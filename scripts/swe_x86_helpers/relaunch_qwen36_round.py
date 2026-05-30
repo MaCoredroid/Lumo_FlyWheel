@@ -3707,6 +3707,169 @@ else:
 LUMOFAUNIQUEBATCH4DIAG
 '''
 
+_FA_REPLAY_STATE_COPY_COMMIT_BLOCK = r'''
+python3 - <<'LUMOFASTATECOPYCOMMIT'
+from pathlib import Path
+
+gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
+text = gl.read_text()
+sentinel = '# LUMO_FA_ACTIVATION_REPLAY_STATE_COPY_COMMIT'
+changed = False
+record_anchor = '                        "initial_state_indices": spec_initial_state_indices_tensor.detach(),\n'
+if '"state_indices": spec_state_indices_tensor.detach(),' not in text and record_anchor in text:
+    text = text.replace(
+        record_anchor,
+        '                        "state_indices": spec_state_indices_tensor.detach(),\n'
+        + record_anchor,
+        1,
+    )
+    changed = True
+start = text.find('def _lumo_fa_activation_replay_commit(\n')
+if start < 0:
+    start = text.find('def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:\n')
+if start < 0:
+    start = text.find('def _lumo_fa_activation_replay_commit(accepted_token_count) -> None:\n')
+end = text.find('\n@CustomOp.register("chunk_gated_delta_rule")\n', start)
+if start < 0 or end < 0:
+    raise RuntimeError('F_a activation replay commit function anchor not found for state-copy commit')
+if sentinel not in text[start:end]:
+    new = r"""def _lumo_fa_activation_replay_commit(
+    accepted_token_count,
+    expected_total_tokens=None,
+    expected_req_count=None,
+) -> None:
+    # LUMO_FA_ACTIVATION_REPLAY_STATE_COPY_COMMIT: tree verification already
+    # materialized the accepted row's conv and GDN recurrent states. Roll both
+    # caches back to that row instead of replaying a second recurrence.
+    _commit_t0 = _lumo_fa_time.perf_counter()
+    if isinstance(accepted_token_count, (list, tuple)):
+        accepted_counts = [int(x) for x in accepted_token_count]
+    else:
+        try:
+            accepted_counts = [int(x) for x in accepted_token_count.tolist()]
+        except Exception:
+            accepted_counts = [int(accepted_token_count)]
+    if not accepted_counts or max(accepted_counts) <= 0:
+        _LUMO_FA_REPLAY_LAYERS.clear()
+        return
+    try:
+        _fh = globals().get("_LUMO_FA_REPLAY_COMMIT_DETAIL_FH")
+        if _fh is None:
+            _fh = open("/logs/fa_activation_replay_commit_detail.jsonl", "a", buffering=1)
+            globals()["_LUMO_FA_REPLAY_COMMIT_DETAIL_FH"] = _fh
+        _fh.write(_lumo_fa_json.dumps({
+            "ts": round(_lumo_fa_time.time(), 4),
+            "event": "fa_activation_replay_commit_detail",
+            "commit_mode": "state_copy",
+            "accepted_counts": accepted_counts,
+            "record_count": len(_LUMO_FA_REPLAY_LAYERS),
+            "expected_total_tokens": expected_total_tokens,
+            "expected_req_count": expected_req_count,
+        }) + chr(10))
+    except Exception:
+        pass
+    replay_layers = _LUMO_FA_REPLAY_LAYERS
+    try:
+        _expected_total = int(expected_total_tokens or 0)
+        if _expected_total > 0 and _LUMO_FA_REPLAY_LAYER_SETS:
+            _candidate_keys = sorted(
+                int(k) for k in _LUMO_FA_REPLAY_LAYER_SETS
+                if int(k) >= _expected_total
+            )
+            if not _candidate_keys and _expected_total in _LUMO_FA_REPLAY_LAYER_SETS:
+                _candidate_keys = [_expected_total]
+            if _candidate_keys:
+                replay_layers = _LUMO_FA_REPLAY_LAYER_SETS[_candidate_keys[0]]
+    except Exception:
+        replay_layers = _LUMO_FA_REPLAY_LAYERS
+    copied = 0
+    missing_state_indices = 0
+    for rec in list(replay_layers):
+        total_tokens = int(rec["num_tokens"])
+        if total_tokens <= 0:
+            continue
+        record_group_size = int(rec.get("tree_group_size") or 0)
+        if record_group_size > 0 and total_tokens % record_group_size == 0:
+            group_size = record_group_size
+        elif len(accepted_counts) > 1 and total_tokens % len(accepted_counts) == 0:
+            group_size = max(1, total_tokens // len(accepted_counts))
+        else:
+            group_size = total_tokens
+        record_req_count = int(rec.get("tree_req_count") or 0)
+        req_count = max(1, total_tokens // group_size)
+        if record_req_count > 0:
+            req_count = min(req_count, record_req_count)
+        if expected_req_count is not None:
+            try:
+                req_count = min(req_count, int(expected_req_count))
+            except Exception:
+                pass
+        req_count = min(req_count, len(accepted_counts))
+        initial_flat = rec["initial_state_indices"].reshape(-1).to(torch.long)
+        state_indices = rec.get("state_indices")
+        if state_indices is None:
+            missing_state_indices += 1
+            continue
+        state_flat = state_indices.reshape(total_tokens, -1)[:, 0].to(torch.long)
+        try:
+            _fh = globals().get("_LUMO_FA_REPLAY_COMMIT_DETAIL_FH")
+            if _fh is not None:
+                _fh.write(_lumo_fa_json.dumps({
+                    "ts": round(_lumo_fa_time.time(), 4),
+                    "event": "fa_activation_replay_record",
+                    "commit_mode": "state_copy",
+                    "total_tokens": total_tokens,
+                    "group_size": int(group_size),
+                    "req_count": int(req_count),
+                    "record_group_size": int(record_group_size),
+                    "record_req_count": int(record_req_count),
+                    "initial_rows": int(initial_flat.numel()),
+                    "state_rows": list(state_indices.shape),
+                    "mixed_shape": list(rec["mixed_qkv_input"].shape),
+                }) + chr(10))
+        except Exception:
+            pass
+        for req_i in range(req_count):
+            n = int(accepted_counts[req_i])
+            tokens = min(n, group_size, total_tokens - req_i * group_size)
+            if tokens <= 0:
+                continue
+            base = req_i * group_size
+            final_row = base + tokens - 1
+            prefix_idx = int(initial_flat[base].item())
+            final_idx = int(state_flat[final_row].item())
+            if final_idx != prefix_idx:
+                rec["conv_state"][prefix_idx].copy_(rec["conv_state"][final_idx], non_blocking=True)
+                rec["ssm_state"][prefix_idx].copy_(rec["ssm_state"][final_idx], non_blocking=True)
+            copied += 1
+    try:
+        _fh = globals().get("_LUMO_FA_REPLAY_COMMIT_DETAIL_FH")
+        if _fh is not None:
+            _fh.write(_lumo_fa_json.dumps({
+                "ts": round(_lumo_fa_time.time(), 4),
+                "event": "fa_activation_replay_commit_summary",
+                "commit_mode": "state_copy",
+                "accepted_counts": accepted_counts,
+                "copied_requests": int(copied),
+                "missing_state_indices": int(missing_state_indices),
+                "commit_enqueue_us": int((_lumo_fa_time.perf_counter() - _commit_t0) * 1000000),
+            }) + chr(10))
+    except Exception:
+        pass
+"""
+    text = text[:start] + new + text[end:]
+    changed = True
+if changed:
+    text = sentinel + '\n' + text
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_a activation replay state-copy commit')
+else:
+    print('[TRACK-B-PRELAUNCH] F_a activation replay state-copy commit already present')
+LUMOFASTATECOPYCOMMIT
+'''
+
 _FA_UNIQUE_BATCH4_PACK_BLOCK = r'''
 python3 - <<'LUMOFAUNIQUEBATCH4PACK'
 from pathlib import Path
@@ -9432,7 +9595,8 @@ LUMOFBCTRL
             + (_FA_UNIQUE_BATCH4_STARTUP_FIX_BLOCK if fa_unique else "")
             + (_FA_TREE_DELTA_VALID_N_BLOCK if fa_unique else "")
             + (_FA_GDN_CORE_CUDAGRAPH_UNSAFE_BLOCK if (fa_unique and os.environ.get("LUMO_FA_CUDAGRAPH_UNSAFE_GDN_CORE") == "1") else "")
-            + (_FA_UNIQUE_BATCH4_DIAG_BLOCK if fa_unique else ""))
+            + (_FA_UNIQUE_BATCH4_DIAG_BLOCK if fa_unique else "")
+            + (_FA_REPLAY_STATE_COPY_COMMIT_BLOCK if fa_unique else ""))
 
 
 def _apply_kv_cache_dtype(src: str, kv_cache_dtype: str | None) -> str:
