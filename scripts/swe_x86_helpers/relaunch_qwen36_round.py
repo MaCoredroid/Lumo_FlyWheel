@@ -3922,6 +3922,23 @@ else:
 LUMOFAUNIQUEBATCH4PACK
 '''
 
+_FA_UNIQUE_BATCH4_STARTUP_FIX_BLOCK = r'''
+python3 - <<'LUMOFAUNIQUEBATCH4STARTUP'
+from pathlib import Path
+ga = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/gdn_attn.py')
+text = ga.read_text()
+bad = '                batch_size = max(int(batch_size), int(num_spec_decodes))\n'
+if bad in text:
+    text = text.replace(bad, '')
+    ga.write_text(text)
+    import py_compile
+    py_compile.compile(str(ga), doraise=True)
+    print('[TRACK-B-PRELAUNCH] removed stale F_a batch4 batch_size assignment')
+else:
+    print('[TRACK-B-PRELAUNCH] stale F_a batch4 batch_size assignment absent')
+LUMOFAUNIQUEBATCH4STARTUP
+'''
+
 _FB_BLOCK = r'''
 python3 - <<'LUMOFBPATHS'
 from pathlib import Path
@@ -9114,6 +9131,7 @@ LUMOFBCTRL
             + (_FB_KERNEL_ROWS_BLOCK if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique) else "")
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_PACK_BLOCK if fa_unique else "")
+            + (_FA_UNIQUE_BATCH4_STARTUP_FIX_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_DIAG_BLOCK if fa_unique else ""))
 
 
