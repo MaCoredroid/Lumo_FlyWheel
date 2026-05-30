@@ -9438,17 +9438,62 @@ def _apply_enforce_eager(src: str, value: str | None) -> str:
     return src.replace(anchor, anchor + line + "\n", 1)
 
 
+def _apply_cuda_graph_capture(src: str, value: str | None) -> str:
+    if value is None:
+        value = os.environ.get("LUMO_CUDAGRAPH_MODE")
+    if value is None:
+        value = os.environ.get("LUMO_CUDA_GRAPH_CAPTURE")
+    if value is None:
+        return src
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on", "full"}:
+        normalized = "on"
+    elif normalized in {"0", "false", "no", "off", "none"}:
+        normalized = "off"
+    elif normalized in {"piecewise", "pw"}:
+        normalized = "piecewise"
+    else:
+        raise RuntimeError(f"unsupported LUMO_CUDAGRAPH_MODE={value!r}")
+    if "  kernel_selection: {}\n" in src:
+        return src.replace(
+            "  kernel_selection: {}\n",
+            "  kernel_selection:\n"
+            f"    cuda_graph_capture: {normalized}\n",
+            1,
+        )
+    import re as _re
+    if _re.search(r"(?m)^  kernel_selection:\n", src) is None:
+        raise RuntimeError("kernel_selection anchor missing in bundle")
+    if _re.search(r"(?m)^    cuda_graph_capture: .*$", src):
+        return _re.sub(
+            r"(?m)^    cuda_graph_capture: .*$",
+            f"    cuda_graph_capture: {normalized}",
+            src,
+            count=1,
+        )
+    return _re.sub(
+        r"(?m)^  kernel_selection:\n",
+        "  kernel_selection:\n"
+        f"    cuda_graph_capture: {normalized}\n",
+        src,
+        count=1,
+    )
+
+
 def _d_bundle(kv_cache_dtype: str | None = None) -> str:
     base = "/tmp/lumo-track-b-bundle-qwen36/bundle.yaml"
     enforce_eager = os.environ.get("LUMO_ENFORCE_EAGER")
-    if kv_cache_dtype is None and enforce_eager is None:
+    cuda_graph_capture = os.environ.get("LUMO_CUDAGRAPH_MODE") or os.environ.get("LUMO_CUDA_GRAPH_CAPTURE")
+    if kv_cache_dtype is None and enforce_eager is None and cuda_graph_capture is None:
         return base
     src = Path(base).read_text()
     src = _apply_kv_cache_dtype(src, kv_cache_dtype)
     src = _apply_enforce_eager(src, enforce_eager)
+    src = _apply_cuda_graph_capture(src, cuda_graph_capture)
     kvtag = "" if kv_cache_dtype is None else f"-kv{kv_cache_dtype}"
     eager_tag = "-eager" if enforce_eager is not None else ""
-    out = Path(f"/tmp/lumo-track-b-bundle-qwen36{kvtag}{eager_tag}"); out.mkdir(exist_ok=True)
+    cg_tag = "" if cuda_graph_capture is None else f"-cg{cuda_graph_capture.strip().lower()}"
+    out = Path(f"/tmp/lumo-track-b-bundle-qwen36{kvtag}{eager_tag}{cg_tag}"); out.mkdir(exist_ok=True)
     (out / "bundle.yaml").write_text(src)
     return str(out / "bundle.yaml")
 
@@ -9459,9 +9504,12 @@ def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = No
     src = _apply_gpu_memory_utilization(
         src, os.environ.get("LUMO_GPU_MEMORY_UTILIZATION"))
     src = _apply_enforce_eager(src, os.environ.get("LUMO_ENFORCE_EAGER"))
+    cuda_graph_capture = os.environ.get("LUMO_CUDAGRAPH_MODE") or os.environ.get("LUMO_CUDA_GRAPH_CAPTURE")
+    src = _apply_cuda_graph_capture(src, cuda_graph_capture)
     kvtag = "" if kv_cache_dtype is None else f"-kv{kv_cache_dtype}"
     eager_tag = "-eager" if os.environ.get("LUMO_ENFORCE_EAGER") is not None else ""
-    tag = (f"mtp{n}" if tree is None else f"mtp{n}tree") + kvtag + eager_tag
+    cg_tag = "" if cuda_graph_capture is None else f"-cg{cuda_graph_capture.strip().lower()}"
+    tag = (f"mtp{n}" if tree is None else f"mtp{n}tree") + kvtag + eager_tag + cg_tag
     src = src.replace("bundle_id: 712fd011-4b16-4051-9e8c-875405b70f5b",
                       f"bundle_id: e0000000-{tag}-4000-9000-config-e-qwen36")
     # speculative_token_tree passes through load_tuned_config (the

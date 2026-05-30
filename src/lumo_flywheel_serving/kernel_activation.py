@@ -445,13 +445,17 @@ def _apply_cuda_graph_capture(
     elif normalized == "on":
         compilation_config["cudagraph_mode"] = "FULL"
         resolved["cuda_graph_capture"] = "FULL"
+    elif normalized.lower() == "piecewise":
+        compilation_config["cudagraph_mode"] = "PIECEWISE"
+        resolved["cuda_graph_capture"] = "PIECEWISE"
+        resolved["cuda_graph_capture_activation"] = "vLLM compilation_config cudagraph_mode PIECEWISE"
     else:
         resolved["cuda_graph_capture"] = "unknown"
         unsupported.append(
             UnsupportedKernelKnob(
                 axis="cuda_graph_capture",
                 value=normalized,
-                reason="expected on/off CUDA graph selection",
+                reason="expected on/off/piecewise CUDA graph selection",
                 required_runtime_hook="map to --enforce-eager or --compilation-config cudagraph_mode",
             )
         )
