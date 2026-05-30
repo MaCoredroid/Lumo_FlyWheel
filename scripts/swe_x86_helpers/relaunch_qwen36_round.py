@@ -2376,6 +2376,16 @@ else:
             'import os as _lumo_fb_kernel_os\nimport ast as _lumo_fa_ast\nimport json as _lumo_fa_json\nimport time as _lumo_fa_time\n',
             1,
         )
+    if '_lumo_fa_replay_gdn' not in text:
+        text = text.replace(
+            'import time as _lumo_fa_time\n',
+            'import time as _lumo_fa_time\n'
+            'try:\n'
+            '    from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_fa_replay_gdn\n'
+            'except Exception:\n'
+            '    _lumo_fa_replay_gdn = None\n',
+            1,
+        )
 
     old = '        m = common_attn_metadata\n\n        query_start_loc = m.query_start_loc\n'
     new = '        m = common_attn_metadata\n        fa_tree_parent_indices_tensor = None\n        fa_tree_depth_rows = None\n        fa_tree_depth_row_tensors = None\n        fa_tree_depth_query_start_tensors = None\n        fa_unique_node_mode = False\n        fa_unique_expanded_node_mode = False\n\n        query_start_loc = m.query_start_loc\n'
@@ -2992,12 +3002,22 @@ def _lumo_fa_tree_delta_triton(
 
 # LUMO_FA_ACTIVATION_REPLAY_COMMIT: accepted-path commit is standard linear GDN.
 _LUMO_FA_REPLAY_LAYERS = []
+_LUMO_FA_REPLAY_LAYER_SETS = {}
+_LUMO_FA_REPLAY_ACTIVE_KEY = None
 
 def _lumo_fa_replay_reset_if_first_layer(prefix: str) -> None:
+    global _LUMO_FA_REPLAY_LAYERS, _LUMO_FA_REPLAY_ACTIVE_KEY
     if ".layers.0." in prefix:
-        _LUMO_FA_REPLAY_LAYERS.clear()
+        _LUMO_FA_REPLAY_LAYERS = []
+        _LUMO_FA_REPLAY_ACTIVE_KEY = None
 
 def _lumo_fa_replay_remember(record: dict) -> None:
+    global _LUMO_FA_REPLAY_ACTIVE_KEY
+    _key = int(record.get("num_tokens") or 0)
+    if _LUMO_FA_REPLAY_ACTIVE_KEY is None:
+        _LUMO_FA_REPLAY_ACTIVE_KEY = _key
+        if _key > 0:
+            _LUMO_FA_REPLAY_LAYER_SETS[_key] = _LUMO_FA_REPLAY_LAYERS
     _LUMO_FA_REPLAY_LAYERS.append(record)
 
 def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
@@ -3506,7 +3526,11 @@ else:
     end = text.find('\n@CustomOp.register("chunk_gated_delta_rule")\n', start)
     if start < 0 or end < 0:
         raise RuntimeError('F_a activation replay commit function anchor not found')
-    new = r"""def _lumo_fa_activation_replay_commit(accepted_token_count) -> None:
+    new = r"""def _lumo_fa_activation_replay_commit(
+    accepted_token_count,
+    expected_total_tokens=None,
+    expected_req_count=None,
+) -> None:
     if isinstance(accepted_token_count, (list, tuple)):
         accepted_counts = [int(x) for x in accepted_token_count]
     else:
@@ -3527,10 +3551,26 @@ else:
             "event": "fa_activation_replay_commit_detail",
             "accepted_counts": accepted_counts,
             "record_count": len(_LUMO_FA_REPLAY_LAYERS),
+            "expected_total_tokens": expected_total_tokens,
+            "expected_req_count": expected_req_count,
         }) + chr(10))
     except Exception:
         pass
-    for rec in list(_LUMO_FA_REPLAY_LAYERS):
+    replay_layers = _LUMO_FA_REPLAY_LAYERS
+    try:
+        _expected_total = int(expected_total_tokens or 0)
+        if _expected_total > 0 and _LUMO_FA_REPLAY_LAYER_SETS:
+            _candidate_keys = sorted(
+                int(k) for k in _LUMO_FA_REPLAY_LAYER_SETS
+                if int(k) >= _expected_total
+            )
+            if not _candidate_keys and _expected_total in _LUMO_FA_REPLAY_LAYER_SETS:
+                _candidate_keys = [_expected_total]
+            if _candidate_keys:
+                replay_layers = _LUMO_FA_REPLAY_LAYER_SETS[_candidate_keys[0]]
+    except Exception:
+        replay_layers = _LUMO_FA_REPLAY_LAYERS
+    for rec in list(replay_layers):
         total_tokens = int(rec["num_tokens"])
         if total_tokens <= 0:
             continue
@@ -3545,6 +3585,11 @@ else:
         req_count = max(1, total_tokens // group_size)
         if record_req_count > 0:
             req_count = min(req_count, record_req_count)
+        if expected_req_count is not None:
+            try:
+                req_count = min(req_count, int(expected_req_count))
+            except Exception:
+                pass
         req_count = min(req_count, len(accepted_counts))
         module = rec["module"]
         device = rec["mixed_qkv_input"].device
@@ -3626,8 +3671,16 @@ else:
             for toks in samples:
                 accepted_lens.append(sum(1 for tok in list(toks) if int(tok) >= 0))
             accepted_len = accepted_lens[0] if accepted_lens else 0
+            expected_total_tokens = getattr(
+                _lumo_fa_replay_gdn, "_LUMO_FA_LAST_TREE_TOTAL_ROWS", None)
+            expected_req_count = getattr(
+                _lumo_fa_replay_gdn, "_LUMO_FA_LAST_TREE_REQ_COUNT", None)
             if accepted_lens and max(accepted_lens) > 0:
-                _lumo_fa_replay_gdn._lumo_fa_activation_replay_commit(accepted_lens)
+                _lumo_fa_replay_gdn._lumo_fa_activation_replay_commit(
+                    accepted_lens,
+                    expected_total_tokens=expected_total_tokens,
+                    expected_req_count=expected_req_count,
+                )
 """
     if old not in text:
         raise RuntimeError('F_a replay commit runner accepted_len anchor not found')
@@ -3638,6 +3691,8 @@ else:
 """,
         """                    "accepted_len": int(accepted_len),
                     "accepted_lens": [int(x) for x in accepted_lens],
+                    "expected_total_tokens": expected_total_tokens,
+                    "expected_req_count": expected_req_count,
                     "num_samples": int(len(samples)),
                     "sample_heads": [[int(x) for x in list(toks)[:8]] for toks in samples[:8]],
                     "sample_head": [int(x) for x in (list(samples[0])[:8] if samples else [])],
@@ -3715,6 +3770,12 @@ else:
                     device=query_start_loc.device)
                 num_spec_decodes = _req_count * _group_size
                 num_spec_decode_tokens = _req_count * _group_size
+                if _lumo_fa_replay_gdn is not None:
+                    try:
+                        _lumo_fa_replay_gdn._LUMO_FA_LAST_TREE_TOTAL_ROWS = int(num_spec_decode_tokens)
+                        _lumo_fa_replay_gdn._LUMO_FA_LAST_TREE_REQ_COUNT = int(_req_count)
+                    except Exception:
+                        pass
                 num_accepted_tokens = torch.ones(
                     (_req_count * _group_size,), dtype=torch.int32,
                     device=query_start_loc.device)
