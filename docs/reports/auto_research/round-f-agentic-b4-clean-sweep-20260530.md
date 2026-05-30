@@ -31,12 +31,25 @@ for E3 contains GPU metrics tables but no CUDA kernel activity tables, so it is 
 kernel-name breakdown. Kernel-level attribution is limited to vLLM telemetry and
 available Round-F instrumentation unless a later arm is captured with CUDA tracing.
 
+For F width-2 arms launched after commit `692d3be3`, the verifier also writes
+`tree_accept_path.jsonl` with the accepted tree node path per event. The alt-branch
+columns count events whose accepted path includes any non-top-1 child and the
+fraction of accepted tokens at or below the first alternate child. The depth-3
+F-width2 arm was already running before that logger was added, so its alt-branch
+path statistic is unavailable.
+
 ## Sweep Matrix
 
-| Arm | Depth | Width | Nodes | Accept/event | Accept/draft | Decode TPS | Event ms | Resolved | Notes |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
-| E3 chain | 3 | 1 | 3 | 2.323 | 0.774 | 37.15 | 89.50 | 1/4 | clean rerun; prefix cache cold at start |
-| F tree-delta spine | 3 | 1 | 3 | 2.363 | 0.788 | 34.21 | 98.42 | 1/4 | clean rerun; FULL requested, GDN forced FULL_AND_PIECEWISE |
+| Arm | Depth | Width | Nodes | Accept/event | Accept/draft | Decode TPS | Event ms | Alt-branch events | Alt accepted tokens | Resolved | Notes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| E3 chain | 3 | 1 | 3 | 2.323 | 0.774 | 37.15 | 89.50 | n/a | n/a | 1/4 | clean rerun; prefix cache cold at start |
+| F tree-delta spine | 3 | 1 | 3 | 2.363 | 0.788 | 34.21 | 98.42 | n/a | n/a | 1/4 | clean rerun; FULL requested, GDN forced FULL_AND_PIECEWISE |
+| F tree-delta width2 | 3 | 2 | 14 | 1.981 | 0.142 | 14.85 | 199.47 | unavailable | unavailable | 1/4 | clean rerun; launched before accepted-path logger |
+
+Depth-3 result: tree-delta spine remains lossless on the real B=4 agentic
+workload but is slower than E3. The 14-node real k=2 tree does not improve
+acceptance over the spine/E3 on this workload and roughly doubles event time, so
+the width-2 depth-3 branch is not a speed win.
 
 ## Per-Arm Details
 
@@ -65,3 +78,15 @@ available Round-F instrumentation unless a later arm is captured with CUDA traci
 - Repair note: the first clean F-spine launch exposed a CUDA graph capture
   failure from allocating depth-row tensors inside capture; commit `fb6c99fa`
   caches/reuses those static tensors before capture.
+
+### F Tree-Delta Width2 Depth 3
+
+- Experiment: `output/roundf_clean_agentic_b4_Fw2_d3_20260530T2037Z`
+- Clean-slate proof: `clean_slate.json`
+- Summary: `summary.json`
+- Sliced traces: `dgx_steptrace_window.jsonl`, `per_req_spec_trace_window.jsonl`
+- Acceptance distribution: `{0: 3464, 1: 1743, 2: 1251, 3: 8390}`
+- Tasks: `astropy__astropy-12907` resolved; the other three failed.
+- Nsight export: available, but no CUDA kernel tables in sqlite.
+- Alt-branch path log: unavailable for this arm because it was launched before
+  commit `692d3be3` added `tree_accept_path.jsonl`.

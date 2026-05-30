@@ -1,0 +1,103 @@
+{
+  "acceptance": {
+    "acc_dist": {
+      "0": 3464,
+      "1": 1743,
+      "2": 1251,
+      "3": 8390
+    },
+    "accept_per_draft": 0.1415053494458128,
+    "accept_per_event": 1.9810748922413792,
+    "accepted_tokens": 29415,
+    "draft_tokens": 207872
+  },
+  "end_ts": 1780176405.0,
+  "exp_dir": "output/roundf_clean_agentic_b4_Fw2_d3_20260530T2037Z",
+  "label": "F_w2_d3_clean",
+  "node_count": 14,
+  "nsight": {
+    "available": true,
+    "has_cuda_kernel_tables": false,
+    "table_count": 29,
+    "tables_head": [
+      "StringIds",
+      "ANALYSIS_FILE",
+      "ProcessStreams",
+      "TARGET_INFO_SYSTEM_ENV",
+      "TARGET_INFO_NIC_INFO",
+      "TARGET_INFO_SESSION_START_TIME",
+      "ANALYSIS_DETAILS",
+      "DIAGNOSTIC_EVENT",
+      "PROCESSES",
+      "GENERIC_EVENT_TYPES",
+      "GENERIC_EVENT_SOURCES",
+      "GENERIC_EVENT_TYPE_FIELDS",
+      "TARGET_INFO_GPU_METRICS",
+      "GPU_METRICS",
+      "ThreadNames",
+      "TARGET_INFO_GPU",
+      "ENUM_NSYS_EVENT_TYPE",
+      "ENUM_NSYS_EVENT_CLASS",
+      "ENUM_NSYS_GENERIC_EVENT_SOURCE",
+      "ENUM_NSYS_GENERIC_EVENT_GROUP"
+    ]
+  },
+  "spec_events": 14848,
+  "start_ts": 1780173450.0,
+  "steptrace": {
+    "accept_per_draft_steptrace": 0.14150017323016514,
+    "accept_per_event_steptrace": 1.981002425222312,
+    "accepted_tokens": 29406.0,
+    "decode_tps": 14.854776757577472,
+    "draft_events": 14844.0,
+    "draft_tokens": 207816.0,
+    "engine_steps": 7722.0,
+    "generation_tokens": 43985.0,
+    "mean_engine_step_ms_wall": 383.4499359377861,
+    "mean_event_ms_wall": 199.47456247046514,
+    "mean_gpu_util": 90.5146290491118,
+    "request_decode_time_s": 4537.166836490622,
+    "request_prefill_time_s": 1249.4878834174015,
+    "window_s": 2961.0004053115845
+  },
+  "tasks": {
+    "end_ts": 1780176405.0,
+    "resolved_count": 1,
+    "resolved_rate": 0.25,
+    "task_count": 4,
+    "tasks": {
+      "astropy__astropy-12907": {
+        "ended_at": "2026-05-30T21:26:45Z",
+        "path": "output/roundf_clean_agentic_b4_Fw2_d3_20260530T2037Z/roundf_clean_agentic_b4_Fw2_d3_20260530T2037Z/per_task/astropy__astropy-12907/runner_metadata.json",
+        "resolved": true,
+        "started_at": "2026-05-30T20:37:32Z",
+        "verdict": "resolved"
+      },
+      "astropy__astropy-13033": {
+        "ended_at": "2026-05-30T21:08:32Z",
+        "path": "output/roundf_clean_agentic_b4_Fw2_d3_20260530T2037Z/roundf_clean_agentic_b4_Fw2_d3_20260530T2037Z/per_task/astropy__astropy-13033/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-05-30T20:37:32Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-13236": {
+        "ended_at": "2026-05-30T21:08:25Z",
+        "path": "output/roundf_clean_agentic_b4_Fw2_d3_20260530T2037Z/roundf_clean_agentic_b4_Fw2_d3_20260530T2037Z/per_task/astropy__astropy-13236/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-05-30T20:37:32Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-13398": {
+        "ended_at": "2026-05-30T20:50:38Z",
+        "path": "output/roundf_clean_agentic_b4_Fw2_d3_20260530T2037Z/roundf_clean_agentic_b4_Fw2_d3_20260530T2037Z/per_task/astropy__astropy-13398/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-05-30T20:37:32Z",
+        "verdict": "failed"
+      }
+    }
+  },
+  "tree_accept_paths": {
+    "available": false,
+    "events": 0
+  }
+}
