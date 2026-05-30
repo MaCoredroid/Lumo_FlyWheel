@@ -4202,6 +4202,40 @@ else:
 LUMOFATREEVALIDN
 '''
 
+_FA_GDN_CORE_CUDAGRAPH_UNSAFE_BLOCK = r'''
+python3 - <<'LUMOFAGDNUNSAFE'
+from pathlib import Path
+gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
+text = gl.read_text()
+sentinel = '# LUMO_FA_GDN_CORE_CUDAGRAPH_UNSAFE'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] GDN core cudagraph-unsafe tag already present')
+else:
+    old = """direct_register_custom_op(
+    op_name="gdn_attention_core",
+    op_func=gdn_attention_core,
+    mutates_args=["core_attn_out"],
+    fake_impl=gdn_attention_core_fake,
+)
+"""
+    new = """direct_register_custom_op(
+    op_name="gdn_attention_core",
+    op_func=gdn_attention_core,
+    mutates_args=["core_attn_out"],
+    fake_impl=gdn_attention_core_fake,
+    tags=(torch._C.Tag.cudagraph_unsafe,),
+)
+"""
+    if old not in text:
+        raise RuntimeError('gdn_attention_core registration anchor not found')
+    text = sentinel + '\n' + text.replace(old, new, 1)
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] tagged gdn_attention_core as cudagraph_unsafe')
+LUMOFAGDNUNSAFE
+'''
+
 _FB_BLOCK = r'''
 python3 - <<'LUMOFBPATHS'
 from pathlib import Path
@@ -9359,6 +9393,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         "LUMO_FB_RIDX_STATE_LAYERS",
         "LUMO_FA_TREE_DELTA_TORCH",
         "LUMO_FA_TREE_DELTA_TRITON",
+        "LUMO_FA_CUDAGRAPH_UNSAFE_GDN_CORE",
     ):
         if os.environ.get(_name):
             fb_debug_exports += f"export {_name}={os.environ[_name]}\n"
@@ -9396,6 +9431,7 @@ LUMOFBCTRL
             + (_FA_UNIQUE_BATCH4_PACK_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_STARTUP_FIX_BLOCK if fa_unique else "")
             + (_FA_TREE_DELTA_VALID_N_BLOCK if fa_unique else "")
+            + (_FA_GDN_CORE_CUDAGRAPH_UNSAFE_BLOCK if (fa_unique and os.environ.get("LUMO_FA_CUDAGRAPH_UNSAFE_GDN_CORE") == "1") else "")
             + (_FA_UNIQUE_BATCH4_DIAG_BLOCK if fa_unique else ""))
 
 
