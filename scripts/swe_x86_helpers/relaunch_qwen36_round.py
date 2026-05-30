@@ -3167,6 +3167,19 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                     torch.arange(len(_rows) + 1, dtype=torch.int32, device=mixed_qkv_spec.device)
                     for _rows in _depth_rows
                 )
+            _actual_conv_rows = int(mixed_qkv_spec.shape[0])
+            _depth_rows = tuple(
+                tuple(int(i) for i in _rows if int(i) < _actual_conv_rows)
+                for _rows in _depth_rows
+            )
+            _depth_row_tensors = tuple(
+                torch.tensor(_rows, dtype=torch.long, device=mixed_qkv_spec.device)
+                for _rows in _depth_rows
+            )
+            _depth_query_start_tensors = tuple(
+                torch.arange(len(_rows) + 1, dtype=torch.int32, device=mixed_qkv_spec.device)
+                for _rows in _depth_rows
+            )
             _conv_out = torch.empty_like(mixed_qkv_spec)
             for _rows, _row_idx, _sub_query_start in zip(
                 _depth_rows, _depth_row_tensors, _depth_query_start_tensors):
@@ -3350,6 +3363,7 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
             )
             _tree_a = _lumo_fa_select_token(a, _all_rows)
             _tree_b = _lumo_fa_select_token(b, _all_rows)
+            _tree_rows = int(query_spec.shape[1])
             core_attn_out_spec, last_recurrent_state = _lumo_tree_delta_impl(
                 A_log=self.A_log,
                 a=_tree_a,
@@ -3359,9 +3373,9 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                 k=key_spec,
                 v=value_spec,
                 initial_state=ssm_state,
-                ssm_state_indices=spec_state_indices_tensor,
-                initial_state_indices=spec_initial_state_indices_tensor,
-                parent_indices=_parents_t,
+                ssm_state_indices=spec_state_indices_tensor[:_tree_rows],
+                initial_state_indices=spec_initial_state_indices_tensor[:_tree_rows],
+                parent_indices=_parents_t[:_tree_rows],
                 use_qk_l2norm_in_kernel=True,
             )
         elif spec_sequence_masks is not None and fa_unique_expanded_node_mode:
@@ -3388,7 +3402,7 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
             core_attn_out_spec = None
             last_recurrent_state = None
             for _depth in range((max(_depths) + 1) if _depths else 0):
-                _rows = [i for i, d in enumerate(_depths) if d == _depth]
+                _rows = [i for i, d in enumerate(_depths) if d == _depth and i < int(query_spec.shape[1])]
                 if not _rows:
                     continue
                 _row_idx = torch.tensor(_rows, dtype=torch.long, device=query_spec.device)
