@@ -3474,6 +3474,159 @@ GPUModelRunner.sample_tokens = _lumo_fa_replay_sample_tokens
 LUMOFAUNIQUENODES
 '''
 
+_FA_UNIQUE_BATCH4_DIAG_BLOCK = r'''
+python3 - <<'LUMOFAUNIQUEBATCH4DIAG'
+from pathlib import Path
+
+gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
+text = gl.read_text()
+sentinel = '# LUMO_FA_ACTIVATION_REPLAY_BATCH4_DIAG'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_a activation replay batch4 diag already present')
+else:
+    start = text.find('def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:\n')
+    if start < 0:
+        start = text.find('def _lumo_fa_activation_replay_commit(accepted_token_count) -> None:\n')
+    end = text.find('\n@CustomOp.register("chunk_gated_delta_rule")\n', start)
+    if start < 0 or end < 0:
+        raise RuntimeError('F_a activation replay commit function anchor not found')
+    new = r"""def _lumo_fa_activation_replay_commit(accepted_token_count) -> None:
+    if isinstance(accepted_token_count, (list, tuple)):
+        accepted_counts = [int(x) for x in accepted_token_count]
+    else:
+        try:
+            accepted_counts = [int(x) for x in accepted_token_count.tolist()]
+        except Exception:
+            accepted_counts = [int(accepted_token_count)]
+    if not accepted_counts or max(accepted_counts) <= 0:
+        _LUMO_FA_REPLAY_LAYERS.clear()
+        return
+    try:
+        _fh = globals().get("_LUMO_FA_REPLAY_COMMIT_DETAIL_FH")
+        if _fh is None:
+            _fh = open("/logs/fa_activation_replay_commit_detail.jsonl", "a", buffering=1)
+            globals()["_LUMO_FA_REPLAY_COMMIT_DETAIL_FH"] = _fh
+        _fh.write(_lumo_fa_json.dumps({
+            "ts": round(_lumo_fa_time.time(), 4),
+            "event": "fa_activation_replay_commit_detail",
+            "accepted_counts": accepted_counts,
+            "record_count": len(_LUMO_FA_REPLAY_LAYERS),
+        }) + chr(10))
+    except Exception:
+        pass
+    for rec in list(_LUMO_FA_REPLAY_LAYERS):
+        total_tokens = int(rec["num_tokens"])
+        if total_tokens <= 0:
+            continue
+        if len(accepted_counts) > 1 and total_tokens % len(accepted_counts) == 0:
+            group_size = max(1, total_tokens // len(accepted_counts))
+        else:
+            group_size = total_tokens
+        req_count = min(len(accepted_counts), max(1, total_tokens // group_size))
+        module = rec["module"]
+        device = rec["mixed_qkv_input"].device
+        initial_flat = rec["initial_state_indices"].reshape(-1)
+        try:
+            _fh = globals().get("_LUMO_FA_REPLAY_COMMIT_DETAIL_FH")
+            if _fh is not None:
+                _fh.write(_lumo_fa_json.dumps({
+                    "ts": round(_lumo_fa_time.time(), 4),
+                    "event": "fa_activation_replay_record",
+                    "total_tokens": total_tokens,
+                    "group_size": int(group_size),
+                    "req_count": int(req_count),
+                    "initial_rows": int(initial_flat.numel()),
+                    "mixed_shape": list(rec["mixed_qkv_input"].shape),
+                }) + chr(10))
+        except Exception:
+            pass
+        for req_i in range(req_count):
+            n = int(accepted_counts[req_i])
+            tokens = min(n, group_size, total_tokens - req_i * group_size)
+            if tokens <= 0:
+                continue
+            base = req_i * group_size
+            prefix_idx = int(initial_flat[base].item())
+            state_idx = torch.tensor([prefix_idx], dtype=torch.int32, device=device)
+            state_cols = torch.full((1, tokens), prefix_idx, dtype=torch.int32, device=device)
+            mixed = rec["mixed_qkv_input"][base:base + tokens]
+            mixed = causal_conv1d_update(
+                mixed.transpose(0, 1).unsqueeze(0),
+                rec["conv_state"],
+                rec["conv_weights"],
+                module.conv1d.bias,
+                module.activation,
+                conv_state_indices=state_idx,
+                validate_data=False,
+            ).squeeze(0).transpose(0, 1).contiguous()
+            q, k, v = module.rearrange_mixed_qkv(mixed)
+            fused_sigmoid_gating_delta_rule_update(
+                A_log=module.A_log,
+                a=rec["a"][base:base + tokens],
+                b=rec["b"][base:base + tokens],
+                dt_bias=module.dt_bias,
+                q=q,
+                k=k,
+                v=v,
+                initial_state=rec["ssm_state"],
+                inplace_final_state=True,
+                cu_seqlens=None,
+                ssm_state_indices=state_cols,
+                initial_state_indices=None,
+                num_accepted_tokens=None,
+                use_qk_l2norm_in_kernel=True,
+            )
+"""
+    text = text[:start] + new + text[end:]
+    text = sentinel + '\n' + text
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_a activation replay batch4 diag')
+
+gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
+text = gm.read_text()
+sentinel = '# LUMO_FA_REPLAY_COMMIT_BATCH4_RUNNER_DIAG'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_a replay commit batch4 runner diag already present')
+else:
+    old = """            accepted_len = 0
+            if samples:
+                toks = samples[0]
+                accepted_len = sum(1 for tok in list(toks) if int(tok) >= 0)
+            if accepted_len > 0:
+                _lumo_fa_replay_gdn._lumo_fa_activation_replay_commit(accepted_len)
+"""
+    new = """            accepted_lens = []
+            for toks in samples:
+                accepted_lens.append(sum(1 for tok in list(toks) if int(tok) >= 0))
+            accepted_len = accepted_lens[0] if accepted_lens else 0
+            if accepted_lens and max(accepted_lens) > 0:
+                _lumo_fa_replay_gdn._lumo_fa_activation_replay_commit(accepted_lens)
+"""
+    if old not in text:
+        raise RuntimeError('F_a replay commit runner accepted_len anchor not found')
+    text = text.replace(old, new, 1)
+    text = text.replace(
+        """                    "accepted_len": int(accepted_len),
+                    "sample_head": [int(x) for x in (list(samples[0])[:8] if samples else [])],
+""",
+        """                    "accepted_len": int(accepted_len),
+                    "accepted_lens": [int(x) for x in accepted_lens],
+                    "num_samples": int(len(samples)),
+                    "sample_heads": [[int(x) for x in list(toks)[:8]] for toks in samples[:8]],
+                    "sample_head": [int(x) for x in (list(samples[0])[:8] if samples else [])],
+""",
+        1,
+    )
+    text = sentinel + '\n' + text
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_a replay commit batch4 runner diag')
+LUMOFAUNIQUEBATCH4DIAG
+'''
+
 _FB_BLOCK = r'''
 python3 - <<'LUMOFBPATHS'
 from pathlib import Path
@@ -8664,7 +8817,8 @@ LUMOFBCTRL
             + mtp_draft_trace_block
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
             + (_FB_KERNEL_ROWS_BLOCK if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique) else "")
-            + (_FA_UNIQUE_NODES_BLOCK if fa_unique else ""))
+            + (_FA_UNIQUE_NODES_BLOCK if fa_unique else "")
+            + (_FA_UNIQUE_BATCH4_DIAG_BLOCK if fa_unique else ""))
 
 
 def _apply_kv_cache_dtype(src: str, kv_cache_dtype: str | None) -> str:
