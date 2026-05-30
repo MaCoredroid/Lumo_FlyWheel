@@ -1,0 +1,30 @@
+{
+  "clean_slate": {
+    "LUMO_BATCH_INVARIANT_VLLM": "1",
+    "attention_backend": "FLASH_ATTN",
+    "fresh_container_recreated": true,
+    "host_memory_recovered_before_launch": true,
+    "pre_generation_tokens": 0,
+    "pre_kv_cache_usage": 0,
+    "pre_prefix_cache_hits": 0,
+    "pre_prefix_cache_queries": 0,
+    "pre_spec_drafts": 0,
+    "prefix_cache_reset_http": 200,
+    "prior_server_down_verified": true,
+    "proxy_temperature": "as-set",
+    "proxy_top_p": "model default 0.95",
+    "skip_existing_scope": "per unique exp_tag only",
+    "steptrace_window": "slice by driver start/end timestamps",
+    "unique_out_dir": true
+  },
+  "concurrency": 4,
+  "config": "E",
+  "exp_tag": "roundf_clean_agentic_b4_E3_d3_20260530T1846Z",
+  "label": "E3_d3_clean",
+  "limit": 4,
+  "mtp": 3,
+  "node_count": 3,
+  "started_at": 1780166794.6184528,
+  "subset": "docs/reports/auto_research/swe-bench-agentic-b4-four-verified-20260530.json",
+  "tree": null
+}
