@@ -36,6 +36,7 @@ available Round-F instrumentation unless a later arm is captured with CUDA traci
 | Arm | Depth | Width | Nodes | Accept/event | Accept/draft | Decode TPS | Event ms | Resolved | Notes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | E3 chain | 3 | 1 | 3 | 2.323 | 0.774 | 37.15 | 89.50 | 1/4 | clean rerun; prefix cache cold at start |
+| F tree-delta spine | 3 | 1 | 3 | 2.363 | 0.788 | 34.21 | 98.42 | 1/4 | clean rerun; FULL requested, GDN forced FULL_AND_PIECEWISE |
 
 ## Per-Arm Details
 
@@ -48,3 +49,19 @@ available Round-F instrumentation unless a later arm is captured with CUDA traci
 - Acceptance distribution: `{0: 2278, 1: 2482, 2: 2276, 3: 13747}`
 - Tasks: `astropy__astropy-12907` resolved; the other three failed.
 - Nsight export: available, but no CUDA kernel tables in sqlite.
+
+### F Tree-Delta Spine Depth 3
+
+- Experiment: `output/roundf_clean_agentic_b4_Fspine_d3_20260530T1938Z`
+- Clean-slate proof: `clean_slate.json`
+- Summary: `summary.json`
+- Sliced traces: `dgx_steptrace_window.jsonl`, `per_req_spec_trace_window.jsonl`
+- Acceptance distribution: `{0: 3501, 1: 2696, 2: 2429, 3: 20156}`
+- Tasks: `astropy__astropy-12907` resolved; the other three failed.
+- Nsight export: available, but no CUDA kernel tables in sqlite.
+- Launch note: `CUDAGraphMode.FULL` was requested, but vLLM 0.19.0 reported
+  `GDNAttentionBackend` support as `UNIFORM_BATCH` and forced
+  `FULL_AND_PIECEWISE`.
+- Repair note: the first clean F-spine launch exposed a CUDA graph capture
+  failure from allocating depth-row tensors inside capture; commit `fb6c99fa`
+  caches/reuses those static tensors before capture.
