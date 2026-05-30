@@ -1,9 +1,19 @@
 #!/usr/bin/env python3
 """Offline validation for the Round-F fused tree-delta Triton kernel."""
 
+import sys
+
 import torch
 
-from vllm.triton_utils import tl, triton
+if not torch.cuda.is_available():
+    print("SKIP: CUDA is not available; Round-F tree-delta Triton validation requires a GPU.")
+    sys.exit(0)
+
+try:
+    from vllm.triton_utils import tl, triton
+except Exception as exc:
+    print(f"SKIP: vLLM/Triton validation dependencies are not available: {exc}")
+    sys.exit(0)
 
 
 @triton.jit(do_not_specialize=["N"])

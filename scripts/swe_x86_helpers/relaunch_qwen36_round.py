@@ -2699,6 +2699,66 @@ else:
 LUMOTREEACCEPTEDROWKERNEL
 '''
 
+_CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK = r'''
+python3 - <<'LUMOCUDAGRAPHRUNTIMETELEMETRY'
+from pathlib import Path
+
+gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
+text = gm.read_text()
+sentinel = '# LUMO_CUDAGRAPH_RUNTIME_TELEMETRY'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] cudagraph runtime telemetry patch already present')
+else:
+    old = """        cudagraph_stats = None
+        if self.vllm_config.observability_config.cudagraph_metrics:
+            cudagraph_stats = CUDAGraphStat(
+                num_unpadded_tokens=num_tokens,
+                num_padded_tokens=batch_descriptor.num_tokens,
+                num_paddings=batch_descriptor.num_tokens - num_tokens,
+                runtime_mode=str(cudagraph_mode),
+            )
+"""
+    new = """        cudagraph_stats = None
+        if (
+            self.vllm_config.observability_config.cudagraph_metrics
+            or os.environ.get("LUMO_CUDAGRAPH_RUNTIME_TELEMETRY") == "1"
+        ):
+            cudagraph_stats = CUDAGraphStat(
+                num_unpadded_tokens=num_tokens,
+                num_padded_tokens=batch_descriptor.num_tokens,
+                num_paddings=batch_descriptor.num_tokens - num_tokens,
+                runtime_mode=str(cudagraph_mode),
+            )
+            if os.environ.get("LUMO_CUDAGRAPH_RUNTIME_TELEMETRY") == "1":
+                try:
+                    import json as _lumo_cg_json, time as _lumo_cg_time
+                    global _LUMO_CUDAGRAPH_RUNTIME_FH
+                    try:
+                        _LUMO_CUDAGRAPH_RUNTIME_FH
+                    except NameError:
+                        _LUMO_CUDAGRAPH_RUNTIME_FH = open("/logs/cudagraph_runtime_debug.jsonl", "a", buffering=1)
+                    _LUMO_CUDAGRAPH_RUNTIME_FH.write(_lumo_cg_json.dumps({
+                        "ts": round(_lumo_cg_time.time(), 4),
+                        "event": "cudagraph_runtime",
+                        "num_unpadded_tokens": int(num_tokens),
+                        "num_padded_tokens": int(batch_descriptor.num_tokens),
+                        "num_paddings": int(batch_descriptor.num_tokens - num_tokens),
+                        "runtime_mode": str(cudagraph_mode),
+                    }) + chr(10))
+                except Exception:
+                    pass
+"""
+    if old not in text:
+        raise RuntimeError('cudagraph runtime telemetry anchor not found')
+    text = text.replace(old, new, 1)
+    text = sentinel + '\n' + text
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied cudagraph runtime telemetry patch')
+LUMOCUDAGRAPHRUNTIMETELEMETRY
+'''
+
 _TREE_ACCEPTED_ROW_COMMIT_BLOCK = r'''
 python3 - <<'LUMOTREEACCEPTEDROWCOMMIT'
 from pathlib import Path
@@ -10391,7 +10451,8 @@ LUMOFBCTRL
     ) else ""
     stale_fb_guard = "" if (fb or fa_unique) else _NO_STALE_FB_PATCHES_BLOCK
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + _CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX_BLOCK
-            + stale_fb_guard + dbg + fb_env + mtp_draft_trace + base + _SPEC_TRACE_BLOCK
+            + stale_fb_guard + dbg + "export LUMO_CUDAGRAPH_RUNTIME_TELEMETRY=1\n"
+            + fb_env + mtp_draft_trace + base + _CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
             + (_FB_KERNEL_ROWS_BLOCK if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique) else "")
