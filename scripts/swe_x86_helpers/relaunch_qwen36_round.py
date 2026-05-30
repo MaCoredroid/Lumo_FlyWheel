@@ -2354,6 +2354,165 @@ else:
 LUMOTREEREJECT
 '''
 
+_TREE_REJECTION_RANDOM_FIX_BLOCK = r'''
+python3 - <<'LUMOTREEREJECTRANDOMFIX'
+from pathlib import Path
+
+rs = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py')
+text = rs.read_text()
+sentinel = '# LUMO_TREE_REJECTION_RANDOM_RATIO_FIX'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] tree rejection random ratio fix already present')
+else:
+    old_call = """            target_probs = target_logits.softmax(dim=-1, dtype=torch.float32)
+            uniform_probs = generate_uniform_probs(
+                num_tokens,
+                num_draft_tokens,
+                sampling_metadata.generators,
+                device,
+            )
+            lumo_tree_prob_sample_kernel[(batch_size,)](
+                output_token_ids,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                tree_token_ids[0],
+                tree_token_ids[1],
+                target_probs,
+                uniform_probs,
+                max_spec_len,
+                vocab_size,
+            )
+"""
+    new_call = """            target_probs = target_logits.softmax(dim=-1, dtype=torch.float32)
+            uniform_probs = generate_uniform_probs(
+                num_tokens,
+                num_draft_tokens,
+                sampling_metadata.generators,
+                device,
+            )
+            recovered_token_ids = sample_recovered_tokens(
+                max_spec_len,
+                num_draft_tokens,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                draft_probs,
+                target_probs,
+                sampling_metadata,
+                device,
+            )
+            lumo_tree_prob_sample_kernel[(batch_size,)](
+                output_token_ids,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                tree_token_ids[0],
+                tree_token_ids[1],
+                draft_probs,
+                target_probs,
+                recovered_token_ids,
+                uniform_probs,
+                max_spec_len,
+                vocab_size,
+                NO_DRAFT_PROBS=draft_probs is None,
+            )
+"""
+    if old_call not in text:
+        raise RuntimeError('tree rejection random ratio call anchor not found')
+    text = text.replace(old_call, new_call, 1)
+
+    start = text.find('def lumo_tree_prob_sample_kernel(')
+    end_marker = '\n\n# NOTE(woosuk): Avoid specialization to prevent unnecessary recompilation.\n@triton.jit(do_not_specialize=["max_spec_len"])\ndef rejection_greedy_sample_kernel('
+    end = text.find(end_marker, start)
+    if start < 0 or end < 0:
+        raise RuntimeError('tree rejection probability kernel anchor not found')
+    new_kernel = """def lumo_tree_prob_sample_kernel(
+    output_token_ids_ptr,  # [batch_size, max_spec_len + 1]
+    cu_num_draft_tokens_ptr,  # [batch_size]
+    draft_token_ids_ptr,  # [num_tokens]
+    tree_parent_indices_ptr,  # [num_tokens], parent node or -1 for root
+    parent_token_ids_ptr,  # [num_tokens], target sample at each node parent
+    self_token_ids_ptr,  # [num_tokens], target sample at each node
+    draft_probs_ptr,  # [num_tokens, vocab_size] or None
+    target_probs_ptr,  # [num_tokens, vocab_size]
+    recovered_token_ids_ptr,  # [num_tokens]
+    uniform_probs_ptr,  # [num_tokens]
+    max_spec_len,
+    vocab_size,
+    NO_DRAFT_PROBS: tl.constexpr,
+):
+    req_idx = tl.program_id(0)
+    start_idx = 0 if req_idx == 0 else tl.load(cu_num_draft_tokens_ptr + req_idx - 1)
+    end_idx = tl.load(cu_num_draft_tokens_ptr + req_idx)
+    num_draft_tokens = end_idx - start_idx
+
+    current_parent = -1
+    out_pos = 0
+    done = False
+    for _step in range(max_spec_len + 1):
+        if not done:
+            first_child = -1
+            accepted_child = -1
+            accepted_token_id = -1
+            recovered_token_id = -1
+            for pos in range(num_draft_tokens):
+                parent = tl.load(tree_parent_indices_ptr + start_idx + pos)
+                if parent == current_parent:
+                    if first_child == -1:
+                        first_child = pos
+                        recovered_token_id = tl.load(
+                            recovered_token_ids_ptr + start_idx + pos
+                        )
+                    draft_token_id = tl.load(draft_token_ids_ptr + start_idx + pos)
+                    if NO_DRAFT_PROBS:
+                        draft_prob = 1.0
+                    else:
+                        draft_prob = tl.load(
+                            draft_probs_ptr + (start_idx + pos) * vocab_size + draft_token_id
+                        )
+                    target_prob = tl.load(
+                        target_probs_ptr + (start_idx + pos) * vocab_size + draft_token_id
+                    )
+                    uniform_prob = tl.load(uniform_probs_ptr + start_idx + pos)
+                    if (
+                        (accepted_child == -1)
+                        and (draft_prob > 0.0)
+                        and (target_prob / draft_prob >= uniform_prob)
+                    ):
+                        accepted_child = pos
+                        accepted_token_id = draft_token_id
+
+            if first_child == -1:
+                if current_parent >= 0:
+                    token_id = tl.load(self_token_ids_ptr + start_idx + current_parent)
+                    tl.store(
+                        output_token_ids_ptr + req_idx * (max_spec_len + 1) + out_pos,
+                        token_id,
+                    )
+                done = True
+            elif accepted_child >= 0:
+                tl.store(
+                    output_token_ids_ptr + req_idx * (max_spec_len + 1) + out_pos,
+                    accepted_token_id,
+                )
+                out_pos += 1
+                current_parent = accepted_child
+            else:
+                tl.store(
+                    output_token_ids_ptr + req_idx * (max_spec_len + 1) + out_pos,
+                    recovered_token_id,
+                )
+                done = True
+"""
+    text = text[:start] + new_kernel + text[end:]
+    text = sentinel + '\n' + text
+    rs.write_text(text)
+    import py_compile
+    py_compile.compile(str(rs), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied tree rejection random ratio fix')
+LUMOTREEREJECTRANDOMFIX
+'''
+
 _FA_UNIQUE_NODES_BLOCK = r'''
 python3 - <<'LUMOFAUNIQUENODES'
 from pathlib import Path
@@ -9539,7 +9698,12 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     # (config F only). Realized KV is auto/bf16, which TreeAttention supports.
     fa_unique = os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"
     dbg = "export LUMO_TREE_DRAFT_DEBUG=1\n" if (tree and tree_debug) else ""
-    tree_blocks = _TREE_ATTN_BLOCK + _MROPE_TREE_BLOCK + _TREE_REJECTION_BLOCK
+    tree_blocks = (
+        _TREE_ATTN_BLOCK
+        + _MROPE_TREE_BLOCK
+        + _TREE_REJECTION_BLOCK
+        + _TREE_REJECTION_RANDOM_FIX_BLOCK
+    )
     fb_k = os.environ.get("LUMO_FB_K", "1")
     fb_dup = "export LUMO_FB_DUP_PATH1=1\n" if os.environ.get("LUMO_FB_DUP_PATH1") == "1" else ""
     fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" else ""
