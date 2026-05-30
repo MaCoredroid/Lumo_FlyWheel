@@ -2721,7 +2721,7 @@ else:
     new = """        cudagraph_stats = None
         if (
             self.vllm_config.observability_config.cudagraph_metrics
-            or os.environ.get("LUMO_CUDAGRAPH_RUNTIME_TELEMETRY") == "1"
+            or __import__("os").environ.get("LUMO_CUDAGRAPH_RUNTIME_TELEMETRY") == "1"
         ):
             cudagraph_stats = CUDAGraphStat(
                 num_unpadded_tokens=num_tokens,
@@ -2729,7 +2729,7 @@ else:
                 num_paddings=batch_descriptor.num_tokens - num_tokens,
                 runtime_mode=str(cudagraph_mode),
             )
-            if os.environ.get("LUMO_CUDAGRAPH_RUNTIME_TELEMETRY") == "1":
+            if __import__("os").environ.get("LUMO_CUDAGRAPH_RUNTIME_TELEMETRY") == "1":
                 try:
                     import json as _lumo_cg_json, time as _lumo_cg_time
                     global _LUMO_CUDAGRAPH_RUNTIME_FH
