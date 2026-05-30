@@ -3326,10 +3326,13 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
             def _lumo_fa_select_token(_tensor, _idx):
                 if _tensor is None:
                     return None
+                _tree_rows = int(query_spec.shape[1])
                 if _tensor.ndim >= 3 and _tensor.shape[1] == attn_metadata.num_spec_decode_tokens:
                     return _tensor.index_select(1, _idx)
                 if _tensor.ndim >= 1 and _tensor.shape[0] == attn_metadata.num_spec_decode_tokens:
                     return _tensor.index_select(0, _idx)
+                if _tensor.ndim >= 1 and int(_tensor.shape[0]) == int(num_actual_tokens) and int(_tensor.shape[0]) >= _tree_rows:
+                    return _tensor.narrow(0, int(_tensor.shape[0]) - _tree_rows, _tree_rows).index_select(0, _idx)
                 return _tensor
 
             _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
@@ -3341,7 +3344,7 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                 else _lumo_fa_tree_delta_torch
             )
             _all_rows = torch.arange(
-                attn_metadata.num_spec_decode_tokens,
+                query_spec.shape[1],
                 dtype=torch.long,
                 device=query_spec.device,
             )
@@ -3365,10 +3368,13 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
             def _lumo_fa_select_token(_tensor, _idx):
                 if _tensor is None:
                     return None
+                _tree_rows = int(query_spec.shape[1])
                 if _tensor.ndim >= 3 and _tensor.shape[1] == attn_metadata.num_spec_decode_tokens:
                     return _tensor.index_select(1, _idx)
                 if _tensor.ndim >= 1 and _tensor.shape[0] == attn_metadata.num_spec_decode_tokens:
                     return _tensor.index_select(0, _idx)
+                if _tensor.ndim >= 1 and int(_tensor.shape[0]) == int(num_actual_tokens) and int(_tensor.shape[0]) >= _tree_rows:
+                    return _tensor.narrow(0, int(_tensor.shape[0]) - _tree_rows, _tree_rows).index_select(0, _idx)
                 return _tensor
 
             _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
