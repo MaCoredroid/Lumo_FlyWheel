@@ -22,6 +22,68 @@ from lumo_flywheel_serving.model_server import ModelServer
 
 _KEEP_MARKER = "applied forced tool_choice parser patch')\nPY\n"
 
+
+def _tree_path_lcp_max_reference(
+    parents: list[int],
+    draft_tokens: list[int],
+    parent_target_tokens: list[int],
+    self_target_tokens: list[int],
+) -> dict[str, object]:
+    """Reference implementation for the N-spine greedy tree verifier.
+
+    This mirrors the source-edited vLLM helper below and is intentionally kept
+    small so host-side tests can prove the intended semantics without importing
+    vLLM. The tree may contain any number of root-to-leaf spines. Ties prefer
+    the earliest leaf in flattened tree order, which preserves path0 parity.
+    """
+    node_count = len(parents)
+    children: dict[int, list[int]] = {-1: []}
+    for node, parent in enumerate(parents):
+        children.setdefault(int(parent), []).append(node)
+        children.setdefault(node, [])
+    leaves = [node for node in range(node_count) if not children.get(node)]
+    if not leaves:
+        leaves = list(range(node_count))
+
+    best_path: list[int] = []
+    best_lcp = -1
+    for leaf in leaves:
+        path: list[int] = []
+        node = int(leaf)
+        guard = 0
+        while 0 <= node < node_count and guard <= node_count:
+            path.append(node)
+            node = int(parents[node])
+            guard += 1
+        path.reverse()
+        lcp = 0
+        for node in path:
+            if int(draft_tokens[node]) != int(parent_target_tokens[node]):
+                break
+            lcp += 1
+        if lcp > best_lcp:
+            best_lcp = lcp
+            best_path = path
+
+    best_lcp = max(0, best_lcp)
+    out_tokens = [int(draft_tokens[node]) for node in best_path[:best_lcp]]
+    if best_path:
+        if best_lcp < len(best_path):
+            out_tokens.append(int(parent_target_tokens[best_path[best_lcp]]))
+        elif best_lcp > 0:
+            out_tokens.append(int(self_target_tokens[best_path[best_lcp - 1]]))
+        else:
+            out_tokens.append(int(parent_target_tokens[best_path[0]]))
+    accepted_row = int(best_path[best_lcp - 1]) + 1 if best_lcp > 0 else 0
+    return {
+        "accepted_len": int(best_lcp),
+        "accepted_row": accepted_row,
+        "accepted_node_ids": best_path[:best_lcp],
+        "winner_path": best_path,
+        "output_tokens": out_tokens,
+    }
+
+
 # Source-edit (NOT monkeypatch -- prelaunch patches the file before vLLM imports
 # it) of Scheduler.make_spec_decoding_stats to emit per-request per-step rows.
 # The inner python builds the injected source with chr(10) for EVERY newline
@@ -3343,6 +3405,201 @@ import py_compile
 py_compile.compile(str(gl), doraise=True)
 print('[TRACK-B-PRELAUNCH] applied branch accepted-row state-copy patch')
 LUMOTREEACCEPTEDROWCOMMIT
+'''
+
+_TREE_PATH_LCP_MAX_BLOCK = r'''
+python3 - <<'LUMOTREEPATHLCPMAX'
+from pathlib import Path
+
+rs = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py')
+text = rs.read_text()
+sentinel = '# LUMO_TREE_PATH_LCP_MAX'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] tree path-LCP-max verifier already present')
+else:
+    helper_anchor = '\n\ndef rejection_sample('
+    helper = r"""
+
+# LUMO_TREE_PATH_LCP_MAX: greedy N-spine verifier.
+#
+# Verify every root-to-leaf path against target argmax tokens and choose the
+# longest accepted prefix. This is the multi-candidate greedy rule:
+# accepted_len = max_path LCP(path, target_argmax). It is a strict superset of
+# path0 because path0 is one of the leaves. The only recurrent state recorded
+# for commit is the final accepted node on the winning path.
+def _lumo_tree_path_lcp_max_greedy_sample(
+    output_token_ids: torch.Tensor,
+    accepted_tree_rows: torch.Tensor,
+    num_draft_tokens,
+    draft_token_ids: torch.Tensor,
+    tree_parent_indices: torch.Tensor,
+    parent_token_ids: torch.Tensor,
+    self_token_ids: torch.Tensor,
+    max_spec_len: int,
+) -> torch.Tensor:
+    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+    drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
+    parent_targets_cpu = [int(x) for x in parent_token_ids.detach().cpu().tolist()]
+    self_targets_cpu = [int(x) for x in self_token_ids.detach().cpu().tolist()]
+    if hasattr(num_draft_tokens, 'detach'):
+        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+    else:
+        counts = [int(x) for x in num_draft_tokens]
+
+    out_rows = []
+    accepted_rows = []
+    path_log_rows = []
+    start = 0
+    for req_i, node_count in enumerate(counts):
+        node_count = int(node_count)
+        parents = parents_cpu[start:start + node_count]
+        drafts = drafts_cpu[start:start + node_count]
+        parent_targets = parent_targets_cpu[start:start + node_count]
+        self_targets = self_targets_cpu[start:start + node_count]
+
+        children = {-1: []}
+        for node, parent in enumerate(parents):
+            parent = int(parent)
+            children.setdefault(parent, []).append(node)
+            children.setdefault(node, [])
+        leaves = [node for node in range(node_count) if not children.get(node)]
+        if not leaves:
+            leaves = list(range(node_count))
+
+        best_path = []
+        best_lcp = -1
+        best_leaf = -1
+        path_scores = []
+        for leaf in leaves:
+            path = []
+            node = int(leaf)
+            guard = 0
+            while 0 <= node < node_count and guard <= node_count:
+                path.append(node)
+                node = int(parents[node])
+                guard += 1
+            path.reverse()
+            lcp = 0
+            for node in path:
+                if int(drafts[node]) != int(parent_targets[node]):
+                    break
+                lcp += 1
+            path_scores.append({
+                'leaf': int(leaf),
+                'path': [int(x) for x in path],
+                'lcp': int(lcp),
+            })
+            # Stable tie-break: earliest flattened leaf wins. With vLLM's sorted
+            # tree choices this preserves the native top-1/path0 chain.
+            if lcp > best_lcp:
+                best_lcp = int(lcp)
+                best_path = path
+                best_leaf = int(leaf)
+
+        best_lcp = max(0, int(best_lcp))
+        row = []
+        for node in best_path[:best_lcp]:
+            row.append(int(drafts[node]))
+        if best_path:
+            if best_lcp < len(best_path):
+                row.append(int(parent_targets[best_path[best_lcp]]))
+            elif best_lcp > 0:
+                row.append(int(self_targets[best_path[best_lcp - 1]]))
+            else:
+                row.append(int(parent_targets[best_path[0]]))
+        row = row[:int(max_spec_len) + 1]
+        out_rows.append(row)
+        accepted_row = int(best_path[best_lcp - 1]) + 1 if best_lcp > 0 else 0
+        accepted_rows.append(accepted_row)
+        path_log_rows.append({
+            'req_index': int(req_i),
+            'node_count': int(node_count),
+            'accepted_len': int(best_lcp),
+            'accepted_final_row': int(accepted_row),
+            'accepted_node_ids': [int(x) for x in best_path[:best_lcp]],
+            'winner_leaf': int(best_leaf),
+            'winner_path': [int(x) for x in best_path],
+            'path_scores': path_scores,
+        })
+        start += node_count
+
+    output_token_ids.fill_(-1)
+    for req_i, row in enumerate(out_rows):
+        for pos, token_id in enumerate(row):
+            output_token_ids[req_i, pos] = int(token_id)
+    accepted_tree_rows.copy_(
+        torch.tensor(accepted_rows, dtype=accepted_tree_rows.dtype,
+                     device=accepted_tree_rows.device)
+    )
+    globals()['_LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL'] = [int(x) for x in accepted_rows]
+    try:
+        from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
+        _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
+            int(x) for x in accepted_rows
+        ]
+    except Exception:
+        pass
+    try:
+        import json as _lcpj, os as _lcpo, time as _lcpt
+        global _LUMO_TREE_PATH_LCP_FH
+        try:
+            _LUMO_TREE_PATH_LCP_FH
+        except NameError:
+            _LUMO_TREE_PATH_LCP_FH = open(
+                _lcpo.environ.get('LUMO_TREE_PATH_LCP_LOG',
+                                  '/logs/tree_path_lcp_max.jsonl'),
+                'a',
+                buffering=1,
+            )
+        _now = round(_lcpt.time(), 4)
+        for row in path_log_rows:
+            row = dict(row)
+            row['ts'] = _now
+            row['event'] = 'tree_path_lcp_max'
+            _LUMO_TREE_PATH_LCP_FH.write(_lcpj.dumps(row) + chr(10))
+    except Exception:
+        pass
+    return output_token_ids
+"""
+    if helper_anchor not in text:
+        raise RuntimeError('tree path-LCP helper anchor not found')
+    text = text.replace(helper_anchor, helper + helper_anchor, 1)
+
+    old = """        if sampling_metadata.all_greedy:
+            lumo_tree_sample_kernel[(batch_size,)](
+                output_token_ids,
+                accepted_tree_rows,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                tree_token_ids[0],
+                tree_token_ids[1],
+                max_spec_len,
+            )
+        else:
+"""
+    new = """        if sampling_metadata.all_greedy:
+            output_token_ids = _lumo_tree_path_lcp_max_greedy_sample(
+                output_token_ids,
+                accepted_tree_rows,
+                num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                tree_token_ids[0],
+                tree_token_ids[1],
+                max_spec_len,
+            )
+        else:
+"""
+    if old not in text:
+        raise RuntimeError('tree path-LCP greedy branch anchor not found')
+    text = text.replace(old, new, 1)
+    text = sentinel + '\n' + text
+    rs.write_text(text)
+    import py_compile
+    py_compile.compile(str(rs), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied tree path-LCP-max greedy verifier')
+LUMOTREEPATHLCPMAX
 '''
 
 _FA_UNIQUE_NODES_BLOCK = r'''
@@ -11717,6 +11974,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         + _TREE_REJECTION_RANDOM_FIX_BLOCK
         + _TREE_ACCEPTED_ROW_KERNEL_BLOCK
         + _TREE_ACCEPTED_ROW_COMMIT_BLOCK
+        + _TREE_PATH_LCP_MAX_BLOCK
     )
     fb_k = "2" if os.environ.get("LUMO_FB_TWO_SPINE") == "1" else os.environ.get("LUMO_FB_K", "1")
     fb_dup = "export LUMO_FB_DUP_PATH1=1\n" if os.environ.get("LUMO_FB_DUP_PATH1") == "1" else ""
@@ -12015,12 +12273,20 @@ def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = No
 
 
 def _default_tree(n: int) -> str:
-    """Config F's default REGULAR tree: top-2 at the root, each extended as a
-    linear chain to depth n (= two parallel depth-n candidate chains seeded by
-    the MTP head's top-2 first tokens). Small on purpose -- enough branching to
-    test the hypothesis, not so much that tree-attn/verifier overhead dominates.
-    n=3 -> [(0,),(1,),(0,0),(1,0),(0,0,0),(1,0,0)] (6-node budget vs E's 3)."""
-    nodes = {(root,) + (0,) * level for level in range(n) for root in (0, 1)}
+    """Config F's default REGULAR N-spine tree.
+
+    Each root is one candidate spine, extended linearly to depth n. The default
+    remains top-2 for the FR7 gate, while LUMO_TREE_SPINES lets the same verifier
+    exercise 2-10 spines without changing code.
+    """
+    spines = int(os.environ.get("LUMO_TREE_SPINES", "2"))
+    if not (1 <= spines <= 10):
+        raise RuntimeError(f"LUMO_TREE_SPINES must be in [1, 10], got {spines}")
+    nodes = {
+        (root,) + (0,) * level
+        for level in range(n)
+        for root in range(spines)
+    }
     return str(sorted(nodes, key=lambda t: (len(t), t)))
 
 
@@ -12064,12 +12330,19 @@ def main() -> int:
     else:  # E, F, or Fb -- MTP bundle (F adds speculative_token_tree)
         bundle = _mtp_bundle(args.mtp, tree=tree, kv_cache_dtype=args.kv_cache_dtype)
     server = ModelServer(
-        registry_path=REPO / "model_registry.yaml", port=9950,
-        container_name="lumo-vllm-track-b-suffix",
-        logs_root=Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs"),
-        triton_cache_root=Path("/tmp/lumo-l0c-fp8-cutlass-run30-triton"),
-        state_root=Path("/tmp/lumo-l0c-fp8-cutlass-run30-state"),
-        proxy_port=8088, ready_timeout_s=900,
+        registry_path=REPO / "model_registry.yaml",
+        port=int(os.environ.get("LUMO_VLLM_PORT", "9950")),
+        container_name=os.environ.get(
+            "LUMO_VLLM_CONTAINER_NAME", "lumo-vllm-track-b-suffix"),
+        logs_root=Path(os.environ.get(
+            "LUMO_VLLM_LOGS_ROOT", "/tmp/lumo-l0c-fp8-cutlass-run30-logs")),
+        triton_cache_root=Path(os.environ.get(
+            "LUMO_VLLM_TRITON_CACHE_ROOT",
+            "/tmp/lumo-l0c-fp8-cutlass-run30-triton")),
+        state_root=Path(os.environ.get(
+            "LUMO_VLLM_STATE_ROOT", "/tmp/lumo-l0c-fp8-cutlass-run30-state")),
+        proxy_port=int(os.environ.get("LUMO_VLLM_PROXY_PORT", "8088")),
+        ready_timeout_s=900,
         prelaunch_shell=_prelaunch_for(args.config, tree=is_tree, tree_debug=args.tree_debug, fb=is_fb),
     )
     server.load_tuned_config(bundle)
