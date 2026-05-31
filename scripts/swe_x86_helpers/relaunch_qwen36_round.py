@@ -8189,7 +8189,7 @@ else:
         '            # scheduled-token count after accepted-prefix correction.',
         '            # Drop those stale clone rows before _prepare_inputs();',
         '            # negative per-row counts otherwise wedge the engine.',
-        '            if os.environ.get("LUMO_FB_PATHS") == "1":',
+        '            if _lumo_fb_os.environ.get("LUMO_FB_PATHS") == "1":',
         '                _lumo_fb_bad_rows = [',
         '                    _rid for _rid, _n in list(scheduler_output.num_scheduled_tokens.items())',
         '                    if "::lumo_fb::" in _rid and int(_n) <= 0',
