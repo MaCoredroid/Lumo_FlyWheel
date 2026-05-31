@@ -2007,6 +2007,7 @@ LUMOFBKERNELROWS
 _TREE_ATTN_BLOCK = r'''
 python3 - <<'LUMOTREEATTN'
 from pathlib import Path
+import os
 nl = chr(10)
 p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/selector.py')
 text = p.read_text()
@@ -2052,7 +2053,7 @@ else:
     print('[TRACK-B-PRELAUNCH] applied tree-attn force patch (selector.py)')
 
 ta = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py')
-if ta.exists():
+if os.environ.get('LUMO_TREE_ATTN_FORCE_CG') == '1' and ta.exists():
     text = ta.read_text()
     sentinel = '# LUMO_TREE_ATTN_UNIFORM_BATCH_CG'
     if sentinel in text:
@@ -2078,6 +2079,8 @@ if ta.exists():
         import py_compile
         py_compile.compile(str(ta), doraise=True)
         print('[TRACK-B-PRELAUNCH] applied tree-attn uniform-batch cudagraph patch')
+else:
+    print('[TRACK-B-PRELAUNCH] skipped tree-attn uniform-batch cudagraph patch')
 LUMOTREEATTN
 '''
 
