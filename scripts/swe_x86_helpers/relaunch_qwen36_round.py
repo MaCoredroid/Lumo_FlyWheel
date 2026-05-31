@@ -7625,6 +7625,47 @@ def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
         pass
     return copied_bytes
 
+def _lumo_fb_drop_scheduled_req(scheduler_output, req_id):
+    try:
+        n = int(scheduler_output.num_scheduled_tokens.pop(req_id, 0) or 0)
+        scheduler_output.total_num_scheduled_tokens -= n
+    except Exception:
+        pass
+    try:
+        scheduler_output.scheduled_spec_decode_tokens.pop(req_id, None)
+    except Exception:
+        pass
+    try:
+        scheduler_output.finished_req_ids.discard(req_id)
+    except Exception:
+        pass
+
+def _lumo_fb_rename_scheduled_req(scheduler_output, old_id, new_id):
+    if old_id == new_id:
+        return
+    try:
+        if old_id in scheduler_output.num_scheduled_tokens:
+            n = scheduler_output.num_scheduled_tokens.pop(old_id)
+            if new_id in scheduler_output.num_scheduled_tokens:
+                scheduler_output.total_num_scheduled_tokens -= int(
+                    scheduler_output.num_scheduled_tokens.pop(new_id) or 0)
+            scheduler_output.num_scheduled_tokens[new_id] = n
+    except Exception:
+        pass
+    try:
+        if old_id in scheduler_output.scheduled_spec_decode_tokens:
+            scheduler_output.scheduled_spec_decode_tokens[new_id] = (
+                scheduler_output.scheduled_spec_decode_tokens.pop(old_id))
+        else:
+            scheduler_output.scheduled_spec_decode_tokens.pop(new_id, None)
+    except Exception:
+        pass
+    try:
+        scheduler_output.finished_req_ids.discard(old_id)
+        scheduler_output.finished_req_ids.discard(new_id)
+    except Exception:
+        pass
+
 def _lumo_fb_apply_runner_collapses(self, scheduler_output):
     collapses = getattr(scheduler_output, "lumo_fb_collapses", None)
     if not collapses:
@@ -7643,6 +7684,7 @@ def _lumo_fb_apply_runner_collapses(self, scheduler_output):
             self.input_batch.remove_request(loser_id)
             self.requests.pop(loser_id, None)
             self.mamba_state_idx.pop(loser_id, None)
+            _lumo_fb_drop_scheduled_req(scheduler_output, loser_id)
             if accepted_prefix_len is not None and row_idx is not None:
                 try:
                     self.input_batch.num_accepted_tokens_cpu[row_idx] = int(accepted_prefix_len)
@@ -7668,6 +7710,9 @@ def _lumo_fb_apply_runner_collapses(self, scheduler_output):
             self.mamba_state_idx[parent_id] = self.mamba_state_idx.pop(winner_id)
         if loser_id != parent_id:
             self.mamba_state_idx.pop(loser_id, None)
+        _lumo_fb_rename_scheduled_req(scheduler_output, winner_id, parent_id)
+        if loser_id != parent_id:
+            _lumo_fb_drop_scheduled_req(scheduler_output, loser_id)
         if accepted_prefix_len is not None and row_idx is not None:
             try:
                 self.input_batch.num_accepted_tokens_cpu[row_idx] = int(accepted_prefix_len)
