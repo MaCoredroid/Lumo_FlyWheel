@@ -14,6 +14,8 @@ def test_path_lcp_max_prefers_alt_longer_spine() -> None:
     )
 
     assert result["accepted_len"] == 2
+    assert result["path0_lcp"] == 0
+    assert result["superset_violation"] is False
     assert result["accepted_row"] == 4
     assert result["accepted_node_ids"] == [1, 3]
     assert result["output_tokens"] == [20, 21, 201]
@@ -30,6 +32,8 @@ def test_path_lcp_max_is_superset_of_path0() -> None:
     )
 
     assert result["accepted_len"] == 2
+    assert result["path0_lcp"] == 2
+    assert result["superset_violation"] is False
     assert result["accepted_row"] == 4
     assert result["accepted_node_ids"] == [0, 3]
     assert result["output_tokens"] == [10, 11, 101]
@@ -46,6 +50,8 @@ def test_path_lcp_max_tie_preserves_path0_order() -> None:
     )
 
     assert result["accepted_len"] == 1
+    assert result["path0_lcp"] == 1
+    assert result["superset_violation"] is False
     assert result["accepted_row"] == 1
     assert result["accepted_node_ids"] == [0]
     assert result["output_tokens"] == [10, 99]
@@ -77,6 +83,8 @@ def test_path_lcp_max_handles_ten_spines() -> None:
     )
 
     assert result["accepted_len"] == 2
+    assert result["path0_lcp"] == 0
+    assert result["superset_violation"] is False
     assert result["accepted_row"] == 18
     assert result["accepted_node_ids"] == [7, 17]
     assert result["output_tokens"] == [107, 207, 2007]

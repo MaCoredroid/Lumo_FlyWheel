@@ -47,6 +47,7 @@ def _tree_path_lcp_max_reference(
 
     best_path: list[int] = []
     best_lcp = -1
+    path_scores: list[dict[str, object]] = []
     for leaf in leaves:
         path: list[int] = []
         node = int(leaf)
@@ -61,11 +62,17 @@ def _tree_path_lcp_max_reference(
             if int(draft_tokens[node]) != int(parent_target_tokens[node]):
                 break
             lcp += 1
+        path_scores.append({
+            "leaf": int(leaf),
+            "path": [int(x) for x in path],
+            "lcp": int(lcp),
+        })
         if lcp > best_lcp:
             best_lcp = lcp
             best_path = path
 
     best_lcp = max(0, best_lcp)
+    path0_lcp = int(path_scores[0]["lcp"]) if path_scores else 0
     out_tokens = [int(draft_tokens[node]) for node in best_path[:best_lcp]]
     if best_path:
         if best_lcp < len(best_path):
@@ -80,6 +87,9 @@ def _tree_path_lcp_max_reference(
         "accepted_row": accepted_row,
         "accepted_node_ids": best_path[:best_lcp],
         "winner_path": best_path,
+        "path0_lcp": path0_lcp,
+        "superset_violation": bool(best_lcp < path0_lcp),
+        "path_scores": path_scores,
         "output_tokens": out_tokens,
     }
 
@@ -3497,6 +3507,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 best_leaf = int(leaf)
 
         best_lcp = max(0, int(best_lcp))
+        path0_lcp = int(path_scores[0]['lcp']) if path_scores else 0
         row = []
         for node in best_path[:best_lcp]:
             row.append(int(drafts[node]))
@@ -3517,6 +3528,9 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             'accepted_len': int(best_lcp),
             'accepted_final_row': int(accepted_row),
             'accepted_node_ids': [int(x) for x in best_path[:best_lcp]],
+            'path0_lcp': int(path0_lcp),
+            'superset_violation': bool(int(best_lcp) < int(path0_lcp)),
+            'superset_delta': int(best_lcp) - int(path0_lcp),
             'winner_leaf': int(best_leaf),
             'winner_path': [int(x) for x in best_path],
             'path_scores': path_scores,

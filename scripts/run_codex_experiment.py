@@ -25,18 +25,31 @@ import json
 import subprocess
 import sys
 import time
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path("/home/mark/shared/lumoFlyWheel")
 ALIEN = "alienware"
-PROXY = "http://127.0.0.1:8022/v1/models"
-VLLM_METRICS = "http://127.0.0.1:9950/metrics"
+PROXY = os.environ.get("LUMO_CODEX_PROXY_MODELS_URL",
+                       "http://127.0.0.1:8022/v1/models")
+VLLM_METRICS = os.environ.get("LUMO_VLLM_METRICS_URL",
+                              "http://127.0.0.1:9950/metrics")
 NSYS = "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys"
-STEPTRACE = "/tmp/swe_dgx_steptrace.jsonl"
-REQUEST_METRICS = "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl"
-PER_REQ_SPEC_TRACE = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl"
-TREE_ACCEPT_PATH_TRACE = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/tree_accept_path.jsonl"
+STEPTRACE = os.environ.get("LUMO_SWE_DGX_STEPTRACE",
+                           "/tmp/swe_dgx_steptrace.jsonl")
+REQUEST_METRICS = os.environ.get(
+    "LUMO_TRACK_B_REQUEST_METRICS_OUT",
+    "/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl")
+PER_REQ_SPEC_TRACE = os.environ.get(
+    "LUMO_PER_REQ_SPEC_TRACE",
+    "/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl")
+TREE_ACCEPT_PATH_TRACE = os.environ.get(
+    "LUMO_TREE_ACCEPT_PATH_LOG",
+    "/tmp/lumo-l0c-fp8-cutlass-run30-logs/tree_accept_path.jsonl")
+TREE_PATH_LCP_TRACE = os.environ.get(
+    "LUMO_TREE_PATH_LCP_LOG",
+    "/tmp/lumo-l0c-fp8-cutlass-run30-logs/tree_path_lcp_max.jsonl")
 
 
 def sh(cmd: list[str], **kw) -> subprocess.CompletedProcess:
@@ -54,7 +67,6 @@ def log(msg: str) -> None:
 def set_temperature(temp: str) -> None:
     """Restart the proxy forcing a sampling temperature (1.0 or 0.6). Cheap,
     no GPU/sudo - just re-execs the proxy with LUMO_PROXY_FORCE_TEMPERATURE set."""
-    import os
     env = dict(os.environ, LUMO_PROXY_FORCE_TEMPERATURE=str(temp))
     log(f"setting proxy temperature={temp} (restarting proxy)")
     sh(["bash", str(REPO / "scripts/swe_x86_helpers/relaunch_proxy.sh")], env=env)
@@ -71,7 +83,6 @@ def apply_config(config: str, mtp: int = 1, kv_cache_dtype: str | None = None) -
     parameterized round relaunch (/tmp/relaunch_qwen36_round.py, which also
     applies the per-agent spec-step trace patch); A/off fall back to the older
     /tmp scripts. Needs LUMO_SUDO_PASSWORD (host-memory recovery)."""
-    import os
     if not os.environ.get("LUMO_SUDO_PASSWORD"):
         sys.exit("LUMO_SUDO_PASSWORD required to relaunch vLLM (source .lumo.local.env)")
     round_script = "/tmp/relaunch_qwen36_round.py"
@@ -219,6 +230,8 @@ def rsync_back(args) -> Path:
     sh(["cp", PER_REQ_SPEC_TRACE, str(local / "per_req_spec_trace.jsonl")])
     if Path(TREE_ACCEPT_PATH_TRACE).exists():
         sh(["cp", TREE_ACCEPT_PATH_TRACE, str(local / "tree_accept_path.jsonl")])
+    if Path(TREE_PATH_LCP_TRACE).exists():
+        sh(["cp", TREE_PATH_LCP_TRACE, str(local / "tree_path_lcp_max.jsonl")])
     return local
 
 
