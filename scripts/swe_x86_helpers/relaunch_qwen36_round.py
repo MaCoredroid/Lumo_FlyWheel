@@ -2058,17 +2058,21 @@ if ta.exists():
     if sentinel in text:
         print('[TRACK-B-PRELAUNCH] tree-attn uniform-batch cudagraph patch already present')
     else:
-        changed = False
-        for old in (
-            'return AttentionCGSupport.NEVER',
-            'return AttentionCGSupport.NEVER  #',
-        ):
-            if old in text:
-                text = text.replace(old, 'return AttentionCGSupport.UNIFORM_BATCH', 1)
-                changed = True
-                break
-        if not changed:
-            raise RuntimeError('TreeAttentionBackend cudagraph support anchor not found')
+        if 'AttentionCGSupport,' not in text:
+            text = text.replace(
+                '    AttentionBackend,\n',
+                '    AttentionBackend,\n    AttentionCGSupport,\n',
+                1,
+            )
+        class_anchor = 'class TreeAttentionBackend(AttentionBackend):\n'
+        if class_anchor not in text:
+            raise RuntimeError('TreeAttentionBackend class anchor not found')
+        text = text.replace(
+            class_anchor,
+            class_anchor
+            + '    _cudagraph_support: ClassVar[AttentionCGSupport] = AttentionCGSupport.UNIFORM_BATCH\n',
+            1,
+        )
         text = sentinel + '\n' + text
         ta.write_text(text)
         import py_compile
