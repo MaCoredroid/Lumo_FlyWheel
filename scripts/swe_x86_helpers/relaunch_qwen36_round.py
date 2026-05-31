@@ -12062,12 +12062,12 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
             "LUMO_MULTI_SPINE must not be combined with LUMO_FB_TWO_SPINE; "
             "the latter is the retired inject/collapse experiment path")
     if multi_spine:
-        raise RuntimeError(
-            "LUMO_MULTI_SPINE fail-closed: the current launcher routes through "
-            "kernel_rows/internal request rows and per-step cleanup "
-            "(remove_request/condense), which is the retired sibling-collapse "
-            "mechanism. Rebuild must use persistent static-shape rows plus "
-            "LUMO_MULTI_SPINE_COPY_RECURRENT_STATE before any B=4 run.")
+        if (os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1"
+                or os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"):
+            raise RuntimeError(
+                "LUMO_MULTI_SPINE must not use LUMO_FB_INTERNAL_ROWS or "
+                "LUMO_FB_KERNEL_ROWS; FR8 multi-spine is the single-request "
+                "FA unique-node verifier with copied GDN state.")
     kernel_rows_requested = os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
     fb_k = (os.environ.get("LUMO_MS_SPINES", "2")
             if multi_spine else
@@ -12090,11 +12090,10 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     multi_spine_env = (
         "export LUMO_MULTI_SPINE=1\n"
         f"export LUMO_MS_SPINES={os.environ.get('LUMO_MS_SPINES', '2')}\n"
-        "export LUMO_FB_INTERNAL_ROWS=1\n"
-        "export LUMO_FB_KERNEL_ROWS=1\n"
+        f"export LUMO_TREE_SPINES={os.environ.get('LUMO_TREE_SPINES', os.environ.get('LUMO_MS_SPINES', '2'))}\n"
+        "export LUMO_FA_UNIQUE_NODES=1\n"
         "export LUMO_FB_NO_KV_PREFIX_COPY=1\n"
         "export LUMO_FB_DISABLE_SHARED_ROOT=1\n"
-        "export LUMO_FB_POSITION_TREE=0\n"
         if multi_spine else ""
     )
     fb_tree_branch_depth = f"export LUMO_FB_TREE_BRANCH_DEPTH={os.environ['LUMO_FB_TREE_BRANCH_DEPTH']}\n" if os.environ.get("LUMO_FB_TREE_BRANCH_DEPTH") else ""
@@ -12417,17 +12416,35 @@ def main() -> int:
                          "the fp8 checkpoint accepts (fp8_e5m2 is rejected -> auto). Default: "
                          "use the bundle's value (fp8_e5m2 -> auto for this checkpoint).")
     args = ap.parse_args()
+    multi_spine = os.environ.get("LUMO_MULTI_SPINE") == "1"
+    if multi_spine:
+        if os.environ.get("LUMO_FB_TWO_SPINE") == "1":
+            raise RuntimeError(
+                "LUMO_MULTI_SPINE must not be combined with LUMO_FB_TWO_SPINE")
+        if (os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1"
+                or os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"):
+            raise RuntimeError(
+                "LUMO_MULTI_SPINE is collapse-free only: unset "
+                "LUMO_FB_INTERNAL_ROWS/LUMO_FB_KERNEL_ROWS")
+        # Preserve existing Fb launch invocations, but route FR8 multi-spine to
+        # the single-request tree verifier instead of the retired internal-row
+        # scheduler path. max_num_seqs remains the user batch size.
+        if args.config == "Fb":
+            args.config = "F"
+        if args.config != "F":
+            raise RuntimeError(
+                "LUMO_MULTI_SPINE requires config F so the MTP bundle carries "
+                "a speculative_token_tree")
+        os.environ.setdefault("LUMO_TREE_SPINES",
+                              os.environ.get("LUMO_MS_SPINES", "2"))
+        os.environ["LUMO_FA_UNIQUE_NODES"] = "1"
+        os.environ.setdefault("LUMO_FB_NO_KV_PREFIX_COPY", "1")
     is_tree = args.config == "F"
     is_fb = args.config == "Fb"
-    if (is_fb and (os.environ.get("LUMO_FB_TWO_SPINE") == "1"
-                   or os.environ.get("LUMO_MULTI_SPINE") == "1")
+    if (is_fb and os.environ.get("LUMO_FB_TWO_SPINE") == "1"
             and os.environ.get("LUMO_VLLM_MAX_NUM_SEQS") is None):
-        # Multi-spine verifies co-resident request rows per user request. The
-        # SWE gate is still B=4 user concurrency, so reserve B * N row slots.
-        spines = 2
-        if os.environ.get("LUMO_MULTI_SPINE") == "1":
-            spines = max(2, int(os.environ.get("LUMO_MS_SPINES", "2")))
-        os.environ["LUMO_VLLM_MAX_NUM_SEQS"] = str(4 * spines)
+        # Retired two-spine request-row route; kept only for old experiments.
+        os.environ["LUMO_VLLM_MAX_NUM_SEQS"] = "8"
     if ((is_fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
             or os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"):
         os.environ["LUMO_BATCH_INVARIANT_VLLM"] = "1"
