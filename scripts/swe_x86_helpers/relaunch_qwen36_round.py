@@ -7627,13 +7627,6 @@ def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
 
 def _lumo_fb_drop_scheduled_req(scheduler_output, req_id):
     try:
-        if req_id in scheduler_output.num_scheduled_tokens:
-            n = int(scheduler_output.num_scheduled_tokens.get(req_id, 0) or 0)
-            scheduler_output.total_num_scheduled_tokens -= n
-            scheduler_output.num_scheduled_tokens[req_id] = 0
-    except Exception:
-        pass
-    try:
         scheduler_output.scheduled_spec_decode_tokens.pop(req_id, None)
     except Exception:
         pass
@@ -7645,16 +7638,6 @@ def _lumo_fb_drop_scheduled_req(scheduler_output, req_id):
 def _lumo_fb_rename_scheduled_req(scheduler_output, old_id, new_id):
     if old_id == new_id:
         return
-    try:
-        if old_id in scheduler_output.num_scheduled_tokens:
-            n = scheduler_output.num_scheduled_tokens.get(old_id)
-            scheduler_output.num_scheduled_tokens[old_id] = 0
-            if new_id in scheduler_output.num_scheduled_tokens:
-                scheduler_output.total_num_scheduled_tokens -= int(
-                    scheduler_output.num_scheduled_tokens.get(new_id) or 0)
-            scheduler_output.num_scheduled_tokens[new_id] = n
-    except Exception:
-        pass
     try:
         if old_id in scheduler_output.scheduled_spec_decode_tokens:
             scheduler_output.scheduled_spec_decode_tokens[new_id] = (
