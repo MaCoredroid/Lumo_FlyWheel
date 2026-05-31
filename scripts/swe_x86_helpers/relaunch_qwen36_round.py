@@ -7773,6 +7773,70 @@ def _lumo_fb_inherit_clone_mamba_state(self, scheduler_output):
         if ok:
             self.mamba_state_idx[rid] = parent_idx
 
+def _lumo_fb_prune_nonpositive_clone_rows(self, scheduler_output, phase):
+    marker = "::lumo_fb::"
+    bad_rows = []
+    try:
+        for rid, num_scheduled in list(scheduler_output.num_scheduled_tokens.items()):
+            if marker in rid and int(num_scheduled) <= 0:
+                bad_rows.append((rid, int(num_scheduled)))
+    except Exception:
+        return
+    if not bad_rows:
+        return
+    for rid, _num_scheduled in bad_rows:
+        try:
+            scheduler_output.num_scheduled_tokens.pop(rid, None)
+            scheduler_output.scheduled_spec_decode_tokens.pop(rid, None)
+            scheduler_output.finished_req_ids.discard(rid)
+        except Exception:
+            pass
+        try:
+            self.input_batch.remove_request(rid)
+        except Exception:
+            pass
+        try:
+            self.requests.pop(rid, None)
+        except Exception:
+            pass
+        try:
+            self.mamba_state_idx.pop(rid, None)
+        except Exception:
+            pass
+    try:
+        scheduler_output.total_num_scheduled_tokens = sum(
+            max(0, int(num_scheduled))
+            for num_scheduled in scheduler_output.num_scheduled_tokens.values()
+        )
+    except Exception:
+        pass
+    try:
+        self.input_batch.condense()
+        self.input_batch.refresh_metadata()
+    except Exception:
+        pass
+    if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
+        try:
+            import json as _fbj, time as _fbt
+            global _LUMO_FB_STATE_DBG_FH
+            try:
+                _LUMO_FB_STATE_DBG_FH
+            except NameError:
+                _LUMO_FB_STATE_DBG_FH = open("/logs/fb_state_debug.jsonl", "a", buffering=1)
+            _LUMO_FB_STATE_DBG_FH.write(_fbj.dumps({
+                "ts": round(_fbt.time(), 4),
+                "phase": phase,
+                "event": "prune_nonpositive_clone_rows",
+                "rows": [
+                    {"rid": rid, "num_scheduled": num_scheduled}
+                    for rid, num_scheduled in bad_rows
+                ],
+                "total_num_scheduled_tokens": getattr(
+                    scheduler_output, "total_num_scheduled_tokens", None),
+            }) + chr(10))
+        except Exception:
+            pass
+
 def _lumo_fb_state_debug(self, scheduler_output, phase):
     if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
         return
@@ -7841,6 +7905,8 @@ def _lumo_fb_update_states(self, scheduler_output):
     if _lumo_fb_os.environ.get("LUMO_FB_PATHS") == "1":
         _lumo_fb_restore_parent_accept_lens(self)
         _lumo_fb_inherit_clone_mamba_state(self, scheduler_output)
+        _lumo_fb_prune_nonpositive_clone_rows(
+            self, scheduler_output, "after_update_states")
         _lumo_fb_state_debug(self, scheduler_output, "after_update_states")
         _lumo_fb_copies = list(getattr(scheduler_output, "lumo_fb_block_copies", []) or [])
         _lumo_fb_copy_us = 0
