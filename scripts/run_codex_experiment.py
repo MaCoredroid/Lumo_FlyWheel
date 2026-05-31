@@ -236,6 +236,33 @@ def rsync_back(args) -> Path:
     return local
 
 
+def finalize_tree_superset(local: Path) -> None:
+    trace = local / "tree_path_lcp_max.jsonl"
+    if not trace.exists():
+        return
+    summary = local / "tree_path_lcp_superset_summary.json"
+    cmd = [
+        sys.executable,
+        str(REPO / "scripts/verify_tree_path_lcp_superset.py"),
+        str(trace),
+        "--json",
+    ]
+    result = sh(cmd, cwd=str(REPO))
+    if result.returncode != 0:
+        sys.exit(
+            "tree path-LCP superset verification failed:\n"
+            f"{result.stdout}{result.stderr}"
+        )
+    summary.write_text(result.stdout.strip() + "\n", encoding="utf-8")
+    data = json.loads(result.stdout)
+    log(
+        "tree superset verified: "
+        f"rows={data['rows']} avg_path0={data['avg_path0_lcp']:.3f} "
+        f"avg_winner={data['avg_accepted_len']:.3f} "
+        f"recovered_tokens={data['recovered_token_total']}"
+    )
+
+
 def task_verdict(meta: Path) -> tuple[str, float | None]:
     try:
         d = json.loads(meta.read_text())
@@ -262,6 +289,8 @@ def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
         paths.append(f"{rel}/tree_accept_path.jsonl")
     if (REPO / rel / "tree_path_lcp_max.jsonl").exists():
         paths.append(f"{rel}/tree_path_lcp_max.jsonl")
+    if (REPO / rel / "tree_path_lcp_superset_summary.json").exists():
+        paths.append(f"{rel}/tree_path_lcp_superset_summary.json")
     if joined:
         paths.append(str(joined.relative_to(REPO)))
     nrep = REPO / f"{rel}/nsight_{args.exp_tag}.nsys-rep"
@@ -355,6 +384,7 @@ def main() -> int:
                 if not args.no_commit:
                     commit_task(args, tid, verdict, joined)
                 committed.add(tid)
+            finalize_tree_superset(local)
             log(f"suite finished; {len(committed)} task(s) committed")
             return 0
         time.sleep(args.poll_s)
