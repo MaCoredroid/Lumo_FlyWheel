@@ -90,6 +90,48 @@ def test_path_lcp_max_handles_ten_spines() -> None:
     assert result["output_tokens"] == [107, 207, 2007]
 
 
+def test_path_lcp_max_matches_exhaustive_n_spine_oracle() -> None:
+    for spines in range(2, 11):
+        for depth in range(1, 6):
+            parents = []
+            drafts = []
+            targets = []
+            self_targets = []
+            paths = []
+            for root in range(spines):
+                path = []
+                parent = -1
+                for level in range(depth):
+                    node = len(parents)
+                    parents.append(parent)
+                    token = 1000 + root * 100 + level
+                    drafts.append(token)
+                    # Deterministic mixed accept lengths across roots. Some
+                    # roots beat path0, some tie, and some underperform it.
+                    accept_len = (root * 3 + depth) % (depth + 1)
+                    targets.append(token if level < accept_len else -token)
+                    self_targets.append(9000 + root * 100 + level)
+                    path.append(node)
+                    parent = node
+                paths.append(path)
+
+            result = _tree_path_lcp_max_reference(
+                parents=parents,
+                draft_tokens=drafts,
+                parent_target_tokens=targets,
+                self_target_tokens=self_targets,
+            )
+            expected_lcps = [
+                sum(1 for node in path if drafts[node] == targets[node])
+                for path in paths
+            ]
+
+            assert result["accepted_len"] == max(expected_lcps)
+            assert result["path0_lcp"] == expected_lcps[0]
+            assert result["superset_violation"] is False
+            assert result["accepted_len"] >= result["path0_lcp"]
+
+
 def test_default_tree_width_is_configurable(monkeypatch) -> None:
     monkeypatch.setenv("LUMO_TREE_SPINES", "4")
 
