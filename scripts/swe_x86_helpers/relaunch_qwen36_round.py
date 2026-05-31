@@ -275,6 +275,246 @@ else:
 LUMOCCONVASSERT
 '''
 
+_MAMBA_ALIGN_DUP_STATE_FREE_FIX_BLOCK = r"""
+python3 - <<'LUMOMAMBADUPFREE'
+from pathlib import Path
+import py_compile
+
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/single_type_kv_cache_manager.py')
+text = p.read_text()
+sentinel = '# LUMO_MAMBA_ALIGN_DUP_STATE_FREE_FIX'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] Mamba align duplicate-state free fix already present')
+else:
+    old = '''                if blocks[last_state_block_idx] != self._null_block:
+                    self.block_pool.free_blocks([blocks[last_state_block_idx]])
+                    blocks[last_state_block_idx] = self._null_block
+'''
+    new = '''                if blocks[last_state_block_idx] != self._null_block:
+                    # LUMO_MAMBA_ALIGN_DUP_STATE_FREE_FIX: align-mode Mamba
+                    # block tables can contain the same physical recurrent
+                    # state block in multiple logical slots after speculative
+                    # state promotion.  Freeing last_state_block_idx blindly
+                    # can put a still-referenced block on the free queue; a
+                    # later allocation then pops it with ref_cnt > 0.  Null the
+                    # skipped slot, but only decrement the physical block when
+                    # no other slot in this request still names it.
+                    block = blocks[last_state_block_idx]
+                    block_id = getattr(block, "block_id", None)
+                    still_referenced = any(
+                        idx != last_state_block_idx
+                        and other != self._null_block
+                        and getattr(other, "block_id", None) == block_id
+                        for idx, other in enumerate(blocks)
+                    )
+                    blocks[last_state_block_idx] = self._null_block
+                    if not still_referenced:
+                        self.block_pool.free_blocks([block])
+'''
+    if old not in text:
+        raise RuntimeError('Mamba align duplicate-state free anchor not found')
+    text = text.replace(old, new, 1)
+    old = '''            if num_required_blocks == len(req_blocks):
+                return []
+            else:
+                assert num_required_blocks > len(req_blocks), (
+                    "num_required_blocks "
+                    f"{num_required_blocks} < len(req_blocks) {len(req_blocks)}"
+                )
+'''
+    new = '''            if num_required_blocks < len(req_blocks):
+                # LUMO_MAMBA_ALIGN_DUP_STATE_FREE_FIX: accepted speculative
+                # prefixes can make the next main-model requirement shorter
+                # than the previous align-mode speculative block table.  Trim
+                # the stale tail before allocating new blocks, freeing only
+                # physical blocks no remaining logical slot still references.
+                removed_blocks = req_blocks[num_required_blocks:]
+                del req_blocks[num_required_blocks:]
+                remaining_ids = {
+                    getattr(block, "block_id", None)
+                    for block in req_blocks
+                    if block != self._null_block
+                }
+                to_free = []
+                seen_removed = set()
+                for block in removed_blocks:
+                    if block == self._null_block:
+                        continue
+                    block_id = getattr(block, "block_id", None)
+                    if block_id in remaining_ids or block_id in seen_removed:
+                        continue
+                    seen_removed.add(block_id)
+                    if getattr(block, "ref_cnt", 0) > 0:
+                        to_free.append(block)
+                if to_free:
+                    self.block_pool.free_blocks(to_free)
+            if num_required_blocks == len(req_blocks):
+                return []
+            else:
+                assert num_required_blocks > len(req_blocks), (
+                    "num_required_blocks "
+                    f"{num_required_blocks} < len(req_blocks) {len(req_blocks)}"
+                )
+'''
+    if old not in text:
+        raise RuntimeError('Mamba align overlong block-table trim anchor not found')
+    text = text.replace(old, new, 1)
+    p.write_text(text)
+    py_compile.compile(str(p), doraise=True)
+print('[TRACK-B-PRELAUNCH] applied Mamba align duplicate-state free fix')
+LUMOMAMBADUPFREE
+"""
+
+_FREE_QUEUE_MEMBERSHIP_FIX_BLOCK = r"""
+python3 - <<'LUMOFREEQUEUEMEMBERSHIP'
+from pathlib import Path
+import py_compile
+
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_utils.py')
+text = p.read_text()
+sentinel = '# LUMO_FREE_QUEUE_MEMBERSHIP_FIX'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] free queue membership fix already present')
+else:
+    old = '''        # Connect the new block after the last block.
+        last_block.next_free_block = block
+        block.prev_free_block = last_block
+
+        # Connect the fake tail after the new block.
+        block.next_free_block = self.fake_free_list_tail
+        self.fake_free_list_tail.prev_free_block = block
+
+        self.num_free_blocks += 1
+'''
+    new = '''        # LUMO_FREE_QUEUE_MEMBERSHIP_FIX: append is a queue-membership
+        # operation.  A block that is already linked into the free list must not
+        # be appended again; doing so leaves duplicate/stale references that can
+        # later be popped after the block has been reallocated.
+        if block.prev_free_block is not None or block.next_free_block is not None:
+            return
+
+        # Connect the new block after the last block.
+        last_block.next_free_block = block
+        block.prev_free_block = last_block
+
+        # Connect the fake tail after the new block.
+        block.next_free_block = self.fake_free_list_tail
+        self.fake_free_list_tail.prev_free_block = block
+
+        self.num_free_blocks += 1
+'''
+    if old not in text:
+        raise RuntimeError('FreeKVCacheBlockQueue append membership anchor not found')
+    text = text.replace(old, new, 1)
+    old = '''        # Add inter-connections between consecutive blocks
+        for block in blocks:
+            block.prev_free_block = last_block
+            last_block.next_free_block = block
+            last_block = block
+
+        # Connect the last block of <blocks> to the fake tail
+        last_block.next_free_block = self.fake_free_list_tail
+        self.fake_free_list_tail.prev_free_block = last_block
+
+        self.num_free_blocks += len(blocks)
+'''
+    new = '''        # LUMO_FREE_QUEUE_MEMBERSHIP_FIX: append each physical block at most
+        # once, and never append a block that is already linked into this free
+        # list.  This is the global backstop for Mamba align-mode tables whose
+        # logical slots can alias the same recurrent state block.
+        linked_blocks = []
+        seen_block_ids = set()
+        for block in blocks:
+            block_id = getattr(block, "block_id", id(block))
+            if block_id in seen_block_ids:
+                continue
+            seen_block_ids.add(block_id)
+            if block.prev_free_block is not None or block.next_free_block is not None:
+                continue
+            linked_blocks.append(block)
+
+        if len(linked_blocks) == 0:
+            return
+
+        # Add inter-connections between consecutive blocks
+        for block in linked_blocks:
+            block.prev_free_block = last_block
+            last_block.next_free_block = block
+            last_block = block
+
+        # Connect the last block of <blocks> to the fake tail
+        last_block.next_free_block = self.fake_free_list_tail
+        self.fake_free_list_tail.prev_free_block = last_block
+
+        self.num_free_blocks += len(linked_blocks)
+'''
+    if old not in text:
+        raise RuntimeError('FreeKVCacheBlockQueue append_n membership anchor not found')
+    text = text.replace(old, new, 1)
+    p.write_text(text)
+    py_compile.compile(str(p), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied free queue membership fix')
+LUMOFREEQUEUEMEMBERSHIP
+"""
+
+_BLOCK_POOL_DEDUP_FREE_FIX_BLOCK = r"""
+python3 - <<'LUMOBLOCKPOOLDEDUP'
+from pathlib import Path
+import py_compile
+
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/block_pool.py')
+text = p.read_text()
+sentinel = '# LUMO_BLOCK_POOL_DEDUP_FREE_FIX'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] BlockPool dedup free fix already present')
+else:
+    old = '''        # Materialize the iterable to allow multiple passes.
+        blocks_list = list(ordered_blocks)
+        for block in blocks_list:
+            block.ref_cnt -= 1
+        self.free_block_queue.append_n(
+            [block for block in blocks_list if block.ref_cnt == 0 and not block.is_null]
+        )
+'''
+    new = '''        # Materialize the iterable to allow multiple passes.
+        blocks_list = list(ordered_blocks)
+        # LUMO_BLOCK_POOL_DEDUP_FREE_FIX: Mamba align block tables can contain
+        # the same physical state block in multiple logical slots.  A single
+        # request free must release that physical block once; otherwise append_n
+        # can enqueue duplicate references and the second copy later trips
+        # get_new_blocks with ref_cnt > 0.
+        unique_blocks = []
+        seen_block_ids = set()
+        for block in blocks_list:
+            block_id = getattr(block, "block_id", id(block))
+            if block_id in seen_block_ids:
+                continue
+            seen_block_ids.add(block_id)
+            unique_blocks.append(block)
+        blocks_list = unique_blocks
+        filtered_blocks = []
+        for block in blocks_list:
+            if (not block.is_null and block.ref_cnt == 0
+                    and block.prev_free_block is not None
+                    and block.next_free_block is not None):
+                continue
+            filtered_blocks.append(block)
+        blocks_list = filtered_blocks
+        for block in blocks_list:
+            block.ref_cnt -= 1
+        self.free_block_queue.append_n(
+            [block for block in blocks_list if block.ref_cnt == 0 and not block.is_null]
+        )
+'''
+    if old not in text:
+        raise RuntimeError('BlockPool free_blocks dedup anchor not found')
+    text = text.replace(old, new, 1)
+    p.write_text(text)
+    py_compile.compile(str(p), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied BlockPool dedup free fix')
+LUMOBLOCKPOOLDEDUP
+"""
+
 
 # F_b kernel-row foundation: let the GDN SSM recurrent update read its initial
 # state from one state slot and write the evolved per-token states to another
@@ -5663,6 +5903,9 @@ def _lumo_fb_spine_only_state_tree_event(active_depth, proposer_us,
         "replay_idx": replay_idx,
     }
 
+def _lumo_fb_two_spine_enabled():
+    return _lumo_fb_os.environ.get("LUMO_FB_TWO_SPINE") == "1"
+
 def _lumo_fb_debug_write(event):
     if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
         return
@@ -6188,12 +6431,23 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
             self, target_token_ids, target_positions, target_hidden_states,
             next_token_ids, token_indices_to_sample, common_attn_metadata,
             sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
-    if common_attn_metadata.batch_size() != 1:
+    if common_attn_metadata.batch_size() != 1 and not _lumo_fb_two_spine_enabled():
         return _lumo_fb_orig_propose(
             self, target_token_ids, target_positions, target_hidden_states,
             next_token_ids, token_indices_to_sample, common_attn_metadata,
             sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
     batch_size = common_attn_metadata.batch_size()
+    if _lumo_fb_two_spine_enabled() and int(next_token_ids.numel()) != int(batch_size):
+        try:
+            _lumo_fb_debug_write({
+                "ts": round(_lumo_fb_time.time(), 4),
+                "event": "fb_two_spine_batch_mismatch_path0_only",
+                "metadata_batch_size": int(batch_size),
+                "next_token_count": int(next_token_ids.numel()),
+            })
+        except Exception:
+            pass
+        return next_token_ids.reshape(-1, 1).repeat(1, int(active_depth)).contiguous()
     if self.method == "eagle3":
         target_hidden_states = self.model.combine_hidden_states(target_hidden_states)
     num_tokens, token_indices_to_sample, common_attn_metadata = self.set_inputs_first_pass(
@@ -6269,9 +6523,11 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
         policy_info = dict(policy_info)
         policy_info["fb_policy_k"] = 2
         policy_info["fb_policy_reason"] = "duplicate_path_gate"
-    root_candidates = _lumo_fb_torch.topk(
+    root_topk = _lumo_fb_torch.topk(
         logits, min(16, logits.shape[-1]), dim=-1
-    ).indices.view(-1)
+    ).indices
+    root_candidates = root_topk[0].reshape(-1)
+    raw_roots_by_batch = root_topk[:, :2].contiguous()
     raw_roots = root_candidates[:2].view(2, 1)
     real_roots = []
     for tok in root_candidates.tolist():
@@ -6290,10 +6546,12 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
     else:
         positions = self.positions[token_indices_to_sample]
     base_hidden_states = hidden_states[token_indices_to_sample]
-    # LUMO_FB_DUP_PATH1_TEST: duplicate-path discriminator keeps path0 as the
-    # raw MTP top-1 chain so it remains directly comparable to K=1.
+    # LUMO_FB_DUP_PATH1_TEST and LUMO_FB_TWO_SPINE keep path0 as the raw MTP
+    # top-1 chain so it remains token-for-token comparable to native E.
     _lumo_fb_path0_root = raw_roots[0] if (
-        policy_k == 1 or _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1"
+        policy_k == 1
+        or _lumo_fb_os.environ.get("LUMO_FB_DUP_PATH1") == "1"
+        or _lumo_fb_two_spine_enabled()
     ) else roots[0]
     if requested_k == 1 and _lumo_fb_os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE"):
         replay = _lumo_fb_replay_next(device=base_hidden_states.device)
@@ -6398,6 +6656,43 @@ def _lumo_fb_propose(self, target_token_ids, target_positions, target_hidden_sta
                     "raw_roots": raw_roots.view(-1).tolist(),
                     "roots": [int(out[0, 0].item())],
                     "root_candidates": root_candidates[:8].tolist(),
+                    "draft": out.tolist(),
+                    "policy": policy_info,
+                }) + chr(10))
+        except Exception:
+            pass
+        return out
+    if _lumo_fb_two_spine_enabled():
+        raw_root0 = raw_roots_by_batch[:, 0].contiguous()
+        raw_root1 = raw_roots_by_batch[:, 1].contiguous()
+        path0 = _lumo_fb_extend_one(
+            self, raw_root0, positions, base_hidden_states,
+            common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
+            num_rejected_tokens_gpu, draft_len=active_depth)
+        path1 = _lumo_fb_extend_one(
+            self, raw_root1, positions, base_hidden_states,
+            common_attn_metadata, batch_size, dict(per_layer_attn_metadata),
+            num_rejected_tokens_gpu, draft_len=active_depth)
+        out = _lumo_fb_torch.cat([
+            path0[:, :active_depth],
+            path1[:, :active_depth],
+        ], dim=1)
+        try:
+            if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
+                import json as _j, time as _t
+                try:
+                    _LUMO_FB_DBG_FH
+                except NameError:
+                    _LUMO_FB_DBG_FH = open("/logs/fb_debug.jsonl", "a", buffering=1)
+                _LUMO_FB_DBG_FH.write(_j.dumps({
+                    "ts": round(_t.time(), 4),
+                    "event": "fb_two_spine_draft",
+                    "launch_n_max": int(self.num_speculative_tokens),
+                    "active_depth": int(active_depth),
+                    "active_k": int(policy_k),
+                    "fb_proposer_us": int((_lumo_fb_time.perf_counter_ns() - _lumo_fb_prop_t0) // 1000),
+                    "roots": raw_roots_by_batch[:, :2].tolist(),
+                    "root_candidates": root_topk[:, :8].tolist(),
                     "draft": out.tolist(),
                     "policy": policy_info,
                 }) + chr(10))
@@ -6583,6 +6878,50 @@ else:
 
 sch = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py')
 text = sch.read_text()
+sentinel = '# LUMO_FB_OPTIONC_WAITING_SPEC'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b Option C waiting-spec scheduler patch already present')
+else:
+    wait_idx = text.index('        # Next, schedule the WAITING requests.')
+    min_line = '                num_new_tokens = min(num_new_tokens, token_budget)\n'
+    min_idx = text.index(min_line, wait_idx)
+    insert_idx = min_idx + len(min_line)
+    text = (
+        text[:insert_idx]
+        + '                # LUMO_FB_OPTIONC_WAITING_SPEC: verifier clone rows enter\n'
+        + '                # through the normal WAITING/new-request path. When prefix\n'
+        + '                # cache has caught the clone up to its current sampled token,\n'
+        + '                # include its draft segment in the same per-request sampler\n'
+        + '                # pass instead of doing a custom KV/state clone.\n'
+        + '                if ("::lumo_fb::" in request_id and request.spec_token_ids\n'
+        + '                        and num_computed_tokens + num_new_tokens >= request.num_tokens):\n'
+        + '                    num_available_spec_tokens = token_budget - num_new_tokens\n'
+        + '                    if num_available_spec_tokens > 0:\n'
+        + '                        num_new_tokens += min(len(request.spec_token_ids),\n'
+        + '                                              num_available_spec_tokens)\n'
+        + text[insert_idx:]
+    )
+    cached_idx = text.index('                if request.num_cached_tokens < 0:\n', wait_idx)
+    encoder_idx = text.index('                # Encoder-related.\n', cached_idx)
+    text = (
+        text[:encoder_idx]
+        + '                if request.spec_token_ids:\n'
+        + '                    num_scheduled_spec_tokens = (\n'
+        + '                        num_new_tokens + num_computed_tokens - request.num_tokens)\n'
+        + '                    if num_scheduled_spec_tokens > 0:\n'
+        + '                        spec_token_ids = request.spec_token_ids\n'
+        + '                        if len(spec_token_ids) > num_scheduled_spec_tokens:\n'
+        + '                            spec_token_ids = spec_token_ids[:num_scheduled_spec_tokens]\n'
+        + '                        scheduled_spec_decode_tokens[request.request_id] = spec_token_ids\n'
+        + '                        request.spec_token_ids = []\n'
+        + text[encoder_idx:]
+    )
+    sch.write_text(text)
+    import py_compile
+    py_compile.compile(str(sch), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b Option C waiting/new-request spec patch')
+
+text = sch.read_text()
 sentinel = '# LUMO_FB_PATHS_SCHED'
 if sentinel in text:
     print('[TRACK-B-PRELAUNCH] F_b scheduler path clone patch already present')
@@ -6592,6 +6931,7 @@ else:
 # LUMO_FB_PATHS_SCHED: internal K=2 path requests + longest-accepted collapse.
 import os as _lumo_fb_os
 import json as _lumo_fb_json
+import time as _lumo_fb_time
 from vllm.v1.core.sched.output import NewRequestData as _LumoFBNewRequestData
 
 _lumo_fb_orig_schedule = Scheduler.schedule
@@ -6621,8 +6961,38 @@ def _lumo_fb_sched_read_control(default_depth):
         raise RuntimeError(f"LUMO_FB active K {k} unsupported in this build")
     return int(depth), int(k)
 
+def _lumo_fb_sched_debug(event):
+    if (_lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1"
+            and _lumo_fb_os.environ.get("LUMO_FB_SUPERSET_DIAG") != "1"):
+        return
+    try:
+        global _LUMO_FB_SCHED_DBG_FH
+        try:
+            _LUMO_FB_SCHED_DBG_FH
+        except NameError:
+            _LUMO_FB_SCHED_DBG_FH = open("/logs/fb_overhead_debug.jsonl", "a", buffering=1)
+        event["ts"] = round(_lumo_fb_time.time(), 4)
+        _LUMO_FB_SCHED_DBG_FH.write(_lumo_fb_json.dumps(event) + chr(10))
+    except Exception:
+        pass
+
 def _lumo_fb_block_ids_from_blocks(blocks):
     return tuple([blk.block_id for blk in group] for group in blocks)
+
+def _lumo_fb_new_req_data(req, block_ids, prompt_token_ids=None):
+    return _LumoFBNewRequestData(
+        req_id=req.request_id,
+        prompt_token_ids=(list(prompt_token_ids)
+                          if prompt_token_ids is not None
+                          else req.prompt_token_ids),
+        mm_features=req.mm_features,
+        sampling_params=req.sampling_params,
+        pooling_params=req.pooling_params,
+        block_ids=block_ids,
+        num_computed_tokens=req.num_computed_tokens,
+        lora_request=req.lora_request,
+        prompt_embeds=req.prompt_embeds,
+    )
 
 def _lumo_fb_clone_blocks(self, parent, clone_id):
     copies = []
@@ -6631,25 +7001,41 @@ def _lumo_fb_clone_blocks(self, parent, clone_id):
         block_size = manager.block_size
         if getattr(manager, "mamba_cache_mode", None) == "align":
             # Mamba/GDN align mode keeps the recurrent state in logical cache
-            # blocks beyond the token prefix. F_b verifier clones must keep the
-            # same logical layout but use independent physical blocks; otherwise
-            # the two sibling verifier rows overwrite each other's recurrent
-            # state during the batched target forward.
-            clone_blocks = []
-            for src in parent_blocks:
-                if src == getattr(manager, "_null_block", None):
-                    clone_blocks.append(src)
+            # blocks beyond the token prefix. Only the current state window is
+            # live for speculative verification: conv state reads cur_block_idx,
+            # temporal state reads cur_block_idx + accepted_len - 1. Preserve the
+            # parent logical layout, but sparsely clone only that O(1) window.
+            # Copying every non-null historical Mamba block turns a long agentic
+            # prompt into an O(sequence length) clone and can exhaust the pool.
+            null_block = getattr(manager, "_null_block", None)
+            clone_blocks = [null_block for _ in parent_blocks]
+            state_idx = None
+            if hasattr(manager, "last_state_block_idx"):
+                state_idx = manager.last_state_block_idx.get(parent.request_id)
+            if state_idx is None:
+                non_null = [
+                    i for i, blk in enumerate(parent_blocks)
+                    if blk is not None and blk != null_block
+                ]
+                state_idx = non_null[-1] if non_null else 0
+            state_idx = max(0, min(int(state_idx), max(0, len(parent_blocks) - 1)))
+            num_spec_blocks = int(getattr(manager, "num_speculative_blocks", 0))
+            for block_idx in range(state_idx, min(len(parent_blocks), state_idx + num_spec_blocks + 1)):
+                src = parent_blocks[block_idx]
+                if src is None or src == null_block:
                     continue
                 dst = manager.block_pool.get_new_blocks(1)[0]
-                clone_blocks.append(dst)
+                clone_blocks[block_idx] = dst
                 copies.append(("mamba", group_idx, src.block_id, dst.block_id))
             manager.req_to_blocks[clone_id] = clone_blocks
             manager.num_cached_block[clone_id] = min(
                 manager.num_cached_block.get(parent.request_id, len(clone_blocks)),
                 len(clone_blocks),
             )
-            if hasattr(manager, "last_state_block_idx") and parent.request_id in manager.last_state_block_idx:
-                manager.last_state_block_idx[clone_id] = manager.last_state_block_idx[parent.request_id]
+            if hasattr(manager, "last_state_block_idx"):
+                manager.last_state_block_idx[clone_id] = state_idx
+            if hasattr(manager, "_allocated_block_reqs") and parent.request_id in manager._allocated_block_reqs:
+                manager._allocated_block_reqs.add(clone_id)
             continue
         valid_tokens = max(0, int(parent.num_tokens) - 1)
         full_blocks = min(valid_tokens // block_size, len(parent_blocks))
@@ -6702,6 +7088,43 @@ def _lumo_fb_transfer_blocks(self, parent_id, winner_id, loser_id):
                     manager.last_state_block_idx.pop(parent_id, None)
                 manager.last_state_block_idx.pop(loser_id, None)
 
+def _lumo_fb_free_request_blocks(self, req_id):
+    for manager in self.kv_cache_manager.coordinator.single_type_managers:
+        blocks = manager.req_to_blocks.pop(req_id, [])
+        if blocks:
+            manager.block_pool.free_blocks(reversed(blocks))
+        manager.num_cached_block.pop(req_id, None)
+        if hasattr(manager, "_allocated_block_reqs"):
+            manager._allocated_block_reqs.discard(req_id)
+        if hasattr(manager, "last_state_block_idx"):
+            manager.last_state_block_idx.pop(req_id, None)
+
+def _lumo_fb_transfer_parent_native_blocks(self, parent_id, winner_id, clone_id):
+    if winner_id == parent_id:
+        _lumo_fb_free_request_blocks(self, clone_id)
+        return
+    for manager in self.kv_cache_manager.coordinator.single_type_managers:
+        winner_allocated = False
+        if hasattr(manager, "_allocated_block_reqs"):
+            winner_allocated = winner_id in manager._allocated_block_reqs
+        old_parent = manager.req_to_blocks.pop(parent_id, [])
+        if old_parent:
+            manager.block_pool.free_blocks(reversed(old_parent))
+        winner_blocks = manager.req_to_blocks.pop(winner_id, [])
+        manager.req_to_blocks[parent_id] = winner_blocks
+        if winner_id in manager.num_cached_block:
+            manager.num_cached_block[parent_id] = manager.num_cached_block.pop(winner_id)
+        if hasattr(manager, "_allocated_block_reqs"):
+            manager._allocated_block_reqs.discard(parent_id)
+            manager._allocated_block_reqs.discard(winner_id)
+            if winner_allocated:
+                manager._allocated_block_reqs.add(parent_id)
+        if hasattr(manager, "last_state_block_idx"):
+            if winner_id in manager.last_state_block_idx:
+                manager.last_state_block_idx[parent_id] = manager.last_state_block_idx.pop(winner_id)
+            else:
+                manager.last_state_block_idx.pop(parent_id, None)
+
 def _lumo_fb_make_clone(self, parent, path_idx, path):
     clone_id = f"{parent.request_id}::lumo_fb::{path_idx}"
     clone = Request(
@@ -6716,25 +7139,22 @@ def _lumo_fb_make_clone(self, parent, path_idx, path):
         cache_salt=parent.cache_salt,
         priority=parent.priority,
         trace_headers=parent.trace_headers,
-        block_hasher=None,
+        block_hasher=getattr(parent, "_block_hasher", None),
         resumable=False,
     )
-    clone.status = RequestStatus.RUNNING
-    # Flat-chain verifier rows must start at the current sampled token.
-    # The token is present in all_token_ids but its KV is not computed yet.
-    clone.num_computed_tokens = max(0, parent.num_tokens - 1)
-    clone.num_cached_tokens = parent.num_cached_tokens
+    clone.status = RequestStatus.WAITING
+    clone.num_computed_tokens = 0
+    clone.num_cached_tokens = -1
     clone.spec_token_ids = list(path)
     clone._lumo_fb_parent_id = parent.request_id
     clone._lumo_fb_path_idx = path_idx
-    clone._lumo_fb_new_clone = True
+    clone._lumo_fb_new_clone = False
     self.requests[clone_id] = clone
     return clone
 
 def _lumo_fb_expand_pending(self):
     if _lumo_fb_os.environ.get("LUMO_FB_PATHS") != "1":
         return []
-    copies = []
     new_running = []
     for req in self.running:
         paths = getattr(req, "_lumo_fb_pending_paths", None)
@@ -6742,13 +7162,28 @@ def _lumo_fb_expand_pending(self):
             new_running.append(req)
             continue
         req._lumo_fb_pending_paths = None
-        req._lumo_fb_waiting_parent = True
-        for idx, path in enumerate(paths):
+        req._lumo_fb_waiting_path1 = True
+        clone_ids = []
+        clones = []
+        for idx, path in enumerate(paths, start=1):
             clone = _lumo_fb_make_clone(self, req, idx, path)
-            copies.extend(_lumo_fb_clone_blocks(self, req, clone.request_id))
-            new_running.append(clone)
+            clone_ids.append(clone.request_id)
+            clones.append(clone)
+        for clone in reversed(clones):
+            self.waiting.prepend_request(clone)
+        req._lumo_fb_path1_clone_ids = list(clone_ids)
+        _lumo_fb_sched_debug({
+            "event": "fb_optionc_expand_independent_segments",
+            "parent": req.request_id,
+            "clone_ids": clone_ids,
+            "paths": paths,
+            "parent_removed_from_running": False,
+            "parent_path0_native": True,
+            "clone_route": "waiting_new_request_prefix_cache",
+        })
+        new_running.append(req)
     self.running = new_running
-    return copies
+    return []
 
 def _lumo_fb_update_draft_token_ids(self, draft_token_ids):
     if _lumo_fb_os.environ.get("LUMO_FB_PATHS") != "1":
@@ -6764,6 +7199,14 @@ def _lumo_fb_update_draft_token_ids(self, draft_token_ids):
         request = self.requests.get(req_id)
         if request is None or request.is_finished():
             continue
+        if "::lumo_fb::" in req_id:
+            _lumo_fb_sched_debug({
+                "event": "fb_optionc_ignore_clone_draft",
+                "rid": req_id,
+                "draft": list(spec_token_ids),
+                "kept_spec": list(getattr(request, "spec_token_ids", []) or []),
+            })
+            continue
         if request.is_prefill_chunk:
             request.spec_token_ids = []
             continue
@@ -6772,12 +7215,27 @@ def _lumo_fb_update_draft_token_ids(self, draft_token_ids):
                                    if _fb_sched_default_k >= 2 and len(spec_token_ids) % 2 == 0
                                    else len(spec_token_ids))
         active_depth, requested_k = _lumo_fb_sched_read_control(_fb_sched_default_depth)
+        if (_lumo_fb_os.environ.get("LUMO_FB_TWO_SPINE") == "1"
+                and requested_k >= 2
+                and len(spec_token_ids) != 2 * active_depth):
+            raise RuntimeError(
+                "LUMO_FB Option C requires a flat two-spine draft to split "
+                f"into independent verifier requests: draft_len={len(spec_token_ids)} "
+                f"active_depth={active_depth} active_k={requested_k}")
         if requested_k >= 2 and len(spec_token_ids) == 2 * active_depth:
-            request._lumo_fb_pending_paths = [
-                list(spec_token_ids[:active_depth]),
-                list(spec_token_ids[active_depth:2 * active_depth]),
-            ]
-            request.spec_token_ids = []
+            path0 = list(spec_token_ids[:active_depth])
+            path1 = list(spec_token_ids[active_depth:2 * active_depth])
+            request._lumo_fb_pending_paths = [path1]
+            request.spec_token_ids = path0
+            _lumo_fb_sched_debug({
+                "event": "fb_optionc_split_flat_draft_to_segments",
+                "parent": req_id,
+                "active_depth": int(active_depth),
+                "paths": [path0, path1],
+                "parent_spec_token_ids": path0,
+                "pending_clone_paths": request._lumo_fb_pending_paths,
+                "parent_path0_native": True,
+            })
         else:
             if _lumo_fb_os.environ.get("LUMO_FB_ASSERT_WIDTH") == "1" and len(spec_token_ids) != active_depth:
                 raise RuntimeError(
@@ -6811,21 +7269,45 @@ def _lumo_fb_schedule(self):
         req_id for req_id in out.num_scheduled_tokens
         if "::lumo_fb::" in req_id and getattr(self.requests.get(req_id), "_lumo_fb_new_clone", False)
     }
-    if fb_new_ids:
+    fb_refresh_ids = {
+        req_id for req_id in out.num_scheduled_tokens
+        if "::lumo_fb::" not in req_id
+        and getattr(self.requests.get(req_id), "_lumo_fb_force_streaming_refresh", False)
+    }
+    fb_convert_ids = fb_new_ids | fb_refresh_ids
+    if fb_convert_ids:
         keep = []
         req_data = out.scheduled_cached_reqs
-        new_req_ids = []
-        new_new_block_ids = []
-        new_num_computed = []
-        new_num_output = []
         for i, rid in enumerate(req_data.req_ids):
-            if rid in fb_new_ids:
+            if rid in fb_convert_ids:
                 req = self.requests[rid]
-                out.scheduled_new_reqs.append(
-                    _LumoFBNewRequestData.from_request(
-                        req, _lumo_fb_block_ids_from_blocks(self.kv_cache_manager.get_blocks(rid))
+                prompt_token_ids = list(req.all_token_ids) if rid in fb_refresh_ids else None
+                out.scheduled_new_reqs.append(_lumo_fb_new_req_data(
+                    req,
+                    _lumo_fb_block_ids_from_blocks(self.kv_cache_manager.get_blocks(rid)),
+                    prompt_token_ids=prompt_token_ids,
                     )
                 )
+                if rid in fb_refresh_ids:
+                    req._lumo_fb_force_streaming_refresh = False
+                    _lumo_fb_sched_debug({
+                        "event": "fb_optionc_parent_streaming_refresh",
+                        "rid": rid,
+                        "num_scheduled_tokens": out.num_scheduled_tokens.get(rid),
+                        "draft": out.scheduled_spec_decode_tokens.get(rid),
+                        "num_computed_tokens": getattr(req, "num_computed_tokens", None),
+                        "prompt_len": len(prompt_token_ids or []),
+                    })
+                    continue
+                _lumo_fb_sched_debug({
+                    "event": "fb_optionc_clone_scheduled_as_new_request",
+                    "rid": rid,
+                    "parent": getattr(req, "_lumo_fb_parent_id", None),
+                    "path_idx": getattr(req, "_lumo_fb_path_idx", None),
+                    "num_scheduled_tokens": out.num_scheduled_tokens.get(rid),
+                    "draft": out.scheduled_spec_decode_tokens.get(rid),
+                    "num_computed_tokens": getattr(req, "num_computed_tokens", None),
+                })
             else:
                 keep.append(i)
         if len(keep) != len(req_data.req_ids):
@@ -6835,8 +7317,8 @@ def _lumo_fb_schedule(self):
             req_data.num_output_tokens = [req_data.num_output_tokens[i] for i in keep]
             if req_data.new_token_ids:
                 req_data.new_token_ids = [req_data.new_token_ids[i] for i in keep]
-            req_data.resumed_req_ids = {rid for rid in req_data.resumed_req_ids if rid not in fb_new_ids}
-            req_data.all_token_ids = {rid: toks for rid, toks in req_data.all_token_ids.items() if rid not in fb_new_ids}
+            req_data.resumed_req_ids = {rid for rid in req_data.resumed_req_ids if rid not in fb_convert_ids}
+            req_data.all_token_ids = {rid: toks for rid, toks in req_data.all_token_ids.items() if rid not in fb_convert_ids}
     collapses = getattr(self, "_lumo_fb_pending_collapses", None)
     if collapses:
         out.lumo_fb_collapses = collapses
@@ -6844,25 +7326,129 @@ def _lumo_fb_schedule(self):
     return out
 
 def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
+    if not getattr(model_runner_output, "req_ids", None):
+        fixed_frontiers = []
+        running_frontiers = []
+        try:
+            for request in list(getattr(self, "running", []) or []):
+                req_id = getattr(request, "request_id", None)
+                if not req_id or "::lumo_fb::" in req_id or request.is_finished():
+                    continue
+                num_tokens = int(getattr(request, "num_tokens", 0))
+                num_computed = int(getattr(request, "num_computed_tokens", 0))
+                num_with_spec = int(getattr(
+                    request, "num_tokens_with_spec", num_tokens))
+                placeholders = int(getattr(
+                    request, "num_output_placeholders", 0))
+                max_tokens = int(getattr(request, "max_tokens", 0))
+                num_output_tokens = int(getattr(
+                    request, "num_output_tokens", 0))
+                gap = num_with_spec + placeholders - num_computed
+                row = {
+                    "rid": req_id,
+                    "num_tokens": num_tokens,
+                    "num_computed_tokens": num_computed,
+                    "num_tokens_with_spec": num_with_spec,
+                    "num_output_placeholders": placeholders,
+                    "num_output_tokens": num_output_tokens,
+                    "max_tokens": max_tokens,
+                    "gap": gap,
+                }
+                if gap <= 0 and (max_tokens <= 0 or num_output_tokens < max_tokens):
+                    new_num_computed = max(0, num_tokens - 1)
+                    if new_num_computed < num_computed:
+                        request.num_computed_tokens = new_num_computed
+                        row["fixed_num_computed_tokens"] = new_num_computed
+                        fixed_frontiers.append(row)
+                running_frontiers.append(row)
+        except Exception as e:
+            running_frontiers.append({"error": repr(e)})
+        try:
+            scheduler_output.num_scheduled_tokens.clear()
+            scheduler_output.scheduled_spec_decode_tokens.clear()
+            scheduler_output.total_num_scheduled_tokens = 0
+        except Exception:
+            pass
+        _lumo_fb_sched_debug({
+            "event": "fb_optionc_empty_model_output_noop",
+            "total_num_scheduled_tokens": getattr(
+                scheduler_output, "total_num_scheduled_tokens", None),
+            "num_scheduled_tokens": dict(getattr(
+                scheduler_output, "num_scheduled_tokens", {}) or {}),
+            "collapses": getattr(scheduler_output, "lumo_fb_collapses", None),
+            "running_count": len(getattr(self, "running", []) or []),
+            "running_frontiers": running_frontiers,
+            "fixed_frontiers": fixed_frontiers,
+        })
+        return {}
     clone_ids = [rid for rid in scheduler_output.num_scheduled_tokens if "::lumo_fb::" in rid]
-    if not clone_ids:
+    parent_spec_ids = [
+        rid for rid in scheduler_output.scheduled_spec_decode_tokens
+        if "::lumo_fb::" not in rid
+        and getattr(self.requests.get(rid), "_lumo_fb_path1_clone_ids", None)
+    ]
+    if not clone_ids and not parent_spec_ids:
         return _lumo_fb_orig_update_output(self, scheduler_output, model_runner_output)
-    groups = {}
-    for rid in clone_ids:
+    spec_clone_ids = [
+        rid for rid in clone_ids
+        if rid in scheduler_output.scheduled_spec_decode_tokens
+    ]
+    if not spec_clone_ids and not parent_spec_ids:
+        return _lumo_fb_orig_update_output(self, scheduler_output, model_runner_output)
+    pending_rows = getattr(self, "_lumo_fb_pending_path_rows", None)
+    if pending_rows is None:
+        pending_rows = {}
+        self._lumo_fb_pending_path_rows = pending_rows
+    for rid in parent_spec_ids:
         req = self.requests.get(rid)
-        if req is not None:
-            groups.setdefault(req._lumo_fb_parent_id, []).append(rid)
+        if req is None:
+            continue
+        idx = model_runner_output.req_id_to_index[rid]
+        gen = model_runner_output.sampled_token_ids[idx] if model_runner_output.sampled_token_ids else []
+        rows = pending_rows.setdefault(rid, {})
+        rows[rid] = (rid, gen, max(len(gen) - 1, 0))
+        if req in self.running:
+            self.running.remove(req)
+    for rid in spec_clone_ids:
+        req = self.requests.get(rid)
+        if req is None:
+            continue
+        idx = model_runner_output.req_id_to_index[rid]
+        gen = model_runner_output.sampled_token_ids[idx] if model_runner_output.sampled_token_ids else []
+        rows = pending_rows.setdefault(req._lumo_fb_parent_id, {})
+        rows[rid] = (rid, gen, max(len(gen) - 1, 0))
+        if req in self.running:
+            self.running.remove(req)
+    groups = {
+        parent_id: [rid for rid in rows]
+        for parent_id, rows in pending_rows.items()
+        if len(rows) >= 2
+    }
+    if not groups:
+        _lumo_fb_sched_debug({
+            "event": "fb_optionc_waiting_for_sibling_spine",
+            "clone_ids": clone_ids,
+            "spec_clone_ids": spec_clone_ids,
+            "parent_spec_ids": parent_spec_ids,
+            "pending_parents": {
+                parent_id: list(rows)
+                for parent_id, rows in pending_rows.items()
+            },
+        })
+        return {}
     outputs = {}
     spec_decoding_stats = None
+    active_depth, _ = _lumo_fb_sched_read_control(
+        int(_lumo_fb_os.environ.get("LUMO_FB_DEPTH", "1")))
     for parent_id, ids in groups.items():
         if len(ids) != 2:
             continue
         parent = self.requests[parent_id]
-        rows = []
-        for rid in sorted(ids, key=lambda x: self.requests[x]._lumo_fb_path_idx):
-            idx = model_runner_output.req_id_to_index[rid]
-            gen = model_runner_output.sampled_token_ids[idx] if model_runner_output.sampled_token_ids else []
-            rows.append((rid, gen, max(len(gen) - 1, 0)))
+        rows_by_id = pending_rows.pop(parent_id)
+        rows = [
+            rows_by_id[rid]
+            for rid in sorted(ids, key=lambda x: 0 if x == parent_id else self.requests[x]._lumo_fb_path_idx)
+        ]
         try:
             if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
                 raise RuntimeError("fb accept debug disabled")
@@ -6878,7 +7464,7 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
                 "paths": [
                     {
                         "rid": rid,
-                        "path_idx": getattr(self.requests.get(rid), "_lumo_fb_path_idx", None),
+                        "path_idx": (0 if rid == parent_id else getattr(self.requests.get(rid), "_lumo_fb_path_idx", None)),
                         "draft": scheduler_output.scheduled_spec_decode_tokens.get(rid),
                         "generated": gen,
                         "accepted": acc,
@@ -6888,17 +7474,25 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
             }) + chr(10))
         except Exception:
             pass
-        winner_id, generated_token_ids, accepted = max(rows, key=lambda r: (r[2], -self.requests[r[0]]._lumo_fb_path_idx))
-        loser_id = rows[1][0] if rows[0][0] == winner_id else rows[0][0]
-        parent.num_computed_tokens = max(0, parent.num_tokens - 1) + len(generated_token_ids)
+        def _lumo_fb_row_path_idx(rid):
+            return 0 if rid == parent_id else int(getattr(self.requests[rid], "_lumo_fb_path_idx", 1))
+        winner_id, generated_token_ids, accepted = max(rows, key=lambda r: (r[2], -_lumo_fb_row_path_idx(r[0])))
+        clone_id = next(rid for rid, _, _ in rows if rid != parent_id)
+        loser_id = clone_id if winner_id == parent_id else parent_id
         spec_decoding_stats = self.make_spec_decoding_stats(
             spec_decoding_stats,
-            num_draft_tokens=3,
+            num_draft_tokens=active_depth,
             num_accepted_tokens=accepted,
             num_invalid_spec_tokens=None,
             request_id=parent_id,
         )
         new_token_ids, stopped = self._update_request_with_output(parent, list(generated_token_ids))
+        # Keep the standard decode invariant after a custom two-spine collapse:
+        # every emitted token except the final sampled token has computed KV.
+        # Without this, the next scheduler pass can see a running parent with
+        # no schedulable token and spin on empty model outputs.
+        parent.num_computed_tokens = max(0, parent.num_tokens - 1)
+        parent._lumo_fb_force_streaming_refresh = True
         finish_reason = None
         kv_transfer_params = None
         routed_experts = None
@@ -6911,12 +7505,13 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
         else:
             if parent not in self.running:
                 self.running.append(parent)
-        _lumo_fb_transfer_blocks(self, parent_id, winner_id, loser_id)
-        for rid in ids:
-            req = self.requests.pop(rid, None)
-            if req is not None and req in self.running:
-                self.running.remove(req)
-            self.finished_req_ids.add(rid)
+        _lumo_fb_transfer_parent_native_blocks(self, parent_id, winner_id, clone_id)
+        parent._lumo_fb_path1_clone_ids = []
+        parent._lumo_fb_waiting_path1 = False
+        req = self.requests.pop(clone_id, None)
+        if req is not None and req in self.running:
+            self.running.remove(req)
+        self.finished_req_ids.add(clone_id)
         self._lumo_fb_pending_collapses = getattr(self, "_lumo_fb_pending_collapses", [])
         self._lumo_fb_pending_collapses.append((parent_id, winner_id, loser_id, parent.num_computed_tokens, len(generated_token_ids)))
         outputs.setdefault(parent.client_index, []).append(
@@ -7089,6 +7684,184 @@ def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
         pass
     return copied_bytes
 
+def _lumo_fb_drop_scheduled_req(scheduler_output, req_id):
+    try:
+        scheduler_output.num_scheduled_tokens[req_id] = 0
+    except Exception:
+        pass
+    try:
+        scheduler_output.scheduled_spec_decode_tokens.pop(req_id, None)
+    except Exception:
+        pass
+    try:
+        scheduler_output.finished_req_ids.discard(req_id)
+    except Exception:
+        pass
+    try:
+        scheduler_output.total_num_scheduled_tokens = sum(
+            max(0, int(num_scheduled))
+            for num_scheduled in scheduler_output.num_scheduled_tokens.values()
+        )
+    except Exception:
+        pass
+
+def _lumo_fb_rename_scheduled_req(scheduler_output, old_id, new_id):
+    if old_id == new_id:
+        return
+    try:
+        if old_id in scheduler_output.scheduled_spec_decode_tokens:
+            scheduler_output.scheduled_spec_decode_tokens[new_id] = (
+                scheduler_output.scheduled_spec_decode_tokens.pop(old_id))
+        else:
+            scheduler_output.scheduled_spec_decode_tokens.pop(new_id, None)
+    except Exception:
+        pass
+    try:
+        scheduler_output.finished_req_ids.discard(old_id)
+        scheduler_output.finished_req_ids.discard(new_id)
+    except Exception:
+        pass
+
+def _lumo_fb_req_index(self, req_id):
+    try:
+        return self.input_batch.req_id_to_index.get(req_id)
+    except Exception:
+        return None
+
+def _lumo_fb_req_spec_len(self, req_id):
+    try:
+        idx = self.input_batch.req_id_to_index.get(req_id)
+        if idx is None:
+            return None
+        return len(self.input_batch.spec_token_ids[idx])
+    except Exception:
+        return None
+
+def _lumo_fb_request_frontier(self, req_id):
+    req_state = None
+    try:
+        req_state = self.requests.get(req_id)
+    except Exception:
+        pass
+    return {
+        "idx": _lumo_fb_req_index(self, req_id),
+        "mamba_idx": getattr(self, "mamba_state_idx", {}).get(req_id),
+        "num_computed_tokens": getattr(req_state, "num_computed_tokens", None),
+        "num_tokens": getattr(req_state, "num_tokens", None),
+        "num_tokens_with_spec": getattr(req_state, "num_tokens_with_spec", None),
+        "request_spec_len": len(getattr(req_state, "spec_token_ids", []) or []),
+        "batch_spec_len": _lumo_fb_req_spec_len(self, req_id),
+    }
+
+def _lumo_fb_collapse_debug(self, scheduler_output, phase, parent_id, winner_id, loser_id):
+    if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
+        return
+    try:
+        import json as _fbj, time as _fbt
+        global _LUMO_FB_STATE_DBG_FH
+        try:
+            _LUMO_FB_STATE_DBG_FH
+        except NameError:
+            _LUMO_FB_STATE_DBG_FH = open("/logs/fb_state_debug.jsonl", "a", buffering=1)
+        _LUMO_FB_STATE_DBG_FH.write(_fbj.dumps({
+            "ts": round(_fbt.time(), 4),
+            "event": "optionc_collapse_batch_diag",
+            "phase": phase,
+            "parent_id": parent_id,
+            "winner": winner_id,
+            "loser": loser_id,
+            "parent_state": _lumo_fb_request_frontier(self, parent_id),
+            "winner_state": _lumo_fb_request_frontier(self, winner_id),
+            "loser_state": _lumo_fb_request_frontier(self, loser_id),
+            "parent_scheduled_tokens": getattr(
+                scheduler_output, "num_scheduled_tokens", {}).get(parent_id),
+            "parent_scheduled_spec_len": len(getattr(
+                scheduler_output, "scheduled_spec_decode_tokens", {}).get(parent_id, []) or []),
+            "loser_scheduled_tokens": getattr(
+                scheduler_output, "num_scheduled_tokens", {}).get(loser_id),
+            "req_ids": list(getattr(self.input_batch, "_req_ids", []) or []),
+        }) + chr(10))
+    except Exception:
+        pass
+
+def _lumo_fb_move_req_to_tail(self, req_id, protected_id, scheduler_output, phase):
+    try:
+        idx = self.input_batch.req_id_to_index.get(req_id)
+        if idx is None:
+            return False
+        req_ids = list(getattr(self.input_batch, "_req_ids", []) or [])
+        live = [(int(i), rid) for i, rid in enumerate(req_ids) if rid is not None]
+        if not live:
+            return False
+        tail_idx, tail_id = max(live, key=lambda x: x[0])
+        if int(idx) == int(tail_idx):
+            return True
+        self.input_batch.swap_states(int(idx), int(tail_idx))
+        _lumo_fb_collapse_debug(
+            self, scheduler_output,
+            f"{phase}_tail_swap_ok_{idx}_to_{tail_idx}"
+            f"{'_protected_tail' if protected_id is not None and tail_id == protected_id else ''}",
+            protected_id or req_id, protected_id or req_id, req_id)
+        return True
+    except Exception:
+        _lumo_fb_collapse_debug(
+            self, scheduler_output,
+            f"{phase}_tail_swap_failed",
+            protected_id or req_id, protected_id or req_id, req_id)
+        return False
+
+def _lumo_fb_remember_parent_index(self, parent_id):
+    idx = _lumo_fb_req_index(self, parent_id)
+    if idx is None:
+        return
+    desired = getattr(self, "_lumo_fb_parent_desired_indices", {})
+    desired[parent_id] = int(idx)
+    self._lumo_fb_parent_desired_indices = desired
+
+def _lumo_fb_restore_parent_indices(self, scheduler_output, phase):
+    desired = getattr(self, "_lumo_fb_parent_desired_indices", None)
+    if not desired:
+        return
+    for parent_id, desired_idx in list(desired.items()):
+        cur_idx = _lumo_fb_req_index(self, parent_id)
+        if cur_idx is None or cur_idx == desired_idx:
+            continue
+        restored = False
+        try:
+            req_ids = list(getattr(self.input_batch, "_req_ids", []) or [])
+            if 0 <= int(desired_idx) < len(req_ids) and req_ids[int(desired_idx)] is not None:
+                self.input_batch.swap_states(int(cur_idx), int(desired_idx))
+                restored = True
+        except Exception:
+            restored = False
+        _lumo_fb_collapse_debug(
+            self, scheduler_output,
+            f"{phase}_restore_parent_idx_{'ok' if restored else 'failed'}",
+            parent_id, parent_id, parent_id)
+    desired.clear()
+
+def _lumo_fb_reinject_parent_spec(self, scheduler_output):
+    reinjected = []
+    try:
+        scheduled = getattr(scheduler_output, "scheduled_spec_decode_tokens", {}) or {}
+        for req_id, spec in list(scheduled.items()):
+            if "::lumo_fb::" in req_id:
+                continue
+            req_state = self.requests.get(req_id)
+            if req_state is None or req_id not in self.input_batch.req_id_to_index:
+                continue
+            if spec:
+                self.input_batch.update_req_spec_token_ids(req_state, scheduled)
+                reinjected.append(req_id)
+    except Exception:
+        pass
+    if reinjected:
+        for req_id in reinjected:
+            _lumo_fb_collapse_debug(
+                self, scheduler_output,
+                "after_collapse_reinject_parent_spec",
+                req_id, req_id, req_id)
+
 def _lumo_fb_apply_runner_collapses(self, scheduler_output):
     collapses = getattr(scheduler_output, "lumo_fb_collapses", None)
     if not collapses:
@@ -7102,6 +7875,38 @@ def _lumo_fb_apply_runner_collapses(self, scheduler_output):
             parent_id, winner_id, loser_id, corrected_num_computed = collapse
         else:
             parent_id, winner_id, loser_id, corrected_num_computed, accepted_prefix_len = collapse
+        _lumo_fb_remember_parent_index(self, parent_id)
+        _lumo_fb_collapse_debug(
+            self, scheduler_output, "before_collapse",
+            parent_id, winner_id, loser_id)
+        if winner_id == parent_id:
+            _lumo_fb_move_req_to_tail(
+                self, loser_id, parent_id, scheduler_output,
+                "before_parent_winner_remove")
+            _lumo_fb_remember_parent_index(self, parent_id)
+            row_idx = self.input_batch.req_id_to_index.get(parent_id)
+            self.input_batch.remove_request(loser_id)
+            try:
+                self.input_batch.condense()
+                self.input_batch.refresh_metadata()
+            except Exception:
+                pass
+            _lumo_fb_restore_parent_indices(
+                self, scheduler_output, "after_parent_winner_condense")
+            _lumo_fb_drop_scheduled_req(scheduler_output, loser_id)
+            if accepted_prefix_len is not None and row_idx is not None:
+                try:
+                    self.input_batch.num_accepted_tokens_cpu[row_idx] = int(accepted_prefix_len)
+                    self.input_batch.num_accepted_tokens_cpu_tensor[row_idx] = int(accepted_prefix_len)
+                    self._lumo_fb_accept_lens = getattr(self, "_lumo_fb_accept_lens", {})
+                    self._lumo_fb_accept_lens[parent_id] = int(accepted_prefix_len)
+                except Exception:
+                    pass
+            scheduler_output.finished_req_ids.discard(loser_id)
+            _lumo_fb_collapse_debug(
+                self, scheduler_output, "after_parent_winner_remove",
+                parent_id, winner_id, loser_id)
+            continue
         win_state = self.requests.pop(winner_id, None)
         self.requests.pop(parent_id, None)
         if win_state is not None:
@@ -7110,11 +7915,16 @@ def _lumo_fb_apply_runner_collapses(self, scheduler_output):
                 win_state.num_computed_tokens = int(corrected_num_computed)
             self.requests[parent_id] = win_state
         row_idx = _lumo_fb_replace_req_id_in_batch(self.input_batch, winner_id, parent_id)
-        self.input_batch.remove_request(loser_id)
-        self.requests.pop(loser_id, None)
+        if loser_id != parent_id:
+            self.input_batch.remove_request(loser_id)
+            self.requests.pop(loser_id, None)
         if winner_id in self.mamba_state_idx:
             self.mamba_state_idx[parent_id] = self.mamba_state_idx.pop(winner_id)
-        self.mamba_state_idx.pop(loser_id, None)
+        if loser_id != parent_id:
+            self.mamba_state_idx.pop(loser_id, None)
+        _lumo_fb_rename_scheduled_req(scheduler_output, winner_id, parent_id)
+        if loser_id != parent_id:
+            _lumo_fb_drop_scheduled_req(scheduler_output, loser_id)
         if accepted_prefix_len is not None and row_idx is not None:
             try:
                 self.input_batch.num_accepted_tokens_cpu[row_idx] = int(accepted_prefix_len)
@@ -7125,6 +7935,9 @@ def _lumo_fb_apply_runner_collapses(self, scheduler_output):
                 pass
         scheduler_output.finished_req_ids.discard(winner_id)
         scheduler_output.finished_req_ids.discard(loser_id)
+        _lumo_fb_collapse_debug(
+            self, scheduler_output, "after_clone_winner_promote",
+            parent_id, winner_id, loser_id)
 
 def _lumo_fb_restore_parent_accept_lens(self):
     accept_lens = getattr(self, "_lumo_fb_accept_lens", None)
@@ -7172,6 +7985,84 @@ def _lumo_fb_inherit_clone_mamba_state(self, scheduler_output):
             ok = False
         if ok:
             self.mamba_state_idx[rid] = parent_idx
+
+def _lumo_fb_prune_nonpositive_clone_rows(self, scheduler_output, phase):
+    marker = "::lumo_fb::"
+    bad_rows = []
+    try:
+        for rid, num_scheduled in list(scheduler_output.num_scheduled_tokens.items()):
+            if marker in rid and int(num_scheduled) <= 0:
+                bad_rows.append((rid, int(num_scheduled)))
+    except Exception:
+        return
+    if not bad_rows:
+        return
+    for rid, _num_scheduled in bad_rows:
+        parent_id = rid.split(marker, 1)[0]
+        _lumo_fb_remember_parent_index(self, parent_id)
+        _lumo_fb_collapse_debug(
+            self, scheduler_output,
+            f"{phase}_before_prune_nonpositive_clone",
+            parent_id, parent_id, rid)
+        _lumo_fb_move_req_to_tail(
+            self, rid, parent_id, scheduler_output,
+            f"{phase}_before_prune_nonpositive_clone")
+        _lumo_fb_remember_parent_index(self, parent_id)
+    for rid, _num_scheduled in bad_rows:
+        try:
+            scheduler_output.num_scheduled_tokens.pop(rid, None)
+            scheduler_output.scheduled_spec_decode_tokens.pop(rid, None)
+            scheduler_output.finished_req_ids.discard(rid)
+        except Exception:
+            pass
+        try:
+            self.input_batch.remove_request(rid)
+        except Exception:
+            pass
+        try:
+            self.requests.pop(rid, None)
+        except Exception:
+            pass
+        try:
+            self.mamba_state_idx.pop(rid, None)
+        except Exception:
+            pass
+    try:
+        scheduler_output.total_num_scheduled_tokens = sum(
+            max(0, int(num_scheduled))
+            for num_scheduled in scheduler_output.num_scheduled_tokens.values()
+        )
+    except Exception:
+        pass
+    try:
+        self.input_batch.condense()
+        self.input_batch.refresh_metadata()
+    except Exception:
+        pass
+    _lumo_fb_restore_parent_indices(
+        self, scheduler_output, f"{phase}_after_prune_nonpositive_clone")
+    _lumo_fb_reinject_parent_spec(self, scheduler_output)
+    if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
+        try:
+            import json as _fbj, time as _fbt
+            global _LUMO_FB_STATE_DBG_FH
+            try:
+                _LUMO_FB_STATE_DBG_FH
+            except NameError:
+                _LUMO_FB_STATE_DBG_FH = open("/logs/fb_state_debug.jsonl", "a", buffering=1)
+            _LUMO_FB_STATE_DBG_FH.write(_fbj.dumps({
+                "ts": round(_fbt.time(), 4),
+                "phase": phase,
+                "event": "prune_nonpositive_clone_rows",
+                "rows": [
+                    {"rid": rid, "num_scheduled": num_scheduled}
+                    for rid, num_scheduled in bad_rows
+                ],
+                "total_num_scheduled_tokens": getattr(
+                    scheduler_output, "total_num_scheduled_tokens", None),
+            }) + chr(10))
+        except Exception:
+            pass
 
 def _lumo_fb_state_debug(self, scheduler_output, phase):
     if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
@@ -7239,8 +8130,16 @@ def _lumo_fb_update_states(self, scheduler_output):
         _lumo_fb_apply_runner_collapses(self, scheduler_output)
     ret = _lumo_fb_orig_update_states(self, scheduler_output)
     if _lumo_fb_os.environ.get("LUMO_FB_PATHS") == "1":
+        _lumo_fb_restore_parent_indices(
+            self, scheduler_output, "after_orig_update_states")
+        _lumo_fb_reinject_parent_spec(self, scheduler_output)
         _lumo_fb_restore_parent_accept_lens(self)
         _lumo_fb_inherit_clone_mamba_state(self, scheduler_output)
+        _lumo_fb_prune_nonpositive_clone_rows(
+            self, scheduler_output, "after_update_states")
+        _lumo_fb_restore_parent_indices(
+            self, scheduler_output, "after_prune_update_states")
+        _lumo_fb_reinject_parent_spec(self, scheduler_output)
         _lumo_fb_state_debug(self, scheduler_output, "after_update_states")
         _lumo_fb_copies = list(getattr(scheduler_output, "lumo_fb_block_copies", []) or [])
         _lumo_fb_copy_us = 0
@@ -7566,6 +8465,68 @@ else:
     print('[TRACK-B-PRELAUNCH] applied F_b draft CPU read-width patch')
 
 text = gm.read_text()
+sentinel = '# LUMO_FB_EMPTY_AFTER_UPDATE_STATES'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b post-update empty-step guard already present')
+else:
+    old = nl.join([
+        '            # Update persistent batch states.',
+        '            deferred_state_corrections_fn = self._update_states(scheduler_output)',
+        '',
+        '            if has_ec_transfer() and not get_ec_transfer().is_consumer:',
+    ])
+    new = nl.join([
+        '            # Update persistent batch states.',
+        '            deferred_state_corrections_fn = self._update_states(scheduler_output)',
+        '',
+        '            # LUMO_FB_EMPTY_AFTER_UPDATE_STATES: Option-C collapse can',
+        '            # consume the only scheduled clone row after the initial',
+        '            # pre-update zero-token check. Treat that as the same',
+        '            # no-forward step vLLM already handles above.',
+        '            # LUMO_FB_PRUNE_NONPOSITIVE_CLONES: vLLM can leave a collapsed',
+        '            # verifier clone in the runner batch with a nonpositive',
+        '            # scheduled-token count after accepted-prefix correction.',
+        '            # Drop those stale clone rows before _prepare_inputs();',
+        '            # negative per-row counts otherwise wedge the engine.',
+        '            if _lumo_fb_os.environ.get("LUMO_FB_PATHS") == "1":',
+        '                _lumo_fb_bad_rows = [',
+        '                    _rid for _rid, _n in list(scheduler_output.num_scheduled_tokens.items())',
+        '                    if "::lumo_fb::" in _rid and int(_n) <= 0',
+        '                ]',
+        '                if _lumo_fb_bad_rows:',
+        '                    for _rid in _lumo_fb_bad_rows:',
+        '                        scheduler_output.num_scheduled_tokens.pop(_rid, None)',
+        '                        scheduler_output.scheduled_spec_decode_tokens.pop(_rid, None)',
+        '                        scheduler_output.finished_req_ids.discard(_rid)',
+        '                        self.input_batch.remove_request(_rid)',
+        '                        self.requests.pop(_rid, None)',
+        '                        self.mamba_state_idx.pop(_rid, None)',
+        '                    scheduler_output.total_num_scheduled_tokens = sum(',
+        '                        max(0, int(_n))',
+        '                        for _n in scheduler_output.num_scheduled_tokens.values()',
+        '                    )',
+        '            if scheduler_output.total_num_scheduled_tokens <= 0:',
+        '                if (',
+        '                    self.parallel_config.distributed_executor_backend',
+        '                    == "external_launcher"',
+        '                    and self.parallel_config.data_parallel_size > 1',
+        '                ):',
+        '                    self._dummy_run(1)',
+        '                if not has_kv_transfer_group():',
+        '                    return EMPTY_MODEL_RUNNER_OUTPUT',
+        '                return self.kv_connector_no_forward(scheduler_output, self.vllm_config)',
+        '',
+        '            if has_ec_transfer() and not get_ec_transfer().is_consumer:',
+    ])
+    if old not in text:
+        raise RuntimeError('F_b post-update empty-step guard anchor not found')
+    text = text.replace(old, new, 1)
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b post-update empty-step guard')
+
+text = gm.read_text()
 sentinel = '# LUMO_FB_META_DEBUG'
 if sentinel in text:
     print('[TRACK-B-PRELAUNCH] F_b metadata debug patch already present')
@@ -7781,6 +8742,15 @@ def _lumo_fb_shared_root_rejection_sample(
     bonus_token_ids,
     sampling_metadata,
 ):
+    if _lumo_fb_rs_os.environ.get("LUMO_FB_TWO_SPINE") == "1":
+        # Option C verifies spine A and spine B as ordinary independent request
+        # segments.  Do not use the shared-root/tree sampler path; each clone row
+        # must attend and sample only its own prefix + contiguous draft segment.
+        return _lumo_fb_rejection_sample_with_debug(
+            "optionc_native_independent_segments",
+            draft_token_ids, num_draft_tokens, max_spec_len,
+            cu_num_draft_tokens, draft_probs, target_logits,
+            bonus_token_ids, sampling_metadata)
     if (_lumo_fb_rs_os.environ.get("LUMO_FB_PATHS") != "1"
             or _lumo_fb_rs_os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1"
             or draft_probs is not None
@@ -8161,7 +9131,215 @@ def _lumo_fb_ir_cdiv(a, b):
     return (int(a) + int(b) - 1) // int(b)
 
 def _lumo_fb_ir_new_block(manager):
-    return manager.block_pool.get_new_blocks(1)[0]
+    pool = manager.block_pool
+    _lumo_fb_ir_check_free_queue(
+        manager, {"op": "pre_alloc"}, raise_on_ref=True)
+    try:
+        return pool.get_new_blocks(1)[0]
+    except AssertionError as exc:
+        _lumo_fb_ir_check_free_queue(
+            manager, {"op": "alloc_assert"}, raise_on_ref=False)
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_stale_free_block_detected",
+            "repair_enabled": _lumo_fb_ir_os.environ.get(
+                "LUMO_FB_REPAIR_STALE_FREE_BLOCK") == "1",
+        })
+        if _lumo_fb_ir_os.environ.get("LUMO_FB_REPAIR_STALE_FREE_BLOCK") != "1":
+            raise
+        skipped = 1
+        queue = pool.free_block_queue
+        while True:
+            block = queue.popleft()
+            if getattr(pool, "enable_caching", False):
+                pool._maybe_evict_cached_block(block)
+            if int(getattr(block, "ref_cnt", 0)) == 0:
+                block.ref_cnt += 1
+                if getattr(pool, "metrics_collector", None):
+                    pool.metrics_collector.on_block_allocated(block)
+                _lumo_fb_ir_sched_debug({
+                    "event": "kernel_row_repaired_stale_free_block",
+                    "skipped": int(skipped),
+                    "allocated": int(block.block_id),
+                })
+                return block
+            skipped += 1
+
+def _lumo_fb_ir_block_id(block):
+    try:
+        return int(getattr(block, "block_id"))
+    except Exception:
+        return None
+
+def _lumo_fb_ir_live_block_owners(manager, block_ids):
+    wanted = set(int(block_id) for block_id in block_ids if block_id is not None)
+    owners = {int(block_id): [] for block_id in wanted}
+    if not wanted:
+        return owners
+    try:
+        for req_id, blocks in list(getattr(manager, "req_to_blocks", {}).items()):
+            for idx, block in enumerate(list(blocks or [])):
+                block_id = _lumo_fb_ir_block_id(block)
+                if block_id in wanted:
+                    owners.setdefault(block_id, []).append({
+                        "req": str(req_id),
+                        "idx": int(idx),
+                    })
+    except Exception as e:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_owner_scan_error",
+            "error": repr(e),
+        })
+    return owners
+
+def _lumo_fb_ir_check_free_queue(manager, context, raise_on_ref=False,
+                                 limit=256):
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_BLOCK_ACCOUNT_DEBUG") != "1":
+        return []
+    try:
+        queue_obj = getattr(manager.block_pool, "free_block_queue", [])
+        if hasattr(queue_obj, "get_all_free_blocks"):
+            queue = list(queue_obj.get_all_free_blocks())
+        else:
+            queue = list(queue_obj)
+    except Exception as e:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_free_queue_scan_error",
+            "context": context,
+            "error": repr(e),
+        })
+        return []
+    anomalies = []
+    scan = queue[:max(0, int(limit))]
+    block_ids = [_lumo_fb_ir_block_id(block) for block in scan]
+    owners = _lumo_fb_ir_live_block_owners(manager, block_ids)
+    for idx, block in enumerate(scan):
+        block_id = _lumo_fb_ir_block_id(block)
+        if block_id is None:
+            continue
+        ref_cnt = int(getattr(block, "ref_cnt", 0))
+        live_owners = owners.get(int(block_id), [])
+        if ref_cnt > 0 or live_owners:
+            anomalies.append({
+                "queue_idx": int(idx),
+                "block": int(block_id),
+                "ref_cnt": int(ref_cnt),
+                "owners": live_owners[:8],
+            })
+    if anomalies:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_free_queue_anomaly",
+            "context": context,
+            "queue_len": int(len(queue)),
+            "scan_limit": int(limit),
+            "anomalies": anomalies[:16],
+        })
+        if raise_on_ref and any(int(item.get("ref_cnt", 0)) > 0
+                                for item in anomalies):
+            raise RuntimeError(
+                "LUMO_FB free queue contains referenced blocks before "
+                f"allocation: context={context} anomalies={anomalies[:4]}")
+    return anomalies
+
+def _lumo_fb_ir_free_blocks_checked(manager, blocks, context):
+    null_block = getattr(manager, "_null_block", None)
+    raw_blocks = [
+        block for block in list(blocks or [])
+        if block is not None and block != null_block
+    ]
+    unique = []
+    seen = set()
+    duplicate_ids = []
+    for block in raw_blocks:
+        block_id = _lumo_fb_ir_block_id(block)
+        if block_id is None:
+            continue
+        if block_id in seen:
+            duplicate_ids.append(int(block_id))
+            continue
+        seen.add(block_id)
+        unique.append(block)
+    if duplicate_ids:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_duplicate_free_input",
+            "context": context,
+            "duplicates": sorted(set(int(block_id) for block_id in duplicate_ids)),
+        })
+    if not unique:
+        return
+    owners_pre = None
+    bad_pre = []
+    already_free = []
+    for block in unique:
+        ref_cnt = int(getattr(block, "ref_cnt", 0))
+        if ref_cnt <= 0:
+            item = {
+                "block": int(block.block_id),
+                "ref_cnt": int(ref_cnt),
+            }
+            if context.get("op") == "transfer_parent_replaced":
+                if owners_pre is None:
+                    owners_pre = _lumo_fb_ir_live_block_owners(
+                        manager, [_lumo_fb_ir_block_id(blk) for blk in unique])
+                item["owners"] = owners_pre.get(int(block.block_id), [])[:8]
+                if not item["owners"]:
+                    already_free.append(item)
+                    continue
+            bad_pre.append(item)
+    if already_free:
+        skip_ids = set(int(item["block"]) for item in already_free)
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_skip_already_free_parent_block",
+            "context": context,
+            "blocks": already_free,
+        })
+        unique = [
+            block for block in unique
+            if int(getattr(block, "block_id", -1)) not in skip_ids
+        ]
+        if not unique:
+            return
+    if bad_pre:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_free_bad_refcnt",
+            "context": context,
+            "blocks": bad_pre,
+        })
+        raise RuntimeError(
+            "LUMO_FB internal-row free attempted on non-referenced block: "
+            f"context={context} blocks={bad_pre}")
+    manager.block_pool.free_blocks(reversed(unique))
+    owners = _lumo_fb_ir_live_block_owners(
+        manager, [_lumo_fb_ir_block_id(block) for block in unique])
+    bad_post = []
+    for block in unique:
+        block_id = int(block.block_id)
+        ref_cnt = int(getattr(block, "ref_cnt", 0))
+        live_owners = owners.get(block_id, [])
+        if ref_cnt == 0 and live_owners:
+            bad_post.append({
+                "block": int(block_id),
+                "ref_cnt": int(ref_cnt),
+                "owners": live_owners[:8],
+            })
+    if bad_post:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_freed_live_block",
+            "context": context,
+            "blocks": bad_post,
+        })
+        raise RuntimeError(
+            "LUMO_FB internal-row free released a block still present in "
+            f"req_to_blocks: context={context} blocks={bad_post}")
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_BLOCK_ACCOUNT_DEBUG") == "1":
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_free_checked",
+            "context": context,
+            "blocks": [{
+                "block": int(block.block_id),
+                "ref_cnt": int(getattr(block, "ref_cnt", 0)),
+                "owners": owners.get(int(block.block_id), [])[:8],
+            } for block in unique],
+        })
 
 def _lumo_fb_ir_kernel_rows_enabled():
     return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
@@ -8178,9 +9356,12 @@ def _lumo_fb_ir_kernel_arrange_mamba_blocks(manager, req_blocks, curr_idx):
     read_idx = int(curr_idx)
     last_idx = read_idx + 1 + num_spec_blocks
     if last_idx > len(row_blocks):
-        raise RuntimeError(
-            f"LUMO_FB_KERNEL_ROWS block table too short: need {last_idx}, "
-            f"got {len(row_blocks)}")
+        null_block = getattr(manager, "_null_block", None)
+        if null_block is None:
+            raise RuntimeError(
+                f"LUMO_FB_KERNEL_ROWS block table too short: need {last_idx}, "
+                f"got {len(row_blocks)}")
+        row_blocks.extend([null_block] * (last_idx - len(row_blocks)))
     read_block = row_blocks[read_idx]
     if read_block == getattr(manager, "_null_block", None):
         raise RuntimeError("LUMO_FB_KERNEL_ROWS read state block is null")
@@ -8308,7 +9489,13 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id,
         new_ids = list(target_groups[group_idx] or [])
         if not new_ids:
             if owned_by_id:
-                manager.block_pool.free_blocks(reversed(list(owned_by_id.values())))
+                _lumo_fb_ir_free_blocks_checked(
+                    manager, list(owned_by_id.values()), {
+                        "op": "transfer_empty_target_owned",
+                        "parent": str(parent_id),
+                        "row": str(row_id),
+                        "group": int(group_idx),
+                    })
             continue
         new_id_set = set(new_ids)
         new_blocks = []
@@ -8318,7 +9505,15 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id,
                 new_blocks.append(block)
         if len(new_blocks) != len(new_ids):
             if owned_by_id:
-                manager.block_pool.free_blocks(reversed(list(owned_by_id.values())))
+                _lumo_fb_ir_free_blocks_checked(
+                    manager, list(owned_by_id.values()), {
+                        "op": "transfer_missing_target_owned",
+                        "parent": str(parent_id),
+                        "row": str(row_id),
+                        "group": int(group_idx),
+                        "target_count": int(len(new_ids)),
+                        "resolved_count": int(len(new_blocks)),
+                    })
             continue
         first_changed = None
         for idx, block_id in enumerate(new_ids):
@@ -8330,16 +9525,30 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id,
             if blk.block_id not in new_id_set
             and blk != getattr(manager, "_null_block", None)
         ]
-        if to_free:
-            manager.block_pool.free_blocks(reversed(to_free))
         unused_owned = [
             blk for block_id, blk in owned_by_id.items()
             if block_id not in new_id_set
             and blk != getattr(manager, "_null_block", None)
         ]
-        if unused_owned:
-            manager.block_pool.free_blocks(reversed(unused_owned))
         manager.req_to_blocks[parent_id] = new_blocks
+        if to_free:
+            _lumo_fb_ir_free_blocks_checked(
+                manager, to_free, {
+                    "op": "transfer_parent_replaced",
+                    "parent": str(parent_id),
+                    "row": str(row_id),
+                    "group": int(group_idx),
+                    "target_count": int(len(new_ids)),
+                })
+        if unused_owned:
+            _lumo_fb_ir_free_blocks_checked(
+                manager, unused_owned, {
+                    "op": "transfer_unused_owned",
+                    "parent": str(parent_id),
+                    "row": str(row_id),
+                    "group": int(group_idx),
+                    "target_count": int(len(new_ids)),
+                })
         cached_limit = len(new_blocks) if first_changed is None else int(first_changed)
         manager.num_cached_block[parent_id] = min(
             manager.num_cached_block.get(parent_id, cached_limit),
@@ -8347,6 +9556,13 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id,
         )
         if hasattr(manager, "_allocated_block_reqs"):
             manager._allocated_block_reqs.add(parent_id)
+        _lumo_fb_ir_check_free_queue(
+            manager, {
+                "op": "transfer_post_group",
+                "parent": str(parent_id),
+                "row": str(row_id),
+                "group": int(group_idx),
+            }, raise_on_ref=True)
         transfer_summary.append({
             "group": int(group_idx),
             "adopted_owned": sorted(int(block_id) for block_id in owned_by_id if block_id in new_id_set),
@@ -8390,6 +9606,12 @@ def _lumo_fb_ir_mirror_manager_blocks_from_ids(self, req_id, block_id_groups):
         )
         if hasattr(manager, "_allocated_block_reqs"):
             manager._allocated_block_reqs.add(req_id)
+        _lumo_fb_ir_check_free_queue(
+            manager, {
+                "op": "mirror_manager_blocks",
+                "req": str(req_id),
+                "group": int(group_idx),
+            }, raise_on_ref=True)
         ok = True
     return ok
 
@@ -8518,11 +9740,13 @@ def _lumo_fb_ir_free_owned(self, row_ids):
         for group_idx, block in owned:
             by_group.setdefault(group_idx, []).append(block)
         for group_idx, blocks in by_group.items():
-            try:
-                manager = self.kv_cache_manager.coordinator.single_type_managers[group_idx]
-                manager.block_pool.free_blocks(reversed(blocks))
-            except Exception:
-                pass
+            manager = self.kv_cache_manager.coordinator.single_type_managers[group_idx]
+            _lumo_fb_ir_free_blocks_checked(
+                manager, blocks, {
+                    "op": "free_loser_owned",
+                    "row": str(row_id),
+                    "group": int(group_idx),
+                })
 
 def _lumo_fb_ir_accept_from_generated(tokens):
     valid = []
@@ -9695,6 +10919,13 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                         tree_acc,
                         _lumo_fb_ir_read_internal_max_commit(
                             _lumo_fb_ir_default_internal_max_commit()))
+                if _lumo_fb_ir_os.environ.get("LUMO_FB_TWO_SPINE") == "1":
+                    # Two-spine mode verifies each spine as an independent
+                    # contiguous segment through vLLM's normal per-request
+                    # sampler.  Its accepted length is already the segment LCP
+                    # (greedy) or segment chain result (stochastic), so do not
+                    # rescore it with any tree/prefix-sharing rule.
+                    tree_acc = int(raw_acc)
                 scored.append((rid, valid, raw_acc, draft, tree_acc))
             scored.sort(key=lambda item: (item[4], 0 if item[0] == parent else -1), reverse=True)
             winner_rid, winner_tokens, winner_raw_acc, winner_draft, winner_acc = scored[0]
@@ -9714,7 +10945,8 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 except Exception:
                     pass
             partial_head_fallback_result = None
-            if winner_is_internal:
+            if (winner_is_internal
+                    and _lumo_fb_ir_os.environ.get("LUMO_FB_TWO_SPINE") != "1"):
                 try:
                     parent_state = self.requests.get(parent)
                     start_token = int(parent_state.num_computed_tokens) if parent_state is not None else 0
@@ -9839,8 +11071,20 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                     parent_state = self.requests.get(parent)
                     winner_state = self.requests.get(winner_rid)
                     if parent_state is not None and winner_state is not None:
-                        kv_pointer_swap_result = _lumo_fb_ir_pointer_swap_winner_suffix_to_parent(
-                            self, parent, winner_rid, len(winner_commit_tokens))
+                        if _lumo_fb_ir_os.environ.get("LUMO_FB_TWO_SPINE") == "1":
+                            _copied_bytes = _lumo_fb_ir_copy_winner_suffix_kv_to_parent(
+                                self, parent, winner_rid, len(winner_commit_tokens))
+                            kv_pointer_swap_result = {
+                                "event": "split_kv_suffix_commit_copy",
+                                "parent": parent,
+                                "winner": winner_rid,
+                                "commit_len": int(len(winner_commit_tokens)),
+                                "bytes": int(_copied_bytes),
+                                "two_spine": True,
+                            }
+                        else:
+                            kv_pointer_swap_result = _lumo_fb_ir_pointer_swap_winner_suffix_to_parent(
+                                self, parent, winner_rid, len(winner_commit_tokens))
                         try:
                             _mamba_group_ids = set(
                                 int(_gid) for _gid in self._get_mamba_copy_bufs().mamba_group_ids)
@@ -9884,8 +11128,20 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                         if (not split_kv_parent_state_applied
                                 and _lumo_fb_ir_kernel_rows_enabled()
                                 and _lumo_fb_ir_os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1"):
-                            kv_pointer_swap_result = _lumo_fb_ir_pointer_swap_winner_suffix_to_parent(
-                                self, parent, winner_rid, len(winner_commit_tokens))
+                            if _lumo_fb_ir_os.environ.get("LUMO_FB_TWO_SPINE") == "1":
+                                _copied_bytes = _lumo_fb_ir_copy_winner_suffix_kv_to_parent(
+                                    self, parent, winner_rid, len(winner_commit_tokens))
+                                kv_pointer_swap_result = {
+                                    "event": "split_kv_suffix_commit_copy",
+                                    "parent": parent,
+                                    "winner": winner_rid,
+                                    "commit_len": int(len(winner_commit_tokens)),
+                                    "bytes": int(_copied_bytes),
+                                    "two_spine": True,
+                                }
+                            else:
+                                kv_pointer_swap_result = _lumo_fb_ir_pointer_swap_winner_suffix_to_parent(
+                                    self, parent, winner_rid, len(winner_commit_tokens))
                             try:
                                 _mamba_group_ids = set(
                                     int(_gid) for _gid in self._get_mamba_copy_bufs().mamba_group_ids)
@@ -9938,6 +11194,8 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                 "path0_tree_acc": int(path0_tree_acc),
                 "raw_best_acc": int(raw_best_acc),
                 "tree_best_acc": int(tree_best_acc),
+                "superset_violation": bool(int(state_accepted_drafts) < int(path0_tree_acc)),
+                "superset_delta": int(state_accepted_drafts) - int(path0_tree_acc),
                 "winner_is_internal": bool(winner_is_internal),
                 "second_pos0_capture": bool(second_pos0_capture),
                 "second_pos1_capture": bool(second_pos1_capture),
@@ -9988,6 +11246,8 @@ def _lumo_fb_ir_prune_after_sample(self, scheduler_output, sampler_output,
                         "path0_tree_acc": int(path0_tree_acc),
                         "raw_best_acc": int(raw_best_acc),
                         "tree_best_acc": int(tree_best_acc),
+                        "superset_violation": bool(int(state_accepted_drafts) < int(path0_tree_acc)),
+                        "superset_delta": int(state_accepted_drafts) - int(path0_tree_acc),
                         "second_pos0_capture": bool(second_pos0_capture),
                         "second_pos1_capture": bool(second_pos1_capture),
                         "commit_tokens": list(winner_commit_tokens)[:8],
@@ -10408,13 +11668,16 @@ else:
         '                        # contamination risk is paying/projection-sampling padded',
         '                        # speculative positions, so assert the actual unpadded',
         '                        # target, logits_indices, sample_hidden, and lm_head rows.',
+        '                        # Mixed prefill/decode batches legitimately include long',
+        '                        # prefill rows; width is only assertable on uniform decode',
+        '                        # batches where every live request contributes depth+1 rows.',
         '                        _fbaw_scheduled_ok = all(int(x) == int(_fbaw_expected_per_req) for x in num_scheduled_tokens_np.tolist()[:int(num_reqs)])',
-        '                        if (not _fbaw_scheduled_ok',
-        '                                or int(max_num_scheduled_tokens) != int(_fbaw_expected_per_req)',
-        '                                or int(num_tokens_unpadded) != _fbaw_expected_total',
-        '                                or int(len(logits_indices)) != _fbaw_expected_total',
-        '                                or int(sample_hidden_states.shape[0]) != _fbaw_expected_total',
-        '                                or int(logits.shape[0]) != _fbaw_expected_total):',
+        '                        if (_fbaw_scheduled_ok',
+        '                                and (int(max_num_scheduled_tokens) != int(_fbaw_expected_per_req)',
+        '                                     or int(num_tokens_unpadded) != _fbaw_expected_total',
+        '                                     or int(len(logits_indices)) != _fbaw_expected_total',
+        '                                     or int(sample_hidden_states.shape[0]) != _fbaw_expected_total',
+        '                                     or int(logits.shape[0]) != _fbaw_expected_total)):',
         '                            raise RuntimeError(f"LUMO_FB_ASSERT_ACTUAL_WIDTH failed: {_fbaw_event}")',
     ])
     if old not in text:
@@ -10455,9 +11718,9 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         + _TREE_ACCEPTED_ROW_KERNEL_BLOCK
         + _TREE_ACCEPTED_ROW_COMMIT_BLOCK
     )
-    fb_k = os.environ.get("LUMO_FB_K", "1")
+    fb_k = "2" if os.environ.get("LUMO_FB_TWO_SPINE") == "1" else os.environ.get("LUMO_FB_K", "1")
     fb_dup = "export LUMO_FB_DUP_PATH1=1\n" if os.environ.get("LUMO_FB_DUP_PATH1") == "1" else ""
-    fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" else ""
+    fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if (os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" or os.environ.get("LUMO_FB_TWO_SPINE") == "1") else ""
     fb_internal = "export LUMO_FB_INTERNAL_ROWS=1\n" if os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1" else ""
     fb_kernel_rows = "export LUMO_FB_KERNEL_ROWS=1\n" if os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""
     fa_unique_env = "export LUMO_FA_UNIQUE_NODES=1\n" if fa_unique else ""
@@ -10469,6 +11732,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_adaptive = "export LUMO_FB_ADAPTIVE=1\n" if os.environ.get("LUMO_FB_ADAPTIVE") == "1" else ""
     fb_batched = "export LUMO_FB_BATCHED_PROPOSER=1\n" if os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1" else ""
     fb_position_tree = f"export LUMO_FB_POSITION_TREE={os.environ['LUMO_FB_POSITION_TREE']}\n" if os.environ.get("LUMO_FB_POSITION_TREE") else ""
+    fb_two_spine = "export LUMO_FB_TWO_SPINE=1\n" if os.environ.get("LUMO_FB_TWO_SPINE") == "1" else ""
     fb_tree_branch_depth = f"export LUMO_FB_TREE_BRANCH_DEPTH={os.environ['LUMO_FB_TREE_BRANCH_DEPTH']}\n" if os.environ.get("LUMO_FB_TREE_BRANCH_DEPTH") else ""
     fb_replay_draft = f"export LUMO_FB_REPLAY_DRAFT_FILE={os.environ['LUMO_FB_REPLAY_DRAFT_FILE']}\n" if os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE") else ""
     fb_free_row1 = "export LUMO_FB_FREE_ROW1=1\n" if os.environ.get("LUMO_FB_FREE_ROW1") == "1" else ""
@@ -10513,14 +11777,30 @@ tmp.replace(p)
 print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
 LUMOFBCTRL
 """ if fb else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_debug_exports}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fa_unique_env}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_tree_branch_depth}{fb_replay_draft}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else (fa_unique_env + fb_debug + fb_debug_exports + fb_replay_draft)
+    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{fb_debug}{fb_superset_diag}{fb_debug_exports}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fa_unique_env}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_two_spine}{fb_tree_branch_depth}{fb_replay_draft}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else (fa_unique_env + fb_debug + fb_debug_exports + fb_replay_draft)
     mtp_draft_trace = f"export LUMO_MTP_DRAFT_TRACE_FILE={os.environ['LUMO_MTP_DRAFT_TRACE_FILE']}\n" if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
     mtp_draft_trace_block = _MTP_DRAFT_TRACE_BLOCK if (
         os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE")
         or os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE")
     ) else ""
     stale_fb_guard = "" if (fb or fa_unique) else _NO_STALE_FB_PATCHES_BLOCK
+    mamba_dup_free_fix = (
+        _MAMBA_ALIGN_DUP_STATE_FREE_FIX_BLOCK
+        if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique)
+        else ""
+    )
+    block_pool_dedup_free_fix = (
+        _BLOCK_POOL_DEDUP_FREE_FIX_BLOCK
+        if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique)
+        else ""
+    )
+    free_queue_membership_fix = (
+        _FREE_QUEUE_MEMBERSHIP_FIX_BLOCK
+        if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique)
+        else ""
+    )
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + _CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX_BLOCK
+            + mamba_dup_free_fix + free_queue_membership_fix + block_pool_dedup_free_fix
             + stale_fb_guard + dbg + "export LUMO_CUDAGRAPH_RUNTIME_TELEMETRY=1\n"
             + fb_env + mtp_draft_trace + base + _CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
@@ -10560,6 +11840,18 @@ def _apply_gpu_memory_utilization(src: str, value: str | None) -> str:
     if src.count(old) != 1:
         raise RuntimeError("gpu_memory_utilization anchor not unique in bundle")
     return src.replace(old, f"    gpu_memory_utilization: {gpu_mem:.2f}", 1)
+
+
+def _apply_max_num_seqs(src: str, value: str | None) -> str:
+    if value is None:
+        return src
+    max_num_seqs = int(value)
+    if max_num_seqs < 1:
+        raise RuntimeError(f"invalid max_num_seqs override: {value}")
+    old = "    max_num_seqs: 4"
+    if src.count(old) != 1:
+        raise RuntimeError("max_num_seqs anchor not unique in bundle")
+    return src.replace(old, f"    max_num_seqs: {max_num_seqs}", 1)
 
 
 def _apply_enforce_eager(src: str, value: str | None) -> str:
@@ -10686,6 +11978,7 @@ def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = No
     src = _apply_kv_cache_dtype(src, kv_cache_dtype)
     src = _apply_gpu_memory_utilization(
         src, os.environ.get("LUMO_GPU_MEMORY_UTILIZATION"))
+    src = _apply_max_num_seqs(src, os.environ.get("LUMO_VLLM_MAX_NUM_SEQS"))
     src = _apply_enforce_eager(src, os.environ.get("LUMO_ENFORCE_EAGER"))
     cuda_graph_capture = os.environ.get("LUMO_CUDAGRAPH_MODE") or os.environ.get("LUMO_CUDA_GRAPH_CAPTURE")
     src = _apply_cuda_graph_capture(src, cuda_graph_capture)
@@ -10754,6 +12047,12 @@ def main() -> int:
     args = ap.parse_args()
     is_tree = args.config == "F"
     is_fb = args.config == "Fb"
+    if (is_fb and os.environ.get("LUMO_FB_TWO_SPINE") == "1"
+            and os.environ.get("LUMO_VLLM_MAX_NUM_SEQS") is None):
+        # Option C verifies path0/path1 as two real vLLM request rows per
+        # user request. The SWE gate is still B=4 user concurrency, but the
+        # scheduler and runner need eight row slots for the independent segments.
+        os.environ["LUMO_VLLM_MAX_NUM_SEQS"] = "8"
     if ((is_fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
             or os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"):
         os.environ["LUMO_BATCH_INVARIANT_VLLM"] = "1"
