@@ -6878,6 +6878,50 @@ else:
 
 sch = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py')
 text = sch.read_text()
+sentinel = '# LUMO_FB_OPTIONC_WAITING_SPEC'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b Option C waiting-spec scheduler patch already present')
+else:
+    wait_idx = text.index('        # Next, schedule the WAITING requests.')
+    min_line = '                num_new_tokens = min(num_new_tokens, token_budget)\n'
+    min_idx = text.index(min_line, wait_idx)
+    insert_idx = min_idx + len(min_line)
+    text = (
+        text[:insert_idx]
+        + '                # LUMO_FB_OPTIONC_WAITING_SPEC: verifier clone rows enter\n'
+        + '                # through the normal WAITING/new-request path. When prefix\n'
+        + '                # cache has caught the clone up to its current sampled token,\n'
+        + '                # include its draft segment in the same per-request sampler\n'
+        + '                # pass instead of doing a custom KV/state clone.\n'
+        + '                if ("::lumo_fb::" in request_id and request.spec_token_ids\n'
+        + '                        and num_computed_tokens + num_new_tokens >= request.num_tokens):\n'
+        + '                    num_available_spec_tokens = token_budget - num_new_tokens\n'
+        + '                    if num_available_spec_tokens > 0:\n'
+        + '                        num_new_tokens += min(len(request.spec_token_ids),\n'
+        + '                                              num_available_spec_tokens)\n'
+        + text[insert_idx:]
+    )
+    cached_idx = text.index('                if request.num_cached_tokens < 0:\n', wait_idx)
+    encoder_idx = text.index('                # Encoder-related.\n', cached_idx)
+    text = (
+        text[:encoder_idx]
+        + '                if request.spec_token_ids:\n'
+        + '                    num_scheduled_spec_tokens = (\n'
+        + '                        num_new_tokens + num_computed_tokens - request.num_tokens)\n'
+        + '                    if num_scheduled_spec_tokens > 0:\n'
+        + '                        spec_token_ids = request.spec_token_ids\n'
+        + '                        if len(spec_token_ids) > num_scheduled_spec_tokens:\n'
+        + '                            spec_token_ids = spec_token_ids[:num_scheduled_spec_tokens]\n'
+        + '                        scheduled_spec_decode_tokens[request.request_id] = spec_token_ids\n'
+        + '                        request.spec_token_ids = []\n'
+        + text[encoder_idx:]
+    )
+    sch.write_text(text)
+    import py_compile
+    py_compile.compile(str(sch), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b Option C waiting/new-request spec patch')
+
+text = sch.read_text()
 sentinel = '# LUMO_FB_PATHS_SCHED'
 if sentinel in text:
     print('[TRACK-B-PRELAUNCH] F_b scheduler path clone patch already present')
@@ -7058,25 +7102,22 @@ def _lumo_fb_make_clone(self, parent, path_idx, path):
         cache_salt=parent.cache_salt,
         priority=parent.priority,
         trace_headers=parent.trace_headers,
-        block_hasher=None,
+        block_hasher=getattr(parent, "_block_hasher", None),
         resumable=False,
     )
-    clone.status = RequestStatus.RUNNING
-    # Flat-chain verifier rows must start at the current sampled token.
-    # The token is present in all_token_ids but its KV is not computed yet.
-    clone.num_computed_tokens = max(0, parent.num_tokens - 1)
-    clone.num_cached_tokens = parent.num_cached_tokens
+    clone.status = RequestStatus.WAITING
+    clone.num_computed_tokens = 0
+    clone.num_cached_tokens = -1
     clone.spec_token_ids = list(path)
     clone._lumo_fb_parent_id = parent.request_id
     clone._lumo_fb_path_idx = path_idx
-    clone._lumo_fb_new_clone = True
+    clone._lumo_fb_new_clone = False
     self.requests[clone_id] = clone
     return clone
 
 def _lumo_fb_expand_pending(self):
     if _lumo_fb_os.environ.get("LUMO_FB_PATHS") != "1":
         return []
-    copies = []
     new_running = []
     for req in self.running:
         paths = getattr(req, "_lumo_fb_pending_paths", None)
@@ -7086,20 +7127,23 @@ def _lumo_fb_expand_pending(self):
         req._lumo_fb_pending_paths = None
         req._lumo_fb_waiting_parent = True
         clone_ids = []
+        clones = []
         for idx, path in enumerate(paths):
             clone = _lumo_fb_make_clone(self, req, idx, path)
             clone_ids.append(clone.request_id)
-            copies.extend(_lumo_fb_clone_blocks(self, req, clone.request_id))
-            new_running.append(clone)
+            clones.append(clone)
+        for clone in reversed(clones):
+            self.waiting.prepend_request(clone)
         _lumo_fb_sched_debug({
             "event": "fb_optionc_expand_independent_segments",
             "parent": req.request_id,
             "clone_ids": clone_ids,
             "paths": paths,
             "parent_removed_from_running": True,
+            "clone_route": "waiting_new_request_prefix_cache",
         })
     self.running = new_running
-    return copies
+    return []
 
 def _lumo_fb_update_draft_token_ids(self, draft_token_ids):
     if _lumo_fb_os.environ.get("LUMO_FB_PATHS") != "1":
@@ -7236,6 +7280,16 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
     clone_ids = [rid for rid in scheduler_output.num_scheduled_tokens if "::lumo_fb::" in rid]
     if not clone_ids:
         return _lumo_fb_orig_update_output(self, scheduler_output, model_runner_output)
+    spec_clone_ids = [
+        rid for rid in clone_ids
+        if rid in scheduler_output.scheduled_spec_decode_tokens
+    ]
+    if not spec_clone_ids:
+        return _lumo_fb_orig_update_output(self, scheduler_output, model_runner_output)
+    if len(spec_clone_ids) != len(clone_ids):
+        raise RuntimeError(
+            "LUMO_FB Option C scheduled only part of a two-spine verifier pair "
+            f"for spec decode: clone_ids={clone_ids} spec_clone_ids={spec_clone_ids}")
     groups = {}
     for rid in clone_ids:
         req = self.requests.get(rid)
