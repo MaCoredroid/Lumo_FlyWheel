@@ -7686,7 +7686,7 @@ def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
 
 def _lumo_fb_drop_scheduled_req(scheduler_output, req_id):
     try:
-        scheduler_output.num_scheduled_tokens.pop(req_id, None)
+        scheduler_output.num_scheduled_tokens[req_id] = 0
     except Exception:
         pass
     try:
