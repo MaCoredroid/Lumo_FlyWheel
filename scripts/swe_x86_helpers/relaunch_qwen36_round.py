@@ -11226,6 +11226,18 @@ def _apply_gpu_memory_utilization(src: str, value: str | None) -> str:
     return src.replace(old, f"    gpu_memory_utilization: {gpu_mem:.2f}", 1)
 
 
+def _apply_max_num_seqs(src: str, value: str | None) -> str:
+    if value is None:
+        return src
+    max_num_seqs = int(value)
+    if max_num_seqs < 1:
+        raise RuntimeError(f"invalid max_num_seqs override: {value}")
+    old = "    max_num_seqs: 4"
+    if src.count(old) != 1:
+        raise RuntimeError("max_num_seqs anchor not unique in bundle")
+    return src.replace(old, f"    max_num_seqs: {max_num_seqs}", 1)
+
+
 def _apply_enforce_eager(src: str, value: str | None) -> str:
     if value is None or value.lower() not in {"1", "true", "yes", "on"}:
         return src
@@ -11350,6 +11362,7 @@ def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = No
     src = _apply_kv_cache_dtype(src, kv_cache_dtype)
     src = _apply_gpu_memory_utilization(
         src, os.environ.get("LUMO_GPU_MEMORY_UTILIZATION"))
+    src = _apply_max_num_seqs(src, os.environ.get("LUMO_VLLM_MAX_NUM_SEQS"))
     src = _apply_enforce_eager(src, os.environ.get("LUMO_ENFORCE_EAGER"))
     cuda_graph_capture = os.environ.get("LUMO_CUDAGRAPH_MODE") or os.environ.get("LUMO_CUDA_GRAPH_CAPTURE")
     src = _apply_cuda_graph_capture(src, cuda_graph_capture)
@@ -11418,6 +11431,12 @@ def main() -> int:
     args = ap.parse_args()
     is_tree = args.config == "F"
     is_fb = args.config == "Fb"
+    if (is_fb and os.environ.get("LUMO_FB_TWO_SPINE") == "1"
+            and os.environ.get("LUMO_VLLM_MAX_NUM_SEQS") is None):
+        # Option C verifies path0/path1 as two real vLLM request rows per
+        # user request. The SWE gate is still B=4 user concurrency, but the
+        # scheduler and runner need eight row slots for the independent segments.
+        os.environ["LUMO_VLLM_MAX_NUM_SEQS"] = "8"
     if ((is_fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
             or os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"):
         os.environ["LUMO_BATCH_INVARIANT_VLLM"] = "1"
