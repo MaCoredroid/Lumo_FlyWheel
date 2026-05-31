@@ -7286,15 +7286,36 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
     ]
     if not spec_clone_ids:
         return _lumo_fb_orig_update_output(self, scheduler_output, model_runner_output)
-    if len(spec_clone_ids) != len(clone_ids):
-        raise RuntimeError(
-            "LUMO_FB Option C scheduled only part of a two-spine verifier pair "
-            f"for spec decode: clone_ids={clone_ids} spec_clone_ids={spec_clone_ids}")
-    groups = {}
-    for rid in clone_ids:
+    pending_rows = getattr(self, "_lumo_fb_pending_path_rows", None)
+    if pending_rows is None:
+        pending_rows = {}
+        self._lumo_fb_pending_path_rows = pending_rows
+    for rid in spec_clone_ids:
         req = self.requests.get(rid)
-        if req is not None:
-            groups.setdefault(req._lumo_fb_parent_id, []).append(rid)
+        if req is None:
+            continue
+        idx = model_runner_output.req_id_to_index[rid]
+        gen = model_runner_output.sampled_token_ids[idx] if model_runner_output.sampled_token_ids else []
+        rows = pending_rows.setdefault(req._lumo_fb_parent_id, {})
+        rows[rid] = (rid, gen, max(len(gen) - 1, 0))
+        if req in self.running:
+            self.running.remove(req)
+    groups = {
+        parent_id: [rid for rid in rows]
+        for parent_id, rows in pending_rows.items()
+        if len(rows) >= 2
+    }
+    if not groups:
+        _lumo_fb_sched_debug({
+            "event": "fb_optionc_waiting_for_sibling_spine",
+            "clone_ids": clone_ids,
+            "spec_clone_ids": spec_clone_ids,
+            "pending_parents": {
+                parent_id: list(rows)
+                for parent_id, rows in pending_rows.items()
+            },
+        })
+        return {}
     outputs = {}
     spec_decoding_stats = None
     active_depth, _ = _lumo_fb_sched_read_control(
@@ -7303,11 +7324,11 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
         if len(ids) != 2:
             continue
         parent = self.requests[parent_id]
-        rows = []
-        for rid in sorted(ids, key=lambda x: self.requests[x]._lumo_fb_path_idx):
-            idx = model_runner_output.req_id_to_index[rid]
-            gen = model_runner_output.sampled_token_ids[idx] if model_runner_output.sampled_token_ids else []
-            rows.append((rid, gen, max(len(gen) - 1, 0)))
+        rows_by_id = pending_rows.pop(parent_id)
+        rows = [
+            rows_by_id[rid]
+            for rid in sorted(ids, key=lambda x: self.requests[x]._lumo_fb_path_idx)
+        ]
         try:
             if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
                 raise RuntimeError("fb accept debug disabled")
