@@ -75,7 +75,14 @@ def apply_config(config: str, mtp: int = 1, kv_cache_dtype: str | None = None) -
     if not os.environ.get("LUMO_SUDO_PASSWORD"):
         sys.exit("LUMO_SUDO_PASSWORD required to relaunch vLLM (source .lumo.local.env)")
     round_script = "/tmp/relaunch_qwen36_round.py"
-    if config in ("D", "E", "F", "Fb") and Path(round_script).exists():
+    if config in ("D", "E", "F", "Fb"):
+        round_src = REPO / "scripts/swe_x86_helpers/relaunch_qwen36_round.py"
+        if not round_src.exists():
+            sys.exit(f"round relaunch source missing: {round_src}")
+        round_dst = Path(round_script)
+        if (not round_dst.exists()
+                or round_dst.read_text() != round_src.read_text()):
+            round_dst.write_text(round_src.read_text())
         cmd = [str(REPO / ".venv/bin/python"), round_script, "--config", config]
         if config in ("E", "F", "Fb"):
             cmd += ["--mtp", str(mtp)]
