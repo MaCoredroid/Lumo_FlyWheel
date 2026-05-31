@@ -2050,6 +2050,30 @@ else:
     import py_compile
     py_compile.compile(str(p), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied tree-attn force patch (selector.py)')
+
+ta = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py')
+if ta.exists():
+    text = ta.read_text()
+    sentinel = '# LUMO_TREE_ATTN_UNIFORM_BATCH_CG'
+    if sentinel in text:
+        print('[TRACK-B-PRELAUNCH] tree-attn uniform-batch cudagraph patch already present')
+    else:
+        changed = False
+        for old in (
+            'return AttentionCGSupport.NEVER',
+            'return AttentionCGSupport.NEVER  #',
+        ):
+            if old in text:
+                text = text.replace(old, 'return AttentionCGSupport.UNIFORM_BATCH', 1)
+                changed = True
+                break
+        if not changed:
+            raise RuntimeError('TreeAttentionBackend cudagraph support anchor not found')
+        text = sentinel + '\n' + text
+        ta.write_text(text)
+        import py_compile
+        py_compile.compile(str(ta), doraise=True)
+        print('[TRACK-B-PRELAUNCH] applied tree-attn uniform-batch cudagraph patch')
 LUMOTREEATTN
 '''
 
