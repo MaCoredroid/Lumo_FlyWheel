@@ -38,6 +38,7 @@ from pathlib import Path
 TRACE = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl"
 FB_DEBUG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_debug.jsonl"
 FB_OVERHEAD_DEBUG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_overhead_debug.jsonl"
+FB_SUPERSET_DIAG = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_superset_diag.jsonl"
 DEFAULT_FB_CONTROL = "/tmp/lumo-l0c-fp8-cutlass-run30-logs/fb_control.json"
 DEFAULT_HOTPLUG_REF_N8 = "output/spec_speed_probe/E8_depth_search_256.json"
 PORT = 9950
@@ -299,6 +300,38 @@ def summarize_free_row1(debug_rows: list[dict], overhead_rows: list[dict]) -> di
     }
 
 
+def summarize_superset(diag_rows: list[dict]) -> dict:
+    rows = [r for r in diag_rows if r.get("parent") and "path0_tree_acc" in r]
+    if not rows:
+        return {"events": 0}
+    path0 = [int(r.get("path0_tree_acc", 0) or 0) for r in rows]
+    best = [int(r.get("tree_best_acc", r.get("winner_acc", 0)) or 0) for r in rows]
+    selected = [int(r.get("state_accepted", r.get("winner_acc", 0)) or 0) for r in rows]
+    violations = [
+        r for r, s, p in zip(rows, selected, path0)
+        if bool(r.get("superset_violation", s < p))
+    ]
+    gains = [s - p for s, p in zip(selected, path0)]
+    def _mean(vals: list[int]) -> float | None:
+        return round(sum(vals) / len(vals), 3) if vals else None
+    return {
+        "events": len(rows),
+        "superset_violations": len(violations),
+        "superset_violation_rate": round(len(violations) / len(rows), 6),
+        "mean_path0_accept_len": _mean(path0),
+        "mean_best_accept_len": _mean(best),
+        "mean_selected_accept_len": _mean(selected),
+        "mean_selected_gain_vs_path0": _mean(gains),
+        "positive_gain_events": sum(1 for g in gains if g > 0),
+        "positive_gain_rate": round(sum(1 for g in gains if g > 0) / len(gains), 6),
+        "path0_acc0_rate": round(sum(1 for x in path0 if x == 0) / len(path0), 6),
+        "selected_acc0_rate": round(sum(1 for x in selected if x == 0) / len(selected), 6),
+        "second_pos0_capture_events": sum(1 for r in rows if r.get("second_pos0_capture")),
+        "internal_winner_events": sum(1 for r in rows if r.get("winner_is_internal")),
+        "gain_dist": dict(sorted(collections.Counter(gains).items())),
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--label", required=True, help="config label, e.g. E3 or Fa")
@@ -337,6 +370,7 @@ def main() -> int:
 
     fb_debug_pre = jsonl_count(FB_DEBUG)
     fb_overhead_pre = jsonl_count(FB_OVERHEAD_DEBUG)
+    fb_superset_pre = jsonl_count(FB_SUPERSET_DIAG)
     per_req, all_rows = [], []
     for i, prompt in enumerate(PROMPTS[: args.n_prompts]):
         pre = trace_count()
@@ -373,6 +407,10 @@ def main() -> int:
         read_jsonl_range(FB_DEBUG, fb_debug_pre, jsonl_count(FB_DEBUG)),
         read_jsonl_range(FB_OVERHEAD_DEBUG, fb_overhead_pre, jsonl_count(FB_OVERHEAD_DEBUG)),
     )
+    superset = summarize_superset(
+        read_jsonl_range(FB_SUPERSET_DIAG, fb_superset_pre,
+                         jsonl_count(FB_SUPERSET_DIAG)),
+    )
 
     result = {
         "label": args.label, "temp": args.temp, "top_p": args.top_p,
@@ -387,6 +425,7 @@ def main() -> int:
         "width_validation": width_validation,
         "hotplug_reference": ref_delta,
         "free_row1": free_row1,
+        "superset": superset,
         "aggregate": agg, "per_request": per_req,
     }
     out = Path(args.out or f"output/spec_speed_probe/{args.label}.json")
@@ -405,6 +444,8 @@ def main() -> int:
     print(f"  width_validation={width_validation['valid_width']}")
     if free_row1.get("events"):
         print(f"  free_row1={free_row1}")
+    if superset.get("events"):
+        print(f"  superset={superset}")
     if ref_delta:
         print(f"  hotplug_reference={ref_delta}")
     print(f"  -> {out}")
