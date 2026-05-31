@@ -47,11 +47,31 @@ path statistic is unavailable.
 | F tree-delta width2 | 3 | 2 | 14 | 1.981 | 0.142 | 14.85 | 199.47 | unavailable | unavailable | 1/4 | clean rerun; launched before accepted-path logger |
 | F tree-delta width2 remeasure | 3 | 2 | 14 | 2.048 | 0.146 | 15.89 | 190.80 | 3635/18607 (19.5%) | 7158/36965 (19.4%) | 2/4 | clean rerun; accepted-path logger live |
 | F tree-delta width2 | 5 | 2 | 62 | 2.421 | 0.039 | 7.44 | 455.81 | 1646/6422 (25.6%) | 4400/14962 (29.4%) | 1/4 | clean rerun; accepted-path logger live; GPU memory target lowered to 0.85 after launch-threshold miss at 0.86 |
+| E5 chain | 5 | 1 | 5 | 3.150 | 0.630 | 26.86 | 154.54 | n/a | n/a | 2/4 | clean rerun; FULL requested; GPU memory target lowered to 0.85 after launch-threshold miss at 0.86 |
 
 Depth-3 result: tree-delta spine remains lossless on the real B=4 agentic
 workload but is slower than E3. The 14-node real k=2 tree does not improve
 acceptance over the spine/E3 on this workload and roughly doubles event time, so
 the width-2 depth-3 branch is not a speed win.
+
+Final narrowed result: alternate branches are not zero. The depth-3 k=2 tree
+accepted alternate-branch tokens on `19.4%` of accepted path tokens, and the
+depth-5 k=2 tree accepted alternate-branch tokens on `29.4%` of accepted path
+tokens. That extra branching did not translate into throughput: E5 chain is the
+depth-paired baseline for F-w2-d5 and is much faster (`26.86` vs `7.44` decode
+TPS) while also accepting more per event (`3.150` vs `2.421`). E3 remains the
+fastest arm in this five-arm closeout matrix. E6 and F-w2-d6 were explicitly
+dropped from the narrowed scope and were not run.
+
+## Final Closeout Matrix
+
+| Arm | Depth | Width | Nodes | Accept/event | Decode TPS | Event ms | Alt branch token % | Resolved | Nsight tables |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| E3 chain | 3 | 1 | 3 | 2.323 | 37.15 | 89.50 | n/a | 1/4 | 29; no CUDA kernel tables |
+| F tree-delta spine | 3 | 1 | 3 | 2.363 | 34.21 | 98.42 | n/a | 1/4 | 29; no CUDA kernel tables |
+| F tree-delta width2 remeasure | 3 | 2 | 14 | 2.048 | 15.89 | 190.80 | 19.4% | 2/4 | 29; no CUDA kernel tables |
+| F tree-delta width2 | 5 | 2 | 62 | 2.421 | 7.44 | 455.81 | 29.4% | 1/4 | 29; no CUDA kernel tables |
+| E5 chain | 5 | 1 | 5 | 3.150 | 26.86 | 154.54 | n/a | 2/4 | 29; no CUDA kernel tables |
 
 ## Per-Arm Details
 
@@ -125,3 +145,18 @@ the width-2 depth-3 branch is not a speed win.
   probe before the clean relaunch. The first clean depth-5 launch at GPU memory
   target `0.86` missed the vLLM startup free-memory threshold by about 0.13 GiB,
   so this arm used `LUMO_GPU_MEMORY_UTILIZATION=0.85`.
+
+### E5 Chain Depth 5
+
+- Experiment: `output/roundf_clean_agentic_b4_E5_d5_20260531T0008Z`
+- Clean-slate proof: `clean_slate.json`
+- Summary: `summary.json`
+- Sliced traces: `dgx_steptrace_window.jsonl`, `per_req_spec_trace_window.jsonl`
+- Acceptance distribution: `{0: 3151, 1: 3335, 2: 2834, 3: 2249, 4: 1830, 5: 10347}`
+- Tasks: `astropy__astropy-12907` and `astropy__astropy-13236` resolved; the
+  other two failed.
+- Nsight export: available, but no CUDA kernel tables in sqlite.
+- Launch note: the first FULL E5 launch hit a transient `lmcache` download
+  failure before serving; the retry at GPU memory target `0.86` then missed the
+  vLLM startup free-memory threshold by about 0.23 GiB. The measured arm used a
+  fresh clean relaunch with `LUMO_GPU_MEMORY_UTILIZATION=0.85`.
