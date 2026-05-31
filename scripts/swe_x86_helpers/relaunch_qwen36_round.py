@@ -7440,7 +7440,6 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
         winner_id, generated_token_ids, accepted = max(rows, key=lambda r: (r[2], -_lumo_fb_row_path_idx(r[0])))
         clone_id = next(rid for rid, _, _ in rows if rid != parent_id)
         loser_id = clone_id if winner_id == parent_id else parent_id
-        parent.num_computed_tokens = max(0, parent.num_tokens - 1) + len(generated_token_ids)
         spec_decoding_stats = self.make_spec_decoding_stats(
             spec_decoding_stats,
             num_draft_tokens=active_depth,
@@ -7449,6 +7448,11 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
             request_id=parent_id,
         )
         new_token_ids, stopped = self._update_request_with_output(parent, list(generated_token_ids))
+        # Keep the standard decode invariant after a custom two-spine collapse:
+        # every emitted token except the final sampled token has computed KV.
+        # Without this, the next scheduler pass can see a running parent with
+        # no schedulable token and spin on empty model outputs.
+        parent.num_computed_tokens = max(0, parent.num_tokens - 1)
         parent._lumo_fb_force_streaming_refresh = True
         finish_reason = None
         kv_transfer_params = None
