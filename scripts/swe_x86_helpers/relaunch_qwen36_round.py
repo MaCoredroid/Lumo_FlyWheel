@@ -7711,6 +7711,146 @@ def _lumo_fb_rename_scheduled_req(scheduler_output, old_id, new_id):
     except Exception:
         pass
 
+def _lumo_fb_req_index(self, req_id):
+    try:
+        return self.input_batch.req_id_to_index.get(req_id)
+    except Exception:
+        return None
+
+def _lumo_fb_req_spec_len(self, req_id):
+    try:
+        idx = self.input_batch.req_id_to_index.get(req_id)
+        if idx is None:
+            return None
+        return len(self.input_batch.spec_token_ids[idx])
+    except Exception:
+        return None
+
+def _lumo_fb_request_frontier(self, req_id):
+    req_state = None
+    try:
+        req_state = self.requests.get(req_id)
+    except Exception:
+        pass
+    return {
+        "idx": _lumo_fb_req_index(self, req_id),
+        "mamba_idx": getattr(self, "mamba_state_idx", {}).get(req_id),
+        "num_computed_tokens": getattr(req_state, "num_computed_tokens", None),
+        "num_tokens": getattr(req_state, "num_tokens", None),
+        "num_tokens_with_spec": getattr(req_state, "num_tokens_with_spec", None),
+        "request_spec_len": len(getattr(req_state, "spec_token_ids", []) or []),
+        "batch_spec_len": _lumo_fb_req_spec_len(self, req_id),
+    }
+
+def _lumo_fb_collapse_debug(self, scheduler_output, phase, parent_id, winner_id, loser_id):
+    if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1":
+        return
+    try:
+        import json as _fbj, time as _fbt
+        global _LUMO_FB_STATE_DBG_FH
+        try:
+            _LUMO_FB_STATE_DBG_FH
+        except NameError:
+            _LUMO_FB_STATE_DBG_FH = open("/logs/fb_state_debug.jsonl", "a", buffering=1)
+        _LUMO_FB_STATE_DBG_FH.write(_fbj.dumps({
+            "ts": round(_fbt.time(), 4),
+            "event": "optionc_collapse_batch_diag",
+            "phase": phase,
+            "parent_id": parent_id,
+            "winner": winner_id,
+            "loser": loser_id,
+            "parent_state": _lumo_fb_request_frontier(self, parent_id),
+            "winner_state": _lumo_fb_request_frontier(self, winner_id),
+            "loser_state": _lumo_fb_request_frontier(self, loser_id),
+            "parent_scheduled_tokens": getattr(
+                scheduler_output, "num_scheduled_tokens", {}).get(parent_id),
+            "parent_scheduled_spec_len": len(getattr(
+                scheduler_output, "scheduled_spec_decode_tokens", {}).get(parent_id, []) or []),
+            "loser_scheduled_tokens": getattr(
+                scheduler_output, "num_scheduled_tokens", {}).get(loser_id),
+            "req_ids": list(getattr(self.input_batch, "_req_ids", []) or []),
+        }) + chr(10))
+    except Exception:
+        pass
+
+def _lumo_fb_move_req_to_tail(self, req_id, protected_id, scheduler_output, phase):
+    try:
+        idx = self.input_batch.req_id_to_index.get(req_id)
+        if idx is None:
+            return False
+        req_ids = list(getattr(self.input_batch, "_req_ids", []) or [])
+        live = [(int(i), rid) for i, rid in enumerate(req_ids) if rid is not None]
+        if not live:
+            return False
+        tail_idx, tail_id = max(live, key=lambda x: x[0])
+        if int(idx) == int(tail_idx):
+            return True
+        self.input_batch.swap_states(int(idx), int(tail_idx))
+        _lumo_fb_collapse_debug(
+            self, scheduler_output,
+            f"{phase}_tail_swap_ok_{idx}_to_{tail_idx}"
+            f"{'_protected_tail' if protected_id is not None and tail_id == protected_id else ''}",
+            protected_id or req_id, protected_id or req_id, req_id)
+        return True
+    except Exception:
+        _lumo_fb_collapse_debug(
+            self, scheduler_output,
+            f"{phase}_tail_swap_failed",
+            protected_id or req_id, protected_id or req_id, req_id)
+        return False
+
+def _lumo_fb_remember_parent_index(self, parent_id):
+    idx = _lumo_fb_req_index(self, parent_id)
+    if idx is None:
+        return
+    desired = getattr(self, "_lumo_fb_parent_desired_indices", {})
+    desired[parent_id] = int(idx)
+    self._lumo_fb_parent_desired_indices = desired
+
+def _lumo_fb_restore_parent_indices(self, scheduler_output, phase):
+    desired = getattr(self, "_lumo_fb_parent_desired_indices", None)
+    if not desired:
+        return
+    for parent_id, desired_idx in list(desired.items()):
+        cur_idx = _lumo_fb_req_index(self, parent_id)
+        if cur_idx is None or cur_idx == desired_idx:
+            continue
+        restored = False
+        try:
+            req_ids = list(getattr(self.input_batch, "_req_ids", []) or [])
+            if 0 <= int(desired_idx) < len(req_ids) and req_ids[int(desired_idx)] is not None:
+                self.input_batch.swap_states(int(cur_idx), int(desired_idx))
+                restored = True
+        except Exception:
+            restored = False
+        _lumo_fb_collapse_debug(
+            self, scheduler_output,
+            f"{phase}_restore_parent_idx_{'ok' if restored else 'failed'}",
+            parent_id, parent_id, parent_id)
+    desired.clear()
+
+def _lumo_fb_reinject_parent_spec(self, scheduler_output):
+    reinjected = []
+    try:
+        scheduled = getattr(scheduler_output, "scheduled_spec_decode_tokens", {}) or {}
+        for req_id, spec in list(scheduled.items()):
+            if "::lumo_fb::" in req_id:
+                continue
+            req_state = self.requests.get(req_id)
+            if req_state is None or req_id not in self.input_batch.req_id_to_index:
+                continue
+            if spec:
+                self.input_batch.update_req_spec_token_ids(req_state, scheduled)
+                reinjected.append(req_id)
+    except Exception:
+        pass
+    if reinjected:
+        for req_id in reinjected:
+            _lumo_fb_collapse_debug(
+                self, scheduler_output,
+                "after_collapse_reinject_parent_spec",
+                req_id, req_id, req_id)
+
 def _lumo_fb_apply_runner_collapses(self, scheduler_output):
     collapses = getattr(scheduler_output, "lumo_fb_collapses", None)
     if not collapses:
@@ -7724,7 +7864,15 @@ def _lumo_fb_apply_runner_collapses(self, scheduler_output):
             parent_id, winner_id, loser_id, corrected_num_computed = collapse
         else:
             parent_id, winner_id, loser_id, corrected_num_computed, accepted_prefix_len = collapse
+        _lumo_fb_remember_parent_index(self, parent_id)
+        _lumo_fb_collapse_debug(
+            self, scheduler_output, "before_collapse",
+            parent_id, winner_id, loser_id)
         if winner_id == parent_id:
+            _lumo_fb_move_req_to_tail(
+                self, loser_id, parent_id, scheduler_output,
+                "before_parent_winner_remove")
+            _lumo_fb_remember_parent_index(self, parent_id)
             row_idx = self.input_batch.req_id_to_index.get(parent_id)
             self.input_batch.remove_request(loser_id)
             self.requests.pop(loser_id, None)
@@ -7739,6 +7887,9 @@ def _lumo_fb_apply_runner_collapses(self, scheduler_output):
                 except Exception:
                     pass
             scheduler_output.finished_req_ids.discard(loser_id)
+            _lumo_fb_collapse_debug(
+                self, scheduler_output, "after_parent_winner_remove",
+                parent_id, winner_id, loser_id)
             continue
         win_state = self.requests.pop(winner_id, None)
         self.requests.pop(parent_id, None)
@@ -7768,6 +7919,9 @@ def _lumo_fb_apply_runner_collapses(self, scheduler_output):
                 pass
         scheduler_output.finished_req_ids.discard(winner_id)
         scheduler_output.finished_req_ids.discard(loser_id)
+        _lumo_fb_collapse_debug(
+            self, scheduler_output, "after_clone_winner_promote",
+            parent_id, winner_id, loser_id)
 
 def _lumo_fb_restore_parent_accept_lens(self):
     accept_lens = getattr(self, "_lumo_fb_accept_lens", None)
@@ -7828,6 +7982,17 @@ def _lumo_fb_prune_nonpositive_clone_rows(self, scheduler_output, phase):
     if not bad_rows:
         return
     for rid, _num_scheduled in bad_rows:
+        parent_id = rid.split(marker, 1)[0]
+        _lumo_fb_remember_parent_index(self, parent_id)
+        _lumo_fb_collapse_debug(
+            self, scheduler_output,
+            f"{phase}_before_prune_nonpositive_clone",
+            parent_id, parent_id, rid)
+        _lumo_fb_move_req_to_tail(
+            self, rid, parent_id, scheduler_output,
+            f"{phase}_before_prune_nonpositive_clone")
+        _lumo_fb_remember_parent_index(self, parent_id)
+    for rid, _num_scheduled in bad_rows:
         try:
             scheduler_output.num_scheduled_tokens.pop(rid, None)
             scheduler_output.scheduled_spec_decode_tokens.pop(rid, None)
@@ -7858,6 +8023,9 @@ def _lumo_fb_prune_nonpositive_clone_rows(self, scheduler_output, phase):
         self.input_batch.refresh_metadata()
     except Exception:
         pass
+    _lumo_fb_restore_parent_indices(
+        self, scheduler_output, f"{phase}_after_prune_nonpositive_clone")
+    _lumo_fb_reinject_parent_spec(self, scheduler_output)
     if _lumo_fb_os.environ.get("LUMO_FB_DEBUG") == "1":
         try:
             import json as _fbj, time as _fbt
@@ -7946,10 +8114,16 @@ def _lumo_fb_update_states(self, scheduler_output):
         _lumo_fb_apply_runner_collapses(self, scheduler_output)
     ret = _lumo_fb_orig_update_states(self, scheduler_output)
     if _lumo_fb_os.environ.get("LUMO_FB_PATHS") == "1":
+        _lumo_fb_restore_parent_indices(
+            self, scheduler_output, "after_orig_update_states")
+        _lumo_fb_reinject_parent_spec(self, scheduler_output)
         _lumo_fb_restore_parent_accept_lens(self)
         _lumo_fb_inherit_clone_mamba_state(self, scheduler_output)
         _lumo_fb_prune_nonpositive_clone_rows(
             self, scheduler_output, "after_update_states")
+        _lumo_fb_restore_parent_indices(
+            self, scheduler_output, "after_prune_update_states")
+        _lumo_fb_reinject_parent_spec(self, scheduler_output)
         _lumo_fb_state_debug(self, scheduler_output, "after_update_states")
         _lumo_fb_copies = list(getattr(scheduler_output, "lumo_fb_block_copies", []) or [])
         _lumo_fb_copy_us = 0
