@@ -73,6 +73,71 @@ dropped from the narrowed scope and were not run.
 | F tree-delta width2 | 5 | 2 | 62 | 2.421 | 7.44 | 455.81 | 29.4% | 1/4 | 29; no CUDA kernel tables |
 | E5 chain | 5 | 1 | 5 | 3.150 | 26.86 | 154.54 | n/a | 2/4 | 29; no CUDA kernel tables |
 
+## Accounting: why F-w2-d5 accept/event is BELOW E5 (the superset question)
+
+A natural objection: the depth-5 62-node binary tree (F-w2-d5) structurally *contains*
+the depth-5 chain (E5) as its top-1 path, so a correct tree verifier should accept
+**at least** what the chain accepts. Yet F-w2-d5 measures `2.421` accept/event vs E5's
+`3.150`. This section explains how the number is counted and why the deficit is a
+**measurement of the branched-verifier correctness gap, not a property of branching.**
+
+### How the two columns are counted
+
+From `scripts/summarize_round_f_agentic_arm.py` over `per_req_spec_trace.jsonl`, per arm:
+
+- `accept/event = sum(acc over events) / num_events` — accepted tokens per spec-decode
+  step, where `acc` for one event is the **accepted path length** (0..depth), capped at
+  the tree **depth** (5 here), NOT the node count.
+- `accept/draft = sum(acc) / sum(draft)` — where `draft` is **all proposed tokens** that
+  event: `5` for the chain, but `62` for the 62-node tree.
+
+So `accept/draft` is deflated by tree width (denominator 62 vs 5) and is **not** a
+cross-config quality metric — it is a verify-efficiency ratio. `accept/event` is the fair
+cross-config comparison, and both arms cap at depth 5, so width can only *help* (it adds
+recovery chances per level), never raise the ceiling.
+
+### Why the superset intuition is correct in theory
+
+At each level the tree can do everything the chain does (follow the top-1 child) **plus**,
+when the top-1 child is rejected, recover by accepting a sibling. With an identical
+proposer and a correct verifier, `tree accept/event >= chain accept/event`. The observed
+inequality is the wrong way round, so either the proposer or the verifier must differ.
+
+### The proposer is the same; the chain-mode verifier is lossless
+
+`--config E` and `--config F` both draft from the Qwen3.6 native MTP head; config F just
+arranges that head's outputs into a tree (one path at a time) and swaps in the GDN
+**tree-delta verifier**. The control is the **spine** (degenerate tree = chain): F
+tree-delta spine d3 = `2.363` accept/event vs E3 = `2.323` (and the prior uncapped spine
+run reached `acc 1.995` vs E3 `1.989`). So config F's proposer + its **chain-mode** verify
+are lossless against config E. The deficit appears **only when branching turns on.**
+
+### The smoking gun: the branched tree rejects the FIRST token 2.4x more often
+
+Accepted-length distributions at depth 5:
+
+| Arm | acc=0 (position-1 reject) | acc>=1 | full accept (5) | accept/event |
+| --- | ---: | ---: | ---: | ---: |
+| E5 chain | 13.3% | 86.7% | 43.6% | 3.150 |
+| F-w2-d5 tree | 32.5% | 67.5% | 34.3% | 2.421 |
+
+The tree fails to accept even one token in **32.5%** of events vs the chain's **13.3%** —
+2.4x more — *despite having an extra root sibling to recover with.* Since both draft the
+same position-1 top-1 token from the same MTP head, a correct tree verifier could only
+match-or-beat the chain at position 1; rejecting it 2.4x more often is direct evidence the
+**branched accepted-path verify + GDN state-copy under-accepts** (rejects tokens the chain
+accepts). This is the residual branched-path correctness gap documented across Round F
+(branched acc plateaued near the spine after ~8 fixes, never reaching parity).
+
+### Conclusion
+
+`E5 > F-w2-d5` on accept/event measures the **branched-verifier correctness gap**, not an
+inherent disadvantage of branching. A correct, full-capturable tree verifier would be
+expected to reach `>= chain` acceptance — which in vLLM 0.19.0 requires the fork noted in
+the main tree-delta closeout (static-shape FULL-capturable GDN + tree attention). Caveat:
+this sweep dropped F-spine-d5, so the d5 spine control is inferred from the d3 spine parity
+and the prior long-sequence spine parity, not measured directly at d5.
+
 ## Per-Arm Details
 
 ### E3 chain depth 3
