@@ -7327,6 +7327,12 @@ def _lumo_fb_schedule(self):
 
 def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
     if not getattr(model_runner_output, "req_ids", None):
+        try:
+            scheduler_output.num_scheduled_tokens.clear()
+            scheduler_output.scheduled_spec_decode_tokens.clear()
+            scheduler_output.total_num_scheduled_tokens = 0
+        except Exception:
+            pass
         _lumo_fb_sched_debug({
             "event": "fb_optionc_empty_model_output_noop",
             "total_num_scheduled_tokens": getattr(
@@ -8178,6 +8184,28 @@ else:
         '            # consume the only scheduled clone row after the initial',
         '            # pre-update zero-token check. Treat that as the same',
         '            # no-forward step vLLM already handles above.',
+        '            # LUMO_FB_PRUNE_NONPOSITIVE_CLONES: vLLM can leave a collapsed',
+        '            # verifier clone in the runner batch with a nonpositive',
+        '            # scheduled-token count after accepted-prefix correction.',
+        '            # Drop those stale clone rows before _prepare_inputs();',
+        '            # negative per-row counts otherwise wedge the engine.',
+        '            if os.environ.get("LUMO_FB_PATHS") == "1":',
+        '                _lumo_fb_bad_rows = [',
+        '                    _rid for _rid, _n in list(scheduler_output.num_scheduled_tokens.items())',
+        '                    if "::lumo_fb::" in _rid and int(_n) <= 0',
+        '                ]',
+        '                if _lumo_fb_bad_rows:',
+        '                    for _rid in _lumo_fb_bad_rows:',
+        '                        scheduler_output.num_scheduled_tokens.pop(_rid, None)',
+        '                        scheduler_output.scheduled_spec_decode_tokens.pop(_rid, None)',
+        '                        scheduler_output.finished_req_ids.discard(_rid)',
+        '                        self.input_batch.remove_request(_rid)',
+        '                        self.requests.pop(_rid, None)',
+        '                        self.mamba_state_idx.pop(_rid, None)',
+        '                    scheduler_output.total_num_scheduled_tokens = sum(',
+        '                        max(0, int(_n))',
+        '                        for _n in scheduler_output.num_scheduled_tokens.values()',
+        '                    )',
         '            if scheduler_output.total_num_scheduled_tokens <= 0:',
         '                if (',
         '                    self.parallel_config.distributed_executor_backend',
