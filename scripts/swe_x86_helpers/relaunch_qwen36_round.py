@@ -8150,6 +8150,46 @@ else:
     print('[TRACK-B-PRELAUNCH] applied F_b draft CPU read-width patch')
 
 text = gm.read_text()
+sentinel = '# LUMO_FB_EMPTY_AFTER_UPDATE_STATES'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_b post-update empty-step guard already present')
+else:
+    old = nl.join([
+        '            # Update persistent batch states.',
+        '            deferred_state_corrections_fn = self._update_states(scheduler_output)',
+        '',
+        '            if has_ec_transfer() and not get_ec_transfer().is_consumer:',
+    ])
+    new = nl.join([
+        '            # Update persistent batch states.',
+        '            deferred_state_corrections_fn = self._update_states(scheduler_output)',
+        '',
+        '            # LUMO_FB_EMPTY_AFTER_UPDATE_STATES: Option-C collapse can',
+        '            # consume the only scheduled clone row after the initial',
+        '            # pre-update zero-token check. Treat that as the same',
+        '            # no-forward step vLLM already handles above.',
+        '            if scheduler_output.total_num_scheduled_tokens <= 0:',
+        '                if (',
+        '                    self.parallel_config.distributed_executor_backend',
+        '                    == "external_launcher"',
+        '                    and self.parallel_config.data_parallel_size > 1',
+        '                ):',
+        '                    self._dummy_run(1)',
+        '                if not has_kv_transfer_group():',
+        '                    return EMPTY_MODEL_RUNNER_OUTPUT',
+        '                return self.kv_connector_no_forward(scheduler_output, self.vllm_config)',
+        '',
+        '            if has_ec_transfer() and not get_ec_transfer().is_consumer:',
+    ])
+    if old not in text:
+        raise RuntimeError('F_b post-update empty-step guard anchor not found')
+    text = text.replace(old, new, 1)
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_b post-update empty-step guard')
+
+text = gm.read_text()
 sentinel = '# LUMO_FB_META_DEBUG'
 if sentinel in text:
     print('[TRACK-B-PRELAUNCH] F_b metadata debug patch already present')
