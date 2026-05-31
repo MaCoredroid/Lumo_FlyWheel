@@ -12057,11 +12057,18 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         + _TREE_PATH_LCP_MAX_BLOCK
     )
     multi_spine = os.environ.get("LUMO_MULTI_SPINE") == "1"
-    kernel_rows_requested = os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" or multi_spine
     if multi_spine and os.environ.get("LUMO_FB_TWO_SPINE") == "1":
         raise RuntimeError(
             "LUMO_MULTI_SPINE must not be combined with LUMO_FB_TWO_SPINE; "
             "the latter is the retired inject/collapse experiment path")
+    if multi_spine:
+        raise RuntimeError(
+            "LUMO_MULTI_SPINE fail-closed: the current launcher routes through "
+            "kernel_rows/internal request rows and per-step cleanup "
+            "(remove_request/condense), which is the retired sibling-collapse "
+            "mechanism. Rebuild must use persistent static-shape rows plus "
+            "LUMO_MULTI_SPINE_COPY_RECURRENT_STATE before any B=4 run.")
+    kernel_rows_requested = os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
     fb_k = (os.environ.get("LUMO_MS_SPINES", "2")
             if multi_spine else
             ("2" if os.environ.get("LUMO_FB_TWO_SPINE") == "1"
