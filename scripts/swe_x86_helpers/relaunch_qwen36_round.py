@@ -985,7 +985,7 @@ else:
         # recurrent state into each spine's private state slot inside the model
         # forward.  The copy is device-to-device and captured with the uniform
         # decode CUDA graph; later conv/SSM kernels read the copied private slot.
-        if (_lumo_fb_kernel_os.environ.get("LUMO_MULTI_SPINE") == "1"
+        if (__import__("os").environ.get("LUMO_MULTI_SPINE") == "1"
                 and spec_initial_state_indices_tensor is not None
                 and spec_write_state_slot_tensor is not None):
             _lumo_ms_n = int(attn_metadata.num_spec_decodes)
