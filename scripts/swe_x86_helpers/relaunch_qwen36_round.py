@@ -7327,6 +7327,42 @@ def _lumo_fb_schedule(self):
 
 def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
     if not getattr(model_runner_output, "req_ids", None):
+        fixed_frontiers = []
+        running_frontiers = []
+        try:
+            for request in list(getattr(self, "running", []) or []):
+                req_id = getattr(request, "request_id", None)
+                if not req_id or "::lumo_fb::" in req_id or request.is_finished():
+                    continue
+                num_tokens = int(getattr(request, "num_tokens", 0))
+                num_computed = int(getattr(request, "num_computed_tokens", 0))
+                num_with_spec = int(getattr(
+                    request, "num_tokens_with_spec", num_tokens))
+                placeholders = int(getattr(
+                    request, "num_output_placeholders", 0))
+                max_tokens = int(getattr(request, "max_tokens", 0))
+                num_output_tokens = int(getattr(
+                    request, "num_output_tokens", 0))
+                gap = num_with_spec + placeholders - num_computed
+                row = {
+                    "rid": req_id,
+                    "num_tokens": num_tokens,
+                    "num_computed_tokens": num_computed,
+                    "num_tokens_with_spec": num_with_spec,
+                    "num_output_placeholders": placeholders,
+                    "num_output_tokens": num_output_tokens,
+                    "max_tokens": max_tokens,
+                    "gap": gap,
+                }
+                if gap <= 0 and (max_tokens <= 0 or num_output_tokens < max_tokens):
+                    new_num_computed = max(0, num_tokens - 1)
+                    if new_num_computed < num_computed:
+                        request.num_computed_tokens = new_num_computed
+                        row["fixed_num_computed_tokens"] = new_num_computed
+                        fixed_frontiers.append(row)
+                running_frontiers.append(row)
+        except Exception as e:
+            running_frontiers.append({"error": repr(e)})
         try:
             scheduler_output.num_scheduled_tokens.clear()
             scheduler_output.scheduled_spec_decode_tokens.clear()
@@ -7340,6 +7376,9 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
             "num_scheduled_tokens": dict(getattr(
                 scheduler_output, "num_scheduled_tokens", {}) or {}),
             "collapses": getattr(scheduler_output, "lumo_fb_collapses", None),
+            "running_count": len(getattr(self, "running", []) or []),
+            "running_frontiers": running_frontiers,
+            "fixed_frontiers": fixed_frontiers,
         })
         return {}
     clone_ids = [rid for rid in scheduler_output.num_scheduled_tokens if "::lumo_fb::" in rid]
