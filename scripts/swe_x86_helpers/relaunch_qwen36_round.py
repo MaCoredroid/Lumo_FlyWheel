@@ -6942,25 +6942,41 @@ def _lumo_fb_clone_blocks(self, parent, clone_id):
         block_size = manager.block_size
         if getattr(manager, "mamba_cache_mode", None) == "align":
             # Mamba/GDN align mode keeps the recurrent state in logical cache
-            # blocks beyond the token prefix. F_b verifier clones must keep the
-            # same logical layout but use independent physical blocks; otherwise
-            # the two sibling verifier rows overwrite each other's recurrent
-            # state during the batched target forward.
-            clone_blocks = []
-            for src in parent_blocks:
-                if src == getattr(manager, "_null_block", None):
-                    clone_blocks.append(src)
+            # blocks beyond the token prefix. Only the current state window is
+            # live for speculative verification: conv state reads cur_block_idx,
+            # temporal state reads cur_block_idx + accepted_len - 1. Preserve the
+            # parent logical layout, but sparsely clone only that O(1) window.
+            # Copying every non-null historical Mamba block turns a long agentic
+            # prompt into an O(sequence length) clone and can exhaust the pool.
+            null_block = getattr(manager, "_null_block", None)
+            clone_blocks = [null_block for _ in parent_blocks]
+            state_idx = None
+            if hasattr(manager, "last_state_block_idx"):
+                state_idx = manager.last_state_block_idx.get(parent.request_id)
+            if state_idx is None:
+                non_null = [
+                    i for i, blk in enumerate(parent_blocks)
+                    if blk is not None and blk != null_block
+                ]
+                state_idx = non_null[-1] if non_null else 0
+            state_idx = max(0, min(int(state_idx), max(0, len(parent_blocks) - 1)))
+            num_spec_blocks = int(getattr(manager, "num_speculative_blocks", 0))
+            for block_idx in range(state_idx, min(len(parent_blocks), state_idx + num_spec_blocks + 1)):
+                src = parent_blocks[block_idx]
+                if src is None or src == null_block:
                     continue
                 dst = manager.block_pool.get_new_blocks(1)[0]
-                clone_blocks.append(dst)
+                clone_blocks[block_idx] = dst
                 copies.append(("mamba", group_idx, src.block_id, dst.block_id))
             manager.req_to_blocks[clone_id] = clone_blocks
             manager.num_cached_block[clone_id] = min(
                 manager.num_cached_block.get(parent.request_id, len(clone_blocks)),
                 len(clone_blocks),
             )
-            if hasattr(manager, "last_state_block_idx") and parent.request_id in manager.last_state_block_idx:
-                manager.last_state_block_idx[clone_id] = manager.last_state_block_idx[parent.request_id]
+            if hasattr(manager, "last_state_block_idx"):
+                manager.last_state_block_idx[clone_id] = state_idx
+            if hasattr(manager, "_allocated_block_reqs") and parent.request_id in manager._allocated_block_reqs:
+                manager._allocated_block_reqs.add(clone_id)
             continue
         valid_tokens = max(0, int(parent.num_tokens) - 1)
         full_blocks = min(valid_tokens // block_size, len(parent_blocks))
