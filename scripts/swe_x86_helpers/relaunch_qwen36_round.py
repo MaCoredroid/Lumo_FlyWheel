@@ -7686,7 +7686,7 @@ def _lumo_fb_copy_mamba_block_id(self, src, dst, group_idx=None):
 
 def _lumo_fb_drop_scheduled_req(scheduler_output, req_id):
     try:
-        scheduler_output.num_scheduled_tokens[req_id] = 0
+        scheduler_output.num_scheduled_tokens.pop(req_id, None)
     except Exception:
         pass
     try:
@@ -7886,6 +7886,15 @@ def _lumo_fb_apply_runner_collapses(self, scheduler_output):
             _lumo_fb_remember_parent_index(self, parent_id)
             row_idx = self.input_batch.req_id_to_index.get(parent_id)
             self.input_batch.remove_request(loser_id)
+            try:
+                self.input_batch.condense()
+                self.input_batch.refresh_metadata()
+            except Exception:
+                pass
+            _lumo_fb_restore_parent_indices(
+                self, scheduler_output, "after_parent_winner_condense")
+            self.requests.pop(loser_id, None)
+            self.mamba_state_idx.pop(loser_id, None)
             _lumo_fb_drop_scheduled_req(scheduler_output, loser_id)
             if accepted_prefix_len is not None and row_idx is not None:
                 try:
