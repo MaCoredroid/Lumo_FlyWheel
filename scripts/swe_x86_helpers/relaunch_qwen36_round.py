@@ -365,6 +365,98 @@ print('[TRACK-B-PRELAUNCH] applied Mamba align duplicate-state free fix')
 LUMOMAMBADUPFREE
 """
 
+_FREE_QUEUE_MEMBERSHIP_FIX_BLOCK = r"""
+python3 - <<'LUMOFREEQUEUEMEMBERSHIP'
+from pathlib import Path
+import py_compile
+
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_utils.py')
+text = p.read_text()
+sentinel = '# LUMO_FREE_QUEUE_MEMBERSHIP_FIX'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] free queue membership fix already present')
+else:
+    old = '''        # Connect the new block after the last block.
+        last_block.next_free_block = block
+        block.prev_free_block = last_block
+
+        # Connect the fake tail after the new block.
+        block.next_free_block = self.fake_free_list_tail
+        self.fake_free_list_tail.prev_free_block = block
+
+        self.num_free_blocks += 1
+'''
+    new = '''        # LUMO_FREE_QUEUE_MEMBERSHIP_FIX: append is a queue-membership
+        # operation.  A block that is already linked into the free list must not
+        # be appended again; doing so leaves duplicate/stale references that can
+        # later be popped after the block has been reallocated.
+        if block.prev_free_block is not None or block.next_free_block is not None:
+            return
+
+        # Connect the new block after the last block.
+        last_block.next_free_block = block
+        block.prev_free_block = last_block
+
+        # Connect the fake tail after the new block.
+        block.next_free_block = self.fake_free_list_tail
+        self.fake_free_list_tail.prev_free_block = block
+
+        self.num_free_blocks += 1
+'''
+    if old not in text:
+        raise RuntimeError('FreeKVCacheBlockQueue append membership anchor not found')
+    text = text.replace(old, new, 1)
+    old = '''        # Add inter-connections between consecutive blocks
+        for block in blocks:
+            block.prev_free_block = last_block
+            last_block.next_free_block = block
+            last_block = block
+
+        # Connect the last block of <blocks> to the fake tail
+        last_block.next_free_block = self.fake_free_list_tail
+        self.fake_free_list_tail.prev_free_block = last_block
+
+        self.num_free_blocks += len(blocks)
+'''
+    new = '''        # LUMO_FREE_QUEUE_MEMBERSHIP_FIX: append each physical block at most
+        # once, and never append a block that is already linked into this free
+        # list.  This is the global backstop for Mamba align-mode tables whose
+        # logical slots can alias the same recurrent state block.
+        linked_blocks = []
+        seen_block_ids = set()
+        for block in blocks:
+            block_id = getattr(block, "block_id", id(block))
+            if block_id in seen_block_ids:
+                continue
+            seen_block_ids.add(block_id)
+            if block.prev_free_block is not None or block.next_free_block is not None:
+                continue
+            linked_blocks.append(block)
+
+        if len(linked_blocks) == 0:
+            return
+
+        # Add inter-connections between consecutive blocks
+        for block in linked_blocks:
+            block.prev_free_block = last_block
+            last_block.next_free_block = block
+            last_block = block
+
+        # Connect the last block of <blocks> to the fake tail
+        last_block.next_free_block = self.fake_free_list_tail
+        self.fake_free_list_tail.prev_free_block = last_block
+
+        self.num_free_blocks += len(linked_blocks)
+'''
+    if old not in text:
+        raise RuntimeError('FreeKVCacheBlockQueue append_n membership anchor not found')
+    text = text.replace(old, new, 1)
+    p.write_text(text)
+    py_compile.compile(str(p), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied free queue membership fix')
+LUMOFREEQUEUEMEMBERSHIP
+"""
+
 _BLOCK_POOL_DEDUP_FREE_FIX_BLOCK = r"""
 python3 - <<'LUMOBLOCKPOOLDEDUP'
 from pathlib import Path
@@ -400,6 +492,14 @@ else:
             seen_block_ids.add(block_id)
             unique_blocks.append(block)
         blocks_list = unique_blocks
+        filtered_blocks = []
+        for block in blocks_list:
+            if (not block.is_null and block.ref_cnt == 0
+                    and block.prev_free_block is not None
+                    and block.next_free_block is not None):
+                continue
+            filtered_blocks.append(block)
+        blocks_list = filtered_blocks
         for block in blocks_list:
             block.ref_cnt -= 1
         self.free_block_queue.append_n(
@@ -11019,8 +11119,13 @@ LUMOFBCTRL
         if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique)
         else ""
     )
+    free_queue_membership_fix = (
+        _FREE_QUEUE_MEMBERSHIP_FIX_BLOCK
+        if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique)
+        else ""
+    )
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + _CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX_BLOCK
-            + mamba_dup_free_fix + block_pool_dedup_free_fix
+            + mamba_dup_free_fix + free_queue_membership_fix + block_pool_dedup_free_fix
             + stale_fb_guard + dbg + "export LUMO_CUDAGRAPH_RUNTIME_TELEMETRY=1\n"
             + fb_env + mtp_draft_trace + base + _CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
