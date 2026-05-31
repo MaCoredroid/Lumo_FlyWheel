@@ -107,7 +107,8 @@ def apply_config(config: str, mtp: int = 1, kv_cache_dtype: str | None = None) -
     # Reset the per-agent spec trace BEFORE relaunch: the fresh container opens a
     # new file handle, so each round's trace starts clean (and we never delete it
     # out from under a live handle -- the cause of the round-1 unlinked-inode loss).
-    sh(["rm", "-f", PER_REQ_SPEC_TRACE, TREE_ACCEPT_PATH_TRACE])
+    sh(["rm", "-f", PER_REQ_SPEC_TRACE, TREE_ACCEPT_PATH_TRACE,
+        TREE_PATH_LCP_TRACE])
     log(f"relaunching vLLM config={config} mtp={mtp if config in ('E','F','Fb') else '-'} "
         f"kv={kv_cache_dtype or 'bundle-default'} (model load ~ several min)")
     r = sh(cmd, timeout=1200)
@@ -125,10 +126,10 @@ def preflight() -> None:
     # proxy reachable (403 guard counts as alive); vLLM serving; tmux infra up
     p = sh(["curl", "-s", "-m5", "-o", "/dev/null", "-w", "%{http_code}", PROXY])
     if p.stdout.strip() not in {"200", "403"}:
-        sys.exit(f"proxy not reachable on 8022 (http={p.stdout!r})")
+        sys.exit(f"proxy not reachable at {PROXY} (http={p.stdout!r})")
     m = sh(["curl", "-s", "-m5", VLLM_METRICS])
     if "vllm:" not in m.stdout:
-        sys.exit("vLLM /metrics on 9950 not serving - is the engine ready?")
+        sys.exit(f"vLLM metrics not serving at {VLLM_METRICS} - is the engine ready?")
     t = sh(["tmux", "has-session", "-t", "swe_infra"])
     if t.returncode != 0:
         log("swe_infra tmux missing; rebuilding via setup_tmux_infra.sh")
@@ -259,6 +260,8 @@ def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
              f"{rel}/per_req_spec_trace.jsonl"]
     if (REPO / rel / "tree_accept_path.jsonl").exists():
         paths.append(f"{rel}/tree_accept_path.jsonl")
+    if (REPO / rel / "tree_path_lcp_max.jsonl").exists():
+        paths.append(f"{rel}/tree_path_lcp_max.jsonl")
     if joined:
         paths.append(str(joined.relative_to(REPO)))
     nrep = REPO / f"{rel}/nsight_{args.exp_tag}.nsys-rep"
