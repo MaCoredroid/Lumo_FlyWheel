@@ -275,6 +275,146 @@ else:
 LUMOCCONVASSERT
 '''
 
+_MAMBA_ALIGN_DUP_STATE_FREE_FIX_BLOCK = r"""
+python3 - <<'LUMOMAMBADUPFREE'
+from pathlib import Path
+import py_compile
+
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/single_type_kv_cache_manager.py')
+text = p.read_text()
+sentinel = '# LUMO_MAMBA_ALIGN_DUP_STATE_FREE_FIX'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] Mamba align duplicate-state free fix already present')
+else:
+    old = '''                if blocks[last_state_block_idx] != self._null_block:
+                    self.block_pool.free_blocks([blocks[last_state_block_idx]])
+                    blocks[last_state_block_idx] = self._null_block
+'''
+    new = '''                if blocks[last_state_block_idx] != self._null_block:
+                    # LUMO_MAMBA_ALIGN_DUP_STATE_FREE_FIX: align-mode Mamba
+                    # block tables can contain the same physical recurrent
+                    # state block in multiple logical slots after speculative
+                    # state promotion.  Freeing last_state_block_idx blindly
+                    # can put a still-referenced block on the free queue; a
+                    # later allocation then pops it with ref_cnt > 0.  Null the
+                    # skipped slot, but only decrement the physical block when
+                    # no other slot in this request still names it.
+                    block = blocks[last_state_block_idx]
+                    block_id = getattr(block, "block_id", None)
+                    still_referenced = any(
+                        idx != last_state_block_idx
+                        and other != self._null_block
+                        and getattr(other, "block_id", None) == block_id
+                        for idx, other in enumerate(blocks)
+                    )
+                    blocks[last_state_block_idx] = self._null_block
+                    if not still_referenced:
+                        self.block_pool.free_blocks([block])
+'''
+    if old not in text:
+        raise RuntimeError('Mamba align duplicate-state free anchor not found')
+    text = text.replace(old, new, 1)
+    old = '''            if num_required_blocks == len(req_blocks):
+                return []
+            else:
+                assert num_required_blocks > len(req_blocks), (
+                    "num_required_blocks "
+                    f"{num_required_blocks} < len(req_blocks) {len(req_blocks)}"
+                )
+'''
+    new = '''            if num_required_blocks < len(req_blocks):
+                # LUMO_MAMBA_ALIGN_DUP_STATE_FREE_FIX: accepted speculative
+                # prefixes can make the next main-model requirement shorter
+                # than the previous align-mode speculative block table.  Trim
+                # the stale tail before allocating new blocks, freeing only
+                # physical blocks no remaining logical slot still references.
+                removed_blocks = req_blocks[num_required_blocks:]
+                del req_blocks[num_required_blocks:]
+                remaining_ids = {
+                    getattr(block, "block_id", None)
+                    for block in req_blocks
+                    if block != self._null_block
+                }
+                to_free = []
+                seen_removed = set()
+                for block in removed_blocks:
+                    if block == self._null_block:
+                        continue
+                    block_id = getattr(block, "block_id", None)
+                    if block_id in remaining_ids or block_id in seen_removed:
+                        continue
+                    seen_removed.add(block_id)
+                    if getattr(block, "ref_cnt", 0) > 0:
+                        to_free.append(block)
+                if to_free:
+                    self.block_pool.free_blocks(to_free)
+            if num_required_blocks == len(req_blocks):
+                return []
+            else:
+                assert num_required_blocks > len(req_blocks), (
+                    "num_required_blocks "
+                    f"{num_required_blocks} < len(req_blocks) {len(req_blocks)}"
+                )
+'''
+    if old not in text:
+        raise RuntimeError('Mamba align overlong block-table trim anchor not found')
+    text = text.replace(old, new, 1)
+    p.write_text(text)
+    py_compile.compile(str(p), doraise=True)
+print('[TRACK-B-PRELAUNCH] applied Mamba align duplicate-state free fix')
+LUMOMAMBADUPFREE
+"""
+
+_BLOCK_POOL_DEDUP_FREE_FIX_BLOCK = r"""
+python3 - <<'LUMOBLOCKPOOLDEDUP'
+from pathlib import Path
+import py_compile
+
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/block_pool.py')
+text = p.read_text()
+sentinel = '# LUMO_BLOCK_POOL_DEDUP_FREE_FIX'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] BlockPool dedup free fix already present')
+else:
+    old = '''        # Materialize the iterable to allow multiple passes.
+        blocks_list = list(ordered_blocks)
+        for block in blocks_list:
+            block.ref_cnt -= 1
+        self.free_block_queue.append_n(
+            [block for block in blocks_list if block.ref_cnt == 0 and not block.is_null]
+        )
+'''
+    new = '''        # Materialize the iterable to allow multiple passes.
+        blocks_list = list(ordered_blocks)
+        # LUMO_BLOCK_POOL_DEDUP_FREE_FIX: Mamba align block tables can contain
+        # the same physical state block in multiple logical slots.  A single
+        # request free must release that physical block once; otherwise append_n
+        # can enqueue duplicate references and the second copy later trips
+        # get_new_blocks with ref_cnt > 0.
+        unique_blocks = []
+        seen_block_ids = set()
+        for block in blocks_list:
+            block_id = getattr(block, "block_id", id(block))
+            if block_id in seen_block_ids:
+                continue
+            seen_block_ids.add(block_id)
+            unique_blocks.append(block)
+        blocks_list = unique_blocks
+        for block in blocks_list:
+            block.ref_cnt -= 1
+        self.free_block_queue.append_n(
+            [block for block in blocks_list if block.ref_cnt == 0 and not block.is_null]
+        )
+'''
+    if old not in text:
+        raise RuntimeError('BlockPool free_blocks dedup anchor not found')
+    text = text.replace(old, new, 1)
+    p.write_text(text)
+    py_compile.compile(str(p), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied BlockPool dedup free fix')
+LUMOBLOCKPOOLDEDUP
+"""
+
 
 # F_b kernel-row foundation: let the GDN SSM recurrent update read its initial
 # state from one state slot and write the evolved per-token states to another
@@ -8217,9 +8357,13 @@ def _lumo_fb_ir_cdiv(a, b):
 
 def _lumo_fb_ir_new_block(manager):
     pool = manager.block_pool
+    _lumo_fb_ir_check_free_queue(
+        manager, {"op": "pre_alloc"}, raise_on_ref=True)
     try:
         return pool.get_new_blocks(1)[0]
     except AssertionError as exc:
+        _lumo_fb_ir_check_free_queue(
+            manager, {"op": "alloc_assert"}, raise_on_ref=False)
         _lumo_fb_ir_sched_debug({
             "event": "kernel_row_stale_free_block_detected",
             "repair_enabled": _lumo_fb_ir_os.environ.get(
@@ -8244,6 +8388,183 @@ def _lumo_fb_ir_new_block(manager):
                 })
                 return block
             skipped += 1
+
+def _lumo_fb_ir_block_id(block):
+    try:
+        return int(getattr(block, "block_id"))
+    except Exception:
+        return None
+
+def _lumo_fb_ir_live_block_owners(manager, block_ids):
+    wanted = set(int(block_id) for block_id in block_ids if block_id is not None)
+    owners = {int(block_id): [] for block_id in wanted}
+    if not wanted:
+        return owners
+    try:
+        for req_id, blocks in list(getattr(manager, "req_to_blocks", {}).items()):
+            for idx, block in enumerate(list(blocks or [])):
+                block_id = _lumo_fb_ir_block_id(block)
+                if block_id in wanted:
+                    owners.setdefault(block_id, []).append({
+                        "req": str(req_id),
+                        "idx": int(idx),
+                    })
+    except Exception as e:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_owner_scan_error",
+            "error": repr(e),
+        })
+    return owners
+
+def _lumo_fb_ir_check_free_queue(manager, context, raise_on_ref=False,
+                                 limit=256):
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_BLOCK_ACCOUNT_DEBUG") != "1":
+        return []
+    try:
+        queue_obj = getattr(manager.block_pool, "free_block_queue", [])
+        if hasattr(queue_obj, "get_all_free_blocks"):
+            queue = list(queue_obj.get_all_free_blocks())
+        else:
+            queue = list(queue_obj)
+    except Exception as e:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_free_queue_scan_error",
+            "context": context,
+            "error": repr(e),
+        })
+        return []
+    anomalies = []
+    scan = queue[:max(0, int(limit))]
+    block_ids = [_lumo_fb_ir_block_id(block) for block in scan]
+    owners = _lumo_fb_ir_live_block_owners(manager, block_ids)
+    for idx, block in enumerate(scan):
+        block_id = _lumo_fb_ir_block_id(block)
+        if block_id is None:
+            continue
+        ref_cnt = int(getattr(block, "ref_cnt", 0))
+        live_owners = owners.get(int(block_id), [])
+        if ref_cnt > 0 or live_owners:
+            anomalies.append({
+                "queue_idx": int(idx),
+                "block": int(block_id),
+                "ref_cnt": int(ref_cnt),
+                "owners": live_owners[:8],
+            })
+    if anomalies:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_free_queue_anomaly",
+            "context": context,
+            "queue_len": int(len(queue)),
+            "scan_limit": int(limit),
+            "anomalies": anomalies[:16],
+        })
+        if raise_on_ref and any(int(item.get("ref_cnt", 0)) > 0
+                                for item in anomalies):
+            raise RuntimeError(
+                "LUMO_FB free queue contains referenced blocks before "
+                f"allocation: context={context} anomalies={anomalies[:4]}")
+    return anomalies
+
+def _lumo_fb_ir_free_blocks_checked(manager, blocks, context):
+    null_block = getattr(manager, "_null_block", None)
+    raw_blocks = [
+        block for block in list(blocks or [])
+        if block is not None and block != null_block
+    ]
+    unique = []
+    seen = set()
+    duplicate_ids = []
+    for block in raw_blocks:
+        block_id = _lumo_fb_ir_block_id(block)
+        if block_id is None:
+            continue
+        if block_id in seen:
+            duplicate_ids.append(int(block_id))
+            continue
+        seen.add(block_id)
+        unique.append(block)
+    if duplicate_ids:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_duplicate_free_input",
+            "context": context,
+            "duplicates": sorted(set(int(block_id) for block_id in duplicate_ids)),
+        })
+    if not unique:
+        return
+    owners_pre = None
+    bad_pre = []
+    already_free = []
+    for block in unique:
+        ref_cnt = int(getattr(block, "ref_cnt", 0))
+        if ref_cnt <= 0:
+            item = {
+                "block": int(block.block_id),
+                "ref_cnt": int(ref_cnt),
+            }
+            if context.get("op") == "transfer_parent_replaced":
+                if owners_pre is None:
+                    owners_pre = _lumo_fb_ir_live_block_owners(
+                        manager, [_lumo_fb_ir_block_id(blk) for blk in unique])
+                item["owners"] = owners_pre.get(int(block.block_id), [])[:8]
+                if not item["owners"]:
+                    already_free.append(item)
+                    continue
+            bad_pre.append(item)
+    if already_free:
+        skip_ids = set(int(item["block"]) for item in already_free)
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_skip_already_free_parent_block",
+            "context": context,
+            "blocks": already_free,
+        })
+        unique = [
+            block for block in unique
+            if int(getattr(block, "block_id", -1)) not in skip_ids
+        ]
+        if not unique:
+            return
+    if bad_pre:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_free_bad_refcnt",
+            "context": context,
+            "blocks": bad_pre,
+        })
+        raise RuntimeError(
+            "LUMO_FB internal-row free attempted on non-referenced block: "
+            f"context={context} blocks={bad_pre}")
+    manager.block_pool.free_blocks(reversed(unique))
+    owners = _lumo_fb_ir_live_block_owners(
+        manager, [_lumo_fb_ir_block_id(block) for block in unique])
+    bad_post = []
+    for block in unique:
+        block_id = int(block.block_id)
+        ref_cnt = int(getattr(block, "ref_cnt", 0))
+        live_owners = owners.get(block_id, [])
+        if ref_cnt == 0 and live_owners:
+            bad_post.append({
+                "block": int(block_id),
+                "ref_cnt": int(ref_cnt),
+                "owners": live_owners[:8],
+            })
+    if bad_post:
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_freed_live_block",
+            "context": context,
+            "blocks": bad_post,
+        })
+        raise RuntimeError(
+            "LUMO_FB internal-row free released a block still present in "
+            f"req_to_blocks: context={context} blocks={bad_post}")
+    if _lumo_fb_ir_os.environ.get("LUMO_FB_BLOCK_ACCOUNT_DEBUG") == "1":
+        _lumo_fb_ir_sched_debug({
+            "event": "kernel_row_free_checked",
+            "context": context,
+            "blocks": [{
+                "block": int(block.block_id),
+                "ref_cnt": int(getattr(block, "ref_cnt", 0)),
+                "owners": owners.get(int(block.block_id), [])[:8],
+            } for block in unique],
+        })
 
 def _lumo_fb_ir_kernel_rows_enabled():
     return _lumo_fb_ir_os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
@@ -8393,7 +8714,13 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id,
         new_ids = list(target_groups[group_idx] or [])
         if not new_ids:
             if owned_by_id:
-                manager.block_pool.free_blocks(reversed(list(owned_by_id.values())))
+                _lumo_fb_ir_free_blocks_checked(
+                    manager, list(owned_by_id.values()), {
+                        "op": "transfer_empty_target_owned",
+                        "parent": str(parent_id),
+                        "row": str(row_id),
+                        "group": int(group_idx),
+                    })
             continue
         new_id_set = set(new_ids)
         new_blocks = []
@@ -8403,7 +8730,15 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id,
                 new_blocks.append(block)
         if len(new_blocks) != len(new_ids):
             if owned_by_id:
-                manager.block_pool.free_blocks(reversed(list(owned_by_id.values())))
+                _lumo_fb_ir_free_blocks_checked(
+                    manager, list(owned_by_id.values()), {
+                        "op": "transfer_missing_target_owned",
+                        "parent": str(parent_id),
+                        "row": str(row_id),
+                        "group": int(group_idx),
+                        "target_count": int(len(new_ids)),
+                        "resolved_count": int(len(new_blocks)),
+                    })
             continue
         first_changed = None
         for idx, block_id in enumerate(new_ids):
@@ -8415,16 +8750,30 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id,
             if blk.block_id not in new_id_set
             and blk != getattr(manager, "_null_block", None)
         ]
-        if to_free:
-            manager.block_pool.free_blocks(reversed(to_free))
         unused_owned = [
             blk for block_id, blk in owned_by_id.items()
             if block_id not in new_id_set
             and blk != getattr(manager, "_null_block", None)
         ]
-        if unused_owned:
-            manager.block_pool.free_blocks(reversed(unused_owned))
         manager.req_to_blocks[parent_id] = new_blocks
+        if to_free:
+            _lumo_fb_ir_free_blocks_checked(
+                manager, to_free, {
+                    "op": "transfer_parent_replaced",
+                    "parent": str(parent_id),
+                    "row": str(row_id),
+                    "group": int(group_idx),
+                    "target_count": int(len(new_ids)),
+                })
+        if unused_owned:
+            _lumo_fb_ir_free_blocks_checked(
+                manager, unused_owned, {
+                    "op": "transfer_unused_owned",
+                    "parent": str(parent_id),
+                    "row": str(row_id),
+                    "group": int(group_idx),
+                    "target_count": int(len(new_ids)),
+                })
         cached_limit = len(new_blocks) if first_changed is None else int(first_changed)
         manager.num_cached_block[parent_id] = min(
             manager.num_cached_block.get(parent_id, cached_limit),
@@ -8432,6 +8781,13 @@ def _lumo_fb_ir_transfer_owned_to_parent(self, parent_id, row_id,
         )
         if hasattr(manager, "_allocated_block_reqs"):
             manager._allocated_block_reqs.add(parent_id)
+        _lumo_fb_ir_check_free_queue(
+            manager, {
+                "op": "transfer_post_group",
+                "parent": str(parent_id),
+                "row": str(row_id),
+                "group": int(group_idx),
+            }, raise_on_ref=True)
         transfer_summary.append({
             "group": int(group_idx),
             "adopted_owned": sorted(int(block_id) for block_id in owned_by_id if block_id in new_id_set),
@@ -8475,6 +8831,12 @@ def _lumo_fb_ir_mirror_manager_blocks_from_ids(self, req_id, block_id_groups):
         )
         if hasattr(manager, "_allocated_block_reqs"):
             manager._allocated_block_reqs.add(req_id)
+        _lumo_fb_ir_check_free_queue(
+            manager, {
+                "op": "mirror_manager_blocks",
+                "req": str(req_id),
+                "group": int(group_idx),
+            }, raise_on_ref=True)
         ok = True
     return ok
 
@@ -8603,11 +8965,13 @@ def _lumo_fb_ir_free_owned(self, row_ids):
         for group_idx, block in owned:
             by_group.setdefault(group_idx, []).append(block)
         for group_idx, blocks in by_group.items():
-            try:
-                manager = self.kv_cache_manager.coordinator.single_type_managers[group_idx]
-                manager.block_pool.free_blocks(reversed(blocks))
-            except Exception:
-                pass
+            manager = self.kv_cache_manager.coordinator.single_type_managers[group_idx]
+            _lumo_fb_ir_free_blocks_checked(
+                manager, blocks, {
+                    "op": "free_loser_owned",
+                    "row": str(row_id),
+                    "group": int(group_idx),
+                })
 
 def _lumo_fb_ir_accept_from_generated(tokens):
     valid = []
@@ -10645,7 +11009,18 @@ LUMOFBCTRL
         or os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE")
     ) else ""
     stale_fb_guard = "" if (fb or fa_unique) else _NO_STALE_FB_PATCHES_BLOCK
+    mamba_dup_free_fix = (
+        _MAMBA_ALIGN_DUP_STATE_FREE_FIX_BLOCK
+        if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique)
+        else ""
+    )
+    block_pool_dedup_free_fix = (
+        _BLOCK_POOL_DEDUP_FREE_FIX_BLOCK
+        if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique)
+        else ""
+    )
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + _CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX_BLOCK
+            + mamba_dup_free_fix + block_pool_dedup_free_fix
             + stale_fb_guard + dbg + "export LUMO_CUDAGRAPH_RUNTIME_TELEMETRY=1\n"
             + fb_env + mtp_draft_trace + base + _CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
