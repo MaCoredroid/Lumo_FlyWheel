@@ -12,10 +12,10 @@ delta them per arm-window:
   - dec_sum, pre_sum: vllm:request_decode/prefill_time_seconds_sum (global histogram sums)
   - gpu_util, mem_util, power_w, temp_c: nvidia-smi (mem_util is ~0 on GB10, kept for record)
 """
-import json, subprocess, time, urllib.request
+import json, os, subprocess, time, urllib.request
 
-METRICS = "http://127.0.0.1:9950/metrics"
-OUT = "/tmp/swe_dgx_steptrace.jsonl"
+METRICS = os.environ.get("LUMO_VLLM_METRICS_URL", "http://127.0.0.1:9950/metrics")
+OUT = os.environ.get("LUMO_SWE_DGX_STEPTRACE", "/tmp/swe_dgx_steptrace.jsonl")
 WANT = {
     "vllm:generation_tokens_total": "gen",
     "vllm:prompt_tokens_total": "prompt",

@@ -14,8 +14,9 @@ TEMP="${2:-1.0}"
 INTERVAL="${3:-300}"
 LOG=/tmp/exp_supervisor.log
 REPO=/home/mark/shared/lumoFlyWheel
-PROXY_LOCAL="http://127.0.0.1:8022/v1/models"
-VLLM_METRICS="http://127.0.0.1:9950/metrics"
+REMOTE_PROXY_PORT=${LUMO_TUNNEL_REMOTE_PROXY_PORT:-8022}
+PROXY_LOCAL=${LUMO_CODEX_PROXY_MODELS_URL:-http://127.0.0.1:8022/v1/models}
+VLLM_METRICS=${LUMO_VLLM_METRICS_URL:-http://127.0.0.1:9950/metrics}
 
 log(){ echo "[supervisor $(date -u +%FT%TZ)] $*" | tee -a "$LOG"; }
 
@@ -28,9 +29,9 @@ while true; do
   fi
   # 2) reverse tunnel forward: curl the proxy THROUGH the tunnel from alienware
   fwd=$(timeout 12 ssh -n -o ConnectTimeout=6 alienware \
-        'curl -s -m5 -o /dev/null -w "%{http_code}" http://127.0.0.1:8022/v1/models 2>/dev/null' 2>/dev/null)
+        "curl -s -m5 -o /dev/null -w '%{http_code}' http://127.0.0.1:${REMOTE_PROXY_PORT}/v1/models 2>/dev/null" 2>/dev/null)
   if [ "$fwd" != "200" ] && [ "$fwd" != "403" ]; then
-    log "WARN: tunnel forward unhealthy (alienware->8022 http='$fwd'); tunnel_keeper should self-heal within 30s"
+    log "WARN: tunnel forward unhealthy (alienware->$REMOTE_PROXY_PORT http='$fwd'); tunnel_keeper should self-heal within 30s"
   fi
   # 3) proxy (local) -- safe to restart (preserves the run's forced temperature)
   ph=$(curl -s -m5 -o /dev/null -w "%{http_code}" "$PROXY_LOCAL" 2>/dev/null)
