@@ -7326,6 +7326,16 @@ def _lumo_fb_schedule(self):
     return out
 
 def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
+    if not getattr(model_runner_output, "req_ids", None):
+        _lumo_fb_sched_debug({
+            "event": "fb_optionc_empty_model_output_noop",
+            "total_num_scheduled_tokens": getattr(
+                scheduler_output, "total_num_scheduled_tokens", None),
+            "num_scheduled_tokens": dict(getattr(
+                scheduler_output, "num_scheduled_tokens", {}) or {}),
+            "collapses": getattr(scheduler_output, "lumo_fb_collapses", None),
+        })
+        return {}
     clone_ids = [rid for rid in scheduler_output.num_scheduled_tokens if "::lumo_fb::" in rid]
     parent_spec_ids = [
         rid for rid in scheduler_output.scheduled_spec_decode_tokens
