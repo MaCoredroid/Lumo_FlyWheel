@@ -7159,6 +7159,14 @@ def _lumo_fb_update_draft_token_ids(self, draft_token_ids):
         request = self.requests.get(req_id)
         if request is None or request.is_finished():
             continue
+        if "::lumo_fb::" in req_id:
+            _lumo_fb_sched_debug({
+                "event": "fb_optionc_ignore_clone_draft",
+                "rid": req_id,
+                "draft": list(spec_token_ids),
+                "kept_spec": list(getattr(request, "spec_token_ids", []) or []),
+            })
+            continue
         if request.is_prefill_chunk:
             request.spec_token_ids = []
             continue
