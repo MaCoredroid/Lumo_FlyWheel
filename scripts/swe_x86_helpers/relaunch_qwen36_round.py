@@ -6935,6 +6935,21 @@ def _lumo_fb_sched_debug(event):
 def _lumo_fb_block_ids_from_blocks(blocks):
     return tuple([blk.block_id for blk in group] for group in blocks)
 
+def _lumo_fb_new_req_data(req, block_ids, prompt_token_ids=None):
+    return _LumoFBNewRequestData(
+        req_id=req.request_id,
+        prompt_token_ids=(list(prompt_token_ids)
+                          if prompt_token_ids is not None
+                          else req.prompt_token_ids),
+        mm_features=req.mm_features,
+        sampling_params=req.sampling_params,
+        pooling_params=req.pooling_params,
+        block_ids=block_ids,
+        num_computed_tokens=req.num_computed_tokens,
+        lora_request=req.lora_request,
+        prompt_embeds=req.prompt_embeds,
+    )
+
 def _lumo_fb_clone_blocks(self, parent, clone_id):
     copies = []
     for group_idx, manager in enumerate(self.kv_cache_manager.coordinator.single_type_managers):
@@ -7161,21 +7176,36 @@ def _lumo_fb_schedule(self):
         req_id for req_id in out.num_scheduled_tokens
         if "::lumo_fb::" in req_id and getattr(self.requests.get(req_id), "_lumo_fb_new_clone", False)
     }
-    if fb_new_ids:
+    fb_refresh_ids = {
+        req_id for req_id in out.num_scheduled_tokens
+        if "::lumo_fb::" not in req_id
+        and getattr(self.requests.get(req_id), "_lumo_fb_force_streaming_refresh", False)
+    }
+    fb_convert_ids = fb_new_ids | fb_refresh_ids
+    if fb_convert_ids:
         keep = []
         req_data = out.scheduled_cached_reqs
-        new_req_ids = []
-        new_new_block_ids = []
-        new_num_computed = []
-        new_num_output = []
         for i, rid in enumerate(req_data.req_ids):
-            if rid in fb_new_ids:
+            if rid in fb_convert_ids:
                 req = self.requests[rid]
-                out.scheduled_new_reqs.append(
-                    _LumoFBNewRequestData.from_request(
-                        req, _lumo_fb_block_ids_from_blocks(self.kv_cache_manager.get_blocks(rid))
+                prompt_token_ids = list(req.all_token_ids) if rid in fb_refresh_ids else None
+                out.scheduled_new_reqs.append(_lumo_fb_new_req_data(
+                    req,
+                    _lumo_fb_block_ids_from_blocks(self.kv_cache_manager.get_blocks(rid)),
+                    prompt_token_ids=prompt_token_ids,
                     )
                 )
+                if rid in fb_refresh_ids:
+                    req._lumo_fb_force_streaming_refresh = False
+                    _lumo_fb_sched_debug({
+                        "event": "fb_optionc_parent_streaming_refresh",
+                        "rid": rid,
+                        "num_scheduled_tokens": out.num_scheduled_tokens.get(rid),
+                        "draft": out.scheduled_spec_decode_tokens.get(rid),
+                        "num_computed_tokens": getattr(req, "num_computed_tokens", None),
+                        "prompt_len": len(prompt_token_ids or []),
+                    })
+                    continue
                 _lumo_fb_sched_debug({
                     "event": "fb_optionc_clone_scheduled_as_new_request",
                     "rid": rid,
@@ -7194,8 +7224,8 @@ def _lumo_fb_schedule(self):
             req_data.num_output_tokens = [req_data.num_output_tokens[i] for i in keep]
             if req_data.new_token_ids:
                 req_data.new_token_ids = [req_data.new_token_ids[i] for i in keep]
-            req_data.resumed_req_ids = {rid for rid in req_data.resumed_req_ids if rid not in fb_new_ids}
-            req_data.all_token_ids = {rid: toks for rid, toks in req_data.all_token_ids.items() if rid not in fb_new_ids}
+            req_data.resumed_req_ids = {rid for rid in req_data.resumed_req_ids if rid not in fb_convert_ids}
+            req_data.all_token_ids = {rid: toks for rid, toks in req_data.all_token_ids.items() if rid not in fb_convert_ids}
     collapses = getattr(self, "_lumo_fb_pending_collapses", None)
     if collapses:
         out.lumo_fb_collapses = collapses
@@ -7260,6 +7290,7 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
             request_id=parent_id,
         )
         new_token_ids, stopped = self._update_request_with_output(parent, list(generated_token_ids))
+        parent._lumo_fb_force_streaming_refresh = True
         finish_reason = None
         kv_transfer_params = None
         routed_experts = None
