@@ -1,0 +1,5 @@
+ts_completed,oracle_session_id,oracle_run_anchor,completion_tokens,decode_tps,accept_ratio,running_before,running_after,gpu_samples,tensor_active_med,sm_issue_med,sms_active_med,power_w
+2026-05-30T21:59:10.322Z,sess_5708b83033023db9,019e7ae2-ce53-7162-9ddb-ee10dc5432b9,64,4.63,0.039,0.0,3.0,1468,0.0,0.0,0.0,49.7
+2026-05-30T21:59:22.462Z,sess_c8f27d89bf1ac0e2,019e7ae2-ce54-7442-a6c3-26d30470b8aa,125,0.62,0.041,0.0,3.0,1468,0.0,0.0,0.0,49.49
+2026-05-30T21:59:28.483Z,sess_01cf90289b3f15f2,019e7ae2-ce52-7691-80dc-40f1089e1de1,129,0.33,0.041,0.0,2.0,1468,0.0,0.0,0.0,52.07
+2026-05-30T22:00:24.825Z,sess_0c33bddea66dd0bb,019e7ae2-ce56-7700-a606-19ecce093e29,161,0.23,0.04,0.0,2.0,1468,0.0,0.0,0.0,81.21

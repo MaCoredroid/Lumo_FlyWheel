@@ -1,0 +1,13 @@
+[exp 00:08:43] WARNING: concurrency=4 (feedback-no-parallel-testing: default is 1)
+[exp 00:08:43] experiment roundf_clean_agentic_b4_E5_d5_20260531T0008Z: config=E temp=as-set concurrency=4 suite=swe nsight=first-task
+[exp 00:08:44] suite launch: launched pid=1932284
+[exp 00:09:29] nsight: capturing 150s gb20y window -> /home/mark/shared/lumoFlyWheel/output/roundf_clean_agentic_b4_E5_d5_20260531T0008Z/nsight_roundf_clean_agentic_b4_E5_d5_20260531T0008Z.nsys-rep
+[exp 00:33:42] join:   B=1-clean rows     = 1/25
+[exp 00:33:42] task astropy__astropy-13398: verdict=failed elapsed=1485s
+[exp 00:39:53] join:   B=1-clean rows     = 1/25
+[exp 00:39:53] task astropy__astropy-12907: verdict=resolved elapsed=1855s
+[exp 00:39:54] join:   B=1-clean rows     = 1/25
+[exp 00:39:54] task astropy__astropy-13033: verdict=failed elapsed=1862s
+[exp 01:10:14] join:   B=1-clean rows     = 1/25
+[exp 01:10:14] task astropy__astropy-13236: verdict=resolved elapsed=3662s
+[exp 01:10:15] suite finished; 4 task(s) committed

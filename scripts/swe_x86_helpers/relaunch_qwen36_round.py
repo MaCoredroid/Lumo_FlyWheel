@@ -2631,6 +2631,62 @@ else:
             _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = _rows
         except Exception:
             pass
+        try:
+            import json as _tapj, os as _tapo, time as _tapt
+            global _LUMO_TREE_ACCEPT_PATH_FH
+            try:
+                _LUMO_TREE_ACCEPT_PATH_FH
+            except NameError:
+                _LUMO_TREE_ACCEPT_PATH_FH = open(
+                    _tapo.environ.get("LUMO_TREE_ACCEPT_PATH_LOG", "/logs/tree_accept_path.jsonl"),
+                    "a",
+                    buffering=1,
+                )
+            _parents_cpu = tree_parent_indices.detach().cpu().tolist()
+            _start = 0
+            _now = round(_tapt.time(), 4)
+            for _req_i, _n in enumerate(num_draft_tokens):
+                _n = int(_n)
+                _parents = [int(x) for x in _parents_cpu[_start:_start + _n]]
+                _final_row = int(_rows[_req_i]) if _req_i < len(_rows) else 0
+                _accepted_node_ids = []
+                if _final_row > 0:
+                    _node = _final_row - 1
+                    _guard = 0
+                    while 0 <= _node < _n and _guard <= _n:
+                        _accepted_node_ids.append(int(_node))
+                        _node = int(_parents[_node])
+                        _guard += 1
+                    _accepted_node_ids.reverse()
+                _child_ranks = []
+                for _node in _accepted_node_ids:
+                    _parent = int(_parents[_node])
+                    _rank = 0
+                    for _pos in range(int(_node)):
+                        if int(_parents[_pos]) == _parent:
+                            _rank += 1
+                    _child_ranks.append(int(_rank))
+                _seen_alt = False
+                _alt_tokens = 0
+                for _rank in _child_ranks:
+                    if int(_rank) != 0:
+                        _seen_alt = True
+                    if _seen_alt:
+                        _alt_tokens += 1
+                _LUMO_TREE_ACCEPT_PATH_FH.write(_tapj.dumps({
+                    "ts": _now,
+                    "req_index": int(_req_i),
+                    "node_count": int(_n),
+                    "accepted_node_ids": _accepted_node_ids,
+                    "accepted_child_ranks": _child_ranks,
+                    "accepted_len": int(len(_accepted_node_ids)),
+                    "accepted_final_row": int(_final_row),
+                    "has_alt_branch": bool(any(int(_rank) != 0 for _rank in _child_ranks)),
+                    "accepted_alt_tokens": int(_alt_tokens),
+                }) + chr(10))
+                _start += _n
+        except Exception:
+            pass
         return output_token_ids
 """
     if branch_old not in text:
@@ -2697,6 +2753,66 @@ else:
     py_compile.compile(str(rs), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied tree accepted-row kernel patch')
 LUMOTREEACCEPTEDROWKERNEL
+'''
+
+_CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK = r'''
+python3 - <<'LUMOCUDAGRAPHRUNTIMETELEMETRY'
+from pathlib import Path
+
+gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
+text = gm.read_text()
+sentinel = '# LUMO_CUDAGRAPH_RUNTIME_TELEMETRY'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] cudagraph runtime telemetry patch already present')
+else:
+    old = """        cudagraph_stats = None
+        if self.vllm_config.observability_config.cudagraph_metrics:
+            cudagraph_stats = CUDAGraphStat(
+                num_unpadded_tokens=num_tokens,
+                num_padded_tokens=batch_descriptor.num_tokens,
+                num_paddings=batch_descriptor.num_tokens - num_tokens,
+                runtime_mode=str(cudagraph_mode),
+            )
+"""
+    new = """        cudagraph_stats = None
+        if (
+            self.vllm_config.observability_config.cudagraph_metrics
+            or __import__("os").environ.get("LUMO_CUDAGRAPH_RUNTIME_TELEMETRY") == "1"
+        ):
+            cudagraph_stats = CUDAGraphStat(
+                num_unpadded_tokens=num_tokens,
+                num_padded_tokens=batch_descriptor.num_tokens,
+                num_paddings=batch_descriptor.num_tokens - num_tokens,
+                runtime_mode=str(cudagraph_mode),
+            )
+            if __import__("os").environ.get("LUMO_CUDAGRAPH_RUNTIME_TELEMETRY") == "1":
+                try:
+                    import json as _lumo_cg_json, time as _lumo_cg_time
+                    global _LUMO_CUDAGRAPH_RUNTIME_FH
+                    try:
+                        _LUMO_CUDAGRAPH_RUNTIME_FH
+                    except NameError:
+                        _LUMO_CUDAGRAPH_RUNTIME_FH = open("/logs/cudagraph_runtime_debug.jsonl", "a", buffering=1)
+                    _LUMO_CUDAGRAPH_RUNTIME_FH.write(_lumo_cg_json.dumps({
+                        "ts": round(_lumo_cg_time.time(), 4),
+                        "event": "cudagraph_runtime",
+                        "num_unpadded_tokens": int(num_tokens),
+                        "num_padded_tokens": int(batch_descriptor.num_tokens),
+                        "num_paddings": int(batch_descriptor.num_tokens - num_tokens),
+                        "runtime_mode": str(cudagraph_mode),
+                    }) + chr(10))
+                except Exception:
+                    pass
+"""
+    if old not in text:
+        raise RuntimeError('cudagraph runtime telemetry anchor not found')
+    text = text.replace(old, new, 1)
+    text = sentinel + '\n' + text
+    gm.write_text(text)
+    import py_compile
+    py_compile.compile(str(gm), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied cudagraph runtime telemetry patch')
+LUMOCUDAGRAPHRUNTIMETELEMETRY
 '''
 
 _TREE_ACCEPTED_ROW_COMMIT_BLOCK = r'''
@@ -3803,18 +3919,32 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                     for _rows in _depth_rows
                 )
             _actual_conv_rows = int(mixed_qkv_spec.shape[0])
-            _depth_rows = tuple(
-                tuple(int(i) for i in _rows if int(i) < _actual_conv_rows)
+            _needs_row_clip = any(
+                any(int(i) >= _actual_conv_rows for i in _rows)
                 for _rows in _depth_rows
             )
-            _depth_row_tensors = tuple(
-                torch.tensor(_rows, dtype=torch.long, device=mixed_qkv_spec.device)
-                for _rows in _depth_rows
-            )
-            _depth_query_start_tensors = tuple(
-                torch.arange(len(_rows) + 1, dtype=torch.int32, device=mixed_qkv_spec.device)
-                for _rows in _depth_rows
-            )
+            if _needs_row_clip or _depth_row_tensors is None or _depth_query_start_tensors is None:
+                _depth_rows = tuple(
+                    tuple(int(i) for i in _rows if int(i) < _actual_conv_rows)
+                    for _rows in _depth_rows
+                )
+                _clip_cache = getattr(self, "_lumo_fa_conv_depth_clip_cache", None)
+                if _clip_cache is None:
+                    _clip_cache = {}
+                    self._lumo_fa_conv_depth_clip_cache = _clip_cache
+                _clip_key = (_actual_conv_rows, _depth_rows)
+                if _clip_key not in _clip_cache:
+                    _clip_cache[_clip_key] = (
+                        tuple(
+                            torch.tensor(_rows, dtype=torch.long, device=mixed_qkv_spec.device)
+                            for _rows in _depth_rows
+                        ),
+                        tuple(
+                            torch.arange(len(_rows) + 1, dtype=torch.int32, device=mixed_qkv_spec.device)
+                            for _rows in _depth_rows
+                        ),
+                    )
+                _depth_row_tensors, _depth_query_start_tensors = _clip_cache[_clip_key]
             _conv_out = torch.empty_like(mixed_qkv_spec)
             for _rows, _row_idx, _sub_query_start in zip(
                 _depth_rows, _depth_row_tensors, _depth_query_start_tensors):
@@ -10391,7 +10521,8 @@ LUMOFBCTRL
     ) else ""
     stale_fb_guard = "" if (fb or fa_unique) else _NO_STALE_FB_PATCHES_BLOCK
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + _CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX_BLOCK
-            + stale_fb_guard + dbg + fb_env + mtp_draft_trace + base + _SPEC_TRACE_BLOCK
+            + stale_fb_guard + dbg + "export LUMO_CUDAGRAPH_RUNTIME_TELEMETRY=1\n"
+            + fb_env + mtp_draft_trace + base + _CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
             + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
             + (_FB_KERNEL_ROWS_BLOCK if ((fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1") or fa_unique) else "")

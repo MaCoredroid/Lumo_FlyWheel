@@ -1,0 +1,13 @@
+{
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "split": "test",
+  "tier": "agentic_b4_four_round_f_sweep",
+  "source_subset": "docs/reports/auto_research/swe-bench-paired55-verified-instances-20260522.json",
+  "generated_at": "2026-05-30T00:00:00Z",
+  "instance_ids": [
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398"
+  ]
+}
