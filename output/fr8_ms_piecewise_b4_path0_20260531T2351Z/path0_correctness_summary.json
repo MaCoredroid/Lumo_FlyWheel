@@ -1,0 +1,31 @@
+{
+  "exp_tag": "fr8_ms_piecewise_b4_path0_20260531T2351Z",
+  "config": "F",
+  "reported_config_arg": "F",
+  "runtime_route": "LUMO_MULTI_SPINE=1 LUMO_MS_SPINES=2 via config Fb rewrite to config F token tree",
+  "capture_mode": "PIECEWISE",
+  "tree_attention_capture_patch": "skipped",
+  "concurrency": 4,
+  "temperature": 0.6,
+  "subset": "docs/reports/auto_research/swe-bench-concprobe16-verified-instances-20260522.json",
+  "path0_source": "tree_accept_path.accepted_len; native accepted child-rank path telemetry",
+  "path0_rows": 750,
+  "path0_avg": 1.8906666666666667,
+  "path0_avg_rounded_3": 1.891,
+  "acc0_rate": 0.316,
+  "acc0_rate_percent": 31.6,
+  "accepted_len_counts": {
+    "0": 237,
+    "1": 161,
+    "2": 105,
+    "3": 73,
+    "4": 42,
+    "5": 132
+  },
+  "has_alt_branch_rows": 79,
+  "nonzero_child_rank_rows": 79,
+  "gate_expected_path0_avg": 3.15,
+  "gate_expected_acc0_rate_percent": 13.3,
+  "gate_pass": false,
+  "verdict": "FAIL: path0 did not match E5 3.150 / 13.3% acc0; do not trust or report winner number"
+}
