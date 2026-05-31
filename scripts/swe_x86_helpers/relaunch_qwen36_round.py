@@ -6887,6 +6887,7 @@ else:
 # LUMO_FB_PATHS_SCHED: internal K=2 path requests + longest-accepted collapse.
 import os as _lumo_fb_os
 import json as _lumo_fb_json
+import time as _lumo_fb_time
 from vllm.v1.core.sched.output import NewRequestData as _LumoFBNewRequestData
 
 _lumo_fb_orig_schedule = Scheduler.schedule
@@ -6915,6 +6916,21 @@ def _lumo_fb_sched_read_control(default_depth):
     if k < 0 or k > 2:
         raise RuntimeError(f"LUMO_FB active K {k} unsupported in this build")
     return int(depth), int(k)
+
+def _lumo_fb_sched_debug(event):
+    if (_lumo_fb_os.environ.get("LUMO_FB_DEBUG") != "1"
+            and _lumo_fb_os.environ.get("LUMO_FB_SUPERSET_DIAG") != "1"):
+        return
+    try:
+        global _LUMO_FB_SCHED_DBG_FH
+        try:
+            _LUMO_FB_SCHED_DBG_FH
+        except NameError:
+            _LUMO_FB_SCHED_DBG_FH = open("/logs/fb_overhead_debug.jsonl", "a", buffering=1)
+        event["ts"] = round(_lumo_fb_time.time(), 4)
+        _LUMO_FB_SCHED_DBG_FH.write(_lumo_fb_json.dumps(event) + chr(10))
+    except Exception:
+        pass
 
 def _lumo_fb_block_ids_from_blocks(blocks):
     return tuple([blk.block_id for blk in group] for group in blocks)
@@ -7038,10 +7054,19 @@ def _lumo_fb_expand_pending(self):
             continue
         req._lumo_fb_pending_paths = None
         req._lumo_fb_waiting_parent = True
+        clone_ids = []
         for idx, path in enumerate(paths):
             clone = _lumo_fb_make_clone(self, req, idx, path)
+            clone_ids.append(clone.request_id)
             copies.extend(_lumo_fb_clone_blocks(self, req, clone.request_id))
             new_running.append(clone)
+        _lumo_fb_sched_debug({
+            "event": "fb_optionc_expand_independent_segments",
+            "parent": req.request_id,
+            "clone_ids": clone_ids,
+            "paths": paths,
+            "parent_removed_from_running": True,
+        })
     self.running = new_running
     return copies
 
@@ -7067,12 +7092,26 @@ def _lumo_fb_update_draft_token_ids(self, draft_token_ids):
                                    if _fb_sched_default_k >= 2 and len(spec_token_ids) % 2 == 0
                                    else len(spec_token_ids))
         active_depth, requested_k = _lumo_fb_sched_read_control(_fb_sched_default_depth)
+        if (_lumo_fb_os.environ.get("LUMO_FB_TWO_SPINE") == "1"
+                and requested_k >= 2
+                and len(spec_token_ids) != 2 * active_depth):
+            raise RuntimeError(
+                "LUMO_FB Option C requires a flat two-spine draft to split "
+                f"into independent verifier requests: draft_len={len(spec_token_ids)} "
+                f"active_depth={active_depth} active_k={requested_k}")
         if requested_k >= 2 and len(spec_token_ids) == 2 * active_depth:
             request._lumo_fb_pending_paths = [
                 list(spec_token_ids[:active_depth]),
                 list(spec_token_ids[active_depth:2 * active_depth]),
             ]
             request.spec_token_ids = []
+            _lumo_fb_sched_debug({
+                "event": "fb_optionc_split_flat_draft_to_segments",
+                "parent": req_id,
+                "active_depth": int(active_depth),
+                "paths": request._lumo_fb_pending_paths,
+                "parent_spec_token_ids_cleared": True,
+            })
         else:
             if _lumo_fb_os.environ.get("LUMO_FB_ASSERT_WIDTH") == "1" and len(spec_token_ids) != active_depth:
                 raise RuntimeError(
@@ -7121,6 +7160,15 @@ def _lumo_fb_schedule(self):
                         req, _lumo_fb_block_ids_from_blocks(self.kv_cache_manager.get_blocks(rid))
                     )
                 )
+                _lumo_fb_sched_debug({
+                    "event": "fb_optionc_clone_scheduled_as_new_request",
+                    "rid": rid,
+                    "parent": getattr(req, "_lumo_fb_parent_id", None),
+                    "path_idx": getattr(req, "_lumo_fb_path_idx", None),
+                    "num_scheduled_tokens": out.num_scheduled_tokens.get(rid),
+                    "draft": out.scheduled_spec_decode_tokens.get(rid),
+                    "num_computed_tokens": getattr(req, "num_computed_tokens", None),
+                })
             else:
                 keep.append(i)
         if len(keep) != len(req_data.req_ids):
@@ -7149,6 +7197,8 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
             groups.setdefault(req._lumo_fb_parent_id, []).append(rid)
     outputs = {}
     spec_decoding_stats = None
+    active_depth, _ = _lumo_fb_sched_read_control(
+        int(_lumo_fb_os.environ.get("LUMO_FB_DEPTH", "1")))
     for parent_id, ids in groups.items():
         if len(ids) != 2:
             continue
@@ -7188,7 +7238,7 @@ def _lumo_fb_update_from_output(self, scheduler_output, model_runner_output):
         parent.num_computed_tokens = max(0, parent.num_tokens - 1) + len(generated_token_ids)
         spec_decoding_stats = self.make_spec_decoding_stats(
             spec_decoding_stats,
-            num_draft_tokens=3,
+            num_draft_tokens=active_depth,
             num_accepted_tokens=accepted,
             num_invalid_spec_tokens=None,
             request_id=parent_id,
@@ -8076,6 +8126,15 @@ def _lumo_fb_shared_root_rejection_sample(
     bonus_token_ids,
     sampling_metadata,
 ):
+    if _lumo_fb_rs_os.environ.get("LUMO_FB_TWO_SPINE") == "1":
+        # Option C verifies spine A and spine B as ordinary independent request
+        # segments.  Do not use the shared-root/tree sampler path; each clone row
+        # must attend and sample only its own prefix + contiguous draft segment.
+        return _lumo_fb_rejection_sample_with_debug(
+            "optionc_native_independent_segments",
+            draft_token_ids, num_draft_tokens, max_spec_len,
+            cu_num_draft_tokens, draft_probs, target_logits,
+            bonus_token_ids, sampling_metadata)
     if (_lumo_fb_rs_os.environ.get("LUMO_FB_PATHS") != "1"
             or _lumo_fb_rs_os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1"
             or draft_probs is not None
