@@ -5929,6 +5929,31 @@ else:
     import py_compile
     py_compile.compile(str(gl), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_a tree-delta actual-parent rows')
+
+text = gl.read_text()
+sentinel = '# LUMO_FA_SPEC_OUTPUT_ACTUAL_TOKEN_CLIP'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] F_a spec output actual-token clip already present')
+else:
+    old = """        elif spec_sequence_masks is not None:
+            core_attn_out[:num_actual_tokens] = core_attn_out_spec.squeeze(0)
+        else:
+            core_attn_out[:num_actual_tokens] = core_attn_out_non_spec.squeeze(0)
+"""
+    new = """        elif spec_sequence_masks is not None:
+            _lumo_spec_out = core_attn_out_spec.squeeze(0)
+            core_attn_out[:num_actual_tokens] = _lumo_spec_out[:num_actual_tokens]
+        else:
+            core_attn_out[:num_actual_tokens] = core_attn_out_non_spec.squeeze(0)
+"""
+    if old not in text:
+        raise RuntimeError('F_a spec output actual-token clip anchor not found')
+    text = text.replace(old, new, 1)
+    text = sentinel + '\n' + text
+    gl.write_text(text)
+    import py_compile
+    py_compile.compile(str(gl), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied F_a spec output actual-token clip')
 LUMOFAUNIQUEBATCH4PACK
 '''
 
