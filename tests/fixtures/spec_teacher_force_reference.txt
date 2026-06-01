@@ -1,0 +1,29 @@
+The request scheduler below is intentionally ordinary text rather than a benchmark
+prompt. It is used as a fixed token stream for teacher-forced speculative decoding
+diagnostics, so the content should remain stable unless the fixture version changes.
+
+At startup, the controller loads the model registry, validates that every declared
+endpoint has a matching health check, and writes a small readiness record to the
+state directory. Each worker then accepts a shard of requests, sorts the shard by
+arrival time, and keeps the original request id attached to every row. When a
+request enters prefill, the worker records the prompt length, the cache slot, and
+the first sampling configuration observed by the OpenAI-compatible server.
+
+During decode, the worker advances exactly one target step at a time. The target
+model produces the next-token argmax, while the draft model proposes a short chain
+of speculative tokens from the same prefix. The verifier compares token ids, not
+decoded strings, because whitespace and punctuation can have multiple surface
+forms. Accepted tokens are appended to the running sequence, rejected tokens are
+discarded, and the next target token starts a fresh speculative event. Metrics are
+reported as per-position acceptance rates so a root failure cannot be hidden by
+later full-chain matches.
+
+The diagnostic mode in this fixture removes generated-text divergence. Instead of
+letting either server choose the next prefix, the client feeds both servers the
+same reference token sequence. For each prefix, the client asks for one greedy
+token and records two values: the draft model's top-one chain and the target
+model's argmax token. If the tree server matches the standalone server under this
+forced sequence, then any previous per-position gap came from the two systems
+continuing different text. If the draft chain differs while the target argmax
+matches, the proposer is wrong. If the target argmax differs, the target forward
+path is not equivalent and the tree path needs deeper attention-state debugging.
