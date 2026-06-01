@@ -1,0 +1,492 @@
+(APIServer pid=658) INFO:     127.0.0.1:47974 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO 06-01 00:50:51 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 79.8%
+(APIServer pid=658) INFO:     127.0.0.1:47976 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:47984 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:47996 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:48006 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:48008 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:48010 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:40054 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:40068 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:40070 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:40078 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:40088 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:40096 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:56054 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:56066 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:56070 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:56080 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:56086 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:56102 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=658) INFO:     127.0.0.1:56116 - "GET /metrics HTTP/1.1" 200 OK
+[VLLM-CONTAINER] id=e1f0bd858b40807b76dcca8cac9d47a08b9af94bc7b9bc44ec60dfa34c81b67e
+[VLLM-INIT] timestamp=2026-06-01T00:51:34.709819+00:00
+[VLLM-INIT] model_id=qwen3.6-27b served_model_name=qwen3.6-27b vllm_version=0.19.0 git_hash=unknown
+[VLLM-INIT] quantization=fp8 kv_cache_dtype=auto
+[VLLM-INIT] max_model_len=131072 gpu_memory_utilization=0.84
+[VLLM-INIT] enforce_eager=false
+[VLLM-INIT] tuned_config_id=e0000000-mtp5tree-kvauto-cgpiecewise-cgpacked-4000-9000-config-e-qwen36 weight_version_id=2e1b21350ce589fcaafbb3c7d7eac526a7aed582
+[VLLM-INIT] kernel_runtime_activation={"activation_id": "6bddf4e95ed21eb2", "env": {}, "kernel_selection": {"cuda_graph_capture": "piecewise", "cuda_graph_capture_sizes": [4, 8, 12, 16, 24, 32, 44, 48]}, "launch_args": ["--compilation-config", "{\"cudagraph_capture_sizes\": [4, 8, 12, 16, 24, 32, 44, 48], \"cudagraph_mode\": \"PIECEWISE\", \"max_cudagraph_capture_size\": 48}"], "resolved": {"attention_backend": "vllm-auto", "cuda_graph_capture": "PIECEWISE", "cuda_graph_capture_activation": "vLLM compilation_config cudagraph_mode PIECEWISE", "cuda_graph_capture_sizes": [4, 8, 12, 16, 24, 32, 44, 48], "cuda_graph_capture_sizes_activation": "vLLM compilation_config cudagraph_capture_sizes/max_cudagraph_capture_size", "deltanet_kernel": "vllm-auto", "fp8_gemm_kernel": "vllm-auto", "torch_compile_mode": "vllm-default"}, "restart_required": true, "supported": true, "unsupported_knobs": []}
+[VLLM-INIT] speculative_config={"method": "qwen3_5_mtp", "num_speculative_tokens": 10, "speculative_token_tree": "[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]"}
+[VLLM-INIT] wire_api=responses
+[VLLM-INIT] responses_api_store=true
+[VLLM-INIT] dev_mode=true sleep_mode=disabled
+[VLLM-INIT] lora_modules=none max_lora_rank=None
+[VLLM-INIT] launch_cmd: vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 127.0.0.1 --port 9950 --quantization fp8 --dtype auto --kv-cache-dtype auto --max-model-len 131072 --gpu-memory-utilization 0.84 --max-num-batched-tokens 8192 --max-num-seqs 4 --enable-prefix-caching --enable-chunked-prefill --no-async-scheduling --attention-backend FLASH_ATTN --chat-template /opt/lumo/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config '{"method": "qwen3_5_mtp", "num_speculative_tokens": 10, "speculative_token_tree": "[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]"}' --compilation-config '{"cudagraph_capture_sizes": [4, 8, 12, 16, 24, 32, 44, 48], "cudagraph_mode": "PIECEWISE", "max_cudagraph_capture_size": 48}'
+/usr/local/lib/python3.12/dist-packages/torch/library.py:357: UserWarning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: flash_attn::_flash_attn_backward(Tensor dout, Tensor q, Tensor k, Tensor v, Tensor out, Tensor softmax_lse, Tensor(a6!)? dq, Tensor(a7!)? dk, Tensor(a8!)? dv, float dropout_p, float softmax_scale, bool causal, SymInt window_size_left, SymInt window_size_right, float softcap, Tensor? alibi_slopes, bool deterministic, Tensor? rng_state=None) -> Tensor
+    registered at /usr/local/lib/python3.12/dist-packages/torch/_library/custom_ops.py:926
+  dispatch key: ADInplaceOrView
+  previous kernel: no debug info
+       new kernel: registered at /usr/local/lib/python3.12/dist-packages/torch/_library/custom_ops.py:926 (Triggered internally at /opt/pytorch/pytorch/aten/src/ATen/core/dispatch/OperatorEntry.cpp:208.)
+  self.m.impl(
+(APIServer pid=689) INFO 06-01 00:53:42 [utils.py:299] 
+(APIServer pid=689) INFO 06-01 00:53:42 [utils.py:299]        █     █     █▄   ▄█
+(APIServer pid=689) INFO 06-01 00:53:42 [utils.py:299]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.19.0
+(APIServer pid=689) INFO 06-01 00:53:42 [utils.py:299]   █▄█▀ █     █     █     █  model   /models/qwen3.6-27b-fp8
+(APIServer pid=689) INFO 06-01 00:53:42 [utils.py:299]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=689) INFO 06-01 00:53:42 [utils.py:299] 
+(APIServer pid=689) INFO 06-01 00:53:42 [utils.py:233] non-default args: {'model_tag': '/models/qwen3.6-27b-fp8', 'chat_template': '/opt/lumo/chat_templates/qwen3-openai-codex.jinja', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_xml', 'host': '127.0.0.1', 'port': 9950, 'model': '/models/qwen3.6-27b-fp8', 'max_model_len': 131072, 'quantization': 'fp8', 'served_model_name': ['qwen3.6-27b'], 'attention_backend': 'FLASH_ATTN', 'reasoning_parser': 'qwen3', 'gpu_memory_utilization': 0.84, 'enable_prefix_caching': True, 'max_num_batched_tokens': 8192, 'max_num_seqs': 4, 'enable_chunked_prefill': True, 'async_scheduling': False, 'speculative_config': {'method': 'qwen3_5_mtp', 'num_speculative_tokens': 10, 'speculative_token_tree': '[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]'}, 'compilation_config': {'mode': None, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': [], 'splitting_ops': None, 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_images_per_batch': 0, 'compile_sizes': None, 'compile_ranges_endpoints': None, 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.PIECEWISE: 1>, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': [4, 8, 12, 16, 24, 32, 44, 48], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': None, 'pass_config': {}, 'max_cudagraph_capture_size': 48, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': None, 'static_all_moe_layers': []}}
+(APIServer pid=689) INFO 06-01 00:53:47 [model.py:549] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=689) INFO 06-01 00:53:47 [model.py:1678] Using max model len 131072
+(APIServer pid=689) WARNING 06-01 00:53:47 [speculative.py:368] method `qwen3_5_mtp` is deprecated and replaced with mtp.
+(APIServer pid=689) INFO 06-01 00:53:52 [model.py:549] Resolved architecture: Qwen3_5MTP
+(APIServer pid=689) INFO 06-01 00:53:52 [model.py:1678] Using max model len 262144
+(APIServer pid=689) WARNING 06-01 00:53:52 [speculative.py:512] Enabling num_speculative_tokens > 1 will run multiple times of forward on same MTP layer,which may result in lower acceptance rate
+(APIServer pid=689) INFO 06-01 00:53:52 [scheduler.py:238] Chunked prefill is enabled with max_num_batched_tokens=8192.
+(APIServer pid=689) WARNING 06-01 00:53:52 [config.py:441] Mamba cache mode is set to 'align' for Qwen3_5ForConditionalGeneration by default when prefix caching is enabled
+(APIServer pid=689) INFO 06-01 00:53:52 [config.py:461] Warning: Prefix caching in Mamba cache 'align' mode is currently enabled. Its support for Mamba layers is experimental. Please report any issues you may observe.
+(APIServer pid=689) INFO 06-01 00:53:52 [config.py:281] Setting attention block size to 848 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=689) INFO 06-01 00:53:52 [config.py:312] Padding mamba page size by 1.80% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=689) INFO 06-01 00:53:52 [vllm.py:790] Asynchronous scheduling is disabled.
+(APIServer pid=689) INFO 06-01 00:53:52 [compilation.py:290] Enabled custom fusions: norm_quant, act_quant
+/usr/local/lib/python3.12/dist-packages/torch/library.py:357: UserWarning: Warning only once for all operators,  other operators may also be overridden.
+  Overriding a previously registered kernel for the same operator and the same dispatch key
+  operator: flash_attn::_flash_attn_backward(Tensor dout, Tensor q, Tensor k, Tensor v, Tensor out, Tensor softmax_lse, Tensor(a6!)? dq, Tensor(a7!)? dk, Tensor(a8!)? dv, float dropout_p, float softmax_scale, bool causal, SymInt window_size_left, SymInt window_size_right, float softcap, Tensor? alibi_slopes, bool deterministic, Tensor? rng_state=None) -> Tensor
+    registered at /usr/local/lib/python3.12/dist-packages/torch/_library/custom_ops.py:926
+  dispatch key: ADInplaceOrView
+  previous kernel: no debug info
+       new kernel: registered at /usr/local/lib/python3.12/dist-packages/torch/_library/custom_ops.py:926 (Triggered internally at /opt/pytorch/pytorch/aten/src/ATen/core/dispatch/OperatorEntry.cpp:208.)
+  self.m.impl(
+(EngineCore pid=919) INFO 06-01 00:54:01 [core.py:105] Initializing a V1 LLM engine (v0.19.0) with config: model='/models/qwen3.6-27b-fp8', speculative_config=SpeculativeConfig(method='mtp', model='/models/qwen3.6-27b-fp8', num_spec_tokens=10), tokenizer='/models/qwen3.6-27b-fp8', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=131072, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=True, quantization=fp8, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='qwen3', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=qwen3.6-27b, enable_prefix_caching=True, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['+quant_fp8', 'none', '+quant_fp8'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::olmo_hybrid_gdn_full_forward', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'cudagraph_mm_encoder': False, 'encoder_cudagraph_token_budgets': [], 'encoder_cudagraph_max_images_per_batch': 0, 'compile_sizes': [], 'compile_ranges_endpoints': [8192], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'size_asserts': False, 'alignment_asserts': False, 'scalar_asserts': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.PIECEWISE: 1>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [4, 8, 12, 16, 24, 32, 44, 48], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': True, 'fuse_act_quant': True, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 48, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': False, 'static_all_moe_layers': []}
+[W601 00:54:01.482627694 Context.cpp:525] Warning: torch.backends.cuda.preferred_blas_library is an experimental feature. If you see any error or unexpected behavior when this flag is set please file an issue on GitHub. (function operator())
+(EngineCore pid=919) INFO 06-01 00:54:01 [parallel_state.py:1400] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://10.0.0.226:51005 backend=nccl
+(EngineCore pid=919) INFO 06-01 00:54:01 [parallel_state.py:1716] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(EngineCore pid=919) WARNING 06-01 00:54:02 [__init__.py:206] min_p and logit_bias parameters won't work with speculative decoding.
+(EngineCore pid=919) INFO 06-01 00:54:05 [gpu_model_runner.py:4882] Starting to load model /models/qwen3.6-27b-fp8...
+(EngineCore pid=919) INFO 06-01 00:54:05 [cuda.py:390] Using backend AttentionBackendEnum.FLASH_ATTN for vit attention
+(EngineCore pid=919) INFO 06-01 00:54:05 [mm_encoder_attention.py:230] Using AttentionBackendEnum.FLASH_ATTN for MMEncoderAttention.
+(EngineCore pid=919) INFO 06-01 00:54:05 [__init__.py:261] Selected CutlassFP8ScaledMMLinearKernel for Fp8LinearMethod
+(EngineCore pid=919) INFO 06-01 00:54:05 [gdn_linear_attn.py:580] Using Triton/FLA GDN prefill kernel
+(EngineCore pid=919) INFO 06-01 00:54:05 [cuda.py:274] Using AttentionBackendEnum.TREE_ATTN backend.
+(EngineCore pid=919) Loading safetensors checkpoint shards:   0% Completed | 0/66 [00:00<?, ?it/s]
+(EngineCore pid=919) Loading safetensors checkpoint shards:   2% Completed | 1/66 [00:02<02:28,  2.28s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:   3% Completed | 2/66 [00:04<02:26,  2.29s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:   5% Completed | 3/66 [00:06<02:23,  2.28s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:   6% Completed | 4/66 [00:08<02:18,  2.23s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:   8% Completed | 5/66 [00:11<02:15,  2.23s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:   9% Completed | 6/66 [00:13<02:12,  2.21s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  11% Completed | 7/66 [00:15<02:10,  2.21s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  12% Completed | 8/66 [00:17<02:07,  2.19s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  14% Completed | 9/66 [00:19<02:05,  2.20s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  15% Completed | 10/66 [00:22<02:03,  2.20s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  17% Completed | 11/66 [00:24<02:02,  2.22s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  18% Completed | 12/66 [00:26<01:58,  2.20s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  20% Completed | 13/66 [00:28<01:56,  2.20s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  21% Completed | 14/66 [00:31<01:54,  2.21s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  23% Completed | 15/66 [00:33<01:52,  2.21s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  24% Completed | 16/66 [00:35<01:50,  2.22s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  26% Completed | 17/66 [00:37<01:48,  2.22s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  27% Completed | 18/66 [00:39<01:46,  2.22s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  29% Completed | 19/66 [00:42<01:45,  2.24s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  30% Completed | 20/66 [00:44<01:42,  2.23s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  32% Completed | 21/66 [00:46<01:39,  2.22s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  33% Completed | 22/66 [00:48<01:37,  2.23s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  35% Completed | 23/66 [00:51<01:35,  2.22s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  36% Completed | 24/66 [00:53<01:32,  2.20s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  38% Completed | 25/66 [00:55<01:30,  2.21s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  39% Completed | 26/66 [00:57<01:28,  2.20s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  41% Completed | 27/66 [00:59<01:25,  2.19s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  42% Completed | 28/66 [01:01<01:22,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  44% Completed | 29/66 [01:04<01:20,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  45% Completed | 30/66 [01:06<01:18,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  47% Completed | 31/66 [01:08<01:16,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  48% Completed | 32/66 [01:10<01:13,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  50% Completed | 33/66 [01:12<01:11,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  52% Completed | 34/66 [01:14<01:09,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  53% Completed | 35/66 [01:17<01:07,  2.18s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  55% Completed | 36/66 [01:19<01:05,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  56% Completed | 37/66 [01:21<01:03,  2.19s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  58% Completed | 38/66 [01:23<01:02,  2.22s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  59% Completed | 39/66 [01:26<00:59,  2.21s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  61% Completed | 40/66 [01:28<00:56,  2.18s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  62% Completed | 41/66 [01:30<00:54,  2.19s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  64% Completed | 42/66 [01:32<00:52,  2.18s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  65% Completed | 43/66 [01:34<00:50,  2.18s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  67% Completed | 44/66 [01:36<00:47,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  68% Completed | 45/66 [01:38<00:45,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  70% Completed | 46/66 [01:41<00:43,  2.17s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  71% Completed | 47/66 [01:43<00:41,  2.16s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  73% Completed | 48/66 [01:45<00:38,  2.16s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  74% Completed | 49/66 [01:47<00:37,  2.18s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  76% Completed | 50/66 [01:49<00:35,  2.20s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  77% Completed | 51/66 [01:52<00:33,  2.20s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  79% Completed | 52/66 [01:54<00:30,  2.18s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  80% Completed | 53/66 [01:56<00:28,  2.19s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  82% Completed | 54/66 [01:58<00:26,  2.21s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  83% Completed | 55/66 [02:00<00:24,  2.21s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  85% Completed | 56/66 [02:03<00:21,  2.19s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  86% Completed | 57/66 [02:05<00:19,  2.21s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  88% Completed | 58/66 [02:07<00:17,  2.21s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  89% Completed | 59/66 [02:09<00:15,  2.20s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  91% Completed | 60/66 [02:11<00:13,  2.18s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  92% Completed | 61/66 [02:14<00:10,  2.18s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  94% Completed | 62/66 [02:16<00:08,  2.18s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  95% Completed | 63/66 [02:18<00:06,  2.18s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  97% Completed | 64/66 [02:20<00:04,  2.15s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards: 100% Completed | 66/66 [02:54<00:00,  8.98s/it]
+(EngineCore pid=919) Loading safetensors checkpoint shards: 100% Completed | 66/66 [02:54<00:00,  2.64s/it]
+(EngineCore pid=919) 
+(EngineCore pid=919) INFO 06-01 00:57:01 [default_loader.py:384] Loading weights took 174.56 seconds
+(EngineCore pid=919) INFO 06-01 00:57:01 [gpu_model_runner.py:4906] Loading drafter model...
+(EngineCore pid=919) Loading safetensors checkpoint shards:   0% Completed | 0/66 [00:00<?, ?it/s]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  98% Completed | 65/66 [00:02<00:00, 23.39it/s]
+(EngineCore pid=919) Loading safetensors checkpoint shards:  98% Completed | 65/66 [00:15<00:00, 23.39it/s]
+(EngineCore pid=919) Loading safetensors checkpoint shards: 100% Completed | 66/66 [00:31<00:00,  1.54it/s]
+(EngineCore pid=919) Loading safetensors checkpoint shards: 100% Completed | 66/66 [00:31<00:00,  2.13it/s]
+(EngineCore pid=919) 
+(EngineCore pid=919) INFO 06-01 00:57:32 [default_loader.py:384] Loading weights took 31.16 seconds
+(EngineCore pid=919) INFO 06-01 00:57:32 [eagle.py:1412] Detected MTP model. Sharing target model embedding weights with the draft model.
+(EngineCore pid=919) INFO 06-01 00:57:32 [eagle.py:1468] Detected MTP model. Sharing target model lm_head weights with the draft model.
+(EngineCore pid=919) INFO 06-01 00:57:33 [gpu_model_runner.py:4967] Model loading took 28.95 GiB memory and 207.176026 seconds
+(EngineCore pid=919) INFO 06-01 00:57:33 [gpu_model_runner.py:5900] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/torch/_dynamo/variables/functions.py:2034: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS="+dynamo" for a DEBUG stack trace.
+(EngineCore pid=919)   torch._dynamo.utils.warn_once(msg)
+(EngineCore pid=919) WARNING 06-01 00:57:51 [backends.py:1010] Failed to read file <frozen os>
+(EngineCore pid=919) INFO 06-01 00:57:51 [backends.py:1051] Using cache directory: /root/.cache/vllm/torch_compile_cache/a5fd3a76dd/rank_0_0/backbone for vLLM's torch.compile
+(EngineCore pid=919) INFO 06-01 00:57:51 [backends.py:1111] Dynamo bytecode transform time: 11.64 s
+(EngineCore pid=919) INFO 06-01 00:57:54 [backends.py:372] Cache the graph of compile range (1, 8192) for later use
+(EngineCore pid=919) INFO 06-01 00:58:29 [backends.py:390] Compiling a graph for compile range (1, 8192) takes 36.00 s
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (16) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (32) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(EngineCore pid=919) INFO 06-01 00:58:51 [monitor.py:48] torch.compile and initial profiling/warmup run together took 71.63 s in total
+(EngineCore pid=919) INFO 06-01 00:58:51 [backends.py:1051] Using cache directory: /root/.cache/vllm/torch_compile_cache/a5fd3a76dd/rank_0_0/eagle_head for vLLM's torch.compile
+(EngineCore pid=919) INFO 06-01 00:58:51 [backends.py:1111] Dynamo bytecode transform time: 0.38 s
+(EngineCore pid=919) INFO 06-01 00:58:54 [backends.py:390] Compiling a graph for compile range (1, 8192) takes 2.43 s
+(EngineCore pid=919) INFO 06-01 00:58:55 [monitor.py:48] torch.compile and initial profiling/warmup run together took 3.86 s in total
+(EngineCore pid=919) WARNING 06-01 00:58:57 [kv_cache_utils.py:1084] Add 3 padding layers, may waste at most 6.25% KV cache memory
+(EngineCore pid=919) INFO 06-01 00:58:57 [kv_cache_utils.py:854] Overriding num_gpu_blocks=0 with num_gpu_blocks_override=48
+(EngineCore pid=919) INFO 06-01 00:58:57 [gpu_model_runner.py:6023] Profiling CUDA graph memory: PIECEWISE=8 (largest=48)
+(EngineCore pid=919) INFO 06-01 00:58:59 [gpu_model_runner.py:6102] Estimated CUDA graph memory: 0.06 GiB total
+(EngineCore pid=919) INFO 06-01 00:58:59 [gpu_worker.py:436] Available KV cache memory: 60.26 GiB
+(EngineCore pid=919) INFO 06-01 00:58:59 [gpu_worker.py:470] In v0.19, CUDA graph memory profiling will be enabled by default (VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1), which more accurately accounts for CUDA graph memory during KV cache allocation. To try it now, set VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS=1 and increase --gpu-memory-utilization from 0.8400 to 0.8405 to maintain the same effective KV cache size.
+(EngineCore pid=919) WARNING 06-01 00:58:59 [kv_cache_utils.py:1084] Add 3 padding layers, may waste at most 6.25% KV cache memory
+(EngineCore pid=919) INFO 06-01 00:58:59 [kv_cache_utils.py:1344] GPU KV cache size: 231,504 tokens
+(EngineCore pid=919) INFO 06-01 00:58:59 [kv_cache_utils.py:1349] Maximum concurrency for 131,072 tokens per request: 5.64x
+(EngineCore pid=919) 2026-06-01 00:59:49,140 - INFO - autotuner.py:262 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+(EngineCore pid=919) 2026-06-01 00:59:52,020 - INFO - autotuner.py:268 - flashinfer.jit: [Autotuner]: Autotuning process ends
+(EngineCore pid=919) Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/8 [00:00<?, ?it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  12%|█▎        | 1/8 [00:01<00:10,  1.50s/it]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  25%|██▌       | 2/8 [00:01<00:05,  1.19it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  38%|███▊      | 3/8 [00:02<00:03,  1.46it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  50%|█████     | 4/8 [00:02<00:02,  1.79it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  62%|██████▎   | 5/8 [00:03<00:01,  2.10it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  75%|███████▌  | 6/8 [00:03<00:00,  2.39it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  88%|████████▊ | 7/8 [00:03<00:00,  2.75it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 8/8 [00:03<00:00,  2.88it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 8/8 [00:03<00:00,  2.03it/s]
+(EngineCore pid=919) INFO 06-01 01:00:08 [gpu_model_runner.py:6193] Graph capturing finished in 16 secs, took -1.23 GiB
+(EngineCore pid=919) INFO 06-01 01:00:08 [gpu_worker.py:597] CUDA graph pool memory: -1.23 GiB (actual), 0.06 GiB (estimated), difference: 1.29 GiB (138640179200.0%).
+(EngineCore pid=919) INFO 06-01 01:00:09 [core.py:283] init engine (profile, create kv cache, warmup model) took 155.87 seconds
+(EngineCore pid=919) INFO 06-01 01:00:09 [vllm.py:790] Asynchronous scheduling is disabled.
+(EngineCore pid=919) INFO 06-01 01:00:09 [compilation.py:290] Enabled custom fusions: norm_quant, act_quant
+(APIServer pid=689) INFO 06-01 01:00:11 [api_server.py:590] Supported tasks: ['generate']
+(APIServer pid=689) WARNING 06-01 01:00:11 [__init__.py:14] SECURITY WARNING: Development endpoints are enabled! This should NOT be used in production!
+(APIServer pid=689) INFO 06-01 01:00:12 [parser_manager.py:202] "auto" tool choice has been enabled.
+(APIServer pid=689) WARNING 06-01 01:00:12 [model.py:1435] Default vLLM sampling parameters have been overridden by the model's `generation_config.json`: `{'top_k': 20, 'top_p': 0.95}`. If this is not intended, please relaunch vLLM instance with `--generation-config vllm`.
+(APIServer pid=689) WARNING 06-01 01:00:12 [serving.py:225] `VLLM_ENABLE_RESPONSES_API_STORE` is enabled. This may cause a memory leak since we never remove responses from the store.
+(APIServer pid=689) INFO 06-01 01:00:12 [hf.py:314] Detected the chat template content format to be 'string'. You can set `--chat-template-content-format` to override this.
+(APIServer pid=689) INFO 06-01 01:00:19 [base.py:231] Multi-modal warmup completed in 7.027s
+(APIServer pid=689) INFO 06-01 01:00:19 [api_server.py:594] Starting vLLM server on http://127.0.0.1:9950
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:37] Available routes are:
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /openapi.json, Methods: GET, HEAD
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /docs, Methods: GET, HEAD
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /docs/oauth2-redirect, Methods: GET, HEAD
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /redoc, Methods: GET, HEAD
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /sleep, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /wake_up, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /is_sleeping, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /collective_rpc, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /reset_prefix_cache, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /reset_mm_cache, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /reset_encoder_cache, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /tokenize, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /detokenize, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /load, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /version, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /health, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /metrics, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /server_info, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/models, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /ping, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /ping, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /invocations, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/chat/completions, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/chat/completions/batch, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/responses, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/responses/{response_id}, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/responses/{response_id}/cancel, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/completions, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/messages, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/messages/count_tokens, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /inference/v1/generate, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /pause, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /resume, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /is_paused, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /init_weight_transfer_engine, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /update_weights, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /get_world_size, Methods: GET
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /scale_elastic_ep, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /is_scaling_elastic_ep, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/chat/completions/render, Methods: POST
+(APIServer pid=689) INFO 06-01 01:00:19 [launcher.py:46] Route: /v1/completions/render, Methods: POST
+(APIServer pid=689) INFO:     Started server process [689]
+(APIServer pid=689) INFO:     Waiting for application startup.
+(APIServer pid=689) INFO:     Application startup complete.
+(APIServer pid=689) INFO:     127.0.0.1:38574 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:38580 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:38594 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:38598 - "GET /health HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:38610 - "GET /v1/models HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:38626 - "GET /metrics HTTP/1.1" 200 OK
+[VLLM-READY] cuda_graph_capture_time=532.5s
+[VLLM-READY] /health 200 OK at 2026-06-01T01:00:27.381956+00:00
+[VLLM-READY] expected_models=qwen3.6-27b
+[VLLM-READY] served_models=qwen3.6-27b
+(APIServer pid=689) INFO:     127.0.0.1:38630 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:38646 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:54540 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:54548 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:54562 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:54578 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:54594 - "GET /v1/models HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:54596 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:54598 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:54608 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:40244 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:40250 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:40258 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:40266 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:40282 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:40286 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55016 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55018 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55028 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55032 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55040 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55042 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55050 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:46708 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:46710 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:46744 - "GET /metrics HTTP/1.1" 200 OK
+(EngineCore pid=919) WARNING 06-01 01:01:03 [utils.py:109] CommonAttentionMetadata.query_start_loc has no default or default factory.
+(EngineCore pid=919) WARNING 06-01 01:01:03 [utils.py:109] CommonAttentionMetadata.query_start_loc_cpu has no default or default factory.
+(EngineCore pid=919) WARNING 06-01 01:01:03 [utils.py:109] CommonAttentionMetadata.seq_lens has no default or default factory.
+(EngineCore pid=919) WARNING 06-01 01:01:03 [utils.py:109] CommonAttentionMetadata.num_reqs has no default or default factory.
+(EngineCore pid=919) WARNING 06-01 01:01:03 [utils.py:109] CommonAttentionMetadata.num_actual_tokens has no default or default factory.
+(EngineCore pid=919) WARNING 06-01 01:01:03 [utils.py:109] CommonAttentionMetadata.max_query_len has no default or default factory.
+(EngineCore pid=919) WARNING 06-01 01:01:03 [utils.py:109] CommonAttentionMetadata.max_seq_len has no default or default factory.
+(EngineCore pid=919) WARNING 06-01 01:01:03 [utils.py:109] CommonAttentionMetadata.block_table_tensor has no default or default factory.
+(EngineCore pid=919) WARNING 06-01 01:01:03 [utils.py:109] CommonAttentionMetadata.slot_mapping has no default or default factory.
+(APIServer pid=689) INFO:     127.0.0.1:46748 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:46754 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:46764 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:46766 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33164 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:01:12 [loggers.py:259] Engine 000: Avg prompt throughput: 12.4 tokens/s, Avg generation throughput: 0.4 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO:     127.0.0.1:33170 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33182 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33198 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33206 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33222 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33234 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:57664 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:01:22 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 24.9 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:01:22 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.89, Accepted throughput: 2.62 tokens/s, Drafted throughput: 9.07 tokens/s, Accepted: 185 tokens, Drafted: 640 tokens, Per-position acceptance rate: 0.750, 0.641, 0.562, 0.500, 0.438, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 28.9%
+(APIServer pid=689) INFO:     127.0.0.1:57672 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:57684 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:57686 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:57688 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:57698 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33790 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:01:32 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 45.0 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:01:32 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.31, Accepted throughput: 31.39 tokens/s, Drafted throughput: 135.98 tokens/s, Accepted: 314 tokens, Drafted: 1360 tokens, Per-position acceptance rate: 0.787, 0.566, 0.426, 0.309, 0.221, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 23.1%
+(APIServer pid=689) INFO:     127.0.0.1:33798 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33800 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33812 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33820 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:46718 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (30) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=689) INFO:     127.0.0.1:33830 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33842 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:01:42 [loggers.py:259] Engine 000: Avg prompt throughput: 3.0 tokens/s, Avg generation throughput: 34.3 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:01:42 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 2.91, Accepted throughput: 22.50 tokens/s, Drafted throughput: 117.98 tokens/s, Accepted: 225 tokens, Drafted: 1180 tokens, Per-position acceptance rate: 0.737, 0.508, 0.314, 0.203, 0.144, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 19.1%
+(APIServer pid=689) INFO:     127.0.0.1:60712 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:60718 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:60720 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:60722 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:60738 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:60748 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:46738 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52190 - "GET /metrics HTTP/1.1" 200 OK
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (26) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=689) INFO 06-01 01:01:52 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 43.2 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:01:52 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.25, Accepted throughput: 30.20 tokens/s, Drafted throughput: 133.99 tokens/s, Accepted: 302 tokens, Drafted: 1340 tokens, Per-position acceptance rate: 0.724, 0.590, 0.448, 0.306, 0.187, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 22.5%
+(APIServer pid=689) INFO:     127.0.0.1:52192 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52196 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52210 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52224 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:46712 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (39) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=689) INFO:     127.0.0.1:46728 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52270 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42818 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:02:02 [loggers.py:259] Engine 000: Avg prompt throughput: 9.5 tokens/s, Avg generation throughput: 39.3 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:02:02 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 2.98, Accepted throughput: 26.10 tokens/s, Drafted throughput: 131.99 tokens/s, Accepted: 261 tokens, Drafted: 1320 tokens, Per-position acceptance rate: 0.727, 0.500, 0.356, 0.242, 0.152, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 19.8%
+(APIServer pid=689) INFO:     127.0.0.1:42826 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42832 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42840 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33828 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (22) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=689) INFO:     127.0.0.1:42866 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42880 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42888 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52254 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (21) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=689) INFO:     127.0.0.1:37240 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:02:12 [loggers.py:259] Engine 000: Avg prompt throughput: 4.3 tokens/s, Avg generation throughput: 43.4 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:02:12 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.19, Accepted throughput: 29.79 tokens/s, Drafted throughput: 135.95 tokens/s, Accepted: 298 tokens, Drafted: 1360 tokens, Per-position acceptance rate: 0.728, 0.588, 0.419, 0.265, 0.191, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 21.9%
+(APIServer pid=689) INFO:     127.0.0.1:37246 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:37262 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:37272 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:37284 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:37294 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55300 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:02:22 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 37.5 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:02:22 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 2.76, Accepted throughput: 23.90 tokens/s, Drafted throughput: 135.99 tokens/s, Accepted: 239 tokens, Drafted: 1360 tokens, Per-position acceptance rate: 0.713, 0.478, 0.279, 0.191, 0.096, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 17.6%
+(APIServer pid=689) INFO:     127.0.0.1:55302 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55318 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55320 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55326 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55342 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:55346 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52176 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (29) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=689) INFO:     127.0.0.1:37788 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:02:32 [loggers.py:259] Engine 000: Avg prompt throughput: 2.9 tokens/s, Avg generation throughput: 40.4 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:02:32 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.04, Accepted throughput: 27.30 tokens/s, Drafted throughput: 133.99 tokens/s, Accepted: 273 tokens, Drafted: 1340 tokens, Per-position acceptance rate: 0.739, 0.530, 0.366, 0.261, 0.142, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 20.4%
+(APIServer pid=689) INFO:     127.0.0.1:37798 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:37812 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:37816 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:37822 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52238 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (19) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=689) INFO:     127.0.0.1:37826 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:49082 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:02:42 [loggers.py:259] Engine 000: Avg prompt throughput: 1.9 tokens/s, Avg generation throughput: 39.9 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:02:42 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 2.98, Accepted throughput: 26.50 tokens/s, Drafted throughput: 133.98 tokens/s, Accepted: 265 tokens, Drafted: 1340 tokens, Per-position acceptance rate: 0.694, 0.537, 0.328, 0.254, 0.164, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 19.8%
+(APIServer pid=689) INFO:     127.0.0.1:49086 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:49098 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:49112 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42850 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (45) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=689) INFO:     127.0.0.1:49136 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:49152 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52370 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:02:52 [loggers.py:259] Engine 000: Avg prompt throughput: 4.5 tokens/s, Avg generation throughput: 40.2 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:02:52 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.00, Accepted throughput: 26.80 tokens/s, Drafted throughput: 134.00 tokens/s, Accepted: 268 tokens, Drafted: 1340 tokens, Per-position acceptance rate: 0.709, 0.530, 0.328, 0.254, 0.179, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 20.0%
+(APIServer pid=689) INFO:     127.0.0.1:52382 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:37234 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (18) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=689) INFO:     127.0.0.1:52396 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52408 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52420 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52428 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52432 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52394 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:58464 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:03:02 [loggers.py:259] Engine 000: Avg prompt throughput: 4.0 tokens/s, Avg generation throughput: 41.2 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:03:02 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.14, Accepted throughput: 28.30 tokens/s, Drafted throughput: 131.98 tokens/s, Accepted: 283 tokens, Drafted: 1320 tokens, Per-position acceptance rate: 0.720, 0.515, 0.394, 0.303, 0.212, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 21.4%
+(APIServer pid=689) INFO:     127.0.0.1:58478 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:58488 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:58504 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:58514 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:37780 - "POST /v1/completions HTTP/1.1" 200 OK
+(EngineCore pid=919) /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/utils.py:113: UserWarning: Input tensor shape suggests potential format mismatch: seq_len (23) < num_heads (48). This may indicate the inputs were passed in head-first format [B, H, T, ...] when head_first=False was specified. Please verify your input tensor format matches the expected shape [B, T, H, ...].
+(EngineCore pid=919)   return fn(*contiguous_args, **contiguous_kwargs)
+(APIServer pid=689) INFO:     127.0.0.1:58524 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33942 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:03:12 [loggers.py:259] Engine 000: Avg prompt throughput: 2.3 tokens/s, Avg generation throughput: 41.0 tokens/s, Running: 4 reqs, Waiting: 0 reqs, GPU KV cache usage: 13.5%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:03:12 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.06, Accepted throughput: 27.60 tokens/s, Drafted throughput: 134.00 tokens/s, Accepted: 276 tokens, Drafted: 1340 tokens, Per-position acceptance rate: 0.731, 0.530, 0.388, 0.246, 0.164, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 20.6%
+(APIServer pid=689) INFO:     127.0.0.1:33952 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33954 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33968 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33982 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33998 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:37824 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:34008 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:59578 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:03:22 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 40.0 tokens/s, Running: 3 reqs, Waiting: 0 reqs, GPU KV cache usage: 10.1%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:03:22 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.10, Accepted throughput: 27.30 tokens/s, Drafted throughput: 129.99 tokens/s, Accepted: 273 tokens, Drafted: 1300 tokens, Per-position acceptance rate: 0.815, 0.508, 0.377, 0.254, 0.146, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 21.0%
+(APIServer pid=689) INFO:     127.0.0.1:59594 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:59610 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:49126 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:59612 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:59618 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:59630 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33664 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:03:32 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 17.2 tokens/s, Running: 2 reqs, Waiting: 0 reqs, GPU KV cache usage: 6.8%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:03:32 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.22, Accepted throughput: 12.20 tokens/s, Drafted throughput: 54.98 tokens/s, Accepted: 122 tokens, Drafted: 550 tokens, Per-position acceptance rate: 0.764, 0.582, 0.436, 0.273, 0.164, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 22.2%
+(APIServer pid=689) INFO:     127.0.0.1:33680 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33684 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33696 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33700 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52448 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33708 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:33712 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42322 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:03:42 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 21.2 tokens/s, Running: 1 reqs, Waiting: 0 reqs, GPU KV cache usage: 3.4%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:03:42 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 3.37, Accepted throughput: 14.90 tokens/s, Drafted throughput: 62.99 tokens/s, Accepted: 149 tokens, Drafted: 630 tokens, Per-position acceptance rate: 0.730, 0.571, 0.476, 0.317, 0.270, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 23.7%
+(APIServer pid=689) INFO:     127.0.0.1:42336 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42340 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42350 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:58520 - "POST /v1/completions HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42362 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42366 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:42380 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52066 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:03:52 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 7.3 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO 06-01 01:03:52 [metrics.py:101] SpecDecoding metrics: Mean acceptance length: 2.88, Accepted throughput: 4.90 tokens/s, Drafted throughput: 26.00 tokens/s, Accepted: 49 tokens, Drafted: 260 tokens, Per-position acceptance rate: 0.615, 0.500, 0.385, 0.231, 0.154, 0.000, 0.000, 0.000, 0.000, 0.000, Avg Draft acceptance rate: 18.8%
+(APIServer pid=689) INFO:     127.0.0.1:52078 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52080 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52088 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52098 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52108 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:52122 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:36290 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO 06-01 01:04:02 [loggers.py:259] Engine 000: Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 0.0 tokens/s, Running: 0 reqs, Waiting: 0 reqs, GPU KV cache usage: 0.0%, Prefix cache hit rate: 0.0%
+(APIServer pid=689) INFO:     127.0.0.1:36300 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:36310 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:36312 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:36316 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:36324 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:48400 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:48412 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:48428 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:48438 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:48446 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:48448 - "GET /metrics HTTP/1.1" 200 OK
+(APIServer pid=689) INFO:     127.0.0.1:48454 - "GET /metrics HTTP/1.1" 200 OK

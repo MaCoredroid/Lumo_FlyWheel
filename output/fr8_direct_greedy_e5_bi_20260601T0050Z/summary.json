@@ -1,0 +1,185 @@
+{
+  "tag": "fr8_direct_greedy_e5_bi_20260601T0050Z",
+  "mode": "E5 direct /v1/completions greedy",
+  "endpoint": "http://127.0.0.1:9950/v1/completions",
+  "model": "qwen3.6-27b",
+  "request_count": 16,
+  "concurrency": 4,
+  "max_tokens": 400,
+  "temperature": 0,
+  "top_p": 1,
+  "elapsed_s": 86.628,
+  "metrics_before": {
+    "drafts": 1183.0,
+    "accepted_total": 3829.0,
+    "pos": [
+      1055.0,
+      887.0,
+      737.0,
+      622.0,
+      528.0
+    ]
+  },
+  "metrics_after": {
+    "drafts": 2591.0,
+    "accepted_total": 7932.0,
+    "pos": [
+      2274.0,
+      1867.0,
+      1523.0,
+      1243.0,
+      1025.0
+    ]
+  },
+  "delta": {
+    "drafts": 1408.0,
+    "accepted_total": 4103.0,
+    "pos": [
+      1219.0,
+      980.0,
+      786.0,
+      621.0,
+      497.0
+    ]
+  },
+  "avg_accept_len": 2.9140625,
+  "acc0": 0.13423295454545459,
+  "full5": 0.35298295454545453,
+  "per_position": [
+    0.8657670454545454,
+    0.6960227272727273,
+    0.5582386363636364,
+    0.44105113636363635,
+    0.35298295454545453
+  ],
+  "results": [
+    {
+      "i": 0,
+      "ok": true,
+      "elapsed_s": 11.414,
+      "completion_tokens": 266,
+      "finish_reason": "stop",
+      "text_prefix": "<think>\n\n</think>\n\n```python\ndef fibonacci(n: int) -> int:\n    \"\"\"\n    Return the nth Fibonacci number using an iterative approach.\n    \n    The Fibonacci sequence is defined as:\n    F(0) = 0, F(1) = 1, F(n) = F(n-1) + F(n-2) for n >= 2\n   "
+    },
+    {
+      "i": 1,
+      "ok": true,
+      "elapsed_s": 22.323,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "    pass\n\n<think>\nHere's a thinking process:\n\n1.  **Understand the Goal**: The user wants to complete a Python function `merge_sorted_unique(left, right)` that takes two sorted lists (`left` and `right`) and returns a new sorted list contai"
+    },
+    {
+      "i": 2,
+      "ok": true,
+      "elapsed_s": 26.129,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Analyze User Input:**\n   - **Context:** Bug report review\n   - **Problem:** A cache key is built from a dictionary, and tests intermittently fail because equivalent dictionaries produce different ke"
+    },
+    {
+      "i": 3,
+      "ok": true,
+      "elapsed_s": 10.514,
+      "completion_tokens": 242,
+      "finish_reason": "stop",
+      "text_prefix": "        self.cache = {}\n        self.order = []\n\n<think>\n\n</think>\n\n```python\nclass LRUCache:\n    def __init__(self, capacity: int):\n        self.capacity = capacity\n        self.cache = {}\n        self.order = []\n\n    def get(self, key: in"
+    },
+    {
+      "i": 4,
+      "ok": true,
+      "elapsed_s": 25.875,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Understand User Request:**\n   - **Function to test:** `parse_duration(text)`\n   - **Input formats:** `'10s'`, `'5m'`, `'2h'`\n   - **Output expected:** Presumably a duration value (likely in seconds,"
+    },
+    {
+      "i": 5,
+      "ok": true,
+      "elapsed_s": 22.513,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Understand User Request:**\n   - Create a Python `dataclass` named `RetryPolicy`.\n   - Fields: `max_attempts`, `base_delay`, `max_delay`.\n   - Method: `delays()` that presumably returns a sequence of"
+    },
+    {
+      "i": 6,
+      "ok": true,
+      "elapsed_s": 21.859,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Understand User Request:**\n   - **Input Tables:** \n     - `users(id, email)`\n     - `events(user_id, created_at)`\n   - **Task:** Write a SQL query to find \"active users in the last 30 days\"\n   - **R"
+    },
+    {
+      "i": 7,
+      "ok": true,
+      "elapsed_s": 5.34,
+      "completion_tokens": 116,
+      "finish_reason": "stop",
+      "text_prefix": "<think>\n\n</think>\n\n```typescript\nfunction groupBy<T, K extends string | number>(items: T[], keyFn: (item: T) => K): Record<K, T[]> {\n  const result: Record<K, T[]> = {} as Record<K, T[]>;\n  for (const item of items) {\n    const key = keyFn("
+    },
+    {
+      "i": 8,
+      "ok": true,
+      "elapsed_s": 27.192,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "    let mut result = String::new();\n\n<think>\nHere's a thinking process:\n\n1.  **Understand User Request:**\n   - **Input:** A Rust function signature `fn normalize_path(input: &str) -> String` with an empty body starting with `let mut result "
+    },
+    {
+      "i": 9,
+      "ok": true,
+      "elapsed_s": 28.079,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking thinking sequence\n\n1.  **Deconstruct and Analyze the Request:**\n    *   Goal: Replace a synchronous file parser with an async streaming parser.\n    *   Context: Production service. This implies high stakes, need fo"
+    },
+    {
+      "i": 10,
+      "ok": true,
+      "elapsed_s": 19.584,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "    \"\"\"\n    Perform topological sorting on a directed graph.\n    \n    Args:\n        graph: A dictionary representing a directed graph where keys are nodes\n               and values are lists of nodes that the key node has edges to.\n    \n   "
+    },
+    {
+      "i": 11,
+      "ok": true,
+      "elapsed_s": 24.979,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking thinking sequence\n\n1.  **Deconstruct the user's request:**\n    *   Goal: Write documentation for a command-line option.\n    *   Option name: `--dry-run`.\n    *   Functionality: Validates inputs without writing outp"
+    },
+    {
+      "i": 12,
+      "ok": true,
+      "elapsed_s": 22.982,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Analyze the User Input:**\n   - **Error:** `TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'`\n   - **Location:** `File 'metrics.py', line 42, in add_sample`\n   - **Task:** Diagnose "
+    },
+    {
+      "i": 13,
+      "ok": true,
+      "elapsed_s": 4.462,
+      "completion_tokens": 77,
+      "finish_reason": "stop",
+      "text_prefix": "    seen := make(map[string]bool)\n    result := make([]string, 0, len(values))\n    for _, v := range values {\n        if !seen[v] {\n\n<think>\n\n</think>\n\n```go\n            seen[v] = true\n            result = append(result, v)\n        }\n    }\n"
+    },
+    {
+      "i": 14,
+      "ok": true,
+      "elapsed_s": 22.6,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Understand the User Request:**\n   - **Goal:** Write a Python function that chunks an iterable into lists of size `n`.\n   - **Constraint:** Do NOT read the entire iterable into memory. This means it "
+    },
+    {
+      "i": 15,
+      "ok": true,
+      "elapsed_s": 23.497,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Understand User Goal**: The user wants to know how to make a batch inference pipeline deterministic, specifically addressing the issue where GPU kernels may choose different algorithms for different"
+    }
+  ]
+}

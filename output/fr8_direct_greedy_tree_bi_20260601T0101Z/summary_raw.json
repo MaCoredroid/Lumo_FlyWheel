@@ -1,0 +1,203 @@
+{
+  "tag": "fr8_direct_greedy_tree_bi_20260601T0101Z",
+  "mode": "two-spine tree direct /v1/completions greedy",
+  "endpoint": "http://127.0.0.1:9950/v1/completions",
+  "model": "qwen3.6-27b",
+  "request_count": 16,
+  "concurrency": 4,
+  "max_tokens": 400,
+  "temperature": 0,
+  "top_p": 1,
+  "elapsed_s": 165.747,
+  "metrics_before": {
+    "drafts": 0.0,
+    "accepted_total": 0.0,
+    "pos": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "metrics_after": {
+    "drafts": 1798.0,
+    "accepted_total": 3782.0,
+    "pos": [
+      1321.0,
+      968.0,
+      687.0,
+      483.0,
+      323.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "delta": {
+    "drafts": 1798.0,
+    "accepted_total": 3782.0,
+    "pos": [
+      1321.0,
+      968.0,
+      687.0,
+      483.0,
+      323.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "generic_avg_accept_len": 2.103448275862069,
+  "generic_per_position": [
+    0.7347052280311457,
+    0.5383759733036707,
+    0.382091212458287,
+    0.26863181312569523,
+    0.1796440489432703,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "results": [
+    {
+      "i": 0,
+      "ok": true,
+      "elapsed_s": 35.456,
+      "completion_tokens": 268,
+      "finish_reason": "stop",
+      "text_prefix": "<think>\n\n</think>\n\n```python\ndef fibonacci(n: int) -> int:\n    \"\"\"\n    Return the nth Fibonacci number using an iterative approach.\n    \n    The Fibonacci sequence is defined as:\n    F(0) = 0, F(1) = 1, F(n) = F(n-1) + F(n-2) for n >= 2.\n  "
+    },
+    {
+      "i": 1,
+      "ok": true,
+      "elapsed_s": 55.331,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "    pass\n\n<think>\nHere's a thinking process:\n\n1.  **Understand the Goal**: The user wants to complete a Python function `merge_sorted_unique(left, right)` that takes two sorted lists and returns a new sorted list containing only the unique "
+    },
+    {
+      "i": 2,
+      "ok": true,
+      "elapsed_s": 56.209,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Analyze User Input:**\n   - **Bug Report Summary:** A cache key is built from a dictionary, and tests intermittently fail because equivalent dictionaries produce different keys.\n   - **Task:** Explai"
+    },
+    {
+      "i": 3,
+      "ok": true,
+      "elapsed_s": 48.897,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "        self.cache = {}\n        self.order = []\n\n<think>\n\n</think>\n\n```python\nclass LRUCache:\n    def __init__(self, capacity: int):\n        self.capacity = capacity\n        self.cache = {}\n        self.order = []\n\n    def get(self, key: in"
+    },
+    {
+      "i": 4,
+      "ok": true,
+      "elapsed_s": 28.078,
+      "completion_tokens": 294,
+      "finish_reason": "stop",
+      "text_prefix": "\ndef parse_duration(text):\n    \"\"\"\n    Parses a duration string like '10s', '5m', or '2h' and returns the total seconds.\n    \"\"\"\n    import re\n    match = re.match(r'^(\\d+)([smh])$', text)\n    if not match:\n        raise ValueError(f\"Invali"
+    },
+    {
+      "i": 5,
+      "ok": true,
+      "elapsed_s": 39.545,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "3\n\nThe user wants a Python dataclass named `RetryPolicy` with three fields:\n- `max_attempts`: likely an integer representing the maximum number of retry attempts.\n- `base_delay`: likely a float or float representing the base delay between r"
+    },
+    {
+      "i": 6,
+      "ok": true,
+      "elapsed_s": 40.726,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": ".sql\nSELECT u.id, u.email\nFROM users u\nJOIN events e ON u.id = e.user_id\nWHERE e.created_at >= CURRENT_DATE - INTERVAL '30 days'\nGROUP BY u.id, u.email\n```\n\n<think>\n\n</think>\n\nHere is the completion of the SQL explanation, breaking down eac"
+    },
+    {
+      "i": 7,
+      "ok": true,
+      "elapsed_s": 12.298,
+      "completion_tokens": 134,
+      "finish_reason": "stop",
+      "text_prefix": "\nfunction should group an array of items by a key derived from each item.\n\n<think>\n\n</think>\n\n```typescript\nfunction groupBy<T, K extends string | number>(items: T[], keyFn: (item: T) => K): Record<K, T[]> {\n  const result: Record<string, T"
+    },
+    {
+      "i": 8,
+      "ok": true,
+      "elapsed_s": 40.729,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "\n}\n\n<think>\n\n</think>\n\n```rust\nfn normalize_path(input: &str) -> String {\n    // Split the path by '/' and filter out empty components and \".\" entries.\n    // Handle \"..\" by popping the previous component when possible.\n    let mut componen"
+    },
+    {
+      "i": 9,
+      "ok": true,
+      "elapsed_s": 42.557,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " u\n\n<think>\n\n</think>\n\n# Migration Plan: Synchronous to Async Streaming File Parser\n\n## 1. Executive Summary\nThis plan outlines the strategy for migrating a production service from a synchronous, blocking file parser to an asynchronous, str"
+    },
+    {
+      "i": 10,
+      "ok": true,
+      "elapsed_s": 38.16,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " table = {}\n    for node in graph:\n        table[node] = 0  # 0: unvisited, 1: visiting, 2: visited\n\n    def dfs(node: str) -> bool:\n        if table[node] == 1:\n        if table[node] == 2:\n        table[node] = 1\n        for neighbor in g"
+    },
+    {
+      "i": 11,
+      "ok": true,
+      "elapsed_s": 41.687,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "\n\n<think>\nHere's a thinking thinking sequence\n\n1.  **Deconstruct the user's request:**\n    *   Goal: Write documentation for a command-line option.\n    *   Option name: `--dry-run`.\n    *   Functionality: Validates inputs without writing ou"
+    },
+    {
+      "i": 12,
+      "ok": true,
+      "elapsed_s": 39.325,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " dict\n{\n  \"file\": \"metrics.py\",\n  \"line\": 42,\n  \"function\": \"add_sample\",\n  \"code\": \"self.total += value\",\n  \"context\": {\n    \"self.total\": None,\n    \"self.count\": 0\n  }\n```\n\n<think>\nHere's a thinking process:\n\n1.  **Analyze the User Input:"
+    },
+    {
+      "i": 13,
+      "ok": true,
+      "elapsed_s": 6.744,
+      "completion_tokens": 68,
+      "finish_reason": "stop",
+      "text_prefix": "    result []string\n    seen := make(map[string]bool)\n    for _, v := range values {\n        if !seen[v] {\n\n<think>\n\n</think>\n\n```go\n            seen[v] = true\n            result = append(result, v)\n        }\n    }\n    return result\n}\n```"
+    },
+    {
+      "i": 14,
+      "ok": true,
+      "elapsed_s": 38.129,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "\ndef chunked(iterable, n):\n    \"\"\"\n    Chunks an iterable into lists of size n.\n    \n    Args:\n        iterable: An iterable to be chunked.\n        n: The size of each chunk.\n    \n    Returns:\n        A generator that yields lists of size n"
+    },
+    {
+      "i": 15,
+      "ok": true,
+      "elapsed_s": 39.136,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " returns the same results for the same input, you need to make sure that the GPU kernels are deterministic. However, some GPU kernels may choose different algorithms for different batch sizes, which can lead to non-deterministic results.\n\nT"
+    }
+  ]
+}
