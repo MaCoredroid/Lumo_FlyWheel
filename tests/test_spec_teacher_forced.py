@@ -27,8 +27,25 @@ def _measurement(rows: list[dict[str, object]]) -> dict[str, object]:
     return {
         "reference_sha256": "abc",
         "start_token": 16,
+        "depth": 5,
         "rows": rows,
     }
+
+
+def test_forced_acceptance_uses_live_measurement_lcp() -> None:
+    rows = [
+        {"forced_position": 16, "draft_top1": [10, 11, 99, 13, 14], "teacher_forced_accept_lcp": 2},
+        {"forced_position": 17, "draft_top1": [11, 12, 13, 14, 15], "teacher_forced_accept_lcp": 5},
+        {"forced_position": 18, "draft_top1": [12, 13, 14, 15, 16], "teacher_forced_accept_lcp": 4},
+    ]
+
+    assert measure.forced_acceptance_lcps(rows, depth=5) == [2, 5, 4]
+
+    summary = measure.forced_acceptance_summary(_measurement(rows))
+
+    assert summary["available"] is True
+    assert summary["avg"] == 11 / 3
+    assert summary["per_position"] == [1.0, 1.0, 2 / 3, 2 / 3, 1 / 3]
 
 
 def test_compare_verdict_divergence_only_when_draft_and_target_match() -> None:
@@ -45,6 +62,8 @@ def test_compare_verdict_divergence_only_when_draft_and_target_match() -> None:
     assert summary["verdict"] == "divergence-only"
     assert summary["draft_mismatches"] == 0
     assert summary["target_mismatches"] == 0
+    assert summary["e5_forced_acceptance"]["available"] is False
+    assert summary["tree_forced_acceptance"]["available"] is False
 
 
 def test_compare_verdict_proposer_bug_when_only_draft_differs() -> None:

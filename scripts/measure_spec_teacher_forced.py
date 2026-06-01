@@ -14,6 +14,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -113,6 +114,75 @@ def draft_top1_chain(record: dict[str, Any], mode: str, depth: int = 5) -> list[
     raise ValueError(f"unknown mode {mode!r}")
 
 
+def forced_acceptance_lcps(rows: list[dict[str, Any]], depth: int) -> list[int]:
+    """Per-row LCP computed by the live verifier during measurement."""
+    lcps: list[int] = []
+    for row in rows:
+        value = row.get("teacher_forced_accept_lcp")
+        if value is None:
+            continue
+        lcps.append(min(int(value), depth))
+    return lcps
+
+
+def summarize_lcps(lcps: list[int], depth: int) -> dict[str, Any]:
+    n = len(lcps)
+    return {
+        "avg": sum(lcps) / n if n else None,
+        "acc0": sum(v == 0 for v in lcps) / n if n else None,
+        "full": sum(v >= depth for v in lcps) / n if n else None,
+        "per_position": [
+            sum(v >= k for v in lcps) / n if n else None for k in range(1, depth + 1)
+        ],
+        "counts": dict(sorted(Counter(lcps).items())),
+    }
+
+
+def forced_acceptance_summary(measurement: dict[str, Any]) -> dict[str, Any]:
+    rows = measurement.get("rows") or []
+    depth = int(measurement.get("depth") or 5)
+    lcps = forced_acceptance_lcps(rows, depth)
+    summary = summarize_lcps(lcps, depth)
+    summary["available"] = len(lcps) == len(rows)
+    summary["n_rows"] = len(lcps)
+    summary["source"] = (
+        "live target queries over prefix + own target argmax + accepted draft tokens"
+    )
+    return summary
+
+
+def compute_teacher_forced_acceptance(
+    endpoint: str,
+    model: str,
+    prefix_tokens: list[int],
+    first_target_token_id: int | None,
+    draft_top1: list[int],
+) -> tuple[int | None, list[int | None], str | None]:
+    if first_target_token_id is None:
+        return None, [], "missing first target argmax token id"
+    accepted: list[int] = []
+    target_chain: list[int | None] = []
+    for draft_token in draft_top1:
+        verifier_prefix_tokens = prefix_tokens + [int(first_target_token_id)] + accepted
+        verifier_prefix_text = detokenize(endpoint, model, verifier_prefix_tokens)
+        response = _completion_one(endpoint, model, verifier_prefix_text)
+        completion_text = response["choices"][0].get("text") or ""
+        target_token_id, warning = recover_argmax_token_id(
+            endpoint,
+            model,
+            verifier_prefix_text,
+            verifier_prefix_tokens,
+            completion_text,
+        )
+        target_chain.append(target_token_id)
+        if warning is not None:
+            return len(accepted), target_chain, warning
+        if target_token_id != int(draft_token):
+            break
+        accepted.append(int(draft_token))
+    return len(accepted), target_chain, None
+
+
 def _completion_one(endpoint: str, model: str, prompt: str) -> dict[str, Any]:
     payload = {
         "model": model,
@@ -182,18 +252,33 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         argmax_token_id, recovery_warning = recover_argmax_token_id(
             args.endpoint, args.model, prefix_text, prefix_tokens, completion_text
         )
+        draft_top1 = draft_top1_chain(trace_row, args.mode, depth=args.depth)
+        accept_lcp = None
+        accept_target_chain: list[int | None] = []
+        accept_warning = None
+        if not args.skip_acceptance:
+            accept_lcp, accept_target_chain, accept_warning = compute_teacher_forced_acceptance(
+                args.endpoint,
+                args.model,
+                prefix_tokens,
+                argmax_token_id,
+                draft_top1,
+            )
         row = {
             "row_index": row_index,
             "forced_position": position,
             "next_reference_token_id": int(reference_tokens[position]),
-            "draft_top1": draft_top1_chain(trace_row, args.mode, depth=args.depth),
+            "draft_top1": draft_top1,
             "target_argmax_token_id": argmax_token_id,
             "target_argmax_text": completion_text,
             "target_argmax_logprob_token": _logprob_token(response),
+            "teacher_forced_accept_lcp": accept_lcp,
+            "teacher_forced_accept_target_chain": accept_target_chain,
             "finish_reason": choice.get("finish_reason"),
             "trace_idx": trace_row.get("idx"),
             "trace_ts": trace_row.get("ts"),
             "recovery_warning": recovery_warning,
+            "acceptance_recovery_warning": accept_warning,
         }
         rows.append(row)
         if args.progress_every and (row_index + 1) % args.progress_every == 0:
@@ -217,6 +302,7 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         "guard": guard,
         "rows": rows,
     }
+    measurement["forced_acceptance"] = forced_acceptance_summary(measurement)
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(measurement, indent=2) + "\n", encoding="utf-8")
@@ -265,6 +351,10 @@ def compare_measurements(e5: dict[str, Any], tree: dict[str, Any]) -> dict[str, 
         verdict = "proposer-bug"
     else:
         verdict = "divergence-only"
+    e5_acceptance = e5.get("forced_acceptance") or forced_acceptance_summary(e5)
+    tree_acceptance = tree.get("forced_acceptance") or forced_acceptance_summary(tree)
+    e5_avg = e5_acceptance.get("avg")
+    tree_avg = tree_acceptance.get("avg")
     return {
         "schema": "spec_teacher_forced_compare.v1",
         "verdict": verdict,
@@ -273,6 +363,13 @@ def compare_measurements(e5: dict[str, Any], tree: dict[str, Any]) -> dict[str, 
         "target_mismatches": target_mismatches,
         "draft_match_rate": (limit - draft_mismatches) / limit if limit else None,
         "target_match_rate": (limit - target_mismatches) / limit if limit else None,
+        "e5_forced_acceptance": e5_acceptance,
+        "tree_forced_acceptance": tree_acceptance,
+        "forced_acceptance_delta_avg": (
+            tree_avg - e5_avg
+            if isinstance(e5_avg, (int, float)) and isinstance(tree_avg, (int, float))
+            else None
+        ),
         "table": table,
     }
 
@@ -283,6 +380,21 @@ def print_compare(summary: dict[str, Any], max_rows: int) -> None:
         f"draft_match={100 * summary['draft_match_rate']:.1f}% "
         f"target_match={100 * summary['target_match_rate']:.1f}%"
     )
+    e5_acc = summary["e5_forced_acceptance"]
+    tree_acc = summary["tree_forced_acceptance"]
+    if e5_acc.get("available") and tree_acc.get("available"):
+        print(
+            "forced_acceptance_avg "
+            f"e5={e5_acc['avg']:.3f} tree={tree_acc['avg']:.3f} "
+            f"delta={summary['forced_acceptance_delta_avg']:.3f}"
+        )
+        print(
+            "forced_acceptance_per_pos "
+            f"e5={[round(x, 4) for x in e5_acc['per_position']]} "
+            f"tree={[round(x, 4) for x in tree_acc['per_position']]}"
+        )
+    else:
+        print("forced_acceptance unavailable: rerun measure without --skip-acceptance")
     print("pos  draft  target  e5_draft0  tree_draft0  e5_argmax  tree_argmax")
     for row in summary["table"][:max_rows]:
         print(
@@ -311,6 +423,7 @@ def main(argv: list[str] | None = None) -> int:
     measure_parser.add_argument("--limit", type=int, default=384)
     measure_parser.add_argument("--depth", type=int, default=5)
     measure_parser.add_argument("--progress-every", type=int, default=25)
+    measure_parser.add_argument("--skip-acceptance", action="store_true")
     measure_parser.add_argument("--no-live-guards", action="store_true", help=argparse.SUPPRESS)
 
     compare_parser = sub.add_parser("compare")
