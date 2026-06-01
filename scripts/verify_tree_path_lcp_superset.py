@@ -25,6 +25,8 @@ def _load_rows(path: Path) -> list[dict[str, Any]]:
         except json.JSONDecodeError as exc:
             raise SystemExit(f"{path}:{line_no}: invalid JSON: {exc}") from exc
         if row.get("event") == "tree_path_lcp_max" or "path_scores" in row:
+            if int(row.get("node_count", 1) or 0) <= 0:
+                continue
             row["_line_no"] = line_no
             rows.append(row)
     return rows

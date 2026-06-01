@@ -1,4 +1,6 @@
-from scripts.verify_tree_path_lcp_superset import summarize_rows, verify_rows
+from pathlib import Path
+
+from scripts.verify_tree_path_lcp_superset import _load_rows, summarize_rows, verify_rows
 
 
 def test_verify_rows_accepts_superset_log() -> None:
@@ -66,3 +68,27 @@ def test_summarize_rows_reports_path0_and_recovery() -> None:
     assert summary["recovery_event_count"] == 1
     assert summary["recovered_token_total"] == 1
     assert summary["winner_index_counts"] == {"1": 1, "0": 1}
+
+
+def test_load_rows_skips_idle_batch_slots(tmp_path: Path) -> None:
+    trace = tmp_path / "tree_path_lcp_max.jsonl"
+    trace.write_text(
+        "\n".join([
+            (
+                '{"event":"tree_path_lcp_max","node_count":0,'
+                '"accepted_len":0,"path0_lcp":0,"path_scores":[]}'
+            ),
+            (
+                '{"event":"tree_path_lcp_max","node_count":10,'
+                '"accepted_len":1,"path0_lcp":1,'
+                '"path_scores":[{"leaf":8,"lcp":1}]}'
+            ),
+        ])
+        + "\n",
+        encoding="utf-8",
+    )
+
+    rows = _load_rows(trace)
+
+    assert len(rows) == 1
+    assert rows[0]["node_count"] == 10
