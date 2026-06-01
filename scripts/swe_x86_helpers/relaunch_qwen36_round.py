@@ -194,6 +194,277 @@ EagleProposer.propose = _lumo_mtp_trace_propose
 LUMOMTPDRAFTTRACE
 '''
 
+_INDEPENDENT_ROWS_BLOCK = r'''
+python3 - <<'LUMOINDEPENDENTROWS'
+from pathlib import Path
+import py_compile
+
+scheduler = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py')
+text = scheduler.read_text()
+sentinel = '# LUMO_INDEPENDENT_ROWS'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] independent rows scheduler patch already present')
+else:
+    patch = r"""
+
+# LUMO_INDEPENDENT_ROWS: hidden co-resident request rows for few-spine MTP.
+# Each spine is a native vLLM sequence with its own recurrent GDN state.  The
+# public request remains spine 0; sibling rows are kept alive until the request
+# finishes and their EngineCoreOutput rows are suppressed from the client.
+import os as _lumo_ir_os
+from vllm.v1.request import Request as _LumoIRRequest
+
+_lumo_ir_orig_add_request = Scheduler.add_request
+_lumo_ir_orig_finish_requests = Scheduler.finish_requests
+_lumo_ir_orig_update_from_output = Scheduler.update_from_output
+
+def _lumo_ir_enabled():
+    return _lumo_ir_os.environ.get("LUMO_INDEPENDENT_ROWS") == "1"
+
+def _lumo_ir_spines():
+    try:
+        value = int(_lumo_ir_os.environ.get("LUMO_IR_SPINES", "2"))
+    except Exception:
+        value = 2
+    return max(1, min(10, value))
+
+def _lumo_ir_is_clone(req_id):
+    return "::lumo_ir_s" in str(req_id)
+
+def _lumo_ir_primary(req_id):
+    return str(req_id).split("::lumo_ir_s", 1)[0]
+
+def _lumo_ir_clone_id(req_id, spine):
+    return f"{req_id}::lumo_ir_s{int(spine)}"
+
+def _lumo_ir_init(self):
+    if not hasattr(self, "_lumo_ir_groups"):
+        self._lumo_ir_groups = {}
+        self._lumo_ir_parent = {}
+        self._lumo_ir_spine = {}
+
+def _lumo_ir_clone_request(request, spine):
+    clone = _LumoIRRequest(
+        request_id=_lumo_ir_clone_id(request.request_id, spine),
+        client_index=request.client_index,
+        prompt_token_ids=(request.prompt_token_ids.copy()
+                          if request.prompt_token_ids is not None else None),
+        prompt_embeds=request.prompt_embeds,
+        mm_features=list(request.mm_features),
+        sampling_params=request.sampling_params,
+        pooling_params=request.pooling_params,
+        arrival_time=request.arrival_time + spine * 1e-6,
+        lora_request=request.lora_request,
+        cache_salt=request.cache_salt,
+        priority=request.priority,
+        trace_headers=request.trace_headers,
+        block_hasher=getattr(request, "_block_hasher", None),
+        resumable=False,
+        reasoning_ended=(
+            request.structured_output_request.reasoning_ended
+            if request.structured_output_request is not None else None
+        ),
+    )
+    clone._lumo_ir_hidden = True
+    clone._lumo_ir_primary = request.request_id
+    clone._lumo_ir_spine = spine
+    return clone
+
+def _lumo_ir_add_request(self, request):
+    if (not _lumo_ir_enabled()
+            or _lumo_ir_is_clone(request.request_id)
+            or request.pooling_params is not None
+            or request.request_id in self.requests):
+        return _lumo_ir_orig_add_request(self, request)
+    spine_count = _lumo_ir_spines()
+    if spine_count <= 1:
+        return _lumo_ir_orig_add_request(self, request)
+    _lumo_ir_init(self)
+    primary_id = request.request_id
+    group = [primary_id] + [_lumo_ir_clone_id(primary_id, s)
+                            for s in range(1, spine_count)]
+    self._lumo_ir_groups[primary_id] = group
+    for s, rid in enumerate(group):
+        self._lumo_ir_parent[rid] = primary_id
+        self._lumo_ir_spine[rid] = s
+    request._lumo_ir_primary = primary_id
+    request._lumo_ir_spine = 0
+    _lumo_ir_orig_add_request(self, request)
+    for spine in range(1, spine_count):
+        _lumo_ir_orig_add_request(self, _lumo_ir_clone_request(request, spine))
+
+def _lumo_ir_finish_requests(self, request_ids, finished_status):
+    if not _lumo_ir_enabled() or request_ids is None:
+        return _lumo_ir_orig_finish_requests(self, request_ids, finished_status)
+    _lumo_ir_init(self)
+    if isinstance(request_ids, str):
+        requested = [request_ids]
+    else:
+        requested = list(request_ids)
+    expanded = []
+    seen = set()
+    for rid in requested:
+        primary = self._lumo_ir_parent.get(rid, _lumo_ir_primary(rid))
+        members = self._lumo_ir_groups.get(primary, [rid])
+        for member in members:
+            if member not in seen:
+                expanded.append(member)
+                seen.add(member)
+    finished = _lumo_ir_orig_finish_requests(self, expanded, finished_status)
+    return [(rid, idx) for rid, idx in finished if not _lumo_ir_is_clone(rid)]
+
+def _lumo_ir_update_from_output(self, scheduler_output, model_runner_output):
+    outputs = _lumo_ir_orig_update_from_output(
+        self, scheduler_output, model_runner_output)
+    if not _lumo_ir_enabled():
+        return outputs
+    for client_index, eco in list(outputs.items()):
+        if hasattr(eco, "outputs"):
+            eco.outputs = [
+                out for out in eco.outputs
+                if not _lumo_ir_is_clone(getattr(out, "request_id", ""))
+            ]
+            if getattr(eco, "finished_requests", None):
+                eco.finished_requests = {
+                    rid for rid in eco.finished_requests
+                    if not _lumo_ir_is_clone(rid)
+                }
+            if (not eco.outputs
+                    and getattr(eco, "scheduler_stats", None) is None
+                    and getattr(eco, "utility_output", None) is None
+                    and not getattr(eco, "finished_requests", None)
+                    and getattr(eco, "wave_complete", None) is None
+                    and getattr(eco, "start_wave", None) is None):
+                del outputs[client_index]
+        else:
+            filtered = [
+                out for out in eco
+                if not _lumo_ir_is_clone(getattr(out, "request_id", ""))
+            ]
+            if filtered:
+                outputs[client_index] = filtered
+            else:
+                del outputs[client_index]
+    return outputs
+
+Scheduler.add_request = _lumo_ir_add_request
+Scheduler.finish_requests = _lumo_ir_finish_requests
+Scheduler.update_from_output = _lumo_ir_update_from_output
+"""
+    scheduler.write_text(text + patch)
+    py_compile.compile(str(scheduler), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied independent rows scheduler patch')
+
+eagle = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py')
+text = eagle.read_text()
+sentinel = '# LUMO_INDEPENDENT_ROWS_ROOTS'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] independent rows proposer patch already present')
+else:
+    helper = r"""
+
+def _lumo_ir_choose_root_tokens(self, sample_hidden_states, fallback_token_ids):
+    # LUMO_INDEPENDENT_ROWS_ROOTS: spine 0 is native top-1; later co-resident
+    # rows use rank-s roots and then continue through the ordinary linear MTP
+    # drafter with their own native sequence state.
+    import os as _lumo_ir_os
+    if _lumo_ir_os.environ.get("LUMO_INDEPENDENT_ROWS") != "1":
+        return fallback_token_ids
+    try:
+        spines = max(1, min(10, int(_lumo_ir_os.environ.get("LUMO_IR_SPINES", "2"))))
+    except Exception:
+        spines = 2
+    req_ids = getattr(self, "_lumo_ir_req_ids", None)
+    if spines <= 1 or fallback_token_ids.shape[0] <= 1 or not req_ids:
+        return fallback_token_ids
+    spine_values = []
+    for rid in list(req_ids)[: int(fallback_token_ids.shape[0])]:
+        marker = "::lumo_ir_s"
+        rid = str(rid)
+        if marker not in rid:
+            spine_values.append(0)
+        else:
+            try:
+                spine_values.append(int(rid.rsplit(marker, 1)[1]))
+            except Exception:
+                spine_values.append(0)
+    logits = self.model.compute_logits(sample_hidden_states)
+    width = min(spines, int(logits.shape[-1]))
+    topk = torch.topk(logits, width, dim=-1).indices
+    spine_idx = torch.tensor(
+        spine_values,
+        dtype=torch.long,
+        device=fallback_token_ids.device,
+    ).clamp(min=0, max=width - 1).view(-1, 1)
+    return topk.gather(1, spine_idx).squeeze(-1).to(dtype=fallback_token_ids.dtype)
+"""
+    text = text + helper
+    old = """        if self.num_speculative_tokens == 1 or self.parallel_drafting:
+            draft_token_ids = self._greedy_sample(sample_hidden_states)
+            return draft_token_ids.view(-1, self.num_speculative_tokens)
+"""
+    new = """        if self.num_speculative_tokens == 1 or self.parallel_drafting:
+            draft_token_ids = self._greedy_sample(sample_hidden_states)
+            draft_token_ids = _lumo_ir_choose_root_tokens(
+                self, sample_hidden_states, draft_token_ids)
+            return draft_token_ids.view(-1, self.num_speculative_tokens)
+"""
+    if old not in text:
+        raise RuntimeError('EagleProposer early root anchor not found')
+    text = text.replace(old, new, 1)
+    old = """        draft_token_ids = self._greedy_sample(sample_hidden_states)
+
+        if self.allowed_attn_types is not None and not isinstance(
+"""
+    new = """        draft_token_ids = self._greedy_sample(sample_hidden_states)
+        draft_token_ids = _lumo_ir_choose_root_tokens(
+            self, sample_hidden_states, draft_token_ids)
+
+        if self.allowed_attn_types is not None and not isinstance(
+"""
+    if old not in text:
+        raise RuntimeError('EagleProposer linear root anchor not found')
+    text = text.replace(old, new, 1)
+    eagle.write_text(text)
+    py_compile.compile(str(eagle), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied independent rows proposer patch')
+
+runner = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py')
+text = runner.read_text()
+sentinel = '# LUMO_INDEPENDENT_ROWS_REQ_IDS'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] independent rows req-id patch already present')
+else:
+    old = """            else:
+                mm_embed_inputs = None
+
+            draft_token_ids = self.drafter.propose(
+"""
+    new = """            else:
+                mm_embed_inputs = None
+
+            # LUMO_INDEPENDENT_ROWS_REQ_IDS: expose active request ids to the
+            # proposer so hidden clone roots are selected by request id, not by
+            # unstable tensor row parity.
+            if __import__("os").environ.get("LUMO_INDEPENDENT_ROWS") == "1":
+                try:
+                    _lumo_ir_batch = int(common_attn_metadata.batch_size())
+                    self.drafter._lumo_ir_req_ids = list(
+                        self.input_batch.req_ids[:_lumo_ir_batch])
+                except Exception:
+                    self.drafter._lumo_ir_req_ids = None
+            draft_token_ids = self.drafter.propose(
+"""
+    count = text.count(old)
+    if count < 1:
+        raise RuntimeError('gpu_model_runner drafter propose anchor not found')
+    text = text.replace(old, new, 1)
+    runner.write_text(text)
+    py_compile.compile(str(runner), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied independent rows req-id patch')
+LUMOINDEPENDENTROWS
+'''
+
 _NO_STALE_TREE_EXPERIMENT_PATCHES_BLOCK = r'''
 python3 - <<'LUMONOSTALETREEEXP'
 from pathlib import Path
@@ -4670,7 +4941,14 @@ else:
 LUMOFAUNIQUEBATCH4STARTUP
 '''
 
-def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb: bool = False) -> str:
+def _prelaunch_for(
+    config: str,
+    tree: bool = False,
+    tree_debug: bool = False,
+    fb: bool = False,
+    independent_rows: bool = False,
+    spines: int = 1,
+) -> str:
     full = _track_b_runtime_prelaunch_shell()
     if config == "D":
         base = full  # full T1+T2+T3+T4 stack
@@ -4715,7 +4993,12 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     ):
         if os.environ.get(_name):
             tree_debug_exports += f"export {_name}={os.environ[_name]}\n"
-    fb_env = fa_unique_env + tree_debug_exports
+    independent_env = (
+        "export LUMO_INDEPENDENT_ROWS=1\n"
+        f"export LUMO_IR_SPINES={int(spines)}\n"
+        if independent_rows else ""
+    )
+    fb_env = fa_unique_env + tree_debug_exports + independent_env
     mtp_draft_trace = f"export LUMO_MTP_DRAFT_TRACE_FILE={os.environ['LUMO_MTP_DRAFT_TRACE_FILE']}\n" if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
     mtp_draft_trace_block = _MTP_DRAFT_TRACE_BLOCK if (
         os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE")
@@ -4741,6 +5024,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
             + stale_fb_guard + dbg + "export LUMO_CUDAGRAPH_RUNTIME_TELEMETRY=1\n"
             + fb_env + mtp_draft_trace + base + _CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
+            + (_INDEPENDENT_ROWS_BLOCK if independent_rows else "")
             + ((_TREE_PER_PATH_DRAFTER_BLOCK + tree_blocks) if tree else "")
             + (_TREE_GDN_PREFIX_STATE_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else "")
@@ -4965,13 +5249,17 @@ def _default_tree(n: int, spines: int) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    # Configs: D is the legacy suffix stack. Fb is the single maintained MTP
-    # path: --mtp controls depth and --spines controls the regular tree width.
-    # --spines=1 is the chain baseline through the same per-path engine code.
+    # Configs: D is the legacy suffix stack. Fb is the maintained MTP path.
+    # --row-mode=tree uses the consolidated speculative_token_tree path.
+    # --row-mode=independent uses native linear MTP plus hidden co-resident
+    # request rows, one per spine.
     ap.add_argument("--config", choices=["D", "Fb"], required=True)
     ap.add_argument("--mtp", type=int, default=5, help="MTP depth for config Fb")
+    ap.add_argument("--row-mode", choices=["tree", "independent"], default="tree",
+                    help="config Fb only: tree=speculative_token_tree, "
+                         "independent=N native co-resident sequence rows")
     ap.add_argument("--spines", type=int, default=int(os.environ.get("LUMO_TREE_SPINES", "2")),
-                    help="number of root spines for config Fb; 1 is the E5-equivalent chain")
+                    help="number of root spines/rows for config Fb; 1 is the E5-equivalent chain")
     ap.add_argument("--tree", default=None,
                     help="config Fb only: override the speculative_token_tree literal "
                          "(default: _default_tree(--mtp)). Must be a REGULAR tree whose "
@@ -4985,16 +5273,26 @@ def main() -> int:
                          "the fp8 checkpoint accepts (fp8_e5m2 is rejected -> auto). Default: "
                          "use the bundle's value (fp8_e5m2 -> auto for this checkpoint).")
     args = ap.parse_args()
-    is_tree = args.config == "Fb"
+    if args.row_mode != "tree" and args.config != "Fb":
+        ap.error("--row-mode is only valid with --config Fb")
+    is_tree = args.config == "Fb" and args.row_mode == "tree"
+    is_independent = args.config == "Fb" and args.row_mode == "independent"
     is_fb = False
-    if is_tree:
+    if is_tree or is_independent:
         os.environ["LUMO_BATCH_INVARIANT_VLLM"] = "1"
+    if is_independent:
+        if not (1 <= args.spines <= 10):
+            raise RuntimeError(f"--spines must be in [1, 10], got {args.spines}")
+        os.environ["LUMO_INDEPENDENT_ROWS"] = "1"
+        os.environ["LUMO_IR_SPINES"] = str(args.spines)
+        if os.environ.get("LUMO_VLLM_MAX_NUM_SEQS") is None:
+            os.environ["LUMO_VLLM_MAX_NUM_SEQS"] = str(4 * args.spines)
     if args.tree is not None and not is_tree:
-        ap.error("--tree is only valid with --config Fb")
+        ap.error("--tree is only valid with --config Fb --row-mode tree")
     tree = (args.tree or _default_tree(args.mtp, args.spines)) if is_tree else None
     if args.config == "D":
         bundle = _d_bundle(kv_cache_dtype=args.kv_cache_dtype)
-    else:  # Fb -- MTP bundle with speculative_token_tree
+    else:  # Fb -- MTP bundle; tree mode adds speculative_token_tree
         bundle = _mtp_bundle(args.mtp, tree=tree, kv_cache_dtype=args.kv_cache_dtype)
     server = ModelServer(
         registry_path=REPO / "model_registry.yaml",
@@ -5010,14 +5308,22 @@ def main() -> int:
             "LUMO_VLLM_STATE_ROOT", "/tmp/lumo-l0c-fp8-cutlass-run30-state")),
         proxy_port=int(os.environ.get("LUMO_VLLM_PROXY_PORT", "8088")),
         ready_timeout_s=900,
-        prelaunch_shell=_prelaunch_for(args.config, tree=is_tree, tree_debug=args.tree_debug, fb=is_fb),
+        prelaunch_shell=_prelaunch_for(
+            args.config,
+            tree=is_tree,
+            tree_debug=args.tree_debug,
+            fb=is_fb,
+            independent_rows=is_independent,
+            spines=args.spines,
+        ),
     )
     server.load_tuned_config(bundle)
     server.start("qwen3.6-27b")
     tree_desc = f" tree={tree}" if is_tree else ""
+    row_desc = f" row_mode={args.row_mode} spines={args.spines}" if args.config == "Fb" else ""
     mtp_desc = args.mtp if args.config == "Fb" else "-"
     kv_desc = args.kv_cache_dtype or "bundle-default"
-    print(f"READY config={args.config} mtp={mtp_desc}{tree_desc} kv={kv_desc} bundle={bundle}")
+    print(f"READY config={args.config} mtp={mtp_desc}{row_desc}{tree_desc} kv={kv_desc} bundle={bundle}")
     return 0
 
 

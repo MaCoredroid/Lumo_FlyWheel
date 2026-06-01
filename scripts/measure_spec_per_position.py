@@ -22,6 +22,7 @@ from typing import Any
 
 DEFAULT_PROMPTS = Path("tests/fixtures/spec_probe_prompts.json")
 DEFAULT_TREE_LCP = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/tree_path_lcp_max.jsonl")
+DEFAULT_SPEC_TRACE = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl")
 DEFAULT_VLLM_LOG = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.6-27b.log")
 
 
@@ -230,6 +231,37 @@ def _tree_lcps_between(trace_path: Path, start_ts: float, end_ts: float) -> list
     return lcps
 
 
+def _independent_path_lcps_between(
+    trace_path: Path,
+    start_ts: float,
+    end_ts: float,
+    depth: int,
+    spine: int = 0,
+) -> list[int]:
+    lcps: list[int] = []
+    if not trace_path.exists():
+        return lcps
+    clone_marker = f"::lumo_ir_s{spine}"
+    for raw in trace_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        try:
+            row = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not (start_ts <= float(row.get("ts", 0.0)) <= end_ts):
+            continue
+        rid = str(row.get("rid", ""))
+        if spine == 0:
+            if "::lumo_ir_s" in rid:
+                continue
+        elif clone_marker not in rid:
+            continue
+        draft = int(row.get("draft", row.get("proposal_width", 0)) or 0)
+        if draft <= 0:
+            continue
+        lcps.append(max(0, min(depth, int(row.get("acc", 0) or 0))))
+    return lcps
+
+
 def print_table(label: str, summary: dict[str, Any]) -> None:
     per = summary["per_position"]
     print(f"{label}: n={summary['n_events']} avg={summary['avg']:.3f} acc0={100 * summary['acc0']:.1f}% full5={100 * summary['full5']:.1f}%")
@@ -276,7 +308,7 @@ def run_measure(args: argparse.Namespace) -> dict[str, Any]:
     if args.mode == "e5":
         spec = summarize_e5_delta(before, after)
         source = "vllm Prometheus spec_decode accepted_tokens_per_pos delta"
-    else:
+    elif args.mode == "tree":
         lcps = _tree_lcps_between(Path(args.tree_lcp_log), start_ts, end_ts)
         spec = summarize_lcps(lcps)
         source = "tree_path_lcp_max.jsonl path0_lcp/spine-A path_scores [0,2,4,6,8]"
@@ -284,6 +316,21 @@ def run_measure(args: argparse.Namespace) -> dict[str, Any]:
             raise SystemExit(
                 "tree mode produced zero path0_lcp events; require verifier-independent "
                 "tree_path_lcp_max.jsonl rows, not accepted_len"
+            )
+    else:
+        lcps = _independent_path_lcps_between(
+            Path(args.spec_trace_log),
+            start_ts,
+            end_ts,
+            depth=args.depth,
+            spine=args.spine,
+        )
+        spec = summarize_lcps(lcps)
+        source = "per_req_spec_trace.jsonl accepted draft count for independent-row spine"
+        if spec["n_events"] == 0:
+            raise SystemExit(
+                "independent mode produced zero spine trace events; require "
+                "LUMO_INDEPENDENT_ROWS launch and per-request spec trace rows"
             )
 
     if not all(r.get("ok") for r in results):
@@ -304,6 +351,7 @@ def run_measure(args: argparse.Namespace) -> dict[str, Any]:
         "temperature": args.temperature,
         "top_p": args.top_p,
         "concurrency": args.concurrency,
+        "spine": args.spine if args.mode == "independent" else None,
         "start_ts": start_ts,
         "end_ts": end_ts,
         "guard": guard,
@@ -320,7 +368,7 @@ def run_measure(args: argparse.Namespace) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=["e5", "tree"], required=True)
+    parser.add_argument("--mode", choices=["e5", "tree", "independent"], required=True)
     parser.add_argument("--prompts", default=str(DEFAULT_PROMPTS))
     parser.add_argument("--limit", type=int, default=None, help="maximum prompts to measure from --prompts")
     parser.add_argument("--max-tokens", type=int, default=400)
@@ -329,6 +377,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", default="qwen3.6-27b")
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--tree-lcp-log", default=str(DEFAULT_TREE_LCP))
+    parser.add_argument("--spec-trace-log", default=str(DEFAULT_SPEC_TRACE))
+    parser.add_argument("--depth", type=int, default=5,
+                        help="independent mode only: MTP depth for per-position summary")
+    parser.add_argument("--spine", type=int, default=0,
+                        help="independent mode only: spine index to measure; 0 is native E5-equivalent")
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=1.0)
     parser.add_argument("--no-live-guards", action="store_true", help=argparse.SUPPRESS)
