@@ -51,3 +51,38 @@ Current FR9 checkpoint:
 Retired routes remain out of the public surface: `LUMO_FB_*` inject/collapse,
 tree-delta, internal rows, kernel rows, and force-capture flags are not part of
 the maintained launcher interface.
+
+## Closeout
+
+FR9's ship-worthy result is independent rows plus winner commit and recurrent
+state sync. The temp-0.6 agentic-B4 winner run met the operator stability bar:
+`fr9_agentic_b4_winner_temp06_sync_20260601T1800Z` ran to the agent-wall
+timeout without engine death, CUBLAS/CUDA/illegal-memory, or shutdown
+signatures. The rejection-sampling superset invariant held under production
+load with co-resident rows: `viol=0`, `missing_sum=0` over 19,307 winner
+events.
+
+Keep the three FR9 results separate:
+
+- Greedy superset proof: the deterministic 16-prompt gate proves the invariant.
+  Winner commit produced `avg=3.441666666666667` versus E5 `avg=3.002` from
+  the prior gate, with `superset_violations=0` and spine 0 remaining
+  E5-equivalent (`LCP 64/64`).
+- Greedy apples-to-apples direct probe: E5-equivalent direct probe measured
+  `44.454399711901914` tok/s and `avg=2.7720739219712525`; winner direct probe
+  measured `47.50160804227232` tok/s and `avg=3.441666666666667`. The clean
+  speed result is `1.0685468333869903x` (`+6.85%` tok/s), with higher
+  deterministic accept.
+- Temp-0.6 agentic-B4 stability: commit `079d51f4` validates that winner commit
+  and recurrent-state sync survive production rejection sampling. The bonus
+  numbers from this run, `decode_tps=10.65`, steptrace accept/event `0.402`,
+  and winner-trace acc/event `1.398`, are workload-confounded. All four SWE
+  agents gave up (`resolved_rate=0/4`), so the decode window is dominated by
+  agent flailing, retry behavior, low-predictability tokens, and B4 contention.
+  These numbers must not be compared to the E5 agentic baseline
+  `26.86` tok/s / `3.150` accept/event.
+
+The in-tree route is closed for FR9. Unified tree mode capped at free-running
+path0 `1.751` versus E5 `3.002`, consistent with shared-GDN token-tree scan
+contamination. STree-style `A_tree` kernel/shared-ancestor reuse remains the
+scale endgame, but it is a no-ship item for this cycle and was not built.
