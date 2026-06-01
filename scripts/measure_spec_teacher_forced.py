@@ -351,8 +351,12 @@ def compare_measurements(e5: dict[str, Any], tree: dict[str, Any]) -> dict[str, 
         verdict = "proposer-bug"
     else:
         verdict = "divergence-only"
-    e5_acceptance = e5.get("forced_acceptance") or forced_acceptance_summary(e5)
-    tree_acceptance = tree.get("forced_acceptance") or forced_acceptance_summary(tree)
+    e5_for_acceptance = dict(e5)
+    tree_for_acceptance = dict(tree)
+    e5_for_acceptance["rows"] = e5_rows[:limit]
+    tree_for_acceptance["rows"] = tree_rows[:limit]
+    e5_acceptance = forced_acceptance_summary(e5_for_acceptance)
+    tree_acceptance = forced_acceptance_summary(tree_for_acceptance)
     e5_avg = e5_acceptance.get("avg")
     tree_avg = tree_acceptance.get("avg")
     return {

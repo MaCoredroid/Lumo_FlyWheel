@@ -94,3 +94,38 @@ def test_compare_verdict_target_fundamental_when_argmax_differs() -> None:
     assert summary["verdict"] == "target-fundamental"
     assert summary["draft_mismatches"] == 1
     assert summary["target_mismatches"] == 1
+
+
+def test_compare_forced_acceptance_uses_paired_row_limit() -> None:
+    e5 = _measurement(
+        [
+            {
+                "forced_position": 16,
+                "draft_top1": [1, 2, 3, 4, 5],
+                "target_argmax_token_id": 1,
+                "teacher_forced_accept_lcp": 5,
+            },
+            {
+                "forced_position": 17,
+                "draft_top1": [1, 2, 3, 4, 5],
+                "target_argmax_token_id": 1,
+                "teacher_forced_accept_lcp": 0,
+            },
+        ]
+    )
+    tree = _measurement(
+        [
+            {
+                "forced_position": 16,
+                "draft_top1": [1, 2, 3, 4, 5],
+                "target_argmax_token_id": 1,
+                "teacher_forced_accept_lcp": 1,
+            }
+        ]
+    )
+
+    summary = measure.compare_measurements(e5, tree)
+
+    assert summary["n_rows"] == 1
+    assert summary["e5_forced_acceptance"]["avg"] == 5
+    assert summary["tree_forced_acceptance"]["avg"] == 1
