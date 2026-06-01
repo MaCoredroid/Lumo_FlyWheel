@@ -242,6 +242,10 @@ def run_measure(args: argparse.Namespace) -> dict[str, Any]:
     prompts = json.loads(Path(args.prompts).read_text(encoding="utf-8"))
     if not isinstance(prompts, list) or not prompts or not all(isinstance(p, str) for p in prompts):
         raise SystemExit(f"prompt file must be a non-empty JSON list of strings: {args.prompts}")
+    if args.limit is not None:
+        if args.limit <= 0:
+            raise SystemExit("--limit must be positive")
+        prompts = prompts[:args.limit]
 
     guard = detect_batch_invariant(args.endpoint)
     if not args.no_live_guards:
@@ -318,6 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=["e5", "tree"], required=True)
     parser.add_argument("--prompts", default=str(DEFAULT_PROMPTS))
+    parser.add_argument("--limit", type=int, default=None, help="maximum prompts to measure from --prompts")
     parser.add_argument("--max-tokens", type=int, default=400)
     parser.add_argument("--out", required=True)
     parser.add_argument("--endpoint", default="http://127.0.0.1:9950")
