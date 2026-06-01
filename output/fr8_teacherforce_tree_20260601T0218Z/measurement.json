@@ -1,0 +1,7320 @@
+{
+  "schema": "spec_teacher_forced.v1",
+  "mode": "tree",
+  "endpoint": "http://127.0.0.1:9950",
+  "model": "qwen3.6-27b",
+  "reference": "tests/fixtures/spec_teacher_force_reference.txt",
+  "reference_sha256": "e4c7d31980b133cc60fab937b3592dfbd0884ebb0a7e5c24f18fcc23119ae3d5",
+  "reference_token_count": 401,
+  "start_token": 16,
+  "limit": 384,
+  "depth": 5,
+  "trace_file": "/tmp/lumo-l0c-fp8-cutlass-run30-logs/rootdiag_tree_mtp.jsonl",
+  "start_ts": 1780280176.6032841,
+  "end_ts": 1780280285.6587474,
+  "guard": {
+    "endpoint": "http://127.0.0.1:9950",
+    "container_id": "e5f62dd594869225885eda465bb580e5d1afcc7480108a58108adb66fd3170e7",
+    "cmdline_has_flash_attn": true,
+    "env_has_vllm_batch_invariant": true,
+    "cmdline": "/usr/bin/python3 /usr/local/bin/vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 127.0.0.1 --port 9950 --quantization fp8 --dtype auto --kv-cache-dtype auto --max-model-len 131072 --gpu-memory-utilization 0.84 --max-num-batched-tokens 8192 --max-num-seqs 4 --enable-prefix-caching --enable-chunked-prefill --no-async-scheduling --attention-backend FLASH_ATTN --chat-template /opt/lumo/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config {\"method\": \"qwen3_5_mtp\", \"num_speculative_tokens\": 10, \"speculative_token_tree\": \"[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]\"} --compilation-config {\"cudagraph_capture_sizes\": [4, 8, 12, 16, 24, 32, 44, 48], \"cudagraph_mode\": \"PIECEWISE\", \"max_cudagraph_capture_size\": 48}"
+  },
+  "rows": [
+    {
+      "row_index": 0,
+      "forced_position": 16,
+      "next_reference_token_id": 369,
+      "draft_top1": [
+        8526,
+        310,
+        381,
+        264,
+        4145
+      ],
+      "target_argmax_token_id": 369,
+      "target_argmax_text": " is",
+      "target_argmax_logprob_token": " is",
+      "finish_reason": "length",
+      "trace_idx": 33,
+      "trace_ts": 1780280176.8235,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 1,
+      "forced_position": 17,
+      "next_reference_token_id": 1429,
+      "draft_top1": [
+        310,
+        381,
+        264,
+        4145,
+        11
+      ],
+      "target_argmax_token_id": 5995,
+      "target_argmax_text": " designed",
+      "target_argmax_logprob_token": " designed",
+      "finish_reason": "length",
+      "trace_idx": 34,
+      "trace_ts": 1780280177.0641,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 2,
+      "forced_position": 18,
+      "next_reference_token_id": 430,
+      "draft_top1": [
+        19264,
+        279,
+        3638,
+        725,
+        5548
+      ],
+      "target_argmax_token_id": 310,
+      "target_argmax_text": " to",
+      "target_argmax_logprob_token": " to",
+      "finish_reason": "length",
+      "trace_idx": 35,
+      "trace_ts": 1780280177.3017,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 3,
+      "forced_position": 19,
+      "next_reference_token_id": 264,
+      "draft_top1": [
+        28746,
+        314,
+        264,
+        2397,
+        1402
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 36,
+      "trace_ts": 1780280177.5386,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 4,
+      "forced_position": 20,
+      "next_reference_token_id": 8097,
+      "draft_top1": [
+        364,
+        264,
+        11,
+        694,
+        364
+      ],
+      "target_argmax_token_id": 5604,
+      "target_argmax_text": " reference",
+      "target_argmax_logprob_token": " reference",
+      "finish_reason": "length",
+      "trace_idx": 37,
+      "trace_ts": 1780280177.7813,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 5,
+      "forced_position": 21,
+      "next_reference_token_id": 3817,
+      "draft_top1": [
+        632,
+        49971,
+        8240,
+        314,
+        279
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 38,
+      "trace_ts": 1780280178.0206,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 6,
+      "forced_position": 22,
+      "next_reference_token_id": 4129,
+      "draft_top1": [
+        364,
+        279,
+        310,
+        1558,
+        1879
+      ],
+      "target_argmax_token_id": 7786,
+      "target_argmax_text": " budget",
+      "target_argmax_logprob_token": " budget",
+      "finish_reason": "length",
+      "trace_idx": 39,
+      "trace_ts": 1780280178.2595,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 7,
+      "forced_position": 23,
+      "next_reference_token_id": 364,
+      "draft_top1": [
+        1228,
+        279,
+        303,
+        321,
+        2468
+      ],
+      "target_argmax_token_id": 310,
+      "target_argmax_text": " to",
+      "target_argmax_logprob_token": " to",
+      "finish_reason": "length",
+      "trace_idx": 40,
+      "trace_ts": 1780280178.4972,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 8,
+      "forced_position": 24,
+      "next_reference_token_id": 10756,
+      "draft_top1": [
+        1558,
+        725,
+        15977,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 41,
+      "trace_ts": 1780280178.7347,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 9,
+      "forced_position": 25,
+      "next_reference_token_id": 14751,
+      "draft_top1": [
+        5933,
+        321,
+        15977,
+        13,
+        198
+      ],
+      "target_argmax_token_id": 14751,
+      "target_argmax_text": "-for",
+      "target_argmax_logprob_token": "-for",
+      "finish_reason": "length",
+      "trace_idx": 42,
+      "trace_ts": 1780280178.9752,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 10,
+      "forced_position": 26,
+      "next_reference_token_id": 1931,
+      "draft_top1": [
+        321,
+        5286,
+        4534,
+        4706,
+        13
+      ],
+      "target_argmax_token_id": 5933,
+      "target_argmax_text": "cing",
+      "target_argmax_logprob_token": "cing",
+      "finish_reason": "length",
+      "trace_idx": 43,
+      "trace_ts": 1780280179.2154,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 11,
+      "forced_position": 27,
+      "next_reference_token_id": 63520,
+      "draft_top1": [
+        13,
+        198,
+        760,
+        198,
+        4277
+      ],
+      "target_argmax_token_id": 45543,
+      "target_argmax_text": " decoding",
+      "target_argmax_logprob_token": " decoding",
+      "finish_reason": "length",
+      "trace_idx": 44,
+      "trace_ts": 1780280179.4582,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 12,
+      "forced_position": 28,
+      "next_reference_token_id": 45543,
+      "draft_top1": [
+        198,
+        258,
+        2133,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 45543,
+      "target_argmax_text": " decoding",
+      "target_argmax_logprob_token": " decoding",
+      "finish_reason": "length",
+      "trace_idx": 45,
+      "trace_ts": 1780280179.6996,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 13,
+      "forced_position": 29,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        1020,
+        264,
+        10756,
+        14751,
+        1931
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 46,
+      "trace_ts": 1780280179.9403,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 14,
+      "forced_position": 30,
+      "next_reference_token_id": 8317,
+      "draft_top1": [
+        264,
+        10756,
+        14751,
+        1931,
+        14855
+      ],
+      "target_argmax_token_id": 258,
+      "target_argmax_text": "in",
+      "target_argmax_logprob_token": "in",
+      "finish_reason": "length",
+      "trace_idx": 47,
+      "trace_ts": 1780280180.1774,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 15,
+      "forced_position": 31,
+      "next_reference_token_id": 15093,
+      "draft_top1": [
+        13,
+        271,
+        4277,
+        271,
+        2
+      ],
+      "target_argmax_token_id": 15093,
+      "target_argmax_text": "agnostics",
+      "target_argmax_logprob_token": "agnostics",
+      "finish_reason": "length",
+      "trace_idx": 48,
+      "trace_ts": 1780280180.4159,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 16,
+      "forced_position": 32,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        271,
+        760,
+        369,
+        264,
+        25
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 49,
+      "trace_ts": 1780280180.6548,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 17,
+      "forced_position": 33,
+      "next_reference_token_id": 748,
+      "draft_top1": [
+        279,
+        3817,
+        4129,
+        369,
+        21620
+      ],
+      "target_argmax_token_id": 1332,
+      "target_argmax_text": " where",
+      "target_argmax_logprob_token": " where",
+      "finish_reason": "length",
+      "trace_idx": 50,
+      "trace_ts": 1780280180.8936,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 18,
+      "forced_position": 34,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        1902,
+        524,
+        381,
+        24276,
+        430
+      ],
+      "target_argmax_token_id": 424,
+      "target_argmax_text": " it",
+      "target_argmax_logprob_token": " it",
+      "finish_reason": "length",
+      "trace_idx": 51,
+      "trace_ts": 1780280181.1349,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 19,
+      "forced_position": 35,
+      "next_reference_token_id": 2144,
+      "draft_top1": [
+        1902,
+        524,
+        381,
+        2858,
+        310
+      ],
+      "target_argmax_token_id": 1558,
+      "target_argmax_text": " model",
+      "target_argmax_logprob_token": " model",
+      "finish_reason": "length",
+      "trace_idx": 52,
+      "trace_ts": 1780280181.3741,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 20,
+      "forced_position": 36,
+      "next_reference_token_id": 1220,
+      "draft_top1": [
+        381,
+        14733,
+        12317,
+        321,
+        524
+      ],
+      "target_argmax_token_id": 1902,
+      "target_argmax_text": " must",
+      "target_argmax_logprob_token": " must",
+      "finish_reason": "length",
+      "trace_idx": 53,
+      "trace_ts": 1780280181.6151,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 21,
+      "forced_position": 37,
+      "next_reference_token_id": 6922,
+      "draft_top1": [
+        14733,
+        321,
+        5067,
+        78157,
+        38400
+      ],
+      "target_argmax_token_id": 6922,
+      "target_argmax_text": " remain",
+      "target_argmax_logprob_token": " remain",
+      "finish_reason": "length",
+      "trace_idx": 54,
+      "trace_ts": 1780280181.8574,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 22,
+      "forced_position": 38,
+      "next_reference_token_id": 14733,
+      "draft_top1": [
+        430,
+        3766,
+        13,
+        271,
+        760
+      ],
+      "target_argmax_token_id": 6681,
+      "target_argmax_text": " exactly",
+      "target_argmax_logprob_token": " exactly",
+      "finish_reason": "length",
+      "trace_idx": 55,
+      "trace_ts": 1780280182.0961,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 23,
+      "forced_position": 39,
+      "next_reference_token_id": 7014,
+      "draft_top1": [
+        42642,
+        13,
+        271,
+        4277,
+        271
+      ],
+      "target_argmax_token_id": 321,
+      "target_argmax_text": " and",
+      "target_argmax_logprob_token": " and",
+      "finish_reason": "length",
+      "trace_idx": 56,
+      "trace_ts": 1780280182.3379,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 24,
+      "forced_position": 40,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        513,
+        20335,
+        7262,
+        13,
+        198
+      ],
+      "target_argmax_token_id": 488,
+      "target_argmax_text": " you",
+      "target_argmax_logprob_token": " you",
+      "finish_reason": "length",
+      "trace_idx": 57,
+      "trace_ts": 1780280182.5845,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 25,
+      "forced_position": 41,
+      "next_reference_token_id": 12149,
+      "draft_top1": [
+        20335,
+        7154,
+        198,
+        2,
+        220
+      ],
+      "target_argmax_token_id": 1156,
+      "target_argmax_text": " user",
+      "target_argmax_logprob_token": " user",
+      "finish_reason": "length",
+      "trace_idx": 58,
+      "trace_ts": 1780280182.8276,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 26,
+      "forced_position": 42,
+      "next_reference_token_id": 2243,
+      "draft_top1": [
+        35007,
+        198,
+        16842,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 369,
+      "target_argmax_text": " is",
+      "target_argmax_logprob_token": " is",
+      "finish_reason": "length",
+      "trace_idx": 59,
+      "trace_ts": 1780280183.0678,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 27,
+      "forced_position": 43,
+      "next_reference_token_id": 4203,
+      "draft_top1": [
+        198,
+        90406,
+        391,
+        5324,
+        13
+      ],
+      "target_argmax_token_id": 369,
+      "target_argmax_text": " is",
+      "target_argmax_logprob_token": " is",
+      "finish_reason": "length",
+      "trace_idx": 60,
+      "trace_ts": 1780280183.3078,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 28,
+      "forced_position": 44,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        271,
+        2,
+        561,
+        12149,
+        369
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 61,
+      "trace_ts": 1780280183.55,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 29,
+      "forced_position": 45,
+      "next_reference_token_id": 271,
+      "draft_top1": [
+        760,
+        27867,
+        369,
+        264,
+        8097
+      ],
+      "target_argmax_token_id": 271,
+      "target_argmax_text": "\n\n",
+      "target_argmax_logprob_token": "\n\n",
+      "finish_reason": "length",
+      "trace_idx": 62,
+      "trace_ts": 1780280183.7918,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 30,
+      "forced_position": 46,
+      "next_reference_token_id": 1597,
+      "draft_top1": [
+        271,
+        248069,
+        271,
+        5328,
+        4884
+      ],
+      "target_argmax_token_id": 248068,
+      "target_argmax_text": "<think>",
+      "target_argmax_logprob_token": "<think>",
+      "finish_reason": "length",
+      "trace_idx": 63,
+      "trace_ts": 1780280184.0346,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 31,
+      "forced_position": 47,
+      "next_reference_token_id": 19942,
+      "draft_top1": [
+        809,
+        314,
+        11,
+        279,
+        27867
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 64,
+      "trace_ts": 1780280184.2751,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 32,
+      "forced_position": 48,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        279,
+        27867,
+        369,
+        220,
+        16
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 65,
+      "trace_ts": 1780280184.515,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 33,
+      "forced_position": 49,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        27867,
+        15339,
+        18805,
+        7154,
+        198
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 66,
+      "trace_ts": 1780280184.7565,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 34,
+      "forced_position": 50,
+      "next_reference_token_id": 6259,
+      "draft_top1": [
+        25,
+        198,
+        12,
+        20195,
+        82
+      ],
+      "target_argmax_token_id": 27867,
+      "target_argmax_text": " scheduler",
+      "target_argmax_logprob_token": " scheduler",
+      "finish_reason": "length",
+      "trace_idx": 67,
+      "trace_ts": 1780280185.0022,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 35,
+      "forced_position": 51,
+      "next_reference_token_id": 20269,
+      "draft_top1": [
+        279,
+        1428,
+        2357,
+        725,
+        321
+      ],
+      "target_argmax_token_id": 15339,
+      "target_argmax_text": " reads",
+      "target_argmax_logprob_token": " reads",
+      "finish_reason": "length",
+      "trace_idx": 68,
+      "trace_ts": 1780280185.2461,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 36,
+      "forced_position": 52,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        6343,
+        999,
+        321,
+        8213,
+        1396
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 69,
+      "trace_ts": 1780280185.4921,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 37,
+      "forced_position": 53,
+      "next_reference_token_id": 1558,
+      "draft_top1": [
+        6343,
+        25,
+        271,
+        12,
+        1510
+      ],
+      "target_argmax_token_id": 2614,
+      "target_argmax_text": " following",
+      "target_argmax_logprob_token": " following",
+      "finish_reason": "length",
+      "trace_idx": 70,
+      "trace_ts": 1780280185.7408,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 38,
+      "forced_position": 54,
+      "next_reference_token_id": 18834,
+      "draft_top1": [
+        11,
+        55288,
+        279,
+        1558,
+        11
+      ],
+      "target_argmax_token_id": 13914,
+      "target_argmax_text": " weights",
+      "target_argmax_logprob_token": " weights",
+      "finish_reason": "length",
+      "trace_idx": 71,
+      "trace_ts": 1780280185.9888,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 39,
+      "forced_position": 55,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        11988,
+        364,
+        1754,
+        11,
+        321
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 72,
+      "trace_ts": 1780280186.2364,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 40,
+      "forced_position": 56,
+      "next_reference_token_id": 25419,
+      "draft_top1": [
+        279,
+        27867,
+        11,
+        321,
+        8211
+      ],
+      "target_argmax_token_id": 55917,
+      "target_argmax_text": " initializes",
+      "target_argmax_logprob_token": " initializes",
+      "finish_reason": "length",
+      "trace_idx": 73,
+      "trace_ts": 1780280186.4813,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 41,
+      "forced_position": 57,
+      "next_reference_token_id": 421,
+      "draft_top1": [
+        21966,
+        11,
+        321,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 74,
+      "trace_ts": 1780280186.7301,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 42,
+      "forced_position": 58,
+      "next_reference_token_id": 1396,
+      "draft_top1": [
+        198,
+        51642,
+        1558,
+        725,
+        11
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 75,
+      "trace_ts": 1780280186.977,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 43,
+      "forced_position": 59,
+      "next_reference_token_id": 13866,
+      "draft_top1": [
+        33752,
+        1558,
+        198,
+        284,
+        2420
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 76,
+      "trace_ts": 1780280187.2249,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 44,
+      "forced_position": 60,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        2448,
+        682,
+        264,
+        11,
+        321
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 77,
+      "trace_ts": 1780280187.473,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 45,
+      "forced_position": 61,
+      "next_reference_token_id": 31467,
+      "draft_top1": [
+        682,
+        264,
+        1510,
+        5480,
+        7561
+      ],
+      "target_argmax_token_id": 2448,
+      "target_argmax_text": "model",
+      "target_argmax_logprob_token": "model",
+      "finish_reason": "length",
+      "trace_idx": 78,
+      "trace_ts": 1780280187.7201,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 46,
+      "forced_position": 62,
+      "next_reference_token_id": 682,
+      "draft_top1": [
+        264,
+        9393,
+        14456,
+        11,
+        321
+      ],
+      "target_argmax_token_id": 682,
+      "target_argmax_text": " has",
+      "target_argmax_logprob_token": " has",
+      "finish_reason": "length",
+      "trace_idx": 79,
+      "trace_ts": 1780280187.9669,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 47,
+      "forced_position": 63,
+      "next_reference_token_id": 264,
+      "draft_top1": [
+        12219,
+        5832,
+        11,
+        321,
+        4523
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 80,
+      "trace_ts": 1780280188.215,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 48,
+      "forced_position": 64,
+      "next_reference_token_id": 12219,
+      "draft_top1": [
+        2730,
+        1716,
+        11,
+        198,
+        429
+      ],
+      "target_argmax_token_id": 11811,
+      "target_argmax_text": " corresponding",
+      "target_argmax_logprob_token": " corresponding",
+      "finish_reason": "length",
+      "trace_idx": 81,
+      "trace_ts": 1780280188.4604,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 49,
+      "forced_position": 65,
+      "next_reference_token_id": 2730,
+      "draft_top1": [
+        11,
+        321,
+        10964,
+        424,
+        11
+      ],
+      "target_argmax_token_id": 6795,
+      "target_argmax_text": " handler",
+      "target_argmax_logprob_token": " handler",
+      "finish_reason": "length",
+      "trace_idx": 82,
+      "trace_ts": 1780280188.7119,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 50,
+      "forced_position": 66,
+      "next_reference_token_id": 1716,
+      "draft_top1": [
+        1752,
+        11,
+        321,
+        55917,
+        279
+      ],
+      "target_argmax_token_id": 15464,
+      "target_argmax_text": "-check",
+      "target_argmax_logprob_token": "-check",
+      "finish_reason": "length",
+      "trace_idx": 83,
+      "trace_ts": 1780280188.9646,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 51,
+      "forced_position": 67,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        321,
+        11690,
+        279,
+        27867,
+        13
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 84,
+      "trace_ts": 1780280189.2162,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 52,
+      "forced_position": 68,
+      "next_reference_token_id": 321,
+      "draft_top1": [
+        1179,
+        10964,
+        1396,
+        9393,
+        198
+      ],
+      "target_argmax_token_id": 321,
+      "target_argmax_text": " and",
+      "target_argmax_logprob_token": " and",
+      "finish_reason": "length",
+      "trace_idx": 85,
+      "trace_ts": 1780280189.4665,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 53,
+      "forced_position": 69,
+      "next_reference_token_id": 13514,
+      "draft_top1": [
+        62305,
+        264,
+        2730,
+        15464,
+        82
+      ],
+      "target_argmax_token_id": 1179,
+      "target_argmax_text": " then",
+      "target_argmax_logprob_token": " then",
+      "finish_reason": "length",
+      "trace_idx": 86,
+      "trace_ts": 1780280189.7188,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 54,
+      "forced_position": 70,
+      "next_reference_token_id": 264,
+      "draft_top1": [
+        11782,
+        314,
+        279,
+        6343,
+        310
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 87,
+      "trace_ts": 1780280189.9677,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 55,
+      "forced_position": 71,
+      "next_reference_token_id": 2526,
+      "draft_top1": [
+        1433,
+        310,
+        279,
+        198,
+        71093
+      ],
+      "target_argmax_token_id": 11782,
+      "target_argmax_text": " summary",
+      "target_argmax_logprob_token": " summary",
+      "finish_reason": "length",
+      "trace_idx": 88,
+      "trace_ts": 1780280190.2212,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 56,
+      "forced_position": 72,
+      "next_reference_token_id": 59610,
+      "draft_top1": [
+        11782,
+        310,
+        279,
+        75869,
+        13
+      ],
+      "target_argmax_token_id": 4566,
+      "target_argmax_text": " JSON",
+      "target_argmax_logprob_token": " JSON",
+      "finish_reason": "length",
+      "trace_idx": 89,
+      "trace_ts": 1780280190.4728,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 57,
+      "forced_position": 73,
+      "next_reference_token_id": 3150,
+      "draft_top1": [
+        310,
+        279,
+        6259,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 21059,
+      "target_argmax_text": " probe",
+      "target_argmax_logprob_token": " probe",
+      "finish_reason": "length",
+      "trace_idx": 90,
+      "trace_ts": 1780280190.7262,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 58,
+      "forced_position": 74,
+      "next_reference_token_id": 310,
+      "draft_top1": [
+        12977,
+        13,
+        271,
+        760,
+        27867
+      ],
+      "target_argmax_token_id": 310,
+      "target_argmax_text": " to",
+      "target_argmax_logprob_token": " to",
+      "finish_reason": "length",
+      "trace_idx": 91,
+      "trace_ts": 1780280190.9778,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 59,
+      "forced_position": 75,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        198,
+        2359,
+        1433,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 92,
+      "trace_ts": 1780280191.2272,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 60,
+      "forced_position": 76,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        2359,
+        1433,
+        999,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 93,
+      "trace_ts": 1780280191.4811,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 61,
+      "forced_position": 77,
+      "next_reference_token_id": 2374,
+      "draft_top1": [
+        50319,
+        13,
+        198,
+        760,
+        27867
+      ],
+      "target_argmax_token_id": 41836,
+      "target_argmax_text": "metrics",
+      "target_argmax_logprob_token": "metrics",
+      "finish_reason": "length",
+      "trace_idx": 94,
+      "trace_ts": 1780280191.7346,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 62,
+      "forced_position": 78,
+      "next_reference_token_id": 6025,
+      "draft_top1": [
+        13,
+        198,
+        760,
+        27867,
+        369
+      ],
+      "target_argmax_token_id": 3436,
+      "target_argmax_text": " store",
+      "target_argmax_logprob_token": " store",
+      "finish_reason": "length",
+      "trace_idx": 95,
+      "trace_ts": 1780280191.9908,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 63,
+      "forced_position": 79,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        561,
+        27867,
+        1179,
+        25,
+        198
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 96,
+      "trace_ts": 1780280192.2449,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 64,
+      "forced_position": 80,
+      "next_reference_token_id": 8618,
+      "draft_top1": [
+        279,
+        1558,
+        369,
+        524,
+        11
+      ],
+      "target_argmax_token_id": 1368,
+      "target_argmax_text": " If",
+      "target_argmax_logprob_token": " If",
+      "finish_reason": "length",
+      "trace_idx": 97,
+      "trace_ts": 1780280192.501,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 65,
+      "forced_position": 81,
+      "next_reference_token_id": 11525,
+      "draft_top1": [
+        1179,
+        15339,
+        264,
+        2730,
+        1716
+      ],
+      "target_argmax_token_id": 11525,
+      "target_argmax_text": " worker",
+      "target_argmax_logprob_token": " worker",
+      "finish_reason": "length",
+      "trace_idx": 98,
+      "trace_ts": 1780280192.753,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 66,
+      "forced_position": 82,
+      "next_reference_token_id": 1179,
+      "draft_top1": [
+        1179,
+        20539,
+        264,
+        2730,
+        1716
+      ],
+      "target_argmax_token_id": 1817,
+      "target_argmax_text": " process",
+      "target_argmax_logprob_token": " process",
+      "finish_reason": "length",
+      "trace_idx": 99,
+      "trace_ts": 1780280193.0081,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 67,
+      "forced_position": 83,
+      "next_reference_token_id": 25503,
+      "draft_top1": [
+        264,
+        50355,
+        6136,
+        11,
+        31950
+      ],
+      "target_argmax_token_id": 27891,
+      "target_argmax_text": " enters",
+      "target_argmax_logprob_token": " enters",
+      "finish_reason": "length",
+      "trace_idx": 100,
+      "trace_ts": 1780280193.2633,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 68,
+      "forced_position": 84,
+      "next_reference_token_id": 264,
+      "draft_top1": [
+        7154,
+        11,
+        321,
+        11690,
+        264
+      ],
+      "target_argmax_token_id": 18805,
+      "target_argmax_text": " incoming",
+      "target_argmax_logprob_token": " incoming",
+      "finish_reason": "length",
+      "trace_idx": 101,
+      "trace_ts": 1780280193.5245,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 69,
+      "forced_position": 85,
+      "next_reference_token_id": 50319,
+      "draft_top1": [
+        314,
+        18805,
+        7154,
+        11,
+        198
+      ],
+      "target_argmax_token_id": 6937,
+      "target_argmax_text": " batch",
+      "target_argmax_logprob_token": " batch",
+      "finish_reason": "length",
+      "trace_idx": 102,
+      "trace_ts": 1780280193.7777,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 70,
+      "forced_position": 86,
+      "next_reference_token_id": 314,
+      "draft_top1": [
+        279,
+        6343,
+        11,
+        321,
+        11690
+      ],
+      "target_argmax_token_id": 314,
+      "target_argmax_text": " of",
+      "target_argmax_logprob_token": " of",
+      "finish_reason": "length",
+      "trace_idx": 103,
+      "trace_ts": 1780280194.0346,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 71,
+      "forced_position": 87,
+      "next_reference_token_id": 7154,
+      "draft_top1": [
+        18805,
+        1622,
+        6951,
+        11,
+        198
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 104,
+      "trace_ts": 1780280194.29,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 72,
+      "forced_position": 88,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        10964,
+        1070,
+        310,
+        279,
+        1727
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 105,
+      "trace_ts": 1780280194.5447,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 73,
+      "forced_position": 89,
+      "next_reference_token_id": 20218,
+      "draft_top1": [
+        1070,
+        11,
+        198,
+        429,
+        4523
+      ],
+      "target_argmax_token_id": 11036,
+      "target_argmax_text": " processes",
+      "target_argmax_logprob_token": " processes",
+      "finish_reason": "length",
+      "trace_idx": 106,
+      "trace_ts": 1780280194.8036,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 74,
+      "forced_position": 90,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        539,
+        198,
+        1967,
+        2984,
+        11
+      ],
+      "target_argmax_token_id": 1070,
+      "target_argmax_text": " them",
+      "target_argmax_logprob_token": " them",
+      "finish_reason": "length",
+      "trace_idx": 107,
+      "trace_ts": 1780280195.0629,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 75,
+      "forced_position": 91,
+      "next_reference_token_id": 50319,
+      "draft_top1": [
+        198,
+        1634,
+        1331,
+        11,
+        321
+      ],
+      "target_argmax_token_id": 50319,
+      "target_argmax_text": " shard",
+      "target_argmax_logprob_token": " shard",
+      "finish_reason": "length",
+      "trace_idx": 108,
+      "trace_ts": 1780280195.3191,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 76,
+      "forced_position": 92,
+      "next_reference_token_id": 539,
+      "draft_top1": [
+        198,
+        22845,
+        11,
+        321,
+        16298
+      ],
+      "target_argmax_token_id": 539,
+      "target_argmax_text": " by",
+      "target_argmax_logprob_token": " by",
+      "finish_reason": "length",
+      "trace_idx": 109,
+      "trace_ts": 1780280195.5749,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 77,
+      "forced_position": 93,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        22845,
+        11,
+        321,
+        45369,
+        364
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 110,
+      "trace_ts": 1780280195.8319,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 78,
+      "forced_position": 94,
+      "next_reference_token_id": 74443,
+      "draft_top1": [
+        11,
+        321,
+        7189,
+        279,
+        1528
+      ],
+      "target_argmax_token_id": 22845,
+      "target_argmax_text": "priority",
+      "target_argmax_logprob_token": "priority",
+      "finish_reason": "length",
+      "trace_idx": 111,
+      "trace_ts": 1780280196.0856,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 79,
+      "forced_position": 95,
+      "next_reference_token_id": 854,
+      "draft_top1": [
+        11,
+        321,
+        48233,
+        1754,
+        440
+      ],
+      "target_argmax_token_id": 854,
+      "target_argmax_text": " time",
+      "target_argmax_logprob_token": " time",
+      "finish_reason": "length",
+      "trace_idx": 112,
+      "trace_ts": 1780280196.3418,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 80,
+      "forced_position": 96,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        321,
+        48233,
+        1754,
+        440,
+        264
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 113,
+      "trace_ts": 1780280196.6029,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 81,
+      "forced_position": 97,
+      "next_reference_token_id": 321,
+      "draft_top1": [
+        20218,
+        539,
+        198,
+        74443,
+        854
+      ],
+      "target_argmax_token_id": 321,
+      "target_argmax_text": " and",
+      "target_argmax_logprob_token": " and",
+      "finish_reason": "length",
+      "trace_idx": 114,
+      "trace_ts": 1780280196.8607,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 82,
+      "forced_position": 98,
+      "next_reference_token_id": 13205,
+      "draft_top1": [
+        264,
+        6937,
+        440,
+        310,
+        1754
+      ],
+      "target_argmax_token_id": 16298,
+      "target_argmax_text": " applies",
+      "target_argmax_logprob_token": " applies",
+      "finish_reason": "length",
+      "trace_idx": 115,
+      "trace_ts": 1780280197.1182,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 83,
+      "forced_position": 99,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        4162,
+        6951,
+        314,
+        14836,
+        7154
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 116,
+      "trace_ts": 1780280197.377,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 84,
+      "forced_position": 100,
+      "next_reference_token_id": 3889,
+      "draft_top1": [
+        10300,
+        539,
+        1141,
+        515,
+        2980
+      ],
+      "target_argmax_token_id": 50319,
+      "target_argmax_text": " shard",
+      "target_argmax_logprob_token": " shard",
+      "finish_reason": "length",
+      "trace_idx": 117,
+      "trace_ts": 1780280197.6374,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 85,
+      "forced_position": 101,
+      "next_reference_token_id": 1622,
+      "draft_top1": [
+        33295,
+        364,
+        49625,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 1906,
+      "target_argmax_text": " order",
+      "target_argmax_logprob_token": " order",
+      "finish_reason": "length",
+      "trace_idx": 118,
+      "trace_ts": 1780280197.8953,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 86,
+      "forced_position": 102,
+      "next_reference_token_id": 850,
+      "draft_top1": [
+        33295,
+        364,
+        1754,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 27437,
+      "target_argmax_text": " IDs",
+      "target_argmax_logprob_token": " IDs",
+      "finish_reason": "length",
+      "trace_idx": 119,
+      "trace_ts": 1780280198.1576,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 87,
+      "forced_position": 103,
+      "next_reference_token_id": 12037,
+      "draft_top1": [
+        421,
+        279,
+        1727,
+        369,
+        369
+      ],
+      "target_argmax_token_id": 748,
+      "target_argmax_text": " so",
+      "target_argmax_logprob_token": " so",
+      "finish_reason": "length",
+      "trace_idx": 120,
+      "trace_ts": 1780280198.4163,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 88,
+      "forced_position": 104,
+      "next_reference_token_id": 310,
+      "draft_top1": [
+        1396,
+        7484,
+        13,
+        271,
+        760
+      ],
+      "target_argmax_token_id": 310,
+      "target_argmax_text": " to",
+      "target_argmax_logprob_token": " to",
+      "finish_reason": "length",
+      "trace_idx": 121,
+      "trace_ts": 1780280198.6755,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 89,
+      "forced_position": 105,
+      "next_reference_token_id": 1396,
+      "draft_top1": [
+        1965,
+        13,
+        271,
+        760,
+        27867
+      ],
+      "target_argmax_token_id": 1396,
+      "target_argmax_text": " every",
+      "target_argmax_logprob_token": " every",
+      "finish_reason": "length",
+      "trace_idx": 122,
+      "trace_ts": 1780280198.933,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 90,
+      "forced_position": 106,
+      "next_reference_token_id": 2713,
+      "draft_top1": [
+        1455,
+        13,
+        271,
+        760,
+        27867
+      ],
+      "target_argmax_token_id": 49625,
+      "target_argmax_text": " downstream",
+      "target_argmax_logprob_token": " downstream",
+      "finish_reason": "length",
+      "trace_idx": 123,
+      "trace_ts": 1780280199.191,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 91,
+      "forced_position": 107,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        271,
+        760,
+        27867,
+        1179,
+        198
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 124,
+      "trace_ts": 1780280199.4502,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 92,
+      "forced_position": 108,
+      "next_reference_token_id": 3095,
+      "draft_top1": [
+        760,
+        27867,
+        369,
+        198,
+        10378
+      ],
+      "target_argmax_token_id": 271,
+      "target_argmax_text": "\n\n",
+      "target_argmax_logprob_token": "\n\n",
+      "finish_reason": "length",
+      "trace_idx": 125,
+      "trace_ts": 1780280199.7132,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 93,
+      "forced_position": 109,
+      "next_reference_token_id": 264,
+      "draft_top1": [
+        198,
+        1967,
+        28712,
+        11,
+        279
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 126,
+      "trace_ts": 1780280199.9732,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 94,
+      "forced_position": 110,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        13646,
+        28712,
+        11,
+        279,
+        50319
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 127,
+      "trace_ts": 1780280200.2307,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 95,
+      "forced_position": 111,
+      "next_reference_token_id": 1967,
+      "draft_top1": [
+        28712,
+        11,
+        279,
+        27867,
+        26731
+      ],
+      "target_argmax_token_id": 1967,
+      "target_argmax_text": "request",
+      "target_argmax_logprob_token": "request",
+      "finish_reason": "length",
+      "trace_idx": 128,
+      "trace_ts": 1780280200.4883,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 96,
+      "forced_position": 112,
+      "next_reference_token_id": 27891,
+      "draft_top1": [
+        14789,
+        11,
+        279,
+        50319,
+        369
+      ],
+      "target_argmax_token_id": 369,
+      "target_argmax_text": " is",
+      "target_argmax_logprob_token": " is",
+      "finish_reason": "length",
+      "trace_idx": 129,
+      "trace_ts": 1780280200.7481,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 97,
+      "forced_position": 113,
+      "next_reference_token_id": 829,
+      "draft_top1": [
+        6951,
+        11,
+        279,
+        27867,
+        198
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 130,
+      "trace_ts": 1780280201.0072,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 98,
+      "forced_position": 114,
+      "next_reference_token_id": 7320,
+      "draft_top1": [
+        11,
+        279,
+        27867,
+        198,
+        6646
+      ],
+      "target_argmax_token_id": 7320,
+      "target_argmax_text": "fill",
+      "target_argmax_logprob_token": "fill",
+      "finish_reason": "length",
+      "trace_idx": 131,
+      "trace_ts": 1780280201.2707,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 99,
+      "forced_position": 115,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        279,
+        27867,
+        48233,
+        424,
+        13
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 132,
+      "trace_ts": 1780280201.5313,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 100,
+      "forced_position": 116,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        6259,
+        48233,
+        279,
+        1558,
+        725
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 133,
+      "trace_ts": 1780280201.7914,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 101,
+      "forced_position": 117,
+      "next_reference_token_id": 11525,
+      "draft_top1": [
+        48233,
+        264,
+        3817,
+        310,
+        279
+      ],
+      "target_argmax_token_id": 6259,
+      "target_argmax_text": " controller",
+      "target_argmax_logprob_token": " controller",
+      "finish_reason": "length",
+      "trace_idx": 134,
+      "trace_ts": 1780280202.0489,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 102,
+      "forced_position": 118,
+      "next_reference_token_id": 7189,
+      "draft_top1": [
+        279,
+        3817,
+        1857,
+        11,
+        279
+      ],
+      "target_argmax_token_id": 7189,
+      "target_argmax_text": " records",
+      "target_argmax_logprob_token": " records",
+      "finish_reason": "length",
+      "trace_idx": 135,
+      "trace_ts": 1780280202.3074,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 103,
+      "forced_position": 119,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        1151,
+        854,
+        11,
+        55288,
+        279
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 136,
+      "trace_ts": 1780280202.5692,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 104,
+      "forced_position": 120,
+      "next_reference_token_id": 9640,
+      "draft_top1": [
+        1698,
+        321,
+        279,
+        1118,
+        11
+      ],
+      "target_argmax_token_id": 3817,
+      "target_argmax_text": " token",
+      "target_argmax_logprob_token": " token",
+      "finish_reason": "length",
+      "trace_idx": 137,
+      "trace_ts": 1780280202.8339,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 105,
+      "forced_position": 121,
+      "next_reference_token_id": 2984,
+      "draft_top1": [
+        11,
+        279,
+        1324,
+        11,
+        321
+      ],
+      "target_argmax_token_id": 2984,
+      "target_argmax_text": " length",
+      "target_argmax_logprob_token": " length",
+      "finish_reason": "length",
+      "trace_idx": 138,
+      "trace_ts": 1780280203.0909,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 106,
+      "forced_position": 122,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        279,
+        1324,
+        314,
+        10885,
+        11
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 139,
+      "trace_ts": 1780280203.3527,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 107,
+      "forced_position": 123,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        1324,
+        314,
+        198,
+        29567,
+        11
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 140,
+      "trace_ts": 1780280203.6135,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 108,
+      "forced_position": 124,
+      "next_reference_token_id": 6297,
+      "draft_top1": [
+        314,
+        10885,
+        11,
+        198,
+        429
+      ],
+      "target_argmax_token_id": 1324,
+      "target_argmax_text": " number",
+      "target_argmax_logprob_token": " number",
+      "finish_reason": "length",
+      "trace_idx": 141,
+      "trace_ts": 1780280203.8744,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 109,
+      "forced_position": 125,
+      "next_reference_token_id": 9167,
+      "draft_top1": [
+        11013,
+        11,
+        198,
+        429,
+        3817
+      ],
+      "target_argmax_token_id": 4062,
+      "target_argmax_text": " hit",
+      "target_argmax_logprob_token": " hit",
+      "finish_reason": "length",
+      "trace_idx": 142,
+      "trace_ts": 1780280204.1363,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 110,
+      "forced_position": 126,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        37729,
+        11,
+        321,
+        279,
+        1428
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 143,
+      "trace_ts": 1780280204.4025,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 111,
+      "forced_position": 127,
+      "next_reference_token_id": 321,
+      "draft_top1": [
+        198,
+        1719,
+        1727,
+        3817,
+        1857
+      ],
+      "target_argmax_token_id": 321,
+      "target_argmax_text": " and",
+      "target_argmax_logprob_token": " and",
+      "finish_reason": "length",
+      "trace_idx": 144,
+      "trace_ts": 1780280204.6627,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 112,
+      "forced_position": 128,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        1719,
+        1151,
+        8404,
+        279,
+        1118
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 145,
+      "trace_ts": 1780280204.9212,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 113,
+      "forced_position": 129,
+      "next_reference_token_id": 1719,
+      "draft_top1": [
+        1118,
+        3817,
+        11,
+        321,
+        279
+      ],
+      "target_argmax_token_id": 1719,
+      "target_argmax_text": "the",
+      "target_argmax_logprob_token": "the",
+      "finish_reason": "length",
+      "trace_idx": 146,
+      "trace_ts": 1780280205.1863,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 114,
+      "forced_position": 130,
+      "next_reference_token_id": 1118,
+      "draft_top1": [
+        3817,
+        1429,
+        13,
+        271,
+        760
+      ],
+      "target_argmax_token_id": 1118,
+      "target_argmax_text": " first",
+      "target_argmax_logprob_token": " first",
+      "finish_reason": "length",
+      "trace_idx": 147,
+      "trace_ts": 1780280205.4543,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 115,
+      "forced_position": 131,
+      "next_reference_token_id": 24102,
+      "draft_top1": [
+        7658,
+        13,
+        271,
+        760,
+        27867
+      ],
+      "target_argmax_token_id": 3817,
+      "target_argmax_text": " token",
+      "target_argmax_logprob_token": " token",
+      "finish_reason": "length",
+      "trace_idx": 148,
+      "trace_ts": 1780280205.7198,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 116,
+      "forced_position": 132,
+      "next_reference_token_id": 6343,
+      "draft_top1": [
+        13,
+        561,
+        11525,
+        7189,
+        279
+      ],
+      "target_argmax_token_id": 2923,
+      "target_argmax_text": " step",
+      "target_argmax_logprob_token": " step",
+      "finish_reason": "length",
+      "trace_idx": 149,
+      "trace_ts": 1780280205.9913,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 117,
+      "forced_position": 133,
+      "next_reference_token_id": 12784,
+      "draft_top1": [
+        561,
+        27867,
+        7189,
+        279,
+        198
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 150,
+      "trace_ts": 1780280206.2583,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 118,
+      "forced_position": 134,
+      "next_reference_token_id": 539,
+      "draft_top1": [
+        271,
+        4350,
+        264,
+        198,
+        1967
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 151,
+      "trace_ts": 1780280206.5257,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 119,
+      "forced_position": 135,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        6326,
+        6000,
+        13,
+        271,
+        4350
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 152,
+      "trace_ts": 1780280206.7944,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 120,
+      "forced_position": 136,
+      "next_reference_token_id": 5097,
+      "draft_top1": [
+        13,
+        271,
+        760,
+        27867,
+        369
+      ],
+      "target_argmax_token_id": 4560,
+      "target_argmax_text": " engine",
+      "target_argmax_logprob_token": " engine",
+      "finish_reason": "length",
+      "trace_idx": 153,
+      "trace_ts": 1780280207.0614,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 121,
+      "forced_position": 137,
+      "next_reference_token_id": 15015,
+      "draft_top1": [
+        40420,
+        13,
+        271,
+        760,
+        27867
+      ],
+      "target_argmax_token_id": 15015,
+      "target_argmax_text": "AI",
+      "target_argmax_logprob_token": "AI",
+      "finish_reason": "length",
+      "trace_idx": 154,
+      "trace_ts": 1780280207.3324,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 122,
+      "forced_position": 138,
+      "next_reference_token_id": 77450,
+      "draft_top1": [
+        14456,
+        13,
+        271,
+        760,
+        27867
+      ],
+      "target_argmax_token_id": 77450,
+      "target_argmax_text": "-compatible",
+      "target_argmax_logprob_token": "-compatible",
+      "finish_reason": "length",
+      "trace_idx": 155,
+      "trace_ts": 1780280207.6014,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 123,
+      "forced_position": 139,
+      "next_reference_token_id": 3421,
+      "draft_top1": [
+        13,
+        271,
+        760,
+        27867,
+        198
+      ],
+      "target_argmax_token_id": 5165,
+      "target_argmax_text": " API",
+      "target_argmax_logprob_token": " API",
+      "finish_reason": "length",
+      "trace_idx": 156,
+      "trace_ts": 1780280207.8692,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 124,
+      "forced_position": 140,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        271,
+        760,
+        27867,
+        1179,
+        198
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 157,
+      "trace_ts": 1780280208.1356,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 125,
+      "forced_position": 141,
+      "next_reference_token_id": 271,
+      "draft_top1": [
+        15542,
+        24102,
+        11,
+        279,
+        198
+      ],
+      "target_argmax_token_id": 271,
+      "target_argmax_text": "\n\n",
+      "target_argmax_logprob_token": "\n\n",
+      "finish_reason": "length",
+      "trace_idx": 158,
+      "trace_ts": 1780280208.403,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 126,
+      "forced_position": 142,
+      "next_reference_token_id": 15542,
+      "draft_top1": [
+        45543,
+        11,
+        279,
+        11525,
+        7189
+      ],
+      "target_argmax_token_id": 15542,
+      "target_argmax_text": "During",
+      "target_argmax_logprob_token": "During",
+      "finish_reason": "length",
+      "trace_idx": 159,
+      "trace_ts": 1780280208.6705,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 127,
+      "forced_position": 143,
+      "next_reference_token_id": 16401,
+      "draft_top1": [
+        11,
+        279,
+        11525,
+        7189,
+        279
+      ],
+      "target_argmax_token_id": 16401,
+      "target_argmax_text": " decode",
+      "target_argmax_logprob_token": " decode",
+      "finish_reason": "length",
+      "trace_idx": 160,
+      "trace_ts": 1780280208.9413,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 128,
+      "forced_position": 144,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        279,
+        11525,
+        7189,
+        279,
+        1118
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 161,
+      "trace_ts": 1780280209.2095,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 129,
+      "forced_position": 145,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        27867,
+        30941,
+        264,
+        198,
+        2721
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 162,
+      "trace_ts": 1780280209.4789,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 130,
+      "forced_position": 146,
+      "next_reference_token_id": 11525,
+      "draft_top1": [
+        30941,
+        264,
+        198,
+        82,
+        279
+      ],
+      "target_argmax_token_id": 11525,
+      "target_argmax_text": " worker",
+      "target_argmax_logprob_token": " worker",
+      "finish_reason": "length",
+      "trace_idx": 163,
+      "trace_ts": 1780280209.7489,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 131,
+      "forced_position": 147,
+      "next_reference_token_id": 28926,
+      "draft_top1": [
+        279,
+        3817,
+        7786,
+        11,
+        55288
+      ],
+      "target_argmax_token_id": 13518,
+      "target_argmax_text": " tracks",
+      "target_argmax_logprob_token": " tracks",
+      "finish_reason": "length",
+      "trace_idx": 164,
+      "trace_ts": 1780280210.0126,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 132,
+      "forced_position": 148,
+      "next_reference_token_id": 6681,
+      "draft_top1": [
+        6937,
+        290,
+        1159,
+        799,
+        506
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 165,
+      "trace_ts": 1780280210.2826,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 133,
+      "forced_position": 149,
+      "next_reference_token_id": 799,
+      "draft_top1": [
+        3817,
+        791,
+        3817,
+        303,
+        279
+      ],
+      "target_argmax_token_id": 799,
+      "target_argmax_text": " one",
+      "target_argmax_logprob_token": " one",
+      "finish_reason": "length",
+      "trace_idx": 166,
+      "trace_ts": 1780280210.557,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 134,
+      "forced_position": 150,
+      "next_reference_token_id": 2100,
+      "draft_top1": [
+        506,
+        264,
+        854,
+        11,
+        198
+      ],
+      "target_argmax_token_id": 3817,
+      "target_argmax_text": " token",
+      "target_argmax_logprob_token": " token",
+      "finish_reason": "length",
+      "trace_idx": 167,
+      "trace_ts": 1780280210.8287,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 135,
+      "forced_position": 151,
+      "next_reference_token_id": 2923,
+      "draft_top1": [
+        791,
+        2923,
+        11,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 3817,
+      "target_argmax_text": " token",
+      "target_argmax_logprob_token": " token",
+      "finish_reason": "length",
+      "trace_idx": 168,
+      "trace_ts": 1780280211.0995,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 136,
+      "forced_position": 152,
+      "next_reference_token_id": 506,
+      "draft_top1": [
+        3817,
+        11,
+        1179,
+        279,
+        11525
+      ],
+      "target_argmax_token_id": 791,
+      "target_argmax_text": " per",
+      "target_argmax_logprob_token": " per",
+      "finish_reason": "length",
+      "trace_idx": 169,
+      "trace_ts": 1780280211.3708,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 137,
+      "forced_position": 153,
+      "next_reference_token_id": 264,
+      "draft_top1": [
+        854,
+        11,
+        1179,
+        279,
+        11525
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 170,
+      "trace_ts": 1780280211.6394,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 138,
+      "forced_position": 154,
+      "next_reference_token_id": 854,
+      "draft_top1": [
+        854,
+        321,
+        198,
+        1719,
+        11525
+      ],
+      "target_argmax_token_id": 9665,
+      "target_argmax_text": " draft",
+      "target_argmax_logprob_token": " draft",
+      "finish_reason": "length",
+      "trace_idx": 171,
+      "trace_ts": 1780280211.9084,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 139,
+      "forced_position": 155,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        86379,
+        799,
+        33686,
+        198,
+        266
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 172,
+      "trace_ts": 1780280212.1787,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 140,
+      "forced_position": 156,
+      "next_reference_token_id": 561,
+      "draft_top1": [
+        279,
+        198,
+        9253,
+        21473,
+        16401
+      ],
+      "target_argmax_token_id": 1368,
+      "target_argmax_text": " If",
+      "target_argmax_logprob_token": " If",
+      "finish_reason": "length",
+      "trace_idx": 173,
+      "trace_ts": 1780280212.4463,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 141,
+      "forced_position": 157,
+      "next_reference_token_id": 2100,
+      "draft_top1": [
+        9253,
+        21473,
+        23776,
+        198,
+        82
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 174,
+      "trace_ts": 1780280212.7133,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 142,
+      "forced_position": 158,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        9239,
+        369,
+        2590,
+        9770,
+        2272
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 175,
+      "trace_ts": 1780280212.9848,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 143,
+      "forced_position": 159,
+      "next_reference_token_id": 2448,
+      "draft_top1": [
+        369,
+        279,
+        1132,
+        2923,
+        11
+      ],
+      "target_argmax_token_id": 9239,
+      "target_argmax_text": "step",
+      "target_argmax_logprob_token": "step",
+      "finish_reason": "length",
+      "trace_idx": 176,
+      "trace_ts": 1780280213.2529,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 144,
+      "forced_position": 160,
+      "next_reference_token_id": 18082,
+      "draft_top1": [
+        264,
+        3074,
+        33686,
+        321,
+        279
+      ],
+      "target_argmax_token_id": 70307,
+      "target_argmax_text": " emits",
+      "target_argmax_logprob_token": " emits",
+      "finish_reason": "length",
+      "trace_idx": 177,
+      "trace_ts": 1780280213.5257,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 145,
+      "forced_position": 161,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        3074,
+        3817,
+        11,
+        321,
+        279
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 178,
+      "trace_ts": 1780280213.7943,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 146,
+      "forced_position": 162,
+      "next_reference_token_id": 1727,
+      "draft_top1": [
+        3817,
+        11,
+        321,
+        279,
+        11525
+      ],
+      "target_argmax_token_id": 1727,
+      "target_argmax_text": " next",
+      "target_argmax_logprob_token": " next",
+      "finish_reason": "length",
+      "trace_idx": 179,
+      "trace_ts": 1780280214.0667,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 147,
+      "forced_position": 163,
+      "next_reference_token_id": 33686,
+      "draft_top1": [
+        11,
+        321,
+        279,
+        11525,
+        198
+      ],
+      "target_argmax_token_id": 3817,
+      "target_argmax_text": " token",
+      "target_argmax_logprob_token": " token",
+      "finish_reason": "length",
+      "trace_idx": 180,
+      "trace_ts": 1780280214.3392,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 148,
+      "forced_position": 164,
+      "next_reference_token_id": 1344,
+      "draft_top1": [
+        11,
+        321,
+        279,
+        11525,
+        198
+      ],
+      "target_argmax_token_id": 7731,
+      "target_argmax_text": " distribution",
+      "target_argmax_logprob_token": " distribution",
+      "finish_reason": "length",
+      "trace_idx": 181,
+      "trace_ts": 1780280214.6065,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 149,
+      "forced_position": 165,
+      "next_reference_token_id": 2721,
+      "draft_top1": [
+        11,
+        321,
+        279,
+        11525,
+        198
+      ],
+      "target_argmax_token_id": 2721,
+      "target_argmax_text": "max",
+      "target_argmax_logprob_token": "max",
+      "finish_reason": "length",
+      "trace_idx": 182,
+      "trace_ts": 1780280214.8913,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 150,
+      "forced_position": 166,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        321,
+        279,
+        11525,
+        5533,
+        279
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 183,
+      "trace_ts": 1780280215.1734,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 151,
+      "forced_position": 167,
+      "next_reference_token_id": 1345,
+      "draft_top1": [
+        279,
+        11525,
+        7189,
+        279,
+        9640
+      ],
+      "target_argmax_token_id": 321,
+      "target_argmax_text": " and",
+      "target_argmax_logprob_token": " and",
+      "finish_reason": "length",
+      "trace_idx": 184,
+      "trace_ts": 1780280215.4446,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 152,
+      "forced_position": 168,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        63520,
+        1558,
+        198,
+        20663,
+        1101
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 185,
+      "trace_ts": 1780280215.7144,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 153,
+      "forced_position": 169,
+      "next_reference_token_id": 9665,
+      "draft_top1": [
+        1558,
+        70307,
+        279,
+        1727,
+        33686
+      ],
+      "target_argmax_token_id": 9665,
+      "target_argmax_text": " draft",
+      "target_argmax_logprob_token": " draft",
+      "finish_reason": "length",
+      "trace_idx": 186,
+      "trace_ts": 1780280215.9868,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 154,
+      "forced_position": 170,
+      "next_reference_token_id": 1558,
+      "draft_top1": [
+        18082,
+        264,
+        3074,
+        33686,
+        198
+      ],
+      "target_argmax_token_id": 1558,
+      "target_argmax_text": " model",
+      "target_argmax_logprob_token": " model",
+      "finish_reason": "length",
+      "trace_idx": 187,
+      "trace_ts": 1780280216.2563,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 155,
+      "forced_position": 171,
+      "next_reference_token_id": 52789,
+      "draft_top1": [
+        264,
+        6937,
+        314,
+        10885,
+        506
+      ],
+      "target_argmax_token_id": 70307,
+      "target_argmax_text": " emits",
+      "target_argmax_logprob_token": " emits",
+      "finish_reason": "length",
+      "trace_idx": 188,
+      "trace_ts": 1780280216.5289,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 156,
+      "forced_position": 172,
+      "next_reference_token_id": 264,
+      "draft_top1": [
+        2526,
+        198,
+        15057,
+        13,
+        561
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 189,
+      "trace_ts": 1780280216.8038,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 157,
+      "forced_position": 173,
+      "next_reference_token_id": 2716,
+      "draft_top1": [
+        198,
+        15057,
+        13,
+        561,
+        9665
+      ],
+      "target_argmax_token_id": 2716,
+      "target_argmax_text": " short",
+      "target_argmax_logprob_token": " short",
+      "finish_reason": "length",
+      "trace_idx": 190,
+      "trace_ts": 1780280217.0778,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 158,
+      "forced_position": 174,
+      "next_reference_token_id": 8516,
+      "draft_top1": [
+        15057,
+        314,
+        10885,
+        13,
+        561
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 191,
+      "trace_ts": 1780280217.3513,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 159,
+      "forced_position": 175,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        1020,
+        10853,
+        13,
+        561,
+        9665
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 192,
+      "trace_ts": 1780280217.6238,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 160,
+      "forced_position": 176,
+      "next_reference_token_id": 1020,
+      "draft_top1": [
+        10853,
+        13,
+        561,
+        1350,
+        198
+      ],
+      "target_argmax_token_id": 1020,
+      "target_argmax_text": "of",
+      "target_argmax_logprob_token": "of",
+      "finish_reason": "length",
+      "trace_idx": 193,
+      "trace_ts": 1780280217.895,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 161,
+      "forced_position": 177,
+      "next_reference_token_id": 63520,
+      "draft_top1": [
+        10885,
+        13,
+        561,
+        11525,
+        198
+      ],
+      "target_argmax_token_id": 63520,
+      "target_argmax_text": " speculative",
+      "target_argmax_logprob_token": " speculative",
+      "finish_reason": "length",
+      "trace_idx": 194,
+      "trace_ts": 1780280218.1674,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 162,
+      "forced_position": 178,
+      "next_reference_token_id": 10885,
+      "draft_top1": [
+        13,
+        561,
+        11525,
+        198,
+        3491
+      ],
+      "target_argmax_token_id": 10885,
+      "target_argmax_text": " tokens",
+      "target_argmax_logprob_token": " tokens",
+      "finish_reason": "length",
+      "trace_idx": 195,
+      "trace_ts": 1780280218.4441,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 163,
+      "forced_position": 179,
+      "next_reference_token_id": 494,
+      "draft_top1": [
+        561,
+        63520,
+        3817,
+        369,
+        1179
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 196,
+      "trace_ts": 1780280218.718,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 164,
+      "forced_position": 180,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        1788,
+        6297,
+        13,
+        561,
+        9665
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 197,
+      "trace_ts": 1780280218.9906,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 165,
+      "forced_position": 181,
+      "next_reference_token_id": 1788,
+      "draft_top1": [
+        6297,
+        1528,
+        13,
+        561,
+        9665
+      ],
+      "target_argmax_token_id": 1788,
+      "target_argmax_text": " same",
+      "target_argmax_logprob_token": " same",
+      "finish_reason": "length",
+      "trace_idx": 198,
+      "trace_ts": 1780280219.2642,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 166,
+      "forced_position": 182,
+      "next_reference_token_id": 8978,
+      "draft_top1": [
+        9167,
+        13,
+        561,
+        9665,
+        1558
+      ],
+      "target_argmax_token_id": 6297,
+      "target_argmax_text": " cache",
+      "target_argmax_logprob_token": " cache",
+      "finish_reason": "length",
+      "trace_idx": 199,
+      "trace_ts": 1780280219.5372,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 167,
+      "forced_position": 183,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        561,
+        63520,
+        3817,
+        369,
+        1179
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 200,
+      "trace_ts": 1780280219.8151,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 168,
+      "forced_position": 184,
+      "next_reference_token_id": 561,
+      "draft_top1": [
+        9665,
+        1558,
+        25503,
+        279,
+        13340
+      ],
+      "target_argmax_token_id": 561,
+      "target_argmax_text": " The",
+      "target_argmax_logprob_token": " The",
+      "finish_reason": "length",
+      "trace_idx": 201,
+      "trace_ts": 1780280220.0909,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 169,
+      "forced_position": 185,
+      "next_reference_token_id": 85683,
+      "draft_top1": [
+        41054,
+        279,
+        9665,
+        3817,
+        725
+      ],
+      "target_argmax_token_id": 6259,
+      "target_argmax_text": " controller",
+      "target_argmax_logprob_token": " controller",
+      "finish_reason": "length",
+      "trace_idx": 202,
+      "trace_ts": 1780280220.3658,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 170,
+      "forced_position": 186,
+      "next_reference_token_id": 41054,
+      "draft_top1": [
+        279,
+        4054,
+        321,
+        198,
+        279
+      ],
+      "target_argmax_token_id": 11988,
+      "target_argmax_text": " checks",
+      "target_argmax_logprob_token": " checks",
+      "finish_reason": "length",
+      "trace_idx": 203,
+      "trace_ts": 1780280220.6381,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 171,
+      "forced_position": 187,
+      "next_reference_token_id": 3817,
+      "draft_top1": [
+        9665,
+        3817,
+        198,
+        66425,
+        279
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 204,
+      "trace_ts": 1780280220.915,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 172,
+      "forced_position": 188,
+      "next_reference_token_id": 13746,
+      "draft_top1": [
+        33686,
+        198,
+        66425,
+        279,
+        13340
+      ],
+      "target_argmax_token_id": 13909,
+      "target_argmax_text": "-by",
+      "target_argmax_logprob_token": "-by",
+      "finish_reason": "length",
+      "trace_idx": 205,
+      "trace_ts": 1780280221.1886,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 173,
+      "forced_position": 189,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        198,
+        10024,
+        82,
+        11,
+        321
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 206,
+      "trace_ts": 1780280221.4673,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 174,
+      "forced_position": 190,
+      "next_reference_token_id": 524,
+      "draft_top1": [
+        10024,
+        82,
+        3817,
+        13746,
+        11
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 207,
+      "trace_ts": 1780280221.7424,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 175,
+      "forced_position": 191,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        813,
+        46608,
+        11,
+        321,
+        17397
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 208,
+      "trace_ts": 1780280222.0176,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 176,
+      "forced_position": 192,
+      "next_reference_token_id": 60794,
+      "draft_top1": [
+        8796,
+        11,
+        321,
+        4523,
+        279
+      ],
+      "target_argmax_token_id": 1006,
+      "target_argmax_text": "raw",
+      "target_argmax_logprob_token": "raw",
+      "finish_reason": "length",
+      "trace_idx": 209,
+      "trace_ts": 1780280222.2947,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 177,
+      "forced_position": 193,
+      "next_reference_token_id": 8796,
+      "draft_top1": [
+        11,
+        321,
+        4523,
+        279,
+        11330
+      ],
+      "target_argmax_token_id": 8796,
+      "target_argmax_text": " strings",
+      "target_argmax_logprob_token": " strings",
+      "finish_reason": "length",
+      "trace_idx": 210,
+      "trace_ts": 1780280222.576,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 178,
+      "forced_position": 194,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        321,
+        6473,
+        279,
+        11330,
+        198
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 211,
+      "trace_ts": 1780280222.8563,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 179,
+      "forced_position": 195,
+      "next_reference_token_id": 1521,
+      "draft_top1": [
+        279,
+        85683,
+        2590,
+        8798,
+        279
+      ],
+      "target_argmax_token_id": 748,
+      "target_argmax_text": " so",
+      "target_argmax_logprob_token": " so",
+      "finish_reason": "length",
+      "trace_idx": 212,
+      "trace_ts": 1780280223.1397,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 180,
+      "forced_position": 196,
+      "next_reference_token_id": 35169,
+      "draft_top1": [
+        23776,
+        1189,
+        381,
+        198,
+        889
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 213,
+      "trace_ts": 1780280223.4193,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 181,
+      "forced_position": 197,
+      "next_reference_token_id": 321,
+      "draft_top1": [
+        628,
+        5073,
+        25602,
+        11461,
+        198
+      ],
+      "target_argmax_token_id": 47096,
+      "target_argmax_text": " normalization",
+      "target_argmax_logprob_token": " normalization",
+      "finish_reason": "length",
+      "trace_idx": 214,
+      "trace_ts": 1780280223.7024,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 182,
+      "forced_position": 198,
+      "next_reference_token_id": 59429,
+      "draft_top1": [
+        3817,
+        1954,
+        198,
+        532,
+        628
+      ],
+      "target_argmax_token_id": 3175,
+      "target_argmax_text": " special",
+      "target_argmax_logprob_token": " special",
+      "finish_reason": "length",
+      "trace_idx": 215,
+      "trace_ts": 1780280223.9856,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 183,
+      "forced_position": 199,
+      "next_reference_token_id": 628,
+      "draft_top1": [
+        5073,
+        25602,
+        11461,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 628,
+      "target_argmax_text": " can",
+      "target_argmax_logprob_token": " can",
+      "finish_reason": "length",
+      "trace_idx": 216,
+      "trace_ts": 1780280224.2658,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 184,
+      "forced_position": 200,
+      "next_reference_token_id": 599,
+      "draft_top1": [
+        3808,
+        3817,
+        198,
+        6304,
+        13
+      ],
+      "target_argmax_token_id": 1684,
+      "target_argmax_text": " differ",
+      "target_argmax_logprob_token": " differ",
+      "finish_reason": "length",
+      "trace_idx": 217,
+      "trace_ts": 1780280224.5515,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 185,
+      "forced_position": 201,
+      "next_reference_token_id": 5081,
+      "draft_top1": [
+        3817,
+        13746,
+        13,
+        271,
+        760
+      ],
+      "target_argmax_token_id": 5081,
+      "target_argmax_text": " multiple",
+      "target_argmax_logprob_token": " multiple",
+      "finish_reason": "length",
+      "trace_idx": 218,
+      "trace_ts": 1780280224.8329,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 186,
+      "forced_position": 202,
+      "next_reference_token_id": 7099,
+      "draft_top1": [
+        56373,
+        13,
+        271,
+        760,
+        27867
+      ],
+      "target_argmax_token_id": 3107,
+      "target_argmax_text": " enc",
+      "target_argmax_logprob_token": " enc",
+      "finish_reason": "length",
+      "trace_idx": 219,
+      "trace_ts": 1780280225.1152,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 187,
+      "forced_position": 203,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        13,
+        271,
+        760,
+        27867,
+        30941
+      ],
+      "target_argmax_token_id": 7346,
+      "target_argmax_text": " forms",
+      "target_argmax_logprob_token": " forms",
+      "finish_reason": "length",
+      "trace_idx": 220,
+      "trace_ts": 1780280225.3985,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 188,
+      "forced_position": 204,
+      "next_reference_token_id": 9515,
+      "draft_top1": [
+        778,
+        13,
+        271,
+        760,
+        27867
+      ],
+      "target_argmax_token_id": 34099,
+      "target_argmax_text": "represent",
+      "target_argmax_logprob_token": "represent",
+      "finish_reason": "length",
+      "trace_idx": 221,
+      "trace_ts": 1780280225.6827,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 189,
+      "forced_position": 205,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        561,
+        85683,
+        1132,
+        279,
+        3817
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 222,
+      "trace_ts": 1780280225.9679,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 190,
+      "forced_position": 206,
+      "next_reference_token_id": 61153,
+      "draft_top1": [
+        279,
+        85683,
+        57409,
+        11,
+        279
+      ],
+      "target_argmax_token_id": 1368,
+      "target_argmax_text": " If",
+      "target_argmax_logprob_token": " If",
+      "finish_reason": "length",
+      "trace_idx": 223,
+      "trace_ts": 1780280226.251,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 191,
+      "forced_position": 207,
+      "next_reference_token_id": 10885,
+      "draft_top1": [
+        513,
+        49465,
+        310,
+        279,
+        2645
+      ],
+      "target_argmax_token_id": 10885,
+      "target_argmax_text": " tokens",
+      "target_argmax_logprob_token": " tokens",
+      "finish_reason": "length",
+      "trace_idx": 224,
+      "trace_ts": 1780280226.5336,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 192,
+      "forced_position": 208,
+      "next_reference_token_id": 513,
+      "draft_top1": [
+        49465,
+        310,
+        279,
+        2450,
+        11
+      ],
+      "target_argmax_token_id": 513,
+      "target_argmax_text": " are",
+      "target_argmax_logprob_token": " are",
+      "finish_reason": "length",
+      "trace_idx": 225,
+      "trace_ts": 1780280226.8191,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 193,
+      "forced_position": 209,
+      "next_reference_token_id": 49465,
+      "draft_top1": [
+        310,
+        279,
+        2468,
+        11,
+        321
+      ],
+      "target_argmax_token_id": 49465,
+      "target_argmax_text": " appended",
+      "target_argmax_logprob_token": " appended",
+      "finish_reason": "length",
+      "trace_idx": 226,
+      "trace_ts": 1780280227.1014,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 194,
+      "forced_position": 210,
+      "next_reference_token_id": 310,
+      "draft_top1": [
+        279,
+        2468,
+        11,
+        321,
+        28258
+      ],
+      "target_argmax_token_id": 310,
+      "target_argmax_text": " to",
+      "target_argmax_logprob_token": " to",
+      "finish_reason": "length",
+      "trace_idx": 227,
+      "trace_ts": 1780280227.387,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 195,
+      "forced_position": 211,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        81726,
+        6297,
+        11,
+        321,
+        49465
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 228,
+      "trace_ts": 1780280227.671,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 196,
+      "forced_position": 212,
+      "next_reference_token_id": 4162,
+      "draft_top1": [
+        8240,
+        11,
+        321,
+        41784,
+        10885
+      ],
+      "target_argmax_token_id": 2468,
+      "target_argmax_text": " output",
+      "target_argmax_logprob_token": " output",
+      "finish_reason": "length",
+      "trace_idx": 229,
+      "trace_ts": 1780280227.9539,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 197,
+      "forced_position": 213,
+      "next_reference_token_id": 8240,
+      "draft_top1": [
+        11,
+        321,
+        41784,
+        10885,
+        513
+      ],
+      "target_argmax_token_id": 2193,
+      "target_argmax_text": " context",
+      "target_argmax_logprob_token": " context",
+      "finish_reason": "length",
+      "trace_idx": 230,
+      "trace_ts": 1780280228.236,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 198,
+      "forced_position": 214,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        1345,
+        279,
+        9665,
+        1558,
+        18082
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 231,
+      "trace_ts": 1780280228.5207,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 199,
+      "forced_position": 215,
+      "next_reference_token_id": 17030,
+      "draft_top1": [
+        279,
+        9665,
+        1558,
+        198,
+        284
+      ],
+      "target_argmax_token_id": 321,
+      "target_argmax_text": " and",
+      "target_argmax_logprob_token": " and",
+      "finish_reason": "length",
+      "trace_idx": 232,
+      "trace_ts": 1780280228.8044,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 200,
+      "forced_position": 216,
+      "next_reference_token_id": 10885,
+      "draft_top1": [
+        513,
+        198,
+        92060,
+        6849,
+        11
+      ],
+      "target_argmax_token_id": 10885,
+      "target_argmax_text": " tokens",
+      "target_argmax_logprob_token": " tokens",
+      "finish_reason": "length",
+      "trace_idx": 233,
+      "trace_ts": 1780280229.0902,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 201,
+      "forced_position": 217,
+      "next_reference_token_id": 513,
+      "draft_top1": [
+        198,
+        1719,
+        3817,
+        310,
+        381
+      ],
+      "target_argmax_token_id": 5073,
+      "target_argmax_text": " cause",
+      "target_argmax_logprob_token": " cause",
+      "finish_reason": "length",
+      "trace_idx": 234,
+      "trace_ts": 1780280229.3782,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 202,
+      "forced_position": 218,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        10936,
+        6708,
+        11,
+        321,
+        311
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 235,
+      "trace_ts": 1780280229.6645,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 203,
+      "forced_position": 219,
+      "next_reference_token_id": 16330,
+      "draft_top1": [
+        6708,
+        11,
+        321,
+        279,
+        19954
+      ],
+      "target_argmax_token_id": 10936,
+      "target_argmax_text": "dro",
+      "target_argmax_logprob_token": "dro",
+      "finish_reason": "length",
+      "trace_idx": 236,
+      "trace_ts": 1780280229.951,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 204,
+      "forced_position": 220,
+      "next_reference_token_id": 20318,
+      "draft_top1": [
+        11,
+        321,
+        279,
+        1428,
+        198
+      ],
+      "target_argmax_token_id": 20318,
+      "target_argmax_text": "arded",
+      "target_argmax_logprob_token": "arded",
+      "finish_reason": "length",
+      "trace_idx": 237,
+      "trace_ts": 1780280230.2382,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 205,
+      "forced_position": 221,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        321,
+        279,
+        85683,
+        311,
+        57081
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 238,
+      "trace_ts": 1780280230.5222,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 206,
+      "forced_position": 222,
+      "next_reference_token_id": 321,
+      "draft_top1": [
+        279,
+        85683,
+        311,
+        57081,
+        279
+      ],
+      "target_argmax_token_id": 321,
+      "target_argmax_text": " and",
+      "target_argmax_logprob_token": " and",
+      "finish_reason": "length",
+      "trace_idx": 239,
+      "trace_ts": 1780280230.8119,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 207,
+      "forced_position": 223,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        9665,
+        2923,
+        369,
+        2590,
+        49465
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 240,
+      "trace_ts": 1780280231.0941,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 208,
+      "forced_position": 224,
+      "next_reference_token_id": 1727,
+      "draft_top1": [
+        2923,
+        369,
+        41784,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 2100,
+      "target_argmax_text": " target",
+      "target_argmax_logprob_token": " target",
+      "finish_reason": "length",
+      "trace_idx": 241,
+      "trace_ts": 1780280231.3728,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 209,
+      "forced_position": 225,
+      "next_reference_token_id": 2100,
+      "draft_top1": [
+        2923,
+        369,
+        2590,
+        198,
+        20663
+      ],
+      "target_argmax_token_id": 9665,
+      "target_argmax_text": " draft",
+      "target_argmax_logprob_token": " draft",
+      "finish_reason": "length",
+      "trace_idx": 242,
+      "trace_ts": 1780280231.6532,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 210,
+      "forced_position": 226,
+      "next_reference_token_id": 3817,
+      "draft_top1": [
+        369,
+        25152,
+        13,
+        271,
+        5836
+      ],
+      "target_argmax_token_id": 2923,
+      "target_argmax_text": " step",
+      "target_argmax_logprob_token": " step",
+      "finish_reason": "length",
+      "trace_idx": 243,
+      "trace_ts": 1780280231.9377,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 211,
+      "forced_position": 227,
+      "next_reference_token_id": 8211,
+      "draft_top1": [
+        1429,
+        430,
+        279,
+        1428,
+        3817
+      ],
+      "target_argmax_token_id": 369,
+      "target_argmax_text": " is",
+      "target_argmax_logprob_token": " is",
+      "finish_reason": "length",
+      "trace_idx": 244,
+      "trace_ts": 1780280232.2232,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 212,
+      "forced_position": 228,
+      "next_reference_token_id": 264,
+      "draft_top1": [
+        491,
+        63520,
+        10458,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 245,
+      "trace_ts": 1780280232.5079,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 213,
+      "forced_position": 229,
+      "next_reference_token_id": 7478,
+      "draft_top1": [
+        9665,
+        10458,
+        13,
+        271,
+        760
+      ],
+      "target_argmax_token_id": 491,
+      "target_argmax_text": " new",
+      "target_argmax_logprob_token": " new",
+      "finish_reason": "length",
+      "trace_idx": 246,
+      "trace_ts": 1780280232.7896,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 214,
+      "forced_position": 230,
+      "next_reference_token_id": 63520,
+      "draft_top1": [
+        10458,
+        13,
+        271,
+        5836,
+        16401
+      ],
+      "target_argmax_token_id": 63520,
+      "target_argmax_text": " speculative",
+      "target_argmax_logprob_token": " speculative",
+      "finish_reason": "length",
+      "trace_idx": 247,
+      "trace_ts": 1780280233.0726,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 215,
+      "forced_position": 231,
+      "next_reference_token_id": 1484,
+      "draft_top1": [
+        13,
+        271,
+        5836,
+        45543,
+        11
+      ],
+      "target_argmax_token_id": 3136,
+      "target_argmax_text": " window",
+      "target_argmax_logprob_token": " window",
+      "finish_reason": "length",
+      "trace_idx": 248,
+      "trace_ts": 1780280233.3577,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 216,
+      "forced_position": 232,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        271,
+        760,
+        85683,
+        41054,
+        3817
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 249,
+      "trace_ts": 1780280233.6386,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 217,
+      "forced_position": 233,
+      "next_reference_token_id": 52369,
+      "draft_top1": [
+        760,
+        85683,
+        41054,
+        3817,
+        13746
+      ],
+      "target_argmax_token_id": 271,
+      "target_argmax_text": "\n\n",
+      "target_argmax_logprob_token": "\n\n",
+      "finish_reason": "length",
+      "trace_idx": 250,
+      "trace_ts": 1780280233.9264,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 218,
+      "forced_position": 234,
+      "next_reference_token_id": 513,
+      "draft_top1": [
+        532,
+        45374,
+        791,
+        12,
+        52742
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 251,
+      "trace_ts": 1780280234.2108,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 219,
+      "forced_position": 235,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        21000,
+        290,
+        506,
+        279,
+        1151
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 252,
+      "trace_ts": 1780280234.4972,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 220,
+      "forced_position": 236,
+      "next_reference_token_id": 73145,
+      "draft_top1": [
+        3634,
+        791,
+        33686,
+        1132,
+        310
+      ],
+      "target_argmax_token_id": 334,
+      "target_argmax_text": "em",
+      "target_argmax_logprob_token": "em",
+      "finish_reason": "length",
+      "trace_idx": 253,
+      "trace_ts": 1780280234.7795,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 221,
+      "forced_position": 237,
+      "next_reference_token_id": 430,
+      "draft_top1": [
+        1396,
+        3817,
+        369,
+        45374,
+        11
+      ],
+      "target_argmax_token_id": 1238,
+      "target_argmax_text": " after",
+      "target_argmax_logprob_token": " after",
+      "finish_reason": "length",
+      "trace_idx": 254,
+      "trace_ts": 1780280235.0688,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 222,
+      "forced_position": 238,
+      "next_reference_token_id": 791,
+      "draft_top1": [
+        14159,
+        11,
+        321,
+        279,
+        2100
+      ],
+      "target_argmax_token_id": 38523,
+      "target_argmax_text": " cumulative",
+      "target_argmax_logprob_token": " cumulative",
+      "finish_reason": "length",
+      "trace_idx": 255,
+      "trace_ts": 1780280235.3561,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 223,
+      "forced_position": 239,
+      "next_reference_token_id": 32412,
+      "draft_top1": [
+        14159,
+        321,
+        38523,
+        14159,
+        11
+      ],
+      "target_argmax_token_id": 43318,
+      "target_argmax_text": "-request",
+      "target_argmax_logprob_token": "-request",
+      "finish_reason": "length",
+      "trace_idx": 256,
+      "trace_ts": 1780280235.6425,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 224,
+      "forced_position": 240,
+      "next_reference_token_id": 24693,
+      "draft_top1": [
+        4598,
+        1056,
+        6891,
+        14159,
+        13
+      ],
+      "target_argmax_token_id": 30494,
+      "target_argmax_text": " counters",
+      "target_argmax_logprob_token": " counters",
+      "finish_reason": "length",
+      "trace_idx": 257,
+      "trace_ts": 1780280235.9285,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 225,
+      "forced_position": 241,
+      "next_reference_token_id": 7566,
+      "draft_top1": [
+        11,
+        524,
+        791,
+        43318,
+        24693
+      ],
+      "target_argmax_token_id": 7566,
+      "target_argmax_text": " rates",
+      "target_argmax_logprob_token": " rates",
+      "finish_reason": "length",
+      "trace_idx": 258,
+      "trace_ts": 1780280236.2142,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 226,
+      "forced_position": 242,
+      "next_reference_token_id": 748,
+      "draft_top1": [
+        524,
+        38523,
+        14159,
+        11,
+        321
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 259,
+      "trace_ts": 1780280236.5005,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 227,
+      "forced_position": 243,
+      "next_reference_token_id": 264,
+      "draft_top1": [
+        279,
+        27867,
+        628,
+        198,
+        4670
+      ],
+      "target_argmax_token_id": 421,
+      "target_argmax_text": " that",
+      "target_argmax_logprob_token": " that",
+      "finish_reason": "length",
+      "trace_idx": 260,
+      "trace_ts": 1780280236.7846,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 228,
+      "forced_position": 244,
+      "next_reference_token_id": 3578,
+      "draft_top1": [
+        5497,
+        628,
+        198,
+        7454,
+        421
+      ],
+      "target_argmax_token_id": 49625,
+      "target_argmax_text": " downstream",
+      "target_argmax_logprob_token": " downstream",
+      "finish_reason": "length",
+      "trace_idx": 261,
+      "trace_ts": 1780280237.0766,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 229,
+      "forced_position": 245,
+      "next_reference_token_id": 7652,
+      "draft_top1": [
+        1508,
+        6157,
+        628,
+        381,
+        198
+      ],
+      "target_argmax_token_id": 12,
+      "target_argmax_text": "-",
+      "target_argmax_logprob_token": "-",
+      "finish_reason": "length",
+      "trace_idx": 262,
+      "trace_ts": 1780280237.3606,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 230,
+      "forced_position": 246,
+      "next_reference_token_id": 4021,
+      "draft_top1": [
+        381,
+        23443,
+        198,
+        1719,
+        6103
+      ],
+      "target_argmax_token_id": 628,
+      "target_argmax_text": " can",
+      "target_argmax_logprob_token": " can",
+      "finish_reason": "length",
+      "trace_idx": 263,
+      "trace_ts": 1780280237.6468,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 231,
+      "forced_position": 247,
+      "next_reference_token_id": 381,
+      "draft_top1": [
+        40751,
+        539,
+        264,
+        198,
+        4670
+      ],
+      "target_argmax_token_id": 381,
+      "target_argmax_text": " be",
+      "target_argmax_logprob_token": " be",
+      "finish_reason": "length",
+      "trace_idx": 264,
+      "trace_ts": 1780280237.9313,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 232,
+      "forced_position": 248,
+      "next_reference_token_id": 7920,
+      "draft_top1": [
+        198,
+        79052,
+        279,
+        4220,
+        13
+      ],
+      "target_argmax_token_id": 7920,
+      "target_argmax_text": " hidden",
+      "target_argmax_logprob_token": " hidden",
+      "finish_reason": "length",
+      "trace_idx": 265,
+      "trace_ts": 1780280238.2198,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 233,
+      "forced_position": 249,
+      "next_reference_token_id": 539,
+      "draft_top1": [
+        198,
+        57592,
+        26946,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 539,
+      "target_argmax_text": " by",
+      "target_argmax_logprob_token": " by",
+      "finish_reason": "length",
+      "trace_idx": 266,
+      "trace_ts": 1780280238.5116,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 234,
+      "forced_position": 250,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        7028,
+        3982,
+        13,
+        271,
+        5836
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 267,
+      "trace_ts": 1780280238.8013,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 235,
+      "forced_position": 251,
+      "next_reference_token_id": 65297,
+      "draft_top1": [
+        3982,
+        13,
+        271,
+        5836,
+        16401
+      ],
+      "target_argmax_token_id": 7028,
+      "target_argmax_text": "aver",
+      "target_argmax_logprob_token": "aver",
+      "finish_reason": "length",
+      "trace_idx": 268,
+      "trace_ts": 1780280239.0901,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 236,
+      "forced_position": 252,
+      "next_reference_token_id": 2400,
+      "draft_top1": [
+        13,
+        271,
+        760,
+        1350,
+        11497
+      ],
+      "target_argmax_token_id": 9599,
+      "target_argmax_text": " positions",
+      "target_argmax_logprob_token": " positions",
+      "finish_reason": "length",
+      "trace_idx": 269,
+      "trace_ts": 1780280239.3831,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 237,
+      "forced_position": 253,
+      "next_reference_token_id": 62985,
+      "draft_top1": [
+        24693,
+        13,
+        271,
+        760,
+        85683
+      ],
+      "target_argmax_token_id": 62985,
+      "target_argmax_text": "-chain",
+      "target_argmax_logprob_token": "-chain",
+      "finish_reason": "length",
+      "trace_idx": 270,
+      "trace_ts": 1780280239.6738,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 238,
+      "forced_position": 254,
+      "next_reference_token_id": 8798,
+      "draft_top1": [
+        2924,
+        13,
+        271,
+        760,
+        85683
+      ],
+      "target_argmax_token_id": 4054,
+      "target_argmax_text": " accept",
+      "target_argmax_logprob_token": " accept",
+      "finish_reason": "length",
+      "trace_idx": 271,
+      "trace_ts": 1780280239.9634,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 239,
+      "forced_position": 255,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        271,
+        760,
+        85683,
+        41054,
+        3817
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 272,
+      "trace_ts": 1780280240.2605,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 240,
+      "forced_position": 256,
+      "next_reference_token_id": 271,
+      "draft_top1": [
+        760,
+        27867,
+        13518,
+        279,
+        1324
+      ],
+      "target_argmax_token_id": 271,
+      "target_argmax_text": "\n\n",
+      "target_argmax_logprob_token": "\n\n",
+      "finish_reason": "length",
+      "trace_idx": 273,
+      "trace_ts": 1780280240.5498,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 241,
+      "forced_position": 257,
+      "next_reference_token_id": 760,
+      "draft_top1": [
+        27867,
+        30941,
+        264,
+        4162,
+        2468
+      ],
+      "target_argmax_token_id": 760,
+      "target_argmax_text": "The",
+      "target_argmax_logprob_token": "The",
+      "finish_reason": "length",
+      "trace_idx": 274,
+      "trace_ts": 1780280240.8491,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 242,
+      "forced_position": 258,
+      "next_reference_token_id": 14648,
+      "draft_top1": [
+        30941,
+        264,
+        4162,
+        1528,
+        6025
+      ],
+      "target_argmax_token_id": 6259,
+      "target_argmax_text": " controller",
+      "target_argmax_logprob_token": " controller",
+      "finish_reason": "length",
+      "trace_idx": 275,
+      "trace_ts": 1780280241.1501,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 243,
+      "forced_position": 259,
+      "next_reference_token_id": 3728,
+      "draft_top1": [
+        35272,
+        279,
+        50319,
+        11,
+        11988
+      ],
+      "target_argmax_token_id": 31338,
+      "target_argmax_text": " harness",
+      "target_argmax_logprob_token": " harness",
+      "finish_reason": "length",
+      "trace_idx": 276,
+      "trace_ts": 1780280241.4497,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 244,
+      "forced_position": 260,
+      "next_reference_token_id": 303,
+      "draft_top1": [
+        279,
+        63520,
+        4560,
+        11040,
+        13
+      ],
+      "target_argmax_token_id": 70514,
+      "target_argmax_text": " disables",
+      "target_argmax_logprob_token": " disables",
+      "finish_reason": "length",
+      "trace_idx": 277,
+      "trace_ts": 1780280241.7564,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 245,
+      "forced_position": 261,
+      "next_reference_token_id": 411,
+      "draft_top1": [
+        6259,
+        1132,
+        1503,
+        524,
+        198
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 278,
+      "trace_ts": 1780280242.0569,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 246,
+      "forced_position": 262,
+      "next_reference_token_id": 12149,
+      "draft_top1": [
+        70514,
+        660,
+        8404,
+        12,
+        10024
+      ],
+      "target_argmax_token_id": 12149,
+      "target_argmax_text": " fixture",
+      "target_argmax_logprob_token": " fixture",
+      "finish_reason": "length",
+      "trace_idx": 279,
+      "trace_ts": 1780280242.3578,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 247,
+      "forced_position": 263,
+      "next_reference_token_id": 27245,
+      "draft_top1": [
+        660,
+        975,
+        321,
+        279,
+        63520
+      ],
+      "target_argmax_token_id": 70514,
+      "target_argmax_text": " disables",
+      "target_argmax_logprob_token": " disables",
+      "finish_reason": "length",
+      "trace_idx": 280,
+      "trace_ts": 1780280242.6554,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 248,
+      "forced_position": 264,
+      "next_reference_token_id": 7658,
+      "draft_top1": [
+        83698,
+        321,
+        198,
+        77299,
+        13
+      ],
+      "target_argmax_token_id": 660,
+      "target_argmax_text": " all",
+      "target_argmax_logprob_token": " all",
+      "finish_reason": "length",
+      "trace_idx": 281,
+      "trace_ts": 1780280242.9563,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 249,
+      "forced_position": 265,
+      "next_reference_token_id": 9067,
+      "draft_top1": [
+        11040,
+        321,
+        198,
+        3138,
+        279
+      ],
+      "target_argmax_token_id": 1414,
+      "target_argmax_text": " text",
+      "target_argmax_logprob_token": " text",
+      "finish_reason": "length",
+      "trace_idx": 282,
+      "trace_ts": 1780280243.2617,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 250,
+      "forced_position": 266,
+      "next_reference_token_id": 78361,
+      "draft_top1": [
+        11040,
+        13,
+        198,
+        2592,
+        264
+      ],
+      "target_argmax_token_id": 2468,
+      "target_argmax_text": " output",
+      "target_argmax_logprob_token": " output",
+      "finish_reason": "length",
+      "trace_idx": 283,
+      "trace_ts": 1780280243.5615,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 251,
+      "forced_position": 267,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        14419,
+        198,
+        3138,
+        279,
+        1324
+      ],
+      "target_argmax_token_id": 539,
+      "target_argmax_text": " by",
+      "target_argmax_logprob_token": " by",
+      "finish_reason": "length",
+      "trace_idx": 284,
+      "trace_ts": 1780280243.8611,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 252,
+      "forced_position": 268,
+      "next_reference_token_id": 11746,
+      "draft_top1": [
+        70514,
+        198,
+        77299,
+        2468,
+        748
+      ],
+      "target_argmax_token_id": 1049,
+      "target_argmax_text": " It",
+      "target_argmax_logprob_token": " It",
+      "finish_reason": "length",
+      "trace_idx": 285,
+      "trace_ts": 1780280244.1638,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 253,
+      "forced_position": 269,
+      "next_reference_token_id": 314,
+      "draft_top1": [
+        198,
+        24501,
+        279,
+        2468,
+        11
+      ],
+      "target_argmax_token_id": 314,
+      "target_argmax_text": " of",
+      "target_argmax_logprob_token": " of",
+      "finish_reason": "length",
+      "trace_idx": 286,
+      "trace_ts": 1780280244.4676,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 254,
+      "forced_position": 270,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        671,
+        286,
+        279,
+        3889,
+        11
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 287,
+      "trace_ts": 1780280244.7718,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 255,
+      "forced_position": 271,
+      "next_reference_token_id": 1112,
+      "draft_top1": [
+        286,
+        279,
+        4880,
+        2468,
+        11
+      ],
+      "target_argmax_token_id": 671,
+      "target_argmax_text": "return",
+      "target_argmax_logprob_token": "return",
+      "finish_reason": "length",
+      "trace_idx": 288,
+      "trace_ts": 1780280245.0722,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 256,
+      "forced_position": 272,
+      "next_reference_token_id": 1235,
+      "draft_top1": [
+        279,
+        1558,
+        3165,
+        310,
+        279
+      ],
+      "target_argmax_token_id": 1235,
+      "target_argmax_text": "ting",
+      "target_argmax_logprob_token": "ting",
+      "finish_reason": "length",
+      "trace_idx": 289,
+      "trace_ts": 1780280245.3723,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 257,
+      "forced_position": 273,
+      "next_reference_token_id": 2892,
+      "draft_top1": [
+        9665,
+        1558,
+        35140,
+        689,
+        279
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 290,
+      "trace_ts": 1780280245.6722,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 258,
+      "forced_position": 274,
+      "next_reference_token_id": 3421,
+      "draft_top1": [
+        32524,
+        1083,
+        279,
+        2468,
+        11
+      ],
+      "target_argmax_token_id": 1558,
+      "target_argmax_text": " model",
+      "target_argmax_logprob_token": " model",
+      "finish_reason": "length",
+      "trace_idx": 291,
+      "trace_ts": 1780280245.9738,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 259,
+      "forced_position": 275,
+      "next_reference_token_id": 4992,
+      "draft_top1": [
+        264,
+        2400,
+        1965,
+        11,
+        279
+      ],
+      "target_argmax_token_id": 16201,
+      "target_argmax_text": " emit",
+      "target_argmax_logprob_token": " emit",
+      "finish_reason": "length",
+      "trace_idx": 292,
+      "trace_ts": 1780280246.2766,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 260,
+      "forced_position": 276,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        1727,
+        3817,
+        11,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 293,
+      "trace_ts": 1780280246.5795,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 261,
+      "forced_position": 277,
+      "next_reference_token_id": 1727,
+      "draft_top1": [
+        3817,
+        11,
+        279,
+        11525,
+        198
+      ],
+      "target_argmax_token_id": 1727,
+      "target_argmax_text": " next",
+      "target_argmax_logprob_token": " next",
+      "finish_reason": "length",
+      "trace_idx": 294,
+      "trace_ts": 1780280246.882,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 262,
+      "forced_position": 278,
+      "next_reference_token_id": 8978,
+      "draft_top1": [
+        11,
+        279,
+        85683,
+        198,
+        10024
+      ],
+      "target_argmax_token_id": 3817,
+      "target_argmax_text": " token",
+      "target_argmax_logprob_token": " token",
+      "finish_reason": "length",
+      "trace_idx": 295,
+      "trace_ts": 1780280247.1837,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 263,
+      "forced_position": 279,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        279,
+        1558,
+        13514,
+        279,
+        198
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 296,
+      "trace_ts": 1780280247.4879,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 264,
+      "forced_position": 280,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        6259,
+        2590,
+        198,
+        57081,
+        279
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 297,
+      "trace_ts": 1780280247.7885,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 265,
+      "forced_position": 281,
+      "next_reference_token_id": 2849,
+      "draft_top1": [
+        2503,
+        24992,
+        279,
+        9640,
+        310
+      ],
+      "target_argmax_token_id": 6259,
+      "target_argmax_text": " controller",
+      "target_argmax_logprob_token": " controller",
+      "finish_reason": "length",
+      "trace_idx": 298,
+      "trace_ts": 1780280248.0942,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 266,
+      "forced_position": 282,
+      "next_reference_token_id": 33254,
+      "draft_top1": [
+        264,
+        8097,
+        3817,
+        1103,
+        198
+      ],
+      "target_argmax_token_id": 16229,
+      "target_argmax_text": " supplies",
+      "target_argmax_logprob_token": " supplies",
+      "finish_reason": "length",
+      "trace_idx": 299,
+      "trace_ts": 1780280248.3993,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 267,
+      "forced_position": 283,
+      "next_reference_token_id": 2107,
+      "draft_top1": [
+        8097,
+        8240,
+        198,
+        1020,
+        1396
+      ],
+      "target_argmax_token_id": 264,
+      "target_argmax_text": " a",
+      "target_argmax_logprob_token": " a",
+      "finish_reason": "length",
+      "trace_idx": 300,
+      "trace_ts": 1780280248.7045,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 268,
+      "forced_position": 284,
+      "next_reference_token_id": 15814,
+      "draft_top1": [
+        264,
+        8097,
+        198,
+        21901,
+        290
+      ],
+      "target_argmax_token_id": 3983,
+      "target_argmax_text": " models",
+      "target_argmax_logprob_token": " models",
+      "finish_reason": "length",
+      "trace_idx": 301,
+      "trace_ts": 1780280249.008,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 269,
+      "forced_position": 285,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        198,
+        23310,
+        3817,
+        850,
+        6505
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 302,
+      "trace_ts": 1780280249.3135,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 270,
+      "forced_position": 286,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        44839,
+        1788,
+        8978,
+        11,
+        279
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 303,
+      "trace_ts": 1780280249.6238,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 271,
+      "forced_position": 287,
+      "next_reference_token_id": 23310,
+      "draft_top1": [
+        8978,
+        11,
+        279,
+        1788,
+        1879
+      ],
+      "target_argmax_token_id": 23310,
+      "target_argmax_text": "same",
+      "target_argmax_logprob_token": "same",
+      "finish_reason": "length",
+      "trace_idx": 304,
+      "trace_ts": 1780280249.9305,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 272,
+      "forced_position": 288,
+      "next_reference_token_id": 5604,
+      "draft_top1": [
+        9640,
+        321,
+        3817,
+        13746,
+        13
+      ],
+      "target_argmax_token_id": 8097,
+      "target_argmax_text": " fixed",
+      "target_argmax_logprob_token": " fixed",
+      "finish_reason": "length",
+      "trace_idx": 305,
+      "trace_ts": 1780280250.2385,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 273,
+      "forced_position": 289,
+      "next_reference_token_id": 3817,
+      "draft_top1": [
+        321,
+        279,
+        23776,
+        15796,
+        279
+      ],
+      "target_argmax_token_id": 8978,
+      "target_argmax_text": " prefix",
+      "target_argmax_logprob_token": " prefix",
+      "finish_reason": "length",
+      "trace_idx": 306,
+      "trace_ts": 1780280250.5434,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 274,
+      "forced_position": 290,
+      "next_reference_token_id": 8240,
+      "draft_top1": [
+        13,
+        561,
+        85683,
+        2590,
+        15339
+      ],
+      "target_argmax_token_id": 4129,
+      "target_argmax_text": " stream",
+      "target_argmax_logprob_token": " stream",
+      "finish_reason": "length",
+      "trace_idx": 307,
+      "trace_ts": 1780280250.8477,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 275,
+      "forced_position": 291,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        54878,
+        421,
+        279,
+        1118,
+        198
+      ],
+      "target_argmax_token_id": 321,
+      "target_argmax_text": " and",
+      "target_argmax_logprob_token": " and",
+      "finish_reason": "length",
+      "trace_idx": 308,
+      "trace_ts": 1780280251.158,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 276,
+      "forced_position": 292,
+      "next_reference_token_id": 1690,
+      "draft_top1": [
+        15814,
+        5091,
+        279,
+        1788,
+        198
+      ],
+      "target_argmax_token_id": 11396,
+      "target_argmax_text": " Both",
+      "target_argmax_logprob_token": " Both",
+      "finish_reason": "length",
+      "trace_idx": 309,
+      "trace_ts": 1780280251.4627,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 277,
+      "forced_position": 293,
+      "next_reference_token_id": 1754,
+      "draft_top1": [
+        11330,
+        3817,
+        11,
+        279,
+        85683
+      ],
+      "target_argmax_token_id": 1396,
+      "target_argmax_text": " every",
+      "target_argmax_logprob_token": " every",
+      "finish_reason": "length",
+      "trace_idx": 310,
+      "trace_ts": 1780280251.7702,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 278,
+      "forced_position": 294,
+      "next_reference_token_id": 8978,
+      "draft_top1": [
+        11,
+        279,
+        85683,
+        41054,
+        279
+      ],
+      "target_argmax_token_id": 2234,
+      "target_argmax_text": " position",
+      "target_argmax_logprob_token": " position",
+      "finish_reason": "length",
+      "trace_idx": 311,
+      "trace_ts": 1780280252.0777,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 279,
+      "forced_position": 295,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        279,
+        85683,
+        41054,
+        279,
+        3817
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 312,
+      "trace_ts": 1780280252.3814,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 280,
+      "forced_position": 296,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        2849,
+        7189,
+        279,
+        1118,
+        3817
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 313,
+      "trace_ts": 1780280252.6937,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 281,
+      "forced_position": 297,
+      "next_reference_token_id": 2849,
+      "draft_top1": [
+        25503,
+        279,
+        1727,
+        33686,
+        321
+      ],
+      "target_argmax_token_id": 2100,
+      "target_argmax_text": " target",
+      "target_argmax_logprob_token": " target",
+      "finish_reason": "length",
+      "trace_idx": 314,
+      "trace_ts": 1780280253.0019,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 282,
+      "forced_position": 298,
+      "next_reference_token_id": 16561,
+      "draft_top1": [
+        279,
+        2100,
+        3817,
+        850,
+        11
+      ],
+      "target_argmax_token_id": 7189,
+      "target_argmax_text": " records",
+      "target_argmax_logprob_token": " records",
+      "finish_reason": "length",
+      "trace_idx": 315,
+      "trace_ts": 1780280253.3067,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 283,
+      "forced_position": 299,
+      "next_reference_token_id": 364,
+      "draft_top1": [
+        2100,
+        1558,
+        310,
+        7936,
+        279
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 316,
+      "trace_ts": 1780280253.6116,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 284,
+      "forced_position": 300,
+      "next_reference_token_id": 799,
+      "draft_top1": [
+        1727,
+        33686,
+        198,
+        429,
+        11
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 317,
+      "trace_ts": 1780280253.9195,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 285,
+      "forced_position": 301,
+      "next_reference_token_id": 54102,
+      "draft_top1": [
+        3817,
+        198,
+        429,
+        11,
+        321
+      ],
+      "target_argmax_token_id": 2100,
+      "target_argmax_text": " target",
+      "target_argmax_logprob_token": " target",
+      "finish_reason": "length",
+      "trace_idx": 318,
+      "trace_ts": 1780280254.2293,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 286,
+      "forced_position": 302,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        9239,
+        321,
+        279,
+        9665,
+        1558
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 319,
+      "trace_ts": 1780280254.5359,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 287,
+      "forced_position": 303,
+      "next_reference_token_id": 5658,
+      "draft_top1": [
+        321,
+        279,
+        9665,
+        1558,
+        18082
+      ],
+      "target_argmax_token_id": 9239,
+      "target_argmax_text": "step",
+      "target_argmax_logprob_token": "step",
+      "finish_reason": "length",
+      "trace_idx": 320,
+      "trace_ts": 1780280254.8412,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 288,
+      "forced_position": 304,
+      "next_reference_token_id": 321,
+      "draft_top1": [
+        2107,
+        3983,
+        321,
+        279,
+        2849
+      ],
+      "target_argmax_token_id": 494,
+      "target_argmax_text": " from",
+      "target_argmax_logprob_token": " from",
+      "finish_reason": "length",
+      "trace_idx": 321,
+      "trace_ts": 1780280255.145,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 289,
+      "forced_position": 305,
+      "next_reference_token_id": 7189,
+      "draft_top1": [
+        63520,
+        3817,
+        13,
+        561,
+        85683
+      ],
+      "target_argmax_token_id": 799,
+      "target_argmax_text": " one",
+      "target_argmax_logprob_token": " one",
+      "finish_reason": "length",
+      "trace_idx": 322,
+      "trace_ts": 1780280255.4533,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 290,
+      "forced_position": 306,
+      "next_reference_token_id": 1330,
+      "draft_top1": [
+        279,
+        1344,
+        2721,
+        8798,
+        11
+      ],
+      "target_argmax_token_id": 3315,
+      "target_argmax_text": " whether",
+      "target_argmax_logprob_token": " whether",
+      "finish_reason": "length",
+      "trace_idx": 323,
+      "trace_ts": 1780280255.7625,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 291,
+      "forced_position": 307,
+      "next_reference_token_id": 2663,
+      "draft_top1": [
+        25,
+        279,
+        1344,
+        2721,
+        11
+      ],
+      "target_argmax_token_id": 2663,
+      "target_argmax_text": " values",
+      "target_argmax_logprob_token": " values",
+      "finish_reason": "length",
+      "trace_idx": 324,
+      "trace_ts": 1780280256.0702,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 292,
+      "forced_position": 308,
+      "next_reference_token_id": 25,
+      "draft_top1": [
+        279,
+        2100,
+        3817,
+        725,
+        321
+      ],
+      "target_argmax_token_id": 25,
+      "target_argmax_text": ":",
+      "target_argmax_logprob_token": ":",
+      "finish_reason": "length",
+      "trace_idx": 325,
+      "trace_ts": 1780280256.3771,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 293,
+      "forced_position": 309,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        2100,
+        3817,
+        850,
+        321,
+        279
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 326,
+      "trace_ts": 1780280256.6832,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 294,
+      "forced_position": 310,
+      "next_reference_token_id": 9665,
+      "draft_top1": [
+        3817,
+        850,
+        321,
+        279,
+        9665
+      ],
+      "target_argmax_token_id": 2100,
+      "target_argmax_text": " target",
+      "target_argmax_logprob_token": " target",
+      "finish_reason": "length",
+      "trace_idx": 327,
+      "trace_ts": 1780280256.9891,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 295,
+      "forced_position": 311,
+      "next_reference_token_id": 1558,
+      "draft_top1": [
+        725,
+        24693,
+        321,
+        279,
+        2100
+      ],
+      "target_argmax_token_id": 1558,
+      "target_argmax_text": " model",
+      "target_argmax_logprob_token": " model",
+      "finish_reason": "length",
+      "trace_idx": 328,
+      "trace_ts": 1780280257.2986,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 296,
+      "forced_position": 312,
+      "next_reference_token_id": 579,
+      "draft_top1": [
+        24693,
+        4238,
+        321,
+        279,
+        2100
+      ],
+      "target_argmax_token_id": 725,
+      "target_argmax_text": "\u2019s",
+      "target_argmax_logprob_token": "\u2019s",
+      "finish_reason": "length",
+      "trace_idx": 329,
+      "trace_ts": 1780280257.6033,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 297,
+      "forced_position": 313,
+      "next_reference_token_id": 1844,
+      "draft_top1": [
+        12,
+        16,
+        18356,
+        321,
+        279
+      ],
+      "target_argmax_token_id": 1844,
+      "target_argmax_text": " top",
+      "target_argmax_logprob_token": " top",
+      "finish_reason": "length",
+      "trace_idx": 330,
+      "trace_ts": 1780280257.9108,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 298,
+      "forced_position": 314,
+      "next_reference_token_id": 18030,
+      "draft_top1": [
+        16,
+        850,
+        321,
+        279,
+        9665
+      ],
+      "target_argmax_token_id": 12,
+      "target_argmax_text": "-",
+      "target_argmax_logprob_token": "-",
+      "finish_reason": "length",
+      "trace_idx": 331,
+      "trace_ts": 1780280258.219,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 299,
+      "forced_position": 315,
+      "next_reference_token_id": 8516,
+      "draft_top1": [
+        321,
+        279,
+        9665,
+        1558,
+        579
+      ],
+      "target_argmax_token_id": 850,
+      "target_argmax_text": " id",
+      "target_argmax_logprob_token": " id",
+      "finish_reason": "length",
+      "trace_idx": 332,
+      "trace_ts": 1780280258.5306,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 300,
+      "forced_position": 316,
+      "next_reference_token_id": 321,
+      "draft_top1": [
+        279,
+        2100,
+        198,
+        10024,
+        663
+      ],
+      "target_argmax_token_id": 321,
+      "target_argmax_text": " and",
+      "target_argmax_logprob_token": " and",
+      "finish_reason": "length",
+      "trace_idx": 333,
+      "trace_ts": 1780280258.8445,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 301,
+      "forced_position": 317,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        9665,
+        1558,
+        579,
+        198,
+        2246
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 334,
+      "trace_ts": 1780280259.1544,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 302,
+      "forced_position": 318,
+      "next_reference_token_id": 2100,
+      "draft_top1": [
+        1558,
+        579,
+        198,
+        813,
+        13
+      ],
+      "target_argmax_token_id": 2100,
+      "target_argmax_text": " target",
+      "target_argmax_logprob_token": " target",
+      "finish_reason": "length",
+      "trace_idx": 335,
+      "trace_ts": 1780280259.4647,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 303,
+      "forced_position": 319,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        579,
+        198,
+        3369,
+        18030,
+        8516
+      ],
+      "target_argmax_token_id": 1558,
+      "target_argmax_text": " model",
+      "target_argmax_logprob_token": " model",
+      "finish_reason": "length",
+      "trace_idx": 336,
+      "trace_ts": 1780280259.7748,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 304,
+      "forced_position": 320,
+      "next_reference_token_id": 2448,
+      "draft_top1": [
+        579,
+        1844,
+        36165,
+        8516,
+        13
+      ],
+      "target_argmax_token_id": 2448,
+      "target_argmax_text": "model",
+      "target_argmax_logprob_token": "model",
+      "finish_reason": "length",
+      "trace_idx": 337,
+      "trace_ts": 1780280260.084,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 305,
+      "forced_position": 321,
+      "next_reference_token_id": 579,
+      "draft_top1": [
+        1344,
+        2721,
+        13,
+        271,
+        760
+      ],
+      "target_argmax_token_id": 579,
+      "target_argmax_text": "'s",
+      "target_argmax_logprob_token": "'s",
+      "finish_reason": "length",
+      "trace_idx": 338,
+      "trace_ts": 1780280260.3986,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 306,
+      "forced_position": 322,
+      "next_reference_token_id": 1344,
+      "draft_top1": [
+        1344,
+        2721,
+        13,
+        271,
+        760
+      ],
+      "target_argmax_token_id": 3074,
+      "target_argmax_text": " single",
+      "target_argmax_logprob_token": " single",
+      "finish_reason": "length",
+      "trace_idx": 339,
+      "trace_ts": 1780280260.7085,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 307,
+      "forced_position": 323,
+      "next_reference_token_id": 2721,
+      "draft_top1": [
+        13,
+        561,
+        85683,
+        41054,
+        3817
+      ],
+      "target_argmax_token_id": 2721,
+      "target_argmax_text": "max",
+      "target_argmax_logprob_token": "max",
+      "finish_reason": "length",
+      "trace_idx": 340,
+      "trace_ts": 1780280261.0179,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 308,
+      "forced_position": 324,
+      "next_reference_token_id": 3817,
+      "draft_top1": [
+        561,
+        85683,
+        41054,
+        279,
+        9665
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 341,
+      "trace_ts": 1780280261.3305,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 309,
+      "forced_position": 325,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        1368,
+        279,
+        9665,
+        1558,
+        25503
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 342,
+      "trace_ts": 1780280261.6395,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 310,
+      "forced_position": 326,
+      "next_reference_token_id": 1368,
+      "draft_top1": [
+        85683,
+        1179,
+        279,
+        85683,
+        41054
+      ],
+      "target_argmax_token_id": 561,
+      "target_argmax_text": " The",
+      "target_argmax_logprob_token": " The",
+      "finish_reason": "length",
+      "trace_idx": 343,
+      "trace_ts": 1780280261.9725,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 311,
+      "forced_position": 327,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        9665,
+        850,
+        8798,
+        279,
+        2100
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 344,
+      "trace_ts": 1780280262.2959,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 312,
+      "forced_position": 328,
+      "next_reference_token_id": 4757,
+      "draft_top1": [
+        3817,
+        850,
+        8798,
+        279,
+        2100
+      ],
+      "target_argmax_token_id": 9665,
+      "target_argmax_text": " draft",
+      "target_argmax_logprob_token": " draft",
+      "finish_reason": "length",
+      "trace_idx": 345,
+      "trace_ts": 1780280262.6075,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 313,
+      "forced_position": 329,
+      "next_reference_token_id": 3421,
+      "draft_top1": [
+        24693,
+        369,
+        321,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 314,
+      "target_argmax_text": " of",
+      "target_argmax_logprob_token": " of",
+      "finish_reason": "length",
+      "trace_idx": 346,
+      "trace_ts": 1780280262.9189,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 314,
+      "forced_position": 330,
+      "next_reference_token_id": 8798,
+      "draft_top1": [
+        264,
+        34131,
+        11,
+        279,
+        85683
+      ],
+      "target_argmax_token_id": 4523,
+      "target_argmax_text": " returns",
+      "target_argmax_logprob_token": " returns",
+      "finish_reason": "length",
+      "trace_idx": 347,
+      "trace_ts": 1780280263.2287,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 315,
+      "forced_position": 331,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        5604,
+        3817,
+        11,
+        279,
+        85683
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 348,
+      "trace_ts": 1780280263.5432,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 316,
+      "forced_position": 332,
+      "next_reference_token_id": 41954,
+      "draft_top1": [
+        3817,
+        11,
+        279,
+        85683,
+        198
+      ],
+      "target_argmax_token_id": 5604,
+      "target_argmax_text": " reference",
+      "target_argmax_logprob_token": " reference",
+      "finish_reason": "length",
+      "trace_idx": 349,
+      "trace_ts": 1780280263.8526,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 317,
+      "forced_position": 333,
+      "next_reference_token_id": 3421,
+      "draft_top1": [
+        11,
+        279,
+        198,
+        10024,
+        663
+      ],
+      "target_argmax_token_id": 3421,
+      "target_argmax_text": " server",
+      "target_argmax_logprob_token": " server",
+      "finish_reason": "length",
+      "trace_idx": 350,
+      "trace_ts": 1780280264.1636,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 318,
+      "forced_position": 334,
+      "next_reference_token_id": 1172,
+      "draft_top1": [
+        279,
+        198,
+        10024,
+        663,
+        369
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 351,
+      "trace_ts": 1780280264.4755,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 319,
+      "forced_position": 335,
+      "next_reference_token_id": 411,
+      "draft_top1": [
+        1653,
+        908,
+        3817,
+        13746,
+        11
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 352,
+      "trace_ts": 1780280264.7875,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 320,
+      "forced_position": 336,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        23485,
+        16682,
+        11,
+        279,
+        85683
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 353,
+      "trace_ts": 1780280265.1032,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 321,
+      "forced_position": 337,
+      "next_reference_token_id": 23485,
+      "draft_top1": [
+        1879,
+        11,
+        279,
+        85683,
+        41054
+      ],
+      "target_argmax_token_id": 21343,
+      "target_argmax_text": "fixed",
+      "target_argmax_logprob_token": "fixed",
+      "finish_reason": "length",
+      "trace_idx": 354,
+      "trace_ts": 1780280265.415,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 322,
+      "forced_position": 338,
+      "next_reference_token_id": 8240,
+      "draft_top1": [
+        11,
+        279,
+        85683,
+        6473,
+        279
+      ],
+      "target_argmax_token_id": 16682,
+      "target_argmax_text": " alignment",
+      "target_argmax_logprob_token": " alignment",
+      "finish_reason": "length",
+      "trace_idx": 355,
+      "trace_ts": 1780280265.7305,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 323,
+      "forced_position": 339,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        279,
+        1558,
+        70573,
+        430,
+        279
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 356,
+      "trace_ts": 1780280266.0466,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 324,
+      "forced_position": 340,
+      "next_reference_token_id": 1179,
+      "draft_top1": [
+        12149,
+        369,
+        709,
+        369,
+        14648
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 357,
+      "trace_ts": 1780280266.3615,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 325,
+      "forced_position": 341,
+      "next_reference_token_id": 866,
+      "draft_top1": [
+        63520,
+        8602,
+        369,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 358,
+      "trace_ts": 1780280266.6786,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 326,
+      "forced_position": 342,
+      "next_reference_token_id": 3555,
+      "draft_top1": [
+        34131,
+        1902,
+        381,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 6575,
+      "target_argmax_text": " earlier",
+      "target_argmax_logprob_token": " earlier",
+      "finish_reason": "length",
+      "trace_idx": 359,
+      "trace_ts": 1780280266.9942,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 327,
+      "forced_position": 343,
+      "next_reference_token_id": 791,
+      "draft_top1": [
+        557,
+        8613,
+        539,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 34131,
+      "target_argmax_text": " mismatch",
+      "target_argmax_logprob_token": " mismatch",
+      "finish_reason": "length",
+      "trace_idx": 360,
+      "trace_ts": 1780280267.3132,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 328,
+      "forced_position": 344,
+      "next_reference_token_id": 32412,
+      "draft_top1": [
+        24693,
+        198,
+        284,
+        557,
+        421
+      ],
+      "target_argmax_token_id": 32412,
+      "target_argmax_text": "-position",
+      "target_argmax_logprob_token": "-position",
+      "finish_reason": "length",
+      "trace_idx": 361,
+      "trace_ts": 1780280267.6299,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 329,
+      "forced_position": 345,
+      "next_reference_token_id": 12558,
+      "draft_top1": [
+        1902,
+        381,
+        198,
+        32228,
+        279
+      ],
+      "target_argmax_token_id": 34131,
+      "target_argmax_text": " mismatch",
+      "target_argmax_logprob_token": " mismatch",
+      "finish_reason": "length",
+      "trace_idx": 362,
+      "trace_ts": 1780280267.948,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 330,
+      "forced_position": 346,
+      "next_reference_token_id": 3571,
+      "draft_top1": [
+        8613,
+        539,
+        279,
+        85683,
+        13
+      ],
+      "target_argmax_token_id": 557,
+      "target_argmax_text": " was",
+      "target_argmax_logprob_token": " was",
+      "finish_reason": "length",
+      "trace_idx": 363,
+      "trace_ts": 1780280268.2655,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 331,
+      "forced_position": 347,
+      "next_reference_token_id": 494,
+      "draft_top1": [
+        279,
+        27867,
+        198,
+        70714,
+        1056
+      ],
+      "target_argmax_token_id": 494,
+      "target_argmax_text": " from",
+      "target_argmax_logprob_token": " from",
+      "finish_reason": "length",
+      "trace_idx": 364,
+      "trace_ts": 1780280268.5815,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 332,
+      "forced_position": 348,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        466,
+        198,
+        3491,
+        2017,
+        11
+      ],
+      "target_argmax_token_id": 36602,
+      "target_argmax_text": " scheduling",
+      "target_argmax_logprob_token": " scheduling",
+      "finish_reason": "length",
+      "trace_idx": 365,
+      "trace_ts": 1780280268.9003,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 333,
+      "forced_position": 349,
+      "next_reference_token_id": 1330,
+      "draft_top1": [
+        11,
+        524,
+        198,
+        1719,
+        87643
+      ],
+      "target_argmax_token_id": 27867,
+      "target_argmax_text": " scheduler",
+      "target_argmax_logprob_token": " scheduler",
+      "finish_reason": "length",
+      "trace_idx": 366,
+      "trace_ts": 1780280269.2191,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 334,
+      "forced_position": 350,
+      "next_reference_token_id": 5757,
+      "draft_top1": [
+        198,
+        32985,
+        303,
+        279,
+        1788
+      ],
+      "target_argmax_token_id": 15814,
+      "target_argmax_text": " servers",
+      "target_argmax_logprob_token": " servers",
+      "finish_reason": "length",
+      "trace_idx": 367,
+      "trace_ts": 1780280269.5404,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 335,
+      "forced_position": 351,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        62856,
+        279,
+        1788,
+        3817,
+        8240
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 368,
+      "trace_ts": 1780280269.8587,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 336,
+      "forced_position": 352,
+      "next_reference_token_id": 20663,
+      "draft_top1": [
+        279,
+        1788,
+        3817,
+        8240,
+        20648
+      ],
+      "target_argmax_token_id": 62856,
+      "target_argmax_text": "seeing",
+      "target_argmax_logprob_token": "seeing",
+      "finish_reason": "length",
+      "trace_idx": 369,
+      "trace_ts": 1780280270.1767,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 337,
+      "forced_position": 353,
+      "next_reference_token_id": 7236,
+      "draft_top1": [
+        494,
+        2086,
+        49219,
+        27222,
+        13
+      ],
+      "target_argmax_token_id": 7236,
+      "target_argmax_text": "uing",
+      "target_argmax_logprob_token": "uing",
+      "finish_reason": "length",
+      "trace_idx": 370,
+      "trace_ts": 1780280270.5012,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 338,
+      "forced_position": 354,
+      "next_reference_token_id": 2086,
+      "draft_top1": [
+        2086,
+        60467,
+        13,
+        271,
+        760
+      ],
+      "target_argmax_token_id": 494,
+      "target_argmax_text": " from",
+      "target_argmax_logprob_token": " from",
+      "finish_reason": "length",
+      "trace_idx": 371,
+      "trace_ts": 1780280270.8205,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 339,
+      "forced_position": 355,
+      "next_reference_token_id": 1414,
+      "draft_top1": [
+        778,
+        13,
+        271,
+        760,
+        14648
+      ],
+      "target_argmax_token_id": 15647,
+      "target_argmax_text": " continu",
+      "target_argmax_logprob_token": " continu",
+      "finish_reason": "length",
+      "trace_idx": 372,
+      "trace_ts": 1780280271.1414,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 340,
+      "forced_position": 356,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        524,
+        494,
+        279,
+        85683,
+        198
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 373,
+      "trace_ts": 1780280271.4605,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 341,
+      "forced_position": 357,
+      "next_reference_token_id": 1368,
+      "draft_top1": [
+        760,
+        14648,
+        3728,
+        13518,
+        279
+      ],
+      "target_argmax_token_id": 271,
+      "target_argmax_text": "\n\n",
+      "target_argmax_logprob_token": "\n\n",
+      "finish_reason": "length",
+      "trace_idx": 374,
+      "trace_ts": 1780280271.7787,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 342,
+      "forced_position": 358,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        4757,
+        1503,
+        524,
+        2353,
+        11
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 375,
+      "trace_ts": 1780280272.0968,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 343,
+      "forced_position": 359,
+      "next_reference_token_id": 9665,
+      "draft_top1": [
+        63815,
+        11,
+        279,
+        2849,
+        33254
+      ],
+      "target_argmax_token_id": 12558,
+      "target_argmax_text": " gap",
+      "target_argmax_logprob_token": " gap",
+      "finish_reason": "length",
+      "trace_idx": 376,
+      "trace_ts": 1780280272.4135,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 344,
+      "forced_position": 360,
+      "next_reference_token_id": 8516,
+      "draft_top1": [
+        1990,
+        35140,
+        4050,
+        11,
+        279
+      ],
+      "target_argmax_token_id": 1558,
+      "target_argmax_text": " model",
+      "target_argmax_logprob_token": " model",
+      "finish_reason": "length",
+      "trace_idx": 377,
+      "trace_ts": 1780280272.7385,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 345,
+      "forced_position": 361,
+      "next_reference_token_id": 42103,
+      "draft_top1": [
+        22602,
+        1056,
+        279,
+        2100,
+        198
+      ],
+      "target_argmax_token_id": 369,
+      "target_argmax_text": " is",
+      "target_argmax_logprob_token": " is",
+      "finish_reason": "length",
+      "trace_idx": 378,
+      "trace_ts": 1780280273.0576,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 346,
+      "forced_position": 362,
+      "next_reference_token_id": 1345,
+      "draft_top1": [
+        279,
+        2100,
+        11,
+        279,
+        198
+      ],
+      "target_argmax_token_id": 494,
+      "target_argmax_text": " from",
+      "target_argmax_logprob_token": " from",
+      "finish_reason": "length",
+      "trace_idx": 379,
+      "trace_ts": 1780280273.3797,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 347,
+      "forced_position": 363,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        2100,
+        1990,
+        8798,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 380,
+      "trace_ts": 1780280273.7022,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 348,
+      "forced_position": 364,
+      "next_reference_token_id": 2100,
+      "draft_top1": [
+        8798,
+        11,
+        198,
+        1719,
+        85683
+      ],
+      "target_argmax_token_id": 2100,
+      "target_argmax_text": " target",
+      "target_argmax_logprob_token": " target",
+      "finish_reason": "length",
+      "trace_idx": 381,
+      "trace_ts": 1780280274.0226,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 349,
+      "forced_position": 365,
+      "next_reference_token_id": 1344,
+      "draft_top1": [
+        2721,
+        369,
+        11,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 1344,
+      "target_argmax_text": " arg",
+      "target_argmax_logprob_token": " arg",
+      "finish_reason": "length",
+      "trace_idx": 382,
+      "trace_ts": 1780280274.3462,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 350,
+      "forced_position": 366,
+      "next_reference_token_id": 2721,
+      "draft_top1": [
+        369,
+        198,
+        41933,
+        11,
+        279
+      ],
+      "target_argmax_token_id": 2721,
+      "target_argmax_text": "max",
+      "target_argmax_logprob_token": "max",
+      "finish_reason": "length",
+      "trace_idx": 383,
+      "trace_ts": 1780280274.6672,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 351,
+      "forced_position": 367,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        19307,
+        11,
+        279,
+        85683,
+        369
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 384,
+      "trace_ts": 1780280274.9898,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 352,
+      "forced_position": 368,
+      "next_reference_token_id": 19307,
+      "draft_top1": [
+        11,
+        279,
+        85683,
+        41054,
+        3817
+      ],
+      "target_argmax_token_id": 19307,
+      "target_argmax_text": "matches",
+      "target_argmax_logprob_token": "matches",
+      "finish_reason": "length",
+      "trace_idx": 385,
+      "trace_ts": 1780280275.3126,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 353,
+      "forced_position": 369,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        279,
+        78361,
+        369,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 386,
+      "trace_ts": 1780280275.6378,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 354,
+      "forced_position": 370,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        12558,
+        369,
+        494,
+        279,
+        9665
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 387,
+      "trace_ts": 1780280275.9625,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 355,
+      "forced_position": 371,
+      "next_reference_token_id": 182349,
+      "draft_top1": [
+        369,
+        4222,
+        4016,
+        310,
+        198
+      ],
+      "target_argmax_token_id": 12558,
+      "target_argmax_text": " gap",
+      "target_argmax_logprob_token": " gap",
+      "finish_reason": "length",
+      "trace_idx": 388,
+      "trace_ts": 1780280276.2831,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 356,
+      "forced_position": 372,
+      "next_reference_token_id": 369,
+      "draft_top1": [
+        279,
+        799,
+        13,
+        271,
+        760
+      ],
+      "target_argmax_token_id": 369,
+      "target_argmax_text": " is",
+      "target_argmax_logprob_token": " is",
+      "finish_reason": "length",
+      "trace_idx": 389,
+      "trace_ts": 1780280276.6039,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 357,
+      "forced_position": 373,
+      "next_reference_token_id": 4808,
+      "draft_top1": [
+        71660,
+        13,
+        271,
+        760,
+        85683
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 390,
+      "trace_ts": 1780280276.9248,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 358,
+      "forced_position": 374,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        1368,
+        279,
+        9665,
+        8516,
+        42103
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 391,
+      "trace_ts": 1780280277.2474,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 359,
+      "forced_position": 375,
+      "next_reference_token_id": 1368,
+      "draft_top1": [
+        279,
+        2100,
+        1344,
+        2721,
+        198
+      ],
+      "target_argmax_token_id": 1368,
+      "target_argmax_text": " If",
+      "target_argmax_logprob_token": " If",
+      "finish_reason": "length",
+      "trace_idx": 392,
+      "trace_ts": 1780280277.5714,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 360,
+      "forced_position": 376,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        27376,
+        11,
+        279,
+        198,
+        751
+      ],
+      "target_argmax_token_id": 2107,
+      "target_argmax_text": " both",
+      "target_argmax_logprob_token": " both",
+      "finish_reason": "length",
+      "trace_idx": 393,
+      "trace_ts": 1780280277.8969,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 361,
+      "forced_position": 377,
+      "next_reference_token_id": 2100,
+      "draft_top1": [
+        1344,
+        2721,
+        198,
+        1719,
+        2100
+      ],
+      "target_argmax_token_id": 2100,
+      "target_argmax_text": " target",
+      "target_argmax_logprob_token": " target",
+      "finish_reason": "length",
+      "trace_idx": 394,
+      "trace_ts": 1780280278.2187,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 362,
+      "forced_position": 378,
+      "next_reference_token_id": 1344,
+      "draft_top1": [
+        2721,
+        42103,
+        11,
+        279,
+        198
+      ],
+      "target_argmax_token_id": 1344,
+      "target_argmax_text": " arg",
+      "target_argmax_logprob_token": " arg",
+      "finish_reason": "length",
+      "trace_idx": 395,
+      "trace_ts": 1780280278.5426,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 363,
+      "forced_position": 379,
+      "next_reference_token_id": 2721,
+      "draft_top1": [
+        42103,
+        11,
+        279,
+        198,
+        751
+      ],
+      "target_argmax_token_id": 2721,
+      "target_argmax_text": "max",
+      "target_argmax_logprob_token": "max",
+      "finish_reason": "length",
+      "trace_idx": 396,
+      "trace_ts": 1780280278.8653,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 364,
+      "forced_position": 380,
+      "next_reference_token_id": 42103,
+      "draft_top1": [
+        11,
+        279,
+        182349,
+        369,
+        1245
+      ],
+      "target_argmax_token_id": 42103,
+      "target_argmax_text": " differs",
+      "target_argmax_logprob_token": " differs",
+      "finish_reason": "length",
+      "trace_idx": 397,
+      "trace_ts": 1780280279.1912,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 365,
+      "forced_position": 381,
+      "next_reference_token_id": 11,
+      "draft_top1": [
+        279,
+        2100,
+        1344,
+        2721,
+        198
+      ],
+      "target_argmax_token_id": 11,
+      "target_argmax_text": ",",
+      "target_argmax_logprob_token": ",",
+      "finish_reason": "length",
+      "trace_idx": 398,
+      "trace_ts": 1780280279.5192,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 366,
+      "forced_position": 382,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        85683,
+        369,
+        198,
+        1719,
+        2100
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 399,
+      "trace_ts": 1780280279.8475,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 367,
+      "forced_position": 383,
+      "next_reference_token_id": 2100,
+      "draft_top1": [
+        369,
+        198,
+        20663,
+        7236,
+        2086
+      ],
+      "target_argmax_token_id": 85683,
+      "target_argmax_text": " verifier",
+      "target_argmax_logprob_token": " verifier",
+      "finish_reason": "length",
+      "trace_idx": 400,
+      "trace_ts": 1780280280.1739,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 368,
+      "forced_position": 384,
+      "next_reference_token_id": 4487,
+      "draft_top1": [
+        198,
+        284,
+        524,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 1558,
+      "target_argmax_text": " model",
+      "target_argmax_logprob_token": " model",
+      "finish_reason": "length",
+      "trace_idx": 401,
+      "trace_ts": 1780280280.4996,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 369,
+      "forced_position": 385,
+      "next_reference_token_id": 198,
+      "draft_top1": [
+        6184,
+        369,
+        10548,
+        13,
+        271
+      ],
+      "target_argmax_token_id": 198,
+      "target_argmax_text": "\n",
+      "target_argmax_logprob_token": "\n",
+      "finish_reason": "length",
+      "trace_idx": 402,
+      "trace_ts": 1780280280.8383,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 370,
+      "forced_position": 386,
+      "next_reference_token_id": 2267,
+      "draft_top1": [
+        369,
+        4808,
+        13,
+        271,
+        760
+      ],
+      "target_argmax_token_id": 6184,
+      "target_argmax_text": "pass",
+      "target_argmax_logprob_token": "pass",
+      "finish_reason": "length",
+      "trace_idx": 403,
+      "trace_ts": 1780280281.1747,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 371,
+      "forced_position": 387,
+      "next_reference_token_id": 369,
+      "draft_top1": [
+        10548,
+        13,
+        271,
+        760,
+        14648
+      ],
+      "target_argmax_token_id": 369,
+      "target_argmax_text": " is",
+      "target_argmax_logprob_token": " is",
+      "finish_reason": "length",
+      "trace_idx": 404,
+      "trace_ts": 1780280281.5186,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 372,
+      "forced_position": 388,
+      "next_reference_token_id": 524,
+      "draft_top1": [
+        13,
+        271,
+        760,
+        14648,
+        3728
+      ],
+      "target_argmax_token_id": 10548,
+      "target_argmax_text": " broken",
+      "target_argmax_logprob_token": " broken",
+      "finish_reason": "length",
+      "trace_idx": 405,
+      "trace_ts": 1780280281.8557,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 373,
+      "forced_position": 389,
+      "next_reference_token_id": 13185,
+      "draft_top1": [
+        13,
+        271,
+        760,
+        14648,
+        3728
+      ],
+      "target_argmax_token_id": 69892,
+      "target_argmax_text": " deterministic",
+      "target_argmax_logprob_token": " deterministic",
+      "finish_reason": "length",
+      "trace_idx": 406,
+      "trace_ts": 1780280282.2036,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 374,
+      "forced_position": 390,
+      "next_reference_token_id": 321,
+      "draft_top1": [
+        271,
+        1919,
+        369,
+        264,
+        13
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 407,
+      "trace_ts": 1780280282.5471,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 375,
+      "forced_position": 391,
+      "next_reference_token_id": 279,
+      "draft_top1": [
+        85683,
+        1902,
+        381,
+        198,
+        1719
+      ],
+      "target_argmax_token_id": 279,
+      "target_argmax_text": " the",
+      "target_argmax_logprob_token": " the",
+      "finish_reason": "length",
+      "trace_idx": 408,
+      "trace_ts": 1780280282.8914,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 376,
+      "forced_position": 392,
+      "next_reference_token_id": 4757,
+      "draft_top1": [
+        5073,
+        369,
+        2892,
+        279,
+        2100
+      ],
+      "target_argmax_token_id": 3578,
+      "target_argmax_text": " root",
+      "target_argmax_logprob_token": " root",
+      "finish_reason": "length",
+      "trace_idx": 409,
+      "trace_ts": 1780280283.2306,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 377,
+      "forced_position": 393,
+      "next_reference_token_id": 1752,
+      "draft_top1": [
+        1902,
+        381,
+        311,
+        12,
+        1653
+      ],
+      "target_argmax_token_id": 3421,
+      "target_argmax_text": " server",
+      "target_argmax_logprob_token": " server",
+      "finish_reason": "length",
+      "trace_idx": 410,
+      "trace_ts": 1780280283.5776,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 378,
+      "forced_position": 394,
+      "next_reference_token_id": 3749,
+      "draft_top1": [
+        381,
+        311,
+        12,
+        271,
+        4277
+      ],
+      "target_argmax_token_id": 1902,
+      "target_argmax_text": " must",
+      "target_argmax_logprob_token": " must",
+      "finish_reason": "length",
+      "trace_idx": 411,
+      "trace_ts": 1780280283.9187,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 379,
+      "forced_position": 395,
+      "next_reference_token_id": 18539,
+      "draft_top1": [
+        13,
+        271,
+        760,
+        6259,
+        30941
+      ],
+      "target_argmax_token_id": 8548,
+      "target_argmax_text": " investigation",
+      "target_argmax_logprob_token": " investigation",
+      "finish_reason": "length",
+      "trace_idx": 412,
+      "trace_ts": 1780280284.2578,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 380,
+      "forced_position": 396,
+      "next_reference_token_id": 6326,
+      "draft_top1": [
+        13,
+        271,
+        760,
+        6259,
+        30941
+      ],
+      "target_argmax_token_id": 24865,
+      "target_argmax_text": " inspection",
+      "target_argmax_logprob_token": " inspection",
+      "finish_reason": "length",
+      "trace_idx": 413,
+      "trace_ts": 1780280284.6008,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 381,
+      "forced_position": 397,
+      "next_reference_token_id": 20105,
+      "draft_top1": [
+        271,
+        760,
+        6259,
+        30941,
+        264
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 414,
+      "trace_ts": 1780280284.9441,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 382,
+      "forced_position": 398,
+      "next_reference_token_id": 26805,
+      "draft_top1": [
+        13,
+        271,
+        760,
+        14648,
+        3728
+      ],
+      "target_argmax_token_id": 24865,
+      "target_argmax_text": " inspection",
+      "target_argmax_logprob_token": " inspection",
+      "finish_reason": "length",
+      "trace_idx": 415,
+      "trace_ts": 1780280285.2929,
+      "recovery_warning": null
+    },
+    {
+      "row_index": 383,
+      "forced_position": 399,
+      "next_reference_token_id": 13,
+      "draft_top1": [
+        271,
+        1919,
+        369,
+        264,
+        1892
+      ],
+      "target_argmax_token_id": 13,
+      "target_argmax_text": ".",
+      "target_argmax_logprob_token": ".",
+      "finish_reason": "length",
+      "trace_idx": 416,
+      "trace_ts": 1780280285.6349,
+      "recovery_warning": null
+    }
+  ]
+}
