@@ -18,3 +18,6 @@ HEAD is now at 6ed769d58 Merge pull request #13228 from astrofrog/fix-spectralco
 [2026-06-01T00:39:44Z] <- astropy__astropy-13236 verdict=failed elapsed_total=1.2s
 [2026-06-01T00:39:44Z] <- astropy__astropy-12907 verdict=failed elapsed_total=1.2s
 [2026-06-01T00:39:44Z] <- astropy__astropy-13033 verdict=failed elapsed_total=1.2s
+[2026-06-01T00:41:11Z]    astropy__astropy-13398: empty patch (agent_gave_up); retrying codex once
+[2026-06-01T00:41:33Z] <- astropy__astropy-13398 verdict=failed elapsed_total=109.8s
+=== [2026-06-01T00:41:33Z] DONE n=4 resolved_rate=0.0 verdicts={'failed': 4} ===
