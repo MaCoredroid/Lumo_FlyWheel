@@ -55,3 +55,9 @@ HEAD is now at 7269fa3e3 Merge pull request #14013 from WilliamJamieson/deprecat
 [2026-06-01T23:18:58Z] -> astropy__astropy-14369
 Preparing worktree (detached HEAD fa4e8d1cd)
 HEAD is now at fa4e8d1cd Merge pull request #14358 from WilliamJamieson/bugfix/asdf_warning
+[2026-06-01T23:19:18Z] <- astropy__astropy-14309 verdict=resolved elapsed_total=177.2s
+[2026-06-01T23:19:18Z] -> astropy__astropy-14508
+Preparing worktree (detached HEAD a3f4ae6cd)
+HEAD is now at a3f4ae6cd Merge pull request #14430 from Cadair/performance_issues_decompress_tile
+[2026-06-01T23:19:39Z]    astropy__astropy-12907: empty patch (agent_gave_up); retrying codex once
+[2026-06-01T23:19:42Z]    astropy__astropy-14508: empty patch (agent_gave_up); retrying codex once
