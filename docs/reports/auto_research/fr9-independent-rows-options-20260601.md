@@ -36,9 +36,13 @@ Current FR9 checkpoint:
 - Winner-commit checkpoint after adding recurrent-state sync:
   `avg=3.441666666666667`, `acc0=0.0`, `full5=0.4777777777777778`,
   `superset_violations=0`, `recovery_rate=0.049305555555555554`, with
-  pre-commit spine 0 at `avg=3.327777777777778`. The same run produced
-  `47.50160804227232` completion tokens/sec versus the E5 reference
-  `26.86`.
+  pre-commit spine 0 under sync at `avg=3.327777777777778`, `acc0=0.0`.
+  The same direct-probe run produced `47.50160804227232` completion tokens/sec.
+- Apples-to-apples direct-probe E5-equivalent checkpoint
+  (`--row-mode independent --spines 1`, same 16-prompt fixture, `--limit 64`,
+  temperature 0): `avg=2.7720739219712525`, `acc0=0.16221765913757702`,
+  `full5=0.33744010951403147`, `44.454399711901914` completion tokens/sec.
+  Direct-probe winner speedup is therefore `1.0685468333869903x`.
 - Independent rows are persistent. The current winner-commit path chooses the
   longest accepted row each event, commits that row's sampled tokens to every
   sibling request, and copies the winner's post-accept GDN recurrent state back
