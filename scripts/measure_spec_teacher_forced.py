@@ -220,11 +220,11 @@ def compute_teacher_forced_acceptance(
     return len(accepted), target_chain, None
 
 
-def _completion_one(endpoint: str, model: str, prompt: str) -> dict[str, Any]:
+def _completion_one(endpoint: str, model: str, prompt: str, max_tokens: int) -> dict[str, Any]:
     payload = {
         "model": model,
         "prompt": prompt,
-        "max_tokens": 1,
+        "max_tokens": max_tokens,
         "temperature": 0,
         "top_p": 1,
         "logprobs": 5,
@@ -282,12 +282,19 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
 
     rows: list[dict[str, Any]] = []
     start_ts = time.time()
+    completion_max_tokens = (
+        args.completion_max_tokens
+        if args.completion_max_tokens is not None
+        else (2 if args.mode == "tree" else 1)
+    )
     for row_index, position in enumerate(range(args.start_token, args.start_token + args.limit)):
         prefix_tokens = reference_tokens[:position]
         prefix_text = detokenize(args.endpoint, args.model, prefix_tokens)
         before_offset = trace_path.stat().st_size
         before_tree_lcp_offset = tree_lcp_path.stat().st_size if args.mode == "tree" else 0
-        response = _completion_one(args.endpoint, args.model, prefix_text)
+        response = _completion_one(
+            args.endpoint, args.model, prefix_text, completion_max_tokens
+        )
         offset, trace_row = wait_for_one_trace_record(trace_path, before_offset)
         tree_lcp_row = None
         if args.mode == "tree":
@@ -347,6 +354,7 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         "reference_token_count": len(reference_tokens),
         "start_token": args.start_token,
         "limit": args.limit,
+        "completion_max_tokens": completion_max_tokens,
         "depth": args.depth,
         "spines": args.spines,
         "trace_file": str(trace_path),
@@ -480,6 +488,7 @@ def main(argv: list[str] | None = None) -> int:
     measure_parser.add_argument("--tree-lcp-log", default=str(DEFAULT_TREE_LCP))
     measure_parser.add_argument("--start-token", type=int, default=16)
     measure_parser.add_argument("--limit", type=int, default=384)
+    measure_parser.add_argument("--completion-max-tokens", type=int, default=None)
     measure_parser.add_argument("--depth", type=int, default=5)
     measure_parser.add_argument("--spines", type=int, default=2)
     measure_parser.add_argument("--progress-every", type=int, default=25)
