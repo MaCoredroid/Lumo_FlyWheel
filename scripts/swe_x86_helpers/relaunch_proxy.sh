@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 cd /home/mark/shared/lumoFlyWheel
-# preserve exact env (bypass kept ON; auto-continue + forced temp/top_p intact)
+# preserve exact env (bypass kept ON; auto-continue + forced temp intact)
 export LUMO_PROXY_RETRY_UPSTREAM_400=1
 export LUMO_PROXY_AUTO_CONTINUE=1
 export LUMO_PROXY_AUTO_CONTINUE_MESSAGE="Continue working on this task. Do not stop until you have left a concrete source edit that makes the tests pass. If your previous attempt did not pass, read the failure and try a different approach. Do not spend time on environment/pip/conda setup."
@@ -9,9 +9,14 @@ export LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=10
 export LUMO_PROXY_MAX_OUTPUT_TOKENS=80000
 export LUMO_PROXY_NONSTREAM_BYPASS=1
 export LUMO_PROXY_REQUEST_DUMP_DIR=/tmp/lumo_proxy_request_dumps
-# temp/top_p are overridable by the caller's env (e.g. the experiment runner
-# switching temp 1.0<->0.6); default to the campaign values when unset.
-export LUMO_PROXY_FORCE_TOP_P=${LUMO_PROXY_FORCE_TOP_P:-0.95}
+# Temperature is overridable by the caller's env (e.g. the experiment runner
+# switching temp 1.0<->0.6). Leave top_p unforced unless the caller explicitly
+# sets LUMO_PROXY_FORCE_TOP_P; the agentic B4 baseline uses the model default.
+if [ -n "${LUMO_PROXY_FORCE_TOP_P:-}" ]; then
+  export LUMO_PROXY_FORCE_TOP_P
+else
+  unset LUMO_PROXY_FORCE_TOP_P
+fi
 export LUMO_PROXY_FORCE_TEMPERATURE=${LUMO_PROXY_FORCE_TEMPERATURE:-1.0}
 export LUMO_TRACK_B_REQUEST_METRICS_OUT=${LUMO_TRACK_B_REQUEST_METRICS_OUT:-/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl}
 LISTEN_HOST=${LUMO_PROXY_LISTEN_HOST:-127.0.0.1}
