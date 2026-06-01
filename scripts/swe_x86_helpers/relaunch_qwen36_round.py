@@ -5242,6 +5242,38 @@ def _apply_max_num_seqs(src: str, value: str | None) -> str:
     return src.replace(old, f"    max_num_seqs: {max_num_seqs}", 1)
 
 
+def _apply_agentic_request_shaping(src: str) -> str:
+    """Keep the proxy admission cap aligned with B4 agentic measurement.
+
+    The legacy MTP bundle carries ``request_shaping.target_concurrency: 1``.
+    The proxy maps that to one active eval request and no queue, which rejects
+    the SWE B=4 workload before it reaches vLLM.  vLLM row capacity remains
+    governed by ``max_num_seqs``; this only admits the four public Codex
+    requests that the benchmark asks for.
+    """
+    import re as _re
+
+    match = _re.search(r"(?m)^    max_num_seqs: ([0-9]+)$", src)
+    if match is None:
+        raise RuntimeError("max_num_seqs missing in bundle")
+    max_num_seqs = int(match.group(1))
+    requested_eval_cap = int(os.environ.get("LUMO_PROXY_CONCURRENCY_CAP_EVAL", "4"))
+    eval_cap = max(1, min(requested_eval_cap, max_num_seqs))
+    queue_depth = int(os.environ.get("LUMO_PROXY_ADMISSION_QUEUE_DEPTH", "128"))
+    if queue_depth < 0:
+        raise RuntimeError("LUMO_PROXY_ADMISSION_QUEUE_DEPTH must be >= 0")
+    block = (
+        "  request_shaping:\n"
+        f"    concurrency_cap_eval: {eval_cap}\n"
+        "    concurrency_cap_rollout: 0\n"
+        f"    admission_queue_depth_max: {queue_depth}\n"
+    )
+    pattern = r"(?ms)^  request_shaping:\n(?:    .*\n)+?(?=^  [A-Za-z0-9_]+:)"
+    if _re.search(pattern, src) is None:
+        raise RuntimeError("request_shaping block missing in bundle")
+    return _re.sub(pattern, block, src, count=1)
+
+
 def _apply_enforce_eager(src: str, value: str | None) -> str:
     if value is None or value.lower() not in {"1", "true", "yes", "on"}:
         return src
@@ -5367,6 +5399,7 @@ def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = No
     src = _apply_gpu_memory_utilization(
         src, os.environ.get("LUMO_GPU_MEMORY_UTILIZATION"))
     src = _apply_max_num_seqs(src, os.environ.get("LUMO_VLLM_MAX_NUM_SEQS"))
+    src = _apply_agentic_request_shaping(src)
     src = _apply_enforce_eager(src, os.environ.get("LUMO_ENFORCE_EAGER"))
     cuda_graph_capture = os.environ.get("LUMO_CUDAGRAPH_MODE") or os.environ.get("LUMO_CUDA_GRAPH_CAPTURE")
     src = _apply_cuda_graph_capture(src, cuda_graph_capture)
