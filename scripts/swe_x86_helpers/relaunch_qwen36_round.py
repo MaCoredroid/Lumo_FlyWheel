@@ -12315,7 +12315,8 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     # backend (target verify + draft). vLLM's selector has no tree logic and does
     # not honor VLLM_ATTENTION_BACKEND in 0.19.0, so we source-edit the selector
     # (config F only). Realized KV is auto/bf16, which TreeAttention supports.
-    fa_unique = os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"
+    target_per_path_gdn = os.environ.get("LUMO_TREE_TARGET_PER_PATH_GDN") == "1"
+    fa_unique = os.environ.get("LUMO_FA_UNIQUE_NODES") == "1" or target_per_path_gdn
     dbg = "export LUMO_TREE_DRAFT_DEBUG=1\n" if (tree and tree_debug) else ""
     tree_blocks = (
         _TREE_ATTN_BLOCK
@@ -12347,7 +12348,11 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if (os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" or os.environ.get("LUMO_FB_TWO_SPINE") == "1") else ""
     fb_internal = "export LUMO_FB_INTERNAL_ROWS=1\n" if os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1" else ""
     fb_kernel_rows = "export LUMO_FB_KERNEL_ROWS=1\n" if os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""
-    fa_unique_env = "export LUMO_FA_UNIQUE_NODES=1\n" if fa_unique else ""
+    fa_unique_env = (
+        "export LUMO_FA_UNIQUE_NODES=1\n"
+        "export LUMO_TREE_TARGET_PER_PATH_GDN=1\n"
+        if fa_unique else ""
+    )
     # Batch-invariant vLLM must be enabled through the host-side ModelServer
     # knob so the launch command also gets a concrete attention backend. A raw
     # inner-container VLLM_BATCH_INVARIANT export makes vLLM fail at init with
@@ -12390,6 +12395,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         "LUMO_FA_TREE_DELTA_TRITON",
         "LUMO_FA_CUDAGRAPH_UNSAFE_GDN_CORE",
         "LUMO_TREE_PER_PATH_DRAFTER",
+        "LUMO_TREE_TARGET_PER_PATH_GDN",
         "LUMO_TREE_PER_PATH_DRAFTER_LOG",
     ):
         if os.environ.get(_name):
