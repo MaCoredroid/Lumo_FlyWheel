@@ -1,0 +1,218 @@
+{
+  "schema": "spec_per_position.v1",
+  "mode": "tree",
+  "source": "tree_path_lcp_max.jsonl path0_lcp/spine-A path_scores [0,2,4,6,8]",
+  "endpoint": "http://127.0.0.1:9950",
+  "model": "qwen3.6-27b",
+  "prompts": "tests/fixtures/spec_probe_prompts.json",
+  "prompt_sha256": "ed502a387b1762f8cdb6140d1a00f22d30269a9f5e0ca4d27389996125320f35",
+  "request_count": 16,
+  "max_tokens": 400,
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "concurrency": 4,
+  "start_ts": 1780277736.477367,
+  "end_ts": 1780277902.8995893,
+  "guard": {
+    "endpoint": "http://127.0.0.1:9950",
+    "container_id": "70015028a233a171e056e7b322bc0db7ce4e53bede7ecf6be7fbdcd1dd3ab523",
+    "cmdline_has_flash_attn": true,
+    "env_has_vllm_batch_invariant": true,
+    "cmdline": "/usr/bin/python3 /usr/local/bin/vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 127.0.0.1 --port 9950 --quantization fp8 --dtype auto --kv-cache-dtype auto --max-model-len 131072 --gpu-memory-utilization 0.84 --max-num-batched-tokens 8192 --max-num-seqs 4 --enable-prefix-caching --enable-chunked-prefill --no-async-scheduling --attention-backend FLASH_ATTN --chat-template /opt/lumo/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config {\"method\": \"qwen3_5_mtp\", \"num_speculative_tokens\": 10, \"speculative_token_tree\": \"[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]\"} --compilation-config {\"cudagraph_capture_sizes\": [4, 8, 12, 16, 24, 32, 44, 48], \"cudagraph_mode\": \"PIECEWISE\", \"max_cudagraph_capture_size\": 48}"
+  },
+  "metrics_before": {
+    "drafts": 0.0,
+    "accepted_total": 0.0,
+    "pos": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "metrics_after": {
+    "drafts": 2058.0,
+    "accepted_total": 4205.0,
+    "pos": [
+      1521.0,
+      1065.0,
+      738.0,
+      517.0,
+      364.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "spec": {
+    "n_events": 2070,
+    "avg": 1.7265700483091788,
+    "acc0": 0.38357487922705313,
+    "full5": 0.14830917874396135,
+    "per_position": [
+      0.6164251207729469,
+      0.442512077294686,
+      0.30772946859903383,
+      0.21159420289855072,
+      0.14830917874396135
+    ],
+    "counts": {
+      "0": 794,
+      "1": 360,
+      "2": 279,
+      "3": 199,
+      "4": 131,
+      "5": 307
+    }
+  },
+  "results": [
+    {
+      "ok": true,
+      "elapsed_s": 21.829,
+      "completion_tokens": 270,
+      "finish_reason": "stop",
+      "text_prefix": "<think>\n\n</think>\n\n```python\ndef fibonacci(n: int) -> int:\n    \"\"\"\n    Return the nth Fibonacci number using an iterative approach.\n    \n    The Fibonacci sequence is defined as:\n    F(0) = 0, F(1) = 1, F(n) = F(n-1) + F(n-2) for n >= 2.\n  ",
+      "prompt_index": 0
+    },
+    {
+      "ok": true,
+      "elapsed_s": 39.492,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "    pass\n\n<think>\nHere's a thinking process:\n\n1.  **Understand the Goal**: The user wants to complete a Python function `merge_sorted_unique(left, right)` that takes two sorted lists and returns a new sorted list containing only the unique ",
+      "prompt_index": 1
+    },
+    {
+      "ok": true,
+      "elapsed_s": 42.418,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Analyze User Input:**\n   - **Context:** Bug report review\n   - Problem: A cache key is built from a dictionary\n   Symptom: Tests intermittently fail because equivalent dictionaries produce different",
+      "prompt_index": 2
+    },
+    {
+      "ok": true,
+      "elapsed_s": 33.382,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "        self.cache = {}\n        self.order = []\n\n<think>\n\n</think>\n\n```python\nclass LRUCache:\n    def __init__(self, capacity: int):\n        self.capacity = capacity\n        self.cache = {}\n        self.order = []\n\n    def get(self, key: in",
+      "prompt_index": 3
+    },
+    {
+      "ok": true,
+      "elapsed_s": 41.564,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " order:\n1. Import pytest\n2. Define the function parse_duration(text)\n3. Write a test function test_parse_duration()\n4. Use @pytest.mark.parametrize to test multiple inputs\n5. Assert the results\n\n<think>\nHere's a thinking process:\n\n1.  **Und",
+      "prompt_index": 4
+    },
+    {
+      "ok": true,
+      "elapsed_s": 38.738,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " hash\nThe user wants a Python dataclass named `RetryPolicy` with three fields:\n1. `max_attempts`\n2. `base_delay`\n3. `max_delay`\n\nAnd a method `delays()` that presumably returns the sequence of delays for each retry attempt.\n\nLet's think abo",
+      "prompt_index": 5
+    },
+    {
+      "ok": true,
+      "elapsed_s": 37.863,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " for active users in the last 30 days and explain each clause.\n\n<think>\nHere's a thinking process:\n\n1.  **Analyze User Input:**\n   - **Tables:** `users(id, email)` and `events(user_id, created_at)`\n   - **Task:** Write a SQL query for \"acti",
+      "prompt_index": 6
+    },
+    {
+      "ok": true,
+      "elapsed_s": 39.328,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " `groupBy` function should group the items in the array by the key returned by the `keyFn` function.\n\n<think>\nHere's a thinking process:\n\n1.  **Understand the Goal**: The user wants a TypeScript function `groupBy<T, K extends string | numbe",
+      "prompt_index": 7
+    },
+    {
+      "ok": true,
+      "elapsed_s": 43.916,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " just\n\n<think>\nHere's a thinking process:\n\n1.  **Understand User Input:**\n   - The user wants me to continue a Rust function `normalize_path(input: &str) -> String`\n   The function name suggests it should normalize a file path (e.g., resolv",
+      "prompt_index": 8
+    },
+    {
+      "ok": true,
+      "elapsed_s": 41.605,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " <think>\nHere's a thinking process:\n\n1.  **Understand User Request:**\n   - **Goal:** Draft a migration plan for replacing a synchronous file parser with an async streaming parser in a production service.\n   **Context:** Production environme",
+      "prompt_index": 9
+    },
+    {
+      "ok": true,
+      "elapsed_s": 38.403,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": " monitoring\n\n<think>\n\n</think>\n\n```python\ndef topo_sort(graph: dict[str, list[str]]) -> list[str]:\n    \"\"\"\n    Perform topological sorting on a directed graph with cycle detection.\n    \n    Args:\n        graph: A dictionary where keys are n",
+      "prompt_index": 10
+    },
+    {
+      "ok": true,
+      "elapsed_s": 43.345,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "   --dry-run\n#   Validates all inputs and performs a full simulation of the\n#   processing pipeline without writing any output files.\n\n<think>\nHere's a thinking process:\n\n1.  **Analyze User Input:**\n   - **Input:** A command line option `--",
+      "prompt_index": 11
+    },
+    {
+      "ok": true,
+      "elapsed_s": 35.263,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "ices\ndef add_sample(self, value):\n    if self._samples is None:\n        self._samples = []\n    self._samples.append(sample)\n    self._count += 1\n```\n\n<think>\nHere's a thinking process:\n\n1.  **Analyze the User Input:**\n   - **Traceback:** `T",
+      "prompt_index": 12
+    },
+    {
+      "ok": true,
+      "elapsed_s": 32.165,
+      "completion_tokens": 375,
+      "finish_reason": "stop",
+      "text_prefix": " unsupported []string\n\tfor _, v := range values {\n\t\tif !contains(unsupported, v1) {\n\n<think>\n\n</think>\n\n```go\nfunc Deduplicate(values []string) []string {\n\tunsupported := []string{}\n\tfor _, v1 := range values {\n\t\tif !contains(unsupported, v",
+      "prompt_index": 13
+    },
+    {
+      "ok": true,
+      "elapsed_s": 38.96,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "  def chunked(iterable, n):\n    \"\"\"Yield successive n-sized chunks from iterable.\"\"\"\n    # Your code here\n```\n\n<think>\n\n</think>\n\n```python\ndef chunks(n):\n    \"\"\"Yields successive n-sized chunks from an iterable.\"\"\"\n    def _chunks(iterable",
+      "prompt_index": 14
+    },
+    {
+      "ok": true,
+      "elapsed_s": 39.33,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "     make a batch inference pipeline deterministic when GPU kernels may choose different algorithms for different batch sizes, you need to address the non-determinism introduced by the GPU's algorithm selection. Here are some strategies to ",
+      "prompt_index": 15
+    }
+  ]
+}

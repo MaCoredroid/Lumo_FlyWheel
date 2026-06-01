@@ -1,0 +1,221 @@
+{
+  "schema": "spec_per_position.v1",
+  "mode": "e5",
+  "source": "vllm Prometheus spec_decode accepted_tokens_per_pos delta",
+  "endpoint": "http://127.0.0.1:9950",
+  "model": "qwen3.6-27b",
+  "prompts": "tests/fixtures/spec_probe_prompts.json",
+  "prompt_sha256": "ed502a387b1762f8cdb6140d1a00f22d30269a9f5e0ca4d27389996125320f35",
+  "request_count": 16,
+  "max_tokens": 400,
+  "temperature": 0.0,
+  "top_p": 1.0,
+  "concurrency": 4,
+  "start_ts": 1780277030.1299553,
+  "end_ts": 1780277163.321153,
+  "guard": {
+    "endpoint": "http://127.0.0.1:9950",
+    "container_id": "c66ab444d12da3ba124c203e3b9c325b85a4f7cffe10f850a15b19badced4e27",
+    "cmdline_has_flash_attn": true,
+    "env_has_vllm_batch_invariant": true,
+    "cmdline": "bash -lc set -euo pipefail  python3 - <<'LUMOQ36FP8CFG' from pathlib import Path import json  cfg_path = Path('/models/qwen3.6-27b-fp8/config.json') if not cfg_path.exists():     print('[TRACK-B-PRELAUNCH] qwen3.6 fp8 config not present; skip quant metadata fix') else:     cfg = json.loads(cfg_path.read_text())     text_cfg = cfg.get('text_config') or {}     layer_types = list(text_cfg.get('layer_types') or [])     modules_to_not_convert = [         'lm_head',         'model.language_model.embed_tokens',         'mtp.fc',     ]     for idx, layer_type in enumerate(layer_types):         if layer_type == 'linear_attention':             base = f'model.language_model.layers.{idx}.linear_attn'             modules_to_not_convert.extend([                 f'{base}.conv1d',                 f'{base}.in_proj_a',                 f'{base}.in_proj_b',             ])     vision_depth = int((cfg.get('vision_config') or {}).get('depth') or 0)     for prefix in ('model.visual', 'visual'):         for idx in range(vision_depth):             base = f'{prefix}.blocks.{idx}'             modules_to_not_convert.extend([                 f'{base}.attn.proj',                 f'{base}.attn.qkv',                 f'{base}.mlp.linear_fc1',                 f'{base}.mlp.linear_fc2',             ])         modules_to_not_convert.extend([             f'{prefix}.merger.linear_fc1',             f'{prefix}.merger.linear_fc2',             f'{prefix}.patch_embed.proj',             f'{prefix}.pos_embed',         ])     existing = cfg.get('quantization_config') or {}     desired = {         'quant_method': 'fp8',         'activation_scheme': 'dynamic',         'weight_per_tensor': False,         'act_per_tensor': False,         'weight_block_size': [128, 128],         'modules_to_not_convert': sorted(set(modules_to_not_convert)),     }     if existing == desired:         print('[TRACK-B-PRELAUNCH] qwen3.6 fp8 quant metadata already present')     else:         cfg['quantization_config'] = desired         bak = cfg_path.with_suffix('.json.lumo_pre_fp8_fix.bak')         if not bak.exists():             bak.write_text(cfg_path.read_text())         cfg_path.write_text(json.dumps(cfg, indent=2, sort_keys=False) + '\\n')         print('[TRACK-B-PRELAUNCH] injected/updated qwen3.6 fp8 block-quant metadata') LUMOQ36FP8CFG  python3 - <<'LUMOCCONVASSERT' from pathlib import Path import py_compile  p = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/ops/causal_conv1d.py') text = p.read_text() sentinel = '# LUMO_CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX' if sentinel in text:     print('[TRACK-B-PRELAUNCH] causal_conv1d cudagraph assert fix already present') else:     old = \"\"\"        assert num_cache_lines >= batch         assert weight.stride(1) == 1  # Need this \"\"\"     new = \"\"\"        # LUMO_CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX: during full decode CUDA-graph         # capture, batch is the capture size while num_cache_lines is the Mamba         # state pool width. When conv_state_indices is provided, the valid batch         # invariant is the index-table length, not num_cache_lines >= batch.         if conv_state_indices is None:             assert num_cache_lines >= batch         else:             assert batch == conv_state_indices.shape[0], (                 f\"ERROR: conv_state_indices should have shape ({batch},*) but got {conv_state_indices.shape}\"             )         assert weight.stride(1) == 1  # Need this \"\"\"     if old not in text:         raise RuntimeError('causal_conv1d cudagraph assert anchor not found')     text = text.replace(old, new, 1)     p.write_text(text)     py_compile.compile(str(p), doraise=True)     print('[TRACK-B-PRELAUNCH] applied causal_conv1d cudagraph assert fix') LUMOCCONVASSERT  python3 - <<'LUMONOSTALEFB' from pathlib import Path root = Path('/usr/local/lib/python3.12/dist-packages/vllm') hits = [] for path in root.rglob('*.py'):     try:         text = path.read_text(errors='ignore')     except Exception:         continue     if 'LUMO_FB' in text:         hits.append(str(path.relative_to(root))) if hits:     raise RuntimeError(         'Non-Fb launch found stale F_b vLLM source patches: '         + ', '.join(hits[:20])) print('[TRACK-B-PRELAUNCH] no stale F_b vLLM source patches found') LUMONOSTALEFB export LUMO_CUDAGRAPH_RUNTIME_TELEMETRY=1 python3 - <<'PY' # Lumo Track B 2026-05-08: GPU memory hygiene before the next vLLM # launch. GB10 unifies GPU memory with system RAM; the NVIDIA driver # can retain prior-process allocations across container exits even # when nvidia-smi reports no running processes. If the previous vLLM # process leaked memory, /proc/meminfo MemAvailable will be lower # than the gpu_memory_utilization request would need, and engine # init will fail with `Free memory on device cuda:0 (X/Y GiB) on # startup is less than desired GPU memory utilization`. Wait briefly # for the driver to release; if it doesn't, fail loud with operator # instructions. import os import time  MIN_AVAILABLE_GIB = float(os.environ.get('LUMO_TRACK_B_MIN_FREE_GIB', '40')) WAIT_TIMEOUT_S = int(os.environ.get('LUMO_TRACK_B_FREE_WAIT_S', '300'))  def _meminfo_available_gib():     with open('/proc/meminfo', 'r', encoding='utf-8') as fh:         for line in fh:             if line.startswith('MemAvailable:'):                 kib = int(line.split()[1])                 return kib / 1024 / 1024     return 0.0  # Note on the actual recovery path: the proven memory-collection # command on this host is `sync; echo 3 > /proc/sys/vm/drop_caches; # swapoff -a || true; swapon -a || true` (recovers ~90+ GiB after a # vLLM teardown). It runs HOST-SIDE and needs root via # LUMO_SUDO_PASSWORD; ModelServer._recover_host_memory() in # src/lumo_flywheel_serving/model_server.py invokes it automatically # at vLLM lifecycle boundaries. This block is the in-container # guardrail: it CANNOT free memory itself (no SYS_ADMIN), but it # fails loud if the host recovery did not happen or was not enough, # rather than letting vllm serve crash mid-init. start = time.monotonic() last_log = -10 avail = _meminfo_available_gib() while avail < MIN_AVAILABLE_GIB:     elapsed = time.monotonic() - start     if elapsed >= WAIT_TIMEOUT_S:         raise RuntimeError(             f'Track B prelaunch: only {avail:.1f} GiB available after '             f'{int(elapsed)}s wait (need {MIN_AVAILABLE_GIB:.0f} GiB). '             f'Host-memory recovery did not free enough. Operator '             f'actions: (1) ensure LUMO_SUDO_PASSWORD is set so '             f'ModelServer._recover_host_memory() can run; (2) run '             f'the recovery sequence directly: '             f'sudo sync; sudo echo 3 > /proc/sys/vm/drop_caches; '             f'sudo swapoff -a; sudo swapon -a; '             f'(3) lower LUMO_TRACK_B_MIN_FREE_GIB and reduce '             f'gpu_memory_utilization correspondingly.'         )     if elapsed - last_log >= 30:         print(             f'[TRACK-B-PRELAUNCH] waiting for GPU memory: '             f'{avail:.1f} GiB available, need {MIN_AVAILABLE_GIB:.0f} GiB '             f'(elapsed {int(elapsed)}s, timeout {WAIT_TIMEOUT_S}s)'         )         last_log = elapsed     time.sleep(5)     avail = _meminfo_available_gib()  print(f'[TRACK-B-PRELAUNCH] GPU memory ready: {avail:.1f} GiB available') PY python3 - <<'PY' from pathlib import Path  path = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/single_type_kv_cache_manager.py') if path.is_file():     text = path.read_text(encoding='utf-8')     old = 'num_required_blocks == len(req_blocks)'     new = 'num_required_blocks <= len(req_blocks)'     if old in text:         path.write_text(text.replace(old, new), encoding='utf-8')         print('[TRACK-B-PRELAUNCH] applied PR39562 KV allocator stop-gap')     elif new in text:         print('[TRACK-B-PRELAUNCH] PR39562 KV allocator stop-gap already present')     else:         raise RuntimeError('PR39562 patch target not found in single_type_kv_cache_manager.py') else:     raise RuntimeError(f'vLLM KV cache manager source missing: {path}') PY python3 - <<'PY' # PR39055 (vllm-project/vllm#39055): qwen3_reasoning_parser drops XML # tool calls emitted inside <think>. Without this patch, the # qwen3_reasoning_parser strips the <tool_call>...</tool_call> blocks # into the `reasoning` field, and the downstream qwen3_xml / # qwen3_coder tool parser never sees them. Codex CLI then receives a # response with tool_calls=[] and exits the agent loop after one # round. Track B benchmark-validity audit \u00a713 (2026-05-12) verified # this is the binding constraint on qwen3.5-27b agentic-loop traffic. from pathlib import Path  path = Path('/usr/local/lib/python3.12/dist-packages/vllm/reasoning/qwen3_reasoning_parser.py') if not path.is_file():     raise RuntimeError(f'vLLM qwen3 reasoning parser source missing: {path}')  text = path.read_text(encoding='utf-8') if '_split_embedded_tool_calls' in text:     print('[TRACK-B-PRELAUNCH] PR39055 qwen3 reasoning parser tool-call recovery already present') else:     helper_block = (         '_EMBEDDED_TOOL_CALL_RE = __import__(\"re\").compile(\\n'         '    r\"<tool_call>(.*?)</tool_call>|<tool_call>.*$\",\\n'         '    __import__(\"re\").DOTALL,\\n'         ')\\n\\n\\n'     )     if 'class Qwen3ReasoningParser' not in text:         raise RuntimeError('PR39055 patch target Qwen3ReasoningParser not found')     text = text.replace('class Qwen3ReasoningParser', helper_block + 'class Qwen3ReasoningParser', 1)      method_block = (         '    @staticmethod\\n'         '    def _split_embedded_tool_calls(\\n'         '        reasoning,\\n'         '        content,\\n'         '    ):\\n'         \"        '''Promote tool-call XML blocks out of reasoning into content.'''\\n\"         '        if (\\n'         '            not reasoning\\n'         '            or \"<tool_call>\" not in reasoning\\n'         '            or \"<function=\" not in reasoning\\n'         '        ):\\n'         '            return reasoning, content\\n'         '        extracted_blocks = []\\n'         '        def _collect_or_keep(match):\\n'         '            block = match.group(0)\\n'         '            if \"<function=\" not in block:\\n'         '                return block\\n'         '            extracted_blocks.append(block.strip())\\n'         '            return \"\"\\n'         '        remaining_reasoning = _EMBEDDED_TOOL_CALL_RE.sub(_collect_or_keep, reasoning)\\n'         '        remaining_reasoning = remaining_reasoning.strip() or None\\n'         '        if not extracted_blocks:\\n'         '            return reasoning, content\\n'         '        content_parts = [\"\\\\n\\\\n\".join(extracted_blocks)]\\n'         '        if content:\\n'         '            content_parts.append(content)\\n'         '        merged_content = \"\\\\n\\\\n\".join(part for part in content_parts if part) or None\\n'         '        return remaining_reasoning, merged_content\\n\\n'     )     sentinel_def = '    def extract_reasoning(\\n'     if sentinel_def not in text:         raise RuntimeError('PR39055 patch insertion point (def extract_reasoning) not found')     text = text.replace(sentinel_def, method_block + sentinel_def, 1)      old_truncated = '            return model_output, None'     new_truncated = '            return self._split_embedded_tool_calls(model_output, None)'     if old_truncated not in text:         raise RuntimeError('PR39055 patch target (truncated-reasoning return) not found')     text = text.replace(old_truncated, new_truncated, 1)      old_normal = '        return reasoning, final_content'     new_normal = '        return self._split_embedded_tool_calls(reasoning, final_content)'     if old_normal not in text:         raise RuntimeError('PR39055 patch target (normal return) not found')     text = text.replace(old_normal, new_normal, 1)      path.write_text(text, encoding='utf-8')     print('[TRACK-B-PRELAUNCH] applied PR39055 qwen3 reasoning parser tool-call recovery') PY python3 - <<'PY' import importlib.util import subprocess import sys  if importlib.util.find_spec('arctic_inference') is None:     print('[TRACK-B-PRELAUNCH] installing arctic-inference for suffix decoding')     subprocess.check_call([         sys.executable,         '-m',         'pip',         'install',         '--disable-pip-version-check',         'arctic-inference==0.1.2',     ]) else:     print('[TRACK-B-PRELAUNCH] arctic-inference already available')  # LMCache (Round 0 Step 1) -- KV reuse across requests; foundation # for the cumulative cache-hit target. --no-build-isolation is # required because LMCache's setup.py imports torch from the # pip-build-env, which on this NVIDIA pytorch 26.01 image conflicts # with the container's pre-installed torch (dlpack_exchange_api). # # Post-install we uninstall nixl + nixl-cu12: lmcache pulls them # transitively for distributed L2 cache support. The CUDA 12 wheel # fails to load on this CUDA 13 image (libcudart.so.12 missing), # and vLLM unconditionally imports nixl_ep via the Quark-quant # init path -- so leaving nixl-cu12 installed crashes vllm serve # at engine init. We don't use distributed L2 (remote_url: \"\" in # the LMCache config), so dropping nixl-cu12 is safe. if importlib.util.find_spec('lmcache') is None:     print('[TRACK-B-PRELAUNCH] installing lmcache for KV cache reuse')     subprocess.check_call([         sys.executable,         '-m',         'pip',         'install',         '--disable-pip-version-check',         '--no-build-isolation',         'lmcache==0.4.4',     ]) else:     print('[TRACK-B-PRELAUNCH] lmcache already available')  if importlib.util.find_spec('nixl_ep') is not None:     print('[TRACK-B-PRELAUNCH] removing nixl/nixl-cu12 (CUDA 12 binaries on CUDA 13 image)')     subprocess.check_call([         sys.executable,         '-m',         'pip',         'uninstall',         '-y',         'nixl',         'nixl-cu12',     ]) else:     print('[TRACK-B-PRELAUNCH] nixl already absent') PY python3 - <<'PY' # Lumo Track B 2026-05-08: patch vllm/parser/abstract_parser.py so the # Responses API forced tool_choice path (ToolChoiceFunction + # ChatCompletionNamedToolChoiceParam) runs the configured tool parser on # `content` instead of stuffing the raw model output into FunctionCall. # Upstream Issue #23227 closed as not-planned; this is the minimal fix. from pathlib import Path  path = Path('/usr/local/lib/python3.12/dist-packages/vllm/parser/abstract_parser.py') if not path.is_file():     raise RuntimeError(f'vLLM abstract_parser source missing: {path}')  text = path.read_text(encoding='utf-8') marker = 'Local patch (Lumo Track B 2026-05-08)' if marker in text:     print('[TRACK-B-PRELAUNCH] forced tool_choice parser patch already present') else:     old = (         '        if request.tool_choice and isinstance(request.tool_choice, ToolChoiceFunction):\\n'         '            # Forced Function Call (Responses API style)\\n'         '            assert content is not None\\n'         '            function_calls.append(\\n'         '                FunctionCall(name=request.tool_choice.name, arguments=content)\\n'         '            )\\n'         '            return function_calls, None  # Clear content since tool is called.\\n'         '\\n'         '        if request.tool_choice and isinstance(\\n'         '            request.tool_choice, ChatCompletionNamedToolChoiceParam\\n'         '        ):\\n'         '            # Forced Function Call (Chat Completion API style)\\n'         '            assert content is not None\\n'         '            function_calls.append(\\n'         '                FunctionCall(name=request.tool_choice.function.name, arguments=content)\\n'         '            )\\n'         '            return function_calls, None  # Clear content since tool is called.\\n'     )     new = (         '        if request.tool_choice and isinstance(request.tool_choice, ToolChoiceFunction):\\n'         '            # Forced Function Call (Responses API style)\\n'         '            #\\n'         '            # Local patch (Lumo Track B 2026-05-08): when a tool parser is\\n'         '            # configured, run it on `content` and use its parsed arguments\\n'         '            # instead of passing the raw model output through verbatim. The\\n'         '            # forced name still overrides whatever the parser thinks. This\\n'         '            # fixes the case where Qwen3 emits a `<tool_call>...<parameter=\\n'         '            # path>\\\\n...\\\\n</parameter>...` XML payload under forced choice\\n'         '            # and the unparsed XML lands in `arguments` -- breaking\\n'         '            # downstream JSON consumers (Codex CLI, schema-strict gates).\\n'         '            assert content is not None\\n'         '            arguments = content\\n'         '            if self._tool_parser is not None:\\n'         '                tool_call_info = self._tool_parser.extract_tool_calls(\\n'         '                    content,\\n'         '                    request=request,  # type: ignore\\n'         '                )\\n'         '                if (\\n'         '                    tool_call_info is not None\\n'         '                    and tool_call_info.tools_called\\n'         '                    and tool_call_info.tool_calls\\n'         '                ):\\n'         '                    arguments = tool_call_info.tool_calls[0].function.arguments\\n'         '            function_calls.append(\\n'         '                FunctionCall(name=request.tool_choice.name, arguments=arguments)\\n'         '            )\\n'         '            return function_calls, None  # Clear content since tool is called.\\n'         '\\n'         '        if request.tool_choice and isinstance(\\n'         '            request.tool_choice, ChatCompletionNamedToolChoiceParam\\n'         '        ):\\n'         '            # Forced Function Call (Chat Completion API style)\\n'         '            #\\n'         '            # Local patch (Lumo Track B 2026-05-08): same fix as the\\n'         '            # ToolChoiceFunction branch above.\\n'         '            assert content is not None\\n'         '            arguments = content\\n'         '            if self._tool_parser is not None:\\n'         '                tool_call_info = self._tool_parser.extract_tool_calls(\\n'         '                    content,\\n'         '                    request=request,  # type: ignore\\n'         '                )\\n'         '                if (\\n'         '                    tool_call_info is not None\\n'         '                    and tool_call_info.tools_called\\n'         '                    and tool_call_info.tool_calls\\n'         '                ):\\n'         '                    arguments = tool_call_info.tool_calls[0].function.arguments\\n'         '            function_calls.append(\\n'         '                FunctionCall(name=request.tool_choice.function.name, arguments=arguments)\\n'         '            )\\n'         '            return function_calls, None  # Clear content since tool is called.\\n'     )     if old not in text:         raise RuntimeError('forced tool_choice patch target not found in abstract_parser.py')     path.write_text(text.replace(old, new), encoding='utf-8')     print('[TRACK-B-PRELAUNCH] applied forced tool_choice parser patch') PY  python3 - <<'LUMOCUDAGRAPHRUNTIMETELEMETRY' from pathlib import Path  gm = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py') text = gm.read_text() sentinel = '# LUMO_CUDAGRAPH_RUNTIME_TELEMETRY' if sentinel in text:     print('[TRACK-B-PRELAUNCH] cudagraph runtime telemetry patch already present') else:     old = \"\"\"        cudagraph_stats = None         if self.vllm_config.observability_config.cudagraph_metrics:             cudagraph_stats = CUDAGraphStat(                 num_unpadded_tokens=num_tokens,                 num_padded_tokens=batch_descriptor.num_tokens,                 num_paddings=batch_descriptor.num_tokens - num_tokens,                 runtime_mode=str(cudagraph_mode),             ) \"\"\"     new = \"\"\"        cudagraph_stats = None         if (             self.vllm_config.observability_config.cudagraph_metrics             or __import__(\"os\").environ.get(\"LUMO_CUDAGRAPH_RUNTIME_TELEMETRY\") == \"1\"         ):             cudagraph_stats = CUDAGraphStat(                 num_unpadded_tokens=num_tokens,                 num_padded_tokens=batch_descriptor.num_tokens,                 num_paddings=batch_descriptor.num_tokens - num_tokens,                 runtime_mode=str(cudagraph_mode),             )             if __import__(\"os\").environ.get(\"LUMO_CUDAGRAPH_RUNTIME_TELEMETRY\") == \"1\":                 try:                     import json as _lumo_cg_json, time as _lumo_cg_time                     global _LUMO_CUDAGRAPH_RUNTIME_FH                     try:                         _LUMO_CUDAGRAPH_RUNTIME_FH                     except NameError:                         _LUMO_CUDAGRAPH_RUNTIME_FH = open(\"/logs/cudagraph_runtime_debug.jsonl\", \"a\", buffering=1)                     _LUMO_CUDAGRAPH_RUNTIME_FH.write(_lumo_cg_json.dumps({                         \"ts\": round(_lumo_cg_time.time(), 4),                         \"event\": \"cudagraph_runtime\",                         \"num_unpadded_tokens\": int(num_tokens),                         \"num_padded_tokens\": int(batch_descriptor.num_tokens),                         \"num_paddings\": int(batch_descriptor.num_tokens - num_tokens),                         \"runtime_mode\": str(cudagraph_mode),                     }) + chr(10))                 except Exception:                     pass \"\"\"     if old not in text:         raise RuntimeError('cudagraph runtime telemetry anchor not found')     text = text.replace(old, new, 1)     text = sentinel + '\\n' + text     gm.write_text(text)     import py_compile     py_compile.compile(str(gm), doraise=True)     print('[TRACK-B-PRELAUNCH] applied cudagraph runtime telemetry patch') LUMOCUDAGRAPHRUNTIMETELEMETRY  python3 - <<'LUMOSPECTRACE' from pathlib import Path nl = chr(10) p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py') text = p.read_text() sentinel = '# LUMO_PER_AGENT_SPEC_TRACE' if sentinel in text:     print('[TRACK-B-PRELAUNCH] per-agent spec trace already present') else:     anchor = '    ) -> SpecDecodingStats | None:' + nl + '        if not self.log_stats or not num_draft_tokens:'     if anchor not in text:         raise RuntimeError('make_spec_decoding_stats anchor not found for per-agent spec trace')     inject = nl.join([         '    ) -> SpecDecodingStats | None:',         '        ' + sentinel,         '        import json as _lj, time as _lt, os as _lo',         '        try:',         '            global _LUMO_SPEC_FH',         '            try:',         '                _LUMO_SPEC_FH',         '            except NameError:',         '                _LUMO_SPEC_FH = open(_lo.environ.get(\"LUMO_PER_REQ_SPEC_TRACE\", \"/logs/per_req_spec_trace.jsonl\"), \"a\", buffering=1)',         '            _linv = (num_invalid_spec_tokens.get(request_id, 0) if num_invalid_spec_tokens else 0)',         '            _LUMO_SPEC_FH.write(_lj.dumps({\"ts\": round(_lt.time(), 4), \"rid\": request_id, \"draft\": num_draft_tokens, \"proposal_width\": num_draft_tokens, \"verify_width\": num_draft_tokens, \"acc\": num_accepted_tokens, \"inv\": _linv}) + chr(10))',         '        except Exception:',         '            pass',         '        if not self.log_stats or not num_draft_tokens:',     ])     text = text.replace(anchor, inject, 1)     p.write_text(text)     import py_compile, tempfile     py_compile.compile(str(p), doraise=True)     print('[TRACK-B-PRELAUNCH] applied per-agent spec-decode step trace patch') LUMOSPECTRACE python3 - <<'PY' import importlib.metadata import json import vllm payload = json.loads('{\"timestamp\": \"2026-06-01T01:15:21.356008+00:00\", \"model_id\": \"qwen3.6-27b\", \"served_model_name\": \"qwen3.6-27b\", \"quantization\": \"fp8\", \"kv_cache_dtype\": \"auto\", \"max_model_len\": 131072, \"gpu_memory_utilization\": 0.84, \"enforce_eager\": false, \"wire_api\": \"responses\", \"responses_api_store\": true, \"dev_mode\": true, \"sleep_mode\": false, \"lora_modules\": [], \"max_lora_rank\": null, \"tuned_config_id\": \"e0000000-mtp5-kvauto-cgpiecewise-cgsizes-4000-9000-config-e-qwen36\", \"weight_version_id\": \"2e1b21350ce589fcaafbb3c7d7eac526a7aed582\", \"kernel_runtime_activation\": {\"supported\": true, \"restart_required\": true, \"activation_id\": \"6bddf4e95ed21eb2\", \"kernel_selection\": {\"cuda_graph_capture_sizes\": [4, 8, 12, 16, 24, 32, 44, 48], \"cuda_graph_capture\": \"piecewise\"}, \"launch_args\": [\"--compilation-config\", \"{\\\\\"cudagraph_capture_sizes\\\\\": [4, 8, 12, 16, 24, 32, 44, 48], \\\\\"cudagraph_mode\\\\\": \\\\\"PIECEWISE\\\\\", \\\\\"max_cudagraph_capture_size\\\\\": 48}\"], \"env\": {}, \"resolved\": {\"attention_backend\": \"vllm-auto\", \"deltanet_kernel\": \"vllm-auto\", \"fp8_gemm_kernel\": \"vllm-auto\", \"torch_compile_mode\": \"vllm-default\", \"cuda_graph_capture\": \"PIECEWISE\", \"cuda_graph_capture_activation\": \"vLLM compilation_config cudagraph_mode PIECEWISE\", \"cuda_graph_capture_sizes\": [4, 8, 12, 16, 24, 32, 44, 48], \"cuda_graph_capture_sizes_activation\": \"vLLM compilation_config cudagraph_capture_sizes/max_cudagraph_capture_size\"}, \"unsupported_knobs\": []}, \"speculative_config\": {\"method\": \"qwen3_5_mtp\", \"num_speculative_tokens\": 5}, \"launch_cmd\": \"vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 127.0.0.1 --port 9950 --quantization fp8 --dtype auto --kv-cache-dtype auto --max-model-len 131072 --gpu-memory-utilization 0.84 --max-num-batched-tokens 8192 --max-num-seqs 4 --enable-prefix-caching --enable-chunked-prefill --no-async-scheduling --attention-backend FLASH_ATTN --chat-template /opt/lumo/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config \\'{\\\\\"method\\\\\": \\\\\"qwen3_5_mtp\\\\\", \\\\\"num_speculative_tokens\\\\\": 5}\\' --compilation-config \\'{\\\\\"cudagraph_capture_sizes\\\\\": [4, 8, 12, 16, 24, 32, 44, 48], \\\\\"cudagraph_mode\\\\\": \\\\\"PIECEWISE\\\\\", \\\\\"max_cudagraph_capture_size\\\\\": 48}\\'\"}') version = getattr(vllm, '__version__', None) or importlib.metadata.version('vllm') git_hash = getattr(vllm, '__commit__', None) or 'unknown' log_path = '/tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.6-27b.log' with open(log_path, 'a', encoding='utf-8') as handle:     handle.write(f\"[VLLM-INIT] timestamp={payload['timestamp']}\\n\")     handle.write(f\"[VLLM-INIT] model_id={payload['model_id']} served_model_name={payload['served_model_name']} vllm_version={version} git_hash={git_hash}\\n\")     handle.write(f\"[VLLM-INIT] quantization={payload['quantization']} kv_cache_dtype={payload['kv_cache_dtype']}\\n\")     handle.write(f\"[VLLM-INIT] max_model_len={payload['max_model_len']} gpu_memory_utilization={payload['gpu_memory_utilization']}\\n\")     handle.write(f\"[VLLM-INIT] enforce_eager={str(payload['enforce_eager']).lower()}\\n\")     handle.write(f\"[VLLM-INIT] tuned_config_id={payload['tuned_config_id']} weight_version_id={payload['weight_version_id']}\\n\")     if payload.get('kernel_runtime_activation') is not None:         handle.write('[VLLM-INIT] kernel_runtime_activation=' + json.dumps(payload['kernel_runtime_activation'], sort_keys=True) + '\\n')     if payload.get('speculative_config'):         handle.write('[VLLM-INIT] speculative_config=' + json.dumps(payload['speculative_config'], sort_keys=True) + '\\n')     handle.write(f\"[VLLM-INIT] wire_api={payload['wire_api']}\\n\")     handle.write(f\"[VLLM-INIT] responses_api_store={str(payload['responses_api_store']).lower()}\\n\")     handle.write(f\"[VLLM-INIT] dev_mode={str(payload['dev_mode']).lower()} sleep_mode={'enabled' if payload['sleep_mode'] else 'disabled'}\\n\")     handle.write(f\"[VLLM-INIT] lora_modules={','.join(payload['lora_modules']) or 'none'} max_lora_rank={payload['max_lora_rank']}\\n\")     handle.write(f\"[VLLM-INIT] launch_cmd: {payload['launch_cmd']}\\n\") PY vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 127.0.0.1 --port 9950 --quantization fp8 --dtype auto --kv-cache-dtype auto --max-model-len 131072 --gpu-memory-utilization 0.84 --max-num-batched-tokens 8192 --max-num-seqs 4 --enable-prefix-caching --enable-chunked-prefill --no-async-scheduling --attention-backend FLASH_ATTN --chat-template /opt/lumo/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config '{\"method\": \"qwen3_5_mtp\", \"num_speculative_tokens\": 5}' --compilation-config '{\"cudagraph_capture_sizes\": [4, 8, 12, 16, 24, 32, 44, 48], \"cudagraph_mode\": \"PIECEWISE\", \"max_cudagraph_capture_size\": 48}' 2>&1 | tee -a /tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.6-27b.log"
+  },
+  "metrics_before": {
+    "drafts": 0.0,
+    "accepted_total": 0.0,
+    "pos": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "metrics_after": {
+    "drafts": 1288.0,
+    "accepted_total": 3866.0,
+    "pos": [
+      1117.0,
+      924.0,
+      744.0,
+      597.0,
+      484.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "spec": {
+    "n_events": 1288.0,
+    "avg": 3.001552795031056,
+    "acc0": 0.1327639751552795,
+    "full5": 0.37577639751552794,
+    "per_position": [
+      0.8672360248447205,
+      0.717391304347826,
+      0.577639751552795,
+      0.4635093167701863,
+      0.37577639751552794
+    ],
+    "metric_delta": {
+      "drafts": 1288.0,
+      "accepted_total": 3866.0,
+      "pos": [
+        1117.0,
+        924.0,
+        744.0,
+        597.0,
+        484.0
+      ]
+    }
+  },
+  "results": [
+    {
+      "ok": true,
+      "elapsed_s": 56.286,
+      "completion_tokens": 266,
+      "finish_reason": "stop",
+      "text_prefix": "<think>\n\n</think>\n\n```python\ndef fibonacci(n: int) -> int:\n    \"\"\"\n    Return the nth Fibonacci number using an iterative approach.\n    \n    The Fibonacci sequence is defined as:\n    F(0) = 0, F(1) = 1, F(n) = F(n-1) + F(n-2) for n >= 2\n   ",
+      "prompt_index": 0
+    },
+    {
+      "ok": true,
+      "elapsed_s": 55.834,
+      "completion_tokens": 267,
+      "finish_reason": "stop",
+      "text_prefix": "    pass\n\n<think>\n\n</think>\n\n```python\ndef merge_sorted_unique(left, right):\n    \"\"\"Return a sorted list containing unique values from two sorted inputs.\"\"\"\n    result = []\n    i, j = 0, 0\n    while i < len(left) and j < len(right):\n       ",
+      "prompt_index": 1
+    },
+    {
+      "ok": true,
+      "elapsed_s": 69.26,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Analyze User Input:**\n   - **Context:** Bug report review\n   - **Problem:** A cache key is built from a dictionary, and tests intermittently fail because equivalent dictionaries produce different ke",
+      "prompt_index": 2
+    },
+    {
+      "ok": true,
+      "elapsed_s": 55.103,
+      "completion_tokens": 242,
+      "finish_reason": "stop",
+      "text_prefix": "        self.cache = {}\n        self.order = []\n\n<think>\n\n</think>\n\n```python\nclass LRUCache:\n    def __init__(self, capacity: int):\n        self.capacity = capacity\n        self.cache = {}\n        self.order = []\n\n    def get(self, key: in",
+      "prompt_index": 3
+    },
+    {
+      "ok": true,
+      "elapsed_s": 24.018,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Understand User Request:**\n   - **Function to test:** `parse_duration(text)`\n   - **Input formats:** `'10s'`, `'5m'`, `'2h'`\n   - **Output expected:** Presumably a duration in seconds (or some stand",
+      "prompt_index": 4
+    },
+    {
+      "ok": true,
+      "elapsed_s": 23.07,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Understand User Request:**\n   - Create a Python `dataclass` named `RetryPolicy`.\n   - Fields: `max_attempts`, `base_delay`, `max_delay`.\n   - Method: `delays()` that presumably returns a sequence of",
+      "prompt_index": 5
+    },
+    {
+      "ok": true,
+      "elapsed_s": 22.168,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Understand User Request:**\n   - **Input Tables:** \n     - `users(id, email)`\n     - `events(user_id, created_at)`\n   - **Task:** Write a SQL query to find \"active users in the last 30 days\"\n   - **R",
+      "prompt_index": 6
+    },
+    {
+      "ok": true,
+      "elapsed_s": 5.376,
+      "completion_tokens": 116,
+      "finish_reason": "stop",
+      "text_prefix": "<think>\n\n</think>\n\n```typescript\nfunction groupBy<T, K extends string | number>(items: T[], keyFn: (item: T) => K): Record<K, T[]> {\n  const result: Record<K, T[]> = {} as Record<K, T[]>;\n  for (const item of items) {\n    const key = keyFn(",
+      "prompt_index": 7
+    },
+    {
+      "ok": true,
+      "elapsed_s": 27.481,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "    let mut result = String::new();\n\n<think>\nHere's a thinking process:\n\n1.  **Understand User Request:**\n   - **Input:** A Rust function signature `fn normalize_path(input: &str) -> String` with an empty body starting with `let mut result ",
+      "prompt_index": 8
+    },
+    {
+      "ok": true,
+      "elapsed_s": 24.564,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking thinking sequence\n\n1.  **Deconstruct the user's request:**\n    *   Goal: Draft a migration plan.\n    *   Action: Replace a synchronous file parser with an async streaming parser.\n    *   Context: Production service",
+      "prompt_index": 9
+    },
+    {
+      "ok": true,
+      "elapsed_s": 19.852,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "    \"\"\"\n    Perform topological sorting on a directed graph.\n    \n    Args:\n        graph: A dictionary representing a directed graph where keys are nodes\n               and values are lists of nodes that the key node has edges to.\n    \n   ",
+      "prompt_index": 10
+    },
+    {
+      "ok": true,
+      "elapsed_s": 25.465,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking thinking sequence\n\n1.  **Deconstruct the user's request:**\n    *   Goal: Write documentation for a command-line option.\n    *   Option name: `--dry-run`.\n    *   Functionality: Validates inputs without writing outp",
+      "prompt_index": 11
+    },
+    {
+      "ok": true,
+      "elapsed_s": 22.906,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Analyze the User Input:**\n   - **Error:** `TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'`\n   - **Location:** `File 'metrics.py', line 42, in add_sample`\n   - **Task:** Diagnose ",
+      "prompt_index": 12
+    },
+    {
+      "ok": true,
+      "elapsed_s": 4.47,
+      "completion_tokens": 77,
+      "finish_reason": "stop",
+      "text_prefix": "    seen := make(map[string]bool)\n    result := make([]string, 0, len(values))\n    for _, v := range values {\n        if !seen[v] {\n\n<think>\n\n</think>\n\n```go\n            seen[v] = true\n            result = append(result, v)\n        }\n    }\n",
+      "prompt_index": 13
+    },
+    {
+      "ok": true,
+      "elapsed_s": 8.803,
+      "completion_tokens": 174,
+      "finish_reason": "stop",
+      "text_prefix": "<think>\n\n</think>\n\n```python\ndef chunked(iterable, n):\n    \"\"\"\n    Chunk an iterable into lists of size n without reading the entire iterable into memory.\n    \n    Args:\n        iterable: An iterable to chunk.\n        n: The size of each ch",
+      "prompt_index": 14
+    },
+    {
+      "ok": true,
+      "elapsed_s": 26.603,
+      "completion_tokens": 400,
+      "finish_reason": "length",
+      "text_prefix": "<think>\nHere's a thinking process:\n\n1.  **Understand User Goal:** The user wants to know how to make a batch inference pipeline deterministic, specifically addressing the issue where GPU kernels may choose different algorithms for different",
+      "prompt_index": 15
+    }
+  ]
+}
