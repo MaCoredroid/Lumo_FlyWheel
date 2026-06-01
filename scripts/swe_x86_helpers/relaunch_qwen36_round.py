@@ -598,7 +598,7 @@ def _lumo_ir_winner_update_states_after_model_execute(
         for idx in indices:
             output_token_ids[idx].copy_(winner_row)
             try:
-                self.input_batch.num_accepted_tokens_cpu[idx] = 1
+                self.input_batch.num_accepted_tokens_cpu[idx] = int(winner_acc)
             except Exception:
                 pass
         counts = {str(_lumo_ir_spine_id(req_ids[i])): _lumo_ir_accept_count(rows_cpu[i])
