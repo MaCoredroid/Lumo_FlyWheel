@@ -12385,6 +12385,8 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         "LUMO_FA_TREE_DELTA_TORCH",
         "LUMO_FA_TREE_DELTA_TRITON",
         "LUMO_FA_CUDAGRAPH_UNSAFE_GDN_CORE",
+        "LUMO_TREE_PER_PATH_DRAFTER",
+        "LUMO_TREE_PER_PATH_DRAFTER_LOG",
     ):
         if os.environ.get(_name):
             fb_debug_exports += f"export {_name}={os.environ[_name]}\n"
