@@ -4740,8 +4740,6 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_PACK_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_STARTUP_FIX_BLOCK if fa_unique else "")
-            + (_FA_UNIQUE_BATCH4_DIAG_BLOCK if fa_unique else "")
-            + (_FA_REPLAY_STATE_COPY_COMMIT_BLOCK if fa_unique else "")
             + (_FA_BRANCH_ACCEPTED_ROW_STATE_COPY_BLOCK if fa_unique else ""))
 
 
