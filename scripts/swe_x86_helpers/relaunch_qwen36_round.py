@@ -4721,11 +4721,8 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
                 _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
                 _parents = _parents_t.detach().cpu().tolist() if _parents_t is not None else []
                 _depths = []
-                for _i, _parent in enumerate(_parents):
-                    if _i == 0:
-                        _depths.append(0)
-                    else:
-                        _depths.append(1 if int(_parent) < 0 else _depths[int(_parent) + 1] + 1)
+                for _parent in _parents:
+                    _depths.append(0 if int(_parent) < 0 else _depths[int(_parent)] + 1)
                 _depth_rows = tuple(
                     tuple(i for i, d in enumerate(_depths) if d == depth)
                     for depth in range((max(_depths) + 1) if _depths else 0)
@@ -4979,11 +4976,8 @@ def _lumo_fa_activation_replay_commit(accepted_token_count: int) -> None:
             _parents_t = getattr(attn_metadata, "fa_tree_parent_indices_tensor", None)
             _parents = _parents_t.detach().cpu().tolist() if _parents_t is not None else []
             _depths = []
-            for _i, _parent in enumerate(_parents):
-                if _i == 0:
-                    _depths.append(0)
-                else:
-                    _depths.append(1 if int(_parent) < 0 else _depths[int(_parent) + 1] + 1)
+            for _parent in _parents:
+                _depths.append(0 if int(_parent) < 0 else _depths[int(_parent)] + 1)
             core_attn_out_spec = None
             last_recurrent_state = None
             for _depth in range((max(_depths) + 1) if _depths else 0):
@@ -5796,6 +5790,25 @@ text = gl.read_text()
 sentinel = '# LUMO_FA_TREE_DELTA_ACTUAL_PARENT_ROWS'
 if sentinel in text:
     print('[TRACK-B-PRELAUNCH] F_a tree-delta actual-parent patch already present')
+    _stale_depth = """                _depths = []
+                for _i, _parent in enumerate(_parents):
+                    if _i == 0:
+                        _depths.append(0)
+                    else:
+                        _depths.append(1 if int(_parent) < 0 else _depths[int(_parent) + 1] + 1)
+"""
+    if _stale_depth in text:
+        text = text.replace(
+            _stale_depth,
+            """                _depths = []
+                for _parent in _parents:
+                    _depths.append(0 if int(_parent) < 0 else _depths[int(_parent)] + 1)
+""",
+        )
+        gl.write_text(text)
+        import py_compile
+        py_compile.compile(str(gl), doraise=True)
+        print('[TRACK-B-PRELAUNCH] repaired stale F_a actual-parent depth rows')
 else:
     text = text.replace(
         """    if initial_state_indices is not None:
