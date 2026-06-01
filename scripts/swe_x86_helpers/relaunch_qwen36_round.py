@@ -4739,8 +4739,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
             + (_TREE_GDN_PREFIX_STATE_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_PACK_BLOCK if fa_unique else "")
-            + (_FA_UNIQUE_BATCH4_STARTUP_FIX_BLOCK if fa_unique else "")
-            + (_FA_BRANCH_ACCEPTED_ROW_STATE_COPY_BLOCK if fa_unique else ""))
+            + (_FA_UNIQUE_BATCH4_STARTUP_FIX_BLOCK if fa_unique else ""))
 
 
 def _apply_kv_cache_dtype(src: str, kv_cache_dtype: str | None) -> str:
