@@ -50,6 +50,9 @@ TREE_ACCEPT_PATH_TRACE = os.environ.get(
 TREE_PATH_LCP_TRACE = os.environ.get(
     "LUMO_TREE_PATH_LCP_LOG",
     "/tmp/lumo-l0c-fp8-cutlass-run30-logs/tree_path_lcp_max.jsonl")
+INDEPENDENT_WINNER_TRACE = os.environ.get(
+    "LUMO_IR_WINNER_TRACE_FILE",
+    "/tmp/lumo-l0c-fp8-cutlass-run30-logs/independent_winner_trace.jsonl")
 
 
 def sh(cmd: list[str], **kw) -> subprocess.CompletedProcess:
@@ -78,7 +81,12 @@ def set_temperature(temp: str) -> None:
     sys.exit("proxy did not come back after temperature change")
 
 
-def apply_config(config: str, mtp: int = 1, kv_cache_dtype: str | None = None) -> None:
+def apply_config(
+    config: str,
+    mtp: int = 1,
+    kv_cache_dtype: str | None = None,
+    row_mode: str = "tree",
+) -> None:
     """Relaunch vLLM into the requested config and wait for READY. D/E use the
     parameterized round relaunch (/tmp/relaunch_qwen36_round.py, which also
     applies the per-agent spec-step trace patch); A/off fall back to the older
@@ -97,6 +105,8 @@ def apply_config(config: str, mtp: int = 1, kv_cache_dtype: str | None = None) -
         cmd = [str(REPO / ".venv/bin/python"), round_script, "--config", config]
         if config in ("E", "F", "Fb"):
             cmd += ["--mtp", str(mtp)]
+        if config == "Fb":
+            cmd += ["--row-mode", row_mode]
         if kv_cache_dtype:
             cmd += ["--kv-cache-dtype", kv_cache_dtype]
     else:
@@ -108,8 +118,9 @@ def apply_config(config: str, mtp: int = 1, kv_cache_dtype: str | None = None) -
     # new file handle, so each round's trace starts clean (and we never delete it
     # out from under a live handle -- the cause of the round-1 unlinked-inode loss).
     sh(["rm", "-f", PER_REQ_SPEC_TRACE, TREE_ACCEPT_PATH_TRACE,
-        TREE_PATH_LCP_TRACE])
+        TREE_PATH_LCP_TRACE, INDEPENDENT_WINNER_TRACE])
     log(f"relaunching vLLM config={config} mtp={mtp if config in ('E','F','Fb') else '-'} "
+        f"row_mode={row_mode if config == 'Fb' else '-'} "
         f"kv={kv_cache_dtype or 'bundle-default'} (model load ~ several min)")
     r = sh(cmd, timeout=1200)
     if "READY" not in (r.stdout + r.stderr):
@@ -233,6 +244,8 @@ def rsync_back(args) -> Path:
         sh(["cp", TREE_ACCEPT_PATH_TRACE, str(local / "tree_accept_path.jsonl")])
     if Path(TREE_PATH_LCP_TRACE).exists():
         sh(["cp", TREE_PATH_LCP_TRACE, str(local / "tree_path_lcp_max.jsonl")])
+    if Path(INDEPENDENT_WINNER_TRACE).exists():
+        sh(["cp", INDEPENDENT_WINNER_TRACE, str(local / "independent_winner_trace.jsonl")])
     return local
 
 
@@ -291,6 +304,8 @@ def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
         paths.append(f"{rel}/tree_path_lcp_max.jsonl")
     if (REPO / rel / "tree_path_lcp_superset_summary.json").exists():
         paths.append(f"{rel}/tree_path_lcp_superset_summary.json")
+    if (REPO / rel / "independent_winner_trace.jsonl").exists():
+        paths.append(f"{rel}/independent_winner_trace.jsonl")
     if joined:
         paths.append(str(joined.relative_to(REPO)))
     nrep = REPO / f"{rel}/nsight_{args.exp_tag}.nsys-rep"
@@ -322,6 +337,8 @@ def main() -> int:
                     help="force sampling temperature by restarting the proxy")
     ap.add_argument("--mtp", type=int, default=1,
                     help="config E num_speculative_tokens (MTP depth) when --apply-config")
+    ap.add_argument("--row-mode", choices=["tree", "independent"], default="tree",
+                    help="config Fb row layout when --apply-config")
     ap.add_argument("--kv-cache-dtype", default=None,
                     choices=["auto", "fp8_e5m2", "fp8_e4m3"],
                     help="override realized KV cache dtype on relaunch (fp8_e4m3 = realized FP8 "
@@ -342,11 +359,12 @@ def main() -> int:
         log(f"WARNING: concurrency={args.concurrency} (feedback-no-parallel-testing: default is 1)")
 
     if args.apply_config:
-        apply_config(args.config, args.mtp, kv_cache_dtype=args.kv_cache_dtype)
+        apply_config(args.config, args.mtp, kv_cache_dtype=args.kv_cache_dtype, row_mode=args.row_mode)
     if args.temp:
         set_temperature(args.temp)
     preflight()
     log(f"experiment {args.exp_tag}: config={args.config} temp={args.temp or 'as-set'} "
+        f"row_mode={args.row_mode if args.config == 'Fb' else '-'} "
         f"concurrency={args.concurrency} suite={args.suite} nsight={args.nsight}")
     launch_suite(args)
 
