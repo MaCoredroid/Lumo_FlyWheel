@@ -2266,6 +2266,8 @@ else:
             chain_tokens = [draft_token_ids]
             spine_hidden_states = hidden_states.contiguous()
             spine_positions = positions.clone()
+            if spine_positions.dim() == 0:
+                spine_positions = spine_positions.view(1)
             spine_common = _clone_common_metadata()
 
             cudagraph_runtime_mode, input_batch_size, batch_size_across_dp = (
@@ -2285,6 +2287,8 @@ else:
             for token_index in range(max_depth - 1):
                 input_ids = chain_tokens[-1].int()
                 positions_1d = spine_positions[0] if self.uses_mrope else spine_positions
+                if positions_1d.dim() == 0:
+                    positions_1d = positions_1d.view(1)
                 if self.uses_mrope:
                     out_pos = self.mrope_positions[0, :batch_size]
                 elif self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0:
