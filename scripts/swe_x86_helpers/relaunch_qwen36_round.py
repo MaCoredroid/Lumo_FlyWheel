@@ -583,17 +583,13 @@ def _lumo_ir_winner_update_states_after_model_execute(
                 best_acc = acc
         winner_rows[primary] = (best_idx, best_acc, indices)
 
-    _lumo_ir_orig_update_states_after_model_execute(
-        self, output_token_ids, scheduler_output)
-
     if not winner_rows:
-        return
+        return _lumo_ir_orig_update_states_after_model_execute(
+            self, output_token_ids, scheduler_output)
 
     trace_rows = []
     for primary, (winner_idx, winner_acc, indices) in winner_rows.items():
         winner_req_id = req_ids[winner_idx]
-        copy_result = _lumo_ir_copy_one_winner_state(
-            self, winner_req_id, [req_ids[i] for i in indices], winner_acc)
         winner_row = output_token_ids[winner_idx].clone()
         for idx in indices:
             output_token_ids[idx].copy_(winner_row)
@@ -601,6 +597,13 @@ def _lumo_ir_winner_update_states_after_model_execute(
                 self.input_batch.num_accepted_tokens_cpu[idx] = int(winner_acc)
             except Exception:
                 pass
+    _lumo_ir_orig_update_states_after_model_execute(
+        self, output_token_ids, scheduler_output)
+
+    for primary, (winner_idx, winner_acc, indices) in winner_rows.items():
+        winner_req_id = req_ids[winner_idx]
+        copy_result = _lumo_ir_copy_one_winner_state(
+            self, winner_req_id, [req_ids[i] for i in indices], winner_acc)
         counts = {str(_lumo_ir_spine_id(req_ids[i])): _lumo_ir_accept_count(rows_cpu[i])
                   for i in indices}
         trace_rows.append({

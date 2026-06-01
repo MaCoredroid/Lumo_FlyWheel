@@ -28,6 +28,7 @@ import time
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 REPO = Path("/home/mark/shared/lumoFlyWheel")
 ALIEN = "alienware"
@@ -71,6 +72,18 @@ def set_temperature(temp: str) -> None:
     """Restart the proxy forcing a sampling temperature (1.0 or 0.6). Cheap,
     no GPU/sudo - just re-execs the proxy with LUMO_PROXY_FORCE_TEMPERATURE set."""
     env = dict(os.environ, LUMO_PROXY_FORCE_TEMPERATURE=str(temp))
+    proxy_url = urlparse(PROXY)
+    proxy_port = proxy_url.port
+    if proxy_port and proxy_port != 8022:
+        env.update({
+            "LUMO_PROXY_LISTEN_HOST": "0.0.0.0",
+            "LUMO_PROXY_LISTEN_PORT": str(proxy_port),
+            "LUMO_PROXY_UPSTREAM_BASE_URL": "http://127.0.0.1:9950",
+            "LUMO_PROXY_PID_FILE": "/tmp/lumo-l0c-fp8-cutlass-run30-logs/codex_inference_proxy.pid",
+            "LUMO_PROXY_LOG_PATH": "/tmp/lumo-l0c-fp8-cutlass-run30-logs/codex_inference_proxy.log",
+            "LUMO_PROXY_STATE_ROOT": "/tmp/lumo-l0c-fp8-cutlass-run30-state",
+            "LUMO_PROXY_NOHUP_PATH": "/tmp/lumo-l0c-fp8-cutlass-run30-logs/codex_inference_proxy.nohup",
+        })
     log(f"setting proxy temperature={temp} (restarting proxy)")
     sh(["bash", str(REPO / "scripts/swe_x86_helpers/relaunch_proxy.sh")], env=env)
     for _ in range(20):
