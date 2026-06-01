@@ -5268,7 +5268,7 @@ def _apply_agentic_request_shaping(src: str) -> str:
         "    concurrency_cap_rollout: 0\n"
         f"    admission_queue_depth_max: {queue_depth}\n"
     )
-    pattern = r"(?ms)^  request_shaping:\n(?:    .*\n)+?(?=^  [A-Za-z0-9_]+:)"
+    pattern = r"(?m)^  request_shaping:\n(?:^    .*\n)+"
     if _re.search(pattern, src) is None:
         raise RuntimeError("request_shaping block missing in bundle")
     return _re.sub(pattern, block, src, count=1)
