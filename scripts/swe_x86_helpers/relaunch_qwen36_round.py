@@ -808,11 +808,11 @@ import torch
             spec_initial_state_slot_tensor = None
             spec_write_state_slot_tensor = None
             if _lumo_tree_gdn_prefix_os.environ.get("LUMO_FA_UNIQUE_NODES") == "1":
-                _tree_write_end = int(self.num_spec + 2)
-                if block_table_tensor.size(1) < _tree_write_end:
+                _tree_write_end = min(int(self.num_spec + 2), int(block_table_tensor.size(1)))
+                if _tree_write_end <= 1:
                     raise RuntimeError(
-                        "LUMO_FA_UNIQUE_NODES requires block_table write columns "
-                        f"through {_tree_write_end - 1}, got width {block_table_tensor.size(1)}")
+                        "LUMO_FA_UNIQUE_NODES requires block_table prefix + write columns, "
+                        f"got width {block_table_tensor.size(1)}")
                 spec_state_indices_tensor = block_table_tensor[
                     spec_sequence_masks, 1:_tree_write_end
                 ]
@@ -3116,13 +3116,16 @@ else:
                     and all(tuple(_p) == tuple([0] * len(tuple(_p)))
                             for _p in _choices)
                 )
-                if block_table_tensor.size(1) < _node_count + 2:
+                if block_table_tensor.size(1) < _node_count + 1:
                     raise RuntimeError(
-                        "LUMO_FA_UNIQUE_NODES requires root + node write "
-                        f"state slots: need {_node_count + 2}, got "
+                        "LUMO_FA_UNIQUE_NODES requires root + node state slots: "
+                        f"need at least {_node_count + 1}, got "
                         f"{block_table_tensor.size(1)}")
                 _row = block_table_tensor[spec_sequence_masks, :_node_count + 2][0]
-                _write_slots = _row[1:_node_count + 2].contiguous()
+                if _row.numel() >= _node_count + 2:
+                    _write_slots = _row[1:_node_count + 2].contiguous()
+                else:
+                    _write_slots = _row[:_node_count + 1].contiguous()
                 _initial_slots = torch.empty(
                     (_node_count + 1,), dtype=torch.int32,
                     device=query_start_loc.device)
@@ -4351,16 +4354,19 @@ else:
                     and all(tuple(_p) == tuple([0] * len(tuple(_p)))
                             for _p in _choices)
                 )
-                if block_table_tensor.size(1) < _node_count + 2:
+                if block_table_tensor.size(1) < _node_count + 1:
                     raise RuntimeError(
-                        "LUMO_FA_UNIQUE_NODES requires root + node write "
-                        f"state slots: need {_node_count + 2}, got "
+                        "LUMO_FA_UNIQUE_NODES requires root + node state slots: "
+                        f"need at least {_node_count + 1}, got "
                         f"{block_table_tensor.size(1)}")
                 _rows = block_table_tensor[
                     spec_sequence_masks, :_node_count + 2
                 ].contiguous()
                 _req_count = int(_rows.shape[0])
-                _write_slots_2d = _rows[:, 1:_node_count + 2].contiguous()
+                if _rows.shape[1] >= _node_count + 2:
+                    _write_slots_2d = _rows[:, 1:_node_count + 2].contiguous()
+                else:
+                    _write_slots_2d = _rows[:, :_node_count + 1].contiguous()
                 _initial_slots_2d = torch.empty(
                     (_req_count, _group_size), dtype=torch.int32,
                     device=query_start_loc.device)
