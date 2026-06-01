@@ -1,0 +1,81 @@
+{
+  "acceptance": {
+    "acc_dist": {
+      "0": 32801,
+      "1": 2347,
+      "2": 556,
+      "3": 363,
+      "4": 264,
+      "5": 1954
+    },
+    "accept_per_draft": 0.08031343868355753,
+    "accept_per_event": 0.4015671934177876,
+    "accepted_tokens": 15374,
+    "draft_tokens": 191425
+  },
+  "end_ts": 1780339583.0,
+  "exp_dir": "output/fr9_agentic_b4_winner_temp06_sync_20260601T1800Z",
+  "label": "fr9_winner_temp06_sync",
+  "node_count": 8,
+  "nsight": {
+    "available": false
+  },
+  "spec_events": 38285,
+  "start_ts": 1780337064.0,
+  "steptrace": {
+    "accept_per_draft_steptrace": 0.08031343868355753,
+    "accept_per_event_steptrace": 0.4015671934177876,
+    "accepted_tokens": 15374.0,
+    "decode_tps": 10.65355125863461,
+    "draft_events": 38285.0,
+    "draft_tokens": 191425.0,
+    "engine_steps": 7209.0,
+    "generation_tokens": 26895.0,
+    "mean_engine_step_ms_wall": 350.1886961975712,
+    "mean_event_ms_wall": 65.93993237268619,
+    "mean_gpu_util": 93.91414453366275,
+    "request_decode_time_s": 6266.820326732937,
+    "request_prefill_time_s": 502.96972989453934,
+    "window_s": 2524.5103108882904
+  },
+  "tasks": {
+    "end_ts": 1780339583.0,
+    "resolved_count": 0,
+    "resolved_rate": 0.0,
+    "task_count": 4,
+    "tasks": {
+      "astropy__astropy-12907": {
+        "ended_at": "2026-06-01T18:39:04Z",
+        "path": "output/fr9_agentic_b4_winner_temp06_sync_20260601T1800Z/fr9_agentic_b4_winner_temp06_sync_20260601T1800Z/per_task/astropy__astropy-12907/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-01T18:04:26Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-13033": {
+        "ended_at": "2026-06-01T18:23:45Z",
+        "path": "output/fr9_agentic_b4_winner_temp06_sync_20260601T1800Z/fr9_agentic_b4_winner_temp06_sync_20260601T1800Z/per_task/astropy__astropy-13033/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-01T18:04:26Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-13236": {
+        "ended_at": "2026-06-01T18:34:41Z",
+        "path": "output/fr9_agentic_b4_winner_temp06_sync_20260601T1800Z/fr9_agentic_b4_winner_temp06_sync_20260601T1800Z/per_task/astropy__astropy-13236/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-01T18:04:26Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-13398": {
+        "ended_at": "2026-06-01T18:46:23Z",
+        "path": "output/fr9_agentic_b4_winner_temp06_sync_20260601T1800Z/fr9_agentic_b4_winner_temp06_sync_20260601T1800Z/per_task/astropy__astropy-13398/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-01T18:04:26Z",
+        "verdict": "failed"
+      }
+    }
+  },
+  "tree_accept_paths": {
+    "available": false,
+    "events": 0
+  }
+}
