@@ -68,6 +68,19 @@ def log(msg: str) -> None:
     print(f"[exp {datetime.now(timezone.utc).strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
+def validate_spines(spines: object) -> int:
+    if not (1 <= int(spines) <= 10):
+        raise ValueError(f"--spines must be in [1, 10], got {spines}")
+    return int(spines)
+
+
+def parse_spines(spines: str) -> int:
+    try:
+        return validate_spines(spines)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+
+
 def set_temperature(temp: str) -> None:
     """Restart the proxy forcing a sampling temperature (1.0 or 0.6). Cheap,
     no GPU/sudo - just re-execs the proxy with LUMO_PROXY_FORCE_TEMPERATURE set."""
@@ -99,6 +112,7 @@ def apply_config(
     mtp: int = 1,
     kv_cache_dtype: str | None = None,
     row_mode: str = "tree",
+    spines: int = 2,
 ) -> None:
     """Relaunch vLLM into the requested config and wait for READY. D/E use the
     parameterized round relaunch (/tmp/relaunch_qwen36_round.py, which also
@@ -119,7 +133,8 @@ def apply_config(
         if config in ("E", "F", "Fb"):
             cmd += ["--mtp", str(mtp)]
         if config == "Fb":
-            cmd += ["--row-mode", row_mode]
+            spine_count = validate_spines(spines)
+            cmd += ["--row-mode", row_mode, "--spines", str(spine_count)]
         if kv_cache_dtype:
             cmd += ["--kv-cache-dtype", kv_cache_dtype]
     else:
@@ -134,6 +149,7 @@ def apply_config(
         TREE_PATH_LCP_TRACE, INDEPENDENT_WINNER_TRACE])
     log(f"relaunching vLLM config={config} mtp={mtp if config in ('E','F','Fb') else '-'} "
         f"row_mode={row_mode if config == 'Fb' else '-'} "
+        f"spines={spines if config == 'Fb' else '-'} "
         f"kv={kv_cache_dtype or 'bundle-default'} (model load ~ several min)")
     r = sh(cmd, timeout=1200)
     if "READY" not in (r.stdout + r.stderr):
@@ -326,7 +342,8 @@ def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
         paths.append(f"{rel}/nsight_{args.exp_tag}.nsys-rep")
     for p in paths:
         sh(["bash", "-lc", f"git add -f {p} 2>/dev/null"], cwd=str(REPO))
-    msg = (f"{args.suite} {args.exp_tag} (config {args.config}, temp {args.temp or 'as-set'}, "
+    fb_desc = f", row_mode {args.row_mode}, spines {args.spines}" if args.config == "Fb" else ""
+    msg = (f"{args.suite} {args.exp_tag} (config {args.config}{fb_desc}, temp {args.temp or 'as-set'}, "
            f"c={args.concurrency}) +task {task_id} verdict={verdict}\n\n"
            f"Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>")
     c = sh(["git", "commit", "-q", "-m", msg], cwd=str(REPO))
@@ -352,6 +369,8 @@ def main() -> int:
                     help="config E num_speculative_tokens (MTP depth) when --apply-config")
     ap.add_argument("--row-mode", choices=["tree", "independent"], default="tree",
                     help="config Fb row layout when --apply-config")
+    ap.add_argument("--spines", type=parse_spines, default=None,
+                    help="config Fb spine/independent-row count when --apply-config; must be in [1, 10]")
     ap.add_argument("--kv-cache-dtype", default=None,
                     choices=["auto", "fp8_e5m2", "fp8_e4m3"],
                     help="override realized KV cache dtype on relaunch (fp8_e4m3 = realized FP8 "
@@ -366,18 +385,32 @@ def main() -> int:
     ap.add_argument("--no-commit", action="store_true")
     ap.add_argument("--poll-s", type=int, default=30)
     args = ap.parse_args()
+    if args.spines is None:
+        try:
+            args.spines = validate_spines(os.environ.get("LUMO_TREE_SPINES", "2"))
+        except ValueError as exc:
+            if args.config == "Fb":
+                ap.error(str(exc))
+            args.spines = 2
     if args.suite == "swe" and not args.subset:
         sys.exit("--subset required for swe")
     if args.concurrency != 1:
         log(f"WARNING: concurrency={args.concurrency} (feedback-no-parallel-testing: default is 1)")
 
     if args.apply_config:
-        apply_config(args.config, args.mtp, kv_cache_dtype=args.kv_cache_dtype, row_mode=args.row_mode)
+        apply_config(
+            args.config,
+            args.mtp,
+            kv_cache_dtype=args.kv_cache_dtype,
+            row_mode=args.row_mode,
+            spines=args.spines,
+        )
     if args.temp:
         set_temperature(args.temp)
     preflight()
     log(f"experiment {args.exp_tag}: config={args.config} temp={args.temp or 'as-set'} "
         f"row_mode={args.row_mode if args.config == 'Fb' else '-'} "
+        f"spines={args.spines if args.config == 'Fb' else '-'} "
         f"concurrency={args.concurrency} suite={args.suite} nsight={args.nsight}")
     launch_suite(args)
 

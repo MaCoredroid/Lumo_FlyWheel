@@ -5438,13 +5438,15 @@ def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = No
     return str(out / "bundle.yaml")
 
 
-def _default_tree(n: int, spines: int) -> str:
+def _default_tree(n: int, spines: int | None = None) -> str:
     """Config F's default REGULAR N-spine tree.
 
     Each root is one candidate spine, extended linearly to depth n. The default
     remains top-2 for the FR7 gate, while LUMO_TREE_SPINES lets the same verifier
     exercise 2-10 spines without changing code.
     """
+    if spines is None:
+        spines = int(os.environ.get("LUMO_TREE_SPINES", "2"))
     if not (1 <= spines <= 10):
         raise RuntimeError(f"--spines must be in [1, 10], got {spines}")
     nodes = {
