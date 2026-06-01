@@ -4494,6 +4494,7 @@ else:
     py_compile.compile(str(ga), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied F_a unique-node batch4 pack')
 
+gl = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py')
 text = gl.read_text()
 sentinel = '# LUMO_FA_SPEC_OUTPUT_ACTUAL_TOKEN_CLIP'
 if sentinel in text:
