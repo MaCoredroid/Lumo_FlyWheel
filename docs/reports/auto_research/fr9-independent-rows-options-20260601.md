@@ -33,10 +33,16 @@ Current FR9 checkpoint:
   `avg=2.8659638554216866`, `acc0=0.15060240963855423`,
   `full5=0.3569277108433735` over 1328 events from the 16-prompt fixture
   (`--limit 64` covers the full fixture).
-- The current independent-row milestone creates persistent co-resident native
-  rows and keeps spine 0 E5-equivalent. Winner selection and recurrent-state
-  sync from the best hidden row are the next milestone; public output is still
-  spine 0.
+- Winner-commit checkpoint after adding recurrent-state sync:
+  `avg=3.441666666666667`, `acc0=0.0`, `full5=0.4777777777777778`,
+  `superset_violations=0`, `recovery_rate=0.049305555555555554`, with
+  pre-commit spine 0 at `avg=3.327777777777778`. The same run produced
+  `47.50160804227232` completion tokens/sec versus the E5 reference
+  `26.86`.
+- Independent rows are persistent. The current winner-commit path chooses the
+  longest accepted row each event, commits that row's sampled tokens to every
+  sibling request, and copies the winner's post-accept GDN recurrent state back
+  into all co-resident rows through vLLM's existing Mamba state-copy path.
 
 Retired routes remain out of the public surface: `LUMO_FB_*` inject/collapse,
 tree-delta, internal rows, kernel rows, and force-capture flags are not part of

@@ -462,6 +462,178 @@ else:
     runner.write_text(text)
     py_compile.compile(str(runner), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied independent rows req-id patch')
+
+text = runner.read_text()
+sentinel = '# LUMO_INDEPENDENT_ROWS_WINNER_COMMIT'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] independent rows winner-commit patch already present')
+else:
+    patch = r"""
+
+# LUMO_INDEPENDENT_ROWS_WINNER_COMMIT: commit the longest accepted co-resident
+# spine and clone its recurrent state back to the persistent sibling rows.
+import json as _lumo_ir_json
+import os as _lumo_ir_os2
+import time as _lumo_ir_time
+from vllm.v1.worker import mamba_utils as _lumo_ir_mamba_utils
+
+_lumo_ir_orig_update_states_after_model_execute = (
+    GPUModelRunner._update_states_after_model_execute)
+
+def _lumo_ir_primary_id(req_id):
+    return str(req_id).split("::lumo_ir_s", 1)[0]
+
+def _lumo_ir_spine_id(req_id):
+    req_id = str(req_id)
+    marker = "::lumo_ir_s"
+    if marker not in req_id:
+        return 0
+    try:
+        return int(req_id.rsplit(marker, 1)[1])
+    except Exception:
+        return 0
+
+def _lumo_ir_accept_count(row):
+    for i, tok in enumerate(row):
+        if int(tok) < 0:
+            return int(i)
+    return int(len(row))
+
+def _lumo_ir_copy_one_winner_state(
+    self,
+    src_req_id,
+    dst_req_ids,
+    src_accept_count,
+):
+    copy_bufs = self._get_mamba_copy_bufs()
+    copy_bufs.offset = 0
+    src_state = self.requests.get(src_req_id)
+    src_block_idx = self.mamba_state_idx.get(src_req_id)
+    if src_state is None or src_block_idx is None:
+        return {"copied": 0, "missing": 1}
+    state_copy_funcs = self.model.get_mamba_state_copy_func()
+    forward_context = self.compilation_config.static_forward_context
+    accept_token_bias = max(0, int(src_accept_count) - 1)
+    copied = 0
+    missing = 0
+    src_block_idx = int(src_block_idx)
+    for dst_req_id in dst_req_ids:
+        dst_state = self.requests.get(dst_req_id)
+        dst_block_idx = self.mamba_state_idx.get(dst_req_id)
+        if dst_state is None or dst_block_idx is None:
+            missing += 1
+            continue
+        dst_block_idx = int(dst_block_idx)
+        for mamba_group_id in copy_bufs.mamba_group_ids:
+            src_block_ids = src_state.block_ids[mamba_group_id]
+            dst_block_ids = dst_state.block_ids[mamba_group_id]
+            if src_block_idx >= len(src_block_ids) or dst_block_idx >= len(dst_block_ids):
+                missing += 1
+                continue
+            dst_block_id = dst_block_ids[dst_block_idx]
+            layer_names = self.kv_cache_config.kv_cache_groups[mamba_group_id].layer_names
+            for layer_name in layer_names:
+                attention = forward_context[layer_name]
+                kv_caches = attention.kv_cache
+                for state, state_copy_func in zip(kv_caches, state_copy_funcs):
+                    if copy_bufs.offset >= copy_bufs.src_ptrs.np.shape[0]:
+                        _lumo_ir_mamba_utils.do_mamba_copy_block(copy_bufs)
+                        copy_bufs.offset = 0
+                    copy_spec = state_copy_func(
+                        state, src_block_ids, src_block_idx, accept_token_bias + 1)
+                    off = copy_bufs.offset
+                    copy_bufs.src_ptrs.np[off] = copy_spec.start_addr
+                    copy_bufs.dst_ptrs.np[off] = state[dst_block_id].data_ptr()
+                    copy_bufs.sizes.np[off] = copy_spec.num_elements * state.element_size()
+                    copy_bufs.offset = off + 1
+                    copied += 1
+    _lumo_ir_mamba_utils.do_mamba_copy_block(copy_bufs)
+    return {"copied": int(copied), "missing": int(missing)}
+
+def _lumo_ir_winner_update_states_after_model_execute(
+    self,
+    output_token_ids,
+    scheduler_output,
+):
+    if (_lumo_ir_os2.environ.get("LUMO_INDEPENDENT_ROWS") != "1"
+            or _lumo_ir_os2.environ.get("LUMO_IR_WINNER_COMMIT", "1") != "1"
+            or not torch.is_tensor(output_token_ids)
+            or output_token_ids.dim() != 2):
+        return _lumo_ir_orig_update_states_after_model_execute(
+            self, output_token_ids, scheduler_output)
+
+    num_rows = int(output_token_ids.shape[0])
+    req_ids = [str(x) for x in list(self.input_batch.req_ids[:num_rows])]
+    rows_cpu = output_token_ids.detach().cpu().tolist()
+    groups = {}
+    for idx, req_id in enumerate(req_ids):
+        groups.setdefault(_lumo_ir_primary_id(req_id), []).append(idx)
+    winner_rows = {}
+    for primary, indices in groups.items():
+        if len(indices) <= 1:
+            continue
+        best_idx = indices[0]
+        best_acc = _lumo_ir_accept_count(rows_cpu[best_idx])
+        for idx in indices[1:]:
+            acc = _lumo_ir_accept_count(rows_cpu[idx])
+            if acc > best_acc or (
+                    acc == best_acc
+                    and _lumo_ir_spine_id(req_ids[idx]) < _lumo_ir_spine_id(req_ids[best_idx])):
+                best_idx = idx
+                best_acc = acc
+        winner_rows[primary] = (best_idx, best_acc, indices)
+
+    _lumo_ir_orig_update_states_after_model_execute(
+        self, output_token_ids, scheduler_output)
+
+    if not winner_rows:
+        return
+
+    trace_rows = []
+    for primary, (winner_idx, winner_acc, indices) in winner_rows.items():
+        winner_req_id = req_ids[winner_idx]
+        copy_result = _lumo_ir_copy_one_winner_state(
+            self, winner_req_id, [req_ids[i] for i in indices], winner_acc)
+        winner_row = output_token_ids[winner_idx].clone()
+        for idx in indices:
+            output_token_ids[idx].copy_(winner_row)
+            try:
+                self.input_batch.num_accepted_tokens_cpu[idx] = 1
+            except Exception:
+                pass
+        counts = {str(_lumo_ir_spine_id(req_ids[i])): _lumo_ir_accept_count(rows_cpu[i])
+                  for i in indices}
+        trace_rows.append({
+            "primary": primary,
+            "winner_req_id": winner_req_id,
+            "winner_spine": int(_lumo_ir_spine_id(winner_req_id)),
+            "winner_acc": int(winner_acc),
+            "spine0_acc": int(counts.get("0", 0)),
+            "counts": counts,
+            "members": [req_ids[i] for i in indices],
+            "copy": copy_result,
+        })
+
+    try:
+        fh = globals().get("_LUMO_IR_WINNER_TRACE_FH")
+        if fh is None:
+            fh = open(_lumo_ir_os2.environ.get(
+                "LUMO_IR_WINNER_TRACE_FILE",
+                "/logs/independent_winner_trace.jsonl"), "a", buffering=1)
+            globals()["_LUMO_IR_WINNER_TRACE_FH"] = fh
+        for row in trace_rows:
+            row["ts"] = round(_lumo_ir_time.time(), 4)
+            row["event"] = "independent_winner_commit"
+            fh.write(_lumo_ir_json.dumps(row) + chr(10))
+    except Exception:
+        pass
+
+GPUModelRunner._update_states_after_model_execute = (
+    _lumo_ir_winner_update_states_after_model_execute)
+"""
+    runner.write_text(text + patch)
+    py_compile.compile(str(runner), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied independent rows winner-commit patch')
 LUMOINDEPENDENTROWS
 '''
 

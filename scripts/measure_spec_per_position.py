@@ -23,6 +23,7 @@ from typing import Any
 DEFAULT_PROMPTS = Path("tests/fixtures/spec_probe_prompts.json")
 DEFAULT_TREE_LCP = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/tree_path_lcp_max.jsonl")
 DEFAULT_SPEC_TRACE = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl")
+DEFAULT_WINNER_TRACE = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/independent_winner_trace.jsonl")
 DEFAULT_VLLM_LOG = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.6-27b.log")
 
 
@@ -262,6 +263,52 @@ def _independent_path_lcps_between(
     return lcps
 
 
+def _independent_winner_between(
+    trace_path: Path,
+    start_ts: float,
+    end_ts: float,
+    depth: int,
+) -> dict[str, Any]:
+    winner_lcps: list[int] = []
+    spine0_lcps: list[int] = []
+    violations = 0
+    recoveries = 0
+    rows = 0
+    if not trace_path.exists():
+        return {
+            "winner_lcps": winner_lcps,
+            "spine0_lcps": spine0_lcps,
+            "violations": violations,
+            "recoveries": recoveries,
+            "rows": rows,
+        }
+    for raw in trace_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        try:
+            row = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if row.get("event") != "independent_winner_commit":
+            continue
+        if not (start_ts <= float(row.get("ts", 0.0)) <= end_ts):
+            continue
+        winner = max(0, min(depth, int(row.get("winner_acc", 0) or 0)))
+        spine0 = max(0, min(depth, int(row.get("spine0_acc", 0) or 0)))
+        winner_lcps.append(winner)
+        spine0_lcps.append(spine0)
+        rows += 1
+        if winner < spine0:
+            violations += 1
+        if winner > spine0:
+            recoveries += 1
+    return {
+        "winner_lcps": winner_lcps,
+        "spine0_lcps": spine0_lcps,
+        "violations": violations,
+        "recoveries": recoveries,
+        "rows": rows,
+    }
+
+
 def print_table(label: str, summary: dict[str, Any]) -> None:
     per = summary["per_position"]
     print(f"{label}: n={summary['n_events']} avg={summary['avg']:.3f} acc0={100 * summary['acc0']:.1f}% full5={100 * summary['full5']:.1f}%")
@@ -317,7 +364,7 @@ def run_measure(args: argparse.Namespace) -> dict[str, Any]:
                 "tree mode produced zero path0_lcp events; require verifier-independent "
                 "tree_path_lcp_max.jsonl rows, not accepted_len"
             )
-    else:
+    elif args.mode == "independent":
         lcps = _independent_path_lcps_between(
             Path(args.spec_trace_log),
             start_ts,
@@ -331,6 +378,27 @@ def run_measure(args: argparse.Namespace) -> dict[str, Any]:
             raise SystemExit(
                 "independent mode produced zero spine trace events; require "
                 "LUMO_INDEPENDENT_ROWS launch and per-request spec trace rows"
+            )
+    else:
+        winner = _independent_winner_between(
+            Path(args.winner_trace_log),
+            start_ts,
+            end_ts,
+            depth=args.depth,
+        )
+        spec = summarize_lcps(winner["winner_lcps"])
+        spine0_spec = summarize_lcps(winner["spine0_lcps"])
+        spec["spine0"] = spine0_spec
+        spec["superset_violations"] = winner["violations"]
+        spec["recovery_rate"] = (
+            winner["recoveries"] / winner["rows"] if winner["rows"] else None
+        )
+        spec["recoveries"] = winner["recoveries"]
+        source = "independent_winner_trace.jsonl winner=max(spines) per group"
+        if spec["n_events"] == 0:
+            raise SystemExit(
+                "independent-winner mode produced zero winner rows; require "
+                "LUMO_IR_WINNER_COMMIT=1 launch"
             )
 
     if not all(r.get("ok") for r in results):
@@ -363,12 +431,21 @@ def run_measure(args: argparse.Namespace) -> dict[str, Any]:
     (out / "measurement.json").write_text(json.dumps(measurement, indent=2) + "\n", encoding="utf-8")
     (out / "prompts.json").write_text(json.dumps(prompts, indent=2) + "\n", encoding="utf-8")
     print_table(args.mode, spec)
+    if args.mode == "independent-winner":
+        print(
+            "winner extras: "
+            f"superset_violations={spec['superset_violations']} "
+            f"recoveries={spec['recoveries']} "
+            f"recovery_rate={100 * spec['recovery_rate']:.1f}% "
+            f"spine0_avg={spec['spine0']['avg']:.3f}",
+            flush=True,
+        )
     return measurement
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=["e5", "tree", "independent"], required=True)
+    parser.add_argument("--mode", choices=["e5", "tree", "independent", "independent-winner"], required=True)
     parser.add_argument("--prompts", default=str(DEFAULT_PROMPTS))
     parser.add_argument("--limit", type=int, default=None, help="maximum prompts to measure from --prompts")
     parser.add_argument("--max-tokens", type=int, default=400)
@@ -378,6 +455,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--concurrency", type=int, default=4)
     parser.add_argument("--tree-lcp-log", default=str(DEFAULT_TREE_LCP))
     parser.add_argument("--spec-trace-log", default=str(DEFAULT_SPEC_TRACE))
+    parser.add_argument("--winner-trace-log", default=str(DEFAULT_WINNER_TRACE))
     parser.add_argument("--depth", type=int, default=5,
                         help="independent mode only: MTP depth for per-position summary")
     parser.add_argument("--spine", type=int, default=0,
