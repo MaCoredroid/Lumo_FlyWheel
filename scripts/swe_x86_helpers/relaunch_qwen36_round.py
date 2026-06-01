@@ -2198,6 +2198,241 @@ else:
 LUMOMROPETREE
 '''
 
+_TREE_PER_PATH_DRAFTER_BLOCK = r'''
+python3 - <<'LUMOTREEPERPATHDRAFTER'
+from pathlib import Path
+nl = chr(10)
+p = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py')
+text = p.read_text()
+sentinel = '# LUMO_TREE_PER_PATH_DRAFTER'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] tree per-path drafter already present')
+else:
+    method_anchor = '    def prepare_inputs(' + nl
+    helper = r"""
+    # LUMO_TREE_PER_PATH_DRAFTER: correctness-first tree drafter.
+    #
+    # The stock propose_tree drafts all tree nodes in one recurrent scan. That
+    # shares GDN recurrence across sibling branches, so the even-node/top-1
+    # spine diverges from the standalone linear MTP chain. This helper reuses
+    # the normal one-token drafting loop once per root spine and repacks those
+    # independent chains into vLLM's level-major tree token order. It is slower
+    # by construction; it is the validation path before a fused STree kernel.
+    def _lumo_tree_per_path_draft(
+        self,
+        *,
+        batch_size: int,
+        root_draft_token_ids: torch.Tensor,
+        positions: torch.Tensor,
+        hidden_states: torch.Tensor,
+        common_attn_metadata: CommonAttentionMetadata,
+        max_depth: int,
+    ) -> list[torch.Tensor] | None:
+        import os as _lumo_tree_ppd_os
+        if _lumo_tree_ppd_os.environ.get("LUMO_TREE_PER_PATH_DRAFTER") != "1":
+            return None
+        if not self.cu_drafts_per_level:
+            return None
+        root_width = int(root_draft_token_ids.shape[1])
+        if root_width <= 0:
+            return None
+        # This naive path intentionally supports regular N-spine trees: each
+        # root has one child at every deeper level, so each level has root_width
+        # nodes and the flattened order is [spine0, spine1, ...] per level.
+        prev_cu = 0
+        for cu in self.cu_drafts_per_level:
+            level_width = int(cu) - int(prev_cu)
+            if level_width != root_width:
+                return None
+            prev_cu = int(cu)
+
+        def _clone_cpu_tensor(value):
+            return value.clone() if value is not None else None
+
+        def _clone_common_metadata():
+            return replace(
+                common_attn_metadata,
+                query_start_loc=common_attn_metadata.query_start_loc.clone(),
+                seq_lens=common_attn_metadata.seq_lens.clone(),
+                query_start_loc_cpu=common_attn_metadata.query_start_loc_cpu.clone(),
+                _seq_lens_cpu=_clone_cpu_tensor(common_attn_metadata._seq_lens_cpu),
+                _num_computed_tokens_cpu=_clone_cpu_tensor(
+                    common_attn_metadata._num_computed_tokens_cpu),
+            )
+
+        chains: list[list[torch.Tensor]] = []
+        for spine_idx in range(root_width):
+            draft_token_ids = root_draft_token_ids[:, spine_idx].contiguous()
+            chain_tokens = [draft_token_ids]
+            spine_hidden_states = hidden_states.contiguous()
+            spine_positions = positions.clone()
+            spine_common = _clone_common_metadata()
+
+            cudagraph_runtime_mode, input_batch_size, batch_size_across_dp = (
+                self._determine_batch_execution_and_padding(batch_size)
+            )
+
+            spine_common.num_actual_tokens = batch_size
+            spine_common.max_query_len = 1
+            spine_common.query_start_loc = self.arange[: batch_size + 1]
+            spine_common.query_start_loc_cpu = torch.from_numpy(
+                self.token_arange_np[: batch_size + 1]
+            ).clone()
+
+            block_size = self.block_size
+            assert block_size > 0, "block_size has not been initialized."
+            per_layer_attn_metadata: dict[str, object] = {}
+            for token_index in range(max_depth - 1):
+                input_ids = chain_tokens[-1].int()
+                positions_1d = spine_positions[0] if self.uses_mrope else spine_positions
+                if self.uses_mrope:
+                    out_pos = self.mrope_positions[0, :batch_size]
+                elif self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0:
+                    out_pos = self.xdrope_positions[0, :batch_size]
+                else:
+                    out_pos = self.positions[:batch_size]
+                eagle_step_update_slot_mapping_and_metadata(
+                    positions_1d=positions_1d,
+                    block_table_tensor=spine_common.block_table_tensor,
+                    seq_lens=spine_common.seq_lens,
+                    block_size=block_size,
+                    max_model_len=self.max_model_len,
+                    out_clamped_positions=out_pos,
+                    out_slot_mapping=self._slot_mapping_buffer[:input_batch_size],
+                    input_batch_size=input_batch_size,
+                )
+                spine_common.slot_mapping = self._slot_mapping_buffer[:batch_size]
+                if self.uses_mrope:
+                    self.mrope_positions[1:, :batch_size] = self.mrope_positions[
+                        0, :batch_size
+                    ]
+                    spine_positions = self.mrope_positions[:, :batch_size].clone()
+                elif self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0:
+                    self.xdrope_positions[1:, :batch_size] = self.xdrope_positions[
+                        0, :batch_size
+                    ]
+                    spine_positions = self.xdrope_positions[0, :batch_size].clone()
+                else:
+                    spine_positions = self.positions[:batch_size].clone()
+
+                spine_common.max_seq_len = min(
+                    spine_common.max_seq_len + 1, self.max_model_len
+                )
+                if spine_common._seq_lens_cpu is not None:
+                    spine_common._seq_lens_cpu += 1
+                if spine_common._num_computed_tokens_cpu is not None:
+                    spine_common._num_computed_tokens_cpu += 1
+
+                for attn_group in self.draft_attn_groups:
+                    attn_metadata = attn_group.get_metadata_builder().build_for_drafting(
+                        common_attn_metadata=spine_common,
+                        draft_index=token_index + 1,
+                    )
+                    for layer_name in attn_group.layer_names:
+                        per_layer_attn_metadata[layer_name] = attn_metadata
+
+                self.input_ids[:batch_size] = input_ids
+                self.hidden_states[:batch_size] = spine_hidden_states
+                if self.supports_mm_inputs:
+                    self.inputs_embeds[:batch_size] = self.model.embed_input_ids(input_ids)
+                    model_input_ids = None
+                    inputs_embeds = self.inputs_embeds[:input_batch_size]
+                else:
+                    model_input_ids = self.input_ids[:input_batch_size]
+                    inputs_embeds = None
+
+                model_kwargs = {
+                    "input_ids": model_input_ids,
+                    "positions": self._get_positions(input_batch_size),
+                    "inputs_embeds": inputs_embeds,
+                }
+                if self.pass_hidden_states_to_model:
+                    model_kwargs["hidden_states"] = self.hidden_states[:input_batch_size]
+
+                with set_forward_context(
+                    per_layer_attn_metadata,
+                    self.vllm_config,
+                    num_tokens=input_batch_size,
+                    num_tokens_across_dp=batch_size_across_dp,
+                    cudagraph_runtime_mode=cudagraph_runtime_mode,
+                    slot_mapping=self._get_slot_mapping(input_batch_size),
+                ):
+                    ret_hidden_states = self.model(**model_kwargs)
+                    if not self.model_returns_tuple():
+                        last_hidden_states = ret_hidden_states
+                        spine_hidden_states = ret_hidden_states
+                    else:
+                        last_hidden_states, spine_hidden_states = ret_hidden_states
+
+                spine_hidden_states = spine_hidden_states[:batch_size].contiguous()
+                draft_token_ids = self._greedy_sample(
+                    last_hidden_states[:batch_size])
+                chain_tokens.append(draft_token_ids)
+            chains.append(chain_tokens)
+
+        level_major = [root_draft_token_ids]
+        for level in range(1, max_depth):
+            level_major.append(
+                torch.stack([chains[spine][level] for spine in range(root_width)], dim=1)
+            )
+
+        try:
+            import json as _lumo_tree_ppd_json, time as _lumo_tree_ppd_time
+            global _LUMO_TREE_PER_PATH_DRAFTER_FH
+            try:
+                _LUMO_TREE_PER_PATH_DRAFTER_FH
+            except NameError:
+                _LUMO_TREE_PER_PATH_DRAFTER_FH = open(
+                    _lumo_tree_ppd_os.environ.get(
+                        "LUMO_TREE_PER_PATH_DRAFTER_LOG",
+                        "/logs/tree_per_path_drafter.jsonl"),
+                    "a",
+                    buffering=1,
+                )
+            _LUMO_TREE_PER_PATH_DRAFTER_FH.write(_lumo_tree_ppd_json.dumps({
+                "event": "tree_per_path_drafter",
+                "ts": round(_lumo_tree_ppd_time.time(), 4),
+                "batch_size": int(batch_size),
+                "spines": int(root_width),
+                "depth": int(max_depth),
+                "draft": torch.cat(level_major, dim=1).detach().cpu().tolist(),
+            }) + chr(10))
+        except Exception:
+            pass
+        return level_major
+
+"""
+    if method_anchor not in text:
+        raise RuntimeError('tree per-path drafter method anchor not found')
+    text = text.replace(method_anchor, helper + method_anchor, 1)
+
+    call_anchor = """        draft_token_ids_list = [draft_token_ids]
+        draft_hidden_states = hidden_states.view(batch_size, 1, -1)
+"""
+    call_new = """        draft_token_ids_list = [draft_token_ids]
+        _lumo_tree_ppd = self._lumo_tree_per_path_draft(
+            batch_size=batch_size,
+            root_draft_token_ids=draft_token_ids,
+            positions=positions,
+            hidden_states=hidden_states.view(batch_size, -1),
+            common_attn_metadata=common_attn_metadata,
+            max_depth=len(self.cu_drafts_per_level),
+        )
+        if _lumo_tree_ppd is not None:
+            return _lumo_tree_ppd
+        draft_hidden_states = hidden_states.view(batch_size, 1, -1)
+"""
+    if call_anchor not in text:
+        raise RuntimeError('tree per-path drafter call anchor not found')
+    text = text.replace(call_anchor, call_new, 1)
+    text = sentinel + '\n' + text
+    p.write_text(text)
+    import py_compile
+    py_compile.compile(str(p), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied tree per-path drafter')
+LUMOTREEPERPATHDRAFTER
+'''
+
 
 _TREE_REJECTION_BLOCK = r'''
 python3 - <<'LUMOTREEREJECT'
@@ -12198,7 +12433,8 @@ LUMOFBCTRL
             + stale_fb_guard + dbg + "export LUMO_CUDAGRAPH_RUNTIME_TELEMETRY=1\n"
             + fb_env + mtp_draft_trace + base + _CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
-            + (tree_blocks if tree else "") + (_FB_BLOCK if fb else "")
+            + ((_TREE_PER_PATH_DRAFTER_BLOCK + tree_blocks) if tree else "")
+            + (_FB_BLOCK if fb else "")
             + (_FB_KERNEL_ROWS_BLOCK if ((fb and kernel_rows_requested) or fa_unique) else "")
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_PACK_BLOCK if fa_unique else "")
