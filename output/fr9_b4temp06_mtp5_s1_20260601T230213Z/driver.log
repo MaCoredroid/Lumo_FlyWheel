@@ -33,3 +33,9 @@ HEAD is now at 5250b2442 Merge pull request #14164 from ayshih/grid_performance
 Preparing worktree (detached HEAD 1a4462d72)
 HEAD is now at 1a4462d72 Merge pull request #14102 from zoghbi-a/fix-votable-validator-issue-#14099
 [2026-06-01T23:15:00Z]    astropy__astropy-13977: empty patch (agent_gave_up); retrying codex once
+[2026-06-01T23:15:49Z] <- astropy__astropy-13977 verdict=failed elapsed_total=65.3s
+[2026-06-01T23:15:49Z] -> astropy__astropy-14182
+Preparing worktree (detached HEAD a5917978b)
+HEAD is now at a5917978b Merge pull request #14172 from astropy/pre-commit-ci-update-config
+[2026-06-01T23:15:55Z]    astropy__astropy-13236: empty patch (agent_gave_up); retrying codex once
+[2026-06-01T23:16:06Z]    astropy__astropy-14182: empty patch (agent_gave_up); retrying codex once
