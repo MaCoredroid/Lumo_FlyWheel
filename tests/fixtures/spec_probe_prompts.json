@@ -1,0 +1,18 @@
+[
+  "Write a Python function that returns the nth Fibonacci number using an iterative loop. Include input validation.\n\n",
+  "Complete this function:\n\ndef merge_sorted_unique(left, right):\n    \"\"\"Return a sorted list containing unique values from two sorted inputs.\"\"\"\n",
+  "You are reviewing this bug report. Explain the likely root cause and propose a minimal patch:\n\nA cache key is built from a dictionary, and tests intermittently fail because equivalent dictionaries produce different keys.\n\n",
+  "Continue this source file with a robust implementation:\n\nclass LRUCache:\n    def __init__(self, capacity: int):\n        self.capacity = capacity\n",
+  "Write a concise pytest test suite for a function parse_duration(text) that accepts '10s', '5m', and '2h'.\n\n",
+  "Implement a Python dataclass called RetryPolicy with fields max_attempts, base_delay, and max_delay, plus a method delays().\n\n",
+  "Complete the SQL explanation: Given tables users(id, email) and events(user_id, created_at), write a query for active users in the last 30 days and explain each clause.\n\n",
+  "Write a TypeScript function groupBy<T, K extends string | number>(items: T[], keyFn: (item: T) => K).\n\n",
+  "Continue this Rust function and explain edge cases:\n\nfn normalize_path(input: &str) -> String {\n",
+  "Draft a migration plan for replacing a synchronous file parser with an async streaming parser in a production service.\n\n",
+  "Complete this Python code for topological sorting with cycle detection:\n\ndef topo_sort(graph: dict[str, list[str]]) -> list[str]:\n",
+  "Write documentation for a command line option --dry-run that validates inputs without writing output files.\n\n",
+  "Given this traceback, diagnose and patch the issue:\n\nTypeError: unsupported operand type(s) for +: 'NoneType' and 'int'\n  File 'metrics.py', line 42, in add_sample\n\n",
+  "Continue the following Go code:\n\nfunc Deduplicate(values []string) []string {\n",
+  "Write a Python function that chunks an iterable into lists of size n without reading the entire iterable into memory.\n\n",
+  "Explain how to make a batch inference pipeline deterministic when GPU kernels may choose different algorithms for different batch sizes.\n\n"
+]
