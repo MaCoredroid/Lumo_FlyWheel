@@ -23,7 +23,6 @@ from typing import Any
 DEFAULT_PROMPTS = Path("tests/fixtures/spec_probe_prompts.json")
 DEFAULT_TREE_LCP = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/tree_path_lcp_max.jsonl")
 DEFAULT_VLLM_LOG = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.6-27b.log")
-SPINE_A_PATH = [0, 2, 4, 6, 8]
 
 
 class GuardError(RuntimeError):
@@ -149,11 +148,14 @@ def validate_live_server(endpoint: str, guard: dict[str, Any]) -> None:
 
 
 def lcp_from_tree_record(record: dict[str, Any], path: list[int] | None = None) -> int:
-    path = path or SPINE_A_PATH
     for score in record.get("path_scores") or []:
+        if path is None:
+            return int(score.get("lcp", 0))
         if [int(x) for x in score.get("path", [])] == path:
             return int(score.get("lcp", 0))
     accepted = [int(x) for x in record.get("accepted_node_ids", [])]
+    if path is None:
+        return len(accepted)
     lcp = 0
     for got, want in zip(accepted, path):
         if got != want:

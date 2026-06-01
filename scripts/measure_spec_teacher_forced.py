@@ -31,7 +31,7 @@ from measure_spec_per_position import (  # noqa: E402
 
 DEFAULT_REFERENCE = Path("tests/fixtures/spec_teacher_force_reference.txt")
 DEFAULT_TRACE = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/teacherforce_mtp.jsonl")
-TREE_SPINE_A_PATH = [0, 2, 4, 6, 8]
+DEFAULT_TREE_LCP = Path("/tmp/lumo-l0c-fp8-cutlass-run30-logs/tree_path_lcp_max.jsonl")
 
 
 def _http_json(url: str, payload: dict[str, Any] | None = None, timeout: int = 60) -> dict[str, Any]:
@@ -102,7 +102,44 @@ def wait_for_one_trace_record(path: Path, offset: int, timeout_s: float = 30.0) 
     raise RuntimeError(f"no mtp_draft record appended to {path} within {timeout_s}s")
 
 
-def draft_top1_chain(record: dict[str, Any], mode: str, depth: int = 5) -> list[int]:
+def tree_lcp_records_after(path: Path, offset: int) -> tuple[int, list[dict[str, Any]]]:
+    if not path.exists():
+        return 0, []
+    size = path.stat().st_size
+    if offset > size:
+        offset = 0
+    records: list[dict[str, Any]] = []
+    with path.open("rb") as fh:
+        fh.seek(offset)
+        chunk = fh.read()
+    for raw in chunk.decode("utf-8", errors="ignore").splitlines():
+        try:
+            row = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if row.get("event") == "tree_path_lcp_max":
+            records.append(row)
+    return size, records
+
+
+def wait_for_one_tree_lcp_record(path: Path, offset: int, timeout_s: float = 30.0) -> tuple[int, dict[str, Any]]:
+    deadline = time.time() + timeout_s
+    while time.time() < deadline:
+        new_offset, records = tree_lcp_records_after(path, offset)
+        if records:
+            return new_offset, records[0]
+        offset = new_offset
+        time.sleep(0.05)
+    raise RuntimeError(f"no tree_path_lcp_max record appended to {path} within {timeout_s}s")
+
+
+def tree_path0_indices(depth: int, spines: int) -> list[int]:
+    return [level * spines for level in range(depth)]
+
+
+def draft_top1_chain(
+    record: dict[str, Any], mode: str, depth: int = 5, spines: int = 2
+) -> list[int]:
     draft = record.get("draft")
     if not isinstance(draft, list) or not draft or not isinstance(draft[0], list):
         raise ValueError(f"bad mtp_draft row: {record!r}")
@@ -110,7 +147,7 @@ def draft_top1_chain(record: dict[str, Any], mode: str, depth: int = 5) -> list[
     if mode == "e5":
         return row[:depth]
     if mode == "tree":
-        return [row[i] for i in TREE_SPINE_A_PATH[:depth] if i < len(row)]
+        return [row[i] for i in tree_path0_indices(depth, spines) if i < len(row)]
     raise ValueError(f"unknown mode {mode!r}")
 
 
@@ -146,7 +183,7 @@ def forced_acceptance_summary(measurement: dict[str, Any]) -> dict[str, Any]:
     summary["available"] = len(lcps) == len(rows)
     summary["n_rows"] = len(lcps)
     summary["source"] = (
-        "live target queries over prefix + own target argmax + accepted draft tokens"
+        "engine tree_path_lcp_max for tree mode; live target queries for e5 mode"
     )
     return summary
 
@@ -238,6 +275,10 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         trace_path.parent.mkdir(parents=True, exist_ok=True)
         trace_path.touch()
     offset = trace_path.stat().st_size
+    tree_lcp_path = Path(args.tree_lcp_log)
+    if args.mode == "tree" and not tree_lcp_path.exists():
+        tree_lcp_path.parent.mkdir(parents=True, exist_ok=True)
+        tree_lcp_path.touch()
 
     rows: list[dict[str, Any]] = []
     start_ts = time.time()
@@ -245,18 +286,28 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         prefix_tokens = reference_tokens[:position]
         prefix_text = detokenize(args.endpoint, args.model, prefix_tokens)
         before_offset = trace_path.stat().st_size
+        before_tree_lcp_offset = tree_lcp_path.stat().st_size if args.mode == "tree" else 0
         response = _completion_one(args.endpoint, args.model, prefix_text)
         offset, trace_row = wait_for_one_trace_record(trace_path, before_offset)
+        tree_lcp_row = None
+        if args.mode == "tree":
+            _, tree_lcp_row = wait_for_one_tree_lcp_record(
+                tree_lcp_path, before_tree_lcp_offset
+            )
         choice = response["choices"][0]
         completion_text = choice.get("text") or ""
         argmax_token_id, recovery_warning = recover_argmax_token_id(
             args.endpoint, args.model, prefix_text, prefix_tokens, completion_text
         )
-        draft_top1 = draft_top1_chain(trace_row, args.mode, depth=args.depth)
+        draft_top1 = draft_top1_chain(
+            trace_row, args.mode, depth=args.depth, spines=args.spines
+        )
         accept_lcp = None
         accept_target_chain: list[int | None] = []
         accept_warning = None
-        if not args.skip_acceptance:
+        if not args.skip_acceptance and args.mode == "tree":
+            accept_lcp = min(int((tree_lcp_row or {}).get("path0_lcp", 0)), args.depth)
+        elif not args.skip_acceptance:
             accept_lcp, accept_target_chain, accept_warning = compute_teacher_forced_acceptance(
                 args.endpoint,
                 args.model,
@@ -279,6 +330,7 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
             "trace_ts": trace_row.get("ts"),
             "recovery_warning": recovery_warning,
             "acceptance_recovery_warning": accept_warning,
+            "engine_tree_path_lcp": tree_lcp_row,
         }
         rows.append(row)
         if args.progress_every and (row_index + 1) % args.progress_every == 0:
@@ -296,7 +348,9 @@ def measure(args: argparse.Namespace) -> dict[str, Any]:
         "start_token": args.start_token,
         "limit": args.limit,
         "depth": args.depth,
+        "spines": args.spines,
         "trace_file": str(trace_path),
+        "tree_lcp_log": str(tree_lcp_path),
         "start_ts": start_ts,
         "end_ts": end_ts,
         "guard": guard,
@@ -423,9 +477,11 @@ def main(argv: list[str] | None = None) -> int:
     measure_parser.add_argument("--endpoint", default="http://127.0.0.1:9950")
     measure_parser.add_argument("--model", default="qwen3.6-27b")
     measure_parser.add_argument("--trace-file", default=str(DEFAULT_TRACE))
+    measure_parser.add_argument("--tree-lcp-log", default=str(DEFAULT_TREE_LCP))
     measure_parser.add_argument("--start-token", type=int, default=16)
     measure_parser.add_argument("--limit", type=int, default=384)
     measure_parser.add_argument("--depth", type=int, default=5)
+    measure_parser.add_argument("--spines", type=int, default=2)
     measure_parser.add_argument("--progress-every", type=int, default=25)
     measure_parser.add_argument("--skip-acceptance", action="store_true")
     measure_parser.add_argument("--no-live-guards", action="store_true", help=argparse.SUPPRESS)

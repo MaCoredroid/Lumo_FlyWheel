@@ -2229,8 +2229,6 @@ else:
         max_depth: int,
     ) -> list[torch.Tensor] | None:
         import os as _lumo_tree_ppd_os
-        if _lumo_tree_ppd_os.environ.get("LUMO_TREE_PER_PATH_DRAFTER") != "1":
-            return None
         if not self.cu_drafts_per_level:
             return None
         root_width = int(root_draft_token_ids.shape[1])
@@ -12353,8 +12351,7 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
     # backend (target verify + draft). vLLM's selector has no tree logic and does
     # not honor VLLM_ATTENTION_BACKEND in 0.19.0, so we source-edit the selector
     # (config F only). Realized KV is auto/bf16, which TreeAttention supports.
-    target_per_path_gdn = os.environ.get("LUMO_TREE_TARGET_PER_PATH_GDN") == "1"
-    fa_unique = os.environ.get("LUMO_FA_UNIQUE_NODES") == "1" or target_per_path_gdn
+    fa_unique = bool(tree)
     dbg = "export LUMO_TREE_DRAFT_DEBUG=1\n" if (tree and tree_debug) else ""
     tree_blocks = (
         _TREE_ATTN_BLOCK
@@ -12365,117 +12362,42 @@ def _prelaunch_for(config: str, tree: bool = False, tree_debug: bool = False, fb
         + _TREE_ACCEPTED_ROW_COMMIT_BLOCK
         + _TREE_PATH_LCP_MAX_BLOCK
     )
-    multi_spine = os.environ.get("LUMO_MULTI_SPINE") == "1"
-    if multi_spine and os.environ.get("LUMO_FB_TWO_SPINE") == "1":
-        raise RuntimeError(
-            "LUMO_MULTI_SPINE must not be combined with LUMO_FB_TWO_SPINE; "
-            "the latter is the retired inject/collapse experiment path")
-    if multi_spine:
-        if (os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1"
-                or os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"):
-            raise RuntimeError(
-                "LUMO_MULTI_SPINE must not use LUMO_FB_INTERNAL_ROWS or "
-                "LUMO_FB_KERNEL_ROWS; FR8 multi-spine is the single-request "
-                "FA unique-node verifier with copied GDN state.")
-    kernel_rows_requested = os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"
-    fb_k = (os.environ.get("LUMO_MS_SPINES", "2")
-            if multi_spine else
-            ("2" if os.environ.get("LUMO_FB_TWO_SPINE") == "1"
-             else os.environ.get("LUMO_FB_K", "1")))
-    fb_dup = "export LUMO_FB_DUP_PATH1=1\n" if os.environ.get("LUMO_FB_DUP_PATH1") == "1" else ""
-    fb_no_shared = "export LUMO_FB_DISABLE_SHARED_ROOT=1\n" if (os.environ.get("LUMO_FB_DISABLE_SHARED_ROOT") == "1" or os.environ.get("LUMO_FB_TWO_SPINE") == "1") else ""
-    fb_internal = "export LUMO_FB_INTERNAL_ROWS=1\n" if os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1" else ""
-    fb_kernel_rows = "export LUMO_FB_KERNEL_ROWS=1\n" if os.environ.get("LUMO_FB_KERNEL_ROWS") == "1" else ""
     fa_unique_env = (
         "export LUMO_FA_UNIQUE_NODES=1\n"
-        "export LUMO_TREE_TARGET_PER_PATH_GDN=1\n"
         if fa_unique else ""
     )
     # Batch-invariant vLLM must be enabled through the host-side ModelServer
     # knob so the launch command also gets a concrete attention backend. A raw
     # inner-container VLLM_BATCH_INVARIANT export makes vLLM fail at init with
     # attention_backend=None.
-    fb_batch_invariant = ""
-    fb_adaptive = "export LUMO_FB_ADAPTIVE=1\n" if os.environ.get("LUMO_FB_ADAPTIVE") == "1" else ""
-    fb_batched = "export LUMO_FB_BATCHED_PROPOSER=1\n" if os.environ.get("LUMO_FB_BATCHED_PROPOSER") == "1" else ""
-    fb_position_tree = f"export LUMO_FB_POSITION_TREE={os.environ['LUMO_FB_POSITION_TREE']}\n" if os.environ.get("LUMO_FB_POSITION_TREE") else ""
-    fb_two_spine = "export LUMO_FB_TWO_SPINE=1\n" if os.environ.get("LUMO_FB_TWO_SPINE") == "1" else ""
-    multi_spine_env = (
-        "export LUMO_MULTI_SPINE=1\n"
-        f"export LUMO_MS_SPINES={os.environ.get('LUMO_MS_SPINES', '2')}\n"
-        f"export LUMO_TREE_SPINES={os.environ.get('LUMO_TREE_SPINES', os.environ.get('LUMO_MS_SPINES', '2'))}\n"
-        "export LUMO_FA_UNIQUE_NODES=1\n"
-        "export LUMO_FB_NO_KV_PREFIX_COPY=1\n"
-        "export LUMO_FB_DISABLE_SHARED_ROOT=1\n"
-        if multi_spine else ""
-    )
-    fb_tree_branch_depth = f"export LUMO_FB_TREE_BRANCH_DEPTH={os.environ['LUMO_FB_TREE_BRANCH_DEPTH']}\n" if os.environ.get("LUMO_FB_TREE_BRANCH_DEPTH") else ""
-    fb_replay_draft = f"export LUMO_FB_REPLAY_DRAFT_FILE={os.environ['LUMO_FB_REPLAY_DRAFT_FILE']}\n" if os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE") else ""
-    fb_free_row1 = "export LUMO_FB_FREE_ROW1=1\n" if os.environ.get("LUMO_FB_FREE_ROW1") == "1" else ""
-    fb_free_row1_shadow = "export LUMO_FB_FREE_ROW1_SHADOW=1\n" if os.environ.get("LUMO_FB_FREE_ROW1_SHADOW") == "1" else ""
-    fb_free_row1_always = "export LUMO_FB_FREE_ROW1_ALWAYS=1\n" if os.environ.get("LUMO_FB_FREE_ROW1_ALWAYS") == "1" else ""
-    fb_free_row1_p1 = f"export LUMO_FB_FREE_ROW1_P1_MAX={os.environ['LUMO_FB_FREE_ROW1_P1_MAX']}\n" if os.environ.get("LUMO_FB_FREE_ROW1_P1_MAX") else ""
-    fb_free_row1_ratio = f"export LUMO_FB_FREE_ROW1_RATIO_MIN={os.environ['LUMO_FB_FREE_ROW1_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_FREE_ROW1_RATIO_MIN") else ""
-    fb_sampler_trace = "export LUMO_FB_SAMPLER_TRACE=1\n" if os.environ.get("LUMO_FB_SAMPLER_TRACE") == "1" else ""
-    fb_no_kv_prefix_copy = "export LUMO_FB_NO_KV_PREFIX_COPY=1\n" if os.environ.get("LUMO_FB_NO_KV_PREFIX_COPY") == "1" else ""
-    fb_p1 = f"export LUMO_FB_ADAPTIVE_P1_MAX={os.environ['LUMO_FB_ADAPTIVE_P1_MAX']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_P1_MAX") else ""
-    fb_ratio = f"export LUMO_FB_ADAPTIVE_RATIO_MIN={os.environ['LUMO_FB_ADAPTIVE_RATIO_MIN']}\n" if os.environ.get("LUMO_FB_ADAPTIVE_RATIO_MIN") else ""
-    fb_depth = f"export LUMO_FB_DEPTH={os.environ['LUMO_FB_DEPTH']}\n" if os.environ.get("LUMO_FB_DEPTH") else ""
-    fb_debug = "export LUMO_FB_DEBUG=1\n" if os.environ.get("LUMO_FB_DEBUG") == "1" else ""
-    fb_superset_diag = "export LUMO_FB_SUPERSET_DIAG=1\n" if os.environ.get("LUMO_FB_SUPERSET_DIAG") == "1" else ""
+    tree_debug_exports = ""
     fb_debug_exports = ""
     for _name in (
-        "LUMO_FB_GDN_DEBUG",
-        "LUMO_FB_RIDX_STATE_SUMMARY",
-        "LUMO_FB_TENSOR_DEBUG",
-        "LUMO_FB_RIDX_STATE_LAYERS",
-        "LUMO_FA_TREE_DELTA_TORCH",
-        "LUMO_FA_TREE_DELTA_TRITON",
-        "LUMO_FA_CUDAGRAPH_UNSAFE_GDN_CORE",
-        "LUMO_TREE_PER_PATH_DRAFTER",
-        "LUMO_TREE_TARGET_PER_PATH_GDN",
         "LUMO_TREE_PER_PATH_DRAFTER_LOG",
+        "LUMO_TREE_PATH_LCP_LOG",
+        "LUMO_TREE_ACCEPT_PATH_LOG",
     ):
         if os.environ.get(_name):
-            fb_debug_exports += f"export {_name}={os.environ[_name]}\n"
-    fb_control = os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json")
-    fb_seed_control = """python3 - <<'LUMOFBCTRL'
-import json, os, pathlib, time
-p = pathlib.Path(os.environ.get("LUMO_FB_CONTROL_FILE", "/logs/fb_control.json"))
-p.parent.mkdir(parents=True, exist_ok=True)
-payload = {
-    "k": int(os.environ.get("LUMO_FB_K", "1")),
-    "updated_at": round(time.time(), 6),
-    "source": "launch_env",
-}
-if os.environ.get("LUMO_FB_DEPTH"):
-    payload["depth"] = int(os.environ["LUMO_FB_DEPTH"])
-tmp = p.with_name(p.name + ".tmp")
-tmp.write_text(json.dumps(payload, sort_keys=True) + "\\n")
-tmp.replace(p)
-print(f"[TRACK-B-PRELAUNCH] seeded F_b control {p}: {payload}")
-LUMOFBCTRL
-""" if fb else ""
-    fb_env = f"export LUMO_FB_PATHS=1\nexport LUMO_FB_K={fb_k}\n{fb_depth}export LUMO_FB_CONTROL_FILE={fb_control}\nexport LUMO_FB_ASSERT_WIDTH=1\nexport LUMO_FB_ASSERT_ACTUAL_WIDTH=1\n{multi_spine_env}{fb_debug}{fb_superset_diag}{fb_debug_exports}{fb_sampler_trace}{fb_dup}{fb_no_shared}{fb_internal}{fb_kernel_rows}{fa_unique_env}{fb_no_kv_prefix_copy}{fb_batch_invariant}{fb_adaptive}{fb_batched}{fb_position_tree}{fb_two_spine}{fb_tree_branch_depth}{fb_replay_draft}{fb_free_row1}{fb_free_row1_shadow}{fb_free_row1_always}{fb_free_row1_p1}{fb_free_row1_ratio}{fb_p1}{fb_ratio}{fb_seed_control}" if fb else (fa_unique_env + fb_debug + fb_debug_exports + fb_replay_draft)
+            tree_debug_exports += f"export {_name}={os.environ[_name]}\n"
+    fb_env = fa_unique_env + tree_debug_exports
     mtp_draft_trace = f"export LUMO_MTP_DRAFT_TRACE_FILE={os.environ['LUMO_MTP_DRAFT_TRACE_FILE']}\n" if os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE") else ""
     mtp_draft_trace_block = _MTP_DRAFT_TRACE_BLOCK if (
         os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE")
-        or os.environ.get("LUMO_FB_REPLAY_DRAFT_FILE")
     ) else ""
     stale_fb_guard = "" if (fb or fa_unique) else _NO_STALE_FB_PATCHES_BLOCK
     mamba_dup_free_fix = (
         _MAMBA_ALIGN_DUP_STATE_FREE_FIX_BLOCK
-        if ((fb and kernel_rows_requested) or fa_unique)
+        if fa_unique
         else ""
     )
     block_pool_dedup_free_fix = (
         _BLOCK_POOL_DEDUP_FREE_FIX_BLOCK
-        if ((fb and kernel_rows_requested) or fa_unique)
+        if fa_unique
         else ""
     )
     free_queue_membership_fix = (
         _FREE_QUEUE_MEMBERSHIP_FIX_BLOCK
-        if ((fb and kernel_rows_requested) or fa_unique)
+        if fa_unique
         else ""
     )
     return (_QWEN36_FP8_CONFIG_FIX_BLOCK + _CAUSAL_CONV_CUDAGRAPH_ASSERT_FIX_BLOCK
@@ -12484,13 +12406,10 @@ LUMOFBCTRL
             + fb_env + mtp_draft_trace + base + _CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
             + ((_TREE_PER_PATH_DRAFTER_BLOCK + tree_blocks) if tree else "")
-            + (_FB_BLOCK if fb else "")
-            + (_FB_KERNEL_ROWS_BLOCK if ((fb and kernel_rows_requested) or fa_unique) else "")
+            + (_FB_KERNEL_ROWS_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_NODES_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_PACK_BLOCK if fa_unique else "")
             + (_FA_UNIQUE_BATCH4_STARTUP_FIX_BLOCK if fa_unique else "")
-            + (_FA_TREE_DELTA_VALID_N_BLOCK if fa_unique else "")
-            + (_FA_GDN_CORE_CUDAGRAPH_UNSAFE_BLOCK if (fa_unique and os.environ.get("LUMO_FA_CUDAGRAPH_UNSAFE_GDN_CORE") == "1") else "")
             + (_FA_UNIQUE_BATCH4_DIAG_BLOCK if fa_unique else "")
             + (_FA_REPLAY_STATE_COPY_COMMIT_BLOCK if fa_unique else "")
             + (_FA_BRANCH_ACCEPTED_ROW_STATE_COPY_BLOCK if fa_unique else ""))
@@ -12668,9 +12587,6 @@ def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = No
     eager_tag = "-eager" if os.environ.get("LUMO_ENFORCE_EAGER") is not None else ""
     cg_tag = "" if cuda_graph_capture is None else f"-cg{cuda_graph_capture.strip().lower()}"
     cgs_tag = "-cgpacked" if os.environ.get("LUMO_FA_PACKED_CUDAGRAPH_SIZES") is not None else ("" if cuda_graph_capture_sizes is None else "-cgsizes")
-    tag = (f"mtp{n}" if tree is None else f"mtp{n}tree") + kvtag + eager_tag + cg_tag + cgs_tag
-    src = src.replace("bundle_id: 712fd011-4b16-4051-9e8c-875405b70f5b",
-                      f"bundle_id: e0000000-{tag}-4000-9000-config-e-qwen36")
     # speculative_token_tree passes through load_tuned_config (the
     # spec_decode_fields_only allowlist is advisory, not enforced); we still
     # add it to the allowlist below for provenance. vLLM only supports REGULAR
@@ -12680,6 +12596,9 @@ def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = No
     # draft per tree node (else: RuntimeError size a(depth) != b(nodes)).
     import ast as _ast
     n_spec = n if tree is None else len(_ast.literal_eval(tree))
+    tag = (f"mtp{n}" if tree is None else f"mtp{n}tree{n_spec}") + kvtag + eager_tag + cg_tag + cgs_tag
+    src = src.replace("bundle_id: 712fd011-4b16-4051-9e8c-875405b70f5b",
+                      f"bundle_id: e0000000-{tag}-4000-9000-config-e-qwen36")
     spec_block = f"  spec_decode:\n    method: qwen3_5_mtp\n    num_speculative_tokens: {n_spec}"
     if tree is not None:
         # single-quote the tree so YAML keeps it a literal string for vLLM's
@@ -12694,16 +12613,15 @@ def _mtp_bundle(n: int, tree: str | None = None, kv_cache_dtype: str | None = No
     return str(out / "bundle.yaml")
 
 
-def _default_tree(n: int) -> str:
+def _default_tree(n: int, spines: int) -> str:
     """Config F's default REGULAR N-spine tree.
 
     Each root is one candidate spine, extended linearly to depth n. The default
     remains top-2 for the FR7 gate, while LUMO_TREE_SPINES lets the same verifier
     exercise 2-10 spines without changing code.
     """
-    spines = int(os.environ.get("LUMO_TREE_SPINES", "2"))
     if not (1 <= spines <= 10):
-        raise RuntimeError(f"LUMO_TREE_SPINES must be in [1, 10], got {spines}")
+        raise RuntimeError(f"--spines must be in [1, 10], got {spines}")
     nodes = {
         (root,) + (0,) * level
         for level in range(n)
@@ -12714,18 +12632,19 @@ def _default_tree(n: int) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    # Configs (each self-contained, like D's suffix stack): D = full T1-T4 suffix;
-    # E = native MTP linear chain; F = native MTP + branching top-k tree (E's
-    # prelaunch + the tree-attn selector source-edit + an MTP bundle carrying
-    # speculative_token_tree).
-    ap.add_argument("--config", choices=["D", "E", "F", "Fb"], required=True)
-    ap.add_argument("--mtp", type=int, default=1, help="num_speculative_tokens (MTP depth) for config E/F")
+    # Configs: D is the legacy suffix stack. Fb is the single maintained MTP
+    # path: --mtp controls depth and --spines controls the regular tree width.
+    # --spines=1 is the chain baseline through the same per-path engine code.
+    ap.add_argument("--config", choices=["D", "Fb"], required=True)
+    ap.add_argument("--mtp", type=int, default=5, help="MTP depth for config Fb")
+    ap.add_argument("--spines", type=int, default=int(os.environ.get("LUMO_TREE_SPINES", "2")),
+                    help="number of root spines for config Fb; 1 is the E5-equivalent chain")
     ap.add_argument("--tree", default=None,
-                    help="config F only: override the speculative_token_tree literal "
+                    help="config Fb only: override the speculative_token_tree literal "
                          "(default: _default_tree(--mtp)). Must be a REGULAR tree whose "
                          "max depth equals --mtp.")
     ap.add_argument("--tree-debug", action="store_true",
-                    help="config F only: export LUMO_TREE_DRAFT_DEBUG=1 so propose_tree "
+                    help="config Fb only: export LUMO_TREE_DRAFT_DEBUG=1 so propose_tree "
                          "logs per-level proposed draft tokens to /logs/tree_draft_debug.jsonl")
     ap.add_argument("--kv-cache-dtype", default=None,
                     choices=["auto", "fp8_e5m2", "fp8_e4m3"],
@@ -12733,44 +12652,16 @@ def main() -> int:
                          "the fp8 checkpoint accepts (fp8_e5m2 is rejected -> auto). Default: "
                          "use the bundle's value (fp8_e5m2 -> auto for this checkpoint).")
     args = ap.parse_args()
-    multi_spine = os.environ.get("LUMO_MULTI_SPINE") == "1"
-    if multi_spine:
-        if os.environ.get("LUMO_FB_TWO_SPINE") == "1":
-            raise RuntimeError(
-                "LUMO_MULTI_SPINE must not be combined with LUMO_FB_TWO_SPINE")
-        if (os.environ.get("LUMO_FB_INTERNAL_ROWS") == "1"
-                or os.environ.get("LUMO_FB_KERNEL_ROWS") == "1"):
-            raise RuntimeError(
-                "LUMO_MULTI_SPINE is collapse-free only: unset "
-                "LUMO_FB_INTERNAL_ROWS/LUMO_FB_KERNEL_ROWS")
-        # Preserve existing Fb launch invocations, but route FR8 multi-spine to
-        # the single-request tree verifier instead of the retired internal-row
-        # scheduler path. max_num_seqs remains the user batch size.
-        if args.config == "Fb":
-            args.config = "F"
-        if args.config != "F":
-            raise RuntimeError(
-                "LUMO_MULTI_SPINE requires config F so the MTP bundle carries "
-                "a speculative_token_tree")
-        os.environ.setdefault("LUMO_TREE_SPINES",
-                              os.environ.get("LUMO_MS_SPINES", "2"))
-        os.environ["LUMO_FA_UNIQUE_NODES"] = "1"
-        os.environ.setdefault("LUMO_FB_NO_KV_PREFIX_COPY", "1")
-    is_tree = args.config == "F"
-    is_fb = args.config == "Fb"
-    if (is_fb and os.environ.get("LUMO_FB_TWO_SPINE") == "1"
-            and os.environ.get("LUMO_VLLM_MAX_NUM_SEQS") is None):
-        # Retired two-spine request-row route; kept only for old experiments.
-        os.environ["LUMO_VLLM_MAX_NUM_SEQS"] = "8"
-    if ((is_fb and os.environ.get("LUMO_FB_KERNEL_ROWS") == "1")
-            or os.environ.get("LUMO_FA_UNIQUE_NODES") == "1"):
+    is_tree = args.config == "Fb"
+    is_fb = False
+    if is_tree:
         os.environ["LUMO_BATCH_INVARIANT_VLLM"] = "1"
     if args.tree is not None and not is_tree:
-        ap.error("--tree is only valid with --config F")
-    tree = (args.tree or _default_tree(args.mtp)) if is_tree else None
+        ap.error("--tree is only valid with --config Fb")
+    tree = (args.tree or _default_tree(args.mtp, args.spines)) if is_tree else None
     if args.config == "D":
         bundle = _d_bundle(kv_cache_dtype=args.kv_cache_dtype)
-    else:  # E, F, or Fb -- MTP bundle (F adds speculative_token_tree)
+    else:  # Fb -- MTP bundle with speculative_token_tree
         bundle = _mtp_bundle(args.mtp, tree=tree, kv_cache_dtype=args.kv_cache_dtype)
     server = ModelServer(
         registry_path=REPO / "model_registry.yaml",
@@ -12791,7 +12682,7 @@ def main() -> int:
     server.load_tuned_config(bundle)
     server.start("qwen3.6-27b")
     tree_desc = f" tree={tree}" if is_tree else ""
-    mtp_desc = args.mtp if args.config in ("E", "F", "Fb") else "-"
+    mtp_desc = args.mtp if args.config == "Fb" else "-"
     kv_desc = args.kv_cache_dtype or "bundle-default"
     print(f"READY config={args.config} mtp={mtp_desc}{tree_desc} kv={kv_desc} bundle={bundle}")
     return 0
