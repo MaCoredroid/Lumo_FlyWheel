@@ -626,7 +626,51 @@ def _process_one(
     _stop_dcgm_sampler(dcgm_proc)
     metrics_post.write_text(_metrics_text(DEFAULT_METRICS_URL), encoding="utf-8")
 
+    patch_text = ""
+    try:
+        patch_text = _extract_patch(cache_path, workspace_path, instance["base_commit"])
+    except Exception as exc:  # noqa: BLE001
+        summary["patch_extract_error"] = f"{type(exc).__name__}: {exc}"
+
+    # Bundle B #2/#3/#8: if the first attempt left no patch, classify why and
+    # re-launch codex ONCE with a state-conditional directive prompt. Bounded
+    # to a single retry to cap the wall-time premium.
+    if not patch_text.strip():
+        cause = _classify_empty_patch_cause(codex_trace)
+        retry_prompt = RETRY_PROMPT_SETUP_LOOP if cause == "setup_loop" else RETRY_PROMPT_EMPTY
+        summary["empty_patch_retry"] = {"cause": cause, "attempted": True}
+        print(f"[{_iso_now()}]    {instance_id}: empty patch ({cause}); retrying codex once",
+              flush=True)
+        retry_trace = task_dir / "codex_trace_retry.jsonl"
+        retry_stderr = task_dir / "codex_stderr_retry.log"
+        retry_stdout = task_dir / "codex_stdout_retry.log"
+        retry_dcgm = _spawn_dcgm_sampler(task_dir / "dcgm_samples_retry.jsonl")
+        codex_meta_retry = _run_codex(
+            workspace=workspace_path, endpoint=endpoint, model=model,
+            timeout_s=agent_wall_s, instance_id=instance_id,
+            stdout_path=retry_stdout, stderr_path=retry_stderr, trace_path=retry_trace,
+            prompt=retry_prompt,
+        )
+        _stop_dcgm_sampler(retry_dcgm)
+        summary["codex_retry"] = codex_meta_retry
+        try:
+            retry_patch = _extract_patch(cache_path, workspace_path, instance["base_commit"])
+        except Exception as exc:  # noqa: BLE001
+            retry_patch = ""
+            summary["patch_extract_error_retry"] = f"{type(exc).__name__}: {exc}"
+        if retry_patch.strip():
+            patch_text = retry_patch
+            summary["empty_patch_retry"]["recovered_patch_bytes"] = len(retry_patch)
+            print(f"[{_iso_now()}]    {instance_id}: retry produced {len(retry_patch)}B patch",
+                  flush=True)
+        else:
+            summary["empty_patch_retry"]["recovered_patch_bytes"] = 0
+
+    metrics_post.write_text(_metrics_text(DEFAULT_METRICS_URL), encoding="utf-8")
+
     # Slice the new proxy rows into a per-task file (matches Track B layout).
+    # This must happen after the optional empty-patch retry so retry traffic is
+    # included in the task's request-metrics evidence.
     per_task_metrics = task_dir / "vllm_request_metrics.jsonl"
     proxy_row_count = 0
     try:
@@ -675,46 +719,6 @@ def _process_one(
         )
     except Exception as exc:  # noqa: BLE001
         summary["vllm_per_turn_error"] = f"{type(exc).__name__}: {exc}"
-
-    patch_text = ""
-    try:
-        patch_text = _extract_patch(cache_path, workspace_path, instance["base_commit"])
-    except Exception as exc:  # noqa: BLE001
-        summary["patch_extract_error"] = f"{type(exc).__name__}: {exc}"
-
-    # Bundle B #2/#3/#8: if the first attempt left no patch, classify why and
-    # re-launch codex ONCE with a state-conditional directive prompt. Bounded
-    # to a single retry to cap the wall-time premium.
-    if not patch_text.strip():
-        cause = _classify_empty_patch_cause(codex_trace)
-        retry_prompt = RETRY_PROMPT_SETUP_LOOP if cause == "setup_loop" else RETRY_PROMPT_EMPTY
-        summary["empty_patch_retry"] = {"cause": cause, "attempted": True}
-        print(f"[{_iso_now()}]    {instance_id}: empty patch ({cause}); retrying codex once",
-              flush=True)
-        retry_trace = task_dir / "codex_trace_retry.jsonl"
-        retry_stderr = task_dir / "codex_stderr_retry.log"
-        retry_stdout = task_dir / "codex_stdout_retry.log"
-        retry_dcgm = _spawn_dcgm_sampler(task_dir / "dcgm_samples_retry.jsonl")
-        codex_meta_retry = _run_codex(
-            workspace=workspace_path, endpoint=endpoint, model=model,
-            timeout_s=agent_wall_s, instance_id=instance_id,
-            stdout_path=retry_stdout, stderr_path=retry_stderr, trace_path=retry_trace,
-            prompt=retry_prompt,
-        )
-        _stop_dcgm_sampler(retry_dcgm)
-        summary["codex_retry"] = codex_meta_retry
-        try:
-            retry_patch = _extract_patch(cache_path, workspace_path, instance["base_commit"])
-        except Exception as exc:  # noqa: BLE001
-            retry_patch = ""
-            summary["patch_extract_error_retry"] = f"{type(exc).__name__}: {exc}"
-        if retry_patch.strip():
-            patch_text = retry_patch
-            summary["empty_patch_retry"]["recovered_patch_bytes"] = len(retry_patch)
-            print(f"[{_iso_now()}]    {instance_id}: retry produced {len(retry_patch)}B patch",
-                  flush=True)
-        else:
-            summary["empty_patch_retry"]["recovered_patch_bytes"] = 0
 
     patch_path.write_text(patch_text, encoding="utf-8")
     summary["patch_bytes"] = len(patch_text)

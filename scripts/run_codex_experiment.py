@@ -216,27 +216,19 @@ def require_request_metrics_live() -> None:
         "request-metrics smoke: "
         f"local_before={local_before} remote_before={remote_before}"
     )
-    r = sh(
-        [
-            "curl",
-            "-sS",
-            "-m",
-            "180",
-            "-H",
-            "Content-Type: application/json",
-            "-H",
-            "Authorization: Bearer EMPTY",
-            "-f",
-            "-X",
-            "POST",
-            "http://127.0.0.1:8022/v1/responses",
-            "--data-binary",
-            json.dumps(payload),
-        ],
+    remote_payload = json.dumps(json.dumps(payload))
+    r = ssh(
+        "curl -sS -m 180 -H 'Content-Type: application/json' "
+        "-H 'Authorization: Bearer EMPTY' -f -X POST "
+        "http://127.0.0.1:8022/v1/responses "
+        f"--data-binary {remote_payload}",
         timeout=210,
     )
     if r.returncode != 0:
-        sys.exit(f"request-metrics smoke request failed:\n{r.stdout[-500:]}\n{r.stderr[-500:]}")
+        sys.exit(
+            "request-metrics x86-tunnel smoke request failed:\n"
+            f"{r.stdout[-500:]}\n{r.stderr[-500:]}"
+        )
     local_after = _local_file_size(REQUEST_METRICS)
     deadline = time.time() + 30
     while local_after <= local_before and time.time() < deadline:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -135,3 +136,34 @@ def test_launch_suite_can_explicitly_skip_existing(monkeypatch: pytest.MonkeyPat
 
     launch_command = commands[0][-1]
     assert "--skip-existing" in launch_command
+
+
+def test_request_metrics_smoke_uses_x86_tunnel(monkeypatch: pytest.MonkeyPatch) -> None:
+    ssh_commands: list[str] = []
+
+    def fake_ssh(command: str, timeout: int = 30) -> subprocess.CompletedProcess[str]:
+        ssh_commands.append(command)
+        if "Path(" in command:
+            return _completed(["ssh"], stdout="200\n")
+        return _completed(["ssh"], stdout='{"id":"resp-smoke"}\n')
+
+    local_sizes = iter([100, 200])
+    remote_sizes = iter([100, 200])
+
+    monkeypatch.setattr(experiment, "ssh", fake_ssh)
+    monkeypatch.setattr(experiment, "_local_file_size", lambda path: next(local_sizes))
+    monkeypatch.setattr(experiment, "_remote_file_size", lambda path: next(remote_sizes))
+
+    experiment.require_request_metrics_live()
+
+    smoke_commands = [cmd for cmd in ssh_commands if "/v1/responses" in cmd]
+    assert smoke_commands
+    assert "http://127.0.0.1:8022/v1/responses" in smoke_commands[0]
+    assert "Reply with exactly: OK" in smoke_commands[0]
+
+
+def test_stream_capture_script_does_not_truncate_remote_mirror() -> None:
+    script = Path("scripts/swe_x86_helpers/stream_capture_to_alienware.sh").read_text()
+
+    assert "touch $DST" in script
+    assert ": > $DST" not in script
