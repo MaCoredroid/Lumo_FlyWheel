@@ -224,9 +224,11 @@ salvage attempts below also failed the evidence rules.
   `13977`, and `14096`. The local hardened guard aborted the whole tag at
   `astropy__astropy-13579` with:
   `SWE task finished without nonzero vLLM request metrics`.
-- No top-level or nested `campaign_summary.json`, `predictions.jsonl`, or
-  `agentic_summary.json` exists for this tag because the runner aborted before
-  campaign finalization.
+- No top-level or nested `campaign_summary.json`, campaign-level
+  `predictions.jsonl`, or `agentic_summary.json` exists for this tag because
+  the runner aborted before campaign finalization. Per-task eval
+  `predictions.jsonl` files exist for the completed task dirs: 7 mirrored
+  locally before abort and 8 present on the x86 runner.
 - Mirrored trace artifacts before abort: `dgx_steptrace.jsonl` has 50,813
   lines, `per_req_spec_trace.jsonl` has 2,472 lines, and
   `independent_winner_trace.jsonl` has 1,307 lines. The tag is still invalid
