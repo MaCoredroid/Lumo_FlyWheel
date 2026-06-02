@@ -35,9 +35,9 @@ python3 -m pytest -q \
   tests/test_run_codex_experiment_spines.py \
   tests/test_independent_winner_commit_patch.py \
   tests/test_independent_winner_trace.py \
-  tests/test_lossless_selector_gate_c.py
+  tests/test_lossless_selector_gate_c_stub_design.py
 
-36 passed in 0.35s
+36 passed in 0.40s
 ```
 
 Compile/static checks:
@@ -107,12 +107,16 @@ Live temp=0 probe appended 10 new winner events:
 }
 ```
 
-Synthetic Gate C negative control:
+Gate C design stub, not a selector proof:
 
-- Target sampler converged on a known two-token distribution.
-- Deliberately naive longest-accepted hidden winner failed the distribution
-  check by forcing the hidden token with frequency >0.98 against target
-  probability 0.30.
+- The old hollow placeholder was renamed to
+  `tests/test_lossless_selector_gate_c_stub_design.py`.
+- It now characterizes the analytic max-order-statistic negative control from
+  `/tmp/fr9_lossless_research.md`: the best-of-spines order statistic must fail
+  versus target `p` and match the biased analytic distribution
+  `p'(z)=p(z)*(2*CDF(z)-p(z))`.
+- It still does not exercise a production multi-draft selector because no
+  selector-on path is implemented on this branch.
 
 ## Gate Status
 
@@ -120,7 +124,7 @@ Synthetic Gate C negative control:
 |---|---|---|
 | A policy fail-closed | Passed | Unit tests plus launch-time fail-closed probes |
 | B greedy equality | Partial only | Live temp=0 spine-2 selector-off commits spine 0; exact target-only token equality was not run |
-| C synthetic selector convergence | Partial | Negative control catches naive longest winner; no selector-on implementation exists |
+| C synthetic selector convergence | Not passed | Only a clearly marked Gate C stub/design-power check exists; no selector-on implementation is exercised |
 | D target-model sampling equivalence | Not run | No target-only versus selector-off distribution run collected |
 | E SWE admission | Not run | No 16-task SWE run collected |
 
@@ -131,3 +135,6 @@ Synthetic Gate C negative control:
 - I do not claim a speed win and did not run kernel profiling.
 - Selector-on is intentionally fail-closed on this branch; hidden recovery is
   trace-only until a real distribution-preserving multi-draft selector exists.
+- Any future non-spine0 public commit must also implement GDN/linear-attention
+  public recurrent-state recompute from the prior committed spine0 state; copying
+  a sibling spine state across a divergent prefix remains forbidden.

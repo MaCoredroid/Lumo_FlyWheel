@@ -96,7 +96,8 @@ def _lumo_ir_validate_public_commit_policy(
     if selector_enabled:
         raise RuntimeError(
             "LUMO_IR_LOSSLESS_SELECTOR_ENABLED was requested, but the "
-            "lossless multi-draft selector is not implemented on this branch"
+            "lossless multi-draft selector and required GDN recurrent-state "
+            "recompute path are not implemented on this branch"
         )
     if spines > 1 and _lumo_ir_hidden_publication_requested(environ):
         raise RuntimeError(
@@ -674,7 +675,8 @@ def _lumo_ir_commit_policy():
 def _lumo_ir_selector_enabled():
     if _lumo_ir_truthy_env("LUMO_IR_LOSSLESS_SELECTOR_ENABLED"):
         raise RuntimeError(
-            "lossless multi-draft selector requested but not implemented")
+            "lossless multi-draft selector requested but the selector and "
+            "GDN recurrent-state recompute path are not implemented")
     return False
 
 def _lumo_ir_hidden_publication_requested():
@@ -726,6 +728,10 @@ def _lumo_ir_select_commit_row(self, primary, req_ids, indices, accept_counts):
             best_acc = acc
     commit_idx = primary_idx
     commit_acc = accept_counts[primary_idx]
+    if commit_idx != primary_idx:
+        raise RuntimeError(
+            "non-spine0 public commit requires token-level lossless selector "
+            "and public recurrent-state recompute from committed spine0 state")
     suppressed_reason = (
         "no_lossless_selector"
         if best_idx != primary_idx and not selector_enabled

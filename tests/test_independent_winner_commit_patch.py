@@ -84,6 +84,8 @@ def test_independent_winner_commit_enforces_lossless_spine0_public_stream():
     assert 'policy in ("best_of_spines", "unsafe_best_of_spines", "deterministic_best")' in patch
     assert 'commit_idx = primary_idx' in patch
     assert 'commit_acc = accept_counts[primary_idx]' in patch
+    assert "non-spine0 public commit requires token-level lossless selector" in patch
+    assert "public recurrent-state recompute from committed spine0 state" in patch
     assert '"no_lossless_selector"' in patch
     assert '"policy": selection["policy"]' in patch
     assert '"selector_enabled": bool(selection["selector_enabled"])' in patch
@@ -231,7 +233,7 @@ def test_hidden_publication_before_selector_fails_closed(env_name: str):
 def test_selector_enabled_before_implementation_fails_closed():
     env = {"LUMO_IR_LOSSLESS_SELECTOR_ENABLED": "1"}
 
-    with pytest.raises(RuntimeError, match="not implemented"):
+    with pytest.raises(RuntimeError, match="GDN recurrent-state recompute"):
         relaunch._lumo_ir_validate_public_commit_policy(
             independent_rows=True,
             spines=2,
