@@ -1,0 +1,25 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced8..bbbdcb6ce 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,10 +1299,17 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
+-    value_str = f"{value:.16G}"
+-    if "." not in value_str and "E" not in value_str:
++    # First try str() for a compact representation that round-trips correctly
++    value_str = str(value)
++    if "." not in value_str and "e" not in value_str.lower():
+         value_str += ".0"
+-    elif "E" in value_str:
++    elif float(value_str) != value:
++        # str() didn't round-trip, fall back to .16G
++        value_str = f"{value:.16G}"
++        if "." not in value_str and "E" not in value_str:
++            value_str += ".0"
++
++    if "E" in value_str:
+         # On some Windows builds of Python (and possibly other platforms?) the
+         # exponent is zero-padded out to, it seems, three digits.  Normalize
+         # the format to pad only to two digits.
