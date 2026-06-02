@@ -85,6 +85,9 @@ def test_independent_winner_commit_keeps_hidden_public_winners_parser_guarded():
     assert "LUMO_QWEN_STRAY_REASONING_END_PUBLIC_GUARD" in text
     assert "LUMO_QWEN_PUBLIC_PROTOCOL_MARKER_GUARD" in text
     assert "LUMO_QWEN_RESPONSES_PUBLIC_ITEM_GUARD" in text
+    assert "def _lumo_repair_response_message_text" in text
+    assert "repaired.rsplit(\"</think>\", 1)[1]" in text
+    assert "items = _lumo_repair_response_items_public(items)" in text
     assert "BaseThinkingReasoningParser.extract_reasoning_streaming" in text
     assert "BaseThinkingReasoningParser.extract_reasoning =" in text
     assert "OpenAIServingResponses._make_response_output_items =" in text

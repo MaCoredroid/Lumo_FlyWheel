@@ -862,10 +862,48 @@ else:
 
 # LUMO_QWEN_RESPONSES_PUBLIC_ITEM_GUARD: final non-stream Responses API safety
 # gate. This catches parser bypasses before Codex can receive raw model protocol
-# markers in assistant output text or tool-call arguments.
+# markers in assistant output text or tool-call arguments. Message text is first
+# repaired with the same public split rule as the qwen reasoning parser: leaked
+# private text through the last stray </think> is dropped, then the hard reject
+# remains as the protocol gate.
+import re as _lumo_qwen_re
+
 _lumo_qwen_response_protocol_markers = ("<think>", "</think>", "<|host|>")
 _lumo_orig_make_response_output_items = (
     OpenAIServingResponses._make_response_output_items)
+
+def _lumo_repair_response_message_text(value):
+    if not isinstance(value, str):
+        return value
+    repaired = _lumo_qwen_re.sub(
+        r"<think>.*?</think>", "", value, flags=_lumo_qwen_re.DOTALL)
+    if "</think>" in repaired:
+        repaired = repaired.rsplit("</think>", 1)[1]
+    if "<think>" in repaired:
+        repaired = repaired.split("<think>", 1)[0]
+    if "<|host|>" in repaired:
+        repaired = repaired.split("<|host|>", 1)[0]
+    return repaired
+
+def _lumo_set_response_part_text(part, text):
+    try:
+        setattr(part, "text", text)
+    except Exception:
+        try:
+            object.__setattr__(part, "text", text)
+        except Exception:
+            pass
+
+def _lumo_repair_response_items_public(items):
+    for item in items:
+        if getattr(item, "type", None) != "message":
+            continue
+        for part in getattr(item, "content", []) or []:
+            original = getattr(part, "text", None)
+            repaired = _lumo_repair_response_message_text(original)
+            if repaired != original:
+                _lumo_set_response_part_text(part, repaired)
+    return items
 
 def _lumo_assert_response_value_public(value, where):
     if not isinstance(value, str):
@@ -892,6 +930,7 @@ def _lumo_make_response_output_items_public_safe(
     self, request, final_output, tokenizer):
     items = _lumo_orig_make_response_output_items(
         self, request, final_output, tokenizer)
+    items = _lumo_repair_response_items_public(items)
     _lumo_assert_response_items_public(items)
     return items
 
