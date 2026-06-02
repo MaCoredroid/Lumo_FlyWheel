@@ -16,9 +16,11 @@ def _completed(cmd: list[str], stdout: str = "") -> subprocess.CompletedProcess[
 
 def test_apply_config_forwards_fb_independent_spines(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     commands: list[list[str]] = []
+    timeouts: list[object] = []
 
     def fake_sh(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         commands.append(cmd)
+        timeouts.append(kwargs.get("timeout"))
         if cmd[:1] == ["curl"]:
             return _completed(cmd, stdout="vllm:up\n")
         if "/tmp/relaunch_qwen36_round.py" in cmd:
@@ -42,6 +44,7 @@ def test_apply_config_forwards_fb_independent_spines(monkeypatch: pytest.MonkeyP
         "--spines",
         "3",
     ] in commands
+    assert experiment.VLLM_RELAUNCH_TIMEOUT_S in timeouts
     assert "row_mode=independent spines=3" in capsys.readouterr().out
 
 

@@ -55,6 +55,7 @@ INDEPENDENT_WINNER_TRACE = os.environ.get(
     "LUMO_IR_WINNER_TRACE_FILE",
     "/tmp/lumo-l0c-fp8-cutlass-run30-logs/independent_winner_trace.jsonl")
 FORBIDDEN_CODEX_PROTOCOL_MARKERS = ("<think>", "</think>", "<|host|>")
+VLLM_RELAUNCH_TIMEOUT_S = int(os.environ.get("LUMO_VLLM_RELAUNCH_TIMEOUT_S", "3600"))
 
 
 def sh(cmd: list[str], **kw) -> subprocess.CompletedProcess:
@@ -173,7 +174,7 @@ def apply_config(
         f"row_mode={row_mode if config == 'Fb' else '-'} "
         f"spines={spines if config == 'Fb' else '-'} "
         f"kv={kv_cache_dtype or 'bundle-default'} (model load ~ several min)")
-    r = sh(cmd, timeout=1200)
+    r = sh(cmd, timeout=VLLM_RELAUNCH_TIMEOUT_S)
     if "READY" not in (r.stdout + r.stderr):
         sys.exit(f"config {config} relaunch did not reach READY:\n{r.stdout[-500:]}\n{r.stderr[-500:]}")
     for _ in range(60):
