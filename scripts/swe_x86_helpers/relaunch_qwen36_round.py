@@ -760,10 +760,13 @@ if not path.is_file():
 
 text = path.read_text(encoding='utf-8')
 sentinel = '# LUMO_QWEN_STRAY_REASONING_END_PUBLIC_GUARD'
-if sentinel in text:
-    print('[TRACK-B-PRELAUNCH] qwen reasoning stream boundary guard already present')
+public_sentinel = '# LUMO_QWEN_PUBLIC_PROTOCOL_MARKER_GUARD'
+if sentinel in text and public_sentinel in text:
+    print('[TRACK-B-PRELAUNCH] qwen reasoning protocol guards already present')
 else:
-    patch = r"""
+    patch = ""
+    if sentinel not in text:
+        patch += r"""
 
 # LUMO_QWEN_STRAY_REASONING_END_PUBLIC_GUARD: vLLM's streaming thinking
 # parser normally treats a delta containing a reasoning end token as public
@@ -810,10 +813,95 @@ def _lumo_extract_reasoning_streaming_boundary_safe(
 BaseThinkingReasoningParser.extract_reasoning_streaming = (
     _lumo_extract_reasoning_streaming_boundary_safe)
 """
-    path.write_text(text + patch, encoding='utf-8')
+    if public_sentinel not in text:
+        patch += r"""
+
+# LUMO_QWEN_PUBLIC_PROTOCOL_MARKER_GUARD: non-stream Responses parsing still
+# passes complete model text through extract_reasoning() before tool parsing.
+# If an independent hidden row contributes a malformed suffix with a second raw
+# reasoning or chat-template marker, fail at the vLLM public boundary instead of
+# serializing that marker into assistant text or function-call arguments.
+_lumo_qwen_protocol_markers = ("<think>", "</think>", "<|host|>")
+_lumo_orig_extract_reasoning = BaseThinkingReasoningParser.extract_reasoning
+
+def _lumo_reject_public_protocol_markers(value, where):
+    if not isinstance(value, str):
+        return
+    for marker in _lumo_qwen_protocol_markers:
+        if marker in value:
+            raise RuntimeError(
+                "LUMO_QWEN_PUBLIC_PROTOCOL_MARKER_GUARD rejected raw "
+                f"{marker!r} in {where}")
+
+def _lumo_extract_reasoning_public_marker_safe(self, model_output, request):
+    reasoning, content = _lumo_orig_extract_reasoning(
+        self, model_output, request)
+    _lumo_reject_public_protocol_markers(content, "reasoning content")
+    return reasoning, content
+
+BaseThinkingReasoningParser.extract_reasoning = (
+    _lumo_extract_reasoning_public_marker_safe)
+"""
+    if patch:
+        path.write_text(text + patch, encoding='utf-8')
+        import py_compile
+        py_compile.compile(str(path), doraise=True)
+        print('[TRACK-B-PRELAUNCH] applied qwen reasoning protocol guards')
+    else:
+        print('[TRACK-B-PRELAUNCH] qwen reasoning protocol guards already present')
+
+serving_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/responses/serving.py')
+if not serving_path.is_file():
+    raise RuntimeError(f'vLLM Responses serving source missing: {serving_path}')
+serving_text = serving_path.read_text(encoding='utf-8')
+serving_sentinel = '# LUMO_QWEN_RESPONSES_PUBLIC_ITEM_GUARD'
+if serving_sentinel in serving_text:
+    print('[TRACK-B-PRELAUNCH] qwen Responses public item guard already present')
+else:
+    serving_patch = r"""
+
+# LUMO_QWEN_RESPONSES_PUBLIC_ITEM_GUARD: final non-stream Responses API safety
+# gate. This catches parser bypasses before Codex can receive raw model protocol
+# markers in assistant output text or tool-call arguments.
+_lumo_qwen_response_protocol_markers = ("<think>", "</think>", "<|host|>")
+_lumo_orig_make_response_output_items = (
+    OpenAIServingResponses._make_response_output_items)
+
+def _lumo_assert_response_value_public(value, where):
+    if not isinstance(value, str):
+        return
+    for marker in _lumo_qwen_response_protocol_markers:
+        if marker in value:
+            raise RuntimeError(
+                "LUMO_QWEN_RESPONSES_PUBLIC_ITEM_GUARD rejected raw "
+                f"{marker!r} in {where}")
+
+def _lumo_assert_response_items_public(items):
+    for idx, item in enumerate(items):
+        item_type = getattr(item, "type", None)
+        if item_type == "message":
+            for part_idx, part in enumerate(getattr(item, "content", []) or []):
+                _lumo_assert_response_value_public(
+                    getattr(part, "text", None),
+                    f"message[{idx}].content[{part_idx}].text")
+        elif item_type in ("function_call", "mcp_call"):
+            _lumo_assert_response_value_public(
+                getattr(item, "arguments", None), f"{item_type}[{idx}].arguments")
+
+def _lumo_make_response_output_items_public_safe(
+    self, request, final_output, tokenizer):
+    items = _lumo_orig_make_response_output_items(
+        self, request, final_output, tokenizer)
+    _lumo_assert_response_items_public(items)
+    return items
+
+OpenAIServingResponses._make_response_output_items = (
+    _lumo_make_response_output_items_public_safe)
+"""
+    serving_path.write_text(serving_text + serving_patch, encoding='utf-8')
     import py_compile
-    py_compile.compile(str(path), doraise=True)
-    print('[TRACK-B-PRELAUNCH] applied qwen reasoning stream boundary guard')
+    py_compile.compile(str(serving_path), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied qwen Responses public item guard')
 LUMOQWENREASONBOUNDARY
 '''
 

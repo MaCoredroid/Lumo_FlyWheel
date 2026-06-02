@@ -83,8 +83,13 @@ def test_independent_winner_commit_keeps_hidden_public_winners_parser_guarded():
     assert '"hidden_winner_suppressed_reason": suppressed_reason' in patch
     assert '"hidden_winner_public_policy": "serialized_reasoning_tool_parser"' in patch
     assert "LUMO_QWEN_STRAY_REASONING_END_PUBLIC_GUARD" in text
+    assert "LUMO_QWEN_PUBLIC_PROTOCOL_MARKER_GUARD" in text
+    assert "LUMO_QWEN_RESPONSES_PUBLIC_ITEM_GUARD" in text
     assert "BaseThinkingReasoningParser.extract_reasoning_streaming" in text
+    assert "BaseThinkingReasoningParser.extract_reasoning =" in text
+    assert "OpenAIServingResponses._make_response_output_items =" in text
     assert "self.end_token_id in delta_token_ids and not has_start_state" in text
+    assert '("<think>", "</think>", "<|host|>")' in text
     assert "_QWEN_REASONING_STREAM_BOUNDARY_BLOCK if independent_rows else" in text
 
 
