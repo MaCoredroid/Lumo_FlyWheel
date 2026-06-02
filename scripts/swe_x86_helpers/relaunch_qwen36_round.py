@@ -908,9 +908,59 @@ def _lumo_set_response_item_arguments(item, arguments):
         except Exception:
             pass
 
+def _lumo_json_compact(value):
+    return _lumo_qwen_json.dumps(value, separators=(",", ":"))
+
+def _lumo_repair_argument_protocol_text(value):
+    if not isinstance(value, str):
+        return value
+    repaired = _lumo_qwen_re.sub(
+        r"<think>.*?</think>", "", value, flags=_lumo_qwen_re.DOTALL)
+    if "</think>" in repaired:
+        repaired = repaired.rsplit("</think>", 1)[1]
+    if "<think>" in repaired:
+        repaired = repaired.split("<think>", 1)[0]
+    return repaired
+
+def _lumo_extract_json_arguments(value):
+    decoder = _lumo_qwen_json.JSONDecoder()
+    for match in _lumo_qwen_re.finditer(r"\{", value):
+        try:
+            decoded, _end = decoder.raw_decode(value[match.start():])
+        except _lumo_qwen_json.JSONDecodeError:
+            continue
+        if isinstance(decoded, dict):
+            return _lumo_json_compact(decoded)
+    return None
+
+def _lumo_extract_qwen_xml_arguments(value):
+    params = _lumo_qwen_re.findall(
+        r"<parameter=([^>\s]+)>(.*?)</parameter>",
+        value,
+        flags=_lumo_qwen_re.DOTALL,
+    )
+    if params:
+        return _lumo_json_compact(
+            {key.strip(): raw.strip() for key, raw in params})
+    match = _lumo_qwen_re.search(
+        r"<arguments>(.*?)</arguments>", value, flags=_lumo_qwen_re.DOTALL)
+    if not match:
+        return None
+    raw = match.group(1).strip()
+    return _lumo_extract_json_arguments(raw)
+
 def _lumo_repair_function_call_arguments(value):
     if not isinstance(value, str):
         return value
+    if any(marker in value for marker in _lumo_qwen_response_protocol_markers):
+        protocol_repaired = _lumo_repair_argument_protocol_text(value)
+        extracted = (
+            _lumo_extract_qwen_xml_arguments(protocol_repaired)
+            or _lumo_extract_json_arguments(protocol_repaired)
+        )
+        if extracted is not None:
+            return extracted
+        value = protocol_repaired
     try:
         decoded, end = _lumo_qwen_json.JSONDecoder().raw_decode(value)
     except _lumo_qwen_json.JSONDecodeError as exc:
@@ -926,10 +976,10 @@ def _lumo_repair_function_call_arguments(value):
         key, raw_arg = match.group(1), match.group(2)
         while raw_arg.endswith("\\"):
             raw_arg = raw_arg[:-1]
-        return _lumo_qwen_json.dumps(
-            {key: raw_arg}, separators=(",", ":"))
+        raw_arg = _lumo_repair_argument_protocol_text(raw_arg)
+        return _lumo_json_compact({key: raw_arg})
     if value[end:].strip():
-        return _lumo_qwen_json.dumps(decoded, separators=(",", ":"))
+        return _lumo_json_compact(decoded)
     return value
 
 def _lumo_repair_response_items_public(items):

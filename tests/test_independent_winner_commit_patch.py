@@ -91,6 +91,10 @@ def test_independent_winner_commit_keeps_hidden_public_winners_parser_guarded():
     assert "child_indent = indent + '    '" in text
     assert "def _lumo_repair_response_message_text" in text
     assert "def _lumo_repair_function_call_arguments" in text
+    assert "def _lumo_extract_qwen_xml_arguments" in text
+    assert "def _lumo_extract_json_arguments" in text
+    assert "protocol_repaired = _lumo_repair_argument_protocol_text(value)" in text
+    assert 'r"<parameter=([^>\\s]+)>(.*?)</parameter>"' in text
     assert '"__lumo_malformed_arguments__": content' in text
     assert "repaired.rsplit(\"</think>\", 1)[1]" in text
     assert "items = _lumo_repair_response_items_public(items)" in text
