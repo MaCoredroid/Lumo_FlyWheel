@@ -36,7 +36,7 @@ tree work can consume this experiment as baseline evidence:
 | Required arm | Status | Required action / acceptance bar |
 |---|---|---|
 | `mtp=5`, `spines=1`, `gpu_memory_utilization=0.88` | accepted | Keep `fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z` as the clean baseline: 16/16 x86 tasks, all per-task request-metrics files nonzero, full campaign and agentic artifacts present. |
-| `mtp=5`, `spines=2`, `gpu_memory_utilization=0.88` | running | Current clean retry tag: `fr9_b4temp06_lowmem088_mtp5_s2_20260602T051155Z`. Accept only if all 16 tasks complete on x86 with nonzero per-task request metrics, complete summaries/traces, and a verified `independent_winner_trace.jsonl` with no winner-superset violations and copy-missing sum 0. |
+| `mtp=5`, `spines=2`, `gpu_memory_utilization=0.88` | invalidated; rerun required | Latest retry tag `fr9_b4temp06_lowmem088_mtp5_s2_20260602T051155Z` passed the hardened request-metrics smoke preflight, but aborted when the second batch produced 0-byte per-task request metrics. Do not count it as a result. Rerun only after the x86 mirror/streamer failure mode is fixed and all 16 tasks can complete on x86 with nonzero per-task request metrics, complete summaries/traces, and a verified `independent_winner_trace.jsonl` with no winner-superset violations and copy-missing sum 0. |
 | `mtp=3`, `spines=2`, lowmem retry if strict 0.90 cannot prelaunch | required pending | Launch only after the `mtp=5`, `spines=2` arm is either accepted or invalidated for fix-and-rerun. Accept under the same x86, metrics, artifact, and winner-trace rules; strict 0.90 prelaunch memory failures are infra-blocks and do not count as SWE evidence. |
 
 Every accepted arm must include `driver.log`, top-level and nested
@@ -58,6 +58,7 @@ winner-trace validation.
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T033500Z` | invalid contaminated | first launched lowmem `spines=2` attempt; request metrics are 0 bytes for every inspected task, including three committed failed task rows and five other zero-metric task dirs. |
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T035600Z` | invalid partial evidence | first four tasks had nonzero metrics and commits, but the next batch had 0-byte metrics and triggered the missing-request-metrics guard. Whole tag is invalid. |
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z` | invalid contaminated | smoke capture passed 1378/1378, but the first four x86 SWE tasks all had 0-byte request metrics; capture stayed smoke-only. No `spines=2` SWE result is accepted. |
+| `fr9_b4temp06_lowmem088_mtp5_s2_20260602T051155Z` | invalid partial evidence | hardened smoke capture passed 1359/1359, and the first four x86 tasks had nonzero metrics and commits, but the next batch had 0-byte request metrics; the hardened guard aborted at `astropy__astropy-13579`. Whole tag is invalid. |
 | strict/lowmem `mtp=3`, `spines=2` | no valid campaign | only old strict prelaunch failures are documented; no local `fr9_b4temp06*mtp3*s2*` output directory exists. |
 
 ## Accepted Arm: `lowmem088_mtp5_s1`
@@ -197,6 +198,43 @@ salvage attempts below also failed the evidence rules.
   at that exact path is 0 bytes, so the crash text is recorded as handoff/root
   cause evidence rather than locally re-quoted log evidence.
 - `independent_winner_trace.jsonl` has 13 lines, but the tag is invalid.
+
+`fr9_b4temp06_lowmem088_mtp5_s2_20260602T051155Z`:
+
+- Launch settings matched the requested arm: B4/Fb, `row_mode=independent`,
+  `mtp=5`, `spines=2`, `LUMO_GPU_MEMORY_UTILIZATION=0.88`, `temp=0.6`,
+  SWE Verified `concprobe16`, `concurrency=4`, 1800 s agent/eval limits, and
+  nsight off.
+- Prelaunch gates were clean: local `main` matched `origin/main` at hardening
+  commit `b9159786` before launch, `swe_infra` was restarted from the patched
+  streamer script, and x86 identity was `mark-Alienware-Aurora-ACT1250` /
+  `x86_64`.
+- The hardened request-metrics smoke preflight passed before SWE launch:
+  `local_before=0 remote_before=0`, then
+  `local_after=1359 remote_after=1359`.
+- The first four x86 tasks completed and had nonzero request metrics:
+  `12907` = 1,464 bytes, `13033` = 7,320 bytes, `13236` = 46,861 bytes, and
+  `13398` = 46,861 bytes. All four runner metadata files report
+  `eval_host=mark-Alienware-Aurora-ACT1250` and `arch=x86_64`.
+- The first four failed task artifacts were committed as `15d46fe6`,
+  `53d70a9e`, `7a44dde5`, and `b47e4ac7`. The first and fourth per-task push
+  attempts hung up, but later/report pushes carry the local commits on `main`;
+  they remain partial invalid evidence, not accepted benchmark rows.
+- The second batch completed with 0-byte request metrics for `13453`, `13579`,
+  `13977`, and `14096`. The local hardened guard aborted the whole tag at
+  `astropy__astropy-13579` with:
+  `SWE task finished without nonzero vLLM request metrics`.
+- No top-level or nested `campaign_summary.json`, `predictions.jsonl`, or
+  `agentic_summary.json` exists for this tag because the runner aborted before
+  campaign finalization.
+- Mirrored trace artifacts before abort: `dgx_steptrace.jsonl` has 50,813
+  lines, `per_req_spec_trace.jsonl` has 2,472 lines, and
+  `independent_winner_trace.jsonl` has 1,307 lines. The tag is still invalid
+  because request-metrics capture failed mid-campaign.
+- After abort, four orphan remote Codex containers for the same invalid tag
+  (`14182`, `14309`, `14365`, `14369`) were stopped. A follow-up x86 process
+  check showed no active `run_swe_bench_q36_a.py`, Codex, eval worker, or
+  `swe-codex-*` container.
 
 ## Invalidated June 1 Tags
 
