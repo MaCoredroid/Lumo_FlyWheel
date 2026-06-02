@@ -29,6 +29,10 @@ DEFAULT_PROMPTS = [
     "Q: What is 7 plus 8? A:",
     "Q: Write three lowercase letters in alphabetical order. A:",
     "Q: Name the color of clear daytime sky in one word. A:",
+    "Q: Complete the pattern: red, orange, yellow, A:",
+    "Q: State one Unix command that lists files. A:",
+    "Q: In Python, what boolean value is 1 == 1? A:",
+    "Q: Give one word that rhymes with time. A:",
 ]
 
 
@@ -283,6 +287,91 @@ def sample_temp(args: argparse.Namespace) -> int:
     return 0
 
 
+def collect_logprobs(args: argparse.Namespace) -> int:
+    if args.wait_health:
+        _wait_health(args.endpoint, args.wait_health)
+
+    api_key = _load_api_key(args)
+    headers = _headers(api_key)
+    prompts = _read_prompts(args.prompts_file)
+
+    reset_error = None
+    if not args.skip_reset_prefix_cache:
+        try:
+            _post_json(args.endpoint, "/reset_prefix_cache", headers, {}, timeout=30)
+        except Exception as exc:  # noqa: BLE001 - endpoint may return empty/non-JSON.
+            reset_error = f"{type(exc).__name__}: {exc}"
+
+    records: list[dict[str, Any]] = []
+    batch_shapes: list[tuple[str, list[tuple[int, str]]]] = [
+        ("b1", [(prompt_id, prompt) for prompt_id, prompt in enumerate(prompts)]),
+        ("b4", [(prompt_id, prompt) for prompt_id, prompt in enumerate(prompts)]),
+    ]
+    for batch_name, prompt_items in batch_shapes:
+        batch_prompts = [prompt for _, prompt in prompt_items]
+        payload: dict[str, Any] = {
+            "model": args.model,
+            "prompt": batch_prompts if len(batch_prompts) > 1 else batch_prompts[0],
+            "max_tokens": 1,
+            "temperature": args.temperature,
+            "logprobs": args.top_k,
+            "return_token_ids": True,
+        }
+        data = _post_json(
+            args.endpoint,
+            "/v1/completions",
+            headers,
+            payload,
+            timeout=args.request_timeout,
+        )
+        for choice in data["choices"]:
+            local_choice_index = int(choice["index"])
+            prompt_id, prompt = prompt_items[local_choice_index]
+            logprobs = choice.get("logprobs") or {}
+            top_logprobs = (logprobs.get("top_logprobs") or [{}])[0] or {}
+            records.append(
+                {
+                    "batch": batch_name,
+                    "choice_index": prompt_id,
+                    "local_choice_index": local_choice_index,
+                    "prompt": prompt,
+                    "sampled_token_ids": choice.get("token_ids") or [],
+                    "sampled_tokens": logprobs.get("tokens") or [],
+                    "token_logprobs": logprobs.get("token_logprobs") or [],
+                    "top_logprobs": top_logprobs,
+                }
+            )
+
+    artifact = {
+        "arm": args.arm,
+        "endpoint": args.endpoint,
+        "model": args.model,
+        "temperature": args.temperature,
+        "top_k": args.top_k,
+        "ts": time.time(),
+        "prompts": prompts,
+        "reset_prefix_cache_error": reset_error,
+        "records": records,
+    }
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(
+        json.dumps(
+            {
+                "arm": args.arm,
+                "out": str(out),
+                "records": len(records),
+                "temperature": args.temperature,
+                "top_k": args.top_k,
+                "reset_prefix_cache_error": reset_error,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _record_key(record: dict[str, Any]) -> tuple[str, int, str]:
     return (record["batch"], int(record["choice_index"]), record["prompt"])
 
@@ -425,6 +514,72 @@ def _chi_square_2sample(left_counts: Counter[str], right_counts: Counter[str]) -
     return stat, max(0, nonzero_columns - 1)
 
 
+def _top_logprob_distribution(
+    top_logprobs: dict[str, float],
+    support: set[str],
+) -> dict[str, float]:
+    probs = {token: math.exp(float(top_logprobs[token])) for token in support if token in top_logprobs}
+    residual = max(0.0, 1.0 - sum(math.exp(float(value)) for value in top_logprobs.values()))
+    probs["<other>"] = residual
+    return probs
+
+
+def _distribution_tv(left: dict[str, float], right: dict[str, float]) -> float:
+    keys = set(left) | set(right)
+    return 0.5 * sum(abs(left.get(key, 0.0) - right.get(key, 0.0)) for key in keys)
+
+
+def compare_logprobs(args: argparse.Namespace) -> int:
+    left = json.loads(Path(args.left).read_text(encoding="utf-8"))
+    right = json.loads(Path(args.right).read_text(encoding="utf-8"))
+    left_records = {_record_key(record): record for record in left["records"]}
+    right_records = {_record_key(record): record for record in right["records"]}
+
+    rows = []
+    missing_left = sorted(set(right_records) - set(left_records))
+    missing_right = sorted(set(left_records) - set(right_records))
+    for key in sorted(set(left_records) & set(right_records)):
+        left_top = left_records[key].get("top_logprobs") or {}
+        right_top = right_records[key].get("top_logprobs") or {}
+        support = set(left_top) | set(right_top)
+        left_dist = _top_logprob_distribution(left_top, support)
+        right_dist = _top_logprob_distribution(right_top, support)
+        tv = _distribution_tv(left_dist, right_dist)
+        left_top_items = sorted(left_top.items(), key=lambda item: item[1], reverse=True)
+        right_top_items = sorted(right_top.items(), key=lambda item: item[1], reverse=True)
+        rows.append(
+            {
+                "batch": key[0],
+                "choice_index": key[1],
+                "prompt": key[2],
+                "tv_with_other_bucket": tv,
+                "left_top": left_top_items[: args.top],
+                "right_top": right_top_items[: args.top],
+                "left_top_mass": sum(math.exp(float(value)) for value in left_top.values()),
+                "right_top_mass": sum(math.exp(float(value)) for value in right_top.values()),
+                "support_size": len(support),
+            }
+        )
+
+    max_tv = max((row["tv_with_other_bucket"] for row in rows), default=0.0)
+    result = {
+        "left_arm": left.get("arm"),
+        "right_arm": right.get("arm"),
+        "left": args.left,
+        "right": args.right,
+        "temperature": [left.get("temperature"), right.get("temperature")],
+        "top_k": [left.get("top_k"), right.get("top_k")],
+        "matched_records": len(set(left_records) & set(right_records)),
+        "missing_left": missing_left,
+        "missing_right": missing_right,
+        "max_tv_with_other_bucket": max_tv,
+        "rows": rows,
+        "passes_tv_threshold": max_tv <= args.tv_threshold,
+    }
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result["passes_tv_threshold"] else 1
+
+
 def compare_sampling(args: argparse.Namespace) -> int:
     left = json.loads(Path(args.left).read_text(encoding="utf-8"))
     right = json.loads(Path(args.right).read_text(encoding="utf-8"))
@@ -537,6 +692,29 @@ def build_parser() -> argparse.ArgumentParser:
     compare_sampling_parser.add_argument("--top", type=int, default=8)
     compare_sampling_parser.add_argument("--tv-threshold", type=float, default=0.05)
     compare_sampling_parser.set_defaults(func=compare_sampling)
+
+    logprobs_parser = subparsers.add_parser("collect-logprobs")
+    logprobs_parser.add_argument("--arm", required=True)
+    logprobs_parser.add_argument("--out", required=True)
+    logprobs_parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+    logprobs_parser.add_argument("--model", default=DEFAULT_MODEL)
+    logprobs_parser.add_argument("--prompts-file")
+    logprobs_parser.add_argument("--temperature", type=float, default=0.6)
+    logprobs_parser.add_argument("--top-k", type=int, default=20)
+    logprobs_parser.add_argument("--request-timeout", type=float, default=180)
+    logprobs_parser.add_argument("--wait-health", type=float, default=0)
+    logprobs_parser.add_argument("--skip-reset-prefix-cache", action="store_true")
+    logprobs_parser.add_argument("--api-key")
+    logprobs_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
+    logprobs_parser.add_argument("--api-key-from-container", default=DEFAULT_CONTAINER)
+    logprobs_parser.set_defaults(func=collect_logprobs)
+
+    compare_logprobs_parser = subparsers.add_parser("compare-logprobs")
+    compare_logprobs_parser.add_argument("left")
+    compare_logprobs_parser.add_argument("right")
+    compare_logprobs_parser.add_argument("--top", type=int, default=8)
+    compare_logprobs_parser.add_argument("--tv-threshold", type=float, default=0.01)
+    compare_logprobs_parser.set_defaults(func=compare_logprobs)
 
     return parser
 

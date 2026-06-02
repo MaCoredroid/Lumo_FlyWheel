@@ -74,6 +74,14 @@ def _lumo_ir_lossless_selector_enabled(
     return _truthy_env(environ, "LUMO_IR_LOSSLESS_SELECTOR_ENABLED")
 
 
+def _lumo_ir_spines2_measurement_allowed(
+    environ: dict[str, str] | os._Environ[str] = os.environ,
+) -> bool:
+    return _truthy_env(environ, "LUMO_IR_DIAGNOSTIC_UNISOLATED") or _truthy_env(
+        environ, "LUMO_IR_ALLOW_UNVERIFIED_SPINES2_MEASUREMENT"
+    )
+
+
 def _lumo_ir_validate_public_commit_policy(
     *,
     independent_rows: bool,
@@ -109,13 +117,14 @@ def _lumo_ir_validate_public_commit_policy(
             "LUMO_IR_LOSSLESS_SELECTOR_VERSION is set without an enabled, "
             "implemented lossless selector"
         )
-    if spines > 1:
+    if spines > 1 and not _lumo_ir_spines2_measurement_allowed(environ):
         raise RuntimeError(
             "independent-row spines>1 is not a verified lossless public mode "
             "on the vLLM 0.19 GDN/linear-attention stack: co-scheduled hidden "
-            "rows perturb spine-0 recurrent logits. Use --spines 1 until GDN "
-            "state isolation or a lossless selector plus public recurrent-state "
-            "recompute is implemented."
+            "rows may perturb spine-0 recurrent logits. Use --spines 1, or set "
+            "LUMO_IR_DIAGNOSTIC_UNISOLATED=1 only for controlled A/B "
+            "measurement until statistical equivalence or GDN state isolation "
+            "is proven."
         )
     return policy
 

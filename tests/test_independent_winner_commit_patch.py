@@ -183,6 +183,18 @@ def test_lossless_policy_default_rejects_unisolated_independent_spines():
         )
 
 
+def test_diagnostic_unisolated_override_allows_ab_probe_only():
+    env = {"LUMO_IR_DIAGNOSTIC_UNISOLATED": "1"}
+
+    policy = relaunch._lumo_ir_validate_public_commit_policy(
+        independent_rows=True,
+        spines=2,
+        environ=env,
+    )
+
+    assert policy == "lossless"
+
+
 def test_lossless_policy_default_allows_single_independent_spine():
     env: dict[str, str] = {}
 
