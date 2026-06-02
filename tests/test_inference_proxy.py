@@ -1158,6 +1158,36 @@ def test_build_request_metrics_row_emits_concurrency_gauges_and_run_anchor() -> 
     assert row["iteration_tokens"] == 96.0
 
 
+def test_build_request_metrics_row_emits_normalized_sampling() -> None:
+    row = _build_request_metrics_row(
+        request_id="resp_1",
+        request_path="/v1/responses",
+        request_class="agent",
+        upstream_status=200,
+        metrics_before={},
+        metrics_after={},
+        deltas={},
+        response_observed={
+            "model": "qwen3.6-27b",
+            "usage": {},
+            "request_sampling": {
+                "temperature": 0.6,
+                "top_p": 0.95,
+                "max_output_tokens": 80000,
+                "stream": False,
+            },
+        },
+        ts_request_received=0.0,
+        ts_first_byte=0.1,
+        ts_completed=1.0,
+        saw_completed=True,
+    )
+    assert row["request_temperature"] == 0.6
+    assert row["request_top_p"] == 0.95
+    assert row["request_max_output_tokens"] == 80000
+    assert row["request_stream"] is False
+
+
 def test_synthesize_oracle_snapshot_counts_assistant_messages() -> None:
     payload = {
         "input": [

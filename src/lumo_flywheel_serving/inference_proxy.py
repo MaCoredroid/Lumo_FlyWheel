@@ -892,6 +892,11 @@ def _build_request_metrics_row(
             expected.get("name") if isinstance(expected, dict) else None
         )
         row["oracle_primed_text_count"] = len(oracle_snapshot.get("primed_texts") or [])
+    sampling = response_observed.get("request_sampling")
+    if isinstance(sampling, dict):
+        for key in ("temperature", "top_p", "max_output_tokens", "stream"):
+            if key in sampling:
+                row[f"request_{key}"] = sampling[key]
     return row
 
 
@@ -1770,6 +1775,7 @@ def build_proxy_handler(
             headers = _filtered_headers(self.headers)
             request_json: dict[str, Any] | None = None
             oracle_snapshot: dict[str, Any] | None = None
+            request_sampling: dict[str, Any] | None = None
             # Set by the /v1/responses path when codex sends stream:true AND
             # LUMO_PROXY_NONSTREAM_BYPASS=1; we rewrite to stream:false upstream
             # so PR #39055's promotion path applies, then synthesize an SSE
@@ -1802,6 +1808,11 @@ def build_proxy_handler(
                     # back in the transcript — non-streaming validation rejects them otherwise.
                     normalized_req = _normalize_input_for_nonstreaming(normalized_req)
                     nonstream_bypass_active = True
+                request_sampling = {
+                    key: normalized_req[key]
+                    for key in ("temperature", "top_p", "max_output_tokens", "stream")
+                    if key in normalized_req
+                }
                 payload = json.dumps(normalized_req).encode("utf-8")
                 headers["Content-Type"] = "application/json"
                 oracle_snapshot = synthesize_oracle_snapshot(request_json)
@@ -2033,7 +2044,8 @@ def build_proxy_handler(
             capture_state: dict[str, Any] | None = (
                 {"ts_first_byte": None, "has_tool_call": False, "text_chars": 0,
                  "ts_upstream_sent": ts_upstream_sent, "ts_upstream_recv": ts_upstream_recv,
-                 "upstream_compute_accum_s": upstream_compute_accum_s}
+                 "upstream_compute_accum_s": upstream_compute_accum_s,
+                 "request_sampling": dict(request_sampling or {})}
                 if capture_active
                 else None
             )
@@ -2084,6 +2096,7 @@ def build_proxy_handler(
                         "ts_first_byte": time.time(),
                         "has_tool_call": False,
                         "text_chars": 0,
+                        "request_sampling": dict(request_sampling or {}),
                     }
                     if isinstance(non_streaming_parsed, dict):
                         capture_state_local["response_id"] = non_streaming_parsed.get("id")

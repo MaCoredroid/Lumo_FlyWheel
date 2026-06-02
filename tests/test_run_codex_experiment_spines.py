@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import subprocess
 
 import pytest
@@ -82,3 +83,55 @@ def test_apply_config_rejects_invalid_fb_spines(monkeypatch: pytest.MonkeyPatch,
         experiment.apply_config("Fb", mtp=2, row_mode="independent", spines=spines)
 
     assert calls == []
+
+
+def test_launch_suite_does_not_skip_existing_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    commands: list[list[str]] = []
+
+    def fake_sh(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        commands.append(cmd)
+        return _completed(cmd, stdout="launched pid=123\n")
+
+    monkeypatch.setattr(experiment, "sh", fake_sh)
+
+    experiment.launch_suite(
+        argparse.Namespace(
+            suite="swe",
+            exp_tag="tag",
+            subset="subset.json",
+            limit=0,
+            agent_wall_s=1800,
+            eval_timeout_s=1800,
+            concurrency=4,
+            skip_existing=False,
+        )
+    )
+
+    launch_command = commands[0][-1]
+    assert "--skip-existing" not in launch_command
+
+
+def test_launch_suite_can_explicitly_skip_existing(monkeypatch: pytest.MonkeyPatch) -> None:
+    commands: list[list[str]] = []
+
+    def fake_sh(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        commands.append(cmd)
+        return _completed(cmd, stdout="launched pid=123\n")
+
+    monkeypatch.setattr(experiment, "sh", fake_sh)
+
+    experiment.launch_suite(
+        argparse.Namespace(
+            suite="swe",
+            exp_tag="tag",
+            subset="subset.json",
+            limit=0,
+            agent_wall_s=1800,
+            eval_timeout_s=1800,
+            concurrency=4,
+            skip_existing=True,
+        )
+    )
+
+    launch_command = commands[0][-1]
+    assert "--skip-existing" in launch_command

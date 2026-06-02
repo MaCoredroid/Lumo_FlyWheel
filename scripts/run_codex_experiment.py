@@ -68,6 +68,27 @@ def log(msg: str) -> None:
     print(f"[exp {datetime.now(timezone.utc).strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
+def _local_file_size(path: str) -> int:
+    p = Path(path)
+    return p.stat().st_size if p.is_file() else 0
+
+
+def _remote_file_size(path: str) -> int:
+    quoted = json.dumps(path)
+    r = ssh(
+        "python3 - <<'PY'\n"
+        "from pathlib import Path\n"
+        f"p = Path({quoted})\n"
+        "print(p.stat().st_size if p.is_file() else 0)\n"
+        "PY",
+        timeout=30,
+    )
+    try:
+        return int((r.stdout or "0").strip())
+    except ValueError:
+        return 0
+
+
 def validate_spines(spines: object) -> int:
     if not (1 <= int(spines) <= 10):
         raise ValueError(f"--spines must be in [1, 10], got {spines}")
@@ -176,6 +197,65 @@ def preflight() -> None:
         sh(["bash", str(REPO / "scripts/swe_x86_helpers/setup_tmux_infra.sh")])
 
 
+def require_request_metrics_live() -> None:
+    """Prove the proxy emits request metrics and the x86 mirror receives them.
+
+    The SWE task runner slices the mirrored capture by byte offset. If this
+    check fails, launching a campaign would recreate the zero-byte per-task
+    contamination this closeout is trying to avoid.
+    """
+    local_before = _local_file_size(REQUEST_METRICS)
+    remote_before = _remote_file_size(REQUEST_METRICS)
+    payload = {
+        "model": "qwen3.6-27b",
+        "input": "Reply with exactly: OK",
+        "max_output_tokens": 4,
+        "stream": False,
+    }
+    log(
+        "request-metrics smoke: "
+        f"local_before={local_before} remote_before={remote_before}"
+    )
+    r = sh(
+        [
+            "curl",
+            "-sS",
+            "-m",
+            "180",
+            "-H",
+            "Content-Type: application/json",
+            "-X",
+            "POST",
+            "http://127.0.0.1:8022/v1/responses",
+            "--data-binary",
+            json.dumps(payload),
+        ],
+        timeout=210,
+    )
+    if r.returncode != 0:
+        sys.exit(f"request-metrics smoke request failed:\n{r.stdout[-500:]}\n{r.stderr[-500:]}")
+    local_after = _local_file_size(REQUEST_METRICS)
+    if local_after <= local_before:
+        sys.exit(
+            "request-metrics smoke did not append locally: "
+            f"before={local_before} after={local_after} path={REQUEST_METRICS}"
+        )
+    deadline = time.time() + 30
+    remote_after = _remote_file_size(REQUEST_METRICS)
+    while remote_after <= remote_before and time.time() < deadline:
+        time.sleep(2)
+        remote_after = _remote_file_size(REQUEST_METRICS)
+    if remote_after <= remote_before:
+        sys.exit(
+            "request-metrics smoke did not append on alienware mirror: "
+            f"before={remote_before} after={remote_after} path={REQUEST_METRICS}"
+        )
+    log(
+        "request-metrics smoke ok: "
+        f"local_after={local_after} remote_after={remote_after}"
+    )
+
+
 def launch_suite(args) -> None:
     out_root = f"output/{args.exp_tag}"
     # NOTE: keep nohup as its OWN statement (';'-separated) and background ONLY
@@ -184,6 +264,7 @@ def launch_suite(args) -> None:
     # holding the ssh channel open until the run ends (ssh then never returns).
     if args.suite == "swe":
         extra = f"--limit {args.limit}" if args.limit else ""
+        skip_existing = " --skip-existing" if args.skip_existing else ""
         cmd = (
             f'cd ~/swe_conc_probe ; export HF_HOME=$HOME/.cache/huggingface ; '
             f'mkdir -p {out_root} ; '
@@ -191,7 +272,7 @@ def launch_suite(args) -> None:
             f'scripts/run_swe_bench_q36_a.py --subset {args.subset} --out-root {out_root} '
             f'--dataset-tag {args.exp_tag} --agent-wall-s {args.agent_wall_s} '
             f'--eval-timeout-s {args.eval_timeout_s} --concurrency {args.concurrency} '
-            f'{extra} --skip-existing --repo-cache $HOME/swe_conc_probe/repo_cache '
+            f'{extra}{skip_existing} --repo-cache $HOME/swe_conc_probe/repo_cache '
             f'> {out_root}/driver.log 2>&1 </dev/null & echo launched pid=$!'
         )
     else:  # cnb
@@ -383,6 +464,8 @@ def main() -> int:
     ap.add_argument("--nsight", default="off",
                     help="off | first-task | <seconds> (one representative window)")
     ap.add_argument("--no-commit", action="store_true")
+    ap.add_argument("--skip-existing", action="store_true",
+                    help="resume an existing SWE tag by skipping finished tasks; forbidden for clean benchmark arms")
     ap.add_argument("--poll-s", type=int, default=30)
     args = ap.parse_args()
     if args.spines is None:
@@ -408,6 +491,8 @@ def main() -> int:
     if args.temp:
         set_temperature(args.temp)
     preflight()
+    if args.suite == "swe":
+        require_request_metrics_live()
     log(f"experiment {args.exp_tag}: config={args.config} temp={args.temp or 'as-set'} "
         f"row_mode={args.row_mode if args.config == 'Fb' else '-'} "
         f"spines={args.spines if args.config == 'Fb' else '-'} "
