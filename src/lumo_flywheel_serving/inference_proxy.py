@@ -939,6 +939,38 @@ def _write_json_payload(handler: BaseHTTPRequestHandler, status: int, payload: d
     handler.wfile.write(body)
 
 
+def _is_vllm_json_parse_flake_response(response: requests.Response) -> bool:
+    """Return true for vLLM's transient request JSON parser 400."""
+    if response.status_code != 400:
+        return False
+    try:
+        body = response.content
+    except requests.RequestException:
+        body = b""
+    try:
+        text = body.decode("utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        text = ""
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        payload = None
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            message = error.get("message")
+            if isinstance(message, str):
+                text = f"{text}\n{message}"
+    return any(
+        needle in text
+        for needle in (
+            "Unterminated string",
+            "JSONDecodeError",
+            "BadRequestError",
+        )
+    )
+
+
 def _normalize_input_for_nonstreaming(request_json: dict[str, Any]) -> dict[str, Any]:
     """Coerce codex's transcript input into a shape vLLM's non-streaming validation accepts.
 
@@ -1870,6 +1902,7 @@ def build_proxy_handler(
             # separate upstream generation merged into one response). This is the
             # true network-deducted vLLM compute for the request.
             upstream_compute_accum_s = None
+            parse_flake_retry_compute_s = 0.0
             for _attempt in range(2):
                 ts_upstream_sent = time.time()
                 try:
@@ -1886,15 +1919,11 @@ def build_proxy_handler(
                     return
                 if not (_retry_400 and upstream.status_code == 400 and _attempt == 0):
                     break
-                # peek a bounded prefix to confirm it's the parse-flake, then retry
-                try:
-                    head = upstream.raw.read(512, decode_content=True) or b""
-                except Exception:  # noqa: BLE001
-                    head = b""
-                upstream.close()
-                if b"Unterminated string" in head or b"BadRequestError" in head or b"JSONDecode" in head:
+                parse_flake_retry_compute_s += time.time() - ts_upstream_sent
+                if _is_vllm_json_parse_flake_response(upstream):
                     sys.stderr.write(f"[proxy] upstream 400 parse-flake on {self.path}; retrying once\n")
                     sys.stderr.flush()
+                    upstream.close()
                     continue
                 # genuine 400 (not the flake): re-issue once to get a fresh
                 # streamable response object, then propagate as-is.
@@ -1915,7 +1944,9 @@ def build_proxy_handler(
                 response_content_buf = upstream.content
                 ts_upstream_recv = time.time()
                 if ts_upstream_sent is not None:
-                    upstream_compute_accum_s = ts_upstream_recv - ts_upstream_sent
+                    upstream_compute_accum_s = (
+                        ts_upstream_recv - ts_upstream_sent + parse_flake_retry_compute_s
+                    )
                 try:
                     parsed = json.loads(response_content_buf.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError):
@@ -1993,17 +2024,31 @@ def build_proxy_handler(
                         retry_req = _normalize_input_for_nonstreaming(retry_req)
                         retry_payload = json.dumps(retry_req).encode("utf-8")
                         try:
-                            _retry_sent = time.time()
-                            retry_resp = requests.post(
-                                f"{upstream_base_url}{self.path}",
-                                data=retry_payload,
-                                headers=headers,
-                                timeout=600,
-                                stream=False,
-                            )
+                            retry_resp = None
+                            retry_elapsed_s = 0.0
+                            for _retry_400_attempt in range(2):
+                                _retry_sent = time.time()
+                                retry_resp = requests.post(
+                                    f"{upstream_base_url}{self.path}",
+                                    data=retry_payload,
+                                    headers=headers,
+                                    timeout=600,
+                                    stream=False,
+                                )
+                                retry_elapsed_s += time.time() - _retry_sent
+                                if not (
+                                    _retry_400
+                                    and _retry_400_attempt == 0
+                                    and _is_vllm_json_parse_flake_response(retry_resp)
+                                ):
+                                    break
+                                sys.stderr.write(
+                                    f"[proxy] auto-continue upstream 400 parse-flake on {self.path}; retrying once\n"
+                                )
+                                sys.stderr.flush()
                             if upstream_compute_accum_s is not None:
-                                upstream_compute_accum_s += time.time() - _retry_sent
-                            if retry_resp.status_code == 200:
+                                upstream_compute_accum_s += retry_elapsed_s
+                            if retry_resp is not None and retry_resp.status_code == 200:
                                 try:
                                     retry_parsed = retry_resp.json()
                                 except json.JSONDecodeError:

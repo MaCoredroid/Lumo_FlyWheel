@@ -877,6 +877,104 @@ def test_proxy_does_not_emit_capture_when_env_unset(monkeypatch, tmp_path: Path)
         proxy.server_close()
 
 
+def test_proxy_auto_continue_retries_vllm_parse_flake(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("LUMO_PROXY_NONSTREAM_BYPASS", "1")
+    monkeypatch.setenv("LUMO_PROXY_AUTO_CONTINUE", "1")
+    monkeypatch.setenv("LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES", "1")
+
+    calls: list[dict[str, object]] = []
+
+    class _UpstreamResp:
+        def __init__(self, status_code: int, payload: dict[str, object]) -> None:
+            self.status_code = status_code
+            self.headers = {"Content-Type": "application/json"}
+            self.content = json.dumps(payload).encode("utf-8")
+
+        def json(self) -> dict[str, object]:
+            return json.loads(self.content.decode("utf-8"))
+
+        def iter_content(self, chunk_size: int):
+            yield self.content
+
+        def close(self) -> None:
+            return
+
+    responses = iter(
+        [
+            _UpstreamResp(
+                200,
+                {
+                    "id": "resp_initial",
+                    "model": "qwen3.5-27b",
+                    "output": [{"type": "message", "role": "assistant", "content": []}],
+                    "usage": {},
+                },
+            ),
+            _UpstreamResp(
+                400,
+                {
+                    "error": {
+                        "message": "Unterminated string starting at: line 1 column 9 (char 8)",
+                        "type": "BadRequestError",
+                    }
+                },
+            ),
+            _UpstreamResp(
+                200,
+                {
+                    "id": "resp_retry",
+                    "model": "qwen3.5-27b",
+                    "output": [
+                        {
+                            "type": "function_call",
+                            "id": "fc_1",
+                            "call_id": "call_1",
+                            "name": "shell",
+                            "arguments": "{\"cmd\":\"true\"}",
+                        }
+                    ],
+                    "usage": {},
+                },
+            ),
+        ]
+    )
+
+    def fake_post(*args: object, **kwargs: object) -> _UpstreamResp:
+        calls.append(kwargs)
+        return next(responses)
+
+    monkeypatch.setattr("lumo_flywheel_serving.inference_proxy.requests.post", fake_post)
+
+    proxy, proxy_thread, proxy_url = _start_server(
+        build_proxy_handler("http://upstream.invalid", state_root=tmp_path / "state")
+    )
+    try:
+        response = requests.request(
+            "POST",
+            f"{proxy_url}/v1/responses",
+            json={
+                "model": "qwen3.5-27b",
+                "stream": True,
+                "input": [{"role": "user", "content": "fix it"}],
+                "tools": [{"type": "function", "name": "shell"}],
+            },
+            timeout=10,
+        )
+    finally:
+        proxy.shutdown()
+        proxy_thread.join(timeout=5)
+        proxy.server_close()
+
+    assert response.status_code == 200
+    assert len(calls) == 3
+    assert calls[0]["stream"] is True
+    assert calls[1]["stream"] is False
+    assert calls[2]["stream"] is False
+    assert b"response.output_item.added" in response.content
+    assert b"function_call" in response.content
+    assert b"Unterminated string" not in response.content
+
+
 def test_synthesize_oracle_snapshot_first_turn_codex() -> None:
     payload = {
         "model": "qwen3.5-27b",
