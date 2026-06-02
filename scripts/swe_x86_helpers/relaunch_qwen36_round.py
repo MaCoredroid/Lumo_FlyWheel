@@ -499,6 +499,12 @@ def _lumo_ir_accept_count(row):
             return int(i)
     return int(len(row))
 
+def _lumo_ir_accept_counts_cpu(output_token_ids):
+    # Keep the token matrix on GPU. vLLM's native state update only needs
+    # accepted-token counts; synchronizing the whole sampled-token tensor here
+    # can surface CUDA graph lifetime issues before native postprocess runs.
+    return output_token_ids.ge(0).sum(dim=1).detach().cpu().tolist()
+
 def _lumo_ir_copy_one_winner_state(
     self,
     src_req_id,
@@ -566,7 +572,7 @@ def _lumo_ir_winner_update_states_after_model_execute(
 
     num_rows = int(output_token_ids.shape[0])
     req_ids = [str(x) for x in list(self.input_batch.req_ids[:num_rows])]
-    rows_cpu = output_token_ids.detach().cpu().tolist()
+    accept_counts = [int(x) for x in _lumo_ir_accept_counts_cpu(output_token_ids)]
     groups = {}
     for idx, req_id in enumerate(req_ids):
         groups.setdefault(_lumo_ir_primary_id(req_id), []).append(idx)
@@ -575,9 +581,9 @@ def _lumo_ir_winner_update_states_after_model_execute(
         if len(indices) <= 1:
             continue
         best_idx = indices[0]
-        best_acc = _lumo_ir_accept_count(rows_cpu[best_idx])
+        best_acc = accept_counts[best_idx]
         for idx in indices[1:]:
-            acc = _lumo_ir_accept_count(rows_cpu[idx])
+            acc = accept_counts[idx]
             if acc > best_acc or (
                     acc == best_acc
                     and _lumo_ir_spine_id(req_ids[idx]) < _lumo_ir_spine_id(req_ids[best_idx])):
@@ -608,7 +614,7 @@ def _lumo_ir_winner_update_states_after_model_execute(
             self, winner_req_id,
             [req_ids[i] for i in indices if req_ids[i] != winner_req_id],
             winner_acc)
-        counts = {str(_lumo_ir_spine_id(req_ids[i])): _lumo_ir_accept_count(rows_cpu[i])
+        counts = {str(_lumo_ir_spine_id(req_ids[i])): int(accept_counts[i])
                   for i in indices}
         trace_rows.append({
             "primary": primary,
