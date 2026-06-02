@@ -109,6 +109,14 @@ def _lumo_ir_validate_public_commit_policy(
             "LUMO_IR_LOSSLESS_SELECTOR_VERSION is set without an enabled, "
             "implemented lossless selector"
         )
+    if spines > 1:
+        raise RuntimeError(
+            "independent-row spines>1 is not a verified lossless public mode "
+            "on the vLLM 0.19 GDN/linear-attention stack: co-scheduled hidden "
+            "rows perturb spine-0 recurrent logits. Use --spines 1 until GDN "
+            "state isolation or a lossless selector plus public recurrent-state "
+            "recompute is implemented."
+        )
     return policy
 
 

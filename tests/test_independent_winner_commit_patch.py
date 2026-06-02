@@ -172,12 +172,23 @@ def test_independent_winner_commit_flushes_mamba_copy_only_when_buffer_nonempty(
     assert "do_mamba_copy_block(copy_bufs)" in patch
 
 
-def test_lossless_policy_default_allows_selector_off_independent_spines():
+def test_lossless_policy_default_rejects_unisolated_independent_spines():
+    env: dict[str, str] = {}
+
+    with pytest.raises(RuntimeError, match="not a verified lossless public mode"):
+        relaunch._lumo_ir_validate_public_commit_policy(
+            independent_rows=True,
+            spines=2,
+            environ=env,
+        )
+
+
+def test_lossless_policy_default_allows_single_independent_spine():
     env: dict[str, str] = {}
 
     policy = relaunch._lumo_ir_validate_public_commit_policy(
         independent_rows=True,
-        spines=2,
+        spines=1,
         environ=env,
     )
 

@@ -9,7 +9,9 @@ and batch shapes so arms can be compared honestly.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
+import math
 import subprocess
 import sys
 import time
@@ -205,6 +207,82 @@ def collect(args: argparse.Namespace) -> int:
     return 0
 
 
+def sample_temp(args: argparse.Namespace) -> int:
+    if args.wait_health:
+        _wait_health(args.endpoint, args.wait_health)
+
+    api_key = _load_api_key(args)
+    headers = _headers(api_key)
+
+    reset_error = None
+    if not args.skip_reset_prefix_cache:
+        try:
+            _post_json(args.endpoint, "/reset_prefix_cache", headers, {}, timeout=30)
+        except Exception as exc:  # noqa: BLE001 - endpoint may return empty/non-JSON.
+            reset_error = f"{type(exc).__name__}: {exc}"
+
+    records: list[dict[str, Any]] = []
+    next_sample = 0
+    while next_sample < args.samples:
+        batch_size = min(args.batch_size, args.samples - next_sample)
+        payload: dict[str, Any] = {
+            "model": args.model,
+            "prompt": [args.prompt] * batch_size if batch_size > 1 else args.prompt,
+            "max_tokens": args.max_tokens,
+            "temperature": args.temperature,
+            "logprobs": args.logprobs,
+            "return_token_ids": True,
+        }
+        data = _post_json(
+            args.endpoint,
+            "/v1/completions",
+            headers,
+            payload,
+            timeout=args.request_timeout,
+        )
+        for choice in data["choices"]:
+            records.append(
+                {
+                    "sample_index": next_sample + int(choice["index"]),
+                    "local_choice_index": int(choice["index"]),
+                    "finish_reason": choice.get("finish_reason"),
+                    "text": choice.get("text"),
+                    "token_ids": choice.get("token_ids") or [],
+                }
+            )
+        next_sample += batch_size
+
+    artifact = {
+        "arm": args.arm,
+        "endpoint": args.endpoint,
+        "model": args.model,
+        "temperature": args.temperature,
+        "max_tokens": args.max_tokens,
+        "prompt": args.prompt,
+        "samples": args.samples,
+        "batch_size": args.batch_size,
+        "ts": time.time(),
+        "reset_prefix_cache_error": reset_error,
+        "records": records,
+    }
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(
+        json.dumps(
+            {
+                "arm": args.arm,
+                "out": str(out),
+                "samples": len(records),
+                "temperature": args.temperature,
+                "reset_prefix_cache_error": reset_error,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def _record_key(record: dict[str, Any]) -> tuple[str, int, str]:
     return (record["batch"], int(record["choice_index"]), record["prompt"])
 
@@ -308,6 +386,97 @@ def compare_batches(args: argparse.Namespace) -> int:
     return 0 if result["exact_match"] else 1
 
 
+def _position_counts(records: list[dict[str, Any]], position: int) -> Counter[str]:
+    counts: Counter[str] = Counter()
+    for record in records:
+        token_ids = record.get("token_ids") or []
+        token = str(token_ids[position]) if position < len(token_ids) else "<missing>"
+        counts[token] += 1
+    return counts
+
+
+def _tv(left_counts: Counter[str], right_counts: Counter[str]) -> float:
+    left_total = sum(left_counts.values())
+    right_total = sum(right_counts.values())
+    keys = set(left_counts) | set(right_counts)
+    return 0.5 * sum(
+        abs(left_counts.get(key, 0) / left_total - right_counts.get(key, 0) / right_total)
+        for key in keys
+    )
+
+
+def _chi_square_2sample(left_counts: Counter[str], right_counts: Counter[str]) -> tuple[float, int]:
+    left_total = sum(left_counts.values())
+    right_total = sum(right_counts.values())
+    total = left_total + right_total
+    stat = 0.0
+    nonzero_columns = 0
+    for key in set(left_counts) | set(right_counts):
+        column = left_counts.get(key, 0) + right_counts.get(key, 0)
+        if column == 0:
+            continue
+        nonzero_columns += 1
+        expected_left = left_total * column / total
+        expected_right = right_total * column / total
+        if expected_left > 0:
+            stat += (left_counts.get(key, 0) - expected_left) ** 2 / expected_left
+        if expected_right > 0:
+            stat += (right_counts.get(key, 0) - expected_right) ** 2 / expected_right
+    return stat, max(0, nonzero_columns - 1)
+
+
+def compare_sampling(args: argparse.Namespace) -> int:
+    left = json.loads(Path(args.left).read_text(encoding="utf-8"))
+    right = json.loads(Path(args.right).read_text(encoding="utf-8"))
+    left_records = left["records"]
+    right_records = right["records"]
+    max_len = max(
+        [len(record.get("token_ids") or []) for record in left_records + right_records]
+        or [0]
+    )
+    max_positions = min(max_len, args.positions)
+    positions = []
+    for position in range(max_positions):
+        left_counts = _position_counts(left_records, position)
+        right_counts = _position_counts(right_records, position)
+        stat, df = _chi_square_2sample(left_counts, right_counts)
+        tv = _tv(left_counts, right_counts)
+        positions.append(
+            {
+                "position": position,
+                "tv": tv,
+                "chi_square": stat,
+                "df": df,
+                "chi_square_per_df": stat / df if df else math.inf if stat else 0.0,
+                "left_top": left_counts.most_common(args.top),
+                "right_top": right_counts.most_common(args.top),
+            }
+        )
+
+    sequence_left = Counter(json.dumps(record.get("token_ids") or []) for record in left_records)
+    sequence_right = Counter(json.dumps(record.get("token_ids") or []) for record in right_records)
+    seq_stat, seq_df = _chi_square_2sample(sequence_left, sequence_right)
+    seq_tv = _tv(sequence_left, sequence_right)
+    max_position_tv = max((row["tv"] for row in positions), default=0.0)
+    result = {
+        "left_arm": left.get("arm"),
+        "right_arm": right.get("arm"),
+        "left": args.left,
+        "right": args.right,
+        "left_samples": len(left_records),
+        "right_samples": len(right_records),
+        "temperature": [left.get("temperature"), right.get("temperature")],
+        "max_position_tv": max_position_tv,
+        "sequence_tv": seq_tv,
+        "sequence_chi_square": seq_stat,
+        "sequence_df": seq_df,
+        "positions": positions,
+        "passes_tv_threshold": max_position_tv <= args.tv_threshold,
+    }
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result["passes_tv_threshold"] else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -341,6 +510,33 @@ def build_parser() -> argparse.ArgumentParser:
     compare_batches_parser.add_argument("--left-batch", default="b1")
     compare_batches_parser.add_argument("--right-batch", default="b4")
     compare_batches_parser.set_defaults(func=compare_batches)
+
+    sample_parser = subparsers.add_parser("sample-temp")
+    sample_parser.add_argument("--arm", required=True)
+    sample_parser.add_argument("--out", required=True)
+    sample_parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+    sample_parser.add_argument("--model", default=DEFAULT_MODEL)
+    sample_parser.add_argument("--prompt", default=DEFAULT_PROMPTS[2])
+    sample_parser.add_argument("--samples", type=int, default=256)
+    sample_parser.add_argument("--batch-size", type=int, default=4)
+    sample_parser.add_argument("--max-tokens", type=int, default=12)
+    sample_parser.add_argument("--temperature", type=float, default=0.6)
+    sample_parser.add_argument("--logprobs", type=int, default=1)
+    sample_parser.add_argument("--request-timeout", type=float, default=180)
+    sample_parser.add_argument("--wait-health", type=float, default=0)
+    sample_parser.add_argument("--skip-reset-prefix-cache", action="store_true")
+    sample_parser.add_argument("--api-key")
+    sample_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
+    sample_parser.add_argument("--api-key-from-container", default=DEFAULT_CONTAINER)
+    sample_parser.set_defaults(func=sample_temp)
+
+    compare_sampling_parser = subparsers.add_parser("compare-sampling")
+    compare_sampling_parser.add_argument("left")
+    compare_sampling_parser.add_argument("right")
+    compare_sampling_parser.add_argument("--positions", type=int, default=12)
+    compare_sampling_parser.add_argument("--top", type=int, default=8)
+    compare_sampling_parser.add_argument("--tv-threshold", type=float, default=0.05)
+    compare_sampling_parser.set_defaults(func=compare_sampling)
 
     return parser
 
