@@ -313,11 +313,37 @@ def _lumo_ir_finish_requests(self, request_ids, finished_status):
     finished = _lumo_ir_orig_finish_requests(self, expanded, finished_status)
     return [(rid, idx) for rid, idx in finished if not _lumo_ir_is_clone(rid)]
 
+def _lumo_ir_sync_group_state(self):
+    _lumo_ir_init(self)
+    for primary, members in list(self._lumo_ir_groups.items()):
+        primary_req = self.requests.get(primary)
+        if primary_req is None or primary_req.is_finished():
+            continue
+        for member in members:
+            if member == primary:
+                continue
+            clone_req = self.requests.get(member)
+            if clone_req is None or clone_req.is_finished():
+                continue
+            clone_req._output_token_ids.clear()
+            clone_req._output_token_ids.extend(primary_req.output_token_ids)
+            clone_req._all_token_ids.clear()
+            clone_req._all_token_ids.extend(primary_req.all_token_ids)
+            clone_req.spec_token_ids = list(primary_req.spec_token_ids)
+            clone_req.num_computed_tokens = int(primary_req.num_computed_tokens)
+            clone_req.num_output_placeholders = int(primary_req.num_output_placeholders)
+            clone_req.is_prefill_chunk = bool(primary_req.is_prefill_chunk)
+            clone_req.num_cached_tokens = int(primary_req.num_cached_tokens)
+            clone_req.num_external_computed_tokens = int(
+                primary_req.num_external_computed_tokens)
+            clone_req.block_hashes = list(primary_req.block_hashes)
+
 def _lumo_ir_update_from_output(self, scheduler_output, model_runner_output):
     outputs = _lumo_ir_orig_update_from_output(
         self, scheduler_output, model_runner_output)
     if not _lumo_ir_enabled():
         return outputs
+    _lumo_ir_sync_group_state(self)
     for client_index, eco in list(outputs.items()):
         if hasattr(eco, "outputs"):
             eco.outputs = [

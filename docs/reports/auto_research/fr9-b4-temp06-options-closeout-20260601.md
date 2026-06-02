@@ -36,7 +36,7 @@ tree work can consume this experiment as baseline evidence:
 | Required arm | Status | Required action / acceptance bar |
 |---|---|---|
 | `mtp=5`, `spines=1`, `gpu_memory_utilization=0.88` | accepted | Keep `fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z` as the clean baseline: 16/16 x86 tasks, all per-task request-metrics files nonzero, full campaign and agentic artifacts present. |
-| `mtp=5`, `spines=2`, `gpu_memory_utilization=0.88` | invalidated; rerun required | Latest retry tag `fr9_b4temp06_lowmem088_mtp5_s2_20260602T055438Z` passed prelaunch and produced clean winner-trace evidence until vLLM EngineCore died from a CUDA illegal memory access in the independent-row winner update path. Do not count it as a result. Rerun only after the winner-update repair is applied and all 16 tasks can complete on x86 with nonzero per-task request metrics, complete summaries/traces, `independent_winner_summary.json` with no winner-superset violations, copy-missing sum 0, and positive recovered tokens, plus `speed_comparison.json` against the accepted `s1` baseline. |
+| `mtp=5`, `spines=2`, `gpu_memory_utilization=0.88` | invalidated; rerun required | Latest retry tag `fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z` passed prelaunch and produced clean early winner-trace evidence until vLLM EngineCore died from hidden sibling scheduler-state drift feeding native Mamba postprocess an unsafe scheduled-token shape. Do not count it as a result. Rerun only after the scheduler-state repair is applied and all 16 tasks can complete on x86 with nonzero per-task request metrics, complete summaries/traces, `independent_winner_summary.json` with no winner-superset violations, copy-missing sum 0, and positive recovered tokens, plus `speed_comparison.json` against the accepted `s1` baseline. |
 | `mtp=3`, `spines=2`, lowmem retry if strict 0.90 cannot prelaunch | required pending | Launch only after the `mtp=5`, `spines=2` arm is either accepted or invalidated for fix-and-rerun. Accept under the same x86, metrics, artifact, and winner-trace rules; strict 0.90 prelaunch memory failures are infra-blocks and do not count as SWE evidence. |
 
 Every accepted arm must include `driver.log`, top-level and nested
@@ -67,6 +67,7 @@ as a valid correctness/stability result only, not as a speed-win result.
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z` | invalid contaminated | smoke capture passed 1378/1378, but the first four x86 SWE tasks all had 0-byte request metrics; capture stayed smoke-only. No `spines=2` SWE result is accepted. |
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T051155Z` | invalid partial evidence | hardened smoke capture passed 1359/1359, and the first four x86 tasks had nonzero metrics and commits, but the next batch had 0-byte request metrics; the hardened guard aborted at `astropy__astropy-13579`. Whole tag is invalid. |
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T055438Z` | invalid partial evidence | prelaunch, x86 identity, smoke capture, and early winner trace were clean; vLLM EngineCore then died at 2026-06-02 06:18:56 UTC with CUDA illegal memory access in `_lumo_ir_winner_update_states_after_model_execute`. Six tasks had nonzero metrics, then downstream tasks hit 502/connection-refused and zero metrics. Whole tag is invalid. |
+| `fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z` | invalid partial evidence | repaired accept-count scan and launched at required 0.88 util on x86; early winner trace was clean, but vLLM EngineCore died at 2026-06-02 06:40:29 UTC after hidden sibling scheduler state drifted (`num_scheduled_tokens` 6 for primary versus 11 for sibling). The tag aborted with missing request metrics and is invalid. |
 | strict/lowmem `mtp=3`, `spines=2` | no valid campaign | only old strict prelaunch failures are documented; no local `fr9_b4temp06*mtp3*s2*` output directory exists. |
 
 ## Accepted Arm: `lowmem088_mtp5_s1`
@@ -285,6 +286,42 @@ salvage attempts below also failed the evidence rules.
   benchmark result. The required repair is to keep winner commit enabled while
   avoiding the unsafe duplicate GPU accept-count scan; a fresh tag must rerun
   from scratch after that repair.
+
+`fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z`:
+
+- Launch settings matched the required arm and explicitly overrode the local env
+  to `LUMO_GPU_MEMORY_UTILIZATION=0.88`: B4/Fb, `row_mode=independent`,
+  `mtp=5`, `spines=2`, `temp=0.6`, SWE Verified `concprobe16`,
+  `concurrency=4`, 1800 s agent/eval limits, nsight off, and speed comparison
+  requested against the accepted `lowmem088_mtp5_s1` baseline.
+- Prelaunch completed, vLLM reported ready at 2026-06-02T06:38:29Z, the
+  request-metrics smoke check advanced local and remote counters from 119,881 to
+  121,237, and SWE launched on `mark-Alienware-Aurora-ACT1250` / `x86_64`.
+- Early winner trace passed the FR9 validator before the engine death: 258 rows,
+  `superset_violations=0`, `copy_missing_sum=0`,
+  `winner_nonzero_spine_events=10`, `recovered_token_total=19`,
+  `avg_spine0_acc=3.9651162790697674`, and
+  `avg_winner_acc=4.038759689922481`.
+- The root scheduler dump in
+  `/tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.6-27b.log` showed hidden row
+  drift immediately before the crash: one primary request had
+  `num_scheduled_tokens=6`, while its `::lumo_ir_s1` sibling had
+  `num_scheduled_tokens=11`; their `num_computed_tokens` and
+  `num_output_tokens` were already divergent. Native Mamba postprocess then
+  reported CUDA illegal memory access while syncing accepted-token counts.
+- The first wave completed too quickly to satisfy the "most 4 tasks hit 30 min"
+  sanity criterion: the completed task elapsed totals were about 110 s, 110 s,
+  137 s, 137 s, 54 s, and 54 s before the guard aborted on missing request
+  metrics. This is not a speed result.
+- Top-level traces before abort were partial: `dgx_steptrace.jsonl` had 51,633
+  lines, `per_req_spec_trace.jsonl` had 481 lines, and
+  `independent_winner_trace.jsonl` had 258 lines. There is no accepted
+  `campaign_summary.json`, `agentic_summary.json`,
+  `independent_winner_summary.json`, or `speed_comparison.json` for this tag.
+- The required repair is to keep winner commit enabled and collapse scheduler
+  request state across hidden siblings after native output processing, so the
+  next schedule cannot feed Mamba a sibling row with a different public token
+  count than the primary row.
 
 ## Invalidated June 1 Tags
 
