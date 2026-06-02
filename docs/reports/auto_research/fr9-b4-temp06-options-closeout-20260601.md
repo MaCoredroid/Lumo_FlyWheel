@@ -1,6 +1,10 @@
 # FR9 Swap / B4 Temp 0.6 Independent-Row Closeout
 
-Status: **IMPLEMENTED_VERIFIED_AND_PUSHED**.
+Status: **REOPENED_IN_PROGRESS** as of 2026-06-02. The earlier clean
+`lowmem088_mtp5_s1` arm remains accepted, but the swap experiment is not
+closed until every required arm below either has clean evidence or is
+explicitly invalidated as infra-blocked evidence rather than a benchmark
+result.
 
 This file replaces the stale June 1 closeout. The earlier version marked
 `fr9_b4temp06_mtp5_s1_20260601T230213Z` and
@@ -19,8 +23,29 @@ invalid and are not accepted evidence here.
   1800 s.
 - Evidence rule: no contaminated or zero-request-metrics tag is counted as an
   accepted arm.
-- Report-only closeout: no new SWE campaign, vLLM launch, Docker SWE worker, or
-  `scripts/run_codex_experiment.py` invocation was run for this report.
+- Reopened run policy: infra failures are fix-and-rerun events, not accepted
+  benchmark results. Any restarted tag must keep the same subset, B4/Fb temp
+  0.6 serving shape, x86 SWE execution, concurrency/wall settings, and evidence
+  standard as the accepted `lowmem088_mtp5_s1` arm.
+
+## Required Arm Matrix
+
+The reopened FR9 swap goal requires the following arm variants before enhanced
+tree work can consume this experiment as baseline evidence:
+
+| Required arm | Status | Required action / acceptance bar |
+|---|---|---|
+| `mtp=5`, `spines=1`, `gpu_memory_utilization=0.88` | accepted | Keep `fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z` as the clean baseline: 16/16 x86 tasks, all per-task request-metrics files nonzero, full campaign and agentic artifacts present. |
+| `mtp=5`, `spines=2`, `gpu_memory_utilization=0.88` | running | Current clean retry tag: `fr9_b4temp06_lowmem088_mtp5_s2_20260602T051155Z`. Accept only if all 16 tasks complete on x86 with nonzero per-task request metrics, complete summaries/traces, and a verified `independent_winner_trace.jsonl` with no winner-superset violations and copy-missing sum 0. |
+| `mtp=3`, `spines=2`, lowmem retry if strict 0.90 cannot prelaunch | required pending | Launch only after the `mtp=5`, `spines=2` arm is either accepted or invalidated for fix-and-rerun. Accept under the same x86, metrics, artifact, and winner-trace rules; strict 0.90 prelaunch memory failures are infra-blocks and do not count as SWE evidence. |
+
+Every accepted arm must include `driver.log`, top-level and nested
+`campaign_summary.json`, `predictions.jsonl`, `agentic_summary.json`,
+`dgx_steptrace.jsonl`, `per_req_spec_trace.jsonl`, per-task
+`runner_metadata.json`, per-task nonzero `vllm_request_metrics.jsonl`,
+`vllm_per_turn.json`, eval artifacts, and speed/overhead metrics comparable to
+the accepted `lowmem088_mtp5_s1` report. Multi-spine arms additionally require
+winner-trace validation.
 
 ## Decision Summary
 
