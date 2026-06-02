@@ -518,6 +518,8 @@ def _lumo_ir_copy_one_winner_state(
     missing = 0
     src_block_idx = int(src_block_idx)
     for dst_req_id in dst_req_ids:
+        if str(dst_req_id) == str(src_req_id):
+            continue
         dst_state = self.requests.get(dst_req_id)
         dst_block_idx = self.mamba_state_idx.get(dst_req_id)
         if dst_state is None or dst_block_idx is None:
@@ -603,7 +605,9 @@ def _lumo_ir_winner_update_states_after_model_execute(
     for primary, (winner_idx, winner_acc, indices) in winner_rows.items():
         winner_req_id = req_ids[winner_idx]
         copy_result = _lumo_ir_copy_one_winner_state(
-            self, winner_req_id, [req_ids[i] for i in indices], winner_acc)
+            self, winner_req_id,
+            [req_ids[i] for i in indices if req_ids[i] != winner_req_id],
+            winner_acc)
         counts = {str(_lumo_ir_spine_id(req_ids[i])): _lumo_ir_accept_count(rows_cpu[i])
                   for i in indices}
         trace_rows.append({
