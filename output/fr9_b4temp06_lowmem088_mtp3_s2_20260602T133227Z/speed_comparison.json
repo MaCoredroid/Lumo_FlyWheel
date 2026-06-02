@@ -1,0 +1,9 @@
+{
+  "baseline_decode_tps": 39.90650600912407,
+  "baseline_summary": "output/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/agentic_summary.json",
+  "current_decode_tps": 29.64114107045728,
+  "current_summary": "output/fr9_b4temp06_lowmem088_mtp3_s2_20260602T133227Z/agentic_summary.json",
+  "require_speed_win": true,
+  "speed_win": false,
+  "speedup": 0.7427646274940793
+}

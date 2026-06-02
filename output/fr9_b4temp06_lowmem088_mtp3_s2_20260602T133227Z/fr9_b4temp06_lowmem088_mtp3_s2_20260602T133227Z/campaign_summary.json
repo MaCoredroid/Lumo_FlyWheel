@@ -1,0 +1,36 @@
+{
+  "model_name_or_path": "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a",
+  "started_at": "2026-06-02T13:42:29Z",
+  "ended_at": "2026-06-02T16:45:24Z",
+  "instances_total": 16,
+  "verdict_counts": {
+    "resolved": 4,
+    "failed": 12
+  },
+  "failure_mode_counts": {
+    "tests_passed": 4,
+    "patch_apply_failed": 6,
+    "tests_failed": 6
+  },
+  "per_repo_total": {
+    "astropy/astropy": 16
+  },
+  "per_repo_resolved": {
+    "astropy/astropy": 4
+  },
+  "eval_wall_seconds": {
+    "p50": 44.678,
+    "p90": 67.144,
+    "p99": 78.363,
+    "min": 0.0,
+    "max": 78.363
+  },
+  "codex_wall_seconds": {
+    "p50": 1800.085,
+    "p90": 1800.117,
+    "p99": 1800.119,
+    "min": 948.261,
+    "max": 1800.119
+  },
+  "resolved_rate": 0.25
+}

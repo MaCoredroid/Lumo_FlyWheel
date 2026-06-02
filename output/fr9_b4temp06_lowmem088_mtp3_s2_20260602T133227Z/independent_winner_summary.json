@@ -1,0 +1,18 @@
+{
+  "avg_spine0_acc": 3.437650776029547,
+  "avg_winner_acc": 3.4887598471424606,
+  "copy_missing_sum": 0,
+  "examples": [],
+  "hidden_winner_suppressed_events": 0,
+  "malformed_rows": 0,
+  "parse_errors": 0,
+  "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp3_s2_20260602T133227Z/independent_winner_trace.jsonl",
+  "recovered_token_total": 4788,
+  "rows": 93682,
+  "superset_violations": 0,
+  "winner_nonzero_spine_events": 2703,
+  "winner_spines": {
+    "0": 90979,
+    "1": 2703
+  }
+}
