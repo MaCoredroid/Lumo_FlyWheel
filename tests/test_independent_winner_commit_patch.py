@@ -34,6 +34,16 @@ def test_independent_rows_syncs_hidden_sibling_scheduler_state():
     assert native_update_pos < sync_pos < filter_pos
 
 
+def test_independent_rows_upgrades_stale_scheduler_sentinel():
+    text = LAUNCHER.read_text()
+
+    assert "sync_sentinel = 'def _lumo_ir_sync_group_state(self):'" in text
+    assert "elif sentinel in text:" in text
+    assert "LUMO_INDEPENDENT_ROWS_SYNC_UPGRADE" in text
+    assert "upgraded independent rows scheduler sync patch" in text
+    assert "_lumo_ir_prev_update_from_output = Scheduler.update_from_output" in text
+
+
 def test_independent_winner_commit_uses_native_accept_counts_not_extra_gpu_scan():
     patch = _winner_commit_patch()
 

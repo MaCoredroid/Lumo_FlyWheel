@@ -68,6 +68,7 @@ as a valid correctness/stability result only, not as a speed-win result.
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T051155Z` | invalid partial evidence | hardened smoke capture passed 1359/1359, and the first four x86 tasks had nonzero metrics and commits, but the next batch had 0-byte request metrics; the hardened guard aborted at `astropy__astropy-13579`. Whole tag is invalid. |
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T055438Z` | invalid partial evidence | prelaunch, x86 identity, smoke capture, and early winner trace were clean; vLLM EngineCore then died at 2026-06-02 06:18:56 UTC with CUDA illegal memory access in `_lumo_ir_winner_update_states_after_model_execute`. Six tasks had nonzero metrics, then downstream tasks hit 502/connection-refused and zero metrics. Whole tag is invalid. |
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z` | invalid partial evidence | repaired accept-count scan and launched at required 0.88 util on x86; early winner trace was clean, but vLLM EngineCore died at 2026-06-02 06:40:29 UTC after hidden sibling scheduler state drifted (`num_scheduled_tokens` 6 for primary versus 11 for sibling). The tag aborted with missing request metrics and is invalid. |
+| `fr9_b4temp06_lowmem088_mtp5_s2_20260602T064744Z` | invalid pre-SWE relaunch | aborted during prelaunch source audit before SWE launch. The container still had the old independent-row scheduler sentinel and therefore skipped the new scheduler-state-sync body. No SWE metrics or benchmark evidence were produced. |
 | strict/lowmem `mtp=3`, `spines=2` | no valid campaign | only old strict prelaunch failures are documented; no local `fr9_b4temp06*mtp3*s2*` output directory exists. |
 
 ## Accepted Arm: `lowmem088_mtp5_s1`
@@ -322,6 +323,19 @@ salvage attempts below also failed the evidence rules.
   request state across hidden siblings after native output processing, so the
   next schedule cannot feed Mamba a sibling row with a different public token
   count than the primary row.
+
+`fr9_b4temp06_lowmem088_mtp5_s2_20260602T064744Z`:
+
+- The run was stopped during vLLM prelaunch before the request-metrics smoke
+  check and before any x86 SWE launch.
+- Source audit found `extra_scan_absent` but `sync_missing` in the live
+  container. The container already contained the original
+  `LUMO_INDEPENDENT_ROWS` scheduler sentinel, so the prelaunch patch incorrectly
+  skipped the newer scheduler-state-sync body.
+- This tag produced no SWE metrics and is not benchmark evidence. The required
+  repair is a version-aware prelaunch patch: if the old sentinel exists but
+  `_lumo_ir_sync_group_state` is absent, append a scheduler sync upgrade instead
+  of reporting the independent-row patch as already present.
 
 ## Invalidated June 1 Tags
 

@@ -202,8 +202,55 @@ import py_compile
 scheduler = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py')
 text = scheduler.read_text()
 sentinel = '# LUMO_INDEPENDENT_ROWS'
-if sentinel in text:
+sync_sentinel = 'def _lumo_ir_sync_group_state(self):'
+if sentinel in text and sync_sentinel in text:
     print('[TRACK-B-PRELAUNCH] independent rows scheduler patch already present')
+elif sentinel in text:
+    patch = r"""
+
+# LUMO_INDEPENDENT_ROWS_SYNC_UPGRADE: older containers may already carry the
+# original independent-row sentinel but miss the scheduler state collapse added
+# after the 2026-06-02 Mamba row-drift failure.
+_lumo_ir_prev_update_from_output = Scheduler.update_from_output
+
+def _lumo_ir_sync_group_state(self):
+    _lumo_ir_init(self)
+    for primary, members in list(self._lumo_ir_groups.items()):
+        primary_req = self.requests.get(primary)
+        if primary_req is None or primary_req.is_finished():
+            continue
+        for member in members:
+            if member == primary:
+                continue
+            clone_req = self.requests.get(member)
+            if clone_req is None or clone_req.is_finished():
+                continue
+            clone_req._output_token_ids.clear()
+            clone_req._output_token_ids.extend(primary_req.output_token_ids)
+            clone_req._all_token_ids.clear()
+            clone_req._all_token_ids.extend(primary_req.all_token_ids)
+            clone_req.spec_token_ids = list(primary_req.spec_token_ids)
+            clone_req.num_computed_tokens = int(primary_req.num_computed_tokens)
+            clone_req.num_output_placeholders = int(primary_req.num_output_placeholders)
+            clone_req.is_prefill_chunk = bool(primary_req.is_prefill_chunk)
+            clone_req.num_cached_tokens = int(primary_req.num_cached_tokens)
+            clone_req.num_external_computed_tokens = int(
+                primary_req.num_external_computed_tokens)
+            clone_req.block_hashes = list(primary_req.block_hashes)
+
+def _lumo_ir_update_from_output_sync_upgrade(
+    self, scheduler_output, model_runner_output):
+    outputs = _lumo_ir_prev_update_from_output(
+        self, scheduler_output, model_runner_output)
+    if _lumo_ir_enabled():
+        _lumo_ir_sync_group_state(self)
+    return outputs
+
+Scheduler.update_from_output = _lumo_ir_update_from_output_sync_upgrade
+"""
+    scheduler.write_text(text + patch)
+    py_compile.compile(str(scheduler), doraise=True)
+    print('[TRACK-B-PRELAUNCH] upgraded independent rows scheduler sync patch')
 else:
     patch = r"""
 
