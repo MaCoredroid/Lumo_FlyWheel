@@ -218,13 +218,24 @@ def require_request_metrics_live() -> None:
         f"local_before={local_before} remote_before={remote_before}"
     )
     remote_payload = json.dumps(json.dumps(payload))
-    r = ssh(
+    smoke_cmd = (
         "curl -sS -m 180 -H 'Content-Type: application/json' "
         "-H 'Authorization: Bearer EMPTY' -f -X POST "
         "http://127.0.0.1:8022/v1/responses "
-        f"--data-binary {remote_payload}",
-        timeout=210,
+        f"--data-binary {remote_payload}"
     )
+    r = subprocess.CompletedProcess([], returncode=1, stdout="", stderr="")
+    deadline = time.time() + 90
+    attempt = 0
+    while time.time() < deadline:
+        attempt += 1
+        r = ssh(smoke_cmd, timeout=210)
+        if r.returncode == 0:
+            break
+        if "Couldn't connect to server" not in (r.stderr or ""):
+            break
+        log(f"request-metrics smoke waiting for x86 proxy tunnel (attempt={attempt})")
+        time.sleep(3)
     if r.returncode != 0:
         sys.exit(
             "request-metrics x86-tunnel smoke request failed:\n"
