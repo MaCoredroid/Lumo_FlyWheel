@@ -173,6 +173,7 @@ def apply_config(
     log(f"relaunching vLLM config={config} mtp={mtp if config in ('E','F','Fb') else '-'} "
         f"row_mode={row_mode if config == 'Fb' else '-'} "
         f"spines={spines if config == 'Fb' else '-'} "
+        f"policy={os.environ.get('LUMO_IR_PUBLIC_COMMIT_POLICY', 'lossless') if config == 'Fb' and row_mode == 'independent' else '-'} "
         f"kv={kv_cache_dtype or 'bundle-default'} (model load ~ several min)")
     r = sh(cmd, timeout=VLLM_RELAUNCH_TIMEOUT_S)
     if "READY" not in (r.stdout + r.stderr):
@@ -422,6 +423,8 @@ def finalize_independent_winner(args, local: Path) -> None:
         "independent winner verified: "
         f"rows={data['rows']} viol={data['superset_violations']} "
         f"copy_missing_sum={data['copy_missing_sum']} "
+        f"suppressed={data.get('hidden_winner_suppressed_events', 0)} "
+        f"policy={','.join((data.get('policies') or {}).keys()) or '-'} "
         f"recovered_tokens={data['recovered_token_total']}"
     )
 
@@ -443,6 +446,26 @@ def finalize_agentic_summary(args, local: Path) -> Path:
     result = sh(cmd, cwd=str(REPO))
     if result.returncode != 0:
         sys.exit(f"agentic summary build failed:\n{result.stdout}{result.stderr}")
+    if args.config == "Fb" and args.row_mode == "independent" and args.spines > 1:
+        try:
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            payload["independent_rows_public_commit"] = {
+                "policy": os.environ.get("LUMO_IR_PUBLIC_COMMIT_POLICY", "lossless"),
+                "selector_enabled": False,
+                "lossless_public_stream": True,
+                "hidden_recovery_publication": "suppressed_no_lossless_selector",
+            }
+            winner_summary = local / "independent_winner_summary.json"
+            if winner_summary.exists():
+                payload["independent_winner_summary"] = json.loads(
+                    winner_summary.read_text(encoding="utf-8")
+                )
+            summary.write_text(
+                json.dumps(payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            sys.exit(f"agentic summary policy annotation failed: {exc}")
     log(f"agentic summary written: {summary.relative_to(REPO)}")
     return summary
 

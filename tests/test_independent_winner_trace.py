@@ -38,6 +38,30 @@ def test_summarize_independent_winner_trace_reports_suppressed_hidden_winners(tm
     trace = tmp_path / "winner.jsonl"
     trace.write_text(
         '{"winner_acc": 1, "winner_spine": 0, "candidate_winner_spine": 1, '
+        '"candidate_winner_acc": 3, "hidden_winner_suppressed_reason": "no_lossless_selector", '
+        '"policy": "lossless", "selector_enabled": false, "lossless_public_stream": true, '
+        '"counts": {"0": 1, "1": 3}, "copy": {"missing": 0}}\n',
+        encoding="utf-8",
+    )
+
+    summary = summarize(trace)
+
+    assert summary["superset_violations"] == 0
+    assert summary["lossless_suppressed_superset_events"] == 1
+    assert summary["hidden_winner_suppressed_events"] == 1
+    assert summary["hidden_recovery_opportunity_total"] == 2
+    assert summary["lossless_public_stream_events"] == 1
+    assert summary["non_lossless_public_stream_events"] == 0
+    assert summary["policies"] == {"lossless": 1}
+    assert summary["examples"][0]["reason"] == "hidden winner suppressed"
+
+
+def test_summarize_independent_winner_trace_still_reports_unlabeled_best_of_mismatch(
+    tmp_path: Path,
+) -> None:
+    trace = tmp_path / "winner.jsonl"
+    trace.write_text(
+        '{"winner_acc": 1, "winner_spine": 0, "candidate_winner_spine": 1, '
         '"candidate_winner_acc": 3, "hidden_winner_suppressed_reason": "stochastic_sampling", '
         '"counts": {"0": 1, "1": 3}, "copy": {"missing": 0}}\n',
         encoding="utf-8",
@@ -46,5 +70,5 @@ def test_summarize_independent_winner_trace_reports_suppressed_hidden_winners(tm
     summary = summarize(trace)
 
     assert summary["superset_violations"] == 1
-    assert summary["hidden_winner_suppressed_events"] == 1
-    assert summary["examples"][0]["reason"] == "winner below max spine count"
+    assert summary["lossless_suppressed_superset_events"] == 0
+    assert summary["non_lossless_public_stream_events"] == 1
