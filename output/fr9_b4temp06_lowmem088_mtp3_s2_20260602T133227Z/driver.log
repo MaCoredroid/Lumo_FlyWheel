@@ -70,3 +70,5 @@ Preparing worktree (detached HEAD b16c7d12c)
 HEAD is now at b16c7d12c Merge pull request #14988 from nstarman/cosmo-dont-register-abstract
 [2026-06-02T16:04:09Z]    astropy__astropy-14539: empty patch (agent_gave_up); retrying codex once
 [2026-06-02T16:11:21Z] <- astropy__astropy-14369 verdict=failed elapsed_total=3002.1s
+[2026-06-02T16:15:24Z]    astropy__astropy-14598: empty patch (agent_gave_up); retrying codex once
+[2026-06-02T16:31:01Z] <- astropy__astropy-14995 verdict=resolved elapsed_total=1845.8s
