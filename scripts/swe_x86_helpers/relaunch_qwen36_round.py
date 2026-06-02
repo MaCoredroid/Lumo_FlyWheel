@@ -493,18 +493,6 @@ def _lumo_ir_spine_id(req_id):
     except Exception:
         return 0
 
-def _lumo_ir_accept_count(row):
-    for i, tok in enumerate(row):
-        if int(tok) < 0:
-            return int(i)
-    return int(len(row))
-
-def _lumo_ir_accept_counts_cpu(output_token_ids):
-    # Keep the token matrix on GPU. vLLM's native state update only needs
-    # accepted-token counts; synchronizing the whole sampled-token tensor here
-    # can surface CUDA graph lifetime issues before native postprocess runs.
-    return output_token_ids.ge(0).sum(dim=1).detach().cpu().tolist()
-
 def _lumo_ir_copy_one_winner_state(
     self,
     src_req_id,
@@ -555,7 +543,8 @@ def _lumo_ir_copy_one_winner_state(
                     copy_bufs.sizes.np[off] = copy_spec.num_elements * state.element_size()
                     copy_bufs.offset = off + 1
                     copied += 1
-    _lumo_ir_mamba_utils.do_mamba_copy_block(copy_bufs)
+    if copy_bufs.offset > 0:
+        _lumo_ir_mamba_utils.do_mamba_copy_block(copy_bufs)
     return {"copied": int(copied), "missing": int(missing)}
 
 def _lumo_ir_winner_update_states_after_model_execute(
@@ -572,10 +561,16 @@ def _lumo_ir_winner_update_states_after_model_execute(
 
     num_rows = int(output_token_ids.shape[0])
     req_ids = [str(x) for x in list(self.input_batch.req_ids[:num_rows])]
-    accept_counts = [int(x) for x in _lumo_ir_accept_counts_cpu(output_token_ids)]
     groups = {}
     for idx, req_id in enumerate(req_ids):
         groups.setdefault(_lumo_ir_primary_id(req_id), []).append(idx)
+
+    _lumo_ir_orig_update_states_after_model_execute(
+        self, output_token_ids, scheduler_output)
+    accept_counts = [
+        int(x) for x in self.input_batch.num_accepted_tokens_cpu[:num_rows]
+    ]
+
     winner_rows = {}
     for primary, indices in groups.items():
         if len(indices) <= 1:
@@ -592,8 +587,7 @@ def _lumo_ir_winner_update_states_after_model_execute(
         winner_rows[primary] = (best_idx, best_acc, indices)
 
     if not winner_rows:
-        return _lumo_ir_orig_update_states_after_model_execute(
-            self, output_token_ids, scheduler_output)
+        return
 
     trace_rows = []
     for primary, (winner_idx, winner_acc, indices) in winner_rows.items():
@@ -605,8 +599,6 @@ def _lumo_ir_winner_update_states_after_model_execute(
                 self.input_batch.num_accepted_tokens_cpu[idx] = int(winner_acc)
             except Exception:
                 pass
-    _lumo_ir_orig_update_states_after_model_execute(
-        self, output_token_ids, scheduler_output)
 
     for primary, (winner_idx, winner_acc, indices) in winner_rows.items():
         winner_req_id = req_ids[winner_idx]

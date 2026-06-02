@@ -12,11 +12,12 @@ def _winner_commit_patch() -> str:
     return text[start:end]
 
 
-def test_independent_winner_commit_does_not_sync_full_token_matrix_to_cpu():
+def test_independent_winner_commit_uses_native_accept_counts_not_extra_gpu_scan():
     patch = _winner_commit_patch()
 
     assert "output_token_ids.detach().cpu().tolist()" not in patch
-    assert "output_token_ids.ge(0).sum(dim=1).detach().cpu().tolist()" in patch
+    assert "output_token_ids.ge(0).sum(dim=1)" not in patch
+    assert "self.input_batch.num_accepted_tokens_cpu[:num_rows]" in patch
 
 
 def test_independent_winner_commit_remains_enabled_and_commits_gpu_rows():
@@ -28,8 +29,16 @@ def test_independent_winner_commit_remains_enabled_and_commits_gpu_rows():
 
     mutation_pos = patch.index("output_token_ids[idx].copy_(winner_row)")
     native_update_pos = patch.index("_lumo_ir_orig_update_states_after_model_execute")
-    assert mutation_pos > native_update_pos
-    assert patch.index(
+    native_call_pos = patch.index(
         "_lumo_ir_orig_update_states_after_model_execute",
-        mutation_pos,
-    ) > mutation_pos
+        native_update_pos + 1,
+    )
+    assert native_call_pos < mutation_pos
+    assert patch.find("_lumo_ir_orig_update_states_after_model_execute", mutation_pos) == -1
+
+
+def test_independent_winner_commit_flushes_mamba_copy_only_when_buffer_nonempty():
+    patch = _winner_commit_patch()
+
+    assert "if copy_bufs.offset > 0:" in patch
+    assert "do_mamba_copy_block(copy_bufs)" in patch
