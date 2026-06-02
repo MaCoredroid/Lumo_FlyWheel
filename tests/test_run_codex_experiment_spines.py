@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 from pathlib import Path
 
@@ -167,3 +168,32 @@ def test_stream_capture_script_does_not_truncate_remote_mirror() -> None:
 
     assert "touch $DST" in script
     assert ": > $DST" not in script
+
+
+def test_required_speed_win_failure_writes_comparison_before_reporting_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(experiment, "REPO", tmp_path)
+    local = tmp_path / "output" / "tag"
+    local.mkdir(parents=True)
+    current = local / "agentic_summary.json"
+    baseline = tmp_path / "output" / "baseline" / "agentic_summary.json"
+    baseline.parent.mkdir(parents=True)
+    current.write_text(json.dumps({"steptrace": {"decode_tps": 10.0}}), encoding="utf-8")
+    baseline.write_text(json.dumps({"steptrace": {"decode_tps": 20.0}}), encoding="utf-8")
+
+    failed = experiment.finalize_speed_comparison(
+        argparse.Namespace(
+            speed_baseline_agentic_summary=str(baseline),
+            require_speed_win=True,
+        ),
+        local,
+        current,
+    )
+
+    payload = json.loads((local / "speed_comparison.json").read_text())
+    assert failed is True
+    assert payload["speedup"] == 0.5
+    assert payload["speed_win"] is False
+    assert payload["require_speed_win"] is True

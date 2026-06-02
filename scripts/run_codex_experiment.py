@@ -434,9 +434,9 @@ def finalize_agentic_summary(args, local: Path) -> Path:
     return summary
 
 
-def finalize_speed_comparison(args, local: Path, summary_path: Path) -> None:
+def finalize_speed_comparison(args, local: Path, summary_path: Path) -> bool:
     if not args.speed_baseline_agentic_summary:
-        return
+        return False
     baseline_path = Path(args.speed_baseline_agentic_summary)
     if not baseline_path.is_absolute():
         baseline_path = REPO / baseline_path
@@ -465,7 +465,8 @@ def finalize_speed_comparison(args, local: Path, summary_path: Path) -> None:
         f"speedup={payload['speedup']}"
     )
     if args.require_speed_win and not payload.get("speed_win"):
-        sys.exit(f"required speed win not met:\n{json.dumps(payload, indent=2)}")
+        return True
+    return False
 
 
 def task_verdict(meta: Path) -> tuple[str, float | None]:
@@ -692,9 +693,14 @@ def main() -> int:
             finalize_tree_superset(local)
             finalize_independent_winner(args, local)
             agentic_summary = finalize_agentic_summary(args, local)
-            finalize_speed_comparison(args, local, agentic_summary)
+            speed_failure = finalize_speed_comparison(args, local, agentic_summary)
             if not args.no_commit:
                 commit_final_artifacts(args, nsight_sqlite)
+            if speed_failure:
+                sys.exit(
+                    "required speed win not met; final evidence was written"
+                    " and committed before failing the run"
+                )
             log(f"suite finished; {len(committed)} task(s) committed")
             return 0
         time.sleep(args.poll_s)
