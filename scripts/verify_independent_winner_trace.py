@@ -28,6 +28,7 @@ def summarize(path: Path) -> dict:
     copy_missing_sum = 0
     recovered_token_total = 0
     winner_nonzero_spine_events = 0
+    hidden_winner_suppressed_events = 0
     winner_acc_total = 0
     spine0_acc_total = 0
     winner_spines: Counter[int] = Counter()
@@ -65,6 +66,19 @@ def summarize(path: Path) -> dict:
 
         copy = row.get("copy") or {}
         copy_missing_sum += int(copy.get("missing") or 0)
+        if row.get("hidden_winner_suppressed_reason"):
+            hidden_winner_suppressed_events += 1
+            if len(examples) < 5:
+                examples.append({
+                    "line": line_no,
+                    "reason": "hidden winner suppressed",
+                    "hidden_winner_suppressed_reason": row.get(
+                        "hidden_winner_suppressed_reason"),
+                    "candidate_winner_spine": row.get("candidate_winner_spine"),
+                    "candidate_winner_acc": row.get("candidate_winner_acc"),
+                    "winner_spine": winner_spine,
+                    "winner_acc": winner_acc,
+                })
         spine0_acc = int(counts.get("0", 0))
         recovered_token_total += max(0, winner_acc - spine0_acc)
         winner_acc_total += winner_acc
@@ -81,6 +95,7 @@ def summarize(path: Path) -> dict:
         "superset_violations": superset_violations,
         "copy_missing_sum": copy_missing_sum,
         "winner_nonzero_spine_events": winner_nonzero_spine_events,
+        "hidden_winner_suppressed_events": hidden_winner_suppressed_events,
         "recovered_token_total": recovered_token_total,
         "avg_winner_acc": (winner_acc_total / rows) if rows else None,
         "avg_spine0_acc": (spine0_acc_total / rows) if rows else None,
@@ -109,6 +124,7 @@ def main() -> int:
             f"rows={summary['rows']} "
             f"viol={summary['superset_violations']} "
             f"copy_missing_sum={summary['copy_missing_sum']} "
+            f"suppressed={summary['hidden_winner_suppressed_events']} "
             f"recovered={summary['recovered_token_total']}"
         )
 
@@ -118,6 +134,7 @@ def main() -> int:
         or summary["malformed_rows"] > 0
         or summary["superset_violations"] > 0
         or summary["copy_missing_sum"] > 0
+        or summary["hidden_winner_suppressed_events"] > 0
     )
     if args.require_recovery and (
         summary["winner_nonzero_spine_events"] <= 0

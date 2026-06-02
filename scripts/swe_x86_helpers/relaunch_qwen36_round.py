@@ -566,29 +566,6 @@ def _lumo_ir_spine_id(req_id):
     except Exception:
         return 0
 
-def _lumo_ir_request_temperature(self, primary_req_id):
-    req_state = self.requests.get(primary_req_id)
-    params = getattr(req_state, "sampling_params", None)
-    if params is None:
-        params = getattr(getattr(req_state, "request", None), "sampling_params", None)
-    try:
-        return float(getattr(params, "temperature"))
-    except Exception:
-        return None
-
-def _lumo_ir_allow_hidden_public_winner(self, primary_req_id):
-    # Hidden roots are separate target-sampling trajectories. At nonzero
-    # temperature, choosing the longest accepted hidden row changes the public
-    # distribution into best-of-spines sampling, which is not a superset of the
-    # s=1 model stream. Hidden public commits are therefore allowed only for
-    # deterministic sampling, unless an explicit research override is set.
-    if _lumo_ir_os2.environ.get("LUMO_IR_ALLOW_STOCHASTIC_HIDDEN_WINNER") == "1":
-        return True, "override"
-    temp = _lumo_ir_request_temperature(self, primary_req_id)
-    if temp is not None and temp <= 0.0:
-        return True, "deterministic"
-    return False, "stochastic_sampling"
-
 def _lumo_ir_copy_one_winner_state(
     self,
     src_req_id,
@@ -671,11 +648,6 @@ def _lumo_ir_winner_update_states_after_model_execute(
     for primary, indices in groups.items():
         if len(indices) <= 1:
             continue
-        primary_idx = indices[0]
-        for idx in indices:
-            if _lumo_ir_spine_id(req_ids[idx]) == 0:
-                primary_idx = idx
-                break
         best_idx = indices[0]
         best_acc = accept_counts[best_idx]
         for idx in indices[1:]:
@@ -688,11 +660,6 @@ def _lumo_ir_winner_update_states_after_model_execute(
         commit_idx = best_idx
         commit_acc = best_acc
         suppressed_reason = None
-        allow_hidden, policy = _lumo_ir_allow_hidden_public_winner(self, primary)
-        if _lumo_ir_spine_id(req_ids[best_idx]) != 0 and not allow_hidden:
-            commit_idx = primary_idx
-            commit_acc = accept_counts[primary_idx]
-            suppressed_reason = policy
         winner_rows[primary] = (
             commit_idx,
             commit_acc,
@@ -734,6 +701,7 @@ def _lumo_ir_winner_update_states_after_model_execute(
             "candidate_winner_spine": int(_lumo_ir_spine_id(req_ids[best_idx])),
             "candidate_winner_acc": int(best_acc),
             "hidden_winner_suppressed_reason": suppressed_reason,
+            "hidden_winner_public_policy": "serialized_reasoning_tool_parser",
             "counts": counts,
             "members": [req_ids[i] for i in indices],
             "copy": copy_result,
@@ -780,6 +748,73 @@ if hits:
         + ', '.join(hits[:20]))
 print('[TRACK-B-PRELAUNCH] no stale retired tree-experiment source patches found')
 LUMONOSTALETREEEXP
+'''
+
+_QWEN_REASONING_STREAM_BOUNDARY_BLOCK = r'''
+python3 - <<'LUMOQWENREASONBOUNDARY'
+from pathlib import Path
+
+path = Path('/usr/local/lib/python3.12/dist-packages/vllm/reasoning/basic_parsers.py')
+if not path.is_file():
+    raise RuntimeError(f'vLLM basic reasoning parser source missing: {path}')
+
+text = path.read_text(encoding='utf-8')
+sentinel = '# LUMO_QWEN_STRAY_REASONING_END_PUBLIC_GUARD'
+if sentinel in text:
+    print('[TRACK-B-PRELAUNCH] qwen reasoning stream boundary guard already present')
+else:
+    patch = r'''
+
+# LUMO_QWEN_STRAY_REASONING_END_PUBLIC_GUARD: vLLM's streaming thinking
+# parser normally treats a delta containing a reasoning end token as public
+# content when the parser state did not remember a matching start token. Under
+# independent-row winner commit, hidden rows can surface an accepted suffix such
+# as "</think>\n\n<tool_call>..." or "</think>\n\n<|host|>..." at the public row.
+# That suffix is still model protocol, so keep it on the normal reasoning/tool
+# parser path instead of exposing the raw closing marker to the client.
+_lumo_orig_extract_reasoning_streaming = (
+    BaseThinkingReasoningParser.extract_reasoning_streaming)
+
+def _lumo_extract_reasoning_streaming_boundary_safe(
+    self,
+    previous_text,
+    current_text,
+    delta_text,
+    previous_token_ids,
+    current_token_ids,
+    delta_token_ids,
+):
+    try:
+        has_start_state = (
+            self.start_token_id in previous_token_ids
+            or self.start_token_id in delta_token_ids
+        )
+        if self.end_token_id in delta_token_ids and not has_start_state:
+            end_index = delta_text.find(self.end_token)
+            if end_index >= 0:
+                reasoning = delta_text[:end_index] or None
+                content = delta_text[end_index + len(self.end_token):] or None
+                return DeltaMessage(reasoning=reasoning, content=content)
+    except Exception:
+        pass
+    return _lumo_orig_extract_reasoning_streaming(
+        self,
+        previous_text,
+        current_text,
+        delta_text,
+        previous_token_ids,
+        current_token_ids,
+        delta_token_ids,
+    )
+
+BaseThinkingReasoningParser.extract_reasoning_streaming = (
+    _lumo_extract_reasoning_streaming_boundary_safe)
+'''
+    path.write_text(text + patch, encoding='utf-8')
+    import py_compile
+    py_compile.compile(str(path), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied qwen reasoning stream boundary guard')
+LUMOQWENREASONBOUNDARY
 '''
 
 _QWEN36_FP8_CONFIG_FIX_BLOCK = r'''
@@ -5321,6 +5356,7 @@ def _prelaunch_for(
             + stale_fb_guard + dbg + "export LUMO_CUDAGRAPH_RUNTIME_TELEMETRY=1\n"
             + fb_env + mtp_draft_trace + base + _CUDAGRAPH_RUNTIME_TELEMETRY_BLOCK + _SPEC_TRACE_BLOCK
             + mtp_draft_trace_block
+            + (_QWEN_REASONING_STREAM_BOUNDARY_BLOCK if independent_rows else "")
             + (_INDEPENDENT_ROWS_BLOCK if independent_rows else "")
             + ((_TREE_PER_PATH_DRAFTER_BLOCK + tree_blocks) if tree else "")
             + (_TREE_GDN_PREFIX_STATE_BLOCK if fa_unique else "")

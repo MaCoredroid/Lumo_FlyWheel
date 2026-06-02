@@ -69,16 +69,22 @@ def test_independent_winner_commit_remains_enabled_and_commits_gpu_rows():
     assert patch.find("_lumo_ir_orig_update_states_after_model_execute", mutation_pos) == -1
 
 
-def test_independent_winner_commit_suppresses_stochastic_hidden_public_winner():
+def test_independent_winner_commit_keeps_hidden_public_winners_parser_guarded():
     patch = _winner_commit_patch()
+    text = LAUNCHER.read_text()
 
-    assert "def _lumo_ir_allow_hidden_public_winner" in patch
-    assert "LUMO_IR_ALLOW_STOCHASTIC_HIDDEN_WINNER" in patch
-    assert 'return False, "stochastic_sampling"' in patch
-    assert "commit_idx = primary_idx" in patch
-    assert "commit_acc = accept_counts[primary_idx]" in patch
+    assert "def _lumo_ir_allow_hidden_public_winner" not in patch
+    assert "LUMO_IR_ALLOW_STOCHASTIC_HIDDEN_WINNER" not in patch
+    assert 'return False, "stochastic_sampling"' not in patch
+    assert "commit_idx = primary_idx" not in patch
+    assert "commit_acc = accept_counts[primary_idx]" not in patch
     assert '"candidate_winner_spine"' in patch
     assert '"hidden_winner_suppressed_reason": suppressed_reason' in patch
+    assert '"hidden_winner_public_policy": "serialized_reasoning_tool_parser"' in patch
+    assert "LUMO_QWEN_STRAY_REASONING_END_PUBLIC_GUARD" in text
+    assert "BaseThinkingReasoningParser.extract_reasoning_streaming" in text
+    assert "self.end_token_id in delta_token_ids and not has_start_state" in text
+    assert "_QWEN_REASONING_STREAM_BOUNDARY_BLOCK if independent_rows else" in text
 
 
 def test_independent_winner_commit_flushes_mamba_copy_only_when_buffer_nonempty():
