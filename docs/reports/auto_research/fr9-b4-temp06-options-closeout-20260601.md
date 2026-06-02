@@ -30,7 +30,7 @@ invalid and are not accepted evidence here.
 | `fr9_b4temp06_mtp5_s1_20260601T230213Z` | invalid | stale June 1 tag; all 16 per-task request-metrics files are 0 bytes. Do not use its 1/16 stale summary as accepted evidence. |
 | `fr9_b4temp06_mtp5_s2_20260601T233000Z` | invalid | stale June 1 tag; all 16 per-task request-metrics files are 0 bytes. Do not use its stale summary as accepted evidence. |
 | strict `mtp=5`, `spines=2`, gpu memory util 0.90 | no valid campaign | prelaunch failed because free memory was below the 0.90 requested threshold. |
-| `fr9_b4temp06_lowmem088_mtp5_s2_20260602T033500Z` | invalid contaminated | first launched lowmem `spines=2` attempt; request metrics are 0 bytes for every inspected task, including four committed failed task rows and four later zero-metric task dirs. |
+| `fr9_b4temp06_lowmem088_mtp5_s2_20260602T033500Z` | invalid contaminated | first launched lowmem `spines=2` attempt; request metrics are 0 bytes for every inspected task, including three committed failed task rows and five other zero-metric task dirs. |
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T035600Z` | invalid partial evidence | first four tasks had nonzero metrics and commits, but the next batch had 0-byte metrics and triggered the missing-request-metrics guard. Whole tag is invalid. |
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z` | invalid contaminated | smoke capture passed 1378/1378, but the first four x86 SWE tasks all had 0-byte request metrics; capture stayed smoke-only. No `spines=2` SWE result is accepted. |
 | strict/lowmem `mtp=3`, `spines=2` | no valid campaign | only old strict prelaunch failures are documented; no local `fr9_b4temp06*mtp3*s2*` output directory exists. |
@@ -101,9 +101,11 @@ Capture parity and x86 evidence:
   `vllm_request_metrics_bytes`, ranging from 78,827 to 275,281 bytes.
 - Runner/eval metadata reports `eval_host=mark-Alienware-Aurora-ACT1250` and
   `arch=x86_64` for every accepted task checked locally and by read-only SSH.
-- The runner metadata records the Codex container names and
-  `model_id=qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a`; it does not record a
-  separate x86 Codex binary path.
+- The runner metadata records the Codex container names for all accepted tasks.
+  The campaign summary and most task eval reports record
+  `model_id=qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a`; three task eval
+  reports omit that field. The metadata does not record a separate x86 Codex
+  binary path.
 - `spines=1` has no `independent_winner_trace.jsonl`; that is expected because
   no multi-spine winner branch exists for this arm.
 
