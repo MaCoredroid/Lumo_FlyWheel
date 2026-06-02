@@ -1,7 +1,0 @@
-{
-  "track": "swe_bench",
-  "instance_id": "astropy__astropy-12907",
-  "outcome": "failed",
-  "failure_mode": "patch_apply_failed",
-  "arch": "x86_64"
-}
