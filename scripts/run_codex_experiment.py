@@ -410,6 +410,18 @@ def task_verdict(meta: Path) -> tuple[str, float | None]:
     return verdict, elapsed
 
 
+def require_swe_task_request_metrics(args, meta: Path) -> None:
+    if args.suite != "swe":
+        return
+    metrics = meta.parent / "vllm_request_metrics.jsonl"
+    if not metrics.is_file() or metrics.stat().st_size == 0:
+        sys.exit(
+            "SWE task finished without nonzero vLLM request metrics; "
+            "aborting before commit to avoid contaminated evidence: "
+            f"tag={args.exp_tag} task={meta.parent.name} path={metrics}"
+        )
+
+
 def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
     rel = f"output/{args.exp_tag}"
     paths = [f"{rel}/*/per_task/{task_id}", f"{rel}/per_task/{task_id}",
@@ -523,6 +535,7 @@ def main() -> int:
             verdict, elapsed = task_verdict(meta)
             if verdict in {"running", "?"}:
                 continue
+            require_swe_task_request_metrics(args, meta)
             joined = join_metrics(args, nsight_sqlite)
             if not args.no_commit:
                 commit_task(args, tid, verdict, joined)
@@ -536,6 +549,7 @@ def main() -> int:
             for meta in remaining:
                 tid = meta.parent.name
                 verdict, elapsed = task_verdict(meta)
+                require_swe_task_request_metrics(args, meta)
                 joined = join_metrics(args, nsight_sqlite)
                 if not args.no_commit:
                     commit_task(args, tid, verdict, joined)
