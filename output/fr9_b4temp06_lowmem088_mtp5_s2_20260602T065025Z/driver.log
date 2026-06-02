@@ -1,0 +1,24 @@
+=== [2026-06-02T06:59:45Z] dataset=princeton-nlp/SWE-bench_Verified tag=fr9_b4temp06_lowmem088_mtp5_s2_20260602T065025Z n=16 concurrency=4 ===
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z/fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z/per_task/astropy__astropy-13977/workspace
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z/fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z/per_task/astropy__astropy-14096/workspace
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z/fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z/per_task/astropy__astropy-14182/workspace
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z/fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z/per_task/astropy__astropy-14309/workspace
+[2026-06-02T06:59:47Z] -> astropy__astropy-12907
+[2026-06-02T06:59:47Z] -> astropy__astropy-13033
+[2026-06-02T06:59:47Z] -> astropy__astropy-13236
+[2026-06-02T06:59:47Z] -> astropy__astropy-13398
+Preparing worktree (detached HEAD d16bfe05a)
+Preparing worktree (detached HEAD 298ccb478)
+Preparing worktree (detached HEAD 6ed769d58)
+Preparing worktree (detached HEAD 6500928dc)
+HEAD is now at 298ccb478 Merge pull request #13031 from meeseeksmachine/auto-backport-of-pr-13027-on-main
+HEAD is now at d16bfe05a Merge pull request #12900 from Cadair/custom_compound_model
+HEAD is now at 6ed769d58 Merge pull request #13228 from astrofrog/fix-spectralcoord-no-target
+HEAD is now at 6500928dc Merge pull request #13502 from taldcroft/better-iers-docs
+[2026-06-02T07:00:59Z]    astropy__astropy-13398: empty patch (agent_gave_up); retrying codex once
+[2026-06-02T07:05:16Z]    astropy__astropy-13033: empty patch (agent_gave_up); retrying codex once
+[2026-06-02T07:05:50Z]    astropy__astropy-13236: empty patch (agent_gave_up); retrying codex once
+[2026-06-02T07:07:22Z] <- astropy__astropy-13398 verdict=failed elapsed_total=455.3s
+[2026-06-02T07:07:22Z] -> astropy__astropy-13453
+Preparing worktree (detached HEAD 19cc80471)
+HEAD is now at 19cc80471 Merge pull request #13444 from eerovaher/unit-format-docs
