@@ -1,0 +1,38 @@
+=== [2026-06-02T05:23:19Z] dataset=princeton-nlp/SWE-bench_Verified tag=fr9_b4temp06_lowmem088_mtp5_s2_20260602T051155Z n=16 concurrency=4 ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z/fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z/per_task/astropy__astropy-13453/workspace
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z/fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z/per_task/astropy__astropy-13579/workspace
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z/fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z/per_task/astropy__astropy-13977/workspace
+[startup-gc] removing stale worktree: /home/mark/swe_conc_probe/output/fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z/fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z/per_task/astropy__astropy-14096/workspace
+[2026-06-02T05:23:21Z] -> astropy__astropy-12907
+[2026-06-02T05:23:21Z] -> astropy__astropy-13033
+[2026-06-02T05:23:21Z] -> astropy__astropy-13236
+[2026-06-02T05:23:21Z] -> astropy__astropy-13398
+Preparing worktree (detached HEAD d16bfe05a)
+Preparing worktree (detached HEAD 6ed769d58)
+Preparing worktree (detached HEAD 298ccb478)
+Preparing worktree (detached HEAD 6500928dc)
+HEAD is now at 6500928dc Merge pull request #13502 from taldcroft/better-iers-docs
+HEAD is now at 6ed769d58 Merge pull request #13228 from astrofrog/fix-spectralcoord-no-target
+HEAD is now at d16bfe05a Merge pull request #12900 from Cadair/custom_compound_model
+HEAD is now at 298ccb478 Merge pull request #13031 from meeseeksmachine/auto-backport-of-pr-13027-on-main
+[2026-06-02T05:24:03Z]    astropy__astropy-12907: empty patch (agent_gave_up); retrying codex once
+[2026-06-02T05:24:19Z]    astropy__astropy-13033: empty patch (agent_gave_up); retrying codex once
+[2026-06-02T05:28:30Z]    astropy__astropy-13398: empty patch (agent_gave_up); retrying codex once
+[2026-06-02T05:28:30Z]    astropy__astropy-13236: empty patch (agent_gave_up); retrying codex once
+[2026-06-02T05:28:55Z] <- astropy__astropy-13033 verdict=failed elapsed_total=334.2s
+[2026-06-02T05:28:55Z] -> astropy__astropy-13453
+Preparing worktree (detached HEAD 19cc80471)
+[2026-06-02T05:28:55Z] <- astropy__astropy-12907 verdict=failed elapsed_total=334.3s
+[2026-06-02T05:28:55Z] -> astropy__astropy-13579
+Preparing worktree (detached HEAD 0df94ff70)
+HEAD is now at 19cc80471 Merge pull request #13444 from eerovaher/unit-format-docs
+HEAD is now at 0df94ff70 Merge pull request #13574 from pllim/rm-corpus-404
+[2026-06-02T05:28:56Z] <- astropy__astropy-13398 verdict=failed elapsed_total=334.7s
+[2026-06-02T05:28:56Z] -> astropy__astropy-13977
+Preparing worktree (detached HEAD 5250b2442)
+HEAD is now at 5250b2442 Merge pull request #14164 from ayshih/grid_performance
+[2026-06-02T05:28:57Z] <- astropy__astropy-13236 verdict=failed elapsed_total=336.1s
+[2026-06-02T05:28:57Z] -> astropy__astropy-14096
+Preparing worktree (detached HEAD 1a4462d72)
+HEAD is now at 1a4462d72 Merge pull request #14102 from zoghbi-a/fix-votable-validator-issue-#14099
