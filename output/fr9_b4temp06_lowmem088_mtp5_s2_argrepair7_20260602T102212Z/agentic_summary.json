@@ -1,0 +1,165 @@
+{
+  "acceptance": {
+    "acc_dist": {
+      "0": 11058,
+      "1": 12390,
+      "2": 10446,
+      "3": 8610,
+      "4": 6958,
+      "5": 86236
+    },
+    "accept_per_draft": 0.7636427950301404,
+    "accept_per_event": 3.8182139751507025,
+    "accepted_tokens": 518124,
+    "draft_tokens": 678490
+  },
+  "end_ts": 1780406690.0,
+  "exp_dir": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z",
+  "label": "fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z",
+  "node_count": 2,
+  "nsight": {
+    "available": false
+  },
+  "spec_events": 135698,
+  "start_ts": 1780396295.0,
+  "steptrace": {
+    "accept_per_draft_steptrace": 0.7636288599012455,
+    "accept_per_event_steptrace": 3.8181442995062276,
+    "accepted_tokens": 518084.0,
+    "decode_tps": 31.439563059566577,
+    "draft_events": 135690.0,
+    "draft_tokens": 678450.0,
+    "engine_steps": 19911.0,
+    "generation_tokens": 326965.0,
+    "mean_engine_step_ms_wall": 522.3140304041054,
+    "mean_event_ms_wall": 76.64378111412886,
+    "mean_gpu_util": 95.55670567056706,
+    "request_decode_time_s": 18558.181172920857,
+    "request_prefill_time_s": 4191.816727103898,
+    "window_s": 10399.794659376144
+  },
+  "tasks": {
+    "end_ts": 1780406690.0,
+    "resolved_count": 4,
+    "resolved_rate": 0.25,
+    "task_count": 16,
+    "tasks": {
+      "astropy__astropy-12907": {
+        "ended_at": "2026-06-02T11:02:32Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-12907/runner_metadata.json",
+        "resolved": true,
+        "started_at": "2026-06-02T10:31:37Z",
+        "verdict": "resolved"
+      },
+      "astropy__astropy-13033": {
+        "ended_at": "2026-06-02T10:59:30Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-13033/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T10:31:37Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-13236": {
+        "ended_at": "2026-06-02T11:08:58Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-13236/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T10:31:37Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-13398": {
+        "ended_at": "2026-06-02T11:08:21Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-13398/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T10:31:37Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-13453": {
+        "ended_at": "2026-06-02T11:54:48Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-13453/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T10:59:30Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-13579": {
+        "ended_at": "2026-06-02T11:45:21Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-13579/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T11:02:32Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-13977": {
+        "ended_at": "2026-06-02T11:54:07Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-13977/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T11:08:21Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-14096": {
+        "ended_at": "2026-06-02T11:33:14Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-14096/runner_metadata.json",
+        "resolved": true,
+        "started_at": "2026-06-02T11:08:58Z",
+        "verdict": "resolved"
+      },
+      "astropy__astropy-14182": {
+        "ended_at": "2026-06-02T12:34:12Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-14182/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T11:33:14Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-14309": {
+        "ended_at": "2026-06-02T12:16:06Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-14309/runner_metadata.json",
+        "resolved": true,
+        "started_at": "2026-06-02T11:45:21Z",
+        "verdict": "resolved"
+      },
+      "astropy__astropy-14365": {
+        "ended_at": "2026-06-02T12:24:49Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-14365/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T11:54:07Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-14369": {
+        "ended_at": "2026-06-02T12:33:09Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-14369/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T11:54:48Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-14508": {
+        "ended_at": "2026-06-02T13:10:23Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-14508/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T12:16:06Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-14539": {
+        "ended_at": "2026-06-02T13:24:50Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-14539/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T12:24:49Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-14598": {
+        "ended_at": "2026-06-02T13:14:56Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-14598/runner_metadata.json",
+        "resolved": false,
+        "started_at": "2026-06-02T12:33:09Z",
+        "verdict": "failed"
+      },
+      "astropy__astropy-14995": {
+        "ended_at": "2026-06-02T13:04:57Z",
+        "path": "/home/mark/shared/lumoFlyWheel/output/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z/per_task/astropy__astropy-14995/runner_metadata.json",
+        "resolved": true,
+        "started_at": "2026-06-02T12:34:12Z",
+        "verdict": "resolved"
+      }
+    }
+  },
+  "tree_accept_paths": {
+    "available": false,
+    "events": 0
+  }
+}
