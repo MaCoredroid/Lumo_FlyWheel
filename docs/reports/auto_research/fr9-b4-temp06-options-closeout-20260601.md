@@ -1,189 +1,228 @@
-# FR9 B4 Temp 0.6 Options Closeout - 2026-06-01
+# FR9 Swap / B4 Temp 0.6 Independent-Row Closeout
 
-Status: **BLOCKED_NEEDS_USER_HELP**.
+Status: **IMPLEMENTED_VERIFIED_AND_PUSHED**.
 
-I ran the requested FR9 independent-row option sweep sequentially until arm 3
-could not pass the vLLM prelaunch gate under the required settings. Arms 1 and 2
-have accepted artifacts. Arm 3 failed three fresh-tag relaunch attempts before
-the SWE driver launched, with the same vLLM free-memory threshold failure. Arms
-4 and 5 were not run because the matrix was required to be sequential and arm 3
-never produced a valid campaign.
+This file replaces the stale June 1 closeout. The earlier version marked
+`fr9_b4temp06_mtp5_s1_20260601T230213Z` and
+`fr9_b4temp06_mtp5_s2_20260601T233000Z` as clean. That was wrong after the
+later capture audit: every per-task `vllm_request_metrics.jsonl` under both
+old tags is zero bytes, so capture did not advance into SWE. Those tags are
+invalid and are not accepted evidence here.
 
-## Fixed Settings
+## Requested Scope
 
-- Subset: `docs/reports/auto_research/swe-bench-concprobe16-verified-instances-20260522.json`
-- Subset size: 16 exact `instance_ids`
-- Suite: `swe`
-- Concurrency: 4
-- Temperature: 0.6
-- Agent wall: 1800 s
-- Eval timeout: 1800 s
-- Nsight: off
-- Config: `Fb`
-- Row mode: `independent`
-- No `--limit`
-- No `--no-commit`
-- `LUMO_PROXY_FORCE_TOP_P` was unset before launch attempts
-- `LUMO_SUDO_PASSWORD` was sourced from `.lumo.local.env`
+- Track: FR9 Swap, independent-row MTP/spine tuning before enhanced tree work.
+- Serving config: B4/Fb, `row_mode=independent`, `temp=0.6`.
+- Dataset: the same SWE-bench Verified 16-instance subset:
+  `docs/reports/auto_research/swe-bench-concprobe16-verified-instances-20260522.json`.
+- SWE shape: x86 SWE box, `concurrency=4`, agent wall 1800 s, eval timeout
+  1800 s.
+- Evidence rule: no contaminated or zero-request-metrics tag is counted as an
+  accepted arm.
+- Report-only closeout: no new SWE campaign, vLLM launch, Docker SWE worker, or
+  `scripts/run_codex_experiment.py` invocation was run for this report.
 
-Canonical command shape used:
+## Decision Summary
 
-```bash
-source .lumo.local.env 2>/dev/null
-export LUMO_SUDO_PASSWORD
-unset LUMO_PROXY_FORCE_TOP_P
-SUB=docs/reports/auto_research/swe-bench-concprobe16-verified-instances-20260522.json
-COMMON="--suite swe --subset $SUB --concurrency 4 --temp 0.6 --agent-wall-s 1800 --eval-timeout-s 1800 --nsight off"
-.venv/bin/python scripts/run_codex_experiment.py \
-  --exp-tag <tag> --config Fb --row-mode independent --mtp <M> --spines <S> --apply-config $COMMON
-```
+| Arm / tag | Decision | Result evidence |
+|---|---|---|
+| `fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z` | accepted clean arm | lowmem088, `mtp=5`, `spines=1`, B4/Fb, temp 0.6, x86 SWE; 8/16 resolved, 8/16 failed; all 16 runner metadata files have nonzero request-metrics bytes. |
+| `fr9_b4temp06_mtp5_s1_20260601T230213Z` | invalid | stale June 1 tag; all 16 per-task request-metrics files are 0 bytes. Do not use its 1/16 stale summary as accepted evidence. |
+| `fr9_b4temp06_mtp5_s2_20260601T233000Z` | invalid | stale June 1 tag; all 16 per-task request-metrics files are 0 bytes. Do not use its stale summary as accepted evidence. |
+| strict `mtp=5`, `spines=2`, gpu memory util 0.90 | no valid campaign | prelaunch failed because free memory was below the 0.90 requested threshold. |
+| `fr9_b4temp06_lowmem088_mtp5_s2_20260602T033500Z` | invalid contaminated | first launched lowmem `spines=2` attempt; request metrics are 0 bytes for every inspected task, including four committed failed task rows and four later zero-metric task dirs. |
+| `fr9_b4temp06_lowmem088_mtp5_s2_20260602T035600Z` | invalid partial evidence | first four tasks had nonzero metrics and commits, but the next batch had 0-byte metrics and triggered the missing-request-metrics guard. Whole tag is invalid. |
+| `fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z` | invalid contaminated | smoke capture passed 1378/1378, but the first four x86 SWE tasks all had 0-byte request metrics; capture stayed smoke-only. No `spines=2` SWE result is accepted. |
+| strict/lowmem `mtp=3`, `spines=2` | no valid campaign | only old strict prelaunch failures are documented; no local `fr9_b4temp06*mtp3*s2*` output directory exists. |
 
-## Campaign Results
+## Accepted Arm: `lowmem088_mtp5_s1`
 
-| Arm | Decision | Exp tag | instances_total | Verdict counts | resolved_rate | Summary commit |
-|---|---:|---|---:|---|---:|---|
-| mtp=5, spines=1 | clean | `fr9_b4temp06_mtp5_s1_20260601T230213Z` | 16 | failed=15, resolved=1 | 0.0625 | `a31ae394` |
-| mtp=5, spines=2 | invalid prelaunch, then clean rerun | `fr9_b4temp06_mtp5_s2_20260601T233000Z` | 16 | failed=16 | 0.0 | `daadbe38` |
-| mtp=3, spines=2 | blocked | none accepted | missing | missing | missing | none |
-| mtp=2, spines=2 | not run | blocked by sequential arm 3 gate | missing | missing | missing | none |
-| mtp=2, spines=3 | not run | blocked by sequential arm 3 gate | missing | missing | missing | none |
+Tag:
+`fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z`.
 
-The invalid arm-2 prelaunch tag was `fr9_b4temp06_mtp5_s2_20260601T232538Z`.
-It produced no SWE driver output and no accepted metrics.
+Artifacts verified:
 
-The blocked arm-3 attempts were:
+- `output/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/driver.log`
+- `output/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/campaign_summary.json`
+- `output/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/agentic_summary.json`
+- `output/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/dgx_steptrace.jsonl`
+- `output/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/per_req_spec_trace.jsonl`
+- `output/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/campaign_summary.json`
+- `output/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/predictions.jsonl`
+
+Result counts from `campaign_summary.json`:
+
+| Metric | Value |
+|---|---:|
+| instances_total | 16 |
+| resolved | 8 |
+| failed | 8 |
+| resolved_rate | 0.5 |
+| failure_mode_counts | tests_passed=8, tests_failed=5, patch_apply_failed=3 |
+| codex_wall_seconds p50 / p90 / p99 / min / max | 1800.102 / 1800.136 / 1800.159 / 674.202 / 1800.159 |
+| eval_wall_seconds p50 / p90 / p99 / min / max | 51.861 / 65.036 / 67.204 / 0.0 / 67.204 |
+| campaign window | 2026-06-02T00:59:17Z to 2026-06-02T03:24:28Z |
+
+Task verdicts:
+
+| Resolved | Failed |
+|---|---|
+| `astropy__astropy-12907` | `astropy__astropy-13033` |
+| `astropy__astropy-13453` | `astropy__astropy-13236` |
+| `astropy__astropy-14096` | `astropy__astropy-13398` |
+| `astropy__astropy-14309` | `astropy__astropy-13579` |
+| `astropy__astropy-14365` | `astropy__astropy-13977` |
+| `astropy__astropy-14508` | `astropy__astropy-14182` |
+| `astropy__astropy-14539` | `astropy__astropy-14369` |
+| `astropy__astropy-14995` | `astropy__astropy-14598` |
+
+Agentic/spec summary from `agentic_summary.json`:
+
+| Metric | Value |
+|---|---:|
+| spec_events | 86,355 |
+| accepted_tokens | 261,362 |
+| draft_tokens | 431,775 |
+| accept_per_event | 3.026599502055469 |
+| accept_per_draft | 0.6053199004110937 |
+| steptrace generation_tokens | 347,914 |
+| steptrace decode_tps | 39.90650600912407 |
+| steptrace mean_gpu_util | 95.5345474022496 |
+| steptrace request_decode_time_s | 23,575.919428933877 |
+| steptrace request_prefill_time_s | 2,539.956661415752 |
+| steptrace window_s | 8,718.227547168732 |
+| tree_accept_paths | unavailable |
+
+Capture parity and x86 evidence:
+
+- `per_req_spec_trace.jsonl`: 86,475 lines.
+- `dgx_steptrace.jsonl`: 49,909 lines.
+- All 16 accepted runner metadata files report nonzero
+  `vllm_request_metrics_bytes`, ranging from 78,827 to 275,281 bytes.
+- Runner/eval metadata reports `eval_host=mark-Alienware-Aurora-ACT1250` and
+  `arch=x86_64` for every accepted task checked locally and by read-only SSH.
+- The runner metadata records the Codex container names and
+  `model_id=qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a`; it does not record a
+  separate x86 Codex binary path.
+- `spines=1` has no `independent_winner_trace.jsonl`; that is expected because
+  no multi-spine winner branch exists for this arm.
+
+Accepted task commits:
+
+`234c393d`, `b6ce92ef`, `b9131b27`, `7de1f6b6`, `731c0bcd`,
+`7f5e661c`, `251b26ca`, `2eda1414`, `343a18ca`, `f7b5d156`,
+`fc3206ed`, `c557aa7b`, `ec91eeb3`, `0ded18e1`, `c34bf75d`,
+`83ac64c4`.
+
+Summary commit for this accepted arm: `e83acde8`.
+
+## Invalidated `spines=2` Evidence
+
+No `spines=2` SWE result is accepted.
+
+Strict `mtp=5`, `spines=2` at gpu memory util 0.90 failed before a campaign
+because vLLM did not satisfy the required free-memory threshold. The lowmem088
+salvage attempts below also failed the evidence rules.
+
+`fr9_b4temp06_lowmem088_mtp5_s2_20260602T033500Z`:
+
+- `driver.log` launched 16 tasks at `concurrency=4`.
+- Local request-metrics files are 0 bytes for all eight task dirs inspected:
+  first batch `12907`, `13033`, `13236`, `13398` and second batch `13453`,
+  `13579`, `13977`, `14096`.
+- Git contains three committed failed task rows for this contaminated tag:
+  `fcf4ef55`, `9803cd9f`, `b55149a6`. They are not accepted evidence.
+- `independent_winner_trace.jsonl` has 11 lines, but the SWE capture is
+  contaminated, so winner trace content cannot make the arm valid.
+
+`fr9_b4temp06_lowmem088_mtp5_s2_20260602T035600Z`:
+
+- The first four x86 tasks had nonzero request metrics:
+  `12907`, `13033`, `13236`, `13398` each had 34,204-byte
+  `vllm_request_metrics.jsonl` files.
+- Those first four failed tasks were committed as `0768d304`, `984d679f`,
+  `59a796a8`, and `a1b3eccb`.
+- The next batch `13453`, `13579`, `13977`, `14096` had 0-byte request metrics,
+  triggering the guard; whole tag is invalid partial evidence.
+- Commit `08efa312` records the invalid abort in `driver.log`.
+- Commit `d2c24374` records the attempted self-copy fix in independent winner
+  state sync.
+- `independent_winner_trace.jsonl` has 3,504 lines, but this tag is not a valid
+  SWE result because capture failed mid-campaign.
+
+`fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z`:
+
+- `/tmp/fr9_b4temp06_lowmem088_mtp5_s2_20260602T041200Z_runner.log` records
+  request-metrics smoke parity: `local_before=0 remote_before=0`, then
+  `local_after=1378 remote_after=1378`.
+- The same runner log aborts before commit when task
+  `astropy__astropy-12907` finishes with 0-byte request metrics.
+- Local and remote checks both show the first four SWE tasks
+  `12907`, `13033`, `13236`, `13398` had 0-byte
+  `vllm_request_metrics.jsonl` files.
+- Capture therefore stayed smoke-only at 1378/1378; no SWE request metrics were
+  accepted for this tag.
+- Handoff evidence identifies the EngineCore root cause in
+  `/tmp/lumo-l0c-fp8-cutlass-run30-logs/vllm_qwen3.6-27b.log` around lines
+  329-368: `torch.AcceleratorError` / CUDA illegal memory access in
+  `_lumo_ir_winner_update_states_after_model_execute` at
+  `output_token_ids.detach().cpu().tolist()`. At this closeout, the local file
+  at that exact path is 0 bytes, so the crash text is recorded as handoff/root
+  cause evidence rather than locally re-quoted log evidence.
+- `independent_winner_trace.jsonl` has 13 lines, but the tag is invalid.
+
+## Invalidated June 1 Tags
+
+The stale June 1 report summaries remain useful only as examples of why the
+zero-metric guard was needed.
+
+| Tag | Stale summary | Audit result |
+|---|---|---|
+| `fr9_b4temp06_mtp5_s1_20260601T230213Z` | 16 tasks, 1 resolved, 15 failed | invalid: all 16 per-task request-metrics files are 0 bytes. |
+| `fr9_b4temp06_mtp5_s2_20260601T233000Z` | 16 tasks, 0 resolved, 16 failed | invalid: all 16 per-task request-metrics files are 0 bytes. |
+
+Do not compare these stale counts against the accepted `lowmem088_mtp5_s1`
+result.
+
+## `mtp3/s2` Status
+
+No valid `mtp=3`, `spines=2` campaign exists. The only documented attempts are
+the old strict prelaunch failures:
 
 - `fr9_b4temp06_mtp3_s2_20260601T234537Z`
 - `fr9_b4temp06_mtp3_s2_20260601T234919Z`
 - `fr9_b4temp06_mtp3_s2_20260601T235241Z`
 
-All three produced no local or remote SWE output directories.
+The stale report recorded those as vLLM prelaunch memory failures and no local
+`output/fr9_b4temp06*mtp3*s2*` directory exists. No lowmem `mtp3/s2` campaign
+was launched for this report.
 
-## Artifact Paths
+## Honesty Audit
 
-Arm 1:
+- Zero-metric guard commits are on `main`:
+  `9b2ddb67` (`Abort SWE commit on missing request metrics`) and `0ce9cf4e`
+  (`Stop SWE campaign on missing request metrics`).
+- The report did not launch any new SWE/vLLM campaign. It used read-only
+  inspection of git history, local artifacts, `/tmp` logs, process state, and
+  remote x86 metadata over SSH.
+- A process check for active `python ... scripts/run_codex_experiment.py`,
+  `run_swe_bench_q36_a.py`, `vllm serve`, `EngineCore`, and Docker SWE worker
+  commands found no actual active runner process after excluding the current
+  reporting Codex prompt and an existing OOM guard shell.
+- Existing tmux/OOM-guard infrastructure was observed but not started,
+  restarted, or modified.
+- The local `qwen3.6` vLLM crash log path named in the handoff is currently
+  0 bytes, so this report does not pretend to have re-read the crash traceback
+  from that file. The invalidation does not depend on the traceback: zero SWE
+  request metrics are sufficient to reject the `spines=2` tags.
 
-- `output/fr9_b4temp06_mtp5_s1_20260601T230213Z/driver.log`
-- `output/fr9_b4temp06_mtp5_s1_20260601T230213Z/campaign_summary.json`
-- `output/fr9_b4temp06_mtp5_s1_20260601T230213Z/agentic_summary.json`
-- `output/fr9_b4temp06_mtp5_s1_20260601T230213Z/per_req_spec_trace.jsonl`
-- `output/fr9_b4temp06_mtp5_s1_20260601T230213Z/dgx_steptrace.jsonl`
-- `output/fr9_b4temp06_mtp5_s1_20260601T230213Z/fr9_b4temp06_mtp5_s1_20260601T230213Z/per_task/`
+## Closeout
 
-Arm 2:
+Accepted evidence is limited to
+`fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z`: `mtp=5`, `spines=1`,
+lowmem088, B4/Fb, independent row mode, temp 0.6, SWE Verified 16 on the x86
+box, 8/16 resolved.
 
-- `output/fr9_b4temp06_mtp5_s2_20260601T233000Z/driver.log`
-- `output/fr9_b4temp06_mtp5_s2_20260601T233000Z/campaign_summary.json`
-- `output/fr9_b4temp06_mtp5_s2_20260601T233000Z/agentic_summary.json`
-- `output/fr9_b4temp06_mtp5_s2_20260601T233000Z/per_req_spec_trace.jsonl`
-- `output/fr9_b4temp06_mtp5_s2_20260601T233000Z/dgx_steptrace.jsonl`
-- `output/fr9_b4temp06_mtp5_s2_20260601T233000Z/independent_winner_trace.jsonl`
-- `output/fr9_b4temp06_mtp5_s2_20260601T233000Z/fr9_b4temp06_mtp5_s2_20260601T233000Z/per_task/`
-
-## Decode And Spec Summaries
-
-Summarizer command used, omitting `--nodes` because node-count semantics were
-not known and should not be guessed:
-
-```bash
-.venv/bin/python scripts/summarize_round_f_agentic_arm.py \
-  --exp-dir output/<tag> --label <label> --out output/<tag>/agentic_summary.json
-```
-
-| Arm | spec_events | accepted_tokens | draft_tokens | accept/event | accept/draft | generation_tokens | decode_tps | mean_gpu_util |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| mtp5_s1 | 6990 | 18430 | 34950 | 2.6366 | 0.5273 | 25397 | 34.3035 | 89.9916 |
-| mtp5_s2 | 467 | 1305 | 2335 | 2.7944 | 0.5589 | 891 | 6.5691 | 68.8409 |
-
-These summaries are sliced by the driver start/end timestamps recorded in
-`driver.log`. The arm-2 decode window is much shorter because all 16 tasks failed
-quickly. It is not a valid speed comparison against arm 1.
-
-## Independent Winner Trace Invariants
-
-| Arm | Trace status | winner_events | winner_spine_counts | superset_violations | missing_state_copy_sum | winner_acc_sum | spine0_acc_sum |
-|---|---|---:|---|---:|---:|---:|---:|
-| mtp5_s1 | absent as expected for `spines=1` | n/a | n/a | n/a | n/a | n/a | n/a |
-| mtp5_s2 | present | 253 | spine0=243, spine1=10 | 0 | 0 | 908 | 889 |
-
-For `mtp5_s2`, the winner trace accepted 19 more tokens than spine 0 over the
-driver-window events. Superset violations were computed by checking
-`winner_acc >= max(counts.values())` for each winner event. Missing state-copy
-sum was computed from `copy.missing`.
-
-## Contamination Audit
-
-| Arm / attempt | Decision | Evidence |
-|---|---|---|
-| `fr9_b4temp06_mtp5_s1_20260601T230213Z` | clean | Preflight: clean `main`, no local/remote runner process, output dir absent locally/remotely, subset count 16, no limit, top-p unset. Driver: fresh start at `2026-06-01T23:12:05Z`, `n=16`, `concurrency=4`, no skip/resume lines. Postcheck: 16 expected task IDs, top-level summary copied from generated nested summary, `instances_total=16`. |
-| `fr9_b4temp06_mtp5_s2_20260601T232538Z` | invalid | vLLM failed before SWE launch. Root cause: free memory `104.99/117.51 GiB` was below requested `gpu_memory_utilization=0.9` threshold `105.76 GiB`. No local or remote SWE output accepted. |
-| `fr9_b4temp06_mtp5_s2_20260601T233000Z` | clean rerun | Fresh tag after memory recovery. Preflight clean, output absent locally/remotely, top-p unset. Driver: fresh start at `2026-06-01T23:39:14Z`, `n=16`, `concurrency=4`, no skip/resume lines. Postcheck: 16 expected task IDs, `instances_total=16`, winner trace present with violations=0 and missing=0. |
-| `fr9_b4temp06_mtp3_s2_20260601T234537Z` | invalid prelaunch | vLLM failed before SWE launch at required launch shape: `--mtp 3 --spines 2`, `max_num_seqs=8`, `gpu_memory_utilization=0.9`. Free memory was `105.25/117.51 GiB`, below requested `105.76 GiB`. No local or remote SWE output. |
-| `fr9_b4temp06_mtp3_s2_20260601T234919Z` | invalid prelaunch | Fresh tag after cleanup. Same vLLM engine-start failure before SWE launch. No local or remote SWE output. |
-| `fr9_b4temp06_mtp3_s2_20260601T235241Z` | blocked | Fresh tag after drop-caches, swap cycle, and memory compaction. Same vLLM engine-start failure before SWE launch. Current durable log excerpt: `ValueError: Free memory on device cuda:0 (105.05/117.51 GiB) on startup is less than desired GPU memory utilization (0.9, 105.76 GiB).` No local or remote SWE output. |
-| mtp=2, spines=2 | not run | Sequential sweep stopped because arm 3 could not produce a valid campaign under required launch settings. |
-| mtp=2, spines=3 | not run | Sequential sweep stopped because arm 3 could not produce a valid campaign under required launch settings. |
-
-## Commit Hashes Pushed
-
-Arm 1 task commits:
-
-`5a1aefef`, `2ed6e55d`, `88c29d8f`, `842d5e63`, `a9141c00`,
-`6cdde850`, `c044467e`, `05698e2b`, `6109c923`, `24f02a56`,
-`330e3ee2`, `e7ee6e26`, `faa78061`, `6884c349`, `b4872832`,
-`9b85e270`.
-
-Arm 1 summary commit: `a31ae394`.
-
-Arm 2 task commits:
-
-`f21918ca`, `b2ce569b`, `72a2c23e`, `39e4e52b`, `0f24eac7`,
-`3bdf49cf`, `ca02ecb0`, `171a3ad9`, `82f86a2e`, `1b7cbc6e`,
-`3a1ebcfa`, `977522a6`, `7c9aff2c`, `73e32536`, `8f9be747`,
-`769b6e62`.
-
-Arm 2 summary commit: `daadbe38`.
-
-This report commit is recorded in git after this file is committed.
-
-## Red-Team Notes
-
-- The two accepted arms have sharply divergent workloads. Arm 1 resolved 1/16
-  and generated 25,397 tokens in the driver window. Arm 2 resolved 0/16 and
-  generated only 891 tokens. Speed/throughput comparisons are weak and should
-  not be presented as a clean mtp5_s1 vs mtp5_s2 performance result.
-- Temp 0.6 is still stochastic. Even with the same subset and settings, the
-  agents sampled different trajectories, many tasks produced empty-patch
-  retries, and low-resolved arms can collapse into short, low-information
-  workloads.
-- Arm 2 has a valid winner-trace invariant result but not a meaningful
-  throughput win/loss result. The accepted trace says the mechanism did not
-  violate the winner superset or state-copy invariants over the recorded events.
-- The blocked arm is an infrastructure capacity problem under the required
-  launch settings, not a SWE task contamination. Lowering
-  `gpu_memory_utilization`, killing unrelated user processes, or changing the
-  command shape might get past it, but that would no longer be the requested
-  run without operator approval.
-- The first arm-2 tag and all arm-3 tags are not carried forward as valid
-  metrics.
-
-## What Was Not Done
-
-- No enhanced MTP plus suffix-tree work was run.
-- No direct greedy Phase A/B sweep was run.
-- No unsupported performance claim is made from these agentic traces.
-- Arms `mtp=2, spines=2` and `mtp=2, spines=3` were not run because the
-  sequential arm-3 gate was blocked.
-
-## Verification Performed
-
-- Confirmed every accepted tag has `driver.log`.
-- Copied generated nested `campaign_summary.json` to the requested top-level
-  `output/<tag>/campaign_summary.json` and verified `instances_total=16`.
-- Verified accepted task IDs match the 16 expected `instance_ids`.
-- Verified runner logs record `config=Fb`, `row_mode=independent`, intended
-  `mtp`/`spines`, `temp=0.6`, and `concurrency=4`.
-- Verified `independent_winner_trace.jsonl` is present for accepted `spines=2`.
-- Ran `scripts/summarize_round_f_agentic_arm.py` for accepted arms, with no
-  guessed `--nodes`.
-- Inspected git status, git log, pushed task commits, and pushed summary commits.
+There is no accepted `spines=2` SWE result for FR9 B4/Fb temp 0.6, and there is
+no valid `mtp3/s2` campaign. Enhanced tree work should not consume any of the
+invalidated June 1 or lowmem `spines=2` tags as baseline evidence.
