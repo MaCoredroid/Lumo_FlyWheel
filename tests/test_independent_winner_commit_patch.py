@@ -69,6 +69,18 @@ def test_independent_winner_commit_remains_enabled_and_commits_gpu_rows():
     assert patch.find("_lumo_ir_orig_update_states_after_model_execute", mutation_pos) == -1
 
 
+def test_independent_winner_commit_suppresses_stochastic_hidden_public_winner():
+    patch = _winner_commit_patch()
+
+    assert "def _lumo_ir_allow_hidden_public_winner" in patch
+    assert "LUMO_IR_ALLOW_STOCHASTIC_HIDDEN_WINNER" in patch
+    assert 'return False, "stochastic_sampling"' in patch
+    assert "commit_idx = primary_idx" in patch
+    assert "commit_acc = accept_counts[primary_idx]" in patch
+    assert '"candidate_winner_spine"' in patch
+    assert '"hidden_winner_suppressed_reason": suppressed_reason' in patch
+
+
 def test_independent_winner_commit_flushes_mamba_copy_only_when_buffer_nonempty():
     patch = _winner_commit_patch()
 

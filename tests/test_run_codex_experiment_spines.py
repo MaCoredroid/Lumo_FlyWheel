@@ -163,6 +163,29 @@ def test_request_metrics_smoke_uses_x86_tunnel(monkeypatch: pytest.MonkeyPatch) 
     assert "Reply with exactly: OK" in smoke_commands[0]
 
 
+def test_codex_protocol_marker_scanner_flags_agent_text_and_commands(tmp_path: Path) -> None:
+    task_dir = tmp_path / "task"
+    task_dir.mkdir()
+    (task_dir / "codex_trace.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "ok"}}),
+                json.dumps({"type": "item.completed", "item": {"type": "agent_message", "text": "</think>\n\n<|host|>"}}),
+                json.dumps({"type": "item.started", "item": {"type": "command_execution", "command": "printf '<think>'"}}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    hits = experiment._codex_protocol_marker_hits(task_dir)
+
+    assert [(trace, line) for trace, line, _snippet in hits] == [
+        ("codex_trace.jsonl", 2),
+        ("codex_trace.jsonl", 3),
+    ]
+
+
 def test_stream_capture_script_does_not_truncate_remote_mirror() -> None:
     script = Path("scripts/swe_x86_helpers/stream_capture_to_alienware.sh").read_text()
 

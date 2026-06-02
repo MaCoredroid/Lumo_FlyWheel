@@ -54,6 +54,7 @@ TREE_PATH_LCP_TRACE = os.environ.get(
 INDEPENDENT_WINNER_TRACE = os.environ.get(
     "LUMO_IR_WINNER_TRACE_FILE",
     "/tmp/lumo-l0c-fp8-cutlass-run30-logs/independent_winner_trace.jsonl")
+FORBIDDEN_CODEX_PROTOCOL_MARKERS = ("<think>", "</think>", "<|host|>")
 
 
 def sh(cmd: list[str], **kw) -> subprocess.CompletedProcess:
@@ -504,6 +505,57 @@ def require_swe_task_request_metrics(args, meta: Path) -> None:
         )
 
 
+def _codex_protocol_marker_hits(task_dir: Path) -> list[tuple[str, int, str]]:
+    hits: list[tuple[str, int, str]] = []
+    for trace in sorted(task_dir.glob("codex_trace*.jsonl")):
+        try:
+            lines = trace.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        for lineno, line in enumerate(lines, 1):
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            item = event.get("item") if isinstance(event, dict) else None
+            if not isinstance(item, dict):
+                continue
+            values: list[str] = []
+            text = item.get("text")
+            command = item.get("command")
+            if isinstance(text, str):
+                values.append(text)
+            if isinstance(command, str):
+                values.append(command)
+            for value in values:
+                if any(marker in value for marker in FORBIDDEN_CODEX_PROTOCOL_MARKERS):
+                    hits.append((trace.name, lineno, value[:300].replace("\n", "\\n")))
+                    break
+    return hits
+
+
+def require_swe_task_protocol_clean(args, meta: Path) -> None:
+    if args.suite != "swe":
+        return
+    hits = _codex_protocol_marker_hits(meta.parent)
+    if not hits:
+        return
+    ssh(
+        "pkill -TERM -f "
+        + json.dumps(f"run_swe_bench_q36_a.py.*{args.exp_tag}")
+        + " 2>/dev/null || true",
+        timeout=30,
+    )
+    details = "\n".join(
+        f"{trace}:{lineno}: {snippet}" for trace, lineno, snippet in hits[:8]
+    )
+    sys.exit(
+        "SWE task Codex trace contains raw model protocol markers; "
+        "aborting before commit to avoid contaminated evidence: "
+        f"tag={args.exp_tag} task={meta.parent.name}\n{details}"
+    )
+
+
 def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
     rel = f"output/{args.exp_tag}"
     paths = [f"{rel}/*/per_task/{task_id}", f"{rel}/per_task/{task_id}",
@@ -672,6 +724,7 @@ def main() -> int:
             if verdict in {"running", "?"}:
                 continue
             require_swe_task_request_metrics(args, meta)
+            require_swe_task_protocol_clean(args, meta)
             joined = join_metrics(args, nsight_sqlite)
             if not args.no_commit:
                 commit_task(args, tid, verdict, joined)
@@ -686,6 +739,7 @@ def main() -> int:
                 tid = meta.parent.name
                 verdict, elapsed = task_verdict(meta)
                 require_swe_task_request_metrics(args, meta)
+                require_swe_task_protocol_clean(args, meta)
                 joined = join_metrics(args, nsight_sqlite)
                 if not args.no_commit:
                     commit_task(args, tid, verdict, joined)

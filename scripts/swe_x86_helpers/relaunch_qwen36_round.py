@@ -566,6 +566,29 @@ def _lumo_ir_spine_id(req_id):
     except Exception:
         return 0
 
+def _lumo_ir_request_temperature(self, primary_req_id):
+    req_state = self.requests.get(primary_req_id)
+    params = getattr(req_state, "sampling_params", None)
+    if params is None:
+        params = getattr(getattr(req_state, "request", None), "sampling_params", None)
+    try:
+        return float(getattr(params, "temperature"))
+    except Exception:
+        return None
+
+def _lumo_ir_allow_hidden_public_winner(self, primary_req_id):
+    # Hidden roots are separate target-sampling trajectories. At nonzero
+    # temperature, choosing the longest accepted hidden row changes the public
+    # distribution into best-of-spines sampling, which is not a superset of the
+    # s=1 model stream. Hidden public commits are therefore allowed only for
+    # deterministic sampling, unless an explicit research override is set.
+    if _lumo_ir_os2.environ.get("LUMO_IR_ALLOW_STOCHASTIC_HIDDEN_WINNER") == "1":
+        return True, "override"
+    temp = _lumo_ir_request_temperature(self, primary_req_id)
+    if temp is not None and temp <= 0.0:
+        return True, "deterministic"
+    return False, "stochastic_sampling"
+
 def _lumo_ir_copy_one_winner_state(
     self,
     src_req_id,
@@ -648,6 +671,11 @@ def _lumo_ir_winner_update_states_after_model_execute(
     for primary, indices in groups.items():
         if len(indices) <= 1:
             continue
+        primary_idx = indices[0]
+        for idx in indices:
+            if _lumo_ir_spine_id(req_ids[idx]) == 0:
+                primary_idx = idx
+                break
         best_idx = indices[0]
         best_acc = accept_counts[best_idx]
         for idx in indices[1:]:
@@ -657,13 +685,28 @@ def _lumo_ir_winner_update_states_after_model_execute(
                     and _lumo_ir_spine_id(req_ids[idx]) < _lumo_ir_spine_id(req_ids[best_idx])):
                 best_idx = idx
                 best_acc = acc
-        winner_rows[primary] = (best_idx, best_acc, indices)
+        commit_idx = best_idx
+        commit_acc = best_acc
+        suppressed_reason = None
+        allow_hidden, policy = _lumo_ir_allow_hidden_public_winner(self, primary)
+        if _lumo_ir_spine_id(req_ids[best_idx]) != 0 and not allow_hidden:
+            commit_idx = primary_idx
+            commit_acc = accept_counts[primary_idx]
+            suppressed_reason = policy
+        winner_rows[primary] = (
+            commit_idx,
+            commit_acc,
+            indices,
+            best_idx,
+            best_acc,
+            suppressed_reason,
+        )
 
     if not winner_rows:
         return
 
     trace_rows = []
-    for primary, (winner_idx, winner_acc, indices) in winner_rows.items():
+    for primary, (winner_idx, winner_acc, indices, _best_idx, _best_acc, _suppressed_reason) in winner_rows.items():
         winner_req_id = req_ids[winner_idx]
         winner_row = output_token_ids[winner_idx].clone()
         for idx in indices:
@@ -673,7 +716,7 @@ def _lumo_ir_winner_update_states_after_model_execute(
             except Exception:
                 pass
 
-    for primary, (winner_idx, winner_acc, indices) in winner_rows.items():
+    for primary, (winner_idx, winner_acc, indices, best_idx, best_acc, suppressed_reason) in winner_rows.items():
         winner_req_id = req_ids[winner_idx]
         copy_result = _lumo_ir_copy_one_winner_state(
             self, winner_req_id,
@@ -687,6 +730,10 @@ def _lumo_ir_winner_update_states_after_model_execute(
             "winner_spine": int(_lumo_ir_spine_id(winner_req_id)),
             "winner_acc": int(winner_acc),
             "spine0_acc": int(counts.get("0", 0)),
+            "candidate_winner_req_id": req_ids[best_idx],
+            "candidate_winner_spine": int(_lumo_ir_spine_id(req_ids[best_idx])),
+            "candidate_winner_acc": int(best_acc),
+            "hidden_winner_suppressed_reason": suppressed_reason,
             "counts": counts,
             "members": [req_ids[i] for i in indices],
             "copy": copy_result,
