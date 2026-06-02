@@ -31,3 +31,7 @@ HEAD is now at 0df94ff70 Merge pull request #13574 from pllim/rm-corpus-404
 [2026-06-02T11:08:21Z] -> astropy__astropy-13977
 Preparing worktree (detached HEAD 5250b2442)
 HEAD is now at 5250b2442 Merge pull request #14164 from ayshih/grid_performance
+[2026-06-02T11:08:58Z] <- astropy__astropy-13236 verdict=failed elapsed_total=2241.1s
+[2026-06-02T11:08:58Z] -> astropy__astropy-14096
+Preparing worktree (detached HEAD 1a4462d72)
+HEAD is now at 1a4462d72 Merge pull request #14102 from zoghbi-a/fix-votable-validator-issue-#14099
