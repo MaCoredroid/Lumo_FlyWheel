@@ -865,8 +865,12 @@ else:
 # markers in assistant output text or tool-call arguments. Message text is first
 # repaired with the same public split rule as the qwen reasoning parser: leaked
 # private text through the last stray </think> is dropped, then the hard reject
-# remains as the protocol gate.
+# remains as the protocol gate. Function-call argument strings are also repaired
+# for the common Qwen/vLLM XML-parser failure where a single string argument is
+# emitted without its closing quote/brace; otherwise the malformed call reaches
+# Codex and the next vLLM Responses render crashes while json.loads-ing history.
 import re as _lumo_qwen_re
+import json as _lumo_qwen_json
 
 _lumo_qwen_response_protocol_markers = ("<think>", "</think>", "<|host|>")
 _lumo_orig_make_response_output_items = (
@@ -894,15 +898,54 @@ def _lumo_set_response_part_text(part, text):
         except Exception:
             pass
 
+def _lumo_set_response_item_arguments(item, arguments):
+    try:
+        setattr(item, "arguments", arguments)
+    except Exception:
+        try:
+            object.__setattr__(item, "arguments", arguments)
+        except Exception:
+            pass
+
+def _lumo_repair_function_call_arguments(value):
+    if not isinstance(value, str):
+        return value
+    try:
+        decoded, end = _lumo_qwen_json.JSONDecoder().raw_decode(value)
+    except _lumo_qwen_json.JSONDecodeError as exc:
+        if "Unterminated string" not in str(exc):
+            return value
+        match = _lumo_qwen_re.match(
+            r'\s*\{\s*"([^"]+)"\s*:\s*"(.*)\s*$',
+            value,
+            flags=_lumo_qwen_re.DOTALL,
+        )
+        if not match:
+            return value
+        key, raw_arg = match.group(1), match.group(2)
+        while raw_arg.endswith("\\"):
+            raw_arg = raw_arg[:-1]
+        return _lumo_qwen_json.dumps(
+            {key: raw_arg}, separators=(",", ":"))
+    if value[end:].strip():
+        return _lumo_qwen_json.dumps(decoded, separators=(",", ":"))
+    return value
+
 def _lumo_repair_response_items_public(items):
     for item in items:
         if getattr(item, "type", None) != "message":
+            if getattr(item, "type", None) in ("function_call", "mcp_call"):
+                original = getattr(item, "arguments", None)
+                repaired = _lumo_repair_function_call_arguments(original)
+                if repaired != original:
+                    _lumo_set_response_item_arguments(item, repaired)
             continue
-        for part in getattr(item, "content", []) or []:
-            original = getattr(part, "text", None)
-            repaired = _lumo_repair_response_message_text(original)
-            if repaired != original:
-                _lumo_set_response_part_text(part, repaired)
+        else:
+            for part in getattr(item, "content", []) or []:
+                original = getattr(part, "text", None)
+                repaired = _lumo_repair_response_message_text(original)
+                if repaired != original:
+                    _lumo_set_response_part_text(part, repaired)
     return items
 
 def _lumo_assert_response_value_public(value, where):
@@ -941,6 +984,34 @@ OpenAIServingResponses._make_response_output_items = (
     import py_compile
     py_compile.compile(str(serving_path), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied qwen Responses public item guard')
+
+chat_utils_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/chat_utils.py')
+if not chat_utils_path.is_file():
+    raise RuntimeError(f'vLLM chat utils source missing: {chat_utils_path}')
+chat_utils_text = chat_utils_path.read_text(encoding='utf-8')
+chat_utils_sentinel = '# LUMO_QWEN_CHAT_HISTORY_ARGUMENTS_GUARD'
+if chat_utils_sentinel in chat_utils_text:
+    print('[TRACK-B-PRELAUNCH] qwen chat-history arguments guard already present')
+else:
+    old = '        item["function"]["arguments"] = json.loads(content)\n'
+    new = (
+        '        # LUMO_QWEN_CHAT_HISTORY_ARGUMENTS_GUARD: tolerate malformed\n'
+        '        # historical function-call arguments from parser edge cases. Public\n'
+        '        # output is repaired before Codex sees it; this prevents old stored\n'
+        '        # content from crashing Responses preprocessing with HTTP 400.\n'
+        '        try:\n'
+        '            item["function"]["arguments"] = json.loads(content)\n'
+        '        except json.JSONDecodeError:\n'
+        '            item["function"]["arguments"] = {\n'
+        '                "__lumo_malformed_arguments__": content\n'
+        '            }\n'
+    )
+    if old not in chat_utils_text:
+        raise RuntimeError('qwen chat-history arguments guard anchor not found')
+    chat_utils_path.write_text(chat_utils_text.replace(old, new, 1), encoding='utf-8')
+    import py_compile
+    py_compile.compile(str(chat_utils_path), doraise=True)
+    print('[TRACK-B-PRELAUNCH] applied qwen chat-history arguments guard')
 LUMOQWENREASONBOUNDARY
 '''
 
