@@ -86,6 +86,9 @@ def test_independent_winner_commit_keeps_hidden_public_winners_parser_guarded():
     assert "LUMO_QWEN_PUBLIC_PROTOCOL_MARKER_GUARD" in text
     assert "LUMO_QWEN_RESPONSES_PUBLIC_ITEM_GUARD" in text
     assert "LUMO_QWEN_CHAT_HISTORY_ARGUMENTS_GUARD" in text
+    assert "match = re.search(" in text
+    assert "indent = match.group('indent')" in text
+    assert "child_indent = indent + '    '" in text
     assert "def _lumo_repair_response_message_text" in text
     assert "def _lumo_repair_function_call_arguments" in text
     assert '"__lumo_malformed_arguments__": content' in text

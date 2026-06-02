@@ -753,6 +753,7 @@ LUMONOSTALETREEEXP
 _QWEN_REASONING_STREAM_BOUNDARY_BLOCK = r'''
 python3 - <<'LUMOQWENREASONBOUNDARY'
 from pathlib import Path
+import re
 
 path = Path('/usr/local/lib/python3.12/dist-packages/vllm/reasoning/basic_parsers.py')
 if not path.is_file():
@@ -993,22 +994,34 @@ chat_utils_sentinel = '# LUMO_QWEN_CHAT_HISTORY_ARGUMENTS_GUARD'
 if chat_utils_sentinel in chat_utils_text:
     print('[TRACK-B-PRELAUNCH] qwen chat-history arguments guard already present')
 else:
-    old = '        item["function"]["arguments"] = json.loads(content)\n'
-    new = (
-        '        # LUMO_QWEN_CHAT_HISTORY_ARGUMENTS_GUARD: tolerate malformed\n'
-        '        # historical function-call arguments from parser edge cases. Public\n'
-        '        # output is repaired before Codex sees it; this prevents old stored\n'
-        '        # content from crashing Responses preprocessing with HTTP 400.\n'
-        '        try:\n'
-        '            item["function"]["arguments"] = json.loads(content)\n'
-        '        except json.JSONDecodeError:\n'
-        '            item["function"]["arguments"] = {\n'
-        '                "__lumo_malformed_arguments__": content\n'
-        '            }\n'
+    match = re.search(
+        r'^(?P<indent>[ \t]*)item\["function"\]\["arguments"\] = json\.loads\(content\)\n',
+        chat_utils_text,
+        re.MULTILINE,
     )
-    if old not in chat_utils_text:
+    if match is None:
         raise RuntimeError('qwen chat-history arguments guard anchor not found')
-    chat_utils_path.write_text(chat_utils_text.replace(old, new, 1), encoding='utf-8')
+    indent = match.group('indent')
+    child_indent = indent + '    '
+    grandchild_indent = child_indent + '    '
+    new = (
+        f'{indent}# LUMO_QWEN_CHAT_HISTORY_ARGUMENTS_GUARD: tolerate malformed\n'
+        f'{indent}# historical function-call arguments from parser edge cases. Public\n'
+        f'{indent}# output is repaired before Codex sees it; this prevents old stored\n'
+        f'{indent}# content from crashing Responses preprocessing with HTTP 400.\n'
+        f'{indent}try:\n'
+        f'{child_indent}item["function"]["arguments"] = json.loads(content)\n'
+        f'{indent}except json.JSONDecodeError:\n'
+        f'{child_indent}item["function"]["arguments"] = {{\n'
+        f'{grandchild_indent}"__lumo_malformed_arguments__": content\n'
+        f'{child_indent}}}\n'
+    )
+    chat_utils_text = (
+        chat_utils_text[:match.start()]
+        + new
+        + chat_utils_text[match.end():]
+    )
+    chat_utils_path.write_text(chat_utils_text, encoding='utf-8')
     import py_compile
     py_compile.compile(str(chat_utils_path), doraise=True)
     print('[TRACK-B-PRELAUNCH] applied qwen chat-history arguments guard')
