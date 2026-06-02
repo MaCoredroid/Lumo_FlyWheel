@@ -64,3 +64,5 @@ HEAD is now at 80c3854a5 Merge pull request #14576 from Cadair/no_gc_in_tiled_da
 [2026-06-02T02:58:46Z] -> astropy__astropy-14995
 Preparing worktree (detached HEAD b16c7d12c)
 HEAD is now at b16c7d12c Merge pull request #14988 from nstarman/cosmo-dont-register-abstract
+[2026-06-02T02:59:12Z]    astropy__astropy-14598: empty patch (agent_gave_up); retrying codex once
+[2026-06-02T02:59:51Z] <- astropy__astropy-14539 verdict=resolved elapsed_total=1846.3s
