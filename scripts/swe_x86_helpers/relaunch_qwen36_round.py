@@ -763,7 +763,7 @@ sentinel = '# LUMO_QWEN_STRAY_REASONING_END_PUBLIC_GUARD'
 if sentinel in text:
     print('[TRACK-B-PRELAUNCH] qwen reasoning stream boundary guard already present')
 else:
-    patch = r'''
+    patch = r"""
 
 # LUMO_QWEN_STRAY_REASONING_END_PUBLIC_GUARD: vLLM's streaming thinking
 # parser normally treats a delta containing a reasoning end token as public
@@ -809,7 +809,7 @@ def _lumo_extract_reasoning_streaming_boundary_safe(
 
 BaseThinkingReasoningParser.extract_reasoning_streaming = (
     _lumo_extract_reasoning_streaming_boundary_safe)
-'''
+"""
     path.write_text(text + patch, encoding='utf-8')
     import py_compile
     py_compile.compile(str(path), doraise=True)

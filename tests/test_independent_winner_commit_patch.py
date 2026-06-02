@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 
@@ -85,6 +86,20 @@ def test_independent_winner_commit_keeps_hidden_public_winners_parser_guarded():
     assert "BaseThinkingReasoningParser.extract_reasoning_streaming" in text
     assert "self.end_token_id in delta_token_ids and not has_start_state" in text
     assert "_QWEN_REASONING_STREAM_BOUNDARY_BLOCK if independent_rows else" in text
+
+
+def test_round_relaunch_launcher_has_no_top_level_patch_runtime_error():
+    result = subprocess.run(
+        ["python3", str(LAUNCHER), "--help"],
+        cwd=REPO,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "relaunch_qwen36_round.py" in result.stdout
 
 
 def test_independent_winner_commit_flushes_mamba_copy_only_when_buffer_nonempty():
