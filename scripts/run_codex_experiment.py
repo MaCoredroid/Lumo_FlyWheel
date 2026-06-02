@@ -415,6 +415,12 @@ def require_swe_task_request_metrics(args, meta: Path) -> None:
         return
     metrics = meta.parent / "vllm_request_metrics.jsonl"
     if not metrics.is_file() or metrics.stat().st_size == 0:
+        ssh(
+            "pkill -TERM -f "
+            + json.dumps(f"run_swe_bench_q36_a.py.*{args.exp_tag}")
+            + " 2>/dev/null || true",
+            timeout=30,
+        )
         sys.exit(
             "SWE task finished without nonzero vLLM request metrics; "
             "aborting before commit to avoid contaminated evidence: "
