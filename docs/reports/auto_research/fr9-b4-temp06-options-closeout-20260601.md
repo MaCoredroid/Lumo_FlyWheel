@@ -36,7 +36,7 @@ tree work can consume this experiment as baseline evidence:
 | Required arm | Status | Required action / acceptance bar |
 |---|---|---|
 | `mtp=5`, `spines=1`, `gpu_memory_utilization=0.88` | accepted | Keep `fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z` as the clean baseline: 16/16 x86 tasks, all per-task request-metrics files nonzero, full campaign and agentic artifacts present. |
-| `mtp=5`, `spines=2`, `gpu_memory_utilization=0.88` | invalidated; rerun required | Latest retry tag `fr9_b4temp06_lowmem088_mtp5_s2_20260602T051155Z` passed the hardened request-metrics smoke preflight, but aborted when the second batch produced 0-byte per-task request metrics. Do not count it as a result. Rerun only after the x86 mirror/streamer failure mode is fixed and all 16 tasks can complete on x86 with nonzero per-task request metrics, complete summaries/traces, and a verified `independent_winner_trace.jsonl` with no winner-superset violations and copy-missing sum 0. |
+| `mtp=5`, `spines=2`, `gpu_memory_utilization=0.88` | invalidated; rerun required | Latest retry tag `fr9_b4temp06_lowmem088_mtp5_s2_20260602T051155Z` passed the hardened request-metrics smoke preflight, but aborted when the second batch produced 0-byte per-task request metrics. Do not count it as a result. Rerun only after the x86 mirror/streamer failure mode is fixed and all 16 tasks can complete on x86 with nonzero per-task request metrics, complete summaries/traces, `independent_winner_summary.json` with no winner-superset violations, copy-missing sum 0, and positive recovered tokens, plus `speed_comparison.json` against the accepted `s1` baseline. |
 | `mtp=3`, `spines=2`, lowmem retry if strict 0.90 cannot prelaunch | required pending | Launch only after the `mtp=5`, `spines=2` arm is either accepted or invalidated for fix-and-rerun. Accept under the same x86, metrics, artifact, and winner-trace rules; strict 0.90 prelaunch memory failures are infra-blocks and do not count as SWE evidence. |
 
 Every accepted arm must include `driver.log`, top-level and nested
@@ -45,7 +45,14 @@ Every accepted arm must include `driver.log`, top-level and nested
 `runner_metadata.json`, per-task nonzero `vllm_request_metrics.jsonl`,
 `vllm_per_turn.json`, eval artifacts, and speed/overhead metrics comparable to
 the accepted `lowmem088_mtp5_s1` report. Multi-spine arms additionally require
-winner-trace validation.
+winner-trace validation. A repaired `spines=2` arm must not merely avoid the
+old crash: it must keep winner commit enabled and produce
+`independent_winner_summary.json` with `superset_violations=0`,
+`copy_missing_sum=0`, `winner_nonzero_spine_events>0`, and
+`recovered_token_total>0`. It must also produce `speed_comparison.json` using
+`output/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/agentic_summary.json`
+as the baseline; if that comparison does not show a speed win, record the arm
+as a valid correctness/stability result only, not as a speed-win result.
 
 ## Decision Summary
 

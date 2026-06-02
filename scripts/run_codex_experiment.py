@@ -385,6 +385,89 @@ def finalize_tree_superset(local: Path) -> None:
     )
 
 
+def finalize_independent_winner(args, local: Path) -> None:
+    if args.config != "Fb" or args.row_mode != "independent" or args.spines <= 1:
+        return
+    trace = local / "independent_winner_trace.jsonl"
+    summary = local / "independent_winner_summary.json"
+    cmd = [
+        sys.executable,
+        str(REPO / "scripts/verify_independent_winner_trace.py"),
+        str(trace),
+        "--json",
+        "--require-recovery",
+    ]
+    result = sh(cmd, cwd=str(REPO))
+    if result.returncode != 0:
+        sys.exit(
+            "independent winner trace verification failed:\n"
+            f"{result.stdout}{result.stderr}"
+        )
+    summary.write_text(result.stdout.strip() + "\n", encoding="utf-8")
+    data = json.loads(result.stdout)
+    log(
+        "independent winner verified: "
+        f"rows={data['rows']} viol={data['superset_violations']} "
+        f"copy_missing_sum={data['copy_missing_sum']} "
+        f"recovered_tokens={data['recovered_token_total']}"
+    )
+
+
+def finalize_agentic_summary(args, local: Path) -> Path:
+    summary = local / "agentic_summary.json"
+    cmd = [
+        sys.executable,
+        str(REPO / "scripts/summarize_round_f_agentic_arm.py"),
+        "--exp-dir",
+        str(local),
+        "--label",
+        args.exp_tag,
+        "--nodes",
+        str(args.spines if args.config == "Fb" else args.mtp),
+        "--out",
+        str(summary),
+    ]
+    result = sh(cmd, cwd=str(REPO))
+    if result.returncode != 0:
+        sys.exit(f"agentic summary build failed:\n{result.stdout}{result.stderr}")
+    log(f"agentic summary written: {summary.relative_to(REPO)}")
+    return summary
+
+
+def finalize_speed_comparison(args, local: Path, summary_path: Path) -> None:
+    if not args.speed_baseline_agentic_summary:
+        return
+    baseline_path = Path(args.speed_baseline_agentic_summary)
+    if not baseline_path.is_absolute():
+        baseline_path = REPO / baseline_path
+    current = json.loads(summary_path.read_text())
+    baseline = json.loads(baseline_path.read_text())
+    current_tps = (current.get("steptrace") or {}).get("decode_tps")
+    baseline_tps = (baseline.get("steptrace") or {}).get("decode_tps")
+    payload = {
+        "current_summary": str(summary_path.relative_to(REPO)),
+        "baseline_summary": str(baseline_path.relative_to(REPO)),
+        "current_decode_tps": current_tps,
+        "baseline_decode_tps": baseline_tps,
+        "speedup": (
+            float(current_tps) / float(baseline_tps)
+            if current_tps is not None and baseline_tps else None
+        ),
+        "require_speed_win": bool(args.require_speed_win),
+    }
+    if payload["speedup"] is not None:
+        payload["speed_win"] = payload["speedup"] > 1.0
+    out = local / "speed_comparison.json"
+    out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    log(
+        "speed comparison: "
+        f"current_tps={current_tps} baseline_tps={baseline_tps} "
+        f"speedup={payload['speedup']}"
+    )
+    if args.require_speed_win and not payload.get("speed_win"):
+        sys.exit(f"required speed win not met:\n{json.dumps(payload, indent=2)}")
+
+
 def task_verdict(meta: Path) -> tuple[str, float | None]:
     try:
         d = json.loads(meta.read_text())
@@ -433,6 +516,12 @@ def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
         paths.append(f"{rel}/tree_path_lcp_superset_summary.json")
     if (REPO / rel / "independent_winner_trace.jsonl").exists():
         paths.append(f"{rel}/independent_winner_trace.jsonl")
+    if (REPO / rel / "independent_winner_summary.json").exists():
+        paths.append(f"{rel}/independent_winner_summary.json")
+    if (REPO / rel / "agentic_summary.json").exists():
+        paths.append(f"{rel}/agentic_summary.json")
+    if (REPO / rel / "speed_comparison.json").exists():
+        paths.append(f"{rel}/speed_comparison.json")
     if joined:
         paths.append(str(joined.relative_to(REPO)))
     nrep = REPO / f"{rel}/nsight_{args.exp_tag}.nsys-rep"
@@ -450,6 +539,50 @@ def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
         log(f"committed+pushed {task_id} (verdict={verdict}); push: {push.stdout.strip().splitlines()[-1] if push.stdout.strip() else push.stderr.strip().splitlines()[-1] if push.stderr.strip() else 'ok'}")
     else:
         log(f"commit {task_id}: nothing to commit (already tracked?)")
+
+
+def commit_final_artifacts(args, joined: Path | None) -> None:
+    rel = f"output/{args.exp_tag}"
+    paths = [
+        f"{rel}/campaign_summary.json",
+        f"{rel}/{args.exp_tag}/campaign_summary.json",
+        f"{rel}/{args.exp_tag}/predictions.jsonl",
+        f"{rel}/agentic_summary.json",
+        f"{rel}/dgx_steptrace.jsonl",
+        f"{rel}/per_req_spec_trace.jsonl",
+        f"{rel}/driver.log",
+    ]
+    for name in [
+        "tree_accept_path.jsonl",
+        "tree_path_lcp_max.jsonl",
+        "tree_path_lcp_superset_summary.json",
+        "independent_winner_trace.jsonl",
+        "independent_winner_summary.json",
+        "speed_comparison.json",
+    ]:
+        if (REPO / rel / name).exists():
+            paths.append(f"{rel}/{name}")
+    if joined:
+        paths.append(str(joined.relative_to(REPO)))
+    for p in paths:
+        sh(["bash", "-lc", f"git add -f {p} 2>/dev/null"], cwd=str(REPO))
+    msg = (
+        f"Finalize {args.suite} {args.exp_tag} artifacts\n\n"
+        f"Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
+    )
+    c = sh(["git", "commit", "-q", "-m", msg], cwd=str(REPO))
+    if c.returncode == 0:
+        push = sh(["git", "push", "origin", "main"], cwd=str(REPO))
+        tail = (
+            push.stdout.strip().splitlines()[-1]
+            if push.stdout.strip()
+            else push.stderr.strip().splitlines()[-1]
+            if push.stderr.strip()
+            else "ok"
+        )
+        log(f"final artifacts committed+pushed; push: {tail}")
+    else:
+        log("final artifacts: nothing to commit")
 
 
 def main() -> int:
@@ -483,6 +616,10 @@ def main() -> int:
     ap.add_argument("--no-commit", action="store_true")
     ap.add_argument("--skip-existing", action="store_true",
                     help="resume an existing SWE tag by skipping finished tasks; forbidden for clean benchmark arms")
+    ap.add_argument("--speed-baseline-agentic-summary", default=None,
+                    help="optional baseline agentic_summary.json for final decode_tps comparison")
+    ap.add_argument("--require-speed-win", action="store_true",
+                    help="fail finalization unless current decode_tps is greater than the baseline")
     ap.add_argument("--poll-s", type=int, default=30)
     args = ap.parse_args()
     if args.spines is None:
@@ -553,6 +690,11 @@ def main() -> int:
                     commit_task(args, tid, verdict, joined)
                 committed.add(tid)
             finalize_tree_superset(local)
+            finalize_independent_winner(args, local)
+            agentic_summary = finalize_agentic_summary(args, local)
+            finalize_speed_comparison(args, local, agentic_summary)
+            if not args.no_commit:
+                commit_final_artifacts(args, nsight_sqlite)
             log(f"suite finished; {len(committed)} task(s) committed")
             return 0
         time.sleep(args.poll_s)
