@@ -36,8 +36,8 @@ tree work can consume this experiment as baseline evidence:
 | Required arm | Status | Required action / acceptance bar |
 |---|---|---|
 | `mtp=5`, `spines=1`, `gpu_memory_utilization=0.88` | accepted | Keep `fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z` as the clean baseline: 16/16 x86 tasks, all per-task request-metrics files nonzero, full campaign and agentic artifacts present. |
-| `mtp=5`, `spines=2`, `gpu_memory_utilization=0.88` | invalidated; rerun required | Latest retry tag `fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z` passed prelaunch and produced clean early winner-trace evidence until vLLM EngineCore died from hidden sibling scheduler-state drift feeding native Mamba postprocess an unsafe scheduled-token shape. Do not count it as a result. Rerun only after the scheduler-state repair is applied and all 16 tasks can complete on x86 with nonzero per-task request metrics, complete summaries/traces, `independent_winner_summary.json` with no winner-superset violations, copy-missing sum 0, and positive recovered tokens, plus `speed_comparison.json` against the accepted `s1` baseline. |
-| `mtp=3`, `spines=2`, lowmem retry if strict 0.90 cannot prelaunch | required pending | Launch only after the `mtp=5`, `spines=2` arm is either accepted or invalidated for fix-and-rerun. Accept under the same x86, metrics, artifact, and winner-trace rules; strict 0.90 prelaunch memory failures are infra-blocks and do not count as SWE evidence. |
+| `mtp=5`, `spines=2`, `gpu_memory_utilization=0.88` | clean correctness/stability evidence; not speed-win accepted | Repaired tag `fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z` completed all 16 x86 tasks with nonzero per-task request metrics, complete artifacts, no raw protocol-marker contamination outside workspaces, and winner trace `superset_violations=0`, `copy_missing_sum=0`, `recovered_token_total=5271`. It is not accepted as a speed-win arm: `speed_comparison.json` records `31.439563` decode tps vs accepted s1 `39.906506` (`speedup=0.787831`, `speed_win=false`), and SWE result quality regressed to 4/16 resolved vs s1 8/16. |
+| `mtp=3`, `spines=2`, lowmem retry if strict 0.90 cannot prelaunch | required pending | Launch after the `mtp=5`, `spines=2` clean non-speed-win evidence above. Accept under the same x86, metrics, artifact, speed-comparison, and winner-trace rules; strict 0.90 prelaunch memory failures are infra-blocks and do not count as SWE evidence. |
 
 Every accepted arm must include `driver.log`, top-level and nested
 `campaign_summary.json`, `predictions.jsonl`, `agentic_summary.json`,
@@ -69,6 +69,7 @@ as a valid correctness/stability result only, not as a speed-win result.
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T055438Z` | invalid partial evidence | prelaunch, x86 identity, smoke capture, and early winner trace were clean; vLLM EngineCore then died at 2026-06-02 06:18:56 UTC with CUDA illegal memory access in `_lumo_ir_winner_update_states_after_model_execute`. Six tasks had nonzero metrics, then downstream tasks hit 502/connection-refused and zero metrics. Whole tag is invalid. |
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T062933Z` | invalid partial evidence | repaired accept-count scan and launched at required 0.88 util on x86; early winner trace was clean, but vLLM EngineCore died at 2026-06-02 06:40:29 UTC after hidden sibling scheduler state drifted (`num_scheduled_tokens` 6 for primary versus 11 for sibling). The tag aborted with missing request metrics and is invalid. |
 | `fr9_b4temp06_lowmem088_mtp5_s2_20260602T064744Z` | invalid pre-SWE relaunch | aborted during prelaunch source audit before SWE launch. The container still had the old independent-row scheduler sentinel and therefore skipped the new scheduler-state-sync body. No SWE metrics or benchmark evidence were produced. |
+| `fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z` | clean evidence; speed gate failed | Completed all 16 x86 tasks after vLLM-side scheduler/protocol repairs. Full artifacts are present and pushed through commit `b2f0d130`; per-task request metrics are nonzero; winner validation reports 69,365 rows, `superset_violations=0`, `copy_missing_sum=0`, `winner_nonzero_spine_events=2267`, and `recovered_token_total=5271`. Raw `<think>`, `</think>`, and `<|host|>` marker scan outside workspaces is empty. Not speed-win accepted: `speedup=0.787831`, 4/16 resolved vs s1 8/16. |
 | strict/lowmem `mtp=3`, `spines=2` | no valid campaign | only old strict prelaunch failures are documented; no local `fr9_b4temp06*mtp3*s2*` output directory exists. |
 
 ## Accepted Arm: `lowmem088_mtp5_s1`
@@ -389,6 +390,10 @@ Accepted evidence is limited to
 lowmem088, B4/Fb, independent row mode, temp 0.6, SWE Verified 16 on the x86
 box, 8/16 resolved.
 
-There is no accepted `spines=2` SWE result for FR9 B4/Fb temp 0.6, and there is
-no valid `mtp3/s2` campaign. Enhanced tree work should not consume any of the
-invalidated June 1 or lowmem `spines=2` tags as baseline evidence.
+There is one clean completed `mtp5/s2` correctness/stability run for FR9 B4/Fb
+temp 0.6, but it is not a speed-win accepted arm. There is no valid `mtp3/s2`
+campaign yet. Enhanced tree work should not consume any invalidated June 1 or
+lowmem `spines=2` tag as speed baseline evidence, and should treat
+`fr9_b4temp06_lowmem088_mtp5_s2_argrepair7_20260602T102212Z` as clean
+non-speed-win evidence unless a later repaired/tuned arm beats the accepted s1
+baseline.
