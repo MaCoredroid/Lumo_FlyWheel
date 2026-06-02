@@ -80,3 +80,4 @@ HEAD is now at b16c7d12c Merge pull request #14988 from nstarman/cosmo-dont-regi
 [2026-06-02T13:04:57Z] <- astropy__astropy-14995 verdict=resolved elapsed_total=1845.6s
 [2026-06-02T13:09:37Z]    astropy__astropy-14508: retry produced 1078B patch
 [2026-06-02T13:10:23Z] <- astropy__astropy-14508 verdict=failed elapsed_total=3256.3s
+[2026-06-02T13:14:56Z] <- astropy__astropy-14598 verdict=failed elapsed_total=2507.0s
