@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-03 17:38 UTC
+Updated: 2026-06-03 17:47 UTC
 
 ## Current Phase
 
@@ -74,6 +74,7 @@ Updated: 2026-06-03 17:38 UTC
 - `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_batchinv_temp06_logprobs.json`
 - `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_metrics_after_batchinv_streams.prom`
 - `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_batchinv_steptrace_window.jsonl`
+- `output/fr10_cu130_gate_d_production_gdn_single_spine_batchinv_followup_clean_20260603.json`
 
 ## Passed
 
@@ -110,6 +111,10 @@ Updated: 2026-06-03 17:38 UTC
 - P0 canonical token prefix for greedy prompt 0: `[271, 248068, 271, 248069, 271, 16, 11, 220, 17, 11, 220, 18, 11, 220, 19, 11, 220, 20, 13, 248044]`. This is the Gate B target for later tree-kernel greedy decode.
 - P0 post-stream metrics recorded `spec_decode_num_drafts_total=398`, `spec_decode_num_draft_tokens_total=1990`, `spec_decode_num_accepted_tokens_total=1206`, positions `{0:273,1:266,2:253,3:238,4:176}`. Bounded live steptrace window around B4 temp=0.6 load: 30 rows over `44.53515648841858 s`; deltas `gen=306`, `prompt=192`, `iter_sum=498`, `iter_cnt=37`, `acc=217`, `draft=375`, `drafts=75`, `dec_sum=16.833757460815832`, `pre_sum=5.048701603198424`; mean step wall time `1.203652878065367 s`, tokens/step `13.45945945945946`, accepted/draft-token `0.5786666666666667`.
 - P0 side-channel caveat: the unmodified cu130 OpenAI server exposes aggregate spec counters via `/metrics`. The old `/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl` file was stale during this run and is not a live P0 source for this stock container. True per-event accept counters still require the instrumented side-channel in a patched serving stack.
+- RED-TEAM independently verified P0 after commit: re-ran the greedy probe against the live cu130 server and reproduced all 16 greedy token-id streams byte-exact versus the committed baseline (`0/16` mismatches). P0 is done; this is the stable Gate B target.
+- Exact-production Gate D rerun completed inside the same digest-pinned cu130-nightly stack: command used `--capture --production-gdn --production-scale --input-dtype bf16 --single-spine-table`. All rows `{2,3,6,8,14}` resolved `production_gdn_forward_method=forward_native`, used bf16 inputs/fp32 initial state/raw `g`/`use_qk_l2norm_in_kernel=True`, and graph replay was bit-exact. Production max output delta was `6.103515625e-05` for all rows; max final-state delta was `0.0009473264217376709`; per-row final-state deltas `{2:0.0008978471159934998, 3:0.000874541699886322, 6:0.000655151903629303, 8:0.0009473264217376709, 14:0.0007828027009963989}`. Tree graph times `{2:12.556us, 3:43.164us, 6:308.687us, 8:352.262us, 14:1041.471us}`. Artifact: `output/fr10_cu130_gate_d_production_gdn_single_spine_batchinv_followup_clean_20260603.json`.
+- Exact-production Gate D interpretation: single-spine tree mask equals the linear causal mask, so this proves apples-to-apples production algebra within bf16 roundoff for logits/output. The remaining `<1e-3` recurrent-state drift is reduction-order drift and confirms canonical native state commit is mandatory before any lossless claim.
+- cu130 native decode commit primitive located: `vllm/model_executor/layers/mamba/gdn_linear_attn.py` imports and calls `fused_recurrent_gated_delta_rule_packed_decode` from `vllm/model_executor/layers/fla/ops/fused_recurrent.py`. The production decode call passes `mixed_qkv`, `a`, `b`, `A_log`, `dt_bias`, `scale=self.head_k_dim**-0.5`, `initial_state=ssm_state`, `out=core_attn_out[:num_actual_tokens].unsqueeze(1)`, `ssm_state_indices`, and `use_qk_l2norm_in_kernel=True`.
 
 ## GPU Kernel Plan After P1 Gate
 

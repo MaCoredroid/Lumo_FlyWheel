@@ -132,6 +132,52 @@ through the canonical native decode update (`fused_recurrent_gated_delta_rule` /
 production decode path) and commit that state. The decisive production gate is
 end-to-end greedy token stream equality against native decode on real prompts.
 
+## Exact Production Gate D On cu130 GB10
+
+Follow-up run after P0 stack resolution used the digest-pinned cu130-nightly image:
+
+- Image: `vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776`
+- Local image ID: `sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc`
+- GB10 production GDN prefill backend: Triton/FLA `forward_native`
+- Precision/convention: bf16 q/k/v/g/beta inputs, fp32 initial state, raw `g`, `use_qk_l2norm_in_kernel=True`, production scale `1/sqrt(128)`
+
+Command:
+
+```bash
+docker run --rm --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
+  -v /home/mark/shared/lumoFlyWheel:/workspace -w /workspace \
+  --entrypoint python3 -e PYTHONWARNINGS=ignore \
+  vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776 \
+  scripts/fr10_phase2_triton_tree_gdn_microbench.py \
+  --capture --production-gdn --production-scale --input-dtype bf16 --single-spine-table
+```
+
+Artifact: `output/fr10_cu130_gate_d_production_gdn_single_spine_batchinv_followup_clean_20260603.json`
+
+| nodes | padded | production method | graph bit-exact | tree graph us | production max out | production final state |
+|---:|---:|---|---|---:|---:|---:|
+| 2 | 2 | `forward_native` | yes | 12.556 | 6.104e-05 | 8.978e-04 |
+| 3 | 4 | `forward_native` | yes | 43.164 | 6.104e-05 | 8.745e-04 |
+| 6 | 8 | `forward_native` | yes | 308.687 | 6.104e-05 | 6.552e-04 |
+| 8 | 8 | `forward_native` | yes | 352.262 | 6.104e-05 | 9.473e-04 |
+| 14 | 16 | `forward_native` | yes | 1041.471 | 6.104e-05 | 7.828e-04 |
+
+Gate D interpretation:
+
+- Single-spine tree mask equals the linear causal mask, so this is the apples-to-apples production algebra check.
+- Output agreement is one bf16 quantum for all rows: max `6.103515625e-05`.
+- Final-state difference remains reduction-order drift below `9.473264217376709e-04`.
+- CUDA graph replay equals eager bit-exact for all rows.
+- Therefore verifier logits are usable for accept/reject, but tree-kernel recurrent state must not be committed.
+
+The cu130 production decode state commit primitive is:
+
+- `vllm/model_executor/layers/mamba/gdn_linear_attn.py`
+- import: `fused_recurrent_gated_delta_rule_packed_decode`
+- call site around the decode path passes `mixed_qkv`, `a`, `b`, `A_log`, `dt_bias`, `scale=self.head_k_dim**-0.5`, `initial_state=ssm_state`, `out=core_attn_out[:num_actual_tokens].unsqueeze(1)`, `ssm_state_indices`, and `use_qk_l2norm_in_kernel=True`.
+
+FR10 state-commit rule: tree kernel output/logits drive accept/reject only. After an accepted path is selected, commit the canonical recurrent state by replaying the accepted short path through the native decode update (`fused_recurrent_gated_delta_rule_packed_decode` / the production decode path) and discard tree verifier state.
+
 ## Marginal Branch Cost
 
 Command:
