@@ -248,8 +248,9 @@ def _patch_gdn_linear() -> bool:
                     dtype=query_spec.dtype,
                     device=query_spec.device,
                 )
-                tree_state = torch.empty(
+                tree_state_all = torch.empty(
                     (
+                        attn_metadata.num_spec_decodes,
                         tree_n_pad,
                         value_tree.size(1),
                         value_tree.size(2),
@@ -264,6 +265,7 @@ def _patch_gdn_linear() -> bool:
                     # one fixed tree block, so offsets are static from tree_n.
                     start = fr10_b * tree_n
                     end = start + tree_n
+                    tree_state = tree_state_all[fr10_b]
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
                         k=key_spec[0, start:end].contiguous(),
@@ -289,11 +291,6 @@ def _patch_gdn_linear() -> bool:
                         ),
                     )
                     core_attn_out_spec[0, start:end] = tree_out[:tree_n]
-                    ssm_state.index_copy_(
-                        0,
-                        spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
-                        tree_state[:tree_n].to(ssm_state.dtype),
-                    )
                 _, last_recurrent_state = fused_sigmoid_gating_delta_rule_update(
                     A_log=self.A_log,
                     a=a,
@@ -311,6 +308,12 @@ def _patch_gdn_linear() -> bool:
                     num_accepted_tokens=num_accepted_tokens,
                     use_qk_l2norm_in_kernel=True,
                 )
+                for fr10_b in range(attn_metadata.num_spec_decodes):
+                    ssm_state.index_copy_(
+                        0,
+                        spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
+                        tree_state_all[fr10_b, :tree_n].to(ssm_state.dtype),
+                    )
             else:
                 core_attn_out_spec, last_recurrent_state = (
                     fused_sigmoid_gating_delta_rule_update(
