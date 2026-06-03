@@ -332,6 +332,50 @@ Cost-gate interpretation:
   `~135 us` FLA flat cost for `6..14` nodes, narrow the speed case to the
   `<=4` node niche.
 
+## Cost-Gate Stage Profile
+
+Implementation artifact: `scripts/fr10_tree_kernel_stage_profile.py`
+
+Artifacts:
+
+- `output/fr10_tree_kernel_stage_profile_6n_20260603.json`
+- `output/fr10_tree_kernel_stage_profile_8n_20260603.json`
+- `output/fr10_tree_kernel_stage_profile_14n_20260603.json`
+
+Command template:
+
+```bash
+docker run --rm --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
+  -v /home/mark/shared/lumoFlyWheel:/workspace -w /workspace \
+  --entrypoint python3 -e PYTHONWARNINGS=ignore \
+  vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776 \
+  scripts/fr10_tree_kernel_stage_profile.py --nodes 14 --capture --iters 300 --repeats 5
+```
+
+The stage profile uses graph-replay medians over `5x300` iterations. It is a
+variant profile, not an exact Nsight additive trace, but it isolates whether the
+dense padded solve or the state/output traversal is the main cost center.
+
+| nodes | padded | full us | dense solve variant us | solve/full | state-output-only us | strict ancestor pairs / dense lower | visible pairs / dense square |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 6 | 8 | 303.243 | 160.921 | 0.531 | 221.282 | 11/28 = 0.393 | 17/64 = 0.266 |
+| 8 | 8 | 334.785 | 160.861 | 0.480 | 285.975 | 19/28 = 0.679 | 27/64 = 0.422 |
+| 14 | 16 | 995.777 | 636.507 | 0.639 | 352.529 | 36/120 = 0.300 | 50/256 = 0.195 |
+
+Profile conclusion:
+
+- Dense triangular solve is the largest single cost center for the 14-node
+  public tree: about `636 us` of a `996 us` full path.
+- Tree sparsity is real, but simple pair-count sparsity does not plausibly
+  rescue the large public trees. Even an optimistic pair-scaled estimate leaves
+  14 nodes well above the `~135 us` FLA flat cost, and 8 nodes has too little
+  sparsity inside the padded-8 bucket.
+- The 6-node case is borderline only under optimistic scaling, but FR10 needs a
+  broad `6..14` tree speed case. Do not invest in large-tree optimization unless
+  a more radical STree-style accumulated-state recurrence removes the padded
+  dense solve/state traversal rather than merely skipping masked pairs.
+- Next speed path is the explicitly narrowed `<=4` node niche.
+
 ## Next
 
 Move the standalone algebra into the vLLM 0.22 FLA op fork:

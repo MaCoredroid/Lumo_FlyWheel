@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-03 18:22 UTC
+Updated: 2026-06-03 18:39 UTC
 
 ## Current Phase
 
@@ -79,6 +79,10 @@ Updated: 2026-06-03 18:22 UTC
 - `output/fr10_canonical_state_commit_probe_20260603.json`
 - `scripts/fr10_real_dims_tree_vs_fla_cost.py`
 - `output/fr10_real_dims_tree_vs_fla_cost_20260603.json`
+- `scripts/fr10_tree_kernel_stage_profile.py`
+- `output/fr10_tree_kernel_stage_profile_6n_20260603.json`
+- `output/fr10_tree_kernel_stage_profile_8n_20260603.json`
+- `output/fr10_tree_kernel_stage_profile_14n_20260603.json`
 
 ## Passed
 
@@ -127,6 +131,8 @@ Updated: 2026-06-03 18:22 UTC
 - Route A before Phase 4: build an offline end-to-end check over the P0 baseline prompts by capturing native per-layer GDN inputs/states for accepted MTP draft positions, running tree-kernel verify plus canonical native commit on those exact tensors/sequences, and confirming accepted greedy tokens plus committed states reproduce native. Route B after A: wire Phase 4 at `mamba/gdn_linear_attn.py` plus the MTP tree draft, rerun the live greedy probe, and require token-for-token equality with P0 baseline sha `b8b1ec32...`.
 - COST-GATE active: real-dims speed is a red flag. cu130 FLA chunk is flat at about `135us` for `2..14` tokens. The standalone tree kernel beats FLA only for tiny trees (`2 nodes 12.325us`, `3 nodes 45.339us`) and is not competitive for larger public trees (`6 nodes 306.008us`, `8 nodes 340.857us`, `14 nodes 996.084us`). Current dense masked solve scales with padded node count (`N_PAD^2`) and cannot be treated as a viable speed path until profiling shows tree sparsity can cut it toward `O(N*depth)`.
 - COST-GATE correction: fixed-base marginal rows `5->6 padded 8->8` produced negative medians (`-13.939us`, `-13.005us`, `-11.282us`) only because base and extended trees run in the same padded bucket and the delta is timing/codegen noise. Do not report marginal leaf cost as free. Reliable per-node bandwidth framing remains `3,145,728` fp32 state bytes read + `3,145,728` written per Qwen3.6 GDN verifier node.
+- COST-GATE profile completed for `6/8/14` nodes. Graph medians: full `{6:303.243us, 8:334.785us, 14:995.777us}`; dense triangular solve variants `{6:160.921us, 8:160.861us, 14:636.507us}`; state/output-only variants `{6:221.282us, 8:285.975us, 14:352.529us}`. Ancestor sparsity exists (`14` nodes has only `36/120` strict lower-tri pairs and `50/256` visible square pairs), but simple sparse-pair scaling still does not plausibly bring `8/14` below the `~135us` FLA flat cost. Do not pour effort into big-tree optimization unless a more radical STree-style accumulated-state recurrence removes the padded dense solve/state traversal.
+- COST-GATE decision: narrow the speed case to the tiny-tree niche (`<=4` nodes) unless new evidence changes the profile. Next step is to evaluate whether MTP-1/2 plus a tiny suffix/tree has enough acceptance to beat the P0 linear MTP-5 spines=1 baseline (`accept/draft=0.5787`, `13.46 tok/step`).
 
 ## GPU Kernel Plan After P1 Gate
 
@@ -145,7 +151,7 @@ Updated: 2026-06-03 18:22 UTC
   2. Exact-production Gate D target is now cu130-nightly `ChunkGatedDeltaRule.forward_native` / `fla_chunk_gated_delta_rule` on GB10, not FlashInfer. Single-spine output matches within one bf16 quantum; recurrent final state still differs at `<1e-3`, so canonical state commit remains required for byte-exact losslessness.
   3. Branch-depth cost table rebuilt with one fixed base tree (`5->6 padded 8->8`) for depths 0/1/2.
 - Remaining Phase 2 implementation work: move standalone deterministic tree kernel into a reproducible vLLM FLA fork/patch and keep production precision (`bf16` inputs, fp32 recurrent state).
-- Speed side next: profile the `14`-node `996us` case and split dense KKT/triangular solve cost from gather/state/output work. If dense solve dominates and tree sparsity can cut the work to roughly `O(N*depth)`, prototype the sparse path. If sparse profiling cannot bring `6..14` node trees under the `~135us` FLA flat cost, narrow FR10 speed work to the tiny-tree niche (`<=4` nodes) and evaluate whether MTP-1/2 plus suffix beats the P0 spines=1 MTP-5 baseline (`accept/draft=0.5787`, `13.46 tok/step`).
+- Speed side next: evaluate the tiny-tree niche (`<=4` nodes) using P0 acceptance counters first, then only run live/probed variants if the upper bound is competitive.
 - User dtype directive: do not approximate dtype flow. First detect active production backend by instantiating `ChunkGatedDeltaRule()` under E3/E5 serving config and reading `.gdn_prefill_backend`; then match that exact wrapper. For FlashInfer: reuse vLLM `l2norm_fwd`, q/k/v bf16, `g=torch.exp(g.float())` outside kernel, `beta.float()`, `initial_state.float()`, fp32 accumulation, bf16 output, fp32 final state, scale `1/sqrt(128)`.
 - Active backend name for the real cu130 GB10 stack: `triton` / native FLA (`forward_native`). The broken audit image is no longer the production reference.
 - Matched-bf16 single-spine native-vs-tree deltas (`6.103515625e-05` output, `<9.48e-4` state) are now treated as reduction-order state drift, not an automatic losslessness pass. State-commit implementation rule: use tree-kernel logits only for accept/reject verification; after acceptance, re-run the accepted short path through `fused_recurrent_gated_delta_rule_packed_decode` and commit that native state, discarding the tree kernel's approximate recurrent state. End-to-end Gate B remains native greedy token stream == tree-verifier greedy token stream on real prompts.
