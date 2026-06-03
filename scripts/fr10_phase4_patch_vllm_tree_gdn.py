@@ -478,14 +478,20 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             row.append(int(drafts[node]))
         if best_path:
             if best_lcp < len(best_path):
+                bonus_source = 'reject_parent_target'
                 row.append(int(parent_targets[best_path[best_lcp]]))
             elif best_lcp > 0:
                 if best_path_idx == 0 and req_i < len(bonus_targets_cpu):
+                    bonus_source = 'path0_native_bonus'
                     row.append(int(bonus_targets_cpu[req_i]))
                 else:
+                    bonus_source = 'tree_self_target'
                     row.append(int(self_targets[best_path[best_lcp - 1]]))
             else:
+                bonus_source = 'root_parent_target'
                 row.append(int(parent_targets[best_path[0]]))
+        else:
+            bonus_source = 'no_path'
         row = row[:int(max_spec_len) + 1]
         out_rows.append(row)
         accepted_row = int(best_path[best_lcp - 1]) + 1 if best_lcp > 0 else 0
@@ -502,6 +508,16 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             'winner_leaf': int(best_leaf),
             'winner_path': [int(x) for x in best_path],
             'path_scores': path_scores,
+            'emitted_tokens': [int(x) for x in row],
+            'bonus_source': bonus_source,
+            'native_bonus_token': (
+                int(bonus_targets_cpu[req_i])
+                if req_i < len(bonus_targets_cpu)
+                else None
+            ),
+            'draft_token_ids': [int(x) for x in drafts],
+            'parent_target_ids': [int(x) for x in parent_targets],
+            'self_target_ids': [int(x) for x in self_targets],
         })
         counts_by_path = {
             str(i): int(score.get('lcp', 0))
