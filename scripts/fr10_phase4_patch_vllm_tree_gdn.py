@@ -21,6 +21,9 @@ REJECTION_SAMPLER_PATH = Path(
 GPU_MODEL_RUNNER_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py"
 )
+MAMBA_UTILS_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/mamba_utils.py"
+)
 
 
 def _patch_gdn_attn() -> bool:
@@ -286,6 +289,11 @@ def _patch_gdn_linear() -> bool:
                         ),
                     )
                     core_attn_out_spec[0, start:end] = tree_out[:tree_n]
+                    ssm_state.index_copy_(
+                        0,
+                        spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
+                        tree_state[:tree_n].to(ssm_state.dtype),
+                    )
                 _, last_recurrent_state = fused_sigmoid_gating_delta_rule_update(
                     A_log=self.A_log,
                     a=a,
@@ -818,12 +826,78 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
     return True
 
 
+def _patch_mamba_postprocess_tree_rows() -> bool:
+    text = MAMBA_UTILS_PATH.read_text()
+    sentinel = "# LUMO_TREE_STATE_COMMIT_ROWS"
+    if sentinel in text:
+        return False
+
+    old = '''        if aligned_new_computed_tokens >= num_tokens_running_state:
+            accept_token_bias = aligned_new_computed_tokens - num_tokens_running_state
+            src_block_idx = mamba_state_idx[req_id]
+            dest_block_idx = aligned_new_computed_tokens // mamba_spec.block_size - 1
+            collect_mamba_copy_meta(
+                copy_bufs,
+                kv_cache_config,
+                mamba_state_copy_funcs,
+                mamba_group_ids,
+                src_block_idx,
+                dest_block_idx,
+                accept_token_bias,
+                req_state,
+                forward_context,
+            )
+            if src_block_idx == dest_block_idx:
+                num_accepted_tokens_cpu[i] = 1
+    do_mamba_copy_block(copy_bufs)
+'''
+    new = '''        if aligned_new_computed_tokens >= num_tokens_running_state:
+            accept_token_bias = aligned_new_computed_tokens - num_tokens_running_state
+            # LUMO_TREE_STATE_COMMIT_ROWS: for FR10 tree verification, the
+            # accepted final recurrent state lives at the accepted tree node
+            # row, not at the flat linear accepted-count row. The scheduler's
+            # accepted-token accounting remains unchanged; only the source row
+            # used for the state copy is redirected.
+            try:
+                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn
+                _fr10_rows = getattr(_fr10_gdn, "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", None)
+                if _fr10_rows is not None and i < len(_fr10_rows):
+                    _fr10_row = int(_fr10_rows[i])
+                    if _fr10_row > 0:
+                        accept_token_bias = _fr10_row
+            except Exception:
+                pass
+            src_block_idx = mamba_state_idx[req_id]
+            dest_block_idx = aligned_new_computed_tokens // mamba_spec.block_size - 1
+            collect_mamba_copy_meta(
+                copy_bufs,
+                kv_cache_config,
+                mamba_state_copy_funcs,
+                mamba_group_ids,
+                src_block_idx,
+                dest_block_idx,
+                accept_token_bias,
+                req_state,
+                forward_context,
+            )
+            if src_block_idx == dest_block_idx:
+                num_accepted_tokens_cpu[i] = 1
+    do_mamba_copy_block(copy_bufs)
+'''
+    if old not in text:
+        raise RuntimeError("mamba postprocess accepted-row copy anchor not found")
+    text = text.replace(old, new, 1)
+    MAMBA_UTILS_PATH.write_text(text)
+    return True
+
+
 def main() -> int:
     patched = {
         str(GDN_ATTN_PATH): _patch_gdn_attn(),
         str(GDN_LINEAR_PATH): _patch_gdn_linear(),
         str(SCHEDULER_PATH): _patch_scheduler_spec_trace(),
         str(GPU_MODEL_RUNNER_PATH): _patch_gpu_model_runner_tree_metadata(),
+        str(MAMBA_UTILS_PATH): _patch_mamba_postprocess_tree_rows(),
         str(REJECTION_SAMPLER_PATH): _patch_rejection_sampler_tree_lcp(),
     }
     import py_compile
