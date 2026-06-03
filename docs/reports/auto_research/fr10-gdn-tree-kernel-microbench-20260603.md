@@ -376,6 +376,51 @@ Profile conclusion:
   dense solve/state traversal rather than merely skipping masked pairs.
 - Next speed path is the explicitly narrowed `<=4` node niche.
 
+## Tiny-Tree Acceptance Bound
+
+Implementation artifact: `scripts/fr10_tiny_tree_acceptance_bound.py`
+
+Artifact: `output/fr10_tiny_tree_acceptance_bound_20260603.json`
+
+This is a cheap upper-bound screen before launching any new serving variants. It
+uses the P0 cu130 spines=1 counters:
+
+- drafts: `398`
+- draft tokens: `1990`
+- accepted tokens: `1206`
+- accepted by MTP position: `{0:273, 1:266, 2:253, 3:238, 4:176}`
+- P0 bounded-window throughput: `13.45945945945946 tok/step`
+- P0 bounded-window accepted/draft-token: `0.5786666666666667`
+
+| max accepted depth | accepted/draft | sequence tokens/draft | projected tok/step at same step time | latency reduction needed to match P0 |
+|---:|---:|---:|---:|---:|
+| 1 | 0.686 | 1.686 | 5.630 | 58.167% |
+| 2 | 1.354 | 2.354 | 7.863 | 41.584% |
+| 3 | 1.990 | 2.990 | 9.986 | 25.810% |
+| 4 | 2.588 | 3.588 | 11.983 | 10.973% |
+
+Kernel-savings bound for a `<=4` node tree:
+
+- FLA chunk reference: `135 us`
+- tiny-tree reference: `45.339 us` (`3` nodes / padded `4`)
+- GDN layers: `48`
+- maximum replacement saving: `4.304 ms/step`
+- P0 mean step wall time: `1.203653 s`
+- step-time saving fraction: `0.358%`
+
+Tiny-tree conclusion:
+
+- Under the observed P0 spine acceptance counters, even the depth-4 upper bound
+  loses about `11%` sequence tokens per draft versus MTP-5.
+- The best plausible kernel saving from replacing FLA with a tiny tree is only
+  about `0.36%` of measured step time.
+- Therefore the `<=4` tiny-tree niche is not competitive unless a real branch
+  sampler/capture shows branch alternatives lift acceptance far beyond the
+  observed MTP spine-position counters.
+- Cost-gate status: current standalone tree-kernel speed case does not clear.
+  Correctness components remain proven, but speed requires a different
+  accumulated-state kernel design or a new acceptance-rate result.
+
 ## Next
 
 Move the standalone algebra into the vLLM 0.22 FLA op fork:
