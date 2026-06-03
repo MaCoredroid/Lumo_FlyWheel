@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import argparse
 from dataclasses import dataclass
 
 
@@ -14,7 +15,6 @@ class P0Counters:
     window_tokens_per_step: float = 13.45945945945946
     window_accepted_per_draft_token: float = 0.5786666666666667
     window_drafts_per_step: float = 75 / 37
-    window_mean_step_seconds: float = 1.203652878065367
 
 
 def depth_rows(p0: P0Counters) -> list[dict[str, float | int]]:
@@ -36,21 +36,36 @@ def depth_rows(p0: P0Counters) -> list[dict[str, float | int]]:
                 "sequence_tokens_per_draft": sequence_tokens_per_draft,
                 "token_step_ratio_vs_mtp5_spine": token_step_ratio,
                 "projected_tokens_per_step_same_step_time": p0.window_tokens_per_step * token_step_ratio,
-                "step_latency_reduction_needed_to_match_baseline": 1.0 - token_step_ratio,
+                "forward_latency_reduction_needed_to_match_baseline": 1.0 - token_step_ratio,
             }
         )
     return rows
 
 
-def run() -> dict[str, object]:
+def run(decode_forward_ms: float | None, decode_forward_ms_range: tuple[float, float]) -> dict[str, object]:
     p0 = P0Counters()
     rows = depth_rows(p0)
     fla_chunk_us = 135.0
     tiny_tree_us = 45.339
     gdn_layers = 48
     saved_us_per_step = (fla_chunk_us - tiny_tree_us) * gdn_layers
-    saved_step_fraction = (saved_us_per_step / 1_000_000.0) / p0.window_mean_step_seconds
     best_depth4 = rows[3]
+
+    def saving(forward_ms: float) -> dict[str, float]:
+        saved_fraction = (saved_us_per_step / 1000.0) / forward_ms
+        return {
+            "decode_forward_ms": forward_ms,
+            "saved_forward_fraction": saved_fraction,
+            "net_tps_ratio_if_depth4": best_depth4["token_step_ratio_vs_mtp5_spine"] / (1.0 - saved_fraction),
+        }
+
+    if decode_forward_ms is None:
+        savings = [saving(decode_forward_ms_range[0]), saving(decode_forward_ms_range[1])]
+        saving_source = "range_assumption_pending_clean_dgx_steptrace_forward_pass"
+    else:
+        savings = [saving(decode_forward_ms)]
+        saving_source = "explicit_decode_forward_ms"
+
     return {
         "schema": "fr10.tiny_tree_acceptance_bound.v1",
         "p0_source": {
@@ -61,7 +76,6 @@ def run() -> dict[str, object]:
             "accepted_by_position": list(p0.accepted_by_position),
             "window_tokens_per_step": p0.window_tokens_per_step,
             "window_accepted_per_draft_token": p0.window_accepted_per_draft_token,
-            "window_mean_step_seconds": p0.window_mean_step_seconds,
         },
         "baseline": {
             "mtp5_spine_accepted_per_draft": p0.accepted_tokens_total / p0.drafts_total,
@@ -75,27 +89,40 @@ def run() -> dict[str, object]:
             "tiny_tree_us_reference_3_node_padded4": tiny_tree_us,
             "gdn_layers": gdn_layers,
             "saved_us_per_step_if_all_layers_replace_fla": saved_us_per_step,
-            "saved_step_fraction_at_p0_mean_step": saved_step_fraction,
+            "saving_source": saving_source,
+            "decode_forward_ms": decode_forward_ms,
+            "decode_forward_ms_range": list(decode_forward_ms_range),
+            "savings": savings,
         },
         "depth_rows": rows,
         "decision": {
             "tiny_tree_depth4_projected_tokens_per_step": best_depth4["projected_tokens_per_step_same_step_time"],
-            "tiny_tree_depth4_required_step_latency_reduction": best_depth4["step_latency_reduction_needed_to_match_baseline"],
-            "kernel_savings_step_fraction": saved_step_fraction,
-            "competitive": bool(saved_step_fraction >= best_depth4["step_latency_reduction_needed_to_match_baseline"]),
+            "tiny_tree_depth4_required_forward_latency_reduction": best_depth4["forward_latency_reduction_needed_to_match_baseline"],
+            "depth_bound_clears_mtp5": False,
             "interpretation": (
                 "Using P0 spine acceptance counters, a <=4-token spine/suffix upper-bound loses about "
-                "11% sequence tokens per draft versus MTP-5, while replacing 135us FLA with a 45us tiny "
-                "tree across 48 GDN layers saves only about 0.36% of the measured step wall time. "
-                "The tiny-tree niche is not competitive unless branch alternatives raise acceptance "
-                "far beyond the observed spine-position counters."
+                "11% sequence tokens per draft versus MTP-5. This is the tiny-tree depth kill. "
+                "Kernel savings must be denominatored against decode-forward-pass latency, not agentic "
+                "step wall time; the depth bound itself remains insufficient without branch acceptance "
+                "beyond the observed spine-position counters."
             ),
         },
     }
 
 
 def main() -> None:
-    print(json.dumps(run(), indent=2, sort_keys=True))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--decode-forward-ms", type=float, default=None)
+    parser.add_argument("--decode-forward-ms-min", type=float, default=25.0)
+    parser.add_argument("--decode-forward-ms-max", type=float, default=40.0)
+    args = parser.parse_args()
+    print(
+        json.dumps(
+            run(args.decode_forward_ms, (args.decode_forward_ms_min, args.decode_forward_ms_max)),
+            indent=2,
+            sort_keys=True,
+        )
+    )
 
 
 if __name__ == "__main__":

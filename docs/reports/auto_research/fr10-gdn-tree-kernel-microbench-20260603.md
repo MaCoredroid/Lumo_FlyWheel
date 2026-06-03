@@ -392,7 +392,7 @@ uses the P0 cu130 spines=1 counters:
 - P0 bounded-window throughput: `13.45945945945946 tok/step`
 - P0 bounded-window accepted/draft-token: `0.5786666666666667`
 
-| max accepted depth | accepted/draft | sequence tokens/draft | projected tok/step at same step time | latency reduction needed to match P0 |
+| max accepted depth | accepted/draft | sequence tokens/draft | projected tok/forward at same forward time | forward latency reduction needed to match P0 |
 |---:|---:|---:|---:|---:|
 | 1 | 0.686 | 1.686 | 5.630 | 58.167% |
 | 2 | 1.354 | 2.354 | 7.863 | 41.584% |
@@ -405,18 +405,23 @@ Kernel-savings bound for a `<=4` node tree:
 - tiny-tree reference: `45.339 us` (`3` nodes / padded `4`)
 - GDN layers: `48`
 - maximum replacement saving: `4.304 ms/step`
-- P0 mean step wall time: `1.203653 s`
-- step-time saving fraction: `0.358%`
+- denominator correction: do not divide by the `1.203653 s` agentic step wall
+  time; compare against decode-forward-pass latency
+- sensitivity range pending a clean DGX decode-forward trace:
+  - at `25 ms` forward latency, `4.304 ms` is `17.215%`
+  - at `40 ms` forward latency, `4.304 ms` is `10.759%`
 
 Tiny-tree conclusion:
 
 - Under the observed P0 spine acceptance counters, even the depth-4 upper bound
   loses about `11%` sequence tokens per draft versus MTP-5.
-- The best plausible kernel saving from replacing FLA with a tiny tree is only
-  about `0.36%` of measured step time.
-- Therefore the `<=4` tiny-tree niche is not competitive unless a real branch
-  sampler/capture shows branch alternatives lift acceptance far beyond the
-  observed MTP spine-position counters.
+- That depth loss is the sound tiny-tree kill: `<=4` nodes is too shallow to
+  match the depth-5 MTP spine acceptance envelope without additional branch
+  acceptance evidence.
+- Effective decode TPS must be evaluated as
+  `tokens_accepted_per_forward_pass / forward_pass_time`, using a decode-forward
+  denominator from DGX steptrace or equivalent kernel timing, not agentic wall
+  time.
 
 ## Fused Sparse Kernel Back-Of-Envelope
 
@@ -448,9 +453,14 @@ Cost-gate implication versus FLA:
 - FLA chunk reference: `135 us`
 - fused tree extra cost: `80.735 us/layer`
 - across 48 GDN layers: `3.875 ms/step`
-- P0 measured mean step: `1.203653 s`
-- step overhead: `0.322%`
-- acceptance lift needed over P0 MTP-5 spine: `0.01298` accepted tokens/draft
+- denominator correction: the old `1.203653 s` P0 step denominator is invalid
+  for cost-gating because it is agentic/server step wall time, not decode
+  forward-pass latency
+- sensitivity pending clean DGX decode-forward trace:
+  - at `25 ms` forward latency, overhead is `15.501%` and requires `0.625`
+    extra accepted tokens/draft over P0 MTP-5
+  - at `40 ms` forward latency, overhead is `9.688%` and requires `0.390`
+    extra accepted tokens/draft over P0 MTP-5
 
 Decision:
 
@@ -459,9 +469,10 @@ Decision:
   state commit.
 - Do not prototype another dense or all-node-state-spilling kernel for `>=6`
   node trees.
-- Prototype condition: branch acceptance must plausibly recover more than
-  `~0.013` accepted tokens/draft over P0 MTP-5, and the implementation must
-  remove the all-node state spill.
+- Do not build the fused kernel yet. The decisive missing evidence is branch
+  acceptance: a depth-5 tree-with-branches must accept enough more tokens per
+  decode forward pass than the MTP-5 spine to pay the corrected fused-kernel GDN
+  overhead.
 
 ## No-State-Spill Prototype Check
 
