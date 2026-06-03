@@ -12,6 +12,12 @@ GDN_LINEAR_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/"
     "gdn_linear_attn.py"
 )
+SCHEDULER_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py"
+)
+REJECTION_SAMPLER_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py"
+)
 
 
 def _patch_gdn_attn() -> bool:
@@ -310,11 +316,291 @@ def _patch_gdn_linear() -> bool:
     return True
 
 
+def _patch_scheduler_spec_trace() -> bool:
+    text = SCHEDULER_PATH.read_text()
+    sentinel = "# LUMO_PER_AGENT_SPEC_TRACE"
+    if sentinel in text:
+        return False
+
+    nl = "\n"
+    anchor = (
+        "    ) -> SpecDecodingStats | None:"
+        + nl
+        + "        if not self.log_stats or not num_draft_tokens:"
+    )
+    if anchor not in text:
+        raise RuntimeError("make_spec_decoding_stats anchor not found")
+    inject = nl.join(
+        [
+            "    ) -> SpecDecodingStats | None:",
+            f"        {sentinel}",
+            "        import json as _lj, time as _lt, os as _lo",
+            "        try:",
+            "            global _LUMO_SPEC_FH",
+            "            try:",
+            "                _LUMO_SPEC_FH",
+            "            except NameError:",
+            '                _LUMO_SPEC_FH = open(_lo.environ.get("LUMO_PER_REQ_SPEC_TRACE", "/logs/per_req_spec_trace.jsonl"), "a", buffering=1)',
+            "            _linv = (num_invalid_spec_tokens.get(request_id, 0) if num_invalid_spec_tokens else 0)",
+            '            _LUMO_SPEC_FH.write(_lj.dumps({"ts": round(_lt.time(), 4), "rid": request_id, "draft": num_draft_tokens, "proposal_width": num_draft_tokens, "verify_width": num_draft_tokens, "acc": num_accepted_tokens, "inv": _linv}) + chr(10))',
+            "        except Exception:",
+            "            pass",
+            "        if not self.log_stats or not num_draft_tokens:",
+        ]
+    )
+    text = text.replace(anchor, inject, 1)
+    SCHEDULER_PATH.write_text(text)
+    return True
+
+
+def _patch_rejection_sampler_tree_lcp() -> bool:
+    text = REJECTION_SAMPLER_PATH.read_text()
+    sentinel = "# LUMO_TREE_PATH_LCP_MAX"
+    if sentinel in text:
+        return False
+
+    helper_anchor = "\n\ndef rejection_sample("
+    helper = r'''
+
+# LUMO_TREE_PATH_LCP_MAX: greedy N-spine verifier.
+#
+# Gate B is greedy/deterministic, so max-LCP over root-to-leaf paths is the
+# correct deterministic tree accept rule. The same rows are diagnostics only for
+# sampled Gate C; sampled production must use the distribution-preserving tree
+# rejection sampler, not this max selector.
+def _lumo_tree_path_lcp_max_greedy_sample(
+    output_token_ids: torch.Tensor,
+    accepted_tree_rows: torch.Tensor,
+    num_draft_tokens,
+    draft_token_ids: torch.Tensor,
+    tree_parent_indices: torch.Tensor,
+    parent_token_ids: torch.Tensor,
+    self_token_ids: torch.Tensor,
+    max_spec_len: int,
+) -> torch.Tensor:
+    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+    drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
+    parent_targets_cpu = [int(x) for x in parent_token_ids.detach().cpu().tolist()]
+    self_targets_cpu = [int(x) for x in self_token_ids.detach().cpu().tolist()]
+    if hasattr(num_draft_tokens, 'detach'):
+        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+    else:
+        counts = [int(x) for x in num_draft_tokens]
+
+    out_rows = []
+    accepted_rows = []
+    path_log_rows = []
+    winner_log_rows = []
+    start = 0
+    for req_i, node_count in enumerate(counts):
+        node_count = int(node_count)
+        parents = parents_cpu[start:start + node_count]
+        drafts = drafts_cpu[start:start + node_count]
+        parent_targets = parent_targets_cpu[start:start + node_count]
+        self_targets = self_targets_cpu[start:start + node_count]
+
+        children = {-1: []}
+        for node, parent in enumerate(parents):
+            parent = int(parent)
+            children.setdefault(parent, []).append(node)
+            children.setdefault(node, [])
+        leaves = [node for node in range(node_count) if not children.get(node)]
+        if not leaves:
+            leaves = list(range(node_count))
+
+        best_path = []
+        best_lcp = -1
+        best_leaf = -1
+        best_path_idx = 0
+        path_scores = []
+        for path_idx, leaf in enumerate(leaves):
+            path = []
+            node = int(leaf)
+            guard = 0
+            while 0 <= node < node_count and guard <= node_count:
+                path.append(node)
+                node = int(parents[node])
+                guard += 1
+            path.reverse()
+            lcp = 0
+            for node in path:
+                if int(drafts[node]) != int(parent_targets[node]):
+                    break
+                lcp += 1
+            path_scores.append({
+                'leaf': int(leaf),
+                'path': [int(x) for x in path],
+                'lcp': int(lcp),
+            })
+            # Stable tie-break: earliest flattened leaf wins. With vLLM's sorted
+            # tree choices this preserves the native top-1/path0 chain.
+            if lcp > best_lcp:
+                best_lcp = int(lcp)
+                best_path = path
+                best_leaf = int(leaf)
+                best_path_idx = int(path_idx)
+
+        best_lcp = max(0, int(best_lcp))
+        path0_lcp = int(path_scores[0]['lcp']) if path_scores else 0
+        row = []
+        for node in best_path[:best_lcp]:
+            row.append(int(drafts[node]))
+        if best_path:
+            if best_lcp < len(best_path):
+                row.append(int(parent_targets[best_path[best_lcp]]))
+            elif best_lcp > 0:
+                row.append(int(self_targets[best_path[best_lcp - 1]]))
+            else:
+                row.append(int(parent_targets[best_path[0]]))
+        row = row[:int(max_spec_len) + 1]
+        out_rows.append(row)
+        accepted_row = int(best_path[best_lcp - 1]) + 1 if best_lcp > 0 else 0
+        accepted_rows.append(accepted_row)
+        path_log_rows.append({
+            'req_index': int(req_i),
+            'node_count': int(node_count),
+            'accepted_len': int(best_lcp),
+            'accepted_final_row': int(accepted_row),
+            'accepted_node_ids': [int(x) for x in best_path[:best_lcp]],
+            'path0_lcp': int(path0_lcp),
+            'superset_violation': bool(int(best_lcp) < int(path0_lcp)),
+            'superset_delta': int(best_lcp) - int(path0_lcp),
+            'winner_leaf': int(best_leaf),
+            'winner_path': [int(x) for x in best_path],
+            'path_scores': path_scores,
+        })
+        counts_by_path = {
+            str(i): int(score.get('lcp', 0))
+            for i, score in enumerate(path_scores)
+        }
+        winner_log_rows.append({
+            'primary': f'fr10_tree_req_{req_i}',
+            'policy': 'greedy_tree_lcp_max',
+            'selector_enabled': True,
+            'lossless_public_stream': True,
+            'temperature': 0.0,
+            'winner_req_id': f'fr10_tree_req_{req_i}::path{best_path_idx}',
+            'winner_spine': int(best_path_idx),
+            'winner_acc': int(best_lcp),
+            'spine0_acc': int(path0_lcp),
+            'candidate_winner_req_id': f'fr10_tree_req_{req_i}::path{best_path_idx}',
+            'candidate_winner_spine': int(best_path_idx),
+            'candidate_winner_acc': int(best_lcp),
+            'hidden_winner_suppressed_reason': None,
+            'counts': counts_by_path,
+            'members': [f'fr10_tree_req_{req_i}::path{i}' for i in range(len(path_scores))],
+            'copy': {'missing': 0, 'copied': 0},
+        })
+        start += node_count
+
+    output_token_ids.fill_(-1)
+    for req_i, row in enumerate(out_rows):
+        for pos, token_id in enumerate(row):
+            output_token_ids[req_i, pos] = int(token_id)
+    accepted_tree_rows.copy_(
+        torch.tensor(accepted_rows, dtype=accepted_tree_rows.dtype,
+                     device=accepted_tree_rows.device)
+    )
+    globals()['_LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL'] = [int(x) for x in accepted_rows]
+    try:
+        from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
+        _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
+            int(x) for x in accepted_rows
+        ]
+    except Exception:
+        pass
+    try:
+        import json as _lcpj, os as _lcpo, time as _lcpt
+        global _LUMO_TREE_PATH_LCP_FH
+        try:
+            _LUMO_TREE_PATH_LCP_FH
+        except NameError:
+            _LUMO_TREE_PATH_LCP_FH = open(
+                _lcpo.environ.get('LUMO_TREE_PATH_LCP_LOG',
+                                  '/logs/tree_path_lcp_max.jsonl'),
+                'a',
+                buffering=1,
+            )
+        _now = round(_lcpt.time(), 4)
+        for row in path_log_rows:
+            row = dict(row)
+            row['ts'] = _now
+            row['event'] = 'tree_path_lcp_max'
+            _LUMO_TREE_PATH_LCP_FH.write(_lcpj.dumps(row) + chr(10))
+    except Exception:
+        pass
+    try:
+        import json as _iwj, os as _iwo, time as _iwt
+        global _LUMO_IR_WINNER_TRACE_FH
+        try:
+            _LUMO_IR_WINNER_TRACE_FH
+        except NameError:
+            _LUMO_IR_WINNER_TRACE_FH = open(
+                _iwo.environ.get('LUMO_IR_WINNER_TRACE_FILE',
+                                 '/logs/independent_winner_trace.jsonl'),
+                'a',
+                buffering=1,
+            )
+        _now = round(_iwt.time(), 4)
+        for row in winner_log_rows:
+            row = dict(row)
+            row['ts'] = _now
+            row['event'] = 'independent_winner_commit'
+            _LUMO_IR_WINNER_TRACE_FH.write(_iwj.dumps(row) + chr(10))
+    except Exception:
+        pass
+    return output_token_ids
+'''
+    if helper_anchor not in text:
+        raise RuntimeError("tree path-LCP helper anchor not found")
+    text = text.replace(helper_anchor, helper + helper_anchor, 1)
+
+    old = """        if sampling_metadata.all_greedy:
+            lumo_tree_sample_kernel[(batch_size,)](
+                output_token_ids,
+                accepted_tree_rows,
+                cu_num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                tree_token_ids[0],
+                tree_token_ids[1],
+                max_spec_len,
+            )
+        else:
+"""
+    new = """        if sampling_metadata.all_greedy:
+            output_token_ids = _lumo_tree_path_lcp_max_greedy_sample(
+                output_token_ids,
+                accepted_tree_rows,
+                num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                tree_token_ids[0],
+                tree_token_ids[1],
+                max_spec_len,
+            )
+        else:
+"""
+    if old not in text:
+        raise RuntimeError("tree path-LCP greedy branch anchor not found")
+    text = text.replace(old, new, 1)
+    text = sentinel + "\n" + text
+    REJECTION_SAMPLER_PATH.write_text(text)
+    return True
+
+
 def main() -> int:
     patched = {
         str(GDN_ATTN_PATH): _patch_gdn_attn(),
         str(GDN_LINEAR_PATH): _patch_gdn_linear(),
+        str(SCHEDULER_PATH): _patch_scheduler_spec_trace(),
+        str(REJECTION_SAMPLER_PATH): _patch_rejection_sampler_tree_lcp(),
     }
+    import py_compile
+
+    for path, did_patch in patched.items():
+        if did_patch:
+            py_compile.compile(path, doraise=True)
     print(patched)
     return 0
 

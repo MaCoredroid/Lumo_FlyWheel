@@ -234,3 +234,13 @@ Updated: 2026-06-03 19:22 UTC
 ## Questions For Researcher
 
 - None yet.
+
+## Latest Update: Gate B Side-Channel Instrumentation
+
+- Integrated FR9/Round-F runtime evidence hooks into `scripts/fr10_phase4_patch_vllm_tree_gdn.py` for the FR10 patched cu130 server. The patcher now also installs:
+  - scheduler `per_req_spec_trace.jsonl` rows in the existing validator schema `{ts,rid,draft,proposal_width,verify_width,acc,inv}` via `LUMO_PER_REQ_SPEC_TRACE`;
+  - greedy tree path-LCP rows in `tree_path_lcp_max.jsonl` via `LUMO_TREE_PATH_LCP_LOG`;
+  - validator-compatible `independent_winner_trace.jsonl` rows derived from the same greedy tree event via `LUMO_IR_WINNER_TRACE_FILE`, so `scripts/verify_independent_winner_trace.py` can run unchanged.
+- Correctness nuance recorded in code: the greedy Gate B tree helper uses max-LCP only for deterministic greedy mode; sampled Gate C must use a distribution-preserving tree rejection sampler, not longest-accepted/max-selector. The LCP rows are diagnostics for sampled mode.
+- Local syntax validation passed: `python3 -m py_compile scripts/fr10_phase4_patch_vllm_tree_gdn.py`.
+- Next Gate B run must relaunch the patched server with trace envs pointing under `output/fr10_phase4_gate_b_integrated/`, then run `verify_tree_path_lcp_superset.py`, `verify_independent_winner_trace.py`, and `measure_spec_per_position.py` on those emitted traces. The currently booting container predates these side-channel additions and is not the final evidence run.
