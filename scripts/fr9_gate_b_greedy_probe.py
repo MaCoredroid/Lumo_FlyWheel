@@ -133,9 +133,12 @@ def collect(args: argparse.Namespace) -> int:
             reset_error = f"{type(exc).__name__}: {exc}"
 
     records: list[dict[str, Any]] = []
-    batch_shapes: list[tuple[str, list[tuple[int, str]]]] = [
+    all_batch_shapes: list[tuple[str, list[tuple[int, str]]]] = [
         ("b1", [(prompt_id, prompt) for prompt_id, prompt in enumerate(prompts)]),
         ("b4", [(prompt_id, prompt) for prompt_id, prompt in enumerate(prompts)]),
+    ]
+    batch_shapes = [
+        item for item in all_batch_shapes if args.batch_shape in ("both", item[0])
     ]
     for batch_name, prompt_items in batch_shapes:
         batch_prompts = [prompt for _, prompt in prompt_items]
@@ -189,6 +192,7 @@ def collect(args: argparse.Namespace) -> int:
         "model": args.model,
         "temperature": 0,
         "seed": args.seed,
+        "batch_shape": args.batch_shape,
         "max_tokens": args.max_tokens,
         "ts": time.time(),
         "prompts": prompts,
@@ -646,6 +650,7 @@ def build_parser() -> argparse.ArgumentParser:
     collect_parser.add_argument("--model", default=DEFAULT_MODEL)
     collect_parser.add_argument("--max-tokens", type=int, default=24)
     collect_parser.add_argument("--seed", type=int)
+    collect_parser.add_argument("--batch-shape", choices=["both", "b1", "b4"], default="both")
     collect_parser.add_argument("--prompts-file")
     collect_parser.add_argument("--request-timeout", type=float, default=180)
     collect_parser.add_argument("--wait-health", type=float, default=0)
