@@ -801,12 +801,41 @@ class ModelServer:
         prelaunch_shell = self.prelaunch_shell.rstrip()
         if prelaunch_shell:
             prelaunch_shell = prelaunch_shell.replace("{{log_path}}", shlex.quote(str(log_path)))
+        execute_args = list(vllm_args)
+        if os.environ.get("LUMO_NSYS_WRAP_VLLM", "0").lower() in {"1", "true", "yes"}:
+            nsys_bin = os.environ.get(
+                "LUMO_NSYS_BIN",
+                "/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys",
+            )
+            nsys_delay_s = os.environ.get("LUMO_NSYS_DELAY_S", "600")
+            nsys_duration_s = os.environ.get("LUMO_NSYS_DURATION_S", "150")
+            nsys_output = os.environ.get(
+                "LUMO_NSYS_OUTPUT",
+                str(log_path.parent / f"nsys_vllm_{model_id}"),
+            )
+            execute_args = [
+                nsys_bin,
+                "profile",
+                "--delay",
+                nsys_delay_s,
+                "--duration",
+                nsys_duration_s,
+                "--trace=cuda,nvtx",
+                "--cuda-graph-trace=node",
+                "--sample=none",
+                "--cpuctxsw=none",
+                "--force-overwrite=true",
+                "-o",
+                nsys_output,
+                *vllm_args,
+            ]
+
         shell_cmd = (
             "set -euo pipefail\n"
             + (prelaunch_shell + "\n" if prelaunch_shell else "")
             + header
             + "\n"
-            + shlex.join(vllm_args)
+            + shlex.join(execute_args)
             + " 2>&1 | tee -a "
             + shlex.quote(str(log_path))
         )
