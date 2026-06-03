@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-03 18:59 UTC
+Updated: 2026-06-03 19:03 UTC
 
 ## Current Phase
 
@@ -93,6 +93,7 @@ Updated: 2026-06-03 18:59 UTC
 - `output/fr10_tree_acceptance_probe_20260603/container_id_retry2.txt`
 - `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py`
 - `scripts/fr10_phase4_launch_tree_capture_probe.sh`
+- `scripts/fr10_phase4_patch_gdn_capture.py`
 
 ## Latest Handoff: Tree Spec / Caterpillar
 
@@ -103,7 +104,8 @@ Updated: 2026-06-03 18:59 UTC
 - Correct tree-speed target: keep depth-5 MTP spine and add probability-pruned second-choice stubs where top-2 probability / head uncertainty makes rescue likely. Measure on P0 prompts: where target token differs from MTP top1, fraction target equals top2/top3; top-2 probability distribution for pruning; and accepted tokens per decode forward pass versus the linear MTP-5 spine. This decides whether the sparse no-state-spill GDN tree kernel rewrite is justified.
 - Do not claim native cu130 tree spec is GDN-lossless. Expected empirical check after boot: compare native tree-spec outputs/metrics against the P0 spine baseline and show divergence/contamination; this motivates the `gdn_attn.py` FR10 integration.
 - Host memory recovery completed after the low-util tree probe failure: stopped/removed FR10 containers, ran the ModelServer-equivalent recovery command (`sync; echo 3 > /proc/sys/vm/drop_caches; swapoff -a || true; swapon -a || true`) via passwordless sudo, and verified `free -h` shows `107 GiB` available and swap `0B/15GiB` used. Full-util Phase 4/tree launches may proceed from this clean state; do not use `docker restart` for recovery.
-- Step 2 capture launcher added: `scripts/fr10_phase4_launch_tree_capture_probe.sh`. It uses the digest-pinned cu130 image, mounts repo and `/models`, patches `gdn_linear_attn.py` before server start, and dumps one spec-GDN payload per layer prefix under `output/fr10_phase4_tree_capture_probe_20260603/tensors`. Payload includes `mixed_qkv_spec`, `a`, `b`, `query_spec`, `key_spec`, `value_spec`, `A_log`, `dt_bias`, `spec_query_start_loc`, `spec_state_indices_tensor`, `num_accepted_tokens`, full `initial_state_before_spec`, `core_attn_out_spec_native`, and `last_recurrent_state_native`. The capture run passes `--enforce-eager` intentionally so Python-side `torch.save` cannot interact with CUDA graph capture; this is a real-tensor de-risk probe, not the final graph-captured Phase 4 validation.
+- Step 2 capture launcher added: `scripts/fr10_phase4_launch_tree_capture_probe.sh`. It uses the digest-pinned cu130 image, mounts repo and `/models`, calls `scripts/fr10_phase4_patch_gdn_capture.py` inside the container to patch `gdn_linear_attn.py` before server start, and dumps one spec-GDN payload per layer prefix under `output/fr10_phase4_tree_capture_probe_20260603/tensors`. Payload includes `mixed_qkv_spec`, `a`, `b`, `query_spec`, `key_spec`, `value_spec`, `A_log`, `dt_bias`, `spec_query_start_loc`, `spec_state_indices_tensor`, `num_accepted_tokens`, full `initial_state_before_spec`, `core_attn_out_spec_native`, and `last_recurrent_state_native`. The capture run passes `--enforce-eager` intentionally so Python-side `torch.save` cannot interact with CUDA graph capture; this is a real-tensor de-risk probe, not the final graph-captured Phase 4 validation.
+- First capture launch attempt failed before server start from a shell quoting bug in an inline Python here-doc (`SyntaxError: unterminated triple-quoted string literal`). Fixed by moving the patcher to the standalone `scripts/fr10_phase4_patch_gdn_capture.py`; validation passed with `bash -n scripts/fr10_phase4_launch_tree_capture_probe.sh` and `python3 -m py_compile scripts/fr10_phase4_patch_gdn_capture.py`.
 
 ## Phase 4 Design / Hook Map
 
