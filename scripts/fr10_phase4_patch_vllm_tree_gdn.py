@@ -102,6 +102,7 @@ def _patch_gdn_attn() -> bool:
             "    fr10_tree_visible_mask: torch.Tensor | None = None\n"
             "    fr10_tree_invocation_counter: torch.Tensor | None = None\n"
             "    fr10_tree_has_sibling: bool = False\n"
+            "    fr10_tree_branch_mask: torch.Tensor | None = None\n"
         ),
         1,
     )
@@ -123,6 +124,7 @@ def _patch_gdn_attn() -> bool:
             "        self.fr10_tree_visible_mask = None\n"
             "        self.fr10_tree_invocation_counter = None\n"
             "        self.fr10_tree_has_sibling = False\n"
+            "        self.fr10_tree_branch_mask = None\n"
             "        spec_token_tree = None\n"
             "        if self.speculative_config is not None:\n"
             "            spec_token_tree = self.speculative_config.speculative_token_tree\n"
@@ -151,6 +153,17 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
             "            self.fr10_tree_has_sibling = any(parent.count(p) > 1 for p in set(parent) if p >= 0)\n"
+            "            children = {node: [] for node in range(n)}\n"
+            "            for node, p in enumerate(parent):\n"
+            "                if p >= 0:\n"
+            "                    children[p].append(node)\n"
+            "            public_path = {0}\n"
+            "            cur = 0\n"
+            "            while children.get(cur):\n"
+            "                cur = min(children[cur])\n"
+            "                public_path.add(cur)\n"
+            "            branch_mask = [node not in public_path for node in range(n)]\n"
+            "            self.fr10_tree_branch_mask = torch.tensor(branch_mask, dtype=torch.bool, device=device)\n"
             "            if _fr10_metrics_enabled():\n"
             "                self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int32, device=device)\n"
             "                _fr10_register_tree_counter(\n"
@@ -171,6 +184,7 @@ def _patch_gdn_attn() -> bool:
             "            fr10_tree_visible_mask=self.fr10_tree_visible_mask,\n"
             "            fr10_tree_invocation_counter=self.fr10_tree_invocation_counter,\n"
             "            fr10_tree_has_sibling=self.fr10_tree_has_sibling,\n"
+            "            fr10_tree_branch_mask=self.fr10_tree_branch_mask,\n"
             "            nums_dict=nums_dict,\n"
         ),
         1,
@@ -229,6 +243,7 @@ def _patch_gdn_linear() -> bool:
                 assert attn_metadata.fr10_tree_parent is not None
                 assert attn_metadata.fr10_tree_strict_mask is not None
                 assert attn_metadata.fr10_tree_visible_mask is not None
+                assert attn_metadata.fr10_tree_branch_mask is not None
                 if os.environ.get("FR10_METRICS", "0") == "1":
                     logger.warning_once(
                         "FR10 tree GDN verifier branch active for layer %s", self.prefix
@@ -247,7 +262,7 @@ def _patch_gdn_linear() -> bool:
                 )
                 tree_n = int(attn_metadata.fr10_tree_parent.numel())
                 tree_n_pad = int(attn_metadata.fr10_tree_visible_mask.size(0))
-                core_attn_out_spec = torch.empty(
+                tree_out_all = torch.empty(
                     (1, query_spec.size(1), value_tree.size(1), value_tree.size(2)),
                     dtype=query_spec.dtype,
                     device=query_spec.device,
@@ -284,7 +299,7 @@ def _patch_gdn_linear() -> bool:
                         n_pad=tree_n_pad,
                         strict_mask=attn_metadata.fr10_tree_strict_mask,
                         visible_mask=attn_metadata.fr10_tree_visible_mask,
-                        out=core_attn_out_spec[0, start:end],
+                        out=tree_out_all[0, start:end],
                         state=tree_state,
                         output_scale=self.head_k_dim**-0.5,
                         use_qk_l2norm_in_kernel=True,
@@ -294,7 +309,6 @@ def _patch_gdn_linear() -> bool:
                             else None
                         ),
                     )
-                    core_attn_out_spec[0, start:end] = tree_out[:tree_n]
                 core_attn_out_native, last_recurrent_state = fused_sigmoid_gating_delta_rule_update(
                     A_log=self.A_log,
                     a=a,
@@ -312,8 +326,19 @@ def _patch_gdn_linear() -> bool:
                     num_accepted_tokens=num_accepted_tokens,
                     use_qk_l2norm_in_kernel=True,
                 )
-                if not getattr(attn_metadata, "fr10_tree_has_sibling", False):
-                    core_attn_out_spec = core_attn_out_native
+                core_attn_out_spec = core_attn_out_native
+                if getattr(attn_metadata, "fr10_tree_has_sibling", False):
+                    branch_mask = attn_metadata.fr10_tree_branch_mask[:tree_n].view(
+                        1, tree_n, 1, 1
+                    )
+                    for fr10_b in range(attn_metadata.num_spec_decodes):
+                        start = fr10_b * tree_n
+                        end = start + tree_n
+                        native_block = core_attn_out_spec[:, start:end]
+                        tree_block = tree_out_all[:, start:end]
+                        core_attn_out_spec[:, start:end] = torch.where(
+                            branch_mask, tree_block, native_block
+                        )
             else:
                 core_attn_out_spec, last_recurrent_state = (
                     fused_sigmoid_gating_delta_rule_update(
