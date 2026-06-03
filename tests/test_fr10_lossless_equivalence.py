@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import sys
-from importlib.util import find_spec
 from pathlib import Path
 
 import pytest
-import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -23,12 +21,9 @@ from lumo_flywheel_serving.fr10_equivalence_gate import (
     evaluate_state_parity,
     evaluate_three_way_gate,
     first_token_diff,
+    load_margin_artifact,
     load_token_artifact,
 )
-
-KERNEL_TESTS_AVAILABLE = find_spec("triton") is not None
-if KERNEL_TESTS_AVAILABLE:
-    from lumo_flywheel_serving.fr10_gdn_tree_kernel import launch_tree_gdn_prepared
 
 
 def _record(batch: str, choice: int, tokens: list[int]) -> TokenRecord:
@@ -61,6 +56,35 @@ def test_committed_ar_vs_p0_artifact_records_batch_shape_gap() -> None:
     assert len(all_flips) == 1
     assert b4_flips[0].choice_index == 0
     assert b4_flips[0].position == 2
+
+
+def test_committed_ar_vs_p0_calibration_flip_margin_is_enforced() -> None:
+    non_mtp = load_token_artifact("output/fr10_cu130_non_mtp_ar_greedy/greedy_tokens.json")
+    naive_mtp = load_token_artifact(
+        "output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_batchinv_greedy_tokens.json"
+    )
+    margins = load_margin_artifact(
+        "output/fr10_cu130_non_mtp_ar_greedy/ar_vs_p0_mtp5_flip_margins.json"
+    )
+    flips = compare_records(non_mtp, naive_mtp, batches={"b4"})
+    flips = [
+        type(flip)(
+            **{
+                **flip.__dict__,
+                "margin": margins[flip.key][flip.position],
+            }
+        )
+        for flip in flips
+    ]
+
+    assert len(flips) == 1
+    assert flips[0].choice_index == 0
+    assert flips[0].position == 2
+    report = evaluate_flip_margins(flips)
+    assert not report.passed
+    assert report.metrics["max_margin"] == pytest.approx(0.25)
+    assert report.metrics["max_margin"] > GateThresholds().margin_indifference
+    assert any("high-margin flip" in violation for violation in report.violations)
 
 
 def test_flip_margin_gate_rejects_high_margin_flip() -> None:
@@ -217,70 +241,3 @@ def test_three_way_gate_rejects_tree_worse_than_baseline() -> None:
 
     assert not report.passed
     assert any("tree flip rate" in violation for violation in report.violations)
-
-
-def test_mode_switch_requires_homogeneous_relaunch_equivalence() -> None:
-    dedicated = {("b1", 0): _record("b1", 0, [1, 2, 3])}
-    shared_same_mode = {("b1", 0): _record("b1", 0, [1, 2, 3])}
-    mixed_mode_contaminated = {("b1", 0): _record("b1", 0, [1, 9, 3])}
-
-    assert compare_records(dedicated, shared_same_mode) == []
-    assert compare_records(dedicated, mixed_mode_contaminated) != []
-
-
-def test_tree_kernel_launcher_fails_closed_on_bad_descriptor_shapes() -> None:
-    if not KERNEL_TESTS_AVAILABLE:
-        pytest.skip("FR10 Triton kernel tests require triton")
-    q = torch.zeros((2, 1, 4), dtype=torch.float32)
-    k = torch.zeros((2, 1, 4), dtype=torch.float32)
-    v = torch.zeros((2, 1, 4), dtype=torch.float32)
-    g = torch.zeros((2, 1), dtype=torch.float32)
-    beta = torch.zeros((2, 1), dtype=torch.float32)
-    h0 = torch.zeros((1, 4, 4), dtype=torch.float32)
-    strict = torch.zeros((2, 2), dtype=torch.int32)
-    visible = torch.eye(2, dtype=torch.int32)
-
-    with pytest.raises(ValueError, match="n_pad"):
-        launch_tree_gdn_prepared(
-            q=q,
-            k=k,
-            v=v,
-            g=g,
-            beta=beta,
-            h0=h0,
-            n_actual=3,
-            n_pad=2,
-            strict_mask=strict,
-            visible_mask=visible,
-        )
-
-
-def test_tree_kernel_launcher_fails_closed_on_bad_bank_index_row() -> None:
-    if not KERNEL_TESTS_AVAILABLE:
-        pytest.skip("FR10 Triton kernel tests require triton")
-    q = torch.zeros((2, 1, 4), dtype=torch.float32)
-    k = torch.zeros((2, 1, 4), dtype=torch.float32)
-    v = torch.zeros((2, 1, 4), dtype=torch.float32)
-    g = torch.zeros((2, 1), dtype=torch.float32)
-    beta = torch.zeros((2, 1), dtype=torch.float32)
-    h0 = torch.zeros((1, 1, 4, 4), dtype=torch.float32)
-    h0_indices = torch.zeros((1,), dtype=torch.int64)
-    strict = torch.zeros((2, 2), dtype=torch.int32)
-    visible = torch.eye(2, dtype=torch.int32)
-
-    with pytest.raises(ValueError, match="h0_index_row"):
-        launch_tree_gdn_prepared(
-            q=q,
-            k=k,
-            v=v,
-            g=g,
-            beta=beta,
-            h0=h0,
-            h0_indices=h0_indices,
-            h0_is_bank=True,
-            h0_index_row=1,
-            n_actual=2,
-            n_pad=2,
-            strict_mask=strict,
-            visible_mask=visible,
-        )

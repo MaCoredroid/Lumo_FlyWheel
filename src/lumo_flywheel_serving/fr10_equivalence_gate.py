@@ -259,6 +259,18 @@ def attach_flip_margins(
     return out
 
 
+def load_margin_artifact(path: str | Path) -> dict[RecordKey, dict[int, float]]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    rows = data.get("records", data if isinstance(data, list) else [])
+    margins: dict[RecordKey, dict[int, float]] = {}
+    for row in rows:
+        key = (str(row["batch"]), int(row["choice_index"]))
+        position = int(row["position"])
+        margin = float(row["margin"])
+        margins.setdefault(key, {})[position] = margin
+    return margins
+
+
 def evaluate_flip_margins(
     flips: Sequence[TokenFlip],
     *,

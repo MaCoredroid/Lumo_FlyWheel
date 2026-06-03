@@ -1,0 +1,64 @@
+{
+  "exact_match": false,
+  "left": "output/fr10_cu130_non_mtp_ar_greedy/greedy_tokens_rerun_for_margin.json",
+  "left_arm": "fr10_cu130_non_mtp_ar_greedy_rerun",
+  "matched_records": 16,
+  "mismatches": [
+    {
+      "batch": "b1",
+      "choice_index": 3,
+      "first_diff_index": 5,
+      "left_token": 8432,
+      "left_token_ids": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        8432,
+        248044
+      ],
+      "prompt": "Q: Name the color of clear daytime sky in one word. A:",
+      "right_token": 10025,
+      "right_token_ids": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        10025,
+        248044
+      ]
+    },
+    {
+      "batch": "b4",
+      "choice_index": 3,
+      "first_diff_index": 5,
+      "left_token": 8432,
+      "left_token_ids": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        8432,
+        248044
+      ],
+      "prompt": "Q: Name the color of clear daytime sky in one word. A:",
+      "right_token": 10025,
+      "right_token_ids": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        10025,
+        248044
+      ]
+    }
+  ],
+  "missing_left": [],
+  "missing_right": [],
+  "right": "output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_batchinv_greedy_tokens.json",
+  "right_arm": "fr10_cu130_p0_s1_batchinv_greedy"
+}
