@@ -178,6 +178,61 @@ The cu130 production decode state commit primitive is:
 
 FR10 state-commit rule: tree kernel output/logits drive accept/reject only. After an accepted path is selected, commit the canonical recurrent state by replaying the accepted short path through the native decode update (`fused_recurrent_gated_delta_rule_packed_decode` / the production decode path) and discard tree verifier state.
 
+## Canonical State Commit Probe
+
+Implementation artifact: `scripts/fr10_canonical_state_commit_probe.py`
+
+This probe exercises the exact cu130 production decode state-update primitive:
+
+`vllm.model_executor.layers.fla.ops.fused_recurrent_gated_delta_rule_packed_decode`
+
+It constructs production-shaped synthetic decode inputs:
+
+- packed bf16 `mixed_qkv` with `[q, k, v]` layout matching `gdn_linear_attn.py`
+- bf16 `a` and `b`
+- fp32 `A_log`, `dt_bias`, and recurrent state bank
+- valid `ssm_state_indices` slot `1`; slot `0` remains the invalid/null state
+- `scale = 1/sqrt(128)`
+- `use_qk_l2norm_in_kernel=True`
+
+Command:
+
+```bash
+docker run --rm --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
+  -v /home/mark/shared/lumoFlyWheel:/workspace -w /workspace \
+  --entrypoint python3 -e PYTHONWARNINGS=ignore \
+  vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776 \
+  scripts/fr10_canonical_state_commit_probe.py --tokens 14 --accepted-tokens 5 --capture
+```
+
+Artifact: `output/fr10_canonical_state_commit_probe_20260603.json`
+
+Results:
+
+- packed-decode replay output bit-exact: `true`
+- packed-decode replay state bit-exact: `true`
+- packed replay max output delta: `0.0`
+- packed replay max state delta: `0.0`
+- one-token CUDA graph replay bit-exact: `true`
+- packed decode vs sequence recurrent diagnostic max output delta: `0.0`
+- packed decode vs sequence recurrent diagnostic max state delta: `2.9802322387695312e-08`
+- accepted path length: `5`
+- state read bytes per token: `3,145,728`
+- state write bytes per token: `3,145,728`
+- accepted-path state read bytes: `15,728,640`
+- accepted-path state write bytes: `15,728,640`
+
+This is the implementation rule for lossless FR10 commit:
+
+1. Tree verifier kernel computes candidate logits and accept/reject decisions.
+2. Tree verifier recurrent state is treated as scratch and never committed.
+3. The accepted token path is replayed through `fused_recurrent_gated_delta_rule_packed_decode`.
+4. The native packed decode output/state is committed to the request state.
+
+The probe demonstrates that this canonical commit path is deterministic,
+CUDA-graph-compatible for warmed one-token decode, and numerically aligned with
+the sequence recurrent diagnostic to fp32 roundoff.
+
 ## Marginal Branch Cost
 
 Command:

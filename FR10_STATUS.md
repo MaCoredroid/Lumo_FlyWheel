@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-03 17:47 UTC
+Updated: 2026-06-03 17:54 UTC
 
 ## Current Phase
 
@@ -75,6 +75,8 @@ Updated: 2026-06-03 17:47 UTC
 - `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_metrics_after_batchinv_streams.prom`
 - `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_batchinv_steptrace_window.jsonl`
 - `output/fr10_cu130_gate_d_production_gdn_single_spine_batchinv_followup_clean_20260603.json`
+- `scripts/fr10_canonical_state_commit_probe.py`
+- `output/fr10_canonical_state_commit_probe_20260603.json`
 
 ## Passed
 
@@ -115,6 +117,8 @@ Updated: 2026-06-03 17:47 UTC
 - Exact-production Gate D rerun completed inside the same digest-pinned cu130-nightly stack: command used `--capture --production-gdn --production-scale --input-dtype bf16 --single-spine-table`. All rows `{2,3,6,8,14}` resolved `production_gdn_forward_method=forward_native`, used bf16 inputs/fp32 initial state/raw `g`/`use_qk_l2norm_in_kernel=True`, and graph replay was bit-exact. Production max output delta was `6.103515625e-05` for all rows; max final-state delta was `0.0009473264217376709`; per-row final-state deltas `{2:0.0008978471159934998, 3:0.000874541699886322, 6:0.000655151903629303, 8:0.0009473264217376709, 14:0.0007828027009963989}`. Tree graph times `{2:12.556us, 3:43.164us, 6:308.687us, 8:352.262us, 14:1041.471us}`. Artifact: `output/fr10_cu130_gate_d_production_gdn_single_spine_batchinv_followup_clean_20260603.json`.
 - Exact-production Gate D interpretation: single-spine tree mask equals the linear causal mask, so this proves apples-to-apples production algebra within bf16 roundoff for logits/output. The remaining `<1e-3` recurrent-state drift is reduction-order drift and confirms canonical native state commit is mandatory before any lossless claim.
 - cu130 native decode commit primitive located: `vllm/model_executor/layers/mamba/gdn_linear_attn.py` imports and calls `fused_recurrent_gated_delta_rule_packed_decode` from `vllm/model_executor/layers/fla/ops/fused_recurrent.py`. The production decode call passes `mixed_qkv`, `a`, `b`, `A_log`, `dt_bias`, `scale=self.head_k_dim**-0.5`, `initial_state=ssm_state`, `out=core_attn_out[:num_actual_tokens].unsqueeze(1)`, `ssm_state_indices`, and `use_qk_l2norm_in_kernel=True`.
+- Canonical-state-commit probe implemented in `scripts/fr10_canonical_state_commit_probe.py` and run inside cu130-nightly. The probe constructs production-shaped bf16 packed `mixed_qkv`, bf16 `a/b`, fp32 `A_log/dt_bias`, fp32 state bank, valid `ssm_state_indices=1`, and replays a 5-token accepted path through `fused_recurrent_gated_delta_rule_packed_decode`. Results: packed replay output bit-exact `true`, packed replay state bit-exact `true`, replay max output/state deltas `0.0/0.0`, one-token CUDA graph replay bit-exact `true`, packed decode vs sequence recurrent diagnostic max output/state deltas `0.0/2.9802322387695312e-08`. This closes the state-commit design point: tree verifier logits drive accept/reject, tree state is scratch, accepted path state is committed only by native packed decode.
+- Canonical-state-commit bandwidth framing: per accepted token native commit reads `3,145,728` state bytes and writes `3,145,728` state bytes (`48*128*128*4` each). A 5-token accepted path reads `15,728,640` bytes and writes `15,728,640` bytes. This commit cost is the correctness-preserving price for byte-exact native recurrent state after tree verification.
 
 ## GPU Kernel Plan After P1 Gate
 
@@ -135,7 +139,7 @@ Updated: 2026-06-03 17:47 UTC
 - Remaining Phase 2 implementation work: move standalone deterministic tree kernel into a reproducible vLLM FLA fork/patch and keep production precision (`bf16` inputs, fp32 recurrent state).
 - User dtype directive: do not approximate dtype flow. First detect active production backend by instantiating `ChunkGatedDeltaRule()` under E3/E5 serving config and reading `.gdn_prefill_backend`; then match that exact wrapper. For FlashInfer: reuse vLLM `l2norm_fwd`, q/k/v bf16, `g=torch.exp(g.float())` outside kernel, `beta.float()`, `initial_state.float()`, fp32 accumulation, bf16 output, fp32 final state, scale `1/sqrt(128)`.
 - Active backend name for the real cu130 GB10 stack: `triton` / native FLA (`forward_native`). The broken audit image is no longer the production reference.
-- Matched-bf16 single-spine native-vs-tree deltas (`~5.65e-05` output, `~7e-04` state) are now treated as reduction-order state drift, not an automatic losslessness pass. State-commit plan: use tree-kernel logits only for accept/reject verification; after acceptance, re-run the accepted short path through the canonical native decode update (`fused_recurrent_gated_delta_rule` / production decode path) and commit that state, discarding the tree kernel's approximate recurrent state. End-to-end Gate B remains native greedy token stream == tree-verifier greedy token stream on real prompts.
+- Matched-bf16 single-spine native-vs-tree deltas (`6.103515625e-05` output, `<9.48e-4` state) are now treated as reduction-order state drift, not an automatic losslessness pass. State-commit implementation rule: use tree-kernel logits only for accept/reject verification; after acceptance, re-run the accepted short path through `fused_recurrent_gated_delta_rule_packed_decode` and commit that native state, discarding the tree kernel's approximate recurrent state. End-to-end Gate B remains native greedy token stream == tree-verifier greedy token stream on real prompts.
 - Initial Phase 2 kernel is standalone deterministic microbench code, not yet a vLLM FLA op fork/integration. Next after red-team fixes: move this algebra into a reproducible vLLM FLA fork/patch under the `chunk.py` pipeline and pin/disable relevant autotune paths.
 - Red-team Phase 2/3 flag: pin/disable autotune for the tree kernel and control `chunk_delta_h.py use_cuda_graph` autotune behavior. Determinism is a losslessness prerequisite. Confirmed `_tree_gdn_kernel` has no `@triton.autotune`; keep it that way.
 - Future Gate C sampler must be sequence-level and must never use a max-over-branches / longest-accepted hidden winner. MTP draft quality affects acceptance rate only, not correctness, if sampler is valid.
