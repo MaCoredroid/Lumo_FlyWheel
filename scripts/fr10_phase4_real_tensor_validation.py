@@ -43,6 +43,8 @@ def gqa_tree_reference(
     visible: torch.Tensor,
     strict: torch.Tensor,
     output_scale: float,
+    *,
+    mapping: str = "consecutive",
 ) -> tuple[torch.Tensor, torch.Tensor]:
     q = q.float()
     k = k.float()
@@ -59,7 +61,12 @@ def gqa_tree_reference(
     eye = torch.eye(n, device=q.device)
     strict_f = strict.to(torch.float32)
     for vh in range(num_vh):
-        kh = vh // head_group
+        if mapping == "consecutive":
+            kh = vh // head_group
+        elif mapping == "strided":
+            kh = vh % num_kh
+        else:
+            raise ValueError(f"unknown GQA mapping {mapping}")
         kk = k[:, kh] @ k[:, kh].T
         decay = torch.exp(cum_g[:, vh].unsqueeze(1) - cum_g[:, vh].unsqueeze(0))
         system = eye + strict_f * kk * beta[:, vh].unsqueeze(1) * decay
@@ -85,6 +92,38 @@ def gqa_tree_reference(
             state[i, vh] = state_i
             out[i, vh] = (state_i @ q[i, kh]) * output_scale
     return out, state
+
+
+def native_serial_per_path(
+    tree: Tree,
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    g: torch.Tensor,
+    beta: torch.Tensor,
+    h0: torch.Tensor,
+    output_scale: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    from vllm.model_executor.layers.fla.ops import chunk_gated_delta_rule
+
+    outputs = []
+    states = []
+    for node in range(tree.n):
+        path = torch.tensor(tree.path(node), device=q.device, dtype=torch.long)
+        out, state = chunk_gated_delta_rule(
+            q=q.index_select(0, path).unsqueeze(0).contiguous(),
+            k=k.index_select(0, path).unsqueeze(0).contiguous(),
+            v=v.index_select(0, path).unsqueeze(0).contiguous(),
+            g=g.index_select(0, path).unsqueeze(0).contiguous(),
+            beta=beta.index_select(0, path).unsqueeze(0).contiguous(),
+            scale=output_scale,
+            initial_state=h0.unsqueeze(0).contiguous(),
+            output_final_state=True,
+            use_qk_l2norm_in_kernel=False,
+        )
+        outputs.append(out[0, -1].float())
+        states.append(state[0].float())
+    return torch.stack(outputs, dim=0), torch.stack(states, dim=0)
 
 
 def main() -> int:
@@ -151,6 +190,29 @@ def main() -> int:
         visible_n,
         strict_n,
         output_scale,
+        mapping="consecutive",
+    )
+    strided_ref_out, strided_ref_state = gqa_tree_reference(
+        q[:n],
+        k[:n],
+        v[:n],
+        g[:n],
+        beta[:n],
+        h0,
+        visible_n,
+        strict_n,
+        output_scale,
+        mapping="strided",
+    )
+    native_path_out, native_path_state = native_serial_per_path(
+        tree,
+        q[:n],
+        k[:n],
+        v[:n],
+        g[:n],
+        beta[:n],
+        h0,
+        output_scale,
     )
     native_linear = payload["core_attn_out_spec_native"].squeeze(0).to("cuda").float()
     non_linear_nodes = torch.tensor(
@@ -170,6 +232,27 @@ def main() -> int:
         "h0_state_index": int(state_indices[0].item()),
         "tree_kernel_vs_gqa_ref_out_abs": float((out[:n].float() - ref_out).abs().max().item()),
         "tree_kernel_vs_gqa_ref_state_abs": float((state[:n] - ref_state).abs().max().item()),
+        "tree_kernel_vs_native_serial_path_out_abs": float(
+            (out[:n].float() - native_path_out).abs().max().item()
+        ),
+        "tree_kernel_vs_native_serial_path_state_abs": float(
+            (state[:n] - native_path_state).abs().max().item()
+        ),
+        "native_serial_path_vs_gqa_consecutive_ref_out_abs": float(
+            (native_path_out - ref_out).abs().max().item()
+        ),
+        "native_serial_path_vs_gqa_consecutive_ref_state_abs": float(
+            (native_path_state - ref_state).abs().max().item()
+        ),
+        "native_serial_path_vs_gqa_strided_ref_out_abs": float(
+            (native_path_out - strided_ref_out).abs().max().item()
+        ),
+        "native_serial_path_vs_gqa_strided_ref_state_abs": float(
+            (native_path_state - strided_ref_state).abs().max().item()
+        ),
+        "gqa_mapping_confirmed": "consecutive"
+        if (native_path_out - ref_out).abs().max() < (native_path_out - strided_ref_out).abs().max()
+        else "strided_or_inconclusive",
         "native_linear_vs_tree_ref_out_abs": float((native_linear[:n] - ref_out).abs().max().item()),
         "native_linear_vs_tree_ref_non_linear_nodes_abs": float(
             (native_linear.index_select(0, non_linear_nodes) - ref_out.index_select(0, non_linear_nodes))
