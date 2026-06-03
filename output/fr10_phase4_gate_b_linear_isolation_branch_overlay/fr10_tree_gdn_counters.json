@@ -1,0 +1,80 @@
+[
+  {
+    "count": 0,
+    "has_sibling": false,
+    "parent": [
+      -1,
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "shape": "n6_pad8"
+  },
+  {
+    "count": 0,
+    "has_sibling": false,
+    "parent": [
+      -1,
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "shape": "n6_pad8"
+  },
+  {
+    "count": 0,
+    "has_sibling": false,
+    "parent": [
+      -1,
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "shape": "n6_pad8"
+  },
+  {
+    "count": 1152,
+    "has_sibling": false,
+    "parent": [
+      -1,
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "shape": "n6_pad8"
+  },
+  {
+    "count": 1152,
+    "has_sibling": false,
+    "parent": [
+      -1,
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "shape": "n6_pad8"
+  },
+  {
+    "count": 1152,
+    "has_sibling": false,
+    "parent": [
+      -1,
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "shape": "n6_pad8"
+  }
+]

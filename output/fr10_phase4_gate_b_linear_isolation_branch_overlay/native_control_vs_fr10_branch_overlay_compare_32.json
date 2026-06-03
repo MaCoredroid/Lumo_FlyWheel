@@ -1,0 +1,11 @@
+{
+  "exact_match": true,
+  "left": "output/fr10_phase4_gate_b_linear_tree_native_control/greedy_tokens_32.json",
+  "left_arm": "fr10_linear_tree_native_control32",
+  "matched_records": 16,
+  "mismatches": [],
+  "missing_left": [],
+  "missing_right": [],
+  "right": "output/fr10_phase4_gate_b_linear_isolation_branch_overlay/greedy_tokens_32.json",
+  "right_arm": "fr10_tree_gdn_linear_isolation_branch_overlay32"
+}
