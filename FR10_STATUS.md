@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-03 18:50 UTC
+Updated: 2026-06-03 18:54 UTC
 
 ## Current Phase
 
@@ -101,6 +101,7 @@ Updated: 2026-06-03 18:50 UTC
 - Current boot blocker for the native tree probe: startup free-memory check sees only about `19.28/117.51 GiB` free at engine init and aborts before weights/KV allocation with desired utilization `0.85` (`99.88 GiB`). Host `nvidia-smi` after exit shows no compute process, only desktop graphics processes, so this is a transient/unified-memory accounting issue around startup, not a tree-config parse failure. A low-util retry with `--gpu-memory-utilization 0.16` got farther: full target and drafter weights loaded, compile/warmup completed, CUDA graph memory was profiled (`PIECEWISE=8`, `FULL=4`, estimated graph memory `0.52 GiB`), then vLLM failed with `AssertionError: Initial free memory 19.2 GiB, current free memory 41.52 GiB` during memory profiling. This confirms the user memory flag: repeated raw Docker launches wedged GB10 unified-memory accounting. Before a full Phase 4 server, stop all FR10 containers, run the ModelServer recovery path or `sync` + drop caches + swap cycle, and verify around `108 GiB` available before relaunching. Do not use docker restart to recover.
 - Correct tree-speed target: keep depth-5 MTP spine and add probability-pruned second-choice stubs where top-2 probability / head uncertainty makes rescue likely. Measure on P0 prompts: where target token differs from MTP top1, fraction target equals top2/top3; top-2 probability distribution for pruning; and accepted tokens per decode forward pass versus the linear MTP-5 spine. This decides whether the sparse no-state-spill GDN tree kernel rewrite is justified.
 - Do not claim native cu130 tree spec is GDN-lossless. Expected empirical check after boot: compare native tree-spec outputs/metrics against the P0 spine baseline and show divergence/contamination; this motivates the `gdn_attn.py` FR10 integration.
+- Host memory recovery completed after the low-util tree probe failure: stopped/removed FR10 containers, ran the ModelServer-equivalent recovery command (`sync; echo 3 > /proc/sys/vm/drop_caches; swapoff -a || true; swapon -a || true`) via passwordless sudo, and verified `free -h` shows `107 GiB` available and swap `0B/15GiB` used. Full-util Phase 4/tree launches may proceed from this clean state; do not use `docker restart` for recovery.
 
 ## Phase 4 Design / Hook Map
 
