@@ -408,7 +408,11 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
     parent_targets_cpu = [int(x) for x in parent_token_ids.detach().cpu().tolist()]
     self_targets_cpu = [int(x) for x in self_token_ids.detach().cpu().tolist()]
-    bonus_targets_cpu = [int(x) for x in bonus_token_ids.detach().cpu().tolist()]
+    bonus_targets_raw = bonus_token_ids.detach().cpu().tolist()
+    if bonus_targets_raw and isinstance(bonus_targets_raw[0], list):
+        bonus_targets_cpu = [int(x[0]) for x in bonus_targets_raw]
+    else:
+        bonus_targets_cpu = [int(x) for x in bonus_targets_raw]
     if hasattr(num_draft_tokens, 'detach'):
         counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
     else:
