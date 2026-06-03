@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-03 19:11 UTC
+Updated: 2026-06-03 19:09 UTC
 
 ## Current Phase
 
@@ -109,6 +109,7 @@ Updated: 2026-06-03 19:11 UTC
 - Corrected capture launcher booted successfully after host-memory recovery. It ran with `--enforce-eager`, `VLLM_BATCH_INVARIANT=1`, `--attention-backend FLASH_ATTN`, `--gdn-prefill-backend triton`, `--gpu-memory-utilization 0.85`, and the 10-token two-root depth-5 tree. Server reached health at poll `64`; logs confirm eager mode disabled compile/CUDA graphs for this de-risk run, MTP/tree config accepted, target/drafter weights loaded, available KV cache memory `61.92 GiB`, GPU KV cache `238,288` tokens.
 - Real tensor capture succeeded on first short request: `output/fr10_phase4_tree_capture_probe_20260603/tensors/language_model_model_layers_0_linear_attn_spec_gdn.pt`, size `7,084,774,069` bytes (`du -h` `6.6G`). Compact summary written to `output/fr10_phase4_tree_capture_probe_20260603/tensor_summary.json`. Payload summary: prefix `language_model.model.layers.0.linear_attn`; `num_actual_tokens=11`; `num_spec_decodes=1`; `spec_query_start_loc=[0,11]`; `spec_state_indices_tensor=[[1,2,3,4,5,6,7,8,9,10,11]]`; `num_accepted_tokens=[1]`; `query_spec` and `key_spec` shapes `[1,11,16,128]` bf16; `value_spec` and `core_attn_out_spec_native` shapes `[1,11,48,128]` bf16; `initial_state_before_spec` shape `[1126,48,128,128]` fp32.
 - Step 2 critical real-tensor finding: production Qwen3.6 GDN is GQA-shaped for recurrent attention (`16` q/k heads, `48` value/state heads). The extracted dense tree kernel module currently keeps the synthetic Phase 2 equal-head assumption (`H=48` for q/k/v). Before real-tensor parity/contamination validation, generalize the kernel to accept `NUM_KH=16`, `NUM_VH=48` and map each value/state head to its key/query head group (`key_head = value_head // 3` for Qwen3.6). Previous Phase 2/Gate D algebra remains useful, but Phase 4 serving must use the real 16/48 head contract.
+- Kernel head-contract fix in progress/completed locally: `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py` now defines `QK_HEADS=16`, `V_HEADS=48`, and `_tree_gdn_kernel` accepts separate `NUM_KH`/`NUM_VH` constexprs. It maps `pid_vh -> pid_kh` by `pid_vh // (NUM_VH // NUM_KH)`, uses q/k buffers indexed by q/k head and g/beta/v/state/out indexed by value head, and `launch_tree_gdn(...)` infers shapes and fails if value heads are not a multiple of q/k heads. The old Phase 2 microbench now passes `NUM_KH=H, NUM_VH=H` to preserve equal-head synthetic coverage. Validation: `python3 -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py scripts/fr10_phase2_triton_tree_gdn_microbench.py`; cu130 import smoke printed `16 48 (-1, 0, 0)`.
 
 ## Phase 4 Design / Hook Map
 

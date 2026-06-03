@@ -8,7 +8,10 @@ import triton.language as tl
 
 
 NODE_FAMILIES = (2, 3, 6, 8, 14)
-H = 48
+QK_HEADS = 16
+V_HEADS = 48
+# Legacy equal-head synthetic default used by the Phase 2 microbench.
+H = V_HEADS
 K = 128
 V = 128
 BV = 16
@@ -92,34 +95,37 @@ def _tree_gdn_kernel(
     state,
     N_ACTUAL: tl.constexpr,
     N_PAD: tl.constexpr,
-    NUM_H: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
     DIM_K: tl.constexpr,
     DIM_V: tl.constexpr,
     BLOCK_V: tl.constexpr,
     OUTPUT_SCALE: tl.constexpr,
 ):
-    pid_h = tl.program_id(0)
+    pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
+    head_group = NUM_VH // NUM_KH
+    pid_kh = pid_vh // head_group
     offs_n = tl.arange(0, N_PAD)
     offs_k = tl.arange(0, DIM_K)
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
     v_mask = offs_v < DIM_V
 
-    b_g = tl.load(g + offs_n * NUM_H + pid_h).to(tl.float32)
-    b_beta = tl.load(beta + offs_n * NUM_H + pid_h).to(tl.float32)
-    b_q = tl.load(q + (offs_n[:, None] * NUM_H + pid_h) * DIM_K + offs_k[None, :]).to(
+    b_g = tl.load(g + offs_n * NUM_VH + pid_vh).to(tl.float32)
+    b_beta = tl.load(beta + offs_n * NUM_VH + pid_vh).to(tl.float32)
+    b_q = tl.load(q + (offs_n[:, None] * NUM_KH + pid_kh) * DIM_K + offs_k[None, :]).to(
         tl.float32
     )
-    b_k = tl.load(k + (offs_n[:, None] * NUM_H + pid_h) * DIM_K + offs_k[None, :]).to(
+    b_k = tl.load(k + (offs_n[:, None] * NUM_KH + pid_kh) * DIM_K + offs_k[None, :]).to(
         tl.float32
     )
     b_v = tl.load(
-        v + (offs_n[:, None] * NUM_H + pid_h) * DIM_V + offs_v[None, :],
+        v + (offs_n[:, None] * NUM_VH + pid_vh) * DIM_V + offs_v[None, :],
         mask=v_mask[None, :],
         other=0.0,
     ).to(tl.float32)
     b_h0 = tl.load(
-        h0 + (pid_h * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+        h0 + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
         mask=v_mask[:, None],
         other=0.0,
     ).to(tl.float32)
@@ -175,12 +181,12 @@ def _tree_gdn_kernel(
             )
         out_i = tl.sum(state_i * q_i[None, :], axis=1) * OUTPUT_SCALE
         tl.store(
-            out + (i * NUM_H + pid_h) * DIM_V + offs_v,
+            out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
             out_i,
             mask=v_mask & (i < N_ACTUAL),
         )
         tl.store(
-            state + ((i * NUM_H + pid_h) * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+            state + ((i * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
             state_i,
             mask=v_mask[:, None] & (i < N_ACTUAL),
         )
@@ -208,13 +214,25 @@ def launch_tree_gdn(
     """
     n = tree.n
     n_pad = padded_nodes(n)
+    num_kh = q.shape[1]
+    num_vh = v.shape[1]
+    dim_k = q.shape[2]
+    dim_v = v.shape[2]
+    if k.shape[1] != num_kh or k.shape[2] != dim_k:
+        raise ValueError(f"q/k shape mismatch: q={tuple(q.shape)} k={tuple(k.shape)}")
+    if g.shape[1] != num_vh or beta.shape[1] != num_vh:
+        raise ValueError(f"g/beta must use value-head count {num_vh}")
+    if h0.shape != (num_vh, dim_v, dim_k):
+        raise ValueError(f"h0 shape must be {(num_vh, dim_v, dim_k)}, got {tuple(h0.shape)}")
+    if num_vh % num_kh != 0:
+        raise ValueError(f"value heads must be a multiple of q/k heads, got {num_vh}/{num_kh}")
     if strict_mask is None or visible_mask is None:
         strict_mask, visible_mask = tree.masks(q.device, n_pad)
     if out is None:
-        out = torch.empty((n_pad, H, V), device=q.device, dtype=q.dtype)
+        out = torch.empty((n_pad, num_vh, dim_v), device=q.device, dtype=q.dtype)
     if state is None:
-        state = torch.empty((n_pad, H, V, K), device=q.device, dtype=torch.float32)
-    grid = (H, triton.cdiv(V, BV))
+        state = torch.empty((n_pad, num_vh, dim_v, dim_k), device=q.device, dtype=torch.float32)
+    grid = (num_vh, triton.cdiv(dim_v, BV))
     _tree_gdn_kernel[grid](
         q,
         k,
@@ -228,9 +246,10 @@ def launch_tree_gdn(
         state,
         N_ACTUAL=n,
         N_PAD=n_pad,
-        NUM_H=H,
-        DIM_K=K,
-        DIM_V=V,
+        NUM_KH=num_kh,
+        NUM_VH=num_vh,
+        DIM_K=dim_k,
+        DIM_V=dim_v,
         BLOCK_V=BV,
         OUTPUT_SCALE=output_scale,
     )

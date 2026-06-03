@@ -362,7 +362,7 @@ def run_tree(
         state,
         N_ACTUAL=n,
         N_PAD=n_pad,
-        NUM_H=H,
+        NUM_KH=H, NUM_VH=H,
         DIM_K=K,
         DIM_V=V,
         BLOCK_V=BV,
@@ -408,7 +408,7 @@ def run_tree(
     end = torch.cuda.Event(enable_timing=True)
     start.record()
     for _ in range(iters):
-        _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_H=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale)
+        _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_KH=H, NUM_VH=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale)
     end.record()
     torch.cuda.synchronize()
     eager_us = start.elapsed_time(end) * 1000.0 / iters
@@ -418,10 +418,10 @@ def run_tree(
     graph_us = 0.0
     if capture:
         graph = torch.cuda.CUDAGraph()
-        _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_H=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale)
+        _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_KH=H, NUM_VH=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale)
         torch.cuda.synchronize()
         with torch.cuda.graph(graph):
-            _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_H=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale)
+            _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_KH=H, NUM_VH=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale)
         out.zero_()
         state.zero_()
         graph.replay()
