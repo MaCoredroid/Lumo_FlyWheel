@@ -25,13 +25,19 @@ def summarize(path: Path) -> dict:
     rows = 0
     parse_errors = 0
     superset_violations = 0
+    lossless_suppressed_superset_events = 0
     copy_missing_sum = 0
     recovered_token_total = 0
+    hidden_recovery_opportunity_total = 0
     winner_nonzero_spine_events = 0
     hidden_winner_suppressed_events = 0
+    lossless_public_stream_events = 0
+    non_lossless_public_stream_events = 0
+    selector_enabled_events = 0
     winner_acc_total = 0
     spine0_acc_total = 0
     winner_spines: Counter[int] = Counter()
+    policies: Counter[str] = Counter()
     malformed_rows = 0
     examples = []
 
@@ -54,19 +60,39 @@ def summarize(path: Path) -> dict:
             continue
 
         max_count = max(counts.values()) if counts else -1
+        hidden_suppressed = bool(row.get("hidden_winner_suppressed_reason"))
+        lossless_public_stream = bool(row.get("lossless_public_stream"))
+        policy = str(row.get("policy") or "unlabeled")
+        policies[policy] += 1
+        if row.get("selector_enabled"):
+            selector_enabled_events += 1
+        if lossless_public_stream:
+            lossless_public_stream_events += 1
+        else:
+            non_lossless_public_stream_events += 1
         if winner_acc < max_count:
-            superset_violations += 1
-            if len(examples) < 5:
-                examples.append({
-                    "line": line_no,
-                    "winner_acc": winner_acc,
-                    "counts": counts,
-                    "reason": "winner below max spine count",
-                })
+            if (
+                policy == "lossless"
+                and lossless_public_stream
+                and winner_spine == 0
+                and row.get("candidate_winner_spine") not in (None, 0)
+                and row.get("hidden_winner_suppressed_reason")
+                == "no_lossless_selector"
+            ):
+                lossless_suppressed_superset_events += 1
+            else:
+                superset_violations += 1
+                if len(examples) < 5:
+                    examples.append({
+                        "line": line_no,
+                        "winner_acc": winner_acc,
+                        "counts": counts,
+                        "reason": "winner below max spine count",
+                    })
 
         copy = row.get("copy") or {}
         copy_missing_sum += int(copy.get("missing") or 0)
-        if row.get("hidden_winner_suppressed_reason"):
+        if hidden_suppressed:
             hidden_winner_suppressed_events += 1
             if len(examples) < 5:
                 examples.append({
@@ -80,6 +106,14 @@ def summarize(path: Path) -> dict:
                     "winner_acc": winner_acc,
                 })
         spine0_acc = int(counts.get("0", 0))
+        candidate_winner_acc = row.get("candidate_winner_acc")
+        try:
+            hidden_recovery_opportunity_total += max(
+                0,
+                int(candidate_winner_acc) - spine0_acc,
+            )
+        except Exception:
+            pass
         recovered_token_total += max(0, winner_acc - spine0_acc)
         winner_acc_total += winner_acc
         spine0_acc_total += spine0_acc
@@ -93,10 +127,16 @@ def summarize(path: Path) -> dict:
         "parse_errors": parse_errors,
         "malformed_rows": malformed_rows,
         "superset_violations": superset_violations,
+        "lossless_suppressed_superset_events": lossless_suppressed_superset_events,
         "copy_missing_sum": copy_missing_sum,
         "winner_nonzero_spine_events": winner_nonzero_spine_events,
         "hidden_winner_suppressed_events": hidden_winner_suppressed_events,
         "recovered_token_total": recovered_token_total,
+        "hidden_recovery_opportunity_total": hidden_recovery_opportunity_total,
+        "lossless_public_stream_events": lossless_public_stream_events,
+        "non_lossless_public_stream_events": non_lossless_public_stream_events,
+        "selector_enabled_events": selector_enabled_events,
+        "policies": dict(sorted(policies.items())),
         "avg_winner_acc": (winner_acc_total / rows) if rows else None,
         "avg_spine0_acc": (spine0_acc_total / rows) if rows else None,
         "winner_spines": dict(sorted(winner_spines.items())),
@@ -125,6 +165,7 @@ def main() -> int:
             f"viol={summary['superset_violations']} "
             f"copy_missing_sum={summary['copy_missing_sum']} "
             f"suppressed={summary['hidden_winner_suppressed_events']} "
+            f"lossless_stream={summary['lossless_public_stream_events']} "
             f"recovered={summary['recovered_token_total']}"
         )
 
@@ -134,11 +175,11 @@ def main() -> int:
         or summary["malformed_rows"] > 0
         or summary["superset_violations"] > 0
         or summary["copy_missing_sum"] > 0
-        or summary["hidden_winner_suppressed_events"] > 0
+        or summary["non_lossless_public_stream_events"] > 0
     )
     if args.require_recovery and (
-        summary["winner_nonzero_spine_events"] <= 0
-        or summary["recovered_token_total"] <= 0
+        summary["hidden_recovery_opportunity_total"] <= 0
+        and summary["recovered_token_total"] <= 0
     ):
         failed = True
     return 1 if failed else 0

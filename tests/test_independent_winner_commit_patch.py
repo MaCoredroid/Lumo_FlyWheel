@@ -1,6 +1,10 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
+from scripts.swe_x86_helpers import relaunch_qwen36_round as relaunch
+
 
 REPO = Path(__file__).resolve().parents[1]
 LAUNCHER = REPO / "scripts/swe_x86_helpers/relaunch_qwen36_round.py"
@@ -70,18 +74,33 @@ def test_independent_winner_commit_remains_enabled_and_commits_gpu_rows():
     assert patch.find("_lumo_ir_orig_update_states_after_model_execute", mutation_pos) == -1
 
 
-def test_independent_winner_commit_keeps_hidden_public_winners_parser_guarded():
+def test_independent_winner_commit_enforces_lossless_spine0_public_stream():
+    patch = _winner_commit_patch()
+
+    assert "def _lumo_ir_request_temperature(self, primary_req_id)" in patch
+    assert "def _lumo_ir_commit_policy()" in patch
+    assert "def _lumo_ir_select_commit_row(self, primary, req_ids, indices, accept_counts)" in patch
+    assert 'LUMO_IR_PUBLIC_COMMIT_POLICY", "lossless"' in patch
+    assert 'policy in ("best_of_spines", "unsafe_best_of_spines", "deterministic_best")' in patch
+    assert 'commit_idx = primary_idx' in patch
+    assert 'commit_acc = accept_counts[primary_idx]' in patch
+    assert "non-spine0 public commit requires token-level lossless selector" in patch
+    assert "public recurrent-state recompute from committed spine0 state" in patch
+    assert '"no_lossless_selector"' in patch
+    assert '"policy": selection["policy"]' in patch
+    assert '"selector_enabled": bool(selection["selector_enabled"])' in patch
+    assert '"lossless_public_stream": bool(selection["lossless_public_stream"])' in patch
+    assert '"candidate_winner_spine"' in patch
+    assert '"hidden_winner_suppressed_reason": selection["suppressed_reason"]' in patch
+    assert '"hidden_winner_public_policy"' not in patch
+
+
+def test_independent_winner_commit_keeps_qwen_parser_protocol_guards():
     patch = _winner_commit_patch()
     text = LAUNCHER.read_text()
 
     assert "def _lumo_ir_allow_hidden_public_winner" not in patch
-    assert "LUMO_IR_ALLOW_STOCHASTIC_HIDDEN_WINNER" not in patch
     assert 'return False, "stochastic_sampling"' not in patch
-    assert "commit_idx = primary_idx" not in patch
-    assert "commit_acc = accept_counts[primary_idx]" not in patch
-    assert '"candidate_winner_spine"' in patch
-    assert '"hidden_winner_suppressed_reason": suppressed_reason' in patch
-    assert '"hidden_winner_public_policy": "serialized_reasoning_tool_parser"' in patch
     assert "LUMO_QWEN_STRAY_REASONING_END_PUBLIC_GUARD" in text
     assert "LUMO_QWEN_PUBLIC_PROTOCOL_MARKER_GUARD" in text
     assert "LUMO_QWEN_RESPONSES_PUBLIC_ITEM_GUARD" in text
@@ -120,8 +139,137 @@ def test_round_relaunch_launcher_has_no_top_level_patch_runtime_error():
     assert "relaunch_qwen36_round.py" in result.stdout
 
 
+def test_round_relaunch_rejects_legacy_policy_before_modelserver_start():
+    result = subprocess.run(
+        [
+            "env",
+            "LUMO_IR_PUBLIC_COMMIT_POLICY=best_of_spines",
+            "python3",
+            str(LAUNCHER),
+            "--config",
+            "Fb",
+            "--row-mode",
+            "independent",
+            "--spines",
+            "2",
+        ],
+        cwd=REPO,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert "forbidden" in result.stderr
+    assert "ModelServer" not in result.stderr
+
+
 def test_independent_winner_commit_flushes_mamba_copy_only_when_buffer_nonempty():
     patch = _winner_commit_patch()
 
     assert "if copy_bufs.offset > 0:" in patch
     assert "do_mamba_copy_block(copy_bufs)" in patch
+
+
+def test_lossless_policy_default_rejects_unisolated_independent_spines():
+    env: dict[str, str] = {}
+
+    with pytest.raises(RuntimeError, match="not a verified lossless public mode"):
+        relaunch._lumo_ir_validate_public_commit_policy(
+            independent_rows=True,
+            spines=2,
+            environ=env,
+        )
+
+
+def test_diagnostic_unisolated_override_allows_ab_probe_only():
+    env = {"LUMO_IR_DIAGNOSTIC_UNISOLATED": "1"}
+
+    policy = relaunch._lumo_ir_validate_public_commit_policy(
+        independent_rows=True,
+        spines=2,
+        environ=env,
+    )
+
+    assert policy == "lossless"
+
+
+def test_lossless_policy_default_allows_single_independent_spine():
+    env: dict[str, str] = {}
+
+    policy = relaunch._lumo_ir_validate_public_commit_policy(
+        independent_rows=True,
+        spines=1,
+        environ=env,
+    )
+
+    assert policy == "lossless"
+
+
+@pytest.mark.parametrize(
+    "policy",
+    ["best_of_spines", "unsafe_best_of_spines", "deterministic_best"],
+)
+def test_legacy_independent_public_commit_policies_fail_closed(policy: str):
+    env = {"LUMO_IR_PUBLIC_COMMIT_POLICY": policy}
+
+    with pytest.raises(RuntimeError, match="forbidden"):
+        relaunch._lumo_ir_validate_public_commit_policy(
+            independent_rows=True,
+            spines=2,
+            environ=env,
+        )
+
+
+def test_unknown_independent_public_commit_policy_fails_closed():
+    env = {"LUMO_IR_PUBLIC_COMMIT_POLICY": "longest_prefix"}
+
+    with pytest.raises(RuntimeError, match="unknown"):
+        relaunch._lumo_ir_validate_public_commit_policy(
+            independent_rows=True,
+            spines=2,
+            environ=env,
+        )
+
+
+@pytest.mark.parametrize(
+    "env_name",
+    [
+        "LUMO_IR_ALLOW_STOCHASTIC_HIDDEN_WINNER",
+        "LUMO_IR_ALLOW_HIDDEN_PUBLIC_WINNER",
+        "LUMO_IR_ENABLE_HIDDEN_PUBLICATION",
+        "LUMO_IR_PUBLISH_HIDDEN_WINNER",
+    ],
+)
+def test_hidden_publication_before_selector_fails_closed(env_name: str):
+    env = {env_name: "1"}
+
+    with pytest.raises(RuntimeError, match="hidden-spine public publication"):
+        relaunch._lumo_ir_validate_public_commit_policy(
+            independent_rows=True,
+            spines=2,
+            environ=env,
+        )
+
+
+def test_selector_enabled_before_implementation_fails_closed():
+    env = {"LUMO_IR_LOSSLESS_SELECTOR_ENABLED": "1"}
+
+    with pytest.raises(RuntimeError, match="GDN recurrent-state recompute"):
+        relaunch._lumo_ir_validate_public_commit_policy(
+            independent_rows=True,
+            spines=2,
+            environ=env,
+        )
+
+
+def test_winner_commit_disable_fails_closed_for_independent_rows():
+    env = {"LUMO_IR_WINNER_COMMIT": "0"}
+
+    with pytest.raises(RuntimeError, match="may not disable"):
+        relaunch._lumo_ir_validate_public_commit_policy(
+            independent_rows=True,
+            spines=2,
+            environ=env,
+        )

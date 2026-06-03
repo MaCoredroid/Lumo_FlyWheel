@@ -21,6 +21,112 @@ from scripts.run_track_b_loop import _track_b_runtime_prelaunch_shell
 from lumo_flywheel_serving.model_server import ModelServer
 
 _KEEP_MARKER = "applied forced tool_choice parser patch')\nPY\n"
+_LUMO_IR_LEGACY_COMMIT_POLICIES = {
+    "best_of_spines",
+    "unsafe_best_of_spines",
+    "deterministic_best",
+}
+_LUMO_IR_HIDDEN_PUBLICATION_ENVS = (
+    "LUMO_IR_ALLOW_STOCHASTIC_HIDDEN_WINNER",
+    "LUMO_IR_ALLOW_HIDDEN_PUBLIC_WINNER",
+    "LUMO_IR_ENABLE_HIDDEN_PUBLICATION",
+    "LUMO_IR_PUBLISH_HIDDEN_WINNER",
+)
+
+
+def _truthy_env(environ: dict[str, str] | os._Environ[str], name: str) -> bool:
+    return str(environ.get(name, "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _lumo_ir_public_commit_policy(
+    environ: dict[str, str] | os._Environ[str] = os.environ,
+) -> str:
+    policy = str(
+        environ.get("LUMO_IR_PUBLIC_COMMIT_POLICY", "lossless")
+    ).strip().lower()
+    if policy in _LUMO_IR_LEGACY_COMMIT_POLICIES:
+        raise RuntimeError(
+            f"LUMO_IR_PUBLIC_COMMIT_POLICY={policy!r} is forbidden; "
+            "public independent-row commits must use policy=lossless"
+        )
+    if policy != "lossless":
+        raise RuntimeError(
+            f"unknown LUMO_IR_PUBLIC_COMMIT_POLICY={policy!r}; "
+            "the only public policy is lossless"
+        )
+    return policy
+
+
+def _lumo_ir_hidden_publication_requested(
+    environ: dict[str, str] | os._Environ[str] = os.environ,
+) -> bool:
+    return any(_truthy_env(environ, name) for name in _LUMO_IR_HIDDEN_PUBLICATION_ENVS)
+
+
+def _lumo_ir_lossless_selector_enabled(
+    environ: dict[str, str] | os._Environ[str] = os.environ,
+) -> bool:
+    return _truthy_env(environ, "LUMO_IR_LOSSLESS_SELECTOR_ENABLED")
+
+
+def _lumo_ir_spines2_measurement_allowed(
+    environ: dict[str, str] | os._Environ[str] = os.environ,
+) -> bool:
+    return _truthy_env(environ, "LUMO_IR_DIAGNOSTIC_UNISOLATED") or _truthy_env(
+        environ, "LUMO_IR_ALLOW_UNVERIFIED_SPINES2_MEASUREMENT"
+    )
+
+
+def _lumo_ir_validate_public_commit_policy(
+    *,
+    independent_rows: bool,
+    spines: int,
+    environ: dict[str, str] | os._Environ[str] = os.environ,
+) -> str:
+    policy = _lumo_ir_public_commit_policy(environ)
+    if not independent_rows:
+        return policy
+    winner_commit = str(environ.get("LUMO_IR_WINNER_COMMIT", "1")).strip()
+    if winner_commit != "1":
+        raise RuntimeError(
+            "LUMO_IR_WINNER_COMMIT may not disable the lossless public "
+            "commit patch for independent rows"
+        )
+    selector_enabled = _lumo_ir_lossless_selector_enabled(environ)
+    selector_version = str(
+        environ.get("LUMO_IR_LOSSLESS_SELECTOR_VERSION", "")
+    ).strip()
+    if selector_enabled:
+        raise RuntimeError(
+            "LUMO_IR_LOSSLESS_SELECTOR_ENABLED was requested, but the "
+            "lossless multi-draft selector and required GDN recurrent-state "
+            "recompute path are not implemented on this branch"
+        )
+    if spines > 1 and _lumo_ir_hidden_publication_requested(environ):
+        raise RuntimeError(
+            "hidden-spine public publication was requested before a "
+            "lossless selector exists"
+        )
+    if spines > 1 and selector_version:
+        raise RuntimeError(
+            "LUMO_IR_LOSSLESS_SELECTOR_VERSION is set without an enabled, "
+            "implemented lossless selector"
+        )
+    if spines > 1 and not _lumo_ir_spines2_measurement_allowed(environ):
+        raise RuntimeError(
+            "independent-row spines>1 is not a verified lossless public mode "
+            "on the vLLM 0.19 GDN/linear-attention stack: co-scheduled hidden "
+            "rows may perturb spine-0 recurrent logits. Use --spines 1, or set "
+            "LUMO_IR_DIAGNOSTIC_UNISOLATED=1 only for controlled A/B "
+            "measurement until statistical equivalence or GDN state isolation "
+            "is proven."
+        )
+    return policy
 
 
 def _tree_path_lcp_max_reference(
@@ -543,8 +649,9 @@ if sentinel in text:
 else:
     patch = r"""
 
-# LUMO_INDEPENDENT_ROWS_WINNER_COMMIT: commit the longest accepted co-resident
-# spine and clone its recurrent state back to the persistent sibling rows.
+# LUMO_INDEPENDENT_ROWS_WINNER_COMMIT: lossless public commit policy for
+# co-resident spines. Hidden rows may not publish without a distribution-
+# preserving token-level selector, so selector-off public output remains spine 0.
 import json as _lumo_ir_json
 import os as _lumo_ir_os2
 import time as _lumo_ir_time
@@ -565,6 +672,99 @@ def _lumo_ir_spine_id(req_id):
         return int(req_id.rsplit(marker, 1)[1])
     except Exception:
         return 0
+
+def _lumo_ir_truthy_env(name):
+    return str(_lumo_ir_os2.environ.get(name, "")).strip().lower() in (
+        "1", "true", "yes", "on")
+
+def _lumo_ir_commit_policy():
+    policy = str(_lumo_ir_os2.environ.get(
+        "LUMO_IR_PUBLIC_COMMIT_POLICY", "lossless")).strip().lower()
+    if policy in ("best_of_spines", "unsafe_best_of_spines", "deterministic_best"):
+        raise RuntimeError(
+            "legacy independent-row public commit policy is forbidden: "
+            + policy)
+    if policy != "lossless":
+        raise RuntimeError(
+            "unknown independent-row public commit policy: " + policy)
+    return policy
+
+def _lumo_ir_selector_enabled():
+    if _lumo_ir_truthy_env("LUMO_IR_LOSSLESS_SELECTOR_ENABLED"):
+        raise RuntimeError(
+            "lossless multi-draft selector requested but the selector and "
+            "GDN recurrent-state recompute path are not implemented")
+    return False
+
+def _lumo_ir_hidden_publication_requested():
+    for name in (
+        "LUMO_IR_ALLOW_STOCHASTIC_HIDDEN_WINNER",
+        "LUMO_IR_ALLOW_HIDDEN_PUBLIC_WINNER",
+        "LUMO_IR_ENABLE_HIDDEN_PUBLICATION",
+        "LUMO_IR_PUBLISH_HIDDEN_WINNER",
+    ):
+        if _lumo_ir_truthy_env(name):
+            return True
+    return False
+
+def _lumo_ir_request_temperature(self, primary_req_id):
+    request = self.requests.get(primary_req_id)
+    if request is None:
+        return None
+    sampling_params = getattr(request, "sampling_params", None)
+    temperature = getattr(sampling_params, "temperature", None)
+    if temperature is None:
+        return None
+    try:
+        return float(temperature)
+    except Exception:
+        return None
+
+def _lumo_ir_select_commit_row(self, primary, req_ids, indices, accept_counts):
+    policy = _lumo_ir_commit_policy()
+    selector_enabled = _lumo_ir_selector_enabled()
+    if _lumo_ir_hidden_publication_requested():
+        raise RuntimeError(
+            "hidden-spine public publication requested before lossless selector")
+    primary_idx = None
+    for idx in indices:
+        if _lumo_ir_spine_id(req_ids[idx]) == 0:
+            primary_idx = idx
+            break
+    if primary_idx is None:
+        raise RuntimeError(
+            "independent-row group missing public spine 0 for " + str(primary))
+    best_idx = indices[0]
+    best_acc = accept_counts[best_idx]
+    for idx in indices[1:]:
+        acc = accept_counts[idx]
+        if acc > best_acc or (
+                acc == best_acc
+                and _lumo_ir_spine_id(req_ids[idx]) < _lumo_ir_spine_id(req_ids[best_idx])):
+            best_idx = idx
+            best_acc = acc
+    commit_idx = primary_idx
+    commit_acc = accept_counts[primary_idx]
+    if commit_idx != primary_idx:
+        raise RuntimeError(
+            "non-spine0 public commit requires token-level lossless selector "
+            "and public recurrent-state recompute from committed spine0 state")
+    suppressed_reason = (
+        "no_lossless_selector"
+        if best_idx != primary_idx and not selector_enabled
+        else None)
+    return {
+        "policy": policy,
+        "selector_enabled": selector_enabled,
+        "primary_idx": primary_idx,
+        "best_idx": best_idx,
+        "best_acc": int(best_acc),
+        "commit_idx": commit_idx,
+        "commit_acc": int(commit_acc),
+        "suppressed_reason": suppressed_reason,
+        "temperature": _lumo_ir_request_temperature(self, req_ids[primary_idx]),
+        "lossless_public_stream": True,
+    }
 
 def _lumo_ir_copy_one_winner_state(
     self,
@@ -626,11 +826,13 @@ def _lumo_ir_winner_update_states_after_model_execute(
     scheduler_output,
 ):
     if (_lumo_ir_os2.environ.get("LUMO_INDEPENDENT_ROWS") != "1"
-            or _lumo_ir_os2.environ.get("LUMO_IR_WINNER_COMMIT", "1") != "1"
             or not torch.is_tensor(output_token_ids)
             or output_token_ids.dim() != 2):
         return _lumo_ir_orig_update_states_after_model_execute(
             self, output_token_ids, scheduler_output)
+    if _lumo_ir_os2.environ.get("LUMO_IR_WINNER_COMMIT", "1") != "1":
+        raise RuntimeError(
+            "LUMO_IR_WINNER_COMMIT may not disable lossless independent-row commits")
 
     num_rows = int(output_token_ids.shape[0])
     req_ids = [str(x) for x in list(self.input_batch.req_ids[:num_rows])]
@@ -648,33 +850,22 @@ def _lumo_ir_winner_update_states_after_model_execute(
     for primary, indices in groups.items():
         if len(indices) <= 1:
             continue
-        best_idx = indices[0]
-        best_acc = accept_counts[best_idx]
-        for idx in indices[1:]:
-            acc = accept_counts[idx]
-            if acc > best_acc or (
-                    acc == best_acc
-                    and _lumo_ir_spine_id(req_ids[idx]) < _lumo_ir_spine_id(req_ids[best_idx])):
-                best_idx = idx
-                best_acc = acc
-        commit_idx = best_idx
-        commit_acc = best_acc
-        suppressed_reason = None
+        selection = _lumo_ir_select_commit_row(
+            self, primary, req_ids, indices, accept_counts)
+        commit_idx = selection["commit_idx"]
+        commit_acc = selection["commit_acc"]
         winner_rows[primary] = (
             commit_idx,
             commit_acc,
             indices,
-            best_idx,
-            best_acc,
-            suppressed_reason,
+            selection,
         )
 
     if not winner_rows:
         return
 
     trace_rows = []
-    for primary, (winner_idx, winner_acc, indices, _best_idx, _best_acc, _suppressed_reason) in winner_rows.items():
-        winner_req_id = req_ids[winner_idx]
+    for primary, (winner_idx, winner_acc, indices, _selection) in winner_rows.items():
         winner_row = output_token_ids[winner_idx].clone()
         for idx in indices:
             output_token_ids[idx].copy_(winner_row)
@@ -683,8 +874,9 @@ def _lumo_ir_winner_update_states_after_model_execute(
             except Exception:
                 pass
 
-    for primary, (winner_idx, winner_acc, indices, best_idx, best_acc, suppressed_reason) in winner_rows.items():
+    for primary, (winner_idx, winner_acc, indices, selection) in winner_rows.items():
         winner_req_id = req_ids[winner_idx]
+        best_idx = selection["best_idx"]
         copy_result = _lumo_ir_copy_one_winner_state(
             self, winner_req_id,
             [req_ids[i] for i in indices if req_ids[i] != winner_req_id],
@@ -693,15 +885,18 @@ def _lumo_ir_winner_update_states_after_model_execute(
                   for i in indices}
         trace_rows.append({
             "primary": primary,
+            "policy": selection["policy"],
+            "selector_enabled": bool(selection["selector_enabled"]),
+            "lossless_public_stream": bool(selection["lossless_public_stream"]),
+            "temperature": selection["temperature"],
             "winner_req_id": winner_req_id,
             "winner_spine": int(_lumo_ir_spine_id(winner_req_id)),
             "winner_acc": int(winner_acc),
             "spine0_acc": int(counts.get("0", 0)),
             "candidate_winner_req_id": req_ids[best_idx],
             "candidate_winner_spine": int(_lumo_ir_spine_id(req_ids[best_idx])),
-            "candidate_winner_acc": int(best_acc),
-            "hidden_winner_suppressed_reason": suppressed_reason,
-            "hidden_winner_public_policy": "serialized_reasoning_tool_parser",
+            "candidate_winner_acc": int(selection["best_acc"]),
+            "hidden_winner_suppressed_reason": selection["suppressed_reason"],
             "counts": counts,
             "members": [req_ids[i] for i in indices],
             "copy": copy_result,
@@ -5589,6 +5784,7 @@ def _prelaunch_for(
     independent_env = (
         "export LUMO_INDEPENDENT_ROWS=1\n"
         f"export LUMO_IR_SPINES={int(spines)}\n"
+        f"export LUMO_IR_PUBLIC_COMMIT_POLICY={_lumo_ir_public_commit_policy()}\n"
         if independent_rows else ""
     )
     fb_env = fa_unique_env + tree_debug_exports + independent_env
@@ -5912,10 +6108,20 @@ def main() -> int:
     if is_independent:
         if not (1 <= args.spines <= 10):
             raise RuntimeError(f"--spines must be in [1, 10], got {args.spines}")
+        commit_policy = _lumo_ir_validate_public_commit_policy(
+            independent_rows=True,
+            spines=args.spines,
+        )
         os.environ["LUMO_INDEPENDENT_ROWS"] = "1"
         os.environ["LUMO_IR_SPINES"] = str(args.spines)
+        os.environ["LUMO_IR_PUBLIC_COMMIT_POLICY"] = commit_policy
         if os.environ.get("LUMO_VLLM_MAX_NUM_SEQS") is None:
             os.environ["LUMO_VLLM_MAX_NUM_SEQS"] = str(4 * args.spines)
+    else:
+        commit_policy = _lumo_ir_validate_public_commit_policy(
+            independent_rows=False,
+            spines=args.spines,
+        )
     if args.tree is not None and not is_tree:
         ap.error("--tree is only valid with --config Fb --row-mode tree")
     tree = (args.tree or _default_tree(args.mtp, args.spines)) if is_tree else None
@@ -5926,6 +6132,7 @@ def main() -> int:
     server = ModelServer(
         registry_path=REPO / "model_registry.yaml",
         port=int(os.environ.get("LUMO_VLLM_PORT", "9950")),
+        image=os.environ.get("LUMO_VLLM_IMAGE", "lumo-flywheel-vllm:26.01-py3-v0.19.0"),
         container_name=os.environ.get(
             "LUMO_VLLM_CONTAINER_NAME", "lumo-vllm-track-b-suffix"),
         logs_root=Path(os.environ.get(
@@ -5952,7 +6159,8 @@ def main() -> int:
     row_desc = f" row_mode={args.row_mode} spines={args.spines}" if args.config == "Fb" else ""
     mtp_desc = args.mtp if args.config == "Fb" else "-"
     kv_desc = args.kv_cache_dtype or "bundle-default"
-    print(f"READY config={args.config} mtp={mtp_desc}{row_desc}{tree_desc} kv={kv_desc} bundle={bundle}")
+    policy_desc = f" policy={commit_policy}" if is_independent else ""
+    print(f"READY config={args.config} mtp={mtp_desc}{row_desc}{tree_desc}{policy_desc} kv={kv_desc} bundle={bundle}")
     return 0
 
 
