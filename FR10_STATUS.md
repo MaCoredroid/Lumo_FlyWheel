@@ -1,12 +1,13 @@
 # FR10 Status
 
-Updated: 2026-06-03 17:24 UTC
+Updated: 2026-06-03 17:38 UTC
 
 ## Current Phase
 
 - P1: CPU GDN tree-algebra parity proof passed. CPU recurrent rule is only the correctness oracle/gate, never the final kernel deliverable.
-- P0: cu130 `spines=1` baseline server booted on digest-pinned nightly with `kv_cache_dtype=auto`; targeted greedy and temp=0.6 B4 reference streams captured.
+- P0: canonical cu130 `spines=1` baseline server booted on digest-pinned nightly with `kv_cache_dtype=auto`, `VLLM_BATCH_INVARIANT=1`, `--attention-backend FLASH_ATTN`, `--gdn-prefill-backend triton`, and working `POST /reset_prefix_cache`; greedy and temp=0.6 B4 reference streams captured.
 - P2 active: GPU Triton tree kernel only, inside `lumo-vllm-audit:v0.22.0-cu129-min`; host `.venv` remains CPU-only.
+- Git workflow: active branch is `fr10-gdn-tree-kernel`; do not commit to main. Going forward, commit and push after every meaningful step. Commit messages must end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ## Read-In
 
@@ -65,6 +66,14 @@ Updated: 2026-06-03 17:24 UTC
 - `output/fr10_p0_cu130_boot/fr10_cu130_p0_s1_temp06_logprobs.json`
 - `output/fr10_p0_cu130_boot/fr10_cu130_p0_s1_metrics_after_streams.prom`
 - `output/fr10_p0_cu130_boot/fr10_cu130_p0_s1_baseline_summary.json`
+- `docs/reports/auto_research/fr10-p0-cu130-batchinv-baseline-20260603.md`
+- `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_boot_batchinv.log`
+- `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_batchinv_greedy_tokens.json`
+- `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_batchinv_greedy_b1_b4_compare.json`
+- `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_batchinv_temp06_b4_samples.json`
+- `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_batchinv_temp06_logprobs.json`
+- `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_metrics_after_batchinv_streams.prom`
+- `output/fr10_p0_cu130_boot_batchinv/fr10_cu130_p0_s1_batchinv_steptrace_window.jsonl`
 
 ## Passed
 
@@ -92,9 +101,15 @@ Updated: 2026-06-03 17:24 UTC
 - cu130 actual GDN source re-anchored: production layer is `/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/gdn_linear_attn.py`, captured clean at `output/fr10_cu130_gdn_linear_attn_clean_20260603.py`. This is not the non-standard `/tmp/vllm-0.22-src/.../mamba/gdn/qwen_gdn_linear_attn.py` path.
 - GB10 production GDN backend: Triton/FLA. cu130 `gdn_linear_attn.py` sets `supports_flashinfer = current_platform.is_cuda() and current_platform.is_device_capability(90)`. GB10 reports capability `(12, 1)`, `is_device_capability(90)=false`, `is_device_capability_family(120)=true`; therefore default `auto`, explicit `flashinfer`, and explicit `triton` all construct `ChunkGatedDeltaRule` with `_forward_method=forward_native`. FlashInfer GDN exists in the image but is Hopper-only for this layer and is not used on GB10.
 - Exact-production Gate D single-spine table completed inside cu130-nightly with bf16 inputs, fp32 initial state, raw `g`, raw q/k passed to cu130 `ChunkGatedDeltaRule(... use_qk_l2norm_in_kernel=True)`, tree side normalized with the same vLLM `l2norm_fwd`, and production scale `1/sqrt(128)`. All public single-spine rows `{2,3,6,8,14}` used `production_gdn_forward_method=forward_native`, graph replay was bit-exact, max output delta was `6.103515625e-05`, and max final-state delta was `9.473264217376709e-04`. Artifact: `output/fr10_cu130_gate_d_production_gdn_single_spine_clean_20260603.json`.
-- P0 cu130 baseline booted: first attempt with `--kv-cache-dtype fp8_e5m2` failed after memory cleanup with `ValueError: fp8_e5m2 kv-cache is not supported with fp8 checkpoints.` Root cause accepted from red-team/user: newer cu130 vLLM hard-errors where old vLLM 0.19 effectively fell back to `auto`; therefore `kv_cache_dtype=auto` is the lossless-equivalent E3/E5 behavior, not a deviation. Relaunch omitted `--kv-cache-dtype`, so engine config reports `kv_cache_dtype=auto`; it kept `--max-num-seqs 4`, `--gpu-memory-utilization 0.85`, `--max-model-len 131072`, MTP5 speculative config, and `--gdn-prefill-backend triton`. Container `fr10-cu130-p0-s1` reached `/health=200` at 17:20:08 UTC.
-- P0 cu130 boot evidence: boot log confirms `Using Triton/FLA GDN prefill kernel`, `kv_cache_dtype=auto`, CUDA graph capture completed (`PIECEWISE=7`, `FULL=4`), GPU KV cache size `231,744 tokens`, and server version `0.19.2rc1.dev134+gfe9c3d6c5`. Summary artifact: `output/fr10_p0_cu130_boot/fr10_cu130_p0_s1_baseline_summary.json`.
-- P0 targeted reference streams captured against live `http://127.0.0.1:9950`: greedy B1/B4 token artifact has 16 records and B1-vs-B4 exact match over 8 prompts; temp=0.6 B4 artifact has 64 samples with `batch_size=4`, `max_tokens=32`; temp=0.6 top-20 first-token logprob artifact has 16 records. Post-probe metrics recorded `spec_decode_num_drafts_total=403`, `spec_decode_num_draft_tokens_total=2015`, `spec_decode_num_accepted_tokens_total=1154`, positions `{0:267,1:260,2:244,3:222,4:161}`. Nonfatal note: `/reset_prefix_cache` returns 404 on cu130 and is recorded in the artifacts.
+- P0 cu130 baseline booted first without batch-invariant: first attempt with `--kv-cache-dtype fp8_e5m2` failed after memory cleanup with `ValueError: fp8_e5m2 kv-cache is not supported with fp8 checkpoints.` Root cause accepted from red-team/user: newer cu130 vLLM hard-errors where old vLLM 0.19 effectively fell back to `auto`; therefore `kv_cache_dtype=auto` is the lossless-equivalent E3/E5 behavior, not a deviation.
+- Reset route root cause: cu130 source has `POST /reset_prefix_cache` in `vllm.entrypoints.serve.cache.api_router`, but `attach_router()` only mounts it when `VLLM_SERVER_DEV_MODE=1`. Without dev mode the API port `9950` returned 404. With `VLLM_SERVER_DEV_MODE=1`, `POST /reset_prefix_cache?reset_running_requests=false&reset_external=false` returns `200`.
+- Batch-invariant root cause/fix: `VLLM_BATCH_INVARIANT=1` alone failed because cu130 resolves `attention_config.backend=None` too early. Relaunching with explicit `--attention-backend FLASH_ATTN` satisfied the batch-invariant guard while keeping GDN backend pinned to Triton/FLA. One retry failed from transient unreleased memory and was cleared by removing the exited container plus dropping page cache.
+- P0 canonical cu130 launch now uses digest-pinned image `vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776` (local ID `sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc`), `VLLM_BATCH_INVARIANT=1`, `VLLM_SERVER_DEV_MODE=1`, `--attention-backend FLASH_ATTN`, `--gdn-prefill-backend triton`, `--max-num-seqs 4`, `--gpu-memory-utilization 0.85`, `--max-model-len 131072`, MTP5 speculative config, and omitted `--kv-cache-dtype` so engine reports `kv_cache_dtype=auto`.
+- P0 canonical boot evidence: health reached `200` at 17:34:14 UTC. Boot log confirms `Using Triton/FLA GDN prefill kernel`, `Using AttentionBackendEnum.FLASH_ATTN backend`, `kv_cache_dtype=auto`, CUDA graph capture completed for mixed prefill-decode `PIECEWISE=7` and decode `FULL=4`, graph pool memory `0.54 GiB`, GPU KV cache size `228,480 tokens`, and server version `0.19.2rc1.dev134+gfe9c3d6c5`.
+- P0 canonical reference streams captured against live `http://127.0.0.1:9950` with reset working (`reset_prefix_cache_error=null` in all probes): greedy B1/B4 token artifact has 16 records and B1-vs-B4 exact match over 8 prompts; temp=0.6 B4 artifact has 64 samples with `batch_size=4`, `max_tokens=32`; temp=0.6 top-20 first-token logprob artifact has 16 records. Hashes: greedy `b8b1ec327f60e34073fcedf54c8dad402bee47264f650888f3e982176c2e9794`; B1/B4 compare `ebc6a1599ef7f27cf62db5243b00ee66ebfc0d9eeb233b4bdfd1dd8c6ec495c8`; temp0.6 B4 `7d5f0ab0f53b6fa7adab7bf650264d717b16bbb0ef2db39a8059a80fd521f113`; temp0.6 logprobs `06d80a8fe814154de0bd13c128cabeee363cc404ca0d1ab016049a9f33b73324`.
+- P0 canonical token prefix for greedy prompt 0: `[271, 248068, 271, 248069, 271, 16, 11, 220, 17, 11, 220, 18, 11, 220, 19, 11, 220, 20, 13, 248044]`. This is the Gate B target for later tree-kernel greedy decode.
+- P0 post-stream metrics recorded `spec_decode_num_drafts_total=398`, `spec_decode_num_draft_tokens_total=1990`, `spec_decode_num_accepted_tokens_total=1206`, positions `{0:273,1:266,2:253,3:238,4:176}`. Bounded live steptrace window around B4 temp=0.6 load: 30 rows over `44.53515648841858 s`; deltas `gen=306`, `prompt=192`, `iter_sum=498`, `iter_cnt=37`, `acc=217`, `draft=375`, `drafts=75`, `dec_sum=16.833757460815832`, `pre_sum=5.048701603198424`; mean step wall time `1.203652878065367 s`, tokens/step `13.45945945945946`, accepted/draft-token `0.5786666666666667`.
+- P0 side-channel caveat: the unmodified cu130 OpenAI server exposes aggregate spec counters via `/metrics`. The old `/tmp/lumo-l0c-fp8-cutlass-run30-logs/per_req_spec_trace.jsonl` file was stale during this run and is not a live P0 source for this stock container. True per-event accept counters still require the instrumented side-channel in a patched serving stack.
 
 ## GPU Kernel Plan After P1 Gate
 
@@ -107,7 +122,7 @@ Updated: 2026-06-03 17:24 UTC
 ## Blocked
 
 - None for P1 CPU gate.
-- P0 targeted follow-up for greedy token streams, temp=0.6 B4 streams, logprob support, CUDA graph capture status, and exact stack version record is complete on the cu130 stack. Full SWE campaign rerun remains separate if requested; current P0 was the targeted baseline/freeze artifact path.
+- P0 targeted follow-up for greedy token streams, temp=0.6 B4 streams, logprob support, CUDA graph capture status, reset route, batch-invariant guard, and exact stack version record is complete on the cu130 stack. Full SWE campaign rerun remains separate if requested; current P0 was the targeted baseline/freeze artifact path.
 - Phase 2 red-team findings in progress:
   1. `graph_ok=true` now requires bit-exact graph replay output/state vs eager, not only capture success. All rerun public shapes reported `graph_bit_exact=true`.
   2. Exact-production Gate D target is now cu130-nightly `ChunkGatedDeltaRule.forward_native` / `fla_chunk_gated_delta_rule` on GB10, not FlashInfer. Single-spine output matches within one bf16 quantum; recurrent final state still differs at `<1e-3`, so canonical state commit remains required for byte-exact losslessness.
