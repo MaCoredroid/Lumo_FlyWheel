@@ -9,6 +9,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 
 RecordKey = tuple[str, int]
+SampleKey = tuple[int, int]
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,32 @@ class NegativeControl:
 
 
 @dataclass(frozen=True)
+class SamplingRecord:
+    prompt_id: int
+    sample_index: int
+    prompt: str
+    token_ids: tuple[int, ...]
+    text: str = ""
+
+    @property
+    def key(self) -> SampleKey:
+        return (self.prompt_id, self.sample_index)
+
+
+@dataclass(frozen=True)
+class SamplingDistanceRow:
+    prompt_id: int | None
+    position: int
+    left_total: int
+    right_total: int
+    tv: float
+    chi_square: float
+    df: int
+    left_top: tuple[tuple[int, int], ...]
+    right_top: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True)
 class GateThresholds:
     state_abs: float = 2e-5
     output_abs: float = 2e-5
@@ -103,6 +130,25 @@ def load_token_artifact(path: str | Path) -> dict[RecordKey, TokenRecord]:
             text=str(row.get("text", "")),
         )
         out[record.key] = record
+    return out
+
+
+def load_sampling_artifact(path: str | Path) -> list[SamplingRecord]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    records = data.get("records", data if isinstance(data, list) else [])
+    out: list[SamplingRecord] = []
+    for idx, row in enumerate(records):
+        prompt_id = int(row.get("prompt_id", row.get("choice_index", 0)))
+        sample_index = int(row.get("sample_index", idx))
+        out.append(
+            SamplingRecord(
+                prompt_id=prompt_id,
+                sample_index=sample_index,
+                prompt=str(row.get("prompt", "")),
+                token_ids=tuple(int(x) for x in row.get("token_ids", [])),
+                text=str(row.get("text", "")),
+            )
+        )
     return out
 
 
@@ -203,6 +249,103 @@ def chi_square_distance(
         observed = observed_counts.get(key, 0)
         stat += (observed - expected) ** 2 / expected
     return stat
+
+
+def chi_square_2sample(
+    left_counts: Mapping[int, int],
+    right_counts: Mapping[int, int],
+) -> tuple[float, int]:
+    left_total = sum(left_counts.values())
+    right_total = sum(right_counts.values())
+    total = left_total + right_total
+    if total == 0:
+        return 0.0, 0
+    stat = 0.0
+    nonzero_columns = 0
+    for key in set(left_counts) | set(right_counts):
+        column = left_counts.get(key, 0) + right_counts.get(key, 0)
+        if column == 0:
+            continue
+        nonzero_columns += 1
+        expected_left = left_total * column / total
+        expected_right = right_total * column / total
+        if expected_left > 0:
+            stat += (left_counts.get(key, 0) - expected_left) ** 2 / expected_left
+        if expected_right > 0:
+            stat += (right_counts.get(key, 0) - expected_right) ** 2 / expected_right
+    return stat, max(0, nonzero_columns - 1)
+
+
+def _sampling_counts(
+    records: Sequence[SamplingRecord],
+    *,
+    position: int,
+    prompt_id: int | None = None,
+) -> Counter[int]:
+    counts: Counter[int] = Counter()
+    for record in records:
+        if prompt_id is not None and record.prompt_id != prompt_id:
+            continue
+        token = record.token_ids[position] if position < len(record.token_ids) else -1
+        counts[int(token)] += 1
+    return counts
+
+
+def sampling_distribution_distance(
+    left: Sequence[SamplingRecord],
+    right: Sequence[SamplingRecord],
+    *,
+    positions: int = 12,
+    per_prompt: bool = True,
+    top: int = 8,
+) -> list[SamplingDistanceRow]:
+    prompt_ids: list[int | None] = [None]
+    if per_prompt:
+        prompt_ids.extend(sorted({record.prompt_id for record in left} | {record.prompt_id for record in right}))
+    rows: list[SamplingDistanceRow] = []
+    max_len = max([len(record.token_ids) for record in [*left, *right]] or [0])
+    for prompt_id in prompt_ids:
+        for position in range(min(positions, max_len)):
+            left_counts = _sampling_counts(left, position=position, prompt_id=prompt_id)
+            right_counts = _sampling_counts(right, position=position, prompt_id=prompt_id)
+            if not left_counts and not right_counts:
+                continue
+            chi2, df = chi_square_2sample(left_counts, right_counts)
+            rows.append(
+                SamplingDistanceRow(
+                    prompt_id=prompt_id,
+                    position=position,
+                    left_total=sum(left_counts.values()),
+                    right_total=sum(right_counts.values()),
+                    tv=total_variation(left_counts, right_counts),
+                    chi_square=chi2,
+                    df=df,
+                    left_top=tuple(left_counts.most_common(top)),
+                    right_top=tuple(right_counts.most_common(top)),
+                )
+            )
+    return rows
+
+
+def summarize_sampling_distance(rows: Sequence[SamplingDistanceRow]) -> dict[str, Any]:
+    aggregate_rows = [row for row in rows if row.prompt_id is None]
+    per_prompt_rows = [row for row in rows if row.prompt_id is not None]
+    max_row = max(rows, key=lambda row: row.tv, default=None)
+    max_aggregate_row = max(aggregate_rows, key=lambda row: row.tv, default=None)
+    return {
+        "rows": len(rows),
+        "aggregate_rows": len(aggregate_rows),
+        "per_prompt_rows": len(per_prompt_rows),
+        "max_tv": max((row.tv for row in rows), default=0.0),
+        "mean_tv": (sum(row.tv for row in rows) / len(rows)) if rows else 0.0,
+        "max_aggregate_tv": max((row.tv for row in aggregate_rows), default=0.0),
+        "mean_aggregate_tv": (
+            sum(row.tv for row in aggregate_rows) / len(aggregate_rows)
+        ) if aggregate_rows else 0.0,
+        "max_chi_square": max((row.chi_square for row in rows), default=0.0),
+        "max_tv_row": max_row.__dict__ if max_row else None,
+        "max_aggregate_tv_row": max_aggregate_row.__dict__ if max_aggregate_row else None,
+    }
 
 
 def evaluate_flip_distribution_equivalence(

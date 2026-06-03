@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from lumo_flywheel_serving.fr10_equivalence_gate import (
     GateThresholds,
     NegativeControl,
+    SamplingRecord,
     StateParityRow,
     TokenRecord,
     compare_records,
@@ -22,7 +23,10 @@ from lumo_flywheel_serving.fr10_equivalence_gate import (
     evaluate_three_way_gate,
     first_token_diff,
     load_margin_artifact,
+    load_sampling_artifact,
     load_token_artifact,
+    sampling_distribution_distance,
+    summarize_sampling_distance,
 )
 
 
@@ -31,6 +35,15 @@ def _record(batch: str, choice: int, tokens: list[int]) -> TokenRecord:
         batch=batch,
         choice_index=choice,
         prompt=f"prompt-{choice}",
+        token_ids=tuple(tokens),
+    )
+
+
+def _sample(prompt_id: int, sample: int, tokens: list[int]) -> SamplingRecord:
+    return SamplingRecord(
+        prompt_id=prompt_id,
+        sample_index=sample,
+        prompt=f"prompt-{prompt_id}",
         token_ids=tuple(tokens),
     )
 
@@ -85,6 +98,38 @@ def test_committed_ar_vs_p0_calibration_flip_margin_is_enforced() -> None:
     assert report.metrics["max_margin"] == pytest.approx(0.25)
     assert report.metrics["max_margin"] > GateThresholds().margin_indifference
     assert any("high-margin flip" in violation for violation in report.violations)
+
+
+def test_sampling_distribution_distance_reports_same_regime_floor() -> None:
+    left = [
+        _sample(0, 0, [1, 2]),
+        _sample(0, 1, [1, 3]),
+        _sample(1, 0, [4, 5]),
+        _sample(1, 1, [4, 6]),
+    ]
+    right_same = [
+        _sample(0, 0, [1, 2]),
+        _sample(0, 1, [1, 3]),
+        _sample(1, 0, [4, 5]),
+        _sample(1, 1, [4, 6]),
+    ]
+    right_shifted = [
+        _sample(0, 0, [9, 2]),
+        _sample(0, 1, [9, 3]),
+        _sample(1, 0, [8, 5]),
+        _sample(1, 1, [8, 6]),
+    ]
+
+    same = summarize_sampling_distance(
+        sampling_distribution_distance(left, right_same, positions=2)
+    )
+    shifted = summarize_sampling_distance(
+        sampling_distribution_distance(left, right_shifted, positions=2)
+    )
+
+    assert same["max_tv"] == 0.0
+    assert shifted["max_aggregate_tv"] == 1.0
+    assert shifted["max_tv_row"]["position"] == 0
 
 
 def test_flip_margin_gate_rejects_high_margin_flip() -> None:

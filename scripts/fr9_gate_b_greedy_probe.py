@@ -294,6 +294,92 @@ def sample_temp(args: argparse.Namespace) -> int:
     return 0
 
 
+def sample_prompts_temp(args: argparse.Namespace) -> int:
+    if args.wait_health:
+        _wait_health(args.endpoint, args.wait_health)
+
+    api_key = _load_api_key(args)
+    headers = _headers(api_key)
+    prompts = _read_prompts(args.prompts_file)
+
+    reset_error = None
+    if not args.skip_reset_prefix_cache:
+        try:
+            _post_json(args.endpoint, "/reset_prefix_cache", headers, {}, timeout=30)
+        except Exception as exc:  # noqa: BLE001 - endpoint may return empty/non-JSON.
+            reset_error = f"{type(exc).__name__}: {exc}"
+
+    records: list[dict[str, Any]] = []
+    for prompt_id, prompt in enumerate(prompts):
+        next_sample = 0
+        while next_sample < args.samples_per_prompt:
+            batch_size = min(args.batch_size, args.samples_per_prompt - next_sample)
+            payload: dict[str, Any] = {
+                "model": args.model,
+                "prompt": [prompt] * batch_size if batch_size > 1 else prompt,
+                "max_tokens": args.max_tokens,
+                "temperature": args.temperature,
+                "logprobs": args.logprobs,
+                "return_token_ids": True,
+            }
+            if args.seed is not None:
+                payload["seed"] = args.seed + prompt_id * args.samples_per_prompt + next_sample
+            data = _post_json(
+                args.endpoint,
+                "/v1/completions",
+                headers,
+                payload,
+                timeout=args.request_timeout,
+            )
+            for choice in data["choices"]:
+                local_choice_index = int(choice["index"])
+                records.append(
+                    {
+                        "prompt_id": prompt_id,
+                        "prompt": prompt,
+                        "sample_index": next_sample + local_choice_index,
+                        "local_choice_index": local_choice_index,
+                        "finish_reason": choice.get("finish_reason"),
+                        "text": choice.get("text"),
+                        "token_ids": choice.get("token_ids") or [],
+                    }
+                )
+            next_sample += batch_size
+
+    artifact = {
+        "arm": args.arm,
+        "endpoint": args.endpoint,
+        "model": args.model,
+        "temperature": args.temperature,
+        "seed": args.seed,
+        "max_tokens": args.max_tokens,
+        "samples_per_prompt": args.samples_per_prompt,
+        "batch_size": args.batch_size,
+        "ts": time.time(),
+        "prompts": prompts,
+        "reset_prefix_cache_error": reset_error,
+        "records": records,
+    }
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(
+        json.dumps(
+            {
+                "arm": args.arm,
+                "out": str(out),
+                "records": len(records),
+                "prompts": len(prompts),
+                "samples_per_prompt": args.samples_per_prompt,
+                "temperature": args.temperature,
+                "reset_prefix_cache_error": reset_error,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
 def collect_logprobs(args: argparse.Namespace) -> int:
     if args.wait_health:
         _wait_health(args.endpoint, args.wait_health)
@@ -693,6 +779,26 @@ def build_parser() -> argparse.ArgumentParser:
     sample_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
     sample_parser.add_argument("--api-key-from-container", default=DEFAULT_CONTAINER)
     sample_parser.set_defaults(func=sample_temp)
+
+    sample_prompts_parser = subparsers.add_parser("sample-prompts-temp")
+    sample_prompts_parser.add_argument("--arm", required=True)
+    sample_prompts_parser.add_argument("--out", required=True)
+    sample_prompts_parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+    sample_prompts_parser.add_argument("--model", default=DEFAULT_MODEL)
+    sample_prompts_parser.add_argument("--prompts-file")
+    sample_prompts_parser.add_argument("--samples-per-prompt", type=int, default=32)
+    sample_prompts_parser.add_argument("--batch-size", type=int, default=4)
+    sample_prompts_parser.add_argument("--max-tokens", type=int, default=32)
+    sample_prompts_parser.add_argument("--temperature", type=float, default=0.6)
+    sample_prompts_parser.add_argument("--logprobs", type=int, default=1)
+    sample_prompts_parser.add_argument("--seed", type=int)
+    sample_prompts_parser.add_argument("--request-timeout", type=float, default=180)
+    sample_prompts_parser.add_argument("--wait-health", type=float, default=0)
+    sample_prompts_parser.add_argument("--skip-reset-prefix-cache", action="store_true")
+    sample_prompts_parser.add_argument("--api-key")
+    sample_prompts_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
+    sample_prompts_parser.add_argument("--api-key-from-container", default=DEFAULT_CONTAINER)
+    sample_prompts_parser.set_defaults(func=sample_prompts_temp)
 
     compare_sampling_parser = subparsers.add_parser("compare-sampling")
     compare_sampling_parser.add_argument("left")
