@@ -332,6 +332,176 @@ Cost-gate interpretation:
   `~135 us` FLA flat cost for `6..14` nodes, narrow the speed case to the
   `<=4` node niche.
 
+## Cost-Gate Stage Profile
+
+Implementation artifact: `scripts/fr10_tree_kernel_stage_profile.py`
+
+Artifacts:
+
+- `output/fr10_tree_kernel_stage_profile_6n_20260603.json`
+- `output/fr10_tree_kernel_stage_profile_8n_20260603.json`
+- `output/fr10_tree_kernel_stage_profile_14n_20260603.json`
+
+Command template:
+
+```bash
+docker run --rm --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
+  -v /home/mark/shared/lumoFlyWheel:/workspace -w /workspace \
+  --entrypoint python3 -e PYTHONWARNINGS=ignore \
+  vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776 \
+  scripts/fr10_tree_kernel_stage_profile.py --nodes 14 --capture --iters 300 --repeats 5
+```
+
+The stage profile uses graph-replay medians over `5x300` iterations. It is a
+variant profile, not an exact Nsight additive trace, but it isolates whether the
+dense padded solve or the state/output traversal is the main cost center.
+
+| nodes | padded | full us | dense solve variant us | solve/full | state-output-only us | strict ancestor pairs / dense lower | visible pairs / dense square |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 6 | 8 | 303.243 | 160.921 | 0.531 | 221.282 | 11/28 = 0.393 | 17/64 = 0.266 |
+| 8 | 8 | 334.785 | 160.861 | 0.480 | 285.975 | 19/28 = 0.679 | 27/64 = 0.422 |
+| 14 | 16 | 995.777 | 636.507 | 0.639 | 352.529 | 36/120 = 0.300 | 50/256 = 0.195 |
+
+Profile conclusion:
+
+- Dense triangular solve is the largest single cost center for the 14-node
+  public tree: about `636 us` of a `996 us` full path.
+- Tree sparsity is real, but simple pair-count sparsity does not plausibly
+  rescue the large public trees. Even an optimistic pair-scaled estimate leaves
+  14 nodes well above the `~135 us` FLA flat cost, and 8 nodes has too little
+  sparsity inside the padded-8 bucket.
+- The 6-node case is borderline only under optimistic scaling, but FR10 needs a
+  broad `6..14` tree speed case. Do not invest in large-tree optimization unless
+  a more radical STree-style accumulated-state recurrence removes the padded
+  dense solve/state traversal rather than merely skipping masked pairs.
+- Next speed path is the explicitly narrowed `<=4` node niche.
+
+## Tiny-Tree Acceptance Bound
+
+Implementation artifact: `scripts/fr10_tiny_tree_acceptance_bound.py`
+
+Artifact: `output/fr10_tiny_tree_acceptance_bound_20260603.json`
+
+This is a cheap upper-bound screen before launching any new serving variants. It
+uses the P0 cu130 spines=1 counters:
+
+- drafts: `398`
+- draft tokens: `1990`
+- accepted tokens: `1206`
+- accepted by MTP position: `{0:273, 1:266, 2:253, 3:238, 4:176}`
+- P0 bounded-window throughput: `13.45945945945946 tok/step`
+- P0 bounded-window accepted/draft-token: `0.5786666666666667`
+
+| max accepted depth | accepted/draft | sequence tokens/draft | projected tok/forward at same forward time | forward latency reduction needed to match P0 |
+|---:|---:|---:|---:|---:|
+| 1 | 0.686 | 1.686 | 5.630 | 58.167% |
+| 2 | 1.354 | 2.354 | 7.863 | 41.584% |
+| 3 | 1.990 | 2.990 | 9.986 | 25.810% |
+| 4 | 2.588 | 3.588 | 11.983 | 10.973% |
+
+Kernel-savings bound for a `<=4` node tree:
+
+- FLA chunk reference: `135 us`
+- tiny-tree reference: `45.339 us` (`3` nodes / padded `4`)
+- GDN layers: `48`
+- maximum replacement saving: `4.304 ms/step`
+- denominator correction: do not divide by the `1.203653 s` agentic step wall
+  time; compare against decode-forward-pass latency
+- sensitivity range pending a clean DGX decode-forward trace:
+  - at `25 ms` forward latency, `4.304 ms` is `17.215%`
+  - at `40 ms` forward latency, `4.304 ms` is `10.759%`
+
+Tiny-tree conclusion:
+
+- Under the observed P0 spine acceptance counters, even the depth-4 upper bound
+  loses about `11%` sequence tokens per draft versus MTP-5.
+- That depth loss is the sound tiny-tree kill: `<=4` nodes is too shallow to
+  match the depth-5 MTP spine acceptance envelope without additional branch
+  acceptance evidence.
+- Effective decode TPS must be evaluated as
+  `tokens_accepted_per_forward_pass / forward_pass_time`, using a decode-forward
+  denominator from DGX steptrace or equivalent kernel timing, not agentic wall
+  time.
+
+## Fused Sparse Kernel Back-Of-Envelope
+
+Implementation artifact: `scripts/fr10_fused_kernel_bote.py`
+
+Artifact: `output/fr10_fused_kernel_bote_20260603.json`
+
+This is the corrected large-tree decision model after the stage profile. The
+current dense kernel is not viable because `state_output_only` already exceeds
+the FLA flat cost for `>=6` node shapes (`221 us` at 6, `286 us` at 8, `353 us`
+at 14). But verifier integration does not need to persist all N verifier node
+states. It needs verifier outputs for the candidate nodes and one canonical
+accepted-path state committed through native decode.
+
+14-node fused-kernel estimate:
+
+- dense triangular solve profile: `636.507 us`
+- strict ancestry pairs: `36/120 = 0.300`
+- sparse-solve estimate: `190.952 us`
+- setup allowance: `12.000 us`
+- output bytes: `14*24 KiB = 344,064`
+- committed state bytes: `3,145,728`
+- observed GB10 state bandwidth: `~273 GB/s`
+- output plus one committed state estimate: `12.783 us`
+- fused 14-node estimate: `215.735 us`
+
+Cost-gate implication versus FLA:
+
+- FLA chunk reference: `135 us`
+- fused tree extra cost: `80.735 us/layer`
+- across 48 GDN layers: `3.875 ms/step`
+- denominator correction: the old `1.203653 s` P0 step denominator is invalid
+  for cost-gating because it is agentic/server step wall time, not decode
+  forward-pass latency
+- sensitivity pending clean DGX decode-forward trace:
+  - at `25 ms` forward latency, overhead is `15.501%` and requires `0.625`
+    extra accepted tokens/draft over P0 MTP-5
+  - at `40 ms` forward latency, overhead is `9.688%` and requires `0.390`
+    extra accepted tokens/draft over P0 MTP-5
+
+Decision:
+
+- A plausibly cheap big-tree path exists, but only as a real rewrite: sparse
+  tree-structured solve plus fused outputs-only verifier plus canonical native
+  state commit.
+- Do not prototype another dense or all-node-state-spilling kernel for `>=6`
+  node trees.
+- Do not build the fused kernel yet. The decisive missing evidence is branch
+  acceptance: a depth-5 tree-with-branches must accept enough more tokens per
+  decode forward pass than the MTP-5 spine to pay the corrected fused-kernel GDN
+  overhead.
+
+## No-State-Spill Prototype Check
+
+Implementation change: `scripts/fr10_tree_kernel_stage_profile.py` added
+`full_dense_outputs_one_state`, which runs the full dense verifier but stores
+outputs for all nodes and only one accepted-final recurrent state instead of
+all N node states.
+
+Artifact: `output/fr10_tree_kernel_stage_profile_14n_one_state_20260603.json`
+
+14-node result:
+
+- full dense all-state-spill graph time: `1041.750 us`
+- full dense outputs plus one state graph time: `845.695 us`
+- all-state-spill increment removed: `196.056 us`
+- dense triangular solve variant: `636.149 us`
+- state-output-only variant remains: `344.904 us`
+- graph replay bit-exact for all stages
+
+Interpretation:
+
+- Suppressing N-state persistence is necessary but not sufficient.
+- The current kernel still spends most of the remaining time in dense solve and
+  per-node state/output traversal, even when it writes only one state.
+- The viable fused design must change the state/output recurrence itself so
+  verifier outputs are produced without materializing/reconstructing all node
+  states from dense padded loops. A store-only patch is not the STree-style
+  hardware-aware kernel.
+
 ## Next
 
 Move the standalone algebra into the vLLM 0.22 FLA op fork:

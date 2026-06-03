@@ -1,0 +1,25 @@
+{
+  "avg_spine0_acc": 0.7700534759358288,
+  "avg_winner_acc": 0.7700534759358288,
+  "copy_missing_sum": 0,
+  "examples": [],
+  "hidden_recovery_opportunity_total": 0,
+  "hidden_winner_suppressed_events": 0,
+  "lossless_public_stream_events": 187,
+  "lossless_suppressed_superset_events": 0,
+  "malformed_rows": 0,
+  "non_lossless_public_stream_events": 0,
+  "parse_errors": 0,
+  "path": "output/fr10_phase4_gate_b_integrated/independent_winner_trace.jsonl",
+  "policies": {
+    "greedy_tree_lcp_max": 187
+  },
+  "recovered_token_total": 0,
+  "rows": 187,
+  "selector_enabled_events": 187,
+  "superset_violations": 0,
+  "winner_nonzero_spine_events": 0,
+  "winner_spines": {
+    "0": 187
+  }
+}

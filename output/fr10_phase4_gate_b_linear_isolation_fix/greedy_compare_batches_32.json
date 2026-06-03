@@ -1,0 +1,11 @@
+{
+  "arm": "fr10_tree_gdn_linear_isolation_fix32",
+  "artifact": "output/fr10_phase4_gate_b_linear_isolation_fix/greedy_tokens_32.json",
+  "exact_match": true,
+  "left_batch": "b1",
+  "matched_records": 8,
+  "mismatches": [],
+  "missing_left": [],
+  "missing_right": [],
+  "right_batch": "b4"
+}
