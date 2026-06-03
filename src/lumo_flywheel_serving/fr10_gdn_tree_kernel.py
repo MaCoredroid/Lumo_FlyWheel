@@ -117,8 +117,13 @@ def _tree_gdn_kernel(
     offs_k = tl.arange(0, DIM_K)
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
     v_mask = offs_v < DIM_V
-    if COUNT_INVOCATION and pid_vh == 0 and pid_v == 0:
-        tl.atomic_add(invocation_counter, 1, sem="relaxed")
+    if COUNT_INVOCATION:
+        tl.atomic_add(
+            invocation_counter,
+            1,
+            sem="relaxed",
+            mask=(pid_vh == 0) & (pid_v == 0),
+        )
 
     b_g = tl.load(g + offs_n * NUM_VH + pid_vh).to(tl.float32)
     b_beta = tl.load(beta + offs_n * NUM_VH + pid_vh).to(tl.float32)
@@ -223,6 +228,7 @@ def launch_tree_gdn(
     state: torch.Tensor | None = None,
     output_scale: float = 1.0,
     use_qk_l2norm_in_kernel: bool = False,
+    invocation_counter: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Launch the FR10 dense tree verifier.
 
@@ -248,6 +254,7 @@ def launch_tree_gdn(
         state=state,
         output_scale=output_scale,
         use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+        invocation_counter=invocation_counter,
     )
 
 

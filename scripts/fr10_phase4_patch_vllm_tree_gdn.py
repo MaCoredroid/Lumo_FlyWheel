@@ -128,7 +128,7 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_tree_parent = torch.tensor(parent, dtype=torch.int32, device=device)\n"
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
-            "            self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int64, device=device)\n"
+            "            self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int32, device=device)\n"
             "            _fr10_register_tree_counter(\n"
             "                shape=f\"n{n}_pad{n_pad}\",\n"
             "                parent=parent,\n"
