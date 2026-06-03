@@ -155,11 +155,11 @@ def native_update_serial_per_path(
             v=v_raw.index_select(0, path).unsqueeze(0).contiguous(),
             scale=output_scale,
             initial_state=initial,
-            inplace_final_state=True,
+            inplace_final_state=False,
             use_qk_l2norm_in_kernel=True,
         )
         outputs.append(out[0, -1].float())
-        states.append(state[0].float())
+        states.append(state[-1].float())
     return torch.stack(outputs, dim=0), torch.stack(states, dim=0)
 
 
