@@ -219,6 +219,44 @@ def launch_tree_gdn(
     """
     n = tree.n
     n_pad = padded_nodes(n)
+    if strict_mask is None or visible_mask is None:
+        strict_mask, visible_mask = tree.masks(q.device, n_pad)
+    return launch_tree_gdn_prepared(
+        q=q,
+        k=k,
+        v=v,
+        g=g,
+        beta=beta,
+        h0=h0,
+        n_actual=n,
+        n_pad=n_pad,
+        strict_mask=strict_mask,
+        visible_mask=visible_mask,
+        out=out,
+        state=state,
+        output_scale=output_scale,
+        use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+    )
+
+
+def launch_tree_gdn_prepared(
+    q: torch.Tensor,
+    k: torch.Tensor,
+    v: torch.Tensor,
+    g: torch.Tensor,
+    beta: torch.Tensor,
+    h0: torch.Tensor,
+    *,
+    n_actual: int,
+    n_pad: int,
+    strict_mask: torch.Tensor,
+    visible_mask: torch.Tensor,
+    out: torch.Tensor | None = None,
+    state: torch.Tensor | None = None,
+    output_scale: float = 1.0,
+    use_qk_l2norm_in_kernel: bool = False,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Launch with precomputed graph-safe tree descriptors."""
     num_kh = q.shape[1]
     num_vh = v.shape[1]
     dim_k = q.shape[2]
@@ -231,8 +269,6 @@ def launch_tree_gdn(
         raise ValueError(f"h0 shape must be {(num_vh, dim_v, dim_k)}, got {tuple(h0.shape)}")
     if num_vh % num_kh != 0:
         raise ValueError(f"value heads must be a multiple of q/k heads, got {num_vh}/{num_kh}")
-    if strict_mask is None or visible_mask is None:
-        strict_mask, visible_mask = tree.masks(q.device, n_pad)
     if out is None:
         out = torch.empty((n_pad, num_vh, dim_v), device=q.device, dtype=q.dtype)
     if state is None:
@@ -249,7 +285,7 @@ def launch_tree_gdn(
         visible_mask,
         out,
         state,
-        N_ACTUAL=n,
+        N_ACTUAL=n_actual,
         N_PAD=n_pad,
         NUM_KH=num_kh,
         NUM_VH=num_vh,
