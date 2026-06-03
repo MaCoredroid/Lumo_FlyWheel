@@ -34,6 +34,7 @@ STAGES = (
     Stage("dense_triangular_solve", 2),
     Stage("state_output_only", 3),
     Stage("full_dense_tree_kernel", 4),
+    Stage("full_dense_outputs_one_state", 5),
 )
 
 
@@ -159,10 +160,14 @@ def _stage_profile_kernel(
             out_i,
             mask=v_mask & (i < N_ACTUAL),
         )
+        if MODE == 5:
+            state_mask = i == (N_ACTUAL - 1)
+        else:
+            state_mask = i < N_ACTUAL
         tl.store(
             state + ((i * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
             state_i,
-            mask=v_mask[:, None] & (i < N_ACTUAL),
+            mask=v_mask[:, None] & state_mask,
         )
 
 
@@ -289,6 +294,7 @@ def run(nodes: int, iters: int, repeats: int, capture: bool) -> dict[str, Any]:
     solve = by_name["dense_triangular_solve"][time_key]
     state_only = by_name["state_output_only"][time_key]
     full = by_name["full_dense_tree_kernel"][time_key]
+    one_state = by_name["full_dense_outputs_one_state"][time_key]
     return {
         "schema": "fr10.tree_kernel_stage_profile.v1",
         "device": torch.cuda.get_device_name(0),
@@ -304,6 +310,8 @@ def run(nodes: int, iters: int, repeats: int, capture: bool) -> dict[str, Any]:
             "dense_solve_variant_us": solve,
             "state_output_only_variant_us": state_only,
             "full_us": full,
+            "full_outputs_one_state_us": one_state,
+            "all_state_spill_increment_us": full - one_state,
             "solve_variant_fraction_of_full": solve / full,
             "state_output_only_fraction_of_full": state_only / full,
             "strict_ancestor_pairs_vs_dense_lower": ancestor_stats(tree, n_pad)["strict_vs_dense_lower_fraction"],

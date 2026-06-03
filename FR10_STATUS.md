@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-03 18:54 UTC
+Updated: 2026-06-03 19:04 UTC
 
 ## Current Phase
 
@@ -87,6 +87,7 @@ Updated: 2026-06-03 18:54 UTC
 - `output/fr10_tiny_tree_acceptance_bound_20260603.json`
 - `scripts/fr10_fused_kernel_bote.py`
 - `output/fr10_fused_kernel_bote_20260603.json`
+- `output/fr10_tree_kernel_stage_profile_14n_one_state_20260603.json`
 
 ## Passed
 
@@ -140,6 +141,7 @@ Updated: 2026-06-03 18:54 UTC
 - COST-GATE tiny-tree screen completed from P0 counters. Depth-4 upper-bound from P0 accepted-position counters gives `2.588` accepted tokens/draft, `3.588` sequence tokens/draft, and projected `11.983 tok/step` at unchanged step time versus P0 `13.459 tok/step`; it would need `10.973%` step-latency reduction to match P0. Replacing `135us` FLA with a `45.339us` tiny tree across all `48` GDN layers saves only `4.304 ms/step`, about `0.358%` of the measured `1.203653s` P0 step. The `<=4` tiny-tree niche is therefore not competitive under observed P0 spine acceptance.
 - COST-GATE fused-kernel back-of-envelope completed. Current all-node-state-spilling kernel is not viable because state-output alone exceeds FLA for `>=6` nodes (`221us@6`, `286us@8`, `353us@14` vs FLA `~135us`). But verification only needs N outputs plus one canonical accepted-path state, not all N states persisted. For 14 nodes: sparse solve estimate from strict ancestry pairs is `636.507us * 36/120 = 190.952us`; setup allowance `12us`; outputs plus one committed state (`344,064 + 3,145,728` bytes at observed `~273GB/s`) is `12.783us`; fused estimate is `215.735us`.
 - COST-GATE revised outcome: a plausibly-cheap big-tree path exists, but only as a real rewrite: sparse/tree-structured solve plus fused outputs-only verifier plus canonical native state commit. This is `80.735us/layer` slower than FLA, or `3.875ms/step` across 48 GDN layers (`0.322%` of the measured P0 step). It needs only `~0.01298` extra accepted tokens/draft over the P0 MTP-5 spine to clear the overhead, but this is an estimate, not a Gate result. Do not prototype another dense/all-node-state-spilling kernel; prototype only the fused sparse design if branch acceptance evidence remains plausible.
+- No-state-spill prototype check: `scripts/fr10_tree_kernel_stage_profile.py` now includes `full_dense_outputs_one_state`, which stores verifier outputs for all nodes and only one accepted-final state. On 14 nodes it reduced full dense graph time from `1041.750us` to `845.695us`, saving `196.056us`, with graph replay bit-exact. This is not enough: dense solve remains `636.149us` and state/output traversal remains `344.904us`. Therefore a store-only patch is not the fused kernel; the real rewrite must also change the state/output recurrence so outputs are produced without reconstructing/materializing every node state through dense padded loops.
 
 ## GPU Kernel Plan After P1 Gate
 

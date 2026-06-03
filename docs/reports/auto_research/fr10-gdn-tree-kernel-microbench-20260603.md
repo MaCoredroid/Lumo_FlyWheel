@@ -463,6 +463,34 @@ Decision:
   `~0.013` accepted tokens/draft over P0 MTP-5, and the implementation must
   remove the all-node state spill.
 
+## No-State-Spill Prototype Check
+
+Implementation change: `scripts/fr10_tree_kernel_stage_profile.py` added
+`full_dense_outputs_one_state`, which runs the full dense verifier but stores
+outputs for all nodes and only one accepted-final recurrent state instead of
+all N node states.
+
+Artifact: `output/fr10_tree_kernel_stage_profile_14n_one_state_20260603.json`
+
+14-node result:
+
+- full dense all-state-spill graph time: `1041.750 us`
+- full dense outputs plus one state graph time: `845.695 us`
+- all-state-spill increment removed: `196.056 us`
+- dense triangular solve variant: `636.149 us`
+- state-output-only variant remains: `344.904 us`
+- graph replay bit-exact for all stages
+
+Interpretation:
+
+- Suppressing N-state persistence is necessary but not sufficient.
+- The current kernel still spends most of the remaining time in dense solve and
+  per-node state/output traversal, even when it writes only one state.
+- The viable fused design must change the state/output recurrence itself so
+  verifier outputs are produced without materializing/reconstructing all node
+  states from dense padded loops. A store-only patch is not the STree-style
+  hardware-aware kernel.
+
 ## Next
 
 Move the standalone algebra into the vLLM 0.22 FLA op fork:
