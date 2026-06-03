@@ -357,6 +357,7 @@ def run_tree(
         beta,
         h0,
         strict,
+        strict,
         visible,
         out,
         state,
@@ -367,6 +368,10 @@ def run_tree(
         DIM_V=V,
         BLOCK_V=BV,
         OUTPUT_SCALE=output_scale,
+        USE_QK_L2NORM_IN_KERNEL=False,
+        H0_IS_BANK=False,
+        H0_INDEX_ROW=0,
+        H0_BANK_STRIDE=0,
     )
     torch.cuda.synchronize()
     ref_out, ref_state = torch_tree_reference(q[:n], k[:n], v[:n], g[:n], beta[:n], h0, visible[:n, :n], strict[:n, :n], output_scale=output_scale)
@@ -408,7 +413,7 @@ def run_tree(
     end = torch.cuda.Event(enable_timing=True)
     start.record()
     for _ in range(iters):
-        _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_KH=H, NUM_VH=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale, USE_QK_L2NORM_IN_KERNEL=False)
+        _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_KH=H, NUM_VH=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale, USE_QK_L2NORM_IN_KERNEL=False, H0_IS_BANK=False, H0_INDEX_ROW=0, H0_BANK_STRIDE=0)
     end.record()
     torch.cuda.synchronize()
     eager_us = start.elapsed_time(end) * 1000.0 / iters
@@ -418,10 +423,10 @@ def run_tree(
     graph_us = 0.0
     if capture:
         graph = torch.cuda.CUDAGraph()
-        _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_KH=H, NUM_VH=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale, USE_QK_L2NORM_IN_KERNEL=False)
+        _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_KH=H, NUM_VH=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale, USE_QK_L2NORM_IN_KERNEL=False, H0_IS_BANK=False, H0_INDEX_ROW=0, H0_BANK_STRIDE=0)
         torch.cuda.synchronize()
         with torch.cuda.graph(graph):
-            _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_KH=H, NUM_VH=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale, USE_QK_L2NORM_IN_KERNEL=False)
+            _tree_gdn_kernel[grid](q, k, v, g, beta, h0, strict, strict, visible, out, state, N_ACTUAL=n, N_PAD=n_pad, NUM_KH=H, NUM_VH=H, DIM_K=K, DIM_V=V, BLOCK_V=BV, OUTPUT_SCALE=output_scale, USE_QK_L2NORM_IN_KERNEL=False, H0_IS_BANK=False, H0_INDEX_ROW=0, H0_BANK_STRIDE=0)
         out.zero_()
         state.zero_()
         graph.replay()

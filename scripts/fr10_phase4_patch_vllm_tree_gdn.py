@@ -179,14 +179,16 @@ def _patch_gdn_linear() -> bool:
                     # one fixed tree block, so offsets are static from tree_n.
                     start = fr10_b * tree_n
                     end = start + tree_n
-                    state_index = spec_state_indices_tensor[fr10_b, 0]
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[start:end].contiguous(),
                         k=key_spec[start:end].contiguous(),
                         v=value_tree[start:end].contiguous(),
                         g=g_tree[start:end].contiguous(),
                         beta=beta_tree[start:end].contiguous(),
-                        h0=ssm_state[state_index].contiguous(),
+                        h0=ssm_state,
+                        h0_indices=spec_state_indices_tensor,
+                        h0_is_bank=True,
+                        h0_index_row=fr10_b * spec_state_indices_tensor.size(-1),
                         n_actual=tree_n,
                         n_pad=tree_n_pad,
                         strict_mask=attn_metadata.fr10_tree_strict_mask,

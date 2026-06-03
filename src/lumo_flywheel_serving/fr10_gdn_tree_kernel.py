@@ -89,6 +89,7 @@ def _tree_gdn_kernel(
     g,
     beta,
     h0,
+    h0_indices,
     strict_mask,
     visible_mask,
     out,
@@ -102,6 +103,9 @@ def _tree_gdn_kernel(
     BLOCK_V: tl.constexpr,
     OUTPUT_SCALE: tl.constexpr,
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    H0_IS_BANK: tl.constexpr,
+    H0_INDEX_ROW: tl.constexpr,
+    H0_BANK_STRIDE: tl.constexpr,
 ):
     pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
@@ -128,8 +132,12 @@ def _tree_gdn_kernel(
         mask=v_mask[None, :],
         other=0.0,
     ).to(tl.float32)
+    h0_base = h0
+    if H0_IS_BANK:
+        h0_index = tl.load(h0_indices + H0_INDEX_ROW)
+        h0_base = h0 + h0_index * H0_BANK_STRIDE
     b_h0 = tl.load(
-        h0 + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+        h0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
         mask=v_mask[:, None],
         other=0.0,
     ).to(tl.float32)
@@ -255,6 +263,9 @@ def launch_tree_gdn_prepared(
     state: torch.Tensor | None = None,
     output_scale: float = 1.0,
     use_qk_l2norm_in_kernel: bool = False,
+    h0_indices: torch.Tensor | None = None,
+    h0_is_bank: bool = False,
+    h0_index_row: int = 0,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Launch with precomputed graph-safe tree descriptors."""
     num_kh = q.shape[1]
@@ -265,8 +276,20 @@ def launch_tree_gdn_prepared(
         raise ValueError(f"q/k shape mismatch: q={tuple(q.shape)} k={tuple(k.shape)}")
     if g.shape[1] != num_vh or beta.shape[1] != num_vh:
         raise ValueError(f"g/beta must use value-head count {num_vh}")
-    if h0.shape != (num_vh, dim_v, dim_k):
+    if h0_is_bank:
+        if h0.ndim != 4 or h0.shape[1:] != (num_vh, dim_v, dim_k):
+            raise ValueError(
+                f"h0 bank shape must be (*, {num_vh}, {dim_v}, {dim_k}), got {tuple(h0.shape)}"
+            )
+        if h0_indices is None:
+            raise ValueError("h0_indices is required when h0_is_bank=True")
+        h0_bank_stride = h0.stride(0)
+    elif h0.shape != (num_vh, dim_v, dim_k):
         raise ValueError(f"h0 shape must be {(num_vh, dim_v, dim_k)}, got {tuple(h0.shape)}")
+    else:
+        h0_bank_stride = 0
+    if h0_indices is None:
+        h0_indices = strict_mask
     if num_vh % num_kh != 0:
         raise ValueError(f"value heads must be a multiple of q/k heads, got {num_vh}/{num_kh}")
     if out is None:
@@ -281,6 +304,7 @@ def launch_tree_gdn_prepared(
         g,
         beta,
         h0,
+        h0_indices,
         strict_mask,
         visible_mask,
         out,
@@ -294,5 +318,8 @@ def launch_tree_gdn_prepared(
         BLOCK_V=BV,
         OUTPUT_SCALE=output_scale,
         USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+        H0_IS_BANK=h0_is_bank,
+        H0_INDEX_ROW=h0_index_row,
+        H0_BANK_STRIDE=h0_bank_stride,
     )
     return out, state
