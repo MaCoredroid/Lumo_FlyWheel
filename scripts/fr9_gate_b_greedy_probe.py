@@ -147,6 +147,8 @@ def collect(args: argparse.Namespace) -> int:
             "logprobs": 1,
             "return_token_ids": True,
         }
+        if args.seed is not None:
+            payload["seed"] = args.seed
         data = _post_json(
             args.endpoint,
             "/v1/completions",
@@ -186,6 +188,7 @@ def collect(args: argparse.Namespace) -> int:
         "endpoint": args.endpoint,
         "model": args.model,
         "temperature": 0,
+        "seed": args.seed,
         "max_tokens": args.max_tokens,
         "ts": time.time(),
         "prompts": prompts,
@@ -642,6 +645,7 @@ def build_parser() -> argparse.ArgumentParser:
     collect_parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     collect_parser.add_argument("--model", default=DEFAULT_MODEL)
     collect_parser.add_argument("--max-tokens", type=int, default=24)
+    collect_parser.add_argument("--seed", type=int)
     collect_parser.add_argument("--prompts-file")
     collect_parser.add_argument("--request-timeout", type=float, default=180)
     collect_parser.add_argument("--wait-health", type=float, default=0)
