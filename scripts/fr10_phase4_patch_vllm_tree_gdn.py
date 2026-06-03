@@ -174,13 +174,12 @@ def _patch_gdn_linear() -> bool:
                     device=query_spec.device,
                 )
                 for fr10_b in range(attn_metadata.num_spec_decodes):
-                    start = int(spec_query_start_loc[fr10_b].item())
-                    end = int(spec_query_start_loc[fr10_b + 1].item())
-                    if end - start != tree_n:
-                        raise RuntimeError(
-                            f"FR10 tree GDN expected {tree_n} spec tokens, got {end - start}"
-                        )
-                    state_index = int(spec_state_indices_tensor[fr10_b, 0].item())
+                    # Full CUDA graph capture cannot tolerate GPU->CPU syncs.
+                    # In pure tree-spec decode vLLM lays each spec decode out as
+                    # one fixed tree block, so offsets are static from tree_n.
+                    start = fr10_b * tree_n
+                    end = start + tree_n
+                    state_index = spec_state_indices_tensor[fr10_b, 0]
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[start:end].contiguous(),
                         k=key_spec[start:end].contiguous(),
@@ -192,7 +191,7 @@ def _patch_gdn_linear() -> bool:
                         n_pad=tree_n_pad,
                         strict_mask=attn_metadata.fr10_tree_strict_mask,
                         visible_mask=attn_metadata.fr10_tree_visible_mask,
-                        out=core_attn_out_spec[0, start : start + tree_n_pad],
+                        out=core_attn_out_spec[0, start:end],
                         state=tree_state,
                         output_scale=self.head_k_dim**-0.5,
                         use_qk_l2norm_in_kernel=True,
