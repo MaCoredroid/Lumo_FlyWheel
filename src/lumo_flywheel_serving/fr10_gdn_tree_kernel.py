@@ -90,6 +90,7 @@ def _tree_gdn_kernel(
     beta,
     h0,
     h0_indices,
+    invocation_counter,
     strict_mask,
     visible_mask,
     out,
@@ -106,6 +107,7 @@ def _tree_gdn_kernel(
     H0_IS_BANK: tl.constexpr,
     H0_INDEX_ROW: tl.constexpr,
     H0_BANK_STRIDE: tl.constexpr,
+    COUNT_INVOCATION: tl.constexpr,
 ):
     pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
@@ -115,6 +117,8 @@ def _tree_gdn_kernel(
     offs_k = tl.arange(0, DIM_K)
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
     v_mask = offs_v < DIM_V
+    if COUNT_INVOCATION and pid_vh == 0 and pid_v == 0:
+        tl.atomic_add(invocation_counter, 1, sem="relaxed")
 
     b_g = tl.load(g + offs_n * NUM_VH + pid_vh).to(tl.float32)
     b_beta = tl.load(beta + offs_n * NUM_VH + pid_vh).to(tl.float32)
@@ -266,6 +270,7 @@ def launch_tree_gdn_prepared(
     h0_indices: torch.Tensor | None = None,
     h0_is_bank: bool = False,
     h0_index_row: int = 0,
+    invocation_counter: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Launch with precomputed graph-safe tree descriptors."""
     num_kh = q.shape[1]
@@ -290,6 +295,9 @@ def launch_tree_gdn_prepared(
         h0_bank_stride = 0
     if h0_indices is None:
         h0_indices = strict_mask
+    count_invocation = invocation_counter is not None
+    if invocation_counter is None:
+        invocation_counter = strict_mask
     if num_vh % num_kh != 0:
         raise ValueError(f"value heads must be a multiple of q/k heads, got {num_vh}/{num_kh}")
     if out is None:
@@ -305,6 +313,7 @@ def launch_tree_gdn_prepared(
         beta,
         h0,
         h0_indices,
+        invocation_counter,
         strict_mask,
         visible_mask,
         out,
@@ -321,5 +330,6 @@ def launch_tree_gdn_prepared(
         H0_IS_BANK=h0_is_bank,
         H0_INDEX_ROW=h0_index_row,
         H0_BANK_STRIDE=h0_bank_stride,
+        COUNT_INVOCATION=count_invocation,
     )
     return out, state

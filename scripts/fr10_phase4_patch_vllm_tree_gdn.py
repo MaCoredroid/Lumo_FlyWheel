@@ -29,6 +29,7 @@ def _patch_gdn_attn() -> bool:
             "    fr10_tree_parent: torch.Tensor | None = None\n"
             "    fr10_tree_strict_mask: torch.Tensor | None = None\n"
             "    fr10_tree_visible_mask: torch.Tensor | None = None\n"
+            "    fr10_tree_invocation_counter: torch.Tensor | None = None\n"
         ),
         1,
     )
@@ -48,6 +49,7 @@ def _patch_gdn_attn() -> bool:
             "        self.fr10_tree_parent = None\n"
             "        self.fr10_tree_strict_mask = None\n"
             "        self.fr10_tree_visible_mask = None\n"
+            "        self.fr10_tree_invocation_counter = None\n"
             "        spec_token_tree = None\n"
             "        if self.speculative_config is not None:\n"
             "            spec_token_tree = self.speculative_config.speculative_token_tree\n"
@@ -75,6 +77,7 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_tree_parent = torch.tensor(parent, dtype=torch.int32, device=device)\n"
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
+            "            self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int64, device=device)\n"
         ),
         1,
     )
@@ -86,6 +89,7 @@ def _patch_gdn_attn() -> bool:
             "            fr10_tree_parent=self.fr10_tree_parent,\n"
             "            fr10_tree_strict_mask=self.fr10_tree_strict_mask,\n"
             "            fr10_tree_visible_mask=self.fr10_tree_visible_mask,\n"
+            "            fr10_tree_invocation_counter=self.fr10_tree_invocation_counter,\n"
             "            nums_dict=nums_dict,\n"
         ),
         1,
@@ -144,6 +148,10 @@ def _patch_gdn_linear() -> bool:
                 assert attn_metadata.fr10_tree_parent is not None
                 assert attn_metadata.fr10_tree_strict_mask is not None
                 assert attn_metadata.fr10_tree_visible_mask is not None
+                assert attn_metadata.fr10_tree_invocation_counter is not None
+                logger.warning_once(
+                    "FR10 tree GDN verifier branch active for layer %s", self.prefix
+                )
                 _, _, value_tree, g_tree, beta_tree = fused_post_conv_prep(
                     conv_output=mixed_qkv_spec,
                     a=a,
@@ -197,6 +205,7 @@ def _patch_gdn_linear() -> bool:
                         state=tree_state,
                         output_scale=self.head_k_dim**-0.5,
                         use_qk_l2norm_in_kernel=True,
+                        invocation_counter=attn_metadata.fr10_tree_invocation_counter,
                     )
                     core_attn_out_spec[0, start:end] = tree_out[:tree_n]
                 _, last_recurrent_state = fused_sigmoid_gating_delta_rule_update(
