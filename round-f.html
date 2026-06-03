@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Reversal — Lossless Speculative Decoding Meets the Gated-DeltaNet Wall · Mark Ma</title>
+<meta name="description" content="Volume II. After the Round-4b mini paper recommended config D, two weeks of investigation overturned it: ship A not D, FP8-KV regresses, and tree speculative decoding shatters against Qwen 3.6's 75% Gated-DeltaNet hybrid. 925 commits, ~50 reports, one architectural wall.">
+<meta property="og:title" content="The Reversal — Speculative Decoding vs the Gated-DeltaNet Wall (Vol. II)">
+<meta property="og:description" content="Why no branching tree variant beats linear MTP on a 75%-GDN hybrid. A companion to the Round-4b paper, and a refutation of its headline.">
+<meta name="author" content="Mark Ma">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,900&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0c0d0a; --bg-2:#101109; --panel:#15170f; --panel-2:#191b12;
+    --bone:#ece6d6; --bone-2:#cfc8b6; --muted:#9a9382; --muted-2:#6f6a5c;
+    --rule:#2a2c20; --rule-2:#3a3d2d;
+    --signal:#e6a93a;      /* amber — findings / revision */
+    --signal-soft:#3a2f12;
+    --ship:#5fbf93;        /* green — confirmed / ship (echo of Vol. I) */
+    --ship-soft:#16301f;
+    --noship:#e0654a;      /* warm red — regression / no-ship */
+    --noship-soft:#341a12;
+    --info:#7aa2cf;        /* steel — neutral data */
+    --info-soft:#15212f;
+    --font-display:"Fraunces","Source Serif Pro",Georgia,serif;
+    --font-body:"Newsreader","Iowan Old Style",Georgia,serif;
+    --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--bone-2);
+    font-family:var(--font-body); font-size:18px; line-height:1.66;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    font-optical-sizing:auto;
+    background-image:
+      radial-gradient(1200px 600px at 78% -8%, rgba(230,169,58,.06), transparent 60%),
+      radial-gradient(900px 500px at -5% 12%, rgba(95,191,147,.05), transparent 55%),
+      linear-gradient(var(--rule) 1px, transparent 1px),
+      linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+    background-size:auto, auto, 46px 46px, 46px 46px;
+    background-position:0 0, 0 0, -1px -1px, -1px -1px;
+  }
+  body::before{ /* faint grain */
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:1; opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  ::selection{background:rgba(230,169,58,.25); color:#fff}
+  a{color:var(--signal); text-decoration:none; border-bottom:1px solid rgba(230,169,58,.32)}
+  a:hover{border-bottom-color:var(--signal)}
+  .wrap{position:relative; z-index:2; max-width:920px; margin:0 auto; padding:0 26px 120px}
+
+  /* top strip */
+  .strip{
+    font-family:var(--font-mono); font-size:12px; letter-spacing:.04em; color:var(--muted);
+    display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap;
+    padding:18px 0 14px; border-bottom:1px solid var(--rule); margin-bottom:40px;
+    text-transform:uppercase;
+  }
+  .strip .l{display:flex; gap:10px; align-items:center}
+  .strip .dot{width:7px;height:7px;border-radius:50%;background:var(--signal);box-shadow:0 0 10px var(--signal);animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.5;transform:scale(.85)}50%{opacity:1;transform:scale(1.15)}}
+  .strip a{color:var(--bone-2); border:none; border-bottom:1px dotted var(--muted)}
+  .strip a:hover{color:var(--signal); border-bottom-color:var(--signal)}
+
+  /* masthead */
+  .vol{font-family:var(--font-mono); font-size:12.5px; letter-spacing:.34em; text-transform:uppercase; color:var(--signal); margin:0 0 22px; display:flex; align-items:center; gap:14px}
+  .vol::after{content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--rule-2),transparent)}
+  h1.title{
+    font-family:var(--font-display); font-weight:900; font-size:clamp(38px,6.4vw,68px);
+    line-height:1.02; letter-spacing:-.022em; color:var(--bone); margin:0 0 22px;
+  }
+  h1 .em{color:var(--signal); font-style:italic; font-weight:700}
+  .lede{
+    font-family:var(--font-body); font-style:italic; font-weight:400;
+    font-size:clamp(20px,2.5vw,25px); line-height:1.42; color:var(--bone-2);
+    max-width:60ch; margin:0 0 30px;
+  }
+  .byline{font-family:var(--font-mono); font-size:13px; color:var(--muted); display:flex; flex-wrap:wrap; gap:7px 14px; align-items:center; padding-top:8px; border-top:1px solid var(--rule)}
+  .byline strong{color:var(--bone); font-weight:600}
+  .byline .sep{color:var(--rule-2)}
+  .byline a{color:var(--bone-2); border-bottom:1px solid transparent}
+  .byline a:hover{color:var(--signal)}
+
+  /* kpis */
+  .kpis{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--rule); border:1px solid var(--rule); margin:44px 0 8px}
+  .kpi{background:var(--bg-2); padding:18px 16px}
+  .kpi .n{font-family:var(--font-display); font-weight:700; font-size:30px; color:var(--bone); line-height:1; letter-spacing:-.01em}
+  .kpi .n .u{font-size:15px; color:var(--signal); font-weight:600}
+  .kpi .k{font-family:var(--font-mono); font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); margin-top:9px}
+  @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
+
+  /* type */
+  section{margin:54px 0}
+  .sec-no{font-family:var(--font-mono); font-size:12px; letter-spacing:.18em; color:var(--signal); text-transform:uppercase}
+  h2{font-family:var(--font-display); font-weight:700; font-size:clamp(26px,3.6vw,36px); line-height:1.12; letter-spacing:-.018em; color:var(--bone); margin:10px 0 18px}
+  h3{font-family:var(--font-display); font-weight:600; font-size:21px; color:var(--bone); margin:34px 0 10px; letter-spacing:-.01em}
+  p{margin:0 0 18px}
+  strong{color:var(--bone); font-weight:600}
+  em{color:var(--bone-2)}
+  code{font-family:var(--font-mono); font-size:.82em; color:var(--signal); background:var(--panel); padding:1.5px 6px; border-radius:4px; border:1px solid var(--rule)}
+  .lead-cap::first-letter{font-family:var(--font-display); font-weight:900; font-size:4.1em; float:left; line-height:.82; padding:6px 12px 0 0; color:var(--signal)}
+
+  /* abstract */
+  .abstract{border-left:3px solid var(--signal); background:linear-gradient(90deg,var(--signal-soft),transparent); padding:20px 24px; margin:34px 0; border-radius:0 8px 8px 0}
+  .abstract .lbl{font-family:var(--font-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--signal); margin-bottom:8px}
+  .abstract p{font-size:18px; margin:0}
+
+  /* reversal banner */
+  .reversal{display:grid; grid-template-columns:1fr auto 1fr; gap:18px; align-items:center; margin:38px 0; border:1px solid var(--rule-2); border-radius:10px; overflow:hidden; background:var(--bg-2)}
+  .reversal .col{padding:22px}
+  .reversal .from{border-right:1px solid var(--rule)}
+  .reversal .ttl{font-family:var(--font-mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; margin-bottom:10px}
+  .reversal .from .ttl{color:var(--noship)}
+  .reversal .to .ttl{color:var(--ship)}
+  .reversal .claim{font-family:var(--font-display); font-size:19px; color:var(--bone); line-height:1.3}
+  .reversal .strike{text-decoration:line-through; text-decoration-color:var(--noship); color:var(--muted)}
+  .reversal .arrow{font-size:30px; color:var(--signal); font-family:var(--font-mono)}
+  @media(max-width:640px){.reversal{grid-template-columns:1fr}.reversal .from{border-right:none;border-bottom:1px solid var(--rule)}.reversal .arrow{transform:rotate(90deg)}}
+
+  /* callouts */
+  .note{border:1px solid var(--rule-2); border-radius:8px; padding:16px 20px; margin:24px 0; font-size:16.5px; background:var(--panel)}
+  .note .tag{font-family:var(--font-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; display:inline-block; margin-bottom:6px}
+  .note.find{border-left:3px solid var(--signal)} .note.find .tag{color:var(--signal)}
+  .note.ship{border-left:3px solid var(--ship)} .note.ship .tag{color:var(--ship)}
+  .note.noship{border-left:3px solid var(--noship)} .note.noship .tag{color:var(--noship)}
+
+  /* charts */
+  .fig{margin:34px 0; border:1px solid var(--rule); border-radius:10px; background:var(--bg-2); overflow:hidden}
+  .fig-head{padding:16px 20px 0; display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap}
+  .fig-head .ft{font-family:var(--font-mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--signal)}
+  .fig-head .fn{font-family:var(--font-display); font-size:18px; color:var(--bone); font-weight:600}
+  .fig-body{padding:14px 18px 6px; height:300px; position:relative}
+  .fig-body.tall{height:360px}
+  .fig-cap{padding:4px 20px 18px; font-size:14.5px; color:var(--muted); font-family:var(--font-body)}
+  .fig-cap b{color:var(--bone-2)}
+
+  /* tables */
+  .tw{margin:28px 0; overflow-x:auto; border:1px solid var(--rule); border-radius:10px}
+  table{border-collapse:collapse; width:100%; font-size:14.5px; font-family:var(--font-mono); min-width:540px}
+  th,td{padding:10px 14px; text-align:right; border-bottom:1px solid var(--rule); white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  thead th{background:var(--panel-2); color:var(--signal); font-weight:600; font-size:11.5px; letter-spacing:.04em; text-transform:uppercase; position:sticky; top:0}
+  tbody tr:hover{background:var(--panel)}
+  td.win{color:var(--ship)} td.lose{color:var(--noship)} td.hl{color:var(--bone); font-weight:600}
+  tbody tr:last-child td{border-bottom:none}
+  .vd{font-family:var(--font-mono); font-size:11px; padding:2px 7px; border-radius:4px; letter-spacing:.03em}
+  .vd.s{background:var(--ship-soft); color:var(--ship)}
+  .vd.n{background:var(--noship-soft); color:var(--noship)}
+  .vd.f{background:var(--signal-soft); color:var(--signal)}
+
+  /* GDN wall figure */
+  .wall{margin:30px 0; border:1px solid var(--rule-2); border-radius:12px; background:linear-gradient(160deg,var(--panel),var(--bg-2)); padding:26px 24px}
+  .wall .wt{font-family:var(--font-mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--signal); margin-bottom:4px}
+  .wall .wh{font-family:var(--font-display); font-weight:700; font-size:22px; color:var(--bone); margin-bottom:18px; letter-spacing:-.01em}
+  .grid64{display:grid; grid-template-columns:repeat(16,1fr); gap:4px; margin:14px 0 18px}
+  .layer{aspect-ratio:1; border-radius:3px; position:relative}
+  .layer.gdn{background:linear-gradient(145deg,#caa23a,#8a6f1f)}
+  .layer.attn{background:linear-gradient(145deg,#6fbf95,#2f7a52)}
+  .wall-legend{display:flex; gap:22px; flex-wrap:wrap; font-family:var(--font-mono); font-size:12.5px; color:var(--bone-2)}
+  .wall-legend .sw{display:inline-block; width:12px; height:12px; border-radius:3px; margin-right:7px; vertical-align:-1px}
+  @media(max-width:560px){.grid64{grid-template-columns:repeat(8,1fr)}}
+
+  /* ledger */
+  .ledger{margin:26px 0; border:1px solid var(--rule); border-radius:10px; overflow:hidden}
+  .ledger .row{display:grid; grid-template-columns:auto 1fr auto; gap:14px; align-items:center; padding:13px 18px; border-bottom:1px solid var(--rule)}
+  .ledger .row:last-child{border-bottom:none}
+  .ledger .row:hover{background:var(--panel)}
+  .ledger .ico{font-family:var(--font-mono); font-weight:600; width:26px; text-align:center}
+  .ledger .ico.s{color:var(--ship)} .ledger .ico.n{color:var(--noship)} .ledger .ico.f{color:var(--signal)}
+  .ledger .what{color:var(--bone); font-family:var(--font-display); font-size:17px}
+  .ledger .what small{display:block; font-family:var(--font-body); font-size:14px; color:var(--muted); font-weight:400}
+  .ledger .verdict{font-family:var(--font-mono); font-size:11px; letter-spacing:.04em; text-transform:uppercase}
+  .ledger .verdict.s{color:var(--ship)} .ledger .verdict.n{color:var(--noship)} .ledger .verdict.f{color:var(--signal)}
+
+  /* hr */
+  .rule{height:1px; background:linear-gradient(90deg,transparent,var(--rule-2),transparent); margin:56px 0; border:none}
+
+  /* reveal */
+  .reveal{opacity:0; transform:translateY(18px); transition:opacity .7s ease, transform .7s ease}
+  .reveal.in{opacity:1; transform:none}
+
+  /* footer */
+  footer{margin-top:70px; padding-top:28px; border-top:1px solid var(--rule); font-family:var(--font-mono); font-size:13px; color:var(--muted)}
+  footer a{color:var(--bone-2)}
+  .fnotes{font-size:14px; color:var(--muted); font-family:var(--font-body)}
+  .fnotes li{margin-bottom:10px}
+  .backlink{display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:13px; margin-top:20px; padding:10px 16px; border:1px solid var(--rule-2); border-radius:8px; color:var(--bone-2)}
+  .backlink:hover{border-color:var(--signal); color:var(--signal)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="strip">
+    <span class="l"><span class="dot"></span> Lumo&nbsp;FlyWheel · Serving&nbsp;Lab</span>
+    <span><a href="index.html">← Vol. I · Round-4b paper</a></span>
+  </div>
+
+  <header>
+    <p class="vol">Volume II — The Sequel &amp; the Erratum</p>
+    <h1 class="title">Where Tree Speculative Decoding <span class="em">Breaks</span>: the Gated-DeltaNet Wall</h1>
+    <p class="lede">A two-week investigation that began as a victory lap for the Round-4b paper and ended by refuting its headline. Ship A, not D. FP8-KV regresses. And no branching draft tree — none — beats a straight line on a 75%-recurrent model.</p>
+    <div class="byline">
+      <strong>Mark Ma</strong>
+      <span class="sep">·</span>
+      <a href="mailto:coredroid0401@gmail.com">coredroid0401@gmail.com</a>
+      <span class="sep">·</span>
+      <span>ML systems / inference</span>
+      <span class="sep">·</span>
+      <span>2026-05-18 → 06-02 · Qwen 3.6-27B FP8 · GB10 / DGX&nbsp;Spark</span>
+    </div>
+  </header>
+
+  <div class="kpis reveal">
+    <div class="kpi"><div class="n">925</div><div class="k">commits after Vol. I</div></div>
+    <div class="kpi"><div class="n">~50</div><div class="k">research reports</div></div>
+    <div class="kpi"><div class="n">4</div><div class="k">threads chased</div></div>
+    <div class="kpi"><div class="n">1</div><div class="k">headline reversed</div></div>
+  </div>
+
+  <div class="abstract reveal">
+    <div class="lbl">Abstract</div>
+    <p>The Round-4b mini paper (<a href="index.html">Vol. I</a>) recommended shipping speculative-decoding config <strong>D</strong> on Qwen 3.5. This volume reports what happened next on Qwen <strong>3.6</strong>-27B-FP8. Four threads — config/quantization tuning, a SWE-Bench baseline campaign, tree-shaped speculative decoding (Round F), and the FR7→FR9 multispine line — converge on one architectural fact: Qwen 3.6 is a <strong>hybrid in which 48 of 64 layers are Gated-DeltaNet</strong> (linear, recurrent). A speculative <em>tree</em> can only be made lossless on the 16 softmax-attention layers; the 48 recurrent layers process the flattened tree in order and corrupt every depth-≥2 candidate. The net result, after 24+ kernel commits: <strong>linear MTP (E3) remains the fastest lossless arm</strong>, the paper's config-D win does not transfer, FP8-KV cache regresses 8–10%, and the most recent work is a correctness reckoning — the multispine "winner" selector turns out not to be distribution-preserving. The honest deliverable is a clean architectural diagnosis and a stack that is faster <em>and</em> provably correct, not a hero number.</p>
+  </div>
+  <section class="reveal">
+    <span class="sec-no">§1 — Why this volume exists</span>
+    <h2>The headline that didn't hold</h2>
+    <p class="lead-cap">Vol. I closed on a clean recommendation: across a 220-cell ablation on Qwen 3.5-27B, the full four-technique stack (<strong>config D</strong>) was the one to ship. The single most persuasive cell was a benchmark task — <code>sqlalchemy-2-session-modernization</code> — where D resolved <strong>4/4</strong> attempts while the leaner config A did not. That one effect carried the "ship D" conclusion.</p>
+    <p>Re-running the same OFF/A/D ablation on Qwen <strong>3.6</strong> at temperature 0.6 was supposed to be confirmation. Instead the load-bearing effect <em>evaporated</em>: Q3.6-D scored <strong>0/4</strong> on the very task that justified the recommendation, while configs A and D tied on every aggregate metric. The paper's headline was an artifact of one non-transferring result on one model.</p>
+
+    <div class="reversal reveal">
+      <div class="col from">
+        <div class="ttl">Vol. I concluded</div>
+        <div class="claim"><span class="strike">Ship config D</span> — the full T1+T2+T3+T4 stack; the <code>sqlalchemy</code> 4/4 effect proves the deeper techniques earn their keep.</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="col to">
+        <div class="ttl">Vol. II concludes</div>
+        <div class="claim">Ship config <strong>A</strong> — T1 (cross-turn SuffixDecoding) alone. On Q3.6 it is <strong>+23%</strong> faster than Q3.5-A, ties D on everything, and the 4/4 effect does not replicate.</div>
+      </div>
+    </div>
+    <p>That reversal set the tone for everything after: trust nothing that hasn't replicated on the production model, and chase a faster decoder only where it can be proven <em>lossless</em>. The rest of this volume is four threads pulling that string until it hits an architectural wall.</p>
+  </section>
+
+  <hr class="rule">
+  <section class="reveal">
+    <span class="sec-no">§2 — Thread I</span>
+    <h2>Knobs that did nothing, a cache that hurt, and a reversal</h2>
+    <p>The first thread asked whether any cheap serving knob could tame Qwen 3.6's habit of writing to the full token budget. Three were tested — <code>model_reasoning_effort</code>, <code>preserve_thinking</code>, and sampling <code>temperature</code>. All three are <strong>inert</strong>: reasoning_effort is silently dropped on the non-Harmony path, preserve_thinking was already on via the custom chat template, and temperature moved no metric outside sampling noise. Verbosity is intrinsic to the model. That is itself a finding — there is no free serving-side lever here.</p>
+
+    <div class="fig reveal">
+      <div class="fig-head"><span class="ft">Figure 1 · OFF/A/D ablation, 132 cells</span><span class="fn">A beats D — and Q3.6 beats Q3.5</span></div>
+      <div class="fig-body"><canvas id="c_ablation"></canvas></div>
+      <div class="fig-cap">Median <b>decode tokens/s</b> per ablation point. Q3.6-A reaches <b>22.46 tps (+23% over Q3.5-A)</b> at slightly lower power; A→D adds nothing (22.46 → 22.27). The win is T1 alone.</div>
+    </div>
+
+    <div class="tw reveal">
+      <table>
+        <thead><tr><th>Point</th><th>tps</th><th>power&nbsp;W</th><th>pass</th><th>accept</th></tr></thead>
+        <tbody>
+          <tr><td>Q3.5 · OFF</td><td>5.59</td><td>37.58</td><td>10/44</td><td>—</td></tr>
+          <tr><td>Q3.5 · A</td><td>18.24</td><td>42.66</td><td>9/44</td><td>0.512</td></tr>
+          <tr><td>Q3.5 · D</td><td>17.02</td><td>36.75</td><td class="hl">14/44</td><td>0.529</td></tr>
+          <tr><td>Q3.6 · OFF</td><td>5.85</td><td>37.85</td><td>9/44</td><td>—</td></tr>
+          <tr><td class="hl">Q3.6 · A</td><td class="win">22.46</td><td>41.83</td><td class="win">10/44</td><td class="win">0.548</td></tr>
+          <tr><td>Q3.6 · D</td><td>22.27</td><td>41.98</td><td>9/44</td><td>0.547</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The Q3.5-D pass count of 14/44 — the headline of Vol. I — was almost entirely the <code>sqlalchemy</code> 4/4 effect. On Q3.6, D drops to 9/44 and A edges it at 10/44. The deeper drafting techniques (T2/T3/T4) contribute nothing measurable on this model; they add complexity, drafter-slot contention, and variance for no throughput.</p>
+
+    <h3>FP8-KV cache: realized at last, and it regresses</h3>
+    <p>Every historical "FP8-KV" run had been silently downgraded — the launcher rewrote <code>fp8_e5m2</code> to <code>auto</code>, so the cache was BF16 all along. A new <code>--kv-cache-dtype fp8_e4m3</code> override finally realized a true FP8 KV cache. The result was not the expected throughput bump:</p>
+
+    <div class="fig reveal">
+      <div class="fig-head"><span class="ft">Figure 2 · same-duration windows</span><span class="fn">FP8-KV crosses into regression after the first hour</span></div>
+      <div class="fig-body"><canvas id="c_fp8"></canvas></div>
+      <div class="fig-cap">Decode tps over equal wall-time windows from run start. FP8-KV starts +1.5% but falls to <b>−8.4% @ 1h</b> and <b>−9.6% @ ~67min</b> — driven by a <b>+60% prefill cost</b> (the <code>head_dim=256</code> FP8 prefill caveat), not by acceptance or idle time. It fails the +5% gate. <b>Verdict: do not promote.</b></div>
+    </div>
+
+    <div class="note find reveal">
+      <span class="tag">Methodological honesty</span>
+      The published "0.548 accept / 22.46 tps" for Q3.6-A is <strong>warm-biased</strong>: the proxy derives <code>session_id</code> from first-user-text, so all four <code>--repeat</code> attempts of a task share one suffix-tree partition and acceptance climbs monotonically. Cold-only is ≈0.46 accept; cold-only at temp=1.0 lands near <strong>0.32 accept / 16–17 tps</strong>. The headline numbers are real but upward-biased, and the reports say so out loud.
+    </div>
+  </section>
+
+  <hr class="rule">
+  <section class="reveal">
+    <span class="sec-no">§3 — Thread II</span>
+    <h2>A defensible SWE-Bench number — and the aarch64 wall</h2>
+    <p>To gate the spec-decode work against real quality, the second thread ran Qwen 3.6 (driven by Codex CLI) on SWE-Bench Verified under a pre-registered, bounded-time protocol. Tier 0 (a 20-instance smoke screen) <strong>passed cleanly: 10/20 resolved (50%)</strong> against a ≥4/20 gate. The published anchors for context: Qwen's own scaffold reports 77.2 Verified; Claude 4.5 Opus, 80.9. The campaign reports its number honestly as "Q3.6 on the Codex loop," which a different agent harness can swing 5–15 points.</p>
+
+    <div class="note find reveal">
+      <span class="tag">Key finding · the carve-out is Python-version-driven</span>
+      SWE-Bench rebuilds each instance's <em>original</em> conda environment. Old instances pin Python ≤3.6 and deps (<code>cdms2</code>, ancient scipy) that conda-forge <strong>never built for linux-aarch64</strong>. On the GB10's ARM cores, an estimated <strong>20–35%</strong> of the benchmark simply cannot build — and it fails by Python version, not by repository.
+    </div>
+
+    <p>The fix was an <strong>x86 eval-offload over SSH</strong>: the Codex agent step stays on the DGX (it needs the Q3.6 vLLM server), while the evaluation step ships its patch to a native x86 box and returns a verdict. The contamination question — does the architecture change the grade? — was answered decisively: <strong>17/17 buildable instances agree between arm64 and x86, zero flips</strong>. The six arm64 crashes recovered to real verdicts on x86.</p>
+
+    <div class="fig reveal">
+      <div class="fig-head"><span class="ft">Figure 3 · 273 GB/s memory bound</span><span class="fn">Batching helps sub-linearly</span></div>
+      <div class="fig-body"><canvas id="c_conc"></canvas></div>
+      <div class="fig-cap">Aggregate decode speedup vs concurrency on the GB10's <b>273 GB/s</b> unified memory. ≈<b>2.6× at B=4</b>, ≈3.5× at B=8, asymptotic ceiling ~5.4×. Per-stream tps degrades past B≈3–4, which can cost agentic fix-revise iterations. The earlier "B=4 → 4×" claim was audited as <b>false</b>. This bandwidth ceiling is exactly what motivated the tree spec-decode line in Thread III.</div>
+    </div>
+
+    <p>The thread then pivoted — rather than burn weeks finishing a full 500+731 headline, it became the substrate for config comparison. A fixed 16-instance subset at batch-4 ranked the MTP depths, and <strong>E3 (native MTP head, depth 3)</strong> emerged as the leader on combined resolved-rate and decode tps. E3 is the baseline every subsequent tree variant had to beat.</p>
+  </section>
+
+  <hr class="rule">
+  <section class="reveal">
+    <span class="sec-no">§4 — Thread III · the central result</span>
+    <h2>Tree speculative decoding meets Gated-DeltaNet</h2>
+    <p class="lead-cap">The depth sweep had plateaued (E3 &gt; E6), so the obvious next lever was <em>width</em>: instead of one linear draft chain, draw many candidates from the MTP head's top-k, arrange them as a branching tree, and verify them in one pass. A verified tree is mathematically guaranteed to raise accepted tokens per step. It did not raise throughput. Understanding why took the whole thread — and the answer is in the model's architecture.</p>
+
+    <div class="wall reveal">
+      <div class="wt">The wall · Qwen 3.6-27B layer composition</div>
+      <div class="wh">48 of 64 layers are recurrent. A tree mask only fixes 16.</div>
+      <div class="grid64" id="wallGrid" aria-label="64 layers: 48 Gated-DeltaNet, 16 softmax attention"></div>
+      <div class="wall-legend">
+        <span><span class="sw" style="background:linear-gradient(145deg,#caa23a,#8a6f1f)"></span>Gated-DeltaNet · linear / recurrent · <strong>48 (75%)</strong></span>
+        <span><span class="sw" style="background:linear-gradient(145deg,#6fbf95,#2f7a52)"></span>Softmax attention · <strong>16 (25%)</strong></span>
+      </div>
+    </div>
+
+    <p>A tree-attention mask corrects the 16 softmax layers. But the 48 Gated-DeltaNet layers carry a <strong>recurrent state</strong>: they process the breadth-first-flattened tree <em>in order</em>, so sibling branches contaminate one another's hidden state. Every candidate at depth ≥2 is verified against a corrupted state. As the report puts it: <em>"a packed tree cannot be made lossless by attention masks alone."</em></p>
+
+    <div class="fig reveal">
+      <div class="fig-head"><span class="ft">Figure 4 · the smoking gun</span><span class="fn">Depth-2 acceptance collapses under the tree</span></div>
+      <div class="fig-body"><canvas id="c_collapse"></canvas></div>
+      <div class="fig-cap">Per-depth accept rate. At depth 1 the packed tree (F_a) matches linear E3 exactly (<b>89.1% vs 88.9%</b>) — the drafts are provably correct. At depth 2 the tree <b>collapses to 8.2%</b> while E3 holds <b>74.5%</b>. The drafts are right; the recurrent verifier rejects them.</div>
+    </div>
+
+    <p>The batched-paths variant (F_b) fares no better: submitting even a path that is an <em>exact duplicate</em> of the top-1 chain collapses its acceptance from 2.667 to 0.286 — proof that the mere presence of a second speculative row in the GDN forward destroys the top-1 invariant. And block-aligned pointer-swaps (the zero-copy commit trick) almost never fire, because vLLM's 816-token block dwarfs the ~5-token accepted suffix.</p>
+
+    <div class="fig reveal">
+      <div class="fig-head"><span class="ft">Figure 5 · agentic B=4, every arm</span><span class="fn">The straight line wins</span></div>
+      <div class="fig-body tall"><canvas id="c_arms"></canvas></div>
+      <div class="fig-cap">Decode tps by drafting shape (node count in parentheses). <b>E3 linear (37.15 tps) is the fastest.</b> Every branching tree is slower — width-2 depth-5 (62 nodes) accepts the most tokens/event (2.421) yet runs at <b>7.44 tps</b> because verifier cost scales with nodes, not with accepts.</div>
+    </div>
+
+    <div class="tw reveal">
+      <table>
+        <thead><tr><th>Arm</th><th>nodes</th><th>accept/ev</th><th>tps</th><th>event ms</th><th>verdict</th></tr></thead>
+        <tbody>
+          <tr><td class="hl">E3 chain</td><td>3</td><td>2.323</td><td class="win">37.15</td><td>89.5</td><td><span class="vd s">fastest</span></td></tr>
+          <tr><td>F tree-delta spine</td><td>3</td><td>2.363</td><td>34.21</td><td>98.4</td><td><span class="vd f">lossless, −8%</span></td></tr>
+          <tr><td>E5 chain</td><td>5</td><td>3.150</td><td>26.86</td><td>154.5</td><td><span class="vd f">more accept</span></td></tr>
+          <tr><td>F width-2 d3</td><td>14</td><td>2.048</td><td class="lose">15.89</td><td>190.8</td><td><span class="vd n">no-ship</span></td></tr>
+          <tr><td>F width-2 d5</td><td>62</td><td>2.421</td><td class="lose">7.44</td><td>455.8</td><td><span class="vd n">no-ship</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>A parallel literature survey (the K≥2-vs-K=1 question) grounded the result: a wider tree always wins on <em>accepted tokens</em>, but only wins on <em>throughput</em> while the verify pass is memory-bandwidth-bound. At agentic batch on this stack it is not — so the literature's own prediction is parity-or-regression, exactly as observed. The matching SOTA reference, <strong>STree (NeurIPS 2025)</strong>, confirms that lossless tree decoding on SSM hybrids needs a bespoke tree-aware recurrent scan kernel that does not exist in this vLLM line.</p>
+  </section>
+
+  <hr class="rule">
+  <section class="reveal">
+    <span class="sec-no">§5 — Thread IV · the live frontier</span>
+    <h2>FR7 → FR9: a correct superset that isn't (yet) a win</h2>
+    <p>If a <em>packed</em> tree corrupts the shared recurrent state, give each draft chain — each <strong>"spine"</strong> — its own independent vLLM sequence with its own native GDN state. That is the FR7→FR9 arc: FR7 proved the shared-state ceiling (free-running path-0 collapses to 1.66/event vs E5's 3.15), FR8 red-teamed the broken condense path into failing closed, and <strong>FR9 (independent rows)</strong> is the design that actually runs.</p>
+
+    <p>And on a micro-probe, it works: spine-0 stays byte-identical to E5, the 2-spine "winner" reaches 3.442 accept/event with <strong>zero superset violations</strong> and a <strong>+6.85% tok/s</strong> edge. Correctness is settled — it survives 19,307 winner events under temperature-0.6 rejection sampling with no engine death. But scale tells a different story:</p>
+
+    <div class="fig reveal">
+      <div class="fig-head"><span class="ft">Figure 6 · the win that doesn't scale</span><span class="fn">+7% on the bench, −21% in the field</span></div>
+      <div class="fig-body"><canvas id="c_fr9"></canvas></div>
+      <div class="fig-cap">A second spine wins by +6.85% on the low-batch micro-probe but <b>loses the speed gate at agentic B=4</b> (0.79× and 0.74× of the spine-1 baseline). The extra row nearly doubles draft tokens/step (17.6 → 34.1) for only ~16% more public tokens — verifier cost eats the accept gain.</div>
+    </div>
+
+    <div class="tw reveal">
+      <table>
+        <thead><tr><th>FR9 arm (B=4, temp 0.6)</th><th>resolved</th><th>accept/ev</th><th>tps</th><th>speedup</th><th>decision</th></tr></thead>
+        <tbody>
+          <tr><td class="hl">mtp5 · spines 1 (baseline)</td><td class="win">8/16</td><td>3.027</td><td class="win">39.91</td><td>—</td><td><span class="vd s">accepted</span></td></tr>
+          <tr><td>mtp5 · spines 2</td><td class="lose">4/16</td><td>3.818</td><td>31.44</td><td class="lose">0.79×</td><td><span class="vd n">gate failed</span></td></tr>
+          <tr><td>mtp3 · spines 2</td><td class="lose">4/16</td><td>2.530</td><td>29.64</td><td class="lose">0.74×</td><td><span class="vd n">gate failed</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note noship reveal">
+      <span class="tag">The current blocker is correctness, not speed</span>
+      The HEAD commit (<code>c22a0859</code>, June 2) is a reckoning: the 2-spine public-commit logic does <code>argmax(accept_counts)</code> over two independently-sampled target trajectories and publishes whichever accepted more. That is a <strong>best-of-spines selector — not distribution-preserving</strong> speculative sampling. It is why the spine-2 quality dropped to 4/16: the flips were distribution-shift divergences, not infra crashes. The spec now collapses every policy to one launchable mode, <code>LUMO_IR_PUBLIC_COMMIT_POLICY=lossless</code> (commit spine-0 only), and fails closed on anything else until a true distribution-safe multi-draft selector passes five verification gates.
+    </div>
+  </section>
+
+  <hr class="rule">
+  <section class="reveal">
+    <span class="sec-no">§6 — Synthesis</span>
+    <h2>The verdict ledger</h2>
+    <p>Two weeks, 24+ kernel commits, and one durable engineering conclusion: <strong>linear MTP at depth 3 is the lossless speed leader on this stack, and every alternative is correct-but-slower or fast-but-lossy.</strong> The value is the map of dead ends — each one is a load-bearing negative result, not a failure.</p>
+
+    <div class="ledger reveal">
+      <div class="row"><span class="ico s">▲</span><span class="what">Config A (T1 SuffixDecoding) on Q3.6<small>+23% over Q3.5-A, ties D on everything</small></span><span class="verdict s">Ship</span></div>
+      <div class="row"><span class="ico s">▲</span><span class="what">Linear MTP E3 (depth 3)<small>fastest lossless arm, 37.15 tps @ B=4</small></span><span class="verdict s">Ship</span></div>
+      <div class="row"><span class="ico s">▲</span><span class="what">x86 eval-offload over SSH<small>recovers the 20–35% aarch64 carve-out, 0 verdict flips</small></span><span class="verdict s">Ship</span></div>
+      <div class="row"><span class="ico n">▼</span><span class="what">Config D (T1–T4 full stack)<small>the Vol. I recommendation — does not transfer to Q3.6</small></span><span class="verdict n">No-ship</span></div>
+      <div class="row"><span class="ico n">▼</span><span class="what">FP8-KV cache (fp8_e4m3)<small>−8 to −10% after 1h, +60% prefill cost</small></span><span class="verdict n">No-ship</span></div>
+      <div class="row"><span class="ico n">▼</span><span class="what">F_a packed tree-attention<small>depth-2 accept collapses 74.5% → 8.2% on GDN layers</small></span><span class="verdict n">No-ship</span></div>
+      <div class="row"><span class="ico n">▼</span><span class="what">F_b batched-paths K≥2<small>second row poisons top-1 GDN state; K2 ≈ K1 parity</small></span><span class="verdict n">No-ship</span></div>
+      <div class="row"><span class="ico f">◆</span><span class="what">FR9 multispine superset<small>correct &amp; stable, +6.85% probe — but loses speed gate at scale; commit policy not yet lossless</small></span><span class="verdict f">Open</span></div>
+      <div class="row"><span class="ico f">◆</span><span class="what">Bespoke GDN tree-scan kernel (STree-style)<small>the only path to lossless tree decoding here — weeks of work, no vLLM support</small></span><span class="verdict f">Deferred</span></div>
+    </div>
+
+    <p>The one-line state of the art on this stack: the multispine superset is <em>correct and stable but not yet a net speed win</em>, and the immediate next action is to make its public stream provably lossless before any further tuning is trusted. The architectural diagnosis — a 75%-recurrent hybrid needs a tree-scan kernel that does not exist — is the result that will outlast every number on this page.</p>
+  </section>
+
+  <hr class="rule">
+
+  <section class="reveal">
+    <span class="sec-no">§7 — For the reader</span>
+    <h2>What you're looking at</h2>
+    <h3>If you hire ML-systems engineers</h3>
+    <p>This is two weeks of inference-stack work that produced no hero number on purpose. The skill on display is the discipline to <strong>refute your own published headline</strong> when the production model disagrees, to localize a throughput regression to a specific architectural cause (48 recurrent layers, not a tuning miss), and to <em>fail closed</em> on a tempting-but-lossy optimization rather than ship a distribution shift. The deliverable is a stack that is faster <em>and</em> provably correct, plus a clean map of which optimizations are dead on this architecture and why.</p>
+    <h3>If you work in this space</h3>
+    <p>The transferable result: on Gated-DeltaNet / SSM-hybrid models, attention-mask-based tree speculative decoding is not losslessly viable — the recurrent majority corrupts depth-≥2 verification, and pointer-swap commits don't fire at realistic block sizes. Independent-row multispine is the correctness-clean route, but the win is bandwidth-gated and the public-commit selector must be distribution-preserving (a naive longest-accepted selector is not). Anyone porting Medusa/Sequoia/EAGLE-style trees to a hybrid will hit the same wall; the kernel-level fix is STree-shaped and currently bespoke.</p>
+  </section>
+  <hr class="rule">
+
+  <section class="reveal">
+    <span class="sec-no">Reproduction &amp; notes</span>
+    <h2>Repository</h2>
+    <p>All four threads — every ablation cell, SWE-Bench artifact, kernel patch, and report — live in the open at <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">github.com/MaCoredroid/Lumo_FlyWheel</a>. The ~50 reports underlying this volume are under <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/docs/reports/auto_research"><code>docs/reports/auto_research/</code></a>. Kernel work is gated behind <code>LUMO_FA_*</code> / <code>LUMO_FB_*</code> / <code>LUMO_IR_*</code> flags so the default serving path is unchanged.</p>
+    <ol class="fnotes">
+      <li><strong>Hardware &amp; runtime.</strong> Single NVIDIA GB10 (DGX Spark, sm_120, aarch64), 117 GB unified LPDDR5x at 273 GB/s. vLLM 0.19 + Arctic Inference 0.1.2, TP=1, Qwen 3.6-27B-FP8, driven by Codex CLI 0.128.0 through an inference proxy at <code>127.0.0.1:8022</code>.</li>
+      <li><strong>Losslessness.</strong> "Lossless" means the published token stream is distribution-equivalent to the target model (Leviathan et&nbsp;al., ICML 2023; Chen et&nbsp;al., 2023). All speed claims are gated on byte-exact greedy equality plus rejection-sampling distribution tests — not a SWE quality re-run.</li>
+      <li><strong>Telemetry caveat.</strong> <code>decode_sum_s</code> / <code>prefill_sum_s</code> / <code>spec_decode_*</code> are deltas of global vLLM Prometheus counters; they over-count under concurrency. The load-bearing signal is the server-side step-trace, and the clean per-request rate is <code>completion_tokens / upstream_compute_s</code>.</li>
+      <li><strong>Companion.</strong> This volume is the sequel to the <a href="index.html">Round-4b mini paper</a>, which it partially refutes. Read Vol. I first for the ablation methodology and the CNB-55 benchmark family it depends on.</li>
+    </ol>
+    <a class="backlink" href="index.html">← Read Volume I · Codex-Harness-Coupled Speculative Decoding (Round 4b)</a>
+  </section>
+
+  <footer>
+    <p><strong style="color:var(--bone)">Mark Ma</strong> · <a href="mailto:coredroid0401@gmail.com">coredroid0401@gmail.com</a> · <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Lumo FlyWheel</a> · ML systems / inference</p>
+    <p style="color:var(--muted-2); margin-top:6px">Volume II · 2026-06-02 · figures from the run artifacts; numbers are upward-biased where noted and the reports say so.</p>
+  </footer>
+
+<script>
+(function(){
+  // GDN wall: 64 cells, 48 GDN + 16 softmax, interleaved roughly 3:1
+  var grid=document.getElementById('wallGrid');
+  if(grid){
+    for(var i=0;i<64;i++){
+      var d=document.createElement('div');
+      d.className='layer '+((i%4===3)?'attn':'gdn');
+      d.style.animationDelay=(i*9)+'ms';
+      grid.appendChild(d);
+    }
+  }
+
+  // scroll reveal
+  var io=new IntersectionObserver(function(es){
+    es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
+  },{threshold:.12});
+  document.querySelectorAll('.reveal').forEach(function(el){io.observe(el);});
+
+  if(typeof Chart==='undefined') return;
+  var BONE='#cfc8b6', MUTE='#9a9382', RULE='rgba(58,61,45,.55)';
+  var AMBER='#e6a93a', SHIP='#5fbf93', NOSHIP='#e0654a', INFO='#7aa2cf';
+  Chart.defaults.color=MUTE;
+  Chart.defaults.font.family="'IBM Plex Mono', monospace";
+  Chart.defaults.font.size=11;
+  var grid={color:RULE, drawBorder:false}, agrid={color:'rgba(58,61,45,.25)'};
+  function mk(id,cfg){ var c=document.getElementById(id); if(c) new Chart(c,cfg); }
+
+  mk('c_ablation',{type:'bar',data:{labels:['OFF','A · T1','D · T1–T4'],datasets:[
+    {label:'Qwen 3.5',data:[5.59,18.24,17.02],backgroundColor:'rgba(122,162,207,.55)',borderColor:INFO,borderWidth:1},
+    {label:'Qwen 3.6',data:[5.85,22.46,22.27],backgroundColor:'rgba(95,191,147,.7)',borderColor:SHIP,borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12}}},
+    scales:{y:{grid:grid,title:{display:true,text:'decode tps',color:MUTE}},x:{grid:agrid}}}});
+
+  mk('c_fp8',{type:'line',data:{labels:['30 min','60 min','67 min'],datasets:[
+    {label:'BF16 control',data:[11.575,13.674,13.895],borderColor:SHIP,backgroundColor:'rgba(95,191,147,.08)',tension:.3,fill:true,pointRadius:4},
+    {label:'FP8-KV (e4m3)',data:[11.750,12.520,12.564],borderColor:NOSHIP,backgroundColor:'rgba(224,101,74,.08)',tension:.3,fill:true,pointRadius:4,borderDash:[5,4]}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12}}},
+    scales:{y:{grid:grid,title:{display:true,text:'decode tps (same-duration window)',color:MUTE}},x:{grid:agrid}}}});
+
+  mk('c_conc',{type:'line',data:{labels:['1','2','3','4','6','8'],datasets:[
+    {label:'aggregate speedup',data:[1.0,1.8,2.3,2.6,3.1,3.5],borderColor:AMBER,backgroundColor:'rgba(230,169,58,.10)',tension:.35,fill:true,pointRadius:4},
+    {label:'realistic SWE (B=4)',data:[null,null,null,2.3,null,null],borderColor:INFO,pointRadius:6,pointStyle:'rectRot',showLine:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12}},
+    tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+c.parsed.y+'×'}}}},
+    scales:{y:{grid:grid,title:{display:true,text:'aggregate speedup ×',color:MUTE},suggestedMax:5.4},x:{grid:agrid,title:{display:true,text:'concurrency (batch)',color:MUTE}}}}});
+
+  mk('c_collapse',{type:'bar',data:{labels:['Depth 1','Depth 2'],datasets:[
+    {label:'E3 linear',data:[88.9,74.5],backgroundColor:'rgba(95,191,147,.7)',borderColor:SHIP,borderWidth:1},
+    {label:'F_a packed tree',data:[89.1,8.2],backgroundColor:'rgba(224,101,74,.7)',borderColor:NOSHIP,borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12}},
+    tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+c.parsed.y+'%'}}}},
+    scales:{y:{grid:grid,title:{display:true,text:'accept rate %',color:MUTE},max:100},x:{grid:agrid}}}});
+
+  mk('c_arms',{type:'bar',data:{labels:['E3 chain (3)','F spine (3)','E5 chain (5)','F width2·d3 (14)','F width2·d5 (62)'],datasets:[
+    {label:'decode tps',data:[37.15,34.21,26.86,15.89,7.44],
+     backgroundColor:[SHIP,'rgba(230,169,58,.8)',INFO,'rgba(224,101,74,.7)','rgba(224,101,74,.7)'],
+     borderColor:[SHIP,AMBER,INFO,NOSHIP,NOSHIP],borderWidth:1}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{x:{grid:grid,title:{display:true,text:'decode tps (higher = better)',color:MUTE}},y:{grid:agrid}}}});
+
+  mk('c_fr9',{type:'bar',data:{labels:['Micro-probe (tok/s)','Agentic B=4 (tps)'],datasets:[
+    {label:'spines 1',data:[44.45,39.91],backgroundColor:'rgba(95,191,147,.7)',borderColor:SHIP,borderWidth:1},
+    {label:'spines 2',data:[47.50,31.44],backgroundColor:'rgba(230,169,58,.75)',borderColor:AMBER,borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12}},
+    tooltip:{callbacks:{afterLabel:function(c){return c.datasetIndex===1?(c.dataIndex===0?'+6.85% — win':'0.79× — gate failed'):''}}}},
+    scales:{y:{grid:grid,title:{display:true,text:'throughput',color:MUTE}},x:{grid:agrid}}}});
+})();
+</script>
+
+</div>
+</body>
+</html>
