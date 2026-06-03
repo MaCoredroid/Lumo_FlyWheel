@@ -417,9 +417,51 @@ Tiny-tree conclusion:
 - Therefore the `<=4` tiny-tree niche is not competitive unless a real branch
   sampler/capture shows branch alternatives lift acceptance far beyond the
   observed MTP spine-position counters.
-- Cost-gate status: current standalone tree-kernel speed case does not clear.
-  Correctness components remain proven, but speed requires a different
-  accumulated-state kernel design or a new acceptance-rate result.
+
+## Fused Sparse Kernel Back-Of-Envelope
+
+Implementation artifact: `scripts/fr10_fused_kernel_bote.py`
+
+Artifact: `output/fr10_fused_kernel_bote_20260603.json`
+
+This is the corrected large-tree decision model after the stage profile. The
+current dense kernel is not viable because `state_output_only` already exceeds
+the FLA flat cost for `>=6` node shapes (`221 us` at 6, `286 us` at 8, `353 us`
+at 14). But verifier integration does not need to persist all N verifier node
+states. It needs verifier outputs for the candidate nodes and one canonical
+accepted-path state committed through native decode.
+
+14-node fused-kernel estimate:
+
+- dense triangular solve profile: `636.507 us`
+- strict ancestry pairs: `36/120 = 0.300`
+- sparse-solve estimate: `190.952 us`
+- setup allowance: `12.000 us`
+- output bytes: `14*24 KiB = 344,064`
+- committed state bytes: `3,145,728`
+- observed GB10 state bandwidth: `~273 GB/s`
+- output plus one committed state estimate: `12.783 us`
+- fused 14-node estimate: `215.735 us`
+
+Cost-gate implication versus FLA:
+
+- FLA chunk reference: `135 us`
+- fused tree extra cost: `80.735 us/layer`
+- across 48 GDN layers: `3.875 ms/step`
+- P0 measured mean step: `1.203653 s`
+- step overhead: `0.322%`
+- acceptance lift needed over P0 MTP-5 spine: `0.01298` accepted tokens/draft
+
+Decision:
+
+- A plausibly cheap big-tree path exists, but only as a real rewrite: sparse
+  tree-structured solve plus fused outputs-only verifier plus canonical native
+  state commit.
+- Do not prototype another dense or all-node-state-spilling kernel for `>=6`
+  node trees.
+- Prototype condition: branch acceptance must plausibly recover more than
+  `~0.013` accepted tokens/draft over P0 MTP-5, and the implementation must
+  remove the all-node state spill.
 
 ## Next
 

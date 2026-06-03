@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-03 18:45 UTC
+Updated: 2026-06-03 18:54 UTC
 
 ## Current Phase
 
@@ -85,6 +85,8 @@ Updated: 2026-06-03 18:45 UTC
 - `output/fr10_tree_kernel_stage_profile_14n_20260603.json`
 - `scripts/fr10_tiny_tree_acceptance_bound.py`
 - `output/fr10_tiny_tree_acceptance_bound_20260603.json`
+- `scripts/fr10_fused_kernel_bote.py`
+- `output/fr10_fused_kernel_bote_20260603.json`
 
 ## Passed
 
@@ -136,7 +138,8 @@ Updated: 2026-06-03 18:45 UTC
 - COST-GATE profile completed for `6/8/14` nodes. Graph medians: full `{6:303.243us, 8:334.785us, 14:995.777us}`; dense triangular solve variants `{6:160.921us, 8:160.861us, 14:636.507us}`; state/output-only variants `{6:221.282us, 8:285.975us, 14:352.529us}`. Ancestor sparsity exists (`14` nodes has only `36/120` strict lower-tri pairs and `50/256` visible square pairs), but simple sparse-pair scaling still does not plausibly bring `8/14` below the `~135us` FLA flat cost. Do not pour effort into big-tree optimization unless a more radical STree-style accumulated-state recurrence removes the padded dense solve/state traversal.
 - COST-GATE decision: narrow the speed case to the tiny-tree niche (`<=4` nodes) unless new evidence changes the profile. Next step is to evaluate whether MTP-1/2 plus a tiny suffix/tree has enough acceptance to beat the P0 linear MTP-5 spines=1 baseline (`accept/draft=0.5787`, `13.46 tok/step`).
 - COST-GATE tiny-tree screen completed from P0 counters. Depth-4 upper-bound from P0 accepted-position counters gives `2.588` accepted tokens/draft, `3.588` sequence tokens/draft, and projected `11.983 tok/step` at unchanged step time versus P0 `13.459 tok/step`; it would need `10.973%` step-latency reduction to match P0. Replacing `135us` FLA with a `45.339us` tiny tree across all `48` GDN layers saves only `4.304 ms/step`, about `0.358%` of the measured `1.203653s` P0 step. The `<=4` tiny-tree niche is therefore not competitive under observed P0 spine acceptance.
-- COST-GATE outcome: current standalone tree-kernel speed case does not clear. Component correctness/losslessness architecture remains proven, but speed now requires either a materially different STree-style accumulated-state kernel that removes the dense padded solve/state traversal, or real branch-sampler evidence that acceptance rises far beyond the P0 spine-position counters. Do not proceed into large-tree vLLM integration as a speed deliverable without one of those.
+- COST-GATE fused-kernel back-of-envelope completed. Current all-node-state-spilling kernel is not viable because state-output alone exceeds FLA for `>=6` nodes (`221us@6`, `286us@8`, `353us@14` vs FLA `~135us`). But verification only needs N outputs plus one canonical accepted-path state, not all N states persisted. For 14 nodes: sparse solve estimate from strict ancestry pairs is `636.507us * 36/120 = 190.952us`; setup allowance `12us`; outputs plus one committed state (`344,064 + 3,145,728` bytes at observed `~273GB/s`) is `12.783us`; fused estimate is `215.735us`.
+- COST-GATE revised outcome: a plausibly-cheap big-tree path exists, but only as a real rewrite: sparse/tree-structured solve plus fused outputs-only verifier plus canonical native state commit. This is `80.735us/layer` slower than FLA, or `3.875ms/step` across 48 GDN layers (`0.322%` of the measured P0 step). It needs only `~0.01298` extra accepted tokens/draft over the P0 MTP-5 spine to clear the overhead, but this is an estimate, not a Gate result. Do not prototype another dense/all-node-state-spilling kernel; prototype only the fused sparse design if branch acceptance evidence remains plausible.
 
 ## GPU Kernel Plan After P1 Gate
 
@@ -155,7 +158,7 @@ Updated: 2026-06-03 18:45 UTC
   2. Exact-production Gate D target is now cu130-nightly `ChunkGatedDeltaRule.forward_native` / `fla_chunk_gated_delta_rule` on GB10, not FlashInfer. Single-spine output matches within one bf16 quantum; recurrent final state still differs at `<1e-3`, so canonical state commit remains required for byte-exact losslessness.
   3. Branch-depth cost table rebuilt with one fixed base tree (`5->6 padded 8->8`) for depths 0/1/2.
 - Remaining Phase 2 implementation work: move standalone deterministic tree kernel into a reproducible vLLM FLA fork/patch and keep production precision (`bf16` inputs, fp32 recurrent state).
-- Speed side status: current standalone tree-kernel path is blocked by cost gate. Next meaningful work is either (a) research/prototype a true accumulated-state sparse tree recurrence that changes the cost model, or (b) continue Route A/Gate B offline correctness capture separately while treating speed as unresolved.
+- Speed side status: tiny-tree spine-bound is insufficient; big-tree remains plausible only via the fused sparse no-state-spill rewrite. Next meaningful speed work is to prototype/validate that cost model or gather branch-acceptance evidence; correctness Route A/Gate B can continue separately.
 - User dtype directive: do not approximate dtype flow. First detect active production backend by instantiating `ChunkGatedDeltaRule()` under E3/E5 serving config and reading `.gdn_prefill_backend`; then match that exact wrapper. For FlashInfer: reuse vLLM `l2norm_fwd`, q/k/v bf16, `g=torch.exp(g.float())` outside kernel, `beta.float()`, `initial_state.float()`, fp32 accumulation, bf16 output, fp32 final state, scale `1/sqrt(128)`.
 - Active backend name for the real cu130 GB10 stack: `triton` / native FLA (`forward_native`). The broken audit image is no longer the production reference.
 - Matched-bf16 single-spine native-vs-tree deltas (`6.103515625e-05` output, `<9.48e-4` state) are now treated as reduction-order state drift, not an automatic losslessness pass. State-commit implementation rule: use tree-kernel logits only for accept/reject verification; after acceptance, re-run the accepted short path through `fused_recurrent_gated_delta_rule_packed_decode` and commit that native state, discarding the tree kernel's approximate recurrent state. End-to-end Gate B remains native greedy token stream == tree-verifier greedy token stream on real prompts.
