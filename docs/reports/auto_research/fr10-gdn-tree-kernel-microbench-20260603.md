@@ -258,6 +258,80 @@ These are initial standalone kernel numbers, not optimized FLA-fork numbers. The
 important Phase 2 signal is that one extra branch row can be measured inside a
 fixed padded graph-captured shape and validated against the CPU oracle.
 
+## Real-Dimension Tree Cost Versus cu130 FLA
+
+Implementation artifact: `scripts/fr10_real_dims_tree_vs_fla_cost.py`
+
+This follow-up runs in the digest-pinned cu130 production stack and uses real
+Qwen3.6 GDN dimensions:
+
+- key heads: `16`
+- value heads: `48`
+- key/value head dim: `128`
+- bf16 q/k/v/g/beta inputs
+- fp32 recurrent state
+- raw q/k are normalized inside both kernels
+- raw `g` is passed to the FLA chunk path
+
+Command:
+
+```bash
+docker run --rm --gpus all --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
+  -v /home/mark/shared/lumoFlyWheel:/workspace -w /workspace \
+  --entrypoint python3 -e PYTHONWARNINGS=ignore \
+  vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776 \
+  scripts/fr10_real_dims_tree_vs_fla_cost.py --capture --iters 300 --repeats 5
+```
+
+Artifact: `output/fr10_real_dims_tree_vs_fla_cost_20260603.json`
+
+Timing is median microseconds over `5` repeats of `300` iterations. The FLA
+column is cu130 `fla_chunk_gated_delta_rule` with
+`use_qk_l2norm_in_kernel=True`.
+
+| nodes | padded | tree graph bit-exact | tree graph us | FLA chunk us | tree minus FLA us | state read bytes | state write bytes |
+|---:|---:|---|---:|---:|---:|---:|---:|
+| 2 | 2 | yes | 12.325 | 135.023 | -122.698 | 6,291,456 | 6,291,456 |
+| 3 | 4 | yes | 45.339 | 134.661 | -89.322 | 9,437,184 | 9,437,184 |
+| 6 | 8 | yes | 306.008 | 135.876 | 170.132 | 18,874,368 | 18,874,368 |
+| 8 | 8 | yes | 340.857 | 134.458 | 206.398 | 25,165,824 | 25,165,824 |
+| 14 | 16 | yes | 996.084 | 135.971 | 860.114 | 44,040,192 | 44,040,192 |
+
+Fixed-base marginal rows used `5->6 padded 8->8` at branch depths `0/1/2`.
+Measured medians were `-13.939 us`, `-13.005 us`, and `-11.282 us`. These are
+not interpreted as a real negative marginal cost. In this standalone monolithic
+kernel the same padded block does most of the work regardless of active node
+count, and the extra active row is below compile/codegen/timing noise at this
+measurement granularity. The bandwidth fact remains fixed and useful for the
+production design: one additional Qwen3.6 GDN verifier node carries
+`3,145,728` bytes of fp32 state read traffic and `3,145,728` bytes of fp32 state
+write traffic per value-head state slot (`48*128*128*4`).
+
+Speed interpretation:
+
+1. Current standalone tree kernel is graph-capturable and faster than cu130 FLA
+   for tiny `2/3` node verifier shapes.
+2. It is slower than cu130 FLA for `6/8/14` node shapes and is not yet an
+   optimized FLA-fork deliverable.
+3. The real optimization target is reducing redundant padded-block state work
+   and state memory traffic while preserving the no-autotune, graph-capturable
+   contract.
+
+Cost-gate interpretation:
+
+- This is a red flag for the large-tree path, not a success result. cu130 FLA is
+  essentially flat around `135 us` for `2..14` tokens, while the dense masked
+  tree kernel climbs to `996 us` at `14` nodes.
+- The negative fixed-base marginal rows are a padding-bucket artifact. Base and
+  extended trees both run in the same padded-8 graph shape, so the measured
+  negative delta is timing/codegen noise and must not be reported as a free
+  leaf.
+- Next decision point is profiling the `14`-node case: if dense KKT/triangular
+  solve dominates and tree sparsity can cut the work from padded `N^2` toward
+  `N*depth`, prototype the sparse path. If that cannot plausibly beat the
+  `~135 us` FLA flat cost for `6..14` nodes, narrow the speed case to the
+  `<=4` node niche.
+
 ## Next
 
 Move the standalone algebra into the vLLM 0.22 FLA op fork:

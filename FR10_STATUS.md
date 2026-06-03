@@ -1,12 +1,12 @@
 # FR10 Status
 
-Updated: 2026-06-03 18:02 UTC
+Updated: 2026-06-03 18:22 UTC
 
 ## Current Phase
 
 - P1: CPU GDN tree-algebra parity proof passed. CPU recurrent rule is only the correctness oracle/gate, never the final kernel deliverable.
 - P0: canonical cu130 `spines=1` baseline server booted on digest-pinned nightly with `kv_cache_dtype=auto`, `VLLM_BATCH_INVARIANT=1`, `--attention-backend FLASH_ATTN`, `--gdn-prefill-backend triton`, and working `POST /reset_prefix_cache`; greedy and temp=0.6 B4 reference streams captured.
-- P2 active: GPU Triton tree kernel only, inside `lumo-vllm-audit:v0.22.0-cu129-min`; host `.venv` remains CPU-only.
+- P2 active: GPU Triton tree kernel only, now validated against the digest-pinned cu130 GB10 production stack for Gate D/cost; host `.venv` remains CPU-only.
 - Git workflow: active branch is `fr10-gdn-tree-kernel`; do not commit to main. Going forward, commit and push after every meaningful step. Commit messages must end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 
 ## Read-In
@@ -77,6 +77,8 @@ Updated: 2026-06-03 18:02 UTC
 - `output/fr10_cu130_gate_d_production_gdn_single_spine_batchinv_followup_clean_20260603.json`
 - `scripts/fr10_canonical_state_commit_probe.py`
 - `output/fr10_canonical_state_commit_probe_20260603.json`
+- `scripts/fr10_real_dims_tree_vs_fla_cost.py`
+- `output/fr10_real_dims_tree_vs_fla_cost_20260603.json`
 
 ## Passed
 
@@ -123,6 +125,8 @@ Updated: 2026-06-03 18:02 UTC
 - Component proof status: P1 proves tree ancestry algebra vs serial oracle (`~3e-8`), Gate D proves single-spine tree verify matches cu130 production FLA `forward_native` output to one bf16 quantum (`6.103515625e-05`) with `<9.48e-4` scratch-state drift, and canonical commit proves accepted-path state can be persisted through native packed decode to fp32 roundoff / bit-exact replay. This proves the losslessness architecture components, not the integrated serving loop.
 - Remaining decisive losslessness gate: END-TO-END Gate B is not yet proven. We have not integrated the tree kernel into speculative decode and shown its greedy output stream equals the canonical P0 baseline token-for-token (`fr10_cu130_p0_s1_batchinv_greedy_tokens.json`, sha256 `b8b1ec327f60e34073fcedf54c8dad402bee47264f650888f3e982176c2e9794`). Do not claim full losslessness until this live integrated Gate B passes.
 - Route A before Phase 4: build an offline end-to-end check over the P0 baseline prompts by capturing native per-layer GDN inputs/states for accepted MTP draft positions, running tree-kernel verify plus canonical native commit on those exact tensors/sequences, and confirming accepted greedy tokens plus committed states reproduce native. Route B after A: wire Phase 4 at `mamba/gdn_linear_attn.py` plus the MTP tree draft, rerun the live greedy probe, and require token-for-token equality with P0 baseline sha `b8b1ec32...`.
+- COST-GATE active: real-dims speed is a red flag. cu130 FLA chunk is flat at about `135us` for `2..14` tokens. The standalone tree kernel beats FLA only for tiny trees (`2 nodes 12.325us`, `3 nodes 45.339us`) and is not competitive for larger public trees (`6 nodes 306.008us`, `8 nodes 340.857us`, `14 nodes 996.084us`). Current dense masked solve scales with padded node count (`N_PAD^2`) and cannot be treated as a viable speed path until profiling shows tree sparsity can cut it toward `O(N*depth)`.
+- COST-GATE correction: fixed-base marginal rows `5->6 padded 8->8` produced negative medians (`-13.939us`, `-13.005us`, `-11.282us`) only because base and extended trees run in the same padded bucket and the delta is timing/codegen noise. Do not report marginal leaf cost as free. Reliable per-node bandwidth framing remains `3,145,728` fp32 state bytes read + `3,145,728` written per Qwen3.6 GDN verifier node.
 
 ## GPU Kernel Plan After P1 Gate
 
@@ -141,7 +145,7 @@ Updated: 2026-06-03 18:02 UTC
   2. Exact-production Gate D target is now cu130-nightly `ChunkGatedDeltaRule.forward_native` / `fla_chunk_gated_delta_rule` on GB10, not FlashInfer. Single-spine output matches within one bf16 quantum; recurrent final state still differs at `<1e-3`, so canonical state commit remains required for byte-exact losslessness.
   3. Branch-depth cost table rebuilt with one fixed base tree (`5->6 padded 8->8`) for depths 0/1/2.
 - Remaining Phase 2 implementation work: move standalone deterministic tree kernel into a reproducible vLLM FLA fork/patch and keep production precision (`bf16` inputs, fp32 recurrent state).
-- Speed side next: produce a real-dimension marginal-leaf-cost table against the cu130 FLA chunk cost using Qwen3.6 GDN dimensions (`16` key heads, `48` value heads, head dim `128`), bandwidth-framed with state reads/writes and marginal leaf depth.
+- Speed side next: profile the `14`-node `996us` case and split dense KKT/triangular solve cost from gather/state/output work. If dense solve dominates and tree sparsity can cut the work to roughly `O(N*depth)`, prototype the sparse path. If sparse profiling cannot bring `6..14` node trees under the `~135us` FLA flat cost, narrow FR10 speed work to the tiny-tree niche (`<=4` nodes) and evaluate whether MTP-1/2 plus suffix beats the P0 spines=1 MTP-5 baseline (`accept/draft=0.5787`, `13.46 tok/step`).
 - User dtype directive: do not approximate dtype flow. First detect active production backend by instantiating `ChunkGatedDeltaRule()` under E3/E5 serving config and reading `.gdn_prefill_backend`; then match that exact wrapper. For FlashInfer: reuse vLLM `l2norm_fwd`, q/k/v bf16, `g=torch.exp(g.float())` outside kernel, `beta.float()`, `initial_state.float()`, fp32 accumulation, bf16 output, fp32 final state, scale `1/sqrt(128)`.
 - Active backend name for the real cu130 GB10 stack: `triton` / native FLA (`forward_native`). The broken audit image is no longer the production reference.
 - Matched-bf16 single-spine native-vs-tree deltas (`6.103515625e-05` output, `<9.48e-4` state) are now treated as reduction-order state drift, not an automatic losslessness pass. State-commit implementation rule: use tree-kernel logits only for accept/reject verification; after acceptance, re-run the accepted short path through `fused_recurrent_gated_delta_rule_packed_decode` and commit that native state, discarding the tree kernel's approximate recurrent state. End-to-end Gate B remains native greedy token stream == tree-verifier greedy token stream on real prompts.
