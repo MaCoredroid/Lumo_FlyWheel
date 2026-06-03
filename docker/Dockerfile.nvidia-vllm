@@ -67,6 +67,10 @@ COPY docker/patches/apply_p2b_vllm_debug_export.py /tmp/apply_p2b_vllm_debug_exp
 RUN python3 /tmp/apply_p2b_vllm_debug_export.py \
     && rm -f /tmp/apply_p2b_vllm_debug_export.py
 
+COPY docker/patches/apply_fr9_isolated_forward_probe.py /tmp/apply_fr9_isolated_forward_probe.py
+RUN python3 /tmp/apply_fr9_isolated_forward_probe.py \
+    && rm -f /tmp/apply_fr9_isolated_forward_probe.py
+
 COPY docker/patches/verify_vllm_cutlass_build_surface.py /tmp/verify_vllm_cutlass_build_surface.py
 RUN python3 /tmp/verify_vllm_cutlass_build_surface.py --source-dir "${LUMO_VLLM_SOURCE_DIR}" \
     && rm -f /tmp/verify_vllm_cutlass_build_surface.py

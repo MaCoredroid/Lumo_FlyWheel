@@ -6132,6 +6132,7 @@ def main() -> int:
     server = ModelServer(
         registry_path=REPO / "model_registry.yaml",
         port=int(os.environ.get("LUMO_VLLM_PORT", "9950")),
+        image=os.environ.get("LUMO_VLLM_IMAGE", "lumo-flywheel-vllm:26.01-py3-v0.19.0"),
         container_name=os.environ.get(
             "LUMO_VLLM_CONTAINER_NAME", "lumo-vllm-track-b-suffix"),
         logs_root=Path(os.environ.get(

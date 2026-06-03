@@ -69,6 +69,22 @@ P2B_DEBUG_EXPORT_VLLM_ENV_ALIASES = {
     "LUMO_P2B_DEBUG_LOGITS_MAX_EXPORTS": "VLLM_LUMO_P2B_DEBUG_LOGITS_MAX_EXPORTS",
     "LUMO_P2B_DEBUG_STRICT": "VLLM_LUMO_P2B_DEBUG_STRICT",
 }
+FR9_ISOLATED_FORWARD_ENV_VARS = (
+    "LUMO_FR9_ISOLATED_FORWARD_PROBE",
+    "LUMO_FR9_ISOLATED_FORWARD_DIR",
+    "LUMO_FR9_ISOLATED_FORWARD_REQ_IDS",
+    "LUMO_FR9_ISOLATED_FORWARD_MAX_PROBES",
+    "LUMO_FR9_ISOLATED_FORWARD_REPEATS",
+    "LUMO_FR9_ISOLATED_FORWARD_STRICT",
+)
+FR9_ISOLATED_FORWARD_VLLM_ENV_ALIASES = {
+    "LUMO_FR9_ISOLATED_FORWARD_PROBE": "VLLM_LUMO_FR9_ISOLATED_FORWARD_PROBE",
+    "LUMO_FR9_ISOLATED_FORWARD_DIR": "VLLM_LUMO_FR9_ISOLATED_FORWARD_DIR",
+    "LUMO_FR9_ISOLATED_FORWARD_REQ_IDS": "VLLM_LUMO_FR9_ISOLATED_FORWARD_REQ_IDS",
+    "LUMO_FR9_ISOLATED_FORWARD_MAX_PROBES": "VLLM_LUMO_FR9_ISOLATED_FORWARD_MAX_PROBES",
+    "LUMO_FR9_ISOLATED_FORWARD_REPEATS": "VLLM_LUMO_FR9_ISOLATED_FORWARD_REPEATS",
+    "LUMO_FR9_ISOLATED_FORWARD_STRICT": "VLLM_LUMO_FR9_ISOLATED_FORWARD_STRICT",
+}
 CUTLASS_OVERLAY_ENV_VARS = (
     "LUMO_FP8_GEMM_CUTLASS_OVERLAY_CONFIG",
     "LUMO_FP8_GEMM_CUTLASS_OVERLAY_SHA256",
@@ -893,6 +909,7 @@ class ModelServer:
             *self._track_b_ablation_env_args(),
             *kernel_activation_env_args,
             *self._p2b_debug_export_env_args(),
+            *self._fr9_isolated_forward_env_args(),
             *self._cutlass_overlay_env_args(),
             *volume_args,
             "--entrypoint",
@@ -985,6 +1002,31 @@ class ModelServer:
         return args
 
     @staticmethod
+    def _fr9_isolated_forward_env_args() -> list[str]:
+        args: list[str] = []
+        probe_enabled = False
+        for name in FR9_ISOLATED_FORWARD_ENV_VARS:
+            value = os.environ.get(name)
+            if value is not None:
+                probe_enabled = True
+                args.extend(["-e", f"{name}={value}"])
+                args.extend(["-e", f"{FR9_ISOLATED_FORWARD_VLLM_ENV_ALIASES[name]}={value}"])
+        if probe_enabled:
+            prefixes = ["LUMO_FR9_ISOLATED_FORWARD_"]
+            if any(os.environ.get(name) is not None for name in P2B_DEBUG_EXPORT_ENV_VARS):
+                prefixes.append("LUMO_P2B_")
+            if any(os.environ.get(name) is not None for name in CUTLASS_OVERLAY_ENV_VARS):
+                prefixes.append(CUTLASS_OVERLAY_ENV_PREFIX)
+            args.extend(
+                [
+                    "-e",
+                    "VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="
+                    f"{ModelServer._ray_env_prefixes_to_copy(*prefixes)}",
+                ]
+            )
+        return args
+
+    @staticmethod
     def _cutlass_overlay_env_args() -> list[str]:
         args: list[str] = []
         overlay_enabled = False
@@ -1001,6 +1043,8 @@ class ModelServer:
             prefixes = [CUTLASS_OVERLAY_ENV_PREFIX]
             if any(os.environ.get(name) is not None for name in P2B_DEBUG_EXPORT_ENV_VARS):
                 prefixes.append("LUMO_P2B_")
+            if any(os.environ.get(name) is not None for name in FR9_ISOLATED_FORWARD_ENV_VARS):
+                prefixes.append("LUMO_FR9_ISOLATED_FORWARD_")
             args.extend(
                 [
                     "-e",
