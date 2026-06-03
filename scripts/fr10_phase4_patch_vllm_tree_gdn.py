@@ -101,6 +101,7 @@ def _patch_gdn_attn() -> bool:
             "    fr10_tree_strict_mask: torch.Tensor | None = None\n"
             "    fr10_tree_visible_mask: torch.Tensor | None = None\n"
             "    fr10_tree_invocation_counter: torch.Tensor | None = None\n"
+            "    fr10_tree_has_sibling: bool = False\n"
         ),
         1,
     )
@@ -121,6 +122,7 @@ def _patch_gdn_attn() -> bool:
             "        self.fr10_tree_strict_mask = None\n"
             "        self.fr10_tree_visible_mask = None\n"
             "        self.fr10_tree_invocation_counter = None\n"
+            "        self.fr10_tree_has_sibling = False\n"
             "        spec_token_tree = None\n"
             "        if self.speculative_config is not None:\n"
             "            spec_token_tree = self.speculative_config.speculative_token_tree\n"
@@ -148,6 +150,7 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_tree_parent = torch.tensor(parent, dtype=torch.int32, device=device)\n"
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
+            "            self.fr10_tree_has_sibling = any(parent.count(p) > 1 for p in set(parent) if p >= 0)\n"
             "            if _fr10_metrics_enabled():\n"
             "                self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int32, device=device)\n"
             "                _fr10_register_tree_counter(\n"
@@ -167,6 +170,7 @@ def _patch_gdn_attn() -> bool:
             "            fr10_tree_strict_mask=self.fr10_tree_strict_mask,\n"
             "            fr10_tree_visible_mask=self.fr10_tree_visible_mask,\n"
             "            fr10_tree_invocation_counter=self.fr10_tree_invocation_counter,\n"
+            "            fr10_tree_has_sibling=self.fr10_tree_has_sibling,\n"
             "            nums_dict=nums_dict,\n"
         ),
         1,
@@ -291,7 +295,7 @@ def _patch_gdn_linear() -> bool:
                         ),
                     )
                     core_attn_out_spec[0, start:end] = tree_out[:tree_n]
-                _, last_recurrent_state = fused_sigmoid_gating_delta_rule_update(
+                core_attn_out_native, last_recurrent_state = fused_sigmoid_gating_delta_rule_update(
                     A_log=self.A_log,
                     a=a,
                     b=b,
@@ -308,6 +312,8 @@ def _patch_gdn_linear() -> bool:
                     num_accepted_tokens=num_accepted_tokens,
                     use_qk_l2norm_in_kernel=True,
                 )
+                if not getattr(attn_metadata, "fr10_tree_has_sibling", False):
+                    core_attn_out_spec = core_attn_out_native
             else:
                 core_attn_out_spec, last_recurrent_state = (
                     fused_sigmoid_gating_delta_rule_update(
