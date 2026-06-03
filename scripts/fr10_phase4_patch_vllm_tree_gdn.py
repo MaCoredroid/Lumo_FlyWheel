@@ -19,7 +19,58 @@ def _patch_gdn_attn() -> bool:
     if "fr10_tree_parent" in text:
         return False
 
-    text = text.replace("from dataclasses import dataclass\n", "from dataclasses import dataclass\nimport ast\n", 1)
+    text = text.replace(
+        "from dataclasses import dataclass\n",
+        "from dataclasses import dataclass\nimport ast\nimport json\nimport os\nimport signal\nfrom pathlib import Path\n",
+        1,
+    )
+    text = text.replace(
+        "from vllm.v1.kv_cache_interface import AttentionSpec, MambaSpec\n",
+        (
+            "from vllm.v1.kv_cache_interface import AttentionSpec, MambaSpec\n"
+            "\n"
+            "_FR10_TREE_COUNTERS = []\n"
+            "_FR10_SIGNAL_INSTALLED = False\n"
+            "\n"
+            "\n"
+            "def _fr10_dump_tree_counters(signum=None, frame=None):\n"
+            "    dump_path = os.environ.get(\n"
+            "        \"FR10_TREE_GDN_COUNTER_DUMP\",\n"
+            "        \"/workspace/output/fr10_phase4_tree_gdn_server/fr10_tree_gdn_counters.json\",\n"
+            "    )\n"
+            "    rows = []\n"
+            "    for row in _FR10_TREE_COUNTERS:\n"
+            "        counter = row.get(\"counter\")\n"
+            "        try:\n"
+            "            count = int(counter.detach().cpu().item()) if counter is not None else None\n"
+            "        except Exception as exc:\n"
+            "            count = f\"ERROR: {exc}\"\n"
+            "        rows.append({\n"
+            "            \"shape\": row.get(\"shape\"),\n"
+            "            \"parent\": row.get(\"parent\"),\n"
+            "            \"has_sibling\": row.get(\"has_sibling\"),\n"
+            "            \"count\": count,\n"
+            "        })\n"
+            "    path = Path(dump_path)\n"
+            "    path.parent.mkdir(parents=True, exist_ok=True)\n"
+            "    path.write_text(json.dumps(rows, indent=2, sort_keys=True))\n"
+            "\n"
+            "\n"
+            "def _fr10_register_tree_counter(shape, parent, counter):\n"
+            "    global _FR10_SIGNAL_INSTALLED\n"
+            "    has_sibling = any(parent.count(p) > 1 for p in set(parent) if p >= 0)\n"
+            "    _FR10_TREE_COUNTERS.append({\n"
+            "        \"shape\": shape,\n"
+            "        \"parent\": list(parent),\n"
+            "        \"has_sibling\": has_sibling,\n"
+            "        \"counter\": counter,\n"
+            "    })\n"
+            "    if not _FR10_SIGNAL_INSTALLED:\n"
+            "        signal.signal(signal.SIGUSR1, _fr10_dump_tree_counters)\n"
+            "        _FR10_SIGNAL_INSTALLED = True\n"
+        ),
+        1,
+    )
     text = text.replace(
         "    num_accepted_tokens: torch.Tensor | None = None  # shape: [batch,]\n",
         (
@@ -78,6 +129,11 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
             "            self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int64, device=device)\n"
+            "            _fr10_register_tree_counter(\n"
+            "                shape=f\"n{n}_pad{n_pad}\",\n"
+            "                parent=parent,\n"
+            "                counter=self.fr10_tree_invocation_counter,\n"
+            "            )\n"
         ),
         1,
     )
