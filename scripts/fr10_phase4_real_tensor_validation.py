@@ -220,6 +220,16 @@ def main() -> int:
         device="cuda",
         dtype=torch.long,
     )
+    native_consecutive_out = (native_path_out - ref_out).abs().max()
+    native_strided_out = (native_path_out - strided_ref_out).abs().max()
+    native_consecutive_state = (native_path_state - ref_state).abs().max()
+    native_strided_state = (native_path_state - strided_ref_state).abs().max()
+    native_consecutive_state_transposed = (
+        native_path_state.transpose(-1, -2) - ref_state
+    ).abs().max()
+    tree_native_state_transposed = (
+        state[:n].transpose(-1, -2) - native_path_state
+    ).abs().max()
     result = {
         "payload": str(payload_path),
         "tree_parent": list(tree.parent),
@@ -239,19 +249,25 @@ def main() -> int:
             (state[:n] - native_path_state).abs().max().item()
         ),
         "native_serial_path_vs_gqa_consecutive_ref_out_abs": float(
-            (native_path_out - ref_out).abs().max().item()
+            native_consecutive_out.item()
         ),
         "native_serial_path_vs_gqa_consecutive_ref_state_abs": float(
-            (native_path_state - ref_state).abs().max().item()
+            native_consecutive_state.item()
+        ),
+        "native_serial_path_transposed_vs_gqa_consecutive_ref_state_abs": float(
+            native_consecutive_state_transposed.item()
         ),
         "native_serial_path_vs_gqa_strided_ref_out_abs": float(
-            (native_path_out - strided_ref_out).abs().max().item()
+            native_strided_out.item()
         ),
         "native_serial_path_vs_gqa_strided_ref_state_abs": float(
-            (native_path_state - strided_ref_state).abs().max().item()
+            native_strided_state.item()
+        ),
+        "tree_kernel_transposed_state_vs_native_serial_path_state_abs": float(
+            tree_native_state_transposed.item()
         ),
         "gqa_mapping_confirmed": "consecutive"
-        if (native_path_out - ref_out).abs().max() < (native_path_out - strided_ref_out).abs().max()
+        if native_consecutive_out < native_strided_out
         else "strided_or_inconclusive",
         "native_linear_vs_tree_ref_out_abs": float((native_linear[:n] - ref_out).abs().max().item()),
         "native_linear_vs_tree_ref_non_linear_nodes_abs": float(
