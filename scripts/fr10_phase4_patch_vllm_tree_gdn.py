@@ -401,12 +401,14 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     tree_parent_indices: torch.Tensor,
     parent_token_ids: torch.Tensor,
     self_token_ids: torch.Tensor,
+    bonus_token_ids: torch.Tensor,
     max_spec_len: int,
 ) -> torch.Tensor:
     parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
     drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
     parent_targets_cpu = [int(x) for x in parent_token_ids.detach().cpu().tolist()]
     self_targets_cpu = [int(x) for x in self_token_ids.detach().cpu().tolist()]
+    bonus_targets_cpu = [int(x) for x in bonus_token_ids.detach().cpu().tolist()]
     if hasattr(num_draft_tokens, 'detach'):
         counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
     else:
@@ -474,7 +476,10 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             if best_lcp < len(best_path):
                 row.append(int(parent_targets[best_path[best_lcp]]))
             elif best_lcp > 0:
-                row.append(int(self_targets[best_path[best_lcp - 1]]))
+                if best_path_idx == 0 and req_i < len(bonus_targets_cpu):
+                    row.append(int(bonus_targets_cpu[req_i]))
+                else:
+                    row.append(int(self_targets[best_path[best_lcp - 1]]))
             else:
                 row.append(int(parent_targets[best_path[0]]))
         row = row[:int(max_spec_len) + 1]
@@ -591,6 +596,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 tree_parent_indices,
                 tree_token_ids[0],
                 tree_token_ids[1],
+                bonus_token_ids,
                 max_spec_len,
             )
         else:
@@ -695,6 +701,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             tree_parent_indices,
             tree_token_ids[0],
             tree_token_ids[1],
+            bonus_token_ids,
             max_spec_len,
         )
 

@@ -1,0 +1,1 @@
+{"accepted_total": 144, "avg_accepted_len": 0.8044692737430168, "avg_path0_lcp": 0.8044692737430168, "avg_superset_delta": 0.0, "max_accept": 2, "max_path_count": 2, "min_path_count": 2, "path0_total": 144, "recovered_token_total": 0, "recovery_event_count": 0, "recovery_event_rate": 0.0, "rows": 179, "superset_delta_total": 0, "winner_index_counts": {"0": 179}}
