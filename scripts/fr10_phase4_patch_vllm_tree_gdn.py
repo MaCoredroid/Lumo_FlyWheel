@@ -308,12 +308,6 @@ def _patch_gdn_linear() -> bool:
                     num_accepted_tokens=num_accepted_tokens,
                     use_qk_l2norm_in_kernel=True,
                 )
-                for fr10_b in range(attn_metadata.num_spec_decodes):
-                    ssm_state.index_copy_(
-                        0,
-                        spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
-                        tree_state_all[fr10_b, :tree_n].to(ssm_state.dtype),
-                    )
             else:
                 core_attn_out_spec, last_recurrent_state = (
                     fused_sigmoid_gating_delta_rule_update(
