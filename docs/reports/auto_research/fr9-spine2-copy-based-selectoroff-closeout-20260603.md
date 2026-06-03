@@ -157,3 +157,31 @@ flight: `/tmp/fr9_stree_deltanet_tree_kernel.md`.)
 - Artifacts/reports on branch `fr9-spine2-lossless-winner`:
   `fr9-spine2-distribution-safe-winner-spec`, `...-stat-lossless-quick-verify`,
   `fr9-p0-gdn-state-isolation-feasibility`, `fr9-isolated-forward-p0`, this report.
+
+## 6. Post-closeout research update — the tree-delta kernel IS derivable (revises §3/§4)
+Research (`/tmp/fr9_stree_deltanet_tree_kernel.md`, landed after the initial close)
+revises the tree-route assessment: a no-copy tree-delta kernel for Gated DeltaNet is
+**NOT published but IS derivable**. The prior F_a premise ("the rank-1 delta term is
+order-dependent, so it has no tree form") is **wrong**.
+- Key fact: the within-chunk delta operator `T=(I+tril(diag(β)KKᵀ,−1))⁻¹diag(β)` is
+  **strictly lower-triangular (causal)**; row t of `W=TK`,`U=TV` depends only on tokens
+  ≤ t. Appending a leaf at position m+1 adds one bottom row and **cannot change trunk
+  rows 1..m** — exactly the property a tree needs. Compute the shared trunk WY factors +
+  end-state ONCE, then extend each leaf as a cheap masked rank-1 step
+  (`w_ℓ = β_ℓk_ℓ − β_ℓ·W_trunkᵀ(K_trunk·k_ℓ)`) reusing trunk factors — no re-solve, no
+  state copy. The scalar gate `α` commutes (cumulative `γ`). This is the delta-rule
+  analogue of STree's `A_tree=L·A_log`; the only delta-specific extra is one matvec
+  against precomputed trunk factors. STree confirmed diagonal-only; no 2025-26 paper
+  ships this (closest: Aurora arXiv:2602.06932 tree-attends only the attention layers).
+- **The real gate is NOT the algebra — it is vLLM-0.19 CUDA-graph capture of a custom
+  GDN/tree backend** (the exact Round F wall).
+- **Revised recommendation (risk-first spike, future):** (1) FIRST settle whether
+  vLLM 0.19 can CUDA-graph-capture a custom GDN/tree backend — decide BEFORE writing the
+  kernel; (2) if capture is viable, derive + microbench the trunk-share/leaf-append
+  Triton kernel vs the per-node-copy baseline on ONE GDN layer; (3) only then wire into
+  the multi-spine verifier. Do NOT re-shelve as "delta has no tree form" (false). Shelve
+  ONLY if (1) shows vLLM 0.19 still cannot capture the GDN/tree backend = the Round F
+  capture ceiling (kernel cost then moot).
+- Net: lossless-AND-faster spine-2 moves from "unknown if possible" to "**derivable,
+  gated on the vLLM-0.19 capture question**" — a bounded, risk-first spike if/when
+  spine-2 speed is wanted. Still no speed/lossless claim made now.
