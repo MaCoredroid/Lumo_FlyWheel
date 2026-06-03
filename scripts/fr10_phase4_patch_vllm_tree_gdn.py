@@ -18,6 +18,9 @@ SCHEDULER_PATH = Path(
 REJECTION_SAMPLER_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py"
 )
+GPU_MODEL_RUNNER_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py"
+)
 
 
 def _patch_gdn_attn() -> bool:
@@ -39,7 +42,13 @@ def _patch_gdn_attn() -> bool:
             "_FR10_SIGNAL_INSTALLED = False\n"
             "\n"
             "\n"
+            "def _fr10_metrics_enabled():\n"
+            "    return os.environ.get(\"FR10_METRICS\", \"0\") == \"1\"\n"
+            "\n"
+            "\n"
             "def _fr10_dump_tree_counters(signum=None, frame=None):\n"
+            "    if not _fr10_metrics_enabled():\n"
+            "        return\n"
             "    dump_path = os.environ.get(\n"
             "        \"FR10_TREE_GDN_COUNTER_DUMP\",\n"
             "        \"/workspace/output/fr10_phase4_tree_gdn_server/fr10_tree_gdn_counters.json\",\n"
@@ -63,6 +72,8 @@ def _patch_gdn_attn() -> bool:
             "\n"
             "\n"
             "def _fr10_register_tree_counter(shape, parent, counter):\n"
+            "    if not _fr10_metrics_enabled():\n"
+            "        return\n"
             "    global _FR10_SIGNAL_INSTALLED\n"
             "    has_sibling = any(parent.count(p) > 1 for p in set(parent) if p >= 0)\n"
             "    _FR10_TREE_COUNTERS.append({\n"
@@ -134,12 +145,13 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_tree_parent = torch.tensor(parent, dtype=torch.int32, device=device)\n"
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
-            "            self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int32, device=device)\n"
-            "            _fr10_register_tree_counter(\n"
-            "                shape=f\"n{n}_pad{n_pad}\",\n"
-            "                parent=parent,\n"
-            "                counter=self.fr10_tree_invocation_counter,\n"
-            "            )\n"
+            "            if _fr10_metrics_enabled():\n"
+            "                self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int32, device=device)\n"
+            "                _fr10_register_tree_counter(\n"
+            "                    shape=f\"n{n}_pad{n_pad}\",\n"
+            "                    parent=parent,\n"
+            "                    counter=self.fr10_tree_invocation_counter,\n"
+            "                )\n"
         ),
         1,
     )
@@ -210,10 +222,10 @@ def _patch_gdn_linear() -> bool:
                 assert attn_metadata.fr10_tree_parent is not None
                 assert attn_metadata.fr10_tree_strict_mask is not None
                 assert attn_metadata.fr10_tree_visible_mask is not None
-                assert attn_metadata.fr10_tree_invocation_counter is not None
-                logger.warning_once(
-                    "FR10 tree GDN verifier branch active for layer %s", self.prefix
-                )
+                if os.environ.get("FR10_METRICS", "0") == "1":
+                    logger.warning_once(
+                        "FR10 tree GDN verifier branch active for layer %s", self.prefix
+                    )
                 _, _, value_tree, g_tree, beta_tree = fused_post_conv_prep(
                     conv_output=mixed_qkv_spec,
                     a=a,
@@ -267,7 +279,11 @@ def _patch_gdn_linear() -> bool:
                         state=tree_state,
                         output_scale=self.head_k_dim**-0.5,
                         use_qk_l2norm_in_kernel=True,
-                        invocation_counter=attn_metadata.fr10_tree_invocation_counter,
+                        invocation_counter=(
+                            attn_metadata.fr10_tree_invocation_counter
+                            if os.environ.get("FR10_METRICS", "0") == "1"
+                            else None
+                        ),
                     )
                     core_attn_out_spec[0, start:end] = tree_out[:tree_n]
                 _, last_recurrent_state = fused_sigmoid_gating_delta_rule_update(
@@ -335,16 +351,17 @@ def _patch_scheduler_spec_trace() -> bool:
             "    ) -> SpecDecodingStats | None:",
             f"        {sentinel}",
             "        import json as _lj, time as _lt, os as _lo",
-            "        try:",
-            "            global _LUMO_SPEC_FH",
+            '        if _lo.environ.get("FR10_METRICS", "0") == "1":',
             "            try:",
-            "                _LUMO_SPEC_FH",
-            "            except NameError:",
-            '                _LUMO_SPEC_FH = open(_lo.environ.get("LUMO_PER_REQ_SPEC_TRACE", "/logs/per_req_spec_trace.jsonl"), "a", buffering=1)',
-            "            _linv = (num_invalid_spec_tokens.get(request_id, 0) if num_invalid_spec_tokens else 0)",
-            '            _LUMO_SPEC_FH.write(_lj.dumps({"ts": round(_lt.time(), 4), "rid": request_id, "draft": num_draft_tokens, "proposal_width": num_draft_tokens, "verify_width": num_draft_tokens, "acc": num_accepted_tokens, "inv": _linv}) + chr(10))',
-            "        except Exception:",
-            "            pass",
+            "                global _LUMO_SPEC_FH",
+            "                try:",
+            "                    _LUMO_SPEC_FH",
+            "                except NameError:",
+            '                    _LUMO_SPEC_FH = open(_lo.environ.get("LUMO_PER_REQ_SPEC_TRACE", "/logs/per_req_spec_trace.jsonl"), "a", buffering=1)',
+            "                _linv = (num_invalid_spec_tokens.get(request_id, 0) if num_invalid_spec_tokens else 0)",
+            '                _LUMO_SPEC_FH.write(_lj.dumps({"ts": round(_lt.time(), 4), "rid": request_id, "draft": num_draft_tokens, "proposal_width": num_draft_tokens, "verify_width": num_draft_tokens, "acc": num_accepted_tokens, "inv": _linv}) + chr(10))',
+            "            except Exception:",
+            "                pass",
             "        if not self.log_stats or not num_draft_tokens:",
         ]
     )
@@ -511,42 +528,44 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         pass
     try:
         import json as _lcpj, os as _lcpo, time as _lcpt
-        global _LUMO_TREE_PATH_LCP_FH
-        try:
-            _LUMO_TREE_PATH_LCP_FH
-        except NameError:
-            _LUMO_TREE_PATH_LCP_FH = open(
-                _lcpo.environ.get('LUMO_TREE_PATH_LCP_LOG',
-                                  '/logs/tree_path_lcp_max.jsonl'),
-                'a',
-                buffering=1,
-            )
-        _now = round(_lcpt.time(), 4)
-        for row in path_log_rows:
-            row = dict(row)
-            row['ts'] = _now
-            row['event'] = 'tree_path_lcp_max'
-            _LUMO_TREE_PATH_LCP_FH.write(_lcpj.dumps(row) + chr(10))
+        if _lcpo.environ.get('FR10_METRICS', '0') == '1':
+            global _LUMO_TREE_PATH_LCP_FH
+            try:
+                _LUMO_TREE_PATH_LCP_FH
+            except NameError:
+                _LUMO_TREE_PATH_LCP_FH = open(
+                    _lcpo.environ.get('LUMO_TREE_PATH_LCP_LOG',
+                                      '/logs/tree_path_lcp_max.jsonl'),
+                    'a',
+                    buffering=1,
+                )
+            _now = round(_lcpt.time(), 4)
+            for row in path_log_rows:
+                row = dict(row)
+                row['ts'] = _now
+                row['event'] = 'tree_path_lcp_max'
+                _LUMO_TREE_PATH_LCP_FH.write(_lcpj.dumps(row) + chr(10))
     except Exception:
         pass
     try:
         import json as _iwj, os as _iwo, time as _iwt
-        global _LUMO_IR_WINNER_TRACE_FH
-        try:
-            _LUMO_IR_WINNER_TRACE_FH
-        except NameError:
-            _LUMO_IR_WINNER_TRACE_FH = open(
-                _iwo.environ.get('LUMO_IR_WINNER_TRACE_FILE',
-                                 '/logs/independent_winner_trace.jsonl'),
-                'a',
-                buffering=1,
-            )
-        _now = round(_iwt.time(), 4)
-        for row in winner_log_rows:
-            row = dict(row)
-            row['ts'] = _now
-            row['event'] = 'independent_winner_commit'
-            _LUMO_IR_WINNER_TRACE_FH.write(_iwj.dumps(row) + chr(10))
+        if _iwo.environ.get('FR10_METRICS', '0') == '1':
+            global _LUMO_IR_WINNER_TRACE_FH
+            try:
+                _LUMO_IR_WINNER_TRACE_FH
+            except NameError:
+                _LUMO_IR_WINNER_TRACE_FH = open(
+                    _iwo.environ.get('LUMO_IR_WINNER_TRACE_FILE',
+                                     '/logs/independent_winner_trace.jsonl'),
+                    'a',
+                    buffering=1,
+                )
+            _now = round(_iwt.time(), 4)
+            for row in winner_log_rows:
+                row = dict(row)
+                row['ts'] = _now
+                row['event'] = 'independent_winner_commit'
+                _LUMO_IR_WINNER_TRACE_FH.write(_iwj.dumps(row) + chr(10))
     except Exception:
         pass
     return output_token_ids
@@ -581,11 +600,221 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             )
         else:
 """
-    if old not in text:
-        raise RuntimeError("tree path-LCP greedy branch anchor not found")
-    text = text.replace(old, new, 1)
+    if old in text:
+        text = text.replace(old, new, 1)
+    else:
+        stock_call = """        output_token_ids = rejection_sample(
+            metadata.draft_token_ids,
+            metadata.num_draft_tokens,
+            metadata.max_spec_len,
+            metadata.cu_num_draft_tokens,
+            draft_probs,
+            target_logits,
+            bonus_token_ids,
+            sampling_metadata,
+        )
+"""
+        stock_call_new = """        lumo_tree_parent_indices = getattr(metadata, "tree_parent_indices", None)
+        lumo_tree_token_ids = None
+        if lumo_tree_parent_indices is not None and sampling_metadata.all_greedy:
+            tree_self_logits = logits[metadata.tree_self_logits_indices]
+            tree_self_logits = tree_self_logits.to(torch.float32)
+            if not self.is_processed_logprobs_mode:
+                tree_self_logits = tree_self_logits.clone()
+            tree_self_logits = self.apply_logits_processors(
+                tree_self_logits, sampling_metadata, metadata
+            )
+            tree_self_logits = apply_sampling_constraints(
+                tree_self_logits,
+                metadata.cu_num_draft_tokens,
+                sampling_metadata,
+            )
+            lumo_tree_token_ids = torch.stack(
+                [
+                    target_logits.argmax(dim=-1).to(torch.int32),
+                    tree_self_logits.argmax(dim=-1).to(torch.int32),
+                ],
+                dim=0,
+            ).contiguous()
+
+        output_token_ids = rejection_sample(
+            metadata.draft_token_ids,
+            metadata.num_draft_tokens,
+            metadata.max_spec_len,
+            metadata.cu_num_draft_tokens,
+            draft_probs,
+            target_logits,
+            bonus_token_ids,
+            sampling_metadata,
+            tree_parent_indices=lumo_tree_parent_indices,
+            tree_token_ids=lumo_tree_token_ids,
+        )
+"""
+        if stock_call not in text:
+            raise RuntimeError("stock rejection_sample call anchor not found")
+        text = text.replace(stock_call, stock_call_new, 1)
+
+        stock_sig = """    bonus_token_ids: torch.Tensor,
+    sampling_metadata: SamplingMetadata,
+) -> torch.Tensor:
+"""
+        stock_sig_new = """    bonus_token_ids: torch.Tensor,
+    sampling_metadata: SamplingMetadata,
+    tree_parent_indices: torch.Tensor | None = None,
+    tree_token_ids: torch.Tensor | None = None,
+) -> torch.Tensor:
+"""
+        if stock_sig not in text:
+            raise RuntimeError("stock rejection_sample signature anchor not found")
+        text = text.replace(stock_sig, stock_sig_new, 1)
+
+        stock_branch = """    if sampling_metadata.all_greedy:
+        is_greedy = None
+"""
+        stock_branch_new = """    if (
+        tree_parent_indices is not None
+        and tree_token_ids is not None
+        and sampling_metadata.all_greedy
+    ):
+        accepted_tree_rows = torch.empty(
+            (batch_size,), dtype=torch.int32, device=device
+        )
+        return _lumo_tree_path_lcp_max_greedy_sample(
+            output_token_ids,
+            accepted_tree_rows,
+            num_draft_tokens,
+            draft_token_ids,
+            tree_parent_indices,
+            tree_token_ids[0],
+            tree_token_ids[1],
+            max_spec_len,
+        )
+
+    if sampling_metadata.all_greedy:
+        is_greedy = None
+"""
+        if stock_branch not in text:
+            raise RuntimeError("stock tree path-LCP greedy branch anchor not found")
+        text = text.replace(stock_branch, stock_branch_new, 1)
+
     text = sentinel + "\n" + text
     REJECTION_SAMPLER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_tree_metadata() -> bool:
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# LUMO_TREE_METADATA"
+    if sentinel in text:
+        return False
+
+    meta_anchor = """        # TODO: Optimize the CPU -> GPU copy.
+        cu_num_draft_tokens = torch.from_numpy(cu_num_draft_tokens).to(
+            self.device, non_blocking=True
+        )
+"""
+    meta_inject = """        # LUMO_TREE_METADATA: tree parent map + parent-logit remap.
+        lumo_tree_parent_indices = None
+        lumo_tree_self_logits_indices = None
+        lumo_draft_token_indices = None
+        try:
+            _lspec = getattr(self.vllm_config, "speculative_config", None)
+            _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None
+            if _ltree_src:
+                _choices = __import__("ast").literal_eval(_ltree_src)
+                _max_depth = max(len(_t) for _t in _choices)
+                if len(_choices) > _max_depth:
+                    _path_to_idx = {tuple(_p): _i for _i, _p in enumerate(_choices)}
+                    _parents_template = np.array([
+                        _path_to_idx.get(tuple(_p[:-1]), -1) for _p in _choices
+                    ], dtype=np.int32)
+                    _tree_len = int(len(_choices))
+                    _parents = []
+                    _target = []
+                    _self = []
+                    _draft = []
+                    _sampled_start = 0
+                    _ok = True
+                    for _n in num_draft_tokens.tolist():
+                        _n = int(_n)
+                        if _n == 0:
+                            _sampled_start += 1
+                            continue
+                        if _n != _tree_len:
+                            _ok = False
+                            break
+                        for _node_idx, _parent in enumerate(_parents_template.tolist()):
+                            _parent_local = 0 if _parent < 0 else int(_parent) + 1
+                            _parents.append(int(_parent))
+                            _target.append(_sampled_start + _parent_local)
+                            _self.append(_sampled_start + _node_idx + 1)
+                            _draft.append(_sampled_start + _node_idx + 1)
+                        _sampled_start += _n + 1
+                    if _ok and len(_target) == int(cu_num_draft_tokens[-1]):
+                        target_logits_indices = np.array(_target, dtype=np.int32)
+                        lumo_tree_parent_indices = torch.from_numpy(
+                            np.array(_parents, dtype=np.int32)
+                        ).to(self.device, non_blocking=True)
+                        lumo_tree_self_logits_indices = torch.from_numpy(
+                            np.array(_self, dtype=np.int32)
+                        ).to(self.device, non_blocking=True)
+                        lumo_draft_token_indices = torch.from_numpy(
+                            np.array(_draft, dtype=np.int32)
+                        ).to(self.device, non_blocking=True)
+        except Exception:
+            lumo_tree_parent_indices = None
+            lumo_tree_self_logits_indices = None
+            lumo_draft_token_indices = None
+
+        # TODO: Optimize the CPU -> GPU copy.
+        cu_num_draft_tokens = torch.from_numpy(cu_num_draft_tokens).to(
+            self.device, non_blocking=True
+        )
+"""
+    if meta_anchor not in text:
+        raise RuntimeError("metadata CPU-copy anchor not found")
+    text = text.replace(meta_anchor, meta_inject, 1)
+
+    draft_anchor = """        # Compute the draft token ids.
+        # draft_token_indices:      [  1,   2,   3, 105, 106, 208]
+        draft_token_ids = self.input_ids.gpu[logits_indices]
+        draft_token_ids = draft_token_ids[target_logits_indices + 1]
+
+        return SpecDecodeMetadata(
+"""
+    draft_inject = """        # Compute the draft token ids.
+        # draft_token_indices:      [  1,   2,   3, 105, 106, 208]
+        draft_token_ids = self.input_ids.gpu[logits_indices]
+        if lumo_draft_token_indices is not None:
+            draft_token_ids = draft_token_ids[lumo_draft_token_indices]
+        else:
+            draft_token_ids = draft_token_ids[target_logits_indices + 1]
+
+        _lumo_meta = SpecDecodeMetadata(
+"""
+    if draft_anchor not in text:
+        raise RuntimeError("draft token gather anchor not found")
+    text = text.replace(draft_anchor, draft_inject, 1)
+
+    return_anchor = """            logits_indices=logits_indices,
+        )
+
+    def _prepare_kv_sharing_fast_prefill(
+"""
+    return_inject = """            logits_indices=logits_indices,
+        )
+        if lumo_tree_parent_indices is not None:
+            _lumo_meta.tree_parent_indices = lumo_tree_parent_indices
+            _lumo_meta.tree_self_logits_indices = lumo_tree_self_logits_indices
+        return _lumo_meta
+
+    def _prepare_kv_sharing_fast_prefill(
+"""
+    if return_anchor not in text:
+        raise RuntimeError("metadata return anchor not found")
+    text = text.replace(return_anchor, return_inject, 1)
+
+    GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
 
 
@@ -594,6 +823,7 @@ def main() -> int:
         str(GDN_ATTN_PATH): _patch_gdn_attn(),
         str(GDN_LINEAR_PATH): _patch_gdn_linear(),
         str(SCHEDULER_PATH): _patch_scheduler_spec_trace(),
+        str(GPU_MODEL_RUNNER_PATH): _patch_gpu_model_runner_tree_metadata(),
         str(REJECTION_SAMPLER_PATH): _patch_rejection_sampler_tree_lcp(),
     }
     import py_compile
