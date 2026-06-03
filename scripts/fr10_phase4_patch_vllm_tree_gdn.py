@@ -159,7 +159,7 @@ def _patch_gdn_linear() -> bool:
                 tree_n = int(attn_metadata.fr10_tree_parent.numel())
                 tree_n_pad = int(attn_metadata.fr10_tree_visible_mask.size(0))
                 core_attn_out_spec = torch.empty(
-                    (1, query_spec.size(0), value_tree.size(1), value_tree.size(2)),
+                    (1, query_spec.size(1), value_tree.size(1), value_tree.size(2)),
                     dtype=query_spec.dtype,
                     device=query_spec.device,
                 )
@@ -168,7 +168,7 @@ def _patch_gdn_linear() -> bool:
                         tree_n_pad,
                         value_tree.size(1),
                         value_tree.size(2),
-                        query_spec.size(2),
+                        query_spec.size(3),
                     ),
                     dtype=torch.float32,
                     device=query_spec.device,
@@ -180,8 +180,8 @@ def _patch_gdn_linear() -> bool:
                     start = fr10_b * tree_n
                     end = start + tree_n
                     tree_out, _ = launch_tree_gdn_prepared(
-                        q=query_spec[start:end].contiguous(),
-                        k=key_spec[start:end].contiguous(),
+                        q=query_spec[0, start:end].contiguous(),
+                        k=key_spec[0, start:end].contiguous(),
                         v=value_tree[start:end].contiguous(),
                         g=g_tree[start:end].contiguous(),
                         beta=beta_tree[start:end].contiguous(),
