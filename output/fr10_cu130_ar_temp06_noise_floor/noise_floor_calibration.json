@@ -1,0 +1,211 @@
+{
+  "arm": "fr10_cu130_ar_temp06_noise_floor",
+  "artifacts": {
+    "noise_floor_summary": "output/fr10_cu130_ar_temp06_noise_floor/noise_floor_summary.json",
+    "samples_run1": "output/fr10_cu130_ar_temp06_noise_floor/samples_run1.json",
+    "samples_run2": "output/fr10_cu130_ar_temp06_noise_floor/samples_run2.json"
+  },
+  "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+  "interpretation": "Use aggregate_max_tv as the initial B4 same-regime serving noise floor D for later FR10-vs-nonMTP temp=0.6 distribution checks; per-node state parity remains a separate fixed-input deterministic L1 kernel gate.",
+  "model": "/models/qwen3.6-27b-fp8",
+  "operating_batch_size": 4,
+  "prompts": 8,
+  "records_per_run": [
+    256,
+    256
+  ],
+  "regime": "non_mtp_ar",
+  "request_args": {
+    "batch_size": 4,
+    "max_tokens": 32,
+    "samples_per_prompt": 32,
+    "seed": null,
+    "temperature": 0.6
+  },
+  "reset_prefix_cache_errors": [
+    null,
+    null
+  ],
+  "samples_per_prompt_per_run": 32,
+  "server_args": [
+    "--max-num-seqs",
+    "4",
+    "--gpu-memory-utilization",
+    "0.85",
+    "--max-model-len",
+    "131072",
+    "--attention-backend",
+    "FLASH_ATTN",
+    "--gdn-prefill-backend",
+    "triton",
+    "--seed",
+    "1234"
+  ],
+  "server_env": {
+    "VLLM_BATCH_INVARIANT": "1",
+    "VLLM_SERVER_DEV_MODE": "1"
+  },
+  "serving_noise_floor_D": {
+    "aggregate_max_chi_square": 43.87337821043406,
+    "aggregate_max_tv": 0.16796875,
+    "aggregate_mean_tv": 0.114013671875,
+    "max_aggregate_tv_row": {
+      "chi_square": 32.179681884354146,
+      "df": 38,
+      "left_top": [
+        [
+          264,
+          58
+        ],
+        [
+          25,
+          30
+        ],
+        [
+          16,
+          22
+        ],
+        [
+          10025,
+          21
+        ],
+        [
+          4577,
+          17
+        ],
+        [
+          13290,
+          12
+        ],
+        [
+          12654,
+          12
+        ],
+        [
+          69710,
+          8
+        ]
+      ],
+      "left_total": 256,
+      "position": 5,
+      "prompt_id": null,
+      "right_top": [
+        [
+          264,
+          68
+        ],
+        [
+          16,
+          21
+        ],
+        [
+          25,
+          18
+        ],
+        [
+          13290,
+          17
+        ],
+        [
+          10025,
+          17
+        ],
+        [
+          4577,
+          16
+        ],
+        [
+          12654,
+          16
+        ],
+        [
+          12865,
+          11
+        ]
+      ],
+      "right_total": 256,
+      "tv": 0.16796875
+    },
+    "max_tv_row": {
+      "chi_square": 16.214814814814815,
+      "df": 11,
+      "left_top": [
+        [
+          271,
+          10
+        ],
+        [
+          -1,
+          6
+        ],
+        [
+          22,
+          4
+        ],
+        [
+          24,
+          3
+        ],
+        [
+          21,
+          2
+        ],
+        [
+          16,
+          2
+        ],
+        [
+          10,
+          1
+        ],
+        [
+          20,
+          1
+        ]
+      ],
+      "left_total": 32,
+      "position": 9,
+      "prompt_id": 1,
+      "right_top": [
+        [
+          271,
+          17
+        ],
+        [
+          16,
+          6
+        ],
+        [
+          -1,
+          4
+        ],
+        [
+          23,
+          2
+        ],
+        [
+          17,
+          1
+        ],
+        [
+          24,
+          1
+        ],
+        [
+          220,
+          1
+        ]
+      ],
+      "right_total": 32,
+      "tv": 0.40625
+    },
+    "per_prompt_max_tv": 0.40625,
+    "per_prompt_mean_tv": 0.14200846354166666
+  },
+  "sha256": {
+    "noise_floor_summary.json": "59de0114af2e215610267f3a751ec3c814d8022b9282e639b3714c86c76e983b",
+    "samples_run1.json": "d393d1efa47115a2dc395af669b360f01ff94cfc0aa8694845dfadf8c0d7b1a8",
+    "samples_run2.json": "52610b7449137e8cb08fb34b0103ed3649b876689b337f70ec8ef6f748332901"
+  },
+  "temperature": 0.6
+}
