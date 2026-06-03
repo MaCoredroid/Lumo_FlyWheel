@@ -202,8 +202,7 @@
   .gdef dd b{color:var(--bone)}
   @media(max-width:640px){.gdefs{grid-template-columns:1fr}}
 
-  /* term + margin sidenotes (Tufte-style on wide screens) */
-  .term{border-bottom:1px dashed var(--rule-2); cursor:help}
+  /* margin sidenotes (Tufte-style on wide screens) */
   .mn{font-family:var(--font-mono); font-size:12.5px; line-height:1.5; color:var(--muted); border-left:2px solid var(--signal); padding-left:13px}
   .mn b{color:var(--bone-2); font-weight:600}
   @media(min-width:1380px){
@@ -218,12 +217,8 @@
   .trail .grp{margin:22px 0}
   .trail .gh{font-family:var(--font-display); font-weight:600; font-size:18px; color:var(--bone); margin:0 0 4px; display:flex; align-items:center; gap:10px}
   .trail .gh .tag{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--bg); background:var(--signal); padding:2px 7px; border-radius:4px}
-  .trail ul{list-style:none; margin:8px 0 0; padding:0; border-top:1px solid var(--rule)}
-  .trail li{padding:9px 2px; border-bottom:1px solid var(--rule); font-size:15.5px; display:flex; gap:12px; align-items:baseline}
-  .trail li:hover{background:var(--panel)}
-  .trail li .doc{font-family:var(--font-mono); font-size:13px; white-space:nowrap}
-  .trail li .desc{color:var(--muted); font-size:14.5px}
-  .trail li .br{font-family:var(--font-mono); font-size:10px; color:var(--signal); border:1px solid var(--rule-2); border-radius:3px; padding:0 5px; margin-left:4px}
+  .trail .gsum{margin:8px 0 0; padding-top:10px; border-top:1px solid var(--rule); font-size:16px; color:var(--bone-2)}
+  .trail .gsum b, .trail .gsum strong{color:var(--bone)}
 </style>
 </head>
 <body>
@@ -471,52 +466,28 @@
 
   <section class="reveal">
     <span class="sec-no">§8 — Receipts</span>
-    <h2>The paper trail: every attempt, in the open</h2>
-    <p>None of the above is a tidy retrofit. Each finding is the residue of a design doc, a pre-registration, or a post-mortem written <em>before</em> the result was known — roughly 50 of them. Here is the curated spine of that trail: the specs we wrote going in, and the closeouts we wrote coming out. A <span class="br">branch</span> chip marks the five reports that currently live only on the <code>docs/auto-research-reports</code> branch.</p>
+    <h2>The paper trail, at altitude</h2>
+    <p>None of the above is a tidy retrofit. Every finding is the residue of roughly <strong>50 reports</strong> — design specs and pre-registrations written <em>before</em> a result was known, and closeouts and post-mortems written <em>after</em>. Rather than enumerate them, here is the shape of that trail at a high level, thread by thread.</p>
 
     <div class="trail reveal">
       <div class="grp">
         <div class="gh"><span class="tag">Thread I</span> Config &amp; quantization</div>
-        <ul>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/qwen36-temp06-experiment-results-20260518.md">qwen36-temp06-experiment-results</a><span class="desc">Temperature &amp; reasoning-effort knobs — all measured inert.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/qwen36-off-a-d-closeout-20260520.md">qwen36-off-a-d-closeout</a><span class="desc">The 132-cell OFF/A/D closeout — where "ship D" died.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/docs/auto-research-reports/docs/reports/auto_research/qwen36-vllm-fp8kv-optimization-spec-20260526.md">qwen36-vllm-fp8kv-optimization-spec</a><span class="br">branch</span><span class="desc">The plan to realize a true FP8 KV cache.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/docs/auto-research-reports/docs/reports/auto_research/round5-e3-fp8kv-regression-analysis-20260526.md">round5-e3-fp8kv-regression-analysis</a><span class="br">branch</span><span class="desc">Why FP8-KV regressed 8–10% — prefill cost up 60%.</span></li>
-        </ul>
+        <p class="gsum">A knob-screening experiment and a 132-cell ablation closeout bookended a specification for realizing a true FP8 KV cache and the regression analysis that explained why it backfired. The collective verdict: no serving knob moves this model, and FP8-KV trades decode throughput for prefill cost at a net loss.</p>
       </div>
       <div class="grp">
         <div class="gh"><span class="tag">Thread II</span> SWE-Bench campaign</div>
-        <ul>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/swe-bench-q36-a-campaign-pre-registration-20260520.md">swe-bench-q36-a-campaign-pre-registration</a><span class="desc">Tiers, gates &amp; instance manifests, fixed before reading data.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/swe-bench-bounded-time-spec-20260520.md">swe-bench-bounded-time-spec</a><span class="desc">The bounded-time, partial-coverage measurement protocol.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/swe-bench-concurrency-bandwidth-analysis-20260522.md">swe-bench-concurrency-bandwidth-analysis</a><span class="desc">Why batching is bandwidth-bound — the "4×" claim, refuted.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/swe-bench-config-decode-comparison-spec-20260525.md">swe-bench-config-decode-comparison-spec</a><span class="desc">D vs E (MTP depth) comparison design — E3 emerges.</span></li>
-        </ul>
+        <p class="gsum">A pre-registration fixed the tiers, gates, and instance lists before any data was read; a bounded-time protocol defined what "done" meant; a bandwidth analysis explained why concurrency saturates well short of linear; and a config-comparison spec set up the D-vs-E race that crowned E3. The discipline was refusing to move the goalposts after seeing the numbers.</p>
       </div>
       <div class="grp">
         <div class="gh"><span class="tag">Thread III</span> Round F · tree speculative decoding</div>
-        <ul>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/round-F-mtp-tree-fa-fb-design-status-20260525.md">round-F-mtp-tree-fa-fb-design-status</a><span class="desc">The F_a-vs-F_b design fork that opened the thread.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/round-F-tree-rejection-sampler-KT-20260526.md">round-F-tree-rejection-sampler-KT</a><span class="desc">vLLM's tree rejection sampler is half-implemented.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/round-F-unified-cheap-propose-tree-verify-spec-20260529.md">round-F-unified-cheap-propose-tree-verify-spec</a><span class="desc">The unified propose → trim → state-tree-verify pipeline.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/round-F-fa-unique-gdn-cost-gate-closeout-20260529.md">round-F-fa-unique-gdn-cost-gate-closeout</a><span class="desc">The GDN state-traffic cost gate (~467 MiB/event) — no-ship.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/docs/auto-research-reports/docs/reports/spec_decode_K2_vs_K1_survey_20260528.md">spec_decode_K2_vs_K1_survey</a><span class="br">branch</span><span class="desc">SOTA survey: when a wider tree actually wins on throughput.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/docs/auto-research-reports/docs/reports/auto_research/round-f-cudagraph-captureability-spec-v2-20260530.md">round-f-cudagraph-captureability-spec-v2</a><span class="br">branch</span><span class="desc">CUDA-graph capture corrections for the GDN decode path.</span></li>
-        </ul>
+        <p class="gsum">Design-status notes forked the work into packed-tree (F_a) and batched-path (F_b) routes; a rejection-sampler post-mortem found vLLM's tree path half-built; a unified propose-and-verify spec tried to salvage it; a cost-gate closeout killed it on memory traffic; and a literature survey confirmed the theory predicted exactly the parity-or-regression that was measured. This is the thread that diagnosed the wall.</p>
       </div>
       <div class="grp">
         <div class="gh"><span class="tag">Thread IV</span> FR7 → FR9 · multispine</div>
-        <ul>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/q36a_fb_k2_pointerswap_closeout_20260529.md">q36a_fb_k2_pointerswap_closeout</a><span class="desc">Zero-copy pointer-swap — correct, but it can't fire.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fb-5-2spine-superset-closeout-20260531.md">fb-5-2spine-superset-closeout</a><span class="desc">2-spine superset proven; the agentic route dead-ends.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr7-tokentree-gdn-superset-ceiling-20260531.md">fr7-tokentree-gdn-superset-ceiling</a><span class="desc">The shared-state ceiling, and the STree diagnosis.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr8-multispine-redteam-20260531.md">fr8-multispine-redteam</a><span class="desc">Red-team: make the broken path fail closed.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr9-superset-closeout-20260601.md">fr9-superset-closeout</a><span class="desc">Independent-row spines — the route that finally runs.</span></li>
-          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr9-spine2-distribution-safe-winner-spec-20260602.md">fr9-spine2-distribution-safe-winner-spec</a><span class="desc">The lossless reckoning — the current HEAD of the work.</span></li>
-        </ul>
+        <p class="gsum">A pointer-swap closeout showed the zero-copy commit was correct but inert; a superset closeout proved the two-spine mechanism while the agentic route dead-ended; a token-tree ceiling note and a red-team hardened the path and named the STree-shaped fix; and the final spec turned a tempting speed win into a correctness reckoning. Specs going in, post-mortems coming out — every dead end documented.</p>
       </div>
     </div>
-    <p>The full set lives under <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/docs/reports/auto_research"><code>docs/reports/auto_research/</code></a> — ~50 reports, every dead end included.</p>
+    <p>The throughline is <strong>method over outcome</strong>: pre-register the gates, freeze the benchmark, red-team your own win, and write the dead ends down as carefully as the wins. The reports live in the repository for anyone who wants the depth behind these summaries.</p>
   </section>
 
   <hr class="rule">
