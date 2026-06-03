@@ -101,6 +101,7 @@ def _tree_gdn_kernel(
     DIM_V: tl.constexpr,
     BLOCK_V: tl.constexpr,
     OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
 ):
     pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
@@ -119,6 +120,9 @@ def _tree_gdn_kernel(
     b_k = tl.load(k + (offs_n[:, None] * NUM_KH + pid_kh) * DIM_K + offs_k[None, :]).to(
         tl.float32
     )
+    if USE_QK_L2NORM_IN_KERNEL:
+        b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q, axis=1)[:, None] + 1e-6)
+        b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k, axis=1)[:, None] + 1e-6)
     b_v = tl.load(
         v + (offs_n[:, None] * NUM_VH + pid_vh) * DIM_V + offs_v[None, :],
         mask=v_mask[None, :],
@@ -133,7 +137,7 @@ def _tree_gdn_kernel(
     m_strict = tl.load(strict_mask + offs_n[:, None] * N_PAD + offs_n[None, :]) != 0
     m_visible = tl.load(visible_mask + offs_n[:, None] * N_PAD + offs_n[None, :]) != 0
     cum_g = tl.sum(tl.where(m_visible, b_g[None, :], 0.0), axis=1)
-    kk = tl.dot(b_k, tl.trans(b_k), input_precision="tf32")
+    kk = tl.dot(b_k, tl.trans(b_k), input_precision="ieee")
     decay = tl.exp(cum_g[:, None] - cum_g[None, :])
     system = tl.where(m_strict, kk * b_beta[:, None] * decay, 0.0)
 
@@ -206,6 +210,7 @@ def launch_tree_gdn(
     out: torch.Tensor | None = None,
     state: torch.Tensor | None = None,
     output_scale: float = 1.0,
+    use_qk_l2norm_in_kernel: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Launch the FR10 dense tree verifier.
 
@@ -252,5 +257,6 @@ def launch_tree_gdn(
         DIM_V=dim_v,
         BLOCK_V=BV,
         OUTPUT_SCALE=output_scale,
+        USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
     )
     return out, state

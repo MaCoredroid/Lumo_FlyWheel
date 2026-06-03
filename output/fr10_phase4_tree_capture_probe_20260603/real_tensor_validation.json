@@ -7,14 +7,28 @@
     11,
     48
   ],
+  "gate_d_real_tensor_decode_update_pass": true,
+  "gqa_mapping_confirmed": "consecutive",
   "h0_state_index": 1,
+  "k_raw_shape": [
+    11,
+    16,
+    128
+  ],
   "k_shape": [
     11,
     16,
     128
   ],
-  "native_linear_vs_tree_ref_non_linear_nodes_abs": 0.5634986162185669,
-  "native_linear_vs_tree_ref_out_abs": 0.5634986162185669,
+  "native_linear_vs_tree_ref_non_linear_nodes_abs": 0.5618356466293335,
+  "native_linear_vs_tree_ref_out_abs": 0.5618356466293335,
+  "native_serial_path_transposed_vs_gqa_consecutive_ref_state_abs": 26.48031234741211,
+  "native_serial_path_vs_gqa_consecutive_ref_out_abs": 0.013602256774902344,
+  "native_serial_path_vs_gqa_consecutive_ref_state_abs": 0.10931587219238281,
+  "native_serial_path_vs_gqa_strided_ref_out_abs": 2.422473669052124,
+  "native_serial_path_vs_gqa_strided_ref_state_abs": 28.254070281982422,
+  "native_update_path_vs_gqa_consecutive_ref_out_abs": 0.00775146484375,
+  "native_update_path_vs_gqa_consecutive_ref_state_abs": 5.7220458984375e-06,
   "non_linear_nodes": [
     2,
     3,
@@ -28,13 +42,27 @@
   ],
   "num_nodes": 11,
   "payload": "output/fr10_phase4_tree_capture_probe_20260603/tensors/language_model_model_layers_0_linear_attn_spec_gdn.pt",
+  "q_raw_shape": [
+    11,
+    16,
+    128
+  ],
   "q_shape": [
     11,
     16,
     128
   ],
-  "tree_kernel_vs_gqa_ref_out_abs": 0.0078012943267822266,
+  "tree_kernel_transposed_state_vs_native_serial_path_state_abs": 26.48031234741211,
+  "tree_kernel_vs_gqa_ref_out_abs": 0.00775146484375,
   "tree_kernel_vs_gqa_ref_state_abs": 5.7220458984375e-06,
+  "tree_kernel_vs_native_chunk_prefill_diagnostic_out_abs": 0.015625,
+  "tree_kernel_vs_native_chunk_prefill_diagnostic_state_abs": 0.10932159423828125,
+  "tree_kernel_vs_native_decode_update_path_out_abs": 7.450580596923828e-09,
+  "tree_kernel_vs_native_decode_update_path_state_abs": 7.62939453125e-06,
+  "tree_kernel_vs_native_serial_path_out_abs": 0.015625,
+  "tree_kernel_vs_native_serial_path_state_abs": 0.10932159423828125,
+  "tree_kernel_vs_native_update_path_out_abs": 7.450580596923828e-09,
+  "tree_kernel_vs_native_update_path_state_abs": 7.62939453125e-06,
   "tree_parent": [
     -1,
     0,

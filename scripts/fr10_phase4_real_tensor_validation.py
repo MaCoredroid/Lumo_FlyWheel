@@ -103,6 +103,8 @@ def native_serial_per_path(
     beta: torch.Tensor,
     h0: torch.Tensor,
     output_scale: float,
+    *,
+    use_qk_l2norm_in_kernel: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     from vllm.model_executor.layers.fla.ops import chunk_gated_delta_rule
 
@@ -119,7 +121,7 @@ def native_serial_per_path(
             scale=output_scale,
             initial_state=h0.unsqueeze(0).contiguous(),
             output_final_state=True,
-            use_qk_l2norm_in_kernel=False,
+            use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
         )
         outputs.append(out[0, -1].float())
         states.append(state[0].float())
@@ -203,13 +205,15 @@ def main() -> int:
     q_raw = payload["query_spec"].squeeze(0).to("cuda")
     k_raw = payload["key_spec"].squeeze(0).to("cuda")
     v_raw = payload["value_spec"].squeeze(0).to("cuda")
+    q_ref = q_raw.float() * torch.rsqrt((q_raw.float() * q_raw.float()).sum(dim=-1, keepdim=True) + 1e-6)
+    k_ref = k_raw.float() * torch.rsqrt((k_raw.float() * k_raw.float()).sum(dim=-1, keepdim=True) + 1e-6)
     state_indices = payload["spec_state_indices_tensor"][0]
     h0 = payload["initial_state_before_spec"][int(state_indices[0].item())].to("cuda")
     output_scale = 128**-0.5
 
     out, state = launch_tree_gdn(
-        q.contiguous(),
-        k.contiguous(),
+        q_raw.contiguous(),
+        k_raw.contiguous(),
         v.contiguous(),
         g.contiguous(),
         beta.contiguous(),
@@ -218,11 +222,12 @@ def main() -> int:
         strict_mask=strict,
         visible_mask=visible,
         output_scale=output_scale,
+        use_qk_l2norm_in_kernel=True,
     )
     torch.cuda.synchronize()
     ref_out, ref_state = gqa_tree_reference(
-        q[:n],
-        k[:n],
+        q_ref[:n],
+        k_ref[:n],
         v[:n],
         g[:n],
         beta[:n],
@@ -233,8 +238,8 @@ def main() -> int:
         mapping="consecutive",
     )
     strided_ref_out, strided_ref_state = gqa_tree_reference(
-        q[:n],
-        k[:n],
+        q_ref[:n],
+        k_ref[:n],
         v[:n],
         g[:n],
         beta[:n],
@@ -244,15 +249,16 @@ def main() -> int:
         output_scale,
         mapping="strided",
     )
-    native_path_out, native_path_state = native_serial_per_path(
+    native_chunk_out, native_chunk_state = native_serial_per_path(
         tree,
-        q[:n],
-        k[:n],
+        q_raw[:n],
+        k_raw[:n],
         v[:n],
         g[:n],
         beta[:n],
         h0,
         output_scale,
+        use_qk_l2norm_in_kernel=True,
     )
     native_update_out, native_update_state = native_update_serial_per_path(
         tree,
@@ -272,33 +278,48 @@ def main() -> int:
         device="cuda",
         dtype=torch.long,
     )
-    native_consecutive_out = (native_path_out - ref_out).abs().max()
-    native_strided_out = (native_path_out - strided_ref_out).abs().max()
-    native_consecutive_state = (native_path_state - ref_state).abs().max()
-    native_strided_state = (native_path_state - strided_ref_state).abs().max()
+    native_consecutive_out = (native_chunk_out - ref_out).abs().max()
+    native_strided_out = (native_chunk_out - strided_ref_out).abs().max()
+    native_consecutive_state = (native_chunk_state - ref_state).abs().max()
+    native_strided_state = (native_chunk_state - strided_ref_state).abs().max()
     native_consecutive_state_transposed = (
-        native_path_state.transpose(-1, -2) - ref_state
+        native_chunk_state.transpose(-1, -2) - ref_state
     ).abs().max()
     tree_native_state_transposed = (
-        state[:n].transpose(-1, -2) - native_path_state
+        state[:n].transpose(-1, -2) - native_chunk_state
     ).abs().max()
+    tree_update_out = (out[:n].float() - native_update_out).abs().max()
+    tree_update_state = (state[:n] - native_update_state).abs().max()
     result = {
         "payload": str(payload_path),
         "tree_parent": list(tree.parent),
         "num_nodes": n,
         "q_shape": list(q.shape),
         "k_shape": list(k.shape),
+        "q_raw_shape": list(q_raw.shape),
+        "k_raw_shape": list(k_raw.shape),
         "v_shape": list(v.shape),
         "g_shape": list(g.shape),
         "beta_shape": list(beta.shape),
         "h0_state_index": int(state_indices[0].item()),
         "tree_kernel_vs_gqa_ref_out_abs": float((out[:n].float() - ref_out).abs().max().item()),
         "tree_kernel_vs_gqa_ref_state_abs": float((state[:n] - ref_state).abs().max().item()),
+        "tree_kernel_vs_native_decode_update_path_out_abs": float(tree_update_out.item()),
+        "tree_kernel_vs_native_decode_update_path_state_abs": float(tree_update_state.item()),
+        "gate_d_real_tensor_decode_update_pass": bool(
+            tree_update_out <= 6.2e-5 and tree_update_state <= 1e-4
+        ),
+        "tree_kernel_vs_native_chunk_prefill_diagnostic_out_abs": float(
+            (out[:n].float() - native_chunk_out).abs().max().item()
+        ),
+        "tree_kernel_vs_native_chunk_prefill_diagnostic_state_abs": float(
+            (state[:n] - native_chunk_state).abs().max().item()
+        ),
         "tree_kernel_vs_native_serial_path_out_abs": float(
-            (out[:n].float() - native_path_out).abs().max().item()
+            (out[:n].float() - native_chunk_out).abs().max().item()
         ),
         "tree_kernel_vs_native_serial_path_state_abs": float(
-            (state[:n] - native_path_state).abs().max().item()
+            (state[:n] - native_chunk_state).abs().max().item()
         ),
         "native_serial_path_vs_gqa_consecutive_ref_out_abs": float(
             native_consecutive_out.item()
@@ -312,12 +333,8 @@ def main() -> int:
         "native_update_path_vs_gqa_consecutive_ref_state_abs": float(
             (native_update_state - ref_state).abs().max().item()
         ),
-        "tree_kernel_vs_native_update_path_out_abs": float(
-            (out[:n].float() - native_update_out).abs().max().item()
-        ),
-        "tree_kernel_vs_native_update_path_state_abs": float(
-            (state[:n] - native_update_state).abs().max().item()
-        ),
+        "tree_kernel_vs_native_update_path_out_abs": float(tree_update_out.item()),
+        "tree_kernel_vs_native_update_path_state_abs": float(tree_update_state.item()),
         "native_serial_path_transposed_vs_gqa_consecutive_ref_state_abs": float(
             native_consecutive_state_transposed.item()
         ),
