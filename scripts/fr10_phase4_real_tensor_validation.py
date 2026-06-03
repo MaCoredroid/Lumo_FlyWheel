@@ -126,6 +126,43 @@ def native_serial_per_path(
     return torch.stack(outputs, dim=0), torch.stack(states, dim=0)
 
 
+def native_update_serial_per_path(
+    tree: Tree,
+    q_raw: torch.Tensor,
+    k_raw: torch.Tensor,
+    v_raw: torch.Tensor,
+    a: torch.Tensor,
+    b: torch.Tensor,
+    A_log: torch.Tensor,
+    dt_bias: torch.Tensor,
+    h0: torch.Tensor,
+    output_scale: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    from vllm.model_executor.layers.fla.ops import fused_sigmoid_gating_delta_rule_update
+
+    outputs = []
+    states = []
+    for node in range(tree.n):
+        path = torch.tensor(tree.path(node), device=q_raw.device, dtype=torch.long)
+        initial = h0.unsqueeze(0).contiguous().clone()
+        out, state = fused_sigmoid_gating_delta_rule_update(
+            A_log=A_log,
+            a=a.index_select(0, path).contiguous(),
+            b=b.index_select(0, path).contiguous(),
+            dt_bias=dt_bias,
+            q=q_raw.index_select(0, path).unsqueeze(0).contiguous(),
+            k=k_raw.index_select(0, path).unsqueeze(0).contiguous(),
+            v=v_raw.index_select(0, path).unsqueeze(0).contiguous(),
+            scale=output_scale,
+            initial_state=initial,
+            inplace_final_state=True,
+            use_qk_l2norm_in_kernel=True,
+        )
+        outputs.append(out[0, -1].float())
+        states.append(state[0].float())
+    return torch.stack(outputs, dim=0), torch.stack(states, dim=0)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--payload", required=True)
@@ -163,6 +200,9 @@ def main() -> int:
         apply_l2norm=True,
         output_g_exp=False,
     )
+    q_raw = payload["query_spec"].squeeze(0).to("cuda")
+    k_raw = payload["key_spec"].squeeze(0).to("cuda")
+    v_raw = payload["value_spec"].squeeze(0).to("cuda")
     state_indices = payload["spec_state_indices_tensor"][0]
     h0 = payload["initial_state_before_spec"][int(state_indices[0].item())].to("cuda")
     output_scale = 128**-0.5
@@ -214,6 +254,18 @@ def main() -> int:
         h0,
         output_scale,
     )
+    native_update_out, native_update_state = native_update_serial_per_path(
+        tree,
+        q_raw[:n],
+        k_raw[:n],
+        v_raw[:n],
+        a[:n],
+        b[:n],
+        A_log,
+        dt_bias,
+        h0,
+        output_scale,
+    )
     native_linear = payload["core_attn_out_spec_native"].squeeze(0).to("cuda").float()
     non_linear_nodes = torch.tensor(
         [i for i, p in enumerate(tree.parent) if i > 0 and p != i - 1],
@@ -253,6 +305,18 @@ def main() -> int:
         ),
         "native_serial_path_vs_gqa_consecutive_ref_state_abs": float(
             native_consecutive_state.item()
+        ),
+        "native_update_path_vs_gqa_consecutive_ref_out_abs": float(
+            (native_update_out - ref_out).abs().max().item()
+        ),
+        "native_update_path_vs_gqa_consecutive_ref_state_abs": float(
+            (native_update_state - ref_state).abs().max().item()
+        ),
+        "tree_kernel_vs_native_update_path_out_abs": float(
+            (out[:n].float() - native_update_out).abs().max().item()
+        ),
+        "tree_kernel_vs_native_update_path_state_abs": float(
+            (state[:n] - native_update_state).abs().max().item()
         ),
         "native_serial_path_transposed_vs_gqa_consecutive_ref_state_abs": float(
             native_consecutive_state_transposed.item()
