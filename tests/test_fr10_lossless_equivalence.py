@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import sys
+from importlib.util import find_spec
 from pathlib import Path
+
+import pytest
+import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -21,6 +25,10 @@ from lumo_flywheel_serving.fr10_equivalence_gate import (
     first_token_diff,
     load_token_artifact,
 )
+
+KERNEL_TESTS_AVAILABLE = find_spec("triton") is not None
+if KERNEL_TESTS_AVAILABLE:
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import launch_tree_gdn_prepared
 
 
 def _record(batch: str, choice: int, tokens: list[int]) -> TokenRecord:
@@ -218,3 +226,61 @@ def test_mode_switch_requires_homogeneous_relaunch_equivalence() -> None:
 
     assert compare_records(dedicated, shared_same_mode) == []
     assert compare_records(dedicated, mixed_mode_contaminated) != []
+
+
+def test_tree_kernel_launcher_fails_closed_on_bad_descriptor_shapes() -> None:
+    if not KERNEL_TESTS_AVAILABLE:
+        pytest.skip("FR10 Triton kernel tests require triton")
+    q = torch.zeros((2, 1, 4), dtype=torch.float32)
+    k = torch.zeros((2, 1, 4), dtype=torch.float32)
+    v = torch.zeros((2, 1, 4), dtype=torch.float32)
+    g = torch.zeros((2, 1), dtype=torch.float32)
+    beta = torch.zeros((2, 1), dtype=torch.float32)
+    h0 = torch.zeros((1, 4, 4), dtype=torch.float32)
+    strict = torch.zeros((2, 2), dtype=torch.int32)
+    visible = torch.eye(2, dtype=torch.int32)
+
+    with pytest.raises(ValueError, match="n_pad"):
+        launch_tree_gdn_prepared(
+            q=q,
+            k=k,
+            v=v,
+            g=g,
+            beta=beta,
+            h0=h0,
+            n_actual=3,
+            n_pad=2,
+            strict_mask=strict,
+            visible_mask=visible,
+        )
+
+
+def test_tree_kernel_launcher_fails_closed_on_bad_bank_index_row() -> None:
+    if not KERNEL_TESTS_AVAILABLE:
+        pytest.skip("FR10 Triton kernel tests require triton")
+    q = torch.zeros((2, 1, 4), dtype=torch.float32)
+    k = torch.zeros((2, 1, 4), dtype=torch.float32)
+    v = torch.zeros((2, 1, 4), dtype=torch.float32)
+    g = torch.zeros((2, 1), dtype=torch.float32)
+    beta = torch.zeros((2, 1), dtype=torch.float32)
+    h0 = torch.zeros((1, 1, 4, 4), dtype=torch.float32)
+    h0_indices = torch.zeros((1,), dtype=torch.int64)
+    strict = torch.zeros((2, 2), dtype=torch.int32)
+    visible = torch.eye(2, dtype=torch.int32)
+
+    with pytest.raises(ValueError, match="h0_index_row"):
+        launch_tree_gdn_prepared(
+            q=q,
+            k=k,
+            v=v,
+            g=g,
+            beta=beta,
+            h0=h0,
+            h0_indices=h0_indices,
+            h0_is_bank=True,
+            h0_index_row=1,
+            n_actual=2,
+            n_pad=2,
+            strict_mask=strict,
+            visible_mask=visible,
+        )

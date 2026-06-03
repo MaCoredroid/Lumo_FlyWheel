@@ -280,6 +280,24 @@ def launch_tree_gdn_prepared(
     invocation_counter: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Launch with precomputed graph-safe tree descriptors."""
+    if n_actual <= 0 or n_actual > n_pad:
+        raise ValueError(f"invalid tree node counts n_actual={n_actual}, n_pad={n_pad}")
+    if n_pad > 16 or n_pad & (n_pad - 1):
+        raise ValueError(f"n_pad must be a power of two <=16, got {n_pad}")
+    if q.shape[0] < n_actual:
+        raise ValueError(f"q has {q.shape[0]} rows but n_actual={n_actual}")
+    if k.shape[0] < n_actual:
+        raise ValueError(f"k has {k.shape[0]} rows but n_actual={n_actual}")
+    if v.shape[0] < n_actual:
+        raise ValueError(f"v has {v.shape[0]} rows but n_actual={n_actual}")
+    if g.shape[0] < n_actual or beta.shape[0] < n_actual:
+        raise ValueError(
+            f"g/beta rows must cover n_actual={n_actual}, got {g.shape[0]}/{beta.shape[0]}"
+        )
+    if strict_mask.shape[0] < n_pad or strict_mask.shape[1] < n_pad:
+        raise ValueError(f"strict_mask must cover {n_pad}x{n_pad}, got {tuple(strict_mask.shape)}")
+    if visible_mask.shape[0] < n_pad or visible_mask.shape[1] < n_pad:
+        raise ValueError(f"visible_mask must cover {n_pad}x{n_pad}, got {tuple(visible_mask.shape)}")
     num_kh = q.shape[1]
     num_vh = v.shape[1]
     dim_k = q.shape[2]
@@ -295,6 +313,19 @@ def launch_tree_gdn_prepared(
             )
         if h0_indices is None:
             raise ValueError("h0_indices is required when h0_is_bank=True")
+        if h0_index_row < 0 or h0_index_row >= h0_indices.numel():
+            raise ValueError(
+                f"h0_index_row {h0_index_row} outside h0_indices numel {h0_indices.numel()}"
+            )
+        if h0_indices.is_cuda:
+            # Avoid GPU->CPU sync during capture. This range check is for eager
+            # launches and debug repros; graph-captured serving relies on the
+            # row-count guard above and prevalidated metadata.
+            pass
+        else:
+            idx = int(h0_indices.reshape(-1)[h0_index_row].item())
+            if idx < 0 or idx >= h0.shape[0]:
+                raise ValueError(f"h0 bank index {idx} outside bank rows {h0.shape[0]}")
         h0_bank_stride = h0.stride(0)
     elif h0.shape != (num_vh, dim_v, dim_k):
         raise ValueError(f"h0 shape must be {(num_vh, dim_v, dim_k)}, got {tuple(h0.shape)}")
@@ -309,8 +340,17 @@ def launch_tree_gdn_prepared(
         raise ValueError(f"value heads must be a multiple of q/k heads, got {num_vh}/{num_kh}")
     if out is None:
         out = torch.empty((n_pad, num_vh, dim_v), device=q.device, dtype=q.dtype)
+    elif out.shape[0] < n_actual or out.shape[1:] != (num_vh, dim_v):
+        raise ValueError(
+            f"out must be at least ({n_actual}, {num_vh}, {dim_v}), got {tuple(out.shape)}"
+        )
     if state is None:
         state = torch.empty((n_pad, num_vh, dim_v, dim_k), device=q.device, dtype=torch.float32)
+    elif state.shape[0] < n_actual or state.shape[1:] != (num_vh, dim_v, dim_k):
+        raise ValueError(
+            "state must be at least "
+            f"({n_actual}, {num_vh}, {dim_v}, {dim_k}), got {tuple(state.shape)}"
+        )
     grid = (num_vh, triton.cdiv(dim_v, BV))
     _tree_gdn_kernel[grid](
         q,
