@@ -37,16 +37,13 @@
     -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
     font-optical-sizing:auto;
     background-image:
-      radial-gradient(1200px 600px at 78% -8%, rgba(230,169,58,.06), transparent 60%),
-      radial-gradient(900px 500px at -5% 12%, rgba(95,191,147,.05), transparent 55%),
-      linear-gradient(var(--rule) 1px, transparent 1px),
-      linear-gradient(90deg, var(--rule) 1px, transparent 1px);
-    background-size:auto, auto, 46px 46px, 46px 46px;
-    background-position:0 0, 0 0, -1px -1px, -1px -1px;
+      radial-gradient(1300px 700px at 82% -12%, rgba(230,169,58,.045), transparent 62%),
+      radial-gradient(1050px 580px at -10% 8%, rgba(95,191,147,.035), transparent 60%);
+    background-attachment:fixed, fixed;
   }
-  body::before{ /* faint grain */
-    content:""; position:fixed; inset:0; pointer-events:none; z-index:1; opacity:.035;
-    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  body::before{ /* whisper-faint grain, fixed so it doesn't shimmer while scrolling */
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:1; opacity:.014;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   ::selection{background:rgba(230,169,58,.25); color:#fff}
   a{color:var(--signal); text-decoration:none; border-bottom:1px solid rgba(230,169,58,.32)}
@@ -190,6 +187,43 @@
   .fnotes li{margin-bottom:10px}
   .backlink{display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:13px; margin-top:20px; padding:10px 16px; border:1px solid var(--rule-2); border-radius:8px; color:var(--bone-2)}
   .backlink:hover{border-color:var(--signal); color:var(--signal)}
+
+  /* plain-language key */
+  .key{margin:34px 0; border:1px solid var(--rule-2); border-radius:12px; background:linear-gradient(165deg,var(--panel),var(--bg-2)); padding:24px 26px}
+  .key .kt{font-family:var(--font-mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:var(--signal); margin-bottom:4px}
+  .key .kh{font-family:var(--font-display); font-weight:700; font-size:22px; color:var(--bone); margin:0 0 6px; letter-spacing:-.01em}
+  .key .intro{font-size:16.5px; color:var(--bone-2); margin:0 0 20px; max-width:64ch}
+  .key .intro b{color:var(--signal)}
+  .gdefs{display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:var(--rule); border:1px solid var(--rule); border-radius:8px; overflow:hidden}
+  .gdef{background:var(--bg-2); padding:15px 17px}
+  .gdef dt{font-family:var(--font-mono); font-size:13.5px; color:var(--signal); font-weight:600; margin-bottom:4px}
+  .gdef dt .pron{color:var(--muted-2); font-weight:400; font-size:11.5px; letter-spacing:.02em}
+  .gdef dd{margin:0; font-size:15px; line-height:1.5; color:var(--bone-2)}
+  .gdef dd b{color:var(--bone)}
+  @media(max-width:640px){.gdefs{grid-template-columns:1fr}}
+
+  /* term + margin sidenotes (Tufte-style on wide screens) */
+  .term{border-bottom:1px dashed var(--rule-2); cursor:help}
+  .mn{font-family:var(--font-mono); font-size:12.5px; line-height:1.5; color:var(--muted); border-left:2px solid var(--signal); padding-left:13px}
+  .mn b{color:var(--bone-2); font-weight:600}
+  @media(min-width:1380px){
+    .mn{float:right; clear:right; width:240px; margin:7px -288px 22px 0; position:relative}
+  }
+  @media(max-width:1379px){
+    .mn{display:block; margin:18px 0; background:var(--panel); padding:13px 16px 13px 14px; border-radius:0 7px 7px 0}
+  }
+
+  /* paper trail */
+  .trail{margin:24px 0}
+  .trail .grp{margin:22px 0}
+  .trail .gh{font-family:var(--font-display); font-weight:600; font-size:18px; color:var(--bone); margin:0 0 4px; display:flex; align-items:center; gap:10px}
+  .trail .gh .tag{font-family:var(--font-mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--bg); background:var(--signal); padding:2px 7px; border-radius:4px}
+  .trail ul{list-style:none; margin:8px 0 0; padding:0; border-top:1px solid var(--rule)}
+  .trail li{padding:9px 2px; border-bottom:1px solid var(--rule); font-size:15.5px; display:flex; gap:12px; align-items:baseline}
+  .trail li:hover{background:var(--panel)}
+  .trail li .doc{font-family:var(--font-mono); font-size:13px; white-space:nowrap}
+  .trail li .desc{color:var(--muted); font-size:14.5px}
+  .trail li .br{font-family:var(--font-mono); font-size:10px; color:var(--signal); border:1px solid var(--rule-2); border-radius:3px; padding:0 5px; margin-left:4px}
 </style>
 </head>
 <body>
@@ -225,6 +259,21 @@
     <div class="lbl">Abstract</div>
     <p>The Round-4b mini paper (<a href="index.html">Vol. I</a>) recommended shipping speculative-decoding config <strong>D</strong> on Qwen 3.5. This volume reports what happened next on Qwen <strong>3.6</strong>-27B-FP8. Four threads — config/quantization tuning, a SWE-Bench baseline campaign, tree-shaped speculative decoding (Round F), and the FR7→FR9 multispine line — converge on one architectural fact: Qwen 3.6 is a <strong>hybrid in which 48 of 64 layers are Gated-DeltaNet</strong> (linear, recurrent). A speculative <em>tree</em> can only be made lossless on the 16 softmax-attention layers; the 48 recurrent layers process the flattened tree in order and corrupt every depth-≥2 candidate. The net result, after 24+ kernel commits: <strong>linear MTP (E3) remains the fastest lossless arm</strong>, the paper's config-D win does not transfer, FP8-KV cache regresses 8–10%, and the most recent work is a correctness reckoning — the multispine "winner" selector turns out not to be distribution-preserving. The honest deliverable is a clean architectural diagnosis and a stack that is faster <em>and</em> provably correct, not a hero number.</p>
   </div>
+
+  <div class="key reveal">
+    <div class="kt">Read me first · a plain-language key</div>
+    <h3 class="kh">The cast of characters — in human words</h3>
+    <p class="intro">A large language model writes one word at a time, which is slow. <b>Speculative decoding</b> bolts on a fast "drafter" that guesses several words ahead; the big model then checks the whole guess in a single pass. Correct guesses are kept <em>for free</em> — same exact output, less waiting. Everything below is a different <b>strategy for guessing</b>, and this whole paper is about which strategy actually pays off on one specific model. You don't need the jargon to follow the story; this key is here whenever a letter stops making sense.</p>
+    <dl class="gdefs">
+      <div class="gdef"><dt>MTP <span class="pron">· multi-token prediction</span></dt><dd>The model's <b>built-in drafter</b> — a small head that ships with the model and guesses the next few words in one shot. The "native" way to speculate.</dd></div>
+      <div class="gdef"><dt>Config A &amp; D</dt><dd>Two guessing recipes from Vol. I. <b>A</b> = one trick (reuse text the agent has already seen). <b>D</b> = A plus three more drafting tricks stacked on top. Vol. I shipped D; this volume shows <b>A alone is enough</b>.</dd></div>
+      <div class="gdef"><dt>E · (E3, E5)</dt><dd>Use the native MTP drafter to guess a <b>straight line</b> of N words ahead. <b>E3</b> = guess 3 ahead, <b>E5</b> = guess 5 ahead. This is the baseline everything tries to beat.</dd></div>
+      <div class="gdef"><dt>F_a &amp; F_b</dt><dd>The experiments that guess a branching <b>tree</b> of possibilities instead of a straight line. <b>F_a</b> packs the whole tree into one pass; <b>F_b</b> runs each branch separately. Both guess wider — both lose on this model.</dd></div>
+      <div class="gdef"><dt>Spine</dt><dd>One straight branch of a tree — a single guess from start to finish. <b>Multispine</b> = run two spines at once and keep whichever guessed better.</dd></div>
+      <div class="gdef"><dt>Gated-DeltaNet (GDN)</dt><dd>The "recurrent" layer type that makes up <b>75% of this model</b>. It reads words strictly in order and remembers as it goes — which is exactly why a branching tree confuses it. The wall this paper runs into.</dd></div>
+    </dl>
+  </div>
+
   <section class="reveal">
     <span class="sec-no">§1 — Why this volume exists</span>
     <h2>The headline that didn't hold</h2>
@@ -249,7 +298,7 @@
   <section class="reveal">
     <span class="sec-no">§2 — Thread I</span>
     <h2>Knobs that did nothing, a cache that hurt, and a reversal</h2>
-    <p>The first thread asked whether any cheap serving knob could tame Qwen 3.6's habit of writing to the full token budget. Three were tested — <code>model_reasoning_effort</code>, <code>preserve_thinking</code>, and sampling <code>temperature</code>. All three are <strong>inert</strong>: reasoning_effort is silently dropped on the non-Harmony path, preserve_thinking was already on via the custom chat template, and temperature moved no metric outside sampling noise. Verbosity is intrinsic to the model. That is itself a finding — there is no free serving-side lever here.</p>
+    <p><span class="mn"><b>A vs D, quickly:</b> two speculation recipes. A = one trick (reuse seen text). D = A + three more drafting tricks. Vol. I shipped D; here A ties it and is simpler.</span>The first thread asked whether any cheap serving knob could tame Qwen 3.6's habit of writing to the full token budget. Three were tested — <code>model_reasoning_effort</code>, <code>preserve_thinking</code>, and sampling <code>temperature</code>. All three are <strong>inert</strong>: reasoning_effort is silently dropped on the non-Harmony path, preserve_thinking was already on via the custom chat template, and temperature moved no metric outside sampling noise. Verbosity is intrinsic to the model. That is itself a finding — there is no free serving-side lever here.</p>
 
     <div class="fig reveal">
       <div class="fig-head"><span class="ft">Figure 1 · OFF/A/D ablation, 132 cells</span><span class="fn">A beats D — and Q3.6 beats Q3.5</span></div>
@@ -325,7 +374,7 @@
       </div>
     </div>
 
-    <p>A tree-attention mask corrects the 16 softmax layers. But the 48 Gated-DeltaNet layers carry a <strong>recurrent state</strong>: they process the breadth-first-flattened tree <em>in order</em>, so sibling branches contaminate one another's hidden state. Every candidate at depth ≥2 is verified against a corrupted state. As the report puts it: <em>"a packed tree cannot be made lossless by attention masks alone."</em></p>
+    <p><span class="mn"><b>MTP &amp; E:</b> MTP is the model's built-in drafter. E3/E5 use it to guess a straight line of 3 or 5 words ahead — the baseline the tree experiments must beat.</span>A tree-attention mask corrects the 16 softmax layers. But the 48 Gated-DeltaNet layers carry a <strong>recurrent state</strong>: they process the breadth-first-flattened tree <em>in order</em>, so sibling branches contaminate one another's hidden state. Every candidate at depth ≥2 is verified against a corrupted state. As the report puts it: <em>"a packed tree cannot be made lossless by attention masks alone."</em></p>
 
     <div class="fig reveal">
       <div class="fig-head"><span class="ft">Figure 4 · the smoking gun</span><span class="fn">Depth-2 acceptance collapses under the tree</span></div>
@@ -333,7 +382,7 @@
       <div class="fig-cap">Per-depth accept rate. At depth 1 the packed tree (F_a) matches linear E3 exactly (<b>89.1% vs 88.9%</b>) — the drafts are provably correct. At depth 2 the tree <b>collapses to 8.2%</b> while E3 holds <b>74.5%</b>. The drafts are right; the recurrent verifier rejects them.</div>
     </div>
 
-    <p>The batched-paths variant (F_b) fares no better: submitting even a path that is an <em>exact duplicate</em> of the top-1 chain collapses its acceptance from 2.667 to 0.286 — proof that the mere presence of a second speculative row in the GDN forward destroys the top-1 invariant. And block-aligned pointer-swaps (the zero-copy commit trick) almost never fire, because vLLM's 816-token block dwarfs the ~5-token accepted suffix.</p>
+    <p><span class="mn"><b>F_a vs F_b:</b> two ways to guess a tree. F_a packs every branch into one pass; F_b runs each branch as its own row. Both try to guess wider than a straight line — both lose here.</span>The batched-paths variant (F_b) fares no better: submitting even a path that is an <em>exact duplicate</em> of the top-1 chain collapses its acceptance from 2.667 to 0.286 — proof that the mere presence of a second speculative row in the GDN forward destroys the top-1 invariant. And block-aligned pointer-swaps (the zero-copy commit trick) almost never fire, because vLLM's 816-token block dwarfs the ~5-token accepted suffix.</p>
 
     <div class="fig reveal">
       <div class="fig-head"><span class="ft">Figure 5 · agentic B=4, every arm</span><span class="fn">The straight line wins</span></div>
@@ -360,7 +409,7 @@
   <section class="reveal">
     <span class="sec-no">§5 — Thread IV · the live frontier</span>
     <h2>FR7 → FR9: a correct superset that isn't (yet) a win</h2>
-    <p>If a <em>packed</em> tree corrupts the shared recurrent state, give each draft chain — each <strong>"spine"</strong> — its own independent vLLM sequence with its own native GDN state. That is the FR7→FR9 arc: FR7 proved the shared-state ceiling (free-running path-0 collapses to 1.66/event vs E5's 3.15), FR8 red-teamed the broken condense path into failing closed, and <strong>FR9 (independent rows)</strong> is the design that actually runs.</p>
+    <p><span class="mn"><b>Spine:</b> one straight branch — a single guess from start to finish. Multispine runs two at once and keeps whichever guessed more, so it can never do worse than one. In theory.</span>If a <em>packed</em> tree corrupts the shared recurrent state, give each draft chain — each <strong>"spine"</strong> — its own independent vLLM sequence with its own native GDN state. That is the FR7→FR9 arc: FR7 proved the shared-state ceiling (free-running path-0 collapses to 1.66/event vs E5's 3.15), FR8 red-teamed the broken condense path into failing closed, and <strong>FR9 (independent rows)</strong> is the design that actually runs.</p>
 
     <p>And on a micro-probe, it works: spine-0 stays byte-identical to E5, the 2-spine "winner" reaches 3.442 accept/event with <strong>zero superset violations</strong> and a <strong>+6.85% tok/s</strong> edge. Correctness is settled — it survives 19,307 winner events under temperature-0.6 rejection sampling with no engine death. But scale tells a different story:</p>
 
@@ -418,6 +467,58 @@
     <h3>If you work in this space</h3>
     <p>The transferable result: on Gated-DeltaNet / SSM-hybrid models, attention-mask-based tree speculative decoding is not losslessly viable — the recurrent majority corrupts depth-≥2 verification, and pointer-swap commits don't fire at realistic block sizes. Independent-row multispine is the correctness-clean route, but the win is bandwidth-gated and the public-commit selector must be distribution-preserving (a naive longest-accepted selector is not). Anyone porting Medusa/Sequoia/EAGLE-style trees to a hybrid will hit the same wall; the kernel-level fix is STree-shaped and currently bespoke.</p>
   </section>
+  <hr class="rule">
+
+  <section class="reveal">
+    <span class="sec-no">§8 — Receipts</span>
+    <h2>The paper trail: every attempt, in the open</h2>
+    <p>None of the above is a tidy retrofit. Each finding is the residue of a design doc, a pre-registration, or a post-mortem written <em>before</em> the result was known — roughly 50 of them. Here is the curated spine of that trail: the specs we wrote going in, and the closeouts we wrote coming out. A <span class="br">branch</span> chip marks the five reports that currently live only on the <code>docs/auto-research-reports</code> branch.</p>
+
+    <div class="trail reveal">
+      <div class="grp">
+        <div class="gh"><span class="tag">Thread I</span> Config &amp; quantization</div>
+        <ul>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/qwen36-temp06-experiment-results-20260518.md">qwen36-temp06-experiment-results</a><span class="desc">Temperature &amp; reasoning-effort knobs — all measured inert.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/qwen36-off-a-d-closeout-20260520.md">qwen36-off-a-d-closeout</a><span class="desc">The 132-cell OFF/A/D closeout — where "ship D" died.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/docs/auto-research-reports/docs/reports/auto_research/qwen36-vllm-fp8kv-optimization-spec-20260526.md">qwen36-vllm-fp8kv-optimization-spec</a><span class="br">branch</span><span class="desc">The plan to realize a true FP8 KV cache.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/docs/auto-research-reports/docs/reports/auto_research/round5-e3-fp8kv-regression-analysis-20260526.md">round5-e3-fp8kv-regression-analysis</a><span class="br">branch</span><span class="desc">Why FP8-KV regressed 8–10% — prefill cost up 60%.</span></li>
+        </ul>
+      </div>
+      <div class="grp">
+        <div class="gh"><span class="tag">Thread II</span> SWE-Bench campaign</div>
+        <ul>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/swe-bench-q36-a-campaign-pre-registration-20260520.md">swe-bench-q36-a-campaign-pre-registration</a><span class="desc">Tiers, gates &amp; instance manifests, fixed before reading data.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/swe-bench-bounded-time-spec-20260520.md">swe-bench-bounded-time-spec</a><span class="desc">The bounded-time, partial-coverage measurement protocol.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/swe-bench-concurrency-bandwidth-analysis-20260522.md">swe-bench-concurrency-bandwidth-analysis</a><span class="desc">Why batching is bandwidth-bound — the "4×" claim, refuted.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/swe-bench-config-decode-comparison-spec-20260525.md">swe-bench-config-decode-comparison-spec</a><span class="desc">D vs E (MTP depth) comparison design — E3 emerges.</span></li>
+        </ul>
+      </div>
+      <div class="grp">
+        <div class="gh"><span class="tag">Thread III</span> Round F · tree speculative decoding</div>
+        <ul>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/round-F-mtp-tree-fa-fb-design-status-20260525.md">round-F-mtp-tree-fa-fb-design-status</a><span class="desc">The F_a-vs-F_b design fork that opened the thread.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/round-F-tree-rejection-sampler-KT-20260526.md">round-F-tree-rejection-sampler-KT</a><span class="desc">vLLM's tree rejection sampler is half-implemented.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/round-F-unified-cheap-propose-tree-verify-spec-20260529.md">round-F-unified-cheap-propose-tree-verify-spec</a><span class="desc">The unified propose → trim → state-tree-verify pipeline.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/round-F-fa-unique-gdn-cost-gate-closeout-20260529.md">round-F-fa-unique-gdn-cost-gate-closeout</a><span class="desc">The GDN state-traffic cost gate (~467 MiB/event) — no-ship.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/docs/auto-research-reports/docs/reports/spec_decode_K2_vs_K1_survey_20260528.md">spec_decode_K2_vs_K1_survey</a><span class="br">branch</span><span class="desc">SOTA survey: when a wider tree actually wins on throughput.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/docs/auto-research-reports/docs/reports/auto_research/round-f-cudagraph-captureability-spec-v2-20260530.md">round-f-cudagraph-captureability-spec-v2</a><span class="br">branch</span><span class="desc">CUDA-graph capture corrections for the GDN decode path.</span></li>
+        </ul>
+      </div>
+      <div class="grp">
+        <div class="gh"><span class="tag">Thread IV</span> FR7 → FR9 · multispine</div>
+        <ul>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/q36a_fb_k2_pointerswap_closeout_20260529.md">q36a_fb_k2_pointerswap_closeout</a><span class="desc">Zero-copy pointer-swap — correct, but it can't fire.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fb-5-2spine-superset-closeout-20260531.md">fb-5-2spine-superset-closeout</a><span class="desc">2-spine superset proven; the agentic route dead-ends.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr7-tokentree-gdn-superset-ceiling-20260531.md">fr7-tokentree-gdn-superset-ceiling</a><span class="desc">The shared-state ceiling, and the STree diagnosis.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr8-multispine-redteam-20260531.md">fr8-multispine-redteam</a><span class="desc">Red-team: make the broken path fail closed.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr9-superset-closeout-20260601.md">fr9-superset-closeout</a><span class="desc">Independent-row spines — the route that finally runs.</span></li>
+          <li><a class="doc" href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr9-spine2-distribution-safe-winner-spec-20260602.md">fr9-spine2-distribution-safe-winner-spec</a><span class="desc">The lossless reckoning — the current HEAD of the work.</span></li>
+        </ul>
+      </div>
+    </div>
+    <p>The full set lives under <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main/docs/reports/auto_research"><code>docs/reports/auto_research/</code></a> — ~50 reports, every dead end included.</p>
+  </section>
+
   <hr class="rule">
 
   <section class="reveal">
