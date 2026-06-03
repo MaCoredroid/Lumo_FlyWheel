@@ -1,0 +1,56 @@
+{
+  "beta_shape": [
+    11,
+    48
+  ],
+  "g_shape": [
+    11,
+    48
+  ],
+  "h0_state_index": 1,
+  "k_shape": [
+    11,
+    16,
+    128
+  ],
+  "native_linear_vs_tree_ref_non_linear_nodes_abs": 0.5634986162185669,
+  "native_linear_vs_tree_ref_out_abs": 0.5634986162185669,
+  "non_linear_nodes": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10
+  ],
+  "num_nodes": 11,
+  "payload": "output/fr10_phase4_tree_capture_probe_20260603/tensors/language_model_model_layers_0_linear_attn_spec_gdn.pt",
+  "q_shape": [
+    11,
+    16,
+    128
+  ],
+  "tree_kernel_vs_gqa_ref_out_abs": 0.0078012943267822266,
+  "tree_kernel_vs_gqa_ref_state_abs": 5.7220458984375e-06,
+  "tree_parent": [
+    -1,
+    0,
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "v_shape": [
+    11,
+    48,
+    128
+  ]
+}
