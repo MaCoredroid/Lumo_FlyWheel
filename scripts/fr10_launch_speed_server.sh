@@ -10,6 +10,7 @@ BATCH_INVARIANT=${BATCH_INVARIANT:-0}
 FR10_METRICS=${FR10_METRICS:-0}
 FR10_ENABLE_TREE_GDN=${FR10_ENABLE_TREE_GDN:-1}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
+FR10_TREE_GDN_CAPTURE_PAYLOAD=${FR10_TREE_GDN_CAPTURE_PAYLOAD:-}
 ENFORCE_EAGER=${ENFORCE_EAGER:-0}
 LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
 TREE=${TREE:-"[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]"}
@@ -29,6 +30,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR10_METRICS="$FR10_METRICS" \
   -e FR10_DECODE_MODE_DEFAULT="$FR10_DECODE_MODE_DEFAULT" \
   -e FR10_TREE_GDN_COUNTER_DUMP=/logs/fr10_tree_gdn_counters.json \
+  -e FR10_TREE_GDN_CAPTURE_PAYLOAD="$FR10_TREE_GDN_CAPTURE_PAYLOAD" \
   -e SPEC_CONFIG="$SPEC_CONFIG" \
   --entrypoint bash \
   "$IMAGE" \
