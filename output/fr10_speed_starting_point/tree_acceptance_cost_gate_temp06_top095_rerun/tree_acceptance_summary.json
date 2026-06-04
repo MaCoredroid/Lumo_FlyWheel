@@ -1,0 +1,48 @@
+{
+  "schema": "fr10.tree_acceptance_cost_gate.v1",
+  "spec_counter_delta": {
+    "accepted_per_draft_event": 3.6355555555555554,
+    "accepted_total": 818.0,
+    "draft_events": 225.0,
+    "per_position_counts": {
+      "0": 179.0,
+      "1": 146.0,
+      "2": 117.0,
+      "3": 99.0,
+      "4": 76.0,
+      "5": 50.0,
+      "6": 44.0,
+      "7": 40.0,
+      "8": 36.0,
+      "9": 31.0
+    },
+    "per_position_rates": {
+      "0": 0.7955555555555556,
+      "1": 0.6488888888888888,
+      "2": 0.52,
+      "3": 0.44,
+      "4": 0.3377777777777778,
+      "5": 0.2222222222222222,
+      "6": 0.19555555555555557,
+      "7": 0.17777777777777778,
+      "8": 0.16,
+      "9": 0.13777777777777778
+    }
+  },
+  "trace_summary": {
+    "accepted_events": 0,
+    "accepted_len_counts": {},
+    "accepted_token_total": 0,
+    "branch1_event_fraction_of_accepted": null,
+    "branch1_token_fraction_of_accepted": null,
+    "events_by_type": {},
+    "examples": [],
+    "parse_errors": 0,
+    "path0_event_fraction_of_accepted": null,
+    "path0_token_fraction_of_accepted": null,
+    "root_event_counts": {},
+    "root_token_counts": {},
+    "rows": 0,
+    "trace": "output/fr10_speed_starting_point/tree_acceptance_cost_gate_logs_rerun/tree_path_lcp_max.jsonl"
+  }
+}
