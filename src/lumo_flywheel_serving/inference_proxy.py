@@ -138,6 +138,15 @@ def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, An
             normalized["top_p"] = float(_force_top_p)
         except ValueError:
             pass
+    _fr10_decode_mode = os.environ.get("LUMO_PROXY_FR10_DECODE_MODE")
+    if _fr10_decode_mode:
+        extra = normalized.get("vllm_xargs")
+        if not isinstance(extra, dict):
+            extra = {}
+        else:
+            extra = dict(extra)
+        extra["fr10_decode_mode"] = _fr10_decode_mode
+        normalized["vllm_xargs"] = extra
     _max_out = os.environ.get("LUMO_PROXY_MAX_OUTPUT_TOKENS")
     if _max_out:
         try:

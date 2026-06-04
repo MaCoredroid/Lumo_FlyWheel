@@ -77,6 +77,24 @@ def test_normalize_responses_request_payload_preserves_existing_tool_shapes() ->
     assert normalized == payload
 
 
+def test_normalize_responses_request_payload_forces_fr10_decode_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LUMO_PROXY_FR10_DECODE_MODE", "tree_mtp")
+    payload = {
+        "model": "qwen3.6-27b",
+        "vllm_xargs": {"trace_id": "keep-me"},
+    }
+
+    normalized = normalize_responses_request_payload(payload)
+
+    assert normalized["vllm_xargs"] == {
+        "trace_id": "keep-me",
+        "fr10_decode_mode": "tree_mtp",
+    }
+    assert payload["vllm_xargs"] == {"trace_id": "keep-me"}
+
+
 def test_normalize_responses_request_payload_adds_reasoning_status() -> None:
     payload = {
         "model": "qwen3.5-27b",
