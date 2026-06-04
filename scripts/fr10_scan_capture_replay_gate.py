@@ -8,6 +8,7 @@ on the fixed captured inputs, then reports exact replay and numeric parity.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -20,7 +21,16 @@ sys.path.insert(0, str(REPO / "src"))
 
 from lumo_flywheel_serving.fr10_gdn_tree_kernel import Tree, launch_tree_gdn_prepared  # noqa: E402
 
-from scripts.fr10_phase4_real_tensor_validation import native_update_serial_per_path  # noqa: E402
+_VALIDATION_PATH = REPO / "scripts" / "fr10_phase4_real_tensor_validation.py"
+_validation_spec = importlib.util.spec_from_file_location(
+    "fr10_phase4_real_tensor_validation", _VALIDATION_PATH
+)
+if _validation_spec is None or _validation_spec.loader is None:
+    raise RuntimeError(f"cannot load {_VALIDATION_PATH}")
+_validation = importlib.util.module_from_spec(_validation_spec)
+sys.modules["fr10_phase4_real_tensor_validation"] = _validation
+_validation_spec.loader.exec_module(_validation)
+native_update_serial_per_path = _validation.native_update_serial_per_path
 
 
 def _tree_masks(parent: list[int], device: torch.device, n_pad: int) -> tuple[torch.Tensor, torch.Tensor]:
