@@ -70,6 +70,14 @@ def log(msg: str) -> None:
     print(f"[exp {datetime.now(timezone.utc).strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
+def current_git_branch() -> str:
+    r = sh(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(REPO))
+    branch = (r.stdout or "").strip()
+    if r.returncode != 0 or not branch or branch == "HEAD":
+        sys.exit(f"cannot determine current git branch:\n{r.stdout}{r.stderr}")
+    return branch
+
+
 def _local_file_size(path: str) -> int:
     p = Path(path)
     return p.stat().st_size if p.is_file() else 0
@@ -620,10 +628,10 @@ def commit_task(args, task_id: str, verdict: str, joined: Path | None) -> None:
     fb_desc = f", row_mode {args.row_mode}, spines {args.spines}" if args.config == "Fb" else ""
     msg = (f"{args.suite} {args.exp_tag} (config {args.config}{fb_desc}, temp {args.temp or 'as-set'}, "
            f"c={args.concurrency}) +task {task_id} verdict={verdict}\n\n"
-           f"Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>")
+           f"Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>")
     c = sh(["git", "commit", "-q", "-m", msg], cwd=str(REPO))
     if c.returncode == 0:
-        push = sh(["git", "push", "origin", "main"], cwd=str(REPO))
+        push = sh(["git", "push", "origin", current_git_branch()], cwd=str(REPO))
         log(f"committed+pushed {task_id} (verdict={verdict}); push: {push.stdout.strip().splitlines()[-1] if push.stdout.strip() else push.stderr.strip().splitlines()[-1] if push.stderr.strip() else 'ok'}")
     else:
         log(f"commit {task_id}: nothing to commit (already tracked?)")
@@ -656,11 +664,11 @@ def commit_final_artifacts(args, joined: Path | None) -> None:
         sh(["bash", "-lc", f"git add -f {p} 2>/dev/null"], cwd=str(REPO))
     msg = (
         f"Finalize {args.suite} {args.exp_tag} artifacts\n\n"
-        f"Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>"
+        f"Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
     )
     c = sh(["git", "commit", "-q", "-m", msg], cwd=str(REPO))
     if c.returncode == 0:
-        push = sh(["git", "push", "origin", "main"], cwd=str(REPO))
+        push = sh(["git", "push", "origin", current_git_branch()], cwd=str(REPO))
         tail = (
             push.stdout.strip().splitlines()[-1]
             if push.stdout.strip()
