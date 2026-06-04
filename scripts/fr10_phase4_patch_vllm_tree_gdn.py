@@ -236,9 +236,16 @@ def _patch_gdn_linear() -> bool:
     conv_replacement = '''        if spec_sequence_masks is not None:
             # spec_state_indices_tensor is always set when spec_sequence_masks is set
             assert spec_state_indices_tensor is not None
+            try:
+                from vllm.v1.sample import rejection_sampler as _fr10_rs_mode
+                _fr10_active_decode_mode = getattr(
+                    _fr10_rs_mode, "_FR10_DECODE_MODE", _FR10_DECODE_MODE
+                )
+            except Exception:
+                _fr10_active_decode_mode = _FR10_DECODE_MODE
             use_fr10_tree_conv = (
                 os.environ.get("FR10_ENABLE_TREE_GDN") == "1"
-                and _FR10_DECODE_MODE == "tree_mtp"
+                and _fr10_active_decode_mode == "tree_mtp"
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
                 and attn_metadata.num_prefills == 0
                 and attn_metadata.num_decodes == 0
@@ -340,9 +347,16 @@ def _patch_gdn_linear() -> bool:
             )
 '''
     replacement = '''        if spec_sequence_masks is not None:
+            try:
+                from vllm.v1.sample import rejection_sampler as _fr10_rs_mode
+                _fr10_active_decode_mode = getattr(
+                    _fr10_rs_mode, "_FR10_DECODE_MODE", _FR10_DECODE_MODE
+                )
+            except Exception:
+                _fr10_active_decode_mode = _FR10_DECODE_MODE
             use_fr10_tree = (
                 os.environ.get("FR10_ENABLE_TREE_GDN") == "1"
-                and _FR10_DECODE_MODE == "tree_mtp"
+                and _fr10_active_decode_mode == "tree_mtp"
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
                 and attn_metadata.num_prefills == 0
                 and attn_metadata.num_decodes == 0
