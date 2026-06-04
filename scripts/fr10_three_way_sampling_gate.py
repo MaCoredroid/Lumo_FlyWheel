@@ -78,7 +78,7 @@ def _floor_relative_rows(
     return out
 
 
-def _lossy_artifact(src: str, out: str, *, token_id: int = 42424242) -> str:
+def _garbage_lossy_artifact(src: str, out: str, *, token_id: int = 42424242) -> str:
     data = json.loads(Path(src).read_text(encoding="utf-8"))
     lossy = copy.deepcopy(data)
     lossy["arm"] = f"{data.get('arm', 'unknown')}_forced_lossy"
@@ -94,6 +94,61 @@ def _lossy_artifact(src: str, out: str, *, token_id: int = 42424242) -> str:
         else:
             token_ids = [token_id]
         row["token_ids"] = token_ids
+    path = Path(out)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(lossy, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return str(path)
+
+
+def _subtle_lossy_artifact(
+    src: str,
+    out: str,
+    *,
+    positions: int = 8,
+    bias_fraction: float = 0.15,
+) -> str:
+    data = json.loads(Path(src).read_text(encoding="utf-8"))
+    lossy = copy.deepcopy(data)
+    lossy["arm"] = f"{data.get('arm', 'unknown')}_subtle_biased_selector"
+    lossy["fr10_known_lossy_control"] = {
+        "kind": "in-vocab-top-token-bias",
+        "source": src,
+        "positions": positions,
+        "bias_fraction": bias_fraction,
+        "description": (
+            "For each prompt/position, redirect a small deterministic fraction "
+            "of non-top samples to the prompt-local top token. This simulates a "
+            "realistic selector bias while keeping tokens in-vocabulary."
+        ),
+    }
+    records = lossy.get("records", [])
+    by_prompt: dict[int, list[dict[str, Any]]] = {}
+    for row in records:
+        by_prompt.setdefault(int(row.get("prompt_id", 0)), []).append(row)
+
+    for prompt_rows in by_prompt.values():
+        for pos in range(positions):
+            counts: dict[int, int] = {}
+            for row in prompt_rows:
+                ids = row.get("token_ids") or []
+                if pos < len(ids):
+                    token = int(ids[pos])
+                    counts[token] = counts.get(token, 0) + 1
+            if len(counts) < 2:
+                continue
+            top_token = max(counts.items(), key=lambda item: (item[1], -item[0]))[0]
+            candidates = [
+                row
+                for row in prompt_rows
+                if pos < len(row.get("token_ids") or [])
+                and int((row.get("token_ids") or [])[pos]) != top_token
+            ]
+            take = max(1, int(round(len(prompt_rows) * bias_fraction)))
+            for row in candidates[:take]:
+                ids = list(row.get("token_ids") or [])
+                ids[pos] = top_token
+                row["token_ids"] = ids
+
     path = Path(out)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(lossy, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -134,21 +189,39 @@ def main() -> int:
     parser.add_argument("--positions", type=int, default=32)
     parser.add_argument("--top", type=int, default=8)
     parser.add_argument(
-        "--lossy-out",
+        "--garbage-lossy-out",
         default="output/fr10_three_way_sampling_gate/known_lossy_forced_first_token.json",
     )
+    parser.add_argument(
+        "--subtle-lossy-out",
+        default="output/fr10_three_way_sampling_gate/known_lossy_subtle_biased_selector.json",
+    )
+    parser.add_argument("--subtle-lossy-fraction", type=float, default=0.15)
+    parser.add_argument("--subtle-lossy-positions", type=int, default=8)
     args = parser.parse_args()
 
     same = _distance(args.non_mtp_run1, args.non_mtp_run2, positions=args.positions, top=args.top)
     naive = _distance(args.naive_mtp, args.non_mtp_run1, positions=args.positions, top=args.top)
     tree = _distance(args.tree_mtp, args.non_mtp_run1, positions=args.positions, top=args.top)
-    lossy_path = _lossy_artifact(args.tree_mtp, args.lossy_out)
-    lossy = _distance(lossy_path, args.non_mtp_run1, positions=args.positions, top=args.top)
+    garbage_lossy_path = _garbage_lossy_artifact(args.tree_mtp, args.garbage_lossy_out)
+    subtle_lossy_path = _subtle_lossy_artifact(
+        args.tree_mtp,
+        args.subtle_lossy_out,
+        positions=args.subtle_lossy_positions,
+        bias_fraction=args.subtle_lossy_fraction,
+    )
+    garbage_lossy = _distance(
+        garbage_lossy_path, args.non_mtp_run1, positions=args.positions, top=args.top
+    )
+    subtle_lossy = _distance(
+        subtle_lossy_path, args.non_mtp_run1, positions=args.positions, top=args.top
+    )
 
     same_tv = float(same["summary"]["max_aggregate_tv"])
     naive_tv = float(naive["summary"]["max_aggregate_tv"])
     tree_tv = float(tree["summary"]["max_aggregate_tv"])
-    lossy_tv = float(lossy["summary"]["max_aggregate_tv"])
+    garbage_lossy_tv = float(garbage_lossy["summary"]["max_aggregate_tv"])
+    subtle_lossy_tv = float(subtle_lossy["summary"]["max_aggregate_tv"])
     floor_tv = max(same_tv, naive_tv)
 
     floor_rows = _floor_relative_rows(cross=tree, same=same, baseline=naive)
@@ -157,12 +230,14 @@ def main() -> int:
     state = _state_parity_report(args.real_tensor_validation)
     negative = evaluate_negative_controls(default_fr10_negative_controls())
 
-    lossy_detected = lossy_tv > floor_tv
+    garbage_lossy_detected = garbage_lossy_tv > floor_tv
+    subtle_lossy_detected = subtle_lossy_tv > floor_tv
     passed = bool(
         tree_tv <= floor_tv
         and max_tree_minus_same <= max(0.0, naive_tv - same_tv)
         and state["passed"]
-        and lossy_detected
+        and garbage_lossy_detected
+        and subtle_lossy_detected
     )
     result = {
         "schema": "fr10.three_way_sampling_gate.v1",
@@ -172,7 +247,8 @@ def main() -> int:
             "naive_mtp": args.naive_mtp,
             "tree_mtp": args.tree_mtp,
             "real_tensor_validation": args.real_tensor_validation,
-            "known_lossy": lossy_path,
+            "known_lossy_garbage": garbage_lossy_path,
+            "known_lossy_subtle": subtle_lossy_path,
         },
         "positions": args.positions,
         "top": args.top,
@@ -180,7 +256,8 @@ def main() -> int:
             "non_mtp_run1_vs_run2": same["summary"],
             "naive_mtp_vs_non_mtp": naive["summary"],
             "tree_mtp_vs_non_mtp": tree["summary"],
-            "known_lossy_vs_non_mtp": lossy["summary"],
+            "known_lossy_garbage_vs_non_mtp": garbage_lossy["summary"],
+            "known_lossy_subtle_vs_non_mtp": subtle_lossy["summary"],
         },
         "floor_relative": {
             "same_regime_max_aggregate_tv": same_tv,
@@ -195,10 +272,16 @@ def main() -> int:
         },
         "state_parity_l1": state,
         "known_lossy_power": {
-            "passed": lossy_detected,
-            "known_lossy_max_aggregate_tv": lossy_tv,
+            "passed": garbage_lossy_detected and subtle_lossy_detected,
+            "garbage_lossy_detected": garbage_lossy_detected,
+            "subtle_lossy_detected": subtle_lossy_detected,
+            "garbage_lossy_max_aggregate_tv": garbage_lossy_tv,
+            "subtle_lossy_max_aggregate_tv": subtle_lossy_tv,
             "serving_floor_max_aggregate_tv": floor_tv,
-            "margin_over_floor": lossy_tv - floor_tv,
+            "garbage_margin_over_floor": garbage_lossy_tv - floor_tv,
+            "subtle_margin_over_floor": subtle_lossy_tv - floor_tv,
+            "subtle_lossy_fraction": args.subtle_lossy_fraction,
+            "subtle_lossy_positions": args.subtle_lossy_positions,
         },
         "negative_controls_l1": {
             "passed": negative.passed,
@@ -218,8 +301,10 @@ def main() -> int:
         )
     if not state["passed"]:
         result["violations"].extend(state["violations"])
-    if not lossy_detected:
-        result["violations"].append("known-lossy control was not above serving floor")
+    if not garbage_lossy_detected:
+        result["violations"].append("garbage known-lossy control was not above serving floor")
+    if not subtle_lossy_detected:
+        result["violations"].append("subtle known-lossy control was not above serving floor")
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
