@@ -1,0 +1,66 @@
+{
+  "clean_control": {
+    "max_output_abs": 7.450580596923828e-09,
+    "max_state_abs": 7.62939453125e-06,
+    "report": {
+      "metrics": {
+        "max_output_abs": 7.450580596923828e-09,
+        "max_state_abs": 7.62939453125e-06,
+        "rows": 1,
+        "violations_observed": []
+      },
+      "passed": false,
+      "violations": [
+        "mixed-mode negative control did not contaminate state parity; isolation test has no power"
+      ]
+    }
+  },
+  "description": "Live FR10 scheduler defers mixed decode modes, so this is the powered negative control for the forbidden mixed-routing case.",
+  "forced_mixed_contamination": {
+    "max_output_abs": 0.5618356466293335,
+    "max_state_abs": 0.5618356466293335,
+    "output_threshold": 2e-05,
+    "report": {
+      "metrics": {
+        "max_output_abs": 0.5618356466293335,
+        "max_state_abs": 0.5618356466293335,
+        "rows": 1,
+        "violations_observed": [
+          "state parity fail layer=0 node=2 delta=0.561836",
+          "output parity fail layer=0 node=2 delta=0.561836"
+        ]
+      },
+      "passed": true,
+      "violations": []
+    },
+    "source": "docs/reports/auto_research/fr10-phase4-real-tensor-derisk-20260603.md",
+    "state_threshold": 2e-05,
+    "state_threshold_ratio": 28091.78233146667
+  },
+  "homogeneous_scheduler_decision": {
+    "accepted_indices": [
+      0,
+      2
+    ],
+    "deferred_indices": [
+      1
+    ],
+    "mixed": true,
+    "mode": "tree_mtp"
+  },
+  "mixed_modes": [
+    "tree_mtp",
+    "naive_mtp",
+    "tree_mtp"
+  ],
+  "schema": "fr10.mixed_mode_contamination_control.v1",
+  "thresholds": {
+    "accumulation_slope_abs": 1e-06,
+    "chi_square_slack": 8.0,
+    "flip_rate_slack": 0.0625,
+    "margin_indifference": 6e-05,
+    "output_abs": 2e-05,
+    "position_tv_slack": 0.25,
+    "state_abs": 2e-05
+  }
+}
