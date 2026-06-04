@@ -52,14 +52,29 @@ def test_phase4_handoff_logs_accepted_bank_row_alias() -> None:
     assert '"value_spec": value_spec[\n                                            0, start:end' in text
 
 
-def test_phase4_seeds_next_tree_read_base_from_accepted_row() -> None:
+def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
 
     assert "_FR10_TREE_READ_PREV" in text
+    assert "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS" in text
+    assert "_fr10_seed_path_tensor = torch.tensor" in text
+    assert "fr10_b, :_fr10_seed_path_len" in text
+    assert "h0_num_accepted_tokens=num_accepted_tokens" in text
+    assert "h0_use_accepted_column=True" in text
+    assert "accepted_linear_read_col" in text
+    assert "linear_column_coincide" in text
+    assert "_fr10_read_col" in text
     assert "spec_state_indices_tensor[\n                                    _fr10_seed_b, 0" in text
-    assert "spec_state_indices_tensor[\n                                    fr10_b, 0" in text
-    assert "_fr10_prev_read[\"conv_rows\"]" in text
-    assert "_fr10_prev_read[\"tree_state\"]" in text
+    assert "spec_state_indices_tensor[\n                                    fr10_b, 0" not in text
+
+
+def test_phase4_tree_kernel_gathers_h0_from_accepted_linear_column() -> None:
+    text = Path("src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py").read_text()
+
+    assert "h0_num_accepted_tokens" in text
+    assert "H0_USE_ACCEPTED_COLUMN" in text
+    assert "H0_BATCH_INDEX" in text
+    assert "tl.load(h0_num_accepted_tokens + H0_BATCH_INDEX)" in text
 
 
 def test_speed_launcher_defaults_to_nine_node_caterpillar() -> None:

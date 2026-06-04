@@ -90,6 +90,7 @@ def _tree_gdn_kernel(
     beta,
     h0,
     h0_indices,
+    h0_num_accepted_tokens,
     invocation_counter,
     strict_mask,
     visible_mask,
@@ -106,7 +107,9 @@ def _tree_gdn_kernel(
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
     H0_IS_BANK: tl.constexpr,
     H0_INDEX_ROW: tl.constexpr,
+    H0_BATCH_INDEX: tl.constexpr,
     H0_BANK_STRIDE: tl.constexpr,
+    H0_USE_ACCEPTED_COLUMN: tl.constexpr,
     COUNT_INVOCATION: tl.constexpr,
 ):
     pid_vh = tl.program_id(0)
@@ -152,7 +155,13 @@ def _tree_gdn_kernel(
     ).to(tl.float32)
     h0_base = h0
     if H0_IS_BANK:
-        h0_index = tl.load(h0_indices + H0_INDEX_ROW)
+        h0_column = 0
+        if H0_USE_ACCEPTED_COLUMN:
+            h0_column = tl.maximum(
+                tl.load(h0_num_accepted_tokens + H0_BATCH_INDEX).to(tl.int64) - 1,
+                0,
+            )
+        h0_index = tl.load(h0_indices + H0_INDEX_ROW + h0_column)
         h0_base = h0 + h0_index * H0_BANK_STRIDE
     b_h0 = tl.load(
         h0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
@@ -284,8 +293,11 @@ def launch_tree_gdn_prepared(
     output_scale: float = 1.0,
     use_qk_l2norm_in_kernel: bool = False,
     h0_indices: torch.Tensor | None = None,
+    h0_num_accepted_tokens: torch.Tensor | None = None,
     h0_is_bank: bool = False,
     h0_index_row: int = 0,
+    h0_batch_index: int = 0,
+    h0_use_accepted_column: bool = False,
     invocation_counter: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Launch with precomputed graph-safe tree descriptors."""
@@ -322,10 +334,21 @@ def launch_tree_gdn_prepared(
             )
         if h0_indices is None:
             raise ValueError("h0_indices is required when h0_is_bank=True")
+        if h0_use_accepted_column and h0_num_accepted_tokens is None:
+            raise ValueError(
+                "h0_num_accepted_tokens is required when h0_use_accepted_column=True"
+            )
         if h0_index_row < 0 or h0_index_row >= h0_indices.numel():
             raise ValueError(
                 f"h0_index_row {h0_index_row} outside h0_indices numel {h0_indices.numel()}"
             )
+        if h0_use_accepted_column:
+            if h0_batch_index < 0 or h0_batch_index >= h0_num_accepted_tokens.numel():
+                raise ValueError(
+                    "h0_batch_index "
+                    f"{h0_batch_index} outside num_accepted_tokens numel "
+                    f"{h0_num_accepted_tokens.numel()}"
+                )
         if h0_indices.is_cuda:
             # Avoid GPU->CPU sync during capture. This range check is for eager
             # launches and debug repros; graph-captured serving relies on the
@@ -342,6 +365,8 @@ def launch_tree_gdn_prepared(
         h0_bank_stride = 0
     if h0_indices is None:
         h0_indices = strict_mask
+    if h0_num_accepted_tokens is None:
+        h0_num_accepted_tokens = strict_mask
     count_invocation = invocation_counter is not None
     if invocation_counter is None:
         invocation_counter = strict_mask
@@ -369,6 +394,7 @@ def launch_tree_gdn_prepared(
         beta,
         h0,
         h0_indices,
+        h0_num_accepted_tokens,
         invocation_counter,
         strict_mask,
         visible_mask,
@@ -385,7 +411,9 @@ def launch_tree_gdn_prepared(
         USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
         H0_IS_BANK=h0_is_bank,
         H0_INDEX_ROW=h0_index_row,
+        H0_BATCH_INDEX=h0_batch_index,
         H0_BANK_STRIDE=h0_bank_stride,
+        H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
         COUNT_INVOCATION=count_invocation,
     )
     return out, state

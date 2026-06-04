@@ -368,6 +368,9 @@ def _patch_gdn_linear() -> bool:
                     _fr10_lens = globals().get(
                         "_LUMO_FA_LAST_ACCEPTED_TREE_LENS", []
                     )
+                    _fr10_node_paths = globals().get(
+                        "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS", []
+                    )
                     for _fr10_seed_b in range(attn_metadata.num_spec_decodes):
                         _fr10_prev_read = _fr10_prev_read_all.get(
                             (str(self.prefix), int(_fr10_seed_b))
@@ -389,6 +392,8 @@ def _patch_gdn_linear() -> bool:
                                     int(_fr10_prev_read["tree_n"]) - 1,
                                 ),
                             )
+                            # The causal-conv update reads the base row and
+                            # applies its own accepted-token temporal offset.
                             conv_state.index_copy_(
                                 0,
                                 spec_state_indices_tensor[
@@ -398,8 +403,17 @@ def _patch_gdn_linear() -> bool:
                                     _fr10_seed_row : _fr10_seed_row + 1
                                 ].to(dtype=conv_state.dtype),
                             )
-                except Exception:
-                    pass
+                except Exception as _fr10_seed_conv_exc:
+                    if (
+                        _fr10_tree_conv_expected
+                        and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
+                    ):
+                        raise RuntimeError(
+                            "FR10 tree causal-conv accepted-base seed failed: "
+                            + type(_fr10_seed_conv_exc).__name__
+                            + ":"
+                            + str(_fr10_seed_conv_exc)
+                        ) from _fr10_seed_conv_exc
                 _fr10_prior_conv_state_bank = torch.index_select(
                     conv_state,
                     0,
@@ -947,25 +961,42 @@ def _patch_gdn_linear() -> bool:
                     start = fr10_b * tree_n
                     end = start + tree_n
                     tree_state = tree_state_all[fr10_b]
+                    _fr10_read_col = 0
+                    try:
+                        if num_accepted_tokens is not None:
+                            _fr10_read_col = max(
+                                0,
+                                min(
+                                    int(num_accepted_tokens[fr10_b].detach().cpu().item()) - 1,
+                                    int(spec_state_indices_tensor.size(-1)) - 1,
+                                ),
+                            )
+                    except Exception:
+                        _fr10_read_col = 0
                     _fr10_capture_scan_payload = (
                         os.environ.get("FR10_TREE_GDN_CAPTURE_PAYLOAD")
                         and not globals().get("_FR10_TREE_GDN_CAPTURE_DONE", False)
                         and fr10_b == 0
                     )
+                    _fr10_capture_state_index = None
+                    _fr10_capture_h0 = None
                     if _fr10_capture_scan_payload:
                         _fr10_capture_state_index = int(
-                            spec_state_indices_tensor[fr10_b, 0].detach().cpu().item()
+                            spec_state_indices_tensor[fr10_b, _fr10_read_col]
+                            .detach()
+                            .cpu()
+                            .item()
                         )
                         _fr10_capture_h0 = (
                             ssm_state[_fr10_capture_state_index].detach().cpu().clone()
                         )
-                    _fr10_commit_handoff_active = (
-                        os.environ.get("FR10_TREE_GDN_COMMIT_HANDOFF_LOG")
+                    _fr10_commit_handoff_active = os.environ.get(
+                        "FR10_TREE_GDN_COMMIT_HANDOFF_LOG"
                     )
                     if _fr10_commit_handoff_active:
                         try:
                             _fr10_commit_state_index = int(
-                                spec_state_indices_tensor[fr10_b, 0]
+                                spec_state_indices_tensor[fr10_b, _fr10_read_col]
                                 .detach()
                                 .cpu()
                                 .item()
@@ -985,6 +1016,9 @@ def _patch_gdn_linear() -> bool:
                         _fr10_lens = globals().get(
                             "_LUMO_FA_LAST_ACCEPTED_TREE_LENS", []
                         )
+                        _fr10_node_paths = globals().get(
+                            "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS", []
+                        )
                         _fr10_has_accept = (
                             _fr10_lens is not None
                             and fr10_b < len(_fr10_lens)
@@ -1002,33 +1036,52 @@ def _patch_gdn_linear() -> bool:
                                     int(_fr10_prev_read["tree_n"]) - 1,
                                 ),
                             )
+                            _fr10_seed_path = (
+                                [int(_x) for _x in _fr10_node_paths[fr10_b]]
+                                if fr10_b < len(_fr10_node_paths)
+                                else [int(_fr10_seed_row)]
+                            )
+                            _fr10_seed_path_len = min(
+                                len(_fr10_seed_path),
+                                int(_fr10_lens[fr10_b]),
+                                int(spec_state_indices_tensor.size(-1)),
+                                int(_fr10_prev_read["tree_n"]),
+                            )
+                            if _fr10_seed_path_len <= 0:
+                                raise RuntimeError("accepted path is empty")
+                            _fr10_seed_path_tensor = torch.tensor(
+                                _fr10_seed_path[:_fr10_seed_path_len],
+                                dtype=torch.long,
+                                device=ssm_state.device,
+                            )
+                            _fr10_seed_dest = spec_state_indices_tensor[
+                                fr10_b, :_fr10_seed_path_len
+                            ].to(torch.long)
+                            # Stock FLA spec verify reads initial SSM state from
+                            # linear column num_accepted-1; caterpillar node ids
+                            # are not linear after the first branch.
                             ssm_state.index_copy_(
                                 0,
+                                _fr10_seed_dest,
+                                _fr10_prev_read["tree_state"]
+                                .index_select(0, _fr10_seed_path_tensor)
+                                .to(dtype=ssm_state.dtype),
+                            )
+                            _fr10_seed_state_index = int(
                                 spec_state_indices_tensor[
-                                    fr10_b, 0
-                                ].to(torch.long).view(1),
-                                _fr10_prev_read["tree_state"][
-                                    _fr10_seed_row : _fr10_seed_row + 1
-                                ].to(dtype=ssm_state.dtype),
+                                    fr10_b, _fr10_read_col
+                                ]
+                                .detach()
+                                .cpu()
+                                .item()
                             )
                             if _fr10_commit_handoff_active:
                                 _fr10_commit_h0 = (
-                                    ssm_state[_fr10_commit_state_index]
-                                    .detach()
-                                    .clone()
+                                    ssm_state[_fr10_commit_state_index].detach().clone()
                                 )
                             if _fr10_capture_scan_payload:
                                 _fr10_capture_h0 = (
-                                    ssm_state[
-                                        int(
-                                            spec_state_indices_tensor[
-                                                fr10_b, 0
-                                            ]
-                                            .detach()
-                                            .cpu()
-                                            .item()
-                                        )
-                                    ]
+                                    ssm_state[_fr10_capture_state_index]
                                     .detach()
                                     .cpu()
                                     .clone()
@@ -1051,20 +1104,16 @@ def _patch_gdn_linear() -> bool:
                                     )
                                 )
                                 if _fr10_seed_log and _fr10_seed_count < _fr10_seed_limit:
-                                    _fr10_seed_state_index = int(
-                                        spec_state_indices_tensor[
-                                            fr10_b, 0
-                                        ].detach().cpu().item()
-                                    )
                                     _fr10_seed_accepted_bank_row = None
                                     _fr10_prev_spec_indices = _fr10_prev_read.get(
                                         "spec_state_indices"
                                     )
                                     if _fr10_prev_spec_indices is not None:
                                         _fr10_seed_accepted_bank_row = int(
-                                            _fr10_prev_spec_indices[
-                                                int(_fr10_seed_row)
-                                            ].detach().cpu().item()
+                                            _fr10_prev_spec_indices[int(_fr10_seed_row)]
+                                            .detach()
+                                            .cpu()
+                                            .item()
                                         )
                                     _fr10_seed_next_ssm = ssm_state[
                                         _fr10_seed_state_index
@@ -1085,7 +1134,12 @@ def _patch_gdn_linear() -> bool:
                                         (
                                             _fr10_seed_next_ssm.float()
                                             - _fr10_seed_expected_ssm.float()
-                                        ).abs().max().detach().cpu().item()
+                                        )
+                                        .abs()
+                                        .max()
+                                        .detach()
+                                        .cpu()
+                                        .item()
                                     )
                                     _fr10_seed_conv_max = None
                                     if _fr10_seed_next_conv is not None:
@@ -1093,7 +1147,12 @@ def _patch_gdn_linear() -> bool:
                                             (
                                                 _fr10_seed_next_conv.float()
                                                 - _fr10_seed_expected_conv.float()
-                                            ).abs().max().detach().cpu().item()
+                                            )
+                                            .abs()
+                                            .max()
+                                            .detach()
+                                            .cpu()
+                                            .item()
                                         )
                                     with open(_fr10_seed_log, "a", buffering=1) as _fr10_fh:
                                         _fr10_fh.write(
@@ -1104,38 +1163,38 @@ def _patch_gdn_linear() -> bool:
                                                     "ts": round(_fr10_seed_time.time(), 4),
                                                     "layer_prefix": str(self.prefix),
                                                     "batch_index": int(fr10_b),
-                                                    "prev_accepted_len": int(
-                                                        _fr10_lens[fr10_b]
-                                                    ),
-                                                    "accepted_node_row": int(
-                                                        _fr10_seed_row
+                                                    "prev_accepted_len": int(_fr10_lens[fr10_b]),
+                                                    "accepted_node_row": int(_fr10_seed_row),
+                                                    "accepted_node_path": [
+                                                        int(_x)
+                                                        for _x in _fr10_seed_path[
+                                                            :_fr10_seed_path_len
+                                                        ]
+                                                    ],
+                                                    "accepted_linear_read_col": int(
+                                                        _fr10_seed_path_len - 1
                                                     ),
                                                     "accepted_spec_state_bank_row": (
                                                         None
-                                                        if _fr10_seed_accepted_bank_row
-                                                        is None
-                                                        else int(
-                                                            _fr10_seed_accepted_bank_row
-                                                        )
+                                                        if _fr10_seed_accepted_bank_row is None
+                                                        else int(_fr10_seed_accepted_bank_row)
                                                     ),
                                                     "accepted_bank_row": (
                                                         None
-                                                        if _fr10_seed_accepted_bank_row
-                                                        is None
-                                                        else int(
-                                                            _fr10_seed_accepted_bank_row
-                                                        )
+                                                        if _fr10_seed_accepted_bank_row is None
+                                                        else int(_fr10_seed_accepted_bank_row)
                                                     ),
                                                     "next_read_bank_row": int(
                                                         _fr10_seed_state_index
                                                     ),
                                                     "address_coincide": bool(
-                                                        _fr10_seed_accepted_bank_row
-                                                        is not None
-                                                        and int(
-                                                            _fr10_seed_accepted_bank_row
-                                                        )
+                                                        _fr10_seed_accepted_bank_row is not None
+                                                        and int(_fr10_seed_accepted_bank_row)
                                                         == int(_fr10_seed_state_index)
+                                                    ),
+                                                    "linear_column_coincide": bool(
+                                                        _fr10_seed_path_len
+                                                        == int(_fr10_lens[fr10_b])
                                                     ),
                                                     "state_coincide": bool(
                                                         _fr10_seed_ssm_max == 0.0
@@ -1159,9 +1218,6 @@ def _patch_gdn_linear() -> bool:
                                         and _fr10_prev_read.get("query_spec") is not None
                                         and _fr10_prev_read.get("h0_cpu") is not None
                                     ):
-                                        _fr10_node_paths = globals().get(
-                                            "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS", []
-                                        )
                                         _fr10_token_ids = globals().get(
                                             "_LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS", []
                                         )
@@ -1172,16 +1228,12 @@ def _patch_gdn_linear() -> bool:
                                                 "batch_index": int(fr10_b),
                                                 "accepted_len": int(_fr10_lens[fr10_b]),
                                                 "accepted_node_id": int(_fr10_seed_row),
-                                                "accepted_node_path": (
-                                                    [
-                                                        int(_x)
-                                                        for _x in _fr10_node_paths[
-                                                            fr10_b
-                                                        ]
+                                                "accepted_node_path": [
+                                                    int(_x)
+                                                    for _x in _fr10_seed_path[
+                                                        :_fr10_seed_path_len
                                                     ]
-                                                    if fr10_b < len(_fr10_node_paths)
-                                                    else [int(_fr10_seed_row)]
-                                                ),
+                                                ],
                                                 "accepted_token_ids": (
                                                     [
                                                         int(_x)
@@ -1196,13 +1248,9 @@ def _patch_gdn_linear() -> bool:
                                                 "output_scale": float(
                                                     _fr10_prev_read["output_scale"]
                                                 ),
-                                                "query_spec": _fr10_prev_read[
-                                                    "query_spec"
-                                                ],
+                                                "query_spec": _fr10_prev_read["query_spec"],
                                                 "key_spec": _fr10_prev_read["key_spec"],
-                                                "value_spec": _fr10_prev_read[
-                                                    "value_spec"
-                                                ],
+                                                "value_spec": _fr10_prev_read["value_spec"],
                                                 "a": _fr10_prev_read["a"],
                                                 "b": _fr10_prev_read["b"],
                                                 "A_log": _fr10_prev_read["A_log"],
@@ -1229,19 +1277,13 @@ def _patch_gdn_linear() -> bool:
                                                 ),
                                                 "accepted_spec_state_bank_row": (
                                                     None
-                                                    if _fr10_seed_accepted_bank_row
-                                                    is None
-                                                    else int(
-                                                        _fr10_seed_accepted_bank_row
-                                                    )
+                                                    if _fr10_seed_accepted_bank_row is None
+                                                    else int(_fr10_seed_accepted_bank_row)
                                                 ),
                                                 "accepted_bank_row": (
                                                     None
-                                                    if _fr10_seed_accepted_bank_row
-                                                    is None
-                                                    else int(
-                                                        _fr10_seed_accepted_bank_row
-                                                    )
+                                                    if _fr10_seed_accepted_bank_row is None
+                                                    else int(_fr10_seed_accepted_bank_row)
                                                 ),
                                                 "next_read_bank_row": int(
                                                     _fr10_seed_state_index
@@ -1255,16 +1297,28 @@ def _patch_gdn_linear() -> bool:
                                     globals()[
                                         "_FR10_TREE_READ_HANDOFF_LOG_COUNT"
                                     ] = _fr10_seed_count + 1
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
+                            except Exception as _fr10_seed_log_exc:
+                                if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1":
+                                    raise RuntimeError(
+                                        "FR10 tree SSM handoff logging failed: "
+                                        + type(_fr10_seed_log_exc).__name__
+                                        + ":"
+                                        + str(_fr10_seed_log_exc)
+                                    ) from _fr10_seed_log_exc
+                    except Exception as _fr10_seed_exc:
+                        if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1":
+                            raise RuntimeError(
+                                "FR10 tree SSM linear accepted-path seed failed: "
+                                + type(_fr10_seed_exc).__name__
+                                + ":"
+                                + str(_fr10_seed_exc)
+                            ) from _fr10_seed_exc
                     try:
                         _fr10_event_h0 = (
                             ssm_state[
                                 int(
                                     spec_state_indices_tensor[
-                                        fr10_b, 0
+                                        fr10_b, _fr10_read_col
                                     ].detach().cpu().item()
                                 )
                             ]
@@ -1281,8 +1335,11 @@ def _patch_gdn_linear() -> bool:
                         beta=beta_tree[start:end].contiguous(),
                         h0=ssm_state,
                         h0_indices=spec_state_indices_tensor,
+                        h0_num_accepted_tokens=num_accepted_tokens,
                         h0_is_bank=True,
                         h0_index_row=fr10_b * spec_state_indices_tensor.size(-1),
+                        h0_batch_index=fr10_b,
+                        h0_use_accepted_column=True,
                         n_actual=tree_n,
                         n_pad=tree_n_pad,
                         strict_mask=attn_metadata.fr10_tree_strict_mask,

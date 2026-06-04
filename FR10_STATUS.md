@@ -2,6 +2,16 @@
 
 Updated: 2026-06-04 03:52 UTC
 
+## CONTRACTS
+
+- Live vLLM GDN state-index construction: `/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/gdn_attn.py:254-258,276-280` builds `spec_state_indices_tensor = block_table_tensor[spec_sequence_masks_cpu, : self.num_spec + 1]`. Contract: `spec_state_indices[b, j]` is block-table column `j`, and `j` is a linear speculative position, not a tree node id.
+- Live vLLM full-graph GDN metadata: `/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/gdn_attn.py:400-404,472-475` stages `num_accepted_tokens` for spec rows and pads non-spec graph rows to `1`. Contract: FR10 tree branches must only act on eligible spec rows; prefill/plain-decode rows taking flat paths are valid.
+- Live FLA GDN spec scan: `/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fla/ops/fused_sigmoid_gating.py:102-120,157-170` reads initial recurrent state from `ssm_state_indices[i_n, num_accepted_tokens[i_n] - 1]` and stores each final state at its linear timestep column `i_t`. Contract: a tree must materialize the accepted path into linear columns `0..accepted_len-1`, so the next step's `accepted_len-1` read is the accepted final state.
+- Live vLLM Mamba/GDN block commit: `/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/mamba_utils.py:194-218,247-272` uses `curr_state_idx = num_blocks - 1 - num_speculative_blocks`; copies use linear `num_accepted_tokens - 1`, and the in-place case does not copy. Contract: when no block migration happens, the running/read block must already contain the accepted state at the consumer's linear read location.
+- Live Mamba copy helpers: `/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/mamba_utils.py:302-345` copy conv with the accepted temporal suffix and temporal/SSM from `block_ids[cur_block_idx + num_accepted_tokens - 1]`. Contract: block-migration sources are linear offsets, so FR10 tree state placement must make linear offset `accepted_len-1` equivalent to the accepted tree final state.
+- FR10 tree kernel h0 seam: `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:153-162,270-290` previously gathered h0 from a single static `h0_indices` row. Contract: with `h0_is_bank=True`, the serving call must gather from column `num_accepted_tokens[b]-1`, matching the FLA scan's downstream consumer.
+- FR10 patcher scan seam: `scripts/fr10_phase4_patch_vllm_tree_gdn.py` must seed previous accepted-path SSM rows into current linear columns before launching the tree kernel, pass `num_accepted_tokens` into the kernel h0 gather, and keep tree-node writes separate from the linear accepted-path handoff.
+
 ## Current User Decision: Conv Only
 
 - Draft-side residual confirmed on 2026-06-04 after the mixed-batch and serving-conv gates were green. A fixed-prefix draft-token parity probe was added (`scripts/fr10_draft_token_parity_probe.py`) plus final drafter tensor tracing in the FR10 patcher (`LUMO_MTP_DRAFT_TRACE_FILE`). Measurement used the same 32 reference prefixes for a spine-only/native MTP5 server and the branched caterpillar tree server. Artifact: `output/fr10_draft_parity_tree_20260604T194024Z/draft_parity_compare.json`.
