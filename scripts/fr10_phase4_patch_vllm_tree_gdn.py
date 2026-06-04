@@ -427,34 +427,18 @@ def _patch_gdn_linear() -> bool:
                             _fr10_acc = torch.nn.functional.silu(_fr10_acc)
                         _fr10_out = _fr10_acc.to(dtype=mixed_qkv_spec.dtype)
                         _fr10_tree_conv_out[_fr10_start:_fr10_end] = _fr10_out
-                        _fr10_path0_x = _fr10_x.index_select(
-                            0, _fr10_path0_node_tensor
-                        )
-                        _fr10_path0_state_source = torch.cat(
-                            (
-                                _fr10_prior_conv_state_bank[_fr10_b].transpose(0, 1),
-                                _fr10_path0_x,
-                            ),
-                            dim=0,
-                        )
-                        _fr10_store_idx = (
-                            _fr10_accept_offset
-                            + 1
-                            + torch.arange(
-                                conv_state.size(2),
-                                dtype=torch.long,
-                                device=mixed_qkv_spec.device,
-                            )
-                        )
-                        _fr10_new_state = _fr10_path0_state_source.index_select(
-                            0, _fr10_store_idx
-                        ).transpose(0, 1).to(dtype=conv_state.dtype)
+                        _fr10_node_states = _fr10_window[:, 1:, :].permute(
+                            0, 2, 1
+                        ).contiguous().to(dtype=conv_state.dtype)
                         conv_state.index_copy_(
                             0,
-                            spec_state_indices_tensor[_fr10_b : _fr10_b + 1, 0].to(
-                                torch.long
-                            ),
-                            _fr10_new_state.unsqueeze(0),
+                            spec_state_indices_tensor[
+                                _fr10_b, 1:_fr10_tree_n
+                            ].to(torch.long),
+                            _fr10_node_states[1:_fr10_tree_n],
+                        )
+                        _fr10_path0_x = _fr10_x.index_select(
+                            0, _fr10_path0_node_tensor
                         )
                         if _fr10_log_conv_diag:
                             _fr10_path0_source = torch.cat(
@@ -2018,6 +2002,52 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
     sentinel = "# LUMO_TREE_STATE_COMMIT_ROWS"
     if sentinel in text:
         return False
+
+    copy_old = '''            for state, state_copy_func in zip(kv_caches, mamba_state_copy_funcs):
+                copy_spec = state_copy_func(
+                    state, block_ids, src_block_idx, accept_token_bias + 1
+                )
+
+                src_ptrs_np[offset] = copy_spec.start_addr
+                dst_ptrs_np[offset] = state[dest_block_id].data_ptr()
+                sizes_np[offset] = copy_spec.num_elements * state.element_size()
+                offset += 1
+'''
+    copy_new = '''            for state, state_copy_func in zip(kv_caches, mamba_state_copy_funcs):
+                # LUMO_TREE_STATE_COMMIT_ROWS: tree GDN conv states are
+                # materialized per accepted node row. The stock conv copy
+                # interprets accept_token_bias as a suffix offset inside the
+                # running row, which is only valid for linear MTP.
+                copy_spec = None
+                try:
+                    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn
+                    _fr10_rows = getattr(_fr10_gdn, "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", None)
+                    _fr10_tree_conv_copy = (
+                        _fr10_rows is not None
+                        and accept_token_bias > 0
+                        and getattr(state_copy_func, "__name__", "") == "get_conv_copy_spec"
+                    )
+                    if _fr10_tree_conv_copy:
+                        src_state = state[block_ids[src_block_idx + accept_token_bias]]
+                        copy_spec = MambaCopySpec(
+                            start_addr=src_state.data_ptr(),
+                            num_elements=src_state.numel(),
+                        )
+                except Exception:
+                    copy_spec = None
+                if copy_spec is None:
+                    copy_spec = state_copy_func(
+                        state, block_ids, src_block_idx, accept_token_bias + 1
+                    )
+
+                src_ptrs_np[offset] = copy_spec.start_addr
+                dst_ptrs_np[offset] = state[dest_block_id].data_ptr()
+                sizes_np[offset] = copy_spec.num_elements * state.element_size()
+                offset += 1
+'''
+    if copy_old not in text:
+        raise RuntimeError("mamba tree conv copy hook anchor not found")
+    text = text.replace(copy_old, copy_new, 1)
 
     old = '''        if aligned_new_computed_tokens >= num_tokens_running_state:
             accept_token_bias = aligned_new_computed_tokens - num_tokens_running_state
