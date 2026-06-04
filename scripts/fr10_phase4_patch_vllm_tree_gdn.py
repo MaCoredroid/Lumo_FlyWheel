@@ -955,6 +955,36 @@ def _lumo_tree_canonical_multidraft_sample(
                     dim=0,
                 ).contiguous()
 
+        try:
+            import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+            if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                global _LUMO_TREE_SAMPLER_DEBUG_FH
+                try:
+                    _LUMO_TREE_SAMPLER_DEBUG_FH
+                except NameError:
+                    _LUMO_TREE_SAMPLER_DEBUG_FH = open(
+                        _fr10_lo.environ.get(
+                            "LUMO_TREE_SAMPLER_DEBUG_LOG",
+                            "/logs/tree_sampler_debug.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _LUMO_TREE_SAMPLER_DEBUG_FH.write(
+                    _fr10_lj.dumps({
+                        "event": "sampler_metadata",
+                        "ts": round(_fr10_lt.time(), 4),
+                        "has_tree_parent_indices": lumo_tree_parent_indices is not None,
+                        "has_tree_self_logits": lumo_tree_self_logits is not None,
+                        "all_greedy": bool(sampling_metadata.all_greedy),
+                        "num_draft_tokens": [
+                            int(_x) for _x in metadata.num_draft_tokens.detach().cpu().tolist()
+                        ],
+                    }) + chr(10)
+                )
+        except Exception:
+            pass
+
         output_token_ids = rejection_sample(
             metadata.draft_token_ids,
             metadata.num_draft_tokens,
@@ -1012,6 +1042,35 @@ def _lumo_tree_canonical_multidraft_sample(
         )
 
     if tree_parent_indices is not None and not sampling_metadata.all_greedy:
+        try:
+            import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+            if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                global _LUMO_TREE_SAMPLER_BRANCH_FH
+                try:
+                    _LUMO_TREE_SAMPLER_BRANCH_FH
+                except NameError:
+                    _LUMO_TREE_SAMPLER_BRANCH_FH = open(
+                        _fr10_lo.environ.get(
+                            "LUMO_TREE_SAMPLER_DEBUG_LOG",
+                            "/logs/tree_sampler_debug.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _LUMO_TREE_SAMPLER_BRANCH_FH.write(
+                    _fr10_lj.dumps({
+                        "event": "sampler_branch_enter",
+                        "ts": round(_fr10_lt.time(), 4),
+                        "batch_size": int(batch_size),
+                        "max_spec_len": int(max_spec_len),
+                        "has_tree_self_logits": tree_self_logits is not None,
+                        "num_draft_tokens": [
+                            int(_x) for _x in num_draft_tokens.detach().cpu().tolist()
+                        ],
+                    }) + chr(10)
+                )
+        except Exception:
+            pass
         if tree_self_logits is None:
             raise RuntimeError("FR10 sampled tree committer missing self logits")
         accepted_tree_rows = torch.empty(
@@ -1106,6 +1165,35 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
             lumo_tree_parent_indices = None
             lumo_tree_self_logits_indices = None
             lumo_draft_token_indices = None
+        try:
+            import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+            if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                global _LUMO_TREE_META_DEBUG_FH
+                try:
+                    _LUMO_TREE_META_DEBUG_FH
+                except NameError:
+                    _LUMO_TREE_META_DEBUG_FH = open(
+                        _fr10_lo.environ.get(
+                            "LUMO_TREE_SAMPLER_DEBUG_LOG",
+                            "/logs/tree_sampler_debug.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _LUMO_TREE_META_DEBUG_FH.write(
+                    _fr10_lj.dumps({
+                        "event": "gpu_tree_metadata",
+                        "ts": round(_fr10_lt.time(), 4),
+                        "mode": getattr(scheduler_output, "fr10_decode_mode", None),
+                        "has_tree_parent_indices": lumo_tree_parent_indices is not None,
+                        "has_tree_self_logits_indices": lumo_tree_self_logits_indices is not None,
+                        "has_draft_token_indices": lumo_draft_token_indices is not None,
+                        "num_draft_tokens": [int(_x) for _x in num_draft_tokens.tolist()],
+                        "cu_total": int(cu_num_draft_tokens[-1]) if len(cu_num_draft_tokens) else 0,
+                    }) + chr(10)
+                )
+        except Exception:
+            pass
 
         # TODO: Optimize the CPU -> GPU copy.
         cu_num_draft_tokens = torch.from_numpy(cu_num_draft_tokens).to(
