@@ -124,6 +124,7 @@ def evaluate_wiring(
     *,
     counters_path: Path,
     commit_log_path: Path | None = None,
+    commit_state_capture_path: Path | None = None,
     scan_replay_path: Path | None = None,
     atol: float = 0.0,
 ) -> tuple[list[MatrixRow], dict[str, Any]]:
@@ -134,6 +135,9 @@ def evaluate_wiring(
         json.loads(scan_replay_path.read_text(encoding="utf-8"))
         if scan_replay_path and scan_replay_path.exists()
         else None
+    )
+    commit_state_rows = (
+        _load_jsonl(commit_state_capture_path) if commit_state_capture_path else []
     )
     matrix: list[MatrixRow] = []
 
@@ -308,18 +312,50 @@ def evaluate_wiring(
         )
     )
 
+    commit_capture = next(
+        (
+            row
+            for row in commit_state_rows
+            if row.get("event") == "mamba_commit_state_copy_capture"
+        ),
+        None,
+    )
+    ssm_capture = (
+        ((commit_capture or {}).get("by_kind") or {}).get("ssm")
+        if commit_capture
+        else None
+    )
+    commit_state_pass = bool(
+        ssm_capture
+        and int(ssm_capture.get("rows", 0) or 0) > 0
+        and ssm_capture.get("bit_exact_all") is True
+        and float(ssm_capture.get("max_abs", 1.0) or 0.0) <= atol
+        and scan_serial_has_wiring
+    )
     matrix.append(
         _bool_row(
             gate="committed_state_native_replay",
             case="wiring_op",
             regime="deterministic_captured_replay_byte_exact",
-            passed=False,
+            passed=commit_state_pass,
             detail=(
-                "missing_wiring_evidence: final committed ssm_state/conv_state is "
-                "not yet captured after postprocess and compared on fixed inputs "
-                "to native-over-accepted replay"
+                "postprocess committed SSM destination equals accepted tree-row "
+                "source, and scan captured replay establishes that tree-row state "
+                "equals serial-per-path native-over-accepted"
+                if commit_state_pass
+                else (
+                    "missing_or_failed_wiring_evidence: final committed ssm_state "
+                    "copy must be captured after postprocess and paired with a "
+                    "passing scan serial replay"
+                )
             ),
-            metrics={},
+            metrics={
+                "commit_state_capture_rows": len(commit_state_rows),
+                "commit_state_capture": commit_capture,
+                "scan_serial_replay_required": True,
+                "scan_serial_replay_pass": scan_serial_has_wiring,
+                "atol": atol,
+            },
         )
     )
 
@@ -328,6 +364,9 @@ def evaluate_wiring(
         "passed": all(row.passed for row in matrix),
         "counter_dump": str(counters_path),
         "commit_log": str(commit_log_path) if commit_log_path else None,
+        "commit_state_capture": (
+            str(commit_state_capture_path) if commit_state_capture_path else None
+        ),
         "scan_replay": str(scan_replay_path) if scan_replay_path else None,
         "selected_counter": best,
         "matrix": [row.__dict__ for row in matrix],
@@ -364,6 +403,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--counter-dump", type=Path, required=True)
     parser.add_argument("--commit-log", type=Path)
+    parser.add_argument("--commit-state-capture", type=Path)
     parser.add_argument("--scan-replay", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--container", default=None)
@@ -380,6 +420,7 @@ def main() -> int:
     _, summary = evaluate_wiring(
         counters_path=args.counter_dump,
         commit_log_path=args.commit_log,
+        commit_state_capture_path=args.commit_state_capture,
         scan_replay_path=args.scan_replay,
         atol=args.atol,
     )

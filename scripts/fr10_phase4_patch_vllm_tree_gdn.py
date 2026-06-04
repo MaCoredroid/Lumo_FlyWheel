@@ -2623,6 +2623,32 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
                         state, block_ids, src_block_idx, accept_token_bias + 1
                     )
 
+                try:
+                    if (
+                        globals().get("_LUMO_TREE_COMMIT_CAPTURE_ACTIVE", False)
+                        and not globals().get("_LUMO_TREE_COMMIT_CAPTURE_DONE", False)
+                    ):
+                        _fr10_kind = (
+                            "conv"
+                            if getattr(state_copy_func, "__name__", "") == "get_conv_copy_spec"
+                            else "ssm"
+                        )
+                        _fr10_src_row = state[block_ids[src_block_idx + accept_token_bias]]
+                        _fr10_specs = globals().setdefault(
+                            "_LUMO_TREE_COMMIT_CAPTURE_SPECS", []
+                        )
+                        _fr10_specs.append({
+                            "kind": _fr10_kind,
+                            "state": state,
+                            "src_snapshot": _fr10_src_row.detach().clone(),
+                            "dest_block_id": int(dest_block_id),
+                            "num_elements": int(copy_spec.num_elements),
+                            "element_size": int(state.element_size()),
+                            "meta": dict(globals().get("_LUMO_TREE_COMMIT_CAPTURE_META", {})),
+                        })
+                except Exception:
+                    pass
+
                 src_ptrs_np[offset] = copy_spec.start_addr
                 dst_ptrs_np[offset] = state[dest_block_id].data_ptr()
                 sizes_np[offset] = copy_spec.num_elements * state.element_size()
@@ -2706,6 +2732,25 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
                     )
             except Exception:
                 pass
+            try:
+                import os as _fr10_lo2
+                _fr10_capture_commit = (
+                    _fr10_lo2.environ.get("FR10_TREE_GDN_CAPTURE_PAYLOAD")
+                    and int(_fr10_tree_row) > 0
+                    and not globals().get("_LUMO_TREE_COMMIT_CAPTURE_DONE", False)
+                )
+                globals()["_LUMO_TREE_COMMIT_CAPTURE_ACTIVE"] = bool(_fr10_capture_commit)
+                globals()["_LUMO_TREE_COMMIT_CAPTURE_META"] = {
+                    "req_index": int(i),
+                    "req_id": str(req_id),
+                    "native_accept_token_bias": int(_fr10_native_accept_token_bias),
+                    "tree_accepted_row": int(_fr10_tree_row),
+                    "effective_accept_token_bias": int(accept_token_bias),
+                    "src_block_idx": int(src_block_idx),
+                    "dest_block_idx": int(dest_block_idx),
+                }
+            except Exception:
+                globals()["_LUMO_TREE_COMMIT_CAPTURE_ACTIVE"] = False
             collect_mamba_copy_meta(
                 copy_bufs,
                 kv_cache_config,
@@ -2717,9 +2762,63 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
                 req_state,
                 forward_context,
             )
+            globals()["_LUMO_TREE_COMMIT_CAPTURE_ACTIVE"] = False
             if src_block_idx == dest_block_idx:
                 num_accepted_tokens_cpu[i] = 1
     do_mamba_copy_block(copy_bufs)
+    try:
+        _fr10_specs = globals().pop("_LUMO_TREE_COMMIT_CAPTURE_SPECS", [])
+        globals()["_LUMO_TREE_COMMIT_CAPTURE_ACTIVE"] = False
+        if _fr10_specs and not globals().get("_LUMO_TREE_COMMIT_CAPTURE_DONE", False):
+            import json as _fr10_lj2, os as _fr10_lo3, time as _fr10_lt2
+            torch.cuda.synchronize()
+            _fr10_by_kind = {}
+            _fr10_rows = []
+            for _fr10_spec in _fr10_specs:
+                _fr10_kind = str(_fr10_spec.get("kind", "unknown"))
+                _fr10_state = _fr10_spec["state"]
+                _fr10_dest = _fr10_state[int(_fr10_spec["dest_block_id"])]
+                _fr10_src = _fr10_spec["src_snapshot"]
+                _fr10_exact = bool(torch.equal(_fr10_dest, _fr10_src))
+                _fr10_max = float((_fr10_dest.float() - _fr10_src.float()).abs().max().item())
+                _fr10_by_kind.setdefault(_fr10_kind, {
+                    "rows": 0,
+                    "bit_exact_all": True,
+                    "max_abs": 0.0,
+                })
+                _fr10_by_kind[_fr10_kind]["rows"] += 1
+                _fr10_by_kind[_fr10_kind]["bit_exact_all"] = (
+                    bool(_fr10_by_kind[_fr10_kind]["bit_exact_all"]) and _fr10_exact
+                )
+                _fr10_by_kind[_fr10_kind]["max_abs"] = max(
+                    float(_fr10_by_kind[_fr10_kind]["max_abs"]), _fr10_max
+                )
+                if len(_fr10_rows) < 8:
+                    _fr10_row = {
+                        "kind": _fr10_kind,
+                        "bit_exact": _fr10_exact,
+                        "max_abs": _fr10_max,
+                        "num_elements": int(_fr10_spec.get("num_elements", 0)),
+                        "element_size": int(_fr10_spec.get("element_size", 0)),
+                    }
+                    _fr10_row.update(dict(_fr10_spec.get("meta", {})))
+                    _fr10_rows.append(_fr10_row)
+            _fr10_payload = {
+                "schema": "fr10.commit_state_capture.v1",
+                "event": "mamba_commit_state_copy_capture",
+                "ts": round(_fr10_lt2.time(), 4),
+                "by_kind": _fr10_by_kind,
+                "sample_rows": _fr10_rows,
+            }
+            _fr10_path = _fr10_lo3.environ.get(
+                "LUMO_TREE_COMMIT_STATE_CAPTURE_LOG",
+                "/logs/fr10_commit_state_capture.jsonl",
+            )
+            with open(_fr10_path, "a", buffering=1) as _fr10_fh:
+                _fr10_fh.write(_fr10_lj2.dumps(_fr10_payload) + chr(10))
+            globals()["_LUMO_TREE_COMMIT_CAPTURE_DONE"] = True
+    except Exception:
+        pass
 '''
     if old not in text:
         raise RuntimeError("mamba postprocess accepted-row copy anchor not found")
