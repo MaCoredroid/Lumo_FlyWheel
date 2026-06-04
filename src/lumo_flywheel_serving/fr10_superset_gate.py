@@ -1,10 +1,12 @@
-"""FR10 external acceptance-superset gate.
+"""FR10 acceptance-superset gates.
 
-The existing tree LCP checker proves an internal property: the tree winner is
-at least as long as the tree verifier's own path0. FR10 also needs an external
-gate against native MTP because a GDN-hybrid tree can be internally consistent
-while degrading the native top-1 chain. This module compares tree path0 against
-native MTP and then compares total accepted tokens for the sampled speed gate.
+The internal tree gate is structural: for a single tree event, the selected
+tree winner must be at least as long as that same tree's own path0 spine.
+
+External comparisons against native MTP are not byte-exact serving claims under
+B4/temp0.6 sampling. They are statistical acceptance gates over paired traces:
+the tree must show a strict accepted-token win over stock MTP-5 with a paired
+bootstrap confidence interval whose lower bound is above zero.
 """
 
 from __future__ import annotations
@@ -176,7 +178,11 @@ def evaluate_path0_sequence_gate(
     native_events: Sequence[AcceptanceEvent],
     tree_events: Sequence[AcceptanceEvent],
 ) -> GateReport:
-    """Tier 1: deterministic native MTP chain must equal tree path0."""
+    """Exact path0 diagnostic for deterministic fixed-input traces only.
+
+    Do not use this as a byte-exact B4/temp0.6 end-to-end claim; sampled LLM
+    output is run-noisy and belongs in the statistical gates below.
+    """
     native = _sequence(native_events, field="accepted_len")
     tree_path0 = _sequence(tree_events, field="path0_len")
     violations: list[str] = []
@@ -209,7 +215,11 @@ def evaluate_total_acceptance_gate(
     tree_events: Sequence[AcceptanceEvent],
     min_delta: float = -0.05,
 ) -> GateReport:
-    """Tier 2: sampled tree total acceptance must not underperform native MTP."""
+    """Legacy sampled acceptance sanity check.
+
+    The enforced deliverable is ``evaluate_strict_win_gate``; this helper only
+    reports an average delta with a caller-provided slack.
+    """
     native = _sequence(native_events, field="accepted_len")
     tree = _sequence(tree_events, field="accepted_len")
     native_avg = sum(native) / len(native) if native else 0.0
@@ -260,7 +270,13 @@ def evaluate_superset_hard_gate(
     native_events: Sequence[AcceptanceEvent],
     tree_events: Sequence[AcceptanceEvent],
 ) -> GateReport:
-    """Enforce per-event ``tree >= path0 >= native`` with zero tolerance."""
+    """Enforce internal per-event tree superset with zero tolerance.
+
+    ``tree >= path0`` is structural for the tree's own event. The optional
+    ``path0 >= native`` term is only meaningful for paired deterministic
+    diagnostics; external sampled comparisons should use the statistical strict
+    win gate.
+    """
     native, tree_path0, tree, violations = _aligned_sequences(
         native_events=native_events,
         tree_events=tree_events,
@@ -326,7 +342,7 @@ def evaluate_strict_win_gate(
     bootstrap_samples: int = 10_000,
     seed: int = 13,
 ) -> GateReport:
-    """Require tree accepted/event to beat native with paired CI lower bound > 0."""
+    """Require sampled tree acceptance to beat native statistically."""
     native, _, tree, violations = _aligned_sequences(
         native_events=native_events,
         tree_events=tree_events,
@@ -373,7 +389,7 @@ def evaluate_enforced_superset_gate(
     bootstrap_samples: int = 10_000,
     seed: int = 13,
 ) -> GateReport:
-    """Combined FR10 deliverable gate: hard superset plus strict statistical win."""
+    """Combined FR10 deliverable: structural superset plus statistical win."""
     hard = evaluate_superset_hard_gate(
         native_events=native_events,
         tree_events=tree_events,

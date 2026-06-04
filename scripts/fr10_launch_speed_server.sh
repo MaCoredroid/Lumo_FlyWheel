@@ -27,6 +27,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR10_ENABLE_TREE_GDN="$FR10_ENABLE_TREE_GDN" \
   -e FR10_METRICS="$FR10_METRICS" \
   -e FR10_DECODE_MODE_DEFAULT="$FR10_DECODE_MODE_DEFAULT" \
+  -e FR10_TREE_GDN_COUNTER_DUMP=/logs/fr10_tree_gdn_counters.json \
   -e SPEC_CONFIG="$SPEC_CONFIG" \
   --entrypoint bash \
   "$IMAGE" \
