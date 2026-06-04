@@ -1,0 +1,185 @@
+{
+  "arm": "fr10_whole_tree_debug_fixed_one",
+  "batch_shape": "b1",
+  "endpoint": "http://127.0.0.1:9950",
+  "max_tokens": 4,
+  "metrics_error": null,
+  "model": "qwen3.6-27b",
+  "prompts": [
+    "Q: Count from one to five. A:",
+    "Q: What is 7 plus 8? A:",
+    "Q: Write three lowercase letters in alphabetical order. A:",
+    "Q: Name the color of clear daytime sky in one word. A:",
+    "Q: Complete the pattern: red, orange, yellow, A:",
+    "Q: State one Unix command that lists files. A:",
+    "Q: In Python, what boolean value is 1 == 1? A:",
+    "Q: Give one word that rhymes with time. A:"
+  ],
+  "records": [
+    {
+      "batch": "b1",
+      "choice_index": 0,
+      "finish_reason": "length",
+      "local_choice_index": 0,
+      "logprob_tokens": [
+        "\n\n",
+        "<think>",
+        "\n\n",
+        "</think>"
+      ],
+      "prompt": "Q: Count from one to five. A:",
+      "text": "\n\n<think>\n\n</think>",
+      "token_ids": [
+        271,
+        248068,
+        271,
+        248069
+      ]
+    },
+    {
+      "batch": "b1",
+      "choice_index": 1,
+      "finish_reason": "length",
+      "local_choice_index": 1,
+      "logprob_tokens": [
+        "\n\n",
+        "<think>",
+        "\n",
+        "Here"
+      ],
+      "prompt": "Q: What is 7 plus 8? A:",
+      "text": "\n\n<think>\nHere",
+      "token_ids": [
+        271,
+        248068,
+        198,
+        8160
+      ]
+    },
+    {
+      "batch": "b1",
+      "choice_index": 2,
+      "finish_reason": "length",
+      "local_choice_index": 2,
+      "logprob_tokens": [
+        "\n\n",
+        "<think>",
+        "\n",
+        "Here"
+      ],
+      "prompt": "Q: Write three lowercase letters in alphabetical order. A:",
+      "text": "\n\n<think>\nHere",
+      "token_ids": [
+        271,
+        248068,
+        198,
+        8160
+      ]
+    },
+    {
+      "batch": "b1",
+      "choice_index": 3,
+      "finish_reason": "length",
+      "local_choice_index": 3,
+      "logprob_tokens": [
+        "\n\n",
+        "<think>",
+        "\n\n",
+        "</think>"
+      ],
+      "prompt": "Q: Name the color of clear daytime sky in one word. A:",
+      "text": "\n\n<think>\n\n</think>",
+      "token_ids": [
+        271,
+        248068,
+        271,
+        248069
+      ]
+    },
+    {
+      "batch": "b1",
+      "choice_index": 4,
+      "finish_reason": "length",
+      "local_choice_index": 4,
+      "logprob_tokens": [
+        "\n\n",
+        "<think>",
+        "\n",
+        "Here"
+      ],
+      "prompt": "Q: Complete the pattern: red, orange, yellow, A:",
+      "text": "\n\n<think>\nHere",
+      "token_ids": [
+        271,
+        248068,
+        198,
+        8160
+      ]
+    },
+    {
+      "batch": "b1",
+      "choice_index": 5,
+      "finish_reason": "length",
+      "local_choice_index": 5,
+      "logprob_tokens": [
+        "\n\n",
+        "<think>",
+        "\n\n",
+        "</think>"
+      ],
+      "prompt": "Q: State one Unix command that lists files. A:",
+      "text": "\n\n<think>\n\n</think>",
+      "token_ids": [
+        271,
+        248068,
+        271,
+        248069
+      ]
+    },
+    {
+      "batch": "b1",
+      "choice_index": 6,
+      "finish_reason": "length",
+      "local_choice_index": 6,
+      "logprob_tokens": [
+        " True",
+        "\n",
+        "<|im_start|>",
+        "<|im_start|>"
+      ],
+      "prompt": "Q: In Python, what boolean value is 1 == 1? A:",
+      "text": " True\n",
+      "token_ids": [
+        2912,
+        198,
+        248045,
+        248045
+      ]
+    },
+    {
+      "batch": "b1",
+      "choice_index": 7,
+      "finish_reason": "length",
+      "local_choice_index": 7,
+      "logprob_tokens": [
+        "\n\n",
+        "<think>",
+        "\n",
+        "Thinking"
+      ],
+      "prompt": "Q: Give one word that rhymes with time. A:",
+      "text": "\n\n<think>\nThinking",
+      "token_ids": [
+        271,
+        248068,
+        198,
+        90700
+      ]
+    }
+  ],
+  "reset_prefix_cache_error": null,
+  "seed": null,
+  "spec_decode_metric_present": true,
+  "temperature": 0,
+  "ts": 1780532033.0845425
+}
