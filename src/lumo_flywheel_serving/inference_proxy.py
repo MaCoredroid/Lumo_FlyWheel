@@ -170,28 +170,44 @@ def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, An
 
 
 def _normalize_responses_input_roles(payload: dict[str, Any]) -> None:
-    """Map Codex/OpenAI roles to the subset accepted by vLLM's Responses API."""
+    """Move Codex/OpenAI instruction roles into vLLM's top-level instructions."""
     items = payload.get("input")
     if not isinstance(items, list):
         return
+    instruction_parts: list[str] = []
     normalized_items: list[Any] = []
     for item in items:
         if isinstance(item, dict):
             item = dict(item)
-            if item.get("role") == "developer":
-                item["role"] = "system"
+            if item.get("role") in {"developer", "system"}:
+                text = _responses_message_text(item)
+                if text:
+                    instruction_parts.append(text)
+                continue
         normalized_items.append(item)
-    system_items = [
-        item
-        for item in normalized_items
-        if isinstance(item, dict) and item.get("role") == "system"
-    ]
-    non_system_items = [
-        item
-        for item in normalized_items
-        if not (isinstance(item, dict) and item.get("role") == "system")
-    ]
-    payload["input"] = system_items + non_system_items
+    if instruction_parts:
+        existing = payload.get("instructions")
+        parts = [existing] if isinstance(existing, str) and existing else []
+        parts.extend(instruction_parts)
+        payload["instructions"] = "\n\n".join(parts)
+    payload["input"] = normalized_items
+
+
+def _responses_message_text(item: dict[str, Any]) -> str:
+    content = item.get("content")
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict):
+            text = block.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "\n".join(part for part in parts if part)
 
 
 def normalize_responses_response_payload(payload: dict[str, Any]) -> dict[str, Any]:

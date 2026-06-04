@@ -112,14 +112,15 @@ def test_normalize_responses_request_payload_maps_developer_role_to_system() -> 
 
     normalized = normalize_responses_request_payload(payload)
 
-    assert normalized["input"][0]["role"] == "system"
-    assert normalized["input"][1]["role"] == "user"
+    assert normalized["instructions"] == "Use concise answers."
+    assert [item["role"] for item in normalized["input"]] == ["user"]
     assert payload["input"][0]["role"] == "developer"
 
 
-def test_normalize_responses_request_payload_hoists_developer_role_to_front() -> None:
+def test_normalize_responses_request_payload_merges_developer_role_into_instructions() -> None:
     payload = {
         "model": "qwen3.6-27b",
+        "instructions": "Base instructions.",
         "input": [
             {
                 "role": "user",
@@ -138,8 +139,8 @@ def test_normalize_responses_request_payload_hoists_developer_role_to_front() ->
 
     normalized = normalize_responses_request_payload(payload)
 
+    assert normalized["instructions"] == "Base instructions.\n\nUse tools."
     assert [item["role"] for item in normalized["input"]] == [
-        "system",
         "user",
         "assistant",
     ]
