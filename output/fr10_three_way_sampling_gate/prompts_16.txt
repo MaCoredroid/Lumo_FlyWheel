@@ -1,0 +1,16 @@
+Q: Count from one to five. A:
+Q: What is 7 plus 8? A:
+Q: Write three lowercase letters in alphabetical order. A:
+Q: Name the color of clear daytime sky in one word. A:
+Q: Complete the pattern: red, orange, yellow, A:
+Q: State one Unix command that lists files. A:
+Q: In Python, what boolean value is 1 == 1? A:
+Q: Give one word that rhymes with time. A:
+Q: Write a one-sentence explanation of what a compiler does. A:
+Q: Name one HTTP method used to retrieve a resource. A:
+Q: Complete this Python expression: len([1, 2, 3]) == A:
+Q: In git, what command shows the current branch status? A:
+Q: Give a short example of a JSON object with one key named x. A:
+Q: What is the next number: 2, 4, 8, 16, A:
+Q: Translate to Spanish: good morning. A:
+Q: Name one Linux command that prints the working directory. A:

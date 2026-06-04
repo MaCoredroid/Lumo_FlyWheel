@@ -1,0 +1,58 @@
+{
+  "biased_negative_control": {
+    "chi_square": {
+      "df": 6,
+      "passed": false,
+      "statistic": 2264.9221495927313,
+      "threshold": 26.784609690826528
+    },
+    "detected": true,
+    "samples": 200000,
+    "threshold_ratio": 84.56058071170794
+  },
+  "branched_two_step_tree": {
+    "chi_square": {
+      "df": 15,
+      "passed": true,
+      "statistic": 11.12805633760397,
+      "threshold": 47.863353450309965
+    },
+    "joint_states": 16,
+    "samples": 250000,
+    "vocab_size": 4
+  },
+  "schema": "fr10.tree_sampler_convergence.v1",
+  "single_position_multidraft": {
+    "chi_square": {
+      "df": 6,
+      "passed": true,
+      "statistic": 6.854195720551379,
+      "threshold": 26.784609690826528
+    },
+    "draft_weights": [
+      0.3370370370370371,
+      0.337037037037037,
+      0.32592592592592595
+    ],
+    "exact_distribution_max_abs_vs_target": 0.0,
+    "mixture_q": [
+      0.06337037037037038,
+      0.12044444444444444,
+      0.1937037037037037,
+      0.09303703703703704,
+      0.1927037037037037,
+      0.22337037037037039,
+      0.11337037037037037
+    ],
+    "samples": 200000,
+    "target": [
+      0.05,
+      0.12,
+      0.21,
+      0.08,
+      0.19,
+      0.25,
+      0.1
+    ]
+  }
+}
