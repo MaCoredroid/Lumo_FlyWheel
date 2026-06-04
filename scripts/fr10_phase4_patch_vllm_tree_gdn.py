@@ -33,6 +33,9 @@ SCHED_OUTPUT_PATH = Path(
 EAGLE_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py"
 )
+TREE_ATTN_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py"
+)
 
 
 def _patch_gdn_attn() -> bool:
@@ -133,7 +136,13 @@ def _patch_gdn_attn() -> bool:
             "        self.fr10_tree_invocation_counter = None\n"
             "        self.fr10_tree_has_sibling = False\n"
             "        spec_token_tree = None\n"
-            "        if self.speculative_config is not None:\n"
+            "        try:\n"
+            "            spec_env = os.environ.get(\"SPEC_CONFIG\")\n"
+            "            if spec_env:\n"
+            "                spec_token_tree = json.loads(spec_env).get(\"speculative_token_tree\")\n"
+            "        except Exception:\n"
+            "            spec_token_tree = None\n"
+            "        if spec_token_tree is None and self.speculative_config is not None:\n"
             "            spec_token_tree = self.speculative_config.speculative_token_tree\n"
             "        if spec_token_tree is not None:\n"
             "            tree_choices = ast.literal_eval(spec_token_tree)\n"
@@ -1156,17 +1165,18 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
             _fr10_mode = _fr10_mode or __import__("os").environ.get(
                 "FR10_DECODE_MODE_DEFAULT", "tree_mtp"
             )
+            _ltree_src = None
+            try:
+                _spec_env = __import__("os").environ.get("SPEC_CONFIG")
+                if _spec_env:
+                    _ltree_src = __import__("json").loads(_spec_env).get(
+                        "speculative_token_tree"
+                    )
+            except Exception:
+                _ltree_src = None
             _lspec = getattr(self.vllm_config, "speculative_config", None)
-            _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None
             if not _ltree_src:
-                try:
-                    _spec_env = __import__("os").environ.get("SPEC_CONFIG")
-                    if _spec_env:
-                        _ltree_src = __import__("json").loads(_spec_env).get(
-                            "speculative_token_tree"
-                        )
-                except Exception:
-                    _ltree_src = None
+                _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None
             _lumo_tree_meta_debug["mode"] = _fr10_mode
             _lumo_tree_meta_debug["has_tree_src"] = bool(_ltree_src)
             if _fr10_mode == "tree_mtp" and _ltree_src:
@@ -1351,7 +1361,29 @@ def _patch_eagle_tree_spine_copy() -> bool:
     if sentinel in text:
         return False
 
-    text = text.replace("import ast\n", "import ast\nimport os\n", 1)
+    text = text.replace("import ast\n", "import ast\nimport json\nimport os\n", 1)
+
+    tree_parse_old = """        # Parse the speculative token tree.
+        spec_token_tree = self.speculative_config.speculative_token_tree
+        assert spec_token_tree is not None
+        self.tree_choices: list[tuple[int, ...]] = ast.literal_eval(spec_token_tree)
+"""
+    tree_parse_new = """        # Parse the speculative token tree.
+        spec_token_tree = None
+        try:
+            spec_env = os.environ.get("SPEC_CONFIG")
+            if spec_env:
+                spec_token_tree = json.loads(spec_env).get("speculative_token_tree")
+        except Exception:
+            spec_token_tree = None
+        if spec_token_tree is None:
+            spec_token_tree = self.speculative_config.speculative_token_tree
+        assert spec_token_tree is not None
+        self.tree_choices: list[tuple[int, ...]] = ast.literal_eval(spec_token_tree)
+"""
+    if tree_parse_old not in text:
+        raise RuntimeError("EAGLE tree parse anchor not found")
+    text = text.replace(tree_parse_old, tree_parse_new, 1)
 
     helper_anchor = """    def propose(
         self,
@@ -1570,6 +1602,40 @@ def _patch_eagle_tree_spine_copy() -> bool:
     return True
 
 
+def _patch_tree_attn_spec_config_override() -> bool:
+    text = TREE_ATTN_PATH.read_text()
+    sentinel = "# FR10_SPEC_CONFIG_TREE_OVERRIDE"
+    if sentinel in text:
+        return False
+    text = text.replace("import ast\n", "import ast\nimport json\nimport os\n", 1)
+    old = """        spec_token_tree: str | None = None
+        if spec := spec_config:
+            spec_token_tree = spec.speculative_token_tree
+        tree_choices: list[tuple[int, ...]] = (
+            ast.literal_eval(spec_token_tree) if spec_token_tree is not None else [(0,)]
+        )
+"""
+    new = f"""        {sentinel}: keep attention tree identical to the FR10 launch descriptor.
+        spec_token_tree: str | None = None
+        try:
+            spec_env = os.environ.get("SPEC_CONFIG")
+            if spec_env:
+                spec_token_tree = json.loads(spec_env).get("speculative_token_tree")
+        except Exception:
+            spec_token_tree = None
+        if spec_token_tree is None and (spec := spec_config):
+            spec_token_tree = spec.speculative_token_tree
+        tree_choices: list[tuple[int, ...]] = (
+            ast.literal_eval(spec_token_tree) if spec_token_tree is not None else [(0,)]
+        )
+"""
+    if old not in text:
+        raise RuntimeError("tree attention spec tree anchor not found")
+    text = text.replace(old, new, 1)
+    TREE_ATTN_PATH.write_text(text)
+    return True
+
+
 def _patch_mamba_postprocess_tree_rows() -> bool:
     text = MAMBA_UTILS_PATH.read_text()
     sentinel = "# LUMO_TREE_STATE_COMMIT_ROWS"
@@ -1644,6 +1710,7 @@ def main() -> int:
         (GDN_LINEAR_PATH, _patch_gdn_linear()),
         (SCHEDULER_PATH, _patch_scheduler_spec_trace()),
         (EAGLE_PATH, _patch_eagle_tree_spine_copy()),
+        (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (MAMBA_UTILS_PATH, _patch_mamba_postprocess_tree_rows()),
