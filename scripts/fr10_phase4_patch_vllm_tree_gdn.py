@@ -145,7 +145,7 @@ def _patch_gdn_attn() -> bool:
             "        if spec_token_tree is None and self.speculative_config is not None:\n"
             "            spec_token_tree = self.speculative_config.speculative_token_tree\n"
             "        if spec_token_tree is not None:\n"
-            "            tree_choices = ast.literal_eval(spec_token_tree)\n"
+            "            tree_choices = sorted(ast.literal_eval(spec_token_tree), key=lambda _p: (len(_p), _p))\n"
             "            index = {choice: i + 1 for i, choice in enumerate(tree_choices)}\n"
             "            parent = [-1]\n"
             "            for choice in tree_choices:\n"
@@ -202,17 +202,111 @@ def _patch_gdn_linear() -> bool:
     if "FR10_ENABLE_TREE_GDN" in text:
         return False
 
-    text = text.replace("import torch\n", "import os\nimport torch\n", 1)
+    text = text.replace("import torch\n", "import ast\nimport json\nimport os\nimport torch\n", 1)
     text = text.replace(
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import launch_tree_gdn_prepared\n"
+            "from lumo_flywheel_serving.fr10_tree_conv import tree_causal_conv1d_reference\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
         ),
         1,
     )
+
+    conv_needle = '''        if spec_sequence_masks is not None:
+            # spec_state_indices_tensor is always set when spec_sequence_masks is set
+            assert spec_state_indices_tensor is not None
+            mixed_qkv_spec = causal_conv1d_update(
+                mixed_qkv_spec,
+                conv_state,
+                conv_weights,
+                self.conv1d.bias,
+                self.activation,
+                conv_state_indices=spec_state_indices_tensor[:, 0][  # type: ignore[index]
+                    : attn_metadata.num_spec_decodes  # type: ignore[attr-defined]
+                ],
+                num_accepted_tokens=num_accepted_tokens,
+                query_start_loc=spec_query_start_loc,
+                max_query_len=spec_state_indices_tensor.size(-1),
+                validate_data=False,
+            )
+'''
+    conv_replacement = '''        if spec_sequence_masks is not None:
+            # spec_state_indices_tensor is always set when spec_sequence_masks is set
+            assert spec_state_indices_tensor is not None
+            use_fr10_tree_conv = (
+                os.environ.get("FR10_ENABLE_TREE_GDN") == "1"
+                and _FR10_DECODE_MODE == "tree_mtp"
+                and getattr(attn_metadata, "fr10_tree_parent", None) is not None
+                and attn_metadata.num_prefills == 0
+                and attn_metadata.num_decodes == 0
+            )
+            mixed_qkv_spec_native = causal_conv1d_update(
+                mixed_qkv_spec,
+                conv_state,
+                conv_weights,
+                self.conv1d.bias,
+                self.activation,
+                conv_state_indices=spec_state_indices_tensor[:, 0][  # type: ignore[index]
+                    : attn_metadata.num_spec_decodes  # type: ignore[attr-defined]
+                ],
+                num_accepted_tokens=num_accepted_tokens,
+                query_start_loc=spec_query_start_loc,
+                max_query_len=spec_state_indices_tensor.size(-1),
+                validate_data=False,
+            )
+            if use_fr10_tree_conv:
+                try:
+                    _fr10_tree_src = None
+                    _fr10_spec_env = os.environ.get("SPEC_CONFIG")
+                    if _fr10_spec_env:
+                        _fr10_tree_src = json.loads(_fr10_spec_env).get(
+                            "speculative_token_tree"
+                        )
+                    if _fr10_tree_src is None and self.speculative_config is not None:
+                        _fr10_tree_src = self.speculative_config.speculative_token_tree
+                    _fr10_choices = sorted(
+                        ast.literal_eval(_fr10_tree_src), key=lambda _p: (len(_p), _p)
+                    )
+                    _fr10_index = {_p: _i + 1 for _i, _p in enumerate(_fr10_choices)}
+                    _fr10_parent = [-1]
+                    for _fr10_choice in _fr10_choices:
+                        _fr10_parent.append(
+                            0
+                            if len(_fr10_choice) == 1
+                            else _fr10_index[_fr10_choice[:-1]]
+                        )
+                    _fr10_tree_n = len(_fr10_parent)
+                    _fr10_tree_conv_out = torch.empty_like(mixed_qkv_spec_native)
+                    for _fr10_b in range(attn_metadata.num_spec_decodes):
+                        _fr10_start = _fr10_b * _fr10_tree_n
+                        _fr10_end = _fr10_start + _fr10_tree_n
+                        _fr10_state_idx = spec_state_indices_tensor[_fr10_b, 0]
+                        _fr10_out, _ = tree_causal_conv1d_reference(
+                            mixed_qkv_spec[_fr10_start:_fr10_end],
+                            conv_state[_fr10_state_idx],
+                            conv_weights,
+                            self.conv1d.bias,
+                            _fr10_parent,
+                            activation=self.activation,
+                        )
+                        _fr10_tree_conv_out[_fr10_start:_fr10_end] = _fr10_out
+                    mixed_qkv_spec = _fr10_tree_conv_out
+                except Exception as _fr10_tree_conv_exc:
+                    if os.environ.get("FR10_METRICS", "0") == "1":
+                        logger.warning_once(
+                            "FR10 tree causal-conv fallback to native flat order: %s",
+                            _fr10_tree_conv_exc,
+                        )
+                    mixed_qkv_spec = mixed_qkv_spec_native
+            else:
+                mixed_qkv_spec = mixed_qkv_spec_native
+'''
+    if conv_needle not in text:
+        raise RuntimeError("FR10 GDN causal conv spec branch needle not found")
+    text = text.replace(conv_needle, conv_replacement, 1)
 
     needle = '''        if spec_sequence_masks is not None:
             core_attn_out_spec, last_recurrent_state = (
@@ -1180,7 +1274,7 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
             _lumo_tree_meta_debug["mode"] = _fr10_mode
             _lumo_tree_meta_debug["has_tree_src"] = bool(_ltree_src)
             if _fr10_mode == "tree_mtp" and _ltree_src:
-                _choices = __import__("ast").literal_eval(_ltree_src)
+                _choices = sorted(__import__("ast").literal_eval(_ltree_src), key=lambda _p: (len(_p), _p))
                 _max_depth = max(len(_t) for _t in _choices)
                 _lumo_tree_meta_debug["tree_len"] = int(len(_choices))
                 _lumo_tree_meta_debug["max_depth"] = int(_max_depth)
@@ -1379,7 +1473,9 @@ def _patch_eagle_tree_spine_copy() -> bool:
         if spec_token_tree is None:
             spec_token_tree = self.speculative_config.speculative_token_tree
         assert spec_token_tree is not None
-        self.tree_choices: list[tuple[int, ...]] = ast.literal_eval(spec_token_tree)
+        self.tree_choices: list[tuple[int, ...]] = sorted(
+            ast.literal_eval(spec_token_tree), key=lambda _p: (len(_p), _p)
+        )
 """
     if tree_parse_old not in text:
         raise RuntimeError("EAGLE tree parse anchor not found")
@@ -1626,7 +1722,7 @@ def _patch_tree_attn_spec_config_override() -> bool:
         if spec_token_tree is None and (spec := spec_config):
             spec_token_tree = spec.speculative_token_tree
         tree_choices: list[tuple[int, ...]] = (
-            ast.literal_eval(spec_token_tree) if spec_token_tree is not None else [(0,)]
+            sorted(ast.literal_eval(spec_token_tree), key=lambda _p: (len(_p), _p)) if spec_token_tree is not None else [(0,)]
         )
 """
     if old not in text:
