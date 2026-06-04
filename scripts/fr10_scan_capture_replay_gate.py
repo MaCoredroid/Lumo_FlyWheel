@@ -41,6 +41,15 @@ def _max_abs(left: torch.Tensor, right: torch.Tensor) -> float:
     return float((left.float() - right.float()).abs().max().item())
 
 
+def _per_node_max_abs(left: torch.Tensor, right: torch.Tensor) -> list[float]:
+    if left.shape != right.shape:
+        raise ValueError(f"shape mismatch: {tuple(left.shape)} != {tuple(right.shape)}")
+    return [
+        float((left[idx].float() - right[idx].float()).abs().max().item())
+        for idx in range(int(left.shape[0]))
+    ]
+
+
 def evaluate(payload_path: Path, *, out_path: Path | None = None) -> dict[str, Any]:
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for scan capture replay")
@@ -111,6 +120,10 @@ def evaluate(payload_path: Path, *, out_path: Path | None = None) -> dict[str, A
     replay_state_n = replay_state[:n_actual]
     flat_out_delta = _max_abs(flat_out, serial_out)
     flat_state_delta = _max_abs(flat_state, serial_state)
+    serving_serial_out_by_node = _per_node_max_abs(serving_out, serial_out)
+    serving_serial_state_by_node = _per_node_max_abs(serving_state, serial_state)
+    replay_serial_out_by_node = _per_node_max_abs(replay_out_n, serial_out)
+    replay_serial_state_by_node = _per_node_max_abs(replay_state_n, serial_state)
     result = {
         "schema": "fr10.scan_capture_replay_gate.v1",
         "payload": str(payload_path),
@@ -127,6 +140,12 @@ def evaluate(payload_path: Path, *, out_path: Path | None = None) -> dict[str, A
         "replay_vs_serial_state_max_abs": _max_abs(replay_state_n, serial_state),
         "serving_vs_serial_out_max_abs": _max_abs(serving_out, serial_out),
         "serving_vs_serial_state_max_abs": _max_abs(serving_state, serial_state),
+        "serving_vs_serial_out_max_abs_by_node": serving_serial_out_by_node,
+        "serving_vs_serial_state_max_abs_by_node": serving_serial_state_by_node,
+        "replay_vs_serial_out_max_abs_by_node": replay_serial_out_by_node,
+        "replay_vs_serial_state_max_abs_by_node": replay_serial_state_by_node,
+        "node0_serving_vs_serial_out_max_abs": serving_serial_out_by_node[0],
+        "node0_serving_vs_serial_state_max_abs": serving_serial_state_by_node[0],
         "flat_negative_vs_serial_out_max_abs": flat_out_delta,
         "flat_negative_vs_serial_state_max_abs": flat_state_delta,
         "flat_negative_control_pass": bool(
