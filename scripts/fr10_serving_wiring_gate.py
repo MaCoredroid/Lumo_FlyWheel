@@ -319,12 +319,7 @@ def evaluate_wiring(
 
 
 def _engine_pids(container: str) -> list[int]:
-    cmd = (
-        "ps -eo pid=,args= | "
-        "python3 -c \"import sys; "
-        "print(' '.join(line.split(None,1)[0] for line in sys.stdin "
-        "if 'EngineCore' in line and 'python' in line))\""
-    )
+    cmd = "ps -eo pid=,comm=,args= | awk '$2 ~ /EngineCor/ || $3 == \"VLLM::EngineCore\" {print $1}'"
     result = subprocess.run(
         ["docker", "exec", container, "bash", "-lc", cmd],
         check=False,
