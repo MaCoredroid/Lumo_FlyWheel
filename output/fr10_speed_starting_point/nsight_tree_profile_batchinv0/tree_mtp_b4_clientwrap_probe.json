@@ -1,0 +1,52 @@
+{
+  "batch_size": 4,
+  "endpoint": "http://127.0.0.1:9950",
+  "max_tokens": 32,
+  "model": "qwen3.6-27b",
+  "modes": {
+    "tree_mtp": {
+      "accepted_per_draft_event": 2.86231884057971,
+      "accepted_per_draft_token": 0.286231884057971,
+      "metric_delta": {
+        "decode_seconds": 67.70215564616956,
+        "generation_tokens": 512.0,
+        "iteration_tokens_count": 42.0,
+        "iteration_tokens_sum": 744.0,
+        "prefill_seconds": 4.858748591504991,
+        "prompt_tokens": 232.0,
+        "spec_accepted_tokens": 395.0,
+        "spec_draft_tokens": 1380.0,
+        "spec_drafts": 138.0
+      },
+      "metrics_decode_seconds": 67.70215564616956,
+      "metrics_generation_tokens": 512.0,
+      "metrics_sum_decode_tps_concurrency_deflated": 7.562536157280656,
+      "mode": "tree_mtp",
+      "per_request_decode_tps_max": 30.353788187264467,
+      "per_request_decode_tps_mean": 25.149965701377113,
+      "per_request_decode_tps_median": 24.687651281743296,
+      "per_request_decode_tps_min": 20.870772054757392,
+      "records": 16,
+      "request_count": 4,
+      "reset_prefix_cache_error": null,
+      "returned_tokens": 512,
+      "returned_tokens_per_decode_s": 7.562536157280656,
+      "returned_tokens_per_wall_s": 24.539422645551593,
+      "spec_accepted_tokens": 395.0,
+      "spec_draft_tokens": 1380.0,
+      "spec_drafts": 138.0,
+      "wall_s": 20.864386558532715,
+      "warm_decode_tps": 7.562536157280656
+    }
+  },
+  "prompts": [
+    "Write a Python function to reverse a singly linked list, then explain it.",
+    "Explain what a hash table is and how collisions are handled, in detail.",
+    "Implement binary search over a sorted list in Python with comments.",
+    "What is the time complexity of merge sort and why? Walk through it."
+  ],
+  "samples_per_prompt": 4,
+  "schema": "fr10.quick_decode_tps.v1",
+  "temperature": 0.6,
+  "top_p": 0.95
+}
