@@ -1,0 +1,78 @@
+{
+  "batch_size": 4,
+  "endpoint": "http://127.0.0.1:9950",
+  "max_tokens": 64,
+  "model": "qwen3.6-27b",
+  "modes": {
+    "naive_mtp": {
+      "accepted_per_draft_event": 3.0076923076923077,
+      "accepted_per_draft_token": 0.3007692307692308,
+      "metric_delta": {
+        "decode_seconds": 254.63647554744966,
+        "generation_tokens": 2048.0,
+        "iteration_tokens_count": 159.0,
+        "iteration_tokens_sum": 2516.0,
+        "prefill_seconds": 16.905657313531265,
+        "prompt_tokens": 468.0,
+        "spec_accepted_tokens": 1564.0,
+        "spec_draft_tokens": 5200.0,
+        "spec_drafts": 520.0
+      },
+      "metrics_decode_seconds": 254.63647554744966,
+      "metrics_generation_tokens": 2048.0,
+      "mode": "naive_mtp",
+      "records": 32,
+      "reset_prefix_cache_error": null,
+      "returned_tokens": 2048,
+      "returned_tokens_per_decode_s": 8.042838307422182,
+      "returned_tokens_per_wall_s": 26.215007534079632,
+      "spec_accepted_tokens": 1564.0,
+      "spec_draft_tokens": 5200.0,
+      "spec_drafts": 520.0,
+      "wall_s": 78.1231894493103,
+      "warm_decode_tps": 8.042838307422182
+    },
+    "tree_mtp": {
+      "accepted_per_draft_event": 3.1218074656188604,
+      "accepted_per_draft_token": 0.31218074656188605,
+      "metric_delta": {
+        "decode_seconds": 251.61420094477944,
+        "generation_tokens": 2048.0,
+        "iteration_tokens_count": 154.0,
+        "iteration_tokens_sum": 2516.0,
+        "prefill_seconds": 10.438604571623728,
+        "prompt_tokens": 468.0,
+        "spec_accepted_tokens": 1589.0,
+        "spec_draft_tokens": 5090.0,
+        "spec_drafts": 509.0
+      },
+      "metrics_decode_seconds": 251.61420094477944,
+      "metrics_generation_tokens": 2048.0,
+      "mode": "tree_mtp",
+      "records": 32,
+      "reset_prefix_cache_error": null,
+      "returned_tokens": 2048,
+      "returned_tokens_per_decode_s": 8.1394451994761,
+      "returned_tokens_per_wall_s": 27.512485284912067,
+      "spec_accepted_tokens": 1589.0,
+      "spec_draft_tokens": 5090.0,
+      "spec_drafts": 509.0,
+      "wall_s": 74.43893122673035,
+      "warm_decode_tps": 8.1394451994761
+    }
+  },
+  "prompts": [
+    "Write a Python function to reverse a singly linked list, then explain it.",
+    "Explain what a hash table is and how collisions are handled, in detail.",
+    "Implement binary search over a sorted list in Python with comments.",
+    "What is the time complexity of merge sort and why? Walk through it.",
+    "Write a Python function to check if a string is a palindrome, with tests.",
+    "Describe the difference between a process and a thread, with examples.",
+    "Implement a Python decorator that times function execution and logs it.",
+    "Explain how a B-tree differs from a binary search tree and when to use each."
+  ],
+  "samples_per_prompt": 4,
+  "schema": "fr10.quick_decode_tps.v1",
+  "temperature": 0.6,
+  "top_p": 0.95
+}
