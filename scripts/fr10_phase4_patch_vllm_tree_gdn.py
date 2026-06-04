@@ -129,6 +129,9 @@ def _patch_gdn_attn() -> bool:
             "    fr10_tree_visible_mask: torch.Tensor | None = None\n"
             "    fr10_tree_invocation_counter: torch.Tensor | None = None\n"
             "    fr10_tree_conv_diag: torch.Tensor | None = None\n"
+            "    fr10_tree_conv_source_indices: dict[int, torch.Tensor] | None = None\n"
+            "    fr10_flat_conv_source_indices: dict[int, torch.Tensor] | None = None\n"
+            "    fr10_path0_conv_source_indices: dict[int, torch.Tensor] | None = None\n"
             "    fr10_tree_path0_nodes: torch.Tensor | None = None\n"
             "    fr10_tree_has_sibling: bool = False\n"
         ),
@@ -152,6 +155,9 @@ def _patch_gdn_attn() -> bool:
             "        self.fr10_tree_visible_mask = None\n"
             "        self.fr10_tree_invocation_counter = None\n"
             "        self.fr10_tree_conv_diag = None\n"
+            "        self.fr10_tree_conv_source_indices = None\n"
+            "        self.fr10_flat_conv_source_indices = None\n"
+            "        self.fr10_path0_conv_source_indices = None\n"
             "        self.fr10_tree_path0_nodes = None\n"
             "        self.fr10_tree_has_sibling = False\n"
             "        spec_token_tree = None\n"
@@ -192,6 +198,49 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_tree_parent = torch.tensor(parent, dtype=torch.int32, device=device)\n"
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
+            "            source_by_width = {}\n"
+            "            flat_source_by_width = {}\n"
+            "            path0_source_by_width = {}\n"
+            "            for width in range(2, 7):\n"
+            "                source_rows = []\n"
+            "                for node in range(n):\n"
+            "                    ancestry = []\n"
+            "                    cur = parent[node]\n"
+            "                    while cur >= 0:\n"
+            "                        ancestry.append(cur)\n"
+            "                        cur = parent[cur]\n"
+            "                    ancestry.reverse()\n"
+            "                    path = ancestry + [node]\n"
+            "                    source = list(range(width - 1)) + [\n"
+            "                        width - 1 + int(path_node) for path_node in path\n"
+            "                    ]\n"
+            "                    source_rows.append(source[-width:])\n"
+            "                source_by_width[width] = torch.tensor(\n"
+            "                    source_rows, dtype=torch.long, device=device\n"
+            "                )\n"
+            "                flat_rows = []\n"
+            "                for node in range(n):\n"
+            "                    source = list(range(width - 1)) + [\n"
+            "                        width - 1 + int(path_node)\n"
+            "                        for path_node in range(node + 1)\n"
+            "                    ]\n"
+            "                    flat_rows.append(source[-width:])\n"
+            "                flat_source_by_width[width] = torch.tensor(\n"
+            "                    flat_rows, dtype=torch.long, device=device\n"
+            "                )\n"
+            "                path0_rows = []\n"
+            "                for node in range(len(path0_nodes)):\n"
+            "                    source = list(range(width - 1)) + [\n"
+            "                        width - 1 + int(path_node)\n"
+            "                        for path_node in range(node + 1)\n"
+            "                    ]\n"
+            "                    path0_rows.append(source[-width:])\n"
+            "                path0_source_by_width[width] = torch.tensor(\n"
+            "                    path0_rows, dtype=torch.long, device=device\n"
+            "                )\n"
+            "            self.fr10_tree_conv_source_indices = source_by_width\n"
+            "            self.fr10_flat_conv_source_indices = flat_source_by_width\n"
+            "            self.fr10_path0_conv_source_indices = path0_source_by_width\n"
             "            self.fr10_tree_path0_nodes = torch.tensor(path0_nodes, dtype=torch.long, device=device)\n"
             "            self.fr10_tree_has_sibling = any(parent.count(p) > 1 for p in set(parent) if p >= 0)\n"
             "            if _fr10_metrics_enabled():\n"
@@ -217,6 +266,9 @@ def _patch_gdn_attn() -> bool:
             "            fr10_tree_visible_mask=self.fr10_tree_visible_mask,\n"
             "            fr10_tree_invocation_counter=self.fr10_tree_invocation_counter,\n"
             "            fr10_tree_conv_diag=self.fr10_tree_conv_diag,\n"
+            "            fr10_tree_conv_source_indices=self.fr10_tree_conv_source_indices,\n"
+            "            fr10_flat_conv_source_indices=self.fr10_flat_conv_source_indices,\n"
+            "            fr10_path0_conv_source_indices=self.fr10_path0_conv_source_indices,\n"
             "            fr10_tree_path0_nodes=self.fr10_tree_path0_nodes,\n"
             "            fr10_tree_has_sibling=self.fr10_tree_has_sibling,\n"
             "            nums_dict=nums_dict,\n"
@@ -238,7 +290,6 @@ def _patch_gdn_linear() -> bool:
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import launch_tree_gdn_prepared\n"
-            "from lumo_flywheel_serving.fr10_tree_conv import tree_causal_conv1d_reference\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
         ),
@@ -280,7 +331,6 @@ def _patch_gdn_linear() -> bool:
                 and attn_metadata.num_prefills == 0
                 and attn_metadata.num_decodes == 0
             )
-            _fr10_prior_conv_state_bank = None
             if use_fr10_tree_conv:
                 _fr10_prior_conv_state_bank = torch.index_select(
                     conv_state,
@@ -289,21 +339,6 @@ def _patch_gdn_linear() -> bool:
                         : attn_metadata.num_spec_decodes, 0
                     ].to(torch.long),
                 )
-            mixed_qkv_spec_native = causal_conv1d_update(
-                mixed_qkv_spec,
-                conv_state,
-                conv_weights,
-                self.conv1d.bias,
-                self.activation,
-                conv_state_indices=spec_state_indices_tensor[:, 0][  # type: ignore[index]
-                    : attn_metadata.num_spec_decodes  # type: ignore[attr-defined]
-                ],
-                num_accepted_tokens=num_accepted_tokens,
-                query_start_loc=spec_query_start_loc,
-                max_query_len=spec_state_indices_tensor.size(-1),
-                validate_data=False,
-            )
-            if use_fr10_tree_conv:
                 try:
                     _fr10_tree_src = None
                     _fr10_spec_env = os.environ.get("SPEC_CONFIG")
@@ -328,12 +363,27 @@ def _patch_gdn_linear() -> bool:
                         attn_metadata, "fr10_tree_path0_nodes", None
                     )
                     assert _fr10_path0_node_tensor is not None
-                    _fr10_path0_parent = [-1] + [
-                        _fr10_i - 1
-                        for _fr10_i in range(1, _fr10_path0_node_tensor.numel())
-                    ]
                     _fr10_tree_n = len(_fr10_parent)
-                    _fr10_tree_conv_out = torch.empty_like(mixed_qkv_spec_native)
+                    _fr10_width = int(conv_weights.shape[1])
+                    _fr10_tree_source_indices = getattr(
+                        attn_metadata, "fr10_tree_conv_source_indices", None
+                    )[_fr10_width]
+                    _fr10_flat_source_indices = getattr(
+                        attn_metadata, "fr10_flat_conv_source_indices", None
+                    )[_fr10_width]
+                    _fr10_path0_source_indices = getattr(
+                        attn_metadata, "fr10_path0_conv_source_indices", None
+                    )[_fr10_width]
+                    _fr10_source_flat = _fr10_tree_source_indices.reshape(-1)
+                    _fr10_flat_source_flat = _fr10_flat_source_indices.reshape(-1)
+                    _fr10_path0_source_flat = _fr10_path0_source_indices.reshape(-1)
+                    _fr10_prior_col_base = torch.arange(
+                        _fr10_width - 1,
+                        dtype=torch.long,
+                        device=mixed_qkv_spec.device,
+                    )
+                    _fr10_weight_f = conv_weights.to(torch.float32)
+                    _fr10_tree_conv_out = torch.empty_like(mixed_qkv_spec)
                     _fr10_conv_diag = getattr(
                         attn_metadata, "fr10_tree_conv_diag", None
                     )
@@ -345,33 +395,129 @@ def _patch_gdn_linear() -> bool:
                     for _fr10_b in range(attn_metadata.num_spec_decodes):
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
-                        _fr10_out, _ = tree_causal_conv1d_reference(
-                            mixed_qkv_spec[_fr10_start:_fr10_end],
-                            _fr10_prior_conv_state_bank[_fr10_b],
-                            conv_weights,
-                            self.conv1d.bias,
-                            _fr10_parent,
-                            activation=self.activation,
+                        _fr10_x = mixed_qkv_spec[_fr10_start:_fr10_end]
+                        _fr10_accept_offset = (
+                            num_accepted_tokens[_fr10_b].to(torch.long) - 1
+                            if num_accepted_tokens is not None
+                            else torch.zeros((), dtype=torch.long, device=_fr10_x.device)
                         )
+                        _fr10_prior_cols = _fr10_prior_col_base + _fr10_accept_offset
+                        _fr10_prior_window = _fr10_prior_conv_state_bank[
+                            _fr10_b
+                        ].index_select(1, _fr10_prior_cols)
+                        _fr10_source = torch.cat(
+                            (_fr10_prior_window.transpose(0, 1), _fr10_x),
+                            dim=0,
+                        )
+                        _fr10_window = _fr10_source.index_select(
+                            0, _fr10_source_flat
+                        ).view(_fr10_tree_n, _fr10_width, _fr10_x.size(1))
+                        if self.conv1d.bias is None:
+                            _fr10_acc = torch.zeros_like(_fr10_x, dtype=torch.float32)
+                        else:
+                            _fr10_acc = self.conv1d.bias.to(torch.float32).unsqueeze(
+                                0
+                            ).expand_as(_fr10_x.float()).clone()
+                        for _fr10_col in range(_fr10_width):
+                            _fr10_acc = _fr10_acc + (
+                                _fr10_window[:, _fr10_col, :].to(torch.float32)
+                                * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
+                            )
+                        if self.activation in (True, "silu", "swish"):
+                            _fr10_acc = torch.nn.functional.silu(_fr10_acc)
+                        _fr10_out = _fr10_acc.to(dtype=mixed_qkv_spec.dtype)
                         _fr10_tree_conv_out[_fr10_start:_fr10_end] = _fr10_out
-                        if _fr10_log_conv_diag:
-                            _fr10_path0_x = mixed_qkv_spec[
-                                _fr10_start:_fr10_end
-                            ].index_select(0, _fr10_path0_node_tensor)
-                            _fr10_path0_ref, _ = tree_causal_conv1d_reference(
+                        _fr10_path0_x = _fr10_x.index_select(
+                            0, _fr10_path0_node_tensor
+                        )
+                        _fr10_path0_state_source = torch.cat(
+                            (
+                                _fr10_prior_conv_state_bank[_fr10_b].transpose(0, 1),
                                 _fr10_path0_x,
-                                _fr10_prior_conv_state_bank[_fr10_b],
-                                conv_weights,
-                                self.conv1d.bias,
-                                _fr10_path0_parent,
-                                activation=self.activation,
+                            ),
+                            dim=0,
+                        )
+                        _fr10_store_idx = (
+                            _fr10_accept_offset
+                            + 1
+                            + torch.arange(
+                                conv_state.size(2),
+                                dtype=torch.long,
+                                device=mixed_qkv_spec.device,
+                            )
+                        )
+                        _fr10_new_state = _fr10_path0_state_source.index_select(
+                            0, _fr10_store_idx
+                        ).transpose(0, 1).to(dtype=conv_state.dtype)
+                        conv_state.index_copy_(
+                            0,
+                            spec_state_indices_tensor[_fr10_b : _fr10_b + 1, 0].to(
+                                torch.long
+                            ),
+                            _fr10_new_state.unsqueeze(0),
+                        )
+                        if _fr10_log_conv_diag:
+                            _fr10_path0_source = torch.cat(
+                                (_fr10_prior_window.transpose(0, 1), _fr10_path0_x),
+                                dim=0,
+                            )
+                            _fr10_path0_window = _fr10_path0_source.index_select(
+                                0, _fr10_path0_source_flat
+                            ).view(
+                                _fr10_path0_node_tensor.numel(),
+                                _fr10_width,
+                                _fr10_path0_x.size(1),
+                            )
+                            if self.conv1d.bias is None:
+                                _fr10_path0_acc = torch.zeros_like(
+                                    _fr10_path0_x, dtype=torch.float32
+                                )
+                            else:
+                                _fr10_path0_acc = self.conv1d.bias.to(
+                                    torch.float32
+                                ).unsqueeze(0).expand_as(_fr10_path0_x.float()).clone()
+                            for _fr10_col in range(_fr10_width):
+                                _fr10_path0_acc = _fr10_path0_acc + (
+                                    _fr10_path0_window[:, _fr10_col, :].to(
+                                        torch.float32
+                                    )
+                                    * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
+                                )
+                            if self.activation in (True, "silu", "swish"):
+                                _fr10_path0_acc = torch.nn.functional.silu(
+                                    _fr10_path0_acc
+                                )
+                            _fr10_path0_ref = _fr10_path0_acc.to(
+                                dtype=mixed_qkv_spec.dtype
                             )
                             _fr10_tree_path0 = _fr10_out.index_select(
                                 0, _fr10_path0_node_tensor
                             )
-                            _fr10_native_flat_path0 = mixed_qkv_spec_native[
-                                _fr10_start:_fr10_end
-                            ].index_select(0, _fr10_path0_node_tensor)
+                            _fr10_flat_window = _fr10_source.index_select(
+                                0, _fr10_flat_source_flat
+                            ).view(_fr10_tree_n, _fr10_width, _fr10_x.size(1))
+                            if self.conv1d.bias is None:
+                                _fr10_flat_acc = torch.zeros_like(
+                                    _fr10_x, dtype=torch.float32
+                                )
+                            else:
+                                _fr10_flat_acc = self.conv1d.bias.to(
+                                    torch.float32
+                                ).unsqueeze(0).expand_as(_fr10_x.float()).clone()
+                            for _fr10_col in range(_fr10_width):
+                                _fr10_flat_acc = _fr10_flat_acc + (
+                                    _fr10_flat_window[:, _fr10_col, :].to(
+                                        torch.float32
+                                    )
+                                    * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
+                                )
+                            if self.activation in (True, "silu", "swish"):
+                                _fr10_flat_acc = torch.nn.functional.silu(
+                                    _fr10_flat_acc
+                                )
+                            _fr10_native_flat_path0 = _fr10_flat_acc.to(
+                                dtype=mixed_qkv_spec.dtype
+                            ).index_select(0, _fr10_path0_node_tensor)
                             _fr10_tree_delta = (
                                 _fr10_tree_path0.float() - _fr10_path0_ref.float()
                             ).abs()
@@ -402,9 +548,35 @@ def _patch_gdn_linear() -> bool:
                             "FR10 tree causal-conv fallback to native flat order: %s",
                             _fr10_tree_conv_exc,
                         )
-                    mixed_qkv_spec = mixed_qkv_spec_native
+                    mixed_qkv_spec = causal_conv1d_update(
+                        mixed_qkv_spec,
+                        conv_state,
+                        conv_weights,
+                        self.conv1d.bias,
+                        self.activation,
+                        conv_state_indices=spec_state_indices_tensor[:, 0][
+                            : attn_metadata.num_spec_decodes
+                        ],
+                        num_accepted_tokens=num_accepted_tokens,
+                        query_start_loc=spec_query_start_loc,
+                        max_query_len=spec_state_indices_tensor.size(-1),
+                        validate_data=False,
+                    )
             else:
-                mixed_qkv_spec = mixed_qkv_spec_native
+                mixed_qkv_spec = causal_conv1d_update(
+                    mixed_qkv_spec,
+                    conv_state,
+                    conv_weights,
+                    self.conv1d.bias,
+                    self.activation,
+                    conv_state_indices=spec_state_indices_tensor[:, 0][  # type: ignore[index]
+                        : attn_metadata.num_spec_decodes  # type: ignore[attr-defined]
+                    ],
+                    num_accepted_tokens=num_accepted_tokens,
+                    query_start_loc=spec_query_start_loc,
+                    max_query_len=spec_state_indices_tensor.size(-1),
+                    validate_data=False,
+                )
 '''
     if conv_needle not in text:
         raise RuntimeError("FR10 GDN causal conv spec branch needle not found")
