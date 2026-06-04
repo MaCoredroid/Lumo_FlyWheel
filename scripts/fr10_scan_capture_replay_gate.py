@@ -92,15 +92,31 @@ def evaluate(payload_path: Path, *, out_path: Path | None = None) -> dict[str, A
         h0,
         output_scale,
     )
+    flat_parent = [-1] + list(range(n_actual - 1))
+    flat_out, flat_state = native_update_serial_per_path(
+        Tree(tuple(flat_parent)),
+        q,
+        k,
+        value_spec,
+        a,
+        b,
+        A_log,
+        dt_bias,
+        h0,
+        output_scale,
+    )
     torch.cuda.synchronize()
 
     replay_out_n = replay_out[:n_actual]
     replay_state_n = replay_state[:n_actual]
+    flat_out_delta = _max_abs(flat_out, serial_out)
+    flat_state_delta = _max_abs(flat_state, serial_state)
     result = {
         "schema": "fr10.scan_capture_replay_gate.v1",
         "payload": str(payload_path),
         "layer_prefix": payload.get("layer_prefix"),
         "tree_parent": parent,
+        "flat_negative_parent": flat_parent,
         "n_actual": n_actual,
         "n_pad": n_pad,
         "serving_vs_replay_out_bit_exact": bool(torch.equal(serving_out, replay_out_n)),
@@ -111,6 +127,11 @@ def evaluate(payload_path: Path, *, out_path: Path | None = None) -> dict[str, A
         "replay_vs_serial_state_max_abs": _max_abs(replay_state_n, serial_state),
         "serving_vs_serial_out_max_abs": _max_abs(serving_out, serial_out),
         "serving_vs_serial_state_max_abs": _max_abs(serving_state, serial_state),
+        "flat_negative_vs_serial_out_max_abs": flat_out_delta,
+        "flat_negative_vs_serial_state_max_abs": flat_state_delta,
+        "flat_negative_control_pass": bool(
+            flat_out_delta > 0.0 or flat_state_delta > 0.0
+        ),
         "serving_replay_pass": bool(
             torch.equal(serving_out, replay_out_n)
             and torch.equal(serving_state, replay_state_n)
@@ -133,7 +154,11 @@ def main() -> int:
     args = parser.parse_args()
     result = evaluate(args.payload, out_path=args.out)
     print(json.dumps(result, indent=2, sort_keys=True))
-    return 0 if result["serving_replay_pass"] and result["serial_parity_pass"] else 2
+    return 0 if (
+        result["serving_replay_pass"]
+        and result["serial_parity_pass"]
+        and result["flat_negative_control_pass"]
+    ) else 2
 
 
 if __name__ == "__main__":
