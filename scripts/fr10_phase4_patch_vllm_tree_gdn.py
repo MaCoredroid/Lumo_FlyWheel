@@ -75,18 +75,31 @@ def _patch_gdn_attn() -> bool:
             "            count = int(counter.detach().cpu().item()) if counter is not None else None\n"
             "        except Exception as exc:\n"
             "            count = f\"ERROR: {exc}\"\n"
+            "        conv_diag = row.get(\"conv_diag\")\n"
+            "        try:\n"
+            "            conv_diag_values = (\n"
+            "                [float(x) for x in conv_diag.detach().cpu().tolist()]\n"
+            "                if conv_diag is not None\n"
+            "                else None\n"
+            "            )\n"
+            "        except Exception as exc:\n"
+            "            conv_diag_values = f\"ERROR: {exc}\"\n"
             "        rows.append({\n"
             "            \"shape\": row.get(\"shape\"),\n"
             "            \"parent\": row.get(\"parent\"),\n"
+            "            \"path0_nodes\": row.get(\"path0_nodes\"),\n"
             "            \"has_sibling\": row.get(\"has_sibling\"),\n"
             "            \"count\": count,\n"
+            "            \"conv_diag\": conv_diag_values,\n"
             "        })\n"
             "    path = Path(dump_path)\n"
             "    path.parent.mkdir(parents=True, exist_ok=True)\n"
             "    path.write_text(json.dumps(rows, indent=2, sort_keys=True))\n"
             "\n"
             "\n"
-            "def _fr10_register_tree_counter(shape, parent, counter):\n"
+            "def _fr10_register_tree_counter(\n"
+            "    shape, parent, counter, conv_diag=None, path0_nodes=None\n"
+            "):\n"
             "    if not _fr10_metrics_enabled():\n"
             "        return\n"
             "    global _FR10_SIGNAL_INSTALLED\n"
@@ -94,8 +107,10 @@ def _patch_gdn_attn() -> bool:
             "    _FR10_TREE_COUNTERS.append({\n"
             "        \"shape\": shape,\n"
             "        \"parent\": list(parent),\n"
+            "        \"path0_nodes\": list(path0_nodes) if path0_nodes is not None else None,\n"
             "        \"has_sibling\": has_sibling,\n"
             "        \"counter\": counter,\n"
+            "        \"conv_diag\": conv_diag,\n"
             "    })\n"
             "    if not _FR10_SIGNAL_INSTALLED:\n"
             "        signal.signal(signal.SIGUSR1, _fr10_dump_tree_counters)\n"
@@ -113,6 +128,8 @@ def _patch_gdn_attn() -> bool:
             "    fr10_tree_strict_mask: torch.Tensor | None = None\n"
             "    fr10_tree_visible_mask: torch.Tensor | None = None\n"
             "    fr10_tree_invocation_counter: torch.Tensor | None = None\n"
+            "    fr10_tree_conv_diag: torch.Tensor | None = None\n"
+            "    fr10_tree_path0_nodes: torch.Tensor | None = None\n"
             "    fr10_tree_has_sibling: bool = False\n"
         ),
         1,
@@ -134,6 +151,8 @@ def _patch_gdn_attn() -> bool:
             "        self.fr10_tree_strict_mask = None\n"
             "        self.fr10_tree_visible_mask = None\n"
             "        self.fr10_tree_invocation_counter = None\n"
+            "        self.fr10_tree_conv_diag = None\n"
+            "        self.fr10_tree_path0_nodes = None\n"
             "        self.fr10_tree_has_sibling = False\n"
             "        spec_token_tree = None\n"
             "        try:\n"
@@ -150,6 +169,11 @@ def _patch_gdn_attn() -> bool:
             "            parent = [-1]\n"
             "            for choice in tree_choices:\n"
             "                parent.append(0 if len(choice) == 1 else index[choice[:-1]])\n"
+            "            path0_nodes = [0] + [\n"
+            "                index[choice]\n"
+            "                for choice in tree_choices\n"
+            "                if all(int(part) == 0 for part in choice)\n"
+            "            ]\n"
             "            n = len(parent)\n"
             "            n_pad = 1 << (n - 1).bit_length()\n"
             "            if n_pad > 16:\n"
@@ -168,13 +192,17 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_tree_parent = torch.tensor(parent, dtype=torch.int32, device=device)\n"
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
+            "            self.fr10_tree_path0_nodes = torch.tensor(path0_nodes, dtype=torch.long, device=device)\n"
             "            self.fr10_tree_has_sibling = any(parent.count(p) > 1 for p in set(parent) if p >= 0)\n"
             "            if _fr10_metrics_enabled():\n"
             "                self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int32, device=device)\n"
+            "                self.fr10_tree_conv_diag = torch.zeros((6,), dtype=torch.float32, device=device)\n"
             "                _fr10_register_tree_counter(\n"
             "                    shape=f\"n{n}_pad{n_pad}\",\n"
             "                    parent=parent,\n"
             "                    counter=self.fr10_tree_invocation_counter,\n"
+            "                    conv_diag=self.fr10_tree_conv_diag,\n"
+            "                    path0_nodes=path0_nodes,\n"
             "                )\n"
         ),
         1,
@@ -188,6 +216,8 @@ def _patch_gdn_attn() -> bool:
             "            fr10_tree_strict_mask=self.fr10_tree_strict_mask,\n"
             "            fr10_tree_visible_mask=self.fr10_tree_visible_mask,\n"
             "            fr10_tree_invocation_counter=self.fr10_tree_invocation_counter,\n"
+            "            fr10_tree_conv_diag=self.fr10_tree_conv_diag,\n"
+            "            fr10_tree_path0_nodes=self.fr10_tree_path0_nodes,\n"
             "            fr10_tree_has_sibling=self.fr10_tree_has_sibling,\n"
             "            nums_dict=nums_dict,\n"
         ),
@@ -294,8 +324,23 @@ def _patch_gdn_linear() -> bool:
                             if len(_fr10_choice) == 1
                             else _fr10_index[_fr10_choice[:-1]]
                         )
+                    _fr10_path0_node_tensor = getattr(
+                        attn_metadata, "fr10_tree_path0_nodes", None
+                    )
+                    assert _fr10_path0_node_tensor is not None
+                    _fr10_path0_parent = [-1] + [
+                        _fr10_i - 1
+                        for _fr10_i in range(1, _fr10_path0_node_tensor.numel())
+                    ]
                     _fr10_tree_n = len(_fr10_parent)
                     _fr10_tree_conv_out = torch.empty_like(mixed_qkv_spec_native)
+                    _fr10_conv_diag = getattr(
+                        attn_metadata, "fr10_tree_conv_diag", None
+                    )
+                    _fr10_log_conv_diag = (
+                        os.environ.get("FR10_METRICS", "0") == "1"
+                        and _fr10_conv_diag is not None
+                    )
                     assert _fr10_prior_conv_state_bank is not None
                     for _fr10_b in range(attn_metadata.num_spec_decodes):
                         _fr10_start = _fr10_b * _fr10_tree_n
@@ -309,6 +354,47 @@ def _patch_gdn_linear() -> bool:
                             activation=self.activation,
                         )
                         _fr10_tree_conv_out[_fr10_start:_fr10_end] = _fr10_out
+                        if _fr10_log_conv_diag:
+                            _fr10_path0_x = mixed_qkv_spec[
+                                _fr10_start:_fr10_end
+                            ].index_select(0, _fr10_path0_node_tensor)
+                            _fr10_path0_ref, _ = tree_causal_conv1d_reference(
+                                _fr10_path0_x,
+                                _fr10_prior_conv_state_bank[_fr10_b],
+                                conv_weights,
+                                self.conv1d.bias,
+                                _fr10_path0_parent,
+                                activation=self.activation,
+                            )
+                            _fr10_tree_path0 = _fr10_out.index_select(
+                                0, _fr10_path0_node_tensor
+                            )
+                            _fr10_native_flat_path0 = mixed_qkv_spec_native[
+                                _fr10_start:_fr10_end
+                            ].index_select(0, _fr10_path0_node_tensor)
+                            _fr10_tree_delta = (
+                                _fr10_tree_path0.float() - _fr10_path0_ref.float()
+                            ).abs()
+                            _fr10_native_delta = (
+                                _fr10_native_flat_path0.float()
+                                - _fr10_path0_ref.float()
+                            ).abs()
+                            _fr10_tree_max = _fr10_tree_delta.max()
+                            _fr10_native_max = _fr10_native_delta.max()
+                            _fr10_conv_diag[0].copy_(
+                                torch.maximum(_fr10_conv_diag[0], _fr10_tree_max)
+                            )
+                            _fr10_conv_diag[1].copy_(
+                                torch.maximum(_fr10_conv_diag[1], _fr10_native_max)
+                            )
+                            _fr10_conv_diag[2].add_(
+                                (_fr10_tree_max != 0).to(dtype=torch.float32)
+                            )
+                            _fr10_conv_diag[3].add_(
+                                (_fr10_native_max != 0).to(dtype=torch.float32)
+                            )
+                            _fr10_conv_diag[4].add_(1.0)
+                            _fr10_conv_diag[5].fill_(float(_fr10_tree_n))
                     mixed_qkv_spec = _fr10_tree_conv_out
                 except Exception as _fr10_tree_conv_exc:
                     if os.environ.get("FR10_METRICS", "0") == "1":

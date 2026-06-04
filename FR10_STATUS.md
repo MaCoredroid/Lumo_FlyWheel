@@ -2,6 +2,16 @@
 
 Updated: 2026-06-04 03:52 UTC
 
+## Current User Decision: Conv Only
+
+- User clarified and recorded the decision on 2026-06-04: the remaining STree gap is the target GDN causal convolution, not the drafter. Native MTP and tree MTP use the same MTP head; the only possible drafter issue would have been recurrent state conditioning, and overlay `f727928a` already drafts path0 as a separate clean native spine. Therefore drafter work is dropped unless path0 tokens are explicitly proven non-native.
+- Precise serving suspect: `gdn_linear_attn.py` stock `causal_conv1d_update(...)` in the spec/tree path computes over flattened tree order, so a node's conv window can include siblings instead of root-path ancestors. The existing `tree_causal_conv1d_reference`/conv parity gates are the right math; the open task is serving integration: ensure the tree-aware ancestor-gather conv replaces/wraps the live spec conv and feeds the scan.
+- Immediate conv diagnostic: in tree_mtp-only serving, dump path0 tree-aware conv output versus a pure linear/path0 causal conv on the same path0 token sequence, and also dump stock flattened conv on those same path0 nodes. Path0 tree-aware conv must match the linear/path0 conv; stock flattened conv divergence is the sibling-contamination signature.
+- Gate chain after the conv fix, in order:
+  1. Path0 serving conv parity: tree-aware path0 conv equals the pure path0/linear conv on the same tokens, with stock-flat divergence documented where branches interleave.
+  2. Tier 1 spine health: tree_mtp path0 survival returns to the native gradual band (`~2.6/event`, e.g. `{1:362,2:300,3:230}`), with no depth-2 cliff.
+  3. Superset acceptance win: committed `fr10_superset_gate.py` must show no internal superset violations (`tree accepted >= tree path0` per event) and aggregate tree accepted/event strictly above stock/native MTP-5 (`~2.6-3.2/event`). Path0==native only unbreaks the spine; FR10 is done only when branches recover enough tokens to beat native MTP-5 while L1 scan and conv gates stay green.
+
 ## Current Phase
 
 - P1: CPU GDN tree-algebra parity proof passed. CPU recurrent rule is only the correctness oracle/gate, never the final kernel deliverable.
