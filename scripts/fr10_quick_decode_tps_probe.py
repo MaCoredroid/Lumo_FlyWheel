@@ -12,6 +12,7 @@ import argparse
 import json
 import time
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -128,8 +129,9 @@ def _run_requests(
     temperature: float,
     top_p: float,
     timeout: float,
-) -> tuple[list[dict[str, Any]], float]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], float]:
     records: list[dict[str, Any]] = []
+    request_rows: list[dict[str, Any]] = []
     t0 = time.time()
     for prompt_id, prompt in enumerate(prompts):
         next_sample = 0
@@ -145,10 +147,14 @@ def _run_requests(
                 "vllm_xargs": {"fr10_decode_mode": mode},
             }
             req_t0 = time.time()
+            ts_request_received = datetime.now(timezone.utc).isoformat()
             data = _post_json(endpoint, "/v1/completions", payload, timeout=timeout)
+            ts_completed = datetime.now(timezone.utc).isoformat()
             req_elapsed = time.time() - req_t0
+            req_completion_tokens = 0
             for choice in data["choices"]:
                 token_ids = choice.get("token_ids") or []
+                req_completion_tokens += len(token_ids)
                 records.append(
                     {
                         "mode": mode,
@@ -160,8 +166,23 @@ def _run_requests(
                         "request_elapsed_s": req_elapsed,
                     }
                 )
+            request_rows.append(
+                {
+                    "ts_request_received": ts_request_received,
+                    "ts_completed": ts_completed,
+                    "oracle_session_id": f"fr10_quick_{mode}",
+                    "oracle_run_anchor": f"{mode}_prompt{prompt_id}_sample{next_sample}",
+                    "mode": mode,
+                    "prompt_id": prompt_id,
+                    "batch_size": n,
+                    "completion_tokens": req_completion_tokens,
+                    "decode_sum_s": req_elapsed,
+                    "num_requests_running_before": n,
+                    "num_requests_running_after": 0,
+                }
+            )
             next_sample += n
-    return records, time.time() - t0
+    return records, request_rows, time.time() - t0
 
 
 def _summarize_mode(
@@ -215,6 +236,7 @@ def main() -> int:
     parser.add_argument("--wait-health", type=float, default=0.0)
     parser.add_argument("--request-timeout", type=float, default=900.0)
     parser.add_argument("--warmup-samples", type=int, default=1)
+    parser.add_argument("--request-metrics-out")
     args = parser.parse_args()
 
     if args.wait_health:
@@ -232,6 +254,7 @@ def main() -> int:
         "prompts": prompts,
         "modes": {},
     }
+    all_request_rows: list[dict[str, Any]] = []
     for mode in args.modes:
         reset_error = _reset_prefix_cache(args.endpoint)
         if args.warmup_samples:
@@ -248,7 +271,7 @@ def main() -> int:
                 timeout=args.request_timeout,
             )
         before = _scrape_metrics(args.endpoint)
-        records, wall_s = _run_requests(
+        records, request_rows, wall_s = _run_requests(
             endpoint=args.endpoint,
             model=args.model,
             prompts=prompts,
@@ -260,6 +283,7 @@ def main() -> int:
             top_p=args.top_p,
             timeout=args.request_timeout,
         )
+        all_request_rows.extend(request_rows)
         after = _scrape_metrics(args.endpoint)
         result["modes"][mode] = _summarize_mode(
             mode=mode,
@@ -271,6 +295,12 @@ def main() -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    if args.request_metrics_out:
+        metrics_out = Path(args.request_metrics_out)
+        metrics_out.parent.mkdir(parents=True, exist_ok=True)
+        with metrics_out.open("w", encoding="utf-8") as fh:
+            for row in all_request_rows:
+                fh.write(json.dumps(row, sort_keys=True) + "\n")
     print(json.dumps(result["modes"], indent=2, sort_keys=True))
     return 0
 
