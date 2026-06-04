@@ -1,0 +1,686 @@
+{
+  "schema": "fr10.draft_token_parity_compare.v1",
+  "verdict": "match",
+  "rows_compared": 32,
+  "depth": 5,
+  "by_depth": [
+    {
+      "depth": 0,
+      "matches": 32,
+      "compared": 32,
+      "mismatches": 0,
+      "match_rate": 1.0
+    },
+    {
+      "depth": 1,
+      "matches": 32,
+      "compared": 32,
+      "mismatches": 0,
+      "match_rate": 1.0
+    },
+    {
+      "depth": 2,
+      "matches": 32,
+      "compared": 32,
+      "mismatches": 0,
+      "match_rate": 1.0
+    },
+    {
+      "depth": 3,
+      "matches": 32,
+      "compared": 32,
+      "mismatches": 0,
+      "match_rate": 1.0
+    },
+    {
+      "depth": 4,
+      "matches": 32,
+      "compared": 32,
+      "mismatches": 0,
+      "match_rate": 1.0
+    }
+  ],
+  "first_mismatch": null,
+  "table": [
+    {
+      "row_index": 0,
+      "forced_position": 16,
+      "native": [
+        8526,
+        310,
+        381,
+        264,
+        4145
+      ],
+      "tree_path0": [
+        8526,
+        310,
+        381,
+        264,
+        4145
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 1,
+      "forced_position": 17,
+      "native": [
+        4145,
+        11,
+        632,
+        95449,
+        11
+      ],
+      "tree_path0": [
+        4145,
+        11,
+        632,
+        95449,
+        11
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 2,
+      "forced_position": 18,
+      "native": [
+        19264,
+        279,
+        12287,
+        314,
+        264
+      ],
+      "tree_path0": [
+        19264,
+        279,
+        12287,
+        314,
+        264
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 3,
+      "forced_position": 19,
+      "native": [
+        28746,
+        314,
+        264,
+        3611,
+        80347
+      ],
+      "tree_path0": [
+        28746,
+        314,
+        264,
+        3611,
+        80347
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 4,
+      "forced_position": 20,
+      "native": [
+        364,
+        264,
+        3274,
+        421,
+        7225
+      ],
+      "tree_path0": [
+        364,
+        264,
+        3274,
+        421,
+        7225
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 5,
+      "forced_position": 21,
+      "native": [
+        632,
+        49971,
+        1879,
+        310,
+        279
+      ],
+      "tree_path0": [
+        632,
+        49971,
+        1879,
+        310,
+        279
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 6,
+      "forced_position": 22,
+      "native": [
+        310,
+        5790,
+        279,
+        1558,
+        369
+      ],
+      "tree_path0": [
+        310,
+        5790,
+        279,
+        1558,
+        369
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 7,
+      "forced_position": 23,
+      "native": [
+        1228,
+        279,
+        1558,
+        725,
+        5548
+      ],
+      "tree_path0": [
+        1228,
+        279,
+        1558,
+        725,
+        5548
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 8,
+      "forced_position": 24,
+      "native": [
+        1558,
+        725,
+        5138,
+        15977,
+        14855
+      ],
+      "tree_path0": [
+        1558,
+        725,
+        5138,
+        15977,
+        14855
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 9,
+      "forced_position": 25,
+      "native": [
+        5933,
+        15977,
+        13,
+        198,
+        760
+      ],
+      "tree_path0": [
+        5933,
+        15977,
+        13,
+        198,
+        760
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 10,
+      "forced_position": 26,
+      "native": [
+        321,
+        5286,
+        24123,
+        13,
+        271
+      ],
+      "tree_path0": [
+        321,
+        5286,
+        24123,
+        13,
+        271
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 11,
+      "forced_position": 27,
+      "native": [
+        13,
+        198,
+        760,
+        2468,
+        369
+      ],
+      "tree_path0": [
+        13,
+        198,
+        760,
+        2468,
+        369
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 12,
+      "forced_position": 28,
+      "native": [
+        198,
+        258,
+        279,
+        4706,
+        6136
+      ],
+      "tree_path0": [
+        198,
+        258,
+        279,
+        4706,
+        6136
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 13,
+      "forced_position": 29,
+      "native": [
+        258,
+        264,
+        63520,
+        45543,
+        14855
+      ],
+      "tree_path0": [
+        258,
+        264,
+        63520,
+        45543,
+        14855
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 14,
+      "forced_position": 30,
+      "native": [
+        264,
+        10756,
+        14751,
+        1931,
+        63520
+      ],
+      "tree_path0": [
+        264,
+        10756,
+        14751,
+        1931,
+        63520
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 15,
+      "forced_position": 31,
+      "native": [
+        13,
+        271,
+        2,
+        561,
+        5952
+      ],
+      "tree_path0": [
+        13,
+        271,
+        2,
+        561,
+        5952
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 16,
+      "forced_position": 32,
+      "native": [
+        271,
+        760,
+        5614,
+        314,
+        411
+      ],
+      "tree_path0": [
+        271,
+        760,
+        5614,
+        314,
+        411
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 17,
+      "forced_position": 33,
+      "native": [
+        279,
+        3817,
+        4129,
+        369,
+        5642
+      ],
+      "tree_path0": [
+        279,
+        3817,
+        4129,
+        369,
+        5642
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 18,
+      "forced_position": 34,
+      "native": [
+        1902,
+        524,
+        381,
+        24276,
+        430
+      ],
+      "tree_path0": [
+        1902,
+        524,
+        381,
+        24276,
+        430
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 19,
+      "forced_position": 35,
+      "native": [
+        1902,
+        524,
+        381,
+        37157,
+        13301
+      ],
+      "tree_path0": [
+        1902,
+        524,
+        381,
+        37157,
+        13301
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 20,
+      "forced_position": 36,
+      "native": [
+        381,
+        14733,
+        321,
+        524,
+        27483
+      ],
+      "tree_path0": [
+        381,
+        14733,
+        321,
+        524,
+        27483
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 21,
+      "forced_position": 37,
+      "native": [
+        14733,
+        321,
+        32680,
+        13,
+        271
+      ],
+      "tree_path0": [
+        14733,
+        321,
+        32680,
+        13,
+        271
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 22,
+      "forced_position": 38,
+      "native": [
+        430,
+        29440,
+        13,
+        271,
+        760
+      ],
+      "tree_path0": [
+        430,
+        29440,
+        13,
+        271,
+        760
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 23,
+      "forced_position": 39,
+      "native": [
+        42642,
+        13,
+        271,
+        760,
+        1879
+      ],
+      "tree_path0": [
+        42642,
+        13,
+        271,
+        760,
+        1879
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 24,
+      "forced_position": 40,
+      "native": [
+        513,
+        20335,
+        7262,
+        198,
+        1719
+      ],
+      "tree_path0": [
+        513,
+        20335,
+        7262,
+        198,
+        1719
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 25,
+      "forced_position": 41,
+      "native": [
+        20335,
+        7154,
+        198,
+        64,
+        491
+      ],
+      "tree_path0": [
+        20335,
+        7154,
+        198,
+        64,
+        491
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 26,
+      "forced_position": 42,
+      "native": [
+        35007,
+        198,
+        16842,
+        13,
+        271
+      ],
+      "tree_path0": [
+        35007,
+        198,
+        16842,
+        13,
+        271
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 27,
+      "forced_position": 43,
+      "native": [
+        198,
+        90406,
+        391,
+        5324,
+        13
+      ],
+      "tree_path0": [
+        198,
+        90406,
+        391,
+        5324,
+        13
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 28,
+      "forced_position": 44,
+      "native": [
+        198,
+        760,
+        5614,
+        369,
+        310
+      ],
+      "tree_path0": [
+        198,
+        760,
+        5614,
+        369,
+        310
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 29,
+      "forced_position": 45,
+      "native": [
+        760,
+        27867,
+        369,
+        5995,
+        310
+      ],
+      "tree_path0": [
+        760,
+        27867,
+        369,
+        5995,
+        310
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 30,
+      "forced_position": 46,
+      "native": [
+        271,
+        248069,
+        271,
+        5328,
+        3300
+      ],
+      "tree_path0": [
+        271,
+        248069,
+        271,
+        5328,
+        3300
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    },
+    {
+      "row_index": 31,
+      "forced_position": 47,
+      "native": [
+        16,
+        17,
+        25,
+        15,
+        15
+      ],
+      "tree_path0": [
+        16,
+        17,
+        25,
+        15,
+        15
+      ],
+      "match": true,
+      "first_mismatch_depth": null
+    }
+  ]
+}
