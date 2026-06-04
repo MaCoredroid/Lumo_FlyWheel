@@ -37,6 +37,15 @@ DIAG = {
     "flat_sibling_leaf_path0_nonzero_count": 11,
     "staged_ssm_state_vs_tree_state_max": 12,
     "staged_ssm_state_nonzero_count": 13,
+    "conv_tree_eligible_spec_rows": 14,
+    "conv_tree_branch_spec_rows": 15,
+    "conv_flat_fallback_spec_rows": 16,
+    "scan_tree_eligible_spec_rows": 17,
+    "scan_tree_branch_spec_rows": 18,
+    "scan_flat_fallback_spec_rows": 19,
+    "conv_num_prefills_sum": 20,
+    "conv_num_decodes_sum": 21,
+    "scan_num_spec_decodes_sum": 22,
 }
 
 
@@ -143,6 +152,44 @@ def evaluate_wiring(
 
     conv_all = _diag(best, "conv_all_nodes_vs_serial_max")
     flat_path0 = _diag(best, "conv_flat_path0_vs_linear_ref_max")
+    conv_eligible = _diag(best, "conv_tree_eligible_spec_rows")
+    conv_branch = _diag(best, "conv_tree_branch_spec_rows")
+    conv_fallback = _diag(best, "conv_flat_fallback_spec_rows")
+    scan_eligible = _diag(best, "scan_tree_eligible_spec_rows")
+    scan_branch = _diag(best, "scan_tree_branch_spec_rows")
+    scan_fallback = _diag(best, "scan_flat_fallback_spec_rows")
+    matrix.append(
+        _bool_row(
+            gate="tree_spec_branch_engagement",
+            case="wiring",
+            regime="structural_hard_zero_violation",
+            passed=(
+                conv_eligible is not None
+                and conv_eligible > 0.0
+                and conv_branch == conv_eligible
+                and (conv_fallback or 0.0) == 0.0
+                and scan_eligible is not None
+                and scan_eligible > 0.0
+                and scan_branch == scan_eligible
+                and (scan_fallback or 0.0) == 0.0
+            ),
+            detail=(
+                "every eligible tree_mtp spec row must enter the tree-aware conv "
+                "and scan branches; flat fallback on eligible spec rows is a hard failure"
+            ),
+            metrics={
+                "conv_tree_eligible_spec_rows": conv_eligible,
+                "conv_tree_branch_spec_rows": conv_branch,
+                "conv_flat_fallback_spec_rows": conv_fallback,
+                "scan_tree_eligible_spec_rows": scan_eligible,
+                "scan_tree_branch_spec_rows": scan_branch,
+                "scan_flat_fallback_spec_rows": scan_fallback,
+                "conv_num_prefills_sum": _diag(best, "conv_num_prefills_sum"),
+                "conv_num_decodes_sum": _diag(best, "conv_num_decodes_sum"),
+                "scan_num_spec_decodes_sum": _diag(best, "scan_num_spec_decodes_sum"),
+            },
+        )
+    )
     matrix.append(
         _bool_row(
             gate="conv_gather",
@@ -261,7 +308,7 @@ def evaluate_wiring(
     )
 
     summary = {
-        "schema": "fr10.serving_wiring_gate.v2",
+        "schema": "fr10.serving_wiring_gate.v3",
         "passed": all(row.passed for row in matrix),
         "counter_dump": str(counters_path),
         "commit_log": str(commit_log_path) if commit_log_path else None,

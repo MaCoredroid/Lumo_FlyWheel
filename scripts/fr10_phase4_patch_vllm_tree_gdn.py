@@ -341,9 +341,17 @@ def _patch_gdn_linear() -> bool:
                 os.environ.get("FR10_ENABLE_TREE_GDN") == "1"
                 and _fr10_active_decode_mode == "tree_mtp"
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
-                and attn_metadata.num_prefills == 0
-                and attn_metadata.num_decodes == 0
+                and attn_metadata.num_spec_decodes > 0
             )
+            _fr10_conv_diag = getattr(attn_metadata, "fr10_tree_conv_diag", None)
+            if os.environ.get("FR10_METRICS", "0") == "1" and _fr10_conv_diag is not None:
+                _fr10_conv_diag[14].add_(float(attn_metadata.num_spec_decodes))
+                if use_fr10_tree_conv:
+                    _fr10_conv_diag[15].add_(float(attn_metadata.num_spec_decodes))
+                else:
+                    _fr10_conv_diag[16].add_(float(attn_metadata.num_spec_decodes))
+                _fr10_conv_diag[20].add_(float(attn_metadata.num_prefills))
+                _fr10_conv_diag[21].add_(float(attn_metadata.num_decodes))
             if use_fr10_tree_conv:
                 _fr10_prior_conv_state_bank = torch.index_select(
                     conv_state,
@@ -797,9 +805,21 @@ def _patch_gdn_linear() -> bool:
                 os.environ.get("FR10_ENABLE_TREE_GDN") == "1"
                 and _fr10_active_decode_mode == "tree_mtp"
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
-                and attn_metadata.num_prefills == 0
-                and attn_metadata.num_decodes == 0
+                and attn_metadata.num_spec_decodes > 0
             )
+            _fr10_scan_branch_diag = getattr(
+                attn_metadata, "fr10_tree_conv_diag", None
+            )
+            if (
+                os.environ.get("FR10_METRICS", "0") == "1"
+                and _fr10_scan_branch_diag is not None
+            ):
+                _fr10_scan_branch_diag[17].add_(float(attn_metadata.num_spec_decodes))
+                if use_fr10_tree:
+                    _fr10_scan_branch_diag[18].add_(float(attn_metadata.num_spec_decodes))
+                else:
+                    _fr10_scan_branch_diag[19].add_(float(attn_metadata.num_spec_decodes))
+                _fr10_scan_branch_diag[22].add_(float(attn_metadata.num_spec_decodes))
             if use_fr10_tree:
                 assert spec_query_start_loc is not None
                 assert spec_state_indices_tensor is not None
