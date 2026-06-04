@@ -752,6 +752,103 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     except Exception:
         pass
     return output_token_ids
+
+
+def _lumo_tree_canonical_multidraft_sample(
+    output_token_ids: torch.Tensor,
+    accepted_tree_rows: torch.Tensor,
+    num_draft_tokens,
+    draft_token_ids: torch.Tensor,
+    tree_parent_indices: torch.Tensor,
+    target_logits: torch.Tensor,
+    tree_self_logits: torch.Tensor,
+    draft_probs: torch.Tensor | None,
+    bonus_token_ids: torch.Tensor,
+    max_spec_len: int,
+) -> torch.Tensor:
+    """Reference sampled tree committer using the verified FR10 rule."""
+    if draft_probs is None:
+        raise RuntimeError(
+            "FR10 sampled tree committer requires draft_probs for canonical q"
+        )
+    import numpy as _fr10_np
+    from lumo_flywheel_serving.fr10_tree_rejection_sampler import (
+        sample_multidraft_rejection_step as _fr10_sample_step,
+    )
+
+    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+    drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
+    if hasattr(num_draft_tokens, 'detach'):
+        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+    else:
+        counts = [int(x) for x in num_draft_tokens]
+    target_probs_cpu = target_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
+    self_probs_cpu = tree_self_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
+    draft_probs_cpu = draft_probs.detach().cpu().numpy()
+    seed = int(torch.randint(0, 2**31 - 1, (1,), device=output_token_ids.device).cpu().item())
+    rng = _fr10_np.random.default_rng(seed)
+
+    out_rows = []
+    accepted_rows = []
+    start = 0
+    for req_i, node_count in enumerate(counts):
+        node_count = int(node_count)
+        parents = parents_cpu[start:start + node_count]
+        drafts = drafts_cpu[start:start + node_count]
+        current_parent = -1
+        accepted_row = 0
+        row = []
+        for _step in range(int(max_spec_len) + 1):
+            children = [
+                node for node, parent in enumerate(parents)
+                if int(parent) == int(current_parent)
+            ]
+            if not children:
+                if current_parent >= 0:
+                    row.append(
+                        int(rng.choice(
+                            self_probs_cpu.shape[1],
+                            p=self_probs_cpu[start + current_parent],
+                        ))
+                    )
+                elif req_i < int(bonus_token_ids.numel()):
+                    row.append(int(bonus_token_ids.reshape(-1)[req_i].detach().cpu().item()))
+                break
+
+            step = _fr10_sample_step(
+                target_probs_cpu[start + children[0]],
+                [draft_probs_cpu[start + child] for child in children],
+                rng=rng,
+            )
+            row.append(int(step.token_id))
+            if not step.accepted:
+                break
+            accepted_child = int(children[int(step.source_index)])
+            if int(step.token_id) != int(drafts[accepted_child]):
+                break
+            current_parent = accepted_child
+            accepted_row = int(current_parent) + 1
+        out_rows.append(row[:int(max_spec_len) + 1])
+        accepted_rows.append(int(accepted_row))
+        start += node_count
+
+    output_token_ids.fill_(-1)
+    for req_i, row in enumerate(out_rows):
+        for pos, token_id in enumerate(row):
+            output_token_ids[req_i, pos] = int(token_id)
+    accepted_tree_rows.copy_(
+        torch.tensor(accepted_rows, dtype=accepted_tree_rows.dtype,
+                     device=accepted_tree_rows.device)
+    )
+    globals()['_LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL'] = [int(x) for x in accepted_rows]
+    try:
+        from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
+        _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
+            int(x) for x in accepted_rows
+        ]
+    except Exception:
+        pass
+    return output_token_ids
 '''
     if helper_anchor not in text:
         raise RuntimeError("tree path-LCP helper anchor not found")
@@ -800,7 +897,8 @@ def _lumo_tree_path_lcp_max_greedy_sample(
 """
         stock_call_new = """        lumo_tree_parent_indices = getattr(metadata, "tree_parent_indices", None)
         lumo_tree_token_ids = None
-        if lumo_tree_parent_indices is not None and sampling_metadata.all_greedy:
+        lumo_tree_self_logits = None
+        if lumo_tree_parent_indices is not None:
             tree_self_logits = logits[metadata.tree_self_logits_indices]
             tree_self_logits = tree_self_logits.to(torch.float32)
             if not self.is_processed_logprobs_mode:
@@ -808,18 +906,19 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             tree_self_logits = self.apply_logits_processors(
                 tree_self_logits, sampling_metadata, metadata
             )
-            tree_self_logits = apply_sampling_constraints(
+            lumo_tree_self_logits = apply_sampling_constraints(
                 tree_self_logits,
                 metadata.cu_num_draft_tokens,
                 sampling_metadata,
             )
-            lumo_tree_token_ids = torch.stack(
-                [
-                    target_logits.argmax(dim=-1).to(torch.int32),
-                    tree_self_logits.argmax(dim=-1).to(torch.int32),
-                ],
-                dim=0,
-            ).contiguous()
+            if sampling_metadata.all_greedy:
+                lumo_tree_token_ids = torch.stack(
+                    [
+                        target_logits.argmax(dim=-1).to(torch.int32),
+                        lumo_tree_self_logits.argmax(dim=-1).to(torch.int32),
+                    ],
+                    dim=0,
+                ).contiguous()
 
         output_token_ids = rejection_sample(
             metadata.draft_token_ids,
@@ -832,6 +931,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             sampling_metadata,
             tree_parent_indices=lumo_tree_parent_indices,
             tree_token_ids=lumo_tree_token_ids,
+            tree_self_logits=lumo_tree_self_logits,
         )
 """
         if stock_call not in text:
@@ -846,6 +946,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     sampling_metadata: SamplingMetadata,
     tree_parent_indices: torch.Tensor | None = None,
     tree_token_ids: torch.Tensor | None = None,
+    tree_self_logits: torch.Tensor | None = None,
 ) -> torch.Tensor:
 """
         if stock_sig not in text:
@@ -871,6 +972,25 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             tree_parent_indices,
             tree_token_ids[0],
             tree_token_ids[1],
+            bonus_token_ids,
+            max_spec_len,
+        )
+
+    if tree_parent_indices is not None and not sampling_metadata.all_greedy:
+        if tree_self_logits is None:
+            raise RuntimeError("FR10 sampled tree committer missing self logits")
+        accepted_tree_rows = torch.empty(
+            (batch_size,), dtype=torch.int32, device=device
+        )
+        return _lumo_tree_canonical_multidraft_sample(
+            output_token_ids,
+            accepted_tree_rows,
+            num_draft_tokens,
+            draft_token_ids,
+            tree_parent_indices,
+            target_logits,
+            tree_self_logits,
+            draft_probs,
             bonus_token_ids,
             max_spec_len,
         )

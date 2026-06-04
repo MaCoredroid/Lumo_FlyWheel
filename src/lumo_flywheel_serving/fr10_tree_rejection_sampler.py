@@ -25,6 +25,13 @@ class ChiSquareResult:
     passed: bool
 
 
+@dataclass(frozen=True)
+class RejectionStep:
+    token_id: int
+    source_index: int
+    accepted: bool
+
+
 def normalize(probs: Sequence[float] | Array) -> Array:
     arr = np.asarray(probs, dtype=np.float64)
     if arr.ndim != 1:
@@ -125,6 +132,39 @@ def sample_multidraft_rejection(
     if rejected_count:
         tokens[~accepted] = rng.choice(p.shape[0], size=rejected_count, p=residual)
     return tokens
+
+
+def sample_multidraft_rejection_step(
+    target_p: Sequence[float] | Array,
+    draft_qs: Sequence[Sequence[float] | Array],
+    *,
+    rng: np.random.Generator,
+    weights: Sequence[float] | Array | None = None,
+) -> RejectionStep:
+    """One canonical multi-draft rejection step with source trace.
+
+    This is the serving-facing reference primitive. It uses the same
+    decomposition as ``sample_multidraft_rejection`` but returns which draft
+    branch was selected and whether the sampled draft token was accepted, so a
+    tree committer can descend only when a verified candidate node exists.
+    """
+
+    p = normalize(target_p)
+    qs = np.stack([normalize(q) for q in draft_qs])
+    w = canonical_draft_weights(p, qs) if weights is None else normalize(weights)
+    q_mix = mixture_distribution(qs, w)
+    source = int(rng.choice(qs.shape[0], p=w))
+    token = int(rng.choice(p.shape[0], p=qs[source]))
+    accept_prob = min(1.0, float(p[token] / q_mix[token]))
+    accepted = bool(rng.random() < accept_prob)
+    if accepted:
+        return RejectionStep(token_id=token, source_index=source, accepted=True)
+    residual = residual_distribution(p, q_mix)
+    return RejectionStep(
+        token_id=int(rng.choice(p.shape[0], p=residual)),
+        source_index=source,
+        accepted=False,
+    )
 
 
 def sample_biased_multidraft_control(

@@ -22,6 +22,15 @@
     "vocab_size": 4
   },
   "schema": "fr10.tree_sampler_convergence.v1",
+  "serving_step_multidraft": {
+    "chi_square": {
+      "df": 6,
+      "passed": true,
+      "statistic": 2.3852921491228067,
+      "threshold": 26.784609690826528
+    },
+    "samples": 200000
+  },
   "single_position_multidraft": {
     "chi_square": {
       "df": 6,

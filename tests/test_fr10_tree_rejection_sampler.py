@@ -17,6 +17,7 @@ from lumo_flywheel_serving.fr10_tree_rejection_sampler import (
     mixture_distribution,
     sample_biased_multidraft_control,
     sample_multidraft_rejection,
+    sample_multidraft_rejection_step,
     sample_two_step_tree_rejection,
 )
 
@@ -54,6 +55,22 @@ def test_multidraft_rejection_sampler_converges_to_target_distribution() -> None
     samples = sample_multidraft_rejection(p, _drafts(), n=200_000, rng=rng)
     observed = count_tokens(samples, len(p))
     result = chi_square_gof(observed, p)
+
+    assert result.passed, result
+
+
+def test_multidraft_rejection_step_converges_to_target_distribution() -> None:
+    rng = np.random.default_rng(20260607)
+    p = _target()
+    samples = np.fromiter(
+        (
+            sample_multidraft_rejection_step(p, _drafts(), rng=rng).token_id
+            for _ in range(200_000)
+        ),
+        dtype=np.int64,
+        count=200_000,
+    )
+    result = chi_square_gof(count_tokens(samples, len(p)), p)
 
     assert result.passed, result
 
