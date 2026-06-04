@@ -117,6 +117,35 @@ def test_normalize_responses_request_payload_maps_developer_role_to_system() -> 
     assert payload["input"][0]["role"] == "developer"
 
 
+def test_normalize_responses_request_payload_hoists_developer_role_to_front() -> None:
+    payload = {
+        "model": "qwen3.6-27b",
+        "input": [
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": "Patch the bug."}],
+            },
+            {
+                "role": "developer",
+                "content": [{"type": "input_text", "text": "Use tools."}],
+            },
+            {
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "I will inspect."}],
+            },
+        ],
+    }
+
+    normalized = normalize_responses_request_payload(payload)
+
+    assert [item["role"] for item in normalized["input"]] == [
+        "system",
+        "user",
+        "assistant",
+    ]
+    assert payload["input"][1]["role"] == "developer"
+
+
 def test_normalize_responses_response_payload_adds_reasoning_status() -> None:
     payload = {
         "type": "response.completed",

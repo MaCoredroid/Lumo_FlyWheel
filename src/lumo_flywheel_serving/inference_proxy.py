@@ -181,7 +181,17 @@ def _normalize_responses_input_roles(payload: dict[str, Any]) -> None:
             if item.get("role") == "developer":
                 item["role"] = "system"
         normalized_items.append(item)
-    payload["input"] = normalized_items
+    system_items = [
+        item
+        for item in normalized_items
+        if isinstance(item, dict) and item.get("role") == "system"
+    ]
+    non_system_items = [
+        item
+        for item in normalized_items
+        if not (isinstance(item, dict) and item.get("role") == "system")
+    ]
+    payload["input"] = system_items + non_system_items
 
 
 def normalize_responses_response_payload(payload: dict[str, Any]) -> dict[str, Any]:
