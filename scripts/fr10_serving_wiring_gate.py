@@ -126,6 +126,7 @@ def evaluate_wiring(
     commit_log_path: Path | None = None,
     commit_state_capture_path: Path | None = None,
     commit_native_handoff_path: Path | None = None,
+    src_native_handoff_path: Path | None = None,
     scan_replay_path: Path | None = None,
     atol: float = 0.0,
 ) -> tuple[list[MatrixRow], dict[str, Any]]:
@@ -142,6 +143,11 @@ def evaluate_wiring(
     )
     handoff_rows = (
         _load_jsonl(commit_native_handoff_path) if commit_native_handoff_path else []
+    )
+    src_native_handoff = (
+        json.loads(src_native_handoff_path.read_text(encoding="utf-8"))
+        if src_native_handoff_path and src_native_handoff_path.exists()
+        else None
     )
     matrix: list[MatrixRow] = []
 
@@ -350,6 +356,9 @@ def evaluate_wiring(
         native_handoff
         and len(native_handoff_pass_rows) == len(native_handoff)
         and native_handoff_powered_rows
+        and src_native_handoff
+        and src_native_handoff.get("src_native_pass") is True
+        and src_native_handoff.get("negative_powered") is True
         and scan_serial_has_wiring
     )
     matrix.append(
@@ -359,14 +368,13 @@ def evaluate_wiring(
             regime="deterministic_captured_replay_byte_exact",
             passed=commit_state_pass,
             detail=(
-                "next-event starting ssm_state and conv_state equal the previous "
-                "event's accepted tree-row state; scan captured replay establishes "
-                "that tree-row state equals serial-per-path native-over-accepted"
+                "next-event starting ssm_state and conv_state equal serial native "
+                "decode over only the previous event's accepted path"
                 if commit_state_pass
                 else (
                     "missing_or_failed_wiring_evidence: capture the cross-step "
-                    "handoff with FR10_TREE_GDN_COMMIT_HANDOFF_LOG and require "
-                    "next-event ssm_state and conv_state to equal native-over-accepted"
+                    "handoff with FR10_TREE_GDN_COMMIT_HANDOFF_LOG and "
+                    "FR10_TREE_GDN_SRC_NATIVE_PAYLOAD, then require src_native_pass"
                 )
             ),
             metrics={
@@ -377,6 +385,7 @@ def evaluate_wiring(
                 "commit_native_handoff_accept_rows": len(native_handoff_accept),
                 "commit_native_handoff_no_accept_rows": len(native_handoff_no_accept),
                 "commit_native_handoff_sample": native_handoff[:8],
+                "src_native_handoff": src_native_handoff,
                 "scan_serial_replay_required": True,
                 "scan_serial_replay_pass": scan_serial_has_wiring,
                 "atol": atol,
@@ -394,6 +403,9 @@ def evaluate_wiring(
         ),
         "commit_native_handoff": (
             str(commit_native_handoff_path) if commit_native_handoff_path else None
+        ),
+        "src_native_handoff": (
+            str(src_native_handoff_path) if src_native_handoff_path else None
         ),
         "scan_replay": str(scan_replay_path) if scan_replay_path else None,
         "selected_counter": best,
@@ -433,6 +445,7 @@ def main() -> int:
     parser.add_argument("--commit-log", type=Path)
     parser.add_argument("--commit-state-capture", type=Path)
     parser.add_argument("--commit-native-handoff", type=Path)
+    parser.add_argument("--src-native-handoff", type=Path)
     parser.add_argument("--scan-replay", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--container", default=None)
@@ -451,6 +464,7 @@ def main() -> int:
         commit_log_path=args.commit_log,
         commit_state_capture_path=args.commit_state_capture,
         commit_native_handoff_path=args.commit_native_handoff,
+        src_native_handoff_path=args.src_native_handoff,
         scan_replay_path=args.scan_replay,
         atol=args.atol,
     )

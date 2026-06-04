@@ -22,3 +22,13 @@ def test_phase4_tree_commit_uses_accepted_node_row_without_plus_one() -> None:
     assert "if _fr10_has_accept:" in text
     assert "accept_token_bias = _fr10_row" in text
     assert "and accept_token_bias > 0" not in text
+
+
+def test_phase4_patcher_exports_src_native_handoff_payload() -> None:
+    text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+
+    assert "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS" in text
+    assert "_LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS" in text
+    assert "FR10_TREE_GDN_SRC_NATIVE_PAYLOAD" in text
+    assert "next_read_ssm_state" in text
+    assert "next_read_conv_state" in text

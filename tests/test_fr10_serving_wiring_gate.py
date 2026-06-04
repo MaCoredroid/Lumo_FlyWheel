@@ -102,6 +102,7 @@ def test_serving_wiring_gate_requires_native_handoff_for_committed_state(tmp_pat
     counters = tmp_path / "counters.json"
     replay = tmp_path / "scan_replay.json"
     handoff = tmp_path / "handoff.jsonl"
+    src_native = tmp_path / "src_native.json"
     diag = [0.0] * 32
     diag[1] = 5.0
     diag[4] = 3.0
@@ -153,11 +154,16 @@ def test_serving_wiring_gate_requires_native_handoff_for_committed_state(tmp_pat
         + "\n",
         encoding="utf-8",
     )
+    src_native.write_text(
+        json.dumps({"src_native_pass": True, "negative_powered": True}) + "\n",
+        encoding="utf-8",
+    )
 
     matrix, _ = gate.evaluate_wiring(
         counters_path=counters,
         scan_replay_path=replay,
         commit_native_handoff_path=handoff,
+        src_native_handoff_path=src_native,
     )
     by_gate = {row.gate: row for row in matrix}
 
@@ -174,6 +180,7 @@ def test_serving_wiring_gate_treats_node0_as_accepted_handoff(tmp_path: Path) ->
     counters = tmp_path / "counters.json"
     replay = tmp_path / "scan_replay.json"
     handoff = tmp_path / "handoff.jsonl"
+    src_native = tmp_path / "src_native.json"
     diag = [0.0] * 32
     diag[4] = 1.0
     _write_counter(counters, diag)
@@ -200,11 +207,16 @@ def test_serving_wiring_gate_treats_node0_as_accepted_handoff(tmp_path: Path) ->
         + "\n",
         encoding="utf-8",
     )
+    src_native.write_text(
+        json.dumps({"src_native_pass": True, "negative_powered": True}) + "\n",
+        encoding="utf-8",
+    )
 
     matrix, _ = gate.evaluate_wiring(
         counters_path=counters,
         scan_replay_path=replay,
         commit_native_handoff_path=handoff,
+        src_native_handoff_path=src_native,
     )
     by_gate = {row.gate: row for row in matrix}
 
@@ -221,6 +233,7 @@ def test_serving_wiring_gate_fails_handoff_address_mismatch(tmp_path: Path) -> N
     counters = tmp_path / "counters.json"
     replay = tmp_path / "scan_replay.json"
     handoff = tmp_path / "handoff.jsonl"
+    src_native = tmp_path / "src_native.json"
     diag = [0.0] * 32
     diag[4] = 1.0
     _write_counter(counters, diag)
@@ -243,11 +256,16 @@ def test_serving_wiring_gate_fails_handoff_address_mismatch(tmp_path: Path) -> N
         + "\n",
         encoding="utf-8",
     )
+    src_native.write_text(
+        json.dumps({"src_native_pass": True, "negative_powered": True}) + "\n",
+        encoding="utf-8",
+    )
 
     matrix, _ = gate.evaluate_wiring(
         counters_path=counters,
         scan_replay_path=replay,
         commit_native_handoff_path=handoff,
+        src_native_handoff_path=src_native,
     )
     by_gate = {row.gate: row for row in matrix}
 
@@ -258,6 +276,7 @@ def test_serving_wiring_gate_fails_handoff_neighbor_negative_control(tmp_path: P
     counters = tmp_path / "counters.json"
     replay = tmp_path / "scan_replay.json"
     handoff = tmp_path / "handoff.jsonl"
+    src_native = tmp_path / "src_native.json"
     diag = [0.0] * 32
     diag[4] = 1.0
     _write_counter(counters, diag)
@@ -280,11 +299,16 @@ def test_serving_wiring_gate_fails_handoff_neighbor_negative_control(tmp_path: P
         + "\n",
         encoding="utf-8",
     )
+    src_native.write_text(
+        json.dumps({"src_native_pass": True, "negative_powered": True}) + "\n",
+        encoding="utf-8",
+    )
 
     matrix, _ = gate.evaluate_wiring(
         counters_path=counters,
         scan_replay_path=replay,
         commit_native_handoff_path=handoff,
+        src_native_handoff_path=src_native,
     )
     by_gate = {row.gate: row for row in matrix}
 

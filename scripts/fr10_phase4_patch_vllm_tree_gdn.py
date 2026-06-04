@@ -1032,6 +1032,12 @@ def _patch_gdn_linear() -> bool:
                                 _fr10_lens = globals().get(
                                     "_LUMO_FA_LAST_ACCEPTED_TREE_LENS", []
                                 )
+                                _fr10_node_paths = globals().get(
+                                    "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS", []
+                                )
+                                _fr10_token_ids = globals().get(
+                                    "_LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS", []
+                                )
                                 _fr10_prev_accepted_row = (
                                     int(_fr10_rows[fr10_b])
                                     if fr10_b < len(_fr10_rows)
@@ -1216,6 +1222,93 @@ def _patch_gdn_linear() -> bool:
                                             _fr10_handoff_json.dumps(_fr10_payload)
                                             + chr(10)
                                         )
+                                    _fr10_src_native_path = os.environ.get(
+                                        "FR10_TREE_GDN_SRC_NATIVE_PAYLOAD"
+                                    )
+                                    if (
+                                        _fr10_src_native_path
+                                        and _fr10_has_accept
+                                        and not globals().get(
+                                            "_FR10_TREE_GDN_SRC_NATIVE_PAYLOAD_DONE",
+                                            False,
+                                        )
+                                    ):
+                                        _fr10_accepted_node_path = (
+                                            [
+                                                int(_x)
+                                                for _x in _fr10_node_paths[fr10_b]
+                                            ]
+                                            if fr10_b < len(_fr10_node_paths)
+                                            else [int(_fr10_row)]
+                                        )
+                                        _fr10_accepted_token_ids = (
+                                            [
+                                                int(_x)
+                                                for _x in _fr10_token_ids[fr10_b]
+                                            ]
+                                            if fr10_b < len(_fr10_token_ids)
+                                            else []
+                                        )
+                                        torch.save(
+                                            {
+                                                "schema": "fr10.src_native_handoff_payload.v1",
+                                                "layer_prefix": _fr10_prefix,
+                                                "batch_index": int(fr10_b),
+                                                "accepted_len": int(
+                                                    _fr10_prev_accepted_len
+                                                ),
+                                                "accepted_node_id": int(
+                                                    _fr10_prev_accepted_row
+                                                ),
+                                                "accepted_node_path": _fr10_accepted_node_path,
+                                                "accepted_token_ids": _fr10_accepted_token_ids,
+                                                "tree_parent": list(
+                                                    _fr10_prev["tree_parent"]
+                                                ),
+                                                "output_scale": float(
+                                                    _fr10_prev["output_scale"]
+                                                ),
+                                                "query_spec": _fr10_prev["query_spec"],
+                                                "key_spec": _fr10_prev["key_spec"],
+                                                "value_spec": _fr10_prev["value_spec"],
+                                                "a": _fr10_prev["a"],
+                                                "b": _fr10_prev["b"],
+                                                "A_log": _fr10_prev["A_log"],
+                                                "dt_bias": _fr10_prev["dt_bias"],
+                                                "prev_h0": _fr10_prev["h0_cpu"],
+                                                "serving_tree_state": _fr10_prev[
+                                                    "tree_state_cpu"
+                                                ],
+                                                "next_read_ssm_state": _fr10_commit_h0.detach()
+                                                .cpu()
+                                                .clone(),
+                                                "prev_conv_prior": _fr10_prev[
+                                                    "conv_prior_cpu"
+                                                ],
+                                                "serving_conv_rows": _fr10_prev[
+                                                    "conv_rows_cpu"
+                                                ],
+                                                "next_read_conv_state": (
+                                                    None
+                                                    if _fr10_curr_conv_prior is None
+                                                    else _fr10_curr_conv_prior.detach()
+                                                    .cpu()
+                                                    .clone()
+                                                ),
+                                                "accepted_spec_state_bank_row": (
+                                                    None
+                                                    if _fr10_accepted_bank_row is None
+                                                    else int(_fr10_accepted_bank_row)
+                                                ),
+                                                "next_read_bank_row": int(
+                                                    _fr10_commit_state_index
+                                                ),
+                                            },
+                                            _fr10_src_native_path,
+                                        )
+                                        globals()[
+                                            "_FR10_TREE_GDN_SRC_NATIVE_PAYLOAD_DONE"
+                                        ] = True
                                     globals()["_FR10_COMMIT_HANDOFF_LOG_COUNT"] = (
                                         _fr10_count + 1
                                     )
@@ -1226,16 +1319,46 @@ def _patch_gdn_linear() -> bool:
                                     _fr10_prev_all[_fr10_key] = {
                                         "tree_n": int(tree_n),
                                         "h0": _fr10_commit_h0.detach().clone(),
+                                        "h0_cpu": _fr10_commit_h0.detach().cpu().clone(),
                                         "tree_state": tree_state[
                                             :tree_n
                                         ].detach().clone(),
+                                        "tree_state_cpu": tree_state[
+                                            :tree_n
+                                        ].detach().cpu().clone(),
                                         "spec_state_indices": spec_state_indices_tensor[
                                             fr10_b, :tree_n
                                         ].detach().clone(),
+                                        "tree_parent": [
+                                            int(_x)
+                                            for _x in attn_metadata.fr10_tree_parent.detach()
+                                            .cpu()
+                                            .tolist()
+                                        ],
+                                        "output_scale": float(self.head_k_dim**-0.5),
+                                        "query_spec": query_spec[
+                                            0, start:end
+                                        ].detach().cpu().clone(),
+                                        "key_spec": key_spec[
+                                            0, start:end
+                                        ].detach().cpu().clone(),
+                                        "value_spec": value_spec[
+                                            start:end
+                                        ].detach().cpu().clone(),
+                                        "a": a[start:end].detach().cpu().clone(),
+                                        "b": b[start:end].detach().cpu().clone(),
+                                        "A_log": self.A_log.detach().cpu().clone(),
+                                        "dt_bias": self.dt_bias.detach().cpu().clone(),
                                         "conv_prior": _fr10_curr_conv_prior.detach().clone(),
+                                        "conv_prior_cpu": _fr10_curr_conv_prior.detach()
+                                        .cpu()
+                                        .clone(),
                                         "conv_rows": _fr10_curr_conv_rows[
                                             :tree_n
                                         ].detach().clone(),
+                                        "conv_rows_cpu": _fr10_curr_conv_rows[
+                                            :tree_n
+                                        ].detach().cpu().clone(),
                                     }
                         except Exception as _fr10_handoff_exc:
                             logger.warning_once(
@@ -1515,6 +1638,8 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     accepted_lens = []
     path_log_rows = []
     winner_log_rows = []
+    accepted_node_paths = []
+    accepted_token_rows = []
     start = 0
     for req_i, node_count in enumerate(counts):
         node_count = int(node_count)
@@ -1590,6 +1715,8 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         accepted_row = int(best_path[best_lcp - 1]) if best_lcp > 0 else 0
         accepted_rows.append(accepted_row)
         accepted_lens.append(int(best_lcp))
+        accepted_node_paths.append([int(x) for x in best_path[:best_lcp]])
+        accepted_token_rows.append([int(drafts[x]) for x in best_path[:best_lcp]])
         path_log_rows.append({
             'req_index': int(req_i),
             'node_count': int(node_count),
@@ -1647,6 +1774,9 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     )
     globals()['_LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL'] = [int(x) for x in accepted_rows]
     globals()['_LUMO_TREE_LAST_ACCEPTED_LENS_KERNEL'] = [int(x) for x in accepted_lens]
+    globals()['_LUMO_TREE_LAST_ACCEPTED_NODE_PATHS_KERNEL'] = [
+        [int(x) for x in row] for row in accepted_node_paths
+    ]
     try:
         from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
@@ -1654,6 +1784,12 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         ]
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_LENS = [
             int(x) for x in accepted_lens
+        ]
+        _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS = [
+            [int(x) for x in row] for row in accepted_node_paths
+        ]
+        _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
+            [int(x) for x in row] for row in accepted_token_rows
         ]
     except Exception:
         pass
@@ -1739,6 +1875,8 @@ def _lumo_tree_canonical_multidraft_sample(
     accepted_rows = []
     accepted_lens = []
     sample_log_rows = []
+    accepted_node_paths = []
+    accepted_token_rows = []
     try:
         import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
         if _fr10_lo.environ.get('FR10_METRICS', '0') == '1':
@@ -1810,6 +1948,8 @@ def _lumo_tree_canonical_multidraft_sample(
         out_rows.append(row[:int(max_spec_len) + 1])
         accepted_rows.append(int(accepted_row))
         accepted_lens.append(int(len(accepted_path)))
+        accepted_node_paths.append([int(x) for x in accepted_path])
+        accepted_token_rows.append([int(drafts[x]) for x in accepted_path])
         final_root = int(accepted_path[0]) if accepted_path else None
         sample_log_rows.append({
             'event': 'tree_sample_accept',
@@ -1834,6 +1974,9 @@ def _lumo_tree_canonical_multidraft_sample(
     )
     globals()['_LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL'] = [int(x) for x in accepted_rows]
     globals()['_LUMO_TREE_LAST_ACCEPTED_LENS_KERNEL'] = [int(x) for x in accepted_lens]
+    globals()['_LUMO_TREE_LAST_ACCEPTED_NODE_PATHS_KERNEL'] = [
+        [int(x) for x in row] for row in accepted_node_paths
+    ]
     try:
         from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
@@ -1841,6 +1984,12 @@ def _lumo_tree_canonical_multidraft_sample(
         ]
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_LENS = [
             int(x) for x in accepted_lens
+        ]
+        _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS = [
+            [int(x) for x in row] for row in accepted_node_paths
+        ]
+        _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
+            [int(x) for x in row] for row in accepted_token_rows
         ]
     except Exception:
         pass
