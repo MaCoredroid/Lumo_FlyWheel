@@ -44,6 +44,14 @@ def test_phase4_tree_disengagement_raises_by_default() -> None:
     assert "eligible_tree_spec_row_flat_fallback" in text
 
 
+def test_phase4_handoff_logs_accepted_bank_row_alias() -> None:
+    text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+
+    assert '"accepted_spec_state_bank_row":' in text
+    assert '"accepted_bank_row":' in text
+    assert '"value_spec": value_spec[\n                                            0, start:end' in text
+
+
 def test_speed_launcher_defaults_to_nine_node_caterpillar() -> None:
     text = Path("scripts/fr10_launch_speed_server.sh").read_text()
 

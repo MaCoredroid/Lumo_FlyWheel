@@ -1213,6 +1213,11 @@ def _patch_gdn_linear() -> bool:
                                             if _fr10_accepted_bank_row is None
                                             else int(_fr10_accepted_bank_row)
                                         ),
+                                        "accepted_bank_row": (
+                                            None
+                                            if _fr10_accepted_bank_row is None
+                                            else int(_fr10_accepted_bank_row)
+                                        ),
                                         "next_read_bank_row": int(_fr10_commit_state_index),
                                         "address_coincide": _fr10_address_coincide,
                                         "ssm_vs_native_max_abs": _fr10_ssm_max,
@@ -1327,6 +1332,11 @@ def _patch_gdn_linear() -> bool:
                                                     if _fr10_accepted_bank_row is None
                                                     else int(_fr10_accepted_bank_row)
                                                 ),
+                                                "accepted_bank_row": (
+                                                    None
+                                                    if _fr10_accepted_bank_row is None
+                                                    else int(_fr10_accepted_bank_row)
+                                                ),
                                                 "next_read_bank_row": int(
                                                     _fr10_commit_state_index
                                                 ),
@@ -1370,7 +1380,7 @@ def _patch_gdn_linear() -> bool:
                                             0, start:end
                                         ].detach().cpu().clone(),
                                         "value_spec": value_spec[
-                                            start:end
+                                            0, start:end
                                         ].detach().cpu().clone(),
                                         "a": a[start:end].detach().cpu().clone(),
                                         "b": b[start:end].detach().cpu().clone(),

@@ -55,6 +55,16 @@ def _max_abs(left: torch.Tensor, right: torch.Tensor) -> float:
     return float((left.float() - right.float()).abs().max().item())
 
 
+def _node_major_spec_tensor(payload: dict[str, Any], name: str) -> torch.Tensor:
+    tensor = payload[name]
+    if name == "value_spec" and tensor.ndim == 4 and tensor.size(0) == 1:
+        tensor = tensor.squeeze(0)
+    q_rows = int(payload["query_spec"].shape[0])
+    if tensor.shape[0] > q_rows:
+        tensor = tensor[:q_rows]
+    return tensor
+
+
 def _native_final_state_for_path(
     payload: dict[str, Any],
     path: list[int],
@@ -66,11 +76,20 @@ def _native_final_state_for_path(
     linear = Tree(tuple(_linear_parent(len(path))))
     _, states = native_update_serial_per_path(
         linear,
-        payload["query_spec"].to(device).index_select(0, index).contiguous(),
-        payload["key_spec"].to(device).index_select(0, index).contiguous(),
-        payload["value_spec"].to(device).index_select(0, index).contiguous(),
-        payload["a"].to(device).index_select(0, index).contiguous(),
-        payload["b"].to(device).index_select(0, index).contiguous(),
+        _node_major_spec_tensor(payload, "query_spec")
+        .to(device)
+        .index_select(0, index)
+        .contiguous(),
+        _node_major_spec_tensor(payload, "key_spec")
+        .to(device)
+        .index_select(0, index)
+        .contiguous(),
+        _node_major_spec_tensor(payload, "value_spec")
+        .to(device)
+        .index_select(0, index)
+        .contiguous(),
+        _node_major_spec_tensor(payload, "a").to(device).index_select(0, index).contiguous(),
+        _node_major_spec_tensor(payload, "b").to(device).index_select(0, index).contiguous(),
         payload["A_log"].to(device).contiguous(),
         payload["dt_bias"].to(device).contiguous(),
         payload["prev_h0"].to(device).contiguous(),
@@ -145,6 +164,9 @@ def evaluate(
         "accepted_node_path": accepted_path,
         "accepted_token_ids": [int(x) for x in payload.get("accepted_token_ids") or []],
         "accepted_spec_state_bank_row": payload.get("accepted_spec_state_bank_row"),
+        "accepted_bank_row": payload.get("accepted_bank_row")
+        if payload.get("accepted_bank_row") is not None
+        else payload.get("accepted_spec_state_bank_row"),
         "next_read_bank_row": payload.get("next_read_bank_row"),
         "state_atol": state_atol,
         "conv_atol": conv_atol,
