@@ -2300,8 +2300,14 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
             [int(x) for x in row] for row in accepted_token_rows
         ]
-    except Exception:
-        pass
+    except Exception as _fr10_tree_lcp_log_exc:
+        if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
+            raise RuntimeError(
+                'FR10 tree path-LCP log failed: '
+                + type(_fr10_tree_lcp_log_exc).__name__
+                + ':'
+                + str(_fr10_tree_lcp_log_exc)
+            ) from _fr10_tree_lcp_log_exc
     try:
         import json as _lcpj, os as _lcpo, time as _lcpt
         if _lcpo.environ.get('FR10_METRICS', '0') == '1':
@@ -2321,8 +2327,14 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 row['ts'] = _now
                 row['event'] = 'tree_path_lcp_max'
                 _LUMO_TREE_PATH_LCP_FH.write(_lcpj.dumps(row) + chr(10))
-    except Exception:
-        pass
+    except Exception as _fr10_winner_log_exc:
+        if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
+            raise RuntimeError(
+                'FR10 independent-winner log failed: '
+                + type(_fr10_winner_log_exc).__name__
+                + ':'
+                + str(_fr10_winner_log_exc)
+            ) from _fr10_winner_log_exc
     try:
         import json as _iwj, os as _iwo, time as _iwt
         if _iwo.environ.get('FR10_METRICS', '0') == '1':
@@ -2342,8 +2354,14 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 row['ts'] = _now
                 row['event'] = 'independent_winner_commit'
                 _LUMO_IR_WINNER_TRACE_FH.write(_iwj.dumps(row) + chr(10))
-    except Exception:
-        pass
+    except Exception as _fr10_commit_globals_exc:
+        if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
+            raise RuntimeError(
+                'FR10 tree committer failed to publish accepted rows: '
+                + type(_fr10_commit_globals_exc).__name__
+                + ':'
+                + str(_fr10_commit_globals_exc)
+            ) from _fr10_commit_globals_exc
     return output_token_ids
 
 
@@ -2500,8 +2518,14 @@ def _lumo_tree_canonical_multidraft_sample(
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
             [int(x) for x in row] for row in accepted_token_rows
         ]
-    except Exception:
-        pass
+    except Exception as _fr10_commit_globals_exc:
+        if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
+            raise RuntimeError(
+                'FR10 tree committer failed to publish accepted rows: '
+                + type(_fr10_commit_globals_exc).__name__
+                + ':'
+                + str(_fr10_commit_globals_exc)
+            ) from _fr10_commit_globals_exc
     try:
         import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
         if _fr10_lo.environ.get('FR10_METRICS', '0') == '1':
@@ -2620,6 +2644,19 @@ def _lumo_tree_canonical_multidraft_sample(
                 )
         except Exception:
             pass
+
+        if (
+            globals().get(
+                "_FR10_DECODE_MODE",
+                __import__("os").environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp"),
+            )
+            == "tree_mtp"
+            and lumo_tree_parent_indices is None
+            and __import__("os").environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
+        ):
+            raise RuntimeError(
+                "FR10 sampled tree committer disengaged: missing_tree_parent_indices"
+            )
 
         output_token_ids = rejection_sample(
             metadata.draft_token_ids,
@@ -2948,13 +2985,15 @@ def _patch_gpu_model_runner_decode_mode_globals() -> bool:
         "        try:\n"
         "            from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn_linear\n"
         "            _fr10_gdn_linear._FR10_DECODE_MODE = fr10_decode_mode\n"
-        "        except Exception:\n"
-        "            pass\n"
+        "        except Exception as _fr10_mode_exc:\n"
+        "            if __import__(\"os\").environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
+        "                raise RuntimeError(\"FR10 tree decode-mode global failed for gdn_linear_attn: \" + type(_fr10_mode_exc).__name__ + \":\" + str(_fr10_mode_exc)) from _fr10_mode_exc\n"
         "        try:\n"
         "            from vllm.v1.sample import rejection_sampler as _fr10_rejection_sampler\n"
         "            _fr10_rejection_sampler._FR10_DECODE_MODE = fr10_decode_mode\n"
-        "        except Exception:\n"
-        "            pass\n"
+        "        except Exception as _fr10_mode_exc:\n"
+        "            if __import__(\"os\").environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
+        "                raise RuntimeError(\"FR10 tree decode-mode global failed for rejection_sampler: \" + type(_fr10_mode_exc).__name__ + \":\" + str(_fr10_mode_exc)) from _fr10_mode_exc\n"
         "\n"
         "        use_spec_decode = len(scheduler_output.scheduled_spec_decode_tokens) > 0\n"
     )
@@ -3204,6 +3243,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         _fr10_tree_draft_branch_seen = any(
             isinstance(md, TreeAttentionMetadata) for md in per_group_attn_metadata
         )
+        if (
+            _fr10_active_decode_mode == "tree_mtp"
+            and not _fr10_is_caterpillar
+            and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
+        ):
+            raise RuntimeError(
+                "FR10 caterpillar drafter disengaged: "
+                + "num_speculative_tokens="
+                + str(int(self.num_speculative_tokens))
+                + " tree_choices="
+                + repr([tuple(_x) for _x in getattr(self, "tree_choices", [])])
+            )
         try:
             import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
             if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
