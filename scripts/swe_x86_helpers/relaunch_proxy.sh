@@ -30,7 +30,7 @@ NOHUP_PATH=${LUMO_PROXY_NOHUP_PATH:-/tmp/track_b_e2e_proxy_${LISTEN_PORT}.nohup}
 OLD=$(cat "$PID_FILE" 2>/dev/null || true)
 [ -n "$OLD" ] && kill "$OLD" 2>/dev/null
 sleep 2
-nohup .venv/bin/python -m lumo_flywheel_serving.inference_proxy \
+setsid -f .venv/bin/python -m lumo_flywheel_serving.inference_proxy \
   --listen-host "$LISTEN_HOST" --listen-port "$LISTEN_PORT" \
   --upstream-base-url "$UPSTREAM_BASE_URL" \
   --pid-file "$PID_FILE" \
