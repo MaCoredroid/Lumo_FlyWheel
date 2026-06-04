@@ -2651,6 +2651,7 @@ def _lumo_tree_canonical_multidraft_sample(
                 __import__("os").environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp"),
             )
             == "tree_mtp"
+            and hasattr(metadata, "tree_parent_indices")
             and lumo_tree_parent_indices is None
             and __import__("os").environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
         ):

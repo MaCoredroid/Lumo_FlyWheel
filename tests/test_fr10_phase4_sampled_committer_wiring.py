@@ -43,6 +43,7 @@ def test_phase4_tree_disengagement_raises_by_default() -> None:
     assert "FR10 tree scan disengaged:" in text
     assert "eligible_tree_spec_row_flat_fallback" in text
     assert "FR10 sampled tree committer disengaged: missing_tree_parent_indices" in text
+    assert 'hasattr(metadata, "tree_parent_indices")' in text
     assert "FR10 caterpillar drafter disengaged:" in text
     assert "FR10 tree decode-mode global failed for gdn_linear_attn" in text
     assert "FR10 tree committer failed to publish accepted rows:" in text
