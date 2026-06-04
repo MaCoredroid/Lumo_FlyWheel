@@ -791,6 +791,27 @@ def _lumo_tree_canonical_multidraft_sample(
     out_rows = []
     accepted_rows = []
     sample_log_rows = []
+    try:
+        import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+        if _fr10_lo.environ.get('FR10_METRICS', '0') == '1':
+            global _LUMO_TREE_SAMPLE_DEBUG_FH
+            try:
+                _LUMO_TREE_SAMPLE_DEBUG_FH
+            except NameError:
+                _LUMO_TREE_SAMPLE_DEBUG_FH = open(
+                    _fr10_lo.environ.get('LUMO_TREE_SAMPLER_DEBUG_LOG',
+                                         '/logs/tree_sampler_debug.jsonl'),
+                    'a',
+                    buffering=1,
+                )
+            _LUMO_TREE_SAMPLE_DEBUG_FH.write(_fr10_lj.dumps({
+                'event': 'sample_helper_enter',
+                'ts': round(_fr10_lt.time(), 4),
+                'max_spec_len': int(max_spec_len),
+                'has_draft_probs': draft_probs is not None,
+            }) + chr(10))
+    except Exception:
+        pass
     start = 0
     for req_i, node_count in enumerate(counts):
         node_count = int(node_count)
@@ -977,9 +998,6 @@ def _lumo_tree_canonical_multidraft_sample(
                         "has_tree_parent_indices": lumo_tree_parent_indices is not None,
                         "has_tree_self_logits": lumo_tree_self_logits is not None,
                         "all_greedy": bool(sampling_metadata.all_greedy),
-                        "num_draft_tokens": [
-                            int(_x) for _x in metadata.num_draft_tokens.detach().cpu().tolist()
-                        ],
                     }) + chr(10)
                 )
         except Exception:
@@ -1064,9 +1082,6 @@ def _lumo_tree_canonical_multidraft_sample(
                         "batch_size": int(batch_size),
                         "max_spec_len": int(max_spec_len),
                         "has_tree_self_logits": tree_self_logits is not None,
-                        "num_draft_tokens": [
-                            int(_x) for _x in num_draft_tokens.detach().cpu().tolist()
-                        ],
                     }) + chr(10)
                 )
         except Exception:
