@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 import time
 import urllib.request
 from datetime import datetime, timezone
@@ -189,6 +190,7 @@ def _summarize_mode(
     *,
     mode: str,
     records: list[dict[str, Any]],
+    request_rows: list[dict[str, Any]],
     wall_s: float,
     metric_delta: dict[str, float],
     reset_error: str | None,
@@ -199,14 +201,36 @@ def _summarize_mode(
     spec_draft = metric_delta.get("spec_draft_tokens", 0.0)
     spec_acc = metric_delta.get("spec_accepted_tokens", 0.0)
     spec_drafts = metric_delta.get("spec_drafts", 0.0)
+    per_request_tps = [
+        float(row["completion_tokens"]) / float(row["decode_sum_s"])
+        for row in request_rows
+        if float(row.get("decode_sum_s") or 0.0) > 0
+    ]
+    per_request_tps_sorted = sorted(per_request_tps)
     return {
         "mode": mode,
         "records": len(records),
+        "request_count": len(request_rows),
         "returned_tokens": returned_tokens,
         "wall_s": wall_s,
         "returned_tokens_per_wall_s": returned_tokens / wall_s if wall_s > 0 else None,
+        "per_request_decode_tps_mean": (
+            statistics.fmean(per_request_tps) if per_request_tps else None
+        ),
+        "per_request_decode_tps_median": (
+            statistics.median(per_request_tps) if per_request_tps else None
+        ),
+        "per_request_decode_tps_min": per_request_tps_sorted[0]
+        if per_request_tps_sorted
+        else None,
+        "per_request_decode_tps_max": per_request_tps_sorted[-1]
+        if per_request_tps_sorted
+        else None,
         "metrics_generation_tokens": gen_tokens,
         "metrics_decode_seconds": decode_seconds,
+        "metrics_sum_decode_tps_concurrency_deflated": (
+            gen_tokens / decode_seconds if decode_seconds > 0 else None
+        ),
         "warm_decode_tps": gen_tokens / decode_seconds if decode_seconds > 0 else None,
         "returned_tokens_per_decode_s": (
             returned_tokens / decode_seconds if decode_seconds > 0 else None
@@ -288,6 +312,7 @@ def main() -> int:
         result["modes"][mode] = _summarize_mode(
             mode=mode,
             records=records,
+            request_rows=request_rows,
             wall_s=wall_s,
             metric_delta=_delta(after, before),
             reset_error=reset_error,
