@@ -15,6 +15,7 @@ TREE=${TREE:-"[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":10,\"speculative_token_tree\":\"$TREE\"}"}
 
 mkdir -p "$LOG_DIR"
+LOG_DIR=$(realpath "$LOG_DIR")
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
