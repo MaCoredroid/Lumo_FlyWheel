@@ -267,12 +267,21 @@ def _assert_tree_engagement(
     debug_rows = _load_jsonl(sampler_debug_path)
     accept_rows = _load_jsonl(tree_accept_path)
     gpu_rows = [row for row in debug_rows if row.get("event") == "gpu_tree_metadata"]
+
+    def _active_draft_counts(row: dict[str, Any]) -> list[int]:
+        return [
+            int(x)
+            for x in (row.get("num_draft_tokens") or [])
+            if int(x) > 0
+        ]
+
     ok_rows = [
         row
         for row in gpu_rows
         if row.get("reason") == "ok"
         and row.get("has_tree_parent_indices") is True
-        and all(int(x) == expected_draft_count for x in (row.get("num_draft_tokens") or []))
+        and _active_draft_counts(row)
+        and all(x == expected_draft_count for x in _active_draft_counts(row))
     ]
     reasons = Counter(str(row.get("reason")) for row in gpu_rows)
     draft_counts = Counter(
