@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-03 19:22 UTC
+Updated: 2026-06-04 00:00 UTC
 
 ## Current Phase
 
@@ -10,6 +10,8 @@ Updated: 2026-06-03 19:22 UTC
 - Phase 4 scope locked: vLLM cu130 already provides `speculative_token_tree` plumbing and tree attention masks, but not GDN tree recurrence. Source check in digest-pinned cu130 image: `vllm/v1/attention/backends/tree_attn.py` references `speculative_token_tree` once and `tree` 50 times; `vllm/v1/attention/backends/gdn_attn.py` references `speculative_token_tree` 0 times, `tree` 0 times, and `spec_state_indices` 24 times. Therefore native tree spec is correct for dense attention layers but GDN layers remain linear and sibling-contaminating. FR10 deliverable is wiring the proven GDN tree verifier plus canonical state commit into `gdn_attn.py` alongside vLLM's existing tree attention/speculative plumbing, not building the serving stack from scratch.
 - Speed-design correction: do not use shallow balanced tiny trees as the target. Keep the MTP-5 spine depth/reach and add pruned second-choice stubs at uncertain positions: a sparse caterpillar tree. The next measurement is second-choice/top-k rescue rate and native tree-contamination evidence, not more dense-kernel microprofiling.
 - Git workflow: active branch is `fr10-gdn-tree-kernel`; do not commit to main. Going forward, commit and push after every meaningful step. Commit messages must end with `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
+- Current single task: contamination-safe per-request decode-mode selector (`naive_mtp`, `non_mtp`, `tree_mtp`). Final 3-way run and whole-tree performance work are on hold until mode selection, no-mixed-batch isolation, relaunch-equivalence, and the mixed-mode contamination negative control are proven.
+- Standing architecture requirement: keep a clean drafter-to-verifier/committer boundary. Any drafter (current MTP, future suffix decoding, or MTP+suffix hybrid) must emit the same static graph-capturable candidate-tree descriptor: `{node_id, parent_id, depth, sibling_index, token_id, draft_prob q}`. The FR10 verifier consumes only `(descriptor, committed_prefix_state)` and returns per-node target logits/states; it must not know whether candidates came from MTP or suffix decoding. The committer consumes `(target logits, draft q)` and applies the lossless tree rejection rule plus canonical accepted-path native state commit. This follows the traversal-verification result that correctness is independent of draft quality `q`; drafter choice affects acceptance rate only. Formalize this descriptor as a dataclass/struct when the verify/commit module is next refactored, with an assert/comment that the verifier has no MTP dependency.
 
 ## Read-In
 
