@@ -295,7 +295,8 @@ def evaluate_wiring(
     redirected = [
         row
         for row in commit_rows
-        if row.get("event") == "mamba_commit_copy_bias"
+        if row.get("event")
+        in {"mamba_commit_copy_bias", "mamba_preprocess_commit_copy_bias"}
         and int(row.get("tree_accepted_row", 0) or 0) > 0
     ]
     matrix.append(
@@ -304,10 +305,20 @@ def evaluate_wiring(
             case="wiring",
             regime="structural_hard_zero_violation",
             passed=bool(redirected),
-            detail="postprocess copied from accepted tree row at least once",
+            detail="preprocess/postprocess copied from accepted tree row at least once",
             metrics={
                 "commit_log_rows": len(commit_rows),
                 "redirected_rows": len(redirected),
+                "redirect_events": dict(
+                    sorted(
+                        {
+                            str(row.get("event")): sum(
+                                1 for other in redirected if other.get("event") == row.get("event")
+                            )
+                            for row in redirected
+                        }.items()
+                    )
+                ),
             },
         )
     )

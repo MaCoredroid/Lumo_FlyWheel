@@ -2658,6 +2658,162 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
         raise RuntimeError("mamba tree state row copy helper anchor not found")
     text = text.replace(copy_old, copy_new, 1)
 
+    preprocess_old = '''        if prev_state_idx != -1 and prev_state_idx != curr_state_idx:
+            collect_mamba_copy_meta(
+                copy_bufs,
+                kv_cache_config,
+                mamba_state_copy_funcs,
+                mamba_group_ids,
+                prev_state_idx,
+                curr_state_idx,
+                input_batch.num_accepted_tokens_cpu[i] - 1,
+                req_state,
+                forward_context,
+            )
+            input_batch.num_accepted_tokens_cpu[i] = 1
+    do_mamba_copy_block(copy_bufs)
+'''
+    preprocess_new = '''        if prev_state_idx != -1 and prev_state_idx != curr_state_idx:
+            _fr10_native_accept_token_bias = int(input_batch.num_accepted_tokens_cpu[i]) - 1
+            _fr10_tree_row = 0
+            _fr10_accept_token_bias = _fr10_native_accept_token_bias
+            # LUMO_TREE_STATE_COMMIT_ROWS: preprocessing moves the previous
+            # step's running state into the current running block. For tree
+            # verification, the source row must be the accepted runtime tree
+            # node, not the flat accepted-count row.
+            try:
+                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn
+                _fr10_rows = getattr(_fr10_gdn, "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", None)
+                if _fr10_rows is not None and i < len(_fr10_rows):
+                    _fr10_tree_row = int(_fr10_rows[i])
+                    if _fr10_tree_row > 0:
+                        _fr10_accept_token_bias = int(_fr10_tree_row)
+            except Exception:
+                pass
+            try:
+                import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+                if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                    global _LUMO_TREE_COMMIT_PARITY_FH
+                    try:
+                        _LUMO_TREE_COMMIT_PARITY_FH
+                    except NameError:
+                        _LUMO_TREE_COMMIT_PARITY_FH = open(
+                            _fr10_lo.environ.get(
+                                "LUMO_TREE_COMMIT_PARITY_LOG",
+                                "/logs/fr10_commit_copy_parity.jsonl",
+                            ),
+                            "a",
+                            buffering=1,
+                        )
+                    _LUMO_TREE_COMMIT_PARITY_FH.write(
+                        _fr10_lj.dumps({
+                            "event": "mamba_preprocess_commit_copy_bias",
+                            "ts": round(_fr10_lt.time(), 4),
+                            "req_index": int(i),
+                            "req_id": str(req_id),
+                            "native_accept_token_bias": int(_fr10_native_accept_token_bias),
+                            "tree_accepted_row": int(_fr10_tree_row),
+                            "effective_accept_token_bias": int(_fr10_accept_token_bias),
+                            "collect_num_accepted_tokens": int(_fr10_accept_token_bias) + 1,
+                            "src_block_idx": int(prev_state_idx),
+                            "dest_block_idx": int(curr_state_idx),
+                            "row_redirect_active": bool(int(_fr10_tree_row) > 0),
+                        }) + chr(10)
+                    )
+            except Exception:
+                pass
+            try:
+                import os as _fr10_lo2
+                _fr10_capture_commit = (
+                    _fr10_lo2.environ.get("FR10_TREE_GDN_CAPTURE_PAYLOAD")
+                    and int(_fr10_tree_row) > 0
+                    and not globals().get("_LUMO_TREE_COMMIT_CAPTURE_DONE", False)
+                )
+                globals()["_LUMO_TREE_COMMIT_CAPTURE_ACTIVE"] = bool(_fr10_capture_commit)
+                globals()["_LUMO_TREE_COMMIT_CAPTURE_META"] = {
+                    "phase": "preprocess",
+                    "req_index": int(i),
+                    "req_id": str(req_id),
+                    "native_accept_token_bias": int(_fr10_native_accept_token_bias),
+                    "tree_accepted_row": int(_fr10_tree_row),
+                    "effective_accept_token_bias": int(_fr10_accept_token_bias),
+                    "src_block_idx": int(prev_state_idx),
+                    "dest_block_idx": int(curr_state_idx),
+                }
+            except Exception:
+                globals()["_LUMO_TREE_COMMIT_CAPTURE_ACTIVE"] = False
+            collect_mamba_copy_meta(
+                copy_bufs,
+                kv_cache_config,
+                mamba_state_copy_funcs,
+                mamba_group_ids,
+                prev_state_idx,
+                curr_state_idx,
+                _fr10_accept_token_bias,
+                req_state,
+                forward_context,
+            )
+            globals()["_LUMO_TREE_COMMIT_CAPTURE_ACTIVE"] = False
+            input_batch.num_accepted_tokens_cpu[i] = 1
+    do_mamba_copy_block(copy_bufs)
+    try:
+        _fr10_specs = globals().pop("_LUMO_TREE_COMMIT_CAPTURE_SPECS", [])
+        globals()["_LUMO_TREE_COMMIT_CAPTURE_ACTIVE"] = False
+        if _fr10_specs and not globals().get("_LUMO_TREE_COMMIT_CAPTURE_DONE", False):
+            import json as _fr10_lj2, os as _fr10_lo3, time as _fr10_lt2
+            torch.cuda.synchronize()
+            _fr10_by_kind = {}
+            _fr10_rows = []
+            for _fr10_spec in _fr10_specs:
+                _fr10_kind = str(_fr10_spec.get("kind", "unknown"))
+                _fr10_state = _fr10_spec["state"]
+                _fr10_dest = _fr10_state[int(_fr10_spec["dest_block_id"])]
+                _fr10_src = _fr10_spec["src_snapshot"]
+                _fr10_exact = bool(torch.equal(_fr10_dest, _fr10_src))
+                _fr10_max = float((_fr10_dest.float() - _fr10_src.float()).abs().max().item())
+                _fr10_by_kind.setdefault(_fr10_kind, {
+                    "rows": 0,
+                    "bit_exact_all": True,
+                    "max_abs": 0.0,
+                })
+                _fr10_by_kind[_fr10_kind]["rows"] += 1
+                _fr10_by_kind[_fr10_kind]["bit_exact_all"] = (
+                    bool(_fr10_by_kind[_fr10_kind]["bit_exact_all"]) and _fr10_exact
+                )
+                _fr10_by_kind[_fr10_kind]["max_abs"] = max(
+                    float(_fr10_by_kind[_fr10_kind]["max_abs"]), _fr10_max
+                )
+                if len(_fr10_rows) < 8:
+                    _fr10_row = {
+                        "kind": _fr10_kind,
+                        "bit_exact": _fr10_exact,
+                        "max_abs": _fr10_max,
+                        "num_elements": int(_fr10_spec.get("num_elements", 0)),
+                        "element_size": int(_fr10_spec.get("element_size", 0)),
+                    }
+                    _fr10_row.update(dict(_fr10_spec.get("meta", {})))
+                    _fr10_rows.append(_fr10_row)
+            _fr10_payload = {
+                "schema": "fr10.commit_state_capture.v1",
+                "event": "mamba_commit_state_copy_capture",
+                "ts": round(_fr10_lt2.time(), 4),
+                "by_kind": _fr10_by_kind,
+                "sample_rows": _fr10_rows,
+            }
+            _fr10_path = _fr10_lo3.environ.get(
+                "LUMO_TREE_COMMIT_STATE_CAPTURE_LOG",
+                "/logs/fr10_commit_state_capture.jsonl",
+            )
+            with open(_fr10_path, "a", buffering=1) as _fr10_fh:
+                _fr10_fh.write(_fr10_lj2.dumps(_fr10_payload) + chr(10))
+            globals()["_LUMO_TREE_COMMIT_CAPTURE_DONE"] = True
+    except Exception:
+        pass
+'''
+    if preprocess_old not in text:
+        raise RuntimeError("mamba preprocess accepted-row copy anchor not found")
+    text = text.replace(preprocess_old, preprocess_new, 1)
+
     old = '''        if aligned_new_computed_tokens >= num_tokens_running_state:
             accept_token_bias = aligned_new_computed_tokens - num_tokens_running_state
             src_block_idx = mamba_state_idx[req_id]
