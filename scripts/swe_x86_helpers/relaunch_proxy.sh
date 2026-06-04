@@ -17,6 +17,11 @@ if [ -n "${LUMO_PROXY_FORCE_TOP_P:-}" ]; then
 else
   unset LUMO_PROXY_FORCE_TOP_P
 fi
+if [ -n "${LUMO_PROXY_FR10_DECODE_MODE:-}" ]; then
+  export LUMO_PROXY_FR10_DECODE_MODE
+else
+  unset LUMO_PROXY_FR10_DECODE_MODE
+fi
 export LUMO_PROXY_FORCE_TEMPERATURE=${LUMO_PROXY_FORCE_TEMPERATURE:-1.0}
 export LUMO_TRACK_B_REQUEST_METRICS_OUT=${LUMO_TRACK_B_REQUEST_METRICS_OUT:-/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl}
 LISTEN_HOST=${LUMO_PROXY_LISTEN_HOST:-127.0.0.1}
@@ -30,7 +35,7 @@ NOHUP_PATH=${LUMO_PROXY_NOHUP_PATH:-/tmp/track_b_e2e_proxy_${LISTEN_PORT}.nohup}
 OLD=$(cat "$PID_FILE" 2>/dev/null || true)
 [ -n "$OLD" ] && kill "$OLD" 2>/dev/null
 sleep 2
-nohup .venv/bin/python -m lumo_flywheel_serving.inference_proxy \
+setsid -f .venv/bin/python -m lumo_flywheel_serving.inference_proxy \
   --listen-host "$LISTEN_HOST" --listen-port "$LISTEN_PORT" \
   --upstream-base-url "$UPSTREAM_BASE_URL" \
   --pid-file "$PID_FILE" \

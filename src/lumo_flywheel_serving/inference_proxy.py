@@ -123,6 +123,7 @@ def is_inference_get_path(path: str) -> bool:
 
 def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload)
+    _normalize_responses_input_roles(normalized)
     # Lumo experiment knobs (env-gated): pin sampling params for controlled
     # A/B runs without a Codex source change. Unset -> request unchanged.
     _force_temp = os.environ.get("LUMO_PROXY_FORCE_TEMPERATURE")
@@ -137,6 +138,15 @@ def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, An
             normalized["top_p"] = float(_force_top_p)
         except ValueError:
             pass
+    _fr10_decode_mode = os.environ.get("LUMO_PROXY_FR10_DECODE_MODE")
+    if _fr10_decode_mode:
+        extra = normalized.get("vllm_xargs")
+        if not isinstance(extra, dict):
+            extra = {}
+        else:
+            extra = dict(extra)
+        extra["fr10_decode_mode"] = _fr10_decode_mode
+        normalized["vllm_xargs"] = extra
     _max_out = os.environ.get("LUMO_PROXY_MAX_OUTPUT_TOKENS")
     if _max_out:
         try:
@@ -166,6 +176,47 @@ def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, An
         normalized_tools.append(tool)
     normalized["tools"] = normalized_tools
     return normalized
+
+
+def _normalize_responses_input_roles(payload: dict[str, Any]) -> None:
+    """Move Codex/OpenAI instruction roles into vLLM's top-level instructions."""
+    items = payload.get("input")
+    if not isinstance(items, list):
+        return
+    instruction_parts: list[str] = []
+    normalized_items: list[Any] = []
+    for item in items:
+        if isinstance(item, dict):
+            item = dict(item)
+            if item.get("role") in {"developer", "system"}:
+                text = _responses_message_text(item)
+                if text:
+                    instruction_parts.append(text)
+                continue
+        normalized_items.append(item)
+    if instruction_parts:
+        existing = payload.get("instructions")
+        parts = [existing] if isinstance(existing, str) and existing else []
+        parts.extend(instruction_parts)
+        payload["instructions"] = "\n\n".join(parts)
+    payload["input"] = normalized_items
+
+
+def _responses_message_text(item: dict[str, Any]) -> str:
+    content = item.get("content")
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict):
+            text = block.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "\n".join(part for part in parts if part)
 
 
 def normalize_responses_response_payload(payload: dict[str, Any]) -> dict[str, Any]:

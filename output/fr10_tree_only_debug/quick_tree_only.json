@@ -1,0 +1,56 @@
+{
+  "batch_size": 4,
+  "endpoint": "http://127.0.0.1:9950",
+  "max_tokens": 64,
+  "model": "qwen3.6-27b",
+  "modes": {
+    "tree_mtp": {
+      "accepted_per_draft_event": 0.38808373590982287,
+      "accepted_per_draft_token": 0.04312041510109143,
+      "metric_delta": {
+        "decode_seconds": 286.9822764303535,
+        "generation_tokens": 893.0,
+        "iteration_tokens_count": 242.0,
+        "iteration_tokens_sum": 1361.0,
+        "prefill_seconds": 27.71817571297288,
+        "prompt_tokens": 468.0,
+        "spec_accepted_tokens": 241.0,
+        "spec_draft_tokens": 5589.0,
+        "spec_drafts": 621.0
+      },
+      "metrics_decode_seconds": 286.9822764303535,
+      "metrics_generation_tokens": 893.0,
+      "metrics_sum_decode_tps_concurrency_deflated": 3.111690419030871,
+      "mode": "tree_mtp",
+      "per_request_decode_tps_max": 10.21279149464699,
+      "per_request_decode_tps_mean": 8.269128762138315,
+      "per_request_decode_tps_median": 8.104495947890987,
+      "per_request_decode_tps_min": 6.558988234455653,
+      "records": 32,
+      "request_count": 8,
+      "reset_prefix_cache_error": null,
+      "returned_tokens": 893,
+      "returned_tokens_per_decode_s": 3.111690419030871,
+      "returned_tokens_per_wall_s": 8.266964587384413,
+      "spec_accepted_tokens": 241.0,
+      "spec_draft_tokens": 5589.0,
+      "spec_drafts": 621.0,
+      "wall_s": 108.02030062675476,
+      "warm_decode_tps": 3.111690419030871
+    }
+  },
+  "prompts": [
+    "Write a Python function to reverse a singly linked list, then explain it.",
+    "Explain what a hash table is and how collisions are handled, in detail.",
+    "Implement binary search over a sorted list in Python with comments.",
+    "What is the time complexity of merge sort and why? Walk through it.",
+    "Write a Python function to check if a string is a palindrome, with tests.",
+    "Describe the difference between a process and a thread, with examples.",
+    "Implement a Python decorator that times function execution and logs it.",
+    "Explain how a B-tree differs from a binary search tree and when to use each."
+  ],
+  "samples_per_prompt": 4,
+  "schema": "fr10.quick_decode_tps.v1",
+  "temperature": 0.6,
+  "top_p": 0.95
+}

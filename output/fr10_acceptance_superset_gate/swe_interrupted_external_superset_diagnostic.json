@@ -1,0 +1,48 @@
+{
+  "compared_events": 11018,
+  "native_trace": "output/fr9_b4temp06_lowmem088_mtp5_s1_20260602T004903Z/per_req_spec_trace.jsonl",
+  "note": "Interrupted SWE run diagnostic only: traces are from different runs and request orders, so this preserves the acceptance cliff but is not the final Tier1 paired proof.",
+  "schema": "fr10.external_acceptance_superset_diagnostic.v1",
+  "spine_degradation_diagnostic": {
+    "metrics": {
+      "classification": "unknown_missing_draft_tokens",
+      "first_degrade_event_index": 0,
+      "native_by_depth": {
+        "0": 9601,
+        "1": 8114,
+        "2": 6886,
+        "3": 5808,
+        "4": 4935
+      },
+      "native_draft_tokens": [],
+      "native_len": 5,
+      "tree_draft_tokens": [],
+      "tree_path0_by_depth": {
+        "0": 8897,
+        "1": 7874,
+        "2": 59,
+        "3": 1
+      },
+      "tree_path0_len": 0
+    },
+    "passed": false,
+    "violations": [
+      "path0 degradation at event_index=0: native=5 tree_path0=0 classification=unknown_missing_draft_tokens"
+    ]
+  },
+  "total_acceptance_gate": {
+    "metrics": {
+      "min_delta": -0.05,
+      "native_avg": 3.2078417135596298,
+      "native_events": 11018,
+      "tree_avg": 1.5402069341078235,
+      "tree_events": 11018,
+      "tree_minus_native_avg": -1.6676347794518063
+    },
+    "passed": false,
+    "violations": [
+      "tree accepted/event degraded vs native: delta=-1.667635 below allowed -0.050000"
+    ]
+  },
+  "tree_trace": "output/fr10_swe_verified4_metrics_on_20260604T063432Z/server_logs/tree_path_lcp_max.jsonl"
+}

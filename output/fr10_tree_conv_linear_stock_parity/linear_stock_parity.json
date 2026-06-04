@@ -1,0 +1,7 @@
+{
+  "out_atol": 1e-06,
+  "passed": true,
+  "state_exact": true,
+  "stock_vs_tree_final_state_abs": 0.0,
+  "stock_vs_tree_out_abs": 4.76837158203125e-07
+}

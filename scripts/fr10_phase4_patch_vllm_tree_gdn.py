@@ -30,6 +30,12 @@ REQUEST_PATH = Path(
 SCHED_OUTPUT_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/output.py"
 )
+EAGLE_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/spec_decode/eagle.py"
+)
+TREE_ATTN_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py"
+)
 
 
 def _patch_gdn_attn() -> bool:
@@ -69,18 +75,31 @@ def _patch_gdn_attn() -> bool:
             "            count = int(counter.detach().cpu().item()) if counter is not None else None\n"
             "        except Exception as exc:\n"
             "            count = f\"ERROR: {exc}\"\n"
+            "        conv_diag = row.get(\"conv_diag\")\n"
+            "        try:\n"
+            "            conv_diag_values = (\n"
+            "                [float(x) for x in conv_diag.detach().cpu().tolist()]\n"
+            "                if conv_diag is not None\n"
+            "                else None\n"
+            "            )\n"
+            "        except Exception as exc:\n"
+            "            conv_diag_values = f\"ERROR: {exc}\"\n"
             "        rows.append({\n"
             "            \"shape\": row.get(\"shape\"),\n"
             "            \"parent\": row.get(\"parent\"),\n"
+            "            \"path0_nodes\": row.get(\"path0_nodes\"),\n"
             "            \"has_sibling\": row.get(\"has_sibling\"),\n"
             "            \"count\": count,\n"
+            "            \"conv_diag\": conv_diag_values,\n"
             "        })\n"
             "    path = Path(dump_path)\n"
             "    path.parent.mkdir(parents=True, exist_ok=True)\n"
             "    path.write_text(json.dumps(rows, indent=2, sort_keys=True))\n"
             "\n"
             "\n"
-            "def _fr10_register_tree_counter(shape, parent, counter):\n"
+            "def _fr10_register_tree_counter(\n"
+            "    shape, parent, counter, conv_diag=None, path0_nodes=None\n"
+            "):\n"
             "    if not _fr10_metrics_enabled():\n"
             "        return\n"
             "    global _FR10_SIGNAL_INSTALLED\n"
@@ -88,8 +107,10 @@ def _patch_gdn_attn() -> bool:
             "    _FR10_TREE_COUNTERS.append({\n"
             "        \"shape\": shape,\n"
             "        \"parent\": list(parent),\n"
+            "        \"path0_nodes\": list(path0_nodes) if path0_nodes is not None else None,\n"
             "        \"has_sibling\": has_sibling,\n"
             "        \"counter\": counter,\n"
+            "        \"conv_diag\": conv_diag,\n"
             "    })\n"
             "    if not _FR10_SIGNAL_INSTALLED:\n"
             "        signal.signal(signal.SIGUSR1, _fr10_dump_tree_counters)\n"
@@ -107,6 +128,11 @@ def _patch_gdn_attn() -> bool:
             "    fr10_tree_strict_mask: torch.Tensor | None = None\n"
             "    fr10_tree_visible_mask: torch.Tensor | None = None\n"
             "    fr10_tree_invocation_counter: torch.Tensor | None = None\n"
+            "    fr10_tree_conv_diag: torch.Tensor | None = None\n"
+            "    fr10_tree_conv_source_indices: dict[int, torch.Tensor] | None = None\n"
+            "    fr10_flat_conv_source_indices: dict[int, torch.Tensor] | None = None\n"
+            "    fr10_path0_conv_source_indices: dict[int, torch.Tensor] | None = None\n"
+            "    fr10_tree_path0_nodes: torch.Tensor | None = None\n"
             "    fr10_tree_has_sibling: bool = False\n"
         ),
         1,
@@ -128,16 +154,32 @@ def _patch_gdn_attn() -> bool:
             "        self.fr10_tree_strict_mask = None\n"
             "        self.fr10_tree_visible_mask = None\n"
             "        self.fr10_tree_invocation_counter = None\n"
+            "        self.fr10_tree_conv_diag = None\n"
+            "        self.fr10_tree_conv_source_indices = None\n"
+            "        self.fr10_flat_conv_source_indices = None\n"
+            "        self.fr10_path0_conv_source_indices = None\n"
+            "        self.fr10_tree_path0_nodes = None\n"
             "        self.fr10_tree_has_sibling = False\n"
             "        spec_token_tree = None\n"
-            "        if self.speculative_config is not None:\n"
+            "        try:\n"
+            "            spec_env = os.environ.get(\"SPEC_CONFIG\")\n"
+            "            if spec_env:\n"
+            "                spec_token_tree = json.loads(spec_env).get(\"speculative_token_tree\")\n"
+            "        except Exception:\n"
+            "            spec_token_tree = None\n"
+            "        if spec_token_tree is None and self.speculative_config is not None:\n"
             "            spec_token_tree = self.speculative_config.speculative_token_tree\n"
             "        if spec_token_tree is not None:\n"
-            "            tree_choices = ast.literal_eval(spec_token_tree)\n"
+            "            tree_choices = sorted(ast.literal_eval(spec_token_tree), key=lambda _p: (len(_p), _p))\n"
             "            index = {choice: i + 1 for i, choice in enumerate(tree_choices)}\n"
             "            parent = [-1]\n"
             "            for choice in tree_choices:\n"
             "                parent.append(0 if len(choice) == 1 else index[choice[:-1]])\n"
+            "            path0_nodes = [0] + [\n"
+            "                index[choice]\n"
+            "                for choice in tree_choices\n"
+            "                if all(int(part) == 0 for part in choice)\n"
+            "            ]\n"
             "            n = len(parent)\n"
             "            n_pad = 1 << (n - 1).bit_length()\n"
             "            if n_pad > 16:\n"
@@ -156,13 +198,60 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_tree_parent = torch.tensor(parent, dtype=torch.int32, device=device)\n"
             "            self.fr10_tree_strict_mask = strict\n"
             "            self.fr10_tree_visible_mask = visible\n"
+            "            source_by_width = {}\n"
+            "            flat_source_by_width = {}\n"
+            "            path0_source_by_width = {}\n"
+            "            for width in range(2, 7):\n"
+            "                source_rows = []\n"
+            "                for node in range(n):\n"
+            "                    ancestry = []\n"
+            "                    cur = parent[node]\n"
+            "                    while cur >= 0:\n"
+            "                        ancestry.append(cur)\n"
+            "                        cur = parent[cur]\n"
+            "                    ancestry.reverse()\n"
+            "                    path = ancestry + [node]\n"
+            "                    source = list(range(width - 1)) + [\n"
+            "                        width - 1 + int(path_node) for path_node in path\n"
+            "                    ]\n"
+            "                    source_rows.append(source[-width:])\n"
+            "                source_by_width[width] = torch.tensor(\n"
+            "                    source_rows, dtype=torch.long, device=device\n"
+            "                )\n"
+            "                flat_rows = []\n"
+            "                for node in range(n):\n"
+            "                    source = list(range(width - 1)) + [\n"
+            "                        width - 1 + int(path_node)\n"
+            "                        for path_node in range(node + 1)\n"
+            "                    ]\n"
+            "                    flat_rows.append(source[-width:])\n"
+            "                flat_source_by_width[width] = torch.tensor(\n"
+            "                    flat_rows, dtype=torch.long, device=device\n"
+            "                )\n"
+            "                path0_rows = []\n"
+            "                for node in range(len(path0_nodes)):\n"
+            "                    source = list(range(width - 1)) + [\n"
+            "                        width - 1 + int(path_node)\n"
+            "                        for path_node in range(node + 1)\n"
+            "                    ]\n"
+            "                    path0_rows.append(source[-width:])\n"
+            "                path0_source_by_width[width] = torch.tensor(\n"
+            "                    path0_rows, dtype=torch.long, device=device\n"
+            "                )\n"
+            "            self.fr10_tree_conv_source_indices = source_by_width\n"
+            "            self.fr10_flat_conv_source_indices = flat_source_by_width\n"
+            "            self.fr10_path0_conv_source_indices = path0_source_by_width\n"
+            "            self.fr10_tree_path0_nodes = torch.tensor(path0_nodes, dtype=torch.long, device=device)\n"
             "            self.fr10_tree_has_sibling = any(parent.count(p) > 1 for p in set(parent) if p >= 0)\n"
             "            if _fr10_metrics_enabled():\n"
             "                self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int32, device=device)\n"
+            "                self.fr10_tree_conv_diag = torch.zeros((12,), dtype=torch.float32, device=device)\n"
             "                _fr10_register_tree_counter(\n"
             "                    shape=f\"n{n}_pad{n_pad}\",\n"
             "                    parent=parent,\n"
             "                    counter=self.fr10_tree_invocation_counter,\n"
+            "                    conv_diag=self.fr10_tree_conv_diag,\n"
+            "                    path0_nodes=path0_nodes,\n"
             "                )\n"
         ),
         1,
@@ -176,6 +265,11 @@ def _patch_gdn_attn() -> bool:
             "            fr10_tree_strict_mask=self.fr10_tree_strict_mask,\n"
             "            fr10_tree_visible_mask=self.fr10_tree_visible_mask,\n"
             "            fr10_tree_invocation_counter=self.fr10_tree_invocation_counter,\n"
+            "            fr10_tree_conv_diag=self.fr10_tree_conv_diag,\n"
+            "            fr10_tree_conv_source_indices=self.fr10_tree_conv_source_indices,\n"
+            "            fr10_flat_conv_source_indices=self.fr10_flat_conv_source_indices,\n"
+            "            fr10_path0_conv_source_indices=self.fr10_path0_conv_source_indices,\n"
+            "            fr10_tree_path0_nodes=self.fr10_tree_path0_nodes,\n"
             "            fr10_tree_has_sibling=self.fr10_tree_has_sibling,\n"
             "            nums_dict=nums_dict,\n"
         ),
@@ -190,7 +284,7 @@ def _patch_gdn_linear() -> bool:
     if "FR10_ENABLE_TREE_GDN" in text:
         return False
 
-    text = text.replace("import torch\n", "import os\nimport torch\n", 1)
+    text = text.replace("import torch\n", "import ast\nimport json\nimport os\nimport torch\n", 1)
     text = text.replace(
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
@@ -201,6 +295,292 @@ def _patch_gdn_linear() -> bool:
         ),
         1,
     )
+
+    conv_needle = '''        if spec_sequence_masks is not None:
+            # spec_state_indices_tensor is always set when spec_sequence_masks is set
+            assert spec_state_indices_tensor is not None
+            mixed_qkv_spec = causal_conv1d_update(
+                mixed_qkv_spec,
+                conv_state,
+                conv_weights,
+                self.conv1d.bias,
+                self.activation,
+                conv_state_indices=spec_state_indices_tensor[:, 0][  # type: ignore[index]
+                    : attn_metadata.num_spec_decodes  # type: ignore[attr-defined]
+                ],
+                num_accepted_tokens=num_accepted_tokens,
+                query_start_loc=spec_query_start_loc,
+                max_query_len=spec_state_indices_tensor.size(-1),
+                validate_data=False,
+            )
+'''
+    conv_replacement = '''        if spec_sequence_masks is not None:
+            # spec_state_indices_tensor is always set when spec_sequence_masks is set
+            assert spec_state_indices_tensor is not None
+            try:
+                from vllm.v1.sample import rejection_sampler as _fr10_rs_mode
+                _fr10_active_decode_mode = getattr(
+                    _fr10_rs_mode, "_FR10_DECODE_MODE", _FR10_DECODE_MODE
+                )
+            except Exception:
+                _fr10_active_decode_mode = _FR10_DECODE_MODE
+            use_fr10_tree_conv = (
+                os.environ.get("FR10_ENABLE_TREE_GDN") == "1"
+                and _fr10_active_decode_mode == "tree_mtp"
+                and getattr(attn_metadata, "fr10_tree_parent", None) is not None
+                and attn_metadata.num_prefills == 0
+                and attn_metadata.num_decodes == 0
+            )
+            if use_fr10_tree_conv:
+                _fr10_prior_conv_state_bank = torch.index_select(
+                    conv_state,
+                    0,
+                    spec_state_indices_tensor[
+                        : attn_metadata.num_spec_decodes, 0
+                    ].to(torch.long),
+                )
+                try:
+                    _fr10_tree_src = None
+                    _fr10_spec_env = os.environ.get("SPEC_CONFIG")
+                    if _fr10_spec_env:
+                        _fr10_tree_src = json.loads(_fr10_spec_env).get(
+                            "speculative_token_tree"
+                        )
+                    if _fr10_tree_src is None and self.speculative_config is not None:
+                        _fr10_tree_src = self.speculative_config.speculative_token_tree
+                    _fr10_choices = sorted(
+                        ast.literal_eval(_fr10_tree_src), key=lambda _p: (len(_p), _p)
+                    )
+                    _fr10_index = {_p: _i + 1 for _i, _p in enumerate(_fr10_choices)}
+                    _fr10_parent = [-1]
+                    for _fr10_choice in _fr10_choices:
+                        _fr10_parent.append(
+                            0
+                            if len(_fr10_choice) == 1
+                            else _fr10_index[_fr10_choice[:-1]]
+                        )
+                    _fr10_path0_node_tensor = getattr(
+                        attn_metadata, "fr10_tree_path0_nodes", None
+                    )
+                    assert _fr10_path0_node_tensor is not None
+                    _fr10_tree_n = len(_fr10_parent)
+                    _fr10_width = int(conv_weights.shape[1])
+                    _fr10_tree_source_indices = getattr(
+                        attn_metadata, "fr10_tree_conv_source_indices", None
+                    )[_fr10_width]
+                    _fr10_flat_source_indices = getattr(
+                        attn_metadata, "fr10_flat_conv_source_indices", None
+                    )[_fr10_width]
+                    _fr10_path0_source_indices = getattr(
+                        attn_metadata, "fr10_path0_conv_source_indices", None
+                    )[_fr10_width]
+                    _fr10_source_flat = _fr10_tree_source_indices.reshape(-1)
+                    _fr10_flat_source_flat = _fr10_flat_source_indices.reshape(-1)
+                    _fr10_path0_source_flat = _fr10_path0_source_indices.reshape(-1)
+                    _fr10_prior_col_base = torch.arange(
+                        _fr10_width - 1,
+                        dtype=torch.long,
+                        device=mixed_qkv_spec.device,
+                    )
+                    _fr10_weight_f = conv_weights.to(torch.float32)
+                    _fr10_tree_conv_out = torch.empty_like(mixed_qkv_spec)
+                    _fr10_conv_diag = getattr(
+                        attn_metadata, "fr10_tree_conv_diag", None
+                    )
+                    _fr10_log_conv_diag = (
+                        os.environ.get("FR10_METRICS", "0") == "1"
+                        and _fr10_conv_diag is not None
+                    )
+                    assert _fr10_prior_conv_state_bank is not None
+                    for _fr10_b in range(attn_metadata.num_spec_decodes):
+                        _fr10_start = _fr10_b * _fr10_tree_n
+                        _fr10_end = _fr10_start + _fr10_tree_n
+                        _fr10_x = mixed_qkv_spec[_fr10_start:_fr10_end]
+                        _fr10_accept_offset = (
+                            num_accepted_tokens[_fr10_b].to(torch.long) - 1
+                            if num_accepted_tokens is not None
+                            else torch.zeros((), dtype=torch.long, device=_fr10_x.device)
+                        )
+                        _fr10_prior_cols = _fr10_prior_col_base + _fr10_accept_offset
+                        _fr10_prior_window = _fr10_prior_conv_state_bank[
+                            _fr10_b
+                        ].index_select(1, _fr10_prior_cols)
+                        _fr10_source = torch.cat(
+                            (_fr10_prior_window.transpose(0, 1), _fr10_x),
+                            dim=0,
+                        )
+                        _fr10_window = _fr10_source.index_select(
+                            0, _fr10_source_flat
+                        ).view(_fr10_tree_n, _fr10_width, _fr10_x.size(1))
+                        if self.conv1d.bias is None:
+                            _fr10_acc = torch.zeros_like(_fr10_x, dtype=torch.float32)
+                        else:
+                            _fr10_acc = self.conv1d.bias.to(torch.float32).unsqueeze(
+                                0
+                            ).expand_as(_fr10_x.float()).clone()
+                        for _fr10_col in range(_fr10_width):
+                            _fr10_acc = _fr10_acc + (
+                                _fr10_window[:, _fr10_col, :].to(torch.float32)
+                                * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
+                            )
+                        if self.activation in (True, "silu", "swish"):
+                            _fr10_acc = torch.nn.functional.silu(_fr10_acc)
+                        _fr10_out = _fr10_acc.to(dtype=mixed_qkv_spec.dtype)
+                        _fr10_tree_conv_out[_fr10_start:_fr10_end] = _fr10_out
+                        _fr10_path0_x = _fr10_x.index_select(
+                            0, _fr10_path0_node_tensor
+                        )
+                        _fr10_path0_state_source = torch.cat(
+                            (
+                                _fr10_prior_conv_state_bank[_fr10_b].transpose(0, 1),
+                                _fr10_path0_x,
+                            ),
+                            dim=0,
+                        )
+                        _fr10_store_idx = (
+                            _fr10_accept_offset
+                            + 1
+                            + torch.arange(
+                                conv_state.size(2),
+                                dtype=torch.long,
+                                device=mixed_qkv_spec.device,
+                            )
+                        )
+                        _fr10_new_state = _fr10_path0_state_source.index_select(
+                            0, _fr10_store_idx
+                        ).transpose(0, 1).to(dtype=conv_state.dtype)
+                        conv_state.index_copy_(
+                            0,
+                            spec_state_indices_tensor[_fr10_b : _fr10_b + 1, 0].to(
+                                torch.long
+                            ),
+                            _fr10_new_state.unsqueeze(0),
+                        )
+                        if _fr10_log_conv_diag:
+                            _fr10_path0_source = torch.cat(
+                                (_fr10_prior_window.transpose(0, 1), _fr10_path0_x),
+                                dim=0,
+                            )
+                            _fr10_path0_window = _fr10_path0_source.index_select(
+                                0, _fr10_path0_source_flat
+                            ).view(
+                                _fr10_path0_node_tensor.numel(),
+                                _fr10_width,
+                                _fr10_path0_x.size(1),
+                            )
+                            if self.conv1d.bias is None:
+                                _fr10_path0_acc = torch.zeros_like(
+                                    _fr10_path0_x, dtype=torch.float32
+                                )
+                            else:
+                                _fr10_path0_acc = self.conv1d.bias.to(
+                                    torch.float32
+                                ).unsqueeze(0).expand_as(_fr10_path0_x.float()).clone()
+                            for _fr10_col in range(_fr10_width):
+                                _fr10_path0_acc = _fr10_path0_acc + (
+                                    _fr10_path0_window[:, _fr10_col, :].to(
+                                        torch.float32
+                                    )
+                                    * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
+                                )
+                            if self.activation in (True, "silu", "swish"):
+                                _fr10_path0_acc = torch.nn.functional.silu(
+                                    _fr10_path0_acc
+                                )
+                            _fr10_path0_ref = _fr10_path0_acc.to(
+                                dtype=mixed_qkv_spec.dtype
+                            )
+                            _fr10_tree_path0 = _fr10_out.index_select(
+                                0, _fr10_path0_node_tensor
+                            )
+                            _fr10_flat_window = _fr10_source.index_select(
+                                0, _fr10_flat_source_flat
+                            ).view(_fr10_tree_n, _fr10_width, _fr10_x.size(1))
+                            if self.conv1d.bias is None:
+                                _fr10_flat_acc = torch.zeros_like(
+                                    _fr10_x, dtype=torch.float32
+                                )
+                            else:
+                                _fr10_flat_acc = self.conv1d.bias.to(
+                                    torch.float32
+                                ).unsqueeze(0).expand_as(_fr10_x.float()).clone()
+                            for _fr10_col in range(_fr10_width):
+                                _fr10_flat_acc = _fr10_flat_acc + (
+                                    _fr10_flat_window[:, _fr10_col, :].to(
+                                        torch.float32
+                                    )
+                                    * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
+                                )
+                            if self.activation in (True, "silu", "swish"):
+                                _fr10_flat_acc = torch.nn.functional.silu(
+                                    _fr10_flat_acc
+                                )
+                            _fr10_native_flat_path0 = _fr10_flat_acc.to(
+                                dtype=mixed_qkv_spec.dtype
+                            ).index_select(0, _fr10_path0_node_tensor)
+                            _fr10_tree_delta = (
+                                _fr10_tree_path0.float() - _fr10_path0_ref.float()
+                            ).abs()
+                            _fr10_native_delta = (
+                                _fr10_native_flat_path0.float()
+                                - _fr10_path0_ref.float()
+                            ).abs()
+                            _fr10_tree_max = _fr10_tree_delta.max()
+                            _fr10_native_max = _fr10_native_delta.max()
+                            _fr10_conv_diag[0].copy_(
+                                torch.maximum(_fr10_conv_diag[0], _fr10_tree_max)
+                            )
+                            _fr10_conv_diag[1].copy_(
+                                torch.maximum(_fr10_conv_diag[1], _fr10_native_max)
+                            )
+                            _fr10_conv_diag[2].add_(
+                                (_fr10_tree_max != 0).to(dtype=torch.float32)
+                            )
+                            _fr10_conv_diag[3].add_(
+                                (_fr10_native_max != 0).to(dtype=torch.float32)
+                            )
+                            _fr10_conv_diag[4].add_(1.0)
+                            _fr10_conv_diag[5].fill_(float(_fr10_tree_n))
+                    mixed_qkv_spec = _fr10_tree_conv_out
+                except Exception as _fr10_tree_conv_exc:
+                    if os.environ.get("FR10_METRICS", "0") == "1":
+                        logger.warning_once(
+                            "FR10 tree causal-conv fallback to native flat order: %s",
+                            _fr10_tree_conv_exc,
+                        )
+                    mixed_qkv_spec = causal_conv1d_update(
+                        mixed_qkv_spec,
+                        conv_state,
+                        conv_weights,
+                        self.conv1d.bias,
+                        self.activation,
+                        conv_state_indices=spec_state_indices_tensor[:, 0][
+                            : attn_metadata.num_spec_decodes
+                        ],
+                        num_accepted_tokens=num_accepted_tokens,
+                        query_start_loc=spec_query_start_loc,
+                        max_query_len=spec_state_indices_tensor.size(-1),
+                        validate_data=False,
+                    )
+            else:
+                mixed_qkv_spec = causal_conv1d_update(
+                    mixed_qkv_spec,
+                    conv_state,
+                    conv_weights,
+                    self.conv1d.bias,
+                    self.activation,
+                    conv_state_indices=spec_state_indices_tensor[:, 0][  # type: ignore[index]
+                        : attn_metadata.num_spec_decodes  # type: ignore[attr-defined]
+                    ],
+                    num_accepted_tokens=num_accepted_tokens,
+                    query_start_loc=spec_query_start_loc,
+                    max_query_len=spec_state_indices_tensor.size(-1),
+                    validate_data=False,
+                )
+'''
+    if conv_needle not in text:
+        raise RuntimeError("FR10 GDN causal conv spec branch needle not found")
+    text = text.replace(conv_needle, conv_replacement, 1)
 
     needle = '''        if spec_sequence_masks is not None:
             core_attn_out_spec, last_recurrent_state = (
@@ -225,9 +605,16 @@ def _patch_gdn_linear() -> bool:
             )
 '''
     replacement = '''        if spec_sequence_masks is not None:
+            try:
+                from vllm.v1.sample import rejection_sampler as _fr10_rs_mode
+                _fr10_active_decode_mode = getattr(
+                    _fr10_rs_mode, "_FR10_DECODE_MODE", _FR10_DECODE_MODE
+                )
+            except Exception:
+                _fr10_active_decode_mode = _FR10_DECODE_MODE
             use_fr10_tree = (
                 os.environ.get("FR10_ENABLE_TREE_GDN") == "1"
-                and _FR10_DECODE_MODE == "tree_mtp"
+                and _fr10_active_decode_mode == "tree_mtp"
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
                 and attn_metadata.num_prefills == 0
                 and attn_metadata.num_decodes == 0
@@ -752,6 +1139,165 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     except Exception:
         pass
     return output_token_ids
+
+
+def _lumo_tree_canonical_multidraft_sample(
+    output_token_ids: torch.Tensor,
+    accepted_tree_rows: torch.Tensor,
+    num_draft_tokens,
+    draft_token_ids: torch.Tensor,
+    tree_parent_indices: torch.Tensor,
+    target_logits: torch.Tensor,
+    tree_self_logits: torch.Tensor,
+    draft_probs: torch.Tensor | None,
+    bonus_token_ids: torch.Tensor,
+    max_spec_len: int,
+) -> torch.Tensor:
+    """Reference sampled tree committer using the verified FR10 rule."""
+    import numpy as _fr10_np
+    from lumo_flywheel_serving.fr10_tree_rejection_sampler import (
+        sample_deterministic_multidraft_rejection_step as _fr10_sample_det_step,
+        sample_multidraft_rejection_step as _fr10_sample_step,
+    )
+
+    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+    drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
+    if hasattr(num_draft_tokens, 'detach'):
+        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+    else:
+        counts = [int(x) for x in num_draft_tokens]
+    target_probs_cpu = target_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
+    self_probs_cpu = tree_self_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
+    draft_probs_cpu = (
+        None if draft_probs is None else draft_probs.detach().cpu().numpy()
+    )
+    seed = int(torch.randint(0, 2**31 - 1, (1,), device=output_token_ids.device).cpu().item())
+    rng = _fr10_np.random.default_rng(seed)
+
+    out_rows = []
+    accepted_rows = []
+    sample_log_rows = []
+    try:
+        import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+        if _fr10_lo.environ.get('FR10_METRICS', '0') == '1':
+            global _LUMO_TREE_SAMPLE_DEBUG_FH
+            try:
+                _LUMO_TREE_SAMPLE_DEBUG_FH
+            except NameError:
+                _LUMO_TREE_SAMPLE_DEBUG_FH = open(
+                    _fr10_lo.environ.get('LUMO_TREE_SAMPLER_DEBUG_LOG',
+                                         '/logs/tree_sampler_debug.jsonl'),
+                    'a',
+                    buffering=1,
+                )
+            _LUMO_TREE_SAMPLE_DEBUG_FH.write(_fr10_lj.dumps({
+                'event': 'sample_helper_enter',
+                'ts': round(_fr10_lt.time(), 4),
+                'max_spec_len': int(max_spec_len),
+                'has_draft_probs': draft_probs is not None,
+            }) + chr(10))
+    except Exception:
+        pass
+    start = 0
+    for req_i, node_count in enumerate(counts):
+        node_count = int(node_count)
+        parents = parents_cpu[start:start + node_count]
+        drafts = drafts_cpu[start:start + node_count]
+        current_parent = -1
+        accepted_row = 0
+        accepted_path = []
+        row = []
+        for _step in range(int(max_spec_len) + 1):
+            children = [
+                node for node, parent in enumerate(parents)
+                if int(parent) == int(current_parent)
+            ]
+            if not children:
+                if current_parent >= 0:
+                    row.append(
+                        int(rng.choice(
+                            self_probs_cpu.shape[1],
+                            p=self_probs_cpu[start + current_parent],
+                        ))
+                    )
+                elif req_i < int(bonus_token_ids.numel()):
+                    row.append(int(bonus_token_ids.reshape(-1)[req_i].detach().cpu().item()))
+                break
+
+            if draft_probs_cpu is None:
+                step = _fr10_sample_det_step(
+                    target_probs_cpu[start + children[0]],
+                    [drafts[child] for child in children],
+                    rng=rng,
+                )
+            else:
+                step = _fr10_sample_step(
+                    target_probs_cpu[start + children[0]],
+                    [draft_probs_cpu[start + child] for child in children],
+                    rng=rng,
+                )
+            row.append(int(step.token_id))
+            if not step.accepted:
+                break
+            accepted_child = int(children[int(step.source_index)])
+            if int(step.token_id) != int(drafts[accepted_child]):
+                break
+            current_parent = accepted_child
+            accepted_row = int(current_parent) + 1
+            accepted_path.append(int(current_parent))
+        out_rows.append(row[:int(max_spec_len) + 1])
+        accepted_rows.append(int(accepted_row))
+        final_root = int(accepted_path[0]) if accepted_path else None
+        sample_log_rows.append({
+            'event': 'tree_sample_accept',
+            'req_index': int(req_i),
+            'node_count': int(node_count),
+            'accepted_len': int(len(accepted_path)),
+            'accepted_final_row': int(accepted_row),
+            'accepted_node_ids': [int(x) for x in accepted_path],
+            'accepted_root': final_root,
+            'emitted_tokens': [int(x) for x in row[:int(max_spec_len) + 1]],
+            'draft_token_ids': [int(x) for x in drafts],
+        })
+        start += node_count
+
+    output_token_ids.fill_(-1)
+    for req_i, row in enumerate(out_rows):
+        for pos, token_id in enumerate(row):
+            output_token_ids[req_i, pos] = int(token_id)
+    accepted_tree_rows.copy_(
+        torch.tensor(accepted_rows, dtype=accepted_tree_rows.dtype,
+                     device=accepted_tree_rows.device)
+    )
+    globals()['_LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL'] = [int(x) for x in accepted_rows]
+    try:
+        from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
+        _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
+            int(x) for x in accepted_rows
+        ]
+    except Exception:
+        pass
+    try:
+        import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+        if _fr10_lo.environ.get('FR10_METRICS', '0') == '1':
+            global _LUMO_TREE_SAMPLE_ACCEPT_FH
+            try:
+                _LUMO_TREE_SAMPLE_ACCEPT_FH
+            except NameError:
+                _LUMO_TREE_SAMPLE_ACCEPT_FH = open(
+                    _fr10_lo.environ.get('LUMO_TREE_PATH_LCP_LOG',
+                                         '/logs/tree_path_lcp_max.jsonl'),
+                    'a',
+                    buffering=1,
+                )
+            _now = round(_fr10_lt.time(), 4)
+            for _row in sample_log_rows:
+                _row = dict(_row)
+                _row['ts'] = _now
+                _LUMO_TREE_SAMPLE_ACCEPT_FH.write(_fr10_lj.dumps(_row) + chr(10))
+    except Exception:
+        pass
+    return output_token_ids
 '''
     if helper_anchor not in text:
         raise RuntimeError("tree path-LCP helper anchor not found")
@@ -800,7 +1346,8 @@ def _lumo_tree_path_lcp_max_greedy_sample(
 """
         stock_call_new = """        lumo_tree_parent_indices = getattr(metadata, "tree_parent_indices", None)
         lumo_tree_token_ids = None
-        if lumo_tree_parent_indices is not None and sampling_metadata.all_greedy:
+        lumo_tree_self_logits = None
+        if lumo_tree_parent_indices is not None:
             tree_self_logits = logits[metadata.tree_self_logits_indices]
             tree_self_logits = tree_self_logits.to(torch.float32)
             if not self.is_processed_logprobs_mode:
@@ -808,18 +1355,46 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             tree_self_logits = self.apply_logits_processors(
                 tree_self_logits, sampling_metadata, metadata
             )
-            tree_self_logits = apply_sampling_constraints(
+            lumo_tree_self_logits = apply_sampling_constraints(
                 tree_self_logits,
                 metadata.cu_num_draft_tokens,
                 sampling_metadata,
             )
-            lumo_tree_token_ids = torch.stack(
-                [
-                    target_logits.argmax(dim=-1).to(torch.int32),
-                    tree_self_logits.argmax(dim=-1).to(torch.int32),
-                ],
-                dim=0,
-            ).contiguous()
+            if sampling_metadata.all_greedy:
+                lumo_tree_token_ids = torch.stack(
+                    [
+                        target_logits.argmax(dim=-1).to(torch.int32),
+                        lumo_tree_self_logits.argmax(dim=-1).to(torch.int32),
+                    ],
+                    dim=0,
+                ).contiguous()
+
+        try:
+            import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+            if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                global _LUMO_TREE_SAMPLER_DEBUG_FH
+                try:
+                    _LUMO_TREE_SAMPLER_DEBUG_FH
+                except NameError:
+                    _LUMO_TREE_SAMPLER_DEBUG_FH = open(
+                        _fr10_lo.environ.get(
+                            "LUMO_TREE_SAMPLER_DEBUG_LOG",
+                            "/logs/tree_sampler_debug.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _LUMO_TREE_SAMPLER_DEBUG_FH.write(
+                    _fr10_lj.dumps({
+                        "event": "sampler_metadata",
+                        "ts": round(_fr10_lt.time(), 4),
+                        "has_tree_parent_indices": lumo_tree_parent_indices is not None,
+                        "has_tree_self_logits": lumo_tree_self_logits is not None,
+                        "all_greedy": bool(sampling_metadata.all_greedy),
+                    }) + chr(10)
+                )
+        except Exception:
+            pass
 
         output_token_ids = rejection_sample(
             metadata.draft_token_ids,
@@ -832,6 +1407,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             sampling_metadata,
             tree_parent_indices=lumo_tree_parent_indices,
             tree_token_ids=lumo_tree_token_ids,
+            tree_self_logits=lumo_tree_self_logits,
         )
 """
         if stock_call not in text:
@@ -846,6 +1422,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     sampling_metadata: SamplingMetadata,
     tree_parent_indices: torch.Tensor | None = None,
     tree_token_ids: torch.Tensor | None = None,
+    tree_self_logits: torch.Tensor | None = None,
 ) -> torch.Tensor:
 """
         if stock_sig not in text:
@@ -871,6 +1448,51 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             tree_parent_indices,
             tree_token_ids[0],
             tree_token_ids[1],
+            bonus_token_ids,
+            max_spec_len,
+        )
+
+    if tree_parent_indices is not None and not sampling_metadata.all_greedy:
+        try:
+            import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+            if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                global _LUMO_TREE_SAMPLER_BRANCH_FH
+                try:
+                    _LUMO_TREE_SAMPLER_BRANCH_FH
+                except NameError:
+                    _LUMO_TREE_SAMPLER_BRANCH_FH = open(
+                        _fr10_lo.environ.get(
+                            "LUMO_TREE_SAMPLER_DEBUG_LOG",
+                            "/logs/tree_sampler_debug.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _LUMO_TREE_SAMPLER_BRANCH_FH.write(
+                    _fr10_lj.dumps({
+                        "event": "sampler_branch_enter",
+                        "ts": round(_fr10_lt.time(), 4),
+                        "batch_size": int(batch_size),
+                        "max_spec_len": int(max_spec_len),
+                        "has_tree_self_logits": tree_self_logits is not None,
+                    }) + chr(10)
+                )
+        except Exception:
+            pass
+        if tree_self_logits is None:
+            raise RuntimeError("FR10 sampled tree committer missing self logits")
+        accepted_tree_rows = torch.empty(
+            (batch_size,), dtype=torch.int32, device=device
+        )
+        return _lumo_tree_canonical_multidraft_sample(
+            output_token_ids,
+            accepted_tree_rows,
+            num_draft_tokens,
+            draft_token_ids,
+            tree_parent_indices,
+            target_logits,
+            tree_self_logits,
+            draft_probs,
             bonus_token_ids,
             max_spec_len,
         )
@@ -902,13 +1524,41 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
         lumo_tree_parent_indices = None
         lumo_tree_self_logits_indices = None
         lumo_draft_token_indices = None
+        _lumo_tree_meta_debug = {
+            "event": "gpu_tree_metadata",
+            "mode": None,
+            "has_tree_src": False,
+            "has_tree_parent_indices": False,
+            "reason": "not_built",
+        }
         try:
-            _fr10_mode = getattr(scheduler_output, "fr10_decode_mode", None)
+            try:
+                from vllm.v1.sample import rejection_sampler as _fr10_rejection_sampler
+                _fr10_mode = getattr(_fr10_rejection_sampler, "_FR10_DECODE_MODE", None)
+            except Exception:
+                _fr10_mode = None
+            _fr10_mode = _fr10_mode or __import__("os").environ.get(
+                "FR10_DECODE_MODE_DEFAULT", "tree_mtp"
+            )
+            _ltree_src = None
+            try:
+                _spec_env = __import__("os").environ.get("SPEC_CONFIG")
+                if _spec_env:
+                    _ltree_src = __import__("json").loads(_spec_env).get(
+                        "speculative_token_tree"
+                    )
+            except Exception:
+                _ltree_src = None
             _lspec = getattr(self.vllm_config, "speculative_config", None)
-            _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None
+            if not _ltree_src:
+                _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None
+            _lumo_tree_meta_debug["mode"] = _fr10_mode
+            _lumo_tree_meta_debug["has_tree_src"] = bool(_ltree_src)
             if _fr10_mode == "tree_mtp" and _ltree_src:
-                _choices = __import__("ast").literal_eval(_ltree_src)
+                _choices = sorted(__import__("ast").literal_eval(_ltree_src), key=lambda _p: (len(_p), _p))
                 _max_depth = max(len(_t) for _t in _choices)
+                _lumo_tree_meta_debug["tree_len"] = int(len(_choices))
+                _lumo_tree_meta_debug["max_depth"] = int(_max_depth)
                 if len(_choices) > _max_depth:
                     _path_to_idx = {tuple(_p): _i for _i, _p in enumerate(_choices)}
                     _parents_template = np.array([
@@ -928,6 +1578,7 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                             continue
                         if _n != _tree_len:
                             _ok = False
+                            _lumo_tree_meta_debug["reason"] = f"draft_count_mismatch:{_n}!={_tree_len}"
                             break
                         for _node_idx, _parent in enumerate(_parents_template.tolist()):
                             _parent_local = 0 if _parent < 0 else int(_parent) + 1
@@ -947,10 +1598,55 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                         lumo_draft_token_indices = torch.from_numpy(
                             np.array(_draft, dtype=np.int32)
                         ).to(self.device, non_blocking=True)
-        except Exception:
+                        _lumo_tree_meta_debug["reason"] = "ok"
+                    elif _ok:
+                        _lumo_tree_meta_debug["reason"] = (
+                            f"target_total_mismatch:{len(_target)}!={int(cu_num_draft_tokens[-1])}"
+                        )
+                else:
+                    _lumo_tree_meta_debug["reason"] = "linear_or_empty_tree"
+            elif _fr10_mode != "tree_mtp":
+                _lumo_tree_meta_debug["reason"] = f"mode:{_fr10_mode}"
+            else:
+                _lumo_tree_meta_debug["reason"] = "missing_tree_src"
+        except Exception as _lumo_tree_meta_exc:
             lumo_tree_parent_indices = None
             lumo_tree_self_logits_indices = None
             lumo_draft_token_indices = None
+            _lumo_tree_meta_debug["reason"] = (
+                "exception:"
+                + type(_lumo_tree_meta_exc).__name__
+                + ":"
+                + str(_lumo_tree_meta_exc)[:200]
+            )
+        try:
+            import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+            if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                global _LUMO_TREE_META_DEBUG_FH
+                try:
+                    _LUMO_TREE_META_DEBUG_FH
+                except NameError:
+                    _LUMO_TREE_META_DEBUG_FH = open(
+                        _fr10_lo.environ.get(
+                            "LUMO_TREE_SAMPLER_DEBUG_LOG",
+                            "/logs/tree_sampler_debug.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _LUMO_TREE_META_DEBUG_FH.write(
+                    _fr10_lj.dumps(dict(
+                        _lumo_tree_meta_debug,
+                        ts=round(_fr10_lt.time(), 4),
+                        has_tree_parent_indices=lumo_tree_parent_indices is not None,
+                        has_tree_self_logits_indices=lumo_tree_self_logits_indices is not None,
+                        has_draft_token_indices=lumo_draft_token_indices is not None,
+                        num_draft_tokens=[int(_x) for _x in num_draft_tokens.tolist()],
+                        cu_total=int(cu_num_draft_tokens[-1]) if len(cu_num_draft_tokens) else 0,
+                    )) + chr(10)
+                )
+        except Exception:
+            pass
 
         # TODO: Optimize the CPU -> GPU copy.
         cu_num_draft_tokens = torch.from_numpy(cu_num_draft_tokens).to(
@@ -1034,6 +1730,253 @@ def _patch_gpu_model_runner_decode_mode_globals() -> bool:
     return True
 
 
+def _patch_eagle_tree_consumption_verify() -> bool:
+    text = EAGLE_PATH.read_text()
+    sentinel = "# FR10_TREE_DRAFT_CONSUMPTION_VERIFY"
+    if sentinel in text:
+        return False
+
+    text = text.replace("import ast\n", "import ast\nimport json\nimport os\n", 1)
+
+    tree_parse_old = """        # Parse the speculative token tree.
+        spec_token_tree = self.speculative_config.speculative_token_tree
+        assert spec_token_tree is not None
+        self.tree_choices: list[tuple[int, ...]] = ast.literal_eval(spec_token_tree)
+"""
+    tree_parse_new = """        # Parse the speculative token tree.
+        spec_token_tree = None
+        try:
+            spec_env = os.environ.get("SPEC_CONFIG")
+            if spec_env:
+                spec_token_tree = json.loads(spec_env).get("speculative_token_tree")
+        except Exception:
+            spec_token_tree = None
+        if spec_token_tree is None:
+            spec_token_tree = self.speculative_config.speculative_token_tree
+        assert spec_token_tree is not None
+        self.tree_choices: list[tuple[int, ...]] = sorted(
+            ast.literal_eval(spec_token_tree), key=lambda _p: (len(_p), _p)
+        )
+"""
+    if tree_parse_old not in text:
+        raise RuntimeError("EAGLE tree parse anchor not found")
+    text = text.replace(tree_parse_old, tree_parse_new, 1)
+
+    old = """        if any(isinstance(md, TreeAttentionMetadata) for md in per_group_attn_metadata):
+            # Draft using tree attention - requires full logits for top-k
+            logits = self.model.compute_logits(sample_hidden_states)
+            draft_token_ids_list = self.propose_tree(
+                batch_size=batch_size,
+                logits=logits,
+                positions=positions,
+                hidden_states=hidden_states,
+                common_attn_metadata=common_attn_metadata,
+                slot_mappings=slot_mappings,
+            )
+            # [batch_size, num_tree_tokens]
+            return torch.cat(draft_token_ids_list, dim=1)
+"""
+    new = """        if any(isinstance(md, TreeAttentionMetadata) for md in per_group_attn_metadata):
+            # FR10_TREE_DRAFT_CONSUMPTION_VERIFY: no separate spine overlay.
+            # vLLM's native tree drafter consumes the MTP head directly:
+            # child-rank 0 is the fed-back spine, child-rank 1 is recorded as
+            # the side leaf and must not advance the spine recurrent state.
+            logits = self.model.compute_logits(sample_hidden_states)
+            draft_token_ids_list = self.propose_tree(
+                batch_size=batch_size,
+                logits=logits,
+                positions=positions,
+                hidden_states=hidden_states,
+                common_attn_metadata=common_attn_metadata,
+                slot_mappings=slot_mappings,
+            )
+            # [batch_size, num_tree_tokens]
+            return torch.cat(draft_token_ids_list, dim=1)
+"""
+    if old not in text:
+        raise RuntimeError("EAGLE tree propose branch anchor not found")
+    text = text.replace(old, new, 1)
+
+    root_log_anchor = """        draft_token_ids_list = [draft_token_ids]
+        draft_hidden_states = hidden_states.view(batch_size, 1, -1)
+"""
+    root_log_new = """        draft_token_ids_list = [draft_token_ids]
+        # FR10_TREE_DRAFT_CONSUMPTION_VERIFY: runtime node placement and q.
+        _fr10_depth_choices = {}
+        for _fr10_choice in self.tree_choices:
+            _fr10_depth_choices.setdefault(len(_fr10_choice), []).append(tuple(_fr10_choice))
+        _fr10_runtime_slot_by_choice = {
+            tuple(_fr10_choice): int(_fr10_i)
+            for _fr10_i, _fr10_choice in enumerate(self.tree_choices)
+        }
+
+        def _fr10_record_tree_consumption(
+            _fr10_depth,
+            _fr10_level_logits,
+            _fr10_level_tokens,
+            _fr10_level_num_parents,
+            _fr10_level_num_children,
+        ):
+            try:
+                import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+                if _fr10_lo.environ.get("FR10_METRICS", "0") != "1":
+                    return
+                global _LUMO_TREE_DRAFT_CONSUMPTION_FH
+                try:
+                    _LUMO_TREE_DRAFT_CONSUMPTION_FH
+                except NameError:
+                    _LUMO_TREE_DRAFT_CONSUMPTION_FH = open(
+                        _fr10_lo.environ.get(
+                            "LUMO_TREE_DRAFT_CONSUMPTION_LOG",
+                            "/logs/fr10_tree_draft_consumption.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _fr10_choices = _fr10_depth_choices.get(int(_fr10_depth), [])
+                _fr10_parent_choices = (
+                    [tuple()]
+                    if int(_fr10_depth) == 1
+                    else _fr10_depth_choices.get(int(_fr10_depth) - 1, [])
+                )
+                _fr10_parent_slot = {
+                    tuple(_fr10_choice): int(_fr10_i)
+                    for _fr10_i, _fr10_choice in enumerate(_fr10_parent_choices)
+                }
+                _fr10_top = torch.topk(
+                    _fr10_level_logits, int(_fr10_level_num_children), dim=-1
+                )
+                _fr10_now = round(_fr10_lt.time(), 4)
+                for _fr10_choice in _fr10_choices:
+                    _fr10_parent = tuple(_fr10_choice[:-1])
+                    _fr10_rank = int(_fr10_choice[-1])
+                    _fr10_p_slot = int(_fr10_parent_slot.get(_fr10_parent, -1))
+                    _fr10_flat_col = (
+                        _fr10_p_slot * int(_fr10_level_num_children) + _fr10_rank
+                    )
+                    if (
+                        _fr10_p_slot < 0
+                        or _fr10_rank >= int(_fr10_level_num_children)
+                        or _fr10_flat_col >= int(_fr10_level_tokens.size(1))
+                    ):
+                        _LUMO_TREE_DRAFT_CONSUMPTION_FH.write(
+                            _fr10_lj.dumps({
+                                "event": "tree_draft_consumption",
+                                "ts": _fr10_now,
+                                "depth": int(_fr10_depth),
+                                "path": [int(_x) for _x in _fr10_choice],
+                                "parent_path": [int(_x) for _x in _fr10_parent],
+                                "child_rank": int(_fr10_rank),
+                                "runtime_slot": int(_fr10_runtime_slot_by_choice.get(_fr10_choice, -1)),
+                                "placement_ok": False,
+                                "reason": "choice_not_represented_by_level_topk",
+                            }) + chr(10)
+                        )
+                        continue
+                    for _fr10_b in range(int(batch_size)):
+                        _fr10_row = (
+                            int(_fr10_b) * int(_fr10_level_num_parents) + _fr10_p_slot
+                        )
+                        _fr10_placed = _fr10_level_tokens[_fr10_b, _fr10_flat_col]
+                        _fr10_expected = _fr10_top.indices[_fr10_row, _fr10_rank]
+                        _fr10_probs = torch.softmax(
+                            _fr10_level_logits[_fr10_row].float(), dim=-1
+                        )
+                        _fr10_q = _fr10_probs[_fr10_placed.to(torch.long)]
+                        _LUMO_TREE_DRAFT_CONSUMPTION_FH.write(
+                            _fr10_lj.dumps({
+                                "event": "tree_draft_consumption",
+                                "ts": _fr10_now,
+                                "req_index": int(_fr10_b),
+                                "depth": int(_fr10_depth),
+                                "path": [int(_x) for _x in _fr10_choice],
+                                "parent_path": [int(_x) for _x in _fr10_parent],
+                                "runtime_slot": int(_fr10_runtime_slot_by_choice.get(_fr10_choice, -1)),
+                                "parent_runtime_slot": int(_fr10_runtime_slot_by_choice.get(_fr10_parent, -1)),
+                                "parent_level_slot": int(_fr10_p_slot),
+                                "child_rank": int(_fr10_rank),
+                                "rank_kind": "top1" if int(_fr10_rank) == 0 else ("top2" if int(_fr10_rank) == 1 else "topN"),
+                                "flat_level_col": int(_fr10_flat_col),
+                                "placed_token": int(_fr10_placed.detach().cpu().item()),
+                                "expected_topk_token": int(_fr10_expected.detach().cpu().item()),
+                                "q_prob": float(_fr10_q.detach().cpu().item()),
+                                "placement_ok": bool(
+                                    int(_fr10_placed.detach().cpu().item())
+                                    == int(_fr10_expected.detach().cpu().item())
+                                ),
+                            }) + chr(10)
+                        )
+            except Exception:
+                pass
+
+        _fr10_record_tree_consumption(1, logits, draft_token_ids, 1, num_children)
+        draft_hidden_states = hidden_states.view(batch_size, 1, -1)
+"""
+    tree_fn_pos = text.find("    def propose_tree(")
+    if tree_fn_pos < 0:
+        raise RuntimeError("EAGLE propose_tree function anchor not found")
+    root_log_pos = text.find(root_log_anchor, tree_fn_pos)
+    if root_log_pos < 0:
+        raise RuntimeError("EAGLE propose_tree root consumption anchor not found")
+    text = (
+        text[:root_log_pos]
+        + root_log_new
+        + text[root_log_pos + len(root_log_anchor) :]
+    )
+
+    level_log_anchor = """            draft_token_ids_list.append(draft_token_ids)
+"""
+    level_log_new = """            draft_token_ids_list.append(draft_token_ids)
+            _fr10_record_tree_consumption(
+                level + 2, logits, draft_token_ids, level_num_drafts, num_children
+            )
+"""
+    level_log_pos = text.find(level_log_anchor, root_log_pos + len(root_log_new))
+    if level_log_pos < 0:
+        raise RuntimeError("EAGLE propose_tree level consumption anchor not found")
+    text = (
+        text[:level_log_pos]
+        + level_log_new
+        + text[level_log_pos + len(level_log_anchor) :]
+    )
+    EAGLE_PATH.write_text(text)
+    return True
+
+
+def _patch_tree_attn_spec_config_override() -> bool:
+    text = TREE_ATTN_PATH.read_text()
+    sentinel = "# FR10_SPEC_CONFIG_TREE_OVERRIDE"
+    if sentinel in text:
+        return False
+    text = text.replace("import ast\n", "import ast\nimport json\nimport os\n", 1)
+    old = """        spec_token_tree: str | None = None
+        if spec := spec_config:
+            spec_token_tree = spec.speculative_token_tree
+        tree_choices: list[tuple[int, ...]] = (
+            ast.literal_eval(spec_token_tree) if spec_token_tree is not None else [(0,)]
+        )
+"""
+    new = f"""        {sentinel}: keep attention tree identical to the FR10 launch descriptor.
+        spec_token_tree: str | None = None
+        try:
+            spec_env = os.environ.get("SPEC_CONFIG")
+            if spec_env:
+                spec_token_tree = json.loads(spec_env).get("speculative_token_tree")
+        except Exception:
+            spec_token_tree = None
+        if spec_token_tree is None and (spec := spec_config):
+            spec_token_tree = spec.speculative_token_tree
+        tree_choices: list[tuple[int, ...]] = (
+            sorted(ast.literal_eval(spec_token_tree), key=lambda _p: (len(_p), _p)) if spec_token_tree is not None else [(0,)]
+        )
+"""
+    if old not in text:
+        raise RuntimeError("tree attention spec tree anchor not found")
+    text = text.replace(old, new, 1)
+    TREE_ATTN_PATH.write_text(text)
+    return True
+
+
 def _patch_mamba_postprocess_tree_rows() -> bool:
     text = MAMBA_UTILS_PATH.read_text()
     sentinel = "# LUMO_TREE_STATE_COMMIT_ROWS"
@@ -1061,6 +2004,8 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
 '''
     new = '''        if aligned_new_computed_tokens >= num_tokens_running_state:
             accept_token_bias = aligned_new_computed_tokens - num_tokens_running_state
+            _fr10_native_accept_token_bias = accept_token_bias
+            _fr10_tree_row = 0
             # LUMO_TREE_STATE_COMMIT_ROWS: for FR10 tree verification, the
             # accepted final recurrent state lives at the accepted tree node
             # row, not at the flat linear accepted-count row. The scheduler's
@@ -1071,12 +2016,47 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
                 _fr10_rows = getattr(_fr10_gdn, "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", None)
                 if _fr10_rows is not None and i < len(_fr10_rows):
                     _fr10_row = int(_fr10_rows[i])
+                    _fr10_tree_row = int(_fr10_row)
                     if _fr10_row > 0:
                         accept_token_bias = _fr10_row
             except Exception:
                 pass
             src_block_idx = mamba_state_idx[req_id]
             dest_block_idx = aligned_new_computed_tokens // mamba_spec.block_size - 1
+            try:
+                import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+                if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                    global _LUMO_TREE_COMMIT_PARITY_FH
+                    try:
+                        _LUMO_TREE_COMMIT_PARITY_FH
+                    except NameError:
+                        _LUMO_TREE_COMMIT_PARITY_FH = open(
+                            _fr10_lo.environ.get(
+                                "LUMO_TREE_COMMIT_PARITY_LOG",
+                                "/logs/fr10_commit_copy_parity.jsonl",
+                            ),
+                            "a",
+                            buffering=1,
+                        )
+                    _LUMO_TREE_COMMIT_PARITY_FH.write(
+                        _fr10_lj.dumps({
+                            "event": "mamba_commit_copy_bias",
+                            "ts": round(_fr10_lt.time(), 4),
+                            "req_index": int(i),
+                            "req_id": str(req_id),
+                            "num_accepted_tokens": int(num_accepted_tokens),
+                            "num_draft_tokens": int(num_draft_tokens),
+                            "native_accept_token_bias": int(_fr10_native_accept_token_bias),
+                            "tree_accepted_row": int(_fr10_tree_row),
+                            "effective_accept_token_bias": int(accept_token_bias),
+                            "collect_num_accepted_tokens": int(accept_token_bias) + 1,
+                            "src_block_idx": int(src_block_idx),
+                            "dest_block_idx": int(dest_block_idx),
+                            "row_redirect_active": bool(int(_fr10_tree_row) > 0),
+                        }) + chr(10)
+                    )
+            except Exception:
+                pass
             collect_mamba_copy_meta(
                 copy_bufs,
                 kv_cache_config,
@@ -1107,6 +2087,8 @@ def main() -> int:
         (GDN_ATTN_PATH, _patch_gdn_attn()),
         (GDN_LINEAR_PATH, _patch_gdn_linear()),
         (SCHEDULER_PATH, _patch_scheduler_spec_trace()),
+        (EAGLE_PATH, _patch_eagle_tree_consumption_verify()),
+        (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (MAMBA_UTILS_PATH, _patch_mamba_postprocess_tree_rows()),

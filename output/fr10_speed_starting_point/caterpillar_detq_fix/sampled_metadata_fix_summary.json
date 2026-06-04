@@ -1,0 +1,71 @@
+{
+  "commit": "4fa09aef",
+  "files": {
+    "logs/per_req_spec_trace.jsonl": {
+      "bytes": 7781,
+      "sha256": "77766165c1186e7518fe6526f2ef5c74dcb23532a0cf8b40310a1a0259bce134"
+    },
+    "logs/tree_path_lcp_max.jsonl": {
+      "bytes": 10824,
+      "sha256": "1e3ff1167839975df8f1e348c68d733bdccfcb10da91ecca4d25be0d47e1e484"
+    },
+    "logs/tree_sampler_debug.jsonl": {
+      "bytes": 38848,
+      "sha256": "263d5711a82faaa2e991f302799e14bd7d2bf0b7de3bdec1f6e64914bc24ac1b"
+    },
+    "smoke/smoke_naive_mtp.json": {
+      "bytes": 2204,
+      "sha256": "8376fccb4f3d2a98fd2502379cffa8c2248dc39eada2820bc095918b7dc636a1"
+    },
+    "smoke/smoke_tree_mtp.json": {
+      "bytes": 2205,
+      "sha256": "84c43735a54db591f8b78ca1c801d23aa86489520e81cb62749e78c136e9fc02"
+    }
+  },
+  "server": {
+    "batch_invariant": 0,
+    "fr10_metrics": 1,
+    "gpu_memory_utilization": 0.88,
+    "temperature": 0.6,
+    "top_p": 0.95,
+    "tree": "[(0,), (0,0), (0,0,0), (0,0,0,0), (0,0,0,0,0), (0,1), (0,0,1), (0,0,0,1), (0,0,0,0,1)]"
+  },
+  "task": "fr10_sampled_tree_metadata_propagation_positive_controls",
+  "tree_path_lcp_max": {
+    "accepted_root": {
+      "0": 26,
+      "None": 12
+    },
+    "branch_node_usage": {},
+    "events": {
+      "tree_sample_accept": 38
+    },
+    "rows": 38
+  },
+  "tree_sampler_debug": {
+    "events": {
+      "gpu_tree_metadata": 72,
+      "sample_helper_enter": 38,
+      "sampler_branch_enter": 38,
+      "sampler_metadata": 74
+    },
+    "gpu_modes": {
+      "naive_mtp": 34,
+      "tree_mtp": 38
+    },
+    "gpu_reasons": {
+      "('naive_mtp', 'mode:naive_mtp', False)": 34,
+      "('tree_mtp', 'ok', True)": 38
+    },
+    "rows": 222,
+    "sample_helper_enter_count": 38,
+    "sample_helper_has_draft_probs": {
+      "False": 38
+    },
+    "sampler_branch_enter_count": 38,
+    "sampler_has_tree_parent_indices": {
+      "False": 36,
+      "True": 38
+    }
+  }
+}

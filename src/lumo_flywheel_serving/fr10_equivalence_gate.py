@@ -1,3 +1,17 @@
+"""FR10 losslessness/equivalence gates.
+
+The gate has two distinct levels:
+
+* L1 deterministic kernel checks run on fixed tensors. These keep strict
+  numerical thresholds such as state/output parity and logit-margin bands; this
+  is the contamination microscope that catches sibling leaks and native-linear
+  GDN routing on a tree.
+* L2 serving checks run at the operating distribution, e.g. B4 temperature 0.6
+  and top_p 0.95. These are floor-relative statistical tests: compare
+  cross-regime distances against same-regime distances at matched sample count
+  and batch shape. Do not apply the L1 6e-5 margin band to serving samples.
+"""
+
 from __future__ import annotations
 
 import json

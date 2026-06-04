@@ -1,0 +1,55 @@
+{
+  "batch_size": 4,
+  "interpretation": "spine-only tree_mtp has gradual survival close to naive_mtp; the depth-2 cliff requires branches and points to branch draft-side state perturbation rather than the verifier kernel.",
+  "mode_switch_ts": {
+    "first_naive_mtp": 1780559658.1345,
+    "first_tree_mtp": 1780559712.3163
+  },
+  "run_dir": "output/fr10_spine_only_discriminator_20260604T074637Z",
+  "schema": "fr10.spine_only_discriminator.v1",
+  "speculative_token_tree": "[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0)]",
+  "summary": {
+    "naive_mtp": {
+      "acc_counts": {
+        "0": 115,
+        "1": 91,
+        "2": 62,
+        "3": 70,
+        "4": 52,
+        "5": 178
+      },
+      "accepted_per_event": 2.681338028169014,
+      "accepted_total": 1523,
+      "events": 568,
+      "survival_by_depth": {
+        "0": 453,
+        "1": 362,
+        "2": 300,
+        "3": 230,
+        "4": 178
+      }
+    },
+    "tree_mtp": {
+      "acc_counts": {
+        "0": 127,
+        "1": 99,
+        "2": 54,
+        "3": 66,
+        "4": 57,
+        "5": 176
+      },
+      "accepted_per_event": 2.613126079447323,
+      "accepted_total": 1513,
+      "events": 579,
+      "survival_by_depth": {
+        "0": 452,
+        "1": 353,
+        "2": 299,
+        "3": 233,
+        "4": 176
+      }
+    }
+  },
+  "temperature": 0.6,
+  "top_p": 0.95
+}

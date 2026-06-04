@@ -77,6 +77,24 @@ def test_normalize_responses_request_payload_preserves_existing_tool_shapes() ->
     assert normalized == payload
 
 
+def test_normalize_responses_request_payload_forces_fr10_decode_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LUMO_PROXY_FR10_DECODE_MODE", "tree_mtp")
+    payload = {
+        "model": "qwen3.6-27b",
+        "vllm_xargs": {"trace_id": "keep-me"},
+    }
+
+    normalized = normalize_responses_request_payload(payload)
+
+    assert normalized["vllm_xargs"] == {
+        "trace_id": "keep-me",
+        "fr10_decode_mode": "tree_mtp",
+    }
+    assert payload["vllm_xargs"] == {"trace_id": "keep-me"}
+
+
 def test_normalize_responses_request_payload_adds_reasoning_status() -> None:
     payload = {
         "model": "qwen3.5-27b",
@@ -93,6 +111,58 @@ def test_normalize_responses_request_payload_adds_reasoning_status() -> None:
 
     assert normalized["input"][0]["status"] == "completed"
     assert normalized["input"][0]["id"].startswith("rs_")
+
+
+def test_normalize_responses_request_payload_maps_developer_role_to_system() -> None:
+    payload = {
+        "model": "qwen3.6-27b",
+        "input": [
+            {
+                "role": "developer",
+                "content": [{"type": "input_text", "text": "Use concise answers."}],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": "Reply OK only."}],
+            },
+        ],
+    }
+
+    normalized = normalize_responses_request_payload(payload)
+
+    assert normalized["instructions"] == "Use concise answers."
+    assert [item["role"] for item in normalized["input"]] == ["user"]
+    assert payload["input"][0]["role"] == "developer"
+
+
+def test_normalize_responses_request_payload_merges_developer_role_into_instructions() -> None:
+    payload = {
+        "model": "qwen3.6-27b",
+        "instructions": "Base instructions.",
+        "input": [
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": "Patch the bug."}],
+            },
+            {
+                "role": "developer",
+                "content": [{"type": "input_text", "text": "Use tools."}],
+            },
+            {
+                "role": "assistant",
+                "content": [{"type": "output_text", "text": "I will inspect."}],
+            },
+        ],
+    }
+
+    normalized = normalize_responses_request_payload(payload)
+
+    assert normalized["instructions"] == "Base instructions.\n\nUse tools."
+    assert [item["role"] for item in normalized["input"]] == [
+        "user",
+        "assistant",
+    ]
+    assert payload["input"][1]["role"] == "developer"
 
 
 def test_normalize_responses_response_payload_adds_reasoning_status() -> None:

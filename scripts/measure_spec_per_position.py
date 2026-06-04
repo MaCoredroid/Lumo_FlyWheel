@@ -31,10 +31,10 @@ class GuardError(RuntimeError):
     """Raised when a measurement confound guard fails."""
 
 
-def validate_sampling(temperature: float, top_p: float) -> None:
+def validate_sampling(temperature: float, top_p: float, *, allow_non_greedy: bool = False) -> None:
     # Guard for the greedy-argmax confound: spec acceptance is exact argmax
     # equality, so non-greedy sampling is not this measurement.
-    if float(temperature) != 0.0 or float(top_p) != 1.0:
+    if not allow_non_greedy and (float(temperature) != 0.0 or float(top_p) != 1.0):
         raise GuardError(
             "direct spec probe is locked to greedy sampling: "
             f"temperature={temperature!r}, top_p={top_p!r}; require 0 and 1"
@@ -129,11 +129,11 @@ def detect_batch_invariant(endpoint: str, log_path: Path = DEFAULT_VLLM_LOG) -> 
     }
 
 
-def validate_live_server(endpoint: str, guard: dict[str, Any]) -> None:
+def validate_live_server(endpoint: str, guard: dict[str, Any], *, allow_batch_invariant_off: bool = False) -> None:
     # Guard for the missing-batch-invariance confound: greedy acceptance is
     # exact argmax equality, so GEMM drift between proposal/verify inflates
     # acc0 and collapses acceptance.
-    if not guard.get("env_has_vllm_batch_invariant"):
+    if not allow_batch_invariant_off and not guard.get("env_has_vllm_batch_invariant"):
         raise GuardError(
             "batch-invariance guard failed: live container env does not expose "
             "VLLM_BATCH_INVARIANT=1; refusing greedy acceptance measurement"
@@ -178,6 +178,34 @@ def summarize_lcps(lcps: list[int]) -> dict[str, Any]:
     }
 
 
+def summarize_tree_paths(records: list[dict[str, Any]]) -> dict[str, Any]:
+    by_path: dict[str, list[int]] = {}
+    path_nodes: dict[str, list[int]] = {}
+    winners: Counter[str] = Counter()
+    for record in records:
+        best_path = None
+        best_lcp = -1
+        for score in record.get("path_scores") or []:
+            path = [int(x) for x in score.get("path", [])]
+            key = ",".join(str(x) for x in path)
+            lcp = int(score.get("lcp", 0))
+            by_path.setdefault(key, []).append(lcp)
+            path_nodes[key] = path
+            if lcp > best_lcp:
+                best_lcp = lcp
+                best_path = key
+        if best_path is not None:
+            winners[best_path] += 1
+    out: dict[str, Any] = {}
+    for key, values in sorted(by_path.items(), key=lambda item: path_nodes[item[0]]):
+        summary = summarize_lcps(values)
+        summary["path"] = path_nodes[key]
+        summary["winner_count"] = winners.get(key, 0)
+        summary["winner_rate"] = winners.get(key, 0) / len(records) if records else None
+        out[key] = summary
+    return out
+
+
 def summarize_e5_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
     drafts = after["drafts"] - before["drafts"]
     pos = [after["pos"][i] - before["pos"][i] for i in range(5)]
@@ -218,18 +246,22 @@ def _completion(endpoint: str, model: str, prompt: str, max_tokens: int, tempera
         return {"ok": False, "elapsed_s": round(time.time() - start, 3), "error": repr(exc)}
 
 
-def _tree_lcps_between(trace_path: Path, start_ts: float, end_ts: float) -> list[int]:
-    lcps: list[int] = []
+def _tree_records_between(trace_path: Path, start_ts: float, end_ts: float) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
     if not trace_path.exists():
-        return lcps
+        return records
     for raw in trace_path.read_text(encoding="utf-8", errors="ignore").splitlines():
         try:
             row = json.loads(raw)
         except json.JSONDecodeError:
             continue
         if start_ts <= float(row.get("ts", 0.0)) <= end_ts:
-            lcps.append(lcp_from_tree_record(row))
-    return lcps
+            records.append(row)
+    return records
+
+
+def _tree_lcps_between(trace_path: Path, start_ts: float, end_ts: float) -> list[int]:
+    return [lcp_from_tree_record(row) for row in _tree_records_between(trace_path, start_ts, end_ts)]
 
 
 def _independent_path_lcps_between(
@@ -317,7 +349,7 @@ def print_table(label: str, summary: dict[str, Any]) -> None:
 
 
 def run_measure(args: argparse.Namespace) -> dict[str, Any]:
-    validate_sampling(args.temperature, args.top_p)
+    validate_sampling(args.temperature, args.top_p, allow_non_greedy=args.allow_non_greedy)
     prompts = json.loads(Path(args.prompts).read_text(encoding="utf-8"))
     if not isinstance(prompts, list) or not prompts or not all(isinstance(p, str) for p in prompts):
         raise SystemExit(f"prompt file must be a non-empty JSON list of strings: {args.prompts}")
@@ -328,7 +360,11 @@ def run_measure(args: argparse.Namespace) -> dict[str, Any]:
 
     guard = detect_batch_invariant(args.endpoint)
     if not args.no_live_guards:
-        validate_live_server(args.endpoint, guard)
+        validate_live_server(
+            args.endpoint,
+            guard,
+            allow_batch_invariant_off=args.allow_batch_invariant_off,
+        )
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -356,8 +392,10 @@ def run_measure(args: argparse.Namespace) -> dict[str, Any]:
         spec = summarize_e5_delta(before, after)
         source = "vllm Prometheus spec_decode accepted_tokens_per_pos delta"
     elif args.mode == "tree":
-        lcps = _tree_lcps_between(Path(args.tree_lcp_log), start_ts, end_ts)
+        tree_records = _tree_records_between(Path(args.tree_lcp_log), start_ts, end_ts)
+        lcps = [lcp_from_tree_record(record) for record in tree_records]
         spec = summarize_lcps(lcps)
+        spec["paths"] = summarize_tree_paths(tree_records)
         source = "tree_path_lcp_max.jsonl path0_lcp/spine-A path_scores [0,2,4,6,8]"
         if spec["n_events"] == 0:
             raise SystemExit(
@@ -463,6 +501,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top-p", type=float, default=1.0)
     parser.add_argument("--no-live-guards", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--allow-non-greedy",
+        action="store_true",
+        help="allow sampled temp/top_p settings for acceptance-rate screens",
+    )
+    parser.add_argument(
+        "--allow-batch-invariant-off",
+        action="store_true",
+        help="allow BI=0 speed-config screens; keep disabled for greedy determinism gates",
+    )
     args = parser.parse_args(argv)
     try:
         run_measure(args)

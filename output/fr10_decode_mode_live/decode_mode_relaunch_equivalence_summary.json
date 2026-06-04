@@ -1,0 +1,96 @@
+{
+  "all_b1_relaunch_equivalence_exact": true,
+  "dedicated_tree_counter_n11_has_sibling_count": 144,
+  "image_digest": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+  "mixed_mode_negative_control": "codified via evaluate_mixed_mode_contamination_control and tests/test_fr10_decode_modes.py using injected state-parity contamination rows; must fail if isolation test has no power",
+  "mixed_mode_policy": "scheduler enforces homogeneous decode mode per forward step; mixed modes are deferred/serialized, not co-scheduled",
+  "mode_relaunch_equivalence": {
+    "naive_mtp": {
+      "batch_shape": "b1",
+      "dedicated_artifact": "output/fr10_decode_mode_live/dedicated_naive_mtp/naive_mtp_greedy_one.json",
+      "dedicated_tokens": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        16,
+        11,
+        220
+      ],
+      "exact": true,
+      "first_diff": -1,
+      "max_tokens": 8,
+      "shared_artifact": "output/fr10_decode_mode_live/shared/naive_mtp_greedy_one.json",
+      "shared_tokens": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        16,
+        11,
+        220
+      ]
+    },
+    "non_mtp": {
+      "batch_shape": "b1",
+      "dedicated_artifact": "output/fr10_decode_mode_live/dedicated_non_mtp/non_mtp_greedy_one.json",
+      "dedicated_tokens": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        16,
+        11,
+        220
+      ],
+      "exact": true,
+      "first_diff": -1,
+      "max_tokens": 8,
+      "shared_artifact": "output/fr10_decode_mode_live/shared/non_mtp_greedy_one.json",
+      "shared_tokens": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        16,
+        11,
+        220
+      ]
+    },
+    "tree_mtp": {
+      "batch_shape": "b1",
+      "dedicated_artifact": "output/fr10_decode_mode_live/dedicated_tree_mtp/tree_mtp_greedy_one.json",
+      "dedicated_tokens": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        16,
+        11,
+        220
+      ],
+      "exact": true,
+      "first_diff": -1,
+      "max_tokens": 8,
+      "shared_artifact": "output/fr10_decode_mode_live/shared/tree_mtp_greedy_one.json",
+      "shared_tokens": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        16,
+        11,
+        220
+      ]
+    }
+  },
+  "prompt_file": "output/fr10_decode_mode_live/one_prompt.txt",
+  "prompt_sha256": "6f02b3212e9085bb05045f70a3fec3dd66759b36b6145f0385a31bd3ab940d5f",
+  "shared_tree_counter_n11_has_sibling_count": 432
+}

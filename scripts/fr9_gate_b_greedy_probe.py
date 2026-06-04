@@ -244,6 +244,7 @@ def sample_temp(args: argparse.Namespace) -> int:
             "prompt": [args.prompt] * batch_size if batch_size > 1 else args.prompt,
             "max_tokens": args.max_tokens,
             "temperature": args.temperature,
+            "top_p": args.top_p,
             "logprobs": args.logprobs,
             "return_token_ids": True,
         }
@@ -273,6 +274,7 @@ def sample_temp(args: argparse.Namespace) -> int:
         "endpoint": args.endpoint,
         "model": args.model,
         "temperature": args.temperature,
+        "top_p": args.top_p,
         "fr10_decode_mode": args.fr10_decode_mode,
         "max_tokens": args.max_tokens,
         "prompt": args.prompt,
@@ -325,6 +327,7 @@ def sample_prompts_temp(args: argparse.Namespace) -> int:
                 "prompt": [prompt] * batch_size if batch_size > 1 else prompt,
                 "max_tokens": args.max_tokens,
                 "temperature": args.temperature,
+                "top_p": args.top_p,
                 "logprobs": args.logprobs,
                 "return_token_ids": True,
             }
@@ -359,6 +362,7 @@ def sample_prompts_temp(args: argparse.Namespace) -> int:
         "endpoint": args.endpoint,
         "model": args.model,
         "temperature": args.temperature,
+        "top_p": args.top_p,
         "seed": args.seed,
         "fr10_decode_mode": args.fr10_decode_mode,
         "max_tokens": args.max_tokens,
@@ -788,6 +792,7 @@ def build_parser() -> argparse.ArgumentParser:
     sample_parser.add_argument("--batch-size", type=int, default=4)
     sample_parser.add_argument("--max-tokens", type=int, default=12)
     sample_parser.add_argument("--temperature", type=float, default=0.6)
+    sample_parser.add_argument("--top-p", type=float, default=0.95)
     sample_parser.add_argument("--logprobs", type=int, default=1)
     sample_parser.add_argument("--request-timeout", type=float, default=180)
     sample_parser.add_argument("--wait-health", type=float, default=0)
@@ -812,6 +817,7 @@ def build_parser() -> argparse.ArgumentParser:
     sample_prompts_parser.add_argument("--batch-size", type=int, default=4)
     sample_prompts_parser.add_argument("--max-tokens", type=int, default=32)
     sample_prompts_parser.add_argument("--temperature", type=float, default=0.6)
+    sample_prompts_parser.add_argument("--top-p", type=float, default=0.95)
     sample_prompts_parser.add_argument("--logprobs", type=int, default=1)
     sample_prompts_parser.add_argument("--seed", type=int)
     sample_prompts_parser.add_argument("--request-timeout", type=float, default=180)
