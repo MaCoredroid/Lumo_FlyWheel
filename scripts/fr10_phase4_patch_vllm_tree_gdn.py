@@ -2228,6 +2228,71 @@ def _patch_eagle_tree_consumption_verify() -> bool:
     return True
 
 
+def _patch_eagle_mtp_draft_trace() -> bool:
+    text = EAGLE_PATH.read_text()
+    sentinel = "# FR10_MTP_DRAFT_TRACE"
+    if sentinel in text:
+        return False
+    patch = r'''
+
+# FR10_MTP_DRAFT_TRACE: final drafter tensor trace for native-vs-tree parity.
+import json as _fr10_mtp_trace_json
+import os as _fr10_mtp_trace_os
+import time as _fr10_mtp_trace_time
+
+_fr10_mtp_trace_orig_propose = EagleProposer.propose
+_fr10_mtp_trace_idx = 0
+
+def _fr10_mtp_trace_propose(self, target_token_ids, target_positions,
+                            target_hidden_states, next_token_ids,
+                            token_indices_to_sample, common_attn_metadata,
+                            sampling_metadata, mm_embed_inputs=None,
+                            num_rejected_tokens_gpu=None,
+                            slot_mappings=None):
+    global _fr10_mtp_trace_idx
+    out = _fr10_mtp_trace_orig_propose(
+        self, target_token_ids, target_positions, target_hidden_states,
+        next_token_ids, token_indices_to_sample, common_attn_metadata,
+        sampling_metadata, mm_embed_inputs, num_rejected_tokens_gpu, slot_mappings)
+    trace_path = _fr10_mtp_trace_os.environ.get("LUMO_MTP_DRAFT_TRACE_FILE")
+    if trace_path or _fr10_mtp_trace_os.environ.get("FR10_METRICS", "0") == "1":
+        try:
+            if not trace_path:
+                trace_path = "/logs/fr10_mtp_draft_trace.jsonl"
+            global _FR10_MTP_DRAFT_TRACE_FH
+            try:
+                _FR10_MTP_DRAFT_TRACE_FH
+            except NameError:
+                _FR10_MTP_DRAFT_TRACE_FH = open(trace_path, "a", buffering=1)
+            try:
+                from vllm.v1.sample import rejection_sampler as _fr10_rs_mode
+                mode = getattr(
+                    _fr10_rs_mode,
+                    "_FR10_DECODE_MODE",
+                    _fr10_mtp_trace_os.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp"),
+                )
+            except Exception:
+                mode = _fr10_mtp_trace_os.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp")
+            _FR10_MTP_DRAFT_TRACE_FH.write(_fr10_mtp_trace_json.dumps({
+                "event": "mtp_draft",
+                "idx": int(_fr10_mtp_trace_idx),
+                "ts": round(_fr10_mtp_trace_time.time(), 4),
+                "mode": str(mode),
+                "speculative_token_tree": _fr10_mtp_trace_os.environ.get("SPEC_CONFIG"),
+                "shape": [int(x) for x in out.shape],
+                "draft": out.detach().cpu().tolist(),
+            }) + chr(10))
+            _fr10_mtp_trace_idx += 1
+        except Exception:
+            pass
+    return out
+
+EagleProposer.propose = _fr10_mtp_trace_propose
+'''
+    EAGLE_PATH.write_text(text + patch)
+    return True
+
+
 def _patch_tree_attn_spec_config_override() -> bool:
     text = TREE_ATTN_PATH.read_text()
     sentinel = "# FR10_SPEC_CONFIG_TREE_OVERRIDE"
@@ -2419,6 +2484,7 @@ def main() -> int:
         (GDN_LINEAR_PATH, _patch_gdn_linear()),
         (SCHEDULER_PATH, _patch_scheduler_spec_trace()),
         (EAGLE_PATH, _patch_eagle_tree_consumption_verify()),
+        (EAGLE_PATH, _patch_eagle_mtp_draft_trace()),
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),

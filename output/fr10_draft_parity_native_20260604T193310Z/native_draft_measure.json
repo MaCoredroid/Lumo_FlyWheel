@@ -1,0 +1,657 @@
+{
+  "schema": "fr10.draft_token_parity_measurement.v1",
+  "endpoint": "http://127.0.0.1:9950",
+  "model": "qwen3.6-27b",
+  "reference": "tests/fixtures/spec_teacher_force_reference.txt",
+  "reference_sha256": "e4c7d31980b133cc60fab937b3592dfbd0884ebb0a7e5c24f18fcc23119ae3d5",
+  "start_token": 16,
+  "limit": 32,
+  "depth": 5,
+  "extract": "native",
+  "request_mode": "tree_mtp",
+  "tree": null,
+  "path0_runtime_nodes": null,
+  "trace_file": "/home/mark/shared/lumoFlyWheel/output/fr10_draft_parity_native_20260604T193310Z/logs/fr10_mtp_draft_trace.jsonl",
+  "rows": [
+    {
+      "row_index": 0,
+      "forced_position": 16,
+      "trace_idx": 0,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        8526,
+        310,
+        381,
+        264,
+        4145
+      ],
+      "full_draft": [
+        8526,
+        310,
+        381,
+        264,
+        4145
+      ]
+    },
+    {
+      "row_index": 1,
+      "forced_position": 17,
+      "trace_idx": 1,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        4145,
+        11,
+        632,
+        95449,
+        11
+      ],
+      "full_draft": [
+        4145,
+        11,
+        632,
+        95449,
+        11
+      ]
+    },
+    {
+      "row_index": 2,
+      "forced_position": 18,
+      "trace_idx": 2,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        19264,
+        279,
+        12287,
+        314,
+        264
+      ],
+      "full_draft": [
+        19264,
+        279,
+        12287,
+        314,
+        264
+      ]
+    },
+    {
+      "row_index": 3,
+      "forced_position": 19,
+      "trace_idx": 3,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        28746,
+        314,
+        264,
+        3611,
+        80347
+      ],
+      "full_draft": [
+        28746,
+        314,
+        264,
+        3611,
+        80347
+      ]
+    },
+    {
+      "row_index": 4,
+      "forced_position": 20,
+      "trace_idx": 4,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        364,
+        264,
+        3274,
+        421,
+        7225
+      ],
+      "full_draft": [
+        364,
+        264,
+        3274,
+        421,
+        7225
+      ]
+    },
+    {
+      "row_index": 5,
+      "forced_position": 21,
+      "trace_idx": 5,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        632,
+        49971,
+        1879,
+        310,
+        279
+      ],
+      "full_draft": [
+        632,
+        49971,
+        1879,
+        310,
+        279
+      ]
+    },
+    {
+      "row_index": 6,
+      "forced_position": 22,
+      "trace_idx": 6,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        310,
+        5790,
+        279,
+        1558,
+        369
+      ],
+      "full_draft": [
+        310,
+        5790,
+        279,
+        1558,
+        369
+      ]
+    },
+    {
+      "row_index": 7,
+      "forced_position": 23,
+      "trace_idx": 7,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        1228,
+        279,
+        1558,
+        725,
+        5548
+      ],
+      "full_draft": [
+        1228,
+        279,
+        1558,
+        725,
+        5548
+      ]
+    },
+    {
+      "row_index": 8,
+      "forced_position": 24,
+      "trace_idx": 8,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        1558,
+        725,
+        5138,
+        15977,
+        14855
+      ],
+      "full_draft": [
+        1558,
+        725,
+        5138,
+        15977,
+        14855
+      ]
+    },
+    {
+      "row_index": 9,
+      "forced_position": 25,
+      "trace_idx": 9,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        5933,
+        15977,
+        13,
+        198,
+        760
+      ],
+      "full_draft": [
+        5933,
+        15977,
+        13,
+        198,
+        760
+      ]
+    },
+    {
+      "row_index": 10,
+      "forced_position": 26,
+      "trace_idx": 10,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        321,
+        5286,
+        24123,
+        13,
+        271
+      ],
+      "full_draft": [
+        321,
+        5286,
+        24123,
+        13,
+        271
+      ]
+    },
+    {
+      "row_index": 11,
+      "forced_position": 27,
+      "trace_idx": 11,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        13,
+        198,
+        760,
+        2468,
+        369
+      ],
+      "full_draft": [
+        13,
+        198,
+        760,
+        2468,
+        369
+      ]
+    },
+    {
+      "row_index": 12,
+      "forced_position": 28,
+      "trace_idx": 12,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        198,
+        258,
+        279,
+        4706,
+        6136
+      ],
+      "full_draft": [
+        198,
+        258,
+        279,
+        4706,
+        6136
+      ]
+    },
+    {
+      "row_index": 13,
+      "forced_position": 29,
+      "trace_idx": 13,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        258,
+        264,
+        63520,
+        45543,
+        14855
+      ],
+      "full_draft": [
+        258,
+        264,
+        63520,
+        45543,
+        14855
+      ]
+    },
+    {
+      "row_index": 14,
+      "forced_position": 30,
+      "trace_idx": 14,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        264,
+        10756,
+        14751,
+        1931,
+        63520
+      ],
+      "full_draft": [
+        264,
+        10756,
+        14751,
+        1931,
+        63520
+      ]
+    },
+    {
+      "row_index": 15,
+      "forced_position": 31,
+      "trace_idx": 15,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        13,
+        271,
+        2,
+        561,
+        5952
+      ],
+      "full_draft": [
+        13,
+        271,
+        2,
+        561,
+        5952
+      ]
+    },
+    {
+      "row_index": 16,
+      "forced_position": 32,
+      "trace_idx": 16,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        271,
+        760,
+        5614,
+        314,
+        411
+      ],
+      "full_draft": [
+        271,
+        760,
+        5614,
+        314,
+        411
+      ]
+    },
+    {
+      "row_index": 17,
+      "forced_position": 33,
+      "trace_idx": 17,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        279,
+        3817,
+        4129,
+        369,
+        5642
+      ],
+      "full_draft": [
+        279,
+        3817,
+        4129,
+        369,
+        5642
+      ]
+    },
+    {
+      "row_index": 18,
+      "forced_position": 34,
+      "trace_idx": 18,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        1902,
+        524,
+        381,
+        24276,
+        430
+      ],
+      "full_draft": [
+        1902,
+        524,
+        381,
+        24276,
+        430
+      ]
+    },
+    {
+      "row_index": 19,
+      "forced_position": 35,
+      "trace_idx": 19,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        1902,
+        524,
+        381,
+        37157,
+        13301
+      ],
+      "full_draft": [
+        1902,
+        524,
+        381,
+        37157,
+        13301
+      ]
+    },
+    {
+      "row_index": 20,
+      "forced_position": 36,
+      "trace_idx": 20,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        381,
+        14733,
+        321,
+        524,
+        27483
+      ],
+      "full_draft": [
+        381,
+        14733,
+        321,
+        524,
+        27483
+      ]
+    },
+    {
+      "row_index": 21,
+      "forced_position": 37,
+      "trace_idx": 21,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        14733,
+        321,
+        32680,
+        13,
+        271
+      ],
+      "full_draft": [
+        14733,
+        321,
+        32680,
+        13,
+        271
+      ]
+    },
+    {
+      "row_index": 22,
+      "forced_position": 38,
+      "trace_idx": 22,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        430,
+        29440,
+        13,
+        271,
+        760
+      ],
+      "full_draft": [
+        430,
+        29440,
+        13,
+        271,
+        760
+      ]
+    },
+    {
+      "row_index": 23,
+      "forced_position": 39,
+      "trace_idx": 23,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        42642,
+        13,
+        271,
+        760,
+        1879
+      ],
+      "full_draft": [
+        42642,
+        13,
+        271,
+        760,
+        1879
+      ]
+    },
+    {
+      "row_index": 24,
+      "forced_position": 40,
+      "trace_idx": 24,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        513,
+        20335,
+        7262,
+        198,
+        1719
+      ],
+      "full_draft": [
+        513,
+        20335,
+        7262,
+        198,
+        1719
+      ]
+    },
+    {
+      "row_index": 25,
+      "forced_position": 41,
+      "trace_idx": 25,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        20335,
+        7154,
+        198,
+        64,
+        491
+      ],
+      "full_draft": [
+        20335,
+        7154,
+        198,
+        64,
+        491
+      ]
+    },
+    {
+      "row_index": 26,
+      "forced_position": 42,
+      "trace_idx": 26,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        35007,
+        198,
+        16842,
+        13,
+        271
+      ],
+      "full_draft": [
+        35007,
+        198,
+        16842,
+        13,
+        271
+      ]
+    },
+    {
+      "row_index": 27,
+      "forced_position": 43,
+      "trace_idx": 27,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        198,
+        90406,
+        391,
+        5324,
+        13
+      ],
+      "full_draft": [
+        198,
+        90406,
+        391,
+        5324,
+        13
+      ]
+    },
+    {
+      "row_index": 28,
+      "forced_position": 44,
+      "trace_idx": 28,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        198,
+        760,
+        5614,
+        369,
+        310
+      ],
+      "full_draft": [
+        198,
+        760,
+        5614,
+        369,
+        310
+      ]
+    },
+    {
+      "row_index": 29,
+      "forced_position": 45,
+      "trace_idx": 29,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        760,
+        27867,
+        369,
+        5995,
+        310
+      ],
+      "full_draft": [
+        760,
+        27867,
+        369,
+        5995,
+        310
+      ]
+    },
+    {
+      "row_index": 30,
+      "forced_position": 46,
+      "trace_idx": 30,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        271,
+        248069,
+        271,
+        5328,
+        3300
+      ],
+      "full_draft": [
+        271,
+        248069,
+        271,
+        5328,
+        3300
+      ]
+    },
+    {
+      "row_index": 31,
+      "forced_position": 47,
+      "trace_idx": 31,
+      "trace_mode": "tree_mtp",
+      "draft_chain": [
+        16,
+        17,
+        25,
+        15,
+        15
+      ],
+      "full_draft": [
+        16,
+        17,
+        25,
+        15,
+        15
+      ]
+    }
+  ]
+}
