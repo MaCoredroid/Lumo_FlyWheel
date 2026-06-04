@@ -19,7 +19,8 @@ LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
 ENFORCE_EAGER=${ENFORCE_EAGER:-0}
 LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
 TREE=${TREE:-"[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]"}
-SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":10,\"speculative_token_tree\":\"$TREE\"}"}
+NUM_SPECULATIVE_TOKENS=${NUM_SPECULATIVE_TOKENS:-10}
+SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
