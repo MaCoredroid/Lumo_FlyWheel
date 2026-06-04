@@ -123,6 +123,7 @@ def is_inference_get_path(path: str) -> bool:
 
 def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
     normalized = dict(payload)
+    _normalize_responses_input_roles(normalized)
     # Lumo experiment knobs (env-gated): pin sampling params for controlled
     # A/B runs without a Codex source change. Unset -> request unchanged.
     _force_temp = os.environ.get("LUMO_PROXY_FORCE_TEMPERATURE")
@@ -166,6 +167,21 @@ def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, An
         normalized_tools.append(tool)
     normalized["tools"] = normalized_tools
     return normalized
+
+
+def _normalize_responses_input_roles(payload: dict[str, Any]) -> None:
+    """Map Codex/OpenAI roles to the subset accepted by vLLM's Responses API."""
+    items = payload.get("input")
+    if not isinstance(items, list):
+        return
+    normalized_items: list[Any] = []
+    for item in items:
+        if isinstance(item, dict):
+            item = dict(item)
+            if item.get("role") == "developer":
+                item["role"] = "system"
+        normalized_items.append(item)
+    payload["input"] = normalized_items
 
 
 def normalize_responses_response_payload(payload: dict[str, Any]) -> dict[str, Any]:

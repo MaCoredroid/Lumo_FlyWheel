@@ -95,6 +95,28 @@ def test_normalize_responses_request_payload_adds_reasoning_status() -> None:
     assert normalized["input"][0]["id"].startswith("rs_")
 
 
+def test_normalize_responses_request_payload_maps_developer_role_to_system() -> None:
+    payload = {
+        "model": "qwen3.6-27b",
+        "input": [
+            {
+                "role": "developer",
+                "content": [{"type": "input_text", "text": "Use concise answers."}],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": "Reply OK only."}],
+            },
+        ],
+    }
+
+    normalized = normalize_responses_request_payload(payload)
+
+    assert normalized["input"][0]["role"] == "system"
+    assert normalized["input"][1]["role"] == "user"
+    assert payload["input"][0]["role"] == "developer"
+
+
 def test_normalize_responses_response_payload_adds_reasoning_status() -> None:
     payload = {
         "type": "response.completed",
