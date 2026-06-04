@@ -1139,9 +1139,13 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
             "reason": "not_built",
         }
         try:
-            _fr10_mode = (
-                getattr(scheduler_output, "fr10_decode_mode", None)
-                or __import__("os").environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp")
+            try:
+                from vllm.v1.sample import rejection_sampler as _fr10_rejection_sampler
+                _fr10_mode = getattr(_fr10_rejection_sampler, "_FR10_DECODE_MODE", None)
+            except Exception:
+                _fr10_mode = None
+            _fr10_mode = _fr10_mode or __import__("os").environ.get(
+                "FR10_DECODE_MODE_DEFAULT", "tree_mtp"
             )
             _lspec = getattr(self.vllm_config, "speculative_config", None)
             _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None
