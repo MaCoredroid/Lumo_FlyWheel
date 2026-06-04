@@ -245,7 +245,7 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_tree_has_sibling = any(parent.count(p) > 1 for p in set(parent) if p >= 0)\n"
             "            if _fr10_metrics_enabled():\n"
             "                self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int32, device=device)\n"
-            "                self.fr10_tree_conv_diag = torch.zeros((6,), dtype=torch.float32, device=device)\n"
+            "                self.fr10_tree_conv_diag = torch.zeros((12,), dtype=torch.float32, device=device)\n"
             "                _fr10_register_tree_counter(\n"
             "                    shape=f\"n{n}_pad{n_pad}\",\n"
             "                    parent=parent,\n"
@@ -1970,6 +1970,41 @@ def _patch_eagle_tree_spine_copy() -> bool:
                     draft_token_ids[:, _fr10_tree_col] = _fr10_linear_spine[
                         :, _fr10_spine_col
                     ]
+                try:
+                    import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+                    if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                        global _LUMO_TREE_DRAFT_PARITY_FH
+                        try:
+                            _LUMO_TREE_DRAFT_PARITY_FH
+                        except NameError:
+                            _LUMO_TREE_DRAFT_PARITY_FH = open(
+                                _fr10_lo.environ.get(
+                                    "LUMO_TREE_DRAFT_PARITY_LOG",
+                                    "/logs/fr10_path0_draft_parity.jsonl",
+                                ),
+                                "a",
+                                buffering=1,
+                            )
+                        _fr10_tree_path0 = draft_token_ids[:, _fr10_path0_indices]
+                        _fr10_mismatch = (_fr10_tree_path0 != _fr10_linear_spine)
+                        for _fr10_b in range(int(batch_size)):
+                            _LUMO_TREE_DRAFT_PARITY_FH.write(
+                                _fr10_lj.dumps({
+                                    "event": "path0_draft_overlay_parity",
+                                    "ts": round(_fr10_lt.time(), 4),
+                                    "req_index": int(_fr10_b),
+                                    "path0_indices": [int(_x) for _x in _fr10_path0_indices],
+                                    "tree_path0_tokens": [
+                                        int(_x) for _x in _fr10_tree_path0[_fr10_b].detach().cpu().tolist()
+                                    ],
+                                    "native_spine_tokens": [
+                                        int(_x) for _x in _fr10_linear_spine[_fr10_b].detach().cpu().tolist()
+                                    ],
+                                    "mismatch_count": int(_fr10_mismatch[_fr10_b].sum().detach().cpu().item()),
+                                }) + chr(10)
+                            )
+                except Exception:
+                    pass
             return draft_token_ids
 """
     if old not in text:
@@ -2040,6 +2075,8 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
 '''
     new = '''        if aligned_new_computed_tokens >= num_tokens_running_state:
             accept_token_bias = aligned_new_computed_tokens - num_tokens_running_state
+            _fr10_native_accept_token_bias = accept_token_bias
+            _fr10_tree_row = 0
             # LUMO_TREE_STATE_COMMIT_ROWS: for FR10 tree verification, the
             # accepted final recurrent state lives at the accepted tree node
             # row, not at the flat linear accepted-count row. The scheduler's
@@ -2050,12 +2087,47 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
                 _fr10_rows = getattr(_fr10_gdn, "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", None)
                 if _fr10_rows is not None and i < len(_fr10_rows):
                     _fr10_row = int(_fr10_rows[i])
+                    _fr10_tree_row = int(_fr10_row)
                     if _fr10_row > 0:
                         accept_token_bias = _fr10_row
             except Exception:
                 pass
             src_block_idx = mamba_state_idx[req_id]
             dest_block_idx = aligned_new_computed_tokens // mamba_spec.block_size - 1
+            try:
+                import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+                if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                    global _LUMO_TREE_COMMIT_PARITY_FH
+                    try:
+                        _LUMO_TREE_COMMIT_PARITY_FH
+                    except NameError:
+                        _LUMO_TREE_COMMIT_PARITY_FH = open(
+                            _fr10_lo.environ.get(
+                                "LUMO_TREE_COMMIT_PARITY_LOG",
+                                "/logs/fr10_commit_copy_parity.jsonl",
+                            ),
+                            "a",
+                            buffering=1,
+                        )
+                    _LUMO_TREE_COMMIT_PARITY_FH.write(
+                        _fr10_lj.dumps({
+                            "event": "mamba_commit_copy_bias",
+                            "ts": round(_fr10_lt.time(), 4),
+                            "req_index": int(i),
+                            "req_id": str(req_id),
+                            "num_accepted_tokens": int(num_accepted_tokens),
+                            "num_draft_tokens": int(num_draft_tokens),
+                            "native_accept_token_bias": int(_fr10_native_accept_token_bias),
+                            "tree_accepted_row": int(_fr10_tree_row),
+                            "effective_accept_token_bias": int(accept_token_bias),
+                            "collect_num_accepted_tokens": int(accept_token_bias) + 1,
+                            "src_block_idx": int(src_block_idx),
+                            "dest_block_idx": int(dest_block_idx),
+                            "row_redirect_active": bool(int(_fr10_tree_row) > 0),
+                        }) + chr(10)
+                    )
+            except Exception:
+                pass
             collect_mamba_copy_meta(
                 copy_bufs,
                 kv_cache_config,
