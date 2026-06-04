@@ -2061,7 +2061,230 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # [batch_size, num_tree_tokens]
             return torch.cat(draft_token_ids_list, dim=1)
 """
-    new = """        if any(isinstance(md, TreeAttentionMetadata) for md in per_group_attn_metadata):
+    new = """        _fr10_active_decode_mode = os.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp")
+        try:
+            from vllm.v1.sample import rejection_sampler as _fr10_rs_mode
+            _fr10_active_decode_mode = getattr(
+                _fr10_rs_mode, "_FR10_DECODE_MODE", _fr10_active_decode_mode
+            )
+        except Exception:
+            pass
+        _fr10_caterpillar_choices = [
+            (0,), (0, 0), (0, 1), (0, 0, 0), (0, 0, 1),
+            (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 1),
+        ]
+        _fr10_is_caterpillar = (
+            _fr10_active_decode_mode == "tree_mtp"
+            and int(self.num_speculative_tokens) == 9
+            and [tuple(_x) for _x in getattr(self, "tree_choices", [])]
+            == _fr10_caterpillar_choices
+        )
+        if _fr10_is_caterpillar:
+            # FR10_CATERPILLAR_NATIVE_SPINE_TOP2: read-only drafter fix.
+            # Run the native causal MTP spine unchanged for depth 5. At each
+            # post-root spine step, read the runner-up token from the same
+            # logits and pack it into the caterpillar leaf slot. Leaves are
+            # never fed back into any forward or recurrent state.
+            _fr10_logits = self.model.compute_logits(sample_hidden_states)
+            _fr10_top2 = torch.topk(_fr10_logits, 2, dim=-1).indices
+            draft_token_ids = self._greedy_sample(sample_hidden_states)
+            _fr10_spine_tokens = [draft_token_ids]
+            _fr10_leaf_tokens = []
+
+            if self.allowed_attn_types is not None:
+                for group_md in per_group_attn_metadata:
+                    if not isinstance(group_md, self.allowed_attn_types):
+                        raise ValueError(
+                            f"Unsupported attention metadata type for speculative "
+                            "decoding with FR10 caterpillar native-spine drafting: "
+                            f"{type(group_md)}. Supported types are: "
+                            f"{self.allowed_attn_types}"
+                        )
+
+            cudagraph_runtime_mode, input_batch_size, batch_size_across_dp = (
+                self._determine_batch_execution_and_padding(batch_size)
+            )
+
+            common_attn_metadata.num_actual_tokens = batch_size
+            common_attn_metadata.max_query_len = 1
+            common_attn_metadata.query_start_loc = self.arange[: batch_size + 1]
+            common_attn_metadata.query_start_loc_cpu = torch.from_numpy(
+                self.token_arange_np[: batch_size + 1]
+            ).clone()
+
+            if self.num_speculative_tokens > 1 and num_rejected_tokens_gpu is not None:
+                common_attn_metadata.seq_lens -= num_rejected_tokens_gpu
+                common_attn_metadata._seq_lens_cpu = None
+                common_attn_metadata._num_computed_tokens_cpu = None
+
+            block_size = self.block_size
+            assert block_size > 0, "block_size has not been initialized."
+            for token_index in range(4):
+                input_ids = _fr10_spine_tokens[-1].int()
+                positions_1d = positions[0] if self.uses_mrope else positions
+                if self.uses_mrope:
+                    out_pos = self.mrope_positions[0, :batch_size]
+                elif self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0:
+                    out_pos = self.xdrope_positions[0, :batch_size]
+                else:
+                    out_pos = self.positions[:batch_size]
+                eagle_step_update_slot_mapping_and_metadata(
+                    positions_1d=positions_1d,
+                    block_table_tensor=common_attn_metadata.block_table_tensor,
+                    seq_lens=common_attn_metadata.seq_lens,
+                    block_size=block_size,
+                    max_model_len=self.max_model_len,
+                    out_clamped_positions=out_pos,
+                    out_slot_mapping=self._slot_mapping_buffer[:input_batch_size],
+                    input_batch_size=input_batch_size,
+                )
+                common_attn_metadata.slot_mapping = self._slot_mapping_buffer[:batch_size]
+                if self.uses_mrope:
+                    self.mrope_positions[1:, :batch_size] = self.mrope_positions[
+                        0, :batch_size
+                    ]
+                    positions = self.mrope_positions[:, :batch_size]
+                elif self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0:
+                    self.xdrope_positions[1:, :batch_size] = self.xdrope_positions[
+                        0, :batch_size
+                    ]
+                    positions = self.xdrope_positions[0, :batch_size]
+                else:
+                    positions = self.positions[:batch_size]
+
+                common_attn_metadata.max_seq_len = min(
+                    common_attn_metadata.max_seq_len + 1, self.max_model_len
+                )
+                if common_attn_metadata._seq_lens_cpu is not None:
+                    common_attn_metadata._seq_lens_cpu += 1
+                if common_attn_metadata._num_computed_tokens_cpu is not None:
+                    common_attn_metadata._num_computed_tokens_cpu += 1
+
+                _, per_layer_attn_metadata = self.build_per_group_and_layer_attn_metadata(
+                    common_attn_metadata, draft_index=token_index + 1
+                )
+
+                self.input_ids[:batch_size] = input_ids
+                self.hidden_states[:batch_size] = hidden_states
+                if self.supports_mm_inputs:
+                    self.inputs_embeds[:batch_size] = self.model.embed_input_ids(input_ids)
+                    input_ids = None
+                    inputs_embeds = self.inputs_embeds[:input_batch_size]
+                else:
+                    input_ids = self.input_ids[:input_batch_size]
+                    inputs_embeds = None
+
+                model_kwargs = {
+                    "input_ids": input_ids,
+                    "positions": self._get_positions(input_batch_size),
+                    "inputs_embeds": inputs_embeds,
+                }
+                if self.pass_hidden_states_to_model:
+                    model_kwargs["hidden_states"] = self.hidden_states[:input_batch_size]
+
+                with set_forward_context(
+                    per_layer_attn_metadata,
+                    self.vllm_config,
+                    num_tokens=input_batch_size,
+                    num_tokens_across_dp=batch_size_across_dp,
+                    cudagraph_runtime_mode=cudagraph_runtime_mode,
+                    slot_mapping=self._get_slot_mapping(input_batch_size),
+                ):
+                    ret_hidden_states = self.model(**model_kwargs)
+                    if not self.model_returns_tuple():
+                        last_hidden_states = ret_hidden_states
+                        hidden_states = ret_hidden_states
+                    else:
+                        last_hidden_states, hidden_states = ret_hidden_states
+
+                hidden_states = hidden_states[:batch_size]
+                _fr10_step_logits = self.model.compute_logits(
+                    last_hidden_states[:batch_size]
+                )
+                _fr10_step_top2 = torch.topk(_fr10_step_logits, 2, dim=-1).indices
+                draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
+                _fr10_spine_tokens.append(draft_token_ids)
+                _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
+
+            _fr10_packed = torch.stack(
+                [
+                    _fr10_spine_tokens[0],
+                    _fr10_spine_tokens[1],
+                    _fr10_leaf_tokens[0],
+                    _fr10_spine_tokens[2],
+                    _fr10_leaf_tokens[1],
+                    _fr10_spine_tokens[3],
+                    _fr10_leaf_tokens[2],
+                    _fr10_spine_tokens[4],
+                    _fr10_leaf_tokens[3],
+                ],
+                dim=1,
+            )
+            try:
+                import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+                if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                    global _LUMO_CATERPILLAR_DRAFTER_FH
+                    try:
+                        _LUMO_CATERPILLAR_DRAFTER_FH
+                    except NameError:
+                        _LUMO_CATERPILLAR_DRAFTER_FH = open(
+                            _fr10_lo.environ.get(
+                                "LUMO_CATERPILLAR_DRAFTER_LOG",
+                                "/logs/fr10_caterpillar_drafter.jsonl",
+                            ),
+                            "a",
+                            buffering=1,
+                        )
+                    _LUMO_CATERPILLAR_DRAFTER_FH.write(
+                        _fr10_lj.dumps({
+                            "event": "fr10_caterpillar_native_spine_top2",
+                            "ts": round(_fr10_lt.time(), 4),
+                            "spine_slots": [0, 1, 3, 5, 7],
+                            "leaf_slots": [2, 4, 6, 8],
+                            "draft": _fr10_packed.detach().cpu().tolist(),
+                            "spine": torch.stack(_fr10_spine_tokens, dim=1).detach().cpu().tolist(),
+                            "leaves": torch.stack(_fr10_leaf_tokens, dim=1).detach().cpu().tolist(),
+                        }) + chr(10)
+                    )
+            except Exception:
+                pass
+            return _fr10_packed
+
+        _fr10_tree_draft_branch_seen = any(
+            isinstance(md, TreeAttentionMetadata) for md in per_group_attn_metadata
+        )
+        try:
+            import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+            if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+                global _LUMO_TREE_DRAFT_BRANCH_FH
+                try:
+                    _LUMO_TREE_DRAFT_BRANCH_FH
+                except NameError:
+                    _LUMO_TREE_DRAFT_BRANCH_FH = open(
+                        _fr10_lo.environ.get(
+                            "LUMO_TREE_DRAFT_BRANCH_LOG",
+                            "/logs/fr10_tree_draft_branch.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _LUMO_TREE_DRAFT_BRANCH_FH.write(
+                    _fr10_lj.dumps({
+                        "event": "tree_draft_branch",
+                        "ts": round(_fr10_lt.time(), 4),
+                        "tree_branch_seen": bool(_fr10_tree_draft_branch_seen),
+                        "metadata_types": [
+                            type(md).__name__ for md in per_group_attn_metadata
+                        ],
+                        "num_speculative_tokens": int(self.num_speculative_tokens),
+                        "speculative_token_tree": _fr10_lo.environ.get("SPEC_CONFIG"),
+                    }) + chr(10)
+                )
+        except Exception:
+            pass
+
+        if _fr10_tree_draft_branch_seen:
             # FR10_TREE_DRAFT_CONSUMPTION_VERIFY: no separate spine overlay.
             # vLLM's native tree drafter consumes the MTP head directly:
             # child-rank 0 is the fed-back spine, child-rank 1 is recorded as
@@ -2102,10 +2325,41 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr10_level_num_parents,
             _fr10_level_num_children,
         ):
+            import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+            if _fr10_lo.environ.get("FR10_METRICS", "0") != "1":
+                return
+            _fr10_now = round(_fr10_lt.time(), 4)
+            def _fr10_log_consumption_error(_fr10_exc):
+                global _LUMO_TREE_DRAFT_CONSUMPTION_ERR_FH
+                try:
+                    _LUMO_TREE_DRAFT_CONSUMPTION_ERR_FH
+                except NameError:
+                    _LUMO_TREE_DRAFT_CONSUMPTION_ERR_FH = open(
+                        _fr10_lo.environ.get(
+                            "LUMO_TREE_DRAFT_CONSUMPTION_ERROR_LOG",
+                            "/logs/fr10_tree_draft_consumption_errors.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _LUMO_TREE_DRAFT_CONSUMPTION_ERR_FH.write(
+                    _fr10_lj.dumps({
+                        "event": "tree_draft_consumption_error",
+                        "ts": _fr10_now,
+                        "depth": int(_fr10_depth),
+                        "level_tokens_shape": [
+                            int(_x) for _x in getattr(_fr10_level_tokens, "shape", [])
+                        ],
+                        "level_logits_shape": [
+                            int(_x) for _x in getattr(_fr10_level_logits, "shape", [])
+                        ],
+                        "level_num_parents": int(_fr10_level_num_parents),
+                        "level_num_children": int(_fr10_level_num_children),
+                        "error_type": type(_fr10_exc).__name__,
+                        "error": str(_fr10_exc),
+                    }) + chr(10)
+                )
             try:
-                import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
-                if _fr10_lo.environ.get("FR10_METRICS", "0") != "1":
-                    return
                 global _LUMO_TREE_DRAFT_CONSUMPTION_FH
                 try:
                     _LUMO_TREE_DRAFT_CONSUMPTION_FH
@@ -2131,7 +2385,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 _fr10_top = torch.topk(
                     _fr10_level_logits, int(_fr10_level_num_children), dim=-1
                 )
-                _fr10_now = round(_fr10_lt.time(), 4)
                 for _fr10_choice in _fr10_choices:
                     _fr10_parent = tuple(_fr10_choice[:-1])
                     _fr10_rank = int(_fr10_choice[-1])
@@ -2191,8 +2444,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 ),
                             }) + chr(10)
                         )
-            except Exception:
-                pass
+            except Exception as _fr10_exc:
+                _fr10_log_consumption_error(_fr10_exc)
 
         _fr10_record_tree_consumption(1, logits, draft_token_ids, 1, num_children)
         draft_hidden_states = hidden_states.view(batch_size, 1, -1)
