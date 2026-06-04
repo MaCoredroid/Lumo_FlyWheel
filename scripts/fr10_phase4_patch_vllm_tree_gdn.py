@@ -790,6 +790,7 @@ def _lumo_tree_canonical_multidraft_sample(
 
     out_rows = []
     accepted_rows = []
+    sample_log_rows = []
     start = 0
     for req_i, node_count in enumerate(counts):
         node_count = int(node_count)
@@ -797,6 +798,7 @@ def _lumo_tree_canonical_multidraft_sample(
         drafts = drafts_cpu[start:start + node_count]
         current_parent = -1
         accepted_row = 0
+        accepted_path = []
         row = []
         for _step in range(int(max_spec_len) + 1):
             children = [
@@ -828,8 +830,21 @@ def _lumo_tree_canonical_multidraft_sample(
                 break
             current_parent = accepted_child
             accepted_row = int(current_parent) + 1
+            accepted_path.append(int(current_parent))
         out_rows.append(row[:int(max_spec_len) + 1])
         accepted_rows.append(int(accepted_row))
+        final_root = int(accepted_path[0]) if accepted_path else None
+        sample_log_rows.append({
+            'event': 'tree_sample_accept',
+            'req_index': int(req_i),
+            'node_count': int(node_count),
+            'accepted_len': int(len(accepted_path)),
+            'accepted_final_row': int(accepted_row),
+            'accepted_node_ids': [int(x) for x in accepted_path],
+            'accepted_root': final_root,
+            'emitted_tokens': [int(x) for x in row[:int(max_spec_len) + 1]],
+            'draft_token_ids': [int(x) for x in drafts],
+        })
         start += node_count
 
     output_token_ids.fill_(-1)
@@ -846,6 +861,26 @@ def _lumo_tree_canonical_multidraft_sample(
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
             int(x) for x in accepted_rows
         ]
+    except Exception:
+        pass
+    try:
+        import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+        if _fr10_lo.environ.get('FR10_METRICS', '0') == '1':
+            global _LUMO_TREE_SAMPLE_ACCEPT_FH
+            try:
+                _LUMO_TREE_SAMPLE_ACCEPT_FH
+            except NameError:
+                _LUMO_TREE_SAMPLE_ACCEPT_FH = open(
+                    _fr10_lo.environ.get('LUMO_TREE_PATH_LCP_LOG',
+                                         '/logs/tree_path_lcp_max.jsonl'),
+                    'a',
+                    buffering=1,
+                )
+            _now = round(_fr10_lt.time(), 4)
+            for _row in sample_log_rows:
+                _row = dict(_row)
+                _row['ts'] = _now
+                _LUMO_TREE_SAMPLE_ACCEPT_FH.write(_fr10_lj.dumps(_row) + chr(10))
     except Exception:
         pass
     return output_token_ids
