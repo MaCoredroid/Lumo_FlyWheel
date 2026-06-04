@@ -1730,9 +1730,9 @@ def _patch_gpu_model_runner_decode_mode_globals() -> bool:
     return True
 
 
-def _patch_eagle_tree_spine_copy() -> bool:
+def _patch_eagle_tree_consumption_verify() -> bool:
     text = EAGLE_PATH.read_text()
-    sentinel = "# FR10_TREE_DRAFTER_SPINE_COPY"
+    sentinel = "# FR10_TREE_DRAFT_CONSUMPTION_VERIFY"
     if sentinel in text:
         return False
 
@@ -1762,160 +1762,6 @@ def _patch_eagle_tree_spine_copy() -> bool:
         raise RuntimeError("EAGLE tree parse anchor not found")
     text = text.replace(tree_parse_old, tree_parse_new, 1)
 
-    helper_anchor = """    def propose(
-        self,
-        # [num_tokens]
-        target_token_ids: torch.Tensor,
-"""
-    helper = r'''    def _fr10_propose_linear_spine_copy(
-        self,
-        *,
-        batch_size: int,
-        positions: torch.Tensor,
-        hidden_states: torch.Tensor,
-        sample_hidden_states: torch.Tensor,
-        common_attn_metadata: CommonAttentionMetadata,
-        sampling_metadata: SamplingMetadata,
-        num_rejected_tokens_gpu: torch.Tensor | None,
-        max_tokens: int,
-    ) -> torch.Tensor:
-        """FR10_TREE_DRAFTER_SPINE_COPY: isolated native MTP path0 draft.
-
-        vLLM's tree drafter is correct for dense attention, but in a hybrid GDN
-        model branch tokens can perturb recurrent state used by the public
-        top-1 chain. This helper reruns the ordinary linear MTP loop on a
-        private metadata copy and returns the unbranched spine draft tokens.
-        The caller overlays these tokens onto path0 in the tree proposal.
-        """
-        if max_tokens <= 0:
-            return torch.empty(
-                (batch_size, 0), dtype=torch.long, device=sample_hidden_states.device
-            )
-        draft_token_ids = self._greedy_sample(sample_hidden_states)
-        draft_token_ids_list = [draft_token_ids]
-        if max_tokens == 1:
-            return torch.stack(draft_token_ids_list, dim=1)
-
-        cudagraph_runtime_mode, input_batch_size, batch_size_across_dp = (
-            self._determine_batch_execution_and_padding(batch_size)
-        )
-
-        linear_metadata = replace(
-            common_attn_metadata,
-            seq_lens=common_attn_metadata.seq_lens.clone(),
-            _seq_lens_cpu=None
-            if common_attn_metadata._seq_lens_cpu is None
-            else common_attn_metadata._seq_lens_cpu.clone(),
-            _num_computed_tokens_cpu=None
-            if common_attn_metadata._num_computed_tokens_cpu is None
-            else common_attn_metadata._num_computed_tokens_cpu.clone(),
-        )
-        linear_metadata.num_actual_tokens = batch_size
-        linear_metadata.max_query_len = 1
-        linear_metadata.query_start_loc = self.arange[: batch_size + 1]
-        linear_metadata.query_start_loc_cpu = torch.from_numpy(
-            self.token_arange_np[: batch_size + 1]
-        ).clone()
-
-        if max_tokens > 1 and num_rejected_tokens_gpu is not None:
-            linear_metadata.seq_lens -= num_rejected_tokens_gpu
-            linear_metadata._seq_lens_cpu = None
-            linear_metadata._num_computed_tokens_cpu = None
-
-        linear_positions = positions.clone()
-        linear_hidden_states = hidden_states.clone()
-        block_size = self.block_size
-        assert block_size > 0, "block_size has not been initialized."
-        for token_index in range(max_tokens - 1):
-            input_ids = draft_token_ids_list[-1].int()
-
-            positions_1d = linear_positions[0] if self.uses_mrope else linear_positions
-            if self.uses_mrope:
-                out_pos = self.mrope_positions[0, :batch_size]
-            elif self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0:
-                out_pos = self.xdrope_positions[0, :batch_size]
-            else:
-                out_pos = self.positions[:batch_size]
-            eagle_step_update_slot_mapping_and_metadata(
-                positions_1d=positions_1d,
-                block_table_tensor=linear_metadata.block_table_tensor,
-                seq_lens=linear_metadata.seq_lens,
-                block_size=block_size,
-                max_model_len=self.max_model_len,
-                out_clamped_positions=out_pos,
-                out_slot_mapping=self._slot_mapping_buffer[:input_batch_size],
-                input_batch_size=input_batch_size,
-            )
-            linear_metadata.slot_mapping = self._slot_mapping_buffer[:batch_size]
-            if self.uses_mrope:
-                self.mrope_positions[1:, :batch_size] = self.mrope_positions[
-                    0, :batch_size
-                ]
-                linear_positions = self.mrope_positions[:, :batch_size]
-            elif self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0:
-                self.xdrope_positions[1:, :batch_size] = self.xdrope_positions[
-                    0, :batch_size
-                ]
-                linear_positions = self.xdrope_positions[0, :batch_size]
-            else:
-                linear_positions = self.positions[:batch_size]
-
-            linear_metadata.max_seq_len = min(
-                linear_metadata.max_seq_len + 1, self.max_model_len
-            )
-            if linear_metadata._seq_lens_cpu is not None:
-                linear_metadata._seq_lens_cpu += 1
-            if linear_metadata._num_computed_tokens_cpu is not None:
-                linear_metadata._num_computed_tokens_cpu += 1
-
-            _, per_layer_attn_metadata = self.build_per_group_and_layer_attn_metadata(
-                linear_metadata, draft_index=token_index + 1
-            )
-
-            self.input_ids[:batch_size] = input_ids
-            self.hidden_states[:batch_size] = linear_hidden_states
-            if self.supports_mm_inputs:
-                self.inputs_embeds[:batch_size] = self.model.embed_input_ids(input_ids)
-                model_input_ids = None
-                inputs_embeds = self.inputs_embeds[:input_batch_size]
-            else:
-                model_input_ids = self.input_ids[:input_batch_size]
-                inputs_embeds = None
-
-            model_kwargs = {
-                "input_ids": model_input_ids,
-                "positions": self._get_positions(input_batch_size),
-                "inputs_embeds": inputs_embeds,
-            }
-            if self.pass_hidden_states_to_model:
-                model_kwargs["hidden_states"] = self.hidden_states[:input_batch_size]
-
-            with set_forward_context(
-                per_layer_attn_metadata,
-                self.vllm_config,
-                num_tokens=input_batch_size,
-                num_tokens_across_dp=batch_size_across_dp,
-                cudagraph_runtime_mode=cudagraph_runtime_mode,
-                slot_mapping=self._get_slot_mapping(input_batch_size),
-            ):
-                ret_hidden_states = self.model(**model_kwargs)
-                if not self.model_returns_tuple():
-                    last_hidden_states = ret_hidden_states
-                    linear_hidden_states = ret_hidden_states
-                else:
-                    last_hidden_states, linear_hidden_states = ret_hidden_states
-
-            linear_hidden_states = linear_hidden_states[:batch_size]
-            draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
-            draft_token_ids_list.append(draft_token_ids)
-
-        return torch.stack(draft_token_ids_list, dim=1)
-
-'''
-    if helper_anchor not in text:
-        raise RuntimeError("EAGLE propose anchor not found")
-    text = text.replace(helper_anchor, helper + helper_anchor, 1)
-
     old = """        if any(isinstance(md, TreeAttentionMetadata) for md in per_group_attn_metadata):
             # Draft using tree attention - requires full logits for top-k
             logits = self.model.compute_logits(sample_hidden_states)
@@ -1931,29 +1777,10 @@ def _patch_eagle_tree_spine_copy() -> bool:
             return torch.cat(draft_token_ids_list, dim=1)
 """
     new = """        if any(isinstance(md, TreeAttentionMetadata) for md in per_group_attn_metadata):
-            # Draft using tree attention - requires full logits for top-k.
-            # FR10_TREE_DRAFTER_SPINE_COPY: protect the public path0 chain by
-            # overlaying an isolated native MTP spine onto the tree proposal.
-            _fr10_path0_indices = [
-                _i for _i, _choice in enumerate(self.tree_choices)
-                if all(_part == 0 for _part in _choice)
-            ]
-            _fr10_linear_spine = None
-            if (
-                os.environ.get("FR10_TREE_DRAFTER_SPINE_COPY", "1") == "1"
-                and len(_fr10_path0_indices) > 0
-                and len(_fr10_path0_indices) < len(self.tree_choices)
-            ):
-                _fr10_linear_spine = self._fr10_propose_linear_spine_copy(
-                    batch_size=batch_size,
-                    positions=positions,
-                    hidden_states=hidden_states,
-                    sample_hidden_states=sample_hidden_states,
-                    common_attn_metadata=common_attn_metadata,
-                    sampling_metadata=sampling_metadata,
-                    num_rejected_tokens_gpu=num_rejected_tokens_gpu,
-                    max_tokens=len(_fr10_path0_indices),
-                )
+            # FR10_TREE_DRAFT_CONSUMPTION_VERIFY: no separate spine overlay.
+            # vLLM's native tree drafter consumes the MTP head directly:
+            # child-rank 0 is the fed-back spine, child-rank 1 is recorded as
+            # the side leaf and must not advance the spine recurrent state.
             logits = self.model.compute_logits(sample_hidden_states)
             draft_token_ids_list = self.propose_tree(
                 batch_size=batch_size,
@@ -1964,52 +1791,154 @@ def _patch_eagle_tree_spine_copy() -> bool:
                 slot_mappings=slot_mappings,
             )
             # [batch_size, num_tree_tokens]
-            draft_token_ids = torch.cat(draft_token_ids_list, dim=1)
-            if _fr10_linear_spine is not None:
-                for _fr10_spine_col, _fr10_tree_col in enumerate(_fr10_path0_indices):
-                    draft_token_ids[:, _fr10_tree_col] = _fr10_linear_spine[
-                        :, _fr10_spine_col
-                    ]
-                try:
-                    import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
-                    if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
-                        global _LUMO_TREE_DRAFT_PARITY_FH
-                        try:
-                            _LUMO_TREE_DRAFT_PARITY_FH
-                        except NameError:
-                            _LUMO_TREE_DRAFT_PARITY_FH = open(
-                                _fr10_lo.environ.get(
-                                    "LUMO_TREE_DRAFT_PARITY_LOG",
-                                    "/logs/fr10_path0_draft_parity.jsonl",
-                                ),
-                                "a",
-                                buffering=1,
-                            )
-                        _fr10_tree_path0 = draft_token_ids[:, _fr10_path0_indices]
-                        _fr10_mismatch = (_fr10_tree_path0 != _fr10_linear_spine)
-                        for _fr10_b in range(int(batch_size)):
-                            _LUMO_TREE_DRAFT_PARITY_FH.write(
-                                _fr10_lj.dumps({
-                                    "event": "path0_draft_overlay_parity",
-                                    "ts": round(_fr10_lt.time(), 4),
-                                    "req_index": int(_fr10_b),
-                                    "path0_indices": [int(_x) for _x in _fr10_path0_indices],
-                                    "tree_path0_tokens": [
-                                        int(_x) for _x in _fr10_tree_path0[_fr10_b].detach().cpu().tolist()
-                                    ],
-                                    "native_spine_tokens": [
-                                        int(_x) for _x in _fr10_linear_spine[_fr10_b].detach().cpu().tolist()
-                                    ],
-                                    "mismatch_count": int(_fr10_mismatch[_fr10_b].sum().detach().cpu().item()),
-                                }) + chr(10)
-                            )
-                except Exception:
-                    pass
-            return draft_token_ids
+            return torch.cat(draft_token_ids_list, dim=1)
 """
     if old not in text:
         raise RuntimeError("EAGLE tree propose branch anchor not found")
     text = text.replace(old, new, 1)
+
+    root_log_anchor = """        draft_token_ids_list = [draft_token_ids]
+        draft_hidden_states = hidden_states.view(batch_size, 1, -1)
+"""
+    root_log_new = """        draft_token_ids_list = [draft_token_ids]
+        # FR10_TREE_DRAFT_CONSUMPTION_VERIFY: runtime node placement and q.
+        _fr10_depth_choices = {}
+        for _fr10_choice in self.tree_choices:
+            _fr10_depth_choices.setdefault(len(_fr10_choice), []).append(tuple(_fr10_choice))
+        _fr10_runtime_slot_by_choice = {
+            tuple(_fr10_choice): int(_fr10_i)
+            for _fr10_i, _fr10_choice in enumerate(self.tree_choices)
+        }
+
+        def _fr10_record_tree_consumption(
+            _fr10_depth,
+            _fr10_level_logits,
+            _fr10_level_tokens,
+            _fr10_level_num_parents,
+            _fr10_level_num_children,
+        ):
+            try:
+                import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
+                if _fr10_lo.environ.get("FR10_METRICS", "0") != "1":
+                    return
+                global _LUMO_TREE_DRAFT_CONSUMPTION_FH
+                try:
+                    _LUMO_TREE_DRAFT_CONSUMPTION_FH
+                except NameError:
+                    _LUMO_TREE_DRAFT_CONSUMPTION_FH = open(
+                        _fr10_lo.environ.get(
+                            "LUMO_TREE_DRAFT_CONSUMPTION_LOG",
+                            "/logs/fr10_tree_draft_consumption.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _fr10_choices = _fr10_depth_choices.get(int(_fr10_depth), [])
+                _fr10_parent_choices = (
+                    [tuple()]
+                    if int(_fr10_depth) == 1
+                    else _fr10_depth_choices.get(int(_fr10_depth) - 1, [])
+                )
+                _fr10_parent_slot = {
+                    tuple(_fr10_choice): int(_fr10_i)
+                    for _fr10_i, _fr10_choice in enumerate(_fr10_parent_choices)
+                }
+                _fr10_top = torch.topk(
+                    _fr10_level_logits, int(_fr10_level_num_children), dim=-1
+                )
+                _fr10_now = round(_fr10_lt.time(), 4)
+                for _fr10_choice in _fr10_choices:
+                    _fr10_parent = tuple(_fr10_choice[:-1])
+                    _fr10_rank = int(_fr10_choice[-1])
+                    _fr10_p_slot = int(_fr10_parent_slot.get(_fr10_parent, -1))
+                    _fr10_flat_col = (
+                        _fr10_p_slot * int(_fr10_level_num_children) + _fr10_rank
+                    )
+                    if (
+                        _fr10_p_slot < 0
+                        or _fr10_rank >= int(_fr10_level_num_children)
+                        or _fr10_flat_col >= int(_fr10_level_tokens.size(1))
+                    ):
+                        _LUMO_TREE_DRAFT_CONSUMPTION_FH.write(
+                            _fr10_lj.dumps({
+                                "event": "tree_draft_consumption",
+                                "ts": _fr10_now,
+                                "depth": int(_fr10_depth),
+                                "path": [int(_x) for _x in _fr10_choice],
+                                "parent_path": [int(_x) for _x in _fr10_parent],
+                                "child_rank": int(_fr10_rank),
+                                "runtime_slot": int(_fr10_runtime_slot_by_choice.get(_fr10_choice, -1)),
+                                "placement_ok": False,
+                                "reason": "choice_not_represented_by_level_topk",
+                            }) + chr(10)
+                        )
+                        continue
+                    for _fr10_b in range(int(batch_size)):
+                        _fr10_row = (
+                            int(_fr10_b) * int(_fr10_level_num_parents) + _fr10_p_slot
+                        )
+                        _fr10_placed = _fr10_level_tokens[_fr10_b, _fr10_flat_col]
+                        _fr10_expected = _fr10_top.indices[_fr10_row, _fr10_rank]
+                        _fr10_probs = torch.softmax(
+                            _fr10_level_logits[_fr10_row].float(), dim=-1
+                        )
+                        _fr10_q = _fr10_probs[_fr10_placed.to(torch.long)]
+                        _LUMO_TREE_DRAFT_CONSUMPTION_FH.write(
+                            _fr10_lj.dumps({
+                                "event": "tree_draft_consumption",
+                                "ts": _fr10_now,
+                                "req_index": int(_fr10_b),
+                                "depth": int(_fr10_depth),
+                                "path": [int(_x) for _x in _fr10_choice],
+                                "parent_path": [int(_x) for _x in _fr10_parent],
+                                "runtime_slot": int(_fr10_runtime_slot_by_choice.get(_fr10_choice, -1)),
+                                "parent_runtime_slot": int(_fr10_runtime_slot_by_choice.get(_fr10_parent, -1)),
+                                "parent_level_slot": int(_fr10_p_slot),
+                                "child_rank": int(_fr10_rank),
+                                "rank_kind": "top1" if int(_fr10_rank) == 0 else ("top2" if int(_fr10_rank) == 1 else "topN"),
+                                "flat_level_col": int(_fr10_flat_col),
+                                "placed_token": int(_fr10_placed.detach().cpu().item()),
+                                "expected_topk_token": int(_fr10_expected.detach().cpu().item()),
+                                "q_prob": float(_fr10_q.detach().cpu().item()),
+                                "placement_ok": bool(
+                                    int(_fr10_placed.detach().cpu().item())
+                                    == int(_fr10_expected.detach().cpu().item())
+                                ),
+                            }) + chr(10)
+                        )
+            except Exception:
+                pass
+
+        _fr10_record_tree_consumption(1, logits, draft_token_ids, 1, num_children)
+        draft_hidden_states = hidden_states.view(batch_size, 1, -1)
+"""
+    tree_fn_pos = text.find("    def propose_tree(")
+    if tree_fn_pos < 0:
+        raise RuntimeError("EAGLE propose_tree function anchor not found")
+    root_log_pos = text.find(root_log_anchor, tree_fn_pos)
+    if root_log_pos < 0:
+        raise RuntimeError("EAGLE propose_tree root consumption anchor not found")
+    text = (
+        text[:root_log_pos]
+        + root_log_new
+        + text[root_log_pos + len(root_log_anchor) :]
+    )
+
+    level_log_anchor = """            draft_token_ids_list.append(draft_token_ids)
+"""
+    level_log_new = """            draft_token_ids_list.append(draft_token_ids)
+            _fr10_record_tree_consumption(
+                level + 2, logits, draft_token_ids, level_num_drafts, num_children
+            )
+"""
+    level_log_pos = text.find(level_log_anchor, root_log_pos + len(root_log_new))
+    if level_log_pos < 0:
+        raise RuntimeError("EAGLE propose_tree level consumption anchor not found")
+    text = (
+        text[:level_log_pos]
+        + level_log_new
+        + text[level_log_pos + len(level_log_anchor) :]
+    )
     EAGLE_PATH.write_text(text)
     return True
 
@@ -2158,7 +2087,7 @@ def main() -> int:
         (GDN_ATTN_PATH, _patch_gdn_attn()),
         (GDN_LINEAR_PATH, _patch_gdn_linear()),
         (SCHEDULER_PATH, _patch_scheduler_spec_trace()),
-        (EAGLE_PATH, _patch_eagle_tree_spine_copy()),
+        (EAGLE_PATH, _patch_eagle_tree_consumption_verify()),
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
