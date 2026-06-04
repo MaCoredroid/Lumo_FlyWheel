@@ -124,11 +124,17 @@ def evaluate_wiring(
     *,
     counters_path: Path,
     commit_log_path: Path | None = None,
+    scan_replay_path: Path | None = None,
     atol: float = 0.0,
 ) -> tuple[list[MatrixRow], dict[str, Any]]:
     rows = _counter_rows(counters_path)
     best = _best_counter_row(rows)
     commit_rows = _load_jsonl(commit_log_path) if commit_log_path else []
+    scan_replay = (
+        json.loads(scan_replay_path.read_text(encoding="utf-8"))
+        if scan_replay_path and scan_replay_path.exists()
+        else None
+    )
     matrix: list[MatrixRow] = []
 
     diag_events = _diag(best, "conv_diag_events")
@@ -257,7 +263,11 @@ def evaluate_wiring(
         )
     )
 
-    scan_serial_has_wiring = False
+    scan_serial_has_wiring = bool(
+        scan_replay
+        and scan_replay.get("serving_replay_pass") is True
+        and scan_replay.get("serial_parity_pass") is True
+    )
     matrix.append(
         _bool_row(
             gate="scan_output_serial_parity",
@@ -265,10 +275,16 @@ def evaluate_wiring(
             regime="deterministic_captured_replay_byte_exact",
             passed=scan_serial_has_wiring,
             detail=(
-                "missing_wiring_evidence: serving scan inputs are not yet captured "
-                "and replayed through serving scan plus serial-per-path reference"
+                "captured serving scan inputs replay through serving scan and "
+                "serial-per-path reference"
+                if scan_serial_has_wiring
+                else (
+                    "missing_or_failed_wiring_evidence: serving scan inputs are "
+                    "not yet captured and replayed through serving scan plus "
+                    "serial-per-path reference"
+                )
             ),
-            metrics={},
+            metrics={} if scan_replay is None else scan_replay,
         )
     )
 
@@ -312,6 +328,7 @@ def evaluate_wiring(
         "passed": all(row.passed for row in matrix),
         "counter_dump": str(counters_path),
         "commit_log": str(commit_log_path) if commit_log_path else None,
+        "scan_replay": str(scan_replay_path) if scan_replay_path else None,
         "selected_counter": best,
         "matrix": [row.__dict__ for row in matrix],
     }
@@ -347,6 +364,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--counter-dump", type=Path, required=True)
     parser.add_argument("--commit-log", type=Path)
+    parser.add_argument("--scan-replay", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--container", default=None)
     parser.add_argument("--dump-live", action="store_true")
@@ -362,6 +380,7 @@ def main() -> int:
     _, summary = evaluate_wiring(
         counters_path=args.counter_dump,
         commit_log_path=args.commit_log,
+        scan_replay_path=args.scan_replay,
         atol=args.atol,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)

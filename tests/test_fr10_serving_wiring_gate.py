@@ -66,6 +66,38 @@ def test_serving_wiring_gate_passes_captured_conv_replay_and_fails_missing_full_
     assert not summary["passed"]
 
 
+def test_serving_wiring_gate_accepts_scan_capture_replay_artifact(tmp_path: Path) -> None:
+    counters = tmp_path / "counters.json"
+    replay = tmp_path / "scan_replay.json"
+    diag = [0.0] * 32
+    diag[1] = 5.0
+    diag[4] = 3.0
+    diag[9] = 7.0
+    diag[14] = 12.0
+    diag[15] = 12.0
+    diag[17] = 12.0
+    diag[18] = 12.0
+    _write_counter(counters, diag)
+    replay.write_text(
+        json.dumps(
+            {
+                "serving_replay_pass": True,
+                "serial_parity_pass": True,
+                "serving_vs_replay_out_max_abs": 0.0,
+                "replay_vs_serial_out_max_abs": 7.45e-9,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    matrix, _ = gate.evaluate_wiring(counters_path=counters, scan_replay_path=replay)
+    by_gate = {row.gate: row for row in matrix}
+
+    assert by_gate["scan_output_serial_parity"].passed
+    assert by_gate["scan_output_serial_parity"].metrics["serial_parity_pass"] is True
+
+
 def test_serving_wiring_gate_requires_flat_negative_control_power(tmp_path: Path) -> None:
     counters = tmp_path / "counters.json"
     diag = [0.0] * 32

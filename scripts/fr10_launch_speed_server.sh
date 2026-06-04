@@ -10,6 +10,7 @@ BATCH_INVARIANT=${BATCH_INVARIANT:-0}
 FR10_METRICS=${FR10_METRICS:-0}
 FR10_ENABLE_TREE_GDN=${FR10_ENABLE_TREE_GDN:-1}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
+ENFORCE_EAGER=${ENFORCE_EAGER:-0}
 LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
 TREE=${TREE:-"[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]"}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":10,\"speculative_token_tree\":\"$TREE\"}"}
@@ -39,4 +40,5 @@ exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --attention-backend FLASH_ATTN --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  --speculative-config \"\$SPEC_CONFIG\""
+  --speculative-config \"\$SPEC_CONFIG\" \
+  $(if [[ "$ENFORCE_EAGER" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"

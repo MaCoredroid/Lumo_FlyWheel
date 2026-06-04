@@ -867,6 +867,18 @@ def _patch_gdn_linear() -> bool:
                     start = fr10_b * tree_n
                     end = start + tree_n
                     tree_state = tree_state_all[fr10_b]
+                    _fr10_capture_scan_payload = (
+                        os.environ.get("FR10_TREE_GDN_CAPTURE_PAYLOAD")
+                        and not globals().get("_FR10_TREE_GDN_CAPTURE_DONE", False)
+                        and fr10_b == 0
+                    )
+                    if _fr10_capture_scan_payload:
+                        _fr10_capture_state_index = int(
+                            spec_state_indices_tensor[fr10_b, 0].detach().cpu().item()
+                        )
+                        _fr10_capture_h0 = (
+                            ssm_state[_fr10_capture_state_index].detach().cpu().clone()
+                        )
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
                         k=key_spec[0, start:end].contiguous(),
@@ -892,6 +904,69 @@ def _patch_gdn_linear() -> bool:
                         ),
                     )
                     core_attn_out_spec[0, start:end] = tree_out[:tree_n]
+                    if _fr10_capture_scan_payload:
+                        try:
+                            _fr10_payload_path = os.environ.get(
+                                "FR10_TREE_GDN_CAPTURE_PAYLOAD"
+                            )
+                            torch.save(
+                                {
+                                    "schema": "fr10.tree_gdn_scan_capture.v1",
+                                    "layer_prefix": str(self.prefix),
+                                    "batch_index": int(fr10_b),
+                                    "tree_parent": [
+                                        int(_x)
+                                        for _x in attn_metadata.fr10_tree_parent.detach()
+                                        .cpu()
+                                        .tolist()
+                                    ],
+                                    "n_actual": int(tree_n),
+                                    "n_pad": int(tree_n_pad),
+                                    "state_index": int(_fr10_capture_state_index),
+                                    "output_scale": float(self.head_k_dim**-0.5),
+                                    "query_spec": query_spec[0, start:end]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "key_spec": key_spec[0, start:end]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "value_spec": value_spec[0, start:end]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "a": a[start:end].detach().cpu().clone(),
+                                    "b": b[start:end].detach().cpu().clone(),
+                                    "A_log": self.A_log.detach().cpu().clone(),
+                                    "dt_bias": self.dt_bias.detach().cpu().clone(),
+                                    "h0": _fr10_capture_h0,
+                                    "value_tree": value_tree[start:end]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "g_tree": g_tree[start:end].detach().cpu().clone(),
+                                    "beta_tree": beta_tree[start:end]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "serving_out": tree_out[:tree_n]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "serving_state": tree_state[:tree_n]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                },
+                                _fr10_payload_path,
+                            )
+                            globals()["_FR10_TREE_GDN_CAPTURE_DONE"] = True
+                        except Exception as _fr10_capture_exc:
+                            logger.warning_once(
+                                "FR10 tree GDN scan capture failed: %s",
+                                _fr10_capture_exc,
+                            )
                     ssm_state.index_copy_(
                         0,
                         spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
