@@ -12,6 +12,7 @@ from __future__ import annotations
 import ast
 import json
 import math
+import random
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -236,6 +237,165 @@ def evaluate_total_acceptance_gate(
     )
 
 
+def _aligned_sequences(
+    *,
+    native_events: Sequence[AcceptanceEvent],
+    tree_events: Sequence[AcceptanceEvent],
+) -> tuple[list[int], list[int], list[int], list[str]]:
+    native = _sequence(native_events, field="accepted_len")
+    tree_path0 = _sequence(tree_events, field="path0_len")
+    tree = _sequence(tree_events, field="accepted_len")
+    violations: list[str] = []
+    if len(native) != len(tree) or len(tree_path0) != len(tree):
+        violations.append(
+            "paired event count mismatch: "
+            f"native={len(native)} tree_path0={len(tree_path0)} tree={len(tree)}"
+        )
+    count = min(len(native), len(tree_path0), len(tree))
+    return native[:count], tree_path0[:count], tree[:count], violations
+
+
+def evaluate_superset_hard_gate(
+    *,
+    native_events: Sequence[AcceptanceEvent],
+    tree_events: Sequence[AcceptanceEvent],
+) -> GateReport:
+    """Enforce per-event ``tree >= path0 >= native`` with zero tolerance."""
+    native, tree_path0, tree, violations = _aligned_sequences(
+        native_events=native_events,
+        tree_events=tree_events,
+    )
+    for idx, (native_len, path0_len, tree_len) in enumerate(zip(native, tree_path0, tree)):
+        if tree_len < path0_len:
+            violations.append(
+                f"tree accepted below path0 at event_index={idx}: "
+                f"tree={tree_len} path0={path0_len}"
+            )
+        if path0_len < native_len:
+            violations.append(
+                f"path0 accepted below native at event_index={idx}: "
+                f"path0={path0_len} native={native_len}"
+            )
+    tree_minus_path0 = [t - p for t, p in zip(tree, tree_path0)]
+    path0_minus_native = [p - n for p, n in zip(tree_path0, native)]
+    return GateReport(
+        passed=not violations,
+        violations=violations,
+        metrics={
+            "paired_events": len(tree),
+            "violations": len(violations),
+            "tree_minus_path0_min": min(tree_minus_path0) if tree_minus_path0 else None,
+            "path0_minus_native_min": min(path0_minus_native) if path0_minus_native else None,
+            "tree_avg": sum(tree) / len(tree) if tree else 0.0,
+            "tree_path0_avg": sum(tree_path0) / len(tree_path0) if tree_path0 else 0.0,
+            "native_avg": sum(native) / len(native) if native else 0.0,
+        },
+    )
+
+
+def paired_bootstrap_ci(
+    diffs: Sequence[float],
+    *,
+    confidence: float = 0.95,
+    samples: int = 10_000,
+    seed: int = 13,
+) -> tuple[float, float]:
+    if not diffs:
+        raise ValueError("diffs must be non-empty")
+    if not 0.0 < confidence < 1.0:
+        raise ValueError("confidence must be between 0 and 1")
+    if samples <= 0:
+        raise ValueError("samples must be positive")
+    rng = random.Random(seed)
+    n = len(diffs)
+    means = []
+    for _ in range(samples):
+        means.append(sum(diffs[rng.randrange(n)] for _ in range(n)) / n)
+    means.sort()
+    alpha = 1.0 - confidence
+    lo_idx = max(0, min(samples - 1, int(math.floor((alpha / 2.0) * samples))))
+    hi_idx = max(0, min(samples - 1, int(math.ceil((1.0 - alpha / 2.0) * samples)) - 1))
+    return means[lo_idx], means[hi_idx]
+
+
+def evaluate_strict_win_gate(
+    *,
+    native_events: Sequence[AcceptanceEvent],
+    tree_events: Sequence[AcceptanceEvent],
+    confidence: float = 0.95,
+    bootstrap_samples: int = 10_000,
+    seed: int = 13,
+) -> GateReport:
+    """Require tree accepted/event to beat native with paired CI lower bound > 0."""
+    native, _, tree, violations = _aligned_sequences(
+        native_events=native_events,
+        tree_events=tree_events,
+    )
+    if not native or not tree:
+        violations.append("missing native or tree acceptance events")
+        return GateReport(passed=False, violations=violations, metrics={"paired_events": 0})
+    diffs = [float(t - n) for t, n in zip(tree, native)]
+    effect = sum(diffs) / len(diffs)
+    ci_low, ci_high = paired_bootstrap_ci(
+        diffs,
+        confidence=confidence,
+        samples=bootstrap_samples,
+        seed=seed,
+    )
+    if ci_low <= 0.0:
+        violations.append(
+            f"strict tree win not statistically proven: effect={effect:.6f} "
+            f"ci_low={ci_low:.6f} ci_high={ci_high:.6f}"
+        )
+    return GateReport(
+        passed=not violations,
+        violations=violations,
+        metrics={
+            "paired_events": len(diffs),
+            "tree_total": sum(tree),
+            "native_total": sum(native),
+            "tree_avg": sum(tree) / len(tree),
+            "native_avg": sum(native) / len(native),
+            "tree_minus_native_avg": effect,
+            "ci_low": ci_low,
+            "ci_high": ci_high,
+            "confidence": confidence,
+            "bootstrap_samples": bootstrap_samples,
+        },
+    )
+
+
+def evaluate_enforced_superset_gate(
+    *,
+    native_events: Sequence[AcceptanceEvent],
+    tree_events: Sequence[AcceptanceEvent],
+    confidence: float = 0.95,
+    bootstrap_samples: int = 10_000,
+    seed: int = 13,
+) -> GateReport:
+    """Combined FR10 deliverable gate: hard superset plus strict statistical win."""
+    hard = evaluate_superset_hard_gate(
+        native_events=native_events,
+        tree_events=tree_events,
+    )
+    strict = evaluate_strict_win_gate(
+        native_events=native_events,
+        tree_events=tree_events,
+        confidence=confidence,
+        bootstrap_samples=bootstrap_samples,
+        seed=seed,
+    )
+    violations = [*hard.violations, *strict.violations]
+    return GateReport(
+        passed=not violations,
+        violations=violations,
+        metrics={
+            "hard": hard.metrics,
+            "strict_win": strict.metrics,
+        },
+    )
+
+
 def acceptance_by_depth(events: Sequence[AcceptanceEvent], *, field: str) -> dict[int, int]:
     counts: Counter[int] = Counter()
     for event in events:
@@ -323,4 +483,3 @@ def write_report(path: str | Path, report: GateReport) -> None:
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
