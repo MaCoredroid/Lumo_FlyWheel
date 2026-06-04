@@ -19,6 +19,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -v "$REPO:/workspace" -v /models:/models \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
   -e VLLM_SERVER_DEV_MODE=1 \
+  -e PYTHONPATH=/workspace/src \
   -e FR10_ENABLE_TREE_GDN=1 \
   -e FR10_METRICS="$FR10_METRICS" \
   -e FR10_DECODE_MODE_DEFAULT="$FR10_DECODE_MODE_DEFAULT" \
