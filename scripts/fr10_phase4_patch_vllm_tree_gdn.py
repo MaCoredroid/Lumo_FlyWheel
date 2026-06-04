@@ -24,6 +24,12 @@ GPU_MODEL_RUNNER_PATH = Path(
 MAMBA_UTILS_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/mamba_utils.py"
 )
+REQUEST_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/request.py"
+)
+SCHED_OUTPUT_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/output.py"
+)
 
 
 def _patch_gdn_attn() -> bool:
@@ -190,6 +196,8 @@ def _patch_gdn_linear() -> bool:
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import launch_tree_gdn_prepared\n"
+            "\n"
+            "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
         ),
         1,
     )
@@ -219,6 +227,7 @@ def _patch_gdn_linear() -> bool:
     replacement = '''        if spec_sequence_masks is not None:
             use_fr10_tree = (
                 os.environ.get("FR10_ENABLE_TREE_GDN") == "1"
+                and _FR10_DECODE_MODE == "tree_mtp"
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
                 and attn_metadata.num_prefills == 0
                 and attn_metadata.num_decodes == 0
@@ -338,6 +347,146 @@ def _patch_gdn_linear() -> bool:
         raise RuntimeError("FR10 GDN linear spec branch needle not found")
     text = text.replace(needle, replacement, 1)
     GDN_LINEAR_PATH.write_text(text)
+    return True
+
+
+def _patch_request_decode_mode() -> bool:
+    text = REQUEST_PATH.read_text()
+    if "fr10_decode_mode" in text:
+        return False
+
+    text = text.replace(
+        "from vllm.sampling_params import SamplingParams\n",
+        (
+            "from vllm.sampling_params import SamplingParams\n"
+            "from lumo_flywheel_serving.fr10_decode_modes import decode_mode_from_sampling_params\n"
+        ),
+        1,
+    )
+    text = text.replace(
+        "        self.sampling_params = sampling_params\n",
+        (
+            "        self.sampling_params = sampling_params\n"
+            "        self.fr10_decode_mode = decode_mode_from_sampling_params(sampling_params)\n"
+        ),
+        1,
+    )
+    REQUEST_PATH.write_text(text)
+    return True
+
+
+def _patch_sched_output_decode_mode() -> bool:
+    text = SCHED_OUTPUT_PATH.read_text()
+    if "fr10_decode_mode" in text:
+        return False
+    text = text.replace(
+        "    num_invalid_spec_tokens: dict[str, int] | None = None\n",
+        (
+            "    num_invalid_spec_tokens: dict[str, int] | None = None\n"
+            "    # FR10: homogeneous per-request decode mode for this scheduler step.\n"
+            "    fr10_decode_mode: str | None = None\n"
+        ),
+        1,
+    )
+    SCHED_OUTPUT_PATH.write_text(text)
+    return True
+
+
+def _patch_scheduler_decode_modes() -> bool:
+    text = SCHEDULER_PATH.read_text()
+    sentinel = "# FR10_DECODE_MODE_SAFETY"
+    if sentinel in text:
+        return False
+
+    text = text.replace(
+        "from vllm.v1.spec_decode.metrics import SpecDecodingStats\n",
+        (
+            "from vllm.v1.spec_decode.metrics import SpecDecodingStats\n"
+            "from lumo_flywheel_serving.fr10_decode_modes import (\n"
+            "    NAIVE_MTP,\n"
+            "    NON_MTP,\n"
+            "    decode_mode_from_request,\n"
+            "    select_path0_spec_tokens,\n"
+            ")\n"
+        ),
+        1,
+    )
+    text = text.replace(
+        "        self.kv_cache_manager.new_step_starts()\n\n",
+        (
+            f"        {sentinel}: reject mixed decode modes within one forward pass.\n"
+            "        fr10_step_decode_mode = None\n"
+            "        self.kv_cache_manager.new_step_starts()\n\n"
+        ),
+        1,
+    )
+    text = text.replace(
+        "            request = self.running[req_index]\n\n",
+        (
+            "            request = self.running[req_index]\n"
+            "            fr10_req_mode = decode_mode_from_request(request)\n"
+            "            if fr10_step_decode_mode is None:\n"
+            "                fr10_step_decode_mode = fr10_req_mode\n"
+            "            elif fr10_req_mode != fr10_step_decode_mode:\n"
+            "                req_index += 1\n"
+            "                continue\n\n"
+        ),
+        1,
+    )
+    text = text.replace(
+        "                request = request_queue.peek_request()\n"
+        "                request_id = request.request_id\n\n",
+        (
+            "                request = request_queue.peek_request()\n"
+            "                request_id = request.request_id\n"
+            "                fr10_req_mode = decode_mode_from_request(request)\n"
+            "                if fr10_step_decode_mode is None:\n"
+            "                    fr10_step_decode_mode = fr10_req_mode\n"
+            "                elif fr10_req_mode != fr10_step_decode_mode:\n"
+            "                    request_queue.pop_request()\n"
+            "                    step_skipped_waiting.prepend_request(request)\n"
+            "                    continue\n\n"
+        ),
+        1,
+    )
+    text = text.replace(
+        "            new_block_ids_to_zero=new_block_ids_to_zero,\n"
+        "        )\n",
+        (
+            "            new_block_ids_to_zero=new_block_ids_to_zero,\n"
+            "            fr10_decode_mode=fr10_step_decode_mode,\n"
+            "        )\n"
+        ),
+        1,
+    )
+    text = text.replace(
+        "            # Add newly generated spec token ids to the request.\n"
+        "            if self.structured_output_manager.should_advance(request):\n",
+        (
+            "            # FR10: mode-specific draft handling on a multi-mode server.\n"
+            "            fr10_req_mode = decode_mode_from_request(request)\n"
+            "            if fr10_req_mode == NON_MTP:\n"
+            "                request.spec_token_ids = []\n"
+            "                continue\n"
+            "            if fr10_req_mode == NAIVE_MTP:\n"
+            "                try:\n"
+            "                    import ast as _fr10_ast\n"
+            "                    _fr10_spec = getattr(self.vllm_config, \"speculative_config\", None)\n"
+            "                    _fr10_tree = getattr(_fr10_spec, \"speculative_token_tree\", None) if _fr10_spec is not None else None\n"
+            "                    if _fr10_tree:\n"
+            "                        spec_token_ids = select_path0_spec_tokens(\n"
+            "                            spec_token_ids, _fr10_ast.literal_eval(_fr10_tree)\n"
+            "                        )\n"
+            "                except Exception:\n"
+            "                    request.spec_token_ids = []\n"
+            "                    continue\n"
+            "\n"
+            "            # Add newly generated spec token ids to the request.\n"
+            "            if self.structured_output_manager.should_advance(request):\n"
+        ),
+        1,
+    )
+    SCHEDULER_PATH.write_text(text)
     return True
 
 
@@ -754,9 +903,10 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
         lumo_tree_self_logits_indices = None
         lumo_draft_token_indices = None
         try:
+            _fr10_mode = getattr(scheduler_output, "fr10_decode_mode", None)
             _lspec = getattr(self.vllm_config, "speculative_config", None)
             _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None
-            if _ltree_src:
+            if _fr10_mode == "tree_mtp" and _ltree_src:
                 _choices = __import__("ast").literal_eval(_ltree_src)
                 _max_depth = max(len(_t) for _t in _choices)
                 if len(_choices) > _max_depth:
@@ -854,6 +1004,36 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_decode_mode_globals() -> bool:
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR10_DECODE_MODE_GLOBALS"
+    if sentinel in text:
+        return False
+
+    anchor = "        use_spec_decode = len(scheduler_output.scheduled_spec_decode_tokens) > 0\n"
+    inject = (
+        f"        {sentinel}: homogeneous batch mode for GDN/sampler branches.\n"
+        "        fr10_decode_mode = getattr(scheduler_output, \"fr10_decode_mode\", None) or \"tree_mtp\"\n"
+        "        try:\n"
+        "            from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn_linear\n"
+        "            _fr10_gdn_linear._FR10_DECODE_MODE = fr10_decode_mode\n"
+        "        except Exception:\n"
+        "            pass\n"
+        "        try:\n"
+        "            from vllm.v1.sample import rejection_sampler as _fr10_rejection_sampler\n"
+        "            _fr10_rejection_sampler._FR10_DECODE_MODE = fr10_decode_mode\n"
+        "        except Exception:\n"
+        "            pass\n"
+        "\n"
+        "        use_spec_decode = len(scheduler_output.scheduled_spec_decode_tokens) > 0\n"
+    )
+    if anchor not in text:
+        raise RuntimeError("gpu_model_runner use_spec_decode anchor not found")
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_mamba_postprocess_tree_rows() -> bool:
     text = MAMBA_UTILS_PATH.read_text()
     sentinel = "# LUMO_TREE_STATE_COMMIT_ROWS"
@@ -920,14 +1100,21 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
 
 
 def main() -> int:
-    patched = {
-        str(GDN_ATTN_PATH): _patch_gdn_attn(),
-        str(GDN_LINEAR_PATH): _patch_gdn_linear(),
-        str(SCHEDULER_PATH): _patch_scheduler_spec_trace(),
-        str(GPU_MODEL_RUNNER_PATH): _patch_gpu_model_runner_tree_metadata(),
-        str(MAMBA_UTILS_PATH): _patch_mamba_postprocess_tree_rows(),
-        str(REJECTION_SAMPLER_PATH): _patch_rejection_sampler_tree_lcp(),
-    }
+    patch_steps = [
+        (REQUEST_PATH, _patch_request_decode_mode()),
+        (SCHED_OUTPUT_PATH, _patch_sched_output_decode_mode()),
+        (SCHEDULER_PATH, _patch_scheduler_decode_modes()),
+        (GDN_ATTN_PATH, _patch_gdn_attn()),
+        (GDN_LINEAR_PATH, _patch_gdn_linear()),
+        (SCHEDULER_PATH, _patch_scheduler_spec_trace()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
+        (MAMBA_UTILS_PATH, _patch_mamba_postprocess_tree_rows()),
+        (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
+    ]
+    patched: dict[str, bool] = {}
+    for path, did_patch in patch_steps:
+        patched[str(path)] = patched.get(str(path), False) or did_patch
     import py_compile
 
     for path, did_patch in patched.items():
