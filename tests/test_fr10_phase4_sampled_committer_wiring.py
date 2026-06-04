@@ -96,3 +96,15 @@ def test_speed_launcher_defaults_to_nine_node_caterpillar() -> None:
         "(0, 0, 0, 0, 1)]\"}"
     ) in text
     assert "print(len(ast.literal_eval(os.environ[\"TREE\"])))" in text
+
+
+def test_speed_launcher_recovers_host_memory_before_docker_run() -> None:
+    text = Path("scripts/fr10_launch_speed_server.sh").read_text()
+
+    recovery = "from lumo_flywheel_serving.model_server import recover_host_memory"
+    docker_run = "docker run -d --name \"$CONTAINER\""
+    assert recovery in text
+    assert text.index(recovery) < text.index(docker_run)
+    assert "recover_host_memory()" in text
+    assert "MemFree>=100GiB and swap_used==0" in text
+    assert "swap_used_kib != 0" in text

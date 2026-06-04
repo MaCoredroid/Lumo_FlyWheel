@@ -31,6 +31,30 @@ mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
+PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+from lumo_flywheel_serving.model_server import recover_host_memory
+
+recover_host_memory()
+PY
+free -h
+python3 - <<'PY'
+from pathlib import Path
+
+fields = {}
+for line in Path("/proc/meminfo").read_text().splitlines():
+    key, value = line.split(":", 1)
+    fields[key] = int(value.strip().split()[0])
+
+mem_free_gib = fields.get("MemFree", 0) / 1024 / 1024
+swap_used_kib = fields.get("SwapTotal", 0) - fields.get("SwapFree", 0)
+if mem_free_gib < 100 or swap_used_kib != 0:
+    raise SystemExit(
+        "FR10 launch aborted: host memory recovery did not produce "
+        f"MemFree>=100GiB and swap_used==0; "
+        f"MemFree={mem_free_gib:.2f}GiB swap_used={swap_used_kib / 1024 / 1024:.2f}GiB"
+    )
+PY
+
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \

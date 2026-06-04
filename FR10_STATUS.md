@@ -11,10 +11,12 @@ Updated: 2026-06-04 23:30 UTC
 - Live Mamba copy helpers: `/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/mamba_utils.py:302-345` copy conv with the accepted temporal suffix and temporal/SSM from `block_ids[cur_block_idx + num_accepted_tokens - 1]`. Contract: block-migration sources are linear offsets, so FR10 tree state placement must make linear offset `accepted_len-1` equivalent to the accepted tree final state.
 - FR10 tree kernel h0 seam: `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:153-162,270-290` previously gathered h0 from a single static `h0_indices` row. Contract: with `h0_is_bank=True`, the serving call must gather from column `num_accepted_tokens[b]-1`, matching the FLA scan's downstream consumer.
 - FR10 patcher scan seam: `scripts/fr10_phase4_patch_vllm_tree_gdn.py` must pass `num_accepted_tokens` into the tree-kernel h0 gather, then materialize the native path0 spine states into linear state columns `0..path0_len-1` after verify. Contract: tree node rows may exist for diagnostics, but the persistent block layout read by the next step must satisfy the stock linear-column convention.
+- FR10 speed-launch memory seam: `scripts/fr10_launch_speed_server.sh` is a bare Docker launcher, so it must explicitly call `src/lumo_flywheel_serving/model_server.py`'s shared `recover_host_memory()` helper before `docker run`, then abort unless `MemFree>=100GiB` and swap used is exactly zero. Contract: confirm boots cannot proceed from a wedged/swap-backed host state.
 
 ## Current Clean Pass
 
 - 2026-06-04 23:30 UTC: removed the dead Mamba postprocess/preprocess accepted-row redirect patch from `scripts/fr10_phase4_patch_vllm_tree_gdn.py`; the patcher no longer patches `mamba_utils.py` or rewrites `accept_token_bias`. The remaining cross-step path is source-grounded: GDN h0 reads column `num_accepted-1`, and the tree verify writes path0 spine state back into linear columns before the next decode reads it. The old address-probe handoff block was removed; the compact src-native handoff payload remains for the correctness gate.
+- 2026-06-04 23:45 UTC: wired ModelServer host-memory recovery into `scripts/fr10_launch_speed_server.sh` before its bare `docker run`. The launcher now fails loud if recovery does not produce `MemFree>=100GiB` and `swap_used==0`, preventing confirm boots from producing swapped/untrustworthy acceptance numbers.
 
 ## Current User Decision: Conv Only
 
