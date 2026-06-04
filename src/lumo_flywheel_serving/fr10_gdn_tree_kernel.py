@@ -125,12 +125,21 @@ def _tree_gdn_kernel(
             mask=(pid_vh == 0) & (pid_v == 0),
         )
 
-    b_g = tl.load(g + offs_n * NUM_VH + pid_vh).to(tl.float32)
-    b_beta = tl.load(beta + offs_n * NUM_VH + pid_vh).to(tl.float32)
-    b_q = tl.load(q + (offs_n[:, None] * NUM_KH + pid_kh) * DIM_K + offs_k[None, :]).to(
+    node_mask = offs_n < N_ACTUAL
+    b_g = tl.load(g + offs_n * NUM_VH + pid_vh, mask=node_mask, other=0.0).to(tl.float32)
+    b_beta = tl.load(beta + offs_n * NUM_VH + pid_vh, mask=node_mask, other=0.0).to(tl.float32)
+    b_q = tl.load(
+        q + (offs_n[:, None] * NUM_KH + pid_kh) * DIM_K + offs_k[None, :],
+        mask=node_mask[:, None],
+        other=0.0,
+    ).to(
         tl.float32
     )
-    b_k = tl.load(k + (offs_n[:, None] * NUM_KH + pid_kh) * DIM_K + offs_k[None, :]).to(
+    b_k = tl.load(
+        k + (offs_n[:, None] * NUM_KH + pid_kh) * DIM_K + offs_k[None, :],
+        mask=node_mask[:, None],
+        other=0.0,
+    ).to(
         tl.float32
     )
     if USE_QK_L2NORM_IN_KERNEL:
@@ -138,7 +147,7 @@ def _tree_gdn_kernel(
         b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k, axis=1)[:, None] + 1e-6)
     b_v = tl.load(
         v + (offs_n[:, None] * NUM_VH + pid_vh) * DIM_V + offs_v[None, :],
-        mask=v_mask[None, :],
+        mask=node_mask[:, None] & v_mask[None, :],
         other=0.0,
     ).to(tl.float32)
     h0_base = h0
