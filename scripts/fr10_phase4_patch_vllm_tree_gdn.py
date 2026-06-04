@@ -1033,8 +1033,246 @@ def _patch_gdn_linear() -> bool:
                                     .cpu()
                                     .clone()
                                 )
+                            try:
+                                import json as _fr10_seed_json
+                                import time as _fr10_seed_time
+
+                                _fr10_seed_log = os.environ.get(
+                                    "FR10_TREE_GDN_COMMIT_HANDOFF_LOG"
+                                )
+                                _fr10_seed_count = int(
+                                    globals().get(
+                                        "_FR10_TREE_READ_HANDOFF_LOG_COUNT", 0
+                                    )
+                                )
+                                _fr10_seed_limit = int(
+                                    os.environ.get(
+                                        "FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT", "32"
+                                    )
+                                )
+                                if _fr10_seed_log and _fr10_seed_count < _fr10_seed_limit:
+                                    _fr10_seed_state_index = int(
+                                        spec_state_indices_tensor[
+                                            fr10_b, 0
+                                        ].detach().cpu().item()
+                                    )
+                                    _fr10_seed_accepted_bank_row = None
+                                    _fr10_prev_spec_indices = _fr10_prev_read.get(
+                                        "spec_state_indices"
+                                    )
+                                    if _fr10_prev_spec_indices is not None:
+                                        _fr10_seed_accepted_bank_row = int(
+                                            _fr10_prev_spec_indices[
+                                                int(_fr10_seed_row)
+                                            ].detach().cpu().item()
+                                        )
+                                    _fr10_seed_next_ssm = ssm_state[
+                                        _fr10_seed_state_index
+                                    ].detach().clone()
+                                    _fr10_seed_expected_ssm = _fr10_prev_read[
+                                        "tree_state"
+                                    ][_fr10_seed_row]
+                                    _fr10_seed_curr_conv = globals().get(
+                                        "_FR10_COMMIT_HANDOFF_CURR_CONV_BY_B", {}
+                                    ).get(int(fr10_b), {})
+                                    _fr10_seed_next_conv = _fr10_seed_curr_conv.get(
+                                        "prior"
+                                    )
+                                    _fr10_seed_expected_conv = _fr10_prev_read[
+                                        "conv_rows"
+                                    ][_fr10_seed_row]
+                                    _fr10_seed_ssm_max = float(
+                                        (
+                                            _fr10_seed_next_ssm.float()
+                                            - _fr10_seed_expected_ssm.float()
+                                        ).abs().max().detach().cpu().item()
+                                    )
+                                    _fr10_seed_conv_max = None
+                                    if _fr10_seed_next_conv is not None:
+                                        _fr10_seed_conv_max = float(
+                                            (
+                                                _fr10_seed_next_conv.float()
+                                                - _fr10_seed_expected_conv.float()
+                                            ).abs().max().detach().cpu().item()
+                                        )
+                                    with open(_fr10_seed_log, "a", buffering=1) as _fr10_fh:
+                                        _fr10_fh.write(
+                                            _fr10_seed_json.dumps(
+                                                {
+                                                    "schema": "fr10.commit_native_handoff.v1",
+                                                    "event": "commit_native_handoff",
+                                                    "ts": round(_fr10_seed_time.time(), 4),
+                                                    "layer_prefix": str(self.prefix),
+                                                    "batch_index": int(fr10_b),
+                                                    "prev_accepted_len": int(
+                                                        _fr10_lens[fr10_b]
+                                                    ),
+                                                    "accepted_node_row": int(
+                                                        _fr10_seed_row
+                                                    ),
+                                                    "accepted_spec_state_bank_row": (
+                                                        None
+                                                        if _fr10_seed_accepted_bank_row
+                                                        is None
+                                                        else int(
+                                                            _fr10_seed_accepted_bank_row
+                                                        )
+                                                    ),
+                                                    "accepted_bank_row": (
+                                                        None
+                                                        if _fr10_seed_accepted_bank_row
+                                                        is None
+                                                        else int(
+                                                            _fr10_seed_accepted_bank_row
+                                                        )
+                                                    ),
+                                                    "next_read_bank_row": int(
+                                                        _fr10_seed_state_index
+                                                    ),
+                                                    "address_coincide": bool(
+                                                        _fr10_seed_accepted_bank_row
+                                                        is not None
+                                                        and int(
+                                                            _fr10_seed_accepted_bank_row
+                                                        )
+                                                        == int(_fr10_seed_state_index)
+                                                    ),
+                                                    "state_coincide": bool(
+                                                        _fr10_seed_ssm_max == 0.0
+                                                        and _fr10_seed_conv_max == 0.0
+                                                    ),
+                                                    "ssm_vs_native_max_abs": _fr10_seed_ssm_max,
+                                                    "conv_vs_native_max_abs": _fr10_seed_conv_max,
+                                                }
+                                            )
+                                            + chr(10)
+                                        )
+                                    _fr10_src_native_path = os.environ.get(
+                                        "FR10_TREE_GDN_SRC_NATIVE_PAYLOAD"
+                                    )
+                                    if (
+                                        _fr10_src_native_path
+                                        and not globals().get(
+                                            "_FR10_TREE_GDN_SRC_NATIVE_PAYLOAD_DONE",
+                                            False,
+                                        )
+                                        and _fr10_prev_read.get("query_spec") is not None
+                                        and _fr10_prev_read.get("h0_cpu") is not None
+                                    ):
+                                        _fr10_node_paths = globals().get(
+                                            "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS", []
+                                        )
+                                        _fr10_token_ids = globals().get(
+                                            "_LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS", []
+                                        )
+                                        torch.save(
+                                            {
+                                                "schema": "fr10.src_native_handoff_payload.v1",
+                                                "layer_prefix": str(self.prefix),
+                                                "batch_index": int(fr10_b),
+                                                "accepted_len": int(_fr10_lens[fr10_b]),
+                                                "accepted_node_id": int(_fr10_seed_row),
+                                                "accepted_node_path": (
+                                                    [
+                                                        int(_x)
+                                                        for _x in _fr10_node_paths[
+                                                            fr10_b
+                                                        ]
+                                                    ]
+                                                    if fr10_b < len(_fr10_node_paths)
+                                                    else [int(_fr10_seed_row)]
+                                                ),
+                                                "accepted_token_ids": (
+                                                    [
+                                                        int(_x)
+                                                        for _x in _fr10_token_ids[fr10_b]
+                                                    ]
+                                                    if fr10_b < len(_fr10_token_ids)
+                                                    else []
+                                                ),
+                                                "tree_parent": list(
+                                                    _fr10_prev_read["tree_parent"]
+                                                ),
+                                                "output_scale": float(
+                                                    _fr10_prev_read["output_scale"]
+                                                ),
+                                                "query_spec": _fr10_prev_read[
+                                                    "query_spec"
+                                                ],
+                                                "key_spec": _fr10_prev_read["key_spec"],
+                                                "value_spec": _fr10_prev_read[
+                                                    "value_spec"
+                                                ],
+                                                "a": _fr10_prev_read["a"],
+                                                "b": _fr10_prev_read["b"],
+                                                "A_log": _fr10_prev_read["A_log"],
+                                                "dt_bias": _fr10_prev_read["dt_bias"],
+                                                "prev_h0": _fr10_prev_read["h0_cpu"],
+                                                "serving_tree_state": _fr10_prev_read[
+                                                    "tree_state_cpu"
+                                                ],
+                                                "next_read_ssm_state": _fr10_seed_next_ssm.detach()
+                                                .cpu()
+                                                .clone(),
+                                                "prev_conv_prior": _fr10_prev_read[
+                                                    "conv_prior_cpu"
+                                                ],
+                                                "serving_conv_rows": _fr10_prev_read[
+                                                    "conv_rows_cpu"
+                                                ],
+                                                "next_read_conv_state": (
+                                                    None
+                                                    if _fr10_seed_next_conv is None
+                                                    else _fr10_seed_next_conv.detach()
+                                                    .cpu()
+                                                    .clone()
+                                                ),
+                                                "accepted_spec_state_bank_row": (
+                                                    None
+                                                    if _fr10_seed_accepted_bank_row
+                                                    is None
+                                                    else int(
+                                                        _fr10_seed_accepted_bank_row
+                                                    )
+                                                ),
+                                                "accepted_bank_row": (
+                                                    None
+                                                    if _fr10_seed_accepted_bank_row
+                                                    is None
+                                                    else int(
+                                                        _fr10_seed_accepted_bank_row
+                                                    )
+                                                ),
+                                                "next_read_bank_row": int(
+                                                    _fr10_seed_state_index
+                                                ),
+                                            },
+                                            _fr10_src_native_path,
+                                        )
+                                        globals()[
+                                            "_FR10_TREE_GDN_SRC_NATIVE_PAYLOAD_DONE"
+                                        ] = True
+                                    globals()[
+                                        "_FR10_TREE_READ_HANDOFF_LOG_COUNT"
+                                    ] = _fr10_seed_count + 1
+                            except Exception:
+                                pass
                     except Exception:
                         pass
+                    try:
+                        _fr10_event_h0 = (
+                            ssm_state[
+                                int(
+                                    spec_state_indices_tensor[
+                                        fr10_b, 0
+                                    ].detach().cpu().item()
+                                )
+                            ]
+                            .detach()
+                            .clone()
+                        )
+                    except Exception:
+                        _fr10_event_h0 = None
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
                         k=key_spec[0, start:end].contiguous(),
@@ -1532,6 +1770,43 @@ def _patch_gdn_linear() -> bool:
                                 "conv_rows": _fr10_curr_conv_rows[
                                     :tree_n
                                 ].detach().clone(),
+                                "spec_state_indices": spec_state_indices_tensor[
+                                    fr10_b, :tree_n
+                                ].detach().clone(),
+                                "tree_parent": [
+                                    int(_x)
+                                    for _x in attn_metadata.fr10_tree_parent.detach()
+                                    .cpu()
+                                    .tolist()
+                                ],
+                                "output_scale": float(self.head_k_dim**-0.5),
+                                "query_spec": query_spec[
+                                    0, start:end
+                                ].detach().cpu().clone(),
+                                "key_spec": key_spec[
+                                    0, start:end
+                                ].detach().cpu().clone(),
+                                "value_spec": value_spec[
+                                    0, start:end
+                                ].detach().cpu().clone(),
+                                "a": a[start:end].detach().cpu().clone(),
+                                "b": b[start:end].detach().cpu().clone(),
+                                "A_log": self.A_log.detach().cpu().clone(),
+                                "dt_bias": self.dt_bias.detach().cpu().clone(),
+                                "h0_cpu": (
+                                    None
+                                    if _fr10_event_h0 is None
+                                    else _fr10_event_h0.detach().cpu().clone()
+                                ),
+                                "tree_state_cpu": tree_state[
+                                    :tree_n
+                                ].detach().cpu().clone(),
+                                "conv_prior_cpu": _fr10_curr_conv.get(
+                                    "prior"
+                                ).detach().cpu().clone(),
+                                "conv_rows_cpu": _fr10_curr_conv_rows[
+                                    :tree_n
+                                ].detach().cpu().clone(),
                             }
                     except Exception:
                         pass
