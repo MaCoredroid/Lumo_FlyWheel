@@ -243,6 +243,15 @@ def _patch_gdn_linear() -> bool:
                 and attn_metadata.num_prefills == 0
                 and attn_metadata.num_decodes == 0
             )
+            _fr10_prior_conv_state_bank = None
+            if use_fr10_tree_conv:
+                _fr10_prior_conv_state_bank = torch.index_select(
+                    conv_state,
+                    0,
+                    spec_state_indices_tensor[
+                        : attn_metadata.num_spec_decodes, 0
+                    ].to(torch.long),
+                )
             mixed_qkv_spec_native = causal_conv1d_update(
                 mixed_qkv_spec,
                 conv_state,
@@ -280,13 +289,13 @@ def _patch_gdn_linear() -> bool:
                         )
                     _fr10_tree_n = len(_fr10_parent)
                     _fr10_tree_conv_out = torch.empty_like(mixed_qkv_spec_native)
+                    assert _fr10_prior_conv_state_bank is not None
                     for _fr10_b in range(attn_metadata.num_spec_decodes):
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
-                        _fr10_state_idx = spec_state_indices_tensor[_fr10_b, 0]
                         _fr10_out, _ = tree_causal_conv1d_reference(
                             mixed_qkv_spec[_fr10_start:_fr10_end],
-                            conv_state[_fr10_state_idx],
+                            _fr10_prior_conv_state_bank[_fr10_b],
                             conv_weights,
                             self.conv1d.bias,
                             _fr10_parent,

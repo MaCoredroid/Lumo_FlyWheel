@@ -9,7 +9,7 @@ GPU_UTIL=${GPU_UTIL:-0.88}
 BATCH_INVARIANT=${BATCH_INVARIANT:-0}
 FR10_METRICS=${FR10_METRICS:-0}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
-LOG_DIR=${LOG_DIR:-"$REPO/output/fr10_speed_starting_point/live_logs"}
+LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
 TREE=${TREE:-"[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]"}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":10,\"speculative_token_tree\":\"$TREE\"}"}
 

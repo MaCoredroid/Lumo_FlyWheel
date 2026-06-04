@@ -59,20 +59,22 @@ def tree_causal_conv1d_reference(
     state0 = initial_state[:, : width - 1].to(torch.float32)
     x_f = x.to(torch.float32)
     w_f = weight.to(torch.float32)
-    bias_f = torch.zeros((dim,), device=x.device, dtype=torch.float32)
-    if bias is not None:
-        bias_f = bias.to(torch.float32)
+    bias_f = None if bias is None else bias.to(torch.float32)
 
     out = torch.empty((n, dim), device=x.device, dtype=torch.float32)
     states = torch.empty((n, dim, width - 1), device=x.device, dtype=torch.float32)
     for node, par in enumerate(parent):
         history = state0 if int(par) < 0 else states[int(par)]
-        acc = bias_f + x_f[node] * w_f[:, width - 1]
+        acc = x_f[node] * w_f[:, width - 1]
+        if bias_f is not None:
+            acc = acc + bias_f
         for col in range(width - 1):
             acc = acc + history[:, col] * w_f[:, col]
         out[node] = _activate(acc, activation)
         if width > 1:
-            states[node] = torch.cat([history[:, 1:], x_f[node : node + 1].T], dim=1)
+            if width > 2:
+                states[node, :, : width - 2] = history[:, 1 : width - 1]
+            states[node, :, width - 2] = x_f[node]
     return out.to(x.dtype), states
 
 
@@ -94,4 +96,3 @@ def flat_causal_conv1d_reference(
         parent,
         activation=activation,
     )
-
