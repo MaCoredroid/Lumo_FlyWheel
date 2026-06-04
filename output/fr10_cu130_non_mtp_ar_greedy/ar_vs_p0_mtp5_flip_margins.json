@@ -1,0 +1,57 @@
+{
+  "arm": "fr10_ar_vs_p0_mtp5_margin_calibration",
+  "notes": [
+    "Committed AR/P0 artifact has one old count-prompt flip at b4 choice 0 position 2, but current logprob replay did not reproduce it.",
+    "Current replay shows token 271 (\n\n) above token 198 (\n) by 0.25 logprob at that position.",
+    "A current full greedy rerun instead flips sky-color Blue vs space-Blue with margin 0.375 logprob."
+  ],
+  "records": [
+    {
+      "batch": "b4",
+      "candidate_logprob": -0.5759497284889221,
+      "candidate_token": 271,
+      "candidate_token_text": "\n\n",
+      "choice_index": 0,
+      "in_band": false,
+      "margin": 0.25,
+      "position": 2,
+      "reference_logprob": -0.8259497284889221,
+      "reference_token": 198,
+      "reference_token_text": "\n",
+      "reproduced_original_flip": false,
+      "source": "output/fr10_cu130_non_mtp_ar_greedy/ar_b8_pos2_logprobs_raw.json"
+    },
+    {
+      "batch": "b1",
+      "candidate_logprob": -1.010253667831421,
+      "candidate_token": 10025,
+      "candidate_token_text": "Blue",
+      "choice_index": 3,
+      "in_band": false,
+      "margin": 0.3750000596046448,
+      "position": 5,
+      "reference_logprob": -0.6352536082267761,
+      "reference_token": 8432,
+      "reference_token_text": " Blue",
+      "reproduced_original_flip": null,
+      "source": "output/fr10_cu130_non_mtp_ar_greedy/ar_b8_pos5_logprobs_raw.json"
+    },
+    {
+      "batch": "b4",
+      "candidate_logprob": -1.010253667831421,
+      "candidate_token": 10025,
+      "candidate_token_text": "Blue",
+      "choice_index": 3,
+      "in_band": false,
+      "margin": 0.3750000596046448,
+      "position": 5,
+      "reference_logprob": -0.6352536082267761,
+      "reference_token": 8432,
+      "reference_token_text": " Blue",
+      "reproduced_original_flip": null,
+      "source": "output/fr10_cu130_non_mtp_ar_greedy/ar_b8_pos5_logprobs_raw.json"
+    }
+  ],
+  "threshold": 6e-05,
+  "ts": 1780528612.3561308
+}

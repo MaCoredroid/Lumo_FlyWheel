@@ -1,0 +1,47 @@
+{
+  "arm": "shared_non_mtp",
+  "batch_shape": "b1",
+  "endpoint": "http://127.0.0.1:9950",
+  "fr10_decode_mode": "non_mtp",
+  "max_tokens": 8,
+  "metrics_error": null,
+  "model": "qwen3.6-27b",
+  "prompts": [
+    "Q: Count from one to five. A:"
+  ],
+  "records": [
+    {
+      "batch": "b1",
+      "choice_index": 0,
+      "finish_reason": "length",
+      "local_choice_index": 0,
+      "logprob_tokens": [
+        "\n\n",
+        "<think>",
+        "\n\n",
+        "</think>",
+        "\n\n",
+        "1",
+        ",",
+        " "
+      ],
+      "prompt": "Q: Count from one to five. A:",
+      "text": "\n\n<think>\n\n</think>\n\n1, ",
+      "token_ids": [
+        271,
+        248068,
+        271,
+        248069,
+        271,
+        16,
+        11,
+        220
+      ]
+    }
+  ],
+  "reset_prefix_cache_error": null,
+  "seed": null,
+  "spec_decode_metric_present": true,
+  "temperature": 0,
+  "ts": 1780533915.2149477
+}

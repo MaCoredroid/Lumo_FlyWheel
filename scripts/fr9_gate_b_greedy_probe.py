@@ -133,9 +133,12 @@ def collect(args: argparse.Namespace) -> int:
             reset_error = f"{type(exc).__name__}: {exc}"
 
     records: list[dict[str, Any]] = []
-    batch_shapes: list[tuple[str, list[tuple[int, str]]]] = [
+    all_batch_shapes: list[tuple[str, list[tuple[int, str]]]] = [
         ("b1", [(prompt_id, prompt) for prompt_id, prompt in enumerate(prompts)]),
         ("b4", [(prompt_id, prompt) for prompt_id, prompt in enumerate(prompts)]),
+    ]
+    batch_shapes = [
+        item for item in all_batch_shapes if args.batch_shape in ("both", item[0])
     ]
     for batch_name, prompt_items in batch_shapes:
         batch_prompts = [prompt for _, prompt in prompt_items]
@@ -147,6 +150,10 @@ def collect(args: argparse.Namespace) -> int:
             "logprobs": 1,
             "return_token_ids": True,
         }
+        if args.fr10_decode_mode:
+            payload["vllm_xargs"] = {"fr10_decode_mode": args.fr10_decode_mode}
+        if args.seed is not None:
+            payload["seed"] = args.seed
         data = _post_json(
             args.endpoint,
             "/v1/completions",
@@ -186,6 +193,9 @@ def collect(args: argparse.Namespace) -> int:
         "endpoint": args.endpoint,
         "model": args.model,
         "temperature": 0,
+        "seed": args.seed,
+        "fr10_decode_mode": args.fr10_decode_mode,
+        "batch_shape": args.batch_shape,
         "max_tokens": args.max_tokens,
         "ts": time.time(),
         "prompts": prompts,
@@ -237,6 +247,8 @@ def sample_temp(args: argparse.Namespace) -> int:
             "logprobs": args.logprobs,
             "return_token_ids": True,
         }
+        if args.fr10_decode_mode:
+            payload["vllm_xargs"] = {"fr10_decode_mode": args.fr10_decode_mode}
         data = _post_json(
             args.endpoint,
             "/v1/completions",
@@ -261,6 +273,7 @@ def sample_temp(args: argparse.Namespace) -> int:
         "endpoint": args.endpoint,
         "model": args.model,
         "temperature": args.temperature,
+        "fr10_decode_mode": args.fr10_decode_mode,
         "max_tokens": args.max_tokens,
         "prompt": args.prompt,
         "samples": args.samples,
@@ -278,6 +291,95 @@ def sample_temp(args: argparse.Namespace) -> int:
                 "arm": args.arm,
                 "out": str(out),
                 "samples": len(records),
+                "temperature": args.temperature,
+                "reset_prefix_cache_error": reset_error,
+            },
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+def sample_prompts_temp(args: argparse.Namespace) -> int:
+    if args.wait_health:
+        _wait_health(args.endpoint, args.wait_health)
+
+    api_key = _load_api_key(args)
+    headers = _headers(api_key)
+    prompts = _read_prompts(args.prompts_file)
+
+    reset_error = None
+    if not args.skip_reset_prefix_cache:
+        try:
+            _post_json(args.endpoint, "/reset_prefix_cache", headers, {}, timeout=30)
+        except Exception as exc:  # noqa: BLE001 - endpoint may return empty/non-JSON.
+            reset_error = f"{type(exc).__name__}: {exc}"
+
+    records: list[dict[str, Any]] = []
+    for prompt_id, prompt in enumerate(prompts):
+        next_sample = 0
+        while next_sample < args.samples_per_prompt:
+            batch_size = min(args.batch_size, args.samples_per_prompt - next_sample)
+            payload: dict[str, Any] = {
+                "model": args.model,
+                "prompt": [prompt] * batch_size if batch_size > 1 else prompt,
+                "max_tokens": args.max_tokens,
+                "temperature": args.temperature,
+                "logprobs": args.logprobs,
+                "return_token_ids": True,
+            }
+            if args.fr10_decode_mode:
+                payload["vllm_xargs"] = {"fr10_decode_mode": args.fr10_decode_mode}
+            if args.seed is not None:
+                payload["seed"] = args.seed + prompt_id * args.samples_per_prompt + next_sample
+            data = _post_json(
+                args.endpoint,
+                "/v1/completions",
+                headers,
+                payload,
+                timeout=args.request_timeout,
+            )
+            for choice in data["choices"]:
+                local_choice_index = int(choice["index"])
+                records.append(
+                    {
+                        "prompt_id": prompt_id,
+                        "prompt": prompt,
+                        "sample_index": next_sample + local_choice_index,
+                        "local_choice_index": local_choice_index,
+                        "finish_reason": choice.get("finish_reason"),
+                        "text": choice.get("text"),
+                        "token_ids": choice.get("token_ids") or [],
+                    }
+                )
+            next_sample += batch_size
+
+    artifact = {
+        "arm": args.arm,
+        "endpoint": args.endpoint,
+        "model": args.model,
+        "temperature": args.temperature,
+        "seed": args.seed,
+        "fr10_decode_mode": args.fr10_decode_mode,
+        "max_tokens": args.max_tokens,
+        "samples_per_prompt": args.samples_per_prompt,
+        "batch_size": args.batch_size,
+        "ts": time.time(),
+        "prompts": prompts,
+        "reset_prefix_cache_error": reset_error,
+        "records": records,
+    }
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(artifact, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    print(
+        json.dumps(
+            {
+                "arm": args.arm,
+                "out": str(out),
+                "records": len(records),
+                "prompts": len(prompts),
+                "samples_per_prompt": args.samples_per_prompt,
                 "temperature": args.temperature,
                 "reset_prefix_cache_error": reset_error,
             },
@@ -317,6 +419,8 @@ def collect_logprobs(args: argparse.Namespace) -> int:
             "logprobs": args.top_k,
             "return_token_ids": True,
         }
+        if args.fr10_decode_mode:
+            payload["vllm_xargs"] = {"fr10_decode_mode": args.fr10_decode_mode}
         data = _post_json(
             args.endpoint,
             "/v1/completions",
@@ -347,6 +451,7 @@ def collect_logprobs(args: argparse.Namespace) -> int:
         "endpoint": args.endpoint,
         "model": args.model,
         "temperature": args.temperature,
+        "fr10_decode_mode": args.fr10_decode_mode,
         "top_k": args.top_k,
         "ts": time.time(),
         "prompts": prompts,
@@ -642,12 +747,19 @@ def build_parser() -> argparse.ArgumentParser:
     collect_parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     collect_parser.add_argument("--model", default=DEFAULT_MODEL)
     collect_parser.add_argument("--max-tokens", type=int, default=24)
+    collect_parser.add_argument("--seed", type=int)
+    collect_parser.add_argument("--batch-shape", choices=["both", "b1", "b4"], default="both")
     collect_parser.add_argument("--prompts-file")
     collect_parser.add_argument("--request-timeout", type=float, default=180)
     collect_parser.add_argument("--wait-health", type=float, default=0)
     collect_parser.add_argument("--skip-reset-prefix-cache", action="store_true")
     collect_parser.add_argument("--api-key")
     collect_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
+    collect_parser.add_argument(
+        "--fr10-decode-mode",
+        choices=["naive_mtp", "non_mtp", "tree_mtp"],
+        help="Pass FR10 per-request decode mode through vLLM vllm_xargs.",
+    )
     collect_parser.add_argument(
         "--api-key-from-container",
         default=DEFAULT_CONTAINER,
@@ -683,7 +795,37 @@ def build_parser() -> argparse.ArgumentParser:
     sample_parser.add_argument("--api-key")
     sample_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
     sample_parser.add_argument("--api-key-from-container", default=DEFAULT_CONTAINER)
+    sample_parser.add_argument(
+        "--fr10-decode-mode",
+        choices=["naive_mtp", "non_mtp", "tree_mtp"],
+        help="Pass FR10 per-request decode mode through vLLM vllm_xargs.",
+    )
     sample_parser.set_defaults(func=sample_temp)
+
+    sample_prompts_parser = subparsers.add_parser("sample-prompts-temp")
+    sample_prompts_parser.add_argument("--arm", required=True)
+    sample_prompts_parser.add_argument("--out", required=True)
+    sample_prompts_parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+    sample_prompts_parser.add_argument("--model", default=DEFAULT_MODEL)
+    sample_prompts_parser.add_argument("--prompts-file")
+    sample_prompts_parser.add_argument("--samples-per-prompt", type=int, default=32)
+    sample_prompts_parser.add_argument("--batch-size", type=int, default=4)
+    sample_prompts_parser.add_argument("--max-tokens", type=int, default=32)
+    sample_prompts_parser.add_argument("--temperature", type=float, default=0.6)
+    sample_prompts_parser.add_argument("--logprobs", type=int, default=1)
+    sample_prompts_parser.add_argument("--seed", type=int)
+    sample_prompts_parser.add_argument("--request-timeout", type=float, default=180)
+    sample_prompts_parser.add_argument("--wait-health", type=float, default=0)
+    sample_prompts_parser.add_argument("--skip-reset-prefix-cache", action="store_true")
+    sample_prompts_parser.add_argument("--api-key")
+    sample_prompts_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
+    sample_prompts_parser.add_argument("--api-key-from-container", default=DEFAULT_CONTAINER)
+    sample_prompts_parser.add_argument(
+        "--fr10-decode-mode",
+        choices=["naive_mtp", "non_mtp", "tree_mtp"],
+        help="Pass FR10 per-request decode mode through vLLM vllm_xargs.",
+    )
+    sample_prompts_parser.set_defaults(func=sample_prompts_temp)
 
     compare_sampling_parser = subparsers.add_parser("compare-sampling")
     compare_sampling_parser.add_argument("left")
@@ -707,6 +849,11 @@ def build_parser() -> argparse.ArgumentParser:
     logprobs_parser.add_argument("--api-key")
     logprobs_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
     logprobs_parser.add_argument("--api-key-from-container", default=DEFAULT_CONTAINER)
+    logprobs_parser.add_argument(
+        "--fr10-decode-mode",
+        choices=["naive_mtp", "non_mtp", "tree_mtp"],
+        help="Pass FR10 per-request decode mode through vLLM vllm_xargs.",
+    )
     logprobs_parser.set_defaults(func=collect_logprobs)
 
     compare_logprobs_parser = subparsers.add_parser("compare-logprobs")

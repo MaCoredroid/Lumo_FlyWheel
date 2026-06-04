@@ -1,0 +1,147 @@
+{
+  "arm": "fr10_phase4_whole_tree_oob_fix",
+  "artifacts": {
+    "fr10_tree_gdn_counters": "output/fr10_phase4_whole_tree_crash_debug_fixed/fr10_tree_gdn_counters.json",
+    "one_request_greedy": "output/fr10_phase4_whole_tree_crash_debug_fixed/one_request_greedy.json",
+    "real_tensor_validation_masked_loads": "output/fr10_phase4_whole_tree_crash_debug_fixed/real_tensor_validation_masked_loads.json",
+    "speculative_config": "output/fr10_phase4_whole_tree_crash_debug_fixed/speculative_config.json"
+  },
+  "counter_non_vacuity": {
+    "max_count": 336,
+    "nonzero_branched_n11": true,
+    "rows": [
+      {
+        "count": 0,
+        "has_sibling": true,
+        "parent": [
+          -1,
+          0,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "shape": "n11_pad16"
+      },
+      {
+        "count": 0,
+        "has_sibling": true,
+        "parent": [
+          -1,
+          0,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "shape": "n11_pad16"
+      },
+      {
+        "count": 0,
+        "has_sibling": true,
+        "parent": [
+          -1,
+          0,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "shape": "n11_pad16"
+      },
+      {
+        "count": 336,
+        "has_sibling": true,
+        "parent": [
+          -1,
+          0,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "shape": "n11_pad16"
+      },
+      {
+        "count": 336,
+        "has_sibling": true,
+        "parent": [
+          -1,
+          0,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "shape": "n11_pad16"
+      },
+      {
+        "count": 336,
+        "has_sibling": true,
+        "parent": [
+          -1,
+          0,
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "shape": "n11_pad16"
+      }
+    ]
+  },
+  "fix": "mask padded q/k/v/g/beta loads with offs_n < N_ACTUAL and zero-fill padded rows",
+  "fix_commit": "270637ad",
+  "live_server": {
+    "cuda_launch_blocking": true,
+    "fr10_enable_tree_gdn": true,
+    "image": "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776",
+    "request_records": 8,
+    "reset_prefix_cache_error": null,
+    "served_one_request_clean": true,
+    "tree": "n11_pad16 branched two-spine"
+  },
+  "parity_recheck": {
+    "gate_d_real_tensor_decode_update_pass": true,
+    "native_linear_vs_tree_ref_non_linear_nodes_abs": 0.5618356466293335,
+    "tree_kernel_vs_native_decode_update_path_out_abs": 7.450580596923828e-09,
+    "tree_kernel_vs_native_decode_update_path_state_abs": 7.62939453125e-06
+  },
+  "root_cause": "n_actual=11 live q/k/v/g/beta slices launched with n_pad=16; Triton loads for padded rows were unmasked and could read rows 11..15 out of bounds.",
+  "sha256": {
+    "fr10_tree_gdn_counters.json": "09c566d530d98dac7ee9d9aabc8291883a6b55a24eb12421ecd0e52d7ecf1bc1",
+    "one_request_greedy.json": "77995864517a50dcc816a1e5644ea75ae6f8dda55afe55973865408796e088fa",
+    "real_tensor_validation_masked_loads.json": "b09a6ea651e69f40040ff9796fbc7d82333f57795622794fe0cd973fc58aa53a",
+    "speculative_config.json": "686710720dd23aece7562508500c49804279ab1358f9ef3ebb5e7df89cf7bba3"
+  }
+}
