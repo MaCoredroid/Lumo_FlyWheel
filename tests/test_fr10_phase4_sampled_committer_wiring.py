@@ -52,6 +52,16 @@ def test_phase4_handoff_logs_accepted_bank_row_alias() -> None:
     assert '"value_spec": value_spec[\n                                            0, start:end' in text
 
 
+def test_phase4_seeds_next_tree_read_base_from_accepted_row() -> None:
+    text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+
+    assert "_FR10_TREE_READ_PREV" in text
+    assert "spec_state_indices_tensor[\n                                    _fr10_seed_b, 0" in text
+    assert "spec_state_indices_tensor[\n                                    fr10_b, 0" in text
+    assert "_fr10_prev_read[\"conv_rows\"]" in text
+    assert "_fr10_prev_read[\"tree_state\"]" in text
+
+
 def test_speed_launcher_defaults_to_nine_node_caterpillar() -> None:
     text = Path("scripts/fr10_launch_speed_server.sh").read_text()
 

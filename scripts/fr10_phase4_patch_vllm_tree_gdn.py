@@ -358,6 +358,48 @@ def _patch_gdn_linear() -> bool:
                 _fr10_conv_diag[20].add_(float(attn_metadata.num_prefills))
                 _fr10_conv_diag[21].add_(float(attn_metadata.num_decodes))
             if use_fr10_tree_conv:
+                try:
+                    _fr10_prev_read_all = globals().setdefault(
+                        "_FR10_TREE_READ_PREV", {}
+                    )
+                    _fr10_rows = globals().get(
+                        "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", []
+                    )
+                    _fr10_lens = globals().get(
+                        "_LUMO_FA_LAST_ACCEPTED_TREE_LENS", []
+                    )
+                    for _fr10_seed_b in range(attn_metadata.num_spec_decodes):
+                        _fr10_prev_read = _fr10_prev_read_all.get(
+                            (str(self.prefix), int(_fr10_seed_b))
+                        )
+                        _fr10_has_accept = (
+                            _fr10_lens is not None
+                            and _fr10_seed_b < len(_fr10_lens)
+                            and int(_fr10_lens[_fr10_seed_b]) > 0
+                        )
+                        if (
+                            _fr10_prev_read is not None
+                            and _fr10_has_accept
+                            and _fr10_seed_b < len(_fr10_rows)
+                        ):
+                            _fr10_seed_row = max(
+                                0,
+                                min(
+                                    int(_fr10_rows[_fr10_seed_b]),
+                                    int(_fr10_prev_read["tree_n"]) - 1,
+                                ),
+                            )
+                            conv_state.index_copy_(
+                                0,
+                                spec_state_indices_tensor[
+                                    _fr10_seed_b, 0
+                                ].to(torch.long).view(1),
+                                _fr10_prev_read["conv_rows"][
+                                    _fr10_seed_row : _fr10_seed_row + 1
+                                ].to(dtype=conv_state.dtype),
+                            )
+                except Exception:
+                    pass
                 _fr10_prior_conv_state_bank = torch.index_select(
                     conv_state,
                     0,
@@ -497,18 +539,17 @@ def _patch_gdn_linear() -> bool:
                         _fr10_new_state = torch.stack(
                             _fr10_node_state_rows, dim=0
                         ).to(dtype=conv_state.dtype)
-                        if os.environ.get("FR10_TREE_GDN_COMMIT_HANDOFF_LOG"):
-                            try:
-                                globals().setdefault(
-                                    "_FR10_COMMIT_HANDOFF_CURR_CONV_BY_B", {}
-                                )[int(_fr10_b)] = {
-                                    "prior": _fr10_prior_conv_state_bank[
-                                        _fr10_b
-                                    ].detach().clone(),
-                                    "rows": _fr10_new_state.detach().clone(),
-                                }
-                            except Exception:
-                                pass
+                        try:
+                            globals().setdefault(
+                                "_FR10_COMMIT_HANDOFF_CURR_CONV_BY_B", {}
+                            )[int(_fr10_b)] = {
+                                "prior": _fr10_prior_conv_state_bank[
+                                    _fr10_b
+                                ].detach().clone(),
+                                "rows": _fr10_new_state.detach().clone(),
+                            }
+                        except Exception:
+                            pass
                         conv_state.index_copy_(
                             0,
                             spec_state_indices_tensor[
@@ -934,6 +975,66 @@ def _patch_gdn_linear() -> bool:
                             )
                         except Exception:
                             _fr10_commit_handoff_active = False
+                    try:
+                        _fr10_prev_read = globals().setdefault(
+                            "_FR10_TREE_READ_PREV", {}
+                        ).get((str(self.prefix), int(fr10_b)))
+                        _fr10_rows = globals().get(
+                            "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", []
+                        )
+                        _fr10_lens = globals().get(
+                            "_LUMO_FA_LAST_ACCEPTED_TREE_LENS", []
+                        )
+                        _fr10_has_accept = (
+                            _fr10_lens is not None
+                            and fr10_b < len(_fr10_lens)
+                            and int(_fr10_lens[fr10_b]) > 0
+                        )
+                        if (
+                            _fr10_prev_read is not None
+                            and _fr10_has_accept
+                            and fr10_b < len(_fr10_rows)
+                        ):
+                            _fr10_seed_row = max(
+                                0,
+                                min(
+                                    int(_fr10_rows[fr10_b]),
+                                    int(_fr10_prev_read["tree_n"]) - 1,
+                                ),
+                            )
+                            ssm_state.index_copy_(
+                                0,
+                                spec_state_indices_tensor[
+                                    fr10_b, 0
+                                ].to(torch.long).view(1),
+                                _fr10_prev_read["tree_state"][
+                                    _fr10_seed_row : _fr10_seed_row + 1
+                                ].to(dtype=ssm_state.dtype),
+                            )
+                            if _fr10_commit_handoff_active:
+                                _fr10_commit_h0 = (
+                                    ssm_state[_fr10_commit_state_index]
+                                    .detach()
+                                    .clone()
+                                )
+                            if _fr10_capture_scan_payload:
+                                _fr10_capture_h0 = (
+                                    ssm_state[
+                                        int(
+                                            spec_state_indices_tensor[
+                                                fr10_b, 0
+                                            ]
+                                            .detach()
+                                            .cpu()
+                                            .item()
+                                        )
+                                    ]
+                                    .detach()
+                                    .cpu()
+                                    .clone()
+                                )
+                    except Exception:
+                        pass
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
                         k=key_spec[0, start:end].contiguous(),
@@ -1353,6 +1454,21 @@ def _patch_gdn_linear() -> bool:
                                     _fr10_curr_conv_prior is not None
                                     and _fr10_curr_conv_rows is not None
                                 ):
+                                    globals().setdefault(
+                                        "_FR10_TREE_READ_PREV", {}
+                                    )[_fr10_key] = {
+                                        "tree_n": int(tree_n),
+                                        "tree_state": tree_state[
+                                            :tree_n
+                                        ].detach().clone(),
+                                        "conv_rows": _fr10_curr_conv_rows[
+                                            :tree_n
+                                        ].detach().clone(),
+                                    }
+                                if (
+                                    _fr10_curr_conv_prior is not None
+                                    and _fr10_curr_conv_rows is not None
+                                ):
                                     _fr10_prev_all[_fr10_key] = {
                                         "tree_n": int(tree_n),
                                         "h0": _fr10_commit_h0.detach().clone(),
@@ -1402,6 +1518,23 @@ def _patch_gdn_linear() -> bool:
                                 "FR10 commit native handoff capture failed: %s",
                                 _fr10_handoff_exc,
                             )
+                    try:
+                        _fr10_curr_conv = globals().get(
+                            "_FR10_COMMIT_HANDOFF_CURR_CONV_BY_B", {}
+                        ).get(int(fr10_b), {})
+                        _fr10_curr_conv_rows = _fr10_curr_conv.get("rows")
+                        if _fr10_curr_conv_rows is not None:
+                            globals().setdefault(
+                                "_FR10_TREE_READ_PREV", {}
+                            )[(str(self.prefix), int(fr10_b))] = {
+                                "tree_n": int(tree_n),
+                                "tree_state": tree_state[:tree_n].detach().clone(),
+                                "conv_rows": _fr10_curr_conv_rows[
+                                    :tree_n
+                                ].detach().clone(),
+                            }
+                    except Exception:
+                        pass
                     _fr10_scan_diag = getattr(
                         attn_metadata, "fr10_tree_conv_diag", None
                     )
