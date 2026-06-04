@@ -167,6 +167,57 @@ def sample_multidraft_rejection_step(
     )
 
 
+def sample_deterministic_multidraft_rejection_step(
+    target_p: Sequence[float] | Array,
+    draft_token_ids: Sequence[int],
+    *,
+    rng: np.random.Generator,
+) -> RejectionStep:
+    """One exact multi-draft step for deterministic proposed tokens.
+
+    vLLM's current MTP path passes ``draft_probs=None`` to the rejection
+    sampler, matching its deterministic proposal behavior: each draft node
+    proposes a fixed token. This is the one-hot specialization of the
+    canonical multi-draft rule and avoids materializing huge vocab-sized q
+    vectors in the serving committer.
+    """
+
+    p = normalize(target_p)
+    tokens = np.asarray(draft_token_ids, dtype=np.int64)
+    if tokens.ndim != 1 or tokens.size == 0:
+        raise ValueError("draft_token_ids must be a non-empty 1-D sequence")
+    if np.any(tokens < 0) or np.any(tokens >= p.shape[0]):
+        raise ValueError("draft token id is outside the target vocabulary")
+
+    overlaps = p[tokens].astype(np.float64, copy=True)
+    overlap_mass = float(overlaps.sum())
+    if overlap_mass <= 0.0:
+        return RejectionStep(
+            token_id=int(rng.choice(p.shape[0], p=p)),
+            source_index=0,
+            accepted=False,
+        )
+
+    weights = overlaps / overlap_mass
+    source = int(rng.choice(tokens.size, p=weights))
+    token = int(tokens[source])
+
+    q_mix_token = float(weights[tokens == token].sum())
+    accept_prob = min(1.0, float(p[token] / q_mix_token))
+    if rng.random() < accept_prob:
+        return RejectionStep(token_id=token, source_index=source, accepted=True)
+
+    q_mix = np.zeros_like(p)
+    for idx, token_id in enumerate(tokens):
+        q_mix[int(token_id)] += weights[idx]
+    residual = residual_distribution(p, q_mix)
+    return RejectionStep(
+        token_id=int(rng.choice(p.shape[0], p=residual)),
+        source_index=source,
+        accepted=False,
+    )
+
+
 def sample_biased_multidraft_control(
     target_p: Sequence[float] | Array,
     draft_qs: Sequence[Sequence[float] | Array],

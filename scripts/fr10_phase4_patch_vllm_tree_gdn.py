@@ -767,12 +767,9 @@ def _lumo_tree_canonical_multidraft_sample(
     max_spec_len: int,
 ) -> torch.Tensor:
     """Reference sampled tree committer using the verified FR10 rule."""
-    if draft_probs is None:
-        raise RuntimeError(
-            "FR10 sampled tree committer requires draft_probs for canonical q"
-        )
     import numpy as _fr10_np
     from lumo_flywheel_serving.fr10_tree_rejection_sampler import (
+        sample_deterministic_multidraft_rejection_step as _fr10_sample_det_step,
         sample_multidraft_rejection_step as _fr10_sample_step,
     )
 
@@ -784,7 +781,9 @@ def _lumo_tree_canonical_multidraft_sample(
         counts = [int(x) for x in num_draft_tokens]
     target_probs_cpu = target_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
     self_probs_cpu = tree_self_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
-    draft_probs_cpu = draft_probs.detach().cpu().numpy()
+    draft_probs_cpu = (
+        None if draft_probs is None else draft_probs.detach().cpu().numpy()
+    )
     seed = int(torch.randint(0, 2**31 - 1, (1,), device=output_token_ids.device).cpu().item())
     rng = _fr10_np.random.default_rng(seed)
 
@@ -838,11 +837,18 @@ def _lumo_tree_canonical_multidraft_sample(
                     row.append(int(bonus_token_ids.reshape(-1)[req_i].detach().cpu().item()))
                 break
 
-            step = _fr10_sample_step(
-                target_probs_cpu[start + children[0]],
-                [draft_probs_cpu[start + child] for child in children],
-                rng=rng,
-            )
+            if draft_probs_cpu is None:
+                step = _fr10_sample_det_step(
+                    target_probs_cpu[start + children[0]],
+                    [drafts[child] for child in children],
+                    rng=rng,
+                )
+            else:
+                step = _fr10_sample_step(
+                    target_probs_cpu[start + children[0]],
+                    [draft_probs_cpu[start + child] for child in children],
+                    rng=rng,
+                )
             row.append(int(step.token_id))
             if not step.accepted:
                 break
