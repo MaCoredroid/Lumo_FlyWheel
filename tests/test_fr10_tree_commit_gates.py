@@ -76,6 +76,38 @@ def _native_linear_conv_state(
     return state
 
 
+def _materialize_temporal_conv_rows(
+    x: torch.Tensor,
+    initial_state_row: torch.Tensor,
+    parent: list[int],
+) -> torch.Tensor:
+    rows = []
+    state_len = int(initial_state_row.shape[1])
+    for node in range(len(parent)):
+        path = _path_to(parent, node)
+        source = torch.cat((initial_state_row.transpose(0, 1), x[path]), dim=0)
+        idx = len(path) + torch.arange(state_len)
+        rows.append(source.index_select(0, idx).transpose(0, 1))
+    return torch.stack(rows)
+
+
+def _bad_global_accept_temporal_conv_rows(
+    x: torch.Tensor,
+    initial_state_row: torch.Tensor,
+    parent: list[int],
+    *,
+    accepted_offset: int,
+) -> torch.Tensor:
+    rows = []
+    state_len = int(initial_state_row.shape[1])
+    bad_idx = accepted_offset + 1 + torch.arange(state_len)
+    for node in range(len(parent)):
+        path = _path_to(parent, node)
+        source = torch.cat((initial_state_row.transpose(0, 1), x[path]), dim=0)
+        rows.append(source.index_select(0, bad_idx).transpose(0, 1))
+    return torch.stack(rows)
+
+
 def _make_inputs() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     node_count, dim, width = len(TREE_PARENT), 5, 4
     x = torch.arange(node_count * dim, dtype=torch.float32).reshape(node_count, dim) / 17.0
@@ -189,3 +221,32 @@ def test_cross_step_commit_parity_powered_flat_commit_fails_on_branch_leaf() -> 
         flat_scan_states[accepted_node],
         _native_linear_scan_state(x, scan0, accepted_path),
     )
+
+
+def test_temporal_conv_rows_use_each_node_path_length_not_global_accept_offset() -> None:
+    x, _, _, _, _ = _make_inputs()
+    state_len = 12
+    initial_state_row = (
+        torch.arange(5 * state_len, dtype=torch.float32).reshape(5, state_len) / 7.0
+    )
+    rows = _materialize_temporal_conv_rows(x, initial_state_row, TREE_PARENT)
+
+    for node in range(len(TREE_PARENT)):
+        path = _path_to(TREE_PARENT, node)
+        source = torch.cat((initial_state_row.transpose(0, 1), x[path]), dim=0)
+        expected = source[len(path) : len(path) + state_len].transpose(0, 1)
+        assert torch.equal(rows[node], expected)
+
+    # This is the d0ac0862 bug: a single accepted-path offset was reused for
+    # every node row. Shallow sibling rows then index past their own source.
+    try:
+        _bad_global_accept_temporal_conv_rows(
+            x,
+            initial_state_row,
+            TREE_PARENT,
+            accepted_offset=5,
+        )
+    except IndexError:
+        pass
+    else:
+        raise AssertionError("global accepted offset should not materialize all rows")

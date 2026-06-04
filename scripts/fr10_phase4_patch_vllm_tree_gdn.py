@@ -447,15 +447,18 @@ def _patch_gdn_linear() -> bool:
                         _fr10_path0_x = _fr10_x.index_select(
                             0, _fr10_path0_node_tensor
                         )
-                        _fr10_store_idx = _fr10_accept_offset + 1 + torch.arange(
-                            conv_state.size(2),
-                            dtype=torch.long,
-                            device=mixed_qkv_spec.device,
-                        )
                         _fr10_node_state_rows = []
                         for _fr10_node_i in range(_fr10_tree_n):
                             _fr10_node_path = _fr10_path_node_tensors[_fr10_node_i]
                             _fr10_node_x = _fr10_x.index_select(0, _fr10_node_path)
+                            _fr10_node_store_idx = (
+                                _fr10_node_path.numel()
+                                + torch.arange(
+                                    conv_state.size(2),
+                                    dtype=torch.long,
+                                    device=mixed_qkv_spec.device,
+                                )
+                            )
                             _fr10_node_state_source = torch.cat(
                                 (
                                     _fr10_prior_conv_state_bank[_fr10_b].transpose(0, 1),
@@ -465,7 +468,7 @@ def _patch_gdn_linear() -> bool:
                             )
                             _fr10_node_state_rows.append(
                                 _fr10_node_state_source.index_select(
-                                    0, _fr10_store_idx
+                                    0, _fr10_node_store_idx
                                 ).transpose(0, 1)
                             )
                         _fr10_new_state = torch.stack(
