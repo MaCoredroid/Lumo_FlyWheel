@@ -1131,6 +1131,13 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
         lumo_tree_parent_indices = None
         lumo_tree_self_logits_indices = None
         lumo_draft_token_indices = None
+        _lumo_tree_meta_debug = {
+            "event": "gpu_tree_metadata",
+            "mode": None,
+            "has_tree_src": False,
+            "has_tree_parent_indices": False,
+            "reason": "not_built",
+        }
         try:
             _fr10_mode = (
                 getattr(scheduler_output, "fr10_decode_mode", None)
@@ -1138,9 +1145,22 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
             )
             _lspec = getattr(self.vllm_config, "speculative_config", None)
             _ltree_src = getattr(_lspec, "speculative_token_tree", None) if _lspec is not None else None
+            if not _ltree_src:
+                try:
+                    _spec_env = __import__("os").environ.get("SPEC_CONFIG")
+                    if _spec_env:
+                        _ltree_src = __import__("json").loads(_spec_env).get(
+                            "speculative_token_tree"
+                        )
+                except Exception:
+                    _ltree_src = None
+            _lumo_tree_meta_debug["mode"] = _fr10_mode
+            _lumo_tree_meta_debug["has_tree_src"] = bool(_ltree_src)
             if _fr10_mode == "tree_mtp" and _ltree_src:
                 _choices = __import__("ast").literal_eval(_ltree_src)
                 _max_depth = max(len(_t) for _t in _choices)
+                _lumo_tree_meta_debug["tree_len"] = int(len(_choices))
+                _lumo_tree_meta_debug["max_depth"] = int(_max_depth)
                 if len(_choices) > _max_depth:
                     _path_to_idx = {tuple(_p): _i for _i, _p in enumerate(_choices)}
                     _parents_template = np.array([
@@ -1160,6 +1180,7 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                             continue
                         if _n != _tree_len:
                             _ok = False
+                            _lumo_tree_meta_debug["reason"] = f"draft_count_mismatch:{_n}!={_tree_len}"
                             break
                         for _node_idx, _parent in enumerate(_parents_template.tolist()):
                             _parent_local = 0 if _parent < 0 else int(_parent) + 1
@@ -1179,10 +1200,22 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                         lumo_draft_token_indices = torch.from_numpy(
                             np.array(_draft, dtype=np.int32)
                         ).to(self.device, non_blocking=True)
+                        _lumo_tree_meta_debug["reason"] = "ok"
+                    elif _ok:
+                        _lumo_tree_meta_debug["reason"] = (
+                            f"target_total_mismatch:{len(_target)}!={int(cu_num_draft_tokens[-1])}"
+                        )
+                else:
+                    _lumo_tree_meta_debug["reason"] = "linear_or_empty_tree"
+            elif _fr10_mode != "tree_mtp":
+                _lumo_tree_meta_debug["reason"] = f"mode:{_fr10_mode}"
+            else:
+                _lumo_tree_meta_debug["reason"] = "missing_tree_src"
         except Exception:
             lumo_tree_parent_indices = None
             lumo_tree_self_logits_indices = None
             lumo_draft_token_indices = None
+            _lumo_tree_meta_debug["reason"] = "exception"
         try:
             import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
             if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
@@ -1199,16 +1232,15 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                         buffering=1,
                     )
                 _LUMO_TREE_META_DEBUG_FH.write(
-                    _fr10_lj.dumps({
-                        "event": "gpu_tree_metadata",
-                        "ts": round(_fr10_lt.time(), 4),
-                        "mode": getattr(scheduler_output, "fr10_decode_mode", None),
-                        "has_tree_parent_indices": lumo_tree_parent_indices is not None,
-                        "has_tree_self_logits_indices": lumo_tree_self_logits_indices is not None,
-                        "has_draft_token_indices": lumo_draft_token_indices is not None,
-                        "num_draft_tokens": [int(_x) for _x in num_draft_tokens.tolist()],
-                        "cu_total": int(cu_num_draft_tokens[-1]) if len(cu_num_draft_tokens) else 0,
-                    }) + chr(10)
+                    _fr10_lj.dumps(dict(
+                        _lumo_tree_meta_debug,
+                        ts=round(_fr10_lt.time(), 4),
+                        has_tree_parent_indices=lumo_tree_parent_indices is not None,
+                        has_tree_self_logits_indices=lumo_tree_self_logits_indices is not None,
+                        has_draft_token_indices=lumo_draft_token_indices is not None,
+                        num_draft_tokens=[int(_x) for _x in num_draft_tokens.tolist()],
+                        cu_total=int(cu_num_draft_tokens[-1]) if len(cu_num_draft_tokens) else 0,
+                    )) + chr(10)
                 )
         except Exception:
             pass
