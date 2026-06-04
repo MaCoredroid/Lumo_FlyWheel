@@ -9,14 +9,16 @@ GPU_UTIL=${GPU_UTIL:-0.88}
 BATCH_INVARIANT=${BATCH_INVARIANT:-0}
 FR10_METRICS=${FR10_METRICS:-0}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
+LOG_DIR=${LOG_DIR:-"$REPO/output/fr10_speed_starting_point/live_logs"}
 TREE=${TREE:-"[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]"}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":10,\"speculative_token_tree\":\"$TREE\"}"}
 
+mkdir -p "$LOG_DIR"
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
-  -v "$REPO:/workspace" -v /models:/models \
+  -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e PYTHONPATH=/workspace/src \
