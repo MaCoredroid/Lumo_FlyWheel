@@ -1211,11 +1211,16 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                 _lumo_tree_meta_debug["reason"] = f"mode:{_fr10_mode}"
             else:
                 _lumo_tree_meta_debug["reason"] = "missing_tree_src"
-        except Exception:
+        except Exception as _lumo_tree_meta_exc:
             lumo_tree_parent_indices = None
             lumo_tree_self_logits_indices = None
             lumo_draft_token_indices = None
-            _lumo_tree_meta_debug["reason"] = "exception"
+            _lumo_tree_meta_debug["reason"] = (
+                "exception:"
+                + type(_lumo_tree_meta_exc).__name__
+                + ":"
+                + str(_lumo_tree_meta_exc)[:200]
+            )
         try:
             import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
             if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
