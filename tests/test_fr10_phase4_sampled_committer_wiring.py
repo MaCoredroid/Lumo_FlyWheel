@@ -13,14 +13,15 @@ def test_phase4_patcher_routes_sampled_tree_to_verified_committer() -> None:
     assert "if draft_probs_cpu is None:" in text
 
 
-def test_phase4_tree_commit_uses_accepted_node_row_without_plus_one() -> None:
+def test_phase4_tree_committer_publishes_accepted_node_without_mamba_redirect() -> None:
     text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
 
     assert "accepted_row = int(best_path[best_lcp - 1]) if best_lcp > 0 else 0" in text
     assert "accepted_row = int(current_parent)" in text
     assert "_LUMO_FA_LAST_ACCEPTED_TREE_LENS" in text
-    assert "if _fr10_has_accept:" in text
-    assert "accept_token_bias = _fr10_row" in text
+    assert "_patch_mamba_postprocess_tree_rows" not in text
+    assert "LUMO_TREE_STATE_COMMIT_ROWS" not in text
+    assert "accept_token_bias = _fr10_row" not in text
     assert "and accept_token_bias > 0" not in text
 
 
@@ -54,7 +55,8 @@ def test_phase4_handoff_logs_accepted_bank_row_alias() -> None:
 
     assert '"accepted_spec_state_bank_row":' in text
     assert '"accepted_bank_row":' in text
-    assert '"value_spec": value_spec[\n                                            0, start:end' in text
+    assert '"value_spec": _fr10_prev_read["value_spec"]' in text
+    assert '"value_spec": value_spec[\n                                    0, start:end' in text
 
 
 def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
@@ -64,6 +66,9 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS" in text
     assert "_fr10_seed_path_tensor = torch.tensor" in text
     assert "fr10_b, :_fr10_seed_path_len" in text
+    assert "_fr10_path0_nodes = getattr(" in text
+    assert "fr10_b, :_fr10_path0_len" in text
+    assert "tree_state.index_select(\n                                    0, _fr10_path0_nodes[:_fr10_path0_len]" in text
     assert "h0_num_accepted_tokens=num_accepted_tokens" in text
     assert "h0_use_accepted_column=True" in text
     assert "accepted_linear_read_col" in text
