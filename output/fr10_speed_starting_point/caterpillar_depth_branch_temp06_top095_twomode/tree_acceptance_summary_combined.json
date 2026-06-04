@@ -1,0 +1,46 @@
+{
+  "schema": "fr10.tree_acceptance_cost_gate.v1",
+  "spec_counter_delta": {
+    "accepted_per_draft_event": 2.9187442289935364,
+    "accepted_total": 3161.0,
+    "draft_events": 1083.0,
+    "per_position_counts": {
+      "0": 821.0,
+      "1": 622.0,
+      "2": 493.0,
+      "3": 375.0,
+      "4": 296.0,
+      "5": 212.0,
+      "6": 158.0,
+      "7": 103.0,
+      "8": 81.0
+    },
+    "per_position_rates": {
+      "0": 0.7580794090489381,
+      "1": 0.5743305632502308,
+      "2": 0.4552169898430286,
+      "3": 0.3462603878116344,
+      "4": 0.27331486611265005,
+      "5": 0.19575253924284394,
+      "6": 0.1458910433979686,
+      "7": 0.0951061865189289,
+      "8": 0.07479224376731301
+    }
+  },
+  "trace_summary": {
+    "accepted_events": 0,
+    "accepted_len_counts": {},
+    "accepted_token_total": 0,
+    "branch1_event_fraction_of_accepted": null,
+    "branch1_token_fraction_of_accepted": null,
+    "events_by_type": {},
+    "examples": [],
+    "parse_errors": 0,
+    "path0_event_fraction_of_accepted": null,
+    "path0_token_fraction_of_accepted": null,
+    "root_event_counts": {},
+    "root_token_counts": {},
+    "rows": 0,
+    "trace": "output/fr10_speed_starting_point/caterpillar_depth_branch_logs_modefix/tree_path_lcp_max.jsonl"
+  }
+}
