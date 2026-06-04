@@ -13,6 +13,7 @@ import json
 import statistics
 import time
 import urllib.request
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -245,6 +246,61 @@ def _summarize_mode(
     }
 
 
+def _load_jsonl(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not path.exists():
+        return rows
+    with path.open(encoding="utf-8") as handle:
+        for raw in handle:
+            raw = raw.strip()
+            if raw:
+                rows.append(json.loads(raw))
+    return rows
+
+
+def _assert_tree_engagement(
+    *,
+    sampler_debug_path: Path,
+    tree_accept_path: Path,
+    expected_draft_count: int,
+) -> dict[str, Any]:
+    debug_rows = _load_jsonl(sampler_debug_path)
+    accept_rows = _load_jsonl(tree_accept_path)
+    gpu_rows = [row for row in debug_rows if row.get("event") == "gpu_tree_metadata"]
+    ok_rows = [
+        row
+        for row in gpu_rows
+        if row.get("reason") == "ok"
+        and row.get("has_tree_parent_indices") is True
+        and all(int(x) == expected_draft_count for x in (row.get("num_draft_tokens") or []))
+    ]
+    reasons = Counter(str(row.get("reason")) for row in gpu_rows)
+    draft_counts = Counter(
+        ",".join(str(int(x)) for x in (row.get("num_draft_tokens") or []))
+        for row in gpu_rows
+    )
+    tree_accept_rows = [
+        row for row in accept_rows if row.get("event") in {"tree_sample_accept", "tree_path_lcp_max"}
+    ]
+    summary = {
+        "sampler_debug": str(sampler_debug_path),
+        "tree_accept_trace": str(tree_accept_path),
+        "expected_draft_count": expected_draft_count,
+        "gpu_tree_metadata_rows": len(gpu_rows),
+        "gpu_tree_metadata_ok_rows": len(ok_rows),
+        "gpu_tree_metadata_reasons": dict(reasons),
+        "gpu_tree_metadata_draft_counts": dict(draft_counts),
+        "tree_accept_rows": len(tree_accept_rows),
+        "engaged": bool(gpu_rows and len(ok_rows) == len(gpu_rows) and tree_accept_rows),
+    }
+    if not summary["engaged"]:
+        raise RuntimeError(
+            "tree_mtp engagement assertion failed before reporting metrics: "
+            + json.dumps(summary, sort_keys=True)
+        )
+    return summary
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
@@ -261,6 +317,10 @@ def main() -> int:
     parser.add_argument("--request-timeout", type=float, default=900.0)
     parser.add_argument("--warmup-samples", type=int, default=1)
     parser.add_argument("--request-metrics-out")
+    parser.add_argument("--require-tree-engagement", action="store_true")
+    parser.add_argument("--tree-sampler-debug-log", type=Path)
+    parser.add_argument("--tree-accept-log", type=Path)
+    parser.add_argument("--expected-draft-count", type=int, default=9)
     args = parser.parse_args()
 
     if args.wait_health:
@@ -316,6 +376,16 @@ def main() -> int:
             wall_s=wall_s,
             metric_delta=_delta(after, before),
             reset_error=reset_error,
+        )
+    if args.require_tree_engagement:
+        if args.tree_sampler_debug_log is None or args.tree_accept_log is None:
+            raise RuntimeError(
+                "--require-tree-engagement needs --tree-sampler-debug-log and --tree-accept-log"
+            )
+        result["tree_engagement"] = _assert_tree_engagement(
+            sampler_debug_path=args.tree_sampler_debug_log,
+            tree_accept_path=args.tree_accept_log,
+            expected_draft_count=args.expected_draft_count,
         )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

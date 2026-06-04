@@ -32,3 +32,24 @@ def test_phase4_patcher_exports_src_native_handoff_payload() -> None:
     assert "FR10_TREE_GDN_SRC_NATIVE_PAYLOAD" in text
     assert "next_read_ssm_state" in text
     assert "next_read_conv_state" in text
+
+
+def test_phase4_tree_disengagement_raises_by_default() -> None:
+    text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+
+    assert "FR10_ALLOW_LINEAR_FALLBACK" in text
+    assert "FR10 tree metadata disengaged:" in text
+    assert "FR10 tree causal-conv disengaged:" in text
+    assert "FR10 tree scan disengaged:" in text
+    assert "eligible_tree_spec_row_flat_fallback" in text
+
+
+def test_speed_launcher_defaults_to_nine_node_caterpillar() -> None:
+    text = Path("scripts/fr10_launch_speed_server.sh").read_text()
+
+    assert (
+        "TREE=${TREE:-\"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), "
+        "(0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), "
+        "(0, 0, 0, 0, 1)]\"}"
+    ) in text
+    assert "print(len(ast.literal_eval(os.environ[\"TREE\"])))" in text

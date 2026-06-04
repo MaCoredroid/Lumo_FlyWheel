@@ -343,6 +343,11 @@ def _patch_gdn_linear() -> bool:
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
                 and attn_metadata.num_spec_decodes > 0
             )
+            _fr10_tree_conv_expected = (
+                _fr10_active_decode_mode == "tree_mtp"
+                and getattr(attn_metadata, "fr10_tree_parent", None) is not None
+                and attn_metadata.num_spec_decodes > 0
+            )
             _fr10_conv_diag = getattr(attn_metadata, "fr10_tree_conv_diag", None)
             if os.environ.get("FR10_METRICS", "0") == "1" and _fr10_conv_diag is not None:
                 _fr10_conv_diag[14].add_(float(attn_metadata.num_spec_decodes))
@@ -744,6 +749,16 @@ def _patch_gdn_linear() -> bool:
                             )
                     mixed_qkv_spec = _fr10_tree_conv_out
                 except Exception as _fr10_tree_conv_exc:
+                    if (
+                        _fr10_tree_conv_expected
+                        and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
+                    ):
+                        raise RuntimeError(
+                            "FR10 tree causal-conv disengaged: "
+                            + type(_fr10_tree_conv_exc).__name__
+                            + ":"
+                            + str(_fr10_tree_conv_exc)
+                        ) from _fr10_tree_conv_exc
                     if os.environ.get("FR10_METRICS", "0") == "1":
                         logger.warning_once(
                             "FR10 tree causal-conv fallback to native flat order: %s",
@@ -764,6 +779,13 @@ def _patch_gdn_linear() -> bool:
                         validate_data=False,
                     )
             else:
+                if (
+                    _fr10_tree_conv_expected
+                    and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
+                ):
+                    raise RuntimeError(
+                        "FR10 tree causal-conv disengaged: eligible_tree_spec_row_flat_fallback"
+                    )
                 mixed_qkv_spec = causal_conv1d_update(
                     mixed_qkv_spec,
                     conv_state,
@@ -816,6 +838,11 @@ def _patch_gdn_linear() -> bool:
             use_fr10_tree = (
                 os.environ.get("FR10_ENABLE_TREE_GDN") == "1"
                 and _fr10_active_decode_mode == "tree_mtp"
+                and getattr(attn_metadata, "fr10_tree_parent", None) is not None
+                and attn_metadata.num_spec_decodes > 0
+            )
+            _fr10_tree_scan_expected = (
+                _fr10_active_decode_mode == "tree_mtp"
                 and getattr(attn_metadata, "fr10_tree_parent", None) is not None
                 and attn_metadata.num_spec_decodes > 0
             )
@@ -1387,6 +1414,13 @@ def _patch_gdn_linear() -> bool:
                         )
                 last_recurrent_state = tree_state_all
             else:
+                if (
+                    _fr10_tree_scan_expected
+                    and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
+                ):
+                    raise RuntimeError(
+                        "FR10 tree scan disengaged: eligible_tree_spec_row_flat_fallback"
+                    )
                 core_attn_out_spec, last_recurrent_state = (
                     fused_sigmoid_gating_delta_rule_update(
                         A_log=self.A_log,
@@ -2363,6 +2397,16 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                 )
         except Exception:
             pass
+        if (
+            _lumo_tree_meta_debug.get("mode") == "tree_mtp"
+            and _lumo_tree_meta_debug.get("has_tree_src")
+            and _lumo_tree_meta_debug.get("reason") != "ok"
+            and __import__("os").environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
+        ):
+            raise RuntimeError(
+                "FR10 tree metadata disengaged: "
+                + str(_lumo_tree_meta_debug.get("reason"))
+            )
 
         # TODO: Optimize the CPU -> GPU copy.
         cu_num_draft_tokens = torch.from_numpy(cu_num_draft_tokens).to(
