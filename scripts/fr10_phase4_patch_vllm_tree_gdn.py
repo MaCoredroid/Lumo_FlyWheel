@@ -133,6 +133,7 @@ def _patch_gdn_attn() -> bool:
             "    fr10_flat_conv_source_indices: dict[int, torch.Tensor] | None = None\n"
             "    fr10_path0_conv_source_indices: dict[int, torch.Tensor] | None = None\n"
             "    fr10_tree_path0_nodes: torch.Tensor | None = None\n"
+            "    fr10_tree_path_node_tensors: list[torch.Tensor] | None = None\n"
             "    fr10_tree_has_sibling: bool = False\n"
         ),
         1,
@@ -159,6 +160,7 @@ def _patch_gdn_attn() -> bool:
             "        self.fr10_flat_conv_source_indices = None\n"
             "        self.fr10_path0_conv_source_indices = None\n"
             "        self.fr10_tree_path0_nodes = None\n"
+            "        self.fr10_tree_path_node_tensors = None\n"
             "        self.fr10_tree_has_sibling = False\n"
             "        spec_token_tree = None\n"
             "        try:\n"
@@ -201,6 +203,15 @@ def _patch_gdn_attn() -> bool:
             "            source_by_width = {}\n"
             "            flat_source_by_width = {}\n"
             "            path0_source_by_width = {}\n"
+            "            path_node_tensors = []\n"
+            "            for node in range(n):\n"
+            "                path = []\n"
+            "                cur = node\n"
+            "                while cur >= 0:\n"
+            "                    path.append(cur)\n"
+            "                    cur = parent[cur]\n"
+            "                path.reverse()\n"
+            "                path_node_tensors.append(torch.tensor(path, dtype=torch.long, device=device))\n"
             "            for width in range(2, 7):\n"
             "                source_rows = []\n"
             "                for node in range(n):\n"
@@ -242,6 +253,7 @@ def _patch_gdn_attn() -> bool:
             "            self.fr10_flat_conv_source_indices = flat_source_by_width\n"
             "            self.fr10_path0_conv_source_indices = path0_source_by_width\n"
             "            self.fr10_tree_path0_nodes = torch.tensor(path0_nodes, dtype=torch.long, device=device)\n"
+            "            self.fr10_tree_path_node_tensors = path_node_tensors\n"
             "            self.fr10_tree_has_sibling = any(parent.count(p) > 1 for p in set(parent) if p >= 0)\n"
             "            if _fr10_metrics_enabled():\n"
             "                self.fr10_tree_invocation_counter = torch.zeros((1,), dtype=torch.int32, device=device)\n"
@@ -270,6 +282,7 @@ def _patch_gdn_attn() -> bool:
             "            fr10_flat_conv_source_indices=self.fr10_flat_conv_source_indices,\n"
             "            fr10_path0_conv_source_indices=self.fr10_path0_conv_source_indices,\n"
             "            fr10_tree_path0_nodes=self.fr10_tree_path0_nodes,\n"
+            "            fr10_tree_path_node_tensors=self.fr10_tree_path_node_tensors,\n"
             "            fr10_tree_has_sibling=self.fr10_tree_has_sibling,\n"
             "            nums_dict=nums_dict,\n"
         ),
@@ -374,6 +387,10 @@ def _patch_gdn_linear() -> bool:
                     _fr10_path0_source_indices = getattr(
                         attn_metadata, "fr10_path0_conv_source_indices", None
                     )[_fr10_width]
+                    _fr10_path_node_tensors = getattr(
+                        attn_metadata, "fr10_tree_path_node_tensors", None
+                    )
+                    assert _fr10_path_node_tensors is not None
                     _fr10_source_flat = _fr10_tree_source_indices.reshape(-1)
                     _fr10_flat_source_flat = _fr10_flat_source_indices.reshape(-1)
                     _fr10_path0_source_flat = _fr10_path0_source_indices.reshape(-1)
@@ -430,31 +447,36 @@ def _patch_gdn_linear() -> bool:
                         _fr10_path0_x = _fr10_x.index_select(
                             0, _fr10_path0_node_tensor
                         )
-                        _fr10_path0_state_source = torch.cat(
-                            (
-                                _fr10_prior_conv_state_bank[_fr10_b].transpose(0, 1),
-                                _fr10_path0_x,
-                            ),
-                            dim=0,
+                        _fr10_store_idx = _fr10_accept_offset + 1 + torch.arange(
+                            conv_state.size(2),
+                            dtype=torch.long,
+                            device=mixed_qkv_spec.device,
                         )
-                        _fr10_store_idx = (
-                            _fr10_accept_offset
-                            + 1
-                            + torch.arange(
-                                conv_state.size(2),
-                                dtype=torch.long,
-                                device=mixed_qkv_spec.device,
+                        _fr10_node_state_rows = []
+                        for _fr10_node_i in range(_fr10_tree_n):
+                            _fr10_node_path = _fr10_path_node_tensors[_fr10_node_i]
+                            _fr10_node_x = _fr10_x.index_select(0, _fr10_node_path)
+                            _fr10_node_state_source = torch.cat(
+                                (
+                                    _fr10_prior_conv_state_bank[_fr10_b].transpose(0, 1),
+                                    _fr10_node_x,
+                                ),
+                                dim=0,
                             )
-                        )
-                        _fr10_new_state = _fr10_path0_state_source.index_select(
-                            0, _fr10_store_idx
-                        ).transpose(0, 1).to(dtype=conv_state.dtype)
+                            _fr10_node_state_rows.append(
+                                _fr10_node_state_source.index_select(
+                                    0, _fr10_store_idx
+                                ).transpose(0, 1)
+                            )
+                        _fr10_new_state = torch.stack(
+                            _fr10_node_state_rows, dim=0
+                        ).to(dtype=conv_state.dtype)
                         conv_state.index_copy_(
                             0,
-                            spec_state_indices_tensor[_fr10_b : _fr10_b + 1, 0].to(
-                                torch.long
-                            ),
-                            _fr10_new_state.unsqueeze(0),
+                            spec_state_indices_tensor[
+                                _fr10_b, :_fr10_tree_n
+                            ].to(torch.long),
+                            _fr10_new_state,
                         )
                         if _fr10_log_conv_diag:
                             _fr10_path0_source = torch.cat(
@@ -691,23 +713,12 @@ def _patch_gdn_linear() -> bool:
                         ),
                     )
                     core_attn_out_spec[0, start:end] = tree_out[:tree_n]
-                _, last_recurrent_state = fused_sigmoid_gating_delta_rule_update(
-                    A_log=self.A_log,
-                    a=a,
-                    b=b,
-                    dt_bias=self.dt_bias,
-                    q=query_spec,
-                    k=key_spec,
-                    v=value_spec,
-                    initial_state=ssm_state,
-                    inplace_final_state=True,
-                    cu_seqlens=spec_query_start_loc[
-                        : attn_metadata.num_spec_decodes + 1
-                    ],
-                    ssm_state_indices=spec_state_indices_tensor,
-                    num_accepted_tokens=num_accepted_tokens,
-                    use_qk_l2norm_in_kernel=True,
-                )
+                    ssm_state.index_copy_(
+                        0,
+                        spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
+                        tree_state[:tree_n].to(dtype=ssm_state.dtype),
+                    )
+                last_recurrent_state = tree_state_all
             else:
                 core_attn_out_spec, last_recurrent_state = (
                     fused_sigmoid_gating_delta_rule_update(
@@ -1982,6 +1993,52 @@ def _patch_mamba_postprocess_tree_rows() -> bool:
     sentinel = "# LUMO_TREE_STATE_COMMIT_ROWS"
     if sentinel in text:
         return False
+
+    copy_old = '''            for state, state_copy_func in zip(kv_caches, mamba_state_copy_funcs):
+                copy_spec = state_copy_func(
+                    state, block_ids, src_block_idx, accept_token_bias + 1
+                )
+
+                src_ptrs_np[offset] = copy_spec.start_addr
+                dst_ptrs_np[offset] = state[dest_block_id].data_ptr()
+                sizes_np[offset] = copy_spec.num_elements * state.element_size()
+                offset += 1
+'''
+    copy_new = '''            for state, state_copy_func in zip(kv_caches, mamba_state_copy_funcs):
+                # LUMO_TREE_STATE_COMMIT_ROWS: tree-mode conv states are
+                # materialized per accepted node row, matching temporal state
+                # row semantics. The stock conv copy treats the value as a
+                # suffix offset inside the current row, which is flat-MTP-only.
+                copy_spec = None
+                try:
+                    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn
+                    _fr10_rows = getattr(_fr10_gdn, "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", None)
+                    _fr10_tree_conv_copy = (
+                        _fr10_rows is not None
+                        and accept_token_bias > 0
+                        and getattr(state_copy_func, "__name__", "") == "get_conv_copy_spec"
+                    )
+                    if _fr10_tree_conv_copy:
+                        src_state = state[block_ids[src_block_idx + accept_token_bias]]
+                        copy_spec = MambaCopySpec(
+                            start_addr=src_state.data_ptr(),
+                            num_elements=src_state.numel(),
+                        )
+                except Exception:
+                    copy_spec = None
+                if copy_spec is None:
+                    copy_spec = state_copy_func(
+                        state, block_ids, src_block_idx, accept_token_bias + 1
+                    )
+
+                src_ptrs_np[offset] = copy_spec.start_addr
+                dst_ptrs_np[offset] = state[dest_block_id].data_ptr()
+                sizes_np[offset] = copy_spec.num_elements * state.element_size()
+                offset += 1
+'''
+    if copy_old not in text:
+        raise RuntimeError("mamba tree state row copy helper anchor not found")
+    text = text.replace(copy_old, copy_new, 1)
 
     old = '''        if aligned_new_computed_tokens >= num_tokens_running_state:
             accept_token_bias = aligned_new_computed_tokens - num_tokens_running_state
