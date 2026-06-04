@@ -150,6 +150,8 @@ def collect(args: argparse.Namespace) -> int:
             "logprobs": 1,
             "return_token_ids": True,
         }
+        if args.fr10_decode_mode:
+            payload["vllm_xargs"] = {"fr10_decode_mode": args.fr10_decode_mode}
         if args.seed is not None:
             payload["seed"] = args.seed
         data = _post_json(
@@ -192,6 +194,7 @@ def collect(args: argparse.Namespace) -> int:
         "model": args.model,
         "temperature": 0,
         "seed": args.seed,
+        "fr10_decode_mode": args.fr10_decode_mode,
         "batch_shape": args.batch_shape,
         "max_tokens": args.max_tokens,
         "ts": time.time(),
@@ -244,6 +247,8 @@ def sample_temp(args: argparse.Namespace) -> int:
             "logprobs": args.logprobs,
             "return_token_ids": True,
         }
+        if args.fr10_decode_mode:
+            payload["vllm_xargs"] = {"fr10_decode_mode": args.fr10_decode_mode}
         data = _post_json(
             args.endpoint,
             "/v1/completions",
@@ -268,6 +273,7 @@ def sample_temp(args: argparse.Namespace) -> int:
         "endpoint": args.endpoint,
         "model": args.model,
         "temperature": args.temperature,
+        "fr10_decode_mode": args.fr10_decode_mode,
         "max_tokens": args.max_tokens,
         "prompt": args.prompt,
         "samples": args.samples,
@@ -322,6 +328,8 @@ def sample_prompts_temp(args: argparse.Namespace) -> int:
                 "logprobs": args.logprobs,
                 "return_token_ids": True,
             }
+            if args.fr10_decode_mode:
+                payload["vllm_xargs"] = {"fr10_decode_mode": args.fr10_decode_mode}
             if args.seed is not None:
                 payload["seed"] = args.seed + prompt_id * args.samples_per_prompt + next_sample
             data = _post_json(
@@ -352,6 +360,7 @@ def sample_prompts_temp(args: argparse.Namespace) -> int:
         "model": args.model,
         "temperature": args.temperature,
         "seed": args.seed,
+        "fr10_decode_mode": args.fr10_decode_mode,
         "max_tokens": args.max_tokens,
         "samples_per_prompt": args.samples_per_prompt,
         "batch_size": args.batch_size,
@@ -410,6 +419,8 @@ def collect_logprobs(args: argparse.Namespace) -> int:
             "logprobs": args.top_k,
             "return_token_ids": True,
         }
+        if args.fr10_decode_mode:
+            payload["vllm_xargs"] = {"fr10_decode_mode": args.fr10_decode_mode}
         data = _post_json(
             args.endpoint,
             "/v1/completions",
@@ -440,6 +451,7 @@ def collect_logprobs(args: argparse.Namespace) -> int:
         "endpoint": args.endpoint,
         "model": args.model,
         "temperature": args.temperature,
+        "fr10_decode_mode": args.fr10_decode_mode,
         "top_k": args.top_k,
         "ts": time.time(),
         "prompts": prompts,
@@ -744,6 +756,11 @@ def build_parser() -> argparse.ArgumentParser:
     collect_parser.add_argument("--api-key")
     collect_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
     collect_parser.add_argument(
+        "--fr10-decode-mode",
+        choices=["naive_mtp", "non_mtp", "tree_mtp"],
+        help="Pass FR10 per-request decode mode through vLLM vllm_xargs.",
+    )
+    collect_parser.add_argument(
         "--api-key-from-container",
         default=DEFAULT_CONTAINER,
         help="Docker container to read VLLM_API_KEY from; use '' to disable.",
@@ -778,6 +795,11 @@ def build_parser() -> argparse.ArgumentParser:
     sample_parser.add_argument("--api-key")
     sample_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
     sample_parser.add_argument("--api-key-from-container", default=DEFAULT_CONTAINER)
+    sample_parser.add_argument(
+        "--fr10-decode-mode",
+        choices=["naive_mtp", "non_mtp", "tree_mtp"],
+        help="Pass FR10 per-request decode mode through vLLM vllm_xargs.",
+    )
     sample_parser.set_defaults(func=sample_temp)
 
     sample_prompts_parser = subparsers.add_parser("sample-prompts-temp")
@@ -798,6 +820,11 @@ def build_parser() -> argparse.ArgumentParser:
     sample_prompts_parser.add_argument("--api-key")
     sample_prompts_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
     sample_prompts_parser.add_argument("--api-key-from-container", default=DEFAULT_CONTAINER)
+    sample_prompts_parser.add_argument(
+        "--fr10-decode-mode",
+        choices=["naive_mtp", "non_mtp", "tree_mtp"],
+        help="Pass FR10 per-request decode mode through vLLM vllm_xargs.",
+    )
     sample_prompts_parser.set_defaults(func=sample_prompts_temp)
 
     compare_sampling_parser = subparsers.add_parser("compare-sampling")
@@ -822,6 +849,11 @@ def build_parser() -> argparse.ArgumentParser:
     logprobs_parser.add_argument("--api-key")
     logprobs_parser.add_argument("--api-key-env", default="VLLM_API_KEY")
     logprobs_parser.add_argument("--api-key-from-container", default=DEFAULT_CONTAINER)
+    logprobs_parser.add_argument(
+        "--fr10-decode-mode",
+        choices=["naive_mtp", "non_mtp", "tree_mtp"],
+        help="Pass FR10 per-request decode mode through vLLM vllm_xargs.",
+    )
     logprobs_parser.set_defaults(func=collect_logprobs)
 
     compare_logprobs_parser = subparsers.add_parser("compare-logprobs")
