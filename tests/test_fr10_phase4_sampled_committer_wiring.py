@@ -26,6 +26,24 @@ def test_phase4_patcher_logs_tree_and_linear_logit_gathers() -> None:
     assert '"target_prob_draft":' in text
 
 
+def test_phase4_tree_committer_receives_constrained_target_logits_once() -> None:
+    text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+
+    target_constraint = """target_logits = apply_sampling_constraints(
+            target_logits,
+            metadata.cu_num_draft_tokens,
+            sampling_metadata,
+        )
+"""
+    tree_branch = 'lumo_tree_parent_indices = getattr(metadata, "tree_parent_indices", None)'
+    committer_call = "return _lumo_tree_canonical_multidraft_sample("
+
+    assert target_constraint in text
+    assert text.index(target_constraint) < text.index(tree_branch)
+    assert text.index(tree_branch) < text.index(committer_call)
+    assert text.count(target_constraint) == 1
+
+
 def test_phase4_tree_committer_publishes_accepted_node_without_dead_mamba_redirect() -> None:
     text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
 

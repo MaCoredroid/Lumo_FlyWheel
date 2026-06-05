@@ -2413,6 +2413,19 @@ def _lumo_tree_canonical_multidraft_sample(
             sampling_metadata,
         )
 """
+        target_constraint = """        target_logits = apply_sampling_constraints(
+            target_logits,
+            metadata.cu_num_draft_tokens,
+            sampling_metadata,
+        )
+"""
+        target_processor_anchor = """        target_logits = self.apply_logits_processors(
+            target_logits, sampling_metadata, metadata
+        )
+        # [num_tokens, vocab_size]
+        # NOTE(woosuk): `target_logits` can be updated in place inside the
+        # `apply_sampling_constraints` function.
+"""
         stock_call_new = """        lumo_tree_parent_indices = getattr(metadata, "tree_parent_indices", None)
         lumo_tree_token_ids = None
         lumo_tree_self_logits = None
@@ -2565,8 +2578,17 @@ def _lumo_tree_canonical_multidraft_sample(
             tree_self_logits=lumo_tree_self_logits,
         )
 """
-        if stock_call not in text:
+        stock_call_pos = text.find(stock_call)
+        if stock_call_pos < 0:
             raise RuntimeError("stock rejection_sample call anchor not found")
+        if target_constraint not in text[:stock_call_pos]:
+            if target_processor_anchor not in text[:stock_call_pos]:
+                raise RuntimeError("target logits sampling-constraints anchor not found")
+            text = text.replace(
+                target_processor_anchor,
+                target_processor_anchor + target_constraint + "\n",
+                1,
+            )
         text = text.replace(stock_call, stock_call_new, 1)
 
         stock_sig = """    bonus_token_ids: torch.Tensor,
