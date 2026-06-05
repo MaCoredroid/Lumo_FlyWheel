@@ -171,9 +171,10 @@ Conv fix, `FR11_TREE_CONV_NATIVE_BF16_TAPS=1`:
 Flag delta:
 - Fixed minus baseline event acceptance: `-0.11562544672164354`.
 - Fixed minus baseline token acceptance: `-0.012847271857960404`.
+- Sampling-noise caveat: this is a single temperature-0.6 A/B pair (`8` prompts x `4` samples). The negative flag delta is within plausible run-to-run sampling variance and should not be interpreted as causal evidence that the conv fix harms acceptance. A greedy `temperature=0` A/B would tighten the sign, but it is cost-gated: the recovery question is already decided by the much larger native gap.
 
 Acceptance verdict:
 
 `CONV_TAP_DTYPE_FIX_DOES_NOT_RECOVER_ACCEPTANCE`
 
-The native-bf16 tap-product flag did not improve no-copy GDN tree acceptance. It reduced accepted/event from `0.87536` to `0.75973`, while native MTP-5 remains `3.076`. This isolates the conv tap-dtype seam as not the acceptance-limiting bug, even though alpha shows it can create post-MLP bf16 precision-floor deltas.
+The native-bf16 tap-product flag did not recover no-copy GDN tree acceptance in this single sampled A/B: accepted/event was `0.87536` for baseline and `0.75973` for the flag, a negative delta that is within single-run temperature-0.6 noise. The conclusion is nevertheless robust because both runs remain about `2.2` accepted/event below native MTP-5 `3.076`, roughly `19x` the absolute flag delta. No plausible sampling noise hides a recovery. This isolates the conv tap-dtype seam as not the acceptance-limiting bug, even though alpha shows it can create post-MLP bf16 precision-floor deltas.
