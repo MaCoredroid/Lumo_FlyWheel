@@ -3749,11 +3749,20 @@ def _fr10_root_hidden_capture_start(self, positions, hidden_states):
             }
             if int(hidden_states.shape[0]) not in desired_counts:
                 return None
-        root_row = int(os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW", "0"))
+        pos_cpu = positions.detach().cpu()
+        root_position_env = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_POSITION")
+        if root_position_env:
+            token_positions = pos_cpu[0] if pos_cpu.ndim == 2 else pos_cpu
+            matches = (token_positions.reshape(-1) == int(root_position_env)).nonzero()
+            if matches.numel() == 0:
+                return None
+            root_row = int(matches.reshape(-1)[0].item())
+        else:
+            root_row = int(os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW", "0"))
         if root_row < 0 or root_row >= int(hidden_states.shape[0]):
             return None
         layer_types = list(getattr(getattr(self, "config", None), "layer_types", []))
-        pos_cpu = positions.detach().cpu()
+        token_positions = pos_cpu[0] if pos_cpu.ndim == 2 else pos_cpu
         return {
             "source": "Qwen3NextModel.forward",
             "path": path,
@@ -3766,7 +3775,7 @@ def _fr10_root_hidden_capture_start(self, positions, hidden_states):
             .cpu(),
             "positions_shape": list(positions.shape),
             "positions": pos_cpu,
-            "root_position": pos_cpu.reshape(-1)[root_row].item(),
+            "root_position": token_positions.reshape(-1)[root_row].item(),
             "positions_first16": pos_cpu.reshape(-1)[:16].tolist(),
             "layer_types": layer_types,
             "layers": [],
