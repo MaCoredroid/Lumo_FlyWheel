@@ -27,6 +27,7 @@ def tree_causal_conv1d_reference(
     parent: Sequence[int],
     *,
     activation: str | bool | None = "silu",
+    native_bf16_taps: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Run causal conv over a tree using only ancestry windows.
 
@@ -65,11 +66,22 @@ def tree_causal_conv1d_reference(
     states = torch.empty((n, dim, width - 1), device=x.device, dtype=torch.float32)
     for node, par in enumerate(parent):
         history = state0 if int(par) < 0 else states[int(par)]
-        acc = x_f[node] * w_f[:, width - 1]
+        if native_bf16_taps:
+            acc = (x[node].to(torch.bfloat16) * weight[:, width - 1].to(torch.bfloat16))
+            acc = acc.to(torch.bfloat16).to(torch.float32)
+        else:
+            acc = x_f[node] * w_f[:, width - 1]
         if bias_f is not None:
             acc = acc + bias_f
         for col in range(width - 1):
-            acc = acc + history[:, col] * w_f[:, col]
+            if native_bf16_taps:
+                prod = (
+                    history[:, col].to(torch.bfloat16)
+                    * weight[:, col].to(torch.bfloat16)
+                )
+                acc = acc + prod.to(torch.bfloat16).to(torch.float32)
+            else:
+                acc = acc + history[:, col] * w_f[:, col]
         out[node] = _activate(acc, activation)
         if width > 1:
             if width > 2:
@@ -85,6 +97,7 @@ def flat_causal_conv1d_reference(
     bias: torch.Tensor | None,
     *,
     activation: str | bool | None = "silu",
+    native_bf16_taps: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Negative-control linearized causal conv over flattened node order."""
     parent = [-1] + [idx - 1 for idx in range(1, int(x.shape[0]))]
@@ -95,4 +108,5 @@ def flat_causal_conv1d_reference(
         bias,
         parent,
         activation=activation,
+        native_bf16_taps=native_bf16_taps,
     )

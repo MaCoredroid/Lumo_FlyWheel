@@ -105,6 +105,49 @@ def test_flattened_causal_conv_negative_control_leaks_sibling() -> None:
     assert (flat_out[3] - tree_out[3]).abs().max().item() > 1.0
 
 
+def test_tree_causal_conv_native_bf16_taps_matches_bf16_product() -> None:
+    x = torch.tensor([[1.0078125, -2.015625]], dtype=torch.bfloat16)
+    initial_state = torch.tensor(
+        [[0.50390625, -1.0078125, 1.5078125], [2.015625, -0.50390625, 0.25]],
+        dtype=torch.bfloat16,
+    )
+    weight = torch.tensor(
+        [[0.3359375, -0.66796875, 1.3359375, -2.671875],
+         [1.671875, -1.171875, 0.8359375, -0.41796875]],
+        dtype=torch.bfloat16,
+    )
+    bias = torch.zeros(2, dtype=torch.bfloat16)
+
+    native_out, _ = tree_causal_conv1d_reference(
+        x,
+        initial_state,
+        weight,
+        bias,
+        [-1],
+        activation=None,
+        native_bf16_taps=True,
+    )
+    fp32_out, _ = tree_causal_conv1d_reference(
+        x,
+        initial_state,
+        weight,
+        bias,
+        [-1],
+        activation=None,
+        native_bf16_taps=False,
+    )
+
+    expected = torch.zeros(2, dtype=torch.float32)
+    window = torch.cat((initial_state, x[0].view(-1, 1)), dim=1)
+    for col in range(4):
+        expected = expected + (
+            window[:, col].to(torch.bfloat16) * weight[:, col].to(torch.bfloat16)
+        ).to(torch.bfloat16).to(torch.float32)
+
+    assert torch.equal(native_out[0], expected.to(torch.bfloat16))
+    assert not torch.equal(native_out, fp32_out)
+
+
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_linear_tree_causal_conv_matches_stock_vllm_conv() -> None:
     """Linear tree path must reduce to vLLM's stock flat causal conv.

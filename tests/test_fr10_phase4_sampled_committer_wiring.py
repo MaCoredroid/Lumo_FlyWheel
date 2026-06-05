@@ -139,6 +139,8 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert "_fr10_conv_read_cols = torch.clamp(" in text
     assert "_fr10_prior_conv_bank_rows = spec_state_indices_tensor" in text
     assert "_fr10_prior_cols = _fr10_prior_col_base" in text
+    assert "FR11_TREE_CONV_NATIVE_BF16_TAPS" in text
+    assert "def _fr11_conv_tap_product" in text
     assert "h0_use_accepted_column=True" in text
     assert "accepted_linear_read_col" in text
     assert "linear_column_coincide" in text

@@ -573,7 +573,23 @@ def _patch_gdn_linear() -> bool:
                         dtype=torch.long,
                         device=mixed_qkv_spec.device,
                     )
+                    _fr11_native_bf16_taps = (
+                        os.environ.get("FR11_TREE_CONV_NATIVE_BF16_TAPS", "0") == "1"
+                    )
                     _fr10_weight_f = conv_weights.to(torch.float32)
+                    def _fr11_conv_tap_product(_fr11_x, _fr11_w):
+                        if _fr11_native_bf16_taps:
+                            _fr11_dtype = mixed_qkv_spec.dtype
+                            _fr11_w_cast = _fr11_w.to(_fr11_dtype)
+                            if _fr11_x.ndim == 2:
+                                _fr11_w_cast = _fr11_w_cast.unsqueeze(0)
+                            return (
+                                _fr11_x.to(_fr11_dtype) * _fr11_w_cast
+                            ).to(_fr11_dtype).to(torch.float32)
+                        _fr11_w_f = _fr11_w.to(torch.float32)
+                        if _fr11_x.ndim == 2:
+                            _fr11_w_f = _fr11_w_f.unsqueeze(0)
+                        return _fr11_x.to(torch.float32) * _fr11_w_f
                     _fr10_tree_conv_out = torch.empty_like(mixed_qkv_spec)
                     _fr10_conv_diag = getattr(
                         attn_metadata, "fr10_tree_conv_diag", None
@@ -605,9 +621,9 @@ def _patch_gdn_linear() -> bool:
                                 0
                             ).expand_as(_fr10_x.float()).clone()
                         for _fr10_col in range(_fr10_width):
-                            _fr10_acc = _fr10_acc + (
-                                _fr10_window[:, _fr10_col, :].to(torch.float32)
-                                * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
+                            _fr10_acc = _fr10_acc + _fr11_conv_tap_product(
+                                _fr10_window[:, _fr10_col, :],
+                                conv_weights[:, _fr10_col],
                             )
                         if self.activation in (True, "silu", "swish"):
                             _fr10_acc = torch.nn.functional.silu(_fr10_acc)
@@ -682,11 +698,12 @@ def _patch_gdn_linear() -> bool:
                                     torch.float32
                                 ).unsqueeze(0).expand_as(_fr10_path0_x.float()).clone()
                             for _fr10_col in range(_fr10_width):
-                                _fr10_path0_acc = _fr10_path0_acc + (
-                                    _fr10_path0_window[:, _fr10_col, :].to(
-                                        torch.float32
+                                _fr10_path0_acc = (
+                                    _fr10_path0_acc
+                                    + _fr11_conv_tap_product(
+                                        _fr10_path0_window[:, _fr10_col, :],
+                                        conv_weights[:, _fr10_col],
                                     )
-                                    * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
                                 )
                             if self.activation in (True, "silu", "swish"):
                                 _fr10_path0_acc = torch.nn.functional.silu(
@@ -710,11 +727,12 @@ def _patch_gdn_linear() -> bool:
                                     torch.float32
                                 ).unsqueeze(0).expand_as(_fr10_x.float()).clone()
                             for _fr10_col in range(_fr10_width):
-                                _fr10_flat_acc = _fr10_flat_acc + (
-                                    _fr10_flat_window[:, _fr10_col, :].to(
-                                        torch.float32
+                                _fr10_flat_acc = (
+                                    _fr10_flat_acc
+                                    + _fr11_conv_tap_product(
+                                        _fr10_flat_window[:, _fr10_col, :],
+                                        conv_weights[:, _fr10_col],
                                     )
-                                    * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
                                 )
                             if self.activation in (True, "silu", "swish"):
                                 _fr10_flat_acc = torch.nn.functional.silu(
@@ -753,15 +771,19 @@ def _patch_gdn_linear() -> bool:
                                     torch.float32
                                 ).unsqueeze(0).expand_as(_fr10_x.float()).clone()
                             for _fr10_col in range(_fr10_width):
-                                _fr10_pert_acc = _fr10_pert_acc + (
-                                    _fr10_pert_window[:, _fr10_col, :].to(torch.float32)
-                                    * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
-                                )
-                                _fr10_flat_pert_acc = _fr10_flat_pert_acc + (
-                                    _fr10_flat_pert_window[:, _fr10_col, :].to(
-                                        torch.float32
+                                _fr10_pert_acc = (
+                                    _fr10_pert_acc
+                                    + _fr11_conv_tap_product(
+                                        _fr10_pert_window[:, _fr10_col, :],
+                                        conv_weights[:, _fr10_col],
                                     )
-                                    * _fr10_weight_f[:, _fr10_col].unsqueeze(0)
+                                )
+                                _fr10_flat_pert_acc = (
+                                    _fr10_flat_pert_acc
+                                    + _fr11_conv_tap_product(
+                                        _fr10_flat_pert_window[:, _fr10_col, :],
+                                        conv_weights[:, _fr10_col],
+                                    )
                                 )
                             if self.activation in (True, "silu", "swish"):
                                 _fr10_pert_acc = torch.nn.functional.silu(_fr10_pert_acc)
@@ -802,9 +824,12 @@ def _patch_gdn_linear() -> bool:
                                         torch.float32
                                     ).clone()
                                 for _fr10_col in range(_fr10_width):
-                                    _fr10_serial_acc = _fr10_serial_acc + (
-                                        _fr10_serial_window[_fr10_col].to(torch.float32)
-                                        * _fr10_weight_f[:, _fr10_col]
+                                    _fr10_serial_acc = (
+                                        _fr10_serial_acc
+                                        + _fr11_conv_tap_product(
+                                            _fr10_serial_window[_fr10_col],
+                                            conv_weights[:, _fr10_col],
+                                        )
                                     )
                                 if self.activation in (True, "silu", "swish"):
                                     _fr10_serial_acc = torch.nn.functional.silu(
