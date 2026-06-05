@@ -128,3 +128,52 @@ Verdict:
 `PRECISION_FLOOR_CANDIDATE_POST_MLP_WITH_HIGH_PEAK_CAVEAT`
 
 Extending through the real post-attention norm and MLP shows the conv tap-dtype seam can produce a post-MLP `0.015625` delta, so the previous post-attention-only `NOT_CAUSALLY_SUFFICIENT` verdict is invalid. The strongest high-output-region check is smaller than the live red-team reference: at the captured `~1.85` peak the delta is `0.0`, and across captured `abs>=1.75` elements the max is `0.0078125`; the whole-tensor `0.015625` occurs at native value `1.2578125`. Because the boot-free replay is not byte-close to the captured live layer output, alpha supports a precision-floor mechanism but does not by itself prove that the exact live `0.0156` peak is solely the conv seam. Acceptance A/B is required to isolate user-visible impact.
+
+## Acceptance A/B: conv tap dtype flag
+
+Configuration:
+- Image: `vllm/vllm-openai:cu130-nightly` via `scripts/fr10_launch_speed_server.sh`.
+- Endpoint: `http://127.0.0.1:9950`.
+- Decode mode: `tree_mtp`.
+- Batch: `4`.
+- Sampling: `temperature=0.6`, `top_p=0.95`.
+- Max tokens: `64`.
+- Tree: 9-node MTP-5-style caterpillar, `expected_draft_count=9`.
+- Metrics mode: `FR10_METRICS=0`.
+- Engagement assertion: required; explicit metrics-off logs enabled with `LUMO_TREE_SAMPLER_DEBUG_LOG=/logs/tree_sampler_debug.jsonl` and `LUMO_TREE_PATH_LCP_LOG=/logs/tree_path_lcp_max.jsonl`.
+- Native reference: MTP-5 `accepted_per_draft_event=3.076`.
+
+Launcher/probe fix:
+- A first acceptance attempt with `FR10_METRICS=0` failed loudly before reporting metrics because tree engagement logs were still gated on `FR10_METRICS=1`.
+- Commit `aa233aed` changed the instrumentation gate so explicit tree-log env vars write engagement traces without enabling metrics, and passed those env vars through the launcher.
+- Focused tests after the patch: `pytest -q tests/test_fr10_phase4_sampled_committer_wiring.py tests/test_fr10_tree_conv.py` -> `16 passed, 1 skipped`.
+
+Baseline, `FR11_TREE_CONV_NATIVE_BF16_TAPS=0`:
+- Run dir: `output/fr11_conv_fp32tap_baseline_accept_20260605T194754Z`.
+- Tree engagement logs: `tree_sampler_debug.jsonl` `1679` rows; `tree_path_lcp_max.jsonl` `1064` rows.
+- `accepted_per_draft_event=0.87535953978907`.
+- `accepted_per_draft_token=0.09726217108767445`.
+- `spec_accepted_tokens=913.0`, `spec_draft_tokens=9387.0`, `spec_drafts=1043.0`.
+- Returned tokens: `1944`; request count: `8`; records: `32`.
+- Warm decode TPS: `3.4234543038004497`.
+- Delta vs native MTP-5 event acceptance: `-2.20064046021093`; ratio vs native: `0.2845772235985273`.
+
+Conv fix, `FR11_TREE_CONV_NATIVE_BF16_TAPS=1`:
+- Run dir: `output/fr11_conv_bf16tap_fix_accept_20260605T200003Z`.
+- Tree engagement logs: `tree_sampler_debug.jsonl` `1729` rows; `tree_path_lcp_max.jsonl` `1083` rows.
+- `accepted_per_draft_event=0.7597340930674265`.
+- `accepted_per_draft_token=0.08441489922971404`.
+- `spec_accepted_tokens=800.0`, `spec_draft_tokens=9477.0`, `spec_drafts=1053.0`.
+- Returned tokens: `1857`; request count: `8`; records: `32`.
+- Warm decode TPS: `3.2202026669903643`.
+- Delta vs native MTP-5 event acceptance: `-2.3162659069325735`; ratio vs native: `0.24698767654987855`.
+
+Flag delta:
+- Fixed minus baseline event acceptance: `-0.11562544672164354`.
+- Fixed minus baseline token acceptance: `-0.012847271857960404`.
+
+Acceptance verdict:
+
+`CONV_TAP_DTYPE_FIX_DOES_NOT_RECOVER_ACCEPTANCE`
+
+The native-bf16 tap-product flag did not improve no-copy GDN tree acceptance. It reduced accepted/event from `0.87536` to `0.75973`, while native MTP-5 remains `3.076`. This isolates the conv tap-dtype seam as not the acceptance-limiting bug, even though alpha shows it can create post-MLP bf16 precision-floor deltas.
