@@ -82,6 +82,128 @@ def l2norm(x: torch.Tensor) -> torch.Tensor:
 
 
 @triton.jit
+def _linear_remap_rows_kernel(
+    state,
+    spec_state_indices,
+    accepted_paths,
+    num_accepted_tokens,
+    B: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    ROW_ELEMS: tl.constexpr,
+    BLOCK: tl.constexpr,
+):
+    pid_b = tl.program_id(0)
+    pid_k = tl.program_id(1)
+    pid_blk = tl.program_id(2)
+    offs = pid_blk * BLOCK + tl.arange(0, BLOCK)
+    accepted_len = tl.load(num_accepted_tokens + pid_b)
+    valid_path = (pid_b < B) & (pid_k < PATH_COLS) & (pid_k < SPEC_COLS) & (pid_k < accepted_len)
+    src_col = tl.load(
+        accepted_paths + pid_b * PATH_COLS + pid_k,
+        mask=valid_path,
+        other=0,
+    )
+    src_col = tl.maximum(0, tl.minimum(src_col, SPEC_COLS - 1))
+    src_bank = tl.load(
+        spec_state_indices + pid_b * SPEC_COLS + src_col,
+        mask=valid_path,
+        other=0,
+    )
+    dst_bank = tl.load(
+        spec_state_indices + pid_b * SPEC_COLS + pid_k,
+        mask=valid_path,
+        other=0,
+    )
+    mask = valid_path & (offs < ROW_ELEMS)
+    vals = tl.load(state + src_bank * ROW_ELEMS + offs, mask=mask)
+    tl.store(state + dst_bank * ROW_ELEMS + offs, vals, mask=mask)
+
+
+def _remap_state_rows(
+    state: torch.Tensor,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    num_accepted_tokens: torch.Tensor,
+    *,
+    num_spec_decodes: int,
+    max_path_len: int,
+    block: int = 256,
+) -> None:
+    if num_spec_decodes <= 0 or max_path_len <= 0:
+        return
+    if state.ndim < 2:
+        raise ValueError(f"state bank must have row dimension plus payload, got {tuple(state.shape)}")
+    if spec_state_indices.ndim != 2:
+        raise ValueError(f"spec_state_indices must be 2D, got {tuple(spec_state_indices.shape)}")
+    if accepted_paths.ndim != 2:
+        raise ValueError(f"accepted_paths must be 2D, got {tuple(accepted_paths.shape)}")
+    if accepted_paths.shape[0] < num_spec_decodes:
+        raise ValueError(
+            "accepted_paths batch rows must cover num_spec_decodes="
+            f"{num_spec_decodes}, got {accepted_paths.shape[0]}"
+        )
+    if num_accepted_tokens.numel() < num_spec_decodes:
+        raise ValueError(
+            "num_accepted_tokens must cover num_spec_decodes="
+            f"{num_spec_decodes}, got {num_accepted_tokens.numel()}"
+        )
+    row_elems = state.stride(0)
+    path_cols = min(int(accepted_paths.shape[1]), int(max_path_len))
+    spec_cols = int(spec_state_indices.shape[1])
+    if path_cols <= 0 or spec_cols <= 0:
+        return
+    grid = (int(num_spec_decodes), path_cols, triton.cdiv(row_elems, block))
+    _linear_remap_rows_kernel[grid](
+        state,
+        spec_state_indices,
+        accepted_paths,
+        num_accepted_tokens,
+        B=int(num_spec_decodes),
+        PATH_COLS=path_cols,
+        SPEC_COLS=spec_cols,
+        ROW_ELEMS=row_elems,
+        BLOCK=block,
+    )
+
+
+def launch_tree_state_linear_remap(
+    *,
+    ssm_state: torch.Tensor | None,
+    conv_state: torch.Tensor | None,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    num_accepted_tokens: torch.Tensor,
+    num_spec_decodes: int,
+    max_path_len: int,
+) -> None:
+    """Materialize accepted tree-path rows into stock linear state columns.
+
+    The committer publishes accepted_paths as tree node columns. vLLM's GDN and
+    causal-conv consumers read recurrent state by linear accepted-token position,
+    so column k must contain the state for accepted_paths[b, k].
+    """
+    if ssm_state is not None:
+        _remap_state_rows(
+            ssm_state,
+            spec_state_indices,
+            accepted_paths,
+            num_accepted_tokens,
+            num_spec_decodes=num_spec_decodes,
+            max_path_len=max_path_len,
+        )
+    if conv_state is not None:
+        _remap_state_rows(
+            conv_state,
+            spec_state_indices,
+            accepted_paths,
+            num_accepted_tokens,
+            num_spec_decodes=num_spec_decodes,
+            max_path_len=max_path_len,
+        )
+
+
+@triton.jit
 def _tree_gdn_kernel(
     q,
     k,

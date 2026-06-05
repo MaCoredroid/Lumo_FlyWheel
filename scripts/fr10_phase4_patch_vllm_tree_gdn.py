@@ -131,6 +131,8 @@ def _patch_gdn_attn() -> bool:
             "    fr10_path0_conv_source_indices: dict[int, torch.Tensor] | None = None\n"
             "    fr10_tree_path0_nodes: torch.Tensor | None = None\n"
             "    fr10_tree_path_node_tensors: list[torch.Tensor] | None = None\n"
+            "    fr10_tree_accepted_paths: torch.Tensor | None = None\n"
+            "    fr10_tree_accepted_lens: torch.Tensor | None = None\n"
             "    fr10_tree_has_sibling: bool = False\n"
         ),
         1,
@@ -158,6 +160,23 @@ def _patch_gdn_attn() -> bool:
             "        self.fr10_path0_conv_source_indices = None\n"
             "        self.fr10_tree_path0_nodes = None\n"
             "        self.fr10_tree_path_node_tensors = None\n"
+            "        self.fr10_tree_accepted_paths = torch.zeros(\n"
+            "            (self.decode_cudagraph_max_bs, self.num_spec + 1),\n"
+            "            dtype=torch.int32,\n"
+            "            device=device,\n"
+            "        )\n"
+            "        self.fr10_tree_accepted_lens = torch.zeros(\n"
+            "            (self.decode_cudagraph_max_bs,),\n"
+            "            dtype=torch.int32,\n"
+            "            device=device,\n"
+            "        )\n"
+            "        try:\n"
+            "            from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn_linear\n"
+            "            _fr10_gdn_linear._LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR = self.fr10_tree_accepted_paths\n"
+            "            _fr10_gdn_linear._LUMO_FA_ACCEPTED_TREE_LENS_TENSOR = self.fr10_tree_accepted_lens\n"
+            "        except Exception as _fr10_path_buf_exc:\n"
+            "            if os.environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
+            "                raise RuntimeError(\"FR10 tree accepted-path buffer export failed: \" + type(_fr10_path_buf_exc).__name__ + \":\" + str(_fr10_path_buf_exc)) from _fr10_path_buf_exc\n"
             "        self.fr10_tree_has_sibling = False\n"
             "        spec_token_tree = None\n"
             "        try:\n"
@@ -299,7 +318,7 @@ def _patch_gdn_linear() -> bool:
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
-            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import launch_tree_gdn_prepared\n"
+            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
         ),
@@ -356,57 +375,29 @@ def _patch_gdn_linear() -> bool:
                 _fr10_conv_diag[21].add_(float(attn_metadata.num_decodes))
             if use_fr10_tree_conv:
                 try:
-                    _fr10_prev_read_all = globals().setdefault(
-                        "_FR10_TREE_READ_PREV", {}
+                    _fr10_accepted_paths_tensor = globals().get(
+                        "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR"
                     )
-                    _fr10_rows = globals().get(
-                        "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", []
+                    if _fr10_accepted_paths_tensor is None:
+                        raise RuntimeError("missing_accepted_path_device_tensor")
+                    if num_accepted_tokens is None:
+                        raise RuntimeError("missing_num_accepted_tokens")
+                    launch_tree_state_linear_remap(
+                        ssm_state=ssm_state,
+                        conv_state=conv_state,
+                        spec_state_indices=spec_state_indices_tensor,
+                        accepted_paths=_fr10_accepted_paths_tensor,
+                        num_accepted_tokens=num_accepted_tokens,
+                        num_spec_decodes=int(attn_metadata.num_spec_decodes),
+                        max_path_len=int(spec_state_indices_tensor.size(-1)),
                     )
-                    _fr10_lens = globals().get(
-                        "_LUMO_FA_LAST_ACCEPTED_TREE_LENS", []
-                    )
-                    _fr10_node_paths = globals().get(
-                        "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS", []
-                    )
-                    for _fr10_seed_b in range(attn_metadata.num_spec_decodes):
-                        _fr10_prev_read = _fr10_prev_read_all.get(
-                            (str(self.prefix), int(_fr10_seed_b))
-                        )
-                        _fr10_has_accept = (
-                            _fr10_lens is not None
-                            and _fr10_seed_b < len(_fr10_lens)
-                            and int(_fr10_lens[_fr10_seed_b]) > 0
-                        )
-                        if (
-                            _fr10_prev_read is not None
-                            and _fr10_has_accept
-                            and _fr10_seed_b < len(_fr10_rows)
-                        ):
-                            _fr10_seed_row = max(
-                                0,
-                                min(
-                                    int(_fr10_rows[_fr10_seed_b]),
-                                    int(_fr10_prev_read["tree_n"]) - 1,
-                                ),
-                            )
-                            # The causal-conv update reads the base row and
-                            # applies its own accepted-token temporal offset.
-                            conv_state.index_copy_(
-                                0,
-                                spec_state_indices_tensor[
-                                    _fr10_seed_b, 0
-                                ].to(torch.long).view(1),
-                                _fr10_prev_read["conv_rows"][
-                                    _fr10_seed_row : _fr10_seed_row + 1
-                                ].to(dtype=conv_state.dtype),
-                            )
                 except Exception as _fr10_seed_conv_exc:
                     if (
                         _fr10_tree_conv_expected
                         and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
                     ):
                         raise RuntimeError(
-                            "FR10 tree causal-conv accepted-base seed failed: "
+                            "FR10 tree state linear remap failed: "
                             + type(_fr10_seed_conv_exc).__name__
                             + ":"
                             + str(_fr10_seed_conv_exc)
@@ -958,23 +949,27 @@ def _patch_gdn_linear() -> bool:
                     start = fr10_b * tree_n
                     end = start + tree_n
                     tree_state = tree_state_all[fr10_b]
-                    _fr10_read_col = 0
-                    try:
-                        if num_accepted_tokens is not None:
-                            _fr10_read_col = max(
-                                0,
-                                min(
-                                    int(num_accepted_tokens[fr10_b].detach().cpu().item()) - 1,
-                                    int(spec_state_indices_tensor.size(-1)) - 1,
-                                ),
-                            )
-                    except Exception:
-                        _fr10_read_col = 0
                     _fr10_capture_scan_payload = (
                         os.environ.get("FR10_TREE_GDN_CAPTURE_PAYLOAD")
                         and not globals().get("_FR10_TREE_GDN_CAPTURE_DONE", False)
                         and fr10_b == 0
                     )
+                    _fr10_commit_handoff_active = os.environ.get(
+                        "FR10_TREE_GDN_COMMIT_HANDOFF_LOG"
+                    )
+                    _fr10_read_col = 0
+                    if _fr10_capture_scan_payload or _fr10_commit_handoff_active:
+                        try:
+                            if num_accepted_tokens is not None:
+                                _fr10_read_col = max(
+                                    0,
+                                    min(
+                                        int(num_accepted_tokens[fr10_b].detach().cpu().item()) - 1,
+                                        int(spec_state_indices_tensor.size(-1)) - 1,
+                                    ),
+                                )
+                        except Exception:
+                            _fr10_read_col = 0
                     _fr10_capture_state_index = None
                     _fr10_capture_h0 = None
                     if _fr10_capture_scan_payload:
@@ -987,9 +982,6 @@ def _patch_gdn_linear() -> bool:
                         _fr10_capture_h0 = (
                             ssm_state[_fr10_capture_state_index].detach().cpu().clone()
                         )
-                    _fr10_commit_handoff_active = os.environ.get(
-                        "FR10_TREE_GDN_COMMIT_HANDOFF_LOG"
-                    )
                     if _fr10_commit_handoff_active:
                         try:
                             _fr10_commit_state_index = int(
@@ -1004,9 +996,11 @@ def _patch_gdn_linear() -> bool:
                         except Exception:
                             _fr10_commit_handoff_active = False
                     try:
-                        _fr10_prev_read = globals().setdefault(
-                            "_FR10_TREE_READ_PREV", {}
-                        ).get((str(self.prefix), int(fr10_b)))
+                        _fr10_prev_read = None
+                        if _fr10_capture_scan_payload or _fr10_commit_handoff_active:
+                            _fr10_prev_read = globals().setdefault(
+                                "_FR10_TREE_READ_PREV", {}
+                            ).get((str(self.prefix), int(fr10_b)))
                         _fr10_rows = globals().get(
                             "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", []
                         )
@@ -1046,24 +1040,6 @@ def _patch_gdn_linear() -> bool:
                             )
                             if _fr10_seed_path_len <= 0:
                                 raise RuntimeError("accepted path is empty")
-                            _fr10_seed_path_tensor = torch.tensor(
-                                _fr10_seed_path[:_fr10_seed_path_len],
-                                dtype=torch.long,
-                                device=ssm_state.device,
-                            )
-                            _fr10_seed_dest = spec_state_indices_tensor[
-                                fr10_b, :_fr10_seed_path_len
-                            ].to(torch.long)
-                            # Stock FLA spec verify reads initial SSM state from
-                            # linear column num_accepted-1; caterpillar node ids
-                            # are not linear after the first branch.
-                            ssm_state.index_copy_(
-                                0,
-                                _fr10_seed_dest,
-                                _fr10_prev_read["tree_state"]
-                                .index_select(0, _fr10_seed_path_tensor)
-                                .to(dtype=ssm_state.dtype),
-                            )
                             _fr10_seed_state_index = int(
                                 spec_state_indices_tensor[
                                     fr10_b, _fr10_read_col
@@ -1301,29 +1277,31 @@ def _patch_gdn_linear() -> bool:
                                         + type(_fr10_seed_log_exc).__name__
                                         + ":"
                                         + str(_fr10_seed_log_exc)
-                                    ) from _fr10_seed_log_exc
+                            ) from _fr10_seed_log_exc
                     except Exception as _fr10_seed_exc:
                         if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1":
                             raise RuntimeError(
-                                "FR10 tree SSM linear accepted-path seed failed: "
+                                "FR10 tree SSM handoff oracle failed: "
                                 + type(_fr10_seed_exc).__name__
                                 + ":"
                                 + str(_fr10_seed_exc)
                             ) from _fr10_seed_exc
-                    try:
-                        _fr10_event_h0 = (
-                            ssm_state[
-                                int(
-                                    spec_state_indices_tensor[
-                                        fr10_b, _fr10_read_col
-                                    ].detach().cpu().item()
-                                )
-                            ]
-                            .detach()
-                            .clone()
-                        )
-                    except Exception:
-                        _fr10_event_h0 = None
+                    _fr10_event_h0 = None
+                    if _fr10_capture_scan_payload or _fr10_commit_handoff_active:
+                        try:
+                            _fr10_event_h0 = (
+                                ssm_state[
+                                    int(
+                                        spec_state_indices_tensor[
+                                            fr10_b, _fr10_read_col
+                                        ].detach().cpu().item()
+                                    )
+                                ]
+                                .detach()
+                                .clone()
+                            )
+                        except Exception:
+                            _fr10_event_h0 = None
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
                         k=key_spec[0, start:end].contiguous(),
@@ -1415,89 +1393,74 @@ def _patch_gdn_linear() -> bool:
                                 "FR10 tree GDN scan capture failed: %s",
                                 _fr10_capture_exc,
                             )
-                    # vLLM's downstream GDN/Mamba consumers address recurrent
-                    # state by linear speculative position. Preserve diagnostic
-                    # node rows, then materialize the native path0 spine into
-                    # columns 0..path0_len-1 so column accepted_len-1 is the
-                    # accepted spine state on the next decode step.
+                    # Persist every verified tree-node state. The sampled
+                    # committer publishes the accepted path after this forward;
+                    # the next decode remaps those node rows into stock linear
+                    # columns with launch_tree_state_linear_remap before the
+                    # recurrent consumers read them.
                     ssm_state.index_copy_(
                         0,
                         spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
                         tree_state[:tree_n].to(dtype=ssm_state.dtype),
                     )
-                    _fr10_path0_nodes = getattr(
-                        attn_metadata, "fr10_tree_path0_nodes", None
-                    )
-                    if _fr10_path0_nodes is not None:
-                        _fr10_path0_len = min(
-                            int(_fr10_path0_nodes.numel()),
-                            int(spec_state_indices_tensor.size(-1)),
-                            int(tree_n),
-                        )
-                        if _fr10_path0_len > 0:
-                            ssm_state.index_copy_(
-                                0,
-                                spec_state_indices_tensor[
-                                    fr10_b, :_fr10_path0_len
-                                ].to(torch.long),
-                                tree_state.index_select(
-                                    0, _fr10_path0_nodes[:_fr10_path0_len]
-                                ).to(dtype=ssm_state.dtype),
-                            )
-                    try:
-                        _fr10_curr_conv = globals().get(
-                            "_FR10_COMMIT_HANDOFF_CURR_CONV_BY_B", {}
-                        ).get(int(fr10_b), {})
-                        _fr10_curr_conv_rows = _fr10_curr_conv.get("rows")
-                        if _fr10_curr_conv_rows is not None:
-                            globals().setdefault(
-                                "_FR10_TREE_READ_PREV", {}
-                            )[(str(self.prefix), int(fr10_b))] = {
-                                "tree_n": int(tree_n),
-                                "tree_state": tree_state[:tree_n].detach().clone(),
-                                "conv_rows": _fr10_curr_conv_rows[
-                                    :tree_n
-                                ].detach().clone(),
-                                "spec_state_indices": spec_state_indices_tensor[
-                                    fr10_b, :tree_n
-                                ].detach().clone(),
-                                "tree_parent": [
-                                    int(_x)
-                                    for _x in attn_metadata.fr10_tree_parent.detach()
-                                    .cpu()
-                                    .tolist()
-                                ],
-                                "output_scale": float(self.head_k_dim**-0.5),
-                                "query_spec": query_spec[
-                                    0, start:end
-                                ].detach().cpu().clone(),
-                                "key_spec": key_spec[
-                                    0, start:end
-                                ].detach().cpu().clone(),
-                                "value_spec": value_spec[
-                                    0, start:end
-                                ].detach().cpu().clone(),
-                                "a": a[start:end].detach().cpu().clone(),
-                                "b": b[start:end].detach().cpu().clone(),
-                                "A_log": self.A_log.detach().cpu().clone(),
-                                "dt_bias": self.dt_bias.detach().cpu().clone(),
-                                "h0_cpu": (
-                                    None
-                                    if _fr10_event_h0 is None
-                                    else _fr10_event_h0.detach().cpu().clone()
-                                ),
-                                "tree_state_cpu": tree_state[
-                                    :tree_n
-                                ].detach().cpu().clone(),
-                                "conv_prior_cpu": _fr10_curr_conv.get(
-                                    "prior"
-                                ).detach().cpu().clone(),
-                                "conv_rows_cpu": _fr10_curr_conv_rows[
-                                    :tree_n
-                                ].detach().cpu().clone(),
-                            }
-                    except Exception:
-                        pass
+                    if (
+                        os.environ.get("FR10_TREE_GDN_COMMIT_HANDOFF_LOG")
+                        or os.environ.get("FR10_TREE_GDN_SRC_NATIVE_PAYLOAD")
+                    ):
+                        try:
+                            _fr10_curr_conv = globals().get(
+                                "_FR10_COMMIT_HANDOFF_CURR_CONV_BY_B", {}
+                            ).get(int(fr10_b), {})
+                            _fr10_curr_conv_rows = _fr10_curr_conv.get("rows")
+                            if _fr10_curr_conv_rows is not None:
+                                globals().setdefault(
+                                    "_FR10_TREE_READ_PREV", {}
+                                )[(str(self.prefix), int(fr10_b))] = {
+                                    "tree_n": int(tree_n),
+                                    "tree_state": tree_state[:tree_n].detach().clone(),
+                                    "conv_rows": _fr10_curr_conv_rows[
+                                        :tree_n
+                                    ].detach().clone(),
+                                    "spec_state_indices": spec_state_indices_tensor[
+                                        fr10_b, :tree_n
+                                    ].detach().clone(),
+                                    "tree_parent": [
+                                        int(_x)
+                                        for _x in attn_metadata.fr10_tree_parent.detach()
+                                        .cpu()
+                                        .tolist()
+                                    ],
+                                    "output_scale": float(self.head_k_dim**-0.5),
+                                    "query_spec": query_spec[
+                                        0, start:end
+                                    ].detach().cpu().clone(),
+                                    "key_spec": key_spec[
+                                        0, start:end
+                                    ].detach().cpu().clone(),
+                                    "value_spec": value_spec[
+                                        0, start:end
+                                    ].detach().cpu().clone(),
+                                    "a": a[start:end].detach().cpu().clone(),
+                                    "b": b[start:end].detach().cpu().clone(),
+                                    "A_log": self.A_log.detach().cpu().clone(),
+                                    "dt_bias": self.dt_bias.detach().cpu().clone(),
+                                    "h0_cpu": (
+                                        None
+                                        if _fr10_event_h0 is None
+                                        else _fr10_event_h0.detach().cpu().clone()
+                                    ),
+                                    "tree_state_cpu": tree_state[
+                                        :tree_n
+                                    ].detach().cpu().clone(),
+                                    "conv_prior_cpu": _fr10_curr_conv.get(
+                                        "prior"
+                                    ).detach().cpu().clone(),
+                                    "conv_rows_cpu": _fr10_curr_conv_rows[
+                                        :tree_n
+                                    ].detach().cpu().clone(),
+                                }
+                        except Exception:
+                            pass
                     _fr10_scan_diag = getattr(
                         attn_metadata, "fr10_tree_conv_diag", None
                     )
@@ -1919,6 +1882,38 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     ]
     try:
         from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
+        _accepted_path_buf = getattr(
+            _lumo_tree_commit_gdn, "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR", None
+        )
+        _accepted_lens_buf = getattr(
+            _lumo_tree_commit_gdn, "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR", None
+        )
+        if _accepted_path_buf is None or _accepted_lens_buf is None:
+            raise RuntimeError("missing_accepted_path_device_tensor")
+        if int(_accepted_path_buf.size(0)) < len(accepted_node_paths):
+            raise RuntimeError("accepted_path_device_tensor_batch_too_small")
+        _accepted_path_cols = int(_accepted_path_buf.size(1))
+        _accepted_path_rows = []
+        for _accepted_path in accepted_node_paths:
+            _row = [0 for _ in range(_accepted_path_cols)]
+            for _pos, _node_id in enumerate(_accepted_path[:_accepted_path_cols]):
+                _row[_pos] = int(_node_id)
+            _accepted_path_rows.append(_row)
+        if _accepted_path_rows:
+            _accepted_path_buf[: len(_accepted_path_rows), :_accepted_path_cols].copy_(
+                torch.tensor(
+                    _accepted_path_rows,
+                    dtype=_accepted_path_buf.dtype,
+                    device=_accepted_path_buf.device,
+                )
+            )
+            _accepted_lens_buf[: len(accepted_lens)].copy_(
+                torch.tensor(
+                    accepted_lens,
+                    dtype=_accepted_lens_buf.dtype,
+                    device=_accepted_lens_buf.device,
+                )
+            )
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
             int(x) for x in accepted_rows
         ]
@@ -2137,6 +2132,38 @@ def _lumo_tree_canonical_multidraft_sample(
     ]
     try:
         from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
+        _accepted_path_buf = getattr(
+            _lumo_tree_commit_gdn, "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR", None
+        )
+        _accepted_lens_buf = getattr(
+            _lumo_tree_commit_gdn, "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR", None
+        )
+        if _accepted_path_buf is None or _accepted_lens_buf is None:
+            raise RuntimeError("missing_accepted_path_device_tensor")
+        if int(_accepted_path_buf.size(0)) < len(accepted_node_paths):
+            raise RuntimeError("accepted_path_device_tensor_batch_too_small")
+        _accepted_path_cols = int(_accepted_path_buf.size(1))
+        _accepted_path_rows = []
+        for _accepted_path in accepted_node_paths:
+            _row = [0 for _ in range(_accepted_path_cols)]
+            for _pos, _node_id in enumerate(_accepted_path[:_accepted_path_cols]):
+                _row[_pos] = int(_node_id)
+            _accepted_path_rows.append(_row)
+        if _accepted_path_rows:
+            _accepted_path_buf[: len(_accepted_path_rows), :_accepted_path_cols].copy_(
+                torch.tensor(
+                    _accepted_path_rows,
+                    dtype=_accepted_path_buf.dtype,
+                    device=_accepted_path_buf.device,
+                )
+            )
+            _accepted_lens_buf[: len(accepted_lens)].copy_(
+                torch.tensor(
+                    accepted_lens,
+                    dtype=_accepted_lens_buf.dtype,
+                    device=_accepted_lens_buf.device,
+                )
+            )
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
             int(x) for x in accepted_rows
         ]

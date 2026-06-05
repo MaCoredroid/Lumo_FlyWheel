@@ -56,25 +56,29 @@ def test_phase4_handoff_logs_accepted_bank_row_alias() -> None:
     assert '"accepted_spec_state_bank_row":' in text
     assert '"accepted_bank_row":' in text
     assert '"value_spec": _fr10_prev_read["value_spec"]' in text
-    assert '"value_spec": value_spec[\n                                    0, start:end' in text
+    assert '"value_spec": value_spec[0, start:end]' in text
 
 
 def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+    kernel_text = Path("src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py").read_text()
 
     assert "_FR10_TREE_READ_PREV" in text
     assert "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS" in text
-    assert "_fr10_seed_path_tensor = torch.tensor" in text
-    assert "fr10_b, :_fr10_seed_path_len" in text
-    assert "_fr10_path0_nodes = getattr(" in text
-    assert "fr10_b, :_fr10_path0_len" in text
-    assert "tree_state.index_select(\n                                    0, _fr10_path0_nodes[:_fr10_path0_len]" in text
+    assert "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR" in text
+    assert "launch_tree_state_linear_remap(" in text
+    assert "missing_accepted_path_device_tensor" in text
+    assert "_fr10_seed_path_tensor = torch.tensor" not in text
+    assert "_fr10_path0_state_rows = _fr10_path0_nodes[1:]" not in text
     assert "h0_num_accepted_tokens=num_accepted_tokens" in text
     assert "h0_use_accepted_column=True" in text
     assert "accepted_linear_read_col" in text
     assert "linear_column_coincide" in text
     assert "_fr10_read_col" in text
-    assert "spec_state_indices_tensor[\n                                    _fr10_seed_b, 0" in text
+    assert "_linear_remap_rows_kernel" in kernel_text
+    assert "src_col = tl.load(" in kernel_text
+    assert "spec_state_indices + pid_b * SPEC_COLS + src_col" in kernel_text
+    assert "spec_state_indices_tensor[\n                                    _fr10_seed_b, 0" not in text
     assert "spec_state_indices_tensor[\n                                    fr10_b, 0" not in text
 
 
