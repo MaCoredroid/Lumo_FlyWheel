@@ -1454,11 +1454,16 @@ def _patch_gdn_linear() -> bool:
                     _fr10_root_h0_log_count = int(
                         globals().get("_FR10_TREE_GDN_ROOT_H0_LOG_COUNT", 0)
                     )
+                    _fr10_root_h0_in_cuda_capture = bool(
+                        torch.cuda.is_available()
+                        and torch.cuda.is_current_stream_capturing()
+                    )
                     if (
                         _fr10_root_h0_log
                         and fr10_b == 0
                         and str(self.prefix) == _fr10_root_h0_log_prefix
                         and _fr10_root_h0_log_count < _fr10_root_h0_log_limit
+                        and not _fr10_root_h0_in_cuda_capture
                     ):
                         try:
                             _fr10_live_col = max(
