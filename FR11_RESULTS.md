@@ -36,7 +36,7 @@ Rejected older captures:
 
 Several older `fr10_src_native_handoff.pt` payloads under `output/fr10_*confirm*/` were intentionally not used because their `accepted_node_id` and `accepted_node_path` metadata disagree. The Probe beta script fails these loudly instead of silently selecting a row.
 
-## Probe alpha: conv seam through real downstream path
+## Probe alpha attempt 1: conv seam through post-attention only — incomplete
 
 Command:
 
@@ -78,8 +78,53 @@ Deltas:
 - Real out_proj attention output native vs tree: `max_abs=0.001953125`, `rms=0.00010767146159196272`, mismatched elements `36221 / 56320`.
 - Residual-hidden native vs tree: `max_abs=0.001953125`, `rms=0.00011625278420979157`, mismatched elements `30765 / 56320`.
 
-Interpretation:
+Status:
 
-`CONV_SEAM_NOT_CAUSALLY_SUFFICIENT`
+`INCOMPLETE_RETRACTED`
 
-The conv tap-dtype seam can produce a `0.015625` max delta in GDN core space, but after the real `RMSNormGated + out_proj + residual add` path the residual-hidden max is `0.001953125`, about 8x below the observed `0.0156` residual-hidden drift. This points away from the conv seam as the sole source of the live residual drift.
+This attempt stopped at the post-attention residual (`attn_out + residual`) and did not propagate through `post_attention_layernorm -> MLP gate/up/down`, while the live FR10 layer compare measures layer output after the MLP (`layers[0].hidden`, peak around `1.9`). The `0.001953125` post-attention residual number is therefore not a valid verdict against the live `0.0156` post-MLP drift. Probe alpha must be extended through the real MLP path before any causal-sufficiency verdict.
+
+## Probe alpha extended: conv seam through post-attention norm and MLP
+
+Command:
+
+```bash
+docker run --rm --gpus all --entrypoint python3 \
+  -v /home/mark/shared/lumoFlyWheel:/workspace \
+  -v /models:/models \
+  -w /workspace \
+  vllm/vllm-openai:cu130-nightly \
+  output/fr10_nocopy_resolve/gpu_conv_seam_replay.py \
+  --out output/fr10_nocopy_resolve/gpu_conv_seam_replay_result_post_mlp.json
+```
+
+Live source checked:
+- `/tmp/vllm-0.22-src/vllm-0.22.0/vllm/model_executor/models/qwen3_next.py`: `Qwen3NextDecoderLayer.forward` does `input_layernorm -> linear_attn -> post_attention_layernorm(hidden_states, residual) -> mlp -> return hidden_states, residual`.
+- `scripts/fr10_phase4_patch_vllm_tree_gdn.py`: `layers[0].hidden` capture records the returned post-MLP `hidden_states`; `layers[0].residual` records the separate residual state.
+
+Replay path extension:
+- Reused the post-attention native/tree branches from attempt 1.
+- Applied the real layer-0 `post_attention_layernorm` with residual semantics.
+- Applied real layer-0 MLP `gate_proj`, `up_proj`, `silu(gate) * up`, and `down_proj` using the FP8 safetensor weights.
+- Reported both returned MLP output (`layers[0].hidden` equivalent) and the diagnostic hidden-plus-residual stream.
+
+Numbers:
+- Post-attention residual native vs tree: `max_abs=0.001953125`, `rms=0.00011625278420979157`.
+- Post-attention norm native vs tree: `max_abs=0.00830078125`, `rms=0.0005177347920835018`.
+- MLP output native vs tree: `max_abs=0.015625`, `rms=0.00012635976599995047`, mismatched elements `35508 / 56320`.
+- Diagnostic MLP-plus-residual stream native vs tree: `max_abs=0.00390625`, `rms=0.000167013073223643`.
+- Captured live layer-0 hidden absmax: `1.8515625`; replay MLP hidden absmax: `1.8359375`.
+- At captured layer-0 hidden peak `(row=5, col=3994, captured=1.8515625)`: replay native `1.8359375`, replay tree `1.8359375`, delta `0.0`.
+- Across captured layer-0 hidden elements with `abs >= 1.75`: `2` elements, MLP output native/tree `max_abs=0.0078125`, `rms=0.005524271633476019`.
+- Across replay MLP output elements with `abs >= 1.75`: `1` element, MLP output native/tree `max_abs=0.0`.
+- Whole-MLP max-diff point: `(row=1, col=3994)`, native `1.2578125`, tree `1.2734375`, delta `0.015625`.
+
+Replay-to-capture check:
+- Native replay MLP output vs captured `layers[0].hidden`: `max_abs=0.59765625`, `rms=0.010052364319562912`.
+- Native replay residual vs captured `layers[0].residual`: `max_abs=2.25`, `rms=0.016501644626259804`.
+
+Verdict:
+
+`PRECISION_FLOOR_CANDIDATE_POST_MLP_WITH_HIGH_PEAK_CAVEAT`
+
+Extending through the real post-attention norm and MLP shows the conv tap-dtype seam can produce a post-MLP `0.015625` delta, so the previous post-attention-only `NOT_CAUSALLY_SUFFICIENT` verdict is invalid. The strongest high-output-region check is smaller than the live red-team reference: at the captured `~1.85` peak the delta is `0.0`, and across captured `abs>=1.75` elements the max is `0.0078125`; the whole-tensor `0.015625` occurs at native value `1.2578125`. Because the boot-free replay is not byte-close to the captured live layer output, alpha supports a precision-floor mechanism but does not by itself prove that the exact live `0.0156` peak is solely the conv seam. Acceptance A/B is required to isolate user-visible impact.

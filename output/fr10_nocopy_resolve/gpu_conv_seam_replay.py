@@ -60,12 +60,81 @@ def _stats(a: torch.Tensor, b: torch.Tensor) -> dict[str, Any]:
     }
 
 
+def _masked_stats(a: torch.Tensor, b: torch.Tensor, mask: torch.Tensor) -> dict[str, Any]:
+    count = int(mask.sum().item())
+    out: dict[str, Any] = {"num_elements": count}
+    if count == 0:
+        out.update({"max_abs": None, "rms": None})
+        return out
+    diff = (a.float() - b.float()).abs()[mask]
+    out.update(
+        {
+            "max_abs": float(diff.max().item()),
+            "rms": float(torch.sqrt(torch.mean(diff.pow(2))).item()),
+        }
+    )
+    return out
+
+
+def _peak_delta(
+    reference: torch.Tensor,
+    left: torch.Tensor,
+    right: torch.Tensor,
+) -> dict[str, Any]:
+    flat_idx = int(torch.argmax(reference.float().abs()).item())
+    width = int(reference.shape[-1])
+    row = flat_idx // width
+    col = flat_idx % width
+    left_v = float(left[row, col].float().item())
+    right_v = float(right[row, col].float().item())
+    ref_v = float(reference[row, col].float().item())
+    return {
+        "row": row,
+        "col": col,
+        "reference_value": ref_v,
+        "left_value": left_v,
+        "right_value": right_v,
+        "abs_delta": abs(left_v - right_v),
+    }
+
+
+def _max_diff_point(left: torch.Tensor, right: torch.Tensor) -> dict[str, Any]:
+    diff = (left.float() - right.float()).abs()
+    flat_idx = int(torch.argmax(diff).item())
+    width = int(left.shape[-1])
+    row = flat_idx // width
+    col = flat_idx % width
+    left_v = float(left[row, col].float().item())
+    right_v = float(right[row, col].float().item())
+    return {
+        "row": row,
+        "col": col,
+        "left_value": left_v,
+        "right_value": right_v,
+        "abs_delta": float(diff[row, col].item()),
+    }
+
+
 def _gemma_rms_norm(x: torch.Tensor, weight: torch.Tensor, eps: float) -> torch.Tensor:
     orig_dtype = x.dtype
     y = x.float()
     y = y * torch.rsqrt(y.pow(2).mean(dim=-1, keepdim=True) + eps)
     y = y * (1.0 + weight.float())
     return y.to(orig_dtype)
+
+
+def _gemma_rms_norm_with_residual(
+    x: torch.Tensor,
+    residual: torch.Tensor,
+    weight: torch.Tensor,
+    eps: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    orig_dtype = x.dtype
+    y_residual = x + residual
+    y = y_residual.float()
+    y = y * torch.rsqrt(y.pow(2).mean(dim=-1, keepdim=True) + eps)
+    y = y * (1.0 + weight.float())
+    return y.to(orig_dtype), y_residual
 
 
 def _rms_norm_gated(
@@ -108,6 +177,25 @@ def _linear_fp8(
     y = x.to(device).float().matmul(w_f.t())
     del w_f, w, s
     return y
+
+
+def _mlp_fp8(
+    x: torch.Tensor,
+    model_dir: Path,
+    prefix: str,
+    device: torch.device,
+) -> torch.Tensor:
+    gate = _linear_fp8(x, model_dir, f"{prefix}.mlp.gate_proj", device).to(
+        torch.bfloat16
+    )
+    up = _linear_fp8(x, model_dir, f"{prefix}.mlp.up_proj", device).to(
+        torch.bfloat16
+    )
+    fused = (F.silu(gate.float()) * up.float()).to(torch.bfloat16)
+    del gate, up
+    return _linear_fp8(fused, model_dir, f"{prefix}.mlp.down_proj", device).to(
+        torch.bfloat16
+    )
 
 
 def _linear_bf16_weight(
@@ -268,9 +356,37 @@ def evaluate(
     out_name = f"{prefix}.linear_attn.out_proj"
     attn_native = _linear_fp8(gated_native, model_dir, out_name, device).to(torch.bfloat16)
     attn_tree = _linear_fp8(gated_tree, model_dir, out_name, device).to(torch.bfloat16)
-    residual_native = (attn_native + residual_in).to(torch.bfloat16)
-    residual_tree = (attn_tree + residual_in).to(torch.bfloat16)
+    post_attn_residual_native = (attn_native + residual_in).to(torch.bfloat16)
+    post_attn_residual_tree = (attn_tree + residual_in).to(torch.bfloat16)
+
+    post_attn_norm_weight = _load_tensor(
+        model_dir, f"{prefix}.post_attention_layernorm.weight"
+    ).to(device)
+    post_attn_norm_native, post_attn_residual_native_exact = (
+        _gemma_rms_norm_with_residual(
+            attn_native, residual_in, post_attn_norm_weight, eps
+        )
+    )
+    post_attn_norm_tree, post_attn_residual_tree_exact = (
+        _gemma_rms_norm_with_residual(
+            attn_tree, residual_in, post_attn_norm_weight, eps
+        )
+    )
+    mlp_hidden_native = _mlp_fp8(post_attn_norm_native, model_dir, prefix, device)
+    mlp_hidden_tree = _mlp_fp8(post_attn_norm_tree, model_dir, prefix, device)
+    layer_stream_native = (mlp_hidden_native + post_attn_residual_native_exact).to(
+        torch.bfloat16
+    )
+    layer_stream_tree = (mlp_hidden_tree + post_attn_residual_tree_exact).to(
+        torch.bfloat16
+    )
     torch.cuda.synchronize()
+
+    captured_layer0_hidden = layer["layers"][0]["hidden"][:n].to(device).to(torch.bfloat16)
+    captured_layer0_residual = layer["layers"][0]["residual"][:n].to(device).to(torch.bfloat16)
+    high_captured_mlp_mask = captured_layer0_hidden.float().abs() >= 1.75
+    high_replay_mlp_mask = mlp_hidden_native.float().abs() >= 1.75
+    high_stream_mask = layer_stream_native.float().abs() >= 1.75
 
     result = {
         "schema": "fr11.probe_alpha_conv_seam_residual_replay.v1",
@@ -287,16 +403,78 @@ def evaluate(
         "conv_native_absmean": float(native_conv.float().abs().mean().item()),
         "core_native_absmean": float(core_native.float().abs().mean().item()),
         "attn_native_absmean": float(attn_native.float().abs().mean().item()),
-        "residual_native_absmean": float(residual_native.float().abs().mean().item()),
+        "post_attn_residual_native_absmean": float(
+            post_attn_residual_native.float().abs().mean().item()
+        ),
+        "post_attn_norm_native_absmean": float(
+            post_attn_norm_native.float().abs().mean().item()
+        ),
+        "mlp_hidden_native_absmean": float(mlp_hidden_native.float().abs().mean().item()),
+        "mlp_hidden_native_absmax": float(mlp_hidden_native.float().abs().max().item()),
+        "layer_stream_native_absmean": float(
+            layer_stream_native.float().abs().mean().item()
+        ),
+        "layer_stream_native_absmax": float(
+            layer_stream_native.float().abs().max().item()
+        ),
+        "captured_layer0_hidden_absmean": float(
+            captured_layer0_hidden.float().abs().mean().item()
+        ),
+        "captured_layer0_hidden_absmax": float(
+            captured_layer0_hidden.float().abs().max().item()
+        ),
+        "captured_layer0_residual_absmean": float(
+            captured_layer0_residual.float().abs().mean().item()
+        ),
         "conv_native_vs_tree": _stats(native_conv, tree_conv),
         "core_native_vs_tree": _stats(core_native, core_tree),
         "rmsnorm_gated_native_vs_tree": _stats(gated_native, gated_tree),
         "attn_out_native_vs_tree": _stats(attn_native, attn_tree),
-        "residual_hidden_native_vs_tree": _stats(residual_native, residual_tree),
+        "post_attn_residual_native_vs_tree": _stats(
+            post_attn_residual_native, post_attn_residual_tree
+        ),
+        "post_attn_residual_exact_native_vs_tree": _stats(
+            post_attn_residual_native_exact, post_attn_residual_tree_exact
+        ),
+        "post_attn_norm_native_vs_tree": _stats(
+            post_attn_norm_native, post_attn_norm_tree
+        ),
+        "mlp_hidden_native_vs_tree": _stats(mlp_hidden_native, mlp_hidden_tree),
+        "layer_stream_native_vs_tree": _stats(layer_stream_native, layer_stream_tree),
+        "mlp_hidden_native_vs_tree_at_captured_abs_ge_1p75": _masked_stats(
+            mlp_hidden_native, mlp_hidden_tree, high_captured_mlp_mask
+        ),
+        "mlp_hidden_native_vs_tree_at_replay_abs_ge_1p75": _masked_stats(
+            mlp_hidden_native, mlp_hidden_tree, high_replay_mlp_mask
+        ),
+        "layer_stream_native_vs_tree_at_stream_abs_ge_1p75": _masked_stats(
+            layer_stream_native, layer_stream_tree, high_stream_mask
+        ),
+        "captured_layer0_hidden_peak_delta_mlp_native_vs_tree": _peak_delta(
+            captured_layer0_hidden, mlp_hidden_native, mlp_hidden_tree
+        ),
+        "mlp_hidden_native_vs_tree_max_diff_point": _max_diff_point(
+            mlp_hidden_native, mlp_hidden_tree
+        ),
+        "layer_stream_native_vs_tree_max_diff_point": _max_diff_point(
+            layer_stream_native, layer_stream_tree
+        ),
+        "replay_mlp_peak_delta_native_vs_tree": _peak_delta(
+            mlp_hidden_native, mlp_hidden_native, mlp_hidden_tree
+        ),
+        "replay_layer_stream_peak_delta_native_vs_tree": _peak_delta(
+            layer_stream_native, layer_stream_native, layer_stream_tree
+        ),
+        "native_replay_vs_captured_layer0_hidden": _stats(
+            mlp_hidden_native, captured_layer0_hidden
+        ),
+        "native_replay_residual_vs_captured_layer0_residual": _stats(
+            post_attn_residual_native_exact, captured_layer0_residual
+        ),
         "interpretation": (
-            "PRECISION_FLOOR_CANDIDATE"
-            if _max_abs(residual_native, residual_tree) >= 0.01
-            else "CONV_SEAM_NOT_CAUSALLY_SUFFICIENT"
+            "PRECISION_FLOOR_CANDIDATE_POST_MLP"
+            if _max_abs(mlp_hidden_native, mlp_hidden_tree) >= 0.01
+            else "CONV_SEAM_NOT_CAUSALLY_SUFFICIENT_POST_MLP"
         ),
     }
     out.parent.mkdir(parents=True, exist_ok=True)
