@@ -52,12 +52,19 @@ def test_phase4_mamba_stock_copies_use_tree_accepted_bias() -> None:
 
 def test_phase4_patcher_exports_src_native_handoff_payload() -> None:
     text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+    gate_text = Path("scripts/fr10_src_native_handoff_gate.py").read_text()
 
     assert "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS" in text
     assert "_LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS" in text
     assert "FR10_TREE_GDN_SRC_NATIVE_PAYLOAD" in text
     assert "next_read_ssm_state" in text
     assert "next_read_conv_state" in text
+    assert '"value_tree": _fr10_prev_read["value_tree"]' in text
+    assert '"g_tree": _fr10_prev_read["g_tree"]' in text
+    assert '"beta_tree": _fr10_prev_read["beta_tree"]' in text
+    assert '"value_tree" if "value_tree" in payload else "value_spec"' in gate_text
+    assert '"g_tree" if "g_tree" in payload else "a"' in gate_text
+    assert '"beta_tree" if "beta_tree" in payload else "b"' in gate_text
 
 
 def test_phase4_tree_disengagement_raises_by_default() -> None:
@@ -100,6 +107,9 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert '"accepted_tree_len": int(_fr10_path_len)' in text
     assert "_fr10_seed_path_tensor = torch.tensor" not in text
     assert "_fr10_path0_state_rows = _fr10_path0_nodes[1:]" not in text
+    assert '"value_tree": _fr10_prev_read["value_tree"]' in text
+    assert '"g_tree": _fr10_prev_read["g_tree"]' in text
+    assert '"beta_tree": _fr10_prev_read["beta_tree"]' in text
     assert "h0_num_accepted_tokens=_fr10_accepted_lens_tensor" in text
     assert "num_accepted_tokens=_fr10_accepted_lens_tensor" in text
     assert "torch.clamp(\n                                _fr10_accepted_lens_tensor[_fr10_b].to(torch.long) - 1" in text

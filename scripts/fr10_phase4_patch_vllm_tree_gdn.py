@@ -1321,8 +1321,11 @@ def _patch_gdn_linear() -> bool:
                                                 "query_spec": _fr10_prev_read["query_spec"],
                                                 "key_spec": _fr10_prev_read["key_spec"],
                                                 "value_spec": _fr10_prev_read["value_spec"],
+                                                "value_tree": _fr10_prev_read["value_tree"],
                                                 "a": _fr10_prev_read["a"],
                                                 "b": _fr10_prev_read["b"],
+                                                "g_tree": _fr10_prev_read["g_tree"],
+                                                "beta_tree": _fr10_prev_read["beta_tree"],
                                                 "A_log": _fr10_prev_read["A_log"],
                                                 "dt_bias": _fr10_prev_read["dt_bias"],
                                                 "prev_h0": _fr10_prev_read["h0_cpu"],
@@ -1537,8 +1540,15 @@ def _patch_gdn_linear() -> bool:
                                     "value_spec": value_spec[
                                         0, start:end
                                     ].detach().cpu().clone(),
+                                    "value_tree": value_tree[
+                                        start:end
+                                    ].detach().cpu().clone(),
                                     "a": a[start:end].detach().cpu().clone(),
                                     "b": b[start:end].detach().cpu().clone(),
+                                    "g_tree": g_tree[start:end].detach().cpu().clone(),
+                                    "beta_tree": beta_tree[
+                                        start:end
+                                    ].detach().cpu().clone(),
                                     "A_log": self.A_log.detach().cpu().clone(),
                                     "dt_bias": self.dt_bias.detach().cpu().clone(),
                                     "h0_cpu": (

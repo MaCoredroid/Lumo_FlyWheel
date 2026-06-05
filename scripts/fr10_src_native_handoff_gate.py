@@ -84,12 +84,20 @@ def _native_final_state_for_path(
         .to(device)
         .index_select(0, index)
         .contiguous(),
-        _node_major_spec_tensor(payload, "value_spec")
+        _node_major_spec_tensor(
+            payload, "value_tree" if "value_tree" in payload else "value_spec"
+        )
         .to(device)
         .index_select(0, index)
         .contiguous(),
-        _node_major_spec_tensor(payload, "a").to(device).index_select(0, index).contiguous(),
-        _node_major_spec_tensor(payload, "b").to(device).index_select(0, index).contiguous(),
+        _node_major_spec_tensor(payload, "g_tree" if "g_tree" in payload else "a")
+        .to(device)
+        .index_select(0, index)
+        .contiguous(),
+        _node_major_spec_tensor(payload, "beta_tree" if "beta_tree" in payload else "b")
+        .to(device)
+        .index_select(0, index)
+        .contiguous(),
         payload["A_log"].to(device).contiguous(),
         payload["dt_bias"].to(device).contiguous(),
         payload["prev_h0"].to(device).contiguous(),
@@ -110,8 +118,12 @@ def evaluate(
     payload = torch.load(payload_path, map_location="cpu")
     parent = [int(x) for x in payload["tree_parent"]]
     accepted_len = int(payload["accepted_len"])
-    accepted_node = int(payload["accepted_node_id"])
-    accepted_path = [int(x) for x in payload.get("accepted_node_path") or []]
+    raw_accepted_node = int(payload["accepted_node_id"])
+    raw_accepted_path = [int(x) for x in payload.get("accepted_node_path") or []]
+    accepted_node = int(payload.get("accepted_gdn_node_id", raw_accepted_node))
+    accepted_path = [int(x) for x in payload.get("accepted_gdn_node_path") or []]
+    if not accepted_path:
+        accepted_path = raw_accepted_path
     if accepted_len <= 0 or not accepted_path:
         raise ValueError("src==native handoff payload must contain an accepted path")
     if accepted_path[-1] != accepted_node:
@@ -160,8 +172,10 @@ def evaluate(
         "layer_prefix": payload.get("layer_prefix"),
         "batch_index": int(payload.get("batch_index", 0)),
         "accepted_len": accepted_len,
-        "accepted_node_id": accepted_node,
-        "accepted_node_path": accepted_path,
+        "accepted_node_id": raw_accepted_node,
+        "accepted_node_path": raw_accepted_path,
+        "accepted_gdn_node_id": accepted_node,
+        "accepted_gdn_node_path": accepted_path,
         "accepted_token_ids": [int(x) for x in payload.get("accepted_token_ids") or []],
         "accepted_spec_state_bank_row": payload.get("accepted_spec_state_bank_row"),
         "accepted_bank_row": payload.get("accepted_bank_row")
