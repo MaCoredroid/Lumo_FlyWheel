@@ -2221,7 +2221,10 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             ) from _fr10_tree_lcp_log_exc
     try:
         import json as _lcpj, os as _lcpo, time as _lcpt
-        if _lcpo.environ.get('FR10_METRICS', '0') == '1':
+        if (
+            _lcpo.environ.get('FR10_METRICS', '0') == '1'
+            or _lcpo.environ.get('LUMO_TREE_PATH_LCP_LOG')
+        ):
             global _LUMO_TREE_PATH_LCP_FH
             try:
                 _LUMO_TREE_PATH_LCP_FH
@@ -2317,7 +2320,10 @@ def _lumo_tree_canonical_multidraft_sample(
     accepted_token_rows = []
     try:
         import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
-        if _fr10_lo.environ.get('FR10_METRICS', '0') == '1':
+        if (
+            _fr10_lo.environ.get('FR10_METRICS', '0') == '1'
+            or _fr10_lo.environ.get('LUMO_TREE_SAMPLER_DEBUG_LOG')
+        ):
             global _LUMO_TREE_SAMPLE_DEBUG_FH
             try:
                 _LUMO_TREE_SAMPLE_DEBUG_FH
@@ -2505,7 +2511,10 @@ def _lumo_tree_canonical_multidraft_sample(
             ) from _fr10_commit_globals_exc
     try:
         import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
-        if _fr10_lo.environ.get('FR10_METRICS', '0') == '1':
+        if (
+            _fr10_lo.environ.get('FR10_METRICS', '0') == '1'
+            or _fr10_lo.environ.get('LUMO_TREE_PATH_LCP_LOG')
+        ):
             global _LUMO_TREE_SAMPLE_ACCEPT_FH
             try:
                 _LUMO_TREE_SAMPLE_ACCEPT_FH
@@ -2610,7 +2619,10 @@ def _lumo_tree_canonical_multidraft_sample(
 
         try:
             import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
-            if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+            if (
+                _fr10_lo.environ.get("FR10_METRICS", "0") == "1"
+                or _fr10_lo.environ.get("LUMO_TREE_SAMPLER_DEBUG_LOG")
+            ):
                 global _LUMO_TREE_SAMPLER_DEBUG_FH
                 try:
                     _LUMO_TREE_SAMPLER_DEBUG_FH
@@ -2874,7 +2886,10 @@ def _lumo_tree_canonical_multidraft_sample(
     if tree_parent_indices is not None and not sampling_metadata.all_greedy:
         try:
             import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
-            if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+            if (
+                _fr10_lo.environ.get("FR10_METRICS", "0") == "1"
+                or _fr10_lo.environ.get("LUMO_TREE_SAMPLER_DEBUG_LOG")
+            ):
                 global _LUMO_TREE_SAMPLER_BRANCH_FH
                 try:
                     _LUMO_TREE_SAMPLER_BRANCH_FH
@@ -3040,7 +3055,10 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
             )
         try:
             import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
-            if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
+            if (
+                _fr10_lo.environ.get("FR10_METRICS", "0") == "1"
+                or _fr10_lo.environ.get("LUMO_TREE_SAMPLER_DEBUG_LOG")
+            ):
                 global _LUMO_TREE_META_DEBUG_FH
                 try:
                     _LUMO_TREE_META_DEBUG_FH

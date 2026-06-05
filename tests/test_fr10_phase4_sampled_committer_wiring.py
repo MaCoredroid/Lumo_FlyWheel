@@ -176,6 +176,19 @@ def test_speed_launcher_defaults_to_nine_node_caterpillar() -> None:
     assert "--attention-backend '$ATTENTION_BACKEND'" in text
     assert "FR11_TREE_CONV_NATIVE_BF16_TAPS=${FR11_TREE_CONV_NATIVE_BF16_TAPS:-0}" in text
     assert '-e FR11_TREE_CONV_NATIVE_BF16_TAPS="$FR11_TREE_CONV_NATIVE_BF16_TAPS"' in text
+    assert "LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}" in text
+    assert "LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}" in text
+    assert '-e LUMO_TREE_SAMPLER_DEBUG_LOG="$LUMO_TREE_SAMPLER_DEBUG_LOG"' in text
+    assert '-e LUMO_TREE_PATH_LCP_LOG="$LUMO_TREE_PATH_LCP_LOG"' in text
+
+
+def test_tree_engagement_logs_are_available_with_metrics_off() -> None:
+    text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+
+    assert 'or _fr10_lo.environ.get("LUMO_TREE_SAMPLER_DEBUG_LOG")' in text
+    assert "or _fr10_lo.environ.get('LUMO_TREE_SAMPLER_DEBUG_LOG')" in text
+    assert "or _fr10_lo.environ.get('LUMO_TREE_PATH_LCP_LOG')" in text
+    assert "or _lcpo.environ.get('LUMO_TREE_PATH_LCP_LOG')" in text
 
 
 def test_speed_launcher_recovers_host_memory_before_docker_run() -> None:
