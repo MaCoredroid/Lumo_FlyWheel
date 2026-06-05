@@ -15,6 +15,7 @@ from lumo_flywheel_serving.fr10_tree_rejection_sampler import (
     exact_multidraft_distribution,
     exact_rejection_distribution,
     mixture_distribution,
+    residual_distribution,
     sample_biased_multidraft_control,
     sample_deterministic_multidraft_rejection_step,
     sample_multidraft_rejection,
@@ -92,6 +93,41 @@ def test_deterministic_multidraft_step_converges_to_target_distribution() -> Non
     )
     result = chi_square_gof(count_tokens(samples, len(p)), p)
 
+    assert result.passed, result
+
+
+def test_deterministic_one_hot_step_accept_rate_and_residual() -> None:
+    rng = np.random.default_rng(20260609)
+    p = np.array([0.07, 0.20, 0.11, 0.17, 0.31, 0.14], dtype=np.float64)
+    draft_token = 1
+    n = 100_000
+
+    accepted = 0
+    rejected_tokens: list[int] = []
+    for _ in range(n):
+        step = sample_deterministic_multidraft_rejection_step(
+            p, [draft_token], rng=rng
+        )
+        if step.accepted:
+            accepted += 1
+            assert step.token_id == draft_token
+        else:
+            rejected_tokens.append(step.token_id)
+
+    observed_accept = accepted / n
+    expected_accept = float(p[draft_token])
+    sigma = (expected_accept * (1.0 - expected_accept) / n) ** 0.5
+    assert abs(observed_accept - expected_accept) < 5.0 * sigma
+
+    q = np.zeros_like(p)
+    q[draft_token] = 1.0
+    expected_residual = residual_distribution(p, q)
+    observed_residual = count_tokens(
+        np.asarray(rejected_tokens, dtype=np.int64), len(p)
+    )
+    positive = expected_residual > 0
+    assert observed_residual[~positive].sum() == 0
+    result = chi_square_gof(observed_residual[positive], expected_residual[positive])
     assert result.passed, result
 
 
