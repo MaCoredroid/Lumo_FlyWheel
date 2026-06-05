@@ -385,16 +385,19 @@ def _patch_gdn_linear() -> bool:
                     _fr10_accepted_paths_tensor = globals().get(
                         "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR"
                     )
+                    _fr10_accepted_lens_tensor = globals().get(
+                        "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR"
+                    )
                     if _fr10_accepted_paths_tensor is None:
                         raise RuntimeError("missing_accepted_path_device_tensor")
-                    if num_accepted_tokens is None:
-                        raise RuntimeError("missing_num_accepted_tokens")
+                    if _fr10_accepted_lens_tensor is None:
+                        raise RuntimeError("missing_accepted_lens_device_tensor")
                     launch_tree_state_linear_remap(
                         ssm_state=ssm_state,
                         conv_state=conv_state,
                         spec_state_indices=spec_state_indices_tensor,
                         accepted_paths=_fr10_accepted_paths_tensor,
-                        num_accepted_tokens=num_accepted_tokens,
+                        num_accepted_tokens=_fr10_accepted_lens_tensor,
                         num_spec_decodes=int(attn_metadata.num_spec_decodes),
                         max_path_len=int(spec_state_indices_tensor.size(-1)),
                     )
@@ -488,8 +491,8 @@ def _patch_gdn_linear() -> bool:
                         _fr10_end = _fr10_start + _fr10_tree_n
                         _fr10_x = mixed_qkv_spec[_fr10_start:_fr10_end]
                         _fr10_accept_offset = (
-                            num_accepted_tokens[_fr10_b].to(torch.long) - 1
-                            if num_accepted_tokens is not None
+                            _fr10_accepted_lens_tensor[_fr10_b].to(torch.long) - 1
+                            if _fr10_accepted_lens_tensor is not None
                             else torch.zeros((), dtype=torch.long, device=_fr10_x.device)
                         )
                         _fr10_prior_cols = _fr10_prior_col_base + _fr10_accept_offset
@@ -915,6 +918,11 @@ def _patch_gdn_linear() -> bool:
                 assert attn_metadata.fr10_tree_parent is not None
                 assert attn_metadata.fr10_tree_strict_mask is not None
                 assert attn_metadata.fr10_tree_visible_mask is not None
+                _fr10_accepted_lens_tensor = globals().get(
+                    "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR"
+                )
+                if _fr10_accepted_lens_tensor is None:
+                    raise RuntimeError("missing_accepted_lens_device_tensor")
                 if os.environ.get("FR10_METRICS", "0") == "1":
                     logger.warning_once(
                         "FR10 tree GDN verifier branch active for layer %s", self.prefix
@@ -967,14 +975,18 @@ def _patch_gdn_linear() -> bool:
                     _fr10_read_col = 0
                     if _fr10_capture_scan_payload or _fr10_commit_handoff_active:
                         try:
-                            if num_accepted_tokens is not None:
-                                _fr10_read_col = max(
-                                    0,
-                                    min(
-                                        int(num_accepted_tokens[fr10_b].detach().cpu().item()) - 1,
-                                        int(spec_state_indices_tensor.size(-1)) - 1,
-                                    ),
+                            _fr10_read_col = max(
+                                0,
+                                min(
+                                    int(
+                                        _fr10_accepted_lens_tensor[
+                                            fr10_b
+                                        ].detach().cpu().item()
+                                    )
+                                    - 1,
+                                    int(spec_state_indices_tensor.size(-1)) - 1,
                                 )
+                            )
                         except Exception:
                             _fr10_read_col = 0
                     _fr10_capture_state_index = None
@@ -1317,7 +1329,7 @@ def _patch_gdn_linear() -> bool:
                         beta=beta_tree[start:end].contiguous(),
                         h0=ssm_state,
                         h0_indices=spec_state_indices_tensor,
-                        h0_num_accepted_tokens=num_accepted_tokens,
+                        h0_num_accepted_tokens=_fr10_accepted_lens_tensor,
                         h0_is_bank=True,
                         h0_index_row=fr10_b * spec_state_indices_tensor.size(-1),
                         h0_batch_index=fr10_b,
