@@ -1444,10 +1444,21 @@ def _patch_gdn_linear() -> bool:
                         ),
                     )
                     _fr10_root_h0_log = os.environ.get("FR10_TREE_GDN_ROOT_H0_LOG")
+                    _fr10_root_h0_log_prefix = os.environ.get(
+                        "FR10_TREE_GDN_ROOT_H0_LOG_LAYER_PREFIX",
+                        "language_model.model.layers.0.linear_attn",
+                    )
+                    _fr10_root_h0_log_limit = int(
+                        os.environ.get("FR10_TREE_GDN_ROOT_H0_LOG_LIMIT", "20")
+                    )
+                    _fr10_root_h0_log_count = int(
+                        globals().get("_FR10_TREE_GDN_ROOT_H0_LOG_COUNT", 0)
+                    )
                     if (
                         _fr10_root_h0_log
                         and fr10_b == 0
-                        and not globals().get("_FR10_TREE_GDN_ROOT_H0_LOG_DONE", False)
+                        and str(self.prefix) == _fr10_root_h0_log_prefix
+                        and _fr10_root_h0_log_count < _fr10_root_h0_log_limit
                     ):
                         try:
                             _fr10_live_col = max(
@@ -1475,60 +1486,76 @@ def _patch_gdn_linear() -> bool:
                                 .cpu()
                                 .item()
                             )
+                            _fr10_root_row = {
+                                "event_index": int(_fr10_root_h0_log_count),
+                                "schema": "fr10.tree_root_h0_probe_row.v2",
+                                "layer_prefix": str(self.prefix),
+                                "batch_index": int(fr10_b),
+                                "tree_n": int(tree_n),
+                                "query_spec_rows": int(query_spec.size(1)),
+                                "start": int(start),
+                                "end": int(end),
+                                "accepted_len": int(_fr10_live_col + 1),
+                                "col0": 0,
+                                "live_col": int(_fr10_live_col),
+                                "col0_bank_row": int(_fr10_col0_row),
+                                "live_bank_row": int(_fr10_live_row),
+                                "h0_col0": ssm_state[_fr10_col0_row]
+                                .detach()
+                                .cpu()
+                                .clone(),
+                                "h0_live": ssm_state[_fr10_live_row]
+                                .detach()
+                                .cpu()
+                                .clone(),
+                                "q_root": query_spec[0, start].detach().cpu().clone(),
+                                "k_root": key_spec[0, start].detach().cpu().clone(),
+                                "value_spec_root": value_spec[start]
+                                .detach()
+                                .cpu()
+                                .clone(),
+                                "value_tree_root": value_tree[start]
+                                .detach()
+                                .cpu()
+                                .clone(),
+                                "a_root": a[start].detach().cpu().clone(),
+                                "b_root": b[start].detach().cpu().clone(),
+                                "g_tree_root": g_tree[start].detach().cpu().clone(),
+                                "beta_tree_root": beta_tree[start]
+                                .detach()
+                                .cpu()
+                                .clone(),
+                                "A_log": self.A_log.detach().cpu().clone(),
+                                "dt_bias": self.dt_bias.detach().cpu().clone(),
+                                "serving_tree_out_root": tree_out[0]
+                                .detach()
+                                .cpu()
+                                .clone(),
+                                "serving_tree_state_root": tree_state[0]
+                                .detach()
+                                .cpu()
+                                .clone(),
+                                "output_scale": float(self.head_k_dim**-0.5),
+                            }
+                            _fr10_root_rows = list(
+                                globals().get("_FR10_TREE_GDN_ROOT_H0_LOG_ROWS", [])
+                            )
+                            _fr10_root_rows.append(_fr10_root_row)
+                            globals()["_FR10_TREE_GDN_ROOT_H0_LOG_ROWS"] = (
+                                _fr10_root_rows
+                            )
                             torch.save(
                                 {
-                                    "schema": "fr10.tree_root_h0_probe.v1",
-                                    "layer_prefix": str(self.prefix),
-                                    "batch_index": int(fr10_b),
-                                    "tree_n": int(tree_n),
-                                    "query_spec_rows": int(query_spec.size(1)),
-                                    "start": int(start),
-                                    "end": int(end),
-                                    "accepted_len": int(_fr10_live_col + 1),
-                                    "col0": 0,
-                                    "live_col": int(_fr10_live_col),
-                                    "col0_bank_row": int(_fr10_col0_row),
-                                    "live_bank_row": int(_fr10_live_row),
-                                    "h0_col0": ssm_state[_fr10_col0_row]
-                                    .detach()
-                                    .cpu()
-                                    .clone(),
-                                    "h0_live": ssm_state[_fr10_live_row]
-                                    .detach()
-                                    .cpu()
-                                    .clone(),
-                                    "q_root": query_spec[0, start].detach().cpu().clone(),
-                                    "k_root": key_spec[0, start].detach().cpu().clone(),
-                                    "value_spec_root": value_spec[start]
-                                    .detach()
-                                    .cpu()
-                                    .clone(),
-                                    "value_tree_root": value_tree[start]
-                                    .detach()
-                                    .cpu()
-                                    .clone(),
-                                    "a_root": a[start].detach().cpu().clone(),
-                                    "b_root": b[start].detach().cpu().clone(),
-                                    "g_tree_root": g_tree[start].detach().cpu().clone(),
-                                    "beta_tree_root": beta_tree[start]
-                                    .detach()
-                                    .cpu()
-                                    .clone(),
-                                    "A_log": self.A_log.detach().cpu().clone(),
-                                    "dt_bias": self.dt_bias.detach().cpu().clone(),
-                                    "serving_tree_out_root": tree_out[0]
-                                    .detach()
-                                    .cpu()
-                                    .clone(),
-                                    "serving_tree_state_root": tree_state[0]
-                                    .detach()
-                                    .cpu()
-                                    .clone(),
-                                    "output_scale": float(self.head_k_dim**-0.5),
+                                    "schema": "fr10.tree_root_h0_probe.v2",
+                                    "layer_prefix": _fr10_root_h0_log_prefix,
+                                    "limit": int(_fr10_root_h0_log_limit),
+                                    "rows": _fr10_root_rows,
                                 },
                                 _fr10_root_h0_log,
                             )
-                            globals()["_FR10_TREE_GDN_ROOT_H0_LOG_DONE"] = True
+                            globals()["_FR10_TREE_GDN_ROOT_H0_LOG_COUNT"] = (
+                                _fr10_root_h0_log_count + 1
+                            )
                         except Exception as _fr10_root_h0_exc:
                             if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1":
                                 raise RuntimeError(
