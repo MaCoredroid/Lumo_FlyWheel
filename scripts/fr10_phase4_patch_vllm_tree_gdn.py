@@ -3893,9 +3893,15 @@ def _fr10_root_hidden_capture_finish(payload, hidden_states):
             _fr10_path = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE")
             _fr10_done = bool(globals().get("_FR10_ROOT_LOGIT_CAPTURED", False))
             if _fr10_path and not _fr10_done and logits is not None:
-                _fr10_desired = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS")
+                _fr10_desired = os.environ.get(
+                    "FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS",
+                    os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS"),
+                )
                 if not _fr10_desired or int(hidden_states.shape[0]) == int(_fr10_desired):
-                    _fr10_root_row = int(os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW", "0"))
+                    _fr10_root_row = int(os.environ.get(
+                        "FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW",
+                        os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW", "0"),
+                    ))
                     if 0 <= _fr10_root_row < int(logits.shape[0]):
                         _fr10_out = Path(_fr10_path + ".logits.pt")
                         _fr10_out.parent.mkdir(parents=True, exist_ok=True)
