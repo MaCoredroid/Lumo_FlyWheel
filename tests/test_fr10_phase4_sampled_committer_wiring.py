@@ -98,6 +98,9 @@ def test_phase4_tree_disengagement_raises_by_default() -> None:
     assert "FR10 sampled tree committer disengaged: missing_tree_parent_indices" in text
     assert 'hasattr(metadata, "tree_parent_indices")' in text
     assert "FR10 caterpillar drafter disengaged:" in text
+    assert "_fr10_tree_expected = (" in text
+    assert '"speculative_token_tree" in os.environ.get("SPEC_CONFIG", "")' in text
+    assert "or len(_fr10_tree_choices_current) == 9" in text
     assert "FR10 tree decode-mode global failed for gdn_linear_attn" in text
     assert "FR10 tree committer failed to publish accepted rows:" in text
 

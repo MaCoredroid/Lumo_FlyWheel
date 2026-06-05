@@ -3505,11 +3505,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 0, 0),
             (0, 0, 0, 0, 1),
         ]
+        _fr10_tree_choices_current = [
+            tuple(_x) for _x in getattr(self, "tree_choices", [])
+        ]
         _fr10_is_caterpillar = (
             _fr10_active_decode_mode == "tree_mtp"
             and int(self.num_speculative_tokens) == 9
-            and [tuple(_x) for _x in getattr(self, "tree_choices", [])]
-            == _fr10_caterpillar_choices
+            and _fr10_tree_choices_current == _fr10_caterpillar_choices
         )
         if _fr10_is_caterpillar:
             # FR10_CATERPILLAR_NATIVE_SPINE_TOP2: read-only drafter fix.
@@ -3685,8 +3687,15 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         _fr10_tree_draft_branch_seen = any(
             isinstance(md, TreeAttentionMetadata) for md in per_group_attn_metadata
         )
-        if (
+        _fr10_tree_expected = (
             _fr10_active_decode_mode == "tree_mtp"
+            and (
+                "speculative_token_tree" in os.environ.get("SPEC_CONFIG", "")
+                or len(_fr10_tree_choices_current) == 9
+            )
+        )
+        if (
+            _fr10_tree_expected
             and not _fr10_is_caterpillar
             and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
         ):
@@ -3695,7 +3704,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 + "num_speculative_tokens="
                 + str(int(self.num_speculative_tokens))
                 + " tree_choices="
-                + repr([tuple(_x) for _x in getattr(self, "tree_choices", [])])
+                + repr(_fr10_tree_choices_current)
             )
         try:
             import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
