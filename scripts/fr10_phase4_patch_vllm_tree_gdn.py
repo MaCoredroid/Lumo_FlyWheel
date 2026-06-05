@@ -3076,9 +3076,28 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                     [0] + [len(_fr10_choice) for _fr10_choice in _fr10_choices],
                     dtype=np.int64,
                 )
+                _fr10_spine_choices = [
+                    _fr10_choice
+                    for _fr10_choice in _fr10_choices
+                    if all(int(_fr10_part) == 0 for _fr10_part in _fr10_choice)
+                ]
+                _fr10_leaf_choices = [
+                    _fr10_choice
+                    for _fr10_choice in _fr10_choices
+                    if not all(int(_fr10_part) == 0 for _fr10_part in _fr10_choice)
+                ]
+                _fr10_spine_first_depth_offsets = np.array(
+                    [0]
+                    + [len(_fr10_choice) for _fr10_choice in _fr10_spine_choices]
+                    + [len(_fr10_choice) for _fr10_choice in _fr10_leaf_choices],
+                    dtype=np.int64,
+                )
                 _fr10_tree_n = int(len(_fr10_depth_offsets))
                 _fr10_depth_pos = np.empty(
                     int(cu_num_tokens[-1]), dtype=np.int64
+                )
+                _fr10_spec_req_ids = set(
+                    getattr(scheduler_output, "scheduled_spec_decode_tokens", {}).keys()
                 )
                 _fr10_out = 0
                 _fr10_ok = True
@@ -3087,12 +3106,18 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                     num_scheduled_tokens.tolist()
                 ):
                     _fr10_sched = int(_fr10_sched)
+                    _fr10_req_id = (
+                        self.input_batch.req_ids[_fr10_req_idx]
+                        if _fr10_req_idx < len(self.input_batch.req_ids)
+                        else None
+                    )
+                    _fr10_is_spec_row = _fr10_req_id in _fr10_spec_req_ids
                     _fr10_base = max(
                         0,
                         int(self.input_batch.num_computed_tokens_cpu[_fr10_req_idx])
                         - 1,
                     )
-                    if _fr10_sched == _fr10_tree_n:
+                    if _fr10_is_spec_row and _fr10_sched == _fr10_tree_n:
                         _fr10_depth_pos[
                             _fr10_out : _fr10_out + _fr10_sched
                         ] = _fr10_base + _fr10_depth_offsets
@@ -3100,10 +3125,11 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                         _fr10_depth_pos[
                             _fr10_out : _fr10_out + _fr10_sched
                         ] = positions_np[_fr10_out : _fr10_out + _fr10_sched]
-                        if _fr10_sched > 1:
+                        if _fr10_is_spec_row:
                             _fr10_bad.append(
                                 {
                                     "req_index": int(_fr10_req_idx),
+                                    "req_id": str(_fr10_req_id),
                                     "scheduled": int(_fr10_sched),
                                     "expected": int(_fr10_tree_n),
                                 }
@@ -3149,8 +3175,12 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                                 {
                                     "event": "tree_depth_positions",
                                     "tree_n": int(_fr10_tree_n),
-                                    "depth_offsets": [
+                                    "depth_offsets_row_order": [
                                         int(_x) for _x in _fr10_depth_offsets.tolist()
+                                    ],
+                                    "depth_offsets_spine_first": [
+                                        int(_x)
+                                        for _x in _fr10_spine_first_depth_offsets.tolist()
                                     ],
                                     "base_contract": "num_computed_tokens_cpu-1",
                                     "flat_first_tree": [
