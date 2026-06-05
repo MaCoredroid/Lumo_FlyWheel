@@ -487,12 +487,28 @@ def _patch_gdn_linear() -> bool:
                             + ":"
                             + str(_fr10_seed_conv_exc)
                         ) from _fr10_seed_conv_exc
+                if _fr10_accepted_lens_tensor is None:
+                    _fr10_conv_read_cols = torch.zeros(
+                        (int(attn_metadata.num_spec_decodes), 1),
+                        dtype=torch.long,
+                        device=spec_state_indices_tensor.device,
+                    )
+                else:
+                    _fr10_conv_read_cols = torch.clamp(
+                        _fr10_accepted_lens_tensor[
+                            : attn_metadata.num_spec_decodes
+                        ].to(torch.long)
+                        - 1,
+                        min=0,
+                        max=int(spec_state_indices_tensor.size(-1)) - 1,
+                    ).view(-1, 1)
+                _fr10_prior_conv_bank_rows = spec_state_indices_tensor[
+                    : attn_metadata.num_spec_decodes
+                ].gather(1, _fr10_conv_read_cols)
                 _fr10_prior_conv_state_bank = torch.index_select(
                     conv_state,
                     0,
-                    spec_state_indices_tensor[
-                        : attn_metadata.num_spec_decodes, 0
-                    ].to(torch.long),
+                    _fr10_prior_conv_bank_rows.reshape(-1).to(torch.long),
                 )
                 try:
                     _fr10_tree_src = None
@@ -565,15 +581,7 @@ def _patch_gdn_linear() -> bool:
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
                         _fr10_x = mixed_qkv_spec[_fr10_start:_fr10_end]
-                        _fr10_accept_offset = (
-                            torch.clamp(
-                                _fr10_accepted_lens_tensor[_fr10_b].to(torch.long) - 1,
-                                min=0,
-                            )
-                            if _fr10_accepted_lens_tensor is not None
-                            else torch.zeros((), dtype=torch.long, device=_fr10_x.device)
-                        )
-                        _fr10_prior_cols = _fr10_prior_col_base + _fr10_accept_offset
+                        _fr10_prior_cols = _fr10_prior_col_base
                         _fr10_prior_window = _fr10_prior_conv_state_bank[
                             _fr10_b
                         ].index_select(1, _fr10_prior_cols)

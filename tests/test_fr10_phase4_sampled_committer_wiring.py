@@ -115,7 +115,9 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS = [\n            [int(x) for x in row] for row in accepted_gdn_node_paths\n        ]" in text
     assert "h0_num_accepted_tokens=_fr10_accepted_lens_tensor" in text
     assert "num_accepted_tokens=_fr10_accepted_lens_tensor" in text
-    assert "torch.clamp(\n                                _fr10_accepted_lens_tensor[_fr10_b].to(torch.long) - 1" in text
+    assert "_fr10_conv_read_cols = torch.clamp(" in text
+    assert "_fr10_prior_conv_bank_rows = spec_state_indices_tensor" in text
+    assert "_fr10_prior_cols = _fr10_prior_col_base" in text
     assert "h0_use_accepted_column=True" in text
     assert "accepted_linear_read_col" in text
     assert "linear_column_coincide" in text
