@@ -1443,6 +1443,100 @@ def _patch_gdn_linear() -> bool:
                             else None
                         ),
                     )
+                    _fr10_root_h0_log = os.environ.get("FR10_TREE_GDN_ROOT_H0_LOG")
+                    if (
+                        _fr10_root_h0_log
+                        and fr10_b == 0
+                        and not globals().get("_FR10_TREE_GDN_ROOT_H0_LOG_DONE", False)
+                    ):
+                        try:
+                            _fr10_live_col = max(
+                                0,
+                                min(
+                                    int(
+                                        _fr10_accepted_lens_tensor[fr10_b]
+                                        .detach()
+                                        .cpu()
+                                        .item()
+                                    )
+                                    - 1,
+                                    int(spec_state_indices_tensor.size(-1)) - 1,
+                                ),
+                            )
+                            _fr10_col0_row = int(
+                                spec_state_indices_tensor[fr10_b, 0]
+                                .detach()
+                                .cpu()
+                                .item()
+                            )
+                            _fr10_live_row = int(
+                                spec_state_indices_tensor[fr10_b, _fr10_live_col]
+                                .detach()
+                                .cpu()
+                                .item()
+                            )
+                            torch.save(
+                                {
+                                    "schema": "fr10.tree_root_h0_probe.v1",
+                                    "layer_prefix": str(self.prefix),
+                                    "batch_index": int(fr10_b),
+                                    "tree_n": int(tree_n),
+                                    "query_spec_rows": int(query_spec.size(1)),
+                                    "start": int(start),
+                                    "end": int(end),
+                                    "accepted_len": int(_fr10_live_col + 1),
+                                    "col0": 0,
+                                    "live_col": int(_fr10_live_col),
+                                    "col0_bank_row": int(_fr10_col0_row),
+                                    "live_bank_row": int(_fr10_live_row),
+                                    "h0_col0": ssm_state[_fr10_col0_row]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "h0_live": ssm_state[_fr10_live_row]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "q_root": query_spec[0, start].detach().cpu().clone(),
+                                    "k_root": key_spec[0, start].detach().cpu().clone(),
+                                    "value_spec_root": value_spec[start]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "value_tree_root": value_tree[start]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "a_root": a[start].detach().cpu().clone(),
+                                    "b_root": b[start].detach().cpu().clone(),
+                                    "g_tree_root": g_tree[start].detach().cpu().clone(),
+                                    "beta_tree_root": beta_tree[start]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "A_log": self.A_log.detach().cpu().clone(),
+                                    "dt_bias": self.dt_bias.detach().cpu().clone(),
+                                    "serving_tree_out_root": tree_out[0]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "serving_tree_state_root": tree_state[0]
+                                    .detach()
+                                    .cpu()
+                                    .clone(),
+                                    "output_scale": float(self.head_k_dim**-0.5),
+                                },
+                                _fr10_root_h0_log,
+                            )
+                            globals()["_FR10_TREE_GDN_ROOT_H0_LOG_DONE"] = True
+                        except Exception as _fr10_root_h0_exc:
+                            if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1":
+                                raise RuntimeError(
+                                    "FR10 tree root h0 probe failed: "
+                                    + type(_fr10_root_h0_exc).__name__
+                                    + ":"
+                                    + str(_fr10_root_h0_exc)
+                                ) from _fr10_root_h0_exc
                     core_attn_out_spec[0, start:end] = tree_out[:tree_n]
                     if _fr10_capture_scan_payload:
                         try:
