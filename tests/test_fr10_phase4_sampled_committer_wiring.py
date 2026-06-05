@@ -95,10 +95,14 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert "launch_tree_state_linear_remap(" in text
     assert "missing_accepted_path_device_tensor" in text
     assert "missing_accepted_lens_device_tensor" in text
+    assert '"event": "tree_length_alignment"' in text
+    assert '"metadata_num_accepted_tokens": _fr10_meta_len' in text
+    assert '"accepted_tree_len": int(_fr10_path_len)' in text
     assert "_fr10_seed_path_tensor = torch.tensor" not in text
     assert "_fr10_path0_state_rows = _fr10_path0_nodes[1:]" not in text
     assert "h0_num_accepted_tokens=_fr10_accepted_lens_tensor" in text
     assert "num_accepted_tokens=_fr10_accepted_lens_tensor" in text
+    assert "torch.clamp(\n                                _fr10_accepted_lens_tensor[_fr10_b].to(torch.long) - 1" in text
     assert "h0_use_accepted_column=True" in text
     assert "accepted_linear_read_col" in text
     assert "linear_column_coincide" in text

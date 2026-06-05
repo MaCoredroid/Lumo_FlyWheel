@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-05 02:35 UTC
+Updated: 2026-06-05 01:40 UTC
 
 ## CONTRACTS
 
@@ -28,6 +28,8 @@ Updated: 2026-06-05 02:35 UTC
 - 2026-06-05 02:15 UTC: patched the stock Mamba block-copy seam instead of the speculative-column remap. `scripts/fr10_phase4_patch_vllm_tree_gdn.py` now patches `vllm/v1/worker/mamba_utils.py` so both `preprocess_mamba` and `postprocess_mamba` translate stock linear copy bias `k` through the accepted tree path (`accepted_path[min(k, len(path)-1)]`) before calling `collect_mamba_copy_meta`. Postprocess records accepted paths by `req_id` for the next preprocess, avoiding batch-slot drift. This targets the observed gate shape where per-node tree state is native but the migrated next-read block is not.
 - 2026-06-05 02:30 UTC: the offline gate on the new Mamba-copy payload `output/fr10_mamba_bias_confirm2_20260605T011657Z/logs/fr10_src_native_handoff.pt` still failed: `accepted_len=4`, accepted path `[0,1,3,6]`, `accepted_spec_state_bank_row=7`, `next_read_bank_row=5`, `ssm_next_vs_native_max_abs=11.936419486999512`, `conv_next_vs_native_max_abs=64.0`, `negative_ssm_max_abs=14.598133087158203`, `src_native_pass=false`. No `fr10_tree_mamba_copy.jsonl` was emitted in that short capture, so the source-native verdict is that the next-read linear column remains unrepaired for this payload.
 - 2026-06-05 02:35 UTC: fixed the graph-safe remap/read length source. The committer already publishes accepted node ids and accepted lengths into device tensors; the tree GDN remap, conv prior offset, handoff read-column instrumentation, and `launch_tree_gdn_prepared` h0 gather now use `_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR`, not stock `num_accepted_tokens`. This prevents vLLM's Mamba migration reset from truncating the tree handoff to column 0 and keeps the CUDA scatter/read contract graph-capturable.
+- 2026-06-05 01:40 UTC: first accepted-lens confirm boot failed loud on the first tree request with a CUDA device assert in the tree causal-conv branch. Engagement had restored before the crash (`gpu_tree_metadata reason=ok`, `has_tree_parent_indices=true`, draft count `9`), and the crash came from zero previous accepted length making the conv prior offset `accepted_len-1 == -1`. The h0 kernel already clamps zero-accept reads to column 0, so the tree conv prior offset now applies the same `max(accepted_len-1, 0)` clamp.
+- 2026-06-05 01:40 UTC: per the standing debug protocol, re-read the live vLLM sources from the image before continuing. `gdn_attn.py` copies scheduler `num_accepted_tokens` into metadata, while `fused_sigmoid_gating.py` reads column `num_accepted_tokens-1`; the FR10 tree data path now uses the committer-owned accepted tree length for both the scatter and `launch_tree_gdn_prepared` h0 read. Added a pre-conv `tree_length_alignment` log row with `metadata_num_accepted_tokens`, `accepted_tree_len`, `metadata_read_col`, and `accepted_len_read_col` so the next capture proves whether the old failing payload was a metadata-vs-path off-by-one before the offline src-native gate is interpreted.
 
 ## Current User Decision: Conv Only
 

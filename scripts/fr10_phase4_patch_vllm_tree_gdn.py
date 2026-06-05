@@ -392,6 +392,81 @@ def _patch_gdn_linear() -> bool:
                         raise RuntimeError("missing_accepted_path_device_tensor")
                     if _fr10_accepted_lens_tensor is None:
                         raise RuntimeError("missing_accepted_lens_device_tensor")
+                    if os.environ.get("FR10_METRICS", "0") == "1":
+                        try:
+                            import time as _fr10_len_time
+
+                            _fr10_len_log = os.environ.get(
+                                "FR10_TREE_GDN_COMMIT_HANDOFF_LOG"
+                            )
+                            _fr10_len_count = int(
+                                globals().get(
+                                    "_FR10_TREE_LENGTH_ALIGNMENT_LOG_COUNT", 0
+                                )
+                            )
+                            _fr10_len_limit = int(
+                                os.environ.get(
+                                    "FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT", "32"
+                                )
+                            )
+                            if _fr10_len_log and _fr10_len_count < _fr10_len_limit:
+                                _fr10_len_rows = []
+                                for _fr10_len_b in range(
+                                    int(attn_metadata.num_spec_decodes)
+                                ):
+                                    _fr10_meta_len = None
+                                    if num_accepted_tokens is not None:
+                                        _fr10_meta_len = int(
+                                            num_accepted_tokens[_fr10_len_b]
+                                            .detach()
+                                            .cpu()
+                                            .item()
+                                        )
+                                    _fr10_path_len = int(
+                                        _fr10_accepted_lens_tensor[_fr10_len_b]
+                                        .detach()
+                                        .cpu()
+                                        .item()
+                                    )
+                                    _fr10_len_rows.append(
+                                        {
+                                            "batch_index": int(_fr10_len_b),
+                                            "metadata_num_accepted_tokens": _fr10_meta_len,
+                                            "accepted_tree_len": int(_fr10_path_len),
+                                            "metadata_read_col": (
+                                                None
+                                                if _fr10_meta_len is None
+                                                else max(0, int(_fr10_meta_len) - 1)
+                                            ),
+                                            "accepted_len_read_col": max(
+                                                0, int(_fr10_path_len) - 1
+                                            ),
+                                        }
+                                    )
+                                with open(_fr10_len_log, "a", buffering=1) as _fr10_fh:
+                                    _fr10_fh.write(
+                                        json.dumps(
+                                            {
+                                                "schema": "fr10.length_alignment.v1",
+                                                "event": "tree_length_alignment",
+                                                "ts": round(_fr10_len_time.time(), 4),
+                                                "layer_prefix": str(self.prefix),
+                                                "rows": _fr10_len_rows,
+                                            }
+                                        )
+                                        + chr(10)
+                                    )
+                                globals()[
+                                    "_FR10_TREE_LENGTH_ALIGNMENT_LOG_COUNT"
+                                ] = _fr10_len_count + 1
+                        except Exception as _fr10_len_exc:
+                            if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1":
+                                raise RuntimeError(
+                                    "FR10 tree length-alignment logging failed: "
+                                    + type(_fr10_len_exc).__name__
+                                    + ":"
+                                    + str(_fr10_len_exc)
+                                ) from _fr10_len_exc
                     launch_tree_state_linear_remap(
                         ssm_state=ssm_state,
                         conv_state=conv_state,
@@ -491,7 +566,10 @@ def _patch_gdn_linear() -> bool:
                         _fr10_end = _fr10_start + _fr10_tree_n
                         _fr10_x = mixed_qkv_spec[_fr10_start:_fr10_end]
                         _fr10_accept_offset = (
-                            _fr10_accepted_lens_tensor[_fr10_b].to(torch.long) - 1
+                            torch.clamp(
+                                _fr10_accepted_lens_tensor[_fr10_b].to(torch.long) - 1,
+                                min=0,
+                            )
                             if _fr10_accepted_lens_tensor is not None
                             else torch.zeros((), dtype=torch.long, device=_fr10_x.device)
                         )
