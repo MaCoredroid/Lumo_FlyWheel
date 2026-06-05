@@ -52,11 +52,17 @@ def main() -> None:
     native_start = _row_start(native_counts, args.native_req)
     tree_rows_abs = [tree_start + node for node in TREE_SPINE_NODES]
     native_rows_abs = [native_start + depth for depth in range(5)]
+    tree_hidden_rows_abs = [
+        int(tree_l["target_logits_indices"][row].item()) for row in tree_rows_abs
+    ]
+    native_hidden_rows_abs = [
+        int(native_l["target_logits_indices"][row].item()) for row in native_rows_abs
+    ]
 
     tree_capture_rows = [int(x) for x in tree_h["rows"]]
     native_capture_rows = [int(x) for x in native_h["rows"]]
-    tree_row_pos = [tree_capture_rows.index(row) for row in tree_rows_abs]
-    native_row_pos = [native_capture_rows.index(row) for row in native_rows_abs]
+    tree_row_pos = [tree_capture_rows.index(row) for row in tree_hidden_rows_abs]
+    native_row_pos = [native_capture_rows.index(row) for row in native_hidden_rows_abs]
 
     tree_drafts = [int(x) for x in tree_l["draft_token_ids"][tree_rows_abs].tolist()]
     native_drafts = [int(x) for x in native_l["draft_token_ids"][native_rows_abs].tolist()]
@@ -140,6 +146,8 @@ def main() -> None:
         "native_req": int(args.native_req),
         "tree_rows_abs": tree_rows_abs,
         "native_rows_abs": native_rows_abs,
+        "tree_hidden_rows_abs": tree_hidden_rows_abs,
+        "native_hidden_rows_abs": native_hidden_rows_abs,
         "tree_spine_tokens": tree_drafts,
         "native_spine_tokens": native_drafts,
         "spine_tokens_match": tree_drafts == native_drafts,
