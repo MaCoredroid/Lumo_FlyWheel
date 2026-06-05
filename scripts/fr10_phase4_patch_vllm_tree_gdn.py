@@ -3760,8 +3760,13 @@ def _fr10_root_hidden_capture_start(self, positions, hidden_states):
             "num_tokens": int(hidden_states.shape[0]),
             "hidden_size": int(hidden_states.shape[-1]),
             "root_row": root_row,
+            "input_root_hidden": hidden_states[root_row]
+            .detach()
+            .to(torch.float32)
+            .cpu(),
             "positions_shape": list(positions.shape),
             "positions": pos_cpu,
+            "root_position": pos_cpu.reshape(-1)[root_row].item(),
             "positions_first16": pos_cpu.reshape(-1)[:16].tolist(),
             "layer_types": layer_types,
             "layers": [],
