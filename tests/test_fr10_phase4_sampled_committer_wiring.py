@@ -26,7 +26,7 @@ def test_phase4_patcher_logs_tree_and_linear_logit_gathers() -> None:
     assert '"target_prob_draft":' in text
 
 
-def test_phase4_tree_committer_publishes_accepted_node_without_mamba_redirect() -> None:
+def test_phase4_tree_committer_publishes_accepted_node_without_dead_mamba_redirect() -> None:
     text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
 
     assert "accepted_row = int(best_path[best_lcp - 1]) if best_lcp > 0 else 0" in text
@@ -34,8 +34,20 @@ def test_phase4_tree_committer_publishes_accepted_node_without_mamba_redirect() 
     assert "_LUMO_FA_LAST_ACCEPTED_TREE_LENS" in text
     assert "_patch_mamba_postprocess_tree_rows" not in text
     assert "LUMO_TREE_STATE_COMMIT_ROWS" not in text
-    assert "accept_token_bias = _fr10_row" not in text
     assert "and accept_token_bias > 0" not in text
+
+
+def test_phase4_mamba_stock_copies_use_tree_accepted_bias() -> None:
+    text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+
+    assert "MAMBA_UTILS_PATH" in text
+    assert "_patch_mamba_utils_tree_accept_bias()" in text
+    assert "FR10_TREE_MAMBA_ACCEPTED_COPY_BIAS" in text
+    assert "_fr10_tree_accept_token_bias(" in text
+    assert "phase=\"preprocess\"" in text
+    assert "phase=\"postprocess\"" in text
+    assert "_FR10_TREE_ACCEPTED_PATH_BY_REQ_ID" in text
+    assert "tree_mamba_copy_bias" in text
 
 
 def test_phase4_patcher_exports_src_native_handoff_payload() -> None:

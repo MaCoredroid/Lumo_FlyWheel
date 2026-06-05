@@ -33,6 +33,9 @@ EAGLE_PATH = Path(
 TREE_ATTN_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py"
 )
+MAMBA_UTILS_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/mamba_utils.py"
+)
 
 
 def _patch_gdn_attn() -> bool:
@@ -2756,6 +2759,193 @@ def _patch_gpu_model_runner_decode_mode_globals() -> bool:
     return True
 
 
+def _patch_mamba_utils_tree_accept_bias() -> bool:
+    text = MAMBA_UTILS_PATH.read_text()
+    sentinel = "# FR10_TREE_MAMBA_ACCEPTED_COPY_BIAS"
+    if sentinel in text:
+        return False
+
+    text = text.replace(
+        "import dataclasses\nimport itertools\n",
+        "import dataclasses\nimport itertools\nimport json\nimport os\nimport time\n",
+        1,
+    )
+    helper_anchor = """
+def collect_mamba_copy_meta(
+"""
+    helper = r'''
+# FR10_TREE_MAMBA_ACCEPTED_COPY_BIAS: stock hybrid Mamba copies use a
+# linear accepted-token offset. For tree_mtp, translate that offset through
+# the accepted tree path before the copy helper dereferences state rows.
+_FR10_TREE_ACCEPTED_PATH_BY_REQ_ID: dict[str, list[int]] = {}
+
+
+def _fr10_tree_mamba_mode_active() -> bool:
+    try:
+        from vllm.v1.sample import rejection_sampler as _fr10_rs
+        mode = getattr(
+            _fr10_rs,
+            "_FR10_DECODE_MODE",
+            os.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp"),
+        )
+    except Exception:
+        mode = os.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp")
+    return (
+        mode == "tree_mtp"
+        and os.environ.get("FR10_ENABLE_TREE_GDN", "1") == "1"
+    )
+
+
+def _fr10_tree_current_accepted_path(batch_index: int) -> list[int] | None:
+    try:
+        from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn
+        lens = getattr(_fr10_gdn, "_LUMO_FA_LAST_ACCEPTED_TREE_LENS", [])
+        paths = getattr(_fr10_gdn, "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS", [])
+        rows = getattr(_fr10_gdn, "_LUMO_FA_LAST_ACCEPTED_TREE_ROWS", [])
+        if batch_index >= len(lens):
+            return None
+        accepted_len = int(lens[batch_index])
+        if accepted_len <= 0:
+            return []
+        if batch_index < len(paths) and paths[batch_index]:
+            return [int(x) for x in paths[batch_index][:accepted_len]]
+        if batch_index < len(rows):
+            return [int(rows[batch_index])]
+    except Exception as exc:
+        if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1":
+            raise RuntimeError(
+                "FR10 tree Mamba accepted-path lookup failed: "
+                + type(exc).__name__
+                + ":"
+                + str(exc)
+            ) from exc
+    return None
+
+
+def _fr10_tree_record_request_accept(req_id: str, batch_index: int) -> None:
+    if not _fr10_tree_mamba_mode_active():
+        return
+    path = _fr10_tree_current_accepted_path(batch_index)
+    if path is None:
+        return
+    if path:
+        _FR10_TREE_ACCEPTED_PATH_BY_REQ_ID[str(req_id)] = path
+    else:
+        _FR10_TREE_ACCEPTED_PATH_BY_REQ_ID.pop(str(req_id), None)
+
+
+def _fr10_tree_accept_token_bias(
+    req_id: str,
+    batch_index: int,
+    linear_bias: int,
+    *,
+    phase: str,
+) -> int:
+    if not _fr10_tree_mamba_mode_active():
+        return int(linear_bias)
+    path = None
+    if phase == "postprocess":
+        path = _fr10_tree_current_accepted_path(batch_index)
+    if path is None:
+        path = _FR10_TREE_ACCEPTED_PATH_BY_REQ_ID.get(str(req_id))
+    if not path:
+        if int(linear_bias) <= 0:
+            return int(linear_bias)
+        if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") == "1":
+            return int(linear_bias)
+        raise RuntimeError(
+            "FR10 tree Mamba copy missing accepted path: "
+            f"phase={phase} req_id={req_id} batch_index={batch_index} "
+            f"linear_bias={linear_bias}"
+        )
+    path_index = max(0, min(int(linear_bias), len(path) - 1))
+    tree_bias = int(path[path_index])
+    if os.environ.get("FR10_METRICS", "0") == "1":
+        try:
+            global _FR10_TREE_MAMBA_COPY_FH
+            try:
+                _FR10_TREE_MAMBA_COPY_FH
+            except NameError:
+                _FR10_TREE_MAMBA_COPY_FH = open(
+                    os.environ.get(
+                        "FR10_TREE_MAMBA_COPY_LOG",
+                        "/logs/fr10_tree_mamba_copy.jsonl",
+                    ),
+                    "a",
+                    buffering=1,
+                )
+            _FR10_TREE_MAMBA_COPY_FH.write(
+                json.dumps(
+                    {
+                        "event": "tree_mamba_copy_bias",
+                        "ts": round(time.time(), 4),
+                        "phase": phase,
+                        "req_id": str(req_id),
+                        "batch_index": int(batch_index),
+                        "linear_bias": int(linear_bias),
+                        "tree_bias": int(tree_bias),
+                        "accepted_path": [int(x) for x in path],
+                    }
+                )
+                + chr(10)
+            )
+        except Exception:
+            pass
+    return tree_bias
+
+
+def collect_mamba_copy_meta(
+'''
+    if helper_anchor not in text:
+        raise RuntimeError("mamba collect_mamba_copy_meta anchor not found")
+    text = text.replace(helper_anchor, helper, 1)
+
+    preprocess_old = """                input_batch.num_accepted_tokens_cpu[i] - 1,
+                req_state,
+"""
+    preprocess_new = """                _fr10_tree_accept_token_bias(
+                    req_id,
+                    i,
+                    input_batch.num_accepted_tokens_cpu[i] - 1,
+                    phase="preprocess",
+                ),
+                req_state,
+"""
+    if preprocess_old not in text:
+        raise RuntimeError("mamba preprocess accept-token-bias anchor not found")
+    text = text.replace(preprocess_old, preprocess_new, 1)
+
+    postprocess_anchor = """        req_state = requests[req_id]
+        num_computed_tokens = req_state.num_computed_tokens
+"""
+    postprocess_inject = """        req_state = requests[req_id]
+        _fr10_tree_record_request_accept(req_id, i)
+        num_computed_tokens = req_state.num_computed_tokens
+"""
+    if postprocess_anchor not in text:
+        raise RuntimeError("mamba postprocess req_state anchor not found")
+    text = text.replace(postprocess_anchor, postprocess_inject, 1)
+
+    postprocess_old = """            accept_token_bias = aligned_new_computed_tokens - num_tokens_running_state
+            src_block_idx = mamba_state_idx[req_id]
+"""
+    postprocess_new = """            accept_token_bias = aligned_new_computed_tokens - num_tokens_running_state
+            accept_token_bias = _fr10_tree_accept_token_bias(
+                req_id,
+                i,
+                accept_token_bias,
+                phase="postprocess",
+            )
+            src_block_idx = mamba_state_idx[req_id]
+"""
+    if postprocess_old not in text:
+        raise RuntimeError("mamba postprocess accept-token-bias anchor not found")
+    text = text.replace(postprocess_old, postprocess_new, 1)
+
+    MAMBA_UTILS_PATH.write_text(text)
+    return True
+
+
 def _patch_eagle_tree_consumption_verify() -> bool:
     text = EAGLE_PATH.read_text()
     sentinel = "# FR10_TREE_DRAFT_CONSUMPTION_VERIFY"
@@ -3347,6 +3537,7 @@ def main() -> int:
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
+        (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
     ]
     patched: dict[str, bool] = {}
