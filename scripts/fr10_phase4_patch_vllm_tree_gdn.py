@@ -3102,6 +3102,7 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                 _fr10_out = 0
                 _fr10_ok = True
                 _fr10_bad = []
+                _fr10_tree_slices = []
                 for _fr10_req_idx, _fr10_sched in enumerate(
                     num_scheduled_tokens.tolist()
                 ):
@@ -3121,6 +3122,9 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                         _fr10_depth_pos[
                             _fr10_out : _fr10_out + _fr10_sched
                         ] = _fr10_base + _fr10_depth_offsets
+                        _fr10_tree_slices.append(
+                            (int(_fr10_out), int(_fr10_out + _fr10_sched))
+                        )
                     else:
                         _fr10_depth_pos[
                             _fr10_out : _fr10_out + _fr10_sched
@@ -3157,6 +3161,30 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                             device=self.device, non_blocking=True
                         )
                     )
+                    if getattr(self, "uses_mrope", False):
+                        for _fr10_start, _fr10_end in _fr10_tree_slices:
+                            _fr10_tree_pos = torch.from_numpy(
+                                _fr10_depth_pos[_fr10_start:_fr10_end]
+                            )
+                            self.mrope_positions.cpu[
+                                :, _fr10_start:_fr10_end
+                            ].copy_(
+                                _fr10_tree_pos.view(1, -1).expand(
+                                    self.mrope_positions.cpu.shape[0], -1
+                                )
+                            )
+                    if getattr(self, "uses_xdrope_dim", 0) > 0:
+                        for _fr10_start, _fr10_end in _fr10_tree_slices:
+                            _fr10_tree_pos = torch.from_numpy(
+                                _fr10_depth_pos[_fr10_start:_fr10_end]
+                            )
+                            self.xdrope_positions.cpu[
+                                :, _fr10_start:_fr10_end
+                            ].copy_(
+                                _fr10_tree_pos.view(1, -1).expand(
+                                    self.xdrope_positions.cpu.shape[0], -1
+                                )
+                            )
                     if __import__("os").environ.get("FR10_METRICS", "0") == "1":
                         global _FR10_TREE_DEPTH_POS_FH
                         try:
@@ -3183,6 +3211,10 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                                         for _x in _fr10_spine_first_depth_offsets.tolist()
                                     ],
                                     "base_contract": "num_computed_tokens_cpu-1",
+                                    "uses_mrope": bool(getattr(self, "uses_mrope", False)),
+                                    "uses_xdrope_dim": int(
+                                        getattr(self, "uses_xdrope_dim", 0)
+                                    ),
                                     "flat_first_tree": [
                                         int(_x)
                                         for _x in self.query_pos.np[
