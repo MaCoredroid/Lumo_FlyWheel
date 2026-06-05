@@ -2059,6 +2059,7 @@ def _lumo_tree_canonical_multidraft_sample(
         current_parent = -1
         accepted_row = 0
         accepted_path = []
+        step_trace_rows = []
         row = []
         for _step in range(int(max_spec_len) + 1):
             children = [
@@ -2077,22 +2078,41 @@ def _lumo_tree_canonical_multidraft_sample(
                     row.append(int(bonus_token_ids.reshape(-1)[req_i].detach().cpu().item()))
                 break
 
+            _target_row = int(start + children[0])
+            _child_drafts = [int(drafts[child]) for child in children]
+            _target_probs = target_probs_cpu[_target_row]
             if draft_probs_cpu is None:
                 step = _fr10_sample_det_step(
-                    target_probs_cpu[start + children[0]],
-                    [drafts[child] for child in children],
+                    _target_probs,
+                    _child_drafts,
                     rng=rng,
                 )
             else:
                 step = _fr10_sample_step(
-                    target_probs_cpu[start + children[0]],
+                    _target_probs,
                     [draft_probs_cpu[start + child] for child in children],
                     rng=rng,
                 )
+            _selected_child = int(children[int(step.source_index)])
+            step_trace_rows.append({
+                'step': int(_step),
+                'parent_node_id': int(current_parent),
+                'child_node_ids': [int(x) for x in children],
+                'target_prob_row': int(_target_row),
+                'target_argmax': int(_fr10_np.argmax(_target_probs)),
+                'draft_token_ids': [int(x) for x in _child_drafts],
+                'target_prob_at_draft_token_ids': [
+                    float(_target_probs[int(_tok)]) for _tok in _child_drafts
+                ],
+                'selected_source_index': int(step.source_index),
+                'selected_child_node_id': int(_selected_child),
+                'selected_token_id': int(step.token_id),
+                'accepted': bool(step.accepted),
+            })
             row.append(int(step.token_id))
             if not step.accepted:
                 break
-            accepted_child = int(children[int(step.source_index)])
+            accepted_child = _selected_child
             if int(step.token_id) != int(drafts[accepted_child]):
                 break
             current_parent = accepted_child
@@ -2114,6 +2134,7 @@ def _lumo_tree_canonical_multidraft_sample(
             'accepted_root': final_root,
             'emitted_tokens': [int(x) for x in row[:int(max_spec_len) + 1]],
             'draft_token_ids': [int(x) for x in drafts],
+            'committer_step_trace': step_trace_rows,
         })
         start += node_count
 
@@ -2300,6 +2321,78 @@ def _lumo_tree_canonical_multidraft_sample(
                         "all_greedy": bool(sampling_metadata.all_greedy),
                     }) + chr(10)
                 )
+                if not sampling_metadata.all_greedy:
+                    _fr10_draft_ids_cpu = [
+                        int(_x) for _x in metadata.draft_token_ids.detach().cpu().tolist()
+                    ]
+                    _fr10_target_indices_cpu = [
+                        int(_x) for _x in metadata.target_logits_indices.detach().cpu().tolist()
+                    ]
+                    _fr10_target_probs_cpu = (
+                        target_logits.softmax(dim=-1, dtype=torch.float32)
+                        .detach()
+                        .cpu()
+                    )
+                    if lumo_tree_parent_indices is not None:
+                        _fr10_parents_cpu = [
+                            int(_x) for _x in lumo_tree_parent_indices.detach().cpu().tolist()
+                        ]
+                        _fr10_self_indices_cpu = [
+                            int(_x)
+                            for _x in metadata.tree_self_logits_indices.detach().cpu().tolist()
+                        ]
+                        _fr10_rows = []
+                        _fr10_start = 0
+                        for _fr10_req_i, _fr10_node_count in enumerate(metadata.num_draft_tokens):
+                            _fr10_node_count = int(_fr10_node_count)
+                            for _fr10_node in range(_fr10_node_count):
+                                _fr10_flat = _fr10_start + _fr10_node
+                                _fr10_tok = int(_fr10_draft_ids_cpu[_fr10_flat])
+                                _fr10_prob_row = _fr10_target_probs_cpu[_fr10_flat]
+                                _fr10_rows.append({
+                                    "req_index": int(_fr10_req_i),
+                                    "node_id": int(_fr10_node),
+                                    "parent_node_id": int(_fr10_parents_cpu[_fr10_flat]),
+                                    "target_logits_index": int(_fr10_target_indices_cpu[_fr10_flat]),
+                                    "self_logits_index": int(_fr10_self_indices_cpu[_fr10_flat]),
+                                    "draft_token_id": int(_fr10_tok),
+                                    "target_argmax": int(torch.argmax(_fr10_prob_row).item()),
+                                    "target_prob_draft": float(_fr10_prob_row[_fr10_tok].item()),
+                                })
+                            _fr10_start += _fr10_node_count
+                        _LUMO_TREE_SAMPLER_DEBUG_FH.write(
+                            _fr10_lj.dumps({
+                                "event": "tree_logit_gather",
+                                "ts": round(_fr10_lt.time(), 4),
+                                "rows": _fr10_rows,
+                            }) + chr(10)
+                        )
+                    elif len(_fr10_draft_ids_cpu):
+                        _fr10_rows = []
+                        _fr10_start = 0
+                        for _fr10_req_i, _fr10_node_count in enumerate(metadata.num_draft_tokens):
+                            _fr10_node_count = int(_fr10_node_count)
+                            for _fr10_pos in range(_fr10_node_count):
+                                _fr10_flat = _fr10_start + _fr10_pos
+                                _fr10_tok = int(_fr10_draft_ids_cpu[_fr10_flat])
+                                _fr10_prob_row = _fr10_target_probs_cpu[_fr10_flat]
+                                _fr10_rows.append({
+                                    "req_index": int(_fr10_req_i),
+                                    "position": int(_fr10_pos),
+                                    "target_logits_index": int(_fr10_target_indices_cpu[_fr10_flat]),
+                                    "draft_logits_index": int(_fr10_target_indices_cpu[_fr10_flat] + 1),
+                                    "draft_token_id": int(_fr10_tok),
+                                    "target_argmax": int(torch.argmax(_fr10_prob_row).item()),
+                                    "target_prob_draft": float(_fr10_prob_row[_fr10_tok].item()),
+                                })
+                            _fr10_start += _fr10_node_count
+                        _LUMO_TREE_SAMPLER_DEBUG_FH.write(
+                            _fr10_lj.dumps({
+                                "event": "linear_logit_gather",
+                                "ts": round(_fr10_lt.time(), 4),
+                                "rows": _fr10_rows,
+                            }) + chr(10)
+                        )
         except Exception:
             pass
 

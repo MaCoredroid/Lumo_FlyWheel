@@ -11,6 +11,19 @@ def test_phase4_patcher_routes_sampled_tree_to_verified_committer() -> None:
     assert "if tree_parent_indices is not None and not sampling_metadata.all_greedy" in text
     assert "return _lumo_tree_canonical_multidraft_sample(" in text
     assert "if draft_probs_cpu is None:" in text
+    assert "'committer_step_trace': step_trace_rows" in text
+    assert "'target_prob_at_draft_token_ids':" in text
+
+
+def test_phase4_patcher_logs_tree_and_linear_logit_gathers() -> None:
+    text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+
+    assert '"event": "tree_logit_gather"' in text
+    assert '"event": "linear_logit_gather"' in text
+    assert '"target_logits_index":' in text
+    assert '"self_logits_index":' in text
+    assert '"draft_logits_index":' in text
+    assert '"target_prob_draft":' in text
 
 
 def test_phase4_tree_committer_publishes_accepted_node_without_mamba_redirect() -> None:
