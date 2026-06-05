@@ -6,6 +6,7 @@ IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870
 CONTAINER=${CONTAINER:-fr10-speed-start}
 PORT=${PORT:-9950}
 GPU_UTIL=${GPU_UTIL:-0.88}
+MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
 BATCH_INVARIANT=${BATCH_INVARIANT:-0}
 FR10_METRICS=${FR10_METRICS:-0}
 FR10_ENABLE_TREE_GDN=${FR10_ENABLE_TREE_GDN:-1}
@@ -84,7 +85,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
 exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --host 0.0.0.0 --port 9950 --max-num-seqs 4 \
-  --gpu-memory-utilization '$GPU_UTIL' --max-model-len 131072 \
+  --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' \
   --attention-backend FLASH_ATTN --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
