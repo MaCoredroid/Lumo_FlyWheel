@@ -3811,24 +3811,23 @@ def _fr10_root_hidden_capture_finish(payload, hidden_states):
         if helper_anchor not in text:
             raise RuntimeError("qwen3_next logger anchor not found")
         text = text.replace(helper_anchor, helper, 1)
-        old_loop = """        aux_hidden_states = []
+        old_loop = """        aux_hidden_states = self._maybe_add_hidden_state([], 0, hidden_states, residual)
         for layer_idx, layer in enumerate(
             islice(self.layers, self.start_layer, self.end_layer),
             start=self.start_layer,
         ):
-            if layer_idx in self.aux_hidden_state_layers:
-                aux_hidden_states.append(
-                    hidden_states + residual if residual is not None else hidden_states
-                )
             hidden_states, residual = layer(
                 positions=positions,
                 hidden_states=hidden_states,
                 residual=residual,
             )
+            self._maybe_add_hidden_state(
+                aux_hidden_states, layer_idx + 1, hidden_states, residual
+            )
 
         if not get_pp_group().is_last_rank:
 """
-        new_loop = """        aux_hidden_states = []
+        new_loop = """        aux_hidden_states = self._maybe_add_hidden_state([], 0, hidden_states, residual)
         _fr10_root_capture = _fr10_root_hidden_capture_start(
             self, positions, hidden_states
         )
@@ -3836,14 +3835,13 @@ def _fr10_root_hidden_capture_finish(payload, hidden_states):
             islice(self.layers, self.start_layer, self.end_layer),
             start=self.start_layer,
         ):
-            if layer_idx in self.aux_hidden_state_layers:
-                aux_hidden_states.append(
-                    hidden_states + residual if residual is not None else hidden_states
-                )
             hidden_states, residual = layer(
                 positions=positions,
                 hidden_states=hidden_states,
                 residual=residual,
+            )
+            self._maybe_add_hidden_state(
+                aux_hidden_states, layer_idx + 1, hidden_states, residual
             )
             _fr10_root_hidden_capture_layer(
                 _fr10_root_capture, layer_idx, hidden_states, residual
