@@ -57,3 +57,36 @@ Interpretation:
 `EXISTING_WY_FUSED_PROBE_IS_NOT_CORRECT`
 
 The existing probe is a useful launch-shape and timing skeleton, but its reconstruction shortcut is not an acceptable FR12 implementation. The next kernel step must replace the reconstruction math and re-check against the serial/WY oracle; speed alone is not sufficient.
+
+## Corrected WY Tree Solve Probe
+
+Command:
+
+```bash
+docker run --rm --gpus all --entrypoint python3 \
+  -v /home/mark/shared/lumoFlyWheel:/workspace -w /workspace \
+  vllm/vllm-openai:cu130-nightly \
+  /workspace/scripts/fr12_wy_tree_kernel_probe.py
+```
+
+Preflight:
+- `docker ps` showed no running containers.
+- `nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader` showed no active compute processes.
+
+Result:
+- Device: `NVIDIA GB10`.
+- Tree nodes: `14`, padded nodes: `16`.
+- Corrected WY tree solve: `557.0748901367188 us`.
+- Dense FR10-shaped fused kernel: `1038.9421081542969 us`.
+- WY vs dense output maxabs: `2.7939677238464355e-09`.
+- WY vs dense state maxabs: `2.9802322387695312e-08`.
+- WY vs serial output maxabs: `8.702627383172512e-07`.
+- WY vs serial state maxabs: `1.8596649169921875e-05`.
+- Dense vs serial output maxabs: `8.703209459781647e-07`.
+- Dense vs serial state maxabs: `1.8611550331115723e-05`.
+
+Interpretation:
+
+`CORRECTED_WY_TREE_SOLVE_MATCHES_DENSE_TREE_KERNEL`
+
+The corrected kernel builds the tree-ancestry triangular WY factor `T = inv(I + A)` with `A[i,j] = beta_i <k_i,k_j> exp(G_i-G_j)` on strict ancestors, then applies `T @ (beta*v)` and `T @ (beta*exp(G)*k)`. It matches the dense tree kernel to fp32 roundoff while cutting the one-launch probe from `1038.94 us` to `557.07 us`. The shared `~1.86e-05` state gap versus the Python serial oracle is also present in the dense kernel, so it is the existing Triton-vs-Python arithmetic-order floor for this probe rather than a WY-specific mismatch.
