@@ -4315,6 +4315,152 @@ def _fr10_root_hidden_capture_finish(payload, hidden_states):
         QWEN3_NEXT_PATH.write_text(text)
         did_patch = True
 
+    layer_sentinel = "# FR10_LAYER_HIDDEN_CAPTURE"
+    if layer_sentinel not in text:
+        helper_anchor = "def _fr10_root_hidden_capture_start(self, positions, hidden_states):\n"
+        helper = '''# FR10_LAYER_HIDDEN_CAPTURE
+def _fr10_layer_hidden_capture_start(self, positions, hidden_states):
+    path = os.environ.get("FR10_LAYER_HIDDEN_CAPTURE")
+    if not path:
+        return None
+    try:
+        desired = os.environ.get("FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS")
+        if desired:
+            desired_counts = {
+                int(_x.strip()) for _x in desired.split(",") if _x.strip()
+            }
+            if int(hidden_states.shape[0]) not in desired_counts:
+                return None
+        seen = int(globals().get("_FR10_LAYER_HIDDEN_CAPTURE_SEEN", 0))
+        skip = int(os.environ.get("FR10_LAYER_HIDDEN_CAPTURE_SKIP", "0"))
+        limit = int(os.environ.get("FR10_LAYER_HIDDEN_CAPTURE_LIMIT", "1"))
+        saved = int(globals().get("_FR10_LAYER_HIDDEN_CAPTURE_SAVED", 0))
+        globals()["_FR10_LAYER_HIDDEN_CAPTURE_SEEN"] = seen + 1
+        if seen < skip or saved >= limit:
+            return None
+        rows_env = os.environ.get("FR10_LAYER_HIDDEN_CAPTURE_ROWS", "")
+        if rows_env:
+            rows = [
+                int(_x.strip()) for _x in rows_env.split(",") if _x.strip()
+            ]
+        else:
+            rows = list(range(int(hidden_states.shape[0])))
+        rows = [row for row in rows if 0 <= row < int(hidden_states.shape[0])]
+        if not rows:
+            return None
+        row_index = torch.tensor(rows, dtype=torch.long, device=hidden_states.device)
+        pos_cpu = positions.detach().cpu()
+        layer_types = list(getattr(getattr(self, "config", None), "layer_types", []))
+        out = Path(str(path))
+        call_out = out.with_name(out.stem + ".call" + str(saved) + out.suffix)
+        return {
+            "source": "Qwen3NextModel.forward",
+            "path": str(path),
+            "call_path": str(call_out),
+            "capture_call_index": int(seen),
+            "capture_saved_index": int(saved),
+            "num_tokens": int(hidden_states.shape[0]),
+            "hidden_size": int(hidden_states.shape[-1]),
+            "rows": rows,
+            "positions_shape": list(positions.shape),
+            "positions": pos_cpu,
+            "positions_first16": pos_cpu.reshape(-1)[:16].tolist(),
+            "layer_types": layer_types,
+            "input_hidden": hidden_states.index_select(0, row_index)
+            .detach()
+            .to(torch.float32)
+            .cpu(),
+            "layers": [],
+        }
+    except Exception as exc:
+        logger.warning("FR10 layer hidden capture start failed: %s", exc)
+        return None
+
+
+def _fr10_layer_hidden_capture_layer(payload, layer_idx, hidden_states, residual):
+    if payload is None:
+        return
+    try:
+        rows = torch.tensor(
+            [int(_x) for _x in payload["rows"]],
+            dtype=torch.long,
+            device=hidden_states.device,
+        )
+        layer_types = payload.get("layer_types") or []
+        layer_type = layer_types[layer_idx] if layer_idx < len(layer_types) else None
+        item = {
+            "layer_idx": int(layer_idx),
+            "layer_type": layer_type,
+            "hidden": hidden_states.index_select(0, rows)
+            .detach()
+            .to(torch.float32)
+            .cpu(),
+        }
+        if residual is not None:
+            item["residual"] = residual.index_select(0, rows).detach().to(torch.float32).cpu()
+        payload["layers"].append(item)
+    except Exception as exc:
+        logger.warning("FR10 layer hidden capture layer failed: %s", exc)
+
+
+def _fr10_layer_hidden_capture_finish(payload, hidden_states):
+    if payload is None:
+        return
+    try:
+        rows = torch.tensor(
+            [int(_x) for _x in payload["rows"]],
+            dtype=torch.long,
+            device=hidden_states.device,
+        )
+        payload["final_norm_hidden"] = hidden_states.index_select(0, rows).detach().to(torch.float32).cpu()
+        out = Path(str(payload["call_path"]))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(payload, out)
+        if int(payload.get("capture_saved_index", 0)) == 0:
+            torch.save(payload, Path(str(payload["path"])))
+        globals()["_FR10_LAYER_HIDDEN_CAPTURE_SAVED"] = (
+            int(globals().get("_FR10_LAYER_HIDDEN_CAPTURE_SAVED", 0)) + 1
+        )
+    except Exception as exc:
+        logger.warning("FR10 layer hidden capture finish failed: %s", exc)
+
+
+'''
+        if helper_anchor not in text:
+            raise RuntimeError("qwen3_next root hidden helper anchor not found")
+        text = text.replace(helper_anchor, helper + helper_anchor, 1)
+        root_start = """        _fr10_root_capture = _fr10_root_hidden_capture_start(
+            self, positions, hidden_states
+        )
+"""
+        layer_start = root_start + """        _fr10_layer_capture = _fr10_layer_hidden_capture_start(
+            self, positions, hidden_states
+        )
+"""
+        if root_start not in text:
+            raise RuntimeError("qwen3_next FR10 root capture start anchor not found")
+        text = text.replace(root_start, layer_start, 1)
+        root_layer = """            _fr10_root_hidden_capture_layer(
+                _fr10_root_capture, layer_idx, hidden_states, residual
+            )
+"""
+        layer_layer = root_layer + """            _fr10_layer_hidden_capture_layer(
+                _fr10_layer_capture, layer_idx, hidden_states, residual
+            )
+"""
+        if root_layer not in text:
+            raise RuntimeError("qwen3_next FR10 root capture layer anchor not found")
+        text = text.replace(root_layer, layer_layer, 1)
+        root_finish = """        _fr10_root_hidden_capture_finish(_fr10_root_capture, hidden_states)
+"""
+        layer_finish = root_finish + """        _fr10_layer_hidden_capture_finish(_fr10_layer_capture, hidden_states)
+"""
+        if root_finish not in text:
+            raise RuntimeError("qwen3_next FR10 root capture finish anchor not found")
+        text = text.replace(root_finish, layer_finish, 1)
+        QWEN3_NEXT_PATH.write_text(text)
+        did_patch = True
+
     text = QWEN3_5_PATH.read_text()
     logit_sentinel = "# FR10_ROOT_LOGIT_CAPTURE"
     if logit_sentinel not in text:
