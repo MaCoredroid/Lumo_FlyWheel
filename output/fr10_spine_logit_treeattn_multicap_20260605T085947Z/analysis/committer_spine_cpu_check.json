@@ -1,0 +1,491 @@
+{
+  "schema": "fr10.committer_spine_cpu_check.v1",
+  "comparison": "output/fr10_spine_logit_treeattn_multicap_20260605T085947Z/spine_logit_comparison_vs_native.json",
+  "rows": [
+    {
+      "match_index": 0,
+      "seq": [
+        271,
+        248069,
+        271,
+        8179,
+        5073
+      ],
+      "tree_capture": "spine_tree_logits.call0.pt",
+      "tree_req": 0,
+      "native_capture": "spine_native_logits.call1.pt",
+      "native_req": 3,
+      "native_linear_expected_on_native_logits": 0.8163082220395834,
+      "native_linear_expected_on_tree_logits": 1.232980806322984,
+      "tree_spine_expected_on_tree_logits": 1.232980806322984,
+      "committer_delta_tree_minus_native_same_tree_logits": 0.0,
+      "verify_delta_native_logits_minus_tree_logits": -0.4166725842834005,
+      "depth_rows": [
+        {
+          "depth": 0,
+          "parent": -1,
+          "children": [
+            0
+          ],
+          "child_tokens": [
+            271
+          ],
+          "spine_child": 0,
+          "spine_token": 271,
+          "spine_target_prob": 0.3973143398761749,
+          "sibling_overlap_mass": 0.3973143398761749,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 0.3973143398761749,
+          "tree_continue_prob": 0.3973143398761749,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 1,
+          "parent": 0,
+          "children": [
+            1,
+            2
+          ],
+          "child_tokens": [
+            248069,
+            71093
+          ],
+          "spine_child": 1,
+          "spine_token": 248069,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 2,
+          "parent": 1,
+          "children": [
+            3,
+            4
+          ],
+          "child_tokens": [
+            271,
+            1358
+          ],
+          "spine_child": 3,
+          "spine_token": 271,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 3,
+          "parent": 3,
+          "children": [
+            5,
+            6
+          ],
+          "child_tokens": [
+            8179,
+            69551
+          ],
+          "spine_child": 5,
+          "spine_token": 8179,
+          "spine_target_prob": 0.0516439788043499,
+          "sibling_overlap_mass": 0.0516439788043499,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 0.0516439788043499,
+          "tree_continue_prob": 0.0516439788043499,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 4,
+          "parent": 5,
+          "children": [
+            7,
+            8
+          ],
+          "child_tokens": [
+            5073,
+            42874
+          ],
+          "spine_child": 7,
+          "spine_token": 5073,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        }
+      ]
+    },
+    {
+      "match_index": 1,
+      "seq": [
+        271,
+        248069,
+        271,
+        71093,
+        12305
+      ],
+      "tree_capture": "spine_tree_logits.call0.pt",
+      "tree_req": 2,
+      "native_capture": "spine_native_logits.call0.pt",
+      "native_req": 0,
+      "native_linear_expected_on_native_logits": 2.759481966495514,
+      "native_linear_expected_on_tree_logits": 3.0134281516075134,
+      "tree_spine_expected_on_tree_logits": 3.0134281516075134,
+      "committer_delta_tree_minus_native_same_tree_logits": 0.0,
+      "verify_delta_native_logits_minus_tree_logits": -0.2539461851119995,
+      "depth_rows": [
+        {
+          "depth": 0,
+          "parent": -1,
+          "children": [
+            0
+          ],
+          "child_tokens": [
+            271
+          ],
+          "spine_child": 0,
+          "spine_token": 271,
+          "spine_target_prob": 0.6026856303215027,
+          "sibling_overlap_mass": 0.6026856303215027,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 0.6026856303215027,
+          "tree_continue_prob": 0.6026856303215027,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 1,
+          "parent": 0,
+          "children": [
+            1,
+            2
+          ],
+          "child_tokens": [
+            248069,
+            71093
+          ],
+          "spine_child": 1,
+          "spine_token": 248069,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 2,
+          "parent": 1,
+          "children": [
+            3,
+            4
+          ],
+          "child_tokens": [
+            271,
+            1358
+          ],
+          "spine_child": 3,
+          "spine_token": 271,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 3,
+          "parent": 3,
+          "children": [
+            5,
+            6
+          ],
+          "child_tokens": [
+            71093,
+            8160
+          ],
+          "spine_child": 5,
+          "spine_token": 71093,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 4,
+          "parent": 5,
+          "children": [
+            7,
+            8
+          ],
+          "child_tokens": [
+            12305,
+            198
+          ],
+          "spine_child": 7,
+          "spine_token": 12305,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        }
+      ]
+    },
+    {
+      "match_index": 2,
+      "seq": [
+        638,
+        19474,
+        283,
+        4535,
+        220
+      ],
+      "tree_capture": "spine_tree_logits.call0.pt",
+      "tree_req": 3,
+      "native_capture": "spine_native_logits.call0.pt",
+      "native_req": 1,
+      "native_linear_expected_on_native_logits": 4.101814419031143,
+      "native_linear_expected_on_tree_logits": 4.0695324912667274,
+      "tree_spine_expected_on_tree_logits": 4.0695324912667274,
+      "committer_delta_tree_minus_native_same_tree_logits": 0.0,
+      "verify_delta_native_logits_minus_tree_logits": 0.03228192776441574,
+      "depth_rows": [
+        {
+          "depth": 0,
+          "parent": -1,
+          "children": [
+            0
+          ],
+          "child_tokens": [
+            638
+          ],
+          "spine_child": 0,
+          "spine_token": 638,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 1,
+          "parent": 0,
+          "children": [
+            1,
+            2
+          ],
+          "child_tokens": [
+            19474,
+            920
+          ],
+          "spine_child": 1,
+          "spine_token": 19474,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 2,
+          "parent": 1,
+          "children": [
+            3,
+            4
+          ],
+          "child_tokens": [
+            283,
+            25
+          ],
+          "spine_child": 3,
+          "spine_token": 283,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 3,
+          "parent": 3,
+          "children": [
+            5,
+            6
+          ],
+          "child_tokens": [
+            4535,
+            14856
+          ],
+          "spine_child": 5,
+          "spine_token": 4535,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 4,
+          "parent": 5,
+          "children": [
+            7,
+            8
+          ],
+          "child_tokens": [
+            220,
+            271
+          ],
+          "spine_child": 7,
+          "spine_token": 220,
+          "spine_target_prob": 0.06953249126672745,
+          "sibling_overlap_mass": 0.31222473829984665,
+          "q_mix_spine_token": 0.22270013467014763,
+          "accept_prob_if_spine_selected": 0.31222473829984665,
+          "tree_continue_prob": 0.06953249126672745,
+          "duplicate_spine_token_count": 1
+        }
+      ]
+    },
+    {
+      "match_index": 3,
+      "seq": [
+        283,
+        2958,
+        198,
+        262,
+        1067
+      ],
+      "tree_capture": "spine_tree_logits.call1.pt",
+      "tree_req": 1,
+      "native_capture": "spine_native_logits.call2.pt",
+      "native_req": 2,
+      "native_linear_expected_on_native_logits": 4.0,
+      "native_linear_expected_on_tree_logits": 3.948664128780365,
+      "tree_spine_expected_on_tree_logits": 3.948664082837727,
+      "committer_delta_tree_minus_native_same_tree_logits": -4.5942638138285474e-08,
+      "verify_delta_native_logits_minus_tree_logits": 0.05133587121963501,
+      "depth_rows": [
+        {
+          "depth": 0,
+          "parent": -1,
+          "children": [
+            0
+          ],
+          "child_tokens": [
+            283
+          ],
+          "spine_child": 0,
+          "spine_token": 283,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 1,
+          "parent": 0,
+          "children": [
+            1,
+            2
+          ],
+          "child_tokens": [
+            2958,
+            4535
+          ],
+          "spine_child": 1,
+          "spine_token": 2958,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 2,
+          "parent": 1,
+          "children": [
+            3,
+            4
+          ],
+          "child_tokens": [
+            198,
+            271
+          ],
+          "spine_child": 3,
+          "spine_token": 198,
+          "spine_target_prob": 1.0,
+          "sibling_overlap_mass": 1.0,
+          "q_mix_spine_token": 1.0,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 1.0,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 3,
+          "parent": 3,
+          "children": [
+            5,
+            6
+          ],
+          "child_tokens": [
+            262,
+            1031
+          ],
+          "spine_child": 5,
+          "spine_token": 262,
+          "spine_target_prob": 0.948664128780365,
+          "sibling_overlap_mass": 1.0000000484287739,
+          "q_mix_spine_token": 0.9486640828377266,
+          "accept_prob_if_spine_selected": 1.0,
+          "tree_continue_prob": 0.9486640828377266,
+          "duplicate_spine_token_count": 1
+        },
+        {
+          "depth": 4,
+          "parent": 5,
+          "children": [
+            7,
+            8
+          ],
+          "child_tokens": [
+            1067,
+            2047
+          ],
+          "spine_child": 7,
+          "spine_token": 1067,
+          "spine_target_prob": 0.0,
+          "sibling_overlap_mass": 0.12970682978630066,
+          "q_mix_spine_token": 0.0,
+          "accept_prob_if_spine_selected": 0.0,
+          "tree_continue_prob": 0.0,
+          "duplicate_spine_token_count": 1
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "matches": 4,
+    "native_linear_on_native_logits_mean": 2.9194011518915604,
+    "native_linear_on_tree_logits_mean": 3.0661513944943977,
+    "tree_spine_mean_of_means": 3.066151383008738,
+    "committer_delta_tree_minus_native_same_tree_logits_mean": -1.1485659534571369e-08,
+    "verify_delta_native_logits_minus_tree_logits_mean": -0.1467502426028373,
+    "tree_less_than_native_same_logits_any_row": false
+  }
+}
