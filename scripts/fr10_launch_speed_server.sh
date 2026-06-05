@@ -38,11 +38,7 @@ PY
 )}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
 if [[ -z "${ATTENTION_BACKEND+x}" ]]; then
-  if [[ "$FR10_DECODE_MODE_DEFAULT" == "tree_mtp" && "$SPEC_CONFIG" == *"speculative_token_tree"* ]]; then
-    ATTENTION_BACKEND=TREE_ATTN
-  else
-    ATTENTION_BACKEND=FLASH_ATTN
-  fi
+  ATTENTION_BACKEND=FLASH_ATTN
 fi
 
 mkdir -p "$LOG_DIR"
