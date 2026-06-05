@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-05 02:11 UTC
+Updated: 2026-06-05 02:25 UTC
 
 ## CONTRACTS
 
@@ -34,6 +34,8 @@ Updated: 2026-06-05 02:11 UTC
 - 2026-06-05 02:10 UTC: fresh corrected-payload boot `output/fr10_kernel_input_gate_confirm_20260605T020143Z` engaged the real tree path before any verdict (`gpu_tree_metadata reason=ok`, `has_tree_parent_indices=true`, draft count `[9]`, tree accept rows present). The run swapped during startup, so no acceptance/TPS number from it is valid, but the state payload is usable. Payload fields include `value_tree/g_tree/beta_tree`; accepted branch is `[0,1,3,6]`, `accepted_len=4`, `accepted_bank_row=7`, `next_read_bank_row=4`.
 - 2026-06-05 02:10 UTC: corrected offline source-native gate on that payload is still red: `ssm_next_vs_native_max_abs=13.220832824707031`, `ssm_tree_row_vs_native_max_abs=13.220832824707031`, `conv_next_vs_native_max_abs=64.0`, `negative_ssm_max_abs=7.1455254554748535`, `negative_powered=true`, `src_native_pass=false`. This confirms the accepted-lens h0/scatter alignment did not make the accepted branch recurrent state native.
 - 2026-06-05 02:11 UTC: added `scripts/fr10_tree_kernel_h0_ab_replay.py`, a cheap CUDA A/B oracle that replays `launch_tree_gdn_prepared` with the payload's known-correct `prev_h0` instead of the serving bank. Result on the same branch payload is **B**: `kernel_replay_row_vs_native_max_abs=13.220832824707031`, `serving_tree_row_vs_kernel_replay_max_abs=0.0`, `serving_tree_row_vs_native_max_abs=13.220832824707031`. Therefore serving h0/read-column wiring is no longer the immediate culprit for this branch; the packed tree GDN branch math itself does not equal serial native over branch path `[0,1,3,6]`.
+- 2026-06-05 02:25 UTC: superseded the 02:11 **B** conclusion after verifying the oracle against the green L1 fixture. L1 `fr10_tree_gdn_scan_capture.pt` gives kernel-vs-native `7.62939453125e-06` only when native replay uses raw `value_spec/a/b`; using post-conv `value_tree/g_tree/beta_tree` inside `fused_sigmoid_gating_delta_rule_update` creates a fake `15.065278053283691` state delta. The handoff gate and h0 replay oracle now use raw `value_spec/a/b` for native replay and reserve `value_tree/g_tree/beta_tree` for kernel replay.
+- 2026-06-05 02:25 UTC: found a second oracle/protocol mismatch: sampler accepted node ids are raw sorted tree nodes, while the GDN kernel state rows include the explicit row-0 root. State publications now translate raw sampler node `j` to GDN row `j+1` before filling `_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR` and `_LUMO_FA_LAST_ACCEPTED_TREE_*`. Re-evaluating the old payload with the corrected row space gives `accepted_gdn_node_id=7`, `accepted_gdn_node_path=[0,1,2,4,7]`, `ssm_tree_row_vs_native_max_abs=2.86102294921875e-06`, `ssm_next_vs_native_max_abs=9.40386962890625`, `conv_next_vs_native_max_abs=64.0`, and `negative_ssm_max_abs=12.170829772949219`. Corrected h0 replay returns **A** (`kernel_replay_row_vs_native_max_abs=2.86102294921875e-06`, `serving_tree_row_vs_kernel_replay_max_abs=0.0`). Kernel math is sound; next-read state handoff remains the failing seam until a fresh payload exercises the raw-to-GDN publication fix.
 
 ## Current User Decision: Conv Only
 

@@ -36,6 +36,18 @@ def _linear_parent(n: int) -> list[int]:
     return [-1] + [idx - 1 for idx in range(1, n)]
 
 
+def _path_to(parent: list[int], node: int) -> list[int]:
+    path: list[int] = []
+    cur = int(node)
+    guard = 0
+    while cur >= 0 and guard <= len(parent):
+        path.append(cur)
+        cur = int(parent[cur])
+        guard += 1
+    path.reverse()
+    return path
+
+
 def _node_major_spec_tensor(payload: dict[str, Any], name: str) -> torch.Tensor:
     tensor = payload[name]
     if name == "value_spec" and tensor.ndim == 4 and tensor.size(0) == 1:
@@ -55,14 +67,21 @@ def evaluate(payload_path: Path, out_path: Path | None = None) -> dict[str, Any]
         raise RuntimeError("CUDA is required for FR10 tree kernel h0 replay")
     payload = torch.load(payload_path, map_location="cpu")
     parent = [int(x) for x in payload["tree_parent"]]
-    accepted_node = int(payload.get("accepted_gdn_node_id", payload["accepted_node_id"]))
-    accepted_path = [int(x) for x in payload.get("accepted_gdn_node_path") or []]
-    if not accepted_path:
-        accepted_path = [int(x) for x in payload.get("accepted_node_path") or []]
+    raw_accepted_node = int(payload["accepted_node_id"])
+    raw_accepted_path = [int(x) for x in payload.get("accepted_node_path") or []]
+    if payload.get("accepted_gdn_node_id") is not None:
+        accepted_node = int(payload["accepted_gdn_node_id"])
+    else:
+        raw_parent_path = _path_to(parent, raw_accepted_node)
+        if raw_parent_path[1:] == raw_accepted_path:
+            accepted_node = raw_accepted_node
+        elif raw_accepted_node + 1 < len(parent):
+            accepted_node = raw_accepted_node + 1
+        else:
+            accepted_node = raw_accepted_node
+    accepted_path = _path_to(parent, accepted_node)
     if not accepted_path or accepted_path[-1] != accepted_node:
-        raise ValueError(
-            f"accepted path {accepted_path} does not end at accepted node {accepted_node}"
-        )
+        raise ValueError(f"cannot resolve GDN path for accepted node {accepted_node}")
 
     device = torch.device("cuda")
     tree = Tree(tuple(parent))
@@ -75,6 +94,9 @@ def evaluate(payload_path: Path, out_path: Path | None = None) -> dict[str, Any]
     v = _node_major_spec_tensor(payload, "value_tree").to(device).contiguous()
     g = _node_major_spec_tensor(payload, "g_tree").to(device).contiguous()
     beta = _node_major_spec_tensor(payload, "beta_tree").to(device).contiguous()
+    value_spec = _node_major_spec_tensor(payload, "value_spec").to(device).contiguous()
+    a = _node_major_spec_tensor(payload, "a").to(device).contiguous()
+    b = _node_major_spec_tensor(payload, "b").to(device).contiguous()
     h0 = payload["prev_h0"].to(device).contiguous()
     serving_tree_state = payload["serving_tree_state"].to(device).contiguous()
     output_scale = float(payload["output_scale"])
@@ -99,9 +121,9 @@ def evaluate(payload_path: Path, out_path: Path | None = None) -> dict[str, Any]
         Tree(tuple(_linear_parent(len(accepted_path)))),
         q.index_select(0, index).contiguous(),
         k.index_select(0, index).contiguous(),
-        v.index_select(0, index).contiguous(),
-        g.index_select(0, index).contiguous(),
-        beta.index_select(0, index).contiguous(),
+        value_spec.index_select(0, index).contiguous(),
+        a.index_select(0, index).contiguous(),
+        b.index_select(0, index).contiguous(),
         payload["A_log"].to(device).contiguous(),
         payload["dt_bias"].to(device).contiguous(),
         h0,
@@ -121,8 +143,8 @@ def evaluate(payload_path: Path, out_path: Path | None = None) -> dict[str, Any]
         "schema": "fr10.tree_kernel_h0_ab_replay.v1",
         "payload": str(payload_path),
         "accepted_len": int(payload["accepted_len"]),
-        "accepted_node_id": int(payload["accepted_node_id"]),
-        "accepted_node_path": [int(x) for x in payload.get("accepted_node_path") or []],
+        "accepted_node_id": raw_accepted_node,
+        "accepted_node_path": raw_accepted_path,
         "accepted_gdn_node_id": accepted_node,
         "accepted_gdn_node_path": accepted_path,
         "state_atol": state_atol,

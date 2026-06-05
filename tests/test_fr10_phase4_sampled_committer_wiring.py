@@ -62,9 +62,11 @@ def test_phase4_patcher_exports_src_native_handoff_payload() -> None:
     assert '"value_tree": _fr10_prev_read["value_tree"]' in text
     assert '"g_tree": _fr10_prev_read["g_tree"]' in text
     assert '"beta_tree": _fr10_prev_read["beta_tree"]' in text
-    assert '"value_tree" if "value_tree" in payload else "value_spec"' in gate_text
-    assert '"g_tree" if "g_tree" in payload else "a"' in gate_text
-    assert '"beta_tree" if "beta_tree" in payload else "b"' in gate_text
+    assert "accepted_gdn_node_paths" in text
+    assert "int(_node_id) + 1" in text
+    assert '_node_major_spec_tensor(payload, "value_spec")' in gate_text
+    assert '_node_major_spec_tensor(payload, "a")' in gate_text
+    assert '_node_major_spec_tensor(payload, "b")' in gate_text
 
 
 def test_phase4_tree_disengagement_raises_by_default() -> None:
@@ -110,6 +112,7 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert '"value_tree": _fr10_prev_read["value_tree"]' in text
     assert '"g_tree": _fr10_prev_read["g_tree"]' in text
     assert '"beta_tree": _fr10_prev_read["beta_tree"]' in text
+    assert "_LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS = [\n            [int(x) for x in row] for row in accepted_gdn_node_paths\n        ]" in text
     assert "h0_num_accepted_tokens=_fr10_accepted_lens_tensor" in text
     assert "num_accepted_tokens=_fr10_accepted_lens_tensor" in text
     assert "torch.clamp(\n                                _fr10_accepted_lens_tensor[_fr10_b].to(torch.long) - 1" in text

@@ -84,17 +84,15 @@ def _native_final_state_for_path(
         .to(device)
         .index_select(0, index)
         .contiguous(),
-        _node_major_spec_tensor(
-            payload, "value_tree" if "value_tree" in payload else "value_spec"
-        )
+        _node_major_spec_tensor(payload, "value_spec")
         .to(device)
         .index_select(0, index)
         .contiguous(),
-        _node_major_spec_tensor(payload, "g_tree" if "g_tree" in payload else "a")
+        _node_major_spec_tensor(payload, "a")
         .to(device)
         .index_select(0, index)
         .contiguous(),
-        _node_major_spec_tensor(payload, "beta_tree" if "beta_tree" in payload else "b")
+        _node_major_spec_tensor(payload, "b")
         .to(device)
         .index_select(0, index)
         .contiguous(),
@@ -120,16 +118,21 @@ def evaluate(
     accepted_len = int(payload["accepted_len"])
     raw_accepted_node = int(payload["accepted_node_id"])
     raw_accepted_path = [int(x) for x in payload.get("accepted_node_path") or []]
-    accepted_node = int(payload.get("accepted_gdn_node_id", raw_accepted_node))
-    accepted_path = [int(x) for x in payload.get("accepted_gdn_node_path") or []]
-    if not accepted_path:
-        accepted_path = raw_accepted_path
-    if accepted_len <= 0 or not accepted_path:
+    if accepted_len <= 0 or not raw_accepted_path:
         raise ValueError("src==native handoff payload must contain an accepted path")
-    if accepted_path[-1] != accepted_node:
-        raise ValueError(
-            f"accepted_node_id {accepted_node} does not match accepted path {accepted_path}"
-        )
+    if payload.get("accepted_gdn_node_id") is not None:
+        accepted_node = int(payload["accepted_gdn_node_id"])
+    else:
+        raw_parent_path = _path_to(parent, raw_accepted_node)
+        if raw_parent_path[1:] == raw_accepted_path:
+            accepted_node = raw_accepted_node
+        elif raw_accepted_node + 1 < len(parent):
+            accepted_node = raw_accepted_node + 1
+        else:
+            accepted_node = raw_accepted_node
+    accepted_path = _path_to(parent, accepted_node)
+    if not accepted_path or accepted_path[-1] != accepted_node:
+        raise ValueError(f"cannot resolve GDN path for accepted node {accepted_node}")
 
     device = torch.device("cuda")
     native_state = _native_final_state_for_path(payload, accepted_path, device)

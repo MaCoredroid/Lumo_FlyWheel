@@ -1989,6 +1989,19 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     ]
     try:
         from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
+        accepted_gdn_node_paths = []
+        accepted_gdn_rows = []
+        for _accepted_path, _accepted_len, _accepted_row in zip(
+            accepted_node_paths, accepted_lens, accepted_rows
+        ):
+            _gdn_path = [
+                int(_node_id) + 1
+                for _node_id in _accepted_path[: int(_accepted_len)]
+            ]
+            accepted_gdn_node_paths.append(_gdn_path)
+            accepted_gdn_rows.append(
+                int(_gdn_path[-1]) if _gdn_path else 0
+            )
         _accepted_path_buf = getattr(
             _lumo_tree_commit_gdn, "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR", None
         )
@@ -1997,11 +2010,11 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         )
         if _accepted_path_buf is None or _accepted_lens_buf is None:
             raise RuntimeError("missing_accepted_path_device_tensor")
-        if int(_accepted_path_buf.size(0)) < len(accepted_node_paths):
+        if int(_accepted_path_buf.size(0)) < len(accepted_gdn_node_paths):
             raise RuntimeError("accepted_path_device_tensor_batch_too_small")
         _accepted_path_cols = int(_accepted_path_buf.size(1))
         _accepted_path_rows = []
-        for _accepted_path in accepted_node_paths:
+        for _accepted_path in accepted_gdn_node_paths:
             _row = [0 for _ in range(_accepted_path_cols)]
             for _pos, _node_id in enumerate(_accepted_path[:_accepted_path_cols]):
                 _row[_pos] = int(_node_id)
@@ -2022,13 +2035,13 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 )
             )
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
-            int(x) for x in accepted_rows
+            int(x) for x in accepted_gdn_rows
         ]
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_LENS = [
             int(x) for x in accepted_lens
         ]
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS = [
-            [int(x) for x in row] for row in accepted_node_paths
+            [int(x) for x in row] for row in accepted_gdn_node_paths
         ]
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
             [int(x) for x in row] for row in accepted_token_rows
@@ -2260,6 +2273,19 @@ def _lumo_tree_canonical_multidraft_sample(
     ]
     try:
         from vllm.model_executor.layers.mamba import gdn_linear_attn as _lumo_tree_commit_gdn
+        accepted_gdn_node_paths = []
+        accepted_gdn_rows = []
+        for _accepted_path, _accepted_len, _accepted_row in zip(
+            accepted_node_paths, accepted_lens, accepted_rows
+        ):
+            _gdn_path = [
+                int(_node_id) + 1
+                for _node_id in _accepted_path[: int(_accepted_len)]
+            ]
+            accepted_gdn_node_paths.append(_gdn_path)
+            accepted_gdn_rows.append(
+                int(_gdn_path[-1]) if _gdn_path else 0
+            )
         _accepted_path_buf = getattr(
             _lumo_tree_commit_gdn, "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR", None
         )
@@ -2268,11 +2294,11 @@ def _lumo_tree_canonical_multidraft_sample(
         )
         if _accepted_path_buf is None or _accepted_lens_buf is None:
             raise RuntimeError("missing_accepted_path_device_tensor")
-        if int(_accepted_path_buf.size(0)) < len(accepted_node_paths):
+        if int(_accepted_path_buf.size(0)) < len(accepted_gdn_node_paths):
             raise RuntimeError("accepted_path_device_tensor_batch_too_small")
         _accepted_path_cols = int(_accepted_path_buf.size(1))
         _accepted_path_rows = []
-        for _accepted_path in accepted_node_paths:
+        for _accepted_path in accepted_gdn_node_paths:
             _row = [0 for _ in range(_accepted_path_cols)]
             for _pos, _node_id in enumerate(_accepted_path[:_accepted_path_cols]):
                 _row[_pos] = int(_node_id)
@@ -2293,13 +2319,13 @@ def _lumo_tree_canonical_multidraft_sample(
                 )
             )
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
-            int(x) for x in accepted_rows
+            int(x) for x in accepted_gdn_rows
         ]
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_LENS = [
             int(x) for x in accepted_lens
         ]
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS = [
-            [int(x) for x in row] for row in accepted_node_paths
+            [int(x) for x in row] for row in accepted_gdn_node_paths
         ]
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
             [int(x) for x in row] for row in accepted_token_rows
