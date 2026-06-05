@@ -100,6 +100,8 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert "accepted_linear_read_col" in text
     assert "linear_column_coincide" in text
     assert "_fr10_read_col" in text
+    assert "self.fr10_tree_accepted_path_bs = max(" in text
+    assert "self.vllm_config.scheduler_config.max_num_seqs" in text
     assert "_linear_remap_rows_kernel" in kernel_text
     assert "src_col = tl.load(" in kernel_text
     assert "spec_state_indices + pid_b * SPEC_COLS + src_col" in kernel_text
