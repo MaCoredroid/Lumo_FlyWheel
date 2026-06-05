@@ -36,6 +36,12 @@ TREE_ATTN_PATH = Path(
 MAMBA_UTILS_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/mamba_utils.py"
 )
+QWEN3_NEXT_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/qwen3_next.py"
+)
+QWEN3_5_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/qwen3_5.py"
+)
 
 
 def _patch_gdn_attn() -> bool:
@@ -3652,17 +3658,17 @@ EagleProposer.propose = _fr10_mtp_trace_propose
 def _patch_tree_attn_spec_config_override() -> bool:
     text = TREE_ATTN_PATH.read_text()
     sentinel = "# FR10_SPEC_CONFIG_TREE_OVERRIDE"
-    if sentinel in text:
-        return False
+    did_patch = False
     text = text.replace("import ast\n", "import ast\nimport json\nimport os\n", 1)
-    old = """        spec_token_tree: str | None = None
+    if sentinel not in text:
+        old = """        spec_token_tree: str | None = None
         if spec := spec_config:
             spec_token_tree = spec.speculative_token_tree
         tree_choices: list[tuple[int, ...]] = (
             ast.literal_eval(spec_token_tree) if spec_token_tree is not None else [(0,)]
         )
 """
-    new = f"""        {sentinel}: keep attention tree identical to the FR10 launch descriptor.
+        new = f"""        {sentinel}: keep attention tree identical to the FR10 launch descriptor.
         spec_token_tree: str | None = None
         try:
             spec_env = os.environ.get("SPEC_CONFIG")
@@ -3676,11 +3682,243 @@ def _patch_tree_attn_spec_config_override() -> bool:
             sorted(ast.literal_eval(spec_token_tree), key=lambda _p: (len(_p), _p)) if spec_token_tree is not None else [(0,)]
         )
 """
-    if old not in text:
-        raise RuntimeError("tree attention spec tree anchor not found")
-    text = text.replace(old, new, 1)
+        if old not in text:
+            raise RuntimeError("tree attention spec tree anchor not found")
+        text = text.replace(old, new, 1)
+        did_patch = True
+
+    mask_sentinel = "# FR10_ROOT_ATTENTION_BIAS_CAPTURE"
+    if mask_sentinel not in text:
+        old_return = """    return tree_attn_mask
+"""
+        new_return = f"""    {mask_sentinel}: dump the runtime root/bonus attention bias row.
+    try:
+        _fr10_mask_path = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE")
+        if _fr10_mask_path and not os.path.exists(_fr10_mask_path + ".tree_attn_bias.pt"):
+            torch.save(
+                {{
+                    "root_row": tree_attn_mask[0].detach().cpu(),
+                    "full_bias": tree_attn_mask.detach().cpu(),
+                    "sorted_tree_choices": [tuple(_p) for _p in sorted_tree_choices],
+                    "depth_counts": [int(_x) for _x in depth_counts],
+                }},
+                _fr10_mask_path + ".tree_attn_bias.pt",
+            )
+    except Exception:
+        pass
+    return tree_attn_mask
+"""
+        if old_return not in text:
+            raise RuntimeError("tree attention return anchor not found")
+        text = text.replace(old_return, new_return, 1)
+        did_patch = True
     TREE_ATTN_PATH.write_text(text)
-    return True
+    return did_patch
+
+
+def _patch_qwen_root_hidden_capture() -> bool:
+    """Diagnostic-only root hidden/logit capture for FR10 verify-forward bisection."""
+
+    did_patch = False
+    text = QWEN3_NEXT_PATH.read_text()
+    sentinel = "# FR10_ROOT_HIDDEN_CAPTURE"
+    if sentinel not in text:
+        text = text.replace(
+            "from itertools import islice\n",
+            "from itertools import islice\nimport os\nfrom pathlib import Path\n",
+            1,
+        )
+        helper_anchor = "logger = init_logger(__name__)\n"
+        helper = '''logger = init_logger(__name__)
+
+
+# FR10_ROOT_HIDDEN_CAPTURE
+_FR10_ROOT_HIDDEN_CAPTURED = False
+
+
+def _fr10_root_hidden_capture_start(self, positions, hidden_states):
+    global _FR10_ROOT_HIDDEN_CAPTURED
+    path = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE")
+    if not path or _FR10_ROOT_HIDDEN_CAPTURED:
+        return None
+    try:
+        desired = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS")
+        if desired and int(hidden_states.shape[0]) != int(desired):
+            return None
+        root_row = int(os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW", "0"))
+        if root_row < 0 or root_row >= int(hidden_states.shape[0]):
+            return None
+        layer_types = list(getattr(getattr(self, "config", None), "layer_types", []))
+        pos_cpu = positions.detach().cpu()
+        return {
+            "source": "Qwen3NextModel.forward",
+            "path": path,
+            "num_tokens": int(hidden_states.shape[0]),
+            "hidden_size": int(hidden_states.shape[-1]),
+            "root_row": root_row,
+            "positions_shape": list(positions.shape),
+            "positions": pos_cpu,
+            "positions_first16": pos_cpu.reshape(-1)[:16].tolist(),
+            "layer_types": layer_types,
+            "layers": [],
+        }
+    except Exception as exc:
+        logger.warning("FR10 root hidden capture start failed: %s", exc)
+        return None
+
+
+def _fr10_root_hidden_capture_layer(payload, layer_idx, hidden_states, residual):
+    if payload is None:
+        return
+    try:
+        root_row = int(payload["root_row"])
+        root = hidden_states[root_row].detach().to(torch.float32).cpu()
+        residual_root = (
+            residual[root_row].detach().to(torch.float32).cpu()
+            if residual is not None
+            else None
+        )
+        layer_types = payload.get("layer_types") or []
+        layer_type = layer_types[layer_idx] if layer_idx < len(layer_types) else None
+        payload["layers"].append({
+            "layer_idx": int(layer_idx),
+            "layer_type": layer_type,
+            "root_hidden": root,
+            "root_residual": residual_root,
+        })
+    except Exception as exc:
+        logger.warning("FR10 root hidden capture layer failed: %s", exc)
+
+
+def _fr10_root_hidden_capture_finish(payload, hidden_states):
+    global _FR10_ROOT_HIDDEN_CAPTURED
+    if payload is None:
+        return
+    try:
+        root_row = int(payload["root_row"])
+        payload["final_norm_root_hidden"] = (
+            hidden_states[root_row].detach().to(torch.float32).cpu()
+        )
+        out = Path(str(payload["path"]))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(payload, out)
+        _FR10_ROOT_HIDDEN_CAPTURED = True
+    except Exception as exc:
+        logger.warning("FR10 root hidden capture finish failed: %s", exc)
+
+
+'''
+        if helper_anchor not in text:
+            raise RuntimeError("qwen3_next logger anchor not found")
+        text = text.replace(helper_anchor, helper, 1)
+        old_loop = """        aux_hidden_states = []
+        for layer_idx, layer in enumerate(
+            islice(self.layers, self.start_layer, self.end_layer),
+            start=self.start_layer,
+        ):
+            if layer_idx in self.aux_hidden_state_layers:
+                aux_hidden_states.append(
+                    hidden_states + residual if residual is not None else hidden_states
+                )
+            hidden_states, residual = layer(
+                positions=positions,
+                hidden_states=hidden_states,
+                residual=residual,
+            )
+
+        if not get_pp_group().is_last_rank:
+"""
+        new_loop = """        aux_hidden_states = []
+        _fr10_root_capture = _fr10_root_hidden_capture_start(
+            self, positions, hidden_states
+        )
+        for layer_idx, layer in enumerate(
+            islice(self.layers, self.start_layer, self.end_layer),
+            start=self.start_layer,
+        ):
+            if layer_idx in self.aux_hidden_state_layers:
+                aux_hidden_states.append(
+                    hidden_states + residual if residual is not None else hidden_states
+                )
+            hidden_states, residual = layer(
+                positions=positions,
+                hidden_states=hidden_states,
+                residual=residual,
+            )
+            _fr10_root_hidden_capture_layer(
+                _fr10_root_capture, layer_idx, hidden_states, residual
+            )
+
+        if not get_pp_group().is_last_rank:
+"""
+        if old_loop not in text:
+            raise RuntimeError("qwen3_next layer loop anchor not found")
+        text = text.replace(old_loop, new_loop, 1)
+        old_norm = """        hidden_states, _ = self.norm(hidden_states, residual)
+        if aux_hidden_states:
+            return hidden_states, aux_hidden_states
+        return hidden_states
+"""
+        new_norm = """        hidden_states, _ = self.norm(hidden_states, residual)
+        _fr10_root_hidden_capture_finish(_fr10_root_capture, hidden_states)
+        if aux_hidden_states:
+            return hidden_states, aux_hidden_states
+        return hidden_states
+"""
+        if old_norm not in text:
+            raise RuntimeError("qwen3_next norm anchor not found")
+        text = text.replace(old_norm, new_norm, 1)
+        QWEN3_NEXT_PATH.write_text(text)
+        did_patch = True
+
+    text = QWEN3_5_PATH.read_text()
+    logit_sentinel = "# FR10_ROOT_LOGIT_CAPTURE"
+    if logit_sentinel not in text:
+        text = text.replace(
+            "import typing\n",
+            "import typing\nimport os\nfrom pathlib import Path\n",
+            1,
+        )
+        old_compute = """    def compute_logits(
+        self,
+        hidden_states: torch.Tensor,
+    ) -> torch.Tensor | None:
+        return self.logits_processor(self.lm_head, hidden_states)
+"""
+        new_compute = """    def compute_logits(
+        self,
+        hidden_states: torch.Tensor,
+    ) -> torch.Tensor | None:
+        logits = self.logits_processor(self.lm_head, hidden_states)
+        # FR10_ROOT_LOGIT_CAPTURE: dump the same root row scored by the LM head.
+        try:
+            _fr10_path = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE")
+            _fr10_done = bool(globals().get("_FR10_ROOT_LOGIT_CAPTURED", False))
+            if _fr10_path and not _fr10_done and logits is not None:
+                _fr10_desired = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS")
+                if not _fr10_desired or int(hidden_states.shape[0]) == int(_fr10_desired):
+                    _fr10_root_row = int(os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW", "0"))
+                    if 0 <= _fr10_root_row < int(logits.shape[0]):
+                        _fr10_out = Path(_fr10_path + ".logits.pt")
+                        _fr10_out.parent.mkdir(parents=True, exist_ok=True)
+                        torch.save({
+                            "source": "Qwen3_5ForCausalLMBase.compute_logits",
+                            "num_tokens": int(hidden_states.shape[0]),
+                            "root_row": int(_fr10_root_row),
+                            "root_logits": logits[_fr10_root_row].detach().to(torch.float32).cpu(),
+                        }, _fr10_out)
+                        globals()["_FR10_ROOT_LOGIT_CAPTURED"] = True
+        except Exception as _fr10_exc:
+            logger.warning("FR10 root logit capture failed: %s", _fr10_exc)
+        return logits
+"""
+        if old_compute not in text:
+            raise RuntimeError("qwen3_5 compute_logits anchor not found")
+        text = text.replace(old_compute, new_compute, 1)
+        QWEN3_5_PATH.write_text(text)
+        did_patch = True
+
+    return did_patch
 
 
 
@@ -3695,6 +3933,7 @@ def main() -> int:
         (EAGLE_PATH, _patch_eagle_tree_consumption_verify()),
         (EAGLE_PATH, _patch_eagle_mtp_draft_trace()),
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
+        (QWEN3_NEXT_PATH, _patch_qwen_root_hidden_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
@@ -3703,6 +3942,8 @@ def main() -> int:
     patched: dict[str, bool] = {}
     for path, did_patch in patch_steps:
         patched[str(path)] = patched.get(str(path), False) or did_patch
+    if patched.get(str(QWEN3_NEXT_PATH), False):
+        patched[str(QWEN3_5_PATH)] = True
     import py_compile
 
     for path, did_patch in patched.items():
