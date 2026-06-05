@@ -167,6 +167,9 @@ def test_speed_launcher_defaults_to_nine_node_caterpillar() -> None:
         "(0, 0, 0, 0, 1)]\"}"
     ) in text
     assert "print(len(ast.literal_eval(os.environ[\"TREE\"])))" in text
+    assert "ATTENTION_BACKEND=TREE_ATTN" in text
+    assert "ATTENTION_BACKEND=FLASH_ATTN" in text
+    assert "--attention-backend '$ATTENTION_BACKEND'" in text
 
 
 def test_speed_launcher_recovers_host_memory_before_docker_run() -> None:

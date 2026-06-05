@@ -117,6 +117,8 @@ def _live_vllm_cmdline() -> str:
 def detect_batch_invariant(endpoint: str, log_path: Path = DEFAULT_VLLM_LOG) -> dict[str, Any]:
     cmdline = _live_vllm_cmdline()
     has_flash = "--attention-backend FLASH_ATTN" in cmdline or "--attention-backend=FLASH_ATTN" in cmdline
+    has_tree = "--attention-backend TREE_ATTN" in cmdline or "--attention-backend=TREE_ATTN" in cmdline
+    attention_backend = "TREE_ATTN" if has_tree else "FLASH_ATTN" if has_flash else None
     container_id = _latest_container_id(log_path)
     env = _docker_env(container_id) if container_id else []
     has_batch_invariant = "VLLM_BATCH_INVARIANT=1" in env
@@ -124,6 +126,8 @@ def detect_batch_invariant(endpoint: str, log_path: Path = DEFAULT_VLLM_LOG) -> 
         "endpoint": endpoint,
         "container_id": container_id,
         "cmdline_has_flash_attn": has_flash,
+        "cmdline_has_tree_attn": has_tree,
+        "cmdline_attention_backend": attention_backend,
         "env_has_vllm_batch_invariant": has_batch_invariant,
         "cmdline": cmdline,
     }
@@ -138,10 +142,10 @@ def validate_live_server(endpoint: str, guard: dict[str, Any], *, allow_batch_in
             "batch-invariance guard failed: live container env does not expose "
             "VLLM_BATCH_INVARIANT=1; refusing greedy acceptance measurement"
         )
-    if not guard.get("cmdline_has_flash_attn"):
+    if not (guard.get("cmdline_has_flash_attn") or guard.get("cmdline_has_tree_attn")):
         raise GuardError(
             "batch-invariance guard failed: live vLLM command does not show "
-            "--attention-backend FLASH_ATTN"
+            "--attention-backend FLASH_ATTN or --attention-backend TREE_ATTN"
         )
     try:
         _http_json(endpoint.rstrip("/") + "/v1/models", timeout=5)
@@ -150,14 +154,12 @@ def validate_live_server(endpoint: str, guard: dict[str, Any], *, allow_batch_in
 
 
 def lcp_from_tree_record(record: dict[str, Any], path: list[int] | None = None) -> int:
+    if path is None:
+        path = [0, 2, 4, 6, 8]
     for score in record.get("path_scores") or []:
-        if path is None:
-            return int(score.get("lcp", 0))
         if [int(x) for x in score.get("path", [])] == path:
             return int(score.get("lcp", 0))
     accepted = [int(x) for x in record.get("accepted_node_ids", [])]
-    if path is None:
-        return len(accepted)
     lcp = 0
     for got, want in zip(accepted, path):
         if got != want:

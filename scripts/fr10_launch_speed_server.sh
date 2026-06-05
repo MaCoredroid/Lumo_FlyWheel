@@ -37,6 +37,13 @@ print(len(ast.literal_eval(os.environ["TREE"])))
 PY
 )}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
+if [[ -z "${ATTENTION_BACKEND+x}" ]]; then
+  if [[ "$FR10_DECODE_MODE_DEFAULT" == "tree_mtp" && "$SPEC_CONFIG" == *"speculative_token_tree"* ]]; then
+    ATTENTION_BACKEND=TREE_ATTN
+  else
+    ATTENTION_BACKEND=FLASH_ATTN
+  fi
+fi
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
@@ -100,7 +107,7 @@ python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
 exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --host 0.0.0.0 --port 9950 --max-num-seqs 4 \
   --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' \
-  --attention-backend FLASH_ATTN --gdn-prefill-backend triton \
+  --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
   --speculative-config \"\$SPEC_CONFIG\" \

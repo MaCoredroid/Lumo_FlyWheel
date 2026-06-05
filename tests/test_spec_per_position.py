@@ -48,14 +48,25 @@ def test_sampling_guard_rejects_non_greedy() -> None:
         measure.validate_sampling(0.0, 0.95)
 
 
-def test_batch_invariance_guard_requires_env_and_flash() -> None:
+def test_batch_invariance_guard_requires_env_and_supported_attention_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(measure, "_http_json", lambda *args, **kwargs: {})
     with pytest.raises(measure.GuardError, match="VLLM_BATCH_INVARIANT=1"):
         measure.validate_live_server(
             "http://127.0.0.1:9950",
             {"env_has_vllm_batch_invariant": False, "cmdline_has_flash_attn": True},
         )
-    with pytest.raises(measure.GuardError, match="FLASH_ATTN"):
+    with pytest.raises(measure.GuardError, match="FLASH_ATTN or --attention-backend TREE_ATTN"):
         measure.validate_live_server(
             "http://127.0.0.1:9950",
             {"env_has_vllm_batch_invariant": True, "cmdline_has_flash_attn": False},
         )
+    measure.validate_live_server(
+        "http://127.0.0.1:9950",
+        {
+            "env_has_vllm_batch_invariant": True,
+            "cmdline_has_flash_attn": False,
+            "cmdline_has_tree_attn": True,
+        },
+    )
