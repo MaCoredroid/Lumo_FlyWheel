@@ -2679,6 +2679,91 @@ def _lumo_tree_canonical_multidraft_sample(
                                 "rows": _fr10_rows,
                             }) + chr(10)
                         )
+                    _fr10_capture_path = _fr10_lo.environ.get("FR10_SPINE_LOGIT_CAPTURE")
+                    _fr10_capture_has_spec = any(
+                        int(_x) > 1 for _x in metadata.num_draft_tokens
+                    )
+                    if (
+                        _fr10_capture_path
+                        and _fr10_capture_has_spec
+                    ):
+                        _fr10_capture_seen = int(
+                            globals().get("_FR10_SPINE_LOGIT_CAPTURE_SEEN", 0)
+                        )
+                        _fr10_capture_skip = int(
+                            _fr10_lo.environ.get("FR10_SPINE_LOGIT_CAPTURE_SKIP", "0")
+                        )
+                        _fr10_capture_limit = int(
+                            _fr10_lo.environ.get("FR10_SPINE_LOGIT_CAPTURE_LIMIT", "1")
+                        )
+                        _fr10_capture_saved = int(
+                            globals().get("_FR10_SPINE_LOGIT_CAPTURE_SAVED", 0)
+                        )
+                        globals()["_FR10_SPINE_LOGIT_CAPTURE_SEEN"] = (
+                            _fr10_capture_seen + 1
+                        )
+                        if (
+                            _fr10_capture_seen >= _fr10_capture_skip
+                            and _fr10_capture_saved < _fr10_capture_limit
+                        ):
+                            try:
+                                from pathlib import Path as _fr10_Path
+                                _fr10_cap = {
+                                    "schema": "fr10.spine_logit_capture.v1",
+                                    "capture_call_index": int(_fr10_capture_seen),
+                                    "capture_saved_index": int(_fr10_capture_saved),
+                                    "mode": str(
+                                        getattr(
+                                            __import__("vllm.v1.sample.rejection_sampler", fromlist=["_FR10_DECODE_MODE"]),
+                                            "_FR10_DECODE_MODE",
+                                            _fr10_lo.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp"),
+                                        )
+                                    ),
+                                    "has_tree_parent_indices": lumo_tree_parent_indices is not None,
+                                    "num_draft_tokens": [
+                                        int(_x) for _x in metadata.num_draft_tokens
+                                    ],
+                                    "draft_token_ids": metadata.draft_token_ids.detach().cpu(),
+                                    "target_logits_indices": metadata.target_logits_indices.detach().cpu(),
+                                    "target_logits": target_logits.detach().to(torch.float32).cpu(),
+                                }
+                                if lumo_tree_parent_indices is not None:
+                                    _fr10_cap["tree_parent_indices"] = (
+                                        lumo_tree_parent_indices.detach().cpu()
+                                    )
+                                    _fr10_cap["tree_self_logits_indices"] = (
+                                        metadata.tree_self_logits_indices.detach().cpu()
+                                    )
+                                    _fr10_cap["tree_self_logits"] = (
+                                        lumo_tree_self_logits.detach().to(torch.float32).cpu()
+                                        if lumo_tree_self_logits is not None else None
+                                    )
+                                _fr10_out = _fr10_Path(_fr10_capture_path)
+                                _fr10_out.parent.mkdir(parents=True, exist_ok=True)
+                                _fr10_call_out = _fr10_out.with_name(
+                                    _fr10_out.stem
+                                    + ".call"
+                                    + str(int(_fr10_capture_saved))
+                                    + _fr10_out.suffix
+                                )
+                                torch.save(_fr10_cap, _fr10_call_out)
+                                if _fr10_capture_saved == 0:
+                                    torch.save(_fr10_cap, _fr10_out)
+                                globals()["_FR10_SPINE_LOGIT_CAPTURE_SAVED"] = (
+                                    _fr10_capture_saved + 1
+                                )
+                                if _fr10_capture_saved + 1 >= _fr10_capture_limit:
+                                    globals()["_FR10_SPINE_LOGIT_CAPTURED"] = True
+                            except Exception as _fr10_capture_exc:
+                                raise RuntimeError(
+                                    "FR10 spine logit capture failed: "
+                                    + type(_fr10_capture_exc).__name__
+                                    + ":"
+                                    + str(_fr10_capture_exc)
+                                ) from _fr10_capture_exc
+        except RuntimeError as _fr10_debug_exc:
+            if str(_fr10_debug_exc).startswith("FR10 spine logit capture failed:"):
+                raise
         except Exception:
             pass
 
