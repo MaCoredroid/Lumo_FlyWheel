@@ -46,7 +46,7 @@ UNSUPPORTED_NVIDIA_SMI_GRACE_S = 20
 LOW_FREE_MEMORY_GRACE_RETRIES = 2
 LOW_FREE_MEMORY_GRACE_SLEEP_S = 45
 CUDA_MEMORY_RECOVERY_MARGIN_GIB = 1.0
-HOST_MEMORY_RECOVERY_COMMAND = "sync; echo 3 > /proc/sys/vm/drop_caches; swapoff -a || true; swapon -a || true"
+HOST_MEMORY_RECOVERY_COMMAND = "sync; echo 3 > /proc/sys/vm/drop_caches; swapoff -a || true; swapon -a || true; echo 3 > /proc/sys/vm/drop_caches"
 GPU_MEMORY_ERROR_RE = re.compile(
     r"Free memory on device cuda:\d+ \((?P<free>[0-9.]+)/(?P<total>[0-9.]+) GiB\)"
 )
@@ -91,6 +91,48 @@ CUTLASS_OVERLAY_ENV_VARS = (
     "LUMO_FP8_GEMM_CUTLASS_OVERLAY_STRICT",
 )
 CUTLASS_OVERLAY_ENV_PREFIX = "LUMO_FP8_GEMM_CUTLASS_OVERLAY_"
+
+
+def recover_host_memory() -> None:
+    if os.environ.get("LUMO_HOST_MEMORY_RECOVERY", "1").lower() in {"0", "false", "no"}:
+        return
+
+    password = os.environ.get("LUMO_SUDO_PASSWORD")
+    if password:
+        command = (
+            f"printf '%s\\n' {shlex.quote(password)} | sudo -S "
+            + shlex.join(["bash", "-lc", HOST_MEMORY_RECOVERY_COMMAND])
+        )
+        result = subprocess.run(
+            ["bash", "-lc", command],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=os.environ.copy(),
+        )
+    else:
+        result = subprocess.run(
+            ["sudo", "-n", "bash", "-lc", HOST_MEMORY_RECOVERY_COMMAND],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=os.environ.copy(),
+        )
+
+    # Recovery is a best-effort machine hygiene step. Keep startup/teardown
+    # working when sudo is unavailable, but surface unexpected failures.
+    if result.returncode != 0:
+        stderr = (result.stderr or "").lower()
+        if "a password is required" in stderr or "password was provided" in stderr:
+            return
+        if "sudo:" in stderr and "permission" in stderr:
+            return
+        if "a terminal is required" in stderr:
+            return
+        raise RuntimeError(
+            "Host memory recovery failed before/after vLLM lifecycle event:\n"
+            f"{result.stdout}{result.stderr}"
+        )
 
 
 class ModelServer:
@@ -527,45 +569,7 @@ class ModelServer:
         return {"Authorization": f"Bearer {ModelServer._api_key()}"}
 
     def _recover_host_memory(self) -> None:
-        if os.environ.get("LUMO_HOST_MEMORY_RECOVERY", "1").lower() in {"0", "false", "no"}:
-            return
-
-        password = os.environ.get("LUMO_SUDO_PASSWORD")
-        if password:
-            command = (
-                f"printf '%s\\n' {shlex.quote(password)} | sudo -S "
-                + shlex.join(["bash", "-lc", HOST_MEMORY_RECOVERY_COMMAND])
-            )
-            result = subprocess.run(
-                ["bash", "-lc", command],
-                capture_output=True,
-                text=True,
-                check=False,
-                env=os.environ.copy(),
-            )
-        else:
-            result = subprocess.run(
-                ["sudo", "-n", "bash", "-lc", HOST_MEMORY_RECOVERY_COMMAND],
-                capture_output=True,
-                text=True,
-                check=False,
-                env=os.environ.copy(),
-            )
-
-        # Recovery is a best-effort machine hygiene step. Keep startup/teardown
-        # working when sudo is unavailable, but surface unexpected failures.
-        if result.returncode != 0:
-            stderr = (result.stderr or "").lower()
-            if "a password is required" in stderr or "password was provided" in stderr:
-                return
-            if "sudo:" in stderr and "permission" in stderr:
-                return
-            if "a terminal is required" in stderr:
-                return
-            raise RuntimeError(
-                "Host memory recovery failed before/after vLLM lifecycle event:\n"
-                f"{result.stdout}{result.stderr}"
-            )
+        recover_host_memory()
 
     def _append_log_text(self, model_id: str, text: str) -> None:
         log_path = self.logs_path(model_id)
@@ -1412,3 +1416,15 @@ class ModelServer:
             text=True,
             env=os.environ.copy(),
         )
+
+
+def _main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args == ["--recover-host-memory"]:
+        recover_host_memory()
+        return 0
+    raise SystemExit("usage: python -m lumo_flywheel_serving.model_server --recover-host-memory")
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

@@ -1,0 +1,172 @@
+{
+  "commit_log": "/home/mark/shared/lumoFlyWheel/output/fr10_mixed_batch_tree_branch_fix_20260604T185721Z/logs/fr10_commit_copy_parity.jsonl",
+  "counter_dump": "/home/mark/shared/lumoFlyWheel/output/fr10_mixed_batch_tree_branch_fix_20260604T185721Z/logs/fr10_tree_gdn_counters.json",
+  "matrix": [
+    {
+      "case": "wiring",
+      "detail": "live branched tree_mtp GDN counter row is present",
+      "gate": "nonvacuity",
+      "metrics": {
+        "counter_rows": 6,
+        "diag_events": 10608.0,
+        "has_sibling": true,
+        "selected_count": 10608,
+        "shape": "n10_pad16"
+      },
+      "passed": true,
+      "regime": "serving_evidence"
+    },
+    {
+      "case": "wiring",
+      "detail": "every eligible tree_mtp spec row must enter the tree-aware conv and scan branches; flat fallback on eligible spec rows is a hard failure",
+      "gate": "tree_spec_branch_engagement",
+      "metrics": {
+        "conv_flat_fallback_spec_rows": 0.0,
+        "conv_num_decodes_sum": 0.0,
+        "conv_num_prefills_sum": 0.0,
+        "conv_tree_branch_spec_rows": 10608.0,
+        "conv_tree_eligible_spec_rows": 10608.0,
+        "scan_flat_fallback_spec_rows": 0.0,
+        "scan_num_spec_decodes_sum": 10608.0,
+        "scan_tree_branch_spec_rows": 10608.0,
+        "scan_tree_eligible_spec_rows": 10608.0
+      },
+      "passed": true,
+      "regime": "structural_hard_zero_violation"
+    },
+    {
+      "case": "wiring_op",
+      "detail": "captured serving conv inputs replay through the serving gather equal serial ancestry; flat-wired replay negative control diverges",
+      "gate": "conv_gather",
+      "metrics": {
+        "atol": 0.0,
+        "conv_all_nodes_vs_serial_max": 0.0,
+        "flat_path0_negative_control_max": 31.923828125
+      },
+      "passed": true,
+      "regime": "deterministic_captured_replay_byte_exact"
+    },
+    {
+      "case": "wiring_op",
+      "detail": "captured serving conv-state inputs replay to native temporal rows",
+      "gate": "conv_commit_state",
+      "metrics": {
+        "atol": 0.0,
+        "conv_state_rows_vs_native_max": 0.0
+      },
+      "passed": true,
+      "regime": "deterministic_captured_replay_byte_exact"
+    },
+    {
+      "case": "wiring_op",
+      "detail": "captured-input replay with a perturbed leaf leaves path0 op output unchanged; flat-wired replay negative control changes it",
+      "gate": "sibling_leaf_no_trunk_mutation",
+      "metrics": {
+        "atol": 0.0,
+        "flat_sibling_leaf_path0_negative_control_max": 9344.279296875,
+        "sibling_leaf_path0_conv_max": 0.0
+      },
+      "passed": true,
+      "regime": "deterministic_captured_replay_byte_exact"
+    },
+    {
+      "case": "wiring_op",
+      "detail": "captured serving scan-state staging rows equal tree_state rows immediately after index_copy",
+      "gate": "scan_state_staging",
+      "metrics": {
+        "atol": 0.0,
+        "staged_ssm_state_vs_tree_state_max": 0.0
+      },
+      "passed": true,
+      "regime": "deterministic_captured_replay_byte_exact"
+    },
+    {
+      "case": "wiring_op",
+      "detail": "missing_wiring_evidence: serving scan inputs are not yet captured and replayed through serving scan plus serial-per-path reference",
+      "gate": "scan_output_serial_parity",
+      "metrics": {},
+      "passed": false,
+      "regime": "deterministic_captured_replay_byte_exact"
+    },
+    {
+      "case": "wiring",
+      "detail": "postprocess copied from accepted tree row at least once",
+      "gate": "postprocess_commit_redirect",
+      "metrics": {
+        "commit_log_rows": 0,
+        "redirected_rows": 0
+      },
+      "passed": false,
+      "regime": "structural_hard_zero_violation"
+    },
+    {
+      "case": "wiring_op",
+      "detail": "missing_wiring_evidence: final committed ssm_state/conv_state is not yet captured after postprocess and compared on fixed inputs to native-over-accepted replay",
+      "gate": "committed_state_native_replay",
+      "metrics": {},
+      "passed": false,
+      "regime": "deterministic_captured_replay_byte_exact"
+    }
+  ],
+  "passed": false,
+  "schema": "fr10.serving_wiring_gate.v3",
+  "selected_counter": {
+    "conv_diag": [
+      0.0,
+      31.923828125,
+      0.0,
+      10608.0,
+      10608.0,
+      10.0,
+      0.0,
+      0.0,
+      0.0,
+      9344.279296875,
+      0.0,
+      10608.0,
+      0.0,
+      0.0,
+      10608.0,
+      10608.0,
+      0.0,
+      10608.0,
+      10608.0,
+      0.0,
+      0.0,
+      0.0,
+      10608.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "count": 10608,
+    "has_sibling": true,
+    "parent": [
+      -1,
+      0,
+      1,
+      1,
+      2,
+      2,
+      4,
+      4,
+      6,
+      6
+    ],
+    "path0_nodes": [
+      0,
+      1,
+      2,
+      4,
+      6,
+      8
+    ],
+    "shape": "n10_pad16"
+  }
+}

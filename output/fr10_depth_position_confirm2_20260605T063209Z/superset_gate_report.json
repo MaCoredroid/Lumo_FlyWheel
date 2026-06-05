@@ -1,0 +1,23 @@
+{
+  "gates": {
+    "superset_hard_internal": {
+      "metrics": {
+        "native_avg": 1.54369918699187,
+        "paired_events": 984,
+        "path0_minus_native_min": 0,
+        "tree_avg": 1.766260162601626,
+        "tree_minus_path0_min": 0,
+        "tree_path0_avg": 1.54369918699187,
+        "violations": 0
+      },
+      "passed": true,
+      "violations": []
+    }
+  },
+  "native_events": 0,
+  "native_spec_trace": null,
+  "schema": "fr10.superset_gate_report.v1",
+  "speculative_token_tree": "[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]",
+  "tree_events": 984,
+  "tree_path_lcp": "output/fr10_depth_position_confirm2_20260605T063209Z/logs/tree_path_lcp_max.jsonl"
+}

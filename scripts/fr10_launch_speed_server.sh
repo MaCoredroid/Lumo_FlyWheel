@@ -6,17 +6,76 @@ IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870
 CONTAINER=${CONTAINER:-fr10-speed-start}
 PORT=${PORT:-9950}
 GPU_UTIL=${GPU_UTIL:-0.88}
+MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
 BATCH_INVARIANT=${BATCH_INVARIANT:-0}
 FR10_METRICS=${FR10_METRICS:-0}
 FR10_ENABLE_TREE_GDN=${FR10_ENABLE_TREE_GDN:-1}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
+FR10_TREE_GDN_CAPTURE_PAYLOAD=${FR10_TREE_GDN_CAPTURE_PAYLOAD:-}
+FR10_TREE_GDN_COMMIT_HANDOFF_LOG=${FR10_TREE_GDN_COMMIT_HANDOFF_LOG:-}
+FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX=${FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX:-}
+FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT=${FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT:-32}
+FR10_TREE_GDN_SRC_NATIVE_PAYLOAD=${FR10_TREE_GDN_SRC_NATIVE_PAYLOAD:-}
+FR10_TREE_GDN_ROOT_H0_LOG=${FR10_TREE_GDN_ROOT_H0_LOG:-}
+FR10_TREE_GDN_ROOT_H0_LOG_LIMIT=${FR10_TREE_GDN_ROOT_H0_LOG_LIMIT:-20}
+FR10_TREE_GDN_ROOT_H0_LOG_LAYER_PREFIX=${FR10_TREE_GDN_ROOT_H0_LOG_LAYER_PREFIX:-language_model.model.layers.0.linear_attn}
+FR10_TREE_DEPTH_POSITION_LOG=${FR10_TREE_DEPTH_POSITION_LOG:-}
+FR10_ROOT_HIDDEN_CAPTURE=${FR10_ROOT_HIDDEN_CAPTURE:-}
+FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS=${FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS:-}
+FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW=${FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW:-0}
+FR10_ROOT_HIDDEN_CAPTURE_POSITION=${FR10_ROOT_HIDDEN_CAPTURE_POSITION:-}
+FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS=${FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS:-}
+FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW=${FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW:-}
+FR10_LAYER_HIDDEN_CAPTURE=${FR10_LAYER_HIDDEN_CAPTURE:-}
+FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS=${FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS:-}
+FR10_LAYER_HIDDEN_CAPTURE_ROWS=${FR10_LAYER_HIDDEN_CAPTURE_ROWS:-}
+FR10_LAYER_HIDDEN_CAPTURE_SKIP=${FR10_LAYER_HIDDEN_CAPTURE_SKIP:-0}
+FR10_LAYER_HIDDEN_CAPTURE_LIMIT=${FR10_LAYER_HIDDEN_CAPTURE_LIMIT:-1}
+FR10_SPINE_LOGIT_CAPTURE=${FR10_SPINE_LOGIT_CAPTURE:-}
+FR10_SPINE_LOGIT_CAPTURE_SKIP=${FR10_SPINE_LOGIT_CAPTURE_SKIP:-0}
+FR10_SPINE_LOGIT_CAPTURE_LIMIT=${FR10_SPINE_LOGIT_CAPTURE_LIMIT:-1}
+LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
+ENFORCE_EAGER=${ENFORCE_EAGER:-0}
 LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
-TREE=${TREE:-"[(0,), (1,), (0, 0), (1, 0), (0, 0, 0), (1, 0, 0), (0, 0, 0, 0), (1, 0, 0, 0), (0, 0, 0, 0, 0), (1, 0, 0, 0, 0)]"}
-SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":10,\"speculative_token_tree\":\"$TREE\"}"}
+TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
+NUM_SPECULATIVE_TOKENS=${NUM_SPECULATIVE_TOKENS:-$(TREE="$TREE" python3 - <<'PY'
+import ast
+import os
+print(len(ast.literal_eval(os.environ["TREE"])))
+PY
+)}
+SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
+if [[ -z "${ATTENTION_BACKEND+x}" ]]; then
+  ATTENTION_BACKEND=FLASH_ATTN
+fi
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+
+PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+from lumo_flywheel_serving.model_server import recover_host_memory
+
+recover_host_memory()
+PY
+free -h
+python3 - <<'PY'
+from pathlib import Path
+
+fields = {}
+for line in Path("/proc/meminfo").read_text().splitlines():
+    key, value = line.split(":", 1)
+    fields[key] = int(value.strip().split()[0])
+
+mem_free_gib = fields.get("MemFree", 0) / 1024 / 1024
+swap_used_kib = fields.get("SwapTotal", 0) - fields.get("SwapFree", 0)
+if mem_free_gib < 100 or swap_used_kib != 0:
+    raise SystemExit(
+        "FR10 launch aborted: host memory recovery did not produce "
+        f"MemFree>=100GiB and swap_used==0; "
+        f"MemFree={mem_free_gib:.2f}GiB swap_used={swap_used_kib / 1024 / 1024:.2f}GiB"
+    )
+PY
 
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
@@ -27,6 +86,31 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR10_ENABLE_TREE_GDN="$FR10_ENABLE_TREE_GDN" \
   -e FR10_METRICS="$FR10_METRICS" \
   -e FR10_DECODE_MODE_DEFAULT="$FR10_DECODE_MODE_DEFAULT" \
+  -e FR10_TREE_GDN_COUNTER_DUMP=/logs/fr10_tree_gdn_counters.json \
+  -e FR10_TREE_GDN_CAPTURE_PAYLOAD="$FR10_TREE_GDN_CAPTURE_PAYLOAD" \
+  -e FR10_TREE_GDN_COMMIT_HANDOFF_LOG="$FR10_TREE_GDN_COMMIT_HANDOFF_LOG" \
+  -e FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX="$FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX" \
+  -e FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT="$FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT" \
+  -e FR10_TREE_GDN_SRC_NATIVE_PAYLOAD="$FR10_TREE_GDN_SRC_NATIVE_PAYLOAD" \
+  -e FR10_TREE_GDN_ROOT_H0_LOG="$FR10_TREE_GDN_ROOT_H0_LOG" \
+  -e FR10_TREE_GDN_ROOT_H0_LOG_LIMIT="$FR10_TREE_GDN_ROOT_H0_LOG_LIMIT" \
+  -e FR10_TREE_GDN_ROOT_H0_LOG_LAYER_PREFIX="$FR10_TREE_GDN_ROOT_H0_LOG_LAYER_PREFIX" \
+  -e FR10_TREE_DEPTH_POSITION_LOG="$FR10_TREE_DEPTH_POSITION_LOG" \
+  -e FR10_ROOT_HIDDEN_CAPTURE="$FR10_ROOT_HIDDEN_CAPTURE" \
+  -e FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS="$FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS" \
+  -e FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW="$FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW" \
+  -e FR10_ROOT_HIDDEN_CAPTURE_POSITION="$FR10_ROOT_HIDDEN_CAPTURE_POSITION" \
+  -e FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS="$FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS" \
+  -e FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW="$FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW" \
+  -e FR10_LAYER_HIDDEN_CAPTURE="$FR10_LAYER_HIDDEN_CAPTURE" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS="$FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_ROWS="$FR10_LAYER_HIDDEN_CAPTURE_ROWS" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_SKIP="$FR10_LAYER_HIDDEN_CAPTURE_SKIP" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_LIMIT="$FR10_LAYER_HIDDEN_CAPTURE_LIMIT" \
+  -e FR10_SPINE_LOGIT_CAPTURE="$FR10_SPINE_LOGIT_CAPTURE" \
+  -e FR10_SPINE_LOGIT_CAPTURE_SKIP="$FR10_SPINE_LOGIT_CAPTURE_SKIP" \
+  -e FR10_SPINE_LOGIT_CAPTURE_LIMIT="$FR10_SPINE_LOGIT_CAPTURE_LIMIT" \
+  -e LUMO_MTP_DRAFT_TRACE_FILE="$LUMO_MTP_DRAFT_TRACE_FILE" \
   -e SPEC_CONFIG="$SPEC_CONFIG" \
   --entrypoint bash \
   "$IMAGE" \
@@ -34,8 +118,9 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
 exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --host 0.0.0.0 --port 9950 --max-num-seqs 4 \
-  --gpu-memory-utilization '$GPU_UTIL' --max-model-len 131072 \
-  --attention-backend FLASH_ATTN --gdn-prefill-backend triton \
+  --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' \
+  --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  --speculative-config \"\$SPEC_CONFIG\""
+  --speculative-config \"\$SPEC_CONFIG\" \
+  $(if [[ "$ENFORCE_EAGER" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"

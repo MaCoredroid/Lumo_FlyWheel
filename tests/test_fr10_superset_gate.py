@@ -11,7 +11,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from lumo_flywheel_serving.fr10_superset_gate import (
     AcceptanceEvent,
     diagnose_spine_degradation,
+    evaluate_enforced_superset_gate,
     evaluate_path0_sequence_gate,
+    evaluate_strict_win_gate,
+    evaluate_superset_hard_gate,
     evaluate_total_acceptance_gate,
     load_spec_trace,
     load_tree_accept_trace,
@@ -117,6 +120,94 @@ def test_tier2_total_acceptance_gate_requires_tree_not_below_native() -> None:
     assert good.metrics["tree_minus_native_avg"] == pytest.approx(0.5)
 
 
+def test_superset_hard_gate_requires_tree_ge_path0_ge_native_per_event() -> None:
+    native = [
+        AcceptanceEvent("r", 0, accepted_len=2, path0_len=2),
+        AcceptanceEvent("r", 1, accepted_len=3, path0_len=3),
+    ]
+    tree_good = [
+        AcceptanceEvent("r", 0, accepted_len=3, path0_len=2),
+        AcceptanceEvent("r", 1, accepted_len=4, path0_len=3),
+    ]
+    tree_bad = [
+        AcceptanceEvent("r", 0, accepted_len=1, path0_len=2),
+        AcceptanceEvent("r", 1, accepted_len=4, path0_len=2),
+    ]
+
+    good = evaluate_superset_hard_gate(native_events=native, tree_events=tree_good)
+    bad = evaluate_superset_hard_gate(native_events=native, tree_events=tree_bad)
+
+    assert good.passed
+    assert not bad.passed
+    assert bad.metrics["violations"] == 2
+    assert "tree accepted below path0" in bad.violations[0]
+    assert "path0 accepted below native" in bad.violations[1]
+
+
+def test_strict_win_gate_requires_bootstrap_ci_lower_bound_above_zero() -> None:
+    native = [
+        AcceptanceEvent("r", idx, accepted_len=2, path0_len=2)
+        for idx in range(40)
+    ]
+    tree_win = [
+        AcceptanceEvent("r", idx, accepted_len=3, path0_len=2)
+        for idx in range(40)
+    ]
+    tree_tie = [
+        AcceptanceEvent("r", idx, accepted_len=2, path0_len=2)
+        for idx in range(40)
+    ]
+    tree_loss = [
+        AcceptanceEvent("r", idx, accepted_len=1, path0_len=2)
+        for idx in range(40)
+    ]
+
+    win = evaluate_strict_win_gate(
+        native_events=native,
+        tree_events=tree_win,
+        bootstrap_samples=500,
+    )
+    tie = evaluate_strict_win_gate(
+        native_events=native,
+        tree_events=tree_tie,
+        bootstrap_samples=500,
+    )
+    loss = evaluate_strict_win_gate(
+        native_events=native,
+        tree_events=tree_loss,
+        bootstrap_samples=500,
+    )
+
+    assert win.passed
+    assert win.metrics["ci_low"] > 0.0
+    assert not tie.passed
+    assert tie.metrics["ci_low"] == pytest.approx(0.0)
+    assert not loss.passed
+    assert loss.metrics["ci_low"] < 0.0
+
+
+def test_enforced_superset_gate_fails_powered_tie_negative_control() -> None:
+    native = [
+        AcceptanceEvent("r", idx, accepted_len=2, path0_len=2)
+        for idx in range(20)
+    ]
+    tree_tie = [
+        AcceptanceEvent("r", idx, accepted_len=2, path0_len=2)
+        for idx in range(20)
+    ]
+
+    report = evaluate_enforced_superset_gate(
+        native_events=native,
+        tree_events=tree_tie,
+        bootstrap_samples=500,
+    )
+
+    assert not report.passed
+    assert report.metrics["hard"]["violations"] == 0
+    assert report.metrics["strict_win"]["tree_minus_native_avg"] == pytest.approx(0.0)
+    assert "strict tree win not statistically proven" in report.violations[0]
+
+
 def test_diagnostic_splits_draft_corruption_from_commit_bug() -> None:
     native = [
         AcceptanceEvent(
@@ -159,4 +250,3 @@ def test_diagnostic_splits_draft_corruption_from_commit_bug() -> None:
     assert draft_report.metrics["classification"] == "draft_side_recurrent_state_corruption"
     assert not commit_report.passed
     assert commit_report.metrics["classification"] == "commit_or_position_bookkeeping_bug"
-

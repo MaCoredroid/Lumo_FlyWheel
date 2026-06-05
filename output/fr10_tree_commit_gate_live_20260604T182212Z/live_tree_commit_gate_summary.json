@@ -1,0 +1,41 @@
+{
+  "accepted_avg": 0.4068441064638783,
+  "accepted_histogram": {
+    "0": 388,
+    "1": 66,
+    "2": 68,
+    "3": 4
+  },
+  "accepted_survival": {
+    "0": 138,
+    "1": 72,
+    "2": 4
+  },
+  "branch_event_count": 2,
+  "branch_event_fraction": 0.0038022813688212928,
+  "event_count": 526,
+  "native_bar_recorded_avg_range": [
+    2.6,
+    3.2
+  ],
+  "paired_c7_note": "No paired stock-MTP5 trace was collected in this tree-only run; tree path0/aggregate are already far below the recorded native bar, so strict-win cannot pass.",
+  "path0_avg": 0.40304182509505704,
+  "path0_gate_vs_native_bar": "FAIL",
+  "path0_histogram": {
+    "0": 388,
+    "1": 67,
+    "2": 68,
+    "3": 3
+  },
+  "path0_survival": {
+    "0": 138,
+    "1": 71,
+    "2": 3
+  },
+  "quick_accepted_per_draft_event": 0.40078585461689586,
+  "quick_spec_accepted_tokens": 204.0,
+  "quick_spec_drafts": 509.0,
+  "run_dir": "/home/mark/shared/lumoFlyWheel/output/fr10_tree_commit_gate_live_20260604T182212Z",
+  "schema": "fr10.live_tree_commit_gate_summary.v1",
+  "superset_strict_win_gate_vs_native_bar": "FAIL"
+}
