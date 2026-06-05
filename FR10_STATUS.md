@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-05 02:36 UTC
+Updated: 2026-06-05 02:44 UTC
 
 ## CONTRACTS
 
@@ -38,6 +38,7 @@ Updated: 2026-06-05 02:36 UTC
 - 2026-06-05 02:25 UTC: found a second oracle/protocol mismatch: sampler accepted node ids are raw sorted tree nodes, while the GDN kernel state rows include the explicit row-0 root. State publications now translate raw sampler node `j` to GDN row `j+1` before filling `_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR` and `_LUMO_FA_LAST_ACCEPTED_TREE_*`. Re-evaluating the old payload with the corrected row space gives `accepted_gdn_node_id=7`, `accepted_gdn_node_path=[0,1,2,4,7]`, `ssm_tree_row_vs_native_max_abs=2.86102294921875e-06`, `ssm_next_vs_native_max_abs=9.40386962890625`, `conv_next_vs_native_max_abs=64.0`, and `negative_ssm_max_abs=12.170829772949219`. Corrected h0 replay returns **A** (`kernel_replay_row_vs_native_max_abs=2.86102294921875e-06`, `serving_tree_row_vs_kernel_replay_max_abs=0.0`). Kernel math is sound; next-read state handoff remains the failing seam until a fresh payload exercises the raw-to-GDN publication fix.
 - 2026-06-05 02:36 UTC: fresh row-space handoff payload `output/fr10_rowspace_handoff_confirm_20260605T022630Z` engaged the tree path (`47/47 gpu_tree_metadata reason=ok`, parent indices present, draft count `9`, tree accept rows present). Corrected source-native gate now gives `ssm_next_vs_native_max_abs=2.86102294921875e-06`, `ssm_tree_row_vs_native_max_abs=2.86102294921875e-06`, `negative_ssm_max_abs=13.325309753417969`, and `negative_powered=true`, proving the SSM cross-step failure was an oracle/row-space measurement bug. Conv remains red: `conv_next_vs_native_max_abs=64.0`.
 - 2026-06-05 02:36 UTC: patched the remaining conv handoff mismatch. After the accepted-path remap, tree conv now gathers its prior row from `spec_state_indices[:, accepted_len-1]` (same linear-column contract as SSM) and reads that row as a standalone conv window with `_fr10_prior_cols = _fr10_prior_col_base`; it no longer reads root column `0` plus an accepted-length temporal offset. Focused tests pass and generated vLLM patch compiles. Next required gate is a fresh payload showing `ssm_next~0`, `conv_next~0`, and powered negative control before any acceptance measurement.
+- 2026-06-05 02:44 UTC: conv handoff confirm `output/fr10_conv_handoff_confirm_20260605T023734Z` is the first all-green source-native cross-step gate. Engagement asserted first (`28/28 gpu_tree_metadata reason=ok`, parent indices true, draft count `9`, tree accept rows present). Gate result: `accepted_gdn_node_id=7`, `accepted_gdn_node_path=[0,1,2,4,7]`, `ssm_next_vs_native_max_abs=2.86102294921875e-06`, `ssm_tree_row_vs_native_max_abs=2.86102294921875e-06`, `conv_next_vs_native_max_abs=0.0`, `negative_ssm_max_abs=13.325309753417969`, `negative_conv_max_abs=64.0`, `negative_powered=true`, `src_native_pass=true`. Conclusion: cross-step recurrent handoff for SSM+conv is now native on the captured branch; the old SSM failure was a row-space oracle bug, while conv was a real separate handoff-column bug now fixed.
 
 ## Current User Decision: Conv Only
 
