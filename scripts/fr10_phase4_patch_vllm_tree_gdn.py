@@ -3743,8 +3743,12 @@ def _fr10_root_hidden_capture_start(self, positions, hidden_states):
         return None
     try:
         desired = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS")
-        if desired and int(hidden_states.shape[0]) != int(desired):
-            return None
+        if desired:
+            desired_counts = {
+                int(_x.strip()) for _x in desired.split(",") if _x.strip()
+            }
+            if int(hidden_states.shape[0]) not in desired_counts:
+                return None
         root_row = int(os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW", "0"))
         if root_row < 0 or root_row >= int(hidden_states.shape[0]):
             return None
@@ -3897,7 +3901,18 @@ def _fr10_root_hidden_capture_finish(payload, hidden_states):
                     "FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS",
                     os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS"),
                 )
-                if not _fr10_desired or int(hidden_states.shape[0]) == int(_fr10_desired):
+                if _fr10_desired:
+                    _fr10_desired_counts = {
+                        int(_x.strip())
+                        for _x in _fr10_desired.split(",")
+                        if _x.strip()
+                    }
+                else:
+                    _fr10_desired_counts = set()
+                if (
+                    not _fr10_desired_counts
+                    or int(hidden_states.shape[0]) in _fr10_desired_counts
+                ):
                     _fr10_root_row = int(os.environ.get(
                         "FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW",
                         os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW", "0"),
