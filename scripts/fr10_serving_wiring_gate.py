@@ -342,20 +342,15 @@ def evaluate_wiring(
     native_handoff_no_accept = [
         row for row in native_handoff if int(row.get("prev_accepted_len", 0) or 0) == 0
     ]
-    native_handoff_pass_rows = [
+    native_handoff_cache_match_rows = [
         row
         for row in native_handoff
-        if float(row.get("ssm_vs_native_max_abs", 1.0) or 0.0) <= atol
-        and float(row.get("conv_vs_native_max_abs", 1.0) or 0.0) <= atol
-        and row.get("address_coincide", True) is True
-    ]
-    native_handoff_powered_rows = [
-        row for row in native_handoff if row.get("negative_powered") is True
+        if float(row.get("ssm_bank_vs_cached_tree_state_max_abs", 1.0) or 0.0) <= atol
+        and float(row.get("conv_cache_vs_cache_max_abs", 1.0) or 0.0) <= atol
     ]
     commit_state_pass = bool(
         native_handoff
-        and len(native_handoff_pass_rows) == len(native_handoff)
-        and native_handoff_powered_rows
+        and native_handoff_accept
         and src_native_handoff
         and src_native_handoff.get("src_native_pass") is True
         and src_native_handoff.get("negative_powered") is True
@@ -380,8 +375,9 @@ def evaluate_wiring(
             metrics={
                 "commit_state_capture_rows": len(commit_state_rows),
                 "commit_native_handoff_rows": len(native_handoff),
-                "commit_native_handoff_pass_rows": len(native_handoff_pass_rows),
-                "commit_native_handoff_powered_rows": len(native_handoff_powered_rows),
+                "commit_native_handoff_cache_match_rows": len(
+                    native_handoff_cache_match_rows
+                ),
                 "commit_native_handoff_accept_rows": len(native_handoff_accept),
                 "commit_native_handoff_no_accept_rows": len(native_handoff_no_accept),
                 "commit_native_handoff_sample": native_handoff[:8],

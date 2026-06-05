@@ -132,8 +132,8 @@ def test_serving_wiring_gate_requires_native_handoff_for_committed_state(tmp_pat
                         "event": "commit_native_handoff",
                         "prev_accepted_row": 4,
                         "prev_accepted_len": 2,
-                        "ssm_vs_native_max_abs": 0.0,
-                        "conv_vs_native_max_abs": 0.0,
+                        "ssm_bank_vs_cached_tree_state_max_abs": 0.0,
+                        "conv_cache_vs_cache_max_abs": 0.0,
                         "address_coincide": True,
                         "negative_powered": True,
                     }
@@ -143,8 +143,8 @@ def test_serving_wiring_gate_requires_native_handoff_for_committed_state(tmp_pat
                         "event": "commit_native_handoff",
                         "prev_accepted_row": 0,
                         "prev_accepted_len": 0,
-                        "ssm_vs_native_max_abs": 0.0,
-                        "conv_vs_native_max_abs": 0.0,
+                        "ssm_bank_vs_cached_tree_state_max_abs": 0.0,
+                        "conv_cache_vs_cache_max_abs": 0.0,
                         "address_coincide": True,
                         "negative_powered": True,
                     }
@@ -198,8 +198,8 @@ def test_serving_wiring_gate_treats_node0_as_accepted_handoff(tmp_path: Path) ->
                 "accepted_node_row": 0,
                 "accepted_spec_state_bank_row": 42,
                 "next_read_bank_row": 42,
-                "ssm_vs_native_max_abs": 0.0,
-                "conv_vs_native_max_abs": 0.0,
+                "ssm_bank_vs_cached_tree_state_max_abs": 0.0,
+                "conv_cache_vs_cache_max_abs": 0.0,
                 "address_coincide": True,
                 "negative_powered": True,
             }
@@ -229,7 +229,7 @@ def test_serving_wiring_gate_treats_node0_as_accepted_handoff(tmp_path: Path) ->
     ] == 0
 
 
-def test_serving_wiring_gate_fails_handoff_address_mismatch(tmp_path: Path) -> None:
+def test_serving_wiring_gate_uses_src_native_not_address_coincidence(tmp_path: Path) -> None:
     counters = tmp_path / "counters.json"
     replay = tmp_path / "scan_replay.json"
     handoff = tmp_path / "handoff.jsonl"
@@ -247,8 +247,8 @@ def test_serving_wiring_gate_fails_handoff_address_mismatch(tmp_path: Path) -> N
                 "event": "commit_native_handoff",
                 "prev_accepted_row": 0,
                 "prev_accepted_len": 1,
-                "ssm_vs_native_max_abs": 0.0,
-                "conv_vs_native_max_abs": 0.0,
+                "ssm_bank_vs_cached_tree_state_max_abs": 0.0,
+                "conv_cache_vs_cache_max_abs": 0.0,
                 "address_coincide": False,
                 "negative_powered": True,
             }
@@ -269,10 +269,10 @@ def test_serving_wiring_gate_fails_handoff_address_mismatch(tmp_path: Path) -> N
     )
     by_gate = {row.gate: row for row in matrix}
 
-    assert not by_gate["committed_state_native_replay"].passed
+    assert by_gate["committed_state_native_replay"].passed
 
 
-def test_serving_wiring_gate_fails_handoff_neighbor_negative_control(tmp_path: Path) -> None:
+def test_serving_wiring_gate_fails_src_native_negative_control(tmp_path: Path) -> None:
     counters = tmp_path / "counters.json"
     replay = tmp_path / "scan_replay.json"
     handoff = tmp_path / "handoff.jsonl"
@@ -290,8 +290,8 @@ def test_serving_wiring_gate_fails_handoff_neighbor_negative_control(tmp_path: P
                 "event": "commit_native_handoff",
                 "prev_accepted_row": 4,
                 "prev_accepted_len": 2,
-                "ssm_vs_native_max_abs": 0.0,
-                "conv_vs_native_max_abs": 0.0,
+                "ssm_bank_vs_cached_tree_state_max_abs": 0.0,
+                "conv_cache_vs_cache_max_abs": 0.0,
                 "address_coincide": True,
                 "negative_powered": False,
             }
@@ -300,7 +300,7 @@ def test_serving_wiring_gate_fails_handoff_neighbor_negative_control(tmp_path: P
         encoding="utf-8",
     )
     src_native.write_text(
-        json.dumps({"src_native_pass": True, "negative_powered": True}) + "\n",
+        json.dumps({"src_native_pass": True, "negative_powered": False}) + "\n",
         encoding="utf-8",
     )
 

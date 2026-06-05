@@ -1169,12 +1169,12 @@ def _patch_gdn_linear() -> bool:
                                                         _fr10_seed_path_len
                                                         == int(_fr10_lens[fr10_b])
                                                     ),
-                                                    "state_coincide": bool(
+                                                    "cache_state_coincide": bool(
                                                         _fr10_seed_ssm_max == 0.0
                                                         and _fr10_seed_conv_max == 0.0
                                                     ),
-                                                    "ssm_vs_native_max_abs": _fr10_seed_ssm_max,
-                                                    "conv_vs_native_max_abs": _fr10_seed_conv_max,
+                                                    "ssm_bank_vs_cached_tree_state_max_abs": _fr10_seed_ssm_max,
+                                                    "conv_cache_vs_cache_max_abs": _fr10_seed_conv_max,
                                                 }
                                             )
                                             + chr(10)

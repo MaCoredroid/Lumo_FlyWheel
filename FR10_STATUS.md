@@ -1,6 +1,6 @@
 # FR10 Status
 
-Updated: 2026-06-05 00:35 UTC
+Updated: 2026-06-05 00:55 UTC
 
 ## CONTRACTS
 
@@ -19,6 +19,8 @@ Updated: 2026-06-05 00:35 UTC
 - 2026-06-04 23:30 UTC: removed the dead Mamba postprocess/preprocess accepted-row redirect patch from `scripts/fr10_phase4_patch_vllm_tree_gdn.py`; the patcher no longer patches `mamba_utils.py` or rewrites `accept_token_bias`. The remaining cross-step path is source-grounded: GDN h0 reads column `num_accepted-1`, and the tree verify writes path0 spine state back into linear columns before the next decode reads it. The old address-probe handoff block was removed; the compact src-native handoff payload remains for the correctness gate.
 - 2026-06-04 23:45 UTC: wired ModelServer host-memory recovery into `scripts/fr10_launch_speed_server.sh` before its bare `docker run`. The launcher now fails loud if recovery does not produce `MemFree>=100GiB` and `swap_used==0`, preventing confirm boots from producing swapped/untrustworthy acceptance numbers.
 - 2026-06-05 00:35 UTC: pivoted the cross-step fix to the deliverable CUDA/graph-capturable form. The committer now fills a preallocated accepted-path device tensor, and the next GDN forward remaps accepted tree node rows into stock linear columns for both SSM and conv with a Triton scatter before recurrent consumers read them. The old eager SSM/conv previous-read seed path is removed from the data path; the large previous-read cache is only populated when the handoff oracle env is enabled.
+- 2026-06-05 00:55 UTC: CUDA graph capture with graph-safe remap commit `d2e28e4e` succeeded on `output/fr10_cuda_remap_confirm_20260605T001052Z`: boot used `enforce_eager=False`, `cudagraph_mode=FULL_AND_PIECEWISE`, tree GDN branch active across the 48 GDN layers, PIECEWISE and FULL captures completed, and logs report `Graph capturing finished in 12 secs, took 2.05 GiB`. Engagement was nonvacuous (`150/150 gpu_tree_metadata reason=ok`, draft count `9`, tree accept rows present), but acceptance stayed low (`accepted_per_draft_event=0.75`, path0 LCP0 fraction `0.74`, accepted-root0 fraction `0.26`) versus native same-8 `3.076/event`.
+- 2026-06-05 00:55 UTC: the real offline `src==native` gate on `output/fr10_linear_remap_confirm_20260604T234415Z/logs/fr10_src_native_handoff.pt` failed: `ssm_next_vs_native_max_abs=13.229767799377441`, `negative_ssm_max_abs=9.40386962890625`, `negative_powered=true`, `src_native_pass=false`; conv next-vs-native was bit-exact for that payload. The inline `commit_native_handoff` fields were renamed to cache diagnostics (`ssm_bank_vs_cached_tree_state_max_abs`, `conv_cache_vs_cache_max_abs`, `cache_state_coincide`) because they do not run native replay; only `scripts/fr10_src_native_handoff_gate.py` owns the native verdict.
 
 ## Current User Decision: Conv Only
 
