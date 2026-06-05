@@ -6,16 +6,17 @@ Date: 2026-06-05
 
 The FR10 no-copy no-go was reopened correctly by `FR10_NOCOPY_RESOLUTION.md`: the literature did not prove an impossibility theorem, and two decisive engineering probes had not yet been run. FR11 has now run those probes and the acceptance A/B. The no-copy decision is **RE-VALIDATED ON FIRM EVIDENCE**.
 
-No-copy GDN tree verify stays **BANKED** on this stack. The no-copy acceptance deficit (`1.86` vs native `3.076` total/event) is not a single cheap seam; it is the diffuse fundamental tree-on-GDN divergence observed in the live verifier. The forward route is copy-recurrent multi-spine, where spine A is native MTP-5 by construction, or `spines=1` native MTP-5 as the clean lossless default.
+No-copy GDN tree verify stays **BANKED** on this stack. On the primary spec-only basis, the no-copy tree remains at `0.87535953978907` accepted/draft-event versus same-harness native MTP-5 at `3.076171875`, a gap of `2.20081233521093`. On the clearly labeled total/event basis, the tree is `1944 / 1043 = 1.8638542665388303` total/event versus native `2048 / 512 = 4.0`, a gap of `2.1361457334611697`. The deficit is not a single cheap seam; it is the diffuse fundamental tree-on-GDN divergence observed in the live verifier. The forward route is copy-recurrent multi-spine, where spine A is native MTP-5 by construction, or `spines=1` native MTP-5 as the clean lossless default.
 
 Keep `FR11_TREE_CONV_NATIVE_BF16_TAPS` defaulted to `0`. The flag is a useful diagnostic and numerics knob, but it did not recover acceptance.
 
 ## Evidence
 
-FR10 established the large acceptance gap:
-- Best no-copy tree after the depth-position repair: about `1.86` accepted/event.
-- Native MTP-5 on the same prompt family: `3.076` accepted/event.
-- Gap: about `1.2` accepted/event against the best no-copy tree, and FR11's focused conv A/B runs remain about `2.2` accepted/event below native.
+FR10/FR11 established the large acceptance gap on a consistent basis:
+- Native reference is the same-harness same-8-prompts run `output/fr10_native_mtp5_same8_20260604T210257Z/quick_native_mtp5_same8.json`.
+- Primary basis is spec-only `accepted_per_draft_event`: no-copy tree baseline `0.87535953978907` vs native MTP-5 `3.076171875`, gap `2.20081233521093`.
+- Optional total/event basis is separately labeled: no-copy tree baseline `1.8638542665388303` vs native MTP-5 `4.0`, gap `2.1361457334611697`.
+- The verdict is unchanged and stronger after the basis correction: the deficit is about `2.2` on either consistent basis.
 
 FR11 closes the three concrete engineering candidates:
 
@@ -36,10 +37,10 @@ FR11 closes the three concrete engineering candidates:
    - The seam can produce a post-MLP delta of `0.015625`, so the post-attention-only alpha verdict was correctly retracted.
    - The focused high-output check is caveated: at the captured `~1.85` peak the delta was `0.0`, across captured `abs>=1.75` elements max was `0.0078125`, and the whole-tensor `0.015625` occurred at native `1.2578125`.
    - Acceptance A/B at B4, `temperature=0.6`, `top_p=0.95`, metrics off, tree engagement asserted:
-     - `FR11_TREE_CONV_NATIVE_BF16_TAPS=0`: `0.87535953978907` accepted/event.
-     - `FR11_TREE_CONV_NATIVE_BF16_TAPS=1`: `0.7597340930674265` accepted/event.
+     - `FR11_TREE_CONV_NATIVE_BF16_TAPS=0`: spec-only `accepted_per_draft_event=0.87535953978907`.
+     - `FR11_TREE_CONV_NATIVE_BF16_TAPS=1`: spec-only `accepted_per_draft_event=0.7597340930674265`.
      - Single-run flag delta: `-0.11562544672164354`, within plausible temp-0.6 sampling noise.
-   - The robust point is not the sign of that delta; it is that neither run is remotely close to native `3.076`. The native gap is about `2.2` accepted/event, roughly `19x` the absolute flag delta. A greedy temp-0 A/B could tighten the sign but is not worth the GPU cost.
+   - The robust point is not the sign of that delta; it is that neither run is remotely close to native `3.076171875` on the same spec-only `accepted_per_draft_event` basis. The native gap is about `2.2`, roughly `19x` the absolute flag delta. On total/event the baseline gap is also about `2.14`. A greedy temp-0 A/B could tighten the sign but is not worth the GPU cost.
 
 Therefore the conv tap-dtype seam is a precision-floor contributor, not the acceptance-limiting cause.
 

@@ -141,7 +141,7 @@ Configuration:
 - Tree: 9-node MTP-5-style caterpillar, `expected_draft_count=9`.
 - Metrics mode: `FR10_METRICS=0`.
 - Engagement assertion: required; explicit metrics-off logs enabled with `LUMO_TREE_SAMPLER_DEBUG_LOG=/logs/tree_sampler_debug.jsonl` and `LUMO_TREE_PATH_LCP_LOG=/logs/tree_path_lcp_max.jsonl`.
-- Native reference: MTP-5 `accepted_per_draft_event=3.076`.
+- Native reference: same-harness same-8-prompts native MTP-5 run `output/fr10_native_mtp5_same8_20260604T210257Z/quick_native_mtp5_same8.json`; primary basis is spec-only `accepted_per_draft_event=3.076171875`. The same native run has total/event `returned_tokens / spec_drafts = 2048 / 512 = 4.0`.
 
 Launcher/probe fix:
 - A first acceptance attempt with `FR10_METRICS=0` failed loudly before reporting metrics because tree engagement logs were still gated on `FR10_METRICS=1`.
@@ -155,8 +155,10 @@ Baseline, `FR11_TREE_CONV_NATIVE_BF16_TAPS=0`:
 - `accepted_per_draft_token=0.09726217108767445`.
 - `spec_accepted_tokens=913.0`, `spec_draft_tokens=9387.0`, `spec_drafts=1043.0`.
 - Returned tokens: `1944`; request count: `8`; records: `32`.
+- Total/event basis: `returned_tokens / spec_drafts = 1944 / 1043 = 1.8638542665388303`.
 - Warm decode TPS: `3.4234543038004497`.
-- Delta vs native MTP-5 event acceptance: `-2.20064046021093`; ratio vs native: `0.2845772235985273`.
+- Delta vs native MTP-5 spec-only acceptance: `-2.20081233521093`; ratio vs native: `0.2845613234107961`.
+- Delta vs native MTP-5 total/event: `-2.1361457334611697`.
 
 Conv fix, `FR11_TREE_CONV_NATIVE_BF16_TAPS=1`:
 - Run dir: `output/fr11_conv_bf16tap_fix_accept_20260605T200003Z`.
@@ -165,8 +167,10 @@ Conv fix, `FR11_TREE_CONV_NATIVE_BF16_TAPS=1`:
 - `accepted_per_draft_token=0.08441489922971404`.
 - `spec_accepted_tokens=800.0`, `spec_draft_tokens=9477.0`, `spec_drafts=1053.0`.
 - Returned tokens: `1857`; request count: `8`; records: `32`.
+- Total/event basis: `returned_tokens / spec_drafts = 1857 / 1053 = 1.7635327635327636`.
 - Warm decode TPS: `3.2202026669903643`.
-- Delta vs native MTP-5 event acceptance: `-2.3162659069325735`; ratio vs native: `0.24698767654987855`.
+- Delta vs native MTP-5 spec-only acceptance: `-2.3164377819325735`; ratio vs native: `0.24697387660350627`.
+- Delta vs native MTP-5 total/event: `-2.2364672364672364`.
 
 Flag delta:
 - Fixed minus baseline event acceptance: `-0.11562544672164354`.
@@ -177,4 +181,4 @@ Acceptance verdict:
 
 `CONV_TAP_DTYPE_FIX_DOES_NOT_RECOVER_ACCEPTANCE`
 
-The native-bf16 tap-product flag did not recover no-copy GDN tree acceptance in this single sampled A/B: accepted/event was `0.87536` for baseline and `0.75973` for the flag, a negative delta that is within single-run temperature-0.6 noise. The conclusion is nevertheless robust because both runs remain about `2.2` accepted/event below native MTP-5 `3.076`, roughly `19x` the absolute flag delta. No plausible sampling noise hides a recovery. This isolates the conv tap-dtype seam as not the acceptance-limiting bug, even though alpha shows it can create post-MLP bf16 precision-floor deltas.
+The native-bf16 tap-product flag did not recover no-copy GDN tree acceptance in this single sampled A/B: spec-only `accepted_per_draft_event` was `0.87536` for baseline and `0.75973` for the flag, a negative delta that is within single-run temperature-0.6 noise. The conclusion is nevertheless robust because both runs remain about `2.2` spec-only accepted/draft-event below the same-harness native MTP-5 `accepted_per_draft_event=3.07617`; on total/event the baseline is `1.86385` vs native `4.0`, a `2.13615` gap. The native gap is roughly `19x` the absolute flag delta on the spec-only basis. No plausible sampling noise hides a recovery. This isolates the conv tap-dtype seam as not the acceptance-limiting bug, even though alpha shows it can create post-MLP bf16 precision-floor deltas.
