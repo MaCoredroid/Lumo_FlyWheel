@@ -3019,6 +3019,184 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_tree_depth_positions() -> bool:
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR10_TREE_DEPTH_POSITIONS"
+    if sentinel in text:
+        return False
+
+    anchor = """        self.input_batch.block_table.compute_slot_mapping(
+            num_reqs,
+            self.query_start_loc.gpu[: num_reqs + 1],
+            self.positions[:total_num_scheduled_tokens],
+        )
+
+        # Copy the tensors to the GPU.
+"""
+    inject = """        self.input_batch.block_table.compute_slot_mapping(
+            num_reqs,
+            self.query_start_loc.gpu[: num_reqs + 1],
+            self.positions[:total_num_scheduled_tokens],
+        )
+
+        # FR10_TREE_DEPTH_POSITIONS: keep token/KV slot addressing flat and
+        # unique, then rewrite only the model-visible RoPE positions for tree
+        # verify rows. Tree siblings share their causal depth; flattened row
+        # offsets are not valid RoPE positions for non-spine caterpillar leaves.
+        try:
+            _fr10_mode = getattr(scheduler_output, "fr10_decode_mode", None) or __import__(
+                "os"
+            ).environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp")
+            _fr10_tree_src = None
+            try:
+                _fr10_spec_env = __import__("os").environ.get("SPEC_CONFIG")
+                if _fr10_spec_env:
+                    _fr10_tree_src = __import__("json").loads(_fr10_spec_env).get(
+                        "speculative_token_tree"
+                    )
+            except Exception:
+                _fr10_tree_src = None
+            _fr10_lspec = getattr(self.vllm_config, "speculative_config", None)
+            if not _fr10_tree_src:
+                _fr10_tree_src = (
+                    getattr(_fr10_lspec, "speculative_token_tree", None)
+                    if _fr10_lspec is not None
+                    else None
+                )
+            if (
+                _fr10_mode == "tree_mtp"
+                and _fr10_tree_src
+                and len(scheduler_output.scheduled_spec_decode_tokens) > 0
+            ):
+                _fr10_choices = sorted(
+                    __import__("ast").literal_eval(_fr10_tree_src),
+                    key=lambda _p: (len(_p), _p),
+                )
+                _fr10_depth_offsets = np.array(
+                    [0] + [len(_fr10_choice) for _fr10_choice in _fr10_choices],
+                    dtype=np.int64,
+                )
+                _fr10_tree_n = int(len(_fr10_depth_offsets))
+                _fr10_depth_pos = np.empty(
+                    int(cu_num_tokens[-1]), dtype=np.int64
+                )
+                _fr10_out = 0
+                _fr10_ok = True
+                _fr10_bad = []
+                for _fr10_req_idx, _fr10_sched in enumerate(
+                    num_scheduled_tokens.tolist()
+                ):
+                    _fr10_sched = int(_fr10_sched)
+                    _fr10_base = max(
+                        0,
+                        int(self.input_batch.num_computed_tokens_cpu[_fr10_req_idx])
+                        - 1,
+                    )
+                    if _fr10_sched == _fr10_tree_n:
+                        _fr10_depth_pos[
+                            _fr10_out : _fr10_out + _fr10_sched
+                        ] = _fr10_base + _fr10_depth_offsets
+                    else:
+                        _fr10_depth_pos[
+                            _fr10_out : _fr10_out + _fr10_sched
+                        ] = positions_np[_fr10_out : _fr10_out + _fr10_sched]
+                        if _fr10_sched > 1:
+                            _fr10_bad.append(
+                                {
+                                    "req_index": int(_fr10_req_idx),
+                                    "scheduled": int(_fr10_sched),
+                                    "expected": int(_fr10_tree_n),
+                                }
+                            )
+                    _fr10_out += _fr10_sched
+                if _fr10_out != int(cu_num_tokens[-1]):
+                    _fr10_ok = False
+                    _fr10_bad.append(
+                        {
+                            "reason": "total_mismatch",
+                            "out": int(_fr10_out),
+                            "total": int(cu_num_tokens[-1]),
+                        }
+                    )
+                if _fr10_bad and __import__("os").environ.get(
+                    "FR10_ALLOW_LINEAR_FALLBACK", "0"
+                ) != "1":
+                    raise RuntimeError(
+                        "FR10 tree depth-position remap found non-tree spec rows: "
+                        + repr(_fr10_bad[:8])
+                    )
+                if _fr10_ok:
+                    self.positions[:total_num_scheduled_tokens].copy_(
+                        torch.from_numpy(_fr10_depth_pos).to(
+                            device=self.device, non_blocking=True
+                        )
+                    )
+                    if __import__("os").environ.get("FR10_METRICS", "0") == "1":
+                        global _FR10_TREE_DEPTH_POS_FH
+                        try:
+                            _FR10_TREE_DEPTH_POS_FH
+                        except NameError:
+                            _FR10_TREE_DEPTH_POS_FH = open(
+                                __import__("os").environ.get(
+                                    "FR10_TREE_DEPTH_POSITION_LOG",
+                                    "/logs/fr10_tree_depth_positions.jsonl",
+                                ),
+                                "a",
+                                buffering=1,
+                            )
+                        _FR10_TREE_DEPTH_POS_FH.write(
+                            __import__("json").dumps(
+                                {
+                                    "event": "tree_depth_positions",
+                                    "tree_n": int(_fr10_tree_n),
+                                    "depth_offsets": [
+                                        int(_x) for _x in _fr10_depth_offsets.tolist()
+                                    ],
+                                    "base_contract": "num_computed_tokens_cpu-1",
+                                    "flat_first_tree": [
+                                        int(_x)
+                                        for _x in self.query_pos.np[
+                                            : min(_fr10_tree_n, int(cu_num_tokens[-1]))
+                                        ].tolist()
+                                    ],
+                                    "depth_first_tree": [
+                                        int(_x)
+                                        for _x in (
+                                            _fr10_depth_pos[
+                                                : min(
+                                                    _fr10_tree_n,
+                                                    int(cu_num_tokens[-1]),
+                                                )
+                                            ]
+                                            - _fr10_depth_pos[0]
+                                        ).tolist()
+                                    ],
+                                    "num_scheduled_tokens": [
+                                        int(_x) for _x in num_scheduled_tokens.tolist()
+                                    ],
+                                },
+                                sort_keys=True,
+                            )
+                            + chr(10)
+                        )
+        except Exception as _fr10_pos_exc:
+            if __import__("os").environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1":
+                raise RuntimeError(
+                    "FR10 tree depth-position remap failed: "
+                    + type(_fr10_pos_exc).__name__
+                    + ":"
+                    + str(_fr10_pos_exc)
+                ) from _fr10_pos_exc
+
+        # Copy the tensors to the GPU.
+"""
+    if anchor not in text:
+        raise RuntimeError("gpu_model_runner slot-mapping position anchor not found")
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_decode_mode_globals() -> bool:
     text = GPU_MODEL_RUNNER_PATH.read_text()
     sentinel = "# FR10_DECODE_MODE_GLOBALS"
@@ -4094,6 +4272,7 @@ def main() -> int:
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
         (QWEN3_NEXT_PATH, _patch_qwen_root_hidden_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_depth_positions()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
