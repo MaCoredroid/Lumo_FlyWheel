@@ -791,6 +791,52 @@ def _patch_gdn_linear() -> bool:
                         and _fr10_conv_diag is not None
                     )
                     assert _fr10_prior_conv_state_bank is not None
+                    _fr12_native_spine_conv_enabled = (
+                        os.environ.get("FR12_TREE_CONV_NATIVE_SPINE", "0") == "1"
+                    )
+                    _fr12_native_spine_conv_out = None
+                    if _fr12_native_spine_conv_enabled:
+                        _fr12_path0_len = int(_fr10_path0_node_tensor.numel())
+                        _fr12_native_spine_x = (
+                            mixed_qkv_spec.view(
+                                int(attn_metadata.num_spec_decodes),
+                                _fr10_tree_n,
+                                mixed_qkv_spec.size(1),
+                            )
+                            .index_select(1, _fr10_path0_node_tensor)
+                            .reshape(
+                                int(attn_metadata.num_spec_decodes)
+                                * _fr12_path0_len,
+                                mixed_qkv_spec.size(1),
+                            )
+                            .contiguous()
+                        )
+                        _fr12_native_spine_qsl = (
+                            torch.arange(
+                                int(attn_metadata.num_spec_decodes) + 1,
+                                dtype=spec_query_start_loc.dtype,
+                                device=spec_query_start_loc.device,
+                            )
+                            * _fr12_path0_len
+                        )
+                        _fr12_native_spine_conv_out = causal_conv1d_update(
+                            _fr12_native_spine_x,
+                            conv_state,
+                            conv_weights,
+                            self.conv1d.bias,
+                            self.activation,
+                            conv_state_indices=spec_state_indices_tensor[:, 0][
+                                : attn_metadata.num_spec_decodes
+                            ],
+                            num_accepted_tokens=num_accepted_tokens,
+                            query_start_loc=_fr12_native_spine_qsl,
+                            max_query_len=_fr12_path0_len,
+                            validate_data=False,
+                        ).view(
+                            int(attn_metadata.num_spec_decodes),
+                            _fr12_path0_len,
+                            mixed_qkv_spec.size(1),
+                        )
                     for _fr10_b in range(attn_metadata.num_spec_decodes):
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
@@ -968,6 +1014,12 @@ def _patch_gdn_linear() -> bool:
                         if self.activation in (True, "silu", "swish"):
                             _fr10_acc = torch.nn.functional.silu(_fr10_acc)
                         _fr10_out = _fr10_acc.to(dtype=mixed_qkv_spec.dtype)
+                        if _fr12_native_spine_conv_out is not None:
+                            _fr10_out.index_copy_(
+                                0,
+                                _fr10_path0_node_tensor,
+                                _fr12_native_spine_conv_out[_fr10_b],
+                            )
                         _fr10_tree_conv_out[_fr10_start:_fr10_end] = _fr10_out
                         _fr10_node_state_rows = []
                         for _fr10_node_i in range(_fr10_tree_n):
