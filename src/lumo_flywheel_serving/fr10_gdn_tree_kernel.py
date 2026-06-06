@@ -298,34 +298,34 @@ def _tree_gdn_kernel(
     decay = tl.exp(cum_g[:, None] - cum_g[None, :])
     system = tl.where(m_strict, kk * b_beta[:, None] * decay, 0.0)
 
-    # FR12 WY-tree: build the same triangular T factor as FLA solve_tril,
-    # generalized from a flat lower triangle to the tree strict-ancestor mask.
-    # T = inv(I + system), then solved sources are T @ (beta*v) and
-    # T @ (beta*exp(G)*k). This removes the value-wise forward-substitution
-    # loop while preserving the existing serving ABI and h0 bank semantics.
-    tmat = tl.zeros((N_PAD, N_PAD), dtype=tl.float32)
+    # Dense forward-substitution scan. FR12 temporarily returns to the original
+    # FR10 scan path because the current priority is native-spine parity rather
+    # than WY speed.
+    solved_v = tl.zeros((N_PAD, BLOCK_V), dtype=tl.float32)
+    solved_k = tl.zeros((N_PAD, DIM_K), dtype=tl.float32)
+    trans_v = tl.zeros((N_PAD, BLOCK_V), dtype=tl.float32)
+
     for i in tl.static_range(0, N_PAD):
         row_i = offs_n == i
         coeff = tl.sum(tl.where(row_i[:, None], system, 0.0), axis=0)
-        t_i = tl.where(offs_n == i, 1.0, 0.0)
+        beta_i = tl.sum(tl.where(row_i, b_beta, 0.0), axis=0)
+        cumg_i = tl.sum(tl.where(row_i, cum_g, 0.0), axis=0)
+        v_i = tl.sum(tl.where(row_i[:, None], b_v, 0.0), axis=0)
+        k_i = tl.sum(tl.where(row_i[:, None], b_k, 0.0), axis=0)
+        y_i = beta_i * v_i
+        sk_i = beta_i * k_i * tl.exp(cumg_i)
         for j in tl.static_range(0, i):
             row_j = offs_n == j
             coeff_j = tl.sum(tl.where(row_j, coeff, 0.0), axis=0)
-            t_j = tl.sum(tl.where(row_j[:, None], tmat, 0.0), axis=0)
-            t_i -= coeff_j * t_j
-        tmat = tl.where(row_i[:, None], t_i[None, :], tmat)
-
-    src_v = b_beta[:, None] * b_v
-    src_k = b_beta[:, None] * b_k * tl.exp(cum_g)[:, None]
-    trans_v = tl.zeros((N_PAD, BLOCK_V), dtype=tl.float32)
-    for i in tl.static_range(0, N_PAD):
-        row_i = offs_n == i
-        t_i = tl.sum(tl.where(row_i[:, None], tmat, 0.0), axis=0)
-        y_i = tl.sum(t_i[:, None] * src_v, axis=0)
-        sk_i = tl.sum(t_i[:, None] * src_k, axis=0)
+            solved_v_j = tl.sum(tl.where(row_j[:, None], solved_v, 0.0), axis=0)
+            solved_k_j = tl.sum(tl.where(row_j[:, None], solved_k, 0.0), axis=0)
+            y_i -= coeff_j * solved_v_j
+            sk_i -= coeff_j * solved_k_j
+        solved_v = tl.where((offs_n == i)[:, None], y_i[None, :], solved_v)
+        solved_k = tl.where((offs_n == i)[:, None], sk_i[None, :], solved_k)
         incoming_i = tl.sum(b_h0 * sk_i[None, :], axis=1)
         tv_i = y_i - incoming_i
-        trans_v = tl.where(row_i[:, None], tv_i[None, :], trans_v)
+        trans_v = tl.where((offs_n == i)[:, None], tv_i[None, :], trans_v)
 
     for i in tl.static_range(0, N_PAD):
         row_i = offs_n == i
