@@ -10,6 +10,12 @@ prelaunch blocks inside the direct launcher instead of duplicating them.
 from __future__ import annotations
 
 import subprocess
+import sys
+from pathlib import Path
+
+WORKSPACE = Path("/workspace")
+if WORKSPACE.is_dir():
+    sys.path.insert(0, str(WORKSPACE))
 
 from scripts.run_track_b_loop import _track_b_runtime_prelaunch_shell
 from scripts.swe_x86_helpers.relaunch_qwen36_round import (
