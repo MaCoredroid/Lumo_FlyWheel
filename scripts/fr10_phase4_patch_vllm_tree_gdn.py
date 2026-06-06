@@ -747,6 +747,9 @@ def _patch_gdn_linear() -> bool:
                         _fr10_window = _fr10_source.index_select(
                             0, _fr10_source_flat
                         ).view(_fr10_tree_n, _fr10_width, _fr10_x.size(1))
+                        _fr10_path0_x = _fr10_x.index_select(
+                            0, _fr10_path0_node_tensor
+                        )
                         if _fr10_b == 0:
                             try:
                                 _fr12_payload = _fr12_subkernel_capture_get(
@@ -860,9 +863,6 @@ def _patch_gdn_linear() -> bool:
                             _fr10_acc = torch.nn.functional.silu(_fr10_acc)
                         _fr10_out = _fr10_acc.to(dtype=mixed_qkv_spec.dtype)
                         _fr10_tree_conv_out[_fr10_start:_fr10_end] = _fr10_out
-                        _fr10_path0_x = _fr10_x.index_select(
-                            0, _fr10_path0_node_tensor
-                        )
                         _fr10_node_state_rows = []
                         for _fr10_node_i in range(_fr10_tree_n):
                             _fr10_node_path = _fr10_path_node_tensors[_fr10_node_i]
