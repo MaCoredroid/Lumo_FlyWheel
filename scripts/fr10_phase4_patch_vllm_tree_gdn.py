@@ -1938,19 +1938,21 @@ def _patch_gdn_linear() -> bool:
     text = text.replace(needle, replacement, 1)
 
     output_projection_needle = '''        z_shape_og = z.shape
+        # Reshape input data into 2D tensor
         core_attn_out = core_attn_out.reshape(-1, core_attn_out.shape[-1])
         z = z.reshape(-1, z.shape[-1])
         core_attn_out = self.norm(core_attn_out, z)
         core_attn_out = core_attn_out.reshape(z_shape_og)
-        core_attn_out = core_attn_out.flatten(-2)  # ... h d -> ... (h d)
+        core_attn_out = rearrange(core_attn_out, "... h d -> ... (h d)")
         output[:num_tokens], _ = self.out_proj(core_attn_out)
 '''
     output_projection_replacement = '''        z_shape_og = z.shape
+        # Reshape input data into 2D tensor
         core_attn_out = core_attn_out.reshape(-1, core_attn_out.shape[-1])
         z = z.reshape(-1, z.shape[-1])
         core_attn_out = self.norm(core_attn_out, z)
         core_attn_out = core_attn_out.reshape(z_shape_og)
-        core_attn_out = core_attn_out.flatten(-2)  # ... h d -> ... (h d)
+        core_attn_out = rearrange(core_attn_out, "... h d -> ... (h d)")
         _fr12_subkernel_capture_tensor(
             self,
             "gate_out",
