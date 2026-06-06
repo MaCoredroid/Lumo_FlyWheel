@@ -570,3 +570,84 @@ native-spine splice disabled, our tree conv now bit-matches native
 `causal_conv1d_update` at `conv1d_out` for the aligned L0 spine rows. The
 remaining L0 core residual is downstream floor (`gdn_scan_out`, `gate_out`,
 `o_proj_out`) rather than the previous `0.125` conv-origin mismatch.
+
+## 2026-06-06 Argmax Lag Red-Team Check
+
+Input:
+
+- Red-team note:
+  `FR12_REDTEAM_ARGMAX_LAG.md`
+- New checker:
+  `scripts/fr12_compare_argmax_lag.py`
+
+Important harness correction:
+
+- The older `fr10_layer_hidden_spine_compare.py` indexed `target_logits` by
+  target model row id. That is invalid for tree captures because
+  `target_logits_indices` contains duplicate branch-sibling row ids.
+- The corrected checker maps each spine depth through the captured
+  `target_logits_indices` entry first, then reads that entry's logits.
+- `fr10_layer_hidden_spine_compare.py` has been patched to use the same
+  entry mapping for probability and argmax reporting.
+
+Old splice-ON recheck with corrected logit-entry mapping:
+
+| Capture | Argmax mismatch depths | One-depth lag depths |
+|---|---|---|
+| `output/fr12_layer2_scan_origin_20260606T043504Z/argmax_lag_call2_recheck.json` | `[]` | `[]` |
+| `output/fr12_layer2_scan_origin_20260606T043504Z/argmax_lag_call3_recheck.json` | `[0, 3]` | `[]` |
+
+Verdict: the reported splice-ON `tree_argmax[d] == native_argmax[d-1]` pattern
+was a compare-basis artifact, not a proven structural one-depth lag.
+
+Splice-OFF argmax gate:
+
+- Run directory:
+  `output/fr12_spliceoff_argmax_20260606T072901Z/`
+- Tree config:
+  `FR12_NATIVE_SPINE_ORACLE=0`,
+  `FR12_TREE_CONV_NATIVE_SPINE=0`,
+  `FR12_TREE_SCAN_NATIVE_SPINE=0`,
+  `FR12_TREE_CONV_NATIVE_BF16_TAPS=1`
+- Tree engagement:
+  `10/10` GPU tree metadata rows ok, `31` tree accept rows.
+- Native MTP-5 rerun:
+  `native/logs/fr10_mtp_draft_trace.jsonl`
+- Native rerun note:
+  the native rerun confirmed the same draft events, but did not write
+  `spine_native*.pt`; comparison used the previous deterministic native
+  logit captures for those same draft events.
+
+Current native draft-event alignment:
+
+| Event | Tree path0 draft tokens | Current native MTP draft tokens |
+|---|---|---|
+| call2 / native idx0 | `[71093, 12305, 198, 727, 9637]` | `[71093, 12305, 198, 727, 9637]` |
+| call3 / native idx1 | `[271, 248069, 271, 71093, 12305]` | `[271, 248069, 271, 71093, 12305]` |
+
+Splice-OFF corrected argmax result:
+
+| Capture | Argmax mismatch depths | One-depth lag depths | Lag from first branch gap |
+|---|---|---|---|
+| `argmax_lag_spliceoff_call2_vs_native_call2.json` | `[]` | `[]` | `false` |
+| `argmax_lag_spliceoff_call3_vs_native_call3.json` | `[]` | `[]` | `false` |
+
+Per-depth splice-OFF argmax:
+
+| Event | Depth | Tree row | Native row | Draft | Tree argmax | Native argmax |
+|---|---:|---:|---:|---:|---:|---:|
+| call2 | 0 | 0 | 0 | 71093 | 248068 | 248068 |
+| call2 | 1 | 1 | 1 | 12305 | 12305 | 12305 |
+| call2 | 2 | 2 | 2 | 198 | 198 | 198 |
+| call2 | 3 | 4 | 3 | 727 | 1005 | 1005 |
+| call2 | 4 | 6 | 4 | 9637 | 9637 | 9637 |
+| call3 | 0 | 0 | 0 | 271 | 271 | 271 |
+| call3 | 1 | 1 | 1 | 248069 | 248069 | 248069 |
+| call3 | 2 | 2 | 2 | 271 | 271 | 271 |
+| call3 | 3 | 4 | 3 | 71093 | 71093 | 71093 |
+| call3 | 4 | 6 | 4 | 12305 | 12305 | 12305 |
+
+Verdict: with splice OFF and our real bf16-rounded tree conv enabled, the
+per-depth argmax gate passes for these two matched events. The one-depth lag
+does not persist. Next seam should be selected by the next failing token-level
+gate, not by the old lag table.

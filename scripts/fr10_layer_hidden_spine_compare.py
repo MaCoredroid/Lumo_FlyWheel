@@ -70,6 +70,23 @@ def _draft_tokens_by_target_row(logits: dict, target_rows: list[int], req: int) 
     return out
 
 
+def _entry_indices_by_target_row(logits: dict, target_rows: list[int], req: int) -> list[int]:
+    counts = [int(x) for x in logits["num_draft_tokens"]]
+    start = _row_start(counts, req)
+    end = start + counts[req]
+    target_logits_indices = logits["target_logits_indices"][start:end]
+    out = []
+    for row in target_rows:
+        matches = (target_logits_indices == int(row)).nonzero(as_tuple=True)[0]
+        if matches.numel() == 0:
+            raise RuntimeError(
+                f"no logit entry found for target row {row}; "
+                f"available={target_logits_indices.detach().cpu().tolist()}"
+            )
+        out.append(int(start + int(matches[0].item())))
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tree-hidden", required=True, type=Path)
@@ -105,6 +122,12 @@ def main() -> None:
     native_drafts = _draft_tokens_by_target_row(
         native_l, native_hidden_rows_abs, args.native_req
     )
+    tree_logit_entries = _entry_indices_by_target_row(
+        tree_l, tree_hidden_rows_abs, args.tree_req
+    )
+    native_logit_entries = _entry_indices_by_target_row(
+        native_l, native_hidden_rows_abs, args.native_req
+    )
     tree_probs = _softmax(tree_l["target_logits"])
     native_probs = _softmax(native_l["target_logits"])
 
@@ -116,10 +139,20 @@ def main() -> None:
             "depth": int(depth),
             "draft_token": int(token),
             "native_draft_token": int(native_drafts[depth]),
-            "tree_prob_draft": float(tree_probs[tree_row, token].item()),
-            "native_prob_draft": float(native_probs[native_row, token].item()),
-            "tree_argmax": int(torch.argmax(tree_probs[tree_row]).item()),
-            "native_argmax": int(torch.argmax(native_probs[native_row]).item()),
+            "tree_logit_entry": int(tree_logit_entries[depth]),
+            "native_logit_entry": int(native_logit_entries[depth]),
+            "tree_prob_draft": float(
+                tree_probs[tree_logit_entries[depth], token].item()
+            ),
+            "native_prob_draft": float(
+                native_probs[native_logit_entries[depth], token].item()
+            ),
+            "tree_argmax": int(
+                torch.argmax(tree_probs[tree_logit_entries[depth]]).item()
+            ),
+            "native_argmax": int(
+                torch.argmax(native_probs[native_logit_entries[depth]]).item()
+            ),
         })
 
     rows = []
@@ -191,6 +224,8 @@ def main() -> None:
         "native_hidden_rows_abs": native_hidden_rows_abs,
         "tree_spine_tokens": tree_drafts,
         "native_spine_tokens": native_drafts,
+        "tree_logit_entries": tree_logit_entries,
+        "native_logit_entries": native_logit_entries,
         "spine_tokens_match": tree_drafts == native_drafts,
         "input_max_abs_by_depth": input_by_depth,
         "layers": rows,
