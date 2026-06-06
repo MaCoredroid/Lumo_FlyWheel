@@ -489,7 +489,7 @@ def _patch_gdn_linear() -> bool:
                     _fr10_conv_diag[16].add_(float(attn_metadata.num_spec_decodes))
                 _fr10_conv_diag[20].add_(float(attn_metadata.num_prefills))
                 _fr10_conv_diag[21].add_(float(attn_metadata.num_decodes))
-            _fr12_pre_conv_spec = mixed_qkv_spec
+            _fr12_pre_conv_spec = mixed_qkv_spec.detach().clone()
             try:
                 _fr12_pre_extra = {
                     "num_spec_decodes": int(attn_metadata.num_spec_decodes),
