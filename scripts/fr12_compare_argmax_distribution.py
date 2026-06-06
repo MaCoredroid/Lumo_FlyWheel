@@ -33,6 +33,12 @@ class EventRecord:
     target_rows: tuple[int, ...]
 
 
+@dataclass(frozen=True)
+class SkippedCapture:
+    capture_path: Path
+    reason: str
+
+
 def _load(path: Path) -> dict[str, Any]:
     return torch.load(path, map_location="cpu")
 
@@ -93,8 +99,12 @@ def _native_path_entries(capture: dict[str, Any], req: int, depth: int) -> list[
     return list(range(start, start + min(depth, count)))
 
 
-def _records_for_capture(path: Path, *, tree: bool, depth: int) -> list[EventRecord]:
+def _records_for_capture(
+    path: Path, *, tree: bool, depth: int
+) -> tuple[list[EventRecord], SkippedCapture | None]:
     capture = _load(path)
+    if tree and capture.get("tree_parent_indices") is None:
+        return [], SkippedCapture(path, "tree_parent_indices_missing")
     counts = _counts(capture)
     target_rows_all = capture["target_logits_indices"]
     draft_all = capture["draft_token_ids"]
@@ -123,14 +133,18 @@ def _records_for_capture(path: Path, *, tree: bool, depth: int) -> list[EventRec
                 target_rows=target_rows,
             )
         )
-    return records
+    return records, None
 
 
 def _records(patterns: list[str], *, tree: bool, depth: int) -> tuple[list[EventRecord], dict[str, Any]]:
     paths = _paths(patterns)
     records: list[EventRecord] = []
+    skipped: list[SkippedCapture] = []
     for path in paths:
-        records.extend(_records_for_capture(path, tree=tree, depth=depth))
+        capture_records, skip = _records_for_capture(path, tree=tree, depth=depth)
+        records.extend(capture_records)
+        if skip is not None:
+            skipped.append(skip)
     deduped: list[EventRecord] = []
     seen: set[tuple[str, int, int, tuple[int, ...]]] = set()
     for rec in records:
@@ -142,6 +156,10 @@ def _records(patterns: list[str], *, tree: bool, depth: int) -> tuple[list[Event
     return deduped, {
         "paths": [str(p) for p in paths],
         "captures": len(paths),
+        "skipped_captures": [
+            {"path": str(skip.capture_path), "reason": skip.reason}
+            for skip in skipped
+        ],
         "events": len(deduped),
     }
 

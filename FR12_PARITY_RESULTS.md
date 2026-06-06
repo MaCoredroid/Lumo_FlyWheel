@@ -651,3 +651,86 @@ Verdict: with splice OFF and our real bf16-rounded tree conv enabled, the
 per-depth argmax gate passes for these two matched events. The one-depth lag
 does not persist. Next seam should be selected by the next failing token-level
 gate, not by the old lag table.
+
+## 2026-06-06 Many-Event Argmax + Distribution Gate
+
+Purpose:
+
+- Red-team coverage check for the one-event splice-OFF green result above.
+- Gate basis: splice OFF, native-spine oracle OFF, our bf16-rounded tree conv
+  ON, real SWE-Bench Verified prompt sample, `B=4`, `temperature=0.6`,
+  `top_p=0.95`, `mtp5`.
+- Comparator: `scripts/fr12_compare_argmax_distribution.py`.
+
+Run directory:
+
+- `output/fr12_spliceoff_many_argmax_20260606T075933Z/`
+
+Serving configs:
+
+| Arm | Key config |
+|---|---|
+| tree | `FR12_NATIVE_SPINE_ORACLE=0`, `FR12_TREE_CONV_NATIVE_SPINE=0`, `FR12_TREE_SCAN_NATIVE_SPINE=0`, `FR12_TREE_CONV_NATIVE_BF16_TAPS=1`, tree n9 |
+| native | native MTP-5, eager rerun for capture, `LUMO_TREE_SAMPLER_DEBUG_LOG=/logs/tree_sampler_debug.jsonl` |
+
+Capture note:
+
+- Native logit capture did not fire until `LUMO_TREE_SAMPLER_DEBUG_LOG` was set,
+  because the current capture hook is nested inside the sampler-debug branch.
+- Tree produced `40` tree capture files plus the base file; two early files had
+  no tree parent indices and were skipped by the comparator.
+- Native produced `40` native capture files after the debug-log rerun.
+
+Probe metrics for this bounded SWE prompt sample:
+
+| Arm | accepted_per_draft_event | spec accepted | spec drafts |
+|---|---:|---:|---:|
+| tree_mtp | 0.6586021505376344 | 245 | 372 |
+| native MTP-5 | 1.623728813559322 | 479 | 295 |
+
+Coverage:
+
+| Metric | Value |
+|---|---:|
+| Tree path0 events in captures | 96 |
+| Native path events in captures | 136 |
+| Exact draft-token matched events | 6 |
+| Unmatched tree events | 90 |
+| Unmatched native events | 130 |
+| Rows compared | 30 |
+
+Argmax / lag:
+
+| Metric | Value |
+|---|---:|
+| Argmax mismatches | 5 / 30 |
+| Argmax mismatch rate | 0.16666666666666666 |
+| Events with any argmax mismatch | 3 / 6 |
+| One-depth lag matches | 0 / 30 |
+| Events with first-branch lag pattern | 0 |
+
+Distributional drift on matched rows:
+
+| Metric | Mean | P50 | P90 | Max |
+|---|---:|---:|---:|---:|
+| TV | 0.23948737420141697 | 0.049303941428661346 | 0.7638193368911743 | 1.0 |
+| JS nats | 0.1182111736619845 | 0.0037247389554977417 | 0.4454859495162964 | 0.6931471228599548 |
+| Draft-prob abs delta | 0.1316683748116096 | 0.028470218181610107 | 0.3891814351081848 | 0.867035761475563 |
+
+Per-depth summary:
+
+| Depth | Rows | Argmax mismatch rate | TV mean | TV max | Draft-prob abs-delta mean | Draft-prob abs-delta max |
+|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 6 | 0.3333333333333333 | 0.344734862446785 | 1.0 | 0.09633595868945122 | 0.3997858762741089 |
+| 1 | 6 | 0.16666666666666666 | 0.261039358874162 | 0.8670357465744019 | 0.24425327281157175 | 0.867035761475563 |
+| 2 | 6 | 0.16666666666666666 | 0.2734779603779316 | 0.7638193368911743 | 0.0963319248209397 | 0.298944890499115 |
+| 3 | 6 | 0.0 | 0.17994595877826214 | 0.42518046498298645 | 0.09386170158783595 | 0.3891814351081848 |
+| 4 | 6 | 0.16666666666666666 | 0.1382387305299441 | 0.5393196940422058 | 0.1275590161482493 | 0.47524142265319824 |
+
+Verdict: the many-event gate does **not** pass. The prior one-event argmax green
+result was real but not broad enough: on this SWE prompt sample, comparable
+matched events already show argmax failures and large distributional TV, while
+the exact-match coverage itself is low because tree and native sampled
+continuations diverge quickly. The explicit one-depth lag pattern remains
+absent, so the next work should target the remaining distribution/argmax
+propagator, not the old lag hypothesis.
