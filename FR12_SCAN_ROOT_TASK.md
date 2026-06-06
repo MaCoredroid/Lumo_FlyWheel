@@ -3,7 +3,9 @@
 **Branch:** `fr12-wy-tree-kernel` · **Driver:** codex gpt-5.5-high (codex_fr12) · **Red-team + loop:** Claude (Opus), 10-min. **ONE GPU — strictly serial.** Read `FR12_REDTEAM_ARGMAX_LAG.md` + `FR12_PARITY_RESULTS.md` (full state) and the committed probe scripts before starting.
 
 ## THE HARD GATE (user, non-negotiable)
-Drive the per-layer GDN sub-kernels **(3) gdn_scan, (4) RMSNormGated gate, (5) o_proj** to **bit-exact 0.0** (tree spine == native; below fp8 bucket resolution so no byte flips) **BEFORE any other kernel work** (speed, branches, other model parts). Do NOT "let small residuals go" — they compound over 64 layers and ARE the whole drift.
+Drive the per-layer GDN sub-kernels **(3) gdn_scan, (4) RMSNormGated gate, (5) o_proj** to **bit-exact 0.0** (below fp8 bucket resolution so no byte flips) **BEFORE any other kernel work** (speed, other model parts). Do NOT "let small residuals go" — they compound over 64 layers and ARE the whole drift.
+
+**"0 vs native" must verify the SPINE *and* the BRANCHES — not just path0 (user, 2026-06-06).** All the scan probes so far compare only the spine rows `[0,1,2,4,6]` vs native's linear chain. That is NECESSARY but NOT sufficient: the off-spine branch nodes (rows 3,5,7,…) are what give the superset, and accepting them losslessly requires their verify output to be correct too. Native MTP-5 has NO branch counterpart, so the branch oracle is **native run on each branch's path-to-root** (the linear ancestor-path root→…→parent→branch), no-MTP, **depth-based positions** — this is theorem-backed (SpecInfer Def 4.1 / STree §3 Eq.4-6; see `reference_gdn_tree_branch_oracle_losslessness`). For each sub-kernel (scan/gate/o_proj), verify **both**: (a) spine row == native linear chain (0.0), AND (b) each branch node == native-on-its-branch-path oracle (0.0). The branch check also validates the **ancestry mask** (a branch must fold in EXACTLY its ancestors, no sibling/non-ancestor bleed). Do NOT declare "0 vs native" until spine AND branches both pass.
 
 ## The drift is LOCALIZED (proven, codex boot-free probes 2026-06-06 — build on these, don't re-litigate)
 - **conv: FIXED** (0.0) via our-kernel bf16 tap rounding (`FR12_TREE_CONV_NATIVE_BF16_TAPS=1`).
@@ -32,4 +34,4 @@ vLLM batch-invariance covers attn+GEMM but NOT the GDN scan. Co-resident branch 
 - **DO NOT close (pass/fail) without asking the user.**
 
 ## Definition of done
-scan + gate + o_proj == 0.0 at L0 (splice OFF), then all 64 layers, then many-event per-depth argmax match + TV within native-vs-native floor + accept/event ≥ native. Bring numbers to the user before any closeout.
+scan + gate + o_proj == 0.0 at L0 (splice OFF) **on BOTH the spine (vs native linear chain) AND every branch node (vs the native-on-branch-path oracle)**, then all 64 layers, then many-event per-depth argmax match + TV within native-vs-native floor + accept/event ≥ native. Bring numbers to the user before any closeout.
