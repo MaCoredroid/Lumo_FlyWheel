@@ -489,6 +489,36 @@ def _patch_gdn_linear() -> bool:
                     _fr10_conv_diag[16].add_(float(attn_metadata.num_spec_decodes))
                 _fr10_conv_diag[20].add_(float(attn_metadata.num_prefills))
                 _fr10_conv_diag[21].add_(float(attn_metadata.num_decodes))
+            _fr12_pre_conv_spec = mixed_qkv_spec
+            try:
+                _fr12_pre_extra = {
+                    "num_spec_decodes": int(attn_metadata.num_spec_decodes),
+                    "num_actual_tokens": int(num_actual_tokens),
+                    "tree_conv_active": bool(use_fr10_tree_conv),
+                    "tree_conv_expected": bool(_fr10_tree_conv_expected),
+                }
+                if getattr(attn_metadata, "fr10_tree_parent", None) is not None:
+                    _fr12_pre_extra["tree_parent"] = [
+                        int(_x)
+                        for _x in attn_metadata.fr10_tree_parent.detach().cpu().tolist()
+                    ]
+                if spec_token_indx is not None:
+                    _fr12_pre_extra["spec_token_indx"] = [
+                        int(_x) for _x in spec_token_indx.detach().cpu().tolist()
+                    ]
+                if spec_query_start_loc is not None:
+                    _fr12_pre_extra["spec_query_start_loc"] = [
+                        int(_x) for _x in spec_query_start_loc.detach().cpu().tolist()
+                    ]
+                _fr12_subkernel_capture_tensor(
+                    self,
+                    "pre_conv",
+                    mixed_qkv_spec,
+                    create=True,
+                    extra=_fr12_pre_extra,
+                )
+            except Exception as _fr12_pre_cap_exc:
+                logger.warning("FR12 pre-conv capture failed: %s", _fr12_pre_cap_exc)
             if use_fr10_tree_conv:
                 try:
                     _fr10_accepted_paths_tensor = globals().get(
@@ -717,6 +747,104 @@ def _patch_gdn_linear() -> bool:
                         _fr10_window = _fr10_source.index_select(
                             0, _fr10_source_flat
                         ).view(_fr10_tree_n, _fr10_width, _fr10_x.size(1))
+                        if _fr10_b == 0:
+                            try:
+                                _fr12_payload = _fr12_subkernel_capture_get(
+                                    self, create=False
+                                )
+                                if (
+                                    _fr12_payload is not None
+                                    and not _fr12_payload["meta"].get(
+                                        "tree_conv_detail_done", False
+                                    )
+                                ):
+                                    _fr12_path0_window = _fr10_window.index_select(
+                                        0, _fr10_path0_node_tensor
+                                    )
+                                    _fr12_path0_source_indices = (
+                                        _fr10_tree_source_indices.index_select(
+                                            0, _fr10_path0_node_tensor
+                                        )
+                                    )
+                                    _fr12_path0_native_chain_indices = (
+                                        _fr10_path0_source_indices
+                                    )
+                                    _fr12_taps_fp32 = []
+                                    _fr12_taps_bf16 = []
+                                    _fr12_tap_dtype = mixed_qkv_spec.dtype
+                                    for _fr12_col in range(_fr10_width):
+                                        _fr12_w_fp32 = conv_weights[
+                                            :, _fr12_col
+                                        ].to(torch.float32).unsqueeze(0)
+                                        _fr12_w_bf16 = conv_weights[
+                                            :, _fr12_col
+                                        ].to(_fr12_tap_dtype).unsqueeze(0)
+                                        _fr12_x_col = _fr12_path0_window[
+                                            :, _fr12_col, :
+                                        ]
+                                        _fr12_taps_fp32.append(
+                                            _fr12_x_col.to(torch.float32)
+                                            * _fr12_w_fp32
+                                        )
+                                        _fr12_taps_bf16.append(
+                                            (
+                                                _fr12_x_col.to(_fr12_tap_dtype)
+                                                * _fr12_w_bf16
+                                            )
+                                            .to(_fr12_tap_dtype)
+                                            .to(torch.float32)
+                                        )
+                                    _fr12_payload["meta"]["tree_conv_detail"] = {
+                                        "schema": "fr12.tree_conv_detail.v1",
+                                        "prior_bank_rows": _fr10_prior_conv_bank_rows.detach()
+                                        .cpu()
+                                        .clone(),
+                                        "read_cols": _fr10_conv_read_cols.detach()
+                                        .cpu()
+                                        .clone(),
+                                        "path0_nodes": _fr10_path0_node_tensor.detach()
+                                        .cpu()
+                                        .clone(),
+                                        "tree_source_indices_path0": _fr12_path0_source_indices.detach()
+                                        .cpu()
+                                        .clone(),
+                                        "native_chain_source_indices_path0": _fr12_path0_native_chain_indices.detach()
+                                        .cpu()
+                                        .clone(),
+                                        "prior_window": _fr10_prior_window.detach()
+                                        .to(torch.float32)
+                                        .cpu()
+                                        .clone(),
+                                        "pre_conv_path0": _fr10_path0_x.detach()
+                                        .to(torch.float32)
+                                        .cpu()
+                                        .clone(),
+                                        "window_path0": _fr12_path0_window.detach()
+                                        .to(torch.float32)
+                                        .cpu()
+                                        .clone(),
+                                        "tap_products_fp32_path0": torch.stack(
+                                            _fr12_taps_fp32, dim=1
+                                        )
+                                        .detach()
+                                        .cpu()
+                                        .clone(),
+                                        "tap_products_bf16_path0": torch.stack(
+                                            _fr12_taps_bf16, dim=1
+                                        )
+                                        .detach()
+                                        .cpu()
+                                        .clone(),
+                                    }
+                                    _fr12_payload["meta"][
+                                        "tree_conv_detail_done"
+                                    ] = True
+                                    _fr12_subkernel_capture_flush(_fr12_payload)
+                            except Exception as _fr12_tree_detail_exc:
+                                logger.warning(
+                                    "FR12 tree conv detail capture failed: %s",
+                                    _fr12_tree_detail_exc,
+                                )
                         if self.conv1d.bias is None:
                             _fr10_acc = torch.zeros_like(_fr10_x, dtype=torch.float32)
                         else:
@@ -1096,6 +1224,126 @@ def _patch_gdn_linear() -> bool:
                     create=True,
                     extra=_fr12_conv_extra,
                 )
+                _fr12_payload = _fr12_subkernel_capture_get(self, create=False)
+                if (
+                    _fr12_payload is not None
+                    and not bool(use_fr10_tree_conv)
+                    and not _fr12_payload["meta"].get(
+                        "native_conv_detail_done", False
+                    )
+                    and spec_state_indices_tensor is not None
+                    and spec_query_start_loc is not None
+                    and attn_metadata.num_spec_decodes > 0
+                ):
+                    _fr12_width = int(conv_weights.shape[1])
+                    _fr12_native_start = int(
+                        spec_query_start_loc[0].detach().cpu().item()
+                    )
+                    _fr12_native_end = int(
+                        spec_query_start_loc[1].detach().cpu().item()
+                    )
+                    _fr12_native_len = max(
+                        0, _fr12_native_end - _fr12_native_start
+                    )
+                    _fr12_native_rows = torch.arange(
+                        _fr12_native_len,
+                        dtype=torch.long,
+                        device=mixed_qkv_spec.device,
+                    )
+                    _fr12_prior_row = spec_state_indices_tensor[0, 0].to(torch.long)
+                    _fr12_prior_window = conv_state.index_select(
+                        0, _fr12_prior_row.view(1)
+                    )[0].index_select(
+                        1,
+                        torch.arange(
+                            _fr12_width - 1,
+                            dtype=torch.long,
+                            device=mixed_qkv_spec.device,
+                        ),
+                    )
+                    _fr12_native_x = _fr12_pre_conv_spec[
+                        _fr12_native_start:_fr12_native_end
+                    ]
+                    _fr12_native_source = torch.cat(
+                        (_fr12_prior_window.transpose(0, 1), _fr12_native_x),
+                        dim=0,
+                    )
+                    _fr12_src_rows = []
+                    for _fr12_i in range(_fr12_native_len):
+                        _fr12_src_rows.append(
+                            list(
+                                range(
+                                    int(_fr12_i),
+                                    int(_fr12_i) + int(_fr12_width),
+                                )
+                            )
+                        )
+                    _fr12_native_source_indices = torch.tensor(
+                        _fr12_src_rows,
+                        dtype=torch.long,
+                        device=mixed_qkv_spec.device,
+                    )
+                    _fr12_native_window = _fr12_native_source.index_select(
+                        0, _fr12_native_source_indices.reshape(-1)
+                    ).view(_fr12_native_len, _fr12_width, _fr12_native_x.size(1))
+                    _fr12_taps_fp32 = []
+                    _fr12_taps_bf16 = []
+                    _fr12_tap_dtype = mixed_qkv_spec.dtype
+                    for _fr12_col in range(_fr12_width):
+                        _fr12_w_fp32 = conv_weights[:, _fr12_col].to(
+                            torch.float32
+                        ).unsqueeze(0)
+                        _fr12_w_bf16 = conv_weights[:, _fr12_col].to(
+                            _fr12_tap_dtype
+                        ).unsqueeze(0)
+                        _fr12_x_col = _fr12_native_window[:, _fr12_col, :]
+                        _fr12_taps_fp32.append(
+                            _fr12_x_col.to(torch.float32) * _fr12_w_fp32
+                        )
+                        _fr12_taps_bf16.append(
+                            (
+                                _fr12_x_col.to(_fr12_tap_dtype)
+                                * _fr12_w_bf16
+                            )
+                            .to(_fr12_tap_dtype)
+                            .to(torch.float32)
+                        )
+                    _fr12_payload["meta"]["native_conv_detail"] = {
+                        "schema": "fr12.native_conv_detail.v1",
+                        "prior_bank_row": int(_fr12_prior_row.detach().cpu().item()),
+                        "query_start_loc": spec_query_start_loc.detach()
+                        .cpu()
+                        .clone(),
+                        "source_indices": _fr12_native_source_indices.detach()
+                        .cpu()
+                        .clone(),
+                        "prior_window": _fr12_prior_window.detach()
+                        .to(torch.float32)
+                        .cpu()
+                        .clone(),
+                        "pre_conv_rows": _fr12_native_x.detach()
+                        .to(torch.float32)
+                        .cpu()
+                        .clone(),
+                        "window": _fr12_native_window.detach()
+                        .to(torch.float32)
+                        .cpu()
+                        .clone(),
+                        "tap_products_fp32": torch.stack(
+                            _fr12_taps_fp32, dim=1
+                        )
+                        .detach()
+                        .cpu()
+                        .clone(),
+                        "tap_products_bf16": torch.stack(
+                            _fr12_taps_bf16, dim=1
+                        )
+                        .detach()
+                        .cpu()
+                        .clone(),
+                    }
+                    _fr12_payload["meta"]["native_conv_detail_done"] = True
+                    _fr12_subkernel_capture_flush(_fr12_payload)
             except Exception as _fr12_conv_cap_exc:
                 logger.warning("FR12 conv capture failed: %s", _fr12_conv_cap_exc)
 '''
