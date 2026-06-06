@@ -1704,6 +1704,18 @@ def _patch_gdn_linear() -> bool:
                 )
                 tree_n = int(attn_metadata.fr10_tree_parent.numel())
                 tree_n_pad = int(attn_metadata.fr10_tree_visible_mask.size(0))
+                _fr12_native_spine_scan_enabled = (
+                    os.environ.get("FR12_TREE_SCAN_NATIVE_SPINE", "0") == "1"
+                )
+                _fr12_scan_path0_node_tensor = None
+                if _fr12_native_spine_scan_enabled:
+                    _fr12_scan_path0_node_tensor = getattr(
+                        attn_metadata, "fr10_tree_path0_nodes", None
+                    )
+                    if _fr12_scan_path0_node_tensor is None:
+                        raise RuntimeError(
+                            "FR12 native-spine scan requested without path0 nodes"
+                        )
                 core_attn_out_spec = torch.empty(
                     (1, query_spec.size(1), value_tree.size(1), value_tree.size(2)),
                     dtype=query_spec.dtype,
@@ -2114,6 +2126,67 @@ def _patch_gdn_linear() -> bool:
                             else None
                         ),
                     )
+                    if _fr12_native_spine_scan_enabled:
+                        assert _fr12_scan_path0_node_tensor is not None
+                        _fr12_scan_path0_len = int(
+                            _fr12_scan_path0_node_tensor.numel()
+                        )
+                        _fr12_scan_qsl = (
+                            torch.arange(
+                                2,
+                                dtype=spec_query_start_loc.dtype,
+                                device=spec_query_start_loc.device,
+                            )
+                            * _fr12_scan_path0_len
+                        )
+                        _fr12_scan_indices = spec_state_indices_tensor[
+                            fr10_b : fr10_b + 1
+                        ].index_select(1, _fr12_scan_path0_node_tensor)
+                        _fr12_scan_num_accepted = num_accepted_tokens[
+                            fr10_b : fr10_b + 1
+                        ]
+                        _fr12_native_scan_out, _ = (
+                            fused_sigmoid_gating_delta_rule_update(
+                                A_log=self.A_log,
+                                a=a[start:end]
+                                .index_select(0, _fr12_scan_path0_node_tensor)
+                                .contiguous(),
+                                b=b[start:end]
+                                .index_select(0, _fr12_scan_path0_node_tensor)
+                                .contiguous(),
+                                dt_bias=self.dt_bias,
+                                q=query_spec[0, start:end]
+                                .index_select(0, _fr12_scan_path0_node_tensor)
+                                .unsqueeze(0)
+                                .contiguous(),
+                                k=key_spec[0, start:end]
+                                .index_select(0, _fr12_scan_path0_node_tensor)
+                                .unsqueeze(0)
+                                .contiguous(),
+                                v=value_spec[0, start:end]
+                                .index_select(0, _fr12_scan_path0_node_tensor)
+                                .unsqueeze(0)
+                                .contiguous(),
+                                initial_state=ssm_state,
+                                inplace_final_state=True,
+                                cu_seqlens=_fr12_scan_qsl,
+                                ssm_state_indices=_fr12_scan_indices,
+                                num_accepted_tokens=_fr12_scan_num_accepted,
+                                use_qk_l2norm_in_kernel=True,
+                            )
+                        )
+                        tree_out.index_copy_(
+                            0,
+                            _fr12_scan_path0_node_tensor,
+                            _fr12_native_scan_out.squeeze(0).to(dtype=tree_out.dtype),
+                        )
+                        tree_state.index_copy_(
+                            0,
+                            _fr12_scan_path0_node_tensor,
+                            ssm_state.index_select(
+                                0, _fr12_scan_indices.squeeze(0).to(torch.long)
+                            ).to(dtype=tree_state.dtype),
+                        )
                     _fr10_root_h0_log = os.environ.get("FR10_TREE_GDN_ROOT_H0_LOG")
                     _fr10_root_h0_log_prefix = os.environ.get(
                         "FR10_TREE_GDN_ROOT_H0_LOG_LAYER_PREFIX",
