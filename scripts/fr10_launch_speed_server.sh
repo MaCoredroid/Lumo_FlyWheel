@@ -38,6 +38,8 @@ FR10_SPINE_LOGIT_CAPTURE_LIMIT=${FR10_SPINE_LOGIT_CAPTURE_LIMIT:-1}
 LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
 LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}
 LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}
+FR12_ENABLE_SWE_PRELAUNCH=${FR12_ENABLE_SWE_PRELAUNCH:-0}
+FR12_NO_SPECULATIVE_CONFIG=${FR12_NO_SPECULATIVE_CONFIG:-0}
 ENFORCE_EAGER=${ENFORCE_EAGER:-0}
 LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
 TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
@@ -117,16 +119,25 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e LUMO_MTP_DRAFT_TRACE_FILE="$LUMO_MTP_DRAFT_TRACE_FILE" \
   -e LUMO_TREE_SAMPLER_DEBUG_LOG="$LUMO_TREE_SAMPLER_DEBUG_LOG" \
   -e LUMO_TREE_PATH_LCP_LOG="$LUMO_TREE_PATH_LCP_LOG" \
+  -e FR12_ENABLE_SWE_PRELAUNCH="$FR12_ENABLE_SWE_PRELAUNCH" \
+  -e FR12_NO_SPECULATIVE_CONFIG="$FR12_NO_SPECULATIVE_CONFIG" \
   -e SPEC_CONFIG="$SPEC_CONFIG" \
   --entrypoint bash \
   "$IMAGE" \
   -lc "set -euo pipefail
+if [[ \"\${FR12_ENABLE_SWE_PRELAUNCH:-0}\" == \"1\" ]]; then
+  python3 /workspace/scripts/fr12_apply_swe_prelaunch.py
+fi
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+SPEC_ARGS=()
+if [[ \"\${FR12_NO_SPECULATIVE_CONFIG:-0}\" != \"1\" ]]; then
+  SPEC_ARGS=(--speculative-config \"\$SPEC_CONFIG\")
+fi
 exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --host 0.0.0.0 --port 9950 --max-num-seqs 4 \
   --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' \
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  --speculative-config \"\$SPEC_CONFIG\" \
+  \"\${SPEC_ARGS[@]}\" \
   $(if [[ "$ENFORCE_EAGER" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
