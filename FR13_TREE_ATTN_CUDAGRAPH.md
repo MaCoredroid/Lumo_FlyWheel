@@ -1,0 +1,35 @@
+# FR-13 (codex_fr13) — tree-attn full-attention: CUDA-graph-capturable + within-FA2-floor, for FR-12 lossless+fast
+
+**Branch:** `fr12-wy-tree-kernel` · **Driver:** codex gpt-5.5-high (codex_fr13) · **Red-team + loop:** Claude (Opus). **ONE GPU.** Continuation of FR-12 (GDN gate DONE 62516997; full-attn depth-RoPE wiring DONE c5fc346d). Read FR12_SCAN_ROOT_TASK.md + FR12_PARITY_RESULTS.md first.
+
+## Mission
+Make the tree-verify FULL-ATTENTION path (1) **CUDA-graph-capturable at B=4** (kill the piecewise speed penalty) and (2) **within FA2's bf16 noise floor** (it already is: attn_out 0.00195), then run the DELIVERABLE: E5 (FA2 native MTP-5) vs tree-attn+tree-verify — lossless-within-E5-floor + speed.
+
+## RESEARCH FINDINGS (3 opus agents, primary-source cited — build on these, do NOT re-derive)
+### A. CUDA-graph fix is WIRING (the metadata builder), NOT a kernel rebuild
+- `TreeAttentionBackend` reports `AttentionCGSupport.NEVER` for two fixable reasons: (1) `TreeAttentionMetadataBuilder` **never declares** `_cudagraph_support` (inherits NEVER from `AttentionMetadataBuilder`, backend.py:478); (2) `.max().item()` **host syncs** in `prefill_metadata`/`decode_metadata` properties invoked from `forward()` (tree_attn.py:116/118/141/143).
+- **The KERNEL is already CG-capturable:** `triton_unified_attention` (qq_bias + `USE_QQ_BIAS: tl.constexpr`, loads tree mask in-kernel) is the SAME kernel `TritonAttentionMetadataBuilder` declares `AttentionCGSupport.ALWAYS` (triton_attn.py:118). The tree bias is a static, data-independent, persistent `__init__` buffer (built from `speculative_token_tree`) — NOT a blocker.
+- **FIX (copy triton_attn.py's build() pattern):** (1) declare `_cudagraph_support = AttentionCGSupport.UNIFORM_BATCH` (spec-decode query_len = 1+num_spec_tokens, all-equal); (2) move `max_query_len`/`max_seq_len` derivation OUT of forward()/properties INTO `build()` from `CommonAttentionMetadata` (already-computed Python ints, NO `.item()`); (3) keep the persistent tree-bias buffer; (4) PIN the Triton autotune config (constexpr block sizes) so the grid/launch is fixed at capture (autotune re-selecting across runs defeats replay — see L0c VLLM_BATCH_INVARIANT drift). Dispatcher: gpu_model_runner.py:6375-6477 takes min cudagraph_support; NEVER → downgrades FULL+PIECEWISE to PIECEWISE (attention runs eager).
+- Upstream tree-attn was DELETED (PR #42121) — we OWN this code for 0.22/cu130-nightly.
+
+### B. Numerics: bit-exact to FA2 is IMPOSSIBLE in Triton; 0.00195 is the bf16 noise floor
+- **The P.to(V.dtype) PV-cast is a RED HERRING:** FA2 does the SAME cast — `convert_type<Element>(acc_s)` (P→bf16) then `gemm_rs` (fp32 acc) at flash_fwd_kernel.h:347/367 (splitkv path, the vLLM paged-KV path). Switching our kernel to fp32-PV would move us AWAY from FA2. DO NOT do fp32-PV.
+- Bit-exact to FA2-CUDA is unachievable in Triton (CUTLASS warp-MMA fragment layout + intra-tile reduction order non-reproducible; fp32 non-associative). Target = WITHIN-FLOOR (~1e-3); 0.00195 already meets it. FA2's own tests assert "≤2× baseline error," never bit-equality.
+- **The one tighten-able difference = exp base:** TREE_ATTN uses base-e `tl.exp(S-m)` / `tl.exp(M-m_j)` (triton_unified_attention.py:363/369); FA2 uses base-2 `exp2` with scale folded: `scale_softmax_log2 = softmax_scale * M_LOG2E`, `exp2(S*scale_log2 - m_scaled)` (softmax.h:66-92). Other matched FA2 choices: QK fp32 acc, scale-after-QK, reverse KV-block iteration, 1/l normalization ONCE at epilogue, fp32→bf16 output cast once (flash_fwd_kernel.h:436). OPTIONAL: swap to exp2/log2e + match reverse-KV + 1/l-once to tighten toward FA2 — within-floor either way.
+- FA2 source (vLLM uses its OWN build _vllm_fa2_C): github vllm-project/flash-attention pinned `bce29425` (cmake/external_projects/vllm_flash_attn.cmake:42); local checkout at `output/auto_research/qwen3.5-27b-...fp8_gemm-20260503T204510Z/cutlass_source_workspace/vllm-source/.deps/vllm-flash-attn-src/csrc/flash_attn/src/`. Tile hdim128: kBlockM=64, kBlockN=128, 4 warps.
+
+## TASK (priority order; continuous-fix, no asking between steps)
+1. **PRIMARY (speed): make tree-attn CUDA-graph-capturable** via the metadata-builder fix (A). Verify at B=4: the tree-attn op is captured in FULL (not piecewise) — check the vLLM log for the CG mode (no "downgrade to PIECEWISE … AttentionCGSupport.NEVER"), and that it serves prefill+decode+tree-verify. One GPU.
+2. **Within-floor verify:** confirm full-attn attn_out is within the bf16 floor (~1e-3) on SPINE *and* BRANCHES (branch oracle = native no-MTP on branch path-to-root, depth positions; reference_gdn_tree_branch_oracle_losslessness). 0.00195 is acceptable; do NOT chase bit-exact.
+3. **OPTIONAL numerics tighten:** swap kernel exp→exp2/log2e (+ reverse-KV, 1/l-once) to move 0.00195 closer to FA2. Verify it stays within-floor and CG-capture still holds. Only if cheap.
+4. **DELIVERABLE (the verdict):** E5 (FA2 native MTP-5, `output/fr10_native_mtp5_same8_*`) VS tree-attn+tree-verify, B=4, CUDA graphs (now FULL): (a) LOSSLESS = our accepted distribution within E5's self-noise floor (NOT vs a TREE_ATTN baseline — that dodges it), (b) SPEED = accept/event + decode-TPS vs E5. Bring the user these numbers.
+
+## CONSTRAINTS
+- ONE GPU job at a time; boot-free/eager probes first; relaunch crashed captures WITHOUT --rm; empty_cache; kill leftover containers + stuck health-loops.
+- REWARD-HACKING RULE: splice native (causal_conv1d_update/FLA/native attn) is oracle-ONLY; every parity verified splice-OFF (our code computes); reject green from calling native.
+- NO copy/state-copy/weight-re-stream/dense. Read LIVE vLLM source before patching. Commit+push every real step to `fr12-wy-tree-kernel`.
+- Verify SPINE *and* BRANCHES on every parity. Probe weights from /models/qwen3.6-27b-fp8.
+- DO NOT close (pass/fail) without asking the user.
+
+## Definition of done
+tree-attn CG-captured (FULL) at B=4, full-attn within-floor on spine+branches, then the E5-vs-tree-attn deliverable (lossless-within-floor + speed). Bring numbers to the user.
