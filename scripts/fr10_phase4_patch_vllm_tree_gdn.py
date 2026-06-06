@@ -5412,6 +5412,232 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
 
 
 
+def _patch_qwen_full_attn_capture() -> bool:
+    """Diagnostic-only layer full-attention sub-kernel capture for FR12."""
+
+    did_patch = False
+    text = QWEN3_NEXT_PATH.read_text()
+    sentinel = "# FR12_FULL_ATTN_CAPTURE"
+    if sentinel not in text:
+        if "import os\n" not in text or "from pathlib import Path\n" not in text:
+            text = text.replace(
+                "from itertools import islice\n",
+                "from itertools import islice\nimport os\nfrom pathlib import Path\n",
+                1,
+            )
+        helper_anchor = "logger = init_logger(__name__)\n"
+        helper = '''logger = init_logger(__name__)
+
+
+# FR12_FULL_ATTN_CAPTURE
+_FR12_FULL_ATTN_CAPTURE_ACTIVE = {}
+
+
+def _fr12_full_attn_capture_get(self, num_tokens=None, create=False):
+    path = os.environ.get("FR12_FULL_ATTN_CAPTURE")
+    if not path:
+        return None
+    try:
+        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+            return None
+    except Exception:
+        return None
+    prefix = str(getattr(self, "prefix", ""))
+    want_prefix = os.environ.get(
+        "FR12_FULL_ATTN_CAPTURE_LAYER_PREFIX",
+        "language_model.model.layers.3.self_attn",
+    )
+    if want_prefix and prefix != want_prefix:
+        return None
+    active = _FR12_FULL_ATTN_CAPTURE_ACTIVE.get(prefix)
+    if active is not None:
+        return active
+    if not create:
+        return None
+    if num_tokens is not None:
+        desired = os.environ.get("FR12_FULL_ATTN_CAPTURE_NUM_TOKENS")
+        if desired:
+            desired_counts = {
+                int(_x.strip()) for _x in desired.split(",") if _x.strip()
+            }
+            if int(num_tokens) not in desired_counts:
+                return None
+    seen = int(globals().get("_FR12_FULL_ATTN_CAPTURE_SEEN", 0))
+    skip = int(os.environ.get("FR12_FULL_ATTN_CAPTURE_SKIP", "0"))
+    limit = int(os.environ.get("FR12_FULL_ATTN_CAPTURE_LIMIT", "1"))
+    saved = int(globals().get("_FR12_FULL_ATTN_CAPTURE_SAVED", 0))
+    globals()["_FR12_FULL_ATTN_CAPTURE_SEEN"] = seen + 1
+    if seen < skip or saved >= limit:
+        return None
+    root, ext = os.path.splitext(path)
+    call_path = root + ".call" + str(saved) + (ext or ".pt")
+    payload = {
+        "schema": "fr12.full_attn_l3_capture.v1",
+        "path": path,
+        "call_path": call_path,
+        "capture_call_index": int(seen),
+        "capture_saved_index": int(saved),
+        "layer_prefix": prefix,
+        "num_tokens": None if num_tokens is None else int(num_tokens),
+        "stages": {},
+        "meta": {},
+    }
+    _FR12_FULL_ATTN_CAPTURE_ACTIVE[prefix] = payload
+    return payload
+
+
+def _fr12_full_attn_capture_flush(payload, final=False):
+    if payload is None:
+        return
+    try:
+        out = str(payload["call_path"])
+        parent = os.path.dirname(out)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        torch.save(payload, out)
+        if int(payload.get("capture_saved_index", 0)) == 0:
+            torch.save(payload, str(payload["path"]))
+        if final:
+            globals()["_FR12_FULL_ATTN_CAPTURE_SAVED"] = (
+                int(globals().get("_FR12_FULL_ATTN_CAPTURE_SAVED", 0)) + 1
+            )
+            _FR12_FULL_ATTN_CAPTURE_ACTIVE.pop(
+                str(payload.get("layer_prefix", "")), None
+            )
+    except Exception as exc:
+        logger.warning("FR12 full attention capture flush failed: %s", exc)
+
+
+def _fr12_full_attn_capture_tensor(self, name, tensor, create=False, extra=None):
+    if tensor is None:
+        return
+    try:
+        num_tokens = int(tensor.shape[0]) if tensor.ndim > 0 else None
+        payload = _fr12_full_attn_capture_get(
+            self, num_tokens=num_tokens, create=create
+        )
+        if payload is None:
+            return
+        cpu = tensor.detach().cpu()
+        if tensor.is_floating_point():
+            cpu = cpu.to(torch.float32)
+        item = {
+            "shape": [int(_x) for _x in tensor.shape],
+            "dtype": str(tensor.dtype),
+            "tensor": cpu,
+        }
+        if extra:
+            item["extra"] = extra
+        payload["stages"][name] = item
+        _fr12_full_attn_capture_flush(payload)
+    except Exception as exc:
+        logger.warning("FR12 full attention capture stage %s failed: %s", name, exc)
+
+
+'''
+        if helper_anchor not in text:
+            raise RuntimeError("qwen3_next logger anchor not found")
+        text = text.replace(helper_anchor, helper, 1)
+        did_patch = True
+
+    prefix_anchor = """        super().__init__()
+        self.config = config
+"""
+    if "        self.prefix = prefix\n" not in text:
+        if prefix_anchor not in text:
+            raise RuntimeError("qwen3_next attention prefix anchor not found")
+        text = text.replace(
+            prefix_anchor,
+            """        super().__init__()
+        self.prefix = prefix
+        self.config = config
+""",
+            1,
+        )
+        did_patch = True
+
+    input_anchor = """        qkv, _ = self.qkv_proj(hidden_states)
+
+        if self.attn_output_gate:
+"""
+    if 'self, "input_hidden", hidden_states' not in text:
+        if input_anchor not in text:
+            raise RuntimeError("qwen3_next qkv capture anchor not found")
+        text = text.replace(
+            input_anchor,
+            """        _fr12_full_attn_capture_tensor(
+            self, "input_hidden", hidden_states, create=True
+        )
+        qkv, _ = self.qkv_proj(hidden_states)
+        _fr12_full_attn_capture_tensor(self, "qkv_proj", qkv)
+
+        if self.attn_output_gate:
+""",
+            1,
+        )
+        did_patch = True
+
+    norm_anchor = """        q = self.q_norm(q.view(-1, self.num_heads, self.head_dim)).view(
+            -1, self.num_heads * self.head_dim
+        )
+        k = self.k_norm(k.view(-1, self.num_kv_heads, self.head_dim)).view(
+            -1, self.num_kv_heads * self.head_dim
+        )
+
+        q, k = self.rotary_emb(positions, q, k)
+
+        attn_output = self.attn(q, k, v)
+
+        if self.attn_output_gate:
+            gate = torch.sigmoid(gate)
+            attn_output = attn_output * gate
+
+        output[:], _ = self.o_proj(attn_output)
+"""
+    if 'self, "q_after_rope", q' not in text:
+        if norm_anchor not in text:
+            raise RuntimeError("qwen3_next full attention stage anchor not found")
+        text = text.replace(
+            norm_anchor,
+            """        q = self.q_norm(q.view(-1, self.num_heads, self.head_dim)).view(
+            -1, self.num_heads * self.head_dim
+        )
+        k = self.k_norm(k.view(-1, self.num_kv_heads, self.head_dim)).view(
+            -1, self.num_kv_heads * self.head_dim
+        )
+        _fr12_full_attn_capture_tensor(self, "q_norm_out", q)
+        _fr12_full_attn_capture_tensor(self, "k_norm_out", k)
+        _fr12_full_attn_capture_tensor(self, "v", v)
+
+        q, k = self.rotary_emb(positions, q, k)
+        _fr12_full_attn_capture_tensor(self, "positions", positions)
+        _fr12_full_attn_capture_tensor(self, "q_after_rope", q)
+        _fr12_full_attn_capture_tensor(self, "k_after_rope", k)
+
+        attn_output = self.attn(q, k, v)
+        _fr12_full_attn_capture_tensor(self, "attn_out_raw", attn_output)
+
+        if self.attn_output_gate:
+            gate = torch.sigmoid(gate)
+            _fr12_full_attn_capture_tensor(self, "gate_sigmoid", gate)
+            attn_output = attn_output * gate
+            _fr12_full_attn_capture_tensor(self, "attn_out_gated", attn_output)
+
+        output[:], _ = self.o_proj(attn_output)
+        _fr12_full_attn_capture_tensor(self, "o_proj_out", output)
+        _fr12_payload = _fr12_full_attn_capture_get(self, create=False)
+        if _fr12_payload is not None:
+            _fr12_full_attn_capture_flush(_fr12_payload, final=True)
+""",
+            1,
+        )
+        did_patch = True
+
+    if did_patch:
+        QWEN3_NEXT_PATH.write_text(text)
+    return did_patch
+
+
 def main() -> int:
     patch_steps = [
         (REQUEST_PATH, _patch_request_decode_mode()),
@@ -5424,6 +5650,7 @@ def main() -> int:
         (EAGLE_PATH, _patch_eagle_mtp_draft_trace()),
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
         (QWEN3_NEXT_PATH, _patch_qwen_root_hidden_capture()),
+        (QWEN3_NEXT_PATH, _patch_qwen_full_attn_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_depth_positions()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
