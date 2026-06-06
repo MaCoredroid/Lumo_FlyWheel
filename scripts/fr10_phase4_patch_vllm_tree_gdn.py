@@ -519,6 +519,9 @@ def _patch_gdn_linear() -> bool:
                 )
             except Exception as _fr12_pre_cap_exc:
                 logger.warning("FR12 pre-conv capture failed: %s", _fr12_pre_cap_exc)
+            _fr12_native_candidate_bank_rows_pre_update = None
+            _fr12_native_candidate_conv_state_pre_update = None
+            _fr12_native_prior_full_row_pre_update = None
             if use_fr10_tree_conv:
                 _fr12_native_prior_read = (
                     os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1"
@@ -1289,6 +1292,22 @@ def _patch_gdn_linear() -> bool:
                     raise RuntimeError(
                         "FR10 tree causal-conv disengaged: eligible_tree_spec_row_flat_fallback"
                     )
+                if os.environ.get("FR12_TREE_CONV_STATE_FULL_CAPTURE", "0") == "1":
+                    _fr12_native_candidate_bank_rows_pre_update = torch.unique(
+                        spec_state_indices_tensor[
+                            : attn_metadata.num_spec_decodes
+                        ].reshape(-1).to(torch.long)
+                    )
+                    _fr12_native_candidate_conv_state_pre_update = torch.index_select(
+                        conv_state,
+                        0,
+                        _fr12_native_candidate_bank_rows_pre_update,
+                    ).detach().to(torch.float32).cpu().clone()
+                    _fr12_native_prior_full_row_pre_update = torch.index_select(
+                        conv_state,
+                        0,
+                        spec_state_indices_tensor[0, 0].to(torch.long).view(1),
+                    )[0].detach().to(torch.float32).cpu().clone()
                 mixed_qkv_spec = causal_conv1d_update(
                     mixed_qkv_spec,
                     conv_state,
@@ -1457,8 +1476,17 @@ def _patch_gdn_linear() -> bool:
                             .cpu()
                             .clone()
                         ),
+                        "candidate_bank_rows_pre_update": (
+                            None
+                            if _fr12_native_candidate_bank_rows_pre_update is None
+                            else _fr12_native_candidate_bank_rows_pre_update.detach()
+                            .cpu()
+                            .clone()
+                        ),
+                        "candidate_conv_state_pre_update": _fr12_native_candidate_conv_state_pre_update,
                         "candidate_conv_state": _fr12_candidate_conv_state,
                         "prior_full_row": _fr12_prior_full_row,
+                        "prior_full_row_pre_update": _fr12_native_prior_full_row_pre_update,
                         "query_start_loc": spec_query_start_loc.detach()
                         .cpu()
                         .clone(),
