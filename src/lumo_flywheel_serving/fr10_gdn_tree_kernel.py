@@ -210,6 +210,10 @@ def _tree_gdn_kernel(
     v,
     g,
     beta,
+    raw_a,
+    raw_b,
+    A_log,
+    dt_bias,
     h0,
     h0_indices,
     h0_num_accepted_tokens,
@@ -233,6 +237,7 @@ def _tree_gdn_kernel(
     H0_BANK_STRIDE: tl.constexpr,
     H0_USE_ACCEPTED_COLUMN: tl.constexpr,
     FLA_BF16_BOUNDARIES: tl.constexpr,
+    RAW_GATING: tl.constexpr,
     COUNT_INVOCATION: tl.constexpr,
 ):
     pid_vh = tl.program_id(0)
@@ -251,31 +256,6 @@ def _tree_gdn_kernel(
             mask=(pid_vh == 0) & (pid_v == 0),
         )
 
-    node_mask = offs_n < N_ACTUAL
-    b_g = tl.load(g + offs_n * NUM_VH + pid_vh, mask=node_mask, other=0.0).to(tl.float32)
-    b_beta = tl.load(beta + offs_n * NUM_VH + pid_vh, mask=node_mask, other=0.0).to(tl.float32)
-    b_q = tl.load(
-        q + (offs_n[:, None] * NUM_KH + pid_kh) * DIM_K + offs_k[None, :],
-        mask=node_mask[:, None],
-        other=0.0,
-    ).to(
-        tl.float32
-    )
-    b_k = tl.load(
-        k + (offs_n[:, None] * NUM_KH + pid_kh) * DIM_K + offs_k[None, :],
-        mask=node_mask[:, None],
-        other=0.0,
-    ).to(
-        tl.float32
-    )
-    if USE_QK_L2NORM_IN_KERNEL:
-        b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q, axis=1)[:, None] + 1e-6)
-        b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k, axis=1)[:, None] + 1e-6)
-    b_v = tl.load(
-        v + (offs_n[:, None] * NUM_VH + pid_vh) * DIM_V + offs_v[None, :],
-        mask=node_mask[:, None] & v_mask[None, :],
-        other=0.0,
-    ).to(tl.float32)
     h0_base = h0
     if H0_IS_BANK:
         h0_column = 0
@@ -292,64 +272,68 @@ def _tree_gdn_kernel(
         other=0.0,
     ).to(tl.float32)
 
-    m_strict = tl.load(strict_mask + offs_n[:, None] * N_PAD + offs_n[None, :]) != 0
-    m_visible = tl.load(visible_mask + offs_n[:, None] * N_PAD + offs_n[None, :]) != 0
-    cum_g = tl.sum(tl.where(m_visible, b_g[None, :], 0.0), axis=1)
-    kk = tl.dot(b_k, tl.trans(b_k), input_precision="ieee")
-    decay = tl.exp(cum_g[:, None] - cum_g[None, :])
-    system = tl.where(m_strict, kk * b_beta[:, None] * decay, 0.0)
-
-    # Dense forward-substitution scan. FR12 temporarily returns to the original
-    # FR10 scan path because the current priority is native-spine parity rather
-    # than WY speed.
-    solved_v = tl.zeros((N_PAD, BLOCK_V), dtype=tl.float32)
-    solved_k = tl.zeros((N_PAD, DIM_K), dtype=tl.float32)
-    trans_v = tl.zeros((N_PAD, BLOCK_V), dtype=tl.float32)
-
+    # FR12 losslessness gate: replay each node's ancestor path with the same
+    # recurrent update order used by vLLM decode. This keeps spine results
+    # independent of sibling rows and avoids the triangular-solve op-order gap.
     for i in tl.static_range(0, N_PAD):
-        row_i = offs_n == i
-        coeff = tl.sum(tl.where(row_i[:, None], system, 0.0), axis=0)
-        beta_i = tl.sum(tl.where(row_i, b_beta, 0.0), axis=0)
-        cumg_i = tl.sum(tl.where(row_i, cum_g, 0.0), axis=0)
-        v_i = tl.sum(tl.where(row_i[:, None], b_v, 0.0), axis=0)
-        k_i = tl.sum(tl.where(row_i[:, None], b_k, 0.0), axis=0)
-        y_i = beta_i * v_i
-        sk_i = beta_i * k_i * tl.exp(cumg_i)
-        for j in tl.static_range(0, i):
-            row_j = offs_n == j
-            coeff_j = tl.sum(tl.where(row_j, coeff, 0.0), axis=0)
-            solved_v_j = tl.sum(tl.where(row_j[:, None], solved_v, 0.0), axis=0)
-            solved_k_j = tl.sum(tl.where(row_j[:, None], solved_k, 0.0), axis=0)
-            y_i -= coeff_j * solved_v_j
-            sk_i -= coeff_j * solved_k_j
-        if FLA_BF16_BOUNDARIES:
-            y_i = y_i.to(tl.bfloat16).to(tl.float32)
-            sk_i = sk_i.to(tl.bfloat16).to(tl.float32)
-        solved_v = tl.where((offs_n == i)[:, None], y_i[None, :], solved_v)
-        solved_k = tl.where((offs_n == i)[:, None], sk_i[None, :], solved_k)
-        incoming_i = tl.sum(b_h0 * sk_i[None, :], axis=1)
-        tv_i = y_i - incoming_i
-        if FLA_BF16_BOUNDARIES:
-            tv_i = tv_i.to(tl.bfloat16).to(tl.float32)
-        trans_v = tl.where((offs_n == i)[:, None], tv_i[None, :], trans_v)
-
-    for i in tl.static_range(0, N_PAD):
-        row_i = offs_n == i
-        cumg_i = tl.sum(tl.where(row_i, cum_g, 0.0), axis=0)
-        q_i = tl.sum(tl.where(row_i[:, None], b_q, 0.0), axis=0)
-        state_i = b_h0 * tl.exp(cumg_i)
-        for j in tl.static_range(0, N_PAD):
+        q_i = tl.load(
+            q + (i * NUM_KH + pid_kh) * DIM_K + offs_k,
+            mask=i < N_ACTUAL,
+            other=0.0,
+        ).to(tl.float32)
+        if USE_QK_L2NORM_IN_KERNEL:
+            q_i = q_i * tl.rsqrt(tl.sum(q_i * q_i) + 1e-6)
+        q_i *= OUTPUT_SCALE
+        state_i = b_h0
+        for j in tl.range(0, i + 1):
             vis = tl.load(visible_mask + i * N_PAD + j) != 0
-            row_j = offs_n == j
-            trans_j = tl.sum(tl.where(row_j[:, None], trans_v, 0.0), axis=0)
-            k_j = tl.sum(tl.where(row_j[:, None], b_k, 0.0), axis=0)
-            cumg_j = tl.sum(tl.where(row_j, cum_g, 0.0), axis=0)
-            state_i += tl.where(
-                vis,
-                trans_j[:, None] * k_j[None, :] * tl.exp(cumg_i - cumg_j),
-                0.0,
-            )
-        out_i = tl.sum(state_i * q_i[None, :], axis=1) * OUTPUT_SCALE
+            k_j = tl.load(
+                k + (j * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=j < N_ACTUAL,
+                other=0.0,
+            ).to(tl.float32)
+            if USE_QK_L2NORM_IN_KERNEL:
+                k_j = k_j * tl.rsqrt(tl.sum(k_j * k_j) + 1e-6)
+            v_j = tl.load(
+                v + (j * NUM_VH + pid_vh) * DIM_V + offs_v,
+                mask=(j < N_ACTUAL) & v_mask,
+                other=0.0,
+            ).to(tl.float32)
+            g_j = tl.load(
+                g + j * NUM_VH + pid_vh,
+                mask=j < N_ACTUAL,
+                other=0.0,
+            ).to(tl.float32)
+            beta_j = tl.load(
+                beta + j * NUM_VH + pid_vh,
+                mask=j < N_ACTUAL,
+                other=0.0,
+            ).to(tl.float32)
+            if RAW_GATING:
+                x_j = tl.load(
+                    raw_a + j * NUM_VH + pid_vh,
+                    mask=j < N_ACTUAL,
+                    other=0.0,
+                ).to(tl.float32) + tl.load(dt_bias + pid_vh).to(tl.float32)
+                softplus_j = tl.where(
+                    x_j <= 20.0,
+                    tl.log(1.0 + tl.exp(x_j)),
+                    x_j,
+                )
+                g_j = -tl.exp(tl.load(A_log + pid_vh).to(tl.float32)) * softplus_j
+                beta_j = tl.sigmoid(
+                    tl.load(
+                        raw_b + j * NUM_VH + pid_vh,
+                        mask=j < N_ACTUAL,
+                        other=0.0,
+                    ).to(tl.float32)
+                )
+            decayed = state_i * tl.exp(g_j)
+            delta_v = v_j - tl.sum(decayed * k_j[None, :], axis=1)
+            delta_v *= beta_j
+            updated = decayed + delta_v[:, None] * k_j[None, :]
+            state_i = tl.where(vis, updated, state_i)
+        out_i = tl.sum(state_i * q_i[None, :], axis=1)
         tl.store(
             out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
             out_i,
@@ -379,6 +363,10 @@ def launch_tree_gdn(
     use_qk_l2norm_in_kernel: bool = False,
     invocation_counter: torch.Tensor | None = None,
     fla_bf16_boundaries: bool = False,
+    raw_a: torch.Tensor | None = None,
+    raw_b: torch.Tensor | None = None,
+    A_log: torch.Tensor | None = None,
+    dt_bias: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Launch the FR10 dense tree verifier.
 
@@ -406,6 +394,10 @@ def launch_tree_gdn(
         use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
         invocation_counter=invocation_counter,
         fla_bf16_boundaries=fla_bf16_boundaries,
+        raw_a=raw_a,
+        raw_b=raw_b,
+        A_log=A_log,
+        dt_bias=dt_bias,
     )
 
 
@@ -433,6 +425,10 @@ def launch_tree_gdn_prepared(
     h0_use_accepted_column: bool = False,
     invocation_counter: torch.Tensor | None = None,
     fla_bf16_boundaries: bool = False,
+    raw_a: torch.Tensor | None = None,
+    raw_b: torch.Tensor | None = None,
+    A_log: torch.Tensor | None = None,
+    dt_bias: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Launch with precomputed graph-safe tree descriptors."""
     if n_actual <= 0 or n_actual > n_pad:
@@ -504,6 +500,32 @@ def launch_tree_gdn_prepared(
     count_invocation = invocation_counter is not None
     if invocation_counter is None:
         invocation_counter = strict_mask
+    raw_gating = (
+        raw_a is not None
+        or raw_b is not None
+        or A_log is not None
+        or dt_bias is not None
+    )
+    if raw_gating:
+        if raw_a is None or raw_b is None or A_log is None or dt_bias is None:
+            raise ValueError("raw_a, raw_b, A_log, and dt_bias must be provided together")
+        if raw_a.shape[0] < n_actual or raw_a.shape[1] != num_vh:
+            raise ValueError(
+                f"raw_a must cover ({n_actual}, {num_vh}), got {tuple(raw_a.shape)}"
+            )
+        if raw_b.shape[0] < n_actual or raw_b.shape[1] != num_vh:
+            raise ValueError(
+                f"raw_b must cover ({n_actual}, {num_vh}), got {tuple(raw_b.shape)}"
+            )
+        if A_log.numel() < num_vh or dt_bias.numel() < num_vh:
+            raise ValueError(
+                f"A_log/dt_bias must cover {num_vh} value heads, got {A_log.numel()}/{dt_bias.numel()}"
+            )
+    else:
+        raw_a = g
+        raw_b = beta
+        A_log = g
+        dt_bias = beta
     if num_vh % num_kh != 0:
         raise ValueError(f"value heads must be a multiple of q/k heads, got {num_vh}/{num_kh}")
     if out is None:
@@ -526,6 +548,10 @@ def launch_tree_gdn_prepared(
         v,
         g,
         beta,
+        raw_a,
+        raw_b,
+        A_log,
+        dt_bias,
         h0,
         h0_indices,
         h0_num_accepted_tokens,
@@ -549,6 +575,7 @@ def launch_tree_gdn_prepared(
         H0_BANK_STRIDE=h0_bank_stride,
         H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
         FLA_BF16_BOUNDARIES=bool(fla_bf16_boundaries),
+        RAW_GATING=raw_gating,
         COUNT_INVOCATION=count_invocation,
     )
     return out, state

@@ -886,3 +886,48 @@ co-resident tree rows for `out_proj`, `in_proj_qkv`, or `in_proj_z`.
 input delta, not from M-dependent fp8 GEMM behavior. No server/fix run is
 justified from this probe; the remaining lossless deficit is the diffuse
 multi-layer numeric wall rather than a fixable fp8 batch-invariance seam.
+
+## 2026-06-06 GDN Scan N-Independent Direct-Load Fix
+
+Hard-gate target: L0 GDN scan output only, boot-free, splice OFF / oracle OFF.
+
+Mechanism confirmed:
+
+- WIP scan batch-invariance probe first showed full-tree spine and
+  reversed-context spine were already output-identical, but spine-only differed
+  because the old kernel selected rows by reducing over the padded node axis.
+- That row-select reduction made even a single row's fp32 op order depend on
+  `N_PAD` and co-resident rows.
+- The serving tree kernel now replays each node's visible ancestor path in the
+  same recurrent statement order as live
+  `fused_sigmoid_gating_delta_rule_update`, using direct row loads for
+  `q/k/v/a/b` and computing `g`/`beta` from raw `a/b/A_log/dt_bias` inside the
+  kernel. This is our kernel arithmetic, not a native splice.
+
+Script:
+
+- `scripts/fr12_scan_batch_invariance_probe.py`
+
+Artifact:
+
+- `output/fr12_scan_direct_raw_clean_20260606T183545Z/scan_batch_invariance_l0.json`
+
+Scan output results on the captured tree payload:
+
+| Comparison | `out.max_abs` |
+|---|---:|
+| original full-tree spine vs native FLA | `0.0` |
+| spine-only vs native FLA | `0.0` |
+| spine-first full-tree spine vs native FLA | `0.0` |
+| reversed sibling DFS full-tree spine vs native FLA | `0.0` |
+| spine-only vs original full-tree spine | `0.0` |
+| reversed sibling DFS full-tree spine vs original full-tree spine | `0.0` |
+
+Per-depth output max abs is `0.0` at all five aligned spine depths
+`[0, 1, 2, 4, 6]`. The recurrent state still has a small fp32 internal delta
+vs native (`state.max_abs = 4.76837158203125e-7`), but the user-facing scan
+output boundary is bit-exact and N-independent.
+
+Next hard-gate step: verify the downstream L0 cascade with fresh splice-OFF
+serving captures: `gdn_scan_out == 0.0`, then `gate_out == 0.0`, then
+`o_proj_out == 0.0`.
