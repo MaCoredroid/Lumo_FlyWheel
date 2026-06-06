@@ -33,5 +33,10 @@ vLLM batch-invariance covers attn+GEMM but NOT the GDN scan. Co-resident branch 
 - **Commit + push every real step** to `fr12-wy-tree-kernel`; numbers in committed docs.
 - **DO NOT close (pass/fail) without asking the user.**
 
+## Measurement regime (user, 2026-06-06) — diagnostics eager/B1; the GATE is B=4 CUDA-captured SWE-4
+- **Diagnostic captures run EAGER (`ENFORCE_EAGER=1`)** — the parity-capture hooks (tensor dumps) aren't Dynamo-traceable, so the Dynamo/graph crash during profiling is the **capture instrumentation, NOT the kernel** (the Triton scan is a Dynamo-opaque custom op; it ran clean in every spine capture). Defer the capture-graph crash; keep diagnostics eager.
+- **The FINAL lossless+superset gate must be B=4, CUDA-graph-captured, SWE-Verified 4 tasks** (the FR9 `swe-bench-agentic-b4-four-verified` workload — NOT eager / B=1 / toy 8-prompt). Reasons: (a) B=4 changes co-residency — the scan's N-independence must hold under 4-request concurrency, not just full-tree-vs-spine-only at B=1; (b) the CUDA-captured path can round/behave differently than eager; (c) the toy prompts aren't the real workload.
+- **Bit-exact 0.0 (spine + branches) must be re-confirmed at B=4 CUDA-captured**, not only eager-B1. And **confirm the kernel itself CUDA-graph-captures cleanly with capture-hooks OFF + graphs ON** (tree shapes / N_PAD in the captured sizes) BEFORE the final run — that property is untested (eager-opaque ≠ graph-capturable).
+
 ## Definition of done
-scan + gate + o_proj == 0.0 at L0 (splice OFF) **on BOTH the spine (vs native linear chain) AND every branch node (vs the native-on-branch-path oracle)**, then all 64 layers, then many-event per-depth argmax match + TV within native-vs-native floor + accept/event ≥ native. Bring numbers to the user before any closeout.
+scan + gate + o_proj == 0.0 at L0 (splice OFF) **on BOTH the spine (vs native linear chain) AND every branch node (vs the native-on-branch-path oracle)** — eager-B1 diagnostic — then all 64 layers, then **re-confirm 0.0 at B=4 CUDA-captured**, then the verdict: **B=4, CUDA-graph-captured, SWE-Verified 4 tasks** — many-event per-depth argmax match + TV within native-vs-native floor + accept/event ≥ native. Bring numbers to the user before any closeout.
