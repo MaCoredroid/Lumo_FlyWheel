@@ -4064,6 +4064,9 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                 _fr10_depth_pos = np.empty(
                     int(cu_num_tokens[-1]), dtype=np.int64
                 )
+                _fr10_mrope_depth_pos = np.empty(
+                    int(cu_num_tokens[-1]), dtype=np.int64
+                )
                 _fr10_spec_req_ids = set(
                     getattr(scheduler_output, "scheduled_spec_decode_tokens", {}).keys()
                 )
@@ -4080,17 +4083,26 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                         else None
                     )
                     _fr10_is_spec_row = _fr10_req_id in _fr10_spec_req_ids
-                    _fr10_base = max(
+                    _fr10_state_base = max(
                         0,
                         int(self.input_batch.num_computed_tokens_cpu[_fr10_req_idx])
                         - 1,
                     )
+                    _fr10_mrope_base = int(
+                        self.input_batch.num_computed_tokens_cpu[_fr10_req_idx]
+                    )
                     if _fr10_is_spec_row and _fr10_sched == _fr10_tree_n:
                         _fr10_depth_pos[
                             _fr10_out : _fr10_out + _fr10_sched
-                        ] = _fr10_base + _fr10_depth_offsets
+                        ] = _fr10_state_base + _fr10_depth_offsets
+                        _fr10_mrope_depth_pos[
+                            _fr10_out : _fr10_out + _fr10_sched
+                        ] = _fr10_mrope_base + _fr10_depth_offsets
                     else:
                         _fr10_depth_pos[
+                            _fr10_out : _fr10_out + _fr10_sched
+                        ] = positions_np[_fr10_out : _fr10_out + _fr10_sched]
+                        _fr10_mrope_depth_pos[
                             _fr10_out : _fr10_out + _fr10_sched
                         ] = positions_np[_fr10_out : _fr10_out + _fr10_sched]
                         if _fr10_is_spec_row:
@@ -4120,11 +4132,25 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                         + repr(_fr10_bad[:8])
                     )
                 if _fr10_ok:
+                    _fr10_depth_pos_cpu = torch.from_numpy(_fr10_depth_pos)
                     self.positions[:total_num_scheduled_tokens].copy_(
-                        torch.from_numpy(_fr10_depth_pos).to(
+                        _fr10_depth_pos_cpu.to(
                             device=self.device, non_blocking=True
                         )
                     )
+                    if getattr(self, "uses_mrope", False):
+                        # Qwen3Next is text-only here, so all three M-RoPE
+                        # components must carry the same depth-based position.
+                        _fr10_mrope_depth_pos_cpu = torch.from_numpy(
+                            _fr10_mrope_depth_pos
+                        )
+                        self.mrope_positions.cpu[
+                            :, :total_num_scheduled_tokens
+                        ].copy_(
+                            _fr10_mrope_depth_pos_cpu.view(1, -1).expand(
+                                3, int(total_num_scheduled_tokens)
+                            )
+                        )
                     if __import__("os").environ.get("FR10_METRICS", "0") == "1":
                         global _FR10_TREE_DEPTH_POS_FH
                         try:
@@ -4150,7 +4176,7 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                                         int(_x)
                                         for _x in _fr10_spine_first_depth_offsets.tolist()
                                     ],
-                                    "base_contract": "num_computed_tokens_cpu-1",
+                                    "base_contract": "state=num_computed_tokens_cpu-1,mrope=num_computed_tokens_cpu",
                                     "flat_first_tree": [
                                         int(_x)
                                         for _x in self.query_pos.np[
@@ -4167,6 +4193,18 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                                                 )
                                             ]
                                             - _fr10_depth_pos[0]
+                                        ).tolist()
+                                    ],
+                                    "mrope_depth_first_tree": [
+                                        int(_x)
+                                        for _x in (
+                                            _fr10_mrope_depth_pos[
+                                                : min(
+                                                    _fr10_tree_n,
+                                                    int(cu_num_tokens[-1]),
+                                                )
+                                            ]
+                                            - _fr10_mrope_depth_pos[0]
                                         ).tolist()
                                     ],
                                     "num_scheduled_tokens": [
