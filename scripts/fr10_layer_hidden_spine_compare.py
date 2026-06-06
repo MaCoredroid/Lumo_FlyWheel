@@ -10,7 +10,7 @@ from pathlib import Path
 import torch
 
 
-TREE_SPINE_NODES = [0, 1, 3, 5, 7]
+FALLBACK_TREE_SPINE_ROWS = [0, 1, 2, 4, 6]
 
 
 def _load(path: Path):
@@ -27,6 +27,47 @@ def _row_start(counts: list[int], req: int) -> int:
 
 def _max_abs(a: torch.Tensor, b: torch.Tensor) -> float:
     return float((a.to(torch.float32) - b.to(torch.float32)).abs().max().item())
+
+
+def _target_rows_from_logits(logits: dict, req: int, *, is_tree: bool) -> list[int]:
+    counts = [int(x) for x in logits["num_draft_tokens"]]
+    start = _row_start(counts, req)
+    end = start + counts[req]
+    target_rows = [
+        int(x)
+        for x in logits["target_logits_indices"][start:end]
+        .detach()
+        .cpu()
+        .reshape(-1)
+        .tolist()
+    ]
+    if is_tree:
+        ordered = []
+        for row in target_rows:
+            if row not in ordered:
+                ordered.append(row)
+        if len(ordered) >= 5:
+            return ordered[:5]
+        return FALLBACK_TREE_SPINE_ROWS[:5]
+    return list(range(min(5, counts[req])))
+
+
+def _draft_tokens_by_target_row(logits: dict, target_rows: list[int], req: int) -> list[int]:
+    counts = [int(x) for x in logits["num_draft_tokens"]]
+    start = _row_start(counts, req)
+    end = start + counts[req]
+    target_logits_indices = logits["target_logits_indices"][start:end]
+    draft_token_ids = logits["draft_token_ids"][start:end]
+    out = []
+    for row in target_rows:
+        matches = (target_logits_indices == int(row)).nonzero(as_tuple=True)[0]
+        if matches.numel() == 0:
+            raise RuntimeError(
+                f"no draft token found for target row {row}; "
+                f"available={target_logits_indices.detach().cpu().tolist()}"
+            )
+        out.append(int(draft_token_ids[int(matches[0])].item()))
+    return out
 
 
 def main() -> None:
@@ -46,31 +87,31 @@ def main() -> None:
     tree_l = _load(args.tree_logits)
     native_l = _load(args.native_logits)
 
-    tree_counts = [int(x) for x in tree_l["num_draft_tokens"]]
-    native_counts = [int(x) for x in native_l["num_draft_tokens"]]
-    tree_start = _row_start(tree_counts, args.tree_req)
-    native_start = _row_start(native_counts, args.native_req)
-    tree_rows_abs = [tree_start + node for node in TREE_SPINE_NODES]
-    native_rows_abs = [native_start + depth for depth in range(5)]
-    tree_hidden_rows_abs = [
-        int(tree_l["target_logits_indices"][row].item()) for row in tree_rows_abs
-    ]
-    native_hidden_rows_abs = [
-        int(native_l["target_logits_indices"][row].item()) for row in native_rows_abs
-    ]
+    tree_hidden_rows_abs = _target_rows_from_logits(
+        tree_l, args.tree_req, is_tree=True
+    )
+    native_hidden_rows_abs = _target_rows_from_logits(
+        native_l, args.native_req, is_tree=False
+    )
+    tree_rows_abs = tree_hidden_rows_abs
+    native_rows_abs = native_hidden_rows_abs
 
     tree_capture_rows = [int(x) for x in tree_h["rows"]]
     native_capture_rows = [int(x) for x in native_h["rows"]]
     tree_row_pos = [tree_capture_rows.index(row) for row in tree_hidden_rows_abs]
     native_row_pos = [native_capture_rows.index(row) for row in native_hidden_rows_abs]
 
-    tree_drafts = [int(x) for x in tree_l["draft_token_ids"][tree_rows_abs].tolist()]
-    native_drafts = [int(x) for x in native_l["draft_token_ids"][native_rows_abs].tolist()]
+    tree_drafts = _draft_tokens_by_target_row(tree_l, tree_hidden_rows_abs, args.tree_req)
+    native_drafts = _draft_tokens_by_target_row(
+        native_l, native_hidden_rows_abs, args.native_req
+    )
     tree_probs = _softmax(tree_l["target_logits"])
     native_probs = _softmax(native_l["target_logits"])
 
     per_depth_probs = []
-    for depth, (tree_row, native_row, token) in enumerate(zip(tree_rows_abs, native_rows_abs, tree_drafts)):
+    for depth, (tree_row, native_row, token) in enumerate(
+        zip(tree_hidden_rows_abs, native_hidden_rows_abs, tree_drafts)
+    ):
         per_depth_probs.append({
             "depth": int(depth),
             "draft_token": int(token),
