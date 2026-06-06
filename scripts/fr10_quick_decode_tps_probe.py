@@ -130,6 +130,7 @@ def _run_requests(
     max_tokens: int,
     temperature: float,
     top_p: float,
+    seed: int | None,
     timeout: float,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], float]:
     records: list[dict[str, Any]] = []
@@ -148,6 +149,8 @@ def _run_requests(
                 "return_token_ids": True,
                 "vllm_xargs": {"fr10_decode_mode": mode},
             }
+            if seed is not None:
+                payload["seed"] = int(seed)
             req_t0 = time.time()
             ts_request_received = datetime.now(timezone.utc).isoformat()
             data = _post_json(endpoint, "/v1/completions", payload, timeout=timeout)
@@ -322,6 +325,7 @@ def main() -> int:
     parser.add_argument("--max-tokens", type=int, default=64)
     parser.add_argument("--temperature", type=float, default=0.6)
     parser.add_argument("--top-p", type=float, default=0.95)
+    parser.add_argument("--seed", type=int)
     parser.add_argument("--wait-health", type=float, default=0.0)
     parser.add_argument("--request-timeout", type=float, default=900.0)
     parser.add_argument("--warmup-samples", type=int, default=1)
@@ -341,6 +345,7 @@ def main() -> int:
         "model": args.model,
         "temperature": args.temperature,
         "top_p": args.top_p,
+        "seed": args.seed,
         "batch_size": args.batch_size,
         "samples_per_prompt": args.samples_per_prompt,
         "max_tokens": args.max_tokens,
@@ -361,6 +366,7 @@ def main() -> int:
                 max_tokens=min(args.max_tokens, 16),
                 temperature=args.temperature,
                 top_p=args.top_p,
+                seed=args.seed,
                 timeout=args.request_timeout,
             )
         before = _scrape_metrics(args.endpoint)
@@ -374,6 +380,7 @@ def main() -> int:
             max_tokens=args.max_tokens,
             temperature=args.temperature,
             top_p=args.top_p,
+            seed=args.seed,
             timeout=args.request_timeout,
         )
         all_request_rows.extend(request_rows)
