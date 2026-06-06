@@ -443,3 +443,130 @@ match, yet the verified target distribution still flips argmax at multiple
 depths. The next fix target must be chosen by the token-level gate: remove the
 remaining post-core/logit residual that changes argmax, not merely reduce
 sub-kernel max abs.
+
+## 2026-06-06 Hard Redirect: Splice Is Oracle-Only
+
+The native-spine conv and scan splices are no longer valid implementation fixes.
+They are retained only as bit-exact oracles for diagnosis. In the live patch
+path, `FR12_TREE_CONV_NATIVE_SPINE=1` and `FR12_TREE_SCAN_NATIVE_SPINE=1` are
+ignored unless `FR12_NATIVE_SPINE_ORACLE=1` is also set. Lossless progress must
+come from our tree kernels matching native numerics, not from routing path0 rows
+through native kernels.
+
+Boot-free scan check:
+
+- Script:
+  `scripts/fr12_spine_scan_rounding_probe.py`
+- Run directory:
+  `output/fr12_real_kernel_rounding_20260606T070013Z/`
+- Payload:
+  `output/fr10_scan_capture_replay_20260604T191801Z/logs/fr10_tree_gdn_scan_capture.pt`
+- Reference:
+  `vllm.fused_sigmoid_gating_delta_rule_update`
+- Our serving kernel:
+  `lumo_flywheel_serving.fr10_gdn_tree_kernel.launch_tree_gdn_prepared`
+
+Single-spine result:
+
+| Check | Max abs |
+|---|---:|
+| scan output | 0.000000476837158203125 |
+| recurrent state | 0.00000476837158203125 |
+
+Full captured-tree replay result:
+
+| Check | Max abs |
+|---|---:|
+| output vs serial oracle | 0.000000476837158203125 |
+| state vs serial oracle | 0.0000057220458984375 |
+
+Verdict: on this captured event, the current serving tree scan is already at
+small fp32/bf16 floor relative to the native recurrent reference and serial
+oracle. The measured L0 `0.125` origin was therefore not in the scan for this
+event.
+
+## 2026-06-06 Real-Kernel Conv Rounding Cut
+
+Source-grounded native arithmetic:
+
+- Live `causal_conv1d_update` loads bf16 `matrix_x` and `matrix_w`, computes
+  `acc += matrix_x * matrix_w` into fp32, applies SiLU in fp32, then stores to
+  the output dtype.
+- Qwen3-Next GDN conv has `bias=False`, so the seam is tap product rounding,
+  not bias or state.
+
+Boot-free replay:
+
+- Script:
+  `scripts/fr12_conv_rounding_replay.py`
+- Output:
+  `output/fr12_real_kernel_rounding_20260606T071500Z/conv_rounding_replay.json`
+- Tree capture:
+  `output/fr12_corrected_l0_parity_20260606T032230Z/tree/logs/subkernel_tree.pt`
+- Native reference:
+  `output/fr12_corrected_l0_parity_20260606T032230Z/native_clonefix/logs/subkernel_native.pt`
+
+Alignment checks:
+
+| Check | Max abs |
+|---|---:|
+| pre-conv window | 0.0 |
+| fp32 tap products tree vs native | 0.0 |
+| bf16 tap products tree vs native | 0.0 |
+
+Replay result:
+
+| Variant | Max abs vs native | Mean abs | Nonzero |
+|---|---:|---:|---:|
+| Captured tree default, fp32 products | 0.125 | 0.00014408888819161803 | 15305 |
+| bf16 products, fp32 SiLU, bf16 store | 0.0 | 0.0 | 0 |
+
+First old mismatch:
+
+- Index `[0, 6100]`
+- Captured tree: `18.25`
+- Native: `18.375`
+- Abs: `0.125`
+
+Patch status:
+
+- The real tree-conv path now defaults to native bf16 tap-product rounding via
+  `FR12_TREE_CONV_NATIVE_BF16_TAPS=1`.
+- The legacy `FR11_TREE_CONV_NATIVE_BF16_TAPS` knob remains as a compatibility
+  override, but the FR12 server launcher now defaults it to `1`.
+- This is our-kernel arithmetic alignment, not a native-spine splice.
+
+Serving gate, splice OFF:
+
+- Run directory:
+  `output/fr12_real_kernel_conv_bf16_20260606T071207Z/`
+- Tree capture:
+  `tree/logs/subkernel_tree.pt`
+- Manual five-row compare:
+  `manual_subkernel_compare_vs_native_clonefix.json`
+- Native reference:
+  `output/fr12_corrected_l0_parity_20260606T032230Z/native_clonefix/logs/subkernel_native.pt`
+- Tree rows:
+  `[0, 1, 2, 4, 6]`
+- Native rows:
+  `[0, 1, 2, 3, 4]`
+- Engagement:
+  `21/21` GPU tree metadata rows ok, `61` tree accept rows.
+- Diagnostic one-prompt eager `accepted_per_draft_event`:
+  `1.1016949152542372` (not an acceptance verdict).
+
+Serving L0 sub-kernel parity with our tree-conv kernel:
+
+| Stage | Max abs | Mean abs | Nonzero |
+|---|---:|---:|---:|
+| pre_conv | 0.0 | 0.0 | 0 |
+| conv1d_out | 0.0 | 0.0 | 0 |
+| gdn_scan_out | 0.00000095367431640625 | 0.000000000031078205980916707 | 4 |
+| gate_out | 0.0000019073486328125 | 0.00000000007082311126449525 | 4 |
+| o_proj_out | 0.0001220703125 | 0.0000000053551048040390015 | 11 |
+
+Verdict: the first real-kernel conv numerics cut is verified in serving. With
+native-spine splice disabled, our tree conv now bit-matches native
+`causal_conv1d_update` at `conv1d_out` for the aligned L0 spine rows. The
+remaining L0 core residual is downstream floor (`gdn_scan_out`, `gate_out`,
+`o_proj_out`) rather than the previous `0.125` conv-origin mismatch.

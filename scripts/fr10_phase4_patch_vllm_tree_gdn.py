@@ -765,9 +765,14 @@ def _patch_gdn_linear() -> bool:
                         dtype=torch.long,
                         device=mixed_qkv_spec.device,
                     )
-                    _fr11_native_bf16_taps = (
-                        os.environ.get("FR11_TREE_CONV_NATIVE_BF16_TAPS", "0") == "1"
+                    _fr12_bf16_tap_env = os.environ.get(
+                        "FR12_TREE_CONV_NATIVE_BF16_TAPS"
                     )
+                    if _fr12_bf16_tap_env is None:
+                        _fr12_bf16_tap_env = os.environ.get(
+                            "FR11_TREE_CONV_NATIVE_BF16_TAPS", "1"
+                        )
+                    _fr11_native_bf16_taps = _fr12_bf16_tap_env != "0"
                     _fr10_weight_f = conv_weights.to(torch.float32)
                     def _fr11_conv_tap_product(_fr11_x, _fr11_w):
                         if _fr11_native_bf16_taps:
@@ -791,8 +796,12 @@ def _patch_gdn_linear() -> bool:
                         and _fr10_conv_diag is not None
                     )
                     assert _fr10_prior_conv_state_bank is not None
+                    _fr12_native_spine_oracle_enabled = (
+                        os.environ.get("FR12_NATIVE_SPINE_ORACLE", "0") == "1"
+                    )
                     _fr12_native_spine_conv_enabled = (
-                        os.environ.get("FR12_TREE_CONV_NATIVE_SPINE", "0") == "1"
+                        _fr12_native_spine_oracle_enabled
+                        and os.environ.get("FR12_TREE_CONV_NATIVE_SPINE", "0") == "1"
                     )
                     _fr12_native_spine_conv_out = None
                     if _fr12_native_spine_conv_enabled:
@@ -1704,8 +1713,12 @@ def _patch_gdn_linear() -> bool:
                 )
                 tree_n = int(attn_metadata.fr10_tree_parent.numel())
                 tree_n_pad = int(attn_metadata.fr10_tree_visible_mask.size(0))
+                _fr12_native_spine_oracle_enabled = (
+                    os.environ.get("FR12_NATIVE_SPINE_ORACLE", "0") == "1"
+                )
                 _fr12_native_spine_scan_enabled = (
-                    os.environ.get("FR12_TREE_SCAN_NATIVE_SPINE", "0") == "1"
+                    _fr12_native_spine_oracle_enabled
+                    and os.environ.get("FR12_TREE_SCAN_NATIVE_SPINE", "0") == "1"
                 )
                 _fr12_scan_path0_node_tensor = None
                 if _fr12_native_spine_scan_enabled:
