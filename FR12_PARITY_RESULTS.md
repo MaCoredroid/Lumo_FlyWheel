@@ -237,3 +237,149 @@ Verdict: the corrected first-divergence sub-kernel is still causal conv, but not
 because of the conv prior-state bank/slot, causal window, or tap inputs. The
 remaining seam is native-kernel rounding in `causal_conv1d_update` versus the
 tree manual conv implementation.
+
+## 2026-06-06 Native-Spine Conv Splice
+
+Implementation:
+
+- Flag-gated splice: `FR12_TREE_CONV_NATIVE_SPINE=1`.
+- Path0 spine rows are routed through the same native Triton
+  `causal_conv1d_update` output path used by native MTP.
+- Branch rows remain on the tree ancestry conv path.
+- Default remains off.
+
+Artifacts:
+
+- Tree capture:
+  `output/fr12_native_spine_conv_20260606T040439Z_eager/tree/logs/subkernel_tree.pt`
+- Tree logits:
+  `output/fr12_native_spine_conv_20260606T040439Z_eager/tree/logs/spine_tree.call2.pt`
+- Sub-kernel compare:
+  `output/fr12_native_spine_conv_20260606T040439Z_eager/corrected_subkernel_compare_native_spine.json`
+- Layer-output compare:
+  `output/fr12_native_spine_conv_20260606T040439Z_eager/corrected_layer_compare_native_spine.json`
+- Native reference:
+  `output/fr12_corrected_l0_parity_20260606T032230Z/native_clonefix/`
+
+Alignment:
+
+- Spine tokens match:
+  `[71093, 12305, 198, 727, 9637]`.
+- Tree rows:
+  `[0, 1, 2, 4, 6]`.
+- Native rows:
+  `[0, 1, 2, 3, 4]`.
+
+Post-splice L0 sub-kernel table:
+
+| Stage | Max abs | Mean abs max depth |
+|---|---:|---:|
+| pre_conv | 0.0 | 0.0 |
+| conv1d_out | 0.0 | 0.0 |
+| gdn_scan_out | 0.00000095367431640625 | 0.00000000015522050311744806 |
+| gate_out | 0.0000019073486328125 | 0.0000000003104597967595879 |
+| o_proj_out | 0.0001220703125 | 0.000000026775524020195007 |
+
+Conv detail checks remain exact:
+
+| Detail | Max abs | Mean abs |
+|---|---:|---:|
+| conv prior window | 0.0 | 0.0 |
+| full conv window | 0.0 | 0.0 |
+| fp32 tap products | 0.0 | 0.0 |
+| bf16 tap products | 0.0 | 0.0 |
+
+Verdict: the native-spine conv splice eliminates the measured causal-conv
+origin. `conv1d_out` drops from `0.125` to `0.0`, and the previous
+`gdn_scan_out = 0.015625` gap drops to `9.5367431640625e-7`; the scan gap was
+therefore propagated from conv rather than intrinsic on this event.
+
+Production caveat: this diagnostic splice calls native `causal_conv1d_update`,
+which mutates `conv_state`, and the tree path then writes its canonical tree
+conv states. That double-write is acceptable for this diagnostic parity probe,
+but the production form must avoid corrupting canonical state while still
+bit-reproducing native spine-row conv output.
+
+Post-splice layer-output parity:
+
+- Input hidden max abs: `0.0`
+- First layer-output divergence: layer 0 `linear_attention`
+- Layer 0 max abs by depth:
+  `[0.0, 0.0, 0.000244140625, 0.0, 0.0]`
+- Layer 0 max abs: `0.000244140625`
+- Final norm max abs: `0.75`
+- Layer 63 max abs: `6.25`
+
+Layer-output max abs by layer:
+
+| Layer | Type | Max abs |
+|---:|---|---:|
+| 0 | linear_attention | 0.000244140625 |
+| 1 | linear_attention | 0.0015869140625 |
+| 2 | linear_attention | 0.0234375 |
+| 3 | full_attention | 0.00439453125 |
+| 4 | linear_attention | 0.00433349609375 |
+| 5 | linear_attention | 0.003979682922363281 |
+| 6 | linear_attention | 0.009765625 |
+| 7 | full_attention | 0.0068359375 |
+| 8 | linear_attention | 0.0064697265625 |
+| 9 | linear_attention | 0.0089111328125 |
+| 10 | linear_attention | 0.007343292236328125 |
+| 11 | full_attention | 0.0146484375 |
+| 12 | linear_attention | 0.0135498046875 |
+| 13 | linear_attention | 0.017578125 |
+| 14 | linear_attention | 0.013671875 |
+| 15 | full_attention | 0.0302734375 |
+| 16 | linear_attention | 0.0244140625 |
+| 17 | linear_attention | 0.0546875 |
+| 18 | linear_attention | 0.15625 |
+| 19 | full_attention | 0.09375 |
+| 20 | linear_attention | 0.15625 |
+| 21 | linear_attention | 0.1328125 |
+| 22 | linear_attention | 0.0650634765625 |
+| 23 | full_attention | 0.1171875 |
+| 24 | linear_attention | 0.2265625 |
+| 25 | linear_attention | 0.140625 |
+| 26 | linear_attention | 0.375 |
+| 27 | full_attention | 0.2890625 |
+| 28 | linear_attention | 0.099029541015625 |
+| 29 | linear_attention | 0.109375 |
+| 30 | linear_attention | 0.109375 |
+| 31 | full_attention | 0.19921875 |
+| 32 | linear_attention | 0.12890625 |
+| 33 | linear_attention | 0.126953125 |
+| 34 | linear_attention | 0.375 |
+| 35 | full_attention | 0.65625 |
+| 36 | linear_attention | 0.111328125 |
+| 37 | linear_attention | 0.107421875 |
+| 38 | linear_attention | 0.21875 |
+| 39 | full_attention | 0.171875 |
+| 40 | linear_attention | 0.09375 |
+| 41 | linear_attention | 0.1953125 |
+| 42 | linear_attention | 0.21875 |
+| 43 | full_attention | 0.25 |
+| 44 | linear_attention | 0.1875 |
+| 45 | linear_attention | 0.1796875 |
+| 46 | linear_attention | 0.11083984375 |
+| 47 | full_attention | 0.21875 |
+| 48 | linear_attention | 0.15234375 |
+| 49 | linear_attention | 0.171875 |
+| 50 | linear_attention | 0.671875 |
+| 51 | full_attention | 1.0703125 |
+| 52 | linear_attention | 0.4375 |
+| 53 | linear_attention | 0.240234375 |
+| 54 | linear_attention | 1.4375 |
+| 55 | full_attention | 0.6875 |
+| 56 | linear_attention | 0.2425537109375 |
+| 57 | linear_attention | 0.2421875 |
+| 58 | linear_attention | 1.875 |
+| 59 | full_attention | 1.0 |
+| 60 | linear_attention | 0.28125 |
+| 61 | linear_attention | 0.6640625 |
+| 62 | linear_attention | 1.12255859375 |
+| 63 | full_attention | 6.25 |
+
+Verdict: the conv splice fixes the L0 GDN core and reduces the layer-0
+post-MLP output gap by roughly 64x (`0.015625` to `0.000244140625`), but this
+event is not full 64-layer lossless. The remaining small L0 post-core/output
+residual still compounds through later layers.
