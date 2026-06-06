@@ -383,3 +383,63 @@ Verdict: the conv splice fixes the L0 GDN core and reduces the layer-0
 post-MLP output gap by roughly 64x (`0.015625` to `0.000244140625`), but this
 event is not full 64-layer lossless. The remaining small L0 post-core/output
 residual still compounds through later layers.
+
+## 2026-06-06 Token-Level Argmax Gate With Conv Splice
+
+Purpose: check the actual losslessness gate, not just max-abs parity. The tree
+arm ran with `FR12_TREE_CONV_NATIVE_SPINE=1`; native MTP-5 and tree ran
+sequentially with real `FR10_SPINE_LOGIT_CAPTURE` tensors.
+
+Artifacts:
+
+- Run directory:
+  `output/fr12_layer2_scan_origin_20260606T043504Z/`
+- Native logits:
+  `l0later_native/logs/spine_native.call2.pt`,
+  `l0later_native/logs/spine_native.call3.pt`
+- Tree logits:
+  `l0later_tree/logs/spine_tree.call2.pt`,
+  `l0later_tree/logs/spine_tree.call3.pt`
+- Argmax/layer compares:
+  `argmax_splice_call2_layer_compare.json`,
+  `argmax_splice_call3_layer_compare.json`
+- L0 sub-kernel compares:
+  `l0_argmax_splice_subkernel_call2.json`,
+  `l0_argmax_splice_subkernel_call3.json`
+
+L0 sub-kernel parity remained at the post-splice floor on both full events:
+
+| Stage | Max abs |
+|---|---:|
+| pre_conv | 0.0 |
+| conv1d_out | 0.0 |
+| gdn_scan_out | 0.00000095367431640625 |
+| gate_out | 0.0000019073486328125 |
+| o_proj_out | 0.0001220703125 |
+
+Call 2 token/probability parity:
+
+| Depth | Draft token | Tree argmax | Native argmax | Tree prob(draft) | Native prob(draft) |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 71093 | 248068 | 248068 | 0.0 | 0.0 |
+| 1 | 12305 | 12305 | 12305 | 1.0 | 1.0 |
+| 2 | 198 | 12305 | 198 | 0.0 | 1.0 |
+| 3 | 727 | 198 | 1005 | 0.0 | 0.12000831216573715 |
+| 4 | 9637 | 1005 | 9637 | 0.0 | 1.0 |
+
+Call 3 token/probability parity:
+
+| Depth | Draft token | Tree argmax | Native argmax | Tree prob(draft) | Native prob(draft) |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 271 | 198 | 271 | 0.5 | 0.6513549089431763 |
+| 1 | 248069 | 248069 | 248069 | 1.0 | 1.0 |
+| 2 | 271 | 248069 | 271 | 0.0 | 1.0 |
+| 3 | 71093 | 271 | 71093 | 0.0 | 1.0 |
+| 4 | 12305 | 2 | 12305 | 0.0 | 1.0 |
+
+Verdict: `FR12_TREE_CONV_NATIVE_SPINE=1` is real progress for L0 numeric
+parity, but it is not sufficient for token-level losslessness. The spine tokens
+match, yet the verified target distribution still flips argmax at multiple
+depths. The next fix target must be chosen by the token-level gate: remove the
+remaining post-core/logit residual that changes argmax, not merely reduce
+sub-kernel max abs.
