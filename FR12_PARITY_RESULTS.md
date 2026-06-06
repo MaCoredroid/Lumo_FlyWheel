@@ -115,3 +115,51 @@ Current verdict: the first confirmed divergence boundary is the layer-0
 which internal sub-kernel within layer 0 first diverges; the next required
 diagnostic is layer-0 sub-taps around `in_proj_qkvz`, `in_proj_ba`, conv output,
 GDN core output, gated norm output, `out_proj`, post-attention norm, and MLP.
+
+## 2026-06-06 L0 GDN Sub-Kernel Origin
+
+Live source check:
+
+- In `vllm/vllm-openai:cu130-nightly`, Qwen full attention uses
+  `output[:], _ = self.o_proj(attn_output)` in
+  `vllm/model_executor/models/qwen3_next.py`.
+- Layer 0 is `linear_attention`; its live GDN implementation is
+  `vllm/model_executor/layers/mamba/gdn_linear_attn.py`, where the GDN
+  projection call is `output[:num_tokens], _ = self.out_proj(core_attn_out)`.
+  The capture stage is still named `o_proj_out` for the user-facing boundary.
+
+Artifacts:
+
+- Tree sub-kernels:
+  `output/fr12_l0_subkernel_20260606T004119Z/tree/logs/subkernel_tree.pt`
+- Tree logits:
+  `output/fr12_l0_subkernel_20260606T004119Z/tree/logs/spine_tree.pt`
+- Native sub-kernels:
+  `output/fr12_l0_subkernel_20260606T004119Z/native24b/logs/subkernel_native.pt`
+- Native debug logits:
+  `output/fr12_l0_subkernel_20260606T004119Z/native24b/logs/native_sampler_debug.jsonl`
+- Compare JSON:
+  `output/fr12_l0_subkernel_20260606T004119Z/subkernel_compare_req0_native24b.json`
+
+Alignment:
+
+- Matched spine tokens:
+  `[71093, 12305, 198, 727, 9637]`.
+- Tree rows:
+  `[0, 1, 2, 4, 6]`.
+- Native rows:
+  `[0, 1, 2, 3, 4]`.
+
+Sub-kernel diffs:
+
+| Stage | Max abs | Mean abs max depth | Per-depth max abs |
+|---|---:|---:|---|
+| conv1d_out | 0.125 | 0.00015655082825105637 | [0.125, 0.125, 0.125, 0.125, 0.125] |
+| gdn_scan_out | 0.015625 | 0.000011691838153637946 | [0.015625, 0.0078125, 0.015625, 0.015625, 0.015625] |
+| gate_out | 0.001953125 | 0.00001911621257022489 | [0.0009765625, 0.001953125, 0.001953125, 0.001953125, 0.001953125] |
+| o_proj_out | 0.00390625 | 0.00019562167290132493 | [0.00048828125, 0.00390625, 0.0015869140625, 0.001953125, 0.0009765625] |
+
+Measured origin: `conv1d_out`. The first nonzero tree-spine vs native
+sub-kernel gap appears immediately after causal conv, before the GDN scan.
+The scan propagates an already-diverged input and has max abs `0.015625` at
+the core output on this matched event.
