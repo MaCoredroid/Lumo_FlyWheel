@@ -163,3 +163,77 @@ Measured origin: `conv1d_out`. The first nonzero tree-spine vs native
 sub-kernel gap appears immediately after causal conv, before the GDN scan.
 The scan propagates an already-diverged input and has max abs `0.015625` at
 the core output on this matched event.
+
+## 2026-06-06 Corrected L0 Sub-Kernel Parity
+
+This supersedes the earlier conv-detail interpretation while preserving the
+stage-level first-divergence verdict.
+
+Harness fixes:
+
+- Native conv detail now captures the conv-state prior before
+  `causal_conv1d_update` mutates the state.
+- Native `pre_conv_rows/window/tap_products` now use a cloned pre-conv tensor;
+  the previous alias was mutated in place by the native conv kernel.
+- Compare scripts now derive the active tree spine rows from capture/logit
+  metadata instead of stale hard-coded tree rows.
+
+Artifacts refuted:
+
+- The apparent zero/missing `conv_state` most-recent column was a post-update
+  conv-state read artifact.
+- The apparent conv-window/tap mismatch was a native pre-conv aliasing artifact.
+
+Corrected artifacts:
+
+- Tree capture:
+  `output/fr12_corrected_l0_parity_20260606T032230Z/tree/logs/subkernel_tree.pt`
+- Native corrected capture:
+  `output/fr12_corrected_l0_parity_20260606T032230Z/native_clonefix/logs/subkernel_native.pt`
+- Corrected subkernel compare:
+  `output/fr12_corrected_l0_parity_20260606T032230Z/corrected_subkernel_compare_clonefix.json`
+- Corrected layer-output compare:
+  `output/fr12_corrected_l0_parity_20260606T032230Z/corrected_layer_compare_clonefix.json`
+
+Corrected same-event tokens:
+`[71093, 12305, 198, 727, 9637]` tree == native.
+
+Corrected L0 sub-kernel table:
+
+| Stage | Max abs | Mean abs max depth |
+|---|---:|---:|
+| pre_conv | 0.0 | 0.0 |
+| conv1d_out | 0.125 | 0.00015655082825105637 |
+| gdn_scan_out | 0.015625 | 0.000011691838153637946 |
+| gate_out | 0.001953125 | 0.00001911621257022489 |
+| o_proj_out | 0.00390625 | 0.00019562167290132493 |
+
+Corrected conv detail checks:
+
+| Detail | Max abs | Mean abs |
+|---|---:|---:|
+| conv prior window | 0.0 | 0.0 |
+| full conv window | 0.0 | 0.0 |
+| fp32 tap products | 0.0 | 0.0 |
+| bf16 tap products | 0.0 | 0.0 |
+
+Corrected first real divergence: `conv1d_out`, specifically inside the conv
+kernel accumulation / activation / output-cast boundary. The tree and native
+inputs, prior state, causal windows, and tap products are byte-identical at the
+captured spine rows, but the tree manual PyTorch conv output differs from the
+native Triton `causal_conv1d_update` output by up to `0.125` (bf16-scale ULPs at
+large positive activations).
+
+Layer-output sanity check remains real:
+
+- Layer input hidden max abs: `0.0`
+- First layer-output divergence: layer 0 `linear_attention`
+- Layer 0 max abs by depth:
+  `[0.0003662109375, 0.015625, 0.001953125, 0.00390625, 0.0009765625]`
+- Layer 0 max abs: `0.015625`
+- This run's layer 63 max abs: `6.0`
+
+Verdict: the corrected first-divergence sub-kernel is still causal conv, but not
+because of the conv prior-state bank/slot, causal window, or tap inputs. The
+remaining seam is native-kernel rounding in `causal_conv1d_update` versus the
+tree manual conv implementation.
