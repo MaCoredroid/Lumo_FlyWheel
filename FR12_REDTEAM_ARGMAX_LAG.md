@@ -1,4 +1,10 @@
-# FR12 RED-TEAM — the argmax "flip" is a one-depth LAG (structural), not residual rounding
+# FR12 RED-TEAM — argmax-lag hypothesis [REFUTED 2026-06-06]
+
+> **RESOLUTION (2026-06-06): the one-depth LAG was a measurement artifact, NOT a real structural bug.** Codex's `fr12_compare_argmax_lag.py` re-ran on the same splice-ON captures with the **parent-traced spine rows `[0,1,2,4,6]`** (passing both methodology gates below: correct `tree_rows`, `draft_match=True`). Result: **call2 tree==native at all 5 depths; call3 matches at d1/d2/d4 with genuine mismatches at d0 and d3; `lag_match_depths=[]`, `lag_persists=False`.** The earlier "tree_argmax[d]==native_argmax[d−1]" came from the OLD table reading the **contiguous rows `[0,1,2,3,4]`** — i.e. **branch row 3** (a child of the depth-2 spine node, which predicts ≈native's depth-2 distribution) read as "depth 3." With correct spine rows there is **no lag**. The deficit is **diffuse per-depth/per-event drift from accumulated 64-layer numeric mismatch** (FR11 confirmed), NOT a fixable structural seam. → Proceed with the numerics-alignment program (conv-L0 done; target the dominant cross-layer propagator next), gating on splice-OFF per-depth final argmax. The methodology gates below did their job — they killed a phantom.
+
+---
+
+## [ORIGINAL HYPOTHESIS — kept for the record, now refuted] the argmax "flip" is a one-depth LAG (structural), not residual rounding
 
 **Claude red-team, 2026-06-06.** Re: `FR12_PARITY_RESULTS.md` §"Token-Level Argmax Gate With Conv Splice" (L387-445).
 
