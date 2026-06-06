@@ -334,6 +334,106 @@ def _patch_gdn_linear() -> bool:
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
+            "_FR12_SUBKERNEL_CAPTURE_ACTIVE = {}\n"
+            "\n"
+            "\n"
+            "def _fr12_subkernel_capture_get(self, num_tokens=None, create=False):\n"
+            "    path = os.environ.get(\"FR12_SUBKERNEL_CAPTURE\")\n"
+            "    if not path:\n"
+            "        return None\n"
+            "    try:\n"
+            "        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():\n"
+            "            return None\n"
+            "    except Exception:\n"
+            "        return None\n"
+            "    prefix = str(getattr(self, \"prefix\", \"\"))\n"
+            "    want_prefix = os.environ.get(\n"
+            "        \"FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX\",\n"
+            "        \"language_model.model.layers.0.linear_attn\",\n"
+            "    )\n"
+            "    if want_prefix and prefix != want_prefix:\n"
+            "        return None\n"
+            "    active = _FR12_SUBKERNEL_CAPTURE_ACTIVE.get(prefix)\n"
+            "    if active is not None:\n"
+            "        return active\n"
+            "    if not create:\n"
+            "        return None\n"
+            "    if num_tokens is not None:\n"
+            "        desired = os.environ.get(\"FR12_SUBKERNEL_CAPTURE_NUM_TOKENS\")\n"
+            "        if desired:\n"
+            "            desired_counts = {\n"
+            "                int(_x.strip()) for _x in desired.split(\",\") if _x.strip()\n"
+            "            }\n"
+            "            if int(num_tokens) not in desired_counts:\n"
+            "                return None\n"
+            "    seen = int(globals().get(\"_FR12_SUBKERNEL_CAPTURE_SEEN\", 0))\n"
+            "    skip = int(os.environ.get(\"FR12_SUBKERNEL_CAPTURE_SKIP\", \"0\"))\n"
+            "    limit = int(os.environ.get(\"FR12_SUBKERNEL_CAPTURE_LIMIT\", \"1\"))\n"
+            "    saved = int(globals().get(\"_FR12_SUBKERNEL_CAPTURE_SAVED\", 0))\n"
+            "    globals()[\"_FR12_SUBKERNEL_CAPTURE_SEEN\"] = seen + 1\n"
+            "    if seen < skip or saved >= limit:\n"
+            "        return None\n"
+            "    root, ext = os.path.splitext(path)\n"
+            "    call_path = root + \".call\" + str(saved) + (ext or \".pt\")\n"
+            "    payload = {\n"
+            "        \"schema\": \"fr12.gdn_l0_subkernel_capture.v1\",\n"
+            "        \"path\": path,\n"
+            "        \"call_path\": call_path,\n"
+            "        \"capture_call_index\": int(seen),\n"
+            "        \"capture_saved_index\": int(saved),\n"
+            "        \"layer_prefix\": prefix,\n"
+            "        \"num_tokens\": None if num_tokens is None else int(num_tokens),\n"
+            "        \"stages\": {},\n"
+            "        \"meta\": {},\n"
+            "    }\n"
+            "    _FR12_SUBKERNEL_CAPTURE_ACTIVE[prefix] = payload\n"
+            "    return payload\n"
+            "\n"
+            "\n"
+            "def _fr12_subkernel_capture_flush(payload, final=False):\n"
+            "    if payload is None:\n"
+            "        return\n"
+            "    try:\n"
+            "        out = str(payload[\"call_path\"])\n"
+            "        parent = os.path.dirname(out)\n"
+            "        if parent:\n"
+            "            os.makedirs(parent, exist_ok=True)\n"
+            "        torch.save(payload, out)\n"
+            "        if int(payload.get(\"capture_saved_index\", 0)) == 0:\n"
+            "            torch.save(payload, str(payload[\"path\"]))\n"
+            "        if final:\n"
+            "            globals()[\"_FR12_SUBKERNEL_CAPTURE_SAVED\"] = (\n"
+            "                int(globals().get(\"_FR12_SUBKERNEL_CAPTURE_SAVED\", 0)) + 1\n"
+            "            )\n"
+            "            _FR12_SUBKERNEL_CAPTURE_ACTIVE.pop(\n"
+            "                str(payload.get(\"layer_prefix\", \"\")), None\n"
+            "            )\n"
+            "    except Exception as exc:\n"
+            "        logger.warning(\"FR12 subkernel capture flush failed: %s\", exc)\n"
+            "\n"
+            "\n"
+            "def _fr12_subkernel_capture_tensor(self, name, tensor, create=False, extra=None):\n"
+            "    if tensor is None:\n"
+            "        return\n"
+            "    try:\n"
+            "        num_tokens = int(tensor.shape[0]) if tensor.ndim > 0 else None\n"
+            "        payload = _fr12_subkernel_capture_get(\n"
+            "            self, num_tokens=num_tokens, create=create\n"
+            "        )\n"
+            "        if payload is None:\n"
+            "            return\n"
+            "        item = {\n"
+            "            \"shape\": [int(_x) for _x in tensor.shape],\n"
+            "            \"dtype\": str(tensor.dtype),\n"
+            "            \"tensor\": tensor.detach().to(torch.float32).cpu(),\n"
+            "        }\n"
+            "        if extra:\n"
+            "            item[\"extra\"] = extra\n"
+            "        payload[\"stages\"][name] = item\n"
+            "        _fr12_subkernel_capture_flush(payload)\n"
+            "    except Exception as exc:\n"
+            "        logger.warning(\"FR12 subkernel capture stage %s failed: %s\", name, exc)\n"
+            "\n"
         ),
         1,
     )
@@ -970,6 +1070,31 @@ def _patch_gdn_linear() -> bool:
                     max_query_len=spec_state_indices_tensor.size(-1),
                     validate_data=False,
                 )
+            try:
+                _fr12_conv_extra = {
+                    "num_spec_decodes": int(attn_metadata.num_spec_decodes),
+                    "num_actual_tokens": int(num_actual_tokens),
+                    "tree_conv_active": bool(use_fr10_tree_conv),
+                    "tree_conv_expected": bool(_fr10_tree_conv_expected),
+                }
+                if getattr(attn_metadata, "fr10_tree_parent", None) is not None:
+                    _fr12_conv_extra["tree_parent"] = [
+                        int(_x)
+                        for _x in attn_metadata.fr10_tree_parent.detach().cpu().tolist()
+                    ]
+                if spec_token_indx is not None:
+                    _fr12_conv_extra["spec_token_indx"] = [
+                        int(_x) for _x in spec_token_indx.detach().cpu().tolist()
+                    ]
+                _fr12_subkernel_capture_tensor(
+                    self,
+                    "conv1d_out",
+                    mixed_qkv_spec,
+                    create=True,
+                    extra=_fr12_conv_extra,
+                )
+            except Exception as _fr12_conv_cap_exc:
+                logger.warning("FR12 conv capture failed: %s", _fr12_conv_cap_exc)
 '''
     if conv_needle not in text:
         raise RuntimeError("FR10 GDN causal conv spec branch needle not found")
@@ -1782,10 +1907,72 @@ def _patch_gdn_linear() -> bool:
                         use_qk_l2norm_in_kernel=True,
                     )
                 )
+            try:
+                _fr12_scan_extra = {
+                    "num_spec_decodes": int(attn_metadata.num_spec_decodes),
+                    "num_actual_tokens": int(num_actual_tokens),
+                    "tree_scan_active": bool(use_fr10_tree),
+                    "tree_scan_expected": bool(_fr10_tree_scan_expected),
+                }
+                if getattr(attn_metadata, "fr10_tree_parent", None) is not None:
+                    _fr12_scan_extra["tree_parent"] = [
+                        int(_x)
+                        for _x in attn_metadata.fr10_tree_parent.detach().cpu().tolist()
+                    ]
+                if spec_token_indx is not None:
+                    _fr12_scan_extra["spec_token_indx"] = [
+                        int(_x) for _x in spec_token_indx.detach().cpu().tolist()
+                    ]
+                _fr12_subkernel_capture_tensor(
+                    self,
+                    "gdn_scan_out",
+                    core_attn_out_spec.squeeze(0),
+                    create=False,
+                    extra=_fr12_scan_extra,
+                )
+            except Exception as _fr12_scan_cap_exc:
+                logger.warning("FR12 scan capture failed: %s", _fr12_scan_cap_exc)
 '''
     if needle not in text:
         raise RuntimeError("FR10 GDN linear spec branch needle not found")
     text = text.replace(needle, replacement, 1)
+
+    output_projection_needle = '''        z_shape_og = z.shape
+        core_attn_out = core_attn_out.reshape(-1, core_attn_out.shape[-1])
+        z = z.reshape(-1, z.shape[-1])
+        core_attn_out = self.norm(core_attn_out, z)
+        core_attn_out = core_attn_out.reshape(z_shape_og)
+        core_attn_out = core_attn_out.flatten(-2)  # ... h d -> ... (h d)
+        output[:num_tokens], _ = self.out_proj(core_attn_out)
+'''
+    output_projection_replacement = '''        z_shape_og = z.shape
+        core_attn_out = core_attn_out.reshape(-1, core_attn_out.shape[-1])
+        z = z.reshape(-1, z.shape[-1])
+        core_attn_out = self.norm(core_attn_out, z)
+        core_attn_out = core_attn_out.reshape(z_shape_og)
+        core_attn_out = core_attn_out.flatten(-2)  # ... h d -> ... (h d)
+        _fr12_subkernel_capture_tensor(
+            self,
+            "gate_out",
+            core_attn_out[:num_tokens],
+            create=False,
+            extra={"num_tokens": int(num_tokens)},
+        )
+        output[:num_tokens], _ = self.out_proj(core_attn_out)
+        _fr12_subkernel_capture_tensor(
+            self,
+            "o_proj_out",
+            output[:num_tokens],
+            create=False,
+            extra={"num_tokens": int(num_tokens)},
+        )
+        _fr12_payload = _fr12_subkernel_capture_get(self, create=False)
+        if _fr12_payload is not None:
+            _fr12_subkernel_capture_flush(_fr12_payload, final=True)
+'''
+    if output_projection_needle not in text:
+        raise RuntimeError("FR12 output projection needle not found")
+    text = text.replace(output_projection_needle, output_projection_replacement, 1)
     GDN_LINEAR_PATH.write_text(text)
     return True
 

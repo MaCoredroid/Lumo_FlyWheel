@@ -25,28 +25,77 @@ Gate facts:
 - First composite layer-output divergence is decoder layer 0,
   `linear_attention`, max abs `0.015625`.
 
-Per-layer head of table:
-
-| Layer | Type | Max abs | Depth deltas |
-|---:|---|---:|---|
-| 0 | linear_attention | 0.015625 | [0.015625, 0.00390625, 0.015625, 0.0078125, 0.01171875] |
-| 1 | linear_attention | 0.00732421875 | [0.00732421875, 0.001953125, 0.0029296875, 0.0013427734375, 0.003173828125] |
-| 2 | linear_attention | 0.046875 | [0.046875, 0.0078125, 0.015625, 0.0234375, 0.015625] |
-| 3 | full_attention | 0.0078125 | [0.0078125, 0.00537109375, 0.00360107421875, 0.003173828125, 0.00732421875] |
-| 4 | linear_attention | 0.006591796875 | [0.0048828125, 0.006591796875, 0.004150390625, 0.003994598984718323, 0.0037841796875] |
-| 5 | linear_attention | 0.009765625 | [0.00390625, 0.009765625, 0.005859375, 0.00390625, 0.0068359375] |
-| 6 | linear_attention | 0.015625 | [0.01171875, 0.008056640625, 0.015625, 0.00390625, 0.00927734375] |
-| 7 | full_attention | 0.006927490234375 | [0.00531005859375, 0.005889892578125, 0.005126953125, 0.0052490234375, 0.006927490234375] |
-
-Tail confirms compounding:
+Per-layer max-abs table:
 
 | Layer | Type | Max abs |
 |---:|---|---:|
+| 0 | linear_attention | 0.015625 |
+| 1 | linear_attention | 0.00732421875 |
+| 2 | linear_attention | 0.046875 |
+| 3 | full_attention | 0.0078125 |
+| 4 | linear_attention | 0.006591796875 |
+| 5 | linear_attention | 0.009765625 |
+| 6 | linear_attention | 0.015625 |
+| 7 | full_attention | 0.006927490234375 |
+| 8 | linear_attention | 0.01171875 |
+| 9 | linear_attention | 0.01171875 |
+| 10 | linear_attention | 0.016845703125 |
+| 11 | full_attention | 0.05419921875 |
+| 12 | linear_attention | 0.0244140625 |
+| 13 | linear_attention | 0.02294921875 |
+| 14 | linear_attention | 0.026611328125 |
+| 15 | full_attention | 0.0296630859375 |
+| 16 | linear_attention | 0.0279541015625 |
+| 17 | linear_attention | 0.046875 |
+| 18 | linear_attention | 0.140625 |
+| 19 | full_attention | 0.125 |
+| 20 | linear_attention | 0.0625 |
+| 21 | linear_attention | 0.0634765625 |
+| 22 | linear_attention | 0.1796875 |
+| 23 | full_attention | 0.0831298828125 |
+| 24 | linear_attention | 0.1875 |
+| 25 | linear_attention | 0.1328125 |
+| 26 | linear_attention | 0.1875 |
+| 27 | full_attention | 0.296875 |
+| 28 | linear_attention | 0.1634521484375 |
+| 29 | linear_attention | 0.203857421875 |
+| 30 | linear_attention | 0.18359375 |
+| 31 | full_attention | 0.19677734375 |
+| 32 | linear_attention | 0.40673828125 |
+| 33 | linear_attention | 0.5009765625 |
+| 34 | linear_attention | 0.265625 |
+| 35 | full_attention | 0.40625 |
+| 36 | linear_attention | 0.146484375 |
+| 37 | linear_attention | 0.19091796875 |
+| 38 | linear_attention | 0.33203125 |
+| 39 | full_attention | 0.2244873046875 |
+| 40 | linear_attention | 0.2734375 |
+| 41 | linear_attention | 0.2734375 |
+| 42 | linear_attention | 0.671875 |
+| 43 | full_attention | 0.34375 |
+| 44 | linear_attention | 0.3330078125 |
+| 45 | linear_attention | 0.314453125 |
+| 46 | linear_attention | 0.78125 |
+| 47 | full_attention | 0.8125 |
+| 48 | linear_attention | 0.3758544921875 |
+| 49 | linear_attention | 0.3359375 |
+| 50 | linear_attention | 1.25 |
+| 51 | full_attention | 1.40625 |
+| 52 | linear_attention | 0.9375 |
+| 53 | linear_attention | 0.62890625 |
+| 54 | linear_attention | 1.7421875 |
+| 55 | full_attention | 2.25 |
+| 56 | linear_attention | 0.84375 |
+| 57 | linear_attention | 0.81640625 |
+| 58 | linear_attention | 4.0 |
 | 59 | full_attention | 3.65234375 |
 | 60 | linear_attention | 4.25 |
 | 61 | linear_attention | 1.87109375 |
 | 62 | linear_attention | 2.5 |
 | 63 | full_attention | 53.0 |
+
+Depth deltas at the first confirmed divergent layer:
+`[0.015625, 0.00390625, 0.015625, 0.0078125, 0.01171875]`.
 
 Source-read decomposition for first layer:
 
