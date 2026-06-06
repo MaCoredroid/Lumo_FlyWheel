@@ -23,6 +23,23 @@ All of these are **no-copy, not-slow** (per-token scaling / per-row kernels), ex
 4. **Then superset:** accept/event ≥ E5 (native MTP-5 ~3.08-3.34 on SWE-Verified).
 5. **Then speed:** only after lossless+superset (this is where the WY kernel + matmul pipeline come back).
 
+## Branch losslessness — the bar for nodes native MTP-5 never computes (user, 2026-06-06)
+Native MTP-5 computes ONLY the spine (path0 linear chain), so the off-spine branch nodes have **no native MTP-5 counterpart** to diff against. The spine isn't the whole gate. The bar for the whole tree:
+> **Every node's verify logits (spine AND branch) == the TARGET MODEL's true logits for that node's ancestor-path.**
+> - spine path → native (its own chain),
+> - each branch path → the target model run on **that branch's linear ancestor-path** (the "branch-path oracle").
+
+Why accepting branches stays lossless: the rejection-sampler / multi-draft committer emits the **target distribution** given correct per-node verify logits, for ANY number of candidates. A branch is accepted with `min(1, p_target/q_draft)` using ITS path's correct logits → output stays target-distributed (lossless), we just reach more tokens/event (the **superset**). A 1-ULP-wrong or argmax-flipped branch logit → accept with the wrong probability → NOT lossless. So branches carry the **same** bit-exact bar as the spine, measured against their **own path's** oracle.
+
+**Validation (whole tree, our kernel doing the compute, splice OFF):** (1) spine == native; (2) for each distinct branch path, our kernel's branch logits == native run on that path. Both bit-exact / within floor + per-depth argmax.
+
+**CAVEAT — do NOT take the branch-path-oracle for granted (user, 2026-06-06; online research + think-more required before trusting it):**
+- **Oracle must be NO-MTP native, not MTP-5.** Lossless bar is vs the true target dist (no-MTP); MTP-5 itself drifts ~6e-5 from no-MTP. Run native **no-MTP** on each branch path.
+- **RoPE positions must be depth-based** (FR10 depth-RoPE finding): the branch token sits at its tree depth; the linear branch-path oracle must place it at the same depth, else the oracle is the wrong ground truth.
+- **Re-running native on the linear branch path only reproduces the tree's shared-ancestor computation IFF the shared prefix is bit-exact AND batch-invariant.** The branch-path oracle therefore also exercises the #42960 co-residency seam — a feature (it catches it) but means a branch "mismatch" can be an ancestor-state problem, not a branch-update problem; attribute carefully.
+- **Per-node-correct logits is the NECESSARY (kernel) half; the committer (multi-round tree rejection sampling) is the other half** — confirm the committer's losslessness theorem holds for temp>0 (we run temp0.6), not just greedy. (Open research item — see branch-oracle research.)
+- Branch-path oracle is **validation-only / offline** (one native run per distinct branch path); it is NOT a runtime path and must never leak into the served kernel.
+
 ## Guardrails
 - ONE GPU job at a time; read code + prior commits (FR11 per-layer diagnostic, conv tap-dtype seam, **why BATCH_INVARIANT failed**); don't guess from numbers.
 - Verify against E5 (native MTP-5): lossless = acceptance-length TV vs E5 within self-noise floor (~0.0188); superset = accept/event ≥ E5.
