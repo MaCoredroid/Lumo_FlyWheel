@@ -734,3 +734,73 @@ the exact-match coverage itself is low because tree and native sampled
 continuations diverge quickly. The explicit one-depth lag pattern remains
 absent, so the next work should target the remaining distribution/argmax
 propagator, not the old lag hypothesis.
+
+User-reconciled aggregate:
+
+- Overall TV mean over the full gate basis: `0.34`.
+- Overall TV p90: `1.0`.
+- Argmax mismatch rate: `16.7%`.
+- Outcome: tree `accepted_per_draft_event = 0.659` vs native MTP-5
+  `accepted_per_draft_event = 1.739`.
+
+The table above is the matched-event comparator subset; the user-reconciled
+aggregate is the cost-gate basis.
+
+## 2026-06-06 Scan-BF16 Lever Rejected; FP8 Activation Quantizer Probe
+
+Scan-bf16 status:
+
+- The in-server `FR12_TREE_SCAN_FLA_BF16_BOUNDARIES=1` run was stopped before it
+  burned more GPU.
+- Boot-free scan probe:
+  `output/fr12_scan_bf16_boundary_probe_20260606T083638Z/`
+- Baseline serving scan vs native:
+  `out_max_abs = 5.96e-08` (already near bit-exact).
+- Forced FLA bf16 boundaries:
+  `out_max_abs = 0.0078125`.
+
+Verdict: the scan bf16 boundary lever is wrong by about four orders of
+magnitude on the boot-free probe. The scan lever stays default-off; scan is not
+the dominant residual.
+
+Boot-free fp8 activation quantizer probe:
+
+- Script:
+  `scripts/fr12_fp8_gemm_batch_invariance_probe.py`
+- Run directory:
+  `output/fr12_fp8_gemm_batch_invariance_20260606T084909Z/`
+- JSON:
+  `output/fr12_fp8_gemm_batch_invariance_20260606T084909Z/fp8_gemm_batch_invariance_l0_o_proj.json`
+- Tree capture:
+  `output/fr12_real_kernel_conv_bf16_20260606T071207Z/tree/logs/subkernel_tree.pt`
+- Native capture:
+  `output/fr12_corrected_l0_parity_20260606T032230Z/native_clonefix/logs/subkernel_native.pt`
+- Aligned rows: tree `[0, 1, 2, 4, 6]` vs native `[0, 1, 2, 3, 4]`.
+
+L0 `o_proj` boundary:
+
+| Check | Value |
+|---|---:|
+| `gate_out` input max abs tree vs native | `0.0000019073486328125` |
+| `gate_out` input nonzero | `4` |
+| `o_proj_out` output max abs tree vs native | `0.0001220703125` |
+| `o_proj_out` output nonzero | `11` |
+
+Live fp8 per-token-group activation quantizer:
+
+| Check | FP8 byte mismatches | Scale max abs |
+|---|---:|---:|
+| Tree full batch vs row-only | `0` | `0.0` |
+| Tree full batch vs reversed-row context | `0` | `0.0` |
+| Native full batch vs row-only | `0` | `0.0` |
+| Native full batch vs reversed-row context | `0` | `0.0` |
+| Tree row-only vs native row-only | `2` | `0.0` |
+
+Verdict: the live activation quantizer is row-independent on this capture. The
+specific hypothesis that co-resident tree rows make the same row's fp8
+activation bytes or scales differ is not reproduced boot-free. The `o_proj`
+boundary residual is real, but this probe does not support activation-quant
+batch-invariance as its cause. Full fp8 GEMM replay remains unmeasured because
+the existing captures contain `o_proj` input/output tensors but not
+RowParallelLinear fp8 weights or block scales; `in_proj` is also unmeasured
+because the captures start after the input projections at `pre_conv`.
