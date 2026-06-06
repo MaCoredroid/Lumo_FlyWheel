@@ -523,6 +523,9 @@ def _patch_gdn_linear() -> bool:
                 _fr12_native_prior_read = (
                     os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1"
                 )
+                _fr12_full_state_capture = (
+                    os.environ.get("FR12_TREE_CONV_STATE_FULL_CAPTURE", "0") == "1"
+                )
                 _fr12_native_prior_conv_bank_rows = None
                 _fr12_native_prior_conv_state_bank = None
                 if _fr12_native_prior_read:
@@ -534,6 +537,20 @@ def _patch_gdn_linear() -> bool:
                         0,
                         _fr12_native_prior_conv_bank_rows.reshape(-1),
                     )
+                _fr12_tree_candidate_bank_rows = None
+                _fr12_tree_candidate_pre_remap = None
+                _fr12_tree_candidate_post_remap = None
+                if _fr12_full_state_capture:
+                    _fr12_tree_candidate_bank_rows = torch.unique(
+                        spec_state_indices_tensor[
+                            : attn_metadata.num_spec_decodes
+                        ].reshape(-1).to(torch.long)
+                    )
+                    _fr12_tree_candidate_pre_remap = torch.index_select(
+                        conv_state,
+                        0,
+                        _fr12_tree_candidate_bank_rows,
+                    ).detach().to(torch.float32).cpu().clone()
                 try:
                     _fr10_accepted_paths_tensor = globals().get(
                         "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR"
@@ -640,6 +657,15 @@ def _patch_gdn_linear() -> bool:
                             + ":"
                             + str(_fr10_seed_conv_exc)
                         ) from _fr10_seed_conv_exc
+                if (
+                    _fr12_full_state_capture
+                    and _fr12_tree_candidate_bank_rows is not None
+                ):
+                    _fr12_tree_candidate_post_remap = torch.index_select(
+                        conv_state,
+                        0,
+                        _fr12_tree_candidate_bank_rows,
+                    ).detach().to(torch.float32).cpu().clone()
                 if _fr12_native_prior_read:
                     _fr10_conv_read_cols = torch.zeros(
                         (int(attn_metadata.num_spec_decodes), 1),
@@ -831,9 +857,36 @@ def _patch_gdn_linear() -> bool:
                                         )
                                     _fr12_payload["meta"]["tree_conv_detail"] = {
                                         "schema": "fr12.tree_conv_detail.v1",
+                                        "conv_state_shape": list(conv_state.shape),
                                         "prior_bank_rows": _fr10_prior_conv_bank_rows.detach()
                                         .cpu()
                                         .clone(),
+                                        "spec_state_indices_tensor": spec_state_indices_tensor[
+                                            : attn_metadata.num_spec_decodes
+                                        ]
+                                        .detach()
+                                        .cpu()
+                                        .clone(),
+                                        "metadata_num_accepted_tokens": (
+                                            None
+                                            if num_accepted_tokens is None
+                                            else num_accepted_tokens[
+                                                : attn_metadata.num_spec_decodes
+                                            ]
+                                            .detach()
+                                            .cpu()
+                                            .clone()
+                                        ),
+                                        "accepted_lens": (
+                                            None
+                                            if _fr10_accepted_lens_tensor is None
+                                            else _fr10_accepted_lens_tensor[
+                                                : attn_metadata.num_spec_decodes
+                                            ]
+                                            .detach()
+                                            .cpu()
+                                            .clone()
+                                        ),
                                         "read_cols": _fr10_conv_read_cols.detach()
                                         .cpu()
                                         .clone(),
@@ -845,6 +898,15 @@ def _patch_gdn_linear() -> bool:
                                         "prior_cols": _fr10_prior_cols.detach()
                                         .cpu()
                                         .clone(),
+                                        "candidate_bank_rows": (
+                                            None
+                                            if _fr12_tree_candidate_bank_rows is None
+                                            else _fr12_tree_candidate_bank_rows.detach()
+                                            .cpu()
+                                            .clone()
+                                        ),
+                                        "candidate_conv_state_pre_remap": _fr12_tree_candidate_pre_remap,
+                                        "candidate_conv_state_post_remap": _fr12_tree_candidate_post_remap,
                                         "path0_nodes": _fr10_path0_node_tensor.detach()
                                         .cpu()
                                         .clone(),
@@ -1301,6 +1363,26 @@ def _patch_gdn_linear() -> bool:
                             device=mixed_qkv_spec.device,
                         ),
                     )
+                    _fr12_full_state_capture = (
+                        os.environ.get("FR12_TREE_CONV_STATE_FULL_CAPTURE", "0") == "1"
+                    )
+                    _fr12_candidate_bank_rows = None
+                    _fr12_candidate_conv_state = None
+                    _fr12_prior_full_row = None
+                    if _fr12_full_state_capture:
+                        _fr12_candidate_bank_rows = torch.unique(
+                            spec_state_indices_tensor[
+                                : attn_metadata.num_spec_decodes
+                            ].reshape(-1).to(torch.long)
+                        )
+                        _fr12_candidate_conv_state = torch.index_select(
+                            conv_state,
+                            0,
+                            _fr12_candidate_bank_rows,
+                        ).detach().to(torch.float32).cpu().clone()
+                        _fr12_prior_full_row = conv_state.index_select(
+                            0, _fr12_prior_row.view(1)
+                        )[0].detach().to(torch.float32).cpu().clone()
                     _fr12_native_x = _fr12_pre_conv_spec[
                         _fr12_native_start:_fr12_native_end
                     ]
@@ -1350,7 +1432,33 @@ def _patch_gdn_linear() -> bool:
                         )
                     _fr12_payload["meta"]["native_conv_detail"] = {
                         "schema": "fr12.native_conv_detail.v1",
+                        "conv_state_shape": list(conv_state.shape),
                         "prior_bank_row": int(_fr12_prior_row.detach().cpu().item()),
+                        "spec_state_indices_tensor": spec_state_indices_tensor[
+                            : attn_metadata.num_spec_decodes
+                        ]
+                        .detach()
+                        .cpu()
+                        .clone(),
+                        "metadata_num_accepted_tokens": (
+                            None
+                            if num_accepted_tokens is None
+                            else num_accepted_tokens[
+                                : attn_metadata.num_spec_decodes
+                            ]
+                            .detach()
+                            .cpu()
+                            .clone()
+                        ),
+                        "candidate_bank_rows": (
+                            None
+                            if _fr12_candidate_bank_rows is None
+                            else _fr12_candidate_bank_rows.detach()
+                            .cpu()
+                            .clone()
+                        ),
+                        "candidate_conv_state": _fr12_candidate_conv_state,
+                        "prior_full_row": _fr12_prior_full_row,
                         "query_start_loc": spec_query_start_loc.detach()
                         .cpu()
                         .clone(),
