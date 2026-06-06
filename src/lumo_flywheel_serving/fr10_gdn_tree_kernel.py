@@ -232,6 +232,7 @@ def _tree_gdn_kernel(
     H0_BATCH_INDEX: tl.constexpr,
     H0_BANK_STRIDE: tl.constexpr,
     H0_USE_ACCEPTED_COLUMN: tl.constexpr,
+    FLA_BF16_BOUNDARIES: tl.constexpr,
     COUNT_INVOCATION: tl.constexpr,
 ):
     pid_vh = tl.program_id(0)
@@ -321,10 +322,15 @@ def _tree_gdn_kernel(
             solved_k_j = tl.sum(tl.where(row_j[:, None], solved_k, 0.0), axis=0)
             y_i -= coeff_j * solved_v_j
             sk_i -= coeff_j * solved_k_j
+        if FLA_BF16_BOUNDARIES:
+            y_i = y_i.to(tl.bfloat16).to(tl.float32)
+            sk_i = sk_i.to(tl.bfloat16).to(tl.float32)
         solved_v = tl.where((offs_n == i)[:, None], y_i[None, :], solved_v)
         solved_k = tl.where((offs_n == i)[:, None], sk_i[None, :], solved_k)
         incoming_i = tl.sum(b_h0 * sk_i[None, :], axis=1)
         tv_i = y_i - incoming_i
+        if FLA_BF16_BOUNDARIES:
+            tv_i = tv_i.to(tl.bfloat16).to(tl.float32)
         trans_v = tl.where((offs_n == i)[:, None], tv_i[None, :], trans_v)
 
     for i in tl.static_range(0, N_PAD):
@@ -372,6 +378,7 @@ def launch_tree_gdn(
     output_scale: float = 1.0,
     use_qk_l2norm_in_kernel: bool = False,
     invocation_counter: torch.Tensor | None = None,
+    fla_bf16_boundaries: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Launch the FR10 dense tree verifier.
 
@@ -398,6 +405,7 @@ def launch_tree_gdn(
         output_scale=output_scale,
         use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
         invocation_counter=invocation_counter,
+        fla_bf16_boundaries=fla_bf16_boundaries,
     )
 
 
@@ -424,6 +432,7 @@ def launch_tree_gdn_prepared(
     h0_batch_index: int = 0,
     h0_use_accepted_column: bool = False,
     invocation_counter: torch.Tensor | None = None,
+    fla_bf16_boundaries: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Launch with precomputed graph-safe tree descriptors."""
     if n_actual <= 0 or n_actual > n_pad:
@@ -539,6 +548,7 @@ def launch_tree_gdn_prepared(
         H0_BATCH_INDEX=h0_batch_index,
         H0_BANK_STRIDE=h0_bank_stride,
         H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+        FLA_BF16_BOUNDARIES=bool(fla_bf16_boundaries),
         COUNT_INVOCATION=count_invocation,
     )
     return out, state
