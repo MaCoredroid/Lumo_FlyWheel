@@ -522,6 +522,7 @@ def _patch_gdn_linear() -> bool:
             _fr12_native_candidate_bank_rows_pre_update = None
             _fr12_native_candidate_conv_state_pre_update = None
             _fr12_native_prior_full_row_pre_update = None
+            _fr12_native_prior_full_row_pre_update_device = None
             if use_fr10_tree_conv:
                 _fr12_native_prior_read = (
                     os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1"
@@ -1303,11 +1304,17 @@ def _patch_gdn_linear() -> bool:
                         0,
                         _fr12_native_candidate_bank_rows_pre_update,
                     ).detach().to(torch.float32).cpu().clone()
-                    _fr12_native_prior_full_row_pre_update = torch.index_select(
+                    _fr12_native_prior_full_row_pre_update_device = torch.index_select(
                         conv_state,
                         0,
                         spec_state_indices_tensor[0, 0].to(torch.long).view(1),
-                    )[0].detach().to(torch.float32).cpu().clone()
+                    )[0]
+                    _fr12_native_prior_full_row_pre_update = (
+                        _fr12_native_prior_full_row_pre_update_device.detach()
+                        .to(torch.float32)
+                        .cpu()
+                        .clone()
+                    )
                 mixed_qkv_spec = causal_conv1d_update(
                     mixed_qkv_spec,
                     conv_state,
@@ -1372,16 +1379,6 @@ def _patch_gdn_linear() -> bool:
                         device=mixed_qkv_spec.device,
                     )
                     _fr12_prior_row = spec_state_indices_tensor[0, 0].to(torch.long)
-                    _fr12_prior_window = conv_state.index_select(
-                        0, _fr12_prior_row.view(1)
-                    )[0].index_select(
-                        1,
-                        torch.arange(
-                            _fr12_width - 1,
-                            dtype=torch.long,
-                            device=mixed_qkv_spec.device,
-                        ),
-                    )
                     _fr12_full_state_capture = (
                         os.environ.get("FR12_TREE_CONV_STATE_FULL_CAPTURE", "0") == "1"
                     )
@@ -1402,6 +1399,43 @@ def _patch_gdn_linear() -> bool:
                         _fr12_prior_full_row = conv_state.index_select(
                             0, _fr12_prior_row.view(1)
                         )[0].detach().to(torch.float32).cpu().clone()
+                    _fr12_prior_full_row_for_window = (
+                        _fr12_native_prior_full_row_pre_update_device
+                        if _fr12_native_prior_full_row_pre_update_device is not None
+                        else conv_state.index_select(0, _fr12_prior_row.view(1))[0]
+                    )
+                    if num_accepted_tokens is None:
+                        _fr12_prior_col_start = 0
+                    else:
+                        _fr12_prior_col_start = max(
+                            0,
+                            int(
+                                num_accepted_tokens[0]
+                                .detach()
+                                .cpu()
+                                .item()
+                            )
+                            - 1,
+                        )
+                    _fr12_prior_cols = torch.arange(
+                        _fr12_prior_col_start,
+                        _fr12_prior_col_start + _fr12_width - 1,
+                        dtype=torch.long,
+                        device=mixed_qkv_spec.device,
+                    )
+                    if int(_fr12_prior_cols[-1].detach().cpu().item()) >= int(
+                        conv_state.size(2)
+                    ):
+                        raise RuntimeError(
+                            "FR12 native conv prior window exceeds conv_state columns: "
+                            + str([int(x) for x in _fr12_prior_cols.detach().cpu().tolist()])
+                            + " shape="
+                            + str(list(conv_state.shape))
+                        )
+                    _fr12_prior_window = _fr12_prior_full_row_for_window.index_select(
+                        1,
+                        _fr12_prior_cols,
+                    )
                     _fr12_native_x = _fr12_pre_conv_spec[
                         _fr12_native_start:_fr12_native_end
                     ]
@@ -1487,6 +1521,14 @@ def _patch_gdn_linear() -> bool:
                         "candidate_conv_state": _fr12_candidate_conv_state,
                         "prior_full_row": _fr12_prior_full_row,
                         "prior_full_row_pre_update": _fr12_native_prior_full_row_pre_update,
+                        "prior_cols": _fr12_prior_cols.detach()
+                        .cpu()
+                        .clone(),
+                        "prior_window_source": (
+                            "pre_update"
+                            if _fr12_native_prior_full_row_pre_update is not None
+                            else "post_update_fallback"
+                        ),
                         "query_start_loc": spec_query_start_loc.detach()
                         .cpu()
                         .clone(),

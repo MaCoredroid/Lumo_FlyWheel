@@ -11,17 +11,12 @@ from typing import Any
 import torch
 
 
-TREE_SPINE_NODES = [0, 1, 3, 5, 7]
-SPEC_ORDER_STAGES = {"conv1d_out", "gdn_scan_out"}
-FULL_ROW_STAGES = {"gate_out", "o_proj_out"}
+FALLBACK_TREE_SPINE_ROWS = [0, 1, 2, 4, 6]
+STAGE_ORDER = ["pre_conv", "conv1d_out", "gdn_scan_out", "gate_out", "o_proj_out"]
 
 
 def _load(path: Path) -> dict[str, Any]:
     return torch.load(path, map_location="cpu")
-
-
-def _row_start(counts: list[int], req: int) -> int:
-    return int(sum(int(x) for x in counts[:req]))
 
 
 def _max_abs(a: torch.Tensor, b: torch.Tensor) -> float:
@@ -39,15 +34,83 @@ def _stage_tensor(capture: dict[str, Any], stage: str) -> torch.Tensor:
         raise KeyError(f"capture {capture.get('call_path')} missing stage {stage}") from exc
 
 
-def _spec_indices(
-    capture: dict[str, Any], stage: str, hidden_rows: list[int], target_rows: list[int]
+def _tensor_list(value: Any) -> list[int] | None:
+    if value is None:
+        return None
+    if torch.is_tensor(value):
+        return [int(x) for x in value.detach().cpu().reshape(-1).tolist()]
+    if isinstance(value, list):
+        return [int(x) for x in value]
+    return None
+
+
+def _tree_path0_rows(capture: dict[str, Any], depth_count: int) -> list[int]:
+    meta = capture.get("meta", {})
+    detail = meta.get("tree_conv_detail", {})
+    path0 = _tensor_list(detail.get("path0_nodes"))
+    if path0:
+        return path0[:depth_count]
+    return FALLBACK_TREE_SPINE_ROWS[:depth_count]
+
+
+def _draft_tokens_by_target_row(
+    logits: dict[str, Any], target_rows: list[int], req: int
 ) -> list[int]:
-    extra = capture["stages"].get(stage, {}).get("extra", {})
-    spec_token_indx = extra.get("spec_token_indx")
-    if spec_token_indx:
-        pos_by_hidden = {int(row): int(i) for i, row in enumerate(spec_token_indx)}
-        return [pos_by_hidden[int(row)] for row in hidden_rows]
-    return [int(row) for row in target_rows]
+    counts = [int(x) for x in logits["num_draft_tokens"]]
+    start = sum(counts[:req])
+    end = start + counts[req]
+    target_logits_indices = logits["target_logits_indices"][start:end]
+    draft_token_ids = logits["draft_token_ids"][start:end]
+    out: list[int] = []
+    for target in target_rows:
+        matches = (target_logits_indices == int(target)).nonzero(as_tuple=True)[0]
+        if matches.numel() == 0:
+            raise RuntimeError(
+                f"no draft token found for target row {target}; "
+                f"available={target_logits_indices.detach().cpu().tolist()}"
+            )
+        out.append(int(draft_token_ids[int(matches[0])].item()))
+    return out
+
+
+def _detail_checks(
+    tree_cap: dict[str, Any],
+    native_cap: dict[str, Any],
+    tree_rows: list[int],
+    native_rows: list[int],
+) -> dict[str, Any]:
+    tree_detail = tree_cap.get("meta", {}).get("tree_conv_detail", {})
+    native_detail = native_cap.get("meta", {}).get("native_conv_detail", {})
+    out: dict[str, Any] = {}
+    tree_window = tree_detail.get("window_path0")
+    native_window = native_detail.get("window")
+    if torch.is_tensor(tree_window) and torch.is_tensor(native_window):
+        depth = min(len(tree_rows), len(native_rows), tree_window.shape[0], native_window.shape[0])
+        out["conv_window"] = {
+            "max_abs": _max_abs(tree_window[:depth], native_window[:depth]),
+            "mean_abs": _mean_abs(tree_window[:depth], native_window[:depth]),
+        }
+    tree_prior = tree_detail.get("prior_window")
+    native_prior = native_detail.get("prior_window")
+    if torch.is_tensor(tree_prior) and torch.is_tensor(native_prior):
+        out["conv_prior_window"] = {
+            "max_abs": _max_abs(tree_prior, native_prior),
+            "mean_abs": _mean_abs(tree_prior, native_prior),
+            "native_source": native_detail.get("prior_window_source"),
+            "tree_prior_cols": _tensor_list(tree_detail.get("prior_cols")),
+            "native_prior_cols": _tensor_list(native_detail.get("prior_cols")),
+        }
+    for key in ["tap_products_fp32", "tap_products_bf16"]:
+        tree_key = key + "_path0"
+        tree_taps = tree_detail.get(tree_key)
+        native_taps = native_detail.get(key)
+        if torch.is_tensor(tree_taps) and torch.is_tensor(native_taps):
+            depth = min(len(tree_rows), len(native_rows), tree_taps.shape[0], native_taps.shape[0])
+            out[key] = {
+                "max_abs": _max_abs(tree_taps[:depth], native_taps[:depth]),
+                "mean_abs": _mean_abs(tree_taps[:depth], native_taps[:depth]),
+            }
+    return out
 
 
 def main() -> None:
@@ -72,41 +135,21 @@ def main() -> None:
     tree_logits = _load(args.tree_logits)
     native_logits = _load(args.native_logits)
 
-    tree_counts = [int(x) for x in tree_logits["num_draft_tokens"]]
     native_counts = [int(x) for x in native_logits["num_draft_tokens"]]
-    tree_start = _row_start(tree_counts, args.tree_req)
-    native_start = _row_start(native_counts, args.native_req)
-    tree_target_rows = [tree_start + node for node in TREE_SPINE_NODES]
-    native_target_rows = [native_start + depth for depth in range(5)]
-    tree_hidden_rows = [
-        int(tree_logits["target_logits_indices"][row].item())
-        for row in tree_target_rows
-    ]
-    native_hidden_rows = [
-        int(native_logits["target_logits_indices"][row].item())
-        for row in native_target_rows
-    ]
-    tree_tokens = [
-        int(tree_logits["draft_token_ids"][row].item()) for row in tree_target_rows
-    ]
-    native_tokens = [
-        int(native_logits["draft_token_ids"][row].item()) for row in native_target_rows
-    ]
+    depth_count = min(5, native_counts[args.native_req])
+    native_rows = list(range(depth_count))
+    tree_rows = _tree_path0_rows(tree_cap, depth_count)
+    tree_tokens = _draft_tokens_by_target_row(tree_logits, tree_rows, args.tree_req)
+    native_tokens = _draft_tokens_by_target_row(
+        native_logits, native_rows, args.native_req
+    )
 
     rows = []
-    for stage in ["conv1d_out", "gdn_scan_out", "gate_out", "o_proj_out"]:
+    for stage in STAGE_ORDER:
+        if stage not in tree_cap.get("stages", {}) or stage not in native_cap.get("stages", {}):
+            continue
         tree_t = _stage_tensor(tree_cap, stage)
         native_t = _stage_tensor(native_cap, stage)
-        if stage in SPEC_ORDER_STAGES:
-            tree_rows = _spec_indices(tree_cap, stage, tree_hidden_rows, tree_target_rows)
-            native_rows = _spec_indices(
-                native_cap, stage, native_hidden_rows, native_target_rows
-            )
-        elif stage in FULL_ROW_STAGES:
-            tree_rows = tree_hidden_rows
-            native_rows = native_hidden_rows
-        else:
-            raise AssertionError(stage)
         depth = []
         for d, (tr, nr) in enumerate(zip(tree_rows, native_rows)):
             depth.append(
@@ -143,13 +186,12 @@ def main() -> None:
         "native_logits": str(args.native_logits),
         "tree_req": int(args.tree_req),
         "native_req": int(args.native_req),
-        "tree_target_rows": tree_target_rows,
-        "native_target_rows": native_target_rows,
-        "tree_hidden_rows": tree_hidden_rows,
-        "native_hidden_rows": native_hidden_rows,
+        "tree_stage_rows": tree_rows,
+        "native_stage_rows": native_rows,
         "tree_spine_tokens": tree_tokens,
         "native_spine_tokens": native_tokens,
         "spine_tokens_match": tree_tokens == native_tokens,
+        "detail_checks": _detail_checks(tree_cap, native_cap, tree_rows, native_rows),
         "stages": rows,
         "first_origin": first,
     }
