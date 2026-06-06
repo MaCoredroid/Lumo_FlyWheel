@@ -35,6 +35,13 @@ The branch-losslessness research independently predicts this exact signature. Sp
 
 Corollary: the correct gate is **per-depth argmax / distributional equivalence vs the recurrent path-rerun** (research confirms: gate on argmax, not bit-exact max_abs). And STree's diagonal-A shortcut does NOT apply to our non-diagonal `(I−βkkᵀ)` term — so there is no shared-accumulator excuse; each spine/branch node needs its correct ancestor-ordered operator. If the lag is real (splice-OFF), it is the single biggest lossless lever on the board.
 
+## Methodology gate for `fr12_compare_argmax_lag.py` (validate BEFORE trusting its verdict)
+The lag verdict is only meaningful if the compared rows are the real spine path and the same event:
+1. **`tree_rows` MUST equal the spine path `[0,1,2,4,6]`, NOT `[0,1,2,3,4]`.** The script selects tree rows by dedup-order of `target_logits_indices` (first-N-unique). The verify forward emits target logits for ALL tree nodes, so that dedup likely yields contiguous `[0,1,2,3,4]` — which picks **branch row 3** for depth 3 and can MANUFACTURE a false lag (or mask a real one). The spine must be traced from `tree_parent_indices` (path0), the way the original `[0,1,2,4,6]` was derived. **Check the `tree_rows` field in the output JSON.** If it is `[0,1,2,3,4]`, the row selection is wrong — fix it to the parent-traced spine before drawing any conclusion.
+2. **`draft_match` MUST be true at the compared depths** — else tree and native are different decode events and the comparison is vacuous. Use the same matched event where spine draft tokens align (the original lag was seen on the `[71093,12305,198,727,9637]` / `[271,248069,271,71093,12305]` matched calls).
+
+Only if both gates pass does `lag_match_depths == [2,3,4]` mean a real structural lag (→ fix mask/row-mapping/position). A wrong `tree_rows` makes the lag flag uninterpretable either way.
+
 ## Also pending
 - conv bf16-taps = 0.0 was shown **offline (boot-free replay)** only. Confirm in-server: splice OFF, bf16-taps ON ⇒ `conv1d_out` max_abs == 0.0 live.
 - Branch-path oracle (per `FR12_LOSSLESS_PLAN.md`): off-spine branch nodes have no native MTP-5 counterpart; validate each branch's logits against **no-MTP native run on that branch's linear ancestor-path** (depth-based RoPE). Add to the parity harness once the spine argmax gate is clean splice-OFF.
