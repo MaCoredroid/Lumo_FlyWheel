@@ -520,6 +520,20 @@ def _patch_gdn_linear() -> bool:
             except Exception as _fr12_pre_cap_exc:
                 logger.warning("FR12 pre-conv capture failed: %s", _fr12_pre_cap_exc)
             if use_fr10_tree_conv:
+                _fr12_native_prior_read = (
+                    os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1"
+                )
+                _fr12_native_prior_conv_bank_rows = None
+                _fr12_native_prior_conv_state_bank = None
+                if _fr12_native_prior_read:
+                    _fr12_native_prior_conv_bank_rows = spec_state_indices_tensor[
+                        : attn_metadata.num_spec_decodes, 0
+                    ].to(torch.long).view(-1, 1)
+                    _fr12_native_prior_conv_state_bank = torch.index_select(
+                        conv_state,
+                        0,
+                        _fr12_native_prior_conv_bank_rows.reshape(-1),
+                    )
                 try:
                     _fr10_accepted_paths_tensor = globals().get(
                         "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR"
@@ -626,29 +640,38 @@ def _patch_gdn_linear() -> bool:
                             + ":"
                             + str(_fr10_seed_conv_exc)
                         ) from _fr10_seed_conv_exc
-                if _fr10_accepted_lens_tensor is None:
+                if _fr12_native_prior_read:
                     _fr10_conv_read_cols = torch.zeros(
                         (int(attn_metadata.num_spec_decodes), 1),
                         dtype=torch.long,
                         device=spec_state_indices_tensor.device,
                     )
+                    _fr10_prior_conv_bank_rows = _fr12_native_prior_conv_bank_rows
+                    _fr10_prior_conv_state_bank = _fr12_native_prior_conv_state_bank
                 else:
-                    _fr10_conv_read_cols = torch.clamp(
-                        _fr10_accepted_lens_tensor[
-                            : attn_metadata.num_spec_decodes
-                        ].to(torch.long)
-                        - 1,
-                        min=0,
-                        max=int(spec_state_indices_tensor.size(-1)) - 1,
-                    ).view(-1, 1)
-                _fr10_prior_conv_bank_rows = spec_state_indices_tensor[
-                    : attn_metadata.num_spec_decodes
-                ].gather(1, _fr10_conv_read_cols)
-                _fr10_prior_conv_state_bank = torch.index_select(
-                    conv_state,
-                    0,
-                    _fr10_prior_conv_bank_rows.reshape(-1).to(torch.long),
-                )
+                    if _fr10_accepted_lens_tensor is None:
+                        _fr10_conv_read_cols = torch.zeros(
+                            (int(attn_metadata.num_spec_decodes), 1),
+                            dtype=torch.long,
+                            device=spec_state_indices_tensor.device,
+                        )
+                    else:
+                        _fr10_conv_read_cols = torch.clamp(
+                            _fr10_accepted_lens_tensor[
+                                : attn_metadata.num_spec_decodes
+                            ].to(torch.long)
+                            - 1,
+                            min=0,
+                            max=int(spec_state_indices_tensor.size(-1)) - 1,
+                        ).view(-1, 1)
+                    _fr10_prior_conv_bank_rows = spec_state_indices_tensor[
+                        : attn_metadata.num_spec_decodes
+                    ].gather(1, _fr10_conv_read_cols)
+                    _fr10_prior_conv_state_bank = torch.index_select(
+                        conv_state,
+                        0,
+                        _fr10_prior_conv_bank_rows.reshape(-1).to(torch.long),
+                    )
                 try:
                     _fr10_tree_src = None
                     _fr10_spec_env = os.environ.get("SPEC_CONFIG")
@@ -706,6 +729,12 @@ def _patch_gdn_linear() -> bool:
                         dtype=torch.long,
                         device=mixed_qkv_spec.device,
                     )
+                    _fr12_native_prior_col_base = torch.arange(
+                        max(0, int(conv_state.size(2)) - (_fr10_width - 1)),
+                        int(conv_state.size(2)),
+                        dtype=torch.long,
+                        device=mixed_qkv_spec.device,
+                    )
                     _fr11_native_bf16_taps = (
                         os.environ.get("FR11_TREE_CONV_NATIVE_BF16_TAPS", "0") == "1"
                     )
@@ -736,7 +765,10 @@ def _patch_gdn_linear() -> bool:
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
                         _fr10_x = mixed_qkv_spec[_fr10_start:_fr10_end]
-                        _fr10_prior_cols = _fr10_prior_col_base
+                        if _fr12_native_prior_read:
+                            _fr10_prior_cols = _fr12_native_prior_col_base
+                        else:
+                            _fr10_prior_cols = _fr10_prior_col_base
                         _fr10_prior_window = _fr10_prior_conv_state_bank[
                             _fr10_b
                         ].index_select(1, _fr10_prior_cols)
@@ -803,6 +835,14 @@ def _patch_gdn_linear() -> bool:
                                         .cpu()
                                         .clone(),
                                         "read_cols": _fr10_conv_read_cols.detach()
+                                        .cpu()
+                                        .clone(),
+                                        "prior_read_mode": (
+                                            "native_tail_pre_remap"
+                                            if _fr12_native_prior_read
+                                            else "legacy_remapped_head"
+                                        ),
+                                        "prior_cols": _fr10_prior_cols.detach()
                                         .cpu()
                                         .clone(),
                                         "path0_nodes": _fr10_path0_node_tensor.detach()
