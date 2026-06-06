@@ -804,3 +804,85 @@ batch-invariance as its cause. Full fp8 GEMM replay remains unmeasured because
 the existing captures contain `o_proj` input/output tensors but not
 RowParallelLinear fp8 weights or block scales; `in_proj` is also unmeasured
 because the captures start after the input projections at `pre_conv`.
+
+## 2026-06-06 Full FP8 GEMM Batch-Invariance Probe
+
+Purpose:
+
+- Exhaust the two fp8 seams the activation-quant probe could not reach:
+  full Cutlass block-fp8 GEMM weight/block-scale behavior and layer-0
+  `in_proj`.
+- Boot-free only: no server, no full model load.
+- Splice OFF: uses captured real-kernel tree/native tensors and local
+  `/models/qwen3.6-27b-fp8/layers-0.safetensors` weights.
+
+Source-grounding:
+
+- Live cu130 container path:
+  `vllm.model_executor.kernels.linear.scaled_mm.cutlass.CutlassFp8BlockScaledMMKernel`
+- Low-level op used by the probe:
+  `torch.ops.vllm.padded_cutlass`
+- Activation quant used by that path:
+  `per_token_group_quant_fp8(..., group_size=128, column_major_scales=True)`
+- Weight layout: checkpoint fp8 weights are `[out, in]`; block scales are
+  `weight_scale_inv` with shape `[ceil(out/128), ceil(in/128)]`.
+- The low-level op was fed block scales as `float32`; this exactly reproduced
+  captured `o_proj_out`.
+
+Script:
+
+- `scripts/fr12_fp8_full_gemm_batch_invariance_probe.py`
+
+Run directory:
+
+- `output/fr12_fp8_full_gemm_batch_invariance_20260606T181323Z/`
+
+JSON:
+
+- `output/fr12_fp8_full_gemm_batch_invariance_20260606T181323Z/fp8_full_gemm_batch_invariance_l0.json`
+
+Aligned rows:
+
+- Tree `[0, 1, 2, 4, 6]`
+- Native `[0, 1, 2, 3, 4]`
+
+Context-invariance results:
+
+| Module | Context | Full vs row-only max abs | Full vs reversed-context max abs | Nonzero |
+|---|---|---:|---:|---:|
+| `out_proj` | tree | `0.0` | `0.0` | `0` |
+| `out_proj` | native | `0.0` | `0.0` | `0` |
+| `in_proj_qkv` | tree | `0.0` | `0.0` | `0` |
+| `in_proj_qkv` | native | `0.0` | `0.0` | `0` |
+| `in_proj_z` | tree | `0.0` | `0.0` | `0` |
+| `in_proj_z` | native | `0.0` | `0.0` | `0` |
+
+Replay validation:
+
+| Check | Max abs |
+|---|---:|
+| Tree `out_proj` replay vs captured `o_proj_out` | `0.0` |
+| Native `out_proj` replay vs captured `o_proj_out` | `0.0` |
+
+Tree-vs-native row-only replay:
+
+| Module | Input max abs | Output max abs | Nonzero output |
+|---|---:|---:|---:|
+| `out_proj` | `0.0000019073486328125` | `0.0001220703125` | `11` |
+| `in_proj_qkv` | `0.0` | `0.0` | `0` |
+| `in_proj_z` | `0.0` | `0.0` | `0` |
+
+Serving boundary:
+
+| Boundary | Max abs |
+|---|---:|
+| `pre_conv` tree vs native | `0.0` |
+
+Verdict: the last fp8 batch-dependence lever is exhausted on this boot-free
+cost gate. Full block-fp8 Cutlass GEMM does not change spine-row outputs with
+co-resident tree rows for `out_proj`, `in_proj_qkv`, or `in_proj_z`.
+`in_proj` starts the layer bit-matched; `out_proj` exactly replays the captured
+`1.22e-4` tree-vs-native residual, but that residual comes from its already tiny
+input delta, not from M-dependent fp8 GEMM behavior. No server/fix run is
+justified from this probe; the remaining lossless deficit is the diffuse
+multi-layer numeric wall rather than a fixable fp8 batch-invariance seam.
