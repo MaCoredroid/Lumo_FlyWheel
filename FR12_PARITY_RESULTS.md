@@ -932,10 +932,11 @@ Next hard-gate step: verify the downstream L0 cascade with fresh splice-OFF
 serving captures: `gdn_scan_out == 0.0`, then `gate_out == 0.0`, then
 `o_proj_out == 0.0`.
 
-## 2026-06-06 L0 GDN Hard Gate Passed: Scan → Gate → O-Projection
+## 2026-06-06 L0 Spine GDN Gate Passed: Scan → Gate → O-Projection
 
 Hard-gate target: L0 GDN sub-kernels `(3) gdn_scan`, `(4) RMSNormGated gate`,
-and `(5) o_proj`, splice OFF / oracle OFF, our kernel computing.
+and `(5) o_proj`, splice OFF / oracle OFF, our kernel computing. This section
+is the spine-only result; the branch-path gate is recorded immediately below.
 
 Serving captures:
 
@@ -963,10 +964,77 @@ Stage results:
 | `gate_out` | `0.0` | `0.0` | `0` |
 | `o_proj_out` | `0.0` | `0.0` | `0` |
 
-Verdict: the FR12 hard gate is satisfied at L0 for scan, gate, and o-projection.
+Verdict: the FR12 spine gate is satisfied at L0 for scan, gate, and
+o-projection.
 This was verified against a true native linear MTP-5 capture; an intermediate
 compare against a tree-shaped native config was also green but is not the gate
 basis.
 
-Next step: propagate this L0 result across all 64 layers and verify full
-layer-output/logit behavior splice OFF before any other kernel work.
+## 2026-06-06 L0 Branch-Path Gate Passed: Spine + Branches
+
+Hard-gate target: L0 branch-path oracle for `conv1d_out`, `(3) gdn_scan`,
+`(4) RMSNormGated gate`, and `(5) o_proj`, splice OFF / oracle OFF, our kernel
+computing. Diagnostic capture was eager because the capture hooks are not
+Dynamo-traceable; this is not the final B=4 CUDA-captured gate.
+
+Final serving capture:
+
+- Run directory:
+  `output/fr12_branch_l0_capture_eager_input_20260606T200632Z/`
+- Raw GDN payload:
+  `output/fr12_branch_l0_capture_eager_input_20260606T200632Z/logs/fr10_tree_gdn_scan_capture.pt`
+- Subkernel capture with MTP GDN `input_hidden`:
+  `output/fr12_branch_l0_capture_eager_input_20260606T200632Z/logs/subkernel_tree.pt`
+- Branch-path oracle:
+  `output/fr12_branch_l0_capture_eager_input_20260606T200632Z/branch_path_oracle_l0.json`
+- Branch input fp8 replay:
+  `output/fr12_branch_l0_capture_eager_input_20260606T200632Z/branch_input_fp8_full_gemm_l0.json`
+
+Tree:
+
+- `tree_parent = [-1,0,1,1,2,2,4,4,6,6]`
+- Spine nodes: `[0,1,2,4,6]`
+- Branch nodes: `[3,5,7,9]`
+- Branch paths:
+  - node `3`: `[0,1,3]`
+  - node `5`: `[0,1,2,5]`
+  - node `7`: `[0,1,2,4,7]`
+  - node `9`: `[0,1,2,4,6,9]`
+
+Branch-path oracle results:
+
+| Node set | `conv1d_out` max abs | `scan` max abs | `gate` max abs | `o_proj` max abs |
+|---|---:|---:|---:|---:|
+| spine `[0,1,2,4,6]` | `0.0` | `0.0` | `0.0` | `0.0` |
+| branches `[3,5,7,9]` | `0.0` | `0.0` | `0.0` | `0.0` |
+
+Self-checks:
+
+| Check | Max abs |
+|---|---:|
+| raw payload serving scan vs captured `gdn_scan_out` | `0.0` |
+| captured scan + captured `gate_z` vs captured `gate_out` | `0.0` |
+| captured `gate_out` replay vs captured `o_proj_out` | `0.0` |
+
+Branch input closure:
+
+The earlier token-derived `pre_conv` replay was a broken check: it compared the
+captured MTP GDN projection boundary against the wrong hidden/projection source
+and produced ~60 max-abs deltas even on spine node 0. The final capture records
+the actual MTP GDN `input_hidden` rows before projection and replays live
+Cutlass block-fp8 `in_proj_qkv` and `in_proj_z`.
+
+| Branch input check | Max abs |
+|---|---:|
+| `in_proj_qkv` path-terminal vs full-tree terminal | `0.0` |
+| `in_proj_qkv` path-terminal vs captured `pre_conv` | `0.0` |
+| `in_proj_z` path-terminal vs full-tree terminal | `0.0` |
+| `in_proj_z` path-terminal vs captured `gate_z` | `0.0` |
+
+Verdict: the eager-B1 L0 hard gate is satisfied for the spine and all verified
+branch nodes `[3,5,7,9]`. The branch ancestry mask is validated at
+`conv1d_out`, `gdn_scan_out`, `gate_out`, and `o_proj_out`, and the branch
+input projection boundary is independently closed by the fp8 in-proj replay.
+
+Next step: propagate this L0 result across all 64 layers splice OFF, then
+re-confirm bit-exact 0.0 at B=4 CUDA-captured before the SWE-4 outcome gate.

@@ -441,6 +441,34 @@ def _patch_gdn_linear() -> bool:
         1,
     )
 
+    if "FR12_SUBKERNEL_CAPTURE_INPUT" not in text:
+        input_capture = '''        if os.environ.get("FR12_SUBKERNEL_CAPTURE_INPUT", "0") == "1":
+            _fr12_subkernel_capture_tensor(
+                self,
+                "input_hidden",
+                hidden_states[:num_tokens],
+                create=True,
+                extra={"num_tokens": int(num_tokens)},
+            )
+'''
+        input_needle = '''        num_tokens = hidden_states.size(0)
+        # ============================================================
+        # Part 1: Input Projection
+        # ============================================================
+'''
+        input_replacement = input_needle + input_capture
+        if input_needle in text:
+            text = text.replace(input_needle, input_replacement, 1)
+        else:
+            fallback_needle = "        num_tokens = hidden_states.size(0)\n"
+            if fallback_needle not in text:
+                raise RuntimeError("FR12 input-hidden capture needle not found")
+            text = text.replace(
+                fallback_needle,
+                fallback_needle + input_capture,
+                1,
+            )
+
     conv_needle = '''        if spec_sequence_masks is not None:
             # spec_state_indices_tensor is always set when spec_sequence_masks is set
             assert spec_state_indices_tensor is not None
@@ -2568,6 +2596,14 @@ def _patch_gdn_linear() -> bool:
         core_attn_out = self.norm(core_attn_out, z)
         core_attn_out = core_attn_out.reshape(z_shape_og)
         core_attn_out = rearrange(core_attn_out, "... h d -> ... (h d)")
+        if os.environ.get("FR12_SUBKERNEL_CAPTURE_Z", "0") == "1":
+            _fr12_subkernel_capture_tensor(
+                self,
+                "gate_z",
+                z.reshape(z_shape_og)[:num_tokens],
+                create=False,
+                extra={"num_tokens": int(num_tokens)},
+            )
         _fr12_subkernel_capture_tensor(
             self,
             "gate_out",
