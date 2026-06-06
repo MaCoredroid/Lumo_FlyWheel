@@ -1038,3 +1038,53 @@ input projection boundary is independently closed by the fp8 in-proj replay.
 
 Next step: propagate this L0 result across all 64 layers splice OFF, then
 re-confirm bit-exact 0.0 at B=4 CUDA-captured before the SWE-4 outcome gate.
+
+## 2026-06-06 64-Layer Propagation Attempt: Blocked at First Full-Attention Layer
+
+Purpose: propagate the eager-B1 L0 spine+branch GDN gate through the full
+64-layer verify stack before attempting the final B=4 CUDA-captured gate.
+
+Captures:
+
+- Tree, splice OFF / oracle OFF:
+  `output/fr12_propagate_tree_eager_20260606T201645Z/`
+- Native MTP reference:
+  `output/fr12_propagate_native_eager_20260606T202356Z/`
+- Direct layer-hidden compare:
+  `output/fr12_propagate_compare_20260606T203056Z/layer_hidden_spine_direct_compare.json`
+
+Alignment:
+
+- Tree spine rows: `[0,1,2,4,6]`
+- Native rows: `[0,1,2,3,4]`
+- Input hidden max abs: `0.0`
+
+Propagation result:
+
+| Boundary | Layer type | Max abs |
+|---|---|---:|
+| layer `0` | `linear_attention` | `0.0` |
+| layer `1` | `linear_attention` | `0.0` |
+| layer `2` | `linear_attention` | `0.0` |
+| layer `3` | `full_attention` | `0.0040283203125` |
+
+Layer-3 depth detail:
+
+| Depth | Max abs |
+|---:|---:|
+| `0` | `0.0` |
+| `1` | `0.0` |
+| `2` | `0.0` |
+| `3` | `0.00390625` |
+| `4` | `0.0040283203125` |
+
+Downstream summary:
+
+- Nonzero layers: `3..63`
+- Max layer hidden delta: `7.25`
+- Final norm hidden max abs: `0.75`
+
+Verdict: the L0 GDN fix propagates bit-exactly through the first three
+linear-attention layers, then the first full-attention layer introduces the
+next residual. Do not run the B=4 CUDA-captured SWE-4 verdict yet; first isolate
+the full-attention layer-3 row/position/mask arithmetic seam.
