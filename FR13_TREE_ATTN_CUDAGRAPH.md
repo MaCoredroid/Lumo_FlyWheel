@@ -1,9 +1,9 @@
 # FR-13 (codex_fr13) — tree-attn full-attention: CUDA-graph-capturable + within-FA2-floor, for FR-12 lossless+fast
 
-**Branch:** `fr12-wy-tree-kernel` · **Driver:** codex gpt-5.5-high (codex_fr13) · **Red-team + loop:** Claude (Opus). **ONE GPU.** Continuation of FR-12 (GDN gate DONE 62516997; full-attn depth-RoPE wiring DONE c5fc346d). Read FR12_SCAN_ROOT_TASK.md + FR12_PARITY_RESULTS.md first.
+**Branch:** `main` (FR branches merged to main 2026-06-06, per user — work on main going forward) · **Driver:** codex gpt-5.5-high (codex_fr13) · **Red-team + loop:** Claude (Opus). **ONE GPU.** Continuation of FR-12 (GDN gate DONE 62516997; full-attn depth-RoPE wiring DONE c5fc346d). Read FR12_SCAN_ROOT_TASK.md + FR12_PARITY_RESULTS.md first.
 
 ## Mission
-Make the tree-verify FULL-ATTENTION path (1) **CUDA-graph-capturable at B=4** (kill the piecewise speed penalty) and (2) **within FA2's bf16 noise floor** (it already is: attn_out 0.00195), then run the DELIVERABLE: E5 (FA2 native MTP-5) vs tree-attn+tree-verify — lossless-within-E5-floor + speed.
+Make the tree-verify FULL-ATTENTION path (1) **CUDA-graph-capturable at B=4** (kill the piecewise speed penalty), and (2) **PROVE the full-attn numeric divergence (attn_out 0.00195, TREE_ATTN base-e vs FA2 exp2) has 0 e2e consequence — do NOT assert "within-floor = fine" (user, 2026-06-06: that is a hand-wave)**. Prove it by ablation (base-e vs exp2 e2e) + a LARGE-sample E5 deliverable. Then the DELIVERABLE: E5 (FA2 native MTP-5) vs tree-attn+tree-verify — lossless (PROVEN within E5's floor) + speed.
 
 ## RESEARCH FINDINGS (3 opus agents, primary-source cited — build on these, do NOT re-derive)
 ### A. CUDA-graph fix is WIRING (the metadata builder), NOT a kernel rebuild
@@ -20,9 +20,9 @@ Make the tree-verify FULL-ATTENTION path (1) **CUDA-graph-capturable at B=4** (k
 
 ## TASK (priority order; continuous-fix, no asking between steps)
 1. **PRIMARY (speed): make tree-attn CUDA-graph-capturable** via the metadata-builder fix (A). Verify at B=4: the tree-attn op is captured in FULL (not piecewise) — check the vLLM log for the CG mode (no "downgrade to PIECEWISE … AttentionCGSupport.NEVER"), and that it serves prefill+decode+tree-verify. One GPU.
-2. **Within-floor verify:** confirm full-attn attn_out is within the bf16 floor (~1e-3) on SPINE *and* BRANCHES (branch oracle = native no-MTP on branch path-to-root, depth positions; reference_gdn_tree_branch_oracle_losslessness). 0.00195 is acceptable; do NOT chase bit-exact.
-3. **OPTIONAL numerics tighten:** swap kernel exp→exp2/log2e (+ reverse-KV, 1/l-once) to move 0.00195 closer to FA2. Verify it stays within-floor and CG-capture still holds. Only if cheap.
-4. **DELIVERABLE (the verdict):** E5 (FA2 native MTP-5, `output/fr10_native_mtp5_same8_*`) VS tree-attn+tree-verify, B=4, CUDA graphs (now FULL): (a) LOSSLESS = our accepted distribution within E5's self-noise floor (NOT vs a TREE_ATTN baseline — that dodges it), (b) SPEED = accept/event + decode-TPS vs E5. Bring the user these numbers.
+2. **PROVE the full-attn divergence has 0 e2e consequence — do NOT assert "within-floor = fine" (user, 2026-06-06; that is a hand-wave).** The 0.00195 (TREE_ATTN base-e vs FA2 exp2) being within the bf16 floor per-position does NOT prove it's harmless e2e — MEASURE it. Required proof = an **ABLATION at LARGE sample**: tree-attn with the current base-e kernel (0.00195) VS tree-attn with the exp2/log2e fix (closer to FA2), both vs E5, comparing the e2e **accepted distribution + accept/event**. If the exp2 fix changes nothing e2e (accept/event + lossless TV identical) → the 0.00195 is PROVEN harmless. If the exp2 fix improves accept/lossless → the divergence had consequence; KEEP it and re-check. NOT optional — it is the proof. Also verify per-layer on SPINE *and* BRANCHES (branch oracle = native no-MTP on branch path-to-root; reference_gdn_tree_branch_oracle_losslessness).
+3. **Implement the exp2 fix** so the ablation can run: kernel `tl.exp`→`tl.exp2` with `softmax_scale*log2e`-folded scale (softmax.h:66-92), + match FA2 reverse-KV-iteration + 1/l-once-at-epilogue. Verify it stays CG-capturable + per-layer within-floor (spine+branches).
+4. **DELIVERABLE (the verdict) — LARGE sample** (the prior run had E5 self-noise ~0.6 = far too small to mean anything; need the floor ~0.02 like FR9 — more prompts/tokens): E5 (FA2 native MTP-5, `output/fr10_native_mtp5_same8_*`) VS tree-attn+tree-verify, B=4, FULL CUDA graphs: (a) LOSSLESS = our accepted distribution within E5's self-noise floor (NOT vs a TREE_ATTN baseline — that dodges it), (b) SPEED = accept/event + decode-TPS vs E5. Bring the user these numbers **+ the base-e-vs-exp2 ablation (the e2e-consequence proof)**.
 
 ## CONSTRAINTS
 - ONE GPU job at a time; boot-free/eager probes first; relaunch crashed captures WITHOUT --rm; empty_cache; kill leftover containers + stuck health-loops.
