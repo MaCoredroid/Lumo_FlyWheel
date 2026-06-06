@@ -416,7 +416,10 @@ def _patch_gdn_linear() -> bool:
             "    if tensor is None:\n"
             "        return\n"
             "    try:\n"
-            "        num_tokens = int(tensor.shape[0]) if tensor.ndim > 0 else None\n"
+            "        if extra and extra.get(\"num_actual_tokens\") is not None:\n"
+            "            num_tokens = int(extra.get(\"num_actual_tokens\"))\n"
+            "        else:\n"
+            "            num_tokens = int(tensor.shape[0]) if tensor.ndim > 0 else None\n"
             "        payload = _fr12_subkernel_capture_get(\n"
             "            self, num_tokens=num_tokens, create=create\n"
             "        )\n"
@@ -2907,7 +2910,7 @@ def _lumo_tree_canonical_multidraft_sample(
                         )
                     _fr10_capture_path = _fr10_lo.environ.get("FR10_SPINE_LOGIT_CAPTURE")
                     _fr10_capture_has_spec = any(
-                        int(_x) > 1 for _x in metadata.num_draft_tokens
+                        int(_x) > 0 for _x in metadata.num_draft_tokens
                     )
                     if (
                         _fr10_capture_path
