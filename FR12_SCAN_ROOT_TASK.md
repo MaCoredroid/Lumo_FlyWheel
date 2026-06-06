@@ -2,6 +2,9 @@
 
 **Branch:** `fr12-wy-tree-kernel` · **Driver:** codex gpt-5.5-high (codex_fr12) · **Red-team + loop:** Claude (Opus), 10-min. **ONE GPU — strictly serial.** Read `FR12_REDTEAM_ARGMAX_LAG.md` + `FR12_PARITY_RESULTS.md` (full state) and the committed probe scripts before starting.
 
+## POLICY: proceed continuously, fix until zero-drift, THEN measure e2e (user, 2026-06-06)
+Do NOT stop to ask between fixes. Keep fixing each divergence — **UPSTREAM-first, in OUR kernel, verifying SPINE *and* BRANCHES** — until there is **ZERO drift everywhere** (spine+branches bit-exact 0.0 across ALL 64 layers AND the final logits). ONLY THEN measure e2e: the **B=4 + CUDA-graph-captured + SWE-Verified-4** gate = lossless (drift within native self-noise floor) + SUPERSET (accept/event ≥ native). Bring the user the e2e numbers. Still ASK before any **close/pass-fail verdict** and before any **copy/dense/re-stream/reward-hack** shortcut (those remain BANNED). Each fix: find the FIRST diverging stage → fix its root in our kernel → re-verify that stage=0 + that layer 0.0 (spine+branches, eager, splice-OFF, ALIGNED so input_hidden~0) → continue propagation to the next divergence and fix it too.
+
 ## THE HARD GATE (user, non-negotiable)
 Drive the per-layer GDN sub-kernels **(3) gdn_scan, (4) RMSNormGated gate, (5) o_proj** to **bit-exact 0.0** (below fp8 bucket resolution so no byte flips) **BEFORE any other kernel work** (speed, other model parts). Do NOT "let small residuals go" — they compound over 64 layers and ARE the whole drift.
 
