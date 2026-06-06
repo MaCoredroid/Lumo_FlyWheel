@@ -931,3 +931,42 @@ output boundary is bit-exact and N-independent.
 Next hard-gate step: verify the downstream L0 cascade with fresh splice-OFF
 serving captures: `gdn_scan_out == 0.0`, then `gate_out == 0.0`, then
 `o_proj_out == 0.0`.
+
+## 2026-06-06 L0 GDN Hard Gate Passed: Scan → Gate → O-Projection
+
+Hard-gate target: L0 GDN sub-kernels `(3) gdn_scan`, `(4) RMSNormGated gate`,
+and `(5) o_proj`, splice OFF / oracle OFF, our kernel computing.
+
+Serving captures:
+
+- Tree, splice OFF:
+  `output/fr12_scanfix_l0_gate_20260606T183732Z/tree/logs/subkernel_tree.pt`
+- Native linear MTP-5:
+  `output/fr12_scanfix_l0_native_linear_b1_20260606T185459Z/native/logs/subkernel_native.pt`
+- Manual aligned-row compare:
+  `output/fr12_scanfix_l0_native_linear_b1_20260606T185459Z/manual_tree_vs_native_linear_b1_subkernel_compare.json`
+
+Alignment:
+
+- Tree rows: `[0, 1, 2, 4, 6]`
+- Native rows: `[0, 1, 2, 3, 4]`
+- Tree capture metadata: `tree_scan_active=true`, `tree_parent=[-1,0,1,1,2,2,4,4,6,6]`
+- Native capture metadata: `tree_scan_active=false`, `tree_parent=[-1,0,1,2,3,4]`
+
+Stage results:
+
+| Stage | Max abs | Mean abs | Nonzero |
+|---|---:|---:|---:|
+| `pre_conv` | `0.0` | `0.0` | `0` |
+| `conv1d_out` | `0.0` | `0.0` | `0` |
+| `gdn_scan_out` | `0.0` | `0.0` | `0` |
+| `gate_out` | `0.0` | `0.0` | `0` |
+| `o_proj_out` | `0.0` | `0.0` | `0` |
+
+Verdict: the FR12 hard gate is satisfied at L0 for scan, gate, and o-projection.
+This was verified against a true native linear MTP-5 capture; an intermediate
+compare against a tree-shaped native config was also green but is not the gate
+basis.
+
+Next step: propagate this L0 result across all 64 layers and verify full
+layer-output/logit behavior splice OFF before any other kernel work.
