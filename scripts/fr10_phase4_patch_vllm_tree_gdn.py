@@ -3497,7 +3497,19 @@ def _lumo_tree_canonical_multidraft_sample(
             sampling_metadata,
         )
 """
-        target_constraint = """        target_logits = apply_sampling_constraints(
+        target_constraint = """        _fr10_target_logits_pre_sampling_constraints = None
+        try:
+            import os as _fr10_constraint_os
+            if (
+                _fr10_constraint_os.environ.get("FR10_METRICS", "0") == "1"
+                or _fr10_constraint_os.environ.get("LUMO_TREE_SAMPLER_DEBUG_LOG")
+            ):
+                _fr10_target_logits_pre_sampling_constraints = (
+                    target_logits.detach().to(torch.float32).clone()
+                )
+        except Exception:
+            _fr10_target_logits_pre_sampling_constraints = None
+        target_logits = apply_sampling_constraints(
             target_logits,
             metadata.cu_num_draft_tokens,
             sampling_metadata,
@@ -3573,6 +3585,18 @@ def _lumo_tree_canonical_multidraft_sample(
                         .detach()
                         .cpu()
                     )
+                    _fr10_pre_logits_cpu = (
+                        None
+                        if _fr10_target_logits_pre_sampling_constraints is None
+                        else _fr10_target_logits_pre_sampling_constraints.detach().cpu()
+                    )
+                    try:
+                        _fr10_temperatures_cpu = [
+                            float(_x)
+                            for _x in sampling_metadata.temperature.detach().cpu().tolist()
+                        ]
+                    except Exception:
+                        _fr10_temperatures_cpu = []
                     if lumo_tree_parent_indices is not None:
                         _fr10_parents_cpu = [
                             int(_x) for _x in lumo_tree_parent_indices.detach().cpu().tolist()
@@ -3589,6 +3613,29 @@ def _lumo_tree_canonical_multidraft_sample(
                                 _fr10_flat = _fr10_start + _fr10_node
                                 _fr10_tok = int(_fr10_draft_ids_cpu[_fr10_flat])
                                 _fr10_prob_row = _fr10_target_probs_cpu[_fr10_flat]
+                                _fr10_raw_prob_draft = None
+                                _fr10_temp_prob_draft = None
+                                if _fr10_pre_logits_cpu is not None:
+                                    _fr10_pre_row = _fr10_pre_logits_cpu[_fr10_flat]
+                                    _fr10_raw_prob_draft = float(
+                                        torch.softmax(
+                                            _fr10_pre_row, dim=-1, dtype=torch.float32
+                                        )[_fr10_tok].item()
+                                    )
+                                    _fr10_temp = (
+                                        _fr10_temperatures_cpu[_fr10_req_i]
+                                        if _fr10_req_i < len(_fr10_temperatures_cpu)
+                                        else 1.0
+                                    )
+                                    if _fr10_temp == 0.0:
+                                        _fr10_temp = 1.0
+                                    _fr10_temp_prob_draft = float(
+                                        torch.softmax(
+                                            _fr10_pre_row / float(_fr10_temp),
+                                            dim=-1,
+                                            dtype=torch.float32,
+                                        )[_fr10_tok].item()
+                                    )
                                 _fr10_rows.append({
                                     "req_index": int(_fr10_req_i),
                                     "node_id": int(_fr10_node),
@@ -3597,6 +3644,8 @@ def _lumo_tree_canonical_multidraft_sample(
                                     "self_logits_index": int(_fr10_self_indices_cpu[_fr10_flat]),
                                     "draft_token_id": int(_fr10_tok),
                                     "target_argmax": int(torch.argmax(_fr10_prob_row).item()),
+                                    "target_raw_prob_draft": _fr10_raw_prob_draft,
+                                    "target_temp_prob_draft": _fr10_temp_prob_draft,
                                     "target_prob_draft": float(_fr10_prob_row[_fr10_tok].item()),
                                 })
                             _fr10_start += _fr10_node_count
@@ -3616,6 +3665,29 @@ def _lumo_tree_canonical_multidraft_sample(
                                 _fr10_flat = _fr10_start + _fr10_pos
                                 _fr10_tok = int(_fr10_draft_ids_cpu[_fr10_flat])
                                 _fr10_prob_row = _fr10_target_probs_cpu[_fr10_flat]
+                                _fr10_raw_prob_draft = None
+                                _fr10_temp_prob_draft = None
+                                if _fr10_pre_logits_cpu is not None:
+                                    _fr10_pre_row = _fr10_pre_logits_cpu[_fr10_flat]
+                                    _fr10_raw_prob_draft = float(
+                                        torch.softmax(
+                                            _fr10_pre_row, dim=-1, dtype=torch.float32
+                                        )[_fr10_tok].item()
+                                    )
+                                    _fr10_temp = (
+                                        _fr10_temperatures_cpu[_fr10_req_i]
+                                        if _fr10_req_i < len(_fr10_temperatures_cpu)
+                                        else 1.0
+                                    )
+                                    if _fr10_temp == 0.0:
+                                        _fr10_temp = 1.0
+                                    _fr10_temp_prob_draft = float(
+                                        torch.softmax(
+                                            _fr10_pre_row / float(_fr10_temp),
+                                            dim=-1,
+                                            dtype=torch.float32,
+                                        )[_fr10_tok].item()
+                                    )
                                 _fr10_rows.append({
                                     "req_index": int(_fr10_req_i),
                                     "position": int(_fr10_pos),
@@ -3623,6 +3695,8 @@ def _lumo_tree_canonical_multidraft_sample(
                                     "draft_logits_index": int(_fr10_target_indices_cpu[_fr10_flat] + 1),
                                     "draft_token_id": int(_fr10_tok),
                                     "target_argmax": int(torch.argmax(_fr10_prob_row).item()),
+                                    "target_raw_prob_draft": _fr10_raw_prob_draft,
+                                    "target_temp_prob_draft": _fr10_temp_prob_draft,
                                     "target_prob_draft": float(_fr10_prob_row[_fr10_tok].item()),
                                 })
                             _fr10_start += _fr10_node_count
