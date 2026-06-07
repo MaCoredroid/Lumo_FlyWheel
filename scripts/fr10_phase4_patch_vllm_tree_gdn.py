@@ -4511,6 +4511,48 @@ def _patch_gpu_model_runner_preprocess_input_capture() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_tree_verify_input_ids() -> bool:
+    """Rebuild target verify inputs from final scheduled token ids.
+
+    The tree verifier must feed Qwen the embeddings for the final scheduled
+    `input_ids`.  Reusing the runner's `inputs_embeds` buffer can preserve stale
+    rows after tree scheduling rewrites the token layout, which makes verifier
+    input hidden drift at depths >= 1 even when positions and token ids match.
+    """
+
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_TREE_VERIFY_INPUT_IDS"
+    if sentinel in text:
+        return False
+
+    anchor = """            input_ids, inputs_embeds = self._prepare_mm_inputs(num_input_tokens)
+"""
+    inject = anchor + """            # FR13_TREE_VERIFY_INPUT_IDS: for Qwen3.5 MTP/tree verify,
+            # rebuild target-model embeddings from the final scheduled
+            # input_ids. This is device-only and graph-safe; it prevents stale
+            # rows in self.inputs_embeds from feeding verifier layer 0.
+            if inputs_embeds is not None:
+                _fr13_verify_input_ids = self.input_ids.gpu[:num_input_tokens]
+                _fr13_verify_is_mm = (
+                    None
+                    if is_mm_embed is None
+                    else is_mm_embed[:num_input_tokens]
+                )
+                inputs_embeds = self.model.embed_input_ids(
+                    _fr13_verify_input_ids,
+                    multimodal_embeddings=mm_embeds,
+                    is_multimodal=_fr13_verify_is_mm,
+                )
+                self.inputs_embeds.gpu[:num_input_tokens].copy_(inputs_embeds)
+"""
+    if anchor not in text:
+        raise RuntimeError("FR13 tree verify input_ids anchor not found")
+    text = text.replace(anchor, inject, 1)
+    text = sentinel + "\n" + text
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_decode_mode_globals() -> bool:
     text = GPU_MODEL_RUNNER_PATH.read_text()
     sentinel = "# FR10_DECODE_MODE_GLOBALS"
@@ -6664,6 +6706,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_depth_positions()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_preprocess_input_capture()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
