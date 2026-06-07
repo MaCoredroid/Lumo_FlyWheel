@@ -188,3 +188,39 @@ convention remains aligned (`target_logits_index` matches native). The bug is
 upstream of canonical sampling and upstream of sampling constraints: tree verify
 is producing a different target logit distribution from native E5 on the same
 spine draft tokens and row positions.
+
+## Scheduled verifier rows
+
+Instrumentation commits:
+`f77ea71f`, `f2cc03a6`
+
+Tree artifact:
+`output/fr13_regime_decompose_20260607T021451Z/scheduled_rows/tree_flash_sched2_debug.jsonl`
+
+Native artifact:
+`output/fr13_regime_decompose_20260607T021451Z/scheduled_rows/native_sched_debug.jsonl`
+
+Diff artifact:
+`output/fr13_regime_decompose_20260607T021451Z/scheduled_rows/tree_vs_native_scheduled_rows_by_tokens_seqpaired.json`
+
+Matched event 0:
+- draft tokens: `[16, 13, 2972, 2425, 64700]`
+- tree sampled token rows: `[271, 16, 13, 2972, 2425, 64700]`
+- native sampled token rows: `[271, 16, 13, 2972, 2425, 64700]`
+- `logits_indices`: `[0, 1, 2, 3, 4, 5]` for both
+- `target_logits_indices`: `[0, 1, 2, 3, 4]` for both
+- `bonus_logits_indices`: `[5]` for both
+
+Matched event 1:
+- draft tokens: `[12305, 198, 727, 9057, 3456]`
+- tree sampled token rows: `[71093, 12305, 198, 727, 9057, 3456]`
+- native sampled token rows: `[71093, 12305, 198, 727, 9057, 3456]`
+- `logits_indices`: `[0, 1, 2, 3, 4, 5]` for both
+- `target_logits_indices`: `[0, 1, 2, 3, 4]` for both
+- `bonus_logits_indices`: `[5]` for both
+
+Interpretation:
+The verifier scheduled token rows and target/bonus row indices match for the
+matched spine events. The pre-constraint logit drift is not explained by
+draft-token row gathering, target row indexing, or bonus row indexing. Proceed
+to a full per-layer hidden-state capture and find the first diverging layer.
