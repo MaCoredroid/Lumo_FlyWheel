@@ -34,6 +34,9 @@ EAGLE_PATH = Path(
 TREE_ATTN_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py"
 )
+FLASH_ATTN_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/flash_attn.py"
+)
 TRITON_UNIFIED_ATTN_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/ops/"
     "triton_unified_attention.py"
@@ -5681,7 +5684,7 @@ def _fr13_tree_attn_op_capture(
             "FR13_TREE_ATTN_OP_CAPTURE_LAYER",
             "language_model.model.layers.3.self_attn",
         )
-        if want and not layer_name.startswith(want):
+        if want and want != "*" and not layer_name.startswith(want):
             return
         seen = int(globals().get("_FR13_TREE_ATTN_OP_CAPTURE_SEEN", 0))
         skip = int(os.environ.get("FR13_TREE_ATTN_OP_CAPTURE_SKIP", "0"))
@@ -5815,6 +5818,208 @@ def _fr13_tree_attn_op_capture(
 
     if did_patch:
         TREE_ATTN_PATH.write_text(text)
+    return did_patch
+
+
+def _patch_flash_attn_op_capture() -> bool:
+    """FR13 diagnostic-only FLASH_ATTN op replay capture for all/layer events."""
+
+    text = FLASH_ATTN_PATH.read_text()
+    did_patch = False
+    sentinel = "# FR13_FLASH_ATTN_OP_CAPTURE"
+    if sentinel not in text:
+        if "import os\n" not in text:
+            text = text.replace("from dataclasses import dataclass\n", "from dataclasses import dataclass\nimport os\n", 1)
+        if "from pathlib import Path\n" not in text:
+            text = text.replace("from dataclasses import dataclass\n", "from dataclasses import dataclass\nfrom pathlib import Path\n", 1)
+        helper_anchor = "logger = init_logger(__name__)\n"
+        helper = '''logger = init_logger(__name__)
+
+
+# FR13_FLASH_ATTN_OP_CAPTURE
+def _fr13_flash_attn_op_capture(
+    impl,
+    layer,
+    query,
+    key,
+    value,
+    output,
+    key_cache,
+    value_cache,
+    attn_metadata,
+):
+    path = os.environ.get("FR13_FLASH_ATTN_OP_CAPTURE")
+    if not path:
+        return
+    try:
+        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+            return
+    except Exception:
+        return
+    try:
+        layer_name = str(getattr(layer, "layer_name", ""))
+        want = os.environ.get(
+            "FR13_FLASH_ATTN_OP_CAPTURE_LAYER",
+            "language_model.model.layers.3.self_attn",
+        )
+        if want and want != "*" and not layer_name.startswith(want):
+            return
+        seen = int(globals().get("_FR13_FLASH_ATTN_OP_CAPTURE_SEEN", 0))
+        skip = int(os.environ.get("FR13_FLASH_ATTN_OP_CAPTURE_SKIP", "0"))
+        limit = int(os.environ.get("FR13_FLASH_ATTN_OP_CAPTURE_LIMIT", "1"))
+        saved = int(globals().get("_FR13_FLASH_ATTN_OP_CAPTURE_SAVED", 0))
+        globals()["_FR13_FLASH_ATTN_OP_CAPTURE_SEEN"] = seen + 1
+        if seen < skip or saved >= limit:
+            return
+
+        block_size = int(key_cache.shape[1])
+        q_start = attn_metadata.query_start_loc.detach().to(torch.long).cpu()
+        seq_lens = attn_metadata.seq_lens.detach().to(torch.long).cpu()
+        block_table_cpu = attn_metadata.block_table.detach().to(torch.long).cpu()
+        dense_k = []
+        dense_v = []
+        used_blocks = []
+        for seq_idx in range(int(seq_lens.numel())):
+            seq_len = int(seq_lens[seq_idx].item())
+            n_blocks = (seq_len + block_size - 1) // block_size
+            seq_k_parts = []
+            seq_v_parts = []
+            seq_blocks = []
+            remaining = seq_len
+            for local_block_idx in range(n_blocks):
+                block_id = int(block_table_cpu[seq_idx, local_block_idx].item())
+                take = min(block_size, remaining)
+                if block_id >= 0 and take > 0:
+                    seq_blocks.append(block_id)
+                    seq_k_parts.append(
+                        key_cache[block_id, :take].detach().to(torch.float32).cpu()
+                    )
+                    seq_v_parts.append(
+                        value_cache[block_id, :take].detach().to(torch.float32).cpu()
+                    )
+                remaining -= take
+            dense_k.append(torch.cat(seq_k_parts, dim=0) if seq_k_parts else torch.empty(0))
+            dense_v.append(torch.cat(seq_v_parts, dim=0) if seq_v_parts else torch.empty(0))
+            used_blocks.append(seq_blocks)
+
+        root, ext = os.path.splitext(path)
+        call_path = root + ".call" + str(saved) + (ext or ".pt")
+        payload = {
+            "schema": "fr13.flash_attn_op_capture.v1",
+            "source": "FlashAttentionImpl.forward",
+            "path": path,
+            "call_path": call_path,
+            "layer_name": layer_name,
+            "capture_call_index": int(seen),
+            "capture_saved_index": int(saved),
+            "scale": float(getattr(impl, "scale", 0.0)),
+            "num_heads": int(getattr(impl, "num_heads", 0)),
+            "num_kv_heads": int(getattr(impl, "num_kv_heads", 0)),
+            "num_queries_per_kv": int(getattr(impl, "num_queries_per_kv", 0)),
+            "head_size": int(getattr(impl, "head_size", 0)),
+            "sliding_window": tuple(int(x) for x in getattr(impl, "sliding_window", (-1, -1))),
+            "logits_soft_cap": float(getattr(impl, "logits_soft_cap", 0.0)),
+            "causal": bool(getattr(attn_metadata, "causal", True)),
+            "query_start_loc": q_start,
+            "seq_lens": seq_lens,
+            "block_table": block_table_cpu,
+            "used_blocks": used_blocks,
+            "query": query.detach().to(torch.float32).cpu(),
+            "key_input": key.detach().to(torch.float32).cpu()
+            if key is not None
+            else None,
+            "value_input": value.detach().to(torch.float32).cpu()
+            if value is not None
+            else None,
+            "output": output.detach().to(torch.float32).cpu(),
+            "dense_key": dense_k,
+            "dense_value": dense_v,
+        }
+        out = Path(call_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(payload, out)
+        if saved == 0:
+            torch.save(payload, Path(path))
+        globals()["_FR13_FLASH_ATTN_OP_CAPTURE_SAVED"] = saved + 1
+    except Exception as exc:
+        logger.warning("FR13 flash attention op capture failed: %s", exc)
+
+
+'''
+        if helper_anchor not in text:
+            raise RuntimeError("flash_attn logger anchor not found")
+        text = text.replace(helper_anchor, helper, 1)
+        did_patch = True
+
+    capture_anchor = """                flash_attn_varlen_func(
+                    q=query[:num_actual_tokens],
+                    k=key_cache,
+                    v=value_cache,
+                    out=output[:num_actual_tokens],
+                    cu_seqlens_q=cu_seqlens_q,
+                    max_seqlen_q=max_seqlen_q,
+                    seqused_k=seqused_k,
+                    max_seqlen_k=max_seqlen_k,
+                    softmax_scale=self.scale,
+                    causal=attn_metadata.causal,
+                    alibi_slopes=self.alibi_slopes,
+                    window_size=sliding_window_size,
+                    block_table=block_table,
+                    softcap=self.logits_soft_cap,
+                    scheduler_metadata=scheduler_metadata,
+                    fa_version=self.vllm_flash_attn_version,
+                    q_descale=q_descale,
+                    k_descale=k_descale,
+                    v_descale=v_descale,
+                    num_splits=attn_metadata.max_num_splits,
+                    s_aux=self.sinks,
+                )
+                return output
+"""
+    capture_replacement = """                flash_attn_varlen_func(
+                    q=query[:num_actual_tokens],
+                    k=key_cache,
+                    v=value_cache,
+                    out=output[:num_actual_tokens],
+                    cu_seqlens_q=cu_seqlens_q,
+                    max_seqlen_q=max_seqlen_q,
+                    seqused_k=seqused_k,
+                    max_seqlen_k=max_seqlen_k,
+                    softmax_scale=self.scale,
+                    causal=attn_metadata.causal,
+                    alibi_slopes=self.alibi_slopes,
+                    window_size=sliding_window_size,
+                    block_table=block_table,
+                    softcap=self.logits_soft_cap,
+                    scheduler_metadata=scheduler_metadata,
+                    fa_version=self.vllm_flash_attn_version,
+                    q_descale=q_descale,
+                    k_descale=k_descale,
+                    v_descale=v_descale,
+                    num_splits=attn_metadata.max_num_splits,
+                    s_aux=self.sinks,
+                )
+                _fr13_flash_attn_op_capture(
+                    self,
+                    layer,
+                    query[:num_actual_tokens],
+                    key[:num_actual_tokens] if key is not None else None,
+                    value[:num_actual_tokens] if value is not None else None,
+                    output[:num_actual_tokens],
+                    key_cache,
+                    value_cache,
+                    attn_metadata,
+                )
+                return output
+"""
+    if "_fr13_flash_attn_op_capture(" not in text.split("class FlashAttentionImpl", 1)[-1]:
+        if capture_anchor not in text:
+            raise RuntimeError("flash_attn varlen forward anchor not found")
+        text = text.replace(capture_anchor, capture_replacement, 1)
+        did_patch = True
+
+    if did_patch:
+        FLASH_ATTN_PATH.write_text(text)
     return did_patch
 
 
@@ -6215,7 +6420,7 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
 
 
 def _patch_qwen_full_attn_capture() -> bool:
-    """Diagnostic-only layer full-attention sub-kernel capture for FR12."""
+    """Diagnostic-only layer full-attention sub-kernel capture for FR12/FR13."""
 
     did_patch = False
     text = QWEN3_NEXT_PATH.read_text()
@@ -6249,7 +6454,7 @@ def _fr12_full_attn_capture_get(self, num_tokens=None, create=False):
         "FR12_FULL_ATTN_CAPTURE_LAYER_PREFIX",
         "language_model.model.layers.3.self_attn",
     )
-    if want_prefix and prefix != want_prefix:
+    if want_prefix and want_prefix != "*" and prefix != want_prefix:
         return None
     active = _FR12_FULL_ATTN_CAPTURE_ACTIVE.get(prefix)
     if active is not None:
@@ -6453,6 +6658,7 @@ def main() -> int:
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
         (TRITON_UNIFIED_ATTN_PATH, _patch_triton_unified_attention_fr13()),
         (TREE_ATTN_PATH, _patch_tree_attn_op_capture()),
+        (FLASH_ATTN_PATH, _patch_flash_attn_op_capture()),
         (QWEN3_NEXT_PATH, _patch_qwen_root_hidden_capture()),
         (QWEN3_NEXT_PATH, _patch_qwen_full_attn_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
