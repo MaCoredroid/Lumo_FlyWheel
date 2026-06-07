@@ -224,3 +224,48 @@ The verifier scheduled token rows and target/bonus row indices match for the
 matched spine events. The pre-constraint logit drift is not explained by
 draft-token row gathering, target row indexing, or bonus row indexing. Proceed
 to a full per-layer hidden-state capture and find the first diverging layer.
+
+## Per-layer spine hidden first divergence
+
+Capture artifact root:
+`output/fr13_layer_hidden_compare_20260607T040643Z`
+
+Tree files:
+- `tree/logs/tree_layer_hidden.call2.pt`
+- `tree/logs/tree_spine_logits.call2.pt`
+
+Native files:
+- `native/logs/native_layer_hidden.call2.pt`
+- `native/logs/native_spine_logits.call2.pt`
+
+Diff artifact:
+`output/fr13_layer_hidden_compare_20260607T040643Z/layer_hidden_spine_compare_call2.json`
+
+Matched spine event:
+- draft tokens: `[16, 13, 2972, 2425, 64700]`
+- scheduled sampled rows: `[271, 16, 13, 2972, 2425, 64700]` on both tree and native
+- target row indices: `[0, 1, 2, 3, 4]` on both tree and native
+- captured mRoPE positions: `[[19, 20, 21, 22, 23, 24], [19, 20, 21, 22, 23, 24], [19, 20, 21, 22, 23, 24]]` on both tree and native
+
+First divergence:
+- `first_divergence.where`: `input`
+- `first_divergence.max_abs`: `0.3870849609375`
+- input max-abs by depth: `[0.0, 0.326171875, 0.3870849609375, 0.29888916015625, 0.107177734375]`
+- layer 0 type: `linear_attention` on both sides
+- layer 0 max-abs after propagation: `0.4296875`
+- final norm max-abs by depth: `[12.3125, 23.75, 25.25, 23.3125, 21.1875]`
+
+Probability consequence on the same matched event:
+- depth 0 token `16`: tree `0.19958573579788208`, native `0.4140564203262329`
+- depth 1 token `13`: tree `1.0`, native `1.0`
+- depth 2 token `2972`: tree `0.957912266254425`, native `0.957912266254425`
+- depth 3 token `2425`: tree `0.0`, native `0.0`
+- depth 4 token `64700`: tree `0.0`, native `0.0`
+
+Interpretation:
+The scheduled token rows and captured positions match exactly, so this is not a
+scheduled-position or RoPE-position mismatch. The first divergence is already in
+the verifier model input hidden tensor before layer 0. Therefore the root is
+pre-layer verifier input/hidden-state wiring for tree verification, not GDN,
+RoPE position construction, full-attention, row indexing, or the canonical
+committer.
