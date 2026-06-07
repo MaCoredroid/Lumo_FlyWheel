@@ -74,6 +74,14 @@ The conv 1-ULP is a **value-dependent edge case**, so a fix that zeroes eager-B1
 3. **CUDA-graphed B=4, hooks OFF** — the deployment regime. **Constraint: the per-layer/sub-op capture HOOKS crash under CUDA-graph capture** (the FR12 Dynamo/graph-capture instrumentation issue, not the kernel) — so graphed-B4 drift is verified **capture-free**, via the served output: **bag-TV vs E5 (≤ floor) + accept/event (≥ E5)** = the e2e deliverable gate. (Per superset-by-math this is *determined* once drift=0 holds + the fix is batch-invariant — but it MUST be measured here, not assumed.)
 A fix is only GATE-A-complete when all three are clean (op-level 0.0 eager-B1, no regression eager-B4, e2e within-floor+superset graphed-B4). Reuse `reference_modelserver_host_memory_recovery` + ONE-GPU between regimes.
 
+## FIX ATTEMPT 1 — fp32 conv taps = WRONG DIRECTION (ruled out, monitor red-team)
+Matched-token comparison (positions equal [13–18], tree vs native):
+- **bf16-taps (current):** `conv1d_out` 0.000977 (1 elem) + `input_hidden` 0.0 (bit-exact thru L44) — 1-ULP close.
+- **fp32-taps:** `conv1d_out` 0.0625 (57k elems) + `input_hidden` 0.3125 (diverges globally) — far worse.
+⟹ native `causal_conv1d_update` is ≈ **bf16-taps**; fp32 taps **overshoot** (move the conv AWAY from native at every layer, compounding to 0.31). **fp32-taps reverted.**
+
+**Correct fix direction:** stay bf16-taps; the remaining 1-ULP at L45 is **NOT the tap dtype** — it's an op-order detail. **Read native `causal_conv1d_update` source** (exact tap multiply-accumulate ORDER + bias add + silu/activation rounding) and align the manual tree conv op-by-op to bit-exact — not guess-and-test dtypes (that burns GPU). codex redirected.
+
 ## Status
 GATE A is **NOT passed** and must not be bound as passing. `gateA_spine_ladder.json` final hidden/logits are still **empty** (`passed: False`) — the final-spine-logits-vs-native number (the losslessness-critical one) is not yet computed. If the divergence is real (A1), it will flip final-spine-logit argmaxes far beyond the E5 floor → the e2e bag-TV would be lossy → a genuine no-copy-GDN losslessness finding to fix at root (the mask/state-indexing leak), NOT to wave through. **Keep the 2-ULP floor separate**: that is the accepted irreducible no-copy grouping floor; THIS (0.25–1.875) is a distinct structural bug. Surfaced to the user; no self-declared pass. Fix once root cause is confirmed by the spine-only test + per-GDN-layer localization.
 
