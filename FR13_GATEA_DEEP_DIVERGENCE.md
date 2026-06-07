@@ -45,6 +45,13 @@ Captured `tree/native_layer_hidden.pt` hold every layer's `hidden`+`residual`. D
 
 **Onset is NOT branch-aligned (flips the leading hypothesis):** at L24 the largest diff is **pos 14 (spine row 1)**, which has NO branch in its conv window or scan ancestors (branches start at pos 15); root pos 13 diverges *later* (~L28). That is the OPPOSITE of branch-contamination ordering. So (A1) branch-into-spine contamination is now UNLIKELY. New leading hypothesis: a **layer-24+ GDN kernel/state issue** (tree `_tree_gdn_kernel` vs native FLA, or an `h0`/recurrent-state-bank column selection that is bit-exact for the first 23 GDN layers then diverges), amplified by the gate (~32× 1/rms, FR12) and compounded. The spine-only test should still diverge at L24/pos14 if branches are irrelevant (expected).
 
+## DEFINITIVE: the flip is in the GDN (linear_attention), NOT the attention layer
+First-diverging layer's `layer_type`, both runs (fp32 hidden vs native):
+- **Branched:** L22 linear=0.0, **L23 full_attention=0.0**, **L24 linear_attention=0.035 ← first nonzero**.
+- **Spine-only:** **L43 full_attention=0.0**, L44 linear_attention=0.0, **L45 linear_attention=0.0195 ← first nonzero**.
+
+In BOTH runs the full_attention layer immediately before the onset is **exactly 0.0**, and the first nonzero is a **linear_attention (GDN)** layer. Post-onset full_attn layers only carry/amplify an inherited divergence (their `first_nonzero_stage`=`input_hidden`, not their own attn op). ⟹ **The FA2 fork succeeded (full_attn byte-exact); the remaining divergence is the GDN tree-kernel.** The flip is value/state-dependent (branched = 1st GDN after full_attn; spine-only = 2nd) = a ~1-ULP rounding crossing that compounds via the recurrent state. **Fix belongs in the GDN tree-kernel, not the attention.** Sub-op localization (h0/state-load → conv → scan → gate → o_proj) at the onset layer in progress (codex).
+
 ## Status
 GATE A is **NOT passed** and must not be bound as passing. `gateA_spine_ladder.json` final hidden/logits are still **empty** (`passed: False`) — the final-spine-logits-vs-native number (the losslessness-critical one) is not yet computed. If the divergence is real (A1), it will flip final-spine-logit argmaxes far beyond the E5 floor → the e2e bag-TV would be lossy → a genuine no-copy-GDN losslessness finding to fix at root (the mask/state-indexing leak), NOT to wave through. **Keep the 2-ULP floor separate**: that is the accepted irreducible no-copy grouping floor; THIS (0.25–1.875) is a distinct structural bug. Surfaced to the user; no self-declared pass. Fix once root cause is confirmed by the spine-only test + per-GDN-layer localization.
 
