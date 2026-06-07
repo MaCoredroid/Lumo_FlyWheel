@@ -3215,8 +3215,10 @@ def _lumo_tree_canonical_multidraft_sample(
                 _LUMO_TREE_SAMPLE_DEBUG_FH
             except NameError:
                 _LUMO_TREE_SAMPLE_DEBUG_FH = open(
-                    _fr10_lo.environ.get('LUMO_TREE_SAMPLER_DEBUG_LOG',
-                                         '/logs/tree_sampler_debug.jsonl'),
+                    (
+                        _fr10_lo.environ.get('LUMO_TREE_SAMPLER_DEBUG_LOG')
+                        or '/logs/tree_sampler_debug.jsonl'
+                    ),
                     'a',
                     buffering=1,
                 )
@@ -3264,12 +3266,39 @@ def _lumo_tree_canonical_multidraft_sample(
                     _child_drafts,
                     rng=rng,
                 )
+                _target_prob_at_draft_tokens = [
+                    float(_target_probs[int(_tok)]) for _tok in _child_drafts
+                ]
+                _overlap_mass = float(sum(_target_prob_at_draft_tokens))
+                if _overlap_mass > 0.0:
+                    _selected_draft_token = int(_child_drafts[int(step.source_index)])
+                    _q_mix_token = float(sum(
+                        _prob / _overlap_mass
+                        for _tok, _prob in zip(
+                            _child_drafts, _target_prob_at_draft_tokens
+                        )
+                        if int(_tok) == int(_selected_draft_token)
+                    ))
+                    _canonical_accept_prob = (
+                        min(
+                            1.0,
+                            float(_target_probs[int(_selected_draft_token)])
+                            / _q_mix_token,
+                        )
+                        if _q_mix_token > 0.0 else 0.0
+                    )
+                else:
+                    _canonical_accept_prob = 0.0
             else:
                 step = _fr10_sample_step(
                     _target_probs,
                     [draft_probs_cpu[start + child] for child in children],
                     rng=rng,
                 )
+                _target_prob_at_draft_tokens = [
+                    float(_target_probs[int(_tok)]) for _tok in _child_drafts
+                ]
+                _canonical_accept_prob = None
             _selected_child = int(children[int(step.source_index)])
             step_trace_rows.append({
                 'step': int(_step),
@@ -3278,9 +3307,11 @@ def _lumo_tree_canonical_multidraft_sample(
                 'target_prob_row': int(_target_row),
                 'target_argmax': int(_fr10_np.argmax(_target_probs)),
                 'draft_token_ids': [int(x) for x in _child_drafts],
-                'target_prob_at_draft_token_ids': [
-                    float(_target_probs[int(_tok)]) for _tok in _child_drafts
-                ],
+                'target_prob_at_draft_token_ids': _target_prob_at_draft_tokens,
+                'canonical_accept_prob': (
+                    None if _canonical_accept_prob is None
+                    else float(_canonical_accept_prob)
+                ),
                 'selected_source_index': int(step.source_index),
                 'selected_child_node_id': int(_selected_child),
                 'selected_token_id': int(step.token_id),
@@ -3303,6 +3334,7 @@ def _lumo_tree_canonical_multidraft_sample(
         final_root = int(accepted_path[0]) if accepted_path else None
         sample_log_rows.append({
             'event': 'tree_sample_accept',
+            'policy': 'canonical_multidraft',
             'req_index': int(req_i),
             'node_count': int(node_count),
             'accepted_len': int(len(accepted_path)),
@@ -3516,8 +3548,7 @@ def _lumo_tree_canonical_multidraft_sample(
                     _LUMO_TREE_SAMPLER_DEBUG_FH = open(
                         _fr10_lo.environ.get(
                             "LUMO_TREE_SAMPLER_DEBUG_LOG",
-                            "/logs/tree_sampler_debug.jsonl",
-                        ),
+                        ) or "/logs/tree_sampler_debug.jsonl",
                         "a",
                         buffering=1,
                     )
@@ -3783,8 +3814,7 @@ def _lumo_tree_canonical_multidraft_sample(
                     _LUMO_TREE_SAMPLER_BRANCH_FH = open(
                         _fr10_lo.environ.get(
                             "LUMO_TREE_SAMPLER_DEBUG_LOG",
-                            "/logs/tree_sampler_debug.jsonl",
-                        ),
+                        ) or "/logs/tree_sampler_debug.jsonl",
                         "a",
                         buffering=1,
                     )
@@ -3952,8 +3982,7 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                     _LUMO_TREE_META_DEBUG_FH = open(
                         _fr10_lo.environ.get(
                             "LUMO_TREE_SAMPLER_DEBUG_LOG",
-                            "/logs/tree_sampler_debug.jsonl",
-                        ),
+                        ) or "/logs/tree_sampler_debug.jsonl",
                         "a",
                         buffering=1,
                     )

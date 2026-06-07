@@ -27,3 +27,25 @@ Interpretation:
 Eager B=1 branches-on reproduces the low-accept regime. It is not an exclusively
 B=4/cuda-graph-captured failure. The next eager-only decomposition is
 spine-only branches-off vs native E5.
+
+## Spine only, tree eager B=1
+
+Artifact:
+`output/fr13_regime_decompose_20260607T021451Z/tree_spine_only_eager_b1_swe4_spp4_mt64_fixed2.json`
+
+Result:
+- samples per prompt: `4`
+- records: `16`
+- accepted/event: `0.8275862068965517`
+- accepted/draft-token: `0.16551724137931034`
+- warm decode TPS: `4.121595655909422`
+- spec accepted tokens: `408`
+- spec draft events: `493`
+- spec draft tokens: `2465`
+
+Interpretation:
+The low-accept eager regime reproduces with branches disabled. Branch topology is
+not required. The decisive remaining eager check is whether the branchless tree
+committer incorrectly dispatches through the greedy tree-LCP path at sampled
+temperature, or whether the canonical stochastic path fires but miscounts or
+mis-hands off accepted length.
