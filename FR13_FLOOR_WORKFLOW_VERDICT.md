@@ -28,6 +28,9 @@ The refuter (lens 3) actually CONFIRMED the row-0 artifact and argued the call15
 ## Recommended gate + verdict (synthesis)
 `recommended_gate = within-E5-floor / argmax-lossless`; `recommended_alternative = none-accept-floor`. 1-ULP attn_out (0.0039 max) ≪ E5 self-noise floor ~0.059; SpecInfer Thm 4.2 / Multi-Draft 2410.18234 Thm 1 give proven distributional equivalence for temp>0 multi-candidate (our temp 0.6). **CAVEAT (non-negotiable): this is a per-layer attn_out observation, NOT the e2e gate.** The verdict belongs to the e2e measurement: bag-TV vs E5 within E5's self-noise floor + superset accept/event ≥ E5. **Explicitly NOT a self-declared pass** — brought to the user.
 
+## USER DECISION (2026-06-07): ACCEPT THE FLOOR → e2e vs E5
+The user set the verify-path gate to **within-E5-floor / argmax-lossless** (not literal-0.0). Rationale accepted: the residual is 2 single-bf16-ULP elements in ~1M (14/16 calls whole-tree byte-exact), proven an irreducible no-copy MMA rounding event 15× below the E5 floor, no impossibility theorem; literal-0.0-everywhere needs a banned per-row-gather copy. Spine-contiguous NOT pursued (buys little; spine already 15/16 byte-exact). **Proceed to the e2e deliverable measurement below.** codex_fr14 dispatched.
+
 ## ONE-GPU e2e plan (synthesis, codex to execute on the user's go)
 1. Precondition: forked-FA2 server at fe21cb73(+); re-confirm Gate-2 byte-exact + CUDA-graph FULL capture at B=4 (no PIECEWISE) with hooks OFF before any timed run.
 2. Baseline reuse: E5 native MTP-5 already at `output/fr10_native_mtp5_same8_20260604T210257Z/quick_native_mtp5_same8.json` (accepted/event 3.076, B=4, temp0.6/top_p0.95, same8, 4 samples). Fixed superset bar; relaunch native only if a fresh paired run is wanted (single GPU, prefix-cache reset + empty_cache + nvidia-smi between arms).
