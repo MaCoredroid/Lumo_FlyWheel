@@ -359,8 +359,12 @@ def _patch_gdn_linear() -> bool:
             "        \"FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX\",\n"
             "        \"language_model.model.layers.0.linear_attn\",\n"
             "    )\n"
-            "    if want_prefix and prefix != want_prefix:\n"
-            "        return None\n"
+            "    if want_prefix and want_prefix != \"*\":\n"
+            "        _fr12_wanted = {\n"
+            "            _x.strip() for _x in want_prefix.split(\",\") if _x.strip()\n"
+            "        }\n"
+            "        if prefix not in _fr12_wanted:\n"
+            "            return None\n"
             "    active = _FR12_SUBKERNEL_CAPTURE_ACTIVE.get(prefix)\n"
             "    if active is not None:\n"
             "        return active\n"
@@ -1788,6 +1792,42 @@ def _patch_gdn_linear() -> bool:
                     start = fr10_b * tree_n
                     end = start + tree_n
                     tree_state = tree_state_all[fr10_b]
+                    try:
+                        _fr12_capture_h0_col = torch.clamp(
+                            _fr10_accepted_lens_tensor[
+                                : attn_metadata.num_spec_decodes
+                            ].to(torch.long)
+                            - 1,
+                            min=0,
+                            max=int(spec_state_indices_tensor.size(-1)) - 1,
+                        ).view(-1, 1)
+                        _fr12_capture_h0_rows = spec_state_indices_tensor[
+                            : attn_metadata.num_spec_decodes
+                        ].gather(1, _fr12_capture_h0_col).reshape(-1).to(torch.long)
+                        _fr12_subkernel_capture_tensor(
+                            self,
+                            "h0_state_in",
+                            torch.index_select(ssm_state, 0, _fr12_capture_h0_rows),
+                            create=False,
+                            extra={
+                                "num_actual_tokens": int(num_actual_tokens),
+                                "h0_rows": [
+                                    int(_x)
+                                    for _x in _fr12_capture_h0_rows.detach()
+                                    .cpu()
+                                    .tolist()
+                                ],
+                                "h0_cols": [
+                                    int(_x)
+                                    for _x in _fr12_capture_h0_col.reshape(-1)
+                                    .detach()
+                                    .cpu()
+                                    .tolist()
+                                ],
+                            },
+                        )
+                    except Exception as _fr12_h0_cap_exc:
+                        logger.warning("FR12 h0 capture failed: %s", _fr12_h0_cap_exc)
                     _fr10_capture_scan_payload = (
                         os.environ.get("FR10_TREE_GDN_CAPTURE_PAYLOAD")
                         and not globals().get("_FR10_TREE_GDN_CAPTURE_DONE", False)
@@ -2537,6 +2577,52 @@ def _patch_gdn_linear() -> bool:
                 ):
                     raise RuntimeError(
                         "FR10 tree scan disengaged: eligible_tree_spec_row_flat_fallback"
+                    )
+                try:
+                    if num_accepted_tokens is None:
+                        _fr12_native_h0_col = torch.zeros(
+                            (int(attn_metadata.num_spec_decodes), 1),
+                            dtype=torch.long,
+                            device=spec_state_indices_tensor.device,
+                        )
+                    else:
+                        _fr12_native_h0_col = torch.clamp(
+                            num_accepted_tokens[
+                                : attn_metadata.num_spec_decodes
+                            ].to(torch.long)
+                            - 1,
+                            min=0,
+                            max=int(spec_state_indices_tensor.size(-1)) - 1,
+                        ).view(-1, 1)
+                    _fr12_native_h0_rows = spec_state_indices_tensor[
+                        : attn_metadata.num_spec_decodes
+                    ].gather(1, _fr12_native_h0_col).reshape(-1).to(torch.long)
+                    _fr12_subkernel_capture_tensor(
+                        self,
+                        "h0_state_in",
+                        torch.index_select(ssm_state, 0, _fr12_native_h0_rows),
+                        create=False,
+                        extra={
+                            "num_actual_tokens": int(num_actual_tokens),
+                            "h0_rows": [
+                                int(_x)
+                                for _x in _fr12_native_h0_rows.detach()
+                                .cpu()
+                                .tolist()
+                            ],
+                            "h0_cols": [
+                                int(_x)
+                                for _x in _fr12_native_h0_col.reshape(-1)
+                                .detach()
+                                .cpu()
+                                .tolist()
+                            ],
+                        },
+                    )
+                except Exception as _fr12_native_h0_cap_exc:
+                    logger.warning(
+                        "FR12 native h0 capture failed: %s",
+                        _fr12_native_h0_cap_exc,
                     )
                 core_attn_out_spec, last_recurrent_state = (
                     fused_sigmoid_gating_delta_rule_update(
