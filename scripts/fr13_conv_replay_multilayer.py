@@ -176,6 +176,32 @@ def _target_rows(
     return selected_tree, native_target, mapped, missing
 
 
+def _detail_alignment(
+    tree_detail: dict[str, Any],
+    native_detail: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    pairs = {
+        "pre_conv_path0": ("pre_conv_path0", "pre_conv_rows"),
+        "window_path0": ("window_path0", "window"),
+        "tap_products_bf16_path0": ("tap_products_bf16_path0", "tap_products_bf16"),
+        "tap_products_fp32_path0": ("tap_products_fp32_path0", "tap_products_fp32"),
+    }
+    out = {}
+    for name, (tree_key, native_key) in pairs.items():
+        tree_value = tree_detail.get(tree_key)
+        native_value = native_detail.get(native_key)
+        if tree_value is None or native_value is None:
+            continue
+        rows = min(int(tree_value.shape[0]), int(native_value.shape[0]))
+        out[name] = {
+            **_metrics(tree_value[:rows], native_value[:rows]),
+            "first_mismatch": _first_mismatch(
+                tree_value[:rows], native_value[:rows]
+            ),
+        }
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tree", nargs="+", type=Path, required=True)
@@ -255,6 +281,7 @@ def main() -> int:
                 },
                 "conv_weights": weight_stats,
                 "conv_bias": bias_stats,
+                "input_alignment": _detail_alignment(tree_detail, native_detail),
                 "best_variant": min(
                     variant_rows,
                     key=lambda row: (row["max_abs"], row["mean_abs"], row["nonzero"]),
