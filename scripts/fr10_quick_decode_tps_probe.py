@@ -167,6 +167,8 @@ def _run_requests(
                         "sample_index": next_sample + int(choice["index"]),
                         "local_choice_index": int(choice["index"]),
                         "finish_reason": choice.get("finish_reason"),
+                        "token_ids": [int(x) for x in token_ids],
+                        "text": choice.get("text", ""),
                         "token_count": len(token_ids),
                         "request_elapsed_s": req_elapsed,
                     }
@@ -353,6 +355,7 @@ def main() -> int:
         "modes": {},
     }
     all_request_rows: list[dict[str, Any]] = []
+    records_by_mode: dict[str, list[dict[str, Any]]] = {}
     for mode in args.modes:
         reset_error = _reset_prefix_cache(args.endpoint)
         if args.warmup_samples:
@@ -383,6 +386,7 @@ def main() -> int:
             seed=args.seed,
             timeout=args.request_timeout,
         )
+        records_by_mode[mode] = records
         all_request_rows.extend(request_rows)
         after = _scrape_metrics(args.endpoint)
         result["modes"][mode] = _summarize_mode(
@@ -393,6 +397,12 @@ def main() -> int:
             metric_delta=_delta(after, before),
             reset_error=reset_error,
         )
+    if len(args.modes) == 1:
+        mode = args.modes[0]
+        result["label"] = f"fr10_quick_{mode}"
+        result["mode"] = mode
+        result["records"] = records_by_mode[mode]
+        result["summary"] = result["modes"][mode]
     if args.require_tree_engagement:
         if args.tree_sampler_debug_log is None or args.tree_accept_log is None:
             raise RuntimeError(
