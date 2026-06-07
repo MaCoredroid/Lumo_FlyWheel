@@ -81,3 +81,23 @@ the canonical stochastic branch. Branches-on also uses the canonical tree sample
 event path. The remaining eager failure is therefore inside canonical
 tree-commit accounting/output handoff, or in an unmeasured alignment difference
 between tree and native E5 around the committed/recovered token stream.
+
+## Native E5, eager B=1
+
+Artifact:
+`output/fr13_regime_decompose_20260607T021451Z/native_e5_eager_b1_swe4_spp4_mt64.json`
+
+Result:
+- samples per prompt: `4`
+- records: `16`
+- accepted/event: `2.7454545454545456`
+- accepted/draft-token: `0.5490909090909091`
+- warm decode TPS: `15.051406888534899`
+- spec accepted tokens: `755`
+- spec draft events: `275`
+- spec draft tokens: `1375`
+
+Interpretation:
+The same eager B=1 prompts/seed are high-accept under native E5, while tree
+spine-only is low-accept. The eager failure is tree-commit/path-specific, not a
+prompt/sample-size artifact.
