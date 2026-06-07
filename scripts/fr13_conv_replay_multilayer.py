@@ -202,11 +202,36 @@ def _detail_alignment(
     return out
 
 
+def _is_clean_input(
+    alignment: dict[str, dict[str, Any]],
+    *,
+    atol: float,
+) -> bool:
+    pre_conv = alignment.get("pre_conv_path0")
+    if pre_conv is None:
+        return False
+    return float(pre_conv.get("max_abs", float("inf"))) <= atol
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tree", nargs="+", type=Path, required=True)
     parser.add_argument("--native", nargs="+", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument(
+        "--require-clean-input",
+        action="store_true",
+        help=(
+            "Only tune variants on layers whose captured tree/native pre_conv "
+            "inputs are identical within --clean-input-atol."
+        ),
+    )
+    parser.add_argument(
+        "--clean-input-atol",
+        type=float,
+        default=0.0,
+        help="Allowed max_abs for pre_conv_path0 when --require-clean-input is set.",
+    )
     args = parser.parse_args()
 
     tree_layers = _by_layer(args.tree)
@@ -225,6 +250,7 @@ def main() -> int:
     ]
 
     layer_reports = []
+    skipped_layers = []
     aggregate: dict[str, list[torch.Tensor]] = {
         json.dumps(v, sort_keys=True): [] for v in variants
     }
@@ -235,6 +261,10 @@ def main() -> int:
         native_payload = native_layers[layer]
         tree_detail = _detail(tree_payload, "tree_conv_detail")
         native_detail = _detail(native_payload, "native_conv_detail")
+        input_alignment = _detail_alignment(tree_detail, native_detail)
+        clean_input = _is_clean_input(
+            input_alignment, atol=float(args.clean_input_atol)
+        )
         selected_tree, native_target, mapped, missing = _target_rows(
             tree_payload, native_payload
         )
@@ -242,14 +272,12 @@ def main() -> int:
         target_pos_tensor = torch.tensor(target_positions, dtype=torch.long)
         selected_target_tree = selected_tree.index_select(0, target_pos_tensor)
         baseline = _metrics(selected_target_tree, native_target)
-        aggregate_targets.append(native_target)
 
         variant_rows = []
         for variant in variants:
             key = json.dumps(variant, sort_keys=True)
             out = _variant_output(tree_detail, **variant)
             out_target = out.index_select(0, target_pos_tensor)
-            aggregate[key].append(out_target)
             stats = _metrics(out_target, native_target)
             variant_rows.append(
                 {
@@ -268,26 +296,46 @@ def main() -> int:
         if tree_detail.get("conv_bias") is not None and native_detail.get("conv_bias") is not None:
             bias_stats = _metrics(tree_detail["conv_bias"], native_detail["conv_bias"])
 
+        report = {
+            "layer": int(layer),
+            "tree_capture": tree_payload["_path"],
+            "native_capture": native_payload["_path"],
+            "target_mapped_rows": mapped,
+            "missing_target_rows": missing,
+            "clean_input": bool(clean_input),
+            "captured_tree_vs_native": {
+                **baseline,
+                "first_mismatch": _first_mismatch(selected_target_tree, native_target),
+            },
+            "conv_weights": weight_stats,
+            "conv_bias": bias_stats,
+            "input_alignment": input_alignment,
+            "best_variant": min(
+                variant_rows,
+                key=lambda row: (row["max_abs"], row["mean_abs"], row["nonzero"]),
+            ),
+            "variants": variant_rows,
+        }
+        if args.require_clean_input and not clean_input:
+            skipped_layers.append(
+                {
+                    "layer": int(layer),
+                    "tree_capture": tree_payload["_path"],
+                    "native_capture": native_payload["_path"],
+                    "reason": "pre_conv_path0_not_clean",
+                    "input_alignment": input_alignment,
+                }
+            )
+        else:
+            aggregate_targets.append(native_target)
+            for variant in variants:
+                key = json.dumps(variant, sort_keys=True)
+                out = _variant_output(tree_detail, **variant)
+                out_target = out.index_select(0, target_pos_tensor)
+                aggregate[key].append(out_target)
+
         layer_reports.append(
-            {
-                "layer": int(layer),
-                "tree_capture": tree_payload["_path"],
-                "native_capture": native_payload["_path"],
-                "target_mapped_rows": mapped,
-                "missing_target_rows": missing,
-                "captured_tree_vs_native": {
-                    **baseline,
-                    "first_mismatch": _first_mismatch(selected_target_tree, native_target),
-                },
-                "conv_weights": weight_stats,
-                "conv_bias": bias_stats,
-                "input_alignment": _detail_alignment(tree_detail, native_detail),
-                "best_variant": min(
-                    variant_rows,
-                    key=lambda row: (row["max_abs"], row["mean_abs"], row["nonzero"]),
-                ),
-                "variants": variant_rows,
-            }
+            report
         )
 
     aggregate_rows = []
@@ -312,6 +360,14 @@ def main() -> int:
         "tree_captures": [str(p) for p in args.tree],
         "native_captures": [str(p) for p in args.native],
         "targetable_layers": sorted(set(tree_layers) & set(native_layers)),
+        "require_clean_input": bool(args.require_clean_input),
+        "clean_input_atol": float(args.clean_input_atol),
+        "aggregate_layers": [
+            int(row["layer"])
+            for row in layer_reports
+            if not args.require_clean_input or bool(row.get("clean_input", False))
+        ],
+        "skipped_layers": skipped_layers,
         "aggregate_best_variant": None
         if not aggregate_rows
         else min(
@@ -330,12 +386,15 @@ def main() -> int:
                 "layers": [
                     {
                         "layer": row["layer"],
+                        "clean_input": row["clean_input"],
+                        "input_alignment": row["input_alignment"],
                         "captured_tree_vs_native": row["captured_tree_vs_native"],
                         "best_variant": row["best_variant"],
                         "missing_target_rows": row["missing_target_rows"],
                     }
                     for row in layer_reports
                 ],
+                "skipped_layers": payload["skipped_layers"],
             },
             indent=2,
             sort_keys=True,

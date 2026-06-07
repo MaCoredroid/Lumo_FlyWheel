@@ -12,7 +12,15 @@ Capture: `output/fr13_gdn_conv_multilayer_capture_20260607T193044Z`
 - Captured rows: spine path plus first branch row (`selected_nodes=[0,1,2,4,6,8,3]`).
 - Replay output: `conv_replay_multilayer.json`.
 
-## Result
+## Superseded Result
+
+This multilayer result is contaminated for kernel tuning. Layers 24, 45, and
+62 have nonzero `pre_conv_path0`, so their `conv1d_out` diffs include upstream
+tree/native drift and must not be used to tune causal-conv arithmetic. The
+replay tool now supports `--require-clean-input` to exclude these layers from
+aggregate variant selection.
+
+## Original Result
 
 Offline replay did not produce a valid conv fix. The failure is not isolated to the causal-conv arithmetic: for layers 24, 45, and 62 the tree and native spine rows already differ at `pre_conv_path0` and `window_path0`, before the manual conv op is applied.
 
