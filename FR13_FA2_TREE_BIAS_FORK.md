@@ -39,3 +39,9 @@ After EVERY new kernel build OR wiring change, run the FULL top-down divergence 
 1. the targeted stage moved toward 0.0 as intended;
 2. **NO previously-0.0 stage REGRESSED to nonzero** — input stage = 0.0, GDN layers = 0.0, and every already-fixed full-attn layer STAYS 0.0.
 Cover ALL layers, not just the one you changed — a kernel/wiring change can silently regress an unrelated stage. Run this BEFORE any e2e accept/lossless measurement. If anything regressed, fix it before proceeding. The top-down drift graph is examined EVERY run, not occasionally.
+
+## Standing rule (user): TWO strict drift gates per commit, verifier-only, bound to the commit
+All our changes (forked FA2 + any wiring) MUST be **VERIFIER-ONLY** — they must NOT change regular (non-spec) decoding. Every commit (kernel/wiring change) is **bound to TWO STRICT top-down ladder results**, recorded in a COMMITTED tracked file `FR13_LADDER_LOG.md` (commit hash + config=strict + the per-layer table), committed WITH the change — so `git log` + that file = a per-commit audit trail ("at this commit we ran, we got this").
+1. **VERIFY-PATH gate** — the tree verify (with tree-bias) byte-exact to the native-FA2-on-path oracle: input → every full_attn layer attn_out → final_norm → final logits = **0.0**, spine AND branch.
+2. **REGULAR-DECODE gate (the verifier-only proof)** — a plain decode (no tree/spec, no bias) with the forked FA2 byte-exact to the **ORIGINAL pristine/stock FA2** (or unpatched model): top-down ladder = **0.0 at every layer**. This proves our changes do NOT touch regular decode.
+CRITICAL: a `FR10_ALLOW_LINEAR_FALLBACK` run is a DIAGNOSTIC ONLY (GDN may be linear) — its numbers are NEVER a valid ladder result and must NEVER be bound to a commit. Both gates must be STRICT + 0.0 before a commit is recorded as passing.
