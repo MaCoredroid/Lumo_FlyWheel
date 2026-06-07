@@ -6457,6 +6457,91 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
         QWEN3_5_PATH.write_text(text)
         did_patch = True
 
+    text = QWEN3_5_PATH.read_text()
+    final_logit_sentinel = "# FR13_FINAL_LOGIT_CAPTURE"
+    if final_logit_sentinel not in text:
+        if "import os\n" not in text or "from pathlib import Path\n" not in text:
+            text = text.replace(
+                "import typing\n",
+                "import typing\nimport os\nfrom pathlib import Path\n",
+                1,
+            )
+        final_logit_block = """        # FR13_FINAL_LOGIT_CAPTURE: dump all selected rows scored by the LM head.
+        try:
+            _fr13_path = os.environ.get("FR13_FINAL_LOGIT_CAPTURE")
+            if _fr13_path and logits is not None:
+                _fr13_desired = os.environ.get("FR13_FINAL_LOGIT_CAPTURE_NUM_TOKENS")
+                if _fr13_desired:
+                    _fr13_desired_counts = {
+                        int(_x.strip())
+                        for _x in _fr13_desired.split(",")
+                        if _x.strip()
+                    }
+                else:
+                    _fr13_desired_counts = set()
+                if (
+                    not _fr13_desired_counts
+                    or int(hidden_states.shape[0]) in _fr13_desired_counts
+                ):
+                    _fr13_seen = int(globals().get("_FR13_FINAL_LOGIT_CAPTURE_SEEN", 0))
+                    _fr13_skip = int(os.environ.get("FR13_FINAL_LOGIT_CAPTURE_SKIP", "0"))
+                    _fr13_limit = int(os.environ.get("FR13_FINAL_LOGIT_CAPTURE_LIMIT", "1"))
+                    _fr13_saved = int(globals().get("_FR13_FINAL_LOGIT_CAPTURE_SAVED", 0))
+                    globals()["_FR13_FINAL_LOGIT_CAPTURE_SEEN"] = _fr13_seen + 1
+                    if _fr13_seen >= _fr13_skip and _fr13_saved < _fr13_limit:
+                        _fr13_rows_env = os.environ.get("FR13_FINAL_LOGIT_CAPTURE_ROWS", "")
+                        if _fr13_rows_env:
+                            _fr13_rows = [
+                                int(_x.strip())
+                                for _x in _fr13_rows_env.split(",")
+                                if _x.strip()
+                            ]
+                        else:
+                            _fr13_rows = list(range(int(logits.shape[0])))
+                        _fr13_rows = [
+                            _x for _x in _fr13_rows
+                            if 0 <= _x < int(logits.shape[0])
+                        ]
+                        if _fr13_rows:
+                            _fr13_idx = torch.tensor(
+                                _fr13_rows, dtype=torch.long, device=logits.device
+                            )
+                            _fr13_out = Path(str(_fr13_path))
+                            _fr13_out.parent.mkdir(parents=True, exist_ok=True)
+                            _fr13_call_out = _fr13_out.with_name(
+                                _fr13_out.stem
+                                + ".call"
+                                + str(int(_fr13_saved))
+                                + _fr13_out.suffix
+                            )
+                            _fr13_payload = {
+                                "schema": "fr13.final_logit_capture.v1",
+                                "source": "Qwen3_5ForCausalLMBase.compute_logits",
+                                "capture_call_index": int(_fr13_seen),
+                                "capture_saved_index": int(_fr13_saved),
+                                "num_tokens": int(hidden_states.shape[0]),
+                                "rows": _fr13_rows,
+                                "logits": logits.index_select(0, _fr13_idx)
+                                .detach()
+                                .to(torch.float32)
+                                .cpu(),
+                            }
+                            torch.save(_fr13_payload, _fr13_call_out)
+                            if _fr13_saved == 0:
+                                torch.save(_fr13_payload, _fr13_out)
+                            globals()["_FR13_FINAL_LOGIT_CAPTURE_SAVED"] = (
+                                _fr13_saved + 1
+                            )
+        except Exception as _fr13_exc:
+            logger.warning("FR13 final logit capture failed: %s", _fr13_exc)
+"""
+        return_anchor = "        return logits\n"
+        if return_anchor not in text:
+            raise RuntimeError("qwen3_5 final logit return anchor not found")
+        text = text.replace(return_anchor, final_logit_block + return_anchor, 1)
+        QWEN3_5_PATH.write_text(text)
+        did_patch = True
+
     return did_patch
 
 
