@@ -22,5 +22,19 @@ The workflow checked `tree_attn_op` (forked FA2) vs an FA2-on-path **oracle buil
 
 **DECISIVE TEST (directed to codex):** run **spine-only (branches OFF / spines=1)** tree vs native. If the deep divergence **vanishes** → (A) shared-state contamination. If it **persists** → (B) alignment/capture. Also re-verify the deep-layer native row mapping.
 
+## Code read (monitor, alongside codex) — what the drift data + source say
+**Positions confirm the contamination geometry.** tree event positions = `[13,14,15,15,16,16,17,17,18,18]` (spine rows 0,1,2,4,6,8 at pos 13–18; branch rows 3,5,7,9 duplicate-positioned at 15/16/17/18, interleaved *between* spine tokens in sequence order). native = `[13,14,15,16,17,18]` (clean chain). So a spine token's GDN conv-window / recurrent-scan neighbors include the interleaved branch token **unless tree-masked**.
+
+**Both GDN cross-token ops ARE tree-masked (live source):**
+- Scan: `fr10_gdn_tree_kernel.py:_tree_gdn_kernel` (L278–289) replays each node's ancestor path gated by `visible_mask[i,j]` — "keeps spine results independent of sibling rows." Spine scan excludes branches by construction.
+- Conv: `fr10_phase4_patch_vllm_tree_gdn.py` `use_fr10_tree_conv` + `fr10_tree_conv_source_indices` (source-by-width ancestor indices) — tree-aware conv windows.
+
+**Therefore:** simple branch→spine contamination is *guarded*, and the guard holds through layer 23 (= 0.0). The divergence **magnitude (0.25→1.875, not ULP-scale)** rules out the **2-ULP grouping floor** (0.0039, a separate, real, accepted phenomenon — do NOT conflate) and rules out a small kernel fp-order diff (~1e-7). 0.25–1.875 is **structural**: the spine genuinely sees different state/inputs at deep layers. Refined hypotheses:
+- **(A1)** a deep-layer **leak in the tree mask / state-bank (`h0`) indexing** — the conv/scan isolation or the per-layer recurrent-state-column selection (`h0_indices`/`h0_num_accepted_tokens`) goes wrong past a certain depth/layer → spine state picks up branch/foreign contribution. REAL, fixable.
+- **(A2)** tree-GDN kernel (`_tree_gdn_kernel` ancestor-replay) vs native FLA chunked kernel diverge for the spine — but magnitude argues against (fp-order is ULP-scale, not 1.875).
+- **(B)** deep-layer row-alignment/capture artifact in the reducer (same mapping is correct early, so weaker).
+
+**DECISIVE TEST (codex running, `fr13-spine-tree` server):** spine-only (branches OFF) tree vs native. Vanishes ⟹ branch-driven (A1). Persists ⟹ kernel (A2) or alignment (B). Next: per-GDN-layer localization (which of layers 24/25/26 first diverges) to pin the exact op.
+
 ## Status
-GATE A is **NOT passed** and must not be bound as passing. `gateA_spine_ladder.json` final hidden/logits are still **empty** (`passed: False`) — the final-spine-logits-vs-native number (the losslessness-critical one) is not yet computed. If (A) holds, the deep-layer divergence will flip final-spine-logit argmaxes beyond the E5 floor → the e2e bag-TV would be lossy. Surfaced to the user; no self-declared pass.
+GATE A is **NOT passed** and must not be bound as passing. `gateA_spine_ladder.json` final hidden/logits are still **empty** (`passed: False`) — the final-spine-logits-vs-native number (the losslessness-critical one) is not yet computed. If the divergence is real (A1), it will flip final-spine-logit argmaxes far beyond the E5 floor → the e2e bag-TV would be lossy → a genuine no-copy-GDN losslessness finding to fix at root (the mask/state-indexing leak), NOT to wave through. **Keep the 2-ULP floor separate**: that is the accepted irreducible no-copy grouping floor; THIS (0.25–1.875) is a distinct structural bug. Surfaced to the user; no self-declared pass. Fix once root cause is confirmed by the spine-only test + per-GDN-layer localization.
