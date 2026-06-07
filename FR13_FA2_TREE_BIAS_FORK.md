@@ -29,3 +29,7 @@ Before building: confirm from the multi-layer capture that **q/k/v (post-norm/pr
 ## Constraints
 - ONE GPU; relaunch crashed captures WITHOUT --rm; empty_cache; kill leftover containers. Read LIVE source before patching. Commit+push every real step to main. NO copy/dense/re-stream; the forked FA2 computing the tree IS our kernel (not a splice — it runs in the real path, byte-exactness verified against the native-FA2 oracle, not by calling native on the spine). Ask before any close/pass-fail.
 - Speed note: on bandwidth-bound GB10 the attention is a small fraction of the ~27GB/forward weight stream; FA2 ≥ Triton; the fork is ~neutral on per-forward time. The speed win is accept/event (superset), which byte-exactness unlocks.
+
+## Kernel requirements (user, non-negotiable)
+- The forked FA2 kernel must take a **GENERAL tree** (arbitrary topology, expressed via the additive ancestry bias: `bias[q,k]=0` if k is an ancestor of q [prefix + self + path-to-root], `-inf` otherwise) and **verify the WHOLE tree (spine + ALL branches) in ONE kernel call** — NOT a per-row spine/branch backend split, NOT per-row rerouting. One general kernel, one pass, any tree.
+- **NO reward-hacking:** do NOT copy native output, do NOT reroute any row to a native call, NO splice. The forked kernel genuinely computes the tree attention. Byte-exactness is verified against the **native-FA2-on-path oracle with the splice OFF** (our forked kernel computing), per the standing reward-hacking rule. A green number that comes from calling native on the spine is rejected.
