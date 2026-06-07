@@ -4400,6 +4400,114 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_preprocess_input_capture() -> bool:
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_PREPROCESS_INPUT_CAPTURE"
+    if sentinel in text:
+        return False
+
+    anchor = """            inputs_embeds_scheduled = self.model.embed_input_ids(
+                self.input_ids.gpu[:num_scheduled_tokens],
+                multimodal_embeddings=mm_embeds,
+                is_multimodal=is_mm_embed,
+            )
+
+            # TODO(woosuk): Avoid the copy. Optimize.
+            self.inputs_embeds.gpu[:num_scheduled_tokens].copy_(inputs_embeds_scheduled)
+
+            input_ids, inputs_embeds = self._prepare_mm_inputs(num_input_tokens)
+"""
+    replacement = anchor + """            # FR13_PREPROCESS_INPUT_CAPTURE: dump the exact target verifier
+            # token ids and embeddings built in the runner before Qwen receives
+            # inputs_embeds. This is diagnostic-only and disabled under graphs.
+            try:
+                _fr13_os = __import__("os")
+                _fr13_pre_path = _fr13_os.environ.get("FR13_PREPROCESS_INPUT_CAPTURE")
+                if _fr13_pre_path:
+                    _fr13_pre_capture_ok = True
+                    try:
+                        _fr13_pre_capture_ok = not torch.cuda.is_current_stream_capturing()
+                    except Exception:
+                        _fr13_pre_capture_ok = False
+                    if _fr13_pre_capture_ok:
+                        _fr13_seen = int(globals().get("_FR13_PREPROCESS_INPUT_CAPTURE_SEEN", 0))
+                        _fr13_skip = int(_fr13_os.environ.get("FR13_PREPROCESS_INPUT_CAPTURE_SKIP", "0"))
+                        _fr13_limit = int(_fr13_os.environ.get("FR13_PREPROCESS_INPUT_CAPTURE_LIMIT", "1"))
+                        _fr13_saved = int(globals().get("_FR13_PREPROCESS_INPUT_CAPTURE_SAVED", 0))
+                        globals()["_FR13_PREPROCESS_INPUT_CAPTURE_SEEN"] = _fr13_seen + 1
+                        _fr13_desired = _fr13_os.environ.get("FR13_PREPROCESS_INPUT_CAPTURE_NUM_TOKENS")
+                        if _fr13_desired:
+                            _fr13_counts = {
+                                int(_x.strip()) for _x in _fr13_desired.split(",") if _x.strip()
+                            }
+                            if int(num_scheduled_tokens) not in _fr13_counts:
+                                _fr13_pre_capture_ok = False
+                        if _fr13_seen < _fr13_skip or _fr13_saved >= _fr13_limit:
+                            _fr13_pre_capture_ok = False
+                        if _fr13_pre_capture_ok:
+                            _fr13_root, _fr13_ext = _fr13_os.path.splitext(_fr13_pre_path)
+                            _fr13_call_path = (
+                                _fr13_root + ".call" + str(_fr13_saved) + (_fr13_ext or ".pt")
+                            )
+                            _fr13_parent = _fr13_os.path.dirname(_fr13_call_path)
+                            if _fr13_parent:
+                                _fr13_os.makedirs(_fr13_parent, exist_ok=True)
+                            _fr13_payload = {
+                                "schema": "fr13.preprocess_input_capture.v1",
+                                "path": _fr13_pre_path,
+                                "call_path": _fr13_call_path,
+                                "capture_call_index": int(_fr13_seen),
+                                "capture_saved_index": int(_fr13_saved),
+                                "num_scheduled_tokens": int(num_scheduled_tokens),
+                                "num_input_tokens": int(num_input_tokens),
+                                "input_ids_scheduled": (
+                                    self.input_ids.gpu[:num_scheduled_tokens]
+                                    .detach()
+                                    .cpu()
+                                ),
+                                "inputs_embeds_scheduled": (
+                                    inputs_embeds_scheduled[:num_scheduled_tokens]
+                                    .detach()
+                                    .to(torch.float32)
+                                    .cpu()
+                                ),
+                                "inputs_embeds_buffer": (
+                                    self.inputs_embeds.gpu[:num_input_tokens]
+                                    .detach()
+                                    .to(torch.float32)
+                                    .cpu()
+                                ),
+                                "model_input_ids_is_none": input_ids is None,
+                                "model_inputs_embeds": (
+                                    None
+                                    if inputs_embeds is None
+                                    else inputs_embeds[:num_input_tokens]
+                                    .detach()
+                                    .to(torch.float32)
+                                    .cpu()
+                                ),
+                                "is_mm_embed": (
+                                    None
+                                    if is_mm_embed is None
+                                    else is_mm_embed.detach().cpu()
+                                ),
+                                "mm_embeds_count": 0 if mm_embeds is None else len(mm_embeds),
+                            }
+                            torch.save(_fr13_payload, _fr13_call_path)
+                            if _fr13_saved == 0:
+                                torch.save(_fr13_payload, _fr13_pre_path)
+                            globals()["_FR13_PREPROCESS_INPUT_CAPTURE_SAVED"] = _fr13_saved + 1
+            except Exception as _fr13_pre_exc:
+                logger.warning("FR13 preprocess input capture failed: %s", _fr13_pre_exc)
+"""
+    if anchor not in text:
+        raise RuntimeError("FR13 preprocess input capture anchor not found")
+    text = text.replace(anchor, replacement, 1)
+    text = sentinel + "\n" + text
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_decode_mode_globals() -> bool:
     text = GPU_MODEL_RUNNER_PATH.read_text()
     sentinel = "# FR10_DECODE_MODE_GLOBALS"
@@ -5885,7 +5993,7 @@ def _fr10_root_hidden_capture_finish(payload, hidden_states):
     if layer_sentinel not in text:
         helper_anchor = "def _fr10_root_hidden_capture_start(self, positions, hidden_states):\n"
         helper = '''# FR10_LAYER_HIDDEN_CAPTURE
-def _fr10_layer_hidden_capture_start(self, positions, hidden_states):
+def _fr10_layer_hidden_capture_start(self, positions, hidden_states, input_ids=None):
     path = os.environ.get("FR10_LAYER_HIDDEN_CAPTURE")
     if not path:
         return None
@@ -5916,6 +6024,15 @@ def _fr10_layer_hidden_capture_start(self, positions, hidden_states):
             return None
         row_index = torch.tensor(rows, dtype=torch.long, device=hidden_states.device)
         pos_cpu = positions.detach().cpu()
+        input_ids_cpu = None
+        input_ids_first16 = None
+        if input_ids is not None:
+            try:
+                input_ids_cpu = input_ids.detach().cpu()
+                input_ids_first16 = input_ids_cpu.reshape(-1)[:16].tolist()
+            except Exception:
+                input_ids_cpu = None
+                input_ids_first16 = None
         layer_types = list(getattr(getattr(self, "config", None), "layer_types", []))
         out = Path(str(path))
         call_out = out.with_name(out.stem + ".call" + str(saved) + out.suffix)
@@ -5931,6 +6048,8 @@ def _fr10_layer_hidden_capture_start(self, positions, hidden_states):
             "positions_shape": list(positions.shape),
             "positions": pos_cpu,
             "positions_first16": pos_cpu.reshape(-1)[:16].tolist(),
+            "input_ids": input_ids_cpu,
+            "input_ids_first16": input_ids_first16,
             "layer_types": layer_types,
             "input_hidden": hidden_states.index_select(0, row_index)
             .detach()
@@ -6000,7 +6119,7 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
         )
 """
         layer_start = root_start + """        _fr10_layer_capture = _fr10_layer_hidden_capture_start(
-            self, positions, hidden_states
+            self, positions, hidden_states, input_ids
         )
 """
         if root_start not in text:
@@ -6338,6 +6457,7 @@ def main() -> int:
         (QWEN3_NEXT_PATH, _patch_qwen_full_attn_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_depth_positions()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_preprocess_input_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
