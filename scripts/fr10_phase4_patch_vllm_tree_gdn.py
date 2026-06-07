@@ -4069,6 +4069,22 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                         has_draft_token_indices=lumo_draft_token_indices is not None,
                         num_draft_tokens=[int(_x) for _x in num_draft_tokens.tolist()],
                         cu_total=int(cu_num_draft_tokens[-1]) if len(cu_num_draft_tokens) else 0,
+                        logits_indices=[
+                            int(_x) for _x in logits_indices.detach().cpu().tolist()
+                        ],
+                        target_logits_indices=[
+                            int(_x) for _x in torch.as_tensor(
+                                target_logits_indices
+                            ).detach().cpu().tolist()
+                        ],
+                        bonus_logits_indices=[
+                            int(_x) for _x in bonus_logits_indices.detach().cpu().tolist()
+                        ],
+                        sampled_token_ids=[
+                            int(_x) for _x in self.input_ids.gpu[
+                                logits_indices
+                            ].detach().cpu().tolist()
+                        ],
                     )) + chr(10)
                 )
         except Exception:
