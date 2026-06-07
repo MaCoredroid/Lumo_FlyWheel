@@ -146,3 +146,45 @@ same target row positions, and same argmax. The spine row convention is not
 off-by-one. The remaining bug is upstream of canonical sampling: the tree verify
 target probability tensor differs from the native E5 tensor after sampling
 constraints, even when the emitted draft-token sequence and target argmax match.
+
+## Raw vs constrained probability diff
+
+Instrumentation commit:
+`44adae75`
+
+Tree artifact:
+`output/fr13_regime_decompose_20260607T021451Z/rawprob_compare/tree_tree_sampler_debug.jsonl`
+
+Native artifact:
+`output/fr13_regime_decompose_20260607T021451Z/rawprob_compare/native_tree_sampler_debug.jsonl`
+
+Diff artifact:
+`output/fr13_regime_decompose_20260607T021451Z/rawprob_compare/tree_vs_native_raw_temp_post_matched_by_tokens.json`
+
+Matched event 0:
+- draft tokens: `[16, 13, 2972, 2425, 64700]`
+- target argmax matches native at all 5 positions
+- target row indices match native at all 5 positions
+- position 0 token `16`: tree raw `0.29153531789779663`, native raw `0.3405103385448456`
+- position 0 token `16`: tree temp `0.2808581292629242`, native temp `0.3937857747077942`
+- position 0 token `16`: tree post top-p `0.19958575069904327`, native post top-p `0.4140564203262329`
+- position 2 token `2972`: tree raw `0.5454047322273254`, native raw `0.5635294318199158`
+- position 2 token `2972`: tree temp `0.7552117109298706`, native temp `0.7788468599319458`
+- position 2 token `2972`: tree post top-p `0.957912266254425`, native post top-p `0.957912266254425`
+
+Matched event 1:
+- draft tokens: `[12305, 198, 727, 9057, 3456]`
+- target argmax matches native at all 5 positions
+- target row indices match native at all 5 positions
+- position 1 token `198`: tree raw `0.6841292977333069`, native raw `0.9997411370277405`
+- position 1 token `198`: tree temp `0.9084097146987915`, native temp `0.9999995231628418`
+- position 1 token `198`: tree post top-p `1.0`, native post top-p `1.0`
+
+Interpretation:
+The probability deficit is already present in raw post-logits-processor logits,
+before temperature and top-p. Top-p can amplify the deficit on boundary tokens
+as in matched event 0 position 0, but it is not the root cause. The spine row
+convention remains aligned (`target_logits_index` matches native). The bug is
+upstream of canonical sampling and upstream of sampling constraints: tree verify
+is producing a different target logit distribution from native E5 on the same
+spine draft tokens and row positions.
