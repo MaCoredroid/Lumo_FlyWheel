@@ -3879,7 +3879,7 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                 _max_depth = max(len(_t) for _t in _choices)
                 _lumo_tree_meta_debug["tree_len"] = int(len(_choices))
                 _lumo_tree_meta_debug["max_depth"] = int(_max_depth)
-                if len(_choices) > _max_depth:
+                if len(_choices) > 0:
                     _path_to_idx = {tuple(_p): _i for _i, _p in enumerate(_choices)}
                     _parents_template = np.array([
                         _path_to_idx.get(tuple(_p[:-1]), -1) for _p in _choices
@@ -3924,7 +3924,7 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                             f"target_total_mismatch:{len(_target)}!={int(cu_num_draft_tokens[-1])}"
                         )
                 else:
-                    _lumo_tree_meta_debug["reason"] = "linear_or_empty_tree"
+                    _lumo_tree_meta_debug["reason"] = "empty_tree"
             elif _fr10_mode != "tree_mtp":
                 _lumo_tree_meta_debug["reason"] = f"mode:{_fr10_mode}"
             else:
