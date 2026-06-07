@@ -36,5 +36,44 @@ The workflow checked `tree_attn_op` (forked FA2) vs an FA2-on-path **oracle buil
 
 **DECISIVE TEST (codex running, `fr13-spine-tree` server):** spine-only (branches OFF) tree vs native. Vanishes ⟹ branch-driven (A1). Persists ⟹ kernel (A2) or alignment (B). Next: per-GDN-layer localization (which of layers 24/25/26 first diverges) to pin the exact op.
 
+## Per-layer curve (all 64 layers, tree-spine vs native, fp32) — answers "special layer vs compounding"
+Captured `tree/native_layer_hidden.pt` hold every layer's `hidden`+`residual`. Diff at spine rows `[0,1,2,4,6,8]`→native `[0,1,2,3,4,5]` (pos 13–18):
+- **Layers 0–23: EXACTLY 0.0 (bit-identical, fp32).** Not "tiny" — zero. So this is NOT gradual accumulation from layer 0.
+- **Layer 24 (linear_attn/GDN, first GDN after full_attn 23): FIRST nonzero** — hidden 0.035, residual 0.25. Discrete step injection.
+- Layers 25→63: compounds → 0.05, 0.125, … 1.9 (L58), **5.25 (L63)**.
+⟹ **Verdict: a discrete onset at GDN layer 24 + downstream compounding — NOT a smooth ramp.** The originating layer is 24.
+
+**Onset is NOT branch-aligned (flips the leading hypothesis):** at L24 the largest diff is **pos 14 (spine row 1)**, which has NO branch in its conv window or scan ancestors (branches start at pos 15); root pos 13 diverges *later* (~L28). That is the OPPOSITE of branch-contamination ordering. So (A1) branch-into-spine contamination is now UNLIKELY. New leading hypothesis: a **layer-24+ GDN kernel/state issue** (tree `_tree_gdn_kernel` vs native FLA, or an `h0`/recurrent-state-bank column selection that is bit-exact for the first 23 GDN layers then diverges), amplified by the gate (~32× 1/rms, FR12) and compounded. The spine-only test should still diverge at L24/pos14 if branches are irrelevant (expected).
+
 ## Status
 GATE A is **NOT passed** and must not be bound as passing. `gateA_spine_ladder.json` final hidden/logits are still **empty** (`passed: False`) — the final-spine-logits-vs-native number (the losslessness-critical one) is not yet computed. If the divergence is real (A1), it will flip final-spine-logit argmaxes far beyond the E5 floor → the e2e bag-TV would be lossy → a genuine no-copy-GDN losslessness finding to fix at root (the mask/state-indexing leak), NOT to wave through. **Keep the 2-ULP floor separate**: that is the accepted irreducible no-copy grouping floor; THIS (0.25–1.875) is a distinct structural bug. Surfaced to the user; no self-declared pass. Fix once root cause is confirmed by the spine-only test + per-GDN-layer localization.
+
+## Spine-only decisive test result — 2026-06-07
+Run dir: `output/fr13_spine_only_decisive_20260607T171840Z`.
+
+Strict spine-only TREE_ATTN:
+- `TREE=[(0,), (0,0), (0,0,0), (0,0,0,0), (0,0,0,0,0)]`
+- `FR13_FA2_TREE_BIAS=1`
+- `FR10_ALLOW_LINEAR_FALLBACK` unset by `scripts/fr13_launch_forked_fa2_tree_server.sh`
+- `--enforce-eager`, `--gpu-memory-utilization 0.4`, B=1
+
+Matched native:
+- `--attention-backend FLASH_ATTN`
+- `fr10_decode_mode=naive_mtp`
+- 5-token MTP, B=1, eager
+
+Row mapping was re-verified on the captured first verifier event:
+- scheduled token IDs equal: `[271, 71093, 12305, 198, 727, 884]`
+- positions equal: `[13, 14, 15, 16, 17, 18]` for all three mRoPE rows
+- hidden rows equal: tree `[0,1,2,3,4,5]` vs native `[0,1,2,3,4,5]`
+- logits rows equal: tree `[0,1,2,3,4,5]` vs native `[0,1,2,3,4,5]`
+- sampler metadata equal on the verifier rows: `logits_indices=[0,1,2,3,4,5]`, `target_logits_indices=[0,1,2,3,4]`, `bonus_logits_indices=[5]`, `sampled_token_ids=[271,71093,12305,198,727,884]`
+
+Spine-only ladder result (`spine_only_ladder.json`, threshold `0.00390625`):
+- input max_abs: `0.0`
+- first nonzero: **layer 45 linear_attention**, hidden `0.01953125`, residual `0.015625`
+- layer 43 and 44 remain exactly `0.0`
+- final_norm max_abs: `1.0`
+- final logits max_abs: `0.59375`
+
+Interpretation: the divergence **persists with branches OFF**, so branch-state contamination is not the sole explanation for Gate A failure. The row mapping check did not support a deep-layer alignment artifact. Current localization is a spine-only GDN/tree-kernel mismatch beginning at layer 45 on this single-spine run, distinct from the earlier branched-tree layer-24 onset and far above the accepted FA2 2-ULP grouping floor.
