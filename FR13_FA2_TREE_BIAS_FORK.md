@@ -33,3 +33,9 @@ Before building: confirm from the multi-layer capture that **q/k/v (post-norm/pr
 ## Kernel requirements (user, non-negotiable)
 - The forked FA2 kernel must take a **GENERAL tree** (arbitrary topology, expressed via the additive ancestry bias: `bias[q,k]=0` if k is an ancestor of q [prefix + self + path-to-root], `-inf` otherwise) and **verify the WHOLE tree (spine + ALL branches) in ONE kernel call** — NOT a per-row spine/branch backend split, NOT per-row rerouting. One general kernel, one pass, any tree.
 - **NO reward-hacking:** do NOT copy native output, do NOT reroute any row to a native call, NO splice. The forked kernel genuinely computes the tree attention. Byte-exactness is verified against the **native-FA2-on-path oracle with the splice OFF** (our forked kernel computing), per the standing reward-hacking rule. A green number that comes from calling native on the spine is rejected.
+
+## Standing rule (user): top-down divergence after EVERY change, all layers, no regression
+After EVERY new kernel build OR wiring change, run the FULL top-down divergence ladder — input → every one of the 64 layers (attn_out + residual) → final_norm → final logits — tree vs native, SPINE AND BRANCH (each branch vs its native-on-path oracle). TWO checks every single time:
+1. the targeted stage moved toward 0.0 as intended;
+2. **NO previously-0.0 stage REGRESSED to nonzero** — input stage = 0.0, GDN layers = 0.0, and every already-fixed full-attn layer STAYS 0.0.
+Cover ALL layers, not just the one you changed — a kernel/wiring change can silently regress an unrelated stage. Run this BEFORE any e2e accept/lossless measurement. If anything regressed, fix it before proceeding. The top-down drift graph is examined EVERY run, not occasionally.
