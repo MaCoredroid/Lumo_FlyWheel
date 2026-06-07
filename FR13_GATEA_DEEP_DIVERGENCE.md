@@ -82,6 +82,13 @@ Matched-token comparison (positions equal [13–18], tree vs native):
 
 **Correct fix direction:** stay bf16-taps; the remaining 1-ULP at L45 is **NOT the tap dtype** — it's an op-order detail. **Read native `causal_conv1d_update` source** (exact tap multiply-accumulate ORDER + bias add + silu/activation rounding) and align the manual tree conv op-by-op to bit-exact — not guess-and-test dtypes (that burns GPU). codex redirected.
 
+## FIX ATTEMPT 2 — silu/activation tie-break (PTX-aligned) = fixed L45 but REGRESSED layer 0
+codex aligned the manual conv to native `causal_conv1d_update` PTX (mul.bf16 → fp32 accumulate → ex2.approx sigmoid → bf16 store). **Boot-free replay fixed the saved L45 element, but the LIVE strict tree-vs-native test regressed at layer 0 (max_abs 0.00195).** Reverted, not committed (honest, no false pass).
+
+**Refined root cause:** the manual conv's **silu activation ≠ native's `ex2.approx` silu**, and the mismatch is **per-element whack-a-mole** (a rule that fixes L45 breaks L0). It is NOT the tap dtype (attempt 1) and NOT a single tie-break (attempt 2).
+
+**Smarter plan (avoid live whack-a-mole / GPU thrash):** iterate the manual-conv alignment **fully OFFLINE across MULTIPLE layers at once** (capture conv inputs `pre_conv`+`conv_state`+`conv_weights`+`bias` for L0 + L45 + one branch row in ONE capture; boot-free replay; drive conv1d_out → 0.0 vs native for **ALL** captured layers/rows simultaneously — this catches the L0 regression offline). Replicate native's EXACT op sequence (tap-mul dtype, fp32 accumulate order, bias, silu `ex2.approx`, bf16 store). Only after offline=0.0 for all, ONE live full-ladder test (all spine rows + branches + logits + gate-2). **If the silu proves un-matchable in torch, STOP and bring the option of routing the conv through native `causal_conv1d_update` to the user (possible banned reroute) — do NOT reroute unilaterally.**
+
 ## Status
 GATE A is **NOT passed** and must not be bound as passing. `gateA_spine_ladder.json` final hidden/logits are still **empty** (`passed: False`) — the final-spine-logits-vs-native number (the losslessness-critical one) is not yet computed. If the divergence is real (A1), it will flip final-spine-logit argmaxes far beyond the E5 floor → the e2e bag-TV would be lossy → a genuine no-copy-GDN losslessness finding to fix at root (the mask/state-indexing leak), NOT to wave through. **Keep the 2-ULP floor separate**: that is the accepted irreducible no-copy grouping floor; THIS (0.25–1.875) is a distinct structural bug. Surfaced to the user; no self-declared pass. Fix once root cause is confirmed by the spine-only test + per-GDN-layer localization.
 
