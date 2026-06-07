@@ -2637,9 +2637,38 @@ def _patch_gdn_linear() -> bool:
 
 def _patch_request_decode_mode() -> bool:
     text = REQUEST_PATH.read_text()
+    def _ensure_os_import(src: str) -> str:
+        if "import os\n" in src:
+            return src
+        if "from __future__ import annotations\n" in src:
+            return src.replace(
+                "from __future__ import annotations\n",
+                "from __future__ import annotations\n\nimport os\n",
+                1,
+            )
+        return src.replace("import time\n", "import time\nimport os\n", 1)
+
     if "fr10_decode_mode" in text:
+        old_default = (
+            "        self.fr10_decode_mode = decode_mode_from_sampling_params(sampling_params)\n"
+        )
+        if old_default in text:
+            text = _ensure_os_import(text)
+            text = text.replace(
+                old_default,
+                (
+                    "        self.fr10_decode_mode = decode_mode_from_sampling_params(\n"
+                    "            sampling_params,\n"
+                    "            default=os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\"),\n"
+                    "        )\n"
+                ),
+                1,
+            )
+            REQUEST_PATH.write_text(text)
+            return True
         return False
 
+    text = _ensure_os_import(text)
     text = text.replace(
         "from vllm.sampling_params import SamplingParams\n",
         (
@@ -2652,7 +2681,10 @@ def _patch_request_decode_mode() -> bool:
         "        self.sampling_params = sampling_params\n",
         (
             "        self.sampling_params = sampling_params\n"
-            "        self.fr10_decode_mode = decode_mode_from_sampling_params(sampling_params)\n"
+            "        self.fr10_decode_mode = decode_mode_from_sampling_params(\n"
+            "            sampling_params,\n"
+            "            default=os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\"),\n"
+            "        )\n"
         ),
         1,
     )
@@ -2709,7 +2741,10 @@ def _patch_scheduler_decode_modes() -> bool:
         "            request = self.running[req_index]\n\n",
         (
             "            request = self.running[req_index]\n"
-            "            fr10_req_mode = decode_mode_from_request(request)\n"
+            "            fr10_req_mode = decode_mode_from_request(\n"
+            "                request,\n"
+            "                default=__import__(\"os\").environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\"),\n"
+            "            )\n"
             "            if fr10_step_decode_mode is None:\n"
             "                fr10_step_decode_mode = fr10_req_mode\n"
             "            elif fr10_req_mode != fr10_step_decode_mode:\n"
@@ -2724,7 +2759,10 @@ def _patch_scheduler_decode_modes() -> bool:
         (
             "                request = request_queue.peek_request()\n"
             "                request_id = request.request_id\n"
-            "                fr10_req_mode = decode_mode_from_request(request)\n"
+            "                fr10_req_mode = decode_mode_from_request(\n"
+            "                    request,\n"
+            "                    default=__import__(\"os\").environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\"),\n"
+            "                )\n"
             "                if fr10_step_decode_mode is None:\n"
             "                    fr10_step_decode_mode = fr10_req_mode\n"
             "                elif fr10_req_mode != fr10_step_decode_mode:\n"
@@ -2749,7 +2787,10 @@ def _patch_scheduler_decode_modes() -> bool:
         "            if self.structured_output_manager.should_advance(request):\n",
         (
             "            # FR10: mode-specific draft handling on a multi-mode server.\n"
-            "            fr10_req_mode = decode_mode_from_request(request)\n"
+            "            fr10_req_mode = decode_mode_from_request(\n"
+            "                request,\n"
+            "                default=__import__(\"os\").environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\"),\n"
+            "            )\n"
             "            if fr10_req_mode == NON_MTP:\n"
             "                request.spec_token_ids = []\n"
             "                continue\n"
@@ -5117,13 +5158,46 @@ def _patch_tree_attn_spec_config_override() -> bool:
             1,
         )
         text = text.replace(
-            "            tree_attn_bias=self.tree_attn_bias,\n",
+            "            block_table=block_table,\n"
+            "            slot_mapping=slot_mapping,\n"
+            "            tree_attn_bias=self.tree_attn_bias,\n"
+            "        )\n",
             (
+                "            block_table=block_table,\n"
+                "            slot_mapping=slot_mapping,\n"
                 "            tree_attn_bias=self.tree_attn_bias,\n"
                 "            max_prefill_query_len=max_prefill_query_len,\n"
                 "            max_prefill_seq_len=max_prefill_seq_len,\n"
                 "            max_decode_query_len=max_decode_query_len,\n"
                 "            max_decode_seq_len=max_decode_seq_len,\n"
+                "        )\n"
+            ),
+            1,
+        )
+        did_patch = True
+    bad_decode_fields = (
+        "            max_prefill_query_len=max_prefill_query_len,\n"
+        "            max_prefill_seq_len=max_prefill_seq_len,\n"
+        "            max_decode_query_len=max_decode_query_len,\n"
+        "            max_decode_seq_len=max_decode_seq_len,\n"
+    )
+    bad_decode_constructor = (
+        "            tree_attn_bias=self.tree_attn_bias,\n"
+        + bad_decode_fields
+        + "        )\n"
+        "        return self._cached_decode_metadata\n"
+    )
+    if bad_decode_constructor in text:
+        text = text.replace(
+            bad_decode_constructor,
+            (
+                "            tree_attn_bias=self.tree_attn_bias,\n"
+                "            max_prefill_query_len=self.max_prefill_query_len,\n"
+                "            max_prefill_seq_len=self.max_prefill_seq_len,\n"
+                "            max_decode_query_len=self.max_decode_query_len,\n"
+                "            max_decode_seq_len=self.max_decode_seq_len,\n"
+                "        )\n"
+                "        return self._cached_decode_metadata\n"
             ),
             1,
         )
@@ -5223,6 +5297,18 @@ def _patch_triton_unified_attention_fr13() -> bool:
         did_patch = True
 
     if os.environ.get("FR13_TREE_ATTN_EXP2_SOFTMAX", "1") == "0":
+        mask_sentinel = "# FR13_TREE_ATTN_QQ_BIAS_MASK"
+        if mask_sentinel not in text:
+            old_mask = (
+                "            is_query_key = key_rel_pos >= 0 and key_rel_pos < qq_bias_stride_0\n"
+            )
+            new_mask = (
+                f"            # {mask_sentinel}: tensor mask must be elementwise.\n"
+                "            is_query_key = (key_rel_pos >= 0) & (key_rel_pos < qq_bias_stride_0)\n"
+            )
+            if old_mask in text:
+                text = text.replace(old_mask, new_mask)
+                did_patch = True
         TRITON_UNIFIED_ATTN_PATH.write_text(text)
         return did_patch
 
@@ -5284,7 +5370,203 @@ def _patch_triton_unified_attention_fr13() -> bool:
         )
         did_patch = True
 
+    mask_sentinel = "# FR13_TREE_ATTN_QQ_BIAS_MASK"
+    if mask_sentinel not in text:
+        old_mask = (
+            "            is_query_key = key_rel_pos >= 0 and key_rel_pos < qq_bias_stride_0\n"
+        )
+        new_mask = (
+            f"            # {mask_sentinel}: tensor mask must be elementwise.\n"
+            "            is_query_key = (key_rel_pos >= 0) & (key_rel_pos < qq_bias_stride_0)\n"
+        )
+        if old_mask not in text:
+            raise RuntimeError("FR13 qq_bias mask anchor not found")
+        text = text.replace(old_mask, new_mask)
+        did_patch = True
+
     TRITON_UNIFIED_ATTN_PATH.write_text(text)
+    return did_patch
+
+
+def _patch_tree_attn_op_capture() -> bool:
+    """FR13 diagnostic-only TREE_ATTN op replay capture for one layer/event."""
+
+    text = TREE_ATTN_PATH.read_text()
+    did_patch = False
+    sentinel = "# FR13_TREE_ATTN_OP_CAPTURE"
+    if sentinel not in text:
+        if "import os\n" not in text:
+            text = text.replace("import ast\n", "import ast\nimport os\n", 1)
+        if "from pathlib import Path\n" not in text:
+            text = text.replace(
+                "from dataclasses import dataclass\n",
+                "from dataclasses import dataclass\nfrom pathlib import Path\n",
+                1,
+            )
+        helper_anchor = "logger = init_logger(__name__)\n"
+        helper = '''logger = init_logger(__name__)
+
+
+# FR13_TREE_ATTN_OP_CAPTURE
+def _fr13_tree_attn_op_capture(
+    impl,
+    layer,
+    query,
+    key,
+    value,
+    output,
+    key_cache,
+    value_cache,
+    attn_metadata,
+):
+    path = os.environ.get("FR13_TREE_ATTN_OP_CAPTURE")
+    if not path:
+        return
+    try:
+        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+            return
+    except Exception:
+        return
+    try:
+        layer_name = str(getattr(layer, "layer_name", ""))
+        want = os.environ.get(
+            "FR13_TREE_ATTN_OP_CAPTURE_LAYER",
+            "language_model.model.layers.3.self_attn",
+        )
+        if want and not layer_name.startswith(want):
+            return
+        seen = int(globals().get("_FR13_TREE_ATTN_OP_CAPTURE_SEEN", 0))
+        skip = int(os.environ.get("FR13_TREE_ATTN_OP_CAPTURE_SKIP", "0"))
+        limit = int(os.environ.get("FR13_TREE_ATTN_OP_CAPTURE_LIMIT", "1"))
+        saved = int(globals().get("_FR13_TREE_ATTN_OP_CAPTURE_SAVED", 0))
+        globals()["_FR13_TREE_ATTN_OP_CAPTURE_SEEN"] = seen + 1
+        if seen < skip or saved >= limit:
+            return
+
+        block_size = int(key_cache.shape[1])
+        q_start = attn_metadata.query_start_loc.detach().to(torch.long).cpu()
+        seq_lens = attn_metadata.seq_lens.detach().to(torch.long).cpu()
+        block_table_cpu = attn_metadata.block_table.detach().to(torch.long).cpu()
+        dense_k = []
+        dense_v = []
+        used_blocks = []
+        for seq_idx in range(int(seq_lens.numel())):
+            seq_len = int(seq_lens[seq_idx].item())
+            n_blocks = (seq_len + block_size - 1) // block_size
+            seq_k_parts = []
+            seq_v_parts = []
+            seq_blocks = []
+            remaining = seq_len
+            for local_block_idx in range(n_blocks):
+                block_id = int(block_table_cpu[seq_idx, local_block_idx].item())
+                take = min(block_size, remaining)
+                if block_id >= 0 and take > 0:
+                    seq_blocks.append(block_id)
+                    seq_k_parts.append(
+                        key_cache[block_id, :take].detach().to(torch.float32).cpu()
+                    )
+                    seq_v_parts.append(
+                        value_cache[block_id, :take].detach().to(torch.float32).cpu()
+                    )
+                remaining -= take
+            dense_k.append(torch.cat(seq_k_parts, dim=0) if seq_k_parts else torch.empty(0))
+            dense_v.append(torch.cat(seq_v_parts, dim=0) if seq_v_parts else torch.empty(0))
+            used_blocks.append(seq_blocks)
+
+        root, ext = os.path.splitext(path)
+        call_path = root + ".call" + str(saved) + (ext or ".pt")
+        payload = {
+            "schema": "fr13.tree_attn_op_capture.v1",
+            "source": "TreeAttentionImpl.forward",
+            "path": path,
+            "call_path": call_path,
+            "layer_name": layer_name,
+            "capture_call_index": int(seen),
+            "capture_saved_index": int(saved),
+            "scale": float(getattr(impl, "scale", 0.0)),
+            "num_heads": int(getattr(impl, "num_heads", 0)),
+            "num_kv_heads": int(getattr(impl, "num_kv_heads", 0)),
+            "num_queries_per_kv": int(getattr(impl, "num_queries_per_kv", 0)),
+            "head_size": int(getattr(impl, "head_size", 0)),
+            "sliding_window": tuple(int(x) for x in getattr(impl, "sliding_window", (-1, -1))),
+            "logits_soft_cap": float(getattr(impl, "logits_soft_cap", 0.0)),
+            "query_start_loc": q_start,
+            "seq_lens": seq_lens,
+            "block_table": block_table_cpu,
+            "used_blocks": used_blocks,
+            "tree_attn_bias": (
+                attn_metadata.tree_attn_bias.detach().to(torch.float32).cpu()
+                if attn_metadata.tree_attn_bias is not None
+                else None
+            ),
+            "query": query.detach().to(torch.float32).cpu(),
+            "key_input": key.detach().to(torch.float32).cpu()
+            if key is not None
+            else None,
+            "value_input": value.detach().to(torch.float32).cpu()
+            if value is not None
+            else None,
+            "output": output.detach().to(torch.float32).cpu(),
+            "dense_key": dense_k,
+            "dense_value": dense_v,
+        }
+        out = Path(call_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(payload, out)
+        if saved == 0:
+            torch.save(payload, Path(path))
+        globals()["_FR13_TREE_ATTN_OP_CAPTURE_SAVED"] = saved + 1
+    except Exception as exc:
+        logger.warning("FR13 tree attention op capture failed: %s", exc)
+
+
+'''
+        if helper_anchor not in text:
+            raise RuntimeError("tree_attn logger anchor not found")
+        text = text.replace(helper_anchor, helper, 1)
+        did_patch = True
+
+    capture_anchor = """            unified_attention(
+                q=query[:num_decode_tokens],
+                k=key_cache,
+                v=value_cache,
+                out=output[:num_decode_tokens],
+                cu_seqlens_q=decode_meta.query_start_loc,
+                max_seqlen_q=decode_meta.max_query_len,
+                seqused_k=decode_meta.seq_lens,
+                max_seqlen_k=decode_meta.max_seq_len,
+                softmax_scale=self.scale,
+                causal=True,
+                alibi_slopes=self.alibi_slopes,
+                qq_bias=decode_meta.tree_attn_bias,
+                window_size=self.sliding_window,
+                block_table=decode_meta.block_table,
+                softcap=self.logits_soft_cap,
+                q_descale=None,  # Not supported
+                k_descale=layer._k_scale.expand(descale_shape),
+                v_descale=layer._v_scale.expand(descale_shape),
+            )
+"""
+    capture_replacement = capture_anchor + """            _fr13_tree_attn_op_capture(
+                self,
+                layer,
+                query[:num_decode_tokens],
+                key[:num_decode_tokens] if key is not None else None,
+                value[:num_decode_tokens] if value is not None else None,
+                output[:num_decode_tokens],
+                key_cache,
+                value_cache,
+                decode_meta,
+            )
+"""
+    if "_fr13_tree_attn_op_capture(" not in text.split("class TreeAttentionImpl", 1)[-1]:
+        if capture_anchor not in text:
+            raise RuntimeError("tree_attn decode unified_attention anchor not found")
+        text = text.replace(capture_anchor, capture_replacement, 1)
+        did_patch = True
+
+    if did_patch:
+        TREE_ATTN_PATH.write_text(text)
     return did_patch
 
 
@@ -5911,6 +6193,7 @@ def main() -> int:
         (EAGLE_PATH, _patch_eagle_mtp_draft_trace()),
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
         (TRITON_UNIFIED_ATTN_PATH, _patch_triton_unified_attention_fr13()),
+        (TREE_ATTN_PATH, _patch_tree_attn_op_capture()),
         (QWEN3_NEXT_PATH, _patch_qwen_root_hidden_capture()),
         (QWEN3_NEXT_PATH, _patch_qwen_full_attn_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
