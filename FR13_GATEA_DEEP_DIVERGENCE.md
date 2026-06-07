@@ -52,6 +52,14 @@ First-diverging layer's `layer_type`, both runs (fp32 hidden vs native):
 
 In BOTH runs the full_attention layer immediately before the onset is **exactly 0.0**, and the first nonzero is a **linear_attention (GDN)** layer. Post-onset full_attn layers only carry/amplify an inherited divergence (their `first_nonzero_stage`=`input_hidden`, not their own attn op). ⟹ **The FA2 fork succeeded (full_attn byte-exact); the remaining divergence is the GDN tree-kernel.** The flip is value/state-dependent (branched = 1st GDN after full_attn; spine-only = 2nd) = a ~1-ULP rounding crossing that compounds via the recurrent state. **Fix belongs in the GDN tree-kernel, not the attention.** Sub-op localization (h0/state-load → conv → scan → gate → o_proj) at the onset layer in progress (codex).
 
+## "Look closely" — it's a data-dependent EDGE CASE, not a layer bug (user insight, confirmed)
+GDN code is identical per layer, yet the onset `(row, layer)` differs by run: **spine-only = row 0 / layer 45**, **branched = row 1 / layer 24**. Same code, different trigger ⟹ a **value-dependent numerical boundary crossing**, not a layer-specific defect.
+
+Close look at the spine-only onset (L45 hidden, fp32):
+- L44 = 0 nonzero (clean). L45 = nonzero **entirely on row 0** (pos 13): ~4587/5120 channels shift up to ~0.02; **rows 1–5 still exactly 0.0**. L46 spreads to all rows (recurrent compounding).
+- **Row 0 is the anchor/carried token** (MTP-5 verify: row0 = previously-accepted token whose recurrent state h0 is carried in; rows 1–5 = drafts). Row 0 diverging first ⟹ points at the **carried-state (h0) handoff or row-0 state-readout**, NOT the tree mask (no branches here anyway). The edge case is in the per-node readout/state for the anchor; the recurrent state then compounds it (this is WHY it's a losslessness blocker unlike the non-compounding FA2 floor).
+- Magnitude on row 0 is ~0.02 (multi-ULP, not a single bit) across ~90% of channels ⟹ a single upstream state/gate value off, spread by the o_proj/MLP matmul. codex sub-op capture (state-in/h0 → conv → scan → gate → o_proj at L44/45) will pin which.
+
 ## Status
 GATE A is **NOT passed** and must not be bound as passing. `gateA_spine_ladder.json` final hidden/logits are still **empty** (`passed: False`) — the final-spine-logits-vs-native number (the losslessness-critical one) is not yet computed. If the divergence is real (A1), it will flip final-spine-logit argmaxes far beyond the E5 floor → the e2e bag-TV would be lossy → a genuine no-copy-GDN losslessness finding to fix at root (the mask/state-indexing leak), NOT to wave through. **Keep the 2-ULP floor separate**: that is the accepted irreducible no-copy grouping floor; THIS (0.25–1.875) is a distinct structural bug. Surfaced to the user; no self-declared pass. Fix once root cause is confirmed by the spine-only test + per-GDN-layer localization.
 
