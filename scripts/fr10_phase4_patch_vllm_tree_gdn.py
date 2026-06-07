@@ -4557,6 +4557,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 0, 0),
             (0, 0, 0, 0, 1),
         ]
+        _fr10_spine_only_choices = [
+            (0,), (0, 0), (0, 0, 0), (0, 0, 0, 0),
+            (0, 0, 0, 0, 0),
+        ]
         _fr10_tree_choices_current = [
             tuple(_x) for _x in getattr(self, "tree_choices", [])
         ]
@@ -4565,12 +4569,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             and int(self.num_speculative_tokens) == 9
             and _fr10_tree_choices_current == _fr10_caterpillar_choices
         )
-        if _fr10_is_caterpillar:
+        _fr10_is_spine_only = (
+            _fr10_active_decode_mode == "tree_mtp"
+            and int(self.num_speculative_tokens) == 5
+            and _fr10_tree_choices_current == _fr10_spine_only_choices
+        )
+        if _fr10_is_caterpillar or _fr10_is_spine_only:
             # FR10_CATERPILLAR_NATIVE_SPINE_TOP2: read-only drafter fix.
             # Run the native causal MTP spine unchanged for depth 5. At each
             # post-root spine step, read the runner-up token from the same
             # logits and pack it into the caterpillar leaf slot. Leaves are
-            # never fed back into any forward or recurrent state.
+            # never fed back into any forward or recurrent state. The 5-node
+            # spine-only diagnostic uses the same native causal MTP spine and
+            # packs only those five spine tokens.
             _fr10_logits = self.model.compute_logits(sample_hidden_states)
             _fr10_top2 = torch.topk(_fr10_logits, 2, dim=-1).indices
             draft_token_ids = self._greedy_sample(sample_hidden_states)
@@ -4692,20 +4703,23 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 _fr10_spine_tokens.append(draft_token_ids)
                 _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
 
-            _fr10_packed = torch.stack(
-                [
-                    _fr10_spine_tokens[0],
-                    _fr10_spine_tokens[1],
-                    _fr10_leaf_tokens[0],
-                    _fr10_spine_tokens[2],
-                    _fr10_leaf_tokens[1],
-                    _fr10_spine_tokens[3],
-                    _fr10_leaf_tokens[2],
-                    _fr10_spine_tokens[4],
-                    _fr10_leaf_tokens[3],
-                ],
-                dim=1,
-            )
+            if _fr10_is_spine_only:
+                _fr10_packed = torch.stack(_fr10_spine_tokens, dim=1)
+            else:
+                _fr10_packed = torch.stack(
+                    [
+                        _fr10_spine_tokens[0],
+                        _fr10_spine_tokens[1],
+                        _fr10_leaf_tokens[0],
+                        _fr10_spine_tokens[2],
+                        _fr10_leaf_tokens[1],
+                        _fr10_spine_tokens[3],
+                        _fr10_leaf_tokens[2],
+                        _fr10_spine_tokens[4],
+                        _fr10_leaf_tokens[3],
+                    ],
+                    dim=1,
+                )
             try:
                 import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
                 if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
@@ -4725,11 +4739,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr10_lj.dumps({
                             "event": "fr10_caterpillar_native_spine_top2",
                             "ts": round(_fr10_lt.time(), 4),
+                            "spine_only": bool(_fr10_is_spine_only),
                             "spine_slots": [0, 1, 3, 5, 7],
                             "leaf_slots": [2, 4, 6, 8],
                             "draft": _fr10_packed.detach().cpu().tolist(),
                             "spine": torch.stack(_fr10_spine_tokens, dim=1).detach().cpu().tolist(),
-                            "leaves": torch.stack(_fr10_leaf_tokens, dim=1).detach().cpu().tolist(),
+                            "leaves": (
+                                []
+                                if _fr10_is_spine_only
+                                else torch.stack(_fr10_leaf_tokens, dim=1).detach().cpu().tolist()
+                            ),
                         }) + chr(10)
                     )
             except Exception:
@@ -4748,7 +4767,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         )
         if (
             _fr10_tree_expected
-            and not _fr10_is_caterpillar
+            and not (_fr10_is_caterpillar or _fr10_is_spine_only)
             and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
         ):
             raise RuntimeError(
