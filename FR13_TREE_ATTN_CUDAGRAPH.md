@@ -31,5 +31,10 @@ Make the tree-verify FULL-ATTENTION path (1) **CUDA-graph-capturable at B=4** (k
 - Verify SPINE *and* BRANCHES on every parity. Probe weights from /models/qwen3.6-27b-fp8.
 - DO NOT close (pass/fail) without asking the user.
 
+## Speed framing + tracking the accept/event deficit to the subkernel (user, 2026-06-07)
+**The cuda-graph fix is PARITY-recovery, NOT a win over E5.** E5 (FA2) is ALREADY cuda-graph-captured (UNIFORM_BATCH). Tree-attn was self-handicapped running eager (the NEVER bug); the fix removed that overhead → tree per-forward ≈ E5 per-forward. On bandwidth-bound GB10 each forward ≈ one ~27GB weight-stream, so tree and native have ~EQUAL per-forward cost ⟹ **speed ∝ accept/event**. The tree's ONLY win source is the SUPERSET (accept/event ≥ E5); the cuda-graph fix just got us to the start line. So 0.922 vs E5 ~1.7 = a deficit = SLOWER; the 2× does not save it.
+
+**Track any accept/event deficit to the subkernel — do NOT hand-wave "drafter".** Decompose: (a) **SPINE-ONLY accept** (branches OFF, just the path0 chain) — this SHOULD equal E5's chain accept if the verify is lossless; if spine-only < E5 → the verify still diverges (a subkernel — localize it like GDN/RoPE/attn, splice-OFF, spine+branch). (b) **BRANCH BONUS** = (branches ON) − (spine-only) = the real superset contribution; if ≈ 0 → the DRAFTER proposes useless branch candidates (project_fr10_drafter_topology_mismatch), not the verify. Report spine-only accept, branches-on accept, branch bonus, all vs E5 — that says verify-loss vs drafter-weak precisely.
+
 ## Definition of done
 tree-attn CG-captured (FULL) at B=4, full-attn within-floor on spine+branches, then the E5-vs-tree-attn deliverable (lossless-within-floor + speed). Bring numbers to the user.
