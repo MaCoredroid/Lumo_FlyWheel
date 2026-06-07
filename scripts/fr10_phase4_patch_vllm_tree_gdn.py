@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import ast
+import os
 from pathlib import Path
 
 
@@ -32,6 +33,10 @@ EAGLE_PATH = Path(
 )
 TREE_ATTN_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py"
+)
+TRITON_UNIFIED_ATTN_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/ops/"
+    "triton_unified_attention.py"
 )
 MAMBA_UTILS_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/mamba_utils.py"
@@ -5009,6 +5014,120 @@ def _patch_tree_attn_spec_config_override() -> bool:
     sentinel = "# FR10_SPEC_CONFIG_TREE_OVERRIDE"
     did_patch = False
     text = text.replace("import ast\n", "import ast\nimport json\nimport os\n", 1)
+    cg_sentinel = "# FR13_TREE_ATTN_CUDAGRAPH_METADATA"
+    if cg_sentinel not in text:
+        text = text.replace(
+            "    AttentionBackend,\n    AttentionImpl,\n",
+            "    AttentionBackend,\n    AttentionCGSupport,\n    AttentionImpl,\n",
+            1,
+        )
+        text = text.replace(
+            "    tree_attn_bias: torch.Tensor | None = None\n",
+            (
+                "    tree_attn_bias: torch.Tensor | None = None\n"
+                "    max_prefill_query_len: int = 0\n"
+                "    max_prefill_seq_len: int = 0\n"
+                "    max_decode_query_len: int = 0\n"
+                "    max_decode_seq_len: int = 0\n"
+            ),
+            1,
+        )
+        text = text.replace(
+            "            max_query_len=int(q_seqlens.max().item()),\n",
+            "            max_query_len=self.max_prefill_query_len,\n",
+            1,
+        )
+        text = text.replace(
+            "            max_seq_len=int(kv_seqlens.max().item()),\n",
+            "            max_seq_len=self.max_prefill_seq_len,\n",
+            1,
+        )
+        text = text.replace(
+            "            max_query_len=int(q_seqlens.max().item()),\n",
+            "            max_query_len=self.max_decode_query_len,\n",
+            1,
+        )
+        text = text.replace(
+            "            max_seq_len=int(kv_seqlens.max().item()),\n",
+            "            max_seq_len=self.max_decode_seq_len,\n",
+            1,
+        )
+        text = text.replace(
+            "class TreeAttentionMetadataBuilder(AttentionMetadataBuilder[TreeAttentionMetadata]):\n",
+            (
+                "class TreeAttentionMetadataBuilder(AttentionMetadataBuilder[TreeAttentionMetadata]):\n"
+                f"    {cg_sentinel}: spec decode is uniform tree-token batches.\n"
+                "    _cudagraph_support: ClassVar[AttentionCGSupport] = (\n"
+                "        AttentionCGSupport.UNIFORM_BATCH\n"
+                "    )\n"
+            ),
+            1,
+        )
+        text = text.replace(
+            "    def build(\n"
+            "        self,\n"
+            "        common_prefix_len: int,\n"
+            "        common_attn_metadata: CommonAttentionMetadata,\n"
+            "        fast_build: bool = False,\n"
+            "    ) -> TreeAttentionMetadata:\n",
+            (
+                "    def build_for_cudagraph_capture(\n"
+                "        self, common_attn_metadata: CommonAttentionMetadata\n"
+                "    ) -> TreeAttentionMetadata:\n"
+                "        attn_metadata = self.build(0, common_attn_metadata)\n"
+                "        attn_metadata.seq_lens.fill_(1)\n"
+                "        return attn_metadata\n"
+                "\n"
+                "    def build(\n"
+                "        self,\n"
+                "        common_prefix_len: int,\n"
+                "        common_attn_metadata: CommonAttentionMetadata,\n"
+                "        fast_build: bool = False,\n"
+                "    ) -> TreeAttentionMetadata:\n"
+            ),
+            1,
+        )
+        text = text.replace(
+            "        block_table = common_attn_metadata.block_table_tensor\n"
+            "        slot_mapping = common_attn_metadata.slot_mapping\n"
+            "\n"
+            "        return TreeAttentionMetadata(\n",
+            (
+                "        block_table = common_attn_metadata.block_table_tensor\n"
+                "        slot_mapping = common_attn_metadata.slot_mapping\n"
+                "\n"
+                "        # FR13: cached prefill/decode metadata is built during the\n"
+                "        # Python metadata phase.  Do not derive these values in\n"
+                "        # TreeAttentionImpl.forward(), where GPU tensor .item() syncs\n"
+                "        # break CUDA graph capture.\n"
+                "        if num_decodes == 0:\n"
+                "            max_decode_query_len = 0\n"
+                "            max_decode_seq_len = 0\n"
+                "        elif num_prefills == 0:\n"
+                "            max_decode_query_len = max_query_len\n"
+                "            max_decode_seq_len = max_seq_len\n"
+                "        else:\n"
+                "            max_decode_query_len = min(max_query_len, decode_threshold)\n"
+                "            max_decode_seq_len = max_seq_len\n"
+                "        max_prefill_query_len = max_query_len if num_prefills else 0\n"
+                "        max_prefill_seq_len = max_seq_len if num_prefills else 0\n"
+                "\n"
+                "        return TreeAttentionMetadata(\n"
+            ),
+            1,
+        )
+        text = text.replace(
+            "            tree_attn_bias=self.tree_attn_bias,\n",
+            (
+                "            tree_attn_bias=self.tree_attn_bias,\n"
+                "            max_prefill_query_len=max_prefill_query_len,\n"
+                "            max_prefill_seq_len=max_prefill_seq_len,\n"
+                "            max_decode_query_len=max_decode_query_len,\n"
+                "            max_decode_seq_len=max_decode_seq_len,\n"
+            ),
+            1,
+        )
+        did_patch = True
     if sentinel not in text:
         old = """        spec_token_tree: str | None = None
         if spec := spec_config:
@@ -5062,6 +5181,110 @@ def _patch_tree_attn_spec_config_override() -> bool:
         text = text.replace(old_return, new_return, 1)
         did_patch = True
     TREE_ATTN_PATH.write_text(text)
+    return did_patch
+
+
+def _patch_triton_unified_attention_fr13() -> bool:
+    """FR13 tree-attn numerics/launch patch for the live vLLM image.
+
+    Default behavior patches the unified Triton attention softmax into FA2-style
+    log2 space. Set FR13_TREE_ATTN_EXP2_SOFTMAX=0 before launch to preserve the
+    image's base-e kernel for the required base-e vs exp2 ablation.
+    """
+
+    text = TRITON_UNIFIED_ATTN_PATH.read_text()
+    did_patch = False
+
+    pin_sentinel = "# FR13_TREE_ATTN_PIN_TRITON_META"
+    if pin_sentinel not in text:
+        text = text.replace(
+            "            CHUNK_SIZE=chunk_size,\n        )\n",
+            (
+                "            CHUNK_SIZE=chunk_size,\n"
+                f"            # {pin_sentinel}: keep launch meta fixed for graph replay.\n"
+                "            num_warps=4,\n"
+                "            num_stages=3,\n"
+                "        )\n"
+            ),
+            1,
+        )
+        text = text.replace(
+            "            CHUNK_SIZE=chunk_size,\n        )\n        reduce_segments",
+            (
+                "            CHUNK_SIZE=chunk_size,\n"
+                f"            # {pin_sentinel}: keep launch meta fixed for graph replay.\n"
+                "            num_warps=4,\n"
+                "            num_stages=3,\n"
+                "        )\n"
+                "        reduce_segments"
+            ),
+            1,
+        )
+        did_patch = True
+
+    if os.environ.get("FR13_TREE_ATTN_EXP2_SOFTMAX", "1") == "0":
+        TRITON_UNIFIED_ATTN_PATH.write_text(text)
+        return did_patch
+
+    exp2_sentinel = "# FR13_TREE_ATTN_EXP2_SOFTMAX"
+    if exp2_sentinel not in text:
+        replacements = [
+            ("        P = tl.exp(S - m_j[:, None])\n", "        P = tl.exp2(S - m_j[:, None])\n"),
+            ("        alpha = tl.exp(M - m_j)\n", "        alpha = tl.exp2(M - m_j)\n"),
+            (
+                "    segm_expsum = segm_expsum * tl.exp(segm_max - overall_max)\n",
+                "    segm_expsum = segm_expsum * tl.exp2(segm_max - overall_max)\n",
+            ),
+            (
+                "    segm_output *= tl.exp(segm_max - overall_max)[:, None]\n",
+                "    segm_output *= tl.exp2(segm_max - overall_max)[:, None]\n",
+            ),
+        ]
+        for old, new in replacements:
+            if old not in text:
+                raise RuntimeError(f"FR13 exp2 softmax anchor not found: {old!r}")
+            text = text.replace(old, new)
+        text = text.replace(
+            "    # iterate through tiles (now limited to the sliding window range)\n"
+            "    for j in range(tile_start, tile_end):\n"
+            "        seq_offset = j * TILE_SIZE + offs_t\n",
+            (
+                "    # iterate through tiles (now limited to the sliding window range)\n"
+                f"    # {exp2_sentinel}: FA2-style reverse KV-block order.\n"
+                "    for j_loop in range(tile_start, tile_end):\n"
+                "        j = tile_end - 1 - (j_loop - tile_start)\n"
+                "        seq_offset = j * TILE_SIZE + offs_t\n"
+            ),
+            1,
+        )
+        text = text.replace(
+            "    # iterate through tiles (now limited to the sliding window range)\n"
+            "    for j in range(\n"
+            "        max(segm_idx * tiles_per_segment, tile_start),\n"
+            "        min((segm_idx + 1) * tiles_per_segment, tile_end),\n"
+            "    ):\n"
+            "        seq_offset = j * TILE_SIZE + offs_t\n",
+            (
+                "    # iterate through tiles (now limited to the sliding window range)\n"
+                f"    # {exp2_sentinel}: FA2-style reverse KV-block order.\n"
+                "    loop_start = max(segm_idx * tiles_per_segment, tile_start)\n"
+                "    loop_end = min((segm_idx + 1) * tiles_per_segment, tile_end)\n"
+                "    for j_loop in range(loop_start, loop_end):\n"
+                "        j = loop_end - 1 - (j_loop - loop_start)\n"
+                "        seq_offset = j * TILE_SIZE + offs_t\n"
+            ),
+            1,
+        )
+        text = text.replace(
+            "            scale=softmax_scale,\n",
+            (
+                f"            # {exp2_sentinel}: fold softmax scale into log2 space.\n"
+                "            scale=softmax_scale * 1.4426950408889634,\n"
+            ),
+        )
+        did_patch = True
+
+    TRITON_UNIFIED_ATTN_PATH.write_text(text)
     return did_patch
 
 
@@ -5687,6 +5910,7 @@ def main() -> int:
         (EAGLE_PATH, _patch_eagle_tree_consumption_verify()),
         (EAGLE_PATH, _patch_eagle_mtp_draft_trace()),
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
+        (TRITON_UNIFIED_ATTN_PATH, _patch_triton_unified_attention_fr13()),
         (QWEN3_NEXT_PATH, _patch_qwen_root_hidden_capture()),
         (QWEN3_NEXT_PATH, _patch_qwen_full_attn_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_metadata()),
