@@ -7,9 +7,11 @@ CONTAINER=${CONTAINER:-fr10-speed-start}
 PORT=${PORT:-9950}
 GPU_UTIL=${GPU_UTIL:-0.88}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
+MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
 BATCH_INVARIANT=${BATCH_INVARIANT:-0}
 FR10_METRICS=${FR10_METRICS:-0}
 FR10_ENABLE_TREE_GDN=${FR10_ENABLE_TREE_GDN:-1}
+FR10_ALLOW_LINEAR_FALLBACK=${FR10_ALLOW_LINEAR_FALLBACK:-0}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
 FR11_TREE_CONV_NATIVE_BF16_TAPS=${FR11_TREE_CONV_NATIVE_BF16_TAPS:-1}
 FR12_TREE_CONV_NATIVE_BF16_TAPS=${FR12_TREE_CONV_NATIVE_BF16_TAPS:-$FR11_TREE_CONV_NATIVE_BF16_TAPS}
@@ -112,6 +114,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e PYTHONPATH=/workspace/src \
   -e FR10_ENABLE_TREE_GDN="$FR10_ENABLE_TREE_GDN" \
+  -e FR10_ALLOW_LINEAR_FALLBACK="$FR10_ALLOW_LINEAR_FALLBACK" \
   -e FR10_METRICS="$FR10_METRICS" \
   -e FR10_DECODE_MODE_DEFAULT="$FR10_DECODE_MODE_DEFAULT" \
   -e FR11_TREE_CONV_NATIVE_BF16_TAPS="$FR11_TREE_CONV_NATIVE_BF16_TAPS" \
@@ -180,7 +183,7 @@ if [[ \"\${FR12_NO_SPECULATIVE_CONFIG:-0}\" != \"1\" ]]; then
   SPEC_ARGS=(--speculative-config \"\$SPEC_CONFIG\")
 fi
 exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
-  --host 0.0.0.0 --port 9950 --max-num-seqs 4 \
+  --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
   --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' \
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
