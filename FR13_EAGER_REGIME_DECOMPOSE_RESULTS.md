@@ -101,3 +101,48 @@ Interpretation:
 The same eager B=1 prompts/seed are high-accept under native E5, while tree
 spine-only is low-accept. The eager failure is tree-commit/path-specific, not a
 prompt/sample-size artifact.
+
+## Matched per-node accept probability diff
+
+Tree artifact:
+`output/fr13_regime_decompose_20260607T021451Z/tree_spine_only_policy_check/logs/tree_sampler_debug.jsonl`
+
+Native artifact:
+`output/fr13_regime_decompose_20260607T021451Z/per_node_diff/native_matched_one_shot_debug.appended.jsonl`
+
+Diff artifact:
+`output/fr13_regime_decompose_20260607T021451Z/per_node_diff/tree_vs_native_matched_one_shot_full5.json`
+
+Matched one-shot:
+- prompt: `Write a concise Python function that returns the square of an integer.`
+- sampling: `temperature=0.6`, `top_p=0.95`, `seed=1313`, `max_tokens=32`
+
+Spine event 0:
+- draft tokens match native at all 5 positions: `[16, 13, 2972, 2425, 64700]`
+- target argmax matches native at all 5 positions
+- position 0 token `16`: tree constrained `target_prob_draft=0.28299781680107117`, native `0.39712056517601013`
+- position 2 token `2972`: tree `0.7825524806976318`, native `0.8094282150268555`
+
+Spine event 1:
+- draft tokens match native at all 5 positions: `[12305, 198, 727, 9057, 3456]`
+- target argmax matches native at all 5 positions
+- position 1 token `198`: tree `0.9241418838500977`, native `1.0`
+
+Row-convention check:
+- spine tree rows use `target_logits_index` `0..4`, matching native
+  `target_logits_index` `0..4`
+- spine tree rows use `self_logits_index` `1..5`
+- canonical accept rows consume the same constrained probability shown by
+  `tree_logit_gather.target_prob_draft`
+- branches-on canonical traces use `target_prob_row=children[0]` for multi-child
+  branch sets under the same parent, for example parent `0`, children `[1, 2]`,
+  target row `1`
+
+Interpretation:
+Canonical is not miscounting accepted length for these matched rows. It is
+accepting/rejecting against the tree constrained target probabilities it is
+given. Those probabilities are lower than native for the same draft tokens,
+same target row positions, and same argmax. The spine row convention is not
+off-by-one. The remaining bug is upstream of canonical sampling: the tree verify
+target probability tensor differs from the native E5 tensor after sampling
+constraints, even when the emitted draft-token sequence and target argmax match.
