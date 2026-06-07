@@ -917,133 +917,240 @@ def _patch_gdn_linear() -> bool:
                                     and not _fr12_payload["meta"].get(
                                         "tree_conv_detail_done", False
                                     )
-                                ):
-                                    _fr12_path0_window = _fr10_window.index_select(
-                                        0, _fr10_path0_node_tensor
-                                    )
-                                    _fr12_path0_source_indices = (
-                                        _fr10_tree_source_indices.index_select(
+                                    ):
+                                        _fr12_path0_window = _fr10_window.index_select(
                                             0, _fr10_path0_node_tensor
                                         )
-                                    )
-                                    _fr12_path0_native_chain_indices = (
-                                        _fr10_path0_source_indices
-                                    )
-                                    _fr12_taps_fp32 = []
-                                    _fr12_taps_bf16 = []
-                                    _fr12_tap_dtype = mixed_qkv_spec.dtype
-                                    for _fr12_col in range(_fr10_width):
-                                        _fr12_w_fp32 = conv_weights[
-                                            :, _fr12_col
-                                        ].to(torch.float32).unsqueeze(0)
-                                        _fr12_w_bf16 = conv_weights[
-                                            :, _fr12_col
-                                        ].to(_fr12_tap_dtype).unsqueeze(0)
-                                        _fr12_x_col = _fr12_path0_window[
-                                            :, _fr12_col, :
-                                        ]
-                                        _fr12_taps_fp32.append(
-                                            _fr12_x_col.to(torch.float32)
-                                            * _fr12_w_fp32
+                                        _fr13_replay_nodes_env = os.environ.get(
+                                            "FR13_CONV_REPLAY_NODES", ""
+                                        ).strip()
+                                        if _fr13_replay_nodes_env:
+                                            if _fr13_replay_nodes_env == "all":
+                                                _fr13_replay_nodes_py = list(
+                                                    range(_fr10_tree_n)
+                                                )
+                                            else:
+                                                _fr13_replay_nodes_py = [
+                                                    int(_x.strip())
+                                                    for _x in _fr13_replay_nodes_env.split(",")
+                                                    if _x.strip()
+                                                ]
+                                        else:
+                                            _fr13_replay_nodes_py = [
+                                                int(_x)
+                                                for _x in _fr10_path0_node_tensor.detach()
+                                                .cpu()
+                                                .tolist()
+                                            ]
+                                            if _fr10_branch_nodes_py:
+                                                _fr13_replay_nodes_py.append(
+                                                    int(_fr10_branch_nodes_py[0])
+                                                )
+                                        _fr13_replay_nodes_unique = []
+                                        for _fr13_node in _fr13_replay_nodes_py:
+                                            if (
+                                                0 <= int(_fr13_node) < _fr10_tree_n
+                                                and int(_fr13_node)
+                                                not in _fr13_replay_nodes_unique
+                                            ):
+                                                _fr13_replay_nodes_unique.append(
+                                                    int(_fr13_node)
+                                                )
+                                        _fr13_replay_node_tensor = torch.tensor(
+                                            _fr13_replay_nodes_unique,
+                                            dtype=torch.long,
+                                            device=mixed_qkv_spec.device,
                                         )
-                                        _fr12_taps_bf16.append(
-                                            (
-                                                _fr12_x_col.to(_fr12_tap_dtype)
-                                                * _fr12_w_bf16
+                                        _fr13_replay_window = _fr10_window.index_select(
+                                            0, _fr13_replay_node_tensor
+                                        )
+                                        _fr13_replay_x = _fr10_x.index_select(
+                                            0, _fr13_replay_node_tensor
+                                        )
+                                        _fr13_replay_source_indices = (
+                                            _fr10_tree_source_indices.index_select(
+                                                0, _fr13_replay_node_tensor
                                             )
-                                            .to(_fr12_tap_dtype)
+                                        )
+                                        _fr12_path0_source_indices = (
+                                            _fr10_tree_source_indices.index_select(
+                                                0, _fr10_path0_node_tensor
+                                            )
+                                        )
+                                        _fr12_path0_native_chain_indices = (
+                                            _fr10_path0_source_indices
+                                        )
+                                        _fr12_taps_fp32 = []
+                                        _fr12_taps_bf16 = []
+                                        _fr13_taps_fp32 = []
+                                        _fr13_taps_bf16 = []
+                                        _fr12_tap_dtype = mixed_qkv_spec.dtype
+                                        for _fr12_col in range(_fr10_width):
+                                            _fr12_w_fp32 = conv_weights[
+                                                :, _fr12_col
+                                            ].to(torch.float32).unsqueeze(0)
+                                            _fr12_w_bf16 = conv_weights[
+                                                :, _fr12_col
+                                            ].to(_fr12_tap_dtype).unsqueeze(0)
+                                            _fr12_x_col = _fr12_path0_window[
+                                                :, _fr12_col, :
+                                            ]
+                                            _fr12_taps_fp32.append(
+                                                _fr12_x_col.to(torch.float32)
+                                                * _fr12_w_fp32
+                                            )
+                                            _fr12_taps_bf16.append(
+                                                (
+                                                    _fr12_x_col.to(_fr12_tap_dtype)
+                                                    * _fr12_w_bf16
+                                                )
+                                                    .to(_fr12_tap_dtype)
+                                                    .to(torch.float32)
+                                                )
+                                            _fr13_x_col = _fr13_replay_window[
+                                                :, _fr12_col, :
+                                            ]
+                                            _fr13_taps_fp32.append(
+                                                _fr13_x_col.to(torch.float32)
+                                                * _fr12_w_fp32
+                                            )
+                                            _fr13_taps_bf16.append(
+                                                (
+                                                    _fr13_x_col.to(_fr12_tap_dtype)
+                                                    * _fr12_w_bf16
+                                                )
+                                                .to(_fr12_tap_dtype)
+                                                .to(torch.float32)
+                                            )
+                                        _fr12_payload["meta"]["tree_conv_detail"] = {
+                                            "schema": "fr12.tree_conv_detail.v1",
+                                            "conv_state_shape": list(conv_state.shape),
+                                            "activation": str(self.activation),
+                                            "conv_weights": conv_weights.detach()
                                             .to(torch.float32)
-                                        )
-                                    _fr12_payload["meta"]["tree_conv_detail"] = {
-                                        "schema": "fr12.tree_conv_detail.v1",
-                                        "conv_state_shape": list(conv_state.shape),
-                                        "prior_bank_rows": _fr10_prior_conv_bank_rows.detach()
-                                        .cpu()
-                                        .clone(),
-                                        "spec_state_indices_tensor": spec_state_indices_tensor[
-                                            : attn_metadata.num_spec_decodes
-                                        ]
-                                        .detach()
-                                        .cpu()
-                                        .clone(),
-                                        "metadata_num_accepted_tokens": (
-                                            None
-                                            if num_accepted_tokens is None
-                                            else num_accepted_tokens[
+                                            .cpu()
+                                            .clone(),
+                                            "conv_bias": (
+                                                None
+                                                if self.conv1d.bias is None
+                                                else self.conv1d.bias.detach()
+                                                .to(torch.float32)
+                                                .cpu()
+                                                .clone()
+                                            ),
+                                                "prior_bank_rows": _fr10_prior_conv_bank_rows.detach()
+                                            .cpu()
+                                            .clone(),
+                                            "spec_state_indices_tensor": spec_state_indices_tensor[
                                                 : attn_metadata.num_spec_decodes
                                             ]
                                             .detach()
                                             .cpu()
-                                            .clone()
-                                        ),
-                                        "accepted_lens": (
-                                            None
-                                            if _fr10_accepted_lens_tensor is None
-                                            else _fr10_accepted_lens_tensor[
-                                                : attn_metadata.num_spec_decodes
-                                            ]
+                                            .clone(),
+                                            "metadata_num_accepted_tokens": (
+                                                None
+                                                if num_accepted_tokens is None
+                                                else num_accepted_tokens[
+                                                    : attn_metadata.num_spec_decodes
+                                                ]
+                                                .detach()
+                                                .cpu()
+                                                .clone()
+                                            ),
+                                            "accepted_lens": (
+                                                None
+                                                if _fr10_accepted_lens_tensor is None
+                                                else _fr10_accepted_lens_tensor[
+                                                    : attn_metadata.num_spec_decodes
+                                                ]
+                                                .detach()
+                                                .cpu()
+                                                .clone()
+                                            ),
+                                            "read_cols": _fr10_conv_read_cols.detach()
+                                            .cpu()
+                                            .clone(),
+                                            "prior_read_mode": (
+                                                "native_tail_pre_remap"
+                                                if _fr12_native_prior_read
+                                                else "legacy_remapped_head"
+                                            ),
+                                            "prior_cols": _fr10_prior_cols.detach()
+                                            .cpu()
+                                            .clone(),
+                                            "candidate_bank_rows": (
+                                                None
+                                                if _fr12_tree_candidate_bank_rows is None
+                                                else _fr12_tree_candidate_bank_rows.detach()
+                                                .cpu()
+                                                .clone()
+                                            ),
+                                            "candidate_conv_state_pre_remap": _fr12_tree_candidate_pre_remap,
+                                            "candidate_conv_state_post_remap": _fr12_tree_candidate_post_remap,
+                                            "path0_nodes": _fr10_path0_node_tensor.detach()
+                                            .cpu()
+                                            .clone(),
+                                            "tree_source_indices_path0": _fr12_path0_source_indices.detach()
+                                            .cpu()
+                                            .clone(),
+                                            "native_chain_source_indices_path0": _fr12_path0_native_chain_indices.detach()
+                                            .cpu()
+                                            .clone(),
+                                            "selected_nodes": _fr13_replay_node_tensor.detach()
+                                            .cpu()
+                                            .clone(),
+                                            "selected_source_indices": _fr13_replay_source_indices.detach()
+                                            .cpu()
+                                            .clone(),
+                                            "prior_window": _fr10_prior_window.detach()
+                                            .to(torch.float32)
+                                            .cpu()
+                                            .clone(),
+                                            "pre_conv_path0": _fr10_path0_x.detach()
+                                            .to(torch.float32)
+                                            .cpu()
+                                            .clone(),
+                                            "window_path0": _fr12_path0_window.detach()
+                                            .to(torch.float32)
+                                            .cpu()
+                                            .clone(),
+                                            "pre_conv_selected": _fr13_replay_x.detach()
+                                            .to(torch.float32)
+                                            .cpu()
+                                            .clone(),
+                                            "window_selected": _fr13_replay_window.detach()
+                                            .to(torch.float32)
+                                            .cpu()
+                                            .clone(),
+                                            "tap_products_fp32_path0": torch.stack(
+                                                _fr12_taps_fp32, dim=1
+                                            )
                                             .detach()
                                             .cpu()
-                                            .clone()
-                                        ),
-                                        "read_cols": _fr10_conv_read_cols.detach()
-                                        .cpu()
-                                        .clone(),
-                                        "prior_read_mode": (
-                                            "native_tail_pre_remap"
-                                            if _fr12_native_prior_read
-                                            else "legacy_remapped_head"
-                                        ),
-                                        "prior_cols": _fr10_prior_cols.detach()
-                                        .cpu()
-                                        .clone(),
-                                        "candidate_bank_rows": (
-                                            None
-                                            if _fr12_tree_candidate_bank_rows is None
-                                            else _fr12_tree_candidate_bank_rows.detach()
+                                            .clone(),
+                                            "tap_products_bf16_path0": torch.stack(
+                                                _fr12_taps_bf16, dim=1
+                                            )
+                                            .detach()
                                             .cpu()
-                                            .clone()
-                                        ),
-                                        "candidate_conv_state_pre_remap": _fr12_tree_candidate_pre_remap,
-                                        "candidate_conv_state_post_remap": _fr12_tree_candidate_post_remap,
-                                        "path0_nodes": _fr10_path0_node_tensor.detach()
-                                        .cpu()
-                                        .clone(),
-                                        "tree_source_indices_path0": _fr12_path0_source_indices.detach()
-                                        .cpu()
-                                        .clone(),
-                                        "native_chain_source_indices_path0": _fr12_path0_native_chain_indices.detach()
-                                        .cpu()
-                                        .clone(),
-                                        "prior_window": _fr10_prior_window.detach()
-                                        .to(torch.float32)
-                                        .cpu()
-                                        .clone(),
-                                        "pre_conv_path0": _fr10_path0_x.detach()
-                                        .to(torch.float32)
-                                        .cpu()
-                                        .clone(),
-                                        "window_path0": _fr12_path0_window.detach()
-                                        .to(torch.float32)
-                                        .cpu()
-                                        .clone(),
-                                        "tap_products_fp32_path0": torch.stack(
-                                            _fr12_taps_fp32, dim=1
-                                        )
-                                        .detach()
-                                        .cpu()
-                                        .clone(),
-                                        "tap_products_bf16_path0": torch.stack(
-                                            _fr12_taps_bf16, dim=1
-                                        )
-                                        .detach()
-                                        .cpu()
-                                        .clone(),
-                                    }
-                                    _fr12_payload["meta"][
-                                        "tree_conv_detail_done"
-                                    ] = True
-                                    _fr12_subkernel_capture_flush(_fr12_payload)
+                                            .clone(),
+                                            "tap_products_fp32_selected": torch.stack(
+                                                _fr13_taps_fp32, dim=1
+                                            )
+                                            .detach()
+                                            .cpu()
+                                            .clone(),
+                                            "tap_products_bf16_selected": torch.stack(
+                                                _fr13_taps_bf16, dim=1
+                                            )
+                                            .detach()
+                                            .cpu()
+                                            .clone(),
+                                        }
+                                        _fr12_payload["meta"][
+                                            "tree_conv_detail_done"
+                                        ] = True
+                                        _fr12_subkernel_capture_flush(_fr12_payload)
                             except Exception as _fr12_tree_detail_exc:
                                 logger.warning(
                                     "FR12 tree conv detail capture failed: %s",
@@ -1584,10 +1691,23 @@ def _patch_gdn_linear() -> bool:
                             .to(_fr12_tap_dtype)
                             .to(torch.float32)
                         )
-                    _fr12_payload["meta"]["native_conv_detail"] = {
-                        "schema": "fr12.native_conv_detail.v1",
-                        "conv_state_shape": list(conv_state.shape),
-                        "prior_bank_row": int(_fr12_prior_row.detach().cpu().item()),
+                        _fr12_payload["meta"]["native_conv_detail"] = {
+                            "schema": "fr12.native_conv_detail.v1",
+                            "conv_state_shape": list(conv_state.shape),
+                            "activation": str(self.activation),
+                            "conv_weights": conv_weights.detach()
+                            .to(torch.float32)
+                            .cpu()
+                            .clone(),
+                            "conv_bias": (
+                                None
+                                if self.conv1d.bias is None
+                                else self.conv1d.bias.detach()
+                                .to(torch.float32)
+                                .cpu()
+                                .clone()
+                            ),
+                            "prior_bank_row": int(_fr12_prior_row.detach().cpu().item()),
                         "spec_state_indices_tensor": spec_state_indices_tensor[
                             : attn_metadata.num_spec_decodes
                         ]
