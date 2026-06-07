@@ -1,5 +1,7 @@
 # FR-13 finding — the no-copy tree FA2 fork hits a single-ULP reduction-grouping FLOOR (not a bug)
 
+> **CORRECTION (workflow `w86uygp1x`, see `FR13_FLOOR_WORKFLOW_VERDICT.md`):** the numbers below from the v1 reducer OVERSTATE the residual. Accurate (v2 oracle, raw `.pt`): **14/16 calls byte-exact 0.0 on the whole tree; 15/16 byte-exact spine; exactly 2 single-bf16-ULP elements total across 16 events (~2e-6 of ~983k comparisons)**. row-0's nonzero is **0.0078/1037** (v1's "0.125/512" superseded) and is **definitively** a single-query-vs-stacked FA2 harness artifact (tree[0] == stacked oracle bit-for-bit). It is a ~2e-6 **probabilistic** single-ULP rounding event, **not** a deterministic per-row floor; **no impossibility theorem exists**. Strongest no-copy losslessness evidence to date. Read the verdict doc, not the v1 numbers below.
+
 Monitor red-team, 2026-06-07, from strict run `output/fr13_verify_strict_tree_20260607T091935Z`
 (`--attention-backend TREE_ATTN`, `FR13_FA2_TREE_BIAS=1`, `FR10_ALLOW_LINEAR_FALLBACK` UNSET, GDN tree branch active). Bound to commit `fe21cb73`.
 
