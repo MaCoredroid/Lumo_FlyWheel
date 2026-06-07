@@ -429,6 +429,17 @@ def _patch_flash_attn_interface(path: Path) -> bool:
 def _patch_tree_attn(path: Path) -> bool:
     text = path.read_text()
     changed = False
+    old_filter = (
+        '        if want and want != "*" and not layer_name.startswith(want):\n'
+        "            return\n"
+    )
+    new_filter = (
+        '        if want and want != "*" and layer_name and not layer_name.startswith(want):\n'
+        "            return\n"
+    )
+    if old_filter in text:
+        text = text.replace(old_filter, new_filter)
+        changed = True
     if "import os\n" not in text:
         text = text.replace("import ast\n", "import ast\nimport os\n", 1)
         changed = True
@@ -459,8 +470,126 @@ def _patch_tree_attn(path: Path) -> bool:
         )
         text = text.replace("                    tree_bias=decode_meta.tree_attn_bias,\n", "                    tree_bias=tree_bias,\n", 1)
         did = True
+    elif (
+        "flash_attn_varlen_func(\n" in text
+        and 'globals().get("_fr13_tree_attn_op_capture")' not in text
+    ):
+        text = text.replace(
+            "                    tree_bias=tree_bias,\n                )\n            else:\n",
+            """                    tree_bias=tree_bias,
+                )
+            else:
+""",
+            1,
+        )
+        did = True
     else:
         did = False
+    changed = changed or did
+    if changed:
+        path.write_text(text)
+        py_compile.compile(path, doraise=True)
+    return changed
+
+
+def _patch_flash_attn_backend(path: Path) -> bool:
+    text = path.read_text()
+    changed = False
+    old_filter = (
+        '        if want and want != "*" and not layer_name.startswith(want):\n'
+        "            return\n"
+    )
+    new_filter = (
+        '        if want and want != "*" and layer_name and not layer_name.startswith(want):\n'
+        "            return\n"
+    )
+    if old_filter in text:
+        text = text.replace(old_filter, new_filter)
+        changed = True
+    if "FR13_FLASH_ATTN_OP_CAPTURE_TREE_ONLY" not in text:
+        text = text.replace(
+            '        layer_name = str(getattr(layer, "layer_name", ""))\n',
+            '''        tree_bias = getattr(attn_metadata, "tree_attn_bias", None)
+        if (
+            os.environ.get("FR13_FLASH_ATTN_OP_CAPTURE_TREE_ONLY", "0") == "1"
+            and (tree_bias is None or tree_bias.numel() == 0)
+        ):
+            return
+        layer_name = str(getattr(layer, "layer_name", ""))
+''',
+            1,
+        )
+        text = text.replace(
+            '            "used_blocks": used_blocks,\n',
+            '''            "used_blocks": used_blocks,
+            "tree_attn_bias": (
+                tree_bias.detach().to(torch.float32).cpu()
+                if tree_bias is not None
+                else None
+            ),
+''',
+            1,
+        )
+        changed = True
+
+    old = """                flash_attn_varlen_func(
+                    q=query[:num_actual_tokens],
+                    k=key_cache,
+                    v=value_cache,
+                    out=output[:num_actual_tokens],
+                    cu_seqlens_q=cu_seqlens_q,
+                    max_seqlen_q=max_seqlen_q,
+                    seqused_k=seqused_k,
+                    max_seqlen_k=max_seqlen_k,
+                    softmax_scale=self.scale,
+                    causal=attn_metadata.causal,
+                    alibi_slopes=self.alibi_slopes,
+                    window_size=sliding_window_size,
+                    block_table=block_table,
+                    softcap=self.logits_soft_cap,
+                    scheduler_metadata=scheduler_metadata,
+                    fa_version=self.vllm_flash_attn_version,
+                    q_descale=q_descale,
+                    k_descale=k_descale,
+                    v_descale=v_descale,
+                    num_splits=attn_metadata.max_num_splits,
+                    s_aux=self.sinks,
+                )
+"""
+    new = """                tree_bias = getattr(attn_metadata, "tree_attn_bias", None)
+                use_tree_bias = (
+                    os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1"
+                    and tree_bias is not None
+                    and tree_bias.numel() > 0
+                )
+                if use_tree_bias and self.alibi_slopes is not None:
+                    raise NotImplementedError("FR13_FA2_TREE_BIAS does not support ALiBi")
+                flash_attn_varlen_func(
+                    q=query[:num_actual_tokens],
+                    k=key_cache,
+                    v=value_cache,
+                    out=output[:num_actual_tokens],
+                    cu_seqlens_q=cu_seqlens_q,
+                    max_seqlen_q=max_seqlen_q,
+                    seqused_k=seqused_k,
+                    max_seqlen_k=max_seqlen_k,
+                    softmax_scale=self.scale,
+                    causal=attn_metadata.causal,
+                    alibi_slopes=None if use_tree_bias else self.alibi_slopes,
+                    window_size=sliding_window_size,
+                    block_table=block_table,
+                    softcap=self.logits_soft_cap,
+                    scheduler_metadata=scheduler_metadata,
+                    fa_version=self.vllm_flash_attn_version,
+                    q_descale=q_descale,
+                    k_descale=k_descale,
+                    v_descale=v_descale,
+                    num_splits=attn_metadata.max_num_splits,
+                    s_aux=self.sinks,
+                    tree_bias=tree_bias if use_tree_bias else None,
+                )
+"""
+    text, did = _replace_once(text, old, new, "flash_attn decode tree_bias")
     changed = changed or did
     if changed:
         path.write_text(text)
@@ -475,6 +604,9 @@ def patch_installed_vllm(site_packages: Path) -> dict[str, bool]:
         ),
         "tree_attn.py": _patch_tree_attn(
             site_packages / "vllm/v1/attention/backends/tree_attn.py"
+        ),
+        "flash_attn.py": _patch_flash_attn_backend(
+            site_packages / "vllm/v1/attention/backends/flash_attn.py"
         ),
     }
 

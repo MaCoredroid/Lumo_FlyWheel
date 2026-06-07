@@ -96,6 +96,7 @@ def main() -> int:
 
     cu_q_single = torch.tensor([0, 1], dtype=torch.int32, device="cuda")
     refs = []
+    path_refs = []
     rows = []
     for row in range(q_len):
         path = _ancestors(parent, row)
@@ -127,6 +128,32 @@ def main() -> int:
             out = ret
         ref = out.detach().cpu().to(torch.float32)[0]
         refs.append(ref)
+
+        path_q_rows = torch.tensor(path, dtype=torch.long)
+        q_path = q_all.index_select(0, path_q_rows).cuda()
+        k_path = k_all.index_select(0, kv_rows).cuda()
+        v_path = v_all.index_select(0, kv_rows).cuda()
+        cu_q_path = torch.tensor([0, len(path)], dtype=torch.int32, device="cuda")
+        out_path = torch.empty_like(q_path)
+        ret_path = flash_attn_varlen_func(
+            q=q_path,
+            k=k_path,
+            v=v_path,
+            out=out_path,
+            cu_seqlens_q=cu_q_path,
+            max_seqlen_q=len(path),
+            cu_seqlens_k=cu_k,
+            max_seqlen_k=int(k_path.shape[0]),
+            softmax_scale=scale,
+            causal=True,
+            window_size=[-1, -1],
+            softcap=0.0,
+            fa_version=2,
+        )
+        if isinstance(ret_path, torch.Tensor):
+            out_path = ret_path
+        path_ref = out_path.detach().cpu().to(torch.float32)[-1]
+        path_refs.append(path_ref)
         rows.append(
             {
                 "row": row,
@@ -134,10 +161,12 @@ def main() -> int:
                 "path": path,
                 "kv_len": int(k.shape[0]),
                 "tree_vs_fa2": _stats(tree[row], ref),
+                "tree_vs_fa2_path": _stats(tree[row], path_ref),
             }
         )
 
     fa2_rows = torch.stack(refs, dim=0)
+    fa2_path_rows = torch.stack(path_refs, dim=0)
 
     spine = torch.tensor(spine_rows, dtype=torch.long)
     spine_kv_rows = torch.tensor(
@@ -176,6 +205,7 @@ def main() -> int:
         "context_len": context_len,
         "spine_rows": spine_rows,
         "tree_vs_fa2_all_rows": _stats(tree, fa2_rows),
+        "tree_vs_fa2_path_rows": _stats(tree, fa2_path_rows),
         "tree_vs_fa2_spine": _stats(tree_spine, spine_fa2),
         "fa2_spine_vs_dense_spine": _stats(spine_fa2, dense_spine),
         "fa2_lse_vs_dense_lse": _stats(spine_lse, dense_lse),
