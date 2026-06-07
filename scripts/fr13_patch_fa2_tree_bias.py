@@ -47,14 +47,14 @@ __forceinline__ __device__ void apply_tree_bias(Tensor<Engine, Layout> &tensor_,
         const int row_idx_base = row_idx_offset + mi * warp_row_stride;
         #pragma unroll
         for (int i = 0; i < size<0, 0>(tensor); ++i) {
-            const int q_rel = row_idx_base + i * 8;
+            const int q_rel = row_idx_base + i * 8 - params.tree_bias_q_offset;
             if (q_rel >= 0 && q_rel < params.tree_bias_rows) {
                 #pragma unroll
                 for (int nj = 0; nj < size<1, 1>(tensor); ++nj) {
                     const int col_idx_base = col_idx_offset + nj * 8;
                     #pragma unroll
                     for (int j = 0; j < size<1, 0>(tensor); ++j) {
-                        const int k_rel = col_idx_base + j - context_len;
+                        const int k_rel = col_idx_base + j - context_len - params.tree_bias_k_offset;
                         if (k_rel >= 0 && k_rel < params.tree_bias_cols) {
                             const float bias = tree_bias[
                                 q_rel * params.tree_bias_row_stride
@@ -94,7 +94,15 @@ def _insert_once(text: str, marker: str, insert: str, label: str) -> tuple[str, 
 
 def _patch_flash_h(path: Path) -> bool:
     text = path.read_text()
-    insert = """    // FR13_FA2_TREE_BIAS: dense [q_suffix, q_suffix] or [batch, q_suffix, q_suffix] fp32 bias.\n    void * __restrict__ tree_bias_ptr;\n    index_t tree_bias_batch_stride;\n    index_t tree_bias_row_stride;\n    index_t tree_bias_col_stride;\n    int tree_bias_rows;\n    int tree_bias_cols;\n\n"""
+    insert = """    // FR13_FA2_TREE_BIAS: dense [q_suffix, q_suffix] or [batch, q_suffix, q_suffix] fp32 bias.\n    void * __restrict__ tree_bias_ptr;\n    index_t tree_bias_batch_stride;\n    index_t tree_bias_row_stride;\n    index_t tree_bias_col_stride;\n    int tree_bias_rows;\n    int tree_bias_cols;\n    int tree_bias_q_offset;\n    int tree_bias_k_offset;\n\n"""
+    if "int tree_bias_cols;\n" in text and "int tree_bias_q_offset;\n" not in text:
+        text = text.replace(
+            "    int tree_bias_cols;\n",
+            "    int tree_bias_cols;\n    int tree_bias_q_offset;\n    int tree_bias_k_offset;\n",
+            1,
+        )
+        path.write_text(text)
+        return True
     text, changed = _insert_once(
         text,
         "    void * __restrict__ alibi_slopes_ptr;\n",
@@ -109,13 +117,22 @@ def _patch_flash_h(path: Path) -> bool:
 def _patch_flash_fwd_kernel(path: Path) -> bool:
     text = path.read_text()
     changed = False
-    text, did = _insert_once(
-        text,
-        "template<typename Kernel_traits, bool Is_dropout",
-        TREE_BIAS_HELPER,
-        "tree bias helper",
-    )
-    changed = changed or did
+    helper_marker = "// FR13_FA2_TREE_BIAS: add a dense query-suffix ancestry bias after QK."
+    helper_end_marker = "template<typename Kernel_traits, bool Is_dropout"
+    if helper_marker in text:
+        start = text.index(helper_marker)
+        end = text.index(helper_end_marker, start)
+        if text[start:end] != TREE_BIAS_HELPER.lstrip():
+            text = text[:start] + TREE_BIAS_HELPER.lstrip() + text[end:]
+            changed = True
+    else:
+        text, did = _insert_once(
+            text,
+            helper_end_marker,
+            TREE_BIAS_HELPER,
+            "tree bias helper",
+        )
+        changed = changed or did
     anchors = [
         (
             """        if constexpr (Is_softcap){\n            FLASH_NAMESPACE::apply_softcap(acc_s, params.softcap);\n        }\n\n        mask.template apply_mask<Is_causal, Is_even_MN>(\n""",
@@ -172,6 +189,8 @@ void set_params_tree_bias(Flash_fwd_params &params,
         params.tree_bias_col_stride = 0;
         params.tree_bias_rows = 0;
         params.tree_bias_cols = 0;
+        params.tree_bias_q_offset = 0;
+        params.tree_bias_k_offset = 0;
         return;
     }
     at::Tensor tree_bias = tree_bias_.value();
@@ -182,24 +201,35 @@ void set_params_tree_bias(Flash_fwd_params &params,
     if (tree_bias.dim() == 3) {
         TORCH_CHECK(tree_bias.size(0) == batch_size, "batched tree_bias batch dimension mismatch");
     }
-    TORCH_CHECK(tree_bias.size(-2) >= max_seqlen_q, "tree_bias rows must cover max_seqlen_q");
-    TORCH_CHECK(tree_bias.size(-1) >= max_seqlen_q, "tree_bias cols must cover max_seqlen_q");
+    TORCH_CHECK(tree_bias.size(-2) > 0, "tree_bias rows must be non-empty");
+    TORCH_CHECK(tree_bias.size(-1) > 0, "tree_bias cols must be non-empty");
     params.tree_bias_ptr = tree_bias.data_ptr();
     params.tree_bias_batch_stride = tree_bias.dim() == 3 ? tree_bias.stride(0) : 0;
     params.tree_bias_row_stride = tree_bias.stride(-2);
     params.tree_bias_col_stride = tree_bias.stride(-1);
     params.tree_bias_rows = tree_bias.size(-2);
     params.tree_bias_cols = tree_bias.size(-1);
+    params.tree_bias_q_offset = max_seqlen_q > tree_bias.size(-2) ? max_seqlen_q - tree_bias.size(-2) : 0;
+    params.tree_bias_k_offset = max_seqlen_q > tree_bias.size(-1) ? max_seqlen_q - tree_bias.size(-1) : 0;
 }
 
 '''
-    text, did = _insert_once(
-        text,
-        "std::vector<at::Tensor>\nmha_fwd(",
-        helper,
-        "set_params_tree_bias helper",
-    )
-    changed = changed or did
+    helper_marker = "// FR13_FA2_TREE_BIAS\nvoid set_params_tree_bias"
+    helper_end_marker = "std::vector<at::Tensor>\nmha_fwd("
+    if helper_marker in text:
+        start = text.index(helper_marker)
+        end = text.index(helper_end_marker, start)
+        if text[start:end] != helper.lstrip():
+            text = text[:start] + helper.lstrip() + text[end:]
+            changed = True
+    else:
+        text, did = _insert_once(
+            text,
+            helper_end_marker,
+            helper,
+            "set_params_tree_bias helper",
+        )
+        changed = changed or did
     text, did = _replace_once(
         text,
         "std::vector<at::Tensor>\nmha_varlen_fwd(",
@@ -410,8 +440,27 @@ def _patch_tree_attn(path: Path) -> bool:
     )
     changed = changed or did
     anchor = """        if decode_meta := attn_metadata.decode_metadata:\n            unified_attention(\n                q=query[:num_decode_tokens],\n                k=key_cache,\n                v=value_cache,\n                out=output[:num_decode_tokens],\n                cu_seqlens_q=decode_meta.query_start_loc,\n                max_seqlen_q=decode_meta.max_query_len,\n                seqused_k=decode_meta.seq_lens,\n                max_seqlen_k=decode_meta.max_seq_len,\n                softmax_scale=self.scale,\n                causal=True,\n                alibi_slopes=self.alibi_slopes,\n                qq_bias=decode_meta.tree_attn_bias,\n                window_size=self.sliding_window,\n                block_table=decode_meta.block_table,\n                softcap=self.logits_soft_cap,\n                q_descale=None,  # Not supported\n                k_descale=layer._k_scale.expand(descale_shape),\n                v_descale=layer._v_scale.expand(descale_shape),\n            )\n"""
-    replacement = """        if decode_meta := attn_metadata.decode_metadata:\n            if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1":\n                if self.alibi_slopes is not None:\n                    raise NotImplementedError("FR13_FA2_TREE_BIAS does not support ALiBi")\n                sliding_window_size = (\n                    list(self.sliding_window)\n                    if self.sliding_window is not None\n                    else None\n                )\n                flash_attn_varlen_func(\n                    q=query[:num_decode_tokens],\n                    k=key_cache,\n                    v=value_cache,\n                    out=output[:num_decode_tokens],\n                    cu_seqlens_q=decode_meta.query_start_loc,\n                    max_seqlen_q=decode_meta.max_query_len,\n                    seqused_k=decode_meta.seq_lens,\n                    max_seqlen_k=decode_meta.max_seq_len,\n                    softmax_scale=self.scale,\n                    causal=True,\n                    alibi_slopes=None,\n                    window_size=sliding_window_size,\n                    block_table=decode_meta.block_table,\n                    softcap=self.logits_soft_cap,\n                    fa_version=2,\n                    tree_bias=decode_meta.tree_attn_bias,\n                )\n            else:\n                unified_attention(\n                    q=query[:num_decode_tokens],\n                    k=key_cache,\n                    v=value_cache,\n                    out=output[:num_decode_tokens],\n                    cu_seqlens_q=decode_meta.query_start_loc,\n                    max_seqlen_q=decode_meta.max_query_len,\n                    seqused_k=decode_meta.seq_lens,\n                    max_seqlen_k=decode_meta.max_seq_len,\n                    softmax_scale=self.scale,\n                    causal=True,\n                    alibi_slopes=self.alibi_slopes,\n                    qq_bias=decode_meta.tree_attn_bias,\n                    window_size=self.sliding_window,\n                    block_table=decode_meta.block_table,\n                    softcap=self.logits_soft_cap,\n                    q_descale=None,  # Not supported\n                    k_descale=layer._k_scale.expand(descale_shape),\n                    v_descale=layer._v_scale.expand(descale_shape),\n                )\n"""
-    text, did = _replace_once(text, anchor, replacement, "tree_attn decode route")
+    replacement = """        if decode_meta := attn_metadata.decode_metadata:\n            tree_bias = decode_meta.tree_attn_bias\n            use_tree_bias = tree_bias is not None and tree_bias.numel() > 0\n            if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1" and use_tree_bias:\n                if self.alibi_slopes is not None:\n                    raise NotImplementedError("FR13_FA2_TREE_BIAS does not support ALiBi")\n                sliding_window_size = (\n                    list(self.sliding_window)\n                    if self.sliding_window is not None\n                    else None\n                )\n                flash_attn_varlen_func(\n                    q=query[:num_decode_tokens],\n                    k=key_cache,\n                    v=value_cache,\n                    out=output[:num_decode_tokens],\n                    cu_seqlens_q=decode_meta.query_start_loc,\n                    max_seqlen_q=decode_meta.max_query_len,\n                    seqused_k=decode_meta.seq_lens,\n                    max_seqlen_k=decode_meta.max_seq_len,\n                    softmax_scale=self.scale,\n                    causal=True,\n                    alibi_slopes=None,\n                    window_size=sliding_window_size,\n                    block_table=decode_meta.block_table,\n                    softcap=self.logits_soft_cap,\n                    fa_version=2,\n                    tree_bias=tree_bias,\n                )\n            else:\n                unified_attention(\n                    q=query[:num_decode_tokens],\n                    k=key_cache,\n                    v=value_cache,\n                    out=output[:num_decode_tokens],\n                    cu_seqlens_q=decode_meta.query_start_loc,\n                    max_seqlen_q=decode_meta.max_query_len,\n                    seqused_k=decode_meta.seq_lens,\n                    max_seqlen_k=decode_meta.max_seq_len,\n                    softmax_scale=self.scale,\n                    causal=True,\n                    alibi_slopes=self.alibi_slopes,\n                    qq_bias=decode_meta.tree_attn_bias,\n                    window_size=self.sliding_window,\n                    block_table=decode_meta.block_table,\n                    softcap=self.logits_soft_cap,\n                    q_descale=None,  # Not supported\n                    k_descale=layer._k_scale.expand(descale_shape),\n                    v_descale=layer._v_scale.expand(descale_shape),\n                )\n"""
+    if anchor in text:
+        text = text.replace(anchor, replacement, 1)
+        did = True
+    elif (
+        'if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1":' in text
+        and "use_tree_bias = tree_bias is not None and tree_bias.numel() > 0" not in text
+    ):
+        text = text.replace(
+            '        if decode_meta := attn_metadata.decode_metadata:\n'
+            '            if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1":\n',
+            '        if decode_meta := attn_metadata.decode_metadata:\n'
+            '            tree_bias = decode_meta.tree_attn_bias\n'
+            '            use_tree_bias = tree_bias is not None and tree_bias.numel() > 0\n'
+            '            if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1" and use_tree_bias:\n',
+            1,
+        )
+        text = text.replace("                    tree_bias=decode_meta.tree_attn_bias,\n", "                    tree_bias=tree_bias,\n", 1)
+        did = True
+    else:
+        did = False
     changed = changed or did
     if changed:
         path.write_text(text)
