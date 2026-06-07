@@ -4070,19 +4070,21 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                         num_draft_tokens=[int(_x) for _x in num_draft_tokens.tolist()],
                         cu_total=int(cu_num_draft_tokens[-1]) if len(cu_num_draft_tokens) else 0,
                         logits_indices=[
-                            int(_x) for _x in logits_indices.detach().cpu().tolist()
+                            int(_x) for _x in np.asarray(logits_indices).tolist()
                         ],
                         target_logits_indices=[
-                            int(_x) for _x in torch.as_tensor(
-                                target_logits_indices
-                            ).detach().cpu().tolist()
+                            int(_x) for _x in np.asarray(target_logits_indices).tolist()
                         ],
                         bonus_logits_indices=[
-                            int(_x) for _x in bonus_logits_indices.detach().cpu().tolist()
+                            int(_x) for _x in np.asarray(bonus_logits_indices).tolist()
                         ],
                         sampled_token_ids=[
                             int(_x) for _x in self.input_ids.gpu[
-                                logits_indices
+                                torch.as_tensor(
+                                    logits_indices,
+                                    dtype=torch.long,
+                                    device=self.device,
+                                )
                             ].detach().cpu().tolist()
                         ],
                     )) + chr(10)
