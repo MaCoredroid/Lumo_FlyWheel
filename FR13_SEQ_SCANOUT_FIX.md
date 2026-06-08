@@ -1,0 +1,19 @@
+# FR13 SEQ scan-out 1.19e-7 FIX (workflow wysctcf1o + monitor red-team, 2026-06-08)
+
+## ROOT (proven from code + git + FR12 artifact): regressed FR12 2-D reduction tile
+- L2 injector = `gdn_scan_out`, fp32 delta 2^-23 (1.19e-7) at index [0,**43,31**] = head 43/head_dim 31 (NOT h31/d26 — that was the WY channel; SEQ capture says **h43/d31**), 2 elems. Everything upstream (input/conv/h0/in_proj/gate_z) = 0.0; downstream gate/o_proj/RMSNorm are pure functions of the diverged scan-out (cascade → 0.0 once scan-out is 0.0).
+- The divergent OPS: `fr10_gdn_tree_kernel.py:335` `b_v -= tl.sum(state_i * b_k)` and `:338` `out_i = tl.sum(state_i * b_q)` — **bare 1-D tl.sum over [DIM_K=128]** (BLOCK_V=1, grid `(num_vh, dim_v)` :543/:568). Native `fused_sigmoid_gating.py:162/:167` = `tl.sum(b_h * b_k[None,:], axis=1)` over a 2-D `[BV,BK]` tile. Triton lowers 1-D vs 2-D-axis=1 to DIFFERENT intra-warp partition/tree-pairing → fp32 partial-sum grouping differs sub-ULP → compounds to 2^-23 at depth-2 on the high-|val| channel.
+- **REGRESSION (git-verified):** FR12 `beec984a` ("make GDN scan output N-independent") used `BV=16`, 2-D `[BV,DIM_K]`, `tl.sum(axis=1)` → measured **0.0 vs native** at depths 0/1/2 (`output/fr12_scan_direct_raw_clean_20260606T183545Z/scan_batch_invariance_l0.json`). The SEQ rewrite `88212830` dropped it to `BLOCK_V=1` 1-D. FIXABLE, existence-proof-backed. NOT the MMA/WY-irreducible class (plain contiguous tl.sum, not scattered-lane MMA). No reward-hack (re-applying our own FR12 numerics alignment).
+
+## THE FIX — restore the 2-D axis=1 reduction FORM. **MONITOR RED-TEAM: do NOT blindly widen BV to 32.**
+The workflow's own DECISIVE PROOF: the reduction tree is **BV-INVARIANT as long as it stays the 2-D axis=1 form** (FR12 BV=16 and native BV=32 are BOTH 0.0). So the fix is the **2-D form, not the BV value.**
+- **h_cache scales with BV:** current `[N_PAD, DIM_K]` = 8KB (BLOCK_V=1). BV=32 → `[16,32,128]` = **256KB → SPILL → re-breaks the register-resident no-tax design (G2).** BV=16 → 128KB (also spill-risky). So do NOT just widen to 32.
+- **TRY THIS ORDER (smallest-change-first, preserve no-spill):**
+  1. **Keep BLOCK_V=1**, but make the REDUCTIONS 2-D: reshape `state_i` to `[1, DIM_K]` and use `tl.sum(state_i * b_k[None,:], axis=1)` (:335) / `tl.sum(state_i * b_q[None,:], axis=1)` (:338); rank-1 `state_i += b_v[:,None] * b_k[None,:]` (:337). h_cache stays 8KB (no spill). **TEST: does scan-out → 0.0?** (Untested regime: the FR12 proof is BV>=16; Triton MIGHT collapse a degenerate `[1,128]` back to 1-D — so this must be MEASURED, not assumed.)
+  2. **If BV=1 2-D does NOT reach 0.0** (Triton collapsed it), escalate to **BV=16** (the FR12-PROVEN 0.0 value) — but then **CHECK `n_spills==0`** (h_cache 128KB). If it spills, the bit-exact-vs-no-spill tension is real → measure the B=4 TPS impact (the spill may still be acceptable, or use the smallest BV that both (a) gives the 2-D lowering 0.0 and (b) doesn't spill).
+- After the fix, **re-run the live L2 row-2 sub-op ladder**: confirm `gdn_scan_out → 0.0`, L2 hidden → 0.0, then the FULL ladder for a new first_nonzero.
+
+## CAVEAT to police (workflow #4): state-compounding
+FR12 measured scan-OUTPUT 0.0 but internal **state.max_abs = 2^-21** (FR12 replayed every node from h0, so state drift never compounded). The SEQ kernel resumes children from `h_cache`, so a residual state delta CAN compound across depth on the spine. After the reduction fix, verify the **state-store path** doesn't re-surface a deeper-layer scan-out nonzero. If it does, apply the SAME 2-D-form alignment to the state-store reduction — still the FIXABLE class.
+
+## RULED OUT (verified): beta (fp32, matches native), h_cache parent-resume (value-preserving zero-sum), cast boundary (pure fp32, no FLA_BF16_BOUNDARIES in _tree_gdn_kernel). NO self-declare; the live ladder confirms.
