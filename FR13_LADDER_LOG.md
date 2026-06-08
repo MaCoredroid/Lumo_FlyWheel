@@ -532,3 +532,69 @@ Interpretation: S1 is real. The previous fp32 floor could round into different B
 - Captured `tree_path_lcp.jsonl` rows show `superset_violation=false`; this is not a substitute for a future live remap-column assertion, but no static accepted-column lag was found in the code path.
 
 Status: no live ladder/e2e verdict is claimed from this entry. The remaining S1 BF16-bank mismatch is the current wall before a meaningful full-model live validator.
+
+## Commit `codex_fr17-output-tap-live-ladder` - prompt-pinned paired ladder + output split (codex_fr17, 2026-06-08)
+
+### Scope
+- User direction: execute `FR13_WY_LADDER_PROMPT_FIX.md`; stop reusing the `163915Z` native capture because its prompt is unrecoverable, do one fresh paired run with a saved deterministic request, then apply `FR13_WY_OUTPUT_TAP_PATCH.md` and re-run only the tree arm.
+- Fixed request saved at `output/fr13_wy_paired_ladder_20260608T211749Z/request.json`:
+  - endpoint body: `{"model":"qwen3.6-27b","prompt":"Explain hash tables.","max_tokens":16,"temperature":0,"vllm_xargs":{"fr10_decode_mode":"naive_mtp"}}`
+  - tree copy changes only `fr10_decode_mode` to `tree_mtp`.
+- Native arm: FLASH_ATTN, MTP-5, B=1 eager, layer/final captures pinned under `output/fr13_wy_paired_ladder_20260608T211749Z/native/`.
+- Tree baseline arm: TREE_ATTN WY, `FR13_FA2_PREFILL_NATIVE=1`, `FR10_TREE_GDN_WY=1`, `FR12_TREE_SCAN_FLA_BF16_BOUNDARIES=1`, output split OFF, captures under `.../tree/`.
+- Patch applied: `_tree_gdn_wy_kernel` now has gated `FLA_BF16_OUTPUT_SPLIT`; default is OFF. When ON, the readout separates carried-state/inter contribution from per-node intra contribution and bf16-rounds the scalar intra score before accumulating `out_intra_i`. Host flag is wired through `fla_bf16_output_split` and launcher env `FR13_WY_FLA_BF16_OUTPUT_SPLIT`.
+
+### OFF-path smoke
+- Attempted boot-free replay against `output/fr13_wy_l1_payload_20260608T170530Z/tree/logs/fr10_tree_gdn_scan_l1.pt`.
+- Artifact: `output/fr13_wy_paired_ladder_20260608T211749Z/off_path_byte_identical_smoke.json`.
+- Result was **not byte-identical**: output max_abs `0.000244140625`, state max_abs `0.00000008940696716308594`.
+- Limitation: this is not a clean pre-output-tap reference because the payload predates the later state-store/order changes; no newer pre-tap WY serving payload exists in the paired ladder run. Compile and `git diff --check` passed.
+
+### Fresh paired baseline, output split OFF
+- Artifacts:
+  - `output/fr13_wy_paired_ladder_20260608T211749Z/gateA_spine_ladder_baseline.json`
+  - `output/fr13_wy_paired_ladder_20260608T211749Z/gateA_summary_baseline.json`
+
+| check | max_abs | mean_abs | nonzero |
+| --- | ---: | ---: | ---: |
+| input spine | `0.0` | `0.0` | `0` |
+| layer0 hidden spine | not summarized | not summarized | not summarized |
+| final norm spine | `2.625` | `0.12346107512712479` | `30085` |
+| final logits spine | `1.25` | `0.13377708196640015` | `1449401` |
+
+Baseline reducer verdict: failed; first above-threshold hidden drift was layer-0 residual max_abs `0.0625`. Per-depth spine argmax still matched native for rows `[0,1,2,4,6,8]` vs native rows `[0,1,2,3,4,5]`.
+
+### Output split ON live tree-only ladder
+- Tree arm: same pinned native request/reference; `FR13_WY_FLA_BF16_OUTPUT_SPLIT=1`; no native reboot.
+- Response artifact: `output/fr13_wy_paired_ladder_20260608T211749Z/tree_tap/response.json`; HTTP 200, prompt_tokens `5`, completion_tokens `16`.
+- Capture artifacts:
+  - `output/fr13_wy_paired_ladder_20260608T211749Z/tree_tap/logs/tree_layer_hidden.pt`
+  - `output/fr13_wy_paired_ladder_20260608T211749Z/tree_tap/logs/tree_final_logits.pt`
+  - `output/fr13_wy_paired_ladder_20260608T211749Z/gateA_spine_ladder_tap.json`
+  - `output/fr13_wy_paired_ladder_20260608T211749Z/gateA_summary_tap.json`
+
+| check | max_abs | mean_abs | nonzero |
+| --- | ---: | ---: | ---: |
+| input spine | `0.0` | `0.0` | `0` |
+| layer0 hidden spine | `0.015625` | `0.00017748985555954278` | `27310` |
+| layer0 residual spine | `0.0625` | `0.00009679019422037527` | `21944` |
+| final norm spine | `2.1875` | `0.09377077966928482` | `29953` |
+| final logits spine | `1.02734375` | `0.11143794655799866` | `1444953` |
+
+Per-depth final-logit max_abs with output split ON:
+
+| depth | tree row | native row | max_abs | argmax match | native margin |
+| ---: | ---: | ---: | ---: | --- | ---: |
+| 0 | 0 | 0 | `0.484375` | true | `1.125` |
+| 1 | 1 | 1 | `0.78125` | true | `2.5` |
+| 2 | 2 | 2 | `0.7392578125` | true | `2.25` |
+| 3 | 4 | 3 | `0.5625` | true | `1.625` |
+| 4 | 6 | 4 | `1.02734375` | true | `0.75` |
+| 5 | 8 | 5 | `0.66015625` | true | `0.375` |
+
+Branch proxy rows `[3,5,7,9]` matched logged self-target argmaxes `[332,332,198,32]`, but this remains only a tree self-target proxy. A true native-on-branch-path oracle was not captured in this paired run because the pinned native MTP-5 capture has spine rows only.
+
+### Verdict
+- Prompt pin is fixed: paired input spine max_abs is `0.0` with saved `request.json`.
+- Output split improves aggregate final-logit drift (`1.25` -> `1.02734375`) but **does not close Gate A**. The first live drift remains layer-0 residual `0.0625`, and final logits remain far above the E5 floor.
+- No e2e run was performed because the live ladder did not pass.

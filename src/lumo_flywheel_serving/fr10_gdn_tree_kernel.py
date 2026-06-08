@@ -431,6 +431,7 @@ def _tree_gdn_wy_kernel(
     H0_BANK_STRIDE: tl.constexpr,
     H0_USE_ACCEPTED_COLUMN: tl.constexpr,
     FLA_BF16_BOUNDARIES: tl.constexpr,
+    FLA_BF16_OUTPUT_SPLIT: tl.constexpr,
     RAW_GATING: tl.constexpr,
     COUNT_INVOCATION: tl.constexpr,
 ):
@@ -613,6 +614,8 @@ def _tree_gdn_wy_kernel(
         cumg_i = tl.sum(tl.where(row_i, cum_g, 0.0), axis=0)
         q_i = tl.sum(tl.where(row_i[:, None], b_q, 0.0), axis=0) * OUTPUT_SCALE
         state_i = b_h0 * tl.exp(cumg_i)
+        state_inter_i = state_i
+        out_intra_i = tl.zeros((BLOCK_V,), dtype=tl.float32)
         state_store_i = tl.zeros((BLOCK_V, DIM_K), dtype=tl.float32)
         state_store_i += b_h0
         for j in tl.static_range(0, N_PAD):
@@ -670,6 +673,15 @@ def _tree_gdn_wy_kernel(
             delta_store_j -= tl.sum(state_store_update_j * k_store_j[None, :], axis=1)
             delta_store_j *= beta_store_j
             state_store_update_j += delta_store_j[:, None] * k_store_j[None, :]
+            if FLA_BF16_OUTPUT_SPLIT:
+                a_ij = tl.sum(q_i * k_j) * decay_ij
+                a_ij = tl.where(
+                    vis & (i < N_ACTUAL) & (j < N_ACTUAL),
+                    a_ij,
+                    0.0,
+                )
+                a_ij = a_ij.to(tl.bfloat16).to(tl.float32)
+                out_intra_i += a_ij * trans_j
             state_i += tl.where(
                 vis & (i < N_ACTUAL) & (j < N_ACTUAL),
                 state_update_ij,
@@ -680,7 +692,11 @@ def _tree_gdn_wy_kernel(
                 state_store_update_j,
                 state_store_i,
             )
-        out_i = tl.sum(state_i * q_i[None, :], axis=1)
+        if FLA_BF16_OUTPUT_SPLIT:
+            out_inter_i = tl.sum(state_inter_i * q_i[None, :], axis=1)
+            out_i = out_inter_i + out_intra_i
+        else:
+            out_i = tl.sum(state_i * q_i[None, :], axis=1)
         tl.store(
             out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
             out_i,
@@ -710,6 +726,7 @@ def launch_tree_gdn(
     use_qk_l2norm_in_kernel: bool = False,
     invocation_counter: torch.Tensor | None = None,
     fla_bf16_boundaries: bool = False,
+    fla_bf16_output_split: bool = False,
     raw_a: torch.Tensor | None = None,
     raw_b: torch.Tensor | None = None,
     A_log: torch.Tensor | None = None,
@@ -742,6 +759,7 @@ def launch_tree_gdn(
         use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
         invocation_counter=invocation_counter,
         fla_bf16_boundaries=fla_bf16_boundaries,
+        fla_bf16_output_split=fla_bf16_output_split,
         raw_a=raw_a,
         raw_b=raw_b,
         A_log=A_log,
@@ -774,6 +792,7 @@ def launch_tree_gdn_prepared(
     h0_use_accepted_column: bool = False,
     invocation_counter: torch.Tensor | None = None,
     fla_bf16_boundaries: bool = False,
+    fla_bf16_output_split: bool = False,
     raw_a: torch.Tensor | None = None,
     raw_b: torch.Tensor | None = None,
     A_log: torch.Tensor | None = None,
@@ -926,6 +945,7 @@ def launch_tree_gdn_prepared(
             H0_BANK_STRIDE=h0_bank_stride,
             H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
             FLA_BF16_BOUNDARIES=bool(fla_bf16_boundaries),
+            FLA_BF16_OUTPUT_SPLIT=bool(fla_bf16_output_split),
             RAW_GATING=raw_gating,
             COUNT_INVOCATION=count_invocation,
         )
