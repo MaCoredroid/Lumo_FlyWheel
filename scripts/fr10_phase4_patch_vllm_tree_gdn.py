@@ -1960,42 +1960,43 @@ def _patch_gdn_linear() -> bool:
                     start = fr10_b * tree_n
                     end = start + tree_n
                     tree_state = tree_state_all[fr10_b]
-                    try:
-                        _fr12_capture_h0_col = torch.clamp(
-                            _fr10_accepted_lens_tensor[
+                    if os.environ.get("FR12_SUBKERNEL_CAPTURE"):
+                        try:
+                            _fr12_capture_h0_col = torch.clamp(
+                                _fr10_accepted_lens_tensor[
+                                    : attn_metadata.num_spec_decodes
+                                ].to(torch.long)
+                                - 1,
+                                min=0,
+                                max=int(spec_state_indices_tensor.size(-1)) - 1,
+                            ).view(-1, 1)
+                            _fr12_capture_h0_rows = spec_state_indices_tensor[
                                 : attn_metadata.num_spec_decodes
-                            ].to(torch.long)
-                            - 1,
-                            min=0,
-                            max=int(spec_state_indices_tensor.size(-1)) - 1,
-                        ).view(-1, 1)
-                        _fr12_capture_h0_rows = spec_state_indices_tensor[
-                            : attn_metadata.num_spec_decodes
-                        ].gather(1, _fr12_capture_h0_col).reshape(-1).to(torch.long)
-                        _fr12_subkernel_capture_tensor(
-                            self,
-                            "h0_state_in",
-                            torch.index_select(ssm_state, 0, _fr12_capture_h0_rows),
-                            create=False,
-                            extra={
-                                "num_actual_tokens": int(num_actual_tokens),
-                                "h0_rows": [
-                                    int(_x)
-                                    for _x in _fr12_capture_h0_rows.detach()
-                                    .cpu()
-                                    .tolist()
-                                ],
-                                "h0_cols": [
-                                    int(_x)
-                                    for _x in _fr12_capture_h0_col.reshape(-1)
-                                    .detach()
-                                    .cpu()
-                                    .tolist()
-                                ],
-                            },
-                        )
-                    except Exception as _fr12_h0_cap_exc:
-                        logger.warning("FR12 h0 capture failed: %s", _fr12_h0_cap_exc)
+                            ].gather(1, _fr12_capture_h0_col).reshape(-1).to(torch.long)
+                            _fr12_subkernel_capture_tensor(
+                                self,
+                                "h0_state_in",
+                                torch.index_select(ssm_state, 0, _fr12_capture_h0_rows),
+                                create=False,
+                                extra={
+                                    "num_actual_tokens": int(num_actual_tokens),
+                                    "h0_rows": [
+                                        int(_x)
+                                        for _x in _fr12_capture_h0_rows.detach()
+                                        .cpu()
+                                        .tolist()
+                                    ],
+                                    "h0_cols": [
+                                        int(_x)
+                                        for _x in _fr12_capture_h0_col.reshape(-1)
+                                        .detach()
+                                        .cpu()
+                                        .tolist()
+                                    ],
+                                },
+                            )
+                        except Exception as _fr12_h0_cap_exc:
+                            logger.warning("FR12 h0 capture failed: %s", _fr12_h0_cap_exc)
                     _fr10_capture_scan_payload = (
                         os.environ.get("FR10_TREE_GDN_CAPTURE_PAYLOAD")
                         and not globals().get("_FR10_TREE_GDN_CAPTURE_DONE", False)
@@ -2775,52 +2776,53 @@ def _patch_gdn_linear() -> bool:
                     raise RuntimeError(
                         "FR10 tree scan disengaged: eligible_tree_spec_row_flat_fallback"
                     )
-                try:
-                    if num_accepted_tokens is None:
-                        _fr12_native_h0_col = torch.zeros(
-                            (int(attn_metadata.num_spec_decodes), 1),
-                            dtype=torch.long,
-                            device=spec_state_indices_tensor.device,
+                if os.environ.get("FR12_SUBKERNEL_CAPTURE"):
+                    try:
+                        if num_accepted_tokens is None:
+                            _fr12_native_h0_col = torch.zeros(
+                                (int(attn_metadata.num_spec_decodes), 1),
+                                dtype=torch.long,
+                                device=spec_state_indices_tensor.device,
+                            )
+                        else:
+                            _fr12_native_h0_col = torch.clamp(
+                                num_accepted_tokens[
+                                    : attn_metadata.num_spec_decodes
+                                ].to(torch.long)
+                                - 1,
+                                min=0,
+                                max=int(spec_state_indices_tensor.size(-1)) - 1,
+                            ).view(-1, 1)
+                        _fr12_native_h0_rows = spec_state_indices_tensor[
+                            : attn_metadata.num_spec_decodes
+                        ].gather(1, _fr12_native_h0_col).reshape(-1).to(torch.long)
+                        _fr12_subkernel_capture_tensor(
+                            self,
+                            "h0_state_in",
+                            torch.index_select(ssm_state, 0, _fr12_native_h0_rows),
+                            create=False,
+                            extra={
+                                "num_actual_tokens": int(num_actual_tokens),
+                                "h0_rows": [
+                                    int(_x)
+                                    for _x in _fr12_native_h0_rows.detach()
+                                    .cpu()
+                                    .tolist()
+                                ],
+                                "h0_cols": [
+                                    int(_x)
+                                    for _x in _fr12_native_h0_col.reshape(-1)
+                                    .detach()
+                                    .cpu()
+                                    .tolist()
+                                ],
+                            },
                         )
-                    else:
-                        _fr12_native_h0_col = torch.clamp(
-                            num_accepted_tokens[
-                                : attn_metadata.num_spec_decodes
-                            ].to(torch.long)
-                            - 1,
-                            min=0,
-                            max=int(spec_state_indices_tensor.size(-1)) - 1,
-                        ).view(-1, 1)
-                    _fr12_native_h0_rows = spec_state_indices_tensor[
-                        : attn_metadata.num_spec_decodes
-                    ].gather(1, _fr12_native_h0_col).reshape(-1).to(torch.long)
-                    _fr12_subkernel_capture_tensor(
-                        self,
-                        "h0_state_in",
-                        torch.index_select(ssm_state, 0, _fr12_native_h0_rows),
-                        create=False,
-                        extra={
-                            "num_actual_tokens": int(num_actual_tokens),
-                            "h0_rows": [
-                                int(_x)
-                                for _x in _fr12_native_h0_rows.detach()
-                                .cpu()
-                                .tolist()
-                            ],
-                            "h0_cols": [
-                                int(_x)
-                                for _x in _fr12_native_h0_col.reshape(-1)
-                                .detach()
-                                .cpu()
-                                .tolist()
-                            ],
-                        },
-                    )
-                except Exception as _fr12_native_h0_cap_exc:
-                    logger.warning(
-                        "FR12 native h0 capture failed: %s",
-                        _fr12_native_h0_cap_exc,
-                    )
+                    except Exception as _fr12_native_h0_cap_exc:
+                        logger.warning(
+                            "FR12 native h0 capture failed: %s",
+                            _fr12_native_h0_cap_exc,
+                        )
                 core_attn_out_spec, last_recurrent_state = (
                     fused_sigmoid_gating_delta_rule_update(
                         A_log=self.A_log,
@@ -2841,31 +2843,32 @@ def _patch_gdn_linear() -> bool:
                         use_qk_l2norm_in_kernel=True,
                     )
                 )
-            try:
-                _fr12_scan_extra = {
-                    "num_spec_decodes": int(attn_metadata.num_spec_decodes),
-                    "num_actual_tokens": int(num_actual_tokens),
-                    "tree_scan_active": bool(use_fr10_tree),
-                    "tree_scan_expected": bool(_fr10_tree_scan_expected),
-                }
-                if getattr(attn_metadata, "fr10_tree_parent", None) is not None:
-                    _fr12_scan_extra["tree_parent"] = [
-                        int(_x)
-                        for _x in attn_metadata.fr10_tree_parent.detach().cpu().tolist()
-                    ]
-                if spec_token_indx is not None:
-                    _fr12_scan_extra["spec_token_indx"] = [
-                        int(_x) for _x in spec_token_indx.detach().cpu().tolist()
-                    ]
-                _fr12_subkernel_capture_tensor(
-                    self,
-                    "gdn_scan_out",
-                    core_attn_out_spec.squeeze(0),
-                    create=False,
-                    extra=_fr12_scan_extra,
-                )
-            except Exception as _fr12_scan_cap_exc:
-                logger.warning("FR12 scan capture failed: %s", _fr12_scan_cap_exc)
+            if os.environ.get("FR12_SUBKERNEL_CAPTURE"):
+                try:
+                    _fr12_scan_extra = {
+                        "num_spec_decodes": int(attn_metadata.num_spec_decodes),
+                        "num_actual_tokens": int(num_actual_tokens),
+                        "tree_scan_active": bool(use_fr10_tree),
+                        "tree_scan_expected": bool(_fr10_tree_scan_expected),
+                    }
+                    if getattr(attn_metadata, "fr10_tree_parent", None) is not None:
+                        _fr12_scan_extra["tree_parent"] = [
+                            int(_x)
+                            for _x in attn_metadata.fr10_tree_parent.detach().cpu().tolist()
+                        ]
+                    if spec_token_indx is not None:
+                        _fr12_scan_extra["spec_token_indx"] = [
+                            int(_x) for _x in spec_token_indx.detach().cpu().tolist()
+                        ]
+                    _fr12_subkernel_capture_tensor(
+                        self,
+                        "gdn_scan_out",
+                        core_attn_out_spec.squeeze(0),
+                        create=False,
+                        extra=_fr12_scan_extra,
+                    )
+                except Exception as _fr12_scan_cap_exc:
+                    logger.warning("FR12 scan capture failed: %s", _fr12_scan_cap_exc)
 '''
     if needle not in text:
         raise RuntimeError("FR10 GDN linear spec branch needle not found")
@@ -6722,6 +6725,11 @@ def _fr10_layer_hidden_capture_start(self, positions, hidden_states, input_ids=N
     if not path:
         return None
     try:
+        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+            return None
+    except Exception:
+        return None
+    try:
         desired = os.environ.get("FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS")
         if desired:
             desired_counts = {
@@ -6893,7 +6901,10 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
         try:
             _fr10_path = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE")
             _fr10_done = bool(globals().get("_FR10_ROOT_LOGIT_CAPTURED", False))
-            if _fr10_path and not _fr10_done and logits is not None:
+            _fr10_in_cuda_capture = bool(
+                torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
+            )
+            if _fr10_path and not _fr10_done and logits is not None and not _fr10_in_cuda_capture:
                 _fr10_desired = os.environ.get(
                     "FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS",
                     os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS"),
@@ -6946,7 +6957,10 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
         final_logit_block = """        # FR13_FINAL_LOGIT_CAPTURE: dump all selected rows scored by the LM head.
         try:
             _fr13_path = os.environ.get("FR13_FINAL_LOGIT_CAPTURE")
-            if _fr13_path and logits is not None:
+            _fr13_in_cuda_capture = bool(
+                torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
+            )
+            if _fr13_path and logits is not None and not _fr13_in_cuda_capture:
                 _fr13_desired = os.environ.get("FR13_FINAL_LOGIT_CAPTURE_NUM_TOKENS")
                 if _fr13_desired:
                     _fr13_desired_counts = {
