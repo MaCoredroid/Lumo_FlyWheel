@@ -260,3 +260,21 @@ Per-row L12 hidden max_abs: row `0->0` = `0.0`; row `1->1` = `0.00634765625`; ro
 
 ### Current wall
 The offline replay localized and fixed a real accepted-path recurrent-state store mismatch, but Gate A did not move: the remaining first nonzero is still the current L12 verify output, not only the stored state read by the next event. L0-L11 did not regress. With the requested boot budget exhausted, e2e remains blocked until the current-output L12 native-path/op-order gap is fixed and the strict ladder reaches drift-0.
+
+## Takeover run `codex_fr15` - WY one-pass tree-GDN build start (2026-06-08T08:43:00Z)
+
+### Scope
+- User direction: stop replay-kernel L12 grind and build the no-copy WY one-pass GDN tree kernel from `FR13_WY_KERNEL_BUILD.md`.
+- Code path: added flag-gated `FR10_TREE_GDN_WY=1`; default remains replay fallback.
+
+### Offline WY sub-gate - **PASS**
+- Artifact: `output/fr13_l12_offline_replay_20260608T075019Z/wy_l12_offline_probe_ieee.json`.
+- Payload: `output/fr13_l12_offline_replay_20260608T075019Z/tree/logs/fr10_tree_gdn_scan_l12.pt`.
+- Kernel: revived native-basis WY/UT form from `_tree_gdn_gqa_kernel`, with raw-gating and h0-bank serving support. Important alignment: `tl.dot(..., input_precision="ieee")`; the initial TF32 dot missed (`out=1.52587890625e-05`, `state=0.00011709332466125488`).
+
+| comparison | max_abs |
+| --- | ---: |
+| WY L12 spine output vs native FLA | 0.000000003725290298461914 |
+| WY L12 spine state vs native FLA | 0.000000059604644775390625 |
+
+This clears the boot-free L12 scan arithmetic/op-order sub-gate and is ready for live `FR10_TREE_GDN_WY=1` ladder validation. No e2e has been run.

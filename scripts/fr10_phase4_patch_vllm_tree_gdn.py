@@ -2419,6 +2419,9 @@ def _patch_gdn_linear() -> bool:
                             os.environ.get("FR12_TREE_SCAN_FLA_BF16_BOUNDARIES", "0")
                             == "1"
                         ),
+                        use_wy=(
+                            os.environ.get("FR10_TREE_GDN_WY", "0") == "1"
+                        ),
                     )
                     if _fr12_native_spine_scan_enabled:
                         assert _fr12_scan_path0_node_tensor is not None

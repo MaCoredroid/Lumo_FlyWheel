@@ -74,6 +74,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e PYTHONPATH=/workspace/src \
   -e FR10_ENABLE_TREE_GDN=1 \
+  -e FR10_TREE_GDN_WY="${FR10_TREE_GDN_WY:-0}" \
   -e FR10_METRICS="$FR10_METRICS" \
   -e FR10_DECODE_MODE_DEFAULT="$FR10_DECODE_MODE_DEFAULT" \
   -e FR11_TREE_CONV_NATIVE_BF16_TAPS=1 \
