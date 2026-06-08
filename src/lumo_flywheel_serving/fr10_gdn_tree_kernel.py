@@ -519,9 +519,14 @@ def _tree_gdn_wy_kernel(
     m_visible = m_visible & n_mask[:, None] & n_mask[None, :]
 
     cum_g = tl.sum(tl.where(m_visible, b_g[None, :], 0.0), axis=1)
-    kk = tl.dot(b_k, tl.trans(b_k), input_precision="ieee")
     decay = tl.exp(cum_g[:, None] - cum_g[None, :])
-    system = tl.where(m_strict, kk * b_beta[:, None] * decay, 0.0)
+    if FLA_BF16_BOUNDARIES:
+        b_kb = (b_k * b_beta[:, None]).to(tl.bfloat16)
+        kk = tl.dot(b_kb, tl.trans(b_k).to(tl.bfloat16))
+        system = tl.where(m_strict, kk * decay, 0.0)
+    else:
+        kk = tl.dot(b_k, tl.trans(b_k), input_precision="ieee")
+        system = tl.where(m_strict, kk * b_beta[:, None] * decay, 0.0)
 
     solved_v = tl.zeros((N_PAD, BLOCK_V), dtype=tl.float32)
     solved_k = tl.zeros((N_PAD, DIM_K), dtype=tl.float32)
@@ -536,25 +541,35 @@ def _tree_gdn_wy_kernel(
         k_i = tl.sum(tl.where(row_i[:, None], b_k, 0.0), axis=0)
         y_i = beta_i * v_i
         sk_i = beta_i * k_i * tl.exp(cumg_i)
+        if FLA_BF16_BOUNDARIES:
+            y_i = y_i.to(tl.bfloat16).to(tl.float32)
+            sk_i = sk_i.to(tl.bfloat16).to(tl.float32)
         for j in tl.static_range(0, i):
             row_j = offs_n == j
             coeff_j = tl.sum(tl.where(row_j, coeff, 0.0), axis=0)
-            if FLA_BF16_BOUNDARIES:
-                coeff_j = coeff_j.to(tl.bfloat16).to(tl.float32)
             solved_v_j = tl.sum(tl.where(row_j[:, None], solved_v, 0.0), axis=0)
             solved_k_j = tl.sum(tl.where(row_j[:, None], solved_k, 0.0), axis=0)
             y_i -= coeff_j * solved_v_j
             sk_i -= coeff_j * solved_k_j
-        solved_v = tl.where((offs_n == i)[:, None], y_i[None, :], solved_v)
-        solved_k = tl.where((offs_n == i)[:, None], sk_i[None, :], solved_k)
+        y_store_i = y_i
+        sk_store_i = sk_i
+        if FLA_BF16_BOUNDARIES:
+            y_store_i = y_store_i.to(tl.bfloat16).to(tl.float32)
+            sk_store_i = sk_store_i.to(tl.bfloat16).to(tl.float32)
+        solved_v = tl.where((offs_n == i)[:, None], y_store_i[None, :], solved_v)
+        solved_k = tl.where((offs_n == i)[:, None], sk_store_i[None, :], solved_k)
         incoming_i = tl.sum(b_h0 * sk_i[None, :], axis=1)
         tv_i = y_i - incoming_i
+        if FLA_BF16_BOUNDARIES:
+            tv_i = tv_i.to(tl.bfloat16).to(tl.float32)
         trans_v = tl.where((offs_n == i)[:, None], tv_i[None, :], trans_v)
 
     for i in tl.static_range(0, N_PAD):
         row_i = offs_n == i
         cumg_i = tl.sum(tl.where(row_i, cum_g, 0.0), axis=0)
         q_i = tl.sum(tl.where(row_i[:, None], b_q, 0.0), axis=0) * OUTPUT_SCALE
+        if FLA_BF16_BOUNDARIES:
+            q_i = q_i.to(tl.bfloat16).to(tl.float32)
         state_i = b_h0 * tl.exp(cumg_i)
         for j in tl.static_range(0, N_PAD):
             vis = tl.load(visible_mask + i * N_PAD + j) != 0
@@ -562,9 +577,12 @@ def _tree_gdn_wy_kernel(
             trans_j = tl.sum(tl.where(row_j[:, None], trans_v, 0.0), axis=0)
             k_j = tl.sum(tl.where(row_j[:, None], b_k, 0.0), axis=0)
             cumg_j = tl.sum(tl.where(row_j, cum_g, 0.0), axis=0)
+            state_update_ij = trans_j[:, None] * k_j[None, :] * tl.exp(cumg_i - cumg_j)
+            if FLA_BF16_BOUNDARIES:
+                state_update_ij = state_update_ij.to(tl.bfloat16).to(tl.float32)
             state_i += tl.where(
                 vis & (i < N_ACTUAL) & (j < N_ACTUAL),
-                trans_j[:, None] * k_j[None, :] * tl.exp(cumg_i - cumg_j),
+                state_update_ij,
                 0.0,
             )
         out_i = tl.sum(state_i * q_i[None, :], axis=1)

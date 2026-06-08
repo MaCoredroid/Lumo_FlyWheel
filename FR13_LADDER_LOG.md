@@ -382,3 +382,38 @@ Interpretation: the patched WY scan is now measured against the live FLA target 
 ### Next gate
 - Run one live WY Gate-A ladder with `FR10_TREE_GDN_WY=1`, fallback unset, and `FR12_TREE_SCAN_FLA_BF16_BOUNDARIES=1` to see whether the one-ULP L1 scan floor no longer amplifies into final-logit drift.
 - Gate 2 and clean B=4 e2e remain blocked until Gate A passes.
+
+## Commit `FR13 apply WY cascade-map bf16 taps` - six-tap implementation and readout wall (codex_fr16, 2026-06-08)
+
+### Scope
+- User supplied `FR13_WY_CASCADE_MAP.md`, which supersedes the earlier two-tap seam fix.
+- Code change: `_tree_gdn_wy_kernel` now gates the complete documented bf16 boundary set behind `FLA_BF16_BOUNDARIES`:
+  - #1 normalized q/k bf16 store after l2norm: kept.
+  - #2 solve-T rounding relocated from per-iteration `coeff_j` to final `solved_v` / `solved_k` stores.
+  - #3 KKt gram uses bf16 dot inputs with beta pre-folded into k, dropping the duplicate post-dot beta multiply.
+  - #4 initial WY operands `beta*v` and `beta*k*exp(cum_g)` round to bf16 before substitution.
+  - #5 transformed value delta `tv_i` rounds to bf16.
+  - #6 readout tap rounds `q_i` and the per-ancestor intra outer-product contribution to bf16. No readout reduction-order rewrite was made.
+
+### Boot-free L1 smoke vs live FLA - **USER-DECISION WALL, not a pass/fail**
+- Runner: CUDA entrypoint container only; no vLLM server boot and no native reboot.
+- Payload: `output/fr13_wy_l1_payload_20260608T170530Z/tree/logs/fr10_tree_gdn_scan_l1.pt`.
+- Artifacts:
+  - `output/fr13_wy_l1_payload_20260608T170530Z/wy_l1_spine_scan_live_fla_6tap.json`.
+  - `output/fr13_wy_l1_payload_20260608T170530Z/wy_l1_batch_scan_live_fla_6tap.json`.
+- Config: `--use-wy --fla-bf16-boundaries --max-depth 6`; native reference is `vllm.fused_sigmoid_gating_delta_rule_update`.
+
+| comparison | max_abs |
+| --- | ---: |
+| isolated spine WY scan output vs live FLA | 0.000244140625 |
+| isolated spine WY scan state vs live FLA | 0.0018433183431625366 |
+| original-full spine WY scan output vs live FLA | 0.000244140625 |
+| original-full spine WY scan state vs live FLA | 0.0018433183431625366 |
+| spine-only output vs original-full spine output | 0.000000010593794286251068 |
+| sibling-reordered full output vs original-full spine output | 0.0 |
+
+Interpretation: the six taps compile and remain row-order/context invariant, but the L1 scan output is above the cascade-map target floor (~6e-5). The next plausible lever is the #6 readout reduction-order match described in `FR13_WY_CASCADE_MAP.md` as a user-decision item, so no live ladder pass/fail is claimed and no readout restructure was attempted.
+
+### Blocked next action
+- Ask user whether to authorize the #6 readout reduction-order rewrite or to run the requested live ladder anyway with the known above-floor L1 scan result.
+- Gate 2 and clean B=4 e2e remain blocked until Gate A is resolved.
