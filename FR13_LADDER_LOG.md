@@ -383,7 +383,7 @@ Interpretation: the patched WY scan is now measured against the live FLA target 
 - Run one live WY Gate-A ladder with `FR10_TREE_GDN_WY=1`, fallback unset, and `FR12_TREE_SCAN_FLA_BF16_BOUNDARIES=1` to see whether the one-ULP L1 scan floor no longer amplifies into final-logit drift.
 - Gate 2 and clean B=4 e2e remain blocked until Gate A passes.
 
-## Commit `FR13 apply WY cascade-map bf16 taps` - six-tap implementation and readout wall (codex_fr16, 2026-06-08)
+## Commit `43434f01` (FR13 apply WY cascade-map bf16 taps) - six-tap implementation and readout wall (codex_fr16, 2026-06-08)
 
 ### Scope
 - User supplied `FR13_WY_CASCADE_MAP.md`, which supersedes the earlier two-tap seam fix.
