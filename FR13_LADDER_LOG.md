@@ -499,3 +499,36 @@ Interpretation: Gate-2 hooks-off/no-bias regression remains byte-exact for the c
 | spine-only spine vs original-full spine | `0.000000014901161193847656` | `0.000000059604644775390625` |
 
 Baseline before this patch on the same payload was state `0.001657634973526001`; the fixed state is now below the requested bf16 floor and at fp32 replay noise. Output remains at the known one-bf16-ULP readout floor. This clears the offline-first state replay gate and is ready for one live ladder with `FR10_TREE_GDN_WY=1` and `FR12_TREE_SCAN_FLA_BF16_BOUNDARIES=1`.
+
+## Commit `codex_fr17-bf16-bank-s1-probe` - post-round state-bank seam check (codex_fr17, 2026-06-08)
+
+### Scope
+- User direction: apply `FR13_WY_MULTISTEP_SEAMS.md`; do **not** touch `b_h0`, do **not** BF16-round `state_store_i` in-kernel, and proactively test S1 offline before another live ladder.
+- Code change: the offline spine and batch replay probes now report per-element `state_bf16_bank` equality for `tree_state.to(bfloat16)` vs native `ht.to(bfloat16)`, not just fp32 `state_max_abs`.
+- Code change: `_tree_gdn_wy_kernel` now computes the stored recurrent-state surface with native's direct per-token recurrent update order using the raw normalized state basis. The WY output/readout path is unchanged, and the stored state is still written fp32 for the caller's single cache-bank round.
+
+### Offline BF16-bank replay - **S1 confirmed, reduced but not cleared**
+- Runner: named CUDA entrypoint containers, no vLLM server boot, no `--rm`.
+- Payload: `output/fr13_wy_l1_payload_20260608T170530Z/tree/logs/fr10_tree_gdn_scan_l1.pt`.
+- Pre-change artifacts:
+  - `output/fr13_wy_l1_payload_20260608T170530Z/codex_fr17_bf16_bank_spine_state.json`
+  - `output/fr13_wy_l1_payload_20260608T170530Z/codex_fr17_bf16_bank_batch_state.json`
+- Best-current artifacts:
+  - `output/fr13_wy_l1_payload_20260608T170530Z/codex_fr17_bf16_bank_spine_softplus.json`
+  - `output/fr13_wy_l1_payload_20260608T170530Z/codex_fr17_bf16_bank_batch_best.json`
+
+| check | fp32 state max_abs | BF16-bank mismatches |
+| --- | ---: | ---: |
+| pre-change spine WY vs native FLA | `0.00000008940696716308594` | `365 / 4718592` |
+| native-order direct-load spine WY vs native FLA | `0.000000007450580596923828` | `8 / 4718592` |
+| native-order original-full spine vs native FLA | `0.000000029802322387695312` | `58 / 4718592` |
+| reverse-sibling full spine vs original-full spine | `0.0` | `0 / 4718592` |
+
+Interpretation: S1 is real. The previous fp32 floor could round into different BF16 cache-bank buckets. Matching native's recurrent update order and direct token-local loads reduces the post-round bank mismatch sharply, but the offline BF16-bank gate is **not yet literal bit-exact**. Remaining first mismatch is at pre-round scale `1.33e-12`, enough to straddle a BF16 midpoint.
+
+### S2/S3 wiring audit - no static off-by-one found
+- `launch_tree_state_linear_remap` copies column `k` from `accepted_paths[b,k]` for `k < accepted_len`, and the next WY h0 read uses `accepted_len - 1`; this matches native's tail-column read contract.
+- The committer writes accepted node paths and accepted lens into the same global device buffers that the remap and h0-read paths consume.
+- Captured `tree_path_lcp.jsonl` rows show `superset_violation=false`; this is not a substitute for a future live remap-column assertion, but no static accepted-column lag was found in the code path.
+
+Status: no live ladder/e2e verdict is claimed from this entry. The remaining S1 BF16-bank mismatch is the current wall before a meaningful full-model live validator.

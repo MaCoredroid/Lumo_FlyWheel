@@ -613,32 +613,72 @@ def _tree_gdn_wy_kernel(
         cumg_i = tl.sum(tl.where(row_i, cum_g, 0.0), axis=0)
         q_i = tl.sum(tl.where(row_i[:, None], b_q, 0.0), axis=0) * OUTPUT_SCALE
         state_i = b_h0 * tl.exp(cumg_i)
-        state_store_i = state_i
+        state_store_i = tl.zeros((BLOCK_V, DIM_K), dtype=tl.float32)
+        state_store_i += b_h0
         for j in tl.static_range(0, N_PAD):
             vis = tl.load(visible_mask + i * N_PAD + j) != 0
             row_j = offs_n == j
             trans_j = tl.sum(tl.where(row_j[:, None], trans_v, 0.0), axis=0)
-            trans_state_j = tl.sum(
-                tl.where(row_j[:, None], trans_state_v, 0.0),
-                axis=0,
-            )
             k_j = tl.sum(tl.where(row_j[:, None], b_k, 0.0), axis=0)
-            k_state_j = tl.sum(tl.where(row_j[:, None], b_k_state, 0.0), axis=0)
             cumg_j = tl.sum(tl.where(row_j, cum_g, 0.0), axis=0)
             decay_ij = tl.exp(cumg_i - cumg_j)
             state_update_ij = trans_j[:, None] * k_j[None, :] * decay_ij
-            state_store_update_ij = (
-                trans_state_j[:, None] * k_state_j[None, :] * decay_ij
-            )
+            k_store_j = tl.load(
+                k + (j * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=j < N_ACTUAL,
+                other=0.0,
+            ).to(tl.float32)
+            if USE_QK_L2NORM_IN_KERNEL:
+                k_store_j *= tl.rsqrt(tl.sum(k_store_j * k_store_j) + 1e-6)
+            v_store_j = tl.load(
+                v + (j * NUM_VH + pid_vh) * DIM_V + offs_v,
+                mask=(j < N_ACTUAL) & v_mask,
+                other=0.0,
+            ).to(tl.float32)
+            g_store_j = tl.load(
+                g + j * NUM_VH + pid_vh,
+                mask=j < N_ACTUAL,
+                other=0.0,
+            ).to(tl.float32)
+            beta_store_j = tl.load(
+                beta + j * NUM_VH + pid_vh,
+                mask=j < N_ACTUAL,
+                other=0.0,
+            ).to(tl.float32)
+            if RAW_GATING:
+                x_store_j = tl.load(
+                    raw_a + j * NUM_VH + pid_vh,
+                    mask=j < N_ACTUAL,
+                    other=0.0,
+                ).to(tl.float32) + tl.load(dt_bias + pid_vh).to(tl.float32)
+                softplus_store_j = tl.where(
+                    x_store_j <= 20.0,
+                    (1.0 / 1.0) * tl.log(1.0 + tl.exp(1.0 * x_store_j)),
+                    x_store_j,
+                )
+                g_store_j = -tl.exp(tl.load(A_log + pid_vh).to(tl.float32)) * softplus_store_j
+                beta_store_j = tl.sigmoid(
+                    tl.load(
+                        raw_b + j * NUM_VH + pid_vh,
+                        mask=j < N_ACTUAL,
+                        other=0.0,
+                    ).to(tl.float32)
+                )
+            state_store_update_j = state_store_i
+            state_store_update_j *= tl.exp(g_store_j)
+            delta_store_j = v_store_j
+            delta_store_j -= tl.sum(state_store_update_j * k_store_j[None, :], axis=1)
+            delta_store_j *= beta_store_j
+            state_store_update_j += delta_store_j[:, None] * k_store_j[None, :]
             state_i += tl.where(
                 vis & (i < N_ACTUAL) & (j < N_ACTUAL),
                 state_update_ij,
                 0.0,
             )
-            state_store_i += tl.where(
+            state_store_i = tl.where(
                 vis & (i < N_ACTUAL) & (j < N_ACTUAL),
-                state_store_update_ij,
-                0.0,
+                state_store_update_j,
+                state_store_i,
             )
         out_i = tl.sum(state_i * q_i[None, :], axis=1)
         tl.store(

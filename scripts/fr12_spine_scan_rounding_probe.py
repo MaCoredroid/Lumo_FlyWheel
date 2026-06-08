@@ -61,6 +61,31 @@ def _first_mismatch(a: torch.Tensor, b: torch.Tensor) -> dict[str, Any] | None:
     }
 
 
+def _bf16_bank_metrics(a: torch.Tensor, b: torch.Tensor) -> dict[str, Any]:
+    a_bf16 = a.to(torch.bfloat16)
+    b_bf16 = b.to(torch.bfloat16)
+    neq = a_bf16 != b_bf16
+    mismatch_count = int(neq.sum().item())
+    first = None
+    if mismatch_count:
+        flat = int(torch.argmax(neq.reshape(-1).to(torch.int32)).item())
+        idx = [int(x.item()) for x in torch.unravel_index(torch.tensor(flat), neq.shape)]
+        first = {
+            "index": idx,
+            "tree_bf16_as_float": float(a_bf16[tuple(idx)].float().item()),
+            "native_bf16_as_float": float(b_bf16[tuple(idx)].float().item()),
+            "pre_round_tree": float(a[tuple(idx)].float().item()),
+            "pre_round_native": float(b[tuple(idx)].float().item()),
+            "pre_round_abs": float((a.float() - b.float()).abs()[tuple(idx)].item()),
+        }
+    return {
+        "torch_equal": bool(torch.equal(a_bf16, b_bf16)),
+        "mismatch_count": mismatch_count,
+        "numel": int(a_bf16.numel()),
+        "first_mismatch": first,
+    }
+
+
 def _load_node_major(payload: dict[str, Any], key: str, rows: torch.Tensor) -> torch.Tensor:
     tensor = payload[key]
     if tensor.ndim == 4 and tensor.size(0) == 1:
@@ -157,6 +182,9 @@ def main() -> int:
                 "out_mean_abs": _mean_abs(tree_out[depth], native_out[depth]),
                 "state_max_abs": _max_abs(tree_state[depth], native_state[depth]),
                 "state_mean_abs": _mean_abs(tree_state[depth], native_state[depth]),
+                "state_bf16_bank": _bf16_bank_metrics(
+                    tree_state[depth], native_state[depth]
+                ),
             }
         )
 
@@ -172,6 +200,7 @@ def main() -> int:
         "n_pad": n_pad,
         "out_max_abs": _max_abs(tree_out[:n], native_out[:n]),
         "state_max_abs": _max_abs(tree_state[:n], native_state[:n]),
+        "state_bf16_bank": _bf16_bank_metrics(tree_state[:n], native_state[:n]),
         "out_first_mismatch": _first_mismatch(tree_out[:n], native_out[:n]),
         "state_first_mismatch": _first_mismatch(tree_state[:n], native_state[:n]),
         "by_depth": depth_rows,

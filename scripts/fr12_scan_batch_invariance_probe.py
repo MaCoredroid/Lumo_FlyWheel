@@ -141,6 +141,31 @@ def _metrics(a: torch.Tensor, b: torch.Tensor) -> dict[str, Any]:
     }
 
 
+def _bf16_bank_metrics(a: torch.Tensor, b: torch.Tensor) -> dict[str, Any]:
+    a_bf16 = a.to(torch.bfloat16)
+    b_bf16 = b.to(torch.bfloat16)
+    neq = a_bf16 != b_bf16
+    mismatch_count = int(neq.sum().item())
+    first = None
+    if mismatch_count:
+        flat = int(torch.argmax(neq.reshape(-1).to(torch.int32)).item())
+        idx = [int(x.item()) for x in torch.unravel_index(torch.tensor(flat), neq.shape)]
+        first = {
+            "index": idx,
+            "a_bf16_as_float": float(a_bf16[tuple(idx)].float().item()),
+            "b_bf16_as_float": float(b_bf16[tuple(idx)].float().item()),
+            "pre_round_a": float(a[tuple(idx)].float().item()),
+            "pre_round_b": float(b[tuple(idx)].float().item()),
+            "pre_round_abs": float((a.float() - b.float()).abs()[tuple(idx)].item()),
+        }
+    return {
+        "torch_equal": bool(torch.equal(a_bf16, b_bf16)),
+        "mismatch_count": mismatch_count,
+        "numel": int(a_bf16.numel()),
+        "first_mismatch": first,
+    }
+
+
 def _load_node_major(payload: dict[str, Any], key: str, rows: torch.Tensor) -> torch.Tensor:
     tensor = payload[key]
     if tensor.ndim == 4 and tensor.size(0) == 1:
@@ -326,6 +351,9 @@ def main() -> int:
         "original_spine_vs_native_fla": {
             "out": _metrics(original_spine_out, native_out),
             "state": _metrics(original_spine_state, native_state),
+            "state_bf16_bank": _bf16_bank_metrics(
+                original_spine_state, native_state
+            ),
         },
     }
 
@@ -347,10 +375,12 @@ def main() -> int:
         comparisons[f"{name}_spine_vs_original_full_spine"] = {
             "out": _metrics(out, original_spine_out),
             "state": _metrics(state, original_spine_state),
+            "state_bf16_bank": _bf16_bank_metrics(state, original_spine_state),
         }
         comparisons[f"{name}_spine_vs_native_fla"] = {
             "out": _metrics(out, native_out),
             "state": _metrics(state, native_state),
+            "state_bf16_bank": _bf16_bank_metrics(state, native_state),
         }
 
     by_depth: list[dict[str, Any]] = []
