@@ -41,7 +41,7 @@ A `FR10_ALLOW_LINEAR_FALLBACK` run is DIAGNOSTIC ONLY (GDN may go linear) → NE
 
 ---
 
-## Commit `cb669425` (FR13: use ex2.approx SiLU for tree conv) — offline clean-input GDN conv gate
+## Commit `ed0390df` (FR13: use ex2.approx SiLU for tree conv) — offline clean-input GDN conv gate
 
 ### Gate A sub-op — causal-conv clean-input replay — **OFFLINE 0.0, pre-live**
 

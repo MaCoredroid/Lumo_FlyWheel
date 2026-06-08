@@ -5,7 +5,7 @@ Commit under test: cff79759 plus replay-tool update
 
 ## 2026-06-08 update: ex2.approx SiLU replica
 
-Commit under test: `cb669425`
+Commit under test: `ed0390df`
 
 Native source read:
 
