@@ -598,3 +598,20 @@ Branch proxy rows `[3,5,7,9]` matched logged self-target argmaxes `[332,332,198,
 - Prompt pin is fixed: paired input spine max_abs is `0.0` with saved `request.json`.
 - Output split improves aggregate final-logit drift (`1.25` -> `1.02734375`) but **does not close Gate A**. The first live drift remains layer-0 residual `0.0625`, and final logits remain far above the E5 floor.
 - No e2e run was performed because the live ladder did not pass.
+
+## Commit `fr13-seq-pivot-bind` - FR13 sequential rank-1 tree-scan pivot bound (codex_fr13, 2026-06-08T22:34:03Z)
+
+### Scope
+- User direction: read `FR13_SEQ_TREE_SCAN_TASK.md` and `FR13_WY_VS_SEQUENTIAL_VERDICT.md` at `HEAD 93ad85e4`, stand down the WY deliverable path, and execute the sequential rank-1 GDN tree-scan task.
+- Verified `HEAD`: `93ad85e46604fe7ae2e152d7b2b6980ead13f088`.
+- Decision bound from the task docs: WY is oracle-only because native verify dispatches to the sequential rank-1 recurrence; the deliverable is the default `use_wy=False` path in `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py`.
+- Discipline bound: one GPU, recover host memory between live arms, no native splice/reroute/dense fallback, and commit + push this log at each implementation or gate step.
+
+### Execution Plan
+1. Audit live native `fused_sigmoid_gating.py` and the current sequential ancestor-replay kernel side by side.
+2. Patch only the sequential tree-scan path to mirror native gate, l2norm, beta rounding, state decay, delta read, rank-1 write, and readout order; keep WY as an oracle path.
+3. Preserve tree ancestry semantics without HBM per-node state replay: parent-derived working state stays in registers/SRAM and only the accepted path state is committed.
+4. Run cheap local checks first, then the pinned paired ladder with native-on-path oracle: B=1 eager spine and true branch, Gate-2 pristine decode, B=4 captured ladder, e2e vs E5, and B=4 TPS vs native MTP-5 and WY.
+
+### Status
+- No code changes or gate claims in this entry.
