@@ -665,3 +665,22 @@ Branch proxy rows `[3,5,7,9]` matched logged self-target argmaxes `[332,332,198,
 - Gate A **does not pass**. The new default sequential kernel compiles/runs and clears layers 0-1 on the spine, but the first visible drift is now layer 2.
 - No branch/native-on-branch or B=4 claim is made from this entry.
 - Next action: recover host memory, then capture layer-2 GDN subops for tree and native to localize the first nonzero.
+
+## Commit `fr13-seq-native-l2-capture-miss` - native layer-2 localization arm did not write captures (codex_fr13, 2026-06-08)
+
+### Scope
+- Native arm run dir: `output/fr13_seq_paired_ladder_20260608T223903Z/native_l2/`.
+- Config: `FLASH_ATTN`, B=1 eager, `FR10_DECODE_MODE_DEFAULT=naive_mtp`, `FR10_ENABLE_TREE_GDN=0`, layer-2 subkernel capture requested with `FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX=language_model.model.layers.2.linear_attn`.
+- Request: pinned native request copied from `output/fr13_wy_paired_ladder_20260608T211749Z/request.json`.
+
+### Result
+- Server reached `/health`; request returned HTTP `200`.
+- Response usage: prompt `5`, completion `16`, total `21`.
+- Request wall time: `50.67s`.
+- Expected capture files under `native_l2/logs/` were **not written**: no `native_l2_gdn_subop.pt`, `native_l2_layer_hidden.pt`, or `native_l2_final_logits.pt`.
+- Container source audit confirmed the capture hooks were installed and env vars were present; this appears to be a capture-filter/matching miss, not an unpatched container.
+- Host recovery after teardown succeeded: swap `0B`, GPU compute process clear.
+
+### Status
+- No layer-2 native subop oracle is available from this arm, so no layer-2 subop verdict is claimed.
+- Last valid binding gate remains the B=1 spine ladder failure at layer 2 from `gateA_spine_ladder_seq.json`.
