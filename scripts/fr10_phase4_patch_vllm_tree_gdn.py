@@ -2865,6 +2865,200 @@ def _patch_gdn_linear() -> bool:
     if output_projection_needle not in text:
         raise RuntimeError("FR12 output projection needle not found")
     text = text.replace(output_projection_needle, output_projection_replacement, 1)
+
+    if "FR13_PREFILL_GDN_CAPTURE" not in text:
+        prefill_conv_needle = '''        if attn_metadata.num_prefills > 0:
+            assert mixed_qkv_non_spec is not None
+            mixed_qkv_non_spec_T = mixed_qkv_non_spec.transpose(0, 1)
+            # - "cache_indices" updates the conv_state cache in positions
+            #   pointed to by "state_indices_tensor"
+            mixed_qkv_non_spec = causal_conv1d_fn(
+                mixed_qkv_non_spec_T,
+                conv_weights,
+                self.conv1d.bias,
+                activation=self.activation,
+                conv_states=conv_state,
+                has_initial_state=has_initial_state,
+                cache_indices=non_spec_state_indices_tensor,
+                query_start_loc=non_spec_query_start_loc,
+                metadata=attn_metadata,
+            ).transpose(0, 1)
+'''
+        prefill_conv_replacement = '''        if attn_metadata.num_prefills > 0:
+            assert mixed_qkv_non_spec is not None
+            _fr13_prefill_pre_conv_capture = mixed_qkv_non_spec.detach().clone()
+            mixed_qkv_non_spec_T = mixed_qkv_non_spec.transpose(0, 1)
+            # - "cache_indices" updates the conv_state cache in positions
+            #   pointed to by "state_indices_tensor"
+            mixed_qkv_non_spec = causal_conv1d_fn(
+                mixed_qkv_non_spec_T,
+                conv_weights,
+                self.conv1d.bias,
+                activation=self.activation,
+                conv_states=conv_state,
+                has_initial_state=has_initial_state,
+                cache_indices=non_spec_state_indices_tensor,
+                query_start_loc=non_spec_query_start_loc,
+                metadata=attn_metadata,
+            ).transpose(0, 1)
+            _fr13_prefill_conv_out_capture = mixed_qkv_non_spec.detach().clone()
+'''
+        if prefill_conv_needle not in text:
+            raise RuntimeError("FR13 prefill conv capture needle not found")
+        text = text.replace(prefill_conv_needle, prefill_conv_replacement, 1)
+
+        prefill_scan_needle = '''            (
+                core_attn_out_non_spec,
+                last_recurrent_state,
+            ) = self.chunk_gated_delta_rule(
+                q=query_non_spec,
+                k=key_non_spec,
+                v=value_non_spec,
+                g=g_non_spec,
+                beta=beta_non_spec,
+                initial_state=initial_state,
+                output_final_state=True,
+                cu_seqlens=non_spec_query_start_loc,
+                chunk_indices=attn_metadata.chunk_indices,
+                chunk_offsets=attn_metadata.chunk_offsets,
+                use_qk_l2norm_in_kernel=False,
+            )
+            # Init cache
+            ssm_state[non_spec_state_indices_tensor] = last_recurrent_state.to(
+                ssm_state.dtype
+            )
+'''
+        prefill_scan_replacement = '''            (
+                core_attn_out_non_spec,
+                last_recurrent_state,
+            ) = self.chunk_gated_delta_rule(
+                q=query_non_spec,
+                k=key_non_spec,
+                v=value_non_spec,
+                g=g_non_spec,
+                beta=beta_non_spec,
+                initial_state=initial_state,
+                output_final_state=True,
+                cu_seqlens=non_spec_query_start_loc,
+                chunk_indices=attn_metadata.chunk_indices,
+                chunk_offsets=attn_metadata.chunk_offsets,
+                use_qk_l2norm_in_kernel=False,
+            )
+            try:
+                _fr13_prefill_capture_path = os.environ.get("FR13_PREFILL_GDN_CAPTURE")
+                if _fr13_prefill_capture_path:
+                    _fr13_prefix = str(self.prefix)
+                    _fr13_want_prefix = os.environ.get("FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX", "")
+                    if _fr13_want_prefix:
+                        _fr13_wanted = {
+                            _x.strip()
+                            for _x in _fr13_want_prefix.split(",")
+                            if _x.strip()
+                        }
+                    else:
+                        _fr13_wanted = set()
+                    _fr13_prefix_ok = (
+                        not _fr13_wanted
+                        or "*" in _fr13_wanted
+                        or _fr13_prefix in _fr13_wanted
+                    )
+                    _fr13_saved_by_prefix = globals().setdefault(
+                        "_FR13_PREFILL_GDN_CAPTURE_SAVED_BY_PREFIX", {}
+                    )
+                    _fr13_limit = int(os.environ.get("FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX", "1"))
+                    if (
+                        _fr13_prefix_ok
+                        and int(_fr13_saved_by_prefix.get(_fr13_prefix, 0)) < _fr13_limit
+                        and not (
+                            torch.cuda.is_available()
+                            and torch.cuda.is_current_stream_capturing()
+                        )
+                    ):
+                        _fr13_root, _fr13_ext = os.path.splitext(_fr13_prefill_capture_path)
+                        _fr13_saved_total = int(
+                            globals().get("_FR13_PREFILL_GDN_CAPTURE_SAVED", 0)
+                        )
+                        _fr13_call_path = (
+                            _fr13_root
+                            + ".call"
+                            + str(_fr13_saved_total)
+                            + (_fr13_ext or ".pt")
+                        )
+                        _fr13_prefill_payload = {
+                            "schema": "fr13.prefill_gdn_capture.v1",
+                            "path": _fr13_prefill_capture_path,
+                            "call_path": _fr13_call_path,
+                            "capture_saved_index": int(_fr13_saved_total),
+                            "layer_prefix": _fr13_prefix,
+                            "num_actual_tokens": int(num_actual_tokens),
+                            "num_prefills": int(attn_metadata.num_prefills),
+                            "num_decodes": int(attn_metadata.num_decodes),
+                            "num_spec_decodes": int(attn_metadata.num_spec_decodes),
+                            "state_indices": (
+                                None
+                                if non_spec_state_indices_tensor is None
+                                else non_spec_state_indices_tensor.detach().cpu().clone()
+                            ),
+                            "query_start_loc": (
+                                None
+                                if non_spec_query_start_loc is None
+                                else non_spec_query_start_loc.detach().cpu().clone()
+                            ),
+                            "has_initial_state": (
+                                None
+                                if has_initial_state is None
+                                else has_initial_state.detach().cpu().clone()
+                            ),
+                            "chunk_indices": (
+                                None
+                                if getattr(attn_metadata, "chunk_indices", None) is None
+                                else attn_metadata.chunk_indices.detach().cpu().clone()
+                            ),
+                            "chunk_offsets": (
+                                None
+                                if getattr(attn_metadata, "chunk_offsets", None) is None
+                                else attn_metadata.chunk_offsets.detach().cpu().clone()
+                            ),
+                            "pre_conv": _fr13_prefill_pre_conv_capture.detach().cpu().clone(),
+                            "conv_out": _fr13_prefill_conv_out_capture.detach().cpu().clone(),
+                            "a_non_spec": a_non_spec.detach().cpu().clone(),
+                            "b_non_spec": b_non_spec.detach().cpu().clone(),
+                            "query": query_non_spec.squeeze(0).detach().cpu().clone(),
+                            "key": key_non_spec.squeeze(0).detach().cpu().clone(),
+                            "value": value_non_spec.squeeze(0).detach().cpu().clone(),
+                            "g": g_non_spec.squeeze(0).detach().cpu().clone(),
+                            "beta": beta_non_spec.squeeze(0).detach().cpu().clone(),
+                            "initial_state": initial_state.detach().cpu().clone(),
+                            "core_out": core_attn_out_non_spec.squeeze(0).detach().cpu().clone(),
+                            "final_state": last_recurrent_state.detach().cpu().clone(),
+                            "A_log": self.A_log.detach().cpu().clone(),
+                            "dt_bias": self.dt_bias.detach().cpu().clone(),
+                        }
+                        _fr13_parent = os.path.dirname(_fr13_call_path)
+                        if _fr13_parent:
+                            os.makedirs(_fr13_parent, exist_ok=True)
+                        torch.save(_fr13_prefill_payload, _fr13_call_path)
+                        if _fr13_saved_total == 0:
+                            torch.save(_fr13_prefill_payload, _fr13_prefill_capture_path)
+                        _fr13_saved_by_prefix[_fr13_prefix] = (
+                            int(_fr13_saved_by_prefix.get(_fr13_prefix, 0)) + 1
+                        )
+                        globals()["_FR13_PREFILL_GDN_CAPTURE_SAVED"] = (
+                            _fr13_saved_total + 1
+                        )
+            except Exception as _fr13_prefill_capture_exc:
+                logger.warning(
+                    "FR13 prefill GDN capture failed: %s",
+                    _fr13_prefill_capture_exc,
+                )
+            # Init cache
+            ssm_state[non_spec_state_indices_tensor] = last_recurrent_state.to(
+                ssm_state.dtype
+            )
+'''
+        if prefill_scan_needle not in text:
+            raise RuntimeError("FR13 prefill scan capture needle not found")
+        text = text.replace(prefill_scan_needle, prefill_scan_replacement, 1)
     GDN_LINEAR_PATH.write_text(text)
     return True
 
