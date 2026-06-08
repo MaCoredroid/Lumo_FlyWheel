@@ -464,13 +464,13 @@ Interpretation: deleting the two over-rounds restores the expected `1.221e-4` L1
 
 Interpretation: Gate-2 hooks-off/no-bias regression remains byte-exact for the current forked FA2 `.so`; proceed to the clean WY B=4 server boot and timed e2e.
 
-## Commit `ced25bd3` (FR13 gate diagnostic captures during graph capture) - clean B=4 Gate-A prerequisite (codex_fr16, 2026-06-08)
+## Commits `ced25bd3` + `74dfb33d` (FR13 gate diagnostic captures for clean B=4 Gate-A) - prerequisite (codex_fr16, 2026-06-08)
 
 ### Scope
 - User red-team caught a gate gap: the prior Gate-A ladder was B=1/eager and pre-final-B=4 conditions; the B=4 WY e2e symptom (`accept/event 1.1989`) must not be treated as a verdict until the final bf16-tapped WY build is ladder-validated at B=4.
 - Code-gated diagnostic capture paths in `scripts/fr10_phase4_patch_vllm_tree_gdn.py`:
   - FR12 GDN h0/scan subkernel capture now constructs CPU metadata only when `FR12_SUBKERNEL_CAPTURE` is set.
-  - FR10 layer-hidden capture and FR13 final-logit capture skip CUDA graph capture and fire only on real post-startup requests.
+  - A follow-up removed a Dynamo-hostile `torch.cuda.is_current_stream_capturing()` check from compiled model code; layer/final capture startup avoidance must be controlled by explicit skip/limit settings.
 - Purpose: run the B=4 Gate-A ladder with CUDA graph FULL intact and without FR12 diagnostic clone/copy contamination during graph capture.
 
 ### Status
