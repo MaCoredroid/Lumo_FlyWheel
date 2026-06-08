@@ -340,6 +340,7 @@ def _patch_gdn_linear() -> bool:
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
+            "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
             "_FR12_SUBKERNEL_CAPTURE_ACTIVE = {}\n"
@@ -1180,8 +1181,11 @@ def _patch_gdn_linear() -> bool:
                                 conv_weights[:, _fr10_col],
                             )
                         if self.activation in (True, "silu", "swish"):
-                            _fr10_acc = torch.nn.functional.silu(_fr10_acc)
-                        _fr10_out = _fr10_acc.to(dtype=mixed_qkv_spec.dtype)
+                            _fr10_out = triton_ex2_silu_bf16(
+                                _fr10_acc, out_dtype=mixed_qkv_spec.dtype
+                            )
+                        else:
+                            _fr10_out = _fr10_acc.to(dtype=mixed_qkv_spec.dtype)
                         if _fr12_native_spine_conv_out is not None:
                             _fr10_out.index_copy_(
                                 0,
@@ -1263,12 +1267,13 @@ def _patch_gdn_linear() -> bool:
                                     )
                                 )
                             if self.activation in (True, "silu", "swish"):
-                                _fr10_path0_acc = torch.nn.functional.silu(
-                                    _fr10_path0_acc
+                                _fr10_path0_ref = triton_ex2_silu_bf16(
+                                    _fr10_path0_acc, out_dtype=mixed_qkv_spec.dtype
                                 )
-                            _fr10_path0_ref = _fr10_path0_acc.to(
-                                dtype=mixed_qkv_spec.dtype
-                            )
+                            else:
+                                _fr10_path0_ref = _fr10_path0_acc.to(
+                                    dtype=mixed_qkv_spec.dtype
+                                )
                             _fr10_tree_path0 = _fr10_out.index_select(
                                 0, _fr10_path0_node_tensor
                             )
@@ -1292,12 +1297,13 @@ def _patch_gdn_linear() -> bool:
                                     )
                                 )
                             if self.activation in (True, "silu", "swish"):
-                                _fr10_flat_acc = torch.nn.functional.silu(
-                                    _fr10_flat_acc
-                                )
-                            _fr10_native_flat_path0 = _fr10_flat_acc.to(
-                                dtype=mixed_qkv_spec.dtype
-                            ).index_select(0, _fr10_path0_node_tensor)
+                                _fr10_native_flat_path0 = triton_ex2_silu_bf16(
+                                    _fr10_flat_acc, out_dtype=mixed_qkv_spec.dtype
+                                ).index_select(0, _fr10_path0_node_tensor)
+                            else:
+                                _fr10_native_flat_path0 = _fr10_flat_acc.to(
+                                    dtype=mixed_qkv_spec.dtype
+                                ).index_select(0, _fr10_path0_node_tensor)
                             _fr10_serial_out = torch.empty_like(_fr10_out)
                             _fr10_serial_state_rows = []
                             _fr10_replay_pert_x = _fr10_x.clone()
@@ -1343,16 +1349,20 @@ def _patch_gdn_linear() -> bool:
                                     )
                                 )
                             if self.activation in (True, "silu", "swish"):
-                                _fr10_pert_acc = torch.nn.functional.silu(_fr10_pert_acc)
-                                _fr10_flat_pert_acc = torch.nn.functional.silu(
-                                    _fr10_flat_pert_acc
-                                )
-                            _fr10_pert_path0 = _fr10_pert_acc.to(
-                                dtype=mixed_qkv_spec.dtype
-                            ).index_select(0, _fr10_path0_node_tensor)
-                            _fr10_flat_pert_path0 = _fr10_flat_pert_acc.to(
-                                dtype=mixed_qkv_spec.dtype
-                            ).index_select(0, _fr10_path0_node_tensor)
+                                _fr10_pert_path0 = triton_ex2_silu_bf16(
+                                    _fr10_pert_acc, out_dtype=mixed_qkv_spec.dtype
+                                ).index_select(0, _fr10_path0_node_tensor)
+                                _fr10_flat_pert_path0 = triton_ex2_silu_bf16(
+                                    _fr10_flat_pert_acc,
+                                    out_dtype=mixed_qkv_spec.dtype,
+                                ).index_select(0, _fr10_path0_node_tensor)
+                            else:
+                                _fr10_pert_path0 = _fr10_pert_acc.to(
+                                    dtype=mixed_qkv_spec.dtype
+                                ).index_select(0, _fr10_path0_node_tensor)
+                                _fr10_flat_pert_path0 = _fr10_flat_pert_acc.to(
+                                    dtype=mixed_qkv_spec.dtype
+                                ).index_select(0, _fr10_path0_node_tensor)
                             for _fr10_node_i in range(_fr10_tree_n):
                                 _fr10_node_path = _fr10_path_node_tensors[_fr10_node_i]
                                 _fr10_node_x = _fr10_x.index_select(0, _fr10_node_path)
@@ -1389,12 +1399,15 @@ def _patch_gdn_linear() -> bool:
                                         )
                                     )
                                 if self.activation in (True, "silu", "swish"):
-                                    _fr10_serial_acc = torch.nn.functional.silu(
-                                        _fr10_serial_acc
+                                    _fr10_serial_out[
+                                        _fr10_node_i
+                                    ] = triton_ex2_silu_bf16(
+                                        _fr10_serial_acc, out_dtype=mixed_qkv_spec.dtype
                                     )
-                                _fr10_serial_out[_fr10_node_i] = _fr10_serial_acc.to(
-                                    dtype=mixed_qkv_spec.dtype
-                                )
+                                else:
+                                    _fr10_serial_out[_fr10_node_i] = _fr10_serial_acc.to(
+                                        dtype=mixed_qkv_spec.dtype
+                                    )
                                 _fr10_serial_state_source = torch.cat(
                                     (
                                         _fr10_prior_conv_state_bank[_fr10_b].transpose(0, 1),

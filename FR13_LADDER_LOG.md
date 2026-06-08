@@ -38,3 +38,22 @@ A `FR10_ALLOW_LINEAR_FALLBACK` run is DIAGNOSTIC ONLY (GDN may go linear) → NE
 - Gate 2 (regular-decode) unchanged from `2900203b`/`d2f1ba18`: byte-exact 0.0, still valid (no regular-decode code changed).
 
 > **CORRECTION (workflow `w86uygp1x`, `FR13_FLOOR_WORKFLOW_VERDICT.md`):** the v1 numbers above ("row-0 0.125/512", phrasing implying broad drift) are superseded by the v2 oracle on raw `.pt`: **14/16 calls byte-exact 0.0 on the whole tree; spine byte-exact 15/16; exactly 2 single-bf16-ULP elements total across 16 events** (call15 spine row6 head20 dim158 = 0.0039; call10 branch row9 = 0.00098). row-0 = **0.0078/1037**, confirmed single-query-vs-stacked FA2 harness artifact (tree[0] == stacked oracle exactly). The residual is a ~2e-6 probabilistic single-ULP rounding event (no depth growth = rounding signature, not bug signature), NOT a deterministic floor; no impossibility theorem. Still NOT a literal-0.0 PASS; the real verdict is the e2e vs-E5 measurement (gate decision with the user pending).
+
+---
+
+## Commit `cb669425` (FR13: use ex2.approx SiLU for tree conv) — offline clean-input GDN conv gate
+
+### Gate A sub-op — causal-conv clean-input replay — **OFFLINE 0.0, pre-live**
+
+- Config: boot-free same-input replay; clean tree/native captures only; L0 from `output/fr13_gdn_conv_multilayer_capture_20260607T193044Z`, fresh L45 from `output/fr13_gdn_l45_fullstate_20260607T175434Z`.
+- Strictness: no `FR10_ALLOW_LINEAR_FALLBACK`; no native `causal_conv1d_update` reroute. The tree path uses our Triton helper `triton_ex2_silu_bf16`, whose `tl.exp` lowers to NVIDIA `ex2.approx.f32`, matching the native activation instruction sequence.
+- Artifact: `output/fr13_clean_input_l0_l45_ex2_replay.json` (`fr13.ex2_silu_replay.v1`).
+
+| layer | clean pre_conv | captured tree conv vs native | ex2 helper conv vs native |
+| ---: | --- | ---: | ---: |
+| 0 | yes | 0.0 / 0 nz | 0.0 / 0 nz |
+| 45 | yes | 0.0009765625 / 1 nz | 0.0 / 0 nz |
+
+Clean aggregate: **max_abs=0.0, nonzero=0** across layers `[0,45]`.
+
+This is not a full verify-path pass. The required live follow-up remains: strict top-down ladder for spine+branches+final logits, plus Gate 2 regular-decode/no-bias no-regression.
