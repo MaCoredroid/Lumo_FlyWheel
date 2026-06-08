@@ -278,3 +278,46 @@ The offline replay localized and fixed a real accepted-path recurrent-state stor
 | WY L12 spine state vs native FLA | 0.000000059604644775390625 |
 
 This clears the boot-free L12 scan arithmetic/op-order sub-gate and is ready for live `FR10_TREE_GDN_WY=1` ladder validation. No e2e has been run.
+
+## Commit `f614979e` (FR13 WY handoff) - live WY ladder attempt (codex_fr16, 2026-06-08T16:29Z)
+
+### Scope
+- User direction: execute `FR13_WY_KERNEL_BUILD.md` from the WY scaffold/handoff state, with `FR10_TREE_GDN_WY=1`, `FR10_ALLOW_LINEAR_FALLBACK` unset, one GPU, host recovery between arms, and no e2e until strict Gate A clears.
+- Code under test: no code changes after `c0448bd7`/`f614979e`; this entry binds the first live WY validation attempt.
+
+### WY boot + CUDA graph capture - **CONFIRMED**
+- Run dir: `output/fr13_wy_live_ladder_20260608T162920Z`.
+- Config: `TREE_ATTN`, forked FA2, `FR13_FA2_PREFILL_NATIVE=1`, `FR10_TREE_GDN_WY=1`, `FR10_METRICS=1`, `MAX_NUM_SEQS=1`, `GPU_UTIL=0.86`, fallback unset by the launch entrypoint.
+- FULL capture evidence from container logs:
+  - `Profiling CUDA graph memory: PIECEWISE=1 (largest=10), FULL=1 (largest=10)`.
+  - `Capturing CUDA graphs (decode, FULL)` completed.
+  - `Graph capturing finished in 6 secs, took 0.33 GiB`.
+- Non-vacuous tree request evidence: `tree_path_lcp.jsonl`, `independent_winner_trace.jsonl`, and `per_req_spec_trace.jsonl` emitted rows for a 9-draft / 10-node tree.
+- WY-compute evidence: container env had `FR10_TREE_GDN_WY=1`; the GDN verifier branch was active; signal-dumped counters after a tree request included three `n10_pad16`, `has_sibling=true` rows with `count=192` each and path0 nodes `[0,1,2,4,6,8]`. Artifact: `output/fr13_wy_gateA_20260608T163915Z/tree/logs/fr10_tree_gdn_counters.after_request.json`.
+
+### Gate A top-down spine ladder - **FAIL**
+- Run dir: `output/fr13_wy_gateA_20260608T163915Z`.
+- Tree arm: `TREE_ATTN`, forked FA2, `FR13_FA2_PREFILL_NATIVE=1`, `FR10_TREE_GDN_WY=1`, `FR10_METRICS=1`, B=1 eager diagnostic capture, rows `0..9`.
+- Native arm: `FLASH_ATTN`, `naive_mtp`, 5-token linear MTP, B=1 eager diagnostic capture, rows `0..5`.
+- Row map: tree spine `[0,1,2,4,6,8]` -> native `[0,1,2,3,4,5]`.
+- Artifact: `output/fr13_wy_gateA_20260608T163915Z/gateA_spine_ladder.json`.
+
+| stage | max_abs |
+| --- | ---: |
+| input_hidden | 0.0 |
+| layer 0 linear_attention hidden | 0.0 |
+| **layer 1 linear_attention hidden** | **0.0001220703125** |
+| layer 2 linear_attention hidden | 0.015625 |
+| layer 3 full_attention hidden | 0.005859375 |
+| final_norm_hidden | 5.294921875 |
+| final logits | 3.3203125 |
+
+This is not a strict Gate-A pass. The first nonzero moved earlier than the previous replay L12 wall: live WY now fails at layer 1 under the full serving ladder. Branch rows were captured in the tree arm, but the gate was stopped at the first strict spine failure; no branch pass is claimed.
+
+### Micro-check
+- Short CUDA-image micro-check compared `use_wy=True` against the existing replay kernel on a random GQA `n10_pad16` tree with raw gating and in-kernel q/k l2norm.
+- Result: WY output matches replay to `9.313225746154785e-10` max_abs (`2` nonzero elements), but materialized per-node state differs (`0.4837808310985565`) because the kernels store different state surfaces. This supports that the live failure is not a silent fallback, but it does not clear Gate A.
+
+### Gate 2 / e2e
+- Gate 2 was not rerun in this failed Gate-A turn; no verifier-only no-bias code changed from the previously bound PASS entries.
+- Clean B=4 e2e was intentionally not run because Gate A is blocked at layer 1.
