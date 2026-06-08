@@ -445,3 +445,21 @@ Interpretation: the six taps compile and remain row-order/context invariant, but
 | sibling-reordered full output vs original-full spine output | 0.0 |
 
 Interpretation: deleting the two over-rounds restores the expected `1.221e-4` L1 spine output smoke and preserves row-order/context invariance. This still exceeds the gate floor; per user direction, hold for the remaining-seam workflow before any live ladder, #6 rewrite, Gate 2, or e2e.
+
+## Commit `ed795c30` (FR13 WY B=4 e2e preconditions) - Gate-2 hooks-off and clean-launch fix (codex_fr16, 2026-06-08)
+
+### Scope
+- User supplied `FR13_WY_RESIDUAL_CLOSURE.md` verdict B: stop tapping; measure WY B=4 e2e with `TREE_ATTN`, forked FA2, `FR13_FA2_PREFILL_NATIVE=1`, `FR10_TREE_GDN_WY=1`, fallback unset, splice off, `FR10_METRICS=0`, and CUDA graph FULL.
+- Launcher fix before boot: `scripts/fr13_launch_forked_fa2_tree_server.sh` now passes `FR12_TREE_SCAN_FLA_BF16_BOUNDARIES` into the container. Without this pass-through, the accepted live-FLA bf16 boundary configuration would be dropped at server launch.
+
+### Gate-2 no-bias hooks-off compare
+- Artifact dir: `output/fr13_wy_b4_e2e_20260608T183138Z/gate2`.
+- Stock and forked FA2 were run in separate entrypoint containers; no model server boot.
+- Compare artifact: `output/fr13_wy_b4_e2e_20260608T183138Z/gate2/no_bias_compare.json`.
+
+| dtype | torch_equal | max_abs | nonzero |
+| --- | --- | ---: | ---: |
+| fp16 | true | 0.0 | 0 |
+| bf16 | true | 0.0 | 0 |
+
+Interpretation: Gate-2 hooks-off/no-bias regression remains byte-exact for the current forked FA2 `.so`; proceed to the clean WY B=4 server boot and timed e2e.
