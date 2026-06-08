@@ -246,8 +246,7 @@ def _tree_gdn_kernel(
     pid_kh = pid_vh // head_group
     offs_n = tl.arange(0, N_PAD)
     offs_k = tl.arange(0, DIM_K)
-    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
-    v_mask = offs_v < DIM_V
+    v_mask = pid_v < DIM_V
     if COUNT_INVOCATION:
         tl.atomic_add(
             invocation_counter,
@@ -267,133 +266,87 @@ def _tree_gdn_kernel(
         h0_index = tl.load(h0_indices + H0_INDEX_ROW + h0_column)
         h0_base = h0 + h0_index * H0_BANK_STRIDE
     b_h0 = tl.load(
-        h0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
-        mask=v_mask[:, None],
+        h0_base + (pid_vh * DIM_V + pid_v) * DIM_K + offs_k,
+        mask=v_mask,
         other=0.0,
     ).to(tl.float32)
 
-    # FR12 losslessness gate: replay each node's ancestor path with the same
-    # recurrent update order used by vLLM decode. This keeps spine results
-    # independent of sibling rows and avoids the triangular-solve op-order gap.
+    # Sequential rank-1 tree scan. Each row caches the post-token state for one
+    # tree node, so children start from their parent's fp32 checkpoint without
+    # reloading h0 or replaying ancestors from HBM.
+    h_cache = tl.zeros((N_PAD, DIM_K), dtype=tl.float32)
     for i in tl.static_range(0, N_PAD):
-        q_i = tl.load(
+        state_i = b_h0
+        for j in tl.static_range(0, i):
+            ancestor = (tl.load(strict_mask + i * N_PAD + j) != 0) & (j < N_ACTUAL)
+            h_j = tl.sum(tl.where((offs_n == j)[:, None], h_cache, 0.0), axis=0)
+            state_i = tl.where(ancestor, h_j, state_i)
+
+        b_q = tl.load(
             q + (i * NUM_KH + pid_kh) * DIM_K + offs_k,
             mask=i < N_ACTUAL,
             other=0.0,
         ).to(tl.float32)
+        b_k = tl.load(
+            k + (i * NUM_KH + pid_kh) * DIM_K + offs_k,
+            mask=i < N_ACTUAL,
+            other=0.0,
+        ).to(tl.float32)
+        b_v = tl.load(
+            v + (i * NUM_VH + pid_vh) * DIM_V + pid_v,
+            mask=(i < N_ACTUAL) & v_mask,
+            other=0.0,
+        ).to(tl.float32)
+        b_b = tl.load(
+            beta + i * NUM_VH + pid_vh,
+            mask=i < N_ACTUAL,
+            other=0.0,
+        ).to(tl.float32)
+        b_g = tl.load(
+            g + i * NUM_VH + pid_vh,
+            mask=i < N_ACTUAL,
+            other=0.0,
+        ).to(tl.float32)
+        b_beta = b_b
+        if RAW_GATING:
+            b_b = tl.load(
+                raw_b + i * NUM_VH + pid_vh,
+                mask=i < N_ACTUAL,
+                other=0.0,
+            ).to(tl.float32)
+            x = tl.load(
+                raw_a + i * NUM_VH + pid_vh,
+                mask=i < N_ACTUAL,
+                other=0.0,
+            ).to(tl.float32) + tl.load(dt_bias + pid_vh).to(tl.float32)
+            softplus_x = tl.where(
+                x <= 20.0,
+                tl.log(1.0 + tl.exp(x)),
+                x,
+            )
+            b_g = -tl.exp(tl.load(A_log + pid_vh).to(tl.float32)) * softplus_x
+            b_beta = tl.sigmoid(b_b.to(tl.float32))
+
         if USE_QK_L2NORM_IN_KERNEL:
-            q_i = q_i * tl.rsqrt(tl.sum(q_i * q_i) + 1e-6)
-        q_i *= OUTPUT_SCALE
-        state_i = b_h0
-        for j in tl.range(0, i + 1):
-            vis = tl.load(visible_mask + i * N_PAD + j) != 0
-            k_j = tl.load(
-                k + (j * NUM_KH + pid_kh) * DIM_K + offs_k,
-                mask=j < N_ACTUAL,
-                other=0.0,
-            ).to(tl.float32)
-            if USE_QK_L2NORM_IN_KERNEL:
-                k_j = k_j * tl.rsqrt(tl.sum(k_j * k_j) + 1e-6)
-            v_j = tl.load(
-                v + (j * NUM_VH + pid_vh) * DIM_V + offs_v,
-                mask=(j < N_ACTUAL) & v_mask,
-                other=0.0,
-            ).to(tl.float32)
-            g_j = tl.load(
-                g + j * NUM_VH + pid_vh,
-                mask=j < N_ACTUAL,
-                other=0.0,
-            ).to(tl.float32)
-            beta_j = tl.load(
-                beta + j * NUM_VH + pid_vh,
-                mask=j < N_ACTUAL,
-                other=0.0,
-            ).to(tl.float32)
-            if RAW_GATING:
-                x_j = tl.load(
-                    raw_a + j * NUM_VH + pid_vh,
-                    mask=j < N_ACTUAL,
-                    other=0.0,
-                ).to(tl.float32) + tl.load(dt_bias + pid_vh).to(tl.float32)
-                softplus_j = tl.where(
-                    x_j <= 20.0,
-                    tl.log(1.0 + tl.exp(x_j)),
-                    x_j,
-                )
-                g_j = -tl.exp(tl.load(A_log + pid_vh).to(tl.float32)) * softplus_j
-                beta_j = tl.sigmoid(
-                    tl.load(
-                        raw_b + j * NUM_VH + pid_vh,
-                        mask=j < N_ACTUAL,
-                        other=0.0,
-                    ).to(tl.float32)
-                )
-            decayed = state_i * tl.exp(g_j)
-            delta_v = v_j - tl.sum(decayed * k_j[None, :], axis=1)
-            delta_v *= beta_j
-            updated = decayed + delta_v[:, None] * k_j[None, :]
-            state_i = tl.where(vis, updated, state_i)
-        state_store_i = state_i
-        if i > 0:
-            state_store_i = b_h0
-            for j in tl.range(1, i + 1):
-                vis = tl.load(visible_mask + i * N_PAD + j) != 0
-                k_j = tl.load(
-                    k + (j * NUM_KH + pid_kh) * DIM_K + offs_k,
-                    mask=j < N_ACTUAL,
-                    other=0.0,
-                ).to(tl.float32)
-                if USE_QK_L2NORM_IN_KERNEL:
-                    k_j = k_j * tl.rsqrt(tl.sum(k_j * k_j) + 1e-6)
-                v_j = tl.load(
-                    v + (j * NUM_VH + pid_vh) * DIM_V + offs_v,
-                    mask=(j < N_ACTUAL) & v_mask,
-                    other=0.0,
-                ).to(tl.float32)
-                g_j = tl.load(
-                    g + j * NUM_VH + pid_vh,
-                    mask=j < N_ACTUAL,
-                    other=0.0,
-                ).to(tl.float32)
-                beta_j = tl.load(
-                    beta + j * NUM_VH + pid_vh,
-                    mask=j < N_ACTUAL,
-                    other=0.0,
-                ).to(tl.float32)
-                if RAW_GATING:
-                    x_j = tl.load(
-                        raw_a + j * NUM_VH + pid_vh,
-                        mask=j < N_ACTUAL,
-                        other=0.0,
-                    ).to(tl.float32) + tl.load(dt_bias + pid_vh).to(tl.float32)
-                    softplus_j = tl.where(
-                        x_j <= 20.0,
-                        tl.log(1.0 + tl.exp(x_j)),
-                        x_j,
-                    )
-                    g_j = -tl.exp(tl.load(A_log + pid_vh).to(tl.float32)) * softplus_j
-                    beta_j = tl.sigmoid(
-                        tl.load(
-                            raw_b + j * NUM_VH + pid_vh,
-                            mask=j < N_ACTUAL,
-                            other=0.0,
-                        ).to(tl.float32)
-                    )
-                decayed = state_store_i * tl.exp(g_j)
-                delta_v = v_j - tl.sum(decayed * k_j[None, :], axis=1)
-                delta_v *= beta_j
-                updated = decayed + delta_v[:, None] * k_j[None, :]
-                state_store_i = tl.where(vis, updated, state_store_i)
-        out_i = tl.sum(state_i * q_i[None, :], axis=1)
+            b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
+            b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
+        b_q = b_q * OUTPUT_SCALE
+
+        state_i *= tl.exp(b_g)
+        b_v -= tl.sum(state_i * b_k)
+        b_v *= b_beta
+        state_i += b_v * b_k
+        out_i = tl.sum(state_i * b_q)
+        h_cache = tl.where((offs_n == i)[:, None], state_i[None, :], h_cache)
         tl.store(
-            out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
+            out + (i * NUM_VH + pid_vh) * DIM_V + pid_v,
             out_i,
-            mask=v_mask & (i < N_ACTUAL),
+            mask=(i < N_ACTUAL) & v_mask,
         )
         tl.store(
-            state + ((i * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
-            state_store_i,
-            mask=v_mask[:, None] & (i < N_ACTUAL),
+            state + ((i * NUM_VH + pid_vh) * DIM_V + pid_v) * DIM_K + offs_k,
+            state_i,
+            mask=(i < N_ACTUAL) & v_mask,
         )
 
 
@@ -910,8 +863,8 @@ def launch_tree_gdn_prepared(
             "state must be at least "
             f"({n_actual}, {num_vh}, {dim_v}, {dim_k}), got {tuple(state.shape)}"
         )
-    grid = (num_vh, triton.cdiv(dim_v, BV))
     if use_wy:
+        grid = (num_vh, triton.cdiv(dim_v, BV))
         _tree_gdn_wy_kernel[grid](
             q,
             k,
@@ -950,6 +903,7 @@ def launch_tree_gdn_prepared(
             COUNT_INVOCATION=count_invocation,
         )
         return out, state
+    grid = (num_vh, dim_v)
     _tree_gdn_kernel[grid](
         q,
         k,
@@ -974,7 +928,7 @@ def launch_tree_gdn_prepared(
         NUM_VH=num_vh,
         DIM_K=dim_k,
         DIM_V=dim_v,
-        BLOCK_V=BV,
+        BLOCK_V=1,
         OUTPUT_SCALE=output_scale,
         USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
         H0_IS_BANK=h0_is_bank,

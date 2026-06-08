@@ -615,3 +615,25 @@ Branch proxy rows `[3,5,7,9]` matched logged self-target argmaxes `[332,332,198,
 
 ### Status
 - No code changes or gate claims in this entry.
+
+## Commit `fr13-seq-register-checkpoint-kernel` - default sequential tree-scan rewritten around parent checkpoints (codex_fr13, 2026-06-08)
+
+### Scope
+- Code change: rewrote the default `use_wy=False` `_tree_gdn_kernel` in `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py`.
+- The sequential path now launches one Triton program per `(value_head, value_channel)` and keeps an `N_PAD x DIM_K` fp32 checkpoint table in the program working set.
+- Each node selects the latest strict ancestor checkpoint from `strict_mask`, applies exactly one native-style rank-1 recurrence update for that node, stores the same post-update state used for readout, and writes the node output/state surface.
+- WY remains behind `FR10_TREE_GDN_WY=1` and unchanged; this entry does not splice or call native FLA as the deliverable kernel.
+
+### Native Op-Order Alignment
+- Per node: load `q`, `k`, `v`, `b`, derive raw gate from `a + dt_bias`, compute `sigmoid(b)`, l2-normalize `q/k` in-kernel with `+1e-6`, scale `q`, decay state, delta-read, beta-scale, rank-1 write, and read out from the updated state.
+- Removed the prior second state replay that skipped token `0` for `i > 0`; stored state now matches the actual post-token state used for `out_i`.
+
+### Local Checks
+- `git diff --check`: passed.
+- `python3 -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py scripts/fr10_phase4_patch_vllm_tree_gdn.py`: passed.
+- `python3 -m pytest tests/test_fr10_gdn_tree_algebra.py -q`: `15 passed`.
+- `python3 -m pytest tests/test_fr10_lossless_equivalence.py tests/test_fr10_tree_conv.py -q`: `15 passed, 1 skipped`.
+
+### Status
+- Host Python reports `torch.cuda.is_available() == False`, so no direct host Triton smoke is claimed here.
+- Next gate is GPU/container validation of the sequential default path with the pinned paired ladder and native-on-path oracle.
