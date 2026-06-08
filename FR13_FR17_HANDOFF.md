@@ -2,10 +2,10 @@
 
 codex_fr16 stood down (1h15m marathon turn, 64M-token context) after the root cause was located. Fresh session, clean context, ONE focused task.
 
-## THE LOCATED ROOT CAUSE (grounded, decisive — see FR13_COMMITTER_TOPOLOGY_REDTEAM.md + FR13_WY_B4_REDTEAM.md)
+## THE LOCATED ROOT CAUSE (grounded, decisive — see FR13_COMMITTER_TOPOLOGY_REDTEAM.md + docs/archive/wy/FR13_WY_B4_REDTEAM.md)
 The WY tree-verify e2e gives accept/event **1.199** (vs E5 3.076, 56% step-0 reject) because the **verify FORWARD is LOSSY** — specifically the **WY GDN scan STATE write drifts ~1.66e-3** and compounds recurrently over 64 layers to **final-logit max_abs 3.32**, flipping argmaxes over the live run.
 - **NOT committer/topology** (both RULED OUT, grounded: topology = correct caterpillar `[-1,0,0,1,1,3,3,5,5]`, spine byte-identical to native; committer = native-identical rules — it only rejects because the drifted verify gives the draft p=0).
-- **NOT batch-dependence** (the WY scan is batch-invariant: no `pid_batch`, no autotune, static-range, per-element slice — `FR13_WY_B4_REDTEAM.md`).
+- **NOT batch-dependence** (the WY scan is batch-invariant: no `pid_batch`, no autotune, static-range, per-element slice — `docs/archive/wy/FR13_WY_B4_REDTEAM.md`).
 - **The blind spot we fixed:** the bf16-tap work drove the scan **OUTPUT** to 1 bf16 ULP (`1f0c7237`/`43434f01`/`1f11b9d7`), but the scan **STATE** (the recurrent carry) was never confirmed — it is **1.66e-3 (~13× the output)** and is what compounds. `Gate A NEVER passed` (always ~3.32 final logits); the "argmax-lossless 6/6" was a single greedy-event coincidence.
 - Trace discriminator: conditioned on root-match, depth-1 spine match is only **0.635** (would be ~1.0 if the verify were native-exact) → forward drift, confirmed.
 

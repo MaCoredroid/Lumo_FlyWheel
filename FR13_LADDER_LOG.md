@@ -264,7 +264,7 @@ The offline replay localized and fixed a real accepted-path recurrent-state stor
 ## Takeover run `codex_fr15` - WY one-pass tree-GDN build start (2026-06-08T08:43:00Z)
 
 ### Scope
-- User direction: stop replay-kernel L12 grind and build the no-copy WY one-pass GDN tree kernel from `FR13_WY_KERNEL_BUILD.md`.
+- User direction: stop replay-kernel L12 grind and build the no-copy WY one-pass GDN tree kernel from `docs/archive/wy/FR13_WY_KERNEL_BUILD.md`.
 - Code path: added flag-gated `FR10_TREE_GDN_WY=1`; default remains replay fallback.
 
 ### Offline WY sub-gate - **PASS**
@@ -282,7 +282,7 @@ This clears the boot-free L12 scan arithmetic/op-order sub-gate and is ready for
 ## Commit `f614979e` (FR13 WY handoff) - live WY ladder attempt (codex_fr16, 2026-06-08T16:29Z)
 
 ### Scope
-- User direction: execute `FR13_WY_KERNEL_BUILD.md` from the WY scaffold/handoff state, with `FR10_TREE_GDN_WY=1`, `FR10_ALLOW_LINEAR_FALLBACK` unset, one GPU, host recovery between arms, and no e2e until strict Gate A clears.
+- User direction: execute `docs/archive/wy/FR13_WY_KERNEL_BUILD.md` from the WY scaffold/handoff state, with `FR10_TREE_GDN_WY=1`, `FR10_ALLOW_LINEAR_FALLBACK` unset, one GPU, host recovery between arms, and no e2e until strict Gate A clears.
 - Code under test: no code changes after `c0448bd7`/`f614979e`; this entry binds the first live WY validation attempt.
 
 ### WY boot + CUDA graph capture - **CONFIRMED**
@@ -356,7 +356,7 @@ Per-node WY-vs-serial output max_abs: `[0.0, 0.0, 1.1641532182693481e-10, 0.0, 0
 ## Commit `1f0c7237` (FR13 align WY FLA bf16 boundaries) - offline L1 WY vs live-FLA seam check (codex_fr16, 2026-06-08)
 
 ### Scope
-- User supplied `FR13_WY_SEAM_FIXES.md`: the prior `9.3e-10` L1 WY scan result was against the fp32 oracle, while the live ladder compares against native FLA's bf16 boundary behavior.
+- User supplied `docs/archive/wy/FR13_WY_SEAM_FIXES.md`: the prior `9.3e-10` L1 WY scan result was against the fp32 oracle, while the live ladder compares against native FLA's bf16 boundary behavior.
 - Code change: `_tree_gdn_wy_kernel` now accepts the existing `FLA_BF16_BOUNDARIES` constexpr and, when enabled, bf16-rounds normalized q/k after in-kernel l2norm and bf16-rounds each triangular solve coefficient. The fp32 oracle path remains available with the flag off.
 - Probe-only script change: `scripts/fr12_spine_scan_rounding_probe.py` and `scripts/fr12_scan_batch_invariance_probe.py` gained `--use-wy` so the boot-free probes exercise `_tree_gdn_wy_kernel`, not the replay fallback.
 
@@ -386,7 +386,7 @@ Interpretation: the patched WY scan is now measured against the live FLA target 
 ## Commit `43434f01` (FR13 apply WY cascade-map bf16 taps) - six-tap implementation and readout wall (codex_fr16, 2026-06-08)
 
 ### Scope
-- User supplied `FR13_WY_CASCADE_MAP.md`, which supersedes the earlier two-tap seam fix.
+- User supplied `docs/archive/wy/FR13_WY_CASCADE_MAP.md`, which supersedes the earlier two-tap seam fix.
 - Code change: `_tree_gdn_wy_kernel` now gates the complete documented bf16 boundary set behind `FLA_BF16_BOUNDARIES`:
   - #1 normalized q/k bf16 store after l2norm: kept.
   - #2 solve-T rounding relocated from per-iteration `coeff_j` to final `solved_v` / `solved_k` stores.
@@ -412,7 +412,7 @@ Interpretation: the patched WY scan is now measured against the live FLA target 
 | spine-only output vs original-full spine output | 0.000000010593794286251068 |
 | sibling-reordered full output vs original-full spine output | 0.0 |
 
-Interpretation: the six taps compile and remain row-order/context invariant, but the L1 scan output is above the cascade-map target floor (~6e-5). The next plausible lever is the #6 readout reduction-order match described in `FR13_WY_CASCADE_MAP.md` as a user-decision item, so no live ladder pass/fail is claimed and no readout restructure was attempted.
+Interpretation: the six taps compile and remain row-order/context invariant, but the L1 scan output is above the cascade-map target floor (~6e-5). The next plausible lever is the #6 readout reduction-order match described in `docs/archive/wy/FR13_WY_CASCADE_MAP.md` as a user-decision item, so no live ladder pass/fail is claimed and no readout restructure was attempted.
 
 ### Blocked next action
 - Ask user whether to authorize the #6 readout reduction-order rewrite or to run the requested live ladder anyway with the known above-floor L1 scan result.
@@ -421,7 +421,7 @@ Interpretation: the six taps compile and remain row-order/context invariant, but
 ## Commit `1f11b9d7` (FR13 remove WY misapplied readout over-rounds) - tap red-team fix (codex_fr16, 2026-06-08)
 
 ### Scope
-- User supplied `FR13_WY_TAP_REDTEAM.md`: the six-tap `2.44e-4` result was a mis-applied #6 tap, not proof of a reduction-order rewrite need.
+- User supplied `docs/archive/wy/FR13_WY_TAP_REDTEAM.md`: the six-tap `2.44e-4` result was a mis-applied #6 tap, not proof of a reduction-order rewrite need.
 - Code change: removed the two native-mismatched over-rounds while keeping #1-#5:
   - Deleted post-scale `q_i.to(bf16).to(f32)`; q is already bf16-rounded by #1 before `OUTPUT_SCALE`.
   - Deleted per-j `state_update_ij.to(bf16).to(f32)`; native accumulates outer products in fp32 after rounding `tv_i`.
@@ -449,7 +449,7 @@ Interpretation: deleting the two over-rounds restores the expected `1.221e-4` L1
 ## Commit `b709d488` (FR13 WY B=4 e2e preconditions) - Gate-2 hooks-off and clean-launch fix (codex_fr16, 2026-06-08)
 
 ### Scope
-- User supplied `FR13_WY_RESIDUAL_CLOSURE.md` verdict B: stop tapping; measure WY B=4 e2e with `TREE_ATTN`, forked FA2, `FR13_FA2_PREFILL_NATIVE=1`, `FR10_TREE_GDN_WY=1`, fallback unset, splice off, `FR10_METRICS=0`, and CUDA graph FULL.
+- User supplied `docs/archive/wy/FR13_WY_RESIDUAL_CLOSURE.md` verdict B: stop tapping; measure WY B=4 e2e with `TREE_ATTN`, forked FA2, `FR13_FA2_PREFILL_NATIVE=1`, `FR10_TREE_GDN_WY=1`, fallback unset, splice off, `FR10_METRICS=0`, and CUDA graph FULL.
 - Launcher fix before boot: `scripts/fr13_launch_forked_fa2_tree_server.sh` now passes `FR12_TREE_SCAN_FLA_BF16_BOUNDARIES` into the container. Without this pass-through, the accepted live-FLA bf16 boundary configuration would be dropped at server launch.
 
 ### Gate-2 no-bias hooks-off compare
@@ -503,7 +503,7 @@ Baseline before this patch on the same payload was state `0.001657634973526001`;
 ## Commit `codex_fr17-bf16-bank-s1-probe` - post-round state-bank seam check (codex_fr17, 2026-06-08)
 
 ### Scope
-- User direction: apply `FR13_WY_MULTISTEP_SEAMS.md`; do **not** touch `b_h0`, do **not** BF16-round `state_store_i` in-kernel, and proactively test S1 offline before another live ladder.
+- User direction: apply `docs/archive/wy/FR13_WY_MULTISTEP_SEAMS.md`; do **not** touch `b_h0`, do **not** BF16-round `state_store_i` in-kernel, and proactively test S1 offline before another live ladder.
 - Code change: the offline spine and batch replay probes now report per-element `state_bf16_bank` equality for `tree_state.to(bfloat16)` vs native `ht.to(bfloat16)`, not just fp32 `state_max_abs`.
 - Code change: `_tree_gdn_wy_kernel` now computes the stored recurrent-state surface with native's direct per-token recurrent update order using the raw normalized state basis. The WY output/readout path is unchanged, and the stored state is still written fp32 for the caller's single cache-bank round.
 
@@ -536,7 +536,7 @@ Status: no live ladder/e2e verdict is claimed from this entry. The remaining S1 
 ## Commit `codex_fr17-output-tap-live-ladder` - prompt-pinned paired ladder + output split (codex_fr17, 2026-06-08)
 
 ### Scope
-- User direction: execute `FR13_WY_LADDER_PROMPT_FIX.md`; stop reusing the `163915Z` native capture because its prompt is unrecoverable, do one fresh paired run with a saved deterministic request, then apply `FR13_WY_OUTPUT_TAP_PATCH.md` and re-run only the tree arm.
+- User direction: execute `docs/archive/wy/FR13_WY_LADDER_PROMPT_FIX.md`; stop reusing the `163915Z` native capture because its prompt is unrecoverable, do one fresh paired run with a saved deterministic request, then apply `docs/archive/wy/FR13_WY_OUTPUT_TAP_PATCH.md` and re-run only the tree arm.
 - Fixed request saved at `output/fr13_wy_paired_ladder_20260608T211749Z/request.json`:
   - endpoint body: `{"model":"qwen3.6-27b","prompt":"Explain hash tables.","max_tokens":16,"temperature":0,"vllm_xargs":{"fr10_decode_mode":"naive_mtp"}}`
   - tree copy changes only `fr10_decode_mode` to `tree_mtp`.
@@ -602,7 +602,7 @@ Branch proxy rows `[3,5,7,9]` matched logged self-target argmaxes `[332,332,198,
 ## Commit `fr13-seq-pivot-bind` - FR13 sequential rank-1 tree-scan pivot bound (codex_fr13, 2026-06-08T22:34:03Z)
 
 ### Scope
-- User direction: read `FR13_SEQ_TREE_SCAN_TASK.md` and `FR13_WY_VS_SEQUENTIAL_VERDICT.md` at `HEAD 93ad85e4`, stand down the WY deliverable path, and execute the sequential rank-1 GDN tree-scan task.
+- User direction: read `FR13_SEQ_TREE_SCAN_TASK.md` and `docs/archive/wy/FR13_WY_VS_SEQUENTIAL_VERDICT.md` at `HEAD 93ad85e4`, stand down the WY deliverable path, and execute the sequential rank-1 GDN tree-scan task.
 - Verified `HEAD`: `93ad85e46604fe7ae2e152d7b2b6980ead13f088`.
 - Decision bound from the task docs: WY is oracle-only because native verify dispatches to the sequential rank-1 recurrence; the deliverable is the default `use_wy=False` path in `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py`.
 - Discipline bound: one GPU, recover host memory between live arms, no native splice/reroute/dense fallback, and commit + push this log at each implementation or gate step.
@@ -756,3 +756,52 @@ The requested visible marker is reproduced in the layer-hidden capture: layer `2
 - This rules out beta and input/convolution wiring for the first L2 row-2 drift.
 - Since `h0_state_in` is identical and the first mismatch appears inside `gdn_scan_out`, the remaining suspect is the sequential scan recurrence itself, specifically the parent-resume/register-carry path around `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:277`.
 - The spine-row cross-check (`tree rows 0,1,2,4,6,8` vs native rows `0..5`) reports the same first diverging stage: `gdn_scan_out`.
+
+## Commit `fr13-archive-wy-path` - WY path archived off main before L2 recurrence fix (codex_fr13, 2026-06-08)
+
+### Scope
+- User direction: preserve all WY work on branch `fr13-wy-archive`, then remove the WY kernel path from `main` before touching the sequential recurrence.
+- Archive branch updated and pushed: `fr13-wy-archive -> 680e0848`.
+- Moved the 16 `FR13_WY_*.md` notes to `docs/archive/wy/` and updated in-repo markdown references to the archived paths.
+- Removed `_tree_gdn_wy_kernel` from `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py`.
+- Removed host/API plumbing for `use_wy`, `fla_bf16_boundaries`, `fla_bf16_output_split`, `FLA_BF16_BOUNDARIES`, `FLA_BF16_OUTPUT_SPLIT`, `FR10_TREE_GDN_WY`, `FR12_TREE_SCAN_FLA_BF16_BOUNDARIES`, and `FR13_WY_FLA_BF16_OUTPUT_SPLIT`.
+- Removed the vestigial `FLA_BF16_BOUNDARIES` constexpr from the sequential `_tree_gdn_kernel` signature.
+- Updated the FR12 scan probe scripts to exercise only the default sequential `launch_tree_gdn_prepared` path.
+- Fixed stale FR10 launcher-default test expectation for `FR11_TREE_CONV_NATIVE_BF16_TAPS` to match the documented/script default `1`.
+
+### Checks
+- `python3 -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py scripts/fr10_phase4_patch_vllm_tree_gdn.py scripts/fr12_spine_scan_rounding_probe.py scripts/fr12_scan_batch_invariance_probe.py`: passed.
+- `bash -n scripts/fr10_launch_speed_server.sh scripts/fr13_launch_forked_fa2_tree_server.sh`: passed.
+- `python3 -m pytest tests/test_fr10_* -q`: `83 passed, 1 skipped`.
+- Source/script grep for WY runtime symbols returned empty for `src`, `scripts`, and `tests`.
+
+### Gate-2 No-Bias Check
+- Run dir: `output/fr13_wy_archive_validation_20260608T234116Z/gate2/`.
+- Reducer: `scripts/fr13_fa2_no_bias_pristine_compare.py`.
+- Result artifact: `no_bias_compare.json`.
+- Stock vs fork, no tree bias:
+  - `float16`: `torch_equal=true`, `max_abs=0.0`, `nonzero=0`.
+  - `bfloat16`: `torch_equal=true`, `max_abs=0.0`, `nonzero=0`.
+
+### Sequential Ladder No-Regression Check
+- Run dir: `output/fr13_wy_archive_validation_20260608T234116Z/tree_ladder/`.
+- Config: `TREE_ATTN`, B=1 eager, `FR10_METRICS=0`, `FR13_FA2_PREFILL_NATIVE=1`, default sequential rank-1 GDN tree-scan only.
+- Pinned request: `Explain hash tables.`, `max_tokens=16`, `temperature=0`.
+- Request returned HTTP `200`, usage prompt `5`, completion `16`.
+- Reducer artifact: `tree_ladder/gateA_spine_ladder_seq_after_wy_archive.json`.
+- Native reference: `output/fr13_seq_l2_subop_20260608T231135Z/native/`.
+
+| check | max_abs | nonzero / status |
+| --- | ---: | --- |
+| input hidden | `0.0` | bit-exact |
+| layer 0 hidden / residual | `0.0 / 0.0` | bit-exact |
+| layer 1 hidden / residual | `0.0 / 0.0` | bit-exact |
+| first nonzero | `0.015625` | layer 2 hidden |
+| layer 2 residual | `0.0009765625` | unchanged known L2 seam |
+| final norm hidden | `1.25` | unchanged known downstream drift |
+| final logits | `0.7265625` | unchanged known downstream drift |
+
+### Status
+- WY is now archived off `main`; the only served GDN tree path in `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py` is the sequential rank-1 kernel.
+- Gate A is not claimed here; the known L2 recurrence seam is intentionally left for the next ordered task.
+- Host recovery after the live ladder succeeded: swap `0B`, GPU compute clear.

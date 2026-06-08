@@ -1,6 +1,6 @@
 # FR13 — PIVOT to the sequential rank-1 GDN tree-scan (user-confirmed 2026-06-08, option a: pivot + measure TPS empirically)
 
-## DECISION (see FR13_WY_VS_SEQUENTIAL_VERDICT.md, source-verified)
+## DECISION (see docs/archive/wy/FR13_WY_VS_SEQUENTIAL_VERDICT.md, source-verified)
 The WY batched UT-solve kernel is **abandoned as the deliverable** (kept ONLY as an fp32 oracle). Native's VERIFY oracle is the **SEQUENTIAL rank-1 recurrence** (`gdn_linear_attn.py:1117 if spec_sequence_masks is not None: -> fused_sigmoid_gating_delta_rule_update`; chunked-WY `:1142` is prefill-only). WY-batched can NEVER be bit-exact to a sequential oracle (different summation tree, fp non-associativity — same impossibility class as Triton->FA2). The bit-exact-able path is a **sequential rank-1 TREE-SCAN** = native's own kernel re-indexed by tree-ancestry. On the pure spine it collapses to native's loop IDENTICALLY -> bit-exact by construction.
 
 ## THE TASK

@@ -9,7 +9,7 @@ Monitor red-team synthesis, 2026-06-08. Run under test: `output/fr13_wy_b4_e2e_2
 measured on this exact WY build by the live Gate-A ladder. The committer mapping is correct and the
 drafter topology IS the intended caterpillar. NO committer or topology fix is the right next action.**
 
-The static prediction in `FR13_WY_B4_REDTEAM.md` ("the WY scan is ~1 ULP / batch-invariant ⇒ the verify
+The static prediction in `docs/archive/wy/FR13_WY_B4_REDTEAM.md` ("the WY scan is ~1 ULP / batch-invariant ⇒ the verify
 is exonerated ⇒ the 1.199 is committer/topology wiring") is **REFUTED by a GPU ladder that was already
 run on this same WY build** (`output/fr13_wy_live_ladder_20260608T162920Z`, `FR13_LADDER_LOG.md:289–322`):
 
@@ -124,8 +124,8 @@ by the prior agents to the **WY GDN tree scan recurrent STATE** carried across t
   `fr10_gdn_tree_kernel.py` `_tree_gdn_kernel`/ancestor-replay).
 - The OUTPUT is already at the ~1-bf16-ULP floor; the **STATE handoff (1.66e-3) is ~13× larger and is what
   compounds** to final-logit 3.32. The remaining bit-exact seam is the WY scan **state write** vs native
-  FLA's materialized recurrent state, not the per-node output readout. Per `FR13_WY_CASCADE_MAP.md` /
-  `FR13_WY_RESIDUAL_CLOSURE.md`, the open lever is the scan state-update reduction/rounding boundary
+  FLA's materialized recurrent state, not the per-node output readout. Per `docs/archive/wy/FR13_WY_CASCADE_MAP.md` /
+  `docs/archive/wy/FR13_WY_RESIDUAL_CLOSURE.md`, the open lever is the scan state-update reduction/rounding boundary
   (taps #4/#5 `tv_i`/`beta*k*exp(cum_g)` and the state outer-product accumulation order), measured against
   the live `fused_sigmoid_gating_delta_rule_update` STATE surface — drive **scan-state**, not just
   scan-output, to the bf16 floor.

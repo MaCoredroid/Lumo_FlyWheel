@@ -305,5 +305,5 @@ Cross-layer sign coherence is a live-only unknown (un-measurable from a single c
 
 Relevant paths:
 - Patch target: `/home/mark/shared/lumoFlyWheel/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py`
-- Monitor commits this text to: `/home/mark/shared/lumoFlyWheel/FR13_WY_OUTPUT_TAP_PATCH.md`
+- Monitor commits this text to: `/home/mark/shared/lumoFlyWheel/docs/archive/wy/FR13_WY_OUTPUT_TAP_PATCH.md`
 - CPU scratch: `/tmp/fr13_cpu_tap_validate.py`, `/tmp/fr13_output_split_analysis.md`, `/tmp/fr13_patch_proposal.py`

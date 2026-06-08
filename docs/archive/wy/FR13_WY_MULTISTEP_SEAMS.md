@@ -53,7 +53,7 @@ Proof — the carry round-trip is byte-for-byte the same pipeline on both arms:
 
 **DO NOT add a bf16 round to `state_store_i` in the kernel (`:649-653`).** That double-rounds
 (kernel store + cache write) and OVER-rounds the carry vs native's single round, doubling the
-gap. This is already-removed wrong change #6 (FR13_WY_STATE_FIX.md / FR13_LADDER_LOG.md:410).
+gap. This is already-removed wrong change #6 (docs/archive/wy/FR13_WY_STATE_FIX.md / FR13_LADDER_LOG.md:410).
 
 ---
 
@@ -70,7 +70,7 @@ across steps and layers — invisible to the single-forward fp32 comparison.
 
 The round itself is correct (both round exactly once at the cache write,
 `fr10_phase4_patch:2686` == `fused_sigmoid_gating.py:180-184`, structurally identical — the
-store-round is NOT the seam, FR13_WY_STATE_FIX.md:114-117 is right). The risk is purely the
+store-round is NOT the seam, docs/archive/wy/FR13_WY_STATE_FIX.md:114-117 is right). The risk is purely the
 bucket the 6e-8 fp32 delta lands in.
 
 **FIX IF LIVE LADDER SHOWS A LAYER-1 RESIDUAL (gated FLA_BF16_BOUNDARIES):**
@@ -100,7 +100,7 @@ the output path at `:561-563/:584-586/:602-603`). This is the correct asymmetry 
 
 ### S2 — accepted branch state becomes next-step h0 for a DIFFERENT topology
 
-The offline test covers branch correctness STATICALLY (FR13_WY_STATE_FIX.md:141-146 Step 2:
+The offline test covers branch correctness STATICALLY (docs/archive/wy/FR13_WY_STATE_FIX.md:141-146 Step 2:
 reverse_sibling_dfs_full + spine_first_full at fp32 floor vs native-on-path oracle). It does
 NOT exercise: across decode STEPS the accepted branch's bf16-committed row
 (`fr10_phase4_patch:2685` writes ALL `:tree_n` node rows) is remapped by
@@ -157,7 +157,7 @@ Each of the 48 GDN layers owns its own ssm bank slice (`self_kv_cache[1]` per-la
 The cross-layer effect is COMPOUNDING: a per-layer bf16-commit delta (S1) that is ~0 at
 layer 1 but nonzero-bf16-bucket at a few elements feeds forward layer-to-layer AND
 step-to-step. The single-forward single-layer offline replay cannot see the 48-layer x N-step
-accumulation that produced the prior final-logit 3.32 (FR13_WY_STATE_FIX.md:154).
+accumulation that produced the prior final-logit 3.32 (docs/archive/wy/FR13_WY_STATE_FIX.md:154).
 
 **No new kernel fix here.** The compounding is fully neutralized IFF the per-layer
 bf16-committed bank rows are bit-exact to native (the S1 POST-round bank assertion). VERIFY in

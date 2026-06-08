@@ -162,7 +162,7 @@ at temp 0.6 / top_p 0.95, so the temp-0.6 path is extrapolated, not captured.
 - **Spine 6/6 argmax-lossless.** Tree rows `[0,1,2,4,6,8]` vs native `[0..5]` → argmax
   `{248068,3299,369,13,248044,198}` match on all 6 (re-derived). Drift `max_abs` 1.44–3.32 lands on
   irrelevant vocab indices, never the argmax index; native top1−top2 margins dominate → no flip.
-  Corroborates `FR13_WY_RESIDUAL_CLOSURE.md` §3.
+  Corroborates `docs/archive/wy/FR13_WY_RESIDUAL_CLOSURE.md` §3.
 - **Greedy accept-direction is EQUAL to native** (not merely ≥). Replaying the 5 spine drafts
   `[760,3299,5354,13,248046]` against tree-argmax vs native-argmax at the parent rows gives accept/reject
   `(F,T,F,T,F)` **identical** tree==native on all 5. Under greedy LCP, spine accept/event is EQUAL to
