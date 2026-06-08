@@ -155,3 +155,65 @@ Conclusion for this gate entry: the L8 live ladder failure is **not** explained 
 ### Verdict
 - The accepted spine argmax-lossless gate from `16660de9` remains the gate definition; this run did not pursue literal GDN 0.0.
 - The requested B=4 CUDA-graph e2e **does not pass**: the forked-FA2 tree arm loses the accept/event superset gate and the distributional bag-TV gate versus aligned native/E5.
+
+---
+
+## Takeover run `codex_fr15` - prefill-native root grind and L12 wall (2026-06-08T07:35:45Z)
+
+### Scope
+- User direction after failed e2e: apply `patches/fr13_fa2_prefill_native.patch`, run `FR13_FA2_PREFILL_NATIVE=1`, stop grinding GDN to literal 0 only after top-down Gate A reaches drift 0, and defer clean B=4 e2e until Gate A is clean.
+- Run dir: `output/fr13_prefill_grind_20260608T063838Z`.
+- One GPU; no Docker `--rm`; host `recover_host_memory()`, `sync`, and `drop_caches` used between server arms.
+
+### Code under test
+- `scripts/fr13_patch_fa2_tree_bias.py`: native FA2 prefill path is installed behind `FR13_FA2_PREFILL_NATIVE=1`.
+- `scripts/fr13_launch_forked_fa2_tree_server.sh`: passes `FR13_FA2_PREFILL_NATIVE` into Docker and fails loud if patched container `tree_attn.py` lacks the prefill-native anchor.
+- `scripts/fr10_phase4_patch_vllm_tree_gdn.py`: FR12 diagnostic clones / CPU `.tolist()` paths are env-gated default-off, so clean e2e can run with `FR10_METRICS=0` without unconditional FR12 clone overhead.
+- Added default-off scan-payload filters: `FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX` and `FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS`.
+
+Container patch anchors:
+- `anchor_ok ... tree_attn.py contains FR13_FA2_PREFILL_NATIVE`.
+- `capture_filter_anchor_ok` for the installed `gdn_linear_attn.py`.
+
+### Gate A top-down ladder - **FAIL**
+- Tree arm: `TREE_ATTN`, forked FA2, `FR13_FA2_TREE_BIAS=1`, `FR13_FA2_PREFILL_NATIVE=1`, B=1 eager, 9-node tree.
+- Native arm: `FLASH_ATTN`, `naive_mtp`, 5 speculative tokens, B=1 eager.
+- Row map: tree spine rows `[0,1,2,4,6,8]` -> native rows `[0,1,2,3,4,5]`.
+- Artifact: `output/fr13_prefill_grind_20260608T063838Z/gateA_spine_ladder.json`.
+
+| stage | max_abs |
+| --- | ---: |
+| input_hidden | 0.0 |
+| layers 0-11 | 0.0 |
+| **layer 12 linear_attention hidden** | **0.00634765625** |
+| final_norm_hidden | 0.59375 |
+| final logits | 0.5234375 |
+
+Prefill-native fixed the previous root/prefill front: model input and layers through full-attn layer 11 are byte-exact. Gate A still fails, now first at GDN layer 12.
+
+### L12 GDN sub-op localization
+- Decode-filtered captures:
+  - Tree: `output/fr13_prefill_grind_20260608T063838Z/gdn_l12_decode_subop/tree/logs/gdn_l12_decode_subop.call0.pt`, `num_tokens=10`.
+  - Native: `output/fr13_prefill_grind_20260608T063838Z/gdn_l12_decode_subop/native/logs/gdn_l12_decode_subop.call0.pt`, `num_tokens=6`.
+- Mapped diff artifact: `output/fr13_prefill_grind_20260608T063838Z/gdn_l12_decode_subop/gdn_l12_decode_subop_mapped_diff.json`.
+
+| stage | mapped max_abs | note |
+| --- | ---: | --- |
+| input_hidden | 0.00390625 | row `1->1` only |
+| pre_conv | 0.0 | clean |
+| conv1d_out | 0.0 | clean |
+| h0_state_in | 0.0 | same row/col `[1]/[0]` |
+| gdn_scan_out | 0.00000095367431640625 | downstream tiny delta |
+| gate_z | 0.0 | clean |
+| gate_out | 0.000244140625 | downstream |
+| o_proj_out | 0.0009765625 | downstream |
+
+Fresh same-input scan replay:
+- Payload: `output/fr13_prefill_grind_20260608T063838Z/gdn_l12_scan_payload/logs/fr10_tree_gdn_scan_l12.pt`, layer `language_model.model.layers.12.linear_attn`, `n_actual=10`.
+- Artifacts:
+  - `output/fr13_prefill_grind_20260608T063838Z/gdn_l12_scan_payload/scan_probe_default.json`
+  - `output/fr13_prefill_grind_20260608T063838Z/gdn_l12_scan_payload/scan_probe_bf16.json`
+- Result: same-input tree-kernel vs native FLA **scan output is 0.0**; state differs only `1.49e-08`. The `fla_bf16_boundaries` flag remains a no-op in current kernel code.
+
+### Current wall
+This is not a clean Gate A pass and no clean B=4 CUDA-graph e2e was run. The next root is no longer the prefill full-attn path and not an isolated same-input scan arithmetic mismatch. The remaining failure enters the L12 GDN block as a tree-vs-native row-1 `input_hidden` delta while conv, h0, gate_z, and same-input scan output are clean. The next step is to pin why that L12 per-row input differs despite the layer-hidden ladder showing layers 0-11 as 0.0 under the earlier capture.

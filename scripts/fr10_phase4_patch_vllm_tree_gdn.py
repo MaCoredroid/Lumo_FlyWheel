@@ -1991,6 +1991,26 @@ def _patch_gdn_linear() -> bool:
                         and not globals().get("_FR10_TREE_GDN_CAPTURE_DONE", False)
                         and fr10_b == 0
                     )
+                    if _fr10_capture_scan_payload:
+                        _fr10_capture_prefix = os.environ.get(
+                            "FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX", ""
+                        )
+                        if (
+                            _fr10_capture_prefix
+                            and _fr10_capture_prefix != str(self.prefix)
+                        ):
+                            _fr10_capture_scan_payload = False
+                        _fr10_capture_counts = os.environ.get(
+                            "FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS", ""
+                        )
+                        if _fr10_capture_scan_payload and _fr10_capture_counts:
+                            _fr10_wanted_counts = {
+                                int(_x.strip())
+                                for _x in _fr10_capture_counts.split(",")
+                                if _x.strip()
+                            }
+                            if int(num_actual_tokens) not in _fr10_wanted_counts:
+                                _fr10_capture_scan_payload = False
                     _fr10_commit_handoff_active = os.environ.get(
                         "FR10_TREE_GDN_COMMIT_HANDOFF_LOG"
                     )
