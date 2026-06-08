@@ -321,3 +321,34 @@ This is not a strict Gate-A pass. The first nonzero moved earlier than the previ
 ### Gate 2 / e2e
 - Gate 2 was not rerun in this failed Gate-A turn; no verifier-only no-bias code changed from the previously bound PASS entries.
 - Clean B=4 e2e was intentionally not run because Gate A is blocked at layer 1.
+
+## Commit `5d90a70d` follow-up - L1 WY offline localization (codex_fr16, 2026-06-08T17:12Z)
+
+### Scope
+- User direction: stop double-booting servers for WY alignment; reuse the fixed native ladder reference and captured L1 scan payload; iterate `_tree_gdn_wy_kernel` offline before any further live ladder.
+- Fixed references:
+  - Native top-down reference: `output/fr13_wy_gateA_20260608T163915Z/native/logs/native_layer_hidden.pt` and `native_final_logits.pt`.
+  - L1 WY scan payload: `output/fr13_wy_l1_payload_20260608T170530Z/tree/logs/fr10_tree_gdn_scan_l1.pt`.
+
+### Offline L1 WY scan replay - **WY SCAN IS NOT THE 1.2e-4 L1 WALL**
+- Artifact: `output/fr13_wy_l1_payload_20260608T170530Z/wy_l1_offline_probe.json`.
+- Runner: lightweight CUDA image only (`--entrypoint bash`), no model/server boot.
+- Kernel under test: `_tree_gdn_wy_kernel` via `launch_tree_gdn_prepared(use_wy=True)`.
+- Native-on-path oracle: vLLM `fused_sigmoid_gating_delta_rule_update`, per-node path, raw `a/b`, in-kernel q/k l2norm, captured h0, captured L1 tree topology.
+
+| comparison | max_abs |
+| --- | ---: |
+| WY replay vs captured serving out | 0.0 |
+| WY replay vs captured serving state | 0.0 |
+| WY replay vs native-on-path serial out | 0.0000000009313225746154785 |
+| WY replay vs native-on-path serial state | 0.00000008940696716308594 |
+| captured serving out vs native-on-path serial out | 0.0000000009313225746154785 |
+| captured serving state vs native-on-path serial state | 0.00000008940696716308594 |
+
+Per-node WY-vs-serial output max_abs: `[0.0, 0.0, 1.1641532182693481e-10, 0.0, 0.0, 0.0, 9.313225746154785e-10, 0.0, 5.820766091346741e-11, 4.656612873077393e-10]`.
+
+### Interpretation / wall
+- The live full-model ladder wall remains: L1 `linear_attention` hidden `0.0001220703125` -> final logits `3.3203125` (artifact `output/fr13_wy_gateA_20260608T163915Z/gateA_spine_ladder.json`).
+- The captured L1 WY scan itself is already at the fp32 floor against native-on-path serial and is bit-exact to the serving capture. Changing WY `kk` dot precision, basis, solve order, raw-g/softplus, l2norm eps, or decay exp has no justified target from this payload: the observed `1.2e-4` full-block hidden drift is not present at the scan output/state boundary.
+- Therefore no in-kernel WY patch was made in this turn. A further live ladder would violate the user's offline-first condition without a kernel change, and a kernel change would be blind/random relative to the captured L1 WY evidence.
+- Next required evidence, if continuing, is a fixed-target L1 GDN sub-op capture (tree and native) for `input_hidden -> pre_conv -> conv1d_out -> h0_state_in -> gdn_scan_out -> gate_z -> gate_out -> o_proj_out`; the currently available L1 scan payload cannot localize gate/o_proj or layer-output drift.
