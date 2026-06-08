@@ -684,3 +684,20 @@ Branch proxy rows `[3,5,7,9]` matched logged self-target argmaxes `[332,332,198,
 ### Status
 - No layer-2 native subop oracle is available from this arm, so no layer-2 subop verdict is claimed.
 - Last valid binding gate remains the B=1 spine ladder failure at layer 2 from `gateA_spine_ladder_seq.json`.
+
+## Commit `fr13-subkernel-capture-debug` - FR12 subkernel capture miss tooling (codex_fr13, 2026-06-08)
+
+### Scope
+- User direction: execute `FR13_SEQ_LAYER2_REDTEAM.md` at `HEAD 48c261b6`; do **not** add bf16 rounding to beta or any sequential-scan beta path.
+- Code change: added optional `FR12_SUBKERNEL_CAPTURE_DEBUG_LOG` support to the FR12 GDN subkernel capture helper in `scripts/fr10_phase4_patch_vllm_tree_gdn.py`.
+- Code change: passed `FR12_SUBKERNEL_CAPTURE_DEBUG_LOG` through both `scripts/fr10_launch_speed_server.sh` and `scripts/fr13_launch_forked_fa2_tree_server.sh`.
+- This is observability only: it records `skip_prefix_mismatch`, `skip_num_tokens_mismatch`, `skip_limit`, CUDA-capture skip, and `capture_created` events when the debug env is set.
+
+### Why
+- The prior native L2 arm returned HTTP `200` but wrote no capture files. Evidence now points to a silent capture filter miss: the native relaunch used the default 9-node tree speculative config while the capture filters requested `NUM_TOKENS=6`.
+- The next native arm will use the MTP-5 speculative config and the debug log so a no-file result has a concrete reason.
+
+### Local Checks
+- `python3 -m py_compile scripts/fr10_phase4_patch_vllm_tree_gdn.py`: passed.
+- `bash -n scripts/fr10_launch_speed_server.sh scripts/fr13_launch_forked_fa2_tree_server.sh`: passed.
+- `git diff --check`: passed.
