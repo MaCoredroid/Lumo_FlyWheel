@@ -417,3 +417,31 @@ Interpretation: the six taps compile and remain row-order/context invariant, but
 ### Blocked next action
 - Ask user whether to authorize the #6 readout reduction-order rewrite or to run the requested live ladder anyway with the known above-floor L1 scan result.
 - Gate 2 and clean B=4 e2e remain blocked until Gate A is resolved.
+
+## Commit `FR13 remove WY misapplied readout over-rounds` - tap red-team fix (codex_fr16, 2026-06-08)
+
+### Scope
+- User supplied `FR13_WY_TAP_REDTEAM.md`: the six-tap `2.44e-4` result was a mis-applied #6 tap, not proof of a reduction-order rewrite need.
+- Code change: removed the two native-mismatched over-rounds while keeping #1-#5:
+  - Deleted post-scale `q_i.to(bf16).to(f32)`; q is already bf16-rounded by #1 before `OUTPUT_SCALE`.
+  - Deleted per-j `state_update_ij.to(bf16).to(f32)`; native accumulates outer products in fp32 after rounding `tv_i`.
+- No #6 reduction-order rewrite was attempted; no live ladder was run.
+
+### Offline L1 smoke vs live FLA - **restored pre-#6 floor, still not Gate A**
+- Runner: CUDA entrypoint container only; no vLLM server boot and no native reboot.
+- Payload: `output/fr13_wy_l1_payload_20260608T170530Z/tree/logs/fr10_tree_gdn_scan_l1.pt`.
+- Artifacts:
+  - `output/fr13_wy_l1_payload_20260608T170530Z/wy_l1_spine_scan_live_fla_redteam_fix.json`.
+  - `output/fr13_wy_l1_payload_20260608T170530Z/wy_l1_batch_scan_live_fla_redteam_fix.json`.
+- Config: `--use-wy --fla-bf16-boundaries --max-depth 6`; native reference is `vllm.fused_sigmoid_gating_delta_rule_update`.
+
+| comparison | max_abs |
+| --- | ---: |
+| isolated spine WY scan output vs live FLA | 0.0001220703125 |
+| isolated spine WY scan state vs live FLA | 0.001657634973526001 |
+| original-full spine WY scan output vs live FLA | 0.0001220703125 |
+| original-full spine WY scan state vs live FLA | 0.001657634973526001 |
+| spine-only output vs original-full spine output | 0.000000014901161193847656 |
+| sibling-reordered full output vs original-full spine output | 0.0 |
+
+Interpretation: deleting the two over-rounds restores the expected `1.221e-4` L1 spine output smoke and preserves row-order/context invariance. This still exceeds the gate floor; per user direction, hold for the remaining-seam workflow before any live ladder, #6 rewrite, Gate 2, or e2e.

@@ -568,8 +568,6 @@ def _tree_gdn_wy_kernel(
         row_i = offs_n == i
         cumg_i = tl.sum(tl.where(row_i, cum_g, 0.0), axis=0)
         q_i = tl.sum(tl.where(row_i[:, None], b_q, 0.0), axis=0) * OUTPUT_SCALE
-        if FLA_BF16_BOUNDARIES:
-            q_i = q_i.to(tl.bfloat16).to(tl.float32)
         state_i = b_h0 * tl.exp(cumg_i)
         for j in tl.static_range(0, N_PAD):
             vis = tl.load(visible_mask + i * N_PAD + j) != 0
@@ -578,8 +576,6 @@ def _tree_gdn_wy_kernel(
             k_j = tl.sum(tl.where(row_j[:, None], b_k, 0.0), axis=0)
             cumg_j = tl.sum(tl.where(row_j, cum_g, 0.0), axis=0)
             state_update_ij = trans_j[:, None] * k_j[None, :] * tl.exp(cumg_i - cumg_j)
-            if FLA_BF16_BOUNDARIES:
-                state_update_ij = state_update_ij.to(tl.bfloat16).to(tl.float32)
             state_i += tl.where(
                 vis & (i < N_ACTUAL) & (j < N_ACTUAL),
                 state_update_ij,
