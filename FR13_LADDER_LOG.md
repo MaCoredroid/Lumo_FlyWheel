@@ -446,7 +446,7 @@ Interpretation: the six taps compile and remain row-order/context invariant, but
 
 Interpretation: deleting the two over-rounds restores the expected `1.221e-4` L1 spine output smoke and preserves row-order/context invariance. This still exceeds the gate floor; per user direction, hold for the remaining-seam workflow before any live ladder, #6 rewrite, Gate 2, or e2e.
 
-## Commit `ed795c30` (FR13 WY B=4 e2e preconditions) - Gate-2 hooks-off and clean-launch fix (codex_fr16, 2026-06-08)
+## Commit `b709d488` (FR13 WY B=4 e2e preconditions) - Gate-2 hooks-off and clean-launch fix (codex_fr16, 2026-06-08)
 
 ### Scope
 - User supplied `FR13_WY_RESIDUAL_CLOSURE.md` verdict B: stop tapping; measure WY B=4 e2e with `TREE_ATTN`, forked FA2, `FR13_FA2_PREFILL_NATIVE=1`, `FR10_TREE_GDN_WY=1`, fallback unset, splice off, `FR10_METRICS=0`, and CUDA graph FULL.
