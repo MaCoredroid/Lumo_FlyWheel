@@ -637,3 +637,31 @@ Branch proxy rows `[3,5,7,9]` matched logged self-target argmaxes `[332,332,198,
 ### Status
 - Host Python reports `torch.cuda.is_available() == False`, so no direct host Triton smoke is claimed here.
 - Next gate is GPU/container validation of the sequential default path with the pinned paired ladder and native-on-path oracle.
+
+## Commit `fr13-seq-b1-eager-gatea-fail-l2` - B=1 eager serving ladder on sequential default kernel (codex_fr13, 2026-06-08)
+
+### Scope
+- Tree arm run dir: `output/fr13_seq_paired_ladder_20260608T223903Z/tree/`.
+- Request: pinned prompt copied from `output/fr13_wy_paired_ladder_20260608T211749Z/tree/request.json` (`Explain hash tables.`, `max_tokens=16`, `temperature=0`, `tree_mtp`).
+- Config: `TREE_ATTN`, B=1 eager (`--enforce-eager`), `FR10_ENABLE_TREE_GDN=1`, `FR10_TREE_GDN_WY=0`, `FR13_FA2_PREFILL_NATIVE=1`, fallback unset by launcher, layer/final captures enabled.
+- Runtime evidence: request returned HTTP `200`; response usage was prompt `5`, completion `16`; container env check showed `FR10_TREE_GDN_WY=0` and no `FR10_ALLOW_LINEAR_FALLBACK`.
+
+### Spine Ladder vs Pinned Native
+- Reducer: `scripts/fr13_ladder_table.py`.
+- Artifact: `output/fr13_seq_paired_ladder_20260608T223903Z/gateA_spine_ladder_seq.json`.
+- Rows: tree `[0,1,2,4,6,8]` vs native `[0,1,2,3,4,5]`, pinned native from `output/fr13_wy_paired_ladder_20260608T211749Z/native/`.
+
+| check | max_abs | nonzero |
+| --- | ---: | ---: |
+| input hidden | `0.0` | `0` |
+| layer 0 hidden / residual | `0.0 / 0.0` | `0 / 0` |
+| layer 1 hidden / residual | `0.0 / 0.0` | `0 / 0` |
+| first nonzero: layer 2 hidden | `0.015625` | `3345` |
+| layer 2 residual | `0.0009765625` | not summarized |
+| final norm hidden | `1.25` | `29704` |
+| final logits | `0.7265625` | `1434157` |
+
+### Verdict
+- Gate A **does not pass**. The new default sequential kernel compiles/runs and clears layers 0-1 on the spine, but the first visible drift is now layer 2.
+- No branch/native-on-branch or B=4 claim is made from this entry.
+- Next action: recover host memory, then capture layer-2 GDN subops for tree and native to localize the first nonzero.
