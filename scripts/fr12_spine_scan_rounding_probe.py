@@ -74,6 +74,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--max-depth", type=int, default=5)
     parser.add_argument("--fla-bf16-boundaries", action="store_true")
+    parser.add_argument("--use-wy", action="store_true")
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
@@ -127,6 +128,7 @@ def main() -> int:
         output_scale=output_scale,
         use_qk_l2norm_in_kernel=True,
         fla_bf16_boundaries=args.fla_bf16_boundaries,
+        use_wy=args.use_wy,
     )
 
     native_out, native_state = fused_sigmoid_gating_delta_rule_update(
@@ -164,6 +166,7 @@ def main() -> int:
         "native_reference": "vllm.fused_sigmoid_gating_delta_rule_update",
         "our_kernel": "lumo_flywheel_serving.fr10_gdn_tree_kernel.launch_tree_gdn_prepared",
         "fla_bf16_boundaries": bool(args.fla_bf16_boundaries),
+        "use_wy": bool(args.use_wy),
         "spine_rows": spine_rows,
         "n": n,
         "n_pad": n_pad,

@@ -156,6 +156,7 @@ def _run_tree_context(
     device: torch.device,
     output_scale: float,
     fla_bf16_boundaries: bool,
+    use_wy: bool,
 ) -> tuple[torch.Tensor, torch.Tensor, list[int]]:
     rows = torch.tensor(order, dtype=torch.long)
     remapped_parent = _remap_parent(parent, order)
@@ -181,6 +182,7 @@ def _run_tree_context(
         output_scale=output_scale,
         use_qk_l2norm_in_kernel=True,
         fla_bf16_boundaries=fla_bf16_boundaries,
+        use_wy=use_wy,
     )
     torch.cuda.synchronize()
     return out[:n_actual].contiguous(), state[:n_actual].contiguous(), remapped_parent
@@ -203,6 +205,7 @@ def main() -> int:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--max-depth", type=int, default=5)
     parser.add_argument("--fla-bf16-boundaries", action="store_true")
+    parser.add_argument("--use-wy", action="store_true")
     args = parser.parse_args()
 
     if not torch.cuda.is_available():
@@ -245,6 +248,7 @@ def main() -> int:
             device=device,
             output_scale=output_scale,
             fla_bf16_boundaries=args.fla_bf16_boundaries,
+            use_wy=args.use_wy,
         )
         context_outputs[name] = out
         context_states[name] = state
@@ -277,6 +281,7 @@ def main() -> int:
         output_scale=output_scale,
         use_qk_l2norm_in_kernel=True,
         fla_bf16_boundaries=args.fla_bf16_boundaries,
+        use_wy=args.use_wy,
     )
     torch.cuda.synchronize()
     context_outputs["spine_only"] = spine_out[: len(spine_rows)].contiguous()
@@ -373,6 +378,7 @@ def main() -> int:
         "native_reference": "vllm.fused_sigmoid_gating_delta_rule_update",
         "our_kernel": "lumo_flywheel_serving.fr10_gdn_tree_kernel.launch_tree_gdn_prepared",
         "fla_bf16_boundaries": bool(args.fla_bf16_boundaries),
+        "use_wy": bool(args.use_wy),
         "tree_parent": parent,
         "spine_rows": [int(x) for x in spine_rows],
         "spine_all_rows": [int(x) for x in spine_all],

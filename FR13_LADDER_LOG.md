@@ -352,3 +352,33 @@ Per-node WY-vs-serial output max_abs: `[0.0, 0.0, 1.1641532182693481e-10, 0.0, 0
 - The captured L1 WY scan itself is already at the fp32 floor against native-on-path serial and is bit-exact to the serving capture. Changing WY `kk` dot precision, basis, solve order, raw-g/softplus, l2norm eps, or decay exp has no justified target from this payload: the observed `1.2e-4` full-block hidden drift is not present at the scan output/state boundary.
 - Therefore no in-kernel WY patch was made in this turn. A further live ladder would violate the user's offline-first condition without a kernel change, and a kernel change would be blind/random relative to the captured L1 WY evidence.
 - Next required evidence, if continuing, is a fixed-target L1 GDN sub-op capture (tree and native) for `input_hidden -> pre_conv -> conv1d_out -> h0_state_in -> gdn_scan_out -> gate_z -> gate_out -> o_proj_out`; the currently available L1 scan payload cannot localize gate/o_proj or layer-output drift.
+
+## Commit `FR13 align WY FLA bf16 boundaries` - offline L1 WY vs live-FLA seam check (codex_fr16, 2026-06-08)
+
+### Scope
+- User supplied `FR13_WY_SEAM_FIXES.md`: the prior `9.3e-10` L1 WY scan result was against the fp32 oracle, while the live ladder compares against native FLA's bf16 boundary behavior.
+- Code change: `_tree_gdn_wy_kernel` now accepts the existing `FLA_BF16_BOUNDARIES` constexpr and, when enabled, bf16-rounds normalized q/k after in-kernel l2norm and bf16-rounds each triangular solve coefficient. The fp32 oracle path remains available with the flag off.
+- Probe-only script change: `scripts/fr12_spine_scan_rounding_probe.py` and `scripts/fr12_scan_batch_invariance_probe.py` gained `--use-wy` so the boot-free probes exercise `_tree_gdn_wy_kernel`, not the replay fallback.
+
+### Offline L1 scan vs live FLA - **within one bf16 ULP; not literal 0.0**
+- Runner: CUDA entrypoint container only, no vLLM server boot and no native reboot.
+- Payload: `output/fr13_wy_l1_payload_20260608T170530Z/tree/logs/fr10_tree_gdn_scan_l1.pt`.
+- Artifacts:
+  - `output/fr13_wy_l1_payload_20260608T170530Z/wy_l1_spine_scan_live_fla_bf16_final.json`.
+  - `output/fr13_wy_l1_payload_20260608T170530Z/wy_l1_batch_scan_live_fla_bf16_final.json`.
+- Config: `--use-wy --fla-bf16-boundaries --max-depth 6`; native reference is `vllm.fused_sigmoid_gating_delta_rule_update`.
+
+| comparison | max_abs |
+| --- | ---: |
+| isolated spine WY scan output vs live FLA | 0.0001220703125 |
+| isolated spine WY scan state vs live FLA | 0.0008958578109741211 |
+| original-full spine WY scan output vs live FLA | 0.0001220703125 |
+| original-full spine WY scan state vs live FLA | 0.0008958280086517334 |
+| spine-only output vs original-full spine output | 0.000000003725290298461914 |
+| sibling-reordered full output vs original-full spine output | 0.0 |
+
+Interpretation: the patched WY scan is now measured against the live FLA target and sits at the expected one-bf16-ULP output floor, while remaining row-order/context invariant. Extra experimental boundaries (`KKt` bf16-input fold and `tv_i/k_j` state-update rounding) did not reduce output drift; `tv_i/k_j` worsened state drift, so they were not kept.
+
+### Next gate
+- Run one live WY Gate-A ladder with `FR10_TREE_GDN_WY=1`, fallback unset, and `FR12_TREE_SCAN_FLA_BF16_BOUNDARIES=1` to see whether the one-ULP L1 scan floor no longer amplifies into final-logit drift.
+- Gate 2 and clean B=4 e2e remain blocked until Gate A passes.

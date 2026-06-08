@@ -430,6 +430,7 @@ def _tree_gdn_wy_kernel(
     H0_BATCH_INDEX: tl.constexpr,
     H0_BANK_STRIDE: tl.constexpr,
     H0_USE_ACCEPTED_COLUMN: tl.constexpr,
+    FLA_BF16_BOUNDARIES: tl.constexpr,
     RAW_GATING: tl.constexpr,
     COUNT_INVOCATION: tl.constexpr,
 ):
@@ -503,6 +504,9 @@ def _tree_gdn_wy_kernel(
     if USE_QK_L2NORM_IN_KERNEL:
         b_q *= tl.rsqrt(tl.sum(b_q * b_q, axis=1)[:, None] + 1e-6)
         b_k *= tl.rsqrt(tl.sum(b_k * b_k, axis=1)[:, None] + 1e-6)
+        if FLA_BF16_BOUNDARIES:
+            b_q = b_q.to(tl.bfloat16).to(tl.float32)
+            b_k = b_k.to(tl.bfloat16).to(tl.float32)
     b_v = tl.load(
         v + (offs_n[:, None] * NUM_VH + pid_vh) * DIM_V + offs_v[None, :],
         mask=n_mask[:, None] & v_mask[None, :],
@@ -535,6 +539,8 @@ def _tree_gdn_wy_kernel(
         for j in tl.static_range(0, i):
             row_j = offs_n == j
             coeff_j = tl.sum(tl.where(row_j, coeff, 0.0), axis=0)
+            if FLA_BF16_BOUNDARIES:
+                coeff_j = coeff_j.to(tl.bfloat16).to(tl.float32)
             solved_v_j = tl.sum(tl.where(row_j[:, None], solved_v, 0.0), axis=0)
             solved_k_j = tl.sum(tl.where(row_j[:, None], solved_k, 0.0), axis=0)
             y_i -= coeff_j * solved_v_j
@@ -806,6 +812,7 @@ def launch_tree_gdn_prepared(
             H0_BATCH_INDEX=h0_batch_index,
             H0_BANK_STRIDE=h0_bank_stride,
             H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+            FLA_BF16_BOUNDARIES=bool(fla_bf16_boundaries),
             RAW_GATING=raw_gating,
             COUNT_INVOCATION=count_invocation,
         )
