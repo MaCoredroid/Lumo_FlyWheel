@@ -162,3 +162,40 @@ Interpretation: the divergence **persists with branches OFF**, so branch-state c
 ## ex2 replica LIVE FAILURE at L8 + broad-test redirect (monitor, 2026-06-08)
 The ex2 silu replica passed offline at L0+L45 (0.0) but the LIVE full-ladder FAILED at **GDN layer 8** (committed `7f950694`). L8 was 0.0 pre-fix; only the conv silu changed ⟹ **the replica REGRESSED L8** — it matches L0/L45 but NOT L8, so it is NOT bit-exact to native's FULL op sequence at all input values. The `ex2.approx` *instruction* is right; the surrounding sequence (bf16 cast points, the `-acc*0x3FB8AA3B` argument, `+1`, `div.full.f32`, `cvt.rn.bf16`) must match exactly. The offline 2-layer pass was necessary but insufficient.
 **Redirect (no L8-by-L8 whack-a-mole):** ONE spine-only capture of conv sub-op inputs (pre_conv+state+weights) for a SPREAD of CLEAN layers (L0,L4,L8,L12,L24,L36,L44 — all clean since spine-only onset=L45); iterate the replica OFFLINE vs native until conv1d_out=0.0 for EVERY clean layer, verifying intermediates (ex2 out / +1 / div / bf16 cvt). **This is the decisive go/no-go for the "grind our kernel bit-exact" path:** if ONE replica matches ALL clean layers → fix; if not → the ex2.approx is effectively un-replicable in our kernel → re-escalate (reroute decision, which the user declined, vs reconsider).
+
+## Spine-only spread capture + offline conv replay — 2026-06-08
+
+Run dir: `output/fr13_conv_spread_20260608T025907Z`.
+
+Config:
+- strict spine-only tree (`TREE=[(0,), (0,0), (0,0,0), (0,0,0,0), (0,0,0,0,0)]`)
+- tree arm: `TREE_ATTN`, `FR13_FA2_TREE_BIAS=1`, `FR10_ALLOW_LINEAR_FALLBACK` unset, B=1 eager, `GPU_UTIL=0.4`
+- native arm: `FLASH_ATTN`, `FR10_DECODE_MODE_DEFAULT=naive_mtp`
+- capture prefixes: GDN layers `0,4,8,12,24,36,44`
+- replay tool: `scripts/fr13_conv_spread_ex2_replay.py`, artifact `conv_spread_ex2_replay.json`
+
+Offline replay result (tree PTX-style bf16 taps -> f32 adds -> `-acc*0x3FB8AA3B` -> `exp2` -> `+1` -> div -> bf16 store, compared to captured native `conv1d_out`):
+
+| GDN layer | clean `pre_conv` | `pre_conv` max_abs | captured tree conv vs native | PTX replay vs native |
+| ---: | --- | ---: | ---: | ---: |
+| 0 | yes | 0.0 | 0.0 | 0.0 |
+| 4 | yes | 0.0 | 0.0 | 0.0 |
+| 8 | yes | 0.0 | 0.0 | 0.0 |
+| 12 | no | 0.0751953125 | 0.012451171875 | 0.012451171875 |
+| 24 | no | 0.265625 | 0.046875 | 0.046875 |
+| 36 | no | 0.40625 | 0.06640625 | 0.06640625 |
+| 44 | no | 0.4296875 | 0.125 | 0.125 |
+
+This invalidates the assumption that all requested spread layers remain clean under the current post-ex2 live run. L12/L24/L36/L44 are already contaminated by upstream hidden/state drift, so they cannot be used to tune or reject the conv kernel. On the clean layers that were actually clean in this run (L0/L4/L8), the conv output is already 0.0 vs native.
+
+Sub-op diff on the same spread capture changes the root-cause target:
+
+| layer | first diverging stage | `input_hidden` | `pre_conv` | `conv1d_out` | `h0_state_in` | downstream |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 4 | none | 0.0 | 0.0 | 0.0 | 0.0 | 0.0 |
+| 8 | `h0_state_in` | 0.0 | 0.0 | 0.0 | 0.0007215589284896851 | `o_proj_out` 0.003906 |
+| 12 | `input_hidden` | 0.09375 | 0.075195 | 0.012451 | 0.0021439790725708008 | `o_proj_out` 0.046875 |
+
+L8 uses the same captured state row/column geometry as clean L4 (`h0_rows=[1]`, `h0_cols=[0]`, `spec_state_indices_tensor=[[1,2,3,4,5,6]]`, same source indices), but the state contents differ: `h0_state_in` has max_abs `0.0007215589284896851` over 748,835 elements while `conv1d_out` is 0.0. Therefore this spread capture does **not** support an L8 conv/SILU mismatch. The next root-cause target is the recurrent state content/write path feeding L8 (`h0` bank row 1), not more L8-specific conv activation tuning.
+
+Limitation: the native CUDA kernel does not expose its internal `ex2`, `+1`, div, or bf16-cvt registers in the capture. The replay reconstructs that sequence and verifies final bf16 output against native `conv1d_out`; internal register comparison is reconstruction-only, not a native-register proof.

@@ -91,3 +91,33 @@ Gate 2 kernel-level no-bias check artifact: `output/fr13_ex2_live_ladder_2026060
 | bf16 | 0.0 | 0 |
 
 Gate 2 full regular-decode model ladder was **not rerun** in this failed verify-path turn; do not treat this entry as a full two-gate pass.
+
+### Follow-up spread replay after L8 live failure — **VERIFY-PATH STILL FAILED / ROOT CAUSE REDIRECTED**
+
+- Bound diagnostic commit: this commit (`FR13: capture spine conv spread replay`; final hash in git log/push output).
+- Run dir: `output/fr13_conv_spread_20260608T025907Z`.
+- Strict config: spine-only `TREE_ATTN`, `FR13_FA2_TREE_BIAS=1`, `FR10_ALLOW_LINEAR_FALLBACK` unset, B=1 eager, `GPU_UTIL=0.4`; matched native `FLASH_ATTN`/`naive_mtp`.
+- Capture layers: GDN `0,4,8,12,24,36,44`.
+- Replay artifact: `output/fr13_conv_spread_20260608T025907Z/conv_spread_ex2_replay.json`.
+
+Offline PTX-style conv replay:
+
+| GDN layer | clean `pre_conv` | captured tree conv vs native | PTX replay vs native |
+| ---: | --- | ---: | ---: |
+| 0 | yes | 0.0 | 0.0 |
+| 4 | yes | 0.0 | 0.0 |
+| 8 | yes | 0.0 | 0.0 |
+| 12 | no | 0.012451171875 | 0.012451171875 |
+| 24 | no | 0.046875 | 0.046875 |
+| 36 | no | 0.06640625 | 0.06640625 |
+| 44 | no | 0.125 | 0.125 |
+
+Sub-op localization on the same run:
+
+| layer | first diverging stage | key result |
+| ---: | --- | --- |
+| 4 | none | all captured stages 0.0 |
+| 8 | `h0_state_in` | `input_hidden=0.0`, `pre_conv=0.0`, `conv1d_out=0.0`, `h0_state_in=0.0007215589284896851`, `o_proj_out=0.003906` |
+| 12 | `input_hidden` | already inherited drift: `input_hidden=0.09375` |
+
+Conclusion for this gate entry: the L8 live ladder failure is **not** explained by a conv/SILU mismatch on this capture; the clean L8 conv output is 0.0 vs native. Deeper spread layers are contaminated and cannot be used for conv tuning. The next target is the recurrent state content/write path feeding L8 (`h0_state_in` bank row 1). Gate A remains **not passed**; Gate 2 full regular-decode model ladder was not rerun in this failed verify-path turn.
