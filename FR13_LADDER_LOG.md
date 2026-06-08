@@ -121,3 +121,37 @@ Sub-op localization on the same run:
 | 12 | `input_hidden` | already inherited drift: `input_hidden=0.09375` |
 
 Conclusion for this gate entry: the L8 live ladder failure is **not** explained by a conv/SILU mismatch on this capture; the clean L8 conv output is 0.0 vs native. Deeper spread layers are contaminated and cannot be used for conv tuning. The next target is the recurrent state content/write path feeding L8 (`h0_state_in` bank row 1). Gate A remains **not passed**; Gate 2 full regular-decode model ladder was not rerun in this failed verify-path turn.
+
+---
+
+## Commit `c776581b` (executed from `FR13_SPINE_ARGMAX_LOSSLESS.md` @ `16660de9`) - B=4 CUDA-graph e2e binding
+
+### Scope
+- User direction: stop the prefill/GDN literal-0 grind; accepted spine gate is **argmax-lossless** and already met 6/6 at `16660de9`; execute Next-action step 2 e2e.
+- Run dir: `output/fr13_argmax_e2e_20260608T055851Z`.
+- One GPU; no Docker `--rm`; tree and native arms run sequentially. Host recovery/sync/drop-caches was run between arms; final `recover_host_memory()` succeeded with swap back to 0.
+
+### Launch config - pinned and aligned
+- Saved E5 reference: `output/fr10_native_mtp5_same8_20260604T210257Z`; 8 prompts x 4 samples, `batch_size=4`, `max_tokens=64`, temperature `0.6`, top_p `0.95`, `naive_mtp`, 5 draft tokens/event, `FLASH_ATTN`, Triton GDN prefill, CUDA graph (`enforce_eager=False`). Saved summary: accept/event `3.076171875`, accept/token `0.615234375`, decode TPS `17.987313578432634`.
+- Fresh native arm: `output/fr13_argmax_e2e_20260608T055851Z/native_mtp5`; same shape/config as E5 (`FLASH_ATTN`, `naive_mtp`, 5 speculative tokens, B=4, CUDA graph). Result: accept/event `3.2132796780684103`, accept/token `0.6426559356136821`, decode TPS `15.647809832189031`, returned tokens `2048`.
+- Tree arm: forked FA2 `.so` sha256 `97fa2519739b3f976debb8377f8829cf3a167b410d1770bb42db390f8c5c0ae1`, `TREE_ATTN`, `FR13_FA2_TREE_BIAS=1`, `FR13_TREE_ATTN_EXP2_SOFTMAX=1`, 9-node tree, `MAX_NUM_SEQS=4`, `GPU_UTIL=0.86` (0.88 failed vLLM free-memory guard), CUDA graph (`enforce_eager=False`). Result: accept/event `1.1133786848072562`, accept/token `0.1237087427563618`, decode TPS `2.6654573600104485`, returned tokens `1855`.
+
+### CUDA graph and hook state
+- Tree FULL capture confirmed in `docker_full_gpu086.log`: `Profiling CUDA graph memory: PIECEWISE=8 (largest=80), FULL=4 (largest=40)` and `Capturing CUDA graphs (decode, FULL)` completed before startup.
+- Native FULL capture confirmed in `native_mtp5/logs/server_pre_probe.log`: `Profiling CUDA graph memory: PIECEWISE=7 (largest=48), FULL=4 (largest=24)` and `Capturing CUDA graphs (decode, FULL)` completed before startup.
+- Capture-path hooks were unset in the runtime env, but both launches emitted FR12 capture-warning spam during CUDA graph capture (`scan`, `pre-conv`, `conv`, `native h0`). Treat this as a recorded hooks-off caveat, not as a hidden diagnostic capture run.
+
+### E2E gate - **FAIL**
+- Artifact: `output/fr13_argmax_e2e_20260608T055851Z/e2e_compare_tree_vs_native_fresh.json`.
+- Accept/event gate: tree `1.1133786848072562` < saved E5 `3.076171875` and < fresh native `3.2132796780684103`.
+- Bag-TV gate: saved E5 artifact has no token records, so bag-TV was computed against the fresh aligned native arm. Full-token bag-TV = `0.5017672885781671` (threshold `0.059`); first-token TV = `0.0`.
+- Paired records: 32/32 paired, exact sequence matches `0`, prefix LCP mean `4.375`, median `2.5`, max `12`.
+- Tree engagement was non-vacuous: `tree_engagement.engaged=true`, metadata rows all OK, draft-count rows include 9-node tree events.
+
+### Gate 2 - no-bias fork pristine check - **PASS**
+- Artifact: `output/fr13_argmax_e2e_20260608T055851Z/gate2_no_bias/no_bias_compare.json`.
+- Stock vs fork, no tree bias: fp16 `torch_equal=true`, `max_abs=0.0`, `nonzero=0`; bf16 `torch_equal=true`, `max_abs=0.0`, `nonzero=0`.
+
+### Verdict
+- The accepted spine argmax-lossless gate from `16660de9` remains the gate definition; this run did not pursue literal GDN 0.0.
+- The requested B=4 CUDA-graph e2e **does not pass**: the forked-FA2 tree arm loses the accept/event superset gate and the distributional bag-TV gate versus aligned native/E5.
