@@ -6725,11 +6725,6 @@ def _fr10_layer_hidden_capture_start(self, positions, hidden_states, input_ids=N
     if not path:
         return None
     try:
-        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
-            return None
-    except Exception:
-        return None
-    try:
         desired = os.environ.get("FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS")
         if desired:
             desired_counts = {
@@ -6901,10 +6896,7 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
         try:
             _fr10_path = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE")
             _fr10_done = bool(globals().get("_FR10_ROOT_LOGIT_CAPTURED", False))
-            _fr10_in_cuda_capture = bool(
-                torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
-            )
-            if _fr10_path and not _fr10_done and logits is not None and not _fr10_in_cuda_capture:
+            if _fr10_path and not _fr10_done and logits is not None:
                 _fr10_desired = os.environ.get(
                     "FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS",
                     os.environ.get("FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS"),
@@ -6957,10 +6949,7 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
         final_logit_block = """        # FR13_FINAL_LOGIT_CAPTURE: dump all selected rows scored by the LM head.
         try:
             _fr13_path = os.environ.get("FR13_FINAL_LOGIT_CAPTURE")
-            _fr13_in_cuda_capture = bool(
-                torch.cuda.is_available() and torch.cuda.is_current_stream_capturing()
-            )
-            if _fr13_path and logits is not None and not _fr13_in_cuda_capture:
+            if _fr13_path and logits is not None:
                 _fr13_desired = os.environ.get("FR13_FINAL_LOGIT_CAPTURE_NUM_TOKENS")
                 if _fr13_desired:
                     _fr13_desired_counts = {
