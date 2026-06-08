@@ -11,7 +11,7 @@ Make our **`use_wy=False`** path in `src/lumo_flywheel_serving/fr10_gdn_tree_ker
 2. in-kernel `l2norm(q,k)` with `+1e-6` eps; `q *= scale`
 3. `b_h *= exp(b_g)` (state decay)
 4. `b_v -= tl.sum(b_h * b_k[None,:], 1)` (delta read)
-5. `b_v *= b_beta` where `b_beta = sigmoid(b).to(bf16).to(fp32)` (**beta rounded through bf16** — our WY missed this at L491; the sequential path must match native L324)
+5. `b_v *= b_beta` where `b_beta = sigmoid(b)` in **PURE fp32 — NO bf16 cast** (CORRECTED 2026-06-08 by workflow w4abw0spa: the native SEQUENTIAL kernel `fused_sigmoid_gating.py:150` has NO bf16 anywhere; the beta-bf16 was a WY-path-only artifact (`_tree_gdn_wy_kernel` FLA_BF16_BOUNDARIES). **DO NOT add bf16 to `_tree_gdn_kernel` — it would INJECT drift, not remove it.**)
 6. `b_h += b_v[:,None] * b_k[None,:]` (rank-1 write)
 7. `b_o = tl.sum(b_h * b_q[None,:], 1)` (readout)
 Source: `fused_sigmoid_gating.py:134-168` (h0 load L134, the `for i_t in range(0,T)` loop L136, ops L158-167). Read the LIVE file first; mirror EXACTLY (cast boundaries, accumulation dtype, op order).
