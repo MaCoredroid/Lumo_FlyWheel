@@ -101,6 +101,34 @@ Clean-input result (corrected methodology): L0 conv=0.0; fresh L45 conv=1 bf16 U
 ## Status
 GATE A is **NOT passed** and must not be bound as passing. `gateA_spine_ladder.json` final hidden/logits are still **empty** (`passed: False`) — the final-spine-logits-vs-native number (the losslessness-critical one) is not yet computed. If the divergence is real (A1), it will flip final-spine-logit argmaxes far beyond the E5 floor → the e2e bag-TV would be lossy → a genuine no-copy-GDN losslessness finding to fix at root (the mask/state-indexing leak), NOT to wave through. **Keep the 2-ULP floor separate**: that is the accepted irreducible no-copy grouping floor; THIS (0.25–1.875) is a distinct structural bug. Surfaced to the user; no self-declared pass. Fix once root cause is confirmed by the spine-only test + per-GDN-layer localization.
 
+## Post-ex2 live ladder — 2026-06-08
+
+Run dir: `output/fr13_ex2_live_ladder_20260608T021853Z`.
+
+Code under test:
+
+- server commit `42d49580`
+- ex2 helper code commit `ed0390df`
+- strict tree run: `TREE_ATTN`, `FR13_FA2_TREE_BIAS=1`, `FR10_ALLOW_LINEAR_FALLBACK` unset, B=1 eager, `GPU_UTIL=0.4`, `MAX_MODEL_LEN=65536`
+
+The offline clean-input conv replay for L0+fresh L45 is fixed (`max_abs=0.0`),
+but the live strict top-down ladder still fails:
+
+| stage | max_abs |
+| --- | ---: |
+| input_hidden | 0.0 |
+| layer 3 full_attention hidden | 0.0 |
+| layer 7 full_attention hidden | 0.0 |
+| **layer 8 linear_attention hidden** | **0.00390625** |
+| final_norm_hidden | 1.65625 |
+| final logits | 1.90625 |
+
+Full-attn/branch reduction on the same run shows the forked FA2 tree path is
+not the primary source: `tree_vs_fa2_branch=0.0` for 15/16 full-attn layers and
+`0.00048828125` at layer 55, while the large later full-attn drift enters as
+`input_hidden`. The next localization target is therefore the GDN sub-op at
+layer 8 on the strict tree/native matched event.
+
 ## Spine-only decisive test result — 2026-06-07
 Run dir: `output/fr13_spine_only_decisive_20260607T171840Z`.
 

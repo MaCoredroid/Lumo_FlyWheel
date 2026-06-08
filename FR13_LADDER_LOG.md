@@ -57,3 +57,37 @@ A `FR10_ALLOW_LINEAR_FALLBACK` run is DIAGNOSTIC ONLY (GDN may go linear) → NE
 Clean aggregate: **max_abs=0.0, nonzero=0** across layers `[0,45]`.
 
 This is not a full verify-path pass. The required live follow-up remains: strict top-down ladder for spine+branches+final logits, plus Gate 2 regular-decode/no-bias no-regression.
+
+### Live follow-up on server commit `42d49580` / ex2 code commit `ed0390df` — **VERIFY-PATH FAILED**
+
+- Run dir: `output/fr13_ex2_live_ladder_20260608T021853Z`
+- Strict tree config: `TREE_ATTN`, `FR13_FA2_TREE_BIAS=1`, `FR10_ALLOW_LINEAR_FALLBACK` unset by `scripts/fr13_launch_forked_fa2_tree_server.sh`, `FR10_ENABLE_TREE_GDN=1`, B=1 eager, `GPU_UTIL=0.4`, `MAX_MODEL_LEN=65536` for diagnostics.
+- Matched native config: `FLASH_ATTN`, `FR10_DECODE_MODE_DEFAULT=naive_mtp`, 5-token spine, B=1 eager.
+- Correct row map for the current scheduler: tree spine rows `[0,1,2,4,6,8]` -> native rows `[0,1,2,3,4,5]`; branch rows `[3,5,7,9]`.
+
+Top-down spine ladder artifact: `output/fr13_ex2_live_ladder_20260608T021853Z/gateA_spine_ladder.json`.
+
+| stage | max_abs |
+| --- | ---: |
+| input_hidden | 0.0 |
+| layer 3 full_attention hidden | 0.0 |
+| layer 7 full_attention hidden | 0.0 |
+| **layer 8 linear_attention hidden** | **0.00390625** |
+| final_norm_hidden | 1.65625 |
+| final logits | 1.90625 |
+
+First nonzero: **layer 8 `linear_attention`**, hidden `0.00390625`; the drift compounds through later GDN/full-attn layers. This is **not a pass**.
+
+Full-attn/branch oracle artifact: `output/fr13_ex2_live_ladder_20260608T021853Z/gateA_full_attn_tree_path_table.json`.
+
+- The full-attn path is not the primary source: layer 3 full-attn stages are 0.0, and the large later full-attn drift enters as `input_hidden`.
+- Branch FA2-on-path oracle from tree op captures: `tree_vs_fa2_branch=0.0` for 15/16 full-attn layers, with one small residual at layer 55 (`0.00048828125`), within the accepted FA2 floor. The verify failure is the compounding GDN spine drift, not the forked FA2 tree-bias call.
+
+Gate 2 kernel-level no-bias check artifact: `output/fr13_ex2_live_ladder_20260608T021853Z/gate2/no_bias_compare.json`.
+
+| case | stock-vs-fork no-bias max_abs | nonzero |
+| --- | ---: | ---: |
+| fp16 | 0.0 | 0 |
+| bf16 | 0.0 | 0 |
+
+Gate 2 full regular-decode model ladder was **not rerun** in this failed verify-path turn; do not treat this entry as a full two-gate pass.
