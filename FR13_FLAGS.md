@@ -42,3 +42,8 @@ Reducers (offline, no GPU): `scripts/fr13_gdn_subop_diff.py` (per-stage tree-vs-
 
 ## D. SPEED / e2e regime — captures OFF (run once Gate A passes)
 All capture flags (B) empty/unset; `FR10_METRICS=0`; `VLLM_BATCH_INVARIANT=0`; **B=4** (`MAX_NUM_SEQS=4`), **CUDA-graph** (no `--enforce-eager`). Measure via vLLM `/metrics` (accept/event) + bag-TV on generated tokens vs E5 (`output/fr10_native_mtp5_same8_*`). This run is the **graphed-B4 drift proof** AND the deliverable (lossless ≤ floor + superset accept/event ≥ 3.076). **Gated on Gate A = drift 0 across all three regimes.**
+
+## Comparison structure + action items (user 2026-06-08)
+- **Two servers:** (1) TREE = `scripts/fr13_launch_forked_fa2_tree_server.sh` (our forked FA2 + tree GDN + ex2 conv, `ATTENTION_BACKEND=TREE_ATTN`, `tree_mtp`); (2) NATIVE drift-reference = `scripts/fr10_launch_speed_server.sh` run as `naive_mtp` (`FLASH_ATTN`, native MTP-5). Drift gate = tree vs native-arm; e2e deliverable = tree vs the saved **E5** baseline `output/fr10_native_mtp5_same8_20260604T210257Z` (`naive_mtp`, B=4).
+- **ACTION (validity):** the drift native-arm (B=1) and the E5 baseline (B=4) are SEPARATE runs; E5's artifact does NOT record its backend/`--gdn-prefill-backend`. **Pin E5's exact launch config (git history / launch log) and make BOTH the tree run and the drift native-arm match it** — else "lossless to native-arm" ≠ "lossless to E5". Both current launchers use `--gdn-prefill-backend triton` (= GDN linear-attn prefill kernel, separate from full-attn FA2).
+- **ACTION (naming):** rename `TREE_ATTN` → `FA2_TREE_ATTN` (our forked FA2, NOT Triton tree-attn) across launcher/code/docs — the label misled framing. Part of the cleanup.
