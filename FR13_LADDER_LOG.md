@@ -476,3 +476,26 @@ Interpretation: Gate-2 hooks-off/no-bias regression remains byte-exact for the c
 ### Status
 - The measured WY e2e artifact (`output/fr13_wy_b4_e2e_20260608T183138Z/tree/quick_tree_wy_b4_spp16_seed1313.json`, accept/event `1.1989480198019802`) is retained as a symptom only.
 - Next action: clean B=4 Gate-A ladder on the final bf16-tapped WY build, including spine rows and branch-path argmax oracles, before assigning structural-vs-numerical cause.
+
+## Commit `codex_fr17-offline-state-fix` - WY scan STATE replay to native floor (codex_fr17, 2026-06-08)
+
+### Scope
+- User direction: execute `FR13_FR17_HANDOFF.md`; grind the WY scan STATE write path offline before any live ladder.
+- Code change: `_tree_gdn_wy_kernel` now splits the WY readout surface from the stored recurrent-state surface when `FLA_BF16_BOUNDARIES` is enabled. Output keeps the bf16-normalized/tapped WY path that was already at the one-bf16-ULP readout floor. The stored state uses a separate raw-normalized WY basis and raw fp32 triangular solve, matching native `fused_sigmoid_gating_delta_rule_update` state storage instead of carrying the readout bf16 taps into the recurrent state.
+- No copy/splice/reroute/dense path was used; the WY kernel still computes the state.
+
+### Offline fixed-payload replay - **STATE floor reached**
+- Runner: named CUDA entrypoint containers, no vLLM server boot, no `--rm`.
+- Payload: `output/fr13_wy_l1_payload_20260608T170530Z/tree/logs/fr10_tree_gdn_scan_l1.pt`.
+- Artifacts:
+  - `output/fr13_wy_l1_payload_20260608T170530Z/codex_fr17_patch2_spine_state.json`
+  - `output/fr13_wy_l1_payload_20260608T170530Z/codex_fr17_patch2_batch_state.json`
+
+| comparison | out max_abs | state max_abs |
+| --- | ---: | ---: |
+| spine WY vs native FLA update | `0.0001220703125` | `0.00000008940696716308594` |
+| original-full spine vs native FLA update | `0.0001220703125` | `0.00000008940696716308594` |
+| reverse-sibling spine vs original-full spine | `0.0` | `0.0` |
+| spine-only spine vs original-full spine | `0.000000014901161193847656` | `0.000000059604644775390625` |
+
+Baseline before this patch on the same payload was state `0.001657634973526001`; the fixed state is now below the requested bf16 floor and at fp32 replay noise. Output remains at the known one-bf16-ULP readout floor. This clears the offline-first state replay gate and is ready for one live ladder with `FR10_TREE_GDN_WY=1` and `FR12_TREE_SCAN_FLA_BF16_BOUNDARIES=1`.
