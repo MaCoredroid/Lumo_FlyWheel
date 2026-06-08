@@ -418,7 +418,7 @@ Interpretation: the six taps compile and remain row-order/context invariant, but
 - Ask user whether to authorize the #6 readout reduction-order rewrite or to run the requested live ladder anyway with the known above-floor L1 scan result.
 - Gate 2 and clean B=4 e2e remain blocked until Gate A is resolved.
 
-## Commit `FR13 remove WY misapplied readout over-rounds` - tap red-team fix (codex_fr16, 2026-06-08)
+## Commit `1f11b9d7` (FR13 remove WY misapplied readout over-rounds) - tap red-team fix (codex_fr16, 2026-06-08)
 
 ### Scope
 - User supplied `FR13_WY_TAP_REDTEAM.md`: the six-tap `2.44e-4` result was a mis-applied #6 tap, not proof of a reduction-order rewrite need.
