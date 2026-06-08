@@ -12,6 +12,7 @@ ATTENTION_BACKEND=${ATTENTION_BACKEND:-TREE_ATTN}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
 FR10_METRICS=${FR10_METRICS:-1}
 FR13_FA2_TREE_BIAS=${FR13_FA2_TREE_BIAS:-1}
+FR13_FA2_PREFILL_NATIVE=${FR13_FA2_PREFILL_NATIVE:-0}
 FR13_TREE_ATTN_EXP2_SOFTMAX=${FR13_TREE_ATTN_EXP2_SOFTMAX:-1}
 LOG_DIR=${LOG_DIR:-"${FR13_RUN_DIR:-$REPO/output/fr13_fa2_tree_e2e/live}/logs"}
 FORKED_FA2_SO=${FORKED_FA2_SO:-"$REPO/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so"}
@@ -83,6 +84,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR12_NATIVE_SPINE_ORACLE="${FR12_NATIVE_SPINE_ORACLE:-0}" \
   -e FR12_TREE_CONV_STATE_FULL_CAPTURE="${FR12_TREE_CONV_STATE_FULL_CAPTURE:-0}" \
   -e FR13_FA2_TREE_BIAS="$FR13_FA2_TREE_BIAS" \
+  -e FR13_FA2_PREFILL_NATIVE="$FR13_FA2_PREFILL_NATIVE" \
   -e FR13_TREE_ATTN_EXP2_SOFTMAX="$FR13_TREE_ATTN_EXP2_SOFTMAX" \
   -e FR10_TREE_GDN_COUNTER_DUMP=/logs/fr10_tree_gdn_counters.json \
   -e FR10_TREE_GDN_CAPTURE_PAYLOAD="${FR10_TREE_GDN_CAPTURE_PAYLOAD:-}" \
@@ -149,6 +151,15 @@ cp /tmp/fr13_fork_fa2.so /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash
 sha256sum /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2_C.abi3.so | tee /logs/fr13_forked_fa2.sha256
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
 python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source
+python3 - <<'PY'
+from pathlib import Path
+
+path = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py')
+text = path.read_text()
+needle = 'FR13_FA2_PREFILL_NATIVE'
+if needle not in text:
+    raise SystemExit(f'{needle} patch missing in {path}')
+PY
 exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
   --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' \
