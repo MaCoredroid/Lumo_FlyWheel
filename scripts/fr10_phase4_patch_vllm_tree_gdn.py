@@ -1227,10 +1227,20 @@ def _patch_gdn_linear() -> bool:
                         _fr10_new_state = torch.stack(
                             _fr10_node_state_rows, dim=0
                         ).to(dtype=conv_state.dtype)
-                        if (
+                        _fr10_conv_handoff_active = (
                             os.environ.get("FR10_TREE_GDN_COMMIT_HANDOFF_LOG")
                             or os.environ.get("FR10_TREE_GDN_SRC_NATIVE_PAYLOAD")
-                        ):
+                        )
+                        if _fr10_conv_handoff_active:
+                            _fr10_conv_handoff_prefix = os.environ.get(
+                                "FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX", ""
+                            )
+                            if (
+                                _fr10_conv_handoff_prefix
+                                and _fr10_conv_handoff_prefix != str(self.prefix)
+                            ):
+                                _fr10_conv_handoff_active = False
+                        if _fr10_conv_handoff_active:
                             try:
                                 globals().setdefault(
                                     "_FR10_COMMIT_HANDOFF_CURR_CONV_BY_B", {}
@@ -2013,7 +2023,16 @@ def _patch_gdn_linear() -> bool:
                                 _fr10_capture_scan_payload = False
                     _fr10_commit_handoff_active = os.environ.get(
                         "FR10_TREE_GDN_COMMIT_HANDOFF_LOG"
-                    )
+                    ) or os.environ.get("FR10_TREE_GDN_SRC_NATIVE_PAYLOAD")
+                    if _fr10_commit_handoff_active:
+                        _fr10_commit_handoff_prefix = os.environ.get(
+                            "FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX", ""
+                        )
+                        if (
+                            _fr10_commit_handoff_prefix
+                            and _fr10_commit_handoff_prefix != str(self.prefix)
+                        ):
+                            _fr10_commit_handoff_active = False
                     _fr10_read_col = 0
                     if _fr10_capture_scan_payload or _fr10_commit_handoff_active:
                         try:
@@ -2662,10 +2681,7 @@ def _patch_gdn_linear() -> bool:
                         spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
                         tree_state[:tree_n].to(dtype=ssm_state.dtype),
                     )
-                    if (
-                        os.environ.get("FR10_TREE_GDN_COMMIT_HANDOFF_LOG")
-                        or os.environ.get("FR10_TREE_GDN_SRC_NATIVE_PAYLOAD")
-                    ):
+                    if _fr10_commit_handoff_active:
                         try:
                             _fr10_curr_conv = globals().get(
                                 "_FR10_COMMIT_HANDOFF_CURR_CONV_BY_B", {}

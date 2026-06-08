@@ -333,6 +333,57 @@ def _tree_gdn_kernel(
             delta_v *= beta_j
             updated = decayed + delta_v[:, None] * k_j[None, :]
             state_i = tl.where(vis, updated, state_i)
+        state_store_i = state_i
+        if i > 0:
+            state_store_i = b_h0
+            for j in tl.range(1, i + 1):
+                vis = tl.load(visible_mask + i * N_PAD + j) != 0
+                k_j = tl.load(
+                    k + (j * NUM_KH + pid_kh) * DIM_K + offs_k,
+                    mask=j < N_ACTUAL,
+                    other=0.0,
+                ).to(tl.float32)
+                if USE_QK_L2NORM_IN_KERNEL:
+                    k_j = k_j * tl.rsqrt(tl.sum(k_j * k_j) + 1e-6)
+                v_j = tl.load(
+                    v + (j * NUM_VH + pid_vh) * DIM_V + offs_v,
+                    mask=(j < N_ACTUAL) & v_mask,
+                    other=0.0,
+                ).to(tl.float32)
+                g_j = tl.load(
+                    g + j * NUM_VH + pid_vh,
+                    mask=j < N_ACTUAL,
+                    other=0.0,
+                ).to(tl.float32)
+                beta_j = tl.load(
+                    beta + j * NUM_VH + pid_vh,
+                    mask=j < N_ACTUAL,
+                    other=0.0,
+                ).to(tl.float32)
+                if RAW_GATING:
+                    x_j = tl.load(
+                        raw_a + j * NUM_VH + pid_vh,
+                        mask=j < N_ACTUAL,
+                        other=0.0,
+                    ).to(tl.float32) + tl.load(dt_bias + pid_vh).to(tl.float32)
+                    softplus_j = tl.where(
+                        x_j <= 20.0,
+                        tl.log(1.0 + tl.exp(x_j)),
+                        x_j,
+                    )
+                    g_j = -tl.exp(tl.load(A_log + pid_vh).to(tl.float32)) * softplus_j
+                    beta_j = tl.sigmoid(
+                        tl.load(
+                            raw_b + j * NUM_VH + pid_vh,
+                            mask=j < N_ACTUAL,
+                            other=0.0,
+                        ).to(tl.float32)
+                    )
+                decayed = state_store_i * tl.exp(g_j)
+                delta_v = v_j - tl.sum(decayed * k_j[None, :], axis=1)
+                delta_v *= beta_j
+                updated = decayed + delta_v[:, None] * k_j[None, :]
+                state_store_i = tl.where(vis, updated, state_store_i)
         out_i = tl.sum(state_i * q_i[None, :], axis=1)
         tl.store(
             out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
@@ -341,7 +392,7 @@ def _tree_gdn_kernel(
         )
         tl.store(
             state + ((i * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
-            state_i,
+            state_store_i,
             mask=v_mask[:, None] & (i < N_ACTUAL),
         )
 

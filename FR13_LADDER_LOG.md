@@ -217,3 +217,46 @@ Fresh same-input scan replay:
 
 ### Current wall
 This is not a clean Gate A pass and no clean B=4 CUDA-graph e2e was run. The next root is no longer the prefill full-attn path and not an isolated same-input scan arithmetic mismatch. The remaining failure enters the L12 GDN block as a tree-vs-native row-1 `input_hidden` delta while conv, h0, gate_z, and same-input scan output are clean. The next step is to pin why that L12 per-row input differs despite the layer-hidden ladder showing layers 0-11 as 0.0 under the earlier capture.
+
+## Takeover run `codex_fr15` - L12 offline replay and native-path state wall (2026-06-08T08:19:00Z)
+
+### Scope
+- User direction: stop live FR12 sub-op capture; localize L12 via offline replay, max 2-3 boots, do not run e2e before Gate A drift-0.
+- Run dir: `output/fr13_l12_offline_replay_20260608T075019Z`.
+- Boots used: one tree capture boot for L12 scan + source-native handoff; one patched tree ladder boot; one native ladder boot. No B=4 e2e was run.
+
+### Offline replay result
+- Fresh payloads:
+  - Tree scan: `output/fr13_l12_offline_replay_20260608T075019Z/tree/logs/fr10_tree_gdn_scan_l12.pt`.
+  - Source-native handoff: `output/fr13_l12_offline_replay_20260608T075019Z/tree/logs/fr10_src_native_handoff_l12.pt`.
+- Added `scripts/fr13_l12_handoff_replay.py`.
+- Baseline replay confirmed a real native-path state mismatch without live sub-op hooks:
+  - serving tree replay vs serving state: `0.0`.
+  - serving accepted state vs next-read SSM state: `0.0`.
+  - native FLA on accepted GDN path `[1,2,4,6,8]` vs serving/next-read state: `0.024476230144500732`.
+  - conv handoff remained exact: `0.0`.
+- Added a scoped handoff-capture layer-prefix filter in `scripts/fr10_phase4_patch_vllm_tree_gdn.py`; previous `FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX` launcher env was not enforced for source-native payloads.
+
+### Patch tested
+- `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py` now stores non-root recurrent states on the accepted/native GDN path (`1..i` under the visible mask) while leaving verify outputs on the full visible ancestry.
+- Offline patched replay:
+  - native accepted-path final state vs patched tree replay state: `1.862645149230957e-09` (down from `0.024476230144500732`).
+  - verify output remained mismatched for that native-path comparison (`0.0003662109375`) because the patch only changed stored state, not current verify output.
+
+### Gate A top-down ladder after patch - **FAIL**
+- Artifact: `output/fr13_l12_offline_replay_20260608T075019Z/gateA_spine_ladder_after_patch.json`.
+- Tree arm: forked FA2, `FR13_FA2_PREFILL_NATIVE=1`, patched state-store kernel, B=1 eager.
+- Native arm: `FLASH_ATTN`, `naive_mtp`, B=1 eager.
+
+| stage | max_abs |
+| --- | ---: |
+| input_hidden | 0.0 |
+| layers 0-11 | 0.0 |
+| **layer 12 linear_attention hidden** | **0.00634765625** |
+| final_norm_hidden | 0.59375 |
+| final logits | 0.5234375 |
+
+Per-row L12 hidden max_abs: row `0->0` = `0.0`; row `1->1` = `0.00634765625`; row `2->2` = `0.001953125`; row `4->3` = `0.0010986328125`; row `6->4` = `0.001953125`; row `8->5` = `0.002685546875`.
+
+### Current wall
+The offline replay localized and fixed a real accepted-path recurrent-state store mismatch, but Gate A did not move: the remaining first nonzero is still the current L12 verify output, not only the stored state read by the next event. L0-L11 did not regress. With the requested boot budget exhausted, e2e remains blocked until the current-output L12 native-path/op-order gap is fixed and the strict ladder reaches drift-0.
