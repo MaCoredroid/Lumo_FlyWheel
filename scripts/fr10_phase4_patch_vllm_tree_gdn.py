@@ -542,36 +542,43 @@ def _patch_gdn_linear() -> bool:
                     _fr10_conv_diag[16].add_(float(attn_metadata.num_spec_decodes))
                 _fr10_conv_diag[20].add_(float(attn_metadata.num_prefills))
                 _fr10_conv_diag[21].add_(float(attn_metadata.num_decodes))
-            _fr12_pre_conv_spec = mixed_qkv_spec.detach().clone()
-            try:
-                _fr12_pre_extra = {
-                    "num_spec_decodes": int(attn_metadata.num_spec_decodes),
-                    "num_actual_tokens": int(num_actual_tokens),
-                    "tree_conv_active": bool(use_fr10_tree_conv),
-                    "tree_conv_expected": bool(_fr10_tree_conv_expected),
-                }
-                if getattr(attn_metadata, "fr10_tree_parent", None) is not None:
-                    _fr12_pre_extra["tree_parent"] = [
-                        int(_x)
-                        for _x in attn_metadata.fr10_tree_parent.detach().cpu().tolist()
-                    ]
-                if spec_token_indx is not None:
-                    _fr12_pre_extra["spec_token_indx"] = [
-                        int(_x) for _x in spec_token_indx.detach().cpu().tolist()
-                    ]
-                if spec_query_start_loc is not None:
-                    _fr12_pre_extra["spec_query_start_loc"] = [
-                        int(_x) for _x in spec_query_start_loc.detach().cpu().tolist()
-                    ]
-                _fr12_subkernel_capture_tensor(
-                    self,
-                    "pre_conv",
-                    mixed_qkv_spec,
-                    create=True,
-                    extra=_fr12_pre_extra,
-                )
-            except Exception as _fr12_pre_cap_exc:
-                logger.warning("FR12 pre-conv capture failed: %s", _fr12_pre_cap_exc)
+            _fr12_subkernel_capture_enabled = bool(os.environ.get("FR12_SUBKERNEL_CAPTURE"))
+            _fr12_pre_conv_spec = None
+            if (
+                _fr12_subkernel_capture_enabled
+                or os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1"
+            ):
+                _fr12_pre_conv_spec = mixed_qkv_spec.detach().clone()
+            if _fr12_subkernel_capture_enabled:
+                try:
+                    _fr12_pre_extra = {
+                        "num_spec_decodes": int(attn_metadata.num_spec_decodes),
+                        "num_actual_tokens": int(num_actual_tokens),
+                        "tree_conv_active": bool(use_fr10_tree_conv),
+                        "tree_conv_expected": bool(_fr10_tree_conv_expected),
+                    }
+                    if getattr(attn_metadata, "fr10_tree_parent", None) is not None:
+                        _fr12_pre_extra["tree_parent"] = [
+                            int(_x)
+                            for _x in attn_metadata.fr10_tree_parent.detach().cpu().tolist()
+                        ]
+                    if spec_token_indx is not None:
+                        _fr12_pre_extra["spec_token_indx"] = [
+                            int(_x) for _x in spec_token_indx.detach().cpu().tolist()
+                        ]
+                    if spec_query_start_loc is not None:
+                        _fr12_pre_extra["spec_query_start_loc"] = [
+                            int(_x) for _x in spec_query_start_loc.detach().cpu().tolist()
+                        ]
+                    _fr12_subkernel_capture_tensor(
+                        self,
+                        "pre_conv",
+                        mixed_qkv_spec,
+                        create=True,
+                        extra=_fr12_pre_extra,
+                    )
+                except Exception as _fr12_pre_cap_exc:
+                    logger.warning("FR12 pre-conv capture failed: %s", _fr12_pre_cap_exc)
             _fr12_native_candidate_bank_rows_pre_update = None
             _fr12_native_candidate_conv_state_pre_update = None
             _fr12_native_prior_full_row_pre_update = None
@@ -1220,17 +1227,21 @@ def _patch_gdn_linear() -> bool:
                         _fr10_new_state = torch.stack(
                             _fr10_node_state_rows, dim=0
                         ).to(dtype=conv_state.dtype)
-                        try:
-                            globals().setdefault(
-                                "_FR10_COMMIT_HANDOFF_CURR_CONV_BY_B", {}
-                            )[int(_fr10_b)] = {
-                                "prior": _fr10_prior_conv_state_bank[
-                                    _fr10_b
-                                ].detach().clone(),
-                                "rows": _fr10_new_state.detach().clone(),
-                            }
-                        except Exception:
-                            pass
+                        if (
+                            os.environ.get("FR10_TREE_GDN_COMMIT_HANDOFF_LOG")
+                            or os.environ.get("FR10_TREE_GDN_SRC_NATIVE_PAYLOAD")
+                        ):
+                            try:
+                                globals().setdefault(
+                                    "_FR10_COMMIT_HANDOFF_CURR_CONV_BY_B", {}
+                                )[int(_fr10_b)] = {
+                                    "prior": _fr10_prior_conv_state_bank[
+                                        _fr10_b
+                                    ].detach().clone(),
+                                    "rows": _fr10_new_state.detach().clone(),
+                                }
+                            except Exception:
+                                pass
                         conv_state.index_copy_(
                             0,
                             spec_state_indices_tensor[
@@ -1563,29 +1574,31 @@ def _patch_gdn_linear() -> bool:
                     validate_data=False,
                 )
             try:
-                _fr12_conv_extra = {
-                    "num_spec_decodes": int(attn_metadata.num_spec_decodes),
-                    "num_actual_tokens": int(num_actual_tokens),
-                    "tree_conv_active": bool(use_fr10_tree_conv),
-                    "tree_conv_expected": bool(_fr10_tree_conv_expected),
-                }
-                if getattr(attn_metadata, "fr10_tree_parent", None) is not None:
-                    _fr12_conv_extra["tree_parent"] = [
-                        int(_x)
-                        for _x in attn_metadata.fr10_tree_parent.detach().cpu().tolist()
-                    ]
-                if spec_token_indx is not None:
-                    _fr12_conv_extra["spec_token_indx"] = [
-                        int(_x) for _x in spec_token_indx.detach().cpu().tolist()
-                    ]
-                _fr12_subkernel_capture_tensor(
-                    self,
-                    "conv1d_out",
-                    mixed_qkv_spec,
-                    create=True,
-                    extra=_fr12_conv_extra,
-                )
-                _fr12_payload = _fr12_subkernel_capture_get(self, create=False)
+                _fr12_payload = None
+                if _fr12_subkernel_capture_enabled:
+                    _fr12_conv_extra = {
+                        "num_spec_decodes": int(attn_metadata.num_spec_decodes),
+                        "num_actual_tokens": int(num_actual_tokens),
+                        "tree_conv_active": bool(use_fr10_tree_conv),
+                        "tree_conv_expected": bool(_fr10_tree_conv_expected),
+                    }
+                    if getattr(attn_metadata, "fr10_tree_parent", None) is not None:
+                        _fr12_conv_extra["tree_parent"] = [
+                            int(_x)
+                            for _x in attn_metadata.fr10_tree_parent.detach().cpu().tolist()
+                        ]
+                    if spec_token_indx is not None:
+                        _fr12_conv_extra["spec_token_indx"] = [
+                            int(_x) for _x in spec_token_indx.detach().cpu().tolist()
+                        ]
+                    _fr12_subkernel_capture_tensor(
+                        self,
+                        "conv1d_out",
+                        mixed_qkv_spec,
+                        create=True,
+                        extra=_fr12_conv_extra,
+                    )
+                    _fr12_payload = _fr12_subkernel_capture_get(self, create=False)
                 if (
                     _fr12_payload is not None
                     and not bool(use_fr10_tree_conv)
