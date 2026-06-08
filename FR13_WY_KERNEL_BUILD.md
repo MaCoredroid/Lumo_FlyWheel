@@ -2,6 +2,15 @@
 
 User decision 2026-06-08: **pivot from grinding the ancestor-replay kernel to BUILDING the WY one-pass kernel.** It clears gap A (lossless BY CONSTRUCTION — per-node output = native-on-path, no per-layer drift grind) AND gap B (removes the +35.8% B=4 GDN-state HBM tax; the replay kernel is 9× HBM and fails speed even at drift 0). This supersedes the replay-kernel L12+ grind (replay stays only as a flag-gated fallback).
 
+## HANDOFF STATE (2026-06-08 → codex_fr16; codex_fr15 stood down for clean context)
+codex_fr15 built the WY kernel **scaffold**, committed + pushed at **`c0448bd7` "FR13 add flag-gated WY tree GDN kernel"**:
+- NEW kernel `_tree_gdn_wy_kernel` (`src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:401`, +217 lines), launched at `:777`.
+- Flag-gated **`FR10_TREE_GDN_WY=1`** (default off, replay = fallback) via `scripts/fr10_phase4_patch_vllm_tree_gdn.py:2423`; wired in both launchers.
+- WY `kk = tl.dot(b_k, trans(b_k))` set to **`input_precision="ieee"`** (full fp32, NOT tf32 — fr15's catch; tf32 truncates ~13 bits and breaks bit-exactness).
+- **NOT yet validated:** the strict Gate-A ladder was NOT run with `FR10_TREE_GDN_WY=1`; fr15's WY ieee L12 offline probe was in-flight when it stood down (orphaned, server cleaned up).
+
+**codex_fr16 task:** continue from `c0448bd7`. Boot the WY server (`FR10_TREE_GDN_WY=1`, fallback UNSET), run the **strict top-down ladder (spine AND branch) vs native-on-path → 0** (assert the WY kernel actually computes — no silent replay fallback; align any seam IN-KERNEL: ieee/tf32, op-order, native-vs-rescaled basis, solve_tril row order, tl.range). Then Gate-2 unchanged + confirm CUDA-graph FULL capture. Bind each to `FR13_LADDER_LOG.md`. THEN the clean B=4 e2e. **HOLD THE SAME STRICT GATES** below — no self-declared pass, report numbers.
+
 ## The mechanism (from `FR13_LOSSLESS_FAST_DERIVATION.md`, CPU-validated)
 No-copy WY/UT one-pass tree kernel. Per value-head state `S∈ℝ^{d_v×d_k}` (d_k=d_v=128, 16 k-heads / 48 v-heads, GQA 3). Gated delta rule `S_t = g_t S_{t-1}(I − β_t k_t k_tᵀ) + β_t k_t v_tᵀ`. The rank-1 reflector product over a path collapses to `∏(I − β_s k_s k_sᵀ) = I − K T Kᵀ` (Schreiber–Van Loan WY; Yang et al. delta rule, arXiv:2406.06484).
 - **Each node inherits its parent's compact `(K, T, G)` factor and appends ONE rank-1 reflector (O(1) per node).** Branches share the spine factor up to their fork — no per-node `d_v×d_k` state copy, no ancestor replay. Working set per node = `K[d_k×L]` + `T[L×L]` (~tiny), NOT a 64 KB state.
