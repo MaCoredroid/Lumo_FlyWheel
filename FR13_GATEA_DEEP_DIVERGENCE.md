@@ -215,3 +215,9 @@ FIX is scoping/config (make prefill = native), NOT grinding the prefill conv to 
 
 ## REPORT-BACK TRIGGER (user 2026-06-08): the DELIVERABLE, not per-front
 User: "do not ask me, we will grind until we reach superset (lossless) and accept/event more than E5 under same condition — that's your time to report back." ⟹ grind autonomously through ALL fronts (GDN sub-ops: prefill-scope/h0, then any remaining) → GATE A drift=0 → e2e. Report back to the user ONLY at: (a) the full e2e win — lossless/superset (bag-TV within E5 floor ~0.059) AND accept/event > E5 (>3.076), at B=4 — or (b) a genuine un-grindable wall (dead-end). No per-front, no per-gate asking. Still red-team every fix, enforce ONE-GPU + memory hygiene + verify-committed + no banned shortcut, and keep cron-tick responses terse.
+
+## PREFILL LOCALIZED (2026-06-08): #1 = forked-FA2 prefill diverges (gate-2-prefill gap)
+Offline reduction `output/fr13_prefill_attn_ladder_20260608T043013Z`:
+- **prefill FULL_ATTN (forked FA2 vs native):** L3 clean → **L7 first diverges at `attn_out_raw`**. So the forked-FA2/TREE_ATTN PREFILL is NOT byte-exact to native FA2/FLASH_ATTN.
+- **prefill GDN (tree vs native):** L0/L4 clean → L8 diverges at `pre_conv` — INHERITED (the L7 attn divergence contaminates the residual → GDN input). NOT a GDN leak (the ex2 conv/scan guards hold).
+⟹ Root of h0=0.0007 = the **forked-FA2 prefill** (the gate-2-prefill gap; gate-2 only tested decode). Fix = make the forked FA2 / TREE_ATTN byte-exact to native FA2 / FLASH_ATTN for the no-bias PREFILL (varlen) path (extend gate-2 to prefill). codex investigating `tree_attn.py` prefill path. Grinding autonomously per the report-back-at-deliverable policy.
