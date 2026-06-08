@@ -701,3 +701,58 @@ Branch proxy rows `[3,5,7,9]` matched logged self-target argmaxes `[332,332,198,
 - `python3 -m py_compile scripts/fr10_phase4_patch_vllm_tree_gdn.py`: passed.
 - `bash -n scripts/fr10_launch_speed_server.sh scripts/fr13_launch_forked_fa2_tree_server.sh`: passed.
 - `git diff --check`: passed.
+
+## Commit `fr13-seq-l2-subop-ladder` - live layer-2 subop ladder localizes first drift (codex_fr13, 2026-06-08)
+
+### Scope
+- User direction: run the `FR13_SEQ_LAYER2_REDTEAM.md` pivot, keep beta pure fp32, and fix the failed native capture tooling before running the live L2 ladder.
+- Run dir: `output/fr13_seq_l2_subop_20260608T231135Z/`.
+- Pinned prompt/request: copied from `output/fr13_wy_paired_ladder_20260608T211749Z/`.
+- Discipline: one GPU; native arm torn down and `recover_host_memory()` run before tree arm; tree arm torn down and recovery rerun after capture. Final host state: swap `0B`, GPU compute clear.
+- No beta or sequential-scan rounding changes were made.
+
+### Native Capture Tooling Fix Validation
+- Native arm used `FLASH_ATTN`, `FR10_ENABLE_TREE_GDN=0`, `FR10_DECODE_MODE_DEFAULT=naive_mtp`, and corrected MTP-5 speculative config (`num_speculative_tokens=5`).
+- Capture filters: layer prefix `language_model.model.layers.2.linear_attn`, `NUM_TOKENS=6`, rows `0..5`.
+- Request returned HTTP `200`, usage prompt `5`, completion `16`.
+- Files written:
+  - `native/logs/native_l2_gdn_subop.pt`
+  - `native/logs/native_l2_layer_hidden.pt`
+  - `native/logs/native_l2_final_logits.pt`
+  - `native/logs/native_l2_gdn_subop.debug.jsonl`
+- The debug log records the prior failure mode concretely: layer-2 calls can be skipped by `skip_num_tokens_mismatch` when the requested token count does not match the live speculative config. With MTP-5 and `NUM_TOKENS=6`, `capture_created` fired.
+
+### Tree Capture
+- Tree arm used `TREE_ATTN`, `FR10_DECODE_MODE_DEFAULT=tree_mtp`, `FR10_TREE_GDN_WY=0`, `FR13_FA2_PREFILL_NATIVE=1`, and the default sequential rank-1 GDN tree-scan.
+- Capture filters: layer prefix `language_model.model.layers.2.linear_attn`, `NUM_TOKENS=10`, rows `0..9`.
+- Request returned HTTP `200`, usage prompt `5`, completion `16`.
+- Files written:
+  - `tree/logs/tree_l2_gdn_subop.pt`
+  - `tree/logs/tree_l2_layer_hidden.pt`
+  - `tree/logs/tree_l2_final_logits.pt`
+  - `tree/logs/tree_l2_spine_logits.pt`
+  - `tree/logs/tree_l2_gdn_subop.debug.jsonl`
+
+### Row-2 Subop Verdict
+- Reducer: `scripts/fr13_layer0_subop_localize.py`.
+- Row-2 artifact: `output/fr13_seq_l2_subop_20260608T231135Z/l2_subop_row2_seq_vs_native.json`.
+- Compact marker summary: `output/fr13_seq_l2_subop_20260608T231135Z/l2_row2_marker_summary.json`.
+- Spine cross-check artifact: `output/fr13_seq_l2_subop_20260608T231135Z/l2_subop_spine_seq_vs_native.json`.
+
+| stage | row-2 max_abs | nonzero | verdict |
+| --- | ---: | ---: | --- |
+| `input_hidden` | `0.0` | `0` | identical |
+| `pre_conv` | `0.0` | `0` | identical |
+| `conv1d_out` | `0.0` | `0` | identical |
+| `h0_state_in` | `0.0` | `0` | identical full tensor |
+| `gdn_scan_out` | `1.1920928955078125e-07` | `2` | **first divergence** |
+| `gate_z` | `0.0` | `0` | identical |
+| `gate_out` | `6.103515625e-05` | `2` | propagated from scan |
+| `o_proj_out` | `0.00048828125` | `1393` | amplified downstream |
+
+The requested visible marker is reproduced in the layer-hidden capture: layer `2`, row `2`, flat `3994` is tree `-2.1875` vs native `-2.203125`, diff `0.015625` exactly one bf16 ULP. At the raw subop level, flat `3994` / `h31,d26` is still identical through `gdn_scan_out`, `gate_z`, `gate_out`, and `o_proj_out`; the first raw scan mismatch is at flat `5535`.
+
+### Interpretation
+- This rules out beta and input/convolution wiring for the first L2 row-2 drift.
+- Since `h0_state_in` is identical and the first mismatch appears inside `gdn_scan_out`, the remaining suspect is the sequential scan recurrence itself, specifically the parent-resume/register-carry path around `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:277`.
+- The spine-row cross-check (`tree rows 0,1,2,4,6,8` vs native rows `0..5`) reports the same first diverging stage: `gdn_scan_out`.
