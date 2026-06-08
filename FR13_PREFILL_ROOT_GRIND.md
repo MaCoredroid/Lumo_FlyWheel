@@ -24,4 +24,11 @@ Spine ladder (`FR13_LADDER_LOG.md`, run `fr13_ex2_live_ladder_20260608T021853Z`)
 5. **Re-confirm Gate-2** (forked FA2 no-bias regular decode == pristine = 0.0) — the prefill flag must not touch regular decode. Bind both gates + per-layer max_abs to `FR13_LADDER_LOG.md` per commit.
 6. **Re-run the e2e** (B=4, CUDA-graph, same8): once spine+branch drift = 0, superset-by-math gives accept/event ≥ E5 3.076 + bag-TV ≤ floor. Bring the numbers to the user (do not self-declare pass/fail).
 
+## RESULT (2026-06-08, run `output/fr13_prefill_grind_20260608T063838Z`, FR13_FA2_PREFILL_NATIVE=1, strict threshold 0.0)
+Prefill fix CONFIRMED as the L8 root: strict spine ladder vs native —
+- input + **layers 0–11 ALL max_abs = 0.0** (torch_equal True), including **L8 linear_attn = 0.0** (was `h0_state_in` 7e-4 → o_proj 0.0039 pre-fix). The prefill bug WAS the root; fixing it cascaded L0–L11 to exact 0.
+- **First nonzero now = LAYER 12 linear_attention `0.00634`** (a deeper GDN source previously masked by the L8 contamination). Compounds: L13 0.0156 → L63 7.5 → **final logits `0.52`** (down from **1.9** pre-fix).
+- Next front: localize L12 GDN sub-op (conv/scan/gate/o_proj) and drive to 0; codex captured `gdn_l12_subop`. NOTE L0–L11 GDN being bit-exact means the GDN kernel is exact for those layers — L12 introduces FRESH drift on its own (value-dependent / fp8 / co-residency-scan), to localize.
+- Cross-link to `FR13_LOSSLESS_FAST_DERIVATION.md`: the L12+ GDN scan drift is the **native-op-order scan-alignment** class the WY derivation says is fixable (gate-folding basis must be `native` not `rescaled`); it is NOT a wall.
+
 ## Banned (user, standing): copy / state-copy / reroute / splice / dense / copy-recurrent multi-spine. Our kernel computes; verify vs native-on-path oracle (splice OFF).
