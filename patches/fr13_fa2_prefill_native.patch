@@ -1,0 +1,127 @@
+diff --git a/scripts/fr13_patch_fa2_tree_bias.py b/scripts/fr13_patch_fa2_tree_bias.py
+index 90aa163f..f4910862 100755
+--- a/scripts/fr13_patch_fa2_tree_bias.py
++++ b/scripts/fr13_patch_fa2_tree_bias.py
+@@ -450,6 +450,122 @@ def _patch_tree_attn(path: Path) -> bool:
+         "tree_attn fa_utils import",
+     )
+     changed = changed or did
++    # FR13_FA2_PREFILL_NATIVE needs the same helpers native FlashAttentionImpl
++    # uses to pick the FA version / batch-invariant num_splits.  Mirror native's
++    # imports from vllm.v1.attention.backends.fa_utils (get_flash_attn_version)
++    # and vllm.envs.
++    text, did = _insert_once(
++        text,
++        "from vllm.v1.attention.backends.fa_utils import flash_attn_varlen_func\n",
++        "from vllm.v1.attention.backends.fa_utils import get_flash_attn_version\n",
++        "tree_attn get_flash_attn_version import",
++    )
++    changed = changed or did
++    if "import vllm.envs as envs\n" not in text:
++        text = text.replace(
++            "from vllm.v1.attention.ops.triton_unified_attention import unified_attention\n",
++            "from vllm.v1.attention.ops.triton_unified_attention import unified_attention\nimport vllm.envs as envs\n",
++            1,
++        )
++        changed = True
++    # FR13_FA2_PREFILL_NATIVE: route the TREE_ATTN *prefill* branch through the
++    # exact same flash_attn_varlen_func(...) call native FlashAttentionImpl
++    # prefill makes (NO tree bias), so prefill is byte-identical to native
++    # FLASH_ATTN.  Flag-gated, default OFF.  Decode path is untouched.
++    prefill_anchor = (
++        "        if prefill_meta := attn_metadata.prefill_metadata:\n"
++        "            unified_attention(\n"
++        "                q=query[num_decode_tokens:num_actual_tokens],\n"
++        "                k=key_cache,\n"
++        "                v=value_cache,\n"
++        "                out=output[num_decode_tokens:num_actual_tokens],\n"
++        "                cu_seqlens_q=prefill_meta.query_start_loc,\n"
++        "                max_seqlen_q=prefill_meta.max_query_len,\n"
++        "                seqused_k=prefill_meta.seq_lens,\n"
++        "                max_seqlen_k=prefill_meta.max_seq_len,\n"
++        "                softmax_scale=self.scale,\n"
++        "                causal=True,\n"
++        "                alibi_slopes=self.alibi_slopes,\n"
++        "                window_size=self.sliding_window,\n"
++        "                block_table=prefill_meta.block_table,\n"
++        "                softcap=self.logits_soft_cap,\n"
++        "                q_descale=None,  # Not supported\n"
++        "                k_descale=layer._k_scale.expand(descale_shape),\n"
++        "                v_descale=layer._v_scale.expand(descale_shape),\n"
++        "            )\n"
++    )
++    prefill_replacement = (
++        "        if prefill_meta := attn_metadata.prefill_metadata:\n"
++        '            if os.environ.get("FR13_FA2_PREFILL_NATIVE", "0") == "1":\n'
++        "                # FR13_FA2_PREFILL_NATIVE: mirror native FlashAttentionImpl\n"
++        "                # prefill (flash_attn.py: the non-cascade else branch)\n"
++        "                # call-for-call, with NO tree bias.  descale_shape uses\n"
++        "                # the per-prefill cu_seqlens and self.num_kv_heads exactly\n"
++        "                # like native (flash_attn.py descale_shape line).\n"
++        "                prefill_descale_shape = (\n"
++        "                    prefill_meta.query_start_loc.shape[0] - 1,\n"
++        "                    self.num_kv_heads,\n"
++        "                )\n"
++        "                prefill_sliding_window_size = (\n"
++        "                    list(self.sliding_window)\n"
++        "                    if self.sliding_window is not None\n"
++        "                    else None\n"
++        "                )\n"
++        "                flash_attn_varlen_func(\n"
++        "                    q=query[num_decode_tokens:num_actual_tokens],\n"
++        "                    k=key_cache,\n"
++        "                    v=value_cache,\n"
++        "                    out=output[num_decode_tokens:num_actual_tokens],\n"
++        "                    cu_seqlens_q=prefill_meta.query_start_loc,\n"
++        "                    max_seqlen_q=prefill_meta.max_query_len,\n"
++        "                    seqused_k=prefill_meta.seq_lens,\n"
++        "                    max_seqlen_k=prefill_meta.max_seq_len,\n"
++        "                    softmax_scale=self.scale,\n"
++        "                    causal=True,\n"
++        "                    alibi_slopes=self.alibi_slopes,\n"
++        "                    window_size=prefill_sliding_window_size,\n"
++        "                    block_table=prefill_meta.block_table,\n"
++        "                    softcap=self.logits_soft_cap,\n"
++        "                    scheduler_metadata=None,\n"
++        "                    fa_version=get_flash_attn_version(\n"
++        "                        requires_alibi=self.alibi_slopes is not None,\n"
++        "                        head_size=self.head_size,\n"
++        "                    ),\n"
++        "                    q_descale=layer._q_scale.expand(prefill_descale_shape),\n"
++        "                    k_descale=layer._k_scale.expand(prefill_descale_shape),\n"
++        "                    v_descale=layer._v_scale.expand(prefill_descale_shape),\n"
++        "                    num_splits=1 if envs.VLLM_BATCH_INVARIANT else 0,\n"
++        "                    s_aux=None,\n"
++        "                )\n"
++        "            else:\n"
++        "                unified_attention(\n"
++        "                    q=query[num_decode_tokens:num_actual_tokens],\n"
++        "                    k=key_cache,\n"
++        "                    v=value_cache,\n"
++        "                    out=output[num_decode_tokens:num_actual_tokens],\n"
++        "                    cu_seqlens_q=prefill_meta.query_start_loc,\n"
++        "                    max_seqlen_q=prefill_meta.max_query_len,\n"
++        "                    seqused_k=prefill_meta.seq_lens,\n"
++        "                    max_seqlen_k=prefill_meta.max_seq_len,\n"
++        "                    softmax_scale=self.scale,\n"
++        "                    causal=True,\n"
++        "                    alibi_slopes=self.alibi_slopes,\n"
++        "                    window_size=self.sliding_window,\n"
++        "                    block_table=prefill_meta.block_table,\n"
++        "                    softcap=self.logits_soft_cap,\n"
++        "                    q_descale=None,  # Not supported\n"
++        "                    k_descale=layer._k_scale.expand(descale_shape),\n"
++        "                    v_descale=layer._v_scale.expand(descale_shape),\n"
++        "                )\n"
++    )
++    if prefill_anchor in text:
++        text = text.replace(prefill_anchor, prefill_replacement, 1)
++        changed = True
++    elif 'os.environ.get("FR13_FA2_PREFILL_NATIVE", "0") == "1"' not in text:
++        raise RuntimeError(
++            "FR13_FA2_PREFILL_NATIVE: tree_attn prefill anchor not found "
++            "(unified_attention prefill branch already mutated?)"
++        )
+     anchor = """        if decode_meta := attn_metadata.decode_metadata:\n            unified_attention(\n                q=query[:num_decode_tokens],\n                k=key_cache,\n                v=value_cache,\n                out=output[:num_decode_tokens],\n                cu_seqlens_q=decode_meta.query_start_loc,\n                max_seqlen_q=decode_meta.max_query_len,\n                seqused_k=decode_meta.seq_lens,\n                max_seqlen_k=decode_meta.max_seq_len,\n                softmax_scale=self.scale,\n                causal=True,\n                alibi_slopes=self.alibi_slopes,\n                qq_bias=decode_meta.tree_attn_bias,\n                window_size=self.sliding_window,\n                block_table=decode_meta.block_table,\n                softcap=self.logits_soft_cap,\n                q_descale=None,  # Not supported\n                k_descale=layer._k_scale.expand(descale_shape),\n                v_descale=layer._v_scale.expand(descale_shape),\n            )\n"""
+     replacement = """        if decode_meta := attn_metadata.decode_metadata:\n            tree_bias = decode_meta.tree_attn_bias\n            use_tree_bias = tree_bias is not None and tree_bias.numel() > 0\n            if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1" and use_tree_bias:\n                if self.alibi_slopes is not None:\n                    raise NotImplementedError("FR13_FA2_TREE_BIAS does not support ALiBi")\n                sliding_window_size = (\n                    list(self.sliding_window)\n                    if self.sliding_window is not None\n                    else None\n                )\n                flash_attn_varlen_func(\n                    q=query[:num_decode_tokens],\n                    k=key_cache,\n                    v=value_cache,\n                    out=output[:num_decode_tokens],\n                    cu_seqlens_q=decode_meta.query_start_loc,\n                    max_seqlen_q=decode_meta.max_query_len,\n                    seqused_k=decode_meta.seq_lens,\n                    max_seqlen_k=decode_meta.max_seq_len,\n                    softmax_scale=self.scale,\n                    causal=True,\n                    alibi_slopes=None,\n                    window_size=sliding_window_size,\n                    block_table=decode_meta.block_table,\n                    softcap=self.logits_soft_cap,\n                    fa_version=2,\n                    tree_bias=tree_bias,\n                )\n            else:\n                unified_attention(\n                    q=query[:num_decode_tokens],\n                    k=key_cache,\n                    v=value_cache,\n                    out=output[:num_decode_tokens],\n                    cu_seqlens_q=decode_meta.query_start_loc,\n                    max_seqlen_q=decode_meta.max_query_len,\n                    seqused_k=decode_meta.seq_lens,\n                    max_seqlen_k=decode_meta.max_seq_len,\n                    softmax_scale=self.scale,\n                    causal=True,\n                    alibi_slopes=self.alibi_slopes,\n                    qq_bias=decode_meta.tree_attn_bias,\n                    window_size=self.sliding_window,\n                    block_table=decode_meta.block_table,\n                    softcap=self.logits_soft_cap,\n                    q_descale=None,  # Not supported\n                    k_descale=layer._k_scale.expand(descale_shape),\n                    v_descale=layer._v_scale.expand(descale_shape),\n                )\n"""
+     if anchor in text:
