@@ -353,7 +353,7 @@ Per-node WY-vs-serial output max_abs: `[0.0, 0.0, 1.1641532182693481e-10, 0.0, 0
 - Therefore no in-kernel WY patch was made in this turn. A further live ladder would violate the user's offline-first condition without a kernel change, and a kernel change would be blind/random relative to the captured L1 WY evidence.
 - Next required evidence, if continuing, is a fixed-target L1 GDN sub-op capture (tree and native) for `input_hidden -> pre_conv -> conv1d_out -> h0_state_in -> gdn_scan_out -> gate_z -> gate_out -> o_proj_out`; the currently available L1 scan payload cannot localize gate/o_proj or layer-output drift.
 
-## Commit `FR13 align WY FLA bf16 boundaries` - offline L1 WY vs live-FLA seam check (codex_fr16, 2026-06-08)
+## Commit `1f0c7237` (FR13 align WY FLA bf16 boundaries) - offline L1 WY vs live-FLA seam check (codex_fr16, 2026-06-08)
 
 ### Scope
 - User supplied `FR13_WY_SEAM_FIXES.md`: the prior `9.3e-10` L1 WY scan result was against the fp32 oracle, while the live ladder compares against native FLA's bf16 boundary behavior.
