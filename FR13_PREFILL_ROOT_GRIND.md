@@ -8,6 +8,8 @@ Run `output/fr13_argmax_e2e_20260608T055851Z`, forked-FA2 B=4, tree ENGAGED (286
 - accepted_len histogram: **0→534 (57.8%)**, 1→104, 2→125, 3→48, 4→37, 5→76. Bimodal: when the draft matches the tree's verify argmax it fully accepts (len 5); 58% of events the tree's verify argmax rejects the draft's first token.
 - Same ballpark as the prior TREE_ATTN-Triton build (2.8× miss). ⟹ **full-attn byte-exactness (the CUTLASS fork) was necessary but NOT sufficient; the remaining lossy source is the GDN spine drift.**
 
+**PAIRED native arm (same harness, `native_mtp5/quick_native_mtp5_b4.json`):** native MTP-5 accept/event = **3.21** (1597/497), warm TPS 15.6, per-req TPS 47.3. So tree (1.11 / 2.67 / 8.78) loses **2.9× on accepts AND ~5× on speed**. Native = 3.21 ≈ E5 3.076 ⟹ harness sane. Same drafter family + same prompts + native accepts 2.9× more ⟹ the **tree VERIFY is lossy** (not the drafter) — confirms the drift→acceptance link.
+
 ## Root cause = the prefill bug (first nonzero in the spine ladder)
 Spine ladder (`FR13_LADDER_LOG.md`, run `fr13_ex2_live_ladder_20260608T021853Z`): first nonzero is **L8 `linear_attention` 0.0039**; its only nonzero input is **`h0_state_in` = 7.2e-4** (conv/pre_conv/conv1d_out all 0.0). That `h0_state_in` is the GDN recurrent-state seed written during **prefill**, inherited from the forked-FA2 **L7 prefill** divergence (`FR13_PREFILL_DRIFT.md`): tree prefill calls `unified_attention` with `q_descale=None` + `descale_shape=(...,key.shape[1])` instead of native `flash_attn_varlen_func` with `q_descale=layer._q_scale.expand(...)` + `(...,num_kv_heads)` + `scheduler_metadata`/`fa_version`/`num_splits`. Compounds L8 0.0039 → 1.9 final logits → argmax flips at low-gap positions → 58% step-0 rejects.
 
