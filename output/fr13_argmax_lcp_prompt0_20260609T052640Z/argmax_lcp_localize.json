@@ -2077,6 +2077,7 @@
     "mismatches": [],
     "missing_prompt_token_rows": [],
     "native_request_rows": 1,
+    "row_count_mismatch": false,
     "rows": [
       {
         "byte_identical": true,

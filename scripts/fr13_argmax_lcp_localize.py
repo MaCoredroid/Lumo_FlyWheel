@@ -18,6 +18,14 @@ import torch
 TREE_SPINE_PATH = [0, 1, 3, 5, 7]
 
 
+class PromptIdentityError(SystemExit):
+    """Raised when tree/native request prompt tokens are not byte-identical."""
+
+    def __init__(self, summary: dict[str, Any]):
+        self.summary = summary
+        super().__init__(_prompt_identity_error_message(summary))
+
+
 def _load_pt(path: Path) -> dict[str, Any]:
     return torch.load(path, map_location="cpu")
 
@@ -84,7 +92,34 @@ def _request_rows(path: Path) -> list[dict[str, Any]]:
     return _load_jsonl(path)
 
 
-def _prompt_identity(tree_run: Path, native_run: Path) -> dict[str, Any]:
+def _prompt_identity_error_message(summary: dict[str, Any]) -> str:
+    if summary.get("missing_prompt_token_rows"):
+        first = summary["missing_prompt_token_rows"][0]
+        return (
+            "prompt token identity guard failed: missing prompt_token_ids at "
+            f"pair_index={first.get('pair_index')} "
+            f"tree_prompt_id={first.get('tree_prompt_id')} "
+            f"native_prompt_id={first.get('native_prompt_id')}"
+        )
+    if summary.get("mismatches"):
+        first = summary["mismatches"][0]
+        return (
+            "prompt token identity guard failed: prompt_token_ids differ at "
+            f"pair_index={first.get('pair_index')} "
+            f"common_prefix_tokens={first.get('common_prefix_tokens')} "
+            f"tree_first_diff={first.get('tree_first_diff')} "
+            f"native_first_diff={first.get('native_first_diff')}"
+        )
+    if summary.get("tree_request_rows") != summary.get("native_request_rows"):
+        return (
+            "prompt token identity guard failed: request row count mismatch "
+            f"tree={summary.get('tree_request_rows')} "
+            f"native={summary.get('native_request_rows')}"
+        )
+    return "prompt token identity guard failed"
+
+
+def _compute_prompt_identity(tree_run: Path, native_run: Path) -> dict[str, Any]:
     tree_rows = _request_rows(tree_run / "tree_request_metrics.jsonl")
     native_rows = _request_rows(native_run / "native_request_metrics.jsonl")
     compared = []
@@ -130,6 +165,7 @@ def _prompt_identity(tree_run: Path, native_run: Path) -> dict[str, Any]:
     return {
         "tree_request_rows": len(tree_rows),
         "native_request_rows": len(native_rows),
+        "row_count_mismatch": len(tree_rows) != len(native_rows),
         "compared_rows": len(compared),
         "missing_prompt_token_rows": missing,
         "mismatches": mismatches,
@@ -139,6 +175,13 @@ def _prompt_identity(tree_run: Path, native_run: Path) -> dict[str, Any]:
         and len(tree_rows) == len(native_rows),
         "rows": compared,
     }
+
+
+def _prompt_identity(tree_run: Path, native_run: Path) -> dict[str, Any]:
+    summary = _compute_prompt_identity(tree_run, native_run)
+    if not summary["byte_identical"]:
+        raise PromptIdentityError(summary)
+    return summary
 
 
 def _first_layer_delta(tree_hidden: Path, native_hidden: Path, *, tree_row: int, native_row: int) -> dict[str, Any]:
@@ -399,22 +442,20 @@ def _argmax_stream_alignment(
 
 
 def reduce(tree_run: Path, native_run: Path, out: Path, *, limit: int) -> dict[str, Any]:
-    prompt_identity = _prompt_identity(tree_run, native_run)
-    if not prompt_identity["byte_identical"]:
+    try:
+        prompt_identity = _prompt_identity(tree_run, native_run)
+    except PromptIdentityError as exc:
         result = {
             "schema": "fr13.argmax_lcp_localize.v1",
             "tree_run": str(tree_run),
             "native_run": str(native_run),
             "valid": False,
             "invalid_reason": "prompt_token_identity_guard_failed",
-            "prompt_identity": prompt_identity,
+            "prompt_identity": exc.summary,
         }
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        raise SystemExit(
-            "prompt token identity guard failed; wrote invalid reducer artifact to "
-            + str(out)
-        )
+        raise
 
     tree_lcp = _tree_lcp_rows(tree_run)
     native_final0 = _load_pt(native_run / "logs" / "native_final_logits.call0.pt")
