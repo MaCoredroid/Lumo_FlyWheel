@@ -1212,3 +1212,11 @@ Call2 conv-detail alignment after the fix:
 - Served-token surface remains bad: exact sequences `0/16`; first mismatch examples include prompt0/sample0 pos `15` tree `5759` vs native `1970`.
 - Classification: `topology_break=false`, `committer_break=false`, `verify_or_target_row_break=true`.
 - Conclusion: the tree contains the superset topology, and the committer follows verifier scores. The B4 accept drop is a verify/target-row contamination or alignment bug, not a drafter-quality structural floor and not a missing-topology bug. Defer speed/forward-cost analysis.
+
+## Commit (this commit) - FR13 corruption gate script bind (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_CORRUPTION_GATE_BIND.md`.
+- File committed: `scripts/fr13_corruption_gate.py`.
+- Validation: `python3 -m py_compile scripts/fr13_corruption_gate.py` passed.
+- Purpose: CPU reduction of the three-arm tree/native/native-noise corruption gate: served-token argmax match corrected by native self-noise, emitted-token bag-TV floor, accept/event superset against native, prompt identity fail-closed, and optional per-event superset checks when traces are present.
+- Note for the next run: the script expects `fr13_e2e_measure.py`-style filenames (`tree_greedy_probe.json`, `native_greedy_probe.json`); the earlier SWE B4 direct probe used `fr12_deliverable_swe4_probe.py` names, so the fresh three-arm run must write or normalize the expected arm filenames before invoking the gate.
