@@ -1017,3 +1017,34 @@ Call2 conv-detail alignment after the fix:
 - The regime remains weight-bandwidth-bound for this prompt length (`~99ms` weight-stream floor; attention about `0.14%`), but per-forward speed is **UNDETERMINED** pending a clean wall-consistent measurement.
 - Future speed measurement must use per-request decode TPS / wall-consistent timing, `VLLM_BATCH_INVARIANT=0`, seeded fixed token totals, many prompts, and E5 `FLASH_ATTN`; do **not** use `decode_seconds_sum` as the denominator.
 - Correctness note: do **not** disable or gate off `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:349-353`; the per-node state store is the committed recurrent-state handoff data source, not a discardable HBM tax.
+
+## Commit `3273c411` + measurement worktree - greedy same8 token-level lossless gate (codex_fr13, 2026-06-09)
+
+### Tooling
+- Added `scripts/fr13_branch_token_oracle.py` and `tests/test_fr13_branch_token_oracle.py`.
+- Local checks passed: `python3 -m py_compile scripts/fr13_branch_token_oracle.py scripts/fr13_e2e_measure.py scripts/fr13_argmax_lcp_localize.py`; `pytest -q tests/test_fr13_branch_token_oracle.py tests/test_fr13_e2e_measure.py`.
+
+### Greedy Same8 Served-Token Gate
+- Run dir: `output/fr13_conv_fix_same8_greedy_token_20260609T074753Z`.
+- Shape: 8 default prompts, `samples_per_prompt=1`, `batch_size=1`, `max_tokens=64`, `temperature=0`, `top_p=1`.
+- Tree arm: forked FA2 tree server, `tree_mtp`, 9-node tree, `FR10_METRICS=0`, CUDA graph, engagement checked (`tree_path_lcp.jsonl` rows present).
+- Native arm: `FLASH_ATTN`, `naive_mtp`, 5 speculative tokens, same prompt slice and request shape.
+- Pairing guard: **PASS**, `prompt_token_ids` byte-identical for all `8/8` request rows.
+- Served output token identity: **FAIL**.
+  - Exact token sequence matches: `0/8`.
+  - Per-position token matches: `26/512` (`0.05078125`).
+  - First mismatch: prompt `0`, sample `0`, position `16`, native token `82546`, tree token `264`.
+  - First mismatches for prompts `1`, `2`, `3`, `5`, `6`, `7` occur at position `1`; prompt `4` at position `2`.
+  - Bag-TV: `0.5672704646017699`; first-token TV `0.0`; token-count TV `0.125`.
+  - Native accept/event: `3.192`; tree accept/event: `1.896774193548387`.
+- Summary artifact: `output/fr13_conv_fix_same8_greedy_token_20260609T074753Z/fr13_greedy_token_lossless_summary.json`.
+- Token compare artifact: `output/fr13_conv_fix_same8_greedy_token_20260609T074753Z/tree_vs_native_token_compare.json`.
+
+### Branch Oracle Status
+- The real branch token oracle was **not bound** because the guard correctly failed before issuing native branch queries.
+- Reason: `tree_path_lcp_max` diagnostic rows do not reconstruct the served tree output for this capture. First failure: record `(prompt_id=0, sample=0)`, position `0`, LCP emitted `[248068]`, served tree target slice `[271]`.
+- Therefore a branch oracle built from `tree_path_lcp_max` rows would bind a different policy from the actual served output. This is a measurement/policy-alignment blocker, not a branch pass or fail.
+
+### Regular-Decode Status
+- Full regular-decode stock-vs-fork layer capture was **not rerun** in this turn. The primary served-token lossless gate already failed, so no lossless verdict is claimed.
+- Existing no-bias pristine FA2 comparator remains available, but this entry does not bind a fresh full-layer regular-decode pass for HEAD.
