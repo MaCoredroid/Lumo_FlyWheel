@@ -884,3 +884,48 @@ The state-store/h-cache compounding caveat is not the first L4 injector on this 
 ### Ladder After L4 Capture
 - L2 remains fixed under BV16. Layer/logit ladder first hidden mismatch is layer `4`, `max_abs=0.0125732421875`.
 - Final norm max_abs `2.125`; logits max_abs `1.00390625`.
+
+## Commit `fr13-l4-conv-detail-root` - layer-4 conv-state/source-index drill (codex_fr13, 2026-06-09)
+
+### Scope
+- User direction: do not fix yet; localize the L4 conv root after the L4 subop ladder showed `conv1d_out` is the first broad divergence.
+- Artifacts reused from the live L4 capture because the subop hooks already wrote the conv-detail payload:
+  - Summary: `output/fr13_seq_l4_subop_bv16_20260609T003555Z/l4_conv_detail_summary.json`.
+  - Row-2 subop compare: `output/fr13_seq_l4_subop_bv16_20260609T003555Z/l4_subop_row2_bv16_vs_native.json`.
+  - Spine subop compare: `output/fr13_seq_l4_subop_bv16_20260609T003555Z/l4_subop_spine_bv16_vs_native.json`.
+- No beta or scan recurrence changes were made.
+
+### Conv State / Window
+- Native conv detail: `conv_state_shape=[1196,10240,8]`, `prior_window_source=post_update_fallback`, `metadata_num_accepted_tokens=[1]`, `prior_bank_row=1`, `prior_cols=[0,1,2]`.
+- Tree conv detail: `conv_state_shape=[1173,10240,12]`, `prior_read_mode=legacy_remapped_head`, `metadata_num_accepted_tokens=[1]`, `accepted_lens=[0]`, `read_cols=[[0]]`, `prior_bank_rows=[[1]]`, `prior_cols=[0,1,2]`.
+- `pre_conv_path0` versus native `pre_conv_rows` is bit-exact: `max_abs=0.0`, `nonzero=0`.
+- Conv prior window/state is already divergent before the convolution tap multiply:
+  - `prior_window`: shape `[10240,3]`, `max_abs=6.0546875`, `mean_abs=0.39506155252456665`, `nonzero=30671`.
+  - Top observed element: index `[2658,1]`, tree `-1.8046875`, native `4.25`.
+- Path0 assembled conv window versus native:
+  - shape `[6,4,10240]`, `max_abs=6.0546875`, `mean_abs=0.09588509052991867`, `nonzero=61340`.
+  - bf16 tap products: `max_abs=0.8046875`, `mean_abs=0.0008135128300637007`, `nonzero=61323`.
+
+### Source Indices
+- Native chain source indices:
+  - `[[0,1,2,3],[1,2,3,4],[2,3,4,5],[3,4,5,6],[4,5,6,7],[5,6,7,8]]`
+- Tree path0 source indices:
+  - `[[0,1,2,3],[1,2,3,4],[2,3,4,5],[3,4,5,7],[4,5,7,9],[5,7,9,11]]`
+- Equal-by-depth verdict: `[true,true,true,false,false,false]`.
+- Branch row memory flag is real for the selected branch node: selected node `3` uses source indices `[2,3,4,6]`.
+- But the spine source-index divergence is not the first L4 injector on this capture: the live `conv1d_out` mismatch occurs at depths `0`, `1`, and `2`, where source indices still match native.
+
+| depth | source indices match | window max_abs | window nonzero | bf16 tap max_abs | bf16 tap nonzero |
+| ---: | --- | ---: | ---: | ---: | ---: |
+| 0 | `true` | `6.0546875` | `30671` | `0.8046875` | `30664` |
+| 1 | `true` | `6.0546875` | `20447` | `0.1962890625` | `20441` |
+| 2 | `true` | `2.75390625` | `10222` | `0.150390625` | `10218` |
+| 3 | `false` | `0.0` | `0` | `0.0` | `0` |
+| 4 | `false` | `0.0` | `0` | `0.0` | `0` |
+| 5 | `false` | `0.0` | `0` | `0.0` | `0` |
+
+### Conv Root Verdict
+- The L4 conv input itself is clean (`pre_conv=0.0`), so the broad `conv1d_out` divergence is not from the incoming hidden stream.
+- The conv state/window used for the causal-conv history is divergent, and that divergence is present on the first three spine depths before any path0 source-index divergence can explain the output.
+- Current root is therefore the tree conv-state/prior-window read path (`legacy_remapped_head` / bank-resume handling), not beta, not the sequential scan, and not the path0 source-index mismatch as first injector.
+- Why L4 and not L0-L3 is now narrowed but not yet fixed: L4 is the first hidden mismatch after full-attn L3; the L4 capture shows the conv-state/prior-window read is live-divergent there. Earlier layers had bit-exact emitted conv outputs after the BV16 scan fix, so the next fix should inspect the layer-indexed conv state bank/update/read transition rather than changing the GDN recurrence.
