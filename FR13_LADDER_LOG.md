@@ -954,3 +954,59 @@ The state-store/h-cache compounding caveat is not the first L4 injector on this 
 - The conv state/window used for the causal-conv history is divergent, and that divergence is present on the first three spine depths before any path0 source-index divergence can explain the output.
 - Current root is therefore the tree conv-state/prior-window read path (`legacy_remapped_head` / bank-resume handling), not beta, not the sequential scan, and not the path0 source-index mismatch as first injector.
 - Why L4 and not L0-L3 is now narrowed but not yet fixed: L4 is the first hidden mismatch after full-attn L3; the L4 capture shows the conv-state/prior-window read is live-divergent there. Earlier layers had bit-exact emitted conv outputs after the BV16 scan fix, so the next fix should inspect the layer-indexed conv state bank/update/read transition rather than changing the GDN recurrence.
+
+## Commit `fr13-conv-prior-slot-fix` - conv prior slot root fix, substate/e2e/profile bind (codex_fr13, 2026-06-09)
+
+### Patch
+- Code commit: `3a9039cc` (`Fix FR13 tree conv prior slot read`).
+- Binding commit: `beca6897` (`Bind FR13 conv prior slot fix`).
+- Changed the live tree GDN conv prior read in `scripts/fr10_phase4_patch_vllm_tree_gdn.py:804-811` from `accepted_len` to `accepted_len - 1`.
+- This aligns the conv read with the already-clean h0 read convention and fixes the compact-bank row/slot selection root. It is not a tail-column band-aid.
+
+### Substate Gate
+- Run dir: `output/fr13_conv_slot_fix_prompt0_20260609T063933Z`.
+- Substate artifact: `output/fr13_conv_slot_fix_prompt0_20260609T063933Z/fr13_conv_substate_compare.json`.
+- Prior failing metric: call2 row0 `conv1d_out=18.375036`.
+- Fixed metric: call2 row0 `conv1d_out=0.0`.
+
+| call | input_hidden | pre_conv | conv1d_out | h0_state_in | gdn_scan_out | gate_out | o_proj_out |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | `0.0` | `0.0` | `0.0` | `0.0` | `0.0` | `0.0` | `0.0` |
+| 1 | `0.0` | `0.0` | `0.0` | `3.725e-09` | `0.0` | `0.0` | `0.0` |
+| 2 | `0.0` | `0.0` | `0.0` | `9.537e-07` | `0.0` | `0.0` | `0.0` |
+
+Call2 conv-detail alignment after the fix:
+- Tree prior bank rows: `[[5]]`.
+- Tree read cols: `[[4]]`.
+- Tree compact prior cols: `[0,1,2]`.
+- Native prior bank row: `1`.
+- Native rolled-tail prior cols: `[5,6,7]`.
+- `prior_window_max_abs=0.0`; `window_row0_max_abs=0.0`.
+
+### Prompt0 E2E Gate
+- Orchestrator artifact: `output/fr13_conv_slot_fix_prompt0_20260609T063933Z/fr13_e2e_measure.json`.
+- `valid=true`; prompt pairing byte-identical.
+- `first_mismatch=None`.
+- `bag_tv=0.0`.
+- Native accept/event: `2.6`.
+- Tree accept/event: `2.8`.
+- Native TPS: `10.320005524789147`.
+- Tree TPS: `6.149089367549517`.
+- `first_flip_layer=None`.
+- Note: the argmax localizer still reports a tail event after native stream exhaustion, but the deliverable comparison is the token-output gate and reports no mismatch plus zero bag-TV.
+
+### Clean Per-Forward Profile
+- Profile artifact: `output/fr13_conv_slot_fix_prompt0_20260609T063933Z/profile/fr13_profile_summary.json`.
+- Surface: `scripts/fr10_quick_decode_tps_probe.py` + vLLM `/metrics`, B=4, CUDA graphs enabled, `FR10_METRICS=0`, prompt0, `max_tokens=64`, `temperature=0.6`, `top_p=0.95`.
+- `GPU_UTIL=0.86`; `0.88` tripped vLLM startup free-memory guard (`102.37 GiB` free vs `103.41 GiB` requested).
+
+| arm | nodes | decode iters | decode seconds sum | ms/request-forward | accept/event |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| tree | 9 | 20 | `21.937230` | `274.215` | `2.173` |
+| native | 6 | 15 | `11.654068` | `194.234` | `3.714` |
+
+- Measured tree/native per-forward ratio: `1.412x`.
+- Node-count ratio: `9/6 = 1.50x`.
+- Residual versus native scaled by node count: `-17.136 ms`; this `/metrics` surface does not show a positive extra penalty beyond node-count scaling.
+- GDN tree-scan state traffic / num_warps spill and forked-FA2 whole-tree cost are not separately isolatable from this metrics-only profile; separating them still requires component ablation or a valid server-side kernel trace.
+- Do not use returned-token TPS alone for this profile: stochastic sampling returned 163 tree tokens vs 256 native tokens.
