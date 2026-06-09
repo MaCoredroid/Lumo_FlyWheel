@@ -1174,3 +1174,18 @@ Call2 conv-detail alignment after the fix:
   - TREE returned fewer than `128` tokens for `4/16` records; native returned `128/128` for all records.
 - Limitations: `fr12_deliverable_swe4_probe.py` is an output-level SWE prompt decode probe, not the full Codex SWE agent/evaluator run, so task grader verdicts were not produced. Self-noise correction was not established because this stage ran the user-requested two arms only; a same-regime native-vs-native repeat would be required to subtract native self-noise from raw TREE-vs-native token differences.
 - Diagnostic bind: record the numbers only; no pass/fail self-declaration. The real-workload B=4 CUDA-captured diagnostic is clearly negative for TREE on speed/acceptance versus native E5.
+
+## Commit (this commit) - FR13 branch seam CPU prep / no-boot inventory (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_BRANCH_SEAM_CPU_PREP_BIND.md`.
+- GPU status: held; no server boot, no GPU work.
+- Target seam from `all8_branch_oracle.json`: prompt `0`, sample `0`, event index `13`, served prefix len `45`, path `[0,1,3,5,8]`, node `8`, depth `4`, parent-target check, prefix token IDs `[638,4381,283,1727]`, tree `198` vs native-on-branch `1358`.
+- Exact tree trace row exists: `output/fr13_decisive_final_20260609T182455Z/tree_b1_greedy_branch/logs/tree_path_lcp.jsonl` line `14`; it has `accepted_node_ids=[0,1,3,5,8]`, `winner_path=[0,1,3,5,8]`, `emitted_tokens=[638,4381,283,1727,198,262]`.
+- Existing capture inventory result: no matching `.pt` substate/layer/full-attn/final-logit capture exists for this all-8 seam event. The all-8 run root has only JSONL/probe/log artifacts.
+- Checked nearby B1 captures:
+  - `fr13_gdn_substate_prompt0_20260609T061732Z`: L0 subkernel/layer-hidden calls exist, but not the `[638,4381,283,1727]` seam event.
+  - `fr13_pos16_substate_20260609T081638Z`: L0 subkernel calls `0..6` exist, but not the seam event.
+  - `fr13_conv_fix_same8_greedy_token_20260609T074753Z`: nearby prefix exists in LCP JSONL, but no `.pt` substate and not the all-8 native-on-branch mismatch.
+  - `fr13_branch_node_redteam_20260609T090932Z`: LCP/sampler traces only; no `.pt` substate.
+- Prepared future capture if CPU workflow calls for a GPU seam boot: tree `FR12_SUBKERNEL_CAPTURE_NUM_TOKENS=10`, `FR12_SUBKERNEL_CAPTURE_SKIP=13`, `FR12_SUBKERNEL_CAPTURE_LIMIT=1`, first at `language_model.model.layers.0.linear_attn`; native-on-branch uses the existing branch-oracle path construction with prefix len `45` plus `[638,4381,283,1727]`, `NUM_TOKENS=6`, `SKIP=0`, `LIMIT=1`.
+- Conclusion: CPU prep cannot localize where `198` vs `1358` is born from existing captures. The next localizing evidence requires one targeted paired capture if and only if the parallel CPU root workflow says the seam fix is worth a GPU boot.
