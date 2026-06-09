@@ -123,6 +123,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
+  -e LUMO_BATCH_INVARIANT_VLLM="${LUMO_BATCH_INVARIANT_VLLM:-$BATCH_INVARIANT}" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e PYTHONPATH=/workspace/src \
   -e FR10_ENABLE_TREE_GDN="$FR10_ENABLE_TREE_GDN" \
