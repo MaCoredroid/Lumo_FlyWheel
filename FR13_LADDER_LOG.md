@@ -849,3 +849,38 @@ The requested visible marker is reproduced in the layer-hidden capture: layer `2
 - Standalone compile artifact: `output/fr13_seq_scanout_fix_bv16_20260609T000522Z/spill_check/`.
 - Triton metadata for `_tree_gdn_kernel`: `shared=2048`, `global_scratch_size=0`, `profile_scratch_size=0`.
 - Generated PTX/LLIR scan: `.local=0`, `spill=0`, `alloca=0`.
+
+## Commit `fr13-l4-subop-ladder` - layer-4 subop localization after BV16 scan fix (codex_fr13, 2026-06-09)
+
+### Scope
+- User correction accepted: `BLOCK_V=1` was a failed diagnostic, not the fix. Its `235731Z` subop artifact still has `gdn_scan_out=1.1920928955078125e-07`; Triton did collapse the degenerate `[1,128]` form.
+- Working scan fix is BV16 and is pushed on `main` as `e4a6a2f2`.
+- Spill/Triton metadata rabbit-hole is deferred. The practical check is the later TPS gate: an HBM spill should show up as a decode TPS drop versus native. Optional future tuning is smallest non-collapsing BV, likely BV2/BV4, after correctness front is localized.
+
+### L4 Capture
+- Run dir: `output/fr13_seq_l4_subop_bv16_20260609T003555Z/`.
+- Native arm: `FLASH_ATTN`, `FR10_ENABLE_TREE_GDN=0`, `FR10_DECODE_MODE_DEFAULT=naive_mtp`, explicit `num_speculative_tokens=5`, layer prefix `language_model.model.layers.4.linear_attn`.
+- Tree arm: `TREE_ATTN`, pushed BV16 sequential GDN tree-scan, default 9-node tree, layer prefix `language_model.model.layers.4.linear_attn`.
+- One GPU discipline: native arm was stopped and host memory recovered before tree arm; tree arm was stopped and host memory recovered after capture. Final host state: swap `0B`, GPU compute clear.
+- Request status: native HTTP `200` wall `48.51s`; tree HTTP `200` wall `69.22s`.
+
+### L4 Subop Verdict
+- Row-2 artifact: `output/fr13_seq_l4_subop_bv16_20260609T003555Z/l4_subop_row2_bv16_vs_native.json`.
+- Spine artifact: `output/fr13_seq_l4_subop_bv16_20260609T003555Z/l4_subop_spine_bv16_vs_native.json`.
+- Layer/logit ladder artifact: `output/fr13_seq_l4_subop_bv16_20260609T003555Z/gateA_spine_ladder_l4_capture_bv16.json`.
+
+| stage | row-2 max_abs | spine max_abs | verdict |
+| --- | ---: | ---: | --- |
+| `input_hidden` | `0.0` | `0.0` | identical |
+| `pre_conv` | `0.0` | `0.0` | identical |
+| `conv1d_out` | `0.00390625` | `0.0556640625` | **first divergence** |
+| `gdn_scan_out` | `0.0018157958984375` | `0.0018157958984375` | downstream of conv |
+| `gate_z` | `0.0` | `0.0` | identical |
+| `gate_out` | `0.1328125` | `0.1328125` | downstream |
+| `o_proj_out` | `0.0703125` | `0.25` | downstream |
+
+The state-store/h-cache compounding caveat is not the first L4 injector on this live capture. `input_hidden` and `pre_conv` are bit-exact; the mismatch starts at the causal-conv output before `h0_state_in` / scan recurrence can be blamed. By-depth spine `conv1d_out` max_abs: depth0 `0.0556640625`, depth1 `0.017578125`, depth2 `0.00390625`, depths3-5 `0.0`.
+
+### Ladder After L4 Capture
+- L2 remains fixed under BV16. Layer/logit ladder first hidden mismatch is layer `4`, `max_abs=0.0125732421875`.
+- Final norm max_abs `2.125`; logits max_abs `1.00390625`.
