@@ -1086,3 +1086,16 @@ Call2 conv-detail alignment after the fix:
 - Sequence level: tree/native exact `0/8`; prefix `0/8`; ordered-subsequence `0/8`; native1/native2 exact `4/8`.
 - First outside-self-noise divergences: prompt0 pos `46`; prompt1 pos `28`; prompt2 pos `35`; prompt3 pos `10`; prompt4 pos `1`; prompt5 pos `1`; prompt6 pos `1`; prompt7 pos `15`.
 - Verdict: native self-noise explains the stale branch-node contradiction, but not the current same8 tree divergence. The accepted minus-self-noise gate still fails; localize from the first current outside-self-noise divergence, not the stale pos18 artifact.
+
+## Commit (this commit) - FR13 Seam 1 uniform conv write-back validation (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_SEAM1_UNIFORM_CONV_BIND.md`.
+- Run root: `output/fr13_decisive_seam1_20260609T173330Z`.
+- Code status: the layer-conditioned rolled-tail band-aid is already absent from HEAD (`_fr10_use_rolled_tail_prior`, `layer_idx >= 4`, and `rolled_tail_remapped` all absent). The live write-back is the uniform accepted-path source `cat(prior_window, node_path_x)` with per-node `node_path_len + arange(conv_state_len)` store rows.
+- Code delta in this stage: normalized the accepted-length clamp cast ordering in `scripts/fr10_phase4_patch_vllm_tree_gdn.py`; this is a guard/contract normalization, not a new conv behavior change.
+- CPU gates: `pytest -q tests/test_fr10_phase4_sampled_committer_wiring.py tests/test_fr10_tree_commit_gates.py tests/test_fr10_tree_conv.py` -> `22 passed, 1 skipped`; `py_compile` passed for the patch and sub-op reducer scripts.
+- Live capture: eager prompt0 tree/native, all 48 GDN layers, three verify calls per layer. Tree captures use `num_tokens=10`; native captures use `num_tokens=6`; prefill/profile captures excluded.
+- Capture counts: `144` tree + `144` native = `48` GDN layers x `3` calls.
+- Reducer artifact: `output/fr13_decisive_seam1_20260609T173330Z/fr13_seam1_uniform_conv_validation.json`.
+- Gate result: row0 clean-input cases `99`; row0 clean-input `conv1d_out` nonzero cases `0`; spine clean-input `conv1d_out` nonzero cases `0`.
+- Verdict: Seam 1 validated. No new clean-input conv divergence was exposed; remaining non-clean divergences are upstream input/branch-state issues, not a conv read/write-back seam. Advance to Seam 2.

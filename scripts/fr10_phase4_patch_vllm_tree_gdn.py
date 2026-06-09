@@ -802,10 +802,12 @@ def _patch_gdn_linear() -> bool:
                         )
                     else:
                         _fr10_conv_read_cols = torch.clamp(
-                            _fr10_accepted_lens_tensor[
-                                : attn_metadata.num_spec_decodes
-                            ].to(torch.long)
-                            - 1,
+                            (
+                                _fr10_accepted_lens_tensor[
+                                    : attn_metadata.num_spec_decodes
+                                ]
+                                - 1
+                            ).to(torch.long),
                             min=0,
                             max=int(spec_state_indices_tensor.size(-1)) - 1,
                         ).view(-1, 1)
