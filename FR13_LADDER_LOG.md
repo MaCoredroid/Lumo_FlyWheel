@@ -1237,3 +1237,20 @@ Call2 conv-detail alignment after the fix:
 - Depth-0 root signal from `fr13_depth0_root_gate.json`: measured tail root accept `348/549 = 0.6339`; root reject `201/549 = 0.3661`; `target_argmax != draft0` in `201` rows.
 - Native per-event limitation: no `per_req_spec_trace.jsonl` was emitted by the native arms, so per-event native target-argmax comparison is unavailable in this bind. The paired served-token/self-noise gate remains valid.
 - Conclusion: not a drafter-quality stop. The three-arm evidence shows a real tree-verify contamination / target-row bug surface; speed/forward-cost analysis remains deferred.
+
+## Commit (this commit) - FR13 eager B4 bisection (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_EAGER_B4_BISECT_BIND.md`.
+- Run root: `output/fr13_b4_eager_bisect_20260609T203718Z`.
+- Purpose: answer whether the B=4 corruption gate is eager-reproducible or CUDA-graph-only before trusting eager substate localization.
+- Arms: TREE forked-FA2 `TREE_ATTN/tree_mtp` seed `1313`; native E5 `FLASH_ATTN/naive_mtp` seed `1313`; native-noise `FLASH_ATTN/naive_mtp` seed `2313`.
+- All arms were B=4, `MAX_NUM_SEQS=4`, `MAX_MODEL_LEN=131072`, `FR10_METRICS=0`, one GPU sequential, with host-memory recovery between arms.
+- Eager validation: all three logs show `Enforce eager set, disabling torch.compile and CUDAGraphs` and `Cudagraph is disabled under eager mode`; no CUDA graphs were used.
+- Prompt guard: prompt token IDs byte-identical; prompt token counts `681`, `1080`, `829`, `1614`.
+- Gate output: `fr13_eager_b4_corruption_gate.json`, exit code `2`, `valid=true`, `passed=false`, `verdict=FAIL`.
+- Self-noise: native self-noise mask positions `137`; native self bag-TV `0.15234375`.
+- Self-noise-corrected token surface: compared positions `256`; eligible positions `119`; outside-self-noise losses `44/119 = 0.3697`; first real loss prompt `1` position `11`, tree `12182` vs native `26622`; longest real-loss run `31`; depth-collapse detector fired.
+- Bag-TV: tree/native emitted-token bag-TV `0.19140625` > budget `0.15234375`.
+- Accept/event: tree `1.8021978022` vs native `3.1875`, delta `-1.3853021978`; native-noise `2.9701492537`.
+- Bisection verdict: EAGER B=4 reproduces the real loss. This is not a captured-only CUDA-graph bug; proceed with eager B=4 co-residency / batched-verify localization.
+- Captured-hook caveat: direct captured substate attempts failed before serving. Layer-hidden capture hit Dynamo shape specialization on `int(hidden_states.shape[0])`; GDN subkernel capture hit unsupported `torch.cuda.is_current_stream_capturing`.
