@@ -1,5 +1,8 @@
 # FR13 -> codex_fr19 handoff (fr18 stood down 2026-06-09 after a 47m marathon boot-churning the conv-fix validation). Fresh context, the SEQ GDN tree-scan front.
 
+## !! BAR CORRECTION (user-decided 2026-06-09, supersedes "Bit-exact-or-bust" in DISCIPLINE below + FR13_STRATEGY_VERDICT.md §3-CORRECTED):
+The gate is **per-depth ARGMAX match + within-E5-floor**, NOT literal max_abs 0.0. The GDN spine needs argmax-match at every depth (drift=0 ⟹ superset by math); a within-floor max_abs (e.g. the L4 0.0126, or the FA2 2-ULP MMA floor) is FINE if no argmax flips. STOP grinding per-layer literal-0.0 — measure e2e vs E5 (per-depth spine argmax + bag-TV ≤ 0.0593 + accept/event ≥ 3.076 + TPS); the compounding-across-64-layers is THE test (if an argmax flips at e2e, localize that layer). Multi-spine is NOT a fallback (CLOSED_NON_SHIP/lossy — co-scheduling contaminates spine-0, fr9-spine2-lossless-winner-closeout); the no-copy GDN tree-scan is the only lossless+scaling path. h_cache spill = num_warps=8 interim (FR13_CACHE_SCALING_FUTURE.md).
+
 ## WHERE WE ARE (sequential rank-1 GDN tree-scan, use_wy=False; WY is archived to branch fr13-wy-archive + docs/archive/wy/)
 The top-down per-layer ladder (pinned prompt "Explain hash tables.", paired native-vs-tree, gateA threshold 0.0) has peeled off the GDN scan; the conv is the current front:
 - **Scan fix DONE + committed (e4a6a2f2):** the 2-D `axis=1` reduction (BV=16, re-applying FR12's dropped tile) drives **layers 0-3 = 0.0**. BLOCK_V=1 collapses the degenerate [1,128] (DO NOT use BV=1). Spill at N_PAD=16/BV=16 is a TPS-opt deferred to the TPS gate (num_warps=8 keeps BV=16, or BV=8 — see FR13_BV_SPILL_VERDICT.md).
