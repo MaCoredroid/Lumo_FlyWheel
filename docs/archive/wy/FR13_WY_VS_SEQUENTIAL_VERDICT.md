@@ -1,5 +1,7 @@
 # FR13 — WY-batched vs sequential GDN verify: STRATEGIC VERDICT (workflow w1ah11lw2, 2026-06-08, source-verified)
 
+## !! CORRECTION (user, 2026-06-09): WY is PARKED, NOT DEAD. This verdict recommended sequential because WY "can't be bit-exact" (abs-0.0, lines 7/15) — but the ACTUAL deliverable gate is per-depth ARGMAX + within-E5-floor (line 28 here already says "NOT max_abs"). WY fails abs-0.0 (different reduction tree, irreducible) but was NEVER disproven at the within-floor/argmax bar: commit 26c577a1 measured WY spine "ARGMAX-LOSSLESS 6/6, over-margin drift on irrelevant vocab"; the later 56%-reject (b8747d23, final-logit 3.32) was a WY-STATE drift that got a fix (8a975837: state 1.66e-3 -> 2.98e-8) and was abandoned (pivot 20be68a5) on the abs-0.0 argument BEFORE an e2e within-floor re-measure. So WY-at-the-within-floor-bar is OPEN, same revival logic that saved the sequential kernel from literal-0.0. **WE STAY ON THE SEQUENTIAL TREE-SCAN (bit-exact-by-construction = strictly safer + scales); WY is a banked fallback, NOT pursued unless the user explicitly says so.** Archived here for that reason.
+
 ## THE QUESTION (user): are WY-batched and native-sequential GDN mathematically equal, or can we get under the fp32 floor (bit-exact)?
 
 ## ANSWER
