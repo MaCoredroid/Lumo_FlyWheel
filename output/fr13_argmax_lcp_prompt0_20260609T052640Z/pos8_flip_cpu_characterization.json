@@ -1,0 +1,290 @@
+{
+  "authoritative_stream_first_flip": {
+    "completion_position": 8,
+    "native_call": 2,
+    "native_event": {
+      "accepted_len": 5,
+      "call": 2,
+      "draft_token_ids": [
+        1005,
+        19876,
+        25,
+        198,
+        262
+      ],
+      "emitted_tokens": [
+        1005,
+        19876,
+        25,
+        198,
+        262,
+        4071
+      ],
+      "target_argmax_ids": [
+        1005,
+        19876,
+        25,
+        198,
+        262,
+        4071
+      ]
+    },
+    "native_row": 0,
+    "native_token": 1005,
+    "stream_position": 7,
+    "tree_call": 2,
+    "tree_event": {
+      "accepted_len": 0,
+      "call": 2,
+      "draft_token_ids": [
+        71093,
+        12305,
+        198,
+        198,
+        271,
+        727,
+        1445,
+        9637,
+        6707
+      ],
+      "emitted_tokens": [
+        727
+      ],
+      "parent_target_ids": [
+        727,
+        271,
+        271,
+        198,
+        198,
+        1005,
+        1005,
+        9637,
+        9637
+      ],
+      "self_target_ids": [
+        271,
+        198,
+        248069,
+        1005,
+        71093,
+        9637,
+        18904,
+        73538,
+        4000
+      ],
+      "winner_path": [
+        0,
+        2
+      ]
+    },
+    "tree_row": 0,
+    "tree_token": 727
+  },
+  "call2_input_divergent_rows": [
+    1,
+    2,
+    3,
+    5
+  ],
+  "call2_same_index_row_inputs": [
+    {
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.0625,
+        "layer_idx": 0,
+        "layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.0,
+      "row": 0
+    },
+    {
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.62890625,
+        "layer_idx": 0,
+        "layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.098876953125,
+      "row": 1
+    },
+    {
+      "first_nonzero_layer": {
+        "hidden_max_abs": 1.17578125,
+        "layer_idx": 0,
+        "layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.078125,
+      "row": 2
+    },
+    {
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.4921875,
+        "layer_idx": 0,
+        "layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.449951171875,
+      "row": 3
+    },
+    {
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.203125,
+        "layer_idx": 0,
+        "layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.0,
+      "row": 4
+    },
+    {
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.203125,
+        "layer_idx": 0,
+        "layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.28466796875,
+      "row": 5
+    }
+  ],
+  "capture_inventory": {
+    "gdn_substate_keys_present": false,
+    "matching_keys": [],
+    "pt_files_checked": 20,
+    "required_substates": [
+      "h_recurrent",
+      "conv/conv_state"
+    ]
+  },
+  "first_flip_layer_delta": {
+    "final_norm_max_abs": 9.03125,
+    "first_nonzero_layer": {
+      "hidden_max_abs": 0.0625,
+      "layer_idx": 0,
+      "native_layer_type": "linear_attention",
+      "tree_layer_type": "linear_attention"
+    },
+    "input_max_abs": 0.0
+  },
+  "native_margin_at_flip": {
+    "native_argmax": 1005,
+    "native_argmax_logit": 29.375,
+    "native_argmax_minus_tree_token": 6.75,
+    "native_call": 2,
+    "native_row": 0,
+    "native_top10": [
+      {
+        "logit": 29.375,
+        "token": 1005
+      },
+      {
+        "logit": 24.5,
+        "token": 2
+      },
+      {
+        "logit": 23.125,
+        "token": 12237
+      },
+      {
+        "logit": 22.75,
+        "token": 1445
+      },
+      {
+        "logit": 22.625,
+        "token": 727
+      },
+      {
+        "logit": 20.0,
+        "token": 8436
+      },
+      {
+        "logit": 18.125,
+        "token": 18221
+      },
+      {
+        "logit": 17.375,
+        "token": 523
+      },
+      {
+        "logit": 17.25,
+        "token": 464
+      },
+      {
+        "logit": 16.25,
+        "token": 56722
+      }
+    ],
+    "native_top1_minus_top2": 4.875,
+    "tree_token": 727,
+    "tree_token_logit_in_native": 22.625
+  },
+  "raw_same_index_first_mismatch": {
+    "call": 0,
+    "caveat": "raw same-index tree branch rows are not necessarily native sequential-path comparable",
+    "native_argmax": 198,
+    "row": 2,
+    "tree_parent_target": 12305
+  },
+  "row0_first_nonzero_by_call": [
+    {
+      "call": 0,
+      "final_norm_max_abs": 1.1875,
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.005126953125,
+        "layer_idx": 10,
+        "native_layer_type": "linear_attention",
+        "tree_layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.0
+    },
+    {
+      "call": 1,
+      "final_norm_max_abs": 1.20703125,
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.00152587890625,
+        "layer_idx": 9,
+        "native_layer_type": "linear_attention",
+        "tree_layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.0
+    },
+    {
+      "call": 2,
+      "final_norm_max_abs": 9.03125,
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.0625,
+        "layer_idx": 0,
+        "native_layer_type": "linear_attention",
+        "tree_layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.0
+    },
+    {
+      "call": 3,
+      "final_norm_max_abs": 26.375,
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.15966796875,
+        "layer_idx": 0,
+        "native_layer_type": "linear_attention",
+        "tree_layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.096435546875
+    },
+    {
+      "call": 4,
+      "final_norm_max_abs": 18.171875,
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.66796875,
+        "layer_idx": 0,
+        "native_layer_type": "linear_attention",
+        "tree_layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.0771484375
+    }
+  ],
+  "run": "output/fr13_argmax_lcp_prompt0_20260609T052640Z",
+  "schema": "fr13.pos8_flip_cpu_characterize.v1",
+  "verdict": {
+    "cause_determined": false,
+    "classification_from_existing_captures": "above-floor model-path divergence at/through layer0 for the first comparable stream flip; exact GDN substate cause is not captured",
+    "flip_valid": true,
+    "not_supported": [
+      "GDN recurrent-state writeback root cause"
+    ]
+  }
+}
