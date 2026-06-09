@@ -1254,3 +1254,15 @@ Call2 conv-detail alignment after the fix:
 - Accept/event: tree `1.8021978022` vs native `3.1875`, delta `-1.3853021978`; native-noise `2.9701492537`.
 - Bisection verdict: EAGER B=4 reproduces the real loss. This is not a captured-only CUDA-graph bug; proceed with eager B=4 co-residency / batched-verify localization.
 - Captured-hook caveat: direct captured substate attempts failed before serving. Layer-hidden capture hit Dynamo shape specialization on `int(hidden_states.shape[0])`; GDN subkernel capture hit unsupported `torch.cuda.is_current_stream_capturing`.
+
+## Commit (this commit) - FR13 B4 eager localization row miss (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_B4_EAGER_LOCALIZE_ROW_MISS_BIND.md`.
+- Run root: `output/fr13_b4_eager_localize_20260609T210539Z`.
+- Purpose: localize eager B=4 co-residency verify divergence at the bisection target prompt `1` position `11` (`tree=12182`, `native=26622`).
+- Regime: eager B=4, `MAX_NUM_SEQS=4`, seed `1313`, `temperature=0.6`, `top_p=0.95`; speed deferred.
+- Capture attempt 1 (`tree`): row roots `0,9,18,27` plus `FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS=36`; reproduced the low-accept run but wrote no `.pt` captures because the token-count filter was too strict.
+- Capture attempt 2 (`tree2/native`): `max_tokens=20`, rows `0..9,18,27`, no token-count filter. `tree2` reproduced prompt1 pos11 (`12182` vs native `26622`) and `.pt` captures were written, but the failing prompt1 row was not in the captured row set.
+- Capture attempt 3 (`tree3/native3`): `max_tokens=14`, rows `0..39`, no token-count filter. `.pt` captures were written for full 40-row calls, but the requested prompt1 pos11 failure did not reproduce: both tree3 and native3 emitted `26622` at prompt1 position `11`.
+- Result: no first-diverging layer is bound. This is a row/token selection miss, not a clean ladder result.
+- Constraint honored: no fifth capture was started; host memory was recovered and no localization container remained running.
