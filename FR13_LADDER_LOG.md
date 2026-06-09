@@ -805,3 +805,47 @@ The requested visible marker is reproduced in the layer-hidden capture: layer `2
 - WY is now archived off `main`; the only served GDN tree path in `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py` is the sequential rank-1 kernel.
 - Gate A is not claimed here; the known L2 recurrence seam is intentionally left for the next ordered task.
 - Host recovery after the live ladder succeeded: swap `0B`, GPU compute clear.
+
+## Commit `fr13-seq-scanout-bv16` - sequential scan-out reduction order aligned (codex_fr13, 2026-06-09)
+
+### Scope
+- User direction: fix the L2 scan-out seam from `FR13_SEQ_SCANOUT_FIX.md`; do not change beta or inject bf16 rounding.
+- Code change: restored the sequential tree-scan value lane tile to the native/FR12 2-D reduction form.
+- First attempt kept `BLOCK_V=1` with `state_i` shaped as `[1, DIM_K]` and axis-1 reductions. It preserved the small h-cache but Triton still produced the old row-2 `gdn_scan_out` delta.
+- Second attempt escalated to existing `BV=16`: grid is now `(num_vh, ceil(dim_v / BV))`, `h_cache` is `[N_PAD, BV, DIM_K]`, and the scan reductions use `tl.sum(..., axis=1)`.
+
+### BV=1 Measurement
+- Run dir: `output/fr13_seq_scanout_fix_20260608T235731Z/`.
+- Request returned HTTP `200`, wall `68.62s`.
+- Row-2 artifact: `l2_subop_row2_after_scanout_fix.json`.
+- Spine artifact: `l2_subop_spine_after_scanout_fix.json`.
+- Verdict: failed to clear the injector.
+  - Row 2 `gdn_scan_out`: `max_abs=1.1920928955078125e-07`, `nonzero=2`.
+  - Spine `gdn_scan_out`: `max_abs=1.1920928955078125e-07`, `nonzero=7`.
+
+### BV=16 Measurement
+- Run dir: `output/fr13_seq_scanout_fix_bv16_20260609T000522Z/`.
+- Request returned HTTP `200`, wall `69.68s`.
+- Row-2 artifact: `l2_subop_row2_after_scanout_fix_bv16.json`.
+- Spine artifact: `l2_subop_spine_after_scanout_fix_bv16.json`.
+- Verdict: cleared the L2 injector.
+
+| stage | row-2 max_abs | spine max_abs | verdict |
+| --- | ---: | ---: | --- |
+| `input_hidden` | `0.0` | `0.0` | identical |
+| `pre_conv` | `0.0` | `0.0` | identical |
+| `conv1d_out` | `0.0` | `0.0` | identical |
+| `gdn_scan_out` | `0.0` | `0.0` | fixed |
+| `gate_z` | `0.0` | `0.0` | identical |
+| `gate_out` | `0.0` | `0.0` | identical |
+| `o_proj_out` | `0.0` | `0.0` | identical |
+
+### Ladder After Fix
+- Reducer artifact: `output/fr13_seq_scanout_fix_bv16_20260609T000522Z/gateA_spine_ladder_after_scanout_fix_bv16.json`.
+- L2 is now clean on the captured spine path; first hidden mismatch moved to layer `4`.
+- Summary: input hidden `0.0`; hidden first nonzero layer `4`, `max_abs=0.0125732421875`; final norm `2.125`; logits `1.00390625`.
+
+### Spill Guard
+- Standalone compile artifact: `output/fr13_seq_scanout_fix_bv16_20260609T000522Z/spill_check/`.
+- Triton metadata for `_tree_gdn_kernel`: `shared=2048`, `global_scratch_size=0`, `profile_scratch_size=0`.
+- Generated PTX/LLIR scan: `.local=0`, `spill=0`, `alloca=0`.

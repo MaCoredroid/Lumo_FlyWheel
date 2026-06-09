@@ -245,7 +245,8 @@ def _tree_gdn_kernel(
     pid_kh = pid_vh // head_group
     offs_n = tl.arange(0, N_PAD)
     offs_k = tl.arange(0, DIM_K)
-    v_mask = pid_v < DIM_V
+    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    v_mask = offs_v < DIM_V
     if COUNT_INVOCATION:
         tl.atomic_add(
             invocation_counter,
@@ -265,20 +266,23 @@ def _tree_gdn_kernel(
         h0_index = tl.load(h0_indices + H0_INDEX_ROW + h0_column)
         h0_base = h0 + h0_index * H0_BANK_STRIDE
     b_h0 = tl.load(
-        h0_base + (pid_vh * DIM_V + pid_v) * DIM_K + offs_k,
-        mask=v_mask,
+        h0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+        mask=v_mask[:, None],
         other=0.0,
     ).to(tl.float32)
 
     # Sequential rank-1 tree scan. Each row caches the post-token state for one
     # tree node, so children start from their parent's fp32 checkpoint without
     # reloading h0 or replaying ancestors from HBM.
-    h_cache = tl.zeros((N_PAD, DIM_K), dtype=tl.float32)
+    h_cache = tl.zeros((N_PAD, BLOCK_V, DIM_K), dtype=tl.float32)
     for i in tl.static_range(0, N_PAD):
         state_i = b_h0
         for j in tl.static_range(0, i):
             ancestor = (tl.load(strict_mask + i * N_PAD + j) != 0) & (j < N_ACTUAL)
-            h_j = tl.sum(tl.where((offs_n == j)[:, None], h_cache, 0.0), axis=0)
+            h_j = tl.sum(
+                tl.where((offs_n == j)[:, None, None], h_cache, 0.0),
+                axis=0,
+            )
             state_i = tl.where(ancestor, h_j, state_i)
 
         b_q = tl.load(
@@ -292,7 +296,7 @@ def _tree_gdn_kernel(
             other=0.0,
         ).to(tl.float32)
         b_v = tl.load(
-            v + (i * NUM_VH + pid_vh) * DIM_V + pid_v,
+            v + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
             mask=(i < N_ACTUAL) & v_mask,
             other=0.0,
         ).to(tl.float32)
@@ -332,20 +336,20 @@ def _tree_gdn_kernel(
         b_q = b_q * OUTPUT_SCALE
 
         state_i *= tl.exp(b_g)
-        b_v -= tl.sum(state_i * b_k)
+        b_v -= tl.sum(state_i * b_k[None, :], axis=1)
         b_v *= b_beta
-        state_i += b_v * b_k
-        out_i = tl.sum(state_i * b_q)
-        h_cache = tl.where((offs_n == i)[:, None], state_i[None, :], h_cache)
+        state_i += b_v[:, None] * b_k[None, :]
+        out_i = tl.sum(state_i * b_q[None, :], axis=1)
+        h_cache = tl.where((offs_n == i)[:, None, None], state_i[None, :, :], h_cache)
         tl.store(
-            out + (i * NUM_VH + pid_vh) * DIM_V + pid_v,
+            out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
             out_i,
             mask=(i < N_ACTUAL) & v_mask,
         )
         tl.store(
-            state + ((i * NUM_VH + pid_vh) * DIM_V + pid_v) * DIM_K + offs_k,
+            state + ((i * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
             state_i,
-            mask=(i < N_ACTUAL) & v_mask,
+            mask=(i < N_ACTUAL) & v_mask[:, None],
         )
 
 def launch_tree_gdn(
@@ -540,7 +544,7 @@ def launch_tree_gdn_prepared(
             "state must be at least "
             f"({n_actual}, {num_vh}, {dim_v}, {dim_k}), got {tuple(state.shape)}"
         )
-    grid = (num_vh, dim_v)
+    grid = (num_vh, triton.cdiv(dim_v, BV))
     _tree_gdn_kernel[grid](
         q,
         k,
@@ -565,7 +569,7 @@ def launch_tree_gdn_prepared(
         NUM_VH=num_vh,
         DIM_K=dim_k,
         DIM_V=dim_v,
-        BLOCK_V=1,
+        BLOCK_V=BV,
         OUTPUT_SCALE=output_scale,
         USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
         H0_IS_BANK=h0_is_bank,
