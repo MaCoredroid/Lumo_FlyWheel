@@ -23,7 +23,10 @@ Forward is **weight-bandwidth-bound**: 27 GB fp8 / 273 GB/s = **98.9 ms floor** 
 - Eager-launch tax: ≤2.7% of the floor (LABELED estimate); CUDA-graph capture removes it.
 - **FUNDAMENTAL** (can't remove without losing the tree): attention node-count (36 vs 24 pos/forward, but hidden behind the floor); no-copy FA2 ~1-bf16-ULP grouping floor (0.0039 on 2 of ~983k elem — **under** the E5 self-noise floor ~0.059, so lossless + free).
 
-## Can the tree EVER be faster at B=4? — conditional + capped, NOT demonstrated
+## ⚠ CORRECTION (user, superset logic) — the "capped/thin" framing below is WRONG
+The tree is a **STRICT SUPERSET** of native's MTP drafter: its spine ≡ native's depth-5 chain, plus branches. A correct verify therefore accepts **≥ native (3.794) on the spine alone**, + branch bonus at temp>0. So tree accept/event **2.024 < native 3.794 is IMPOSSIBLE for a correct verify** — the 2.024 and the "0 net branch accepts" are **CONTAMINATION dropping the spine itself**, NOT a drafter ceiling. The break-even table below computes from 2.024, which is the *contaminated* number → meaningless as a "drafter floor." **Corrected verdict:** fixing the B=4 carrier pulls accept/event from 2.024 → ≥3.794 (spine recovered) + branch bonus, so **lossless and faster CONVERGE** — they are not separate phases. The speed is currently *masked by the bug*, not capped by the drafter/spine. (The 76%-saturated argument only bounds the *branch* upside above native, not the recovery to native.)
+
+## [superseded framing] Break-even arithmetic — valid only IF 2.024 were the true yield (it is not)
 Governing identity: `TPS = (accept/event + 1) / time_per_forward`. Break-even accept/event the tree must hit (LABELED structural estimates):
 | tree forward vs native | break-even accept/event |
 |---|---|
