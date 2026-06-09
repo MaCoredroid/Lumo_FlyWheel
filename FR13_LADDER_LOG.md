@@ -1060,3 +1060,10 @@ Call2 conv-detail alignment after the fix:
   - calls `3`, `5`, and `6` first diverge at `input_hidden`, before layer-0 GDN.
 - At the served flip event, spine rows remain clean through layer-0 GDN, while the tree selects off-spine branch path `[0,1,3,5,7]` and emits `10278` where native greedy emits `52589`.
 - Verdict: this frontier is **not another systematic row0 conv/bank num-accepted-class issue**. It is a **branch selector / native-on-branch-path oracle alignment front**. Do not tune row0 conv writeback/readback from this artifact.
+
+### Branch Oracle Follow-Up
+- Code/test update: `scripts/fr13_branch_token_oracle.py` now aligns `tree_path_lcp_max` rows as an ordered subsequence of served output, allowing the leading unlogged token `[271]` and a truncated final tree event; `tests/test_fr13_branch_token_oracle.py` covers both cases.
+- Native-on-path artifact: `output/fr13_branch_oracle_20260609T084849Z/branch_event4_path_0_1_3_5_7_oracle.json`.
+- Prompt-token sanity: `prompt: [prompt_token_ids]` reproduced the native prompt0 text-prompt baseline for the first 24 tokens; integer-token branch prompts are valid for this oracle.
+- Event `4`, branch path `[0,1,3,5,7]`: tree verify targets match real native-on-branch-path `/v1/completions` for `6/6` checks (`364`, `264`, `82546`, `10278`, `1103`, leaf bonus `2357`).
+- Classification: **alignment/gate mismatch**, not branch-kernel argmax drift. The paired native greedy spine emits `52589`, but native-on-that-branch-path emits `10278`, matching the tree. The committer selects the branch because branch LCP `5` > path0 LCP `1`; this is the `greedy_tree_lcp_max` policy, not a GDN/FA2 sub-op failure.
