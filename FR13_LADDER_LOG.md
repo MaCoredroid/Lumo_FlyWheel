@@ -1293,3 +1293,13 @@ Call2 conv-detail alignment after the fix:
 - Native BI self-noise: `139/256` positional mask, bag-TV `0.0859375`.
 - Captured no-BI reference from the prior 16-record gate: `1319/2048` positional mask, bag-TV `0.10986328125`.
 - Bound verdict: TREE nondeterminism is confirmed and failures move. Native BI reduces emitted-token bag-TV in this seed-pair but does not reduce the raw positional self-noise mask, so this diagnostic does not prove the TREE excess is only shared fp8 GEMM batch-dependence. GDN-scan vs `TREE_ATTN` carrier remains unresolved; speed remains deferred.
+
+## Commit (this commit) - FR13 cost-gate BI tree backend read-first blocker (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_COST_GATE_BI_TREE_BACKEND_BLOCKED.md`.
+- Scope: read-first cost gate only; no GPU boot and no fallback run.
+- Batch-invariant guard at `/tmp/vllm_live_019/vllm/model_executor/layers/batch_invariant.py:993-1017` accepts only `FLASH_ATTN`, `TRITON_ATTN`, `FLASH_ATTN_MLA`, and `TRITON_MLA`.
+- FR13 forked-FA2 tree launcher default is `ATTENTION_BACKEND=TREE_ATTN`, with `FR13_FA2_PREFILL_NATIVE=1` live by default and batch-invariant envs passed through.
+- Live backend registry maps `TREE_ATTN` to `vllm.v1.attention.backends.tree_attn.TreeAttentionBackend`; `TreeAttentionBackend.get_name()` returns exactly `TREE_ATTN`.
+- `scripts/fr13_patch_fa2_tree_bias.py` adds `varlen_fwd_tree_bias` and calls `flash_attn_varlen_func(..., tree_bias=tree_bias)` from inside `TREE_ATTN`; it does not register the tree-bias path as `FLASH_ATTN` and does not rename the selected backend.
+- Verdict: Step2 is blocked under the strict gate. The forked-FA2 `-inf` tree-bias path cannot boot under `VLLM_BATCH_INVARIANT=1` as a `FLASH_ATTN`-accepted backend without a new validated backend/registration change. GDN scan remains exonerated and was not re-investigated.
