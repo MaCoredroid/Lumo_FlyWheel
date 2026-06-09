@@ -1122,3 +1122,20 @@ Call2 conv-detail alignment after the fix:
   - Native capture: `native_prefill_live/logs/prefill_gdn_native.call0.pt`.
   - Result: no first diverging layer/stage; `pre_conv=0.0`, `conv_out=0.0`, `initial_state/h0=0.0`, `core_out=0.0`, `final_state=0.0`.
 - Verdict: Seam 2 validated for HEAD. Forked FA2 no-bias regular decode and prefill are byte-identical to pristine stock FA2; live TREE_ATTN prefill L7 is byte-identical to native FLASH_ATTN; downstream GDN L8 prefill recurrent seed is byte-identical. Advance directly to the all-8 branch-oracle plus self-noise-corrected B=4 superset e2e comparator.
+
+## Commit (this commit) - FR13 all-8 branch oracle targeted winner-path gate (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_ALL8_BRANCH_ORACLE_BIND.md`.
+- Run root: `output/fr13_decisive_final_20260609T182455Z`.
+- Reducer update: `scripts/fr13_branch_token_oracle.py` gained `--targets` and `--winner-only` so the oracle can check the eight requested first outside-self-noise flip events without running every branch path. It also records skipped leading overrun rows from max-token truncation while preserving the fail-closed mismatch guard.
+- CPU gates: `pytest -q tests/test_fr13_branch_token_oracle.py` -> `3 passed`; `py_compile` passed.
+- Tree B1 greedy branch capture: `tree_b1_greedy_branch/tree_greedy_probe.json`; engagement asserted by the probe; tree accept/event `1.965986394557823`.
+- Native B1 greedy reference: `native_b1/native_greedy_probe.json`; native accept/event `3.8545454545454545`.
+- Native B1 temp0.6 self-noise baseline captured: `native_b1/native_temp06_probe.json`; native accept/event `3.8878504672897196`.
+- Targeted oracle artifact: `all8_branch_oracle.json`.
+  - events aligned: `143`; skipped overrun rows: `5`.
+  - target positions: `0:46,1:28,2:35,3:10,4:1,5:1,6:1,7:15`.
+  - winner-only checks: `17`; tree/native-on-branch matches: `13/17`.
+  - first mismatch: prompt0 event13 path `[0,1,3,5,8]` depth4 parent target, tree `198` vs native-on-branch `1358`.
+  - other mismatches: prompt0 leaf self target `262` vs `71093`; prompt3 leaf self target `265` vs `1302`; prompt7 depth0 parent target `417` vs `7620`.
+- Verdict: the all-8 branch oracle does **not** confirm lossless-by-branch for HEAD. Several targeted committed winner-path checks differ from native-on-their-branch-path. The B4 temp0.6 superset e2e deliverable was not started in this stage.

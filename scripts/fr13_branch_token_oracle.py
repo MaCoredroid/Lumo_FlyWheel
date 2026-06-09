@@ -120,6 +120,7 @@ def align_events(tree_run: Path) -> list[EventContext]:
     rows = _lcp_rows(tree_run)
     contexts: list[EventContext] = []
     cursor = 0
+    skipped_overrun_rows: list[dict[str, Any]] = []
     for record in records:
         key = (int(record["prompt_id"]), int(record["sample_index"]))
         target = _token_ids(record, "token_ids")
@@ -139,6 +140,15 @@ def align_events(tree_run: Path) -> list[EventContext]:
             start = _find_subsequence(target, emitted, start=served_cursor)
             if start is None:
                 remaining = target[served_cursor:]
+                if served_cursor == 0 and contexts:
+                    skipped_overrun_rows.append(
+                        {
+                            "record": list(key),
+                            "row_index": cursor - 1,
+                            "emitted_tokens": emitted,
+                        }
+                    )
+                    continue
                 if remaining and emitted[: len(remaining)] == remaining:
                     # The request stopped mid-tree-event because max_tokens was
                     # reached. Do not create an oracle context for a partial row.
@@ -162,6 +172,7 @@ def align_events(tree_run: Path) -> list[EventContext]:
             )
             served_cursor = start + len(emitted)
             event_index += 1
+    align_events.skipped_overrun_rows = skipped_overrun_rows  # type: ignore[attr-defined]
     return contexts
 
 
@@ -198,6 +209,19 @@ def _parse_path(value: str | None) -> list[int] | None:
     if not value.strip():
         return None
     return [int(part) for part in value.split(",") if part.strip()]
+
+
+def _parse_targets(value: str | None) -> set[tuple[int, int]]:
+    if value is None or not value.strip():
+        return set()
+    out: set[tuple[int, int]] = set()
+    for item in value.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        prompt, pos = item.split(":", 1)
+        out.add((int(prompt), int(pos)))
+    return out
 
 
 def _path_checks_for_context(
@@ -282,17 +306,31 @@ def run_branch_oracle(args: argparse.Namespace) -> dict[str, Any]:
     selected_contexts = contexts
     if args.event_index is not None:
         selected_contexts = [ctx for ctx in contexts if ctx.event_index == args.event_index]
+    target_positions = _parse_targets(args.targets)
+    if target_positions:
+        selected_contexts = [
+            ctx
+            for ctx in selected_contexts
+            if any(
+                ctx.record_key[0] == prompt_id
+                and ctx.event_start <= position < ctx.event_end
+                for prompt_id, position in target_positions
+            )
+        ]
     if args.max_events:
         selected_contexts = selected_contexts[: args.max_events]
     for ctx in selected_contexts:
         record = request_by_key[ctx.record_key]
         prompt_tokens = _token_ids(record, "prompt_token_ids")
         row = ctx.row
+        winner_path = [int(x) for x in (row.get("winner_path") or [])]
         for path_idx, score in enumerate(row.get("path_scores") or []):
             if path_idx == 0 and not args.include_path0:
                 continue
             path = [int(x) for x in (score.get("path") or [])]
             if not path:
+                continue
+            if args.winner_only and path != winner_path:
                 continue
             if path_filter is not None and path != path_filter:
                 continue
@@ -329,8 +367,11 @@ def run_branch_oracle(args: argparse.Namespace) -> dict[str, Any]:
         "model": args.model,
         "native_mode": args.native_mode,
         "events_aligned": len(contexts),
+        "skipped_overrun_rows": getattr(align_events, "skipped_overrun_rows", []),
         "events_checked": len(selected_contexts),
         "event_index_filter": args.event_index,
+        "target_positions": sorted([list(item) for item in target_positions]),
+        "winner_only": bool(args.winner_only),
         "path_filter": path_filter,
         "checks_total": total,
         "tree_native_matches": exact,
@@ -354,6 +395,11 @@ def main() -> int:
     parser.add_argument("--request-timeout", type=float, default=120.0)
     parser.add_argument("--max-events", type=int)
     parser.add_argument("--event-index", type=int)
+    parser.add_argument(
+        "--targets",
+        help="Comma-separated prompt_id:position filters, e.g. 0:46,1:28",
+    )
+    parser.add_argument("--winner-only", action="store_true")
     parser.add_argument("--path", help="Comma-separated node path, e.g. 0,1,3,5,7")
     parser.add_argument("--include-path0", action="store_true")
     parser.add_argument("--out", required=True, type=Path)
