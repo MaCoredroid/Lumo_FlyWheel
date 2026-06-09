@@ -1220,3 +1220,20 @@ Call2 conv-detail alignment after the fix:
 - Validation: `python3 -m py_compile scripts/fr13_corruption_gate.py` passed.
 - Purpose: CPU reduction of the three-arm tree/native/native-noise corruption gate: served-token argmax match corrected by native self-noise, emitted-token bag-TV floor, accept/event superset against native, prompt identity fail-closed, and optional per-event superset checks when traces are present.
 - Note for the next run: the script expects `fr13_e2e_measure.py`-style filenames (`tree_greedy_probe.json`, `native_greedy_probe.json`); the earlier SWE B4 direct probe used `fr12_deliverable_swe4_probe.py` names, so the fresh three-arm run must write or normalize the expected arm filenames before invoking the gate.
+
+## Commit (this commit) - FR13 corruption B4 three-arm gate (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_CORRUPTION_B4_GATE_BIND.md`.
+- Run root: `output/fr13_corruption_b4_gate_20260609T194841Z`.
+- Arms: TREE forked-FA2 `TREE_ATTN/tree_mtp` seed `1313`; native E5 `FLASH_ATTN/naive_mtp` seed `1313`; native-noise `FLASH_ATTN/naive_mtp` seed `2313`.
+- All arms were B=4, `MAX_NUM_SEQS=4`, `MAX_MODEL_LEN=131072`, `FR10_METRICS=0`, sequential one-GPU, with `recover_host_memory()` between arms.
+- CUDA graph validation: all three logs show `enforce_eager=False`, `Profiling CUDA graph memory: ... FULL=4`, and `Capturing CUDA graphs (decode, FULL): 4/4`.
+- Prompt guard: tree/native prompt token IDs byte-identical; prompt token counts `681`, `1080`, `829`, `1614`; record sets paired.
+- Gate output: `fr13_corruption_gate.json`, exit code `2`, `valid=true`, `passed=false`, `verdict=FAIL`.
+- Self-noise: native self-noise mask positions `277`; native self bag-TV `0.10986328125`.
+- Self-noise-corrected token surface: compared positions `467`; eligible positions `221`; outside-self-noise losses `105/221 = 0.4751`; first real loss prompt `0` position `16`, tree `369` vs native `3051`; longest real-loss run `44`; depth-collapse detector fired.
+- Bag-TV: tree/native emitted-token bag-TV `0.2335064444` > budget `0.10986328125`.
+- Accept/event: tree `2.1016042781` vs native `3.6191536748`, delta `-1.5175493968`; native-noise `3.8139534884`.
+- Depth-0 root signal from `fr13_depth0_root_gate.json`: measured tail root accept `348/549 = 0.6339`; root reject `201/549 = 0.3661`; `target_argmax != draft0` in `201` rows.
+- Native per-event limitation: no `per_req_spec_trace.jsonl` was emitted by the native arms, so per-event native target-argmax comparison is unavailable in this bind. The paired served-token/self-noise gate remains valid.
+- Conclusion: not a drafter-quality stop. The three-arm evidence shows a real tree-verify contamination / target-row bug surface; speed/forward-cost analysis remains deferred.
