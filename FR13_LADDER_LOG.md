@@ -1189,3 +1189,26 @@ Call2 conv-detail alignment after the fix:
   - `fr13_branch_node_redteam_20260609T090932Z`: LCP/sampler traces only; no `.pt` substate.
 - Prepared future capture if CPU workflow calls for a GPU seam boot: tree `FR12_SUBKERNEL_CAPTURE_NUM_TOKENS=10`, `FR12_SUBKERNEL_CAPTURE_SKIP=13`, `FR12_SUBKERNEL_CAPTURE_LIMIT=1`, first at `language_model.model.layers.0.linear_attn`; native-on-branch uses the existing branch-oracle path construction with prefix len `45` plus `[638,4381,283,1727]`, `NUM_TOKENS=6`, `SKIP=0`, `LIMIT=1`.
 - Conclusion: CPU prep cannot localize where `198` vs `1358` is born from existing captures. The next localizing evidence requires one targeted paired capture if and only if the parallel CPU root workflow says the seam fix is worth a GPU boot.
+
+## Commit (this commit) - FR13 B4 superset CPU gate (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_B4_SUPERSET_CPU_GATE_BIND.md`.
+- Reducer: `scripts/fr13_b4_superset_cpu_gate.py`.
+- Artifact: `output/fr13_swe_verified_b4_diag_20260609T190931Z/b4_superset_cpu_gate.json`.
+- CPU-only; no server boot, no GPU work.
+- Gate input: existing SWE B4 diagnostic artifacts under `output/fr13_swe_verified_b4_diag_20260609T190931Z`, using tree `tree_path_lcp.jsonl`, `tree_sampler_debug.jsonl`, `fr10_mtp_draft_trace.jsonl`, tree probe, and native probe.
+- Topology result: pass. Runtime `speculative_token_tree` equals the expected top-1 spine plus top-2 branch tree; path0/top-1 spine nodes are `[0,1,3,5,7]`; sibling branch nodes are `[2,4,6,8]`; `193/193` `gpu_tree_metadata` rows have `mode=tree_mtp`, `tree_len=9`, `reason=ok`, `has_tree_parent_indices=true`, and `has_draft_token_indices=true`.
+- Measured-tail tree verifier/committer classification from `tree_summary.spec_drafts=620`:
+  - spine path accepted `250/620`;
+  - branch path accepted `132/620`;
+  - root reject `238/620`;
+  - accepted-length counts `{0:238, 1:60, 2:85, 3:74, 4:37, 5:126}`.
+- Committer/source-index evidence:
+  - accepted source `0`: `1098`;
+  - accepted source `1`: `132`;
+  - in `116/132` source-1 branch accepts, the verifier assigned zero probability to the top-1/spine child;
+  - reject steps total `367`, root-step rejects `227`, reject steps with both candidates at zero probability `332`.
+- Native limitation: the existing native B4 artifact has aggregate spec counters and served token IDs but no per-event MTP draft/accept trace, so exact native per-event accepted depth cannot be reconstructed CPU-only from this run.
+- Served-token surface remains bad: exact sequences `0/16`; first mismatch examples include prompt0/sample0 pos `15` tree `5759` vs native `1970`.
+- Classification: `topology_break=false`, `committer_break=false`, `verify_or_target_row_break=true`.
+- Conclusion: the tree contains the superset topology, and the committer follows verifier scores. The B4 accept drop is a verify/target-row contamination or alignment bug, not a drafter-quality structural floor and not a missing-topology bug. Defer speed/forward-cost analysis.
