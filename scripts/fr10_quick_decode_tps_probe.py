@@ -119,6 +119,19 @@ def _reset_prefix_cache(endpoint: str) -> str | None:
         return f"{type(exc).__name__}: {exc}"
 
 
+def _tokenize_prompt(endpoint: str, model: str, prompt: str, timeout: float) -> list[int]:
+    data = _post_json(
+        endpoint,
+        "/tokenize",
+        {"model": model, "prompt": prompt},
+        timeout=timeout,
+    )
+    tokens = data.get("tokens") if isinstance(data, dict) else None
+    if not isinstance(tokens, list) or not all(isinstance(token, int) for token in tokens):
+        raise RuntimeError(f"unexpected /tokenize response for prompt guard: {data!r}")
+    return [int(token) for token in tokens]
+
+
 def _run_requests(
     *,
     endpoint: str,
@@ -135,6 +148,10 @@ def _run_requests(
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], float]:
     records: list[dict[str, Any]] = []
     request_rows: list[dict[str, Any]] = []
+    prompt_token_cache = {
+        prompt_id: _tokenize_prompt(endpoint, model, prompt, timeout)
+        for prompt_id, prompt in enumerate(prompts)
+    }
     t0 = time.time()
     for prompt_id, prompt in enumerate(prompts):
         next_sample = 0
@@ -166,6 +183,8 @@ def _run_requests(
                         "prompt_id": prompt_id,
                         "sample_index": next_sample + int(choice["index"]),
                         "local_choice_index": int(choice["index"]),
+                        "prompt_token_ids": prompt_token_cache[prompt_id],
+                        "prompt_token_count": len(prompt_token_cache[prompt_id]),
                         "finish_reason": choice.get("finish_reason"),
                         "token_ids": [int(x) for x in token_ids],
                         "text": choice.get("text", ""),
@@ -181,6 +200,8 @@ def _run_requests(
                     "oracle_run_anchor": f"{mode}_prompt{prompt_id}_sample{next_sample}",
                     "mode": mode,
                     "prompt_id": prompt_id,
+                    "prompt_token_ids": prompt_token_cache[prompt_id],
+                    "prompt_token_count": len(prompt_token_cache[prompt_id]),
                     "batch_size": n,
                     "completion_tokens": req_completion_tokens,
                     "decode_sum_s": req_elapsed,
@@ -320,6 +341,8 @@ def main() -> int:
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--prompts-file")
+    parser.add_argument("--prompt-start", type=int, default=0)
+    parser.add_argument("--prompt-limit", type=int)
     parser.add_argument("--out", required=True)
     parser.add_argument("--modes", nargs="+", default=["naive_mtp", "tree_mtp"])
     parser.add_argument("--samples-per-prompt", type=int, default=4)
@@ -341,6 +364,15 @@ def main() -> int:
     if args.wait_health:
         _wait_health(args.endpoint, args.wait_health)
     prompts = _read_prompts(args.prompts_file)
+    if args.prompt_start < 0:
+        raise ValueError("--prompt-start must be non-negative")
+    prompts = prompts[args.prompt_start:]
+    if args.prompt_limit is not None:
+        if args.prompt_limit <= 0:
+            raise ValueError("--prompt-limit must be positive")
+        prompts = prompts[: args.prompt_limit]
+    if not prompts:
+        raise ValueError("prompt slice is empty")
     result: dict[str, Any] = {
         "schema": "fr10.quick_decode_tps.v1",
         "endpoint": args.endpoint,
@@ -348,6 +380,8 @@ def main() -> int:
         "temperature": args.temperature,
         "top_p": args.top_p,
         "seed": args.seed,
+        "prompt_start": args.prompt_start,
+        "prompt_limit": args.prompt_limit,
         "batch_size": args.batch_size,
         "samples_per_prompt": args.samples_per_prompt,
         "max_tokens": args.max_tokens,

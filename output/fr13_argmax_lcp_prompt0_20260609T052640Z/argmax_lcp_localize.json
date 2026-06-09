@@ -1,0 +1,2142 @@
+{
+  "argmax_stream_alignment": {
+    "first_argmax_flip": {
+      "completion_position": 8,
+      "layer_delta": {
+        "final_norm_max_abs": 9.03125,
+        "first_nonzero_layer": {
+          "hidden_max_abs": 0.0625,
+          "layer_idx": 0,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        "input_max_abs": 0.0,
+        "layers": [
+          {
+            "hidden_max_abs": 0.0625,
+            "layer_idx": 0,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.0606689453125,
+            "layer_idx": 1,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.421875,
+            "layer_idx": 2,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.07373046875,
+            "layer_idx": 3,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 0.103515625,
+            "layer_idx": 4,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.155517578125,
+            "layer_idx": 5,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.1904296875,
+            "layer_idx": 6,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.0869140625,
+            "layer_idx": 7,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 0.0980224609375,
+            "layer_idx": 8,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.130859375,
+            "layer_idx": 9,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.1552734375,
+            "layer_idx": 10,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.1778564453125,
+            "layer_idx": 11,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 0.204498291015625,
+            "layer_idx": 12,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.28955078125,
+            "layer_idx": 13,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.347991943359375,
+            "layer_idx": 14,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.3056640625,
+            "layer_idx": 15,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 0.43505859375,
+            "layer_idx": 16,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.703125,
+            "layer_idx": 17,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 2.6015625,
+            "layer_idx": 18,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.611328125,
+            "layer_idx": 19,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 0.658203125,
+            "layer_idx": 20,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.7333984375,
+            "layer_idx": 21,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 0.8203125,
+            "layer_idx": 22,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 1.90625,
+            "layer_idx": 23,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 1.15283203125,
+            "layer_idx": 24,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 1.05859375,
+            "layer_idx": 25,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 10.4296875,
+            "layer_idx": 26,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 3.2734375,
+            "layer_idx": 27,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 1.87890625,
+            "layer_idx": 28,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 3.25,
+            "layer_idx": 29,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 6.10784912109375,
+            "layer_idx": 30,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 1.18359375,
+            "layer_idx": 31,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 1.337890625,
+            "layer_idx": 32,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 1.5380859375,
+            "layer_idx": 33,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 6.015625,
+            "layer_idx": 34,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 1.37109375,
+            "layer_idx": 35,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 1.39453125,
+            "layer_idx": 36,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 1.3515625,
+            "layer_idx": 37,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 2.09375,
+            "layer_idx": 38,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 1.236328125,
+            "layer_idx": 39,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 1.375,
+            "layer_idx": 40,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 4.1796875,
+            "layer_idx": 41,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 11.609375,
+            "layer_idx": 42,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 9.125,
+            "layer_idx": 43,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 4.28125,
+            "layer_idx": 44,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 4.1328125,
+            "layer_idx": 45,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 5.8046875,
+            "layer_idx": 46,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 9.234375,
+            "layer_idx": 47,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 5.8427734375,
+            "layer_idx": 48,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 3.9189453125,
+            "layer_idx": 49,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 14.8046875,
+            "layer_idx": 50,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 8.5107421875,
+            "layer_idx": 51,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 4.02392578125,
+            "layer_idx": 52,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 3.1328125,
+            "layer_idx": 53,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 28.9609375,
+            "layer_idx": 54,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 2.265625,
+            "layer_idx": 55,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 2.7861328125,
+            "layer_idx": 56,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 3.1640625,
+            "layer_idx": 57,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 93.125,
+            "layer_idx": 58,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 6.625,
+            "layer_idx": 59,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          },
+          {
+            "hidden_max_abs": 9.3125,
+            "layer_idx": 60,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 5.67578125,
+            "layer_idx": 61,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 15.0,
+            "layer_idx": 62,
+            "native_layer_type": "linear_attention",
+            "tree_layer_type": "linear_attention"
+          },
+          {
+            "hidden_max_abs": 56.25,
+            "layer_idx": 63,
+            "native_layer_type": "full_attention",
+            "tree_layer_type": "full_attention"
+          }
+        ],
+        "native_num_tokens": 6,
+        "native_rows": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "tree_num_tokens": 10,
+        "tree_rows": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9
+        ]
+      },
+      "native_location": {
+        "call": 2,
+        "event": {
+          "accepted_len": 5,
+          "call": 2,
+          "draft_token_ids": [
+            1005,
+            19876,
+            25,
+            198,
+            262
+          ],
+          "emitted_tokens": [
+            1005,
+            19876,
+            25,
+            198,
+            262,
+            4071
+          ],
+          "target_argmax_ids": [
+            1005,
+            19876,
+            25,
+            198,
+            262,
+            4071
+          ]
+        },
+        "local_emitted_index": 0,
+        "row": 0,
+        "stream_end": 13,
+        "stream_start": 7
+      },
+      "native_token": 1005,
+      "stream_position": 7,
+      "tree_location": {
+        "call": 2,
+        "event": {
+          "accepted_len": 0,
+          "call": 2,
+          "draft_token_ids": [
+            71093,
+            12305,
+            198,
+            198,
+            271,
+            727,
+            1445,
+            9637,
+            6707
+          ],
+          "emitted_tokens": [
+            727
+          ],
+          "parent_target_ids": [
+            727,
+            271,
+            271,
+            198,
+            198,
+            1005,
+            1005,
+            9637,
+            9637
+          ],
+          "self_target_ids": [
+            271,
+            198,
+            248069,
+            1005,
+            71093,
+            9637,
+            18904,
+            73538,
+            4000
+          ],
+          "winner_path": [
+            0,
+            2
+          ]
+        },
+        "local_emitted_index": 0,
+        "row": 0,
+        "stream_end": 8,
+        "stream_start": 7
+      },
+      "tree_token": 727
+    },
+    "native_emitted_stream": [
+      248068,
+      271,
+      248069,
+      271,
+      71093,
+      12305,
+      198,
+      1005,
+      19876,
+      25,
+      198,
+      262,
+      4071,
+      10088,
+      364,
+      264,
+      82546,
+      52589
+    ],
+    "native_events": [
+      {
+        "accepted_len": 0,
+        "call": 0,
+        "draft_token_ids": [
+          71093,
+          12305,
+          198,
+          727,
+          9637
+        ],
+        "emitted_tokens": [
+          248068
+        ],
+        "target_argmax_ids": [
+          248068,
+          12305,
+          198,
+          1005,
+          9637,
+          73538
+        ]
+      },
+      {
+        "accepted_len": 5,
+        "call": 1,
+        "draft_token_ids": [
+          271,
+          248069,
+          271,
+          71093,
+          12305
+        ],
+        "emitted_tokens": [
+          271,
+          248069,
+          271,
+          71093,
+          12305,
+          198
+        ],
+        "target_argmax_ids": [
+          271,
+          248069,
+          271,
+          71093,
+          12305,
+          198
+        ]
+      },
+      {
+        "accepted_len": 5,
+        "call": 2,
+        "draft_token_ids": [
+          1005,
+          19876,
+          25,
+          198,
+          262
+        ],
+        "emitted_tokens": [
+          1005,
+          19876,
+          25,
+          198,
+          262,
+          4071
+        ],
+        "target_argmax_ids": [
+          1005,
+          19876,
+          25,
+          198,
+          262,
+          4071
+        ]
+      },
+      {
+        "accepted_len": 0,
+        "call": 3,
+        "draft_token_ids": [
+          32,
+          2357,
+          303,
+          264,
+          82546
+        ],
+        "emitted_tokens": [
+          10088
+        ],
+        "target_argmax_ids": [
+          10088,
+          2357,
+          303,
+          264,
+          82546,
+          10278
+        ]
+      },
+      {
+        "accepted_len": 3,
+        "call": 4,
+        "draft_token_ids": [
+          364,
+          264,
+          82546,
+          10278,
+          1103
+        ],
+        "emitted_tokens": [
+          364,
+          264,
+          82546,
+          52589
+        ],
+        "target_argmax_ids": [
+          364,
+          264,
+          82546,
+          52589,
+          1103,
+          2357
+        ]
+      }
+    ],
+    "served_compared_stream_tokens": 15,
+    "served_prefix_offset_for_tree_stream": 1,
+    "stream_alignment": {
+      "common_prefix": 7,
+      "exact": false,
+      "first_mismatch": {
+        "left_token": 727,
+        "position": 7,
+        "right_token": 1005
+      },
+      "left_len": 15,
+      "right_len": 15
+    },
+    "tree_emitted_stream": [
+      248068,
+      271,
+      248069,
+      271,
+      71093,
+      12305,
+      198,
+      727,
+      9637,
+      73538,
+      1951,
+      24535,
+      1590,
+      198,
+      262,
+      4071,
+      198,
+      262,
+      997,
+      2909,
+      287,
+      264
+    ],
+    "tree_events": [
+      {
+        "accepted_len": 0,
+        "call": 0,
+        "draft_token_ids": [
+          71093,
+          12305,
+          198,
+          198,
+          271,
+          727,
+          1005,
+          9637,
+          26548
+        ],
+        "emitted_tokens": [
+          248068
+        ],
+        "parent_target_ids": [
+          248068,
+          12305,
+          12305,
+          198,
+          198,
+          1005,
+          1005,
+          9637,
+          9637
+        ],
+        "self_target_ids": [
+          12305,
+          198,
+          727,
+          1005,
+          1005,
+          9637,
+          5829,
+          73538,
+          73538
+        ],
+        "winner_path": [
+          0,
+          2
+        ]
+      },
+      {
+        "accepted_len": 5,
+        "call": 1,
+        "draft_token_ids": [
+          271,
+          248069,
+          71093,
+          271,
+          1358,
+          71093,
+          8160,
+          12305,
+          198
+        ],
+        "emitted_tokens": [
+          271,
+          248069,
+          271,
+          71093,
+          12305,
+          198
+        ],
+        "parent_target_ids": [
+          271,
+          248069,
+          248069,
+          271,
+          271,
+          71093,
+          71093,
+          12305,
+          12305
+        ],
+        "self_target_ids": [
+          248069,
+          271,
+          12305,
+          71093,
+          71093,
+          12305,
+          369,
+          198,
+          727
+        ],
+        "winner_path": [
+          0,
+          1,
+          3,
+          5,
+          7
+        ]
+      },
+      {
+        "accepted_len": 0,
+        "call": 2,
+        "draft_token_ids": [
+          71093,
+          12305,
+          198,
+          198,
+          271,
+          727,
+          1445,
+          9637,
+          6707
+        ],
+        "emitted_tokens": [
+          727
+        ],
+        "parent_target_ids": [
+          727,
+          271,
+          271,
+          198,
+          198,
+          1005,
+          1005,
+          9637,
+          9637
+        ],
+        "self_target_ids": [
+          271,
+          198,
+          248069,
+          1005,
+          71093,
+          9637,
+          18904,
+          73538,
+          4000
+        ],
+        "winner_path": [
+          0,
+          2
+        ]
+      },
+      {
+        "accepted_len": 3,
+        "call": 3,
+        "draft_token_ids": [
+          9637,
+          73538,
+          3773,
+          1951,
+          36053,
+          6742,
+          7080,
+          25,
+          1590
+        ],
+        "emitted_tokens": [
+          9637,
+          73538,
+          1951,
+          24535
+        ],
+        "parent_target_ids": [
+          9637,
+          73538,
+          73538,
+          1951,
+          1951,
+          24535,
+          24535,
+          1590,
+          1590
+        ],
+        "self_target_ids": [
+          73538,
+          1951,
+          1104,
+          24535,
+          24535,
+          1590,
+          4922,
+          359,
+          198
+        ],
+        "winner_path": [
+          0,
+          1,
+          3,
+          6
+        ]
+      },
+      {
+        "accepted_len": 0,
+        "call": 4,
+        "draft_token_ids": [
+          25,
+          592,
+          1103,
+          8,
+          11,
+          1411,
+          535,
+          1103,
+          13992
+        ],
+        "emitted_tokens": [
+          1590
+        ],
+        "parent_target_ids": [
+          1590,
+          19876,
+          19876,
+          8,
+          8,
+          1411,
+          1411,
+          592,
+          592
+        ],
+        "self_target_ids": [
+          19876,
+          8,
+          8,
+          1411,
+          9495,
+          592,
+          198,
+          25,
+          25
+        ],
+        "winner_path": [
+          0,
+          2
+        ]
+      },
+      {
+        "accepted_len": 5,
+        "call": 5,
+        "draft_token_ids": [
+          198,
+          262,
+          220,
+          4071,
+          653,
+          198,
+          271,
+          262,
+          1031
+        ],
+        "emitted_tokens": [
+          198,
+          262,
+          4071,
+          198,
+          262,
+          997
+        ],
+        "parent_target_ids": [
+          198,
+          262,
+          262,
+          4071,
+          4071,
+          198,
+          198,
+          262,
+          262
+        ],
+        "self_target_ids": [
+          262,
+          4071,
+          4071,
+          198,
+          8736,
+          262,
+          71093,
+          997,
+          262
+        ],
+        "winner_path": [
+          0,
+          1,
+          3,
+          5,
+          7
+        ]
+      },
+      {
+        "accepted_len": 2,
+        "call": 6,
+        "draft_token_ids": [
+          2909,
+          287,
+          286,
+          279,
+          10278,
+          1103,
+          10278,
+          310,
+          1608
+        ],
+        "emitted_tokens": [
+          2909,
+          287,
+          264
+        ],
+        "parent_target_ids": [
+          2909,
+          287,
+          287,
+          264,
+          264,
+          2574,
+          2574,
+          303,
+          303
+        ],
+        "self_target_ids": [
+          287,
+          264,
+          264,
+          2574,
+          1103,
+          303,
+          1103,
+          381,
+          449
+        ],
+        "winner_path": [
+          0,
+          1,
+          4
+        ]
+      }
+    ],
+    "uncensored_stream_alignment": {
+      "common_prefix": 7,
+      "exact": false,
+      "first_mismatch": {
+        "left_token": 727,
+        "position": 7,
+        "right_token": 1005
+      },
+      "left_len": 22,
+      "right_len": 18
+    }
+  },
+  "capture_filters": {
+    "native_hidden_num_tokens": 6,
+    "native_rows": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "tree_hidden_num_tokens": 10,
+    "tree_rows": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ]
+  },
+  "depth0_call0_argmax": {
+    "argmax_match": true,
+    "depth": 0,
+    "layer_delta": {
+      "final_norm_max_abs": 1.1875,
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.005126953125,
+        "layer_idx": 10,
+        "native_layer_type": "linear_attention",
+        "tree_layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.0,
+      "layers": [
+        {
+          "hidden_max_abs": 0.0,
+          "layer_idx": 0,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0,
+          "layer_idx": 1,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0,
+          "layer_idx": 2,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0,
+          "layer_idx": 3,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.0,
+          "layer_idx": 4,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0,
+          "layer_idx": 5,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0,
+          "layer_idx": 6,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0,
+          "layer_idx": 7,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.0,
+          "layer_idx": 8,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0,
+          "layer_idx": 9,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.005126953125,
+          "layer_idx": 10,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.009521484375,
+          "layer_idx": 11,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.01141357421875,
+          "layer_idx": 12,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.014892578125,
+          "layer_idx": 13,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.018524169921875,
+          "layer_idx": 14,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.02490234375,
+          "layer_idx": 15,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.0341796875,
+          "layer_idx": 16,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0341796875,
+          "layer_idx": 17,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.037109375,
+          "layer_idx": 18,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.04638671875,
+          "layer_idx": 19,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.0625,
+          "layer_idx": 20,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.05859375,
+          "layer_idx": 21,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0634765625,
+          "layer_idx": 22,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0693359375,
+          "layer_idx": 23,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.2265625,
+          "layer_idx": 24,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.125,
+          "layer_idx": 25,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.15625,
+          "layer_idx": 26,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.09912109375,
+          "layer_idx": 27,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.0814666748046875,
+          "layer_idx": 28,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.1953125,
+          "layer_idx": 29,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.1484375,
+          "layer_idx": 30,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.15625,
+          "layer_idx": 31,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.125,
+          "layer_idx": 32,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.28125,
+          "layer_idx": 33,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.4765625,
+          "layer_idx": 34,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.2421875,
+          "layer_idx": 35,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.1171875,
+          "layer_idx": 36,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0615234375,
+          "layer_idx": 37,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.15625,
+          "layer_idx": 38,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.083984375,
+          "layer_idx": 39,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.109375,
+          "layer_idx": 40,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0908203125,
+          "layer_idx": 41,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.16796875,
+          "layer_idx": 42,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.08984375,
+          "layer_idx": 43,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.10009765625,
+          "layer_idx": 44,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.09375,
+          "layer_idx": 45,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0859375,
+          "layer_idx": 46,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.21875,
+          "layer_idx": 47,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.1015625,
+          "layer_idx": 48,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.115234375,
+          "layer_idx": 49,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.15234375,
+          "layer_idx": 50,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.1328125,
+          "layer_idx": 51,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.20703125,
+          "layer_idx": 52,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.2545166015625,
+          "layer_idx": 53,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 2.25,
+          "layer_idx": 54,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.84375,
+          "layer_idx": 55,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.25,
+          "layer_idx": 56,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.19921875,
+          "layer_idx": 57,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 8.0,
+          "layer_idx": 58,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 1.3125,
+          "layer_idx": 59,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.296875,
+          "layer_idx": 60,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.21533203125,
+          "layer_idx": 61,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 1.0,
+          "layer_idx": 62,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 8.0,
+          "layer_idx": 63,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        }
+      ],
+      "native_num_tokens": 6,
+      "native_rows": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "tree_num_tokens": 10,
+      "tree_rows": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ]
+    },
+    "native_argmax": 248068,
+    "native_call": 0,
+    "tree_argmax": 248068,
+    "tree_call": 0,
+    "tree_lcp_row": {
+      "accepted_len": 0,
+      "draft_token_ids": [
+        71093,
+        12305,
+        198,
+        198,
+        271,
+        727,
+        1005,
+        9637,
+        26548
+      ],
+      "emitted_tokens": [
+        248068
+      ],
+      "native_bonus_token": 73538,
+      "parent_target_ids": [
+        248068,
+        12305,
+        12305,
+        198,
+        198,
+        1005,
+        1005,
+        9637,
+        9637
+      ],
+      "path0_lcp": 0,
+      "self_target_ids": [
+        12305,
+        198,
+        727,
+        1005,
+        1005,
+        9637,
+        5829,
+        73538,
+        73538
+      ],
+      "winner_path": [
+        0,
+        2
+      ]
+    },
+    "verdict": "argmax_match_hidden_drift_observed"
+  },
+  "exact_row0_verify_pair_count": 3,
+  "exact_row0_verify_pairs": [
+    {
+      "all_layers_bit_exact": false,
+      "final_norm_max_abs": 1.1875,
+      "input_max_abs": 0.0,
+      "max_layer_max_abs": 8.0,
+      "native_call": 0,
+      "tree_call": 0
+    },
+    {
+      "all_layers_bit_exact": false,
+      "final_norm_max_abs": 1.20703125,
+      "input_max_abs": 0.0,
+      "max_layer_max_abs": 14.0,
+      "native_call": 1,
+      "tree_call": 1
+    },
+    {
+      "all_layers_bit_exact": false,
+      "final_norm_max_abs": 9.03125,
+      "input_max_abs": 0.0,
+      "max_layer_max_abs": 93.125,
+      "native_call": 2,
+      "tree_call": 2
+    }
+  ],
+  "first_argmax_flip": {
+    "completion_position": 8,
+    "layer_delta": {
+      "final_norm_max_abs": 9.03125,
+      "first_nonzero_layer": {
+        "hidden_max_abs": 0.0625,
+        "layer_idx": 0,
+        "native_layer_type": "linear_attention",
+        "tree_layer_type": "linear_attention"
+      },
+      "input_max_abs": 0.0,
+      "layers": [
+        {
+          "hidden_max_abs": 0.0625,
+          "layer_idx": 0,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0606689453125,
+          "layer_idx": 1,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.421875,
+          "layer_idx": 2,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.07373046875,
+          "layer_idx": 3,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.103515625,
+          "layer_idx": 4,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.155517578125,
+          "layer_idx": 5,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.1904296875,
+          "layer_idx": 6,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.0869140625,
+          "layer_idx": 7,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.0980224609375,
+          "layer_idx": 8,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.130859375,
+          "layer_idx": 9,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.1552734375,
+          "layer_idx": 10,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.1778564453125,
+          "layer_idx": 11,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.204498291015625,
+          "layer_idx": 12,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.28955078125,
+          "layer_idx": 13,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.347991943359375,
+          "layer_idx": 14,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.3056640625,
+          "layer_idx": 15,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.43505859375,
+          "layer_idx": 16,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.703125,
+          "layer_idx": 17,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 2.6015625,
+          "layer_idx": 18,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.611328125,
+          "layer_idx": 19,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 0.658203125,
+          "layer_idx": 20,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.7333984375,
+          "layer_idx": 21,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 0.8203125,
+          "layer_idx": 22,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 1.90625,
+          "layer_idx": 23,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 1.15283203125,
+          "layer_idx": 24,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 1.05859375,
+          "layer_idx": 25,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 10.4296875,
+          "layer_idx": 26,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 3.2734375,
+          "layer_idx": 27,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 1.87890625,
+          "layer_idx": 28,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 3.25,
+          "layer_idx": 29,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 6.10784912109375,
+          "layer_idx": 30,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 1.18359375,
+          "layer_idx": 31,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 1.337890625,
+          "layer_idx": 32,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 1.5380859375,
+          "layer_idx": 33,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 6.015625,
+          "layer_idx": 34,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 1.37109375,
+          "layer_idx": 35,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 1.39453125,
+          "layer_idx": 36,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 1.3515625,
+          "layer_idx": 37,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 2.09375,
+          "layer_idx": 38,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 1.236328125,
+          "layer_idx": 39,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 1.375,
+          "layer_idx": 40,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 4.1796875,
+          "layer_idx": 41,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 11.609375,
+          "layer_idx": 42,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 9.125,
+          "layer_idx": 43,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 4.28125,
+          "layer_idx": 44,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 4.1328125,
+          "layer_idx": 45,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 5.8046875,
+          "layer_idx": 46,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 9.234375,
+          "layer_idx": 47,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 5.8427734375,
+          "layer_idx": 48,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 3.9189453125,
+          "layer_idx": 49,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 14.8046875,
+          "layer_idx": 50,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 8.5107421875,
+          "layer_idx": 51,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 4.02392578125,
+          "layer_idx": 52,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 3.1328125,
+          "layer_idx": 53,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 28.9609375,
+          "layer_idx": 54,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 2.265625,
+          "layer_idx": 55,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 2.7861328125,
+          "layer_idx": 56,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 3.1640625,
+          "layer_idx": 57,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 93.125,
+          "layer_idx": 58,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 6.625,
+          "layer_idx": 59,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        },
+        {
+          "hidden_max_abs": 9.3125,
+          "layer_idx": 60,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 5.67578125,
+          "layer_idx": 61,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 15.0,
+          "layer_idx": 62,
+          "native_layer_type": "linear_attention",
+          "tree_layer_type": "linear_attention"
+        },
+        {
+          "hidden_max_abs": 56.25,
+          "layer_idx": 63,
+          "native_layer_type": "full_attention",
+          "tree_layer_type": "full_attention"
+        }
+      ],
+      "native_num_tokens": 6,
+      "native_rows": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "tree_num_tokens": 10,
+      "tree_rows": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ]
+    },
+    "native_location": {
+      "call": 2,
+      "event": {
+        "accepted_len": 5,
+        "call": 2,
+        "draft_token_ids": [
+          1005,
+          19876,
+          25,
+          198,
+          262
+        ],
+        "emitted_tokens": [
+          1005,
+          19876,
+          25,
+          198,
+          262,
+          4071
+        ],
+        "target_argmax_ids": [
+          1005,
+          19876,
+          25,
+          198,
+          262,
+          4071
+        ]
+      },
+      "local_emitted_index": 0,
+      "row": 0,
+      "stream_end": 13,
+      "stream_start": 7
+    },
+    "native_token": 1005,
+    "stream_position": 7,
+    "tree_location": {
+      "call": 2,
+      "event": {
+        "accepted_len": 0,
+        "call": 2,
+        "draft_token_ids": [
+          71093,
+          12305,
+          198,
+          198,
+          271,
+          727,
+          1445,
+          9637,
+          6707
+        ],
+        "emitted_tokens": [
+          727
+        ],
+        "parent_target_ids": [
+          727,
+          271,
+          271,
+          198,
+          198,
+          1005,
+          1005,
+          9637,
+          9637
+        ],
+        "self_target_ids": [
+          271,
+          198,
+          248069,
+          1005,
+          71093,
+          9637,
+          18904,
+          73538,
+          4000
+        ],
+        "winner_path": [
+          0,
+          2
+        ]
+      },
+      "local_emitted_index": 0,
+      "row": 0,
+      "stream_end": 8,
+      "stream_start": 7
+    },
+    "tree_token": 727
+  },
+  "method": "B1 eager paired greedy/temp0; tree target argmax from tree_path_lcp_max.parent_target_ids; native target argmax from native_final_logits.call*.pt",
+  "native_run": "output/fr13_argmax_lcp_prompt0_20260609T052640Z/native",
+  "prompt_identity": {
+    "byte_identical": true,
+    "compared_rows": 1,
+    "mismatches": [],
+    "missing_prompt_token_rows": [],
+    "native_request_rows": 1,
+    "rows": [
+      {
+        "byte_identical": true,
+        "native_prompt_id": 0,
+        "native_prompt_token_count": 15,
+        "pair_index": 0,
+        "tree_prompt_id": 0,
+        "tree_prompt_token_count": 15
+      }
+    ],
+    "tree_request_rows": 1
+  },
+  "schema": "fr13.argmax_lcp_localize.v1",
+  "served_output_alignment": {
+    "common_prefix": 8,
+    "exact": false,
+    "first_mismatch": {
+      "left_token": 727,
+      "position": 8,
+      "right_token": 1005
+    },
+    "left_len": 16,
+    "native_prompt0_tokens": [
+      271,
+      248068,
+      271,
+      248069,
+      271,
+      71093,
+      12305,
+      198,
+      1005,
+      19876,
+      25,
+      198,
+      262,
+      4071,
+      10088,
+      364
+    ],
+    "right_len": 16,
+    "tree_prompt0_tokens": [
+      271,
+      248068,
+      271,
+      248069,
+      271,
+      71093,
+      12305,
+      198,
+      727,
+      9637,
+      73538,
+      1951,
+      24535,
+      1590,
+      198,
+      262
+    ]
+  },
+  "tree_run": "output/fr13_argmax_lcp_prompt0_20260609T052640Z/tree",
+  "valid": true
+}

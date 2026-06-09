@@ -8,6 +8,19 @@ A `FR10_ALLOW_LINEAR_FALLBACK` run is DIAGNOSTIC ONLY (GDN may go linear) → NE
 
 ---
 
+## Commit `e9d2a701` + measurement-tool worktree - guarded prompt-0 argmax localization (codex_fr13, 2026-06-09T05:26Z)
+
+- Pairing red-team: `scripts/fr10_quick_decode_tps_probe.py` now records `prompt_token_ids`; `scripts/fr13_argmax_lcp_localize.py` fails closed unless tree/native prompt tokens are byte-identical.
+- Guarded run: `output/fr13_argmax_lcp_prompt0_20260609T052640Z`, B=1 eager, prompt `0`, temp `0`, no warmup, tree `TREE_ATTN`/`tree_mtp` vs native `FLASH_ATTN`/`naive_mtp`.
+- Prompt identity: byte-identical, `15` prompt tokens on both arms. The earlier `lcp=0` token-0 divergence is invalidated as a pairing artifact.
+- Served-token alignment: exact through `8` tokens; first mismatch at position `8` (`tree=727`, `native=1005`), matching the prior e2e miss shape rather than token-0 divergence.
+- Authoritative target-argmax flip: stream position `7` / completion position `8`, tree call `2` row `0` token `727` vs native call `2` row `0` token `1005`.
+- Flip-row layer localization: `input_hidden max_abs=0.0`; first nonzero layer `0` `linear_attention`, `max_abs=0.0625`; final norm max_abs `9.03125`.
+- Interpretation: first guarded flip is not full-attention. It is already in the layer-0 GDN/linear-attention path on verify event 2 after an accepted path. Next root is that event's GDN recurrent-state/current-event handling, not prompt pairing and not the rejected lcp=0 artifact.
+- `num_warps=8` red-team gate: `output/fr13_numwarps8_gdn_scan_gate_20260609T043954Z.json` gives output max_abs `0.0` at `N_PAD=1` and deployed `N_PAD=16`; no revert indicated from this gate.
+
+---
+
 ## Commit `a586ac84` - sequential e2e prefill-native binding (codex_fr13, 2026-06-09T04:15Z)
 
 - Code changes: `FR13_FA2_PREFILL_NATIVE` defaults on for the forked FA2 TREE_ATTN launcher, `FR10_METRICS` defaults off, and the GDN tree kernel launch pins `num_warps=8`.

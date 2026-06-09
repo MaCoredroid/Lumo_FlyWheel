@@ -1,0 +1,151 @@
+{
+  "cases": [
+    {
+      "by_node": [
+        {
+          "node": 0,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 0,
+          "state_vs_native_max_abs": 3.725290298461914e-09
+        }
+      ],
+      "n_actual": 1,
+      "n_pad": 1,
+      "name": "root_npad1",
+      "out_bit_exact": true,
+      "out_first_mismatch": null,
+      "out_vs_native_max_abs": 0.0,
+      "parent": [
+        -1
+      ],
+      "source_rows": [
+        0
+      ],
+      "state_bit_exact": false,
+      "state_first_mismatch": {
+        "abs": 3.725290298461914e-09,
+        "index": [
+          0,
+          3,
+          63,
+          58
+        ],
+        "left": 0.05339397117495537,
+        "right": 0.05339396744966507
+      },
+      "state_vs_native_max_abs": 3.725290298461914e-09
+    },
+    {
+      "by_node": [
+        {
+          "node": 0,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 0,
+          "state_vs_native_max_abs": 3.725290298461914e-09
+        },
+        {
+          "node": 1,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 1,
+          "state_vs_native_max_abs": 3.725290298461914e-09
+        },
+        {
+          "node": 2,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 2,
+          "state_vs_native_max_abs": 3.725290298461914e-09
+        },
+        {
+          "node": 3,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 3,
+          "state_vs_native_max_abs": 3.725290298461914e-09
+        },
+        {
+          "node": 4,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 4,
+          "state_vs_native_max_abs": 1.4901161193847656e-08
+        },
+        {
+          "node": 5,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 5,
+          "state_vs_native_max_abs": 3.725290298461914e-09
+        },
+        {
+          "node": 6,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 6,
+          "state_vs_native_max_abs": 1.4901161193847656e-08
+        },
+        {
+          "node": 7,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 7,
+          "state_vs_native_max_abs": 1.4901161193847656e-08
+        },
+        {
+          "node": 8,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 8,
+          "state_vs_native_max_abs": 1.4901161193847656e-08
+        },
+        {
+          "node": 9,
+          "out_vs_native_max_abs": 0.0,
+          "source_row": 9,
+          "state_vs_native_max_abs": 1.4901161193847656e-08
+        }
+      ],
+      "n_actual": 10,
+      "n_pad": 16,
+      "name": "tree_npad16",
+      "out_bit_exact": true,
+      "out_first_mismatch": null,
+      "out_vs_native_max_abs": 0.0,
+      "parent": [
+        -1,
+        0,
+        1,
+        1,
+        2,
+        2,
+        4,
+        4,
+        6,
+        6
+      ],
+      "source_rows": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "state_bit_exact": false,
+      "state_first_mismatch": {
+        "abs": 1.4901161193847656e-08,
+        "index": [
+          4,
+          14,
+          31,
+          7
+        ],
+        "left": -0.21302469074726105,
+        "right": -0.21302470564842224
+      },
+      "state_vs_native_max_abs": 1.4901161193847656e-08
+    }
+  ],
+  "kernel": "lumo_flywheel_serving.fr10_gdn_tree_kernel.launch_tree_gdn_prepared",
+  "launch_num_warps_expected": 8,
+  "layer_prefix": "language_model.model.layers.12.linear_attn",
+  "payload": "output/fr13_prefill_grind_20260608T063838Z/gdn_l12_scan_payload/logs/fr10_tree_gdn_scan_l12.pt",
+  "schema": "fr13.gdn_scan_warp_gate.v1"
+}
