@@ -1279,3 +1279,17 @@ Call2 conv-detail alignment after the fix:
 - No native-only corruption gate was run because native-only arms cannot answer whether TREE_ATTN real-loss drops under batch-invariant mode.
 - Same-config repeat under batch-invariant mode was not rerun because the tree batch-invariant server cannot boot.
 - Host memory was recovered and no `fr13-bi-*` containers remained running.
+
+## Commit (this commit) - FR13 B4 nondeterminism + native BI diagnostic (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_B4_NONDET_NATIVE_BI_BIND.md`.
+- Run root: `output/fr13_b4_nondet_bi_native_20260609T220457Z`.
+- Purpose: pivot after the TREE batch-invariant blocker by testing same-config TREE nondeterminism and native `FLASH_ATTN/naive_mtp` self-noise under `VLLM_BATCH_INVARIANT=1`.
+- TREE repeat: B=4 `TREE_ATTN/tree_mtp`, seed `1313`, CUDA graph captured, `FR10_METRICS=0`, `VLLM_BATCH_INVARIANT=0`.
+- Native BI arms: B=4 `FLASH_ATTN/naive_mtp`, seeds `1313` and `2313`, `VLLM_BATCH_INVARIANT=1`, `LUMO_BATCH_INVARIANT_VLLM=1`.
+- Comparison output: `output/fr13_b4_nondet_bi_native_20260609T220457Z/fr13_b4_nondet_native_bi_compare.json`.
+- TREE direct nondeterminism: comparing the prior captured TREE run to the fresh same-config TREE repeat on overlapping records gives exact `0/4`, token mismatches `189/256`; first diffs moved at prompt0 pos `16` (`369 -> 5759`), prompt1 pos `11` (`26622 -> 12182`), prompt2 pos `21` (`1970 -> 3425`), prompt3 pos `11` (`12182 -> 26622`).
+- Native no-BI eager self-noise baseline: `137/256` positional mask, bag-TV `0.15234375`.
+- Native BI self-noise: `139/256` positional mask, bag-TV `0.0859375`.
+- Captured no-BI reference from the prior 16-record gate: `1319/2048` positional mask, bag-TV `0.10986328125`.
+- Bound verdict: TREE nondeterminism is confirmed and failures move. Native BI reduces emitted-token bag-TV in this seed-pair but does not reduce the raw positional self-noise mask, so this diagnostic does not prove the TREE excess is only shared fp8 GEMM batch-dependence. GDN-scan vs `TREE_ATTN` carrier remains unresolved; speed remains deferred.
