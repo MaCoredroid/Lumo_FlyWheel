@@ -579,5 +579,6 @@ def launch_tree_gdn_prepared(
         H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
         RAW_GATING=raw_gating,
         COUNT_INVOCATION=count_invocation,
+        num_warps=8,
     )
     return out, state

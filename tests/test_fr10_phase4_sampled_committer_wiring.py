@@ -172,6 +172,16 @@ def test_phase4_tree_kernel_gathers_h0_from_accepted_linear_column() -> None:
     assert "H0_USE_ACCEPTED_COLUMN" in text
     assert "H0_BATCH_INDEX" in text
     assert "tl.load(h0_num_accepted_tokens + H0_BATCH_INDEX)" in text
+    assert "num_warps=8" in text
+
+
+def test_forked_fa2_tree_launcher_defaults_to_prefill_native_metrics_off() -> None:
+    text = Path("scripts/fr13_launch_forked_fa2_tree_server.sh").read_text()
+
+    assert "FR10_METRICS=${FR10_METRICS:-0}" in text
+    assert "FR13_FA2_PREFILL_NATIVE=${FR13_FA2_PREFILL_NATIVE:-1}" in text
+    assert '-e FR10_METRICS="$FR10_METRICS"' in text
+    assert '-e FR13_FA2_PREFILL_NATIVE="$FR13_FA2_PREFILL_NATIVE"' in text
 
 
 def test_speed_launcher_defaults_to_nine_node_caterpillar() -> None:
