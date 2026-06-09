@@ -66,6 +66,8 @@ def test_phase4_mamba_stock_copies_use_tree_accepted_bias() -> None:
     assert "phase=\"postprocess\"" in text
     assert "_FR10_TREE_ACCEPTED_PATH_BY_REQ_ID" in text
     assert "tree_mamba_copy_bias" in text
+    assert "FR13_TREE_MAMBA_CONV_NODE_COPY" in text
+    assert "src_state = state[block_ids[src_block_pos]]" in text
 
 
 def test_phase4_patcher_exports_src_native_handoff_payload() -> None:
@@ -141,13 +143,13 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert ".to(torch.long)\n                            - 1," not in text
     assert "_fr10_prior_conv_bank_rows = spec_state_indices_tensor" in text
     assert "_fr10_prior_cols = _fr10_prior_col_base" in text
-    assert "_fr10_use_rolled_tail_prior" in text
-    assert 'int(_fr13_layer_idx) >= 4' in text
-    assert "_fr10_head_prior_col_base = torch.arange(" in text
-    assert "_fr10_tail_prior_col_base = torch.arange(" in text
-    assert "max(0, int(conv_state.size(2)) - (_fr10_width - 1))" in text
-    assert "rolled_tail_remapped" in text
-    assert "legacy_remapped_head" in text
+    assert "_fr10_prior_col_base = torch.arange(" in text
+    assert "compact_head" in text
+    assert "_fr10_use_rolled_tail_prior" not in text
+    assert 'int(_fr13_layer_idx) >= 4' not in text
+    assert "rolled_tail_remapped" not in text
+    assert "legacy_remapped_head" not in text
+    assert "_fr10_node_state_source = torch.cat(\n                                (_fr10_prior_window.transpose(0, 1), _fr10_node_x)," in text
     assert "FR11_TREE_CONV_NATIVE_BF16_TAPS" in text
     assert "def _fr11_conv_tap_product" in text
     assert "h0_use_accepted_column=True" in text

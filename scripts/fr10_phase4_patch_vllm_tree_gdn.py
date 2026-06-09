@@ -44,6 +44,10 @@ TRITON_UNIFIED_ATTN_PATH = Path(
 MAMBA_UTILS_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/mamba_utils.py"
 )
+MAMBA_STATE_UTILS_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/"
+    "mamba_utils.py"
+)
 QWEN3_NEXT_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/qwen3_next.py"
 )
@@ -864,30 +868,10 @@ def _patch_gdn_linear() -> bool:
                     _fr10_source_flat = _fr10_tree_source_indices.reshape(-1)
                     _fr10_flat_source_flat = _fr10_flat_source_indices.reshape(-1)
                     _fr10_path0_source_flat = _fr10_path0_source_indices.reshape(-1)
-                    try:
-                        _fr13_layer_idx = int(
-                            str(self.prefix).split(".layers.", 1)[1].split(".", 1)[0]
-                        )
-                    except Exception:
-                        _fr13_layer_idx = None
-                    _fr10_use_rolled_tail_prior = (
-                        _fr13_layer_idx is not None and int(_fr13_layer_idx) >= 4
-                    )
-                    _fr10_head_prior_col_base = torch.arange(
+                    _fr10_prior_col_base = torch.arange(
                         _fr10_width - 1,
                         dtype=torch.long,
                         device=mixed_qkv_spec.device,
-                    )
-                    _fr10_tail_prior_col_base = torch.arange(
-                        max(0, int(conv_state.size(2)) - (_fr10_width - 1)),
-                        int(conv_state.size(2)),
-                        dtype=torch.long,
-                        device=mixed_qkv_spec.device,
-                    )
-                    _fr10_prior_col_base = (
-                        _fr10_tail_prior_col_base
-                        if _fr10_use_rolled_tail_prior
-                        else _fr10_head_prior_col_base
                     )
                     _fr12_native_prior_col_base = torch.arange(
                         max(0, int(conv_state.size(2)) - (_fr10_width - 1)),
@@ -1163,11 +1147,7 @@ def _patch_gdn_linear() -> bool:
                                             "prior_read_mode": (
                                                 "native_tail_pre_remap"
                                                 if _fr12_native_prior_read
-                                                else (
-                                                    "rolled_tail_remapped"
-                                                    if _fr10_use_rolled_tail_prior
-                                                    else "legacy_remapped_head"
-                                                )
+                                                else "compact_head"
                                             ),
                                             "prior_cols": _fr10_prior_cols.detach()
                                             .cpu()
@@ -1278,6 +1258,22 @@ def _patch_gdn_linear() -> bool:
                         for _fr10_node_i in range(_fr10_tree_n):
                             _fr10_node_path = _fr10_path_node_tensors[_fr10_node_i]
                             _fr10_node_x = _fr10_x.index_select(0, _fr10_node_path)
+                            _fr10_node_state_source = torch.cat(
+                                (_fr10_prior_window.transpose(0, 1), _fr10_node_x),
+                                dim=0,
+                            )
+                            _fr10_node_state_source = torch.cat(
+                                (
+                                    _fr10_node_state_source,
+                                    _fr10_x.new_zeros(
+                                        (
+                                            int(conv_state.size(2)),
+                                            int(_fr10_x.size(1)),
+                                        )
+                                    ),
+                                ),
+                                dim=0,
+                            )
                             _fr10_node_store_idx = (
                                 _fr10_node_path.numel()
                                 + torch.arange(
@@ -1285,13 +1281,6 @@ def _patch_gdn_linear() -> bool:
                                     dtype=torch.long,
                                     device=mixed_qkv_spec.device,
                                 )
-                            )
-                            _fr10_node_state_source = torch.cat(
-                                (
-                                    _fr10_prior_conv_state_bank[_fr10_b].transpose(0, 1),
-                                    _fr10_node_x,
-                                ),
-                                dim=0,
                             )
                             _fr10_node_state_rows.append(
                                 _fr10_node_state_source.index_select(
@@ -1504,9 +1493,18 @@ def _patch_gdn_linear() -> bool:
                                         dtype=mixed_qkv_spec.dtype
                                     )
                                 _fr10_serial_state_source = torch.cat(
+                                    (_fr10_prior_window.transpose(0, 1), _fr10_node_x),
+                                    dim=0,
+                                )
+                                _fr10_serial_state_source = torch.cat(
                                     (
-                                        _fr10_prior_conv_state_bank[_fr10_b].transpose(0, 1),
-                                        _fr10_node_x,
+                                        _fr10_serial_state_source,
+                                        _fr10_x.new_zeros(
+                                            (
+                                                int(conv_state.size(2)),
+                                                int(_fr10_x.size(1)),
+                                            )
+                                        ),
                                     ),
                                     dim=0,
                                 )
@@ -5319,6 +5317,68 @@ def collect_mamba_copy_meta(
     return True
 
 
+def _patch_mamba_state_utils_tree_conv_node_copy() -> bool:
+    text = MAMBA_STATE_UTILS_PATH.read_text()
+    sentinel = "# FR13_TREE_MAMBA_CONV_NODE_COPY"
+    if sentinel in text:
+        return False
+
+    text = text.replace("import torch\n", "import os\n\nimport torch\n", 1)
+    replacement = """def get_conv_copy_spec(
+    state: torch.Tensor,
+    block_ids: list[int],
+    cur_block_idx: int,
+    num_accepted_tokens: int,
+) -> MambaCopySpec:
+    \"\"\"Return a MambaCopySpec for copying a convolutional state slice.\"\"\"
+    # FR13_TREE_MAMBA_CONV_NODE_COPY: tree GDN stores every verified
+    # causal-conv state in the accepted node row. The accepted-token value has
+    # already been translated to tree-node + 1, so copy that full row instead
+    # of treating it as a suffix offset into the base speculative row.
+    if (
+        os.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp") == "tree_mtp"
+        and os.environ.get("FR10_ENABLE_TREE_GDN", "1") == "1"
+        and num_accepted_tokens > 1
+    ):
+        src_block_pos = cur_block_idx + num_accepted_tokens - 1
+        if src_block_pos < len(block_ids):
+            src_state = state[block_ids[src_block_pos]]
+            return MambaCopySpec(
+                start_addr=src_state.data_ptr(), num_elements=src_state.numel()
+            )
+        if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1":
+            raise RuntimeError(
+                "FR13 tree conv node copy out of range: "
+                f"cur_block_idx={cur_block_idx} "
+                f"num_accepted_tokens={num_accepted_tokens} "
+                f"block_ids={len(block_ids)}"
+            )
+    src_block_id = block_ids[cur_block_idx]
+    offset = num_accepted_tokens - 1
+    if "is_conv_state_dim_first" in globals() and is_conv_state_dim_first():
+        if offset > 0:
+            raise NotImplementedError(
+                "DS conv state layout does not yet support speculative "
+                "decoding with mamba_cache_mode='align' "
+                "(num_accepted_tokens > 1)."
+            )
+        src_state = state[src_block_id]
+    else:
+        src_state = state[src_block_id, offset:]
+    return MambaCopySpec(
+        start_addr=src_state.data_ptr(), num_elements=src_state.numel()
+    )
+
+"""
+    start = text.find("def get_conv_copy_spec(")
+    end = text.find("\ndef get_temporal_copy_spec(", start)
+    if start < 0 or end < 0:
+        raise RuntimeError("mamba state conv copy spec anchor not found")
+    text = text[:start] + replacement + text[end + 1 :]
+    MAMBA_STATE_UTILS_PATH.write_text(text)
+    return True
+
+
 def _patch_eagle_tree_consumption_verify() -> bool:
     text = EAGLE_PATH.read_text()
     sentinel = "# FR10_TREE_DRAFT_CONSUMPTION_VERIFY"
@@ -7341,6 +7401,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
+        (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
     ]
     patched: dict[str, bool] = {}
