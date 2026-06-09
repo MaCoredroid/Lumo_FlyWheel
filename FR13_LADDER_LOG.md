@@ -1266,3 +1266,16 @@ Call2 conv-detail alignment after the fix:
 - Capture attempt 3 (`tree3/native3`): `max_tokens=14`, rows `0..39`, no token-count filter. `.pt` captures were written for full 40-row calls, but the requested prompt1 pos11 failure did not reproduce: both tree3 and native3 emitted `26622` at prompt1 position `11`.
 - Result: no first-diverging layer is bound. This is a row/token selection miss, not a clean ladder result.
 - Constraint honored: no fifth capture was started; host memory was recovered and no localization container remained running.
+
+## Commit (this commit) - FR13 B4 batch-invariant gate blocked (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_B4_BATCH_INVARIANT_GATE_BLOCKED.md`.
+- Run root: `output/fr13_b4_batch_invariant_gate_20260609T215506Z`.
+- Prerequisite code commit: `92854ab9` allowed the FR13/F10 launchers to pass `BATCH_INVARIANT=1` / `LUMO_BATCH_INVARIANT_VLLM=1` instead of hard-coding tree `VLLM_BATCH_INVARIANT=0`.
+- Attempted tree arm: B=4, `TREE_ATTN/tree_mtp`, `MAX_NUM_SEQS=4`, `FR10_METRICS=0`, `VLLM_BATCH_INVARIANT=1`, `LUMO_BATCH_INVARIANT_VLLM=1`.
+- Env proof: `tree/batch_invariant_env.txt` shows both batch-invariant flags live in the container.
+- Result: tree server failed before health. vLLM's global batch-invariant guard rejects `TREE_ATTN`: `RuntimeError: VLLM batch_invariant mode requires an attention backend in ['FLASH_ATTN', 'TRITON_ATTN', 'FLASH_ATTN_MLA', 'TRITON_MLA'], but got 'TREE_ATTN'.`
+- Failure log: `tree/docker_failed_batch_invariant.log`.
+- No native-only corruption gate was run because native-only arms cannot answer whether TREE_ATTN real-loss drops under batch-invariant mode.
+- Same-config repeat under batch-invariant mode was not rerun because the tree batch-invariant server cannot boot.
+- Host memory was recovered and no `fr13-bi-*` containers remained running.
