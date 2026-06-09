@@ -68,3 +68,5 @@ Self-noise correction was not established by this two-arm run. A native-vs-nativ
 This binds the requested SWE B=4 CUDA-graph diagnostic numbers only. It does not self-declare pass/fail.
 
 The measured diagnostic is not lossless at the raw served-token level (`0/16` exact, bag-TV `0.2194`) and TREE is slower than Native E5 on the wall-consistent per-request metrics in this run (`18.03` vs `41.27` returned tokens/s; accept/event `2.024` vs `3.794`). Task-verdict match was not measured by this output-level probe.
+
+Against the deployed-regime B=4 CUDA-captured native E5 baseline, the TREE arm is a clear negative diagnostic: request TPS mean `4.90` vs `11.88` means TREE is `2.42x` slower by wall-consistent per-request TPS, and accept/event `2.024` vs `3.794` means TREE has `1.87x` fewer accepted tokens per draft event. Both arms had `enforce_eager=False` and FULL decode CUDA graph capture verified.

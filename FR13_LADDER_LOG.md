@@ -1158,9 +1158,11 @@ Call2 conv-detail alignment after the fix:
 - Wall-consistent speed:
   - TREE returned `1856` tokens in `102.950s`: `18.028` returned tokens/s; request TPS mean/median `4.902/4.966`.
   - Native returned `2048` tokens in `49.629s`: `41.266` returned tokens/s; request TPS mean/median `11.875/11.417`.
+- Deployed-regime speed verdict for this diagnostic: using wall-consistent per-request TPS mean, TREE is `2.42x` slower than native E5 (`4.902` vs `11.875`). By returned-token wall TPS, TREE is `2.29x` slower (`18.028` vs `41.266`); by measured wall window, TREE took `2.07x` longer (`102.950s` vs `49.629s`) while returning fewer tokens.
 - Acceptance:
   - TREE accept/event `2.024` (`1255` accepted, `5580` draft tokens, `620` drafts).
   - Native accept/event `3.794` (`1643` accepted, `3897` draft tokens, `433` drafts).
+  - Native E5 has `1.87x` higher accept/event than TREE (`3.794 / 2.024`), equivalently TREE has `1.87x` fewer accepts per draft event.
 - Raw output-level token comparison:
   - records compared `16`;
   - exact token sequences `0/16`;
@@ -1171,4 +1173,4 @@ Call2 conv-detail alignment after the fix:
   - prefix match min/median/max `1/16/68`;
   - TREE returned fewer than `128` tokens for `4/16` records; native returned `128/128` for all records.
 - Limitations: `fr12_deliverable_swe4_probe.py` is an output-level SWE prompt decode probe, not the full Codex SWE agent/evaluator run, so task grader verdicts were not produced. Self-noise correction was not established because this stage ran the user-requested two arms only; a same-regime native-vs-native repeat would be required to subtract native self-noise from raw TREE-vs-native token differences.
-- Diagnostic bind: record the numbers only; no pass/fail self-declaration.
+- Diagnostic bind: record the numbers only; no pass/fail self-declaration. The real-workload B=4 CUDA-captured diagnostic is clearly negative for TREE on speed/acceptance versus native E5.
