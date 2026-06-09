@@ -8,6 +8,18 @@ A `FR10_ALLOW_LINEAR_FALLBACK` run is DIAGNOSTIC ONLY (GDN may go linear) → NE
 
 ---
 
+## Commit `a586ac84` - sequential e2e prefill-native binding (codex_fr13, 2026-06-09T04:15Z)
+
+- Code changes: `FR13_FA2_PREFILL_NATIVE` defaults on for the forked FA2 TREE_ATTN launcher, `FR10_METRICS` defaults off, and the GDN tree kernel launch pins `num_warps=8`.
+- Static checks: `python3 -m py_compile src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py scripts/fr13_patch_fa2_tree_bias.py scripts/fr12_deliverable_swe4_probe.py scripts/fr13_compare_deliverable.py`; `bash -n scripts/fr13_launch_forked_fa2_tree_server.sh`; `pytest -q tests/test_fr10_phase4_sampled_committer_wiring.py`.
+- Live run: `output/fr13_seq_e2e_prefill_native_20260609T041654Z`, sequential 9-node TREE_ATTN, forked FA2, `FR13_FA2_PREFILL_NATIVE=1`, `FR10_METRICS=0`, B=4 CUDA graph. FULL decode capture completed (`PIECEWISE=8`, `FULL=4`).
+- Tree engagement: `engaged=true`, `gpu_tree_metadata_ok_rows=248/248`, `tree_accept_rows=795`.
+- E2E result: tree accept/event `1.6583442838370566` versus saved E5 bar `3.076171875`; tree warm decode TPS `5.746200172868099` versus saved E5 `17.987313578432634`.
+- Bag-TV: saved E5 same8 JSON has no token records, so bag-TV was computed against the fresh paired native artifact with records. Result `0.42584828811470293`, above the `0.0593` floor; first paired mismatch at prompt `0`, sample `0`, position `8`.
+- Binding caveat: this e2e path emitted canonical stochastic committer rows (`tree_sample_accept`), not authoritative `tree_path_lcp_max` argmax-ladder rows. It binds the distribution/acceptance miss, not the exact per-depth argmax-flip layer. Do not pivot back to GDN/literal-zero from this artifact; next localization remains the full-attention/tree-verify argmax front.
+
+---
+
 ## Commit `2900203b` (fr13 handle suffix tree bias offsets) — forked FA2 tree-bias kernel
 
 ### Kernel smoke (direct CUDA, isolated)
