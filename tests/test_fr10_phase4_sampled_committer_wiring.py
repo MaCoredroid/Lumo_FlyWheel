@@ -199,8 +199,26 @@ def test_speed_launcher_defaults_to_nine_node_caterpillar() -> None:
     assert '-e FR11_TREE_CONV_NATIVE_BF16_TAPS="$FR11_TREE_CONV_NATIVE_BF16_TAPS"' in text
     assert "LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}" in text
     assert "LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}" in text
+    assert "FR13_PREFILL_GDN_CAPTURE=${FR13_PREFILL_GDN_CAPTURE:-}" in text
+    assert (
+        "FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX="
+        "${FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX:-}"
+    ) in text
+    assert (
+        "FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX="
+        "${FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX:-1}"
+    ) in text
     assert '-e LUMO_TREE_SAMPLER_DEBUG_LOG="$LUMO_TREE_SAMPLER_DEBUG_LOG"' in text
     assert '-e LUMO_TREE_PATH_LCP_LOG="$LUMO_TREE_PATH_LCP_LOG"' in text
+    assert '-e FR13_PREFILL_GDN_CAPTURE="$FR13_PREFILL_GDN_CAPTURE"' in text
+    assert (
+        '-e FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX='
+        '"$FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX"'
+    ) in text
+    assert (
+        '-e FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX='
+        '"$FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX"'
+    ) in text
 
 
 def test_tree_engagement_logs_are_available_with_metrics_off() -> None:

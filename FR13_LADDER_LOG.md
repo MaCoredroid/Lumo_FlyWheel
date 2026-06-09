@@ -1099,3 +1099,26 @@ Call2 conv-detail alignment after the fix:
 - Reducer artifact: `output/fr13_decisive_seam1_20260609T173330Z/fr13_seam1_uniform_conv_validation.json`.
 - Gate result: row0 clean-input cases `99`; row0 clean-input `conv1d_out` nonzero cases `0`; spine clean-input `conv1d_out` nonzero cases `0`.
 - Verdict: Seam 1 validated. No new clean-input conv divergence was exposed; remaining non-clean divergences are upstream input/branch-state issues, not a conv read/write-back seam. Advance to Seam 2.
+
+## Commit (this commit) - FR13 Seam 2 prefill-native validation (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_SEAM2_PREFILL_NATIVE_BIND.md`.
+- Code status: the `FR13_FA2_PREFILL_NATIVE` implementation was already present in `scripts/fr13_patch_fa2_tree_bias.py` and launch-defaulted on by `scripts/fr13_launch_forked_fa2_tree_server.sh`. This stage validates it; it does not re-derive or replace it.
+- Harness updates: `scripts/fr13_fa2_no_bias_pristine_compare.py` now includes explicit prefill-shaped cases (`q_lens == k_lens`) in addition to decode-shaped cases; `scripts/fr10_launch_speed_server.sh` passes the existing `FR13_PREFILL_GDN_CAPTURE*` diagnostic env vars so native FLASH_ATTN can be paired for L8 h0/state.
+- CPU gates: `pytest -q tests/test_fr13_fa2_no_bias_pristine_compare.py tests/test_fr10_phase4_sampled_committer_wiring.py` -> `15 passed`; `bash -n` for both launchers and `py_compile` for Seam 2 scripts passed.
+- Run root: `output/fr13_decisive_seam2_20260609T175913Z`.
+- Extended gate-2 stock-vs-fork no-bias compare: `gate2/no_bias_compare.json`.
+  - `float16_decode`: `torch_equal=true`, `max_abs=0.0`, `nonzero=0`.
+  - `float16_prefill`: `torch_equal=true`, `max_abs=0.0`, `nonzero=0`.
+  - `bfloat16_decode`: `torch_equal=true`, `max_abs=0.0`, `nonzero=0`.
+  - `bfloat16_prefill`: `torch_equal=true`, `max_abs=0.0`, `nonzero=0`.
+- Live L7 prefill full-attn replay: `prefill_full_attn_l7_replay.json`.
+  - Tree capture: `tree_prefill_l7_live/logs/full_attn_tree_l7.call0.pt`.
+  - Native capture: `native_prefill_live/logs/full_attn_native_l7.call0.pt`.
+  - Same text prompt; both arms reported `prompt_tokens=14`.
+  - Result: no first diverging layer/stage; `attn_out_raw=0.0`, `o_proj_out=0.0`, and all captured stages `0.0`.
+- Live L8 prefill-GDN replay: `prefill_gdn_l8_state_replay.json`.
+  - Tree capture source: `tree_prefill_live/logs/prefill_gdn_tree.call*.pt`.
+  - Native capture: `native_prefill_live/logs/prefill_gdn_native.call0.pt`.
+  - Result: no first diverging layer/stage; `pre_conv=0.0`, `conv_out=0.0`, `initial_state/h0=0.0`, `core_out=0.0`, `final_state=0.0`.
+- Verdict: Seam 2 validated for HEAD. Forked FA2 no-bias regular decode and prefill are byte-identical to pristine stock FA2; live TREE_ATTN prefill L7 is byte-identical to native FLASH_ATTN; downstream GDN L8 prefill recurrent seed is byte-identical. Advance directly to the all-8 branch-oracle plus self-noise-corrected B=4 superset e2e comparator.

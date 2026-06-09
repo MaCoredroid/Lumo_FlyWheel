@@ -27,28 +27,37 @@ def make_input(path: Path) -> int:
     torch.manual_seed(1313)
     cases = []
     for dtype in (torch.float16, torch.bfloat16):
-        q_lens = [9, 3]
-        k_lens = [71, 17]
-        total_q = sum(q_lens)
-        total_k = sum(k_lens)
-        q = torch.randn(total_q, 64, 128, dtype=dtype)
-        k = torch.randn(total_k, 8, 128, dtype=dtype)
-        v = torch.randn(total_k, 8, 128, dtype=dtype)
-        cu_q = torch.tensor([0, q_lens[0], total_q], dtype=torch.int32)
-        cu_k = torch.tensor([0, k_lens[0], total_k], dtype=torch.int32)
-        cases.append(
-            {
-                "name": str(dtype).replace("torch.", ""),
-                "q": q,
-                "k": k,
-                "v": v,
-                "cu_q": cu_q,
-                "cu_k": cu_k,
-                "max_q": max(q_lens),
-                "max_k": max(k_lens),
-                "scale": 1.0 / (128**0.5),
-            }
-        )
+        for mode, q_lens, k_lens in (
+            ("decode", [9, 3], [71, 17]),
+            ("prefill", [71, 17], [71, 17]),
+        ):
+            total_q = sum(q_lens)
+            total_k = sum(k_lens)
+            q = torch.randn(total_q, 64, 128, dtype=dtype)
+            k = torch.randn(total_k, 8, 128, dtype=dtype)
+            v = torch.randn(total_k, 8, 128, dtype=dtype)
+            cu_q = torch.tensor(
+                [0, *torch.tensor(q_lens).cumsum(0).tolist()],
+                dtype=torch.int32,
+            )
+            cu_k = torch.tensor(
+                [0, *torch.tensor(k_lens).cumsum(0).tolist()],
+                dtype=torch.int32,
+            )
+            cases.append(
+                {
+                    "name": f"{str(dtype).replace('torch.', '')}_{mode}",
+                    "mode": mode,
+                    "q": q,
+                    "k": k,
+                    "v": v,
+                    "cu_q": cu_q,
+                    "cu_k": cu_k,
+                    "max_q": max(q_lens),
+                    "max_k": max(k_lens),
+                    "scale": 1.0 / (128**0.5),
+                }
+            )
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"schema": "fr13.fa2_no_bias_input.v1", "cases": cases}, path)
     print(path)
