@@ -1048,3 +1048,15 @@ Call2 conv-detail alignment after the fix:
 ### Regular-Decode Status
 - Full regular-decode stock-vs-fork layer capture was **not rerun** in this turn. The primary served-token lossless gate already failed, so no lossless verdict is claimed.
 - Existing no-bias pristine FA2 comparator remains available, but this entry does not bind a fresh full-layer regular-decode pass for HEAD.
+
+## Commit `6f11a7ca` + measurement worktree - prompt0 next-divergence class (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_POS16_DIVERGENCE_BIND.md`.
+- Temp0.6 same8 after the conv fix: bag-TV `0.24993977147577093` versus prior `0.4258`; improved but still above the `0.059` floor. Exact sequence matches `1/32`; first mismatch prompt `1`, sample `0`, position `1`.
+- Targeted prompt0 greedy eager substate run: `output/fr13_pos16_substate_20260609T081638Z`.
+- Capture note: the original CUDA-graph same8 first mismatch was prompt0 position `16`; the eager substate run shifted the first prompt0 mismatch to position `18`, so this entry binds the **class** of the next divergence, not a literal CUDA-graph position-16 row.
+- Row0 layer-0 GDN substate:
+  - calls `0`, `1`, `2`, and `4` are clean through `o_proj_out`;
+  - calls `3`, `5`, and `6` first diverge at `input_hidden`, before layer-0 GDN.
+- At the served flip event, spine rows remain clean through layer-0 GDN, while the tree selects off-spine branch path `[0,1,3,5,7]` and emits `10278` where native greedy emits `52589`.
+- Verdict: this frontier is **not another systematic row0 conv/bank num-accepted-class issue**. It is a **branch selector / native-on-branch-path oracle alignment front**. Do not tune row0 conv writeback/readback from this artifact.
