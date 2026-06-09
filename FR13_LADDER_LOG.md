@@ -1010,3 +1010,10 @@ Call2 conv-detail alignment after the fix:
 - Residual versus native scaled by node count: `-17.136 ms`; this `/metrics` surface does not show a positive extra penalty beyond node-count scaling.
 - GDN tree-scan state traffic / num_warps spill and forked-FA2 whole-tree cost are not separately isolatable from this metrics-only profile; separating them still requires component ablation or a valid server-side kernel trace.
 - Do not use returned-token TPS alone for this profile: stochastic sampling returned 163 tree tokens vs 256 native tokens.
+
+### Speed Correction / Caveat
+- User red-team workflow `w7m85fq0e` adversarially verified that the `1.412x` ratio above is a **raw, internally inconsistent metric artifact**, not a speed verdict.
+- The broken surface is `vllm:request_decode_time_seconds_sum`: it is directionally inverted versus per-request `decode_sum_s` and wall clock on the checked run (`tree 8.60s` vs `native 37.20s` wall-consistent aggregate), while returned-token counts also differ.
+- The regime remains weight-bandwidth-bound for this prompt length (`~99ms` weight-stream floor; attention about `0.14%`), but per-forward speed is **UNDETERMINED** pending a clean wall-consistent measurement.
+- Future speed measurement must use per-request decode TPS / wall-consistent timing, `VLLM_BATCH_INVARIANT=0`, seeded fixed token totals, many prompts, and E5 `FLASH_ATTN`; do **not** use `decode_seconds_sum` as the denominator.
+- Correctness note: do **not** disable or gate off `src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:349-353`; the per-node state store is the committed recurrent-state handoff data source, not a discardable HBM tax.
