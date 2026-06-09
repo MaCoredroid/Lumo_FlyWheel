@@ -1067,3 +1067,22 @@ Call2 conv-detail alignment after the fix:
 - Prompt-token sanity: `prompt: [prompt_token_ids]` reproduced the native prompt0 text-prompt baseline for the first 24 tokens; integer-token branch prompts are valid for this oracle.
 - Event `4`, branch path `[0,1,3,5,7]`: tree verify targets match real native-on-branch-path `/v1/completions` for `6/6` checks (`364`, `264`, `82546`, `10278`, `1103`, leaf bonus `2357`).
 - Classification: **alignment/gate mismatch**, not branch-kernel argmax drift. The paired native greedy spine emits `52589`, but native-on-that-branch-path emits `10278`, matching the tree. The committer selects the branch because branch LCP `5` > path0 LCP `1`; this is the `greedy_tree_lcp_max` policy, not a GDN/FA2 sub-op failure.
+
+## Commit (this commit) - FR13 branch-node self-noise red-team / current same8 minus native-self-noise gate (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_BRANCH_NODE_SELF_NOISE_BIND.md`.
+- Run root: `output/fr13_branch_node_redteam_20260609T090932Z`.
+- Reason for rerun: stale artifacts disagreed on native's own prompt0 branch-point token (`10278` vs `52589`), so no losslessness verdict can be bound from those pairs.
+- Fresh current arms:
+  - tree: `TREE_ATTN`, forked FA2, `tree_mtp`, 9-node tree, `MAX_NUM_SEQS=1`, batch probe `1`;
+  - native1: `FLASH_ATTN`, `naive_mtp`, 5 MTP tokens, `MAX_NUM_SEQS=1`, batch probe `1`;
+  - native2 self-noise: `FLASH_ATTN`, `naive_mtp`, 5 MTP tokens, `MAX_NUM_SEQS=4`, batch probe `4`.
+- Prompt identity: byte-exact for all `8/8` current records.
+- Branch-node red-team result: prompt0 position `18` is native self-noise (`native1=10278`, `native2=52589`, `tree=52589`), so that specific branch flip is not a real tree loss.
+- A/B/C gate:
+  - (a) tree-vs-native1 mismatching positions: `368`;
+  - (b) native self-noise mismatching positions: `85`;
+  - (c) tree mismatches outside native self-noise: `287`.
+- Sequence level: tree/native exact `0/8`; prefix `0/8`; ordered-subsequence `0/8`; native1/native2 exact `4/8`.
+- First outside-self-noise divergences: prompt0 pos `46`; prompt1 pos `28`; prompt2 pos `35`; prompt3 pos `10`; prompt4 pos `1`; prompt5 pos `1`; prompt6 pos `1`; prompt7 pos `15`.
+- Verdict: native self-noise explains the stale branch-node contradiction, but not the current same8 tree divergence. The accepted minus-self-noise gate still fails; localize from the first current outside-self-noise divergence, not the stale pos18 artifact.
