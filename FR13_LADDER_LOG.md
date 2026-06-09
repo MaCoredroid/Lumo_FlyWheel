@@ -1139,3 +1139,36 @@ Call2 conv-detail alignment after the fix:
   - first mismatch: prompt0 event13 path `[0,1,3,5,8]` depth4 parent target, tree `198` vs native-on-branch `1358`.
   - other mismatches: prompt0 leaf self target `262` vs `71093`; prompt3 leaf self target `265` vs `1302`; prompt7 depth0 parent target `417` vs `7620`.
 - Verdict: the all-8 branch oracle does **not** confirm lossless-by-branch for HEAD. Several targeted committed winner-path checks differ from native-on-their-branch-path. The B4 temp0.6 superset e2e deliverable was not started in this stage.
+
+## Commit (this commit) - FR13 SWE B=4 CUDA-graph diagnostic (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_SWE_B4_DIAGNOSTIC_BIND.md`.
+- Run root: `output/fr13_swe_verified_b4_diag_20260609T190931Z`.
+- Scope: two sequential one-GPU arms using `scripts/fr12_deliverable_swe4_probe.py` on the SWE-Verified four-prompt subset, B=4, `temperature=0.6`, `top_p=0.95`, `max_tokens=128`, `samples_per_prompt=4`, `seed=1313`; `recover_host_memory()` before each arm.
+- TREE arm: `TREE_ATTN`, forked FA2 tree verify, `tree_mtp`, `MAX_NUM_SEQS=4`, `MAX_MODEL_LEN=131072`, `FR13_FA2_PREFILL_NATIVE=1`, `FR10_METRICS=0`.
+- Native E5 arm: `FLASH_ATTN`, `naive_mtp`, MTP-5, `MAX_NUM_SEQS=4`, `MAX_MODEL_LEN=131072`, `FR10_METRICS=0`.
+- CUDA graph validation:
+  - TREE: `enforce_eager=False`, `cudagraph_mode=FULL_AND_PIECEWISE`, `Capturing CUDA graphs (decode, FULL): 4/4`.
+  - Native: `enforce_eager=False`, `cudagraph_mode=FULL_AND_PIECEWISE`, `Capturing CUDA graphs (decode, FULL): 4/4`.
+  - No FR13 subkernel/prefill capture hook artifacts were produced; TREE standard engagement traces were present (`tree_sampler_debug.jsonl`, `tree_path_lcp.jsonl`, `fr10_mtp_draft_trace.jsonl`).
+- Artifacts:
+  - TREE probe: `tree_b4_swe4/tree_b4_swe4_probe.json`.
+  - Native probe: `native_b4_swe4/native_b4_swe4_probe.json`.
+  - Raw compare: `native_vs_tree_swe4_compare.json`.
+- Wall-consistent speed:
+  - TREE returned `1856` tokens in `102.950s`: `18.028` returned tokens/s; request TPS mean/median `4.902/4.966`.
+  - Native returned `2048` tokens in `49.629s`: `41.266` returned tokens/s; request TPS mean/median `11.875/11.417`.
+- Acceptance:
+  - TREE accept/event `2.024` (`1255` accepted, `5580` draft tokens, `620` drafts).
+  - Native accept/event `3.794` (`1643` accepted, `3897` draft tokens, `433` drafts).
+- Raw output-level token comparison:
+  - records compared `16`;
+  - exact token sequences `0/16`;
+  - emitted-token bag TV `0.2194066541`;
+  - first-token TV `0.0`;
+  - token-count TV `0.25`;
+  - first mismatch prompt `0`, sample `0`, position `15`, native `1970`, tree `5759`;
+  - prefix match min/median/max `1/16/68`;
+  - TREE returned fewer than `128` tokens for `4/16` records; native returned `128/128` for all records.
+- Limitations: `fr12_deliverable_swe4_probe.py` is an output-level SWE prompt decode probe, not the full Codex SWE agent/evaluator run, so task grader verdicts were not produced. Self-noise correction was not established because this stage ran the user-requested two arms only; a same-regime native-vs-native repeat would be required to subtract native self-noise from raw TREE-vs-native token differences.
+- Diagnostic bind: record the numbers only; no pass/fail self-declaration.
