@@ -137,8 +137,17 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert "h0_num_accepted_tokens=_fr10_accepted_lens_tensor" in text
     assert "num_accepted_tokens=_fr10_accepted_lens_tensor" in text
     assert "_fr10_conv_read_cols = torch.clamp(" in text
+    assert ".to(torch.long),\n                            min=0," in text
+    assert ".to(torch.long)\n                            - 1," not in text
     assert "_fr10_prior_conv_bank_rows = spec_state_indices_tensor" in text
     assert "_fr10_prior_cols = _fr10_prior_col_base" in text
+    assert "_fr10_use_rolled_tail_prior" in text
+    assert 'int(_fr13_layer_idx) >= 4' in text
+    assert "_fr10_head_prior_col_base = torch.arange(" in text
+    assert "_fr10_tail_prior_col_base = torch.arange(" in text
+    assert "max(0, int(conv_state.size(2)) - (_fr10_width - 1))" in text
+    assert "rolled_tail_remapped" in text
+    assert "legacy_remapped_head" in text
     assert "FR11_TREE_CONV_NATIVE_BF16_TAPS" in text
     assert "def _fr11_conv_tap_product" in text
     assert "h0_use_accepted_column=True" in text

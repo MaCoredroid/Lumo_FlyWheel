@@ -800,8 +800,7 @@ def _patch_gdn_linear() -> bool:
                         _fr10_conv_read_cols = torch.clamp(
                             _fr10_accepted_lens_tensor[
                                 : attn_metadata.num_spec_decodes
-                            ].to(torch.long)
-                            - 1,
+                            ].to(torch.long),
                             min=0,
                             max=int(spec_state_indices_tensor.size(-1)) - 1,
                         ).view(-1, 1)
@@ -865,10 +864,30 @@ def _patch_gdn_linear() -> bool:
                     _fr10_source_flat = _fr10_tree_source_indices.reshape(-1)
                     _fr10_flat_source_flat = _fr10_flat_source_indices.reshape(-1)
                     _fr10_path0_source_flat = _fr10_path0_source_indices.reshape(-1)
-                    _fr10_prior_col_base = torch.arange(
+                    try:
+                        _fr13_layer_idx = int(
+                            str(self.prefix).split(".layers.", 1)[1].split(".", 1)[0]
+                        )
+                    except Exception:
+                        _fr13_layer_idx = None
+                    _fr10_use_rolled_tail_prior = (
+                        _fr13_layer_idx is not None and int(_fr13_layer_idx) >= 4
+                    )
+                    _fr10_head_prior_col_base = torch.arange(
                         _fr10_width - 1,
                         dtype=torch.long,
                         device=mixed_qkv_spec.device,
+                    )
+                    _fr10_tail_prior_col_base = torch.arange(
+                        max(0, int(conv_state.size(2)) - (_fr10_width - 1)),
+                        int(conv_state.size(2)),
+                        dtype=torch.long,
+                        device=mixed_qkv_spec.device,
+                    )
+                    _fr10_prior_col_base = (
+                        _fr10_tail_prior_col_base
+                        if _fr10_use_rolled_tail_prior
+                        else _fr10_head_prior_col_base
                     )
                     _fr12_native_prior_col_base = torch.arange(
                         max(0, int(conv_state.size(2)) - (_fr10_width - 1)),
@@ -1144,7 +1163,11 @@ def _patch_gdn_linear() -> bool:
                                             "prior_read_mode": (
                                                 "native_tail_pre_remap"
                                                 if _fr12_native_prior_read
-                                                else "legacy_remapped_head"
+                                                else (
+                                                    "rolled_tail_remapped"
+                                                    if _fr10_use_rolled_tail_prior
+                                                    else "legacy_remapped_head"
+                                                )
                                             ),
                                             "prior_cols": _fr10_prior_cols.detach()
                                             .cpu()
