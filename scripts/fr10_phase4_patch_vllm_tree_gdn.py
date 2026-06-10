@@ -2743,16 +2743,22 @@ def _patch_gdn_linear() -> bool:
                                 "FR10 tree GDN scan capture failed: %s",
                                 _fr10_capture_exc,
                             )
-                    # Persist every verified tree-node state. The sampled
-                    # committer publishes the accepted path after this forward;
-                    # the next decode remaps those node rows into stock linear
-                    # columns with launch_tree_state_linear_remap before the
-                    # recurrent consumers read them.
-                    ssm_state.index_copy_(
-                        0,
-                        spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
-                        tree_state[:tree_n].to(dtype=ssm_state.dtype),
-                    )
+                    # Defer recurrent-state publish until the sampled committer
+                    # knows the accepted path. Rejected rows are dead: the next
+                    # launch_tree_state_linear_remap reads only columns
+                    # pid_k < accepted_len from the accepted path tensor. Store
+                    # references to the graph-stable scratch/state buffers here,
+                    # then publish only surviving rows in the committer.
+                    globals().setdefault(
+                        "_FR10_PENDING_TREE_STATE_PUBLISH", {}
+                    )[(str(self.prefix), int(fr10_b))] = {
+                        "ssm_state": ssm_state,
+                        "spec_state_indices": spec_state_indices_tensor[
+                            fr10_b, :tree_n
+                        ],
+                        "tree_state": tree_state,
+                        "tree_n": int(tree_n),
+                    }
                     if _fr10_commit_handoff_active:
                         try:
                             _fr10_curr_conv = globals().get(
@@ -2822,19 +2828,10 @@ def _patch_gdn_linear() -> bool:
                         os.environ.get("FR10_METRICS", "0") == "1"
                         and _fr10_scan_diag is not None
                     ):
-                        _fr10_staged_state = ssm_state.index_select(
-                            0, spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long)
-                        )
-                        _fr10_staged_delta = (
-                            _fr10_staged_state.float()
-                            - tree_state[:tree_n].to(dtype=ssm_state.dtype).float()
-                        ).abs().max()
-                        _fr10_scan_diag[12].copy_(
-                            torch.maximum(_fr10_scan_diag[12], _fr10_staged_delta)
-                        )
-                        _fr10_scan_diag[13].add_(
-                            (_fr10_staged_delta != 0).to(dtype=torch.float32)
-                        )
+                        # Accepted-only publish is intentionally deferred until
+                        # committer path selection. The old all-row staged-state
+                        # equality probe is no longer meaningful here.
+                        _fr10_scan_diag[13].add_(0.0)
                 last_recurrent_state = tree_state_all
             else:
                 if (
@@ -3648,6 +3645,53 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
             [int(x) for x in row] for row in accepted_token_rows
         ]
+        _fr10_pending_publish = getattr(
+            _lumo_tree_commit_gdn, "_FR10_PENDING_TREE_STATE_PUBLISH", {}
+        )
+        _fr10_published_rows = 0
+        if _fr10_pending_publish:
+            for (_fr10_prefix, _fr10_batch_index), _fr10_publish in list(
+                _fr10_pending_publish.items()
+            ):
+                _fr10_bi = int(_fr10_batch_index)
+                if _fr10_bi >= len(accepted_gdn_node_paths):
+                    continue
+                # Row 0 is live for zero-accept events: h0 read clamps
+                # accepted_len - 1 to column 0. Publish it plus the accepted
+                # path rows; all other rejected branch rows remain dead.
+                _fr10_path = [0] + [
+                    int(_node)
+                    for _node in accepted_gdn_node_paths[_fr10_bi][
+                        : int(accepted_lens[_fr10_bi])
+                    ]
+                ]
+                if not _fr10_path:
+                    continue
+                _fr10_tree_n = int(_fr10_publish["tree_n"])
+                _fr10_path = sorted(set(_fr10_path))
+                _fr10_path = [
+                    max(0, min(int(_node), _fr10_tree_n - 1))
+                    for _node in _fr10_path
+                ]
+                _fr10_tree_state = _fr10_publish["tree_state"]
+                _fr10_spec_state_indices = _fr10_publish["spec_state_indices"]
+                _fr10_ssm_state = _fr10_publish["ssm_state"]
+                _fr10_rows_t = torch.tensor(
+                    _fr10_path,
+                    dtype=torch.long,
+                    device=_fr10_tree_state.device,
+                )
+                _fr10_bank_rows = _fr10_spec_state_indices.index_select(
+                    0, _fr10_rows_t
+                ).to(torch.long)
+                _fr10_values = _fr10_tree_state.index_select(
+                    0, _fr10_rows_t
+                ).to(dtype=_fr10_ssm_state.dtype)
+                _fr10_ssm_state.index_copy_(0, _fr10_bank_rows, _fr10_values)
+                _fr10_published_rows += int(_fr10_rows_t.numel())
+        _lumo_tree_commit_gdn._FR10_LAST_ACCEPT_ONLY_PUBLISH_ROWS = int(
+            _fr10_published_rows
+        )
     except Exception as _fr10_tree_lcp_log_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(
@@ -3970,6 +4014,53 @@ def _lumo_tree_canonical_multidraft_sample(
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
             [int(x) for x in row] for row in accepted_token_rows
         ]
+        _fr10_pending_publish = getattr(
+            _lumo_tree_commit_gdn, "_FR10_PENDING_TREE_STATE_PUBLISH", {}
+        )
+        _fr10_published_rows = 0
+        if _fr10_pending_publish:
+            for (_fr10_prefix, _fr10_batch_index), _fr10_publish in list(
+                _fr10_pending_publish.items()
+            ):
+                _fr10_bi = int(_fr10_batch_index)
+                if _fr10_bi >= len(accepted_gdn_node_paths):
+                    continue
+                # Row 0 is live for zero-accept events: h0 read clamps
+                # accepted_len - 1 to column 0. Publish it plus the accepted
+                # path rows; all other rejected branch rows remain dead.
+                _fr10_path = [0] + [
+                    int(_node)
+                    for _node in accepted_gdn_node_paths[_fr10_bi][
+                        : int(accepted_lens[_fr10_bi])
+                    ]
+                ]
+                if not _fr10_path:
+                    continue
+                _fr10_tree_n = int(_fr10_publish["tree_n"])
+                _fr10_path = sorted(set(_fr10_path))
+                _fr10_path = [
+                    max(0, min(int(_node), _fr10_tree_n - 1))
+                    for _node in _fr10_path
+                ]
+                _fr10_tree_state = _fr10_publish["tree_state"]
+                _fr10_spec_state_indices = _fr10_publish["spec_state_indices"]
+                _fr10_ssm_state = _fr10_publish["ssm_state"]
+                _fr10_rows_t = torch.tensor(
+                    _fr10_path,
+                    dtype=torch.long,
+                    device=_fr10_tree_state.device,
+                )
+                _fr10_bank_rows = _fr10_spec_state_indices.index_select(
+                    0, _fr10_rows_t
+                ).to(torch.long)
+                _fr10_values = _fr10_tree_state.index_select(
+                    0, _fr10_rows_t
+                ).to(dtype=_fr10_ssm_state.dtype)
+                _fr10_ssm_state.index_copy_(0, _fr10_bank_rows, _fr10_values)
+                _fr10_published_rows += int(_fr10_rows_t.numel())
+        _lumo_tree_commit_gdn._FR10_LAST_ACCEPT_ONLY_PUBLISH_ROWS = int(
+            _fr10_published_rows
+        )
     except Exception as _fr10_commit_globals_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(

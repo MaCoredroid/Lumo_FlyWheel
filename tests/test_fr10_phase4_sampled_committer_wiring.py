@@ -165,6 +165,18 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert "spec_state_indices_tensor[\n                                    fr10_b, 0" not in text
 
 
+def test_phase4_defers_ssm_publish_to_accepted_path_only() -> None:
+    text = Path("scripts/fr10_phase4_patch_vllm_tree_gdn.py").read_text()
+
+    assert "Persist every verified tree-node state" not in text
+    assert "_FR10_PENDING_TREE_STATE_PUBLISH" in text
+    assert "_FR10_LAST_ACCEPT_ONLY_PUBLISH_ROWS" in text
+    assert "_fr10_path = [0] + [" in text
+    assert 'accepted_gdn_node_paths[_fr10_bi]' in text
+    assert '_fr10_ssm_state.index_copy_(0, _fr10_bank_rows, _fr10_values)' in text
+    assert "spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),\n                        tree_state[:tree_n].to(dtype=ssm_state.dtype)," not in text
+
+
 def test_phase4_tree_kernel_gathers_h0_from_accepted_linear_column() -> None:
     text = Path("src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py").read_text()
 
