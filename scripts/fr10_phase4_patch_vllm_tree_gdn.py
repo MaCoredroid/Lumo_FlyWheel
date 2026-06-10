@@ -7382,6 +7382,97 @@ def _fr12_full_attn_capture_tensor(self, name, tensor, create=False, extra=None)
     return did_patch
 
 
+def _patch_gpu_model_runner_fr13_det_warn() -> bool:
+    """FR13 chase: flag-gated op-level nondeterminism pinpointer (inert by default).
+
+    Appends a module-level installer to gpu_model_runner.py (imported in every
+    worker process, i.e. worker init). With FR13_TORCH_DET_WARN=1 it enables
+    torch.use_deterministic_algorithms(True, warn_only=True) and routes every
+    nondeterministic-op warning through a logger WITH the full Python call
+    stack, so each hit in serving pinpoints its call site. Default: no-op.
+    """
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_TORCH_DET_WARN"
+    if sentinel in text:
+        return False
+    block = '''
+
+# FR13_TORCH_DET_WARN: flag-gated op-level nondeterminism pinpointer.
+# Inert unless FR13_TORCH_DET_WARN=1. With the flag set, the worker enables
+# torch.use_deterministic_algorithms(True, warn_only=True) at import time and
+# routes every nondeterministic-op warning (".. does not have a deterministic
+# implementation ..", cuBLAS workspace alerts) through a logger WITH the full
+# Python call stack, so each hit in serving pinpoints its call site. The
+# warn_only alert fires host-side at op dispatch, so the stack is the real
+# caller; CUDA launch blocking stays OFF. NOTE while the flag is ON torch
+# switches ops that DO have deterministic implementations onto them (slower,
+# may change CUDA-graph capture) - diagnostics only, never measure with it.
+def _fr13_install_torch_det_warn():
+    import os as _fr13_os
+
+    if _fr13_os.environ.get("FR13_TORCH_DET_WARN", "0") != "1":
+        return
+    import logging as _fr13_logging
+    import traceback as _fr13_traceback
+    import warnings as _fr13_warnings
+
+    import torch as _fr13_torch
+
+    _fr13_logger = _fr13_logging.getLogger("fr13.torch_det_warn")
+    if not _fr13_logger.handlers:
+        _fr13_log_path = _fr13_os.environ.get(
+            "FR13_TORCH_DET_WARN_LOG", "/logs/fr13_torch_det_warn.log"
+        )
+        try:
+            _fr13_handler = _fr13_logging.FileHandler(_fr13_log_path)
+        except OSError:
+            _fr13_handler = _fr13_logging.StreamHandler()
+        _fr13_handler.setFormatter(
+            _fr13_logging.Formatter("%(asctime)s pid=%(process)d %(message)s")
+        )
+        _fr13_logger.addHandler(_fr13_handler)
+    _fr13_logger.setLevel(_fr13_logging.WARNING)
+    _fr13_torch.use_deterministic_algorithms(True, warn_only=True)
+    # Default warning filtering dedupes by call site; the pinpointer wants
+    # EVERY hit, including repeats of the same op across serving steps.
+    _fr13_warnings.filterwarnings("always", message="(?i).*deterministic.*")
+    _fr13_prev_showwarning = _fr13_warnings.showwarning
+
+    def _fr13_showwarning(message, category, filename, lineno, file=None, line=None):
+        try:
+            _fr13_text = str(message)
+            if "deterministic" in _fr13_text.lower():
+                _fr13_logger.warning(
+                    "FR13_TORCH_DET_WARN %s:%s %s STACK:%s%s",
+                    filename,
+                    lineno,
+                    _fr13_text,
+                    chr(10),
+                    "".join(_fr13_traceback.format_stack(limit=48)),
+                )
+        except Exception:
+            pass
+        try:
+            _fr13_prev_showwarning(
+                message, category, filename, lineno, file=file, line=line
+            )
+        except Exception:
+            pass
+
+    _fr13_warnings.showwarning = _fr13_showwarning
+    _fr13_logger.warning(
+        "FR13_TORCH_DET_WARN active: "
+        "torch.use_deterministic_algorithms(True, warn_only=True) installed"
+    )
+
+
+_fr13_install_torch_det_warn()
+'''
+    text = text + block
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def main() -> int:
     patch_steps = [
         (REQUEST_PATH, _patch_request_decode_mode()),
@@ -7403,6 +7494,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_preprocess_input_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
