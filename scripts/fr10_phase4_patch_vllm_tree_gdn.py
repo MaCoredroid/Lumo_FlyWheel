@@ -552,6 +552,21 @@ def _patch_gdn_linear() -> bool:
             "    )\n"
             "\n"
             "\n"
+            "def _fr13_boundary_window_digest(bank, rows):\n"
+            "    # whole-window digests for interval bisection (taps A/B/B0)\n"
+            "    _fr13_bnd_out = []\n"
+            "    for _fr13_bnd_r in rows:\n"
+            "        _fr13_bnd_f8, _fr13_bnd_sha, _fr13_bnd_nb = (\n"
+            "            _fr13_boundary_row_digest(bank[int(_fr13_bnd_r)])\n"
+            "        )\n"
+            "        _fr13_bnd_out.append({\n"
+            "            \"row\": int(_fr13_bnd_r),\n"
+            "            \"first8\": _fr13_bnd_f8,\n"
+            "            \"sha4096\": _fr13_bnd_sha,\n"
+            "        })\n"
+            "    return _fr13_bnd_out\n"
+            "\n"
+            "\n"
             "def _fr12_subkernel_capture_debug(event, **fields):\n"
             "    debug_path = os.environ.get(\"FR12_SUBKERNEL_CAPTURE_DEBUG_LOG\")\n"
             "    if not debug_path:\n"
@@ -2779,6 +2794,11 @@ def _patch_gdn_linear() -> bool:
                         _fr13_bnd_req_ids = (
                             globals().get("_LUMO_FA_SAMPLER_ROW_REQ_IDS") or []
                         )
+                        _fr13_bnd_window_now = [
+                            int(_x)
+                            for _x in spec_state_indices_tensor[fr10_b]
+                            .detach().cpu().tolist()
+                        ]
                         _fr13_boundary_emit({
                             "tap": "B",
                             "layer": str(self.prefix),
@@ -2796,11 +2816,10 @@ def _patch_gdn_linear() -> bool:
                             "num_spec_decodes": int(
                                 attn_metadata.num_spec_decodes
                             ),
-                            "window_now": [
-                                int(_x)
-                                for _x in spec_state_indices_tensor[fr10_b]
-                                .detach().cpu().tolist()
-                            ],
+                            "window_now": _fr13_bnd_window_now,
+                            "window_digest": _fr13_boundary_window_digest(
+                                ssm_state, _fr13_bnd_window_now
+                            ),
                             "replay_route": bool(_fr13_replay_route_on),
                         })
                     if _fr13_replay_route_on:
@@ -3629,6 +3648,64 @@ def _patch_gdn_linear() -> bool:
         if prefill_scan_needle not in text:
             raise RuntimeError("FR13 prefill scan capture needle not found")
         text = text.replace(prefill_scan_needle, prefill_scan_replacement, 1)
+
+    # FR13_REPLAY_BOUNDARY tap B0: forward entry (pre-conv-branch) whole-window
+    # digest for interval bisection. Anchors on the _forward_core unpack (the
+    # 3-line sequence is unique: the non-spec fast path lacks
+    # num_accepted_tokens).
+    b0_anchor = (
+        "        ssm_state = self_kv_cache[1]\n"
+        "        num_actual_tokens = attn_metadata.num_actual_tokens\n"
+        "        num_accepted_tokens = attn_metadata.num_accepted_tokens\n"
+    )
+    if text.count(b0_anchor) != 1:
+        raise RuntimeError("FR13 boundary tap B0 anchor not unique")
+    b0_inject = b0_anchor + '''        if (
+            _fr13_boundary_on()
+            and spec_sequence_masks is not None
+            and attn_metadata.num_spec_decodes > 0
+            and spec_state_indices_tensor is not None
+            and _fr13_boundary_layer_match(self.prefix)
+        ):
+            # FR13_REPLAY_BOUNDARY tap B0 (forward entry, BEFORE the conv
+            # branch and the scan): whole-window digest. Segments the
+            # producer-write..consumer-read interval:
+            #   A.post(k) -> B0(k+1): drafter/runner/prepare;
+            #   B0(k+1) -> B(k+1): layer-local conv branch;
+            #   B(k)   -> A.pre(k): scan + layers 1..63 + sampler head.
+            _fr13_b0_lens = globals().get("_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR")
+            _fr13_b0_req_ids = (
+                globals().get("_LUMO_FA_SAMPLER_ROW_REQ_IDS") or []
+            )
+            for _fr13_b0_i in range(int(attn_metadata.num_spec_decodes)):
+                _fr13_b0_window = [
+                    int(_fr13_b0_x)
+                    for _fr13_b0_x in spec_state_indices_tensor[_fr13_b0_i]
+                    .detach().cpu().tolist()
+                ]
+                _fr13_boundary_emit({
+                    "tap": "B0",
+                    "layer": str(self.prefix),
+                    "slot": int(_fr13_b0_i),
+                    "req_id": (
+                        str(_fr13_b0_req_ids[_fr13_b0_i])
+                        if _fr13_b0_i < len(_fr13_b0_req_ids)
+                        else None
+                    ),
+                    "lens_now": (
+                        None
+                        if _fr13_b0_lens is None
+                        else int(
+                            _fr13_b0_lens[_fr13_b0_i].detach().cpu().item()
+                        )
+                    ),
+                    "window_now": _fr13_b0_window,
+                    "window_digest": _fr13_boundary_window_digest(
+                        ssm_state, _fr13_b0_window
+                    ),
+                })
+'''
+    text = text.replace(b0_anchor, b0_inject, 1)
     GDN_LINEAR_PATH.write_text(text)
     return True
 
@@ -3888,6 +3965,9 @@ def _fr13_boundary_replay_pre(gdn_mod, layer, bank, rows):
             'h0_first8_prelaunch': _first8,
             'h0_sha4096_prelaunch': _sha,
             'window_written': _window,
+            'window_digest_pre': gdn_mod._fr13_boundary_window_digest(
+                bank, _window
+            ),
         })
     return pre
 
@@ -3955,6 +4035,10 @@ def _fr13_boundary_replay_post(
             'window_written': _window,
             'dst_rows': _dst,
             'num_replay_rows': int(rows),
+            'window_digest_pre': _info.get('window_digest_pre'),
+            'window_digest_post': gdn_mod._fr13_boundary_window_digest(
+                bank, _window
+            ),
         })
 
 
