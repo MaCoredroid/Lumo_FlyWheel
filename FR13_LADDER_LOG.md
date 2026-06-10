@@ -1303,3 +1303,17 @@ Call2 conv-detail alignment after the fix:
 - Live backend registry maps `TREE_ATTN` to `vllm.v1.attention.backends.tree_attn.TreeAttentionBackend`; `TreeAttentionBackend.get_name()` returns exactly `TREE_ATTN`.
 - `scripts/fr13_patch_fa2_tree_bias.py` adds `varlen_fwd_tree_bias` and calls `flash_attn_varlen_func(..., tree_bias=tree_bias)` from inside `TREE_ATTN`; it does not register the tree-bias path as `FLASH_ATTN` and does not rename the selected backend.
 - Verdict: Step2 is blocked under the strict gate. The forked-FA2 `-inf` tree-bias path cannot boot under `VLLM_BATCH_INVARIANT=1` as a `FLASH_ATTN`-accepted backend without a new validated backend/registration change. GDN scan remains exonerated and was not re-investigated.
+
+## Commit (this commit) - FR13 num_splits static + native same-seed floor (codex_fr13, 2026-06-09)
+
+- Binding note: `FR13_NUM_SPLITS_NATIVE_FLOOR_BIND.md`.
+- `num_splits` static check: the tree decode FR13 forked-FA2 path at `scripts/fr13_patch_fa2_tree_bias.py:570` reaches FA2 varlen with `num_splits=0` by default; the broader flash-attn backend replacement preserves `attn_metadata.max_num_splits`, but FA2 rejects `num_splits > 1`.
+- C++ dispatch result: for tree verify, paged KV is true and `max_seqlen_q=tree_len>1`, so `set_params_splitkv(...)` is not called. Paged KV forces splitkv dispatch, but `params.num_splits=0` and `1` both select `Split=false`, the same grid, and no combine kernel. Therefore forcing `num_splits=1` is inert for this probe; attention split-reduction is ruled out by static read and no TREE GPU boot was run.
+- Native same-seed floor run root: `output/fr13_native_same_seed_floor_082_20260609T234548Z`.
+- Native arms: both `FLASH_ATTN/naive_mtp`, B=4, `MAX_NUM_SEQS=4`, `max_tokens=64`, `temperature=0.6`, `top_p=0.95`, seed `1313`, `FR13_FA2_PREFILL_NATIVE=1`, launched only via `scripts/fr13_launch_forked_fa2_tree_server.sh`, `GPU_UTIL=0.82`, one container at a time with host-memory recovery between arms.
+- Regime proof: logs show `attention_backend: FLASH_ATTN`, FlashAttention v2, `gpu_memory_utilization: 0.82`, `enforce_eager=False`, and FULL B=4 CUDA graph capture completed for both arms.
+- Arm A: accept/event `3.203125`, accept/token `0.3559027777777778`, accepted/draft `205/576`, drafts `64`, returned tokens `256`, wall `13.280279874801636`, returned tokens/wall second `19.276702178976013`, warm decode TPS `9.834429859774906`.
+- Arm B: accept/event `3.125`, accept/token `0.3472222222222222`, accepted/draft `200/576`, drafts `64`, returned tokens `256`, wall `13.201187133789062`, returned tokens/wall second `19.392195368911626`, warm decode TPS `9.9476437823192`.
+- Same-seed native comparison: exact records `1/4`, mismatched records `3/4`, compared positions `256`, raw mask/token mismatches `139/256`, bag-TV `0.11328125`.
+- First diffs: prompt0 pos11 `26622 -> 12182`; prompt1 pos15 `5759 -> 1970`; prompt2 pos25 `44675 -> 13766`.
+- Bound verdict: same-seed native B=4 is not deterministic in this deployed probe shape. The seed-robust native floor for this pair is approximately bag-TV `0.1133`; no fallback run is bound and speed remains deferred.
