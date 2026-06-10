@@ -1317,3 +1317,9 @@ Call2 conv-detail alignment after the fix:
 - Same-seed native comparison: exact records `1/4`, mismatched records `3/4`, compared positions `256`, raw mask/token mismatches `139/256`, bag-TV `0.11328125`.
 - First diffs: prompt0 pos11 `26622 -> 12182`; prompt1 pos15 `5759 -> 1970`; prompt2 pos25 `44675 -> 13766`.
 - Bound verdict: same-seed native B=4 is not deterministic in this deployed probe shape. The seed-robust native floor for this pair is approximately bag-TV `0.1133`; no fallback run is bound and speed remains deferred.
+
+## Accept-only publish gate-4 LIVE FAIL — parked (monitor, 2026-06-10)
+- Bind: `FR13_ACCEPT_ONLY_GATE4_FAIL_BIND.md`; patch parked on `fr13-accept-only-wip` (1a566d41), main unchanged.
+- Offline gates 1-3 PASSED (scan 0.0 @ N_PAD=1/16; accepted-rows torch_equal; regular-decode==pristine).
+- LIVE B=4 captured gate-4 FAILED: accept/event 2.024→1.521 (tree-internal), real-loss 0.7315, bag-TV 0.5347, exit 2.
+- Lesson: offline single-forward bit-identical ≠ live multi-step bit-identical; deferred-publish ordering vs next-step h0/remap is the prime suspect.
