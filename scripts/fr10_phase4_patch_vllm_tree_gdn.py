@@ -440,7 +440,11 @@ def _patch_gdn_linear() -> bool:
     if "FR10_ENABLE_TREE_GDN" in text:
         return False
 
-    text = text.replace("import torch\n", "import ast\nimport json\nimport os\nimport torch\n", 1)
+    text = text.replace(
+        "import torch\n",
+        "import ast\nimport hashlib\nimport json\nimport os\nimport time\nimport torch\n",
+        1,
+    )
     text = text.replace(
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
@@ -451,6 +455,101 @@ def _patch_gdn_linear() -> bool:
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
             "_FR12_SUBKERNEL_CAPTURE_ACTIVE = {}\n"
             "_FR12_SUBKERNEL_CAPTURE_SAVED_BY_PREFIX = {}\n"
+            "\n"
+            "# FR13_REPLAY_BOUNDARY_LOG: producer-write..consumer-read interval\n"
+            "# instrument (playbook row 8). Default OFF; eager-only (fail-loud on\n"
+            "# CUDA-graph capture); JSONL via a module-global FH; shared event\n"
+            "# counter incremented by the committer (tap A) so every record between\n"
+            "# commit k and commit k+1 carries event=k.\n"
+            "_FR13_BOUNDARY_EVENT = 0\n"
+            "_FR13_BOUNDARY_LAST_WRITTEN_BY_REQ = {}\n"
+            "_FR13_BOUNDARY_FH = None\n"
+            "_FR13_BOUNDARY_HEADER_DONE = False\n"
+            "\n"
+            "\n"
+            "def _fr13_boundary_on():\n"
+            "    return os.environ.get(\"FR13_REPLAY_BOUNDARY_LOG\", \"0\") == \"1\"\n"
+            "\n"
+            "\n"
+            "def _fr13_boundary_layer_match(prefix):\n"
+            "    pats = os.environ.get(\n"
+            "        \"FR13_REPLAY_BOUNDARY_LAYERS\", \"layers.0.linear_attn\"\n"
+            "    )\n"
+            "    return any(\n"
+            "        _p.strip() and _p.strip() in str(prefix)\n"
+            "        for _p in pats.split(\",\")\n"
+            "    )\n"
+            "\n"
+            "\n"
+            "def _fr13_boundary_emit(record):\n"
+            "    global _FR13_BOUNDARY_FH, _FR13_BOUNDARY_HEADER_DONE\n"
+            "    if not _fr13_boundary_on():\n"
+            "        return\n"
+            "    # Class-9 fail-loud: this instrument is EAGER-ONLY (the final\n"
+            "    # re-gate runs captured with it OFF).\n"
+            "    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():\n"
+            "        raise RuntimeError(\n"
+            "            \"FR13_REPLAY_BOUNDARY_LOG is eager-only: emit called \"\n"
+            "            \"during CUDA-graph capture\"\n"
+            "        )\n"
+            "    if _FR13_BOUNDARY_FH is None:\n"
+            "        _fr13_bnd_path = os.environ.get(\n"
+            "            \"FR13_REPLAY_BOUNDARY_PATH\", \"/logs/fr13_replay_boundary.jsonl\"\n"
+            "        )\n"
+            "        _fr13_bnd_parent = os.path.dirname(_fr13_bnd_path)\n"
+            "        if _fr13_bnd_parent:\n"
+            "            os.makedirs(_fr13_bnd_parent, exist_ok=True)\n"
+            "        _FR13_BOUNDARY_FH = open(_fr13_bnd_path, \"a\", buffering=1)\n"
+            "    if not _FR13_BOUNDARY_HEADER_DONE:\n"
+            "        _FR13_BOUNDARY_HEADER_DONE = True\n"
+            "        _FR13_BOUNDARY_FH.write(json.dumps({\n"
+            "            \"tap\": \"header\",\n"
+            "            \"regime\": \"eager\",\n"
+            "            \"ts\": round(time.time(), 6),\n"
+            "            \"pid\": os.getpid(),\n"
+            "            \"flags\": {\n"
+            "                _k: os.environ.get(_k)\n"
+            "                for _k in (\n"
+            "                    \"FR13_REPLAY_ROUTE\",\n"
+            "                    \"FR13_REPLAY_BOUNDARY_LOG\",\n"
+            "                    \"FR13_REPLAY_BOUNDARY_LAYERS\",\n"
+            "                    \"FR13_TREE_REQKEY\",\n"
+            "                    \"FR13_CONV_COMMITTED_PATH\",\n"
+            "                    \"FR13_TREE_BONUS_SELF\",\n"
+            "                    \"FR10_ENABLE_TREE_GDN\",\n"
+            "                    \"VLLM_BATCH_INVARIANT\",\n"
+            "                    \"FR13_BI_TREE_ATTN\",\n"
+            "                    \"FR10_METRICS\",\n"
+            "                )\n"
+            "            },\n"
+            "        }) + \"\\n\")\n"
+            "    _fr13_bnd_rec = dict(record)\n"
+            "    _fr13_bnd_rec[\"regime\"] = \"eager\"\n"
+            "    _fr13_bnd_rec[\"ts\"] = round(time.time(), 6)\n"
+            "    _fr13_bnd_rec.setdefault(\n"
+            "        \"event\", int(globals().get(\"_FR13_BOUNDARY_EVENT\", 0))\n"
+            "    )\n"
+            "    _FR13_BOUNDARY_FH.write(json.dumps(_fr13_bnd_rec, default=str) + \"\\n\")\n"
+            "\n"
+            "\n"
+            "def _fr13_boundary_row_digest(t, max_bytes=4096):\n"
+            "    # first-8-bytes + sha256-of-first-4096-bytes of a state row/segment\n"
+            "    # (uint8 reinterpretation; works for bf16 banks where .numpy() on\n"
+            "    # the source dtype would fail).\n"
+            "    _fr13_bnd_flat = t.detach().reshape(-1)\n"
+            "    _fr13_bnd_es = _fr13_bnd_flat.element_size()\n"
+            "    _fr13_bnd_n = min(\n"
+            "        int(_fr13_bnd_flat.numel()), max(1, max_bytes // _fr13_bnd_es)\n"
+            "    )\n"
+            "    _fr13_bnd_raw = (\n"
+            "        _fr13_bnd_flat[:_fr13_bnd_n].cpu().contiguous()\n"
+            "        .view(torch.uint8).numpy().tobytes()\n"
+            "    )\n"
+            "    return (\n"
+            "        list(_fr13_bnd_raw[:8]),\n"
+            "        hashlib.sha256(_fr13_bnd_raw).hexdigest(),\n"
+            "        len(_fr13_bnd_raw),\n"
+            "    )\n"
             "\n"
             "\n"
             "def _fr12_subkernel_capture_debug(event, **fields):\n"
@@ -2646,6 +2745,64 @@ def _patch_gdn_linear() -> bool:
                             )
                         except Exception:
                             _fr10_event_h0 = None
+                    if _fr13_boundary_on() and _fr13_boundary_layer_match(
+                        self.prefix
+                    ):
+                        # FR13_REPLAY_BOUNDARY tap B (CONSUMER): the h0 column/
+                        # row/bytes the scan is about to read, as-read. Joined
+                        # by the reducer against tap A (event N) on req_id =
+                        # the playbook row-8 boundary instrument. Eager-only
+                        # diagnostics (syncs); emit() fail-louds on capture.
+                        _fr13_bnd_lens_now = int(
+                            _fr10_accepted_lens_tensor[fr10_b]
+                            .detach().cpu().item()
+                        )
+                        _fr13_bnd_read_col = max(
+                            0,
+                            min(
+                                _fr13_bnd_lens_now - 1,
+                                int(spec_state_indices_tensor.size(-1)) - 1,
+                            ),
+                        )
+                        _fr13_bnd_read_row = int(
+                            spec_state_indices_tensor[
+                                fr10_b, _fr13_bnd_read_col
+                            ].detach().cpu().item()
+                        )
+                        (
+                            _fr13_bnd_first8,
+                            _fr13_bnd_sha,
+                            _fr13_bnd_nb,
+                        ) = _fr13_boundary_row_digest(
+                            ssm_state[_fr13_bnd_read_row]
+                        )
+                        _fr13_bnd_req_ids = (
+                            globals().get("_LUMO_FA_SAMPLER_ROW_REQ_IDS") or []
+                        )
+                        _fr13_boundary_emit({
+                            "tap": "B",
+                            "layer": str(self.prefix),
+                            "slot": int(fr10_b),
+                            "req_id": (
+                                str(_fr13_bnd_req_ids[fr10_b])
+                                if fr10_b < len(_fr13_bnd_req_ids)
+                                else None
+                            ),
+                            "lens_now": _fr13_bnd_lens_now,
+                            "read_col": int(_fr13_bnd_read_col),
+                            "read_row": int(_fr13_bnd_read_row),
+                            "first8": _fr13_bnd_first8,
+                            "sha4096": _fr13_bnd_sha,
+                            "num_spec_decodes": int(
+                                attn_metadata.num_spec_decodes
+                            ),
+                            "window_now": [
+                                int(_x)
+                                for _x in spec_state_indices_tensor[fr10_b]
+                                .detach().cpu().tolist()
+                            ],
+                            "replay_route": bool(_fr13_replay_route_on),
+                        })
                     if _fr13_replay_route_on:
                         # FR13_REPLAY_ROUTE activation ring + scan-time
                         # snapshot. PERSISTENT preallocated staging only --
@@ -3704,6 +3861,103 @@ def _patch_rejection_sampler_tree_lcp() -> bool:
     helper_anchor = "\n\ndef rejection_sample("
     helper = r'''
 
+# FR13_REPLAY_BOUNDARY tap A (PRODUCER): immediately around the committer's
+# _fr13_replay_launch for the probed layer(s), snapshot the replay's inputs
+# (scan-time prev-lens/window snapshot, h0 source row bytes PRE-launch) and the
+# as-written dst bank rows (linear columns 0..max(len-1,0)) POST-launch.
+# Publishes {req_id: rows written} in the gdn module for tap C's stale-read
+# discriminator. Eager-only diagnostics (syncs + .item()); the shared emit()
+# fail-louds if ever called during CUDA-graph capture.
+def _fr13_boundary_replay_pre(gdn_mod, layer, bank, rows):
+    torch.cuda.synchronize()
+    pre = []
+    spec_idx = layer._fr13_replay_spec_idx
+    prev_lens = layer._fr13_replay_prev_lens
+    for _b in range(rows):
+        _prev_len = int(prev_lens[_b].detach().cpu().item())
+        _h0_col = max(_prev_len - 1, 0)
+        _window = [
+            int(_x) for _x in spec_idx[_b].detach().cpu().tolist()
+        ]
+        _h0_row = int(_window[min(_h0_col, len(_window) - 1)])
+        _first8, _sha, _nb = gdn_mod._fr13_boundary_row_digest(bank[_h0_row])
+        pre.append({
+            'prev_len_snapshot': _prev_len,
+            'h0_col': _h0_col,
+            'h0_src_row': _h0_row,
+            'h0_first8_prelaunch': _first8,
+            'h0_sha4096_prelaunch': _sha,
+            'window_written': _window,
+        })
+    return pre
+
+
+def _fr13_boundary_replay_post(
+    gdn_mod, prefix, layer, bank, rows,
+    accepted_node_paths, accepted_lens_list, pre,
+):
+    torch.cuda.synchronize()
+    _row_req_ids = getattr(gdn_mod, '_LUMO_FA_SAMPLER_ROW_REQ_IDS', None) or []
+    _last_written = getattr(gdn_mod, '_FR13_BOUNDARY_LAST_WRITTEN_BY_REQ', None)
+    if _last_written is None:
+        _last_written = {}
+        gdn_mod._FR13_BOUNDARY_LAST_WRITTEN_BY_REQ = _last_written
+    for _b in range(rows):
+        _path = [int(_x) for _x in accepted_node_paths[_b]]
+        _alen = int(accepted_lens_list[_b])
+        _info = pre[_b] if pre is not None and _b < len(pre) else {}
+        _window = _info.get('window_written') or [
+            int(_x)
+            for _x in layer._fr13_replay_spec_idx[_b].detach().cpu().tolist()
+        ]
+        _dst = []
+        _rows_written = []
+        for _c in range(max(_alen, 1)):
+            _row_id = int(_window[_c])
+            _first8, _sha, _nb = gdn_mod._fr13_boundary_row_digest(
+                bank[_row_id]
+            )
+            _dst.append({
+                'col': int(_c),
+                'row': _row_id,
+                'first8': _first8,
+                'sha4096': _sha,
+            })
+            _rows_written.append(_row_id)
+        _req_id = (
+            str(_row_req_ids[_b]) if _b < len(_row_req_ids) else None
+        )
+        if _req_id is not None:
+            _last_written[_req_id] = {
+                'event': int(getattr(gdn_mod, '_FR13_BOUNDARY_EVENT', 0)),
+                'rows': sorted(set(_rows_written)),
+                'by_col': {
+                    str(_d['col']): _d['row'] for _d in _dst
+                },
+                'sha_by_row': {
+                    str(_d['row']): _d['sha4096'] for _d in _dst
+                },
+                'accepted_len': _alen,
+                'window_written': _window,
+            }
+        gdn_mod._fr13_boundary_emit({
+            'tap': 'A',
+            'layer': str(prefix),
+            'slot': int(_b),
+            'req_id': _req_id,
+            'accepted_path': _path,
+            'accepted_len': _alen,
+            'prev_len_snapshot': _info.get('prev_len_snapshot'),
+            'h0_col': _info.get('h0_col'),
+            'h0_src_row': _info.get('h0_src_row'),
+            'h0_first8_prelaunch': _info.get('h0_first8_prelaunch'),
+            'h0_sha4096_prelaunch': _info.get('h0_sha4096_prelaunch'),
+            'window_written': _window,
+            'dst_rows': _dst,
+            'num_replay_rows': int(rows),
+        })
+
+
 # LUMO_TREE_PATH_LCP_MAX: greedy N-spine verifier.
 #
 # Gate B is greedy/deterministic, so max-LCP over root-to-leaf paths is the
@@ -4062,7 +4316,15 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     'FR13_REPLAY_ROUTE: no registered GDN replay layers'
                 )
             _fr13_replay_rows = len(accepted_gdn_node_paths)
+            _fr13_bnd_on = _lumo_tree_commit_gdn._fr13_boundary_on()
             if _fr13_replay_rows:
+                if _fr13_bnd_on:
+                    # Shared boundary event counter: increment ONCE per commit
+                    # event; every tap record between commit k and commit k+1
+                    # then carries event=k (tap A of commit k carries k).
+                    _lumo_tree_commit_gdn._FR13_BOUNDARY_EVENT = int(getattr(
+                        _lumo_tree_commit_gdn, '_FR13_BOUNDARY_EVENT', 0
+                    )) + 1
                 for _fr13_prefix in sorted(_fr13_replay_layers):
                     _fr13_layer = _fr13_replay_layers[_fr13_prefix]
                     _fr13_flags = getattr(
@@ -4088,6 +4350,18 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                             + str(int(_fr13_flags[1].item()))
                             + ' for layer ' + str(_fr13_prefix)
                         )
+                    _fr13_bnd_pre = None
+                    _fr13_bnd_layer_on = (
+                        _fr13_bnd_on
+                        and _lumo_tree_commit_gdn._fr13_boundary_layer_match(
+                            _fr13_prefix
+                        )
+                    )
+                    if _fr13_bnd_layer_on:
+                        _fr13_bnd_pre = _fr13_boundary_replay_pre(
+                            _lumo_tree_commit_gdn, _fr13_layer,
+                            _fr13_ssm_bank, _fr13_replay_rows,
+                        )
                     _fr13_replay_launch(
                         state_bank=_fr13_ssm_bank,
                         spec_state_indices=_fr13_layer._fr13_replay_spec_idx,
@@ -4107,6 +4381,13 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                         use_qk_l2norm_in_kernel=True,
                     )
                     _fr13_flags[0].fill_(0)
+                    if _fr13_bnd_layer_on:
+                        _fr13_boundary_replay_post(
+                            _lumo_tree_commit_gdn, _fr13_prefix, _fr13_layer,
+                            _fr13_ssm_bank, _fr13_replay_rows,
+                            accepted_gdn_node_paths, accepted_lens,
+                            _fr13_bnd_pre,
+                        )
     except Exception as _fr10_tree_lcp_log_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(
@@ -4519,7 +4800,15 @@ def _lumo_tree_canonical_multidraft_sample(
                     'FR13_REPLAY_ROUTE: no registered GDN replay layers'
                 )
             _fr13_replay_rows = len(accepted_gdn_node_paths)
+            _fr13_bnd_on = _lumo_tree_commit_gdn._fr13_boundary_on()
             if _fr13_replay_rows:
+                if _fr13_bnd_on:
+                    # Shared boundary event counter: increment ONCE per commit
+                    # event; every tap record between commit k and commit k+1
+                    # then carries event=k (tap A of commit k carries k).
+                    _lumo_tree_commit_gdn._FR13_BOUNDARY_EVENT = int(getattr(
+                        _lumo_tree_commit_gdn, '_FR13_BOUNDARY_EVENT', 0
+                    )) + 1
                 for _fr13_prefix in sorted(_fr13_replay_layers):
                     _fr13_layer = _fr13_replay_layers[_fr13_prefix]
                     _fr13_flags = getattr(
@@ -4545,6 +4834,18 @@ def _lumo_tree_canonical_multidraft_sample(
                             + str(int(_fr13_flags[1].item()))
                             + ' for layer ' + str(_fr13_prefix)
                         )
+                    _fr13_bnd_pre = None
+                    _fr13_bnd_layer_on = (
+                        _fr13_bnd_on
+                        and _lumo_tree_commit_gdn._fr13_boundary_layer_match(
+                            _fr13_prefix
+                        )
+                    )
+                    if _fr13_bnd_layer_on:
+                        _fr13_bnd_pre = _fr13_boundary_replay_pre(
+                            _lumo_tree_commit_gdn, _fr13_layer,
+                            _fr13_ssm_bank, _fr13_replay_rows,
+                        )
                     _fr13_replay_launch(
                         state_bank=_fr13_ssm_bank,
                         spec_state_indices=_fr13_layer._fr13_replay_spec_idx,
@@ -4564,6 +4865,13 @@ def _lumo_tree_canonical_multidraft_sample(
                         use_qk_l2norm_in_kernel=True,
                     )
                     _fr13_flags[0].fill_(0)
+                    if _fr13_bnd_layer_on:
+                        _fr13_boundary_replay_post(
+                            _lumo_tree_commit_gdn, _fr13_prefix, _fr13_layer,
+                            _fr13_ssm_bank, _fr13_replay_rows,
+                            accepted_gdn_node_paths, accepted_lens,
+                            _fr13_bnd_pre,
+                        )
     except Exception as _fr10_commit_globals_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(
@@ -5847,6 +6155,101 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_replay_boundary_tap_d() -> bool:
+    """FR13_REPLAY_BOUNDARY tap D: detect preprocess_mamba's native
+    num_accepted reset-to-1 firing while the TREE lens buffer still holds the
+    pre-slide lens (ranked actor 2: tree-lens-not-reset asymmetry). Captures
+    num_accepted_tokens_cpu before preprocess_mamba and emits a record for
+    every row whose value changed, alongside the current tree lens. Default
+    OFF (FR13_REPLAY_BOUNDARY_LOG=1)."""
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_REPLAY_BOUNDARY_TAP_D"
+    if sentinel in text:
+        return False
+
+    pre_anchor = "                mamba_utils.preprocess_mamba(\n"
+    if text.count(pre_anchor) != 1:
+        raise RuntimeError("tap D preprocess_mamba anchor not unique")
+    pre_inject = (
+        f"                {sentinel}_PRE: snapshot num_accepted before the\n"
+        "                # native preprocess reset so the post-block can tell\n"
+        "                # which rows were reset.\n"
+        "                _fr13_bnd_pre_accept = None\n"
+        "                if __import__(\"os\").environ.get(\n"
+        "                    \"FR13_REPLAY_BOUNDARY_LOG\", \"0\"\n"
+        "                ) == \"1\":\n"
+        "                    _fr13_bnd_pre_accept = [\n"
+        "                        int(_fr13_bnd_x)\n"
+        "                        for _fr13_bnd_x in\n"
+        "                        self.input_batch.num_accepted_tokens_cpu[:num_reqs]\n"
+        "                    ]\n"
+    ) + pre_anchor
+    text = text.replace(pre_anchor, pre_inject, 1)
+
+    post_anchor = (
+        "                self.num_accepted_tokens.np[:num_reqs] = (\n"
+        "                    self.input_batch.num_accepted_tokens_cpu[:num_reqs]\n"
+        "                )\n"
+        "                self.num_accepted_tokens.copy_to_gpu(num_reqs)\n"
+    )
+    if text.count(post_anchor) != 1:
+        raise RuntimeError("tap D re-sync anchor not unique")
+    post_inject = post_anchor + (
+        f"                {sentinel}_POST\n"
+        "                if _fr13_bnd_pre_accept is not None:\n"
+        "                    try:\n"
+        "                        from vllm.model_executor.layers.mamba import (\n"
+        "                            gdn_linear_attn as _fr13_bnd_gdn,\n"
+        "                        )\n"
+        "                        _fr13_bnd_lens_t = getattr(\n"
+        "                            _fr13_bnd_gdn,\n"
+        "                            \"_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR\",\n"
+        "                            None,\n"
+        "                        )\n"
+        "                        for _fr13_bnd_i in range(num_reqs):\n"
+        "                            _fr13_bnd_post_v = int(\n"
+        "                                self.input_batch.num_accepted_tokens_cpu[\n"
+        "                                    _fr13_bnd_i\n"
+        "                                ]\n"
+        "                            )\n"
+        "                            _fr13_bnd_pre_v = int(\n"
+        "                                _fr13_bnd_pre_accept[_fr13_bnd_i]\n"
+        "                            )\n"
+        "                            if _fr13_bnd_pre_v == _fr13_bnd_post_v:\n"
+        "                                continue\n"
+        "                            _fr13_bnd_tree_len = None\n"
+        "                            if _fr13_bnd_lens_t is not None and (\n"
+        "                                _fr13_bnd_i < int(_fr13_bnd_lens_t.size(0))\n"
+        "                            ):\n"
+        "                                _fr13_bnd_tree_len = int(\n"
+        "                                    _fr13_bnd_lens_t[_fr13_bnd_i]\n"
+        "                                    .detach().cpu().item()\n"
+        "                                )\n"
+        "                            _fr13_bnd_gdn._fr13_boundary_emit({\n"
+        "                                \"tap\": \"D\",\n"
+        "                                \"req_id\": str(\n"
+        "                                    self.input_batch.req_ids[_fr13_bnd_i]\n"
+        "                                ),\n"
+        "                                \"slot\": int(_fr13_bnd_i),\n"
+        "                                \"pre_accept\": _fr13_bnd_pre_v,\n"
+        "                                \"post_accept\": _fr13_bnd_post_v,\n"
+        "                                \"reset_fired\": True,\n"
+        "                                \"tree_lens_tensor\": _fr13_bnd_tree_len,\n"
+        "                            })\n"
+        "                    except Exception as _fr13_bnd_d_exc:\n"
+        "                        raise RuntimeError(\n"
+        "                            \"FR13_REPLAY_BOUNDARY tap D failed: \"\n"
+        "                            + type(_fr13_bnd_d_exc).__name__\n"
+        "                            + \":\"\n"
+        "                            + str(_fr13_bnd_d_exc)\n"
+        "                        ) from _fr13_bnd_d_exc\n"
+    )
+    text = text.replace(post_anchor, post_inject, 1)
+
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_mamba_utils_tree_accept_bias() -> bool:
     text = MAMBA_UTILS_PATH.read_text()
     sentinel = "# FR10_TREE_MAMBA_ACCEPTED_COPY_BIAS"
@@ -5938,6 +6341,19 @@ def _fr10_tree_accept_token_bias(
         path = _FR10_TREE_ACCEPTED_PATH_BY_REQ_ID.get(str(req_id))
     if not path:
         if int(linear_bias) <= 0:
+            if os.environ.get("FR13_REPLAY_BOUNDARY_LOG", "0") == "1":
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_bnd_gdn,
+                )
+                _fr13_bnd_gdn._fr13_boundary_emit({
+                    "tap": "C_bias",
+                    "phase": str(phase),
+                    "req_id": str(req_id),
+                    "batch_index": int(batch_index),
+                    "linear_bias": int(linear_bias),
+                    "tree_bias": int(linear_bias),
+                    "accepted_path": [],
+                })
             return int(linear_bias)
         if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") == "1":
             return int(linear_bias)
@@ -5948,6 +6364,19 @@ def _fr10_tree_accept_token_bias(
         )
     path_index = max(0, min(int(linear_bias), len(path) - 1))
     tree_bias = int(path[path_index])
+    if os.environ.get("FR13_REPLAY_BOUNDARY_LOG", "0") == "1":
+        from vllm.model_executor.layers.mamba import (
+            gdn_linear_attn as _fr13_bnd_gdn,
+        )
+        _fr13_bnd_gdn._fr13_boundary_emit({
+            "tap": "C_bias",
+            "phase": str(phase),
+            "req_id": str(req_id),
+            "batch_index": int(batch_index),
+            "linear_bias": int(linear_bias),
+            "tree_bias": int(tree_bias),
+            "accepted_path": [int(x) for x in path],
+        })
     if os.environ.get("FR10_METRICS", "0") == "1":
         try:
             global _FR10_TREE_MAMBA_COPY_FH
@@ -6029,6 +6458,156 @@ def collect_mamba_copy_meta(
     if postprocess_old not in text:
         raise RuntimeError("mamba postprocess accept-token-bias anchor not found")
     text = text.replace(postprocess_old, postprocess_new, 1)
+
+    MAMBA_UTILS_PATH.write_text(text)
+    return True
+
+
+def _patch_mamba_utils_boundary_log() -> bool:
+    """FR13_REPLAY_BOUNDARY tap C: per-copy-op records inside
+    collect_mamba_copy_meta (the native temporal/conv state-copy machinery,
+    ranked actors 1/3 of the interval audit), plus phase markers and a
+    one-shot init_meta record (mamba block_size / num_speculative_blocks).
+    Runs AFTER _patch_mamba_utils_tree_accept_bias. Default OFF
+    (FR13_REPLAY_BOUNDARY_LOG=1 to enable); eager-only via the shared
+    fail-loud emit in gdn_linear_attn."""
+    text = MAMBA_UTILS_PATH.read_text()
+    sentinel = "# FR13_REPLAY_BOUNDARY_TAP_C"
+    if sentinel in text:
+        return False
+
+    pre_anchor = "    finished_req_ids = scheduler_output.finished_req_ids\n"
+    if text.count(pre_anchor) != 1:
+        raise RuntimeError("mamba preprocess phase-marker anchor not unique")
+    pre_inject = pre_anchor + (
+        f"    {sentinel}: phase marker + one-shot init_meta.\n"
+        "    if os.environ.get(\"FR13_REPLAY_BOUNDARY_LOG\", \"0\") == \"1\":\n"
+        "        globals()[\"_FR13_BOUNDARY_PHASE\"] = \"preprocess\"\n"
+        "        if not globals().get(\"_FR13_BOUNDARY_META_DONE\"):\n"
+        "            globals()[\"_FR13_BOUNDARY_META_DONE\"] = True\n"
+        "            from vllm.model_executor.layers.mamba import (\n"
+        "                gdn_linear_attn as _fr13_bnd_gdn,\n"
+        "            )\n"
+        "            _fr13_bnd_gdn._fr13_boundary_emit({\n"
+        "                \"tap\": \"init_meta\",\n"
+        "                \"mamba_block_size\": int(mamba_spec.block_size),\n"
+        "                \"num_speculative_blocks\": int(\n"
+        "                    mamba_spec.num_speculative_blocks\n"
+        "                ),\n"
+        "            })\n"
+    )
+    text = text.replace(pre_anchor, pre_inject, 1)
+
+    post_anchor = (
+        "    num_scheduled_tokens_dict = scheduler_output.num_scheduled_tokens\n"
+    )
+    if text.count(post_anchor) != 1:
+        raise RuntimeError("mamba postprocess phase-marker anchor not unique")
+    post_inject = post_anchor + (
+        "    if os.environ.get(\"FR13_REPLAY_BOUNDARY_LOG\", \"0\") == \"1\":\n"
+        "        globals()[\"_FR13_BOUNDARY_PHASE\"] = \"postprocess\"\n"
+    )
+    text = text.replace(post_anchor, post_inject, 1)
+
+    collect_anchor = (
+        "                copy_spec = state_copy_func(\n"
+        "                    state, block_ids, src_block_idx, accept_token_bias + 1\n"
+        "                )\n"
+    )
+    if text.count(collect_anchor) != 1:
+        raise RuntimeError("mamba collect copy_spec anchor not unique")
+    collect_inject = collect_anchor + (
+        "                if os.environ.get(\"FR13_REPLAY_BOUNDARY_LOG\", \"0\") == \"1\":\n"
+        "                    try:\n"
+        "                        from vllm.model_executor.layers.mamba import (\n"
+        "                            gdn_linear_attn as _fr13_bnd_gdn,\n"
+        "                        )\n"
+        "                        _fr13_bnd_req_id = str(\n"
+        "                            getattr(req_state, \"req_id\", None)\n"
+        "                        )\n"
+        "                        _fr13_bnd_func = getattr(\n"
+        "                            state_copy_func, \"__name__\", str(state_copy_func)\n"
+        "                        )\n"
+        "                        _fr13_bnd_layer_ok = (\n"
+        "                            _fr13_bnd_gdn._fr13_boundary_layer_match(layer_name)\n"
+        "                        )\n"
+        "                        _fr13_bnd_es = int(state.element_size())\n"
+        "                        _fr13_bnd_row_bytes = (\n"
+        "                            int(state[0].numel()) * _fr13_bnd_es\n"
+        "                        )\n"
+        "                        _fr13_bnd_off = int(copy_spec.start_addr) - int(\n"
+        "                            state.data_ptr()\n"
+        "                        )\n"
+        "                        _fr13_bnd_src_row = _fr13_bnd_off // _fr13_bnd_row_bytes\n"
+        "                        _fr13_bnd_in_row = _fr13_bnd_off % _fr13_bnd_row_bytes\n"
+        "                        _fr13_bnd_first8 = None\n"
+        "                        _fr13_bnd_sha = None\n"
+        "                        if _fr13_bnd_layer_ok:\n"
+        "                            _fr13_bnd_elem_off = _fr13_bnd_off // _fr13_bnd_es\n"
+        "                            _fr13_bnd_n = min(\n"
+        "                                int(copy_spec.num_elements),\n"
+        "                                max(1, 4096 // _fr13_bnd_es),\n"
+        "                            )\n"
+        "                            (\n"
+        "                                _fr13_bnd_first8,\n"
+        "                                _fr13_bnd_sha,\n"
+        "                                _fr13_bnd_nb,\n"
+        "                            ) = _fr13_bnd_gdn._fr13_boundary_row_digest(\n"
+        "                                state.reshape(-1)[\n"
+        "                                    _fr13_bnd_elem_off:\n"
+        "                                    _fr13_bnd_elem_off + _fr13_bnd_n\n"
+        "                                ]\n"
+        "                            )\n"
+        "                        _fr13_bnd_lastw = getattr(\n"
+        "                            _fr13_bnd_gdn,\n"
+        "                            \"_FR13_BOUNDARY_LAST_WRITTEN_BY_REQ\",\n"
+        "                            {},\n"
+        "                        ).get(_fr13_bnd_req_id)\n"
+        "                        _fr13_bnd_stale = None\n"
+        "                        if (\n"
+        "                            os.environ.get(\"FR13_REPLAY_ROUTE\", \"0\") == \"1\"\n"
+        "                            and _fr13_bnd_func == \"get_temporal_copy_spec\"\n"
+        "                            and _fr13_bnd_lastw is not None\n"
+        "                        ):\n"
+        "                            _fr13_bnd_stale = int(\n"
+        "                                _fr13_bnd_src_row\n"
+        "                            ) not in set(_fr13_bnd_lastw.get(\"rows\", []))\n"
+        "                        _fr13_bnd_gdn._fr13_boundary_emit({\n"
+        "                            \"tap\": \"C\",\n"
+        "                            \"phase\": str(\n"
+        "                                globals().get(\"_FR13_BOUNDARY_PHASE\", \"?\")\n"
+        "                            ),\n"
+        "                            \"req_id\": _fr13_bnd_req_id,\n"
+        "                            \"layer\": str(layer_name),\n"
+        "                            \"copy_func\": _fr13_bnd_func,\n"
+        "                            \"src_block_idx\": int(src_block_idx),\n"
+        "                            \"dest_block_idx\": int(dest_block_idx),\n"
+        "                            \"accept_token_bias\": int(accept_token_bias),\n"
+        "                            \"src_row\": int(_fr13_bnd_src_row),\n"
+        "                            \"src_in_row_byte_off\": int(_fr13_bnd_in_row),\n"
+        "                            \"dest_row\": int(dest_block_id),\n"
+        "                            \"num_elements\": int(copy_spec.num_elements),\n"
+        "                            \"src_first8\": _fr13_bnd_first8,\n"
+        "                            \"src_sha4096\": _fr13_bnd_sha,\n"
+        "                            \"stale_read\": _fr13_bnd_stale,\n"
+        "                            \"last_written_rows\": (\n"
+        "                                None\n"
+        "                                if _fr13_bnd_lastw is None\n"
+        "                                else _fr13_bnd_lastw.get(\"rows\")\n"
+        "                            ),\n"
+        "                            \"block_ids_tail\": [\n"
+        "                                int(_x) for _x in block_ids[-8:]\n"
+        "                            ],\n"
+        "                        })\n"
+        "                    except Exception as _fr13_bnd_exc:\n"
+        "                        raise RuntimeError(\n"
+        "                            \"FR13_REPLAY_BOUNDARY tap C failed: \"\n"
+        "                            + type(_fr13_bnd_exc).__name__\n"
+        "                            + \":\"\n"
+        "                            + str(_fr13_bnd_exc)\n"
+        "                        ) from _fr13_bnd_exc\n"
+    )
+    text = text.replace(collect_anchor, collect_inject, 1)
 
     MAMBA_UTILS_PATH.write_text(text)
     return True
@@ -8210,7 +8789,9 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_boundary_tap_d()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
+        (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
     ]
