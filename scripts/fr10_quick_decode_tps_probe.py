@@ -101,11 +101,17 @@ def _delta(after: dict[str, float], before: dict[str, float]) -> dict[str, float
 def _read_prompts(path: str | None) -> list[str]:
     if path is None:
         return list(DEFAULT_PROMPTS)
-    prompts = [
-        line.strip()
-        for line in Path(path).read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    if path.endswith(".json"):
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if not isinstance(data, list) or not all(isinstance(p, str) for p in data):
+            raise ValueError(f"json prompts file must be a JSON list of strings: {path}")
+        prompts = [p for p in data if p]
+    else:
+        prompts = [
+            line.strip()
+            for line in Path(path).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
     if not prompts:
         raise ValueError(f"no prompts in {path}")
     return prompts
