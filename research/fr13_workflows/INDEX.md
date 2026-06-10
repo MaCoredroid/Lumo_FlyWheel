@@ -14,6 +14,14 @@ these are the **source** results (synthesis + adversarial-verify, verbatim) so c
 
 Note: `output/` is gitignored, so these were copied here (tracked) to survive context resets.
 
+## Kernel-speed flows (the HBM-tax half)
+| file | workflow | verify | verdict |
+|---|---|---|---|
+| `replay_no_hbm_tax_wznd54pmo.raw.json` | wznd54pmo — remove HBM tax from battle-tested replay kernel | holds=True | **ACCEPT-ONLY COMMIT = the win**: bit-IDENTICAL (rejected nodes' states are published then provably dead; only accepted path's final state survives the remap), ~2-4 days plumbing, erases +35.8% durable tax → native 1.0x HBM, keeps the proven batch-invariant kernel. Recompute-from-spine (free under 99ms floor, ~<1%) = secondary for the transient spill. DOMINATES WY on GB10. Per-node S = 3.0 MiB (not 151 MB — that's the per-seq all-layers aggregate). |
+| `wy_breakthrough_wox8pnjx8.raw.json` | wox8pnjx8 — WY at the within-argmax B=4 bar | holds=True | WY failed the WRONG bar (byte-exact); within-floor residual ~1 bf16 ULP (4.19e-9 vs non-MTP = 10000× closer than shipping MTP-5). PARKED-NOT-DEAD but **dominated**: within-floor not byte-exact, 6/6 spine argmax was "single-event coincidence/Gate A never passed" (contested), FLOP advantage worthless bandwidth-bound. Pursue only if state tax empirically dominates B=4 TPS. |
+
+**Speed verdict:** accept-only commit (low-risk, bit-identical, keeps proven kernel) is the clear HBM-tax removal — WY not needed. **SEPARATE from the B=4 lossy carrier** (both flows confirm the carrier — conv/h0 bank-row + fp8-GEMM — is OUTSIDE the GDN scan and persists under accept-only/recompute/WY alike).
+
 ## Consolidated cost-gate read (all 4 flows)
 - **AGREE:** GDN scan is exonerated; B=4 carrier is outside it; tree is 2.336× slower and conditional/capped even if lossless (native 76% saturated, 0 branch accepts = drafter bug).
 - **CONTESTED (key uncertainty):** ws5783inp says carrier = *diffuse* state/bank-row wiring → stop; w6m7imv2j says carrier = TREE_ATTN/fp8-GEMM *batch-variance* → fixable via the FLASH-compatible FA2 path under `VLLM_BATCH_INVARIANT`. **Untested decisive lever distinguishes them.**
