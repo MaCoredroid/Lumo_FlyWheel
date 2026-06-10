@@ -1328,3 +1328,9 @@ Call2 conv-detail alignment after the fix:
 - Bind: `FR13_METHOD_A_PARTIAL_BIND.md`. Prep 0a0d4433 (flag-gated, inert by default). Engagement verified per arm.
 - Native BI-on same-seed: 3/4 EXACT (38/256) vs BI-off 1/4 (0.113) — BI covers most of native's noise.
 - Tree BI-on: 0/4 exact, lcp 1/11/11/57 within-boot; accept/event 2.096/1.867 unmoved ⇒ CASE-2-TREE-SPECIFIC (non-BI-covered tree-path channel; lcp=1 = op-level nondeterminism on identical input).
+
+## Non-det chase COMPLETE: 3 bugs fixed; determinism(B=1) achieved; acceptance deficit SEPARATE (monitor, 2026-06-10)
+- Raw: research/fr13_workflows/nondet_chase_w9uazu129.raw.json (verify holds=True). Fixes cc008587 (FR13_TREE_PER_REQ_GEN / FR13_TREE_REQKEY / FR13_TREE_REMAP_SEQ, default ON, revertible).
+- POST-FIX: B=1 t06 same-seed BIT-IDENTICAL ×2 (pre 0/3); B=4 0/4→2/4 (caveat: cross-boot, slot-order unreconstructed); greedy B=4 0/4 residual = logit-level batch-composition sensitivity (outside the 3 channels + current BI allowlist).
+- accept/event UNMOVED ~1.96 (sampled, 251 events) ⇒ acceptance deficit ≠ determinism channels; now reproducible DETERMINISTICALLY at B=1 → next: deterministic B=1 acceptance ladder (per-depth verify-vs-oracle).
+- NOTE: all earlier binds (0.2335/2.024, Method-A partial) describe the PRE-fix default path; future comparisons must state flag state.
