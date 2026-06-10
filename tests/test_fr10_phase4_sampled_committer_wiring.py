@@ -182,6 +182,30 @@ def test_forked_fa2_tree_launcher_defaults_to_prefill_native_metrics_off() -> No
     assert "FR13_FA2_PREFILL_NATIVE=${FR13_FA2_PREFILL_NATIVE:-1}" in text
     assert '-e FR10_METRICS="$FR10_METRICS"' in text
     assert '-e FR13_FA2_PREFILL_NATIVE="$FR13_FA2_PREFILL_NATIVE"' in text
+    # FR13 Method-A BI allowlist: default OFF, plumbed through, boot needles.
+    assert "FR13_BI_TREE_ATTN=${FR13_BI_TREE_ATTN:-0}" in text
+    assert '-e FR13_BI_TREE_ATTN="$FR13_BI_TREE_ATTN"' in text
+    assert "FR13_BI_TREE_ATTN allowlist patch missing" in text
+    assert "FR13 BI decode num_splits expression missing" in text
+
+
+def test_fr13_patcher_method_a_bi_allowlist_is_flag_gated() -> None:
+    text = Path("scripts/fr13_patch_fa2_tree_bias.py").read_text()
+
+    assert "def _patch_batch_invariant_guard" in text
+    assert '"batch_invariant.py": _patch_batch_invariant_guard(' in text
+    assert (
+        'if os.environ.get("FR13_BI_TREE_ATTN", "0") == "1":' in text
+    )
+    assert (
+        "decode_invariant_backends.append(AttentionBackendEnum.TREE_ATTN)" in text
+    )
+    # double gate raises unless both FR13_FA2_* flags are set
+    assert "forked-FA2 tree decode + native-FA2 prefill paths" in text
+    # EDIT 2: BI-forced non-split dispatch on the tree-bias decode call
+    assert "num_splits=1 if envs.VLLM_BATCH_INVARIANT else 0," in text
+    # swapped-mode hardening: bias only engages for multi-token decode rows
+    assert "and decode_meta.max_query_len > 1" in text
 
 
 def test_speed_launcher_defaults_to_nine_node_caterpillar() -> None:

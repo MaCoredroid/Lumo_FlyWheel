@@ -602,6 +602,43 @@ def _patch_tree_attn(path: Path) -> bool:
     else:
         did = False
     changed = changed or did
+    # FR13 swapped-mode hardening: gate use_tree_bias on max_query_len > 1.
+    # FA2 swapped mode (seqlenq_ngroups_swapped, requires max_seqlen_q == 1)
+    # reassigns max_seqlen_q before set_params_tree_bias, so a hypothetical
+    # all-1-token decode segment with a non-empty bias would mis-address the
+    # bias; route it to the unified_attention fallback instead.  Deployed tree
+    # decode has max_query_len == tree_len > 1, so behavior there is unchanged.
+    old_gate = (
+        "            use_tree_bias = tree_bias is not None and tree_bias.numel() > 0\n"
+    )
+    new_gate = (
+        "            use_tree_bias = (\n"
+        "                tree_bias is not None\n"
+        "                and tree_bias.numel() > 0\n"
+        "                and decode_meta.max_query_len > 1\n"
+        "            )\n"
+    )
+    if old_gate in text:
+        text = text.replace(old_gate, new_gate, 1)
+        changed = True
+    # FR13_BI_TREE_ATTN EDIT 2: under VLLM_BATCH_INVARIANT force non-split
+    # dispatch on the tree-bias decode call, mirroring native FLASH_ATTN's
+    # batch-invariant num_splits expression (provably inert for tree shapes:
+    # max_seqlen_q = tree_len > 1 keeps num_splits at 0 anyway; this closes
+    # the hypothetical all-1-token split-kv gap).  Evaluates to the previous
+    # default 0 when VLLM_BATCH_INVARIANT is unset.
+    old_call_tail = (
+        "                    fa_version=2,\n"
+        "                    tree_bias=tree_bias,\n"
+    )
+    new_call_tail = (
+        "                    fa_version=2,\n"
+        "                    num_splits=1 if envs.VLLM_BATCH_INVARIANT else 0,\n"
+        "                    tree_bias=tree_bias,\n"
+    )
+    if old_call_tail in text:
+        text = text.replace(old_call_tail, new_call_tail, 1)
+        changed = True
     if changed:
         path.write_text(text)
         py_compile.compile(path, doraise=True)
@@ -713,6 +750,56 @@ def _patch_flash_attn_backend(path: Path) -> bool:
     return changed
 
 
+def _patch_batch_invariant_guard(path: Path) -> bool:
+    """FR13 Method-A (FR13_BI_TREE_ATTN): flag-gated BI allowlist for TREE_ATTN.
+
+    On-disk edit of the installed vllm batch_invariant.py, anchored on the
+    decode_invariant_backends block inside override_envs_for_invariance().
+    The injected code is runtime-gated on env FR13_BI_TREE_ATTN=1 and
+    double-gated on FR13_FA2_TREE_BIAS=1 + FR13_FA2_PREFILL_NATIVE=1 (raises
+    a loud RuntimeError otherwise: the BI justification covers only the
+    forked-FA2 tree decode + native-FA2 prefill paths).  Inert by default:
+    the env gate defaults to "0" AND override_envs_for_invariance() is only
+    ever called when VLLM_BATCH_INVARIANT is enabled.
+    """
+    text = path.read_text()
+    if "FR13_BI_TREE_ATTN" in text:
+        return False
+    anchor = (
+        "    decode_invariant_backends = [\n"
+        "        AttentionBackendEnum.FLASH_ATTN,  # best supported backend\n"
+        "        AttentionBackendEnum.TRITON_ATTN,\n"
+        "    ]\n"
+    )
+    guard = anchor + (
+        "    # FR13_BI_TREE_ATTN: Method-A flag-gated allowlist relaxation.\n"
+        "    # Appending to decode_invariant_backends (before supported_backends\n"
+        "    # is built from it) also allowlists TREE_ATTN as supported and\n"
+        "    # suppresses the prefill-vs-decode warning: deployed prefill AND\n"
+        "    # decode run the same forked FA2 varlen binary with non-split\n"
+        "    # dispatch (num_splits forced under BI).\n"
+        '    if os.environ.get("FR13_BI_TREE_ATTN", "0") == "1":\n'
+        "        if not (\n"
+        '            os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1"\n'
+        '            and os.environ.get("FR13_FA2_PREFILL_NATIVE", "0") == "1"\n'
+        "        ):\n"
+        "            raise RuntimeError(\n"
+        '                "FR13_BI_TREE_ATTN=1 requires FR13_FA2_TREE_BIAS=1 and "\n'
+        '                "FR13_FA2_PREFILL_NATIVE=1: BI justification covers only "\n'
+        '                "the forked-FA2 tree decode + native-FA2 prefill paths"\n'
+        "            )\n"
+        "        decode_invariant_backends.append(AttentionBackendEnum.TREE_ATTN)\n"
+    )
+    if anchor not in text:
+        raise RuntimeError(
+            "anchor not found for batch_invariant decode_invariant_backends block"
+        )
+    text = text.replace(anchor, guard, 1)
+    path.write_text(text)
+    py_compile.compile(path, doraise=True)
+    return True
+
+
 def patch_installed_vllm(site_packages: Path) -> dict[str, bool]:
     return {
         "flash_attn_interface.py": _patch_flash_attn_interface(
@@ -723,6 +810,9 @@ def patch_installed_vllm(site_packages: Path) -> dict[str, bool]:
         ),
         "flash_attn.py": _patch_flash_attn_backend(
             site_packages / "vllm/v1/attention/backends/flash_attn.py"
+        ),
+        "batch_invariant.py": _patch_batch_invariant_guard(
+            site_packages / "vllm/model_executor/layers/batch_invariant.py"
         ),
     }
 

@@ -14,6 +14,9 @@ FR10_METRICS=${FR10_METRICS:-0}
 BATCH_INVARIANT=${BATCH_INVARIANT:-0}
 FR13_FA2_TREE_BIAS=${FR13_FA2_TREE_BIAS:-1}
 FR13_FA2_PREFILL_NATIVE=${FR13_FA2_PREFILL_NATIVE:-1}
+# FR13 Method-A: BI allowlist for TREE_ATTN (inert by default; only relevant
+# with BATCH_INVARIANT=1, and requires the two FR13_FA2_* flags above).
+FR13_BI_TREE_ATTN=${FR13_BI_TREE_ATTN:-0}
 FR13_TREE_ATTN_EXP2_SOFTMAX=${FR13_TREE_ATTN_EXP2_SOFTMAX:-1}
 LOG_DIR=${LOG_DIR:-"${FR13_RUN_DIR:-$REPO/output/fr13_fa2_tree_e2e/live}/logs"}
 FORKED_FA2_SO=${FORKED_FA2_SO:-"$REPO/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so"}
@@ -73,6 +76,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
   -e LUMO_BATCH_INVARIANT_VLLM="${LUMO_BATCH_INVARIANT_VLLM:-$BATCH_INVARIANT}" \
+  -e FR13_BI_TREE_ATTN="$FR13_BI_TREE_ATTN" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e PYTHONPATH=/workspace/src \
   -e FR10_ENABLE_TREE_GDN=1 \
@@ -157,6 +161,7 @@ sha256sum /usr/local/lib/python3.12/dist-packages/vllm/vllm_flash_attn/_vllm_fa2
 python3 /workspace/scripts/fr10_phase4_patch_vllm_tree_gdn.py
 python3 /workspace/scripts/fr13_patch_fa2_tree_bias.py --skip-source
 python3 - <<'PY'
+import os
 from pathlib import Path
 
 path = Path('/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/tree_attn.py')
@@ -164,6 +169,17 @@ text = path.read_text()
 needle = 'FR13_FA2_PREFILL_NATIVE'
 if needle not in text:
     raise SystemExit(f'{needle} patch missing in {path}')
+if os.environ.get('FR13_BI_TREE_ATTN', '0') == '1':
+    bi_path = Path('/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/batch_invariant.py')
+    bi_text = bi_path.read_text()
+    if 'FR13_BI_TREE_ATTN' not in bi_text:
+        raise SystemExit(f'FR13_BI_TREE_ATTN allowlist patch missing in {bi_path}')
+    decode_needle = (
+        'num_splits=1 if envs.VLLM_BATCH_INVARIANT else 0,\n'
+        '                    tree_bias=tree_bias,'
+    )
+    if decode_needle not in text:
+        raise SystemExit(f'FR13 BI decode num_splits expression missing in {path}')
 PY
 exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
