@@ -211,3 +211,84 @@ violations are acknowledged here and remediated on this branch:
    GPU TODO #4: force/observe a zero-accept event in live serving and
    assert the NEXT event h0 read consumes the replayed root state
    (column 0).
+
+## REBASE RECORD (2026-06-10) — onto main `c3766eb0` (conv fix + S1 + lineage)
+
+Branch rebased from base `8587396d` onto main HEAD `c3766eb0`, inheriting:
+conv-committed-path fix `c0b53f5d` (FR13_CONV_COMMITTED_PATH, default ON),
+S1 bonus-row fix `4d45be27` (FR13_TREE_BONUS_SELF, default ON), forced-spine
+diag flag (FR13_FORCE_SPINE_COMMIT, diagnostic-only), lineage table
+`00857190`. Determinism fixes `cc008587` were already in the base.
+
+**Conflict (ONE hunk, `scripts/fr10_phase4_patch_vllm_tree_gdn.py`,
+pre-remap region):** main's FR13_CONV_COMMITTED_PATH snapshot
+(`gather_committed_path_conv_prior` BEFORE the in-place remap) vs the
+branch's replay-route remap comment + flag-gated `ssm_state=None` launch.
+Resolution = BOTH coexist, in order: (1) the committed-path conv snapshot
+(runs under FR13_REPLAY_ROUTE=1 too — it is conv-bank-only, node-indexed,
+pre-remap; the replay route deletes only the ssm remap half), then (2) the
+replay-route comment + the remap launch with
+`ssm_state=(None if FR13_REPLAY_ROUTE==1 else ssm_state)`, conv half
+unconditional. The other 4 branch commits applied clean.
+
+**Text-assertion co-update (matrix Part 3.1, expected):** main's
+`tests/test_fr13_conv_committed_path.py::test_patch_text_conv_committed_path_wiring`
+pinned the remap call as `ssm_state=ssm_state,`; co-updated ONCE on the
+rebased text to pin the flag-gated form (gather-before-remap ordering
+assertion preserved; flag-OFF still covers ssm_state).
+
+**Byte-A/B vehicle port (matrix ADDENDUM rider 2) — test-enforced:** new
+`tests/test_fr13_replay_ab_vehicle_port.py` (5 tests) pins that the
+STORE_NODE_STATES=True diagnostic mode (FR13_REPLAY_ROUTE unset/0) retains
+the COMMIT_HANDOFF capture path end-to-end: legacy scratch alloc +
+`store_node_states=not _fr13_replay_route_on` + `_FR10_TREE_READ_PREV`
+staging + `"serving_tree_state": tree_state_cpu` in the
+`fr10.src_native_handoff_payload.v1` payload (the exact field
+`fr10_tree_kernel_h0_ab_replay.py:101` reads); that the flag-ON guard
+refuses ALL FOUR scratch-consuming capture envs; that the
+FR10_TREE_GDN_CAPTURE_PAYLOAD harness saves the replay inputs (key_spec =
+k pre-l2norm, value_tree = v, a = raw_a, b = raw_b, h0) + serving_out /
+serving_state (the scan halves of Gate A, incl. old-vs-new-binary out
+equality); that every required payload key the vehicle reads is written by
+the capture; and that the vehicle compiles against the rebased launcher
+(default `store_node_states=True` keeps its 2-tuple export-enabled call
+form valid).
+
+**Post-rebase verification (CPU, this worktree):**
+- `e8a64eed`-class input-ids fix verified in HEAD
+  (`_patch_gpu_model_runner_tree_verify_input_ids` present + registered) —
+  the matrix item-13 monitor-lesson check.
+- Branch battery: `test_fr13_replay_reference_bitexact.py` +
+  `test_fr13_replay_route_wiring.py` (incl. remediation asserts) +
+  `test_fr10_serving_wiring_gate.py` + `test_fr13_replay_gpu_byte_ab.py`
+  (GPU cases skip on CPU) + `test_fr13_replay_ab_vehicle_port.py`:
+  36 passed, 5 skipped.
+- Main suites: `test_fr13_conv_committed_path.py` +
+  `test_fr13_s1_bonus_row.py` + `test_fr13_nondet_chase_fixes.py` +
+  `test_fr10_phase4_sampled_committer_wiring.py` +
+  `test_fr10_tree_commit_gates.py`: 55 passed (after the one co-update
+  above).
+- Full-suite failure parity vs main HEAD: verified by (a) DIFF-SURFACE
+  COVERAGE — the complete set of test files referencing ANY module in the
+  branch diff (patcher, kernel, fr13_replay_reference, wiring gate, A/B
+  vehicle) is exactly the 9 files above, ALL green on the rebased HEAD
+  (GPU byte-A/B cases skip on CPU by design); every other test file is
+  textually independent of the diff; (b) PER-FILE A/B EMPIRICS — a
+  disk-safe per-file battery (identical runner, HEAD worktree vs
+  origin/main `git archive` extraction, temp cleaned between files)
+  produced IDENTICAL failure sets over the processed prefix
+  (auto_research + track_b_activation env-class failures, 4=4, plus
+  byte-identical in-file failure patterns). NOTE the single-process
+  full-suite run is INFEASIBLE on this host: one run writes >300 GB of
+  pytest temp (tests/test_codex_long_assets.py and friends) — this is
+  also why the host disk was found at 100% (479 GB of stale
+  /tmp/pytest-of-mark, cleared 2026-06-10); the per-file runner
+  (output/fr13_replay_rebase/perfile_runner.sh, gitignored) is the
+  reusable workaround. The 2 fr10_lossless_equivalence failures read
+  gitignored output/ GPU artifacts absent in fresh worktrees —
+  environment-class, identical on both sides.
+- GPU TODO list above is UNCHANGED by the rebase; per matrix sequencing the
+  byte A/B (Gate A) is now unblocked on the post-fix base. Mechanical
+  gate-2 rider (re-run iff emitted-module hunks land outside the
+  `num_spec_decodes>0` branch) remains a live-container check at the next
+  boot.
