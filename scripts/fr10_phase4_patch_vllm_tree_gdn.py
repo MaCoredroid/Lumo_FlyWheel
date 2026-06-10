@@ -3444,6 +3444,17 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
     else:
         counts = [int(x) for x in num_draft_tokens]
+    # FR13 S1 (default ON): a fully-accepted path commits the accepted LEAF's
+    # self-target row as its bonus token. At greedy that row IS the verify
+    # argmax for the accepted path — for EVERY path, including the spine.
+    # FR13_TREE_BONUS_SELF=0 restores the legacy 'path0_native_bonus' reuse of
+    # vLLM's precomputed bonus_token_ids, which is sampled from the LAST row
+    # of the forward (the final tree node) and is therefore the WRONG row for
+    # any winner path not ending at that node (FR13 acceptance-ladder bind:
+    # 14/163 greedy events served node-8's token after a [0,2] alt accept).
+    _fr13_bonus_self = (
+        __import__('os').environ.get('FR13_TREE_BONUS_SELF', '1') == '1'
+    )
 
     out_rows = []
     accepted_rows = []
@@ -3502,7 +3513,25 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 best_path_idx = int(path_idx)
 
         best_lcp = max(0, int(best_lcp))
-        path0_lcp = int(path_scores[0]['lcp']) if path_scores else 0
+        # FR13 S1: the TRUE spine is the first-child chain from the root.
+        # Leaves enumerate in NODE order, so path_idx 0 is generally a shallow
+        # ALT leaf, not the spine (9-node caterpillar: leaves=[2,4,6,7,8],
+        # spine [0,1,3,5,7] = path_idx 3). The superset diagnostic must be
+        # checked against the spine, not whatever leaf happens to come first.
+        _spine_leaf = -1
+        _spine_node = children[-1][0] if children.get(-1) else -1
+        _spine_guard = 0
+        while 0 <= _spine_node < node_count and _spine_guard <= node_count:
+            _spine_leaf = int(_spine_node)
+            _spine_kids = children.get(_spine_node) or []
+            _spine_node = int(_spine_kids[0]) if _spine_kids else -1
+            _spine_guard += 1
+        spine_path_idx = (
+            leaves.index(_spine_leaf) if _spine_leaf in leaves else 0
+        )
+        path0_lcp = (
+            int(path_scores[spine_path_idx]['lcp']) if path_scores else 0
+        )
         row = []
         for node in best_path[:best_lcp]:
             row.append(int(drafts[node]))
@@ -3511,7 +3540,14 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 bonus_source = 'reject_parent_target'
                 row.append(int(parent_targets[best_path[best_lcp]]))
             elif best_lcp > 0:
-                if best_path_idx == 0 and req_i < len(bonus_targets_cpu):
+                if (
+                    not _fr13_bonus_self
+                    and best_path_idx == 0
+                    and req_i < len(bonus_targets_cpu)
+                ):
+                    # Legacy bug path (FR13_TREE_BONUS_SELF=0 only): reuses
+                    # vLLM's bonus_token_ids = the LAST verify row's token,
+                    # which is the wrong row for path_idx 0 (an alt leaf).
                     bonus_source = 'path0_native_bonus'
                     row.append(int(bonus_targets_cpu[req_i]))
                 else:
@@ -3535,7 +3571,11 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             'accepted_len': int(best_lcp),
             'accepted_final_row': int(accepted_row),
             'accepted_node_ids': [int(x) for x in best_path[:best_lcp]],
+            # FR13 S1: path0_lcp is the TRUE spine's lcp (first-child chain
+            # from the root, path index spine_path_idx), NOT path_scores[0].
             'path0_lcp': int(path0_lcp),
+            'spine_path_idx': int(spine_path_idx),
+            'spine_leaf': int(_spine_leaf),
             'superset_violation': bool(int(best_lcp) < int(path0_lcp)),
             'superset_delta': int(best_lcp) - int(path0_lcp),
             'winner_leaf': int(best_leaf),

@@ -82,6 +82,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_TREE_PER_REQ_GEN="${FR13_TREE_PER_REQ_GEN:-1}" \
   -e FR13_TREE_REQKEY="${FR13_TREE_REQKEY:-1}" \
   -e FR13_TREE_REMAP_SEQ="${FR13_TREE_REMAP_SEQ:-1}" \
+  -e FR13_TREE_BONUS_SELF="${FR13_TREE_BONUS_SELF:-1}" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e PYTHONPATH=/workspace/src \
   -e FR10_ENABLE_TREE_GDN=1 \
