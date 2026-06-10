@@ -36,3 +36,9 @@ ordering probe (publish-before-next-h0-read assert) before burning a full B=4 ca
 - Fix design will be informed by the in-flight `w78aq6xum` flow (full traffic accounting + every reader of
   the publish + the ordering contract).
 - Codex_fr19 fully stood down (contract: workflows are the worker).
+
+## ROOT CAUSE IDENTIFIED (w78aq6xum adversarial verify, 2026-06-10 — supersedes "prime suspect")
+Two concrete mechanisms, both consistent with the live collapse:
+1. **Stale row-0 on zero-accept events**: the next-event h0 read clamps `accepted_len-1` to column 0 (kernel :261-266), so bank row 0 is LIVE even when the accepted path is empty — the path-only publish never refreshes it ⇒ the next event seeds from a stale state. Gate-2's offline empty-path case checked "rejected rows untouched" but NOT the next event's h0 correctness.
+2. **Non-graph-stable pending dict under FULL capture** (the gate-4 regime): `_FR10_PENDING_TREE_STATE_PUBLISH` pins the per-step `tree_state_all` allocations (48×201.3 MB ≈ 9.4 GiB, never popped) and per-batch-size graphs alias different allocations ⇒ the committer publishes whichever buffer was captured last = silent wrong-buffer publish.
+Fix shape (for the retry, on the branch): ONE persistent preallocated staging bank per layer (the patch :184-197 pattern), pop-on-publish, and an explicit zero-accept row-0 publish path; then the full replay route deletes the scratch entirely.
