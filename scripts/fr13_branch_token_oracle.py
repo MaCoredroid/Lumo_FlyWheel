@@ -137,7 +137,22 @@ def align_events(tree_run: Path) -> list[EventContext]:
                     f"capture; got req_index={row.get('req_index')} record={key}"
                 )
             emitted = _token_ids(row, "emitted_tokens")
-            start = _find_subsequence(target, emitted, start=served_cursor)
+            if event_index == 0:
+                # The first event of a record may sit after the single
+                # prefill-sampled token, so allow a start gap of at most 1.
+                start = _find_subsequence(target, emitted, start=served_cursor)
+                if start is not None and start > 1:
+                    start = None
+            else:
+                # Later events must tile the served stream exactly. A fuzzy
+                # find() here can lock onto a spurious repeat (seen on the
+                # repetitive SWE-4 captures) and desync the cursor.
+                start = (
+                    served_cursor
+                    if target[served_cursor : served_cursor + len(emitted)] == emitted
+                    and served_cursor + len(emitted) <= len(target)
+                    else None
+                )
             if start is None:
                 remaining = target[served_cursor:]
                 if served_cursor == 0 and contexts:
