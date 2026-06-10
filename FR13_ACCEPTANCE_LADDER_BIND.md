@@ -157,3 +157,9 @@ the superset accept≥native bar is impossible while the spine ≠ native chain)
 Method: all numbers reproducible CPU-only from the run dir (event walks assert emitted_tokens == served token_ids; native
 draft/event pairing validated by greedy accepted-prefix == draft-prefix on all 123 events; logit pairs compared only at
 identical-prefix identical-input rows). Flag state stated above; all pre-fix binds (36.6% etc.) describe the pre-cc008587 path.
+
+## ADDENDUM — adversarial-verify riders (wc11426x6, holds=True)
+- Run config completeness: seeds 1313/1717, greedy = temp 0.0/top_p 1.0, t06 = 0.6/0.95 (omitted from header above).
+- R2 d1+ conditional deficits are CONFOUNDED by alt-leaf capping: excluding the 15 full-[0,2] accepts, tree d2 conditional = 0.847 vs native 0.860 (near-zero). **The real deficit is d0-concentrated** (−0.227/−0.301, far beyond the ±0.07 binomial CI); sub-CI rows (d1/d3/d4) are unresolved, not signed deficits.
+- The 17-honest/26-drafter-flip split is a RATE decomposition (native a_0 expectation), not per-event classification; lockstep (20 events) is the direct evidence.
+- R4 prompts 1-2 "S2" classes are argmax-logic-only (fp32 logit evidence exists only for prompt-0 event-7).

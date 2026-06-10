@@ -1346,3 +1346,10 @@ Call2 conv-detail alignment after the fix:
 - Committer accept RULE cleared: 163/163 events exactly match full-tree greedy argmax; 35 branch accepts are the realized tree upside (+35 tokens).
 - Oracle caveat measured: native-on-path is prefill-shaped; one demonstrated near-tie disagreement vs live native decode (3655 vs 2781) ⇒ oracle mismatch rates are upper bounds.
 - Next: S1 fix (tiny) -> S2 GPU localization (logit capture on post-acc>=1 events + state-advance read) -> S3 discriminators (BI-equalized boot, spine-only drafter A/B).
+
+## Acceptance ladder LOCALIZED: three seams bound (wc11426x6 verify-passed, 2026-06-10)
+- Bind: FR13_ACCEPTANCE_LADDER_BIND.md (8add39e6) + riders. Committer accept-math CLEARED (163/163; +35 genuine branch accepts). Verify NOT rejecting good drafts (tree-accept ≈ native-on-path at every depth).
+- S1 committer bonus-row bug: path_idx0=[0,2] alt, native-bonus special case serves node-8 row → 14/163 wrong tokens served (8.6%); also corrupts path0_lcp/superset_violation diagnostics. EXACT fix specified :3505-3539.
+- S2 episodic verify corruption: event-7-class whole-forward (10-25x baseline, flips vs margin 7.25), transient → per-event read path; the live multi-event conv residual (3a9039cc was single-event). Trigger unbound.
+- S3 drafter spine NOT token-identical (DOMINATOR of the d0-concentrated deficit −0.227/−0.301): top1/top2 swaps dead-ending on leaf alts; first event after prefill ⇒ inside the multi-depth rollout. Candidates: alt co-residency in drafter state / BI asymmetry (tree BI=1 vs native BI=0 — needs BI-equalized boot) / commit rebuild.
+- Root-reject 34.4% SURVIVED the slot fixes (stale-slot attribution dead).
