@@ -18,6 +18,18 @@ FR13_FA2_PREFILL_NATIVE=${FR13_FA2_PREFILL_NATIVE:-1}
 # with BATCH_INVARIANT=1, and requires the two FR13_FA2_* flags above).
 FR13_BI_TREE_ATTN=${FR13_BI_TREE_ATTN:-0}
 FR13_TREE_ATTN_EXP2_SOFTMAX=${FR13_TREE_ATTN_EXP2_SOFTMAX:-1}
+# FR13_CONV_COMMITTED_PATH (default ON): the next event's prior conv window is
+# read from the COMMITTED path's accepted-leaf NODE column (pre-remap), so
+# BRANCH winners ([0,2], [0,1,4]) commit a window built from committed-path
+# tokens only; spine winners are byte-identical to the legacy linear read.
+# =0 restores the legacy post-remap linear-column read.
+FR13_CONV_COMMITTED_PATH=${FR13_CONV_COMMITTED_PATH:-1}
+# FR13_FORCE_SPINE_COMMIT (default OFF) — DIAGNOSTIC ONLY, like
+# FR10_ALLOW_LINEAR_FALLBACK: the greedy committer scores all paths (alts
+# still verified) but always commits the spine path's own prefix. For the
+# S3/m1 decisive A/B (caterpillar forced-spine vs chain boot) ONLY. NEVER
+# bind =1 into a committed serving config or a gate result.
+FR13_FORCE_SPINE_COMMIT=${FR13_FORCE_SPINE_COMMIT:-0}
 LOG_DIR=${LOG_DIR:-"${FR13_RUN_DIR:-$REPO/output/fr13_fa2_tree_e2e/live}/logs"}
 FORKED_FA2_SO=${FORKED_FA2_SO:-"$REPO/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so"}
 TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
@@ -83,6 +95,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_TREE_REQKEY="${FR13_TREE_REQKEY:-1}" \
   -e FR13_TREE_REMAP_SEQ="${FR13_TREE_REMAP_SEQ:-1}" \
   -e FR13_TREE_BONUS_SELF="${FR13_TREE_BONUS_SELF:-1}" \
+  -e FR13_CONV_COMMITTED_PATH="$FR13_CONV_COMMITTED_PATH" \
+  -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e PYTHONPATH=/workspace/src \
   -e FR10_ENABLE_TREE_GDN=1 \

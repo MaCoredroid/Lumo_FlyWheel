@@ -278,6 +278,62 @@ def launch_tree_state_linear_remap(
         )
 
 
+def gather_committed_path_conv_prior(
+    *,
+    conv_state: torch.Tensor,
+    spec_state_indices: torch.Tensor,
+    accepted_paths: torch.Tensor | None,
+    num_accepted_tokens: torch.Tensor | None,
+    num_spec_decodes: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Gather the prior conv window from the COMMITTED path's accepted leaf.
+
+    FR13_CONV_COMMITTED_PATH: the legacy prior-window read gathers
+    ``spec_state_indices[:, accepted_len - 1]`` AFTER
+    :func:`launch_tree_state_linear_remap` has permuted the bank in place —
+    linear-column arithmetic that is only spine-valid by construction and
+    depends on the remap having executed exactly. This helper instead reads
+    the accepted path's LEAF NODE column (``accepted_paths[b, len - 1]``,
+    node-indexed pre-remap layout). The per-node tree-conv write-back stores
+    each node's window as the last (width - 1) taps of
+    ``(prior ++ that node's root-path tokens)``, so the accepted leaf's bank
+    row IS the committed token path's window by construction — valid for
+    BRANCH winners ([0,2], [0,1,4]); for spine winners it is byte-identical
+    to the legacy post-remap linear read (the leaf's source row is never a
+    remap destination), which is the semantics-preserving license.
+
+    Must be called BEFORE ``launch_tree_state_linear_remap`` mutates the
+    bank. ``accepted_len == 0`` (no draft accepted) reads node column 0 (the
+    committed root token's window), matching legacy. All ops are tensor ops
+    with no host sync, so the gather is CUDA-graph safe.
+
+    Returns ``(read_node_cols [B,1], bank_rows [B,1], prior_state_bank)``.
+    """
+    b = int(num_spec_decodes)
+    spec_cols = int(spec_state_indices.size(-1))
+    device = spec_state_indices.device
+    if accepted_paths is None or num_accepted_tokens is None:
+        read_node_cols = torch.zeros((b, 1), dtype=torch.long, device=device)
+    else:
+        lens = num_accepted_tokens[:b].to(torch.long).view(-1, 1)
+        path_cols = torch.clamp(
+            lens - 1, min=0, max=int(accepted_paths.size(-1)) - 1
+        )
+        read_node_cols = accepted_paths[:b].to(torch.long).gather(1, path_cols)
+        # len == 0 commits no draft node: the prior window is node 0's (the
+        # committed root token's). The committer zero-fills path rows, but
+        # enforce explicitly so a stale buffer cannot redirect the read.
+        read_node_cols = torch.where(
+            lens > 0, read_node_cols, torch.zeros_like(read_node_cols)
+        )
+        read_node_cols = torch.clamp(read_node_cols, min=0, max=spec_cols - 1)
+    bank_rows = spec_state_indices[:b].to(torch.long).gather(1, read_node_cols)
+    prior_state_bank = torch.index_select(
+        conv_state, 0, bank_rows.reshape(-1)
+    )
+    return read_node_cols, bank_rows, prior_state_bank
+
+
 @triton.jit
 def _tree_gdn_kernel(
     q,

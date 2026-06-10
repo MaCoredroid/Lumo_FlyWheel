@@ -14,11 +14,14 @@ These select OUR verify path (forked FA2 tree-bias + GDN tree-kernel + MTP draft
 | `FR10_DECODE_MODE_DEFAULT` | `tree_mtp` | decode mode = tree verify (vs `naive_mtp`/`non_mtp`) |
 | `FR11_TREE_CONV_NATIVE_BF16_TAPS` | `1` | conv tap-dtype alignment (FR11) |
 | `FR12_TREE_CONV_NATIVE_BF16_TAPS` | `1` | conv tap-dtype alignment (FR12) — **note: the GATE-A residual is a remaining 1-ULP in this manual conv vs native `causal_conv1d_update`** (`FR13_GATEA_DEEP_DIVERGENCE.md`) |
+| `FR13_CONV_COMMITTED_PATH` | `1` | committed-path conv prior window: the next event's prior window is gathered from the accepted path's LEAF NODE column (node-indexed, BEFORE the in-place remap), so BRANCH winners ([0,2], [0,1,4]) commit a window built from committed-path tokens only (m1 seam 1, `FR13_S1S2S3_DISCRIMINATE_BIND.md`). Spine winners byte-identical to legacy (tested). `=0` restores the legacy post-remap linear-column read |
 | `SPEC_CONFIG` | `{method:qwen3_5_mtp, num_speculative_tokens:N, speculative_token_tree:TREE}` | the **MTP-5 drafter** + the tree topology (spine=path0=the MTP chain) |
 | `VLLM_BATCH_INVARIANT` | `0` | batch-invariance off (speed). **For B=4 drift this matters** — #42960 batch-dependence; the conv fix must be batch-invariant regardless |
 | forked `.so` + patchers | — | copy `_vllm_fa2_C.abi3.so`; run `fr10_phase4_patch_vllm_tree_gdn.py` + `fr13_patch_fa2_tree_bias.py --skip-source` at launch |
 
 **FOOTGUN — must stay UNSET:** `FR10_ALLOW_LINEAR_FALLBACK`. The launcher explicitly `unset FR10_ALLOW_LINEAR_FALLBACK` (line 144). Set ⟹ GDN silently falls back to LINEAR ⟹ DIAGNOSTIC ONLY, never a valid gate result, never bound to a commit.
+
+**FOOTGUN — must stay `0` for serving/gates:** `FR13_FORCE_SPINE_COMMIT` (default OFF). Same class as `FR10_ALLOW_LINEAR_FALLBACK`: the greedy committer scores ALL paths (alts verified in `path_scores`) but always COMMITS the spine path's own prefix, so alt paths never win. Exists ONLY for the S3/m1 decisive A/B (caterpillar forced-spine vs chain-only boot, `FR13_S1S2S3_DISCRIMINATE_BIND.md`): if forced-spine next-event drafts match the chain boot token-for-token, the m1 contamination is entirely in the branch-commit state advance. NEVER bind `=1` into a committed serving config or a gate result; the sampled (temp>0) committer fails loud if it sees the flag. Log rows carry `forced_spine_commit` + policy `greedy_tree_lcp_max_FORCED_SPINE_DIAGNOSTIC` so captures self-describe.
 
 ## B. DRIFT-MEASURE — capture flags (set per measurement; default empty/off)
 Top-down ladder vs E5 (eager, hooks ON). All point to a `/logs/*.pt` path; each has `_NUM_TOKENS/_SKIP/_LIMIT` (+ `_LAYER_PREFIX`/`_ROWS`/`_Z`/`_INPUT` where noted).

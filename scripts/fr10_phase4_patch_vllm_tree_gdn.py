@@ -343,7 +343,7 @@ def _patch_gdn_linear() -> bool:
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
-            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
+            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
@@ -670,6 +670,12 @@ def _patch_gdn_linear() -> bool:
                         0,
                         _fr12_tree_candidate_bank_rows,
                     ).detach().to(torch.float32).cpu().clone()
+                _fr13_conv_committed_path = (
+                    os.environ.get("FR13_CONV_COMMITTED_PATH", "1") == "1"
+                )
+                _fr13_committed_read_cols = None
+                _fr13_committed_bank_rows = None
+                _fr13_committed_prior_bank = None
                 try:
                     _fr10_accepted_paths_tensor = globals().get(
                         "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR"
@@ -756,6 +762,28 @@ def _patch_gdn_linear() -> bool:
                                     + ":"
                                     + str(_fr10_len_exc)
                                 ) from _fr10_len_exc
+                    if _fr13_conv_committed_path and not _fr12_native_prior_read:
+                        # FR13_CONV_COMMITTED_PATH (default ON): snapshot the
+                        # committed-path prior conv window BEFORE the in-place
+                        # remap below mutates the bank. The window is read
+                        # from the accepted path's LEAF NODE column
+                        # (accepted_paths[b, len-1], node-indexed layout), so
+                        # it is built from the COMMITTED token path only —
+                        # branch-winner-valid; spine winners are byte-identical
+                        # to the legacy post-remap linear-column read (the
+                        # leaf's source row is never a remap destination).
+                        # FR13_CONV_COMMITTED_PATH=0 restores the legacy read.
+                        (
+                            _fr13_committed_read_cols,
+                            _fr13_committed_bank_rows,
+                            _fr13_committed_prior_bank,
+                        ) = gather_committed_path_conv_prior(
+                            conv_state=conv_state,
+                            spec_state_indices=spec_state_indices_tensor,
+                            accepted_paths=_fr10_accepted_paths_tensor,
+                            num_accepted_tokens=_fr10_accepted_lens_tensor,
+                            num_spec_decodes=int(attn_metadata.num_spec_decodes),
+                        )
                     launch_tree_state_linear_remap(
                         ssm_state=ssm_state,
                         conv_state=conv_state,
@@ -786,6 +814,7 @@ def _patch_gdn_linear() -> bool:
                         _fr12_tree_candidate_bank_rows,
                     ).detach().to(torch.float32).cpu().clone()
                 if _fr12_native_prior_read:
+                    _fr10_prior_read_mode = "native_tail_pre_remap"
                     _fr10_conv_read_cols = torch.zeros(
                         (int(attn_metadata.num_spec_decodes), 1),
                         dtype=torch.long,
@@ -793,7 +822,20 @@ def _patch_gdn_linear() -> bool:
                     )
                     _fr10_prior_conv_bank_rows = _fr12_native_prior_conv_bank_rows
                     _fr10_prior_conv_state_bank = _fr12_native_prior_conv_state_bank
+                elif (
+                    _fr13_conv_committed_path
+                    and _fr13_committed_prior_bank is not None
+                ):
+                    # FR13_CONV_COMMITTED_PATH: committed-path window gathered
+                    # node-indexed BEFORE the remap (see comment above the
+                    # launch_tree_state_linear_remap call). read_cols here are
+                    # NODE columns, not linear accepted positions.
+                    _fr10_prior_read_mode = "committed_path_node"
+                    _fr10_conv_read_cols = _fr13_committed_read_cols
+                    _fr10_prior_conv_bank_rows = _fr13_committed_bank_rows
+                    _fr10_prior_conv_state_bank = _fr13_committed_prior_bank
                 else:
+                    _fr10_prior_read_mode = "compact_head"
                     if _fr10_accepted_lens_tensor is None:
                         _fr10_conv_read_cols = torch.zeros(
                             (int(attn_metadata.num_spec_decodes), 1),
@@ -1147,11 +1189,7 @@ def _patch_gdn_linear() -> bool:
                                             "read_cols": _fr10_conv_read_cols.detach()
                                             .cpu()
                                             .clone(),
-                                            "prior_read_mode": (
-                                                "native_tail_pre_remap"
-                                                if _fr12_native_prior_read
-                                                else "compact_head"
-                                            ),
+                                            "prior_read_mode": _fr10_prior_read_mode,
                                             "prior_cols": _fr10_prior_cols.detach()
                                             .cpu()
                                             .clone(),
@@ -3455,6 +3493,19 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     _fr13_bonus_self = (
         __import__('os').environ.get('FR13_TREE_BONUS_SELF', '1') == '1'
     )
+    # FR13_FORCE_SPINE_COMMIT (default OFF) — DIAGNOSTIC ONLY; NEVER bind =1
+    # into a committed serving config (same class as
+    # FR10_ALLOW_LINEAR_FALLBACK: a forced-spine stream is not the tree
+    # committer's output). The committer still scores EVERY root-to-leaf path
+    # (alts stay verified in path_scores) but the COMMIT is forced to the
+    # spine path's own prefix (longest spine lcp), so alt paths can never
+    # win. Decisive S3/m1 A/B: caterpillar topology with forced spine commits
+    # vs the chain-only boot — if next-event drafts then match the chain boot
+    # token-for-token, the m1 contamination is entirely in the branch-commit
+    # state advance.
+    _fr13_force_spine_commit = (
+        __import__('os').environ.get('FR13_FORCE_SPINE_COMMIT', '0') == '1'
+    )
 
     out_rows = []
     accepted_rows = []
@@ -3532,6 +3583,14 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         path0_lcp = (
             int(path_scores[spine_path_idx]['lcp']) if path_scores else 0
         )
+        if _fr13_force_spine_commit and path_scores:
+            # FR13_FORCE_SPINE_COMMIT diagnostic override: commit the spine
+            # path's prefix (its own lcp). Alts were scored above and remain
+            # in path_scores (verified-but-never-winning).
+            best_path = [int(x) for x in path_scores[spine_path_idx]['path']]
+            best_lcp = max(0, int(path_scores[spine_path_idx]['lcp']))
+            best_leaf = int(path_scores[spine_path_idx]['leaf'])
+            best_path_idx = int(spine_path_idx)
         row = []
         for node in best_path[:best_lcp]:
             row.append(int(drafts[node]))
@@ -3580,6 +3639,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             'superset_delta': int(best_lcp) - int(path0_lcp),
             'winner_leaf': int(best_leaf),
             'winner_path': [int(x) for x in best_path],
+            'forced_spine_commit': bool(_fr13_force_spine_commit),
             'path_scores': path_scores,
             'emitted_tokens': [int(x) for x in row],
             'bonus_source': bonus_source,
@@ -3598,7 +3658,12 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         }
         winner_log_rows.append({
             'primary': f'fr10_tree_req_{req_i}',
-            'policy': 'greedy_tree_lcp_max',
+            'policy': (
+                'greedy_tree_lcp_max_FORCED_SPINE_DIAGNOSTIC'
+                if _fr13_force_spine_commit
+                else 'greedy_tree_lcp_max'
+            ),
+            'forced_spine_commit': bool(_fr13_force_spine_commit),
             'selector_enabled': True,
             'lossless_public_stream': True,
             'temperature': 0.0,
@@ -3801,6 +3866,15 @@ def _lumo_tree_canonical_multidraft_sample(
     generators=None,
 ) -> torch.Tensor:
     """Reference sampled tree committer using the verified FR10 rule."""
+    if __import__('os').environ.get('FR13_FORCE_SPINE_COMMIT', '0') == '1':
+        # FR13_FORCE_SPINE_COMMIT is a GREEDY-committer diagnostic. The
+        # sampled committer's sequential child walk cannot force-commit the
+        # spine without silently changing acceptance distributions; fail loud
+        # so a temp>0 run cannot masquerade as a forced-spine A/B.
+        raise RuntimeError(
+            'FR13_FORCE_SPINE_COMMIT=1 is diagnostic-only for the GREEDY '
+            'tree committer; unset it for sampled (temp>0) decoding'
+        )
     import numpy as _fr10_np
     from lumo_flywheel_serving.fr10_tree_rejection_sampler import (
         sample_deterministic_multidraft_rejection_step as _fr10_sample_det_step,
