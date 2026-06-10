@@ -48,7 +48,12 @@ Contract: **workflows are the worker** (codex stood down); Claude red-teams/bind
 
 **Direction (queued behind Method A — one repo-mutating workflow at a time):** staged replay-route build: fix stage-1's three blockers on the branch (persistent staging bank, pop-on-publish, zero-accept row-0 path) → STORE_NODE_STATES=False + activation ring + chain-replay kernel (Option 1 eager → Option 2 capture-fused), gated by byte A/B + durable-state diff=0 + live gate-4-class campaign.
 
-**WY: PARKED-NOT-DEAD, dominated** (within-floor ~1-ULP but not byte-exact; FLOP advantage worthless bandwidth-bound; chunking risks reintroducing batch-variance). Only revisit if the replay route fails its gates.
+**WY: in the plan as LAST-RESORT FALLBACK (user 2026-06-10) — not battle-tested lossless, so never the primary.**
+Half-2 ordering:
+1. **PRIMARY = replay route** (above): the battle-tested byte-exact, batch-invariant-by-construction kernel, tax removed by activation-store + identical-op-order replay (0.86× native).
+2. **FALLBACK = WY**, triggered ONLY if the primary fails a hard gate: (a) the codegen-identity byte A/B fails irrecoverably (shared `@triton.jit` body can't force bit-identical replay), or (b) the replay route fails its live gate-4-class campaign for structural reasons, or (c) an unfixable spill/capture wall.
+   WY's standing (verified wox8pnjx8): within-floor ~1 bf16 ULP, **not byte-exact** (different summation tree — provably can never be 0.0 vs the sequential incumbent); 4.19e-9 vs non-MTP ground truth (closer than shipping MTP-5's own ~6e-5 chunk gap); batch-invariance argued by construction for the self-authored static kernel but **must be re-proven live**; the "6/6 spine argmax" evidence is contested ("single-event coincidence", b8747d23). If triggered, WY runs the mapped path: re-plug archived `tree-gdn-wy-kernel` (branch `fr13-wy-archive`, c0448bd7) **with the 8a975837 state fix** (the pre-fix 1.1989 e2e is NOT a verdict against it) → B=1 ladder spine AND branch (native-on-branch-path oracle) → B=4 CUDA-capture confirm → decisive B=4 SWE e2e vs E5 at the **within-argmax/within-floor bar** (bag-TV ≤ floor + accept/event ≥ same-shape native). ~3-5 boots.
+   WY also reaches the same ~1.0× HBM endpoint (accept-only state commit is native to its design) — the fallback loses byte-exactness, not the speed target.
 
 ## Convergence principle (user's superset logic)
 Fixing the Half-1 carrier should pull accept/event 2.024 → ≥ same-shape native (spine recovered) **+ branch bonus**; the Half-2 route cuts the per-forward tax below native. Lossless and faster are ONE outcome, not a trade.
