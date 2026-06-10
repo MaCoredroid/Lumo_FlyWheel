@@ -150,3 +150,10 @@ Optional only if route feasibility must be retired early and a GPU slot is idle:
 5. Bank dtype fp32 is believed, not proven — patch-time assert (R9).
 6. Boot estimates assume corruption-gate native/noise arms are reusable at identical probe shape; otherwise +2 boots for the native floor (item 8 caveat).
 7. Line numbers will drift as the ladder flow commits; anchors here are at `8587396d`/`b960679d` — re-grep before relying on any `:NNNN`.
+
+## ADDENDUM — adversarial-verify riders (wg13fn85p verify, holds=True; MUST be honored by the build/campaign)
+1. **Two more deleted-export readers** missing from the instrument-breaks list: `scripts/fr12_scan_batch_invariance_probe.py:328` (reads `payload["serving_state"]`) and `scripts/fr11_probe_beta_event0_handoff.py:182` (reads `serving_tree_state`) — port or mark diagnostic-era before trusting their numbers under the replay route.
+2. **Gate A's own vehicle depends on the export**: `fr10_tree_kernel_h0_ab_replay.py:101` reads `serving_tree_state` from the COMMIT_HANDOFF capture (sourced from the deleted `tree_state_all` scratch). The `STORE_NODE_STATES=True` diagnostic mode must ALSO retain the capture path, or the byte A/B cannot run.
+3. **Fourth seam row**: a ladder seam landing OUTSIDE verify-forward/committer-math/handoff (e.g., the REQKEY pre-forward rewrite ~:5235-5350) → treat as committer-math (A/B survives; gate-4 baselines re-pinned).
+4. **Approximate coordinates**: re-derive `:2015+` (tree-branch guard) and `~:4000-4060` (sampled-committer publish) by reading before any hunk or text-assertion test targets them.
+5. **Mechanical gate-2 rider**: re-run gate-2 iff the diff of the emitted patched gdn_linear_attn module contains hunks OUTSIDE the `num_spec_decodes>0` branch (not by judgment).
