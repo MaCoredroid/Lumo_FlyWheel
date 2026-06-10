@@ -3648,6 +3648,37 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
             [int(x) for x in row] for row in accepted_token_rows
         ]
+        if __import__('os').environ.get('FR13_TREE_REQKEY', '1') == '1':
+            # FR13_TREE_REQKEY: also publish accepted paths keyed by request
+            # id. The device buffers above are batch-position-keyed and
+            # persistent, so a slot's new occupant would otherwise consume the
+            # previous occupant's path/lens at its first tree-verify forward
+            # (and a persistent-batch reorder hands rows across requests). The
+            # model-runner pre-forward rewrite consumes this dict.
+            _fr13_row_req_ids = getattr(
+                _lumo_tree_commit_gdn, '_LUMO_FA_SAMPLER_ROW_REQ_IDS', None
+            )
+            if _fr13_row_req_ids is None:
+                raise RuntimeError(
+                    'FR13_TREE_REQKEY missing sampler-row request ids'
+                )
+            if len(_fr13_row_req_ids) < len(accepted_gdn_node_paths):
+                raise RuntimeError(
+                    'FR13_TREE_REQKEY sampler-row request ids shorter than '
+                    'committer rows: '
+                    f'{len(_fr13_row_req_ids)} < {len(accepted_gdn_node_paths)}'
+                )
+            _fr13_by_req = getattr(
+                _lumo_tree_commit_gdn, '_LUMO_FA_TREE_ACCEPT_BY_REQ', None
+            )
+            if _fr13_by_req is None:
+                _fr13_by_req = {}
+                _lumo_tree_commit_gdn._LUMO_FA_TREE_ACCEPT_BY_REQ = _fr13_by_req
+            for _fr13_i in range(len(accepted_gdn_node_paths)):
+                _fr13_by_req[str(_fr13_row_req_ids[_fr13_i])] = (
+                    [int(_x) for _x in accepted_gdn_node_paths[_fr13_i]],
+                    int(accepted_lens[_fr13_i]),
+                )
     except Exception as _fr10_tree_lcp_log_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(
@@ -3727,6 +3758,7 @@ def _lumo_tree_canonical_multidraft_sample(
     draft_probs: torch.Tensor | None,
     bonus_token_ids: torch.Tensor,
     max_spec_len: int,
+    generators=None,
 ) -> torch.Tensor:
     """Reference sampled tree committer using the verified FR10 rule."""
     import numpy as _fr10_np
@@ -3746,8 +3778,21 @@ def _lumo_tree_canonical_multidraft_sample(
     draft_probs_cpu = (
         None if draft_probs is None else draft_probs.detach().cpu().numpy()
     )
-    seed = int(torch.randint(0, 2**31 - 1, (1,), device=output_token_ids.device).cpu().item())
-    rng = _fr10_np.random.default_rng(seed)
+    # FR13_TREE_PER_REQ_GEN: seed the rejection-sampling rng from the
+    # per-request torch.Generator (sampling_metadata.generators, the same
+    # mechanism stock vLLM uses for seeded requests) instead of the GLOBAL
+    # torch CUDA RNG. The global stream's offset depends on every prior tree
+    # event in the boot AND the draws were consumed sequentially across
+    # requests in batch order, so same-seed reruns diverged at the first
+    # sampled token (FR13 nondeterminism chase candidate #1). Default ON:
+    # the per-draw distributions are unchanged; only the stream source moves
+    # to the request's own seeded generator. FR13_TREE_PER_REQ_GEN=0 restores
+    # the legacy single global-seeded rng.
+    _fr13_per_req_gen = (
+        __import__('os').environ.get('FR13_TREE_PER_REQ_GEN', '1') == '1'
+    )
+    rng_global = None
+    rng = None
 
     out_rows = []
     accepted_rows = []
@@ -3784,6 +3829,30 @@ def _lumo_tree_canonical_multidraft_sample(
     start = 0
     for req_i, node_count in enumerate(counts):
         node_count = int(node_count)
+        _fr13_gen = None
+        if _fr13_per_req_gen and generators:
+            _fr13_gen = generators.get(req_i)
+        if _fr13_gen is not None:
+            _fr13_seed = int(
+                torch.randint(
+                    0,
+                    2**31 - 1,
+                    (1,),
+                    device=_fr13_gen.device,
+                    generator=_fr13_gen,
+                ).cpu().item()
+            )
+            rng = _fr10_np.random.default_rng(_fr13_seed)
+        else:
+            if rng_global is None:
+                rng_global = _fr10_np.random.default_rng(
+                    int(
+                        torch.randint(
+                            0, 2**31 - 1, (1,), device=output_token_ids.device
+                        ).cpu().item()
+                    )
+                )
+            rng = rng_global
         parents = parents_cpu[start:start + node_count]
         drafts = drafts_cpu[start:start + node_count]
         current_parent = -1
@@ -3970,6 +4039,34 @@ def _lumo_tree_canonical_multidraft_sample(
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
             [int(x) for x in row] for row in accepted_token_rows
         ]
+        if __import__('os').environ.get('FR13_TREE_REQKEY', '1') == '1':
+            # FR13_TREE_REQKEY: also publish accepted paths keyed by request
+            # id (see the greedy committer for the rationale). The
+            # model-runner pre-forward rewrite consumes this dict.
+            _fr13_row_req_ids = getattr(
+                _lumo_tree_commit_gdn, '_LUMO_FA_SAMPLER_ROW_REQ_IDS', None
+            )
+            if _fr13_row_req_ids is None:
+                raise RuntimeError(
+                    'FR13_TREE_REQKEY missing sampler-row request ids'
+                )
+            if len(_fr13_row_req_ids) < len(accepted_gdn_node_paths):
+                raise RuntimeError(
+                    'FR13_TREE_REQKEY sampler-row request ids shorter than '
+                    'committer rows: '
+                    f'{len(_fr13_row_req_ids)} < {len(accepted_gdn_node_paths)}'
+                )
+            _fr13_by_req = getattr(
+                _lumo_tree_commit_gdn, '_LUMO_FA_TREE_ACCEPT_BY_REQ', None
+            )
+            if _fr13_by_req is None:
+                _fr13_by_req = {}
+                _lumo_tree_commit_gdn._LUMO_FA_TREE_ACCEPT_BY_REQ = _fr13_by_req
+            for _fr13_i in range(len(accepted_gdn_node_paths)):
+                _fr13_by_req[str(_fr13_row_req_ids[_fr13_i])] = (
+                    [int(_x) for _x in accepted_gdn_node_paths[_fr13_i]],
+                    int(accepted_lens[_fr13_i]),
+                )
     except Exception as _fr10_commit_globals_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(
@@ -4470,6 +4567,7 @@ def _lumo_tree_canonical_multidraft_sample(
             draft_probs,
             bonus_token_ids,
             max_spec_len,
+            generators=getattr(sampling_metadata, "generators", None),
         )
 
     if sampling_metadata.all_greedy:
@@ -5128,6 +5226,125 @@ def _patch_gpu_model_runner_decode_mode_globals() -> bool:
     )
     if anchor not in text:
         raise RuntimeError("gpu_model_runner use_spec_decode anchor not found")
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_tree_reqkey() -> bool:
+    """FR13_TREE_REQKEY: re-key the tree accepted-path/lens buffers by request.
+
+    The FR10 tree accepted-path/lens device buffers are allocated once at
+    metadata-builder init and written by the committer keyed by BATCH POSITION,
+    never reset per request. The first tree-verify forward of a request on slot
+    b therefore consumes the previous occupant's accepted path/lens (wrong
+    state-bank remap + wrong h0 column -> different logits for identical
+    input), and a persistent-batch swap-removal reorder transiently hands row b
+    a different request's path. This injects a pre-forward rewrite in
+    _prepare_inputs that installs each CURRENT spec-row occupant's own last
+    accepted path/lens (zeros for a request's first spec step) from a
+    request-id-keyed dict published by the committer. Default ON: for stable
+    occupancy beyond the first event the installed values equal what the
+    buffers already held, so the deterministic case is unchanged;
+    FR13_TREE_REQKEY=0 restores the legacy slot-keyed behavior.
+    """
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_TREE_REQKEY_REWRITE"
+    if sentinel in text:
+        return False
+
+    anchor = (
+        "            self.num_decode_draft_tokens.np[:num_reqs] = num_decode_draft_tokens\n"
+        "            self.num_decode_draft_tokens.np[num_reqs:].fill(-1)\n"
+        "            self.num_decode_draft_tokens.copy_to_gpu()\n"
+    )
+    inject = anchor + (
+        f"            {sentinel}: install the current spec-row occupants' own\n"
+        "            # accepted tree paths/lens (request-id keyed; zeros for a first\n"
+        "            # spec step) into the persistent batch-position-keyed device\n"
+        "            # buffers before the forward reads them.\n"
+        "            if __import__(\"os\").environ.get(\"FR13_TREE_REQKEY\", \"1\") == \"1\":\n"
+        "                try:\n"
+        "                    from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_rk_gdn\n"
+        "                    _fr13_rk_req_ids = [\n"
+        "                        str(_fr13_rk_rid)\n"
+        "                        for _fr13_rk_rid in self.input_batch.req_ids[:num_reqs]\n"
+        "                    ]\n"
+        "                    _fr13_rk_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = _fr13_rk_req_ids\n"
+        "                    _fr13_rk_by_req = getattr(\n"
+        "                        _fr13_rk_gdn, \"_LUMO_FA_TREE_ACCEPT_BY_REQ\", None\n"
+        "                    )\n"
+        "                    if _fr13_rk_by_req is None:\n"
+        "                        _fr13_rk_by_req = {}\n"
+        "                        _fr13_rk_gdn._LUMO_FA_TREE_ACCEPT_BY_REQ = _fr13_rk_by_req\n"
+        "                    _fr13_rk_live = set(_fr13_rk_req_ids)\n"
+        "                    for _fr13_rk_key in list(_fr13_rk_by_req.keys()):\n"
+        "                        if _fr13_rk_key not in _fr13_rk_live:\n"
+        "                            del _fr13_rk_by_req[_fr13_rk_key]\n"
+        "                    _fr13_rk_paths = getattr(\n"
+        "                        _fr13_rk_gdn, \"_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR\", None\n"
+        "                    )\n"
+        "                    _fr13_rk_lens = getattr(\n"
+        "                        _fr13_rk_gdn, \"_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR\", None\n"
+        "                    )\n"
+        "                    if _fr13_rk_paths is not None and _fr13_rk_lens is not None:\n"
+        "                        _fr13_rk_spec_rids = [\n"
+        "                            _fr13_rk_req_ids[_fr13_rk_i]\n"
+        "                            for _fr13_rk_i in range(num_reqs)\n"
+        "                            if int(num_decode_draft_tokens[_fr13_rk_i]) >= 0\n"
+        "                        ]\n"
+        "                        if _fr13_rk_spec_rids:\n"
+        "                            if len(_fr13_rk_spec_rids) > int(_fr13_rk_paths.size(0)):\n"
+        "                                raise RuntimeError(\n"
+        "                                    \"FR13_TREE_REQKEY accepted-path buffer too small\"\n"
+        "                                )\n"
+        "                            _fr13_rk_cols = int(_fr13_rk_paths.size(1))\n"
+        "                            _fr13_rk_path_rows = []\n"
+        "                            _fr13_rk_len_vals = []\n"
+        "                            for _fr13_rk_rid in _fr13_rk_spec_rids:\n"
+        "                                _fr13_rk_entry = _fr13_rk_by_req.get(_fr13_rk_rid)\n"
+        "                                if _fr13_rk_entry is None:\n"
+        "                                    _fr13_rk_path = []\n"
+        "                                    _fr13_rk_len = 0\n"
+        "                                else:\n"
+        "                                    _fr13_rk_path = [\n"
+        "                                        int(_fr13_rk_x)\n"
+        "                                        for _fr13_rk_x in _fr13_rk_entry[0][:_fr13_rk_cols]\n"
+        "                                    ]\n"
+        "                                    _fr13_rk_len = min(\n"
+        "                                        int(_fr13_rk_entry[1]), _fr13_rk_cols\n"
+        "                                    )\n"
+        "                                _fr13_rk_path_rows.append(\n"
+        "                                    _fr13_rk_path\n"
+        "                                    + [0] * (_fr13_rk_cols - len(_fr13_rk_path))\n"
+        "                                )\n"
+        "                                _fr13_rk_len_vals.append(_fr13_rk_len)\n"
+        "                            _fr13_rk_n = len(_fr13_rk_path_rows)\n"
+        "                            _fr13_rk_paths[:_fr13_rk_n].copy_(\n"
+        "                                torch.tensor(\n"
+        "                                    _fr13_rk_path_rows,\n"
+        "                                    dtype=_fr13_rk_paths.dtype,\n"
+        "                                    device=_fr13_rk_paths.device,\n"
+        "                                )\n"
+        "                            )\n"
+        "                            _fr13_rk_lens[:_fr13_rk_n].copy_(\n"
+        "                                torch.tensor(\n"
+        "                                    _fr13_rk_len_vals,\n"
+        "                                    dtype=_fr13_rk_lens.dtype,\n"
+        "                                    device=_fr13_rk_lens.device,\n"
+        "                                )\n"
+        "                            )\n"
+        "                except Exception as _fr13_rk_exc:\n"
+        "                    if __import__(\"os\").environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
+        "                        raise RuntimeError(\n"
+        "                            \"FR13_TREE_REQKEY rewrite failed: \"\n"
+        "                            + type(_fr13_rk_exc).__name__\n"
+        "                            + \":\"\n"
+        "                            + str(_fr13_rk_exc)\n"
+        "                        ) from _fr13_rk_exc\n"
+    )
+    if anchor not in text:
+        raise RuntimeError("gpu_model_runner num_decode_draft_tokens anchor not found")
     text = text.replace(anchor, inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
@@ -7494,6 +7711,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_preprocess_input_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),

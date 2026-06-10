@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 import torch
@@ -120,6 +121,60 @@ def _linear_remap_rows_kernel(
     tl.store(state + dst_bank * ROW_ELEMS + offs, vals, mask=mask)
 
 
+@triton.jit
+def _linear_remap_rows_gather_kernel(
+    state,
+    spec_state_indices,
+    accepted_paths,
+    num_accepted_tokens,
+    B: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    PATH_POW2: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    ROW_ELEMS: tl.constexpr,
+    BLOCK: tl.constexpr,
+):
+    # FR13_TREE_REMAP_SEQ: race-free remap. The legacy kernel parallelizes over
+    # path columns, but accepted spine paths overlap their destinations (src
+    # cols [1..L] -> dst cols [0..L-1]) so the program writing column k races
+    # the program reading column k as its source (nondeterministic winner and
+    # corrupted state for every accepted_len >= 2). Here a single program owns
+    # ALL path columns for one (batch, element-block) slice: every source row
+    # slice is loaded into registers before any destination row slice is
+    # stored, which makes the in-place overlapping permutation exact.
+    pid_b = tl.program_id(0)
+    pid_blk = tl.program_id(1)
+    offs = pid_blk * BLOCK + tl.arange(0, BLOCK)
+    ks = tl.arange(0, PATH_POW2)
+    accepted_len = tl.load(num_accepted_tokens + pid_b)
+    valid_path = (
+        (pid_b < B) & (ks < PATH_COLS) & (ks < SPEC_COLS) & (ks < accepted_len)
+    )
+    src_col = tl.load(
+        accepted_paths + pid_b * PATH_COLS + ks,
+        mask=valid_path,
+        other=0,
+    )
+    src_col = tl.maximum(0, tl.minimum(src_col, SPEC_COLS - 1))
+    src_bank = tl.load(
+        spec_state_indices + pid_b * SPEC_COLS + src_col,
+        mask=valid_path,
+        other=0,
+    ).to(tl.int64)
+    dst_bank = tl.load(
+        spec_state_indices + pid_b * SPEC_COLS + ks,
+        mask=valid_path,
+        other=0,
+    ).to(tl.int64)
+    mask = valid_path[:, None] & (offs[None, :] < ROW_ELEMS)
+    vals = tl.load(
+        state + src_bank[:, None] * ROW_ELEMS + offs[None, :], mask=mask
+    )
+    tl.store(
+        state + dst_bank[:, None] * ROW_ELEMS + offs[None, :], vals, mask=mask
+    )
+
+
 def _remap_state_rows(
     state: torch.Tensor,
     spec_state_indices: torch.Tensor,
@@ -152,6 +207,26 @@ def _remap_state_rows(
     path_cols = min(int(accepted_paths.shape[1]), int(max_path_len))
     spec_cols = int(spec_state_indices.shape[1])
     if path_cols <= 0 or spec_cols <= 0:
+        return
+    if os.environ.get("FR13_TREE_REMAP_SEQ", "1") == "1":
+        # Race-free gather-then-scatter remap (see kernel docstring). Default
+        # ON: it computes the intended permutation exactly; the legacy kernel
+        # is only kept (FR13_TREE_REMAP_SEQ=0) for A/B against the racy path.
+        gather_block = min(block, 128)
+        path_pow2 = max(1, triton.next_power_of_2(path_cols))
+        grid = (int(num_spec_decodes), triton.cdiv(row_elems, gather_block))
+        _linear_remap_rows_gather_kernel[grid](
+            state,
+            spec_state_indices,
+            accepted_paths,
+            num_accepted_tokens,
+            B=int(num_spec_decodes),
+            PATH_COLS=path_cols,
+            PATH_POW2=path_pow2,
+            SPEC_COLS=spec_cols,
+            ROW_ELEMS=row_elems,
+            BLOCK=gather_block,
+        )
         return
     grid = (int(num_spec_decodes), path_cols, triton.cdiv(row_elems, block))
     _linear_remap_rows_kernel[grid](
