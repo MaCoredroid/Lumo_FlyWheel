@@ -1334,3 +1334,15 @@ Call2 conv-detail alignment after the fix:
 - POST-FIX: B=1 t06 same-seed BIT-IDENTICAL ×2 (pre 0/3); B=4 0/4→2/4 (caveat: cross-boot, slot-order unreconstructed); greedy B=4 0/4 residual = logit-level batch-composition sensitivity (outside the 3 channels + current BI allowlist).
 - accept/event UNMOVED ~1.96 (sampled, 251 events) ⇒ acceptance deficit ≠ determinism channels; now reproducible DETERMINISTICALLY at B=1 → next: deterministic B=1 acceptance ladder (per-depth verify-vs-oracle).
 - NOTE: all earlier binds (0.2335/2.024, Method-A partial) describe the PRE-fix default path; future comparisons must state flag state.
+
+## Acceptance ladder localized: committer bonus-row bug + episodic verify corruption + drafter spine flips (monitor, 2026-06-10)
+- Bind: `FR13_ACCEPTANCE_LADDER_BIND.md`; raw under `output/fr13_acceptance_ladder` (W1 greedy + N5 oracle, substrate cc008587 flags ON).
+- R1: root-reject 34.4% greedy / 41.0% t06 vs pre-fix 36.6% — REQKEY did NOT kill it; stale-slot attribution dead.
+- R2: deficit is root-concentrated (d0 cond 0.667 vs 0.894; t06 0.585 vs 0.886); on the tree stream native-on-path accepts the tree's drafts only ~69% at d0 ⇒ the drafts are worse, verify aggregate ≈ faithful.
+- GREEDY OUTPUTS FORK vs native at pos 16/24/21/14 — B=1 greedy lossless FAILS on this boot pair; all four forks classified:
+  - **S1 committer bug (EXACT)**: winner path [0,2] commits vLLM last-row bonus (st[n8]) instead of st[n2] — `best_path_idx==0` is the d1-ALT because leaves enumerate [2,4,6,7,8] (`fr10_phase4_patch_vllm_tree_gdn.py:3505-3522`); 14/163 events served a wrong token; p3 fork = this; `path0_lcp`/`superset_violation` reference the wrong path too. Fix described in bind (delete path0_native_bonus case / true spine idx), NOT implemented.
+  - **S2 episodic verify corruption**: p0 event-7 whole-forward off 10-25x in fp32 captures (root argmax 369 vs native 3051 at margin 7.25); transient; trigger unbound (24 earlier row-pairs argmax-identical). p1/p2 forks same class (argmax flips, no logits captured there).
+  - **S3 drafter spine ≠ native chain** (accept-deficit dominator): lockstep flips d0 4/20 … d4 7/20, present at event 0 from prefill state; 5/7 deep first-flips are exact spine/alt swaps (native's token sits in the alt leaf and dead-ends). Root-reject anatomy ≈ 17 honest / 10 verify-flip / 26 drafter-flip of 53.
+- Committer accept RULE cleared: 163/163 events exactly match full-tree greedy argmax; 35 branch accepts are the realized tree upside (+35 tokens).
+- Oracle caveat measured: native-on-path is prefill-shaped; one demonstrated near-tie disagreement vs live native decode (3655 vs 2781) ⇒ oracle mismatch rates are upper bounds.
+- Next: S1 fix (tiny) -> S2 GPU localization (logit capture on post-acc>=1 events + state-advance read) -> S3 discriminators (BI-equalized boot, spine-only drafter A/B).
