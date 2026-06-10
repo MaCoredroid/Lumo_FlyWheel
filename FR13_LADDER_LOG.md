@@ -1353,3 +1353,8 @@ Call2 conv-detail alignment after the fix:
 - S2 episodic verify corruption: event-7-class whole-forward (10-25x baseline, flips vs margin 7.25), transient → per-event read path; the live multi-event conv residual (3a9039cc was single-event). Trigger unbound.
 - S3 drafter spine NOT token-identical (DOMINATOR of the d0-concentrated deficit −0.227/−0.301): top1/top2 swaps dead-ending on leaf alts; first event after prefill ⇒ inside the multi-depth rollout. Candidates: alt co-residency in drafter state / BI asymmetry (tree BI=1 vs native BI=0 — needs BI-equalized boot) / commit rebuild.
 - Root-reject 34.4% SURVIVED the slot fixes (stale-slot attribution dead).
+
+## S1/S2/S3 campaign INTERRUPTED by spend limit (monitor, 2026-06-10) — RESUME PENDING
+- Fix phase COMPLETE+committed: S1 fix 4d45be27 (bonus row = accepted leaf self-target; sampled committer audited CLEAN — no wrong-row reuse; spine_path_idx diagnostics fixed; 7 new tests). NOTE: ladder-bind R1/R3 numbers used OLD path0_lcp semantics.
+- Discriminate phase PARTIAL (artifacts on disk, agents killed by spend limit): s1_regate.json (182 events, 21 [0,2]-winners, superset_violations=0, flag header recorded); s3_chain_vs_nativeBI0.json (identical-rate 0.533) vs s3_caterpillar_vs_nativeBI0.json (0.348) => m1 (alt co-residency) REAL but PARTIAL; boot2 (native BI=1, the m2 discriminator) was mid-run — BI-equalized comparisons NOT yet produced.
+- RESUME: Workflow scriptPath workflows/scripts/fr13-s1-fix-s2s3-discriminate-wf_2bc205f4-4a3.js + resumeFromRunId wf_2bc205f4-4a3 (fix phase returns cached; discriminate re-runs).
