@@ -1323,3 +1323,8 @@ Call2 conv-detail alignment after the fix:
 - Offline gates 1-3 PASSED (scan 0.0 @ N_PAD=1/16; accepted-rows torch_equal; regular-decode==pristine).
 - LIVE B=4 captured gate-4 FAILED: accept/event 2.024→1.521 (tree-internal), real-loss 0.7315, bag-TV 0.5347, exit 2.
 - Lesson: offline single-forward bit-identical ≠ live multi-step bit-identical; deferred-publish ordering vs next-step h0/remap is the prime suspect.
+
+## Method-A BI campaign PARTIAL (stopped by user to chase; monitor, 2026-06-10)
+- Bind: `FR13_METHOD_A_PARTIAL_BIND.md`. Prep 0a0d4433 (flag-gated, inert by default). Engagement verified per arm.
+- Native BI-on same-seed: 3/4 EXACT (38/256) vs BI-off 1/4 (0.113) — BI covers most of native's noise.
+- Tree BI-on: 0/4 exact, lcp 1/11/11/57 within-boot; accept/event 2.096/1.867 unmoved ⇒ CASE-2-TREE-SPECIFIC (non-BI-covered tree-path channel; lcp=1 = op-level nondeterminism on identical input).
