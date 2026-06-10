@@ -49,6 +49,28 @@ DIAG = {
 }
 
 
+def _refuse_if_replay_route() -> None:
+    """FAIL LOUDLY under FR13_REPLAY_ROUTE=1 instead of passing vacuous.
+
+    Under the replay route the per-node tree_state scratch does not exist:
+    diag[12]/[13] (``scan_state_staging``) are skipped and stay at their
+    zeros-init, so this gate's ``staged_ssm_state_vs_tree_state_max <= atol``
+    check would PASS silently-vacuous (the gate-transfer matrix rider's
+    "silently vacuous" item), and the tree_state-consuming captures raise in
+    serving. Refuse to emit a verdict at all: gate the replay route on the
+    replay byte A/B (tests/test_fr13_replay_gpu_byte_ab.py) plus the durable
+    accepted-state diff instead (FR13_REPLAY_ROUTE_BUILD.md, GPU TODO).
+    """
+    if os.environ.get("FR13_REPLAY_ROUTE", "0") == "1":
+        raise RuntimeError(
+            "fr10_serving_wiring_gate REFUSES to run with FR13_REPLAY_ROUTE=1: "
+            "the scan_state_staging evidence (diag[12]/[13]) is VACUOUS under "
+            "the replay route and this gate would silently pass. Run the gate "
+            "with the flag OFF, and gate the replay route on the replay byte "
+            "A/B + durable accepted-state diff instead."
+        )
+
+
 @dataclass(frozen=True)
 class MatrixRow:
     gate: str
@@ -130,6 +152,7 @@ def evaluate_wiring(
     scan_replay_path: Path | None = None,
     atol: float = 0.0,
 ) -> tuple[list[MatrixRow], dict[str, Any]]:
+    _refuse_if_replay_route()
     rows = _counter_rows(counters_path)
     best = _best_counter_row(rows)
     commit_rows = _load_jsonl(commit_log_path) if commit_log_path else []
@@ -449,6 +472,8 @@ def main() -> int:
     parser.add_argument("--dump-wait-s", type=float, default=2.0)
     parser.add_argument("--atol", type=float, default=0.0)
     args = parser.parse_args()
+
+    _refuse_if_replay_route()
 
     if args.dump_live:
         if not args.container:

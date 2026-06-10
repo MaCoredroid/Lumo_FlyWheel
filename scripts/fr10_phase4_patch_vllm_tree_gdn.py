@@ -306,6 +306,108 @@ def _patch_gdn_attn() -> bool:
             "                    conv_diag=self.fr10_tree_conv_diag,\n"
             "                    path0_nodes=path0_nodes,\n"
             "                )\n"
+            "            if os.environ.get(\"FR13_REPLAY_ROUTE\", \"0\") == \"1\":\n"
+            "                # FR13_REPLAY_ROUTE: INIT-TIME allocation of every\n"
+            "                # per-layer replay staging buffer (activation rings,\n"
+            "                # scan-time prev-lens/spec-idx snapshots, handshake\n"
+            "                # flag tensor). Allocating these lazily on the first\n"
+            "                # flagged forward would be an allocation inside the\n"
+            "                # CUDA-graph-captured region = stale-pointer aliasing\n"
+            "                # (the gate-4 root cause #2); the forward only WRITES\n"
+            "                # these buffers. Sized B_max x N_PAD, mirroring the\n"
+            "                # persistent accepted-paths/lens buffers above.\n"
+            "                from vllm.model_executor.layers.mamba import (\n"
+            "                    gdn_linear_attn as _fr13_gdn_mod,\n"
+            "                )\n"
+            "                _fr13_ring_bs = int(self.fr10_tree_accepted_path_bs)\n"
+            "                _fr13_spec_cols = int(self.num_spec) + 1\n"
+            "                _fr13_fwd_ctx = (\n"
+            "                    self.vllm_config.compilation_config.static_forward_context\n"
+            "                )\n"
+            "                _fr13_replay_layers = {}\n"
+            "                for _fr13_name in layer_names:\n"
+            "                    _fr13_layer = _fr13_fwd_ctx.get(_fr13_name)\n"
+            "                    if _fr13_layer is None or not (\n"
+            "                        hasattr(_fr13_layer, \"A_log\")\n"
+            "                        and hasattr(_fr13_layer, \"dt_bias\")\n"
+            "                        and hasattr(_fr13_layer, \"head_k_dim\")\n"
+            "                    ):\n"
+            "                        raise RuntimeError(\n"
+            "                            \"FR13_REPLAY_ROUTE: kv-cache-group layer \"\n"
+            "                            + str(_fr13_name)\n"
+            "                            + \" is not a GDN layer; cannot allocate replay staging\"\n"
+            "                        )\n"
+            "                    _fr13_dtype = _fr13_layer.model_config.dtype\n"
+            "                    _fr13_kh = int(_fr13_layer.num_k_heads) // int(_fr13_layer.tp_size)\n"
+            "                    _fr13_vh = int(_fr13_layer.num_v_heads) // int(_fr13_layer.tp_size)\n"
+            "                    _fr13_layer._fr13_replay_ring_k = torch.zeros(\n"
+            "                        (_fr13_ring_bs, n_pad, _fr13_kh, int(_fr13_layer.head_k_dim)),\n"
+            "                        dtype=_fr13_dtype,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_layer._fr13_replay_ring_v = torch.zeros(\n"
+            "                        (_fr13_ring_bs, n_pad, _fr13_vh, int(_fr13_layer.head_v_dim)),\n"
+            "                        dtype=_fr13_dtype,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_layer._fr13_replay_ring_a = torch.zeros(\n"
+            "                        (_fr13_ring_bs, n_pad, _fr13_vh),\n"
+            "                        dtype=_fr13_dtype,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_layer._fr13_replay_ring_b = torch.zeros(\n"
+            "                        (_fr13_ring_bs, n_pad, _fr13_vh),\n"
+            "                        dtype=_fr13_dtype,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_layer._fr13_replay_prev_lens = torch.zeros(\n"
+            "                        (_fr13_ring_bs,),\n"
+            "                        dtype=torch.int32,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_layer._fr13_replay_spec_idx = torch.zeros(\n"
+            "                        (_fr13_ring_bs, _fr13_spec_cols),\n"
+            "                        dtype=torch.int32,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    # Capture-safe staging handshake (replaces the\n"
+            "                    # per-step _fr13_replay_meta dict): preallocated\n"
+            "                    # int32 flag tensor, [0]=fresh, [1]=staged\n"
+            "                    # spec-decode rows; written by CAPTURED device\n"
+            "                    # ops in the forward so a CUDA-graph replay\n"
+            "                    # re-arms it. Scalars that never change are\n"
+            "                    # fixed at init; the bank ref is a fixed\n"
+            "                    # attribute (no per-step object creation).\n"
+            "                    _fr13_layer._fr13_replay_flags = torch.zeros(\n"
+            "                        (2,),\n"
+            "                        dtype=torch.int32,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_layer._fr13_replay_output_scale = float(\n"
+            "                        float(_fr13_layer.head_k_dim) ** -0.5\n"
+            "                    )\n"
+            "                    _fr13_layer._fr13_replay_ssm_state = None\n"
+            "                    _fr13_replay_layers[str(_fr13_name)] = _fr13_layer\n"
+            "                if not _fr13_replay_layers:\n"
+            "                    raise RuntimeError(\n"
+            "                        \"FR13_REPLAY_ROUTE: no GDN layers visible at \"\n"
+            "                        \"metadata-builder init; replay staging allocation failed\"\n"
+            "                    )\n"
+            "                _fr13_existing_layers = getattr(\n"
+            "                    _fr13_gdn_mod, \"_FR13_REPLAY_LAYERS\", None\n"
+            "                )\n"
+            "                if _fr13_existing_layers:\n"
+            "                    # Merge (still init-time, never per step): a\n"
+            "                    # second builder for another GDN group must\n"
+            "                    # not drop the first group's layers.\n"
+            "                    _fr13_existing_layers.update(_fr13_replay_layers)\n"
+            "                else:\n"
+            "                    _fr13_gdn_mod._FR13_REPLAY_LAYERS = _fr13_replay_layers\n"
+            "        elif os.environ.get(\"FR13_REPLAY_ROUTE\", \"0\") == \"1\":\n"
+            "            raise RuntimeError(\n"
+            "                \"FR13_REPLAY_ROUTE=1 requires a speculative token tree \"\n"
+            "                \"(tree_mtp); refusing to start with replay staging unallocated\"\n"
+            "            )\n"
         ),
         1,
     )
@@ -2549,45 +2651,41 @@ def _patch_gdn_linear() -> bool:
                         # snapshot. PERSISTENT preallocated staging only --
                         # never dict-pinned per-step buffers (the gate-4
                         # root cause #2, FR13_ACCEPT_ONLY_GATE4_FAIL_BIND.md).
+                        # All staging buffers are allocated at GDN
+                        # METADATA-BUILDER INIT (gdn_attn.py __init__, the
+                        # persistent accepted-paths/lens pattern): a lazy
+                        # first-flagged-forward allocation here would sit
+                        # INSIDE the CUDA-graph-captured region =
+                        # stale-pointer aliasing (gate-4 root cause #2), so
+                        # this path only WRITES; it never allocates and
+                        # creates no per-step Python objects.
                         # The ring stores EXACTLY what the scan consumes at
                         # consumed precision: k pre-l2norm, v, raw_a, raw_b
                         # byte-copies (~16.2KiB/node vs the 3.146MB state
                         # row). A_log/dt_bias are persistent params; q is not
                         # needed (q-side ops never touch state).
                         if getattr(self, "_fr13_replay_ring_k", None) is None:
-                            _fr13_ring_bs = int(_fr10_accepted_lens_tensor.size(0))
-                            _fr13_spec_cols = int(spec_state_indices_tensor.size(-1))
-                            self._fr13_replay_ring_k = torch.zeros(
-                                (_fr13_ring_bs, tree_n_pad, key_spec.size(2), key_spec.size(3)),
-                                dtype=key_spec.dtype,
-                                device=key_spec.device,
+                            raise RuntimeError(
+                                "FR13_REPLAY_ROUTE: replay staging buffers "
+                                "missing for layer " + str(self.prefix)
+                                + "; they must be allocated at GDN metadata-"
+                                "builder init (capture-unsafe lazy allocation "
+                                "in the forward is banned)"
                             )
-                            self._fr13_replay_ring_v = torch.zeros(
-                                (_fr13_ring_bs, tree_n_pad, value_tree.size(1), value_tree.size(2)),
-                                dtype=value_tree.dtype,
-                                device=value_tree.device,
+                        if (
+                            self._fr13_replay_ring_k.size(1) != tree_n_pad
+                            or self._fr13_replay_ring_k.dtype != key_spec.dtype
+                            or self._fr13_replay_ring_v.dtype != value_tree.dtype
+                            or self._fr13_replay_ring_a.dtype != a.dtype
+                            or self._fr13_replay_ring_b.dtype != b.dtype
+                        ):
+                            raise RuntimeError(
+                                "FR13_REPLAY_ROUTE: staging ring shape/dtype "
+                                "mismatch for layer " + str(self.prefix)
+                                + "; the init-time allocation must match the "
+                                "consumed activations exactly (byte-copy "
+                                "contract)"
                             )
-                            self._fr13_replay_ring_a = torch.zeros(
-                                (_fr13_ring_bs, tree_n_pad, a.size(1)),
-                                dtype=a.dtype,
-                                device=a.device,
-                            )
-                            self._fr13_replay_ring_b = torch.zeros(
-                                (_fr13_ring_bs, tree_n_pad, b.size(1)),
-                                dtype=b.dtype,
-                                device=b.device,
-                            )
-                            self._fr13_replay_prev_lens = torch.zeros(
-                                (_fr13_ring_bs,),
-                                dtype=_fr10_accepted_lens_tensor.dtype,
-                                device=_fr10_accepted_lens_tensor.device,
-                            )
-                            self._fr13_replay_spec_idx = torch.zeros(
-                                (_fr13_ring_bs, _fr13_spec_cols),
-                                dtype=spec_state_indices_tensor.dtype,
-                                device=spec_state_indices_tensor.device,
-                            )
-                            self._fr13_replay_meta = {}
                         if fr10_b == 0:
                             # SNAPSHOT prev accepted lens + spec indices AT
                             # SCAN TIME: the committer refills
@@ -2610,17 +2708,21 @@ def _patch_gdn_linear() -> bool:
                                     : attn_metadata.num_spec_decodes
                                 ]
                             )
-                            self._fr13_replay_meta = {
-                                "num_spec_decodes": int(attn_metadata.num_spec_decodes),
-                                "tree_n": int(tree_n),
-                                "tree_n_pad": int(tree_n_pad),
-                                "output_scale": float(self.head_k_dim**-0.5),
-                                "ssm_state": ssm_state,
-                                "fresh": True,
-                            }
-                            globals().setdefault("_FR13_REPLAY_LAYERS", {})[
-                                str(self.prefix)
-                            ] = self
+                            # Capture-safe staging handshake (replaces the
+                            # banned per-step meta dict): the preallocated
+                            # int32 flag tensor is written by CAPTURED device
+                            # ops ([0]=fresh, [1]=staged spec-decode rows), so
+                            # a CUDA-graph REPLAY re-arms freshness even
+                            # though this Python never re-runs; the fill
+                            # values are per-captured-graph constants
+                            # (UNIFORM_BATCH capture). The bank ref is a fixed
+                            # attribute write of an existing persistent
+                            # tensor -- no per-step object creation.
+                            self._fr13_replay_flags[0].fill_(1)
+                            self._fr13_replay_flags[1].fill_(
+                                attn_metadata.num_spec_decodes
+                            )
+                            self._fr13_replay_ssm_state = ssm_state
                         self._fr13_replay_ring_k[fr10_b, :tree_n].copy_(
                             key_spec[0, start:end]
                         )
@@ -3941,10 +4043,14 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             # ssm_state.index_copy_ publish (skipped under the flag) and the
             # ssm half of the next-step remap (the replay writes LINEAR bank
             # columns directly, root row 0 always refreshed for zero-accept).
-            # Inputs are PERSISTENT device buffers only: the accepted
-            # paths/lens buffers refilled above plus each layer's persistent
-            # scan-time staging (activation ring, prev-lens snapshot,
-            # spec-index snapshot) -- no per-step pinned scratch (gate-4).
+            # Inputs are PERSISTENT device buffers only, all allocated at GDN
+            # metadata-builder INIT: the accepted paths/lens buffers refilled
+            # above plus each layer's scan-time staging (activation ring,
+            # prev-lens snapshot, spec-index snapshot) -- no per-step pinned
+            # scratch (gate-4). The freshness handshake is the layer's
+            # preallocated _fr13_replay_flags int32 tensor ([0]=fresh,
+            # [1]=staged spec-decode rows), device-written by the (captured)
+            # forward and cleared here -- not a per-step Python dict.
             from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
                 launch_tree_gdn_replay as _fr13_replay_launch,
             )
@@ -3959,22 +4065,31 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             if _fr13_replay_rows:
                 for _fr13_prefix in sorted(_fr13_replay_layers):
                     _fr13_layer = _fr13_replay_layers[_fr13_prefix]
-                    _fr13_meta = getattr(_fr13_layer, '_fr13_replay_meta', None)
-                    if not _fr13_meta or not _fr13_meta.get('fresh', False):
+                    _fr13_flags = getattr(
+                        _fr13_layer, '_fr13_replay_flags', None
+                    )
+                    _fr13_ssm_bank = getattr(
+                        _fr13_layer, '_fr13_replay_ssm_state', None
+                    )
+                    if (
+                        _fr13_flags is None
+                        or _fr13_ssm_bank is None
+                        or int(_fr13_flags[0].item()) != 1
+                    ):
                         raise RuntimeError(
                             'FR13_REPLAY_ROUTE: stale or missing scan-time '
                             'staging for layer ' + str(_fr13_prefix)
                         )
-                    if int(_fr13_meta['num_spec_decodes']) != _fr13_replay_rows:
+                    if int(_fr13_flags[1].item()) != _fr13_replay_rows:
                         raise RuntimeError(
                             'FR13_REPLAY_ROUTE: committer rows '
                             + str(_fr13_replay_rows)
                             + ' != staged spec decodes '
-                            + str(_fr13_meta['num_spec_decodes'])
+                            + str(int(_fr13_flags[1].item()))
                             + ' for layer ' + str(_fr13_prefix)
                         )
                     _fr13_replay_launch(
-                        state_bank=_fr13_meta['ssm_state'],
+                        state_bank=_fr13_ssm_bank,
                         spec_state_indices=_fr13_layer._fr13_replay_spec_idx,
                         prev_lens=_fr13_layer._fr13_replay_prev_lens,
                         accepted_paths=_accepted_path_buf,
@@ -3986,10 +4101,12 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                         A_log=_fr13_layer.A_log,
                         dt_bias=_fr13_layer.dt_bias,
                         num_spec_decodes=_fr13_replay_rows,
-                        output_scale=float(_fr13_meta['output_scale']),
+                        output_scale=float(
+                            _fr13_layer._fr13_replay_output_scale
+                        ),
                         use_qk_l2norm_in_kernel=True,
                     )
-                    _fr13_meta['fresh'] = False
+                    _fr13_flags[0].fill_(0)
     except Exception as _fr10_tree_lcp_log_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(
@@ -4405,22 +4522,31 @@ def _lumo_tree_canonical_multidraft_sample(
             if _fr13_replay_rows:
                 for _fr13_prefix in sorted(_fr13_replay_layers):
                     _fr13_layer = _fr13_replay_layers[_fr13_prefix]
-                    _fr13_meta = getattr(_fr13_layer, '_fr13_replay_meta', None)
-                    if not _fr13_meta or not _fr13_meta.get('fresh', False):
+                    _fr13_flags = getattr(
+                        _fr13_layer, '_fr13_replay_flags', None
+                    )
+                    _fr13_ssm_bank = getattr(
+                        _fr13_layer, '_fr13_replay_ssm_state', None
+                    )
+                    if (
+                        _fr13_flags is None
+                        or _fr13_ssm_bank is None
+                        or int(_fr13_flags[0].item()) != 1
+                    ):
                         raise RuntimeError(
                             'FR13_REPLAY_ROUTE: stale or missing scan-time '
                             'staging for layer ' + str(_fr13_prefix)
                         )
-                    if int(_fr13_meta['num_spec_decodes']) != _fr13_replay_rows:
+                    if int(_fr13_flags[1].item()) != _fr13_replay_rows:
                         raise RuntimeError(
                             'FR13_REPLAY_ROUTE: committer rows '
                             + str(_fr13_replay_rows)
                             + ' != staged spec decodes '
-                            + str(_fr13_meta['num_spec_decodes'])
+                            + str(int(_fr13_flags[1].item()))
                             + ' for layer ' + str(_fr13_prefix)
                         )
                     _fr13_replay_launch(
-                        state_bank=_fr13_meta['ssm_state'],
+                        state_bank=_fr13_ssm_bank,
                         spec_state_indices=_fr13_layer._fr13_replay_spec_idx,
                         prev_lens=_fr13_layer._fr13_replay_prev_lens,
                         accepted_paths=_accepted_path_buf,
@@ -4432,10 +4558,12 @@ def _lumo_tree_canonical_multidraft_sample(
                         A_log=_fr13_layer.A_log,
                         dt_bias=_fr13_layer.dt_bias,
                         num_spec_decodes=_fr13_replay_rows,
-                        output_scale=float(_fr13_meta['output_scale']),
+                        output_scale=float(
+                            _fr13_layer._fr13_replay_output_scale
+                        ),
                         use_qk_l2norm_in_kernel=True,
                     )
-                    _fr13_meta['fresh'] = False
+                    _fr13_flags[0].fill_(0)
     except Exception as _fr10_commit_globals_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(

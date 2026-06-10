@@ -5,6 +5,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "fr10_serving_wiring_gate.py"
 spec = importlib.util.spec_from_file_location("fr10_serving_wiring_gate", SCRIPT)
@@ -29,6 +31,23 @@ def _write_counter(path: Path, diag: list[float]) -> None:
         + "\n",
         encoding="utf-8",
     )
+
+
+def test_serving_wiring_gate_refuses_loudly_under_replay_route(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # FR13 replay route: diag[12]/[13] (scan_state_staging) are skipped and
+    # stay zeros-init, so the gate would otherwise PASS silently-vacuous.
+    # It must FAIL LOUDLY instead (FR13_REPLAY_ROUTE_BUILD.md AMENDMENT #3).
+    counters = tmp_path / "counters.json"
+    _write_counter(counters, [0.0] * 32)
+    monkeypatch.setenv("FR13_REPLAY_ROUTE", "1")
+    with pytest.raises(RuntimeError, match="REFUSES to run with FR13_REPLAY_ROUTE=1"):
+        gate.evaluate_wiring(counters_path=counters)
+    # Flag OFF (unset/0) keeps the gate runnable.
+    monkeypatch.setenv("FR13_REPLAY_ROUTE", "0")
+    _, summary = gate.evaluate_wiring(counters_path=counters)
+    assert summary["schema"] == "fr10.serving_wiring_gate.v3"
 
 
 def test_serving_wiring_gate_passes_captured_conv_replay_and_fails_missing_full_commit(tmp_path: Path) -> None:

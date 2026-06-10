@@ -73,14 +73,14 @@ committed accepted path from a tiny activation ring (~16.2 KiB/node vs the
 ## Flag matrix
 | Flag | Default | Behavior |
 |---|---|---|
-| `FR13_REPLAY_ROUTE` | **0 (OFF)** | Unset/0 = byte-identical legacy path (all-rows publish + ssm remap; scratch alloc; STORE_NODE_STATES=True). 1 = replay route. |
+| `FR13_REPLAY_ROUTE` | **0 (OFF)** | Unset/0 = legacy path (all-rows publish + ssm remap; scratch alloc; STORE_NODE_STATES=True), **source-inert**: every new behavior is flag-gated and the legacy text is intact, but the shared `_gdn_node_step` body refactor RECOMPILES the default scan, so flag-OFF **compile-identity is pending the refactored-scan byte A/B (GPU TODO #2)** — NOT claimed byte-identical until that A/B passes. 1 = replay route. |
 | `FR13_TREE_REQKEY` | 1 (ON) | Unchanged; the replay reuses the request-keyed persistent paths/lens buffers (within-step positional fill is what the replay consumes, snapshot covers the cross-refill hazard). |
 | `FR13_TREE_REMAP_SEQ` | 1 (ON) | Unchanged; under the replay route the ssm half is not launched at all, conv half still uses the race-free gather remap. |
 | `FR13_TREE_PER_REQ_GEN` | 1 (ON) | Untouched (sampler rng; orthogonal). |
 | `FR10_TREE_GDN_CAPTURE_PAYLOAD` / `FR10_TREE_GDN_COMMIT_HANDOFF_LOG` / `FR10_TREE_GDN_SRC_NATIVE_PAYLOAD` / `FR12_TREE_SCAN_NATIVE_SPINE` | off | RAISE if set together with `FR13_REPLAY_ROUTE=1` (they consume/splice the deleted scratch). Capture payloads with the flag OFF. |
-| `FR10_METRICS` diag[12]/[13] | off | VACUOUS under the replay route (skipped, stays at zeros-init) — `fr10_serving_wiring_gate.py`'s `scan_state_staging` check must not be trusted with the flag ON. |
+| `FR10_METRICS` diag[12]/[13] | off | VACUOUS under the replay route (skipped, stays at zeros-init) — `fr10_serving_wiring_gate.py` now REFUSES to run (raises) with `FR13_REPLAY_ROUTE=1` instead of silently passing the vacuous `scan_state_staging` check (see AMENDMENT #3). |
 
-## CPU-PROVEN (all green on CPU torch 2.4.1, no triton; 19 new tests + 15 existing)
+## CPU-PROVEN (all green on CPU torch 2.4.1, no triton; 23 new tests + 15 existing after the AMENDMENT remediation)
 - `tests/test_fr13_replay_reference_bitexact.py` — 9 passed:
   - `test_handoff_masked_sum_equals_plus_zero_and_flips_neg_zero` — the
     kernel's masked-sum handoff == `+0.0` emulation, bit-level, and the
@@ -103,17 +103,25 @@ committed accepted path from a tiny activation ring (~16.2 KiB/node vs the
     byte identity (int16 view) + exact fp32 widen, incl. -0.0/denormal/max.
   - `test_replay_differs_without_plus_zero_normalization` — dropping the
     +0.0 BREAKS identity (the normalization is load-bearing).
-- `tests/test_fr13_replay_route_wiring.py` — 10 passed: flag defaults OFF at
-  every read; kernel export gate + shared body single-source (called by
-  both kernels, identical constexpr plumbing, num_warps=8 on the replay);
-  scratch alloc/publish/diag flag-gated with legacy text intact; scan-time
-  snapshot precedes the launch and the committer refill precedes the replay
-  launch; persistent staging only (`_FR10_PENDING_TREE_STATE_PUBLISH`
-  banned); replay launch in BOTH committers after the REQKEY block; remap
-  conv half kept / ssm half None; embedded patch fragments AST-parse;
-  `py_compile` of patcher + kernel + reference.
+- `tests/test_fr13_replay_route_wiring.py` — 13 passed (remediated battery,
+  see AMENDMENT): flag defaults OFF at every read; kernel export gate +
+  shared body single-source (called by both kernels, identical constexpr
+  plumbing, num_warps=8 on the replay); scratch alloc/publish/diag
+  flag-gated with legacy text intact; scan-time snapshot precedes the
+  launch and the committer refill precedes the replay launch; staging
+  allocated at METADATA-BUILDER INIT (forward only writes, raises if
+  missing, no allocation calls in the flagged path); broadened per-step
+  object-creation ban in the flagged forward path (not just
+  `_FR10_PENDING_TREE_STATE_PUBLISH` by name) + capture-safe
+  `_fr13_replay_flags` handshake asserted; `fr10_serving_wiring_gate.py`
+  refuses loudly under the flag; replay launch in BOTH committers after the
+  REQKEY block; remap conv half kept / ssm half None; embedded patch
+  fragments (incl. the builder-init allocation fragment) AST-parse;
+  `py_compile` of patcher + kernel + reference + gate script.
 - `tests/test_fr10_phase4_sampled_committer_wiring.py` — 15 passed
   (unchanged; flag default OFF preserves all legacy surfaces).
+- `tests/test_fr10_serving_wiring_gate.py` — 9 passed (8 existing + 1 new:
+  `evaluate_wiring` raises with FR13_REPLAY_ROUTE=1, runs with it unset/0).
 - Full suite: 968 passed, 8 skipped, 31 failed — the 31 failures are
   byte-identical to unmodified main HEAD `8587396d` (diffed failure lists:
   IDENTICAL), i.e. pre-existing and unrelated.
@@ -135,14 +143,17 @@ committed accepted path from a tiny activation ring (~16.2 KiB/node vs the
    columns legitimately differ, legacy leaves node-state bytes there;
    regular-decode == pristine; the live single-step ordering probe from the
    gate-4 lesson; B=4 corruption gate; measured TPS/traffic).
-4. **CUDA-graph capture** of the replay kernel + the no-scratch forward
+4. **LIVE zero-accept gate**: force/observe a zero-accept event in live
+   serving and assert the NEXT event h0 read consumes the replayed root
+   state (column 0).
+5. **CUDA-graph capture** of the replay kernel + the no-scratch forward
    (the alloc removal is the capture-blocker fix; verify capture, then the
    final regime = B=4 CUDA-captured SWE-4 vs E5 per standing policy).
-5. **ptxas spill check**: replay kernel spill-bytes==0 (and the scan at
+6. **ptxas spill check**: replay kernel spill-bytes==0 (and the scan at
    N_PAD=16/num_warps=8 — the standing FR13_CACHE_SCALING_FUTURE gate).
-6. **Preemption/resume invariant**: "no pending replay => bank state is
+7. **Preemption/resume invariant**: "no pending replay => bank state is
    final" — re-read live vLLM preemption source first (read-source-first).
-7. Container deployment detail: the live image must ship this updated
+8. Container deployment detail: the live image must ship this updated
    `fr10_gdn_tree_kernel.py` (the patcher imports `launch_tree_gdn_replay`
    inside the committer only under the flag, so stale images fail loudly,
    not silently).
@@ -151,3 +162,52 @@ committed accepted path from a tiny activation ring (~16.2 KiB/node vs the
 CURRENT 36 rows = 21.74 GB/fwd (scratch 9 + publish 18 + remap 2a + h0 1,
 a=4) -> replay route 2+a = 6 rows = 3.62 GB/fwd = 0.86x actual native E5
 (4.23 GB); replay FLOPs ~5-33 us vs the ~99 ms weight-bound forward.
+
+## AMENDMENT (2026-06-10) — verify violations acknowledged + remediated
+Workflow `w89pmmka9` verify returned holds=FALSE on the original build
+(commits `c2e84054`/`ff9e90e8`/`406ab614`/`6929bdb9`). The gate-4 review
+violations are acknowledged here and remediated on this branch:
+
+1. **Lazy allocation was a gate-4-class capture landmine (NOW FIXED).** The
+   original build allocated the activation rings + prev-lens/spec-idx
+   snapshot buffers LAZILY on the first flagged forward
+   (`if getattr(self, "_fr13_replay_ring_k", None) is None: torch.zeros(...)`
+   inside the forward). Under CUDA FULL capture, a first-flagged-forward
+   allocation inside the captured region = stale-pointer aliasing — exactly
+   gate-4 root cause #2, the very failure mode this build claimed to bind.
+   FIX: all replay staging buffers are now allocated at GDN
+   METADATA-BUILDER INIT (mirroring the persistent accepted-paths/lens
+   buffer pattern in the same `__init__`), sized `B_max x N_PAD`
+   (`B_max = max(decode_cudagraph_max_bs, max_num_seqs)`); the forward only
+   WRITES and RAISES if the buffers are missing (no fallback allocation).
+2. **`_fr13_replay_meta` was a NEW per-step Python dict handshake (NOW
+   FIXED).** Replaced with a capture-safe persistent mechanism: a
+   preallocated per-layer int32 flag tensor `_fr13_replay_flags`
+   (`[0]`=fresh, `[1]`=staged spec-decode rows) written by CAPTURED device
+   ops in the forward — so a CUDA-graph REPLAY re-arms freshness even
+   though the Python in the captured region never re-runs — and cleared by
+   the committer after the replay launch; `output_scale` is a fixed
+   init-time attribute; the ssm bank ref is a fixed attribute written per
+   step without object creation; layer registration in
+   `_FR13_REPLAY_LAYERS` moved to builder init. NO per-step dict/object
+   creation remains in the flagged replay path (test-enforced, broadened
+   beyond the old `_FR10_PENDING_TREE_STATE_PUBLISH`-by-name ban).
+3. **diag[12]/[13] vacuity left `scripts/fr10_serving_wiring_gate.py`
+   unmodified (NOW FIXED).** The original build declared diag[12]/[13]
+   vacuous under the flag but did not touch the gate script, so its
+   `scan_state_staging` check would have PASSED silently-vacuous with
+   `FR13_REPLAY_ROUTE=1` — the gate-transfer matrix rider's "silently
+   vacuous" item. FIX: the gate now FAILS LOUDLY (raises, in both
+   `evaluate_wiring` and `main`) when `FR13_REPLAY_ROUTE=1` instead of
+   emitting a vacuous PASS; gate the replay route on the replay byte A/B +
+   durable accepted-state diff instead.
+4. **Flag-OFF claim overreach (DOWNGRADED).** The original text claimed
+   flag-OFF is BYTE-identical unconditionally. The shared `_gdn_node_step`
+   body refactor RECOMPILES the default scan, so the honest claim is:
+   flag-OFF is **source-inert**; **compile-identity is pending the
+   refactored-scan byte A/B (GPU TODO #2)**. Downgraded in the flag matrix
+   above and in the wiring tests.
+5. **GPU TODO was missing an explicit LIVE zero-accept gate (ADDED).** See
+   GPU TODO #4: force/observe a zero-accept event in live serving and
+   assert the NEXT event h0 read consumes the replayed root state
+   (column 0).
