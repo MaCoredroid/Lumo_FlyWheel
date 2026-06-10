@@ -40,3 +40,4 @@ All raw workflow results: `research/fr13_workflows/INDEX.md` (each row = synthes
 3. Engagement asserts before any number (class 9); flag-state+seeds header in every artifact.
 4. Adversarial verify phase always; holds=false ⇒ do not act on the synthesis.
 5. Reuse Part-2 instruments by path; extending them is fine, re-implementing inline is not (`FR13_MEASURE_HARNESS.md`).
+6. **Environment health before campaigns**: `df -h` first — a full-suite pytest writes >300 GB of temp (use the per-file runner pattern, see replay-gates bind); ENOSPC can corrupt the background-task notification channel — on any weird notification, verify by direct artifact reads.

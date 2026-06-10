@@ -1397,3 +1397,8 @@ Call2 conv-detail alignment after the fix:
 - **Lineage table updated (FLAGGED):** `_tree_gdn_replay_kernel` row — byte A/B verdict landed (codegen identity PROVEN, R4 retired) + LIVE FAIL gate-4 class; live-kernel row gains the 2/113 legacy handoff datum. See FR13_GDN_KERNEL_LINEAGE.md.
 - Pre-existing main-side bug surfaced: naive_mtp/non_mtp on tree boots kill the engine (EagleProposer.positions, eagle.py:1430), flag-independent — regular-decode reference not runnable; track separately.
 - Next (before any merge decision): Gate B live ordering probe + R6g neutrality check + R8 churn test on the bound seams; re-earn determinism/accept live; only then corruption gate + CG gates + final B=4 regime.
+
+## Replay-route GPU gates (w7q9e2bj3, verify-passed; monitor bank 2026-06-10)
+- Raw: research/fr13_workflows/replay_gpu_gates_w7q9e2bj3.raw.json; bind FR13_REPLAY_GPU_GATES_BIND.md; lineage updated (kernel PROVEN / live FAIL).
+- Byte A/B 126/126 + scan-binary byte-equal + 0 spill ⇒ R4 retired, flag-OFF inertness binary-proven. Live: gate-4 class, wiring interval (R1/R6g/R8) → chase wq10ibu3t with the boundary instrument.
+- ENV lessons: df check before campaigns (full-suite pytest >300GB temp; 479GB stale cleared); ENOSPC corrupted the notification channel — verify by direct reads.
