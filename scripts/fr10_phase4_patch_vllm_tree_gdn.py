@@ -773,6 +773,10 @@ def _patch_gdn_linear() -> bool:
                         # to the legacy post-remap linear-column read (the
                         # leaf's source row is never a remap destination).
                         # FR13_CONV_COMMITTED_PATH=0 restores the legacy read.
+                        # Under FR13_REPLAY_ROUTE=1 this snapshot MUST still
+                        # run: it is conv-bank-only (node-indexed, pre-remap)
+                        # and the conv carrier is untouched by the replay
+                        # route (only the ssm remap half is deleted below).
                         (
                             _fr13_committed_read_cols,
                             _fr13_committed_bank_rows,
@@ -784,8 +788,19 @@ def _patch_gdn_linear() -> bool:
                             num_accepted_tokens=_fr10_accepted_lens_tensor,
                             num_spec_decodes=int(attn_metadata.num_spec_decodes),
                         )
+                    # FR13_REPLAY_ROUTE: the committer replay already
+                    # published accepted ssm states to LINEAR bank columns,
+                    # so the ssm half of the remap is dead (and would corrupt
+                    # the bank: node-column states are never staged under the
+                    # flag). The conv half MUST stay: it is the FR13
+                    # conv-prior-window carrier and the conv spec branch
+                    # still publishes node columns.
                     launch_tree_state_linear_remap(
-                        ssm_state=ssm_state,
+                        ssm_state=(
+                            None
+                            if os.environ.get("FR13_REPLAY_ROUTE", "0") == "1"
+                            else ssm_state
+                        ),
                         conv_state=conv_state,
                         spec_state_indices=spec_state_indices_tensor,
                         accepted_paths=_fr10_accepted_paths_tensor,
@@ -2055,24 +2070,54 @@ def _patch_gdn_linear() -> bool:
                     dtype=query_spec.dtype,
                     device=query_spec.device,
                 )
-                tree_state_all = torch.empty(
-                    (
-                        attn_metadata.num_spec_decodes,
-                        tree_n_pad,
-                        value_tree.size(1),
-                        value_tree.size(2),
-                        query_spec.size(3),
-                    ),
-                    dtype=torch.float32,
-                    device=query_spec.device,
+                _fr13_replay_route_on = (
+                    os.environ.get("FR13_REPLAY_ROUTE", "0") == "1"
                 )
+                if _fr13_replay_route_on:
+                    # FR13_REPLAY_ROUTE: the per-node scratch (tree_state) no
+                    # longer exists, so every diagnostic that embeds or
+                    # splices it must refuse loudly instead of silently
+                    # reading garbage (fail-loud policy).
+                    if (
+                        os.environ.get("FR10_TREE_GDN_CAPTURE_PAYLOAD")
+                        or os.environ.get("FR10_TREE_GDN_COMMIT_HANDOFF_LOG")
+                        or os.environ.get("FR10_TREE_GDN_SRC_NATIVE_PAYLOAD")
+                        or os.environ.get("FR12_TREE_SCAN_NATIVE_SPINE", "0") == "1"
+                    ):
+                        raise RuntimeError(
+                            "FR13_REPLAY_ROUTE is incompatible with tree_state "
+                            "diagnostics (FR10_TREE_GDN_CAPTURE_PAYLOAD/"
+                            "FR10_TREE_GDN_COMMIT_HANDOFF_LOG/"
+                            "FR10_TREE_GDN_SRC_NATIVE_PAYLOAD/"
+                            "FR12_TREE_SCAN_NATIVE_SPINE); capture with the "
+                            "flag OFF"
+                        )
+                    # FR13_REPLAY_ROUTE: skip the 201.3MB/layer per-step
+                    # scratch alloc (the capture-blocking allocation); the
+                    # scan runs with STORE_NODE_STATES=False and the durable
+                    # accepted states are produced by the committer replay.
+                    tree_state_all = None
+                else:
+                    tree_state_all = torch.empty(
+                        (
+                            attn_metadata.num_spec_decodes,
+                            tree_n_pad,
+                            value_tree.size(1),
+                            value_tree.size(2),
+                            query_spec.size(3),
+                        ),
+                        dtype=torch.float32,
+                        device=query_spec.device,
+                    )
                 for fr10_b in range(attn_metadata.num_spec_decodes):
                     # Full CUDA graph capture cannot tolerate GPU->CPU syncs.
                     # In pure tree-spec decode vLLM lays each spec decode out as
                     # one fixed tree block, so offsets are static from tree_n.
                     start = fr10_b * tree_n
                     end = start + tree_n
-                    tree_state = tree_state_all[fr10_b]
+                    tree_state = (
+                        None if _fr13_replay_route_on else tree_state_all[fr10_b]
+                    )
                     if os.environ.get("FR12_SUBKERNEL_CAPTURE"):
                         try:
                             _fr12_capture_h0_col = torch.clamp(
@@ -2499,6 +2544,95 @@ def _patch_gdn_linear() -> bool:
                             )
                         except Exception:
                             _fr10_event_h0 = None
+                    if _fr13_replay_route_on:
+                        # FR13_REPLAY_ROUTE activation ring + scan-time
+                        # snapshot. PERSISTENT preallocated staging only --
+                        # never dict-pinned per-step buffers (the gate-4
+                        # root cause #2, FR13_ACCEPT_ONLY_GATE4_FAIL_BIND.md).
+                        # The ring stores EXACTLY what the scan consumes at
+                        # consumed precision: k pre-l2norm, v, raw_a, raw_b
+                        # byte-copies (~16.2KiB/node vs the 3.146MB state
+                        # row). A_log/dt_bias are persistent params; q is not
+                        # needed (q-side ops never touch state).
+                        if getattr(self, "_fr13_replay_ring_k", None) is None:
+                            _fr13_ring_bs = int(_fr10_accepted_lens_tensor.size(0))
+                            _fr13_spec_cols = int(spec_state_indices_tensor.size(-1))
+                            self._fr13_replay_ring_k = torch.zeros(
+                                (_fr13_ring_bs, tree_n_pad, key_spec.size(2), key_spec.size(3)),
+                                dtype=key_spec.dtype,
+                                device=key_spec.device,
+                            )
+                            self._fr13_replay_ring_v = torch.zeros(
+                                (_fr13_ring_bs, tree_n_pad, value_tree.size(1), value_tree.size(2)),
+                                dtype=value_tree.dtype,
+                                device=value_tree.device,
+                            )
+                            self._fr13_replay_ring_a = torch.zeros(
+                                (_fr13_ring_bs, tree_n_pad, a.size(1)),
+                                dtype=a.dtype,
+                                device=a.device,
+                            )
+                            self._fr13_replay_ring_b = torch.zeros(
+                                (_fr13_ring_bs, tree_n_pad, b.size(1)),
+                                dtype=b.dtype,
+                                device=b.device,
+                            )
+                            self._fr13_replay_prev_lens = torch.zeros(
+                                (_fr13_ring_bs,),
+                                dtype=_fr10_accepted_lens_tensor.dtype,
+                                device=_fr10_accepted_lens_tensor.device,
+                            )
+                            self._fr13_replay_spec_idx = torch.zeros(
+                                (_fr13_ring_bs, _fr13_spec_cols),
+                                dtype=spec_state_indices_tensor.dtype,
+                                device=spec_state_indices_tensor.device,
+                            )
+                            self._fr13_replay_meta = {}
+                        if fr10_b == 0:
+                            # SNAPSHOT prev accepted lens + spec indices AT
+                            # SCAN TIME: the committer refills
+                            # _LUMO_FA_ACCEPTED_TREE_LENS_TENSOR with the NEW
+                            # lens BEFORE its publish/replay block, so the
+                            # replay's h0 base column (prev_len-1) is not
+                            # derivable at the launch site (the verify-rider
+                            # Option-1 gap).
+                            self._fr13_replay_prev_lens[
+                                : attn_metadata.num_spec_decodes
+                            ].copy_(
+                                _fr10_accepted_lens_tensor[
+                                    : attn_metadata.num_spec_decodes
+                                ]
+                            )
+                            self._fr13_replay_spec_idx[
+                                : attn_metadata.num_spec_decodes
+                            ].copy_(
+                                spec_state_indices_tensor[
+                                    : attn_metadata.num_spec_decodes
+                                ]
+                            )
+                            self._fr13_replay_meta = {
+                                "num_spec_decodes": int(attn_metadata.num_spec_decodes),
+                                "tree_n": int(tree_n),
+                                "tree_n_pad": int(tree_n_pad),
+                                "output_scale": float(self.head_k_dim**-0.5),
+                                "ssm_state": ssm_state,
+                                "fresh": True,
+                            }
+                            globals().setdefault("_FR13_REPLAY_LAYERS", {})[
+                                str(self.prefix)
+                            ] = self
+                        self._fr13_replay_ring_k[fr10_b, :tree_n].copy_(
+                            key_spec[0, start:end]
+                        )
+                        self._fr13_replay_ring_v[fr10_b, :tree_n].copy_(
+                            value_tree[start:end]
+                        )
+                        self._fr13_replay_ring_a[fr10_b, :tree_n].copy_(
+                            a[start:end]
+                        )
+                        self._fr13_replay_ring_b[fr10_b, :tree_n].copy_(
+                            b[start:end]
+                        )
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
                         k=key_spec[0, start:end].contiguous(),
@@ -2522,6 +2656,7 @@ def _patch_gdn_linear() -> bool:
                         visible_mask=attn_metadata.fr10_tree_visible_mask,
                         out=core_attn_out_spec[0, start:end],
                         state=tree_state,
+                        store_node_states=not _fr13_replay_route_on,
                         output_scale=self.head_k_dim**-0.5,
                         use_qk_l2norm_in_kernel=True,
                         invocation_counter=(
@@ -2786,11 +2921,19 @@ def _patch_gdn_linear() -> bool:
                     # the next decode remaps those node rows into stock linear
                     # columns with launch_tree_state_linear_remap before the
                     # recurrent consumers read them.
-                    ssm_state.index_copy_(
-                        0,
-                        spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
-                        tree_state[:tree_n].to(dtype=ssm_state.dtype),
-                    )
+                    #
+                    # FR13_REPLAY_ROUTE replaces this all-rows publish: the
+                    # committer launches launch_tree_gdn_replay, which
+                    # re-executes root+accepted-path from the activation ring
+                    # and writes the bank LINEAR columns directly (including
+                    # the zero-accept row-0 refresh), so nothing is published
+                    # here and the next-step ssm remap is skipped.
+                    if not _fr13_replay_route_on:
+                        ssm_state.index_copy_(
+                            0,
+                            spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
+                            tree_state[:tree_n].to(dtype=ssm_state.dtype),
+                        )
                     if _fr10_commit_handoff_active:
                         try:
                             _fr10_curr_conv = globals().get(
@@ -2859,6 +3002,13 @@ def _patch_gdn_linear() -> bool:
                     if (
                         os.environ.get("FR10_METRICS", "0") == "1"
                         and _fr10_scan_diag is not None
+                        # FR13_REPLAY_ROUTE: diag[12]/[13] measure the staged
+                        # all-rows publish, which does not exist under the
+                        # replay route; skipping keeps them at zeros-init, so
+                        # treat scan_state_staging as VACUOUS when the flag is
+                        # on (do not gate on it; use the replay byte A/B and
+                        # the durable accepted-state diff gate instead).
+                        and not _fr13_replay_route_on
                     ):
                         _fr10_staged_state = ssm_state.index_select(
                             0, spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long)
@@ -3784,6 +3934,62 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     [int(_x) for _x in accepted_gdn_node_paths[_fr13_i]],
                     int(accepted_lens[_fr13_i]),
                 )
+        if __import__('os').environ.get('FR13_REPLAY_ROUTE', '0') == '1':
+            # FR13_REPLAY_ROUTE durable-state publish (Option 1, committer
+            # publish site): replay the committed accepted path on every
+            # registered GDN layer. This REPLACES the forward's all-rows
+            # ssm_state.index_copy_ publish (skipped under the flag) and the
+            # ssm half of the next-step remap (the replay writes LINEAR bank
+            # columns directly, root row 0 always refreshed for zero-accept).
+            # Inputs are PERSISTENT device buffers only: the accepted
+            # paths/lens buffers refilled above plus each layer's persistent
+            # scan-time staging (activation ring, prev-lens snapshot,
+            # spec-index snapshot) -- no per-step pinned scratch (gate-4).
+            from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                launch_tree_gdn_replay as _fr13_replay_launch,
+            )
+            _fr13_replay_layers = getattr(
+                _lumo_tree_commit_gdn, '_FR13_REPLAY_LAYERS', None
+            )
+            if not _fr13_replay_layers:
+                raise RuntimeError(
+                    'FR13_REPLAY_ROUTE: no registered GDN replay layers'
+                )
+            _fr13_replay_rows = len(accepted_gdn_node_paths)
+            if _fr13_replay_rows:
+                for _fr13_prefix in sorted(_fr13_replay_layers):
+                    _fr13_layer = _fr13_replay_layers[_fr13_prefix]
+                    _fr13_meta = getattr(_fr13_layer, '_fr13_replay_meta', None)
+                    if not _fr13_meta or not _fr13_meta.get('fresh', False):
+                        raise RuntimeError(
+                            'FR13_REPLAY_ROUTE: stale or missing scan-time '
+                            'staging for layer ' + str(_fr13_prefix)
+                        )
+                    if int(_fr13_meta['num_spec_decodes']) != _fr13_replay_rows:
+                        raise RuntimeError(
+                            'FR13_REPLAY_ROUTE: committer rows '
+                            + str(_fr13_replay_rows)
+                            + ' != staged spec decodes '
+                            + str(_fr13_meta['num_spec_decodes'])
+                            + ' for layer ' + str(_fr13_prefix)
+                        )
+                    _fr13_replay_launch(
+                        state_bank=_fr13_meta['ssm_state'],
+                        spec_state_indices=_fr13_layer._fr13_replay_spec_idx,
+                        prev_lens=_fr13_layer._fr13_replay_prev_lens,
+                        accepted_paths=_accepted_path_buf,
+                        accepted_lens=_accepted_lens_buf,
+                        k_ring=_fr13_layer._fr13_replay_ring_k,
+                        v_ring=_fr13_layer._fr13_replay_ring_v,
+                        a_ring=_fr13_layer._fr13_replay_ring_a,
+                        b_ring=_fr13_layer._fr13_replay_ring_b,
+                        A_log=_fr13_layer.A_log,
+                        dt_bias=_fr13_layer.dt_bias,
+                        num_spec_decodes=_fr13_replay_rows,
+                        output_scale=float(_fr13_meta['output_scale']),
+                        use_qk_l2norm_in_kernel=True,
+                    )
+                    _fr13_meta['fresh'] = False
     except Exception as _fr10_tree_lcp_log_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(
@@ -4181,6 +4387,55 @@ def _lumo_tree_canonical_multidraft_sample(
                     [int(_x) for _x in accepted_gdn_node_paths[_fr13_i]],
                     int(accepted_lens[_fr13_i]),
                 )
+        if __import__('os').environ.get('FR13_REPLAY_ROUTE', '0') == '1':
+            # FR13_REPLAY_ROUTE durable-state publish (Option 1, committer
+            # publish site) -- sampled committer twin of the greedy block;
+            # see the greedy committer for the full rationale.
+            from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                launch_tree_gdn_replay as _fr13_replay_launch,
+            )
+            _fr13_replay_layers = getattr(
+                _lumo_tree_commit_gdn, '_FR13_REPLAY_LAYERS', None
+            )
+            if not _fr13_replay_layers:
+                raise RuntimeError(
+                    'FR13_REPLAY_ROUTE: no registered GDN replay layers'
+                )
+            _fr13_replay_rows = len(accepted_gdn_node_paths)
+            if _fr13_replay_rows:
+                for _fr13_prefix in sorted(_fr13_replay_layers):
+                    _fr13_layer = _fr13_replay_layers[_fr13_prefix]
+                    _fr13_meta = getattr(_fr13_layer, '_fr13_replay_meta', None)
+                    if not _fr13_meta or not _fr13_meta.get('fresh', False):
+                        raise RuntimeError(
+                            'FR13_REPLAY_ROUTE: stale or missing scan-time '
+                            'staging for layer ' + str(_fr13_prefix)
+                        )
+                    if int(_fr13_meta['num_spec_decodes']) != _fr13_replay_rows:
+                        raise RuntimeError(
+                            'FR13_REPLAY_ROUTE: committer rows '
+                            + str(_fr13_replay_rows)
+                            + ' != staged spec decodes '
+                            + str(_fr13_meta['num_spec_decodes'])
+                            + ' for layer ' + str(_fr13_prefix)
+                        )
+                    _fr13_replay_launch(
+                        state_bank=_fr13_meta['ssm_state'],
+                        spec_state_indices=_fr13_layer._fr13_replay_spec_idx,
+                        prev_lens=_fr13_layer._fr13_replay_prev_lens,
+                        accepted_paths=_accepted_path_buf,
+                        accepted_lens=_accepted_lens_buf,
+                        k_ring=_fr13_layer._fr13_replay_ring_k,
+                        v_ring=_fr13_layer._fr13_replay_ring_v,
+                        a_ring=_fr13_layer._fr13_replay_ring_a,
+                        b_ring=_fr13_layer._fr13_replay_ring_b,
+                        A_log=_fr13_layer.A_log,
+                        dt_bias=_fr13_layer.dt_bias,
+                        num_spec_decodes=_fr13_replay_rows,
+                        output_scale=float(_fr13_meta['output_scale']),
+                        use_qk_l2norm_in_kernel=True,
+                    )
+                    _fr13_meta['fresh'] = False
     except Exception as _fr10_commit_globals_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(
