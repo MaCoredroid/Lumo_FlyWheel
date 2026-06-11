@@ -1,6 +1,6 @@
 # FR-13 TRAIL — the critical path to the goal (canonical; monitor checks every tick)
 
-**GOAL:** B=4, CUDA-captured, SWE-Verified: e2e lossless (within native self-floor + per-depth argmax + temp-0.6 distributional) + superset accept ≥ same-shape native + wall TPS ≥ native E5. Prototype purpose: drafter-agnostic fast+lossless tree verifier for MTP⊕suffix fusion.
+**GOAL:** B=4 remains the final CUDA-captured SWE-Verified endpoint: e2e lossless (within native self-floor + per-depth argmax + temp-0.6 distributional) + superset accept ≥ same-shape native + wall TPS ≥ native E5. Active pivot (user 2026-06-11): stop the B=4 chase-down until B=1 is both lossless and near-native in forward speed.
 
 **Quality/lossless invariant (user 2026-06-11):**
 - Ground truth quality: pure target-model decode, no MTP.
@@ -13,12 +13,13 @@
 
 | # | step | success criterion | owner of the call | status |
 |---|---|---|---|---|
-| 1 | replay wiring fix re-gate (page-stomp stride fix) | B=1 same-seed 4/4 bit-identical (eager AND captured) + accept ≥ legacy 2.02 + durable diff=0 on spine-no-flip events | monitor (gate is mechanical) | 🔶 in flight (wq10ibu3t fix phase) |
-| 2 | merge `fr13-replay-route` to main | step-1 green + flow verify holds | **USER DECISION** | pending |
-| 3 | B=4 3-arm corruption gate on the FIXED build | bag-TV ≤ 0.113 floor + real-loss ≤ 0.05 + accept within slack of same-shape **E5 (K=5) native — NOT K=9** (native+noise arms MUST boot `qwen3_5_mtp num_speculative_tokens=5`; assert draft_tokens/drafts==5; the K=9 arm already measured is context only) | pass/fail = **USER**; running it = monitor | **FAIL bound** in `FR13_STEP3_POST_HANDOFF_BIND.md`; localization and next discriminator bound in `FR13_STEP3_FAILURE_LOCALIZATION.md` |
-| 4 | healthy-p2 paired capture (temp 0.6, post-fix) | measures the branch bonus; accept/event vs same-shape native | monitor measures; interpretation to user if thin | the superset-accept verdict |
-| 5 | speed: topology-cache quick win + deployment-regime measurement (B=4, BI=0, METRICS=0, FULL capture incl. replay, SWE workload, per FR13_SPEED_TAX_BASELINE spec + overhead protocol) | measured per-forward ratio + wall TPS vs native E5 | monitor measures | the TPS verdict |
-| 6 | FINAL: B=4 CUDA SWE-Verified e2e vs E5 | within-floor + accept ≥ native + TPS ≥ native | **USER pass/fail** | the goal |
+| P0 | freeze B=4 chase-down | B=4 handoff crash fixed and Step 3 failure/speed evidence banked; no further B=4 diagnostics until B=1 clears | monitor | **pivot bound** in `FR13_B1_SPEED_LOSSLESS_PIVOT.md`; speed evidence in `FR13_STEP3_SPEED_FORENSICS.md` |
+| B1-1 | clean current B=1 speed+lossless gate | replay-on tree vs native MTP-5 at `MAX_NUM_SEQS=1`, BI=0, METRICS=0, FULL capture proven, paired prompts/seeds; lossless bar = latest B=1 chasedown S1/S2 classification plus temp-0.6 floor after greedy is clean; report accept/event, warm TPS, and `/metrics` s/fwd | monitor/subagent | **next** |
+| B1-2 | fix B=1 lossless blockers | S1 stays healed (`bonus_violations=0`, true-spine diagnostics); no S2/gross verify-forward corruption or served-stream fork outside accepted native/cross-boot floor; S3 tracked separately as accept/superset blocker | monitor/subagent | pending B1-1 |
+| B1-3 | fix B=1 speed blocker | tree/native per-forward ratio near `1.0x`; a `1.1x`-class result is not enough without explicit break-even proof | monitor/subagent | pending B1-1/B1-2 |
+| B4-1 | return to B=4 lossless | after B=1 lossless+speed clears, rerun B=4 lossless/superset gate against native E5 K=5 | **USER pass/fail** | frozen |
+
+Step 3 speed-forensics note: `FR13_STEP3_SPEED_FORENSICS.md` separates current replay-on per-forward tax from the old replay-off HBM state-materialization story.
 
 **Known risks to the trail (named, with the planned response):**
 - R-A (the real research risk): temp-0.6 accept margin vs native is plausible-but-thin (+5-12% conditional). If step 4 lands BELOW native and the root-sibling topology (+0.08-0.15) + forward-drift recovery don't close it → ESCALATE with the measured margin (decision: accept parity-class vs drafter work).
