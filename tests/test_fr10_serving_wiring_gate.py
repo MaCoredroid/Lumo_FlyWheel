@@ -16,6 +16,16 @@ sys.modules["fr10_serving_wiring_gate"] = gate
 spec.loader.exec_module(gate)
 
 
+@pytest.fixture(autouse=True)
+def _legacy_route_escape_hatch(monkeypatch):
+    # FR13_REPLAY_ROUTE now defaults ON, and this gate REFUSES to run under
+    # the replay route (its scan_state_staging evidence is vacuous there).
+    # These tests exercise the LEGACY gate matrix, so pin the explicit
+    # escape hatch =0; the refusal test below overrides per-case (set 1 /
+    # delenv for the default / set 0).
+    monkeypatch.setenv("FR13_REPLAY_ROUTE", "0")
+
+
 def _write_counter(path: Path, diag: list[float]) -> None:
     path.write_text(
         json.dumps(
@@ -44,7 +54,11 @@ def test_serving_wiring_gate_refuses_loudly_under_replay_route(
     monkeypatch.setenv("FR13_REPLAY_ROUTE", "1")
     with pytest.raises(RuntimeError, match="REFUSES to run with FR13_REPLAY_ROUTE=1"):
         gate.evaluate_wiring(counters_path=counters)
-    # Flag OFF (unset/0) keeps the gate runnable.
+    # DEFAULT IS ON (user decision, trail step 2): unset must refuse too.
+    monkeypatch.delenv("FR13_REPLAY_ROUTE", raising=False)
+    with pytest.raises(RuntimeError, match="REFUSES to run with FR13_REPLAY_ROUTE=1"):
+        gate.evaluate_wiring(counters_path=counters)
+    # Only the explicit legacy escape hatch =0 keeps the gate runnable.
     monkeypatch.setenv("FR13_REPLAY_ROUTE", "0")
     _, summary = gate.evaluate_wiring(counters_path=counters)
     assert summary["schema"] == "fr10.serving_wiring_gate.v3"

@@ -61,7 +61,7 @@ def _refuse_if_replay_route() -> None:
     replay byte A/B (tests/test_fr13_replay_gpu_byte_ab.py) plus the durable
     accepted-state diff instead (FR13_REPLAY_ROUTE_BUILD.md, GPU TODO).
     """
-    if os.environ.get("FR13_REPLAY_ROUTE", "0") == "1":
+    if os.environ.get("FR13_REPLAY_ROUTE", "1") == "1":
         raise RuntimeError(
             "fr10_serving_wiring_gate REFUSES to run with FR13_REPLAY_ROUTE=1: "
             "the scan_state_staging evidence (diag[12]/[13]) is VACUOUS under "

@@ -38,6 +38,18 @@ KERNEL_TEXT = KERNEL_PATH.read_text()
 LAUNCHER_PATH = REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh"
 
 
+@pytest.fixture(autouse=True)
+def _legacy_route_escape_hatch(monkeypatch):
+    # FR13_REPLAY_ROUTE now defaults ON; the committer-exec tests in this
+    # file run the committer fragments on CPU, whose replay branch imports
+    # the triton kernel and requires registered GDN replay layers
+    # (GPU/serving-only). Pin the explicit legacy escape hatch =0 -- the
+    # conv-committed-path / force-spine logic under test is
+    # route-independent; default-ON wiring is asserted in
+    # test_fr13_replay_route_wiring.py.
+    monkeypatch.setenv("FR13_REPLAY_ROUTE", "0")
+
+
 def _extract_function(text: str, name: str) -> str:
     start = text.index(f"def {name}(")
     ends = [
@@ -263,14 +275,15 @@ def test_patch_text_conv_committed_path_wiring() -> None:
     gather_call = text.index(") = gather_committed_path_conv_prior(")
     # Co-updated on the fr13-replay-route rebase (gate-transfer matrix Part
     # 3.1 "text-assertion suites" rider), then again for the page-safe conv
-    # remap (boundary-trace root cause): FR13_REPLAY_ROUTE=1 routes the conv
-    # half through replay_conv_state_linear_remap (torch ops, copies ONLY the
-    # conv view's logical elements -- the Triton remap's stride(0) extent
-    # copies the whole shared mamba page and clobbers the replay's linear ssm
-    # columns); the default OFF path keeps the legacy whole-page launch with
-    # ssm_state passed verbatim. The conv half runs either way.
+    # remap (boundary-trace root cause): FR13_REPLAY_ROUTE (default ON, user
+    # decision trail step 2) routes the conv half through
+    # replay_conv_state_linear_remap (torch ops, copies ONLY the conv view's
+    # logical elements -- the Triton remap's stride(0) extent copies the whole
+    # shared mamba page and clobbers the replay's linear ssm columns); the
+    # explicit FR13_REPLAY_ROUTE=0 escape hatch keeps the legacy whole-page
+    # launch with ssm_state passed verbatim. The conv half runs either way.
     remap_call = text.index(
-        "if os.environ.get(\"FR13_REPLAY_ROUTE\", \"0\") == \"1\":\n"
+        "if os.environ.get(\"FR13_REPLAY_ROUTE\", \"1\") == \"1\":\n"
         "                        replay_conv_state_linear_remap(\n"
         "                            conv_state=conv_state,"
     )

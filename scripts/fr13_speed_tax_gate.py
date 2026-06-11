@@ -831,21 +831,23 @@ def cmd_sweep(args: argparse.Namespace) -> int:
                 "FR13_RUN_DIR": logs.rsplit("/logs", 1)[0],
                 "LOG_DIR": logs,
             }
-            if route == "replay":
-                env["FR13_REPLAY_ROUTE"] = "1"
+            # FR13_REPLAY_ROUTE defaults ON (launcher passthrough :-1) since
+            # the fr13-replay-route merge; BOTH arms pin it explicitly so the
+            # sweep stays unambiguous under either default.
+            env["FR13_REPLAY_ROUTE"] = "1" if route == "replay" else "0"
             env_str = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
             arm_cmds = [
                 f"# --- {shape_name} / {route} (N={n}, depth={stats['depth']}, n_pad={stats['n_pad']}) ---",
             ]
             if route == "replay":
                 arm_cmds.append(
-                    "# REPLAY ROUTE: requires branch fr13-replay-route@9d4d22e3 (launcher FR13_REPLAY_ROUTE"
+                    "# REPLAY ROUTE: merged to main + DEFAULT ON (page-safe conv remap 02b1627a,"
                 )
                 arm_cmds.append(
-                    "# passthrough is NOT on main). LABEL: replay accept-bug confounded live"
+                    "# re-gate f4d971c1: live gates PASS both regimes — the old accept-bug"
                 )
                 arm_cmds.append(
-                    "# (b2 accept 2.02->1.58, FR13_ACCEPT_ONLY_GATE4_FAIL_BIND) — fix before binding accept;"
+                    "# confound (b2 2.02->1.58, FR13_ACCEPT_ONLY_GATE4_FAIL_BIND) is FIXED);"
                 )
                 arm_cmds.append(
                     "# the per-forward RATIO at matched shape is the quantity this sweep tests."
@@ -867,7 +869,7 @@ def cmd_sweep(args: argparse.Namespace) -> int:
                     "window": win,
                     "env": env,
                     "expected_num_spec_tokens": n,
-                    "label": "replay accept-bug confounded live (fix before binding accept)"
+                    "label": "replay route (default ON post-merge; accept-bug FIXED by page-safe conv remap 02b1627a, re-gate f4d971c1)"
                     if route == "replay"
                     else None,
                 }

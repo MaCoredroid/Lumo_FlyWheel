@@ -535,15 +535,20 @@ def test_sweep_matrix_caps_and_routes(tmp_path: Path) -> None:
     for shape in ("chain5", "caterpillar9", "caterpillar13_d6", "caterpillar15_w3_d6"):
         routes = {a["route"] for a in matrix["arms"] if a["shape"] == shape}
         assert routes == {"legacy", "replay"}
-    # replay arms carry the accept-bug-confounded label
+    # replay arms carry the post-merge label (accept bug FIXED, default ON);
+    # BOTH routes pin FR13_REPLAY_ROUTE explicitly so the sweep stays
+    # unambiguous under either launcher default.
     for arm in matrix["arms"]:
         if arm["route"] == "replay":
-            assert "confounded" in arm["label"]
+            assert "FIXED" in arm["label"]
+            assert arm["env"]["FR13_REPLAY_ROUTE"] == "1"
+        else:
+            assert arm["env"]["FR13_REPLAY_ROUTE"] == "0"
         assert arm["env"]["BATCH_INVARIANT"] == "1"
         assert arm["env"]["FR10_METRICS"] == "1"
     commands = (out_dir / "sweep_commands.sh").read_text(encoding="utf-8")
     assert "metrics_before.txt" in commands and "metrics_after.txt" in commands
-    assert "fr13-replay-route@9d4d22e3" in commands
+    assert "merged to main + DEFAULT ON" in commands
     assert "native MTP-5 reference" in commands
 
 

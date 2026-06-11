@@ -30,6 +30,17 @@ PATCHER_PATH = REPO / "scripts" / "fr10_phase4_patch_vllm_tree_gdn.py"
 PATCHER_TEXT = PATCHER_PATH.read_text()
 
 
+@pytest.fixture(autouse=True)
+def _legacy_route_escape_hatch(monkeypatch):
+    # FR13_REPLAY_ROUTE now defaults ON; these CPU tests exec the committer
+    # fragments, whose replay branch imports the triton kernel and requires
+    # registered GDN replay layers (GPU/serving-only). Pin the explicit
+    # legacy escape hatch =0 -- the bonus-row logic under test is
+    # route-independent; default-ON wiring is asserted in
+    # test_fr13_replay_route_wiring.py.
+    monkeypatch.setenv("FR13_REPLAY_ROUTE", "0")
+
+
 def _extract_function(name: str) -> str:
     start = PATCHER_TEXT.index(f"def {name}(")
     ends = [

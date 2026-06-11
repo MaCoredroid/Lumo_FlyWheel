@@ -6,11 +6,13 @@ all-rows publish flag-gated off, scan-time prev-lens snapshot precedes the
 scan launch, ssm remap half gated off (conv half kept), persistent staging
 only -- allocated at METADATA-BUILDER INIT, never in the (capturable)
 forward, with a capture-safe flag-tensor handshake instead of a per-step
-dict. Flag OFF: the legacy path is textually intact and every new behavior
-sits behind an FR13_REPLAY_ROUTE check that defaults to "0" -- i.e. flag-OFF
-is SOURCE-INERT; compile-identity is pending the refactored-scan byte A/B
-(GPU TODO #2 in FR13_REPLAY_ROUTE_BUILD.md), because the shared
-_gdn_node_step body refactor recompiles the default scan.
+dict. DEFAULT IS ON (user decision, trail step 2, post-merge): every
+FR13_REPLAY_ROUTE check defaults to "1". Explicit FR13_REPLAY_ROUTE=0 is the
+legacy escape hatch: the legacy path is textually intact and every replay
+behavior is flag-gated, so =0 restores the legacy surfaces (all-rows publish
++ ssm remap + scratch diagnostic mode). Flag=0 compile-identity to the
+pre-refactor scan was proven by the GPU byte A/B (old-vs-new scan binary
+byte-equal, FR13_REPLAY_GPU_GATES_BIND.md section 1).
 """
 
 from __future__ import annotations
@@ -36,13 +38,17 @@ def _flagged_forward_fragment() -> str:
     return text[start:end]
 
 
-def test_replay_route_flag_defaults_off_everywhere() -> None:
+def test_replay_route_flag_defaults_on_everywhere() -> None:
     text = PATCHER.read_text()
     ktext = KERNEL.read_text()
 
-    assert 'os.environ.get("FR13_REPLAY_ROUTE", "0") == "1"' in text
-    assert "__import__('os').environ.get('FR13_REPLAY_ROUTE', '0') == '1'" in text
-    # No defaultless reads: unset env must mean OFF.
+    assert 'os.environ.get("FR13_REPLAY_ROUTE", "1") == "1"' in text
+    assert "__import__('os').environ.get('FR13_REPLAY_ROUTE', '1') == '1'" in text
+    # Default flip is TOTAL: no read site may still default OFF.
+    assert '"FR13_REPLAY_ROUTE", "0"' not in text
+    assert "'FR13_REPLAY_ROUTE', '0'" not in text
+    assert '\\"FR13_REPLAY_ROUTE\\", \\"0\\"' not in text
+    # No defaultless reads: unset env must mean ON (the deployed default).
     assert 'environ.get("FR13_REPLAY_ROUTE")' not in text
     assert "environ.get('FR13_REPLAY_ROUTE')" not in text
     # The kernel module itself reads no flag: route selection is wiring-level
@@ -263,7 +269,9 @@ def test_serving_wiring_gate_fails_loud_under_replay_route_flag() -> None:
     # scan_state_staging (diag[12]/[13]) check.
     gtext = GATE.read_text()
     assert gtext.count("_refuse_if_replay_route()") >= 2  # evaluate_wiring + main
-    assert 'os.environ.get("FR13_REPLAY_ROUTE", "0") == "1"' in gtext
+    # Default ON: the gate refuses when the flag is UNSET too; only the
+    # explicit legacy escape hatch FR13_REPLAY_ROUTE=0 lets it run.
+    assert 'os.environ.get("FR13_REPLAY_ROUTE", "1") == "1"' in gtext
     assert "REFUSES to run with FR13_REPLAY_ROUTE=1" in gtext
     # The refusal happens before any matrix row is computed.
     assert gtext.index("def _refuse_if_replay_route") < gtext.index(
@@ -308,7 +316,7 @@ def test_patcher_remap_keeps_conv_half_and_drops_ssm_half_on_flag() -> None:
     # page-safe path at all; flag OFF keeps the legacy whole-page launch with
     # ssm_state passed verbatim.
     needle = (
-        '                    if os.environ.get("FR13_REPLAY_ROUTE", "0") == "1":\n'
+        '                    if os.environ.get("FR13_REPLAY_ROUTE", "1") == "1":\n'
         "                        replay_conv_state_linear_remap(\n"
         "                            conv_state=conv_state,\n"
         "                            spec_state_indices=spec_state_indices_tensor,\n"
@@ -369,18 +377,27 @@ def test_replay_route_fragments_parse_and_everything_compiles() -> None:
         py_compile.compile(str(path), doraise=True)
 
 
-def test_flag_off_legacy_surfaces_intact() -> None:
+def test_flag_zero_restores_legacy_surfaces() -> None:
     text = PATCHER.read_text()
 
     # The legacy publish, remap, lens plumbing and committer publishes are
-    # all still present (flag unset => SOURCE-INERT default: the legacy text
-    # is intact and every new behavior is flag-gated; compile-identity is
-    # NOT claimed -- the shared _gdn_node_step body refactor recompiles the
-    # default scan, so it is pending the refactored-scan byte A/B, GPU TODO
-    # #2 in FR13_REPLAY_ROUTE_BUILD.md).
+    # all still present: with the default now ON, explicit FR13_REPLAY_ROUTE=0
+    # is the legacy escape hatch -- the legacy text is intact and every replay
+    # behavior is flag-gated, so =0 restores the legacy surfaces (all-rows
+    # publish + ssm remap + scratch/STORE_NODE_STATES=True diagnostic mode).
+    # Flag=0 binary identity to the pre-refactor scan was proven by the GPU
+    # byte A/B (FR13_REPLAY_GPU_GATES_BIND.md section 1).
     assert "ssm_state.index_copy_(" in text
     assert "launch_tree_state_linear_remap(" in text
     assert "h0_num_accepted_tokens=_fr10_accepted_lens_tensor" in text
     assert "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR" in text
     assert "FR13_TREE_REQKEY" in text
     assert "FR13_TREE_PER_REQ_GEN" in text
+
+
+def test_launcher_passthrough_defaults_replay_route_on() -> None:
+    launcher = Path("scripts/fr13_launch_forked_fa2_tree_server.sh").read_text()
+    # Deployed default ON (user decision, trail step 2); explicit
+    # FR13_REPLAY_ROUTE=0 at invocation is the legacy escape hatch.
+    assert '-e FR13_REPLAY_ROUTE="${FR13_REPLAY_ROUTE:-1}"' in launcher
+    assert "FR13_REPLAY_ROUTE:-0" not in launcher

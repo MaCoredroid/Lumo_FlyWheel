@@ -3,9 +3,10 @@ rider 2; CPU, text-level, style of test_fr13_replay_route_wiring.py).
 
 Gate A's own vehicle, scripts/fr10_tree_kernel_h0_ab_replay.py, reads
 ``serving_tree_state`` from the COMMIT_HANDOFF capture -- a field sourced
-from the per-node scratch (``tree_state_all``) that FR13_REPLAY_ROUTE=1
+from the per-node scratch (``tree_state_all``) that the replay route
 deletes. The byte A/B therefore runs in the STORE_NODE_STATES=True
-diagnostic mode (FR13_REPLAY_ROUTE unset/0), and that mode MUST retain:
+diagnostic mode (explicit FR13_REPLAY_ROUTE=0 -- the legacy escape hatch;
+the route now defaults ON), and that mode MUST retain:
 
 1. the legacy per-node scratch alloc + export-enabled scan launch,
 2. the COMMIT_HANDOFF capture path that publishes ``serving_tree_state``,
@@ -51,7 +52,8 @@ def test_store_node_states_true_mode_retains_commit_handoff_capture() -> None:
 
     # Flag-OFF keeps the export-enabled scan: store_node_states is wired to
     # the inverse of the route flag, so the STORE_NODE_STATES=True
-    # diagnostic mode is exactly FR13_REPLAY_ROUTE unset/0.
+    # diagnostic mode is exactly the explicit legacy escape hatch
+    # FR13_REPLAY_ROUTE=0 (the default is now ON; unset means replay).
     assert "store_node_states=not _fr13_replay_route_on" in text
     # Flag-OFF allocates the per-node scratch the capture is sourced from.
     assert "tree_state_all = torch.empty(" in text

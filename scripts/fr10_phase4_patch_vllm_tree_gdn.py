@@ -306,7 +306,7 @@ def _patch_gdn_attn() -> bool:
             "                    conv_diag=self.fr10_tree_conv_diag,\n"
             "                    path0_nodes=path0_nodes,\n"
             "                )\n"
-            "            if os.environ.get(\"FR13_REPLAY_ROUTE\", \"0\") == \"1\":\n"
+            "            if os.environ.get(\"FR13_REPLAY_ROUTE\", \"1\") == \"1\":\n"
             "                # FR13_REPLAY_ROUTE: INIT-TIME allocation of every\n"
             "                # per-layer replay staging buffer (activation rings,\n"
             "                # scan-time prev-lens/spec-idx snapshots, handshake\n"
@@ -403,7 +403,7 @@ def _patch_gdn_attn() -> bool:
             "                    _fr13_existing_layers.update(_fr13_replay_layers)\n"
             "                else:\n"
             "                    _fr13_gdn_mod._FR13_REPLAY_LAYERS = _fr13_replay_layers\n"
-            "        elif os.environ.get(\"FR13_REPLAY_ROUTE\", \"0\") == \"1\":\n"
+            "        elif os.environ.get(\"FR13_REPLAY_ROUTE\", \"1\") == \"1\":\n"
             "            raise RuntimeError(\n"
             "                \"FR13_REPLAY_ROUTE=1 requires a speculative token tree \"\n"
             "                \"(tree_mtp); refusing to start with replay staging unallocated\"\n"
@@ -1031,7 +1031,7 @@ def _patch_gdn_linear() -> bool:
                     # all-rows ssm publish refreshes every window column each
                     # event, making the page-wide copy semantically identical
                     # to the intended ssm remap there.
-                    if os.environ.get("FR13_REPLAY_ROUTE", "0") == "1":
+                    if os.environ.get("FR13_REPLAY_ROUTE", "1") == "1":
                         replay_conv_state_linear_remap(
                             conv_state=conv_state,
                             spec_state_indices=spec_state_indices_tensor,
@@ -2313,7 +2313,7 @@ def _patch_gdn_linear() -> bool:
                     device=query_spec.device,
                 )
                 _fr13_replay_route_on = (
-                    os.environ.get("FR13_REPLAY_ROUTE", "0") == "1"
+                    os.environ.get("FR13_REPLAY_ROUTE", "1") == "1"
                 )
                 if _fr13_replay_route_on:
                     # FR13_REPLAY_ROUTE: the per-node scratch (tree_state) no
@@ -4400,7 +4400,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     [int(_x) for _x in accepted_gdn_node_paths[_fr13_i]],
                     int(accepted_lens[_fr13_i]),
                 )
-        if __import__('os').environ.get('FR13_REPLAY_ROUTE', '0') == '1':
+        if __import__('os').environ.get('FR13_REPLAY_ROUTE', '1') == '1':
             # FR13_REPLAY_ROUTE durable-state publish (Option 1, committer
             # publish site): replay the committed accepted path on every
             # registered GDN layer. This REPLACES the forward's all-rows
@@ -4895,7 +4895,7 @@ def _lumo_tree_canonical_multidraft_sample(
                     [int(_x) for _x in accepted_gdn_node_paths[_fr13_i]],
                     int(accepted_lens[_fr13_i]),
                 )
-        if __import__('os').environ.get('FR13_REPLAY_ROUTE', '0') == '1':
+        if __import__('os').environ.get('FR13_REPLAY_ROUTE', '1') == '1':
             # FR13_REPLAY_ROUTE durable-state publish (Option 1, committer
             # publish site) -- sampled committer twin of the greedy block;
             # see the greedy committer for the full rationale.
@@ -6675,7 +6675,7 @@ def _patch_mamba_utils_boundary_log() -> bool:
         "                        ).get(_fr13_bnd_req_id)\n"
         "                        _fr13_bnd_stale = None\n"
         "                        if (\n"
-        "                            os.environ.get(\"FR13_REPLAY_ROUTE\", \"0\") == \"1\"\n"
+        "                            os.environ.get(\"FR13_REPLAY_ROUTE\", \"1\") == \"1\"\n"
         "                            and _fr13_bnd_func == \"get_temporal_copy_spec\"\n"
         "                            and _fr13_bnd_lastw is not None\n"
         "                        ):\n"
