@@ -30,6 +30,9 @@ FR13_CONV_COMMITTED_PATH=${FR13_CONV_COMMITTED_PATH:-1}
 # S3/m1 decisive A/B (caterpillar forced-spine vs chain boot) ONLY. NEVER
 # bind =1 into a committed serving config or a gate result.
 FR13_FORCE_SPINE_COMMIT=${FR13_FORCE_SPINE_COMMIT:-0}
+LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
+LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}
+LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}
 LOG_DIR=${LOG_DIR:-"${FR13_RUN_DIR:-$REPO/output/fr13_fa2_tree_e2e/live}/logs"}
 FORKED_FA2_SO=${FORKED_FA2_SO:-"$REPO/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so"}
 TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
@@ -203,9 +206,9 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FINAL_LOGIT_CAPTURE_ROWS="${FR13_FINAL_LOGIT_CAPTURE_ROWS:-}" \
   -e FR13_FINAL_LOGIT_CAPTURE_SKIP="${FR13_FINAL_LOGIT_CAPTURE_SKIP:-0}" \
   -e FR13_FINAL_LOGIT_CAPTURE_LIMIT="${FR13_FINAL_LOGIT_CAPTURE_LIMIT:-1}" \
-  -e LUMO_MTP_DRAFT_TRACE_FILE=/logs/fr10_mtp_draft_trace.jsonl \
-  -e LUMO_TREE_SAMPLER_DEBUG_LOG=/logs/tree_sampler_debug.jsonl \
-  -e LUMO_TREE_PATH_LCP_LOG=/logs/tree_path_lcp.jsonl \
+  -e LUMO_MTP_DRAFT_TRACE_FILE="$LUMO_MTP_DRAFT_TRACE_FILE" \
+  -e LUMO_TREE_SAMPLER_DEBUG_LOG="$LUMO_TREE_SAMPLER_DEBUG_LOG" \
+  -e LUMO_TREE_PATH_LCP_LOG="$LUMO_TREE_PATH_LCP_LOG" \
   -e SPEC_CONFIG="$SPEC_CONFIG" \
   --entrypoint bash \
   "$IMAGE" \

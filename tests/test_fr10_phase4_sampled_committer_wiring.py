@@ -184,8 +184,17 @@ def test_forked_fa2_tree_launcher_defaults_to_prefill_native_metrics_off() -> No
 
     assert "FR10_METRICS=${FR10_METRICS:-0}" in text
     assert "FR13_FA2_PREFILL_NATIVE=${FR13_FA2_PREFILL_NATIVE:-1}" in text
+    assert "LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}" in text
+    assert "LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}" in text
+    assert "LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}" in text
     assert '-e FR10_METRICS="$FR10_METRICS"' in text
     assert '-e FR13_FA2_PREFILL_NATIVE="$FR13_FA2_PREFILL_NATIVE"' in text
+    assert '-e LUMO_MTP_DRAFT_TRACE_FILE="$LUMO_MTP_DRAFT_TRACE_FILE"' in text
+    assert '-e LUMO_TREE_SAMPLER_DEBUG_LOG="$LUMO_TREE_SAMPLER_DEBUG_LOG"' in text
+    assert '-e LUMO_TREE_PATH_LCP_LOG="$LUMO_TREE_PATH_LCP_LOG"' in text
+    assert "-e LUMO_MTP_DRAFT_TRACE_FILE=/logs/fr10_mtp_draft_trace.jsonl" not in text
+    assert "-e LUMO_TREE_SAMPLER_DEBUG_LOG=/logs/tree_sampler_debug.jsonl" not in text
+    assert "-e LUMO_TREE_PATH_LCP_LOG=/logs/tree_path_lcp.jsonl" not in text
     # FR13 Method-A BI allowlist: default OFF, plumbed through, boot needles.
     assert "FR13_BI_TREE_ATTN=${FR13_BI_TREE_ATTN:-0}" in text
     assert '-e FR13_BI_TREE_ATTN="$FR13_BI_TREE_ATTN"' in text
