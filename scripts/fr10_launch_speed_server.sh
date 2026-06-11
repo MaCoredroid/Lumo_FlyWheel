@@ -95,6 +95,29 @@ mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
+_lumo_truthy() {
+  case "${1,,}" in
+    1|true|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+LUMO_NSYS_WRAP_VLLM=${LUMO_NSYS_WRAP_VLLM:-0}
+LUMO_NSYS_BIN=${LUMO_NSYS_BIN:-/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys}
+LUMO_NSYS_DELAY_S=${LUMO_NSYS_DELAY_S:-600}
+LUMO_NSYS_DURATION_S=${LUMO_NSYS_DURATION_S:-150}
+LUMO_NSYS_OUTPUT=${LUMO_NSYS_OUTPUT:-/logs/nsys_vllm_${CONTAINER}}
+NSYS_DOCKER_ARGS=()
+if _lumo_truthy "$LUMO_NSYS_WRAP_VLLM"; then
+  for nsight_mount in /opt/nvidia /usr/local/cuda-13.0; do
+    if [[ ! -e "$nsight_mount" ]]; then
+      echo "LUMO_NSYS_WRAP_VLLM enabled but Nsight mount path is missing: $nsight_mount" >&2
+      exit 2
+    fi
+    NSYS_DOCKER_ARGS+=(-v "$nsight_mount:$nsight_mount:ro")
+  done
+fi
+
 PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
 from lumo_flywheel_serving.model_server import recover_host_memory
 
@@ -122,8 +145,14 @@ PY
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
+  "${NSYS_DOCKER_ARGS[@]}" \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
   -e LUMO_BATCH_INVARIANT_VLLM="${LUMO_BATCH_INVARIANT_VLLM:-$BATCH_INVARIANT}" \
+  -e LUMO_NSYS_WRAP_VLLM="$LUMO_NSYS_WRAP_VLLM" \
+  -e LUMO_NSYS_BIN="$LUMO_NSYS_BIN" \
+  -e LUMO_NSYS_DELAY_S="$LUMO_NSYS_DELAY_S" \
+  -e LUMO_NSYS_DURATION_S="$LUMO_NSYS_DURATION_S" \
+  -e LUMO_NSYS_OUTPUT="$LUMO_NSYS_OUTPUT" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e PYTHONPATH=/workspace/src \
   -e FR10_ENABLE_TREE_GDN="$FR10_ENABLE_TREE_GDN" \
@@ -212,7 +241,24 @@ SPEC_ARGS=()
 if [[ \"\${FR12_NO_SPECULATIVE_CONFIG:-0}\" != \"1\" ]]; then
   SPEC_ARGS=(--speculative-config \"\$SPEC_CONFIG\")
 fi
-exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
+NSYS_PREFIX=()
+case \"\${LUMO_NSYS_WRAP_VLLM,,}\" in
+  1|true|yes|on)
+    NSYS_PREFIX=(
+      \"\$LUMO_NSYS_BIN\"
+      profile
+      --delay \"\$LUMO_NSYS_DELAY_S\"
+      --duration \"\$LUMO_NSYS_DURATION_S\"
+      --trace=cuda,nvtx
+      --cuda-graph-trace=node
+      --sample=none
+      --cpuctxsw=none
+      --force-overwrite=true
+      -o \"\$LUMO_NSYS_OUTPUT\"
+    )
+    ;;
+esac
+exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --host 0.0.0.0 --port 9950 --max-num-seqs '$MAX_NUM_SEQS' \
   --gpu-memory-utilization '$GPU_UTIL' --max-model-len '$MAX_MODEL_LEN' \
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
