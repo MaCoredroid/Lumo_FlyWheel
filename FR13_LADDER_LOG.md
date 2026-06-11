@@ -1414,3 +1414,6 @@ Call2 conv-detail alignment after the fix:
 - Byte-pinned actor: conv-remap whole-page stride stomp over shared mamba page; fix = page-safe tensor-op remap (02b1627a, fr13_replay_conv_remap.py; frozen kernel untouched); re-gate f4d971c1.
 - POST-FIX: determinism 4/4 eager+captured; accept 2.0833 == flag-OFF; flag-ON token-identical to flag-OFF all 4 prompts. Riders: paired flag-OFF captured boot pending; align-mode adapters replay-blind = LATENT (prefix caching off in our boots — precondition-check if ever enabled).
 - NEXT: TRAIL STEP 2 = merge decision (USER).
+
+## Merge+step3 flow CLOSED early (user, 2026-06-11)
+- Phase 1 banked: merge 776368a9 + default-ON d2a0ff51 pushed. Gate phase: tree arm = B=4 gather-OOB crash (chase wpuubqdrc running); native/noise arms were K=9 (wrong comparator per the E5-K5 rule, 476f8e15) = context-only. Step-3 gate RE-RUNS fresh post-fix with E5 (qwen3_5_mtp K=5) arms + drafts-ratio assert.
