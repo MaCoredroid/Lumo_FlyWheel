@@ -8,7 +8,7 @@
 |---|---|---|---|---|
 | 1 | replay wiring fix re-gate (page-stomp stride fix) | B=1 same-seed 4/4 bit-identical (eager AND captured) + accept ≥ legacy 2.02 + durable diff=0 on spine-no-flip events | monitor (gate is mechanical) | 🔶 in flight (wq10ibu3t fix phase) |
 | 2 | merge `fr13-replay-route` to main | step-1 green + flow verify holds | **USER DECISION** | pending |
-| 3 | B=4 3-arm corruption gate on the FIXED build | bag-TV ≤ 0.113 floor + real-loss ≤ 0.05 + accept within slack of same-shape native | pass/fail = **USER**; running it = monitor | the lossless verdict — first post-fix B=4 measurement |
+| 3 | B=4 3-arm corruption gate on the FIXED build | bag-TV ≤ 0.113 floor + real-loss ≤ 0.05 + accept within slack of same-shape **E5 (K=5) native — NOT K=9** (native+noise arms MUST boot `qwen3_5_mtp num_speculative_tokens=5`; assert draft_tokens/drafts==5; the K=9 arm already measured is context only) | pass/fail = **USER**; running it = monitor | the lossless verdict — first post-fix B=4 measurement |
 | 4 | healthy-p2 paired capture (temp 0.6, post-fix) | measures the branch bonus; accept/event vs same-shape native | monitor measures; interpretation to user if thin | the superset-accept verdict |
 | 5 | speed: topology-cache quick win + deployment-regime measurement (B=4, BI=0, METRICS=0, FULL capture incl. replay, SWE workload, per FR13_SPEED_TAX_BASELINE spec + overhead protocol) | measured per-forward ratio + wall TPS vs native E5 | monitor measures | the TPS verdict |
 | 6 | FINAL: B=4 CUDA SWE-Verified e2e vs E5 | within-floor + accept ≥ native + TPS ≥ native | **USER pass/fail** | the goal |
