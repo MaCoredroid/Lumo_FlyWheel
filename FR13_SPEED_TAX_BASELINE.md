@@ -136,8 +136,8 @@ legacy tax grows with N). **Invalid for:** absolute tax, deployment claims, E5 c
 
 ## DEPLOYMENT-REGIME measurement spec (the one that counts; run post-wiring-fix)
 - B=4, MAX_NUM_SEQS=4, **FULL CUDA capture proven** (cuda_graph_proof per arm), **BI=0 both arms**,
-  **FR10_METRICS=0 + ALL LUMO logging envs unset** (accept counters come from vLLM's native /metrics spec counters
-  — no instrumentation in the serving path), GPU_UTIL deployment value.
+  **FR10_METRICS=0 + ALL LUMO logging envs unset** (accept counters come from vLLM's native /metrics spec counters,
+  which exist regardless — no instrumentation in the serving path), GPU_UTIL deployment value.
 - Workload: SWE-Verified agentic shape (`fr12_deliverable_swe4_probe` full-task form, ~30 min/arm class), pinned
   task set, seeds recorded. Arms: native E5 / legacy tree / replay tree (post-fix), same HEAD.
 - Basis: /metrics window deltas only (`decode_seconds/spec_drafts`), pairing gate enforced; per-forward ratio +

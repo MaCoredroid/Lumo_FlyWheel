@@ -34,8 +34,9 @@ kernel. The live wiring seam is unlocalized (R1/R6g/R8 candidates below).
    premise) must be read with this re-interpretation.
 3. Live-kernel row gains a factual datum: legacy handoff log (boot1a, layer0,
    113 events) shows **2/113 nonzero ssm next-read deltas** (21.8/23.6,
-   prev_len 2/4, branch-commit class) — the legacy path is not proven fully
-   clean either; it is just far better live than the replay route today.
+   prev_len 2/4, branch-commit class; conv next-read delta 59.08 on the same
+   events) — the legacy path is not proven fully clean either; it is just far
+   better live than the replay route today.
 
 ## Headers — boots (ONE GPU serial; teardown + recover_host_memory between; >=100G free before each; docker ps empty)
 | boot | regime | FR13_REPLAY_ROUTE | purpose | windows |
@@ -127,8 +128,9 @@ binary but not one output byte.
 ## 4) Mechanical gate-2 rider — CLEAN (no gate-2 re-run required)
 Emitted `gdn_linear_attn.py` main-patcher vs branch-patcher (pristine
 container): 10 hunks, ALL inside the two `num_spec_decodes > 0` guarded
-regions. Caveat: the metadata-builder file also gains the env-gated init-time
-ring allocation (allocation-only, FR13_REPLAY_ROUTE=1).
+regions (guard indent 16; every changed line ≥16 with the only =16 lines being
+the scratch-alloc swap itself). Caveat: the metadata-builder file also gains
+the env-gated init-time ring allocation (allocation-only, FR13_REPLAY_ROUTE=1).
 
 ## 5) LIVE gates (flag ON) — **FAIL, gate-4 class**
 
@@ -248,3 +250,56 @@ run_header.json, boot*_launch.log. CPU-stage logs in
 single-process full-suite runs write >300 GB of /tmp and are infeasible on
 this host). Branch bind copy: `FR13_REPLAY_GPU_GATES_BIND.md` @ `9d4d22e3`
 on `fr13-replay-route`.
+
+## ADDENDUM 2026-06-11 — root cause FOUND + FIXED; live gates now PASS (both regimes)
+
+**Root cause (boundary-trace, run dir `output/fr13_replay_boundary_trace`):**
+R6g-CLASS but OUR OWN wiring, not vLLM's align-mode machinery — the
+"conv-only" linear remap (`launch_tree_state_linear_remap(ssm_state=None,
+conv_state=...)` at the next forward's conv branch) launches the frozen
+Triton remap on the conv kv-cache VIEW, whose `stride(0) ==
+num_element_per_page` (conv kv[0] and ssm kv[1] are as_strided views over the
+SAME mamba page). The kernel copies `stride(0)` elements per row ⇒ every
+len≥1 commit copied WHOLE PAGES node→linear, dragging never-written
+node-column ssm bytes over the replay's just-published linear-column ssm
+states (byte prediction B.window[c] == A.post.window[node path[c]]: 581/581,
+0 mismatches, both probed layers; len=0 commits 71/71 clean = remap writes
+nothing). Legacy immunity: the all-rows ssm publish made the page-wide copy
+semantically identical to the intended ssm remap. Flag-ON non-determinism:
+wiped-in bytes are history-dependent page garbage (boot-fresh zeros vs
+reused-block leftovers).
+
+**Fix (PURE WIRING, kernel file untouched), commit `02b1627a`:** under
+FR13_REPLAY_ROUTE=1 the conv half runs through
+`lumo_flywheel_serving.fr13_replay_conv_remap.replay_conv_state_linear_remap`
+— identical gather-then-scatter permutation in plain tensor ops
+(index_select/index_copy_) that copy ONLY the conv view's logical elements,
+never the page remainder. Flag OFF keeps the legacy whole-page launch
+verbatim. CPU tests: page-shared as_strided fixture (mirrors
+_reshape_kv_cache_tensors MambaSpec branch), whole-raw-tensor byte compare vs
+a kernel-semantics reference, ssm-slice byte-frozen assertion, capture-safety
+AST lint.
+
+**Re-gate (run dir `output/fr13_replay_fix_regate`, branch @ 02b1627a, pinned
+battery prompts_swe4 B=1 greedy seed1313 BI=1, FR13_REPLAY_ROUTE=1, boundary
+instrument OFF, one eager boot + one captured boot, battery x2 each,
+RestartCount=0 both):**
+| gate | eager (e1/e1r2) | captured (c1/c1r2) | broken (b3/b2) | flag-OFF ref |
+|---|---|---|---|---|
+| same-seed determinism | **4/4 identical** | **4/4 identical** | 2/4 / 1/4 | 4/4 |
+| accept/event | **2.0833 / 2.0833** | **2.1467 / 2.1467** | 1.665-1.710 / 1.583-1.689 | 2.083 (b1a eager) / 2.024 (b1 captured) |
+| first fork vs native_greedy | **35/15/21/71** | **70/21/21/71** | 15/11/17/14 / 15/12/15/13 | 35/15/21/71 (b1a) / 54/24/25/57 (b1) |
+
+- EAGER flag-ON is TOKEN-IDENTICAL to flag-OFF eager (b1a) on all 4 prompts
+  (first-fork = None everywhere) — the route now reproduces legacy exactly.
+- CAPTURED flag-ON forks from flag-OFF captured (b1) only at 54/21/21/57 =
+  the known captured cross-boot near-tie band (b1 vs banked bootB themselves
+  differ at 35), and diverges from broken b2 exactly at b2's corruption
+  positions (15/12/15/13). On p0/p3 it holds native lockstep LONGER than b1
+  (70/71 vs 54/57).
+- Class-6 check: the page-safe torch remap CUDA-graph-captures and replays
+  correctly (captured boot healthy, gates pass, no eager fallback).
+
+**Verdict: gate-4-class live failure RESOLVED. Replay-route live gates PASS
+in both regimes.** R1/R8 excluded by the trace; align-mode actors untested
+because this serving config never runs them (enable_prefix_caching=False).

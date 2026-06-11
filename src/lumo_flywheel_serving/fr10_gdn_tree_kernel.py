@@ -335,6 +335,55 @@ def gather_committed_path_conv_prior(
 
 
 @triton.jit
+def _gdn_node_step(
+    state_i,
+    b_q,
+    b_k,
+    b_v,
+    b_b,
+    b_g,
+    b_raw_a,
+    b_raw_b,
+    b_a_log,
+    b_dt_bias,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+):
+    # FR13_REPLAY_ROUTE shared per-node update body. This is the SINGLE
+    # source of the GDN rank-1 node update used by BOTH the tree scan kernel
+    # (_tree_gdn_kernel) and the accepted-path replay kernel
+    # (_tree_gdn_replay_kernel). Replay bit-exactness is by re-execution of
+    # the identical fp32 instruction sequence on bit-identical inputs, so the
+    # two kernels MUST inline this one body with identical constexprs
+    # (DIM_K/BLOCK_V via operand shapes, OUTPUT_SCALE, USE_QK_L2NORM_IN_KERNEL,
+    # RAW_GATING) and identical num_warps=8. Codegen identity across the two
+    # compilations (FMA contraction/scheduling per unrolled instance) is NOT
+    # spec-guaranteed: it is gated by the one-time byte A/B on captured
+    # payloads (GPU-gated obligation; see FR13_REPLAY_ROUTE_BUILD.md).
+    b_beta = b_b
+    if RAW_GATING:
+        x = b_raw_a + b_dt_bias
+        softplus_x = tl.where(
+            x <= 20.0,
+            tl.log(1.0 + tl.exp(x)),
+            x,
+        )
+        b_g = -tl.exp(b_a_log) * softplus_x
+        b_beta = tl.sigmoid(b_raw_b.to(tl.float32))
+    if USE_QK_L2NORM_IN_KERNEL:
+        b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
+        b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
+    b_q = b_q * OUTPUT_SCALE
+    state_i *= tl.exp(b_g)
+    b_v -= tl.sum(state_i * b_k[None, :], axis=1)
+    b_v *= b_beta
+    state_i += b_v[:, None] * b_k[None, :]
+    out_i = tl.sum(state_i * b_q[None, :], axis=1)
+    return state_i, out_i
+
+
+@triton.jit
 def _tree_gdn_kernel(
     q,
     k,
@@ -369,6 +418,7 @@ def _tree_gdn_kernel(
     H0_USE_ACCEPTED_COLUMN: tl.constexpr,
     RAW_GATING: tl.constexpr,
     COUNT_INVOCATION: tl.constexpr,
+    STORE_NODE_STATES: tl.constexpr,
 ):
     pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
@@ -441,47 +491,358 @@ def _tree_gdn_kernel(
             mask=i < N_ACTUAL,
             other=0.0,
         ).to(tl.float32)
-        b_beta = b_b
+        b_raw_a = b_g
+        b_raw_b = b_b
+        b_a_log = b_g
+        b_dt_bias = b_b
         if RAW_GATING:
-            b_b = tl.load(
+            b_raw_b = tl.load(
                 raw_b + i * NUM_VH + pid_vh,
                 mask=i < N_ACTUAL,
                 other=0.0,
             ).to(tl.float32)
-            x = tl.load(
+            b_raw_a = tl.load(
                 raw_a + i * NUM_VH + pid_vh,
                 mask=i < N_ACTUAL,
                 other=0.0,
-            ).to(tl.float32) + tl.load(dt_bias + pid_vh).to(tl.float32)
-            softplus_x = tl.where(
-                x <= 20.0,
-                tl.log(1.0 + tl.exp(x)),
-                x,
-            )
-            b_g = -tl.exp(tl.load(A_log + pid_vh).to(tl.float32)) * softplus_x
-            b_beta = tl.sigmoid(b_b.to(tl.float32))
+            ).to(tl.float32)
+            b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+            b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
 
-        if USE_QK_L2NORM_IN_KERNEL:
-            b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
-            b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
-        b_q = b_q * OUTPUT_SCALE
-
-        state_i *= tl.exp(b_g)
-        b_v -= tl.sum(state_i * b_k[None, :], axis=1)
-        b_v *= b_beta
-        state_i += b_v[:, None] * b_k[None, :]
-        out_i = tl.sum(state_i * b_q[None, :], axis=1)
+        state_i, out_i = _gdn_node_step(
+            state_i,
+            b_q,
+            b_k,
+            b_v,
+            b_b,
+            b_g,
+            b_raw_a,
+            b_raw_b,
+            b_a_log,
+            b_dt_bias,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+            RAW_GATING=RAW_GATING,
+        )
         h_cache = tl.where((offs_n == i)[:, None, None], state_i[None, :, :], h_cache)
         tl.store(
             out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
             out_i,
             mask=(i < N_ACTUAL) & v_mask,
         )
-        tl.store(
-            state + ((i * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
-            state_i,
-            mask=(i < N_ACTUAL) & v_mask[:, None],
+        if STORE_NODE_STATES:
+            # FR13_REPLAY_ROUTE: this per-node HBM export is PURE EXPORT.
+            # Children resume from the h_cache registers above; nothing
+            # in-kernel reads this store, so skipping it cannot perturb the
+            # scan. Under the replay route the accepted path is re-executed
+            # from the activation ring instead (see _tree_gdn_replay_kernel).
+            tl.store(
+                state + ((i * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+                state_i,
+                mask=(i < N_ACTUAL) & v_mask[:, None],
+            )
+
+@triton.jit
+def _tree_gdn_replay_kernel(
+    k_ring,
+    v_ring,
+    a_ring,
+    b_ring,
+    A_log,
+    dt_bias,
+    state_bank,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    prev_lens,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    DIM_V: tl.constexpr,
+    BLOCK_V: tl.constexpr,
+    N_PAD: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    BANK_STRIDE: tl.constexpr,
+    RING_B_STRIDE_K: tl.constexpr,
+    RING_N_STRIDE_K: tl.constexpr,
+    RING_B_STRIDE_V: tl.constexpr,
+    RING_N_STRIDE_V: tl.constexpr,
+    RING_B_STRIDE_AB: tl.constexpr,
+    RING_N_STRIDE_AB: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+):
+    # FR13_REPLAY_ROUTE accepted-path chain replay (sibling of the scan).
+    #
+    # The scan no longer exports per-node states to HBM
+    # (STORE_NODE_STATES=False); instead this kernel re-executes the
+    # committed accepted path from the activation ring (k pre-l2norm, v,
+    # raw_a, raw_b at consumed precision) on the IDENTICAL shared
+    # _gdn_node_step body, in the NATIVE gate-folding basis (no rescaled-exp
+    # reconstruction), and publishes the post-step states directly to the
+    # bank's LINEAR columns (column t = t-th accepted token), which removes
+    # the ssm half of the next-step remap under the flag.
+    #
+    # No h_cache: one (BLOCK_V, DIM_K) register tile per program, so the
+    # replay is spill-free at any tree size.
+    pid_b = tl.program_id(0)
+    pid_vh = tl.program_id(1)
+    pid_v = tl.program_id(2)
+    head_group = NUM_VH // NUM_KH
+    pid_kh = pid_vh // head_group
+    offs_k = tl.arange(0, DIM_K)
+    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    v_mask = offs_v < DIM_V
+
+    # h0 = same column convention as the scan's in-kernel h0 gather:
+    # column clamp(prev_accepted_len - 1, 0). prev_lens is the SCAN-TIME
+    # snapshot of the accepted-lens buffer (the committer refills the live
+    # buffer with the NEW lens before this kernel launches).
+    prev_len = tl.load(prev_lens + pid_b).to(tl.int64)
+    h0_col = tl.maximum(prev_len - 1, 0)
+    h0_row = tl.load(spec_state_indices + pid_b * SPEC_COLS + h0_col).to(tl.int64)
+    # Read the whole h0 tile into registers BEFORE any store: a later
+    # publish in this same program may target the h0 bank row itself
+    # (publish-overwrites-h0-row case).
+    state = tl.load(
+        state_bank
+        + h0_row * BANK_STRIDE
+        + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+        + offs_k[None, :],
+        mask=v_mask[:, None],
+        other=0.0,
+    ).to(tl.float32)
+    acc_len = tl.load(accepted_lens + pid_b)
+    # q is not stored: the q-side ops never touch state, out was already
+    # emitted by the scan. A zero q keeps the shared body's signature and
+    # constexprs identical; out_i is discarded.
+    b_q = tl.zeros((DIM_K,), dtype=tl.float32)
+    b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+    b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+    for t in tl.static_range(0, PATH_COLS + 1):
+        if t == 0:
+            # Root (gdn node 0) replays unconditionally: row 0 must be
+            # refreshed even on a ZERO-ACCEPT event (the next h0 read clamps
+            # accepted_len-1 to column 0), and the scan applies NO handoff
+            # normalization to h0 before the root update.
+            active = acc_len >= 0
+            node = 0
+        else:
+            active = (t - 1) < acc_len
+            node = tl.load(
+                accepted_paths + pid_b * PATH_COLS + (t - 1),
+                mask=active,
+                other=0,
+            ).to(tl.int64)
+            node = tl.maximum(node, 0)
+            node = tl.minimum(node, N_PAD - 1)
+            # Parent-handoff normalization: the scan reads the parent state
+            # through tl.sum(tl.where(offs_n == j, h_cache, 0.0), axis=0),
+            # which flips -0.0 to +0.0 exactly once per edge. `+ 0.0`
+            # reproduces that bit behavior; the root above gets none.
+            state = state + 0.0
+        b_k = tl.load(
+            k_ring
+            + pid_b * RING_B_STRIDE_K
+            + node * RING_N_STRIDE_K
+            + pid_kh * DIM_K
+            + offs_k,
+            mask=active,
+            other=0.0,
+        ).to(tl.float32)
+        b_v = tl.load(
+            v_ring
+            + pid_b * RING_B_STRIDE_V
+            + node * RING_N_STRIDE_V
+            + pid_vh * DIM_V
+            + offs_v,
+            mask=active & v_mask,
+            other=0.0,
+        ).to(tl.float32)
+        b_raw_b = tl.load(
+            b_ring + pid_b * RING_B_STRIDE_AB + node * RING_N_STRIDE_AB + pid_vh,
+            mask=active,
+            other=0.0,
+        ).to(tl.float32)
+        b_raw_a = tl.load(
+            a_ring + pid_b * RING_B_STRIDE_AB + node * RING_N_STRIDE_AB + pid_vh,
+            mask=active,
+            other=0.0,
+        ).to(tl.float32)
+        new_state, out_i = _gdn_node_step(
+            state,
+            b_q,
+            b_k,
+            b_v,
+            0.0,
+            0.0,
+            b_raw_a,
+            b_raw_b,
+            b_a_log,
+            b_dt_bias,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+            RAW_GATING=RAW_GATING,
         )
+        state = tl.where(active, new_state, state)
+        if t == 0:
+            dst_col = 0
+        else:
+            dst_col = t - 1
+        dst_row = tl.load(
+            spec_state_indices + pid_b * SPEC_COLS + dst_col,
+            mask=active,
+            other=0,
+        ).to(tl.int64)
+        tl.store(
+            state_bank
+            + dst_row * BANK_STRIDE
+            + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            state,
+            mask=active & v_mask[:, None],
+        )
+
+
+def launch_tree_gdn_replay(
+    *,
+    state_bank: torch.Tensor,
+    spec_state_indices: torch.Tensor,
+    prev_lens: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    k_ring: torch.Tensor,
+    v_ring: torch.Tensor,
+    a_ring: torch.Tensor,
+    b_ring: torch.Tensor,
+    A_log: torch.Tensor,
+    dt_bias: torch.Tensor,
+    num_spec_decodes: int,
+    output_scale: float,
+    use_qk_l2norm_in_kernel: bool = True,
+) -> None:
+    """Launch the FR13 accepted-path replay (the durable-state publish).
+
+    Replaces the legacy all-rows publish + next-step ssm remap under
+    FR13_REPLAY_ROUTE: replays root + accepted path from the activation ring
+    and writes post-step states to bank LINEAR columns (and always column 0,
+    covering the zero-accept path). All inputs must be persistent
+    preallocated buffers (graph-stable addresses); per-step pinned scratch is
+    the gate-4 failure mode and is banned here.
+    """
+    if num_spec_decodes <= 0:
+        return
+    if state_bank.ndim != 4:
+        raise ValueError(
+            f"state bank must be (rows, num_vh, dim_v, dim_k), got {tuple(state_bank.shape)}"
+        )
+    bank_rows, num_vh, dim_v, dim_k = state_bank.shape
+    if state_bank.dtype != torch.float32:
+        raise ValueError(
+            f"FR13 replay requires an fp32 GDN state bank, got {state_bank.dtype}"
+        )
+    if (
+        state_bank.stride(3) != 1
+        or state_bank.stride(2) != dim_k
+        or state_bank.stride(1) != dim_v * dim_k
+    ):
+        raise ValueError("state bank payload must be row-contiguous")
+    if k_ring.ndim != 4 or v_ring.ndim != 4 or a_ring.ndim != 3 or b_ring.ndim != 3:
+        raise ValueError(
+            "activation ring shapes must be k(B,N,KH,DK)/v(B,N,VH,DV)/a,b(B,N,VH), got "
+            f"k={tuple(k_ring.shape)} v={tuple(v_ring.shape)} "
+            f"a={tuple(a_ring.shape)} b={tuple(b_ring.shape)}"
+        )
+    ring_bs, n_pad, num_kh, ring_dim_k = k_ring.shape
+    if n_pad > 16 or n_pad & (n_pad - 1):
+        raise ValueError(f"ring n_pad must be a power of two <=16, got {n_pad}")
+    if ring_dim_k != dim_k:
+        raise ValueError(f"ring k dim {ring_dim_k} != bank dim_k {dim_k}")
+    if v_ring.shape != (ring_bs, n_pad, num_vh, dim_v):
+        raise ValueError(
+            f"v ring shape {tuple(v_ring.shape)} != {(ring_bs, n_pad, num_vh, dim_v)}"
+        )
+    if a_ring.shape != (ring_bs, n_pad, num_vh) or b_ring.shape != (ring_bs, n_pad, num_vh):
+        raise ValueError(
+            f"a/b ring shapes must be {(ring_bs, n_pad, num_vh)}, got "
+            f"{tuple(a_ring.shape)}/{tuple(b_ring.shape)}"
+        )
+    if not (
+        k_ring.is_contiguous()
+        and v_ring.is_contiguous()
+        and a_ring.is_contiguous()
+        and b_ring.is_contiguous()
+    ):
+        raise ValueError("activation rings must be contiguous")
+    if num_vh % num_kh != 0:
+        raise ValueError(f"value heads must be a multiple of k heads, got {num_vh}/{num_kh}")
+    if ring_bs < num_spec_decodes:
+        raise ValueError(
+            f"ring batch {ring_bs} < num_spec_decodes {num_spec_decodes}"
+        )
+    if spec_state_indices.ndim != 2 or spec_state_indices.shape[0] < num_spec_decodes:
+        raise ValueError(
+            f"spec_state_indices must be 2D covering {num_spec_decodes} rows, "
+            f"got {tuple(spec_state_indices.shape)}"
+        )
+    spec_cols = int(spec_state_indices.shape[1])
+    if accepted_paths.ndim != 2 or accepted_paths.shape[0] < num_spec_decodes:
+        raise ValueError(
+            f"accepted_paths must be 2D covering {num_spec_decodes} rows, "
+            f"got {tuple(accepted_paths.shape)}"
+        )
+    path_cols = int(accepted_paths.shape[1])
+    if path_cols > spec_cols:
+        raise ValueError(
+            f"path cols {path_cols} exceed spec cols {spec_cols}; linear publish "
+            "columns must be valid spec columns"
+        )
+    if prev_lens.numel() < num_spec_decodes or accepted_lens.numel() < num_spec_decodes:
+        raise ValueError(
+            "prev_lens/accepted_lens must cover num_spec_decodes="
+            f"{num_spec_decodes}, got {prev_lens.numel()}/{accepted_lens.numel()}"
+        )
+    if A_log.numel() < num_vh or dt_bias.numel() < num_vh:
+        raise ValueError(
+            f"A_log/dt_bias must cover {num_vh} value heads, got "
+            f"{A_log.numel()}/{dt_bias.numel()}"
+        )
+    grid = (int(num_spec_decodes), num_vh, triton.cdiv(dim_v, BV))
+    _tree_gdn_replay_kernel[grid](
+        k_ring,
+        v_ring,
+        a_ring,
+        b_ring,
+        A_log,
+        dt_bias,
+        state_bank,
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        prev_lens,
+        NUM_KH=num_kh,
+        NUM_VH=num_vh,
+        DIM_K=dim_k,
+        DIM_V=dim_v,
+        BLOCK_V=BV,
+        N_PAD=n_pad,
+        PATH_COLS=path_cols,
+        SPEC_COLS=spec_cols,
+        BANK_STRIDE=state_bank.stride(0),
+        RING_B_STRIDE_K=k_ring.stride(0),
+        RING_N_STRIDE_K=k_ring.stride(1),
+        RING_B_STRIDE_V=v_ring.stride(0),
+        RING_N_STRIDE_V=v_ring.stride(1),
+        RING_B_STRIDE_AB=a_ring.stride(0),
+        RING_N_STRIDE_AB=a_ring.stride(1),
+        OUTPUT_SCALE=output_scale,
+        USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+        RAW_GATING=True,
+        num_warps=8,
+    )
+
 
 def launch_tree_gdn(
     q: torch.Tensor,
@@ -503,7 +864,8 @@ def launch_tree_gdn(
     raw_b: torch.Tensor | None = None,
     A_log: torch.Tensor | None = None,
     dt_bias: torch.Tensor | None = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
+    store_node_states: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
     """Launch the FR10 dense tree verifier.
 
     For CUDA graph capture, pass preallocated masks, output, and state buffers.
@@ -533,6 +895,7 @@ def launch_tree_gdn(
         raw_b=raw_b,
         A_log=A_log,
         dt_bias=dt_bias,
+        store_node_states=store_node_states,
     )
 
 
@@ -563,8 +926,15 @@ def launch_tree_gdn_prepared(
     raw_b: torch.Tensor | None = None,
     A_log: torch.Tensor | None = None,
     dt_bias: torch.Tensor | None = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Launch with precomputed graph-safe tree descriptors."""
+    store_node_states: bool = True,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    """Launch with precomputed graph-safe tree descriptors.
+
+    store_node_states=False (FR13_REPLAY_ROUTE) compiles the scan with the
+    per-node HBM state export elided and skips the scratch state allocation;
+    the durable accepted states are produced by launch_tree_gdn_replay at the
+    committer instead. Returns (out, None) in that mode.
+    """
     if n_actual <= 0 or n_actual > n_pad:
         raise ValueError(f"invalid tree node counts n_actual={n_actual}, n_pad={n_pad}")
     if n_pad > 16 or n_pad & (n_pad - 1):
@@ -668,7 +1038,18 @@ def launch_tree_gdn_prepared(
         raise ValueError(
             f"out must be at least ({n_actual}, {num_vh}, {dim_v}), got {tuple(out.shape)}"
         )
-    if state is None:
+    if not store_node_states:
+        # FR13_REPLAY_ROUTE: the per-node state export is compiled out, so do
+        # NOT allocate the 201.3MB/layer scratch (the capture-blocking
+        # alloc). A caller passing a state buffer while disabling the store
+        # is a wiring bug -- fail loud.
+        if state is not None:
+            raise ValueError(
+                "state buffer provided but store_node_states=False; the FR13 "
+                "replay route must not stage per-node states"
+            )
+        state = strict_mask  # dummy pointer; no store reaches it
+    elif state is None:
         state = torch.empty((n_pad, num_vh, dim_v, dim_k), device=q.device, dtype=torch.float32)
     elif state.shape[0] < n_actual or state.shape[1:] != (num_vh, dim_v, dim_k):
         raise ValueError(
@@ -710,6 +1091,9 @@ def launch_tree_gdn_prepared(
         H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
         RAW_GATING=raw_gating,
         COUNT_INVOCATION=count_invocation,
+        STORE_NODE_STATES=store_node_states,
         num_warps=8,
     )
+    if not store_node_states:
+        return out, None
     return out, state

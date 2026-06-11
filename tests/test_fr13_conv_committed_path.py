@@ -261,7 +261,25 @@ def test_patch_text_conv_committed_path_wiring() -> None:
     assert 'os.environ.get("FR13_CONV_COMMITTED_PATH", "1") == "1"' in text
     assert "gather_committed_path_conv_prior, launch_tree_gdn_prepared" in text
     gather_call = text.index(") = gather_committed_path_conv_prior(")
-    remap_call = text.index("launch_tree_state_linear_remap(\n                        ssm_state=ssm_state,")
+    # Co-updated on the fr13-replay-route rebase (gate-transfer matrix Part
+    # 3.1 "text-assertion suites" rider), then again for the page-safe conv
+    # remap (boundary-trace root cause): FR13_REPLAY_ROUTE=1 routes the conv
+    # half through replay_conv_state_linear_remap (torch ops, copies ONLY the
+    # conv view's logical elements -- the Triton remap's stride(0) extent
+    # copies the whole shared mamba page and clobbers the replay's linear ssm
+    # columns); the default OFF path keeps the legacy whole-page launch with
+    # ssm_state passed verbatim. The conv half runs either way.
+    remap_call = text.index(
+        "if os.environ.get(\"FR13_REPLAY_ROUTE\", \"0\") == \"1\":\n"
+        "                        replay_conv_state_linear_remap(\n"
+        "                            conv_state=conv_state,"
+    )
+    assert (
+        "else:\n"
+        "                        launch_tree_state_linear_remap(\n"
+        "                            ssm_state=ssm_state,\n"
+        "                            conv_state=conv_state,"
+    ) in text
     # The committed-path snapshot MUST happen before the in-place remap
     # mutates the bank (node-indexed layout is destroyed for cols < acc).
     assert gather_call < remap_call
@@ -271,9 +289,9 @@ def test_patch_text_conv_committed_path_wiring() -> None:
     assert '"committed_path_node"' in text
     assert '"native_tail_pre_remap"' in text
     assert '"prior_read_mode": _fr10_prior_read_mode,' in text
-    # The ssm/h0 handoff machinery is untouched (m1 seam 2 belongs to the
-    # replay route): the remap still covers ssm_state and the h0 read keeps
-    # the accepted-column convention.
+    # The ssm/h0 handoff machinery is untouched at flag-OFF (m1 seam 2
+    # belongs to the replay route): the default remap still covers ssm_state
+    # and the h0 read keeps the accepted-column convention.
     assert "h0_num_accepted_tokens=_fr10_accepted_lens_tensor" in text
     assert "h0_use_accepted_column=True" in text
 
