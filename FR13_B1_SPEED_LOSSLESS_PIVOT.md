@@ -8,9 +8,11 @@ Stop the current B=4 chase-down. B=4 serving is no longer the blocker; Step 3
 showed a real quality deficit and a large per-forward speed deficit. The active
 order is now:
 
-1. Prove or fix B=1 speed + lossless.
-2. Only after B=1 is lossless and near-native in forward cost, return to B=4
-   lossless and superset acceptance.
+1. Prove or fix B=1 strong lossless and speed, with accept/event as the
+   required superset consequence check.
+2. Only after B=1 is strong-lossless, near-native in forward cost, and
+   measured at least native MTP-5 on accept/event, return to B=4 lossless and
+   superset acceptance.
 
 The speed target is effectively native parity. A tree/native forward ratio near
 `1.0x` is the objective; a merely-sub-`1.1x` result is not enough unless the
@@ -47,6 +49,11 @@ optimizing the wrong surface.
 - Superset claim: because the tree contains the native MTP spine plus branches,
   a correct verifier should match native-spine quality and accept at least
   native MTP-5, with branches adding opportunity.
+- B=1 consequence check: under the strong FR13 lossless preconditions, superset
+  accept/event should follow. The B=1 tree must therefore measure at least the
+  matched native MTP-5 accept/event before we return to B=4. The current clean
+  B=1 caterpillar row (`2.1515` vs native `3.1613`) is a hard fail and means a
+  lossless/superset precondition is still broken or unproven.
 
 ## Banked B=1 Facts To Reuse
 
@@ -138,8 +145,12 @@ Pass bar for moving past B=1:
 - No known B=1 lossless-class violation remains under the historical S1/S2
   bar, with temp-0.6 distribution inside the historical floor once greedy is
   clean.
+- Tree accept/event must be at least matched native MTP-5 on the B=1 workload
+  as the measured consequence of the strong-lossless/superset proof; the
+  intended result is tree > native, with branches adding opportunity rather
+  than reducing acceptance.
 - Tree/native per-forward ratio is near `1.0x`; do not accept a `1.1x` class
   result as good enough without an explicit end-to-end break-even calculation.
-- Accept/event is reported against native MTP-5 and S3 is chased if it still
-  blocks the superset/speed math, but accept/event alone is not a lossless
-  proof.
+- Accept/event alone is not a lossless proof. Below-native accept/event is a
+  theorem-check failure for the current implementation and blocks moving back
+  to B=4.
