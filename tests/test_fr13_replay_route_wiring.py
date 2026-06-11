@@ -300,18 +300,40 @@ def test_patcher_committer_replay_launch_in_both_committers() -> None:
 def test_patcher_remap_keeps_conv_half_and_drops_ssm_half_on_flag() -> None:
     text = PATCHER.read_text()
 
+    # FR13_REPLAY_PAGE_SAFE_CONV_REMAP (boundary-trace root cause): under the
+    # flag the conv half must run through the page-safe torch remap (conv and
+    # ssm are as_strided views over the SAME mamba page; the Triton remap
+    # copies stride(0) elements per row = the whole page, clobbering the
+    # replay's just-published linear ssm columns). No ssm arg exists on the
+    # page-safe path at all; flag OFF keeps the legacy whole-page launch with
+    # ssm_state passed verbatim.
     needle = (
-        "                    launch_tree_state_linear_remap(\n"
-        "                        ssm_state=(\n"
-        "                            None\n"
-        '                            if os.environ.get("FR13_REPLAY_ROUTE", "0") == "1"\n'
-        "                            else ssm_state\n"
-        "                        ),\n"
-        "                        conv_state=conv_state,"
+        '                    if os.environ.get("FR13_REPLAY_ROUTE", "0") == "1":\n'
+        "                        replay_conv_state_linear_remap(\n"
+        "                            conv_state=conv_state,\n"
+        "                            spec_state_indices=spec_state_indices_tensor,\n"
+        "                            accepted_paths=_fr10_accepted_paths_tensor,\n"
+        "                            num_accepted_tokens=_fr10_accepted_lens_tensor,\n"
+        "                            num_spec_decodes=int(attn_metadata.num_spec_decodes),\n"
+        "                            max_path_len=int(spec_state_indices_tensor.size(-1)),\n"
+        "                        )\n"
+        "                    else:\n"
+        "                        launch_tree_state_linear_remap(\n"
+        "                            ssm_state=ssm_state,\n"
+        "                            conv_state=conv_state,"
     )
     assert needle in text
+    # The page-safe helper must never receive an ssm bank handle.
+    assert "replay_conv_state_linear_remap(\n                            ssm_state" not in text
+    # The helper import is injected alongside the kernel imports.
+    assert (
+        "from lumo_flywheel_serving.fr13_replay_conv_remap import "
+        "replay_conv_state_linear_remap" in text
+    )
     # The conv carrier rationale is documented at the call site.
     assert "conv-prior-window carrier" in text
+    # The page-sharing root cause is documented at the call site.
+    assert "FR13_REPLAY_PAGE_SAFE_CONV_REMAP" in text
 
 
 def test_replay_route_fragments_parse_and_everything_compiles() -> None:

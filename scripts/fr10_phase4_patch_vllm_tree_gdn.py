@@ -450,6 +450,7 @@ def _patch_gdn_linear() -> bool:
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
+            "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
@@ -992,7 +993,8 @@ def _patch_gdn_linear() -> bool:
                         # Under FR13_REPLAY_ROUTE=1 this snapshot MUST still
                         # run: it is conv-bank-only (node-indexed, pre-remap)
                         # and the conv carrier is untouched by the replay
-                        # route (only the ssm remap half is deleted below).
+                        # route (the remap below becomes the page-safe
+                        # conv-only torch remap; the ssm half is dead).
                         (
                             _fr13_committed_read_cols,
                             _fr13_committed_bank_rows,
@@ -1011,19 +1013,43 @@ def _patch_gdn_linear() -> bool:
                     # flag). The conv half MUST stay: it is the FR13
                     # conv-prior-window carrier and the conv spec branch
                     # still publishes node columns.
-                    launch_tree_state_linear_remap(
-                        ssm_state=(
-                            None
-                            if os.environ.get("FR13_REPLAY_ROUTE", "0") == "1"
-                            else ssm_state
-                        ),
-                        conv_state=conv_state,
-                        spec_state_indices=spec_state_indices_tensor,
-                        accepted_paths=_fr10_accepted_paths_tensor,
-                        num_accepted_tokens=_fr10_accepted_lens_tensor,
-                        num_spec_decodes=int(attn_metadata.num_spec_decodes),
-                        max_path_len=int(spec_state_indices_tensor.size(-1)),
-                    )
+                    #
+                    # FR13_REPLAY_PAGE_SAFE_CONV_REMAP (boundary-trace root
+                    # cause, 2026-06-10): conv (kv[0]) and ssm (kv[1]) are
+                    # as_strided views over the SAME mamba page with
+                    # stride(0) == num_element_per_page, and the Triton remap
+                    # copies state.stride(0) elements per row -- a "conv-only"
+                    # launch therefore copies the WHOLE page and drags
+                    # never-written node-column ssm bytes over the replay's
+                    # just-published linear-column ssm states (live byte
+                    # prediction B.window[c] == A.post.window[node path[c]]
+                    # matched 581/581 on both probed layers). Under the flag
+                    # the conv half runs through the page-safe torch remap
+                    # (identical permutation, copies ONLY the conv view's
+                    # logical elements; frozen kernel untouched). Flag OFF
+                    # keeps the legacy whole-page launch verbatim: the legacy
+                    # all-rows ssm publish refreshes every window column each
+                    # event, making the page-wide copy semantically identical
+                    # to the intended ssm remap there.
+                    if os.environ.get("FR13_REPLAY_ROUTE", "0") == "1":
+                        replay_conv_state_linear_remap(
+                            conv_state=conv_state,
+                            spec_state_indices=spec_state_indices_tensor,
+                            accepted_paths=_fr10_accepted_paths_tensor,
+                            num_accepted_tokens=_fr10_accepted_lens_tensor,
+                            num_spec_decodes=int(attn_metadata.num_spec_decodes),
+                            max_path_len=int(spec_state_indices_tensor.size(-1)),
+                        )
+                    else:
+                        launch_tree_state_linear_remap(
+                            ssm_state=ssm_state,
+                            conv_state=conv_state,
+                            spec_state_indices=spec_state_indices_tensor,
+                            accepted_paths=_fr10_accepted_paths_tensor,
+                            num_accepted_tokens=_fr10_accepted_lens_tensor,
+                            num_spec_decodes=int(attn_metadata.num_spec_decodes),
+                            max_path_len=int(spec_state_indices_tensor.size(-1)),
+                        )
                 except Exception as _fr10_seed_conv_exc:
                     if (
                         _fr10_tree_conv_expected

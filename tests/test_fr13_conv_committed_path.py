@@ -262,18 +262,24 @@ def test_patch_text_conv_committed_path_wiring() -> None:
     assert "gather_committed_path_conv_prior, launch_tree_gdn_prepared" in text
     gather_call = text.index(") = gather_committed_path_conv_prior(")
     # Co-updated on the fr13-replay-route rebase (gate-transfer matrix Part
-    # 3.1 "text-assertion suites" rider): the remap's ssm arg is now
-    # flag-gated -- FR13_REPLAY_ROUTE=1 passes None (the committer replay
-    # already published LINEAR ssm columns), the default OFF path still
-    # passes ssm_state verbatim. The conv half is unconditional either way.
+    # 3.1 "text-assertion suites" rider), then again for the page-safe conv
+    # remap (boundary-trace root cause): FR13_REPLAY_ROUTE=1 routes the conv
+    # half through replay_conv_state_linear_remap (torch ops, copies ONLY the
+    # conv view's logical elements -- the Triton remap's stride(0) extent
+    # copies the whole shared mamba page and clobbers the replay's linear ssm
+    # columns); the default OFF path keeps the legacy whole-page launch with
+    # ssm_state passed verbatim. The conv half runs either way.
     remap_call = text.index(
-        "launch_tree_state_linear_remap(\n"
-        "                        ssm_state=(\n"
-        "                            None\n"
-        "                            if os.environ.get(\"FR13_REPLAY_ROUTE\", \"0\") == \"1\"\n"
-        "                            else ssm_state\n"
-        "                        ),"
+        "if os.environ.get(\"FR13_REPLAY_ROUTE\", \"0\") == \"1\":\n"
+        "                        replay_conv_state_linear_remap(\n"
+        "                            conv_state=conv_state,"
     )
+    assert (
+        "else:\n"
+        "                        launch_tree_state_linear_remap(\n"
+        "                            ssm_state=ssm_state,\n"
+        "                            conv_state=conv_state,"
+    ) in text
     # The committed-path snapshot MUST happen before the in-place remap
     # mutates the bank (node-indexed layout is destroyed for cols < acc).
     assert gather_call < remap_call
