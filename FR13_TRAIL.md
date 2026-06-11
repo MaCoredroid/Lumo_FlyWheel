@@ -2,6 +2,13 @@
 
 **GOAL:** B=4, CUDA-captured, SWE-Verified: e2e lossless (within native self-floor + per-depth argmax + temp-0.6 distributional) + superset accept ≥ same-shape native + wall TPS ≥ native E5. Prototype purpose: drafter-agnostic fast+lossless tree verifier for MTP⊕suffix fusion.
 
+**Quality/lossless invariant (user 2026-06-11):**
+- Ground truth quality: pure target-model decode, no MTP.
+- Deployed reference: native MTP-5, which verifies a single spine.
+- Current object: a 9-node caterpillar tree verifier from the MTP head, with one branch off each spine position.
+- Lossless claim: the tree verifier/committer preserves the underlying model's output distribution, not merely that it serves or accepts more tokens.
+- Superset claim: because the tree contains the native MTP spine plus branches, a correct verifier should match native-spine quality and accept at least native MTP-5, with branches adding opportunity.
+
 **Monitor contract (user 2026-06-11):** keep this trail on track autonomously; escalate to the user ONLY when (a) the trail goes off-track AND the monitor cannot decide as a researcher, (b) a step's pass/fail close, (c) the marked USER-DECISION points, (d) lineage-table factual changes.
 
 | # | step | success criterion | owner of the call | status |

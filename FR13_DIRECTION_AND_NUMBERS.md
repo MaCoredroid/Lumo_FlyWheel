@@ -8,6 +8,13 @@ Contract: **workflows are the worker** (codex stood down); Claude red-teams/bind
 - **The speed target is the depth-matched SUPERSET claim**: the 9-node caterpillar must beat the **5-node top spine** (same drafter, same depth — native E5-class 3.076/per-shape). Beating the deployed K=9 LINEAR chain was **never the goal** (that comparison informs drafter design later; suffix decoding is what buys depth/branches in production).
 - Therefore "tree shape can't beat K=9 chain at equal budget" is NOT a blocker — tree shapes get rich when suffix decoding arrives; what must be true NOW is: verify a tree **fast** (per-forward tax → ~native, Half-2) and **lossless** (Half-1), for arbitrary trees.
 
+## QUALITY REFERENCE INVARIANT (user, 2026-06-11)
+- **Ground truth quality:** pure target-model decode, no MTP.
+- **Deployed reference:** native MTP-5, which verifies a single spine.
+- **Current object:** a 9-node caterpillar tree verifier from the MTP head, with one branch off each spine position.
+- **Lossless claim:** the tree verifier/committer preserves the underlying model's output distribution, not merely that it serves or accepts more tokens.
+- **Superset claim:** because the tree contains the native MTP spine plus branches, a correct verifier should match native-spine quality and accept at least native MTP-5, with branches adding opportunity.
+
 ## LOSSLESS, PRECISELY (the nuance — binding definition from prior decisions + memory)
 - **B=1, greedy: byte-exact, PROVEN.** Input → all 64 layers → final logits = 0.0, spine AND branch; branch correctness judged vs the **native-on-the-branch's-path-to-root oracle** (SpecInfer Def 4.1 / STree Eq.4-6) — native MTP has no branch counterpart, so the oracle is the reference. Committer is lossless-by-design at temp-0 (longest-LCP = the unique verify-argmax chain = native greedy).
 - **The e2e gate is TOKEN-LEVEL, not hidden-state max_abs**: per-depth **argmax match** (greedy) — hidden drift below the native top1-top2 margin cannot flip a token (math-correct ≠ bit-exact, but the bar is the token). Per-node **marginal**, not joint (Traversal 2505.12398).
