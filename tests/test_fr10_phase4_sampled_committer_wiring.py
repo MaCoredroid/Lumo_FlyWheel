@@ -68,6 +68,10 @@ def test_phase4_mamba_stock_copies_use_tree_accepted_bias() -> None:
     assert "tree_mamba_copy_bias" in text
     assert "FR13_TREE_MAMBA_CONV_NODE_COPY" in text
     assert "src_state = state[block_ids[src_block_pos]]" in text
+    assert "_LUMO_FA_SPEC_ROW_REQ_IDS" in text
+    assert "missing request-keyed replay row ids" in text
+    assert "missing committer rows for staged" in text
+    assert "_fr13_replay_gdn_node_paths" in text
 
 
 def test_phase4_patcher_exports_src_native_handoff_payload() -> None:

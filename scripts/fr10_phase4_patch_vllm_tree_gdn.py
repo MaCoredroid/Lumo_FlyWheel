@@ -4425,9 +4425,75 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 raise RuntimeError(
                     'FR13_REPLAY_ROUTE: no registered GDN replay layers'
                 )
-            _fr13_replay_rows = len(accepted_gdn_node_paths)
+            _fr13_row_req_ids = getattr(
+                _lumo_tree_commit_gdn, '_LUMO_FA_SAMPLER_ROW_REQ_IDS', None
+            )
+            _fr13_spec_req_ids = getattr(
+                _lumo_tree_commit_gdn, '_LUMO_FA_SPEC_ROW_REQ_IDS', None
+            )
+            if _fr13_row_req_ids is None or _fr13_spec_req_ids is None:
+                raise RuntimeError(
+                    'FR13_REPLAY_ROUTE: missing request-keyed replay row ids'
+                )
+            if len(_fr13_row_req_ids) < len(accepted_gdn_node_paths):
+                raise RuntimeError(
+                    'FR13_REPLAY_ROUTE sampler-row request ids shorter than '
+                    'committer rows: '
+                    f'{len(_fr13_row_req_ids)} < {len(accepted_gdn_node_paths)}'
+                )
+            _fr13_idx_by_req = {
+                str(_fr13_rid): int(_fr13_i)
+                for _fr13_i, _fr13_rid in enumerate(_fr13_row_req_ids)
+            }
+            _fr13_replay_gdn_node_paths = []
+            _fr13_replay_lens = []
+            _fr13_missing_replay_req_ids = []
+            for _fr13_rid in _fr13_spec_req_ids:
+                _fr13_src_i = _fr13_idx_by_req.get(str(_fr13_rid))
+                if _fr13_src_i is None or _fr13_src_i >= len(accepted_gdn_node_paths):
+                    _fr13_missing_replay_req_ids.append(str(_fr13_rid))
+                    continue
+                _fr13_replay_gdn_node_paths.append(
+                    [int(_x) for _x in accepted_gdn_node_paths[_fr13_src_i]]
+                )
+                _fr13_replay_lens.append(int(accepted_lens[_fr13_src_i]))
+            if _fr13_missing_replay_req_ids:
+                raise RuntimeError(
+                    'FR13_REPLAY_ROUTE: missing committer rows for staged '
+                    'spec req ids: ' + repr(_fr13_missing_replay_req_ids[:8])
+                )
+            _fr13_replay_rows = len(_fr13_replay_gdn_node_paths)
             _fr13_bnd_on = _lumo_tree_commit_gdn._fr13_boundary_on()
             if _fr13_replay_rows:
+                if int(_accepted_path_buf.size(0)) < _fr13_replay_rows:
+                    raise RuntimeError(
+                        'FR13_REPLAY_ROUTE accepted-path buffer too small '
+                        'for compact staged replay rows'
+                    )
+                _fr13_replay_path_rows = []
+                for _fr13_path in _fr13_replay_gdn_node_paths:
+                    _fr13_row = [0 for _ in range(_accepted_path_cols)]
+                    for _fr13_pos, _fr13_node_id in enumerate(
+                        _fr13_path[:_accepted_path_cols]
+                    ):
+                        _fr13_row[_fr13_pos] = int(_fr13_node_id)
+                    _fr13_replay_path_rows.append(_fr13_row)
+                _accepted_path_buf[
+                    :_fr13_replay_rows, :_accepted_path_cols
+                ].copy_(
+                    torch.tensor(
+                        _fr13_replay_path_rows,
+                        dtype=_accepted_path_buf.dtype,
+                        device=_accepted_path_buf.device,
+                    )
+                )
+                _accepted_lens_buf[:_fr13_replay_rows].copy_(
+                    torch.tensor(
+                        _fr13_replay_lens,
+                        dtype=_accepted_lens_buf.dtype,
+                        device=_accepted_lens_buf.device,
+                    )
+                )
                 if _fr13_bnd_on:
                     # Shared boundary event counter: increment ONCE per commit
                     # event; every tap record between commit k and commit k+1
@@ -4495,7 +4561,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                         _fr13_boundary_replay_post(
                             _lumo_tree_commit_gdn, _fr13_prefix, _fr13_layer,
                             _fr13_ssm_bank, _fr13_replay_rows,
-                            accepted_gdn_node_paths, accepted_lens,
+                            _fr13_replay_gdn_node_paths, _fr13_replay_lens,
                             _fr13_bnd_pre,
                         )
     except Exception as _fr10_tree_lcp_log_exc:
@@ -4909,9 +4975,75 @@ def _lumo_tree_canonical_multidraft_sample(
                 raise RuntimeError(
                     'FR13_REPLAY_ROUTE: no registered GDN replay layers'
                 )
-            _fr13_replay_rows = len(accepted_gdn_node_paths)
+            _fr13_row_req_ids = getattr(
+                _lumo_tree_commit_gdn, '_LUMO_FA_SAMPLER_ROW_REQ_IDS', None
+            )
+            _fr13_spec_req_ids = getattr(
+                _lumo_tree_commit_gdn, '_LUMO_FA_SPEC_ROW_REQ_IDS', None
+            )
+            if _fr13_row_req_ids is None or _fr13_spec_req_ids is None:
+                raise RuntimeError(
+                    'FR13_REPLAY_ROUTE: missing request-keyed replay row ids'
+                )
+            if len(_fr13_row_req_ids) < len(accepted_gdn_node_paths):
+                raise RuntimeError(
+                    'FR13_REPLAY_ROUTE sampler-row request ids shorter than '
+                    'committer rows: '
+                    f'{len(_fr13_row_req_ids)} < {len(accepted_gdn_node_paths)}'
+                )
+            _fr13_idx_by_req = {
+                str(_fr13_rid): int(_fr13_i)
+                for _fr13_i, _fr13_rid in enumerate(_fr13_row_req_ids)
+            }
+            _fr13_replay_gdn_node_paths = []
+            _fr13_replay_lens = []
+            _fr13_missing_replay_req_ids = []
+            for _fr13_rid in _fr13_spec_req_ids:
+                _fr13_src_i = _fr13_idx_by_req.get(str(_fr13_rid))
+                if _fr13_src_i is None or _fr13_src_i >= len(accepted_gdn_node_paths):
+                    _fr13_missing_replay_req_ids.append(str(_fr13_rid))
+                    continue
+                _fr13_replay_gdn_node_paths.append(
+                    [int(_x) for _x in accepted_gdn_node_paths[_fr13_src_i]]
+                )
+                _fr13_replay_lens.append(int(accepted_lens[_fr13_src_i]))
+            if _fr13_missing_replay_req_ids:
+                raise RuntimeError(
+                    'FR13_REPLAY_ROUTE: missing committer rows for staged '
+                    'spec req ids: ' + repr(_fr13_missing_replay_req_ids[:8])
+                )
+            _fr13_replay_rows = len(_fr13_replay_gdn_node_paths)
             _fr13_bnd_on = _lumo_tree_commit_gdn._fr13_boundary_on()
             if _fr13_replay_rows:
+                if int(_accepted_path_buf.size(0)) < _fr13_replay_rows:
+                    raise RuntimeError(
+                        'FR13_REPLAY_ROUTE accepted-path buffer too small '
+                        'for compact staged replay rows'
+                    )
+                _fr13_replay_path_rows = []
+                for _fr13_path in _fr13_replay_gdn_node_paths:
+                    _fr13_row = [0 for _ in range(_accepted_path_cols)]
+                    for _fr13_pos, _fr13_node_id in enumerate(
+                        _fr13_path[:_accepted_path_cols]
+                    ):
+                        _fr13_row[_fr13_pos] = int(_fr13_node_id)
+                    _fr13_replay_path_rows.append(_fr13_row)
+                _accepted_path_buf[
+                    :_fr13_replay_rows, :_accepted_path_cols
+                ].copy_(
+                    torch.tensor(
+                        _fr13_replay_path_rows,
+                        dtype=_accepted_path_buf.dtype,
+                        device=_accepted_path_buf.device,
+                    )
+                )
+                _accepted_lens_buf[:_fr13_replay_rows].copy_(
+                    torch.tensor(
+                        _fr13_replay_lens,
+                        dtype=_accepted_lens_buf.dtype,
+                        device=_accepted_lens_buf.device,
+                    )
+                )
                 if _fr13_bnd_on:
                     # Shared boundary event counter: increment ONCE per commit
                     # event; every tap record between commit k and commit k+1
@@ -4979,7 +5111,7 @@ def _lumo_tree_canonical_multidraft_sample(
                         _fr13_boundary_replay_post(
                             _lumo_tree_commit_gdn, _fr13_prefix, _fr13_layer,
                             _fr13_ssm_bank, _fr13_replay_rows,
-                            accepted_gdn_node_paths, accepted_lens,
+                            _fr13_replay_gdn_node_paths, _fr13_replay_lens,
                             _fr13_bnd_pre,
                         )
     except Exception as _fr10_commit_globals_exc:
@@ -6208,6 +6340,7 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "                            for _fr13_rk_i in range(num_reqs)\n"
         "                            if int(num_decode_draft_tokens[_fr13_rk_i]) >= 0\n"
         "                        ]\n"
+        "                        _fr13_rk_gdn._LUMO_FA_SPEC_ROW_REQ_IDS = _fr13_rk_spec_rids\n"
         "                        if _fr13_rk_spec_rids:\n"
         "                            if len(_fr13_rk_spec_rids) > int(_fr13_rk_paths.size(0)):\n"
         "                                raise RuntimeError(\n"
@@ -6261,6 +6394,289 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
     if anchor not in text:
         raise RuntimeError("gpu_model_runner num_decode_draft_tokens anchor not found")
     text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_replay_draft_reqkey() -> bool:
+    """FR13_REPLAY_ROUTE: repair async first-spec sampled/draft handoff.
+
+    Async scheduling writes -1 spec-token placeholders into scheduler output
+    and normally relies on _prepare_input_ids to scatter the prior drafter's
+    GPU tensor over those slots. A request that just finished prefill can have
+    valid sampled/drafter output from the previous step, but no
+    prev_req_id_to_index entry because it was not a prior decode row. In a
+    mixed B=4 batch that leaves first-spec-step placeholders in input_ids until
+    the embedding gather asserts. This request-keyed repair scatters the
+    actual prior sampled/drafter rows for only those first-spec rows, and fails
+    before embedding if a producer row is absent or still contains placeholders.
+    """
+
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_REPLAY_DRAFT_REQKEY"
+    if sentinel in text:
+        return False
+
+    propose_anchor = (
+        "                self._draft_token_ids = self.propose_draft_token_ids(\n"
+        "                    scheduler_output,\n"
+        "                    sampled_token_ids,\n"
+        "                    self.input_batch.sampling_metadata,\n"
+        "                    hidden_states,\n"
+        "                    sample_hidden_states,\n"
+        "                    aux_hidden_states,\n"
+        "                    spec_decode_metadata,\n"
+        "                    spec_decode_common_attn_metadata,\n"
+        "                    slot_mappings,\n"
+        "                )\n"
+        "                self._copy_draft_token_ids_to_cpu(scheduler_output)\n"
+    )
+    propose_inject = (
+        "                self._draft_token_ids = self.propose_draft_token_ids(\n"
+        "                    scheduler_output,\n"
+        "                    sampled_token_ids,\n"
+        "                    self.input_batch.sampling_metadata,\n"
+        "                    hidden_states,\n"
+        "                    sample_hidden_states,\n"
+        "                    aux_hidden_states,\n"
+        "                    spec_decode_metadata,\n"
+        "                    spec_decode_common_attn_metadata,\n"
+        "                    slot_mappings,\n"
+        "                )\n"
+        f"                # {sentinel}: remember the row owners for the GPU\n"
+        "                # drafter tensor even when async scheduling skips the\n"
+        "                # CPU DraftTokenIds handoff. First-spec rows after a\n"
+        "                # prefill-completion step need this request-keyed map\n"
+        "                # because they are not present in prev_req_id_to_index.\n"
+        "                try:\n"
+        "                    _fr13_draft_rows = int(\n"
+        "                        self._draft_token_ids.shape[0]\n"
+        "                    ) if torch.is_tensor(self._draft_token_ids) else len(\n"
+        "                        self._draft_token_ids\n"
+        "                    )\n"
+        "                    self._fr13_replay_draft_token_req_ids = [\n"
+        "                        str(_fr13_rid)\n"
+        "                        for _fr13_rid in self.input_batch.req_ids[\n"
+        "                            :_fr13_draft_rows\n"
+        "                        ]\n"
+        "                    ]\n"
+        "                except Exception:\n"
+        "                    self._fr13_replay_draft_token_req_ids = []\n"
+        "                self._copy_draft_token_ids_to_cpu(scheduler_output)\n"
+    )
+    if propose_anchor not in text:
+        raise RuntimeError("FR13 replay draft reqkey propose anchor not found")
+    text = text.replace(propose_anchor, propose_inject, 1)
+
+    sampled_anchor = (
+        "        self.input_batch.prev_sampled_token_ids = next_token_ids.unsqueeze(1)\n"
+    )
+    sampled_inject = sampled_anchor + (
+        f"        # {sentinel}: remember sampled-token row owners for\n"
+        "        # request-keyed first-spec async placeholder repair.\n"
+        "        try:\n"
+        "            _fr13_sample_rows = int(next_token_ids.shape[0])\n"
+        "            self._fr13_replay_prev_sampled_req_ids = [\n"
+        "                str(_fr13_rid)\n"
+        "                for _fr13_rid in self.input_batch.req_ids[:_fr13_sample_rows]\n"
+        "            ]\n"
+        "        except Exception:\n"
+        "            self._fr13_replay_prev_sampled_req_ids = []\n"
+    )
+    if sampled_anchor not in text:
+        raise RuntimeError("FR13 replay draft reqkey sampled anchor not found")
+    text = text.replace(sampled_anchor, sampled_inject, 1)
+
+    no_common_anchor = (
+        "        if num_common_tokens == 0:\n"
+        "            # No requests in common with the previous iteration\n"
+        "            # So input_ids.cpu will have all the input ids.\n"
+        "            return\n"
+    )
+    no_common_inject = (
+        f"        def _fr13_replay_scatter_first_spec_drafts() -> None:\n"
+        f"            # {sentinel}: native async scatter is keyed by\n"
+        "            # prev_req_id_to_index. A prefill-completion row can be\n"
+        "            # first scheduled for spec decode with real drafter output\n"
+        "            # from the prior step but no previous decode-row index.\n"
+        "            if __import__(\"os\").environ.get(\"FR13_REPLAY_ROUTE\", \"1\") != \"1\":\n"
+        "                return\n"
+        "            _fr13_mode = getattr(scheduler_output, \"fr10_decode_mode\", None) or __import__(\"os\").environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
+        "            if _fr13_mode != \"tree_mtp\":\n"
+        "                return\n"
+        "            if self._draft_token_ids is None or not scheduled_spec_tokens:\n"
+        "                return\n"
+        "            if not torch.is_tensor(self._draft_token_ids):\n"
+        "                return\n"
+        "            _fr13_req_ids = getattr(\n"
+        "                self, \"_fr13_replay_draft_token_req_ids\", None\n"
+        "            )\n"
+        "            if not _fr13_req_ids:\n"
+        "                _fr13_req_ids = [\n"
+        "                    str(_fr13_rid)\n"
+        "                    for _fr13_rid in self.input_batch.req_ids[\n"
+        "                        : int(self._draft_token_ids.shape[0])\n"
+        "                    ]\n"
+        "                ]\n"
+        "            _fr13_src_by_req = {\n"
+        "                str(_fr13_rid): int(_fr13_i)\n"
+        "                for _fr13_i, _fr13_rid in enumerate(_fr13_req_ids)\n"
+        "            }\n"
+        "            _fr13_prev_sampled = self.input_batch.prev_sampled_token_ids\n"
+        "            if not torch.is_tensor(_fr13_prev_sampled):\n"
+        "                return\n"
+        "            _fr13_sample_req_ids = getattr(\n"
+        "                self, \"_fr13_replay_prev_sampled_req_ids\", None\n"
+        "            )\n"
+        "            if not _fr13_sample_req_ids:\n"
+        "                _fr13_sample_req_ids = [\n"
+        "                    str(_fr13_rid)\n"
+        "                    for _fr13_rid in self.input_batch.req_ids[\n"
+        "                        : int(_fr13_prev_sampled.shape[0])\n"
+        "                    ]\n"
+        "                ]\n"
+        "            _fr13_sample_src_by_req = {\n"
+        "                str(_fr13_rid): int(_fr13_i)\n"
+        "                for _fr13_i, _fr13_rid in enumerate(_fr13_sample_req_ids)\n"
+        "            }\n"
+        "            _fr13_root_dst = []\n"
+        "            _fr13_root_src = []\n"
+        "            _fr13_flat_dst = []\n"
+        "            _fr13_flat_src = []\n"
+        "            _fr13_missing = []\n"
+        "            _fr13_missing_sample = []\n"
+        "            _fr13_draft_rows = int(self._draft_token_ids.shape[0])\n"
+        "            _fr13_draft_cols = int(self._draft_token_ids.shape[1])\n"
+        "            _fr13_sample_rows = int(_fr13_prev_sampled.shape[0])\n"
+        "            for _fr13_cur_index in range(num_reqs):\n"
+        "                if int(prev_positions[_fr13_cur_index]) >= 0:\n"
+        "                    continue\n"
+        "                _fr13_req_id = self.input_batch.req_ids[_fr13_cur_index]\n"
+        "                _fr13_sched = scheduled_spec_tokens.get(_fr13_req_id, ())\n"
+        "                if not _fr13_sched:\n"
+        "                    continue\n"
+        "                _fr13_sched_vals = [int(_x) for _x in _fr13_sched]\n"
+        "                if not all(_x < 0 for _x in _fr13_sched_vals):\n"
+        "                    continue\n"
+        "                _fr13_draft_len = len(_fr13_sched_vals)\n"
+        "                _fr13_src_row = _fr13_src_by_req.get(str(_fr13_req_id))\n"
+        "                if (\n"
+        "                    _fr13_src_row is None\n"
+        "                    or int(_fr13_src_row) < 0\n"
+        "                    or int(_fr13_src_row) >= _fr13_draft_rows\n"
+        "                    or _fr13_draft_len > _fr13_draft_cols\n"
+        "                ):\n"
+        "                    _fr13_missing.append(str(_fr13_req_id))\n"
+        "                    continue\n"
+        "                _fr13_end = int(cu_num_tokens[_fr13_cur_index].item())\n"
+        "                _fr13_start = _fr13_end - _fr13_draft_len\n"
+        "                _fr13_root_pos = _fr13_start - 1\n"
+        "                _fr13_sample_src_row = _fr13_sample_src_by_req.get(\n"
+        "                    str(_fr13_req_id)\n"
+        "                )\n"
+        "                if (\n"
+        "                    _fr13_sample_src_row is None\n"
+        "                    or int(_fr13_sample_src_row) < 0\n"
+        "                    or int(_fr13_sample_src_row) >= _fr13_sample_rows\n"
+        "                    or _fr13_root_pos < 0\n"
+        "                ):\n"
+        "                    _fr13_missing_sample.append(str(_fr13_req_id))\n"
+        "                    continue\n"
+        "                _fr13_root_dst.append(_fr13_root_pos)\n"
+        "                _fr13_root_src.append(int(_fr13_sample_src_row))\n"
+        "                _fr13_flat_dst.extend(range(_fr13_start, _fr13_end))\n"
+        "                _fr13_src_base = int(_fr13_src_row) * _fr13_draft_cols\n"
+        "                _fr13_flat_src.extend(\n"
+        "                    range(_fr13_src_base, _fr13_src_base + _fr13_draft_len)\n"
+        "                )\n"
+        "            if _fr13_missing:\n"
+        "                raise RuntimeError(\n"
+        "                    \"FR13_REPLAY_ROUTE: missing request-keyed draft rows \"\n"
+        "                    \"for first-spec async placeholders: \"\n"
+        "                    + repr(_fr13_missing[:8])\n"
+        "                )\n"
+        "            if _fr13_missing_sample:\n"
+        "                raise RuntimeError(\n"
+        "                    \"FR13_REPLAY_ROUTE: missing request-keyed sampled \"\n"
+        "                    \"rows for first-spec async placeholders: \"\n"
+        "                    + repr(_fr13_missing_sample[:8])\n"
+        "                )\n"
+        "            if not _fr13_flat_dst:\n"
+        "                return\n"
+        "            _fr13_root_src_index = torch.tensor(\n"
+        "                _fr13_root_src,\n"
+        "                dtype=torch.int64,\n"
+        "                pin_memory=self.pin_memory,\n"
+        "            ).to(self.device, non_blocking=True)\n"
+        "            _fr13_root_values = _fr13_prev_sampled.to(\n"
+        "                device=self.device,\n"
+        "                dtype=torch.int32,\n"
+        "                non_blocking=True,\n"
+        "            )[_fr13_root_src_index, 0]\n"
+        "            if bool(torch.any(_fr13_root_values < 0).item()):\n"
+        "                raise RuntimeError(\n"
+        "                    \"FR13_REPLAY_ROUTE: request-keyed sampled row \"\n"
+        "                    \"still contains async sampled-token placeholders\"\n"
+        "                )\n"
+        "            _fr13_root_dst_index = torch.tensor(\n"
+        "                _fr13_root_dst,\n"
+        "                dtype=torch.int64,\n"
+        "                pin_memory=self.pin_memory,\n"
+        "            ).to(self.device, non_blocking=True)\n"
+        "            self.input_ids.gpu.scatter_(\n"
+        "                dim=0,\n"
+        "                index=_fr13_root_dst_index,\n"
+        "                src=_fr13_root_values,\n"
+        "            )\n"
+        "            _fr13_src_index = torch.tensor(\n"
+        "                _fr13_flat_src,\n"
+        "                dtype=torch.int64,\n"
+        "                pin_memory=self.pin_memory,\n"
+        "            ).to(self.device, non_blocking=True)\n"
+        "            _fr13_repair_values = self._draft_token_ids.to(\n"
+        "                dtype=torch.int32\n"
+        "            ).flatten()[_fr13_src_index]\n"
+        "            if bool(torch.any(_fr13_repair_values < 0).item()):\n"
+        "                raise RuntimeError(\n"
+        "                    \"FR13_REPLAY_ROUTE: request-keyed drafter row \"\n"
+        "                    \"still contains async draft-token placeholders\"\n"
+        "                )\n"
+        "            _fr13_dst_index = torch.tensor(\n"
+        "                _fr13_flat_dst,\n"
+        "                dtype=torch.int64,\n"
+        "                pin_memory=self.pin_memory,\n"
+        "            ).to(self.device, non_blocking=True)\n"
+        "            self.input_ids.gpu.scatter_(\n"
+        "                dim=0,\n"
+        "                index=_fr13_dst_index,\n"
+        "                src=_fr13_repair_values,\n"
+        "            )\n"
+        "\n"
+        "        _fr13_replay_scatter_first_spec_drafts()\n"
+        "        if num_common_tokens == 0:\n"
+        "            # No requests in common with the previous iteration\n"
+        "            # So input_ids.cpu will have all the input ids.\n"
+        "            return\n"
+    )
+    if no_common_anchor not in text:
+        raise RuntimeError("FR13 replay draft reqkey no-common anchor not found")
+    text = text.replace(no_common_anchor, no_common_inject, 1)
+
+    draft_scatter_anchor = (
+        "        self.input_ids.gpu.scatter_(\n"
+        "            dim=0,\n"
+        "            index=draft_tokens_index_tensor,\n"
+        "            src=draft_token_ids.flatten()[prev_draft_token_indices_tensor],\n"
+        "        )\n"
+    )
+    draft_scatter_inject = draft_scatter_anchor + (
+        "\n"
+        "        _fr13_replay_scatter_first_spec_drafts()\n"
+    )
+    if draft_scatter_anchor not in text:
+        raise RuntimeError("FR13 replay draft reqkey draft-scatter anchor not found")
+    text = text.replace(draft_scatter_anchor, draft_scatter_inject, 1)
+
     GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
 
@@ -8898,6 +9314,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_draft_reqkey()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_boundary_tap_d()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),

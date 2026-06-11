@@ -327,6 +327,10 @@ def test_launcher_forwards_fr13_chase_flags() -> None:
 
 def test_patcher_registers_reqkey_step_and_passes_generators() -> None:
     assert "(GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey())" in PATCHER_TEXT
+    assert (
+        "(GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_draft_reqkey())"
+        in PATCHER_TEXT
+    )
     assert 'generators=getattr(sampling_metadata, "generators", None),' in PATCHER_TEXT
     # The sampled committer must accept the per-request generators.
     sampled = _extract_function("_lumo_tree_canonical_multidraft_sample")
@@ -349,6 +353,38 @@ def test_reqkey_patch_applies_to_pristine_model_runner(tmp_path) -> None:
     py_compile.compile(str(target), doraise=True)
     # Idempotent on the sentinel.
     assert module._patch_gpu_model_runner_tree_reqkey() is False
+
+
+@pytest.mark.skipif(not PRISTINE.exists(), reason="pristine vLLM tree not present")
+def test_replay_draft_reqkey_patch_applies_to_pristine_model_runner(tmp_path) -> None:
+    import py_compile
+
+    module = _load_patcher_module()
+    target = tmp_path / "gpu_model_runner.py"
+    target.write_text((PRISTINE / "v1" / "worker" / "gpu_model_runner.py").read_text())
+    module.GPU_MODEL_RUNNER_PATH = target
+    assert module._patch_gpu_model_runner_replay_draft_reqkey() is True
+    py_compile.compile(str(target), doraise=True)
+    text = target.read_text()
+    assert "# FR13_REPLAY_DRAFT_REQKEY" in text
+    assert "_fr13_replay_draft_token_req_ids" in text
+    assert "_fr13_replay_prev_sampled_req_ids" in text
+    assert "_fr13_replay_scatter_first_spec_drafts()" in text
+    assert "prev_req_id_to_index" in text
+    assert "missing request-keyed draft rows" in text
+    assert "missing request-keyed sampled " in text
+    assert "still contains async draft-token placeholders" in text
+    assert "still contains async sampled-token placeholders" in text
+    # The repair must source from the actual drafter tensor, not replace -1
+    # placeholders with a constant token.
+    repair_start = text.index("def _fr13_replay_scatter_first_spec_drafts")
+    repair_end = text.index("        _fr13_replay_scatter_first_spec_drafts()", repair_start)
+    repair_block = text[repair_start:repair_end]
+    assert "self._draft_token_ids.to(" in repair_block
+    assert "_fr13_prev_sampled.to(" in repair_block
+    assert "fill_(0)" not in repair_block
+    # Idempotent on the sentinel.
+    assert module._patch_gpu_model_runner_replay_draft_reqkey() is False
 
 
 @pytest.mark.skipif(not PRISTINE.exists(), reason="pristine vLLM tree not present")
