@@ -83,6 +83,12 @@ FR13_TREE_ATTN_EXP2_SOFTMAX=${FR13_TREE_ATTN_EXP2_SOFTMAX:-1}
 # lm-head read per drafter step, FR13_B1_SPEED_ATTRIBUTION_BIND.md). =0 is
 # the exact legacy double-logits path (the A/B instrument).
 FR13_DRAFTER_SINGLE_LOGITS=${FR13_DRAFTER_SINGLE_LOGITS:-1}
+# FR13_EAGER_PACK (FIX-2, default OFF until the lossless gate passes): pack
+# the committer's eager DtoH/HtoD storm and batch the 48 per-layer replay
+# launches into one (FR13_B1_SPEED_ATTRIBUTION_BIND.md). SEMANTICS-PRESERVING
+# ONLY: no computed value changes, only WHERE/HOW the same ints move. =0 is
+# the exact legacy transport path (the A/B instrument).
+FR13_EAGER_PACK=${FR13_EAGER_PACK:-0}
 ENFORCE_EAGER=${ENFORCE_EAGER:-0}
 LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
 TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
@@ -186,6 +192,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR10_METRICS="$FR10_METRICS" \
   -e FR10_DECODE_MODE_DEFAULT="$FR10_DECODE_MODE_DEFAULT" \
   -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
+  -e FR13_EAGER_PACK="$FR13_EAGER_PACK" \
   -e FR11_TREE_CONV_NATIVE_BF16_TAPS="$FR11_TREE_CONV_NATIVE_BF16_TAPS" \
   -e FR12_TREE_CONV_NATIVE_BF16_TAPS="$FR12_TREE_CONV_NATIVE_BF16_TAPS" \
   -e FR12_NATIVE_SPINE_ORACLE="$FR12_NATIVE_SPINE_ORACLE" \

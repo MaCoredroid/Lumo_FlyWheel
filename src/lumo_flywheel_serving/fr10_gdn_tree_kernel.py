@@ -844,6 +844,403 @@ def launch_tree_gdn_replay(
     )
 
 
+@triton.jit
+def _tree_gdn_replay_all_layers_kernel(
+    k_rings,
+    v_rings,
+    a_rings,
+    b_rings,
+    A_logs,
+    dt_biases,
+    bank_ptrs,
+    spec_state_indices,
+    accepted_paths,
+    accepted_lens,
+    prev_lens,
+    NUM_SPEC: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    DIM_V: tl.constexpr,
+    BLOCK_V: tl.constexpr,
+    N_PAD: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    BANK_STRIDE: tl.constexpr,
+    RING_L_STRIDE_K: tl.constexpr,
+    RING_B_STRIDE_K: tl.constexpr,
+    RING_N_STRIDE_K: tl.constexpr,
+    RING_L_STRIDE_V: tl.constexpr,
+    RING_B_STRIDE_V: tl.constexpr,
+    RING_N_STRIDE_V: tl.constexpr,
+    RING_L_STRIDE_AB: tl.constexpr,
+    RING_B_STRIDE_AB: tl.constexpr,
+    RING_N_STRIDE_AB: tl.constexpr,
+    SPEC_L_STRIDE: tl.constexpr,
+    PREV_L_STRIDE: tl.constexpr,
+    GATE_L_STRIDE: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+):
+    # FR13_EAGER_PACK (FIX-2 item 2b): all-layer batched sibling of
+    # _tree_gdn_replay_kernel. ONE launch covers every GDN layer; pid0 packs
+    # (layer, spec) as layer * NUM_SPEC + spec. Each program's instruction
+    # sequence is source-identical to the single-layer kernel (same inlined
+    # _gdn_node_step, same constexprs, same num_warps=8); only the base
+    # addresses gain a per-layer offset (stacked rings / gates / snapshots,
+    # plus an int64 bank pointer table because each layer's ssm bank is a
+    # distinct KV-pool tensor). Layers are independent: a program reads only
+    # its own layer's ring/spec/prev rows and writes only its own layer's
+    # bank rows (accepted_paths/lens are shared READ-ONLY), so inter-program
+    # concurrency reorders nothing within any program's sequential replay
+    # (playbook class 3: no overlapping writes across programs).
+    # Class-10 caveat: codegen identity vs the legacy per-layer launch loop
+    # is NOT assumed from source identity; it is gated by the int-view byte
+    # A/B of bank bytes (never atol) before any live boot.
+    pid_lb = tl.program_id(0)
+    pid_l = pid_lb // NUM_SPEC
+    pid_b = pid_lb % NUM_SPEC
+    pid_vh = tl.program_id(1)
+    pid_v = tl.program_id(2)
+    head_group = NUM_VH // NUM_KH
+    pid_kh = pid_vh // head_group
+    offs_k = tl.arange(0, DIM_K)
+    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    v_mask = offs_v < DIM_V
+
+    state_bank = tl.load(bank_ptrs + pid_l).to(tl.pointer_type(tl.float32))
+    k_ring = k_rings + pid_l * RING_L_STRIDE_K
+    v_ring = v_rings + pid_l * RING_L_STRIDE_V
+    a_ring = a_rings + pid_l * RING_L_STRIDE_AB
+    b_ring = b_rings + pid_l * RING_L_STRIDE_AB
+    A_log = A_logs + pid_l * GATE_L_STRIDE
+    dt_bias = dt_biases + pid_l * GATE_L_STRIDE
+    spec_layer = spec_state_indices + pid_l * SPEC_L_STRIDE
+    prev_layer = prev_lens + pid_l * PREV_L_STRIDE
+
+    # h0 = same column convention as the scan's in-kernel h0 gather:
+    # column clamp(prev_accepted_len - 1, 0). prev_lens is the SCAN-TIME
+    # snapshot of the accepted-lens buffer (the committer refills the live
+    # buffer with the NEW lens before this kernel launches).
+    prev_len = tl.load(prev_layer + pid_b).to(tl.int64)
+    h0_col = tl.maximum(prev_len - 1, 0)
+    h0_row = tl.load(spec_layer + pid_b * SPEC_COLS + h0_col).to(tl.int64)
+    # Read the whole h0 tile into registers BEFORE any store: a later
+    # publish in this same program may target the h0 bank row itself
+    # (publish-overwrites-h0-row case).
+    state = tl.load(
+        state_bank
+        + h0_row * BANK_STRIDE
+        + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+        + offs_k[None, :],
+        mask=v_mask[:, None],
+        other=0.0,
+    ).to(tl.float32)
+    acc_len = tl.load(accepted_lens + pid_b)
+    # q is not stored: the q-side ops never touch state, out was already
+    # emitted by the scan. A zero q keeps the shared body's signature and
+    # constexprs identical; out_i is discarded.
+    b_q = tl.zeros((DIM_K,), dtype=tl.float32)
+    b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+    b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+    for t in tl.static_range(0, PATH_COLS + 1):
+        if t == 0:
+            # Root (gdn node 0) replays unconditionally: row 0 must be
+            # refreshed even on a ZERO-ACCEPT event (the next h0 read clamps
+            # accepted_len-1 to column 0), and the scan applies NO handoff
+            # normalization to h0 before the root update.
+            active = acc_len >= 0
+            node = 0
+        else:
+            active = (t - 1) < acc_len
+            node = tl.load(
+                accepted_paths + pid_b * PATH_COLS + (t - 1),
+                mask=active,
+                other=0,
+            ).to(tl.int64)
+            node = tl.maximum(node, 0)
+            node = tl.minimum(node, N_PAD - 1)
+            # Parent-handoff normalization: the scan reads the parent state
+            # through tl.sum(tl.where(offs_n == j, h_cache, 0.0), axis=0),
+            # which flips -0.0 to +0.0 exactly once per edge. `+ 0.0`
+            # reproduces that bit behavior; the root above gets none.
+            state = state + 0.0
+        b_k = tl.load(
+            k_ring
+            + pid_b * RING_B_STRIDE_K
+            + node * RING_N_STRIDE_K
+            + pid_kh * DIM_K
+            + offs_k,
+            mask=active,
+            other=0.0,
+        ).to(tl.float32)
+        b_v = tl.load(
+            v_ring
+            + pid_b * RING_B_STRIDE_V
+            + node * RING_N_STRIDE_V
+            + pid_vh * DIM_V
+            + offs_v,
+            mask=active & v_mask,
+            other=0.0,
+        ).to(tl.float32)
+        b_raw_b = tl.load(
+            b_ring + pid_b * RING_B_STRIDE_AB + node * RING_N_STRIDE_AB + pid_vh,
+            mask=active,
+            other=0.0,
+        ).to(tl.float32)
+        b_raw_a = tl.load(
+            a_ring + pid_b * RING_B_STRIDE_AB + node * RING_N_STRIDE_AB + pid_vh,
+            mask=active,
+            other=0.0,
+        ).to(tl.float32)
+        new_state, out_i = _gdn_node_step(
+            state,
+            b_q,
+            b_k,
+            b_v,
+            0.0,
+            0.0,
+            b_raw_a,
+            b_raw_b,
+            b_a_log,
+            b_dt_bias,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+            RAW_GATING=RAW_GATING,
+        )
+        state = tl.where(active, new_state, state)
+        if t == 0:
+            dst_col = 0
+        else:
+            dst_col = t - 1
+        dst_row = tl.load(
+            spec_layer + pid_b * SPEC_COLS + dst_col,
+            mask=active,
+            other=0,
+        ).to(tl.int64)
+        tl.store(
+            state_bank
+            + dst_row * BANK_STRIDE
+            + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            state,
+            mask=active & v_mask[:, None],
+        )
+
+
+def build_replay_bank_pointer_table(
+    banks: list[torch.Tensor],
+) -> tuple[list[int], tuple[int, int, int, int], int]:
+    """Validate per-layer GDN state banks for the batched all-layer replay.
+
+    FR13_EAGER_PACK (FIX-2 item 2b): each layer's ssm bank is a distinct
+    KV-pool tensor, so the batched kernel addresses them through an int64
+    device pointer table. This helper validates every bank exactly like
+    launch_tree_gdn_replay (fp32, 4D, row-contiguous payload) plus the
+    stacking preconditions (identical shape and stride across layers) and
+    returns (host pointer list, bank shape, bank row stride). FAIL-LOUD on
+    any precondition miss -- no silent per-layer fallback (playbook class 9).
+    The caller must re-assert the host pointer list against the live banks'
+    data_ptr() on every commit (cheap Python int compares) before launching.
+    """
+    if not banks:
+        raise ValueError("FR13_EAGER_PACK bank table requires at least one bank")
+    shape0 = tuple(banks[0].shape)
+    stride0 = banks[0].stride(0)
+    ptrs: list[int] = []
+    for i, bank in enumerate(banks):
+        if bank.ndim != 4:
+            raise ValueError(
+                f"bank[{i}] must be (rows, num_vh, dim_v, dim_k), got {tuple(bank.shape)}"
+            )
+        if bank.dtype != torch.float32:
+            raise ValueError(
+                f"FR13 replay requires fp32 GDN state banks, bank[{i}] is {bank.dtype}"
+            )
+        rows_i, num_vh_i, dim_v_i, dim_k_i = bank.shape
+        if (
+            bank.stride(3) != 1
+            or bank.stride(2) != dim_k_i
+            or bank.stride(1) != dim_v_i * dim_k_i
+        ):
+            raise ValueError(f"bank[{i}] payload must be row-contiguous")
+        if tuple(bank.shape) != shape0 or bank.stride(0) != stride0:
+            raise ValueError(
+                "FR13_EAGER_PACK stacking precondition failed: bank["
+                f"{i}] shape/stride {tuple(bank.shape)}/{bank.stride(0)} != "
+                f"bank[0] {shape0}/{stride0}"
+            )
+        ptrs.append(int(bank.data_ptr()))
+    return ptrs, (int(shape0[0]), int(shape0[1]), int(shape0[2]), int(shape0[3])), int(stride0)
+
+
+def launch_tree_gdn_replay_all_layers(
+    *,
+    bank_ptrs: torch.Tensor,
+    bank_shape: tuple[int, int, int, int],
+    bank_stride: int,
+    spec_state_indices: torch.Tensor,
+    prev_lens: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    accepted_lens: torch.Tensor,
+    k_rings: torch.Tensor,
+    v_rings: torch.Tensor,
+    a_rings: torch.Tensor,
+    b_rings: torch.Tensor,
+    A_logs: torch.Tensor,
+    dt_biases: torch.Tensor,
+    num_layers: int,
+    num_spec_decodes: int,
+    output_scale: float,
+    use_qk_l2norm_in_kernel: bool = True,
+) -> None:
+    """Launch the FR13_EAGER_PACK batched all-layer accepted-path replay.
+
+    Semantics-preserving sibling of launch_tree_gdn_replay: one launch
+    replaces the legacy per-layer loop (48 launches + 48 flag clears). Every
+    input must be a persistent preallocated stacked buffer (graph-stable
+    addresses) allocated at GDN metadata-builder init; per-step scratch is
+    the gate-4 failure mode and is banned here. bank_ptrs is the int64
+    device pointer table from build_replay_bank_pointer_table (the caller
+    re-asserts the live banks' data_ptr() each commit).
+    """
+    if num_spec_decodes <= 0:
+        return
+    if num_layers <= 0:
+        raise ValueError(f"num_layers must be positive, got {num_layers}")
+    if bank_ptrs.dtype != torch.int64 or bank_ptrs.numel() < num_layers:
+        raise ValueError(
+            f"bank_ptrs must be int64 covering {num_layers} layers, got "
+            f"{bank_ptrs.dtype} numel={bank_ptrs.numel()}"
+        )
+    bank_rows, num_vh, dim_v, dim_k = (int(x) for x in bank_shape)
+    if k_rings.ndim != 5 or v_rings.ndim != 5 or a_rings.ndim != 4 or b_rings.ndim != 4:
+        raise ValueError(
+            "stacked ring shapes must be k(L,B,N,KH,DK)/v(L,B,N,VH,DV)/a,b(L,B,N,VH), got "
+            f"k={tuple(k_rings.shape)} v={tuple(v_rings.shape)} "
+            f"a={tuple(a_rings.shape)} b={tuple(b_rings.shape)}"
+        )
+    ring_layers, ring_bs, n_pad, num_kh, ring_dim_k = k_rings.shape
+    if ring_layers < num_layers:
+        raise ValueError(f"ring layers {ring_layers} < num_layers {num_layers}")
+    if n_pad > 16 or n_pad & (n_pad - 1):
+        raise ValueError(f"ring n_pad must be a power of two <=16, got {n_pad}")
+    if ring_dim_k != dim_k:
+        raise ValueError(f"ring k dim {ring_dim_k} != bank dim_k {dim_k}")
+    if v_rings.shape != (ring_layers, ring_bs, n_pad, num_vh, dim_v):
+        raise ValueError(
+            f"v rings shape {tuple(v_rings.shape)} != "
+            f"{(ring_layers, ring_bs, n_pad, num_vh, dim_v)}"
+        )
+    if a_rings.shape != (ring_layers, ring_bs, n_pad, num_vh) or b_rings.shape != (
+        ring_layers,
+        ring_bs,
+        n_pad,
+        num_vh,
+    ):
+        raise ValueError(
+            f"a/b rings must be {(ring_layers, ring_bs, n_pad, num_vh)}, got "
+            f"{tuple(a_rings.shape)}/{tuple(b_rings.shape)}"
+        )
+    if not (
+        k_rings.is_contiguous()
+        and v_rings.is_contiguous()
+        and a_rings.is_contiguous()
+        and b_rings.is_contiguous()
+    ):
+        raise ValueError("stacked activation rings must be contiguous")
+    if num_vh % num_kh != 0:
+        raise ValueError(f"value heads must be a multiple of k heads, got {num_vh}/{num_kh}")
+    if ring_bs < num_spec_decodes:
+        raise ValueError(f"ring batch {ring_bs} < num_spec_decodes {num_spec_decodes}")
+    if spec_state_indices.ndim != 3 or spec_state_indices.shape[0] < num_layers or (
+        spec_state_indices.shape[1] < num_spec_decodes
+    ):
+        raise ValueError(
+            "stacked spec_state_indices must be (L, B, SPEC_COLS) covering "
+            f"{num_layers}x{num_spec_decodes}, got {tuple(spec_state_indices.shape)}"
+        )
+    spec_cols = int(spec_state_indices.shape[2])
+    if accepted_paths.ndim != 2 or accepted_paths.shape[0] < num_spec_decodes:
+        raise ValueError(
+            f"accepted_paths must be 2D covering {num_spec_decodes} rows, "
+            f"got {tuple(accepted_paths.shape)}"
+        )
+    path_cols = int(accepted_paths.shape[1])
+    if path_cols > spec_cols:
+        raise ValueError(
+            f"path cols {path_cols} exceed spec cols {spec_cols}; linear publish "
+            "columns must be valid spec columns"
+        )
+    if prev_lens.ndim != 2 or prev_lens.shape[0] < num_layers or (
+        prev_lens.shape[1] < num_spec_decodes
+    ):
+        raise ValueError(
+            "stacked prev_lens must be (L, B) covering "
+            f"{num_layers}x{num_spec_decodes}, got {tuple(prev_lens.shape)}"
+        )
+    if accepted_lens.numel() < num_spec_decodes:
+        raise ValueError(
+            f"accepted_lens must cover num_spec_decodes={num_spec_decodes}, "
+            f"got {accepted_lens.numel()}"
+        )
+    if A_logs.ndim != 2 or A_logs.shape[0] < num_layers or A_logs.shape[1] < num_vh:
+        raise ValueError(
+            f"stacked A_logs must be (L, VH) covering {num_layers}x{num_vh}, "
+            f"got {tuple(A_logs.shape)}"
+        )
+    if dt_biases.shape != A_logs.shape:
+        raise ValueError(
+            f"stacked dt_biases shape {tuple(dt_biases.shape)} != A_logs "
+            f"{tuple(A_logs.shape)}"
+        )
+    if not (A_logs.is_contiguous() and dt_biases.is_contiguous()):
+        raise ValueError("stacked A_logs/dt_biases must be contiguous")
+    if not (spec_state_indices.is_contiguous() and prev_lens.is_contiguous()):
+        raise ValueError("stacked spec_state_indices/prev_lens must be contiguous")
+    grid = (int(num_layers) * int(num_spec_decodes), num_vh, triton.cdiv(dim_v, BV))
+    _tree_gdn_replay_all_layers_kernel[grid](
+        k_rings,
+        v_rings,
+        a_rings,
+        b_rings,
+        A_logs,
+        dt_biases,
+        bank_ptrs,
+        spec_state_indices,
+        accepted_paths,
+        accepted_lens,
+        prev_lens,
+        NUM_SPEC=int(num_spec_decodes),
+        NUM_KH=num_kh,
+        NUM_VH=num_vh,
+        DIM_K=dim_k,
+        DIM_V=dim_v,
+        BLOCK_V=BV,
+        N_PAD=n_pad,
+        PATH_COLS=path_cols,
+        SPEC_COLS=spec_cols,
+        BANK_STRIDE=int(bank_stride),
+        RING_L_STRIDE_K=k_rings.stride(0),
+        RING_B_STRIDE_K=k_rings.stride(1),
+        RING_N_STRIDE_K=k_rings.stride(2),
+        RING_L_STRIDE_V=v_rings.stride(0),
+        RING_B_STRIDE_V=v_rings.stride(1),
+        RING_N_STRIDE_V=v_rings.stride(2),
+        RING_L_STRIDE_AB=a_rings.stride(0),
+        RING_B_STRIDE_AB=a_rings.stride(1),
+        RING_N_STRIDE_AB=a_rings.stride(2),
+        SPEC_L_STRIDE=spec_state_indices.stride(0),
+        PREV_L_STRIDE=prev_lens.stride(0),
+        GATE_L_STRIDE=A_logs.stride(0),
+        OUTPUT_SCALE=output_scale,
+        USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+        RAW_GATING=True,
+        num_warps=8,
+    )
+
+
 def launch_tree_gdn(
     q: torch.Tensor,
     k: torch.Tensor,

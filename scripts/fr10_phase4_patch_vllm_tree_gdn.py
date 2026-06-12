@@ -325,73 +325,204 @@ def _patch_gdn_attn() -> bool:
             "                    self.vllm_config.compilation_config.static_forward_context\n"
             "                )\n"
             "                _fr13_replay_layers = {}\n"
-            "                for _fr13_name in layer_names:\n"
-            "                    _fr13_layer = _fr13_fwd_ctx.get(_fr13_name)\n"
-            "                    if _fr13_layer is None or not (\n"
-            "                        hasattr(_fr13_layer, \"A_log\")\n"
-            "                        and hasattr(_fr13_layer, \"dt_bias\")\n"
-            "                        and hasattr(_fr13_layer, \"head_k_dim\")\n"
-            "                    ):\n"
-            "                        raise RuntimeError(\n"
-            "                            \"FR13_REPLAY_ROUTE: kv-cache-group layer \"\n"
-            "                            + str(_fr13_name)\n"
-            "                            + \" is not a GDN layer; cannot allocate replay staging\"\n"
+            "                _fr13_eager_pack = os.environ.get(\"FR13_EAGER_PACK\", \"0\") == \"1\"\n"
+            "                if _fr13_eager_pack:\n"
+            "                    # FR13_EAGER_PACK (FIX-2 items 2a/2b): STACKED\n"
+            "                    # init-time allocation. One tensor per ring kind\n"
+            "                    # [L, ring_bs, n_pad, ...]; each layer's\n"
+            "                    # _fr13_replay_ring_* becomes a fixed layer-slice\n"
+            "                    # VIEW so the captured forward's write code and\n"
+            "                    # write ADDRESSES are unchanged (class 6). Rows\n"
+            "                    # follow sorted(layer_names) = the committer's\n"
+            "                    # sorted(_FR13_REPLAY_LAYERS) iteration order.\n"
+            "                    # A_log/dt_bias are stacked READ-ONLY bitwise\n"
+            "                    # copies. FAIL-LOUD on any non-uniform layer\n"
+            "                    # (no silent per-layer fallback, class 9).\n"
+            "                    _fr13_ep_names = sorted(str(_n) for _n in layer_names)\n"
+            "                    _fr13_ep_layers = []\n"
+            "                    for _fr13_name in _fr13_ep_names:\n"
+            "                        _fr13_layer = _fr13_fwd_ctx.get(_fr13_name)\n"
+            "                        if _fr13_layer is None or not (\n"
+            "                            hasattr(_fr13_layer, \"A_log\")\n"
+            "                            and hasattr(_fr13_layer, \"dt_bias\")\n"
+            "                            and hasattr(_fr13_layer, \"head_k_dim\")\n"
+            "                        ):\n"
+            "                            raise RuntimeError(\n"
+            "                                \"FR13_REPLAY_ROUTE: kv-cache-group layer \"\n"
+            "                                + str(_fr13_name)\n"
+            "                                + \" is not a GDN layer; cannot allocate replay staging\"\n"
+            "                            )\n"
+            "                        _fr13_ep_layers.append(_fr13_layer)\n"
+            "                    _fr13_ep_ref = _fr13_ep_layers[0]\n"
+            "                    _fr13_ep_dtype = _fr13_ep_ref.model_config.dtype\n"
+            "                    _fr13_ep_kh = int(_fr13_ep_ref.num_k_heads) // int(_fr13_ep_ref.tp_size)\n"
+            "                    _fr13_ep_vh = int(_fr13_ep_ref.num_v_heads) // int(_fr13_ep_ref.tp_size)\n"
+            "                    _fr13_ep_dk = int(_fr13_ep_ref.head_k_dim)\n"
+            "                    _fr13_ep_dv = int(_fr13_ep_ref.head_v_dim)\n"
+            "                    _fr13_ep_scale = float(float(_fr13_ep_ref.head_k_dim) ** -0.5)\n"
+            "                    for _fr13_layer in _fr13_ep_layers:\n"
+            "                        if (\n"
+            "                            _fr13_layer.model_config.dtype != _fr13_ep_dtype\n"
+            "                            or int(_fr13_layer.num_k_heads) // int(_fr13_layer.tp_size) != _fr13_ep_kh\n"
+            "                            or int(_fr13_layer.num_v_heads) // int(_fr13_layer.tp_size) != _fr13_ep_vh\n"
+            "                            or int(_fr13_layer.head_k_dim) != _fr13_ep_dk\n"
+            "                            or int(_fr13_layer.head_v_dim) != _fr13_ep_dv\n"
+            "                            or tuple(_fr13_layer.A_log.shape) != tuple(_fr13_ep_ref.A_log.shape)\n"
+            "                            or tuple(_fr13_layer.dt_bias.shape) != tuple(_fr13_ep_ref.dt_bias.shape)\n"
+            "                            or _fr13_layer.A_log.dtype != _fr13_ep_ref.A_log.dtype\n"
+            "                            or _fr13_layer.dt_bias.dtype != _fr13_ep_ref.dt_bias.dtype\n"
+            "                        ):\n"
+            "                            raise RuntimeError(\n"
+            "                                \"FR13_EAGER_PACK stacking precondition failed: \"\n"
+            "                                \"non-uniform GDN layer dims/dtype at \"\n"
+            "                                + str(getattr(_fr13_layer, \"prefix\", \"?\"))\n"
+            "                            )\n"
+            "                    _fr13_ep_count = len(_fr13_ep_layers)\n"
+            "                    _fr13_ep_ring_k = torch.zeros(\n"
+            "                        (_fr13_ep_count, _fr13_ring_bs, n_pad, _fr13_ep_kh, _fr13_ep_dk),\n"
+            "                        dtype=_fr13_ep_dtype,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_ep_ring_v = torch.zeros(\n"
+            "                        (_fr13_ep_count, _fr13_ring_bs, n_pad, _fr13_ep_vh, _fr13_ep_dv),\n"
+            "                        dtype=_fr13_ep_dtype,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_ep_ring_a = torch.zeros(\n"
+            "                        (_fr13_ep_count, _fr13_ring_bs, n_pad, _fr13_ep_vh),\n"
+            "                        dtype=_fr13_ep_dtype,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_ep_ring_b = torch.zeros(\n"
+            "                        (_fr13_ep_count, _fr13_ring_bs, n_pad, _fr13_ep_vh),\n"
+            "                        dtype=_fr13_ep_dtype,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_ep_prev_lens = torch.zeros(\n"
+            "                        (_fr13_ep_count, _fr13_ring_bs),\n"
+            "                        dtype=torch.int32,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_ep_spec_idx = torch.zeros(\n"
+            "                        (_fr13_ep_count, _fr13_ring_bs, _fr13_spec_cols),\n"
+            "                        dtype=torch.int32,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_ep_flags = torch.zeros(\n"
+            "                        (_fr13_ep_count, 2),\n"
+            "                        dtype=torch.int32,\n"
+            "                        device=device,\n"
+            "                    )\n"
+            "                    _fr13_ep_alog = torch.stack(\n"
+            "                        [_l.A_log.detach() for _l in _fr13_ep_layers]\n"
+            "                    ).contiguous()\n"
+            "                    _fr13_ep_dtb = torch.stack(\n"
+            "                        [_l.dt_bias.detach() for _l in _fr13_ep_layers]\n"
+            "                    ).contiguous()\n"
+            "                    for _fr13_row, _fr13_name in enumerate(_fr13_ep_names):\n"
+            "                        _fr13_layer = _fr13_ep_layers[_fr13_row]\n"
+            "                        _fr13_layer._fr13_replay_ring_k = _fr13_ep_ring_k[_fr13_row]\n"
+            "                        _fr13_layer._fr13_replay_ring_v = _fr13_ep_ring_v[_fr13_row]\n"
+            "                        _fr13_layer._fr13_replay_ring_a = _fr13_ep_ring_a[_fr13_row]\n"
+            "                        _fr13_layer._fr13_replay_ring_b = _fr13_ep_ring_b[_fr13_row]\n"
+            "                        _fr13_layer._fr13_replay_prev_lens = _fr13_ep_prev_lens[_fr13_row]\n"
+            "                        _fr13_layer._fr13_replay_spec_idx = _fr13_ep_spec_idx[_fr13_row]\n"
+            "                        _fr13_layer._fr13_replay_flags = _fr13_ep_flags[_fr13_row]\n"
+            "                        _fr13_layer._fr13_replay_output_scale = float(\n"
+            "                            float(_fr13_layer.head_k_dim) ** -0.5\n"
             "                        )\n"
-            "                    _fr13_dtype = _fr13_layer.model_config.dtype\n"
-            "                    _fr13_kh = int(_fr13_layer.num_k_heads) // int(_fr13_layer.tp_size)\n"
-            "                    _fr13_vh = int(_fr13_layer.num_v_heads) // int(_fr13_layer.tp_size)\n"
-            "                    _fr13_layer._fr13_replay_ring_k = torch.zeros(\n"
-            "                        (_fr13_ring_bs, n_pad, _fr13_kh, int(_fr13_layer.head_k_dim)),\n"
-            "                        dtype=_fr13_dtype,\n"
-            "                        device=device,\n"
-            "                    )\n"
-            "                    _fr13_layer._fr13_replay_ring_v = torch.zeros(\n"
-            "                        (_fr13_ring_bs, n_pad, _fr13_vh, int(_fr13_layer.head_v_dim)),\n"
-            "                        dtype=_fr13_dtype,\n"
-            "                        device=device,\n"
-            "                    )\n"
-            "                    _fr13_layer._fr13_replay_ring_a = torch.zeros(\n"
-            "                        (_fr13_ring_bs, n_pad, _fr13_vh),\n"
-            "                        dtype=_fr13_dtype,\n"
-            "                        device=device,\n"
-            "                    )\n"
-            "                    _fr13_layer._fr13_replay_ring_b = torch.zeros(\n"
-            "                        (_fr13_ring_bs, n_pad, _fr13_vh),\n"
-            "                        dtype=_fr13_dtype,\n"
-            "                        device=device,\n"
-            "                    )\n"
-            "                    _fr13_layer._fr13_replay_prev_lens = torch.zeros(\n"
-            "                        (_fr13_ring_bs,),\n"
-            "                        dtype=torch.int32,\n"
-            "                        device=device,\n"
-            "                    )\n"
-            "                    _fr13_layer._fr13_replay_spec_idx = torch.zeros(\n"
-            "                        (_fr13_ring_bs, _fr13_spec_cols),\n"
-            "                        dtype=torch.int32,\n"
-            "                        device=device,\n"
-            "                    )\n"
-            "                    # Capture-safe staging handshake (replaces the\n"
-            "                    # per-step _fr13_replay_meta dict): preallocated\n"
-            "                    # int32 flag tensor, [0]=fresh, [1]=staged\n"
-            "                    # spec-decode rows; written by CAPTURED device\n"
-            "                    # ops in the forward so a CUDA-graph replay\n"
-            "                    # re-arms it. Scalars that never change are\n"
-            "                    # fixed at init; the bank ref is a fixed\n"
-            "                    # attribute (no per-step object creation).\n"
-            "                    _fr13_layer._fr13_replay_flags = torch.zeros(\n"
-            "                        (2,),\n"
-            "                        dtype=torch.int32,\n"
-            "                        device=device,\n"
-            "                    )\n"
-            "                    _fr13_layer._fr13_replay_output_scale = float(\n"
-            "                        float(_fr13_layer.head_k_dim) ** -0.5\n"
-            "                    )\n"
-            "                    _fr13_layer._fr13_replay_ssm_state = None\n"
-            "                    _fr13_replay_layers[str(_fr13_name)] = _fr13_layer\n"
+            "                        _fr13_layer._fr13_replay_ssm_state = None\n"
+            "                        _fr13_replay_layers[str(_fr13_name)] = _fr13_layer\n"
+            "                    _fr13_gdn_mod._FR13_EAGER_PACK_STACKS = {\n"
+            "                        \"layer_order\": tuple(_fr13_ep_names),\n"
+            "                        \"flags\": _fr13_ep_flags,\n"
+            "                        \"ring_k\": _fr13_ep_ring_k,\n"
+            "                        \"ring_v\": _fr13_ep_ring_v,\n"
+            "                        \"ring_a\": _fr13_ep_ring_a,\n"
+            "                        \"ring_b\": _fr13_ep_ring_b,\n"
+            "                        \"prev_lens\": _fr13_ep_prev_lens,\n"
+            "                        \"spec_idx\": _fr13_ep_spec_idx,\n"
+            "                        \"A_log\": _fr13_ep_alog,\n"
+            "                        \"dt_bias\": _fr13_ep_dtb,\n"
+            "                        \"output_scale\": _fr13_ep_scale,\n"
+            "                        \"num_layers\": _fr13_ep_count,\n"
+            "                    }\n"
+            "                else:\n"
+            "                    for _fr13_name in layer_names:\n"
+            "                        _fr13_layer = _fr13_fwd_ctx.get(_fr13_name)\n"
+            "                        if _fr13_layer is None or not (\n"
+            "                            hasattr(_fr13_layer, \"A_log\")\n"
+            "                            and hasattr(_fr13_layer, \"dt_bias\")\n"
+            "                            and hasattr(_fr13_layer, \"head_k_dim\")\n"
+            "                        ):\n"
+            "                            raise RuntimeError(\n"
+            "                                \"FR13_REPLAY_ROUTE: kv-cache-group layer \"\n"
+            "                                + str(_fr13_name)\n"
+            "                                + \" is not a GDN layer; cannot allocate replay staging\"\n"
+            "                            )\n"
+            "                        _fr13_dtype = _fr13_layer.model_config.dtype\n"
+            "                        _fr13_kh = int(_fr13_layer.num_k_heads) // int(_fr13_layer.tp_size)\n"
+            "                        _fr13_vh = int(_fr13_layer.num_v_heads) // int(_fr13_layer.tp_size)\n"
+            "                        _fr13_layer._fr13_replay_ring_k = torch.zeros(\n"
+            "                            (_fr13_ring_bs, n_pad, _fr13_kh, int(_fr13_layer.head_k_dim)),\n"
+            "                            dtype=_fr13_dtype,\n"
+            "                            device=device,\n"
+            "                        )\n"
+            "                        _fr13_layer._fr13_replay_ring_v = torch.zeros(\n"
+            "                            (_fr13_ring_bs, n_pad, _fr13_vh, int(_fr13_layer.head_v_dim)),\n"
+            "                            dtype=_fr13_dtype,\n"
+            "                            device=device,\n"
+            "                        )\n"
+            "                        _fr13_layer._fr13_replay_ring_a = torch.zeros(\n"
+            "                            (_fr13_ring_bs, n_pad, _fr13_vh),\n"
+            "                            dtype=_fr13_dtype,\n"
+            "                            device=device,\n"
+            "                        )\n"
+            "                        _fr13_layer._fr13_replay_ring_b = torch.zeros(\n"
+            "                            (_fr13_ring_bs, n_pad, _fr13_vh),\n"
+            "                            dtype=_fr13_dtype,\n"
+            "                            device=device,\n"
+            "                        )\n"
+            "                        _fr13_layer._fr13_replay_prev_lens = torch.zeros(\n"
+            "                            (_fr13_ring_bs,),\n"
+            "                            dtype=torch.int32,\n"
+            "                            device=device,\n"
+            "                        )\n"
+            "                        _fr13_layer._fr13_replay_spec_idx = torch.zeros(\n"
+            "                            (_fr13_ring_bs, _fr13_spec_cols),\n"
+            "                            dtype=torch.int32,\n"
+            "                            device=device,\n"
+            "                        )\n"
+            "                        # Capture-safe staging handshake (replaces the\n"
+            "                        # per-step _fr13_replay_meta dict): preallocated\n"
+            "                        # int32 flag tensor, [0]=fresh, [1]=staged\n"
+            "                        # spec-decode rows; written by CAPTURED device\n"
+            "                        # ops in the forward so a CUDA-graph replay\n"
+            "                        # re-arms it. Scalars that never change are\n"
+            "                        # fixed at init; the bank ref is a fixed\n"
+            "                        # attribute (no per-step object creation).\n"
+            "                        _fr13_layer._fr13_replay_flags = torch.zeros(\n"
+            "                            (2,),\n"
+            "                            dtype=torch.int32,\n"
+            "                            device=device,\n"
+            "                        )\n"
+            "                        _fr13_layer._fr13_replay_output_scale = float(\n"
+            "                            float(_fr13_layer.head_k_dim) ** -0.5\n"
+            "                        )\n"
+            "                        _fr13_layer._fr13_replay_ssm_state = None\n"
+            "                        _fr13_replay_layers[str(_fr13_name)] = _fr13_layer\n"
             "                if not _fr13_replay_layers:\n"
             "                    raise RuntimeError(\n"
             "                        \"FR13_REPLAY_ROUTE: no GDN layers visible at \"\n"
             "                        \"metadata-builder init; replay staging allocation failed\"\n"
+            "                    )\n"
+            "                if _fr13_eager_pack and getattr(\n"
+            "                    _fr13_gdn_mod, \"_FR13_REPLAY_LAYERS\", None\n"
+            "                ):\n"
+            "                    raise RuntimeError(\n"
+            "                        \"FR13_EAGER_PACK requires a single GDN replay \"\n"
+            "                        \"group; a second metadata-builder group cannot \"\n"
+            "                        \"join the stacked rings (fail-loud, class 9)\"\n"
             "                    )\n"
             "                _fr13_existing_layers = getattr(\n"
             "                    _fr13_gdn_mod, \"_FR13_REPLAY_LAYERS\", None\n"
@@ -454,6 +585,10 @@ def _patch_gdn_linear() -> bool:
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
+            "# FR13_EAGER_PACK (FIX-2): read ONCE at module scope (flag plan: env is\n"
+            "# read once per boot; init-time allocations are flag-conditional but\n"
+            "# fixed for the life of the process).\n"
+            "_FR13_EAGER_PACK = os.environ.get(\"FR13_EAGER_PACK\", \"0\") == \"1\"\n"
             "_FR12_SUBKERNEL_CAPTURE_ACTIVE = {}\n"
             "_FR12_SUBKERNEL_CAPTURE_SAVED_BY_PREFIX = {}\n"
             "\n"
@@ -1170,17 +1305,56 @@ def _patch_gdn_linear() -> bool:
                     _fr10_source_flat = _fr10_tree_source_indices.reshape(-1)
                     _fr10_flat_source_flat = _fr10_flat_source_indices.reshape(-1)
                     _fr10_path0_source_flat = _fr10_path0_source_indices.reshape(-1)
-                    _fr10_prior_col_base = torch.arange(
-                        _fr10_width - 1,
-                        dtype=torch.long,
-                        device=mixed_qkv_spec.device,
-                    )
-                    _fr12_native_prior_col_base = torch.arange(
-                        max(0, int(conv_state.size(2)) - (_fr10_width - 1)),
-                        int(conv_state.size(2)),
-                        dtype=torch.long,
-                        device=mixed_qkv_spec.device,
-                    )
+                    if _FR13_EAGER_PACK:
+                        # FR13_EAGER_PACK (FIX-2 2h): hoist the two constant
+                        # aranges (2 const kernels x 48 layers = 96/draft).
+                        # Cached on the layer keyed by the FULL value domain
+                        # (width, conv columns, device); populated on the
+                        # first NON-capturing forward (eager warmup precedes
+                        # capture). A capture-time miss builds the identical
+                        # tensors like legacy WITHOUT retaining them, so no
+                        # capture-pool allocation outlives its graph.
+                        _fr13_ep_ar_key = (
+                            int(_fr10_width),
+                            int(conv_state.size(2)),
+                            str(mixed_qkv_spec.device),
+                        )
+                        _fr13_ep_ar = getattr(
+                            self, "_fr13_eager_pack_conv_arange", None
+                        )
+                        if _fr13_ep_ar is not None and _fr13_ep_ar[0] == _fr13_ep_ar_key:
+                            _fr10_prior_col_base = _fr13_ep_ar[1]
+                            _fr12_native_prior_col_base = _fr13_ep_ar[2]
+                        else:
+                            _fr10_prior_col_base = torch.arange(
+                                _fr10_width - 1,
+                                dtype=torch.long,
+                                device=mixed_qkv_spec.device,
+                            )
+                            _fr12_native_prior_col_base = torch.arange(
+                                max(0, int(conv_state.size(2)) - (_fr10_width - 1)),
+                                int(conv_state.size(2)),
+                                dtype=torch.long,
+                                device=mixed_qkv_spec.device,
+                            )
+                            if not torch.cuda.is_current_stream_capturing():
+                                self._fr13_eager_pack_conv_arange = (
+                                    _fr13_ep_ar_key,
+                                    _fr10_prior_col_base,
+                                    _fr12_native_prior_col_base,
+                                )
+                    else:
+                        _fr10_prior_col_base = torch.arange(
+                            _fr10_width - 1,
+                            dtype=torch.long,
+                            device=mixed_qkv_spec.device,
+                        )
+                        _fr12_native_prior_col_base = torch.arange(
+                            max(0, int(conv_state.size(2)) - (_fr10_width - 1)),
+                            int(conv_state.size(2)),
+                            dtype=torch.long,
+                            device=mixed_qkv_spec.device,
+                        )
                     _fr12_bf16_tap_env = os.environ.get(
                         "FR12_TREE_CONV_NATIVE_BF16_TAPS"
                     )
@@ -1189,7 +1363,12 @@ def _patch_gdn_linear() -> bool:
                             "FR11_TREE_CONV_NATIVE_BF16_TAPS", "1"
                         )
                     _fr11_native_bf16_taps = _fr12_bf16_tap_env != "0"
-                    _fr10_weight_f = conv_weights.to(torch.float32)
+                    if not _FR13_EAGER_PACK:
+                        # FR13_EAGER_PACK (FIX-2 2h): dead cast deleted under
+                        # the flag — census-verified NO consumers (1 cast x48
+                        # layers/draft of pure waste); legacy keeps it for the
+                        # byte-verbatim OFF arm.
+                        _fr10_weight_f = conv_weights.to(torch.float32)
                     def _fr11_conv_tap_product(_fr11_x, _fr11_w):
                         if _fr11_native_bf16_taps:
                             _fr11_dtype = mixed_qkv_spec.dtype
@@ -1280,9 +1459,15 @@ def _patch_gdn_linear() -> bool:
                         _fr10_window = _fr10_source.index_select(
                             0, _fr10_source_flat
                         ).view(_fr10_tree_n, _fr10_width, _fr10_x.size(1))
-                        _fr10_path0_x = _fr10_x.index_select(
-                            0, _fr10_path0_node_tensor
-                        )
+                        if not _FR13_EAGER_PACK:
+                            # FR13_EAGER_PACK (FIX-2 2h): _fr10_path0_x is NOT
+                            # dead (FR10_METRICS=1 consumers) — census caution.
+                            # Under the flag it moves INSIDE the two gated
+                            # diagnostic branches below (identical inputs,
+                            # identical value); it is never deleted.
+                            _fr10_path0_x = _fr10_x.index_select(
+                                0, _fr10_path0_node_tensor
+                            )
                         if _fr10_b == 0:
                             try:
                                 _fr12_payload = _fr12_subkernel_capture_get(
@@ -1294,6 +1479,14 @@ def _patch_gdn_linear() -> bool:
                                         "tree_conv_detail_done", False
                                     )
                                     ):
+                                        if _FR13_EAGER_PACK:
+                                            # FR13_EAGER_PACK 2h gated-move:
+                                            # same inputs (_fr10_x and the
+                                            # node tensor are unmutated since
+                                            # the legacy site) => same value.
+                                            _fr10_path0_x = _fr10_x.index_select(
+                                                0, _fr10_path0_node_tensor
+                                            )
                                         _fr12_path0_window = _fr10_window.index_select(
                                             0, _fr10_path0_node_tensor
                                         )
@@ -1621,6 +1814,13 @@ def _patch_gdn_linear() -> bool:
                             _fr10_new_state,
                         )
                         if _fr10_log_conv_diag:
+                            if _FR13_EAGER_PACK:
+                                # FR13_EAGER_PACK 2h gated-move: recompute from
+                                # the SAME unmutated inputs as the legacy site
+                                # (identical value; FR10_METRICS=1 only).
+                                _fr10_path0_x = _fr10_x.index_select(
+                                    0, _fr10_path0_node_tensor
+                                )
                             _fr10_path0_source = torch.cat(
                                 (_fr10_prior_window.transpose(0, 1), _fr10_path0_x),
                                 dim=0,
@@ -3156,7 +3356,13 @@ def _patch_gdn_linear() -> bool:
                                     + ":"
                                     + str(_fr10_root_h0_exc)
                                 ) from _fr10_root_h0_exc
-                    core_attn_out_spec[0, start:end] = tree_out[:tree_n]
+                    if not _FR13_EAGER_PACK:
+                        # FR13_EAGER_PACK (FIX-2 2h): VERIFIED-DEAD self-copy.
+                        # launch_tree_gdn_prepared writes into out=
+                        # core_attn_out_spec[0, start:end] and returns that
+                        # same view as tree_out, so this setitem copies the
+                        # view onto itself (48 kernels/draft of identity).
+                        core_attn_out_spec[0, start:end] = tree_out[:tree_n]
                     if _fr10_capture_scan_payload:
                         try:
                             _fr10_payload_path = os.environ.get(
@@ -3964,6 +4170,90 @@ def _patch_rejection_sampler_tree_lcp() -> bool:
     helper_anchor = "\n\ndef rejection_sample("
     helper = r'''
 
+# FR13_EAGER_PACK (FIX-2): ONE flag, default OFF; OFF = exact legacy
+# committer/sampler transports (the A/B instrument, same pattern as
+# FR13_DRAFTER_SINGLE_LOGITS). ON changes NO computed value — only HOW the
+# same ints move: one packed DtoH for all six committer inputs PLUS the
+# stacked 48x2 replay-flag matrix (replaces ~102 tiny blocking readbacks),
+# pinned staged HtoD for the committer outputs, and ONE batched all-layer
+# replay launch (replaces 48 eager launches + 48 flag clears). Env is read
+# once at module import (flag plan).
+_FR13_EAGER_PACK = __import__('os').environ.get('FR13_EAGER_PACK', '0') == '1'
+_FR13_EAGER_PACK_NEEDLE_DONE = False
+_FR13_EAGER_PACK_STAGE = {}
+
+
+def _fr13_eager_pack_stage(kind, elems, device, dtype):
+    """Persistent staging (device tensor, pinned CPU mirror, event, rec-flag).
+
+    Allocated once; REALLOCATED only when capacity grows (amortized
+    init-time, class 6 — the committer is eager host code, never CUDA-graph
+    captured, and B=1 steady state hits a fixed size). The CUDA event guards
+    pinned-buffer reuse: recorded after the transport that last touches the
+    pinned buffer on-stream and synchronized before the next host write, so
+    a host rewrite can never race an in-flight async copy.
+    """
+    entry = _FR13_EAGER_PACK_STAGE.get(kind)
+    if (
+        entry is None
+        or entry[0].numel() < elems
+        or entry[0].device != device
+        or entry[0].dtype != dtype
+    ):
+        cap = max(int(elems), 256)
+        entry = (
+            torch.empty((cap,), dtype=dtype, device=device),
+            torch.empty((cap,), dtype=dtype, pin_memory=True),
+            torch.cuda.Event(),
+            [False],
+        )
+        _FR13_EAGER_PACK_STAGE[kind] = entry
+    return entry
+
+
+def _fr13_eager_pack_tree_ids_buf(rows, device):
+    """Persistent contiguous [2, rows] int32 tree-token buffer (FIX-2 2g).
+
+    Exact-size keyed cache (allocated once per (rows, device); B=1 steady
+    state is a single entry), so the ON path has NO per-step allocation and
+    the tensor layout is identical to the legacy stack().contiguous().
+    """
+    key = ('tree_ids', int(rows), str(device))
+    buf = _FR13_EAGER_PACK_STAGE.get(key)
+    if buf is None:
+        buf = torch.empty((2, int(rows)), dtype=torch.int32, device=device)
+        _FR13_EAGER_PACK_STAGE[key] = buf
+    return buf
+
+
+def _fr13_eager_pack_needle(pack_on, is_cuda, layers, packed_elems,
+                            replay_batched, stacked_rings,
+                            boundary_legacy_loop):
+    """Engagement needle (class 9): fires once, in BOTH flag states."""
+    global _FR13_EAGER_PACK_NEEDLE_DONE
+    if _FR13_EAGER_PACK_NEEDLE_DONE:
+        return
+    _FR13_EAGER_PACK_NEEDLE_DONE = True
+    msg = (
+        'FR13_EAGER_PACK committer path engaged: pack=%d cuda=%d layers=%d '
+        'packed_dtoh_elems=%d replay_batched=%d stacked_rings=%d '
+        'boundary_legacy_loop=%d' % (
+            1 if pack_on else 0,
+            1 if is_cuda else 0,
+            int(layers),
+            int(packed_elems),
+            1 if replay_batched else 0,
+            1 if stacked_rings else 0,
+            1 if boundary_legacy_loop else 0,
+        )
+    )
+    try:
+        from vllm.logger import init_logger as _ep_init_logger
+        _ep_init_logger('vllm.fr13_eager_pack').info(msg)
+    except Exception:
+        print(msg, flush=True)
+
+
 # FR13_REPLAY_BOUNDARY tap A (PRODUCER): immediately around the committer's
 # _fr13_replay_launch for the probed layer(s), snapshot the replay's inputs
 # (scan-time prev-lens/window snapshot, h0 source row bytes PRE-launch) and the
@@ -4085,19 +4375,138 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     bonus_token_ids: torch.Tensor,
     max_spec_len: int,
 ) -> torch.Tensor:
-    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
-    drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
-    parent_targets_cpu = [int(x) for x in parent_token_ids.detach().cpu().tolist()]
-    self_targets_cpu = [int(x) for x in self_token_ids.detach().cpu().tolist()]
-    bonus_targets_raw = bonus_token_ids.detach().cpu().tolist()
-    if bonus_targets_raw and isinstance(bonus_targets_raw[0], list):
-        bonus_targets_cpu = [int(x[0]) for x in bonus_targets_raw]
+    # FR13_EAGER_PACK 2a: ON + CUDA = one packed DtoH for all committer
+    # inputs plus the stacked replay-flag matrix (the ~102 tiny readbacks +
+    # syncs collapse to 1). CPU tensors (offline oracles/unit tests) and the
+    # OFF state take the exact legacy per-tensor tolist path.
+    _ep_active = _FR13_EAGER_PACK and bool(
+        getattr(tree_parent_indices, 'is_cuda', False)
+    )
+    _ep_flag_rows = None
+    _ep_stacks = None
+    _ep_replay_route_on = (
+        __import__('os').environ.get('FR13_REPLAY_ROUTE', '1') == '1'
+    )
+    if _ep_active:
+        _ep_parents_src = tree_parent_indices.detach().reshape(-1)
+        _ep_drafts_src = draft_token_ids.detach().reshape(-1)
+        _ep_ptgt_src = parent_token_ids.detach().reshape(-1)
+        _ep_stgt_src = self_token_ids.detach().reshape(-1)
+        _ep_bonus_src = bonus_token_ids.detach()
+        if _ep_bonus_src.dim() > 1:
+            # Legacy parity: tolist of a 2D bonus takes x[0] per row, i.e.
+            # column 0 — identical selection, device-side.
+            _ep_bonus_src = _ep_bonus_src.reshape(
+                _ep_bonus_src.size(0), -1
+            )[:, 0]
+        _ep_counts_src = (
+            num_draft_tokens.detach().reshape(-1)
+            if hasattr(num_draft_tokens, 'detach')
+            else None
+        )
+        if _ep_replay_route_on:
+            from vllm.model_executor.layers.mamba import (
+                gdn_linear_attn as _ep_gdn_mod,
+            )
+            _ep_stacks = getattr(_ep_gdn_mod, '_FR13_EAGER_PACK_STACKS', None)
+            if _ep_stacks is None:
+                raise RuntimeError(
+                    'FR13_EAGER_PACK=1 with FR13_REPLAY_ROUTE=1 requires the '
+                    'stacked replay-flag matrix from GDN metadata-builder '
+                    'init; missing (class 9 fail-loud, no silent fallback)'
+                )
+        _ep_srcs = [
+            _ep_parents_src,
+            _ep_drafts_src,
+            _ep_ptgt_src,
+            _ep_stgt_src,
+            _ep_bonus_src,
+        ]
+        if _ep_counts_src is not None:
+            _ep_srcs.append(_ep_counts_src)
+        if _ep_stacks is not None:
+            _ep_srcs.append(_ep_stacks['flags'].detach().reshape(-1))
+        _ep_total = 0
+        for _ep_s in _ep_srcs:
+            _ep_total += int(_ep_s.numel())
+        _ep_dev, _ep_cpu, _ep_evt, _ep_evt_rec = _fr13_eager_pack_stage(
+            'committer_dtoh',
+            _ep_total,
+            tree_parent_indices.device,
+            torch.int64,
+        )
+        _ep_off = 0
+        for _ep_s in _ep_srcs:
+            _ep_n = int(_ep_s.numel())
+            if _ep_n:
+                # Async device-side slice/cast copies into disjoint staging
+                # (gather-then-scatter; staging never aliases a source —
+                # class 3 n/a but preserved by construction).
+                _ep_dev[_ep_off:_ep_off + _ep_n].copy_(_ep_s)
+            _ep_off += _ep_n
+        _ep_cpu[:_ep_total].copy_(_ep_dev[:_ep_total], non_blocking=True)
+        torch.cuda.current_stream(tree_parent_indices.device).synchronize()
+        _ep_vals = _ep_cpu[:_ep_total].tolist()
+        _ep_off = 0
+        _ep_n = int(_ep_parents_src.numel())
+        parents_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+        _ep_off += _ep_n
+        _ep_n = int(_ep_drafts_src.numel())
+        drafts_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+        _ep_off += _ep_n
+        _ep_n = int(_ep_ptgt_src.numel())
+        parent_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+        _ep_off += _ep_n
+        _ep_n = int(_ep_stgt_src.numel())
+        self_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+        _ep_off += _ep_n
+        _ep_n = int(_ep_bonus_src.numel())
+        bonus_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+        _ep_off += _ep_n
+        if _ep_counts_src is not None:
+            _ep_n = int(_ep_counts_src.numel())
+            counts = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+        else:
+            # counts kept on its existing CPU branch when already a list
+            # (design 2a): no transport involved.
+            counts = [int(x) for x in num_draft_tokens]
+        if _ep_stacks is not None:
+            _ep_flag_flat = _ep_vals[_ep_off:]
+            _ep_flag_rows = [
+                (
+                    int(_ep_flag_flat[2 * _ep_i]),
+                    int(_ep_flag_flat[2 * _ep_i + 1]),
+                )
+                for _ep_i in range(len(_ep_flag_flat) // 2)
+            ]
     else:
-        bonus_targets_cpu = [int(x) for x in bonus_targets_raw]
-    if hasattr(num_draft_tokens, 'detach'):
-        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
-    else:
-        counts = [int(x) for x in num_draft_tokens]
+        parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+        drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
+        parent_targets_cpu = [int(x) for x in parent_token_ids.detach().cpu().tolist()]
+        self_targets_cpu = [int(x) for x in self_token_ids.detach().cpu().tolist()]
+        bonus_targets_raw = bonus_token_ids.detach().cpu().tolist()
+        if bonus_targets_raw and isinstance(bonus_targets_raw[0], list):
+            bonus_targets_cpu = [int(x[0]) for x in bonus_targets_raw]
+        else:
+            bonus_targets_cpu = [int(x) for x in bonus_targets_raw]
+        if hasattr(num_draft_tokens, 'detach'):
+            counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+        else:
+            counts = [int(x) for x in num_draft_tokens]
+    _fr13_eager_pack_needle(
+        _FR13_EAGER_PACK,
+        bool(getattr(tree_parent_indices, 'is_cuda', False)),
+        0 if _ep_stacks is None else int(_ep_stacks['num_layers']),
+        0 if not _ep_active else int(_ep_total),
+        bool(_ep_active and _ep_stacks is not None),
+        _ep_stacks is not None,
+        bool(
+            _ep_active
+            and __import__('os').environ.get('FR13_REPLAY_BOUNDARY_LOG', '0')
+            == '1'
+        ),
+    )
     # FR13 S1 (default ON): a fully-accepted path commits the accepted LEAF's
     # self-target row as its bonus token. At greedy that row IS the verify
     # argmax for the accepted path — for EVERY path, including the spine.
@@ -4297,14 +4706,60 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         })
         start += node_count
 
-    output_token_ids.fill_(-1)
-    for req_i, row in enumerate(out_rows):
-        for pos, token_id in enumerate(row):
-            output_token_ids[req_i, pos] = int(token_id)
-    accepted_tree_rows.copy_(
-        torch.tensor(accepted_rows, dtype=accepted_tree_rows.dtype,
-                     device=accepted_tree_rows.device)
-    )
+    if _ep_active:
+        # FR13_EAGER_PACK 2c (phase a): the fill_(-1) + per-element writes +
+        # pageable torch.tensor HtoD collapse into ONE pinned async HtoD and
+        # two device-side slice copies. The staged matrix writes -1 to every
+        # element the legacy fill_ covered, then the same row values to the
+        # same elements (gather-then-scatter; staging disjoint from dst,
+        # class 3). Same values, one transport.
+        _ep_out_rows_n = int(output_token_ids.size(0))
+        _ep_out_cols = int(output_token_ids.size(1))
+        if len(out_rows) > _ep_out_rows_n or len(accepted_rows) > _ep_out_rows_n:
+            raise RuntimeError(
+                'FR13_EAGER_PACK: committer rows exceed output buffer: '
+                + str(len(out_rows)) + '/' + str(len(accepted_rows))
+                + ' > ' + str(_ep_out_rows_n)
+            )
+        _ep_a_base = _ep_out_rows_n * _ep_out_cols
+        _ep_a_need = _ep_a_base + len(accepted_rows)
+        _ep_a_dev, _ep_a_cpu, _ep_a_evt, _ep_a_rec = _fr13_eager_pack_stage(
+            'committer_htod_out',
+            _ep_a_need,
+            output_token_ids.device,
+            torch.int64,
+        )
+        if _ep_a_rec[0]:
+            # Pinned-reuse guard: never rewrite the pinned mirror while a
+            # prior async transport may still be reading it.
+            _ep_a_evt.synchronize()
+        _ep_a_np = _ep_a_cpu.numpy()
+        _ep_a_np[:_ep_a_base] = -1
+        for req_i, row in enumerate(out_rows):
+            if row:
+                _ep_a_np[
+                    req_i * _ep_out_cols:req_i * _ep_out_cols + len(row)
+                ] = row
+        for _ep_i, _ep_r in enumerate(accepted_rows):
+            _ep_a_np[_ep_a_base + _ep_i] = _ep_r
+        _ep_a_dev[:_ep_a_need].copy_(_ep_a_cpu[:_ep_a_need], non_blocking=True)
+        output_token_ids.copy_(
+            _ep_a_dev[:_ep_a_base].view(_ep_out_rows_n, _ep_out_cols)
+        )
+        accepted_tree_rows[:len(accepted_rows)].copy_(
+            _ep_a_dev[_ep_a_base:_ep_a_base + len(accepted_rows)]
+        )
+        _ep_a_evt.record()
+        _ep_a_rec[0] = True
+    else:
+        output_token_ids.fill_(-1)
+        for req_i, row in enumerate(out_rows):
+            for pos, token_id in enumerate(row):
+                output_token_ids[req_i, pos] = int(token_id)
+        accepted_tree_rows.copy_(
+            torch.tensor(accepted_rows, dtype=accepted_tree_rows.dtype,
+                         device=accepted_tree_rows.device)
+        )
     globals()['_LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL'] = [int(x) for x in accepted_rows]
     globals()['_LUMO_TREE_LAST_ACCEPTED_LENS_KERNEL'] = [int(x) for x in accepted_lens]
     globals()['_LUMO_TREE_LAST_ACCEPTED_NODE_PATHS_KERNEL'] = [
@@ -4343,20 +4798,62 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 _row[_pos] = int(_node_id)
             _accepted_path_rows.append(_row)
         if _accepted_path_rows:
-            _accepted_path_buf[: len(_accepted_path_rows), :_accepted_path_cols].copy_(
-                torch.tensor(
-                    _accepted_path_rows,
-                    dtype=_accepted_path_buf.dtype,
-                    device=_accepted_path_buf.device,
+            if _ep_active:
+                # FR13_EAGER_PACK 2c (phase b1): pinned staged transport for
+                # the sampler-row-keyed publish -- 2 pageable torch.tensor
+                # HtoDs (each with a host staging sync) become ONE pinned
+                # async HtoD + 2 device slice copies. Same values into the
+                # same destination slices in the same order; the REQKEY
+                # publish below is KEPT even when identical (no
+                # skip-if-unchanged -- class 8 interval risk excluded).
+                _ep_b1_rows = len(_accepted_path_rows)
+                _ep_b1_paths = _ep_b1_rows * _accepted_path_cols
+                _ep_b1_need = _ep_b1_paths + len(accepted_lens)
+                _ep_b1_dev, _ep_b1_cpu, _ep_b1_evt, _ep_b1_rec = (
+                    _fr13_eager_pack_stage(
+                        'committer_htod_pub1',
+                        _ep_b1_need,
+                        _accepted_path_buf.device,
+                        torch.int64,
+                    )
                 )
-            )
-            _accepted_lens_buf[: len(accepted_lens)].copy_(
-                torch.tensor(
-                    accepted_lens,
-                    dtype=_accepted_lens_buf.dtype,
-                    device=_accepted_lens_buf.device,
+                if _ep_b1_rec[0]:
+                    _ep_b1_evt.synchronize()
+                _ep_b1_np = _ep_b1_cpu.numpy()
+                for _ep_i, _ep_row in enumerate(_accepted_path_rows):
+                    _ep_b1_np[
+                        _ep_i * _accepted_path_cols:
+                        (_ep_i + 1) * _accepted_path_cols
+                    ] = _ep_row
+                _ep_b1_np[_ep_b1_paths:_ep_b1_need] = accepted_lens
+                _ep_b1_dev[:_ep_b1_need].copy_(
+                    _ep_b1_cpu[:_ep_b1_need], non_blocking=True
                 )
-            )
+                _accepted_path_buf[:_ep_b1_rows, :_accepted_path_cols].copy_(
+                    _ep_b1_dev[:_ep_b1_paths].view(
+                        _ep_b1_rows, _accepted_path_cols
+                    )
+                )
+                _accepted_lens_buf[: len(accepted_lens)].copy_(
+                    _ep_b1_dev[_ep_b1_paths:_ep_b1_need]
+                )
+                _ep_b1_evt.record()
+                _ep_b1_rec[0] = True
+            else:
+                _accepted_path_buf[: len(_accepted_path_rows), :_accepted_path_cols].copy_(
+                    torch.tensor(
+                        _accepted_path_rows,
+                        dtype=_accepted_path_buf.dtype,
+                        device=_accepted_path_buf.device,
+                    )
+                )
+                _accepted_lens_buf[: len(accepted_lens)].copy_(
+                    torch.tensor(
+                        accepted_lens,
+                        dtype=_accepted_lens_buf.dtype,
+                        device=_accepted_lens_buf.device,
+                    )
+                )
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
             int(x) for x in accepted_gdn_rows
         ]
@@ -4478,22 +4975,62 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     ):
                         _fr13_row[_fr13_pos] = int(_fr13_node_id)
                     _fr13_replay_path_rows.append(_fr13_row)
-                _accepted_path_buf[
-                    :_fr13_replay_rows, :_accepted_path_cols
-                ].copy_(
-                    torch.tensor(
-                        _fr13_replay_path_rows,
-                        dtype=_accepted_path_buf.dtype,
-                        device=_accepted_path_buf.device,
+                if _ep_active:
+                    # FR13_EAGER_PACK 2c (phase b2): pinned staged transport
+                    # for the spec-row-keyed replay publish. KEPT even when
+                    # identical to phase b1 (no skip-if-unchanged, class 8);
+                    # same values, same destination slices, same order.
+                    _ep_b2_paths = _fr13_replay_rows * _accepted_path_cols
+                    _ep_b2_need = _ep_b2_paths + _fr13_replay_rows
+                    _ep_b2_dev, _ep_b2_cpu, _ep_b2_evt, _ep_b2_rec = (
+                        _fr13_eager_pack_stage(
+                            'committer_htod_pub2',
+                            _ep_b2_need,
+                            _accepted_path_buf.device,
+                            torch.int64,
+                        )
                     )
-                )
-                _accepted_lens_buf[:_fr13_replay_rows].copy_(
-                    torch.tensor(
-                        _fr13_replay_lens,
-                        dtype=_accepted_lens_buf.dtype,
-                        device=_accepted_lens_buf.device,
+                    if _ep_b2_rec[0]:
+                        _ep_b2_evt.synchronize()
+                    _ep_b2_np = _ep_b2_cpu.numpy()
+                    for _ep_i, _ep_row in enumerate(_fr13_replay_path_rows):
+                        _ep_b2_np[
+                            _ep_i * _accepted_path_cols:
+                            (_ep_i + 1) * _accepted_path_cols
+                        ] = _ep_row
+                    _ep_b2_np[_ep_b2_paths:_ep_b2_need] = _fr13_replay_lens
+                    _ep_b2_dev[:_ep_b2_need].copy_(
+                        _ep_b2_cpu[:_ep_b2_need], non_blocking=True
                     )
-                )
+                    _accepted_path_buf[
+                        :_fr13_replay_rows, :_accepted_path_cols
+                    ].copy_(
+                        _ep_b2_dev[:_ep_b2_paths].view(
+                            _fr13_replay_rows, _accepted_path_cols
+                        )
+                    )
+                    _accepted_lens_buf[:_fr13_replay_rows].copy_(
+                        _ep_b2_dev[_ep_b2_paths:_ep_b2_need]
+                    )
+                    _ep_b2_evt.record()
+                    _ep_b2_rec[0] = True
+                else:
+                    _accepted_path_buf[
+                        :_fr13_replay_rows, :_accepted_path_cols
+                    ].copy_(
+                        torch.tensor(
+                            _fr13_replay_path_rows,
+                            dtype=_accepted_path_buf.dtype,
+                            device=_accepted_path_buf.device,
+                        )
+                    )
+                    _accepted_lens_buf[:_fr13_replay_rows].copy_(
+                        torch.tensor(
+                            _fr13_replay_lens,
+                            dtype=_accepted_lens_buf.dtype,
+                            device=_accepted_lens_buf.device,
+                        )
+                    )
                 if _fr13_bnd_on:
                     # Shared boundary event counter: increment ONCE per commit
                     # event; every tap record between commit k and commit k+1
@@ -4501,69 +5038,180 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     _lumo_tree_commit_gdn._FR13_BOUNDARY_EVENT = int(getattr(
                         _lumo_tree_commit_gdn, '_FR13_BOUNDARY_EVENT', 0
                     )) + 1
-                for _fr13_prefix in sorted(_fr13_replay_layers):
-                    _fr13_layer = _fr13_replay_layers[_fr13_prefix]
-                    _fr13_flags = getattr(
-                        _fr13_layer, '_fr13_replay_flags', None
-                    )
-                    _fr13_ssm_bank = getattr(
-                        _fr13_layer, '_fr13_replay_ssm_state', None
-                    )
-                    if (
-                        _fr13_flags is None
-                        or _fr13_ssm_bank is None
-                        or int(_fr13_flags[0].item()) != 1
-                    ):
+                if _ep_active and not _fr13_bnd_on:
+                    # FR13_EAGER_PACK 2a (all-layer batched flag validation)
+                    # + 2b (ONE batched all-layer replay launch). EVERY
+                    # layer's [fresh, staged] pair is still checked
+                    # individually with a per-layer error message --
+                    # REPRESENTATIVE-LAYER VALIDATION IS BANNED (failed
+                    # safety twice). The values are the forward-written
+                    # flags read in the single packed DtoH at committer
+                    # start; nothing writes them between the forward and
+                    # here, and validate-all-then-launch reads only
+                    # pre-launch state (the replay kernel never touches
+                    # flags). Boundary diagnostics ON routes through the
+                    # verbatim legacy per-layer loop below instead.
+                    _ep_order = list(_ep_stacks['layer_order'])
+                    _ep_sorted_prefixes = sorted(_fr13_replay_layers)
+                    if _ep_order != _ep_sorted_prefixes:
                         raise RuntimeError(
-                            'FR13_REPLAY_ROUTE: stale or missing scan-time '
-                            'staging for layer ' + str(_fr13_prefix)
+                            'FR13_EAGER_PACK: stacked layer order != '
+                            'registered replay layers: '
+                            + repr(_ep_order[:4]) + ' vs '
+                            + repr(_ep_sorted_prefixes[:4])
                         )
-                    if int(_fr13_flags[1].item()) != _fr13_replay_rows:
+                    if _ep_flag_rows is None or len(_ep_flag_rows) < len(_ep_order):
                         raise RuntimeError(
-                            'FR13_REPLAY_ROUTE: committer rows '
-                            + str(_fr13_replay_rows)
-                            + ' != staged spec decodes '
-                            + str(int(_fr13_flags[1].item()))
-                            + ' for layer ' + str(_fr13_prefix)
+                            'FR13_EAGER_PACK: packed flag matrix missing or '
+                            'short: '
+                            + str(0 if _ep_flag_rows is None else len(_ep_flag_rows))
+                            + ' < ' + str(len(_ep_order))
                         )
-                    _fr13_bnd_pre = None
-                    _fr13_bnd_layer_on = (
-                        _fr13_bnd_on
-                        and _lumo_tree_commit_gdn._fr13_boundary_layer_match(
-                            _fr13_prefix
+                    _ep_banks = []
+                    for _ep_i, _ep_prefix in enumerate(_ep_order):
+                        _ep_layer = _fr13_replay_layers[_ep_prefix]
+                        _ep_bank = getattr(
+                            _ep_layer, "_fr13_replay_ssm_state", None
                         )
+                        if _ep_bank is None or _ep_flag_rows[_ep_i][0] != 1:
+                            raise RuntimeError(
+                                'FR13_EAGER_PACK replay: stale/missing staged '
+                                'scan flags for layer ' + str(_ep_prefix)
+                            )
+                        if _ep_flag_rows[_ep_i][1] != _fr13_replay_rows:
+                            raise RuntimeError(
+                                'FR13_EAGER_PACK replay: committer rows '
+                                + str(_fr13_replay_rows)
+                                + ' != staged spec decodes '
+                                + str(_ep_flag_rows[_ep_i][1])
+                                + ' for layer ' + str(_ep_prefix)
+                            )
+                        _ep_banks.append(_ep_bank)
+                    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                        build_replay_bank_pointer_table as _ep_build_tbl,
+                        launch_tree_gdn_replay_all_layers as _ep_launch_all,
                     )
-                    if _fr13_bnd_layer_on:
-                        _fr13_bnd_pre = _fr13_boundary_replay_pre(
-                            _lumo_tree_commit_gdn, _fr13_layer,
-                            _fr13_ssm_bank, _fr13_replay_rows,
+                    _ep_tbl = getattr(
+                        _lumo_tree_commit_gdn, '_FR13_EAGER_PACK_BANK_TBL',
+                        None,
+                    )
+                    _ep_ptrs_now = [int(_b.data_ptr()) for _b in _ep_banks]
+                    if _ep_tbl is None:
+                        # Pointer table built ONCE (one-time HtoD); every
+                        # later commit re-asserts ALL layers' bank data_ptr
+                        # unchanged via cheap Python int compares (no
+                        # representative shortcut).
+                        _ep_ptr_list, _ep_bank_shape, _ep_bank_stride = (
+                            _ep_build_tbl(_ep_banks)
                         )
-                    _fr13_replay_launch(
-                        state_bank=_fr13_ssm_bank,
-                        spec_state_indices=_fr13_layer._fr13_replay_spec_idx,
-                        prev_lens=_fr13_layer._fr13_replay_prev_lens,
+                        _ep_ptr_dev = torch.tensor(
+                            _ep_ptr_list,
+                            dtype=torch.int64,
+                            device=_ep_banks[0].device,
+                        )
+                        _ep_tbl = (
+                            _ep_ptr_list,
+                            _ep_ptr_dev,
+                            _ep_bank_shape,
+                            _ep_bank_stride,
+                        )
+                        _lumo_tree_commit_gdn._FR13_EAGER_PACK_BANK_TBL = (
+                            _ep_tbl
+                        )
+                    elif _ep_tbl[0] != _ep_ptrs_now:
+                        raise RuntimeError(
+                            'FR13_EAGER_PACK: GDN bank data_ptr changed since '
+                            'pointer-table build (fail-loud; banks must be '
+                            'boot-persistent KV-pool tensors)'
+                        )
+                    _ep_launch_all(
+                        bank_ptrs=_ep_tbl[1],
+                        bank_shape=_ep_tbl[2],
+                        bank_stride=_ep_tbl[3],
+                        spec_state_indices=_ep_stacks['spec_idx'],
+                        prev_lens=_ep_stacks['prev_lens'],
                         accepted_paths=_accepted_path_buf,
                         accepted_lens=_accepted_lens_buf,
-                        k_ring=_fr13_layer._fr13_replay_ring_k,
-                        v_ring=_fr13_layer._fr13_replay_ring_v,
-                        a_ring=_fr13_layer._fr13_replay_ring_a,
-                        b_ring=_fr13_layer._fr13_replay_ring_b,
-                        A_log=_fr13_layer.A_log,
-                        dt_bias=_fr13_layer.dt_bias,
+                        k_rings=_ep_stacks['ring_k'],
+                        v_rings=_ep_stacks['ring_v'],
+                        a_rings=_ep_stacks['ring_a'],
+                        b_rings=_ep_stacks['ring_b'],
+                        A_logs=_ep_stacks['A_log'],
+                        dt_biases=_ep_stacks['dt_bias'],
+                        num_layers=len(_ep_order),
                         num_spec_decodes=_fr13_replay_rows,
-                        output_scale=float(
-                            _fr13_layer._fr13_replay_output_scale
-                        ),
+                        output_scale=float(_ep_stacks['output_scale']),
                         use_qk_l2norm_in_kernel=True,
                     )
-                    _fr13_flags[0].fill_(0)
-                    if _fr13_bnd_layer_on:
-                        _fr13_boundary_replay_post(
-                            _lumo_tree_commit_gdn, _fr13_prefix, _fr13_layer,
-                            _fr13_ssm_bank, _fr13_replay_rows,
-                            _fr13_replay_gdn_node_paths, _fr13_replay_lens,
-                            _fr13_bnd_pre,
+                    # ONE all-layer clear preserves the per-layer
+                    # clear-after-consume invariant: every layer row's [0] is
+                    # zeroed exactly once after its replay, identically to
+                    # the legacy 48 per-layer clears.
+                    _ep_stacks['flags'][:, 0].fill_(0)
+                else:
+                    for _fr13_prefix in sorted(_fr13_replay_layers):
+                        _fr13_layer = _fr13_replay_layers[_fr13_prefix]
+                        _fr13_flags = getattr(
+                            _fr13_layer, '_fr13_replay_flags', None
                         )
+                        _fr13_ssm_bank = getattr(
+                            _fr13_layer, '_fr13_replay_ssm_state', None
+                        )
+                        if (
+                            _fr13_flags is None
+                            or _fr13_ssm_bank is None
+                            or int(_fr13_flags[0].item()) != 1
+                        ):
+                            raise RuntimeError(
+                                'FR13_REPLAY_ROUTE: stale or missing scan-time '
+                                'staging for layer ' + str(_fr13_prefix)
+                            )
+                        if int(_fr13_flags[1].item()) != _fr13_replay_rows:
+                            raise RuntimeError(
+                                'FR13_REPLAY_ROUTE: committer rows '
+                                + str(_fr13_replay_rows)
+                                + ' != staged spec decodes '
+                                + str(int(_fr13_flags[1].item()))
+                                + ' for layer ' + str(_fr13_prefix)
+                            )
+                        _fr13_bnd_pre = None
+                        _fr13_bnd_layer_on = (
+                            _fr13_bnd_on
+                            and _lumo_tree_commit_gdn._fr13_boundary_layer_match(
+                                _fr13_prefix
+                            )
+                        )
+                        if _fr13_bnd_layer_on:
+                            _fr13_bnd_pre = _fr13_boundary_replay_pre(
+                                _lumo_tree_commit_gdn, _fr13_layer,
+                                _fr13_ssm_bank, _fr13_replay_rows,
+                            )
+                        _fr13_replay_launch(
+                            state_bank=_fr13_ssm_bank,
+                            spec_state_indices=_fr13_layer._fr13_replay_spec_idx,
+                            prev_lens=_fr13_layer._fr13_replay_prev_lens,
+                            accepted_paths=_accepted_path_buf,
+                            accepted_lens=_accepted_lens_buf,
+                            k_ring=_fr13_layer._fr13_replay_ring_k,
+                            v_ring=_fr13_layer._fr13_replay_ring_v,
+                            a_ring=_fr13_layer._fr13_replay_ring_a,
+                            b_ring=_fr13_layer._fr13_replay_ring_b,
+                            A_log=_fr13_layer.A_log,
+                            dt_bias=_fr13_layer.dt_bias,
+                            num_spec_decodes=_fr13_replay_rows,
+                            output_scale=float(
+                                _fr13_layer._fr13_replay_output_scale
+                            ),
+                            use_qk_l2norm_in_kernel=True,
+                        )
+                        _fr13_flags[0].fill_(0)
+                        if _fr13_bnd_layer_on:
+                            _fr13_boundary_replay_post(
+                                _lumo_tree_commit_gdn, _fr13_prefix, _fr13_layer,
+                                _fr13_ssm_bank, _fr13_replay_rows,
+                                _fr13_replay_gdn_node_paths, _fr13_replay_lens,
+                                _fr13_bnd_pre,
+                            )
     except Exception as _fr10_tree_lcp_log_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
             raise RuntimeError(
@@ -5223,8 +5871,15 @@ def _lumo_tree_canonical_multidraft_sample(
         if lumo_tree_parent_indices is not None:
             tree_self_logits = logits[metadata.tree_self_logits_indices]
             tree_self_logits = tree_self_logits.to(torch.float32)
-            if not self.is_processed_logprobs_mode:
-                tree_self_logits = tree_self_logits.clone()
+            if not _FR13_EAGER_PACK:
+                if not self.is_processed_logprobs_mode:
+                    tree_self_logits = tree_self_logits.clone()
+            # FR13_EAGER_PACK 2g(i): under the flag the defensive clone is
+            # dropped -- the advanced-index gather above ALWAYS materializes
+            # fresh storage (never aliases `logits`), so in-place mutation by
+            # processors/constraints cannot touch `logits` with or without
+            # the clone; it is a bitwise-identity third copy. (Red-team
+            # sign-off item: deletes a stock-mirroring defensive copy.)
             tree_self_logits = self.apply_logits_processors(
                 tree_self_logits, sampling_metadata, metadata
             )
@@ -5234,13 +5889,27 @@ def _lumo_tree_canonical_multidraft_sample(
                 sampling_metadata,
             )
             if sampling_metadata.all_greedy:
-                lumo_tree_token_ids = torch.stack(
-                    [
-                        target_logits.argmax(dim=-1).to(torch.int32),
-                        lumo_tree_self_logits.argmax(dim=-1).to(torch.int32),
-                    ],
-                    dim=0,
-                ).contiguous()
+                if _FR13_EAGER_PACK:
+                    # FR13_EAGER_PACK 2g(ii): persistent [2, T] int32 output
+                    # buffer; copy_ casts the int64 argmax to int32 in-kernel,
+                    # removing the stack/cat + two cast kernels + contiguous +
+                    # the per-step allocation. The argmax inputs and the
+                    # resulting token values are UNTOUCHED.
+                    lumo_tree_token_ids = _fr13_eager_pack_tree_ids_buf(
+                        int(target_logits.size(0)), target_logits.device
+                    )
+                    lumo_tree_token_ids[0].copy_(target_logits.argmax(dim=-1))
+                    lumo_tree_token_ids[1].copy_(
+                        lumo_tree_self_logits.argmax(dim=-1)
+                    )
+                else:
+                    lumo_tree_token_ids = torch.stack(
+                        [
+                            target_logits.argmax(dim=-1).to(torch.int32),
+                            lumo_tree_self_logits.argmax(dim=-1).to(torch.int32),
+                        ],
+                        dim=0,
+                    ).contiguous()
 
         try:
             import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
@@ -5680,49 +6349,98 @@ def _patch_gpu_model_runner_tree_metadata() -> bool:
                 _lumo_tree_meta_debug["tree_len"] = int(len(_choices))
                 _lumo_tree_meta_debug["max_depth"] = int(_max_depth)
                 if len(_choices) > 0:
-                    _path_to_idx = {tuple(_p): _i for _i, _p in enumerate(_choices)}
-                    _parents_template = np.array([
-                        _path_to_idx.get(tuple(_p[:-1]), -1) for _p in _choices
-                    ], dtype=np.int32)
-                    _tree_len = int(len(_choices))
-                    _parents = []
-                    _target = []
-                    _self = []
-                    _draft = []
-                    _sampled_start = 0
-                    _ok = True
-                    for _n in num_draft_tokens.tolist():
-                        _n = int(_n)
-                        if _n == 0:
-                            _sampled_start += 1
-                            continue
-                        if _n != _tree_len:
-                            _ok = False
-                            _lumo_tree_meta_debug["reason"] = f"draft_count_mismatch:{_n}!={_tree_len}"
-                            break
-                        for _node_idx, _parent in enumerate(_parents_template.tolist()):
-                            _parent_local = 0 if _parent < 0 else int(_parent) + 1
-                            _parents.append(int(_parent))
-                            _target.append(_sampled_start + _parent_local)
-                            _self.append(_sampled_start + _node_idx + 1)
-                            _draft.append(_sampled_start + _node_idx + 1)
-                        _sampled_start += _n + 1
-                    if _ok and len(_target) == int(cu_num_draft_tokens[-1]):
-                        target_logits_indices = np.array(_target, dtype=np.int32)
-                        lumo_tree_parent_indices = torch.from_numpy(
-                            np.array(_parents, dtype=np.int32)
-                        ).to(self.device, non_blocking=True)
-                        lumo_tree_self_logits_indices = torch.from_numpy(
-                            np.array(_self, dtype=np.int32)
-                        ).to(self.device, non_blocking=True)
-                        lumo_draft_token_indices = torch.from_numpy(
-                            np.array(_draft, dtype=np.int32)
-                        ).to(self.device, non_blocking=True)
-                        _lumo_tree_meta_debug["reason"] = "ok"
-                    elif _ok:
-                        _lumo_tree_meta_debug["reason"] = (
-                            f"target_total_mismatch:{len(_target)}!={int(cu_num_draft_tokens[-1])}"
+                    # FR13_EAGER_PACK (FIX-2 2d): the four metadata arrays are
+                    # a PURE FUNCTION of (tree source, per-req draft counts,
+                    # cu total) -- the exact-equality cache key spans the full
+                    # value domain, so a hit returns IDENTICAL values with
+                    # ZERO HtoD and zero per-node list building (steady B=1 =
+                    # always hit). OFF or miss = the verbatim legacy build.
+                    _ep_pack = getattr(self, "_fr13_eager_pack_flag", None)
+                    if _ep_pack is None:
+                        _ep_pack = __import__("os").environ.get(
+                            "FR13_EAGER_PACK", "0"
+                        ) == "1"
+                        self._fr13_eager_pack_flag = _ep_pack
+                    _ep_meta_hit = None
+                    _ep_meta_key = None
+                    if _ep_pack:
+                        _ep_meta_cache = getattr(
+                            self, "_fr13_eager_pack_meta_cache", None
                         )
+                        if _ep_meta_cache is None:
+                            _ep_meta_cache = {}
+                            self._fr13_eager_pack_meta_cache = _ep_meta_cache
+                        _ep_meta_key = (
+                            str(_ltree_src),
+                            tuple(int(_x) for _x in num_draft_tokens.tolist()),
+                            int(cu_num_draft_tokens[-1])
+                            if len(cu_num_draft_tokens)
+                            else 0,
+                        )
+                        _ep_meta_hit = _ep_meta_cache.get(_ep_meta_key)
+                    if _ep_meta_hit is not None:
+                        target_logits_indices = _ep_meta_hit[0].copy()
+                        lumo_tree_parent_indices = _ep_meta_hit[1]
+                        lumo_tree_self_logits_indices = _ep_meta_hit[2]
+                        lumo_draft_token_indices = _ep_meta_hit[3]
+                        _lumo_tree_meta_debug["reason"] = "ok"
+                        _lumo_tree_meta_debug["eager_pack_meta_cached"] = True
+                    else:
+                        _path_to_idx = {tuple(_p): _i for _i, _p in enumerate(_choices)}
+                        _parents_template = np.array([
+                            _path_to_idx.get(tuple(_p[:-1]), -1) for _p in _choices
+                        ], dtype=np.int32)
+                        _tree_len = int(len(_choices))
+                        _parents = []
+                        _target = []
+                        _self = []
+                        _draft = []
+                        _sampled_start = 0
+                        _ok = True
+                        for _n in num_draft_tokens.tolist():
+                            _n = int(_n)
+                            if _n == 0:
+                                _sampled_start += 1
+                                continue
+                            if _n != _tree_len:
+                                _ok = False
+                                _lumo_tree_meta_debug["reason"] = f"draft_count_mismatch:{_n}!={_tree_len}"
+                                break
+                            for _node_idx, _parent in enumerate(_parents_template.tolist()):
+                                _parent_local = 0 if _parent < 0 else int(_parent) + 1
+                                _parents.append(int(_parent))
+                                _target.append(_sampled_start + _parent_local)
+                                _self.append(_sampled_start + _node_idx + 1)
+                                _draft.append(_sampled_start + _node_idx + 1)
+                            _sampled_start += _n + 1
+                        if _ok and len(_target) == int(cu_num_draft_tokens[-1]):
+                            target_logits_indices = np.array(_target, dtype=np.int32)
+                            lumo_tree_parent_indices = torch.from_numpy(
+                                np.array(_parents, dtype=np.int32)
+                            ).to(self.device, non_blocking=True)
+                            lumo_tree_self_logits_indices = torch.from_numpy(
+                                np.array(_self, dtype=np.int32)
+                            ).to(self.device, non_blocking=True)
+                            lumo_draft_token_indices = torch.from_numpy(
+                                np.array(_draft, dtype=np.int32)
+                            ).to(self.device, non_blocking=True)
+                            _lumo_tree_meta_debug["reason"] = "ok"
+                            if _ep_pack and _ep_meta_key is not None:
+                                # Store AFTER a fully-ok build; private numpy
+                                # copy so later mutation can never poison the
+                                # cache. Bounded (pattern count is tiny).
+                                if len(_ep_meta_cache) > 64:
+                                    _ep_meta_cache.clear()
+                                _ep_meta_cache[_ep_meta_key] = (
+                                    target_logits_indices.copy(),
+                                    lumo_tree_parent_indices,
+                                    lumo_tree_self_logits_indices,
+                                    lumo_draft_token_indices,
+                                )
+                        elif _ok:
+                            _lumo_tree_meta_debug["reason"] = (
+                                f"target_total_mismatch:{len(_target)}!={int(cu_num_draft_tokens[-1])}"
+                            )
                 else:
                     _lumo_tree_meta_debug["reason"] = "empty_tree"
             elif _fr10_mode != "tree_mtp":
@@ -5924,12 +6642,53 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                     dtype=np.int64,
                 )
                 _fr10_tree_n = int(len(_fr10_depth_offsets))
-                _fr10_depth_pos = np.empty(
-                    int(cu_num_tokens[-1]), dtype=np.int64
-                )
-                _fr10_mrope_depth_pos = np.empty(
-                    int(cu_num_tokens[-1]), dtype=np.int64
-                )
+                _ep_pack = getattr(self, "_fr13_eager_pack_flag", None)
+                if _ep_pack is None:
+                    _ep_pack = __import__("os").environ.get(
+                        "FR13_EAGER_PACK", "0"
+                    ) == "1"
+                    self._fr13_eager_pack_flag = _ep_pack
+                if _ep_pack:
+                    # FR13_EAGER_PACK (FIX-2 2e): persistent pinned
+                    # depth-position buffers. TRANSPORT-ONLY change: the SAME
+                    # per-element values are written by the SAME loop below;
+                    # pinned staging replaces per-step np.empty x2 + the
+                    # pageable .to(device) staging sync. Values change every
+                    # step => NO caching (excluded as value-risk-free
+                    # impossible).
+                    _ep_dp_need = int(cu_num_tokens[-1])
+                    _ep_dp = getattr(self, "_fr13_eager_pack_depth_pos", None)
+                    if _ep_dp is None or _ep_dp[0].numel() < _ep_dp_need:
+                        _ep_dp_pin = torch.empty(
+                            (max(_ep_dp_need, 256),),
+                            dtype=torch.int64,
+                            pin_memory=True,
+                        )
+                        _ep_dp_mr = torch.empty(
+                            (max(_ep_dp_need, 256),), dtype=torch.int64
+                        )
+                        _ep_dp = (
+                            _ep_dp_pin,
+                            _ep_dp_mr,
+                            _ep_dp_pin.numpy(),
+                            _ep_dp_mr.numpy(),
+                            torch.cuda.Event(),
+                            [False],
+                        )
+                        self._fr13_eager_pack_depth_pos = _ep_dp
+                    if _ep_dp[5][0]:
+                        # Pinned-reuse guard: never rewrite the pinned buffer
+                        # while a prior async HtoD may still be reading it.
+                        _ep_dp[4].synchronize()
+                    _fr10_depth_pos = _ep_dp[2][:_ep_dp_need]
+                    _fr10_mrope_depth_pos = _ep_dp[3][:_ep_dp_need]
+                else:
+                    _fr10_depth_pos = np.empty(
+                        int(cu_num_tokens[-1]), dtype=np.int64
+                    )
+                    _fr10_mrope_depth_pos = np.empty(
+                        int(cu_num_tokens[-1]), dtype=np.int64
+                    )
                 _fr10_spec_req_ids = set(
                     getattr(scheduler_output, "scheduled_spec_decode_tokens", {}).keys()
                 )
@@ -5995,12 +6754,25 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                         + repr(_fr10_bad[:8])
                     )
                 if _fr10_ok:
-                    _fr10_depth_pos_cpu = torch.from_numpy(_fr10_depth_pos)
-                    self.positions[:total_num_scheduled_tokens].copy_(
-                        _fr10_depth_pos_cpu.to(
-                            device=self.device, non_blocking=True
+                    if _ep_pack:
+                        # FR13_EAGER_PACK 2e: ONE async pinned HtoD straight
+                        # into positions (legacy: pageable .to(device)
+                        # staging + copy_). Identical source values; the
+                        # [:_ep_dp_need] source keeps legacy's copy_ shape
+                        # mismatch raise if totals ever disagree.
+                        self.positions[:total_num_scheduled_tokens].copy_(
+                            _ep_dp[0][:_ep_dp_need],
+                            non_blocking=True,
                         )
-                    )
+                        _ep_dp[4].record()
+                        _ep_dp[5][0] = True
+                    else:
+                        _fr10_depth_pos_cpu = torch.from_numpy(_fr10_depth_pos)
+                        self.positions[:total_num_scheduled_tokens].copy_(
+                            _fr10_depth_pos_cpu.to(
+                                device=self.device, non_blocking=True
+                            )
+                        )
                     if getattr(self, "uses_mrope", False):
                         # Qwen3Next is text-only here, so all three M-RoPE
                         # components must carry the same depth-based position.
@@ -6368,20 +7140,79 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "                                )\n"
         "                                _fr13_rk_len_vals.append(_fr13_rk_len)\n"
         "                            _fr13_rk_n = len(_fr13_rk_path_rows)\n"
-        "                            _fr13_rk_paths[:_fr13_rk_n].copy_(\n"
-        "                                torch.tensor(\n"
-        "                                    _fr13_rk_path_rows,\n"
-        "                                    dtype=_fr13_rk_paths.dtype,\n"
-        "                                    device=_fr13_rk_paths.device,\n"
+        "                            _ep_pack = getattr(self, \"_fr13_eager_pack_flag\", None)\n"
+        "                            if _ep_pack is None:\n"
+        "                                _ep_pack = __import__(\"os\").environ.get(\n"
+        "                                    \"FR13_EAGER_PACK\", \"0\"\n"
+        "                                ) == \"1\"\n"
+        "                                self._fr13_eager_pack_flag = _ep_pack\n"
+        "                            if _ep_pack:\n"
+        "                                # FR13_EAGER_PACK (FIX-2 2f): persistent\n"
+        "                                # pinned staging (one async HtoD + 2 device\n"
+        "                                # slice copies) replaces 2 pageable\n"
+        "                                # torch.tensor HtoDs. Writes are NEVER\n"
+        "                                # skipped even when by_req 'should' equal\n"
+        "                                # the buffer contents (class 8 excluded).\n"
+        "                                _ep_rk_paths_n = _fr13_rk_n * _fr13_rk_cols\n"
+        "                                _ep_rk_need = _ep_rk_paths_n + _fr13_rk_n\n"
+        "                                _ep_rk = getattr(\n"
+        "                                    self, \"_fr13_eager_pack_rk_stage\", None\n"
         "                                )\n"
-        "                            )\n"
-        "                            _fr13_rk_lens[:_fr13_rk_n].copy_(\n"
-        "                                torch.tensor(\n"
-        "                                    _fr13_rk_len_vals,\n"
-        "                                    dtype=_fr13_rk_lens.dtype,\n"
-        "                                    device=_fr13_rk_lens.device,\n"
+        "                                if _ep_rk is None or _ep_rk[0].numel() < _ep_rk_need:\n"
+        "                                    _ep_rk_dev = torch.empty(\n"
+        "                                        (max(_ep_rk_need, 256),),\n"
+        "                                        dtype=torch.int64,\n"
+        "                                        device=_fr13_rk_paths.device,\n"
+        "                                    )\n"
+        "                                    _ep_rk_pin = torch.empty(\n"
+        "                                        (max(_ep_rk_need, 256),),\n"
+        "                                        dtype=torch.int64,\n"
+        "                                        pin_memory=True,\n"
+        "                                    )\n"
+        "                                    _ep_rk = (\n"
+        "                                        _ep_rk_dev,\n"
+        "                                        _ep_rk_pin,\n"
+        "                                        _ep_rk_pin.numpy(),\n"
+        "                                        torch.cuda.Event(),\n"
+        "                                        [False],\n"
+        "                                    )\n"
+        "                                    self._fr13_eager_pack_rk_stage = _ep_rk\n"
+        "                                if _ep_rk[4][0]:\n"
+        "                                    # Pinned-reuse guard (see committer).\n"
+        "                                    _ep_rk[3].synchronize()\n"
+        "                                for _ep_i, _ep_row in enumerate(_fr13_rk_path_rows):\n"
+        "                                    _ep_rk[2][\n"
+        "                                        _ep_i * _fr13_rk_cols:(_ep_i + 1) * _fr13_rk_cols\n"
+        "                                    ] = _ep_row\n"
+        "                                _ep_rk[2][_ep_rk_paths_n:_ep_rk_need] = _fr13_rk_len_vals\n"
+        "                                _ep_rk[0][:_ep_rk_need].copy_(\n"
+        "                                    _ep_rk[1][:_ep_rk_need], non_blocking=True\n"
         "                                )\n"
-        "                            )\n"
+        "                                _fr13_rk_paths[:_fr13_rk_n].copy_(\n"
+        "                                    _ep_rk[0][:_ep_rk_paths_n].view(\n"
+        "                                        _fr13_rk_n, _fr13_rk_cols\n"
+        "                                    )\n"
+        "                                )\n"
+        "                                _fr13_rk_lens[:_fr13_rk_n].copy_(\n"
+        "                                    _ep_rk[0][_ep_rk_paths_n:_ep_rk_need]\n"
+        "                                )\n"
+        "                                _ep_rk[3].record()\n"
+        "                                _ep_rk[4][0] = True\n"
+        "                            else:\n"
+        "                                _fr13_rk_paths[:_fr13_rk_n].copy_(\n"
+        "                                    torch.tensor(\n"
+        "                                        _fr13_rk_path_rows,\n"
+        "                                        dtype=_fr13_rk_paths.dtype,\n"
+        "                                        device=_fr13_rk_paths.device,\n"
+        "                                    )\n"
+        "                                )\n"
+        "                                _fr13_rk_lens[:_fr13_rk_n].copy_(\n"
+        "                                    torch.tensor(\n"
+        "                                        _fr13_rk_len_vals,\n"
+        "                                        dtype=_fr13_rk_lens.dtype,\n"
+        "                                        device=_fr13_rk_lens.device,\n"
+        "                                    )\n"
+        "                                )\n"
         "                except Exception as _fr13_rk_exc:\n"
         "                    if __import__(\"os\").environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
         "                        raise RuntimeError(\n"

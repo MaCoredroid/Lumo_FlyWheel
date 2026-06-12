@@ -66,7 +66,15 @@ def _load_gather_helper():
     # extract just the torch-only helper (same harness style as the
     # committer-extraction tests).
     src = _extract_function(KERNEL_TEXT, "gather_committed_path_conv_prior")
-    ns: dict = {"torch": torch}
+    ns: dict = {
+        "torch": torch,
+        # FR13_EAGER_PACK (FIX-2) module-globals: these CPU rigs exec the
+        # bare committer function; in the injected module the flag/needle
+        # are defined at module scope. Flag OFF = exact legacy transports
+        # (the value logic under test is transport-independent).
+        "_FR13_EAGER_PACK": False,
+        "_fr13_eager_pack_needle": lambda *a, **k: None,
+    }
     exec(src, ns)
     return ns["gather_committed_path_conv_prior"]
 
@@ -343,7 +351,15 @@ def _install_gdn_stub(monkeypatch, *, row_req_ids):
 
 
 def _greedy_namespace() -> dict:
-    ns: dict = {"torch": torch}
+    ns: dict = {
+        "torch": torch,
+        # FR13_EAGER_PACK (FIX-2) module-globals: these CPU rigs exec the
+        # bare committer function; in the injected module the flag/needle
+        # are defined at module scope. Flag OFF = exact legacy transports
+        # (the value logic under test is transport-independent).
+        "_FR13_EAGER_PACK": False,
+        "_fr13_eager_pack_needle": lambda *a, **k: None,
+    }
     exec(_extract_function(PATCHER_TEXT, "_lumo_tree_path_lcp_max_greedy_sample"), ns)
     return ns
 
@@ -460,7 +476,15 @@ def test_sampled_committer_fails_loud_on_force_spine_flag(monkeypatch) -> None:
     # Diagnostic-only flag: the sampled committer must refuse to run rather
     # than silently produce a non-forced (or wrongly-forced) t>0 stream.
     monkeypatch.setenv("FR13_FORCE_SPINE_COMMIT", "1")
-    ns: dict = {"torch": torch}
+    ns: dict = {
+        "torch": torch,
+        # FR13_EAGER_PACK (FIX-2) module-globals: these CPU rigs exec the
+        # bare committer function; in the injected module the flag/needle
+        # are defined at module scope. Flag OFF = exact legacy transports
+        # (the value logic under test is transport-independent).
+        "_FR13_EAGER_PACK": False,
+        "_fr13_eager_pack_needle": lambda *a, **k: None,
+    }
     exec(_extract_function(PATCHER_TEXT, "_lumo_tree_canonical_multidraft_sample"), ns)
     with pytest.raises(RuntimeError, match="FR13_FORCE_SPINE_COMMIT"):
         ns["_lumo_tree_canonical_multidraft_sample"](

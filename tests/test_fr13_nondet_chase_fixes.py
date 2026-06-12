@@ -77,7 +77,15 @@ def _install_gdn_stub(monkeypatch, *, row_req_ids):
 
 
 def _committer_namespace() -> dict:
-    ns: dict = {"torch": torch}
+    ns: dict = {
+        "torch": torch,
+        # FR13_EAGER_PACK (FIX-2) module-globals: these CPU rigs exec the
+        # bare committer function; in the injected module the flag/needle
+        # are defined at module scope. Flag OFF = exact legacy transports
+        # (the value logic under test is transport-independent).
+        "_FR13_EAGER_PACK": False,
+        "_fr13_eager_pack_needle": lambda *a, **k: None,
+    }
     exec(_extract_function("_lumo_tree_canonical_multidraft_sample"), ns)
     exec(_extract_function("_lumo_tree_path_lcp_max_greedy_sample"), ns)
     return ns

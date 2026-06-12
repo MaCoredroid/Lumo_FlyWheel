@@ -82,13 +82,17 @@ def test_kernel_shared_node_step_body_used_by_scan_and_replay() -> None:
     ktext = KERNEL.read_text()
 
     assert ktext.count("def _gdn_node_step(") == 1
-    # def + scan call + replay call = 3 mentions of the open-paren form.
-    assert ktext.count("_gdn_node_step(") == 3
+    # def + scan call + replay call + FR13_EAGER_PACK batched all-layer
+    # replay call (FIX-2 2b: same inlined body = the bit-exactness basis,
+    # gated by the int-view byte A/B vs the legacy 48-loop).
+    assert ktext.count("_gdn_node_step(") == 4
     assert "def _tree_gdn_replay_kernel(" in ktext
     assert "def launch_tree_gdn_replay(" in ktext
-    # Identical constexpr plumbing at both call sites.
-    assert ktext.count("USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,") == 2
-    assert ktext.count("RAW_GATING=RAW_GATING,") == 2
+    assert "def _tree_gdn_replay_all_layers_kernel(" in ktext
+    assert "def launch_tree_gdn_replay_all_layers(" in ktext
+    # Identical constexpr plumbing at all call sites (scan, replay, batched).
+    assert ktext.count("USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,") == 3
+    assert ktext.count("RAW_GATING=RAW_GATING,") == 3
     # The replay launch pins the scan's warp shape and raw-gating basis.
     replay_launch = ktext[ktext.index("_tree_gdn_replay_kernel[grid]"):]
     assert "RAW_GATING=True," in replay_launch

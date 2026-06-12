@@ -36,6 +36,12 @@ FR13_FORCE_SPINE_COMMIT=${FR13_FORCE_SPINE_COMMIT:-0}
 # lm-head read per drafter step, FR13_B1_SPEED_ATTRIBUTION_BIND.md). =0 is
 # the exact legacy double-logits path (the A/B instrument).
 FR13_DRAFTER_SINGLE_LOGITS=${FR13_DRAFTER_SINGLE_LOGITS:-1}
+# FR13_EAGER_PACK (FIX-2, default OFF until the lossless gate passes): pack
+# the committer's eager DtoH/HtoD storm and batch the 48 per-layer replay
+# launches into one (FR13_B1_SPEED_ATTRIBUTION_BIND.md). SEMANTICS-PRESERVING
+# ONLY: no computed value changes, only WHERE/HOW the same ints move. =0 is
+# the exact legacy transport path (the A/B instrument).
+FR13_EAGER_PACK=${FR13_EAGER_PACK:-0}
 # FR13_FIX1_SELFCHECK (default OFF) — DIAGNOSTIC ONLY, like
 # FR13_FORCE_SPINE_COMMIT: with the single-logits drafter serving, ALSO run
 # legacy _greedy_sample per drafter step and raise on any token mismatch
@@ -164,6 +170,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_CONV_COMMITTED_PATH="$FR13_CONV_COMMITTED_PATH" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \
   -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
+  -e FR13_EAGER_PACK="$FR13_EAGER_PACK" \
   -e FR13_FIX1_SELFCHECK="$FR13_FIX1_SELFCHECK" \
   -e FR13_FIX1_SELFCHECK_DUMP="$FR13_FIX1_SELFCHECK_DUMP" \
   -e FR13_REPLAY_ROUTE="${FR13_REPLAY_ROUTE:-1}" \
