@@ -963,8 +963,32 @@ def _patch_gdn_linear() -> bool:
             "_FR13_BOUNDARY_HEADER_DONE = False\n"
             "\n"
             "\n"
+            "def _fr13_chase_on():\n"
+            "    # FR13_CHASE_DIAG (superset-chase Step 1, default OFF): ONE flag\n"
+            "    # arming the in-process chase diagnostics. On the GDN side it\n"
+            "    # IMPLIES the boundary instrument (taps A/B/B0 + the new B_JOIN\n"
+            "    # verdict + the CV conv-prior tap), all EAGER-ONLY via the\n"
+            "    # shared emit() capture fail-loud.\n"
+            "    return os.environ.get(\"FR13_CHASE_DIAG\", \"0\") == \"1\"\n"
+            "\n"
+            "\n"
+            "# FR13_CHASE_DIAG both-state needle (playbook class 9): import-time,\n"
+            "# fires exactly once per process in BOTH flag states.\n"
+            "print(\n"
+            "    \"FR13_CHASE_DIAG gdn taps: chase=%s (%s)\"\n"
+            "    % (\n"
+            "        os.environ.get(\"FR13_CHASE_DIAG\", \"0\"),\n"
+            "        \"armed-eager-only\" if _fr13_chase_on() else \"inert\",\n"
+            "    ),\n"
+            "    flush=True,\n"
+            ")\n"
+            "\n"
+            "\n"
             "def _fr13_boundary_on():\n"
-            "    return os.environ.get(\"FR13_REPLAY_BOUNDARY_LOG\", \"0\") == \"1\"\n"
+            "    return (\n"
+            "        os.environ.get(\"FR13_REPLAY_BOUNDARY_LOG\", \"0\") == \"1\"\n"
+            "        or _fr13_chase_on()\n"
+            "    )\n"
             "\n"
             "\n"
             "def _fr13_boundary_layer_match(prefix):\n"
@@ -1009,6 +1033,7 @@ def _patch_gdn_linear() -> bool:
             "                    \"FR13_REPLAY_ROUTE\",\n"
             "                    \"FR13_REPLAY_BOUNDARY_LOG\",\n"
             "                    \"FR13_REPLAY_BOUNDARY_LAYERS\",\n"
+            "                    \"FR13_CHASE_DIAG\",\n"
             "                    \"FR13_TREE_REQKEY\",\n"
             "                    \"FR13_CONV_COMMITTED_PATH\",\n"
             "                    \"FR13_TREE_BONUS_SELF\",\n"
@@ -1667,6 +1692,79 @@ def _patch_gdn_linear() -> bool:
                                 num_accepted_tokens=_fr10_accepted_lens_tensor,
                                 num_spec_decodes=int(attn_metadata.num_spec_decodes),
                             )
+                        if _fr13_chase_on() and _fr13_boundary_layer_match(
+                            str(self.prefix)
+                        ):
+                            # FR13_CHASE_DIAG instrument (v): H6 conv-prior
+                            # row/col + prior-window bytes AS-READ. EAGER-ONLY
+                            # (explicit fail-loud BEFORE the syncs below; the
+                            # shared emit() also fail-louds). The byte VERDICT
+                            # for H6 remains the dual-path FR13_TCF_SELFCHECK=1
+                            # (raises on mismatch) — mandatory on the chase
+                            # boot per the plan-verify caveat (FIX-3's
+                            # per-group bug proved 'bit-exact-by-construction'
+                            # can fail live with green needles); this tap
+                            # records what the verify forward actually
+                            # consumed so the reducer can byte-join it against
+                            # the previous event's committed window.
+                            if torch.cuda.is_current_stream_capturing():
+                                raise RuntimeError(
+                                    "FR13_CHASE_DIAG conv tap is eager-only: "
+                                    "boot with ENFORCE_EAGER=1"
+                                )
+                            _fr13_cv_n = int(attn_metadata.num_spec_decodes)
+                            # gather_committed_path_conv_prior{,_prepared}
+                            # return read_node_cols/bank_rows as [B, 1]
+                            # (kernel-lib contract) -- flatten before the
+                            # int() walk (the 2026-06-12 diag-boot crash:
+                            # tolist() on [B,1] yields nested lists).
+                            _fr13_cv_cols = [
+                                int(_x)
+                                for _x in _fr13_committed_read_cols[
+                                    :_fr13_cv_n
+                                ].reshape(-1).detach().cpu().tolist()
+                            ]
+                            _fr13_cv_rows = [
+                                int(_x)
+                                for _x in _fr13_committed_bank_rows[
+                                    :_fr13_cv_n
+                                ].reshape(-1).detach().cpu().tolist()
+                            ]
+                            _fr13_cv_dig = []
+                            for _fr13_cv_b in range(_fr13_cv_n):
+                                (
+                                    _fr13_cv_f8,
+                                    _fr13_cv_sha,
+                                    _fr13_cv_nb,
+                                ) = _fr13_boundary_row_digest(
+                                    _fr13_committed_prior_bank[_fr13_cv_b]
+                                )
+                                _fr13_cv_dig.append({
+                                    "slot": int(_fr13_cv_b),
+                                    "read_col": _fr13_cv_cols[_fr13_cv_b],
+                                    "bank_row": _fr13_cv_rows[_fr13_cv_b],
+                                    "first8": _fr13_cv_f8,
+                                    "sha4096": _fr13_cv_sha,
+                                })
+                            _fr13_boundary_emit({
+                                "tap": "CV",
+                                "layer": str(self.prefix),
+                                "num_spec_decodes": _fr13_cv_n,
+                                "tcf_fused": bool(_FR13_TREE_CONV_FUSED),
+                                "prior_rows": _fr13_cv_dig,
+                                "accepted_lens": [
+                                    int(_x)
+                                    for _x in _fr10_accepted_lens_tensor[
+                                        :_fr13_cv_n
+                                    ].detach().cpu().tolist()
+                                ],
+                                "accepted_paths": [
+                                    [int(_x) for _x in _row]
+                                    for _row in _fr10_accepted_paths_tensor[
+                                        :_fr13_cv_n
+                                    ].detach().cpu().tolist()
+                                ],
+                            })
                     # FR13_REPLAY_ROUTE: the committer replay already
                     # published accepted ssm states to LINEAR bank columns,
                     # so the ssm half of the remap is dead (and would corrupt
@@ -3839,6 +3937,69 @@ def _patch_gdn_linear() -> bool:
                             ),
                             "replay_route": bool(_fr13_replay_route_on),
                         })
+                        # FR13_CHASE_DIAG instrument (ii): IN-PROCESS byte
+                        # verdict — producer's as-written digests (tap A,
+                        # event N, _FR13_BOUNDARY_LAST_WRITTEN_BY_REQ) vs
+                        # this consumer's as-read h0 row (event N+1). The
+                        # playbook class-8 boundary instrument, joined here
+                        # instead of by an offline reducer; ROWBUG class
+                        # carried from the published path so the decision
+                        # rule (A: integer mismatch + state byte-equal => H1;
+                        # B: state as-read != as-written => class 4/7/8
+                        # handoff fix FIRST) reads off one jsonl.
+                        _fr13_ch_req = (
+                            str(_fr13_bnd_req_ids[fr10_b])
+                            if fr10_b < len(_fr13_bnd_req_ids)
+                            else None
+                        )
+                        _fr13_ch_prev = (
+                            globals().get(
+                                "_FR13_BOUNDARY_LAST_WRITTEN_BY_REQ", {}
+                            ).get(_fr13_ch_req)
+                            if _fr13_ch_req is not None
+                            else None
+                        )
+                        if _fr13_ch_prev is None:
+                            _fr13_ch_verdict = "NO_PRIOR_WRITE"
+                            _fr13_ch_w_sha = None
+                        else:
+                            _fr13_ch_w_sha = _fr13_ch_prev.get(
+                                "sha_by_row", {}
+                            ).get(str(_fr13_bnd_read_row))
+                            if _fr13_ch_w_sha is None:
+                                _fr13_ch_verdict = "READ_ROW_NOT_WRITTEN"
+                            elif _fr13_ch_w_sha == _fr13_bnd_sha:
+                                _fr13_ch_verdict = "BYTE_EQUAL"
+                            else:
+                                _fr13_ch_verdict = "BYTE_DIFF"
+                        _fr13_boundary_emit({
+                            "tap": "B_JOIN",
+                            "layer": str(self.prefix),
+                            "slot": int(fr10_b),
+                            "req_id": _fr13_ch_req,
+                            "verdict": _fr13_ch_verdict,
+                            "read_row": int(_fr13_bnd_read_row),
+                            "read_col": int(_fr13_bnd_read_col),
+                            "lens_now": _fr13_bnd_lens_now,
+                            "sha_as_read": _fr13_bnd_sha,
+                            "sha_as_written": _fr13_ch_w_sha,
+                            "prev_event": (
+                                None if _fr13_ch_prev is None
+                                else _fr13_ch_prev.get("event")
+                            ),
+                            "prev_accepted_len": (
+                                None if _fr13_ch_prev is None
+                                else _fr13_ch_prev.get("accepted_len")
+                            ),
+                            "prev_accepted_path": (
+                                None if _fr13_ch_prev is None
+                                else _fr13_ch_prev.get("accepted_path")
+                            ),
+                            "prev_rowbug": (
+                                None if _fr13_ch_prev is None
+                                else _fr13_ch_prev.get("rowbug")
+                            ),
+                        })
                     if _fr13_replay_route_on:
                         # FR13_REPLAY_ROUTE activation ring + scan-time
                         # snapshot. PERSISTENT preallocated staging only --
@@ -5117,7 +5278,13 @@ def _fr13_boundary_replay_post(
         if _req_id is not None:
             _last_written[_req_id] = {
                 'event': int(getattr(gdn_mod, '_FR13_BOUNDARY_EVENT', 0)),
-                'rows': sorted(set(_rows_written)),
+                # FR13_CHASE_DIAG instrument (ii): keep the published PATH and
+                # the ROWBUG class (H1: published leaf flat row != accepted
+                # len => the stock linear sample-row math picks a wrong row)
+                # with the as-written digests so the next event's B_JOIN
+                # verdict can label every transition in-process.
+                'accepted_path': [int(_x) for _x in _path],
+                'rowbug': bool(_path) and int(_path[-1]) != _alen,
                 'by_col': {
                     str(_d['col']): _d['row'] for _d in _dst
                 },
@@ -9029,6 +9196,176 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr10_spine_tokens = [draft_token_ids]
             _fr10_leaf_tokens = []
 
+            # FR13_CHASE_DIAG (superset-chase Step 1; ONE flag, default OFF,
+            # inert): (i) per-event INTEGER record {token_indices_to_sample -
+            # base, prev accepted_len, published leaf flat row from the
+            # REQKEY dict} — H1's smoking gun is integer equality, no
+            # numerics, no cross-boot floor; (iii) drafter root-logit top-K
+            # fp32 dump for the flip-margin reduce against the NEXT event's
+            # parent target. Host-side python in propose(), OUTSIDE captured
+            # graph regions (capture-safe like the FR10_MTP_DRAFT_TRACE
+            # wrapper) but adds per-event syncs: chase boots are
+            # diagnostics-only, never accept/speed boots.
+            _fr13_chase_diag = os.environ.get("FR13_CHASE_DIAG", "0") == "1"
+            logger.info_once(
+                "FR13_CHASE_DIAG drafter instruments: chase=%s (%s)",
+                os.environ.get("FR13_CHASE_DIAG", "0"),
+                "armed" if _fr13_chase_diag else "inert",
+            )
+            if _fr13_chase_diag:
+                import time as _fr13_ch_time
+                global _FR13_CHASE_EVENT_IDX
+                global _FR13_CHASE_ROW_FH
+                global _FR13_CHASE_LOGIT_FH
+                try:
+                    _FR13_CHASE_EVENT_IDX
+                except NameError:
+                    _FR13_CHASE_EVENT_IDX = 0
+                    _FR13_CHASE_ROW_FH = None
+                    _FR13_CHASE_LOGIT_FH = None
+                _fr13_ch_dir = os.environ.get("FR13_CHASE_DIAG_DIR", "/logs")
+                if _FR13_CHASE_ROW_FH is None:
+                    os.makedirs(_fr13_ch_dir, exist_ok=True)
+                    _FR13_CHASE_ROW_FH = open(
+                        os.path.join(
+                            _fr13_ch_dir, "fr13_chase_rowtrace.jsonl"
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                    _FR13_CHASE_ROW_FH.write(json.dumps({
+                        "tap": "header",
+                        "ts": round(_fr13_ch_time.time(), 4),
+                        "pid": os.getpid(),
+                        "flags": {
+                            _fr13_ch_key: os.environ.get(_fr13_ch_key)
+                            for _fr13_ch_key in (
+                                "FR13_CHASE_DIAG",
+                                "FR13_REPLAY_ROUTE",
+                                "FR13_TREE_REQKEY",
+                                "FR13_DRAFTER_SINGLE_LOGITS",
+                                "FR13_EAGER_PACK",
+                                "FR13_TREE_CONV_FUSED",
+                                "FR10_DECODE_MODE_DEFAULT",
+                                "VLLM_BATCH_INVARIANT",
+                            )
+                        },
+                    }) + chr(10))
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_ch_gdn,
+                )
+                _fr13_ch_by_req = getattr(
+                    _fr13_ch_gdn, "_LUMO_FA_TREE_ACCEPT_BY_REQ", None
+                ) or {}
+                _fr13_ch_req_ids = getattr(
+                    _fr13_ch_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None
+                ) or []
+                _fr13_ch_tis = (
+                    [
+                        int(_fr13_ch_x)
+                        for _fr13_ch_x in token_indices_to_sample
+                        .detach().cpu().tolist()
+                    ]
+                    if token_indices_to_sample is not None
+                    else None
+                )
+                _fr13_ch_qsl = [
+                    int(_fr13_ch_x)
+                    for _fr13_ch_x in common_attn_metadata.query_start_loc
+                    .detach().cpu().tolist()
+                ]
+                _fr13_ch_rows = []
+                for _fr13_ch_b in range(int(batch_size)):
+                    _fr13_ch_req = (
+                        str(_fr13_ch_req_ids[_fr13_ch_b])
+                        if _fr13_ch_b < len(_fr13_ch_req_ids)
+                        else None
+                    )
+                    _fr13_ch_entry = (
+                        _fr13_ch_by_req.get(_fr13_ch_req)
+                        if _fr13_ch_req is not None
+                        else None
+                    )
+                    if _fr13_ch_entry is None:
+                        _fr13_ch_path = None
+                        _fr13_ch_len = None
+                        _fr13_ch_leaf = None
+                        _fr13_ch_rowbug = None
+                    else:
+                        _fr13_ch_path = [
+                            int(_fr13_ch_x) for _fr13_ch_x in _fr13_ch_entry[0]
+                        ]
+                        _fr13_ch_len = int(_fr13_ch_entry[1])
+                        _fr13_ch_leaf = (
+                            int(_fr13_ch_path[_fr13_ch_len - 1])
+                            if 0 < _fr13_ch_len <= len(_fr13_ch_path)
+                            else 0
+                        )
+                        # ROWBUG (H1): the published leaf's flat verify row
+                        # (+1-shifted node id) differs from accepted_len =
+                        # the row stock prepare_inputs_padded samples.
+                        _fr13_ch_rowbug = bool(
+                            _fr13_ch_len > 0 and _fr13_ch_leaf != _fr13_ch_len
+                        )
+                    _fr13_ch_base = (
+                        _fr13_ch_qsl[_fr13_ch_b]
+                        if _fr13_ch_b < len(_fr13_ch_qsl)
+                        else None
+                    )
+                    _fr13_ch_off = (
+                        _fr13_ch_tis[_fr13_ch_b] - _fr13_ch_base
+                        if _fr13_ch_tis is not None
+                        and _fr13_ch_base is not None
+                        else None
+                    )
+                    _fr13_ch_rows.append({
+                        "slot": _fr13_ch_b,
+                        "req_id": _fr13_ch_req,
+                        "token_index_to_sample": (
+                            None if _fr13_ch_tis is None
+                            else _fr13_ch_tis[_fr13_ch_b]
+                        ),
+                        "base": _fr13_ch_base,
+                        "sampled_row_offset": _fr13_ch_off,
+                        "prev_accepted_len": _fr13_ch_len,
+                        "published_path": _fr13_ch_path,
+                        "published_leaf_flat_row": _fr13_ch_leaf,
+                        "rowbug": _fr13_ch_rowbug,
+                        "h1_row_mismatch": (
+                            None
+                            if _fr13_ch_off is None or _fr13_ch_leaf is None
+                            else bool(_fr13_ch_off != _fr13_ch_leaf)
+                        ),
+                        "root_draft_token": int(
+                            draft_token_ids.reshape(-1)[_fr13_ch_b]
+                        ),
+                    })
+                _FR13_CHASE_ROW_FH.write(json.dumps({
+                    "tap": "rowtrace",
+                    "event_idx": int(_FR13_CHASE_EVENT_IDX),
+                    "ts": round(_fr13_ch_time.time(), 4),
+                    "rows": _fr13_ch_rows,
+                }) + chr(10))
+                if _FR13_CHASE_LOGIT_FH is None:
+                    _FR13_CHASE_LOGIT_FH = open(
+                        os.path.join(
+                            _fr13_ch_dir, "fr13_chase_rootlogits.jsonl"
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _fr13_ch_topk = int(os.environ.get("FR13_CHASE_TOPK", "32"))
+                _fr13_ch_vals, _fr13_ch_ids = torch.topk(
+                    _fr10_logits.float(), _fr13_ch_topk, dim=-1
+                )
+                _FR13_CHASE_LOGIT_FH.write(json.dumps({
+                    "tap": "root_topk",
+                    "event_idx": int(_FR13_CHASE_EVENT_IDX),
+                    "topk_ids": _fr13_ch_ids.detach().cpu().tolist(),
+                    "topk_logits_fp32": _fr13_ch_vals.detach().cpu().tolist(),
+                }) + chr(10))
+                _FR13_CHASE_EVENT_IDX += 1
+
             if self.allowed_attn_types is not None:
                 for group_md in per_group_attn_metadata:
                     if not isinstance(group_md, self.allowed_attn_types):
@@ -9219,6 +9556,141 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
             except Exception:
                 pass
+            if _fr13_chase_diag:
+                # FR13_CHASE_DIAG instrument (iv): drafter-layer KV row
+                # hashes over the tail of the visible window (the H2
+                # carrier), recorded AFTER this event's first-pass scatter
+                # and the 4 spine-step writes. Module handles cached
+                # host-side on self (propose() python — never inside a
+                # captured region; no device allocations); EAGER boots
+                # recommended (heavy per-event syncs).
+                import hashlib as _fr13_ch_hashlib
+                import time as _fr13_ch_time2
+                global _FR13_CHASE_KV_FH
+                try:
+                    _FR13_CHASE_KV_FH
+                except NameError:
+                    _FR13_CHASE_KV_FH = None
+                if _FR13_CHASE_KV_FH is None:
+                    _FR13_CHASE_KV_FH = open(
+                        os.path.join(
+                            os.environ.get("FR13_CHASE_DIAG_DIR", "/logs"),
+                            "fr13_chase_drafter_kv.jsonl",
+                        ),
+                        "a",
+                        buffering=1,
+                    )
+                _fr13_ch_kv_layers = getattr(
+                    self, "_fr13_chase_kv_layers", None
+                )
+                if _fr13_ch_kv_layers is None:
+                    _fr13_ch_kv_layers = []
+                    for _fr13_ch_nm, _fr13_ch_mod in (
+                        self.model.named_modules()
+                    ):
+                        _fr13_ch_kvc = getattr(_fr13_ch_mod, "kv_cache", None)
+                        if (
+                            isinstance(_fr13_ch_kvc, (list, tuple))
+                            and len(_fr13_ch_kvc) > 0
+                            and torch.is_tensor(_fr13_ch_kvc[0])
+                            and _fr13_ch_kvc[0].numel() > 0
+                        ):
+                            _fr13_ch_kv_layers.append(
+                                (_fr13_ch_nm, _fr13_ch_mod)
+                            )
+                    self._fr13_chase_kv_layers = _fr13_ch_kv_layers
+                    logger.info_once(
+                        "FR13_CHASE_DIAG drafter-KV tap: %d kv-cache "
+                        "module(s) located in the drafter",
+                        len(_fr13_ch_kv_layers),
+                    )
+
+                def _fr13_ch_row_sha(_fr13_ch_t):
+                    _fr13_ch_flat = _fr13_ch_t.detach().reshape(-1)
+                    _fr13_ch_es = _fr13_ch_flat.element_size()
+                    _fr13_ch_n = min(
+                        int(_fr13_ch_flat.numel()),
+                        max(1, 4096 // _fr13_ch_es),
+                    )
+                    _fr13_ch_raw = (
+                        _fr13_ch_flat[:_fr13_ch_n].cpu().contiguous()
+                        .view(torch.uint8).numpy().tobytes()
+                    )
+                    return _fr13_ch_hashlib.sha256(_fr13_ch_raw).hexdigest()
+
+                _fr13_ch_w = int(
+                    os.environ.get("FR13_CHASE_KV_WINDOW", "16")
+                )
+                _fr13_ch_bt = (
+                    common_attn_metadata.block_table_tensor.detach().cpu()
+                )
+                _fr13_ch_sl = [
+                    int(_fr13_ch_x)
+                    for _fr13_ch_x in common_attn_metadata.seq_lens
+                    .detach().cpu().tolist()
+                ]
+                _fr13_ch_layer_recs = []
+                for _fr13_ch_nm, _fr13_ch_mod in _fr13_ch_kv_layers:
+                    _fr13_ch_kvt = _fr13_ch_mod.kv_cache[0]
+                    if int(_fr13_ch_kvt.shape[0]) == 2:
+                        _fr13_ch_kk = _fr13_ch_kvt[0]
+                        _fr13_ch_vv = _fr13_ch_kvt[1]
+                    elif (
+                        _fr13_ch_kvt.dim() >= 2
+                        and int(_fr13_ch_kvt.shape[1]) == 2
+                    ):
+                        _fr13_ch_kk = _fr13_ch_kvt[:, 0]
+                        _fr13_ch_vv = _fr13_ch_kvt[:, 1]
+                    else:
+                        _fr13_ch_layer_recs.append({
+                            "layer": _fr13_ch_nm,
+                            "kv_shape": [
+                                int(_fr13_ch_x)
+                                for _fr13_ch_x in _fr13_ch_kvt.shape
+                            ],
+                            "verdict": "UNKNOWN_LAYOUT",
+                        })
+                        continue
+                    _fr13_ch_rows_rec = []
+                    for _fr13_ch_b in range(int(batch_size)):
+                        _fr13_ch_s = _fr13_ch_sl[_fr13_ch_b]
+                        for _fr13_ch_p in range(
+                            max(0, _fr13_ch_s - _fr13_ch_w), _fr13_ch_s
+                        ):
+                            _fr13_ch_blk = int(
+                                _fr13_ch_bt[_fr13_ch_b][
+                                    _fr13_ch_p // int(block_size)
+                                ]
+                            )
+                            _fr13_ch_boff = _fr13_ch_p % int(block_size)
+                            _fr13_ch_rows_rec.append({
+                                "slot": _fr13_ch_b,
+                                "pos": _fr13_ch_p,
+                                "block": _fr13_ch_blk,
+                                "block_off": _fr13_ch_boff,
+                                "k_sha4096": _fr13_ch_row_sha(
+                                    _fr13_ch_kk[_fr13_ch_blk][_fr13_ch_boff]
+                                ),
+                                "v_sha4096": _fr13_ch_row_sha(
+                                    _fr13_ch_vv[_fr13_ch_blk][_fr13_ch_boff]
+                                ),
+                            })
+                    _fr13_ch_layer_recs.append({
+                        "layer": _fr13_ch_nm,
+                        "kv_shape": [
+                            int(_fr13_ch_x)
+                            for _fr13_ch_x in _fr13_ch_kvt.shape
+                        ],
+                        "rows": _fr13_ch_rows_rec,
+                    })
+                _FR13_CHASE_KV_FH.write(json.dumps({
+                    "tap": "drafter_kv",
+                    "event_idx": int(_FR13_CHASE_EVENT_IDX) - 1,
+                    "ts": round(_fr13_ch_time2.time(), 4),
+                    "seq_lens": _fr13_ch_sl,
+                    "rows_window": _fr13_ch_w,
+                    "layers": _fr13_ch_layer_recs,
+                }) + chr(10))
             return _fr10_packed
 
         _fr10_tree_draft_branch_seen = any(

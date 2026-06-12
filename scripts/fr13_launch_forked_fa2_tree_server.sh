@@ -59,6 +59,20 @@ FR13_TREE_CONV_FUSED=${FR13_TREE_CONV_FUSED:-1}
 # number.
 FR13_FIX1_SELFCHECK=${FR13_FIX1_SELFCHECK:-0}
 FR13_FIX1_SELFCHECK_DUMP=${FR13_FIX1_SELFCHECK_DUMP:-/logs/fr13_fix1_selfcheck.json}
+# FR13_CHASE_DIAG (default OFF) — DIAGNOSTIC ONLY, superset-chase Step-1
+# in-process instruments (plan wf_c43b084f, FIX1-SELFCHECK pattern): (i)
+# per-event integer row record + (iii) drafter root-logit top-K (eagle
+# propose, capture-safe but adds syncs), (ii) GDN state-parity taps
+# A/B/B_JOIN/CV via the boundary instrument (EAGER-ONLY — boot with
+# ENFORCE_EAGER=1), (iv) drafter-KV row hashes. Implies the
+# FR13_REPLAY_BOUNDARY_LOG taps on the FR13_REPLAY_BOUNDARY_LAYERS
+# layer(s). Pair with FR13_TCF_SELFCHECK=1 on the chase boot for the
+# mandatory H6 conv-prior byte check. NEVER bind =1 into a serving config
+# or an accept/speed number.
+FR13_CHASE_DIAG=${FR13_CHASE_DIAG:-0}
+FR13_CHASE_DIAG_DIR=${FR13_CHASE_DIAG_DIR:-/logs}
+FR13_CHASE_TOPK=${FR13_CHASE_TOPK:-32}
+FR13_CHASE_KV_WINDOW=${FR13_CHASE_KV_WINDOW:-16}
 LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
 LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}
 LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}
@@ -187,6 +201,10 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_REPLAY_BOUNDARY_LOG="${FR13_REPLAY_BOUNDARY_LOG:-0}" \
   -e FR13_REPLAY_BOUNDARY_LAYERS="${FR13_REPLAY_BOUNDARY_LAYERS:-layers.0.linear_attn}" \
   -e FR13_REPLAY_BOUNDARY_PATH="${FR13_REPLAY_BOUNDARY_PATH:-/logs/fr13_replay_boundary.jsonl}" \
+  -e FR13_CHASE_DIAG="$FR13_CHASE_DIAG" \
+  -e FR13_CHASE_DIAG_DIR="$FR13_CHASE_DIAG_DIR" \
+  -e FR13_CHASE_TOPK="$FR13_CHASE_TOPK" \
+  -e FR13_CHASE_KV_WINDOW="$FR13_CHASE_KV_WINDOW" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-0}" \
   -e TORCH_USE_CUDA_DSA="${TORCH_USE_CUDA_DSA:-0}" \
