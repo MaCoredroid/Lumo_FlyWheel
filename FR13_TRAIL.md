@@ -2,7 +2,7 @@
 
 **GOAL:** B=4 remains the final CUDA-captured SWE-Verified endpoint: e2e lossless (within native self-floor + per-depth argmax + temp-0.6 distributional) + superset accept ≥ same-shape native + wall TPS ≥ native E5. Active pivot (user 2026-06-11): stop the B=4 chase-down until B=1 is strong-lossless, near-native in forward speed, and shows the expected superset accept/event consequence versus native MTP-5.
 
-**Active order (user 2026-06-11):** lossless/superset evidence is banked, but live work pivots to B=1 speed first. `FR13_B1_SPEED_FIRST_PIVOT_BIND.md` records the paused state-parity discriminator and makes B1-3 the current front.
+**Active order (user 2026-06-11; re-confirmed + sharpened 2026-06-12):** B=1 SPEED FIRST (B1-3), with lossless as the GATE on every speed change — each change must be semantics-preserving: B=1 same-seed served-token byte-identity vs the pre-change build (greedy and temp 0.6; B=1 is deterministic post cc008587), accept/event unchanged, regular-decode==pristine when shared code is touched. The B1-2 superset/state-parity chase resumes ONLY after the speed code settles — fixing superset first would have to be re-chased after speed edits (user 2026-06-12). The full lossless/superset bar (FR13_DIRECTION_AND_NUMBERS.md "LOSSLESS, PRECISELY") stays the final verdict on the settled code. `FR13_B1_SPEED_FIRST_PIVOT_BIND.md` records the paused state-parity discriminator.
 
 **Quality/lossless invariant (user 2026-06-11):**
 - Ground truth quality: pure target-model decode, no MTP.
