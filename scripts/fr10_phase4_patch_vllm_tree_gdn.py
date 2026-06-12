@@ -7306,11 +7306,91 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 os.environ.get("FR13_DRAFTER_SINGLE_LOGITS", "1"),
                 getattr(self, "use_local_argmax_reduction", False),
             )
+            # FR13_FIX1_SELFCHECK (default OFF; DIAGNOSTIC ONLY, like
+            # FR13_FORCE_SPINE_COMMIT): in-process dual-path byte-identity
+            # proof for FIX-1. With the single-logits path serving, ALSO run
+            # legacy self._greedy_sample (the second compute_logits) per
+            # drafter step and assert torch.equal against the
+            # argmax-of-same-logits draft tokens. Needs no cross-boot
+            # anything: this is the decisive OFF==ON instrument on a
+            # substrate whose cross-boot floor is non-deterministic under
+            # BI=0 AND BI=1 (FR13_B1_FIX1_CONFIRM_BIND.md step 1).
+            _fr13_selfcheck = (
+                _fr13_single_logits
+                and os.environ.get("FR13_FIX1_SELFCHECK", "0") == "1"
+            )
+            if _fr13_selfcheck:
+                logger.info_once(
+                    "FR13_FIX1_SELFCHECK engaged: dual-path drafter "
+                    "byte-identity assert active (diagnostic, default OFF)"
+                )
+                if not hasattr(self, "_fr13_fix1_sc_stats"):
+                    self._fr13_fix1_sc_stats = {
+                        "steps_checked": 0,
+                        "rows_checked": 0,
+                        "mismatch_steps": 0,
+                    }
+
+            def _fr13_sc_check(_site, _new_ids, _legacy_ids):
+                _st = self._fr13_fix1_sc_stats
+                _st["steps_checked"] += 1
+                _st["rows_checked"] += int(_new_ids.numel())
+                _ok = bool(torch.equal(_new_ids, _legacy_ids))
+                if not _ok:
+                    _st["mismatch_steps"] += 1
+                    _bad = (
+                        (_new_ids != _legacy_ids)
+                        .nonzero(as_tuple=False)
+                        .flatten()
+                        .tolist()
+                    )
+                    logger.error(
+                        "FR13_FIX1_SELFCHECK MISMATCH at %s step %d: "
+                        "rows=%s argmax=%s greedy_sample=%s",
+                        _site,
+                        _st["steps_checked"],
+                        _bad,
+                        _new_ids.flatten()[_bad].tolist(),
+                        _legacy_ids.flatten()[_bad].tolist(),
+                    )
+                try:
+                    import json as _sc_json
+
+                    with open(
+                        os.environ.get(
+                            "FR13_FIX1_SELFCHECK_DUMP",
+                            "/logs/fr13_fix1_selfcheck.json",
+                        ),
+                        "w",
+                    ) as _sc_fh:
+                        _sc_json.dump(_st, _sc_fh)
+                except Exception:
+                    pass
+                if not _ok or _st["steps_checked"] % 50 == 0:
+                    logger.info(
+                        "FR13_FIX1_SELFCHECK needle: steps=%d rows=%d "
+                        "mismatch_steps=%d",
+                        _st["steps_checked"],
+                        _st["rows_checked"],
+                        _st["mismatch_steps"],
+                    )
+                if not _ok:
+                    raise AssertionError(
+                        "FR13_FIX1_SELFCHECK: argmax-of-same-logits != "
+                        "_greedy_sample at " + _site
+                    )
+
             if _fr13_single_logits:
                 # Root top-2 is verified unused (no tree node consumes the
                 # root runner-up: every caterpillar choice starts with 0).
                 _fr10_logits = self.model.compute_logits(sample_hidden_states)
                 draft_token_ids = _fr10_logits.argmax(dim=-1)
+                if _fr13_selfcheck:
+                    _fr13_sc_check(
+                        "root",
+                        draft_token_ids,
+                        self._greedy_sample(sample_hidden_states),
+                    )
             else:
                 _fr10_logits = self.model.compute_logits(sample_hidden_states)
                 _fr10_top2 = torch.topk(_fr10_logits, 2, dim=-1).indices
@@ -7436,6 +7516,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         last_hidden_states[:batch_size]
                     )
                     draft_token_ids = _fr10_step_logits.argmax(dim=-1)
+                    if _fr13_selfcheck:
+                        _fr13_sc_check(
+                            "loop",
+                            draft_token_ids,
+                            self._greedy_sample(last_hidden_states[:batch_size]),
+                        )
                     _fr10_spine_tokens.append(draft_token_ids)
                     if not _fr10_is_spine_only:
                         _fr10_step_top2 = torch.topk(

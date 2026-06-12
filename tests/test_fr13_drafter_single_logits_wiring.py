@@ -99,9 +99,50 @@ def test_legacy_double_logits_path_preserved_verbatim_under_off() -> None:
     )
     assert legacy_loop in snippet
 
-    # No _greedy_sample call outside the legacy (else) branches: exactly the
-    # two legacy call sites remain.
-    assert snippet.count("self._greedy_sample(") == 2
+    # _greedy_sample call sites: exactly the two legacy (else) branches plus
+    # the two FR13_FIX1_SELFCHECK diagnostic sites (default OFF, gated on
+    # _fr13_selfcheck inside the single-logits branch).
+    assert snippet.count("self._greedy_sample(") == 4
+    assert (
+        snippet.count(
+            "if _fr13_selfcheck:\n"
+        )
+        >= 2
+    )
+
+
+def test_fix1_selfcheck_diagnostic_wiring() -> None:
+    """FR13_FIX1_SELFCHECK: in-process dual-path byte-identity instrument.
+
+    Default OFF; only active inside the single-logits branch; raises on the
+    first token mismatch (fail loud, class 9); counters dumped to a /logs
+    needle file; engagement needle in the boot log; tree-launcher
+    passthrough exists.
+    """
+    snippet = _eagle_consumption_new_snippet()
+
+    # Default OFF and nested under the single-logits path.
+    assert (
+        '_fr13_single_logits\n'
+        '                and os.environ.get("FR13_FIX1_SELFCHECK", "0") == "1"'
+        in snippet
+    )
+    # Dual-path compare = torch.equal; fail-loud raise on mismatch.
+    assert "torch.equal(_new_ids, _legacy_ids)" in snippet
+    assert "raise AssertionError(" in snippet
+    # Counter needle (log line) + JSON dump path env.
+    assert "FR13_FIX1_SELFCHECK needle: steps=" in snippet
+    assert "FR13_FIX1_SELFCHECK_DUMP" in snippet
+    # Engagement needle (class 9).
+    assert "FR13_FIX1_SELFCHECK engaged" in snippet
+    # Both drafter sites are checked (root + loop).
+    assert '"root",' in snippet
+    assert '"loop",' in snippet
+
+    tree_launcher = (REPO / "scripts" / "fr13_launch_forked_fa2_tree_server.sh").read_text()
+    assert "FR13_FIX1_SELFCHECK=${FR13_FIX1_SELFCHECK:-0}" in tree_launcher
+    assert '-e FR13_FIX1_SELFCHECK="$FR13_FIX1_SELFCHECK" \\' in tree_launcher
+    assert '-e FR13_FIX1_SELFCHECK_DUMP="$FR13_FIX1_SELFCHECK_DUMP" \\' in tree_launcher
 
 
 def test_drafter_replacement_snippet_is_valid_method_body() -> None:

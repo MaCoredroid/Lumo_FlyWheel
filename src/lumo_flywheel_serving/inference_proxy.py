@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import hashlib
+import itertools
 import json
 import os
 import sys
@@ -28,6 +29,44 @@ from .tuned_config import (
 TRACK_B_REQUEST_METRICS_SCHEMA = "lumo.track_b.vllm_request_metrics.v1"
 TRACK_B_REQUEST_METRICS_PRODUCER = "track_b_vllm_request_metrics_patch"
 TRACK_B_REQUEST_METRICS_OUT_ENV = "LUMO_TRACK_B_REQUEST_METRICS_OUT"
+
+# FR13 SWE served-stream instrument (env-gated, default OFF): when
+# LUMO_PROXY_PAIR_DUMP_DIR is set, every UPSTREAM /v1/responses call (the
+# initial call AND each auto-continue retry, which never hits the request-dump
+# path) is dumped as one JSON file pairing the exact upstream request payload
+# with the parsed upstream response. This is the per-request served-stream
+# byte-compare vehicle for A/B arms at the SWE agentic regime (FR13_TRAIL
+# gate-regime fork attribution: model-served fork vs environment fork).
+# Diagnostic capture only — the served traffic is unchanged.
+PAIR_DUMP_DIR_ENV = "LUMO_PROXY_PAIR_DUMP_DIR"
+_PAIR_DUMP_SEQ = itertools.count()
+
+
+def _pair_dump_upstream(kind: str, request_payload: bytes, response_obj: Any) -> None:
+    dump_dir = os.environ.get(PAIR_DUMP_DIR_ENV, "").strip()
+    if not dump_dir:
+        return
+    try:
+        Path(dump_dir).mkdir(parents=True, exist_ok=True)
+        seq = next(_PAIR_DUMP_SEQ)
+        try:
+            req_obj: Any = json.loads(request_payload.decode("utf-8"))
+        except Exception:  # noqa: BLE001
+            req_obj = {"_undecodable_request": request_payload.decode("utf-8", errors="replace")}
+        record = {
+            "schema": "lumo.fr13.proxy_pair_dump.v1",
+            "ts_ns": time.time_ns(),
+            "seq": seq,
+            "kind": kind,
+            "request": req_obj,
+            "response": response_obj,
+        }
+        path = Path(dump_dir) / f"pair_{time.time_ns():020d}_{seq:06d}_{kind}.json"
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(record, handle)
+    except Exception:  # noqa: BLE001
+        # Best-effort capture; never break inference traffic.
+        pass
 TRACK_B_RUNTIME_CONFIG_HASH_ENV = "LUMO_TRACK_B_RUNTIME_CONFIG_HASH"
 
 # Harness oracle header — see
@@ -2024,6 +2063,7 @@ def build_proxy_handler(
                     response_headers["Content-Length"] = str(len(response_content))
                 elif isinstance(parsed, dict):
                     non_streaming_parsed = parsed
+                    _pair_dump_upstream("initial", payload, parsed)
                 # Auto-continue retry loop (Qwen3 #1817 / Qwen3.5-9B #10 workaround):
                 # qwen3.5-27b in thinking mode sometimes plans tool calls in
                 # reasoning/text ("Now let me create X") and then fails to emit
@@ -2105,6 +2145,7 @@ def build_proxy_handler(
                                 except json.JSONDecodeError:
                                     retry_parsed = None
                                 if isinstance(retry_parsed, dict):
+                                    _pair_dump_upstream("auto_continue", retry_payload, retry_parsed)
                                     # Merge: keep accumulated output from prior calls,
                                     # then append the new output items.
                                     prev_output = list(non_streaming_parsed.get("output", []) or [])
