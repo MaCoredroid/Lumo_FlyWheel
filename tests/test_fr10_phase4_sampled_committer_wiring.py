@@ -153,7 +153,10 @@ def test_phase4_seeds_next_tree_read_linear_path_from_accepted_nodes() -> None:
     assert 'int(_fr13_layer_idx) >= 4' not in text
     assert "rolled_tail_remapped" not in text
     assert "legacy_remapped_head" not in text
-    assert "_fr10_node_state_source = torch.cat(\n                                (_fr10_prior_window.transpose(0, 1), _fr10_node_x)," in text
+    # Co-updated for FR13_TREE_CONV_FUSED (FIX-3): the legacy per-node
+    # write-back loop moved one indent level into the byte-verbatim OFF arm
+    # (else branch); the ops are unchanged.
+    assert "_fr10_node_state_source = torch.cat(\n                                    (_fr10_prior_window.transpose(0, 1), _fr10_node_x)," in text
     assert "FR11_TREE_CONV_NATIVE_BF16_TAPS" in text
     assert "def _fr11_conv_tap_product" in text
     assert "h0_use_accepted_column=True" in text

@@ -319,22 +319,35 @@ def test_patcher_remap_keeps_conv_half_and_drops_ssm_half_on_flag() -> None:
     # replay's just-published linear ssm columns). No ssm arg exists on the
     # page-safe path at all; flag OFF keeps the legacy whole-page launch with
     # ssm_state passed verbatim.
+    # Co-updated for FR13_TREE_CONV_FUSED (FIX-3): the page-safe torch remap
+    # is now the byte-verbatim OFF arm (else branch, one indent deeper) of
+    # the fused prepared-rows remap; the route flag line, the legacy call's
+    # kwargs and the FR13_REPLAY_ROUTE=0 whole-page escape hatch are
+    # unchanged. The fused arm calls the same-permutation
+    # replay_conv_state_linear_remap_prepared (gather-then-scatter,
+    # conv-view-only) and is wiring-gated by
+    # tests/test_fr13_tree_conv_fused_wiring.py.
     needle = (
         '                    if os.environ.get("FR13_REPLAY_ROUTE", "1") == "1":\n'
-        "                        replay_conv_state_linear_remap(\n"
-        "                            conv_state=conv_state,\n"
-        "                            spec_state_indices=spec_state_indices_tensor,\n"
-        "                            accepted_paths=_fr10_accepted_paths_tensor,\n"
-        "                            num_accepted_tokens=_fr10_accepted_lens_tensor,\n"
-        "                            num_spec_decodes=int(attn_metadata.num_spec_decodes),\n"
-        "                            max_path_len=int(spec_state_indices_tensor.size(-1)),\n"
-        "                        )\n"
+        "                        if _FR13_TREE_CONV_FUSED:\n"
+    )
+    assert needle in text
+    legacy_arm = (
+        "                        else:\n"
+        "                            replay_conv_state_linear_remap(\n"
+        "                                conv_state=conv_state,\n"
+        "                                spec_state_indices=spec_state_indices_tensor,\n"
+        "                                accepted_paths=_fr10_accepted_paths_tensor,\n"
+        "                                num_accepted_tokens=_fr10_accepted_lens_tensor,\n"
+        "                                num_spec_decodes=int(attn_metadata.num_spec_decodes),\n"
+        "                                max_path_len=int(spec_state_indices_tensor.size(-1)),\n"
+        "                            )\n"
         "                    else:\n"
         "                        launch_tree_state_linear_remap(\n"
         "                            ssm_state=ssm_state,\n"
         "                            conv_state=conv_state,"
     )
-    assert needle in text
+    assert legacy_arm in text
     # The page-safe helper must never receive an ssm bank handle.
     assert "replay_conv_state_linear_remap(\n                            ssm_state" not in text
     # The helper import is injected alongside the kernel imports.

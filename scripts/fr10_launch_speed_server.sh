@@ -89,6 +89,15 @@ FR13_DRAFTER_SINGLE_LOGITS=${FR13_DRAFTER_SINGLE_LOGITS:-1}
 # ONLY: no computed value changes, only WHERE/HOW the same ints move. =0 is
 # the exact legacy transport path (the A/B instrument).
 FR13_EAGER_PACK=${FR13_EAGER_PACK:-1}
+# FR13_TREE_CONV_FUSED (FIX-3, default OFF until the byte A/B + live gate
+# pass): fuse the tree causal-conv emulation's per-node state write-back
+# loop / per-col tap loop / remap + committed-prior row math into vectorized
+# torch ops over init-time static index tensors (census contributors 1-4,
+# FR13_B1_SPEED_ATTRIBUTION_BIND.md). BIT-EXACT-PRESERVING by construction
+# (same per-element ops in the same order; tree-only — native
+# causal_conv1d_update untouched). =0 is the exact legacy emulation (the
+# A/B instrument).
+FR13_TREE_CONV_FUSED=${FR13_TREE_CONV_FUSED:-0}
 ENFORCE_EAGER=${ENFORCE_EAGER:-0}
 LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
 TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
@@ -193,6 +202,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR10_DECODE_MODE_DEFAULT="$FR10_DECODE_MODE_DEFAULT" \
   -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
   -e FR13_EAGER_PACK="$FR13_EAGER_PACK" \
+  -e FR13_TREE_CONV_FUSED="$FR13_TREE_CONV_FUSED" \
   -e FR11_TREE_CONV_NATIVE_BF16_TAPS="$FR11_TREE_CONV_NATIVE_BF16_TAPS" \
   -e FR12_TREE_CONV_NATIVE_BF16_TAPS="$FR12_TREE_CONV_NATIVE_BF16_TAPS" \
   -e FR12_NATIVE_SPINE_ORACLE="$FR12_NATIVE_SPINE_ORACLE" \

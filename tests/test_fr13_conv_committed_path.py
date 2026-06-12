@@ -290,11 +290,18 @@ def test_patch_text_conv_committed_path_wiring() -> None:
     # shared mamba page and clobbers the replay's linear ssm columns); the
     # explicit FR13_REPLAY_ROUTE=0 escape hatch keeps the legacy whole-page
     # launch with ssm_state passed verbatim. The conv half runs either way.
+    # Co-updated for FR13_TREE_CONV_FUSED (FIX-3): the page-safe call is now
+    # the byte-verbatim OFF arm of the fused prepared-rows remap (else
+    # branch, one indent deeper); ops unchanged, frozen library fn intact.
     remap_call = text.index(
         "if os.environ.get(\"FR13_REPLAY_ROUTE\", \"1\") == \"1\":\n"
-        "                        replay_conv_state_linear_remap(\n"
-        "                            conv_state=conv_state,"
+        "                        if _FR13_TREE_CONV_FUSED:"
     )
+    assert (
+        "else:\n"
+        "                            replay_conv_state_linear_remap(\n"
+        "                                conv_state=conv_state,"
+    ) in text
     assert (
         "else:\n"
         "                        launch_tree_state_linear_remap(\n"
