@@ -63,20 +63,20 @@ def _conv_replacement() -> str:
 CONV = _conv_replacement()
 
 
-def test_flag_default_off_everywhere() -> None:
-    # Module-scope read-once (escaped patch-string form), default OFF.
+def test_flag_default_on_everywhere() -> None:
+    # Module-scope read-once (escaped patch-string form), default ON (gated 2026-06-12).
     assert (
-        '_FR13_TREE_CONV_FUSED = os.environ.get(\\"FR13_TREE_CONV_FUSED\\", \\"0\\") == \\"1\\"'
+        '_FR13_TREE_CONV_FUSED = os.environ.get(\\"FR13_TREE_CONV_FUSED\\", \\"1\\") == \\"1\\"'
         in TEXT
     )
-    # Builder-init read (escaped form), default OFF; two escaped read sites
+    # Builder-init read (escaped form), default ON; two escaped read sites
     # total (module header + builder init).
     assert (
-        TEXT.count('os.environ.get(\\"FR13_TREE_CONV_FUSED\\", \\"0\\") == \\"1\\"')
+        TEXT.count('os.environ.get(\\"FR13_TREE_CONV_FUSED\\", \\"1\\") == \\"1\\"')
         == 2
     )
     # No site may default ON; no defaultless reads.
-    assert '\\"FR13_TREE_CONV_FUSED\\", \\"1\\"' not in TEXT
+    assert '\\"FR13_TREE_CONV_FUSED\\", \\"0\\"' not in TEXT
     assert '"FR13_TREE_CONV_FUSED", "1"' not in TEXT
     assert "'FR13_TREE_CONV_FUSED', '1'" not in TEXT
     assert 'environ.get(\\"FR13_TREE_CONV_FUSED\\")' not in TEXT
@@ -95,9 +95,9 @@ def test_flag_default_off_everywhere() -> None:
 def test_both_launchers_default_off_and_pass_the_flag() -> None:
     for launcher in LAUNCHERS:
         text = launcher.read_text()
-        assert "FR13_TREE_CONV_FUSED=${FR13_TREE_CONV_FUSED:-0}" in text, launcher
+        assert "FR13_TREE_CONV_FUSED=${FR13_TREE_CONV_FUSED:-1}" in text, launcher
         assert '-e FR13_TREE_CONV_FUSED="$FR13_TREE_CONV_FUSED" \\' in text, launcher
-        assert "FR13_TREE_CONV_FUSED:-1" not in text, launcher
+        assert "FR13_TREE_CONV_FUSED:-0" not in text, launcher
 
 
 def test_engagement_needle_fires_in_both_states() -> None:
@@ -266,9 +266,10 @@ def test_builder_init_prep_buffers_group_union_and_boot_needle() -> None:
     # Prep buffers + owners allocated/exported at METADATA-BUILDER INIT
     # (class 6), inside the gdn_attn builder patch (before _patch_gdn_linear).
     for needle in (
-        "_fr13_tcf_mod._FR13_TCF_PREP = _fr13_tcf_prep",
+        "_fr13_tcf_mod._FR13_TCF_PREP = _fr13_tcf_prep_all",
         "_fr13_tcf_mod._FR13_TCF_PREP_OWNERS = frozenset(",
         "_fr13_tcf_mod._FR13_TCF_GROUP_OWNERS = _fr13_tcf_groups",
+        "_fr13_tcf_mod._FR13_TCF_LAYER_GROUP = _fr13_tcf_layer_group",
     ):
         assert TEXT.index(needle) < gdn_linear_start, needle
     # Group-first ownership ranked by NUMERIC layer index (model execution
@@ -286,7 +287,17 @@ def test_builder_init_prep_buffers_group_union_and_boot_needle() -> None:
     assert '_fr13_tcf_prep["read_cols"][' in CONV
     assert '_fr13_tcf_prep["src_rows"][' in CONV
     assert ".copy_(_fr13_tcf_new_src)" in CONV
-    assert 'str(self.prefix) in _fr13_tcf_owners' in CONV
+    # PER-GROUP prep semantics (live-gate root cause 2026-06-12, dual-path
+    # selfcheck-proven: spec_state_indices is kv-cache-GROUP-LOCAL — bank
+    # rows differ per group; the original shared single buffer let the
+    # last-initialized group's rows leak into the other groups' layers,
+    # committed_bank_rows mismatch 2499/4000). Every layer resolves ITS
+    # group's prep slot; the write gate is equality with that group's owner.
+    assert "_fr13_tcf_prep = _fr13_tcf_prep_all[_fr13_tcf_gk]" in CONV
+    assert '_fr13_tcf_gk = _fr13_tcf_layer_group.get(' in CONV
+    assert "_fr13_tcf_group_owners[_fr13_tcf_gk]" in CONV
+    assert "missing from the builder layer-group" in CONV
+    assert "moved between kv-cache groups across" in TEXT
 
 
 def test_static_tables_capture_safe_cache() -> None:

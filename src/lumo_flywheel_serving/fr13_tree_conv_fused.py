@@ -57,6 +57,20 @@ import torch
 # Static index tables (init-time; value-static per tree topology).
 # ---------------------------------------------------------------------------
 
+# CUDA-graph capture-time staging retention (class 6, live-gate fix
+# 2026-06-12): the cu130 nightly profiles cudagraph memory BEFORE any eager
+# tree forward (gpu_model_runner "Profiling CUDA graph memory"), so the
+# FIRST fused forward of a boot can run INSIDE stream capture and miss the
+# layer-keyed table cache. A pageable host->device copy
+# (torch.tensor(list, device="cuda")) is ILLEGAL during capture; a PINNED
+# host source is legal but gets baked into the graph as an H2D copy node
+# that re-reads the staging buffer on every replay — so every staging
+# tensor must stay alive for the life of the process. Retained here
+# (value-static, tree_n*state_len int64 each, a handful per boot). The
+# DEVICE-side result stays unretained per the capture-pool license (the
+# graph owns its pool address; the baked copy refills it on each replay).
+_CAPTURE_STAGING_RETAIN: list[torch.Tensor] = []
+
 
 def tree_paths_from_parent(parent: list[int]) -> list[list[int]]:
     """Root-to-node path (node ids) for every node, mirroring the builder."""
@@ -143,7 +157,19 @@ def build_tree_conv_state_src_indices(
                 flat.append(width - 1 + paths[i][p - (width - 1)])
             else:
                 flat.append(zero_row)
-    return torch.tensor(flat, dtype=torch.long, device=device)
+    flat_cpu = torch.tensor(flat, dtype=torch.long)
+    dev = torch.device(device)
+    if dev.type != "cuda":
+        return flat_cpu.to(dev)
+    if torch.cuda.is_current_stream_capturing():
+        # Capture-time miss (see _CAPTURE_STAGING_RETAIN): pinned staging is
+        # the only capture-legal H2D; retain the staging buffer so the baked
+        # copy node stays valid on every replay. Values are byte-identical
+        # to the eager build (exact int64, no numerics).
+        staging = flat_cpu.pin_memory()
+        _CAPTURE_STAGING_RETAIN.append(staging)
+        return staging.to(dev, non_blocking=True)
+    return flat_cpu.to(dev)
 
 
 # ---------------------------------------------------------------------------

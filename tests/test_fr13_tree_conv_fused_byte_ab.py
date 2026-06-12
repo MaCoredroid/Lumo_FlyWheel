@@ -636,9 +636,22 @@ def test_t6_capture_payload_anchor_gpu_byte_ab() -> None:
             cand_payload = torch.load(p, map_location="cpu", weights_only=False)
         except Exception:
             continue
-        if (
-            isinstance(cand_payload, dict)
-            and cand_payload.get("meta", {}).get("tree_conv_detail")
+        detail_cand = (
+            cand_payload.get("meta", {}).get("tree_conv_detail")
+            if isinstance(cand_payload, dict)
+            else None
+        )
+        # Older FR12 captures lack the selected-window fields this anchor
+        # consumes; require the exact keys (conv_bias may be None but the
+        # key must exist) so the sorted scan lands on a live FR13 capture.
+        if isinstance(detail_cand, dict) and all(
+            k in detail_cand
+            for k in (
+                "window_selected",
+                "pre_conv_selected",
+                "conv_weights",
+                "conv_bias",
+            )
         ):
             payload = cand_payload
             break
@@ -674,3 +687,38 @@ def test_t6_capture_payload_anchor_gpu_byte_ab() -> None:
     assert torch.equal(
         _bits16(silu(legacy).cpu()), _bits16(silu(fused).cpu())
     )
+
+
+@_GPU
+def test_t8_state_src_build_capture_legal_byte_ab() -> None:
+    """T8 (class 6, live-gate fix 2026-06-12): the static-table fallback must
+    be LEGAL inside CUDA-graph capture and byte-identical on replay.
+
+    The cu130 nightly profiles cudagraph memory BEFORE any eager tree
+    forward, so the first fused forward of a boot runs INSIDE stream capture
+    with a cold table cache; the original pageable
+    ``torch.tensor(list, device="cuda")`` raised "Cannot copy between CPU
+    and CUDA tensors during CUDA graph capture" and killed the cat9_on boot.
+    The fix stages through RETAINED pinned host memory. This test captures a
+    graph whose body builds the table and bakes a copy into a persistent out
+    buffer, then replays TWICE (after trashing the buffer) and asserts exact
+    int64 equality with the eager build — proving both capture legality and
+    replay-stable values (the baked H2D re-reads the retained staging).
+    """
+    parent = CAT9_PARENT
+    eager = build_tree_conv_state_src_indices(
+        parent=parent, width=4, state_len=12, device="cuda"
+    )
+    out = torch.empty_like(eager)
+    g = torch.cuda.CUDAGraph()
+    torch.cuda.synchronize()
+    with torch.cuda.graph(g):
+        captured = build_tree_conv_state_src_indices(
+            parent=parent, width=4, state_len=12, device="cuda"
+        )
+        out.copy_(captured)
+    for _ in range(2):
+        out.fill_(-1)
+        g.replay()
+        torch.cuda.synchronize()
+        assert torch.equal(out, eager)

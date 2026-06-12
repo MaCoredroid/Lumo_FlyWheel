@@ -584,7 +584,7 @@ def _patch_gdn_attn() -> bool:
             "                    _fr13_existing_layers.update(_fr13_replay_layers)\n"
             "                else:\n"
             "                    _fr13_gdn_mod._FR13_REPLAY_LAYERS = _fr13_replay_layers\n"
-            "            if os.environ.get(\"FR13_TREE_CONV_FUSED\", \"0\") == \"1\":\n"
+            "            if os.environ.get(\"FR13_TREE_CONV_FUSED\", \"1\") == \"1\":\n"
             "                # FR13_TREE_CONV_FUSED (FIX-3): INIT-TIME persistent\n"
             "                # prepared-row buffers + group-first prep ownership\n"
             "                # (class 6). The shared remap/committed-prior row math\n"
@@ -638,7 +638,28 @@ def _patch_gdn_attn() -> bool:
             "                _fr13_tcf_mod._FR13_TCF_PREP_OWNERS = frozenset(\n"
             "                    _fr13_tcf_groups.values()\n"
             "                )\n"
-            "                _fr13_tcf_prep = getattr(_fr13_tcf_mod, \"_FR13_TCF_PREP\", None)\n"
+            "                # PER-GROUP prep buffers (live-gate root cause\n"
+            "                # 2026-06-12, selfcheck-proven: spec_state_indices\n"
+            "                # is kv-cache-GROUP-LOCAL — bank rows differ per\n"
+            "                # group, so a single shared buffer let the last\n"
+            "                # owner's group rows leak into the other groups'\n"
+            "                # layers [committed_bank_rows mismatch 2499/4000 =\n"
+            "                # exactly the 30 non-last-group layers/forward].\n"
+            "                # read_cols stays group-invariant [0/4000] but is\n"
+            "                # kept per-group for buffer locality). Each owner\n"
+            "                # writes ITS group's buffers; each layer reads its\n"
+            "                # OWN group's buffers via _FR13_TCF_LAYER_GROUP.\n"
+            "                _fr13_tcf_prep_all = dict(\n"
+            "                    getattr(_fr13_tcf_mod, \"_FR13_TCF_PREP\", None) or {}\n"
+            "                )\n"
+            "                if not isinstance(_fr13_tcf_prep_all, dict) or (\n"
+            "                    _fr13_tcf_prep_all and \"b_max\" in _fr13_tcf_prep_all\n"
+            "                ):\n"
+            "                    raise RuntimeError(\n"
+            "                        \"FR13_TREE_CONV_FUSED legacy single-buffer prep \"\n"
+            "                        \"export found; per-group rebuild required\"\n"
+            "                    )\n"
+            "                _fr13_tcf_prep = _fr13_tcf_prep_all.get(_fr13_tcf_group_key)\n"
             "                if _fr13_tcf_prep is not None and (\n"
             "                    int(_fr13_tcf_prep[\"b_max\"]) != _fr13_tcf_bs\n"
             "                    or int(_fr13_tcf_prep[\"path_cols\"]) != _fr13_tcf_cols\n"
@@ -668,7 +689,30 @@ def _patch_gdn_attn() -> bool:
             "                            device=device,\n"
             "                        ),\n"
             "                    }\n"
-            "                _fr13_tcf_mod._FR13_TCF_PREP = _fr13_tcf_prep\n"
+            "                _fr13_tcf_prep_all[_fr13_tcf_group_key] = _fr13_tcf_prep\n"
+            "                _fr13_tcf_mod._FR13_TCF_PREP = _fr13_tcf_prep_all\n"
+            "                _fr13_tcf_layer_group = dict(\n"
+            "                    getattr(_fr13_tcf_mod, \"_FR13_TCF_LAYER_GROUP\", None)\n"
+            "                    or {}\n"
+            "                )\n"
+            "                for _fr13_tcf_ln in layer_names:\n"
+            "                    _fr13_tcf_prior_gk = _fr13_tcf_layer_group.get(\n"
+            "                        str(_fr13_tcf_ln)\n"
+            "                    )\n"
+            "                    if (\n"
+            "                        _fr13_tcf_prior_gk is not None\n"
+            "                        and _fr13_tcf_prior_gk != _fr13_tcf_group_key\n"
+            "                    ):\n"
+            "                        raise RuntimeError(\n"
+            "                            \"FR13_TREE_CONV_FUSED layer \"\n"
+            "                            + str(_fr13_tcf_ln)\n"
+            "                            + \" moved between kv-cache groups across \"\n"
+            "                            \"builder inits (fail-loud, class 9)\"\n"
+            "                        )\n"
+            "                    _fr13_tcf_layer_group[str(_fr13_tcf_ln)] = (\n"
+            "                        _fr13_tcf_group_key\n"
+            "                    )\n"
+            "                _fr13_tcf_mod._FR13_TCF_LAYER_GROUP = _fr13_tcf_layer_group\n"
             "                try:\n"
             "                    from vllm.logger import init_logger as _fr13_tcf_il\n"
             "                    _fr13_tcf_il(\"vllm.fr13_tree_conv_fused\").info(\n"
@@ -746,7 +790,7 @@ def _patch_gdn_linear() -> bool:
             "# per-element ops, same order; tree-only — the native\n"
             "# causal_conv1d_update path is untouched). OFF executes the legacy\n"
             "# emulation verbatim (the A/B instrument).\n"
-            "_FR13_TREE_CONV_FUSED = os.environ.get(\"FR13_TREE_CONV_FUSED\", \"0\") == \"1\"\n"
+            "_FR13_TREE_CONV_FUSED = os.environ.get(\"FR13_TREE_CONV_FUSED\", \"1\") == \"1\"\n"
             "_FR13_TREE_CONV_FUSED_CHECKED = False\n"
             "_FR13_TREE_CONV_FUSED_NEEDLE_DONE = False\n"
             "# Prepared-row persistent buffers + group-first prep ownership:\n"
@@ -754,7 +798,8 @@ def _patch_gdn_linear() -> bool:
             "# builder re-init, the FIX-2 cu130 group-union/5x-re-init license;\n"
             "# CUDA capture happens after the LAST init so the graph binds the\n"
             "# final addresses).\n"
-            "_FR13_TCF_PREP = None\n"
+            "_FR13_TCF_PREP = None  # per-GROUP dict: group_key -> buffers\n"
+            "_FR13_TCF_LAYER_GROUP = {}\n"
             "_FR13_TCF_PREP_OWNERS = frozenset()\n"
             "_FR13_TCF_GROUP_OWNERS = {}\n"
             "_FR12_SUBKERNEL_CAPTURE_ACTIVE = {}\n"
@@ -791,6 +836,18 @@ def _patch_gdn_linear() -> bool:
             "            \"FR13_TREE_CONV_FUSED=1 requires native bf16 taps \"\n"
             "            \"(FR12/FR11_TREE_CONV_NATIVE_BF16_TAPS != 0)\"\n"
             "        )\n"
+    "    if os.environ.get(\"FR13_TCF_DIAG_OVERRIDE\", \"0\") == \"1\":\n"
+            "        # FIX-3 live-gate localization license (2026-06-12): allow\n"
+            "        # the diagnostic capture envs to coexist with the fused path\n"
+            "        # for EAGER dual-arm capture diffs ONLY. Never a gate/serving\n"
+            "        # config; the exclusion below stays the default.\n"
+            "        logger.warning(\n"
+            "            \"FR13_TREE_CONV_FUSED: FR13_TCF_DIAG_OVERRIDE=1 — \"\n"
+            "            \"diagnostic capture envs permitted with the fused path \"\n"
+            "            \"(localization boots only, NEVER a gate)\"\n"
+            "        )\n"
+            "        _FR13_TREE_CONV_FUSED_CHECKED = True\n"
+            "        return\n"
             "    for _fr13_tcf_env in (\n"
             "        \"FR12_NATIVE_SPINE_ORACLE\",\n"
             "        \"FR12_TREE_CONV_NATIVE_PRIOR_READ\",\n"
@@ -833,6 +890,67 @@ def _patch_gdn_linear() -> bool:
             "        logger.info(_fr13_tcf_msg)\n"
             "    except Exception:\n"
             "        print(_fr13_tcf_msg, flush=True)\n"
+            "\n"
+            "\n"
+            "_FR13_TCF_SC_STATS = {}\n"
+            "\n"
+            "\n"
+            "def _fr13_tcf_sc_compare(stage, fused, legacy, prefix):\n"
+            "    \"\"\"FIX-3 dual-path selfcheck compare (localization, eager-only).\n"
+            "\n"
+            "    Bitwise (int-view) equality of the fused value vs the legacy\n"
+            "    recompute on the SAME inputs in the SAME forward — immune to\n"
+            "    boot-to-boot substrate noise. Log-only (full-run statistics);\n"
+            "    grep needles: 'FR13_TCF_SELFCHECK MISMATCH' and the periodic\n"
+            "    'FR13_TCF_SELFCHECK stats' lines.\n"
+            "    \"\"\"\n"
+            "    st = _FR13_TCF_SC_STATS.setdefault(\n"
+            "        stage, {\"checks\": 0, \"mismatch\": 0, \"logged\": 0}\n"
+            "    )\n"
+            "    st[\"checks\"] += 1\n"
+            "    ok = (\n"
+            "        fused.shape == legacy.shape and fused.dtype == legacy.dtype\n"
+            "    )\n"
+            "    if ok:\n"
+            "        _f, _l = fused, legacy\n"
+            "        if _f.dtype == torch.bfloat16:\n"
+            "            _f, _l = _f.view(torch.int16), _l.view(torch.int16)\n"
+            "        elif _f.dtype == torch.float32:\n"
+            "            _f, _l = _f.view(torch.int32), _l.view(torch.int32)\n"
+            "        ok = bool(torch.equal(_f, _l))\n"
+            "    if not ok:\n"
+            "        st[\"mismatch\"] += 1\n"
+            "        if st[\"logged\"] < 5:\n"
+            "            st[\"logged\"] += 1\n"
+            "            try:\n"
+            "                if fused.shape == legacy.shape and fused.is_floating_point():\n"
+            "                    _d = (\n"
+            "                        fused.to(torch.float32) - legacy.to(torch.float32)\n"
+            "                    ).abs()\n"
+            "                    detail = \"max_abs=%g ndiff=%d/%d\" % (\n"
+            "                        float(_d.max()), int((_d > 0).sum()), _d.numel(),\n"
+            "                    )\n"
+            "                elif fused.shape == legacy.shape:\n"
+            "                    _ne = fused != legacy\n"
+            "                    detail = \"int ndiff=%d/%d\" % (\n"
+            "                        int(_ne.sum()), _ne.numel(),\n"
+            "                    )\n"
+            "                else:\n"
+            "                    detail = \"shape %s vs %s\" % (\n"
+            "                        tuple(fused.shape), tuple(legacy.shape),\n"
+            "                    )\n"
+            "            except Exception as _sc_exc:\n"
+            "                detail = \"detail-error %s\" % (_sc_exc,)\n"
+            "            logger.warning(\n"
+            "                \"FR13_TCF_SELFCHECK MISMATCH stage=%s layer=%s \"\n"
+            "                \"check#%d %s\",\n"
+            "                stage, prefix, st[\"checks\"], detail,\n"
+            "            )\n"
+            "    if st[\"checks\"] % 500 == 0:\n"
+            "        logger.info(\n"
+            "            \"FR13_TCF_SELFCHECK stats stage=%s checks=%d mismatch=%d\",\n"
+            "            stage, st[\"checks\"], st[\"mismatch\"],\n"
+            "        )\n"
             "\n"
             "# FR13_REPLAY_BOUNDARY_LOG: producer-write..consumer-read interval\n"
             "# instrument (playbook row 8). Default OFF; eager-only (fail-loud on\n"
@@ -1404,23 +1522,48 @@ def _patch_gdn_linear() -> bool:
                             # bank index_select stays IN-LAYER and PRE-remap
                             # (per-layer snapshot semantics preserved
                             # exactly).
-                            _fr13_tcf_prep = globals().get("_FR13_TCF_PREP")
-                            _fr13_tcf_owners = globals().get(
-                                "_FR13_TCF_PREP_OWNERS"
+                            _fr13_tcf_prep_all = globals().get("_FR13_TCF_PREP")
+                            _fr13_tcf_layer_group = globals().get(
+                                "_FR13_TCF_LAYER_GROUP"
                             )
-                            if not _fr13_tcf_prep or not _fr13_tcf_owners:
+                            _fr13_tcf_group_owners = globals().get(
+                                "_FR13_TCF_GROUP_OWNERS"
+                            )
+                            if (
+                                not _fr13_tcf_prep_all
+                                or not _fr13_tcf_layer_group
+                                or not _fr13_tcf_group_owners
+                            ):
                                 raise RuntimeError(
                                     "FR13_TREE_CONV_FUSED engaged without "
                                     "builder-init prep buffers/owners "
                                     "(fail-loud, class 9)"
                                 )
+                            # PER-GROUP prep (selfcheck-proven root cause):
+                            # spec_state_indices is kv-cache-group-local, so
+                            # every layer must read the prep slot of ITS OWN
+                            # group, written by that group's owner layer.
+                            _fr13_tcf_gk = _fr13_tcf_layer_group.get(
+                                str(self.prefix)
+                            )
+                            if _fr13_tcf_gk is None:
+                                raise RuntimeError(
+                                    "FR13_TREE_CONV_FUSED layer "
+                                    + str(self.prefix)
+                                    + " missing from the builder layer-group "
+                                    "map (fail-loud, class 9)"
+                                )
+                            _fr13_tcf_prep = _fr13_tcf_prep_all[_fr13_tcf_gk]
                             _fr13_tcf_b = int(attn_metadata.num_spec_decodes)
                             _fr13_tcf_path_cols = min(
                                 int(_fr10_accepted_paths_tensor.size(-1)),
                                 int(spec_state_indices_tensor.size(-1)),
                             )
                             _fr13_tcf_rows_n = _fr13_tcf_b * _fr13_tcf_path_cols
-                            if str(self.prefix) in _fr13_tcf_owners:
+                            if (
+                                _fr13_tcf_group_owners[_fr13_tcf_gk]
+                                == str(self.prefix)
+                            ):
                                 (
                                     _fr13_tcf_new_cols,
                                     _fr13_tcf_new_rows,
@@ -1472,6 +1615,46 @@ def _patch_gdn_linear() -> bool:
                                     bank_rows=_fr13_committed_bank_rows,
                                 )
                             )
+                            if os.environ.get("FR13_TCF_SELFCHECK", "0") == "1":
+                                # FIX-3 dual-path selfcheck (localization
+                                # license, eager-only): recompute the LEGACY
+                                # committed-prior gather on the SAME inputs
+                                # and bitwise-compare. Boot-noise-immune.
+                                if torch.cuda.is_current_stream_capturing():
+                                    raise RuntimeError(
+                                        "FR13_TCF_SELFCHECK=1 is eager-only"
+                                    )
+                                (
+                                    _fr13_sc_cols,
+                                    _fr13_sc_rows,
+                                    _fr13_sc_bank,
+                                ) = gather_committed_path_conv_prior(
+                                    conv_state=conv_state,
+                                    spec_state_indices=spec_state_indices_tensor,
+                                    accepted_paths=_fr10_accepted_paths_tensor,
+                                    num_accepted_tokens=_fr10_accepted_lens_tensor,
+                                    num_spec_decodes=int(
+                                        attn_metadata.num_spec_decodes
+                                    ),
+                                )
+                                _fr13_tcf_sc_compare(
+                                    "committed_read_cols",
+                                    _fr13_committed_read_cols,
+                                    _fr13_sc_cols,
+                                    str(self.prefix),
+                                )
+                                _fr13_tcf_sc_compare(
+                                    "committed_bank_rows",
+                                    _fr13_committed_bank_rows,
+                                    _fr13_sc_rows,
+                                    str(self.prefix),
+                                )
+                                _fr13_tcf_sc_compare(
+                                    "committed_prior_bank",
+                                    _fr13_committed_prior_bank,
+                                    _fr13_sc_bank,
+                                    str(self.prefix),
+                                )
                         else:
                             (
                                 _fr13_committed_read_cols,
@@ -1517,6 +1700,25 @@ def _patch_gdn_linear() -> bool:
                             # shared row math was computed once per kv-cache
                             # group above. The frozen library fn is the
                             # byte-verbatim OFF arm.
+                            _fr13_sc_remap_on = (
+                                os.environ.get("FR13_TCF_SELFCHECK", "0")
+                                == "1"
+                            )
+                            if _fr13_sc_remap_on:
+                                # FIX-3 selfcheck: pre-remap snapshot of the
+                                # source rows; post-remap the dst rows must
+                                # equal pre[src] (materialize-before-scatter
+                                # permutation = the T4-anchored library
+                                # semantics).
+                                _fr13_sc_srcr = _fr13_tcf_prep["src_rows"][
+                                    :_fr13_tcf_rows_n
+                                ].to(torch.long)
+                                _fr13_sc_dstr = _fr13_tcf_prep["dst_rows"][
+                                    :_fr13_tcf_rows_n
+                                ].to(torch.long)
+                                _fr13_sc_pre_rows = conv_state.index_select(
+                                    0, _fr13_sc_srcr
+                                ).clone()
                             replay_conv_state_linear_remap_prepared(
                                 conv_state=conv_state,
                                 src_rows=_fr13_tcf_prep["src_rows"][
@@ -1526,6 +1728,15 @@ def _patch_gdn_linear() -> bool:
                                     :_fr13_tcf_rows_n
                                 ],
                             )
+                            if _fr13_sc_remap_on:
+                                _fr13_tcf_sc_compare(
+                                    "remap_dst_permutation",
+                                    conv_state.index_select(
+                                        0, _fr13_sc_dstr
+                                    ),
+                                    _fr13_sc_pre_rows,
+                                    str(self.prefix),
+                                )
                         else:
                             replay_conv_state_linear_remap(
                                 conv_state=conv_state,
@@ -2226,6 +2437,104 @@ def _patch_gdn_linear() -> bool:
                                 tree_n=_fr10_tree_n,
                                 state_len=int(conv_state.size(2)),
                             ).to(dtype=conv_state.dtype)
+                            if os.environ.get("FR13_TCF_SELFCHECK", "0") == "1":
+                                # FIX-3 dual-path selfcheck: recompute the
+                                # ENTIRE legacy conv section on the same
+                                # inputs; bitwise compare window/acc/out/
+                                # new_state (covers source + taps + silu).
+                                _fr13_sc_source = torch.cat(
+                                    (_fr10_prior_window.transpose(0, 1), _fr10_x),
+                                    dim=0,
+                                )
+                                _fr13_sc_window = _fr13_sc_source.index_select(
+                                    0, _fr10_source_flat
+                                ).view(_fr10_tree_n, _fr10_width, _fr10_x.size(1))
+                                _fr13_tcf_sc_compare(
+                                    "conv_window", _fr10_window,
+                                    _fr13_sc_window, str(self.prefix),
+                                )
+                                if self.conv1d.bias is None:
+                                    _fr13_sc_acc = torch.zeros_like(
+                                        _fr10_x, dtype=torch.float32
+                                    )
+                                else:
+                                    _fr13_sc_acc = self.conv1d.bias.to(
+                                        torch.float32
+                                    ).unsqueeze(0).expand_as(
+                                        _fr10_x.float()
+                                    ).clone()
+                                for _fr13_sc_col in range(_fr10_width):
+                                    _fr13_sc_acc = (
+                                        _fr13_sc_acc
+                                        + _fr11_conv_tap_product(
+                                            _fr13_sc_window[:, _fr13_sc_col, :],
+                                            conv_weights[:, _fr13_sc_col],
+                                        )
+                                    )
+                                _fr13_tcf_sc_compare(
+                                    "conv_acc", _fr10_acc, _fr13_sc_acc,
+                                    str(self.prefix),
+                                )
+                                if self.activation in (True, "silu", "swish"):
+                                    _fr13_sc_out = triton_ex2_silu_bf16(
+                                        _fr13_sc_acc,
+                                        out_dtype=mixed_qkv_spec.dtype,
+                                    )
+                                else:
+                                    _fr13_sc_out = _fr13_sc_acc.to(
+                                        dtype=mixed_qkv_spec.dtype
+                                    )
+                                _fr13_tcf_sc_compare(
+                                    "conv_out", _fr10_out, _fr13_sc_out,
+                                    str(self.prefix),
+                                )
+                                _fr13_sc_rows_l = []
+                                for _fr13_sc_i in range(_fr10_tree_n):
+                                    _fr13_sc_path = _fr10_path_node_tensors[
+                                        _fr13_sc_i
+                                    ]
+                                    _fr13_sc_nx = _fr10_x.index_select(
+                                        0, _fr13_sc_path
+                                    )
+                                    _fr13_sc_src2 = torch.cat(
+                                        (
+                                            _fr10_prior_window.transpose(0, 1),
+                                            _fr13_sc_nx,
+                                        ),
+                                        dim=0,
+                                    )
+                                    _fr13_sc_src2 = torch.cat(
+                                        (
+                                            _fr13_sc_src2,
+                                            _fr10_x.new_zeros(
+                                                (
+                                                    int(conv_state.size(2)),
+                                                    int(_fr10_x.size(1)),
+                                                )
+                                            ),
+                                        ),
+                                        dim=0,
+                                    )
+                                    _fr13_sc_sidx = (
+                                        _fr13_sc_path.numel()
+                                        + torch.arange(
+                                            conv_state.size(2),
+                                            dtype=torch.long,
+                                            device=mixed_qkv_spec.device,
+                                        )
+                                    )
+                                    _fr13_sc_rows_l.append(
+                                        _fr13_sc_src2.index_select(
+                                            0, _fr13_sc_sidx
+                                        ).transpose(0, 1)
+                                    )
+                                _fr13_sc_new_state = torch.stack(
+                                    _fr13_sc_rows_l, dim=0
+                                ).to(dtype=conv_state.dtype)
+                                _fr13_tcf_sc_compare(
+                                    "conv_new_state", _fr10_new_state,
+                                    _fr13_sc_new_state, str(self.prefix),
+                                )
                         else:
                             _fr10_node_state_rows = []
                             for _fr10_node_i in range(_fr10_tree_n):

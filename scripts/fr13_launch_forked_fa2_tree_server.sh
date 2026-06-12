@@ -50,7 +50,7 @@ FR13_EAGER_PACK=${FR13_EAGER_PACK:-1}
 # (same per-element ops in the same order; tree-only — native
 # causal_conv1d_update untouched). =0 is the exact legacy emulation (the
 # A/B instrument).
-FR13_TREE_CONV_FUSED=${FR13_TREE_CONV_FUSED:-0}
+FR13_TREE_CONV_FUSED=${FR13_TREE_CONV_FUSED:-1}
 # FR13_FIX1_SELFCHECK (default OFF) — DIAGNOSTIC ONLY, like
 # FR13_FORCE_SPINE_COMMIT: with the single-logits drafter serving, ALSO run
 # legacy _greedy_sample per drafter step and raise on any token mismatch
@@ -230,6 +230,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR12_FULL_ATTN_CAPTURE_SKIP="${FR12_FULL_ATTN_CAPTURE_SKIP:-0}" \
   -e FR12_FULL_ATTN_CAPTURE_LIMIT="${FR12_FULL_ATTN_CAPTURE_LIMIT:-1}" \
   -e FR12_SUBKERNEL_CAPTURE="${FR12_SUBKERNEL_CAPTURE:-}" \
+  -e FR13_TCF_DIAG_OVERRIDE="${FR13_TCF_DIAG_OVERRIDE:-0}" \
+  -e FR13_TCF_SELFCHECK="${FR13_TCF_SELFCHECK:-0}" \
   -e FR12_SUBKERNEL_CAPTURE_DEBUG_LOG="${FR12_SUBKERNEL_CAPTURE_DEBUG_LOG:-}" \
   -e FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX="${FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX:-language_model.model.layers.0.linear_attn}" \
   -e FR12_SUBKERNEL_CAPTURE_NUM_TOKENS="${FR12_SUBKERNEL_CAPTURE_NUM_TOKENS:-}" \

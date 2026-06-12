@@ -97,7 +97,7 @@ FR13_EAGER_PACK=${FR13_EAGER_PACK:-1}
 # (same per-element ops in the same order; tree-only — native
 # causal_conv1d_update untouched). =0 is the exact legacy emulation (the
 # A/B instrument).
-FR13_TREE_CONV_FUSED=${FR13_TREE_CONV_FUSED:-0}
+FR13_TREE_CONV_FUSED=${FR13_TREE_CONV_FUSED:-1}
 ENFORCE_EAGER=${ENFORCE_EAGER:-0}
 LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
 TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
