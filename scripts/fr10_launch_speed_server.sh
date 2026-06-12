@@ -88,7 +88,7 @@ FR13_DRAFTER_SINGLE_LOGITS=${FR13_DRAFTER_SINGLE_LOGITS:-1}
 # launches into one (FR13_B1_SPEED_ATTRIBUTION_BIND.md). SEMANTICS-PRESERVING
 # ONLY: no computed value changes, only WHERE/HOW the same ints move. =0 is
 # the exact legacy transport path (the A/B instrument).
-FR13_EAGER_PACK=${FR13_EAGER_PACK:-0}
+FR13_EAGER_PACK=${FR13_EAGER_PACK:-1}
 ENFORCE_EAGER=${ENFORCE_EAGER:-0}
 LOG_DIR=${LOG_DIR:-"${FR10_RUN_DIR:-$REPO/output/fr10_speed_starting_point/live_logs}/logs"}
 TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}

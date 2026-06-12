@@ -41,7 +41,7 @@ FR13_DRAFTER_SINGLE_LOGITS=${FR13_DRAFTER_SINGLE_LOGITS:-1}
 # launches into one (FR13_B1_SPEED_ATTRIBUTION_BIND.md). SEMANTICS-PRESERVING
 # ONLY: no computed value changes, only WHERE/HOW the same ints move. =0 is
 # the exact legacy transport path (the A/B instrument).
-FR13_EAGER_PACK=${FR13_EAGER_PACK:-0}
+FR13_EAGER_PACK=${FR13_EAGER_PACK:-1}
 # FR13_FIX1_SELFCHECK (default OFF) — DIAGNOSTIC ONLY, like
 # FR13_FORCE_SPINE_COMMIT: with the single-logits drafter serving, ALSO run
 # legacy _greedy_sample per drafter step and raise on any token mismatch

@@ -65,8 +65,8 @@ def test_flag_default_off_everywhere() -> None:
     assert (
         "__import__('os').environ.get('FR13_EAGER_PACK', '0') == '1'" in TEXT
     )  # committer helper
-    assert '"FR13_EAGER_PACK", "0"' in TEXT  # runner """ sites
-    assert '"FR13_EAGER_PACK", "1"' not in TEXT
+    assert '"FR13_EAGER_PACK", "1"' in TEXT  # runner """ sites
+    assert '"FR13_EAGER_PACK", "0"' not in TEXT
     assert "'FR13_EAGER_PACK', '1'" not in TEXT
     assert '\\"FR13_EAGER_PACK\\", \\"1\\"' not in TEXT
     # No defaultless reads (unset env must mean OFF, the deployed default
@@ -92,9 +92,9 @@ def test_flag_default_off_everywhere() -> None:
 def test_both_launchers_default_off_and_pass_the_flag() -> None:
     for launcher in LAUNCHERS:
         text = launcher.read_text()
-        assert "FR13_EAGER_PACK=${FR13_EAGER_PACK:-0}" in text, launcher
+        assert "FR13_EAGER_PACK=${FR13_EAGER_PACK:-1}" in text, launcher
         assert '-e FR13_EAGER_PACK="$FR13_EAGER_PACK" \\' in text, launcher
-        assert "FR13_EAGER_PACK:-1" not in text, launcher
+        assert "FR13_EAGER_PACK:-0" not in text, launcher
 
 
 def test_engagement_needle_fires_in_both_states() -> None:
@@ -290,11 +290,24 @@ def test_builder_init_stacked_views_and_fail_loud() -> None:
         '_fr13_gdn_mod._FR13_EAGER_PACK_STACKS = {',
     ):
         assert TEXT.index(needle) < gdn_linear_start, needle
-    # Rows follow sorted(layer_names) = committer iteration order.
-    assert "sorted(str(_n) for _n in layer_names)" in TEXT
-    # FAIL-LOUD preconditions (class 9): non-uniform layers, multi-group.
+    # Rows follow sorted(union of registered GDN layer names) = the
+    # committer's sorted(_FR13_REPLAY_LAYERS) iteration order.
+    assert "_fr13_ep_names = sorted(_fr13_ep_union)" in TEXT
+    # FAIL-LOUD preconditions (class 9): non-uniform layers, union drop.
     assert "FR13_EAGER_PACK stacking precondition failed" in TEXT
-    assert "requires a single GDN replay" in TEXT
+    assert "FR13_EAGER_PACK union invariant violated" in TEXT
+    # GROUP-UNION + RE-INIT semantics (FIX-2 gate localization 2026-06-12,
+    # cat9_on boots 1-2): the cu130-nightly splits the 48 GDN layers into
+    # MULTIPLE same-size kv-cache groups (3 x 16 on Qwen3-Next,
+    # _get_kv_cache_groups_uniform_page_size) AND constructs every builder
+    # several times per boot (profile run, profile_cudagraph_memory
+    # minimal-KV init, real KV init). Each builder init must REBUILD the
+    # stacks from the union of registered GDN layers and re-bind every
+    # union layer's views — a "single group" raise is wrong on this model.
+    assert "FR13_EAGER_PACK stacked rings rebuilt" in TEXT
+    assert "_fr13_ep_union[str(_fr13_name)] = _fr13_layer" in TEXT
+    assert "_fr13_ep_names = sorted(_fr13_ep_union)" in TEXT
+    assert "requires a single GDN replay" not in TEXT
     # Legacy per-layer allocation intact for the OFF arm.
     assert "_fr13_layer._fr13_replay_ring_k = torch.zeros(" in TEXT
 
