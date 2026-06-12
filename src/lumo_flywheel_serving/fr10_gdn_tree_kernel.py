@@ -852,7 +852,8 @@ def _tree_gdn_replay_all_layers_kernel(
     b_rings,
     A_logs,
     dt_biases,
-    bank_ptrs,
+    bank_anchor,
+    bank_off16,
     spec_state_indices,
     accepted_paths,
     accepted_lens,
@@ -889,8 +890,10 @@ def _tree_gdn_replay_all_layers_kernel(
     # sequence is source-identical to the single-layer kernel (same inlined
     # _gdn_node_step, same constexprs, same num_warps=8); only the base
     # addresses gain a per-layer offset (stacked rings / gates / snapshots,
-    # plus an int64 bank pointer table because each layer's ssm bank is a
-    # distinct KV-pool tensor). Layers are independent: a program reads only
+    # plus an int64 bank OFFSET table relative to the layer-0 bank anchor
+    # because each layer's ssm bank is a distinct KV-pool tensor -- see the
+    # state_bank addptr note below for why offsets, not raw pointers).
+    # Layers are independent: a program reads only
     # its own layer's ring/spec/prev rows and writes only its own layer's
     # bank rows (accepted_paths/lens are shared READ-ONLY), so inter-program
     # concurrency reorders nothing within any program's sequential replay
@@ -909,7 +912,23 @@ def _tree_gdn_replay_all_layers_kernel(
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
     v_mask = offs_v < DIM_V
 
-    state_bank = tl.load(bank_ptrs + pid_l).to(tl.pointer_type(tl.float32))
+    # Byte-A/B fix (class 10, GPU gate 2026-06-12): the original
+    # `tl.load(bank_ptrs + pid_l).to(tl.pointer_type(tl.float32))` form loses
+    # ALL alignment info -- this Triton's AxisInfo does not propagate
+    # divisibility through tt.int_to_ptr (verified by container microbench;
+    # tl.multiple_of/shift hints on the loaded integer do NOT survive the
+    # cast either). The whole kernel then compiles with a scalarized layout
+    # (sizePerThread=[1,1], st.global.b32) instead of the legacy kernel's
+    # vectorized layout (sizePerThread=[1,4], st.global.v4.b32), which
+    # reshapes every tl.sum reduction tree in _gdn_node_step and changes
+    # fp32 rounding (~1-2 ULP on published rows; measured, both arms
+    # deterministic). Fix: address banks as ANCHOR + ELEMENT OFFSET through
+    # tt.addptr, whose AxisInfo math is exact: bank_anchor is the layer-0
+    # bank ARG (divisibility 16 from arg specialization) and bank_off16
+    # holds (data_ptr - anchor_ptr) // 16 per layer, so `off * 4` fp32
+    # elements is structurally 16-byte divisible. Host-side data_ptr()%16
+    # fail-loud checks in build_replay_bank_pointer_table keep this exact.
+    state_bank = bank_anchor + tl.load(bank_off16 + pid_l) * 4
     k_ring = k_rings + pid_l * RING_L_STRIDE_K
     v_ring = v_rings + pid_l * RING_L_STRIDE_V
     a_ring = a_rings + pid_l * RING_L_STRIDE_AB
@@ -1035,8 +1054,11 @@ def build_replay_bank_pointer_table(
     """Validate per-layer GDN state banks for the batched all-layer replay.
 
     FR13_EAGER_PACK (FIX-2 item 2b): each layer's ssm bank is a distinct
-    KV-pool tensor, so the batched kernel addresses them through an int64
-    device pointer table. This helper validates every bank exactly like
+    KV-pool tensor, so the batched kernel addresses them as the layer-0
+    bank ANCHOR plus an int64 device OFFSET table ((ptr - ptr0) // 16,
+    derived from this host pointer list; offsets-not-pointers is the
+    byte-A/B alignment fix, see the kernel). This helper validates every
+    bank exactly like
     launch_tree_gdn_replay (fp32, 4D, row-contiguous payload) plus the
     stacking preconditions (identical shape and stride across layers) and
     returns (host pointer list, bank shape, bank row stride). FAIL-LOUD on
@@ -1071,13 +1093,25 @@ def build_replay_bank_pointer_table(
                 f"{i}] shape/stride {tuple(bank.shape)}/{bank.stride(0)} != "
                 f"bank[0] {shape0}/{stride0}"
             )
-        ptrs.append(int(bank.data_ptr()))
+        ptr_i = int(bank.data_ptr())
+        if ptr_i % 16 != 0:
+            # The batched kernel asserts tl.multiple_of(bank_ptr, 16) -- the
+            # divisibility a kernel pointer ARG gets from Triton arg
+            # specialization. An unaligned bank would make that hint UNSOUND
+            # (silent wrong codegen), so fail loud here instead (class 9).
+            raise ValueError(
+                f"bank[{i}] data_ptr {ptr_i:#x} is not 16-byte aligned; the "
+                "batched replay kernel's tl.multiple_of(16) hint would be "
+                "unsound"
+            )
+        ptrs.append(ptr_i)
     return ptrs, (int(shape0[0]), int(shape0[1]), int(shape0[2]), int(shape0[3])), int(stride0)
 
 
 def launch_tree_gdn_replay_all_layers(
     *,
-    bank_ptrs: torch.Tensor,
+    bank_anchor: torch.Tensor,
+    bank_off16: torch.Tensor,
     bank_shape: tuple[int, int, int, int],
     bank_stride: int,
     spec_state_indices: torch.Tensor,
@@ -1101,18 +1135,27 @@ def launch_tree_gdn_replay_all_layers(
     replaces the legacy per-layer loop (48 launches + 48 flag clears). Every
     input must be a persistent preallocated stacked buffer (graph-stable
     addresses) allocated at GDN metadata-builder init; per-step scratch is
-    the gate-4 failure mode and is banned here. bank_ptrs is the int64
-    device pointer table from build_replay_bank_pointer_table (the caller
-    re-asserts the live banks' data_ptr() each commit).
+    the gate-4 failure mode and is banned here. bank_anchor is the LAYER-0
+    bank tensor (pointer arg = alignment anchor; byte-A/B fix, see the
+    kernel) and bank_off16 is the int64 device table of
+    (bank[i].data_ptr() - bank[0].data_ptr()) // 16 derived from
+    build_replay_bank_pointer_table's pointer list (the caller re-asserts
+    the live banks' data_ptr() each commit, which also pins the anchor).
     """
     if num_spec_decodes <= 0:
         return
     if num_layers <= 0:
         raise ValueError(f"num_layers must be positive, got {num_layers}")
-    if bank_ptrs.dtype != torch.int64 or bank_ptrs.numel() < num_layers:
+    if bank_off16.dtype != torch.int64 or bank_off16.numel() < num_layers:
         raise ValueError(
-            f"bank_ptrs must be int64 covering {num_layers} layers, got "
-            f"{bank_ptrs.dtype} numel={bank_ptrs.numel()}"
+            f"bank_off16 must be int64 covering {num_layers} layers, got "
+            f"{bank_off16.dtype} numel={bank_off16.numel()}"
+        )
+    if bank_anchor.dtype != torch.float32 or bank_anchor.data_ptr() % 16 != 0:
+        raise ValueError(
+            "bank_anchor must be the fp32 layer-0 GDN state bank with a "
+            f"16-byte-aligned data_ptr, got {bank_anchor.dtype} "
+            f"ptr={int(bank_anchor.data_ptr()):#x}"
         )
     bank_rows, num_vh, dim_v, dim_k = (int(x) for x in bank_shape)
     if k_rings.ndim != 5 or v_rings.ndim != 5 or a_rings.ndim != 4 or b_rings.ndim != 4:
@@ -1207,7 +1250,8 @@ def launch_tree_gdn_replay_all_layers(
         b_rings,
         A_logs,
         dt_biases,
-        bank_ptrs,
+        bank_anchor,
+        bank_off16,
         spec_state_indices,
         accepted_paths,
         accepted_lens,

@@ -5097,23 +5097,31 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     )
                     _ep_ptrs_now = [int(_b.data_ptr()) for _b in _ep_banks]
                     if _ep_tbl is None:
-                        # Pointer table built ONCE (one-time HtoD); every
+                        # Offset table built ONCE (one-time HtoD); every
                         # later commit re-asserts ALL layers' bank data_ptr
                         # unchanged via cheap Python int compares (no
-                        # representative shortcut).
+                        # representative shortcut), which also pins the
+                        # layer-0 anchor tensor the kernel addresses from
+                        # (anchor + (ptr - ptr0)//16 offsets; the byte-A/B
+                        # alignment fix -- raw int64 pointers lose AxisInfo
+                        # through tt.int_to_ptr and change fp32 rounding).
                         _ep_ptr_list, _ep_bank_shape, _ep_bank_stride = (
                             _ep_build_tbl(_ep_banks)
                         )
-                        _ep_ptr_dev = torch.tensor(
-                            _ep_ptr_list,
+                        _ep_off16_dev = torch.tensor(
+                            [
+                                (_p - _ep_ptr_list[0]) // 16
+                                for _p in _ep_ptr_list
+                            ],
                             dtype=torch.int64,
                             device=_ep_banks[0].device,
                         )
                         _ep_tbl = (
                             _ep_ptr_list,
-                            _ep_ptr_dev,
+                            _ep_off16_dev,
                             _ep_bank_shape,
                             _ep_bank_stride,
+                            _ep_banks[0],
                         )
                         _lumo_tree_commit_gdn._FR13_EAGER_PACK_BANK_TBL = (
                             _ep_tbl
@@ -5125,7 +5133,8 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                             'boot-persistent KV-pool tensors)'
                         )
                     _ep_launch_all(
-                        bank_ptrs=_ep_tbl[1],
+                        bank_anchor=_ep_tbl[4],
+                        bank_off16=_ep_tbl[1],
                         bank_shape=_ep_tbl[2],
                         bank_stride=_ep_tbl[3],
                         spec_state_indices=_ep_stacks['spec_idx'],

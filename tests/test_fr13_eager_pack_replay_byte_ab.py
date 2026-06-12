@@ -81,9 +81,22 @@ def test_batched_replay_bank_bytes_match_legacy_loop(
         torch.float32
     )
     dt_biases = torch.randn((num_layers, NUM_VH), device=device, dtype=torch.float32)
+    # Per-request DISJOINT bank rows (deployed semantics: each request's
+    # spec_state_indices point at its OWN KV-pool rows). Sharing rows across
+    # batch rows made BOTH arms racy at num_spec=2 (b=0's path publish and
+    # b=1's zero-accept root publish hit the same bank row 0 concurrently;
+    # measured 2026-06-12: legacy arm itself nondeterministic) -- a
+    # test-construction bug, not a kernel property (playbook class 3).
+    spec_rows = torch.stack(
+        [
+            torch.arange(SPEC_COLS, dtype=torch.int32),
+            SPEC_COLS
+            + (torch.arange(SPEC_COLS, dtype=torch.int32) % (BANK_ROWS - SPEC_COLS)),
+        ]
+    )[:ring_bs]
     spec_idx = (
-        torch.arange(SPEC_COLS, device=device, dtype=torch.int32)
-        .view(1, 1, -1)
+        spec_rows.to(device)
+        .view(1, ring_bs, SPEC_COLS)
         .expand(num_layers, ring_bs, SPEC_COLS)
         .contiguous()
     )
@@ -124,12 +137,18 @@ def test_batched_replay_bank_bytes_match_legacy_loop(
             use_qk_l2norm_in_kernel=True,
         )
 
-    # Arm B: ONE batched all-layer launch via the int64 bank pointer table.
+    # Arm B: ONE batched all-layer launch via the layer-0 anchor + int64
+    # offset table (offsets-not-pointers is the byte-A/B alignment fix).
     banks_batched = [b.clone() for b in base_banks]
     ptr_list, bank_shape, bank_stride = build_replay_bank_pointer_table(banks_batched)
-    bank_ptrs = torch.tensor(ptr_list, dtype=torch.int64, device=device)
+    bank_off16 = torch.tensor(
+        [(p - ptr_list[0]) // 16 for p in ptr_list],
+        dtype=torch.int64,
+        device=device,
+    )
     launch_tree_gdn_replay_all_layers(
-        bank_ptrs=bank_ptrs,
+        bank_anchor=banks_batched[0],
+        bank_off16=bank_off16,
         bank_shape=bank_shape,
         bank_stride=bank_stride,
         spec_state_indices=spec_idx,

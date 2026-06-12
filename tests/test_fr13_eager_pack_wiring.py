@@ -303,9 +303,20 @@ def test_batched_kernel_shape_and_byte_ab_gate_documented() -> None:
     assert "def _tree_gdn_replay_all_layers_kernel(" in KTEXT
     assert "def launch_tree_gdn_replay_all_layers(" in KTEXT
     assert "def build_replay_bank_pointer_table(" in KTEXT
-    # int64 pointer table -> typed pointer cast (per-layer banks are distinct
-    # KV-pool tensors).
-    assert "tl.load(bank_ptrs + pid_l).to(tl.pointer_type(tl.float32))" in KTEXT
+    # Layer-0 anchor + int64 offset table (per-layer banks are distinct
+    # KV-pool tensors). NOT a raw pointer load + tt.int_to_ptr cast: that
+    # form loses AxisInfo divisibility, scalarizes the layout and changes
+    # fp32 rounding vs the legacy per-layer kernel (byte-A/B fix,
+    # 2026-06-12 GPU gate).
+    assert "state_bank = bank_anchor + tl.load(bank_off16 + pid_l) * 4" in KTEXT
+    _batched_code = "\n".join(
+        line
+        for line in KTEXT.split("def _tree_gdn_replay_all_layers_kernel(")[1]
+        .split("def build_replay_bank_pointer_table(")[0]
+        .splitlines()
+        if not line.lstrip().startswith("#")
+    )
+    assert "tl.pointer_type" not in _batched_code
     # Same warp shape + raw-gating basis as the single-layer replay.
     batched = KTEXT[KTEXT.index("_tree_gdn_replay_all_layers_kernel[grid]"):]
     assert "RAW_GATING=True," in batched
