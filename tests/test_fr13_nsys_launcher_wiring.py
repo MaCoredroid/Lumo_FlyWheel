@@ -36,9 +36,15 @@ def test_nsys_wrapper_wraps_the_in_container_vllm_serve_exec() -> None:
         assert '-e LUMO_NSYS_BIN="$LUMO_NSYS_BIN"' in text
         assert '-e LUMO_NSYS_DELAY_S="$LUMO_NSYS_DELAY_S"' in text
         assert '-e LUMO_NSYS_DURATION_S="$LUMO_NSYS_DURATION_S"' in text
+        assert '-e LUMO_NSYS_FLUSH_MS="$LUMO_NSYS_FLUSH_MS"' in text
         assert '-e LUMO_NSYS_OUTPUT="$LUMO_NSYS_OUTPUT"' in text
         assert "NSYS_PREFIX=()" in text
         assert '--cuda-graph-trace=node' in text
+        # Without a periodic CUPTI flush, per-kernel rows (incl. graph node-level
+        # kernels) are dropped as incomplete at the delayed-duration session stop
+        # on GB10; fr13_b1_profile_bind exports had ZERO kernel tables.
+        assert "LUMO_NSYS_FLUSH_MS=${LUMO_NSYS_FLUSH_MS:-100}" in text
+        assert '--cuda-flush-interval \\"\\$LUMO_NSYS_FLUSH_MS\\"' in text
         assert '--trace=cuda,nvtx' in text
         assert '-o \\"\\$LUMO_NSYS_OUTPUT\\"' in text
         assert (

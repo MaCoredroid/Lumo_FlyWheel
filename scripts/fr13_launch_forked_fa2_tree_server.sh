@@ -70,6 +70,10 @@ LUMO_NSYS_WRAP_VLLM=${LUMO_NSYS_WRAP_VLLM:-0}
 LUMO_NSYS_BIN=${LUMO_NSYS_BIN:-/opt/nvidia/nsight-systems-cli/2026.2.1/bin/nsys}
 LUMO_NSYS_DELAY_S=${LUMO_NSYS_DELAY_S:-600}
 LUMO_NSYS_DURATION_S=${LUMO_NSYS_DURATION_S:-150}
+# Periodic CUPTI buffer flush (ms). Without it, per-kernel records (incl. graph
+# node-level kernels) are dropped as "incomplete" at the delayed-duration session
+# stop on GB10 (fr13_b1_profile_bind: 55k/78k events dropped, zero kernel rows).
+LUMO_NSYS_FLUSH_MS=${LUMO_NSYS_FLUSH_MS:-100}
 LUMO_NSYS_OUTPUT=${LUMO_NSYS_OUTPUT:-/logs/nsys_vllm_${CONTAINER}}
 NSYS_DOCKER_ARGS=()
 if _lumo_truthy "$LUMO_NSYS_WRAP_VLLM"; then
@@ -119,6 +123,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e LUMO_NSYS_BIN="$LUMO_NSYS_BIN" \
   -e LUMO_NSYS_DELAY_S="$LUMO_NSYS_DELAY_S" \
   -e LUMO_NSYS_DURATION_S="$LUMO_NSYS_DURATION_S" \
+  -e LUMO_NSYS_FLUSH_MS="$LUMO_NSYS_FLUSH_MS" \
   -e LUMO_NSYS_OUTPUT="$LUMO_NSYS_OUTPUT" \
   -e FR13_BI_TREE_ATTN="$FR13_BI_TREE_ATTN" \
   -e FR13_TORCH_DET_WARN="${FR13_TORCH_DET_WARN:-0}" \
@@ -249,6 +254,7 @@ case \"\${LUMO_NSYS_WRAP_VLLM,,}\" in
       --duration \"\$LUMO_NSYS_DURATION_S\"
       --trace=cuda,nvtx
       --cuda-graph-trace=node
+      --cuda-flush-interval \"\$LUMO_NSYS_FLUSH_MS\"
       --sample=none
       --cpuctxsw=none
       --force-overwrite=true
