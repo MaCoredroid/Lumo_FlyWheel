@@ -7285,9 +7285,36 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # never fed back into any forward or recurrent state. The 5-node
             # spine-only diagnostic uses the same native causal MTP spine and
             # packs only those five spine tokens.
-            _fr10_logits = self.model.compute_logits(sample_hidden_states)
-            _fr10_top2 = torch.topk(_fr10_logits, 2, dim=-1).indices
-            draft_token_ids = self._greedy_sample(sample_hidden_states)
+            # FR13_DRAFTER_SINGLE_LOGITS (FIX-1, default ON): compute the
+            # full-vocab bf16 lm-head logits ONCE per drafter step and take
+            # the spine draft token as argmax of that SAME tensor. Legacy
+            # (flag OFF = the A/B instrument) additionally calls
+            # self._greedy_sample, which RECOMPUTES compute_logits in live
+            # vLLM eagle.py — a second ~2.5 GB lm-head read per step.
+            # use_local_argmax_reduction routes _greedy_sample through
+            # get_top_tokens (shard-local logits.max on a separately
+            # computed lm-head output, different selection semantics), so
+            # that config falls back to the exact legacy path.
+            _fr13_single_logits = (
+                os.environ.get("FR13_DRAFTER_SINGLE_LOGITS", "1") == "1"
+                and not getattr(self, "use_local_argmax_reduction", False)
+            )
+            logger.info_once(
+                "FR13_DRAFTER_SINGLE_LOGITS drafter path engaged: "
+                "single_logits=%s (env=%s, use_local_argmax_reduction=%s)",
+                _fr13_single_logits,
+                os.environ.get("FR13_DRAFTER_SINGLE_LOGITS", "1"),
+                getattr(self, "use_local_argmax_reduction", False),
+            )
+            if _fr13_single_logits:
+                # Root top-2 is verified unused (no tree node consumes the
+                # root runner-up: every caterpillar choice starts with 0).
+                _fr10_logits = self.model.compute_logits(sample_hidden_states)
+                draft_token_ids = _fr10_logits.argmax(dim=-1)
+            else:
+                _fr10_logits = self.model.compute_logits(sample_hidden_states)
+                _fr10_top2 = torch.topk(_fr10_logits, 2, dim=-1).indices
+                draft_token_ids = self._greedy_sample(sample_hidden_states)
             _fr10_spine_tokens = [draft_token_ids]
             _fr10_leaf_tokens = []
 
@@ -7398,13 +7425,31 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         last_hidden_states, hidden_states = ret_hidden_states
 
                 hidden_states = hidden_states[:batch_size]
-                _fr10_step_logits = self.model.compute_logits(
-                    last_hidden_states[:batch_size]
-                )
-                _fr10_step_top2 = torch.topk(_fr10_step_logits, 2, dim=-1).indices
-                draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
-                _fr10_spine_tokens.append(draft_token_ids)
-                _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
+                if _fr13_single_logits:
+                    # Single lm-head read: spine token = argmax of the SAME
+                    # logits tensor _greedy_sample would have recomputed.
+                    # Top-2 packing is kept ONLY for the caterpillar leaf
+                    # slots; spine-only (chain5) never consumes the
+                    # runner-up (packing and the FR10_METRICS log both emit
+                    # no leaves in spine-only mode), so its topk is skipped.
+                    _fr10_step_logits = self.model.compute_logits(
+                        last_hidden_states[:batch_size]
+                    )
+                    draft_token_ids = _fr10_step_logits.argmax(dim=-1)
+                    _fr10_spine_tokens.append(draft_token_ids)
+                    if not _fr10_is_spine_only:
+                        _fr10_step_top2 = torch.topk(
+                            _fr10_step_logits, 2, dim=-1
+                        ).indices
+                        _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
+                else:
+                    _fr10_step_logits = self.model.compute_logits(
+                        last_hidden_states[:batch_size]
+                    )
+                    _fr10_step_top2 = torch.topk(_fr10_step_logits, 2, dim=-1).indices
+                    draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
+                    _fr10_spine_tokens.append(draft_token_ids)
+                    _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
 
             if _fr10_is_spine_only:
                 _fr10_packed = torch.stack(_fr10_spine_tokens, dim=1)
@@ -7442,6 +7487,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr10_lj.dumps({
                             "event": "fr10_caterpillar_native_spine_top2",
                             "ts": round(_fr10_lt.time(), 4),
+                            "single_logits": bool(_fr13_single_logits),
                             "spine_only": bool(_fr10_is_spine_only),
                             "spine_slots": [0, 1, 3, 5, 7],
                             "leaf_slots": [2, 4, 6, 8],

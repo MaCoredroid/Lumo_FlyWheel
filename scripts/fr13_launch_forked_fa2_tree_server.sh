@@ -30,6 +30,12 @@ FR13_CONV_COMMITTED_PATH=${FR13_CONV_COMMITTED_PATH:-1}
 # S3/m1 decisive A/B (caterpillar forced-spine vs chain boot) ONLY. NEVER
 # bind =1 into a committed serving config or a gate result.
 FR13_FORCE_SPINE_COMMIT=${FR13_FORCE_SPINE_COMMIT:-0}
+# FR13_DRAFTER_SINGLE_LOGITS (FIX-1, default ON): the caterpillar drafter
+# takes draft tokens as argmax of the single already-computed logits tensor
+# instead of _greedy_sample's second compute_logits (double full-vocab bf16
+# lm-head read per drafter step, FR13_B1_SPEED_ATTRIBUTION_BIND.md). =0 is
+# the exact legacy double-logits path (the A/B instrument).
+FR13_DRAFTER_SINGLE_LOGITS=${FR13_DRAFTER_SINGLE_LOGITS:-1}
 LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
 LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}
 LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}
@@ -149,6 +155,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_TREE_BONUS_SELF="${FR13_TREE_BONUS_SELF:-1}" \
   -e FR13_CONV_COMMITTED_PATH="$FR13_CONV_COMMITTED_PATH" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \
+  -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
   -e FR13_REPLAY_ROUTE="${FR13_REPLAY_ROUTE:-1}" \
   -e FR13_REPLAY_BOUNDARY_LOG="${FR13_REPLAY_BOUNDARY_LOG:-0}" \
   -e FR13_REPLAY_BOUNDARY_LAYERS="${FR13_REPLAY_BOUNDARY_LAYERS:-layers.0.linear_attn}" \
