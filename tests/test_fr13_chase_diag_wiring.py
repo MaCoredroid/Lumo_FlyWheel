@@ -254,6 +254,12 @@ def _eagle_synthetic_fixture() -> str:
         "    def __init__(self):\n"
         + tree_parse
         + "\n"
+        "    def set_inputs_first_pass(self, target_token_ids, next_token_ids,\n"
+        "                              target_positions, target_hidden_states,\n"
+        "                              token_indices_to_sample, cad,\n"
+        "                              num_rejected_tokens_gpu):\n"
+        "        return target_token_ids.shape[0], token_indices_to_sample, cad\n"
+        "\n"
         "    def propose(self, target_token_ids, target_positions,\n"
         "                target_hidden_states, next_token_ids,\n"
         "                token_indices_to_sample, common_attn_metadata,\n"
@@ -264,6 +270,19 @@ def _eagle_synthetic_fixture() -> str:
         "        hidden_states = target_hidden_states\n"
         "        positions = target_positions\n"
         "        per_group_attn_metadata = []\n"
+        # The FIX-A1 (FR13_TREE_SAMPLE_ROW) injection anchors on this exact
+        # call shape (live eagle.py propose); the patch inserts BEFORE it.
+        "        num_tokens, token_indices_to_sample, common_attn_metadata = (\n"
+        "            self.set_inputs_first_pass(\n"
+        "                target_token_ids=target_token_ids,\n"
+        "                next_token_ids=next_token_ids,\n"
+        "                target_positions=target_positions,\n"
+        "                target_hidden_states=target_hidden_states,\n"
+        "                token_indices_to_sample=token_indices_to_sample,\n"
+        "                cad=common_attn_metadata,\n"
+        "                num_rejected_tokens_gpu=num_rejected_tokens_gpu,\n"
+        "            )\n"
+        "        )\n"
         + dispatch
         + "\n"
         "    def propose_tree(self, batch_size, logits, positions,\n"
@@ -324,6 +343,80 @@ def test_committer_patch_applies_to_pristine_and_compiles(tmp_path) -> None:
     rs_patched = rs_target.read_text()
     assert "'rowbug': bool(_path) and int(_path[-1]) != _alen," in rs_patched
     py_compile.compile(str(rs_target), doraise=True)
+
+
+def test_drafter_kv_locator_accepts_bare_tensor_and_fail_louds() -> None:
+    # Instrument (iv) repair (wf_a71e2a24 FAIL-1): cu130-nightly binds
+    # layer.kv_cache as a BARE tensor (bind_kv_cache), the old locator only
+    # matched the legacy list/tuple form => 0 modules, 168 vacuous records.
+    eagle = _eagle_new_snippet()
+    bare = eagle.index("torch.is_tensor(_fr13_ch_kvc)")
+    legacy = eagle.index("isinstance(_fr13_ch_kvc, (list, tuple))")
+    assert bare < legacy, "bare-tensor form must be checked first"
+    # Use-site resolver mirrors the locator (no more .kv_cache[0] blind read).
+    assert "torch.is_tensor(_fr13_ch_kvr)" in eagle
+    assert "_fr13_ch_mod.kv_cache[0]" not in eagle
+    # Class-9 fail-loud: a 0-module harvest can never bank silently again.
+    assert "FR13_CHASE_KV_ALLOW_EMPTY" in eagle
+    assert "instrument " in eagle and "VACUOUS" in eagle
+    raise_idx = eagle.index("FR13_CHASE_KV_ALLOW_EMPTY")
+    needle_idx = eagle.index(
+        "FR13_CHASE_DIAG drafter-KV tap: %d kv-cache "
+    )
+    assert raise_idx < needle_idx, "fail-loud precedes the count needle"
+
+
+def test_h3_probe_present_with_recorded_deviation() -> None:
+    eagle = _eagle_new_snippet()
+    for needle in (
+        'os.environ.get("FR13_CHASE_H3", "1") == "1"',
+        '"tap": "h3_target_fullattn"',
+        "FR13_CHASE_H3_LAYER",
+        "static_forward_context",
+        '"depth_last_writer_row"',
+        '"foreign_slot"',
+        '"accepted_flat_row"',
+        '"kv_cache_gid"',
+        "the H3 probe would be VACUOUS",
+        # The minimal-version deviation is recorded IN-BAND, per task.
+        "served-slot only: accepted-row pre-overwrite ",
+    ):
+        assert needle in eagle, needle
+    # H3 rides the chase-diag tail: after the drafter_kv record, before the
+    # packed return; drafter modules are excluded from the target walk.
+    assert eagle.index('"tap": "h3_target_fullattn"') > eagle.index(
+        '"tap": "drafter_kv"'
+    )
+    assert eagle.index('"tap": "h3_target_fullattn"') < eagle.index(
+        "return _fr10_packed"
+    )
+    assert eagle.index("_fr13_h3_drafter_ids") < eagle.index(
+        "_fr13_h3_cands.append"
+    )
+
+
+def test_tap_a_store_keeps_rows_for_tap_c() -> None:
+    # wf_a71e2a24 FAIL-2: the chase edit dropped 'rows' from the
+    # _FR13_BOUNDARY_LAST_WRITTEN_BY_REQ store while the PRE-EXISTING tap-C
+    # consumer reads lastw.get("rows") for its stale verdict (always-True
+    # without it). The store must keep 'rows' as long as tap-C reads it.
+    helper = _helper_snippet()
+    post = helper[helper.index("def _fr13_boundary_replay_post("):]
+    post = post[:post.index("\ndef ")] if "\ndef " in post else post
+    assert "'rows': [int(_x) for _x in _rows_written]," in post
+    assert 'lastw.get(\\"rows\\", [])' in TEXT or \
+        '_fr13_bnd_lastw.get(\\"rows\\", [])' in TEXT
+
+
+def test_launcher_h3_and_kv_empty_passthrough() -> None:
+    for aux in ("FR13_CHASE_H3", "FR13_CHASE_H3_LAYER",
+                "FR13_CHASE_KV_ALLOW_EMPTY"):
+        assert f'-e {aux}="${aux}" \\' in LAUNCHER_TEXT, aux
+    assert "FR13_CHASE_H3=${FR13_CHASE_H3:-1}" in LAUNCHER_TEXT
+    assert (
+        "FR13_CHASE_KV_ALLOW_EMPTY=${FR13_CHASE_KV_ALLOW_EMPTY:-0}"
+        in LAUNCHER_TEXT
+    )
 
 
 def test_rescued_reducers_importable_and_compile() -> None:

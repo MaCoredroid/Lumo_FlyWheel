@@ -5285,6 +5285,11 @@ def _fr13_boundary_replay_post(
                 # verdict can label every transition in-process.
                 'accepted_path': [int(_x) for _x in _path],
                 'rowbug': bool(_path) and int(_path[-1]) != _alen,
+                # 'rows' is read by the PRE-EXISTING tap-C consumer
+                # (lastw.get("rows")) for its stale-read verdict; the chase
+                # edit that added accepted_path/rowbug dropped it, making
+                # tap-C stale=always-True (wf_a71e2a24 FAIL-2). Keep it.
+                'rows': [int(_x) for _x in _rows_written],
                 'by_col': {
                     str(_d['col']): _d['row'] for _d in _dst
                 },
@@ -5812,6 +5817,15 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                         device=_accepted_lens_buf.device,
                     )
                 )
+        # FR13_TREE_SAMPLE_ROW freshness publish (FIX-A1): row count of THIS
+        # step's tree commit. The REQKEY pre-forward rewrite zeroes it at the
+        # start of every step and the drafter-side sample-row fix consumes
+        # (re-zeroes) it, so the fix can only ever join a path published by
+        # this step's commit. Value-inert while FR13_TREE_SAMPLE_ROW=0
+        # (nothing reads it).
+        _lumo_tree_commit_gdn._LUMO_FA_TREE_COMMIT_NROWS = len(
+            accepted_gdn_node_paths
+        )
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
             int(x) for x in accepted_gdn_rows
         ]
@@ -6536,6 +6550,11 @@ def _lumo_tree_canonical_multidraft_sample(
                     device=_accepted_lens_buf.device,
                 )
             )
+        # FR13_TREE_SAMPLE_ROW freshness publish (FIX-A1): sampled-committer
+        # twin of the greedy publish above (see there for the contract).
+        _lumo_tree_commit_gdn._LUMO_FA_TREE_COMMIT_NROWS = len(
+            accepted_gdn_node_paths
+        )
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [
             int(x) for x in accepted_gdn_rows
         ]
@@ -8057,6 +8076,14 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "                        for _fr13_rk_rid in self.input_batch.req_ids[:num_reqs]\n"
         "                    ]\n"
         "                    _fr13_rk_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = _fr13_rk_req_ids\n"
+        "                    # FR13_TREE_SAMPLE_ROW freshness clear (FIX-A1):\n"
+        "                    # zero the committer's tree-commit row count at the\n"
+        "                    # START of every step, so the drafter-side\n"
+        "                    # sample-row fix can only consume a path published\n"
+        "                    # by THIS step's tree commit (prefill proposes and\n"
+        "                    # commit-less steps see 0 => verbatim stock row).\n"
+        "                    # Value-inert while FR13_TREE_SAMPLE_ROW=0.\n"
+        "                    _fr13_rk_gdn._LUMO_FA_TREE_COMMIT_NROWS = 0\n"
         "                    _fr13_rk_by_req = getattr(\n"
         "                        _fr13_rk_gdn, \"_LUMO_FA_TREE_ACCEPT_BY_REQ\", None\n"
         "                    )\n"
@@ -9031,6 +9058,140 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         raise RuntimeError("EAGLE tree parse anchor not found")
     text = text.replace(tree_parse_old, tree_parse_new, 1)
 
+    # FIX-A1 (FR13_TREE_SAMPLE_ROW, default OFF until gated;
+    # FR13_CHASE_STEP1_BIND.md H1 / wf_a71e2a24 nextStepSpec): stock
+    # prepare_inputs_padded samples the drafter at flat row
+    # base + prev_accepted_len, but after a tree partial accept the committed
+    # leaf lives at the +1-shifted published node id paths_buf[b, len-1]
+    # (committer publish: _gdn_path = node_id + 1; leaf row 0 when len==0).
+    # 84/164 decode events (51.2%) conditioned the drafter on a REJECTED
+    # node's hidden state. The rewrite happens HERE, BEFORE
+    # set_inputs_first_pass, so EVERY downstream consumer of the sampled row
+    # moves consistently (playbook class 5 -- one row map, re-derived from
+    # the committer publish code, all consumers audited):
+    #   - set_inputs_first_pass: self.input_ids[token_indices_to_sample] =
+    #     next_token_ids (the bonus token pairs with the LEAF row);
+    #   - sample_hidden_states = last_hidden_states[token_indices_to_sample]
+    #     (root logits / FIX-1 single-logits block / legacy _greedy_sample);
+    #   - positions[token_indices_to_sample] (+mrope twin): the 4-spine-step
+    #     slot/position kernel derives new_position = sampled_pos + 1, so
+    #     spine slots become chain-equivalent (leaf depth L => bonus pos);
+    #   - hidden_states[token_indices_to_sample] (spine-step MTP input).
+    # num_rejected_tokens_gpu is a COUNT (num_draft - accepted_len), not a
+    # row id: the seq_lens -= adjustment stays stock by design.
+    # CHAIN-NEUTRAL BY CONSTRUCTION: a chain publishes path [1..L], so
+    # paths_buf[b, L-1] == L == the stock offset (chain5 byte-identity
+    # regression arm + needle prove it live).
+    # Freshness contract (closes the stale-REQKEY-join class the step-1
+    # instrument hit on prefill proposes): the REQKEY pre-forward rewrite
+    # zeroes _LUMO_FA_TREE_COMMIT_NROWS at the START of every step; ONLY the
+    # tree committer (greedy + sampled twins) sets it to its row count
+    # during THIS step's commit; propose consumes (re-zeroes) it. Prefill
+    # proposes and commit-less steps therefore see 0 => verbatim stock row.
+    # ONE gather + where on device-resident int32 buffers, no CPU sync,
+    # capture-legal (propose python runs eagerly outside captured graphs,
+    # same class as stock's prepare_inputs_padded torch.empty),
+    # drafter-agnostic (only the row map changes, no drafter internals).
+    tsr_anchor = (
+        "        num_tokens, token_indices_to_sample, common_attn_metadata = (\n"
+        "            self.set_inputs_first_pass(\n"
+    )
+    tsr_inject = """        # FR13_TREE_SAMPLE_ROW (FIX-A1): sample the drafter at the committed
+        # tree LEAF's flat verify row (+1-shifted published node id), not the
+        # stock linear row prev_accepted_len. Default OFF = verbatim stock.
+        _fr13_tsr_on = os.environ.get("FR13_TREE_SAMPLE_ROW", "1") == "1"
+        logger.info_once(
+            "FR13_TREE_SAMPLE_ROW drafter sample-row fix: tsr=%s (%s)",
+            os.environ.get("FR13_TREE_SAMPLE_ROW", "1"),
+            "armed" if _fr13_tsr_on else "inert",
+        )
+        if _fr13_tsr_on:
+            if os.environ.get("FR13_TREE_REQKEY", "1") != "1":
+                raise RuntimeError(
+                    "FR13_TREE_SAMPLE_ROW=1 requires FR13_TREE_REQKEY=1: the "
+                    "pre-forward rewrite provides the per-step freshness "
+                    "clear of _LUMO_FA_TREE_COMMIT_NROWS"
+                )
+            if self.needs_extra_input_slots:
+                raise RuntimeError(
+                    "FR13_TREE_SAMPLE_ROW: needs_extra_input_slots drafters "
+                    "recompute token_indices_to_sample inside "
+                    "set_inputs_first_pass; the sample-row fix would be "
+                    "silently discarded (refusing to run vacuously)"
+                )
+            from vllm.model_executor.layers.mamba import (
+                gdn_linear_attn as _fr13_tsr_gdn,
+            )
+            _fr13_tsr_nrows = int(getattr(
+                _fr13_tsr_gdn, "_LUMO_FA_TREE_COMMIT_NROWS", 0
+            ))
+            # Consume-once: zero after read so a later propose without a
+            # tree commit this step (prefill propose, capture warmup) can
+            # never join a stale path (class-12 trap from step 1).
+            _fr13_tsr_gdn._LUMO_FA_TREE_COMMIT_NROWS = 0
+            _fr13_tsr_mode = os.environ.get(
+                "FR10_DECODE_MODE_DEFAULT", "tree_mtp"
+            )
+            try:
+                from vllm.v1.sample import (
+                    rejection_sampler as _fr13_tsr_rs,
+                )
+                _fr13_tsr_mode = getattr(
+                    _fr13_tsr_rs, "_FR10_DECODE_MODE", _fr13_tsr_mode
+                )
+            except Exception:
+                pass
+            # Tree-only engagement: _LUMO_FA_TREE_COMMIT_NROWS > 0 is set
+            # exclusively by the tree committer helper (greedy + sampled
+            # twins), which only runs on the tree-verify path; native/naive
+            # decode and prefill proposes always see 0 here.
+            if (
+                _fr13_tsr_mode == "tree_mtp"
+                and token_indices_to_sample is not None
+                and _fr13_tsr_nrows > 0
+            ):
+                _fr13_tsr_paths = getattr(
+                    _fr13_tsr_gdn, "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR", None
+                )
+                _fr13_tsr_lens = getattr(
+                    _fr13_tsr_gdn, "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR", None
+                )
+                if _fr13_tsr_paths is None or _fr13_tsr_lens is None:
+                    raise RuntimeError(
+                        "FR13_TREE_SAMPLE_ROW: accepted-path device buffers "
+                        "missing at propose time after a tree commit"
+                    )
+                # FR13_TSR_ROWMAP_BEGIN (pure row map; unit-tested verbatim:
+                # row = base + (len > 0 ? paths[b, len-1] : 0))
+                _fr13_tsr_n = min(
+                    int(_fr13_tsr_nrows),
+                    int(batch_size),
+                    int(_fr13_tsr_paths.size(0)),
+                )
+                _fr13_tsr_len_n = _fr13_tsr_lens[:_fr13_tsr_n].to(torch.long)
+                _fr13_tsr_leaf = _fr13_tsr_paths[:_fr13_tsr_n].gather(
+                    1,
+                    (_fr13_tsr_len_n - 1).clamp(min=0).unsqueeze(1),
+                ).squeeze(1)
+                _fr13_tsr_leaf = torch.where(
+                    _fr13_tsr_len_n > 0,
+                    _fr13_tsr_leaf,
+                    torch.zeros_like(_fr13_tsr_leaf),
+                )
+                _fr13_tsr_base = common_attn_metadata.query_start_loc[
+                    :_fr13_tsr_n
+                ]
+                token_indices_to_sample = token_indices_to_sample.clone()
+                token_indices_to_sample[:_fr13_tsr_n] = (
+                    _fr13_tsr_base.to(token_indices_to_sample.dtype)
+                    + _fr13_tsr_leaf.to(token_indices_to_sample.dtype)
+                )
+                # FR13_TSR_ROWMAP_END
+""" + tsr_anchor
+    if tsr_anchor not in text:
+        raise RuntimeError("EAGLE set_inputs_first_pass anchor not found")
+    text = text.replace(tsr_anchor, tsr_inject, 1)
+
     old = """        if any(isinstance(md, TreeAttentionMetadata) for md in per_group_attn_metadata):
             # Draft using tree attention - requires full logits for top-k
             logits = self.model.compute_logits(sample_hidden_states)
@@ -9589,15 +9750,43 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         self.model.named_modules()
                     ):
                         _fr13_ch_kvc = getattr(_fr13_ch_mod, "kv_cache", None)
+                        # cu130-nightly binds layer.kv_cache as a BARE tensor
+                        # (worker/utils.py bind_kv_cache:
+                        # forward_context[name].kv_cache = tensor; pre-bind
+                        # placeholder is torch.tensor([])). The step-1
+                        # harvest matched only the legacy list/tuple
+                        # per-virtual-engine form => 0 modules located and
+                        # 168 vacuous records (wf_a71e2a24 FAIL-1). Accept
+                        # BOTH forms here.
+                        _fr13_ch_kvt = None
                         if (
+                            torch.is_tensor(_fr13_ch_kvc)
+                            and _fr13_ch_kvc.numel() > 0
+                        ):
+                            _fr13_ch_kvt = _fr13_ch_kvc
+                        elif (
                             isinstance(_fr13_ch_kvc, (list, tuple))
                             and len(_fr13_ch_kvc) > 0
                             and torch.is_tensor(_fr13_ch_kvc[0])
                             and _fr13_ch_kvc[0].numel() > 0
                         ):
+                            _fr13_ch_kvt = _fr13_ch_kvc[0]
+                        if _fr13_ch_kvt is not None:
                             _fr13_ch_kv_layers.append(
                                 (_fr13_ch_nm, _fr13_ch_mod)
                             )
+                    if not _fr13_ch_kv_layers and os.environ.get(
+                        "FR13_CHASE_KV_ALLOW_EMPTY", "0"
+                    ) != "1":
+                        # Class-9 fail-loud: never bank a vacuous instrument
+                        # again (the step-1 verify caught exactly this).
+                        raise RuntimeError(
+                            "FR13_CHASE_DIAG drafter-KV tap located 0 "
+                            "kv-cache modules in the drafter: instrument "
+                            "(iv) would be VACUOUS (wf_a71e2a24 FAIL-1 "
+                            "class). Set FR13_CHASE_KV_ALLOW_EMPTY=1 only "
+                            "to bank an explicitly-empty record."
+                        )
                     self._fr13_chase_kv_layers = _fr13_ch_kv_layers
                     logger.info_once(
                         "FR13_CHASE_DIAG drafter-KV tap: %d kv-cache "
@@ -9631,7 +9820,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 ]
                 _fr13_ch_layer_recs = []
                 for _fr13_ch_nm, _fr13_ch_mod in _fr13_ch_kv_layers:
-                    _fr13_ch_kvt = _fr13_ch_mod.kv_cache[0]
+                    # Resolve at use time (bare tensor on cu130-nightly,
+                    # list/tuple on legacy builds) -- mirrors the locator.
+                    _fr13_ch_kvr = _fr13_ch_mod.kv_cache
+                    _fr13_ch_kvt = (
+                        _fr13_ch_kvr
+                        if torch.is_tensor(_fr13_ch_kvr)
+                        else _fr13_ch_kvr[0]
+                    )
                     if int(_fr13_ch_kvt.shape[0]) == 2:
                         _fr13_ch_kk = _fr13_ch_kvt[0]
                         _fr13_ch_vv = _fr13_ch_kvt[1]
@@ -9691,6 +9887,221 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     "rows_window": _fr13_ch_w,
                     "layers": _fr13_ch_layer_recs,
                 }) + chr(10))
+                if os.environ.get("FR13_CHASE_H3", "1") == "1":
+                    # H3 probe (minimal, deviation recorded in-band): ONE
+                    # TARGET full-attn layer's SERVED-SLOT K/V hashes at this
+                    # event's committed positions. Tree rows of the same
+                    # depth share one slot (depth positions), so after a
+                    # skip-commit the slot holds the LAST same-depth row
+                    # written, not necessarily the accepted node.
+                    # DEVIATION vs the plan's full H3 (explicit): the
+                    # accepted row's PRE-OVERWRITE K/V is not captured (that
+                    # needs an in-forward tap before the slot scatter); the
+                    # per-depth verdict here is TOPOLOGICAL
+                    # (accepted_flat_row != depth_last_writer_row =>
+                    # foreign_slot) and the hashes bank the byte evidence
+                    # for cross-arm / cross-event joins. Block table = the
+                    # drafter kv-cache group's (valid iff the target
+                    # full-attn layers share that group; kv_cache_gid and
+                    # kv_shape are recorded so the reducer can check).
+                    _fr13_h3_layer = getattr(
+                        self, "_fr13_chase_h3_layer", None
+                    )
+                    if _fr13_h3_layer is None:
+                        _fr13_h3_want = os.environ.get(
+                            "FR13_CHASE_H3_LAYER", ""
+                        )
+                        _fr13_h3_drafter_ids = {
+                            id(_fr13_h3_m)
+                            for _fr13_h3_nm2, _fr13_h3_m in (
+                                self.model.named_modules()
+                            )
+                        }
+                        _fr13_h3_ctx = (
+                            self.vllm_config.compilation_config
+                            .static_forward_context
+                        )
+                        _fr13_h3_cands = []
+                        for _fr13_h3_nm in sorted(_fr13_h3_ctx.keys()):
+                            _fr13_h3_mod = _fr13_h3_ctx[_fr13_h3_nm]
+                            if id(_fr13_h3_mod) in _fr13_h3_drafter_ids:
+                                continue
+                            _fr13_h3_kv = getattr(
+                                _fr13_h3_mod, "kv_cache", None
+                            )
+                            # Full-attn layers bind kv_cache as a BARE
+                            # tensor (bind_kv_cache); GDN/mamba state binds
+                            # a tuple => the bare-tensor filter selects
+                            # target full-attention layers only.
+                            if (
+                                torch.is_tensor(_fr13_h3_kv)
+                                and _fr13_h3_kv.numel() > 0
+                            ):
+                                _fr13_h3_cands.append(
+                                    (_fr13_h3_nm, _fr13_h3_mod)
+                                )
+                        if _fr13_h3_want:
+                            _fr13_h3_cands = [
+                                _fr13_h3_c
+                                for _fr13_h3_c in _fr13_h3_cands
+                                if _fr13_h3_c[0] == _fr13_h3_want
+                            ]
+                        if not _fr13_h3_cands:
+                            # Class-9 fail-loud: a silently-empty H3 would
+                            # repeat the instrument-(iv) vacuousness.
+                            raise RuntimeError(
+                                "FR13_CHASE_H3: no target full-attn "
+                                "kv-cache layer located (want="
+                                + repr(_fr13_h3_want)
+                                + "); the H3 probe would be VACUOUS"
+                            )
+                        _fr13_h3_layer = _fr13_h3_cands[0]
+                        self._fr13_chase_h3_layer = _fr13_h3_layer
+                        logger.info_once(
+                            "FR13_CHASE_H3 target full-attn K/V probe "
+                            "layer: %s (%d full-attn candidates)",
+                            _fr13_h3_layer[0],
+                            len(_fr13_h3_cands),
+                        )
+                    _fr13_h3_lwmap = getattr(
+                        self, "_fr13_chase_h3_lastw", None
+                    )
+                    if _fr13_h3_lwmap is None:
+                        # Topological last writer per depth: flat verify row
+                        # of node i is i+1 (sorted tree_choices order); the
+                        # highest flat row of a depth is written last by the
+                        # in-order slot scatter. Chains have one row per
+                        # depth => never foreign.
+                        _fr13_h3_lwmap = {}
+                        for _fr13_h3_i, _fr13_h3_ch in enumerate(
+                            getattr(self, "tree_choices", [])
+                        ):
+                            _fr13_h3_d = len(_fr13_h3_ch)
+                            _fr13_h3_lwmap[_fr13_h3_d] = max(
+                                _fr13_h3_lwmap.get(_fr13_h3_d, 0),
+                                _fr13_h3_i + 1,
+                            )
+                        self._fr13_chase_h3_lastw = _fr13_h3_lwmap
+                    _fr13_h3_kvt = _fr13_h3_layer[1].kv_cache
+                    if int(_fr13_h3_kvt.shape[0]) == 2:
+                        _fr13_h3_kk = _fr13_h3_kvt[0]
+                        _fr13_h3_vv = _fr13_h3_kvt[1]
+                    elif (
+                        _fr13_h3_kvt.dim() >= 2
+                        and int(_fr13_h3_kvt.shape[1]) == 2
+                    ):
+                        _fr13_h3_kk = _fr13_h3_kvt[:, 0]
+                        _fr13_h3_vv = _fr13_h3_kvt[:, 1]
+                    else:
+                        _fr13_h3_kk = None
+                        _fr13_h3_vv = None
+                    _fr13_h3_rows = []
+                    if _fr13_h3_kk is not None:
+                        for _fr13_h3_b in range(int(batch_size)):
+                            _fr13_h3_req = (
+                                str(_fr13_ch_req_ids[_fr13_h3_b])
+                                if _fr13_h3_b < len(_fr13_ch_req_ids)
+                                else None
+                            )
+                            _fr13_h3_entry = (
+                                _fr13_ch_by_req.get(_fr13_h3_req)
+                                if _fr13_h3_req is not None
+                                else None
+                            )
+                            if not _fr13_h3_entry:
+                                continue
+                            _fr13_h3_path = [
+                                int(_fr13_h3_x)
+                                for _fr13_h3_x in _fr13_h3_entry[0]
+                            ]
+                            _fr13_h3_len = int(_fr13_h3_entry[1])
+                            if _fr13_h3_len <= 0:
+                                continue
+                            # seq_lens here = committed_len + 4: the
+                            # -= num_rejected adjust ran before the spine
+                            # loop and each of the 4 spine steps +1 in
+                            # place. Accepted depth-d token position =
+                            # (s_end - 4 - L) + (d - 1).
+                            _fr13_h3_send = _fr13_ch_sl[_fr13_h3_b]
+                            _fr13_h3_p0 = (
+                                _fr13_h3_send - 4 - _fr13_h3_len
+                            )
+                            for _fr13_h3_d in range(
+                                1, _fr13_h3_len + 1
+                            ):
+                                _fr13_h3_p = _fr13_h3_p0 + _fr13_h3_d - 1
+                                if _fr13_h3_p < 0:
+                                    continue
+                                _fr13_h3_blk = int(
+                                    _fr13_ch_bt[_fr13_h3_b][
+                                        _fr13_h3_p // int(block_size)
+                                    ]
+                                )
+                                _fr13_h3_boff = (
+                                    _fr13_h3_p % int(block_size)
+                                )
+                                _fr13_h3_acc = _fr13_h3_path[
+                                    _fr13_h3_d - 1
+                                ]
+                                _fr13_h3_lw = _fr13_h3_lwmap.get(
+                                    _fr13_h3_d
+                                )
+                                _fr13_h3_rows.append({
+                                    "slot": _fr13_h3_b,
+                                    "req_id": _fr13_h3_req,
+                                    "depth": _fr13_h3_d,
+                                    "pos": _fr13_h3_p,
+                                    "accepted_flat_row": _fr13_h3_acc,
+                                    "depth_last_writer_row": _fr13_h3_lw,
+                                    "foreign_slot": (
+                                        None
+                                        if _fr13_h3_lw is None
+                                        else bool(
+                                            _fr13_h3_acc != _fr13_h3_lw
+                                        )
+                                    ),
+                                    "rowbug": bool(
+                                        _fr13_h3_path[_fr13_h3_len - 1]
+                                        != _fr13_h3_len
+                                    ),
+                                    "block": _fr13_h3_blk,
+                                    "block_off": _fr13_h3_boff,
+                                    "k_sha4096": _fr13_ch_row_sha(
+                                        _fr13_h3_kk[_fr13_h3_blk][
+                                            _fr13_h3_boff
+                                        ]
+                                    ),
+                                    "v_sha4096": _fr13_ch_row_sha(
+                                        _fr13_h3_vv[_fr13_h3_blk][
+                                            _fr13_h3_boff
+                                        ]
+                                    ),
+                                })
+                    _FR13_CHASE_KV_FH.write(json.dumps({
+                        "tap": "h3_target_fullattn",
+                        "event_idx": int(_FR13_CHASE_EVENT_IDX) - 1,
+                        "ts": round(_fr13_ch_time2.time(), 4),
+                        "layer": _fr13_h3_layer[0],
+                        "kv_shape": [
+                            int(_fr13_h3_x)
+                            for _fr13_h3_x in _fr13_h3_kvt.shape
+                        ],
+                        "kv_cache_gid": getattr(
+                            self, "kv_cache_gid", None
+                        ),
+                        "layout": (
+                            "UNKNOWN_LAYOUT"
+                            if _fr13_h3_kk is None
+                            else "ok"
+                        ),
+                        "deviation": (
+                            "served-slot only: accepted-row pre-overwrite "
+                            "K/V not captured (needs in-forward tap); "
+                            "foreign_slot verdict is topological; block "
+                            "table = drafter kv group"
+                        ),
+                        "rows": _fr13_h3_rows,
+                    }) + chr(10))
             return _fr10_packed
 
         _fr10_tree_draft_branch_seen = any(

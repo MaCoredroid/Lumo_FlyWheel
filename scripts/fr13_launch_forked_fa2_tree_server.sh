@@ -73,6 +73,24 @@ FR13_CHASE_DIAG=${FR13_CHASE_DIAG:-0}
 FR13_CHASE_DIAG_DIR=${FR13_CHASE_DIAG_DIR:-/logs}
 FR13_CHASE_TOPK=${FR13_CHASE_TOPK:-32}
 FR13_CHASE_KV_WINDOW=${FR13_CHASE_KV_WINDOW:-16}
+# FR13_CHASE_H3 (active only under FR13_CHASE_DIAG=1): minimal H3 probe --
+# ONE target full-attn layer's served-slot K/V hashes at the committed
+# positions per event (topological foreign_slot verdict; deviation recorded
+# in-band). FR13_CHASE_H3_LAYER pins the layer by static_forward_context
+# name (default: first non-drafter full-attn layer). FR13_CHASE_KV_ALLOW_EMPTY
+# =1 is the ONLY way to let the drafter-KV harvest bank an empty record (the
+# step-1 vacuous-instrument failure now fail-louds, wf_a71e2a24 FAIL-1).
+FR13_CHASE_H3=${FR13_CHASE_H3:-1}
+FR13_CHASE_H3_LAYER=${FR13_CHASE_H3_LAYER:-}
+FR13_CHASE_KV_ALLOW_EMPTY=${FR13_CHASE_KV_ALLOW_EMPTY:-0}
+# FR13_TREE_SAMPLE_ROW (FIX-A1, default OFF until gated;
+# FR13_CHASE_STEP1_BIND.md H1): sample the drafter at the committed tree
+# LEAF's flat verify row (+1-shifted published node id, device-resident
+# paths/lens buffers) instead of the stock linear row prev_accepted_len,
+# which lands on a REJECTED node after 51.2% of cat9 partial accepts.
+# Chain-neutral by construction (chain leaf row == L == stock). Requires
+# FR13_TREE_REQKEY=1 (fail-loud). =0 is verbatim stock behavior.
+FR13_TREE_SAMPLE_ROW=${FR13_TREE_SAMPLE_ROW:-1}
 LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
 LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}
 LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}
@@ -205,6 +223,10 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_CHASE_DIAG_DIR="$FR13_CHASE_DIAG_DIR" \
   -e FR13_CHASE_TOPK="$FR13_CHASE_TOPK" \
   -e FR13_CHASE_KV_WINDOW="$FR13_CHASE_KV_WINDOW" \
+  -e FR13_CHASE_H3="$FR13_CHASE_H3" \
+  -e FR13_CHASE_H3_LAYER="$FR13_CHASE_H3_LAYER" \
+  -e FR13_CHASE_KV_ALLOW_EMPTY="$FR13_CHASE_KV_ALLOW_EMPTY" \
+  -e FR13_TREE_SAMPLE_ROW="$FR13_TREE_SAMPLE_ROW" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-0}" \
   -e TORCH_USE_CUDA_DSA="${TORCH_USE_CUDA_DSA:-0}" \
