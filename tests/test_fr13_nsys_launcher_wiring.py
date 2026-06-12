@@ -45,7 +45,25 @@ def test_nsys_wrapper_wraps_the_in_container_vllm_serve_exec() -> None:
         # on GB10; fr13_b1_profile_bind exports had ZERO kernel tables.
         assert "LUMO_NSYS_FLUSH_MS=${LUMO_NSYS_FLUSH_MS:-100}" in text
         assert '--cuda-flush-interval \\"\\$LUMO_NSYS_FLUSH_MS\\"' in text
-        assert '--trace=cuda,nvtx' in text
+        # GB10 GPU-timestamp drop workaround: ALL per-kernel rows are dropped as
+        # "incomplete" at session stop even with periodic flushes unless
+        # CuptiUseRawGpuTimestamps=false is written to the in-container nsys
+        # user config before the wrapped vllm serve exec.
+        assert (
+            "LUMO_NSYS_CONFIG_DIRECTIVES="
+            "${LUMO_NSYS_CONFIG_DIRECTIVES:-CuptiUseRawGpuTimestamps=false}"
+        ) in text
+        assert '-e LUMO_NSYS_CONFIG_DIRECTIVES="$LUMO_NSYS_CONFIG_DIRECTIVES"' in text
+        assert 'NSYS_CFG_PATH=\\$(\\"\\$LUMO_NSYS_BIN\\" -z)' in text
+        assert (
+            "printf '%s\\n' \\\"\\$LUMO_NSYS_CONFIG_DIRECTIVES\\\" | tr ';' '\\n' "
+            '>> \\"\\$NSYS_CFG_PATH\\"'
+        ) in text
+        # Trace selector is env-tunable: GB10+CUDA13 hardware-trace kernel rows
+        # are dropped in delayed sessions; cuda,cuda-sw forces software records.
+        assert "LUMO_NSYS_TRACE=${LUMO_NSYS_TRACE:-cuda,nvtx}" in text
+        assert '-e LUMO_NSYS_TRACE="$LUMO_NSYS_TRACE"' in text
+        assert '--trace=\\"\\$LUMO_NSYS_TRACE\\"' in text
         assert '-o \\"\\$LUMO_NSYS_OUTPUT\\"' in text
         assert (
             'exec \\"\\${NSYS_PREFIX[@]}\\" vllm serve '

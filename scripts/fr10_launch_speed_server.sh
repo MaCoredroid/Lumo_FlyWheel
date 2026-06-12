@@ -110,6 +110,19 @@ LUMO_NSYS_DURATION_S=${LUMO_NSYS_DURATION_S:-150}
 # node-level kernels) are dropped as "incomplete" at the delayed-duration session
 # stop on GB10 (fr13_b1_profile_bind: 55k/78k events dropped, zero kernel rows).
 LUMO_NSYS_FLUSH_MS=${LUMO_NSYS_FLUSH_MS:-100}
+# Semicolon-separated lines appended to the in-container nsys user config
+# ("$nsys -z"). Default works around the GB10 drop class where ALL per-kernel
+# rows are "incomplete CUPTI events dropped ... GPU timestamp information have
+# not been retrieved" even with periodic flushes (NVIDIA-documented
+# CuptiUseRawGpuTimestamps=false workaround; fr13_b1_profile_node: 102,320
+# dropped with --cuda-flush-interval 100 and zero kernel tables).
+LUMO_NSYS_CONFIG_DIRECTIVES=${LUMO_NSYS_CONFIG_DIRECTIVES:-CuptiUseRawGpuTimestamps=false}
+# nsys --trace value. On GB10 + CUDA 13 the default 'cuda' engages the HARDWARE
+# trace engine for kernel records; in delayed-duration sessions ALL kernel rows
+# are then dropped ("GPU timestamp information have not been retrieved").
+# 'cuda,cuda-sw' forces the software CUPTI kernel-record path (memcpy/memset/
+# runtime rows always survived; only hw-trace kernel rows dropped).
+LUMO_NSYS_TRACE=${LUMO_NSYS_TRACE:-cuda,nvtx}
 LUMO_NSYS_OUTPUT=${LUMO_NSYS_OUTPUT:-/logs/nsys_vllm_${CONTAINER}}
 NSYS_DOCKER_ARGS=()
 if _lumo_truthy "$LUMO_NSYS_WRAP_VLLM"; then
@@ -157,6 +170,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e LUMO_NSYS_DELAY_S="$LUMO_NSYS_DELAY_S" \
   -e LUMO_NSYS_DURATION_S="$LUMO_NSYS_DURATION_S" \
   -e LUMO_NSYS_FLUSH_MS="$LUMO_NSYS_FLUSH_MS" \
+  -e LUMO_NSYS_CONFIG_DIRECTIVES="$LUMO_NSYS_CONFIG_DIRECTIVES" \
+  -e LUMO_NSYS_TRACE="$LUMO_NSYS_TRACE" \
   -e LUMO_NSYS_OUTPUT="$LUMO_NSYS_OUTPUT" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e PYTHONPATH=/workspace/src \
@@ -249,12 +264,19 @@ fi
 NSYS_PREFIX=()
 case \"\${LUMO_NSYS_WRAP_VLLM,,}\" in
   1|true|yes|on)
+    if [[ -n \"\${LUMO_NSYS_CONFIG_DIRECTIVES:-}\" ]]; then
+      NSYS_CFG_PATH=\$(\"\$LUMO_NSYS_BIN\" -z)
+      mkdir -p \"\$(dirname \"\$NSYS_CFG_PATH\")\"
+      printf '%s\n' \"\$LUMO_NSYS_CONFIG_DIRECTIVES\" | tr ';' '\n' >> \"\$NSYS_CFG_PATH\"
+      echo \"nsys config directives appended to \$NSYS_CFG_PATH:\"
+      cat \"\$NSYS_CFG_PATH\"
+    fi
     NSYS_PREFIX=(
       \"\$LUMO_NSYS_BIN\"
       profile
       --delay \"\$LUMO_NSYS_DELAY_S\"
       --duration \"\$LUMO_NSYS_DURATION_S\"
-      --trace=cuda,nvtx
+      --trace=\"\$LUMO_NSYS_TRACE\"
       --cuda-graph-trace=node
       --cuda-flush-interval \"\$LUMO_NSYS_FLUSH_MS\"
       --sample=none
