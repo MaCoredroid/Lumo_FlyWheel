@@ -59,6 +59,17 @@ FR13_TREE_CONV_FUSED=${FR13_TREE_CONV_FUSED:-1}
 # number.
 FR13_FIX1_SELFCHECK=${FR13_FIX1_SELFCHECK:-0}
 FR13_FIX1_SELFCHECK_DUMP=${FR13_FIX1_SELFCHECK_DUMP:-/logs/fr13_fix1_selfcheck.json}
+# FR13_COMMIT_ARGMAX_GATE (default OFF) — DIAGNOSTIC ONLY, like
+# FR13_FORCE_SPINE_COMMIT / FR13_FIX1_SELFCHECK: in-process per-served-token
+# committer-row argmax gate. At each committed/served token the greedy tree
+# committer dumps (to FR13_COMMIT_ARGMAX_GATE_DUMP jsonl) the verify-forward
+# logit row it ACTUALLY indexed plus channel-1 (committed_id vs
+# argmax(verify_logits[row])) and channel-2 (verify argmax + top-2 margin for
+# the clean-forward reduce). Localizes the gold-gate non-argmax-served gap
+# (FR13_B1_SWE_GOLD_BIND.md). EAGER-only (it syncs/.item()s) — run on an eager
+# diagnostic boot. NEVER bind =1 into a serving config or a speed number.
+FR13_COMMIT_ARGMAX_GATE=${FR13_COMMIT_ARGMAX_GATE:-0}
+FR13_COMMIT_ARGMAX_GATE_DUMP=${FR13_COMMIT_ARGMAX_GATE_DUMP:-/logs/fr13_commit_argmax_gate.jsonl}
 # FR13_CHASE_DIAG (default OFF) — DIAGNOSTIC ONLY, superset-chase Step-1
 # in-process instruments (plan wf_c43b084f, FIX1-SELFCHECK pattern): (i)
 # per-event integer row record + (iii) drafter root-logit top-K (eagle
@@ -215,6 +226,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_TREE_CONV_FUSED="$FR13_TREE_CONV_FUSED" \
   -e FR13_FIX1_SELFCHECK="$FR13_FIX1_SELFCHECK" \
   -e FR13_FIX1_SELFCHECK_DUMP="$FR13_FIX1_SELFCHECK_DUMP" \
+  -e FR13_COMMIT_ARGMAX_GATE="$FR13_COMMIT_ARGMAX_GATE" \
+  -e FR13_COMMIT_ARGMAX_GATE_DUMP="$FR13_COMMIT_ARGMAX_GATE_DUMP" \
   -e FR13_REPLAY_ROUTE="${FR13_REPLAY_ROUTE:-1}" \
   -e FR13_REPLAY_BOUNDARY_LOG="${FR13_REPLAY_BOUNDARY_LOG:-0}" \
   -e FR13_REPLAY_BOUNDARY_LAYERS="${FR13_REPLAY_BOUNDARY_LAYERS:-layers.0.linear_attn}" \

@@ -74,6 +74,12 @@ def _load_gather_helper():
         # (the value logic under test is transport-independent).
         "_FR13_EAGER_PACK": False,
         "_fr13_eager_pack_needle": lambda *a, **k: None,
+        # FR13_COMMIT_ARGMAX_GATE (default OFF) module-globals: the
+        # committer-row gate is value-independent; seed it OFF + no-op
+        # needle (gate wiring covered in
+        # test_fr13_commit_argmax_gate_wiring.py).
+        "_FR13_COMMIT_ARGMAX_GATE": False,
+        "_fr13_commit_argmax_gate_needle": lambda *a, **k: None,
     }
     exec(src, ns)
     return ns["gather_committed_path_conv_prior"]
@@ -366,6 +372,12 @@ def _greedy_namespace() -> dict:
         # (the value logic under test is transport-independent).
         "_FR13_EAGER_PACK": False,
         "_fr13_eager_pack_needle": lambda *a, **k: None,
+        # FR13_COMMIT_ARGMAX_GATE (default OFF) module-globals: the
+        # committer-row gate is value-independent; seed it OFF + no-op
+        # needle (gate wiring covered in
+        # test_fr13_commit_argmax_gate_wiring.py).
+        "_FR13_COMMIT_ARGMAX_GATE": False,
+        "_fr13_commit_argmax_gate_needle": lambda *a, **k: None,
     }
     exec(_extract_function(PATCHER_TEXT, "_lumo_tree_path_lcp_max_greedy_sample"), ns)
     return ns
@@ -491,6 +503,12 @@ def test_sampled_committer_fails_loud_on_force_spine_flag(monkeypatch) -> None:
         # (the value logic under test is transport-independent).
         "_FR13_EAGER_PACK": False,
         "_fr13_eager_pack_needle": lambda *a, **k: None,
+        # FR13_COMMIT_ARGMAX_GATE (default OFF) module-globals: the
+        # committer-row gate is value-independent; seed it OFF + no-op
+        # needle (gate wiring covered in
+        # test_fr13_commit_argmax_gate_wiring.py).
+        "_FR13_COMMIT_ARGMAX_GATE": False,
+        "_fr13_commit_argmax_gate_needle": lambda *a, **k: None,
     }
     exec(_extract_function(PATCHER_TEXT, "_lumo_tree_canonical_multidraft_sample"), ns)
     with pytest.raises(RuntimeError, match="FR13_FORCE_SPINE_COMMIT"):

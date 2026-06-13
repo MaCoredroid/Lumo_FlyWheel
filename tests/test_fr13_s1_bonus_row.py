@@ -82,6 +82,12 @@ def _greedy_namespace() -> dict:
         # (the value logic under test is transport-independent).
         "_FR13_EAGER_PACK": False,
         "_fr13_eager_pack_needle": lambda *a, **k: None,
+        # FR13_COMMIT_ARGMAX_GATE (default OFF) module-globals: same as the
+        # EAGER_PACK pattern -- the committer-row gate is value-independent, so
+        # these CPU rigs seed the flag OFF + a no-op needle. The gate's own
+        # wiring is covered in test_fr13_commit_argmax_gate_wiring.py.
+        "_FR13_COMMIT_ARGMAX_GATE": False,
+        "_fr13_commit_argmax_gate_needle": lambda *a, **k: None,
     }
     exec(_extract_function("_lumo_tree_path_lcp_max_greedy_sample"), ns)
     return ns

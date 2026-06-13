@@ -5134,6 +5134,93 @@ _FR13_EAGER_PACK = __import__('os').environ.get('FR13_EAGER_PACK', '0') == '1'
 _FR13_EAGER_PACK_NEEDLE_DONE = False
 _FR13_EAGER_PACK_STAGE = {}
 
+# FR13_COMMIT_ARGMAX_GATE (ONE flag, default OFF, inert): per-served-token
+# in-process committer-row argmax gate. At each committed/served token the
+# greedy committer records, to a jsonl, the row it ACTUALLY indexed into the
+# verify-forward logits and whether the served token id == argmax of THAT row
+# (channel-1: committer row-mapping). It also records the verify-forward argmax
+# id + its top-2 margin so the reduce can compare against a clean teacher-forced
+# single-forward reference (channel-2: verify-forward losslessness). OFF =
+# nothing happens (legacy-verbatim: the committer never touches the published
+# logit globals, which the OFF call-site leaves None). EAGER-only: the tap
+# syncs + .item()s the logit rows, so it must run on an eager diagnostic boot
+# (fail-loud if it ever runs during CUDA-graph capture). NEVER bind =1 into a
+# serving/speed config (same class as FR13_FORCE_SPINE_COMMIT). Read once at
+# import (flag plan); the call-site publishes the raw logit tensors only when
+# armed.
+_FR13_COMMIT_ARGMAX_GATE = (
+    __import__('os').environ.get('FR13_COMMIT_ARGMAX_GATE', '0') == '1'
+)
+_FR13_COMMIT_ARGMAX_GATE_NEEDLE_DONE = False
+_FR13_COMMIT_ARGMAX_GATE_FH = None
+_FR13_COMMIT_ARGMAX_GATE_STATS = {
+    'served_tokens': 0,
+    'ch1_mismatch': 0,
+    'spine_path_idx_set': 0,
+}
+
+
+def _fr13_commit_argmax_gate_needle(armed):
+    """Engagement needle (class 9): fires once, in BOTH flag states."""
+    global _FR13_COMMIT_ARGMAX_GATE_NEEDLE_DONE
+    if _FR13_COMMIT_ARGMAX_GATE_NEEDLE_DONE:
+        return
+    _FR13_COMMIT_ARGMAX_GATE_NEEDLE_DONE = True
+    msg = (
+        'FR13_COMMIT_ARGMAX_GATE committer-row gate: armed=%d (%s)' % (
+            1 if armed else 0,
+            'armed-eager-only' if armed else 'inert',
+        )
+    )
+    try:
+        from vllm.logger import init_logger as _cag_init_logger
+        _cag_init_logger('vllm.fr13_commit_argmax_gate').info(msg)
+    except Exception:
+        print(msg, flush=True)
+
+
+def _fr13_commit_argmax_gate_fh():
+    """Append-mode jsonl handle, opened once (class 12 raw-counter sink)."""
+    global _FR13_COMMIT_ARGMAX_GATE_FH
+    if _FR13_COMMIT_ARGMAX_GATE_FH is None:
+        import os as _cag_os
+        _cag_path = _cag_os.environ.get(
+            'FR13_COMMIT_ARGMAX_GATE_DUMP',
+            '/logs/fr13_commit_argmax_gate.jsonl',
+        )
+        try:
+            _cag_dir = _cag_os.path.dirname(_cag_path)
+            if _cag_dir:
+                _cag_os.makedirs(_cag_dir, exist_ok=True)
+        except Exception:
+            pass
+        _FR13_COMMIT_ARGMAX_GATE_FH = open(_cag_path, 'a', buffering=1)
+    return _FR13_COMMIT_ARGMAX_GATE_FH
+
+
+def _fr13_commit_argmax_gate_row_stats(logit_row):
+    """Top-2 over one verify-forward logit row (eager .item() syncs).
+
+    Returns (argmax_id, argmax_logit, runner_up_id, runner_up_logit). The
+    top-2 margin (argmax_logit - runner_up_logit) is the channel-2 margin the
+    reduce uses to decide whether a verify-vs-clean argmax flip is a clear
+    deviation or a near-tie. NEVER call during CUDA-graph capture.
+    """
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            'FR13_COMMIT_ARGMAX_GATE is eager-only: row stats called during '
+            'CUDA-graph capture (class 6 fail-loud)'
+        )
+    _top = torch.topk(logit_row.to(torch.float32), 2, dim=-1)
+    _vals = _top.values.tolist()
+    _ids = _top.indices.tolist()
+    return (
+        int(_ids[0]),
+        float(_vals[0]),
+        int(_ids[1]) if len(_ids) > 1 else -1,
+        float(_vals[1]) if len(_vals) > 1 else float('-inf'),
+    )
+
 
 def _fr13_eager_pack_stage(kind, elems, device, dtype):
     """Persistent staging (device tensor, pinned CPU mirror, event, rec-flag).
@@ -5470,6 +5557,17 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             == '1'
         ),
     )
+    # FR13_COMMIT_ARGMAX_GATE: the call-site publishes the raw verify logit
+    # tensors only when armed; here we read them back. Gate is active iff the
+    # flag is on AND the call-site actually published (so an OFF call-site can
+    # never accidentally arm a captured boot). Needle fires in BOTH states.
+    _fr13_cag_target_logits = globals().get('_FR13_CAG_TARGET_LOGITS')
+    _fr13_cag_self_logits = globals().get('_FR13_CAG_SELF_LOGITS')
+    _fr13_cag_active = bool(
+        _FR13_COMMIT_ARGMAX_GATE and _fr13_cag_target_logits is not None
+    )
+    _fr13_commit_argmax_gate_needle(_fr13_cag_active)
+    _fr13_cag_step = int(globals().get('_FR13_CAG_STEP', -1))
     # FR13 S1 (default ON): a fully-accepted path commits the accepted LEAF's
     # self-target row as its bonus token. At greedy that row IS the verify
     # argmax for the accepted path — for EVERY path, including the spine.
@@ -5606,6 +5704,159 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         else:
             bonus_source = 'no_path'
         row = row[:int(max_spec_len) + 1]
+        # FR13_COMMIT_ARGMAX_GATE: in-process per-served-token committer-row
+        # gate. For each token in `row` (the committed/served sequence for this
+        # request), name the EXACT verify-forward logit row the committer
+        # indexed and record:
+        #   CHANNEL 1 (committer row-mapping): committed_token_id vs
+        #     argmax(verify_logits[committed_row]) at the row the committer
+        #     ACTUALLY used. A mismatch => the committer served a non-argmax
+        #     token for that row (draft/bonus/off-by-one row bug). The capture
+        #     metadata (num_accepted, node_type, accept_run_index, bonus_source)
+        #     names the seam.
+        #   CHANNEL 2 (verify-forward losslessness): also record the verify
+        #     argmax id + its top-2 margin so the reduce can compare against a
+        #     clean single-forward (teacher-forced) reference at the same prefix
+        #     -- if committer is correct (ch1 ok) but verify-argmax != clean
+        #     argmax at clear margin, the verify forward itself diverged.
+        # Row map (re-derived from THIS committer, class 5):
+        #   - accepted prefix pos p (< best_lcp): node = best_path[p]; the
+        #     served token is drafts[node], which was accepted because it
+        #     matched the verify parent-edge dist => committed_row =
+        #     target_logits[start + node]. node_type spine/leaf by spine chain.
+        #   - bonus/correction pos (== best_lcp):
+        #       reject_parent_target  -> target_logits[start + reject_node]
+        #       root_parent_target    -> target_logits[start + root_node]
+        #       tree_self_target      -> self_logits[start + accepted_leaf]
+        #       path0_native_bonus    -> vLLM last-row bonus (legacy bug; the
+        #                                committer indexed NO per-node row, so
+        #                                committed_row = -1, row_known = False)
+        if _fr13_cag_active and row:
+            try:
+                _cag_spine_nodes = set()
+                _cag_sn = children[-1][0] if children.get(-1) else -1
+                _cag_g = 0
+                while 0 <= _cag_sn < node_count and _cag_g <= node_count:
+                    _cag_spine_nodes.add(int(_cag_sn))
+                    _cag_kids = children.get(_cag_sn) or []
+                    _cag_sn = int(_cag_kids[0]) if _cag_kids else -1
+                    _cag_g += 1
+                _cag_fh = _fr13_commit_argmax_gate_fh()
+                for _cag_pos, _cag_tok in enumerate(row):
+                    _cag_tok = int(_cag_tok)
+                    _cag_logit_kind = None
+                    _cag_flat = -1
+                    _cag_node = -1
+                    _cag_run_idx = -1
+                    _cag_ntype = 'unknown'
+                    if _cag_pos < best_lcp:
+                        # Accepted draft token at accept-run position _cag_pos.
+                        _cag_node = int(best_path[_cag_pos])
+                        _cag_flat = int(start + _cag_node)
+                        _cag_logit_kind = 'target'
+                        _cag_run_idx = int(_cag_pos)
+                        _cag_ntype = (
+                            'spine' if _cag_node in _cag_spine_nodes else 'leaf'
+                        )
+                    else:
+                        # Bonus/correction token (one per request, last pos).
+                        if bonus_source == 'reject_parent_target':
+                            _cag_node = int(best_path[best_lcp])
+                            _cag_flat = int(start + _cag_node)
+                            _cag_logit_kind = 'target'
+                            _cag_ntype = 'reject_correction'
+                        elif bonus_source == 'root_parent_target':
+                            _cag_node = int(best_path[0])
+                            _cag_flat = int(start + _cag_node)
+                            _cag_logit_kind = 'target'
+                            _cag_ntype = 'root_correction'
+                        elif bonus_source == 'tree_self_target':
+                            _cag_node = int(best_path[best_lcp - 1])
+                            _cag_flat = int(start + _cag_node)
+                            _cag_logit_kind = 'self'
+                            _cag_ntype = (
+                                'bonus_self_spine'
+                                if _cag_node in _cag_spine_nodes
+                                else 'bonus_self_leaf'
+                            )
+                        elif bonus_source == 'path0_native_bonus':
+                            _cag_logit_kind = None  # no per-node row indexed
+                            _cag_ntype = 'bonus_native_lastrow'
+                        else:
+                            _cag_ntype = bonus_source
+                    _cag_rec = {
+                        'step': int(_fr13_cag_step),
+                        'req_index': int(req_i),
+                        'served_pos': int(_cag_pos),
+                        'committed_token_id': _cag_tok,
+                        'num_accepted_this_step': int(best_lcp),
+                        'node_count': int(node_count),
+                        'node_id': int(_cag_node),
+                        'node_type': _cag_ntype,
+                        'accept_run_index': int(_cag_run_idx),
+                        'bonus_source': str(bonus_source),
+                        'logit_kind': _cag_logit_kind,
+                        'committed_row': int(_cag_flat),
+                        'row_known': bool(_cag_logit_kind is not None),
+                        'best_path': [int(_x) for _x in best_path],
+                        'spine_path_idx': int(spine_path_idx),
+                        'winner_path_idx': int(best_path_idx),
+                    }
+                    if _cag_logit_kind is not None and _cag_flat >= 0:
+                        _cag_src = (
+                            _fr13_cag_self_logits
+                            if _cag_logit_kind == 'self'
+                            else _fr13_cag_target_logits
+                        )
+                        if _cag_src is not None and _cag_flat < int(
+                            _cag_src.size(0)
+                        ):
+                            (
+                                _cag_amax_id,
+                                _cag_amax_lp,
+                                _cag_ru_id,
+                                _cag_ru_lp,
+                            ) = _fr13_commit_argmax_gate_row_stats(
+                                _cag_src[_cag_flat]
+                            )
+                            _cag_tok_lp = float(
+                                _cag_src[_cag_flat][_cag_tok].item()
+                            )
+                            # CHANNEL 1: committed vs argmax(row the committer
+                            # used). margin > 0 => non-argmax served.
+                            _cag_ch1_match = bool(_cag_tok == _cag_amax_id)
+                            _cag_rec.update({
+                                'verify_argmax_id': int(_cag_amax_id),
+                                'verify_argmax_logit': float(_cag_amax_lp),
+                                'committed_token_logit': float(_cag_tok_lp),
+                                # ch1 margin: argmax_logit - committed_logit
+                                'ch1_margin': float(_cag_amax_lp - _cag_tok_lp),
+                                'ch1_match': _cag_ch1_match,
+                                # CHANNEL 2: verify top-2 margin (argmax - rank2)
+                                # so the reduce classifies clear vs near-tie
+                                # against the clean-forward reference.
+                                'verify_runnerup_id': int(_cag_ru_id),
+                                'verify_runnerup_logit': float(_cag_ru_lp),
+                                'verify_top2_margin': float(
+                                    _cag_amax_lp - _cag_ru_lp
+                                ),
+                            })
+                            _FR13_COMMIT_ARGMAX_GATE_STATS['served_tokens'] += 1
+                            if not _cag_ch1_match:
+                                _FR13_COMMIT_ARGMAX_GATE_STATS[
+                                    'ch1_mismatch'
+                                ] += 1
+                        else:
+                            _cag_rec['row_known'] = False
+                            _cag_rec['oob'] = True
+                    _cag_fh.write(__import__('json').dumps(_cag_rec) + chr(10))
+            except RuntimeError as _cag_exc:
+                if 'FR13_COMMIT_ARGMAX_GATE is eager-only' in str(_cag_exc):
+                    raise
+                raise RuntimeError(
+                    'FR13_COMMIT_ARGMAX_GATE capture failed: '
+                    + type(_cag_exc).__name__ + ':' + str(_cag_exc)
+                ) from _cag_exc
         out_rows.append(row)
         accepted_row = int(best_path[best_lcp - 1]) if best_lcp > 0 else 0
         accepted_rows.append(accepted_row)
@@ -7158,6 +7409,32 @@ def _lumo_tree_canonical_multidraft_sample(
             raise RuntimeError(
                 "FR10 sampled tree committer disengaged: missing_tree_parent_indices"
             )
+
+        # FR13_COMMIT_ARGMAX_GATE (default OFF; DIAGNOSTIC ONLY, like
+        # FR13_FIX1_SELFCHECK / FR13_FORCE_SPINE_COMMIT): publish the verify
+        # forward's RAW logit tensors so the greedy committer can capture, at
+        # each served row, whether committed_token_id == argmax(verify_logits
+        # [the row the committer actually indexed]). Channel-1 = committer
+        # row-mapping; channel-2 split records the verify argmax + top-2 margin
+        # for the reduce's clean-forward comparison. OFF = nothing published
+        # (the committer's gate reads the global as None and no-ops). EAGER-only
+        # (the committer syncs/.item()s); NEVER bind =1 into a serving/speed
+        # boot. The two tensors are the EXACT post-constraint logits the argmax
+        # token-ids were computed from (target_logits = parent-edge dist;
+        # lumo_tree_self_logits = self/node dist) -- same rows, same values.
+        import os as _fr13_cag_os
+        if _fr13_cag_os.environ.get("FR13_COMMIT_ARGMAX_GATE", "0") == "1":
+            globals()["_FR13_CAG_TARGET_LOGITS"] = target_logits
+            globals()["_FR13_CAG_SELF_LOGITS"] = lumo_tree_self_logits
+            globals()["_FR13_CAG_NUM_DRAFT"] = [
+                int(_x) for _x in metadata.num_draft_tokens
+            ]
+            globals()["_FR13_CAG_STEP"] = int(
+                globals().get("_FR13_CAG_STEP", -1)
+            ) + 1
+        else:
+            globals()["_FR13_CAG_TARGET_LOGITS"] = None
+            globals()["_FR13_CAG_SELF_LOGITS"] = None
 
         output_token_ids = rejection_sample(
             metadata.draft_token_ids,
