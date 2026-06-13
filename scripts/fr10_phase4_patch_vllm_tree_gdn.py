@@ -6563,7 +6563,7 @@ def _lumo_tree_canonical_multidraft_sample(
     # to the request's own seeded generator. FR13_TREE_PER_REQ_GEN=0 restores
     # the legacy single global-seeded rng.
     _fr13_per_req_gen = (
-        __import__('os').environ.get('FR13_TREE_PER_REQ_GEN', '1') == '1'
+        True  # FR13_TREE_PER_REQ_GEN baked ON (locked); legacy global-seeded rng path dead
     )
     rng_global = None
     rng = None
