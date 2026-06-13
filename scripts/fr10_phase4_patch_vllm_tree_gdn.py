@@ -9496,6 +9496,21 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 0, 0),
             (0, 0, 0, 0, 1),
         ]
+        # FR13_CAT10_ROOT_SIBLING (default OFF => byte-identical to cat9): a
+        # 10-node caterpillar that adds the MISSING depth-0 (root) top-2 leaf.
+        # The new node (1,) hangs off the root, sorts to flat index 1 (node id
+        # 2) in vLLM's (len, path) tree order, and carries the root logits'
+        # rank-2 token. EVERY spine depth 0-4 then has top-1 spine + top-2
+        # sibling; the 62%-of-rejects-at-step-0 d0 misses gain a root-branch
+        # rescue. Downstream consumers (parent/ancestry masks, committer path
+        # enumeration, eager-pack replay rows, conv-fusion prior windows) are
+        # ALL driven off the SPEC_CONFIG tree_choices and auto-adapt -- only
+        # the drafter packing order is hand-rolled, so only it is touched here.
+        _fr10_cat10_choices = [
+            (0,), (1,), (0, 0), (0, 1), (0, 0, 0), (0, 0, 1),
+            (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 1),
+        ]
         _fr10_spine_only_choices = [
             (0,), (0, 0), (0, 0, 0), (0, 0, 0, 0),
             (0, 0, 0, 0, 0),
@@ -9503,8 +9518,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         _fr10_tree_choices_current = [
             tuple(_x) for _x in getattr(self, "tree_choices", [])
         ]
+        _fr10_cat10_root_sibling = (
+            os.environ.get("FR13_CAT10_ROOT_SIBLING", "0") == "1"
+        )
+        _fr10_is_caterpillar10 = (
+            _fr10_cat10_root_sibling
+            and _fr10_active_decode_mode == "tree_mtp"
+            and int(self.num_speculative_tokens) == 10
+            and _fr10_tree_choices_current == _fr10_cat10_choices
+        )
         _fr10_is_caterpillar = (
-            _fr10_active_decode_mode == "tree_mtp"
+            not _fr10_is_caterpillar10
+            and _fr10_active_decode_mode == "tree_mtp"
             and int(self.num_speculative_tokens) == 9
             and _fr10_tree_choices_current == _fr10_caterpillar_choices
         )
@@ -9513,7 +9538,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             and int(self.num_speculative_tokens) == 5
             and _fr10_tree_choices_current == _fr10_spine_only_choices
         )
-        if _fr10_is_caterpillar or _fr10_is_spine_only:
+        logger.info_once(
+            "FR13_CAT10_ROOT_SIBLING drafter topology: cat10=%s (env=%s) "
+            "is_cat10=%s is_cat9=%s is_spine_only=%s num_spec=%s",
+            _fr10_cat10_root_sibling,
+            os.environ.get("FR13_CAT10_ROOT_SIBLING", "0"),
+            _fr10_is_caterpillar10,
+            _fr10_is_caterpillar,
+            _fr10_is_spine_only,
+            int(self.num_speculative_tokens),
+        )
+        if _fr10_is_caterpillar or _fr10_is_caterpillar10 or _fr10_is_spine_only:
             # FR10_CATERPILLAR_NATIVE_SPINE_TOP2: read-only drafter fix.
             # Run the native causal MTP spine unchanged for depth 5. At each
             # post-root spine step, read the runner-up token from the same
@@ -9616,11 +9651,20 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "_greedy_sample at " + _site
                     )
 
+            _fr10_root_leaf_token = None
             if _fr13_single_logits:
-                # Root top-2 is verified unused (no tree node consumes the
-                # root runner-up: every caterpillar choice starts with 0).
+                # Root top-2: unused for cat9/spine-only (every choice starts
+                # with 0), but cat10 (FR13_CAT10_ROOT_SIBLING) consumes the
+                # root runner-up as the (1,) root-sibling leaf -- so compute
+                # the rank-2 token from the SAME root logits tensor when cat10
+                # is engaged (no extra lm-head read; one topk on the already-
+                # materialized logits).
                 _fr10_logits = self.model.compute_logits(sample_hidden_states)
                 draft_token_ids = _fr10_logits.argmax(dim=-1)
+                if _fr10_is_caterpillar10:
+                    _fr10_root_leaf_token = torch.topk(
+                        _fr10_logits, 2, dim=-1
+                    ).indices[:, 1]
                 if _fr13_selfcheck:
                     _fr13_sc_check(
                         "root",
@@ -9631,6 +9675,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 _fr10_logits = self.model.compute_logits(sample_hidden_states)
                 _fr10_top2 = torch.topk(_fr10_logits, 2, dim=-1).indices
                 draft_token_ids = self._greedy_sample(sample_hidden_states)
+                if _fr10_is_caterpillar10:
+                    _fr10_root_leaf_token = _fr10_top2[:, 1]
             _fr10_spine_tokens = [draft_token_ids]
             _fr10_leaf_tokens = []
 
@@ -9945,6 +9991,34 @@ def _patch_eagle_tree_consumption_verify() -> bool:
 
             if _fr10_is_spine_only:
                 _fr10_packed = torch.stack(_fr10_spine_tokens, dim=1)
+            elif _fr10_is_caterpillar10:
+                # FR13_CAT10_ROOT_SIBLING: 10-node flat order = vLLM sorted
+                # (len, path) tree order. Node id (0-based slot) -> path:
+                #   0 (0,) spine0 | 1 (1,) ROOT_LEAF | 2 (0,0) spine1
+                #   3 (0,1) leaf0  | 4 (0,0,0) spine2 | 5 (0,0,1) leaf1
+                #   6 (0,0,0,0) spine3 | 7 (0,0,0,1) leaf2
+                #   8 (0,0,0,0,0) spine4 | 9 (0,0,0,0,1) leaf3
+                if _fr10_root_leaf_token is None:
+                    raise RuntimeError(
+                        "FR13_CAT10_ROOT_SIBLING engaged but root runner-up "
+                        "token was not captured (drafter packing would be "
+                        "vacuous)"
+                    )
+                _fr10_packed = torch.stack(
+                    [
+                        _fr10_spine_tokens[0],
+                        _fr10_root_leaf_token,
+                        _fr10_spine_tokens[1],
+                        _fr10_leaf_tokens[0],
+                        _fr10_spine_tokens[2],
+                        _fr10_leaf_tokens[1],
+                        _fr10_spine_tokens[3],
+                        _fr10_leaf_tokens[2],
+                        _fr10_spine_tokens[4],
+                        _fr10_leaf_tokens[3],
+                    ],
+                    dim=1,
+                )
             else:
                 _fr10_packed = torch.stack(
                     [
@@ -9981,14 +10055,29 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             "ts": round(_fr10_lt.time(), 4),
                             "single_logits": bool(_fr13_single_logits),
                             "spine_only": bool(_fr10_is_spine_only),
-                            "spine_slots": [0, 1, 3, 5, 7],
-                            "leaf_slots": [2, 4, 6, 8],
+                            "cat10_root_sibling": bool(_fr10_is_caterpillar10),
+                            "spine_slots": (
+                                [0, 2, 4, 6, 8]
+                                if _fr10_is_caterpillar10
+                                else [0, 1, 3, 5, 7]
+                            ),
+                            "leaf_slots": (
+                                [1, 3, 5, 7, 9]
+                                if _fr10_is_caterpillar10
+                                else [2, 4, 6, 8]
+                            ),
+                            "root_leaf_slot": 1 if _fr10_is_caterpillar10 else None,
                             "draft": _fr10_packed.detach().cpu().tolist(),
                             "spine": torch.stack(_fr10_spine_tokens, dim=1).detach().cpu().tolist(),
                             "leaves": (
                                 []
                                 if _fr10_is_spine_only
                                 else torch.stack(_fr10_leaf_tokens, dim=1).detach().cpu().tolist()
+                            ),
+                            "root_leaf": (
+                                None
+                                if _fr10_root_leaf_token is None
+                                else _fr10_root_leaf_token.detach().cpu().tolist()
                             ),
                         }) + chr(10)
                     )
@@ -10393,13 +10482,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         )
         if (
             _fr10_tree_expected
-            and not (_fr10_is_caterpillar or _fr10_is_spine_only)
+            and not (
+                _fr10_is_caterpillar
+                or _fr10_is_caterpillar10
+                or _fr10_is_spine_only
+            )
             and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
         ):
             raise RuntimeError(
                 "FR10 caterpillar drafter disengaged: "
                 + "num_speculative_tokens="
                 + str(int(self.num_speculative_tokens))
+                + " cat10_root_sibling="
+                + os.environ.get("FR13_CAT10_ROOT_SIBLING", "0")
                 + " tree_choices="
                 + repr(_fr10_tree_choices_current)
             )

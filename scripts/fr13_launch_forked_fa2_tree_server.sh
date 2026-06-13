@@ -102,12 +102,30 @@ FR13_CHASE_KV_ALLOW_EMPTY=${FR13_CHASE_KV_ALLOW_EMPTY:-0}
 # Chain-neutral by construction (chain leaf row == L == stock). Requires
 # FR13_TREE_REQKEY=1 (fail-loud). =0 is verbatim stock behavior.
 FR13_TREE_SAMPLE_ROW=${FR13_TREE_SAMPLE_ROW:-1}
+# FR13_CAT10_ROOT_SIBLING (default OFF => byte-identical to cat9): add the
+# MISSING depth-0 (root) top-2 sibling => a 10-node caterpillar where every
+# spine depth 0-4 carries the MTP head's top-1 (spine continuation) AND top-2
+# (sibling leaf). When ON (and the operator has not pinned a custom TREE), the
+# default TREE gains the (1,) root-sibling path; the drafter packs the root
+# logits' rank-2 token into it and the parent/ancestry masks, committer path
+# enumeration, eager-pack replay rows, and conv-fusion prior windows ALL
+# auto-adapt off the SPEC_CONFIG tree. Tree-mode-only; native serving (E5,
+# FLASH_ATTN, num_spec 5) is untouched. Rescues the d0 rejects (62% of greedy
+# rejects are at step-0/d0 with no current root-branch rescue).
+FR13_CAT10_ROOT_SIBLING=${FR13_CAT10_ROOT_SIBLING:-0}
 LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
 LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}
 LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}
 LOG_DIR=${LOG_DIR:-"${FR13_RUN_DIR:-$REPO/output/fr13_fa2_tree_e2e/live}/logs"}
 FORKED_FA2_SO=${FORKED_FA2_SO:-"$REPO/output/auto_research/qwen3.5-27b-responses-sdk-adapter-cutover-heavy-l0c-mutation-fp8_gemm-20260504T053925Z/cutlass_source_workspace/vllm-source/build/lumo_cutlass_research/vllm-flash-attn/_vllm_fa2_C.abi3.so"}
-TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
+# Default tree shape. cat9 (root-sibling OFF) is the historical caterpillar;
+# cat10 (FR13_CAT10_ROOT_SIBLING=1) appends the (1,) root sibling. An explicit
+# TREE override always wins (operator pins the exact descriptor).
+if [[ "${FR13_CAT10_ROOT_SIBLING:-0}" == "1" ]]; then
+  TREE=${TREE:-"[(0,), (1,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
+else
+  TREE=${TREE:-"[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"}
+fi
 NUM_SPECULATIVE_TOKENS=${NUM_SPECULATIVE_TOKENS:-$(TREE="$TREE" python3 - <<'PY'
 import ast
 import os
@@ -240,6 +258,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_CHASE_H3_LAYER="$FR13_CHASE_H3_LAYER" \
   -e FR13_CHASE_KV_ALLOW_EMPTY="$FR13_CHASE_KV_ALLOW_EMPTY" \
   -e FR13_TREE_SAMPLE_ROW="$FR13_TREE_SAMPLE_ROW" \
+  -e FR13_CAT10_ROOT_SIBLING="$FR13_CAT10_ROOT_SIBLING" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-0}" \
   -e TORCH_USE_CUDA_DSA="${TORCH_USE_CUDA_DSA:-0}" \
