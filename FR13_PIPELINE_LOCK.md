@@ -76,3 +76,15 @@ to remote. Borderline-removable-later (left conservatively): the old FR13_CHASE_
 **Live integration test (pending):** the chase's first cat9 boot MUST reproduce the 22-flip
 fingerprint [6,6,4,6] + within-boot determinism. If it changed, the bake-in altered behavior =>
 revert 219d41de/a09ef5b5/45dc05a2 (git history + remote = safety net).
+
+## INTEGRITY-CHECK CORRECTION (2026-06-13, sharp_localize wf_1ea62c3f): the [6,6,4,6] CROSS-BOOT check was WRONG
+The "first cat9 boot must reproduce [6,6,4,6] byte-for-byte vs the banked stream" check is INVALID
+on GB10: fresh B=1 boots fork from ANY reference at tokens 11-71 (boot-level autotune/kernel-
+selection, outside batch-invariance). The sharp boot forked at p0@17/p1@11/p2@60/p3@77 = that floor,
+NOT a bake-in change. The bake-in is logically equivalent (env-read->locked-constant) and touches
+ZERO Triton-jit source (the baked sites are Python launch wrappers). The VALID bake-in integrity
+instrument = the **in-process same-boot gate** (FR13_COMMIT_ARGMAX_GATE), which reconfirmed
+channel-2/committer-exonerated 0/944 on the baked build = the bake-in did NOT break the serving
+path. **DO NOT revert 219d41de/a09ef5b5/45dc05a2.** See FR13_SHARP_LOCALIZE_BIND.md. (Any future
+"reproduce a banked stream" gate must be in-process/same-boot or floor-bracketed, never raw
+cross-boot byte-identity.)
