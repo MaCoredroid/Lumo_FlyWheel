@@ -208,10 +208,10 @@ def _remap_state_rows(
     spec_cols = int(spec_state_indices.shape[1])
     if path_cols <= 0 or spec_cols <= 0:
         return
-    if os.environ.get("FR13_TREE_REMAP_SEQ", "1") == "1":
+    if True:  # FR13_TREE_REMAP_SEQ baked ON (gather-then-scatter remap)
         # Race-free gather-then-scatter remap (see kernel docstring). Default
-        # ON: it computes the intended permutation exactly; the legacy kernel
-        # is only kept (FR13_TREE_REMAP_SEQ=0) for A/B against the racy path.
+        # ON: it computes the intended permutation exactly; the legacy racy
+        # A/B kernel path is now dead (flag baked to constant True).
         gather_block = min(block, 128)
         path_pow2 = max(1, triton.next_power_of_2(path_cols))
         grid = (int(num_spec_decodes), triton.cdiv(row_elems, gather_block))

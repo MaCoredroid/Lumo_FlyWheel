@@ -306,7 +306,7 @@ def _patch_gdn_attn() -> bool:
             "                    conv_diag=self.fr10_tree_conv_diag,\n"
             "                    path0_nodes=path0_nodes,\n"
             "                )\n"
-            "            if os.environ.get(\"FR13_REPLAY_ROUTE\", \"1\") == \"1\":\n"
+            "            if True:  # FR13_REPLAY_ROUTE baked ON\n"
             "                # FR13_REPLAY_ROUTE: INIT-TIME allocation of every\n"
             "                # per-layer replay staging buffer (activation rings,\n"
             "                # scan-time prev-lens/spec-idx snapshots, handshake\n"
@@ -325,7 +325,7 @@ def _patch_gdn_attn() -> bool:
             "                    self.vllm_config.compilation_config.static_forward_context\n"
             "                )\n"
             "                _fr13_replay_layers = {}\n"
-            "                _fr13_eager_pack = os.environ.get(\"FR13_EAGER_PACK\", \"0\") == \"1\"\n"
+            "                _fr13_eager_pack = True  # FR13_EAGER_PACK baked ON\n"
             "                if _fr13_eager_pack:\n"
             "                    # FR13_EAGER_PACK (FIX-2 items 2a/2b): STACKED\n"
             "                    # init-time allocation. One tensor per ring kind\n"
@@ -584,7 +584,7 @@ def _patch_gdn_attn() -> bool:
             "                    _fr13_existing_layers.update(_fr13_replay_layers)\n"
             "                else:\n"
             "                    _fr13_gdn_mod._FR13_REPLAY_LAYERS = _fr13_replay_layers\n"
-            "            if os.environ.get(\"FR13_TREE_CONV_FUSED\", \"1\") == \"1\":\n"
+            "            if True:  # FR13_TREE_CONV_FUSED baked ON\n"
             "                # FR13_TREE_CONV_FUSED (FIX-3): INIT-TIME persistent\n"
             "                # prepared-row buffers + group-first prep ownership\n"
             "                # (class 6). The shared remap/committed-prior row math\n"
@@ -726,7 +726,7 @@ def _patch_gdn_attn() -> bool:
             "                    )\n"
             "                except Exception:\n"
             "                    pass\n"
-            "        elif os.environ.get(\"FR13_REPLAY_ROUTE\", \"1\") == \"1\":\n"
+            "        elif True:  # FR13_REPLAY_ROUTE baked ON\n"
             "            raise RuntimeError(\n"
             "                \"FR13_REPLAY_ROUTE=1 requires a speculative token tree \"\n"
             "                \"(tree_mtp); refusing to start with replay staging unallocated\"\n"
@@ -781,7 +781,7 @@ def _patch_gdn_linear() -> bool:
             "# FR13_EAGER_PACK (FIX-2): read ONCE at module scope (flag plan: env is\n"
             "# read once per boot; init-time allocations are flag-conditional but\n"
             "# fixed for the life of the process).\n"
-            "_FR13_EAGER_PACK = os.environ.get(\"FR13_EAGER_PACK\", \"0\") == \"1\"\n"
+            "_FR13_EAGER_PACK = True  # FR13_EAGER_PACK baked ON\n"
             "# FR13_TREE_CONV_FUSED (FIX-3): read ONCE at module scope; default OFF\n"
             "# until the byte A/B + live gate pass. ON fuses the tree causal-conv\n"
             "# emulation's per-node state write-back loop / per-col tap loop /\n"
@@ -790,7 +790,7 @@ def _patch_gdn_linear() -> bool:
             "# per-element ops, same order; tree-only — the native\n"
             "# causal_conv1d_update path is untouched). OFF executes the legacy\n"
             "# emulation verbatim (the A/B instrument).\n"
-            "_FR13_TREE_CONV_FUSED = os.environ.get(\"FR13_TREE_CONV_FUSED\", \"1\") == \"1\"\n"
+            "_FR13_TREE_CONV_FUSED = True  # FR13_TREE_CONV_FUSED baked ON\n"
             "_FR13_TREE_CONV_FUSED_CHECKED = False\n"
             "_FR13_TREE_CONV_FUSED_NEEDLE_DONE = False\n"
             "# Prepared-row persistent buffers + group-first prep ownership:\n"
@@ -818,11 +818,11 @@ def _patch_gdn_linear() -> bool:
             "    global _FR13_TREE_CONV_FUSED_CHECKED\n"
             "    if _FR13_TREE_CONV_FUSED_CHECKED:\n"
             "        return\n"
-            "    if os.environ.get(\"FR13_CONV_COMMITTED_PATH\", \"1\") != \"1\":\n"
+            "    if False:  # FR13_CONV_COMMITTED_PATH baked ON; dep-guard never fires\n"
             "        raise RuntimeError(\n"
             "            \"FR13_TREE_CONV_FUSED=1 requires FR13_CONV_COMMITTED_PATH=1\"\n"
             "        )\n"
-            "    if os.environ.get(\"FR13_REPLAY_ROUTE\", \"1\") != \"1\":\n"
+            "    if False:  # FR13_REPLAY_ROUTE baked ON; dep-guard never fires\n"
             "        raise RuntimeError(\n"
             "            \"FR13_TREE_CONV_FUSED=1 requires FR13_REPLAY_ROUTE=1\"\n"
             "        )\n"
@@ -1429,7 +1429,7 @@ def _patch_gdn_linear() -> bool:
                         _fr12_tree_candidate_bank_rows,
                     ).detach().to(torch.float32).cpu().clone()
                 _fr13_conv_committed_path = (
-                    os.environ.get("FR13_CONV_COMMITTED_PATH", "1") == "1"
+                    True  # FR13_CONV_COMMITTED_PATH baked ON
                 )
                 _fr13_committed_read_cols = None
                 _fr13_committed_bank_rows = None
@@ -1790,7 +1790,7 @@ def _patch_gdn_linear() -> bool:
                     # all-rows ssm publish refreshes every window column each
                     # event, making the page-wide copy semantically identical
                     # to the intended ssm remap there.
-                    if os.environ.get("FR13_REPLAY_ROUTE", "1") == "1":
+                    if True:  # FR13_REPLAY_ROUTE baked ON
                         if _FR13_TREE_CONV_FUSED:
                             # FR13_TREE_CONV_FUSED (FIX-3): identical
                             # permutation, identical materialize-before-
@@ -3402,7 +3402,7 @@ def _patch_gdn_linear() -> bool:
                     device=query_spec.device,
                 )
                 _fr13_replay_route_on = (
-                    os.environ.get("FR13_REPLAY_ROUTE", "1") == "1"
+                    True  # FR13_REPLAY_ROUTE baked ON
                 )
                 if _fr13_replay_route_on:
                     # FR13_REPLAY_ROUTE: the per-node scratch (tree_state) no
@@ -9193,7 +9193,7 @@ def _patch_mamba_utils_boundary_log() -> bool:
         "                        ).get(_fr13_bnd_req_id)\n"
         "                        _fr13_bnd_stale = None\n"
         "                        if (\n"
-        "                            os.environ.get(\"FR13_REPLAY_ROUTE\", \"1\") == \"1\"\n"
+        "                            True  # FR13_REPLAY_ROUTE baked ON\n"
         "                            and _fr13_bnd_func == \"get_temporal_copy_spec\"\n"
         "                            and _fr13_bnd_lastw is not None\n"
         "                        ):\n"
@@ -9376,14 +9376,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
     tsr_inject = """        # FR13_TREE_SAMPLE_ROW (FIX-A1): sample the drafter at the committed
         # tree LEAF's flat verify row (+1-shifted published node id), not the
         # stock linear row prev_accepted_len. Default OFF = verbatim stock.
-        _fr13_tsr_on = os.environ.get("FR13_TREE_SAMPLE_ROW", "1") == "1"
+        _fr13_tsr_on = True  # FR13_TREE_SAMPLE_ROW baked ON
         logger.info_once(
             "FR13_TREE_SAMPLE_ROW drafter sample-row fix: tsr=%s (%s)",
-            os.environ.get("FR13_TREE_SAMPLE_ROW", "1"),
+            "1",  # FR13_TREE_SAMPLE_ROW baked ON
             "armed" if _fr13_tsr_on else "inert",
         )
         if _fr13_tsr_on:
-            if os.environ.get("FR13_TREE_REQKEY", "1") != "1":
+            if False:  # FR13_TREE_REQKEY baked ON; dep-guard never fires
                 raise RuntimeError(
                     "FR13_TREE_SAMPLE_ROW=1 requires FR13_TREE_REQKEY=1: the "
                     "pre-forward rewrite provides the per-step freshness "
@@ -9532,14 +9532,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # computed lm-head output, different selection semantics), so
             # that config falls back to the exact legacy path.
             _fr13_single_logits = (
-                os.environ.get("FR13_DRAFTER_SINGLE_LOGITS", "1") == "1"
+                True  # FR13_DRAFTER_SINGLE_LOGITS baked ON
                 and not getattr(self, "use_local_argmax_reduction", False)
             )
             logger.info_once(
                 "FR13_DRAFTER_SINGLE_LOGITS drafter path engaged: "
                 "single_logits=%s (env=%s, use_local_argmax_reduction=%s)",
                 _fr13_single_logits,
-                os.environ.get("FR13_DRAFTER_SINGLE_LOGITS", "1"),
+                "1",  # FR13_DRAFTER_SINGLE_LOGITS baked ON
                 getattr(self, "use_local_argmax_reduction", False),
             )
             # FR13_FIX1_SELFCHECK (default OFF; DIAGNOSTIC ONLY, like
@@ -10941,7 +10941,7 @@ def _patch_triton_unified_attention_fr13() -> bool:
         )
         did_patch = True
 
-    if os.environ.get("FR13_TREE_ATTN_EXP2_SOFTMAX", "1") == "0":
+    if False:  # FR13_TREE_ATTN_EXP2_SOFTMAX baked ON; the =="0" elementwise-mask alt-patch is never applied on the locked config
         mask_sentinel = "# FR13_TREE_ATTN_QQ_BIAS_MASK"
         if mask_sentinel not in text:
             old_mask = (
