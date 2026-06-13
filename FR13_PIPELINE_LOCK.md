@@ -53,3 +53,26 @@ NATIVE BASELINE = TRUE E5 = scripts/fr10_launch_speed_server.sh num_spec=5 FLASH
 - The known gap on this locked baseline: it FAILED the SWE-Verified gold gate on the **22-flip =
   channel-2 verify-forward** defect (committer exonerated, 0b5de164 0/944). The drafter is a proven
   alt-free spine, so the cat10 −28 was verify-side too. **The chase runs FROM this locked baseline.**
+
+## FLAGS BAKED 2026-06-13 (commits 219d41de, a09ef5b5, 45dc05a2; verify holds=TRUE)
+The golden pipeline flags are now HARDCODED in the code (env-toggles removed), behavior
+byte-identical for the locked config (every flag's locked runtime value was ON; polarities:
+`==\"1\"`->True, `!=\"1\"` dep-guards->False, EXP2 inverse `==\"0\"`->False, logger args->literal "1";
+ON-bodies untouched). 11/12 baked = REPLAY_ROUTE, EAGER_PACK, TREE_CONV_FUSED, TREE_SAMPLE_ROW,
+TREE_REQKEY, DRAFTER_SINGLE_LOGITS, CONV_COMMITTED_PATH, TREE_REMAP_SEQ, TREE_ATTN_EXP2_SOFTMAX,
+TREE_PER_REQ_GEN (+ the kernel FR13_TREE_REMAP_SEQ). **LEFT (intentional): FR13_FA2_TREE_BIAS +
+FR13_FA2_PREFILL_NATIVE** in scripts/fr13_patch_fa2_tree_bias.py — their injected env-reads mirror
+the patcher's idempotency/already-patched anchors; baking would break re-patch detection. They
+default ON, so locked behavior is unchanged.
+
+**NO DEAD CODE was removable:** under the strict bar (OFF-path==locked AND never-engaged AND
+not-a-needed-diagnostic AND provable), no FR13_/FR10_ flag qualified. The 177-flag "sprawl" is all
+live: pipeline (now baked), active default-OFF chase diagnostics (COMMIT_ARGMAX_GATE,
+HIDDEN_SUBSTITUTE, FORCE_SPINE_COMMIT, op-capture, FR10_METRICS, the CHASE_DIAG family), or
+fail-loud guards whose default IS the locked path. cat10 (the only true cruft) was already archived
+to remote. Borderline-removable-later (left conservatively): the old FR13_CHASE_DIAG scaffolding
+(default-OFF, from the H1/acceptance-ladder chase) and FR10_ALLOW_LINEAR_FALLBACK.
+
+**Live integration test (pending):** the chase's first cat9 boot MUST reproduce the 22-flip
+fingerprint [6,6,4,6] + within-boot determinism. If it changed, the bake-in altered behavior =>
+revert 219d41de/a09ef5b5/45dc05a2 (git history + remote = safety net).
