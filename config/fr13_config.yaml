@@ -1,0 +1,57 @@
+# ============================================================================
+# FR13 RUN CONFIG — the single LIVE source for the TOGGLEABLE (non-locked) flags.
+# The launchers read this via scripts/fr13_config_load.py (PyYAML -> shell exports).
+# Edit a value here -> it changes the next run. One file for both arms.
+#
+# NOT here (on purpose): the golden PIPELINE flags are BAKED into the code (locked)
+# -> see FR13_PIPELINE_LOCK.md. Changing them is a code/lock change, not config.
+#
+# Leaf keys are the EXACT env var names; the section headers are for humans only
+# (the reader flattens them). Defaults below == the locked SWE-gold-gate config.
+# ============================================================================
+
+infra:
+  IMAGE: "vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"
+  PORT: 9950
+  GPU_UTIL: 0.88
+  MAX_MODEL_LEN: 131072
+  MAX_NUM_SEQS: 4               # B=4 cap; B=1 chase uses 1 concurrent request
+
+tree:                          # the cat9 GOLD topology (locked shape — change deliberately)
+  ATTENTION_BACKEND: TREE_ATTN
+  FR10_DECODE_MODE_DEFAULT: tree_mtp
+  TREE: "[(0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0), (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1)]"
+  # NUM_SPECULATIVE_TOKENS + SPEC_CONFIG are derived from TREE by the launcher.
+
+runtime:
+  BATCH_INVARIANT: 0           # off for speed; #42960 batch-dependence note in FR13_FLAGS.md
+
+diagnostics:                   # default 0/off; set 1 (or a /logs path) to ARM for a chase/gate
+  FR10_METRICS: 0              # per-forward metrics (do NOT combine with the commit-argmax gate)
+  FR13_COMMIT_ARGMAX_GATE: 0   # channel-1/2 splitter (served vs argmax(verify logits))
+  FR13_FORCE_SPINE_COMMIT: 0   # pin the commit to the spine path (the -28 A/B)
+  FR13_BI_TREE_ATTN: 0         # route VLLM_BATCH_INVARIANT into TREE_ATTN
+  FR13_FIX1_SELFCHECK: 0       # drafter single-logits dual-path byte-identity assert
+  FR13_CHASE_DIAG: 0           # the acceptance-ladder chase instrumentation (+ sub-flags below)
+
+diagnostics_advanced:          # rarely touched; the chase sub-flags + capture taps
+  FR13_CHASE_TOPK: 32
+  FR13_CHASE_KV_WINDOW: 16
+  FR13_CHASE_H3: 1
+  FR13_CHASE_KV_ALLOW_EMPTY: 0
+
+native_arm:                    # for scripts/fr10_launch_speed_server.sh (native-E5 / oracle)
+  FR10_ENABLE_TREE_GDN: 1
+  FR10_ALLOW_LINEAR_FALLBACK: 0
+  FR11_TREE_CONV_NATIVE_BF16_TAPS: 1
+  FR12_NATIVE_SPINE_ORACLE: 0
+  # the no-spec ORACLE boot sets FR12_NO_SPECULATIVE_CONFIG=1 explicitly (per-run, not here)
+
+# ----------------------------------------------------------------------------
+# BAKED PIPELINE (locked in code, NOT configurable here — FR13_PIPELINE_LOCK.md):
+#   FR13_DRAFTER_SINGLE_LOGITS, FR13_EAGER_PACK, FR13_TREE_CONV_FUSED, FR13_TREE_SAMPLE_ROW,
+#   FR13_REPLAY_ROUTE, FR13_CONV_COMMITTED_PATH, FR13_TREE_REMAP_SEQ, FR13_TREE_PER_REQ_GEN,
+#   FR13_TREE_REQKEY, FR13_TREE_ATTN_EXP2_SOFTMAX = all baked ON.
+#   FR13_FA2_TREE_BIAS + FR13_FA2_PREFILL_NATIVE = ON (left as env-flags: their read mirrors
+#   the patcher idempotency anchor, so they cannot be baked without breaking re-patch detection).
+# ----------------------------------------------------------------------------
