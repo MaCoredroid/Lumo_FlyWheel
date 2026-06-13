@@ -60,3 +60,36 @@ lossless-gate). The CPU hit-rate study can run now (offline, doesn't need cat9 l
 whether it ever earns a GPU slot. Pairs with [[project_fr13_speed_first_lossless_gate]],
 [[feedback_speed_is_the_goal_cost_gate]], [[project_fr13_tree_reshape_unifying_lever]],
 [[reference_multispine_not_lossless_closed_nonship]], [[project_fr10_drafter_verifier_interface]].
+
+---
+
+## CPU HIT-RATE GATE RESULT (wf_facb0c38, 2026-06-13) — CONDITIONAL-GO
+
+Replayed the suffix tail against REAL banked SWE-Verified streams (4540 decode positions,
+68 requests: 64 deliverable astropy SWE + 4 acceptance-ladder), no-leakage verified 3 ways
+(incremental==from-scratch rebuild 0 mismatches on all 64; future-corruption collapses
+capped-mean to exactly 0.0; global-build skips the target). Red-team **holds=True**.
+
+**The load-bearing assumption HOLDS — and the tail is a SWAP not an ADD (the key insight):**
+- Expected suffix accepts at the spine tip A = E[min(CORRECT_LEN,3)] = **2.32** (as-deployed,
+  global tree warm) / **1.90** (strict cross-task leakage bound) / 0.82 (cold per-request-only).
+  Bimodal: 69.9% reach the full 3-cap, 15% hit 0; uncapped echo mean ~9, p90 22, max 51.
+- Displaced cat9 deep MTP (d3-d5 spine) B = **0.721** sequential-expected (0.483 + 0.483·0.379 +
+  0.483·0.379·0.30).
+- Margin A−B = **+1.18 (strict) to +1.60 (leaky)**, positive even cold (+0.82).
+- **The 3-deep tail SWAPS cat9's deep spine rows, it does not ADD a 4th** → net-new node count
+  ~0 → the +2.9 ms/node GDN tax is not net-new, and **the cat10 −0.27 dilution mechanism (an
+  ADDED co-resident row) does not recur.** Break-even reduces to A−B>0, cleared in every variant.
+  Margin is 4.4–5.9× the cat10 dilution magnitude → absorbs a full −0.27 with headroom.
+
+**Why CONDITIONAL not GO — data thinness (the only real caveat):** only **4 independent
+astropy tasks** (16 temp-varied samples each → effective task-N≈4, not 4540); streams are short
+(64-128 tok) so the per-request tree contributes ~nothing — **the entire win rides on the GLOBAL
+cross-request tree** (shared agentic boilerplate). The margin DIRECTION is robust (positive even
+under the strict cross-task bound), but the magnitude needs a real multi-task SWE corpus.
+
+**Conditions for the single GPU prototype arm:** (1) GLOBAL corpus warm is a hard precondition
+(cold/per-request-only is the +0.82 thin-margin worst case); (2) the arm must be a pure SWAP of
+the cat9 deep spine (d3-d5) for the suffix tail, NOT additive (additive = the cat10 trap);
+(3) gate on the per-token argmax-vs-clean-oracle probe (suffix tails sit at the same deep rows as
+the open 22-flip defect — so this is **downstream of the cat9 lossless chase**, not before it).
