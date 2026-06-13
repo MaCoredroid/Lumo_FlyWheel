@@ -1,0 +1,157 @@
+{
+  "finding": "v1 substitution INVALID: all arms frow=6 oracle_row=0, no positive control; arm10=all-64-layers still pos21=1970 => splice never controlled pos21",
+  "arms": {
+    "sub_arm1.json": {
+      "layers": [],
+      "frow": 6,
+      "oracle_row": 0,
+      "enabled": false,
+      "pos21": 1970,
+      "pos21_tok": " code"
+    },
+    "sub_arm10.json": {
+      "layers": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63
+      ],
+      "frow": 6,
+      "oracle_row": 0,
+      "enabled": true,
+      "pos21": 1970,
+      "pos21_tok": " code"
+    },
+    "sub_arm11.json": {
+      "layers": [
+        63
+      ],
+      "frow": 6,
+      "oracle_row": 0,
+      "enabled": true,
+      "pos21": 1970,
+      "pos21_tok": " code"
+    },
+    "sub_arm12.json": {
+      "layers": [
+        62,
+        63
+      ],
+      "frow": 6,
+      "oracle_row": 0,
+      "enabled": true,
+      "pos21": 1970,
+      "pos21_tok": " code"
+    },
+    "sub_arm2.json": {
+      "layers": [
+        63
+      ],
+      "frow": 6,
+      "oracle_row": 0,
+      "enabled": true,
+      "pos21": 1970,
+      "pos21_tok": " code"
+    },
+    "sub_arm3.json": {
+      "layers": [
+        58
+      ],
+      "frow": 6,
+      "oracle_row": 0,
+      "enabled": true,
+      "pos21": 1970,
+      "pos21_tok": " code"
+    },
+    "sub_arm4.json": {
+      "layers": [
+        45
+      ],
+      "frow": 6,
+      "oracle_row": 0,
+      "enabled": true,
+      "pos21": 1970,
+      "pos21_tok": " code"
+    },
+    "sub_arm5.json": {
+      "layers": [
+        30
+      ],
+      "frow": 6,
+      "oracle_row": 0,
+      "enabled": true,
+      "pos21": 1970,
+      "pos21_tok": " code"
+    },
+    "sub_arm6.json": {
+      "layers": [
+        0
+      ],
+      "frow": 6,
+      "oracle_row": 0,
+      "enabled": true,
+      "pos21": 1970,
+      "pos21_tok": " code"
+    }
+  }
+}
