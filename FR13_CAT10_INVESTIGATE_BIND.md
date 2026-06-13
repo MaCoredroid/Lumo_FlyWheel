@@ -50,3 +50,16 @@ BOOT-B re-run cat10 (full tree) WITH a per-node accept counter (FR10_METRICS=1 +
 d0 tag) -> recompute d0->d1 AFTER removing sibling-stop events from the per_pos[0] denominator. The
 load-bearing unknown: is there ANY residual spine d1-d4 dilution once the sibling-stop artifact is
 stripped? Then the confidence-gated cat10 superset verdict at temp>0.
+
+## STATUS (user 2026-06-13): cat10 PARKED with this note
+User ruling: "cat10 is more like accounting, not a real (drafter-side) issue — park cat10 for now
+with a note; finish the 22-flip chase ALL THE WAY to NATIVE LEVEL and use cat9." So:
+- **cat10 = PARKED** (not abandoned). The −28 is mostly a measurement artifact (above); there is
+  no real drafter-side bug to fix. The drafter is alt-free; m1 ruled out; m3 inert.
+- **The note to carry forward:** the root branch's d0 rescue (27% on near-tie roots) is REAL and
+  worth it; the future lever is the CONFIDENCE-GATED root branch (emit (1,) only when root is a
+  near-tie, FREE top2-margin gate, shape-true caterpillar+1 root node). Revisit ONLY after cat9
+  is at native level, with a per-node sibling-vs-spine counter to de-confound.
+- **ACTIVE GOAL = drive the cat9 22-flip down to NATIVE LEVEL (native's 3 clear-margin flips vs
+  the same oracle).** That is the lossless bar. The node7-ladder localizes the carrier; then align
+  the carrier sub-op bit-exact to native and re-gate the per-token argmax probe to ~3.
