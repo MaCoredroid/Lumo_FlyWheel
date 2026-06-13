@@ -33,15 +33,19 @@ deep-row non-argmax flips, the 22-flip chase) — suffix tails live at exactly t
 it **inherits** that open gap. Re-gate on the per-token argmax-vs-clean-oracle probe, never scalar
 accept/event.
 
-## Speed — NOT established; the cat10 dilution trap is the load-bearing risk
+## Speed — NOT established (GPU arm needed), but there is NO real cat10 dilution to beat
 - lm-head row tax ≈ free (one batched GEMM, ~2.9 ms/row at B=1). **The binding cost is GDN
-  per-node state traffic** (+2.9 ms/node on the replay route; +42–46 ms/node legacy). A 3-deep
-  tail = ~3 nodes' tax on **every** forward, paid even on suffix misses.
-- **cat10 precedent (direct refutation to beat):** +1 co-resident row dropped accept/event
-  3.198→2.932 (−0.27) and regressed TPS, even though its targeted d0 rescue was real. Suffix
-  tails add MORE rows, DEEPER, with a workload-conditional payoff, and the root-concentrated d0
-  deficit (0.585 conditional) means the spine often dies before reaching the tip where the tail
-  sits. On prose the tail is pure row-waste.
+  per-node state traffic** (+2.9 ms/node on the replay route; +42–46 ms/node legacy). The suffix
+  tail SWAPS cat9's deep spine rows (d3-d5) rather than adding any, so net-new node count ≈ 0.
+- **CORRECTION (user ruling f0bf9e0e — supersedes the original cat10 "dilution" read):** the
+  cat10 −0.27 accept/event is an **ACCOUNTING ARTIFACT, not real dilution** — (a) trajectory
+  confound (cat9 [98,128,128,128] vs cat10 [73,128,128,128] are different streams ⇒ whole-window
+  accept/event is a DRAW), (b) sibling-stop denominator, (c) m1 structurally ruled out: strict_mask
+  makes the root sibling attention-invisible to the spine, so it CANNOT dilute spine acceptance.
+  So earlier text framing the cat10 −0.27 as a "dilution trap to beat" was based on the overturned
+  verdict. The suffix tail's merit stands on its own measured numbers (below); and unlike cat10's
+  added `(1,)` sibling, the suffix tail is part of the spine path (extends d3→d4→d5), not a separate
+  co-resident node — so the (already-non-real) cat10 mechanism does not even apply.
 
 ## VERDICT + the cheap gate (cost-gate before building)
 **Qualified yes, narrow form only, and NOT a GPU prototype yet.** Highest-risk unmeasured
@@ -78,9 +82,10 @@ capped-mean to exactly 0.0; global-build skips the target). Red-team **holds=Tru
   0.483·0.379·0.30).
 - Margin A−B = **+1.18 (strict) to +1.60 (leaky)**, positive even cold (+0.82).
 - **The 3-deep tail SWAPS cat9's deep spine rows, it does not ADD a 4th** → net-new node count
-  ~0 → the +2.9 ms/node GDN tax is not net-new, and **the cat10 −0.27 dilution mechanism (an
-  ADDED co-resident row) does not recur.** Break-even reduces to A−B>0, cleared in every variant.
-  Margin is 4.4–5.9× the cat10 dilution magnitude → absorbs a full −0.27 with headroom.
+  ~0 → the +2.9 ms/node GDN tax is not net-new. Break-even reduces to A−B>0, cleared in every
+  variant. (NB: the cat10 −0.27 it was framed as "beating" is itself an accounting artifact per
+  f0bf9e0e — see the Speed-section correction — so there was no real dilution to beat; the margin
+  stands on its own.)
 
 **Why CONDITIONAL not GO — data thinness (the only real caveat):** only **4 independent
 astropy tasks** (16 temp-varied samples each → effective task-N≈4, not 4540); streams are short
