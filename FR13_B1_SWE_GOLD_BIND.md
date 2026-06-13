@@ -48,9 +48,37 @@ earlier than the self-floor is EXPECTED for two lossless-but-numerically-differe
 IFF every early fork is a near-tie (target top-1/top-2 within float noise). It is a real
 loss only if the fork is at a CLEAR margin (tree served a token the target would clearly
 reject). **This cannot be classified from served tokens alone** — needs per-position top-k
-logit/margin capture at the fork. Per [[feedback_math_correct_vs_bitexact]] +
-"locate the exact divergent op, don't hand-wave backend nature" — this is being resolved
-by a follow-up margin-classification + adversarial-verify workflow, NOT rubber-stamped.
+logit/margin capture at the fork.
+
+## RESOLVED 2026-06-13 (close workflow wf_3c6f5c0a, margin agent + independent verify BOTH = FAIL):
+**The probe forks are NOT all near-ties — there is a REAL greedy-lossless gap in the tree
+serving path.** Measured via CLEAN teacher-forced distributions (the streamed tree
+top_logprobs are off-by-one at spec-decode positions — a vLLM logprob-reporting bug — so
+they were discarded; teacher-forcing on the byte-identical shared prefix is the valid
+reference, validated by ASYMMETRY: native teacher-forced argmax == native served at 4/4
+forks, but tree teacher-forced argmax != tree served at 3/4):
+| prompt | fork | tree served | clean argmax (both backends agree) | dev_gap | verdict |
+|---|---|---|---|---|---|
+| 0 | 17 | ` and` | ` structure` | 0.375 | near-tie (same defect, small margin) |
+| 1 | 11 | ` workspace` | genuine ` workspace`/` repository` tie | 0.000 | NEAR-TIE (lossless) |
+| 2 | 21 | ` code` | ` files` (8.4×) | 2.125 | **CLEAR-MARGIN real loss** |
+| 3 | 68 | `Let` (0.59%) | ` ``` ` (98.88%, 168×) | 5.125 | **CLEAR-MARGIN real loss** |
+A 168× argmax flip is NOT cross-backend numerics — it is a logic/commit-path defect: the
+tree spec-decode COMMITTER serves a non-argmax token at a subset of accept boundaries
+(clustered at structural/template boundaries: code fences, stop regions). Reconciles with
+codex SOLVING task1 on the tree: the within-floor agentic verdict is a COARSE first-fork
+check (blind to per-position argmax misses); a ~6%-of-positions non-argmax commit stays
+COHERENT (task resolves, stream within-floor) yet is not greedy-lossless.
+
+**VERDICT: B=1 does NOT cleanly graduate. Binding agentic within-floor HOLDS but is too
+coarse; the tight probe is the binding lossless instrument and it FAILS.** B4-1 NOT launched.
+DECISIVE NEXT (in-process, confound-free): per-accept-boundary committer-row gate asserting
+committed_id == argmax(verify-forward logits at that row) over the pinned probes; first
+divergent boundary names the seam. Candidate seams (agent): FIX-A tree-sample-row bonus/self
+at accept-run ends, eager-pack replay row mapping, conv-fusion committed-path row at
+num_accepted>1. Also split channel-1 (commit != verify-argmax = committer row bug) from
+channel-2 (verify-argmax != clean-argmax = verify-forward losslessness gap).
+See [[feedback_math_correct_vs_bitexact]] ("don't hand-wave backend nature, locate the op").
 
 ## Speed (task1, per-request medians, DRAWS — class 12)
 | arm | s/fwd | accept/event | (TPS noisy/prefill-confounded) |
@@ -61,6 +89,9 @@ Tree ~1.05-1.08x native s/fwd at 11k-ctx agentic (consistent with the 64-tok 1.0
 the residue audit's "gap grows with context = kernel/launch-shape, not flag plumbing").
 accept/event overlapping bands (trajectory-confounded draws, NOT a superset verdict here).
 
-## STATUS: gate BINDING criterion PASSED (within-floor, both tasks, full-health, det clean);
-ONE open red-team item (probe prompt-0 greedy margin) to close before declaring graduation
-airtight. NO adversarial verify ran (agent died) — the close workflow supplies it.
+## STATUS (2026-06-13): gate did NOT cleanly pass. Coarse agentic within-floor verdict HOLDS
+(full-health, det-clean, env_forks=0), but the close workflow's tight teacher-forced probe
++ independent verify found a REAL greedy-lossless gap in the tree serving path (committer
+serves non-argmax at clear margin, 2/4 forks). **B=1 NOT graduated; B4-1 NOT launched.**
+NEXT = in-process committer-row argmax localization (then fix). This is the gate working as
+designed — the within-floor SWE check was too coarse; the probe caught what it missed.

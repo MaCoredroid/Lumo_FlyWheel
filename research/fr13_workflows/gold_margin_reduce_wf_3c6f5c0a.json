@@ -1,0 +1,288 @@
+{
+  "threshold_logprob": 2.3026,
+  "threshold_note": "ln(10): served token at most 10x more probable than the other arm's token per arm => NEAR-TIE",
+  "tree_arm": "tree",
+  "native_arm": "native",
+  "tree_within_boot_det": [
+    true,
+    true,
+    true,
+    true
+  ],
+  "native_within_boot_det": [
+    true,
+    true,
+    true,
+    true
+  ],
+  "tree_metrics": {
+    "vllm:spec_decode_num_drafts_total": 254.0,
+    "vllm:spec_decode_num_draft_tokens_total": 2286.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 678.0
+  },
+  "native_metrics": {
+    "vllm:spec_decode_num_drafts_total": 258.0,
+    "vllm:spec_decode_num_draft_tokens_total": 1290.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 768.0
+  },
+  "banked_fork_cross_check": "task1 greedy native-vs-tree fork idx [17,15,21,61]",
+  "forks": [
+    {
+      "prompt_id": 0,
+      "fork_idx": 17,
+      "T_t_str": " and",
+      "T_t_id": 321,
+      "T_n_str": " structure",
+      "T_n_id": 5759,
+      "tree_rank_Tt": 1,
+      "tree_lp_Tt": -0.6326631307601929,
+      "tree_rank_Tn": 2,
+      "tree_lp_Tn": -0.7576631307601929,
+      "native_rank_Tn": 1,
+      "native_lp_Tn": -0.4287400245666504,
+      "native_rank_Tt": 2,
+      "native_lp_Tt": -1.0537400245666504,
+      "margin_tree": 0.125,
+      "margin_native": 0.625,
+      "verdict": "NEAR-TIE",
+      "tree_top5": [
+        [
+          " and",
+          -0.6326631307601929
+        ],
+        [
+          " structure",
+          -0.7576631307601929
+        ],
+        [
+          ",",
+          -9.882662773132324
+        ],
+        [
+          "\u7ed3\u6784\u548c",
+          -13.132662773132324
+        ],
+        [
+          " location",
+          -13.195162773132324
+        ]
+      ],
+      "native_top5": [
+        [
+          " structure",
+          -0.4287400245666504
+        ],
+        [
+          " and",
+          -1.0537400245666504
+        ],
+        [
+          ",",
+          -10.428739547729492
+        ],
+        [
+          "\u7ed3\u6784\u548c",
+          -13.116239547729492
+        ],
+        [
+          " Structure",
+          -13.678739547729492
+        ]
+      ],
+      "served_context_excerpt_tree": "\n\n<think>\n\n</think>\n\nI'll start by exploring the workspace to understand the codebase"
+    },
+    {
+      "prompt_id": 1,
+      "fork_idx": 11,
+      "T_t_str": " workspace",
+      "T_t_id": 26622,
+      "T_n_str": " repository",
+      "T_n_id": 12182,
+      "tree_rank_Tt": 1,
+      "tree_lp_Tt": -0.584391713142395,
+      "tree_rank_Tn": 2,
+      "tree_lp_Tn": -0.834391713142395,
+      "native_rank_Tn": 1,
+      "native_lp_Tn": -0.6407589912414551,
+      "native_rank_Tt": 2,
+      "native_lp_Tt": -0.7657589912414551,
+      "margin_tree": 0.25,
+      "margin_native": 0.125,
+      "verdict": "NEAR-TIE",
+      "tree_top5": [
+        [
+          " workspace",
+          -0.584391713142395
+        ],
+        [
+          " repository",
+          -0.834391713142395
+        ],
+        [
+          " code",
+          -5.2093915939331055
+        ],
+        [
+          " problem",
+          -7.0843915939331055
+        ],
+        [
+          " task",
+          -7.4593915939331055
+        ]
+      ],
+      "native_top5": [
+        [
+          " repository",
+          -0.6407589912414551
+        ],
+        [
+          " workspace",
+          -0.7657589912414551
+        ],
+        [
+          " code",
+          -5.140758991241455
+        ],
+        [
+          " problem",
+          -7.640758991241455
+        ],
+        [
+          " issue",
+          -7.765758991241455
+        ]
+      ],
+      "served_context_excerpt_tree": "\n\n<think>\n\n</think>\n\nI'll start by exploring the"
+    },
+    {
+      "prompt_id": 2,
+      "fork_idx": 21,
+      "T_t_str": " code",
+      "T_t_id": 1970,
+      "T_n_str": " files",
+      "T_n_id": 3425,
+      "tree_rank_Tt": 2,
+      "tree_lp_Tt": -7.125994682312012,
+      "tree_rank_Tn": 3,
+      "tree_lp_Tn": -9.375994682312012,
+      "native_rank_Tn": 1,
+      "native_lp_Tn": -0.1446201652288437,
+      "native_rank_Tt": 2,
+      "native_lp_Tt": -2.019620180130005,
+      "margin_tree": 2.25,
+      "margin_native": 1.8750000149011612,
+      "verdict": "NEAR-TIE",
+      "tree_top5": [
+        [
+          " relevant",
+          -0.0009945451747626066
+        ],
+        [
+          " code",
+          -7.125994682312012
+        ],
+        [
+          " files",
+          -9.375994682312012
+        ],
+        [
+          " file",
+          -9.750994682312012
+        ],
+        [
+          " problematic",
+          -10.750994682312012
+        ]
+      ],
+      "native_top5": [
+        [
+          " files",
+          -0.1446201652288437
+        ],
+        [
+          " code",
+          -2.019620180130005
+        ],
+        [
+          " file",
+          -6.394619941711426
+        ],
+        [
+          " source",
+          -8.269619941711426
+        ],
+        [
+          "\n\n",
+          -12.957119941711426
+        ]
+      ],
+      "served_context_excerpt_tree": "\n\n<think>\n\n</think>\n\nI'll start by exploring the workspace to understand the codebase and locate the relevant"
+    },
+    {
+      "prompt_id": 3,
+      "fork_idx": 68,
+      "T_t_str": "Let",
+      "T_t_id": 9764,
+      "T_n_str": "```",
+      "T_n_id": 71093,
+      "tree_rank_Tt": 1,
+      "tree_lp_Tt": -12.422473907470703,
+      "tree_rank_Tn": null,
+      "tree_lp_Tn": null,
+      "native_rank_Tn": 1,
+      "native_lp_Tn": -0.0012161486083641648,
+      "native_rank_Tt": 3,
+      "native_lp_Tt": -7.501215934753418,
+      "margin_tree": null,
+      "margin_native": 7.499999786145054,
+      "verdict": "OTHER-ABSENT-FROM-TOPK",
+      "tree_top5": [
+        [
+          "Let",
+          -12.422473907470703
+        ],
+        [
+          "4",
+          -12.422473907470703
+        ],
+        [
+          "3",
+          -12.422473907470703
+        ],
+        [
+          "1",
+          -12.422473907470703
+        ],
+        [
+          "2",
+          -12.422473907470703
+        ]
+      ],
+      "native_top5": [
+        [
+          "```",
+          -0.0012161486083641648
+        ],
+        [
+          "<tool_call>",
+          -7.376215934753418
+        ],
+        [
+          "Let",
+          -7.501215934753418
+        ],
+        [
+          "</think>",
+          -10.876215934753418
+        ],
+        [
+          "<",
+          -12.001215934753418
+        ]
+      ],
+      "served_context_excerpt_tree": "\n\n<think>\n\n</think>\n\nI'll start by exploring the workspace structure to understand the codebase and then implement the fix described in the problem statement.\n\n```bash\nfind /workspace -type f -name \"*.py\" | grep -E \"(altaz|hadec|itrs|transform)\" | head -20\n```\n\n"
+    }
+  ],
+  "overall_verdict": "CLEAR_MARGIN_REAL_LOSS"
+}
