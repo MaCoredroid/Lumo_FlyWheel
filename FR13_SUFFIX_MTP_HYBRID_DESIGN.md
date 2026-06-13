@@ -98,3 +98,43 @@ under the strict cross-task bound), but the magnitude needs a real multi-task SW
 the cat9 deep spine (d3-d5) for the suffix tail, NOT additive (additive = the cat10 trap);
 (3) gate on the per-token argmax-vs-clean-oracle probe (suffix tails sit at the same deep rows as
 the open 22-flip defect — so this is **downstream of the cat9 lossless chase**, not before it).
+
+---
+
+## LEG-GROW n-SWEEP RESULT (wf_82b46622, CPU, 2026-06-13) — legs do NOT beat tip
+
+User refinement: MTP builds the cat10-shape caterpillar (spine + (n-1) legs/depth + root
+sibling), suffix GROWS THE LEGS; sweep n=1..5 under the asymmetric cost (MTP depth = head
+forwards; suffix growth = free draft, verify rows only). Red-team **holds=True**, no leakage
+(3 adversarial corruption probes → 0.0), reward-hack-free, modeling flaw is conservative
+(biases toward legs, the losing arm).
+
+**VERDICT: growing the LEGS does NOT beat growing the TIP.** Two EXACT (not modeled) signals:
+1. **Suffix payoff is FLAT across graft depth** — E[min(CL,3)] ≈ 1.43–1.70 at d0…d5. A chain
+   grafted on a shallow leg predicts ~the same #tokens as one on the deep tip → a leg has no
+   intrinsic payoff edge. Its only possible advantage is catching divergences the tip misses.
+2. **At matched MTP-head forwards (spine=3), TIP wins every extra-node budget 1–8** (TIP A/E
+   2.33→2.94 vs LEGS 2.17→2.55), top-2 modeled (no geometric approx).
+The modeled leg-rescue is only ~1.08 tokens (reach-corrected ~0.76) and ~63% of it is the
+single **unreliable capped d0 catch** (modeled 0.95, raw 1.76 = the cat9-vs-native trajectory
+confound, NOT a real rank-2 recovery). Under the asymmetric cost the optimizer never selects a
+leg at any n (best-with-legs A/cost strictly falls 0.323→0.241 as n 2→5). MECHANISM: the spine
+survives early (cat9 d0/d1 accept 0.87/0.83), so the tip is reached by the large surviving mass
+and the suffix continues from the tip as well as from any leg; the leg only fires on the small,
+modeled, unreliable early-divergence mass.
+
+**The sobering part (tempers the gate's optimism):** the **EXACT tip-grow arm reaches only
+A/E ≈ 2.94**, BELOW cat9 3.18 and native E5 3.16. The earlier gate's "+1.18–1.60" was a
+*portion* comparison (the 3-deep tail vs the displaced d3-d5 nodes, 2.32 vs 0.721) — the FULL
+config accept/event is ~2.94, because shortening the MTP spine to fund the suffix tail trades
+reliable deep-MTP accepts for echo-dependent suffix ones. The ONLY native-beating number (raw
+3.43, n=2 budget-fill) lives entirely inside the modeled leg-rescue and is NOT claimable on CPU.
+
+**The decisive open number is GPU-only:** no per-depth MTP **top-k LEG drafts** exist anywhere
+on CPU (`fr10_mtp_draft_trace.jsonl` holds only the width-1 MTP-5 spine draft; no top-k in any
+cat9/cat10/native capture). So the leg verdict is a **MODELED "no"** — the true per-depth
+leg-catch (especially d0) and the leg token identities are unknowable offline. RECOMMENDATION:
+**do not fund the leg-grow GPU arm** until the true d0 leg-catch is measured; if a suffix arm is
+built, build the **TIP-grow** (n=1 most cost-efficient, or spineD2-3+tip4 for max raw accept ~2.94).
+But note even tip-grow doesn't clear native on exact evidence — the suffix lever is weaker than
+the gate first suggested. All of this stays **downstream of the cat9 lossless chase**.
