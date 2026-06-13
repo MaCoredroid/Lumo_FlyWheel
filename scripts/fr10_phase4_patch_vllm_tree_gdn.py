@@ -11709,6 +11709,101 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
         logger.warning("FR10 layer hidden capture finish failed: %s", exc)
 
 
+# FR13_HIDDEN_SUBSTITUTE: diagnostic causal substitution. On the matching
+# verify forward (num_tokens match + Nth such forward = SKIP), after a target
+# layer completes, overwrite ONE flat forward-row's residual-stream
+# (hidden_states + residual) with a loaded oracle tensor, then let the remaining
+# real layers + norm + lm_head run. This isolates WHICH layer-range carries the
+# argmax flip (Q2). Not a reroute/copy of the deploy path -- a flag-gated offline
+# diagnostic only (default OFF). Spec file (json):
+#   {"path": "<oracle .pt>", "num_tokens": 10, "skip": 6, "forward_row": 4,
+#    "layers": [58], "field": "both"}
+# oracle .pt = a captured payload (same schema as the layer capture): we read its
+# layers[layer_idx]["hidden"/"residual"] at the row whose index in oracle rows ==
+# oracle_row. We match the source row of the oracle by ORACLE_ROW (default = the
+# clean last prefill row index within the oracle payload's rows list).
+def _fr13_hidden_substitute_start(self, hidden_states):
+    spec_path = os.environ.get("FR13_HIDDEN_SUBSTITUTE")
+    if not spec_path:
+        return None
+    try:
+        import json as _json
+        # re-read the spec each forward (cheap) so a new arm_id re-arms without reboot
+        spec = _json.loads(Path(spec_path).read_text())
+        arm_id = spec.get("arm_id", 0)
+        if globals().get("_FR13_HSUB_ARM_ID") != arm_id:
+            globals()["_FR13_HSUB_ARM_ID"] = arm_id
+            globals()["_FR13_HSUB_SEEN"] = 0
+            globals()["_FR13_HSUB_DONE"] = False
+            globals()["_FR13_HSUB_SPEC"] = spec
+            oracle = torch.load(str(spec["oracle"]), map_location="cpu", weights_only=False)
+            globals()["_FR13_HSUB_ORACLE"] = oracle
+        spec = globals()["_FR13_HSUB_SPEC"]
+        if not spec.get("enabled", True):
+            return None
+        want_nt = int(spec.get("num_tokens", 0))
+        if want_nt and int(hidden_states.shape[0]) != want_nt:
+            return None
+        if globals().get("_FR13_HSUB_DONE", False):
+            return None
+        # Nth matching forward selection
+        seen = int(globals().get("_FR13_HSUB_SEEN", 0))
+        globals()["_FR13_HSUB_SEEN"] = seen + 1
+        if seen != int(spec.get("skip", 0)):
+            return None
+        globals()["_FR13_HSUB_DONE"] = True
+        oracle = globals()["_FR13_HSUB_ORACLE"]
+        o_rows = [int(x) for x in oracle["rows"]]
+        oracle_row = int(spec.get("oracle_row", o_rows[-1]))
+        o_idx = o_rows.index(oracle_row)
+        logger.warning(
+            "FR13_HSUB ARMED: forward num_tokens=%d skip=%d forward_row=%s layers=%s field=%s oracle_row=%d",
+            int(hidden_states.shape[0]), int(spec.get("skip", 0)),
+            spec.get("forward_row"), spec.get("layers"), spec.get("field", "both"),
+            oracle_row,
+        )
+        return {"spec": spec, "oracle": oracle, "o_idx": o_idx}
+    except Exception as exc:
+        logger.warning("FR13 hidden substitute start failed: %s", exc)
+        return None
+
+
+def _fr13_hidden_substitute_layer(state, layer_idx, hidden_states, residual):
+    if state is None:
+        return hidden_states, residual
+    try:
+        spec = state["spec"]
+        layers = [int(x) for x in spec.get("layers", [])]
+        if int(layer_idx) not in layers:
+            return hidden_states, residual
+        oracle = state["oracle"]
+        o_idx = state["o_idx"]
+        frow = int(spec.get("forward_row"))
+        field = str(spec.get("field", "both"))
+        # locate the oracle layer entry by layer_idx
+        olayer = None
+        for it in oracle["layers"]:
+            if int(it.get("layer_idx", -1)) == int(layer_idx):
+                olayer = it
+                break
+        if olayer is None:
+            logger.warning("FR13_HSUB: oracle has no layer %d", layer_idx)
+            return hidden_states, residual
+        dev = hidden_states.device
+        if field in ("hidden", "both"):
+            oh = olayer["hidden"][o_idx].to(device=dev, dtype=hidden_states.dtype)
+            hidden_states = hidden_states.clone()
+            hidden_states[frow] = oh
+        if residual is not None and field in ("residual", "both") and "residual" in olayer:
+            orr = olayer["residual"][o_idx].to(device=dev, dtype=residual.dtype)
+            residual = residual.clone()
+            residual[frow] = orr
+        logger.warning("FR13_HSUB: spliced layer %d row %d field=%s", layer_idx, frow, field)
+    except Exception as exc:
+        logger.warning("FR13 hidden substitute layer failed: %s", exc)
+    return hidden_states, residual
+
+
 '''
         if helper_anchor not in text:
             raise RuntimeError("qwen3_next root hidden helper anchor not found")
@@ -11720,6 +11815,7 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
         layer_start = root_start + """        _fr10_layer_capture = _fr10_layer_hidden_capture_start(
             self, positions, hidden_states, input_ids
         )
+        _fr13_hsub_state = _fr13_hidden_substitute_start(self, hidden_states)
 """
         if root_start not in text:
             raise RuntimeError("qwen3_next FR10 root capture start anchor not found")
@@ -11730,6 +11826,9 @@ def _fr10_layer_hidden_capture_finish(payload, hidden_states):
 """
         layer_layer = root_layer + """            _fr10_layer_hidden_capture_layer(
                 _fr10_layer_capture, layer_idx, hidden_states, residual
+            )
+            hidden_states, residual = _fr13_hidden_substitute_layer(
+                _fr13_hsub_state, layer_idx, hidden_states, residual
             )
 """
         if root_layer not in text:
