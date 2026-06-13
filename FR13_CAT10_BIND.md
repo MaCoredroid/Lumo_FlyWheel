@@ -123,3 +123,16 @@ more than it rescues d0; lossless flat at 22). The real ceiling = (A) the 22-fli
 gate-blindspot analysis — why the prior SCALAR gate missed a ~4.8% per-token flip, 30d749a4) +
 (B) the d1-d4 dilution (DRAFTER co-residency, spine-only-drafter A/B). Chase BOTH on the shipped
 (replay-ON) path. cat10 flag stays OFF; cat9 default.
+
+## CORRECTION (user 2026-06-13): cat10 is DEFERRED-NOT-DEAD, and it IS meaningful
+The earlier "no_help / wrong lever" verdict over-flattened it. The user's ruling:
+- The cat10 root sibling IS its own (drafter-side) thing AND it is **MEANINGFUL** — it gives an
+  **extra chance at the ROOT** (a second candidate at depth-0), which is the d0 rescue for the
+  62%-of-rejects-at-step-0. The +5 d0 accepts were real and valuable.
+- The −28 net was the dilution COST. **Revisit cat10 AFTER the 22-flip fix** — the dilution may
+  be tied to the same verify-forward defect, or a separable co-residency cost to solve once the
+  spine is clean. Do NOT chase it during the current 22-flip localization (correctly deferred).
+- **Shape is confirmed: a plain CATERPILLAR + one root branch.** No deepening — the branches/leaves
+  stay single nodes (one token off the spine, not a deeper sub-tree); we just add ONE branch at the
+  root. That is exactly the cat10 (10-node) we built (archived on remote fr13-cat10-archive).
+So: status = PARKED-FOR-NOW (post-22-flip), NOT abandoned. The d0/root chance is the reason.
