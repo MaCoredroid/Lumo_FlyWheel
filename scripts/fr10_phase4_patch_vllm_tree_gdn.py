@@ -5130,7 +5130,7 @@ def _patch_rejection_sampler_tree_lcp() -> bool:
 # pinned staged HtoD for the committer outputs, and ONE batched all-layer
 # replay launch (replaces 48 eager launches + 48 flag clears). Env is read
 # once at module import (flag plan).
-_FR13_EAGER_PACK = __import__('os').environ.get('FR13_EAGER_PACK', '0') == '1'
+_FR13_EAGER_PACK = True
 _FR13_EAGER_PACK_NEEDLE_DONE = False
 _FR13_EAGER_PACK_STAGE = {}
 
@@ -5435,7 +5435,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     _ep_flag_rows = None
     _ep_stacks = None
     _ep_replay_route_on = (
-        __import__('os').environ.get('FR13_REPLAY_ROUTE', '1') == '1'
+        True
     )
     if _ep_active:
         _ep_parents_src = tree_parent_indices.detach().reshape(-1)
@@ -6089,7 +6089,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
             [int(x) for x in row] for row in accepted_token_rows
         ]
-        if __import__('os').environ.get('FR13_TREE_REQKEY', '1') == '1':
+        if True:
             # FR13_TREE_REQKEY: also publish accepted paths keyed by request
             # id. The device buffers above are batch-position-keyed and
             # persistent, so a slot's new occupant would otherwise consume the
@@ -6120,7 +6120,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     [int(_x) for _x in accepted_gdn_node_paths[_fr13_i]],
                     int(accepted_lens[_fr13_i]),
                 )
-        if __import__('os').environ.get('FR13_REPLAY_ROUTE', '1') == '1':
+        if True:
             # FR13_REPLAY_ROUTE durable-state publish (Option 1, committer
             # publish site): replay the committed accepted path on every
             # registered GDN layer. This REPLACES the forward's all-rows
@@ -6818,7 +6818,7 @@ def _lumo_tree_canonical_multidraft_sample(
         _lumo_tree_commit_gdn._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
             [int(x) for x in row] for row in accepted_token_rows
         ]
-        if __import__('os').environ.get('FR13_TREE_REQKEY', '1') == '1':
+        if True:
             # FR13_TREE_REQKEY: also publish accepted paths keyed by request
             # id (see the greedy committer for the rationale). The
             # model-runner pre-forward rewrite consumes this dict.
@@ -6846,7 +6846,7 @@ def _lumo_tree_canonical_multidraft_sample(
                     [int(_x) for _x in accepted_gdn_node_paths[_fr13_i]],
                     int(accepted_lens[_fr13_i]),
                 )
-        if __import__('os').environ.get('FR13_REPLAY_ROUTE', '1') == '1':
+        if True:
             # FR13_REPLAY_ROUTE durable-state publish (Option 1, committer
             # publish site) -- sampled committer twin of the greedy block;
             # see the greedy committer for the full rationale.
