@@ -55,8 +55,11 @@ replay kernel `:588` already has NO h_cache = existence proof this is doable):
    state on demand instead of caching all N_PAD nodes → h_cache shrinks to one path → BV=32/warps=4
    fits at ANY tree size. Preferred.
 2. **Node-tiling** — process N_PAD nodes in sub-tiles so the live tile stays small.
-3. **Shared-memory h_cache** — hold the state in on-chip SMEM (~228 KB/SM Blackwell) not registers;
-   slower than registers, but no DRAM spill, and decouples from the 255-reg cap.
+3. ~~**Shared-memory h_cache**~~ — **DEAD (CORRECTION, ranking wf wwrov62yp):** GB10/DGX Spark is
+   compute capability 12.1 with **~99 KB shared-mem per block** (NOT 228 KB — that's the datacenter
+   B200/sm_100 number I wrongly cited). The h_cache tile is **256 KB at BV=32** (and **128 KB even at
+   shipped BV=16**) — both over the 99 KB cap, so it does NOT fit in SMEM either. Plus Triton has no
+   primitive to place a non-`tl.dot` accumulator in SMEM. Struck on both the cap and expressibility.
 This also lifts the **N_PAD ≤ 16 cap** (`:76-77`) → larger trees become possible (relevant to any
 future suffix-fusion / deeper trees). Pairs with [[reference_diffuse_gdn_accumulation_explained]],
 [[feedback_math_correct_vs_bitexact]], [[feedback_no_reroute_reward_hacking]],
@@ -94,3 +97,40 @@ reproduce native to RAW max_abs==0.0?) can run despite the spill (it launches), 
 *correctness* question independent of speed. (2) if lossless, the **cache workaround** (spill-rank
 wf) removes the 636 B spill → lossless AND fast. The spill is no longer a wall — it's a speed
 optimization that follows the lossless confirmation.
+
+---
+
+## SPILL-WORKAROUND RANKING (wf wwrov62yp, CPU; red-team holds=False = over-stated, order holds)
+Rank the 3 spill-fixes by lossless + speed risk vs our impl. **RECOMPUTE ≫ NODE-TILING ≫ SMEM(dead).**
+
+1. **RECOMPUTE-state-from-spine — THE ROUTE (the only register-feasible one at native BV=32/warps=4).**
+   - LOSSLESS by construction: it relocates only the SOURCE of a node's seed state (replay ancestors
+     via the shared `_gdn_node_step` from b_h0, using the EXISTING ancestry machinery :459-467) — it
+     never touches the [BV=32,DIM_K=128] tile, the two `tl.sum(axis=1)` reductions (:379,:382), or the
+     op-order. The reduction tree (set by BV+warps on that tile) is preserved → lossless PROVIDED
+     recompute runs at BV=32/warps=4.
+   - FITS: holds ONE [BV,DIM_K] tile = ~64-90 regs/thread at BV=32/warps=4 (vs h_cache's 512) →
+     comfortably under 255, O(1) in tree size → fits native geometry at N_PAD=16 AND lifts the
+     N_PAD≤16 cap.
+   - SPEED ≈ neutral-to-positive: the scan is a tiny sliver of the ~99 ms GEMV-dominated forward; the
+     extra ~2.57× rank-1 steps ≈ 5-33 µs (and it AVOIDS the 256 KB spill round-trip). (Red-team
+     corrected the *mechanism*: not "bandwidth hides it" — the scan is latency-bound — but "the scan
+     is negligible vs the weight-GEMV.")
+   - EXISTENCE PROOF: `_tree_gdn_replay_kernel` (:588) already runs no-h_cache spill-free on the
+     identical body. **CAVEAT (why red-team holds=False): that replay kernel runs at warps=8 (not
+     native 4) AND is BROKEN LIVE (gate-4, accept/event 2.02→1.58 wiring seam). So recompute's
+     losslessness is a GPU OBLIGATION, not a CPU-proven fact — "offline-bit-identical ≠ live-correct."**
+2. **NODE-TILING — inferior.** Our tree is wide/shallow + multi-parent (node 0 parents 1,12,13), so
+   tiles either carry a large cross-tile live set (the all-resident problem re-expressed) or spill
+   cross-tile parents to HBM (reintroduces the +35.8% state-traffic tax FR13 fled). No production
+   tree kernel tiles over nodes — the multi-parent boundary handoff is why.
+3. **SMEM — DEAD** (256 KB ≫ 99 KB GB10 cap; 128 KB even at BV=16; no Triton SMEM primitive). See the
+   corrected future-work note above.
+
+**GATING NEXT (GPU, the decisive test for the whole BV path):** (1) the cheap A/B first — run the
+EXISTING cache kernel at BV=32/warps=4 (it RUNS despite the 636 B spill) vs native → **RAW max_abs==0.0?**
+That answers "is the launch geometry actually THE seam" independent of recompute. (2) If yes →
+build the recompute-verify variant at BV=32/warps=4 and confirm in one boot: 0 spill (ptxas -v) +
+RAW 0.0 vs native at N_PAD=1 AND N_PAD=16. If the A/B is NOT 0.0, the geometry isn't the (sole) seam
+and S1 may be the irreducible floor — recompute won't rescue it. Lossless is a GPU obligation here,
+not a CPU conclusion.
