@@ -16,6 +16,46 @@ H = V_HEADS
 K = 128
 V = 128
 BV = 16
+# Deployed launch geometry for the served tree-scan: num_warps=8, num_stages
+# = Triton default (left unset). These are the locked cat9 serving values.
+_DEPLOYED_NUM_WARPS = 8
+
+
+def _read_tree_gdn_geom_override() -> dict | None:
+    """TEST-ONLY geometry override for the tree-GDN scan launch.
+
+    Reads ``FR13_TREE_GDN_GEOM_OVERRIDE`` (e.g. ``"BV=32,num_warps=4,
+    num_stages=3"``). This DOES NOT change any value/math the kernel computes;
+    it only changes the Triton launch geometry (BLOCK_V tiling, warp count,
+    pipeline stages) so the BV/warps A/B arms can be measured against the
+    native packed-decode SASS. When the env var is unset (the deployed
+    default), this returns ``None`` and the served launch is BYTE-IDENTICAL to
+    the prior locked path (num_warps=8, BLOCK_V=BV, num_stages unset). The
+    override is a diagnostics lever (bug-class #10 codegen-identity A/B), never
+    a served-path value change.
+    """
+    raw = os.environ.get("FR13_TREE_GDN_GEOM_OVERRIDE")
+    if not raw:
+        return None
+    out: dict = {}
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        if "=" not in token:
+            raise ValueError(
+                f"FR13_TREE_GDN_GEOM_OVERRIDE token {token!r} must be key=value"
+            )
+        key, value = token.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if key not in ("BV", "num_warps", "num_stages"):
+            raise ValueError(
+                f"FR13_TREE_GDN_GEOM_OVERRIDE key {key!r} not in "
+                "{BV, num_warps, num_stages}"
+            )
+        out[key] = int(value)
+    return out or None
 
 
 @dataclass(frozen=True)
@@ -1497,7 +1537,21 @@ def launch_tree_gdn_prepared(
             "state must be at least "
             f"({n_actual}, {num_vh}, {dim_v}, {dim_k}), got {tuple(state.shape)}"
         )
-    grid = (num_vh, triton.cdiv(dim_v, BV))
+    # Resolve launch geometry. The deployed/served path uses BLOCK_V=BV and
+    # num_warps=8 with the Triton default num_stages (unset). The TEST-ONLY
+    # override (FR13_TREE_GDN_GEOM_OVERRIDE) lets the BV/warps A/B arms run; it
+    # is value-neutral (only tiling/warps/stages change). When unset, _geom is
+    # None and the launch below is byte-identical to the prior locked path.
+    _geom = _read_tree_gdn_geom_override()
+    _bv = BV
+    _num_warps = _DEPLOYED_NUM_WARPS
+    _extra_launch_kwargs: dict = {}
+    if _geom is not None:
+        _bv = int(_geom.get("BV", _bv))
+        _num_warps = int(_geom.get("num_warps", _num_warps))
+        if "num_stages" in _geom:
+            _extra_launch_kwargs["num_stages"] = int(_geom["num_stages"])
+    grid = (num_vh, triton.cdiv(dim_v, _bv))
     _tree_gdn_kernel[grid](
         q,
         k,
@@ -1522,7 +1576,7 @@ def launch_tree_gdn_prepared(
         NUM_VH=num_vh,
         DIM_K=dim_k,
         DIM_V=dim_v,
-        BLOCK_V=BV,
+        BLOCK_V=_bv,
         OUTPUT_SCALE=output_scale,
         USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
         H0_IS_BANK=h0_is_bank,
@@ -1533,7 +1587,8 @@ def launch_tree_gdn_prepared(
         RAW_GATING=raw_gating,
         COUNT_INVOCATION=count_invocation,
         STORE_NODE_STATES=store_node_states,
-        num_warps=8,
+        num_warps=_num_warps,
+        **_extra_launch_kwargs,
     )
     if not store_node_states:
         return out, None
