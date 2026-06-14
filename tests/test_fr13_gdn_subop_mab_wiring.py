@@ -313,5 +313,165 @@ def test_missing_conv_state_snapshot_no_record(tmp_path, monkeypatch) -> None:
     assert not dump.exists()
 
 
+# --------------------------------------------------------------------------- #
+# 3. CUDA-SAFETY bounds-guards: a device-side assert is a GPU-runtime fault CPU
+#    tests cannot catch, so the helper must raise a CLEAN Python error BEFORE
+#    any native-kernel launch on a bad bank / row / index.  These tests use
+#    kernel stubs that RECORD whether they were called and assert the guard
+#    fired FIRST (kernel never reached -> no OOB global read -> no CUDA assert).
+# --------------------------------------------------------------------------- #
+def _make_module_kernel_tracking(tmp_path: Path):
+    """Like _make_module but the stub kernels set a 'called' flag so a test can
+    assert the bounds-guard fired BEFORE the native kernel was launched."""
+    body = _extract_helper()
+    calls = {"conv": 0, "scan": 0}
+
+    class _Logger:
+        def warning(self, *a, **k):  # pragma: no cover - trivial
+            pass
+
+    def stub_conv(x, cs, w, bias, act, **k):
+        calls["conv"] += 1
+        return x.clone() * 2.0 + 0.5
+
+    def stub_scan(*, A_log, a, b, dt_bias, q, k, v, initial_state, **k2):
+        calls["scan"] += 1
+        out = (q * 3.0)[..., : v.shape[-1]] if q.shape[-1] >= v.shape[-1] else q * 3.0
+        return out, None
+
+    ns = {
+        "os": os,
+        "json": json,
+        "torch": torch,
+        "logger": _Logger(),
+        "causal_conv1d_update": stub_conv,
+        "fused_sigmoid_gating_delta_rule_update": stub_scan,
+    }
+    compile(body, "<emitted_mab_helper>", "exec")
+    exec(body, ns)
+    return ns, calls
+
+
+def _call(fn, *, ssi, ssm, conv_snap, max_path_len=16, tree_n=10, nacc=5):
+    parent, spine = _cat9_geometry()
+    H = 8
+    return fn(
+        _FakeLayer(),
+        torch.randn(tree_n, H),  # pre_conv
+        torch.randn(tree_n, H),  # mixed_qkv_spec
+        torch.randn(tree_n, H),  # a
+        torch.randn(tree_n, H),  # b
+        torch.randn(1, tree_n, H),  # query_spec
+        torch.randn(1, tree_n, H),  # key_spec
+        torch.randn(tree_n, H),  # value_spec
+        conv_snap,
+        torch.randn(H, 4),  # conv_weights (width 4)
+        ssm,
+        ssi,
+        torch.tensor([nacc], dtype=torch.long),
+        torch.tensor([0, tree_n], dtype=torch.long),
+        _FakeAttnMeta(tree_n, spine, parent),
+        tree_n,
+    )
+
+
+def test_oob_prior_bank_fires_guard_no_kernel(tmp_path, monkeypatch) -> None:
+    """ssi0[0,0] points at a bank >= n_ssm_banks: the prior-bank guard must
+    raise BEFORE any kernel launch (would be the OOB h0 deref -> CUDA assert)."""
+    ns, calls = _make_module_kernel_tracking(tmp_path)
+    fn = ns["_fr13_gdn_subop_mab"]
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "1")
+    dump = tmp_path / "oobbank.jsonl"
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_DUMP", str(dump))
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_LAYER", "*")
+    ssi = torch.zeros(1, 16, dtype=torch.long)
+    ssi[0, 0] = 999  # committed prior bank way out of range
+    _call(
+        fn,
+        ssi=ssi,
+        ssm=torch.randn(20, 8, 8),  # only 20 banks
+        conv_snap=torch.randn(20, 8, 4),
+    )
+    assert not dump.exists(), "OOB prior bank wrote a record (guard did not fire)"
+    assert calls["conv"] == 0 and calls["scan"] == 0, (
+        "a native kernel was launched on an OOB bank -> would be a CUDA assert"
+    )
+
+
+def test_row_ge_max_path_len_fires_guard_no_kernel(tmp_path, monkeypatch) -> None:
+    """A served tree wider than the index table's column count: index_select(1,.)
+    would be a CUDA assert.  _guard_rows must raise first (no kernel)."""
+    ns, calls = _make_module_kernel_tracking(tmp_path)
+    fn = ns["_fr13_gdn_subop_mab"]
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "1")
+    dump = tmp_path / "oobrow.jsonl"
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_DUMP", str(dump))
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_LAYER", "*")
+    # max_path_len = 4 but tree_n = 10 -> full_rows reaches column 9 >= 4.
+    ssi = torch.zeros(1, 4, dtype=torch.long)
+    _call(
+        fn,
+        ssi=ssi,
+        ssm=torch.randn(20, 8, 8),
+        conv_snap=torch.randn(20, 8, 4),
+        max_path_len=4,
+    )
+    assert not dump.exists(), "row>=max_path_len wrote a record (guard did not fire)"
+    assert calls["conv"] == 0 and calls["scan"] == 0, (
+        "index_select(1,.) on an OOB column was reached -> would be a CUDA assert"
+    )
+
+
+def test_served_table_branch_bank_oob_fires_guard(tmp_path, monkeypatch) -> None:
+    """M10 served arm reuses the per-node bank table; if a node bank is OOB the
+    final bank-range guard must catch it (the kernel would OOB-read h0).  -1
+    (PAD_SLOT_ID) is allowed by the guard (kernel skips it)."""
+    ns, calls = _make_module_kernel_tracking(tmp_path)
+    fn = ns["_fr13_gdn_subop_mab"]
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "1")
+    dump = tmp_path / "branchbank.jsonl"
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_DUMP", str(dump))
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_LAYER", "*")
+    ssi = torch.zeros(1, 16, dtype=torch.long)  # column 0 valid (bank 0)
+    ssi[0, 7] = 12345  # a branch/leaf node column holds an OOB bank
+    _call(
+        fn,
+        ssi=ssi,
+        ssm=torch.randn(20, 8, 8),  # 20 banks; 12345 is OOB
+        conv_snap=torch.randn(20, 8, 4),
+    )
+    assert not dump.exists(), "served OOB node bank wrote a record (guard missed it)"
+    # The conv arm runs before the scan arm; the guard that catches the served
+    # branch bank is inside _scan_arm (M10). The conv arm uses only ssi0[:,0]
+    # (valid) so it legitimately runs; the scan-table guard then fires and the
+    # event is aborted with no record.  Assert the SCAN kernel was never reached.
+    assert calls["scan"] == 0, (
+        "scan kernel launched on an OOB served node bank -> would be a CUDA assert"
+    )
+
+
+def test_pad_slot_minus_one_allowed_in_scan_table(tmp_path, monkeypatch) -> None:
+    """PAD_SLOT_ID=-1 in the served bank table must NOT trip the guard (the
+    kernel checks state_idx<0 and skips); a record is still written."""
+    ns, calls = _make_module_kernel_tracking(tmp_path)
+    fn = ns["_fr13_gdn_subop_mab"]
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "1")
+    dump = tmp_path / "padslot.jsonl"
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_DUMP", str(dump))
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_LAYER", "*")
+    ssi = torch.zeros(1, 16, dtype=torch.long)
+    ssi[0, 9] = -1  # a non-spine node padded out (allowed)
+    _call(
+        fn,
+        ssi=ssi,
+        ssm=torch.randn(20, 8, 8),
+        conv_snap=torch.randn(20, 8, 4),
+    )
+    assert dump.exists(), "PAD_SLOT_ID=-1 wrongly tripped the bank guard"
+    recs = [json.loads(l) for l in dump.read_text().splitlines() if l.strip()]
+    assert len(recs) == 1
+    assert calls["scan"] >= 1, "scan arms did not run on a valid (PAD-allowed) table"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
