@@ -54,6 +54,10 @@ QWEN3_NEXT_PATH = Path(
 QWEN3_5_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/qwen3_5.py"
 )
+FP8_UTILS_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/"
+    "quantization/utils/fp8_utils.py"
+)
 
 
 def _patch_gdn_attn() -> bool:
@@ -12314,6 +12318,89 @@ _fr13_install_torch_det_warn()
     return True
 
 
+def _patch_fp8_utils_gb10_gemv_cfg() -> bool:
+    """OPT-A: GB10/sm_121-tuned fp8 w8a8 block-scaled-mm decode config.
+
+    Flag FR13_GB10_FP8_GEMV_CFG, DEFAULT-OFF. vLLM ships no GB10/Spark JSON
+    for ``get_w8a8_block_fp8_configs`` (verified: configs/ has H100/H200/
+    L40S/MI3xx only, no NVIDIA_GB10), so on GB10 ``configs`` is always None
+    and ``w8a8_triton_block_scaled_mm`` falls to the generic DEFAULT config
+    (BLOCK_SIZE_M=64, GROUP_SIZE_M=32, num_warps=4, num_stages=2). That
+    default is tuned for fat-M server batches; at tree-verify decode M=6-10
+    it wastes ~75-90% of the 64-row M-tile and only double-buffers the
+    LPDDR5X weight DMA.
+
+    This patch leaves the stock default dict byte-for-byte and, ONLY when the
+    flag is on AND the device reports GB10 AND the GEMM is a skinny decode
+    shape (M small, block_size==[128,128] so BLOCK_SIZE_K stays pinned),
+    overrides the *scheduling-only* meta-params with a GB10 decode config.
+
+    LOSSLESS BY CONSTRUCTION: BLOCK_SIZE_N (=block_size[0]) and BLOCK_SIZE_K
+    (=block_size[1], pinned to the block-scale block_k=128) are UNCHANGED, so
+    the per-k-tile scale application and the fp32 K-accumulation loop
+    (fp8_utils _w8a8_triton_block_scaled_mm: ``accumulator += tl.dot(a,b)*a_s*b_s``
+    over ``range(cdiv(K, BLOCK_SIZE_K))``) run in the identical order with the
+    identical number of tiles. Only BLOCK_SIZE_M / GROUP_SIZE_M (M-tiling and
+    L2 group-swizzle) and num_warps / num_stages (warp count and software-
+    pipeline depth) move -- none of these touch the reduction axis, so the
+    output is bit-identical to the stock default. Flag-off OR non-GB10 OR
+    large-M => the stock default dict is used verbatim (FIX-1/2/3 gating
+    mirror: default-OFF, byte-identical default path).
+    """
+    text = FP8_UTILS_PATH.read_text()
+    sentinel = "# FR13_GB10_FP8_GEMV_CFG"
+    if sentinel in text:
+        return False
+    stock = (
+        "        # Default config\n"
+        "        # Block-wise quant: BLOCK_SIZE_N must be divisible by block_size[0]\n"
+        "        # BLOCK_SIZE_K must be divisible by block_size[1]\n"
+        "        config = {\n"
+        '            "BLOCK_SIZE_M": 64,\n'
+        '            "BLOCK_SIZE_N": block_size[0],\n'
+        '            "BLOCK_SIZE_K": block_size[1],\n'
+        '            "GROUP_SIZE_M": 32,\n'
+        '            "num_warps": 4,\n'
+        '            "num_stages": 2,\n'
+        "        }\n"
+    )
+    if stock not in text:
+        raise RuntimeError(
+            "FR13_GB10_FP8_GEMV_CFG: stock default fp8 config block not found "
+            "in fp8_utils.py (vLLM version drift) -- not patching."
+        )
+    override = (
+        stock
+        + "        " + sentinel + " (OPT-A): GB10/sm_121 decode override.\n"
+        "        # DEFAULT-OFF; flag-off / non-GB10 / large-M leave the stock\n"
+        "        # default dict above untouched (byte-identical default path).\n"
+        "        # Lossless by construction: BLOCK_SIZE_N and BLOCK_SIZE_K stay\n"
+        "        # pinned (=block_size[*], K=128), so the fp32 K-accumulation\n"
+        "        # order is identical -- only M-tiling / L2 grouping / warps /\n"
+        "        # pipeline staging change.\n"
+        '        if __import__("os").environ.get("FR13_GB10_FP8_GEMV_CFG", "0") == "1":\n'
+        "            try:\n"
+        "                from vllm.platforms import current_platform as _fr13_cp\n"
+        "                _fr13_dev = _fr13_cp.get_device_name()\n"
+        "            except Exception:\n"
+        '                _fr13_dev = ""\n'
+        "            # Skinny-decode guard: only the small tree-verify M tiers\n"
+        "            # (M<=32) benefit; prefill / large-M keep the 64-row tile.\n"
+        '            if "GB10" in _fr13_dev and M <= 32 and block_size[1] == 128:\n'
+        "                config = {\n"
+        '                    "BLOCK_SIZE_M": 16,\n'
+        '                    "BLOCK_SIZE_N": block_size[0],\n'
+        '                    "BLOCK_SIZE_K": block_size[1],\n'
+        '                    "GROUP_SIZE_M": 1,\n'
+        '                    "num_warps": 8,\n'
+        '                    "num_stages": 4,\n'
+        "                }\n"
+    )
+    text = text.replace(stock, override, 1)
+    FP8_UTILS_PATH.write_text(text)
+    return True
+
+
 def main() -> int:
     patch_steps = [
         (REQUEST_PATH, _patch_request_decode_mode()),
@@ -12343,6 +12430,7 @@ def main() -> int:
         (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
+        (FP8_UTILS_PATH, _patch_fp8_utils_gb10_gemv_cfg()),
     ]
     patched: dict[str, bool] = {}
     for path, did_patch in patch_steps:
