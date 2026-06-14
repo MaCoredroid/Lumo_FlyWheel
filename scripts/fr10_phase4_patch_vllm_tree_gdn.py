@@ -5546,10 +5546,16 @@ def _lumo_fb_proj_padded(self, proj, src, spans, row_len, pad_rows):
     return torch.cat(_parts, dim=0)
 
 '''
-        anchor = "    def forward(\n        self,\n        hidden_states: torch.Tensor,\n        output: torch.Tensor,\n    ):\n        self._forward_method(hidden_states, output)\n"
+        # Insert the helpers at MODULE scope (column 0) -- they are top-level
+        # `def`s, so they MUST go before a class definition, NOT before a class
+        # method (inserting a dedented def before `def forward` terminates the
+        # GatedDeltaNetAttention class body and orphans forward/forward_cuda ->
+        # AttributeError: object has no attribute 'forward_cuda'). Anchor on the
+        # class header (module scope) and prepend the helpers above it.
+        anchor = "class GatedDeltaNetAttention(PluggableLayer, MambaBase):\n"
         if anchor not in text:
-            raise RuntimeError("LUMO_FB helper anchor (forward dispatch) not found")
-        text = text.replace(anchor, helper + "\n" + anchor, 1)
+            raise RuntimeError("LUMO_FB helper anchor (class header) not found")
+        text = text.replace(anchor, helper.lstrip("\n") + "\n\n" + anchor, 1)
 
     # in_proj_ba pad (forward_cuda main / Qwen3-Next path). Anchor on the
     # unique 2-line main-path sequence (the LoRA path uses in_proj_qkv/in_proj_z,
