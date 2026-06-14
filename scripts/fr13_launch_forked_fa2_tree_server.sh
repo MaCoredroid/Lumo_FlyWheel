@@ -102,6 +102,27 @@ FR13_CHASE_KV_ALLOW_EMPTY=${FR13_CHASE_KV_ALLOW_EMPTY:-0}
 # Chain-neutral by construction (chain leaf row == L == stock). Requires
 # FR13_TREE_REQKEY=1 (fail-loud). =0 is verbatim stock behavior.
 FR13_TREE_SAMPLE_ROW=${FR13_TREE_SAMPLE_ROW:-1}
+# LUMO_FB_KERNEL_ROWS / LUMO_FB_PROJ_PAD_ROWS (default OFF) — TARGETED ba-proj
+# batch-invariance for the FR13 +17 leaf width carrier (FR13_WIDTH_CARRIER_
+# INPROJ_BA_BIND.md, H1). When LUMO_FB_KERNEL_ROWS=1 the gdn_linear_attn forward
+# pads the bf16 in_proj_ba (and out_proj) GEMM to a FIXED, tree_n-independent row
+# group (LUMO_FB_PROJ_PAD_ROWS per spec, >= max tree_n), computes one batched
+# projection, scatters the real rows back, and discards pads => cuBLASLt is pinned
+# to ONE shape => M-invariant a/b on the spine row. Lossless-by-construction
+# (GEMM row = W @ hidden[row], independent per row; zero pad-rows contribute
+# nothing). This is the AUTHORIZED #42960 batch-invariance, NOT a reward-hack, and
+# is the TARGETED fix (NOT full VLLM_BATCH_INVARIANT, which takes the GB10 REDUCED
+# override branch and perturbs fp8/scan => cat9+BI=34, counterproductive).
+# DEFAULT OFF: empty LUMO_FB_KERNEL_ROWS => the gate `== "1"` is False => verbatim
+# stock projection path (byte-identical to the locked launcher).
+# *** BLOCKER (2026-06-14): the pad-block code (live snapshot gdn_linear_attn.py:
+# 553-601 / 674-723) is NOT present in the deployed image
+# (vllm/vllm-openai@sha256:3dbe092e, gdn_linear_attn.py=1211 lines) and is NOT
+# inserted by scripts/fr10_phase4_patch_vllm_tree_gdn.py. Passing these envs is
+# additive/byte-identical but INERT until that block is inserted into the patch
+# script. See the returned schema notes. ***
+LUMO_FB_KERNEL_ROWS=${LUMO_FB_KERNEL_ROWS:-}
+LUMO_FB_PROJ_PAD_ROWS=${LUMO_FB_PROJ_PAD_ROWS:-16}
 LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
 LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}
 LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}
@@ -240,6 +261,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_CHASE_H3_LAYER="$FR13_CHASE_H3_LAYER" \
   -e FR13_CHASE_KV_ALLOW_EMPTY="$FR13_CHASE_KV_ALLOW_EMPTY" \
   -e FR13_TREE_SAMPLE_ROW="$FR13_TREE_SAMPLE_ROW" \
+  -e LUMO_FB_KERNEL_ROWS="$LUMO_FB_KERNEL_ROWS" \
+  -e LUMO_FB_PROJ_PAD_ROWS="$LUMO_FB_PROJ_PAD_ROWS" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-0}" \
   -e TORCH_USE_CUDA_DSA="${TORCH_USE_CUDA_DSA:-0}" \
