@@ -123,6 +123,35 @@ FR13_TREE_SAMPLE_ROW=${FR13_TREE_SAMPLE_ROW:-1}
 # script. See the returned schema notes. ***
 LUMO_FB_KERNEL_ROWS=${LUMO_FB_KERNEL_ROWS:-}
 LUMO_FB_PROJ_PAD_ROWS=${LUMO_FB_PROJ_PAD_ROWS:-16}
+# FR13_GDN_SUBOP_MAB worker-env propagation (additive, default-safe). The GDN
+# forward runs in the EngineCore WORKER process; the bare master switch
+# FR13_GDN_SUBOP_MAB (+ _DUMP/_EXPECT_TREE_N/_THRESHOLD) is neither VLLM_-
+# prefixed nor registered in vllm.envs, so it can be stripped on worker spawn.
+# Two belt-and-suspenders knobs, BOTH consulted by ray_env.get_env_vars_to_copy
+# (ray-executor path) and harmless under the default mp/fork executor:
+#   * VLLM_RAY_EXTRA_ENV_VARS_TO_COPY = exact comma-list of names
+#   * VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY = "FR13_" prefix (catches ALL
+#     FR13_* incl. the master switch + every sibling)
+# ONLY populated when FR13_GDN_SUBOP_MAB is set/non-zero; otherwise empty =>
+# byte-identical to the locked default path. We APPEND to any caller-supplied
+# value (additive, never replacing).
+VLLM_RAY_EXTRA_ENV_VARS_TO_COPY=${VLLM_RAY_EXTRA_ENV_VARS_TO_COPY:-}
+VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY=${VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY:-}
+case "${FR13_GDN_SUBOP_MAB:-0}" in
+  1|true|yes|on|TRUE|YES|ON)
+    _fr13_subop_names="FR13_GDN_SUBOP_MAB,FR13_GDN_SUBOP_MAB_DUMP,FR13_GDN_SUBOP_MAB_LAYER,FR13_GDN_SUBOP_MAB_SKIP,FR13_GDN_SUBOP_MAB_LIMIT,FR13_GDN_SUBOP_MAB_EXPECT_TREE_N,FR13_GDN_SUBOP_MAB_THRESHOLD"
+    if [[ -n "$VLLM_RAY_EXTRA_ENV_VARS_TO_COPY" ]]; then
+      VLLM_RAY_EXTRA_ENV_VARS_TO_COPY="${VLLM_RAY_EXTRA_ENV_VARS_TO_COPY},${_fr13_subop_names}"
+    else
+      VLLM_RAY_EXTRA_ENV_VARS_TO_COPY="$_fr13_subop_names"
+    fi
+    if [[ -n "$VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY" ]]; then
+      VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="${VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY},FR13_"
+    else
+      VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="FR13_"
+    fi
+    ;;
+esac
 LUMO_MTP_DRAFT_TRACE_FILE=${LUMO_MTP_DRAFT_TRACE_FILE:-}
 LUMO_TREE_SAMPLER_DEBUG_LOG=${LUMO_TREE_SAMPLER_DEBUG_LOG:-}
 LUMO_TREE_PATH_LCP_LOG=${LUMO_TREE_PATH_LCP_LOG:-}
@@ -331,6 +360,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_GDN_SUBOP_MAB_LIMIT="${FR13_GDN_SUBOP_MAB_LIMIT:-1}" \
   -e FR13_GDN_SUBOP_MAB_EXPECT_TREE_N="${FR13_GDN_SUBOP_MAB_EXPECT_TREE_N:-10}" \
   -e FR13_GDN_SUBOP_MAB_THRESHOLD="${FR13_GDN_SUBOP_MAB_THRESHOLD:-0.0}" \
+  -e VLLM_RAY_EXTRA_ENV_VARS_TO_COPY="$VLLM_RAY_EXTRA_ENV_VARS_TO_COPY" \
+  -e VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="$VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY" \
   -e FR13_FLASH_ATTN_OP_CAPTURE="${FR13_FLASH_ATTN_OP_CAPTURE:-}" \
   -e FR13_FLASH_ATTN_OP_CAPTURE_LAYER="${FR13_FLASH_ATTN_OP_CAPTURE_LAYER:-language_model.model.layers.3.self_attn}" \
   -e FR13_FLASH_ATTN_OP_CAPTURE_SKIP="${FR13_FLASH_ATTN_OP_CAPTURE_SKIP:-0}" \
