@@ -115,12 +115,9 @@ FR13_TREE_SAMPLE_ROW=${FR13_TREE_SAMPLE_ROW:-1}
 # override branch and perturbs fp8/scan => cat9+BI=34, counterproductive).
 # DEFAULT OFF: empty LUMO_FB_KERNEL_ROWS => the gate `== "1"` is False => verbatim
 # stock projection path (byte-identical to the locked launcher).
-# *** BLOCKER (2026-06-14): the pad-block code (live snapshot gdn_linear_attn.py:
-# 553-601 / 674-723) is NOT present in the deployed image
-# (vllm/vllm-openai@sha256:3dbe092e, gdn_linear_attn.py=1211 lines) and is NOT
-# inserted by scripts/fr10_phase4_patch_vllm_tree_gdn.py. Passing these envs is
-# additive/byte-identical but INERT until that block is inserted into the patch
-# script. See the returned schema notes. ***
+# NOTE (2026-06-14): the pad-block code IS inserted by the patcher and is LIVE
+# (the in_proj_ba pad is BAKED into locked cat9, a666f9ec — lossless + speed-
+# neutral; the prior "not inserted / INERT" BLOCKER was wrong and is removed).
 LUMO_FB_KERNEL_ROWS=${LUMO_FB_KERNEL_ROWS:-}
 LUMO_FB_PROJ_PAD_ROWS=${LUMO_FB_PROJ_PAD_ROWS:-16}
 # FR13_GDN_SUBOP_MAB worker-env propagation (additive, default-safe).

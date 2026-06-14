@@ -41,17 +41,26 @@ SRC = PATCHER.read_text()
 # 1. The patcher emits the MAB behind the default-OFF flag.
 # --------------------------------------------------------------------------- #
 def test_flag_guard_present_default_off() -> None:
-    # Module-scope default OFF read via env (flag plan).
-    assert 'os.environ.get("FR13_GDN_SUBOP_MAB", "0") != "1"' in SRC
-    assert 'os.environ.get("FR13_GDN_SUBOP_MAB", "0") == "1"' in SRC
-    # The call site is inside an explicit flag guard.
+    # The three worker-side gate reads resolve via the worker-env-safe helper,
+    # NOT a bare os.environ.get (the bare master switch is curated out of the
+    # mp/spawn EngineCore worker -- measured 2026-06-14, class-9 vacuous boot).
+    assert "def _fr13_gdn_subop_mab_enabled():" in SRC
+    assert "if not _fr13_gdn_subop_mab_enabled():" in SRC  # helper top-guard
+    assert "_fr13_gdn_subop_mab_on = _fr13_gdn_subop_mab_enabled()" in SRC
+    # The call site is inside the resolver guard.
     assert re.search(
-        r'if os\.environ\.get\("FR13_GDN_SUBOP_MAB", "0"\) == "1":\n'
+        r"if _fr13_gdn_subop_mab_enabled\(\):\n"
         r"\s+# FR13_GDN_SUBOP_MAB.*?_fr13_gdn_subop_mab\(\s*\n\s+self,",
         SRC,
         re.DOTALL,
     )
-    # The conv-state snapshot + pre_conv stash is gated by the same flag.
+    # No bare worker-time master env read survives at the GDN gate sites; the
+    # only direct master env read is the patch-time sidecar writer (pid 1).
+    assert SRC.count('os.environ.get("FR13_GDN_SUBOP_MAB", "0")') == 1
+    # The patch-time sidecar bridge (pid 1 -> worker via /logs bind mount).
+    assert "_fr13_write_subop_mab_sidecar" in SRC
+    assert "/logs/fr13_gdn_subop_mab.flag" in SRC
+    # The conv-state snapshot + pre_conv stash is gated by the same resolver.
     assert "self._fr13_gdn_subop_mab_pre_conv = _fr12_pre_conv_spec" in SRC
     assert "self._fr13_gdn_subop_mab_conv_state = (" in SRC
 
@@ -157,6 +166,11 @@ def test_default_off_helper_is_noop(tmp_path, monkeypatch) -> None:
     ns, _ = _make_module(tmp_path)
     fn = ns["_fr13_gdn_subop_mab"]
     monkeypatch.delenv("FR13_GDN_SUBOP_MAB", raising=False)  # default OFF
+    # Hermetic: point the sidecar bridge at a guaranteed-absent path so the
+    # resolver cannot pick up a stray /logs flag from a co-located run.
+    monkeypatch.setenv(
+        "FR13_GDN_SUBOP_MAB_FLAG_FILE", str(tmp_path / "absent.flag")
+    )
     dump = tmp_path / "noop.jsonl"
     monkeypatch.setenv("FR13_GDN_SUBOP_MAB_DUMP", str(dump))
     # Flag OFF: the helper must return immediately and write NOTHING.
@@ -471,6 +485,304 @@ def test_pad_slot_minus_one_allowed_in_scan_table(tmp_path, monkeypatch) -> None
     recs = [json.loads(l) for l in dump.read_text().splitlines() if l.strip()]
     assert len(recs) == 1
     assert calls["scan"] >= 1, "scan arms did not run on a valid (PAD-allowed) table"
+
+
+# --------------------------------------------------------------------------- #
+# 4. Worker-env bridge: the resolver reads env OR the patch-time sidecar so the
+#    master switch reaches the curated mp/spawn EngineCore worker (class-9 fix).
+# --------------------------------------------------------------------------- #
+def _make_resolver(tmp_path: Path):
+    """Exec just the emitted helper body and return the resolver fn + namespace.
+
+    Each call gets a fresh namespace so the module-global cache resets.
+    """
+    body = _extract_helper()
+    ns = {"os": os, "json": json, "torch": torch, "logger": object()}
+    exec(body, ns)
+    return ns["_fr13_gdn_subop_mab_enabled"], ns
+
+
+def test_resolver_env_on_short_circuits(tmp_path, monkeypatch) -> None:
+    fn, _ = _make_resolver(tmp_path)
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "1")
+    monkeypatch.setenv(
+        "FR13_GDN_SUBOP_MAB_FLAG_FILE", str(tmp_path / "nope.flag")
+    )
+    assert fn() is True
+
+
+def test_resolver_sidecar_bridge_when_env_absent(tmp_path, monkeypatch) -> None:
+    # The mp/spawn worker case: master env is ABSENT, the patch-time sidecar
+    # (written in pid 1) carries the flag through the /logs bind mount.
+    fn, _ = _make_resolver(tmp_path)
+    monkeypatch.delenv("FR13_GDN_SUBOP_MAB", raising=False)
+    flag = tmp_path / "fr13_gdn_subop_mab.flag"
+    flag.write_text("1\n")
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_FLAG_FILE", str(flag))
+    assert fn() is True
+
+
+def test_resolver_env_off_overrides_sidecar(tmp_path, monkeypatch) -> None:
+    # An explicit OFF env must win over a stale sidecar (no leak ON).
+    fn, _ = _make_resolver(tmp_path)
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "0")
+    flag = tmp_path / "fr13_gdn_subop_mab.flag"
+    flag.write_text("1\n")
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_FLAG_FILE", str(flag))
+    assert fn() is False
+
+
+def test_resolver_default_off_no_env_no_sidecar(tmp_path, monkeypatch) -> None:
+    fn, _ = _make_resolver(tmp_path)
+    monkeypatch.delenv("FR13_GDN_SUBOP_MAB", raising=False)
+    monkeypatch.setenv(
+        "FR13_GDN_SUBOP_MAB_FLAG_FILE", str(tmp_path / "absent.flag")
+    )
+    assert fn() is False
+
+
+def test_patcher_sidecar_writer_on_off(tmp_path, monkeypatch) -> None:
+    # Exec the patch-time sidecar writer (pid-1 side) in isolation: ON writes
+    # "1", OFF deletes any stale flag (default-safe, no leak).
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("_fr13_patcher_mod", str(PATCHER))
+    assert spec and spec.loader
+    flag = tmp_path / "fr13_gdn_subop_mab.flag"
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_FLAG_FILE", str(flag))
+    # Import the patcher WITHOUT running main(); grab the writer.
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    writer = mod._fr13_write_subop_mab_sidecar
+    # OFF: no flag file written.
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "0")
+    writer()
+    assert not flag.exists()
+    # ON: flag file written with "1".
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "1")
+    writer()
+    assert flag.exists() and flag.read_text().strip() == "1"
+    # Back to OFF: stale flag is removed (no leak into an OFF boot).
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "0")
+    writer()
+    assert not flag.exists()
+
+
+# --------------------------------------------------------------------------- #
+# 5. FR13_SUBOP_STAGE markers (the rebuild: NEVER silently vacuous, class-9).
+#    These pin the stage-marker helper + the call-site engagement probe + the
+#    hoisted engagement asserts, then exercise the emitted helpers on CPU stubs.
+# --------------------------------------------------------------------------- #
+# 5.1 Patcher-text assertions (cheap; catch a needle drift).
+def test_stage_marker_helper_emitted() -> None:
+    assert "def _fr13_subop_stage(" in SRC
+    assert "FR13_SUBOP_STAGE=%s %s" in SRC
+    assert "def _fr13_subop_worker_env_gate(" in SRC
+    assert "/proc/self/environ" in SRC
+
+
+def test_callsite_skip_marker_above_use_fr10_tree() -> None:
+    # The call-site engagement probe must sit BEFORE the `if use_fr10_tree:`
+    # branch at the scan site (failure-#4 hole).
+    assert "callsite-skip" in SRC
+    assert re.search(
+        r"if _fr13_gdn_subop_mab_enabled\(\) and not use_fr10_tree:.*?"
+        r"_fr13_subop_stage\(\s*\n\s+\"callsite-skip\"",
+        SRC, re.DOTALL,
+    )
+    # The orphaned stash is released on the skip (no leak into a later event).
+    assert SRC.count("self._fr13_gdn_subop_mab_pre_conv = None") >= 2
+
+
+def test_engagement_asserts_hoisted_out_of_try() -> None:
+    # The disengagement guards now emit a loud `engage-fail` marker and RETURN,
+    # they are no longer bare `raise` inside the swallowing try.
+    assert "engage-fail" in SRC
+    assert "def _engage_fail(reason):" in SRC
+    # The swallow handler is now a distinct ERROR tag, not the success-level
+    # warning.
+    assert 'FR13_GDN_SUBOP_MAB A/B failed' not in SRC  # old swallow text gone
+    assert '"arm-fail"' in SRC
+    assert '"record-written"' in SRC
+    assert '"engaged"' in SRC
+
+
+# 5.2 Emitted-helper behavioral tests (exec the helper on CPU stubs).
+class _ErrLogger:
+    """A logger stub that captures `.error` calls so a test can assert which
+    FR13_SUBOP_STAGE markers fired (the chase is never silent)."""
+
+    def __init__(self):
+        self.warnings = []
+        self.errors = []
+
+    def warning(self, *a, **k):  # pragma: no cover - trivial
+        self.warnings.append(a)
+
+    def error(self, *a, **k):
+        self.errors.append(a)
+
+
+def _stage_tags(err_logger):
+    """Extract the FR13_SUBOP_STAGE=<tag> tag from each captured error call."""
+    tags = []
+    for a in err_logger.errors:
+        # `_fr13_subop_stage` logs as ("FR13_SUBOP_STAGE=%s %s", tag, msg)
+        if a and a[0] == "FR13_SUBOP_STAGE=%s %s" and len(a) >= 2:
+            tags.append(a[1])
+    return tags
+
+
+def _make_module_err(tmp_path: Path):
+    """Like _make_module but the logger captures `.error` so the stage markers
+    are observable.  Returns (ns, err_logger)."""
+    body = _extract_helper()
+    err_logger = _ErrLogger()
+
+    def stub_conv(x, cs, w, bias, act, **k):
+        return x.clone() * 2.0 + 0.5
+
+    def stub_scan(*, A_log, a, b, dt_bias, q, k, v, initial_state, **k2):
+        out = (q * 3.0)[..., : v.shape[-1]] if q.shape[-1] >= v.shape[-1] else q * 3.0
+        return out, None
+
+    ns = {
+        "os": os,
+        "json": json,
+        "torch": torch,
+        "logger": err_logger,
+        "causal_conv1d_update": stub_conv,
+        "fused_sigmoid_gating_delta_rule_update": stub_scan,
+    }
+    compile(body, "<emitted_mab_helper>", "exec")
+    exec(body, ns)
+    return ns, err_logger
+
+
+def test_engage_marker_on_disengaged_tree_no_record(tmp_path, monkeypatch) -> None:
+    # Same as the disengaged-tree test, but ALSO assert an `engage-fail` stage
+    # marker fired (the chase is never silent) and NO record was written.
+    ns, err_logger = _make_module_err(tmp_path)
+    fn = ns["_fr13_gdn_subop_mab"]
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "1")
+    dump = tmp_path / "diseng.jsonl"
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_DUMP", str(dump))
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_LAYER", "*")
+
+    class _NoTree:
+        num_spec_decodes = 1
+        fr10_tree_path0_nodes = None
+        fr10_tree_parent = None
+
+    fn(
+        _FakeLayer(),
+        torch.randn(10, 8),
+        torch.randn(1, 10, 8),
+        torch.randn(10, 8),
+        torch.randn(10, 8),
+        torch.randn(1, 10, 8),
+        torch.randn(1, 10, 8),
+        torch.randn(10, 8),
+        torch.randn(20, 8, 4),
+        torch.randn(8, 4),
+        torch.randn(20, 8, 8),
+        torch.zeros(1, 16, dtype=torch.long),
+        torch.tensor([5], dtype=torch.long),
+        torch.tensor([0, 10], dtype=torch.long),
+        _NoTree(),
+        10,
+    )
+    assert not dump.exists(), "disengaged tree wrote a vacuous record (class 9)"
+    tags = _stage_tags(err_logger)
+    assert "engage-fail" in tags, f"no engage-fail marker fired; tags={tags}"
+    assert "record-written" not in tags
+
+
+def test_record_written_marker_on_success(tmp_path, monkeypatch) -> None:
+    # The ON happy-path additionally fires a `record-written` (and `engaged`)
+    # stage marker exactly once for the event.
+    ns, err_logger = _make_module_err(tmp_path)
+    fn = ns["_fr13_gdn_subop_mab"]
+    parent, spine = _cat9_geometry()
+    tree_n = 10
+    H = 8
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "1")
+    dump = tmp_path / "on.jsonl"
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_DUMP", str(dump))
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_LAYER", "*")
+    fn(
+        _FakeLayer(),
+        torch.randn(tree_n, H),
+        torch.randn(tree_n, H),
+        torch.randn(tree_n, H),
+        torch.randn(tree_n, H),
+        torch.randn(1, tree_n, H),
+        torch.randn(1, tree_n, H),
+        torch.randn(tree_n, H),
+        torch.randn(20, H, 4),
+        torch.randn(H, 4),
+        torch.randn(20, H, H),
+        torch.zeros(1, 16, dtype=torch.long),
+        torch.tensor([5], dtype=torch.long),
+        torch.tensor([0, tree_n], dtype=torch.long),
+        _FakeAttnMeta(tree_n, spine, parent),
+        tree_n,
+    )
+    assert dump.exists(), "flag ON wrote no record"
+    tags = _stage_tags(err_logger)
+    assert tags.count("record-written") == 1, f"tags={tags}"
+    assert "engaged" in tags
+    assert "engage-fail" not in tags
+    assert "arm-fail" not in tags
+
+
+def test_worker_env_gate_marker_env_channel(tmp_path, monkeypatch) -> None:
+    # FR13_GDN_SUBOP_MAB=1 in env + absent sidecar -> the gate logs
+    # `FR13_SUBOP_STAGE=worker-env ... channel=env`.
+    ns, err_logger = _make_module_err(tmp_path)
+    gate = ns["_fr13_subop_worker_env_gate"]
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "1")
+    monkeypatch.setenv(
+        "FR13_GDN_SUBOP_MAB_FLAG_FILE", str(tmp_path / "absent.flag")
+    )
+    gate()
+    assert "worker-env" in _stage_tags(err_logger)
+    joined = " ".join(str(a) for a in err_logger.errors)
+    assert "channel=env" in joined, joined
+
+
+def test_worker_env_gate_marker_sidecar_channel(tmp_path, monkeypatch) -> None:
+    # env absent, sidecar flag=1 -> channel=sidecar.
+    ns, err_logger = _make_module_err(tmp_path)
+    gate = ns["_fr13_subop_worker_env_gate"]
+    monkeypatch.delenv("FR13_GDN_SUBOP_MAB", raising=False)
+    flag = tmp_path / "fr13_gdn_subop_mab.flag"
+    flag.write_text("1\n")
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_FLAG_FILE", str(flag))
+    gate()
+    assert "worker-env" in _stage_tags(err_logger)
+    joined = " ".join(str(a) for a in err_logger.errors)
+    assert "channel=sidecar" in joined, joined
+
+
+def test_stage_marker_once_dedup(tmp_path, monkeypatch) -> None:
+    # Two calls with once=True on the same tag -> exactly one logger.error; the
+    # counter increments to 2 (record-count discriminator stays live).
+    ns, err_logger = _make_module_err(tmp_path)
+    stage = ns["_fr13_subop_stage"]
+    stage("dedup-tag", "first", once=True)
+    stage("dedup-tag", "second", once=True)
+    assert _stage_tags(err_logger).count("dedup-tag") == 1
+    assert ns["_FR13_SUBOP_STAGE_COUNTS"]["dedup-tag"] == 2
+
+
+# 5.3 Default-OFF byte-identity (the new markers are wholly behind enabled()).
+def test_stage_markers_are_noop_when_off() -> None:
+    # The call-site probe block is wholly inside an enabled() guard; OFF => no-op.
+    assert re.search(
+        r"if _fr13_gdn_subop_mab_enabled\(\) and not use_fr10_tree:",
+        SRC,
+    )
 
 
 if __name__ == "__main__":

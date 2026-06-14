@@ -1292,6 +1292,115 @@ def _patch_gdn_linear() -> bool:
         # locked cat9 default path is byte-identical.
         mab_helper = '''
 
+_FR13_GDN_SUBOP_MAB_FLAG = None
+
+
+def _fr13_gdn_subop_mab_enabled():
+    """Resolve the FR13_GDN_SUBOP_MAB master switch for the EngineCore worker.
+
+    The GDN forward runs in the mp/spawn EngineCore worker (VLLM::EngineCore),
+    which is launched with a CURATED env that drops even registered VLLM_-
+    prefixed vars; the bare FR13_GDN_SUBOP_MAB never reaches /proc/<worker>/
+    environ (measured 2026-06-14: 14/66 FR13_* survive, master dropped).  The
+    patcher (fr10_phase4_patch_vllm_tree_gdn.py) DOES run in pid 1 where the var
+    is present, so at patch time it writes a sidecar flag file into /logs (host
+    + worker visible bind mount).  Resolve from env first (cheap, future ray-
+    executor path), else the sidecar.  Default OFF (no env, no sidecar) =>
+    byte-identical locked path.  Result is cached after first resolution.
+    """
+    global _FR13_GDN_SUBOP_MAB_FLAG
+    if _FR13_GDN_SUBOP_MAB_FLAG is not None:
+        return _FR13_GDN_SUBOP_MAB_FLAG
+    val = os.environ.get("FR13_GDN_SUBOP_MAB")
+    if val is not None and val != "":
+        # An EXPLICIT env value is authoritative (incl. "0" => OFF wins over any
+        # stale sidecar; no leak).  Only ABSENCE consults the sidecar.
+        _FR13_GDN_SUBOP_MAB_FLAG = val == "1"
+        return _FR13_GDN_SUBOP_MAB_FLAG
+    # env absent/empty -> consult the patch-time sidecar (worker path)
+    try:
+        flag_path = os.environ.get(
+            "FR13_GDN_SUBOP_MAB_FLAG_FILE", "/logs/fr13_gdn_subop_mab.flag"
+        )
+        with open(flag_path, "r") as _fh:
+            _FR13_GDN_SUBOP_MAB_FLAG = _fh.read().strip() == "1"
+    except Exception:
+        _FR13_GDN_SUBOP_MAB_FLAG = False
+    return _FR13_GDN_SUBOP_MAB_FLAG
+
+
+_FR13_SUBOP_STAGE_SEEN = set()
+_FR13_SUBOP_STAGE_COUNTS = {}
+
+
+def _fr13_subop_stage(tag, msg, once=True, level="error"):
+    """FR13_GDN_SUBOP_MAB class-9 stage marker (NEVER silently vacuous).
+
+    Emits a single grep-able `FR13_SUBOP_STAGE=<tag>` line at ERROR level so the
+    FAILING STAGE of a chase is unmistakable in the worker log flood.  `once`
+    de-dups per (prefix-less) tag so a per-forward stage logs exactly one line.
+    Always increments a monotone counter so the reducer can assert a non-zero
+    record count vs a non-zero engaged count (vacuous-boot discriminator).
+
+    Default-OFF safe: callers guard every invocation behind
+    _fr13_gdn_subop_mab_enabled(); this fn itself does no env work and never
+    touches the live forward.
+    """
+    _FR13_SUBOP_STAGE_COUNTS[tag] = int(_FR13_SUBOP_STAGE_COUNTS.get(tag, 0)) + 1
+    if once:
+        if tag in _FR13_SUBOP_STAGE_SEEN:
+            return
+        _FR13_SUBOP_STAGE_SEEN.add(tag)
+    try:
+        emit = getattr(logger, level, None) or logger.error
+        emit("FR13_SUBOP_STAGE=%s %s", tag, msg)
+    except Exception:
+        pass
+
+
+def _fr13_subop_worker_env_gate():
+    """STAGE (i): on first resolution, log whether the master reached THIS proc
+    (the mp/spawn EngineCore worker) via env or the pid-1 sidecar bridge, and
+    self-check /proc/self/environ.  One ERROR line names the channel so a future
+    'env did not reach the worker' regression (failures #2/#3) is loud.
+
+    Observe-only: reads env + the sidecar flag path; writes nothing.
+    """
+    if not _fr13_gdn_subop_mab_enabled():
+        return
+    env_present = os.environ.get("FR13_GDN_SUBOP_MAB") in ("1", "0") and bool(
+        os.environ.get("FR13_GDN_SUBOP_MAB")
+    )
+    flag_path = os.environ.get(
+        "FR13_GDN_SUBOP_MAB_FLAG_FILE", "/logs/fr13_gdn_subop_mab.flag"
+    )
+    sidecar_present = False
+    try:
+        with open(flag_path, "r") as _fh:
+            sidecar_present = _fh.read().strip() == "1"
+    except Exception:
+        sidecar_present = False
+    proc_present = False
+    try:
+        with open("/proc/self/environ", "rb") as _pf:
+            proc_present = b"FR13_GDN_SUBOP_MAB=" in _pf.read()
+    except Exception:
+        proc_present = None
+    channel = (
+        "env" if env_present else ("sidecar" if sidecar_present else "NONE")
+    )
+    _fr13_subop_stage(
+        "worker-env",
+        (
+            "engaged channel=" + str(channel)
+            + " env_master=" + repr(os.environ.get("FR13_GDN_SUBOP_MAB"))
+            + " sidecar=" + str(sidecar_present)
+            + " proc_self_has_master=" + str(proc_present)
+            + " pid=" + str(os.getpid())
+        ),
+    )
+
+
 def _fr13_gdn_subop_mab(
     self,
     pre_conv_spec,
@@ -1344,7 +1453,7 @@ def _fr13_gdn_subop_mab(
     (every arm runs on detached clones; no mutation of the live forward, no
     splice, no copy-recurrent, no dense-route).
     """
-    if os.environ.get("FR13_GDN_SUBOP_MAB", "0") != "1":
+    if not _fr13_gdn_subop_mab_enabled():
         return
     try:
         if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
@@ -1379,42 +1488,57 @@ def _fr13_gdn_subop_mab(
         "FR13_GDN_SUBOP_MAB_DUMP",
         "output/fr13_gdn_subop_mab/fr13_gdn_subop_mab.jsonl",
     )
-    try:
-        # ----- class-9 ENGAGEMENT ASSERTS (fail loud, never a vacuous number) --
-        if pre_conv_spec is None:
-            raise RuntimeError("FR13_GDN_SUBOP_MAB: pre_conv_spec not captured")
-        path0 = getattr(attn_metadata, "fr10_tree_path0_nodes", None)
-        if path0 is None:
-            raise RuntimeError("FR13_GDN_SUBOP_MAB: tree DISENGAGED (no path0)")
-        tree_parent = getattr(attn_metadata, "fr10_tree_parent", None)
-        if tree_parent is None:
-            raise RuntimeError("FR13_GDN_SUBOP_MAB: tree DISENGAGED (no parent)")
-        num_spec = int(attn_metadata.num_spec_decodes)
-        if num_spec < 1:
-            raise RuntimeError("FR13_GDN_SUBOP_MAB: num_spec_decodes < 1")
-        tree_n = int(tree_parent.numel())
-        # tok/draft engagement: assert the served tree matches the expected
-        # geometry (cat9 => 10 nodes incl root).  An env override allows other
-        # shapes; otherwise fail loud on a silent shape change (class 9).
-        expect_tree_n = os.environ.get("FR13_GDN_SUBOP_MAB_EXPECT_TREE_N", "10")
-        if expect_tree_n and expect_tree_n != "*":
-            if tree_n != int(expect_tree_n):
-                raise RuntimeError(
-                    "FR13_GDN_SUBOP_MAB: tree_n="
-                    + str(tree_n)
-                    + " != expected "
-                    + str(expect_tree_n)
-                    + " (silent tree-shape change; class 9)"
-                )
-        dev = mixed_qkv_spec.device
-        path0_list = [int(x) for x in path0.detach().cpu().reshape(-1).tolist()]
-        # Only nodes that actually exist in the served tree (< tree_n).
-        spine_rows = [r for r in path0_list if 0 <= r < tree_n]
-        if len(spine_rows) < 2:
-            raise RuntimeError(
-                "FR13_GDN_SUBOP_MAB: degenerate spine " + str(spine_rows)
+    # ----- class-9 ENGAGEMENT ASSERTS (HOISTED above the swallowing try so a
+    # disengagement is a LOUD `FR13_SUBOP_STAGE=engage-fail` ERROR, never a
+    # warning lost in the flood — the call WAS reached, so a vacuous skip here is
+    # a real defect, not a legit pure-decode skip).  Each guard records the
+    # specific reason then returns WITHOUT writing a record.
+    def _engage_fail(reason):
+        _fr13_subop_stage("engage-fail", reason, once=False)
+    if pre_conv_spec is None:
+        _engage_fail("pre_conv_spec not captured (conv-site stash disengaged)")
+        return
+    path0 = getattr(attn_metadata, "fr10_tree_path0_nodes", None)
+    if path0 is None:
+        _engage_fail("tree DISENGAGED (no path0)")
+        return
+    tree_parent = getattr(attn_metadata, "fr10_tree_parent", None)
+    if tree_parent is None:
+        _engage_fail("tree DISENGAGED (no parent)")
+        return
+    num_spec = int(attn_metadata.num_spec_decodes)
+    if num_spec < 1:
+        _engage_fail("num_spec_decodes < 1 (= " + str(num_spec) + ")")
+        return
+    tree_n = int(tree_parent.numel())
+    # tok/draft engagement: the served tree must match expected geometry
+    # (cat9 => 10 nodes incl root).  Env override allows other shapes; otherwise
+    # a silent shape change is class-9 and must be loud.
+    expect_tree_n = os.environ.get("FR13_GDN_SUBOP_MAB_EXPECT_TREE_N", "10")
+    if expect_tree_n and expect_tree_n != "*":
+        if tree_n != int(expect_tree_n):
+            _engage_fail(
+                "tree_n=" + str(tree_n) + " != expected " + str(expect_tree_n)
+                + " (silent tree-shape change; class 9)"
             )
-        deep_row = spine_rows[-1]
+            return
+    dev = mixed_qkv_spec.device
+    path0_list = [int(x) for x in path0.detach().cpu().reshape(-1).tolist()]
+    # Only nodes that actually exist in the served tree (< tree_n).
+    spine_rows = [r for r in path0_list if 0 <= r < tree_n]
+    if len(spine_rows) < 2:
+        _engage_fail("degenerate spine " + str(spine_rows))
+        return
+    deep_row = spine_rows[-1]
+    # STAGE (iv-pre): the event is fully engaged; the next failure point is the
+    # arm execution (native kernels) which stays inside the swallowing try.
+    _fr13_subop_stage(
+        "engaged",
+        "layer=" + str(prefix) + " tree_n=" + str(tree_n)
+        + " deep_row=" + str(deep_row) + " num_spec=" + str(num_spec),
+        once=False,
+    )
+    try:
         # The FULL-tree arm = batch-0's tree-row block [0:tree_n).
         start = 0
         end = tree_n
@@ -1750,6 +1874,12 @@ def _fr13_gdn_subop_mab(
             os.makedirs(parent, exist_ok=True)
         with open(out_path, "a", buffering=1) as fh:
             fh.write(json.dumps(rec) + chr(10))
+        _fr13_subop_stage(
+            "record-written",
+            "layer=" + str(prefix) + " event=" + str(seen)
+            + " path=" + str(out_path),
+            once=False,
+        )
         logger.warning(
             "FR13_GDN_SUBOP_MAB layer=%s event=%s deep_row=%s | M10-vs-M5 "
             "pre_conv=%.3e conv1d_out=%.3e scan_out=%.3e | first(coresid)=%s | "
@@ -1767,7 +1897,14 @@ def _fr13_gdn_subop_mab(
             pre_conv_m_invariant,
         )
     except Exception as exc:  # pragma: no cover - diagnostic only
-        logger.warning("FR13_GDN_SUBOP_MAB A/B failed: %s", exc)
+        # ARM-execution failure (e.g. a per-arm bank/row bounds-guard raise, a
+        # native-kernel fault).  LOUD + distinct tag so it is never confused with
+        # the success warning at the M10-vs-M5 emit; the event produced NO record.
+        _fr13_subop_stage(
+            "arm-fail",
+            "layer=" + str(getattr(self, "prefix", "")) + " exc=" + repr(exc),
+            once=False,
+        )
 '''
         text = text.replace(
             "logger = init_logger(__name__)\n",
@@ -1852,9 +1989,7 @@ def _fr13_gdn_subop_mab(
                 _fr10_conv_diag[20].add_(float(attn_metadata.num_prefills))
                 _fr10_conv_diag[21].add_(float(attn_metadata.num_decodes))
             _fr12_subkernel_capture_enabled = bool(os.environ.get("FR12_SUBKERNEL_CAPTURE"))
-            _fr13_gdn_subop_mab_on = (
-                os.environ.get("FR13_GDN_SUBOP_MAB", "0") == "1"
-            )
+            _fr13_gdn_subop_mab_on = _fr13_gdn_subop_mab_enabled()
             _fr12_pre_conv_spec = None
             if (
                 _fr12_subkernel_capture_enabled
@@ -3883,6 +4018,33 @@ def _fr13_gdn_subop_mab(
                 else:
                     _fr10_scan_branch_diag[19].add_(float(attn_metadata.num_spec_decodes))
                 _fr10_scan_branch_diag[22].add_(float(attn_metadata.num_spec_decodes))
+            # STAGE (ii) — CALL-SITE ENGAGEMENT (class-9, failure-#4 hole).  The
+            # conv-site stash runs on enabled() ALONE, but the A/B CALL below is
+            # gated on use_fr10_tree.  If the flag is ON yet use_fr10_tree is
+            # False on a spec-verify forward, the call is SILENTLY skipped (stash
+            # accumulates, zero records, zero log).  Emit ONE loud ERROR naming
+            # the failing precondition so the chase is never vacuous.  Observe-
+            # only; no effect on the live forward; no-op when the flag is OFF.
+            if _fr13_gdn_subop_mab_enabled() and not use_fr10_tree:
+                _fr13_subop_worker_env_gate()
+                _fr13_subop_stage(
+                    "callsite-skip",
+                    (
+                        "flag ON but use_fr10_tree False on a spec-verify forward "
+                        "(stash accumulates, A/B call skipped). reasons:"
+                        " FR10_ENABLE_TREE_GDN="
+                        + repr(os.environ.get("FR10_ENABLE_TREE_GDN"))
+                        + " decode_mode=" + repr(_fr10_active_decode_mode)
+                        + " tree_parent_set="
+                        + str(getattr(attn_metadata, "fr10_tree_parent", None) is not None)
+                        + " num_spec_decodes=" + str(attn_metadata.num_spec_decodes)
+                    ),
+                )
+                # release the orphaned stash so it cannot leak into a later event
+                self._fr13_gdn_subop_mab_pre_conv = None
+                self._fr13_gdn_subop_mab_conv_state = None
+            elif _fr13_gdn_subop_mab_enabled() and use_fr10_tree:
+                _fr13_subop_worker_env_gate()
             if use_fr10_tree:
                 assert spec_query_start_loc is not None
                 assert spec_state_indices_tensor is not None
@@ -3898,7 +4060,7 @@ def _fr13_gdn_subop_mab(
                     logger.warning_once(
                         "FR10 tree GDN verifier branch active for layer %s", self.prefix
                     )
-                if os.environ.get("FR13_GDN_SUBOP_MAB", "0") == "1":
+                if _fr13_gdn_subop_mab_enabled():
                     # FR13_GDN_SUBOP_MAB (default OFF, observe-only): re-run the
                     # L0-GDN sub-op sequence at M=10/M=5/M=1 on the SAME captured
                     # pre_conv + h0 + conv prior-window to localize WHERE the
@@ -13608,7 +13770,43 @@ def _patch_rejection_sampler_gpu_committer() -> bool:
     return True
 
 
+def _fr13_write_subop_mab_sidecar() -> None:
+    """Bake the FR13_GDN_SUBOP_MAB master switch into a sidecar flag file.
+
+    The patcher runs in pid 1 (entrypoint lineage) where the env var IS present.
+    The GDN forward runs in the mp/spawn EngineCore worker, whose curated env
+    drops the bare FR13_GDN_SUBOP_MAB (measured 2026-06-14).  /logs is a host +
+    worker visible bind mount, so writing the resolved flag here lets the patched
+    gate read it from the worker via _fr13_gdn_subop_mab_enabled().
+
+    Default-safe: when the master is OFF/absent we DELETE any stale flag so a
+    prior ON boot cannot leak into an OFF boot (the patched default path stays
+    byte-identical).  Only writes a non-empty flag when the master == "1".
+    """
+    flag_path = os.environ.get(
+        "FR13_GDN_SUBOP_MAB_FLAG_FILE", "/logs/fr13_gdn_subop_mab.flag"
+    )
+    on = os.environ.get("FR13_GDN_SUBOP_MAB", "0") == "1"
+    try:
+        if on:
+            os.makedirs(os.path.dirname(flag_path) or ".", exist_ok=True)
+            with open(flag_path, "w") as _fh:
+                _fh.write("1\n")
+            print(
+                "FR13_GDN_SUBOP_MAB sidecar written (worker-env bridge): "
+                + flag_path
+            )
+        else:
+            try:
+                os.remove(flag_path)
+            except FileNotFoundError:
+                pass
+    except Exception as exc:  # pragma: no cover - best-effort, fail-safe-OFF
+        print("FR13_GDN_SUBOP_MAB sidecar write failed: %s" % exc)
+
+
 def main() -> int:
+    _fr13_write_subop_mab_sidecar()
     patch_steps = [
         (REQUEST_PATH, _patch_request_decode_mode()),
         (SCHED_OUTPUT_PATH, _patch_sched_output_decode_mode()),
