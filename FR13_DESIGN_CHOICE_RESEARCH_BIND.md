@@ -21,11 +21,20 @@ seam-scan hypothesis but not the 02:25 refutation.)
   lossless risk).
 - Tree-reshape: complementary, being GPU-tested — see the drafter constraint below.
 
-## Hard drafter constraint (design-phase finding, sweep wf_2a3b22eb)
-The MTP drafter is HARDCODED: it exposes ONLY child-rank 0 (spine, every depth) + child-rank 1 (top-2 leaf)
-at spine depths 2-5. **No root sibling `(1,)`, no rank>=2 anywhere.** So the realizable reshape space =
-SUBSETS of cat9's 9 nodes (drop leaves / shorten spine); root-sibling/wider-shallow trees are NOT
-buildable without retraining the drafter. (Kills the FR13_CAT10_ROOT_SIBLING line as a no-code option.)
+## CORRECTION (2026-06-14, user caught it): the "no root sibling" drafter constraint is FALSE
+The sweep design agent claimed the drafter is hardcoded to spine + depth-2-5 top-2 leaf, "no root sibling
+`(1,)`, no rank>=2." **This is WRONG — cat10 disproves it.** cat10's TREE is
+`[(0,), (1,), (0,0), (1,0), (0,0,0), (1,0,0), (0,0,0,0), (1,0,0,0), (0,0,0,0,0), (1,0,0,0,0)]` — a root
+sibling `(1,)` PLUS a full second 5-chain off it. The MTP drafter produces the rank-1 root token fine;
+building a wider tree is just a different `TREE` env (num_spec auto-derived). So the realizable reshape
+space is NOT limited to subsets of cat9; root-sibling / wider trees ARE buildable with no retrain.
+**rank>=2 (top-3+) feasibility is still open** (re-check against the code, not the agent's claim).
+
+**AND cat10 already ran the "wider" experiment (FR13_CAT10_BIND.md, verdict no_help):** root-sibling cat10
+(10 nodes) = **22 clear-margin flips [2,6,8,6], FLAT vs cat9's 22 [6,6,4,6]** (redistributed p0 6->2,
+p2 4->8, net zero) AND **accept/event 3.198 -> 2.932 (worse)** + ~+1.3% s/fwd. So **adding WIDTH does NOT
+cut flips and HURTS accept** — the "shallower + wider root-sibling" reshape direction is empirically dead.
+The open reshape lever is LEANER/shallower (chain5 / cat7 / cat8 subsets), which `chain5` is testing now.
 
 ## Live suspects (Verify) + the DECISIVE control
 With geometry dead, the remaining sources of the cat9(22)-vs-native(3) excess are: (i) **tree co-residency**
