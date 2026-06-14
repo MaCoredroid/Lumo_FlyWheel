@@ -30,11 +30,27 @@ building a wider tree is just a different `TREE` env (num_spec auto-derived). So
 space is NOT limited to subsets of cat9; root-sibling / wider trees ARE buildable with no retrain.
 **rank>=2 (top-3+) feasibility is still open** (re-check against the code, not the agent's claim).
 
-**AND cat10 already ran the "wider" experiment (FR13_CAT10_BIND.md, verdict no_help):** root-sibling cat10
-(10 nodes) = **22 clear-margin flips [2,6,8,6], FLAT vs cat9's 22 [6,6,4,6]** (redistributed p0 6->2,
-p2 4->8, net zero) AND **accept/event 3.198 -> 2.932 (worse)** + ~+1.3% s/fwd. So **adding WIDTH does NOT
-cut flips and HURTS accept** — the "shallower + wider root-sibling" reshape direction is empirically dead.
-The open reshape lever is LEANER/shallower (chain5 / cat7 / cat8 subsets), which `chain5` is testing now.
+**SECOND CORRECTION (2026-06-14, user caught it again): "wider hurts accept" is ALSO WRONG.** My read of
+cat10 (accept 3.198->2.932 = "wider hurts") was hand-wavey and CONTRADICTS the standing directive +
+FR13_CAT10_INVESTIGATE_BIND.md (`wf_59bf2440`, verify holds=FALSE corrected it). The truth:
+- The accept drop is **NOT apples-to-apple**: cat9 and cat10 run DIFFERENT greedy streams (diverge early;
+  cat10 p0 hit EOS 25 tokens sooner = 73 vs 98 over 1 MORE event) = class-12 whole-window denominator
+  confound. Not a controlled comparison.
+- It is **NOT leaf-lossiness**: m1 (verify co-residency) STRUCTURALLY RULED OUT (strict_mask makes the
+  root-sibling row attention-invisible to every spine row — cannot contaminate spine acceptance); m3
+  (commit handoff) inert (sibling commits accepted_len=1). The d0->d1 drop is the **sibling-stop
+  denominator artifact** (sibling win caps at d0, deflating d1|d0; de-confounded d1|d0 recovers ~0.84+,
+  d2-d4 FLAT). Any residual real dilution is sub-ULP (extra row in the 16-pad tile) and UNMEASURED.
+- The root branch's **d0-rescue is REAL** (27% on near-tie roots); the future lever is the
+  CONFIDENCE-GATED root branch (FREE top2-margin gate). So root-sibling/wider is NOT "dead."
+
+What IS defensible: cat10 (full root branch) does **not REDUCE the 22-flip** — cat9 [6,6,4,6] and cat10
+[2,6,8,6] are 100% DISJOINT positions, same total 22, because the 22-flip is a **per-forward channel-2
+GDN-diffuse defect ORTHOGONAL to tree topology** (the same defect repositioned by the trajectory, NOT
+caused by width). So reshape REPOSITIONS the 22, and whether ANY topology change can REDUCE it is exactly
+what `chain5` tests (chain5~3 => topology/branches matter; chain5~22 => it's the per-forward kernel/handoff,
+topology-independent => reshape is a dead end for the flip count). Lesson: do NOT take cross-trajectory
+accept/event deltas at face value (class-12 confound); use per-node de-confounded counters.
 
 ## Live suspects (Verify) + the DECISIVE control
 With geometry dead, the remaining sources of the cat9(22)-vs-native(3) excess are: (i) **tree co-residency**
