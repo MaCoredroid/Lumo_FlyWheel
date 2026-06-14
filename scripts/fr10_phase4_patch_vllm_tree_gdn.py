@@ -1436,13 +1436,68 @@ def _fr13_gdn_subop_mab(
             else num_accepted_tokens[0:1].detach().clone().to(num_accepted_tokens.dtype)
         )
         width = int(conv_weights.shape[-1])
+        # ---- bounds-guard scaffolding (a CUDA device-side assert is a GPU-
+        # runtime fault that CPU wiring tests cannot catch; raise a CLEAN Python
+        # error here BEFORE any native-kernel launch so the engine never hits an
+        # OOB global read inside the triton kernel) -----------------------------
+        max_path_len = int(ssi0.shape[-1])
+        n_conv_banks = int(conv_state_snapshot.shape[0])
+        n_ssm_banks = int(ssm_state.shape[0])
+
+        def _guard_rows(rows):
+            # every selected tree-row must exist in the captured batch-0 block
+            # [0:tree_n) AND be a valid COLUMN of the [1, max_path_len] index
+            # table (index_select(1, idx) OOB is itself a CUDA assert).
+            for r in rows:
+                if not (0 <= int(r) < tree_n):
+                    raise RuntimeError(
+                        "FR13_GDN_SUBOP_MAB: row "
+                        + str(int(r))
+                        + " out of [0,tree_n=" + str(tree_n) + ")"
+                    )
+                if not (0 <= int(r) < max_path_len):
+                    raise RuntimeError(
+                        "FR13_GDN_SUBOP_MAB: row "
+                        + str(int(r))
+                        + " >= max_path_len=" + str(max_path_len)
+                        + " (index_select(1,.) OOB)"
+                    )
+
+        # The deep node's prior recurrent / conv state lives in the committed
+        # (path0[0]) bank.  Validate it is an in-range cache bank BEFORE passing
+        # it to either native kernel.
+        prior_conv_bank = int(ssi0[0, 0].item())
+        if not (0 <= prior_conv_bank < n_conv_banks):
+            raise RuntimeError(
+                "FR13_GDN_SUBOP_MAB: prior conv bank "
+                + str(prior_conv_bank)
+                + " out of [0," + str(n_conv_banks) + ")"
+            )
+        if not (0 <= prior_conv_bank < n_ssm_banks):
+            raise RuntimeError(
+                "FR13_GDN_SUBOP_MAB: prior ssm bank "
+                + str(prior_conv_bank)
+                + " out of [0," + str(n_ssm_banks) + ")"
+            )
 
         def _conv_arm(rows):
             m = len(rows)
+            _guard_rows(rows)
             idx = torch.tensor(rows, dtype=torch.long, device=dev)
             x = pre_conv0.index_select(0, idx).contiguous()
             cs = conv_state_snapshot.detach().clone()
             qsl = torch.tensor([0, m], dtype=spec_query_start_loc.dtype, device=dev)
+            # conv_state_indices = the single VALID committed bank (already
+            # guarded in-range above); the depthwise causal conv has no cross-
+            # bank reduction, so num_accepted_tokens (sliding-window offset) is
+            # the only spec-decode knob.  For the FULL (served-geometry) M10 arm
+            # keep the served num_accepted; for the REDUCED arms clamp the
+            # offset to the present row count so the kernel's conv_state_token_
+            # offset = nacc-1 stays within the cloned window.
+            if nacc is None:
+                conv_nacc = None
+            else:
+                conv_nacc = nacc.clamp(min=1, max=m)
             out = causal_conv1d_update(
                 x,
                 cs,
@@ -1450,7 +1505,7 @@ def _fr13_gdn_subop_mab(
                 self.conv1d.bias,
                 self.activation,
                 conv_state_indices=ssi0[:, 0],
-                num_accepted_tokens=(None if nacc is None else nacc.clamp(max=m)),
+                num_accepted_tokens=conv_nacc,
                 query_start_loc=qsl,
                 max_query_len=m,
                 validate_data=False,
@@ -1462,11 +1517,76 @@ def _fr13_gdn_subop_mab(
         # from the conv A/B: each arm slices the SAME a/b/q/k/v and re-runs the
         # recurrent core on a CLONED h0 (inplace_final_state must not mutate the
         # served state).
-        def _scan_arm(rows):
+        #
+        # FR13_SUBOP_AB_CRASHED_PIVOT_CHAIN3 FIX: the previous arm passed
+        # ssm_state_indices=ssi0.index_select(1, idx) + num_accepted_tokens=nacc.
+        # The scan kernel reads its INITIAL state at column i_t=nacc-1 and STORES
+        # per-timestep at columns 0..m-1 of that reduced table, indexing the LIVE
+        # multi-bank ssm_state cache by whatever bank id sits in those columns.
+        # For the reduced M5/M1 arms the deep node's column (ssi0[0, deep_row])
+        # is a BRANCH/LEAF bank that need not be a valid recurrent prior-state
+        # bank -> h0 + state_idx*stride is an OOB global read -> CUDA device-side
+        # assert.  Fix (verdict nextAction): for the reduced arms pass the deep
+        # node's prior state as a 1-row initial_state at bos=0 with a VALID bank
+        # and DISABLE the spec-decode i_t=nacc-1 column read (num_accepted_tokens
+        # =None -> initial read at column 0).  We build a [1,m] index table all
+        # pointing at the committed prior bank so every read/store hits one
+        # in-range bank; the deep node's true prior state already lives there.
+        # The FULL M10 arm keeps the served geometry (validated in-range).
+        def _scan_arm(rows, served_geom):
             m = len(rows)
+            _guard_rows(rows)
             idx = torch.tensor(rows, dtype=torch.long, device=dev)
             qsl = torch.tensor([0, m], dtype=spec_query_start_loc.dtype, device=dev)
             ss = ssm_state.detach().clone()
+            if served_geom:
+                # M10 = the FULL present tree in the SERVED flat layout; reuse the
+                # served per-node bank table and spec-decode offset verbatim (this
+                # is the reference arm; geometry guaranteed in-range by max_path_len
+                # >= tree_n and per-node valid banks).
+                scan_indices = ssi0.index_select(1, idx)
+                # served forward passes raw num_accepted (1 <= nacc <= tree_n);
+                # m == tree_n here so the i_t=nacc-1 init column is guaranteed
+                # in-range (asserted by the final guard below) -> keep it raw for
+                # a faithful served reference.
+                scan_nacc = None if nacc is None else nacc
+            else:
+                # REDUCED arms: clean 1-row-initial-state-at-bos=0-valid-bank.
+                # All m columns point at the single committed prior bank; the
+                # initial read (num_accepted_tokens=None -> column 0) loads the
+                # deep node's prior state from that valid bank.  inplace stores
+                # land in the cloned ss at that one bank (harmless; observe-only).
+                scan_indices = torch.full(
+                    (1, m),
+                    prior_conv_bank,
+                    dtype=ssi0.dtype,
+                    device=dev,
+                )
+                scan_nacc = None
+            # FINAL bank-range guard: every value the kernel will dereference must
+            # be a valid ssm cache bank (PAD_SLOT_ID=-1 is skipped by the kernel
+            # and allowed; any other negative or >= n_ssm_banks is an OOB read).
+            _bank_vals = scan_indices.reshape(-1).tolist()
+            for _bv in _bank_vals:
+                _bvi = int(_bv)
+                if _bvi == -1:
+                    continue
+                if not (0 <= _bvi < n_ssm_banks):
+                    raise RuntimeError(
+                        "FR13_GDN_SUBOP_MAB: scan ssm bank "
+                        + str(_bvi)
+                        + " out of [0," + str(n_ssm_banks) + ")"
+                        + " (served_geom=" + str(bool(served_geom)) + ")"
+                    )
+            if scan_nacc is not None:
+                # the kernel reads the initial state at column i_t=nacc-1; that
+                # column must exist in the [1,m] table.
+                _ni = int(scan_nacc.reshape(-1).max().item()) - 1
+                if not (0 <= _ni < m):
+                    raise RuntimeError(
+                        "FR13_GDN_SUBOP_MAB: nacc-1=" + str(_ni)
+                        + " out of [0,m=" + str(m) + ") init-state column"
+                    )
             out, _ = fused_sigmoid_gating_delta_rule_update(
                 A_log=self.A_log,
                 a=a0.index_select(0, idx).contiguous(),
@@ -1478,8 +1598,8 @@ def _fr13_gdn_subop_mab(
                 initial_state=ss,
                 inplace_final_state=True,
                 cu_seqlens=qsl,
-                ssm_state_indices=ssi0.index_select(1, idx),
-                num_accepted_tokens=(None if nacc is None else nacc.clamp(max=m)),
+                ssm_state_indices=scan_indices,
+                num_accepted_tokens=scan_nacc,
                 use_qk_l2norm_in_kernel=True,
             )
             return out.squeeze(0).detach()
@@ -1569,9 +1689,12 @@ def _fr13_gdn_subop_mab(
         except Exception:
             subops["conv1d_out"]["served_fused_vs_native_decode_max_abs"] = None
         # ----- scan_out (recurrent core) --------------------------------------
-        scan_m10 = _scan_arm(full_rows)
-        scan_m5 = _scan_arm(spine_rows)
-        scan_m1 = _scan_arm(m1_rows)
+        # M10 = served flat geometry (reference, served bank table); M5/M1 =
+        # reduced arms (clean 1-row-initial-state-at-bos=0-valid-bank, no live
+        # multi-bank index into branch/leaf banks -> no OOB CUDA assert).
+        scan_m10 = _scan_arm(full_rows, served_geom=True)
+        scan_m5 = _scan_arm(spine_rows, served_geom=False)
+        scan_m1 = _scan_arm(m1_rows, served_geom=False)
         subops["scan_out"] = _triplet(scan_m10, scan_m5, scan_m1)
         # Clean co-residency verdict: first sub-op whose deep-row M10-vs-M5 RAW
         # crosses threshold = the carrier's birthplace (branch rows present vs
