@@ -6372,12 +6372,12 @@ def _fr13_replay_durable_ab_enabled():
     global _FR13_RDAB_FLAG
     if _FR13_RDAB_FLAG is not None:
         return _FR13_RDAB_FLAG
-    val = os.environ.get("FR13_REPLAY_DURABLE_AB")
+    val = __import__('os').environ.get("FR13_REPLAY_DURABLE_AB")
     if val is not None and val != "":
         _FR13_RDAB_FLAG = val == "1"
         return _FR13_RDAB_FLAG
     try:
-        flag_path = os.environ.get(
+        flag_path = __import__('os').environ.get(
             "FR13_REPLAY_DURABLE_AB_FLAG_FILE",
             "/logs/fr13_replay_durable_ab.flag",
         )
@@ -6424,13 +6424,13 @@ def _fr13_rdab_emit(record):
     except Exception:
         pass
     if _FR13_RDAB_FH is None:
-        _path = os.environ.get(
+        _path = __import__('os').environ.get(
             "FR13_REPLAY_DURABLE_AB_PATH",
             "/logs/fr13_replay_durable_ab.jsonl",
         )
-        _parent = os.path.dirname(_path)
+        _parent = __import__('os').path.dirname(_path)
         if _parent:
-            os.makedirs(_parent, exist_ok=True)
+            __import__('os').makedirs(_parent, exist_ok=True)
         _FR13_RDAB_FH = open(_path, "a", buffering=1)
     if not _FR13_RDAB_HEADER_DONE:
         _FR13_RDAB_HEADER_DONE = True
@@ -6438,10 +6438,10 @@ def _fr13_rdab_emit(record):
             "tap": "header",
             "regime": "eager",
             "ts": round(__import__("time").time(), 6),
-            "pid": os.getpid(),
+            "pid": __import__('os').getpid(),
             "ref_kernel": "fused_sigmoid_gating_delta_rule_update",
             "flags": {
-                _k: os.environ.get(_k)
+                _k: __import__('os').environ.get(_k)
                 for _k in (
                     "FR13_REPLAY_DURABLE_AB",
                     "FR13_REPLAY_DURABLE_AB_LAYERS",
@@ -6463,7 +6463,7 @@ def _fr13_rdab_emit(record):
 
 def _fr13_rdab_layer_match(prefix):
     """Optional layer filter (default: every GDN layer)."""
-    pats = os.environ.get("FR13_REPLAY_DURABLE_AB_LAYERS", "")
+    pats = __import__('os').environ.get("FR13_REPLAY_DURABLE_AB_LAYERS", "")
     if not pats.strip():
         return True
     return any(

@@ -26,7 +26,6 @@ This CPU test pins (live GPU boot remains the binding gate, class 8):
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 
@@ -57,6 +56,26 @@ def test_flag_guard_present_default_off() -> None:
     # Default-safe: only the patch-time sidecar writer reads the bare master env
     # (pid 1); the worker-side resolver consults env-or-sidecar.
     assert SRC.count('os.environ.get("FR13_REPLAY_DURABLE_AB", "0")') == 1
+
+
+def test_rdab_helper_no_bare_os_in_rejection_sampler_namespace() -> None:
+    # The committer helper raw string is exec'd in rejection_sampler.py, whose
+    # module namespace has `torch`/`logger` but NOT bare `os`/`json`/`time`
+    # (those exist only as __import__(...) or `_lumo_fb_rs_os`-style aliases).
+    # The 2026-06-14 boot died on a bare `os.environ` NameError inside the RDAB
+    # resolver. Pin the working idiom: the durable-AB helper functions must use
+    # `__import__('os')`, never bare `os.`/`json.`/`time.`.
+    helper = _extract_helper()
+    # Slice out just the RDAB region (between its banner and the next major def)
+    start = helper.index("def _fr13_replay_durable_ab_enabled():")
+    end = helper.index("def _lumo_tree_path_lcp_max", start)
+    rdab = helper[start:end]
+    for mod in ("os", "json", "time", "sys"):
+        bad = re.findall(rf"(?<![_a-zA-Z'\"\.]){mod}\.[a-z]", rdab)
+        assert not bad, (
+            f"bare `{mod}.` in RDAB helper (unbound in rejection_sampler ns) "
+            f"-> use __import__('{mod}'): {bad}"
+        )
 
 
 def test_stage_markers_class9() -> None:
@@ -112,12 +131,14 @@ def _exec_helper(stub_native, fake_enabled):
         def __getattr__(self, n):
             return lambda *a, **k: None
 
+    # Mirror the REAL rejection_sampler.py module namespace: it imports `torch`
+    # and `logger` (init_logger) at module scope, but NOT bare `os`/`json`/
+    # `time` (those are only available via __import__(...) inside the helper).
+    # Seeding `os`/`json`/`time` here would VACUOUSLY pass any bare-`os.` usage
+    # (class 9) -- the boot 2026-06-14 died on exactly such a bare `os.environ`
+    # NameError that this test had been masking. Keep the namespace faithful.
     ns = {
-        "os": os,
-        "json": json,
         "torch": torch,
-        "hashlib": __import__("hashlib"),
-        "time": __import__("time"),
         "logger": _Logger(),
     }
     compile(body, "<lcp_helper>", "exec")
