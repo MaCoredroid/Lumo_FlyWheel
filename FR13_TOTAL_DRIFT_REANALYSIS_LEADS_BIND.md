@@ -4,9 +4,12 @@ Date 2026-06-14. Distilled from `FR13_TOTAL_DRIFT_REANALYSIS.md` (committed `473
 CPU re-derivation of the 21 baked flips). My red-team: HOLDS — appropriately hedged (2-3 un-aligned seams +
 cascade inflation, NOT a single magic carrier like the prior overstated FA2-tile / BV-warps / width-H1
 hypotheses). Two load-bearing claims CODE-CONFIRMED this tick:
-- **Decode backend = TREE_ATTN, FA2 fork = PREFILL-only** (`fr13_launch_locked.sh`: `FR13_TREE_ATTN_EXP2_SOFTMAX=1`
-  + `FR13_FA2_PREFILL_NATIVE=1`, boot echo "TREE_ATTN"). ⇒ the FA2 2-ULP whole-tree floor we kept citing is
-  PREFILL-only; it does NOT bound the live decode flips.
+- ~~**Decode backend = TREE_ATTN, FA2 fork = PREFILL-only**~~ **CORRECTED 2026-06-14 — WRONG (see
+  FR13_FA2_FORK_IS_DECODE_KERNEL_CORRECTION.md).** `fr13_launch_locked.sh:24` exports `FR13_FA2_TREE_BIAS=1`
+  (missed in the original grep) ⇒ the **FA2-fork IS the deployed decode kernel** for cat9 (max_query_len=9>1
+  routes to `flash_attn_varlen_func(tree_bias=...)`). The 0.00195 is the `unified_attention` EXP2-Triton
+  FALLBACK residual, shadowed OFF. The live full-attn decode is at the fork's 0.0039 floor (lossless,
+  ~15× below E5). Full-attn is NOT the carrier ⇒ reinforces the replay (L0-GDN-upstream) pivot.
 - **Replay route always-on** (`if True: # FR13_REPLAY_ROUTE baked ON`); its byte-A/B was replay-vs-OUR-scan,
   never vs native MTP's `fused_sigmoid_gating_delta_rule_update`.
 

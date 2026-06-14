@@ -40,13 +40,14 @@ durable state's spec IS the sequential recurrent state after the accepted tokens
 TREE_ATTN. Reuses the PROVEN SUBOP_MAB sidecar-env + stage markers; operates on the LINEAR accepted chain to
 DODGE the reduced-row assert that killed conv/scan 5×.
 
-## OPEN FRONT 2 (CPU, wkaexrv30) — FA2-tree-for-decode feasibility  [0.00195 DELIVERABLE axis]
-User question: why TREE_ATTN (separate Triton kernel, 0.00195 vs FLASH) for decode instead of our FA2-fork
-(native FLASH + additive -inf tree bias, byte-exact floor 14/16 whole-tree 0.0)? **Axis note (do not
-conflate):** the 0.00195 is the DELIVERABLE-vs-E5 axis; the 21 flips are vs cat9's own oracle where the
-backend CANCELS. So FA2-tree targets the deliverable, replay targets the 21. Investigating: why prefill-only,
-can it serve decode + CUDA-graph + B=4, would it close 0.00195 (is the decode paged kernel native-FLASH+bias
-or different?). FLASH+tree-mask is the user-sanctioned fallback, NOT a reroute.
+## ~~OPEN~~ CLOSED FRONT 2 (CPU, wkaexrv30 DONE) — FA2-tree-for-decode  [0.00195 DELIVERABLE axis]
+**ANSWERED + closed (FR13_FA2_FORK_IS_DECODE_KERNEL_CORRECTION.md):** PREMISE WAS FALSE — `FR13_FA2_TREE_BIAS=1`
+in the locked launcher means the **FA2-fork is ALREADY the deployed decode kernel** (cat9 max_query_len=9>1 →
+`flash_attn_varlen_func(tree_bias=...)`). The 0.00195 is the `unified_attention` EXP2-Triton FALLBACK residual,
+shadowed OFF = MOOT; nothing to swap. Live full-attn decode = fork floor 0.0039 (lossless, ~15× below E5);
+FULL-captures + serves at B=4. Full-attn is NOT the carrier (node7 first-nonzero L0 GDN 0.0078 upstream of L3
+full-attn 0.00409) ⇒ **reinforces the replay (L0-GDN cross-event) pivot.** Legitimate (fork = FLASH+tree-mask,
+the sanctioned fallback, byte-verified splice-OFF), not a reroute. No GPU test needed.
 
 ## Standing
 2/2 (1 GPU + 1 CPU). Per-forward kernels all M-invariant; the residual is now hypothesized as cross-event
