@@ -49,3 +49,24 @@ doesn't change real rows; verify det [T,T,T,T] + default-OFF still 22). Stays 22
 wrong → the extended in_proj_ba re-run A/B. Pairs with [[reference_diffuse_gdn_accumulation_explained]],
 [[project_fr13_22flip_carrier_l0gdn]], [[feedback_no_reroute_reward_hacking]],
 [[reference_gb10_gdn_backend_fla]], [[feedback_check_artifact_before_concluding]] (the cat9+BI=34 reinterpret).
+
+## RESULT (2026-06-14, BA_PROJ_BI_ON, GPU boot, commit 9a99bb44 patcher)
+cat9 + LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 (in_proj_ba + out_proj padded to a FIXED
+M=16*row_len group, M-invariant; lossless-by-construction CPU check: padded real-row == per-row
+W@hidden[row] byte-exact at fixed pad_rows). Instrument fr13_oracle_stream_teacher_force.py thr 1.0
+prompts_swe4 each-vs-own oracle.
+
+**total_clear_margin_flips = 18** (baseline 22 / pure-spine 5 / native 3). per_prompt [4,4,4,6].
+Gates ALL PASS: tok/draft=9.0==len(TREE) (class-9 engaged), within_boot_det [T,T,T,T] capture +
+within_boot_det_all_prompts=true oracle (class-8), spec_metrics_delta_during_oracle=0 (class-12 oracle
+clean, no spec-counter advance), accept/event=3.017 (721 acc / 239 drafts, leaf edge preserved, ~= native 3.0).
+
+**VERDICT: PARTIAL — neither BIND-doc branch.** Not 22 (flag is NOT inert; the pad path engaged and the
+fix is real) and not ~5 (in_proj_ba M-keying is NOT the dominant carrier). The bf16 in_proj_ba GEMM
+Split-K shift accounts for ~4 of the +17 width co-residency flips (22->18, ~18%). The residual +13 (18 vs
+pure-spine 5) is OTHER co-residency channel(s) on the spine when leaves are co-resident — H1 in_proj_ba is
+a CONTRIBUTOR, not the sole carrier. Default-OFF byte-identity unaffected (locked cat9 [6,6,4,6]; gate-OFF
+proven additive). NEXT (for the user): the +13 residual needs its own localization (the extended in_proj_ba
+re-run A/B per the doc covers only the ba seam; the rest is a fresh carrier hunt — candidate channels:
+fp8 in_proj_qkvz M-keying, gate/o_proj co-residency, full-attn KV co-residency). LOSSLESS + leaf-edge
+intact, so BA_PROJ_BI_ON is a keep-able partial improvement (default-OFF, flag-gated).
