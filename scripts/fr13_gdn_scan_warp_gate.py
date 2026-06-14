@@ -68,11 +68,39 @@ native_update_serial_per_path = _validation.native_update_serial_per_path
 # Geometry arms. Each arm sets FR13_TREE_GDN_GEOM_OVERRIDE; the DEPLOYED arm
 # leaves it unset so the served byte-identical launch is exercised directly.
 # ---------------------------------------------------------------------------
+# Each arm is one (geometry, scan-align) configuration of the SAME served
+# launch. The DEPLOYED arm leaves both env vars unset (the byte-identical locked
+# path). The try-order from the FR13_SCAN_ALIGNMENT_MATH plan:
+#   (1) GEOMETRY pre-test  : value-neutral BV32/w1/s3 launch-override on the
+#       UNCHANGED scan (geom only; no body seams). If this matches native at
+#       N_PAD=1, geometry IS the dominant seam.
+#   (2) BODY SEAMS         : FR13_SCAN_ALIGN=1 (l2norm div-by-sqrt + beta bf16).
+#   (3) RECOMPUTE-FROM-SPINE: FR13_SCAN_ALIGN=1 + MODE=recompute at native
+#       BV32/w1/s3 -- the DEPLOYABLE geometry fix (spill-free, no co-residency).
 ARMS = [
-    {"name": "BV16_w8_DEPLOYED", "override": None},  # env unset = served path
-    {"name": "BV32_w4_native_geom", "override": "BV=32,num_warps=4,num_stages=3"},
-    {"name": "BV8_w8", "override": "BV=8,num_warps=8"},
-    {"name": "BV8_w4", "override": "BV=8,num_warps=4"},
+    {"name": "BV16_w8_DEPLOYED", "override": None, "scan_align": None},
+    # (1) geometry pre-test, native packed-decode launch on the unchanged body.
+    {
+        "name": "BV32_w1_s3_native_geom",
+        "override": "BV=32,num_warps=1,num_stages=3",
+        "scan_align": None,
+    },
+    # Legacy w4 geom arm retained for continuity with the prior gate.
+    {
+        "name": "BV32_w4_native_geom",
+        "override": "BV=32,num_warps=4,num_stages=3",
+        "scan_align": None,
+    },
+    # (2) body seams only, deployed geometry.
+    {"name": "BODY_SEAMS_BV16_w8", "override": None, "scan_align": "body"},
+    # (2)+(1) body seams at native geom.
+    {
+        "name": "BODY_SEAMS_BV32_w1_s3",
+        "override": "BV=32,num_warps=1,num_stages=3",
+        "scan_align": "body",
+    },
+    # (3) recompute-from-spine: native geom is selected inside the launcher.
+    {"name": "RECOMPUTE_FROM_SPINE", "override": None, "scan_align": "recompute"},
 ]
 
 
@@ -81,6 +109,16 @@ def _set_geom(override: str | None) -> None:
         os.environ.pop("FR13_TREE_GDN_GEOM_OVERRIDE", None)
     else:
         os.environ["FR13_TREE_GDN_GEOM_OVERRIDE"] = override
+
+
+def _set_scan_align(mode: str | None) -> None:
+    """mode None => SCAN_ALIGN off; 'body'/'recompute' => on with that mode."""
+    if mode is None:
+        os.environ.pop("FR13_SCAN_ALIGN", None)
+        os.environ.pop("FR13_SCAN_ALIGN_MODE", None)
+    else:
+        os.environ["FR13_SCAN_ALIGN"] = "1"
+        os.environ["FR13_SCAN_ALIGN_MODE"] = mode
 
 
 def _max_abs(left: torch.Tensor, right: torch.Tensor) -> float:
@@ -189,9 +227,15 @@ def _build_inputs(payload: dict[str, Any], rows: torch.Tensor, device: torch.dev
     )
 
 
-def _run_tree(arm_override, inp, tree, n_actual, n_pad, strict, visible):
-    """Launch the deployed scan under one geometry arm; returns (out, state)."""
+def _run_tree(arm_override, inp, tree, n_actual, n_pad, strict, visible, scan_align=None):
+    """Launch the deployed scan under one (geometry, scan-align) arm.
+
+    Returns (out, state). The geometry override and the FR13_SCAN_ALIGN body
+    seams / recompute route are set in env around the launch and always cleared
+    in `finally`, so the deployed arm (both None) is the byte-identical path.
+    """
     _set_geom(arm_override)
+    _set_scan_align(scan_align)
     try:
         tree_out, tree_state = launch_tree_gdn_prepared(
             q=inp["q"],
@@ -213,8 +257,12 @@ def _run_tree(arm_override, inp, tree, n_actual, n_pad, strict, visible):
         )
     finally:
         _set_geom(None)
+        _set_scan_align(None)
     torch.cuda.synchronize()
-    return tree_out[:n_actual].contiguous(), tree_state[:n_actual].contiguous()
+    state_out = (
+        tree_state[:n_actual].contiguous() if tree_state is not None else None
+    )
+    return tree_out[:n_actual].contiguous(), state_out
 
 
 def _run_case(
@@ -287,18 +335,29 @@ def _run_case(
     arms_out: list[dict[str, Any]] = []
     for arm in ARMS:
         tree_out, tree_state = _run_tree(
-            arm["override"], inp, tree, n_actual, n_pad, strict, visible
+            arm["override"],
+            inp,
+            tree,
+            n_actual,
+            n_pad,
+            strict,
+            visible,
+            scan_align=arm.get("scan_align"),
+        )
+        state_cmp = (
+            _compare("native_packed_decode", tree_state, native_state)
+            if tree_state is not None
+            else {"ref": "native_packed_decode", "skipped": "no state returned"}
         )
         arms_out.append(
             {
                 "arm": arm["name"],
                 "override": arm["override"],
+                "scan_align": arm.get("scan_align"),
                 "out_vs_native_packed": _compare(
                     "native_packed_decode", tree_out, native_out
                 ),
-                "state_vs_native_packed": _compare(
-                    "native_packed_decode", tree_state, native_state
-                ),
+                "state_vs_native_packed": state_cmp,
                 "out_vs_serial_torch": _compare(
                     "native_update_serial_per_path", tree_out, serial_out
                 ),

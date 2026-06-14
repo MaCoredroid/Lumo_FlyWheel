@@ -58,6 +58,51 @@ def _read_tree_gdn_geom_override() -> dict | None:
     return out or None
 
 
+# Native packed-decode launch geometry, re-grounded on the pinned image
+# (vllm_src.sh model_executor/layers/fla/ops/fused_recurrent.py:437-439):
+#   BV = min(next_power_of_2(V), 32) = 32,  num_warps = 1,  num_stages = 3.
+# The recompute-from-spine route (FR13_SCAN_ALIGN with mode=recompute) launches
+# at these values so the per-node tile partitions the 128-lane K-reduce the same
+# way the incumbent decode SASS does.
+_NATIVE_PACKED_BV = 32
+_NATIVE_PACKED_NUM_WARPS = 1
+_NATIVE_PACKED_NUM_STAGES = 3
+
+
+def scan_align_on() -> bool:
+    """Whether the FR13_SCAN_ALIGN body-seam alignment is enabled.
+
+    Default OFF: when ``FR13_SCAN_ALIGN`` is unset/0/false the served scan is
+    BYTE-IDENTICAL to the locked cat9 path -- the SCAN_ALIGN constexpr threads
+    through ``_gdn_node_step`` as ``False`` and every aligned branch is dead
+    code (no codegen change, bug-class #10). The flag turns on the two body
+    seams (l2norm div-by-sqrt, beta bf16 round-trip) that align our rank-1
+    node update to the native packed-decode SASS.
+    """
+    raw = os.environ.get("FR13_SCAN_ALIGN", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def scan_align_mode() -> str:
+    """Deployable geometry route for FR13_SCAN_ALIGN.
+
+    ``FR13_SCAN_ALIGN_MODE`` selects how the geometry seam is realized:
+      * ``body`` (default): body seams only on the UNCHANGED scan launch
+        geometry (BV16/w8) -- the cheap body-seam A/B.
+      * ``recompute``: the deployable geometry fix -- recompute each tree node
+        from the spine (ancestry replay, one [BLOCK_V, DIM_K] fp32 tile, no
+        h_cache) at native BV32/w1/s3, removing leaf co-residency.
+    The mode is only consulted when scan_align_on() is True; when SCAN_ALIGN is
+    off the served path never reads it.
+    """
+    raw = os.environ.get("FR13_SCAN_ALIGN_MODE", "body").strip().lower()
+    if raw not in ("body", "recompute"):
+        raise ValueError(
+            f"FR13_SCAN_ALIGN_MODE={raw!r} not in {{body, recompute}}"
+        )
+    return raw
+
+
 @dataclass(frozen=True)
 class Tree:
     parent: tuple[int, ...]
@@ -389,6 +434,7 @@ def _gdn_node_step(
     OUTPUT_SCALE: tl.constexpr,
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
     RAW_GATING: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr = False,
 ):
     # FR13_REPLAY_ROUTE shared per-node update body. This is the SINGLE
     # source of the GDN rank-1 node update used by BOTH the tree scan kernel
@@ -410,10 +456,29 @@ def _gdn_node_step(
             x,
         )
         b_g = -tl.exp(b_a_log) * softplus_x
-        b_beta = tl.sigmoid(b_raw_b.to(tl.float32))
+        # SEAM e (beta): native packed-decode is
+        #   tl.sigmoid(b_val).to(b.dtype.element_ty).to(tl.float32)
+        # (fused_recurrent.py:325 on the pinned image) -- a bf16 round-trip,
+        # since b.dtype is bf16. Ours omits the round-trip (fp32-carry, MORE
+        # precise). SCAN_ALIGN reproduces the native bf16 cast so the served
+        # scan's beta matches the incumbent decode bit-for-bit.
+        if SCAN_ALIGN:
+            b_beta = tl.sigmoid(b_raw_b.to(tl.float32)).to(tl.bfloat16).to(tl.float32)
+        else:
+            b_beta = tl.sigmoid(b_raw_b.to(tl.float32))
     if USE_QK_L2NORM_IN_KERNEL:
-        b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
-        b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
+        # SEAM d (l2norm): native packed-decode is
+        #   b_q = b_q / tl.sqrt(tl.sum(b_q*b_q) + 1e-6)
+        # (fused_recurrent.py:314-315). Ours uses tl.rsqrt(...) -- the same
+        # math but a DIFFERENT opcode (rcp+sqrt fused vs div), so the last bit
+        # can differ. eps (1e-6) already matches. SCAN_ALIGN swaps to the
+        # native div-by-sqrt form.
+        if SCAN_ALIGN:
+            b_q = b_q / tl.sqrt(tl.sum(b_q * b_q) + 1e-6)
+            b_k = b_k / tl.sqrt(tl.sum(b_k * b_k) + 1e-6)
+        else:
+            b_q = b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)
+            b_k = b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)
     b_q = b_q * OUTPUT_SCALE
     state_i *= tl.exp(b_g)
     b_v -= tl.sum(state_i * b_k[None, :], axis=1)
@@ -459,6 +524,7 @@ def _tree_gdn_kernel(
     RAW_GATING: tl.constexpr,
     COUNT_INVOCATION: tl.constexpr,
     STORE_NODE_STATES: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr = False,
 ):
     pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
@@ -563,6 +629,7 @@ def _tree_gdn_kernel(
             OUTPUT_SCALE=OUTPUT_SCALE,
             USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
             RAW_GATING=RAW_GATING,
+            SCAN_ALIGN=SCAN_ALIGN,
         )
         h_cache = tl.where((offs_n == i)[:, None, None], state_i[None, :, :], h_cache)
         tl.store(
@@ -581,6 +648,186 @@ def _tree_gdn_kernel(
                 state_i,
                 mask=(i < N_ACTUAL) & v_mask[:, None],
             )
+
+
+@triton.jit
+def _tree_gdn_recompute_kernel(
+    q,
+    k,
+    v,
+    g,
+    beta,
+    raw_a,
+    raw_b,
+    A_log,
+    dt_bias,
+    h0,
+    h0_indices,
+    h0_num_accepted_tokens,
+    invocation_counter,
+    strict_mask,
+    visible_mask,
+    out,
+    state,
+    N_ACTUAL: tl.constexpr,
+    N_PAD: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    DIM_V: tl.constexpr,
+    BLOCK_V: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    H0_IS_BANK: tl.constexpr,
+    H0_INDEX_ROW: tl.constexpr,
+    H0_BATCH_INDEX: tl.constexpr,
+    H0_BANK_STRIDE: tl.constexpr,
+    H0_USE_ACCEPTED_COLUMN: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+    COUNT_INVOCATION: tl.constexpr,
+    STORE_NODE_STATES: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr = False,
+):
+    # FR13_SCAN_ALIGN recompute-from-spine (SRAM EXIT-2, re-pinned to native
+    # w1/s3). DEPLOYABLE geometry fix: signature-identical to _tree_gdn_kernel
+    # (same out/state semantics) so it is a drop-in for the served scan, but it
+    # drops the (N_PAD, BLOCK_V, DIM_K) h_cache. Instead each output node i
+    # REPLAYS its full ancestry chain from h0 into ONE [BLOCK_V, DIM_K] fp32
+    # tile, exactly like _tree_gdn_replay_kernel's no-h_cache structure, reusing
+    # the shared _gdn_node_step body (with SCAN_ALIGN body seams). Two
+    # consequences vs the h_cache scan:
+    #   (1) spill-free at any tree size -- one tile, never ~2048 regs/lane, so
+    #       it can launch at native BV32/num_warps=1/num_stages=3.
+    #   (2) each node is computed from the spine independently, so there is NO
+    #       leaf co-residency (the +9-13 leaf-co-residency carrier is removed).
+    # Bit-exact-by-construction to a per-path serial recurrence: each node's
+    # output is its path-to-root replayed in isolation, which is the same
+    # definition the native packed-decode reference uses per path.
+    #
+    # HANDOFF NOTE: unlike _tree_gdn_kernel, there is NO parent-handoff `-0.0 ->
+    # +0.0` flip here -- the state stays in registers across the j-loop, exactly
+    # like the native per-path recurrence (which never round-trips state through
+    # an HBM gather). The scan's handoff flip lives in its h_cache gather and is
+    # reproduced by _tree_gdn_replay_kernel's `state = state + 0.0`; recompute
+    # MUST omit it to match native, NOT our own h_cache scan.
+    pid_vh = tl.program_id(0)
+    pid_v = tl.program_id(1)
+    head_group = NUM_VH // NUM_KH
+    pid_kh = pid_vh // head_group
+    offs_n = tl.arange(0, N_PAD)
+    offs_k = tl.arange(0, DIM_K)
+    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    v_mask = offs_v < DIM_V
+    if COUNT_INVOCATION:
+        tl.atomic_add(
+            invocation_counter,
+            1,
+            sem="relaxed",
+            mask=(pid_vh == 0) & (pid_v == 0),
+        )
+
+    h0_base = h0
+    if H0_IS_BANK:
+        h0_column = 0
+        if H0_USE_ACCEPTED_COLUMN:
+            h0_column = tl.maximum(
+                tl.load(h0_num_accepted_tokens + H0_BATCH_INDEX).to(tl.int64) - 1,
+                0,
+            )
+        h0_index = tl.load(h0_indices + H0_INDEX_ROW + h0_column)
+        h0_base = h0 + h0_index * H0_BANK_STRIDE
+    b_h0 = tl.load(
+        h0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+        mask=v_mask[:, None],
+        other=0.0,
+    ).to(tl.float32)
+
+    b_a_log = tl.load(A_log + pid_vh).to(tl.float32) if RAW_GATING else 0.0
+    b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32) if RAW_GATING else 0.0
+
+    for i in tl.static_range(0, N_PAD):
+        # One fresh tile per output node: replay the whole path-to-root in
+        # ascending node order (parent < child by tree construction, so j
+        # ascending is a topological replay of the ancestry chain), then node i.
+        state_i = b_h0
+        out_i = tl.zeros((BLOCK_V,), dtype=tl.float32)
+        for j in tl.static_range(0, N_PAD):
+            # j is replayed iff it is on node i's path: an ancestor
+            # (strict_mask[i, j]) or i itself. Inactive j leaves state_i
+            # untouched via tl.where(on_path, ...).
+            is_anc = (tl.load(strict_mask + i * N_PAD + j) != 0)
+            on_path = ((j == i) | is_anc) & (j < N_ACTUAL) & (i < N_ACTUAL)
+            b_q = tl.load(
+                q + (j * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=on_path,
+                other=0.0,
+            ).to(tl.float32)
+            b_k = tl.load(
+                k + (j * NUM_KH + pid_kh) * DIM_K + offs_k,
+                mask=on_path,
+                other=0.0,
+            ).to(tl.float32)
+            b_v = tl.load(
+                v + (j * NUM_VH + pid_vh) * DIM_V + offs_v,
+                mask=on_path & v_mask,
+                other=0.0,
+            ).to(tl.float32)
+            b_b = tl.load(
+                beta + j * NUM_VH + pid_vh,
+                mask=on_path,
+                other=0.0,
+            ).to(tl.float32)
+            b_g = tl.load(
+                g + j * NUM_VH + pid_vh,
+                mask=on_path,
+                other=0.0,
+            ).to(tl.float32)
+            b_raw_a = b_g
+            b_raw_b = b_b
+            if RAW_GATING:
+                b_raw_b = tl.load(
+                    raw_b + j * NUM_VH + pid_vh,
+                    mask=on_path,
+                    other=0.0,
+                ).to(tl.float32)
+                b_raw_a = tl.load(
+                    raw_a + j * NUM_VH + pid_vh,
+                    mask=on_path,
+                    other=0.0,
+                ).to(tl.float32)
+            new_state, out_j = _gdn_node_step(
+                state_i,
+                b_q,
+                b_k,
+                b_v,
+                b_b,
+                b_g,
+                b_raw_a,
+                b_raw_b,
+                b_a_log,
+                b_dt_bias,
+                OUTPUT_SCALE=OUTPUT_SCALE,
+                USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+                RAW_GATING=RAW_GATING,
+                SCAN_ALIGN=SCAN_ALIGN,
+            )
+            state_i = tl.where(on_path[:, None], new_state, state_i)
+            # The output for node i is produced when j == i (the last replayed
+            # step on the path). out_j for j != i is discarded; j == i is always
+            # reached since i is on its own path.
+            out_i = tl.where(j == i, out_j, out_i)
+        tl.store(
+            out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
+            out_i,
+            mask=(i < N_ACTUAL) & v_mask,
+        )
+        if STORE_NODE_STATES:
+            tl.store(
+                state + ((i * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+                state_i,
+                mask=(i < N_ACTUAL) & v_mask[:, None],
+            )
+
 
 @triton.jit
 def _tree_gdn_replay_kernel(
@@ -613,6 +860,7 @@ def _tree_gdn_replay_kernel(
     OUTPUT_SCALE: tl.constexpr,
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
     RAW_GATING: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr = False,
 ):
     # FR13_REPLAY_ROUTE accepted-path chain replay (sibling of the scan).
     #
@@ -725,6 +973,7 @@ def _tree_gdn_replay_kernel(
             OUTPUT_SCALE=OUTPUT_SCALE,
             USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
             RAW_GATING=RAW_GATING,
+            SCAN_ALIGN=SCAN_ALIGN,
         )
         state = tl.where(active, new_state, state)
         if t == 0:
@@ -880,6 +1129,7 @@ def launch_tree_gdn_replay(
         OUTPUT_SCALE=output_scale,
         USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
         RAW_GATING=True,
+        SCAN_ALIGN=scan_align_on(),
         num_warps=8,
     )
 
@@ -923,6 +1173,7 @@ def _tree_gdn_replay_all_layers_kernel(
     OUTPUT_SCALE: tl.constexpr,
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
     RAW_GATING: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr = False,
 ):
     # FR13_EAGER_PACK (FIX-2 item 2b): all-layer batched sibling of
     # _tree_gdn_replay_kernel. ONE launch covers every GDN layer; pid0 packs
@@ -1067,6 +1318,7 @@ def _tree_gdn_replay_all_layers_kernel(
             OUTPUT_SCALE=OUTPUT_SCALE,
             USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
             RAW_GATING=RAW_GATING,
+            SCAN_ALIGN=SCAN_ALIGN,
         )
         state = tl.where(active, new_state, state)
         if t == 0:
@@ -1321,6 +1573,7 @@ def launch_tree_gdn_replay_all_layers(
         OUTPUT_SCALE=output_scale,
         USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
         RAW_GATING=True,
+        SCAN_ALIGN=scan_align_on(),
         num_warps=8,
     )
 
@@ -1551,6 +1804,61 @@ def launch_tree_gdn_prepared(
         _num_warps = int(_geom.get("num_warps", _num_warps))
         if "num_stages" in _geom:
             _extra_launch_kwargs["num_stages"] = int(_geom["num_stages"])
+    # FR13_SCAN_ALIGN body seams (l2norm div-by-sqrt, beta bf16 round-trip).
+    # Default OFF => SCAN_ALIGN=False => the aligned branches in _gdn_node_step
+    # are dead code and the launch is byte-identical to the locked path. The
+    # diagnostic geom-override above is INDEPENDENT of this (it predates the
+    # unified flag and stays value-neutral).
+    _scan_align = scan_align_on()
+    # FR13_SCAN_ALIGN_MODE=recompute: the DEPLOYABLE geometry fix. Replace the
+    # h_cache scan with the recompute-from-spine kernel at native BV32/w1/s3
+    # (SRAM EXIT-2). Spill-free + removes leaf co-residency. Falls back to the
+    # h_cache scan for mode=body (or when the flag is off).
+    if _scan_align and scan_align_mode() == "recompute":
+        _rbv = _NATIVE_PACKED_BV
+        rgrid = (num_vh, triton.cdiv(dim_v, _rbv))
+        _tree_gdn_recompute_kernel[rgrid](
+            q,
+            k,
+            v,
+            g,
+            beta,
+            raw_a,
+            raw_b,
+            A_log,
+            dt_bias,
+            h0,
+            h0_indices,
+            h0_num_accepted_tokens,
+            invocation_counter,
+            strict_mask,
+            visible_mask,
+            out,
+            state,
+            N_ACTUAL=n_actual,
+            N_PAD=n_pad,
+            NUM_KH=num_kh,
+            NUM_VH=num_vh,
+            DIM_K=dim_k,
+            DIM_V=dim_v,
+            BLOCK_V=_rbv,
+            OUTPUT_SCALE=output_scale,
+            USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+            H0_IS_BANK=h0_is_bank,
+            H0_INDEX_ROW=h0_index_row,
+            H0_BATCH_INDEX=h0_batch_index,
+            H0_BANK_STRIDE=h0_bank_stride,
+            H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+            RAW_GATING=raw_gating,
+            COUNT_INVOCATION=count_invocation,
+            STORE_NODE_STATES=store_node_states,
+            SCAN_ALIGN=_scan_align,
+            num_warps=_NATIVE_PACKED_NUM_WARPS,
+            num_stages=_NATIVE_PACKED_NUM_STAGES,
+        )
+        if not store_node_states:
+            return out, None
+        return out, state
     grid = (num_vh, triton.cdiv(dim_v, _bv))
     _tree_gdn_kernel[grid](
         q,
@@ -1587,6 +1895,7 @@ def launch_tree_gdn_prepared(
         RAW_GATING=raw_gating,
         COUNT_INVOCATION=count_invocation,
         STORE_NODE_STATES=store_node_states,
+        SCAN_ALIGN=_scan_align,
         num_warps=_num_warps,
         **_extra_launch_kwargs,
     )

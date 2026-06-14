@@ -202,8 +202,14 @@ def test_gate_uses_int_view_not_atol():
 def test_gate_invokes_native_packed_reference_and_arms():
     src = GATE_SRC.read_text(encoding="utf-8")
     assert "native_packed_decode_per_path" in src
-    # The four geometry arms.
-    for arm in ("BV16_w8_DEPLOYED", "BV32_w4_native_geom", "BV8_w8", "BV8_w4"):
+    # The deployed arm + the geometry pre-test + body-seam + recompute arms.
+    for arm in (
+        "BV16_w8_DEPLOYED",
+        "BV32_w1_s3_native_geom",
+        "BODY_SEAMS_BV16_w8",
+        "BODY_SEAMS_BV32_w1_s3",
+        "RECOMPUTE_FROM_SPINE",
+    ):
         assert arm in src, f"missing arm {arm}"
     # rel_err + norm ratio + first mismatch.
     assert "_rel_err" in src and "_norm_ratio" in src and "_first_mismatch" in src
@@ -212,9 +218,293 @@ def test_gate_invokes_native_packed_reference_and_arms():
     assert "negative_control_powered" in src
 
 
+def test_gate_wires_scan_align_env_and_clears_it():
+    """The gate must drive the body seams / recompute via the SCAN_ALIGN env,
+    and ALWAYS clear it in finally so the deployed arm stays byte-identical."""
+    src = GATE_SRC.read_text(encoding="utf-8")
+    assert "_set_scan_align" in src
+    assert 'os.environ["FR13_SCAN_ALIGN"] = "1"' in src
+    assert 'os.environ["FR13_SCAN_ALIGN_MODE"] = mode' in src
+    # cleared in finally (popped to None) alongside the geom override.
+    assert 'os.environ.pop("FR13_SCAN_ALIGN", None)' in src
+    assert 'os.environ.pop("FR13_SCAN_ALIGN_MODE", None)' in src
+    # The finally block clears both.
+    gtree = ast.parse(src)
+    run_fn = None
+    for node in ast.walk(gtree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_run_tree":
+            run_fn = node
+            break
+    assert run_fn is not None
+    finals = [n for n in ast.walk(run_fn) if isinstance(n, ast.Try)]
+    assert finals, "_run_tree must use try/finally"
+    final_src = "\n".join(
+        ast.get_source_segment(src, stmt) or "" for stmt in finals[0].finalbody
+    )
+    assert "_set_geom(None)" in final_src
+    assert "_set_scan_align(None)" in final_src
+
+
 def test_ref_module_confirms_dispatch_in_docstring():
     src = REF_SRC.read_text(encoding="utf-8")
     # The reference module must name the EXACT live dispatch chain it mirrors.
     assert "_forward_core_decode_non_spec" in src
     assert "fused_recurrent_gated_delta_rule_packed_decode" in src
     assert "VLLM_ENABLE_FLA_PACKED_RECURRENT_DECODE" in src
+
+
+# ---------------------------------------------------------------------------
+# 5. FR13_SCAN_ALIGN flag helpers (CPU exec of the pure-python helpers).
+# ---------------------------------------------------------------------------
+def _load_scan_align_helpers():
+    """Exec scan_align_on / scan_align_mode + native-geom constants from source,
+    without importing triton (GPU-only)."""
+    src = KERNEL_SRC.read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    wanted: list[ast.stmt] = []
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name in (
+            "scan_align_on",
+            "scan_align_mode",
+        ):
+            wanted.append(node)
+        elif isinstance(node, ast.Assign):
+            for t in node.targets:
+                if isinstance(t, ast.Name) and t.id in (
+                    "_NATIVE_PACKED_BV",
+                    "_NATIVE_PACKED_NUM_WARPS",
+                    "_NATIVE_PACKED_NUM_STAGES",
+                ):
+                    wanted.append(node)
+    mod = ast.Module(body=wanted, type_ignores=[])
+    ns: dict = {"os": os}
+    exec(compile(mod, str(KERNEL_SRC), "exec"), ns)  # noqa: S102
+    return ns
+
+
+def test_scan_align_default_off():
+    os.environ.pop("FR13_SCAN_ALIGN", None)
+    os.environ.pop("FR13_SCAN_ALIGN_MODE", None)
+    ns = _load_scan_align_helpers()
+    assert ns["scan_align_on"]() is False
+    assert ns["scan_align_mode"]() == "body"
+
+
+def test_scan_align_on_truthy_values():
+    ns = _load_scan_align_helpers()
+    try:
+        for v in ("1", "true", "TRUE", "Yes", "on", " on "):
+            os.environ["FR13_SCAN_ALIGN"] = v
+            assert ns["scan_align_on"]() is True, v
+        for v in ("0", "false", "no", "off", "", "  "):
+            os.environ["FR13_SCAN_ALIGN"] = v
+            assert ns["scan_align_on"]() is False, repr(v)
+    finally:
+        os.environ.pop("FR13_SCAN_ALIGN", None)
+
+
+def test_scan_align_mode_values_and_reject():
+    ns = _load_scan_align_helpers()
+    try:
+        os.environ["FR13_SCAN_ALIGN_MODE"] = "recompute"
+        assert ns["scan_align_mode"]() == "recompute"
+        os.environ["FR13_SCAN_ALIGN_MODE"] = "body"
+        assert ns["scan_align_mode"]() == "body"
+        os.environ["FR13_SCAN_ALIGN_MODE"] = "bogus"
+        with pytest.raises(ValueError):
+            ns["scan_align_mode"]()
+    finally:
+        os.environ.pop("FR13_SCAN_ALIGN_MODE", None)
+
+
+def test_native_packed_geom_constants_match_image():
+    """The recompute route's geometry must equal the native packed-decode
+    launch re-grounded on the pinned image (fused_recurrent.py:437-439):
+    BV=min(next_pow2(V),32)=32, num_warps=1, num_stages=3."""
+    ns = _load_scan_align_helpers()
+    assert ns["_NATIVE_PACKED_BV"] == 32
+    assert ns["_NATIVE_PACKED_NUM_WARPS"] == 1
+    assert ns["_NATIVE_PACKED_NUM_STAGES"] == 3
+
+
+# ---------------------------------------------------------------------------
+# 6. _gdn_node_step: both body seams are SCAN_ALIGN-gated; the OFF branch keeps
+#    the original ops (rsqrt l2norm + plain fp32 sigmoid). Bug-class #10:
+#    default-OFF must be byte-identical, so the aligned ops must live behind an
+#    `if SCAN_ALIGN:` and the off branch must be the unchanged source.
+# ---------------------------------------------------------------------------
+def _func_def(name: str) -> ast.FunctionDef:
+    src = KERNEL_SRC.read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{name} not found")
+
+
+def test_gdn_node_step_has_scan_align_constexpr_default_false():
+    fn = _func_def("_gdn_node_step")
+    # SCAN_ALIGN is the last arg with default False.
+    arg_names = [a.arg for a in fn.args.args]
+    assert "SCAN_ALIGN" in arg_names
+    # default False (defaults align to the trailing args).
+    n_defaults = len(fn.args.defaults)
+    assert n_defaults >= 1
+    last_default = fn.args.defaults[-1]
+    assert isinstance(last_default, ast.Constant) and last_default.value is False
+
+
+def test_gdn_node_step_seams_are_gated_and_off_branch_is_original():
+    """The l2norm and beta seams must be `if SCAN_ALIGN: <native>; else:
+    <original>`. The else-branch must contain rsqrt (l2norm) and a plain
+    sigmoid (beta) with NO bf16 round-trip, so OFF == locked path."""
+    src = KERNEL_SRC.read_text(encoding="utf-8")
+    fn = _func_def("_gdn_node_step")
+    fn_src = ast.get_source_segment(src, fn)
+    assert fn_src is not None
+    # Aligned (native) forms appear (inside the SCAN_ALIGN branches):
+    assert "b_q / tl.sqrt(tl.sum(b_q * b_q) + 1e-6)" in fn_src
+    assert "b_k / tl.sqrt(tl.sum(b_k * b_k) + 1e-6)" in fn_src
+    assert "tl.sigmoid(b_raw_b.to(tl.float32)).to(tl.bfloat16).to(tl.float32)" in fn_src
+    # Original (OFF) forms still present (the else branches):
+    assert "b_q * tl.rsqrt(tl.sum(b_q * b_q) + 1e-6)" in fn_src
+    assert "b_k * tl.rsqrt(tl.sum(b_k * b_k) + 1e-6)" in fn_src
+    # plain fp32 sigmoid (no bf16 cast) must remain as the OFF beta.
+    assert "b_beta = tl.sigmoid(b_raw_b.to(tl.float32))\n" in (fn_src + "\n")
+    # Both seams are guarded by `if SCAN_ALIGN`.
+    n_if_scan_align = sum(
+        1
+        for node in ast.walk(fn)
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Name)
+        and node.test.id == "SCAN_ALIGN"
+    )
+    assert n_if_scan_align == 2, f"expected 2 SCAN_ALIGN ifs, got {n_if_scan_align}"
+
+
+def test_all_gdn_node_step_calls_pass_scan_align():
+    """Every in-kernel _gdn_node_step call must forward SCAN_ALIGN, or the
+    aligned arm cannot reach the body (and the OFF arm cannot stay byte-id)."""
+    src = KERNEL_SRC.read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    calls = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_gdn_node_step"
+    ]
+    assert len(calls) == 4, f"expected 4 _gdn_node_step calls, got {len(calls)}"
+    for call in calls:
+        kw = {k.arg for k in call.keywords if k.arg is not None}
+        assert "SCAN_ALIGN" in kw, "a _gdn_node_step call drops SCAN_ALIGN"
+
+
+# ---------------------------------------------------------------------------
+# 7. Recompute-from-spine: exists, is no-h_cache (one tile), reuses the shared
+#    body, and launches at native BV32/w1/s3 only when SCAN_ALIGN + mode.
+# ---------------------------------------------------------------------------
+def test_recompute_kernel_is_no_hcache_one_tile():
+    fn = _func_def("_tree_gdn_recompute_kernel")
+    fn_src = ast.get_source_segment(KERNEL_SRC.read_text(encoding="utf-8"), fn)
+    assert fn_src is not None
+    # The h_cache (N_PAD, BLOCK_V, DIM_K) tile of the scan must NOT be allocated
+    # here -- no `tl.zeros((N_PAD, ...))` 3-D cache. The replay/recompute hold a
+    # single (BLOCK_V, DIM_K) tile that re-replays ancestry. We assert via the
+    # AST: no assignment whose value is a tl.zeros with an (N_PAD, ...) shape and
+    # no name `h_cache` is bound.
+    bound_names = {
+        t.id
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Assign)
+        for t in node.targets
+        if isinstance(t, ast.Name)
+    }
+    assert "h_cache" not in bound_names, "recompute must not bind an h_cache tile"
+    # No tl.zeros((N_PAD, ...)) 3-D cache allocation.
+    for node in ast.walk(fn):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "zeros"
+            and node.args
+            and isinstance(node.args[0], ast.Tuple)
+        ):
+            elts = node.args[0].elts
+            first = elts[0]
+            assert not (
+                isinstance(first, ast.Name) and first.id == "N_PAD"
+            ), "recompute allocated an (N_PAD, ...) cache tile (spill risk)"
+    # It must reuse the shared per-node body.
+    assert "_gdn_node_step(" in fn_src
+    # It produces per-node out + (optional) state, like the scan.
+    assert "tl.store(" in fn_src
+    # SCAN_ALIGN constexpr threaded.
+    assert "SCAN_ALIGN" in [a.arg for a in fn.args.args]
+
+
+def test_recompute_dispatch_gated_and_native_geom():
+    """launch_tree_gdn_prepared dispatches the recompute kernel only when
+    scan_align_on() and mode=='recompute', at native w1/s3."""
+    src = KERNEL_SRC.read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    fn = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "launch_tree_gdn_prepared":
+            fn = node
+            break
+    assert fn is not None
+    fn_src = ast.get_source_segment(src, fn)
+    assert fn_src is not None
+    # Gated dispatch condition.
+    assert 'scan_align_mode() == "recompute"' in fn_src
+    assert "_scan_align and scan_align_mode() == \"recompute\"" in fn_src
+    # The recompute launch uses the native packed geom constants.
+    assert "_NATIVE_PACKED_NUM_WARPS" in fn_src
+    assert "_NATIVE_PACKED_NUM_STAGES" in fn_src
+    assert "_NATIVE_PACKED_BV" in fn_src
+    # Find the _tree_gdn_recompute_kernel[...] launch and check its geom kwargs.
+    rcall = None
+    for node in ast.walk(fn):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Subscript)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "_tree_gdn_recompute_kernel"
+        ):
+            rcall = node
+            break
+    assert rcall is not None, "recompute kernel launch not found"
+    kw = {k.arg: k.value for k in rcall.keywords if k.arg is not None}
+    assert isinstance(kw["num_warps"], ast.Name) and kw["num_warps"].id == "_NATIVE_PACKED_NUM_WARPS"
+    assert isinstance(kw["num_stages"], ast.Name) and kw["num_stages"].id == "_NATIVE_PACKED_NUM_STAGES"
+    assert "SCAN_ALIGN" in kw
+
+
+def test_served_scan_launch_passes_scan_align_and_default_off_is_identity():
+    """The served _tree_gdn_kernel launch must pass SCAN_ALIGN=_scan_align, and
+    _scan_align must resolve from scan_align_on() (default False => byte-id)."""
+    src = KERNEL_SRC.read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    call = _find_launch_call(tree)
+    kw = {k.arg: k.value for k in call.keywords if k.arg is not None}
+    assert "SCAN_ALIGN" in kw
+    assert isinstance(kw["SCAN_ALIGN"], ast.Name) and kw["SCAN_ALIGN"].id == "_scan_align"
+    # _scan_align is assigned from scan_align_on() in the function body.
+    fn = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "launch_tree_gdn_prepared":
+            fn = node
+            break
+    assert fn is not None
+    found = False
+    for node in ast.walk(fn):
+        if (
+            isinstance(node, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == "_scan_align" for t in node.targets)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == "scan_align_on"
+        ):
+            found = True
+    assert found, "_scan_align must be assigned from scan_align_on()"
