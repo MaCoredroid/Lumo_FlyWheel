@@ -6335,6 +6335,272 @@ def _fr13_boundary_replay_post(
         })
 
 
+# =========================================================================== #
+# FR13_REPLAY_DURABLE_AB (PRIME lead, FR13_TOTAL_DRIFT_REANALYSIS_LEADS_BIND):
+# OBSERVE-ONLY per-event durable-state A/B of OUR replay kernel's published GDN
+# recurrent state (H_ours) vs NATIVE MTP's sequential recurrent kernel
+# (fused_sigmoid_gating_delta_rule_update) run over the SAME accepted token
+# chain from the SAME cloned h0/conv-state.  Default OFF -> byte-identical to
+# the locked cat9 build.  Served stream NEVER touched: every native arm runs on
+# a detached CLONE of h0 + a flat gather of the activation rings, with
+# inplace_final_state=False so native writes its durable state into a FRESH
+# tensor (the served ssm_state bank is read-only here).  NOT a reroute: the
+# VERIFY scan and the served replay launch are unchanged; this only ADDS an
+# observe-only native run on clones and records max_abs(H_ours - H_native_seq).
+# Bug classes: #9 (silent/vacuous -> loud stage markers + record-count assert),
+# #10 (codegen-identity-not-spec -> the very thing being measured), #12
+# (cross-event accumulation -> per-event index for back-loading).
+# =========================================================================== #
+_FR13_RDAB_FLAG = None
+_FR13_RDAB_FH = None
+_FR13_RDAB_HEADER_DONE = False
+_FR13_RDAB_STAGE_SEEN = set()
+_FR13_RDAB_STAGE_COUNTS = {}
+_FR13_RDAB_RECORDS = 0
+
+
+def _fr13_replay_durable_ab_enabled():
+    """Resolve FR13_REPLAY_DURABLE_AB for the EngineCore worker.
+
+    The GDN committer runs in the mp/spawn EngineCore worker, whose curated env
+    drops bare FR13_* masters (measured 2026-06-14: SUBOP_MAB master dropped).
+    The patcher runs in pid 1 where the var IS present and writes a sidecar flag
+    into /logs (host + worker visible bind mount).  Env first (explicit wins,
+    incl. "0"), else the sidecar.  Default OFF (no env, no sidecar) ->
+    byte-identical locked path.  Cached after first resolution.
+    """
+    global _FR13_RDAB_FLAG
+    if _FR13_RDAB_FLAG is not None:
+        return _FR13_RDAB_FLAG
+    val = os.environ.get("FR13_REPLAY_DURABLE_AB")
+    if val is not None and val != "":
+        _FR13_RDAB_FLAG = val == "1"
+        return _FR13_RDAB_FLAG
+    try:
+        flag_path = os.environ.get(
+            "FR13_REPLAY_DURABLE_AB_FLAG_FILE",
+            "/logs/fr13_replay_durable_ab.flag",
+        )
+        with open(flag_path, "r") as _fh:
+            _FR13_RDAB_FLAG = _fh.read().strip() == "1"
+    except Exception:
+        _FR13_RDAB_FLAG = False
+    return _FR13_RDAB_FLAG
+
+
+def _fr13_rdab_stage(tag, msg, once=True, level="error"):
+    """Class-9 stage marker: grep-able `FR13_RDAB_STAGE=<tag>` ERROR line so the
+    failing stage (env-in-worker / engaged / record-written / arm-fail) is
+    unmistakable in the worker log flood.  Always bumps a monotone counter so a
+    reducer can assert non-zero records vs non-zero engaged (vacuous-boot
+    discriminator).  Callers guard behind _fr13_replay_durable_ab_enabled().
+    """
+    _FR13_RDAB_STAGE_COUNTS[tag] = int(_FR13_RDAB_STAGE_COUNTS.get(tag, 0)) + 1
+    if once:
+        if tag in _FR13_RDAB_STAGE_SEEN:
+            return
+        _FR13_RDAB_STAGE_SEEN.add(tag)
+    try:
+        emit = getattr(logger, level, None) or logger.error
+        emit("FR13_RDAB_STAGE=%s %s", tag, msg)
+    except Exception:
+        pass
+
+
+def _fr13_rdab_emit(record):
+    """Append one JSONL durable-AB record; eager-only (fail-loud on capture)."""
+    global _FR13_RDAB_FH, _FR13_RDAB_HEADER_DONE, _FR13_RDAB_RECORDS
+    try:
+        if (
+            torch.cuda.is_available()
+            and torch.cuda.is_current_stream_capturing()
+        ):
+            raise RuntimeError(
+                "FR13_REPLAY_DURABLE_AB is eager-only: emit during CUDA-graph "
+                "capture (boot ENFORCE_EAGER=1)"
+            )
+    except RuntimeError:
+        raise
+    except Exception:
+        pass
+    if _FR13_RDAB_FH is None:
+        _path = os.environ.get(
+            "FR13_REPLAY_DURABLE_AB_PATH",
+            "/logs/fr13_replay_durable_ab.jsonl",
+        )
+        _parent = os.path.dirname(_path)
+        if _parent:
+            os.makedirs(_parent, exist_ok=True)
+        _FR13_RDAB_FH = open(_path, "a", buffering=1)
+    if not _FR13_RDAB_HEADER_DONE:
+        _FR13_RDAB_HEADER_DONE = True
+        _FR13_RDAB_FH.write(__import__("json").dumps({
+            "tap": "header",
+            "regime": "eager",
+            "ts": round(__import__("time").time(), 6),
+            "pid": os.getpid(),
+            "ref_kernel": "fused_sigmoid_gating_delta_rule_update",
+            "flags": {
+                _k: os.environ.get(_k)
+                for _k in (
+                    "FR13_REPLAY_DURABLE_AB",
+                    "FR13_REPLAY_DURABLE_AB_LAYERS",
+                    "FR13_REPLAY_ROUTE",
+                    "FR10_ENABLE_TREE_GDN",
+                    "VLLM_BATCH_INVARIANT",
+                    "FR13_EAGER_PACK",
+                )
+            },
+        }) + "\n")
+    _rec = dict(record)
+    _rec["regime"] = "eager"
+    _rec["ts"] = round(__import__("time").time(), 6)
+    _FR13_RDAB_FH.write(
+        __import__("json").dumps(_rec, default=str) + "\n"
+    )
+    _FR13_RDAB_RECORDS += 1
+
+
+def _fr13_rdab_layer_match(prefix):
+    """Optional layer filter (default: every GDN layer)."""
+    pats = os.environ.get("FR13_REPLAY_DURABLE_AB_LAYERS", "")
+    if not pats.strip():
+        return True
+    return any(
+        _p.strip() and _p.strip() in str(prefix)
+        for _p in pats.split(",")
+    )
+
+
+def _fr13_replay_durable_ab(
+    gdn_mod, prefix, layer, bank, rows,
+    accepted_node_paths, accepted_lens_list, event_index,
+):
+    """OBSERVE-ONLY: per accepted-chain row, compare OUR replay's published
+    durable GDN state (H_ours = bank row at the final accepted column, just
+    written by _fr13_replay_launch) against NATIVE MTP's sequential recurrent
+    kernel run over the SAME root+accepted chain from the SAME CLONED h0.
+
+    H_native_seq = fused_sigmoid_gating_delta_rule_update(...) final state, with
+    inplace_final_state=False so native writes into a FRESH (M,HV,V,K) tensor;
+    the served bank is read-only here.  The accepted chain is a LINEAR sequence
+    of length M = acc_len+1 (root node 0 + accepted path), passed as a single
+    B=1 varlen sequence (cu_seqlens=[0,M]) WITHOUT ssm_state_indices /
+    num_accepted_tokens -> IS_CONTINUOUS_BATCHING / IS_SPEC_DECODING are both
+    False, dodging the reduced-row M5/M1 tree-slice geometry that device-
+    asserted in the conv/scan A/B (kernel-valid by construction, never caught).
+    """
+    if not _fr13_replay_durable_ab_enabled():
+        return
+    if not _fr13_rdab_layer_match(prefix):
+        return
+    from vllm.model_executor.layers.fla.ops.fused_sigmoid_gating import (
+        fused_sigmoid_gating_delta_rule_update as _rdab_native,
+    )
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+    spec_idx = layer._fr13_replay_spec_idx
+    prev_lens = layer._fr13_replay_prev_lens
+    ring_k = layer._fr13_replay_ring_k
+    ring_v = layer._fr13_replay_ring_v
+    ring_a = layer._fr13_replay_ring_a
+    ring_b = layer._fr13_replay_ring_b
+    A_log = layer.A_log
+    dt_bias = layer.dt_bias
+    n_pad = int(ring_k.size(1))
+    # ring layout: k(B,N,KH,DK) v(B,N,VH,DV) a/b(B,N,VH); bank(rows,VH,DV,DK)
+    num_kh = int(ring_k.size(2))
+    num_vh = int(ring_v.size(2))
+    dim_k = int(ring_k.size(3))
+    dim_v = int(ring_v.size(3))
+    scale = float(dim_k ** -0.5)
+    for _b in range(rows):
+        try:
+            _path = [int(x) for x in accepted_node_paths[_b]]
+            _alen = int(accepted_lens_list[_b])
+            _prev_len = int(prev_lens[_b].detach().cpu().item())
+            _h0_col = max(_prev_len - 1, 0)
+            _spec_row = spec_idx[_b].detach().cpu().tolist()
+            _h0_row = int(_spec_row[min(_h0_col, len(_spec_row) - 1)])
+            # node chain = root(0) + accepted path tokens, clamped to ring.
+            _nodes = [0] + [
+                max(0, min(int(n), n_pad - 1)) for n in _path[:_alen]
+            ]
+            _M = len(_nodes)
+            _node_t = torch.tensor(
+                _nodes, device=ring_k.device, dtype=torch.long
+            )
+            # flat (1, M, ...) gather of the SAME activations the replay reads;
+            # CLONE so nothing aliases the served rings.
+            _k = ring_k[_b].index_select(0, _node_t).unsqueeze(0).contiguous()
+            _v = ring_v[_b].index_select(0, _node_t).unsqueeze(0).contiguous()
+            _a = ring_a[_b].index_select(0, _node_t).unsqueeze(0).contiguous()
+            _bb = ring_b[_b].index_select(0, _node_t).unsqueeze(0).contiguous()
+            # q is irrelevant to the durable state (q-side never touches it);
+            # native still needs a tensor of the right (1,M,KH,DK) shape.
+            _q = torch.zeros_like(_k)
+            # h0 CLONE shaped (1, HV, V, K): IS_CONTINUOUS_BATCHING=False reads
+            # h0 + bos*HV*V*K with bos=0 -> our cloned single row.
+            _h0 = bank[_h0_row].to(torch.float32).unsqueeze(0).clone()
+            _cu = torch.tensor(
+                [0, _M], device=ring_k.device, dtype=torch.int32
+            )
+            _out, _final = _rdab_native(
+                A_log=A_log,
+                a=_a,
+                b=_bb,
+                dt_bias=dt_bias,
+                q=_q,
+                k=_k,
+                v=_v,
+                initial_state=_h0,
+                inplace_final_state=False,
+                cu_seqlens=_cu,
+                use_qk_l2norm_in_kernel=True,
+            )
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            _h_native = _final[_M - 1].to(torch.float32)
+            # H_ours = the bank row our replay just published at the final
+            # accepted linear column (clamp(acc_len-1,0)).
+            _final_col = max(_alen - 1, 0)
+            _final_row = int(_spec_row[min(_final_col, len(_spec_row) - 1)])
+            _h_ours = bank[_final_row].to(torch.float32)
+            _diff = (_h_ours - _h_native).abs()
+            _max_abs = float(_diff.max().item())
+            # per-head max for first-nonzero head locality.
+            _per_head = _diff.reshape(num_vh, -1).amax(dim=1)
+            _nz_heads = int((_per_head > 0).sum().item())
+            _fr13_rdab_emit({
+                "tap": "durable_ab",
+                "layer": str(prefix),
+                "slot": int(_b),
+                "event": int(event_index),
+                "accepted_len": int(_alen),
+                "M_chain": int(_M),
+                "node_chain": _nodes,
+                "h0_src_row": int(_h0_row),
+                "final_dst_row": int(_final_row),
+                "max_abs_h_ours_vs_native": _max_abs,
+                "num_nonzero_heads": _nz_heads,
+                "num_vh": int(num_vh),
+                "ref_final_finite": bool(torch.isfinite(_h_native).all().item()),
+            })
+            _fr13_rdab_stage(
+                "record-written",
+                "first record-written ok layer=" + str(prefix)
+                + " max_abs=" + repr(_max_abs),
+            )
+        except Exception as _rdab_exc:  # observe-only: never poison the served
+            _fr13_rdab_stage(
+                "arm-fail",
+                "native A/B arm failed layer=" + str(prefix)
+                + " slot=" + str(_b) + " "
+                + type(_rdab_exc).__name__ + ":" + str(_rdab_exc),
+                once=False,
+            )
+
+
 # LUMO_TREE_PATH_LCP_MAX: greedy N-spine verifier.
 #
 # Gate B is greedy/deterministic, so max-LCP over root-to-leaf paths is the
@@ -7111,6 +7377,12 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 )
             _fr13_replay_rows = len(_fr13_replay_gdn_node_paths)
             _fr13_bnd_on = _lumo_tree_commit_gdn._fr13_boundary_on()
+            # FR13_REPLAY_DURABLE_AB (PRIME lead, observe-only): when ON, force
+            # the verbatim per-layer replay loop (so the durable-state A/B can
+            # tap H_ours fresh per layer) and carry the SAME per-event counter
+            # the boundary tap uses for back-loading. Default OFF -> no effect
+            # (byte-identical locked cat9 path; EAGER_PACK fast loop unchanged).
+            _fr13_rdab_on = _fr13_replay_durable_ab_enabled()
             if _fr13_replay_rows:
                 if int(_accepted_path_buf.size(0)) < _fr13_replay_rows:
                     raise RuntimeError(
@@ -7181,14 +7453,15 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                             device=_accepted_lens_buf.device,
                         )
                     )
-                if _fr13_bnd_on:
+                if _fr13_bnd_on or _fr13_rdab_on:
                     # Shared boundary event counter: increment ONCE per commit
                     # event; every tap record between commit k and commit k+1
-                    # then carries event=k (tap A of commit k carries k).
+                    # then carries event=k (tap A of commit k carries k). The
+                    # durable-AB tap reuses this counter for back-loading.
                     _lumo_tree_commit_gdn._FR13_BOUNDARY_EVENT = int(getattr(
                         _lumo_tree_commit_gdn, '_FR13_BOUNDARY_EVENT', 0
                     )) + 1
-                if _ep_active and not _fr13_bnd_on:
+                if _ep_active and not _fr13_bnd_on and not _fr13_rdab_on:
                     # FR13_EAGER_PACK 2a (all-layer batched flag validation)
                     # + 2b (ONE batched all-layer replay launch). EVERY
                     # layer's [fresh, staged] pair is still checked
@@ -7370,6 +7643,21 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                                 _fr13_ssm_bank, _fr13_replay_rows,
                                 _fr13_replay_gdn_node_paths, _fr13_replay_lens,
                                 _fr13_bnd_pre,
+                            )
+                        if _fr13_rdab_on:
+                            # OBSERVE-ONLY durable-state A/B: H_ours (the bank
+                            # row just published by the replay above) vs native
+                            # MTP's sequential recurrent kernel on the SAME
+                            # cloned h0 + accepted chain. event_index carries
+                            # the shared per-commit counter for back-loading.
+                            _fr13_replay_durable_ab(
+                                _lumo_tree_commit_gdn, _fr13_prefix,
+                                _fr13_layer, _fr13_ssm_bank, _fr13_replay_rows,
+                                _fr13_replay_gdn_node_paths, _fr13_replay_lens,
+                                int(getattr(
+                                    _lumo_tree_commit_gdn,
+                                    '_FR13_BOUNDARY_EVENT', 0,
+                                )),
                             )
     except Exception as _fr10_tree_lcp_log_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
@@ -7856,7 +8144,10 @@ def _lumo_tree_canonical_multidraft_sample(
                         device=_accepted_lens_buf.device,
                     )
                 )
-                if _fr13_bnd_on:
+                # FR13_REPLAY_DURABLE_AB (PRIME lead, observe-only): canonical/
+                # sampled committer variant. Default OFF -> no effect.
+                _fr13_rdab_on = _fr13_replay_durable_ab_enabled()
+                if _fr13_bnd_on or _fr13_rdab_on:
                     # Shared boundary event counter: increment ONCE per commit
                     # event; every tap record between commit k and commit k+1
                     # then carries event=k (tap A of commit k carries k).
@@ -7925,6 +8216,20 @@ def _lumo_tree_canonical_multidraft_sample(
                             _fr13_ssm_bank, _fr13_replay_rows,
                             _fr13_replay_gdn_node_paths, _fr13_replay_lens,
                             _fr13_bnd_pre,
+                        )
+                    if _fr13_rdab_on:
+                        # OBSERVE-ONLY durable-state A/B (sampled committer):
+                        # H_ours vs native MTP sequential recurrent on the SAME
+                        # cloned h0 + accepted chain. event_index = shared
+                        # per-commit counter (back-loading axis).
+                        _fr13_replay_durable_ab(
+                            _lumo_tree_commit_gdn, _fr13_prefix, _fr13_layer,
+                            _fr13_ssm_bank, _fr13_replay_rows,
+                            _fr13_replay_gdn_node_paths, _fr13_replay_lens,
+                            int(getattr(
+                                _lumo_tree_commit_gdn,
+                                '_FR13_BOUNDARY_EVENT', 0,
+                            )),
                         )
     except Exception as _fr10_commit_globals_exc:
         if __import__('os').environ.get('FR10_ALLOW_LINEAR_FALLBACK', '0') != '1':
@@ -13829,8 +14134,43 @@ def _fr13_write_subop_mab_sidecar() -> None:
         print("FR13_GDN_SUBOP_MAB sidecar write failed: %s" % exc)
 
 
+def _fr13_write_replay_durable_ab_sidecar() -> None:
+    """Bake the FR13_REPLAY_DURABLE_AB master switch into a sidecar flag file.
+
+    Same worker-env bridge rationale as the SUBOP_MAB sidecar: the patcher runs
+    in pid 1 (env present); the GDN committer runs in the mp/spawn EngineCore
+    worker whose curated env drops the bare master.  /logs is host + worker
+    visible, so the resolved flag written here lets the committer read it via
+    _fr13_replay_durable_ab_enabled().  Default-safe: OFF/absent DELETES any
+    stale flag so a prior ON boot cannot leak into an OFF (byte-identical
+    default).  Only writes a non-empty flag when the master == "1".
+    """
+    flag_path = os.environ.get(
+        "FR13_REPLAY_DURABLE_AB_FLAG_FILE",
+        "/logs/fr13_replay_durable_ab.flag",
+    )
+    on = os.environ.get("FR13_REPLAY_DURABLE_AB", "0") == "1"
+    try:
+        if on:
+            os.makedirs(os.path.dirname(flag_path) or ".", exist_ok=True)
+            with open(flag_path, "w") as _fh:
+                _fh.write("1\n")
+            print(
+                "FR13_REPLAY_DURABLE_AB sidecar written (worker-env bridge): "
+                + flag_path
+            )
+        else:
+            try:
+                os.remove(flag_path)
+            except FileNotFoundError:
+                pass
+    except Exception as exc:  # pragma: no cover - best-effort, fail-safe-OFF
+        print("FR13_REPLAY_DURABLE_AB sidecar write failed: %s" % exc)
+
+
 def main() -> int:
     _fr13_write_subop_mab_sidecar()
+    _fr13_write_replay_durable_ab_sidecar()
     patch_steps = [
         (REQUEST_PATH, _patch_request_decode_mode()),
         (SCHED_OUTPUT_PATH, _patch_sched_output_decode_mode()),

@@ -167,8 +167,12 @@ def test_committer_all_layer_flag_validation_no_representative_shortcut() -> Non
     assert "REPRESENTATIVE-LAYER VALIDATION IS BANNED" in committer
     # Layer-order identity is asserted against sorted(_fr13_replay_layers).
     assert "_ep_order != _ep_sorted_prefixes" in committer
-    # Boundary diagnostics route through the VERBATIM legacy per-layer loop.
-    assert "if _ep_active and not _fr13_bnd_on:" in committer
+    # Boundary diagnostics AND the durable-AB observe-only A/B route through the
+    # VERBATIM legacy per-layer loop (the EAGER_PACK fast path is bypassed only
+    # when one of those diagnostic flags is ON; default OFF keeps the fast path).
+    assert (
+        "if _ep_active and not _fr13_bnd_on and not _fr13_rdab_on:" in committer
+    )
     # Bank pointer table: built once, re-asserted every commit, fail-loud.
     assert "_FR13_EAGER_PACK_BANK_TBL" in committer
     assert "_ep_tbl[0] != _ep_ptrs_now" in committer
