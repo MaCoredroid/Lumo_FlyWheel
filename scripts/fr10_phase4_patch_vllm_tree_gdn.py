@@ -11046,6 +11046,8 @@ def _patch_tree_attn_op_capture() -> bool:
     if sentinel not in text:
         if "import os\n" not in text:
             text = text.replace("import ast\n", "import ast\nimport os\n", 1)
+        if "import json\n" not in text:
+            text = text.replace("import ast\n", "import ast\nimport json\n", 1)
         if "from pathlib import Path\n" not in text:
             text = text.replace(
                 "from dataclasses import dataclass\n",
@@ -11054,6 +11056,208 @@ def _patch_tree_attn_op_capture() -> bool:
             )
         helper_anchor = "logger = init_logger(__name__)\n"
         helper = '''logger = init_logger(__name__)
+
+
+# FR13_FA2_MAB: in-process forked-FA2 M-invariance A/B (default OFF).
+#
+# Decisive controlled test for the cat9 22-flip SPINE_PERTURBATION carrier.
+# At the carrier full_attention layers, on the SAME live captured K/V from one
+# cat9 boot's deep-accept event, re-call OUR forked-FA2 op (the tree-bias
+# varlen forward) TWICE and compare the deep-spine row's attn_out:
+#   (a) M=9: the full tree (all 9 query rows + the 9x9 ancestry bias).
+#   (b) M=5: the SPINE-SLICE (only the spine query rows [0,1,2,4,6] + the 5x5
+#            spine-ancestry sub-bias; the spine-suffix KV rows [0,1,2,4,6]).
+# The spine rows attend ONLY to spine ancestors (strict mask), so the M=5
+# slice's spine bias == the M=9 spine bias for those keys; the ONLY thing that
+# changes between (a) and (b) is M (query-row occupancy / kBlockM MMA fragment
+# tile). RAW max_abs (NOT atol) on the deep-spine row (cat9 flat row 6 = node5)
+# is computed PER full_attention layer.
+#
+# VERDICT: RAW != 0 at the full-attn layers => the forked-FA2 IS M-dependent
+# (the query-tile fragment realization) => the query-pad fix (FR13_FA2_QPAD) is
+# REAL.  RAW == 0 (bit-exact) => the fork is M-invariant => NOT the carrier =>
+# the 22 is genuinely DIFFUSE (per-layer GDN ~1-ULP) => reshape is the route.
+#
+# This re-uses the captured K/V (NO second served stream => no stream
+# decoherence). The re-call uses CONTIGUOUS (non-paged) KV built from the live
+# block-gathered dense K/V (no block_table) -- exactly how the banked FA2 path
+# oracles already call the fork -- so it is unaffected by paged-KV block_table
+# or varlen cu_seqlens. Default OFF; locked cat9 default path is byte-identical
+# when FR13_FA2_MAB != "1".
+_FR13_MAB_TREE_PARENT = (-1, 0, 1, 1, 2, 2, 4, 4, 6, 6)
+_FR13_MAB_SPINE_ROWS = (0, 1, 2, 4, 6)
+_FR13_MAB_DEEP_ROW = 6
+
+
+def _fr13_fa2_mab_recall(
+    impl,
+    layer_name,
+    capture_call_index,
+    capture_saved_index,
+    query,
+    dense_key,
+    dense_value,
+    seq_lens,
+    tree_attn_bias,
+    output,
+):
+    """In-process M=9-vs-M=5 spine-slice A/B on OUR forked-FA2 op."""
+    if os.environ.get("FR13_FA2_MAB", "0") != "1":
+        return
+    dump = os.environ.get(
+        "FR13_FA2_MAB_DUMP", "/logs/fr13_fa2_mab.jsonl"
+    )
+    try:
+        import importlib
+
+        # Resolve the forked varlen op via importlib (NOT a bare import line) so
+        # this helper text never collides with the fork patch's import-insertion
+        # anchors in fr13_patch_fa2_tree_bias.py::_patch_tree_attn.
+        flash_attn_varlen_func = getattr(
+            importlib.import_module("vllm.v1.attention.backends.fa_utils"),
+            "flash_attn_varlen_func",
+        )
+
+        if tree_attn_bias is None:
+            return
+        bias = tree_attn_bias.to(torch.float32).cpu()
+        m_full = int(query.shape[0])
+        if m_full <= 0 or bias.shape[0] < m_full or bias.shape[1] < m_full:
+            return
+        # The deep-spine row and the spine slice are defined for the cat9
+        # caterpillar.  Skip silently if the live tree is a different shape
+        # (the A/B is only meaningful when the spine rows / deep row exist).
+        spine_rows = [r for r in _FR13_MAB_SPINE_ROWS if r < m_full]
+        deep_row = _FR13_MAB_DEEP_ROW
+        if deep_row not in spine_rows or len(spine_rows) < 2:
+            return
+
+        # Single-sequence assumption for the carrier capture (the deep-accept
+        # event is one decode request); use seq 0.
+        seq_len = int(seq_lens.reshape(-1)[0].item())
+        context_len = seq_len - m_full
+        if context_len < 0:
+            return
+
+        dev = torch.device("cuda")
+        scale = float(getattr(impl, "scale", 0.0))
+        softcap = float(getattr(impl, "logits_soft_cap", 0.0))
+        # Use bf16 KV/Q for the fork (the deployed decode dtype); the dense
+        # K/V capture is fp32, so cast down once for an apples-to-apples call.
+        # Move all operands to the SAME device up front so the row index_select
+        # (index tensors built on dev) never crosses the cpu/cuda boundary; the
+        # cast+placement is common-mode across the M=9 and M=5 arms so the
+        # M9-vs-M5 RAW max_abs verdict is unaffected.
+        q_all = query.to(dev).to(torch.bfloat16)
+        k_all = dense_key[0].to(dev).to(torch.bfloat16)
+        v_all = dense_value[0].to(dev).to(torch.bfloat16)
+        bias_full = bias[:m_full, :m_full].contiguous()
+
+        def _call(q_rows, suffix_rows, bias_sub):
+            m = len(q_rows)
+            q = q_all.index_select(
+                0, torch.tensor(q_rows, dtype=torch.long, device=dev)
+            ).contiguous()
+            # KV = full context prefix + the selected tree-suffix nodes.
+            kv_idx = list(range(context_len)) + [
+                context_len + r for r in suffix_rows
+            ]
+            kv_sel = torch.tensor(kv_idx, dtype=torch.long, device=dev)
+            k = k_all.index_select(0, kv_sel).contiguous()
+            v = v_all.index_select(0, kv_sel).contiguous()
+            cu_q = torch.tensor([0, m], dtype=torch.int32, device=dev)
+            cu_k = torch.tensor(
+                [0, k.shape[0]], dtype=torch.int32, device=dev
+            )
+            tb = bias_sub.to(dev).contiguous()
+            out = flash_attn_varlen_func(
+                q=q,
+                k=k,
+                v=v,
+                cu_seqlens_q=cu_q,
+                cu_seqlens_k=cu_k,
+                max_seqlen_q=m,
+                max_seqlen_k=int(k.shape[0]),
+                softmax_scale=scale,
+                causal=True,
+                window_size=[-1, -1],
+                softcap=softcap,
+                fa_version=2,
+                tree_bias=tb,
+            )
+            torch.cuda.synchronize()
+            return out.detach().to(torch.float32).cpu()
+
+        # (a) M=9 full tree: all rows, suffix = all tree nodes, full bias.
+        full_rows = list(range(m_full))
+        out_m9 = _call(full_rows, full_rows, bias_full)
+        # (b) M=5 spine-slice: spine query rows attend to spine-suffix nodes
+        # only; the 5x5 spine sub-bias is the M=9 bias restricted to spine
+        # rows/cols (strict spine ancestry).
+        bias_spine = bias_full.index_select(
+            0, torch.tensor(spine_rows, dtype=torch.long)
+        ).index_select(
+            1, torch.tensor(spine_rows, dtype=torch.long)
+        ).contiguous()
+        out_m5 = _call(spine_rows, spine_rows, bias_spine)
+
+        # Row alignment: the deep-spine row (flat row 6 = node5) is at
+        # position deep_row in the M=9 output and at index
+        # spine_rows.index(deep_row) in the M=5 spine-slice output.
+        m5_deep = spine_rows.index(deep_row)
+        row_m9 = out_m9[deep_row].reshape(-1)
+        row_m5 = out_m5[m5_deep].reshape(-1)
+        raw_max_abs = float((row_m9 - row_m5).abs().max().item())
+        raw_mean_abs = float((row_m9 - row_m5).abs().mean().item())
+        # Also the served kernel's own row 6 (cross-check the re-call's M=9
+        # arm matches the live forked-FA2 output for the deep-spine row).
+        served_row = output[deep_row].reshape(-1).to(torch.float32)
+        recall_vs_served = float((row_m9 - served_row).abs().max().item())
+        # Per-spine-depth RAW (M=9 spine rows vs M=5 spine rows) for context.
+        by_depth = []
+        for depth, sr in enumerate(spine_rows):
+            a = out_m9[sr].reshape(-1)
+            b = out_m5[depth].reshape(-1)
+            by_depth.append(
+                {
+                    "depth": int(depth),
+                    "m9_row": int(sr),
+                    "m5_row": int(depth),
+                    "max_abs": float((a - b).abs().max().item()),
+                    "mean_abs": float((a - b).abs().mean().item()),
+                }
+            )
+        rec = {
+            "schema": "fr13.fa2_mab.v1",
+            "layer_name": layer_name,
+            "capture_call_index": int(capture_call_index),
+            "capture_saved_index": int(capture_saved_index),
+            "m_full": int(m_full),
+            "context_len": int(context_len),
+            "seq_len": int(seq_len),
+            "spine_rows": list(spine_rows),
+            "deep_row": int(deep_row),
+            "scale": scale,
+            "softcap": softcap,
+            "deep_spine_raw_max_abs": raw_max_abs,
+            "deep_spine_raw_mean_abs": raw_mean_abs,
+            "recall_m9_vs_served_deep_max_abs": recall_vs_served,
+            "by_spine_depth": by_depth,
+        }
+        out_path = Path(dump)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with out_path.open("a") as fh:
+            fh.write(json.dumps(rec) + "\\n")
+        logger.warning(
+            "FR13_FA2_MAB layer=%s call=%s M9-vs-M5 deep-spine(row6) "
+            "RAW max_abs=%.3e (recall_m9_vs_served=%.3e)",
+            layer_name,
+            capture_call_index,
+            raw_max_abs,
+            recall_vs_served,
+        )
+    except Exception as exc:  # pragma: no cover - diagnostic only
+        logger.warning("FR13_FA2_MAB A/B re-call failed: %s", exc)
 
 
 # FR13_TREE_ATTN_OP_CAPTURE
@@ -11069,7 +11273,12 @@ def _fr13_tree_attn_op_capture(
     attn_metadata,
 ):
     path = os.environ.get("FR13_TREE_ATTN_OP_CAPTURE")
-    if not path:
+    # FR13_FA2_MAB shares this hook's dense-KV gather + carrier-event gating but
+    # is an independent diagnostic: it runs even when the op-capture SAVE path
+    # is unset.  Both default OFF; when neither is set the hook is a no-op and
+    # the locked cat9 default path is byte-identical.
+    mab_on = os.environ.get("FR13_FA2_MAB", "0") == "1"
+    if not path and not mab_on:
         return
     try:
         if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
@@ -11078,18 +11287,38 @@ def _fr13_tree_attn_op_capture(
         return
     try:
         layer_name = str(getattr(layer, "layer_name", ""))
-        want = os.environ.get(
-            "FR13_TREE_ATTN_OP_CAPTURE_LAYER",
-            "language_model.model.layers.3.self_attn",
-        )
+        # The A/B can sweep all 16 full_attention layers via its own LAYER
+        # filter (default "*"); the save path keeps its own layer default.
+        if mab_on and not path:
+            want = os.environ.get("FR13_FA2_MAB_LAYER", "*")
+        else:
+            want = os.environ.get(
+                "FR13_TREE_ATTN_OP_CAPTURE_LAYER",
+                "language_model.model.layers.3.self_attn",
+            )
         if want and want != "*" and not layer_name.startswith(want):
             return
         seen = int(globals().get("_FR13_TREE_ATTN_OP_CAPTURE_SEEN", 0))
         skip = int(os.environ.get("FR13_TREE_ATTN_OP_CAPTURE_SKIP", "0"))
         limit = int(os.environ.get("FR13_TREE_ATTN_OP_CAPTURE_LIMIT", "1"))
         saved = int(globals().get("_FR13_TREE_ATTN_OP_CAPTURE_SAVED", 0))
+        # FR13_FA2_MAB carrier-event gating: an independent per-(layer) counter
+        # so the A/B fires on the FR13_FA2_MAB_SKIP-th tree-verify forward (the
+        # deep-accept carrier event) and at most FR13_FA2_MAB_LIMIT times per
+        # layer.  Keyed by layer_name so a "*" sweep gates each of the 16
+        # full-attn layers at the SAME event ordinal.
+        if mab_on:
+            mab_skip = int(os.environ.get("FR13_FA2_MAB_SKIP", "0"))
+            mab_limit = int(os.environ.get("FR13_FA2_MAB_LIMIT", "1"))
+            mab_counts = globals().setdefault("_FR13_FA2_MAB_COUNTS", {})
+            mab_seen = int(mab_counts.get(layer_name, 0))
+            mab_counts[layer_name] = mab_seen + 1
+            run_mab = mab_skip <= mab_seen < (mab_skip + mab_limit)
+        else:
+            run_mab = False
         globals()["_FR13_TREE_ATTN_OP_CAPTURE_SEEN"] = seen + 1
-        if seen < skip or saved >= limit:
+        save_now = bool(path) and not (seen < skip or saved >= limit)
+        if not save_now and not run_mab:
             return
 
         block_size = int(key_cache.shape[1])
@@ -11159,12 +11388,26 @@ def _fr13_tree_attn_op_capture(
             "dense_key": dense_k,
             "dense_value": dense_v,
         }
-        out = Path(call_path)
-        out.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(payload, out)
-        if saved == 0:
-            torch.save(payload, Path(path))
-        globals()["_FR13_TREE_ATTN_OP_CAPTURE_SAVED"] = saved + 1
+        if save_now:
+            out = Path(call_path)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            torch.save(payload, out)
+            if saved == 0:
+                torch.save(payload, Path(path))
+            globals()["_FR13_TREE_ATTN_OP_CAPTURE_SAVED"] = saved + 1
+        if run_mab:
+            _fr13_fa2_mab_recall(
+                impl,
+                layer_name,
+                int(seen),
+                int(saved),
+                query,
+                dense_k,
+                dense_v,
+                seq_lens,
+                payload["tree_attn_bias"],
+                output.detach().to(torch.float32).cpu(),
+            )
     except Exception as exc:
         logger.warning("FR13 tree attention op capture failed: %s", exc)
 

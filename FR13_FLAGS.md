@@ -35,6 +35,7 @@ Top-down ladder vs E5 (eager, hooks ON). All point to a `/logs/*.pt` path; each 
 | `FR12_SUBKERNEL_CAPTURE` (`_LAYER_PREFIX`,`_INPUT`,`_Z`) | GDN sub-ops: input_hidden, pre_conv, conv1d_out, h0_state_in, scan_out, gate_z, gate_out, o_proj_out |
 | `FR10_SPINE_LOGIT_CAPTURE` / `FR13_FINAL_LOGIT_CAPTURE` (`_ROWS`) | spine / final logits |
 | `FR13_TREE_ATTN_OP_CAPTURE` / `FR13_FLASH_ATTN_OP_CAPTURE` (`_LAYER`) | low-level attn op q/k/v/out (for the FA2-on-path oracle) |
+| `FR13_FA2_MAB` (`_LAYER` default `*`, `_SKIP`, `_LIMIT`, `_DUMP`) | **forked-FA2 M-invariance A/B (default OFF)**. In-process at each full_attn layer on the SAME live captured K/V from one cat9 deep-accept event: re-calls OUR forked-FA2 op at M=9 (full tree) and M=5 (spine-slice rows `[0,1,2,4,6]` + 5×5 spine sub-bias + spine-suffix KV) and dumps the deep-spine row6 (=node5) attn_out **RAW max_abs** per layer to `_DUMP` (jsonl). RAW≠0 ⇒ fork IS M-dependent (query-tile fragment) ⇒ FR13_FA2_QPAD is REAL; RAW==0 ⇒ M-invariant ⇒ 22 is DIFFUSE ⇒ reshape. Offline twin (banked captures): `scripts/fr13_fa2_mab_replay.py`. Default-OFF ⇒ locked cat9 default path byte-identical. |
 | `FR10_METRICS` | `1` for measure (diag counters); `0` for the speed run |
 | `FR12_TREE_CONV_STATE_FULL_CAPTURE`, `FR12_NATIVE_SPINE_ORACLE`, `FR12_TREE_CONV_NATIVE_SPINE`, `FR12_TREE_SCAN_NATIVE_SPINE`, `FR12_TREE_CONV_NATIVE_PRIOR_READ` | conv ring-buffer full state + native-spine conv/scan oracle (distinguish conv-state vs conv-kernel) |
 
