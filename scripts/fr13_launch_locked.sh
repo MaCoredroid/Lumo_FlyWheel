@@ -26,6 +26,13 @@ export FR13_FA2_PREFILL_NATIVE=1
 export FR13_TREE_ATTN_EXP2_SOFTMAX=1
 export FR13_CONV_COMMITTED_PATH=1
 export BATCH_INVARIANT=0
+# --- BAKED FIX (2026-06-14): in_proj_ba pad-to-fixed-M batch-invariance (FR13_WIDTH_
+# CARRIER_INPROJ_BA_BIND.md, H1). Pads bf16 in_proj_ba (+ out_proj) to a tree_n-
+# independent M => M-invariant a/b => removes ~8 of the +17 leaf co-residency flips.
+# Same-boot OFF=26 vs ON=18 (-8, lossless: det [T,T,T,T], CPU max_abs=0.0, flips DOWN).
+# Spec-path-only (gate num_spec_decodes>1); regular decode byte-unaffected.
+export LUMO_FB_KERNEL_ROWS=1
+export LUMO_FB_PROJ_PAD_ROWS=16
 
 # --- DIAGNOSTIC-OFF (armable for the chase) ---
 export FR13_COMMIT_ARGMAX_GATE="$(diag FR13_COMMIT_ARGMAX_GATE)"
