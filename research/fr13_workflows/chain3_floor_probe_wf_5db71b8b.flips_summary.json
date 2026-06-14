@@ -1,0 +1,32 @@
+{
+ "total_clear_margin_flips": 5,
+ "total_flips": 10,
+ "total_positions": 512,
+ "within_boot_det_all": true,
+ "per_prompt": [
+  {
+   "prompt_id": 0,
+   "served_len": 128,
+   "n_flips": 2,
+   "n_clear_flips": 0
+  },
+  {
+   "prompt_id": 1,
+   "served_len": 128,
+   "n_flips": 1,
+   "n_clear_flips": 1
+  },
+  {
+   "prompt_id": 2,
+   "served_len": 128,
+   "n_flips": 5,
+   "n_clear_flips": 3
+  },
+  {
+   "prompt_id": 3,
+   "served_len": 128,
+   "n_flips": 2,
+   "n_clear_flips": 1
+  }
+ ]
+}
