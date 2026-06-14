@@ -29,3 +29,15 @@ User-set sequence after the localization grind wraps (user expects the L0-GDN A/
 
 Pairs with [[project_fr13_speed_first_lossless_gate]], [[feedback_dont_handroll_speed_defer_tuning]],
 [[feedback_flag_gate_metrics_reuse_infra]], FR13_WIDTH_CARRIER_INPROJ_BA_BIND.md.
+
+## RE-SEQUENCE (user 2026-06-14): empirical chase-down AFTER bake, BEFORE final B=1 (gate now ready)
+Now that the SUBOP_MAB gate is rebuilt (FR13_SUBOP_MAB_REBUILD.md, c8061eda - 5 EDITs), the order is:
+1. Bake in_proj_ba (running wc9kiwfi7) -> verify bake holds (lossless + speed + new fingerprint).
+2b. APPLY the 5 rebuild EDITs to the patcher (post-bake, when it frees the patcher): plain -e env (NOT the
+    inert ray allowlist - the worker is mp/spawn, inherits pid-1 environ) + 4 ERROR-level FR13_SUBOP_STAGE
+    markers + hoist asserts out of the swallowing try.
+2c. EMPIRICAL CHASE-DOWN with the working gate: rebuilt L0-GDN A/B = conv1d_out/scan_out M10-vs-M5 deep-spine.
+    Worker-env gate + stage markers confirm engagement first. Predicts ~0 (depth-intrinsic) but get the REAL
+    number (or find a paddable op). This is the empirical close of the residual the 4 infra failures blocked.
+3. FINAL B=1: baked cat9 flip count + accept + fingerprint + speed (re-measure if 2c found a fix).
+Then OPT-1/OPT-A speed verify -> B=4.
