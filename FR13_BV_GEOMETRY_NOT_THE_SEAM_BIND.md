@@ -52,3 +52,27 @@ decode-reference artifact; if not, isolate the cross-event handoff. Pairs with
 [[reference_gdn_verify_sequential_dispatch]], [[project_fr13_conv_priorwindow_root]],
 [[reference_multispine_not_lossless_closed_nonship]], [[feedback_read_vllm_source_first]],
 [[feedback_research_before_deadend]].
+
+## Verify holds=True + the PRECISE mechanism + the corrected next step
+Verify ran the strongest disconfirmation: an independent from-scratch fp32 torch GDN scan matches
+native root to 0.0078 (=1 bf16 ULP) while native==our-kernel==0.0 — proving native is a genuine
+SEPARATE correct code path (not our kernel aliased), and the harness reports a real 0.0078 when a
+1-ULP diff exists (so the reported 0.0 are TRUE zeros, not clamped). Also swept bv32w8/bv16w4/bv8w8
+= all 0.0.
+
+**WHY the seam-scan was wrong (the precise mechanism):** `BLOCK_V` only re-tiles WHICH V-rows a
+program owns; the `tl.sum(axis=1)` reduction is over **DIM_K** within each V-row — BV never changes
+the K-reduction order. So the launch geometry is **reduction-invariant** on GB10/triton 3.6.0. The
+seam-scan's "BV reshapes the tl.sum reduction tree → ~1 ULP/node" conflated V-tiling with the
+K-reduction.
+
+**CORRECTED next step (verify's nextAction):** do NOT build BV-match/recompute. Re-run the
+**top-down per-layer ladder** (input→L0→…→logits) on current HEAD to find the FIRST nonzero layer,
+**using the RIGHT reference — native tree-verify / E5, NOT the no-spec decode oracle** (the 22 flips
+were measured vs the decode oracle, a different kernel path; part of them may be a
+tree-verify-vs-sequential-decode artifact, not a kernel bug). Prime remaining suspects (GDN scan +
+conv ruled out): the **full-attention TREE_ATTN-vs-FLASH_ATTN 0.00195 front** (the FA2-fork; user
+ACCEPTED its ~2-ULP floor, so re-confirm it's within-floor not a carrier), the **cross-event h0
+handoff**, and **tree co-residency** (cat9 tree vs linear MTP-5). One caveat: this test covered the
+SPINE only (native has no branch rows); branch losslessness vs the SpecInfer/STree path-rerun
+oracle is still untested.
