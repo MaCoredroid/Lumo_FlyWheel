@@ -14,6 +14,16 @@ FR10_METRICS=${FR10_METRICS:-0}
 BATCH_INVARIANT=${BATCH_INVARIANT:-0}
 FR13_FA2_TREE_BIAS=${FR13_FA2_TREE_BIAS:-1}
 FR13_FA2_PREFILL_NATIVE=${FR13_FA2_PREFILL_NATIVE:-1}
+# FR13_FA2_QPAD (default OFF): make the forked-FA2 tree-bias decode M-invariant
+# by padding the query AND the suffix-key extent to a fixed compile-constant
+# N_PAD_Q (FR13_FA2_QPAD_N, default 64). Real rows live at [0:M] / real suffix
+# keys at the same KV positions; padded query rows + padded keys are -inf-masked
+# from every real row, so it is lossless-by-construction (FR13_FA2_MDEPENDENT_BIND
+# carrier fix). ONLY affects the forked-FA2 tree-verify call (tree_bias present);
+# regular decode has no tree_bias and is untouched. Gate: re-run the MAB A/B
+# (FR13_FA2_MAB=1) -> carrier RAW->0.0, then the e2e per-token flip count.
+FR13_FA2_QPAD=${FR13_FA2_QPAD:-0}
+FR13_FA2_QPAD_N=${FR13_FA2_QPAD_N:-64}
 # FR13 Method-A: BI allowlist for TREE_ATTN (inert by default; only relevant
 # with BATCH_INVARIANT=1, and requires the two FR13_FA2_* flags above).
 FR13_BI_TREE_ATTN=${FR13_BI_TREE_ATTN:-0}
@@ -256,6 +266,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR12_TREE_CONV_STATE_FULL_CAPTURE="${FR12_TREE_CONV_STATE_FULL_CAPTURE:-0}" \
   -e FR13_FA2_TREE_BIAS="$FR13_FA2_TREE_BIAS" \
   -e FR13_FA2_PREFILL_NATIVE="$FR13_FA2_PREFILL_NATIVE" \
+  -e FR13_FA2_QPAD="$FR13_FA2_QPAD" \
+  -e FR13_FA2_QPAD_N="$FR13_FA2_QPAD_N" \
   -e FR13_TREE_ATTN_EXP2_SOFTMAX="$FR13_TREE_ATTN_EXP2_SOFTMAX" \
   -e FR10_TREE_GDN_COUNTER_DUMP=/logs/fr10_tree_gdn_counters.json \
   -e FR10_TREE_GDN_CAPTURE_PAYLOAD="${FR10_TREE_GDN_CAPTURE_PAYLOAD:-}" \

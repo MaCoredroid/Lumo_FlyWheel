@@ -402,9 +402,227 @@ def patch_fa2_source(fa2_src: Path) -> dict[str, bool]:
     }
 
 
+# FR13_FA2_QPAD: query-pad helper injected at module scope into the installed
+# vllm/vllm_flash_attn/flash_attn_interface.py.  Flag-gated (FR13_FA2_QPAD=1),
+# default OFF.  See _patch_flash_attn_interface for the gated dispatch.
+#
+# WHY: the forked-FA2 tree-bias decode is M_DEPENDENT on the deep-spine query
+# row (FR13_FA2_MDEPENDENT_BIND) -- the kBlockM MMA-fragment tile / Is_even_MN
+# predication / tree_bias lane offsets differ for M=10 (full tree) vs M=5
+# (spine), ~1 bf16-ULP/full-attn-layer compounding to the 22-flip carrier.
+# Padding the query AND the suffix-key extent to a fixed compile-constant
+# N_PAD_Q (=64, a kBlockM multiple) makes the real rows' tile geometry
+# M-invariant: with max_seqlen_q == N_PAD_Q always, the spine row's
+# (row_idx, Is_even_MN, q/k bias offsets) are identical for every tree size.
+#
+# LOSSLESS-BY-CONSTRUCTION: real query rows live at segment indices [0:M] and
+# real suffix keys at the same KV positions as the unpadded call; the padded
+# query rows ([M:N_PAD_Q]) and padded suffix keys are -inf-masked in the
+# padded bias for EVERY real row (cols [M:N_PAD_Q] = -inf), so they never
+# contribute to any real row's softmax.  Padded query-row outputs are sliced
+# off ([:M]).  Because we extend BOTH the query (to N_PAD_Q) and the key
+# extent (seqused_k += pad / appended dummy KV), the kernel's causal offset
+# (max_seqlen_k - max_seqlen_q == context_len) and the bias column origin
+# (context_len) are UNCHANGED from the unpadded call, so each real row's
+# score tile is bit-identical to what it would be with no padding -- only the
+# tile OCCUPANCY (which is the M-dependent carrier) is now constant.
+#
+# NOT a reward-hack: our forked kernel still computes the whole tree in one
+# pass; no copy / dense rerun / splice / native route.  NOT global BI.
+FR13_FA2_QPAD_HELPER = r'''
+def _fr13_fa2_qpad_should_apply(tree_bias, fa_version):
+    """True iff the FR13_FA2_QPAD query-pad is enabled for this call."""
+    return (
+        tree_bias is not None
+        and int(fa_version) == 2
+        and os.environ.get("FR13_FA2_QPAD", "0") == "1"
+    )
+
+
+def _fr13_fa2_qpad_size():
+    # Fixed compile-constant query/key pad target.  64 == kBlockM, >= largest
+    # deployed tree.  Overridable for sweeps but defaults to 64.
+    return int(os.environ.get("FR13_FA2_QPAD_N", "64"))
+
+
+def _fr13_fa2_qpad_prepare(
+    q,
+    k,
+    v,
+    out,
+    cu_seqlens_q,
+    cu_seqlens_k,
+    seqused_k,
+    max_seqlen_q,
+    max_seqlen_k,
+    tree_bias,
+    block_table,
+    n_pad_q,
+):
+    """Build the query-/key-padded tensors + a callback that copies the real
+    rows of the padded output back into the caller's ``out`` and returns it.
+
+    All decode requests in a tree batch share ONE 2D ancestry bias and have the
+    SAME tree_len query rows, so the pad is uniform.  Non-uniform query lengths
+    (never produced by tree decode) fail loud rather than silently mis-pad.
+    """
+    if cu_seqlens_q is None:
+        raise RuntimeError("FR13_FA2_QPAD requires varlen cu_seqlens_q")
+    if tree_bias.dim() != 2:
+        raise RuntimeError(
+            f"FR13_FA2_QPAD expects a 2D [q, q] tree_bias, got {tuple(tree_bias.shape)}"
+        )
+    seglen = torch.diff(cu_seqlens_q)
+    n_seq = int(seglen.numel())
+    seg_list = [int(x) for x in seglen.tolist()]
+    if n_seq == 0:
+        raise RuntimeError("FR13_FA2_QPAD got an empty query batch")
+    m = seg_list[0]
+    if any(s != m for s in seg_list):
+        raise RuntimeError(
+            f"FR13_FA2_QPAD requires uniform query lengths, got {seg_list}"
+        )
+    if m > n_pad_q:
+        raise RuntimeError(
+            f"FR13_FA2_QPAD N={n_pad_q} smaller than tree query length M={m}"
+        )
+    bias_rows, bias_cols = int(tree_bias.shape[0]), int(tree_bias.shape[1])
+    if bias_rows < m or bias_cols < m:
+        raise RuntimeError(
+            f"FR13_FA2_QPAD tree_bias {tuple(tree_bias.shape)} smaller than M={m}"
+        )
+    pad = n_pad_q - m
+    device = q.device
+
+    # --- padded query: real rows [0:m] per segment, zeros at [m:n_pad_q] ---
+    h, d = int(q.shape[1]), int(q.shape[2])
+    q_pad = q.new_zeros((n_seq * n_pad_q, h, d))
+    real_q_idx = (
+        torch.arange(n_seq, device=device).unsqueeze(1) * n_pad_q
+        + torch.arange(m, device=device).unsqueeze(0)
+    ).reshape(-1)
+    src_q_idx = (
+        torch.arange(n_seq, device=device).unsqueeze(1) * m
+        + torch.arange(m, device=device).unsqueeze(0)
+    ).reshape(-1)
+    q_pad[real_q_idx] = q[src_q_idx]
+    cu_seqlens_q_pad = (
+        torch.arange(n_seq + 1, device=device, dtype=cu_seqlens_q.dtype) * n_pad_q
+    )
+
+    # --- padded ancestry bias [n_pad_q, n_pad_q]: real top-left m x m, padded
+    #     diagonal 0 (padded query self-attends its own padded key), all else
+    #     -inf so real rows never see padded keys and padded keys never see
+    #     real rows. ---
+    neg_inf = float("-inf")
+    bias_pad = tree_bias.new_full((n_pad_q, n_pad_q), neg_inf)
+    bias_pad[:m, :m] = tree_bias[:m, :m]
+    if pad > 0:
+        diag = torch.arange(m, n_pad_q, device=device)
+        bias_pad[diag, diag] = 0.0
+    bias_pad = bias_pad.contiguous()
+
+    # --- key extent: append `pad` suffix-key slots per request so the kernel's
+    #     causal offset (max_seqlen_k - max_seqlen_q) and the bias column origin
+    #     (context_len) are unchanged.  Paged: inflate seqused_k + max_seqlen_k
+    #     (extra slots are -inf-masked for real rows; only padded query rows,
+    #     which are sliced off, read them).  Contiguous (the MAB replay): append
+    #     `pad` real zero KV rows per request so the padded diagonal has a key. ---
+    k_pad, v_pad = k, v
+    cu_seqlens_k_pad = cu_seqlens_k
+    seqused_k_pad = seqused_k
+    if block_table is not None or seqused_k is not None:
+        if seqused_k is None:
+            raise RuntimeError(
+                "FR13_FA2_QPAD paged path requires seqused_k"
+            )
+        seqused_k_pad = seqused_k + pad
+        max_seqlen_k_pad = int(max_seqlen_k) + pad
+    else:
+        if cu_seqlens_k is None:
+            raise RuntimeError(
+                "FR13_FA2_QPAD contiguous path requires cu_seqlens_k"
+            )
+        kseg = torch.diff(cu_seqlens_k)
+        kseg_list = [int(x) for x in kseg.tolist()]
+        hk, dk = int(k.shape[1]), int(k.shape[2])
+        total_k_pad = int(cu_seqlens_k[-1].item()) + n_seq * pad
+        k_pad = k.new_zeros((total_k_pad, hk, dk))
+        v_pad = v.new_zeros((total_k_pad, hk, dk))
+        new_cu_k = [0]
+        for i in range(n_seq):
+            ks = int(cu_seqlens_k[i].item())
+            ke = int(cu_seqlens_k[i + 1].item())
+            dst = new_cu_k[-1]
+            seg = ke - ks
+            k_pad[dst:dst + seg] = k[ks:ke]
+            v_pad[dst:dst + seg] = v[ks:ke]
+            # padded KV rows [seg:seg+pad] stay zero (only the padded diagonal
+            # query rows attend them; sliced off).
+            new_cu_k.append(dst + seg + pad)
+        cu_seqlens_k_pad = torch.tensor(
+            new_cu_k, device=device, dtype=cu_seqlens_k.dtype
+        )
+        max_seqlen_k_pad = int(max_seqlen_k) + pad
+
+    # out_pad MUST mirror the caller's `out` dtype/device (the attention-output
+    # dtype), NOT q's dtype -- otherwise the kernel would write into the wrong
+    # precision and the slice-back would re-round.  When out is None the kernel
+    # allocates its own output and we just reshape the real rows.
+    out_pad = (
+        out.new_zeros((n_seq * n_pad_q, h, d)) if out is not None else None
+    )
+
+    def _unpad(result):
+        # result is the padded output ([n_seq*n_pad_q, H, D]); copy the real
+        # rows back into the caller's `out` in row order and return it.  The
+        # gather + reshape preserve dtype, so no extra rounding is introduced.
+        real = result[real_q_idx]
+        if out is not None:
+            out.copy_(real.reshape(out.shape))
+            return out
+        return real.reshape(n_seq * m, h, d)
+
+    return {
+        "q": q_pad,
+        "k": k_pad,
+        "v": v_pad,
+        "out": out_pad,
+        "cu_seqlens_q": cu_seqlens_q_pad,
+        "cu_seqlens_k": cu_seqlens_k_pad,
+        "seqused_k": seqused_k_pad,
+        "max_seqlen_q": n_pad_q,
+        "max_seqlen_k": max_seqlen_k_pad,
+        "tree_bias": bias_pad,
+        "unpad": _unpad,
+    }
+
+'''
+
+
 def _patch_flash_attn_interface(path: Path) -> bool:
     text = path.read_text()
     changed = False
+    # FR13_FA2_QPAD: ensure `os` is importable at module scope (the helper +
+    # the gate read os.environ).  The stock file imports os lazily inside the
+    # cute try-block; hoist a top-level import to be safe.
+    if "\nimport os\n" not in text:
+        text, did = _replace_once(
+            text,
+            "\nimport torch\n",
+            "\nimport os\nimport torch\n",
+            "flash_attn_interface os import",
+        )
+        changed = changed or did
+    # Inject the module-level query-pad helper just before flash_attn_varlen_func.
+    if "_fr13_fa2_qpad_prepare" not in text:
+        text, did = _insert_once(
+            text,
+            "def flash_attn_varlen_func(",
+            FR13_FA2_QPAD_HELPER.lstrip("\n"),
+            "flash_attn_interface qpad helper",
+        )
+        changed = changed or did
     text, did = _replace_once(
         text,
         "    s_aux=None,\n    cp_world_size=1,\n",
@@ -412,6 +630,60 @@ def _patch_flash_attn_interface(path: Path) -> bool:
         "flash_attn_interface tree_bias parameter",
     )
     changed = changed or did
+    # FR13_FA2_QPAD: gated query-pad transform.  Anchored on the post-
+    # maybe_contiguous / dummy_cu_seqlens_k line so q/k/v are already
+    # contiguous; rebinds the locals to padded tensors and stashes the unpad
+    # callback.  Default OFF (env gate + tree_bias presence).
+    qpad_anchor = "    dummy_cu_seqlens_k = torch.empty_like(cu_seqlens_q)\n"
+    qpad_block = (
+        qpad_anchor
+        + "\n"
+        + "    _fr13_qpad_unpad = None\n"
+        + "    if _fr13_fa2_qpad_should_apply(tree_bias, fa_version):\n"
+        + "        _fr13_qpad = _fr13_fa2_qpad_prepare(\n"
+        + "            q, k, v, out, cu_seqlens_q, cu_seqlens_k, seqused_k,\n"
+        + "            max_seqlen_q, max_seqlen_k, tree_bias, block_table,\n"
+        + "            _fr13_fa2_qpad_size(),\n"
+        + "        )\n"
+        + "        q = _fr13_qpad[\"q\"]\n"
+        + "        k = _fr13_qpad[\"k\"]\n"
+        + "        v = _fr13_qpad[\"v\"]\n"
+        + "        out = _fr13_qpad[\"out\"]\n"
+        + "        cu_seqlens_q = _fr13_qpad[\"cu_seqlens_q\"]\n"
+        + "        cu_seqlens_k = _fr13_qpad[\"cu_seqlens_k\"]\n"
+        + "        seqused_k = _fr13_qpad[\"seqused_k\"]\n"
+        + "        max_seqlen_q = _fr13_qpad[\"max_seqlen_q\"]\n"
+        + "        max_seqlen_k = _fr13_qpad[\"max_seqlen_k\"]\n"
+        + "        tree_bias = _fr13_qpad[\"tree_bias\"]\n"
+        + "        dummy_cu_seqlens_k = torch.empty_like(cu_seqlens_q)\n"
+        + "        _fr13_qpad_unpad = _fr13_qpad[\"unpad\"]\n"
+    )
+    if "    if _fr13_fa2_qpad_should_apply(tree_bias, fa_version):\n" not in text:
+        text, did = _replace_once(
+            text,
+            qpad_anchor,
+            qpad_block,
+            "flash_attn_interface qpad transform",
+        )
+        changed = changed or did
+    # FR13_FA2_QPAD: un-pad the result (copy real rows into the caller's out)
+    # right before the function returns.
+    qpad_return_old = (
+        "    return (out, softmax_lse) if return_softmax_lse else out\n"
+    )
+    qpad_return_new = (
+        "    if _fr13_qpad_unpad is not None:\n"
+        "        out = _fr13_qpad_unpad(out)\n"
+        "    return (out, softmax_lse) if return_softmax_lse else out\n"
+    )
+    if "_fr13_qpad_unpad is not None" not in text:
+        text, did = _replace_once(
+            text,
+            qpad_return_old,
+            qpad_return_new,
+            "flash_attn_interface qpad unpad-return",
+        )
+        changed = changed or did
     old = """        out, softmax_lse = torch.ops._vllm_fa2_C.varlen_fwd(\n            q,\n            k,\n            v,\n            out,\n"""
     new = """        _fr13_fa2_op = (\n            torch.ops._vllm_fa2_C.varlen_fwd_tree_bias\n            if tree_bias is not None\n            else torch.ops._vllm_fa2_C.varlen_fwd\n        )\n        out, softmax_lse = _fr13_fa2_op(\n            q,\n            k,\n            v,\n            out,\n"""
     text, did = _replace_once(text, old, new, "flash_attn_interface choose tree op")
