@@ -61,3 +61,36 @@ This also lifts the **N_PAD ≤ 16 cap** (`:76-77`) → larger trees become poss
 future suffix-fusion / deeper trees). Pairs with [[reference_diffuse_gdn_accumulation_explained]],
 [[feedback_math_correct_vs_bitexact]], [[feedback_no_reroute_reward_hacking]],
 [[project_fr13_pipeline_lock]].
+
+---
+
+## MEASURED spill numbers (GPU compile-test wp5hsu63v, 2026-06-14) — REAL ptxas, holds=True
+
+Compiled `_tree_gdn_kernel` (committed, unchanged) at each geometry on GB10 (triton 3.6.0,
+cu130-nightly, NO model load); read `compiled.n_regs`/`.n_spills` off the Triton handle (numbers
+DIVERGE from the math prediction in every config ⇒ real, not echoed).
+
+| cfg | geometry | tree | pred regs | **measured n_regs** | **spill B/thread** | verdict |
+|---|---|---|---:|---:|---:|---|
+| C0 | BV=16, warps=8, N_PAD=16 | cat9 (current) | 128 | **254** | **0** | FITS (right at the 255 cap) |
+| C1 | BV=32, warps=4, N_PAD=2 | cat2 | 64 | 140 | 0 | FITS |
+| C2 | BV=32, warps=4, N_PAD=4 | 3-4 node | 128 | 235 | 0 | FITS |
+| C3 | BV=32, warps=4, N_PAD=16 | **cat9 native-geom** | 512 | 255 (clamped) | **636** | **SPILLS hard (runs, no 701)** |
+| C4 | BV=32, warps=8, N_PAD=16 | cat9, more warps | 256 | 255 (clamped) | **96** | spills 6.6× less, still spills |
+
+**KEY REFRAME — the spill is a SPEED cost, not a correctness wall.** Matching native's full
+geometry (BV=32/warps=4) at cat9 (N_PAD=16) does NOT fail to launch (no CUDA 701) — ptxas clamps
+to 255 regs and **spills 636 B/thread to local memory**: the kernel runs, just slow. So we can get
+the (presumably) lossless BV=32/warps=4 config NOW at a speed penalty, then optimize. Findings:
+- Small trees (cat2 N_PAD=2/4) match native's geometry cleanly — 0 spill. The spill is purely a
+  large-tree (N_PAD=16) problem.
+- `num_warps` is the dominant lever: warps=8 cuts the spill 6.6× (636→96 B) but doesn't clear it
+  (256 regs > 255), and warps=8 ≠ native's warps=4 reduction anyway.
+- Only the current BV=16/warps=8 is 0-spill at cat9 — but it's the geometry that DOESN'T match
+  native (the open seam). So: BV=16 = fast but seam; BV=32/warps=4 = matches native but spills.
+
+**Two-step path this implies:** (1) **confirm lossless** — the A/B verify (does BV=32/warps=4
+reproduce native to RAW max_abs==0.0?) can run despite the spill (it launches), answering the
+*correctness* question independent of speed. (2) if lossless, the **cache workaround** (spill-rank
+wf) removes the 636 B spill → lossless AND fast. The spill is no longer a wall — it's a speed
+optimization that follows the lossless confirmation.
