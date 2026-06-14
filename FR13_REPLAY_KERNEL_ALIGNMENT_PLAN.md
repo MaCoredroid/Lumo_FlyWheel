@@ -250,3 +250,20 @@ kernel computing. We do NOT propose "call native fused_sigmoid for the durable s
   dtype guard L4773-4786; replay launch sites L7621-7637 / L8194-8210; A/B harness
   `_fr13_replay_durable_ab` L6475-6580.
 - Corroboration: `FR13_DIFFUSE_GDN_EXPLAINED.md:42-44` (num_warps=8/BV=16 named seam).
+
+---
+## MONITOR RED-TEAM ADDENDUM (2026-06-14, before the A/B verdict)
+The PRIME seam (a: num_warps=8/BV=16 vs native 4/BV=32) is PLAUSIBLE but in TENSION with prior evidence — flag
+it, do NOT treat STEP 0 as a known carrier (this session overturned BV/warps + FA2-tile + width-H1 as
+overstated single-seam carriers):
+- FR13_BV_SPILL_VERDICT.md: "the SEQ scan kernel is ALREADY bit-exact at BV=16" (e4a6a2f2), and FR13_BV_GEOMETRY
+  measured our scan RAW 0.0 vs REAL native (native BV=32) — so for the SHARED _gdn_node_step body, BV alone does
+  NOT cause divergence. If the scan (same body) is bit-exact across BV, the replay (same body) plausibly is too.
+- The ONLY way the plan's seam survives: num_warps=8 was an UNCONFIRMED spill-fix that FR13_BV_SPILL_VERDICT
+  itself flags as a [LIVE prediction] — "thread-mapping change could perturb the layout… re-run the gate to
+  confirm still bit-exact." So num_warps=8 (not BV) is the candidate, and its bit-exactness was never confirmed.
+- RULE for applying this plan: only after the A/B (w2vaqcsmx) shows nonzero+growing max_abs(H_ours-H_native_seq).
+  Then apply STEP 0 and EMPIRICALLY re-measure the int-view A/B (NEVER atol); STEP 0 is a carrier ONLY if it
+  drives the divergence to 0.0. If the A/B lands ~0, the replay is already faithful and STEP 0 is moot — and the
+  scan's BV-invariance is the leading prior for that ~0 outcome. Do NOT report "BV/warps is the carrier" from
+  the plan alone. Bug-class #11 (measurement trap — a plausible seam re-raised) + #10 (codegen-identity).
