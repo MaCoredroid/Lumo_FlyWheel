@@ -4,6 +4,20 @@ Date 2026-06-14. Workflow wg5ilg5ua (FR13_SCAN_BITEXACT_SRAM_NPAD.md, design 349
 concrete follow-up to FR13_BV_SPILL_VERDICT (which deferred this). ptxas-MEASURED on GB10 (sub-agent, triton3.6
 cu130). Verify HOLDS=True with one material sharpening (the dissolve-test reference).
 
+> ## ⚠ FACTUAL CORRECTION 2026-06-14 (scan-alignment-math w0n91rty5 34b92317, VERIFIED in live source)
+> **Native decode geometry is `BV32 / num_warps=1 / num_stages=3`, NOT `BV32/w4`.** Confirmed at
+> `/tmp/vllm_live_019/.../fla/ops/fused_recurrent.py:438` (`num_warps=1`, `num_stages=3`) — the packed-decode
+> launcher. The `BV32/w4` in this bind (and the lineage) was WRONG. Consequences: (1) EXIT-2 recompute-from-spine
+> must re-pin to **BV32/w1/s3** (not w4). (2) The spill arithmetic must be RE-DERIVED at w1: h_cache at
+> N_PAD=16/BV=32/**w1** = 16·32·128·4 = 256 KB over 1 warp (32 lanes) = ~2048 fp32 regs/lane = CATASTROPHIC
+> spill (far worse than w4's 636 B) — so the native-geom full-tree SCAN is unusable at N_PAD=16; only
+> **recompute-from-spine** (one tile, no h_cache, no spill) is the deployable bit-exact route. The FREE geom
+> pre-test (BV32/w1 at N_PAD=1, one node) has no h_cache so no spill. (3) BIGGER FINDING (FR13_SCAN_ALIGNMENT_MATH.md):
+> native decode is RECURRENT rank-1 = the SAME algorithm as our scan (byte-for-byte same 5 ops) — so the
+> carrier is CODEGEN (geometry + l2norm rsqrt-vs-1/sqrt + beta bf16-cast, all alignable), NOT a chunk-vs-recurrent
+> algorithmic gap. The "diffuse within-floor IRREDUCIBLE" pessimism rested on the WRONG (chunked-prefill)
+> reference and is REFUTED.
+
 ## BV=4 lead = DEAD (overturned — the monitor-flagged load-bearing claim)
 BV=4/warps=4 does NOT preserve native's reduction: it is a DIFFERENT TENSOR SHAPE ([4,128] vs native [32,128])
 ⇒ different compilation/ptxas instruction-selection of the partial-sum + FMA feeding the K-reduce (bug-class
