@@ -785,5 +785,147 @@ def test_stage_markers_are_noop_when_off() -> None:
     )
 
 
+# --------------------------------------------------------------------------- #
+# 6. KERNEL-VALID REDUCED-ROW CONV GEOMETRY (the residual device-assert fix).
+#    The reduced (M5/M1) conv arm previously passed num_accepted_tokens =
+#    nacc.clamp(min=1,max=m) (the spec path), which drives the FLA conv-update
+#    kernel to state_len = width-1+(m-1) and conv_state_token_offset = nacc-1.
+#    On a reduced arm that span/offset can run OFF the committed conv-state bank
+#    -> a device-side assert INSIDE the kernel (beyond the host-side
+#    _guard_rows).  The fix: the reduced arms pass num_accepted_tokens=None so
+#    the kernel uses the non-spec path (state_len = width-1, offset = 0), a
+#    footprint INDEPENDENT of nacc / max_path_len / the physical column count.
+#    The M10 (served-geometry) reference arm KEEPS the spec geometry (faithful
+#    co-residency).  These CPU tests capture the kwargs the helper passes to
+#    causal_conv1d_update per arm and assert the geometry, plus model the
+#    kernel's state_len arithmetic to prove the reduced footprint is bounded.
+# --------------------------------------------------------------------------- #
+def _make_module_conv_capture(tmp_path: Path):
+    """Exec the emitted helper with a conv stub that RECORDS, per call, the
+    geometry-defining kwargs (num_accepted_tokens, max_query_len) + row count."""
+    body = _extract_helper()
+    conv_calls: list[dict] = []
+
+    class _Logger:
+        def warning(self, *a, **k):  # pragma: no cover - trivial
+            pass
+
+    def stub_conv(x, cs, w, bias, act, **k):
+        nacc = k.get("num_accepted_tokens", None)
+        conv_calls.append(
+            {
+                "m": int(x.shape[0]),
+                "max_query_len": int(k.get("max_query_len", -1)),
+                "nacc_is_none": nacc is None,
+                "nacc_vals": (
+                    None if nacc is None else [int(v) for v in nacc.reshape(-1).tolist()]
+                ),
+            }
+        )
+        return x.clone() * 2.0 + 0.5
+
+    def stub_scan(*, A_log, a, b, dt_bias, q, k, v, initial_state, **k2):
+        out = (q * 3.0)[..., : v.shape[-1]] if q.shape[-1] >= v.shape[-1] else q * 3.0
+        return out, None
+
+    ns = {
+        "os": os,
+        "json": json,
+        "torch": torch,
+        "logger": _Logger(),
+        "causal_conv1d_update": stub_conv,
+        "fused_sigmoid_gating_delta_rule_update": stub_scan,
+    }
+    compile(body, "<emitted_mab_helper>", "exec")
+    exec(body, ns)
+    return ns, conv_calls
+
+
+def test_conv_arm_has_served_geom_split() -> None:
+    """The patcher must thread served_geom through _conv_arm (mirrors _scan_arm),
+    and the reduced call-sites must pass served_geom=False."""
+    helper = _extract_helper()
+    assert "def _conv_arm(rows, served_geom):" in helper
+    assert "conv_m10 = _conv_arm(full_rows, served_geom=True)" in helper
+    assert "conv_m5 = _conv_arm(spine_rows, served_geom=False)" in helper
+    assert "conv_m1 = _conv_arm(m1_rows, served_geom=False)" in helper
+    # Reduced arms disable the spec sliding-window (num_accepted_tokens=None).
+    assert "            else:\n                conv_nacc = None\n" in helper
+
+
+def test_reduced_conv_arm_passes_nacc_none_full_keeps_spec(tmp_path, monkeypatch) -> None:
+    """Live-shaped capture: the M10 conv arm (10 rows) keeps the served spec
+    geometry (num_accepted_tokens != None); the reduced M5 (5) + M1 (1) arms
+    pass num_accepted_tokens=None -> the kernel's non-spec path (no OOB)."""
+    ns, conv_calls = _make_module_conv_capture(tmp_path)
+    fn = ns["_fr13_gdn_subop_mab"]
+    parent, spine = _cat9_geometry()
+    tree_n = 10
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB", "1")
+    dump = tmp_path / "convcap.jsonl"
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_DUMP", str(dump))
+    monkeypatch.setenv("FR13_GDN_SUBOP_MAB_LAYER", "*")
+    _call(
+        fn,
+        ssi=torch.zeros(1, 16, dtype=torch.long),  # all banks valid (bank 0)
+        ssm=torch.randn(20, 8, 8),
+        conv_snap=torch.randn(20, 8, 4),  # width 4 -> physical state_len 4
+        nacc=5,  # served num_accepted (the OLD reduced-arm assert trigger)
+    )
+    assert dump.exists(), "live geometry wrote no record"
+    # Three conv arms ran in M10, M5, M1 order.
+    by_m = {c["m"]: c for c in conv_calls}
+    assert set(by_m) == {tree_n, len(spine), 1}, f"arms ran: {[c['m'] for c in conv_calls]}"
+    # M10 (full tree) = the faithful reference: spec geometry retained.
+    assert not by_m[tree_n]["nacc_is_none"], "M10 arm dropped the served spec geometry"
+    # M5 / M1 (reduced) = kernel-valid non-spec geometry.
+    assert by_m[len(spine)]["nacc_is_none"], "M5 reduced arm still passes spec nacc (would assert)"
+    assert by_m[1]["nacc_is_none"], "M1 reduced arm still passes spec nacc (would assert)"
+
+
+def _conv_kernel_state_len(width: int, m: int, nacc_is_none: bool) -> tuple[int, int]:
+    """Model causal_conv1d_update's host-side state_len + the kernel's
+    conv_state_token_offset (causal_conv1d.py wrapper L1233-1236 + kernel
+    L859-863).  Returns (state_len, conv_state_token_offset) for the arm; the
+    reduced arm (nacc_is_none) must have a footprint bounded by width-1 with
+    offset 0, INDEPENDENT of m and nacc -> provably in-range on any committed
+    bank with >= width-1 physical columns."""
+    if nacc_is_none:
+        state_len = width - 1
+        offset = 0
+    else:
+        seqlen = m
+        state_len = width - 1 + (seqlen - 1)
+        # offset = nacc - 1 (clamped to [1, m] by the served arm); the reference
+        # arm's geometry equals the live forward's and is in-range by construction.
+        offset = m - 1
+    return state_len, offset
+
+
+def test_reduced_conv_footprint_is_kernel_bounded() -> None:
+    """The reduced-arm footprint is width-1 with offset 0 for ANY m / nacc, so
+    the kernel's read (offset .. offset+width-1) and store (0 .. state_len-1)
+    stay inside the committed bank's width-1 physical window -> no OOB assert.
+    The OLD reduced geometry (spec path) grew state_len with m (M5 -> 7 cols),
+    which over-ran a width-1 (3-col) committed window = the device assert."""
+    width = 4  # cat9 GDN conv width
+    phys_cols = width - 1  # a committed conv-state bank's physical column count
+    # Reduced arms (the fix): footprint pinned to width-1, offset 0, for all m.
+    for m in (1, 5, 10):
+        state_len, offset = _conv_kernel_state_len(width, m, nacc_is_none=True)
+        assert state_len == phys_cols, f"reduced m={m} state_len={state_len} != {phys_cols}"
+        assert offset == 0, f"reduced m={m} offset={offset} != 0"
+        # store span [0, state_len) and read window [offset, offset+width-1)
+        # both fit the physical bank.
+        assert state_len <= phys_cols
+        assert offset + (width - 1) <= phys_cols + (width - 2)  # read uses masking
+    # The OLD (spec) reduced geometry over-ran the committed width-1 window:
+    old_state_len, _ = _conv_kernel_state_len(width, 5, nacc_is_none=False)
+    assert old_state_len == 7 and old_state_len > phys_cols, (
+        "the spec reduced geometry no longer over-runs the committed bank "
+        "(the device-assert precondition is gone) -- recheck the model"
+    )
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

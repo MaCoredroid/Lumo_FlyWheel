@@ -1604,7 +1604,7 @@ def _fr13_gdn_subop_mab(
                 + " out of [0," + str(n_ssm_banks) + ")"
             )
 
-        def _conv_arm(rows):
+        def _conv_arm(rows, served_geom):
             m = len(rows)
             _guard_rows(rows)
             idx = torch.tensor(rows, dtype=torch.long, device=dev)
@@ -1613,15 +1613,39 @@ def _fr13_gdn_subop_mab(
             qsl = torch.tensor([0, m], dtype=spec_query_start_loc.dtype, device=dev)
             # conv_state_indices = the single VALID committed bank (already
             # guarded in-range above); the depthwise causal conv has no cross-
-            # bank reduction, so num_accepted_tokens (sliding-window offset) is
-            # the only spec-decode knob.  For the FULL (served-geometry) M10 arm
-            # keep the served num_accepted; for the REDUCED arms clamp the
-            # offset to the present row count so the kernel's conv_state_token_
-            # offset = nacc-1 stays within the cloned window.
-            if nacc is None:
-                conv_nacc = None
+            # bank reduction, so num_accepted_tokens (the sliding-window offset)
+            # is the only spec-decode knob.
+            #
+            # KERNEL-VALID REDUCED-ROW GEOMETRY (FR13_SUBOP_MAB device-assert fix,
+            # mirrors the scan-arm served_geom split):
+            #
+            #  * SERVED (M10) arm — keep the spec geometry so the deep row sees the
+            #    SAME branch-co-resident sliding-window the live forward consumed
+            #    (this is the faithful reference; geometry is the live one, in-range
+            #    by construction).  num_accepted_tokens = the served nacc.
+            #
+            #  * REDUCED (M5/M1) arms — pass num_accepted_tokens=None.  With the
+            #    spec path DISABLED the wrapper sets state_len = width-1 (NOT the
+            #    spec formula width-1+(seqlen-1)) and the kernel uses
+            #    conv_state_token_offset = 0, so it reads the deep node's committed
+            #    prior window at the STANDARD width-1 location of the (in-range,
+            #    guarded) committed bank and writes only width-1 columns.  This
+            #    footprint is INDEPENDENT of nacc / max_path_len / the physical
+            #    conv_state column count -> it provably cannot drive an OOB
+            #    global read/store inside _causal_conv1d_update_kernel (the spec
+            #    path's conv_state_token_offset = nacc-1 + the width-1+(m-1) store
+            #    span on the reduced arm was the residual device-side assert
+            #    beyond the host-side _guard_rows).  The deep node's true prior
+            #    conv state already lives in that committed bank's width-1 window,
+            #    so the reduced conv arm is the correct receptive-field-reduced
+            #    control (matches M1 = prior-window-only by construction).
+            if served_geom:
+                if nacc is None:
+                    conv_nacc = None
+                else:
+                    conv_nacc = nacc.clamp(min=1, max=m)
             else:
-                conv_nacc = nacc.clamp(min=1, max=m)
+                conv_nacc = None
             out = causal_conv1d_update(
                 x,
                 cs,
@@ -1784,9 +1808,9 @@ def _fr13_gdn_subop_mab(
         # ROW-OCCUPANCY axis.  Per FR13_CONV_FIX_DESIGN the tree-conv emulation
         # is row-occupancy M-INVARIANT by construction (no cross-row reduction),
         # so conv1d_out M10-vs-M5 is EXPECTED ~0; a non-zero would overturn that.
-        conv_m10 = _conv_arm(full_rows)
-        conv_m5 = _conv_arm(spine_rows)
-        conv_m1 = _conv_arm(m1_rows)
+        conv_m10 = _conv_arm(full_rows, served_geom=True)
+        conv_m5 = _conv_arm(spine_rows, served_geom=False)
+        conv_m1 = _conv_arm(m1_rows, served_geom=False)
         subops["conv1d_out"] = _triplet(conv_m10, conv_m5, conv_m1)
         # SECOND axis (kernel-identity realization seam, NOT row-occupancy): the
         # SERVED fused tree-conv output (bf16-tap MAC + triton_ex2_silu, already
