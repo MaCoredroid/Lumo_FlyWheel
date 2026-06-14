@@ -123,15 +123,22 @@ FR13_TREE_SAMPLE_ROW=${FR13_TREE_SAMPLE_ROW:-1}
 # script. See the returned schema notes. ***
 LUMO_FB_KERNEL_ROWS=${LUMO_FB_KERNEL_ROWS:-}
 LUMO_FB_PROJ_PAD_ROWS=${LUMO_FB_PROJ_PAD_ROWS:-16}
-# FR13_GDN_SUBOP_MAB worker-env propagation (additive, default-safe). The GDN
-# forward runs in the EngineCore WORKER process; the bare master switch
-# FR13_GDN_SUBOP_MAB (+ _DUMP/_EXPECT_TREE_N/_THRESHOLD) is neither VLLM_-
-# prefixed nor registered in vllm.envs, so it can be stripped on worker spawn.
-# Two belt-and-suspenders knobs, BOTH consulted by ray_env.get_env_vars_to_copy
-# (ray-executor path) and harmless under the default mp/fork executor:
-#   * VLLM_RAY_EXTRA_ENV_VARS_TO_COPY = exact comma-list of names
-#   * VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY = "FR13_" prefix (catches ALL
-#     FR13_* incl. the master switch + every sibling)
+# FR13_GDN_SUBOP_MAB worker-env propagation (additive, default-safe).
+# *** MEASURED 2026-06-14 (this launcher run, wf l0gdn-envfix): these two ray
+# vars are NOT SUFFICIENT for the deployed image. The GDN forward runs in the
+# EngineCore process (VLLM::EngineCore, PPid=1) which is spawned with a CURATED
+# env that drops even registered VLLM_-prefixed vars (VLLM_SERVER_DEV_MODE /
+# VLLM_BATCH_INVARIANT were ABSENT from /proc/<EngineCore>/environ) and is NOT
+# the ray-executor path (no "Copying the following environment variables" log;
+# ray_env.get_env_vars_to_copy never fires). Only 14/66 FR13_* vars reach the
+# worker; the bare master FR13_GDN_SUBOP_MAB (+ _DUMP/_EXPECT_TREE_N/_THRESHOLD)
+# is among the dropped. The hard worker-env gate caught this pre-capture.
+# REQUIRED FIX (patcher-side, next boot): fr10_phase4_patch_vllm_tree_gdn.py runs
+# in pid 1 (master PRESENT) and edits the in-image gdn_linear_attn.py the worker
+# imports -> have it READ FR13_GDN_SUBOP_MAB at PATCH time and bake the engaged
+# flag (or write a sidecar file the gate reads) into the patched gate, instead of
+# os.environ.get() at worker forward time. These ray vars are kept below as
+# harmless belt-and-suspenders for any future ray-executor path. ***
 # ONLY populated when FR13_GDN_SUBOP_MAB is set/non-zero; otherwise empty =>
 # byte-identical to the locked default path. We APPEND to any caller-supplied
 # value (additive, never replacing).
