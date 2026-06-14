@@ -1262,6 +1262,396 @@ def _patch_gdn_linear() -> bool:
         1,
     )
 
+    if "FR13_GDN_SUBOP_MAB" not in text:
+        # FR13_GDN_SUBOP_MAB: in-process OBSERVE-ONLY L0-GDN sub-op M-A/B
+        # (default OFF). Decisive controlled localization for the cat9 22-flip
+        # SPINE_PERTURBATION carrier, which the NODE7-LADDER puts at
+        # L0 linear_attention (GDN) = 7.8125e-3 (byte-exact input).
+        #
+        # At a captured tree-verify forward (the deep-accept carrier event), on
+        # the SAME live captured GDN inputs (pre_conv hidden, conv_state +
+        # prior-window, h0 recurrent state, a/b/q/k/v) from ONE cat9 boot, re-run
+        # the GDN sub-op sequence (conv1d_update -> fused_sigmoid_gating scan)
+        # THREE times varying ONLY which rows (M) are present:
+        #   (M10) the FULL tree (all present nodes; the deep-spine row is the
+        #         live committed-path deepest node).
+        #   (M5)  the SPINE-SLICE (only path0_nodes; strict-spine ancestry).
+        #   (M1)  the deep-spine row ALONE (decode geometry, 1-token query).
+        # The path0/spine rows attend ONLY to spine ancestors, so the ONLY thing
+        # that changes across the three arms is M (row count / batch occupancy).
+        # Per sub-op (pre_conv [control, M-invariant by construction], conv1d_out,
+        # scan_out) we record RAW max_abs (NOT atol) of the deep-spine row:
+        #   (M10 deep-spine row) vs (M1)  and  (M5 deep-spine row) vs (M1).
+        # The FIRST sub-op whose deep-spine RAW != 0 is the carrier's birthplace.
+        #
+        # OBSERVE-ONLY: the re-runs operate on detached clones (h0 is cloned per
+        # arm so inplace_final_state never mutates the served state; conv_state
+        # is cloned per arm). NO mutation of the live forward, NO splice into the
+        # served spine, NO copy-recurrent, NO dense-route. Default OFF; when
+        # FR13_GDN_SUBOP_MAB != "1" the helper returns immediately and the
+        # locked cat9 default path is byte-identical.
+        mab_helper = '''
+
+def _fr13_gdn_subop_mab(
+    self,
+    pre_conv_spec,
+    mixed_qkv_spec,
+    a,
+    b,
+    query_spec,
+    key_spec,
+    value_spec,
+    conv_state_snapshot,
+    conv_weights,
+    ssm_state,
+    spec_state_indices_tensor,
+    num_accepted_tokens,
+    spec_query_start_loc,
+    attn_metadata,
+    num_actual_tokens,
+):
+    """OBSERVE-ONLY L0-GDN sub-op M=10/M=5/M=1 A/B on captured inputs.
+
+    Re-runs conv1d_update + the fused_sigmoid_gating scan on the deep-spine
+    carrier row at three row-counts, reusing the SAME captured pre_conv input +
+    h0 recurrent state + conv prior-window snapshot, varying ONLY which rows are
+    present:
+      M10 = the FULL present tree (all tree_n nodes, the served FLAT layout); the
+            deep-spine row's conv window / recurrent accumulation is co-resident
+            with the BRANCH rows.
+      M5  = the deep node's ANCESTRY (path0 / spine slice) ONLY; the deep node
+            sees its TRUE causal context, no branch rows present.
+      M1  = the deep node ALONE (decode geometry, 1-token query).
+
+    IMPORTANT (receptive-field entanglement — see notes): conv1d (depthwise
+    causal, width W) and the GDN scan (recurrent) are STATEFUL/CONTEXTUAL ops.
+    Native causal_conv1d_update / fused_sigmoid_gating consume the QUERY rows in
+    FLAT order, so:
+      * M10 gives the deep row a window contaminated by co-resident BRANCH rows
+        (flat positions deep_row-W+1 .. deep_row may be branch nodes).
+      * M5 gives the deep row its correct spine ancestry window.
+      * M1 deep-alone CANNOT reproduce the deep row's query-side context (its
+        ancestors are not present as query rows; only the prior-window remains)
+        -> M1 is RECEPTIVE-FIELD-REDUCED, reported with a caveat, NOT the clean
+        co-residency control.
+    The clean co-residency verdict is M10-vs-M5 (branch rows present vs absent,
+    deep node otherwise identical context).  The FIRST sub-op whose M10-vs-M5
+    deep-row RAW != 0 is the carrier's birthplace.  M*-vs-M1 are recorded too;
+    a large M5-vs-M1 (with small M10-vs-M5) localizes the carrier to the
+    STATEFUL receptive field rather than a batch-tile occupancy effect.
+
+    Writes one JSONL record per captured verify event.  Default OFF; observe-only
+    (every arm runs on detached clones; no mutation of the live forward, no
+    splice, no copy-recurrent, no dense-route).
+    """
+    if os.environ.get("FR13_GDN_SUBOP_MAB", "0") != "1":
+        return
+    try:
+        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+            return
+    except Exception:
+        return
+    if conv_state_snapshot is None:
+        # The conv-state snapshot is taken at the conv site under the same flag;
+        # its absence means the stash did not run (class-9 disengagement) — fail
+        # loud rather than read the in-place-mutated live conv_state.
+        logger.warning(
+            "FR13_GDN_SUBOP_MAB: conv_state snapshot missing (stash disengaged)"
+        )
+        return
+    prefix = str(getattr(self, "prefix", ""))
+    want = os.environ.get(
+        "FR13_GDN_SUBOP_MAB_LAYER",
+        "language_model.model.layers.0.linear_attn",
+    )
+    if want and want != "*":
+        wanted = {x.strip() for x in want.split(",") if x.strip()}
+        if prefix not in wanted:
+            return
+    skip = int(os.environ.get("FR13_GDN_SUBOP_MAB_SKIP", "0"))
+    limit = int(os.environ.get("FR13_GDN_SUBOP_MAB_LIMIT", "1"))
+    counts = globals().setdefault("_FR13_GDN_SUBOP_MAB_COUNTS", {})
+    seen = int(counts.get(prefix, 0))
+    counts[prefix] = seen + 1
+    if not (skip <= seen < (skip + limit)):
+        return
+    dump = os.environ.get(
+        "FR13_GDN_SUBOP_MAB_DUMP",
+        "output/fr13_gdn_subop_mab/fr13_gdn_subop_mab.jsonl",
+    )
+    try:
+        # ----- class-9 ENGAGEMENT ASSERTS (fail loud, never a vacuous number) --
+        if pre_conv_spec is None:
+            raise RuntimeError("FR13_GDN_SUBOP_MAB: pre_conv_spec not captured")
+        path0 = getattr(attn_metadata, "fr10_tree_path0_nodes", None)
+        if path0 is None:
+            raise RuntimeError("FR13_GDN_SUBOP_MAB: tree DISENGAGED (no path0)")
+        tree_parent = getattr(attn_metadata, "fr10_tree_parent", None)
+        if tree_parent is None:
+            raise RuntimeError("FR13_GDN_SUBOP_MAB: tree DISENGAGED (no parent)")
+        num_spec = int(attn_metadata.num_spec_decodes)
+        if num_spec < 1:
+            raise RuntimeError("FR13_GDN_SUBOP_MAB: num_spec_decodes < 1")
+        tree_n = int(tree_parent.numel())
+        # tok/draft engagement: assert the served tree matches the expected
+        # geometry (cat9 => 10 nodes incl root).  An env override allows other
+        # shapes; otherwise fail loud on a silent shape change (class 9).
+        expect_tree_n = os.environ.get("FR13_GDN_SUBOP_MAB_EXPECT_TREE_N", "10")
+        if expect_tree_n and expect_tree_n != "*":
+            if tree_n != int(expect_tree_n):
+                raise RuntimeError(
+                    "FR13_GDN_SUBOP_MAB: tree_n="
+                    + str(tree_n)
+                    + " != expected "
+                    + str(expect_tree_n)
+                    + " (silent tree-shape change; class 9)"
+                )
+        dev = mixed_qkv_spec.device
+        path0_list = [int(x) for x in path0.detach().cpu().reshape(-1).tolist()]
+        # Only nodes that actually exist in the served tree (< tree_n).
+        spine_rows = [r for r in path0_list if 0 <= r < tree_n]
+        if len(spine_rows) < 2:
+            raise RuntimeError(
+                "FR13_GDN_SUBOP_MAB: degenerate spine " + str(spine_rows)
+            )
+        deep_row = spine_rows[-1]
+        # The FULL-tree arm = batch-0's tree-row block [0:tree_n).
+        start = 0
+        end = tree_n
+        # ----- captured inputs for batch 0 (clone => observe-only) -------------
+        pre_conv0 = pre_conv_spec[start:end].detach().clone()
+        a0 = a[start:end].detach().clone()
+        b0 = b[start:end].detach().clone()
+        q0 = query_spec[0, start:end].detach().clone()
+        k0 = key_spec[0, start:end].detach().clone()
+        v0 = value_spec[start:end].detach().clone()
+        # conv1d_update reads conv_state at conv_state_indices=ssi[:,0]; the
+        # prior-window is the committed-path bank row.  Clone the WHOLE conv_state
+        # so each arm's in-place causal_conv1d_update write never perturbs the
+        # next arm or the live state (observe-only).
+        ssi0 = spec_state_indices_tensor[0:1].detach().clone()
+        nacc = (
+            None
+            if num_accepted_tokens is None
+            else num_accepted_tokens[0:1].detach().clone().to(num_accepted_tokens.dtype)
+        )
+        width = int(conv_weights.shape[-1])
+
+        def _conv_arm(rows):
+            m = len(rows)
+            idx = torch.tensor(rows, dtype=torch.long, device=dev)
+            x = pre_conv0.index_select(0, idx).contiguous()
+            cs = conv_state_snapshot.detach().clone()
+            qsl = torch.tensor([0, m], dtype=spec_query_start_loc.dtype, device=dev)
+            out = causal_conv1d_update(
+                x,
+                cs,
+                conv_weights,
+                self.conv1d.bias,
+                self.activation,
+                conv_state_indices=ssi0[:, 0],
+                num_accepted_tokens=(None if nacc is None else nacc.clamp(max=m)),
+                query_start_loc=qsl,
+                max_query_len=m,
+                validate_data=False,
+            )
+            return out.detach()
+
+        # For the scan we re-use the LIVE post-conv mixed_qkv_spec rows (the same
+        # conv output the served forward consumed) so the scan A/B is isolated
+        # from the conv A/B: each arm slices the SAME a/b/q/k/v and re-runs the
+        # recurrent core on a CLONED h0 (inplace_final_state must not mutate the
+        # served state).
+        def _scan_arm(rows):
+            m = len(rows)
+            idx = torch.tensor(rows, dtype=torch.long, device=dev)
+            qsl = torch.tensor([0, m], dtype=spec_query_start_loc.dtype, device=dev)
+            ss = ssm_state.detach().clone()
+            out, _ = fused_sigmoid_gating_delta_rule_update(
+                A_log=self.A_log,
+                a=a0.index_select(0, idx).contiguous(),
+                b=b0.index_select(0, idx).contiguous(),
+                dt_bias=self.dt_bias,
+                q=q0.index_select(0, idx).unsqueeze(0).contiguous(),
+                k=k0.index_select(0, idx).unsqueeze(0).contiguous(),
+                v=v0.index_select(0, idx).unsqueeze(0).contiguous(),
+                initial_state=ss,
+                inplace_final_state=True,
+                cu_seqlens=qsl,
+                ssm_state_indices=ssi0.index_select(1, idx),
+                num_accepted_tokens=(None if nacc is None else nacc.clamp(max=m)),
+                use_qk_l2norm_in_kernel=True,
+            )
+            return out.squeeze(0).detach()
+
+        # M10 = the FULL present tree (all nodes 0..tree_n-1, in flat order).
+        full_rows = list(range(tree_n))
+        # M5 = the spine-slice (path0_nodes); M1 = deep-spine row alone.
+        m1_rows = [deep_row]
+
+        def _row_max_abs(big, small, big_row, small_row):
+            return float(
+                (
+                    big[big_row].to(torch.float32) - small[small_row].to(torch.float32)
+                )
+                .abs()
+                .max()
+                .item()
+            )
+
+        def _row_mean_abs(big, small, big_row, small_row):
+            return float(
+                (
+                    big[big_row].to(torch.float32) - small[small_row].to(torch.float32)
+                )
+                .abs()
+                .mean()
+                .item()
+            )
+
+        m5_deep = spine_rows.index(deep_row)
+
+        def _triplet(t10, t5, t1):
+            # t10/t5 are [M,...] (deep at row deep_row / m5_deep); t1 is [1,...].
+            return {
+                "m10_deep_vs_m5_deep_max_abs": _row_max_abs(t10, t5, deep_row, m5_deep),
+                "m10_deep_vs_m5_deep_mean_abs": _row_mean_abs(
+                    t10, t5, deep_row, m5_deep
+                ),
+                "m5_deep_vs_m1_max_abs": _row_max_abs(t5, t1, m5_deep, 0),
+                "m5_deep_vs_m1_mean_abs": _row_mean_abs(t5, t1, m5_deep, 0),
+                "m10_deep_vs_m1_max_abs": _row_max_abs(t10, t1, deep_row, 0),
+                "m10_deep_vs_m1_mean_abs": _row_mean_abs(t10, t1, deep_row, 0),
+            }
+
+        subops = {}
+        # ----- pre_conv (control sub-op): row-independent at the in_proj output,
+        # so M10-deep == M5-deep == M1 BIT-EXACTLY by construction.  A non-zero
+        # here means the captured input itself is M-dependent (would INVALIDATE
+        # the downstream A/B) -> the harness flags it. -------------------------
+        idx_spine = torch.tensor(spine_rows, dtype=torch.long, device=dev)
+        idx_m1 = torch.tensor(m1_rows, dtype=torch.long, device=dev)
+        pc_m10 = pre_conv0
+        pc_m5 = pre_conv0.index_select(0, idx_spine)
+        pc_m1 = pre_conv0.index_select(0, idx_m1)
+        subops["pre_conv"] = _triplet(pc_m10, pc_m5, pc_m1)
+        # ----- conv1d_out ------------------------------------------------------
+        # Three native-kernel arms (causal_conv1d_update) at M10/M5/M1 = the
+        # ROW-OCCUPANCY axis.  Per FR13_CONV_FIX_DESIGN the tree-conv emulation
+        # is row-occupancy M-INVARIANT by construction (no cross-row reduction),
+        # so conv1d_out M10-vs-M5 is EXPECTED ~0; a non-zero would overturn that.
+        conv_m10 = _conv_arm(full_rows)
+        conv_m5 = _conv_arm(spine_rows)
+        conv_m1 = _conv_arm(m1_rows)
+        subops["conv1d_out"] = _triplet(conv_m10, conv_m5, conv_m1)
+        # SECOND axis (kernel-identity realization seam, NOT row-occupancy): the
+        # SERVED fused tree-conv output (bf16-tap MAC + triton_ex2_silu, already
+        # held in mixed_qkv_spec [num_spec*tree_n, dim]) for the deep-spine row
+        # vs the native causal_conv1d_update arms.  This is the ~9.77e-4 carrier
+        # FR13_CONV_FIX_DESIGN names (our-kernel vs native realization seam).
+        try:
+            served_conv_deep = mixed_qkv_spec[start:end][deep_row]
+            subops["conv1d_out"]["served_fused_vs_native_decode_max_abs"] = float(
+                (served_conv_deep.to(torch.float32) - conv_m1[0].to(torch.float32))
+                .abs()
+                .max()
+                .item()
+            )
+            subops["conv1d_out"]["served_fused_vs_native_m5_max_abs"] = float(
+                (
+                    served_conv_deep.to(torch.float32)
+                    - conv_m5[m5_deep].to(torch.float32)
+                )
+                .abs()
+                .max()
+                .item()
+            )
+        except Exception:
+            subops["conv1d_out"]["served_fused_vs_native_decode_max_abs"] = None
+        # ----- scan_out (recurrent core) --------------------------------------
+        scan_m10 = _scan_arm(full_rows)
+        scan_m5 = _scan_arm(spine_rows)
+        scan_m1 = _scan_arm(m1_rows)
+        subops["scan_out"] = _triplet(scan_m10, scan_m5, scan_m1)
+        # Clean co-residency verdict: first sub-op whose deep-row M10-vs-M5 RAW
+        # crosses threshold = the carrier's birthplace (branch rows present vs
+        # absent, deep node's context otherwise identical).
+        thresh = float(os.environ.get("FR13_GDN_SUBOP_MAB_THRESHOLD", "0.0"))
+        order = ["pre_conv", "conv1d_out", "scan_out"]
+        first = None
+        for name in order:
+            if subops[name]["m10_deep_vs_m5_deep_max_abs"] > thresh:
+                first = name
+                break
+        first_m1 = None
+        for name in order:
+            if subops[name]["m5_deep_vs_m1_max_abs"] > thresh:
+                first_m1 = name
+                break
+        pre_conv_m_invariant = (
+            subops["pre_conv"]["m10_deep_vs_m5_deep_max_abs"] == 0.0
+            and subops["pre_conv"]["m10_deep_vs_m1_max_abs"] == 0.0
+        )
+        rec = {
+            "schema": "fr13.gdn_subop_mab.v2",
+            "layer_prefix": prefix,
+            "capture_event_index": int(seen),
+            "tree_n": int(tree_n),
+            "num_spec_decodes": int(num_spec),
+            "num_actual_tokens": int(num_actual_tokens),
+            "full_rows": [int(x) for x in full_rows],
+            "spine_rows": [int(x) for x in spine_rows],
+            "deep_row": int(deep_row),
+            "m5_deep_index": int(m5_deep),
+            "conv_width": int(width),
+            "num_accepted_tokens": (
+                None if nacc is None else [int(x) for x in nacc.detach().cpu().tolist()]
+            ),
+            "subops": subops,
+            # CLEAN co-residency verdict (branch rows present vs absent):
+            "first_coresidency_subop_m10_vs_m5": first,
+            # M1 (decode-geometry, receptive-field-reduced) crossover:
+            "first_subop_m5_vs_m1": first_m1,
+            "pre_conv_m_invariant": bool(pre_conv_m_invariant),
+            "threshold": thresh,
+            "m1_receptive_field_caveat": (
+                "M1 = deep node alone: its query-side ancestry is NOT present, "
+                "so conv/scan see only the prior-window. M5-vs-M1 != 0 localizes "
+                "the carrier to the STATEFUL receptive field; the clean co-"
+                "residency control is M10-vs-M5."
+            ),
+        }
+        out_path = dump
+        parent = os.path.dirname(out_path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(out_path, "a", buffering=1) as fh:
+            fh.write(json.dumps(rec) + chr(10))
+        logger.warning(
+            "FR13_GDN_SUBOP_MAB layer=%s event=%s deep_row=%s | M10-vs-M5 "
+            "pre_conv=%.3e conv1d_out=%.3e scan_out=%.3e | first(coresid)=%s | "
+            "M5-vs-M1 conv=%.3e scan=%.3e first(m1)=%s | pre_conv_M_inv=%s",
+            prefix,
+            seen,
+            deep_row,
+            subops["pre_conv"]["m10_deep_vs_m5_deep_max_abs"],
+            subops["conv1d_out"]["m10_deep_vs_m5_deep_max_abs"],
+            subops["scan_out"]["m10_deep_vs_m5_deep_max_abs"],
+            first,
+            subops["conv1d_out"]["m5_deep_vs_m1_max_abs"],
+            subops["scan_out"]["m5_deep_vs_m1_max_abs"],
+            first_m1,
+            pre_conv_m_invariant,
+        )
+    except Exception as exc:  # pragma: no cover - diagnostic only
+        logger.warning("FR13_GDN_SUBOP_MAB A/B failed: %s", exc)
+'''
+        text = text.replace(
+            "logger = init_logger(__name__)\n",
+            "logger = init_logger(__name__)\n" + mab_helper + "\n",
+            1,
+        )
+
     if "FR12_SUBKERNEL_CAPTURE_INPUT" not in text:
         input_capture = '''        if os.environ.get("FR12_SUBKERNEL_CAPTURE_INPUT", "0") == "1":
             _fr12_subkernel_capture_tensor(
@@ -1339,12 +1729,27 @@ def _patch_gdn_linear() -> bool:
                 _fr10_conv_diag[20].add_(float(attn_metadata.num_prefills))
                 _fr10_conv_diag[21].add_(float(attn_metadata.num_decodes))
             _fr12_subkernel_capture_enabled = bool(os.environ.get("FR12_SUBKERNEL_CAPTURE"))
+            _fr13_gdn_subop_mab_on = (
+                os.environ.get("FR13_GDN_SUBOP_MAB", "0") == "1"
+            )
             _fr12_pre_conv_spec = None
             if (
                 _fr12_subkernel_capture_enabled
+                or _fr13_gdn_subop_mab_on
                 or os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1"
             ):
                 _fr12_pre_conv_spec = mixed_qkv_spec.detach().clone()
+            if _fr13_gdn_subop_mab_on:
+                # FR13_GDN_SUBOP_MAB: stash the PRE-conv input AND a snapshot of
+                # conv_state TAKEN BEFORE the served causal_conv1d_update mutates
+                # it in-place (decoherence-free: the conv A/B re-runs read the
+                # same prior-window the served conv consumed).  The scan-site A/B
+                # (after q/k/v are split) reads these back.  Default-OFF;
+                # observe-only (clone => no mutation of the live forward).
+                self._fr13_gdn_subop_mab_pre_conv = _fr12_pre_conv_spec
+                self._fr13_gdn_subop_mab_conv_state = (
+                    conv_state.detach().clone()
+                )
             if _fr12_subkernel_capture_enabled:
                 try:
                     _fr12_pre_extra = {
@@ -3370,6 +3775,32 @@ def _patch_gdn_linear() -> bool:
                     logger.warning_once(
                         "FR10 tree GDN verifier branch active for layer %s", self.prefix
                     )
+                if os.environ.get("FR13_GDN_SUBOP_MAB", "0") == "1":
+                    # FR13_GDN_SUBOP_MAB (default OFF, observe-only): re-run the
+                    # L0-GDN sub-op sequence at M=10/M=5/M=1 on the SAME captured
+                    # pre_conv + h0 + conv prior-window to localize WHERE the
+                    # deep-spine row first becomes M-dependent.  No mutation of
+                    # the live forward.
+                    _fr13_gdn_subop_mab(
+                        self,
+                        getattr(self, "_fr13_gdn_subop_mab_pre_conv", None),
+                        mixed_qkv_spec,
+                        a,
+                        b,
+                        query_spec,
+                        key_spec,
+                        value_spec,
+                        getattr(self, "_fr13_gdn_subop_mab_conv_state", None),
+                        conv_weights,
+                        ssm_state,
+                        spec_state_indices_tensor,
+                        num_accepted_tokens,
+                        spec_query_start_loc,
+                        attn_metadata,
+                        num_actual_tokens,
+                    )
+                    self._fr13_gdn_subop_mab_pre_conv = None
+                    self._fr13_gdn_subop_mab_conv_state = None
                 _, _, value_tree, g_tree, beta_tree = fused_post_conv_prep(
                     conv_output=mixed_qkv_spec,
                     a=a,
