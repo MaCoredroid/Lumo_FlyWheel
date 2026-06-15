@@ -223,3 +223,91 @@ accept/superset gate is **UNMEASURED on the deployment prompt** ⇒ **no Tier A 
   FR13_MATH_HISTORY_RECONCILE (7.39x; M-invariance both refuted), FR13_E5_VS_CAT9_SPINE_DRIFT,
   FR13_CONFIRM_SPEC_VS_NONSPEC (big-denom VALID), FR13_TEMP06_DRIFT_GATE (deployment temp-0.6 gate;
   bag-TV 0.0593→0.1133), FR13_SPEED_HISTORY_RECONCILE (+0.0176 edge, accept-parity).
+
+---
+---
+
+# FR13 NUMBERS TRUST LEDGER — SLICE: DRIVING VERDICTS (disposition — STANDS vs NEEDS-REMEASURE)
+
+Audit (CPU read-only, 2026-06-15; GPU re-aim wf w8q5jg1k0 in flight — no boot). The SPEED and ACCEPT
+slices above staple individual NUMBERS. This slice dispositions the five VERDICTS that drove FR13
+decisions: the regime of each verdict's EVIDENCE, and whether the verdict STANDS on deployment-faithful
+evidence or NEEDS-REMEASURE on the deployment regime (real-SWE+codex chat + temp 0.6). It does not
+re-table numbers already stapled above; it cites their rows (A*, S*).
+
+## Audit-confirmed contamination smoking gun (this slice's load-bearing finding)
+The wgb0yegin "confound-free" oracle source and the reshape A/B sources are the **raw off-distribution
+regime, AUDIT-CONFIRMED IN THE BINDING ARTIFACT**: `output/fr13_recurrent_oracle/rescore_native.json`
+points at src `output/fr13_verify_decisive/q3_native_capture.json`, whose native
+`served_token_ids[:14] = [271, 248068, 271, 248069, 271, 40, ...]` = `"\n<think>\n</think>\nI"` — the
+exact degenerate empty-`<think></think>` loop the re-aim condemned. The capture prompt carries NO chat
+markers (raw `## Codex CLI invocation prompt` string; `<|im_start|>`/harmony absent), `temperature=0.0`,
+seed 1313. So 7.39× (A17), the 20-flip 2/13/5 KIND split, the held-trajectory-zero control, and the
+reshape frontier (A6–A8) are ALL measured against a degenerate native baseline ⇒ TIER D.
+
+## THE FIVE DRIVING VERDICTS
+
+**V1 — "lossless-vs-native met at scale" (big-denom 13.55%/13.99%, A11).**
+Evidence regime: **chat / deployment-prompt (real SWE astropy-12907, codex, /v1/responses) but TEMP-0**,
+single task, B=1. Spec-vs-non-spec framing CODE-READ-confirmed (4 links, FR13_CONFIRM_SPEC_VS_NONSPEC).
+**STANDS at temp-0 (TIER B) — the only deployment-faithful lossless evidence in FR13; necessary-not-
+sufficient.** NEEDS-REMEASURE for the binding answer at temp 0.6 (the sub-argmax tail sampling reaches at
+0.6 is untested; temp-0.6 TV(q,p) = A11's missing axis, not yet computable — q not banked,
+FR13_TEMP06_DRIFT_GATE §3) and to widen past one SWE task.
+
+**V2 — "M-invariance + topology-reshape BOTH refuted" (wgb0yegin / A17).**
+Evidence regime: **RAW prompts_swe4 / temp-0**, native source = the empty-think loop; reshape arms also
+scored vs a chunked (wrong-frame) oracle. SPLIT VERDICT:
+- M-invariance lever refutation (conv-state-feed seam = max_abs 0.0 — a 0.0 seam can't carry 14 flips) is
+  a CODE/SEAM fact → **STANDS regime-robust.**
+- depth-dead (chain3==chain5) and width-adds-GDN-co-residency are STRUCTURAL topology facts →
+  **STAND DIRECTIONALLY.**
+- the headline NUMBERS (7.39×, +17 co-residency, 2/13/5 KIND split, "native-3 is the wrong bar /
+  spine ~1.67× floor") are **TIER D** → **NEEDS-REMEASURE on deployment + temp 0.6.** The qualitative
+  "no cheap deployable single-op route to native losslessness" is plausibly robust; its quantitative
+  floor is not.
+
+**V3 — per-event SUPERSET gate PASS (+15, A14).**
+Evidence regime: **RAW / temp-0 / 1 boot / 118 events.** `spine_regressions=0` is a structural committer
+property (strict `>best_lcp` tie-break, 250 recs) → **STANDS regime-robust.** The quantitative gate
+(+15 net, 78% lossless, 21/6 split, A14–A16) is **TIER D** → **NEEDS-REMEASURE on deployment + temp 0.6**
+(the binding superset question at 0.6 is distributional, not a greedy leaf-save count). Correctly NOT
+baked/shipped.
+
+**V4 — reshape LEADS (R4 cat6root + chain3/cat3w frontier).**
+The SPEED rationale (pad8→pad16 = +42–46 ms/fwd, keep N≤7; S14) is **TIER C → STANDS** as a speed lever.
+The LOSSLESS/accept rationale and the "reshape EXHAUSTED — no deployable lossless+fast shape" verdict are
+**TIER D** (raw + temp-0 + chunked-oracle frame; A6–A8) → **NEEDS-REMEASURE**: decided on a degenerate
+native baseline. R4 cat6root is worth trying as a SPEED lever; as a lossless claim it is unproven.
+Depth-matched compares also UNMET (a d3 arm must compare to E3, currently UNMEASURED;
+feedback_depth_matched_accept_compare).
+
+**V5 — OPT-1 / OPT-A speed path (S11/S12).**
+NOT YET A VERDICT — both UNBUILT/un-GPU-verified (OPT-1 sync-kill G2 unbuilt; OPT-A built CPU-byte-A/B,
+never GPU-verified; reaches INFERRED). The s/fwd baseline they attack (cat9 1.030×, S2) is TIER C and
+STANDS. Lossless-by-construction arguments are strong but unverified; OPT-A has a shared-kernel scope
+tension needing a user ruling. When GPU-verified, run the LOSSLESS side on deployment regime + temp 0.6.
+
+## DRIVING-VERDICTS DISPOSITION SUMMARY
+- **STANDS (deployment-faithful / structural):** V1 at temp-0 (TIER B, the lone deployment-prompt lossless
+  point); the structural/code facts inside V2/V3 (spine_regressions=0; conv-state-feed 0.0; depth-dead;
+  width-adds-co-residency); the V4 SPEED rationale (TIER C).
+- **NEEDS-REMEASURE on real-SWE+codex chat + temp 0.6 [+ B=4/CUDA]:** V1's temp-0.6 axis (does not yet
+  exist); V2/V3 quantitative numbers (7.39×, +15, 2/13/5, reshape frontier); V4 lossless/accept claims;
+  V5 GPU-verify.
+- **Bottom line:** the only verdict resting on BOTH a deployment-prompt AND a lossless measure is V1
+  (big-denom, TIER B, temp-0). The confound-free 7.39×, reshape-exhausted, and superset-PASS verdicts that
+  drove recent strategy were all on the raw off-distribution regime where native itself degenerates → TIER
+  D → must be re-run on real-SWE+codex chat at temp 0.6 before they bind a lever or ship decision. The
+  speed wins (1.030× etc.) stand.
+
+## CITATIONS (driving-verdicts slice)
+Commits: be10f299, cab6c157 (re-aim + native-degeneration proof); eabb07f9/wgb0yegin (7.39×);
+e720b0be/77e2a0e8 (per-event superset); ac1d3039 (FIX-A 3.1789); 5146e574 (reshape exhausted);
+10ebccac (OPT-1), e90de7ef (OPT-A). Docs: FR13_CONFIRM_SPEC_VS_NONSPEC, FR13_TEMP06_DRIFT_GATE,
+FR13_MATH_HISTORY_RECONCILE, FR13_PEREVENT_SUPERSET_GATE_RESULT, FR13_RESHAPE_EXHAUSTED_BIND,
+FR13_B1_CURRENT_GATE_BIND, FR13_MEASURE_DEPLOYMENT_REGIME, FR13_SPEED_HISTORY_RECONCILE.
+Artifacts: output/fr13_bigdenom_rescore/consolidated.json; output/fr13_recurrent_oracle/rescore_*.json
+(src output/fr13_verify_decisive/q3_native_capture.json = native served_token_ids[:14]
+[271,248068,271,248069,271,40,...] = empty-think loop, AUDIT-CONFIRMED THIS SLICE);
+output/fr13_shape_sweep/*_capture.json (temperature=0.0, prompts_swe4).
