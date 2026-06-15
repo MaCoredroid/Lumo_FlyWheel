@@ -6086,6 +6086,76 @@ _FR13_COMMIT_ARGMAX_GATE_STATS = {
     'spine_path_idx_set': 0,
 }
 
+# FR13_FORK_MARGIN_DUMP (ONE flag, default OFF, READ-ONLY) — per-spec-step
+# committer-fork classifier sink. The LCP-committer
+# (_lumo_tree_path_lcp_max_greedy_sample) scores every root-to-leaf path's lcp
+# (= longest prefix where draft==parent_target) and commits the max-lcp path's
+# prefix+bonus. A FORK is a step where the WINNER path is NOT the spine (a leaf
+# wins the lcp tie-break, or the lcp boundary shifts under co-residency). To
+# decide whether a fork is (A) a GENUINE leaf-LCP win (the deciding
+# parent_target was CONFIDENT, verify top1-top2 > 1.0 nat -> margin-damp would
+# lose a real accept) or (B) a SUB-1-NAT NEAR-TIE (verify nearly indifferent ->
+# a deterministic rank-2 "don't let a leaf win the lcp boundary on a sub-1-nat
+# parent_target" rule would stop the fork while genuine (A) wins keep serving),
+# we dump, per request per step: each path's lcp + nodes; the WINNER and SPINE
+# lcp-boundary (divergence) nodes + their VERIFY top-2 logprobs (parent_target
+# margin = top1-top2); the parent_target id, spine-token id, draft id at the
+# divergence node; the chosen best_path/best_leaf + committed row. The dump
+# CHANGES NOTHING SERVED (the committed `row` is computed exactly as OFF; this
+# block only reads target_logits rows and writes a jsonl) => default-OFF is
+# byte-identical to the locked path (bug-class #10: OFF call-site never
+# publishes the logit globals, so an OFF boot can never arm a captured run).
+# EAGER-only (it syncs/.item()s the logit rows; fail-loud during CUDA-graph
+# capture via the shared row_stats guard). NEVER bind =1 into a serving/speed
+# config (same class as FR13_FORCE_SPINE_COMMIT / FR13_COMMIT_ARGMAX_GATE).
+_FR13_FORK_MARGIN_DUMP = (
+    __import__('os').environ.get('FR13_FORK_MARGIN_DUMP', '0') == '1'
+)
+_FR13_FORK_MARGIN_DUMP_NEEDLE_DONE = False
+_FR13_FORK_MARGIN_DUMP_FH = None
+_FR13_FORK_MARGIN_DUMP_STATS = {
+    'steps_seen': 0,
+    'forks_seen': 0,
+}
+
+
+def _fr13_fork_margin_dump_needle(armed):
+    """Engagement needle (class 9): fires once, in BOTH flag states."""
+    global _FR13_FORK_MARGIN_DUMP_NEEDLE_DONE
+    if _FR13_FORK_MARGIN_DUMP_NEEDLE_DONE:
+        return
+    _FR13_FORK_MARGIN_DUMP_NEEDLE_DONE = True
+    msg = (
+        'FR13_FORK_MARGIN_DUMP committer-fork classifier: armed=%d (%s)' % (
+            1 if armed else 0,
+            'armed-eager-only-readonly' if armed else 'inert',
+        )
+    )
+    try:
+        from vllm.logger import init_logger as _fmd_init_logger
+        _fmd_init_logger('vllm.fr13_fork_margin_dump').info(msg)
+    except Exception:
+        print(msg, flush=True)
+
+
+def _fr13_fork_margin_dump_fh():
+    """Append-mode jsonl handle, opened once (class 12 raw-counter sink)."""
+    global _FR13_FORK_MARGIN_DUMP_FH
+    if _FR13_FORK_MARGIN_DUMP_FH is None:
+        import os as _fmd_os
+        _fmd_path = _fmd_os.environ.get(
+            'FR13_FORK_MARGIN_DUMP_PATH',
+            '/logs/fr13_fork_margin_dump.jsonl',
+        )
+        try:
+            _fmd_dir = _fmd_os.path.dirname(_fmd_path)
+            if _fmd_dir:
+                _fmd_os.makedirs(_fmd_dir, exist_ok=True)
+        except Exception:
+            pass
+        _FR13_FORK_MARGIN_DUMP_FH = open(_fmd_path, 'a', buffering=1)
+    return _FR13_FORK_MARGIN_DUMP_FH
+
 
 def _fr13_commit_argmax_gate_needle(armed):
     """Engagement needle (class 9): fires once, in BOTH flag states."""
@@ -6761,6 +6831,16 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     )
     _fr13_commit_argmax_gate_needle(_fr13_cag_active)
     _fr13_cag_step = int(globals().get('_FR13_CAG_STEP', -1))
+    # FR13_FORK_MARGIN_DUMP: same publish channel as CAG (the call-site at the
+    # rejection_sample wrapper publishes the verify target_logits when EITHER
+    # flag is armed). READ-ONLY: this block only reads target_logits rows; the
+    # served `row` is unchanged. Active iff the flag is on AND the call-site
+    # actually published (an OFF call-site leaves the global None). Needle in
+    # BOTH states.
+    _fr13_fork_margin_active = bool(
+        _FR13_FORK_MARGIN_DUMP and _fr13_cag_target_logits is not None
+    )
+    _fr13_fork_margin_dump_needle(_fr13_fork_margin_active)
     # FR13 S1 (default ON): a fully-accepted path commits the accepted LEAF's
     # self-target row as its bonus token. At greedy that row IS the verify
     # argmax for the accepted path — for EVERY path, including the spine.
@@ -7111,6 +7191,176 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             'members': [f'fr10_tree_req_{req_i}::path{i}' for i in range(len(path_scores))],
             'copy': {'missing': 0, 'copied': 0},
         })
+        # FR13_FORK_MARGIN_DUMP (READ-ONLY): classify this step's committer
+        # fork. A FORK = the WINNER path is NOT the spine (best_leaf !=
+        # _spine_leaf) -> the served stream takes a leaf token the spine never
+        # serves, OR a co-resident leaf shifted the lcp boundary. For each fork
+        # we record the deciding parent_target's VERIFY top-2 margin so the
+        # reduce splits (A) genuine leaf-LCP win (margin>1nat) vs (B) sub-1-nat
+        # near-tie. NOTHING served changes here (the committed `row` was already
+        # appended above); we only read target_logits rows + write a jsonl.
+        if _fr13_fork_margin_active:
+            try:
+                _FR13_FORK_MARGIN_DUMP_STATS['steps_seen'] += 1
+                _fmd_spine_score = (
+                    path_scores[spine_path_idx]
+                    if path_scores and 0 <= spine_path_idx < len(path_scores)
+                    else None
+                )
+                _fmd_spine_path = (
+                    [int(x) for x in _fmd_spine_score['path']]
+                    if _fmd_spine_score else []
+                )
+                _fmd_spine_lcp = int(path0_lcp)
+                _fmd_winner_path = [int(x) for x in best_path]
+                _fmd_winner_lcp = int(best_lcp)
+                # is_fork: winner leaf is not the spine leaf (a leaf path won)
+                # OR the winner path index is not the spine path index.
+                _fmd_is_fork = bool(
+                    int(best_leaf) != int(_spine_leaf)
+                    or int(best_path_idx) != int(spine_path_idx)
+                )
+                # path-SPLIT node: first node index where winner & spine paths
+                # differ (the topology branch point = where leaf vs spine
+                # diverge). For sorted caterpillar trees the shared prefix is
+                # the deeper spine chain; the split node is the first leaf-only
+                # node on the winner path.
+                _fmd_split_pos = -1
+                _fmd_split_node = -1
+                _fmd_n_common = min(len(_fmd_winner_path), len(_fmd_spine_path))
+                for _fmd_k in range(_fmd_n_common):
+                    if _fmd_winner_path[_fmd_k] != _fmd_spine_path[_fmd_k]:
+                        _fmd_split_pos = int(_fmd_k)
+                        _fmd_split_node = int(_fmd_winner_path[_fmd_k])
+                        break
+
+                def _fmd_node_margin(_node):
+                    # READ-ONLY verify top-2 over the parent-edge (target) logit
+                    # row for `_node`. Returns the margin record (parent_target
+                    # = verify argmax id, its top1-top2 nat margin, runner-up).
+                    if _node is None or int(_node) < 0:
+                        return None
+                    _flat = int(start + int(_node))
+                    _src = _fr13_cag_target_logits
+                    if _src is None or _flat < 0 or _flat >= int(_src.size(0)):
+                        return None
+                    (
+                        _amax_id, _amax_lp, _ru_id, _ru_lp,
+                    ) = _fr13_commit_argmax_gate_row_stats(_src[_flat])
+                    _node_i = int(_node)
+                    _draft_here = (
+                        int(drafts[_node_i])
+                        if 0 <= _node_i < len(drafts) else -1
+                    )
+                    _ptgt_here = (
+                        int(parent_targets[_node_i])
+                        if 0 <= _node_i < len(parent_targets) else -1
+                    )
+                    return {
+                        'node': _node_i,
+                        'flat_row': _flat,
+                        # parent_target = argmax of THIS verify row (the edge
+                        # dist into this node); margin = top1 - top2 in nats.
+                        'verify_argmax_id': int(_amax_id),
+                        'verify_argmax_logprob': float(_amax_lp),
+                        'verify_runnerup_id': int(_ru_id),
+                        'verify_runnerup_logprob': float(_ru_lp),
+                        'verify_top2_margin_nat': float(_amax_lp - _ru_lp),
+                        'parent_target_id': _ptgt_here,
+                        'draft_id': _draft_here,
+                        'draft_eq_parent_target': bool(
+                            _draft_here == _ptgt_here
+                        ),
+                    }
+
+                # WINNER lcp-divergence node = node where the winner path's
+                # match STOPPED (best_path[best_lcp] if rejected; else the leaf
+                # = fully accepted). SPINE lcp-divergence node = same for the
+                # spine path. The DECIDING parent_target whose margin classifies
+                # the fork is the one at the node the lcp boundary turned on
+                # (the winner's divergence node if the leaf out-matched the
+                # spine, i.e. best_lcp >= path0_lcp).
+                _fmd_winner_div_node = (
+                    int(_fmd_winner_path[_fmd_winner_lcp])
+                    if 0 <= _fmd_winner_lcp < len(_fmd_winner_path)
+                    else (
+                        int(_fmd_winner_path[-1]) if _fmd_winner_path else -1
+                    )
+                )
+                _fmd_spine_div_node = (
+                    int(_fmd_spine_path[_fmd_spine_lcp])
+                    if 0 <= _fmd_spine_lcp < len(_fmd_spine_path)
+                    else (int(_fmd_spine_path[-1]) if _fmd_spine_path else -1)
+                )
+                # spine-token id at the split node (the token the SPINE would
+                # have served at the topology branch = drafts[split_node on the
+                # spine path]); for sorted trees the spine sibling of the split
+                # node is _fmd_spine_path[_fmd_split_pos].
+                _fmd_spine_split_node = (
+                    int(_fmd_spine_path[_fmd_split_pos])
+                    if 0 <= _fmd_split_pos < len(_fmd_spine_path)
+                    else -1
+                )
+                _fmd_spine_token_at_split = (
+                    int(drafts[_fmd_spine_split_node])
+                    if 0 <= _fmd_spine_split_node < len(drafts)
+                    else -1
+                )
+                _fmd_winner_token_at_split = (
+                    int(drafts[_fmd_split_node])
+                    if 0 <= _fmd_split_node < len(drafts)
+                    else -1
+                )
+                _fmd_rec = {
+                    'step': int(globals().get('_FR13_CAG_STEP', -1)),
+                    'req_index': int(req_i),
+                    'node_count': int(node_count),
+                    'is_fork': _fmd_is_fork,
+                    'best_leaf': int(best_leaf),
+                    'spine_leaf': int(_spine_leaf),
+                    'best_path_idx': int(best_path_idx),
+                    'spine_path_idx': int(spine_path_idx),
+                    'best_path': _fmd_winner_path,
+                    'spine_path': _fmd_spine_path,
+                    'winner_lcp': _fmd_winner_lcp,
+                    'spine_lcp': _fmd_spine_lcp,
+                    'lcp_delta_winner_minus_spine': int(
+                        _fmd_winner_lcp - _fmd_spine_lcp
+                    ),
+                    'committed_row': [int(x) for x in row],
+                    'bonus_source': str(bonus_source),
+                    'path_scores': [
+                        {
+                            'leaf': int(_ps['leaf']),
+                            'lcp': int(_ps['lcp']),
+                            'path': [int(_x) for _x in _ps['path']],
+                        }
+                        for _ps in path_scores
+                    ],
+                    # topology split node (leaf-vs-spine branch point) + the
+                    # spine-token / winner-token there.
+                    'split_pos': int(_fmd_split_pos),
+                    'split_node': int(_fmd_split_node),
+                    'spine_split_node': int(_fmd_spine_split_node),
+                    'spine_token_at_split': int(_fmd_spine_token_at_split),
+                    'winner_token_at_split': int(_fmd_winner_token_at_split),
+                    # VERIFY top-2 margins at the deciding nodes.
+                    'winner_div_margin': _fmd_node_margin(_fmd_winner_div_node),
+                    'spine_div_margin': _fmd_node_margin(_fmd_spine_div_node),
+                    'split_node_margin': _fmd_node_margin(_fmd_split_node),
+                }
+                if _fmd_is_fork:
+                    _FR13_FORK_MARGIN_DUMP_STATS['forks_seen'] += 1
+                _fr13_fork_margin_dump_fh().write(
+                    __import__('json').dumps(_fmd_rec) + chr(10)
+                )
+            except RuntimeError as _fmd_exc:
+                if 'eager-only' in str(_fmd_exc):
+                    raise
+                raise RuntimeError(
+                    'FR13_FORK_MARGIN_DUMP capture failed: '
+                    + type(_fmd_exc).__name__ + ':' + str(_fmd_exc)
+                ) from _fmd_exc
         start += node_count
 
     if _ep_active:
@@ -8654,8 +8904,16 @@ def _lumo_tree_canonical_multidraft_sample(
         # boot. The two tensors are the EXACT post-constraint logits the argmax
         # token-ids were computed from (target_logits = parent-edge dist;
         # lumo_tree_self_logits = self/node dist) -- same rows, same values.
+        # FR13_FORK_MARGIN_DUMP reuses this SAME read-only publish: the
+        # committer-fork classifier needs the verify target_logits rows to read
+        # the deciding parent_target's top-2 margin. Publish when EITHER
+        # diagnostic flag is armed; OFF for both => globals stay None => the
+        # committer's gates no-op (byte-identical served path, bug-class #10).
         import os as _fr13_cag_os
-        if _fr13_cag_os.environ.get("FR13_COMMIT_ARGMAX_GATE", "0") == "1":
+        if (
+            _fr13_cag_os.environ.get("FR13_COMMIT_ARGMAX_GATE", "0") == "1"
+            or _fr13_cag_os.environ.get("FR13_FORK_MARGIN_DUMP", "0") == "1"
+        ):
             globals()["_FR13_CAG_TARGET_LOGITS"] = target_logits
             globals()["_FR13_CAG_SELF_LOGITS"] = lumo_tree_self_logits
             globals()["_FR13_CAG_NUM_DRAFT"] = [
@@ -14059,6 +14317,7 @@ def _patch_rejection_sampler_gpu_committer() -> bool:
         "        __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'\n"
         "        and not _fr13_force_spine_commit\n"
         "        and not _fr13_cag_active\n"
+        "        and not _fr13_fork_margin_active\n"
         "        and _fr13_bonus_self\n"
         "    )\n"
         "    _fr13_gpu_commit_counts = counts\n"

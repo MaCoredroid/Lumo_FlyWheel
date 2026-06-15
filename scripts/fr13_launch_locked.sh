@@ -36,6 +36,11 @@ export LUMO_FB_PROJ_PAD_ROWS=16
 
 # --- DIAGNOSTIC-OFF (armable for the chase) ---
 export FR13_COMMIT_ARGMAX_GATE="$(diag FR13_COMMIT_ARGMAX_GATE)"
+# FR13_FORK_MARGIN_DUMP: READ-ONLY committer-fork classifier (default OFF).
+# Armable via `--arm FR13_FORK_MARGIN_DUMP`; ALSO honors a pre-set env (the
+# K1 BootCapture harness exports it directly, like FR13_SCAN_ALIGN). Default
+# OFF = byte-identical locked serving path.
+export FR13_FORK_MARGIN_DUMP="${FR13_FORK_MARGIN_DUMP:-$(diag FR13_FORK_MARGIN_DUMP)}"
 export FR13_FORCE_SPINE_COMMIT="$(diag FR13_FORCE_SPINE_COMMIT)"
 export FR13_FIX1_SELFCHECK="$(diag FR13_FIX1_SELFCHECK)"
 export FR13_CHASE_DIAG="$(diag FR13_CHASE_DIAG)"

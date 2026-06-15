@@ -70,6 +70,16 @@ FR13_FIX1_SELFCHECK_DUMP=${FR13_FIX1_SELFCHECK_DUMP:-/logs/fr13_fix1_selfcheck.j
 # diagnostic boot. NEVER bind =1 into a serving config or a speed number.
 FR13_COMMIT_ARGMAX_GATE=${FR13_COMMIT_ARGMAX_GATE:-0}
 FR13_COMMIT_ARGMAX_GATE_DUMP=${FR13_COMMIT_ARGMAX_GATE_DUMP:-/logs/fr13_commit_argmax_gate.jsonl}
+# FR13_FORK_MARGIN_DUMP (default OFF) — DIAGNOSTIC ONLY, READ-ONLY, same class
+# as FR13_COMMIT_ARGMAX_GATE / FR13_FORCE_SPINE_COMMIT. Per-spec-step committer-
+# fork classifier: dumps (to FR13_FORK_MARGIN_DUMP_PATH jsonl) each path's lcp +
+# the WINNER/SPINE lcp-divergence nodes' VERIFY top-2 margins (parent_target
+# top1-top2), so the reduce splits genuine leaf-LCP wins (margin>1nat = A,
+# FUNDAMENTAL) from sub-1-nat near-ties (B, FIXABLE by a rank-2 margin-damp).
+# CHANGES NOTHING SERVED (default-OFF = byte-identical). EAGER-only. NEVER bind
+# =1 into a serving config or a speed number.
+FR13_FORK_MARGIN_DUMP=${FR13_FORK_MARGIN_DUMP:-0}
+FR13_FORK_MARGIN_DUMP_PATH=${FR13_FORK_MARGIN_DUMP_PATH:-/logs/fr13_fork_margin_dump.jsonl}
 # FR13_CHASE_DIAG (default OFF) — DIAGNOSTIC ONLY, superset-chase Step-1
 # in-process instruments (plan wf_c43b084f, FIX1-SELFCHECK pattern): (i)
 # per-event integer row record + (iii) drafter root-logit top-K (eagle
@@ -282,6 +292,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FIX1_SELFCHECK_DUMP="$FR13_FIX1_SELFCHECK_DUMP" \
   -e FR13_COMMIT_ARGMAX_GATE="$FR13_COMMIT_ARGMAX_GATE" \
   -e FR13_COMMIT_ARGMAX_GATE_DUMP="$FR13_COMMIT_ARGMAX_GATE_DUMP" \
+  -e FR13_FORK_MARGIN_DUMP="$FR13_FORK_MARGIN_DUMP" \
+  -e FR13_FORK_MARGIN_DUMP_PATH="$FR13_FORK_MARGIN_DUMP_PATH" \
   -e FR13_REPLAY_ROUTE="${FR13_REPLAY_ROUTE:-1}" \
   -e FR13_REPLAY_BOUNDARY_LOG="${FR13_REPLAY_BOUNDARY_LOG:-0}" \
   -e FR13_REPLAY_BOUNDARY_LAYERS="${FR13_REPLAY_BOUNDARY_LAYERS:-layers.0.linear_attn}" \
