@@ -220,8 +220,87 @@ paired_accept() {  # reference_arm arm_q1 [arm_q2 ...]
     --out "$OUT/paired_accept_ref_${refarm}.json"
 }
 
+# =========================================================================== #
+# DEPLOYMENT REGIME (the CANONICAL path) — real SWE-Verified + codex            #
+# =========================================================================== #
+# fr13_measure ORCHESTRATES the proven big-denom machinery (it does NOT re-
+# invent it). The chain, GPU-SERIALIZED (each stage waits + recovers):
+#   1. fr13_bigdenom_swe_serve.sh <arm> <cat9|native> <subset> : boots the arm
+#      (cat9 via fr13_launch_locked / native via fr10_launch_speed num_spec=5) +
+#      runs scripts/run_swe_bench_q36_a.py (the codex agent loop) with the proxy
+#      pair-dump ON + raw-/metrics spec-engagement asserts. run_swe_bench_q36_a
+#      ALREADY brackets /metrics per task -> vllm_metrics_pre/post.txt.
+#   2. cmd_deploy_speed reduces those per-task brackets -> deployment s/fwd +
+#      accept/event + committed + derived TPS (SAME truthful basis, real codex
+#      trajectory, no degenerate fork). [OFF, instrument clean]
+#   3. fr13_bigdenom_phase3_rescore.sh : proxy pair-dump -> fr13_swe_stream_to_
+#      oracle_src (byte-exact detok src) -> fr13_recurrent_decode_oracle rescore
+#      (no-spec RECURRENT decode = the lossless flip) -> consolidate (Wilson CI).
+#   4. cmd_deploy_lossless reads the consolidation -> within-floor lossless
+#      verdict (cat9 vs native-E5, each vs its OWN no-spec oracle). [ON]
+# DEV-iteration = a CHEAP deployment-faithful proxy (a SHORT codex run / few
+# turns via SUBSET, NOT raw prompts). FINAL judgment = real SWE-Verified + codex,
+# B=4 + CUDA-captured + 4 tasks + ~30min, lossless re-confirmed at B=4.
+BIGDENOM_RUNROOT="$REPO/output/fr13_bigdenom_swe"
+BIGDENOM_RESCORE="$REPO/output/fr13_bigdenom_rescore"
+DEPLOY_OUT="$OUT/deployment"
+
+# deploy_serve <arm_dir> <cat9|native> <subset.json> : ONE deployment SWE arm
+# (boots + codex loop + pair-dump + per-task /metrics brackets). The serialized
+# GPU stage; serve.sh owns its own pre-boot hygiene + teardown + recover.
+deploy_serve() {  # arm_dir kind subset
+  local armdir="$1" kind="$2" subset="${3:-subset_astropy12907.json}"
+  echo "######## DEPLOY serve $armdir (kind=$kind subset=$subset) ########"
+  bash "$REPO/scripts/fr13_bigdenom_swe_serve.sh" "$armdir" "$kind" "$subset"
+}
+
+# deploy_speed <arm_label> <arm_dir> <expected_tok_per_draft> [batch_size]
+# Reduce the per-task /metrics brackets from a finished deployment arm -> the
+# CANONICAL deployment s/fwd + accept/event. CPU-only (no GPU).
+deploy_speed() {  # arm_label arm_dir expected_ratio [batch]
+  local label="$1" armdir="$2" ratio="$3" batch="${4:-1}"
+  mkdir -p "$DEPLOY_OUT"
+  echo "===== DEPLOY speed $label (B=$batch, real codex trajectory) ====="
+  python3 "$MEASURE" deploy-speed --arm "$label" \
+    --out-root "$BIGDENOM_RUNROOT/$armdir/swe_out" \
+    --expected-tok-per-draft "$ratio" --batch-size "$batch" \
+    --out "$DEPLOY_OUT/${label}_deploy_speed_b${batch}.json"
+}
+
+# deploy_rescore : run the big-denom Phase-3 rescore + consolidate (GPU), then
+# the CANONICAL deployment lossless verdict. Assumes both arms' deployment serve
+# runs finished (cat9_a + native_a pair-dumps present). GPU-SERIALIZED.
+deploy_rescore() {
+  mkdir -p "$DEPLOY_OUT"
+  echo "######## DEPLOY rescore (big-denom Phase-3: oracle flips + Wilson CI) ########"
+  bash "$REPO/scripts/fr13_bigdenom_phase3_rescore.sh"
+  echo "===== DEPLOY lossless verdict (within-floor) ====="
+  python3 "$MEASURE" deploy-lossless \
+    --consolidated "$BIGDENOM_RESCORE/consolidated.json" \
+    --out "$DEPLOY_OUT/deploy_lossless.json"
+}
+
+# deploy_full : the FINAL-judgment chain end-to-end (serialized). cat9 + native
+# serve arms, deploy-speed each, then rescore+lossless. For DEV iteration use a
+# SHORT subset; for FINAL judgment use the 4-task SWE-Verified subset at B=4.
+deploy_full() {  # subset [batch]
+  local subset="${1:-subset_astropy12907.json}" batch="${2:-1}"
+  deploy_serve native_a native "$subset"
+  deploy_speed native_e5 native_a 5 "$batch"
+  deploy_serve cat9_a cat9 "$subset"
+  deploy_speed cat9 cat9_a 9 "$batch"
+  deploy_rescore
+  echo "######## DEPLOY full chain done -> $DEPLOY_OUT ########"
+}
+
 CMD="${1:-}"; shift || true
 case "$CMD" in
+  # --- CANONICAL: deployment regime (real SWE-Verified + codex) ---
+  deploy-serve)    deploy_serve "$1" "$2" "${3:-}" ;;     # ONE arm: boot+codex+pairdump+brackets
+  deploy-speed)    deploy_speed "$1" "$2" "$3" "${4:-1}" ;; # reduce /metrics brackets -> s/fwd+accept (CPU)
+  deploy-rescore)  deploy_rescore ;;                        # big-denom Phase-3 + lossless verdict (GPU)
+  deploy-full)     deploy_full "${1:-}" "${2:-1}" ;;        # end-to-end serialized chain
+  # --- DEPRECATED: raw-/v1/completions regime (off-distribution, cautionary) ---
   native)    boot_native "$1" ;;       # B=1 gold regime (MAX_NUM_SEQS=1)
   native-b4) boot_native_b4 "$1" ;;    # B=4 co-residency smoke (MAX_NUM_SEQS=4)
   tree)      boot_tree "$1" "$2" ;;     # B=1 gold regime
@@ -232,7 +311,14 @@ case "$CMD" in
     python3 "$MEASURE" reconcile --speed "$OUT"/*_speed_b1_off.json \
       --out "$OUT/reconcile.json" ;;
   *)
-    echo "usage: $0 {native eN | native-b4 eN | tree NAME 'TREE' | tree-b4 NAME 'TREE' |" >&2
-    echo "          drift ARM | paired REF_ARM ARM [ARM...] | reconcile}" >&2
+    echo "usage: $0 <command>" >&2
+    echo "  CANONICAL (deployment = real SWE-Verified + codex):" >&2
+    echo "    deploy-serve ARM_DIR {cat9|native} [SUBSET]   boot+codex+pairdump+brackets (GPU)" >&2
+    echo "    deploy-speed LABEL ARM_DIR EXPECT_RATIO [B]    reduce /metrics brackets -> s/fwd+accept (CPU)" >&2
+    echo "    deploy-rescore                                 big-denom Phase-3 + lossless verdict (GPU)" >&2
+    echo "    deploy-full [SUBSET] [B]                        end-to-end serialized chain" >&2
+    echo "  DEPRECATED (raw-/v1/completions, off-distribution cautionary):" >&2
+    echo "    native eN | native-b4 eN | tree NAME 'TREE' | tree-b4 NAME 'TREE'" >&2
+    echo "    drift ARM | paired REF_ARM ARM [ARM...] | reconcile" >&2
     exit 2 ;;
 esac

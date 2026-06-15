@@ -1,14 +1,39 @@
 #!/usr/bin/env python3
-"""FR13 CANONICAL speed / lossless / temp-0.6-drift MEASUREMENT infra.
+"""FR13 CANONICAL speed / lossless MEASUREMENT infra — DEPLOYMENT regime.
 
 ONE validated entry point that measures, for ANY arm (native MTP-N / any
-caterpillar TREE shape / OPT flags), in ONE canonical regime:
+caterpillar TREE shape / OPT flags), on the CANONICAL regime = the real
+SWE-Verified + codex DEPLOYMENT trajectory (the codex agent loop on real
+SWE-bench-Verified tasks, chat-templated via /v1/responses, multi-turn, real
+tool calls). The four deployment numbers, on the deployment trajectory:
   {s/fwd, accept/event, committed/event, derived-TPS}  (SPEED, instrument OFF)
-  {temp-0 argmax flip vs the no-spec recurrent oracle}  (LOSSLESS, instrument ON)
-  {per-position TV(softmax(q/0.6), softmax(p/0.6)) + KL + over-floor vector,
-   plus the realized multi-seed BAG-TV}                 (temp-0.6 DRIFT, ON)
+    -> cmd_deploy_speed: raw-counter delta of the per-task /metrics brackets
+       run_swe_bench_q36_a.py already captures during the codex loop.
+  {clear-margin flip rate + Wilson CI vs each arm's OWN no-spec RECURRENT
+   decode oracle; native-E5 = the within-floor BAR}    (LOSSLESS, instrument ON)
+    -> cmd_deploy_lossless: consumes the big-denom rescore consolidation.
 
-WHY THIS EXISTS — the regime bug it fixes (root-caused 2026-06-15)
+THE DEPLOYMENT REGIME IS CANONICAL; THE RAW-/v1/completions PATH IS DEPRECATED
+------------------------------------------------------------------------------
+The handrolled regime (cmd_speed / cmd_capture_q / cmd_temp06_drift on
+prompts_swe4.json sent as a RAW string to /v1/completions with NO chat template)
+is OFF-DISTRIBUTION for this chat/thinking-trained model. native E5's served
+stream on prompt 0 REPEATS [271,248068,271,248069,271,40] = "\\n<think>\\n</think>
+\\nI" (a degenerate empty-<think></think> loop, verified in
+output/fr13_measure/native_e5_q_temp06_on.json) — that off-distribution
+degeneration (NOT a kernel bug) tanked native accept to ~1.589 and forked the
+stream cross-boot (the GB10 near-tie). The no-spec oracle ranks the COHERENT
+continuation correct by ~11 nats, so the real model decode is coherent; only the
+raw-prompt spec boots degenerate. THE FIX (user): measure on the DEPLOYMENT
+regime, which the big-denom ALREADY proved faithful + representative (codex on
+astropy-12907: native ~= cat9, 13.99% vs 13.55% clear-margin flips, NO degenerate
+loop, spec-vs-non-spec CONFIRMED). The raw-/v1/completions subcommands below are
+KEPT only as a documented OFF-DISTRIBUTION cautionary note + (flagged) for the
+regime-robust s/fwd cross-check; they are NOT the deployment number.
+
+DEPLOYMENT-regime numbers come from cmd_deploy_speed / cmd_deploy_lossless ONLY.
+
+(historical) the original raw-regime root-cause — root-caused 2026-06-15
 -----------------------------------------------------------------
 Two hand-rolled probes gave two different "native accept" on the SAME
 prompts_swe4 / max_tokens 128 / temp 0 / seed 1313:
@@ -83,6 +108,18 @@ capture. diag_residue() computes the OFF-vs-ON s/fwd tax per arm (expect <=2.5%,
 
 SUBCOMMANDS
 -----------
+  CANONICAL (DEPLOYMENT regime = real SWE-Verified + codex):
+  deploy-speed   OFF-mode CANONICAL: s/fwd + accept/event + committed + derived
+                 TPS on the REAL codex trajectory, from the per-task /metrics
+                 brackets run_swe_bench_q36_a.py captures. Same truthful basis as
+                 `speed`, no degenerate fork. THE deployment SPEED number.
+  deploy-lossless ON-mode CANONICAL: the within-floor lossless verdict from the
+                 big-denom rescore consolidation (clear-margin flip rate + Wilson
+                 CI vs each arm's OWN no-spec recurrent oracle; native-E5 = BAR).
+                 THE deployment LOSSLESS number.
+
+  DEPRECATED (raw-/v1/completions, OFF-DISTRIBUTION — cautionary / regime-robust
+  s/fwd cross-check only, never the deployment number):
   speed        OFF-mode: raw-counter s/fwd + accept/event + committed + derived
                TPS for one arm at a given batch_size + temp. Capture-once served
                streams + fingerprint. No logprobs (clean deployment path).
@@ -1250,6 +1287,238 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
     return 0
 
 
+# =========================================================================== #
+# DEPLOYMENT REGIME (the CANONICAL path) — real SWE-Verified + codex            #
+# =========================================================================== #
+# The raw-/v1/completions handrolled regime above (speed/capture-q on            #
+# prompts_swe4.json) is DEPRECATED: sending the handrolled prompt as a RAW       #
+# string with NO chat template is OFF-DISTRIBUTION for this chat/thinking model. #
+# The native E5 served stream on prompt 0 REPEATS [271,248068,271,248069,271,40] #
+# = "\n<think>\n</think>\nI" (a degenerate empty-<think></think> loop, verified  #
+# output/fr13_measure/native_e5_q_temp06_on.json) — that off-distribution        #
+# degeneration (NOT a kernel bug) tanked native accept to ~1.589 and forked the  #
+# stream cross-boot. The no-spec oracle ranks the COHERENT continuation correct  #
+# by ~11 nats, so the real model decode is coherent; only the raw-prompt spec    #
+# boots degenerate. THE FIX (user): measure on the DEPLOYMENT regime = the codex #
+# agent loop on real SWE-bench-Verified tasks, chat-templated via /v1/responses, #
+# multi-turn, real tool calls. The big-denom ALREADY proved this regime faithful #
+# + representative (codex on astropy-12907: native ~= cat9, 13.99% vs 13.55%     #
+# clear-margin flips, NO degenerate loop, spec-vs-non-spec CONFIRMED).            #
+#                                                                                 #
+# This block ORCHESTRATES the proven big-denom machinery (it does NOT re-invent  #
+# it): the deployment harness (fr13_bigdenom_swe_serve.sh) boots the arm + runs  #
+# scripts/run_swe_bench_q36_a.py (the codex loop), which ALREADY brackets        #
+# /metrics per task into vllm_metrics_pre.txt / vllm_metrics_post.txt. So the    #
+# DEPLOYMENT-regime s/fwd + accept/event is the SAME raw-counter delta basis as  #
+# cmd_speed, only on the real codex trajectory (no degenerate fork). Lossless on #
+# the deployment trajectory is the big-denom rescore (proxy pair-dump -> no-spec #
+# RECURRENT decode oracle -> clear-margin flip rate + Wilson CI) consolidated by #
+# fr13_bigdenom_rescore_consolidate.py; cmd_deploy_lossless reads that artifact. #
+# --------------------------------------------------------------------------- #
+def _scrape_metrics_file(path: str) -> dict[str, float]:
+    """Parse a Prometheus /metrics SNAPSHOT FILE (vllm_metrics_pre/post.txt
+    bracketed per task by run_swe_bench_q36_a.py) into the raw counters. Same
+    parse as _scrape() but from a captured file instead of a live HTTP poll."""
+    out = {c: 0.0 for c in COUNTERS}
+    text = Path(path).read_text(encoding="utf-8", errors="ignore")
+    for line in text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        name = line.split("{", 1)[0].split(" ", 1)[0]
+        if name in out:
+            try:
+                out[name] += float(line.rsplit(" ", 1)[1])
+            except (IndexError, ValueError):
+                continue
+    return out
+
+
+def _find_task_dirs(out_root: str) -> list[Path]:
+    """Locate per-task dirs under a run_swe_bench_q36_a out-root. The layout is
+    <out_root>/<dataset_tag>/per_task/<instance_id>/ (each holding the bracketed
+    vllm_metrics_pre.txt / vllm_metrics_post.txt). Accepts an out-root, a
+    dataset dir, or a swe_out dir."""
+    root = Path(out_root)
+    dirs = sorted(root.glob("**/per_task/*"))
+    return [d for d in dirs if (d / "vllm_metrics_pre.txt").exists()
+            and (d / "vllm_metrics_post.txt").exists()]
+
+
+def cmd_deploy_speed(args: argparse.Namespace) -> int:
+    """DEPLOYMENT-regime SPEED (OFF, regime=deployment): s/fwd + accept/event +
+    committed + derived TPS on the REAL codex trajectory, from the per-task
+    /metrics brackets run_swe_bench_q36_a.py already captured.
+
+    THE SAME truthful basis as cmd_speed (raw-counter delta, banned bases
+    blocked, class-9 engagement asserted) — only the trajectory differs: this is
+    the real SWE-Verified + codex deployment stream (chat-templated /v1/responses,
+    multi-turn, tool calls), NOT the off-distribution raw-/v1/completions prompts.
+    No degenerate fork: accept/event here is the DEPLOYMENT-TRAJECTORY number.
+
+    --out-root = a run_swe_bench_q36_a out-root (e.g. output/fr13_bigdenom_swe/
+    cat9_a/swe_out). --batch-size labels which co-residency regime the arm was
+    booted in (B=1 MAX_NUM_SEQS=1 deployment, or B=4). --expected-tok-per-draft
+    is the class-9 engagement gate (5 for native E5, len(TREE) for a tree arm)."""
+    assert_speed_basis(args.basis)
+    task_dirs = _find_task_dirs(args.out_root)
+    if not task_dirs:
+        raise RuntimeError(
+            f"class-9 FAIL-LOUD [deploy-speed]: no per-task /metrics brackets "
+            f"under {args.out_root!r} (vllm_metrics_pre/post.txt). The codex "
+            "deployment run did not produce a bracketed task -- nothing to reduce."
+        )
+    # Aggregate the raw-counter delta OVER ALL tasks (the deployment workload).
+    agg = {c: 0.0 for c in COUNTERS}
+    per_task: list[dict[str, Any]] = []
+    for d in task_dirs:
+        before = _scrape_metrics_file(str(d / "vllm_metrics_pre.txt"))
+        after = _scrape_metrics_file(str(d / "vllm_metrics_post.txt"))
+        md = _delta(after, before)
+        for c in COUNTERS:
+            agg[c] += md[c]
+        drafts = md[M_DRAFTS]
+        per_task.append({
+            "instance_id": d.name,
+            "drafts": drafts,
+            "tok_per_draft": (md[M_DRAFT_TOK] / drafts) if drafts > 0 else None,
+            "s_per_fwd": (md[M_DECODE_S] / drafts) if drafts > 0 else None,
+            "accept_per_event": (md[M_ACCEPTED] / drafts) if drafts > 0 else None,
+        })
+
+    # class-9 engagement: tok/draft over the WHOLE deployment workload == expected.
+    spec_like = {"expected_tok_per_draft": args.expected_tok_per_draft, "arm": args.arm}
+    eng = assert_engaged(spec_like, agg, context=f"deploy-speed {args.arm} B={args.batch_size}")
+
+    drafts = agg[M_DRAFTS]
+    s_fwd = agg[M_DECODE_S] / drafts if drafts > 0 else None
+    accept_per_event = agg[M_ACCEPTED] / drafts if drafts > 0 else None
+    committed_per_event = (accept_per_event + 1.0) if accept_per_event is not None else None
+    derived_tps = (committed_per_event / s_fwd) if (s_fwd and committed_per_event) else None
+
+    rec = {
+        "schema": "fr13.measure.deploy_speed.v1",
+        "kind": "speed",
+        "instrument": "OFF",
+        "regime": "deployment",  # real SWE-Verified + codex (the canonical path)
+        "regime_note": (
+            "DEPLOYMENT trajectory: s/fwd + accept/event over the REAL codex agent "
+            "loop on SWE-bench-Verified tasks (chat-templated /v1/responses, "
+            "multi-turn, tool calls), from the per-task /metrics brackets. NO "
+            "degenerate raw-prompt fork; accept is on the deployment trajectory."
+        ),
+        "label": f"deploy_speed_{args.arm}_b{args.batch_size}",
+        "arm": args.arm,
+        "batch_size": args.batch_size,
+        "out_root": args.out_root,
+        "n_tasks": len(task_dirs),
+        "task_instance_ids": [d.name for d in task_dirs],
+        "engagement": eng,
+        "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
+        "s_per_fwd": s_fwd,
+        "accept_per_event": accept_per_event,
+        "accept_per_event_note": (
+            "DEPLOYMENT-TRAJECTORY accept (real codex loop). B-DEPENDENT; valid "
+            "for this batch_size on this workload. NOT the off-distribution raw-"
+            "prompt accept (which forked degenerate)."
+        ),
+        "committed_per_event": committed_per_event,
+        "derived_tps": derived_tps,
+        "derived_tps_note": "DERIVED = committed_per_event / s_fwd; NOT measured.",
+        "raw_counter_delta_aggregate": agg,
+        "per_task": per_task,
+        "ts": time.time(),
+    }
+    assert_no_mode_mix([rec])
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({k: rec[k] for k in (
+        "arm", "regime", "batch_size", "n_tasks", "s_per_fwd",
+        "accept_per_event", "committed_per_event", "derived_tps", "instrument")},
+        indent=2))
+    return 0
+
+
+def cmd_deploy_lossless(args: argparse.Namespace) -> int:
+    """DEPLOYMENT-regime LOSSLESS verdict (ON, regime=deployment): the within-
+    floor lossless gate on the REAL codex trajectory.
+
+    This CONSUMES the big-denom rescore consolidation
+    (fr13.bigdenom_rescore_consolidate.v1, produced by
+    fr13_bigdenom_phase3_rescore.sh: proxy pair-dump -> byte-exact detok src ->
+    no-spec RECURRENT decode oracle -> clear-margin flip rate + Wilson CI). Each
+    arm is scored vs ITS OWN no-spec recurrent oracle on its OWN served codex
+    stream; native-E5 is the within-floor BAR (feedback_fr13_lossless_compare_
+    target: US vs native-E5 vs no-spec-decode, never a proxy).
+
+    The verdict: cat9 is lossless-within-floor iff its clear-margin flip rate is
+    NOT statistically above native-E5's (Wilson CIs OVERLAP, i.e. cat9 is not
+    separated-above native). A high absolute flip rate that BOTH arms share is the
+    deployment self-noise floor, NOT a cat9 defect (scalar_metric blindspot: the
+    per-token clear-margin definition is the binding instrument, not bag-TV)."""
+    cons = json.loads(Path(args.consolidated).read_text(encoding="utf-8"))
+    if cons.get("schema") != "fr13.bigdenom_rescore_consolidate.v1":
+        raise RuntimeError(
+            f"class-9 FAIL-LOUD [deploy-lossless]: --consolidated must be a "
+            f"fr13.bigdenom_rescore_consolidate.v1 artifact, got {cons.get('schema')!r}."
+        )
+    nv = cons.get("non_vacuity", {})
+    if not nv.get("oracle_engaged_both", False):
+        raise RuntimeError(
+            "class-9 FAIL-LOUD [deploy-lossless]: the big-denom rescore oracle was "
+            "NOT engaged on both arms (RECURRENT_PATH_ENGAGED / recurrent_decode_"
+            "calls == 0) -- the lossless verdict would be vacuous."
+        )
+    if not nv.get("denominator_is_validated_roundtrip_tokens", False):
+        raise RuntimeError(
+            "class-12 FAIL-LOUD [deploy-lossless]: the flip-rate denominator is NOT "
+            "the round-trip-validated token count (text-length / silent re-count) -- "
+            "refusing to bind a lossless verdict on a fictional denominator."
+        )
+    cat9 = cons["cat9"]
+    native = cons["native"]
+    # within-floor: cat9 NOT separated-above native (Wilson CIs overlap).
+    cat9_above_native = bool(cons.get("ci_separated_cat9_above_native", False))
+    within_floor = not cat9_above_native
+    result = {
+        "schema": "fr13.measure.deploy_lossless.v1",
+        "kind": "lossless",
+        "instrument": "ON",
+        "regime": "deployment",
+        "compare_target": cons.get("compare_target"),
+        "clear_margin_def": cons.get("clear_margin_def"),
+        "source_consolidated": args.consolidated,
+        # the 4 lossless numbers ON the deployment trajectory ---------------
+        "cat9_clear_margin_rate_ci": cat9.get("rate_ci_str"),
+        "native_clear_margin_rate_ci": native.get("rate_ci_str"),
+        "cat9_clear_margin_rate": cat9.get("clear_margin_rate"),
+        "native_clear_margin_rate": native.get("clear_margin_rate"),
+        "cat9_n_positions": cat9.get("total_positions_rescored"),
+        "native_n_positions": native.get("total_positions_rescored"),
+        "cat9_above_native_separated": cat9_above_native,
+        "within_floor_verdict": "LOSSLESS_within_floor" if within_floor else "ABOVE_floor",
+        "within_floor": within_floor,
+        "within_proc_determinism_both": cons.get("within_proc_determinism_both"),
+        "non_vacuity": nv,
+        "verdict_note": (
+            "DEPLOYMENT-regime lossless: each arm vs its OWN no-spec RECURRENT "
+            "decode oracle on its OWN codex served stream; native-E5 is the BAR. "
+            "cat9 lossless-within-floor iff its clear-margin flip rate is not "
+            "Wilson-separated ABOVE native's (shared rate = deployment self-noise "
+            "floor, not a cat9 defect). This is the binding per-token instrument "
+            "(reference_scalar_metric_per_token_blindspot), not bag-TV."
+        ),
+        "ts": time.time(),
+    }
+    assert_no_mode_mix([result])
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({k: result[k] for k in (
+        "regime", "cat9_clear_margin_rate_ci", "native_clear_margin_rate_ci",
+        "within_floor_verdict", "within_proc_determinism_both", "instrument")},
+        indent=2))
+    return 0
+
+
 # --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__,
@@ -1346,6 +1615,34 @@ def build_parser() -> argparse.ArgumentParser:
     rc.add_argument("--accept-tol", type=float, default=0.05)
     rc.add_argument("--out", required=True)
     rc.set_defaults(func=cmd_reconcile)
+
+    # ----- DEPLOYMENT REGIME (the CANONICAL path) ----------------------------
+    ds = sub.add_parser(
+        "deploy-speed",
+        help="CANONICAL: deployment-regime s/fwd + accept on the real codex "
+             "trajectory (per-task /metrics brackets from run_swe_bench_q36_a)")
+    ds.add_argument("--arm", required=True, help="cat9 / native_e5 / ... (label)")
+    ds.add_argument("--out-root", required=True,
+                    help="a run_swe_bench_q36_a out-root (e.g. "
+                         "output/fr13_bigdenom_swe/cat9_a/swe_out)")
+    ds.add_argument("--expected-tok-per-draft", type=float, required=True,
+                    help="class-9 engagement gate: 5 for native E5, len(TREE) for a tree")
+    ds.add_argument("--batch-size", type=int, default=1,
+                    help="co-residency regime the arm was booted in (1 or 4)")
+    ds.add_argument("--basis", default="decode_seconds",
+                    help="speed basis; banned: tps/accept/wall/req_elapsed")
+    ds.add_argument("--out", required=True)
+    ds.set_defaults(func=cmd_deploy_speed)
+
+    dl = sub.add_parser(
+        "deploy-lossless",
+        help="CANONICAL: deployment-regime lossless verdict (within-floor) from "
+             "the big-denom rescore consolidation (no-spec recurrent oracle flips)")
+    dl.add_argument("--consolidated", required=True,
+                    help="fr13.bigdenom_rescore_consolidate.v1 artifact "
+                         "(output/fr13_bigdenom_rescore/consolidated.json)")
+    dl.add_argument("--out", required=True)
+    dl.set_defaults(func=cmd_deploy_lossless)
     return p
 
 
