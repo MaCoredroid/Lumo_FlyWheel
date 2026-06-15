@@ -20,31 +20,40 @@ Raw: `research/fr13_workflows/fr13_reshape_ab_raw.json`. User chose this test (o
 | **chain3** | depth-3 spine, NO width | **1 / 1** | [0,0,1,0] | 2.266 |
 | cat3w | depth-3 spine + root sib + d1 | 27 / ~17 (16-19, audit-fuzzy) | [5,3,3,6] | 2.282 |
 
-## Verdict: DEPTH is the flip lever (CONFIRMED), WIDTH is not (REFUTED) — but lossless costs speed
-- **chain3 (depth-3, leaf-free) = 1 clear flip ≤ native 3 = LOSSLESS** in the deployment-correct recurrent
-  frame. Removing the deep spine removes the diffuse cross-layer accumulation (the 1.166x/layer growth from
-  FR13_DIFFUSION_DEEP_DIVE has fewer layers of runway / the leaf-free spine has no co-residency).
+## Verdict: WIDTH / leaf-co-residency is the CARRIER (depth ~negligible) — and lossless costs speed
+**RED-TEAM CORRECTION (monitor, 2026-06-15): the workflow Verdict labeled this "DEPTH is the lever, WIDTH
+refuted" — that is CONFOUNDED.** The clean A/B is at FIXED depth-3: chain3 (d3, NO width)=1 vs cat3w (d3,
++width)=17 → **width adds +16**. At fixed width: cat3w (d3)=17 vs cat9 (d5)=18 → **depth adds +1**. So the
+de-cascaded-flip carrier is WIDTH / leaf co-residency (+16), NOT depth (+1). chain3 is lossless because it is
+**leaf-free**, not because it is shallow; the Verdict conflated depth-reduction with width-removal (chain3 is
+both). This CONFIRMS (not overturns) the banked `+17 leaf-co-residency` decomposition.
+- **chain3 (depth-3, leaf-free) = 1 clear flip ≤ native 3 = LOSSLESS** (recurrent frame). No leaves → no
+  co-residency forks. The deep-spine accumulation (1.166x/layer, FR13_DIFFUSION_DEEP_DIVE) adds only ~+1-2.
 - **cat3w (depth-3 + width) = ~17 ≈ OFF cat9's 18**: the root-sibling/d1 leaves RE-INTRODUCE the
-  co-residency / structural-boundary forks (class #12). Audited cat3w p3 = genuine multiple INDEPENDENT forks
-  (clusters 67-69, 72-76, 88, 122-126 separated by dev=0 re-convergence), NOT one undercounted cascade.
+  co-residency / structural-boundary forks (class #12) — the FULL carrier appears at depth-3 already. Audited
+  cat3w p3 = genuine multiple INDEPENDENT forks (67-69, 72-76, 88, 122-126 separated by dev=0 re-convergence).
 - **BINDING ARBITER (accept/event): BOTH reshaped arms DROP to ~2.27 < native 3.08 < cat9-OFF 3.0-3.198.**
   chain3 is lossless-CLEAN but speed-NEGATIVE (~0.8 fewer accepted tok/event). cat9's SPEED (3.198 > native)
-  comes precisely from the depth+width that makes it LOSSY (23). The two are coupled.
+  comes precisely from the LEAVES (width) that make it LOSSY (23). Accept-edge and lossy-ness are the SAME
+  leaves — coupled.
 
-## OVERTURNS a banked closure (REPORTED to user)
-This SUPERSEDES **FR13_CHAIN3_DEPTH_LEVER_DEAD_BIND** ("chain3=chain5=5, depth lever dead, flips don't scale
-with depth"). In the deployment-correct RECURRENT oracle frame, **chain3 = 1 ≤ native 3 = LOSSLESS**; the
-banked chain3=5 was a stale-frame number (2026-06-14, pre-recurrent-oracle — likely the chunked/prefill
-teacher-force frame, FR13_ORACLE_FRAME ~9x chunk-vs-recurrent at L0). The DEPTH lever is LIVE: depth+width
-co-residency IS the flip carrier, not a "depth-independent floor." Caveat (#12/#9): chain3=1 is a SINGLE fresh
-boot; cross-boot autotune-fork noise (the GB10 "no cross-boot byte-identity" floor) means the point estimate
-is ~1-3, but ALL of {1 fresh, 3 native} ≤ native and << cat9 23, so the ORDER (chain3 lossless, cat9 lossy,
-width re-adds) is robust. Do NOT over-read the exact "1".
+## What it REFINES in the banked record (REPORTED to user) — NOT a depth-lever overturn
+**FR13_CHAIN3_DEPTH_LEVER_DEAD_BIND is CONFIRMED in its core claim** (width/co-residency, not depth, is the
+carrier) and only its NUMBER is superseded: the banked chain3=5 was scored vs **chunked-prefill** (confirmed:
+"our pure-spine gap (TREE_ATTN + tree-GDN rank-1 scan vs chunked-prefill) → 5"), an inflated frame; in the
+deployment-correct RECURRENT frame **chain3 = 1 ≤ native 3 = LOSSLESS** (the spine floor is BELOW native, not
++2). So the earlier "depth lever dead" intuition was directionally right (depth isn't the carrier) but its
+spine-floor magnitude was a chunked-frame artifact. Caveat (#12/#9): chain3=1 is a SINGLE recurrent-frame boot;
+cross-boot autotune-fork noise means ~1-3, but {1, native 3} ≤ native and << cat9 23/cat3w 17, so the ORDER
+(leaf-free=lossless, +width=+16) is robust. Do NOT over-read the exact "1".
 
 ## Strategic consequence (the live front)
-Reshape gives a lossless shape (chain3) OR a fast shape (cat9), NOT both — topology alone can't break the
-tension. **The only lossless+FAST path is to KEEP cat9's topology (depth+width = the 3.198 accept edge) and
-CUT the per-layer/co-residency divergence via a kernel fix.** That is EXACTLY what **K1** tests (workflow
+Reshape gives a lossless shape (chain3, leaf-free) OR a fast shape (cat9, leaves), NOT both — topology alone
+can't break the tension because the leaves ARE both the accept edge AND the co-residency carrier. **The only
+lossless+FAST path is to KEEP cat9's leaves (the 3.198 accept edge) and CUT the leaf-co-residency divergence
+via a kernel fix** (the no-copy / isolated-forward problem the leaves' shared GDN scan creates). K1 tests one
+slice of this — whether matching the scan state store-boundary (the path the leaf co-residency flows through)
+cuts it. That is what **K1** tests (workflow
 `waao62oj0`, committed b91c1bc0): the per-node bf16 `b_h` store-boundary round-trip applied to every GDN layer,
 keeping cat9 geometry — does it cut the depth-accumulation carrier the reshape just localized? If K1 drops
 cat9 flips toward native at unchanged accept 3.198 → lossless+fast. If not → the tension is fundamental:
