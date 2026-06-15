@@ -311,3 +311,108 @@ Artifacts: output/fr13_bigdenom_rescore/consolidated.json; output/fr13_recurrent
 (src output/fr13_verify_decisive/q3_native_capture.json = native served_token_ids[:14]
 [271,248068,271,248069,271,40,...] = empty-think loop, AUDIT-CONFIRMED THIS SLICE);
 output/fr13_shape_sweep/*_capture.json (temperature=0.0, prompts_swe4).
+
+
+---
+---
+
+# FR13 NUMBERS TRUST LEDGER — SLICE: LOSSLESS / FLIP NUMBERS
+
+Audit (CPU read-only, no boot; GPU re-aim wf w8q5jg1k0 in flight; 2026-06-15). Staples every
+LOSSLESS / FLIP number against the TWO deployment contaminations and assigns a TIER. Sources cited
+inline. APPENDED (do not clobber sibling slices).
+
+## The two contaminations (the staples for THIS slice)
+**(1) OUT-OF-DISTRIBUTION PROMPT.** The canonical `output/fr13_acceptance_ladder/prompts_swe4.json`
+greedy probe is sent as a RAW string to `/v1/completions` with NO chat template -> off-distribution for
+this chat/thinking model. **CONFIRMED THIS AUDIT:** `output/fr13_verify_decisive/q3_native_capture.json`
+(the served-stream SOURCE feeding the 23-flip / 7.39x / chain*/cat* / per-event rescores via
+`fr13_recurrent_decode_oracle`) carries the SWE codex-prompt TEXT but `HAS_<|im_start|>=False`, no
+harmony/channel tokens, and its served stream STARTS `[271,248068,271,248069,271,40]` =
+`\n<think>\n</think>\nI` -- the empty-`<think></think>` degeneration loop the re-aim commits flagged
+(be10f299, cab6c157). Native accept tanked ~1.589, forked cross-boot; the no-spec oracle ranks the
+coherent continuation correct by ~11 nats. **accept / flip-rate / superset numbers on this regime are
+UNRELIABLE -> TIER D.** Deployment regime = real SWE-Verified + codex agent loop, chat-templated
+`/v1/responses` (the big-denom, proxy pair-dump, `scripts/fr13_bigdenom_swe_serve.sh`).
+
+**(2) TEMP 0 vs TEMP 0.6.** temp 0 = greedy, served = ARGMAX = a DIAGNOSTIC point-measure
+(NECESSARY-NOT-SUFFICIENT for lossless). Deployment = temp 0.6 + top_p 0.95 SAMPLING where lossless is
+DISTRIBUTIONAL (`q=softmax(verify/0.6)` vs `p=softmax(decode/0.6)`, NOT argmax; `FR13_TEMP06_DRIFT_GATE.md`).
+A position can pass the temp-0 argmax gate yet drift the temp-0.6 sampled distribution. So **temp-0 argmax
+flip-rate is a LOWER-BOUND PROXY, not the deployment-binding lossless gate.**
+
+Tiers: **A** chat+temp0.6+real-SWE; **B** chat real-SWE but temp0 greedy argmax (nec-not-suff); **C**
+regime-robust s/fwd (out of this slice); **D** CONTAMINATED raw /v1/completions; **E** diagnostic-only
+(temp-0 determinism/byte-exact/argmax-localization). UNKNOWN-REGIME where undeterminable.
+
+## KEY FINDING FOR THIS SLICE
+The ONLY flip number on the deployment CHAT prompt regime is the **big-denom 13.548%/13.985%** -- and it is
+**temp-0 = TIER B**. EVERY OTHER flip/lossless number (23/22/20; the 6+17 decomp; the per-event superset
++15; the confound-free 7.39x; chain5=5/chain3=5/cat3w=25/cat10=22; accept 3.161/3.18/3.198/2.15; bag-TV
+0.0593) is on the RAW prompts_swe4 `/v1/completions` regime (degenerate `<think>` loop confirmed) = **TIER D**
+(or E diagnostic). **NO deployment-binding (TIER A) lossless number exists in the FR13 record** -- the binding
+temp-0.6 distributional TV(q,p) is NOT YET measured (q never captured in the recurrent frame;
+`FR13_TEMP06_DRIFT_GATE.md` §3).
+
+---
+
+## LOSSLESS / FLIP LEDGER (one row per number)
+
+| # | number / verdict | doc / artifact | regime | temp | B | TIER | STANDS / RE-MEASURE |
+|---|---|---|---|---|---|---|---|
+| L1 | **big-denom cat9 13.548% [12.846,14.283] vs native 13.985% [13.275,14.728]** clear-margin flip rate; CIs OVERLAP, cat9 LOWER | `FR13_CONFIRM_SPEC_VS_NONSPEC.md`; `output/fr13_bigdenom_rescore/consolidated.json` | **CHAT** (real codex `/v1/responses`, uncapped astropy-12907, pair-dump, 8717/8752 pos) | **0** | 1 | **B** | "cat9 ~= native within floor at scale" STANDS as the STRONGEST lossless evidence -- but temp-0 argmax (nec-not-suff); temp-0.6 distributional verdict NOT yet measured |
+| L2 | **23 clear flips (cat9) vs native 3**; per-prompt [5,4,5,9]/[0,0,2,1]; de-cascaded 18/3 | `FR13_CARRIER_REOPEN.md`; `output/fr13_scan_align_rerun/logs/*_recur_flips.json` (<- `q3_native_capture.json`) | **RAW** (degenerate `<think>` loop CONFIRMED) | **0** | 1 | **D** | raw COUNT contaminated+length-confounded; STRUCTURE (fork-dominated hybrid; ~13-15 near-tie + ~5 fork-progeny; native-3 NOT irreducible) is regime-robust REASONING -- re-COUNT on chat+temp0.6 |
+| L3 | **23-flip decomp: 6 lossy leaf-saves + 17 spine-realization** (6+5+12=23) | `FR13_PEREVENT_SUPERSET_GATE_RESULT.md` | **RAW** | **0** | 1 | **D** | leaf-vs-spine ATTRIBUTION is the useful insight; 6/17 COUNTS off-distribution; re-measure |
+| L4 | **per-event SUPERSET gate net +15** (21 lossless - 6 lossy - 0 spine_reg); lossless 21/27=78% | `FR13_PEREVENT_SUPERSET_GATE_RESULT.md`; `output/fr13_fork_margin_probe/` | **RAW** (fork_margin boot [4,6,7,6]) | **0** | 1 | **D** | "cat9 IS a lossless superset of E5 (+15,0 reg)" drove SUPERSET-PASS -- single-boot RAW greedy -> NOT deployment-binding; re-run on chat+temp0.6 (user's deployable arbiter) |
+| L5 | **confound-free 7.39x** (cat9 43.3/1000 vs native 5.9/1000); spine 1.67x; HELD-common-trajectory = 0 flips all 3 arms | `FR13_MATH_HISTORY_RECONCILE.md`; `output/fr13_confound_free_flip_result.json` (<- rescore_{native,spine,cat9}, same FLASH_ATTN boot) | **RAW** (all 3 arms degenerate) | **0** | 1 | **D** | neutralizes cross-boot/trajectory/length/oracle-frame confounds AND "the flip IS the fork" is load-bearing -- but does NOT neutralize RAW-prompt contamination or temp-0; re-measure the RATE on chat+temp0.6 |
+| L6 | **chain5 = 5 raw -> 2 independent** de-cascaded (<= native 3); [0,0,5,0] | `FR13_PLUS2_DECASCADE.md`, `FR13_RESHAPE_EXHAUSTED_BIND.md`; `output/fr13_shape_sweep/chain5_flips.json` | **RAW** | **0** | 1 | **D** | "deep-spine +2 = cascade artifact, <= native" STANDS as de-cascade reasoning; integers off-distribution |
+| L7 | **chain3 = 5 raw -> 5 independent** (> native 3, +2 REAL diffuse); [0,1,3,1] | `FR13_PLUS2_DECASCADE.md`, `FR13_RESHAPE_EXHAUSTED_BIND.md`; `chain3_flips.json` | **RAW** | **0** | 1 | **D** | "DEPTH lever DEAD (chain3=chain5)" + "small real diffuse residual" STAND as structure; counts contaminated |
+| L8 | **cat3w = 25 flips** (vs chain3 5 = +20 from 2 shallow leaves -> GDN co-residency) | `FR13_RESHAPE_EXHAUSTED_BIND.md`; `research/fr13_workflows/chain3_cat3w_wf_5db71b8b.raw.json` | **RAW** | **0** | 1 | **D** | "width NOT free; reshape EXHAUSTED" STANDS directionally (+20 too large to be only trajectory); count contaminated |
+| L9 | **cat9 = 22 flips** ([6,6,4,6]); cat10 = 22 ([2,6,8,6]) -- root sibling lossless-FLAT | `FR13_CAT10_BIND.md`; `output/fr13_cat10/` | **RAW** | **0** | 1 | **D** | "cat10 does not improve lossless (22==22)" STANDS directionally; counts contaminated (22 vs 23/20 = boot/length variance on same raw regime) |
+| L10 | **native E5 vs oracle = 95 flips** (cat10 boot) | `FR13_CAT10_BIND.md` | **RAW** | **0** | 1 | **E/D** | explicitly OFF-TRAJECTORY (native forked oracle greedy ~pos 6) -- NOT a native floor; do not read as a flip baseline (flagged in-doc) |
+| L11 | **temp-0.6 bag-TV NATIVE floor 0.1133** (139/256 raw mismatches; native NOT same-seed deterministic) | `FR13_NUM_SPLITS_NATIVE_FLOOR_BIND.md` | **RAW** (prompts_swe4, B=4) | **0.6** top_p 0.95 | 4 | **D**(prompt)/partial-A(temp/B) | RARE temp-0.6 CUDA-captured B=4 -- but RAW prompt; SINGLE-DRAW center NOT p95 (class #12); SUPERSEDES 0.0593. Re-measure on chat + upgrade to N=6-8 p95 |
+| L12 | **historical bag-TV floor 0.0593** (`fr13_corruption_gate.py:123`) | `scripts/fr13_corruption_gate.py`; `FR13_TEMP06_DRIFT_GATE.md` §2 | **UNKNOWN-REGIME** (hard-coded constant; provenance not in code/doc) | UNKNOWN (used as temp-0.6 budget) | UNKNOWN | **UNKNOWN-REGIME / D** | SUPERSEDED by 0.1133; single-draw, provenance undetermined -- do NOT use as a hard threshold |
+| L13 | **per-token argmax probe** (binding instrument: `fr13_gold_margin_probe.py` + FR13_COMMIT_ARGMAX_GATE) | `FR13_GATE_BLINDSPOT_PER_TOKEN_ARGMAX.md` | regime-agnostic INSTRUMENT (values inherit boot regime) | -- | -- | **(instrument)** | REQUIREMENT STANDS (scalar accept blind to ~4.3% per-token flips); every value to date is RAW temp-0 (D/E); binding object = temp-0.6 distributional TV(q,p), not this argmax probe |
+| L14 | **temp-0.6 distributional drift TV(q,p)** -- the DEPLOYMENT-BINDING lossless gate | `FR13_TEMP06_DRIFT_GATE.md` §3-4 | (design = chat SWE, capture-once pinned) | **0.6** | 4 | **A (TARGET, not yet measured)** | **NOT COMPUTABLE on banked data** (q absent from big-denom recurrent frame; gold_margin q has WRONG chunked p at 4 pts). NO temp-0.6 lossless number exists. Awaits §4 GPU capture |
+| L15 | p-side temp-0.6 peakedness on flip subset: median P(top1)@0.6 = 0.742 cat9 / 0.739 native; 70.5%/71.4% flips P(top1)<0.9 | `FR13_TEMP06_DRIFT_GATE.md` §1c | CHAT (big-denom flip subset, p-side only) | 0.6 (derived from banked top-K) | 1 | **E** | INFERRED context only -- refutes "13% argmax-pass => done at 0.6"; NOT a q-vs-p drift estimate |
+
+### Accept/event lossless-adjacent anchors (the superset/lossless arbiter)
+| # | number | doc | regime | temp | B | TIER | stands? |
+|---|---|---|---|---|---|---|---|
+| A1 | **native E5 accept/event 3.1613** (depth-5 BAR) | `FR13_B1_CURRENT_GATE_BIND.md` | RAW | 0 | 1 | **D/E** | the BAR; raw-greedy. native B=4 temp0.6 floor 3.125-3.203 (`FR13_NUM_SPLITS...`, also raw). Re-anchor on chat |
+| A2 | **cat9 accept/event 3.18 / 3.1789 / 3.1983** (> native) | `FR13_B1_CURRENT_GATE_BIND.md`, `FR13_CAT10_BIND.md`, FIX-A bind ac1d3039 | RAW | 0 | 1 | **D/E** | "cat9 > native +0.018" PASSED WITH the ~4.3% per-token flip defect present (scalar-blindspot) -> NOT a clean superset proof; re-measure |
+| A3 | cat9 accept/event 2.1515 (B=1 current gate, diff boot/length) | `FR13_B1_CURRENT_GATE_BIND.md` | RAW | 0 | 1 | **D/E** | trajectory/length-confounded vs A2 -- shows the raw cross-boot accept swing (2.15<->3.20); not a fixed number |
+| A4 | native depth-3 (E3) accept = **UNMEASURED** | `feedback_depth_matched_accept_compare` | -- | -- | -- | -- | chain3/cat3w (d3) accept 2.295/2.108 have NO depth-matched bar; capture E3 before judging |
+
+---
+
+## TIER SUMMARY (lossless / flip slice)
+
+**Which lossless verdict is deployment-binding (real-SWE chat + temp 0.6)? -> NONE yet.**
+`FR13_TEMP06_DRIFT_GATE.md` is explicit: the temp-0.6 distributional TV(q,p) is the binding gate and is NOT
+COMPUTABLE on banked data (q never captured in the recurrent frame). So there is **zero TIER-A lossless number**
+in the FR13 record. Every lossless verdict to date is TIER B (one chat temp-0 point) or TIER D/E (raw
+off-distribution / diagnostic).
+
+**STAND (as evidence, not as the deployment gate):**
+- **L1 big-denom 13.55% ~= 13.99% (TIER B)** -- the ONE flip number on the deployment CHAT prompt; strongly
+  suggests cat9 within floor, but temp-0 argmax (nec-not-suff). Closest-to-binding; does NOT close temp-0.6.
+
+**STRUCTURAL conclusions that stand as REASONING (every integer TIER D -- re-measure on chat+temp0.6):**
+fork-dominated hybrid (L2); leaf-vs-spine attribution (L3); depth-lever-dead/width-adds-co-residency/
+reshape-exhausted (L6/L7/L8); cat10-flat (L9); native-3-not-irreducible (L2/L5); "the flip IS the fork" +
+held-trajectory-zero (L5); scalar-accept-is-blind (L13). Directional findings stand; the COUNTS do not.
+
+**MOST AT RISK -- the SUPERSET-PASS claim (L4, +15):** single-boot RAW greedy AND it passed alongside a known
+~4.3% per-token argmax flip the scalar could not see (`FR13_GATE_BLINDSPOT...`). Must be re-run as the user's
+deployable arbiter on chat + temp0.6 (per-event superset + per-token argmax probe + temp-0.6 bag-TV vs the
+N=6-8 p95 floor) before "superset PASS" is deployment-faithful.
+
+**CONTAMINATED -- do NOT trust the number:** 23/22/20 flips (L2/L9), 6+17 (L3), 7.39x (L5),
+chain5/chain3/cat3w (L6/L7/L8), accept 3.161/3.18/3.198/2.15 (A1-A3), bag-TV 0.0593 (L12, also UNKNOWN-REGIME).
+
+**RE-MEASURE the floor:** temp-0.6 bag-TV native floor 0.1133 (L11) stands as the floor CENTER (temp-0.6, B=4)
+but is RAW prompt + single-draw -- re-measure on chat and upgrade to N=6-8 p95.
+
+**Cross-slice note:** the s/fwd 1.030x / 0.2182 / FIX-1/2/3 progression are TIER C (regime-robust) in the SPEED
+slice above -- NOT lossless numbers; do not conflate the 7.39x FLIP RATE with any speed ratio.
