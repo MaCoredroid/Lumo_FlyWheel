@@ -288,3 +288,112 @@ fr10_quick_decode_tps_probe.py L34-44,181,213,232-275, scripts/fr13_e2e_measure.
 scripts/fr13_launch_locked.sh, scripts/fr13_launch_forked_fa2_tree_server.sh L241,
 scripts/fr10_launch_speed_server.sh L162; reference_fr10_speed_measurement_pitfalls;
 output/fr10_native_mtp5_same8_20260604T210257Z (B=4 E5, NOT the B=1 ref).
+
+---
+
+# APPENDIX 3 (THE-TWO-LEVERS lineage) — OPT-1 + OPT-A: implemented first-drafts, GPU-verify pending
+
+This appendix is the **the-two-levers** lineage: the path to STRICTLY sub-native B=1. It reads the
+actual implementation commits (not just the design binds Appendix-1/per-forward cited) and CORRECTS a
+staleness in this file's earlier sections: OPT-1 and OPT-A are NOT "UNBUILT / flag not yet in HEAD" —
+both were implemented as first-drafts on 2026-06-14 (a few hours after their design binds) and are on
+main HEAD. The design binds (a0e8cc3d OPT-1, 087fbd51 OPT-A) are dated 06:19/06:43; the IMPLEMENTATION
+first-drafts (10ebccac OPT-1, e90de7ef OPT-A) landed 07:31/07:20 same day. Both are flag-gated
+default-OFF with CPU byte-A/B gates passing; NEITHER is GPU-verified.
+
+## Lever 1 — OPT-1 GPU-resident committer (FR13_GPU_COMMITTER)
+- **Mechanism (MEASURED root).** The dominant remaining MAIN-thread tax is the committer's packed
+  DtoH + `cuda.synchronize()` readback: census chain5 blocks the main launching thread in memcpyAsync
+  **91.9%** of the verify window vs native **0.8%** (native waits on the async OUTPUT thread, keeping
+  run-ahead). The accept/path-LCP/bonus decision (`fr10_phase4_patch_vllm_tree_gdn.py` ~:5780-5879) is
+  pure-Python on host lists -> one DtoH+sync/forward on the critical thread. **Note FIX-2 already
+  collapsed 6 separate committer DtoH -> ONE packed DtoH + ONE blocking sync/forward** (7fe500b5); OPT-1
+  removes that surviving single sync by moving the pure-INTEGER decision (drafts[node]==parent_targets[node]
+  compares, parent walk, LCP scan, earliest-leaf strict-`>` tie-break, 3-way bonus select) to a Triton
+  integer kernel and side-streaming the readback (CUDA event), restoring run-ahead.
+- **Projected reach (INFERRED — design arithmetic).** Reclaims ~4-6 ms of the ~6.6 ms cat9 tax. native
+  218.2 / cat9 224.7 ms (1.030x). Conservative 2.5-4 ms -> ~220.7-222.2 ms (1.011-1.018x, still ABOVE
+  native); optimistic 6 ms + OPT-2/3/4 -> ~217-218 ms (AT/just-below native). **chain5 (+4.4 ms) crosses
+  below native FIRST.** The decisive win is the accept-edge TPS (cat9 ~3.18 vs native ~3.07 tok/fwd)
+  making cat9 faster e2e even at s/fwd PARITY — "way faster on s/fwd alone" is NOT realistic from the
+  structural pass.
+- **Implemented / tested / banked?** IMPLEMENTED FIRST-DRAFT, NOT GPU-verified. Commit **10ebccac** (on
+  main HEAD). Ships `scripts/fr13_gpu_committer_kernel.py` (bit-exact CPU oracle + Triton kernel
+  `_fr13_committer_kernel` + `fr13_gpu_committer[_full]` dispatch), hook
+  `_patch_rejection_sampler_gpu_committer` (registered after the LCP committer patcher on
+  REJECTION_SAMPLER_PATH; sentinel `# FR13_GPU_COMMITTER`, version-guarded), and
+  `scripts/fr13_gpu_committer_byte_ab_gate.py`. **CPU byte-A/B: 52/52 trees byte-identical, exit 0**
+  (TRITON arm skipped on CPU host). Five GPU obligations remain (G1-G5 in FR13_GPU_COMMITTER_BIND.md):
+  **G1** Triton byte-A/B on GPU; **G2 = the actual speed win — KILL THE SYNC** (first draft STILL does a
+  host `.cpu().tolist()` readback; must move to the FR13_EAGER_PACK side-stream + event, census target
+  91.9% -> ~0.8%); **G3** CUDA-12.4 graph conditional-node / torch.cond in-capture accept branch; **G4**
+  on-device variable node_count packing; **G5** e2e class-9/10 byte A/B + s/fwd vs E5.
+- **Lossless argument (STRONG, verify holds=True for a0e8cc3d).** Pure-integer, location-only host->Triton
+  move; no float / no reduction / no reorder (verified at :5780-5879). Flag-off -> legacy loop iterates
+  `counts` unchanged -> default path byte-identical. CAVEAT (decisive red-team, OPT-1 raw): the "keep
+  CURRENT numerics bit-exact" premise rests on a current state that FAILS its own greedy gold gate (the
+  deployed committer serves a non-argmax token at margin = the 22-flip lossless deficit); OPT-1 preserves
+  whatever the committer decides, it does not fix that deficit.
+- **Tree-only / constraint (CLEAN, 6c5aeaae).** Hook only PREPENDS a flag-guarded branch; touches the
+  TREE committer only; native's spine path untouched. Compliant.
+- **Blocker.** G2 (kill the sync) is the whole win and is unbuilt; needs a GPU boot. Effort: large.
+  Sequenced AFTER the lossless 22->3 fix + the in_proj bake (df631112 endgame roadmap step 4).
+
+## Lever 2 — OPT-A GB10/sm_121-tuned fp8 GEMV (FR13_GB10_FP8_GEMV_CFG)
+- **Mechanism (root verified against LIVE vLLM source, pinned 3dbe092e via scripts/vllm_src.sh).** vLLM
+  ships NO GB10/Spark fp8 JSON. CONFIRMED in the live image `fp8_utils.py`: `get_w8a8_block_fp8_configs`
+  (line 640) looks up `configs/N=..,device_name=..,dtype=fp8_w8a8.json`; no GB10 file -> returns None ->
+  `w8a8_triton_block_scaled_mm` (line 678) takes the **else/Default branch (lines 722-731): BLOCK_SIZE_M=64,
+  GROUP_SIZE_M=32, num_warps=4, num_stages=2**. At decode M=6-10 with BLOCK_SIZE_M=64 only ~9-16% of the
+  M-tile rows are real and num_stages=2 barely hides the LPDDR5X weight DMA. OPT-A injects (flag + GB10 +
+  M<=32 + block_size[1]==128) **BLOCK_SIZE_M=16, GROUP_SIZE_M=1, num_warps=8, num_stages=4**; BLOCK_SIZE_N/K
+  stay pinned (K=128).
+- **Projected reach (INFERRED — design; OPT-A parent verify holds=FALSE on the BUCKET-SPLIT only).** ~140-150
+  ms/fwd (60-70% of peak) = **~1.45-1.55x faster s/fwd vs native 218 ms**; optimistic ~126 ms (78%). NOT the
+  98.6 ms weight-bandwidth floor (26.9 GB / 273 GB/s; GB10 lacks TMA/WGMMA/cp.async.bulk for a megakernel).
+  native = 2.21x floor = ~45% of peak (123 GB/s, matches Hazy ~50%). A FUNDAMENTAL bandwidth win, separate
+  from (not double-counting) OPT-1's parity.
+- **Implemented / tested / banked?** IMPLEMENTED FIRST-DRAFT, NOT GPU-verified. Commit **e90de7ef** (on main
+  HEAD), hook `_patch_fp8_utils_gb10_gemv_cfg` registered in main(). Ships the patcher + CPU byte-A/B gate
+  `scripts/fr13_gb10_fp8_gemv_cfg_byte_ab_gate.py` (G0 patched compiles, G1 idempotent, G2 stock dict
+  verbatim, G3 N/K pinned). NO separate bind doc (design = 087fbd51 + commit msg). NEVER GPU-verified.
+- **Lossless argument (STRONG, verify-confirmed against fp8_utils.py).** BLOCK_SIZE_K pinned at 128 => the
+  fp32 K-accumulation loop (line 611 `accumulator=tl.zeros(...,float32)`; lines 612-621
+  `for k in range(0,cdiv(K,BLOCK_SIZE_K)): accumulator += tl.dot(a,b)*a_s*b_s`) runs the IDENTICAL tile
+  count in the IDENTICAL order; the output cast (line 624+) happens after full accumulation.
+  BLOCK_SIZE_M / GROUP_SIZE_M / num_warps / num_stages are tiling / L2-swizzle / warp-count / pipeline-depth
+  only -> bit-identical output bytes => lossless by construction. **HARD EXCLUSION (verify red-flag):
+  Split-K / RevSplit-K variants split the K-reduction across CTAs (cross-CTA combine = different fp32
+  order) = NOT bit-exact; only JSON-meta tuning of the existing single-K-CTA kernel is lossless.**
+- **Tree-only / constraint (TENSION — flag for the user).** OPT-A patches `w8a8_triton_block_scaled_mm`, a
+  SHARED kernel native's spine ALSO executes, and the `M<=32` guard ALSO catches native MTP-5 decode (also
+  small-M). This is "deviate-shared"-ADJACENT under 6c5aeaae. Defense: the change is OUTPUT-bit-identical
+  (lossless by construction), so it is "align-to-native in output" (spine bytes unchanged), only scheduling
+  changes. But it IS a config change to a kernel native runs — strictly a SHARED-PATH speedup, not tree-only.
+  Reconcile path: if native is run through the SAME patched image its GEMMs speed up too (preserves the
+  relative bar), OR gate the override to the tree-verify dispatch only. The bind itself frames it as
+  "touches NATIVE's own un-tuned GEMM path -> beats native fundamentally" (the fundamental-win premise),
+  which sits against the literal tree-only constraint. **NEEDS a user ruling** on whether shared-but-bit-
+  exact config tuning is in-scope.
+- **Blocker.** GPU-verify (byte A/B on one fp8 GEMM same M=6-10 OFF-vs-ON + per-token argmax probe +
+  s/fwd) + the constraint-scope decision. Sequenced LAST in the fundamental-floor build order
+  (OPT-A -> OPT-C -> OPT-D risky -> OPT-B), AFTER lossless 22->3 + OPT-1.
+
+## The two levers as the endgame (df631112 roadmap step 4)
+"Verify the 2 previous speed fixes (lossless AND fast)": OPT-1 (10ebccac) + OPT-A (e90de7ef), both
+default-OFF, both never GPU-verified. GPU-verify each: lossless (same-boot det + per-token argmax
+unchanged + regular-decode pristine) AND fast (B=1 s/fwd vs native E5 FLASH MTP-5); goal sub-native B=1.
+Then step 5 = B=4 final gate (CUDA-graph + SWE-Verified 4). Both queued BEHIND the lossless 22->3 fix +
+the in_proj bake.
+
+Appendix-3 citations: 10ebccac (OPT-1 impl + FR13_GPU_COMMITTER_BIND.md G1-G5; CPU gate 52/52),
+e90de7ef (OPT-A impl + fr13_gb10_fp8_gemv_cfg_byte_ab_gate.py G0-G3), a0e8cc3d
+(FR13_BEAT_NATIVE_SPEED_DESIGN_BIND, OPT-1 design, verify holds=True; 91.9% main-thread block;
+218.2/224.7 ms arithmetic), 087fbd51 (FR13_FUNDAMENTAL_SPEED_FLOOR_BIND, OPT-A design, verify
+holds=FALSE on bucket-split, lossless-by-construction confirmed; 45%-of-peak / 98.6 ms floor),
+dd45c3c1 (committer sync-DtoH dominant-tax recon, 2 streams), df631112 (FR13_ENDGAME_ROADMAP.md step
+4 = the 2 levers), 6c5aeaae (tree-only / align-to-native constraint, FR13_TRAIL.md); LIVE vLLM source
+fp8_utils.py:611-624,640,678,717-731 (K-accum loop + no-GB10-config default branch) via
+scripts/vllm_src.sh (pinned 3dbe092ec5b2); HEAD code
+fr10_phase4_patch_vllm_tree_gdn.py:14168-14248 (_patch_fp8_utils_gb10_gemv_cfg),
+:14249+ (_patch_rejection_sampler_gpu_committer registered in main()).
