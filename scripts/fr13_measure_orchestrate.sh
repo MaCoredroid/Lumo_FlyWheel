@@ -61,22 +61,20 @@ wait_health() {
 teardown() { docker rm -f "$1" >/dev/null 2>&1 || true; recover; }
 empty_docker() { docker rm -f fr10-speed-start fr13-forked-fa2-tree >/dev/null 2>&1 || true; }
 
-# measure_arm <arm> <tree-or-empty> <container>  (server booted+healthy)
-# OFF speed B=1 + B=4, then ON capture-q, then diag-residue.
-measure_arm() {
+# measure_arm_b1 <arm> <tree-or-empty> <container>  (gold regime, MAX_NUM_SEQS=1)
+# OFF speed B=1 (the deployment number, reproduces banked), then ON capture-q,
+# then diag-residue. B=4 is a SEPARATE boot (measure_arm_b4) so it does not
+# perturb the B=1 trajectory.
+measure_arm_b1() {
   local arm="$1" tree="$2" cont="$3"
   local treearg=(); [ -n "$tree" ] && treearg=(--tree "$tree")
-  echo "===== measure $arm (instrument OFF: speed B=1, B=4) ====="
-  # OFF B=1 sequential greedy speed
+  echo "===== measure $arm (instrument OFF: speed B=1 SEQUENTIAL gold regime) ====="
+  # OFF B=1 sequential greedy speed (dump streams to bind the fork point)
   python3 "$MEASURE" speed --arm "$arm" "${treearg[@]}" \
     --endpoint "$ENDPOINT" --model "$MODEL" --prompts-file "$PROMPTS" \
     --batch-size 1 --temperature 0.0 --top-p 1.0 --seed "$SEED" --max-tokens 128 \
+    --dump-streams \
     --out "$OUT/${arm}_speed_b1_off.json" || { echo "[$arm] speed B=1 FAIL"; return 1; }
-  # OFF B=4 co-resident greedy speed
-  python3 "$MEASURE" speed --arm "$arm" "${treearg[@]}" \
-    --endpoint "$ENDPOINT" --model "$MODEL" --prompts-file "$PROMPTS" \
-    --batch-size 4 --temperature 0.0 --top-p 1.0 --seed "$SEED" --max-tokens 128 \
-    --out "$OUT/${arm}_speed_b4_off.json" || echo "[$arm] speed B=4 nonzero (continuing)"
   echo "===== measure $arm (instrument ON: capture-q temp 0.6/top_p 0.95) ====="
   python3 "$MEASURE" capture-q --arm "$arm" "${treearg[@]}" \
     --endpoint "$ENDPOINT" --model "$MODEL" --prompts-file "$PROMPTS" \
@@ -88,45 +86,99 @@ measure_arm() {
       --on "$OUT/${arm}_q_temp06_on.json" --out "$OUT/${arm}_diag_residue.json" \
       || echo "[$arm] diag-residue nonzero (continuing)"
   fi
-  echo "[$arm] done: $(ls "$OUT"/${arm}_*.json 2>/dev/null | tr '\n' ' ')"
+  echo "[$arm] B=1 done: $(ls "$OUT"/${arm}_*.json 2>/dev/null | tr '\n' ' ')"
 }
 
-boot_native() {  # eN
+# measure_arm_b4 <arm> <tree-or-empty> <container>  (co-residency, MAX_NUM_SEQS=4)
+measure_arm_b4() {
+  local arm="$1" tree="$2" cont="$3"
+  local treearg=(); [ -n "$tree" ] && treearg=(--tree "$tree")
+  echo "===== measure $arm (instrument OFF: speed B=4 CO-RESIDENT) ====="
+  python3 "$MEASURE" speed --arm "$arm" "${treearg[@]}" \
+    --endpoint "$ENDPOINT" --model "$MODEL" --prompts-file "$PROMPTS" \
+    --batch-size 4 --temperature 0.0 --top-p 1.0 --seed "$SEED" --max-tokens 128 \
+    --out "$OUT/${arm}_speed_b4_off.json" || echo "[$arm] speed B=4 nonzero (continuing)"
+  echo "[$arm] B=4 done: $(ls "$OUT"/${arm}_speed_b4_off.json 2>/dev/null)"
+}
+
+# REGIME FIX (2026-06-15): the banked native E5 3.161290 was captured with
+# MAX_NUM_SEQS=1 (FR13_B1_CURRENT_GATE_BIND.md L33). The launcher DEFAULT is
+# MAX_NUM_SEQS=4, which is exactly diagnosed amplifier #3 (FR13_SPEED_MEASURE_
+# INFRA.md §1): it perturbs the per-step bf16/fp8 realization and forks native
+# E5 onto a DEGENERATE accept-~1.5 trajectory (measured this session: a forked
+# boot gave accept 1.5 / fp 02f1e63b vs gold 3.16). So the B=1 gold regime is
+# MAX_NUM_SEQS=1. B=4 co-residency NEEDS MAX_NUM_SEQS>=4, so it is a SEPARATE
+# boot (boot_native_b4) -- its accept is the genuinely co-residency-degraded
+# number and is labelled batch_size=4. The two MUST NOT share one boot (mixing
+# is what forked native).
+boot_native() {  # eN  -> B=1 gold regime (MAX_NUM_SEQS=1), reproduces banked 3.161
   local arm="native_$1" N="${1#e}"
-  echo "######## boot $arm (native MTP-$N, FLASH) ########"
+  echo "######## boot $arm (native MTP-$N, FLASH, MAX_NUM_SEQS=1 gold regime) ########"
   recover; assert_free || return 1; empty_docker
-  NUM_SPECULATIVE_TOKENS="$N" \
+  MAX_NUM_SEQS=1 NUM_SPECULATIVE_TOKENS="$N" \
   SPEC_CONFIG="{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$N}" \
   CONTAINER=fr10-speed-start PORT="$PORT" FR10_METRICS=0 BATCH_INVARIANT=0 \
     bash "$REPO/scripts/fr10_launch_speed_server.sh" > "$OUT/${arm}_boot.log" 2>&1 &
   sleep 8
-  if wait_health fr10-speed-start; then measure_arm "$arm" "" fr10-speed-start; fi
+  if wait_health fr10-speed-start; then measure_arm_b1 "$arm" "" fr10-speed-start; fi
   teardown fr10-speed-start
 }
 
-boot_tree() {  # name TREE
+boot_native_b4() {  # eN  -> B=4 co-residency smoke (MAX_NUM_SEQS=4)
+  local arm="native_$1" N="${1#e}"
+  echo "######## boot $arm B=4 (native MTP-$N, FLASH, MAX_NUM_SEQS=4 co-resident) ########"
+  recover; assert_free || return 1; empty_docker
+  MAX_NUM_SEQS=4 NUM_SPECULATIVE_TOKENS="$N" \
+  SPEC_CONFIG="{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$N}" \
+  CONTAINER=fr10-speed-start PORT="$PORT" FR10_METRICS=0 BATCH_INVARIANT=0 \
+    bash "$REPO/scripts/fr10_launch_speed_server.sh" > "$OUT/${arm}_b4_boot.log" 2>&1 &
+  sleep 8
+  if wait_health fr10-speed-start; then measure_arm_b4 "$arm" "" fr10-speed-start; fi
+  teardown fr10-speed-start
+}
+
+boot_tree() {  # name TREE  -> B=1 gold regime (MAX_NUM_SEQS=1, reproduces cat9 3.18)
   local arm="$1" tree="$2"
-  echo "######## boot $arm (tree_mtp, TREE_ATTN) ########"
+  echo "######## boot $arm (tree_mtp, TREE_ATTN, MAX_NUM_SEQS=1 gold regime) ########"
   recover; assert_free || return 1; empty_docker
   if [ "$arm" = "cat9" ]; then
-    CONTAINER=fr13-forked-fa2-tree PORT="$PORT" FR10_METRICS=0 BATCH_INVARIANT=0 \
+    MAX_NUM_SEQS=1 CONTAINER=fr13-forked-fa2-tree PORT="$PORT" FR10_METRICS=0 BATCH_INVARIANT=0 \
       bash "$REPO/scripts/fr13_launch_locked.sh" > "$OUT/${arm}_boot.log" 2>&1 &
   else
-    TREE="$tree" CONTAINER=fr13-forked-fa2-tree PORT="$PORT" FR10_METRICS=0 BATCH_INVARIANT=0 \
+    MAX_NUM_SEQS=1 TREE="$tree" CONTAINER=fr13-forked-fa2-tree PORT="$PORT" FR10_METRICS=0 BATCH_INVARIANT=0 \
       bash "$REPO/scripts/fr13_launch_forked_fa2_tree_server.sh" > "$OUT/${arm}_boot.log" 2>&1 &
   fi
   sleep 8
-  if wait_health fr13-forked-fa2-tree; then measure_arm "$arm" "$tree" fr13-forked-fa2-tree; fi
+  if wait_health fr13-forked-fa2-tree; then measure_arm_b1 "$arm" "$tree" fr13-forked-fa2-tree; fi
+  teardown fr13-forked-fa2-tree
+}
+
+boot_tree_b4() {  # name TREE  -> B=4 co-residency smoke (MAX_NUM_SEQS=4)
+  local arm="$1" tree="$2"
+  echo "######## boot $arm B=4 (tree_mtp, TREE_ATTN, MAX_NUM_SEQS=4 co-resident) ########"
+  recover; assert_free || return 1; empty_docker
+  if [ "$arm" = "cat9" ]; then
+    MAX_NUM_SEQS=4 CONTAINER=fr13-forked-fa2-tree PORT="$PORT" FR10_METRICS=0 BATCH_INVARIANT=0 \
+      bash "$REPO/scripts/fr13_launch_locked.sh" > "$OUT/${arm}_b4_boot.log" 2>&1 &
+  else
+    MAX_NUM_SEQS=4 TREE="$tree" CONTAINER=fr13-forked-fa2-tree PORT="$PORT" FR10_METRICS=0 BATCH_INVARIANT=0 \
+      bash "$REPO/scripts/fr13_launch_forked_fa2_tree_server.sh" > "$OUT/${arm}_b4_boot.log" 2>&1 &
+  fi
+  sleep 8
+  if wait_health fr13-forked-fa2-tree; then measure_arm_b4 "$arm" "$tree" fr13-forked-fa2-tree; fi
   teardown fr13-forked-fa2-tree
 }
 
 CMD="${1:-}"; shift || true
 case "$CMD" in
-  native) boot_native "$1" ;;
-  tree)   boot_tree "$1" "$2" ;;
+  native)    boot_native "$1" ;;       # B=1 gold regime (MAX_NUM_SEQS=1)
+  native-b4) boot_native_b4 "$1" ;;    # B=4 co-residency smoke (MAX_NUM_SEQS=4)
+  tree)      boot_tree "$1" "$2" ;;     # B=1 gold regime
+  tree-b4)   boot_tree_b4 "$1" "$2" ;;  # B=4 co-residency smoke
   reconcile)
     python3 "$MEASURE" reconcile --speed "$OUT"/*_speed_b1_off.json \
       --out "$OUT/reconcile.json" ;;
   *)
-    echo "usage: $0 {native eN | tree NAME 'TREE' | reconcile}" >&2; exit 2 ;;
+    echo "usage: $0 {native eN | native-b4 eN | tree NAME 'TREE' | tree-b4 NAME 'TREE' | reconcile}" >&2
+    exit 2 ;;
 esac
