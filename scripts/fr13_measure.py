@@ -1520,6 +1520,239 @@ def cmd_deploy_lossless(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# DEPLOYMENT temp-0.6 DRIFT reduce (CPU) — q (spec verify) vs p (recurrent),    #
+# both forced onto the SAME deployment served stream, step/id-aligned.          #
+# --------------------------------------------------------------------------- #
+def _q_deploy_by_pos(q_art: dict[str, Any], pid: int, q_path: str) -> dict[int, dict[str, float]]:
+    """{step -> {str(token_id): logprob}} of the SPEC VERIFY top-K q for one
+    prompt, from the deployment capture-q-deploy q-sinks (verify_topk_*). Keyed
+    by token id (id-keyed by construction)."""
+    out: dict[int, dict[str, float]] = {}
+    pp = {p["prompt_id"]: p for p in q_art.get("per_prompt", [])}.get(pid)
+    candidates: list[Path] = []
+    if pp and pp.get("qsink"):
+        candidates.append(Path(pp["qsink"]))
+    qsink_dir = q_art.get("qsink_dir")
+    if qsink_dir:
+        candidates.append(Path(qsink_dir) / f"p{pid}_rep0.jsonl")
+    candidates.append(Path(q_path).parent / f"{q_art.get('arm','')}_qsinks" / f"p{pid}_rep0.jsonl")
+    for sink in candidates:
+        if sink.exists():
+            for line in sink.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                rec = json.loads(line)
+                ids = rec.get("verify_topk_ids") or []
+                lps = rec.get("verify_topk_logprobs") or []
+                if ids and lps:
+                    out[rec["step"]] = {str(int(t)): float(v) for t, v in zip(ids, lps)}
+            if out:
+                return out
+    return out
+
+
+def _p_deploy_by_pos(p_art: dict[str, Any], pid: int, p_path: str) -> dict[int, dict[str, float]]:
+    """{step -> {str(token_id): logprob}} of the RECURRENT oracle top-K p for one
+    prompt. Reuses the SAME sink/positions resolution as the canonical
+    _p_topk_by_pos (bigdenom <arm>_sinks/pN_rep0.jsonl oracle_topk_*), but ALSO
+    accepts the bigdenom default sink layout (sink_dir absent in the artifact but
+    the on-disk sinks present next to it)."""
+    out = _p_topk_by_pos(p_art, pid, p_path)
+    if out:
+        return out
+    # bigdenom layout: <consolidated_dir>/<arm>_sinks/pN_rep0.jsonl. The rescore
+    # artifact may have sink_dir=None (older runs); locate the sink next to it.
+    arm = p_art.get("arm", "")
+    base = Path(p_path).parent / f"{arm}_sinks"
+    sink = base / f"p{pid}_rep0.jsonl"
+    if sink.exists():
+        for line in sink.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            ids = rec.get("oracle_topk_ids") or []
+            lps = rec.get("oracle_topk_logprobs") or []
+            if ids and lps:
+                out[rec["step"]] = {str(int(t)): float(v) for t, v in zip(ids, lps)}
+    return out
+
+
+def cmd_deploy_temp06_drift(args: argparse.Namespace) -> int:
+    """DEPLOYMENT-regime temp-0.6 distributional DRIFT (ON, regime=deployment):
+    per-position TV(softmax(q/0.6), softmax(p/0.6)) on the REAL codex served
+    stream, each-arm-vs-its-OWN oracle, vs the DEPTH-MATCHED native floor.
+
+    q = the SPEC VERIFY top-K (capture-q-deploy: forced-decode the deployment
+        served stream through the spec serve; verify_topk_*; ID-KEYED).
+    p = the no-spec RECURRENT decode oracle top-K (the bigdenom rescore of the
+        SAME served stream; oracle_topk_*; RECURRENT_PATH_ENGAGED).
+    q and p are forced onto the IDENTICAL served stream (same <arm>_src.json), so
+    they are step/id-aligned BY CONSTRUCTION -- no re-key, no string match, no
+    streamed-logprob off-by-one (the trust-ledger #1 gap the off-distribution
+    temp06-drift could only reach via a re-key).
+
+    The DEPLOYMENT difference vs the off-distribution temp06-drift:
+      * q is the verify dist on the PINNED deployment stream (not a free-running
+        raw-prompt generation that degenerates into the <think></think> loop);
+      * p comes from the big-denom recurrent rescore (the canonical deployment
+        oracle), read from its per-step full-top-K sinks.
+    PASS = the arm's drift is NOT separated above its DEPTH-MATCHED native floor
+    (cat9/depth-5 -> native-E5 floor; 3-3-3/depth-3 -> native-E3 floor). Pair the
+    scalar with the per-position vector (reference_scalar_metric_per_token_blindspot)."""
+    q_art = json.loads(Path(args.q).read_text(encoding="utf-8"))
+    p_art = json.loads(Path(args.p).read_text(encoding="utf-8"))
+    if q_art.get("schema") != "fr13.recurrent_decode_oracle.capture_q_deploy.v1":
+        raise RuntimeError(
+            "class-9 FAIL-LOUD [deploy-temp06-drift]: --q must be a "
+            "fr13.recurrent_decode_oracle.capture_q_deploy.v1 artifact (the SPEC "
+            f"verify q forced onto the deployment stream), got {q_art.get('schema')!r}."
+        )
+    if not q_art.get("SPEC_VERIFY_ENGAGED", False):
+        raise RuntimeError(
+            "class-9 FAIL-LOUD [deploy-temp06-drift]: the q capture did NOT engage "
+            "the spec verify forward (SPEC_VERIFY_ENGAGED != True) -- vacuous q."
+        )
+    if p_art.get("schema") != "fr13.recurrent_decode_oracle.rescore.v1":
+        raise RuntimeError(
+            "class-9 FAIL-LOUD [deploy-temp06-drift]: --p must be a "
+            "fr13.recurrent_decode_oracle.rescore.v1 artifact (the no-spec "
+            f"recurrent deployment oracle), got {p_art.get('schema')!r}."
+        )
+    if not p_art.get("RECURRENT_PATH_ENGAGED", False):
+        raise RuntimeError(
+            "class-9 FAIL-LOUD [deploy-temp06-drift]: p oracle does not assert "
+            "RECURRENT_PATH_ENGAGED -- wrong/chunked oracle frame, refusing."
+        )
+    if q_art.get("src") != p_art.get("src"):
+        # q and p MUST be the SAME served stream or the per-position align is a
+        # fiction (different stream -> different forced tokens at each step).
+        raise RuntimeError(
+            "class-12 FAIL-LOUD [deploy-temp06-drift]: q.src != p.src "
+            f"({q_art.get('src')!r} vs {p_art.get('src')!r}) -- q and p must be "
+            "forced onto the IDENTICAL deployment served stream to be aligned."
+        )
+    temp = args.temp
+    # The served stream pins which token is forced at each step; align q[step] to
+    # p[step] by step index (both forced the same served id at that step).
+    n_prompts = max(
+        (pp["prompt_id"] for pp in q_art.get("per_prompt", [])), default=-1) + 1
+
+    forks: list[dict[str, Any]] = []
+    all_tv: list[float] = []
+    all_kl: list[float] = []
+    over_floor_total = 0
+    n_q_only = 0   # steps with q but no p (align miss)
+    n_p_only = 0   # steps with p but no q (align miss)
+    n_id_mismatch_served = 0  # served id absent from one side's support
+    for pid in range(n_prompts):
+        q_by = _q_deploy_by_pos(q_art, pid, args.q)
+        p_by = _p_deploy_by_pos(p_art, pid, args.p)
+        if not q_by or not p_by:
+            forks.append({"prompt_id": pid,
+                          "note": f"no {'q' if not q_by else 'p'} top-K for prompt"})
+            continue
+        steps = sorted(set(q_by) & set(p_by))
+        n_q_only += len(set(q_by) - set(p_by))
+        n_p_only += len(set(p_by) - set(q_by))
+        per_pos: list[dict[str, Any]] = []
+        for st in steps:
+            qmap, pmap = q_by[st], p_by[st]
+            q_at = _softmax_over_support_at_temp(qmap, temp)
+            p_at = _softmax_over_support_at_temp(pmap, temp)
+            overlap = set(q_at) & set(p_at)
+            tv = _tv(q_at, p_at)
+            kl = _kl(p_at, q_at)
+            entry = {
+                "pos": st,
+                "tv_q_p_at_temp": tv,
+                "kl_p_q_at_temp": kl,
+                "n_support_overlap": len(overlap),
+                "q_support": len(q_at),
+                "p_support": len(p_at),
+                "align_status": "ok",
+            }
+            per_pos.append(entry)
+            all_tv.append(tv)
+            all_kl.append(kl)
+            if args.per_position_floor is not None and tv > args.per_position_floor:
+                over_floor_total += 1
+        forks.append({
+            "prompt_id": pid,
+            "n_positions": len(per_pos),
+            "mean_tv": (statistics.fmean([e["tv_q_p_at_temp"] for e in per_pos])
+                        if per_pos else None),
+            "max_tv": (max(e["tv_q_p_at_temp"] for e in per_pos) if per_pos else None),
+            "positions": per_pos if args.dump_positions else per_pos[:5],
+        })
+
+    # depth-matched native floor verdict (if a floor was supplied).
+    arm_p95 = (sorted(all_tv)[int(0.95 * (len(all_tv) - 1))] if all_tv else None)
+    above_floor = None
+    if args.native_floor_p95 is not None and arm_p95 is not None:
+        above_floor = arm_p95 > args.native_floor_p95
+    result = {
+        "schema": "fr13.measure.deploy_temp06_drift.v1",
+        "kind": "drift",
+        "instrument": "ON",
+        "regime": "deployment",
+        "label": f"deploy_temp06_drift_{q_art.get('arm')}",
+        "arm": q_art.get("arm"),
+        "depth_matched_native_floor_p95": args.native_floor_p95,
+        "depth_match_note": (
+            "feedback_depth_matched_accept_compare: a depth-D tree's TV floor is "
+            "native MTP-D (cat9/depth-5 -> native-E5; 3-3-3/depth-3 -> native-E3), "
+            "NOT E5 for every arm. Supply --native-floor-p95 = the p95 of the "
+            "DEPTH-MATCHED native deploy-temp06-drift run."
+        ),
+        "temp": temp,
+        "q_artifact": args.q,
+        "p_artifact": args.p,
+        "src": q_art.get("src"),
+        "aligned_by": "served-stream step index (q.src == p.src, id-keyed)",
+        "per_position_floor": args.per_position_floor,
+        "mean_tv_q_p_at_temp": (statistics.fmean(all_tv) if all_tv else None),
+        "p95_tv_q_p_at_temp": arm_p95,
+        "max_tv_q_p_at_temp": (max(all_tv) if all_tv else None),
+        "mean_kl_p_q_at_temp": (statistics.fmean(all_kl) if all_kl else None),
+        "n_positions_scored": len(all_tv),
+        "n_q_only_steps": n_q_only,
+        "n_p_only_steps": n_p_only,
+        "over_floor_count": over_floor_total,
+        "arm_p95_above_native_floor": above_floor,
+        "within_floor_verdict": (
+            None if above_floor is None
+            else ("ABOVE_floor" if above_floor else "WITHIN_floor")),
+        "non_vacuity": {
+            "q_spec_verify_engaged": q_art.get("SPEC_VERIFY_ENGAGED"),
+            "p_recurrent_engaged": p_art.get("RECURRENT_PATH_ENGAGED"),
+            "q_p_same_served_stream": (q_art.get("src") == p_art.get("src")),
+            "q_id_keyed": q_art.get("q_id_keyed"),
+            "n_positions_scored_gt0": len(all_tv) > 0,
+        },
+        "interpretation_note": (
+            "DEPLOYMENT temp-0.6 drift: q (SPEC VERIFY top-K) vs p (no-spec "
+            "RECURRENT oracle), BOTH forced onto the SAME codex served stream "
+            "(q.src == p.src) so per-position alignment is exact. Each arm vs its "
+            "OWN oracle; native-of-matching-depth is the floor. PAIR the scalar "
+            "with the per-position vector (over_floor_count locates the drift); a "
+            "high shared TV is the deployment self-noise floor, NOT a defect."
+        ),
+        "forks": forks,
+        "ts": time.time(),
+    }
+    assert_no_mode_mix([result])
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({k: result[k] for k in (
+        "arm", "regime", "temp", "mean_tv_q_p_at_temp", "p95_tv_q_p_at_temp",
+        "max_tv_q_p_at_temp", "n_positions_scored", "over_floor_count",
+        "within_floor_verdict", "instrument")}, indent=2))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -1643,6 +1876,27 @@ def build_parser() -> argparse.ArgumentParser:
                          "(output/fr13_bigdenom_rescore/consolidated.json)")
     dl.add_argument("--out", required=True)
     dl.set_defaults(func=cmd_deploy_lossless)
+
+    dt = sub.add_parser(
+        "deploy-temp06-drift",
+        help="CANONICAL: deployment-regime temp-0.6 TV(q,p) drift on the real "
+             "codex served stream (q = spec verify capture-q-deploy, p = no-spec "
+             "recurrent bigdenom rescore; same stream, step/id-aligned)")
+    dt.add_argument("--q", required=True,
+                    help="fr13.recurrent_decode_oracle.capture_q_deploy.v1 (the "
+                         "spec verify q forced onto the deployment served stream)")
+    dt.add_argument("--p", required=True,
+                    help="fr13.recurrent_decode_oracle.rescore.v1 (the no-spec "
+                         "recurrent deployment oracle on the SAME served stream)")
+    dt.add_argument("--temp", type=float, default=0.6)
+    dt.add_argument("--per-position-floor", type=float, default=None,
+                    help="per-position TV floor; over_floor_count locates the drift")
+    dt.add_argument("--native-floor-p95", type=float, default=None,
+                    help="DEPTH-MATCHED native deploy-temp06-drift p95 (the floor "
+                         "this arm is judged against; depth-5->E5, depth-3->E3)")
+    dt.add_argument("--dump-positions", action="store_true")
+    dt.add_argument("--out", required=True)
+    dt.set_defaults(func=cmd_deploy_temp06_drift)
     return p
 
 

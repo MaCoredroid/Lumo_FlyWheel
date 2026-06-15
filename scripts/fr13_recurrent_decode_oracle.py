@@ -134,8 +134,56 @@ def _make_forced_recurrent_request_lp(served_ids, top_k, sink_path):
     return _lp
 
 
+def _make_forced_verify_request_lp(served_ids, top_k, sink_path):
+    """Return the per-request Callable that forces served[i] and logs the
+    SPEC VERIFY (target) top-K dist q at each forced position.
+
+    SAME forcing mechanism as the recurrent p LP (force served[i] as the unique
+    argmax so the engine commits it and advances state to i+1), but this LP runs
+    inside a SPEC-ENABLED engine, so the logits row it reads at the sampler
+    boundary is the TARGET (verify) distribution for that decode step -- this is
+    the q the temp06-drift gate needs (= "the spec verify-forward top-K logits",
+    the same q the off-distribution capture-q records via the HTTP logprobs
+    field, here forced onto the FIXED deployment served stream and TOKEN-ID keyed
+    by construction). The recurrent p LP and this q LP score the IDENTICAL served
+    stream step-for-step, so q and p are step/id-aligned with NO re-key needed."""
+    f = open(sink_path, "w", encoding="utf-8")  # noqa: SIM115
+
+    def _lp(past_token_ids, logits: torch.Tensor) -> torch.Tensor:
+        step = len(past_token_ids)
+        if step >= len(served_ids):
+            return logits
+        row = logits.detach().float()
+        k = min(top_k, row.numel())
+        top = torch.topk(row, k)
+        logprobs = torch.log_softmax(row, dim=-1)
+        served_id = int(served_ids[step])
+        rec = {
+            "step": step,
+            "served_token_id": served_id,
+            "verify_argmax_id": int(top.indices[0].item()),
+            "verify_argmax_logprob": float(logprobs[int(top.indices[0].item())].item()),
+            "verify_served_logprob": float(logprobs[served_id].item()),
+            # q top-K: TOKEN-ID keyed log_softmax over the verify forward row.
+            "verify_topk_ids": [int(x) for x in top.indices.tolist()],
+            "verify_topk_logprobs": [float(logprobs[i].item()) for i in top.indices.tolist()],
+        }
+        f.write(json.dumps(rec) + "\n")
+        f.flush()
+        forced = torch.full_like(logits, float("-inf"))
+        forced[served_id] = 0.0
+        return forced
+
+    return _lp
+
+
 def _adapter_class():
-    """Build the AdapterLogitsProcessor subclass lazily (needs vllm import)."""
+    """Build the AdapterLogitsProcessor subclass lazily (needs vllm import).
+
+    ONE adapter handles BOTH the recurrent p capture (fr13_sink_path) and the
+    spec verify q capture (fr13_verify_sink_path); which LP fires is selected by
+    which extra_args key the request carries -- the engine config (spec ON vs
+    no-spec) decides which distribution the logits row actually is."""
     from vllm.v1.sample.logits_processor import AdapterLogitsProcessor
 
     class ForcedRecurrentAdapter(AdapterLogitsProcessor):
@@ -145,9 +193,16 @@ def _adapter_class():
         def new_req_logits_processor(self, params):
             ea = getattr(params, "extra_args", None) or {}
             served = ea.get("fr13_served_ids")
-            sink_path = ea.get("fr13_sink_path")
             top_k = int(ea.get("fr13_top_k", 20))
-            if served is None or sink_path is None:
+            if served is None:
+                return None
+            verify_sink = ea.get("fr13_verify_sink_path")
+            if verify_sink is not None:  # spec-verify q capture (deployment)
+                return _make_forced_verify_request_lp(
+                    [int(x) for x in served], top_k, verify_sink
+                )
+            sink_path = ea.get("fr13_sink_path")
+            if sink_path is None:
                 return None
             return _make_forced_recurrent_request_lp(
                 [int(x) for x in served], top_k, sink_path
@@ -185,6 +240,43 @@ def _build_llm(
     )
     if register_adapter:
         kwargs["logits_processors"] = [_adapter_class()]
+    return LLM(**kwargs)
+
+
+def _build_spec_llm(
+    model_path: str,
+    max_model_len: int,
+    gpu_util: float,
+    attn_backend: str,
+    spec_config: dict,
+):
+    """Build the SPEC-ENABLED LLM (the deployment spec serve) for the q capture.
+
+    Mirrors the deployment serve's speculative_config (e.g. native-E5
+    {"method":"qwen3_5_mtp","num_speculative_tokens":5}; tree arms add their
+    flag-gated env). The forced-verify LP is registered so the verify (target)
+    top-K q is logged per forced position. NOTE: FR12_NO_SPECULATIVE_CONFIG is
+    NOT set here -- this engine MUST speculate (that is the whole point: q is the
+    verify-forward dist). Tree-arm flags (FR10_ENABLE_TREE_GDN, FR13_*, the
+    decode-mode default) are passed via the environment by the launcher, exactly
+    as the deployment serve sets them."""
+    os.environ.setdefault("VLLM_ATTENTION_BACKEND", attn_backend)
+    # spec ON: do NOT force-disable speculation.
+    os.environ.pop("FR12_NO_SPECULATIVE_CONFIG", None)
+    os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
+    from vllm import LLM
+
+    kwargs: dict[str, Any] = dict(
+        model=model_path,
+        served_model_name=SERVED_MODEL_NAME,
+        tokenizer=model_path,
+        max_model_len=max_model_len,
+        gpu_memory_utilization=gpu_util,
+        enforce_eager=True,
+        max_num_seqs=1,
+        speculative_config=spec_config,
+        logits_processors=[_adapter_class()],
+    )
     return LLM(**kwargs)
 
 
@@ -479,6 +571,95 @@ def cmd_rescore(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_capture_q_deploy(args: argparse.Namespace) -> int:
+    """DEPLOYMENT q capture: forced-decode the deployment served stream through
+    the SPEC serve and log the verify (target) top-K dist q, ID-KEYED, STEP-
+    ALIGNED to the recurrent oracle p (both score the SAME --src served stream).
+
+    This is the missing producer for deploy-temp06-drift: the off-distribution
+    capture-q free-runs on raw prompts (degenerate loop, deprecated); here we PIN
+    the EXACT deployment served stream (the <arm>_src.json the big-denom reducer
+    already produced from the codex proxy pair-dump) and read q on the spec serve.
+    p is the no-spec recurrent rescore of the SAME src -> q and p are aligned by
+    construction (no re-key, no string match)."""
+    import re
+
+    spec_config = json.loads(args.spec_config)
+    llm = _build_spec_llm(
+        args.model, args.max_model_len, args.gpu_util, args.attn_backend, spec_config,
+    )
+    n_gdn = _assert_gdn_present(llm)
+    prompts, served_streams = _load_served_streams(args.arm, args.src)
+    qsink_dir = Path(args.out).parent / f"{args.arm}_qsinks"
+    qsink_dir.mkdir(parents=True, exist_ok=True)
+
+    from vllm import SamplingParams
+
+    per_prompt: list[dict[str, Any]] = []
+    total_positions = 0
+    for pid, served in enumerate(served_streams):
+        prompt = prompts[pid]
+        sink_path = str(qsink_dir / f"p{pid}_rep0.jsonl")
+        sp = SamplingParams(
+            temperature=0.0, top_p=1.0, max_tokens=len(served), seed=args.seed,
+            extra_args={
+                "fr13_served_ids": served,
+                "fr13_verify_sink_path": sink_path,
+                "fr13_top_k": args.top_k,
+            },
+        )
+        llm.generate([prompt], sp)
+        recs = _read_sink(sink_path)
+        total_positions += len(recs)
+        per_prompt.append({
+            "prompt_id": pid,
+            "served_len": len(served),
+            "n_q_steps": len(recs),
+            "qsink": sink_path,
+        })
+
+    # class-9 engagement: the spec verify forward MUST have fired. The spec
+    # counters live in the engine; the binding deployment evidence is that the
+    # served stream was forced through a spec-enabled engine that produced the
+    # verify top-K per step. n_q_steps>0 for every prompt is the gate.
+    n_steps = [pp["n_q_steps"] for pp in per_prompt]
+    engaged = total_positions > 0 and all(n > 0 for n in n_steps)
+    artifact = {
+        "schema": "fr13.recurrent_decode_oracle.capture_q_deploy.v1",
+        "arm": args.arm,
+        "src": args.src,
+        "model": args.model,
+        "seed": args.seed,
+        "top_k": args.top_k,
+        "attn_backend": args.attn_backend,
+        "spec_config": spec_config,
+        "regime": "deployment",
+        "instrument": "ON",
+        "q_id_keyed": True,  # q is token-id keyed by construction (verify_topk_ids)
+        "aligned_to_p_by": "served-stream step index (same --src)",
+        "n_gdn_layers_introspected": n_gdn,
+        "qsink_dir": str(qsink_dir),
+        "total_positions": total_positions,
+        "SPEC_VERIFY_ENGAGED": engaged,
+        "per_prompt": per_prompt,
+        "ts": time.time(),
+    }
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({
+        "arm": args.arm, "out": args.out, "regime": "deployment",
+        "total_positions": total_positions, "n_q_steps": n_steps,
+        "SPEC_VERIFY_ENGAGED": engaged, "spec_config": spec_config,
+    }, indent=2))
+    if not engaged:
+        raise SystemExit(
+            "FR13 class-9 FAIL-LOUD: the spec-verify q capture logged ZERO "
+            "positions on some prompt -- vacuous q (the forced-decode LP did not "
+            "fire / the spec engine did not run the verify forward)."
+        )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="command", required=True)
@@ -511,6 +692,27 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--gpu-util", type=float, default=0.88)
     r.add_argument("--attn-backend", default="FLASH_ATTN")
     r.set_defaults(func=cmd_rescore)
+
+    q = sub.add_parser(
+        "capture-q-deploy",
+        help="DEPLOYMENT q: forced-decode the deployment served stream through "
+             "the SPEC serve, log the verify top-K q (id-keyed, step-aligned to p)")
+    q.add_argument("--arm", required=True)
+    q.add_argument("--src", required=True,
+                   help="the SAME <arm>_src.json the recurrent p rescore consumes "
+                        "(deployment served stream from the codex proxy pair-dump)")
+    q.add_argument("--out", required=True)
+    q.add_argument("--spec-config", required=True,
+                   help='deployment speculative_config JSON, e.g. '
+                        '\'{"method":"qwen3_5_mtp","num_speculative_tokens":5}\' for '
+                        'native-E5 (tree arms add their flag-gated env)')
+    q.add_argument("--model", default=DEFAULT_MODEL_PATH)
+    q.add_argument("--seed", type=int, default=1313)
+    q.add_argument("--top-k", type=int, default=20)
+    q.add_argument("--max-model-len", type=int, default=131072)
+    q.add_argument("--gpu-util", type=float, default=0.88)
+    q.add_argument("--attn-backend", default="FLASH_ATTN")
+    q.set_defaults(func=cmd_capture_q_deploy)
     return p
 
 
