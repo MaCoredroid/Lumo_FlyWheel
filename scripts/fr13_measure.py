@@ -123,6 +123,8 @@ DEFAULT_MODEL = "qwen3.6-27b"
 CANONICAL_PROMPTS = str(REPO / "output" / "fr13_acceptance_ladder" / "prompts_swe4.json")
 CANONICAL_SEED = 1313
 CANONICAL_MAX_TOKENS = 128
+# the tokenizer behind the served model (id<->decoded-string re-key for GAP-1).
+CANONICAL_TOKENIZER = "/models/qwen3.6-27b-fp8"
 
 # raw /metrics counters (the ONLY allowed speed basis)
 M_DECODE_S = "vllm:request_decode_time_seconds_sum"
@@ -195,6 +197,76 @@ def _read_prompts(path: str) -> list[str]:
     if not prompts:
         raise ValueError(f"no prompts in {path}")
     return prompts
+
+
+# --------------------------------------------------------------------------- #
+# GAP-1 RE-KEY: q top_logprobs is keyed by the DECODED token STRING (vLLM's    #
+# completions logprobs lose the token id in serialization); the recurrent      #
+# oracle p is keyed by token ID. To compare them by ID we build a reverse map  #
+# decoded_string -> token_id from the SERVED MODEL's own tokenizer, once.      #
+# MEASURED (this model's 248k-vocab): the decoded->id map is COLLISION-FREE    #
+# over the captured top-K support (0 collisions / 1506 distinct keys), so the  #
+# re-key is unambiguous; any string that does not map to a single id is kept   #
+# in an "unmapped::<string>" bucket so its probability mass is NEVER dropped    #
+# (the TV stays an upper-faithful reduce, never vacuous).                       #
+# --------------------------------------------------------------------------- #
+_DEC2ID_CACHE: dict[str, dict[str, int]] = {}
+
+
+def _build_dec2id(tokenizer_path: str) -> dict[str, int]:
+    """decoded_string -> token_id reverse map from the served model's tokenizer.
+
+    Built ONCE per tokenizer_path. Collisions (a decoded string produced by >1
+    id) are DROPPED from the unambiguous map (the caller then routes that string
+    to the unmapped bucket) so a many-to-one decode never silently mis-assigns
+    mass to the wrong id. CPU-only (transformers in the host venv)."""
+    if tokenizer_path in _DEC2ID_CACHE:
+        return _DEC2ID_CACHE[tokenizer_path]
+    from transformers import AutoTokenizer  # host venv, CPU
+    tok = AutoTokenizer.from_pretrained(tokenizer_path)
+    vocab_size = len(tok.get_vocab())
+    decoded = tok.batch_decode([[i] for i in range(vocab_size)])
+    seen: dict[str, int] = {}
+    collisions: set[str] = set()
+    for tid, dec in enumerate(decoded):
+        if dec in seen and seen[dec] != tid:
+            collisions.add(dec)
+        else:
+            seen[dec] = tid
+    for c in collisions:
+        seen.pop(c, None)  # ambiguous -> route to unmapped bucket
+    _DEC2ID_CACHE[tokenizer_path] = seen
+    return seen
+
+
+def rekey_q_to_ids(
+    top_logprobs_str: dict[str, float],
+    dec2id: dict[str, int],
+    served_id: int | None,
+    served_str: str | None,
+) -> tuple[dict[str, float], dict[str, Any]]:
+    """Re-key one position's string-keyed q top_logprobs to token-ID keys.
+
+    Returns ({str(token_id)|"unmapped::<s>": logprob}, stats). The served-token
+    ANCHOR is honored: if the position's served string is present it is forced
+    to the EXACT served id (the served id is known from return_token_ids, so the
+    served candidate is never mis-mapped even in the unlikely collision case)."""
+    out: dict[str, float] = {}
+    n_mapped = 0
+    n_unmapped = 0
+    for s, lp in (top_logprobs_str or {}).items():
+        if served_str is not None and served_id is not None and s == served_str:
+            out[str(int(served_id))] = float(lp)  # served anchor: exact id
+            n_mapped += 1
+            continue
+        tid = dec2id.get(s)
+        if tid is None:
+            out[f"unmapped::{s}"] = float(lp)
+            n_unmapped += 1
+        else:
+            out[str(tid)] = float(lp)
+            n_mapped += 1
+    return out, {"n_mapped": n_mapped, "n_unmapped": n_unmapped}
 
 
 # --------------------------------------------------------------------------- #
@@ -452,10 +524,15 @@ def cmd_capture_q(args: argparse.Namespace) -> int:
         _wait_health(args.endpoint, args.wait_health)
     spec = parse_arm(args.arm, args.tree)
     prompts = _read_prompts(args.prompts_file)
+    # GAP-1: build the decoded-string -> token-id reverse map ONCE so q can be
+    # emitted ID-KEYED at capture time (the recurrent oracle p is id-keyed).
+    dec2id = None if args.no_rekey else _build_dec2id(args.tokenizer)
     _self_warm(args.endpoint, args.model, prompts[0], spec["mode"], args.seed,
                args.request_timeout)
     before = _scrape(args.endpoint)
 
+    rekey_unmapped_total = 0
+    rekey_mapped_total = 0
     reps: list[list[dict[str, Any]]] = []
     for _rep in range(2):  # within-boot determinism (class-8)
         rep_records: list[dict[str, Any]] = []
@@ -468,19 +545,33 @@ def cmd_capture_q(args: argparse.Namespace) -> int:
             )[0]
             lp = ch.get("logprobs") or {}
             top = lp.get("top_logprobs") or []
+            served_ids = [int(x) for x in (ch.get("token_ids") or [])]
+            served_toks = lp.get("tokens") or []
             tail_mass = []
-            for pos in top:
+            top_ids: list[dict[str, float] | None] = []  # GAP-1: id-keyed q
+            for i, pos in enumerate(top):
                 if pos:
                     s = sum(math.exp(v) for v in pos.values())
                     tail_mass.append(max(0.0, 1.0 - s))
+                    if dec2id is not None:
+                        sid = served_ids[i] if i < len(served_ids) else None
+                        sstr = served_toks[i] if i < len(served_toks) else None
+                        q_ids, st = rekey_q_to_ids(pos, dec2id, sid, sstr)
+                        top_ids.append(q_ids)
+                        rekey_mapped_total += st["n_mapped"]
+                        rekey_unmapped_total += st["n_unmapped"]
+                    else:
+                        top_ids.append(None)
                 else:
                     tail_mass.append(None)
+                    top_ids.append(None)
             rep_records.append({
                 "prompt_id": pid,
-                "served_token_ids": [int(x) for x in (ch.get("token_ids") or [])],
-                "served_tokens": lp.get("tokens") or [],
+                "served_token_ids": served_ids,
+                "served_tokens": served_toks,
                 "served_token_logprobs": lp.get("token_logprobs") or [],
-                "top_logprobs": top,                # q at T=1, per position
+                "top_logprobs": top,                # q at T=1, STRING-keyed (raw)
+                "top_logprobs_ids": top_ids,        # GAP-1: SAME q, TOKEN-ID keyed
                 "per_position_tail_mass": tail_mass,  # truncation error bar
                 "finish_reason": ch.get("finish_reason"),
             })
@@ -514,6 +605,15 @@ def cmd_capture_q(args: argparse.Namespace) -> int:
             [r["served_token_ids"] for r in reps[0]]),
         "engagement": eng,
         "raw_counter_delta": md,
+        # GAP-1 re-key provenance: q is now emitted ID-KEYED (top_logprobs_ids)
+        # via the served model's tokenizer so temp06-drift can align with the
+        # id-keyed recurrent oracle p (no more id_string_mismatch vacuum).
+        "q_id_keyed": (not args.no_rekey),
+        "rekey_tokenizer": (None if args.no_rekey else args.tokenizer),
+        "rekey_mapped_total": rekey_mapped_total,
+        "rekey_unmapped_total": rekey_unmapped_total,
+        "rekey_unmapped_frac": (
+            rekey_unmapped_total / max(1, rekey_mapped_total + rekey_unmapped_total)),
         "ts": time.time(),
     }
     assert_no_mode_mix([artifact])
@@ -568,17 +668,59 @@ def _kl(p: dict[str, float], q: dict[str, float], eps: float = 1e-12) -> float:
     return out
 
 
+def _p_topk_by_pos(p_art: dict[str, Any], pid: int, p_path: str) -> dict[int, dict[str, float]]:
+    """Build {pos -> {str(token_id): logprob}} for one prompt from the recurrent
+    oracle artifact. GAP-1: the reduced positions[] only retain oracle_topk on
+    FLIP positions, so to score the FULL stream we read the per-prompt SINK
+    JSONL (which the LP writes for EVERY step with the full top-K) when present;
+    otherwise we use whatever positions[] carry (full when the oracle was run
+    with --full-topk-all-positions, else flips only)."""
+    pp = {p["prompt_id"]: p for p in p_art["per_prompt"]}.get(pid)
+    out: dict[int, dict[str, float]] = {}
+    if pp is None:
+        return out
+    # 1) preferred: the per-prompt sink JSONL (full top-K at EVERY step).
+    sink_dir = p_art.get("sink_dir")
+    candidates = []
+    if sink_dir:
+        candidates.append(Path(sink_dir) / f"p{pid}_rep0.jsonl")
+    # default sink layout from fr13_recurrent_decode_oracle.cmd_rescore:
+    base = Path(p_path).parent / f"{p_art.get('arm','')}_sinks"
+    candidates.append(base / f"p{pid}_rep0.jsonl")
+    for sink in candidates:
+        if sink.exists():
+            for line in sink.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                rec = json.loads(line)
+                step = rec["step"]
+                ids = rec.get("oracle_topk_ids") or []
+                lps = rec.get("oracle_topk_logprobs") or []
+                if ids and lps:
+                    out[step] = {str(int(t)): float(v) for t, v in zip(ids, lps)}
+            if out:
+                return out
+    # 2) fallback: positions[] (full if --full-topk-all-positions was used).
+    for pr in pp.get("positions", []):
+        ids = pr.get("oracle_topk_ids")
+        lps = pr.get("oracle_topk_logprobs")
+        if ids and lps:
+            out[pr["pos"]] = {str(int(t)): float(v) for t, v in zip(ids, lps)}
+    return out
+
+
 def cmd_temp06_drift(args: argparse.Namespace) -> int:
     """Reduce the per-position TV/KL(q,p) at temp-0.6 for ONE arm vs its OWN
-    recurrent oracle. q = capture-q artifact (spec verify top-K); p = the
-    recurrent-decode oracle top-K (fr13_recurrent_decode_oracle.py rescore on
-    the SAME served stream). Each arm vs its OWN oracle (apples-to-apples)."""
+    recurrent oracle, ALIGNED BY TOKEN ID (GAP-1). q = capture-q artifact (spec
+    verify top-K, now ID-KEYED via top_logprobs_ids); p = the recurrent-decode
+    oracle top-K (token-id keyed) over the FULL served stream. Each arm vs its
+    OWN oracle on the arm's OWN served stream (apples-to-apples)."""
     q_art = json.loads(Path(args.q).read_text(encoding="utf-8"))
     p_art = json.loads(Path(args.p).read_text(encoding="utf-8"))
     if q_art.get("instrument") != "ON":
         raise RuntimeError("temp06-drift q artifact must be instrument=ON (capture-q).")
-    # p artifact = recurrent oracle rescore (has per_prompt[].positions[] with
-    # oracle_topk_ids + oracle_topk_logprobs). Assert it is the recurrent frame.
+    # p artifact = recurrent oracle rescore. Assert it is the recurrent frame.
     if not p_art.get("RECURRENT_PATH_ENGAGED", False):
         raise RuntimeError(
             "class-9 FAIL-LOUD: p oracle artifact does not assert "
@@ -586,74 +728,93 @@ def cmd_temp06_drift(args: argparse.Namespace) -> int:
         )
     temp = args.temp
     q_recs = q_art["records"]
-    p_prompts = {pp["prompt_id"]: pp for pp in p_art["per_prompt"]}
+
+    # GAP-1: q must be ID-KEYED. If the capture-q artifact predates the re-key,
+    # build the reverse map here and re-key on the fly (so old artifacts still
+    # reduce non-vacuously) rather than silently falling back to string keys.
+    dec2id = None
+    if not q_art.get("q_id_keyed", False):
+        if args.no_rekey:
+            raise RuntimeError(
+                "temp06-drift: q artifact is NOT id-keyed (q_id_keyed != True) and "
+                "--no-rekey was set -> the TV would be VACUOUS (id/string mismatch). "
+                "Re-run capture-q with the re-key, or drop --no-rekey here."
+            )
+        dec2id = _build_dec2id(args.tokenizer)
 
     forks: list[dict[str, Any]] = []
     all_tv: list[float] = []
+    all_kl: list[float] = []
     over_floor_total = 0
+    n_string_mismatch = 0
+    served_in_p_mismatch = 0
     for qrec in q_recs:
         pid = qrec["prompt_id"]
-        pp = p_prompts.get(pid)
-        if pp is None:
-            forks.append({"prompt_id": pid, "note": "no oracle for prompt"})
+        p_by_pos = _p_topk_by_pos(p_art, pid, args.p)
+        if not p_by_pos:
+            forks.append({"prompt_id": pid, "note": "no oracle top-K for prompt"})
             continue
-        q_tops = qrec["top_logprobs"]
+        q_tops_str = qrec["top_logprobs"]
+        q_tops_ids = qrec.get("top_logprobs_ids") or [None] * len(q_tops_str)
         q_tail = qrec.get("per_position_tail_mass") or []
-        # oracle positions carry the recurrent top-K log_softmax; index by step.
-        p_pos = {p["pos"]: p for p in pp["positions"]}
+        served_ids = qrec.get("served_token_ids") or []
+        served_toks = qrec.get("served_tokens") or []
         per_pos: list[dict[str, Any]] = []
-        for i, q_pos in enumerate(q_tops):
-            p_rec = p_pos.get(i)
-            if p_rec is None or "oracle_topk_logprobs" not in p_rec:
+        for i in range(len(q_tops_str)):
+            pmap = p_by_pos.get(i)
+            if pmap is None:
                 continue
-            qmap = _logprob_map(q_pos)
-            # build p map from the oracle top-K (ids -> logprobs)
-            pmap = {str(tid): lp for tid, lp in zip(
-                p_rec.get("oracle_topk_ids", []),
-                p_rec.get("oracle_topk_logprobs", []))}
-            # q is keyed by token STRING; p by token ID. Re-key q to ids when the
-            # oracle records ids (the canonical capture also records served_tokens
-            # so a downstream re-key is possible); here we compare on the OVERLAP
-            # of the served-token + argmax keys via the served id, falling back to
-            # string keys if both sides are strings.
+            # build the ID-KEYED q for this position.
+            q_id_pos = q_tops_ids[i] if i < len(q_tops_ids) else None
+            if q_id_pos is None:
+                if dec2id is None:
+                    n_string_mismatch += 1
+                    continue
+                sid = served_ids[i] if i < len(served_ids) else None
+                sstr = served_toks[i] if i < len(served_toks) else None
+                q_id_pos, _ = rekey_q_to_ids(q_tops_str[i], dec2id, sid, sstr)
+            qmap = {str(k): float(v) for k, v in q_id_pos.items()}
             q_at = _softmax_over_support_at_temp(qmap, temp)
-            p_at = _softmax_over_support_at_temp(
-                {k: v for k, v in pmap.items()}, temp)
-            # NOTE: q-keys are token strings; p-keys are token-id strings. To make
-            # them comparable we align on the served token only when both expose
-            # it; the FULL cross-key TV requires the GPU capture to record q by
-            # token-id (the capture-q artifact records served_token_ids so the
-            # GPU pass can be extended to emit id-keyed q). When keys are not
-            # alignable we record the per-position served-token probability gap as
-            # a lower bound + flag align_status so the reduce is never vacuous.
-            served_str = (qrec.get("served_tokens") or [None] * len(q_tops))[i]
-            q_served = q_at.get(served_str)
-            tv = _tv(q_at, p_at) if (set(q_at) & set(p_at)) else None
-            kl = _kl(p_at, q_at) if (set(q_at) & set(p_at)) else None
+            p_at = _softmax_over_support_at_temp(pmap, temp)
+            # full cross-key TV over the UNION of id supports (mass on the
+            # symmetric difference is counted, not dropped) -- this is the real
+            # truncated-support TV(softmax(q/T), softmax(p/T)).
+            overlap = set(q_at) & set(p_at)
+            tv = _tv(q_at, p_at)
+            kl = _kl(p_at, q_at)
+            served_id = str(int(served_ids[i])) if i < len(served_ids) else None
+            q_served = q_at.get(served_id) if served_id else None
+            p_served = p_at.get(served_id) if served_id else None
+            if served_id is not None and p_served is None:
+                served_in_p_mismatch += 1
             entry = {
                 "pos": i,
                 "tv_q_p_at_temp": tv,
                 "kl_p_q_at_temp": kl,
+                "n_support_overlap": len(overlap),
+                "q_support": len(q_at),
+                "p_support": len(p_at),
                 "q_served_prob_at_temp": q_served,
+                "p_served_prob_at_temp": p_served,
                 "q_tail_mass_T1": (q_tail[i] if i < len(q_tail) else None),
-                "align_status": ("id_string_mismatch" if tv is None else "ok"),
+                "align_status": "ok",
             }
             per_pos.append(entry)
-            if tv is not None:
-                all_tv.append(tv)
-                if args.per_position_floor is not None and tv > args.per_position_floor:
-                    over_floor_total += 1
+            all_tv.append(tv)
+            all_kl.append(kl)
+            if args.per_position_floor is not None and tv > args.per_position_floor:
+                over_floor_total += 1
         forks.append({
             "prompt_id": pid,
             "n_positions": len(per_pos),
-            "mean_tv": (statistics.fmean([e["tv_q_p_at_temp"] for e in per_pos
-                                          if e["tv_q_p_at_temp"] is not None])
-                        if any(e["tv_q_p_at_temp"] is not None for e in per_pos) else None),
+            "mean_tv": (statistics.fmean([e["tv_q_p_at_temp"] for e in per_pos])
+                        if per_pos else None),
+            "max_tv": (max(e["tv_q_p_at_temp"] for e in per_pos) if per_pos else None),
             "positions": per_pos if args.dump_positions else per_pos[:5],
         })
 
     result = {
-        "schema": "fr13.measure.temp06_drift.v1",
+        "schema": "fr13.measure.temp06_drift.v2",
         "kind": "drift",
         "instrument": "ON",
         "label": f"temp06_drift_{q_art.get('arm')}",
@@ -661,16 +822,38 @@ def cmd_temp06_drift(args: argparse.Namespace) -> int:
         "temp": temp,
         "q_artifact": args.q,
         "p_artifact": args.p,
+        "aligned_by": "token_id",
+        "q_id_keyed_source": ("capture-q top_logprobs_ids" if q_art.get("q_id_keyed")
+                              else "on-the-fly host-tokenizer re-key"),
         "per_position_floor": args.per_position_floor,
         "mean_tv_q_p_at_temp": (statistics.fmean(all_tv) if all_tv else None),
         "p95_tv_q_p_at_temp": (
             sorted(all_tv)[int(0.95 * (len(all_tv) - 1))] if all_tv else None),
+        "max_tv_q_p_at_temp": (max(all_tv) if all_tv else None),
+        "mean_kl_p_q_at_temp": (statistics.fmean(all_kl) if all_kl else None),
         "n_positions_scored": len(all_tv),
+        "n_string_mismatch_skipped": n_string_mismatch,
+        "served_token_absent_from_p_count": served_in_p_mismatch,
         "over_floor_count": over_floor_total,
+        "error_bar_note": (
+            "TV is over the TRUNCATED top-K supports; per-position q_tail_mass_T1 "
+            "(1 - sum exp(top-K logprob)) is the truncation error bar -- the TV is "
+            "exact within that tail mass. served_token_absent_from_p_count flags "
+            "positions where the sampled served token left the oracle top-K "
+            "(expected for a temp-0.6 SAMPLED q vs a GREEDY-argmax-ranked p)."
+        ),
         "per_position_note": (
             "PAIR the scalar with the per-position vector "
             "(reference_scalar_metric_per_token_blindspot): "
             "over_floor_count names WHERE the drift crosses the native floor."
+        ),
+        "interpretation_note": (
+            "This TV is q (the SPEC-VERIFY forward dist at temp 0.6 over the SAMPLED "
+            "served stream) vs p (the no-spec RECURRENT oracle teacher-forced onto "
+            "that SAME served stream). Both arms compare to their OWN oracle on their "
+            "OWN stream. Use the LOSSLESS gate = per-position over-floor count vs the "
+            "native temp-0.6 self-floor + the multi-seed bag-TV (cmd_bag_tv); a high "
+            "raw mean TV alone is NOT a lossless miss (sampling spreads q)."
         ),
         "forks": forks,
         "ts": time.time(),
@@ -679,8 +862,9 @@ def cmd_temp06_drift(args: argparse.Namespace) -> int:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: result[k] for k in (
-        "arm", "temp", "mean_tv_q_p_at_temp", "p95_tv_q_p_at_temp",
-        "n_positions_scored", "over_floor_count", "instrument")}, indent=2))
+        "arm", "temp", "aligned_by", "mean_tv_q_p_at_temp", "p95_tv_q_p_at_temp",
+        "max_tv_q_p_at_temp", "n_positions_scored", "over_floor_count",
+        "served_token_absent_from_p_count", "instrument")}, indent=2))
     return 0
 
 
@@ -742,6 +926,236 @@ def cmd_bag_tv(args: argparse.Namespace) -> int:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# GAP-2 PAIRED TEACHER-FORCED ACCEPT — fork-immune verification-efficiency edge #
+# --------------------------------------------------------------------------- #
+# WHY: free-running accept/event FORKS cross-boot at the GB10 token-6 near-tie
+# (autotune floor, feedback_no_cross_boot_byte_gate). So a free-running cat9-vs-
+# native accept is NOT apple-to-apple (bug-class #12 non-like-for-like
+# trajectories). The fix: pin ONE reference trajectory (the no-spec RECURRENT
+# oracle GREEDY stream = deployment-correct ground truth) and have BOTH arms
+# verify that SAME fixed token sequence; accept/event per arm on identical
+# content = the structural edge (cat9 superset vs native linear).
+#
+# TWO modes, ONE distinction documented on every record:
+#   * mode=structural (CPU, validatable NOW): along the fixed reference, the
+#     GREEDY verify accepts the reference token at position i iff it equals the
+#     arm's VERIFIER argmax (the captured q argmax). The per-event accepted run
+#     is the count of consecutive reference tokens the arm's verifier would
+#     argmax-confirm before the first miss; we segment the reference into spec
+#     events of the arm's draft depth D and sum accepts. This uses ONLY the
+#     captured per-position verifier dist q (no GPU), is fork-immune (BOTH arms
+#     anchored to the SAME reference), and is apples-to-apple.
+#   * mode=force (GPU, deferred / orchestrate hook): boot the arm, force the
+#     reference stream as the served sequence (the spec-verify must commit the
+#     reference tokens), and read d(num_accepted)/d(num_drafts) live. This is the
+#     ground-truth paired-accept; structural is its cheap fork-immune proxy.
+#
+# DISTINCTION (printed on every record): paired-accept (this) = apples-to-apple
+# STRUCTURAL edge for the break-even; deployment-accept (cmd_speed) = free-
+# running, trajectory-variable (the floor). NEVER cross-compare the two.
+def _load_reference_streams(path: str) -> tuple[list[list[int]], str, str]:
+    """Load the reference trajectory (deployment-correct ground truth) streams.
+
+    Accepts (a) a recurrent-oracle rescore artifact (per_prompt[].positions[]
+    .served_token_id = the forced reference); (b) a recurrent-oracle smoke/
+    generate artifact with gen ids; (c) a capture-q / speed artifact with
+    records[].served_token_ids or served_streams; (d) a plain JSON list of
+    id-lists. Returns (streams, source_kind, reference_fingerprint)."""
+    art = json.loads(Path(path).read_text(encoding="utf-8"))
+    if isinstance(art, list):  # plain list of id-lists
+        streams = [[int(x) for x in s] for s in art]
+        return streams, "plain_id_lists", stream_fingerprint(streams)
+    schema = art.get("schema", "")
+    if "recurrent_decode_oracle.rescore" in schema:
+        if not art.get("RECURRENT_PATH_ENGAGED", False):
+            raise RuntimeError(
+                "GAP-2 paired-accept: reference oracle must be RECURRENT_PATH_ENGAGED "
+                "(the deployment-correct no-spec greedy ground truth).")
+        streams = [[int(p["served_token_id"]) for p in pp["positions"]]
+                   for pp in art["per_prompt"]]
+        return streams, "recurrent_oracle_rescore", stream_fingerprint(streams)
+    if "records" in art:  # capture-q / speed
+        streams = [[int(x) for x in r["served_token_ids"]] for r in art["records"]]
+        return streams, "capture_q_or_speed_records", stream_fingerprint(streams)
+    if "served_streams" in art:
+        streams = [[int(x) for x in s] for s in art["served_streams"]]
+        return streams, "speed_served_streams", stream_fingerprint(streams)
+    raise RuntimeError(f"GAP-2 paired-accept: unrecognized reference artifact {path!r}")
+
+
+def _arm_verifier_argmax_ids(q_art: dict[str, Any]) -> dict[int, list[int]]:
+    """Per-prompt list of the arm's VERIFIER argmax token-id at each served
+    position, from the capture-q artifact (the top_logprobs_ids argmax). This is
+    the arm's greedy verify decision used by the structural accept reducer."""
+    out: dict[int, list[int]] = {}
+    for rec in q_art["records"]:
+        pid = rec["prompt_id"]
+        ids_per_pos = rec.get("top_logprobs_ids") or []
+        str_per_pos = rec.get("top_logprobs") or []
+        served = rec.get("served_token_ids") or []
+        argmaxes: list[int] = []
+        for i in range(len(str_per_pos)):
+            qid = ids_per_pos[i] if i < len(ids_per_pos) else None
+            if qid:
+                # argmax = id with the max logprob in the id-keyed q
+                best = max(qid.items(), key=lambda kv: kv[1])[0]
+                argmaxes.append(int(best) if not best.startswith("unmapped::")
+                                else (int(served[i]) if i < len(served) else -1))
+            else:
+                argmaxes.append(int(served[i]) if i < len(served) else -1)
+        out[pid] = argmaxes
+    return out
+
+
+def _structural_accept_on_reference(
+    reference: list[int], verifier_argmax: list[int], draft_depth: int,
+) -> dict[str, Any]:
+    """GREEDY verify of ONE arm against the fixed reference, segmented into spec
+    events of `draft_depth` drafted tokens. Per event starting at reference
+    position j: the arm accepts reference[j..] while reference[k] equals the
+    arm's verifier argmax at k (verifier-confirmed), up to draft_depth; the first
+    mismatch ends the run (then +1 bonus token = the verifier's own token). This
+    is the depth-D verification efficiency on IDENTICAL content (fork-immune)."""
+    n = min(len(reference), len(verifier_argmax))
+    j = 0
+    events = 0
+    accepted_total = 0
+    per_event = []
+    while j < n:
+        acc = 0
+        for d in range(draft_depth):
+            k = j + d
+            if k >= n:
+                break
+            if reference[k] == verifier_argmax[k]:
+                acc += 1
+            else:
+                break
+        events += 1
+        accepted_total += acc
+        per_event.append(acc)
+        # advance by accepted + 1 bonus token (the verifier-committed token).
+        j += acc + 1
+    return {
+        "draft_depth": draft_depth,
+        "n_events": events,
+        "accepted_total": accepted_total,
+        "accept_per_event": (accepted_total / events) if events else None,
+        "committed_per_event": ((accepted_total / events) + 1.0) if events else None,
+        "per_event_accepts": per_event,
+    }
+
+
+def cmd_paired_accept(args: argparse.Namespace) -> int:
+    """GAP-2: paired teacher-forced accept on a COMMON reference trajectory.
+
+    --reference = the deployment-correct ground-truth stream (no-spec recurrent
+    oracle greedy). --arm-q = one or more capture-q artifacts (each carrying its
+    arm's verifier dist + draft depth). Each arm is scored on the SAME forced
+    reference content (fork-immune). mode=structural (CPU). mode=force documents
+    the GPU ground-truth hook (orchestrate boots it)."""
+    reference, ref_kind, ref_fp = _load_reference_streams(args.reference)
+    arms: list[dict[str, Any]] = []
+    for q_path in args.arm_q:
+        q_art = json.loads(Path(q_path).read_text(encoding="utf-8"))
+        if q_art.get("instrument") != "ON":
+            raise RuntimeError(f"{q_path}: paired-accept arm-q must be instrument=ON.")
+        # the structural verifier-argmax MUST come from the id-keyed q; a non-
+        # id-keyed q would silently fall back to the arm's OWN served token,
+        # which conflates the served stream with the verify decision and makes
+        # the structural accept meaningless. Fail loud (class-9) unless --allow-
+        # served-fallback is explicitly set (and then flag it on the record).
+        q_id_keyed = bool(q_art.get("q_id_keyed", False)) or all(
+            r.get("top_logprobs_ids") for r in q_art["records"])
+        if not q_id_keyed and not args.allow_served_fallback:
+            raise RuntimeError(
+                f"class-9 FAIL-LOUD [{q_path}]: arm-q is NOT id-keyed (no "
+                "top_logprobs_ids) -> the verifier argmax would fall back to the "
+                "arm's served token (conflates served-stream with verify-decision). "
+                "Re-run capture-q with the GAP-1 re-key, or pass --allow-served-"
+                "fallback to score the SERVED stream as the proxy (labelled)."
+            )
+        arm = q_art.get("arm")
+        is_tree = q_art.get("mode") == "tree_mtp"
+        # draft depth D: native MTP-N = N; tree = len(TREE) spine depth used for
+        # the linear-chain structural proxy (the spine; the branch superset edge
+        # needs mode=force, documented).
+        if is_tree and q_art.get("tree"):
+            import ast
+            depth = len(ast.literal_eval(q_art["tree"]))
+        elif arm and arm.startswith("native_e"):
+            depth = int(arm[len("native_e"):])
+        else:
+            depth = int(args.default_depth)
+        argmax_by_pid = _arm_verifier_argmax_ids(q_art)
+        per_prompt = []
+        agg_events = 0
+        agg_accept = 0
+        for pid, ref in enumerate(reference):
+            vargmax = argmax_by_pid.get(pid)
+            if vargmax is None:
+                continue
+            r = _structural_accept_on_reference(ref, vargmax, depth)
+            r["prompt_id"] = pid
+            per_prompt.append(r)
+            agg_events += r["n_events"]
+            agg_accept += r["accepted_total"]
+        arms.append({
+            "arm": arm,
+            "q_artifact": q_path,
+            "draft_depth": depth,
+            "is_tree_spine_proxy": is_tree,
+            "verifier_argmax_source": ("id_keyed_q" if q_id_keyed else "served_fallback_PROXY"),
+            "served_stream_fingerprint": q_art.get("served_stream_fingerprint"),
+            "structural_accept_per_event": (agg_accept / agg_events) if agg_events else None,
+            "structural_committed_per_event": (
+                (agg_accept / agg_events) + 1.0) if agg_events else None,
+            "n_events": agg_events,
+            "accepted_total": agg_accept,
+            "per_prompt": per_prompt,
+        })
+    result = {
+        "schema": "fr13.measure.paired_accept.v1",
+        "kind": "paired_accept",
+        "mode": "structural",
+        "reference_artifact": args.reference,
+        "reference_kind": ref_kind,
+        "reference_fingerprint": ref_fp,
+        "reference_note": (
+            "the deployment-correct ground-truth stream (no-spec recurrent oracle "
+            "greedy). BOTH arms verify THIS SAME fixed sequence -> fork-immune."
+        ),
+        "structural_note": (
+            "mode=structural: GREEDY verify of each arm's captured verifier argmax "
+            "against the fixed reference, segmented into depth-D spec events. The "
+            "TREE arm's number here is the SPINE (linear-chain) proxy; the branch "
+            "superset edge (a sibling holding the reference token after a spine "
+            "miss) needs mode=force on the live tree verifier (GPU, orchestrate "
+            "boots it). Use this for the apples-to-apple break-even; do NOT cross-"
+            "compare with the free-running deployment-accept (cmd_speed), which is "
+            "trajectory-variable (the floor, bug-class #12)."
+        ),
+        "deployment_vs_paired": {
+            "paired_accept": "apples-to-apple STRUCTURAL edge on a COMMON reference (this)",
+            "deployment_accept": "free-running, trajectory-bound floor (cmd_speed.accept_per_event)",
+            "rule": "NEVER cross-compare; paired drives the break-even, deployment is the floor",
+        },
+        "arms": arms,
+        "ts": time.time(),
+    }
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({
+        "reference_kind": ref_kind,
+        "reference_fingerprint": ref_fp,
+        "arms": [{"arm": a["arm"], "draft_depth": a["draft_depth"],
+                  "structural_accept_per_event": a["structural_accept_per_event"],
+                  "n_events": a["n_events"]} for a in arms],
+    }, indent=2))
     return 0
 
 
@@ -873,6 +1287,10 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--temperature", type=float, default=0.6)
     q.add_argument("--top-p", type=float, default=0.95)
     q.add_argument("--top-k", type=int, default=20)
+    q.add_argument("--tokenizer", default=CANONICAL_TOKENIZER,
+                   help="served-model tokenizer for the GAP-1 decoded-string->id re-key")
+    q.add_argument("--no-rekey", action="store_true",
+                   help="skip the id re-key (string-keyed q only; temp06-drift will be vacuous)")
     q.set_defaults(func=cmd_capture_q)
 
     d = sub.add_parser("temp06-drift",
@@ -883,6 +1301,10 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--temp", type=float, default=0.6)
     d.add_argument("--per-position-floor", type=float, default=None,
                    help="native-vs-native per-position TV floor; over-floor count")
+    d.add_argument("--tokenizer", default=CANONICAL_TOKENIZER,
+                   help="served-model tokenizer for on-the-fly re-key of OLD q artifacts")
+    d.add_argument("--no-rekey", action="store_true",
+                   help="forbid on-the-fly re-key (require q already id-keyed)")
     d.add_argument("--dump-positions", action="store_true")
     d.add_argument("--out", required=True)
     d.set_defaults(func=cmd_temp06_drift)
@@ -895,6 +1317,22 @@ def build_parser() -> argparse.ArgumentParser:
                    help="cat9 temp-0.6 artifacts (same seeds)")
     b.add_argument("--out", required=True)
     b.set_defaults(func=cmd_bag_tv)
+
+    pa = sub.add_parser("paired-accept",
+                        help="GAP-2: fork-immune paired accept on a COMMON reference trajectory")
+    pa.add_argument("--reference", required=True,
+                    help="deployment-correct ground-truth stream (no-spec recurrent "
+                         "oracle greedy rescore/smoke, or any served-stream artifact)")
+    pa.add_argument("--arm-q", nargs="+", required=True,
+                    help="capture-q artifacts (instrument=ON) for the arms to score")
+    pa.add_argument("--default-depth", type=int, default=5,
+                    help="draft depth fallback when the arm name/tree does not encode it")
+    pa.add_argument("--allow-served-fallback", action="store_true",
+                    help="score the arm's SERVED stream as the verify proxy when the "
+                         "q is not id-keyed (labelled served_fallback_PROXY; the "
+                         "real structural edge needs id-keyed q)")
+    pa.add_argument("--out", required=True)
+    pa.set_defaults(func=cmd_paired_accept)
 
     dr = sub.add_parser("diag-residue", help="OFF-vs-ON s/fwd instrument tax")
     dr.add_argument("--off", required=True, help="OFF speed record")

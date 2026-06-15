@@ -169,16 +169,70 @@ boot_tree_b4() {  # name TREE  -> B=4 co-residency smoke (MAX_NUM_SEQS=4)
   teardown fr13-forked-fa2-tree
 }
 
+IMAGE="vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"
+ORACLE="$REPO/scripts/fr13_recurrent_decode_oracle.py"
+TOKENIZER=/models/qwen3.6-27b-fp8
+
+# GAP-1: recurrent oracle p over the FULL served stream of an arm's capture-q,
+# with full top-K on EVERY position, then the real id-aligned temp06-drift TV.
+# The oracle runs in-process (offline LLM, no server) in a fresh container so the
+# GPU is clean. recover_host_memory + assert>=95GiB before the boot.
+drift_arm() {  # arm  (uses $OUT/<arm>_q_temp06_on.json captured by native/tree)
+  local arm="$1"
+  local q="$OUT/${arm}_q_temp06_on.json"
+  local p="$OUT/${arm}_recurrent_p.json"
+  [ -f "$q" ] || { echo "[$arm] drift: missing capture-q $q (run native/tree first)"; return 1; }
+  echo "######## GAP-1 drift $arm: recurrent oracle p (full-stream top-K) ########"
+  recover; assert_free || return 1; empty_docker
+  docker run --rm --name "fr13-recur-oracle-${arm}" --gpus all --ipc=host \
+    --entrypoint bash --ulimit memlock=-1 --ulimit stack=67108864 \
+    -v "$REPO:/workspace" -v /models:/models \
+    -e VLLM_ENABLE_V1_MULTIPROCESSING=0 -e VLLM_ATTENTION_BACKEND=FLASH_ATTN \
+    -e FR12_NO_SPECULATIVE_CONFIG=1 -e PYTHONPATH=/workspace/src -e HF_HUB_OFFLINE=1 \
+    "$IMAGE" -lc "set -e; cd /workspace; python3 scripts/fr13_recurrent_decode_oracle.py rescore \
+      --arm ${arm} --src /workspace/output/fr13_measure/${arm}_q_temp06_on.json \
+      --out /workspace/output/fr13_measure/${arm}_recurrent_p.json \
+      --seed ${SEED} --top-k 20 --threshold 1.0 --full-topk-all-positions \
+      --attn-backend FLASH_ATTN --gpu-util 0.88 2>&1" \
+    > "$OUT/${arm}_recurrent_p_boot.log" 2>&1
+  recover
+  [ -f "$p" ] || { echo "[$arm] drift: oracle p not produced (see ${arm}_recurrent_p_boot.log)"; return 1; }
+  echo "===== GAP-1 temp06-drift $arm (id-aligned TV q vs p) ====="
+  python3 "$MEASURE" temp06-drift --q "$q" --p "$p" --temp 0.6 \
+    --per-position-floor "${PER_POS_FLOOR:-0.05}" --tokenizer "$TOKENIZER" \
+    --dump-positions --out "$OUT/${arm}_temp06_drift.json"
+}
+
+# GAP-2: fork-immune paired teacher-forced accept. reference = the no-spec
+# recurrent oracle GREEDY stream (deployment-correct ground truth); BOTH arms
+# scored on it. The reference is produced once (native arm's recurrent p whose
+# served stream IS the greedy ground truth when captured at temp 0). Pass the
+# arms' capture-q artifacts; structural (CPU) reduce here, force-mode is the GPU
+# ground-truth hook documented in FR13_MEASURE_INFRA_GAPS_CLOSED.md.
+paired_accept() {  # reference_arm arm_q1 [arm_q2 ...]
+  local refarm="$1"; shift
+  local ref="$OUT/${refarm}_recurrent_p.json"
+  [ -f "$ref" ] || { echo "paired: missing reference oracle $ref (run drift ${refarm} first)"; return 1; }
+  local qargs=()
+  for a in "$@"; do qargs+=("$OUT/${a}_q_temp06_on.json"); done
+  echo "######## GAP-2 paired-accept (reference=${refarm}) arms: $* ########"
+  python3 "$MEASURE" paired-accept --reference "$ref" --arm-q "${qargs[@]}" \
+    --out "$OUT/paired_accept_ref_${refarm}.json"
+}
+
 CMD="${1:-}"; shift || true
 case "$CMD" in
   native)    boot_native "$1" ;;       # B=1 gold regime (MAX_NUM_SEQS=1)
   native-b4) boot_native_b4 "$1" ;;    # B=4 co-residency smoke (MAX_NUM_SEQS=4)
   tree)      boot_tree "$1" "$2" ;;     # B=1 gold regime
   tree-b4)   boot_tree_b4 "$1" "$2" ;;  # B=4 co-residency smoke
+  drift)     drift_arm "$1" ;;          # GAP-1: oracle p (full-stream) + id-aligned TV
+  paired)    paired_accept "$@" ;;      # GAP-2: paired teacher-forced accept (CPU structural)
   reconcile)
     python3 "$MEASURE" reconcile --speed "$OUT"/*_speed_b1_off.json \
       --out "$OUT/reconcile.json" ;;
   *)
-    echo "usage: $0 {native eN | native-b4 eN | tree NAME 'TREE' | tree-b4 NAME 'TREE' | reconcile}" >&2
+    echo "usage: $0 {native eN | native-b4 eN | tree NAME 'TREE' | tree-b4 NAME 'TREE' |" >&2
+    echo "          drift ARM | paired REF_ARM ARM [ARM...] | reconcile}" >&2
     exit 2 ;;
 esac

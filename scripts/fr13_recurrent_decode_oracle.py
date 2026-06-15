@@ -394,12 +394,20 @@ def cmd_rescore(args: argparse.Namespace) -> int:
                 "clear_margin": clear,
                 "within_proc_det": det,
             }
+            # GAP-1: the temp06-drift TV needs the recurrent oracle top-K p over
+            # the FULL served stream (not flip positions only). When
+            # --full-topk-all-positions is set, retain the full top-K on EVERY
+            # position so the drift reduce never has to fall back to the sinks.
+            if getattr(args, "full_topk_all_positions", False):
+                pr["oracle_topk_ids"] = rec["oracle_topk_ids"]
+                pr["oracle_topk_logprobs"] = rec["oracle_topk_logprobs"]
             positions.append(pr)
             total_positions += 1
             if flip:
-                pr["oracle_topk_ids"] = rec["oracle_topk_ids"][:5]
-                pr["oracle_topk_logprobs"] = rec["oracle_topk_logprobs"][:5]
-                flips.append(pr)
+                fr_pr = dict(pr)
+                fr_pr["oracle_topk_ids"] = rec["oracle_topk_ids"][:5]
+                fr_pr["oracle_topk_logprobs"] = rec["oracle_topk_logprobs"][:5]
+                flips.append(fr_pr)
                 total_flips += 1
                 if clear:
                     total_clear += 1
@@ -430,6 +438,10 @@ def cmd_rescore(args: argparse.Namespace) -> int:
         "n_gdn_layers_introspected": n_gdn,
         "recurrent_decode_calls": _RECUR_DECODE_CALLS["n"],
         "RECURRENT_PATH_ENGAGED": engaged,
+        # GAP-1: where the per-step full top-K sinks live (temp06-drift reads
+        # these for the FULL-stream p when positions[] only carries flip top-K).
+        "sink_dir": str(sink_dir),
+        "full_topk_all_positions": bool(getattr(args, "full_topk_all_positions", False)),
         "total_positions": total_positions,
         "total_flips": total_flips,
         "total_clear_margin_flips": total_clear,
@@ -492,6 +504,9 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--seed", type=int, default=1313)
     r.add_argument("--top-k", type=int, default=20)
     r.add_argument("--threshold", type=float, default=1.0)
+    r.add_argument("--full-topk-all-positions", action="store_true",
+                   help="GAP-1: retain oracle top-K on EVERY position (full-stream p "
+                        "for temp06-drift), not just flips (larger artifact)")
     r.add_argument("--max-model-len", type=int, default=131072)
     r.add_argument("--gpu-util", type=float, default=0.88)
     r.add_argument("--attn-backend", default="FLASH_ATTN")
