@@ -266,12 +266,20 @@ else
 fi
 
 # ---- the SWE window: /metrics bracketing + the FULL UNCAPPED task ----
+# AGENT_WALL_S (optional env): bound the codex agent wall for a DEV-iteration
+# BOUNDED deployment run. Default UNSET = the proven full 25-min deployment wall
+# (run_swe_bench_q36_a.py DEFAULT_AGENT_WALL_S = 1500s). When set, the /metrics
+# brackets still wrap the real (bounded) codex trajectory -> a deployment-faithful
+# deploy-speed reduction on a shorter window (the user-blessed bounded-turn path).
+WALL_ARGS=()
+[[ -n "${AGENT_WALL_S:-}" ]] && WALL_ARGS=(--agent-wall-s "$AGENT_WALL_S")
 curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_before_swe.txt"
 S0=$(date +%s)
 .venv/bin/python scripts/run_swe_bench_q36_a.py \
   --subset "$SUBSET" \
   --out-root "$ARMDIR/swe_out" \
   --concurrency 1 \
+  "${WALL_ARGS[@]}" \
   "${EVAL_ARGS[@]}" \
   > "$ARMDIR/swe_orchestrator.log" 2>&1
 SWERC=$?

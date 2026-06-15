@@ -156,3 +156,83 @@ ONLY.
   `inference_proxy.py` (proxy pair-dump), `fr13_swe_stream_to_oracle_src.py`,
   `fr13_recurrent_decode_oracle.py`, `fr13_bigdenom_phase3_rescore.sh`,
   `fr13_bigdenom_rescore_consolidate.py`.
+
+## LIVE deployment validation (2026-06-15, HEAD `cab6c157` + serve `AGENT_WALL_S`)
+
+The deployment harness was driven END-TO-END on the current HEAD to confirm the
+served streams are **COHERENT** (no degenerate `<think></think>` loop) and that
+the deployment-regime metrics reduce correctly + reconcile with the big-denom.
+
+### What ran (GPU, this wf as the only GPU user)
+
+- **Fresh bounded cat9 arm** `output/fr13_bigdenom_swe/cat9_dev` —
+  `AGENT_WALL_S=360 fr13_bigdenom_swe_serve.sh cat9_dev cat9 subset_astropy12907.json`
+  on HEAD `cab6c157`. Booted via `fr13_launch_locked.sh` (cat9 num_spec=9
+  TREE_ATTN, **CUDA graph captured** — "Graph capturing finished in 7 secs"),
+  healthy after 437s, **spec engagement OK: draft_tokens/drafts = 9.0** (cat9
+  TREE live), proxy pair-dump ON (forced temp 0.0). Codex agent loop on the real
+  SWE-Verified task `astropy__astropy-12907` via `/v1/responses`, multi-turn,
+  real `exec_command` tool calls. `ARM_DONE swerc=0 health_rc=0 pair_nonempty=1`,
+  wall 725s, **11 pair-dumps**, clean teardown + recover.
+  - A 360 s bounded codex CANNOT finish the full astropy fix (the big-denom
+    needed the full 1500 s), so the bounded arm's task verdict is `failed`
+    (`patch_bytes 0`) — EXPECTED for a DEV-iteration proxy. The deliverable here
+    is COHERENCE + healthy metrics, NOT a resolved patch.
+
+### Served streams are COHERENT (the headline)
+
+Full scan of all 11 cat9_dev pair-dumps: **33,132 served chars, 7 tool-calling
+turns, ZERO empty `<think></think>` blocks**. The agent reasons about the real
+bug (e.g. turn 2 = 13,117 chars: *"Now I understand the code. Let me trace
+through the issue: The `_separable` function ... when it encounters a
+CompoundMod..."*; later *"In the `_cstack` function, when handling the right
+operand that's already a coord_matrix (ndarray) ..."*) and issues real
+`exec_command` calls (`find`, `cat separable.py`). This is the deployment regime
+working as intended — **NO degenerate loop**, in stark contrast to the
+off-distribution raw-`/v1/completions` artifact (native E5 record[2] literally
+re-opens the empty block: `[271,248068,271,248069,271,40, ... ,271,248068,271]`
+= `\n\n<think>\n\n</think>\n\nI have read the task.\n\n<think>\n\n`).
+
+### Deployment-regime metrics (measured + reconciled)
+
+`deploy-speed` reductions (OFF, B=1, class-9 engagement asserted, tok/draft=9):
+
+| arm | source | s/fwd | accept/event | committed | derived TPS |
+|---|---|---|---|---|---|
+| native_e5 | big-denom `native_a` (full 1500 s) | 0.2334 | 3.267 | 4.267 | 18.28 |
+| cat9 | big-denom `cat9_a` (full 1500 s) | 0.2481 | 3.685 | 4.685 | 18.88 |
+| cat9 | **fresh `cat9_dev` (bounded 360 s, HEAD cab6c157)** | **0.2404** | **3.240** | **4.240** | **17.64** |
+
+**Reconciliation with the big-denom:**
+- **s/fwd reconciles tightly** (0.2404 vs 0.2481, ~3%): s/fwd is bandwidth-bound
+  and ~trajectory-invariant, exactly as the regime-robust-cross-check note
+  predicts.
+- **accept/event lands in the same HEALTHY 3–4 band** (3.240 vs 3.685, both far
+  from the off-distribution 1.589 degenerate fork). The small delta is the
+  B-/trajectory-dependence: the bounded arm hit its wall mid-task with more
+  exploratory file-reading turns (different acceptance than the full task) —
+  expected for a deployment-trajectory accept.
+- **Engagement identical:** tok/draft = 9.0 on both (cat9 TREE), 5.0 native.
+
+`deploy-lossless` (ON) on the big-denom consolidation is unchanged and holds:
+native ≈ cat9 (**cat9 1181/8717 = 13.548 % [12.846, 14.283]** vs **native
+1224/8752 = 13.985 % [13.275, 14.728]**), Wilson CIs OVERLAP →
+**`LOSSLESS_within_floor`** (native-E5 = the BAR; cat9 NOT separated above),
+`within_proc_determinism_both`. This is the per-token clear-margin instrument
+vs each arm's OWN no-spec RECURRENT decode oracle, the binding lossless gate.
+
+### One serve-script change (behavior-preserving)
+
+`scripts/fr13_bigdenom_swe_serve.sh` now honours an optional `AGENT_WALL_S` env:
+when UNSET it is the proven full 25-min deployment wall
+(`run_swe_bench_q36_a.py` `DEFAULT_AGENT_WALL_S = 1500`); when set it passes
+`--agent-wall-s` for a DEV-iteration BOUNDED deployment run (the /metrics
+brackets still wrap the real bounded codex trajectory → a deployment-faithful
+`deploy-speed`). The FINAL gate is unchanged: `deploy-full <4-task-subset> 4`
+(B=4 + CUDA-captured + 4 tasks + ~30 min, lossless re-confirmed at B=4).
+
+### Bottom line
+
+The deployment regime is the canonical one and it is **coherent + faithful** on
+the current HEAD. The four deployment numbers reduce correctly from the real
+codex trajectory; the off-distribution raw-prompt 1.589 degenerate fork is gone.
