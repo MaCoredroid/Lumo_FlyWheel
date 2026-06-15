@@ -33,6 +33,23 @@ const BASE = [
 '(class-9): tok/draft == N (native) / == len(TREE) (tree), has_tree_parent_indices, tree_sample_accept; FAIL LOUD',
 '+ record nothing on disengagement. Within-boot determinism (class-8) rep1==rep2. Cross-boot byte gate BANNED.',
 '',
+'TEMP-0.6 DISTRIBUTIONAL CAPTURE (FIRST-CLASS metric, per FR13_TEMP06_DRIFT_GATE.md / wuhlwhr0l - the q-capture',
+'machinery does NOT exist yet, BUILD it into the infra). The deployment-binding lossless gate is NOT the temp-0',
+'argmax flip (that is necessary-not-sufficient); it is per-position TV(softmax(q/0.6), softmax(p/0.6)) where',
+'q = the SPEC VERIFY-FORWARD full top-20 log_softmax per SERVED position (extend the fr13_gold_margin_probe verify',
+'-top_logprobs capture to the WHOLE served stream + record per-position truncated tail mass for an error bar) and',
+'p = the no-spec RECURRENT decode oracle top-20 on the IDENTICAL served prefix (forced-decode, fr13_recurrent_',
+'decode_oracle, FR12_NO_SPECULATIVE_CONFIG=1, FLASH_ATTN, single-token roll, NOT chunked; assert RECURRENT_PATH_',
+'ENGAGED + call-counter>0, #9 fail-loud). softmax(.../0.6) is recoverable from a recorded top-20 log_softmax (the',
+'per-position additive constant cancels) - record the tail mass as the truncation error. Each arm vs its OWN',
+'oracle. The infra must: (1) CAPTURE q over the FULL served stream (NEW - nothing records it today, that was the',
+'gap), (2) capture the forced-decode recurrent p, (3) reduce per-position TV(softmax(q/0.6),softmax(p/0.6)) + KL +',
+'the per-position over-floor vector (PAIR the scalar with the per-position view, reference_scalar_metric_per_token',
+'_blindspot). PLUS the realized multi-seed BAG-TV cross-check: N=6-8 native temp-0.6/top_p0.95 seeds -> floor =',
+'p95 of C(N,2) native-vs-native draws (UPGRADE the single-draw 0.1133, #12); cat9 same seeds -> cat9-vs-native',
+'bag-TV PASS iff <= floor_p95; B=4 deployed shape for the verdict tier. Expose as `--metric temp06_drift` of the',
+'ONE canonical infra (not a separate hand-roll) so the lossless-lever decision runs through the validated path.',
+'',
 'VALIDATED TOOLS TO REUSE (do NOT re-invent): scripts/fr13_shape_gate.sh (prelaunch recover_host_memory + assert',
 'MemAvailable>=95GiB + docker-empty + boot forked + engagement + capture + flip + teardown - but TREE-only + no',
 's/fwd); scripts/fr13_gold_margin_probe.py (the CANONICAL tokenized-prompt capture = q/verify-forward margin);',
@@ -78,7 +95,7 @@ const G_SCHEMA = {
     reconcileNativeE5: { type: 'string', description: 'GPU: boot native E5, run the harness, the MEASURED s/fwd + accept + flip vs the banked (0.2182 / 3.161); does it REPRODUCE 3.161 (fixing the 1.70 bug)? the delta + why' },
     reconcileCat9: { type: 'string', description: 'GPU: boot cat9, run the harness, MEASURED vs banked (0.2248 / 3.18); reproduces?' },
     b4Smoke: { type: 'string', description: 'GPU: a B=4 measurement on one arm - does the harness measure B=4 s/fwd + accept (co-residency-degraded accept expected, s/fwd ~B-invariant) sanely?' },
-    temp06Smoke: { type: 'string', description: 'GPU: a temp 0.6 / top_p 0.95 measurement on one arm - does the harness measure the sampling-regime numbers sanely?' },
+    temp06Smoke: { type: 'string', description: 'GPU: the temp-0.6 (q,p) DISTRIBUTIONAL capture on one arm over a short served stream - does the infra capture q (spec verify full top-20) + the forced-decode recurrent p + reduce per-position TV(softmax(q/0.6),softmax(p/0.6)) sanely (non-vacuous: q present over the full stream, p RECURRENT_PATH_ENGAGED, tail-mass recorded)?' },
     reproducesHistoric: { type: 'string', description: 'VERDICT: does the canonical harness reproduce the historic B=1 numbers (native 3.161 / cat9 3.18 / s/fwd), confirming the regime is correct + the 1.70 was the raw-prompt bug?' },
     committed: { type: 'string' },
     notes: { type: 'string' },
@@ -101,7 +118,7 @@ const V_SCHEMA = {
     holds: { type: 'boolean' },
     reproducesHistoric: { type: 'string', description: 'did the GPU validation actually reproduce the banked native 3.161 / cat9 3.18 (not still 1.70)? spot-check the measured numbers' },
     accountingTruthful: { type: 'string', description: 'is the speed accounting truthful (s/fwd decode_seconds basis, accept B-labelled, TPS derived, no banned TPS/accept-as-measured), B=1 sequential?' },
-    coverageComplete: { type: 'string', description: 'does the infra support B=1+B=4, temp 0 + temp 0.6/top_p 0.95, native + any TREE cat shape (fail-loud on unbuilt), the 4 metrics - one canonical regime?' },
+    coverageComplete: { type: 'string', description: 'does the infra support B=1+B=4, temp 0 + temp 0.6/top_p 0.95, native + any TREE cat shape (fail-loud on unbuilt), the 4 metrics INCLUDING the temp-0.6 DISTRIBUTIONAL drift (the NEW q-capture over the full served stream + forced-decode recurrent p + per-position TV(softmax(q/0.6),softmax(p/0.6)) + multi-seed bag-TV p95 floor) - one canonical regime, not a separate hand-roll?' },
     recommendation: { type: 'string', description: 'single: is the canonical infra ready to drive the speed campaign (and the Phase-0 accept re-measured correctly)? No close/pass-fail.' },
     issues: { type: 'string' },
   },
@@ -110,7 +127,10 @@ const v = await agent(
   BASE + '\n\nADVERSARIALLY VERIFY build+validate: ' + JSON.stringify({ build: b, gpu: g }) + '. Default holds=false '
   + 'if the GPU validation did NOT reproduce the banked 3.161/3.18 (still the raw-prompt 1.70 bug), the speed '
   + 'accounting uses a BANNED basis (TPS/accept/wall) or mislabels B-dependence, the infra misses B=4 / temp-0.6+'
-  + 'top_p0.95 / TREE-cat-shapes / a metric, or it is still hand-rolled-per-call rather than one canonical regime. '
+  + 'top_p0.95 / TREE-cat-shapes / a metric, or it is still hand-rolled-per-call rather than one canonical regime; '
+  + 'if the temp-0.6 DISTRIBUTIONAL drift is only LISTED not IMPLEMENTED (the infra must actually CAPTURE q over the '
+  + 'full served stream + the forced-decode recurrent p + reduce per-position TV(softmax(q/0.6),softmax(p/0.6)) - the '
+  + 'q-capture is NEW, nothing records it today, so a "supports temp06_drift" that has no q-capture code FAILS). '
   + 'research-before-deadend. No close/pass-fail.',
   { label: 'verify-measure-infra', phase: 'Verify', schema: V_SCHEMA, agentType: 'general-purpose' }
 );
