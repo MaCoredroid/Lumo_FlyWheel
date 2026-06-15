@@ -173,6 +173,201 @@ def make_request(parents, *, accept_depth, mismatch_at=None, max_tok=1000):
     return drafts, ptgt, stgt
 
 
+def _dispatch_composition_gate(ptext: str) -> list[str]:
+    """LIVE-DISPATCH composition gate (catches the OPT-1 G2 crash class).
+
+    The kernel-in-isolation arms above (ORACLE/FULL/TRITON/DEVICE) feed the
+    committer functions CLEAN inputs and never exercise the COMPOSITION inside
+    ``_lumo_tree_path_lcp_max_greedy_sample``: the interaction between
+      (A) the synckill DtoH-skip that NULLS the host committer-input lists
+          (``parents_cpu = None``), gated by
+          ``_FR13_COMMITTER_SYNCKILL and _fr13_sk_engage``;  and
+      (B) the injected loop-skip that empties the per-node loop iterable
+          (``_fr13_gpu_commit_counts = []``), gated by ``_fr13_gpu_committer``.
+    The ORIGINAL defect: (A) fired while (B) did NOT (synckill ON + a diagnostic
+    gate active), so the legacy per-node loop ran with parents_cpu=None ->
+    NoneType subscript -> EngineCoreDead. The kernel-isolation gate PASSED and
+    missed it because it never composed (A) with (B).
+
+    This gate reproduces the LIVE composed dispatch logic: it (1) applies the
+    patcher anchor replacement to obtain the ACTUAL composed committer text, (2)
+    extracts the two engagement predicates VERBATIM from that composed text, and
+    (3) EVALUATES both across the full cartesian product of the flags that gate
+    them, asserting the INVARIANT that makes the dispatch byte-safe:
+
+        whenever the synckill NULL fires (A==True), the loop-SKIP must also
+        fire (B==True)  --  i.e. A implies B.
+
+    If A can be True while B is False for ANY flag combination, the legacy loop
+    would run with nulled inputs -> the crash. This is a true composition check
+    of the live dispatch, not the kernel in isolation.
+    """
+    fails: list[str] = []
+    import itertools
+    import re
+
+    # ---- (1) confirm the patcher composes the loop-skip (anchor present) ----
+    anchor = (
+        "    out_rows = []\n"
+        "    accepted_rows = []\n"
+        "    accepted_lens = []\n"
+        "    path_log_rows = []\n"
+        "    winner_log_rows = []\n"
+        "    accepted_node_paths = []\n"
+        "    accepted_token_rows = []\n"
+        "    start = 0\n"
+        "    for req_i, node_count in enumerate(counts):\n"
+    )
+    if anchor not in ptext:
+        fails.append(
+            "DISPATCH-COMP: committer loop anchor not found in patcher "
+            "(cannot compose the live dispatch text)"
+        )
+        return fails
+
+    # ---- (2) recover the two engagement predicates VERBATIM from source ----
+    # The synckill NULL-gate engagement (`_fr13_sk_engage`) lives in the
+    # committer body as plain python; the loop-SKIP gate (`_fr13_gpu_committer`)
+    # is injected by the patcher as a sequence of quoted python-source string
+    # literals. Recover both as real source, then turn the os.environ reads into
+    # a plain dict lookup `_ENV[...]` so we can EVALUATE them with no os import.
+    a_m = re.search(
+        r"        _fr13_sk_engage = \(\n(.*?)\n        \)\n",
+        ptext,
+        re.DOTALL,
+    )
+    if a_m is None:
+        fails.append(
+            "DISPATCH-COMP: could not extract `_fr13_sk_engage` (synckill "
+            "null-gate engagement predicate) from the committer body"
+        )
+        return fails
+    import textwrap as _tw0
+    a_engage_src = (
+        "_fr13_sk_engage = (\n"
+        + _tw0.dedent(a_m.group(1)) + "\n)\n"
+    )
+
+    def _extract_injected_block(start_needle: str, end_needle: str):
+        si = ptext.find(start_needle)
+        if si < 0:
+            return None
+        ei = ptext.find(end_needle, si)
+        if ei < 0:
+            return None
+        chunk = ptext[si:ei + len(end_needle)]
+        lines = []
+        for sline in chunk.splitlines():
+            sline = sline.strip()
+            if sline.startswith('"') and sline.endswith('"'):
+                try:
+                    lines.append(eval(sline))  # noqa: S307 - trusted repo source
+                except Exception:
+                    return None
+        return "".join(lines)
+
+    b_src = _extract_injected_block(
+        '"    _fr13_gpu_committer = (\\n"',
+        '"    )\\n"',
+    )
+    if b_src is None:
+        fails.append(
+            "DISPATCH-COMP: could not extract the injected `_fr13_gpu_committer` "
+            "loop-skip predicate from the patcher replacement"
+        )
+        return fails
+
+    # Normalise `__import__('os').environ.get('FLAG', 'def')` -> `_ENV.get(...)`
+    # so both predicates evaluate against a plain modelled-env dict (no os).
+    def _normalise(src: str) -> str:
+        return re.sub(
+            r"__import__\(\s*'os'\s*\)\.environ", "_ENV", src
+        )
+
+    import textwrap as _tw
+    a_engage_src = _normalise(a_engage_src)
+    b_src = _tw.dedent(_normalise(b_src))
+
+    class _Env(dict):
+        def get(self, k, default=None):
+            return dict.get(self, k, default)
+
+    # ---- (3) evaluate A=>B across the flag cartesian product ----
+    flag_names = [
+        "FR13_GPU_COMMITTER",
+        "FR13_COMMITTER_SYNCKILL",
+        "FR13_FORCE_SPINE_COMMIT",
+        "FR13_TREE_BONUS_SELF",
+    ]
+    # CAG / fork-margin engagement also depends on whether the call-site
+    # PUBLISHED the verify logits (an OFF call-site leaves the global None ->
+    # the diagnostic is inactive even with the flag on). Model both axes.
+    diag_states = [
+        # (cag_flag, fork_flag, logits_published)
+        (False, False, False),
+        (True, False, True),    # CAG armed (flag + publish)
+        (True, False, False),   # CAG flag, no publish -> inactive
+        (False, True, True),    # fork-margin armed
+        (False, True, False),   # fork flag, no publish -> inactive
+        (True, True, True),
+    ]
+    checked = 0
+    for combo in itertools.product([False, True], repeat=len(flag_names)):
+        env = dict(zip(flag_names, combo))
+        env_dict = _Env({k: ("1" if v else "0") for k, v in env.items()})
+        for cag_flag, fork_flag, published in diag_states:
+            ns: dict = {
+                "_ENV": env_dict,
+                "_FR13_COMMIT_ARGMAX_GATE": bool(cag_flag),
+                "_FR13_FORK_MARGIN_DUMP": bool(fork_flag),
+                "_fr13_sk_cag_logits": (object() if published else None),
+                # _FR13_COMMITTER_SYNCKILL = GPU_COMMITTER & SYNCKILL (mod top).
+                "_FR13_COMMITTER_SYNCKILL": bool(
+                    env["FR13_GPU_COMMITTER"]
+                    and env["FR13_COMMITTER_SYNCKILL"]
+                ),
+                # the live committer locals B reads (same modelled state):
+                "_fr13_force_spine_commit": bool(env["FR13_FORCE_SPINE_COMMIT"]),
+                "_fr13_cag_active": bool(cag_flag and published),
+                "_fr13_fork_margin_active": bool(fork_flag and published),
+                "_fr13_bonus_self": bool(env["FR13_TREE_BONUS_SELF"]),
+            }
+            try:
+                exec(a_engage_src, {}, ns)  # noqa: S102 - trusted repo source
+                exec(b_src, {}, ns)         # noqa: S102 - trusted repo source
+            except Exception as exc:  # noqa: BLE001
+                fails.append(
+                    "DISPATCH-COMP: predicate eval raised on "
+                    f"{env} cag={cag_flag} fork={fork_flag} pub={published}: "
+                    f"{type(exc).__name__}:{exc}"
+                )
+                return fails
+
+            a_null_fires = bool(
+                ns["_FR13_COMMITTER_SYNCKILL"] and ns["_fr13_sk_engage"]
+            )
+            b_loop_skips = bool(ns["_fr13_gpu_committer"])
+            checked += 1
+            # INVARIANT: A (the null) implies B (the loop-skip). If A and not B,
+            # the legacy per-node loop runs with parents_cpu=None -> the crash.
+            if a_null_fires and not b_loop_skips:
+                fails.append(
+                    "DISPATCH-COMP: synckill NULL fires but loop-SKIP does NOT "
+                    f"(crash composition) for {env} "
+                    f"cag={cag_flag} fork={fork_flag} pub={published}"
+                )
+
+    if not fails:
+        print(
+            "[DISPATCH-COMP] PASS  synckill-null => loop-skip across "
+            f"{checked} flag/diagnostic combinations (composed live dispatch; "
+            "A=>B invariant holds, would catch the OPT-1 G2 crash class)"
+        )
+    else:
+        print("[DISPATCH-COMP] FAIL  (composition crash class present)")
+    return fails
+
+
 def main() -> int:
     fails: list[str] = []
     km = _load("_fr13_committer_kernel_mod", KERNEL)
@@ -228,6 +423,13 @@ def main() -> int:
         fails.append("legacy committer-input sync (:6761) removed -- OFF path "
                      "not byte-identical")
         print("[G-FLAG4] FAIL  legacy committer-input sync missing")
+
+    # ---------- DISPATCH-COMP: LIVE composed-dispatch composition gate --------
+    # The G-FLAG/ORACLE/FULL/DEVICE arms test the kernel in ISOLATION; this gate
+    # composes the synckill NULL-gate with the loop-SKIP gate exactly as the
+    # live committer dispatch does, and asserts the A=>B invariant. It is the
+    # arm that would have caught the OPT-1 G2 crash class.
+    fails.extend(_dispatch_composition_gate(ptext))
 
     # ---------- Behavioral matrix ----------
     matrix = []

@@ -6754,7 +6754,42 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     'stacked replay-flag matrix from GDN metadata-builder '
                     'init; missing (class 9 fail-loud, no silent fallback)'
                 )
-        if _FR13_COMMITTER_SYNCKILL:
+        # OPT-1 G2 COMPOSITION GUARD: the synckill DtoH-skip (nulling the host
+        # committer-input lists below) is byte-safe ONLY when the device arm
+        # actually runs AND the legacy per-node loop is skipped. The loop-skip
+        # is the injected `_fr13_gpu_committer` predicate
+        # (FR13_GPU_COMMITTER=1 AND no diagnostic gate AND bonus_self), which is
+        # STRICTER than `_FR13_COMMITTER_SYNCKILL` (=GPU_COMMITTER & SYNCKILL).
+        # If synckill is on but a diagnostic disables the GPU committer
+        # (force_spine / CAG / fork_margin / bonus_self=0), the device arm is
+        # NOT dispatched and the legacy loop DOES run -> nulling parents_cpu
+        # here crashes it (NoneType subscript -> EngineCoreDead). So gate the
+        # null on the SAME engagement predicate the loop-skip uses; otherwise
+        # fall through to the legacy packed-DtoH else-branch which materialises
+        # the host lists for the legacy loop. The diagnostic-flag values used
+        # here are the SAME globals/env the injected predicate reads (computed
+        # below at the committer; recompute them inline so the guard is correct
+        # at this earlier point). _fr13_cag_target_logits is published by the
+        # call-site only when a gate is armed; absent => diagnostic inactive.
+        _fr13_sk_cag_logits = globals().get('_FR13_CAG_TARGET_LOGITS')
+        _fr13_sk_engage = (
+            __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'
+            and __import__('os').environ.get(
+                'FR13_FORCE_SPINE_COMMIT', '0'
+            ) != '1'
+            and not (
+                _FR13_COMMIT_ARGMAX_GATE
+                and _fr13_sk_cag_logits is not None
+            )
+            and not (
+                _FR13_FORK_MARGIN_DUMP
+                and _fr13_sk_cag_logits is not None
+            )
+            and __import__('os').environ.get(
+                'FR13_TREE_BONUS_SELF', '1'
+            ) == '1'
+        )
+        if _FR13_COMMITTER_SYNCKILL and _fr13_sk_engage:
             # OPT-1 G2.a: the GPU committer DECISION reads the DEVICE source
             # tensors directly (the hook's synckill branch), so the big
             # committer-input DtoH+sync (parents/drafts/ptgt/stgt/bonus) is NOT
@@ -6972,6 +7007,21 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     start = 0
     for req_i, node_count in enumerate(counts):
         node_count = int(node_count)
+        if parents_cpu is None:
+            # OPT-1 G2 composition guard (fail-loud, class 9): the legacy
+            # per-node loop MUST NOT run with the host committer-input lists
+            # nulled by the synckill DtoH-skip. That combination only arises if
+            # the synckill null fired while the GPU-committer loop-skip did NOT
+            # (a guard-mismatch); the engagement predicate at the DtoH branch is
+            # supposed to keep them in lockstep. If we are here, that invariant
+            # broke -- raise a named error instead of a cryptic NoneType
+            # subscript -> EngineCoreDead.
+            raise RuntimeError(
+                'FR13_COMMITTER_SYNCKILL composition defect: legacy committer '
+                'loop ran with nulled host inputs (synckill nulled parents_cpu '
+                'but the GPU-committer loop-skip did not engage). The synckill '
+                'null and the loop-skip must share the same engagement predicate.'
+            )
         parents = parents_cpu[start:start + node_count]
         drafts = drafts_cpu[start:start + node_count]
         parent_targets = parent_targets_cpu[start:start + node_count]
