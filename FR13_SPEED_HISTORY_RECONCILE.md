@@ -126,3 +126,81 @@ Citations: 008631cd (FR13_B1_SPEED_ATTRIBUTION_BIND), dd45c3c1, 93a4043a
 4d0452df (in_proj_ba), 9aa28ce5 (replay vs WY kernel policy); HEAD code
 fr10_phase4_patch_vllm_tree_gdn.py:11069-11476 (single-logits baked ON);
 gpu_model_runner.py:4090-4091 (verify lm-head single batched GEMM).
+
+---
+
+# APPENDIX (per-forward-tax lineage) — residual-tax SLICE decomposition + which lever removes which slice + the N_PAD spill
+
+This appendix sharpens the *current residual tax* (the ~6.5 ms cat9 over native) into named
+slices and maps each lever to a slice. Complements the lm-head lineage above (which proves the
++82 ms lm-head adder is GONE). Same basis: decode_seconds, greedy, metrics OFF, native E5 0.2182.
+
+## Current deployed s/fwd (MEASURED, FR13_B1_FIX3_GATE_BIND.md L251-257)
+- native E5 = 0.2182 s/fwd. cat9 ON clean = **0.2247-0.2249 = 1.030x = +6.5 ms**. chain5 ON_b =
+  0.2223-0.2226 = **1.019x = +4.4 ms**. in_proj_ba-baked cat9 = 0.2248 (SPEED-NEUTRAL, 4d0452df).
+- The fdf5ffa7 "~1.05x = +10 ms" is the @11k-ctx figure (1.056-1.063x); the deployed 64-tok
+  greedy gate figure is the tighter 1.030x / +6.5 ms. Both MEASURED; use 1.030x as the current
+  deployed cat9 number, +10 ms as the long-context end.
+
+## The ~6.5 ms residual, decomposed (only FIX-3's 7.7 ms + FIX-2's 3-4 ms are DIRECTLY MEASURED;
+the slice estimates are INFERRED from output/fr13_b1_speed_census/, NOT a per-kernel nsys trace —
+nsys cuda_gpu_kern_sum export is EMPTY so there is no per-kernel attribution)
+| slice | est ms (INFERRED) | what it is | removed by |
+|---|---|---|---|
+| committer DtoH+sync | ~2.5-4 | the FIX-2-packed *single* blocking `current_stream().synchronize()`+`.tolist()` on the MAIN launch thread; census: chain5 blocks 91.9% in memcpyAsync vs native 0.8% -> loses async run-ahead | **OPT-1** |
+| eager Python glue | ~1.5-2.5 | committer path-LCP tree-walk + replay-publish + runner tree-metadata, dispatched eager on the critical thread, gated behind that sync | **OPT-1** (folds in) |
+| residual graph-node (#4-#7 conv residue + per-layer staging) | ~1-2 | post-FIX-3 node residue; wall-bounded <=10 ms by the no-tree-GDN 1.347x discriminator -> NOT dominant | OPT-C / FIX-3 follow-ups |
+| residual eager launches | ~0.5-1 | post-FIX-1/2 leftover torch-op dispatch | folds into node/glue |
+The DOMINANT residual slice is the committer DtoH+sync + the eager glue it gates (~4-6 ms
+combined). That is OPT-1's target. Node-count is NOT dominant (FIX-3 took the big slice).
+
+## N_PAD=16 register-spill wall (the SCALING tax, MEASURED ptxas wp5hsu63v, FR13_BV_NATIVE_MATCH_BIND)
+The verify scan holds ALL N_PAD nodes' recurrent state in registers (`h_cache=(N_PAD,BV,DIM_K)`,
+DIM_K=128, cap 255 regs/thread). cat9 = N_PAD = 1<<(9-1).bit_length() = 16.
+| geometry | tree | measured n_regs | spill B/thread | verdict |
+|---|---|---:|---:|---|
+| BV=16, warps=8 (DEPLOYED) | cat9 N_PAD=16 | 254 | **0** | FITS (at the 255 cap) |
+| BV=32, warps=4 (native geom) | cat9 N_PAD=16 | 255 clamped | **636** | SPILLS hard (runs, no CUDA-701) |
+| BV=32, warps=4 | N_PAD<=4 | 235 | 0 | FITS (small trees only) |
+KEY: the spill is a **SPEED cost, not a correctness wall** — native geometry runs at cat9, just
+spills 636 B/thread to local DRAM. The deployed BV=16/warps=8 is the only 0-spill cat9 geometry
+but it does NOT match native's reduction tree (the open diffuse-GDN seam). **recompute-state-
+from-spine** (3fd0717c) is the spill-free fix: ~64-90 regs (O(1) in tree size), lossless by
+construction (relocates only the state SOURCE, never touches the BV/warps reduction tile), lifts
+the N_PAD<=16 cap. CAVEAT (red-team holds=FALSE): the existing replay kernel runs at warps=8 and
+is live-broken at gate-4 -> recompute's losslessness is a GPU OBLIGATION, not a CPU-proven fact.
+
+## Lever -> slice map (which residual each of the two levers removes)
+- **OPT-1 GPU-resident committer (a0e8cc3d, UNBUILT design — FR13_GPU_COMMITTER flag not yet in
+  HEAD): removes the committer DtoH+sync slice (~2.5-4 ms) + the eager glue behind it (~1.5-2.5
+  ms) = ~4-6 ms.** Mechanism: move the integer accept/path-LCP/bonus decision to a Triton
+  committer kernel + CUDA-12.4 graph conditional-node so the data-dependent branch captures,
+  restoring native-style run-ahead. INFERRED: cat9 -> ~220.7-218 ms = parity-to-just-below native;
+  chain5 crosses below native first (less reclaim needed). Lossless by construction (pure integer,
+  location-only move). The real win is the **accept-edge TPS** (cat9 ~3.18 vs native ~3.07
+  tok/fwd) at s/fwd parity, NOT "way faster on s/fwd."
+- **OPT-A GB10-tuned fp8 GEMV config (087fbd51, UNBUILT — no GB10 JSON authored): does NOT touch
+  the residual tree-tax slices; attacks NATIVE's OWN ~45%-of-peak slack** (native = 2.21x the 98.6
+  ms floor). NO GB10/sm_121 config exists (fp8_utils.py:803 -> default BLOCK_SIZE_M=64,
+  num_stages=2); a GB10-tuned config (BLOCK_SIZE_M=tree-rows, num_stages=3-4) is lossless by
+  construction (BLOCK_SIZE_K=128 pinned -> fp32 K-accum unchanged). INFERRED ~140-150 ms/fwd
+  (60-70% peak) = ~1.45-1.55x faster s/fwd vs native 218 ms — a FUNDAMENTAL bandwidth win, NOT the
+  98.6 ms floor (GB10 lacks TMA/WGMMA). Standalone win is small (low-single-digit-% e2e per
+  GemLite); the fraction-of-peak needs it bundled with full CUDA-graph capture (OPT-C) +
+  cross-layer prefetch (OPT-D, risk-flagged on sm_121: vLLM #37431 Mamba-Triton async illegal-
+  instruction crash). This is the joint lm-head/GEMV class the lineage above flags (native pays
+  the same lm-head GEMV) — sub-native lever for BOTH arms.
+
+NET (per-forward-tax lineage): current deployed cat9 = **1.030x native s/fwd (+6.5 ms), accept-
+parity** — NOT 2.3x. Residual = committer DtoH+sync + eager glue (~4-6 ms, dominant) + minor
+node/launch residue, plus the N_PAD=16 spill capping the scan to deployed-geometry-only. OPT-1
+removes the dominant residual (-> s/fwd parity, accept-edge TPS win); OPT-A attacks native's own
+bandwidth slack (-> fundamental ~1.45-1.55x). Both UNBUILT; all per-forward ms are INFERRED
+(census/literature anchored, nsys per-kernel export empty); the clean GPU measurement is the arbiter.
+
+Appendix citations: a0e8cc3d (FR13_BEAT_NATIVE_SPEED_DESIGN_BIND, OPT-1), dd45c3c1 (committer
+sync tax hypothesis), 087fbd51 (FR13_FUNDAMENTAL_SPEED_FLOOR_BIND, OPT-A), df631112 (2-lever
+framing), 0ecd94aa (~97% fixed-overhead-not-bandwidth, 3x graph nodes), 4b409630/07f7ce6a/3fd0717c
+(N_PAD=16 ptxas spill 636 B/thread + recompute-from-spine), b12d8a40 (BV=16/warps=8 vs native
+BV=32/warps=4 geometry seam); HEAD source fr10_gdn_tree_kernel.py:19-126 (N_PAD cap + GEOM_OVERRIDE),
+fp8_utils.py:803 (no GB10 fp8 config), output/fr13_b1_speed_census/ (91.9% main-thread block).
