@@ -406,15 +406,17 @@ def evaluate(payload_path: Path) -> dict[str, Any]:
             parent=parent,
         ),
         # BRANCH winner [0,2] (off-spine child of root via the captured tree).
+        # n_pad must be a warmed power-of-2 >= node count (the masks tensor is
+        # [n_pad,n_pad]); 2 nodes -> padded block 4 (smallest no-spill tile).
         _run_case(
-            payload, name="branch_0_2", rows_list=[0, 2], n_pad=1, parent=[-1, 0]
+            payload, name="branch_0_2", rows_list=[0, 2], n_pad=4, parent=[-1, 0]
         ),
-        # BRANCH winner [0,1,4] (deeper off-spine path).
+        # BRANCH winner [0,1,4] (deeper off-spine path; 3 nodes -> padded 4).
         _run_case(
             payload,
             name="branch_0_1_4",
             rows_list=[0, 1, 4],
-            n_pad=1,
+            n_pad=4,
             parent=[-1, 0, 1],
         ),
         # POWERED NEGATIVE CONTROL: deployed geometry, perturbed row -> MUST
