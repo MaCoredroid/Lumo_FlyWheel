@@ -116,3 +116,110 @@ on GB10 (FR13_WHY_SLOWER_VERDICT L18; FR13_FUNDAMENTAL_SPEED_FLOOR_BIND L9). The
 not mistake it for a TPS/s-fwd ratio. accept 3.161/3.18, the +15 per-event superset, the 23-flip
 decomposition, the big-denom 13.55%/13.99%, the reshape accept/flip numbers, and the bag-TV floors
 belong to the accept/lossless slices and are TIER B/D/E there — out of scope here.
+
+---
+---
+
+# FR13 NUMBERS TRUST LEDGER — SLICE: ACCEPT NUMBERS + BREAK-EVEN + PER-EVENT SUPERSET GATE
+
+Audit (CPU read-only, no boot; GPU re-aim wf w8q5jg1k0 in flight). Staples every ACCEPT/event
+number, the break-even argument, and the per-event SUPERSET gate against the TWO contaminations and
+assigns a TIER. Sources cited inline. (Speed slice above; this slice = accept/lossless axis.)
+
+## The decisive regime fact for THIS slice
+Essentially EVERY B=1 accept/event number below came from `prompts_swe4.json` sent as a **RAW text
+string** to **`/v1/completions` with NO chat template**, greedy (temp 0.0), seed 1313 — CONFIRMED in
+the probe code:
+- `scripts/fr13_gold_margin_probe.py:6` — literally "`/v1/completions, RAW text prompt (no chat template)`".
+- `scripts/fr13_verify_bisect_probe.py:85-89` — `"prompt": prompt … /v1/completions`, `temperature 0.0`.
+- `scripts/fr13_measure.py:19,45` — canonical fr13_measure "sent prompts_swe4.json as a RAW string to
+  /v1/completions with NO chat template".
+- `prompts_swe4.json` = the astropy-12907 SWE-bench task text as ONE raw string (verified head).
+
+This is **OFF-DISTRIBUTION** for the chat/thinking model. CONFIRMED degenerate (re-aim commits
+`be10f299`, `cab6c157`): native E5 served stream loops `[271,248068,271,248069,271,40]` =
+`\n<think>\n</think>\nI` (empty-`<think></think>` repetition) → **native accept tanks to ~1.589**, forks
+cross-boot; the no-spec recurrent oracle ranks the coherent continuation correct by ~11 nats → it is
+the **raw regime, not a kernel bug**. ⇒ **accept/lossless on this regime is TIER D (CONTAMINATED).**
+
+The ONLY chat-templated real-SWE accept-axis number is the **big-denom** (codex agent loop on
+astropy-12907 via `/v1/responses`, no degenerate loop) — that one is TIER B.
+
+All accept numbers are temp-0 (greedy) → at best the greedy-superset axis; the temp-0.6 distributional
+accept/superset gate is **UNMEASURED on the deployment prompt** ⇒ **no Tier A accept number exists yet.**
+
+## ACCEPT/EVENT LEDGER (one row per number)
+
+| # | number | what | prompt-regime | temp | B | TIER | conclusion STANDS / RE-MEASURE | source |
+|---|---|---|---|---|---|---|---|---|
+| A1 | **native E5 = 3.1613** | native MTP-5 accept/event, B=1 current gate (the "3.1613 bar") | raw /v1/completions (off-dist) | 0 | 1 | **D** | RE-MEASURE — contaminated native baseline; SAME boot family degenerates to ~1.589. | FR13_B1_CURRENT_GATE_BIND (3.161290, 124ev/620tok); FR13_B1_SUPERSET_PRECONDITION_BIND |
+| A2 | **native E5 = 3.076 / 3.08 / 3.154** | the depth-matched SUPERSET BAR (5-spine MTP-5); cross-boot spread | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — the superset target bar itself is contaminated; the 3.076↔3.154↔3.1613 spread is the native self-floor ON THE RAW REGIME. | FR13_DIRECTION_AND_NUMBERS (3.076); FR13_CHAIN3_DEPTH_LEVER_DEAD_BIND (3.076); FR13_RESHAPE_AB_RECURRENT_BIND (3.08); FR13_ACCEPTANCE_LADDER_BIND R2 (3.154 sum) |
+| A3 | **cat9 = 3.18 / 3.1789 / 3.198** | cat9 accept/event (post-FIX-A); "first crossing ABOVE native" | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — the crossing-above-native claim is raw-regime. (3.1789 controlled probe; 3.198 ladder/cat10.) | FR13_SPEED_HISTORY_RECONCILE L410 (3.1789); FR13_CAT10_BIND (3.1983); FR13_RESHAPE_AB_RECURRENT_BIND (3.198) |
+| A4 | **cat9 +0.0176 EDGE over native E5** | controlled pinned-probe accept delta (3.1789 − 3.1613) | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — a delta of two TIER-D numbers; does NOT survive to deployment as-measured. Aggregate accept draw also UNRESOLVED (−0.43→~0, trajectory-confounded). | FR13_SPEED_HISTORY_RECONCILE L410-466 (MEASURED, ac1d3039 FIX-A) |
+| A5 | **cat9 = 2.1515** | pre-FIX-A cat9 accept (B=1 current gate); drove "theorem-precondition failure" | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — historical; superseded by A3 but same contamination. | FR13_B1_CURRENT_GATE_BIND (2.151515, 165ev/1485tok) |
+| A6 | **chain5 = 2.66 / 2.664 / 2.6596 / 3.0391 / 3.2562** | leaf-free 5-spine accept (cross-boot spread) | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — wide cross-boot spread is itself a raw-regime symptom; "chain5 exceeds native" is contaminated. | FR13_CHAIN3_DEPTH_LEVER_DEAD_BIND (2.664); FR13_B1_FIX3_GATE_BIND gate(c) (ON 3.0391 / on_b 2.6596); FR13_B1_CHAIN_SPEED_DISCRIMINATOR (3.2562) |
+| A7 | **chain3 = 2.266 / 2.295** | leaf-free depth-3 spine accept | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — accept is the binding arbiter for the "reshape lossless but SPEED-NEGATIVE" verdict; it is TIER D. | FR13_RESHAPE_AB_RECURRENT_BIND (2.266); FR13_CHAIN3_DEPTH_LEVER_DEAD_BIND (2.295) |
+| A8 | **cat3w = 2.282** | depth-3 spine + root-sib + d1 width accept | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — "width re-introduces co-residency, accept < native" verdict on TIER-D accept. | FR13_RESHAPE_AB_RECURRENT_BIND (2.282) |
+| A9 | **cat10 = 2.9316** (d0 rescue +0.035, net −0.27 vs cat9 3.1983) | root-sibling cat10 accept | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — whole-window accept self-flagged trajectory-confounded IN the doc AND TIER D. | FR13_CAT10_BIND AXIS 2 |
+| A10 | **per-depth ladder: tree 2.082 vs native 3.154 sum** (d0 deficit −0.227, root-concentrated) | R2 marginal/conditional per-depth | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — the root-concentrated d0-deficit diagnosis is on the regime where native degenerates; BI-asymmetry (tree BI=1 / native BI=0) ALSO open. | FR13_ACCEPTANCE_LADDER_BIND R2 |
+| **A11** | **big-denom 13.548% (cat9) / 13.985% (native)** clear-margin flip rate (CIs OVERLAP, cat9 LOWER) | per-token argmax-vs-own-no-spec-recurrent-oracle flip rate at scale | **CHAT /v1/responses, real SWE astropy-12907 + codex loop** | 0 | 1 | **B** | **STANDS** as a lossless-vs-native PASS at the deployment PROMPT (temp-0). The only non-contaminated accept-axis number. RE-MEASURE ONLY to add the temp-0.6 distributional axis (→ A). | FR13_CONFIRM_SPEC_VS_NONSPEC (VALID, 4 CODE-READ links); output/fr13_bigdenom_rescore/consolidated.json; FR13_TEMP06_DRIFT_GATE §1b |
+
+## BREAK-EVEN / ACCEPT-PARITY
+
+| # | claim | regime | temp | B | TIER | STANDS / RE-MEASURE | source |
+|---|---|---|---|---|---|---|---|
+| A12 | **"cat9 accept ≥ native at parity" (the break-even for the accept-edge TPS win)** | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — rests on A3 vs A1/A2 (all TIER D). The token-weighted AGGREGATE accept draw is admitted UNRESOLVED (−0.43→~0, trajectory-confounded). The break-even THRESHOLD math is sound but its accept inputs are contaminated. | FR13_SPEED_HISTORY_RECONCILE L180,317,415-466 |
+| A13 | **"no break-even available" (pre-FIX-A current gate)** | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — "tree slower per-fwd AND fewer accepts (2.15<3.16)" is TIER D; superseded by FIX-A. | FR13_B1_CURRENT_GATE_BIND |
+
+## PER-EVENT SUPERSET GATE
+
+| # | number | what | regime | temp | B | TIER | STANDS / RE-MEASURE | source |
+|---|---|---|---|---|---|---|---|---|
+| A14 | **net +15** (21 lossless leaf-saves − 6 lossy − 0 spine_reg) | per-event superset gate: cat9 IS a lossless superset of E5 | raw /v1/completions (fork-margin boot, 118ev/466pos/4 prompts) | 0 | 1 | **D** | RE-MEASURE — VERDICT computed on raw-regime dump; greedy-only; SMALL-SAMPLE 1 boot. The STRUCTURAL part (0 spine_regressions, strict `>best_lcp` tie-break over 250 recs) is design-true; the +15 magnitude + 21/6 split are TIER D. | FR13_PEREVENT_SUPERSET_GATE_RESULT (w02jpqib2, verify HOLDS) |
+| A15 | **23-flip decomp = 6 lossy-leaf-saves + 17 spine-realization** | reframes "cat9 23 flips vs native 3" | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — the KIND-split logic (leaves net-positive; gap = tree-verify SPINE drift) is informative, but COUNTS (23/6/17, native ~3) are TIER D. | FR13_PEREVENT_SUPERSET_GATE_RESULT; FR13_CARRIER_REOPEN (de-cascade 23→18→~14-15) |
+| A16 | **net_lossless/event +0.127, lossless fraction 21/27 = 78%** | per-event superset gain magnitudes | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — same boot as A14; TIER D. | FR13_PEREVENT_SUPERSET_GATE_RESULT |
+| A17 | **confound-free 7.39x flip RATE** (cat9 43.3/1000 vs native 5.9/1000; de-cascaded 19 vs 3) | the "load-bearing defect number" replacing raw 23-vs-3 | raw /v1/completions (recurrent-rescore, wgb0yegin) | 0 | 1 | **D** | RE-MEASURE — confound-free vs LENGTH/CASCADE, NOT vs PROMPT-REGIME; both arms on the off-dist streams. The "M-invariance vs topology BOTH refuted" verdict (every single-op lever dead; floor = spine ~+2) is a per-forward KERNEL/co-residency conclusion that likely STANDS structurally (content-independent channel), but its NUMBERS are TIER D. | FR13_MATH_HISTORY_RECONCILE L52-207 (verify HOLDS); FR13_E5_VS_CAT9_SPINE_DRIFT |
+| A18 | **bag-TV floor 0.0593 → superseded by 0.1133** | native-self bag-TV floor (lossless threshold) | raw /v1/completions | 0.6 (served-bag) | 1/4 | **D** | RE-MEASURE — 0.0593 = ONE native-a/native-b draw (`fr13_corruption_gate.py:123`); 0.1133 = one CUDA-captured draw; BOTH single-draw (class #12) AND raw-regime. Must become an N=6-8 p95 floor on the deployment regime. (Rare temp-0.6 number, but native-self on off-dist.) | FR13_TEMP06_DRIFT_GATE §2; FR13_DRIFT_TRACKER_DESIGN L5 |
+| A19 | **cat9 22 / 23 raw flips (per-prompt [6,6,4,6] / [5,4,5,9]) vs native ~3** | the headline absolute flip count | raw /v1/completions | 0 | 1 | **D/E** | RE-MEASURE for deployment; valid as TIER E (argmax-localization diagnostic) for kernel work. "22 reproduces the banked oracle → reference validated" is a legitimate E use. | FR13_CAT10_BIND (22); FR13_CARRIER_REOPEN (23) |
+
+## TIER SUMMARY (accept slice)
+
+**STANDS (deployment-faithful):**
+- **A11 big-denom 13.548% (cat9) / 13.985% (native) — TIER B.** The ONLY accept-axis number measured
+  on the deployment PROMPT (chat `/v1/responses`, real SWE-Verified astropy-12907 + codex loop, no
+  degenerate loop). Each arm scored vs its OWN no-spec recurrent decode oracle; CIs overlap, cat9 LOWER.
+  Conclusion "cat9 ≈ native within floor ⇒ lossless-vs-native PASS at scale" is deployment-prompt-faithful.
+  **B not A** because it is temp-0 argmax (necessary-not-sufficient); the temp-0.6 distributional gate is owed.
+- The DESIGN-TRUE / kernel-channel parts survive regardless of prompt: 0 spine_regressions (strict
+  `>best_lcp` tie-break, 250 recs), the spec-vs-non-spec framing validity (4 CODE-READ links), and the
+  qualitative co-residency-is-the-carrier / single-op-levers-refuted structure (A17). Their MAGNITUDES are TIER D.
+
+**RE-MEASURE on the deployment regime (chat real-SWE + temp 0.6):**
+- **EVERY B=1 accept number A1–A10, A12–A19 is TIER D** — all from `prompts_swe4.json` sent RAW to
+  `/v1/completions` (no chat template) at temp-0, the regime where native degenerates to ~1.589. So:
+  native 3.1613 / 3.076 / 3.08 / 3.154 (the bar); cat9 3.18 / 3.1789 / 3.198 and the **+0.0176 edge**;
+  chain5 (2.66–3.2562) / chain3 (2.27/2.30) / cat3w (2.28) / cat10 (2.93); the **per-event SUPERSET gate
+  +15** and the **23 = 6+17 decomposition**; the **break-even / accept-parity**; the **7.39x** rate; the
+  **bag-TV floor**.
+- These do not necessarily REVERSE on the deployment regime (A11 suggests cat9 ≈ native HOLDS there), but
+  **the specific accept/event values and the +15 / +0.0176 magnitudes are not deployment-faithful as
+  measured** — re-take on chat real-SWE, then run a temp-0.6 distributional accept/superset gate for Tier A.
+- **No Tier A accept number exists yet.** The deployment-binding lossless gate is the temp-0.6
+  distributional one (FR13_TEMP06_DRIFT_GATE), UNMEASURED on the deployment prompt. Re-aim (`cab6c157`,
+  `w8q5jg1k0`) re-points fr13_measure at exactly this.
+- **UNKNOWN-REGIME: none in this slice** — every accept number's prompt-path is determinable (raw probe
+  scripts) or documented (big-denom = chat). Only the bag-TV floor (A18) is temp-AMBIGUOUS (temp-0.6
+  served-bag, but raw regime).
+
+## CITATIONS (accept slice)
+- Commits: `cab6c157`, `be10f299` (re-aim / contamination ruling: raw /v1/completions off-dist → native
+  ~1.589, `\n<think>\n</think>\nI` loop); `ac1d3039` (FIX-A, cat9 2.03→3.1789); `8add39e6` (+35 greedy
+  branch accepts); `77e2a0e8` (per-event superset reducer).
+- Probe source (regime proof): `scripts/fr13_gold_margin_probe.py:6,94`; `scripts/fr13_verify_bisect_probe.py:85-89`;
+  `scripts/fr13_measure.py:7,16,19,45`; `output/fr13_acceptance_ladder/prompts_swe4.json`.
+- Binds: FR13_B1_CURRENT_GATE_BIND, FR13_B1_SUPERSET_PRECONDITION_BIND, FR13_B1_FIX3_GATE_BIND,
+  FR13_DIRECTION_AND_NUMBERS, FR13_ACCEPTANCE_LADDER_BIND, FR13_CHAIN3_DEPTH_LEVER_DEAD_BIND,
+  FR13_RESHAPE_AB_RECURRENT_BIND, FR13_CAT10_BIND, FR13_PEREVENT_SUPERSET_GATE_RESULT, FR13_CARRIER_REOPEN,
+  FR13_MATH_HISTORY_RECONCILE (7.39x; M-invariance both refuted), FR13_E5_VS_CAT9_SPINE_DRIFT,
+  FR13_CONFIRM_SPEC_VS_NONSPEC (big-denom VALID), FR13_TEMP06_DRIFT_GATE (deployment temp-0.6 gate;
+  bag-TV 0.0593→0.1133), FR13_SPEED_HISTORY_RECONCILE (+0.0176 edge, accept-parity).
