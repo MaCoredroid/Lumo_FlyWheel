@@ -1,3 +1,79 @@
+# FR13 NUMBERS TRUST LEDGER — CONSOLIDATED (master)
+
+Audit (CPU read-only, 2026-06-15; GPU re-aim wf w8q5jg1k0 in flight — DO NOT boot). This top section
+CONSOLIDATES the four audit slices below (SPEED, ACCEPT, DRIVING-VERDICTS, LOSSLESS/FLIP) into ONE trust
+ledger, the stands-vs-remeasure split, and the deployment-faithful gaps. The four slices below are the
+detailed per-number tables; this section is the single staple-table + the disposition. Do not edit the
+slices — read them for the per-row reasoning; read THIS for the one-line verdict per number.
+
+## The two contaminations (the staples)
+1. **OOD PROMPT (contamination 1).** Almost every B=1 number came from `prompts_swe4.json` /
+   `q3_native_capture.json` sent as a **RAW string to `/v1/completions` with NO chat template** —
+   off-distribution for this chat/thinking model. **AUDIT-CONFIRMED THIS TASK:**
+   `output/fr13_verify_decisive/q3_native_capture.json` (the served-stream SOURCE feeding the 23-flip /
+   7.39× / chain*/cat* / per-event-superset recurrent rescores) has `HAS_<|im_start|>=False` and its
+   native served stream STARTS `[271,248068,271,248069,271,40]` = `\n<think>\n</think>\nI` = the empty-
+   `<think></think>` degeneration loop (re-aim commits `be10f299`/`cab6c157`; native accept tanks to
+   ~1.589; the no-spec oracle ranks the coherent decode correct by ~11 nats = RAW REGIME, not a kernel
+   bug). The speed probe ALSO posts raw `/v1/completions` (`fr10_quick_decode_tps_probe.py:179`) — but
+   s/fwd survives it (per-FORWARD, bandwidth-bound). Deployment regime = real SWE-Verified + codex agent
+   loop, chat-templated `/v1/responses` (the big-denom, `scripts/fr13_bigdenom_swe_serve.sh`).
+2. **temp 0 vs 0.6 (contamination 2).** temp 0 = greedy = served ARGMAX = a DIAGNOSTIC point-measure
+   (necessary-not-sufficient for lossless). Deployment = temp 0.6 + top_p 0.95 SAMPLING where lossless is
+   DISTRIBUTIONAL: `q=softmax(verify/0.6)` vs `p=softmax(decode/0.6)` (`FR13_TEMP06_DRIFT_GATE.md`). A
+   position can pass the temp-0 argmax gate yet drift the temp-0.6 sampled distribution.
+
+## TIERS
+- **A** = deployment-binding: real-SWE+codex CHAT (`/v1/responses`) + temp 0.6 [+ B as noted].
+- **B** = deployment-prompt-but-temp0: chat real-SWE but greedy argmax (necessary-not-sufficient).
+- **C** = regime-robust: s/fwd = decode-seconds-per-FORWARD, bandwidth-bound ⇒ content/temp/B-independent
+  by construction. TRUSTWORTHY regardless of prompt regime (one caveat = context length).
+- **D** = CONTAMINATED: raw `/v1/completions` handrolled off-distribution accept/lossless (degenerate loop).
+- **E** = diagnostic-only: temp-0 determinism / byte-exact / argmax-localization (valid for its narrow
+  purpose, not deployment).
+
+## CONSOLIDATED TRUST LEDGER — every key number stapled (prompt-regime | temp | B | TIER)
+| # | number | what | prompt-regime | temp | B | TIER | STANDS / RE-MEASURE | slice-row |
+|---|---|---|---|---|---|---|---|---|
+| 1 | **native E5 = 0.2182 s/fwd** | B=1 native per-forward ref | raw /v1/completions | 0 | 1 | **C** | STANDS | S1 |
+| 2 | **cat9 ON = 0.2247-0.2249 s/fwd = 1.030× native** | tree per-forward, post-FIX-3 | raw /v1/completions | 0 | 1 | **C** | STANDS @64-tok; deployment-context ~1.05-1.06× @11k. The s/fwd verdict STANDS despite accept contamination | S2 |
+| 3 | **chain5 ON = 1.019× native** (best tree s/fwd) | depth-5 linear per-forward | raw /v1/completions | 0 | 1 | **C** | STANDS as a per-forward ratio | S3 |
+| 4 | **Phase-0 reproduction native 0.2159 / cat9 0.2241** | s/fwd reproduces banked; **Phase-0 ACCEPT did NOT** | raw /v1/completions | 0 | 1 | **C** | STANDS — the EXACT proof s/fwd is regime-robust while accept is not | S4 |
+| 5 | **FIX-1/2/3 NET = 1.40× → 1.03× (cat9), 1.41× → 1.019× (chain5)** | lm-head/eager/conv lineage | raw /v1/completions | 0 | 1 | **C** | STANDS — the headline speed-reduction lineage | S5-S8 |
+| 6 | **in_proj_ba baked = SPEED-NEUTRAL (0.2248 vs 0.2249)** | pad hidden behind weight DMA | raw /v1/completions | 0 | 1 | **C** | STANDS | S9 |
+| 7 | **bandwidth floor = 98.6-98.9 ms/fwd (27 GB fp8 / 273 GB/s GB10)** | shared per-forward HW floor | n/a (hardware) | n/a | n/a | **C** | STANDS — the reason s/fwd is regime-robust at all | S13 |
+| 8 | **per-fwd tax grows with N: +0.0108 s/fwd/node** (OLS n=2) | row-traffic step | raw /v1/completions, BI=1 | 0 | 1 | **C** (step) / INFERRED (slope) | STEP STANDS; SLOPE direction-only (n_pad 8→16 confound) | S14 |
+| 9 | **OPT-1 reclaims ~4-6 ms (→ s/fwd parity)** | GPU-resident committer | n/a (projection) | n/a | 1 | **INFERRED** (impl 10ebccac, never GPU-verified) | RE-MEASURE on GPU — mechanism (91.9% main-thread block) MEASURED; reach unproven | S11 |
+| 10 | **OPT-A ~140-150 ms/fwd = 1.45-1.55× faster** | GB10-tuned fp8 GEMV | n/a (projection) | n/a | 1 | **INFERRED** (impl e90def, never GPU-verified) | RE-MEASURE on GPU — root (45%-of-peak) source-verified; reach unproven; needs shared-kernel ruling | S12 |
+| 11 | **stale "2.336× slower"** (B=4 SWE) | OLD pre-FIX cat9-vs-native | raw (B=4 SWE) | 0 | 4 | **STALE / partly NOT-regime-robust** | DO NOT USE — pre-FIX + the 1.432× forward-count factor is accept-coupled + B=4-sum-basis. Superseded by row 2 | S10 |
+| 12 | **big-denom cat9 13.548% [12.85,14.28] / native 13.985% [13.28,14.73]** clear-margin flip rate; CIs OVERLAP, cat9 LOWER | per-token argmax-vs-own-no-spec-recurrent-oracle flip rate at scale | **CHAT /v1/responses real SWE astropy-12907 + codex** | 0 | 1 | **B** | **STANDS** — the ONLY non-contaminated lossless/accept-axis number; "cat9 ≈ native within floor ⇒ lossless PASS at scale" is deployment-prompt-faithful. B (not A) = temp-0 argmax owes the temp-0.6 distributional axis | A11 / L1 / V1 |
+| 13 | **native E5 accept = 3.1613** (depth-5 BAR) | B=1 current-gate native baseline | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — same boot family degenerates to ~1.589 | A1 |
+| 14 | **native E5 = 3.076 / 3.08 / 3.154** (depth-matched SUPERSET BAR) | the bar the tree must exceed | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — the bar itself is contaminated (raw cross-boot spread) | A2 |
+| 15 | **cat9 = 3.18 / 3.1789 / 3.198** ("first crossing above native") | post-FIX-A accept | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — crossing-above-native is raw-regime; passed WITH a ~4.3% per-token flip the scalar can't see | A3 / A2(loss) |
+| 16 | **cat9 +0.0176 EDGE over native** (3.1789 − 3.1613) | controlled pinned-probe delta | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — delta of two TIER-D numbers; aggregate draw UNRESOLVED (−0.43→~0) | A4 |
+| 17 | **cat9 = 2.1515** (pre-FIX-A) | historical B=1 current gate | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — shows raw cross-boot swing 2.15↔3.20 | A5 |
+| 18 | **chain5 = 2.66 … 3.2562; chain3 = 2.27/2.30; cat3w = 2.28; cat10 = 2.93** | reshape-arm accepts | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE — wide cross-boot spread is a raw-regime symptom; reshape STRUCTURE stands directionally, accepts TIER D | A6-A9 |
+| 19 | **per-event SUPERSET gate net +15** (21 lossless leaf-saves − 6 lossy − 0 spine_reg); 78% lossless | "cat9 IS a lossless superset of E5" | raw /v1/completions (1 boot, greedy) | 0 | 1 | **D** | RE-MEASURE — **MOST AT RISK**: single-boot RAW greedy that PASSED alongside the invisible ~4.3% flip. `0 spine_reg` (strict >best_lcp, 250 recs) is design-true; the +15 magnitude is TIER D. Re-run as the deployable arbiter on chat + temp 0.6 | A14 / L4 / V3 |
+| 20 | **23 flips cat9 vs native 3** = **6 leaf + 17 spine** decomp; de-cascaded 18/3 | flip-count + leaf-vs-spine attribution | raw /v1/completions | 0 | 1 | **D** | RE-MEASURE the COUNTS; the leaf-vs-spine KIND-logic + fork-dominated-hybrid + "native-3 NOT irreducible" stand as REASONING | A15 / L2-L3 |
+| 21 | **confound-free 7.39× flip rate** (cat9 43.3 vs native 5.9 /1000; de-cascaded 19 vs 3; held-trajectory = 0) | the "load-bearing defect rate"; "M-invariance vs topology BOTH refuted" | raw /v1/completions (3 arms, same boot) | 0 | 1 | **D** | RE-MEASURE the RATE — confound-free vs LENGTH/CASCADE/oracle-frame, NOT vs PROMPT-REGIME (all 3 arms degenerate). "The flip IS the fork" + every single-op lever dead = kernel/co-residency STRUCTURE likely stands; numbers TIER D | A17 / L5 / V2 |
+| 22 | **bag-TV native floor 0.0593 → superseded by 0.1133** (139/256 mismatch, single-draw) | temp-0.6 self-drift lossless threshold | raw /v1/completions | 0.6 top_p0.95 | 1/4 | **D** (prompt) / partial-A (temp,B) | RE-MEASURE — 0.1133 is the temp-0.6 B=4 CENTER but raw-prompt + single-draw (class #12); 0.0593 is UNKNOWN-REGIME hard-coded constant, superseded. Re-measure on chat → N=6-8 p95 | A18 / L11-L12 |
+| 23 | **cat9 22 raw flips ([6,6,4,6]) vs native ~3; cat10 22 ([2,6,8,6]) FLAT** | absolute flip count / reshape-flat | raw /v1/completions | 0 | 1 | **D** (deployment) / **E** (argmax-localization) | RE-MEASURE for deployment; valid as E for kernel argmax-localization. cat10==cat9 (22==22) "root sibling doesn't help lossless" stands directionally | A19 / L9 |
+| 24 | **native E5 vs oracle = 95 flips** (cat10 boot) | NOT a floor — off-trajectory artifact | raw /v1/completions | 0 | 1 | **E/D** | DO NOT read as a baseline (native forked the oracle greedy ~pos6; flagged in-doc) | L10 |
+| 25 | **temp-0.6 distributional TV(q,p)** — the DEPLOYMENT-BINDING lossless gate | the gate that decides lossless | (design: chat SWE, temp 0.6, B=4) | 0.6 | 4 | **A (TARGET — NOT YET MEASURED)** | **THE GAP** — NOT computable on banked data (q never captured in the recurrent frame; gold_margin q paired with WRONG chunked p at 4 pts). Zero TIER-A lossless number exists. Re-aim cab6c157 / wf w8q5jg1k0 points at it | L14 / V1 |
+| 26 | **native depth-3 (E3) accept = UNMEASURED** | the depth-matched bar for chain3/cat3w (d3) | — | — | — | **GAP** | CAPTURE before judging any d3 arm "slow/lossy" (depth-matched compare owed) | L-A4 |
+
+> **LOAD-BEARING CONSOLIDATED CONCLUSION:** The SPEED axis is regime-robust and STANDS (TIER C: cat9
+> 1.030× s/fwd vs native, the FIX-1/2/3 1.40×→1.03× lineage, the bandwidth floor). The ONLY
+> deployment-PROMPT lossless/accept evidence is the big-denom (row 12, TIER B: cat9 13.55% ≈ native 13.99%,
+> CIs overlap cat9 lower) — it STANDS as the strongest lossless evidence but is temp-0 argmax
+> (necessary-not-sufficient). EVERY OTHER accept/lossless number (rows 13-24) is TIER D — raw
+> `/v1/completions` off-distribution where native itself degenerates to ~1.589. **There is ZERO TIER-A
+> (deployment-binding) lossless number in the entire FR13 record** (row 25, the temp-0.6 distributional gate,
+> is not computable on banked data — that is THE re-measure target the re-aimed infra w8q5jg1k0 points at).
+
+---
+---
+
 # FR13 NUMBERS TRUST LEDGER — SLICE: SPEED NUMBERS
 
 Audit (CPU read-only, no boot; GPU re-aim wf w8q5jg1k0 in flight). Staples every SPEED
