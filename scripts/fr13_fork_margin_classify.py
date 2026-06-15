@@ -71,41 +71,68 @@ def _load_dump(path: str) -> list[dict[str, Any]]:
     return recs
 
 
-def _segment_prompt_steps(
-    dump: list[dict[str, Any]], served: list[int]
-) -> tuple[list[dict[str, Any]], list[int]] | None:
-    """Find the contiguous dump-step run whose committed_row concatenation == served.
+def _flatten_dump(dump: list[dict[str, Any]]) -> tuple[list[int], list[int]]:
+    """Flatten committed_row tokens in global step order -> (tokens, rec_index)."""
+    flat: list[int] = []
+    rec_of: list[int] = []
+    for j, r in enumerate(dump):
+        for t in r.get("committed_row", []):
+            flat.append(int(t))
+            rec_of.append(j)
+    return flat, rec_of
 
-    Returns (the dump records for this prompt, position->record-index map) or
-    None if no alignment found. Scans every candidate start so the first
-    matching contiguous run (rep1) is used; later reps re-emit identical rows.
+
+def _segment_prompt_steps(
+    dump: list[dict[str, Any]], flat: list[int], rec_of: list[int],
+    served: list[int], min_coverage: float = 0.95, max_head: int = 4,
+) -> tuple[int, int, dict[int, int]] | None:
+    """Align a prompt's served stream to the flattened committer-dump tokens.
+
+    The served stream (from the completions API) carries a 0..max_head-token
+    chat-template/BOS prefix that the raw committer dump does NOT contain, and
+    the dump also holds a warmup request + a second capture rep -- so we slide
+    served[head:] against the flattened committed tokens and take the
+    (head_skip, flat_offset) that maximises a CONTIGUOUS match. Returns
+    (head_skip, flat_offset, {served_pos -> dump_rec_index}) for the first
+    (rep1) high-coverage alignment, or None.
+
+    served_pos -> rec: served[head+i] committed flat[flat_offset+i], whose dump
+    record is rec_of[flat_offset+i]. The head-skip positions (0..head-1) have no
+    committer record (template tokens) and are simply absent from the map; a
+    fork there would mark join MISS (but clear-margin forks are model tokens, so
+    they land at served_pos >= head).
     """
-    n = len(dump)
-    target = list(served)
-    for start in range(n):
-        flat: list[int] = []
-        used: list[int] = []
-        pos_rec: list[int] = []
-        j = start
-        ok = True
-        while len(flat) < len(target) and j < n:
-            row = [int(t) for t in dump[j].get("committed_row", [])]
-            # the committer can over-emit the final bonus past max_tokens; clip
-            for t in row:
-                if len(flat) >= len(target):
-                    break
-                if t != target[len(flat)]:
-                    ok = False
-                    break
-                flat.append(t)
-                pos_rec.append(j)
-            if not ok:
-                break
-            used.append(j)
-            j += 1
-        if ok and len(flat) == len(target) and len(target) > 0:
-            return [dump[k] for k in used], pos_rec
-    return None
+    best = None  # (matched, head, off)
+    for head in range(0, max_head + 1):
+        ss = served[head:]
+        if not ss:
+            continue
+        for off in range(len(flat)):
+            k = 0
+            while (
+                k < len(ss)
+                and off + k < len(flat)
+                and flat[off + k] == ss[k]
+            ):
+                k += 1
+            if best is None or k > best[0]:
+                best = (k, head, off)
+        # if this head already covers the whole stream, stop early
+        if best and best[0] >= len(served) - head:
+            break
+    if best is None:
+        return None
+    matched, head, off = best
+    denom = max(1, len(served) - head)
+    if matched / denom < min_coverage:
+        return None
+    pos_to_rec: dict[int, int] = {}
+    for i in range(matched):
+        sp = head + i
+        fi = off + i
+        if 0 <= fi < len(rec_of):
+            pos_to_rec[sp] = rec_of[fi]
+    return head, off, pos_to_rec
 
 
 def _deciding_margin(rec: dict[str, Any]) -> tuple[float | None, str, dict | None]:
@@ -148,10 +175,25 @@ def main() -> int:
     ]
     per_prompt = rescore["per_prompt"]
 
-    # Segment the global dump-step sequence per prompt (the JOIN).
-    prompt_maps: list[tuple[list[dict], list[int]] | None] = []
+    # Flatten the committer dump once, then align each prompt's served stream
+    # (the JOIN). The completions stream carries a chat-template head-skip the
+    # raw committer dump lacks; we slide to find the contiguous alignment.
+    flat, rec_of = _flatten_dump(dump)
+    prompt_maps: list[tuple[int, int, dict[int, int]] | None] = []
+    prompt_align_meta: list[dict[str, Any]] = []
     for pid, served in enumerate(cap_served):
-        prompt_maps.append(_segment_prompt_steps(dump, served))
+        seg = _segment_prompt_steps(dump, flat, rec_of, served)
+        prompt_maps.append(seg)
+        if seg is None:
+            prompt_align_meta.append({"prompt_id": pid, "aligned": False})
+        else:
+            head, off, m = seg
+            prompt_align_meta.append({
+                "prompt_id": pid, "aligned": True, "head_skip": head,
+                "flat_offset": off, "n_positions_mapped": len(m),
+                "served_len": len(served),
+                "coverage": round(len(m) / max(1, len(served) - head), 4),
+            })
 
     n_join_ok = sum(1 for m in prompt_maps if m is not None)
 
@@ -164,7 +206,7 @@ def main() -> int:
     for pp in per_prompt:
         pid = int(pp["prompt_id"])
         seg = prompt_maps[pid] if pid < len(prompt_maps) else None
-        recs, pos_rec = (seg if seg else (None, None))
+        pos_to_rec = seg[2] if seg else None
         clear_positions = [
             p for p in pp.get("positions", []) if p.get("clear_margin")
         ]
@@ -172,8 +214,8 @@ def main() -> int:
             n_clear_total += 1
             pos = int(p["pos"])
             joined = None
-            if pos_rec is not None and 0 <= pos < len(pos_rec):
-                joined = dump[pos_rec[pos]]
+            if pos_to_rec is not None and pos in pos_to_rec:
+                joined = dump[pos_to_rec[pos]]
             rec = {
                 "prompt_id": pid,
                 "served_pos": pos,
@@ -243,6 +285,7 @@ def main() -> int:
         "n_prompts": len(cap_served),
         "n_prompts_dump_join_ok": n_join_ok,
         "join_nonvacuous": bool(n_join_ok == len(cap_served)),
+        "prompt_alignment": prompt_align_meta,
         "n_clear_margin_forks": n_clear_total,
         "n_joined_to_dump": n_join_to_dump,
         "n_join_miss": n_join_miss,
