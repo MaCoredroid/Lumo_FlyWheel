@@ -1,5 +1,16 @@
 # FR13 — Amplification-reduction / "keep drift in the argmax floor" levers (user 2026-06-15)
 
+> **SUPERSEDED AS THE PRIMARY LEVER (2026-06-15, by wsvy4vn5k / FR13_E5_VS_CAT9_SPINE_DRIFT.md, verify HOLDS).**
+> The study answered the gate-keeper question below: the 1.166x/layer amplification is **shared with E5** (E5
+> rides the SAME residual-stream compounding — GDN 1.075x/layer, full-attn 1.236x/layer), so amplification-
+> reduction **does NOT close the cat9-vs-E5 gap**. The ~14 excess (cat9-spine 17 vs E5-spine 3) is **co-residency
+> M-dependence** at the **L0 GDN birth-amplitude** (existence proof: `chain5`, cat9's exact kernels on the spine
+> alone at M=5, de-cascades to 2 ≤ native 3). The PRIMARY lever is now **make the spine rows M-INVARIANT** (reach
+> 17→~5), pursued by the math-expert design workflow (wdq98mpeo) + the GPU sub-op A/B. Amplification-reduction
+> survives only as an **orthogonal SECONDARY** for the residual 5→3 (it shrinks the shared compounding for both
+> arms equally, so at best it lowers the absolute floor, it does NOT differentially fix cat9). Keep the levers
+> below on the bench for that secondary use; do NOT pursue them as the path to native-3.
+
 Captured thoughts to spin out AFTER the E5-vs-cat9 spine-drift study (wsvy4vn5k) lands (it decides whether the
 amplification is reducible). A SECOND class of lever beyond the bit-exact-alignment grind we'd over-focused on.
 
