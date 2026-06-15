@@ -11208,6 +11208,30 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             (0,), (1,), (0, 0), (0, 1), (0, 0, 0), (0, 0, 1),
             (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1),
         ]
+        # FR13_RESHAPE_333 (wide-shape B=4 probe): depth-3 tree with 3
+        # candidates PER spine depth (root + the 2 interior spine depths),
+        # i.e. spine (top-1), rank-1 leaf (top-2), AND rank-2 leaf (top-3).
+        # 9 nodes, depth 3, pad16. Sorted (len, path) tree order:
+        #   slot 0 (0,)     spine0 (root draft = argmax)
+        #   slot 1 (1,)     root rank-1 leaf (root top-2)
+        #   slot 2 (2,)     root rank-2 leaf (root top-3)  <-- NEW child-rank 2
+        #   slot 3 (0,0)    spine1 (loop step 0 argmax)
+        #   slot 4 (0,1)    d1 rank-1 leaf (step 0 top-2)
+        #   slot 5 (0,2)    d1 rank-2 leaf (step 0 top-3)  <-- NEW child-rank 2
+        #   slot 6 (0,0,0)  spine2 (loop step 1 argmax)
+        #   slot 7 (0,0,1)  d2 rank-1 leaf (step 1 top-2)
+        #   slot 8 (0,0,2)  d2 rank-2 leaf (step 1 top-3)  <-- NEW child-rank 2
+        # The rank-2 token is a RUNNER-UP READ of topk(logits, 3)[:, 2] from
+        # the SAME spine logits (no extra lm-head). It is NEVER fed into a
+        # forward/recurrent state -- only packed into a leaf slot. Lossless
+        # by construction: parent/ancestry masks, committer path enum,
+        # eager-pack replay rows, conv prior windows ALL auto-derive from
+        # SPEC_CONFIG tree_choices (only the drafter packing is hand-rolled).
+        _fr10_threethree_choices = [
+            (0,), (1,), (2,),
+            (0, 0), (0, 1), (0, 2),
+            (0, 0, 0), (0, 0, 1), (0, 0, 2),
+        ]
         _fr10_tree_choices_current = [
             tuple(_x) for _x in getattr(self, "tree_choices", [])
         ]
@@ -11241,6 +11265,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             and int(self.num_speculative_tokens) == 10
             and _fr10_tree_choices_current == _fr10_cat10_choices
         )
+        # FR13_RESHAPE_333: exact-match guard for the 3-3-3 wide shape. Same
+        # num_speculative_tokens (9) as cat9, so the tree_choices comparison
+        # (NOT the count) is what disambiguates them -- the two choice lists
+        # are disjoint, so at most one of _fr10_is_caterpillar/_fr10_is_333 is
+        # ever True. Default cat9/cat3w/cat6root/cat10/chain* untouched.
+        _fr10_is_333 = (
+            _fr10_active_decode_mode == "tree_mtp"
+            and int(self.num_speculative_tokens) == 9
+            and _fr10_tree_choices_current == _fr10_threethree_choices
+        )
         # FR13_RESHAPE_DEPTH3: number of post-root spine forward steps and the
         # depth steps (1-based) at which the runner-up leaf is consumed. cat9
         # and chain5 keep the original depth-5 spine (4 steps, leaves at every
@@ -11249,16 +11283,31 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         # FR13_RESHAPE_DEPTH5: cat6root and cat10 keep the depth-5 spine (4
         # steps). cat6root consumes NO interior leaves (root sibling only);
         # cat10 consumes the d1..d4 leaves like cat9 (root sibling extra).
-        if _fr10_is_chain3 or _fr10_is_cat3w:
+        # FR13_RESHAPE_333: 3-3-3 is depth-3 -> 2 post-root spine forward
+        # steps (loop steps 0,1 == depths 2,3), same as chain3/cat3w.
+        if _fr10_is_chain3 or _fr10_is_cat3w or _fr10_is_333:
             _fr10_spine_steps = 2
         else:
             _fr10_spine_steps = 4
+        # FR13_RESHAPE_333: 3-3-3 consumes a rank-1 leaf at BOTH interior
+        # spine steps (loop steps 0,1 -> token_index+1 in {1,2}); it ALSO
+        # consumes a rank-2 leaf at the same steps (handled separately via
+        # _fr10_leaf2_steps below).
         if _fr10_is_spine_only or _fr10_is_chain3 or _fr10_is_cat6root:
             _fr10_leaf_steps = frozenset()
         elif _fr10_is_cat3w:
             _fr10_leaf_steps = frozenset({1})
+        elif _fr10_is_333:
+            _fr10_leaf_steps = frozenset({1, 2})
         else:
             _fr10_leaf_steps = frozenset({1, 2, 3, 4})
+        # FR13_RESHAPE_333: the SECOND runner-up (rank-2 / top-3) interior
+        # leaf steps. ONLY 3-3-3 reads a child-rank-2 token; every other
+        # shape leaves this empty (so its topk stays k=2, no behavior change).
+        if _fr10_is_333:
+            _fr10_leaf2_steps = frozenset({1, 2})
+        else:
+            _fr10_leaf2_steps = frozenset()
         if (
             _fr10_is_caterpillar
             or _fr10_is_spine_only
@@ -11266,6 +11315,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             or _fr10_is_cat3w
             or _fr10_is_cat6root
             or _fr10_is_cat10
+            or _fr10_is_333
         ):
             # FR10_CATERPILLAR_NATIVE_SPINE_TOP2: read-only drafter fix.
             # Run the native causal MTP spine unchanged for depth 5. At each
@@ -11376,21 +11426,36 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # FR13_RESHAPE_DEPTH5: cat6root and cat10 ALSO carry the (1,) root
             # sibling, so they read the rank-2 token from the SAME root logits
             # (one topk, no extra lm-head read), identical to cat3w.
+            # FR13_RESHAPE_333: 3-3-3 carries BOTH a (1,) root rank-1 leaf and
+            # a (2,) root rank-2 leaf, so it reads topk(root_logits, 3) and
+            # consumes indices[:, 1] (rank-1) + indices[:, 2] (rank-2). The
+            # rank-2 token is a runner-up read from the SAME logits (no extra
+            # lm-head), never fed into a forward/recurrent state.
             _fr10_consumes_root_leaf = (
                 _fr10_is_cat3w or _fr10_is_cat6root or _fr10_is_cat10
+                or _fr10_is_333
             )
+            _fr10_consumes_root_leaf2 = _fr10_is_333
             _fr10_root_leaf_token = None
+            _fr10_root_leaf2_token = None
+            # FR13_RESHAPE_333: read 3 (top-3) only when the root rank-2 leaf
+            # is consumed; otherwise keep k=2 (byte-identical to legacy).
+            _fr10_root_topk_k = 3 if _fr10_consumes_root_leaf2 else 2
             if _fr13_single_logits:
                 # Root top-2 is verified unused for cat9/chain5/chain3 (no
                 # tree node consumes the root runner-up: every choice starts
                 # with 0). cat3w/cat6root/cat10 read the rank-2 token from the
                 # SAME root logits tensor (one topk, no extra lm-head read).
+                # 3-3-3 additionally reads rank-2 (index 2) from that topk.
                 _fr10_logits = self.model.compute_logits(sample_hidden_states)
                 draft_token_ids = _fr10_logits.argmax(dim=-1)
                 if _fr10_consumes_root_leaf:
-                    _fr10_root_leaf_token = torch.topk(
-                        _fr10_logits, 2, dim=-1
-                    ).indices[:, 1]
+                    _fr10_root_topk = torch.topk(
+                        _fr10_logits, _fr10_root_topk_k, dim=-1
+                    ).indices
+                    _fr10_root_leaf_token = _fr10_root_topk[:, 1]
+                    if _fr10_consumes_root_leaf2:
+                        _fr10_root_leaf2_token = _fr10_root_topk[:, 2]
                 if _fr13_selfcheck:
                     _fr13_sc_check(
                         "root",
@@ -11399,12 +11464,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
             else:
                 _fr10_logits = self.model.compute_logits(sample_hidden_states)
-                _fr10_top2 = torch.topk(_fr10_logits, 2, dim=-1).indices
+                _fr10_top2 = torch.topk(
+                    _fr10_logits, _fr10_root_topk_k, dim=-1
+                ).indices
                 draft_token_ids = self._greedy_sample(sample_hidden_states)
                 if _fr10_consumes_root_leaf:
                     _fr10_root_leaf_token = _fr10_top2[:, 1]
+                    if _fr10_consumes_root_leaf2:
+                        _fr10_root_leaf2_token = _fr10_top2[:, 2]
             _fr10_spine_tokens = [draft_token_ids]
             _fr10_leaf_tokens = []
+            # FR13_RESHAPE_333: parallel list of the rank-2 (top-3) interior
+            # leaves, collected only at _fr10_leaf2_steps (3-3-3 only).
+            _fr10_leaf2_tokens = []
 
             # FR13_CHASE_DIAG (superset-chase Step 1; ONE flag, default OFF,
             # inert): (i) per-event INTEGER record {token_indices_to_sample -
@@ -11710,24 +11782,45 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # step), so this is byte-identical to the legacy
                     # "not spine_only" branch; cat3w = {1} (d1 (0,1) only);
                     # chain5/chain3 = {} (no leaves).
+                    # FR13_RESHAPE_333: this step is in BOTH _fr10_leaf_steps
+                    # and _fr10_leaf2_steps ({1,2}); read top-3 ONCE and pack
+                    # rank-1 (index 1) + rank-2 (index 2). The topk widens to
+                    # k=3 ONLY for 3-3-3 (every other shape keeps k=2 == the
+                    # legacy byte-identical read).
                     if (token_index + 1) in _fr10_leaf_steps:
+                        _fr10_step_topk_k = (
+                            3 if (token_index + 1) in _fr10_leaf2_steps else 2
+                        )
                         _fr10_step_top2 = torch.topk(
-                            _fr10_step_logits, 2, dim=-1
+                            _fr10_step_logits, _fr10_step_topk_k, dim=-1
                         ).indices
                         _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
+                        if (token_index + 1) in _fr10_leaf2_steps:
+                            _fr10_leaf2_tokens.append(_fr10_step_top2[:, 2])
                 else:
                     _fr10_step_logits = self.model.compute_logits(
                         last_hidden_states[:batch_size]
                     )
-                    _fr10_step_top2 = torch.topk(_fr10_step_logits, 2, dim=-1).indices
+                    # FR13_RESHAPE_333: widen the legacy topk to k=3 only when
+                    # this step packs a rank-2 leaf; otherwise keep k=2 (op
+                    # order unchanged vs legacy cat9: topk before greedy_sample).
+                    _fr10_step_topk_k = (
+                        3 if (token_index + 1) in _fr10_leaf2_steps else 2
+                    )
+                    _fr10_step_top2 = torch.topk(
+                        _fr10_step_logits, _fr10_step_topk_k, dim=-1
+                    ).indices
                     draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
                     _fr10_spine_tokens.append(draft_token_ids)
-                    # FR13_RESHAPE_DEPTH3: op order unchanged vs legacy cat9
-                    # (top2 before greedy_sample); only the leaf append is
-                    # depth-gated. cat9 = {1,2,3,4} => appends every step =
-                    # byte-identical; cat3w = {1}; chain shapes = {}.
+                    # FR13_RESHAPE_DEPTH3: only the leaf append is depth-gated.
+                    # cat9 = {1,2,3,4} => appends every step = byte-identical;
+                    # cat3w = {1}; chain shapes = {}.
+                    # FR13_RESHAPE_333: rank-1 at _fr10_leaf_steps, rank-2 at
+                    # _fr10_leaf2_steps (both {1,2} for 3-3-3).
                     if (token_index + 1) in _fr10_leaf_steps:
                         _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
+                        if (token_index + 1) in _fr10_leaf2_steps:
+                            _fr10_leaf2_tokens.append(_fr10_step_top2[:, 2])
 
             if _fr10_is_spine_only or _fr10_is_chain3:
                 # FR13_RESHAPE_DEPTH3 chain3 = pure depth-3 spine = the same
@@ -11824,6 +11917,53 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     ],
                     dim=1,
                 )
+            elif _fr10_is_333:
+                # FR13_RESHAPE_333: 9-node flat order = vLLM sorted (len, path)
+                # tree order. 3 candidates per depth (spine, rank-1, rank-2).
+                # Node id (0-based slot) -> path:
+                #   0 (0,)     spine0 (root draft = argmax)
+                #   1 (1,)     ROOT_LEAF  (root rank-1, root topk[:,1])
+                #   2 (2,)     ROOT_LEAF2 (root rank-2, root topk[:,2])
+                #   3 (0,0)    spine1 (loop step 0 argmax)
+                #   4 (0,1)    leaf0  (d2 rank-1, step 0 topk[:,1])
+                #   5 (0,2)    leaf2_0 (d2 rank-2, step 0 topk[:,2])
+                #   6 (0,0,0)  spine2 (loop step 1 argmax)
+                #   7 (0,0,1)  leaf1  (d3 rank-1, step 1 topk[:,1])
+                #   8 (0,0,2)  leaf2_1 (d3 rank-2, step 1 topk[:,2])
+                # _fr10_leaf_tokens = [d2_rank1, d3_rank1] (steps {1,2});
+                # _fr10_leaf2_tokens = [d2_rank2, d3_rank2] (steps {1,2}).
+                if (
+                    _fr10_root_leaf_token is None
+                    or _fr10_root_leaf2_token is None
+                ):
+                    raise RuntimeError(
+                        "FR13_RESHAPE_333 engaged but root runner-up tokens "
+                        "(rank-1/rank-2) were not captured (drafter packing "
+                        "would be vacuous)"
+                    )
+                if len(_fr10_leaf_tokens) != 2 or len(_fr10_leaf2_tokens) != 2:
+                    raise RuntimeError(
+                        "FR13_RESHAPE_333 engaged but interior leaf lists are "
+                        "the wrong length (rank-1="
+                        + str(len(_fr10_leaf_tokens))
+                        + " rank-2="
+                        + str(len(_fr10_leaf2_tokens))
+                        + ", expected 2 each)"
+                    )
+                _fr10_packed = torch.stack(
+                    [
+                        _fr10_spine_tokens[0],
+                        _fr10_root_leaf_token,
+                        _fr10_root_leaf2_token,
+                        _fr10_spine_tokens[1],
+                        _fr10_leaf_tokens[0],
+                        _fr10_leaf2_tokens[0],
+                        _fr10_spine_tokens[2],
+                        _fr10_leaf_tokens[1],
+                        _fr10_leaf2_tokens[1],
+                    ],
+                    dim=1,
+                )
             else:
                 _fr10_packed = torch.stack(
                     [
@@ -11868,6 +12008,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 else "cat3w" if _fr10_is_cat3w
                                 else "cat6root" if _fr10_is_cat6root
                                 else "cat10" if _fr10_is_cat10
+                                else "333" if _fr10_is_333
                                 else "chain5" if _fr10_is_spine_only
                                 else "cat9"
                             ),
@@ -11879,6 +12020,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 []
                                 if not _fr10_leaf_tokens
                                 else torch.stack(_fr10_leaf_tokens, dim=1).detach().cpu().tolist()
+                            ),
+                            # FR13_RESHAPE_333: rank-2 (child-rank-2) leaves;
+                            # empty for every shape except 3-3-3.
+                            "leaves2": (
+                                []
+                                if not _fr10_leaf2_tokens
+                                else torch.stack(_fr10_leaf2_tokens, dim=1).detach().cpu().tolist()
+                            ),
+                            "root_leaf2": (
+                                None
+                                if _fr10_root_leaf2_token is None
+                                else _fr10_root_leaf2_token.detach().cpu().tolist()
                             ),
                         }) + chr(10)
                     )
@@ -12290,6 +12443,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr10_is_cat3w
                 or _fr10_is_cat6root
                 or _fr10_is_cat10
+                or _fr10_is_333
             )
             and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
         ):
