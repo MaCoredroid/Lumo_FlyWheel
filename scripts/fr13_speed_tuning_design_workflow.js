@@ -32,6 +32,17 @@ const BASE = [
 'native E5; depth-3 shapes -> native E3, which is UNMEASURED - capture before judging any d3 arm) and PAIRED',
 'teacher-forced (the aggregate cross-trajectory accept is class-12 confounded). No hand-rolled TPS decomposition',
 'as a MEASURED fact (all per-forward ms are INFERRED until the clean GPU measurement).',
+'',
+'TWO MEASUREMENT TIERS (user 2026-06-15): (1) DEV-ITERATION = B=1 EAGER decode_seconds (above) for fast cheap',
+'tuning of each change during the build loop. (2) FINAL JUDGMENT / candidate comparison = B=4 + CUDA-GRAPH-',
+'CAPTURED + 4 SWE-Verified tasks + ~30min PER CANDIDATE (the DEPLOYABLE gate; B=4 changes co-residency, CUDA-',
+'graph capture is the deployed mode, SWE-Verified 4 tasks = real workload, 30min = denominator). EVERY candidate',
+'(OPT-1 OFF/ON, OPT-A OFF/ON, EACH reshape tree incl cat10) gets the B=4/CUDA-captured/4-SWE-task/30min final',
+'comparison, and the LOSSLESS gate is RE-CONFIRMED at B=4 (co-residency changes it - bit-exact at B=1 does NOT',
+'imply bit-exact at B=4). CONSEQUENCE FOR DESIGN: each lever MUST be CUDA-GRAPH-CAPTURABLE and B=4-safe - the',
+'OPT-1 sync-kill side-stream/CUDA-event must be capture-safe (no host sync inside the captured region), OPT-A\'s',
+'config must capture at B=4 M-tiles, and each reshape tree must capture + behave at B=4 co-residency. A lever',
+'that cannot B=4/CUDA-capture is NOT shippable - flag it in the design.',
 ].join('\n');
 
 phase('Design');
@@ -88,7 +99,7 @@ const SYNTH_SCHEMA = {
   required: ['sequencedCampaign','sharedMeasurementProtocol','losslessGatePerChange','committed','notes'],
   properties: {
     sequencedCampaign: { type: 'string', description: 'the sequenced speed-tuning GPU campaign across OPT-1 (sync-kill) + OPT-A (fp8 tune) + topology reshape (cat10 + remove-deep-add-root), the order + dependencies + which to measure first' },
-    sharedMeasurementProtocol: { type: 'string', description: 'the shared accounting-correct measurement (decode_seconds speed basis, depth-matched + paired-teacher-forced accept, confound-free instrument, prelaunch, BI=0, engagement asserts) - explicitly avoiding the cat10 denominator/trajectory artifact' },
+    sharedMeasurementProtocol: { type: 'string', description: 'the TWO-TIER measurement: (1) B=1 eager decode_seconds for dev-iteration; (2) FINAL JUDGMENT = B=4 + CUDA-graph-captured + 4 SWE-Verified tasks + ~30min PER candidate (lossless re-confirmed at B=4). depth-matched + paired-teacher-forced accept, confound-free instrument, prelaunch, BI=0, engagement asserts - explicitly avoiding the cat10 denominator/trajectory artifact + each lever\'s CUDA-capture/B=4 compat' },
     losslessGatePerChange: { type: 'string', description: 'the per-change lossless gate held throughout (byte-identical streams + accept/event unchanged + per-token argmax probe + regular-decode pristine), how it is applied to each lever' },
     committed: { type: 'string' },
     notes: { type: 'string' },
@@ -120,6 +131,8 @@ const v = await agent(
   + 'relocates the sync (does not restore run-ahead) or is not pure-integer lossless; if the cat10/reshape '
   + 'measurement re-makes the class-12 trajectory/denominator artifact (must be depth-matched + paired teacher-'
   + 'forced + per-event) or is not depth-matched (d3->E3 unmeasured); if the lossless gate is relaxed for speed; '
+  + 'if the FINAL-JUDGMENT tier is missing or weaker than B=4 + CUDA-graph-captured + 4 SWE-Verified tasks + ~30min '
+  + 'per candidate (with lossless re-confirmed at B=4), or a lever\'s CUDA-capture/B=4-safety is not addressed; '
   + 'or if a lever is a reward-hack (WY parked; multispine/copy/dense banned; OPT-A is the only ruled-in shared '
   + 'tune). research-before-deadend. No close/pass-fail.',
   { label: 'verify-speed-tuning', phase: 'Verify', schema: V_SCHEMA, agentType: 'general-purpose' }
