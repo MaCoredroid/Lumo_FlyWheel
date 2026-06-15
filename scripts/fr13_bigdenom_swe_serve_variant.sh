@@ -105,8 +105,14 @@ if [[ "$LAUNCHER" == "locked" ]]; then
   scripts/fr13_launch_locked.sh > "$ARMDIR/launch.log" 2>&1
   RC=$?
 else
+  # Reshape arms boot the LOCKED cat9 pipeline flags (FIX-1/2/3/A, REPLAY_ROUTE,
+  # FA2_TREE_BIAS, CONV_COMMITTED_PATH) + the BAKED in_proj_ba pad
+  # (LUMO_FB_KERNEL_ROWS=1, LUMO_FB_PROJ_PAD_ROWS=16) so the only difference vs
+  # cat9 is the TREE shape. The forked launcher defaults these flags ON except
+  # the LUMO_FB pad, which we pin here for a like-for-like vs the deployed cat9.
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=0.82 MAX_NUM_SEQS=1 \
   TREE="$TREEARG" FR10_METRICS=0 BATCH_INVARIANT=0 \
+  LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 \
   FR13_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \
   scripts/fr13_launch_forked_fa2_tree_server.sh > "$ARMDIR/launch.log" 2>&1
   RC=$?
