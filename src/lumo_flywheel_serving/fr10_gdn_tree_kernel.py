@@ -103,6 +103,40 @@ def scan_align_mode() -> str:
     return raw
 
 
+# FR13_NPAD_INVARIANT: the canonical N_PAD-invariant reduction order.
+# The deployed cat9 tree has N_PAD = 1 << (9-1).bit_length() = 16; smaller trees
+# (e.g. the leaf-free chain5 spine, N_PAD = 8) recompile the scan/reduction loop
+# spans (`tl.static_range(0, N_PAD)`, `offs_n = tl.arange(0, N_PAD)`, the parent
+# `tl.sum(tl.where(offs_n == j, ...))` reduction) to a SMALLER unrolled FMA tree,
+# so the SAME spine node gets a different rounding order (bug-class #10
+# codegen-identity; MEASURED state gap 0.0289). The fix pins the loop bound +
+# offs_n lane count to this fixed N_FIXED for ALL tree sizes so the reduction
+# order is identical regardless of how many leaves co-reside. The existing
+# `< N_ACTUAL` masks make the [N_ACTUAL, N_FIXED) lanes contribute exactly 0.0
+# (tl.where(...) already does this), so the computed value is unchanged and only
+# the codegen/order is canonicalized. This is COMPUTE-ONLY: no copy, no HBM
+# staging, no geometry change (num_warps stays the deployed 8).
+_FR13_N_FIXED = 16
+
+
+def npad_invariant_on() -> bool:
+    """Whether the FR13_NPAD_INVARIANT canonical reduction order is enabled.
+
+    Default OFF: when ``FR13_NPAD_INVARIANT`` is unset/0/false the kernel loops
+    over the per-tree ``N_PAD`` (the locked cat9 served path). When ON, the scan
+    loop bound, ``offs_n`` lane count, and ``h_cache`` row span are pinned to the
+    fixed ``_FR13_N_FIXED`` (= the deployed cat9 ``N_PAD`` = 16) for every tree
+    size, canonicalizing the scan/reduction FMA order across tree sizes. The
+    ``< N_ACTUAL`` masks are kept, so inactive lanes contribute exact 0.0 and the
+    computed value is byte-unchanged for the deployed cat9 tree (whose N_PAD is
+    already 16); only smaller trees see the reduction order pinned. Default OFF
+    => the ``N_LOOP`` constexpr equals ``N_PAD`` and the served launch is
+    byte-identical to the prior locked path (bug-class #10 constexpr-dead).
+    """
+    raw = os.environ.get("FR13_NPAD_INVARIANT", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 @dataclass(frozen=True)
 class Tree:
     parent: tuple[int, ...]
@@ -542,12 +576,21 @@ def _tree_gdn_kernel(
     COUNT_INVOCATION: tl.constexpr,
     STORE_NODE_STATES: tl.constexpr,
     SCAN_ALIGN: tl.constexpr = False,
+    N_LOOP: tl.constexpr = 0,
 ):
+    # N_LOOP is the span (loop bound, offs_n lane count, h_cache rows) of the
+    # scan/reduction. Default (0) means "use N_PAD" -- the per-tree padded span
+    # of the locked served path. When FR13_NPAD_INVARIANT pins it to the fixed
+    # N_FIXED (>= N_PAD), the reduction FMA order is canonical across tree sizes
+    # while the strict_mask buffer keeps its true N_PAD width (mask reads are
+    # guarded so lanes in [N_PAD, N_LOOP) read no ancestry and contribute 0.0;
+    # they are also >= N_ACTUAL so they never load/store real data).
+    N_SPAN: tl.constexpr = N_PAD if N_LOOP == 0 else N_LOOP
     pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
     head_group = NUM_VH // NUM_KH
     pid_kh = pid_vh // head_group
-    offs_n = tl.arange(0, N_PAD)
+    offs_n = tl.arange(0, N_SPAN)
     offs_k = tl.arange(0, DIM_K)
     offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
     v_mask = offs_v < DIM_V
@@ -578,11 +621,26 @@ def _tree_gdn_kernel(
     # Sequential rank-1 tree scan. Each row caches the post-token state for one
     # tree node, so children start from their parent's fp32 checkpoint without
     # reloading h0 or replaying ancestors from HBM.
-    h_cache = tl.zeros((N_PAD, BLOCK_V, DIM_K), dtype=tl.float32)
-    for i in tl.static_range(0, N_PAD):
+    h_cache = tl.zeros((N_SPAN, BLOCK_V, DIM_K), dtype=tl.float32)
+    for i in tl.static_range(0, N_SPAN):
         state_i = b_h0
         for j in tl.static_range(0, i):
-            ancestor = (tl.load(strict_mask + i * N_PAD + j) != 0) & (j < N_ACTUAL)
+            # The strict_mask buffer is N_PAD x N_PAD. When the canonical-order
+            # span exceeds N_PAD (N_LOOP != 0), lanes i,j in [N_PAD, N_SPAN)
+            # must NOT read OOB: a guarded load returns 0 (no ancestry); those
+            # lanes are also >= N_ACTUAL so they contribute exactly 0.0. When
+            # N_LOOP == 0 (default served path) the span equals N_PAD, every
+            # i,j < N_PAD, and the load is the EXACT prior unguarded form --
+            # constexpr-dead guard => byte-identical codegen (bug-class #10).
+            if N_LOOP == 0:
+                anc_bit = tl.load(strict_mask + i * N_PAD + j)
+            else:
+                anc_bit = tl.load(
+                    strict_mask + i * N_PAD + j,
+                    mask=(i < N_PAD) & (j < N_PAD),
+                    other=0,
+                )
+            ancestor = (anc_bit != 0) & (j < N_ACTUAL)
             h_j = tl.sum(
                 tl.where((offs_n == j)[:, None, None], h_cache, 0.0),
                 axis=0,
@@ -1829,6 +1887,22 @@ def launch_tree_gdn_prepared(
     # byte-identical to the locked path. The diagnostic geom-override above is
     # INDEPENDENT of this (it predates the unified flag and stays value-neutral).
     _scan_align = scan_align_on()
+    # FR13_NPAD_INVARIANT: pin the scan loop bound + offs_n lane count + h_cache
+    # row span to the fixed N_FIXED for ALL tree sizes so the reduction FMA order
+    # is canonical regardless of how many leaves co-reside (bug-class #10
+    # codegen-identity; closes the MEASURED 0.0289 leaf-co-residency state gap).
+    # N_LOOP=0 (default) => the kernel's N_SPAN equals N_PAD and the launch is
+    # byte-identical to the locked path. num_warps stays the deployed value (8);
+    # this is COMPUTE-ONLY (no copy, no HBM staging, geometry HELD), NOT the
+    # refuted recompute route (which changed geometry to native BV32/w1/s3).
+    _n_loop = 0
+    if npad_invariant_on():
+        if n_pad > _FR13_N_FIXED:
+            raise ValueError(
+                f"FR13_NPAD_INVARIANT N_FIXED={_FR13_N_FIXED} < n_pad={n_pad}; "
+                "the canonical span must cover the tree's padded node block"
+            )
+        _n_loop = _FR13_N_FIXED
     # FR13_SCAN_ALIGN_MODE=recompute: the DEPLOYABLE geometry fix. Replace the
     # h_cache scan with the recompute-from-spine kernel at native BV32/w1/s3
     # (SRAM EXIT-2). Spill-free + removes leaf co-residency. Falls back to the
@@ -1915,6 +1989,7 @@ def launch_tree_gdn_prepared(
         COUNT_INVOCATION=count_invocation,
         STORE_NODE_STATES=store_node_states,
         SCAN_ALIGN=_scan_align,
+        N_LOOP=_n_loop,
         num_warps=_num_warps,
         **_extra_launch_kwargs,
     )
