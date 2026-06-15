@@ -6061,6 +6061,27 @@ _FR13_EAGER_PACK = True
 _FR13_EAGER_PACK_NEEDLE_DONE = False
 _FR13_EAGER_PACK_STAGE = {}
 
+# FR13_COMMITTER_SYNCKILL (OPT-1 G2, ONE flag, default OFF, gated UNDER
+# FR13_GPU_COMMITTER). The GPU committer's first draft still blocks the MAIN
+# launching thread: the EAGER_PACK packed committer-input DtoH+sync (:6761) and
+# the kernel's output .cpu() readback both gate the main thread, so the flag-ON
+# path was SLOWER than OFF (the decision is on-GPU + lossless but the run-ahead
+# is not restored). G2 keeps the committer inputs DEVICE-resident (skips :6761),
+# runs the decision kernel on device tensors, writes the SAME-STEP serving
+# outputs (output_token_ids / accepted_tree_rows / GDN path/len) DEVICE->DEVICE
+# from the kernel's device outputs, and moves the host materialisation onto a
+# side stream + CUDA event (native AsyncGPUModelRunnerOutput shape) so the main
+# thread launches the next forward WITHOUT blocking. PURE-INTEGER, location-only
+# -> byte-identical to the host committer for every input; OFF == the current
+# :6761 + first-draft-kernel/legacy path verbatim. NEVER bind into a config
+# without FR13_GPU_COMMITTER=1 (synckill is meaningless without the GPU
+# committer). Read once at import (flag plan).
+_FR13_COMMITTER_SYNCKILL = (
+    __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'
+    and __import__('os').environ.get('FR13_COMMITTER_SYNCKILL', '0') == '1'
+)
+_FR13_COMMITTER_SYNCKILL_NEEDLE_DONE = False
+
 # FR13_COMMIT_ARGMAX_GATE (ONE flag, default OFF, inert): per-served-token
 # in-process committer-row argmax gate. At each committed/served token the
 # greedy committer records, to a jsonl, the row it ACTUALLY indexed into the
@@ -6697,6 +6718,11 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     )
     _ep_flag_rows = None
     _ep_stacks = None
+    # _ep_total is the packed committer-input DtoH element count (needle arg).
+    # Under SYNCKILL the big committer-input pack is skipped (only the tiny
+    # counts+flags meta is moved), so seed it 0 so the needle never NameErrors
+    # on the synckill branch.
+    _ep_total = 0
     _ep_replay_route_on = (
         True
     )
@@ -6728,71 +6754,141 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     'stacked replay-flag matrix from GDN metadata-builder '
                     'init; missing (class 9 fail-loud, no silent fallback)'
                 )
-        _ep_srcs = [
-            _ep_parents_src,
-            _ep_drafts_src,
-            _ep_ptgt_src,
-            _ep_stgt_src,
-            _ep_bonus_src,
-        ]
-        if _ep_counts_src is not None:
-            _ep_srcs.append(_ep_counts_src)
-        if _ep_stacks is not None:
-            _ep_srcs.append(_ep_stacks['flags'].detach().reshape(-1))
-        _ep_total = 0
-        for _ep_s in _ep_srcs:
-            _ep_total += int(_ep_s.numel())
-        _ep_dev, _ep_cpu, _ep_evt, _ep_evt_rec = _fr13_eager_pack_stage(
-            'committer_dtoh',
-            _ep_total,
-            tree_parent_indices.device,
-            torch.int64,
-        )
-        _ep_off = 0
-        for _ep_s in _ep_srcs:
-            _ep_n = int(_ep_s.numel())
-            if _ep_n:
-                # Async device-side slice/cast copies into disjoint staging
-                # (gather-then-scatter; staging never aliases a source —
-                # class 3 n/a but preserved by construction).
-                _ep_dev[_ep_off:_ep_off + _ep_n].copy_(_ep_s)
-            _ep_off += _ep_n
-        _ep_cpu[:_ep_total].copy_(_ep_dev[:_ep_total], non_blocking=True)
-        torch.cuda.current_stream(tree_parent_indices.device).synchronize()
-        _ep_vals = _ep_cpu[:_ep_total].tolist()
-        _ep_off = 0
-        _ep_n = int(_ep_parents_src.numel())
-        parents_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
-        _ep_off += _ep_n
-        _ep_n = int(_ep_drafts_src.numel())
-        drafts_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
-        _ep_off += _ep_n
-        _ep_n = int(_ep_ptgt_src.numel())
-        parent_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
-        _ep_off += _ep_n
-        _ep_n = int(_ep_stgt_src.numel())
-        self_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
-        _ep_off += _ep_n
-        _ep_n = int(_ep_bonus_src.numel())
-        bonus_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
-        _ep_off += _ep_n
-        if _ep_counts_src is not None:
-            _ep_n = int(_ep_counts_src.numel())
-            counts = _ep_vals[_ep_off:_ep_off + _ep_n]
-            _ep_off += _ep_n
-        else:
-            # counts kept on its existing CPU branch when already a list
-            # (design 2a): no transport involved.
-            counts = [int(x) for x in num_draft_tokens]
-        if _ep_stacks is not None:
-            _ep_flag_flat = _ep_vals[_ep_off:]
-            _ep_flag_rows = [
-                (
-                    int(_ep_flag_flat[2 * _ep_i]),
-                    int(_ep_flag_flat[2 * _ep_i + 1]),
+        if _FR13_COMMITTER_SYNCKILL:
+            # OPT-1 G2.a: the GPU committer DECISION reads the DEVICE source
+            # tensors directly (the hook's synckill branch), so the big
+            # committer-input DtoH+sync (parents/drafts/ptgt/stgt/bonus) is NOT
+            # done on the main thread -- this is the :6761 sync that census-
+            # measured blocks the main thread 91.9% of the verify window. Only
+            # counts (n_req ints) + the replay flag-rows (2*n_layers ints) are
+            # read here; both are tiny, packed into ONE small DtoH that rides
+            # the committer side stream + CUDA event, and synchronized ONCE
+            # (n_req+2*n_layers ints, not the full O(nodes) committer inputs).
+            # The host committer-input lists are NEVER materialised (the legacy
+            # per-node loop iterates EMPTY under the GPU committer; the kernel's
+            # acc_path replaces the host _winning_path_prefix re-derivation).
+            parents_cpu = None
+            drafts_cpu = None
+            parent_targets_cpu = None
+            self_targets_cpu = None
+            bonus_targets_cpu = None
+            _ep_sk_srcs = []
+            if _ep_counts_src is not None:
+                _ep_sk_srcs.append(_ep_counts_src)
+            if _ep_stacks is not None:
+                _ep_sk_srcs.append(_ep_stacks['flags'].detach().reshape(-1))
+            _ep_sk_total = 0
+            for _ep_s in _ep_sk_srcs:
+                _ep_sk_total += int(_ep_s.numel())
+            _ep_total = _ep_sk_total  # truthful needle telemetry (small meta only)
+            if _ep_sk_total:
+                _ep_sk_dev, _ep_sk_cpu, _ep_sk_evt, _ep_sk_rec = (
+                    _fr13_eager_pack_stage(
+                        'committer_synckill_meta',
+                        _ep_sk_total,
+                        tree_parent_indices.device,
+                        torch.int64,
+                    )
                 )
-                for _ep_i in range(len(_ep_flag_flat) // 2)
+                if _ep_sk_rec[0]:
+                    _ep_sk_evt.synchronize()
+                _ep_off = 0
+                for _ep_s in _ep_sk_srcs:
+                    _ep_n = int(_ep_s.numel())
+                    if _ep_n:
+                        _ep_sk_dev[_ep_off:_ep_off + _ep_n].copy_(_ep_s)
+                    _ep_off += _ep_n
+                _ep_sk_cpu[:_ep_sk_total].copy_(
+                    _ep_sk_dev[:_ep_sk_total], non_blocking=True
+                )
+                _ep_sk_evt.record()
+                _ep_sk_rec[0] = True
+                _ep_sk_evt.synchronize()
+                _ep_vals = _ep_sk_cpu[:_ep_sk_total].tolist()
+            else:
+                _ep_vals = []
+            _ep_off = 0
+            if _ep_counts_src is not None:
+                _ep_n = int(_ep_counts_src.numel())
+                counts = _ep_vals[_ep_off:_ep_off + _ep_n]
+                _ep_off += _ep_n
+            else:
+                counts = [int(x) for x in num_draft_tokens]
+            if _ep_stacks is not None:
+                _ep_flag_flat = _ep_vals[_ep_off:]
+                _ep_flag_rows = [
+                    (
+                        int(_ep_flag_flat[2 * _ep_i]),
+                        int(_ep_flag_flat[2 * _ep_i + 1]),
+                    )
+                    for _ep_i in range(len(_ep_flag_flat) // 2)
+                ]
+        else:
+            _ep_srcs = [
+                _ep_parents_src,
+                _ep_drafts_src,
+                _ep_ptgt_src,
+                _ep_stgt_src,
+                _ep_bonus_src,
             ]
+            if _ep_counts_src is not None:
+                _ep_srcs.append(_ep_counts_src)
+            if _ep_stacks is not None:
+                _ep_srcs.append(_ep_stacks['flags'].detach().reshape(-1))
+            _ep_total = 0
+            for _ep_s in _ep_srcs:
+                _ep_total += int(_ep_s.numel())
+            _ep_dev, _ep_cpu, _ep_evt, _ep_evt_rec = _fr13_eager_pack_stage(
+                'committer_dtoh',
+                _ep_total,
+                tree_parent_indices.device,
+                torch.int64,
+            )
+            _ep_off = 0
+            for _ep_s in _ep_srcs:
+                _ep_n = int(_ep_s.numel())
+                if _ep_n:
+                    # Async device-side slice/cast copies into disjoint staging
+                    # (gather-then-scatter; staging never aliases a source —
+                    # class 3 n/a but preserved by construction).
+                    _ep_dev[_ep_off:_ep_off + _ep_n].copy_(_ep_s)
+                _ep_off += _ep_n
+            _ep_cpu[:_ep_total].copy_(_ep_dev[:_ep_total], non_blocking=True)
+            torch.cuda.current_stream(tree_parent_indices.device).synchronize()
+            _ep_vals = _ep_cpu[:_ep_total].tolist()
+            _ep_off = 0
+            _ep_n = int(_ep_parents_src.numel())
+            parents_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+            _ep_n = int(_ep_drafts_src.numel())
+            drafts_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+            _ep_n = int(_ep_ptgt_src.numel())
+            parent_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+            _ep_n = int(_ep_stgt_src.numel())
+            self_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+            _ep_n = int(_ep_bonus_src.numel())
+            bonus_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+            if _ep_counts_src is not None:
+                _ep_n = int(_ep_counts_src.numel())
+                counts = _ep_vals[_ep_off:_ep_off + _ep_n]
+                _ep_off += _ep_n
+            else:
+                # counts kept on its existing CPU branch when already a list
+                # (design 2a): no transport involved.
+                counts = [int(x) for x in num_draft_tokens]
+            if _ep_stacks is not None:
+                _ep_flag_flat = _ep_vals[_ep_off:]
+                _ep_flag_rows = [
+                    (
+                        int(_ep_flag_flat[2 * _ep_i]),
+                        int(_ep_flag_flat[2 * _ep_i + 1]),
+                    )
+                    for _ep_i in range(len(_ep_flag_flat) // 2)
+                ]
     else:
         parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
         drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
@@ -7363,7 +7459,48 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 ) from _fmd_exc
         start += node_count
 
-    if _ep_active:
+    # OPT-1 G2.b device->device writeback engages ONLY when the synckill flag
+    # is on AND the hook actually ran the device arm this step (_fr13_dev_out
+    # bound). The hook always binds it under the flag; the try-guard keeps the
+    # helper robust if the hook patch is absent (NameError => legacy path).
+    _fr13_synckill_writeback = False
+    if _FR13_COMMITTER_SYNCKILL:
+        try:
+            _fr13_synckill_writeback = bool(
+                _fr13_gpu_committer and _fr13_dev_out is not None
+            )
+        except NameError:
+            _fr13_synckill_writeback = False
+    if _fr13_synckill_writeback:
+        # OPT-1 G2.b: the SAME-STEP serving outputs (output_token_ids /
+        # accepted_tree_rows = the next forward's input) are written
+        # DEVICE->DEVICE from the kernel's device outputs -- NO host round-trip,
+        # NO main-thread sync. The kernel pads out_tokens with _PAD=-1 (= the
+        # legacy fill_(-1) value), and rows are truncated to max_spec_len+1 by
+        # the kernel, so this copy is byte-identical to the host scatter:
+        #   output_token_ids[r, :k] = out_tokens[r, :k];  rest stays -1.
+        _ep_out_rows_n = int(output_token_ids.size(0))
+        _ep_out_cols = int(output_token_ids.size(1))
+        _ot_dev = _fr13_dev_out['out_tokens']
+        _ar_dev = _fr13_dev_out['accepted_row']
+        _ot_nreq = int(_ot_dev.size(0))
+        _ot_cols = int(_ot_dev.size(1))
+        if _ot_nreq > _ep_out_rows_n:
+            raise RuntimeError(
+                'FR13_COMMITTER_SYNCKILL: committer rows exceed output buffer: '
+                + str(_ot_nreq) + ' > ' + str(_ep_out_rows_n)
+            )
+        if _ot_cols > _ep_out_cols:
+            # A committed row could overflow the destination columns. The host
+            # path would equally fail; fail loud (class 9, no silent truncate).
+            raise RuntimeError(
+                'FR13_COMMITTER_SYNCKILL: committer row width exceeds output '
+                'columns: ' + str(_ot_cols) + ' > ' + str(_ep_out_cols)
+            )
+        output_token_ids.fill_(-1)
+        output_token_ids[:_ot_nreq, :_ot_cols].copy_(_ot_dev)
+        accepted_tree_rows[:_ot_nreq].copy_(_ar_dev)
+    elif _ep_active:
         # FR13_EAGER_PACK 2c (phase a): the fill_(-1) + per-element writes +
         # pageable torch.tensor HtoD collapse into ONE pinned async HtoD and
         # two device-side slice copies. The staged matrix writes -1 to every
@@ -14418,6 +14555,7 @@ def _patch_rejection_sampler_gpu_committer() -> bool:
         "    " + sentinel + " (OPT-1): flag-gated GPU-resident committer.\n"
         "    # DEFAULT-OFF. flag-off => _fr13_gpu_commit_counts IS counts, so the\n"
         "    # legacy per-node Python loop below runs byte-for-byte unchanged.\n"
+        "    _fr13_dev_out = None  # G2.b device->device writeback source (synckill)\n"
         "    _fr13_gpu_committer = (\n"
         "        __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'\n"
         "        and not _fr13_force_spine_commit\n"
@@ -14441,14 +14579,52 @@ def _patch_rejection_sampler_gpu_committer() -> bool:
         "                _fr13_km = _fr13_ilu.module_from_spec(_fr13_spec)\n"
         "                _fr13_spec.loader.exec_module(_fr13_km)\n"
         "                __import__('sys').modules['_fr13_gpu_committer_kernel'] = _fr13_km\n"
-        "            (\n"
-        "                out_rows, accepted_rows, accepted_lens,\n"
-        "                accepted_node_paths, accepted_token_rows,\n"
-        "            ) = _fr13_km.fr13_gpu_committer_full(\n"
-        "                parents_cpu, drafts_cpu, parent_targets_cpu,\n"
-        "                self_targets_cpu, bonus_targets_cpu, counts,\n"
-        "                max_spec_len,\n"
-        "            )\n"
+        "            if _FR13_COMMITTER_SYNCKILL:\n"
+        "                " + sentinel + "_SYNCKILL (OPT-1 G2): device-resident\n"
+        "                # committer reading the DEVICE source tensors (NO host\n"
+        "                # committer-input list = the :6761 sync is killed) +\n"
+        "                # side-stream output readback (NO inline .cpu()). The\n"
+        "                # host lists are materialised LAZILY (event.synchronize\n"
+        "                # only on first access); the kernel device outputs are\n"
+        "                # the SAME-STEP serving writeback source. Byte-identical\n"
+        "                # to fr13_gpu_committer_full for every input (pure-int).\n"
+        "                _fr13_dev_out, _fr13_materialise = (\n"
+        "                    _fr13_km.fr13_gpu_committer_device_full(\n"
+        "                        tree_parent_indices, draft_token_ids,\n"
+        "                        parent_token_ids, self_token_ids,\n"
+        "                        bonus_token_ids, counts, max_spec_len,\n"
+        "                    )\n"
+        "                )\n"
+        "                if not _FR13_COMMITTER_SYNCKILL_NEEDLE_DONE:\n"
+        "                    globals()['_FR13_COMMITTER_SYNCKILL_NEEDLE_DONE'] = True\n"
+        "                    try:\n"
+        "                        from vllm.logger import init_logger as _fr13_sk_il\n"
+        "                        _fr13_sk_il('vllm.fr13_committer_synckill').info(\n"
+        "                            'FR13_COMMITTER_SYNCKILL engaged: device-arm '\n"
+        "                            'committer (no :6761 committer-input sync), '\n"
+        "                            'side-stream output readback, n_req=%d'\n"
+        "                            % len(counts)\n"
+        "                        )\n"
+        "                    except Exception:\n"
+        "                        print('FR13_COMMITTER_SYNCKILL engaged', flush=True)\n"
+        "                # Lazy host materialisation (the run-ahead window is\n"
+        "                # between device_full() above and this first access; on\n"
+        "                # the pure serving path the host lists feed the replay\n"
+        "                # req-key dict + diagnostics, NOT the same-step writeback\n"
+        "                # which reads _fr13_dev_out device->device).\n"
+        "                (\n"
+        "                    out_rows, accepted_rows, accepted_lens,\n"
+        "                    accepted_node_paths, accepted_token_rows,\n"
+        "                ) = _fr13_materialise()\n"
+        "            else:\n"
+        "                (\n"
+        "                    out_rows, accepted_rows, accepted_lens,\n"
+        "                    accepted_node_paths, accepted_token_rows,\n"
+        "                ) = _fr13_km.fr13_gpu_committer_full(\n"
+        "                    parents_cpu, drafts_cpu, parent_targets_cpu,\n"
+        "                    self_targets_cpu, bonus_targets_cpu, counts,\n"
+        "                    max_spec_len,\n"
+        "                )\n"
         "        except Exception as _fr13_gco_exc:\n"
         "            raise RuntimeError(\n"
         "                'FR13_GPU_COMMITTER failed (no silent fallback, class 9): '\n"

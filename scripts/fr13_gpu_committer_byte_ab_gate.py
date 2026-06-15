@@ -199,6 +199,36 @@ def main() -> int:
         fails.append("legacy committer block missing/altered (default path not preserved)")
         print("[G-FLAG2] FAIL  legacy committer block altered")
 
+    # ---------- G-FLAG3: OPT-1 G2 SYNCKILL is DEFAULT-OFF & gated under
+    # FR13_GPU_COMMITTER. The synckill flag must (a) be read default-OFF and
+    # (b) require FR13_GPU_COMMITTER=1 (meaningless without the GPU committer),
+    # and (c) the legacy/OFF transport (:6761 packed committer-input sync) must
+    # stay present so the default-ON serving path is byte-identical.
+    sk_default_off = (
+        'FR13_COMMITTER_SYNCKILL\', \'0\'' in ptext
+        or "FR13_COMMITTER_SYNCKILL\", \"0\"" in ptext
+    )
+    sk_gated = (
+        "_FR13_COMMITTER_SYNCKILL = (" in ptext
+        and "FR13_GPU_COMMITTER" in ptext
+    )
+    if sk_default_off and sk_gated:
+        print("[G-FLAG3] PASS  FR13_COMMITTER_SYNCKILL default-OFF, gated under "
+              "FR13_GPU_COMMITTER")
+    else:
+        fails.append("FR13_COMMITTER_SYNCKILL not default-OFF/gated under "
+                     "FR13_GPU_COMMITTER")
+        print("[G-FLAG3] FAIL  synckill flag not default-OFF/gated")
+    # The OFF/legacy committer-input main-thread sync must still be present
+    # (default-ON path byte-identical: synckill only forks when the flag is ON).
+    if "torch.cuda.current_stream(tree_parent_indices.device).synchronize()" in ptext:
+        print("[G-FLAG4] PASS  legacy :6761 committer-input sync preserved "
+              "(OFF path byte-identical)")
+    else:
+        fails.append("legacy committer-input sync (:6761) removed -- OFF path "
+                     "not byte-identical")
+        print("[G-FLAG4] FAIL  legacy committer-input sync missing")
+
     # ---------- Behavioral matrix ----------
     matrix = []
     parents_cat = caterpillar9()
@@ -287,9 +317,53 @@ def main() -> int:
                 fails.append("TRITON != REF on '%s':\n   ref=%r\n   tri=%r" % (name, ref3, tri))
                 print("[TRI] FAIL  %s" % name)
                 continue
+            # ---------- OPT-1 G2 DEVICE arm (FR13_COMMITTER_SYNCKILL) ----------
+            # Feed the kernel DEVICE tensors (no host committer-input list = the
+            # :6761 sync this kills), run the device decision + side-stream
+            # readback, materialise, and assert the FULL 5-tuple == REF. Also
+            # assert the device->device writeback of output_token_ids /
+            # accepted_tree_rows equals the legacy host-scatter element-for-
+            # element (G2.d writeback-equality).
+            import torch as _t
+            dev = "cuda"
+            p_dev = _t.tensor(parents_flat, dtype=_t.int64, device=dev)
+            d_dev = _t.tensor(drafts_flat, dtype=_t.int64, device=dev)
+            pt_dev = _t.tensor(ptgt_flat, dtype=_t.int64, device=dev)
+            st_dev = _t.tensor(stgt_flat, dtype=_t.int64, device=dev)
+            b_dev = _t.tensor(bonus_flat, dtype=_t.int64, device=dev)
+            dev_out, materialise = km.fr13_gpu_committer_device_full(
+                p_dev, d_dev, pt_dev, st_dev, b_dev, counts, msl,
+            )
+            dev5 = materialise()
+            if tuple(dev5) != tuple(ref5):
+                fails.append(
+                    "DEVICE(synckill) != REF on '%s':\n   ref=%r\n   dev=%r"
+                    % (name, ref5, dev5)
+                )
+                print("[DEV] FAIL  %s" % name)
+                continue
+            # writeback-equality: device output_token_ids (PAD-padded, then
+            # sliced to row_len per request) must equal the legacy host scatter.
+            n_req = len(counts)
+            ot = dev_out["out_tokens"].cpu().tolist()
+            rl = dev_out["row_len"].cpu().tolist()
+            wb_ok = True
+            for r in range(n_req):
+                got = [int(x) for x in ot[r][: int(rl[r])]]
+                if got != ref5[0][r]:
+                    wb_ok = False
+                    fails.append(
+                        "DEVICE writeback row %d != REF on '%s': %r vs %r"
+                        % (r, name, got, ref5[0][r])
+                    )
+                    break
+            if not wb_ok:
+                print("[DEV-WB] FAIL  %s" % name)
+                continue
         n_pass += 1
 
-    arm = "ORACLE+TRITON" if have_gpu else "ORACLE (TRITON arm SKIPPED: no CUDA -- live-GPU step)"
+    arm = ("ORACLE+TRITON+DEVICE" if have_gpu
+           else "ORACLE (TRITON+DEVICE arms SKIPPED: no CUDA -- live-GPU step)")
     print("[MATRIX] %d/%d trees byte-identical to REF via %s" % (n_pass, len(matrix), arm))
     if not have_gpu:
         print("[NOTE] CPU-only host: the Triton kernel arm is the documented live-GPU "
