@@ -485,6 +485,23 @@ def _gdn_node_step(
     b_v *= b_beta
     state_i += b_v[:, None] * b_k[None, :]
     out_i = tl.sum(state_i * b_q[None, :], axis=1)
+    # SEAM K1 (per-node bf16 state round-trip): the native packed-decode ORACLE
+    # (2) processes one token per kernel program -- it computes b_o from the
+    # FP32 post-update b_h (fused_recurrent.py:331), then STORES the state as
+    # bf16 to ht (fused_recurrent.py:336 -- ht.dtype is bf16) and the NEXT
+    # token RELOADS that bf16 state -> fp32 (fused_recurrent.py:303). So the
+    # state CARRIED forward to the next token is bf16-rounded while THIS token's
+    # output is the precise fp32 value. Our default fp32-carry tree scan is MORE
+    # precise but DISAGREES with (2); since we are scored against (2), SCAN_ALIGN
+    # reproduces the store-boundary round-trip on the carried state ONLY (after
+    # out_i is taken from the precise fp32 state_i, before state_i is returned to
+    # be cached / fed to the next node). This is the single op with depth-growth
+    # (per-node, fed recurrently) -- the diffuse-carrier lever. K1 is gated on
+    # the SAME SCAN_ALIGN constexpr (MODE=body implies all body seams d/e/K1):
+    # when SCAN_ALIGN is False the cast is dead code (no codegen change,
+    # bug-class #10), so the default served path stays byte-identical.
+    if SCAN_ALIGN:
+        state_i = state_i.to(tl.bfloat16).to(tl.float32)
     return state_i, out_i
 
 
@@ -1804,11 +1821,13 @@ def launch_tree_gdn_prepared(
         _num_warps = int(_geom.get("num_warps", _num_warps))
         if "num_stages" in _geom:
             _extra_launch_kwargs["num_stages"] = int(_geom["num_stages"])
-    # FR13_SCAN_ALIGN body seams (l2norm div-by-sqrt, beta bf16 round-trip).
-    # Default OFF => SCAN_ALIGN=False => the aligned branches in _gdn_node_step
-    # are dead code and the launch is byte-identical to the locked path. The
-    # diagnostic geom-override above is INDEPENDENT of this (it predates the
-    # unified flag and stays value-neutral).
+    # FR13_SCAN_ALIGN body seams (d: l2norm div-by-sqrt, e: beta bf16
+    # round-trip, K1: per-node carried-state bf16 round-trip = the depth-growth
+    # store-boundary seam). MODE=body turns on all three (full (2)-oracle
+    # alignment of the per-node update). Default OFF => SCAN_ALIGN=False => every
+    # aligned branch in _gdn_node_step is dead code and the launch is
+    # byte-identical to the locked path. The diagnostic geom-override above is
+    # INDEPENDENT of this (it predates the unified flag and stays value-neutral).
     _scan_align = scan_align_on()
     # FR13_SCAN_ALIGN_MODE=recompute: the DEPLOYABLE geometry fix. Replace the
     # h_cache scan with the recompute-from-spine kernel at native BV32/w1/s3
