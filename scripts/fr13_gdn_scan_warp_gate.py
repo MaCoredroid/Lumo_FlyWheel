@@ -207,6 +207,12 @@ def _compare(name: str, ours: torch.Tensor, ref: torch.Tensor) -> dict[str, Any]
         "max_abs": _max_abs(ours, ref),
         "rel_err": _rel_err(ours, ref),
         "norm_ratio": _norm_ratio(ours, ref),
+        # Explicit per-side norms so the verdict can require the NATIVE (ref) state
+        # to be genuinely non-zero -- norm_ratio alone is vacuous-passable (a zeros
+        # ref gives ours.norm()/1e-12 = huge-but-FINITE, which passes 0<r<inf). The
+        # old all-zeros-ref bug (state_idx==0 short-circuit) is caught only by ref_norm>0.
+        "ref_norm": float(ref.float().norm().item()),
+        "ours_norm": float(ours.float().norm().item()),
         "first_mismatch": _first_mismatch(ours, ref),
     }
 
@@ -460,13 +466,21 @@ def evaluate(payload_path: Path) -> dict[str, Any]:
     # The STATE comparison must be present + non-vacuous (states are non-zero):
     neg_state_int_eq = neg_state.get("int_view_equal", None)
     neg_state_norm_ratio = neg_state.get("norm_ratio", None)
+    neg_state_ref_norm = neg_state.get("ref_norm", None)
+    neg_state_ours_norm = neg_state.get("ours_norm", None)
     # Powered iff (a) the STATE comparison ran (state returned), (b) it FLIPPED
-    # to mismatch (int-view False), and (c) BOTH states are non-zero (norm ratio
-    # finite & > 0) so we are not comparing a zeros tensor (the old vacuous bug).
+    # to mismatch (int-view False), (c) norm ratio finite & > 0, AND (d) BOTH the
+    # native (ref) state AND our state are EXPLICITLY non-zero. (d) is the bulletproof
+    # guard against the old vacuous bug (zeros native ref from the state_idx==0
+    # short-circuit) -- norm_ratio alone passes vacuously off a zeros ref (huge-finite).
     neg_powered_state = bool(
         neg_state_int_eq is False
         and neg_state_norm_ratio is not None
         and 0.0 < float(neg_state_norm_ratio) < float("inf")
+        and neg_state_ref_norm is not None
+        and float(neg_state_ref_norm) > 0.0
+        and neg_state_ours_norm is not None
+        and float(neg_state_ours_norm) > 0.0
     )
 
     # Sanity: the NATIVE STATE must be non-zero (the old ref returned the
@@ -493,6 +507,8 @@ def evaluate(payload_path: Path) -> dict[str, Any]:
         "negative_control_powered": bool(neg_powered_state),
         "negative_control_state_int_view_equal": neg_state_int_eq,
         "negative_control_state_norm_ratio": neg_state_norm_ratio,
+        "negative_control_native_state_norm": neg_state_ref_norm,
+        "negative_control_our_state_norm": neg_state_ours_norm,
         # The carrier measurement we never got: OFF scan-STATE vs native-STATE.
         "off_arm_spine_state_vs_native": spine_off.get("state_vs_native_packed"),
         "recompute_arm_spine_state_vs_native": spine_recompute.get(
