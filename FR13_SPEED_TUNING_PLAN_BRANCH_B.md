@@ -113,6 +113,19 @@ draft-toks/event VARIABLE — the engagement gate must assert tok/draft ∈ {9,1
 as its own exact-match shape with a variable-count check, OR boot ungated cat10 first for the clean
 number, then gate).
 
+### 2d. cat10 is NOT on HEAD — re-derive as a new exact-match shape (code-verified)
+HEAD has ZERO `FR13_CAT10_ROOT_SIBLING`/`is_cat10` (grep 0 on `fr10_phase4_patch_vllm_tree_gdn.py`); the
+built cat10 is archived on remote `origin/fr13-cat10-archive` only. So cat10 must be re-derived the SAME
+way as cat3w (a new exact-match guard `_fr10_is_cat10` + `_fr10_cat10_choices` + a packing branch), NOT
+revived from the archive flag. The exact sorted `(len, path)` `tree_choices` (10 nodes, committed depth 5,
+N=10 ⇒ **pad16**):
+`[(0,), (1,), (0,0), (0,1), (0,0,0), (0,0,1), (0,0,0,0), (0,0,0,1), (0,0,0,0,0), (0,0,0,0,1)]`
+= the cat9 caterpillar (`_fr10_caterpillar_choices` :10984, verbatim 9 nodes) + ONE root sibling `(1,)`
+in slot 1. Build = `_fr10_spine_steps = 4`, `_fr10_leaf_steps = {1,2,3,4}` (cat9's), plus the root sibling
+packed in slot 1 via the cat3w `_fr10_root_leaf_token` capture (:11166/:11181, `torch.topk(_fr10_logits,2)
+[:,1]`) verbatim. Same ~15-30-line additive pattern as §3; the GPU worker builds it. The ungated cat10
+asserts `tok/draft == 10`; the gated form asserts `tok/draft ∈ {9,10}`.
+
 ---
 
 ## 3. REMOVE-DEEP-LEAF / ADD-ROOT-LEAF CANDIDATE TREES (exact tree_choices, infra-reuse)
