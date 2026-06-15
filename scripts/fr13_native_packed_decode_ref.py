@@ -105,13 +105,36 @@ def native_packed_decode_per_path(
 
     outputs: list[torch.Tensor] = []
     states: list[torch.Tensor] = []
-    ssm_state_indices = torch.zeros(1, dtype=torch.int32, device=device)
+    # CRITICAL (read from the pinned-image kernel, fused_recurrent.py L292-296):
+    #   state_idx = tl.load(ssm_state_indices + ...)
+    #   if state_idx <= 0:   # NULL_BLOCK_ID == 0
+    #       store ZEROS to out; RETURN  (state is NOT updated)
+    # The prior ref passed ssm_state_indices = zeros(1) -> state_idx == 0 -> the
+    # kernel SHORT-CIRCUITED: it wrote zeros to `out` (the all-zeros-output bug)
+    # AND never reached `tl.store(p_ht, b_h)` (the state stayed at the un-updated
+    # h0). Both the durable STATE and the output were vacuous. The live decode
+    # path (gdn_linear_attn._forward_core_decode_non_spec L1085) passes the REAL
+    # cache slot indices (non_spec_state_indices_tensor, all >= 1), indexing into
+    # the multi-slot ssm_state cache `initial_state=ssm_state` [num_slots,HV,V,K].
+    # We reproduce that exactly: a >=2-slot buffer with the real h0 at SLOT 1 and
+    # ssm_state_indices=[1]. The kernel reads slot 1, runs the rank-1 update, and
+    # writes the UPDATED state back to slot 1 in place (h0 == ht). We extract that
+    # durable STATE for the A/B (bug-class #10: A/B the incumbent decode SASS, not
+    # a serial ref; bug-class #9: the comparand is now the live STATE, not zeros).
+    state_slot = 1
+    ssm_state_indices = torch.full(
+        (1,), state_slot, dtype=torch.int32, device=device
+    )
 
     for node in range(tree.n):
         path = list(tree.path(node))
-        # Per-path fresh initial state (slot 0). Native state buffer is fp32,
-        # 4D [num_slots=1, HV, V, K], updated in place by the kernel.
-        state = h0.unsqueeze(0).to(torch.float32).contiguous().clone()
+        # Per-path fresh initial state. Native ssm_state cache is fp32 and 4D
+        # [num_slots, HV, V, K]; slot 0 is NULL_BLOCK_ID (never used), slot 1
+        # carries the real h0 and is updated IN PLACE by the kernel along the
+        # path. zeros() for slot 0 so a stray slot-0 read would surface loudly.
+        state = h0.new_zeros((state_slot + 1, *h0.shape), dtype=torch.float32)
+        state[state_slot].copy_(h0.to(torch.float32))
+        state = state.contiguous()
         out_buf = torch.empty(
             (1, 1, hv, v_dim), device=device, dtype=query_spec.dtype
         )
@@ -130,13 +153,14 @@ def native_packed_decode_per_path(
                 A_log=A_log,
                 dt_bias=dt_bias,
                 scale=scale,
-                initial_state=state,  # updated IN PLACE -> becomes the next h0
+                initial_state=state,  # slot 1 updated IN PLACE -> next h0
                 out=out_buf,
                 ssm_state_indices=ssm_state_indices,
                 use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
             )
-        # out_buf holds the output of the LAST token on this path.
+        # out_buf holds the output of the LAST token on this path; state[slot]
+        # holds the durable STATE after the last token (the A/B comparand).
         outputs.append(out_buf[0, 0].clone())
-        states.append(state[0].clone())  # [HV, V, K]
+        states.append(state[state_slot].clone())  # [HV, V, K]
 
     return torch.stack(outputs, dim=0), torch.stack(states, dim=0)

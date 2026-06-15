@@ -10,16 +10,29 @@ dispatch in gdn_linear_attn.py _forward_core -> _forward_core_decode_non_spec).
 bit-exact-to-a-serial-ref != bit-exact-to-the-incumbent-SASS (bug-class #10
 codegen identity). This gate uses the RIGHT reference.
 
+DECISIVE COMPARAND = the DURABLE GDN STATE (h / ssm_state), NOT the output o.
+The native packed-decode kernel writes the recurrent STATE (b_h -> ht) IN PLACE
+and ALSO emits an output o = sum(b_h * b_q); the durable carrier is the STATE.
+An earlier version of this gate keyed its verdict on the OUTPUT and was VACUOUS
+(bug-class #9): the native ref passed ssm_state_indices=0, hitting the kernel's
+`if state_idx <= 0: store zeros; return` short-circuit -> the output was all
+ZEROS *and* the state was never updated. Fixed: the ref now uses a valid cache
+slot (>= 1) so the kernel runs the real rank-1 update and writes the durable
+STATE, which this gate extracts and A/Bs.
+
 For each arm (BV/num_warps geometry of the deployed scan) we compare, at
-N_PAD={1,16}, on the SPINE and a BRANCH winner, the tree scan output vs the
-native packed-decode reference, using:
+N_PAD={1,16}, on the SPINE and a BRANCH winner, OUR per-node tree-scan STATE vs
+the native packed-decode STATE (and, secondarily, the outputs), using:
   * int-view equality  a.view(int32).eq(b.view(int32)).all()  (NEVER atol)
   * raw max_abs
   * rel_err = max_abs / (||native||_inf + eps)
   * norm_ours / norm_native
   * first-mismatch index
-A POWERED NEGATIVE CONTROL (bug-class #9) deliberately perturbs one row so the
-arm MUST int-view-mismatch -- an all-match elsewhere is then non-vacuous.
+A POWERED NEGATIVE CONTROL (bug-class #9) perturbs the root value row that feeds
+OUR recurrent STATE update, so OUR STATE MUST int-view-mismatch native's
+unperturbed STATE -- an all-match elsewhere is then non-vacuous. The verdict is
+keyed on the STATE comparison (negative_control_powered) AND requires both
+states to be non-zero (norm-ratio finite) so we never re-key off a zeros tensor.
 
 The serial-torch reference (native_update_serial_per_path) is still recorded as
 a SECONDARY column for continuity, but the packed-decode reference is the gate.
@@ -290,12 +303,14 @@ def _run_case(
     # NEGATIVE CONTROL (bug-class #9): perturb the root value-tree row that
     # feeds OUR scan (value_tree) while leaving the native reference's
     # value_spec UNCHANGED. value_spec and value_tree are byte-identical in the
-    # captured payload, so this guarantees a real ours-vs-native divergence
-    # that MUST int-view-mismatch -- proving the comparator is live (a clean
-    # all-match elsewhere is then non-vacuous). The perturbation is applied to
-    # the root node so it propagates through the recurrent scan to every
-    # descendant. A value-add (not a single ULP XOR) makes the control
-    # unambiguously powered.
+    # captured payload, so this guarantees a real ours-vs-native divergence in
+    # the DURABLE STATE -- v feeds the recurrent update directly
+    # (b_v -= sum(state*k); b_v *= beta; state += b_v*k), so a perturbed root v
+    # changes state_i and propagates forward to every descendant's state. The
+    # neg-control's STATE int-view comparison MUST therefore be False, proving
+    # the STATE comparator is LIVE (a clean all-match elsewhere is then
+    # non-vacuous). A value-add (+0.5, not a single ULP XOR) makes the control
+    # unambiguously powered against the STATE, not just the output.
     if negative_control:
         vt = inp["value_tree"].clone()
         vt[0, 0, 0] = vt[0, 0, 0] + torch.tensor(
@@ -431,13 +446,40 @@ def evaluate(payload_path: Path) -> dict[str, Any]:
         ),
     ]
 
-    # Powered: the negative control's DEPLOYED arm must NOT int-view-equal.
+    # POWERED on the durable STATE (h), not the output (o). The directive: the
+    # gate must compare the DURABLE GDN STATE the kernel writes in place (b_h /
+    # ssm_state), and the neg-control must FLIP that STATE comparison. The
+    # neg-control perturbs value_tree[0,0,0] (an INPUT to OUR scan's v), which
+    # propagates into the recurrent STATE (b_v -= sum(state*k); state += b_v*k),
+    # so OUR state MUST diverge from native's unperturbed state -> the STATE
+    # int-view comparison MUST be False. A clean all-match elsewhere is then
+    # non-vacuous (bug-class #9).
     neg = cases[-1]
     deployed = next(a for a in neg["arms"] if a["arm"] == "BV16_w8_DEPLOYED")
-    neg_powered = not deployed["out_vs_native_packed"]["int_view_equal"]
+    neg_state = deployed["state_vs_native_packed"]
+    # The STATE comparison must be present + non-vacuous (states are non-zero):
+    neg_state_int_eq = neg_state.get("int_view_equal", None)
+    neg_state_norm_ratio = neg_state.get("norm_ratio", None)
+    # Powered iff (a) the STATE comparison ran (state returned), (b) it FLIPPED
+    # to mismatch (int-view False), and (c) BOTH states are non-zero (norm ratio
+    # finite & > 0) so we are not comparing a zeros tensor (the old vacuous bug).
+    neg_powered_state = bool(
+        neg_state_int_eq is False
+        and neg_state_norm_ratio is not None
+        and 0.0 < float(neg_state_norm_ratio) < float("inf")
+    )
+
+    # Sanity: the NATIVE STATE must be non-zero (the old ref returned the
+    # all-zeros output because state_idx==0 short-circuited the kernel). Surface
+    # the OFF-arm STATE comparison on the clean spine case as the carrier number.
+    spine = next(c for c in cases if c["name"] == "spine_npad16")
+    spine_off = next(a for a in spine["arms"] if a["arm"] == "BV16_w8_DEPLOYED")
+    spine_recompute = next(
+        a for a in spine["arms"] if a["arm"] == "RECOMPUTE_FROM_SPINE"
+    )
 
     return {
-        "schema": "fr13.gdn_scan_packed_ab_gate.v1",
+        "schema": "fr13.gdn_scan_packed_ab_gate.v2_state",
         "payload": str(payload_path),
         "layer_prefix": payload.get("layer_prefix"),
         "native_ref_kernel": (
@@ -447,7 +489,15 @@ def evaluate(payload_path: Path) -> dict[str, Any]:
         ),
         "deployed_scan": "lumo_flywheel_serving.fr10_gdn_tree_kernel.launch_tree_gdn_prepared",
         "arms": [a["name"] for a in ARMS],
-        "negative_control_powered": bool(neg_powered),
+        # The decisive verdict is now keyed on the DURABLE STATE comparison.
+        "negative_control_powered": bool(neg_powered_state),
+        "negative_control_state_int_view_equal": neg_state_int_eq,
+        "negative_control_state_norm_ratio": neg_state_norm_ratio,
+        # The carrier measurement we never got: OFF scan-STATE vs native-STATE.
+        "off_arm_spine_state_vs_native": spine_off.get("state_vs_native_packed"),
+        "recompute_arm_spine_state_vs_native": spine_recompute.get(
+            "state_vs_native_packed"
+        ),
         "cases": cases,
     }
 
@@ -464,7 +514,9 @@ def main() -> int:
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     # Gate is informational (it discriminates branches); fail only if the
-    # negative control did not power (vacuous).
+    # negative control did not power against the DURABLE STATE (vacuous). A
+    # powered control = the STATE int-view comparison FLIPPED to mismatch AND
+    # both states are non-zero, so the OFF/recompute STATE results are real.
     return 0 if result["negative_control_powered"] else 3
 
 

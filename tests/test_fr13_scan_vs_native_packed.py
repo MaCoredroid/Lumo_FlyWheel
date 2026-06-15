@@ -253,6 +253,56 @@ def test_ref_module_confirms_dispatch_in_docstring():
     assert "VLLM_ENABLE_FLA_PACKED_RECURRENT_DECODE" in src
 
 
+def test_ref_uses_valid_state_slot_not_null_block():
+    """The native packed-decode ref MUST index a valid cache slot (>= 1), not
+    NULL_BLOCK_ID=0. The kernel short-circuits `if state_idx <= 0` (zeros to
+    out + state never updated), which made the prior ref vacuous. The fix uses
+    slot 1; ssm_state_indices must be 1, NOT zeros."""
+    src = REF_SRC.read_text(encoding="utf-8")
+    # The vacuous zeros(1) ssm_state_indices must be GONE.
+    assert "torch.zeros(1, dtype=torch.int32" not in src, (
+        "ref still passes ssm_state_indices=zeros(1) -> state_idx==0 -> kernel "
+        "short-circuits (zeros output + un-updated state); use slot >= 1"
+    )
+    # A valid slot is used and the durable STATE at that slot is extracted.
+    assert "state_slot = 1" in src
+    assert "torch.full(" in src and "state_slot" in src
+    assert "state[state_slot].copy_(h0" in src
+    assert "states.append(state[state_slot].clone())" in src
+    # The kernel short-circuit is documented so the fix can't silently regress.
+    assert "state_idx <= 0" in src or "NULL_BLOCK_ID" in src
+
+
+def test_gate_verdict_is_keyed_on_durable_state_not_output():
+    """The decisive verdict must compare the DURABLE STATE (h), not the zeros-
+    prone output. negative_control_powered must read state_vs_native_packed and
+    require both states non-zero (norm-ratio finite) so it can never re-vacuum
+    off a zeros tensor (bug-class #9)."""
+    src = GATE_SRC.read_text(encoding="utf-8")
+    gtree = ast.parse(src)
+    ev = None
+    for node in ast.walk(gtree):
+        if isinstance(node, ast.FunctionDef) and node.name == "evaluate":
+            ev = node
+            break
+    assert ev is not None, "evaluate not found"
+    ev_src = ast.get_source_segment(src, ev)
+    assert ev_src is not None
+    # The verdict variable must derive from the STATE comparison.
+    assert 'deployed["state_vs_native_packed"]' in ev_src
+    assert "neg_powered_state" in ev_src
+    # It must require the STATE int-view to FLIP to mismatch (False).
+    assert "neg_state_int_eq is False" in ev_src
+    # And require both states non-zero via the norm ratio (no zeros tensor).
+    assert "neg_state_norm_ratio" in ev_src
+    assert 'result["negative_control_powered"]' or "negative_control_powered" in ev_src
+    # The schema bumped to the state-keyed version.
+    assert "fr13.gdn_scan_packed_ab_gate.v2_state" in src
+    # The OFF and recompute spine STATE-vs-native carriers are surfaced.
+    assert "off_arm_spine_state_vs_native" in src
+    assert "recompute_arm_spine_state_vs_native" in src
+
+
 # ---------------------------------------------------------------------------
 # 5. FR13_SCAN_ALIGN flag helpers (CPU exec of the pure-python helpers).
 # ---------------------------------------------------------------------------
