@@ -204,3 +204,87 @@ framing), 0ecd94aa (~97% fixed-overhead-not-bandwidth, 3x graph nodes), 4b409630
 (N_PAD=16 ptxas spill 636 B/thread + recompute-from-spine), b12d8a40 (BV=16/warps=8 vs native
 BV=32/warps=4 geometry seam); HEAD source fr10_gdn_tree_kernel.py:19-126 (N_PAD cap + GEOM_OVERRIDE),
 fp8_utils.py:803 (no GB10 fp8 config), output/fr13_b1_speed_census/ (91.9% main-thread block).
+
+---
+
+# APPENDIX 2 (measurement-methodology lineage) — the EXACT clean B=1 protocol to reuse
+
+How to MEASURE the cat9-vs-native B=1 number correctly so the next clean GPU run is a verdict, not
+another artifact. Distinct from the lm-head/tax lineage above (what the number IS); this is HOW to
+get it. Sources cited inline.
+
+## The basis (the ONLY s/fwd that is a verdict)
+`s/forward = vllm:request_decode_time_seconds_sum / vllm:spec_decode_num_drafts_total` (delta over
+the window), scraped from `/metrics` RAW counters. NOT TPS, NOT accept (both BANNED as a basis,
+reference_fr10_speed_measurement_pitfalls + feedback_dont_handroll_speed). NOT HTTP wall (tree
+early-stops make wall unfair). Per-event (drafts denominator) so it is concurrency-immune.
+Source: FR13_B1_CURRENT_GATE_BIND.md L34-35,64-65; FR13_B1_FIX3_GATE_BIND.md gate (e) L244.
+⚠ `fr10_quick_decode_tps_probe.py`'s per-request `decode_sum_s` is HTTP `req_elapsed` (probe
+L181,213) — for the s/fwd verdict use the `/metrics` `metric_delta` fields it also records
+(`decode_seconds`, `spec_drafts`), NOT the per-request wall.
+
+## FR10 pitfalls to avoid (reference_fr10_speed_measurement_pitfalls)
+(1) AGGREGATE decode_seconds SUMS the concurrent per-request decode wall -> deflates ~concurrency
+(faked the FR10 "5x"); fix = per-request OR the spec_drafts denominator. (2) `VLLM_BATCH_INVARIANT=1`
+forces slow deterministic GEMMs/attn ("SMs busy, low TPS") — it is the DETERMINISM tool, NOT a speed
+config; measure BI=0. These two together were the FR10 double artifact.
+
+## Flags / regime (pin on EVERY arm; FR13_B1_FIX3_GATE_BIND.md L127-139, FR13_B1_CURRENT_GATE L26-58)
+PORT=9950, GPU_UTIL=0.82, MAX_NUM_SEQS=1 (B=1), BATCH_INVARIANT=0, FR13_BI_TREE_ATTN=0,
+FR10_METRICS=0 (all FR10/12/13 diag writers gated on ==1 -> compiled-out/dead), FR13_REPLAY_ROUTE=1;
+FIX-1/2/3/A + in_proj_ba pinned at committed defaults (fr13_launch_locked.sh) — only the
+flag-under-test varies. Heavy captures + final-logit diagnostics UNSET. The only varying flag per
+A/B; everything else byte-identical (class 11).
+
+## Determinism / BI caveat (93a4043a, MEASURED)
+BI=1 is NOT cross-boot deterministic at B=1 on GB10 (zero-diff boots fork at tokens 11-71 = boot
+autotune/kernel-selection channel, outside batch-invariance). So: speed reps WITHIN-boot (rep1==rep2
+IS byte-identical, class-8); cross-boot needs a same-flag zero-diff floor pair. Pin BI identically on
+both arms (it is OFF for speed anyway). Corollary (feedback_no_cross_boot_byte_gate): never gate on
+reproducing a banked free-running stream byte-for-byte across boots.
+
+## Prompts / sampling
+`output/fr13_acceptance_ladder/prompts_swe4.json` (4 pinned SWE prompts), seed 1313, max_tokens 128,
+warmup 1×16, samples_per_prompt=1, client batch_size=1. GREEDY (temp 0.0 top_p 1.0) is the speed
+basis — t0.6 carries wall jitter between identical-stream reps and is NOT a speed basis
+(FR13_B1_FIX3_GATE_BIND.md L269). Assert prompt-token identity across the paired arms
+(fr13_e2e_measure.py `assert_prompt_identity`; reference_capture_once_native_pin_prompt).
+
+## Arms + prelaunch
+- Tree: `scripts/fr13_launch_locked.sh` (TREE_ATTN, tree_mtp, num_spec=9, 9-node caterpillar; FIX-1/2/3/A
+  + in_proj_ba baked ON). Native: `scripts/fr10_launch_speed_server.sh` num_spec=5 FLASH_ATTN naive_mtp
+  (locked launcher L5 names it as the baseline).
+- Prelaunch host-mem protocol = `recover_host_memory()` at boot (forked launcher L241; native L162;
+  reference_modelserver_host_memory_recovery — sync+drop_caches+swap-cycle via LUMO_SUDO_PASSWORD).
+  Between arms: reset_prefix_cache + torch.cuda.empty_cache + docker rm -f + verify `docker ps` empty
+  + `free -g` (gpu-mem collection memory). GPU serialized (max 1 GPU workflow).
+- Class-9 engagement asserts BEFORE trusting any number: FULL CUDA-graph capture proven ("Graph
+  capturing finished"), tok/draft==9 (cat9) / ==5 (native), has_tree_parent_indices, tree_sample_accept
+  (probe `--require-tree-engagement`). Fail-loud on disengagement (feedback_fail_loud_assert_engagement).
+
+## Fairness (46e89f22, holds=True)
+Diagnostics-OFF residue = 0.5-2.5% of the speed gap, ≥97% intrinsic; gold TPS comparison FAIR; accept
+spread NOT instrument-caused. So the measured delta is real. Do NOT present any per-forward
+TPS/accept decomposition as a MEASURED fact — label INFERRED (the per-kernel nsys export is empty);
+the clean s/fwd is the arbiter.
+
+## Reusable scripts
+`scripts/fr10_quick_decode_tps_probe.py` (probe: metric_delta + accept/event + engagement assert);
+`scripts/fr13_e2e_measure.py` (orchestrator: capture -> prompt-identity assert -> reducers -> 1 JSON);
+`scripts/fr13_launch_locked.sh` / `scripts/fr10_launch_speed_server.sh` (arms);
+`output/fr13_b1_fix3_gate/{run_fix3_arm.sh,run_fix3_campaign.sh,reduce_fix3_gate.py}` (per-arm
+runner/reducer pattern).
+
+## Exit bars (d7ea6ccd, user 2026-06-12)
+(a) strong-lossless (per-change gate: same-seed byte-identical streams greedy+t0.6, accept/event
+unchanged, regular-decode pristine); (b) s/fwd AT-OR-UNDER native AND actively TRY strictly-sub-native
+(do not settle for parity); (c) cat9 accept/event STRICTLY > native E5 (>, not ≥) before any B=4.
+Depth-match speed comparisons (feedback_depth_matched_accept_compare): cat9 (d5) -> native MTP-5 / E5
+0.21816; a d3 arm -> E3 (E3 currently UNMEASURED). Final verdict = B=4 CUDA-captured SWE-Verified-4.
+
+Appendix-2 citations: FR13_B1_CURRENT_GATE_BIND.md L26-90, FR13_B1_FIX3_GATE_BIND.md L127-308,
+FR13_B1_BACKEND_ABLATION_BIND.md L80, 93a4043a, 46e89f22, d7ea6ccd; scripts/
+fr10_quick_decode_tps_probe.py L34-44,181,213,232-275, scripts/fr13_e2e_measure.py,
+scripts/fr13_launch_locked.sh, scripts/fr13_launch_forked_fa2_tree_server.sh L241,
+scripts/fr10_launch_speed_server.sh L162; reference_fr10_speed_measurement_pitfalls;
+output/fr10_native_mtp5_same8_20260604T210257Z (B=4 E5, NOT the B=1 ref).
