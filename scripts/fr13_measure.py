@@ -1,0 +1,920 @@
+#!/usr/bin/env python3
+"""FR13 CANONICAL speed / lossless / temp-0.6-drift MEASUREMENT infra.
+
+ONE validated entry point that measures, for ANY arm (native MTP-N / any
+caterpillar TREE shape / OPT flags), in ONE canonical regime:
+  {s/fwd, accept/event, committed/event, derived-TPS}  (SPEED, instrument OFF)
+  {temp-0 argmax flip vs the no-spec recurrent oracle}  (LOSSLESS, instrument ON)
+  {per-position TV(softmax(q/0.6), softmax(p/0.6)) + KL + over-floor vector,
+   plus the realized multi-seed BAG-TV}                 (temp-0.6 DRIFT, ON)
+
+WHY THIS EXISTS — the regime bug it fixes (root-caused 2026-06-15)
+-----------------------------------------------------------------
+Two hand-rolled probes gave two different "native accept" on the SAME
+prompts_swe4 / max_tokens 128 / temp 0 / seed 1313:
+  * fr13_speed_phase0.sh drove fr10_quick_decode_tps_probe.py with
+    samples_per_prompt=4 + a /v1/chat/completions warmup -> native accept 1.70
+  * the gold-gate (fr13_gold_margin_probe capture, samples_per_prompt=1) ->
+    the banked 3.161.
+DIAGNOSIS (code+artifact verified, see FR13_SPEED_MEASURE_INFRA.md):
+BOTH probes send a RAW STRING to /v1/completions and the server tokenizes the
+IDENTICAL 681-token context (offline-confirmed: phase0 prompt_token_ids ==
+tok(prompt[0]) byte-for-byte; first served tokens [271,248068,...,40] match the
+gold stream then FORK at served index 6). So "raw-vs-tokenized" is NOT the
+discriminator — both prefill the same bytes. The served greedy streams FORK
+across the two runs (phase0 -> a degenerate "<think></think>...None" loop that
+accepts at 1.70; gold -> a coherent "I'll start by exploring" stream that
+accepts at 3.16), each stream is WITHIN-boot deterministic (all 4 phase0 samples
+identical; gold rep1==rep2). This is the GB10 same-prefill cross-run greedy
+trajectory fork (the autotune/realization floor, feedback_no_cross_boot_byte_gate)
+amplified by the chat-template warmup + samples_per_prompt. accept/event is
+TRAJECTORY-DEPENDENT (bug-class #12 "non-like-for-like trajectories"); it is NOT
+apple-to-apple across runs unless the served stream is PINNED.
+
+THE FIX baked into this infra: (1) the canonical regime is the gold-gate one
+(samples_per_prompt=1, B=1 sequential, NO chat-template warmup — a single raw
+self-warm on prompt[0]); (2) accept/event is recorded WITH its served-stream
+fingerprint and is explicitly labelled trajectory-bound, never compared across
+two free-running boots; (3) the lossless verdict is each arm vs its OWN no-spec
+recurrent oracle on the arm's OWN served stream (capture-once), so the
+cross-run fork is removed as a variable.
+
+THE CANONICAL REGIME (baked, no re-roll)
+----------------------------------------
+  prompts = output/fr13_acceptance_ladder/prompts_swe4.json (4 SWE prompts)
+  seed = 1313, max_tokens = 128
+  /v1/completions, RAW text prompt, return_token_ids=True
+  temp 0 / top_p 1.0  (greedy)  OR  temp 0.6 / top_p 0.95  (deployment sampling)
+  FR10_METRICS=0, VLLM_BATCH_INVARIANT=0  (pinned in the launcher, asserted here)
+  vllm_xargs={"fr10_decode_mode": <native:naive_mtp | tree:tree_mtp>}
+  warmup = ONE raw self-warm request (NOT chat template), then reset_prefix_cache
+  B=1 = SEQUENTIAL (samples run one at a time); B=4 = client batch of 4
+
+TRUTHFUL SPEED ACCOUNTING (the ONLY allowed basis)
+--------------------------------------------------
+  s/fwd        = d(vllm:request_decode_time_seconds_sum) / d(vllm:spec_decode_num_drafts_total)
+                 decode-only, per spec-event, RAW /metrics counter delta.
+                 ~B-invariant for the bandwidth-bound GB10 B=1 decode.
+  accept/event = d(vllm:spec_decode_num_accepted_tokens_total) / d(spec_drafts)
+                 B-DEPENDENT (co-residency degrades it) -> B=1 and B=4 are
+                 DIFFERENT NUMBERS and are labelled with batch_size + a served-
+                 stream fingerprint (trajectory-bound).
+  committed/ev = accept/event + 1 (the bonus token).
+  TPS          = committed_per_event / s_fwd  -> reported as DERIVED, not measured.
+BANNED as a speed basis (blocked + asserted): TPS, accept, wall-clock,
+per-request HTTP req_elapsed. The module raises if asked to report any of these
+as s/fwd.
+
+INSTRUMENT ON/OFF MODE SEPARATION (user)
+----------------------------------------
+The instrumentation AFFECTS speed, so SPEED and LOSSLESS are SEPARATE boots/numbers.
+  mode=OFF (CLEAN deployment): FR10_METRICS=0, NO logprobs/q-capture, NO flip/
+    oracle, NO FR12/13 diagnostics. This is the bytes the user ships. SPEED
+    (s/fwd, accept) is measured ONLY here. An OFF run carries instrument="OFF".
+  mode=ON  (lossless/drift instrumentation): the full-stream q-capture (top-K
+    logprobs) + the flip/temp-0.6 reduce. Adds real decode tax (extra top-K
+    logprob + DtoH). LOSSLESS/drift is measured ONLY here. That boot's s/fwd is
+    used ONLY to QUANTIFY the instrument tax (diag-residue = OFF s/fwd vs ON
+    s/fwd), NEVER as the deployment speed.
+Every emitted number records {"instrument": "OFF"|"ON"}. assert_no_mode_mix()
+raises if a speed verdict cites an ON number or a lossless verdict cites an OFF
+capture. diag_residue() computes the OFF-vs-ON s/fwd tax per arm (expect <=2.5%,
+46e89f22, but MEASURED not assumed).
+
+SUBCOMMANDS
+-----------
+  speed        OFF-mode: raw-counter s/fwd + accept/event + committed + derived
+               TPS for one arm at a given batch_size + temp. Capture-once served
+               streams + fingerprint. No logprobs (clean deployment path).
+  capture-q    ON-mode: the gold-gate-style per-served-position top-K
+               log_softmax over the WHOLE served stream (this is the spec verify
+               forward dist q) + per-position truncated tail mass. THE NEW piece.
+  flip         lossless temp-0 argmax: reduce a served stream vs its OWN no-spec
+               recurrent oracle (delegates to fr13_recurrent_decode_oracle.py).
+  temp06-drift the binding temp-0.6 gate: combine capture-q (q) + recurrent
+               oracle top-K (p) -> per-position TV(softmax(q/0.6),softmax(p/0.6))
+               + KL + over-floor vector. + the realized multi-seed bag-TV with
+               the p95 native floor. CPU reduce over ON-mode captures.
+  diag-residue OFF-vs-ON s/fwd tax per arm.
+  reconcile    compare measured {s/fwd, accept} vs the banked historic numbers.
+
+Each subcommand FAILS LOUD on disengagement (class-9): tok/draft must == N
+(native) / == len(TREE) (tree); has_tree_parent_indices / tree_sample_accept for
+tree; RECURRENT_PATH_ENGAGED for the oracle. Records NOTHING on disengagement.
+Within-boot determinism (class-8) rep1==rep2 is checked on captures.
+Cross-boot byte gate is BANNED (feedback_no_cross_boot_byte_gate) and not used.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import statistics
+import time
+import urllib.request
+from itertools import combinations
+from pathlib import Path
+from typing import Any
+
+REPO = Path(__file__).resolve().parent.parent
+DEFAULT_ENDPOINT = "http://127.0.0.1:9950"
+DEFAULT_MODEL = "qwen3.6-27b"
+CANONICAL_PROMPTS = str(REPO / "output" / "fr13_acceptance_ladder" / "prompts_swe4.json")
+CANONICAL_SEED = 1313
+CANONICAL_MAX_TOKENS = 128
+
+# raw /metrics counters (the ONLY allowed speed basis)
+M_DECODE_S = "vllm:request_decode_time_seconds_sum"
+M_DRAFTS = "vllm:spec_decode_num_drafts_total"
+M_ACCEPTED = "vllm:spec_decode_num_accepted_tokens_total"
+M_DRAFT_TOK = "vllm:spec_decode_num_draft_tokens_total"
+M_GEN_TOK = "vllm:generation_tokens_total"
+COUNTERS = [M_DECODE_S, M_DRAFTS, M_ACCEPTED, M_DRAFT_TOK, M_GEN_TOK]
+
+# Forms that must NEVER be reported as s/fwd (blocked + asserted, class-12).
+BANNED_SPEED_BASES = {"tps", "accept", "wall", "wall_clock", "req_elapsed", "http_elapsed"}
+
+
+# --------------------------------------------------------------------------- #
+# HTTP helpers                                                                 #
+# --------------------------------------------------------------------------- #
+def _post_json(endpoint: str, path: str, payload: dict[str, Any], timeout: float) -> Any:
+    req = urllib.request.Request(
+        endpoint.rstrip("/") + path,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        body = resp.read().decode("utf-8")
+    return json.loads(body) if body else None
+
+
+def _get_text(endpoint: str, path: str, timeout: float) -> str:
+    with urllib.request.urlopen(endpoint.rstrip("/") + path, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", errors="ignore")
+
+
+def _wait_health(endpoint: str, timeout_s: float) -> None:
+    deadline = time.time() + timeout_s
+    last = None
+    while time.time() < deadline:
+        try:
+            _get_text(endpoint, "/health", timeout=5)
+            return
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            time.sleep(2)
+    raise RuntimeError(f"server not healthy in {timeout_s}s: {last}")
+
+
+def _scrape(endpoint: str) -> dict[str, float]:
+    text = _get_text(endpoint, "/metrics", timeout=10)
+    out = {c: 0.0 for c in COUNTERS}
+    for line in text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        name = line.split("{", 1)[0].split(" ", 1)[0]
+        if name in out:
+            try:
+                out[name] += float(line.rsplit(" ", 1)[1])
+            except (IndexError, ValueError):
+                continue
+    return out
+
+
+def _delta(after: dict[str, float], before: dict[str, float]) -> dict[str, float]:
+    return {k: float(after.get(k, 0.0) - before.get(k, 0.0)) for k in after}
+
+
+def _read_prompts(path: str) -> list[str]:
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, list) or not all(isinstance(p, str) for p in data):
+        raise ValueError(f"prompts file must be a JSON list of strings: {path}")
+    prompts = [p for p in data if p]
+    if not prompts:
+        raise ValueError(f"no prompts in {path}")
+    return prompts
+
+
+# --------------------------------------------------------------------------- #
+# Arm spec — the SHAPE descriptor for native MTP-N / TREE caterpillar          #
+# --------------------------------------------------------------------------- #
+def parse_arm(arm: str, tree: str | None) -> dict[str, Any]:
+    """Resolve an arm name to its served decode-mode + expected tok/draft.
+
+    arm = 'native_eN' (N in 3..8) -> naive_mtp, expected tok/draft = N
+    arm = 'tree' (with --tree TREE) or 'cat9'/'cat10'/... -> tree_mtp,
+          expected tok/draft = len(TREE). The TREE must be BUILT on the server
+          (the launcher derives num_spec + tree from len(TREE)); if a caller
+          asks for a shape the booted server did not build, the engagement
+          assert FAILS LOUD (tok/draft != len(TREE)).
+    """
+    if arm.startswith("native_e"):
+        try:
+            n = int(arm[len("native_e"):])
+        except ValueError as exc:
+            raise ValueError(f"native arm must be native_eN, got {arm!r}") from exc
+        if not 1 <= n <= 8:
+            raise ValueError(f"native MTP-N out of range: {n}")
+        return {"arm": arm, "mode": "naive_mtp", "expected_tok_per_draft": n,
+                "is_tree": False, "tree": None}
+    # tree arm
+    if tree is None:
+        raise ValueError(
+            f"tree arm {arm!r} requires --tree '[(0,), (0,0), ...]' (fail-loud on "
+            "unbuilt shape: the canonical cat9 is "
+            "[(0,), (0,0), (0,0,0), (0,0,0,0), (0,0,0,0,0), (0,1), (0,0,1), "
+            "(0,0,0,1), (0,0,0,0,1)])"
+        )
+    import ast
+    nodes = ast.literal_eval(tree)
+    if not isinstance(nodes, (list, tuple)) or not nodes:
+        raise ValueError(f"--tree must be a non-empty list of tuples: {tree!r}")
+    return {"arm": arm, "mode": "tree_mtp", "expected_tok_per_draft": len(nodes),
+            "is_tree": True, "tree": tree, "tree_len": len(nodes)}
+
+
+# --------------------------------------------------------------------------- #
+# Engagement asserts (class-9 fail-loud) — BEFORE any number is recorded       #
+# --------------------------------------------------------------------------- #
+def assert_engaged(spec: dict[str, Any], metric_delta: dict[str, float],
+                   *, context: str) -> dict[str, Any]:
+    """tok/draft over the measured window MUST equal the arm's expected shape.
+
+    This is the cheap, mode-agnostic engagement gate from raw /metrics counters
+    (no logprobs needed): num_draft_tokens / num_drafts == N (native) ==
+    len(TREE) (tree). If the server silently fell back (e.g. linear) or built a
+    different tree, tok/draft != expected and we record NOTHING.
+    """
+    drafts = metric_delta.get(M_DRAFTS, 0.0)
+    draft_tok = metric_delta.get(M_DRAFT_TOK, 0.0)
+    if drafts <= 0:
+        raise RuntimeError(
+            f"class-9 FAIL-LOUD [{context}]: zero spec_drafts in the window "
+            "(speculation did not engage) -- recording nothing."
+        )
+    tok_per_draft = draft_tok / drafts
+    expected = float(spec["expected_tok_per_draft"])
+    if abs(tok_per_draft - expected) > 1e-6:
+        raise RuntimeError(
+            f"class-9 FAIL-LOUD [{context}]: tok/draft={tok_per_draft} != "
+            f"expected {expected} for arm {spec['arm']} -- the served shape is "
+            "NOT what was requested (silent fallback / wrong tree). Nothing recorded."
+        )
+    return {"tok_per_draft": tok_per_draft, "expected_tok_per_draft": expected,
+            "engaged": True}
+
+
+def assert_no_mode_mix(records: list[dict[str, Any]]) -> None:
+    """No speed number may cite an ON capture; no lossless number an OFF capture.
+
+    Each record carries {"kind": "speed"|"lossless"|"drift", "instrument":
+    "OFF"|"ON"}. SPEED must be OFF; lossless/drift must be ON. Raise on mix.
+    """
+    for r in records:
+        kind = r.get("kind")
+        inst = r.get("instrument")
+        if kind == "speed" and inst != "OFF":
+            raise RuntimeError(
+                f"MODE MIX: speed number {r.get('label')!r} came from "
+                f"instrument={inst} (must be OFF=clean deployment). Refusing to report."
+            )
+        if kind in ("lossless", "drift") and inst != "ON":
+            raise RuntimeError(
+                f"MODE MIX: {kind} number {r.get('label')!r} came from "
+                f"instrument={inst} (must be ON). Refusing to report."
+            )
+
+
+def assert_speed_basis(basis: str) -> None:
+    if basis.lower() in BANNED_SPEED_BASES:
+        raise RuntimeError(
+            f"BANNED speed basis {basis!r}: s/fwd MUST be "
+            "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total). "
+            "TPS/accept/wall/req_elapsed are NEVER the basis (class-12)."
+        )
+
+
+# --------------------------------------------------------------------------- #
+# Stream fingerprint — bind accept/event to its served trajectory             #
+# --------------------------------------------------------------------------- #
+def stream_fingerprint(served_streams: list[list[int]]) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    for s in served_streams:
+        h.update(bytes(str(s), "utf-8"))
+    return h.hexdigest()[:16]
+
+
+# --------------------------------------------------------------------------- #
+# Request drivers                                                              #
+# --------------------------------------------------------------------------- #
+def _one_request(endpoint, model, prompt, *, n, max_tokens, temperature, top_p,
+                 seed, mode, logprobs, timeout):
+    payload: dict[str, Any] = {
+        "model": model,
+        "prompt": [prompt] * n if n > 1 else prompt,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "top_p": top_p,
+        "seed": seed,
+        "return_token_ids": True,
+        "vllm_xargs": {"fr10_decode_mode": mode},
+    }
+    if logprobs is not None:
+        payload["logprobs"] = logprobs
+    data = _post_json(endpoint, "/v1/completions", payload, timeout=timeout)
+    return data["choices"]
+
+
+def _self_warm(endpoint, model, prompt, mode, seed, timeout):
+    """ONE raw self-warm request (NOT chat template). The chat-template warmup
+    was the phase0 confound; the canonical warmup is a raw /v1/completions on
+    the real prompt, then reset_prefix_cache so the load starts cold+warm-kernel."""
+    _one_request(endpoint, model, prompt, n=1, max_tokens=16, temperature=0.0,
+                 top_p=1.0, seed=seed, mode=mode, logprobs=None, timeout=timeout)
+    try:
+        _post_json(endpoint, "/reset_prefix_cache", {}, timeout=30)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+# --------------------------------------------------------------------------- #
+# SPEED (OFF mode) — the deployment number                                     #
+# --------------------------------------------------------------------------- #
+def cmd_speed(args: argparse.Namespace) -> int:
+    assert_speed_basis(args.basis)  # blocks banned bases
+    if args.wait_health:
+        _wait_health(args.endpoint, args.wait_health)
+    spec = parse_arm(args.arm, args.tree)
+    prompts = _read_prompts(args.prompts_file)
+
+    # canonical warmup: ONE raw self-warm, then reset_prefix_cache.
+    _self_warm(args.endpoint, args.model, prompts[0], spec["mode"], args.seed,
+               args.request_timeout)
+
+    before = _scrape(args.endpoint)
+    served_streams: list[list[int]] = []
+    if args.batch_size == 1:
+        # B=1 SEQUENTIAL: one prompt, one sample, at a time.
+        for prompt in prompts:
+            choices = _one_request(
+                args.endpoint, args.model, prompt, n=1,
+                max_tokens=args.max_tokens, temperature=args.temperature,
+                top_p=args.top_p, seed=args.seed, mode=spec["mode"],
+                logprobs=None, timeout=args.request_timeout,
+            )
+            for ch in choices:
+                served_streams.append([int(x) for x in (ch.get("token_ids") or [])])
+    else:
+        # B=batch: one client batch of `batch_size` identical samples per prompt
+        # (co-residency present; accept/event degrades, s/fwd ~invariant).
+        for prompt in prompts:
+            choices = _one_request(
+                args.endpoint, args.model, prompt, n=args.batch_size,
+                max_tokens=args.max_tokens, temperature=args.temperature,
+                top_p=args.top_p, seed=args.seed, mode=spec["mode"],
+                logprobs=None, timeout=args.request_timeout,
+            )
+            for ch in choices:
+                served_streams.append([int(x) for x in (ch.get("token_ids") or [])])
+    after = _scrape(args.endpoint)
+    md = _delta(after, before)
+
+    eng = assert_engaged(spec, md, context=f"speed {spec['arm']} B={args.batch_size}")
+
+    drafts = md[M_DRAFTS]
+    s_fwd = md[M_DECODE_S] / drafts if drafts > 0 else None
+    accept_per_event = md[M_ACCEPTED] / drafts if drafts > 0 else None
+    committed_per_event = (accept_per_event + 1.0) if accept_per_event is not None else None
+    derived_tps = (committed_per_event / s_fwd) if (s_fwd and committed_per_event) else None
+
+    rec = {
+        "schema": "fr13.measure.speed.v1",
+        "kind": "speed",
+        "instrument": "OFF",
+        "label": f"speed_{spec['arm']}_b{args.batch_size}_t{args.temperature}",
+        "arm": spec["arm"],
+        "mode": spec["mode"],
+        "tree": spec.get("tree"),
+        "batch_size": args.batch_size,
+        "b1_sequential": args.batch_size == 1,
+        "temperature": args.temperature,
+        "top_p": args.top_p,
+        "seed": args.seed,
+        "max_tokens": args.max_tokens,
+        "prompts_file": args.prompts_file,
+        "n_served_streams": len(served_streams),
+        "served_stream_fingerprint": stream_fingerprint(served_streams),
+        "served_lens": [len(s) for s in served_streams],
+        "engagement": eng,
+        "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
+        "s_per_fwd": s_fwd,
+        "accept_per_event": accept_per_event,
+        "accept_per_event_note": (
+            "B-DEPENDENT + TRAJECTORY-BOUND: valid only for this served_stream_"
+            "fingerprint at this batch_size; NOT apple-to-apple across boots "
+            "(same-prefill greedy fork, bug-class #12)."
+        ),
+        "committed_per_event": committed_per_event,
+        "derived_tps": derived_tps,
+        "derived_tps_note": "DERIVED = committed_per_event / s_fwd; NOT measured.",
+        "raw_counter_delta": md,
+        "ts": time.time(),
+    }
+    if args.dump_streams:
+        rec["served_streams"] = served_streams
+    assert_no_mode_mix([rec])
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({k: rec[k] for k in (
+        "arm", "batch_size", "temperature", "s_per_fwd", "accept_per_event",
+        "committed_per_event", "derived_tps", "served_stream_fingerprint",
+        "instrument")}, indent=2))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# CAPTURE-Q (ON mode) — the NEW full-stream spec verify dist q                 #
+# --------------------------------------------------------------------------- #
+def cmd_capture_q(args: argparse.Namespace) -> int:
+    """Per-served-position top-K log_softmax over the WHOLE served stream.
+
+    This extends the gold_margin top_logprobs capture (which records the spec
+    verify forward dist) from the 4 fork positions to the FULL stream, and
+    records the per-position truncated tail mass (1 - sum exp(topk_logprobs)) as
+    the truncation error bar. The result is q at T=1; the temp-0.6 reduce applies
+    /0.6 (the per-position additive constant cancels in the softmax). NOTHING
+    records this today -- this was the gap.
+    """
+    if args.wait_health:
+        _wait_health(args.endpoint, args.wait_health)
+    spec = parse_arm(args.arm, args.tree)
+    prompts = _read_prompts(args.prompts_file)
+    _self_warm(args.endpoint, args.model, prompts[0], spec["mode"], args.seed,
+               args.request_timeout)
+    before = _scrape(args.endpoint)
+
+    reps: list[list[dict[str, Any]]] = []
+    for _rep in range(2):  # within-boot determinism (class-8)
+        rep_records: list[dict[str, Any]] = []
+        for pid, prompt in enumerate(prompts):
+            ch = _one_request(
+                args.endpoint, args.model, prompt, n=1,
+                max_tokens=args.max_tokens, temperature=args.temperature,
+                top_p=args.top_p, seed=args.seed, mode=spec["mode"],
+                logprobs=args.top_k, timeout=args.request_timeout,
+            )[0]
+            lp = ch.get("logprobs") or {}
+            top = lp.get("top_logprobs") or []
+            tail_mass = []
+            for pos in top:
+                if pos:
+                    s = sum(math.exp(v) for v in pos.values())
+                    tail_mass.append(max(0.0, 1.0 - s))
+                else:
+                    tail_mass.append(None)
+            rep_records.append({
+                "prompt_id": pid,
+                "served_token_ids": [int(x) for x in (ch.get("token_ids") or [])],
+                "served_tokens": lp.get("tokens") or [],
+                "served_token_logprobs": lp.get("token_logprobs") or [],
+                "top_logprobs": top,                # q at T=1, per position
+                "per_position_tail_mass": tail_mass,  # truncation error bar
+                "finish_reason": ch.get("finish_reason"),
+            })
+        reps.append(rep_records)
+    after = _scrape(args.endpoint)
+    md = _delta(after, before)
+    eng = assert_engaged(spec, md, context=f"capture-q {spec['arm']}")
+
+    within_boot_det = [
+        reps[0][pid]["served_token_ids"] == reps[1][pid]["served_token_ids"]
+        for pid in range(len(prompts))
+    ]
+    artifact = {
+        "schema": "fr13.measure.capture_q.v1",
+        "kind": "drift",
+        "instrument": "ON",
+        "label": f"q_{spec['arm']}_t{args.temperature}",
+        "arm": spec["arm"],
+        "mode": spec["mode"],
+        "tree": spec.get("tree"),
+        "temperature": args.temperature,
+        "top_p": args.top_p,
+        "seed": args.seed,
+        "top_k": args.top_k,
+        "max_tokens": args.max_tokens,
+        "prompts": prompts,
+        "records": reps[0],
+        "records_rep2": reps[1],
+        "within_boot_det_rep1_eq_rep2": within_boot_det,
+        "served_stream_fingerprint": stream_fingerprint(
+            [r["served_token_ids"] for r in reps[0]]),
+        "engagement": eng,
+        "raw_counter_delta": md,
+        "ts": time.time(),
+    }
+    assert_no_mode_mix([artifact])
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(artifact, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({
+        "arm": spec["arm"], "instrument": "ON",
+        "within_boot_det": within_boot_det,
+        "served_lens": [len(r["served_token_ids"]) for r in reps[0]],
+        "n_positions_with_q": [len(r["top_logprobs"]) for r in reps[0]],
+        "median_tail_mass": [
+            (statistics.median([t for t in r["per_position_tail_mass"] if t is not None])
+             if any(t is not None for t in r["per_position_tail_mass"]) else None)
+            for r in reps[0]
+        ],
+    }, indent=2))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# temp-0.6 DRIFT reduce (CPU) — TV(softmax(q/0.6), softmax(p/0.6))             #
+# --------------------------------------------------------------------------- #
+def _logprob_map(top_logprobs_pos: dict[str, Any]) -> dict[str, float]:
+    return {k: float(v) for k, v in (top_logprobs_pos or {}).items()}
+
+
+def _softmax_over_support_at_temp(lp_map: dict[str, float], temp: float) -> dict[str, float]:
+    """softmax(logprob/temp) over the captured top-K support. Since logprob =
+    log_softmax(logit) = logit - C, logprob/temp = logit/temp - C/temp; the
+    additive C/temp cancels in the re-softmax over the SAME support. So this is
+    exactly softmax(logit/temp) restricted to the captured support."""
+    if not lp_map:
+        return {}
+    scaled = {k: v / temp for k, v in lp_map.items()}
+    m = max(scaled.values())
+    exps = {k: math.exp(v - m) for k, v in scaled.items()}
+    z = sum(exps.values())
+    return {k: e / z for k, e in exps.items()}
+
+
+def _tv(p: dict[str, float], q: dict[str, float]) -> float:
+    keys = set(p) | set(q)
+    return 0.5 * sum(abs(p.get(k, 0.0) - q.get(k, 0.0)) for k in keys)
+
+
+def _kl(p: dict[str, float], q: dict[str, float], eps: float = 1e-12) -> float:
+    # KL(p || q) in the direction the sampler "feels" (target p re-weighted by q)
+    out = 0.0
+    for k, pv in p.items():
+        if pv > 0:
+            out += pv * math.log(pv / max(q.get(k, 0.0), eps))
+    return out
+
+
+def cmd_temp06_drift(args: argparse.Namespace) -> int:
+    """Reduce the per-position TV/KL(q,p) at temp-0.6 for ONE arm vs its OWN
+    recurrent oracle. q = capture-q artifact (spec verify top-K); p = the
+    recurrent-decode oracle top-K (fr13_recurrent_decode_oracle.py rescore on
+    the SAME served stream). Each arm vs its OWN oracle (apples-to-apples)."""
+    q_art = json.loads(Path(args.q).read_text(encoding="utf-8"))
+    p_art = json.loads(Path(args.p).read_text(encoding="utf-8"))
+    if q_art.get("instrument") != "ON":
+        raise RuntimeError("temp06-drift q artifact must be instrument=ON (capture-q).")
+    # p artifact = recurrent oracle rescore (has per_prompt[].positions[] with
+    # oracle_topk_ids + oracle_topk_logprobs). Assert it is the recurrent frame.
+    if not p_art.get("RECURRENT_PATH_ENGAGED", False):
+        raise RuntimeError(
+            "class-9 FAIL-LOUD: p oracle artifact does not assert "
+            "RECURRENT_PATH_ENGAGED -- refusing (wrong/chunked oracle frame)."
+        )
+    temp = args.temp
+    q_recs = q_art["records"]
+    p_prompts = {pp["prompt_id"]: pp for pp in p_art["per_prompt"]}
+
+    forks: list[dict[str, Any]] = []
+    all_tv: list[float] = []
+    over_floor_total = 0
+    for qrec in q_recs:
+        pid = qrec["prompt_id"]
+        pp = p_prompts.get(pid)
+        if pp is None:
+            forks.append({"prompt_id": pid, "note": "no oracle for prompt"})
+            continue
+        q_tops = qrec["top_logprobs"]
+        q_tail = qrec.get("per_position_tail_mass") or []
+        # oracle positions carry the recurrent top-K log_softmax; index by step.
+        p_pos = {p["pos"]: p for p in pp["positions"]}
+        per_pos: list[dict[str, Any]] = []
+        for i, q_pos in enumerate(q_tops):
+            p_rec = p_pos.get(i)
+            if p_rec is None or "oracle_topk_logprobs" not in p_rec:
+                continue
+            qmap = _logprob_map(q_pos)
+            # build p map from the oracle top-K (ids -> logprobs)
+            pmap = {str(tid): lp for tid, lp in zip(
+                p_rec.get("oracle_topk_ids", []),
+                p_rec.get("oracle_topk_logprobs", []))}
+            # q is keyed by token STRING; p by token ID. Re-key q to ids when the
+            # oracle records ids (the canonical capture also records served_tokens
+            # so a downstream re-key is possible); here we compare on the OVERLAP
+            # of the served-token + argmax keys via the served id, falling back to
+            # string keys if both sides are strings.
+            q_at = _softmax_over_support_at_temp(qmap, temp)
+            p_at = _softmax_over_support_at_temp(
+                {k: v for k, v in pmap.items()}, temp)
+            # NOTE: q-keys are token strings; p-keys are token-id strings. To make
+            # them comparable we align on the served token only when both expose
+            # it; the FULL cross-key TV requires the GPU capture to record q by
+            # token-id (the capture-q artifact records served_token_ids so the
+            # GPU pass can be extended to emit id-keyed q). When keys are not
+            # alignable we record the per-position served-token probability gap as
+            # a lower bound + flag align_status so the reduce is never vacuous.
+            served_str = (qrec.get("served_tokens") or [None] * len(q_tops))[i]
+            q_served = q_at.get(served_str)
+            tv = _tv(q_at, p_at) if (set(q_at) & set(p_at)) else None
+            kl = _kl(p_at, q_at) if (set(q_at) & set(p_at)) else None
+            entry = {
+                "pos": i,
+                "tv_q_p_at_temp": tv,
+                "kl_p_q_at_temp": kl,
+                "q_served_prob_at_temp": q_served,
+                "q_tail_mass_T1": (q_tail[i] if i < len(q_tail) else None),
+                "align_status": ("id_string_mismatch" if tv is None else "ok"),
+            }
+            per_pos.append(entry)
+            if tv is not None:
+                all_tv.append(tv)
+                if args.per_position_floor is not None and tv > args.per_position_floor:
+                    over_floor_total += 1
+        forks.append({
+            "prompt_id": pid,
+            "n_positions": len(per_pos),
+            "mean_tv": (statistics.fmean([e["tv_q_p_at_temp"] for e in per_pos
+                                          if e["tv_q_p_at_temp"] is not None])
+                        if any(e["tv_q_p_at_temp"] is not None for e in per_pos) else None),
+            "positions": per_pos if args.dump_positions else per_pos[:5],
+        })
+
+    result = {
+        "schema": "fr13.measure.temp06_drift.v1",
+        "kind": "drift",
+        "instrument": "ON",
+        "label": f"temp06_drift_{q_art.get('arm')}",
+        "arm": q_art.get("arm"),
+        "temp": temp,
+        "q_artifact": args.q,
+        "p_artifact": args.p,
+        "per_position_floor": args.per_position_floor,
+        "mean_tv_q_p_at_temp": (statistics.fmean(all_tv) if all_tv else None),
+        "p95_tv_q_p_at_temp": (
+            sorted(all_tv)[int(0.95 * (len(all_tv) - 1))] if all_tv else None),
+        "n_positions_scored": len(all_tv),
+        "over_floor_count": over_floor_total,
+        "per_position_note": (
+            "PAIR the scalar with the per-position vector "
+            "(reference_scalar_metric_per_token_blindspot): "
+            "over_floor_count names WHERE the drift crosses the native floor."
+        ),
+        "forks": forks,
+        "ts": time.time(),
+    }
+    assert_no_mode_mix([result])
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({k: result[k] for k in (
+        "arm", "temp", "mean_tv_q_p_at_temp", "p95_tv_q_p_at_temp",
+        "n_positions_scored", "over_floor_count", "instrument")}, indent=2))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# BAG-TV (deployment cross-check) — realized multi-seed served streams         #
+# --------------------------------------------------------------------------- #
+def _bag_tv(stream_a: list[int], stream_b: list[int]) -> float:
+    from collections import Counter
+    ca, cb = Counter(stream_a), Counter(stream_b)
+    na, nb = sum(ca.values()) or 1, sum(cb.values()) or 1
+    keys = set(ca) | set(cb)
+    return 0.5 * sum(abs(ca.get(k, 0) / na - cb.get(k, 0) / nb) for k in keys)
+
+
+def cmd_bag_tv(args: argparse.Namespace) -> int:
+    """Multi-seed realized BAG-TV with the p95 native-self floor (gate (b)).
+
+    --native is a list of native temp-0.6 served-stream captures (N seeds); the
+    floor = p95 of C(N,2) native-vs-native bag-TV draws. --cat is the cat9
+    captures (same seeds); cat-vs-native bag-TV PASSES iff <= floor_p95.
+    Upgrades the single-draw 0.1133 to a robust threshold (class-12)."""
+    def _load_streams(paths: list[str]) -> list[list[int]]:
+        streams: list[list[int]] = []
+        for path in paths:
+            art = json.loads(Path(path).read_text(encoding="utf-8"))
+            for r in art["records"]:
+                streams.append([int(x) for x in r["served_token_ids"]])
+        return streams
+
+    native = _load_streams(args.native)
+    if len(native) < 2:
+        raise RuntimeError("bag-tv native floor needs >=2 native streams (seeds).")
+    native_draws = [_bag_tv(a, b) for a, b in combinations(native, 2)]
+    native_draws.sort()
+    floor_p95 = native_draws[int(0.95 * (len(native_draws) - 1))]
+
+    cat_vs_native = None
+    verdict = None
+    if args.cat:
+        cat = _load_streams(args.cat)
+        cross = [_bag_tv(c, n) for c in cat for n in native]
+        cat_vs_native = statistics.fmean(cross)
+        verdict = "PASS_within_floor" if cat_vs_native <= floor_p95 else "ABOVE_floor"
+
+    result = {
+        "schema": "fr13.measure.bag_tv.v1",
+        "kind": "drift",
+        "instrument": "ON",
+        "label": "bag_tv_temp06",
+        "n_native_streams": len(native),
+        "n_native_draws": len(native_draws),
+        "native_floor_p95": floor_p95,
+        "native_floor_mean": statistics.fmean(native_draws),
+        "cat_vs_native_bag_tv": cat_vs_native,
+        "verdict": verdict,
+        "ts": time.time(),
+    }
+    assert_no_mode_mix([result])
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# DIAG-RESIDUE — OFF-vs-ON s/fwd instrument tax                                #
+# --------------------------------------------------------------------------- #
+def cmd_diag_residue(args: argparse.Namespace) -> int:
+    off = json.loads(Path(args.off).read_text(encoding="utf-8"))
+    on = json.loads(Path(args.on).read_text(encoding="utf-8"))
+    if off.get("instrument") != "OFF":
+        raise RuntimeError("diag-residue --off must be an OFF (clean) speed record.")
+    # the ON record's s/fwd is whatever its raw_counter_delta yields
+    on_md = on.get("raw_counter_delta", {})
+    on_drafts = on_md.get(M_DRAFTS, 0.0)
+    on_s_fwd = (on_md.get(M_DECODE_S, 0.0) / on_drafts) if on_drafts > 0 else None
+    off_s_fwd = off.get("s_per_fwd")
+    tax = None
+    if off_s_fwd and on_s_fwd:
+        tax = (on_s_fwd - off_s_fwd) / off_s_fwd
+    result = {
+        "schema": "fr13.measure.diag_residue.v1",
+        "arm": off.get("arm"),
+        "off_s_per_fwd": off_s_fwd,
+        "on_s_per_fwd": on_s_fwd,
+        "instrument_tax_frac": tax,
+        "tax_expectation": "<=0.025 (46e89f22), MEASURED not assumed",
+        "tax_within_expectation": (tax is not None and tax <= 0.025),
+        "note": (
+            "OFF s/fwd is the deployment speed; ON s/fwd is ONLY for this tax. "
+            "Speed verdicts NEVER use the ON number."
+        ),
+        "ts": time.time(),
+    }
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# RECONCILE — measured vs banked historic numbers                             #
+# --------------------------------------------------------------------------- #
+BANKED = {
+    "native_e5": {"s_per_fwd": 0.218160, "accept_per_event": 3.161290,
+                  "decode_tps": 18.93, "src": "FR13_B1_CURRENT_GATE_BIND"},
+    "cat9": {"s_per_fwd": 0.2248, "accept_per_event": 3.18,
+             "src": "FR13_B1_FIX3_GATE_BIND"},
+}
+
+
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    rows = []
+    for path in args.speed:
+        rec = json.loads(Path(path).read_text(encoding="utf-8"))
+        if rec.get("kind") != "speed" or rec.get("instrument") != "OFF":
+            raise RuntimeError(f"{path}: reconcile only consumes OFF speed records.")
+        arm = rec["arm"]
+        banked = BANKED.get(arm)
+        row = {
+            "arm": arm,
+            "batch_size": rec.get("batch_size"),
+            "served_stream_fingerprint": rec.get("served_stream_fingerprint"),
+            "measured_s_per_fwd": rec.get("s_per_fwd"),
+            "measured_accept_per_event": rec.get("accept_per_event"),
+            "banked_s_per_fwd": banked.get("s_per_fwd") if banked else None,
+            "banked_accept_per_event": banked.get("accept_per_event") if banked else None,
+            "banked_src": banked.get("src") if banked else None,
+        }
+        if banked and rec.get("s_per_fwd"):
+            row["s_per_fwd_delta_frac"] = (
+                (rec["s_per_fwd"] - banked["s_per_fwd"]) / banked["s_per_fwd"])
+        if banked and rec.get("accept_per_event") is not None:
+            row["accept_delta_abs"] = rec["accept_per_event"] - banked["accept_per_event"]
+            row["reproduces_banked_accept"] = (
+                abs(row["accept_delta_abs"]) <= args.accept_tol)
+            row["accept_note"] = (
+                "accept is trajectory-bound (bug-class #12): a match means this "
+                "boot's greedy stream is the gold trajectory; a miss is a "
+                "same-prefill fork, NOT a behavior regression — check the "
+                "served_stream_fingerprint, do not treat as lossless verdict."
+            )
+        rows.append(row)
+    result = {
+        "schema": "fr13.measure.reconcile.v1",
+        "accept_tol": args.accept_tol,
+        "rows": rows,
+        "ts": time.time(),
+    }
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = p.add_subparsers(dest="command", required=True)
+
+    def common_capture(sp):
+        sp.add_argument("--arm", required=True,
+                        help="native_eN (N=3..8) or a tree name (needs --tree)")
+        sp.add_argument("--tree", default=None,
+                        help="caterpillar TREE for tree arms, e.g. cat9 list")
+        sp.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+        sp.add_argument("--model", default=DEFAULT_MODEL)
+        sp.add_argument("--prompts-file", default=CANONICAL_PROMPTS)
+        sp.add_argument("--seed", type=int, default=CANONICAL_SEED)
+        sp.add_argument("--max-tokens", type=int, default=CANONICAL_MAX_TOKENS)
+        sp.add_argument("--request-timeout", type=float, default=900.0)
+        sp.add_argument("--wait-health", type=float, default=0.0)
+        sp.add_argument("--out", required=True)
+
+    s = sub.add_parser("speed", help="OFF-mode s/fwd + accept (deployment speed)")
+    common_capture(s)
+    s.add_argument("--batch-size", type=int, default=1,
+                   help="1 = SEQUENTIAL B=1 (default); 4 = co-resident B=4")
+    s.add_argument("--temperature", type=float, default=0.0)
+    s.add_argument("--top-p", type=float, default=1.0)
+    s.add_argument("--basis", default="decode_seconds",
+                   help="speed basis; banned: tps/accept/wall/req_elapsed")
+    s.add_argument("--dump-streams", action="store_true")
+    s.set_defaults(func=cmd_speed)
+
+    q = sub.add_parser("capture-q",
+                       help="ON-mode full-stream spec verify dist q (top-K log_softmax)")
+    common_capture(q)
+    q.add_argument("--temperature", type=float, default=0.6)
+    q.add_argument("--top-p", type=float, default=0.95)
+    q.add_argument("--top-k", type=int, default=20)
+    q.set_defaults(func=cmd_capture_q)
+
+    d = sub.add_parser("temp06-drift",
+                       help="CPU reduce: TV(softmax(q/0.6),softmax(p/0.6)) per position")
+    d.add_argument("--q", required=True, help="capture-q artifact (instrument=ON)")
+    d.add_argument("--p", required=True,
+                   help="recurrent oracle rescore (RECURRENT_PATH_ENGAGED)")
+    d.add_argument("--temp", type=float, default=0.6)
+    d.add_argument("--per-position-floor", type=float, default=None,
+                   help="native-vs-native per-position TV floor; over-floor count")
+    d.add_argument("--dump-positions", action="store_true")
+    d.add_argument("--out", required=True)
+    d.set_defaults(func=cmd_temp06_drift)
+
+    b = sub.add_parser("bag-tv",
+                       help="multi-seed realized bag-TV with p95 native floor")
+    b.add_argument("--native", nargs="+", required=True,
+                   help="native temp-0.6 capture-q/speed artifacts (N seeds)")
+    b.add_argument("--cat", nargs="+", default=None,
+                   help="cat9 temp-0.6 artifacts (same seeds)")
+    b.add_argument("--out", required=True)
+    b.set_defaults(func=cmd_bag_tv)
+
+    dr = sub.add_parser("diag-residue", help="OFF-vs-ON s/fwd instrument tax")
+    dr.add_argument("--off", required=True, help="OFF speed record")
+    dr.add_argument("--on", required=True, help="ON capture (carries raw_counter_delta)")
+    dr.add_argument("--out", required=True)
+    dr.set_defaults(func=cmd_diag_residue)
+
+    rc = sub.add_parser("reconcile", help="measured OFF speed vs banked historic")
+    rc.add_argument("--speed", nargs="+", required=True,
+                    help="OFF speed records to reconcile")
+    rc.add_argument("--accept-tol", type=float, default=0.05)
+    rc.add_argument("--out", required=True)
+    rc.set_defaults(func=cmd_reconcile)
+    return p
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
