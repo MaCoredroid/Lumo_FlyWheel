@@ -397,3 +397,85 @@ fp8_utils.py:611-624,640,678,717-731 (K-accum loop + no-GB10-config default bran
 scripts/vllm_src.sh (pinned 3dbe092ec5b2); HEAD code
 fr10_phase4_patch_vllm_tree_gdn.py:14168-14248 (_patch_fp8_utils_gb10_gemv_cfg),
 :14249+ (_patch_rejection_sampler_gpu_committer registered in main()).
+
+# APPENDIX 4 (ACCEPT-SIDE lineage) — the TPS NUMERATOR: cat9 vs native accept/event + the L3 lever
+
+Scope = accept/event (tokens-committed-per-step), the TPS numerator (TPS = (accept+1)/s_fwd). The
+s/fwd appendices above are the DENOMINATOR; this is the numerator. Basis = spec_accepted_tokens /
+spec_drafts (draft-only, bonus excluded, class-12), pinned same-N prompts, greedy, B=1.
+
+## Current cat9 vs native accept/event (depth-matched: cat9 d5 -> native E5/MTP-5)
+| basis | cat9 | native | delta | MEASURED? | source |
+|---|---|---|---|---|---|
+| **controlled pinned-probe, greedy, post-FIX-A** | **3.1789** | **3.1613 (E5)** | **+0.0176** | **MEASURED** | ac1d3039 FIX-A bind |
+| native depth-5 structural accept floor | — | **3.076** | — | MEASURED | FR13_PEREVENT_SUPERSET_GATE_RESULT (E5 [0,1,1,1]) |
+| gold-gate aggregate (token-weighted, long ctx) | 3.149 | 3.577 | -0.427 | MEASURED but CONFOUNDED | fdf5ffa7 (wf_d8a86320) |
+| gold-gate per-request MEDIAN | 3.5872 | 3.5955 | ~0 | MEASURED but CONFOUNDED | fdf5ffa7 |
+
+The two non-confounded MEASURED anchors agree: cat9 has a TINY real accept EDGE (+0.0176) over
+native E5. The -0.43 "behind native" is TRAJECTORY-CONFOUNDED (cat9/native fork early into different
+greedy streams; cat9's long low-accept requests deflate the token-weighted aggregate on a different
+token path; cross-boot tree spread 0.648 >> the ~0.2 margin = a DRAW basis, not a verdict).
+
+## Does cat9 have a real accept EDGE? YES, small + real (NOT the -0.43)
+- Controlled: +0.0176/event over native E5 (MEASURED). Structural proof: per-event SUPERSET gate
+  (e720b0be, verify HOLDS) = cat9 net **+15 lossless leaf-saves** over E5 (21 lossless - 6 lossy - 0
+  spine-regressions), **0 spine-regressions by committer construction** (strict >best_lcp spine-favored
+  tie-break, confirmed over 250 dump recs). cat9 IS a per-event lossless superset of E5 at parity.
+- Edge is SMALL because it is a decontaminated branch bonus: FIX-A (ac1d3039, H1 ROWBUG = +1-shifted
+  path publication on ~51% of partial-accept events; FR13_TREE_SAMPLE_ROW, baked ON HEAD patcher
+  L10869 + launcher :-1) lifted accept **2.0274 -> 3.1789 (+1.15)**; root-reject 39.7% -> 13.8%;
+  next-spine-LCP 0.97 -> 3.04. Pre-FIX-A the +0.21 GROSS branch bonus was net-zeroed by ~0.75-0.85
+  spine contamination; post-FIX-A realized NET bonus is +0.02..+0.05 (branches still 90.8% co-located
+  with parent rejections, capping below gross).
+- Spine accept = native at parity (N5 spine oracle, MEASURED, acceptance_ladder): native-on-tree-path
+  d0..d4 tree {.662,.650,.688,.764,.694} vs native {.694,.573,.675,.739,.701}, net tree +12 (verify
+  not under-accepting). The d0 marginal deficit (tree .667 vs native .894) = genuine DRAFTER quality
+  on the tree stream, NOT a verify bug.
+
+## The ~4.3% verify-flips do NOT eat accept (lossless-violations, not accept-drains)
+22-23 clear-margin flips land on ALREADY-FULLY-ACCEPTED spine rows (p2 pos21 node7 SPINE
+num_accepted=5/5; p3 pos73 node7 reject_correction num_accepted=4) - corrupt WHICH token emits (byte
+losslessness), NOT how many accept. Per-event decomp of 23: 6 lossy leaf-saves (net-paid-for by +15)
++ 17 spine-realization/bonus drift (tree-verify FA2+tree-scan vs native FLASH = the 7.39x own-rate
+lossless gap, wgb0yegin). Fixing verify bit-exactness moves accept ~0 (+0..+0.05). Edge NOT blocked.
+
+## L3 confidence-gated root-sibling — the accept lever's reach (cat10 lineage)
+- Unconditional cat10 (always-on (1,) sibling): NET accept LOSS -0.27 (3.198 -> 2.932), but
+  ARTIFACT-DOMINATED (cd30f5ad, verify holds=FALSE corrected readers): trajectory/EOS confound +
+  SIBLING-STOP DENOMINATOR ARTIFACT (sibling win is accepted_len=1, deflates d1|d0; de-confound
+  recovers ~0.84). VERDICT=no_help (9aa28ce5), archived not merged (986c6e77), NOT on HEAD; lossless
+  FLAT (22==22); cost +1 lm-head row ~2.9 ms/fwd.
+- d0-rescue is REAL: P(target==root-rank-2 | rank-1 missed) = **0.273 (27%)** MEASURED (2-horse-race);
+  unconditional sibling gets d0-reject 0.129 -> 0.094 = **+0.035 d0 accept (~+21/boot) MEASURED**, but
+  pays the row 100% of events + dilutes deeper -> net -0.27.
+- **L3 LEVER = CONFIDENCE-GATED form** (non-refuted, future, NOT on HEAD): emit (1,) ONLY when root
+  top-2 margin < tau (62% of rejects step-0). Gate is FREE (top2 already materialized, one scalar
+  compare, zero extra forward). Keeps +0.035 d0 rescue WITHOUT the d1-d4 (mostly-artifact) dilution.
+  **L3 reach = +0.035 (d0-rescue floor, MEASURED) to +0.08..+0.15 (first-order doc bound, INFERRED)**
+  -> cat9 accept ~3.21..3.33. Decisive test needs a per-node sibling-vs-spine counter (ABSENT from
+  saved data) so the upper reach is INFERRED. Non-refuted in wgb0yegin (eabb07f9).
+
+## CORRECTED stale accept numbers
+- "cat9 -0.43 BEHIND native" (fdf5ffa7 headline) -> confounded gold-gate; controlled = +0.0176 AHEAD.
+- "accept gap UNRESOLVED draw" (fdf5ffa7) -> RESOLVED for cat9 by per-event gate (e720b0be): net +15,
+  0 spine-regressions, cat9 IS a lossless superset of E5.
+- "cat9 accept 2.03" (pre-FIX-A) -> 3.1789 (FIX-A baked ON).
+- "cat10 root sibling helps accept" -> unconditional -0.27 artifact; only confidence-gated lives.
+
+NET (accept-side): cat9 numerator is ALREADY >= native E5 at parity (+0.0176 controlled, structurally
+net +15 lossless superset, 0 spine-regressions). The TPS verdict is gated by the DENOMINATOR
+(s/fwd ~1.05x), not the numerator - the edge is too small to clear the per-forward tax alone
+(break-even needs accept ~3.43 at 1.05x). L3 confidence-gated root sibling is the cheapest numerator
+lever (+0.035..+0.15, attacking the 62%-step-0-reject + d0 drafter deficit) but must combine with the
+speed levers (Appendix-3) to cross to strictly sub-native TPS. MEASURED vs INFERRED labeled inline.
+
+Appendix-4 citations: ac1d3039 (FIX-A bind FR13_CHASE_FIXA_BIND.md), e720b0be /
+FR13_PEREVENT_SUPERSET_GATE_RESULT.md (77e2a0e8 reducer scripts/fr13_perevent_superset_gate.py),
+fdf5ffa7 / FR13_SPEED_TAX_SCALING_BIND.md, 4b6769ee (b1_superset_speed_research_wf_c618b0c9.raw.json),
+cd30f5ad + 9aa28ce5 + 986c6e77 + 31e227cf (cat10 / FR13_CAT10_INVESTIGATE_BIND.md), eabb07f9 /
+FR13_MATH_HISTORY_RECONCILE.md + math_history_reconcile_innovate_wgb0yegin.raw.json, wgb0yegin;
+research/fr13_workflows/{acceptance_ladder_wc11426x6.raw.json (N5 spine oracle),
+branch_upside_wlhtzqvib.raw.json, chase_fixA_wf_164f7b0d.raw.json}; scripts/
+fr10_phase4_patch_vllm_tree_gdn.py L10869 (FIX-A baked ON),
+scripts/fr13_launch_forked_fa2_tree_server.sh L114 (FR13_TREE_SAMPLE_ROW :-1).
