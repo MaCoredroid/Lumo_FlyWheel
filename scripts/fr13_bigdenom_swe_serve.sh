@@ -54,6 +54,13 @@ OFFLOAD_HELPER=scripts/swe_x86_helpers/offload_codex_proxy.sh
 # Watchdog (req #5): max contiguous seconds the Spark<->alienware link may be
 # down before we fail LOUD + teardown rather than hang.
 OFFLOAD_LINK_DOWN_MAX_S=${OFFLOAD_LINK_DOWN_MAX_S:-300}
+# B=4 depth-match knobs (defaults preserve byte-identity for existing callers):
+#   SPEC_N           = native num_speculative_tokens (E3/E4/E5 -> 3/4/5). cat9 ignores.
+#   MAX_NUM_SEQS_OVR = boot co-residency (B). 1 = legacy B=1; 4 = B=4 co-residency.
+#   SWE_CONCURRENCY  = concurrent codex tasks driving the served stream.
+SPEC_N=${SPEC_N:-5}
+MAX_NUM_SEQS_OVR=${MAX_NUM_SEQS_OVR:-1}
+SWE_CONCURRENCY=${SWE_CONCURRENCY:-1}
 mkdir -p "$ARMDIR/logs"
 
 echo "=== BIGDENOM SWEServe ARM $ARM kind=$KIND subset=$SUBSET ==="
@@ -114,24 +121,24 @@ trap teardown EXIT
 # ---- boot server (class 11: everything pinned except the arm variable) ----
 if [[ "$KIND" == "cat9" ]]; then
   # DEPLOYED cat9 via the LOCKED launcher (baked pad fix LIVE: LUMO_FB_KERNEL_ROWS=1).
-  CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=0.82 MAX_NUM_SEQS=1 \
+  CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=0.82 MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   FR13_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \
   scripts/fr13_launch_locked.sh > "$ARMDIR/launch.log" 2>&1
   RC=$?
   PROBE_MODE=tree_mtp
   EXPECT_RATIO=9
 else
-  # COMPARATOR RULE: native = E5 qwen3_5_mtp num_speculative_tokens=5 via the SPEED launcher.
-  CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=0.82 MAX_NUM_SEQS=1 \
+  # COMPARATOR RULE: native = E{N} qwen3_5_mtp num_speculative_tokens=$SPEC_N via the SPEED launcher.
+  CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=0.82 MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   BATCH_INVARIANT=0 FR10_METRICS=0 \
   ATTENTION_BACKEND=FLASH_ATTN FR10_ENABLE_TREE_GDN=0 \
   FR10_DECODE_MODE_DEFAULT=naive_mtp \
-  SPEC_CONFIG='{"method":"qwen3_5_mtp","num_speculative_tokens":5}' \
+  SPEC_CONFIG="{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$SPEC_N}" \
   FR10_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \
   scripts/fr10_launch_speed_server.sh > "$ARMDIR/launch.log" 2>&1
   RC=$?
   PROBE_MODE=naive_mtp
-  EXPECT_RATIO=5
+  EXPECT_RATIO=$SPEC_N
 fi
 if (( RC != 0 )); then echo "FAIL: launcher rc=$RC"; tail -30 "$ARMDIR/launch.log"; exit 2; fi
 
@@ -168,8 +175,8 @@ for need in "${NEEDS[@]}"; do
     || { echo "FAIL: env pin missing: $need"; exit 3; }
 done
 if [[ "$KIND" == "native" ]]; then
-  grep -q '^SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":5}$' "$ARMDIR/container_env.txt" \
-    || { echo "FAIL: native SPEC_CONFIG pin missing (E5, no tree)"; exit 3; }
+  grep -q "^SPEC_CONFIG={\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$SPEC_N}\$" "$ARMDIR/container_env.txt" \
+    || { echo "FAIL: native SPEC_CONFIG pin missing (E$SPEC_N, no tree)"; exit 3; }
 fi
 echo "container env OK ($KIND)"
 
@@ -385,7 +392,7 @@ S0=$(date +%s)
 .venv/bin/python scripts/run_swe_bench_q36_a.py \
   --subset "$SUBSET" \
   --out-root "$ARMDIR/swe_out" \
-  --concurrency 1 \
+  --concurrency "$SWE_CONCURRENCY" \
   "${WALL_ARGS[@]}" \
   "${EVAL_ARGS[@]}" \
   "${CODEX_ARGS[@]}" \
