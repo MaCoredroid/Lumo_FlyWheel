@@ -16,6 +16,8 @@ run_native() {  # arm spec_n expect offload
   local arm=$1 spec_n=$2 expect=$3 offload=$4
   echo "===== NATIVE ARM $arm (E$spec_n) offload=$offload ====="
   OFFLOAD_CODEX=$offload SPEC_N=$spec_n MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4 AGENT_WALL_S=$WALL \
+    FR13_SFWD_GPU_TIMER=1 \
+    FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
     bash scripts/fr13_bigdenom_swe_serve.sh "$arm" native "$SUBSET" \
     > "$RUNROOT/$arm.runlog" 2>&1
   local rc=$?
@@ -32,6 +34,8 @@ run_variant() {  # arm kind expect offload
   OFFLOAD_CODEX=$offload MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4 AGENT_WALL_S=$WALL \
     FR13_DEVICE_MULTIDRAFT=1 \
     FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
+    FR13_SFWD_GPU_TIMER=1 \
+    FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh "$arm" "$kind" "$SUBSET" \
     > "$RUNROOT/$arm.runlog" 2>&1
   local rc=$?

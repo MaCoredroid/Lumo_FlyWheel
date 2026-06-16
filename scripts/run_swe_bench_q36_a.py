@@ -116,6 +116,61 @@ def _metrics_text(metrics_url: str) -> str:
         return f"# metrics fetch failed: {type(exc).__name__}: {exc}\n"
 
 
+def _sidecar_fwd_gpu_total() -> float | None:
+    """FR13_SFWD_GPU_TIMER: cumulative decode-forward GPU seconds from the worker
+    timer's JSON sidecar(s). The worker (gpu_model_runner) writes the sidecar
+    per-pid to FR13_SFWD_GPU_TIMER_JSON; in single-API-server mode the worker
+    Counter is NOT aggregated into the API-server /metrics, so this sidecar is the
+    robust channel. Returns None when the timer is off / no sidecar exists (=> the
+    snapshot stays byte-identical to the plain /metrics fetch). Sums across per-pid
+    files (one per worker)."""
+    base = os.environ.get("FR13_SFWD_GPU_TIMER_JSON")
+    if not base:
+        return None
+    # the boot env sets a /workspace path (docker -v "$REPO:/workspace"); on the
+    # host that is REPO_ROOT. Translate so this host-side reader finds the file.
+    if base.startswith("/workspace/"):
+        base = str(REPO_ROOT / base[len("/workspace/"):])
+    import glob as _glob
+    pat = base.replace("{pid}", "*") if "{pid}" in base else base + ".*"
+    files = set(_glob.glob(pat))
+    if os.path.exists(base):
+        files.add(base)
+    total = 0.0
+    found = False
+    for f in files:
+        try:
+            d = json.loads(Path(f).read_text(encoding="utf-8"))
+            total += float(d.get("decode_forward_gpu_seconds", 0.0))
+            found = True
+        except Exception:  # noqa: BLE001
+            continue
+    return total if found else None
+
+
+def _metrics_snapshot(metrics_url: str) -> str:
+    """/metrics text, plus (FR13_SFWD_GPU_TIMER) a synthetic counter line carrying
+    the worker timer's cumulative decode-forward GPU seconds. In single-API-server
+    mode /metrics does NOT expose the worker Counter, so without this the reducer's
+    s_per_fwd_gpu would be None even with the timer on. The reducer scrapes the
+    counter NAME from the captured file, so appending the line makes s_per_fwd_gpu
+    work through the existing per-task bracket path with no reducer change.
+
+    Double-count guard: if /metrics ALREADY exposes the counter (multiprocess
+    prometheus aggregation active), use that and do NOT append — the reducer sums
+    all matching lines, so a duplicate would double the value. No-op
+    (byte-identical) when the timer is off / no sidecar."""
+    text = _metrics_text(metrics_url)
+    if "fr13_decode_forward_gpu_seconds_total" in text:
+        return text
+    fwd = _sidecar_fwd_gpu_total()
+    if fwd is not None:
+        if not text.endswith("\n"):
+            text += "\n"
+        text += f"vllm:fr13_decode_forward_gpu_seconds_total {fwd:.9f}\n"
+    return text
+
+
 def _spawn_dcgm_sampler(out_path: Path, interval_s: float = DEFAULT_DCGM_INTERVAL_S
                        ) -> subprocess.Popen[bytes] | None:
     """Spawn the same DCGM/NVML sampler Track B uses, writing JSONL to out_path."""
@@ -772,7 +827,7 @@ def _process_one(
     proxy_offset_before = (
         proxy_capture.stat().st_size if proxy_capture.is_file() else 0
     )
-    metrics_pre.write_text(_metrics_text(DEFAULT_METRICS_URL), encoding="utf-8")
+    metrics_pre.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
     # Start the DCGM/NVML sampler in parallel with the Codex agent.
     dcgm_proc = _spawn_dcgm_sampler(dcgm_samples)
@@ -790,7 +845,7 @@ def _process_one(
     summary["codex"] = codex_meta
 
     _stop_dcgm_sampler(dcgm_proc)
-    metrics_post.write_text(_metrics_text(DEFAULT_METRICS_URL), encoding="utf-8")
+    metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
     patch_text = ""
     try:
@@ -832,7 +887,7 @@ def _process_one(
         else:
             summary["empty_patch_retry"]["recovered_patch_bytes"] = 0
 
-    metrics_post.write_text(_metrics_text(DEFAULT_METRICS_URL), encoding="utf-8")
+    metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
     # Slice the new proxy rows into a per-task file (matches Track B layout).
     # This must happen after the optional empty-patch retry so retry traffic is
