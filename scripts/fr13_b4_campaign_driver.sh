@@ -10,7 +10,7 @@ set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
 RUNROOT=output/fr13_bigdenom_swe
 SUBSET=subset_b4_four.json
-WALL=${WALL:-600}   # bound the codex wall per task (retries still ~2x)
+WALL=${WALL:-1800}  # codex wall per task = deployment-faithful 30min (user 2026-06-16; retries still ~2x)
 
 run_native() {  # arm spec_n expect offload
   local arm=$1 spec_n=$2 expect=$3 offload=$4
@@ -51,15 +51,16 @@ reduce() {  # arm label expect bsize
   docker ps -q 2>/dev/null | wc -l | sed "s/^/[$arm] docker containers after: /"
 }
 
-# ---- sequence (native E5 already running separately) ----
-# bars first: E3, E4 ; then candidates: cat9, OPT-1, cat6root, cat10, 3-3-3 ;
-# then the contaminated cat9 contrast (offload=0).
-run_native  nativeE3_b4 3 3 1
-run_native  nativeE4_b4 4 4 1
+# ---- sequence (FULL restart at WALL=1800; E4 DROPPED = not a depth-match bar) ----
+# DECISIVE depth-5 pair FIRST (E5 bar + cat9 deliverable), then depth-5 candidates
+# (OPT-1, cat6root, cat10), then depth-3 (E3 bar + 3-3-3), then the contaminated
+# cat9 contrast (offload=0). All at 1800s for deployment-faithful trajectories.
+run_native  nativeE5_b4 5 5 1
 run_variant cat9_b4      cat9     9  1
 run_variant opt1_b4c     cat9-opt1 9 1
 run_variant cat6root_b4  cat6root 6  1
 run_variant cat10_b4     cat10    10 1
+run_native  nativeE3_b4 3 3 1
 run_variant threethree_b4 333     9  1
 # contaminated contrast (codex co-located on GB10)
 run_variant cat9_contam_b4 cat9   9  0
