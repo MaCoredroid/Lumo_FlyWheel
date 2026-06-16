@@ -181,19 +181,28 @@ def _dispatch_composition_gate(ptext: str) -> list[str]:
     ``_lumo_tree_path_lcp_max_greedy_sample``: the interaction between
       (A) the synckill DtoH-skip that NULLS the host committer-input lists
           (``parents_cpu = None``), gated by
-          ``_FR13_COMMITTER_SYNCKILL and _fr13_sk_engage``;  and
+          ``_FR13_COMMITTER_SYNCKILL and _fr13_gpu_committer``;  and
       (B) the injected loop-skip that empties the per-node loop iterable
           (``_fr13_gpu_commit_counts = []``), gated by ``_fr13_gpu_committer``.
-    The ORIGINAL defect: (A) fired while (B) did NOT (synckill ON + a diagnostic
-    gate active), so the legacy per-node loop ran with parents_cpu=None ->
+    The ORIGINAL defect: (A) was gated by a SEPARATE env/globals recompute
+    (``_fr13_sk_engage``) that drifted from the runtime predicate (B) used at
+    the loop-skip, so (A) fired while (B) did NOT (synckill ON + a diagnostic
+    gate active), the legacy per-node loop ran with parents_cpu=None ->
     NoneType subscript -> EngineCoreDead. The kernel-isolation gate PASSED and
     missed it because it never composed (A) with (B).
 
+    THE FIX (single source of truth): ``_fr13_gpu_committer`` is computed ONCE
+    at the top of the committer body and the SAME variable now gates BOTH (A)
+    the synckill null AND (B) the loop-skip. So A == ``SYNCKILL and X`` and
+    B == ``X`` for the IDENTICAL X -- A implies B is now true BY CONSTRUCTION,
+    not by keeping two hand-copied predicates in sync.
+
     This gate reproduces the LIVE composed dispatch logic: it (1) applies the
     patcher anchor replacement to obtain the ACTUAL composed committer text, (2)
-    extracts the two engagement predicates VERBATIM from that composed text, and
-    (3) EVALUATES both across the full cartesian product of the flags that gate
-    them, asserting the INVARIANT that makes the dispatch byte-safe:
+    confirms the null guard and the loop-skip BOTH reference the SAME single
+    ``_fr13_gpu_committer`` and that the loop-skip does NOT recompute it, (3)
+    extracts the ONE predicate VERBATIM and EVALUATES the A=>B invariant across
+    the full cartesian product of the gating flags:
 
         whenever the synckill NULL fires (A==True), the loop-SKIP must also
         fire (B==True)  --  i.e. A implies B.
@@ -225,74 +234,83 @@ def _dispatch_composition_gate(ptext: str) -> list[str]:
         )
         return fails
 
-    # ---- (2) recover the two engagement predicates VERBATIM from source ----
-    # The synckill NULL-gate engagement (`_fr13_sk_engage`) lives in the
-    # committer body as plain python; the loop-SKIP gate (`_fr13_gpu_committer`)
-    # is injected by the patcher as a sequence of quoted python-source string
-    # literals. Recover both as real source, then turn the os.environ reads into
-    # a plain dict lookup `_ENV[...]` so we can EVALUATE them with no os import.
-    a_m = re.search(
-        r"        _fr13_sk_engage = \(\n(.*?)\n        \)\n",
+    # ---- (2) SINGLE-SOURCE-OF-TRUTH structure checks ----
+    # (2a) the synckill NULL guard must reference the SAME `_fr13_gpu_committer`
+    #      (no separate `_fr13_sk_engage` recompute that could drift).
+    if "if _FR13_COMMITTER_SYNCKILL and _fr13_gpu_committer:" not in ptext:
+        fails.append(
+            "DISPATCH-COMP: synckill NULL guard does NOT reference the single "
+            "`_fr13_gpu_committer` predicate (single-source-of-truth broken)"
+        )
+        return fails
+    # (2b) the drifting env-recompute must be GONE from the committer body.
+    if "_fr13_sk_engage = (" in ptext:
+        fails.append(
+            "DISPATCH-COMP: stale `_fr13_sk_engage` env-recompute still present "
+            "(the divergent duplicate the fix removed)"
+        )
+        return fails
+    # (2c) the injected loop-skip must REFERENCE `_fr13_gpu_committer`, and must
+    #      NOT recompute it (the prior duplicate that diverged at B=4). The
+    #      loop-skip block is injected by the patcher as quoted python-source
+    #      string literals; pull the segment between the sentinel and the
+    #      (emptied) per-node loop and confirm.
+    si = ptext.find('" + sentinel + " (OPT-1): flag-gated GPU-resident committer')
+    if si < 0:
+        # the sentinel concat splits the literal; fall back to the comment text.
+        si = ptext.find('flag-gated GPU-resident committer')
+    ei = ptext.find('for req_i, node_count in enumerate(_fr13_gpu_commit_counts)', si)
+    loopskip_region = ptext[si:ei] if (si >= 0 and ei > si) else ""
+    if 'if _fr13_gpu_committer:' not in loopskip_region:
+        fails.append(
+            "DISPATCH-COMP: injected loop-skip does not reference the single "
+            "`_fr13_gpu_committer` predicate"
+        )
+        return fails
+    if '_fr13_gpu_committer = (' in loopskip_region:
+        fails.append(
+            "DISPATCH-COMP: injected loop-skip RECOMPUTES `_fr13_gpu_committer` "
+            "(a duplicate predicate that can drift from the null guard -- the "
+            "exact B=4 crash class the fix removes)"
+        )
+        return fails
+
+    # ---- (3) recover the ONE predicate VERBATIM and evaluate A=>B ----
+    # `_fr13_gpu_committer` is computed ONCE in the committer body as plain
+    # python. Recover it as real source, normalise the os.environ reads to a
+    # plain dict lookup `_ENV[...]`, and evaluate over the flag space. Because
+    # the SAME variable now gates both the null and the loop-skip, A=>B is true
+    # by construction; this evaluation is the belt-and-suspenders confirmation.
+    p_m = re.search(
+        r"    _fr13_gpu_committer = \(\n(.*?)\n    \)\n",
         ptext,
         re.DOTALL,
     )
-    if a_m is None:
+    if p_m is None:
         fails.append(
-            "DISPATCH-COMP: could not extract `_fr13_sk_engage` (synckill "
-            "null-gate engagement predicate) from the committer body"
+            "DISPATCH-COMP: could not extract the single `_fr13_gpu_committer` "
+            "predicate from the committer body"
         )
         return fails
     import textwrap as _tw0
-    a_engage_src = (
-        "_fr13_sk_engage = (\n"
-        + _tw0.dedent(a_m.group(1)) + "\n)\n"
+    pred_src = (
+        "_fr13_gpu_committer = (\n"
+        + _tw0.dedent(p_m.group(1)) + "\n)\n"
     )
-
-    def _extract_injected_block(start_needle: str, end_needle: str):
-        si = ptext.find(start_needle)
-        if si < 0:
-            return None
-        ei = ptext.find(end_needle, si)
-        if ei < 0:
-            return None
-        chunk = ptext[si:ei + len(end_needle)]
-        lines = []
-        for sline in chunk.splitlines():
-            sline = sline.strip()
-            if sline.startswith('"') and sline.endswith('"'):
-                try:
-                    lines.append(eval(sline))  # noqa: S307 - trusted repo source
-                except Exception:
-                    return None
-        return "".join(lines)
-
-    b_src = _extract_injected_block(
-        '"    _fr13_gpu_committer = (\\n"',
-        '"    )\\n"',
-    )
-    if b_src is None:
-        fails.append(
-            "DISPATCH-COMP: could not extract the injected `_fr13_gpu_committer` "
-            "loop-skip predicate from the patcher replacement"
-        )
-        return fails
 
     # Normalise `__import__('os').environ.get('FLAG', 'def')` -> `_ENV.get(...)`
-    # so both predicates evaluate against a plain modelled-env dict (no os).
     def _normalise(src: str) -> str:
         return re.sub(
             r"__import__\(\s*'os'\s*\)\.environ", "_ENV", src
         )
 
-    import textwrap as _tw
-    a_engage_src = _normalise(a_engage_src)
-    b_src = _tw.dedent(_normalise(b_src))
+    pred_src = _normalise(pred_src)
 
     class _Env(dict):
         def get(self, k, default=None):
             return dict.get(self, k, default)
 
-    # ---- (3) evaluate A=>B across the flag cartesian product ----
+    # ---- evaluate A=>B across the flag cartesian product ----
     flag_names = [
         "FR13_GPU_COMMITTER",
         "FR13_COMMITTER_SYNCKILL",
@@ -318,23 +336,20 @@ def _dispatch_composition_gate(ptext: str) -> list[str]:
         for cag_flag, fork_flag, published in diag_states:
             ns: dict = {
                 "_ENV": env_dict,
-                "_FR13_COMMIT_ARGMAX_GATE": bool(cag_flag),
-                "_FR13_FORK_MARGIN_DUMP": bool(fork_flag),
-                "_fr13_sk_cag_logits": (object() if published else None),
+                # the runtime locals the single predicate reads (same modelled
+                # state the committer top-of-function computes them to):
+                "_fr13_force_spine_commit": bool(env["FR13_FORCE_SPINE_COMMIT"]),
+                "_fr13_cag_active": bool(cag_flag and published),
+                "_fr13_fork_margin_active": bool(fork_flag and published),
+                "_fr13_bonus_self": bool(env["FR13_TREE_BONUS_SELF"]),
                 # _FR13_COMMITTER_SYNCKILL = GPU_COMMITTER & SYNCKILL (mod top).
                 "_FR13_COMMITTER_SYNCKILL": bool(
                     env["FR13_GPU_COMMITTER"]
                     and env["FR13_COMMITTER_SYNCKILL"]
                 ),
-                # the live committer locals B reads (same modelled state):
-                "_fr13_force_spine_commit": bool(env["FR13_FORCE_SPINE_COMMIT"]),
-                "_fr13_cag_active": bool(cag_flag and published),
-                "_fr13_fork_margin_active": bool(fork_flag and published),
-                "_fr13_bonus_self": bool(env["FR13_TREE_BONUS_SELF"]),
             }
             try:
-                exec(a_engage_src, {}, ns)  # noqa: S102 - trusted repo source
-                exec(b_src, {}, ns)         # noqa: S102 - trusted repo source
+                exec(pred_src, {}, ns)  # noqa: S102 - trusted repo source
             except Exception as exc:  # noqa: BLE001
                 fails.append(
                     "DISPATCH-COMP: predicate eval raised on "
@@ -343,8 +358,10 @@ def _dispatch_composition_gate(ptext: str) -> list[str]:
                 )
                 return fails
 
+            # A (the null) = SYNCKILL and the SAME predicate; B (loop-skip) = the
+            # SAME predicate. Both read ns["_fr13_gpu_committer"].
             a_null_fires = bool(
-                ns["_FR13_COMMITTER_SYNCKILL"] and ns["_fr13_sk_engage"]
+                ns["_FR13_COMMITTER_SYNCKILL"] and ns["_fr13_gpu_committer"]
             )
             b_loop_skips = bool(ns["_fr13_gpu_committer"])
             checked += 1
@@ -359,9 +376,10 @@ def _dispatch_composition_gate(ptext: str) -> list[str]:
 
     if not fails:
         print(
-            "[DISPATCH-COMP] PASS  synckill-null => loop-skip across "
+            "[DISPATCH-COMP] PASS  single-source `_fr13_gpu_committer` gates "
+            "BOTH null + loop-skip; A=>B holds across "
             f"{checked} flag/diagnostic combinations (composed live dispatch; "
-            "A=>B invariant holds, would catch the OPT-1 G2 crash class)"
+            "would catch the OPT-1 G2 crash class)"
         )
     else:
         print("[DISPATCH-COMP] FAIL  (composition crash class present)")

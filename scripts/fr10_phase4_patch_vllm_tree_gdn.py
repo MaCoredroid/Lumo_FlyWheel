@@ -6709,6 +6709,78 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     bonus_token_ids: torch.Tensor,
     max_spec_len: int,
 ) -> torch.Tensor:
+    # OPT-1 G2 SINGLE-SOURCE-OF-TRUTH (FR13_COMMITTER_SYNCKILL composition fix):
+    # the synckill null (which skips the committer-input DtoH and sets
+    # parents_cpu=None) and the legacy-loop-skip (which runs the device committer
+    # instead of the Python per-node loop) MUST fire on the EXACT SAME boolean.
+    # Previously the null recomputed an env/globals duplicate (`_fr13_sk_engage`)
+    # while the loop-skip used these LOCAL runtime vars; the two drifted at B=4
+    # (the null fired but the loop-skip did NOT -> legacy loop ran on a nulled
+    # parents_cpu -> EngineDeadError). Compute the diagnostic-gate runtime vars
+    # and the `_fr13_gpu_committer` predicate ONCE here, BEFORE either use, and
+    # reference this single `_fr13_gpu_committer` in both the null guard and the
+    # injected loop-skip. These read globals/env that are stable for the whole
+    # call (the call-site publishes _FR13_CAG_TARGET_LOGITS once before
+    # rejection_sample and never mutates it mid-call), so hoisting is value-safe.
+    #
+    # FR13_COMMIT_ARGMAX_GATE: the call-site publishes the raw verify logit
+    # tensors only when armed; here we read them back. Gate is active iff the
+    # flag is on AND the call-site actually published (so an OFF call-site can
+    # never accidentally arm a captured boot). Needle fires in BOTH states.
+    _fr13_cag_target_logits = globals().get('_FR13_CAG_TARGET_LOGITS')
+    _fr13_cag_self_logits = globals().get('_FR13_CAG_SELF_LOGITS')
+    _fr13_cag_active = bool(
+        _FR13_COMMIT_ARGMAX_GATE and _fr13_cag_target_logits is not None
+    )
+    _fr13_commit_argmax_gate_needle(_fr13_cag_active)
+    _fr13_cag_step = int(globals().get('_FR13_CAG_STEP', -1))
+    # FR13_FORK_MARGIN_DUMP: same publish channel as CAG (the call-site at the
+    # rejection_sample wrapper publishes the verify target_logits when EITHER
+    # flag is armed). READ-ONLY: this block only reads target_logits rows; the
+    # served `row` is unchanged. Active iff the flag is on AND the call-site
+    # actually published (an OFF call-site leaves the global None). Needle in
+    # BOTH states.
+    _fr13_fork_margin_active = bool(
+        _FR13_FORK_MARGIN_DUMP and _fr13_cag_target_logits is not None
+    )
+    _fr13_fork_margin_dump_needle(_fr13_fork_margin_active)
+    # FR13 S1 (default ON): a fully-accepted path commits the accepted LEAF's
+    # self-target row as its bonus token. At greedy that row IS the verify
+    # argmax for the accepted path — for EVERY path, including the spine.
+    # FR13_TREE_BONUS_SELF=0 restores the legacy 'path0_native_bonus' reuse of
+    # vLLM's precomputed bonus_token_ids, which is sampled from the LAST row
+    # of the forward (the final tree node) and is therefore the WRONG row for
+    # any winner path not ending at that node (FR13 acceptance-ladder bind:
+    # 14/163 greedy events served node-8's token after a [0,2] alt accept).
+    _fr13_bonus_self = (
+        __import__('os').environ.get('FR13_TREE_BONUS_SELF', '1') == '1'
+    )
+    # FR13_FORCE_SPINE_COMMIT (default OFF) — DIAGNOSTIC ONLY; NEVER bind =1
+    # into a committed serving config (same class as
+    # FR10_ALLOW_LINEAR_FALLBACK: a forced-spine stream is not the tree
+    # committer's output). The committer still scores EVERY root-to-leaf path
+    # (alts stay verified in path_scores) but the COMMIT is forced to the
+    # spine path's own prefix (longest spine lcp), so alt paths can never
+    # win. Decisive S3/m1 A/B: caterpillar topology with forced spine commits
+    # vs the chain-only boot — if next-event drafts then match the chain boot
+    # token-for-token, the m1 contamination is entirely in the branch-commit
+    # state advance.
+    _fr13_force_spine_commit = (
+        __import__('os').environ.get('FR13_FORCE_SPINE_COMMIT', '0') == '1'
+    )
+    # SINGLE SOURCE OF TRUTH: this is the byte-for-byte same predicate the
+    # injected loop-skip uses (rejection_sampler.py:14763 replacement). The
+    # synckill null guard below references THIS variable (not an env-recompute),
+    # so the null can NEVER fire when the loop-skip is False. The injected
+    # loop-skip reads back this same `_fr13_gpu_committer` (it no longer
+    # recomputes the predicate).
+    _fr13_gpu_committer = (
+        __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'
+        and not _fr13_force_spine_commit
+        and not _fr13_cag_active
+        and not _fr13_fork_margin_active
+        and _fr13_bonus_self
+    )
     # FR13_EAGER_PACK 2a: ON + CUDA = one packed DtoH for all committer
     # inputs plus the stacked replay-flag matrix (the ~102 tiny readbacks +
     # syncs collapse to 1). CPU tensors (offline oracles/unit tests) and the
@@ -6757,39 +6829,22 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         # OPT-1 G2 COMPOSITION GUARD: the synckill DtoH-skip (nulling the host
         # committer-input lists below) is byte-safe ONLY when the device arm
         # actually runs AND the legacy per-node loop is skipped. The loop-skip
-        # is the injected `_fr13_gpu_committer` predicate
+        # is the `_fr13_gpu_committer` predicate
         # (FR13_GPU_COMMITTER=1 AND no diagnostic gate AND bonus_self), which is
         # STRICTER than `_FR13_COMMITTER_SYNCKILL` (=GPU_COMMITTER & SYNCKILL).
         # If synckill is on but a diagnostic disables the GPU committer
         # (force_spine / CAG / fork_margin / bonus_self=0), the device arm is
         # NOT dispatched and the legacy loop DOES run -> nulling parents_cpu
-        # here crashes it (NoneType subscript -> EngineCoreDead). So gate the
-        # null on the SAME engagement predicate the loop-skip uses; otherwise
-        # fall through to the legacy packed-DtoH else-branch which materialises
-        # the host lists for the legacy loop. The diagnostic-flag values used
-        # here are the SAME globals/env the injected predicate reads (computed
-        # below at the committer; recompute them inline so the guard is correct
-        # at this earlier point). _fr13_cag_target_logits is published by the
-        # call-site only when a gate is armed; absent => diagnostic inactive.
-        _fr13_sk_cag_logits = globals().get('_FR13_CAG_TARGET_LOGITS')
-        _fr13_sk_engage = (
-            __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'
-            and __import__('os').environ.get(
-                'FR13_FORCE_SPINE_COMMIT', '0'
-            ) != '1'
-            and not (
-                _FR13_COMMIT_ARGMAX_GATE
-                and _fr13_sk_cag_logits is not None
-            )
-            and not (
-                _FR13_FORK_MARGIN_DUMP
-                and _fr13_sk_cag_logits is not None
-            )
-            and __import__('os').environ.get(
-                'FR13_TREE_BONUS_SELF', '1'
-            ) == '1'
-        )
-        if _FR13_COMMITTER_SYNCKILL and _fr13_sk_engage:
+        # here crashes it (NoneType subscript -> EngineCoreDead). SINGLE SOURCE
+        # OF TRUTH: gate the null on the IDENTICAL `_fr13_gpu_committer` boolean
+        # the injected loop-skip uses (computed ONCE at function top from the
+        # SAME runtime vars). The null can therefore NEVER fire when the
+        # loop-skip is False; when it does not fire we fall through to the
+        # legacy packed-DtoH else-branch which materialises the host lists for
+        # the legacy loop. (The previous env/globals recompute `_fr13_sk_engage`
+        # was a hand-maintained duplicate that drifted from the runtime
+        # `_fr13_bonus_self`/`_fr13_cag_active`/... at B=4.)
+        if _FR13_COMMITTER_SYNCKILL and _fr13_gpu_committer:
             # OPT-1 G2.a: the GPU committer DECISION reads the DEVICE source
             # tensors directly (the hook's synckill branch), so the big
             # committer-input DtoH+sync (parents/drafts/ptgt/stgt/bonus) is NOT
@@ -6951,51 +7006,13 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             == '1'
         ),
     )
-    # FR13_COMMIT_ARGMAX_GATE: the call-site publishes the raw verify logit
-    # tensors only when armed; here we read them back. Gate is active iff the
-    # flag is on AND the call-site actually published (so an OFF call-site can
-    # never accidentally arm a captured boot). Needle fires in BOTH states.
-    _fr13_cag_target_logits = globals().get('_FR13_CAG_TARGET_LOGITS')
-    _fr13_cag_self_logits = globals().get('_FR13_CAG_SELF_LOGITS')
-    _fr13_cag_active = bool(
-        _FR13_COMMIT_ARGMAX_GATE and _fr13_cag_target_logits is not None
-    )
-    _fr13_commit_argmax_gate_needle(_fr13_cag_active)
-    _fr13_cag_step = int(globals().get('_FR13_CAG_STEP', -1))
-    # FR13_FORK_MARGIN_DUMP: same publish channel as CAG (the call-site at the
-    # rejection_sample wrapper publishes the verify target_logits when EITHER
-    # flag is armed). READ-ONLY: this block only reads target_logits rows; the
-    # served `row` is unchanged. Active iff the flag is on AND the call-site
-    # actually published (an OFF call-site leaves the global None). Needle in
-    # BOTH states.
-    _fr13_fork_margin_active = bool(
-        _FR13_FORK_MARGIN_DUMP and _fr13_cag_target_logits is not None
-    )
-    _fr13_fork_margin_dump_needle(_fr13_fork_margin_active)
-    # FR13 S1 (default ON): a fully-accepted path commits the accepted LEAF's
-    # self-target row as its bonus token. At greedy that row IS the verify
-    # argmax for the accepted path — for EVERY path, including the spine.
-    # FR13_TREE_BONUS_SELF=0 restores the legacy 'path0_native_bonus' reuse of
-    # vLLM's precomputed bonus_token_ids, which is sampled from the LAST row
-    # of the forward (the final tree node) and is therefore the WRONG row for
-    # any winner path not ending at that node (FR13 acceptance-ladder bind:
-    # 14/163 greedy events served node-8's token after a [0,2] alt accept).
-    _fr13_bonus_self = (
-        __import__('os').environ.get('FR13_TREE_BONUS_SELF', '1') == '1'
-    )
-    # FR13_FORCE_SPINE_COMMIT (default OFF) — DIAGNOSTIC ONLY; NEVER bind =1
-    # into a committed serving config (same class as
-    # FR10_ALLOW_LINEAR_FALLBACK: a forced-spine stream is not the tree
-    # committer's output). The committer still scores EVERY root-to-leaf path
-    # (alts stay verified in path_scores) but the COMMIT is forced to the
-    # spine path's own prefix (longest spine lcp), so alt paths can never
-    # win. Decisive S3/m1 A/B: caterpillar topology with forced spine commits
-    # vs the chain-only boot — if next-event drafts then match the chain boot
-    # token-for-token, the m1 contamination is entirely in the branch-commit
-    # state advance.
-    _fr13_force_spine_commit = (
-        __import__('os').environ.get('FR13_FORCE_SPINE_COMMIT', '0') == '1'
-    )
+    # NOTE: _fr13_cag_target_logits / _fr13_cag_self_logits / _fr13_cag_active /
+    # _fr13_cag_step / _fr13_fork_margin_active / _fr13_bonus_self /
+    # _fr13_force_spine_commit and the single-source-of-truth _fr13_gpu_committer
+    # predicate are now computed ONCE at the top of this function (see the
+    # OPT-1 G2 SINGLE-SOURCE-OF-TRUTH block) so the synckill null and the
+    # loop-skip share the IDENTICAL boolean. They were previously recomputed
+    # here; that duplicate is removed to keep one source of truth.
 
     out_rows = []
     accepted_rows = []
@@ -14760,13 +14777,17 @@ def _patch_rejection_sampler_gpu_committer() -> bool:
         "    # DEFAULT-OFF. flag-off => _fr13_gpu_commit_counts IS counts, so the\n"
         "    # legacy per-node Python loop below runs byte-for-byte unchanged.\n"
         "    _fr13_dev_out = None  # G2.b device->device writeback source (synckill)\n"
-        "    _fr13_gpu_committer = (\n"
-        "        __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'\n"
-        "        and not _fr13_force_spine_commit\n"
-        "        and not _fr13_cag_active\n"
-        "        and not _fr13_fork_margin_active\n"
-        "        and _fr13_bonus_self\n"
-        "    )\n"
+        "    # SINGLE SOURCE OF TRUTH: _fr13_gpu_committer was computed ONCE at the\n"
+        "    # top of this function (OPT-1 G2). The synckill null guard references\n"
+        "    # the SAME variable, so the null can NEVER fire while this loop-skip\n"
+        "    # is False. Do NOT recompute it here (the prior duplicate diverged\n"
+        "    # from the runtime _fr13_bonus_self/_fr13_cag_active at B=4).\n"
+        "    if '_fr13_gpu_committer' not in dir():\n"
+        "        raise RuntimeError(\n"
+        "            'FR13_GPU_COMMITTER: single-source predicate _fr13_gpu_committer '\n"
+        "            'missing at the loop-skip (top-of-function computation lost) -- '\n"
+        "            'class 9 fail-loud, refusing to recompute a drifting duplicate.'\n"
+        "        )\n"
         "    _fr13_gpu_commit_counts = counts\n"
         "    if _fr13_gpu_committer:\n"
         "        try:\n"
