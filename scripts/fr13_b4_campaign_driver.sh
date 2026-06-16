@@ -9,7 +9,7 @@
 set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
 RUNROOT=output/fr13_bigdenom_swe
-SUBSET=subset_b4_four.json
+SUBSET=${SUBSET:-subset_b4_sixteen.json}   # default = fr9_mtp5_s1's exact 16-task set (decode_tps 39.9 baseline; user 2026-06-16, apples-to-apple aggregate). Override with SUBSET=subset_b4_four.json for the quick 4-task screen.
 WALL=${WALL:-1800}  # codex wall per task = deployment-faithful 30min (user 2026-06-16; retries still ~2x)
 
 run_native() {  # arm spec_n expect offload

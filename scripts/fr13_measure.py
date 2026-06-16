@@ -175,8 +175,11 @@ M_GEN_TOK = "vllm:generation_tokens_total"
 # gen_tok/decode_s_sum as concurrency-deflated at B>1; this is the non-deflated basis.
 M_TPOT_SUM = "vllm:request_time_per_output_token_seconds_sum"
 M_TPOT_COUNT = "vllm:request_time_per_output_token_seconds_count"
+# prefill time (decode-span EXCLUDES it, but it eats wall -> drags gen/wall aggregate;
+# prefill_frac exposes the workload confound, user 2026-06-16).
+M_PREFILL_S = "vllm:request_prefill_time_seconds_sum"
 COUNTERS = [M_DECODE_S, M_DRAFTS, M_ACCEPTED, M_DRAFT_TOK, M_GEN_TOK,
-            M_TPOT_SUM, M_TPOT_COUNT]
+            M_TPOT_SUM, M_TPOT_COUNT, M_PREFILL_S]
 
 # Forms that must NEVER be reported as s/fwd (blocked + asserted, class-12).
 BANNED_SPEED_BASES = {"tps", "accept", "wall", "wall_clock", "req_elapsed", "http_elapsed"}
@@ -1416,19 +1419,55 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # (NOT the summed agg[M_GEN_TOK], which double-counts the overlapping windows).
     aggregate_decode_tps = None
     aggregate_window_wall_s = None
+    union_decode_s = None  # earliest-pre -> latest-post single delta (NOT the summed
+    # agg[M_DECODE_S], which double-counts the OVERLAPPING per-task brackets at B>1).
     try:
         earliest_pre = min((d / "vllm_metrics_pre.txt" for d in task_dirs),
                            key=lambda p: p.stat().st_mtime)
         latest_post = max((d / "vllm_metrics_post.txt" for d in task_dirs),
                           key=lambda p: p.stat().st_mtime)
         wall = latest_post.stat().st_mtime - earliest_pre.stat().st_mtime
-        gen0 = _scrape_metrics_file(str(earliest_pre)).get(M_GEN_TOK, 0.0)
-        gen1 = _scrape_metrics_file(str(latest_post)).get(M_GEN_TOK, 0.0)
+        pre_m = _scrape_metrics_file(str(earliest_pre))
+        post_m = _scrape_metrics_file(str(latest_post))
+        gen0, gen1 = pre_m.get(M_GEN_TOK, 0.0), post_m.get(M_GEN_TOK, 0.0)
+        union_decode_s = post_m.get(M_DECODE_S, 0.0) - pre_m.get(M_DECODE_S, 0.0)
         if wall > 0 and gen1 > gen0:
             aggregate_window_wall_s = wall
             aggregate_decode_tps = (gen1 - gen0) / wall
     except OSError:
         pass
+
+    # prefill_frac: how much GPU-wall went to prefill vs decode. HIGH prefill (long
+    # re-prefilled codex contexts) drags the gen/wall aggregate down WITHOUT being a
+    # decode slowdown - the workload confound behind "why is our aggregate low" (user
+    # 2026-06-16). request_decode_time EXCLUDES prefill, so per_request_decode_tps is
+    # unaffected; only aggregate_decode_tps (gen/wall) absorbs it. (A RATIO -> the
+    # bracket-overlap over-count cancels, so the summed agg is fine here.)
+    prefill_frac = (agg[M_PREFILL_S] / agg[M_DECODE_S]) if agg[M_DECODE_S] > 0 else None
+    # effective_concurrency: UNION decode-stream-seconds / union wall = avg co-resident
+    # streams over the window (bounded by batch_size). aggregate_decode_tps ~=
+    # per_request_decode_tps x eff_conc, separating batch-fullness from per-stream (the
+    # 39.9-vs-ours decomposition; lower eff_conc = drained batch / fewer tasks). MUST
+    # use union_decode_s, NOT summed agg[M_DECODE_S] (the latter gives >batch_size).
+    effective_concurrency = (
+        (union_decode_s / aggregate_window_wall_s)
+        if (union_decode_s and aggregate_window_wall_s and aggregate_window_wall_s > 0)
+        else None
+    )
+    # per_stream_decode_rate = union gen / union decode-seconds = the EXACT
+    # decomposition factor: aggregate_decode_tps == per_stream_decode_rate x
+    # effective_concurrency (identity, both from the same union deltas). This is the
+    # ratio-of-sums per-stream rate; it differs slightly from per_request_decode_tps
+    # (the per-request-mean TPOT basis) - use THIS one for the aggregate decomposition.
+    _union_gen = None
+    try:
+        _union_gen = post_m.get(M_GEN_TOK, 0.0) - pre_m.get(M_GEN_TOK, 0.0)
+    except (NameError, TypeError):
+        _union_gen = None
+    per_stream_decode_rate = (
+        (_union_gen / union_decode_s)
+        if (_union_gen and union_decode_s and union_decode_s > 0) else None
+    )
 
     rec = {
         "schema": "fr13.measure.deploy_speed.v1",
@@ -1477,11 +1516,25 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "aggregate_decode_tps": aggregate_decode_tps,
         "aggregate_window_wall_s": aggregate_window_wall_s,
         "aggregate_decode_tps_note": (
-            "REPORTING-ONLY (NOT a kernel-speed basis; the s/fwd ban still holds "
-            "for comparisons): total generation_tokens over the UNION measurement "
-            "window (earliest-pre -> latest-post single delta) / union wall "
-            "seconds = the GPU's total decode throughput across all co-resident "
-            "streams at this batch_size."
+            "END-TO-END throughput = total generation_tokens / UNION wall (earliest-"
+            "pre -> latest-post). The wall is IDLE- AND PREFILL-INCLUSIVE, so this is "
+            "the SAME basis as the fr9 steptrace decode_tps=39.9 baseline (gen/wall) "
+            "and is the ONLY field comparable to it - but ONLY at matched task-count + "
+            "concurrency + prefill_frac (see effective_concurrency + prefill_frac). It "
+            "is NOT decode capacity (a high-prefill / drained-batch run reads low here "
+            "without being slower per forward). For per-forward/decode speed use s/fwd "
+            "or per_request_decode_tps; aggregate = per_stream_decode_rate x "
+            "effective_concurrency (exact identity)."
+        ),
+        "per_stream_decode_rate": per_stream_decode_rate,
+        "effective_concurrency": effective_concurrency,
+        "prefill_frac": prefill_frac,
+        "prefill_frac_note": (
+            "request_prefill_time_seconds_sum / request_decode_time_seconds_sum = the "
+            "workload's prefill-vs-decode GPU-time ratio. HIGH (e.g. 0.39 for the 4 "
+            "astropy tasks vs 0.108 for fr9's 16-task set) drags aggregate_decode_tps "
+            "down WITHOUT a per-forward slowdown. The driver behind aggregate gaps; "
+            "MATCH it before comparing aggregates across runs."
         ),
         "raw_counter_delta_aggregate": agg,
         "per_task": per_task,
@@ -1493,7 +1546,8 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     print(json.dumps({k: rec[k] for k in (
         "arm", "regime", "batch_size", "n_tasks", "s_per_fwd",
         "accept_per_event", "committed_per_event", "derived_tps",
-        "per_request_decode_tps", "aggregate_decode_tps", "instrument")},
+        "per_request_decode_tps", "aggregate_decode_tps",
+        "effective_concurrency", "prefill_frac", "instrument")},
         indent=2))
     return 0
 
