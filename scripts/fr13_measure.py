@@ -178,8 +178,15 @@ M_TPOT_COUNT = "vllm:request_time_per_output_token_seconds_count"
 # prefill time (decode-span EXCLUDES it, but it eats wall -> drags gen/wall aggregate;
 # prefill_frac exposes the workload confound, user 2026-06-16).
 M_PREFILL_S = "vllm:request_prefill_time_seconds_sum"
+# FR13_SFWD_GPU_TIMER counter: GPU-active time in the PURE-DECODE model-forward
+# (the tree TREE_ATTN / MTP verify forward), summed over decode steps via async
+# cuda events in gpu_model_runner.execute_model. PREFILL-INDEPENDENT (excludes
+# interleaved chunked-prefill + idle that the wall-span M_DECODE_S absorbs at
+# B>1). Present only when the server booted with FR13_SFWD_GPU_TIMER=1 (the timer
+# is DEFAULT-OFF + byte-identical); absent => 0.0 here and s_per_fwd_gpu = None.
+M_DECODE_FWD_GPU_S = "vllm:fr13_decode_forward_gpu_seconds_total"
 COUNTERS = [M_DECODE_S, M_DRAFTS, M_ACCEPTED, M_DRAFT_TOK, M_GEN_TOK,
-            M_TPOT_SUM, M_TPOT_COUNT, M_PREFILL_S]
+            M_TPOT_SUM, M_TPOT_COUNT, M_PREFILL_S, M_DECODE_FWD_GPU_S]
 
 # Forms that must NEVER be reported as s/fwd (blocked + asserted, class-12).
 BANNED_SPEED_BASES = {"tps", "accept", "wall", "wall_clock", "req_elapsed", "http_elapsed"}
@@ -505,6 +512,12 @@ def cmd_speed(args: argparse.Namespace) -> int:
 
     drafts = md[M_DRAFTS]
     s_fwd = md[M_DECODE_S] / drafts if drafts > 0 else None
+    # FR13_SFWD_GPU_TIMER (prefill-independent): see M_DECODE_FWD_GPU_S. At B=1
+    # SEQUENTIAL there is NO co-resident interleave, so s_fwd_gpu ~= the wall-span
+    # s_fwd here -- this raw B=1 path is the pure-decode REFERENCE the deployment
+    # B>1 s_per_fwd_gpu is validated against (prefill-independence).
+    fwd_gpu = md.get(M_DECODE_FWD_GPU_S, 0.0)
+    s_fwd_gpu = (fwd_gpu / drafts) if (drafts > 0 and fwd_gpu > 0) else None
     accept_per_event = md[M_ACCEPTED] / drafts if drafts > 0 else None
     committed_per_event = (accept_per_event + 1.0) if accept_per_event is not None else None
     derived_tps = (committed_per_event / s_fwd) if (s_fwd and committed_per_event) else None
@@ -530,6 +543,14 @@ def cmd_speed(args: argparse.Namespace) -> int:
         "engagement": eng,
         "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
         "s_per_fwd": s_fwd,
+        "s_per_fwd_note": (
+            "WALL-SPAN basis; at B=1 SEQUENTIAL there is no co-resident prefill "
+            "interleave so it ~= s_per_fwd_gpu (the pure-decode reference)."
+        ),
+        # FR13_SFWD_GPU_TIMER: prefill-independent decode-forward GPU time per
+        # spec event (None unless the server booted FR13_SFWD_GPU_TIMER=1).
+        "s_per_fwd_gpu": s_fwd_gpu,
+        "s_per_fwd_gpu_basis": "d(fr13_decode_forward_gpu_seconds_total)/d(spec_decode_num_drafts_total)",
         "accept_per_event": accept_per_event,
         "accept_per_event_note": (
             "B-DEPENDENT + TRAJECTORY-BOUND: valid only for this served_stream_"
@@ -548,9 +569,9 @@ def cmd_speed(args: argparse.Namespace) -> int:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: rec[k] for k in (
-        "arm", "batch_size", "temperature", "s_per_fwd", "accept_per_event",
-        "committed_per_event", "derived_tps", "served_stream_fingerprint",
-        "instrument")}, indent=2))
+        "arm", "batch_size", "temperature", "s_per_fwd", "s_per_fwd_gpu",
+        "accept_per_event", "committed_per_event", "derived_tps",
+        "served_stream_fingerprint", "instrument")}, indent=2))
     return 0
 
 
@@ -1388,11 +1409,15 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
             agg[c] += md[c]
         drafts = md[M_DRAFTS]
         tpot_sum_d = md.get(M_TPOT_SUM, 0.0)
+        fwd_gpu_d = md.get(M_DECODE_FWD_GPU_S, 0.0)
         per_task.append({
             "instance_id": d.name,
             "drafts": drafts,
             "tok_per_draft": (md[M_DRAFT_TOK] / drafts) if drafts > 0 else None,
             "s_per_fwd": (md[M_DECODE_S] / drafts) if drafts > 0 else None,
+            # FR13_SFWD_GPU_TIMER: prefill-INDEPENDENT decode-forward GPU time per
+            # spec event (None unless the server booted with the timer on).
+            "s_per_fwd_gpu": (fwd_gpu_d / drafts) if (drafts > 0 and fwd_gpu_d > 0) else None,
             "accept_per_event": (md[M_ACCEPTED] / drafts) if drafts > 0 else None,
             "per_request_decode_tps": (md.get(M_TPOT_COUNT, 0.0) / tpot_sum_d) if tpot_sum_d > 0 else None,
         })
@@ -1403,9 +1428,20 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
 
     drafts = agg[M_DRAFTS]
     s_fwd = agg[M_DECODE_S] / drafts if drafts > 0 else None
+    # FR13_SFWD_GPU_TIMER: the PREFILL-INDEPENDENT decode-forward GPU time per
+    # spec event = d(fr13_decode_forward_gpu_seconds_total)/d(spec_decode_num_
+    # drafts_total). The wall-span s_fwd above absorbs co-resident chunked-prefill
+    # + idle in the decode window at B>1; this counter times ONLY the pure-decode
+    # model-forward (verify forward) GPU kernel, so it is the prefill-independent
+    # decode speed. None unless the server booted with FR13_SFWD_GPU_TIMER=1.
+    agg_fwd_gpu = agg.get(M_DECODE_FWD_GPU_S, 0.0)
+    s_fwd_gpu = (agg_fwd_gpu / drafts) if (drafts > 0 and agg_fwd_gpu > 0) else None
     accept_per_event = agg[M_ACCEPTED] / drafts if drafts > 0 else None
     committed_per_event = (accept_per_event + 1.0) if accept_per_event is not None else None
     derived_tps = (committed_per_event / s_fwd) if (s_fwd and committed_per_event) else None
+    # derived GPU TPS uses the prefill-independent per-forward time (the kernel-
+    # speed view; the wall-span derived_tps stays as the concurrency-summed basis).
+    derived_tps_gpu = (committed_per_event / s_fwd_gpu) if (s_fwd_gpu and committed_per_event) else None
 
     # NON-deflated per-STREAM decode rate: count/sum of vLLM
     # request_time_per_output_token = 1/avg(per-request mean-TPOT). Per-request
@@ -1489,6 +1525,32 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "engagement": eng,
         "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
         "s_per_fwd": s_fwd,
+        "s_per_fwd_note": (
+            "WALL-SPAN basis (request_decode_time = last_token_ts - first_token_ts, "
+            "vLLM v1/metrics/stats.py: 'preemptions during decode are included'). "
+            "PREFILL-CONFOUNDED at B>1: the decode window absorbs co-resident "
+            "chunked-prefill the scheduler interleaves into it (high prefill_frac) "
+            "+ idle. Use s_per_fwd_gpu for the prefill-independent decode-kernel time."
+        ),
+        # FR13_SFWD_GPU_TIMER: prefill-INDEPENDENT decode-forward GPU time per spec
+        # event. None unless the server booted with FR13_SFWD_GPU_TIMER=1.
+        "s_per_fwd_gpu": s_fwd_gpu,
+        "s_per_fwd_gpu_basis": "d(fr13_decode_forward_gpu_seconds_total)/d(spec_decode_num_drafts_total)",
+        "s_per_fwd_gpu_note": (
+            "PREFILL-INDEPENDENT: GPU-active time in the PURE-DECODE model-forward "
+            "(tree TREE_ATTN / MTP verify forward) only, summed over uniform-decode "
+            "steps via async cuda events (gpu_model_runner.execute_model), divided "
+            "by spec events. EXCLUDES interleaved chunked-prefill (which the "
+            "wall-span s_per_fwd absorbs at B>1) + idle. None => server booted "
+            "timer-OFF (default; byte-identical). Verify prefill-independence: "
+            "~invariant to prefill_frac across boots, and at B=1 (no co-resident "
+            "interleave) s_per_fwd_gpu approaches the wall-span s_per_fwd."
+        ),
+        "derived_tps_gpu": derived_tps_gpu,
+        "derived_tps_gpu_note": (
+            "DERIVED = committed_per_event / s_per_fwd_gpu = decode-kernel TPS "
+            "(prefill-independent). None unless the timer was on."
+        ),
         "accept_per_event": accept_per_event,
         "accept_per_event_note": (
             "DEPLOYMENT-TRAJECTORY accept (real codex loop). B-DEPENDENT; valid "
@@ -1544,8 +1606,8 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: rec[k] for k in (
-        "arm", "regime", "batch_size", "n_tasks", "s_per_fwd",
-        "accept_per_event", "committed_per_event", "derived_tps",
+        "arm", "regime", "batch_size", "n_tasks", "s_per_fwd", "s_per_fwd_gpu",
+        "accept_per_event", "committed_per_event", "derived_tps", "derived_tps_gpu",
         "per_request_decode_tps", "aggregate_decode_tps",
         "effective_concurrency", "prefill_frac", "instrument")},
         indent=2))

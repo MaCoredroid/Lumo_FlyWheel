@@ -14699,6 +14699,323 @@ _fr13_install_torch_det_warn()
     return True
 
 
+def _patch_gpu_model_runner_sfwd_gpu_timer() -> bool:
+    """FR13_SFWD_GPU_TIMER (DEFAULT-OFF): a PREFILL-INDEPENDENT decode-forward
+    GPU-time counter.
+
+    WHY: the deployment s/fwd basis d(request_decode_time_seconds_sum)/
+    d(spec_decode_num_drafts_total) is a WALL span. vLLM defines
+    request_decode_time = last_token_ts - first_token_ts (v1/metrics/stats.py
+    "preemptions during decode are included"), so at B>1 it absorbs co-resident
+    chunked-prefill that the scheduler interleaves into the decode window, plus
+    any idle gaps between this stream's steps. That confounds the per-forward
+    decode-kernel cost with the workload's prefill mix.
+
+    WHAT: time ONLY the decode model-forward (self._model_forward = the tree
+    TREE_ATTN / MTP verify forward over the spec-verify rows, the GEMV-bound
+    decode cost that differs native-vs-tree) on PURE-DECODE steps, with async
+    cuda events, and accumulate into a process Counter exposed on /metrics:
+        vllm:fr13_decode_forward_gpu_seconds_total
+    The deploy-speed reducer then reads
+        s_per_fwd_gpu = d(fr13_decode_forward_gpu_seconds_total) /
+                        d(spec_decode_num_drafts_total)
+    which is the actual decode-kernel time per spec event, EXCLUDING interleaved
+    prefill and idle.
+
+    PURE-DECODE ISOLATION (excludes prefill + mixed steps): a step is pure
+    decode iff every scheduled request was scheduled exactly its spec-verify
+    width and nothing is prefilling -- vLLM's own `_is_uniform_decode`
+    predicate: max_num_scheduled_tokens == self.uniform_decode_query_len (=
+    1 + num_spec_tokens) AND num_tokens == max_num_scheduled_tokens * num_reqs.
+    A prefilling request has query_len > uniform_decode_query_len, and a mixed
+    prefill+decode batch breaks the num_tokens == width*num_reqs equality, so
+    both are excluded -- exactly num_prefill_tokens==0 in the spec-decode regime.
+    (The locals max_num_scheduled_tokens / num_tokens_unpadded / num_reqs are all
+    in scope at the forward call site in execute_model.)
+
+    LOW OVERHEAD (must NOT change the speed it measures): events are recorded
+    ASYNC on the current (forward) stream -- start before _model_forward, stop
+    after. We NEVER torch.cuda.synchronize() per step. The (start, stop) pair is
+    appended to a deque; elapsed_time (which would block on an incomplete stop)
+    is called ONLY on pairs whose stop.query() is already True (a non-blocking
+    completion poll). By the next decode step the prior forward is long
+    complete, so the drain never stalls the live decode stream. A bounded
+    fallback caps the deque so a never-completing tail cannot leak. The ONLY
+    synchronize is at teardown (atexit) where decode is already stopped.
+
+    EXPOSURE: a prometheus_client Counter in the worker process. vLLM runs
+    prometheus in MULTIPROCESS mode (v1/metrics/prometheus.py
+    setup_multiprocess_prometheus -> PROMETHEUS_MULTIPROC_DIR; the /metrics
+    endpoint aggregates every process via MultiProcessCollector). The worker
+    inherits PROMETHEUS_MULTIPROC_DIR, so a Counter created here is summed into
+    /metrics and read by the same scrape the SWE per-task brackets + cmd_speed
+    already use -- a single read at teardown/scrape, NO per-step DtoH stall.
+    A JSON sidecar (FR13_SFWD_GPU_TIMER_JSON) is ALSO dumped at atexit as a
+    registry-independent cross-check.
+
+    FLAG-GATE: env FR13_SFWD_GPU_TIMER. DEFAULT OFF => the begin/end helpers are
+    no-ops, NO events are created, NO counter registered => byte-identical to
+    the unpatched forward path.
+    """
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_SFWD_GPU_TIMER"
+    if sentinel in text:
+        return False
+
+    # --- 1) module-level installer (the timer + Counter + atexit dump) -------
+    module_block = '''
+
+# FR13_SFWD_GPU_TIMER: prefill-independent decode-forward GPU-time counter.
+# Inert unless FR13_SFWD_GPU_TIMER=1. See the patch docstring for the design.
+class _Fr13SfwdGpuTimer:
+    """Async-cuda-event accumulator of pure-decode model-forward GPU seconds.
+
+    Begin/end record cuda events on the current stream WITHOUT synchronizing.
+    Completed (start, stop) pairs are drained (elapsed_time, ms->s) into a
+    prometheus Counter that vLLM's multiprocess /metrics aggregates. The single
+    blocking synchronize happens only at teardown."""
+
+    def __init__(self):
+        import collections as _c
+        self._enabled = (
+            __import__("os").environ.get("FR13_SFWD_GPU_TIMER", "0") == "1"
+        )
+        self._pending = _c.deque()
+        # bound: a pair whose stop never completes cannot leak unboundedly.
+        self._max_pending = int(
+            __import__("os").environ.get("FR13_SFWD_GPU_TIMER_MAXPENDING", "256")
+        )
+        self._accum_s = 0.0          # local mirror (for the JSON sidecar)
+        self._n_steps = 0            # pure-decode steps timed
+        self._counter = None
+        self._installed_atexit = False
+        if self._enabled:
+            self._install_counter()
+            self._install_atexit()
+
+    def _install_counter(self):
+        try:
+            from prometheus_client import Counter as _C
+            # Counter name -> exposes vllm:fr13_decode_forward_gpu_seconds_total
+            # on /metrics (prometheus appends _total). Multiprocess-mode
+            # Counters sum across processes, so the worker's value reaches the
+            # API server's /metrics scrape.
+            self._counter = _C(
+                "vllm:fr13_decode_forward_gpu_seconds",
+                "FR13: GPU-active time in the pure-decode model-forward "
+                "(verify forward), summed over decode steps; prefill-"
+                "independent decode-kernel time for s_per_fwd_gpu.",
+            )
+        except Exception as _exc:  # noqa: BLE001
+            # already-registered (re-import) or no prometheus: fall back to the
+            # JSON sidecar only; never crash the worker for a diagnostic.
+            self._counter = None
+
+    def _install_atexit(self):
+        import atexit as _atexit
+        _atexit.register(self._teardown)
+        self._installed_atexit = True
+
+    def begin(self):
+        """Return a fresh start cuda-event (recorded on the current stream), or
+        None when disabled. Called only on pure-decode steps."""
+        if not self._enabled:
+            return None
+        import torch as _t
+        if not _t.cuda.is_available():
+            return None
+        ev = _t.cuda.Event(enable_timing=True)
+        ev.record()  # async on the current (forward) stream
+        return ev
+
+    def end(self, start_ev):
+        """Record the stop event (async), enqueue the pair, and drain any pairs
+        whose stop has ALREADY completed (non-blocking query) into the counter.
+        No per-step synchronize."""
+        if start_ev is None or not self._enabled:
+            return
+        import torch as _t
+        stop_ev = _t.cuda.Event(enable_timing=True)
+        stop_ev.record()  # async on the current (forward) stream
+        self._pending.append((start_ev, stop_ev))
+        self._drain(blocking=False)
+        # bound the backlog: if we ever exceed the cap (should not at steady
+        # B<=4 decode), force a drain of the OLDEST pair (it is certainly done).
+        if len(self._pending) > self._max_pending:
+            self._drain(blocking=True)
+
+    def _drain(self, blocking):
+        # Pop from the FRONT while the stop event is complete. query() is a
+        # non-blocking completion poll; we never elapsed_time() an incomplete
+        # stop (that would block the live decode stream).
+        while self._pending:
+            start_ev, stop_ev = self._pending[0]
+            try:
+                done = stop_ev.query()
+            except Exception:  # noqa: BLE001
+                self._pending.popleft()
+                continue
+            if not done and not blocking:
+                break
+            self._pending.popleft()
+            try:
+                if blocking and not done:
+                    stop_ev.synchronize()  # teardown-only path
+                ms = start_ev.elapsed_time(stop_ev)  # blocks only if complete
+                secs = float(ms) / 1000.0
+                self._accum_s += secs
+                self._n_steps += 1
+                if self._counter is not None:
+                    self._counter.inc(secs)
+            except Exception:  # noqa: BLE001
+                continue
+
+    def _teardown(self):
+        # final flush: decode is stopped here, so a blocking drain is safe and
+        # is the ONLY synchronize this timer ever does.
+        try:
+            import torch as _t
+            if _t.cuda.is_available():
+                _t.cuda.synchronize()
+        except Exception:  # noqa: BLE001
+            pass
+        self._drain(blocking=True)
+        out = __import__("os").environ.get("FR13_SFWD_GPU_TIMER_JSON")
+        if not out:
+            return
+        try:
+            import json as _json
+            payload = {
+                "schema": "fr13.sfwd_gpu_timer.v1",
+                "pid": __import__("os").getpid(),
+                "decode_forward_gpu_seconds": self._accum_s,
+                "n_pure_decode_steps_timed": self._n_steps,
+                "metric_name": "vllm:fr13_decode_forward_gpu_seconds_total",
+                "note": (
+                    "pure-decode (uniform_decode) model-forward GPU seconds; "
+                    "prefill + mixed + idle EXCLUDED; async cuda events, single "
+                    "synchronize at teardown."
+                ),
+            }
+            # per-pid suffix so multiple workers do not clobber one file.
+            _p = out
+            if "{pid}" in out:
+                _p = out.replace("{pid}", str(__import__("os").getpid()))
+            else:
+                _p = out + "." + str(__import__("os").getpid())
+            __import__("pathlib").Path(_p).parent.mkdir(
+                parents=True, exist_ok=True
+            )
+            __import__("pathlib").Path(_p).write_text(
+                _json.dumps(payload, indent=2) + "\\n", encoding="utf-8"
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+
+_FR13_SFWD_GPU_TIMER = None
+
+
+def _fr13_sfwd_timer():
+    # lazy singleton: built on first pure-decode step in the worker process
+    # (after PROMETHEUS_MULTIPROC_DIR is set), so the Counter lands in the
+    # multiprocess registry.
+    global _FR13_SFWD_GPU_TIMER
+    if _FR13_SFWD_GPU_TIMER is None:
+        _FR13_SFWD_GPU_TIMER = _Fr13SfwdGpuTimer()
+    return _FR13_SFWD_GPU_TIMER
+
+
+def _fr13_sfwd_is_pure_decode(max_num_scheduled_tokens, num_tokens, num_reqs,
+                              uniform_decode_query_len):
+    """vLLM `_is_uniform_decode`: pure decode iff every request was scheduled
+    exactly the spec-verify width (no prefill, no mixed). num_prefill_tokens==0
+    in the spec-decode regime."""
+    try:
+        return bool(
+            (max_num_scheduled_tokens == uniform_decode_query_len)
+            and (num_tokens == max_num_scheduled_tokens * max(1, num_reqs))
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _fr13_sfwd_begin(max_num_scheduled_tokens, num_tokens, num_reqs,
+                     uniform_decode_query_len):
+    """Return a start event if FR13_SFWD_GPU_TIMER=1 AND this is a pure-decode
+    step, else None (no event, no cost)."""
+    if __import__("os").environ.get("FR13_SFWD_GPU_TIMER", "0") != "1":
+        return None
+    if not _fr13_sfwd_is_pure_decode(
+        max_num_scheduled_tokens, num_tokens, num_reqs, uniform_decode_query_len
+    ):
+        return None
+    try:
+        return _fr13_sfwd_timer().begin()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _fr13_sfwd_end(start_ev):
+    if start_ev is None:
+        return
+    try:
+        _fr13_sfwd_timer().end(start_ev)
+    except Exception:  # noqa: BLE001
+        pass
+'''
+    text = text + module_block
+
+    # --- 2) inline: wrap the DECODE model-forward with begin/end -------------
+    begin_anchor = (
+        "        defer_kv_connector_finalize = self.speculative_config is not None\n"
+        "        with (\n"
+        "            set_forward_context(\n"
+    )
+    begin_inject = (
+        "        defer_kv_connector_finalize = self.speculative_config is not None\n"
+        "        # FR13_SFWD_GPU_TIMER: time the PURE-DECODE verify forward only "
+        "(async cuda events; no per-step sync; inert unless the flag is on).\n"
+        "        _fr13_sfwd_ev = _fr13_sfwd_begin(\n"
+        "            max_num_scheduled_tokens,\n"
+        "            num_tokens_unpadded,\n"
+        "            num_reqs,\n"
+        "            self.uniform_decode_query_len,\n"
+        "        )\n"
+        "        with (\n"
+        "            set_forward_context(\n"
+    )
+    if begin_anchor not in text:
+        raise RuntimeError(
+            "FR13_SFWD_GPU_TIMER: forward begin anchor "
+            "(set_forward_context block) not found in gpu_model_runner.py"
+        )
+    text = text.replace(begin_anchor, begin_inject, 1)
+
+    end_anchor = (
+        "            )\n"
+        "\n"
+        "        with record_function_or_nullcontext(\"gpu_model_runner: postprocess\"):\n"
+    )
+    end_inject = (
+        "            )\n"
+        "        # FR13_SFWD_GPU_TIMER: record the stop event + drain completed "
+        "pairs into the /metrics counter.\n"
+        "        _fr13_sfwd_end(_fr13_sfwd_ev)\n"
+        "\n"
+        "        with record_function_or_nullcontext(\"gpu_model_runner: postprocess\"):\n"
+    )
+    if end_anchor not in text:
+        raise RuntimeError(
+            "FR13_SFWD_GPU_TIMER: forward end anchor "
+            "(postprocess record_function) not found in gpu_model_runner.py"
+        )
+    text = text.replace(end_anchor, end_inject, 1)
+
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_fp8_utils_gb10_gemv_cfg() -> bool:
     """OPT-A: GB10/sm_121-tuned fp8 w8a8 block-scaled-mm decode config.
 
@@ -15045,6 +15362,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_draft_reqkey()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_boundary_tap_d()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sfwd_gpu_timer()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
