@@ -41,15 +41,33 @@ const BASE = [
 'works if alienware is down. Default the deployment measurement to the offloaded path. Reuse the existing eval-',
 'offload SSH/rsync plumbing (run_swe_bench_q36_a.py:392-432). Do NOT change the canonical measurement (deploy-',
 'speed/deploy-lossless/deploy-temp06-drift) - only the codex+proxy LOCATION.',
+'',
+'NETWORK ROBUSTNESS (user MAIN reminder - the Spark<->alienware tailscale link can be UNSTABLE; a blip must NOT',
+'become a silent failed/contaminated run). REQUIREMENTS, build them in: (1) the SPEED basis is ALREADY network-',
+'robust BY CONSTRUCTION and must STAY so - s/fwd = d(request_decode_time_seconds_sum)/d(spec_drafts) is read from',
+'the GB10 vLLM /metrics LOCALLY (on the GB10, not over the wire); decode_seconds only advances while the serve is',
+'actually DECODING, so a network stall (codex request hanging) just PAUSES it = the per-event s/fwd is unaffected',
+'(confirm this; never read the speed counter across the wire). (2) the codex<->vLLM request path (alienware codex',
+'-> proxy -> GB10:9950 over tailscale) must SURVIVE transient drops: generous request timeouts + retry/reconnect',
+'with backoff (do not fail the whole 30-min codex task on one blip); the proxy retries the upstream. (3) the pair-',
+'dump rsync alienware->GB10 must be resilient: rsync --partial --append-verify + retry loop (a dropped rsync must',
+'not lose the served stream the lossless rescore needs). (4) NETWORK-DROP DETECTION + non-mis-attribution: log the',
+'tailscale link state (ping/curl /health from alienware) throughout; a request failure must be CLASSIFIED network',
+'-drop vs real (model/measurement) so a blip is NOT mistaken for a degenerate fork (#12) or a real failure; if a',
+'measurement window spans a confirmed network stall, FLAG/discard it (do not record an s/fwd or accept from a',
+'wire-stalled window). (5) WATCHDOG/teardown: if the link is down past a threshold, fail LOUD + clean teardown +',
+'recover, do not hang. (6) the GB10 vLLM serve binds to the tailscale interface but its health/measurement is',
+'always checkable LOCALLY on the GB10 (so a Spark<->alienware drop never blinds the measurement side).',
 ].join('\n');
 
 phase('BuildOffload');
 const B_SCHEMA = {
   type: 'object', additionalProperties: false,
-  required: ['alienwareSetup','network','harnessBuilt','proxyOffload','gaps','committed','notes'],
+  required: ['alienwareSetup','network','networkRobustness','harnessBuilt','proxyOffload','gaps','committed','notes'],
   properties: {
     alienwareSetup: { type: 'string', description: 'what was set up on alienware (codex-runner:v1 ready, the proxy code+deps synced/imaged, swe_eval present) + how the codex+proxy launch there' },
     network: { type: 'string', description: 'the GB10<->alienware network (tailscale? the GB10 IP/hostname alienware reaches the vLLM 9950 on); confirmed alienware can curl the GB10 /health' },
+    networkRobustness: { type: 'string', description: 'how network INSTABILITY is handled (user main reminder): s/fwd read LOCALLY on GB10 (network-stall-immune by construction); codex<->vLLM timeouts+retry/reconnect with backoff (survive a blip, not fail the 30-min task); rsync --partial --append-verify + retry; tailscale-link logging + network-drop-vs-real classification (no #12 mis-attribution); discard a wire-stalled measurement window; watchdog fail-loud+teardown if link down past threshold' },
     harnessBuilt: { type: 'string', description: 'the harness change (flag-gated OFFLOAD_CODEX): proxy+codex on alienware over SSH, vLLM on GB10, pair-dumps rsync back; reusing the eval-offload SSH plumbing' },
     proxyOffload: { type: 'string', description: 'how the inference_proxy runs on alienware (synced code+venv, or an image) forwarding to GB10:9950 + capturing pair-dumps locally' },
     gaps: { type: 'string', description: 'anything the USER must do (e.g. build/pull an image on alienware, SSH key, firewall) - or NONE' },
@@ -68,9 +86,10 @@ const b = await agent(
 phase('ValidateClean');
 const V1_SCHEMA = {
   type: 'object', additionalProperties: false,
-  required: ['gb10VllmOnly','codexRanOnAlienware','measurementWorks','speedCleanVsContaminated','committed','notes'],
+  required: ['gb10VllmOnly','codexRanOnAlienware','measurementWorks','networkResilience','speedCleanVsContaminated','committed','notes'],
   properties: {
     gb10VllmOnly: { type: 'string', description: 'GPU: during a SHORT offloaded codex run, ps+docker ON THE GB10 show ONLY the vllm container (no codex-runner, no inference_proxy) - the contamination is gone? cite the GB10 process/docker snapshot taken DURING the run' },
+    networkResilience: { type: 'string', description: 'test network instability: inject a brief tailscale blip (or drop a request) mid-run + confirm the run SURVIVES (retry/reconnect, task continues) OR cleanly detects+flags it (no silent contamination); confirm a wire-stalled window is NOT recorded as a bad s/fwd; the local s/fwd held steady across the blip' },
     codexRanOnAlienware: { type: 'string', description: 'the codex agent + proxy genuinely ran on alienware (the served stream is coherent codex multi-turn, pair-dumps captured on alienware + rsynced back)' },
     measurementWorks: { type: 'string', description: 'deploy-speed read the GB10 vLLM /metrics fine + the deploy-lossless pair-dump path works through the offload (the canonical measurement is intact)' },
     speedCleanVsContaminated: { type: 'string', description: 'the offloaded s/fwd vs the prior co-located s/fwd (is the clean number lower / different = contamination was real)?' },
@@ -90,11 +109,12 @@ const v1 = await agent(
 phase('Verify');
 const V_SCHEMA = {
   type: 'object', additionalProperties: false,
-  required: ['holds','gb10IsVllmOnly','measurementIntact','recommendation','issues'],
+  required: ['holds','gb10IsVllmOnly','measurementIntact','networkRobust','recommendation','issues'],
   properties: {
     holds: { type: 'boolean' },
     gb10IsVllmOnly: { type: 'string', description: 'is the GB10 PROVEN vLLM-only during a codex run (the during-run ps/docker snapshot shows no codex/proxy on the GB10) - the contamination genuinely removed, not asserted?' },
     measurementIntact: { type: 'string', description: 'is the canonical deployment measurement intact through the offload (deploy-speed reads GB10 /metrics, lossless pair-dumps rsynced) - nothing reward-hacked or broken?' },
+    networkRobust: { type: 'string', description: 'is Spark<->alienware network instability genuinely handled (s/fwd local + stall-immune, codex/rsync retry/reconnect, wire-stalled window flagged-not-recorded) AND exercised by a real blip test - not just asserted?' },
     recommendation: { type: 'string', description: 'single: is the offloaded harness ready to re-run the B=4 deployment sweep cleanly? any user-setup gap? No close/pass-fail.' },
     issues: { type: 'string' },
   },
@@ -103,7 +123,10 @@ const v = await agent(
   BASE + '\n\nADVERSARIALLY VERIFY: ' + JSON.stringify(v1) + '. Default holds=false if the GB10 is NOT proven '
   + 'vLLM-only during the codex run (the during-run GB10 ps/docker snapshot is the proof - codex/proxy must be '
   + 'ABSENT on the GB10), if the codex/proxy secretly still ran on the GB10, if the measurement was broken/reward-'
-  + 'hacked by the offload, or if a required alienware setup gap is hidden. No close/pass-fail.',
+  + 'hacked by the offload, if NETWORK INSTABILITY is not genuinely handled (s/fwd must be read locally + network-'
+  + 'stall-immune; codex<->vLLM retry/reconnect; rsync resilient; a wire-stalled window flagged not silently '
+  + 'recorded - the resilience test must actually exercise a blip), or if a required alienware setup gap is hidden. '
+  + 'No close/pass-fail.',
   { label: 'verify-offload', phase: 'Verify', schema: V_SCHEMA, agentType: 'general-purpose' }
 );
 
