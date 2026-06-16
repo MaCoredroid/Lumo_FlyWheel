@@ -169,7 +169,14 @@ M_DRAFTS = "vllm:spec_decode_num_drafts_total"
 M_ACCEPTED = "vllm:spec_decode_num_accepted_tokens_total"
 M_DRAFT_TOK = "vllm:spec_decode_num_draft_tokens_total"
 M_GEN_TOK = "vllm:generation_tokens_total"
-COUNTERS = [M_DECODE_S, M_DRAFTS, M_ACCEPTED, M_DRAFT_TOK, M_GEN_TOK]
+# per-request-NORMALIZED decode rate (NOT the concurrency-summed decode_seconds_sum):
+# request_time_per_output_token = per-request mean time-per-output-token (decode
+# phase). count/sum = 1/avg(TPOT) = the per-STREAM decode token rate. FR10 flagged
+# gen_tok/decode_s_sum as concurrency-deflated at B>1; this is the non-deflated basis.
+M_TPOT_SUM = "vllm:request_time_per_output_token_seconds_sum"
+M_TPOT_COUNT = "vllm:request_time_per_output_token_seconds_count"
+COUNTERS = [M_DECODE_S, M_DRAFTS, M_ACCEPTED, M_DRAFT_TOK, M_GEN_TOK,
+            M_TPOT_SUM, M_TPOT_COUNT]
 
 # Forms that must NEVER be reported as s/fwd (blocked + asserted, class-12).
 BANNED_SPEED_BASES = {"tps", "accept", "wall", "wall_clock", "req_elapsed", "http_elapsed"}
@@ -1377,12 +1384,14 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         for c in COUNTERS:
             agg[c] += md[c]
         drafts = md[M_DRAFTS]
+        tpot_sum_d = md.get(M_TPOT_SUM, 0.0)
         per_task.append({
             "instance_id": d.name,
             "drafts": drafts,
             "tok_per_draft": (md[M_DRAFT_TOK] / drafts) if drafts > 0 else None,
             "s_per_fwd": (md[M_DECODE_S] / drafts) if drafts > 0 else None,
             "accept_per_event": (md[M_ACCEPTED] / drafts) if drafts > 0 else None,
+            "per_request_decode_tps": (md.get(M_TPOT_COUNT, 0.0) / tpot_sum_d) if tpot_sum_d > 0 else None,
         })
 
     # class-9 engagement: tok/draft over the WHOLE deployment workload == expected.
@@ -1394,6 +1403,32 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     accept_per_event = agg[M_ACCEPTED] / drafts if drafts > 0 else None
     committed_per_event = (accept_per_event + 1.0) if accept_per_event is not None else None
     derived_tps = (committed_per_event / s_fwd) if (s_fwd and committed_per_event) else None
+
+    # NON-deflated per-STREAM decode rate: count/sum of vLLM
+    # request_time_per_output_token = 1/avg(per-request mean-TPOT). Per-request
+    # normalized (NOT the concurrency-summed gen_tok/decode_s_sum basis FR10 flagged).
+    tpot_sum = agg[M_TPOT_SUM]
+    per_request_decode_tps = (agg[M_TPOT_COUNT] / tpot_sum) if tpot_sum > 0 else None
+
+    # Aggregate throughput (REPORTING-ONLY, not a kernel-speed basis): total
+    # generation_tokens over the UNION measurement window / union wall. The per-task
+    # brackets OVERLAP at B>1, so use the earliest-pre -> latest-post SINGLE delta
+    # (NOT the summed agg[M_GEN_TOK], which double-counts the overlapping windows).
+    aggregate_decode_tps = None
+    aggregate_window_wall_s = None
+    try:
+        earliest_pre = min((d / "vllm_metrics_pre.txt" for d in task_dirs),
+                           key=lambda p: p.stat().st_mtime)
+        latest_post = max((d / "vllm_metrics_post.txt" for d in task_dirs),
+                          key=lambda p: p.stat().st_mtime)
+        wall = latest_post.stat().st_mtime - earliest_pre.stat().st_mtime
+        gen0 = _scrape_metrics_file(str(earliest_pre)).get(M_GEN_TOK, 0.0)
+        gen1 = _scrape_metrics_file(str(latest_post)).get(M_GEN_TOK, 0.0)
+        if wall > 0 and gen1 > gen0:
+            aggregate_window_wall_s = wall
+            aggregate_decode_tps = (gen1 - gen0) / wall
+    except OSError:
+        pass
 
     rec = {
         "schema": "fr13.measure.deploy_speed.v1",
@@ -1423,7 +1458,31 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         ),
         "committed_per_event": committed_per_event,
         "derived_tps": derived_tps,
-        "derived_tps_note": "DERIVED = committed_per_event / s_fwd; NOT measured.",
+        "derived_tps_note": (
+            "DERIVED = committed_per_event / s_fwd = generation_tokens / "
+            "request_decode_time_seconds_sum = the CONCURRENCY-SUMMED basis "
+            "(decode-seconds summed over co-resident requests). FR10 flagged this "
+            "as NOT directly E5-comparable at B>1. Use per_request_decode_tps "
+            "(per-stream rate) or aggregate_decode_tps (GPU throughput) instead."
+        ),
+        "per_request_decode_tps": per_request_decode_tps,
+        "per_request_decode_tps_note": (
+            "NON-deflated per-STREAM decode rate = count/sum of vLLM "
+            "request_time_per_output_token (= 1/avg per-request mean-TPOT). "
+            "Per-request normalized (NOT concurrency-summed); includes the real "
+            "co-residency cost at B>1. The FR10-recommended per-request basis "
+            "(cross-references the pre-kernel B=4 per-request ~28 synthetic / "
+            "B=1 ~18 deployment)."
+        ),
+        "aggregate_decode_tps": aggregate_decode_tps,
+        "aggregate_window_wall_s": aggregate_window_wall_s,
+        "aggregate_decode_tps_note": (
+            "REPORTING-ONLY (NOT a kernel-speed basis; the s/fwd ban still holds "
+            "for comparisons): total generation_tokens over the UNION measurement "
+            "window (earliest-pre -> latest-post single delta) / union wall "
+            "seconds = the GPU's total decode throughput across all co-resident "
+            "streams at this batch_size."
+        ),
         "raw_counter_delta_aggregate": agg,
         "per_task": per_task,
         "ts": time.time(),
@@ -1433,7 +1492,8 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     Path(args.out).write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: rec[k] for k in (
         "arm", "regime", "batch_size", "n_tasks", "s_per_fwd",
-        "accept_per_event", "committed_per_event", "derived_tps", "instrument")},
+        "accept_per_event", "committed_per_event", "derived_tps",
+        "per_request_decode_tps", "aggregate_decode_tps", "instrument")},
         indent=2))
     return 0
 
