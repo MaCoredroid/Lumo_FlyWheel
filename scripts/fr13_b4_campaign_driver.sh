@@ -26,7 +26,12 @@ run_native() {  # arm spec_n expect offload
 run_variant() {  # arm kind expect offload
   local arm=$1 kind=$2 expect=$3 offload=$4
   echo "===== VARIANT ARM $arm (kind=$kind) offload=$offload ====="
+  # FR13_DEVICE_MULTIDRAFT=1 -> the device-side temp>0 multidraft committer (the real
+  # t0.6 speed lever, ~22% faster than the host reference, lossless-within-floor; user
+  # 2026-06-16 accepted). Engages on tree arms at temp>0 only; no-op for the native bars.
   OFFLOAD_CODEX=$offload MAX_NUM_SEQS_OVR=4 SWE_CONCURRENCY=4 AGENT_WALL_S=$WALL \
+    FR13_DEVICE_MULTIDRAFT=1 \
+    FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh "$arm" "$kind" "$SUBSET" \
     > "$RUNROOT/$arm.runlog" 2>&1
   local rc=$?
@@ -51,13 +56,14 @@ reduce() {  # arm label expect bsize
   docker ps -q 2>/dev/null | wc -l | sed "s/^/[$arm] docker containers after: /"
 }
 
-# ---- sequence (FULL restart at WALL=1800; E4 DROPPED = not a depth-match bar) ----
-# DECISIVE depth-5 pair FIRST (E5 bar + cat9 deliverable), then depth-5 candidates
-# (OPT-1, cat6root, cat10), then depth-3 (E3 bar + 3-3-3), then the contaminated
-# cat9 contrast (offload=0). All at 1800s for deployment-faithful trajectories.
+# ---- sequence (temp-0.6 16-task; OPT-1 DROPPED = greedy-only, replaced by the device
+# multidraft committer FR13_DEVICE_MULTIDRAFT for the tree arms; E4 DROPPED = not a
+# depth-match bar). DECISIVE depth-5 pair FIRST (E5 bar + cat9 deliverable), then depth-5
+# candidates (cat6root, cat10), then depth-3 (E3 bar + 3-3-3), then the contaminated cat9
+# contrast (offload=0). All at WALL=1800 + temp 0.6 (offload DEPLOY_FORCE_TEMP) =
+# deployment-faithful, comparable to the fr9 16-task E5 baseline (decode_tps 39.9).
 run_native  nativeE5_b4 5 5 1
 run_variant cat9_b4      cat9     9  1
-run_variant opt1_b4c     cat9-opt1 9 1
 run_variant cat6root_b4  cat6root 6  1
 run_variant cat10_b4     cat10    10 1
 run_native  nativeE3_b4 3 3 1
