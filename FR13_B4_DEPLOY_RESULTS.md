@@ -18,7 +18,11 @@ captured at B=4 as the bars FIRST.
 |-----|-------|-------------------|--------------|-----------|--------|-------------|---------|
 | native E5 | 5 | 0.6263 | 3.177 | 4.177 | 149.9 | 6.67 | 4 |
 | native E4 | 4 | (pending) | | | | | |
-| native E3 | 3 | (pending) | | | | | |
+| native E3 | 3 | 0.5628 | 2.350 | 3.350 | 168.0 | 5.95 | 4 |
+
+native E3: swerc=0, 4/4 brackets. NOTE: E3 ms/tok (168.0) WORSE than E5 (149.9) and
+E3 TPS (5.95) < E5 TPS (6.67) — at B=4 deeper native MTP wins (more committed/fwd
+amortizes the ~B-invariant HBM read). depth-matched bar for depth-3 trees (3-3-3).
 
 native E5: swerc=0, wall=2146s, 142 pair-dumps, resolved_rate=0.25.
 
