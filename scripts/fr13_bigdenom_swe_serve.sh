@@ -36,6 +36,24 @@ CONTAINER="fr13-bigdenom-$ARM"
 PORT=9950
 PROXY_PORT=8022
 EVAL_HOST=${EVAL_HOST:-alienware}
+# --- FR13 CODEX-OFFLOAD (the unified-memory contamination fix) -----------------
+# OFFLOAD_CODEX=1 (DEFAULT for clean deploy-speed): run the inference_proxy AND
+# the codex-runner docker on alienware (x86) so the GB10 runs ONLY vLLM during
+# the codex agent loop. The GB10's 273 GB/s Grace+Blackwell unified memory is
+# then uncontended -> the timing-sensitive deploy-speed (s/fwd) is clean. The
+# lossless (argmax/distributional) numbers are timing-independent so unaffected.
+# OFFLOAD_CODEX=0 = the legacy on-GB10 path (fallback if alienware is down).
+# Flag-gated so nothing about the canonical measurement BASIS changes — only the
+# codex+proxy LOCATION. s/fwd is ALWAYS read LOCALLY from the GB10 vLLM /metrics
+# (never across the wire) so a Spark<->alienware blip can't corrupt the speed.
+OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
+OFFLOAD_HOST=${OFFLOAD_HOST:-alienware}
+OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}   # 8022 is taken on alienware
+GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}             # GB10 tailscale IP (gx10-edb9-1)
+OFFLOAD_HELPER=scripts/swe_x86_helpers/offload_codex_proxy.sh
+# Watchdog (req #5): max contiguous seconds the Spark<->alienware link may be
+# down before we fail LOUD + teardown rather than hang.
+OFFLOAD_LINK_DOWN_MAX_S=${OFFLOAD_LINK_DOWN_MAX_S:-300}
 mkdir -p "$ARMDIR/logs"
 
 echo "=== BIGDENOM SWEServe ARM $ARM kind=$KIND subset=$SUBSET ==="
@@ -77,6 +95,13 @@ teardown(){
   echo "[teardown] kill proxy + docker rm -f $CONTAINER + recover_host_memory"
   kill "$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null)" 2>/dev/null
   pkill -f "lumo_flywheel_serving.inference_proxy" 2>/dev/null
+  # kill any link watchdog
+  [[ -n "${WATCHDOG_PID:-}" ]] && kill "$WATCHDOG_PID" 2>/dev/null
+  # OFFLOAD: stop the remote proxy on alienware (clean teardown, req #5)
+  if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+    LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+      bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
+  fi
   docker logs "$CONTAINER" > "$ARMDIR/docker_full.log" 2>&1 || true
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   recover_host || true
@@ -224,34 +249,75 @@ curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" \
   > "$ARMDIR/reset_prefix_cache.txt" 2>&1 || echo "WARN: reset_prefix_cache failed (non-fatal)"
 
 # ---- launch canonical proxy: temp 0.0 pin + served-stream pair dumps ON ----
+# Two paths, flag-gated by OFFLOAD_CODEX:
+#   OFFLOAD_CODEX=1 (default): proxy runs ON ALIENWARE (-> GB10:9950 over
+#     tailscale); pair-dumps captured LOCALLY on alienware (rsynced back after
+#     the run). The GB10 runs ONLY vLLM during the codex loop = clean s/fwd.
+#   OFFLOAD_CODEX=0: legacy on-GB10 proxy (the prior co-located path).
 mkdir -p "$ARMDIR/proxy_pair_dumps" "$ARMDIR/proxy_request_dumps"
-LUMO_PROXY_FORCE_TEMPERATURE=0.0 \
-LUMO_PROXY_REQUEST_DUMP_DIR="$PWD/$ARMDIR/proxy_request_dumps" \
-LUMO_PROXY_PAIR_DUMP_DIR="$PWD/$ARMDIR/proxy_pair_dumps" \
-LUMO_PROXY_LOG_PATH="$PWD/$ARMDIR/proxy.log" \
-LUMO_PROXY_NOHUP_PATH="$PWD/$ARMDIR/proxy.nohup" \
-LUMO_PROXY_STATE_ROOT="/tmp/fr13_bigdenom_proxy_state_${ARM}" \
-bash scripts/swe_x86_helpers/relaunch_proxy.sh > "$ARMDIR/proxy_launch.log" 2>&1
-sleep 3
-PROXY_PID=$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null || true)
-if [[ -n "$PROXY_PID" ]] && [[ -r "/proc/$PROXY_PID/environ" ]]; then
-  tr '\0' '\n' < "/proc/$PROXY_PID/environ" | grep -E "^LUMO_(PROXY|TRACK_B)" | sort \
-    > "$ARMDIR/proxy_env.txt"
+CODEX_ARGS=()
+if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+  echo "[offload] OFFLOAD_CODEX=1 — proxy+codex on $OFFLOAD_HOST, GB10 stays vLLM-only"
+  # (a) the GB10 vLLM must be reachable from alienware over tailscale before we
+  #     start the remote proxy (req #6: measurement-side health is GB10-local,
+  #     but the request-side path needs the link up to begin).
+  if ! ssh -o BatchMode=yes -o ConnectTimeout=15 "$OFFLOAD_HOST" \
+        "curl -fsS -m 6 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo ok" \
+        2>/dev/null | grep -q ok; then
+    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health"
+    echo "      (network/firewall — set OFFLOAD_CODEX=0 to fall back to the on-GB10 path)"
+    exit 5
+  fi
+  echo "[offload] alienware -> GB10 vLLM $GB10_TS_IP:$PORT/health OK"
+  # (b) sync the proxy code to alienware + start it there (pins forced temp 0.0,
+  #     pair-dumps ON, auto-continue ON — the canonical deploy pins, asserted by
+  #     the helper). LUMO_OFFLOAD_PROXY_PORT=8023 (8022 taken on alienware).
+  LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+    bash "$OFFLOAD_HELPER" sync "$OFFLOAD_HOST" > "$ARMDIR/offload_sync.log" 2>&1 \
+    || { echo "FAIL: offload proxy sync to $OFFLOAD_HOST"; cat "$ARMDIR/offload_sync.log"; exit 5; }
+  LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+    bash "$OFFLOAD_HELPER" start "$OFFLOAD_HOST" "$GB10_TS_IP" "$PWD/$ARMDIR" \
+    > "$ARMDIR/offload_start.log" 2>&1 \
+    || { echo "FAIL: offload proxy start on $OFFLOAD_HOST"; cat "$ARMDIR/offload_start.log"; exit 5; }
+  cat "$ARMDIR/offload_start.log"
+  # the offload helper already asserts the canonical pins on the REMOTE proxy
+  # env (forced temp 0.0 / pair-dump / auto-continue) before returning OK.
+  cp "$ARMDIR/offload_proxy_env.txt" "$ARMDIR/proxy_env.txt" 2>/dev/null || true
+  # the codex orchestrator runs the codex docker on alienware against the
+  # alienware-local proxy (127.0.0.1:8023). vLLM /metrics still read GB10-locally.
+  CODEX_ARGS=(--codex-host "$OFFLOAD_HOST" \
+              --codex-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
+  echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT; forced temp 0.0, pair dumps on, auto-continue on)"
+else
+  echo "[offload] OFFLOAD_CODEX=0 — legacy on-GB10 proxy+codex (co-located)"
+  LUMO_PROXY_FORCE_TEMPERATURE=0.0 \
+  LUMO_PROXY_REQUEST_DUMP_DIR="$PWD/$ARMDIR/proxy_request_dumps" \
+  LUMO_PROXY_PAIR_DUMP_DIR="$PWD/$ARMDIR/proxy_pair_dumps" \
+  LUMO_PROXY_LOG_PATH="$PWD/$ARMDIR/proxy.log" \
+  LUMO_PROXY_NOHUP_PATH="$PWD/$ARMDIR/proxy.nohup" \
+  LUMO_PROXY_STATE_ROOT="/tmp/fr13_bigdenom_proxy_state_${ARM}" \
+  bash scripts/swe_x86_helpers/relaunch_proxy.sh > "$ARMDIR/proxy_launch.log" 2>&1
+  sleep 3
+  PROXY_PID=$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null || true)
+  if [[ -n "$PROXY_PID" ]] && [[ -r "/proc/$PROXY_PID/environ" ]]; then
+    tr '\0' '\n' < "/proc/$PROXY_PID/environ" | grep -E "^LUMO_(PROXY|TRACK_B)" | sort \
+      > "$ARMDIR/proxy_env.txt"
+  fi
+  P0=$(date +%s); PROXY_OK=0
+  while (( $(date +%s) < P0 + 60 )); do
+    CODE=$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://127.0.0.1:$PROXY_PORT/v1/models" 2>/dev/null)
+    if [[ -n "$CODE" && "$CODE" != "000" ]]; then PROXY_OK=1; break; fi
+    sleep 2
+  done
+  (( PROXY_OK == 1 )) || { echo "FAIL: proxy not healthy on :$PROXY_PORT"; tail -20 "$ARMDIR/proxy.nohup" 2>/dev/null; exit 5; }
+  grep -q "LUMO_PROXY_FORCE_TEMPERATURE=0.0" "$ARMDIR/proxy_env.txt" \
+    || { echo "FAIL: proxy temp pin missing (class 9)"; exit 5; }
+  grep -q "LUMO_PROXY_PAIR_DUMP_DIR=" "$ARMDIR/proxy_env.txt" \
+    || { echo "FAIL: proxy pair-dump pin missing (class 9)"; exit 5; }
+  grep -q "LUMO_PROXY_AUTO_CONTINUE=1" "$ARMDIR/proxy_env.txt" \
+    || { echo "FAIL: proxy auto-continue pin missing (early-exit class fe927e74)"; exit 5; }
+  echo "proxy OK (forced temp 0.0, pair dumps on, auto-continue on)"
 fi
-P0=$(date +%s); PROXY_OK=0
-while (( $(date +%s) < P0 + 60 )); do
-  CODE=$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://127.0.0.1:$PROXY_PORT/v1/models" 2>/dev/null)
-  if [[ -n "$CODE" && "$CODE" != "000" ]]; then PROXY_OK=1; break; fi
-  sleep 2
-done
-(( PROXY_OK == 1 )) || { echo "FAIL: proxy not healthy on :$PROXY_PORT"; tail -20 "$ARMDIR/proxy.nohup" 2>/dev/null; exit 5; }
-grep -q "LUMO_PROXY_FORCE_TEMPERATURE=0.0" "$ARMDIR/proxy_env.txt" \
-  || { echo "FAIL: proxy temp pin missing (class 9)"; exit 5; }
-grep -q "LUMO_PROXY_PAIR_DUMP_DIR=" "$ARMDIR/proxy_env.txt" \
-  || { echo "FAIL: proxy pair-dump pin missing (class 9)"; exit 5; }
-grep -q "LUMO_PROXY_AUTO_CONTINUE=1" "$ARMDIR/proxy_env.txt" \
-  || { echo "FAIL: proxy auto-continue pin missing (early-exit class fe927e74)"; exit 5; }
-echo "proxy OK (forced temp 0.0, pair dumps on, auto-continue on)"
 
 # ---- eval offload pre-flight (attempt eval; do NOT fail the gate on infra) ----
 EVAL_ARGS=()
@@ -273,6 +339,47 @@ fi
 # deploy-speed reduction on a shorter window (the user-blessed bounded-turn path).
 WALL_ARGS=()
 [[ -n "${AGENT_WALL_S:-}" ]] && WALL_ARGS=(--agent-wall-s "$AGENT_WALL_S")
+
+# ---- NETWORK-LINK WATCHDOG (OFFLOAD only; req #4/#5) -------------------------
+# Throughout the SWE window, poll the Spark<->alienware tailscale link
+# (alienware curls the GB10 vLLM /health). Each sample is logged with a
+# timestamp so a request failure can be CLASSIFIED network-drop vs real (no #12
+# fork mis-attribution). If the link is DOWN for > OFFLOAD_LINK_DOWN_MAX_S
+# contiguous seconds, write a LINK_DEAD marker (the watchdog fails LOUD; the
+# post-run classifier then flags the window for DISCARD rather than recording a
+# wire-stalled s/fwd). s/fwd itself is read GB10-LOCALLY so it is stall-immune
+# by construction — the watchdog only guards against a hung/contaminated window.
+LINKLOG="$ARMDIR/offload_link_state.log"
+LINK_DEAD_MARKER="$ARMDIR/offload_link_dead.flag"
+WATCHDOG_PID=""
+if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+  rm -f "$LINK_DEAD_MARKER"
+  ( down_since=0
+    while true; do
+      ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      if ssh -o BatchMode=yes -o ConnectTimeout=8 "$OFFLOAD_HOST" \
+           "curl -fsS -m 5 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo up" \
+           2>/dev/null | grep -q up; then
+        echo "[$ts] LINK up (alienware->GB10:$PORT/health)" >> "$LINKLOG"
+        down_since=0
+      else
+        now=$(date +%s)
+        [[ "$down_since" == "0" ]] && down_since=$now
+        contig=$(( now - down_since ))
+        echo "[$ts] LINK DOWN contig=${contig}s (CLASSIFIED network-drop, not a model fork)" >> "$LINKLOG"
+        if (( contig > OFFLOAD_LINK_DOWN_MAX_S )); then
+          echo "[$ts] LINK DEAD > ${OFFLOAD_LINK_DOWN_MAX_S}s — watchdog FAIL LOUD, marking window DISCARD" \
+            | tee -a "$LINKLOG"
+          echo "$ts contig=${contig}s" > "$LINK_DEAD_MARKER"
+          break
+        fi
+      fi
+      sleep 10
+    done ) >> "$ARMDIR/offload_watchdog.log" 2>&1 &
+  WATCHDOG_PID=$!
+  echo "[offload] link watchdog pid=$WATCHDOG_PID (threshold ${OFFLOAD_LINK_DOWN_MAX_S}s)"
+fi
+
 curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_before_swe.txt"
 S0=$(date +%s)
 .venv/bin/python scripts/run_swe_bench_q36_a.py \
@@ -281,6 +388,7 @@ S0=$(date +%s)
   --concurrency 1 \
   "${WALL_ARGS[@]}" \
   "${EVAL_ARGS[@]}" \
+  "${CODEX_ARGS[@]}" \
   > "$ARMDIR/swe_orchestrator.log" 2>&1
 SWERC=$?
 S1=$(date +%s)
@@ -288,6 +396,28 @@ curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_after_swe.txt"
 SWE_WALL=$((S1-S0))
 echo "swe orchestrator rc=$SWERC wall=${SWE_WALL}s"
 tail -5 "$ARMDIR/swe_orchestrator.log"
+
+# stop the watchdog now the window is closed
+[[ -n "$WATCHDOG_PID" ]] && kill "$WATCHDOG_PID" 2>/dev/null && WATCHDOG_PID=""
+
+# ---- OFFLOAD: fetch the alienware pair-dumps back (resilient rsync, req #3) --
+# the deploy-lossless recurrent-oracle rescore (a SEPARATE GB10 vLLM-only GPU
+# phase) reads these. A dropped rsync must not lose the served stream.
+if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+  LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+    bash "$OFFLOAD_HELPER" fetch "$OFFLOAD_HOST" "$PWD/$ARMDIR" \
+    > "$ARMDIR/offload_fetch.log" 2>&1 || echo "WARN: offload pair-dump fetch had errors (see offload_fetch.log)"
+  cat "$ARMDIR/offload_fetch.log"
+  # NETWORK-STALL WINDOW DISCARD (req #4): if the watchdog saw the link dead,
+  # FLAG this arm's deploy-speed window as not-recordable (do not silently
+  # record a wire-stalled s/fwd). The lossless rescore can still proceed from
+  # whatever pair-dumps were captured; only the SPEED window is discarded.
+  if [[ -f "$LINK_DEAD_MARKER" ]]; then
+    echo "OFFLOAD_LINK_DEAD: $(cat "$LINK_DEAD_MARKER") — deploy-speed window for $ARM is DISCARDED" \
+      | tee "$ARMDIR/DEPLOY_SPEED_DISCARDED.flag"
+    SWERC=12   # distinct rc: network-stall window, not a real/model failure
+  fi
+fi
 
 # ---- FULL-RUN HEALTH RULE (class 9): record + flag wall-consumed ----
 .venv/bin/python - "$ARMDIR" "$SWE_WALL" "$SWERC" <<'PY'
