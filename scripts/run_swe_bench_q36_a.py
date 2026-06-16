@@ -116,14 +116,19 @@ def _metrics_text(metrics_url: str) -> str:
         return f"# metrics fetch failed: {type(exc).__name__}: {exc}\n"
 
 
-def _sidecar_fwd_gpu_total() -> float | None:
-    """FR13_SFWD_GPU_TIMER: cumulative decode-forward GPU seconds from the worker
-    timer's JSON sidecar(s). The worker (gpu_model_runner) writes the sidecar
-    per-pid to FR13_SFWD_GPU_TIMER_JSON; in single-API-server mode the worker
-    Counter is NOT aggregated into the API-server /metrics, so this sidecar is the
-    robust channel. Returns None when the timer is off / no sidecar exists (=> the
-    snapshot stays byte-identical to the plain /metrics fetch). Sums across per-pid
-    files (one per worker)."""
+def _sidecar_fwd_gpu_totals() -> dict | None:
+    """FR13_SFWD_GPU_TIMER: cumulative pure-decode-forward GPU stats from the worker
+    timer's JSON sidecar(s): {seconds, steps, drafts}. ALL THREE are restricted to
+    the SAME pure-decode steps the timer measured (prefill/mixed/idle EXCLUDED), so
+    seconds/steps (per-forward) and seconds/drafts (per-spec-event) are prefill-
+    INDEPENDENT. CRITICAL: do NOT divide seconds by the GLOBAL
+    spec_decode_num_drafts_total -- that counts drafts on mixed prefill+decode steps
+    the timer excludes, reintroducing a prefill-load-dependent confound (measured:
+    ~49% of global drafts land on non-timed steps at B=4 deployment). The worker
+    writes the sidecar per-pid to FR13_SFWD_GPU_TIMER_JSON; in single-API-server mode
+    the worker Counter is NOT aggregated into the API-server /metrics, so this sidecar
+    is the robust channel. Returns None when the timer is off / no sidecar. Sums
+    across per-pid files (one per worker)."""
     base = os.environ.get("FR13_SFWD_GPU_TIMER_JSON")
     if not base:
         return None
@@ -136,38 +141,44 @@ def _sidecar_fwd_gpu_total() -> float | None:
     files = set(_glob.glob(pat))
     if os.path.exists(base):
         files.add(base)
-    total = 0.0
+    secs = steps = drafts = 0.0
     found = False
     for f in files:
         try:
             d = json.loads(Path(f).read_text(encoding="utf-8"))
-            total += float(d.get("decode_forward_gpu_seconds", 0.0))
+            secs += float(d.get("decode_forward_gpu_seconds", 0.0))
+            steps += float(d.get("n_pure_decode_steps_timed", 0.0))
+            drafts += float(d.get("n_drafts_in_timed_steps", 0.0))
             found = True
         except Exception:  # noqa: BLE001
             continue
-    return total if found else None
+    return {"seconds": secs, "steps": steps, "drafts": drafts} if found else None
 
 
 def _metrics_snapshot(metrics_url: str) -> str:
-    """/metrics text, plus (FR13_SFWD_GPU_TIMER) a synthetic counter line carrying
-    the worker timer's cumulative decode-forward GPU seconds. In single-API-server
-    mode /metrics does NOT expose the worker Counter, so without this the reducer's
-    s_per_fwd_gpu would be None even with the timer on. The reducer scrapes the
-    counter NAME from the captured file, so appending the line makes s_per_fwd_gpu
-    work through the existing per-task bracket path with no reducer change.
+    """/metrics text, plus (FR13_SFWD_GPU_TIMER) synthetic counter lines carrying the
+    worker timer's cumulative pure-decode-forward GPU seconds AND its MATCHED
+    denominators (pure-decode forward count + drafts-on-those-steps). The matched
+    denominators are essential for prefill-independence: dividing the pure-decode-only
+    GPU seconds by the GLOBAL spec_decode_num_drafts_total (which counts mixed-step
+    drafts) reintroduces the prefill confound; dividing by the matched count (both
+    pure-decode-only) does not. In single-API-server mode /metrics does not expose
+    these worker counters, so we synthesize them here for the reducer's per-task
+    bracket path.
 
-    Double-count guard: if /metrics ALREADY exposes the counter (multiprocess
-    prometheus aggregation active), use that and do NOT append — the reducer sums
-    all matching lines, so a duplicate would double the value. No-op
-    (byte-identical) when the timer is off / no sidecar."""
+    Double-count guard: if /metrics ALREADY exposes the seconds counter (multiprocess
+    aggregation active), use that and do NOT append. No-op / byte-identical when the
+    timer is off / no sidecar."""
     text = _metrics_text(metrics_url)
     if "fr13_decode_forward_gpu_seconds_total" in text:
         return text
-    fwd = _sidecar_fwd_gpu_total()
-    if fwd is not None:
+    t = _sidecar_fwd_gpu_totals()
+    if t is not None:
         if not text.endswith("\n"):
             text += "\n"
-        text += f"vllm:fr13_decode_forward_gpu_seconds_total {fwd:.9f}\n"
+        text += f"vllm:fr13_decode_forward_gpu_seconds_total {t['seconds']:.9f}\n"
+        text += f"vllm:fr13_decode_forward_gpu_steps_total {t['steps']:.1f}\n"
+        text += f"vllm:fr13_decode_forward_gpu_drafts_total {t['drafts']:.1f}\n"
     return text
 
 
