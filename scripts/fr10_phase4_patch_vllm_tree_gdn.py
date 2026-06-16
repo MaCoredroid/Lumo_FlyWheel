@@ -14741,7 +14741,18 @@ def _patch_rejection_sampler_gpu_committer() -> bool:
     mirror).
     """
     text = REJECTION_SAMPLER_PATH.read_text()
-    sentinel = "# FR13_GPU_COMMITTER"
+    # UNIQUE idempotency sentinel. It MUST be (a) injected by THIS patcher into
+    # the loop-skip region it adds AND (b) checked here, AND (c) NOT a substring
+    # of anything the tree_lcp helper injects. The old sentinel "# FR13_GPU_
+    # COMMITTER" COLLIDED with the tree_lcp doc comment "# FR13_GPU_COMMITTER)."
+    # (helper line ~6065): tree_lcp runs FIRST, so by the time this patcher read
+    # the file the bare "# FR13_GPU_COMMITTER" was already present -> this guard
+    # mis-fired "already patched" and BAILED, so the loop-skip
+    # `if _fr13_gpu_committer:` was never injected and the legacy loop ran on the
+    # synckill-nulled parents_cpu -> EngineDeadError. The new sentinel ends in a
+    # token ("_LOOPSKIP_SOT") that does NOT appear anywhere in the tree_lcp
+    # helper, so the guard now only matches a genuine prior gpu_committer apply.
+    sentinel = "# FR13_GPU_COMMITTER_LOOPSKIP_SOT"
     if sentinel in text:
         return False
     if "def _lumo_tree_path_lcp_max_greedy_sample(" not in text:
