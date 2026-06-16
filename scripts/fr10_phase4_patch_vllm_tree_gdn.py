@@ -14787,8 +14787,22 @@ class _Fr13SfwdGpuTimer:
         )
         self._accum_s = 0.0          # local mirror (for the JSON sidecar)
         self._n_steps = 0            # pure-decode steps timed
+        # spec events (drafts) processed in the GPU-TIMED pure-decode steps =
+        # sum(num_reqs over timed steps). This is the CORRECT denominator for
+        # s/fwd_gpu: at B>1, MIXED (prefill+decode) steps are excluded from the
+        # GPU numerator, so dividing by the engine's TOTAL drafts (which include
+        # mixed-step drafts) would bias s/fwd_gpu low. Dividing the timed GPU
+        # seconds by the drafts that occurred IN those timed steps keeps the
+        # per-spec-event decode-kernel time prefill-independent.
+        self._n_drafts = 0
         self._counter = None
         self._installed_atexit = False
+        # throttled incremental sidecar dump (prometheus-independent live channel)
+        import time as _time
+        self._dump_period_s = float(
+            __import__("os").environ.get("FR13_SFWD_GPU_TIMER_DUMP_S", "1.0")
+        )
+        self._last_dump_t = _time.monotonic()
         if self._enabled:
             self._install_counter()
             self._install_atexit()
@@ -14816,9 +14830,11 @@ class _Fr13SfwdGpuTimer:
         _atexit.register(self._teardown)
         self._installed_atexit = True
 
-    def begin(self):
+    def begin(self, num_reqs=1):
         """Return a fresh start cuda-event (recorded on the current stream), or
-        None when disabled. Called only on pure-decode steps."""
+        None when disabled. Called only on pure-decode steps. num_reqs = the
+        spec events (drafts) this timed step will process (the s/fwd_gpu
+        denominator)."""
         if not self._enabled:
             return None
         import torch as _t
@@ -14826,18 +14842,19 @@ class _Fr13SfwdGpuTimer:
             return None
         ev = _t.cuda.Event(enable_timing=True)
         ev.record()  # async on the current (forward) stream
-        return ev
+        return (ev, int(max(1, num_reqs)))
 
-    def end(self, start_ev):
+    def end(self, start):
         """Record the stop event (async), enqueue the pair, and drain any pairs
         whose stop has ALREADY completed (non-blocking query) into the counter.
         No per-step synchronize."""
-        if start_ev is None or not self._enabled:
+        if start is None or not self._enabled:
             return
+        start_ev, n_reqs = start
         import torch as _t
         stop_ev = _t.cuda.Event(enable_timing=True)
         stop_ev.record()  # async on the current (forward) stream
-        self._pending.append((start_ev, stop_ev))
+        self._pending.append((start_ev, stop_ev, n_reqs))
         self._drain(blocking=False)
         # bound the backlog: if we ever exceed the cap (should not at steady
         # B<=4 decode), force a drain of the OLDEST pair (it is certainly done).
@@ -14849,7 +14866,7 @@ class _Fr13SfwdGpuTimer:
         # non-blocking completion poll; we never elapsed_time() an incomplete
         # stop (that would block the live decode stream).
         while self._pending:
-            start_ev, stop_ev = self._pending[0]
+            start_ev, stop_ev, n_reqs = self._pending[0]
             try:
                 done = stop_ev.query()
             except Exception:  # noqa: BLE001
@@ -14865,10 +14882,72 @@ class _Fr13SfwdGpuTimer:
                 secs = float(ms) / 1000.0
                 self._accum_s += secs
                 self._n_steps += 1
+                self._n_drafts += int(n_reqs)
                 if self._counter is not None:
                     self._counter.inc(secs)
             except Exception:  # noqa: BLE001
                 continue
+        # Incremental sidecar write (throttled): vLLM only calls
+        # setup_multiprocess_prometheus() when api_server_count>1, so in the
+        # single-API-server deployment the worker's Counter is NOT aggregated
+        # into the API-server /metrics (separate process, no shared
+        # PROMETHEUS_MULTIPROC_DIR). The JSON sidecar is therefore the canonical,
+        # prometheus-independent live channel the reducer reads. We rewrite it at
+        # most every FR13_SFWD_GPU_TIMER_DUMP_S seconds (monotonic clock, default
+        # 1.0) so windowed deltas are pollable WITHOUT a per-step file write.
+        self._maybe_dump_json()
+
+    def _maybe_dump_json(self):
+        import time as _time
+        now = _time.monotonic()
+        period = self._dump_period_s
+        if (now - self._last_dump_t) < period:
+            return
+        self._last_dump_t = now
+        self._dump_json(final=False)
+
+    def _dump_json(self, final):
+        out = __import__("os").environ.get("FR13_SFWD_GPU_TIMER_JSON")
+        if not out:
+            return
+        try:
+            import json as _json
+            payload = {
+                "schema": "fr13.sfwd_gpu_timer.v1",
+                "pid": __import__("os").getpid(),
+                "final": bool(final),
+                "decode_forward_gpu_seconds": self._accum_s,
+                "n_pure_decode_steps_timed": self._n_steps,
+                # drafts (spec events) processed IN the timed pure-decode steps =
+                # the matching s/fwd_gpu denominator. At B=1 == n_steps; at B>1
+                # == sum(num_reqs) so MIXED-step drafts are not counted against
+                # the pure-decode GPU numerator.
+                "n_drafts_in_timed_steps": self._n_drafts,
+                "metric_name": "vllm:fr13_decode_forward_gpu_seconds_total",
+                "note": (
+                    "pure-decode (uniform_decode) model-forward GPU seconds; "
+                    "prefill + mixed + idle EXCLUDED; async cuda events, single "
+                    "synchronize at teardown. Cumulative running total; the "
+                    "reducer takes a delta across a request window."
+                ),
+            }
+            # per-pid suffix so multiple workers do not clobber one file.
+            _p = out
+            if "{pid}" in out:
+                _p = out.replace("{pid}", str(__import__("os").getpid()))
+            else:
+                _p = out + "." + str(__import__("os").getpid())
+            _pp = __import__("pathlib").Path(_p)
+            _pp.parent.mkdir(parents=True, exist_ok=True)
+            # atomic-ish: write to a temp then replace so a poller never reads a
+            # half-written file.
+            _tmp = _pp.with_suffix(_pp.suffix + ".tmp")
+            _tmp.write_text(
+                _json.dumps(payload, indent=2) + "\\n", encoding="utf-8"
+            )
+            _tmp.replace(_pp)
+        except Exception:  # noqa: BLE001
+            pass
 
     def _teardown(self):
         # final flush: decode is stopped here, so a blocking drain is safe and
@@ -14880,37 +14959,7 @@ class _Fr13SfwdGpuTimer:
         except Exception:  # noqa: BLE001
             pass
         self._drain(blocking=True)
-        out = __import__("os").environ.get("FR13_SFWD_GPU_TIMER_JSON")
-        if not out:
-            return
-        try:
-            import json as _json
-            payload = {
-                "schema": "fr13.sfwd_gpu_timer.v1",
-                "pid": __import__("os").getpid(),
-                "decode_forward_gpu_seconds": self._accum_s,
-                "n_pure_decode_steps_timed": self._n_steps,
-                "metric_name": "vllm:fr13_decode_forward_gpu_seconds_total",
-                "note": (
-                    "pure-decode (uniform_decode) model-forward GPU seconds; "
-                    "prefill + mixed + idle EXCLUDED; async cuda events, single "
-                    "synchronize at teardown."
-                ),
-            }
-            # per-pid suffix so multiple workers do not clobber one file.
-            _p = out
-            if "{pid}" in out:
-                _p = out.replace("{pid}", str(__import__("os").getpid()))
-            else:
-                _p = out + "." + str(__import__("os").getpid())
-            __import__("pathlib").Path(_p).parent.mkdir(
-                parents=True, exist_ok=True
-            )
-            __import__("pathlib").Path(_p).write_text(
-                _json.dumps(payload, indent=2) + "\\n", encoding="utf-8"
-            )
-        except Exception:  # noqa: BLE001
-            pass
+        self._dump_json(final=True)
 
 
 _FR13_SFWD_GPU_TIMER = None
@@ -14951,7 +15000,7 @@ def _fr13_sfwd_begin(max_num_scheduled_tokens, num_tokens, num_reqs,
     ):
         return None
     try:
-        return _fr13_sfwd_timer().begin()
+        return _fr13_sfwd_timer().begin(num_reqs=num_reqs)
     except Exception:  # noqa: BLE001
         return None
 

@@ -147,6 +147,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import statistics
 import time
 import urllib.request
@@ -241,6 +242,42 @@ def _scrape(endpoint: str) -> dict[str, float]:
 
 def _delta(after: dict[str, float], before: dict[str, float]) -> dict[str, float]:
     return {k: float(after.get(k, 0.0) - before.get(k, 0.0)) for k in after}
+
+
+def read_sfwd_gpu_sidecar() -> dict[str, float] | None:
+    """FR13_SFWD_GPU_TIMER sidecar (cumulative): the prefill-independent
+    decode-forward GPU-time channel. vLLM only calls setup_multiprocess_
+    prometheus() when api_server_count>1, so in the single-API-server deployment
+    the worker's Counter is NOT aggregated into the API-server /metrics (separate
+    process, no shared PROMETHEUS_MULTIPROC_DIR). The worker therefore ALSO dumps
+    a throttled JSON sidecar (FR13_SFWD_GPU_TIMER_JSON), which carries:
+      decode_forward_gpu_seconds  (cumulative pure-decode model-forward GPU s)
+      n_drafts_in_timed_steps     (drafts processed IN those timed steps =
+                                    the MATCHING s/fwd_gpu denominator; at B>1,
+                                    mixed prefill+decode steps are excluded from
+                                    the GPU numerator, so this -- NOT the engine's
+                                    total drafts -- is the correct denominator).
+    Returns None if no sidecar is found (server booted timer-OFF / api_server>1).
+    """
+    import glob as _glob
+    pattern = os.environ.get(
+        "FR13_SFWD_GPU_TIMER_JSON_GLOB",
+        str(REPO / "output" / "fr13_sfwd_gpu_verify" / "logs"
+            / "fr13_sfwd_gpu_timer.json.*"),
+    )
+    files = _glob.glob(pattern)
+    if not files:
+        return None
+    f = max(files, key=os.path.getmtime)
+    try:
+        d = json.loads(Path(f).read_text())
+    except Exception:  # noqa: BLE001
+        return None
+    return {
+        "decode_forward_gpu_seconds": float(d.get("decode_forward_gpu_seconds", 0.0)),
+        "n_drafts_in_timed_steps": float(d.get("n_drafts_in_timed_steps", 0.0)),
+        "n_pure_decode_steps_timed": float(d.get("n_pure_decode_steps_timed", 0.0)),
+    }
 
 
 def _read_prompts(path: str) -> list[str]:
@@ -481,6 +518,7 @@ def cmd_speed(args: argparse.Namespace) -> int:
                args.request_timeout)
 
     before = _scrape(args.endpoint)
+    sc_before = read_sfwd_gpu_sidecar()
     served_streams: list[list[int]] = []
     if args.batch_size == 1:
         # B=1 SEQUENTIAL: one prompt, one sample, at a time.
@@ -506,18 +544,37 @@ def cmd_speed(args: argparse.Namespace) -> int:
             for ch in choices:
                 served_streams.append([int(x) for x in (ch.get("token_ids") or [])])
     after = _scrape(args.endpoint)
+    sc_after = read_sfwd_gpu_sidecar()
     md = _delta(after, before)
 
     eng = assert_engaged(spec, md, context=f"speed {spec['arm']} B={args.batch_size}")
 
     drafts = md[M_DRAFTS]
     s_fwd = md[M_DECODE_S] / drafts if drafts > 0 else None
-    # FR13_SFWD_GPU_TIMER (prefill-independent): see M_DECODE_FWD_GPU_S. At B=1
-    # SEQUENTIAL there is NO co-resident interleave, so s_fwd_gpu ~= the wall-span
-    # s_fwd here -- this raw B=1 path is the pure-decode REFERENCE the deployment
-    # B>1 s_per_fwd_gpu is validated against (prefill-independence).
-    fwd_gpu = md.get(M_DECODE_FWD_GPU_S, 0.0)
-    s_fwd_gpu = (fwd_gpu / drafts) if (drafts > 0 and fwd_gpu > 0) else None
+    # FR13_SFWD_GPU_TIMER (prefill-independent): the pure-decode model-forward GPU
+    # seconds per spec event. PREFERRED channel = the worker JSON sidecar (the
+    # /metrics counter is NOT aggregated in single-API-server mode). CRITICAL
+    # denominator: the drafts processed IN the GPU-TIMED pure-decode steps
+    # (sidecar n_drafts_in_timed_steps), NOT the engine's total drafts -- at B>1
+    # the mixed prefill+decode steps are excluded from the GPU numerator, so
+    # dividing by total drafts would bias s/fwd_gpu low. At B=1 SEQUENTIAL there
+    # is no co-resident interleave so timed-drafts == total drafts and s_fwd_gpu
+    # ~= the wall-span s_fwd (the pure-decode reference).
+    s_fwd_gpu = None
+    fwd_gpu_d = 0.0
+    timed_drafts_d = 0.0
+    if sc_before is not None and sc_after is not None:
+        fwd_gpu_d = sc_after["decode_forward_gpu_seconds"] - sc_before["decode_forward_gpu_seconds"]
+        timed_drafts_d = sc_after["n_drafts_in_timed_steps"] - sc_before["n_drafts_in_timed_steps"]
+        if fwd_gpu_d > 0 and timed_drafts_d > 0:
+            s_fwd_gpu = fwd_gpu_d / timed_drafts_d
+    if s_fwd_gpu is None:
+        # fallback: /metrics counter (multi-API-server mode), total-drafts denom
+        fwd_gpu = md.get(M_DECODE_FWD_GPU_S, 0.0)
+        if drafts > 0 and fwd_gpu > 0:
+            s_fwd_gpu = fwd_gpu / drafts
+            fwd_gpu_d = fwd_gpu
+            timed_drafts_d = drafts
     accept_per_event = md[M_ACCEPTED] / drafts if drafts > 0 else None
     committed_per_event = (accept_per_event + 1.0) if accept_per_event is not None else None
     derived_tps = (committed_per_event / s_fwd) if (s_fwd and committed_per_event) else None
@@ -550,7 +607,9 @@ def cmd_speed(args: argparse.Namespace) -> int:
         # FR13_SFWD_GPU_TIMER: prefill-independent decode-forward GPU time per
         # spec event (None unless the server booted FR13_SFWD_GPU_TIMER=1).
         "s_per_fwd_gpu": s_fwd_gpu,
-        "s_per_fwd_gpu_basis": "d(fr13_decode_forward_gpu_seconds_total)/d(spec_decode_num_drafts_total)",
+        "s_per_fwd_gpu_basis": "d(decode_forward_gpu_seconds)/d(n_drafts_in_timed_steps) [sidecar]",
+        "s_per_fwd_gpu_decode_forward_gpu_seconds_delta": fwd_gpu_d,
+        "s_per_fwd_gpu_timed_drafts_delta": timed_drafts_d,
         "accept_per_event": accept_per_event,
         "accept_per_event_note": (
             "B-DEPENDENT + TRAJECTORY-BOUND: valid only for this served_stream_"
