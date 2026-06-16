@@ -1,0 +1,32 @@
+{
+  "id": "b4_concurrency_confound_switch_to_b1",
+  "date": "2026-06-16",
+  "decision": "User 2026-06-16: STOP the B=4 16-task deployment sweep, switch to B=1 temp-0.6 4-task per arm. B=1 (eff_conc=1, one codex task at a time, no co-residency) makes s/fwd_gpu directly comparable across tree shapes; B=4 does not.",
+  "why": "At B=4 the prefill-independent s/fwd_gpu (per-forward) is CONCURRENCY-confounded: per-forward rises with co-residency (more query rows/forward, and the tree's rows = 9 nodes x B grow faster than native's 5 x B). During the B=4 run, cat9 was measured at Running:3-4 while native E5's whole-arm eff_conc was only 1.745, so the raw cat9-vs-native per-forward gap (1.23x) mixed a real per-forward difference with a co-residency mismatch (the same confound the morning data hit: 'E5 ran fuller yet faster'). The eff_conc-matched comparison was not determinable mid-run. B=1 removes the confound entirely.",
+  "b4_native_e5_baseline_archived": {
+    "regime": "B=4 temp0.6 16-task (16/16 done, then abandoned)",
+    "accept_per_event": 3.37,
+    "s_per_fwd_gpu_per_forward_matched_sidecar": 0.158,
+    "per_request_decode_tps": 6.33,
+    "per_stream_decode_rate": 11.53,
+    "aggregate_decode_tps": 20.12,
+    "effective_concurrency": 1.745,
+    "prefill_frac": 0.405,
+    "note": "aggregate 20.12 = per_stream 11.53 x eff_conc 1.745; the ~2x gap vs fr9's 39.9 is the eff_conc term (concurrency-driven), not a per-stream regression. archived to output/.b4_deleted_*/."
+  },
+  "b4_cat9_partial_archived": {
+    "regime": "B=4 temp0.6 (2/16, abandoned)",
+    "accept_per_event": 3.43,
+    "s_per_fwd_gpu_per_forward": 0.194,
+    "kernel_tps": 22.6,
+    "vs_native_kernel_tps": 27.6,
+    "caveat": "the ~18% behind was an UPPER BOUND: cat9 measured at higher co-residency than native's avg => concurrency-inflated. NOT a clean verdict. attention path = OUR forked FA2 tree-bias (FR13_FA2_TREE_BIAS=1 + _vllm_fa2_C.so), labeled TREE_ATTN by vLLM's backend slot; the per-forward delta is unattributed (more rows vs our FA2 fork vs tree-mask) and unconfirmed."
+  },
+  "b1_plan": {
+    "arms": ["nativeE5_b1 (E5 bar)", "cat9_b1", "cat6root_b1", "nativeE3_b1 (E3 bar)", "threethree_b1 (333)"],
+    "config": "BSIZE=1 CONC=1 TAG=b1 RUNROOT=output/fr13_b1_swe SUBSET=subset_b4_four.json WALL=1800, temp 0.6 forced (offload), device committer on tree arms, timer ON all arms",
+    "compares": "depth-matched per-forward s/fwd_gpu + accept/event: cat9/cat6 -> E5 (depth-5); 333 -> E3 (depth-3). B=1 => clean, no eff_conc confound, directly comparable to the banked B=1 numbers (cat9 0.2249 vs native 0.2182 = 1.03x).",
+    "cost": "~2h per arm (4 tasks sequential x ~34min wall), ~10-15h for 5 arms."
+  },
+  "driver": "scripts/fr13_b4_campaign_driver.sh now batch-parameterized (BSIZE/CONC/TAG/RUNROOT envs, default B=4) + sequence trimmed to the 5 arms, depth-5 trio then depth-3 pair."
+}
