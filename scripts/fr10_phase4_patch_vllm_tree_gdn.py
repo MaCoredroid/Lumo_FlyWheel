@@ -8216,8 +8216,30 @@ def _lumo_tree_canonical_multidraft_sample(
         counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
     else:
         counts = [int(x) for x in num_draft_tokens]
-    target_probs_cpu = target_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
-    self_probs_cpu = tree_self_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
+    # FR13_DEVICE_MULTIDRAFT (default OFF): when ON, the temp>0 multidraft
+    # per-node decision runs ON-DEVICE (scripts/fr13_device_multidraft_kernel.py)
+    # so the [nodes x vocab] host softmax DtoH below + the Python per-node
+    # interpreter loop are ELIMINATED. The device committer computes the SAME
+    # SpecInfer/multi-draft residual-mix accept rule (per-node source weights ~
+    # min-overlap, accept ~ min(1,p/q_mix), residual fallback) and produces the
+    # SAME five committer products (distribution-lossless, NOT byte: device rng
+    # draws differ but follow the identical distributions; proven offline by
+    # scripts/fr13_device_multidraft_offline_gate.py). DEFAULT-OFF => the host
+    # reference below runs byte-identical to HEAD. Fail-loud on disengagement
+    # (no silent host fallback, bug-class 9).
+    _fr13_device_multidraft = (
+        __import__('os').environ.get('FR13_DEVICE_MULTIDRAFT', '0') == '1'
+        and draft_probs is None
+    )
+    if _fr13_device_multidraft:
+        # device path decides every request -> the [nodes x vocab] host softmax
+        # DtoH is SKIPPED (its only consumer is the host per-node loop, which is
+        # skipped). The actual on-device commit runs at the loop anchor below.
+        target_probs_cpu = None
+        self_probs_cpu = None
+    else:
+        target_probs_cpu = target_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
+        self_probs_cpu = tree_self_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
     draft_probs_cpu = (
         None if draft_probs is None else draft_probs.detach().cpu().numpy()
     )
@@ -8270,7 +8292,59 @@ def _lumo_tree_canonical_multidraft_sample(
     except Exception:
         pass
     start = 0
-    for req_i, node_count in enumerate(counts):
+    # FR13_DEVICE_MULTIDRAFT loop-skip (default OFF). flag-off => _fr13_dm_counts
+    # IS counts, so the legacy host per-node Python loop below runs byte-for-byte
+    # unchanged. flag-on => the device committer fills the five product lists and
+    # the legacy loop iterates EMPTY (the host walk never runs; the [nodes x
+    # vocab] softmax DtoH above was already skipped).
+    _fr13_dm_counts = counts
+    if _fr13_device_multidraft:
+        try:
+            import importlib.util as _fr13_dm_ilu, os as _fr13_dm_os
+            _fr13_dm_path = _fr13_dm_os.environ.get(
+                'FR13_DEVICE_MULTIDRAFT_KERNEL',
+                '/home/mark/shared/lumoFlyWheel/scripts/'
+                'fr13_device_multidraft_kernel.py',
+            )
+            _fr13_dm = __import__('sys').modules.get('_fr13_device_multidraft_kernel')
+            if _fr13_dm is None:
+                _fr13_dm_spec = _fr13_dm_ilu.spec_from_file_location(
+                    '_fr13_device_multidraft_kernel', _fr13_dm_path)
+                _fr13_dm = _fr13_dm_ilu.module_from_spec(_fr13_dm_spec)
+                _fr13_dm_spec.loader.exec_module(_fr13_dm)
+                __import__('sys').modules['_fr13_device_multidraft_kernel'] = _fr13_dm
+            if not globals().get('_FR13_DEVICE_MULTIDRAFT_NEEDLE_DONE'):
+                globals()['_FR13_DEVICE_MULTIDRAFT_NEEDLE_DONE'] = True
+                try:
+                    from vllm.logger import init_logger as _fr13_dm_il
+                    _fr13_dm_il('vllm.fr13_device_multidraft').info(
+                        'FR13_DEVICE_MULTIDRAFT engaged: device-side temp>0 '
+                        'multidraft committer (no [nodes x vocab] softmax DtoH, '
+                        'no per-node Python loop), n_req=%d' % len(counts)
+                    )
+                except Exception:
+                    print('FR13_DEVICE_MULTIDRAFT engaged', flush=True)
+            (
+                out_rows, accepted_rows, accepted_lens,
+                accepted_node_paths, accepted_token_rows,
+            ) = _fr13_dm.fr13_device_multidraft_commit(
+                num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                target_logits,
+                tree_self_logits,
+                draft_probs,
+                bonus_token_ids,
+                max_spec_len,
+                generators=generators,
+            )
+        except Exception as _fr13_dm_exc:
+            raise RuntimeError(
+                'FR13_DEVICE_MULTIDRAFT failed (no silent fallback, class 9): '
+                + type(_fr13_dm_exc).__name__ + ':' + str(_fr13_dm_exc)
+            ) from _fr13_dm_exc
+        _fr13_dm_counts = []
+    for req_i, node_count in enumerate(_fr13_dm_counts):
         node_count = int(node_count)
         _fr13_gen = None
         if _fr13_per_req_gen and generators:
