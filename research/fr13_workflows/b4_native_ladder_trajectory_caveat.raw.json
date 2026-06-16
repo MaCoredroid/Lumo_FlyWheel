@@ -1,0 +1,15 @@
+{
+  "id": "b4_native_ladder_trajectory_caveat",
+  "date": "2026-06-16",
+  "source": "cron audit 3f4204bb of the B=4 clean deployment sweep (driver pid 1568868), native depth bars E3/E4/E5",
+  "finding": "The B=4 native depth ladder per-request tps is NON-MONOTONIC and must NOT be read as a clean depth ordering: E3 s/fwd=0.5628 accept=2.350 tps=5.95; E4 s/fwd=0.3941 accept=3.028 tps=10.22; E5 s/fwd=0.6263 accept=3.177 tps=6.67. E4 sits BELOW E3 on s/fwd despite being deeper (N=4>3), which superficially reads as 'E4 under-measured' or 'E4 fastest native'. BOTH readings are wrong.",
+  "root_cause": "CROSS-TRAJECTORY confound, not a measurement bug. The token/draft counters are clean and internally consistent (E4 draft-tokens/draft = 4.0 = genuine MTP-4; committed = accept+1 holds; per_task s/fwd tight within each arm). The anomaly is isolated to request_decode_time_seconds_sum, which is a function of the CODEX TRAJECTORY (turn count, decode-burst length, prefill/decode mix), and each MTP depth produces different model output -> a different agentic path -> a different decode/prefill mix within the measurement window. E4 ms/tok=97.9 is physically plausible (>> the 24.5 ms/tok floor of 98.6ms / 4.03 committed), so it is not sub-floor / not a clipped window (the s/fwd ratio is window-length invariant). Retries do not discriminate (E3 and E4 both had 4 retry lines, E5 had 0).",
+  "refuted_hypotheses": [
+    "lower co-residency on E4 (REFUTED: E4 had the HIGHEST co-residency, 110 log-lines at 'Running: 4 reqs', avg ~3.59 vs E5 ~3.37)",
+    "in-flight-draft / window-clipping under-count (REFUTED: per_task drafts deltas clean+consistent; s/fwd is a ratio of two deltas over the same window, window-length invariant)",
+    "codex-retry decode-time undercount (REFUTED: E3 also had 4 retries and is monotone-consistent)"
+  ],
+  "guard_for_deliverable": "E4 is NOT a depth-match bar for any candidate (3-3-3 -> E3, cat9/cat6root/cat10 -> E5), so it corrupts NO comparison. BUT the SAME cross-trajectory confound applies to candidate-vs-native (cat9 vs E5, 3-3-3 vs E3): a candidate 'win' on raw s/fwd / tps could be trajectory noise. Before declaring ANY candidate faster-and-lossless, the winner call MUST control trajectory: bind to served_stream_fingerprint / like-for-like trajectory (the campaign's stated intent), and cross-check s/fwd against ms/tok = decode_s/gen_tok and accept; a candidate whose tps win is not matched by a like-for-like accept gain at matched trajectory is suspect. Comparison-critical bars E3 (0.5628/2.350/5.95) and E5 (0.6263/3.177/6.67) are mutually consistent + sound; only the cross-DEPTH E3-vs-E4-vs-E5 reading is trajectory-confounded.",
+  "action": "No restart, no script edit (no bug; trajectory variance is inherent and already acknowledged by the campaign's like-for-like requirement). Caveat banked; apply the trajectory control when candidate bars land.",
+  "links": ["feedback_check_artifact_before_concluding", "feedback_depth_matched_accept_compare", "reference_decode_hbm_bound_accept_is_the_lever"]
+}

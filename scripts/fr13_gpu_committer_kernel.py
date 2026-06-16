@@ -345,6 +345,205 @@ if _HAVE_TRITON:
         tl.store(accepted_row_ptr + r, acc_row)
 
 
+# ---------------------------------------------------------------------------
+# OPT-1 G2 (FR13_COMMITTER_SYNCKILL) device-arm kernels
+# ---------------------------------------------------------------------------
+# These are SUPERSET kernels of the byte-validated kernel above: they emit the
+# SAME (out_tokens, row_len, accepted_row, best_lcp) decision AND additionally
+# the accepted node-id PATH on device (acc_path[r, :best_lcp]). The accepted
+# path is the only committer product the GDN durable-state advance re-derives on
+# host (_winning_path_prefix); emitting it on device lets the SYNCKILL path do a
+# device->device GDN-path writeback with NO host re-derivation. The integer
+# decision is byte-for-byte identical to _fr13_committer_kernel (G2.c invariant:
+# G2 moves transport, never the decision).
+if _HAVE_TRITON:
+
+    @triton.jit
+    def _fr13_committer_leaves_kernel(
+        parents_ptr,
+        node_count_ptr,
+        leaves_ptr,
+        num_leaves_ptr,
+        MAX_NODES: tl.constexpr,
+    ):
+        # One program per request: derive node-order leaves (nodes with no
+        # child) array-free, matching the host _build_device_layout EXACTLY
+        # (fallback to all-nodes when no leaf). Pure integer, no value dep.
+        r = tl.program_id(0)
+        nc = tl.load(node_count_ptr + r)
+        base = r * MAX_NODES
+        n_leaf = 0
+        node = 0
+        while node < nc:
+            # node is a leaf iff no other node names it as parent.
+            has_child = 0
+            j = 0
+            while j < nc:
+                pj = tl.load(parents_ptr + base + j)
+                if pj == node:
+                    has_child = 1
+                j += 1
+            if has_child == 0:
+                tl.store(leaves_ptr + base + n_leaf, node)
+                n_leaf += 1
+            node += 1
+        if n_leaf == 0:
+            # fallback: every node is a leaf (committer: leaves=range(nc)).
+            node = 0
+            while node < nc:
+                tl.store(leaves_ptr + base + node, node)
+                node += 1
+            n_leaf = nc
+        tl.store(num_leaves_ptr + r, n_leaf)
+
+    @triton.jit
+    def _fr13_committer_kernel_dev(
+        parents_ptr,
+        drafts_ptr,
+        ptgt_ptr,
+        stgt_ptr,
+        leaves_ptr,
+        node_count_ptr,
+        num_leaves_ptr,
+        out_tokens_ptr,
+        row_len_ptr,
+        accepted_row_ptr,
+        best_lcp_ptr,
+        acc_path_ptr,
+        MAX_NODES: tl.constexpr,
+        MAX_SPEC_LEN: tl.constexpr,
+    ):
+        # Byte-for-byte the decision of _fr13_committer_kernel (transcribed
+        # verbatim) PLUS acc_path[r, :best_lcp] = best_path node ids (the
+        # accepted prefix node ids, root..accepted, in committer order).
+        r = tl.program_id(0)
+        nc = tl.load(node_count_ptr + r)
+        nl = tl.load(num_leaves_ptr + r)
+        base = r * MAX_NODES
+        out_base = r * (MAX_SPEC_LEN + 1)
+        path_base = r * MAX_NODES
+
+        best_lcp = -1
+        best_leaf = -1
+
+        li = 0
+        while li < nl:
+            leaf = tl.load(leaves_ptr + base + li)
+            depth = 0
+            node = leaf
+            guard = 0
+            while (node >= 0) & (node < nc) & (guard <= nc):
+                depth += 1
+                node = tl.load(parents_ptr + base + node)
+                guard += 1
+            lcp = 0
+            p = 0
+            broke = 0
+            while (p < depth) & (broke == 0):
+                up = depth - 1 - p
+                node2 = leaf
+                k = 0
+                while k < up:
+                    node2 = tl.load(parents_ptr + base + node2)
+                    k += 1
+                d_tok = tl.load(drafts_ptr + base + node2)
+                pt_tok = tl.load(ptgt_ptr + base + node2)
+                is_match = d_tok == pt_tok
+                if is_match:
+                    lcp += 1
+                else:
+                    broke = 1
+                p += 1
+            if lcp > best_lcp:
+                best_lcp = lcp
+                best_leaf = leaf
+            li += 1
+
+        if best_lcp < 0:
+            best_lcp = 0
+
+        depth = 0
+        node = best_leaf
+        guard = 0
+        while (node >= 0) & (node < nc) & (guard <= nc):
+            depth += 1
+            node = tl.load(parents_ptr + base + node)
+            guard += 1
+
+        max_row = MAX_SPEC_LEN + 1
+        rlen = 0
+        p = 0
+        while (p < best_lcp) & (p < max_row):
+            up = depth - 1 - p
+            node2 = best_leaf
+            k = 0
+            while k < up:
+                node2 = tl.load(parents_ptr + base + node2)
+                k += 1
+            tok = tl.load(drafts_ptr + base + node2)
+            tl.store(out_tokens_ptr + out_base + p, tok)
+            rlen += 1
+            p += 1
+
+        # accepted node PATH: best_path[p] = ancestor of best_leaf at
+        # distance (depth-1-p) = the same node2 the token emit walked, stored
+        # into acc_path[r, :best_lcp].
+        p = 0
+        while p < best_lcp:
+            up = depth - 1 - p
+            node2 = best_leaf
+            k = 0
+            while k < up:
+                node2 = tl.load(parents_ptr + base + node2)
+                k += 1
+            tl.store(acc_path_ptr + path_base + p, node2)
+            p += 1
+
+        if depth > 0:
+            bonus_tok = 0
+            if best_lcp < depth:
+                up = depth - 1 - best_lcp
+                node2 = best_leaf
+                k = 0
+                while k < up:
+                    node2 = tl.load(parents_ptr + base + node2)
+                    k += 1
+                bonus_tok = tl.load(ptgt_ptr + base + node2)
+            else:
+                if best_lcp > 0:
+                    up = depth - 1 - (best_lcp - 1)
+                    node2 = best_leaf
+                    k = 0
+                    while k < up:
+                        node2 = tl.load(parents_ptr + base + node2)
+                        k += 1
+                    bonus_tok = tl.load(stgt_ptr + base + node2)
+                else:
+                    up = depth - 1
+                    node2 = best_leaf
+                    k = 0
+                    while k < up:
+                        node2 = tl.load(parents_ptr + base + node2)
+                        k += 1
+                    bonus_tok = tl.load(ptgt_ptr + base + node2)
+            if rlen < max_row:
+                tl.store(out_tokens_ptr + out_base + rlen, bonus_tok)
+                rlen += 1
+
+        tl.store(row_len_ptr + r, rlen)
+        tl.store(best_lcp_ptr + r, best_lcp)
+        acc_row = 0
+        if best_lcp > 0:
+            up = depth - 1 - (best_lcp - 1)
+            node2 = best_leaf
+            k = 0
+            while k < up:
+                node2 = tl.load(parents_ptr + base + node2)
+                k += 1
+            acc_row = node2
+        tl.store(accepted_row_ptr + r, acc_row)
+
+
 def _build_device_layout(
     parents_cpu, drafts_cpu, parent_targets_cpu, self_targets_cpu, counts, device
 ):
@@ -482,6 +681,332 @@ def fr13_gpu_committer_triton(
         accepted_rows.append(int(accepted_row_h[r]))
         accepted_lens.append(int(best_lcp_h[r]))
     return out_rows, accepted_rows, accepted_lens
+
+
+# ---------------------------------------------------------------------------
+# OPT-1 G2 (FR13_COMMITTER_SYNCKILL): device-resident committer + side-stream
+# readback. The decision runs on the kernel reading DEVICE tensors (no host
+# list = no committer-input :6761 sync); the outputs stay DEVICE-resident
+# (no .cpu() = no committer-output sync); a dedicated side stream copies the
+# packed outputs to a pinned host mirror with a CUDA event, so the host
+# materialisation is LAZY (event.synchronize() only on first host access),
+# letting the main thread launch the device->device writeback + next forward
+# without blocking. Pure-integer, location-only: byte-identical to the host
+# committer for every input.
+# ---------------------------------------------------------------------------
+
+# Module-level side stream (mirrors native AsyncGPUModelRunnerOutput's
+# async_output_copy_stream). Allocated once, on first use, on the committer's
+# device. Never the default compute stream, so the readback copy does not gate
+# the main thread.
+_FR13_SYNCKILL_SIDE_STREAM = None
+
+# Persistent readback staging (device buffer, pinned host mirror, CUDA event,
+# rec-flag), keyed by required element count. Reused across steps (B=1 steady
+# state is a single fixed size), so the readback has NO per-step allocation; the
+# event guards pinned-buffer reuse exactly like _fr13_eager_pack_stage. Grows
+# only when capacity is exceeded.
+_FR13_SYNCKILL_STAGE = {}
+
+
+def _fr13_synckill_stage(total, device):
+    entry = _FR13_SYNCKILL_STAGE.get("rb")
+    if (
+        entry is None
+        or entry[0].numel() < total
+        or entry[0].device != device
+    ):
+        cap = max(int(total), 256)
+        entry = (
+            torch.empty((cap,), dtype=torch.int64, device=device),
+            torch.empty((cap,), dtype=torch.int64, pin_memory=True),
+            torch.cuda.Event(),
+            [False],
+        )
+        _FR13_SYNCKILL_STAGE["rb"] = entry
+    return entry
+
+
+def _fr13_synckill_side_stream(device):
+    global _FR13_SYNCKILL_SIDE_STREAM
+    if _FR13_SYNCKILL_SIDE_STREAM is None:
+        _FR13_SYNCKILL_SIDE_STREAM = torch.cuda.Stream(device=device)
+    return _FR13_SYNCKILL_SIDE_STREAM
+
+
+def _build_device_layout_from_device(
+    parents_dev, drafts_dev, ptgt_dev, stgt_dev, counts, device
+):
+    """Pack ragged DEVICE committer inputs into the fixed-stride kernel layout
+    WITHOUT a host round-trip of the values.
+
+    Only ``counts`` (the per-request node count, ``n_req`` ints — on the B=1
+    serving path already a host list) drives the shape; the token-id / parent
+    VALUES never touch the host. The per-request slices are scattered on-device
+    (``out[r, :nc].copy_(src[start:start+nc])``), and the node-order leaves are
+    derived ON DEVICE by ``_fr13_committer_leaves_kernel`` (matching the host
+    ``_build_device_layout`` leaf rule exactly). Returns the device tensors the
+    decision kernel consumes plus ``max_nodes``.
+    """
+    counts = [int(c) for c in counts]
+    n_req = len(counts)
+    max_nodes = max(counts) if counts else 1
+    max_nodes = max(1, max_nodes)
+
+    parents = torch.full((n_req, max_nodes), _PAD, dtype=torch.int64, device=device)
+    drafts = torch.full((n_req, max_nodes), _PAD, dtype=torch.int64, device=device)
+    ptgt = torch.full((n_req, max_nodes), _PAD, dtype=torch.int64, device=device)
+    stgt = torch.full((n_req, max_nodes), _PAD, dtype=torch.int64, device=device)
+    leaves = torch.full((n_req, max_nodes), _PAD, dtype=torch.int64, device=device)
+    node_count = torch.tensor(counts, dtype=torch.int64, device=device)
+    num_leaves = torch.zeros((n_req,), dtype=torch.int64, device=device)
+
+    # Device-side gather: cast/reshape to int64 once, scatter per-request
+    # slices on the default compute stream (no sync, no host copy).
+    p_src = parents_dev.reshape(-1).to(torch.int64)
+    d_src = drafts_dev.reshape(-1).to(torch.int64)
+    pt_src = ptgt_dev.reshape(-1).to(torch.int64)
+    st_src = stgt_dev.reshape(-1).to(torch.int64)
+    start = 0
+    for r, nc in enumerate(counts):
+        if nc:
+            parents[r, :nc].copy_(p_src[start:start + nc])
+            drafts[r, :nc].copy_(d_src[start:start + nc])
+            ptgt[r, :nc].copy_(pt_src[start:start + nc])
+            stgt[r, :nc].copy_(st_src[start:start + nc])
+        start += nc
+
+    _fr13_committer_leaves_kernel[(n_req,)](
+        parents, node_count, leaves, num_leaves, MAX_NODES=int(max_nodes),
+    )
+    return parents, drafts, ptgt, stgt, leaves, node_count, num_leaves, max_nodes
+
+
+def fr13_gpu_committer_device(
+    parents_dev,
+    drafts_dev,
+    ptgt_dev,
+    stgt_dev,
+    bonus_dev,  # accepted for signature parity; bonus_self serving = unused
+    counts,
+    max_spec_len,
+):
+    """Run the integer committer on-GPU from DEVICE inputs; return DEVICE outputs.
+
+    NO ``.cpu()``, NO host list of the per-node committer inputs (that is the
+    :6761 sync this kills). Returns the dict of device tensors the SYNCKILL
+    writeback consumes device->device:
+      ``out_tokens`` [n_req, max_spec_len+1] (_PAD padded)
+      ``row_len``    [n_req]
+      ``accepted_row`` [n_req]
+      ``best_lcp``   [n_req]
+      ``acc_path``   [n_req, max_nodes] accepted node-id path (_PAD padded)
+    plus ``max_nodes`` / ``max_spec_len`` for downstream slicing.
+    """
+    if torch is None or not _HAVE_TRITON:
+        raise RuntimeError("fr13_gpu_committer_device requires torch + triton")
+    device = parents_dev.device
+    counts = [int(c) for c in counts]
+    n_req = len(counts)
+    if n_req == 0:
+        return {
+            "out_tokens": torch.empty((0, int(max_spec_len) + 1), dtype=torch.int64, device=device),
+            "row_len": torch.empty((0,), dtype=torch.int64, device=device),
+            "accepted_row": torch.empty((0,), dtype=torch.int64, device=device),
+            "best_lcp": torch.empty((0,), dtype=torch.int64, device=device),
+            "acc_path": torch.empty((0, 1), dtype=torch.int64, device=device),
+            "max_nodes": 1,
+            "max_spec_len": int(max_spec_len),
+        }
+    (
+        parents,
+        drafts,
+        ptgt,
+        stgt,
+        leaves,
+        node_count,
+        num_leaves,
+        max_nodes,
+    ) = _build_device_layout_from_device(
+        parents_dev, drafts_dev, ptgt_dev, stgt_dev, counts, device
+    )
+    out_tokens = torch.full(
+        (n_req, int(max_spec_len) + 1), _PAD, dtype=torch.int64, device=device
+    )
+    row_len = torch.zeros((n_req,), dtype=torch.int64, device=device)
+    accepted_row = torch.zeros((n_req,), dtype=torch.int64, device=device)
+    best_lcp = torch.zeros((n_req,), dtype=torch.int64, device=device)
+    acc_path = torch.full(
+        (n_req, int(max_nodes)), _PAD, dtype=torch.int64, device=device
+    )
+
+    _fr13_committer_kernel_dev[(n_req,)](
+        parents,
+        drafts,
+        ptgt,
+        stgt,
+        leaves,
+        node_count,
+        num_leaves,
+        out_tokens,
+        row_len,
+        accepted_row,
+        best_lcp,
+        acc_path,
+        MAX_NODES=int(max_nodes),
+        MAX_SPEC_LEN=int(max_spec_len),
+    )
+    return {
+        "out_tokens": out_tokens,
+        "row_len": row_len,
+        "accepted_row": accepted_row,
+        "best_lcp": best_lcp,
+        "acc_path": acc_path,
+        "max_nodes": int(max_nodes),
+        "max_spec_len": int(max_spec_len),
+    }
+
+
+def fr13_gpu_committer_device_readback(dev_out):
+    """Side-stream + CUDA-event readback of the device committer outputs.
+
+    Packs the four scalar/row device outputs (out_tokens, row_len,
+    accepted_row, best_lcp) plus acc_path into ONE staging device buffer on the
+    default compute stream, then on a dedicated side stream copies it to a
+    pinned host mirror with a CUDA event. Returns a LAZY materialiser: a closure
+    that, on FIRST call, ``event.synchronize()`` then ``.tolist()`` (native
+    get_output() shape). The main thread is free between the record() and the
+    first materialise() call — that is the run-ahead the :6761 sync killed.
+
+    Returns ``(materialise, event)``. ``materialise()`` -> the host
+    ``(out_rows, accepted_rows, accepted_lens, acc_node_paths,
+    accepted_token_rows)`` tuple byte-identical to the host committer
+    (acc_node_paths = accepted node-id path = best_path[:best_lcp];
+    accepted_token_rows = drafts on that path = out_rows[r][:best_lcp]).
+    """
+    if torch is None:
+        raise RuntimeError("fr13_gpu_committer_device_readback requires torch")
+    out_tokens = dev_out["out_tokens"]
+    row_len = dev_out["row_len"]
+    accepted_row = dev_out["accepted_row"]
+    best_lcp = dev_out["best_lcp"]
+    acc_path = dev_out["acc_path"]
+    n_req = int(out_tokens.size(0))
+    device = out_tokens.device
+    if n_req == 0:
+        def _empty():
+            return [], [], [], [], []
+        return _empty, None
+
+    ot_cols = int(out_tokens.size(1))
+    ap_cols = int(acc_path.size(1))
+    # one contiguous staging buffer: [out_tokens | row_len | accepted_row |
+    # best_lcp | acc_path]; device-side slice copies on the compute stream.
+    # best_lcp doubles as accepted_lens (no redundant slot).
+    base_ot = n_req * ot_cols
+    base_rl = base_ot + n_req
+    base_ar = base_rl + n_req
+    base_bl = base_ar + n_req
+    base_ap = base_bl  # best_lcp doubles as accepted_lens; no separate slot
+    total = base_ap + n_req * ap_cols
+    staging_buf, pinned_buf, event, rec = _fr13_synckill_stage(total, device)
+    if rec[0]:
+        # Pinned-reuse guard: never rewrite the pinned mirror while a prior
+        # async readback may still be reading it (native event-guard shape).
+        event.synchronize()
+    staging = staging_buf[:total]
+    pinned = pinned_buf[:total]
+    staging[:base_ot].copy_(out_tokens.reshape(-1))
+    staging[base_ot:base_rl].copy_(row_len)
+    staging[base_rl:base_ar].copy_(accepted_row)
+    staging[base_ar:base_bl].copy_(best_lcp)
+    staging[base_ap:total].copy_(acc_path.reshape(-1))
+
+    side = _fr13_synckill_side_stream(device)
+    side.wait_stream(torch.cuda.current_stream(device))
+    with torch.cuda.stream(side):
+        pinned.copy_(staging, non_blocking=True)
+        event.record(side)
+    rec[0] = True
+
+    materialised = {}
+
+    def _materialise():
+        if "v" in materialised:
+            return materialised["v"]
+        event.synchronize()
+        vals = pinned.tolist()
+        # offsets mirror the packing above EXACTLY:
+        #   [:base_ot]=out_tokens, [base_ot:base_rl]=row_len,
+        #   [base_rl:base_ar]=accepted_row, [base_ar:base_bl]=best_lcp,
+        #   [base_bl:base_ap]=accepted_lens(==best_lcp), [base_ap:]=acc_path
+        ot = vals[:base_ot]
+        rl = vals[base_ot:base_rl]
+        ar = vals[base_rl:base_ar]
+        bl = vals[base_ar:base_bl]
+        ap = vals[base_ap:total]
+        out_rows = []
+        accepted_rows = []
+        accepted_lens = []
+        acc_node_paths = []
+        accepted_token_rows = []
+        for r in range(n_req):
+            rln = int(rl[r])
+            row = [int(x) for x in ot[r * ot_cols:r * ot_cols + rln]]
+            out_rows.append(row)
+            accepted_rows.append(int(ar[r]))
+            lcp = int(bl[r])
+            accepted_lens.append(lcp)
+            acc_node_paths.append(
+                [int(x) for x in ap[r * ap_cols:r * ap_cols + lcp]]
+            )
+            # accepted_token_rows = drafts on the accepted path = the accepted
+            # prefix of out_rows (the first `lcp` committed tokens, before the
+            # one bonus/correction token).
+            accepted_token_rows.append([int(x) for x in row[:lcp]])
+        v = (
+            out_rows,
+            accepted_rows,
+            accepted_lens,
+            acc_node_paths,
+            accepted_token_rows,
+        )
+        materialised["v"] = v
+        return v
+
+    return _materialise, event
+
+
+def fr13_gpu_committer_device_full(
+    parents_dev,
+    drafts_dev,
+    ptgt_dev,
+    stgt_dev,
+    bonus_dev,
+    counts,
+    max_spec_len,
+):
+    """OPT-1 G2 entry: device-resident committer + side-stream readback.
+
+    Runs the decision kernel on the DEVICE inputs (no committer-input :6761
+    sync), launches the side-stream output readback (no inline .cpu()), and
+    returns ``(dev_out, materialise)``:
+      ``dev_out``     = the dict of device output tensors (for the device->device
+                        same-step serving writeback);
+      ``materialise`` = the lazy host materialiser -> ``(out_rows,
+                        accepted_rows, accepted_lens, accepted_node_paths,
+                        accepted_token_rows)`` byte-identical to the host
+                        committer (event.synchronize() only on first call).
+    The main thread is free between this return and the first materialise()
+    call -- it launches the device->device writeback + the next forward without
+    blocking on the committer-output sync.
+    """
+    dev_out = fr13_gpu_committer_device(
+        parents_dev, drafts_dev, ptgt_dev, stgt_dev, bonus_dev, counts,
+        max_spec_len,
+    )
+    materialise, _event = fr13_gpu_committer_device_readback(dev_out)
+    return dev_out, materialise
 
 
 def _winning_path_prefix(parents, drafts, parent_targets, node_count):

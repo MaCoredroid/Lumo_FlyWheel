@@ -1,0 +1,36 @@
+{
+  "id": "b4_tps_accounting_reconcile",
+  "date": "2026-06-16",
+  "source": "user-led reconciliation during the B=4 1800s sweep audit (3f4204bb); vLLM source read via scripts/vllm_src.sh (pinned 3dbe092e); git-history pre-kernel numbers",
+  "summary": "Full reconciliation of why the B=4 deployment E5 TPS (6.67-7.5) looks ~3x below the historical B=1 native E5 (~18.3-18.9) and the pre-kernel B=4 references, plus the fix (per_request_decode_tps + aggregate_decode_tps added to deploy-speed). NONE of it is a regression or our instrumentation; it is the metric-definition + regime + a deflated TPS basis.",
+  "historical_native_E5_B1": {
+    "note": "native MTP-5 is the UNTOUCHED incumbent; should be stable. All B=1, decode_seconds/spec_drafts basis.",
+    "FR13-TAX native_mtp5_bi1": "s/fwd 0.2127, accept 3.047, TPS 18.95 (raw, BI=1)",
+    "speed-history reconcile": "s/fwd 0.2182, accept 3.161, TPS 18.93 (clean)",
+    "reaim deployment": "s/fwd 0.2334, accept 3.267, TPS 18.28 (chat B=1)"
+  },
+  "pre_kernel_B4_native_E5": {
+    "note": "FR10 'speed starting point', RAW synthetic decode probe (fixed prompts, pure decode, client-batch), pre-tree-kernel",
+    "per_request_decode_tps_mean": 28.2,
+    "other_probe_configs": "47.3 / 39.9 per-req",
+    "accept": "3.18-3.21",
+    "metrics_sum_basis_TPS": 8.74,
+    "FR10_VERBATIM_FLAG": "'metrics_sum_decode_tps divides generation tokens by vllm:request_decode_time_seconds_sum, which SUMS concurrent per-request decode seconds at B4 and is therefore CONCURRENCY-DEFLATED. Do not compare that ~8 TPS to E5. Use per-request median/mean.'"
+  },
+  "root_cause_chain": [
+    "decode_time = last_token_ts - first_token_ts (output_processor.py:726, pinned image) = a WALL-SPAN, not a sum of pure forward times.",
+    "At B=1 (one agent) the span ~= pure forward time -> s/fwd 0.22, B-invariant (clean-regime native E5 B=4 0.21641 = -0.42% vs B=1 0.2182 CONFIRMS B-invariance).",
+    "At B=4 deployment (4 co-resident codex agents, enable_chunked_prefill=True) the span STRETCHES ~2.7x because between a request's tokens the scheduler interleaves the other 3 agents' prefill+decode -> s/fwd 0.6263 (1800s: 0.5961). REAL per-request latency under co-residency, NOT a bug.",
+    "derived_tps = committed/s_fwd = gen_tokens/decode_seconds_sum = EXACTLY the FR10-flagged concurrency-summed basis (E5 B=4 6.67 [600s] / 7.5 [1800s] ~ the pre-kernel deflated 8.74, same basis).",
+    "drafts IS per-request (x B/step) - verified empirically (committed/step = co-res 3.37 x 4.17/draft = 14.05 = gen_tok/steps 14.07) - so s/fwd's batch factor cancels; the inflation is the wall-span interleave, not a /4 error."
+  ],
+  "reconciliation_verdict": {
+    "pure_per_forward_speed": "~0.22 s/fwd = B-INVARIANT, the number that 'should match' B=1==B=4 (and does, clean regime). The B=4 deployment 0.6263 = 0.22 pure + ~0.40 co-resident interleave.",
+    "native_E5_not_a_regression": "B=1 ~18.5 TPS (1 stream); B=4 per-request 6.53 (measured non-deflated) -> aggregate 15.66 measured. Same incumbent through co-residency.",
+    "metrics_do_NOT_affect_speed": "deploy-speed is INSTRUMENT=OFF: FR10_METRICS=0 + VLLM_BATCH_INVARIANT=0 pinned+asserted (BI=1 would slow GEMMs), diag hooks inert (chase=0). Pair-dumps are alienware-side, fire once at end-of-response, never touch GB10 decode_time. ONLY the regime (interleave) inflates B=4 s/fwd.",
+    "why_no_prior_aggregate_B4_TPS": "aggregate/wall TPS was BANNED as a basis (assert_speed_basis blocks tps/wall/req_elapsed) after the FR10 '~8 TPS' artifact + 'stale 2.336x'; project standardized on s/fwd. Cost = lost the throughput-reporting number, now re-added as reporting-only."
+  },
+  "fix_committed": "585b1f02 on fr13-speedfix: deploy-speed now emits per_request_decode_tps (count/sum of vLLM request_time_per_output_token = 1/avg per-request mean-TPOT = non-deflated per-stream rate) + aggregate_decode_tps (gen_tokens over earliest-pre->latest-post UNION window / union wall = total GPU throughput, reporting-only) + annotates derived_tps as the concurrency-summed basis. Additive, no serve restart (re-reduced E5 offline; applies forward to cat9+). E5 1800s: s/fwd 0.5961, accept 3.471, per_request_decode_tps 6.53, aggregate_decode_tps 15.66.",
+  "comparison_guidance": "cat9-vs-E5 ratio on derived_tps is still valid (both concurrency-summed identically). For ABSOLUTE/cross-reference use per_request_decode_tps (per-stream) or aggregate_decode_tps (throughput). For pure KERNEL speed use the B=1 clean-regime s/fwd (cat9 1.030x native), NOT the interleave-laden B=4 deployment s/fwd.",
+  "links": ["feedback_check_artifact_before_concluding", "reference_decode_hbm_bound_accept_is_the_lever", "feedback_canonical_speed_lossless_infra", "b4_native_ladder_trajectory_caveat"]
+}

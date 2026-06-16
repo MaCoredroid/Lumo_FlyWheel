@@ -116,6 +116,61 @@ def _metrics_text(metrics_url: str) -> str:
         return f"# metrics fetch failed: {type(exc).__name__}: {exc}\n"
 
 
+def _sidecar_fwd_gpu_total() -> float | None:
+    """FR13_SFWD_GPU_TIMER: cumulative decode-forward GPU seconds from the worker
+    timer's JSON sidecar(s). The worker (gpu_model_runner) writes the sidecar
+    per-pid to FR13_SFWD_GPU_TIMER_JSON; in single-API-server mode the worker
+    Counter is NOT aggregated into the API-server /metrics, so this sidecar is the
+    robust channel. Returns None when the timer is off / no sidecar exists (=> the
+    snapshot stays byte-identical to the plain /metrics fetch). Sums across per-pid
+    files (one per worker)."""
+    base = os.environ.get("FR13_SFWD_GPU_TIMER_JSON")
+    if not base:
+        return None
+    # the boot env sets a /workspace path (docker -v "$REPO:/workspace"); on the
+    # host that is REPO_ROOT. Translate so this host-side reader finds the file.
+    if base.startswith("/workspace/"):
+        base = str(REPO_ROOT / base[len("/workspace/"):])
+    import glob as _glob
+    pat = base.replace("{pid}", "*") if "{pid}" in base else base + ".*"
+    files = set(_glob.glob(pat))
+    if os.path.exists(base):
+        files.add(base)
+    total = 0.0
+    found = False
+    for f in files:
+        try:
+            d = json.loads(Path(f).read_text(encoding="utf-8"))
+            total += float(d.get("decode_forward_gpu_seconds", 0.0))
+            found = True
+        except Exception:  # noqa: BLE001
+            continue
+    return total if found else None
+
+
+def _metrics_snapshot(metrics_url: str) -> str:
+    """/metrics text, plus (FR13_SFWD_GPU_TIMER) a synthetic counter line carrying
+    the worker timer's cumulative decode-forward GPU seconds. In single-API-server
+    mode /metrics does NOT expose the worker Counter, so without this the reducer's
+    s_per_fwd_gpu would be None even with the timer on. The reducer scrapes the
+    counter NAME from the captured file, so appending the line makes s_per_fwd_gpu
+    work through the existing per-task bracket path with no reducer change.
+
+    Double-count guard: if /metrics ALREADY exposes the counter (multiprocess
+    prometheus aggregation active), use that and do NOT append — the reducer sums
+    all matching lines, so a duplicate would double the value. No-op
+    (byte-identical) when the timer is off / no sidecar."""
+    text = _metrics_text(metrics_url)
+    if "fr13_decode_forward_gpu_seconds_total" in text:
+        return text
+    fwd = _sidecar_fwd_gpu_total()
+    if fwd is not None:
+        if not text.endswith("\n"):
+            text += "\n"
+        text += f"vllm:fr13_decode_forward_gpu_seconds_total {fwd:.9f}\n"
+    return text
+
+
 def _spawn_dcgm_sampler(out_path: Path, interval_s: float = DEFAULT_DCGM_INTERVAL_S
                        ) -> subprocess.Popen[bytes] | None:
     """Spawn the same DCGM/NVML sampler Track B uses, writing JSONL to out_path."""
@@ -398,6 +453,25 @@ _EVAL_SSH_OPTS = [
     "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4",
     "-o", "StrictHostKeyChecking=accept-new",
 ]
+
+# --- FR13 CODEX-OFFLOAD config (the unified-memory contamination fix) ---------
+# When CODEX_HOST is set (via --codex-host), the codex-runner Docker runs on a
+# native x86 box (alienware) instead of locally on the GB10. The workspace is
+# rsynced there before the run and the (modified) workspace is rsynced back
+# after, so patch extraction + eval stay on the GB10 unchanged. This leaves the
+# GB10 running ONLY vLLM during the codex agent loop, so the unified-memory
+# bandwidth (273 GB/s, shared Grace CPU + Blackwell GPU) is uncontended and the
+# timing-sensitive deploy-speed numbers (s/fwd) are clean. The lossless numbers
+# are timing-independent so unaffected; only WHERE the codex compute runs moves.
+# The codex docker on alienware hits the alienware-LOCAL proxy (CODEX_ENDPOINT,
+# default 127.0.0.1:8023 — 8022 is occupied on alienware by an unrelated host
+# service). Reuses the eval-offload SSH/rsync plumbing (_net_retry below).
+CODEX_HOST: str | None = None
+# alienware-local proxy the offloaded codex docker hits (8022 is taken on
+# alienware by an unrelated host service; the offload proxy listens on 8023).
+CODEX_ENDPOINT: str | None = None
+_CODEX_REMOTE_ROOT = "~/lumo_proxy_offload/codex_work"
+_CODEX_NET_LOG = DEFAULT_OUT_ROOT / "swe_codex_offload_network.log"
 _REMOTE_BASE = "~/swe_eval_offload"
 _REMOTE_WORKER = "~/swe_eval_offload/swe_eval_x86_worker.py"
 _REMOTE_VENV_PY = "~/swe_eval_offload/venv/bin/python"
@@ -482,6 +556,153 @@ def _run_eval_remote(
                what=f"cleanup:{instance_id}", timeout=30, max_attempts=2)
     return {"exit_code": ev.returncode, "elapsed_s": round(time.monotonic() - started, 3),
             "offloaded": True, "eval_host": host}
+
+
+# ---- FR13 CODEX-OFFLOAD: run the codex-runner Docker on alienware -----------
+# rsync robustness (req #3): a dropped workspace sync must NOT lose the run.
+# --partial keeps a half-transferred file for the next attempt to resume;
+# --append-verify resumes + re-checksums; the _net_retry loop reconnects.
+_RSYNC_RESILIENT = [
+    "rsync", "-az", "--partial", "--append-verify", "--timeout=120",
+    "-e", "ssh " + " ".join(_EVAL_SSH_OPTS),
+]
+
+
+def _codex_net_log(msg: str) -> None:
+    try:
+        _CODEX_NET_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with _CODEX_NET_LOG.open("a", encoding="utf-8") as f:
+            f.write(f"[{_iso_now()}] {msg}\n")
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _run_codex_remote(
+    *,
+    host: str,
+    workspace: Path,
+    endpoint: str,
+    model: str,
+    timeout_s: int,
+    instance_id: str,
+    stdout_path: Path,
+    stderr_path: Path,
+    trace_path: Path,
+    prompt: str = DEFAULT_CODEX_PROMPT,
+) -> dict[str, Any]:
+    """Run codex-runner:v1 ON alienware (x86) over SSH, keeping the GB10 vLLM-only.
+
+    Workspace lifecycle: rsync the GB10 worktree -> alienware, run the codex
+    docker there (against the alienware-LOCAL proxy at `endpoint`), rsync the
+    modified workspace back. Patch extraction + eval stay on the GB10 unchanged.
+    Network-robust: resilient rsync (req #3) + a generous SSH timeout for the
+    codex run; an SSH transport failure (rc 255) is CLASSIFIED network-drop and
+    flagged (req #4) so the harness never reads a wire-stalled trajectory as a
+    real run.
+    """
+    started = time.monotonic()
+    safe_id = instance_id.replace("/", "_")[:48]
+    remote_ws = f"{_CODEX_REMOTE_ROOT}/{safe_id}/workspace"
+    container_name = f"swe-codex-{safe_id}-{int(time.time())}"
+    net_drop = False
+
+    mk = _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"mkdir -p {remote_ws} && echo ok"],
+                    what=f"codex_mkdir:{instance_id}", timeout=30)
+    if mk.returncode != 0:
+        net_drop = mk.returncode == 255
+        stderr_path.write_text(f"remote mkdir failed rc={mk.returncode}\n{mk.stderr}", encoding="utf-8")
+        trace_path.write_text("", encoding="utf-8")
+        return {"elapsed_s": round(time.monotonic() - started, 3), "exit_code": -1,
+                "timed_out": False, "container_name": container_name,
+                "offloaded": True, "codex_host": host, "network_drop": net_drop}
+
+    # push the hydrated worktree (trailing slash = contents into remote_ws)
+    up = _net_retry([*_RSYNC_RESILIENT, f"{str(workspace).rstrip('/')}/", f"{host}:{remote_ws}/"],
+                    what=f"codex_ws_up:{instance_id}", timeout=600, max_attempts=5)
+    if up.returncode != 0:
+        net_drop = True
+        _codex_net_log(f"WS_UP_FAIL {instance_id} rc={up.returncode} (network-drop)")
+        stderr_path.write_text(f"workspace rsync up failed rc={up.returncode}\n{up.stderr}", encoding="utf-8")
+        trace_path.write_text("", encoding="utf-8")
+        return {"elapsed_s": round(time.monotonic() - started, 3), "exit_code": -1,
+                "timed_out": False, "container_name": container_name,
+                "offloaded": True, "codex_host": host, "network_drop": net_drop}
+
+    # the codex docker on alienware mounts the remote workspace + hits the
+    # alienware-local proxy endpoint. ~ expands on the remote login shell.
+    remote_cmd = CODEX_TEMPLATE.format(
+        container_name=container_name,
+        workspace=remote_ws,
+        endpoint=endpoint,
+        model=model,
+        prompt=prompt,
+    )
+    timed_out = False
+    rc: int | None = None
+    # run codex over SSH; trace (codex --json) -> trace_path, ssh stderr -> stderr_path.
+    # SSH timeout = codex wall + a teardown buffer; a true codex timeout is
+    # handled by killing the remote container (mirrors the local path).
+    ssh_codex = ["ssh", *_EVAL_SSH_OPTS, "-o", f"ConnectTimeout=20", host, remote_cmd]
+    try:
+        with trace_path.open("w", encoding="utf-8") as tf, \
+             stderr_path.open("w", encoding="utf-8") as ef:
+            completed = subprocess.run(
+                ssh_codex, stdout=tf, stderr=ef,
+                timeout=max(timeout_s, 30) + 120, check=False,
+            )
+        rc = completed.returncode
+        if rc == 255:
+            # SSH transport died — CLASSIFY network-drop (req #4), not a model run.
+            net_drop = True
+            _codex_net_log(f"CODEX_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        # best-effort kill the remote container so it doesn't linger on alienware
+        _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"docker kill {container_name} 2>/dev/null; "
+                    f"docker wait {container_name} 2>/dev/null; echo killed"],
+                   what=f"codex_kill:{instance_id}", timeout=60, max_attempts=2)
+        rc = -1
+    elapsed = time.monotonic() - started
+
+    # rsync the (modified) workspace back to the GB10 for patch extraction.
+    # delete-after keeps the GB10 worktree authoritative for git diff.
+    down = _net_retry([*_RSYNC_RESILIENT, f"{host}:{remote_ws}/", f"{str(workspace).rstrip('/')}/"],
+                      what=f"codex_ws_down:{instance_id}", timeout=600, max_attempts=5)
+    if down.returncode != 0:
+        net_drop = True
+        _codex_net_log(f"WS_DOWN_FAIL {instance_id} rc={down.returncode} (network-drop) — "
+                       "patch may be incomplete; FLAGGED")
+    # cleanup the remote workspace (non-fatal)
+    _net_retry(["ssh", *_EVAL_SSH_OPTS, host,
+                f"docker rm -f {container_name} 2>/dev/null; rm -rf {_CODEX_REMOTE_ROOT}/{safe_id}; echo ok"],
+               what=f"codex_cleanup:{instance_id}", timeout=60, max_attempts=2)
+
+    if not stdout_path.is_file():
+        stdout_path.write_text("", encoding="utf-8")
+    return {
+        "elapsed_s": round(elapsed, 3),
+        "exit_code": rc if rc is not None else -1,
+        "timed_out": timed_out,
+        "container_name": container_name,
+        "offloaded": True,
+        "codex_host": host,
+        "network_drop": net_drop,
+        "ws_down_rc": down.returncode,
+    }
+
+
+def _run_codex_dispatch(**kwargs: Any) -> dict[str, Any]:
+    """Route the codex run to alienware (CODEX_HOST set) or local (GB10).
+
+    On the offload path the codex docker on alienware must hit the alienware-
+    LOCAL proxy, so the GB10-side `--endpoint` is overridden with CODEX_ENDPOINT.
+    """
+    if CODEX_HOST:
+        kwargs = dict(kwargs)
+        if CODEX_ENDPOINT:
+            kwargs["endpoint"] = CODEX_ENDPOINT
+        return _run_codex_remote(host=CODEX_HOST, **kwargs)
+    return _run_codex(**kwargs)
 
 
 def _run_eval(
@@ -606,12 +827,12 @@ def _process_one(
     proxy_offset_before = (
         proxy_capture.stat().st_size if proxy_capture.is_file() else 0
     )
-    metrics_pre.write_text(_metrics_text(DEFAULT_METRICS_URL), encoding="utf-8")
+    metrics_pre.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
     # Start the DCGM/NVML sampler in parallel with the Codex agent.
     dcgm_proc = _spawn_dcgm_sampler(dcgm_samples)
 
-    codex_meta = _run_codex(
+    codex_meta = _run_codex_dispatch(
         workspace=workspace_path,
         endpoint=endpoint,
         model=model,
@@ -624,7 +845,7 @@ def _process_one(
     summary["codex"] = codex_meta
 
     _stop_dcgm_sampler(dcgm_proc)
-    metrics_post.write_text(_metrics_text(DEFAULT_METRICS_URL), encoding="utf-8")
+    metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
     patch_text = ""
     try:
@@ -645,7 +866,7 @@ def _process_one(
         retry_stderr = task_dir / "codex_stderr_retry.log"
         retry_stdout = task_dir / "codex_stdout_retry.log"
         retry_dcgm = _spawn_dcgm_sampler(task_dir / "dcgm_samples_retry.jsonl")
-        codex_meta_retry = _run_codex(
+        codex_meta_retry = _run_codex_dispatch(
             workspace=workspace_path, endpoint=endpoint, model=model,
             timeout_s=agent_wall_s, instance_id=instance_id,
             stdout_path=retry_stdout, stderr_path=retry_stderr, trace_path=retry_trace,
@@ -666,7 +887,7 @@ def _process_one(
         else:
             summary["empty_patch_retry"]["recovered_patch_bytes"] = 0
 
-    metrics_post.write_text(_metrics_text(DEFAULT_METRICS_URL), encoding="utf-8")
+    metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
     # Slice the new proxy rows into a per-task file (matches Track B layout).
     # This must happen after the optional empty-patch retry so retry traffic is
@@ -839,12 +1060,27 @@ def main(argv: list[str] | None = None) -> int:
                         help="SSH host to offload the eval step to (native x86_64). When set, "
                              "the agent runs locally on arm64 but eval runs on the x86 box — "
                              "recovers old-python instances + keeps the dataset single-arch.")
+    parser.add_argument("--codex-host", default=None,
+                        help="SSH host to offload the codex-runner Docker to (native x86_64, "
+                             "e.g. alienware). When set, the codex agent loop runs on the x86 box "
+                             "(workspace rsynced there + back) so the GB10 runs ONLY vLLM and the "
+                             "unified-memory bandwidth is uncontended = clean deploy-speed numbers.")
+    parser.add_argument("--codex-endpoint", default=None,
+                        help="The codex docker on --codex-host hits this (alienware-local) proxy "
+                             "endpoint (default http://127.0.0.1:8023/v1). Distinct from --endpoint "
+                             "(the on-GB10 legacy proxy) because 8022 is taken on alienware.")
     args = parser.parse_args(argv)
 
-    global EVAL_HOST
+    global EVAL_HOST, CODEX_HOST, CODEX_ENDPOINT
     EVAL_HOST = args.eval_host
     if EVAL_HOST:
         print(f"[eval-offload] eval step -> {EVAL_HOST} (native x86_64)", flush=True)
+    CODEX_HOST = args.codex_host
+    CODEX_ENDPOINT = args.codex_endpoint or (
+        "http://127.0.0.1:8023/v1" if CODEX_HOST else None)
+    if CODEX_HOST:
+        print(f"[codex-offload] codex docker -> {CODEX_HOST} (x86); endpoint={CODEX_ENDPOINT} "
+              f"(GB10 stays vLLM-only — uncontended deploy-speed)", flush=True)
 
     dataset_name, instance_ids = _load_subset(args.subset)
     if args.limit is not None:

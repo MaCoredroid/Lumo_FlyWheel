@@ -147,6 +147,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import statistics
 import time
 import urllib.request
@@ -169,7 +170,24 @@ M_DRAFTS = "vllm:spec_decode_num_drafts_total"
 M_ACCEPTED = "vllm:spec_decode_num_accepted_tokens_total"
 M_DRAFT_TOK = "vllm:spec_decode_num_draft_tokens_total"
 M_GEN_TOK = "vllm:generation_tokens_total"
-COUNTERS = [M_DECODE_S, M_DRAFTS, M_ACCEPTED, M_DRAFT_TOK, M_GEN_TOK]
+# per-request-NORMALIZED decode rate (NOT the concurrency-summed decode_seconds_sum):
+# request_time_per_output_token = per-request mean time-per-output-token (decode
+# phase). count/sum = 1/avg(TPOT) = the per-STREAM decode token rate. FR10 flagged
+# gen_tok/decode_s_sum as concurrency-deflated at B>1; this is the non-deflated basis.
+M_TPOT_SUM = "vllm:request_time_per_output_token_seconds_sum"
+M_TPOT_COUNT = "vllm:request_time_per_output_token_seconds_count"
+# prefill time (decode-span EXCLUDES it, but it eats wall -> drags gen/wall aggregate;
+# prefill_frac exposes the workload confound, user 2026-06-16).
+M_PREFILL_S = "vllm:request_prefill_time_seconds_sum"
+# FR13_SFWD_GPU_TIMER counter: GPU-active time in the PURE-DECODE model-forward
+# (the tree TREE_ATTN / MTP verify forward), summed over decode steps via async
+# cuda events in gpu_model_runner.execute_model. PREFILL-INDEPENDENT (excludes
+# interleaved chunked-prefill + idle that the wall-span M_DECODE_S absorbs at
+# B>1). Present only when the server booted with FR13_SFWD_GPU_TIMER=1 (the timer
+# is DEFAULT-OFF + byte-identical); absent => 0.0 here and s_per_fwd_gpu = None.
+M_DECODE_FWD_GPU_S = "vllm:fr13_decode_forward_gpu_seconds_total"
+COUNTERS = [M_DECODE_S, M_DRAFTS, M_ACCEPTED, M_DRAFT_TOK, M_GEN_TOK,
+            M_TPOT_SUM, M_TPOT_COUNT, M_PREFILL_S, M_DECODE_FWD_GPU_S]
 
 # Forms that must NEVER be reported as s/fwd (blocked + asserted, class-12).
 BANNED_SPEED_BASES = {"tps", "accept", "wall", "wall_clock", "req_elapsed", "http_elapsed"}
@@ -224,6 +242,42 @@ def _scrape(endpoint: str) -> dict[str, float]:
 
 def _delta(after: dict[str, float], before: dict[str, float]) -> dict[str, float]:
     return {k: float(after.get(k, 0.0) - before.get(k, 0.0)) for k in after}
+
+
+def read_sfwd_gpu_sidecar() -> dict[str, float] | None:
+    """FR13_SFWD_GPU_TIMER sidecar (cumulative): the prefill-independent
+    decode-forward GPU-time channel. vLLM only calls setup_multiprocess_
+    prometheus() when api_server_count>1, so in the single-API-server deployment
+    the worker's Counter is NOT aggregated into the API-server /metrics (separate
+    process, no shared PROMETHEUS_MULTIPROC_DIR). The worker therefore ALSO dumps
+    a throttled JSON sidecar (FR13_SFWD_GPU_TIMER_JSON), which carries:
+      decode_forward_gpu_seconds  (cumulative pure-decode model-forward GPU s)
+      n_drafts_in_timed_steps     (drafts processed IN those timed steps =
+                                    the MATCHING s/fwd_gpu denominator; at B>1,
+                                    mixed prefill+decode steps are excluded from
+                                    the GPU numerator, so this -- NOT the engine's
+                                    total drafts -- is the correct denominator).
+    Returns None if no sidecar is found (server booted timer-OFF / api_server>1).
+    """
+    import glob as _glob
+    pattern = os.environ.get(
+        "FR13_SFWD_GPU_TIMER_JSON_GLOB",
+        str(REPO / "output" / "fr13_sfwd_gpu_verify" / "logs"
+            / "fr13_sfwd_gpu_timer.json.*"),
+    )
+    files = _glob.glob(pattern)
+    if not files:
+        return None
+    f = max(files, key=os.path.getmtime)
+    try:
+        d = json.loads(Path(f).read_text())
+    except Exception:  # noqa: BLE001
+        return None
+    return {
+        "decode_forward_gpu_seconds": float(d.get("decode_forward_gpu_seconds", 0.0)),
+        "n_drafts_in_timed_steps": float(d.get("n_drafts_in_timed_steps", 0.0)),
+        "n_pure_decode_steps_timed": float(d.get("n_pure_decode_steps_timed", 0.0)),
+    }
 
 
 def _read_prompts(path: str) -> list[str]:
@@ -464,6 +518,7 @@ def cmd_speed(args: argparse.Namespace) -> int:
                args.request_timeout)
 
     before = _scrape(args.endpoint)
+    sc_before = read_sfwd_gpu_sidecar()
     served_streams: list[list[int]] = []
     if args.batch_size == 1:
         # B=1 SEQUENTIAL: one prompt, one sample, at a time.
@@ -489,12 +544,37 @@ def cmd_speed(args: argparse.Namespace) -> int:
             for ch in choices:
                 served_streams.append([int(x) for x in (ch.get("token_ids") or [])])
     after = _scrape(args.endpoint)
+    sc_after = read_sfwd_gpu_sidecar()
     md = _delta(after, before)
 
     eng = assert_engaged(spec, md, context=f"speed {spec['arm']} B={args.batch_size}")
 
     drafts = md[M_DRAFTS]
     s_fwd = md[M_DECODE_S] / drafts if drafts > 0 else None
+    # FR13_SFWD_GPU_TIMER (prefill-independent): the pure-decode model-forward GPU
+    # seconds per spec event. PREFERRED channel = the worker JSON sidecar (the
+    # /metrics counter is NOT aggregated in single-API-server mode). CRITICAL
+    # denominator: the drafts processed IN the GPU-TIMED pure-decode steps
+    # (sidecar n_drafts_in_timed_steps), NOT the engine's total drafts -- at B>1
+    # the mixed prefill+decode steps are excluded from the GPU numerator, so
+    # dividing by total drafts would bias s/fwd_gpu low. At B=1 SEQUENTIAL there
+    # is no co-resident interleave so timed-drafts == total drafts and s_fwd_gpu
+    # ~= the wall-span s_fwd (the pure-decode reference).
+    s_fwd_gpu = None
+    fwd_gpu_d = 0.0
+    timed_drafts_d = 0.0
+    if sc_before is not None and sc_after is not None:
+        fwd_gpu_d = sc_after["decode_forward_gpu_seconds"] - sc_before["decode_forward_gpu_seconds"]
+        timed_drafts_d = sc_after["n_drafts_in_timed_steps"] - sc_before["n_drafts_in_timed_steps"]
+        if fwd_gpu_d > 0 and timed_drafts_d > 0:
+            s_fwd_gpu = fwd_gpu_d / timed_drafts_d
+    if s_fwd_gpu is None:
+        # fallback: /metrics counter (multi-API-server mode), total-drafts denom
+        fwd_gpu = md.get(M_DECODE_FWD_GPU_S, 0.0)
+        if drafts > 0 and fwd_gpu > 0:
+            s_fwd_gpu = fwd_gpu / drafts
+            fwd_gpu_d = fwd_gpu
+            timed_drafts_d = drafts
     accept_per_event = md[M_ACCEPTED] / drafts if drafts > 0 else None
     committed_per_event = (accept_per_event + 1.0) if accept_per_event is not None else None
     derived_tps = (committed_per_event / s_fwd) if (s_fwd and committed_per_event) else None
@@ -520,6 +600,16 @@ def cmd_speed(args: argparse.Namespace) -> int:
         "engagement": eng,
         "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
         "s_per_fwd": s_fwd,
+        "s_per_fwd_note": (
+            "WALL-SPAN basis; at B=1 SEQUENTIAL there is no co-resident prefill "
+            "interleave so it ~= s_per_fwd_gpu (the pure-decode reference)."
+        ),
+        # FR13_SFWD_GPU_TIMER: prefill-independent decode-forward GPU time per
+        # spec event (None unless the server booted FR13_SFWD_GPU_TIMER=1).
+        "s_per_fwd_gpu": s_fwd_gpu,
+        "s_per_fwd_gpu_basis": "d(decode_forward_gpu_seconds)/d(n_drafts_in_timed_steps) [sidecar]",
+        "s_per_fwd_gpu_decode_forward_gpu_seconds_delta": fwd_gpu_d,
+        "s_per_fwd_gpu_timed_drafts_delta": timed_drafts_d,
         "accept_per_event": accept_per_event,
         "accept_per_event_note": (
             "B-DEPENDENT + TRAJECTORY-BOUND: valid only for this served_stream_"
@@ -538,9 +628,9 @@ def cmd_speed(args: argparse.Namespace) -> int:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: rec[k] for k in (
-        "arm", "batch_size", "temperature", "s_per_fwd", "accept_per_event",
-        "committed_per_event", "derived_tps", "served_stream_fingerprint",
-        "instrument")}, indent=2))
+        "arm", "batch_size", "temperature", "s_per_fwd", "s_per_fwd_gpu",
+        "accept_per_event", "committed_per_event", "derived_tps",
+        "served_stream_fingerprint", "instrument")}, indent=2))
     return 0
 
 
@@ -1377,12 +1467,18 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         for c in COUNTERS:
             agg[c] += md[c]
         drafts = md[M_DRAFTS]
+        tpot_sum_d = md.get(M_TPOT_SUM, 0.0)
+        fwd_gpu_d = md.get(M_DECODE_FWD_GPU_S, 0.0)
         per_task.append({
             "instance_id": d.name,
             "drafts": drafts,
             "tok_per_draft": (md[M_DRAFT_TOK] / drafts) if drafts > 0 else None,
             "s_per_fwd": (md[M_DECODE_S] / drafts) if drafts > 0 else None,
+            # FR13_SFWD_GPU_TIMER: prefill-INDEPENDENT decode-forward GPU time per
+            # spec event (None unless the server booted with the timer on).
+            "s_per_fwd_gpu": (fwd_gpu_d / drafts) if (drafts > 0 and fwd_gpu_d > 0) else None,
             "accept_per_event": (md[M_ACCEPTED] / drafts) if drafts > 0 else None,
+            "per_request_decode_tps": (md.get(M_TPOT_COUNT, 0.0) / tpot_sum_d) if tpot_sum_d > 0 else None,
         })
 
     # class-9 engagement: tok/draft over the WHOLE deployment workload == expected.
@@ -1391,9 +1487,82 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
 
     drafts = agg[M_DRAFTS]
     s_fwd = agg[M_DECODE_S] / drafts if drafts > 0 else None
+    # FR13_SFWD_GPU_TIMER: the PREFILL-INDEPENDENT decode-forward GPU time per
+    # spec event = d(fr13_decode_forward_gpu_seconds_total)/d(spec_decode_num_
+    # drafts_total). The wall-span s_fwd above absorbs co-resident chunked-prefill
+    # + idle in the decode window at B>1; this counter times ONLY the pure-decode
+    # model-forward (verify forward) GPU kernel, so it is the prefill-independent
+    # decode speed. None unless the server booted with FR13_SFWD_GPU_TIMER=1.
+    agg_fwd_gpu = agg.get(M_DECODE_FWD_GPU_S, 0.0)
+    s_fwd_gpu = (agg_fwd_gpu / drafts) if (drafts > 0 and agg_fwd_gpu > 0) else None
     accept_per_event = agg[M_ACCEPTED] / drafts if drafts > 0 else None
     committed_per_event = (accept_per_event + 1.0) if accept_per_event is not None else None
     derived_tps = (committed_per_event / s_fwd) if (s_fwd and committed_per_event) else None
+    # derived GPU TPS uses the prefill-independent per-forward time (the kernel-
+    # speed view; the wall-span derived_tps stays as the concurrency-summed basis).
+    derived_tps_gpu = (committed_per_event / s_fwd_gpu) if (s_fwd_gpu and committed_per_event) else None
+
+    # NON-deflated per-STREAM decode rate: count/sum of vLLM
+    # request_time_per_output_token = 1/avg(per-request mean-TPOT). Per-request
+    # normalized (NOT the concurrency-summed gen_tok/decode_s_sum basis FR10 flagged).
+    tpot_sum = agg[M_TPOT_SUM]
+    per_request_decode_tps = (agg[M_TPOT_COUNT] / tpot_sum) if tpot_sum > 0 else None
+
+    # Aggregate throughput (REPORTING-ONLY, not a kernel-speed basis): total
+    # generation_tokens over the UNION measurement window / union wall. The per-task
+    # brackets OVERLAP at B>1, so use the earliest-pre -> latest-post SINGLE delta
+    # (NOT the summed agg[M_GEN_TOK], which double-counts the overlapping windows).
+    aggregate_decode_tps = None
+    aggregate_window_wall_s = None
+    union_decode_s = None  # earliest-pre -> latest-post single delta (NOT the summed
+    # agg[M_DECODE_S], which double-counts the OVERLAPPING per-task brackets at B>1).
+    try:
+        earliest_pre = min((d / "vllm_metrics_pre.txt" for d in task_dirs),
+                           key=lambda p: p.stat().st_mtime)
+        latest_post = max((d / "vllm_metrics_post.txt" for d in task_dirs),
+                          key=lambda p: p.stat().st_mtime)
+        wall = latest_post.stat().st_mtime - earliest_pre.stat().st_mtime
+        pre_m = _scrape_metrics_file(str(earliest_pre))
+        post_m = _scrape_metrics_file(str(latest_post))
+        gen0, gen1 = pre_m.get(M_GEN_TOK, 0.0), post_m.get(M_GEN_TOK, 0.0)
+        union_decode_s = post_m.get(M_DECODE_S, 0.0) - pre_m.get(M_DECODE_S, 0.0)
+        if wall > 0 and gen1 > gen0:
+            aggregate_window_wall_s = wall
+            aggregate_decode_tps = (gen1 - gen0) / wall
+    except OSError:
+        pass
+
+    # prefill_frac: how much GPU-wall went to prefill vs decode. HIGH prefill (long
+    # re-prefilled codex contexts) drags the gen/wall aggregate down WITHOUT being a
+    # decode slowdown - the workload confound behind "why is our aggregate low" (user
+    # 2026-06-16). request_decode_time EXCLUDES prefill, so per_request_decode_tps is
+    # unaffected; only aggregate_decode_tps (gen/wall) absorbs it. (A RATIO -> the
+    # bracket-overlap over-count cancels, so the summed agg is fine here.)
+    prefill_frac = (agg[M_PREFILL_S] / agg[M_DECODE_S]) if agg[M_DECODE_S] > 0 else None
+    # effective_concurrency: UNION decode-stream-seconds / union wall = avg co-resident
+    # streams over the window (bounded by batch_size). aggregate_decode_tps ~=
+    # per_request_decode_tps x eff_conc, separating batch-fullness from per-stream (the
+    # 39.9-vs-ours decomposition; lower eff_conc = drained batch / fewer tasks). MUST
+    # use union_decode_s, NOT summed agg[M_DECODE_S] (the latter gives >batch_size).
+    effective_concurrency = (
+        (union_decode_s / aggregate_window_wall_s)
+        if (union_decode_s and aggregate_window_wall_s and aggregate_window_wall_s > 0)
+        else None
+    )
+    # per_stream_decode_rate = union gen / union decode-seconds = the EXACT
+    # decomposition factor: aggregate_decode_tps == per_stream_decode_rate x
+    # effective_concurrency (identity, both from the same union deltas). This is the
+    # ratio-of-sums per-stream rate; it differs slightly from per_request_decode_tps
+    # (the per-request-mean TPOT basis) - use THIS one for the aggregate decomposition.
+    _union_gen = None
+    try:
+        _union_gen = post_m.get(M_GEN_TOK, 0.0) - pre_m.get(M_GEN_TOK, 0.0)
+    except (NameError, TypeError):
+        _union_gen = None
+    per_stream_decode_rate = (
+        (_union_gen / union_decode_s)
+        if (_union_gen and union_decode_s and union_decode_s > 0) else None
+    )
 
     rec = {
         "schema": "fr13.measure.deploy_speed.v1",
@@ -1415,6 +1584,32 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "engagement": eng,
         "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
         "s_per_fwd": s_fwd,
+        "s_per_fwd_note": (
+            "WALL-SPAN basis (request_decode_time = last_token_ts - first_token_ts, "
+            "vLLM v1/metrics/stats.py: 'preemptions during decode are included'). "
+            "PREFILL-CONFOUNDED at B>1: the decode window absorbs co-resident "
+            "chunked-prefill the scheduler interleaves into it (high prefill_frac) "
+            "+ idle. Use s_per_fwd_gpu for the prefill-independent decode-kernel time."
+        ),
+        # FR13_SFWD_GPU_TIMER: prefill-INDEPENDENT decode-forward GPU time per spec
+        # event. None unless the server booted with FR13_SFWD_GPU_TIMER=1.
+        "s_per_fwd_gpu": s_fwd_gpu,
+        "s_per_fwd_gpu_basis": "d(fr13_decode_forward_gpu_seconds_total)/d(spec_decode_num_drafts_total)",
+        "s_per_fwd_gpu_note": (
+            "PREFILL-INDEPENDENT: GPU-active time in the PURE-DECODE model-forward "
+            "(tree TREE_ATTN / MTP verify forward) only, summed over uniform-decode "
+            "steps via async cuda events (gpu_model_runner.execute_model), divided "
+            "by spec events. EXCLUDES interleaved chunked-prefill (which the "
+            "wall-span s_per_fwd absorbs at B>1) + idle. None => server booted "
+            "timer-OFF (default; byte-identical). Verify prefill-independence: "
+            "~invariant to prefill_frac across boots, and at B=1 (no co-resident "
+            "interleave) s_per_fwd_gpu approaches the wall-span s_per_fwd."
+        ),
+        "derived_tps_gpu": derived_tps_gpu,
+        "derived_tps_gpu_note": (
+            "DERIVED = committed_per_event / s_per_fwd_gpu = decode-kernel TPS "
+            "(prefill-independent). None unless the timer was on."
+        ),
         "accept_per_event": accept_per_event,
         "accept_per_event_note": (
             "DEPLOYMENT-TRAJECTORY accept (real codex loop). B-DEPENDENT; valid "
@@ -1423,7 +1618,45 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         ),
         "committed_per_event": committed_per_event,
         "derived_tps": derived_tps,
-        "derived_tps_note": "DERIVED = committed_per_event / s_fwd; NOT measured.",
+        "derived_tps_note": (
+            "DERIVED = committed_per_event / s_fwd = generation_tokens / "
+            "request_decode_time_seconds_sum = the CONCURRENCY-SUMMED basis "
+            "(decode-seconds summed over co-resident requests). FR10 flagged this "
+            "as NOT directly E5-comparable at B>1. Use per_request_decode_tps "
+            "(per-stream rate) or aggregate_decode_tps (GPU throughput) instead."
+        ),
+        "per_request_decode_tps": per_request_decode_tps,
+        "per_request_decode_tps_note": (
+            "NON-deflated per-STREAM decode rate = count/sum of vLLM "
+            "request_time_per_output_token (= 1/avg per-request mean-TPOT). "
+            "Per-request normalized (NOT concurrency-summed); includes the real "
+            "co-residency cost at B>1. The FR10-recommended per-request basis "
+            "(cross-references the pre-kernel B=4 per-request ~28 synthetic / "
+            "B=1 ~18 deployment)."
+        ),
+        "aggregate_decode_tps": aggregate_decode_tps,
+        "aggregate_window_wall_s": aggregate_window_wall_s,
+        "aggregate_decode_tps_note": (
+            "END-TO-END throughput = total generation_tokens / UNION wall (earliest-"
+            "pre -> latest-post). The wall is IDLE- AND PREFILL-INCLUSIVE, so this is "
+            "the SAME basis as the fr9 steptrace decode_tps=39.9 baseline (gen/wall) "
+            "and is the ONLY field comparable to it - but ONLY at matched task-count + "
+            "concurrency + prefill_frac (see effective_concurrency + prefill_frac). It "
+            "is NOT decode capacity (a high-prefill / drained-batch run reads low here "
+            "without being slower per forward). For per-forward/decode speed use s/fwd "
+            "or per_request_decode_tps; aggregate = per_stream_decode_rate x "
+            "effective_concurrency (exact identity)."
+        ),
+        "per_stream_decode_rate": per_stream_decode_rate,
+        "effective_concurrency": effective_concurrency,
+        "prefill_frac": prefill_frac,
+        "prefill_frac_note": (
+            "request_prefill_time_seconds_sum / request_decode_time_seconds_sum = the "
+            "workload's prefill-vs-decode GPU-time ratio. HIGH (e.g. 0.39 for the 4 "
+            "astropy tasks vs 0.108 for fr9's 16-task set) drags aggregate_decode_tps "
+            "down WITHOUT a per-forward slowdown. The driver behind aggregate gaps; "
+            "MATCH it before comparing aggregates across runs."
+        ),
         "raw_counter_delta_aggregate": agg,
         "per_task": per_task,
         "ts": time.time(),
@@ -1432,8 +1665,10 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(rec, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({k: rec[k] for k in (
-        "arm", "regime", "batch_size", "n_tasks", "s_per_fwd",
-        "accept_per_event", "committed_per_event", "derived_tps", "instrument")},
+        "arm", "regime", "batch_size", "n_tasks", "s_per_fwd", "s_per_fwd_gpu",
+        "accept_per_event", "committed_per_event", "derived_tps", "derived_tps_gpu",
+        "per_request_decode_tps", "aggregate_decode_tps",
+        "effective_concurrency", "prefill_frac", "instrument")},
         indent=2))
     return 0
 
@@ -1516,6 +1751,239 @@ def cmd_deploy_lossless(args: argparse.Namespace) -> int:
         "regime", "cat9_clear_margin_rate_ci", "native_clear_margin_rate_ci",
         "within_floor_verdict", "within_proc_determinism_both", "instrument")},
         indent=2))
+    return 0
+
+
+# --------------------------------------------------------------------------- #
+# DEPLOYMENT temp-0.6 DRIFT reduce (CPU) — q (spec verify) vs p (recurrent),    #
+# both forced onto the SAME deployment served stream, step/id-aligned.          #
+# --------------------------------------------------------------------------- #
+def _q_deploy_by_pos(q_art: dict[str, Any], pid: int, q_path: str) -> dict[int, dict[str, float]]:
+    """{step -> {str(token_id): logprob}} of the SPEC VERIFY top-K q for one
+    prompt, from the deployment capture-q-deploy q-sinks (verify_topk_*). Keyed
+    by token id (id-keyed by construction)."""
+    out: dict[int, dict[str, float]] = {}
+    pp = {p["prompt_id"]: p for p in q_art.get("per_prompt", [])}.get(pid)
+    candidates: list[Path] = []
+    if pp and pp.get("qsink"):
+        candidates.append(Path(pp["qsink"]))
+    qsink_dir = q_art.get("qsink_dir")
+    if qsink_dir:
+        candidates.append(Path(qsink_dir) / f"p{pid}_rep0.jsonl")
+    candidates.append(Path(q_path).parent / f"{q_art.get('arm','')}_qsinks" / f"p{pid}_rep0.jsonl")
+    for sink in candidates:
+        if sink.exists():
+            for line in sink.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                rec = json.loads(line)
+                ids = rec.get("verify_topk_ids") or []
+                lps = rec.get("verify_topk_logprobs") or []
+                if ids and lps:
+                    out[rec["step"]] = {str(int(t)): float(v) for t, v in zip(ids, lps)}
+            if out:
+                return out
+    return out
+
+
+def _p_deploy_by_pos(p_art: dict[str, Any], pid: int, p_path: str) -> dict[int, dict[str, float]]:
+    """{step -> {str(token_id): logprob}} of the RECURRENT oracle top-K p for one
+    prompt. Reuses the SAME sink/positions resolution as the canonical
+    _p_topk_by_pos (bigdenom <arm>_sinks/pN_rep0.jsonl oracle_topk_*), but ALSO
+    accepts the bigdenom default sink layout (sink_dir absent in the artifact but
+    the on-disk sinks present next to it)."""
+    out = _p_topk_by_pos(p_art, pid, p_path)
+    if out:
+        return out
+    # bigdenom layout: <consolidated_dir>/<arm>_sinks/pN_rep0.jsonl. The rescore
+    # artifact may have sink_dir=None (older runs); locate the sink next to it.
+    arm = p_art.get("arm", "")
+    base = Path(p_path).parent / f"{arm}_sinks"
+    sink = base / f"p{pid}_rep0.jsonl"
+    if sink.exists():
+        for line in sink.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            ids = rec.get("oracle_topk_ids") or []
+            lps = rec.get("oracle_topk_logprobs") or []
+            if ids and lps:
+                out[rec["step"]] = {str(int(t)): float(v) for t, v in zip(ids, lps)}
+    return out
+
+
+def cmd_deploy_temp06_drift(args: argparse.Namespace) -> int:
+    """DEPLOYMENT-regime temp-0.6 distributional DRIFT (ON, regime=deployment):
+    per-position TV(softmax(q/0.6), softmax(p/0.6)) on the REAL codex served
+    stream, each-arm-vs-its-OWN oracle, vs the DEPTH-MATCHED native floor.
+
+    q = the SPEC VERIFY top-K (capture-q-deploy: forced-decode the deployment
+        served stream through the spec serve; verify_topk_*; ID-KEYED).
+    p = the no-spec RECURRENT decode oracle top-K (the bigdenom rescore of the
+        SAME served stream; oracle_topk_*; RECURRENT_PATH_ENGAGED).
+    q and p are forced onto the IDENTICAL served stream (same <arm>_src.json), so
+    they are step/id-aligned BY CONSTRUCTION -- no re-key, no string match, no
+    streamed-logprob off-by-one (the trust-ledger #1 gap the off-distribution
+    temp06-drift could only reach via a re-key).
+
+    The DEPLOYMENT difference vs the off-distribution temp06-drift:
+      * q is the verify dist on the PINNED deployment stream (not a free-running
+        raw-prompt generation that degenerates into the <think></think> loop);
+      * p comes from the big-denom recurrent rescore (the canonical deployment
+        oracle), read from its per-step full-top-K sinks.
+    PASS = the arm's drift is NOT separated above its DEPTH-MATCHED native floor
+    (cat9/depth-5 -> native-E5 floor; 3-3-3/depth-3 -> native-E3 floor). Pair the
+    scalar with the per-position vector (reference_scalar_metric_per_token_blindspot)."""
+    q_art = json.loads(Path(args.q).read_text(encoding="utf-8"))
+    p_art = json.loads(Path(args.p).read_text(encoding="utf-8"))
+    if q_art.get("schema") != "fr13.recurrent_decode_oracle.capture_q_deploy.v1":
+        raise RuntimeError(
+            "class-9 FAIL-LOUD [deploy-temp06-drift]: --q must be a "
+            "fr13.recurrent_decode_oracle.capture_q_deploy.v1 artifact (the SPEC "
+            f"verify q forced onto the deployment stream), got {q_art.get('schema')!r}."
+        )
+    if not q_art.get("SPEC_VERIFY_ENGAGED", False):
+        raise RuntimeError(
+            "class-9 FAIL-LOUD [deploy-temp06-drift]: the q capture did NOT engage "
+            "the spec verify forward (SPEC_VERIFY_ENGAGED != True) -- vacuous q."
+        )
+    if p_art.get("schema") != "fr13.recurrent_decode_oracle.rescore.v1":
+        raise RuntimeError(
+            "class-9 FAIL-LOUD [deploy-temp06-drift]: --p must be a "
+            "fr13.recurrent_decode_oracle.rescore.v1 artifact (the no-spec "
+            f"recurrent deployment oracle), got {p_art.get('schema')!r}."
+        )
+    if not p_art.get("RECURRENT_PATH_ENGAGED", False):
+        raise RuntimeError(
+            "class-9 FAIL-LOUD [deploy-temp06-drift]: p oracle does not assert "
+            "RECURRENT_PATH_ENGAGED -- wrong/chunked oracle frame, refusing."
+        )
+    if q_art.get("src") != p_art.get("src"):
+        # q and p MUST be the SAME served stream or the per-position align is a
+        # fiction (different stream -> different forced tokens at each step).
+        raise RuntimeError(
+            "class-12 FAIL-LOUD [deploy-temp06-drift]: q.src != p.src "
+            f"({q_art.get('src')!r} vs {p_art.get('src')!r}) -- q and p must be "
+            "forced onto the IDENTICAL deployment served stream to be aligned."
+        )
+    temp = args.temp
+    # The served stream pins which token is forced at each step; align q[step] to
+    # p[step] by step index (both forced the same served id at that step).
+    n_prompts = max(
+        (pp["prompt_id"] for pp in q_art.get("per_prompt", [])), default=-1) + 1
+
+    forks: list[dict[str, Any]] = []
+    all_tv: list[float] = []
+    all_kl: list[float] = []
+    over_floor_total = 0
+    n_q_only = 0   # steps with q but no p (align miss)
+    n_p_only = 0   # steps with p but no q (align miss)
+    n_id_mismatch_served = 0  # served id absent from one side's support
+    for pid in range(n_prompts):
+        q_by = _q_deploy_by_pos(q_art, pid, args.q)
+        p_by = _p_deploy_by_pos(p_art, pid, args.p)
+        if not q_by or not p_by:
+            forks.append({"prompt_id": pid,
+                          "note": f"no {'q' if not q_by else 'p'} top-K for prompt"})
+            continue
+        steps = sorted(set(q_by) & set(p_by))
+        n_q_only += len(set(q_by) - set(p_by))
+        n_p_only += len(set(p_by) - set(q_by))
+        per_pos: list[dict[str, Any]] = []
+        for st in steps:
+            qmap, pmap = q_by[st], p_by[st]
+            q_at = _softmax_over_support_at_temp(qmap, temp)
+            p_at = _softmax_over_support_at_temp(pmap, temp)
+            overlap = set(q_at) & set(p_at)
+            tv = _tv(q_at, p_at)
+            kl = _kl(p_at, q_at)
+            entry = {
+                "pos": st,
+                "tv_q_p_at_temp": tv,
+                "kl_p_q_at_temp": kl,
+                "n_support_overlap": len(overlap),
+                "q_support": len(q_at),
+                "p_support": len(p_at),
+                "align_status": "ok",
+            }
+            per_pos.append(entry)
+            all_tv.append(tv)
+            all_kl.append(kl)
+            if args.per_position_floor is not None and tv > args.per_position_floor:
+                over_floor_total += 1
+        forks.append({
+            "prompt_id": pid,
+            "n_positions": len(per_pos),
+            "mean_tv": (statistics.fmean([e["tv_q_p_at_temp"] for e in per_pos])
+                        if per_pos else None),
+            "max_tv": (max(e["tv_q_p_at_temp"] for e in per_pos) if per_pos else None),
+            "positions": per_pos if args.dump_positions else per_pos[:5],
+        })
+
+    # depth-matched native floor verdict (if a floor was supplied).
+    arm_p95 = (sorted(all_tv)[int(0.95 * (len(all_tv) - 1))] if all_tv else None)
+    above_floor = None
+    if args.native_floor_p95 is not None and arm_p95 is not None:
+        above_floor = arm_p95 > args.native_floor_p95
+    result = {
+        "schema": "fr13.measure.deploy_temp06_drift.v1",
+        "kind": "drift",
+        "instrument": "ON",
+        "regime": "deployment",
+        "label": f"deploy_temp06_drift_{q_art.get('arm')}",
+        "arm": q_art.get("arm"),
+        "depth_matched_native_floor_p95": args.native_floor_p95,
+        "depth_match_note": (
+            "feedback_depth_matched_accept_compare: a depth-D tree's TV floor is "
+            "native MTP-D (cat9/depth-5 -> native-E5; 3-3-3/depth-3 -> native-E3), "
+            "NOT E5 for every arm. Supply --native-floor-p95 = the p95 of the "
+            "DEPTH-MATCHED native deploy-temp06-drift run."
+        ),
+        "temp": temp,
+        "q_artifact": args.q,
+        "p_artifact": args.p,
+        "src": q_art.get("src"),
+        "aligned_by": "served-stream step index (q.src == p.src, id-keyed)",
+        "per_position_floor": args.per_position_floor,
+        "mean_tv_q_p_at_temp": (statistics.fmean(all_tv) if all_tv else None),
+        "p95_tv_q_p_at_temp": arm_p95,
+        "max_tv_q_p_at_temp": (max(all_tv) if all_tv else None),
+        "mean_kl_p_q_at_temp": (statistics.fmean(all_kl) if all_kl else None),
+        "n_positions_scored": len(all_tv),
+        "n_q_only_steps": n_q_only,
+        "n_p_only_steps": n_p_only,
+        "over_floor_count": over_floor_total,
+        "arm_p95_above_native_floor": above_floor,
+        "within_floor_verdict": (
+            None if above_floor is None
+            else ("ABOVE_floor" if above_floor else "WITHIN_floor")),
+        "non_vacuity": {
+            "q_spec_verify_engaged": q_art.get("SPEC_VERIFY_ENGAGED"),
+            "p_recurrent_engaged": p_art.get("RECURRENT_PATH_ENGAGED"),
+            "q_p_same_served_stream": (q_art.get("src") == p_art.get("src")),
+            "q_id_keyed": q_art.get("q_id_keyed"),
+            "n_positions_scored_gt0": len(all_tv) > 0,
+        },
+        "interpretation_note": (
+            "DEPLOYMENT temp-0.6 drift: q (SPEC VERIFY top-K) vs p (no-spec "
+            "RECURRENT oracle), BOTH forced onto the SAME codex served stream "
+            "(q.src == p.src) so per-position alignment is exact. Each arm vs its "
+            "OWN oracle; native-of-matching-depth is the floor. PAIR the scalar "
+            "with the per-position vector (over_floor_count locates the drift); a "
+            "high shared TV is the deployment self-noise floor, NOT a defect."
+        ),
+        "forks": forks,
+        "ts": time.time(),
+    }
+    assert_no_mode_mix([result])
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps({k: result[k] for k in (
+        "arm", "regime", "temp", "mean_tv_q_p_at_temp", "p95_tv_q_p_at_temp",
+        "max_tv_q_p_at_temp", "n_positions_scored", "over_floor_count",
+        "within_floor_verdict", "instrument")}, indent=2))
     return 0
 
 
@@ -1643,6 +2111,27 @@ def build_parser() -> argparse.ArgumentParser:
                          "(output/fr13_bigdenom_rescore/consolidated.json)")
     dl.add_argument("--out", required=True)
     dl.set_defaults(func=cmd_deploy_lossless)
+
+    dt = sub.add_parser(
+        "deploy-temp06-drift",
+        help="CANONICAL: deployment-regime temp-0.6 TV(q,p) drift on the real "
+             "codex served stream (q = spec verify capture-q-deploy, p = no-spec "
+             "recurrent bigdenom rescore; same stream, step/id-aligned)")
+    dt.add_argument("--q", required=True,
+                    help="fr13.recurrent_decode_oracle.capture_q_deploy.v1 (the "
+                         "spec verify q forced onto the deployment served stream)")
+    dt.add_argument("--p", required=True,
+                    help="fr13.recurrent_decode_oracle.rescore.v1 (the no-spec "
+                         "recurrent deployment oracle on the SAME served stream)")
+    dt.add_argument("--temp", type=float, default=0.6)
+    dt.add_argument("--per-position-floor", type=float, default=None,
+                    help="per-position TV floor; over_floor_count locates the drift")
+    dt.add_argument("--native-floor-p95", type=float, default=None,
+                    help="DEPTH-MATCHED native deploy-temp06-drift p95 (the floor "
+                         "this arm is judged against; depth-5->E5, depth-3->E3)")
+    dt.add_argument("--dump-positions", action="store_true")
+    dt.add_argument("--out", required=True)
+    dt.set_defaults(func=cmd_deploy_temp06_drift)
     return p
 
 

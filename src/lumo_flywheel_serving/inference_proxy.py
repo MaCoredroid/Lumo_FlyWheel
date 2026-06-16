@@ -1993,18 +1993,67 @@ def build_proxy_handler(
             # true network-deducted vLLM compute for the request.
             upstream_compute_accum_s = None
             parse_flake_retry_compute_s = 0.0
+            # FR13 OFFLOAD network robustness (req #2): when the proxy runs on
+            # alienware and forwards to the GB10 vLLM over tailscale, a transient
+            # link drop (ConnectionError / read timeout) must NOT immediately 502
+            # and kill the 30-min codex task. Reconnect with backoff and a
+            # generous per-attempt timeout. The upstream call is idempotent at
+            # the request level (a dropped connection means vLLM never returned
+            # this generation; re-POSTing re-runs it cleanly). Tunable via env:
+            #   LUMO_PROXY_UPSTREAM_TIMEOUT_S   (default 1200) per-attempt timeout
+            #   LUMO_PROXY_UPSTREAM_MAX_RETRIES (default 6)    reconnect attempts
+            #   LUMO_PROXY_UPSTREAM_BACKOFF_S   (default 3)    initial backoff
+            # Each retry is CLASSIFIED + logged so a network blip is never
+            # mis-attributed (req #4) to a degenerate fork / model failure.
+            _up_timeout = float(os.environ.get("LUMO_PROXY_UPSTREAM_TIMEOUT_S", "1200"))
+            _up_max_retries = int(os.environ.get("LUMO_PROXY_UPSTREAM_MAX_RETRIES", "6"))
+            _up_backoff = float(os.environ.get("LUMO_PROXY_UPSTREAM_BACKOFF_S", "3"))
+
+            def _post_upstream_resilient() -> "requests.Response | None":
+                backoff = _up_backoff
+                last_exc: Exception | None = None
+                for net_attempt in range(1, _up_max_retries + 1):
+                    try:
+                        return requests.post(
+                            f"{upstream_base_url}{self.path}",
+                            data=payload,
+                            headers=headers,
+                            timeout=_up_timeout,
+                            stream=True,
+                        )
+                    except requests.RequestException as exc:  # connect/read drop
+                        last_exc = exc
+                        sys.stderr.write(
+                            f"[proxy][NET-DROP] upstream POST {self.path} "
+                            f"attempt={net_attempt}/{_up_max_retries} "
+                            f"err={type(exc).__name__}: {exc} — "
+                            f"CLASSIFIED network-drop (not a model/measurement "
+                            f"failure); reconnecting in {backoff:.0f}s\n"
+                        )
+                        sys.stderr.flush()
+                        if net_attempt < _up_max_retries:
+                            time.sleep(backoff)
+                            backoff = min(backoff * 2, 60.0)
+                sys.stderr.write(
+                    f"[proxy][NET-GIVEUP] upstream POST {self.path} failed after "
+                    f"{_up_max_retries} reconnect attempts: {last_exc}\n"
+                )
+                sys.stderr.flush()
+                return None
+
             for _attempt in range(2):
                 ts_upstream_sent = time.time()
-                try:
-                    upstream = requests.post(
-                        f"{upstream_base_url}{self.path}",
-                        data=payload,
-                        headers=headers,
-                        timeout=600,
-                        stream=True,
+                upstream = _post_upstream_resilient()
+                if upstream is None:
+                    # Watchdog (req #5): the link stayed down across all
+                    # reconnect attempts. Fail LOUD with a distinct 504 so the
+                    # caller/harness can classify this as a network-stall window
+                    # to DISCARD (req #4), not a real model failure.
+                    _write_json_error(
+                        self, 504,
+                        "Upstream inference unreachable after retries "
+                        "(NETWORK-DROP; discard this measurement window)",
                     )
-                except requests.RequestException as exc:
-                    _write_json_error(self, 502, f"Upstream inference request failed: {exc}")
                     admission.release(ticket)
                     return
                 if not (_retry_400 and upstream.status_code == 400 and _attempt == 0):
@@ -2017,10 +2066,15 @@ def build_proxy_handler(
                     continue
                 # genuine 400 (not the flake): re-issue once to get a fresh
                 # streamable response object, then propagate as-is.
-                upstream = requests.post(
-                    f"{upstream_base_url}{self.path}",
-                    data=payload, headers=headers, timeout=600, stream=True,
-                )
+                upstream = _post_upstream_resilient()
+                if upstream is None:
+                    _write_json_error(
+                        self, 504,
+                        "Upstream inference unreachable after retries "
+                        "(NETWORK-DROP; discard this measurement window)",
+                    )
+                    admission.release(ticket)
+                    return
                 break
 
             self.send_response(upstream.status_code)

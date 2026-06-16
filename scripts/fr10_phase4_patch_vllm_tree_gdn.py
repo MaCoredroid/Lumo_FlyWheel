@@ -6061,6 +6061,27 @@ _FR13_EAGER_PACK = True
 _FR13_EAGER_PACK_NEEDLE_DONE = False
 _FR13_EAGER_PACK_STAGE = {}
 
+# FR13_COMMITTER_SYNCKILL (OPT-1 G2, ONE flag, default OFF, gated UNDER
+# FR13_GPU_COMMITTER). The GPU committer's first draft still blocks the MAIN
+# launching thread: the EAGER_PACK packed committer-input DtoH+sync (:6761) and
+# the kernel's output .cpu() readback both gate the main thread, so the flag-ON
+# path was SLOWER than OFF (the decision is on-GPU + lossless but the run-ahead
+# is not restored). G2 keeps the committer inputs DEVICE-resident (skips :6761),
+# runs the decision kernel on device tensors, writes the SAME-STEP serving
+# outputs (output_token_ids / accepted_tree_rows / GDN path/len) DEVICE->DEVICE
+# from the kernel's device outputs, and moves the host materialisation onto a
+# side stream + CUDA event (native AsyncGPUModelRunnerOutput shape) so the main
+# thread launches the next forward WITHOUT blocking. PURE-INTEGER, location-only
+# -> byte-identical to the host committer for every input; OFF == the current
+# :6761 + first-draft-kernel/legacy path verbatim. NEVER bind into a config
+# without FR13_GPU_COMMITTER=1 (synckill is meaningless without the GPU
+# committer). Read once at import (flag plan).
+_FR13_COMMITTER_SYNCKILL = (
+    __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'
+    and __import__('os').environ.get('FR13_COMMITTER_SYNCKILL', '0') == '1'
+)
+_FR13_COMMITTER_SYNCKILL_NEEDLE_DONE = False
+
 # FR13_COMMIT_ARGMAX_GATE (ONE flag, default OFF, inert): per-served-token
 # in-process committer-row argmax gate. At each committed/served token the
 # greedy committer records, to a jsonl, the row it ACTUALLY indexed into the
@@ -6688,138 +6709,20 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     bonus_token_ids: torch.Tensor,
     max_spec_len: int,
 ) -> torch.Tensor:
-    # FR13_EAGER_PACK 2a: ON + CUDA = one packed DtoH for all committer
-    # inputs plus the stacked replay-flag matrix (the ~102 tiny readbacks +
-    # syncs collapse to 1). CPU tensors (offline oracles/unit tests) and the
-    # OFF state take the exact legacy per-tensor tolist path.
-    _ep_active = _FR13_EAGER_PACK and bool(
-        getattr(tree_parent_indices, 'is_cuda', False)
-    )
-    _ep_flag_rows = None
-    _ep_stacks = None
-    _ep_replay_route_on = (
-        True
-    )
-    if _ep_active:
-        _ep_parents_src = tree_parent_indices.detach().reshape(-1)
-        _ep_drafts_src = draft_token_ids.detach().reshape(-1)
-        _ep_ptgt_src = parent_token_ids.detach().reshape(-1)
-        _ep_stgt_src = self_token_ids.detach().reshape(-1)
-        _ep_bonus_src = bonus_token_ids.detach()
-        if _ep_bonus_src.dim() > 1:
-            # Legacy parity: tolist of a 2D bonus takes x[0] per row, i.e.
-            # column 0 — identical selection, device-side.
-            _ep_bonus_src = _ep_bonus_src.reshape(
-                _ep_bonus_src.size(0), -1
-            )[:, 0]
-        _ep_counts_src = (
-            num_draft_tokens.detach().reshape(-1)
-            if hasattr(num_draft_tokens, 'detach')
-            else None
-        )
-        if _ep_replay_route_on:
-            from vllm.model_executor.layers.mamba import (
-                gdn_linear_attn as _ep_gdn_mod,
-            )
-            _ep_stacks = getattr(_ep_gdn_mod, '_FR13_EAGER_PACK_STACKS', None)
-            if _ep_stacks is None:
-                raise RuntimeError(
-                    'FR13_EAGER_PACK=1 with FR13_REPLAY_ROUTE=1 requires the '
-                    'stacked replay-flag matrix from GDN metadata-builder '
-                    'init; missing (class 9 fail-loud, no silent fallback)'
-                )
-        _ep_srcs = [
-            _ep_parents_src,
-            _ep_drafts_src,
-            _ep_ptgt_src,
-            _ep_stgt_src,
-            _ep_bonus_src,
-        ]
-        if _ep_counts_src is not None:
-            _ep_srcs.append(_ep_counts_src)
-        if _ep_stacks is not None:
-            _ep_srcs.append(_ep_stacks['flags'].detach().reshape(-1))
-        _ep_total = 0
-        for _ep_s in _ep_srcs:
-            _ep_total += int(_ep_s.numel())
-        _ep_dev, _ep_cpu, _ep_evt, _ep_evt_rec = _fr13_eager_pack_stage(
-            'committer_dtoh',
-            _ep_total,
-            tree_parent_indices.device,
-            torch.int64,
-        )
-        _ep_off = 0
-        for _ep_s in _ep_srcs:
-            _ep_n = int(_ep_s.numel())
-            if _ep_n:
-                # Async device-side slice/cast copies into disjoint staging
-                # (gather-then-scatter; staging never aliases a source —
-                # class 3 n/a but preserved by construction).
-                _ep_dev[_ep_off:_ep_off + _ep_n].copy_(_ep_s)
-            _ep_off += _ep_n
-        _ep_cpu[:_ep_total].copy_(_ep_dev[:_ep_total], non_blocking=True)
-        torch.cuda.current_stream(tree_parent_indices.device).synchronize()
-        _ep_vals = _ep_cpu[:_ep_total].tolist()
-        _ep_off = 0
-        _ep_n = int(_ep_parents_src.numel())
-        parents_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
-        _ep_off += _ep_n
-        _ep_n = int(_ep_drafts_src.numel())
-        drafts_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
-        _ep_off += _ep_n
-        _ep_n = int(_ep_ptgt_src.numel())
-        parent_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
-        _ep_off += _ep_n
-        _ep_n = int(_ep_stgt_src.numel())
-        self_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
-        _ep_off += _ep_n
-        _ep_n = int(_ep_bonus_src.numel())
-        bonus_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
-        _ep_off += _ep_n
-        if _ep_counts_src is not None:
-            _ep_n = int(_ep_counts_src.numel())
-            counts = _ep_vals[_ep_off:_ep_off + _ep_n]
-            _ep_off += _ep_n
-        else:
-            # counts kept on its existing CPU branch when already a list
-            # (design 2a): no transport involved.
-            counts = [int(x) for x in num_draft_tokens]
-        if _ep_stacks is not None:
-            _ep_flag_flat = _ep_vals[_ep_off:]
-            _ep_flag_rows = [
-                (
-                    int(_ep_flag_flat[2 * _ep_i]),
-                    int(_ep_flag_flat[2 * _ep_i + 1]),
-                )
-                for _ep_i in range(len(_ep_flag_flat) // 2)
-            ]
-    else:
-        parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
-        drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
-        parent_targets_cpu = [int(x) for x in parent_token_ids.detach().cpu().tolist()]
-        self_targets_cpu = [int(x) for x in self_token_ids.detach().cpu().tolist()]
-        bonus_targets_raw = bonus_token_ids.detach().cpu().tolist()
-        if bonus_targets_raw and isinstance(bonus_targets_raw[0], list):
-            bonus_targets_cpu = [int(x[0]) for x in bonus_targets_raw]
-        else:
-            bonus_targets_cpu = [int(x) for x in bonus_targets_raw]
-        if hasattr(num_draft_tokens, 'detach'):
-            counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
-        else:
-            counts = [int(x) for x in num_draft_tokens]
-    _fr13_eager_pack_needle(
-        _FR13_EAGER_PACK,
-        bool(getattr(tree_parent_indices, 'is_cuda', False)),
-        0 if _ep_stacks is None else int(_ep_stacks['num_layers']),
-        0 if not _ep_active else int(_ep_total),
-        bool(_ep_active and _ep_stacks is not None),
-        _ep_stacks is not None,
-        bool(
-            _ep_active
-            and __import__('os').environ.get('FR13_REPLAY_BOUNDARY_LOG', '0')
-            == '1'
-        ),
-    )
+    # OPT-1 G2 SINGLE-SOURCE-OF-TRUTH (FR13_COMMITTER_SYNCKILL composition fix):
+    # the synckill null (which skips the committer-input DtoH and sets
+    # parents_cpu=None) and the legacy-loop-skip (which runs the device committer
+    # instead of the Python per-node loop) MUST fire on the EXACT SAME boolean.
+    # Previously the null recomputed an env/globals duplicate (`_fr13_sk_engage`)
+    # while the loop-skip used these LOCAL runtime vars; the two drifted at B=4
+    # (the null fired but the loop-skip did NOT -> legacy loop ran on a nulled
+    # parents_cpu -> EngineDeadError). Compute the diagnostic-gate runtime vars
+    # and the `_fr13_gpu_committer` predicate ONCE here, BEFORE either use, and
+    # reference this single `_fr13_gpu_committer` in both the null guard and the
+    # injected loop-skip. These read globals/env that are stable for the whole
+    # call (the call-site publishes _FR13_CAG_TARGET_LOGITS once before
+    # rejection_sample and never mutates it mid-call), so hoisting is value-safe.
+    #
     # FR13_COMMIT_ARGMAX_GATE: the call-site publishes the raw verify logit
     # tensors only when armed; here we read them back. Gate is active iff the
     # flag is on AND the call-site actually published (so an OFF call-site can
@@ -6865,6 +6768,251 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     _fr13_force_spine_commit = (
         __import__('os').environ.get('FR13_FORCE_SPINE_COMMIT', '0') == '1'
     )
+    # SINGLE SOURCE OF TRUTH: this is the byte-for-byte same predicate the
+    # injected loop-skip uses (rejection_sampler.py:14763 replacement). The
+    # synckill null guard below references THIS variable (not an env-recompute),
+    # so the null can NEVER fire when the loop-skip is False. The injected
+    # loop-skip reads back this same `_fr13_gpu_committer` (it no longer
+    # recomputes the predicate).
+    _fr13_gpu_committer = (
+        __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'
+        and not _fr13_force_spine_commit
+        and not _fr13_cag_active
+        and not _fr13_fork_margin_active
+        and _fr13_bonus_self
+    )
+    # FR13_EAGER_PACK 2a: ON + CUDA = one packed DtoH for all committer
+    # inputs plus the stacked replay-flag matrix (the ~102 tiny readbacks +
+    # syncs collapse to 1). CPU tensors (offline oracles/unit tests) and the
+    # OFF state take the exact legacy per-tensor tolist path.
+    _ep_active = _FR13_EAGER_PACK and bool(
+        getattr(tree_parent_indices, 'is_cuda', False)
+    )
+    _ep_flag_rows = None
+    _ep_stacks = None
+    # _ep_total is the packed committer-input DtoH element count (needle arg).
+    # Under SYNCKILL the big committer-input pack is skipped (only the tiny
+    # counts+flags meta is moved), so seed it 0 so the needle never NameErrors
+    # on the synckill branch.
+    _ep_total = 0
+    _ep_replay_route_on = (
+        True
+    )
+    if _ep_active:
+        _ep_parents_src = tree_parent_indices.detach().reshape(-1)
+        _ep_drafts_src = draft_token_ids.detach().reshape(-1)
+        _ep_ptgt_src = parent_token_ids.detach().reshape(-1)
+        _ep_stgt_src = self_token_ids.detach().reshape(-1)
+        _ep_bonus_src = bonus_token_ids.detach()
+        if _ep_bonus_src.dim() > 1:
+            # Legacy parity: tolist of a 2D bonus takes x[0] per row, i.e.
+            # column 0 — identical selection, device-side.
+            _ep_bonus_src = _ep_bonus_src.reshape(
+                _ep_bonus_src.size(0), -1
+            )[:, 0]
+        _ep_counts_src = (
+            num_draft_tokens.detach().reshape(-1)
+            if hasattr(num_draft_tokens, 'detach')
+            else None
+        )
+        if _ep_replay_route_on:
+            from vllm.model_executor.layers.mamba import (
+                gdn_linear_attn as _ep_gdn_mod,
+            )
+            _ep_stacks = getattr(_ep_gdn_mod, '_FR13_EAGER_PACK_STACKS', None)
+            if _ep_stacks is None:
+                raise RuntimeError(
+                    'FR13_EAGER_PACK=1 with FR13_REPLAY_ROUTE=1 requires the '
+                    'stacked replay-flag matrix from GDN metadata-builder '
+                    'init; missing (class 9 fail-loud, no silent fallback)'
+                )
+        # OPT-1 G2 COMPOSITION GUARD: the synckill DtoH-skip (nulling the host
+        # committer-input lists below) is byte-safe ONLY when the device arm
+        # actually runs AND the legacy per-node loop is skipped. The loop-skip
+        # is the `_fr13_gpu_committer` predicate
+        # (FR13_GPU_COMMITTER=1 AND no diagnostic gate AND bonus_self), which is
+        # STRICTER than `_FR13_COMMITTER_SYNCKILL` (=GPU_COMMITTER & SYNCKILL).
+        # If synckill is on but a diagnostic disables the GPU committer
+        # (force_spine / CAG / fork_margin / bonus_self=0), the device arm is
+        # NOT dispatched and the legacy loop DOES run -> nulling parents_cpu
+        # here crashes it (NoneType subscript -> EngineCoreDead). SINGLE SOURCE
+        # OF TRUTH: gate the null on the IDENTICAL `_fr13_gpu_committer` boolean
+        # the injected loop-skip uses (computed ONCE at function top from the
+        # SAME runtime vars). The null can therefore NEVER fire when the
+        # loop-skip is False; when it does not fire we fall through to the
+        # legacy packed-DtoH else-branch which materialises the host lists for
+        # the legacy loop. (The previous env/globals recompute `_fr13_sk_engage`
+        # was a hand-maintained duplicate that drifted from the runtime
+        # `_fr13_bonus_self`/`_fr13_cag_active`/... at B=4.)
+        if _FR13_COMMITTER_SYNCKILL and _fr13_gpu_committer:
+            # OPT-1 G2.a: the GPU committer DECISION reads the DEVICE source
+            # tensors directly (the hook's synckill branch), so the big
+            # committer-input DtoH+sync (parents/drafts/ptgt/stgt/bonus) is NOT
+            # done on the main thread -- this is the :6761 sync that census-
+            # measured blocks the main thread 91.9% of the verify window. Only
+            # counts (n_req ints) + the replay flag-rows (2*n_layers ints) are
+            # read here; both are tiny, packed into ONE small DtoH that rides
+            # the committer side stream + CUDA event, and synchronized ONCE
+            # (n_req+2*n_layers ints, not the full O(nodes) committer inputs).
+            # The host committer-input lists are NEVER materialised (the legacy
+            # per-node loop iterates EMPTY under the GPU committer; the kernel's
+            # acc_path replaces the host _winning_path_prefix re-derivation).
+            parents_cpu = None
+            drafts_cpu = None
+            parent_targets_cpu = None
+            self_targets_cpu = None
+            bonus_targets_cpu = None
+            _ep_sk_srcs = []
+            if _ep_counts_src is not None:
+                _ep_sk_srcs.append(_ep_counts_src)
+            if _ep_stacks is not None:
+                _ep_sk_srcs.append(_ep_stacks['flags'].detach().reshape(-1))
+            _ep_sk_total = 0
+            for _ep_s in _ep_sk_srcs:
+                _ep_sk_total += int(_ep_s.numel())
+            _ep_total = _ep_sk_total  # truthful needle telemetry (small meta only)
+            if _ep_sk_total:
+                _ep_sk_dev, _ep_sk_cpu, _ep_sk_evt, _ep_sk_rec = (
+                    _fr13_eager_pack_stage(
+                        'committer_synckill_meta',
+                        _ep_sk_total,
+                        tree_parent_indices.device,
+                        torch.int64,
+                    )
+                )
+                if _ep_sk_rec[0]:
+                    _ep_sk_evt.synchronize()
+                _ep_off = 0
+                for _ep_s in _ep_sk_srcs:
+                    _ep_n = int(_ep_s.numel())
+                    if _ep_n:
+                        _ep_sk_dev[_ep_off:_ep_off + _ep_n].copy_(_ep_s)
+                    _ep_off += _ep_n
+                _ep_sk_cpu[:_ep_sk_total].copy_(
+                    _ep_sk_dev[:_ep_sk_total], non_blocking=True
+                )
+                _ep_sk_evt.record()
+                _ep_sk_rec[0] = True
+                _ep_sk_evt.synchronize()
+                _ep_vals = _ep_sk_cpu[:_ep_sk_total].tolist()
+            else:
+                _ep_vals = []
+            _ep_off = 0
+            if _ep_counts_src is not None:
+                _ep_n = int(_ep_counts_src.numel())
+                counts = _ep_vals[_ep_off:_ep_off + _ep_n]
+                _ep_off += _ep_n
+            else:
+                counts = [int(x) for x in num_draft_tokens]
+            if _ep_stacks is not None:
+                _ep_flag_flat = _ep_vals[_ep_off:]
+                _ep_flag_rows = [
+                    (
+                        int(_ep_flag_flat[2 * _ep_i]),
+                        int(_ep_flag_flat[2 * _ep_i + 1]),
+                    )
+                    for _ep_i in range(len(_ep_flag_flat) // 2)
+                ]
+        else:
+            _ep_srcs = [
+                _ep_parents_src,
+                _ep_drafts_src,
+                _ep_ptgt_src,
+                _ep_stgt_src,
+                _ep_bonus_src,
+            ]
+            if _ep_counts_src is not None:
+                _ep_srcs.append(_ep_counts_src)
+            if _ep_stacks is not None:
+                _ep_srcs.append(_ep_stacks['flags'].detach().reshape(-1))
+            _ep_total = 0
+            for _ep_s in _ep_srcs:
+                _ep_total += int(_ep_s.numel())
+            _ep_dev, _ep_cpu, _ep_evt, _ep_evt_rec = _fr13_eager_pack_stage(
+                'committer_dtoh',
+                _ep_total,
+                tree_parent_indices.device,
+                torch.int64,
+            )
+            _ep_off = 0
+            for _ep_s in _ep_srcs:
+                _ep_n = int(_ep_s.numel())
+                if _ep_n:
+                    # Async device-side slice/cast copies into disjoint staging
+                    # (gather-then-scatter; staging never aliases a source —
+                    # class 3 n/a but preserved by construction).
+                    _ep_dev[_ep_off:_ep_off + _ep_n].copy_(_ep_s)
+                _ep_off += _ep_n
+            _ep_cpu[:_ep_total].copy_(_ep_dev[:_ep_total], non_blocking=True)
+            torch.cuda.current_stream(tree_parent_indices.device).synchronize()
+            _ep_vals = _ep_cpu[:_ep_total].tolist()
+            _ep_off = 0
+            _ep_n = int(_ep_parents_src.numel())
+            parents_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+            _ep_n = int(_ep_drafts_src.numel())
+            drafts_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+            _ep_n = int(_ep_ptgt_src.numel())
+            parent_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+            _ep_n = int(_ep_stgt_src.numel())
+            self_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+            _ep_n = int(_ep_bonus_src.numel())
+            bonus_targets_cpu = _ep_vals[_ep_off:_ep_off + _ep_n]
+            _ep_off += _ep_n
+            if _ep_counts_src is not None:
+                _ep_n = int(_ep_counts_src.numel())
+                counts = _ep_vals[_ep_off:_ep_off + _ep_n]
+                _ep_off += _ep_n
+            else:
+                # counts kept on its existing CPU branch when already a list
+                # (design 2a): no transport involved.
+                counts = [int(x) for x in num_draft_tokens]
+            if _ep_stacks is not None:
+                _ep_flag_flat = _ep_vals[_ep_off:]
+                _ep_flag_rows = [
+                    (
+                        int(_ep_flag_flat[2 * _ep_i]),
+                        int(_ep_flag_flat[2 * _ep_i + 1]),
+                    )
+                    for _ep_i in range(len(_ep_flag_flat) // 2)
+                ]
+    else:
+        parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+        drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
+        parent_targets_cpu = [int(x) for x in parent_token_ids.detach().cpu().tolist()]
+        self_targets_cpu = [int(x) for x in self_token_ids.detach().cpu().tolist()]
+        bonus_targets_raw = bonus_token_ids.detach().cpu().tolist()
+        if bonus_targets_raw and isinstance(bonus_targets_raw[0], list):
+            bonus_targets_cpu = [int(x[0]) for x in bonus_targets_raw]
+        else:
+            bonus_targets_cpu = [int(x) for x in bonus_targets_raw]
+        if hasattr(num_draft_tokens, 'detach'):
+            counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+        else:
+            counts = [int(x) for x in num_draft_tokens]
+    _fr13_eager_pack_needle(
+        _FR13_EAGER_PACK,
+        bool(getattr(tree_parent_indices, 'is_cuda', False)),
+        0 if _ep_stacks is None else int(_ep_stacks['num_layers']),
+        0 if not _ep_active else int(_ep_total),
+        bool(_ep_active and _ep_stacks is not None),
+        _ep_stacks is not None,
+        bool(
+            _ep_active
+            and __import__('os').environ.get('FR13_REPLAY_BOUNDARY_LOG', '0')
+            == '1'
+        ),
+    )
+    # NOTE: _fr13_cag_target_logits / _fr13_cag_self_logits / _fr13_cag_active /
+    # _fr13_cag_step / _fr13_fork_margin_active / _fr13_bonus_self /
+    # _fr13_force_spine_commit and the single-source-of-truth _fr13_gpu_committer
+    # predicate are now computed ONCE at the top of this function (see the
+    # OPT-1 G2 SINGLE-SOURCE-OF-TRUTH block) so the synckill null and the
+    # loop-skip share the IDENTICAL boolean. They were previously recomputed
+    # here; that duplicate is removed to keep one source of truth.
 
     out_rows = []
     accepted_rows = []
@@ -6876,6 +7024,21 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     start = 0
     for req_i, node_count in enumerate(counts):
         node_count = int(node_count)
+        if parents_cpu is None:
+            # OPT-1 G2 composition guard (fail-loud, class 9): the legacy
+            # per-node loop MUST NOT run with the host committer-input lists
+            # nulled by the synckill DtoH-skip. That combination only arises if
+            # the synckill null fired while the GPU-committer loop-skip did NOT
+            # (a guard-mismatch); the engagement predicate at the DtoH branch is
+            # supposed to keep them in lockstep. If we are here, that invariant
+            # broke -- raise a named error instead of a cryptic NoneType
+            # subscript -> EngineCoreDead.
+            raise RuntimeError(
+                'FR13_COMMITTER_SYNCKILL composition defect: legacy committer '
+                'loop ran with nulled host inputs (synckill nulled parents_cpu '
+                'but the GPU-committer loop-skip did not engage). The synckill '
+                'null and the loop-skip must share the same engagement predicate.'
+            )
         parents = parents_cpu[start:start + node_count]
         drafts = drafts_cpu[start:start + node_count]
         parent_targets = parent_targets_cpu[start:start + node_count]
@@ -7363,7 +7526,48 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 ) from _fmd_exc
         start += node_count
 
-    if _ep_active:
+    # OPT-1 G2.b device->device writeback engages ONLY when the synckill flag
+    # is on AND the hook actually ran the device arm this step (_fr13_dev_out
+    # bound). The hook always binds it under the flag; the try-guard keeps the
+    # helper robust if the hook patch is absent (NameError => legacy path).
+    _fr13_synckill_writeback = False
+    if _FR13_COMMITTER_SYNCKILL:
+        try:
+            _fr13_synckill_writeback = bool(
+                _fr13_gpu_committer and _fr13_dev_out is not None
+            )
+        except NameError:
+            _fr13_synckill_writeback = False
+    if _fr13_synckill_writeback:
+        # OPT-1 G2.b: the SAME-STEP serving outputs (output_token_ids /
+        # accepted_tree_rows = the next forward's input) are written
+        # DEVICE->DEVICE from the kernel's device outputs -- NO host round-trip,
+        # NO main-thread sync. The kernel pads out_tokens with _PAD=-1 (= the
+        # legacy fill_(-1) value), and rows are truncated to max_spec_len+1 by
+        # the kernel, so this copy is byte-identical to the host scatter:
+        #   output_token_ids[r, :k] = out_tokens[r, :k];  rest stays -1.
+        _ep_out_rows_n = int(output_token_ids.size(0))
+        _ep_out_cols = int(output_token_ids.size(1))
+        _ot_dev = _fr13_dev_out['out_tokens']
+        _ar_dev = _fr13_dev_out['accepted_row']
+        _ot_nreq = int(_ot_dev.size(0))
+        _ot_cols = int(_ot_dev.size(1))
+        if _ot_nreq > _ep_out_rows_n:
+            raise RuntimeError(
+                'FR13_COMMITTER_SYNCKILL: committer rows exceed output buffer: '
+                + str(_ot_nreq) + ' > ' + str(_ep_out_rows_n)
+            )
+        if _ot_cols > _ep_out_cols:
+            # A committed row could overflow the destination columns. The host
+            # path would equally fail; fail loud (class 9, no silent truncate).
+            raise RuntimeError(
+                'FR13_COMMITTER_SYNCKILL: committer row width exceeds output '
+                'columns: ' + str(_ot_cols) + ' > ' + str(_ep_out_cols)
+            )
+        output_token_ids.fill_(-1)
+        output_token_ids[:_ot_nreq, :_ot_cols].copy_(_ot_dev)
+        accepted_tree_rows[:_ot_nreq].copy_(_ar_dev)
+    elif _ep_active:
         # FR13_EAGER_PACK 2c (phase a): the fill_(-1) + per-element writes +
         # pageable torch.tensor HtoD collapse into ONE pinned async HtoD and
         # two device-side slice copies. The staged matrix writes -1 to every
@@ -8012,8 +8216,30 @@ def _lumo_tree_canonical_multidraft_sample(
         counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
     else:
         counts = [int(x) for x in num_draft_tokens]
-    target_probs_cpu = target_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
-    self_probs_cpu = tree_self_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
+    # FR13_DEVICE_MULTIDRAFT (default OFF): when ON, the temp>0 multidraft
+    # per-node decision runs ON-DEVICE (scripts/fr13_device_multidraft_kernel.py)
+    # so the [nodes x vocab] host softmax DtoH below + the Python per-node
+    # interpreter loop are ELIMINATED. The device committer computes the SAME
+    # SpecInfer/multi-draft residual-mix accept rule (per-node source weights ~
+    # min-overlap, accept ~ min(1,p/q_mix), residual fallback) and produces the
+    # SAME five committer products (distribution-lossless, NOT byte: device rng
+    # draws differ but follow the identical distributions; proven offline by
+    # scripts/fr13_device_multidraft_offline_gate.py). DEFAULT-OFF => the host
+    # reference below runs byte-identical to HEAD. Fail-loud on disengagement
+    # (no silent host fallback, bug-class 9).
+    _fr13_device_multidraft = (
+        __import__('os').environ.get('FR13_DEVICE_MULTIDRAFT', '0') == '1'
+        and draft_probs is None
+    )
+    if _fr13_device_multidraft:
+        # device path decides every request -> the [nodes x vocab] host softmax
+        # DtoH is SKIPPED (its only consumer is the host per-node loop, which is
+        # skipped). The actual on-device commit runs at the loop anchor below.
+        target_probs_cpu = None
+        self_probs_cpu = None
+    else:
+        target_probs_cpu = target_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
+        self_probs_cpu = tree_self_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
     draft_probs_cpu = (
         None if draft_probs is None else draft_probs.detach().cpu().numpy()
     )
@@ -8066,7 +8292,59 @@ def _lumo_tree_canonical_multidraft_sample(
     except Exception:
         pass
     start = 0
-    for req_i, node_count in enumerate(counts):
+    # FR13_DEVICE_MULTIDRAFT loop-skip (default OFF). flag-off => _fr13_dm_counts
+    # IS counts, so the legacy host per-node Python loop below runs byte-for-byte
+    # unchanged. flag-on => the device committer fills the five product lists and
+    # the legacy loop iterates EMPTY (the host walk never runs; the [nodes x
+    # vocab] softmax DtoH above was already skipped).
+    _fr13_dm_counts = counts
+    if _fr13_device_multidraft:
+        try:
+            import importlib.util as _fr13_dm_ilu, os as _fr13_dm_os
+            _fr13_dm_path = _fr13_dm_os.environ.get(
+                'FR13_DEVICE_MULTIDRAFT_KERNEL',
+                '/home/mark/shared/lumoFlyWheel/scripts/'
+                'fr13_device_multidraft_kernel.py',
+            )
+            _fr13_dm = __import__('sys').modules.get('_fr13_device_multidraft_kernel')
+            if _fr13_dm is None:
+                _fr13_dm_spec = _fr13_dm_ilu.spec_from_file_location(
+                    '_fr13_device_multidraft_kernel', _fr13_dm_path)
+                _fr13_dm = _fr13_dm_ilu.module_from_spec(_fr13_dm_spec)
+                _fr13_dm_spec.loader.exec_module(_fr13_dm)
+                __import__('sys').modules['_fr13_device_multidraft_kernel'] = _fr13_dm
+            if not globals().get('_FR13_DEVICE_MULTIDRAFT_NEEDLE_DONE'):
+                globals()['_FR13_DEVICE_MULTIDRAFT_NEEDLE_DONE'] = True
+                try:
+                    from vllm.logger import init_logger as _fr13_dm_il
+                    _fr13_dm_il('vllm.fr13_device_multidraft').info(
+                        'FR13_DEVICE_MULTIDRAFT engaged: device-side temp>0 '
+                        'multidraft committer (no [nodes x vocab] softmax DtoH, '
+                        'no per-node Python loop), n_req=%d' % len(counts)
+                    )
+                except Exception:
+                    print('FR13_DEVICE_MULTIDRAFT engaged', flush=True)
+            (
+                out_rows, accepted_rows, accepted_lens,
+                accepted_node_paths, accepted_token_rows,
+            ) = _fr13_dm.fr13_device_multidraft_commit(
+                num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                target_logits,
+                tree_self_logits,
+                draft_probs,
+                bonus_token_ids,
+                max_spec_len,
+                generators=generators,
+            )
+        except Exception as _fr13_dm_exc:
+            raise RuntimeError(
+                'FR13_DEVICE_MULTIDRAFT failed (no silent fallback, class 9): '
+                + type(_fr13_dm_exc).__name__ + ':' + str(_fr13_dm_exc)
+            ) from _fr13_dm_exc
+        _fr13_dm_counts = []
+    for req_i, node_count in enumerate(_fr13_dm_counts):
         node_count = int(node_count)
         _fr13_gen = None
         if _fr13_per_req_gen and generators:
@@ -11005,6 +11283,46 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         _fr10_cat3w_choices = [
             (0,), (1,), (0, 0), (0, 1), (0, 0, 0),
         ]
+        # FR13_RESHAPE_DEPTH5: two depth-5 reshape candidates that layer a
+        # root runner-up (1,) onto the existing depth-5 spine. Both are
+        # sorted (len, path) tree_choices, ADDITIVE, exact-match guarded,
+        # default cat9 path untouched, FAIL-LOUD on disengagement.
+        #   cat6root (6 nodes, depth-5, pad8) = pure depth-5 spine + (1,)
+        #     root sibling, NO interior leaves (like cat3w's root-sibling
+        #     slot but on the full chain5 spine).
+        #   cat10 (10 nodes, depth-5, pad16) = cat9 + (1,) root sibling
+        #     (the caterpillar with a root runner-up prepended at slot 1).
+        _fr10_cat6root_choices = [
+            (0,), (1,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0),
+        ]
+        _fr10_cat10_choices = [
+            (0,), (1,), (0, 0), (0, 1), (0, 0, 0), (0, 0, 1),
+            (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 0, 0), (0, 0, 0, 0, 1),
+        ]
+        # FR13_RESHAPE_333 (wide-shape B=4 probe): depth-3 tree with 3
+        # candidates PER spine depth (root + the 2 interior spine depths),
+        # i.e. spine (top-1), rank-1 leaf (top-2), AND rank-2 leaf (top-3).
+        # 9 nodes, depth 3, pad16. Sorted (len, path) tree order:
+        #   slot 0 (0,)     spine0 (root draft = argmax)
+        #   slot 1 (1,)     root rank-1 leaf (root top-2)
+        #   slot 2 (2,)     root rank-2 leaf (root top-3)  <-- NEW child-rank 2
+        #   slot 3 (0,0)    spine1 (loop step 0 argmax)
+        #   slot 4 (0,1)    d1 rank-1 leaf (step 0 top-2)
+        #   slot 5 (0,2)    d1 rank-2 leaf (step 0 top-3)  <-- NEW child-rank 2
+        #   slot 6 (0,0,0)  spine2 (loop step 1 argmax)
+        #   slot 7 (0,0,1)  d2 rank-1 leaf (step 1 top-2)
+        #   slot 8 (0,0,2)  d2 rank-2 leaf (step 1 top-3)  <-- NEW child-rank 2
+        # The rank-2 token is a RUNNER-UP READ of topk(logits, 3)[:, 2] from
+        # the SAME spine logits (no extra lm-head). It is NEVER fed into a
+        # forward/recurrent state -- only packed into a leaf slot. Lossless
+        # by construction: parent/ancestry masks, committer path enum,
+        # eager-pack replay rows, conv prior windows ALL auto-derive from
+        # SPEC_CONFIG tree_choices (only the drafter packing is hand-rolled).
+        _fr10_threethree_choices = [
+            (0,), (1,), (2,),
+            (0, 0), (0, 1), (0, 2),
+            (0, 0, 0), (0, 0, 1), (0, 0, 2),
+        ]
         _fr10_tree_choices_current = [
             tuple(_x) for _x in getattr(self, "tree_choices", [])
         ]
@@ -11028,26 +11346,67 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             and int(self.num_speculative_tokens) == 5
             and _fr10_tree_choices_current == _fr10_cat3w_choices
         )
+        _fr10_is_cat6root = (
+            _fr10_active_decode_mode == "tree_mtp"
+            and int(self.num_speculative_tokens) == 6
+            and _fr10_tree_choices_current == _fr10_cat6root_choices
+        )
+        _fr10_is_cat10 = (
+            _fr10_active_decode_mode == "tree_mtp"
+            and int(self.num_speculative_tokens) == 10
+            and _fr10_tree_choices_current == _fr10_cat10_choices
+        )
+        # FR13_RESHAPE_333: exact-match guard for the 3-3-3 wide shape. Same
+        # num_speculative_tokens (9) as cat9, so the tree_choices comparison
+        # (NOT the count) is what disambiguates them -- the two choice lists
+        # are disjoint, so at most one of _fr10_is_caterpillar/_fr10_is_333 is
+        # ever True. Default cat9/cat3w/cat6root/cat10/chain* untouched.
+        _fr10_is_333 = (
+            _fr10_active_decode_mode == "tree_mtp"
+            and int(self.num_speculative_tokens) == 9
+            and _fr10_tree_choices_current == _fr10_threethree_choices
+        )
         # FR13_RESHAPE_DEPTH3: number of post-root spine forward steps and the
         # depth steps (1-based) at which the runner-up leaf is consumed. cat9
         # and chain5 keep the original depth-5 spine (4 steps, leaves at every
         # step for cat9). The depth-3 shapes run 2 steps; cat3w consumes the
         # d1 leaf at step 1 only (its (0,1) sibling); chain3 consumes none.
-        if _fr10_is_chain3 or _fr10_is_cat3w:
+        # FR13_RESHAPE_DEPTH5: cat6root and cat10 keep the depth-5 spine (4
+        # steps). cat6root consumes NO interior leaves (root sibling only);
+        # cat10 consumes the d1..d4 leaves like cat9 (root sibling extra).
+        # FR13_RESHAPE_333: 3-3-3 is depth-3 -> 2 post-root spine forward
+        # steps (loop steps 0,1 == depths 2,3), same as chain3/cat3w.
+        if _fr10_is_chain3 or _fr10_is_cat3w or _fr10_is_333:
             _fr10_spine_steps = 2
         else:
             _fr10_spine_steps = 4
-        if _fr10_is_spine_only or _fr10_is_chain3:
+        # FR13_RESHAPE_333: 3-3-3 consumes a rank-1 leaf at BOTH interior
+        # spine steps (loop steps 0,1 -> token_index+1 in {1,2}); it ALSO
+        # consumes a rank-2 leaf at the same steps (handled separately via
+        # _fr10_leaf2_steps below).
+        if _fr10_is_spine_only or _fr10_is_chain3 or _fr10_is_cat6root:
             _fr10_leaf_steps = frozenset()
         elif _fr10_is_cat3w:
             _fr10_leaf_steps = frozenset({1})
+        elif _fr10_is_333:
+            _fr10_leaf_steps = frozenset({1, 2})
         else:
             _fr10_leaf_steps = frozenset({1, 2, 3, 4})
+        # FR13_RESHAPE_333: the SECOND runner-up (rank-2 / top-3) interior
+        # leaf steps. ONLY 3-3-3 reads a child-rank-2 token; every other
+        # shape leaves this empty (so its topk stays k=2, no behavior change).
+        if _fr10_is_333:
+            _fr10_leaf2_steps = frozenset({1, 2})
+        else:
+            _fr10_leaf2_steps = frozenset()
         if (
             _fr10_is_caterpillar
             or _fr10_is_spine_only
             or _fr10_is_chain3
             or _fr10_is_cat3w
+            or _fr10_is_cat6root
+            or _fr10_is_cat10
+            or _fr10_is_333
         ):
             # FR10_CATERPILLAR_NATIVE_SPINE_TOP2: read-only drafter fix.
             # Run the native causal MTP spine unchanged for depth 5. At each
@@ -11155,18 +11514,39 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # (1,) root-sibling leaf. cat9/chain5/chain3 never consume the
             # root runner-up (every choice starts with 0), so it stays None
             # for them and the root top-2 is not read (no extra lm-head work).
+            # FR13_RESHAPE_DEPTH5: cat6root and cat10 ALSO carry the (1,) root
+            # sibling, so they read the rank-2 token from the SAME root logits
+            # (one topk, no extra lm-head read), identical to cat3w.
+            # FR13_RESHAPE_333: 3-3-3 carries BOTH a (1,) root rank-1 leaf and
+            # a (2,) root rank-2 leaf, so it reads topk(root_logits, 3) and
+            # consumes indices[:, 1] (rank-1) + indices[:, 2] (rank-2). The
+            # rank-2 token is a runner-up read from the SAME logits (no extra
+            # lm-head), never fed into a forward/recurrent state.
+            _fr10_consumes_root_leaf = (
+                _fr10_is_cat3w or _fr10_is_cat6root or _fr10_is_cat10
+                or _fr10_is_333
+            )
+            _fr10_consumes_root_leaf2 = _fr10_is_333
             _fr10_root_leaf_token = None
+            _fr10_root_leaf2_token = None
+            # FR13_RESHAPE_333: read 3 (top-3) only when the root rank-2 leaf
+            # is consumed; otherwise keep k=2 (byte-identical to legacy).
+            _fr10_root_topk_k = 3 if _fr10_consumes_root_leaf2 else 2
             if _fr13_single_logits:
                 # Root top-2 is verified unused for cat9/chain5/chain3 (no
                 # tree node consumes the root runner-up: every choice starts
-                # with 0). cat3w reads the rank-2 token from the SAME root
-                # logits tensor (one topk, no extra lm-head read).
+                # with 0). cat3w/cat6root/cat10 read the rank-2 token from the
+                # SAME root logits tensor (one topk, no extra lm-head read).
+                # 3-3-3 additionally reads rank-2 (index 2) from that topk.
                 _fr10_logits = self.model.compute_logits(sample_hidden_states)
                 draft_token_ids = _fr10_logits.argmax(dim=-1)
-                if _fr10_is_cat3w:
-                    _fr10_root_leaf_token = torch.topk(
-                        _fr10_logits, 2, dim=-1
-                    ).indices[:, 1]
+                if _fr10_consumes_root_leaf:
+                    _fr10_root_topk = torch.topk(
+                        _fr10_logits, _fr10_root_topk_k, dim=-1
+                    ).indices
+                    _fr10_root_leaf_token = _fr10_root_topk[:, 1]
+                    if _fr10_consumes_root_leaf2:
+                        _fr10_root_leaf2_token = _fr10_root_topk[:, 2]
                 if _fr13_selfcheck:
                     _fr13_sc_check(
                         "root",
@@ -11175,12 +11555,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
             else:
                 _fr10_logits = self.model.compute_logits(sample_hidden_states)
-                _fr10_top2 = torch.topk(_fr10_logits, 2, dim=-1).indices
+                _fr10_top2 = torch.topk(
+                    _fr10_logits, _fr10_root_topk_k, dim=-1
+                ).indices
                 draft_token_ids = self._greedy_sample(sample_hidden_states)
-                if _fr10_is_cat3w:
+                if _fr10_consumes_root_leaf:
                     _fr10_root_leaf_token = _fr10_top2[:, 1]
+                    if _fr10_consumes_root_leaf2:
+                        _fr10_root_leaf2_token = _fr10_top2[:, 2]
             _fr10_spine_tokens = [draft_token_ids]
             _fr10_leaf_tokens = []
+            # FR13_RESHAPE_333: parallel list of the rank-2 (top-3) interior
+            # leaves, collected only at _fr10_leaf2_steps (3-3-3 only).
+            _fr10_leaf2_tokens = []
 
             # FR13_CHASE_DIAG (superset-chase Step 1; ONE flag, default OFF,
             # inert): (i) per-event INTEGER record {token_indices_to_sample -
@@ -11486,24 +11873,45 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # step), so this is byte-identical to the legacy
                     # "not spine_only" branch; cat3w = {1} (d1 (0,1) only);
                     # chain5/chain3 = {} (no leaves).
+                    # FR13_RESHAPE_333: this step is in BOTH _fr10_leaf_steps
+                    # and _fr10_leaf2_steps ({1,2}); read top-3 ONCE and pack
+                    # rank-1 (index 1) + rank-2 (index 2). The topk widens to
+                    # k=3 ONLY for 3-3-3 (every other shape keeps k=2 == the
+                    # legacy byte-identical read).
                     if (token_index + 1) in _fr10_leaf_steps:
+                        _fr10_step_topk_k = (
+                            3 if (token_index + 1) in _fr10_leaf2_steps else 2
+                        )
                         _fr10_step_top2 = torch.topk(
-                            _fr10_step_logits, 2, dim=-1
+                            _fr10_step_logits, _fr10_step_topk_k, dim=-1
                         ).indices
                         _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
+                        if (token_index + 1) in _fr10_leaf2_steps:
+                            _fr10_leaf2_tokens.append(_fr10_step_top2[:, 2])
                 else:
                     _fr10_step_logits = self.model.compute_logits(
                         last_hidden_states[:batch_size]
                     )
-                    _fr10_step_top2 = torch.topk(_fr10_step_logits, 2, dim=-1).indices
+                    # FR13_RESHAPE_333: widen the legacy topk to k=3 only when
+                    # this step packs a rank-2 leaf; otherwise keep k=2 (op
+                    # order unchanged vs legacy cat9: topk before greedy_sample).
+                    _fr10_step_topk_k = (
+                        3 if (token_index + 1) in _fr10_leaf2_steps else 2
+                    )
+                    _fr10_step_top2 = torch.topk(
+                        _fr10_step_logits, _fr10_step_topk_k, dim=-1
+                    ).indices
                     draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
                     _fr10_spine_tokens.append(draft_token_ids)
-                    # FR13_RESHAPE_DEPTH3: op order unchanged vs legacy cat9
-                    # (top2 before greedy_sample); only the leaf append is
-                    # depth-gated. cat9 = {1,2,3,4} => appends every step =
-                    # byte-identical; cat3w = {1}; chain shapes = {}.
+                    # FR13_RESHAPE_DEPTH3: only the leaf append is depth-gated.
+                    # cat9 = {1,2,3,4} => appends every step = byte-identical;
+                    # cat3w = {1}; chain shapes = {}.
+                    # FR13_RESHAPE_333: rank-1 at _fr10_leaf_steps, rank-2 at
+                    # _fr10_leaf2_steps (both {1,2} for 3-3-3).
                     if (token_index + 1) in _fr10_leaf_steps:
                         _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
+                        if (token_index + 1) in _fr10_leaf2_steps:
+                            _fr10_leaf2_tokens.append(_fr10_step_top2[:, 2])
 
             if _fr10_is_spine_only or _fr10_is_chain3:
                 # FR13_RESHAPE_DEPTH3 chain3 = pure depth-3 spine = the same
@@ -11533,6 +11941,117 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr10_spine_tokens[1],
                         _fr10_leaf_tokens[0],
                         _fr10_spine_tokens[2],
+                    ],
+                    dim=1,
+                )
+            elif _fr10_is_cat6root:
+                # FR13_RESHAPE_DEPTH5 cat6root: 6-node flat order = vLLM
+                # sorted (len, path) tree order. Node id (0-based slot) ->
+                # path:
+                #   0 (0,)         spine0 (root draft)
+                #   1 (1,)         ROOT_LEAF (root runner-up)
+                #   2 (0,0)        spine1 (loop step 0)
+                #   3 (0,0,0)      spine2 (loop step 1)
+                #   4 (0,0,0,0)    spine3 (loop step 2)
+                #   5 (0,0,0,0,0)  spine4 (loop step 3)
+                # No interior leaves (_fr10_leaf_steps == {}); the only
+                # off-spine node is the root sibling.
+                if _fr10_root_leaf_token is None:
+                    raise RuntimeError(
+                        "FR13_RESHAPE_DEPTH5 cat6root engaged but root "
+                        "runner-up token was not captured (drafter packing "
+                        "would be vacuous)"
+                    )
+                _fr10_packed = torch.stack(
+                    [
+                        _fr10_spine_tokens[0],
+                        _fr10_root_leaf_token,
+                        _fr10_spine_tokens[1],
+                        _fr10_spine_tokens[2],
+                        _fr10_spine_tokens[3],
+                        _fr10_spine_tokens[4],
+                    ],
+                    dim=1,
+                )
+            elif _fr10_is_cat10:
+                # FR13_RESHAPE_DEPTH5 cat10: 10-node flat order = vLLM sorted
+                # (len, path) tree order = cat9 with the (1,) root sibling
+                # inserted at slot 1. Node id (0-based slot) -> path:
+                #   0 (0,)         spine0 (root draft)
+                #   1 (1,)         ROOT_LEAF (root runner-up)
+                #   2 (0,0)        spine1 (loop step 0)
+                #   3 (0,1)        leaf0  (d1 runner-up, step 0 top2[:,1])
+                #   4 (0,0,0)      spine2 (loop step 1)
+                #   5 (0,0,1)      leaf1  (d2 runner-up, step 1 top2[:,1])
+                #   6 (0,0,0,0)    spine3 (loop step 2)
+                #   7 (0,0,0,1)    leaf2  (d3 runner-up, step 2 top2[:,1])
+                #   8 (0,0,0,0,0)  spine4 (loop step 3)
+                #   9 (0,0,0,0,1)  leaf3  (d4 runner-up, step 3 top2[:,1])
+                if _fr10_root_leaf_token is None:
+                    raise RuntimeError(
+                        "FR13_RESHAPE_DEPTH5 cat10 engaged but root runner-up "
+                        "token was not captured (drafter packing would be "
+                        "vacuous)"
+                    )
+                _fr10_packed = torch.stack(
+                    [
+                        _fr10_spine_tokens[0],
+                        _fr10_root_leaf_token,
+                        _fr10_spine_tokens[1],
+                        _fr10_leaf_tokens[0],
+                        _fr10_spine_tokens[2],
+                        _fr10_leaf_tokens[1],
+                        _fr10_spine_tokens[3],
+                        _fr10_leaf_tokens[2],
+                        _fr10_spine_tokens[4],
+                        _fr10_leaf_tokens[3],
+                    ],
+                    dim=1,
+                )
+            elif _fr10_is_333:
+                # FR13_RESHAPE_333: 9-node flat order = vLLM sorted (len, path)
+                # tree order. 3 candidates per depth (spine, rank-1, rank-2).
+                # Node id (0-based slot) -> path:
+                #   0 (0,)     spine0 (root draft = argmax)
+                #   1 (1,)     ROOT_LEAF  (root rank-1, root topk[:,1])
+                #   2 (2,)     ROOT_LEAF2 (root rank-2, root topk[:,2])
+                #   3 (0,0)    spine1 (loop step 0 argmax)
+                #   4 (0,1)    leaf0  (d2 rank-1, step 0 topk[:,1])
+                #   5 (0,2)    leaf2_0 (d2 rank-2, step 0 topk[:,2])
+                #   6 (0,0,0)  spine2 (loop step 1 argmax)
+                #   7 (0,0,1)  leaf1  (d3 rank-1, step 1 topk[:,1])
+                #   8 (0,0,2)  leaf2_1 (d3 rank-2, step 1 topk[:,2])
+                # _fr10_leaf_tokens = [d2_rank1, d3_rank1] (steps {1,2});
+                # _fr10_leaf2_tokens = [d2_rank2, d3_rank2] (steps {1,2}).
+                if (
+                    _fr10_root_leaf_token is None
+                    or _fr10_root_leaf2_token is None
+                ):
+                    raise RuntimeError(
+                        "FR13_RESHAPE_333 engaged but root runner-up tokens "
+                        "(rank-1/rank-2) were not captured (drafter packing "
+                        "would be vacuous)"
+                    )
+                if len(_fr10_leaf_tokens) != 2 or len(_fr10_leaf2_tokens) != 2:
+                    raise RuntimeError(
+                        "FR13_RESHAPE_333 engaged but interior leaf lists are "
+                        "the wrong length (rank-1="
+                        + str(len(_fr10_leaf_tokens))
+                        + " rank-2="
+                        + str(len(_fr10_leaf2_tokens))
+                        + ", expected 2 each)"
+                    )
+                _fr10_packed = torch.stack(
+                    [
+                        _fr10_spine_tokens[0],
+                        _fr10_root_leaf_token,
+                        _fr10_root_leaf2_token,
+                        _fr10_spine_tokens[1],
+                        _fr10_leaf_tokens[0],
+                        _fr10_leaf2_tokens[0],
+                        _fr10_spine_tokens[2],
+                        _fr10_leaf_tokens[1],
+                        _fr10_leaf2_tokens[1],
                     ],
                     dim=1,
                 )
@@ -11578,6 +12097,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             "shape": (
                                 "chain3" if _fr10_is_chain3
                                 else "cat3w" if _fr10_is_cat3w
+                                else "cat6root" if _fr10_is_cat6root
+                                else "cat10" if _fr10_is_cat10
+                                else "333" if _fr10_is_333
                                 else "chain5" if _fr10_is_spine_only
                                 else "cat9"
                             ),
@@ -11589,6 +12111,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 []
                                 if not _fr10_leaf_tokens
                                 else torch.stack(_fr10_leaf_tokens, dim=1).detach().cpu().tolist()
+                            ),
+                            # FR13_RESHAPE_333: rank-2 (child-rank-2) leaves;
+                            # empty for every shape except 3-3-3.
+                            "leaves2": (
+                                []
+                                if not _fr10_leaf2_tokens
+                                else torch.stack(_fr10_leaf2_tokens, dim=1).detach().cpu().tolist()
+                            ),
+                            "root_leaf2": (
+                                None
+                                if _fr10_root_leaf2_token is None
+                                else _fr10_root_leaf2_token.detach().cpu().tolist()
                             ),
                         }) + chr(10)
                     )
@@ -11998,6 +12532,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr10_is_spine_only
                 or _fr10_is_chain3
                 or _fr10_is_cat3w
+                or _fr10_is_cat6root
+                or _fr10_is_cat10
+                or _fr10_is_333
             )
             and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
         ):
@@ -14162,6 +14699,372 @@ _fr13_install_torch_det_warn()
     return True
 
 
+def _patch_gpu_model_runner_sfwd_gpu_timer() -> bool:
+    """FR13_SFWD_GPU_TIMER (DEFAULT-OFF): a PREFILL-INDEPENDENT decode-forward
+    GPU-time counter.
+
+    WHY: the deployment s/fwd basis d(request_decode_time_seconds_sum)/
+    d(spec_decode_num_drafts_total) is a WALL span. vLLM defines
+    request_decode_time = last_token_ts - first_token_ts (v1/metrics/stats.py
+    "preemptions during decode are included"), so at B>1 it absorbs co-resident
+    chunked-prefill that the scheduler interleaves into the decode window, plus
+    any idle gaps between this stream's steps. That confounds the per-forward
+    decode-kernel cost with the workload's prefill mix.
+
+    WHAT: time ONLY the decode model-forward (self._model_forward = the tree
+    TREE_ATTN / MTP verify forward over the spec-verify rows, the GEMV-bound
+    decode cost that differs native-vs-tree) on PURE-DECODE steps, with async
+    cuda events, and accumulate into a process Counter exposed on /metrics:
+        vllm:fr13_decode_forward_gpu_seconds_total
+    The deploy-speed reducer then reads
+        s_per_fwd_gpu = d(fr13_decode_forward_gpu_seconds_total) /
+                        d(spec_decode_num_drafts_total)
+    which is the actual decode-kernel time per spec event, EXCLUDING interleaved
+    prefill and idle.
+
+    PURE-DECODE ISOLATION (excludes prefill + mixed steps): a step is pure
+    decode iff every scheduled request was scheduled exactly its spec-verify
+    width and nothing is prefilling -- vLLM's own `_is_uniform_decode`
+    predicate: max_num_scheduled_tokens == self.uniform_decode_query_len (=
+    1 + num_spec_tokens) AND num_tokens == max_num_scheduled_tokens * num_reqs.
+    A prefilling request has query_len > uniform_decode_query_len, and a mixed
+    prefill+decode batch breaks the num_tokens == width*num_reqs equality, so
+    both are excluded -- exactly num_prefill_tokens==0 in the spec-decode regime.
+    (The locals max_num_scheduled_tokens / num_tokens_unpadded / num_reqs are all
+    in scope at the forward call site in execute_model.)
+
+    LOW OVERHEAD (must NOT change the speed it measures): events are recorded
+    ASYNC on the current (forward) stream -- start before _model_forward, stop
+    after. We NEVER torch.cuda.synchronize() per step. The (start, stop) pair is
+    appended to a deque; elapsed_time (which would block on an incomplete stop)
+    is called ONLY on pairs whose stop.query() is already True (a non-blocking
+    completion poll). By the next decode step the prior forward is long
+    complete, so the drain never stalls the live decode stream. A bounded
+    fallback caps the deque so a never-completing tail cannot leak. The ONLY
+    synchronize is at teardown (atexit) where decode is already stopped.
+
+    EXPOSURE: a prometheus_client Counter in the worker process. vLLM runs
+    prometheus in MULTIPROCESS mode (v1/metrics/prometheus.py
+    setup_multiprocess_prometheus -> PROMETHEUS_MULTIPROC_DIR; the /metrics
+    endpoint aggregates every process via MultiProcessCollector). The worker
+    inherits PROMETHEUS_MULTIPROC_DIR, so a Counter created here is summed into
+    /metrics and read by the same scrape the SWE per-task brackets + cmd_speed
+    already use -- a single read at teardown/scrape, NO per-step DtoH stall.
+    A JSON sidecar (FR13_SFWD_GPU_TIMER_JSON) is ALSO dumped at atexit as a
+    registry-independent cross-check.
+
+    FLAG-GATE: env FR13_SFWD_GPU_TIMER. DEFAULT OFF => the begin/end helpers are
+    no-ops, NO events are created, NO counter registered => byte-identical to
+    the unpatched forward path.
+    """
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_SFWD_GPU_TIMER"
+    if sentinel in text:
+        return False
+
+    # --- 1) module-level installer (the timer + Counter + atexit dump) -------
+    module_block = '''
+
+# FR13_SFWD_GPU_TIMER: prefill-independent decode-forward GPU-time counter.
+# Inert unless FR13_SFWD_GPU_TIMER=1. See the patch docstring for the design.
+class _Fr13SfwdGpuTimer:
+    """Async-cuda-event accumulator of pure-decode model-forward GPU seconds.
+
+    Begin/end record cuda events on the current stream WITHOUT synchronizing.
+    Completed (start, stop) pairs are drained (elapsed_time, ms->s) into a
+    prometheus Counter that vLLM's multiprocess /metrics aggregates. The single
+    blocking synchronize happens only at teardown."""
+
+    def __init__(self):
+        import collections as _c
+        self._enabled = (
+            __import__("os").environ.get("FR13_SFWD_GPU_TIMER", "0") == "1"
+        )
+        self._pending = _c.deque()
+        # bound: a pair whose stop never completes cannot leak unboundedly.
+        self._max_pending = int(
+            __import__("os").environ.get("FR13_SFWD_GPU_TIMER_MAXPENDING", "256")
+        )
+        self._accum_s = 0.0          # local mirror (for the JSON sidecar)
+        self._n_steps = 0            # pure-decode steps timed
+        # spec events (drafts) processed in the GPU-TIMED pure-decode steps =
+        # sum(num_reqs over timed steps). This is the CORRECT denominator for
+        # s/fwd_gpu: at B>1, MIXED (prefill+decode) steps are excluded from the
+        # GPU numerator, so dividing by the engine's TOTAL drafts (which include
+        # mixed-step drafts) would bias s/fwd_gpu low. Dividing the timed GPU
+        # seconds by the drafts that occurred IN those timed steps keeps the
+        # per-spec-event decode-kernel time prefill-independent.
+        self._n_drafts = 0
+        self._counter = None
+        self._installed_atexit = False
+        # throttled incremental sidecar dump (prometheus-independent live channel)
+        import time as _time
+        self._dump_period_s = float(
+            __import__("os").environ.get("FR13_SFWD_GPU_TIMER_DUMP_S", "1.0")
+        )
+        self._last_dump_t = _time.monotonic()
+        if self._enabled:
+            self._install_counter()
+            self._install_atexit()
+
+    def _install_counter(self):
+        try:
+            from prometheus_client import Counter as _C
+            # Counter name -> exposes vllm:fr13_decode_forward_gpu_seconds_total
+            # on /metrics (prometheus appends _total). Multiprocess-mode
+            # Counters sum across processes, so the worker's value reaches the
+            # API server's /metrics scrape.
+            self._counter = _C(
+                "vllm:fr13_decode_forward_gpu_seconds",
+                "FR13: GPU-active time in the pure-decode model-forward "
+                "(verify forward), summed over decode steps; prefill-"
+                "independent decode-kernel time for s_per_fwd_gpu.",
+            )
+        except Exception as _exc:  # noqa: BLE001
+            # already-registered (re-import) or no prometheus: fall back to the
+            # JSON sidecar only; never crash the worker for a diagnostic.
+            self._counter = None
+
+    def _install_atexit(self):
+        import atexit as _atexit
+        _atexit.register(self._teardown)
+        self._installed_atexit = True
+
+    def begin(self, num_reqs=1):
+        """Return a fresh start cuda-event (recorded on the current stream), or
+        None when disabled. Called only on pure-decode steps. num_reqs = the
+        spec events (drafts) this timed step will process (the s/fwd_gpu
+        denominator)."""
+        if not self._enabled:
+            return None
+        import torch as _t
+        if not _t.cuda.is_available():
+            return None
+        ev = _t.cuda.Event(enable_timing=True)
+        ev.record()  # async on the current (forward) stream
+        return (ev, int(max(1, num_reqs)))
+
+    def end(self, start):
+        """Record the stop event (async), enqueue the pair, and drain any pairs
+        whose stop has ALREADY completed (non-blocking query) into the counter.
+        No per-step synchronize."""
+        if start is None or not self._enabled:
+            return
+        start_ev, n_reqs = start
+        import torch as _t
+        stop_ev = _t.cuda.Event(enable_timing=True)
+        stop_ev.record()  # async on the current (forward) stream
+        self._pending.append((start_ev, stop_ev, n_reqs))
+        self._drain(blocking=False)
+        # bound the backlog: if we ever exceed the cap (should not at steady
+        # B<=4 decode), force a drain of the OLDEST pair (it is certainly done).
+        if len(self._pending) > self._max_pending:
+            self._drain(blocking=True)
+
+    def _drain(self, blocking):
+        # Pop from the FRONT while the stop event is complete. query() is a
+        # non-blocking completion poll; we never elapsed_time() an incomplete
+        # stop (that would block the live decode stream).
+        while self._pending:
+            start_ev, stop_ev, n_reqs = self._pending[0]
+            try:
+                done = stop_ev.query()
+            except Exception:  # noqa: BLE001
+                self._pending.popleft()
+                continue
+            if not done and not blocking:
+                break
+            self._pending.popleft()
+            try:
+                if blocking and not done:
+                    stop_ev.synchronize()  # teardown-only path
+                ms = start_ev.elapsed_time(stop_ev)  # blocks only if complete
+                secs = float(ms) / 1000.0
+                self._accum_s += secs
+                self._n_steps += 1
+                self._n_drafts += int(n_reqs)
+                if self._counter is not None:
+                    self._counter.inc(secs)
+            except Exception:  # noqa: BLE001
+                continue
+        # Incremental sidecar write (throttled): vLLM only calls
+        # setup_multiprocess_prometheus() when api_server_count>1, so in the
+        # single-API-server deployment the worker's Counter is NOT aggregated
+        # into the API-server /metrics (separate process, no shared
+        # PROMETHEUS_MULTIPROC_DIR). The JSON sidecar is therefore the canonical,
+        # prometheus-independent live channel the reducer reads. We rewrite it at
+        # most every FR13_SFWD_GPU_TIMER_DUMP_S seconds (monotonic clock, default
+        # 1.0) so windowed deltas are pollable WITHOUT a per-step file write.
+        self._maybe_dump_json()
+
+    def _maybe_dump_json(self):
+        import time as _time
+        now = _time.monotonic()
+        period = self._dump_period_s
+        if (now - self._last_dump_t) < period:
+            return
+        self._last_dump_t = now
+        self._dump_json(final=False)
+
+    def _dump_json(self, final):
+        out = __import__("os").environ.get("FR13_SFWD_GPU_TIMER_JSON")
+        if not out:
+            return
+        try:
+            import json as _json
+            payload = {
+                "schema": "fr13.sfwd_gpu_timer.v1",
+                "pid": __import__("os").getpid(),
+                "final": bool(final),
+                "decode_forward_gpu_seconds": self._accum_s,
+                "n_pure_decode_steps_timed": self._n_steps,
+                # drafts (spec events) processed IN the timed pure-decode steps =
+                # the matching s/fwd_gpu denominator. At B=1 == n_steps; at B>1
+                # == sum(num_reqs) so MIXED-step drafts are not counted against
+                # the pure-decode GPU numerator.
+                "n_drafts_in_timed_steps": self._n_drafts,
+                "metric_name": "vllm:fr13_decode_forward_gpu_seconds_total",
+                "note": (
+                    "pure-decode (uniform_decode) model-forward GPU seconds; "
+                    "prefill + mixed + idle EXCLUDED; async cuda events, single "
+                    "synchronize at teardown. Cumulative running total; the "
+                    "reducer takes a delta across a request window."
+                ),
+            }
+            # per-pid suffix so multiple workers do not clobber one file.
+            _p = out
+            if "{pid}" in out:
+                _p = out.replace("{pid}", str(__import__("os").getpid()))
+            else:
+                _p = out + "." + str(__import__("os").getpid())
+            _pp = __import__("pathlib").Path(_p)
+            _pp.parent.mkdir(parents=True, exist_ok=True)
+            # atomic-ish: write to a temp then replace so a poller never reads a
+            # half-written file.
+            _tmp = _pp.with_suffix(_pp.suffix + ".tmp")
+            _tmp.write_text(
+                _json.dumps(payload, indent=2) + "\\n", encoding="utf-8"
+            )
+            _tmp.replace(_pp)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _teardown(self):
+        # final flush: decode is stopped here, so a blocking drain is safe and
+        # is the ONLY synchronize this timer ever does.
+        try:
+            import torch as _t
+            if _t.cuda.is_available():
+                _t.cuda.synchronize()
+        except Exception:  # noqa: BLE001
+            pass
+        self._drain(blocking=True)
+        self._dump_json(final=True)
+
+
+_FR13_SFWD_GPU_TIMER = None
+
+
+def _fr13_sfwd_timer():
+    # lazy singleton: built on first pure-decode step in the worker process
+    # (after PROMETHEUS_MULTIPROC_DIR is set), so the Counter lands in the
+    # multiprocess registry.
+    global _FR13_SFWD_GPU_TIMER
+    if _FR13_SFWD_GPU_TIMER is None:
+        _FR13_SFWD_GPU_TIMER = _Fr13SfwdGpuTimer()
+    return _FR13_SFWD_GPU_TIMER
+
+
+def _fr13_sfwd_is_pure_decode(max_num_scheduled_tokens, num_tokens, num_reqs,
+                              uniform_decode_query_len):
+    """vLLM `_is_uniform_decode`: pure decode iff every request was scheduled
+    exactly the spec-verify width (no prefill, no mixed). num_prefill_tokens==0
+    in the spec-decode regime."""
+    try:
+        return bool(
+            (max_num_scheduled_tokens == uniform_decode_query_len)
+            and (num_tokens == max_num_scheduled_tokens * max(1, num_reqs))
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _fr13_sfwd_begin(max_num_scheduled_tokens, num_tokens, num_reqs,
+                     uniform_decode_query_len):
+    """Return a start event if FR13_SFWD_GPU_TIMER=1 AND this is a pure-decode
+    step, else None (no event, no cost)."""
+    if __import__("os").environ.get("FR13_SFWD_GPU_TIMER", "0") != "1":
+        return None
+    if not _fr13_sfwd_is_pure_decode(
+        max_num_scheduled_tokens, num_tokens, num_reqs, uniform_decode_query_len
+    ):
+        return None
+    try:
+        return _fr13_sfwd_timer().begin(num_reqs=num_reqs)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _fr13_sfwd_end(start_ev):
+    if start_ev is None:
+        return
+    try:
+        _fr13_sfwd_timer().end(start_ev)
+    except Exception:  # noqa: BLE001
+        pass
+'''
+    text = text + module_block
+
+    # --- 2) inline: wrap the DECODE model-forward with begin/end -------------
+    begin_anchor = (
+        "        defer_kv_connector_finalize = self.speculative_config is not None\n"
+        "        with (\n"
+        "            set_forward_context(\n"
+    )
+    begin_inject = (
+        "        defer_kv_connector_finalize = self.speculative_config is not None\n"
+        "        # FR13_SFWD_GPU_TIMER: time the PURE-DECODE verify forward only "
+        "(async cuda events; no per-step sync; inert unless the flag is on).\n"
+        "        _fr13_sfwd_ev = _fr13_sfwd_begin(\n"
+        "            max_num_scheduled_tokens,\n"
+        "            num_tokens_unpadded,\n"
+        "            num_reqs,\n"
+        "            self.uniform_decode_query_len,\n"
+        "        )\n"
+        "        with (\n"
+        "            set_forward_context(\n"
+    )
+    if begin_anchor not in text:
+        raise RuntimeError(
+            "FR13_SFWD_GPU_TIMER: forward begin anchor "
+            "(set_forward_context block) not found in gpu_model_runner.py"
+        )
+    text = text.replace(begin_anchor, begin_inject, 1)
+
+    end_anchor = (
+        "            )\n"
+        "\n"
+        "        with record_function_or_nullcontext(\"gpu_model_runner: postprocess\"):\n"
+    )
+    end_inject = (
+        "            )\n"
+        "        # FR13_SFWD_GPU_TIMER: record the stop event + drain completed "
+        "pairs into the /metrics counter.\n"
+        "        _fr13_sfwd_end(_fr13_sfwd_ev)\n"
+        "\n"
+        "        with record_function_or_nullcontext(\"gpu_model_runner: postprocess\"):\n"
+    )
+    if end_anchor not in text:
+        raise RuntimeError(
+            "FR13_SFWD_GPU_TIMER: forward end anchor "
+            "(postprocess record_function) not found in gpu_model_runner.py"
+        )
+    text = text.replace(end_anchor, end_inject, 1)
+
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_fp8_utils_gb10_gemv_cfg() -> bool:
     """OPT-A: GB10/sm_121-tuned fp8 w8a8 block-scaled-mm decode config.
 
@@ -14278,7 +15181,18 @@ def _patch_rejection_sampler_gpu_committer() -> bool:
     mirror).
     """
     text = REJECTION_SAMPLER_PATH.read_text()
-    sentinel = "# FR13_GPU_COMMITTER"
+    # UNIQUE idempotency sentinel. It MUST be (a) injected by THIS patcher into
+    # the loop-skip region it adds AND (b) checked here, AND (c) NOT a substring
+    # of anything the tree_lcp helper injects. The old sentinel "# FR13_GPU_
+    # COMMITTER" COLLIDED with the tree_lcp doc comment "# FR13_GPU_COMMITTER)."
+    # (helper line ~6065): tree_lcp runs FIRST, so by the time this patcher read
+    # the file the bare "# FR13_GPU_COMMITTER" was already present -> this guard
+    # mis-fired "already patched" and BAILED, so the loop-skip
+    # `if _fr13_gpu_committer:` was never injected and the legacy loop ran on the
+    # synckill-nulled parents_cpu -> EngineDeadError. The new sentinel ends in a
+    # token ("_LOOPSKIP_SOT") that does NOT appear anywhere in the tree_lcp
+    # helper, so the guard now only matches a genuine prior gpu_committer apply.
+    sentinel = "# FR13_GPU_COMMITTER_LOOPSKIP_SOT"
     if sentinel in text:
         return False
     if "def _lumo_tree_path_lcp_max_greedy_sample(" not in text:
@@ -14313,13 +15227,18 @@ def _patch_rejection_sampler_gpu_committer() -> bool:
         "    " + sentinel + " (OPT-1): flag-gated GPU-resident committer.\n"
         "    # DEFAULT-OFF. flag-off => _fr13_gpu_commit_counts IS counts, so the\n"
         "    # legacy per-node Python loop below runs byte-for-byte unchanged.\n"
-        "    _fr13_gpu_committer = (\n"
-        "        __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'\n"
-        "        and not _fr13_force_spine_commit\n"
-        "        and not _fr13_cag_active\n"
-        "        and not _fr13_fork_margin_active\n"
-        "        and _fr13_bonus_self\n"
-        "    )\n"
+        "    _fr13_dev_out = None  # G2.b device->device writeback source (synckill)\n"
+        "    # SINGLE SOURCE OF TRUTH: _fr13_gpu_committer was computed ONCE at the\n"
+        "    # top of this function (OPT-1 G2). The synckill null guard references\n"
+        "    # the SAME variable, so the null can NEVER fire while this loop-skip\n"
+        "    # is False. Do NOT recompute it here (the prior duplicate diverged\n"
+        "    # from the runtime _fr13_bonus_self/_fr13_cag_active at B=4).\n"
+        "    if '_fr13_gpu_committer' not in dir():\n"
+        "        raise RuntimeError(\n"
+        "            'FR13_GPU_COMMITTER: single-source predicate _fr13_gpu_committer '\n"
+        "            'missing at the loop-skip (top-of-function computation lost) -- '\n"
+        "            'class 9 fail-loud, refusing to recompute a drifting duplicate.'\n"
+        "        )\n"
         "    _fr13_gpu_commit_counts = counts\n"
         "    if _fr13_gpu_committer:\n"
         "        try:\n"
@@ -14336,14 +15255,52 @@ def _patch_rejection_sampler_gpu_committer() -> bool:
         "                _fr13_km = _fr13_ilu.module_from_spec(_fr13_spec)\n"
         "                _fr13_spec.loader.exec_module(_fr13_km)\n"
         "                __import__('sys').modules['_fr13_gpu_committer_kernel'] = _fr13_km\n"
-        "            (\n"
-        "                out_rows, accepted_rows, accepted_lens,\n"
-        "                accepted_node_paths, accepted_token_rows,\n"
-        "            ) = _fr13_km.fr13_gpu_committer_full(\n"
-        "                parents_cpu, drafts_cpu, parent_targets_cpu,\n"
-        "                self_targets_cpu, bonus_targets_cpu, counts,\n"
-        "                max_spec_len,\n"
-        "            )\n"
+        "            if _FR13_COMMITTER_SYNCKILL:\n"
+        "                " + sentinel + "_SYNCKILL (OPT-1 G2): device-resident\n"
+        "                # committer reading the DEVICE source tensors (NO host\n"
+        "                # committer-input list = the :6761 sync is killed) +\n"
+        "                # side-stream output readback (NO inline .cpu()). The\n"
+        "                # host lists are materialised LAZILY (event.synchronize\n"
+        "                # only on first access); the kernel device outputs are\n"
+        "                # the SAME-STEP serving writeback source. Byte-identical\n"
+        "                # to fr13_gpu_committer_full for every input (pure-int).\n"
+        "                _fr13_dev_out, _fr13_materialise = (\n"
+        "                    _fr13_km.fr13_gpu_committer_device_full(\n"
+        "                        tree_parent_indices, draft_token_ids,\n"
+        "                        parent_token_ids, self_token_ids,\n"
+        "                        bonus_token_ids, counts, max_spec_len,\n"
+        "                    )\n"
+        "                )\n"
+        "                if not _FR13_COMMITTER_SYNCKILL_NEEDLE_DONE:\n"
+        "                    globals()['_FR13_COMMITTER_SYNCKILL_NEEDLE_DONE'] = True\n"
+        "                    try:\n"
+        "                        from vllm.logger import init_logger as _fr13_sk_il\n"
+        "                        _fr13_sk_il('vllm.fr13_committer_synckill').info(\n"
+        "                            'FR13_COMMITTER_SYNCKILL engaged: device-arm '\n"
+        "                            'committer (no :6761 committer-input sync), '\n"
+        "                            'side-stream output readback, n_req=%d'\n"
+        "                            % len(counts)\n"
+        "                        )\n"
+        "                    except Exception:\n"
+        "                        print('FR13_COMMITTER_SYNCKILL engaged', flush=True)\n"
+        "                # Lazy host materialisation (the run-ahead window is\n"
+        "                # between device_full() above and this first access; on\n"
+        "                # the pure serving path the host lists feed the replay\n"
+        "                # req-key dict + diagnostics, NOT the same-step writeback\n"
+        "                # which reads _fr13_dev_out device->device).\n"
+        "                (\n"
+        "                    out_rows, accepted_rows, accepted_lens,\n"
+        "                    accepted_node_paths, accepted_token_rows,\n"
+        "                ) = _fr13_materialise()\n"
+        "            else:\n"
+        "                (\n"
+        "                    out_rows, accepted_rows, accepted_lens,\n"
+        "                    accepted_node_paths, accepted_token_rows,\n"
+        "                ) = _fr13_km.fr13_gpu_committer_full(\n"
+        "                    parents_cpu, drafts_cpu, parent_targets_cpu,\n"
+        "                    self_targets_cpu, bonus_targets_cpu, counts,\n"
+        "                    max_spec_len,\n"
+        "                )\n"
         "        except Exception as _fr13_gco_exc:\n"
         "            raise RuntimeError(\n"
         "                'FR13_GPU_COMMITTER failed (no silent fallback, class 9): '\n"
@@ -14454,6 +15411,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_draft_reqkey()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_boundary_tap_d()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sfwd_gpu_timer()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
