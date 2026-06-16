@@ -26,6 +26,23 @@ amortizes the ~B-invariant HBM read). depth-matched bar for depth-3 trees (3-3-3
 
 native E5: swerc=0, wall=2146s, 142 pair-dumps, resolved_rate=0.25.
 
+### STATUS (this session)
+Native bars E5 + E3 CAPTURED + COMMITTED (CLEAN offloaded B=4). E4 + all candidates +
+cat9-contam + ON-mode (lossless + temp-0.6 drift) running AUTONOMOUSLY:
+- speed driver pid 1568868: E4 -> cat9 -> OPT-1 -> cat6root -> cat10 -> 3-3-3 -> cat9-contam
+- finalizer pid 1586106 (scripts/fr13_b4_finalizer.sh): waits for the driver, dumps all
+  speed bars, runs ON-mode for the decisive depth-5 pair (cat9 vs native-E5):
+  reduce pair-dump -> recurrent p oracle (temp-0 flip) + capture-q-deploy q (temp-0.6 TV)
+  -> deploy-lossless (Wilson CI flip vs native floor) + deploy-temp06-drift (TV p95).
+Each arm ~35-40 min (codex retry-on-empty-patch doubles the wall); full campaign ~5-6h.
+Results land in output/fr13_bigdenom_swe/<arm>/deploy_speed_b4.json and
+output/fr13_b4_onmode/. Monitor delivers each arm's deploy-speed incrementally.
+
+KEY FINDING SO FAR (native bars, B=4 CLEAN): deeper native MTP is FASTER at B=4.
+E5 (6.67 TPS, accept 3.18) > E3 (5.95 TPS, accept 2.35). The ~B-invariant HBM weight
+read (98.6ms floor) is amortized over MORE committed tokens at higher N, so the
+depth-matched BAR for depth-5 trees (cat9/cat6root/cat10) is the demanding E5 6.67 TPS.
+
 ## CANDIDATE ARMS (B=4, CLEAN) — depth-matched
 
 | arm | depth->bar | s/fwd | accept/event | committed | ms/tok | derived TPS | vs bar TPS |
