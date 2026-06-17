@@ -355,6 +355,17 @@
     color: var(--muted);
     font-size: 14px;
   }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
   svg {
     display: block;
     max-width: 100%;
@@ -395,6 +406,131 @@
   }
   .diagram .dash {
     stroke-dasharray: 6 5;
+  }
+
+  .flow-figure {
+    clear: both;
+    background:
+      linear-gradient(180deg, rgba(139, 211, 221, 0.035), transparent 36%),
+      #0c0c0c;
+    overflow-x: auto;
+  }
+  .flow-figure.is-paused .flow-edge,
+  .flow-figure.is-paused .flow-node,
+  .flow-figure.is-paused .bias-on,
+  .flow-figure.is-paused .scan-window {
+    animation-play-state: paused;
+  }
+  .flow-control {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: #121212;
+    color: var(--text);
+    font: 800 12px var(--mono);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1), color 160ms cubic-bezier(0.25, 1, 0.5, 1), background 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .flow-control:hover,
+  .flow-control:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-why {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 16px 0 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--rule);
+  }
+  .flow-why div {
+    background: #101010;
+    padding: 13px 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .flow-why strong {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .flow-svg .lane {
+    fill: rgba(255, 255, 255, 0.018);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-title {
+    fill: var(--ink);
+    font: 800 16px var(--mono);
+  }
+  .flow-svg .flow-sub {
+    fill: var(--muted);
+    font: 12px var(--mono);
+  }
+  .flow-svg .math {
+    fill: var(--text);
+    font: 13px var(--mono);
+  }
+  .flow-svg .native-fill { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .flow-svg .tree-fill { fill: var(--green-soft); stroke: var(--green); }
+  .flow-svg .fa-fill { fill: var(--amber-soft); stroke: var(--amber); }
+  .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .flow-node {
+    stroke-width: 1.4;
+    animation: nodePulse 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .flow-svg .flow-node.s2 { animation-delay: 0.35s; }
+  .flow-svg .flow-node.s3 { animation-delay: 0.7s; }
+  .flow-svg .flow-edge {
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 10 9;
+    animation: flowDash 2.4s linear infinite;
+  }
+  .flow-svg .native-edge { stroke: var(--cyan); }
+  .flow-svg .tree-edge { stroke: var(--green); animation-duration: 2.9s; }
+  .flow-svg .fa-edge { stroke: var(--amber); animation-duration: 2.1s; }
+  .flow-svg .commit-edge { stroke: var(--rose); animation-duration: 3.2s; }
+  .flow-svg .bias-on {
+    fill: rgba(231, 199, 111, 0.5);
+    animation: biasGlow 2.6s ease-in-out infinite;
+  }
+  .flow-svg .bias-off {
+    fill: rgba(255, 255, 255, 0.03);
+    stroke: rgba(255, 255, 255, 0.08);
+  }
+  .flow-svg .scan-window {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    animation: scanWindow 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .flow-svg .legend-dot { stroke: none; }
+  @keyframes flowDash {
+    to { stroke-dashoffset: -38; }
+  }
+  @keyframes nodePulse {
+    0%, 100% { opacity: 0.82; }
+    45%, 55% { opacity: 1; stroke-width: 2.7; }
+  }
+  @keyframes biasGlow {
+    0%, 100% { opacity: 0.48; }
+    50% { opacity: 1; }
+  }
+  @keyframes scanWindow {
+    0%, 100% { transform: translateX(0); opacity: 0.65; }
+    50% { transform: translateX(96px); opacity: 1; }
   }
 
   .two-col {
@@ -707,6 +843,11 @@
       border-radius: 7px;
     }
     .claim { grid-template-columns: 1fr; gap: 4px; }
+    .flow-figure .flow-svg {
+      width: 760px;
+      max-width: none;
+    }
+    .flow-why { grid-template-columns: 1fr; }
   }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
@@ -715,6 +856,13 @@
       animation-iteration-count: 1 !important;
       transition-duration: 0.001ms !important;
     }
+    .flow-svg .flow-edge,
+    .flow-svg .flow-node,
+    .flow-svg .bias-on,
+    .flow-svg .scan-window {
+      animation: none !important;
+    }
+    .flow-svg .flow-edge { stroke-dashoffset: 0; }
   }
 </style>
 </head>
@@ -753,6 +901,7 @@
       <a href="#design-trail">Design trail</a>
       <a href="#prior-work">Prior work</a>
       <a href="#algorithm">Algorithm</a>
+      <a href="#math-flow">Math flow</a>
       <a href="#kernel">Kernel and math</a>
       <a href="#wiring">vLLM wiring</a>
       <a href="#shapes">Tree shapes</a>
@@ -1038,6 +1187,127 @@
       <p>The proof obligation is attached to the outputs of steps 2, 3, and 6. Step 2 must preserve attention ancestry, step 3 must preserve branch-local recurrent state, and step 6 must ensure the next decode event starts from the accepted native-compatible state rather than from a rejected tree row.</p>
     </section>
 
+    <section class="section" id="math-flow">
+      <h2>Animated Math Flow</h2>
+      <aside class="sidenote">
+        <p><strong>How to read it:</strong> the blue lane is native MTP's linear spine. The amber lane is the FA2 tree fork: same FA2 realization, plus an ancestry bias. The green lane is the GDN tree scan: each node pulls its parent state, not the previous row's state.</p>
+        <p><strong>Reduced motion:</strong> the graph becomes static for readers who prefer less motion.</p>
+      </aside>
+      <p>The key math relationship is that the tree verifier is not a wider version of native decode. Native MTP has one recurrence chain. The tree verifier has many candidate rows, but each row must be evaluated as if native decode had walked that row's root-to-node path. The FA2 fork solves the attention half of that sentence; the GDN tree scan solves the recurrent-state half.</p>
+
+      <figure class="figure flow-figure" aria-labelledby="flow-title" aria-describedby="flow-long-desc flow-caption">
+        <div class="figure-head">
+          <strong id="flow-title">Figure 1</strong>
+          <span>Native spine versus FA2 tree fork plus GDN tree scan</span>
+          <button class="flow-control" type="button" aria-pressed="false" aria-label="Pause math-flow animation" title="Pause animation">Pause</button>
+        </div>
+        <p class="sr-only" id="flow-long-desc">Text equivalent: native MTP moves through one linear recurrent state chain. FA2 tree fork gives candidate rows a tree ancestry bias so attention sees ancestors but not unrelated branches. GDN tree scan gives every tree node the recurrent state of its parent, stores post-state rows in h_cache, and replays only the accepted path before publishing durable vLLM state.</p>
+        <svg class="diagram flow-svg" viewBox="0 0 1120 590" role="img" aria-labelledby="flow-svg-title flow-svg-desc">
+          <title id="flow-svg-title">Native spine, FA2 tree fork, and GDN tree-scan math flow</title>
+          <desc id="flow-svg-desc">Three-lane diagram: a blue native MTP chain updates state from the previous token, an amber FA2 fork applies tree ancestry bias to attention rows, and a green GDN tree scan lets each node inherit from its parent state before replay commits only the accepted path.</desc>
+          <defs>
+            <marker id="flow-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+            <marker id="flow-arrow-green" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
+            </marker>
+            <marker id="flow-arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#e7c76f"></path>
+            </marker>
+            <marker id="flow-arrow-rose" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
+            </marker>
+          </defs>
+
+          <rect x="28" y="34" width="1064" height="136" rx="10" class="lane"></rect>
+          <text x="52" y="66" class="flow-title">Native MTP spine kernel</text>
+          <text x="52" y="91" class="flow-sub">one accepted chain, one recurrent state column</text>
+          <rect x="78" y="111" width="86" height="40" rx="8" class="flow-node native-fill"></rect>
+          <text x="100" y="136" class="label">S0</text>
+          <path d="M164 131 H254" class="flow-edge native-edge" marker-end="url(#flow-arrow)"></path>
+          <rect x="254" y="111" width="86" height="40" rx="8" class="flow-node native-fill s2"></rect>
+          <text x="276" y="136" class="label">S1</text>
+          <path d="M340 131 H430" class="flow-edge native-edge" marker-end="url(#flow-arrow)"></path>
+          <rect x="430" y="111" width="86" height="40" rx="8" class="flow-node native-fill s3"></rect>
+          <text x="452" y="136" class="label">S2</text>
+          <path d="M516 131 H606" class="flow-edge native-edge" marker-end="url(#flow-arrow)"></path>
+          <rect x="606" y="111" width="86" height="40" rx="8" class="flow-node native-fill"></rect>
+          <text x="628" y="136" class="label">S3</text>
+          <path d="M692 131 H782" class="flow-edge native-edge" marker-end="url(#flow-arrow)"></path>
+          <rect x="782" y="111" width="86" height="40" rx="8" class="flow-node native-fill s2"></rect>
+          <text x="804" y="136" class="label">S4</text>
+          <text x="910" y="125" class="math">S_t = step(S_{t-1}, x_t)</text>
+          <text x="910" y="148" class="flow-sub">native uses previous state</text>
+
+          <rect x="28" y="204" width="1064" height="142" rx="10" class="lane"></rect>
+          <text x="52" y="236" class="flow-title">FA2 tree fork</text>
+          <text x="52" y="261" class="flow-sub">same FA2 kernel family; decode receives ancestry bias</text>
+          <rect x="80" y="286" width="146" height="36" rx="8" class="flow-node fa-fill"></rect>
+          <text x="104" y="309" class="label">candidate rows</text>
+          <path d="M226 304 H294" class="flow-edge fa-edge" marker-end="url(#flow-arrow-amber)"></path>
+          <g aria-label="tree bias matrix">
+            <rect x="294" y="264" width="130" height="72" rx="8" class="node node-amber"></rect>
+            <rect x="314" y="281" width="18" height="18" class="bias-on"></rect>
+            <rect x="336" y="281" width="18" height="18" class="bias-off"></rect>
+            <rect x="358" y="281" width="18" height="18" class="bias-off"></rect>
+            <rect x="380" y="281" width="18" height="18" class="bias-off"></rect>
+            <rect x="314" y="303" width="18" height="18" class="bias-on"></rect>
+            <rect x="336" y="303" width="18" height="18" class="bias-on"></rect>
+            <rect x="358" y="303" width="18" height="18" class="bias-off"></rect>
+            <rect x="380" y="303" width="18" height="18" class="bias-off"></rect>
+          </g>
+          <path d="M424 304 H492" class="flow-edge fa-edge" marker-end="url(#flow-arrow-amber)"></path>
+          <rect x="492" y="267" width="198" height="74" rx="10" class="flow-node fa-fill s2"></rect>
+          <text x="520" y="298" class="label">flash_attn_varlen</text>
+          <text x="520" y="322" class="tiny">QK + tree_bias -> softmax -> PV</text>
+          <path d="M690 304 H768" class="flow-edge fa-edge" marker-end="url(#flow-arrow-amber)"></path>
+          <rect x="768" y="286" width="146" height="36" rx="8" class="flow-node fa-fill s3"></rect>
+          <text x="790" y="309" class="label">attn outputs</text>
+          <text x="938" y="292" class="math">bias=0 on ancestors</text>
+          <text x="938" y="316" class="math">bias=-inf elsewhere</text>
+
+          <rect x="28" y="380" width="1064" height="166" rx="10" class="lane"></rect>
+          <text x="52" y="412" class="flow-title">GDN tree-scan kernel</text>
+          <text x="52" y="437" class="flow-sub">parent state first; replay only the accepted chain</text>
+          <circle cx="110" cy="482" r="24" class="flow-node tree-fill"></circle>
+          <text x="99" y="487" class="label">h0</text>
+          <path d="M134 482 H220" class="flow-edge tree-edge" marker-end="url(#flow-arrow-green)"></path>
+          <circle cx="244" cy="482" r="23" class="flow-node tree-fill s2"></circle>
+          <text x="237" y="487" class="label">n0</text>
+          <path d="M267 482 H348" class="flow-edge tree-edge" marker-end="url(#flow-arrow-green)"></path>
+          <circle cx="372" cy="482" r="23" class="flow-node tree-fill s3"></circle>
+          <text x="365" y="487" class="label">n1</text>
+          <path d="M395 482 H476" class="flow-edge tree-edge" marker-end="url(#flow-arrow-green)"></path>
+          <circle cx="500" cy="482" r="23" class="flow-node tree-fill"></circle>
+          <text x="493" y="487" class="label">n2</text>
+          <path d="M267 492 C294 532 326 542 352 526" class="flow-edge tree-edge" marker-end="url(#flow-arrow-green)"></path>
+          <circle cx="372" cy="526" r="21" class="flow-node tree-fill s2"></circle>
+          <text x="365" y="531" class="label">b1</text>
+          <text x="405" y="535" class="tiny">sibling child inherits n0 state</text>
+          <rect x="612" y="423" width="210" height="92" rx="10" class="node node-green"></rect>
+          <text x="634" y="452" class="label">h_cache</text>
+          <text x="634" y="477" class="tiny">one post-state per node</text>
+          <text x="634" y="501" class="tiny">child selects parent row</text>
+          <rect x="622" y="436" width="78" height="68" rx="8" class="scan-window"></rect>
+          <path d="M523 482 H612" class="flow-edge tree-edge" marker-end="url(#flow-arrow-green)"></path>
+          <path d="M822 469 H902" class="flow-edge commit-edge" marker-end="url(#flow-arrow-rose)"></path>
+          <rect x="902" y="431" width="154" height="76" rx="10" class="flow-node commit-fill"></rect>
+          <text x="930" y="462" class="label">replay</text>
+          <text x="930" y="486" class="tiny">publish accepted state</text>
+          <text x="66" y="570" class="math">Tree invariant: S_i = GDN_step(S_parent(i), x_i)</text>
+          <text x="502" y="570" class="math">Commit invariant: durable_state = native_scan(accepted_path)</text>
+        </svg>
+        <div class="flow-why" aria-label="Why each path alone is insufficient">
+          <div><strong>Native MTP</strong>Linear spine only; it gives no branch opportunity set for a tree verifier.</div>
+          <div><strong>FA2 fork</strong>Fixes attention ancestry, but recurrent GDN state would still be wrong without parent-state scan.</div>
+          <div><strong>GDN scan</strong>Computes branch-local states; losslessness still needs accepted-chain replay and durable writeback.</div>
+          <div><strong>STree / Triton</strong>Useful framing and masks, but not the served native FA2 plus bf16/fp8 vLLM realization.</div>
+        </div>
+        <figcaption class="caption" id="flow-caption">The animation intentionally separates two constraints. FA2 tree bias controls which tokens each attention row can see. GDN tree scan controls which recurrent state each row inherits. A rejected sibling such as b1 receives the parent n0 state; it never consumes prior row n1. Losslessness requires both halves, plus replay of the accepted path before vLLM publishes durable state.</figcaption>
+      </figure>
+    </section>
+
     <section class="section" id="kernel">
       <h2>Kernel and Math</h2>
       <aside class="sidenote">
@@ -1086,7 +1356,7 @@ out_i = tl.sum(state_i * b_q[None, :], axis=1)</code></pre>
       </div>
 
       <div class="figure" aria-labelledby="scan-title">
-        <div class="figure-head"><strong id="scan-title">Figure 1</strong><span>What the GDN tree scan does</span></div>
+        <div class="figure-head"><strong id="scan-title">Figure 2</strong><span>What the GDN tree scan does</span></div>
         <svg class="diagram" viewBox="0 0 1120 390" role="img" aria-label="GDN tree scan and replay diagram">
           <defs>
             <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
@@ -1195,7 +1465,7 @@ else:
       </div>
 
       <div class="figure" aria-labelledby="wiring-title">
-        <div class="figure-head"><strong id="wiring-title">Figure 2</strong><span>vLLM decode path with tree verification</span></div>
+        <div class="figure-head"><strong id="wiring-title">Figure 3</strong><span>vLLM decode path with tree verification</span></div>
         <svg class="diagram" viewBox="0 0 1120 360" role="img" aria-label="vLLM wiring path from tree choices through attention, GDN scan, committer, and metrics">
           <defs>
             <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
@@ -1758,5 +2028,17 @@ else:
     <p>Volume III. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a> and <a href="round-f.html">Vol. II</a>, but this page does not require them. Last updated 2026-06-17.</p>
   </footer>
 </div>
+<script>
+  document.querySelectorAll('.flow-control').forEach((button) => {
+    button.addEventListener('click', () => {
+      const figure = button.closest('.flow-figure');
+      const paused = figure.classList.toggle('is-paused');
+      button.setAttribute('aria-pressed', String(paused));
+      button.setAttribute('aria-label', paused ? 'Resume math-flow animation' : 'Pause math-flow animation');
+      button.setAttribute('title', paused ? 'Resume animation' : 'Pause animation');
+      button.textContent = paused ? 'Play' : 'Pause';
+    });
+  });
+</script>
 </body>
 </html>
