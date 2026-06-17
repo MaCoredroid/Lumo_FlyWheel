@@ -141,12 +141,53 @@
     text-wrap: balance;
   }
   .subhead {
-    max-width: 840px;
+    max-width: 900px;
     margin: 24px 0 0;
     color: var(--text);
     font-size: 21px;
     line-height: 1.55;
     text-wrap: pretty;
+  }
+  .hero-tldr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.46fr);
+    gap: 22px;
+    align-items: end;
+    max-width: 980px;
+    margin: 26px 0 0;
+    padding: 18px 0 20px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero-tldr p {
+    margin: 0;
+    color: var(--text);
+  }
+  .hero-tldr .tldr-copy {
+    max-width: 68ch;
+    font-size: 18px;
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+  .hero-result {
+    justify-self: end;
+    width: min(100%, 330px);
+  }
+  .hero-number {
+    display: block;
+    color: var(--green);
+    font-family: var(--serif);
+    font-size: clamp(40px, 4.3vw, 62px);
+    line-height: 0.96;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .hero-result p {
+    margin-top: 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
   }
   .byline {
     display: flex;
@@ -547,9 +588,13 @@
     h1 { font-size: 44px; }
     .subhead { font-size: 19px; }
     .byline span:not(:first-child)::before { content: none; }
-    .abstract-grid, .two-col, .shape-grid { grid-template-columns: 1fr; }
+    .abstract-grid, .two-col, .shape-grid, .hero-tldr { grid-template-columns: 1fr; }
     .section { margin: 56px 0; }
     .section h2 { font-size: 30px; }
+    .hero-result {
+      justify-self: start;
+      width: 100%;
+    }
     .sidenote {
       display: block;
       margin: 18px 0 22px;
@@ -586,10 +631,13 @@
     <p class="kicker">Volume III / standalone mini-paper preview</p>
     <h1>Lossless GDN Tree-Scan</h1>
     <p class="subhead">A tree speculative decoder for a 75% recurrent hybrid model. The core result is not a wider attention mask; it is a branch-local Gated-DeltaNet scan, a forked attention path, vLLM committer wiring, and a measurement stack that separates losslessness from speed.</p>
-    <aside class="sidenote">
-      <p><strong>Read this without Vol. I or II:</strong> a draft model proposes a small token tree. The target model verifies it and only publishes the accepted prefix.</p>
-      <p>For this model, verifying a tree means fixing both attention and recurrent state. Attention masks alone are not enough.</p>
-    </aside>
+    <div class="hero-tldr" aria-label="TLDR and headline result">
+      <p class="tldr-copy"><strong>TL;DR:</strong> a draft tree is a menu of next-token guesses. The target model verifies that menu and publishes only the accepted prefix. On this 75% recurrent model, that requires tree-aware attention plus branch-local GDN state; attention masks alone are not enough.</p>
+      <div class="hero-result">
+        <span class="hero-number">18.51 tok/s</span>
+        <p><strong>cat6root</strong> at clean B=1/temp-0.6: +4.0% vs native E5, 3.82 accepted/event, 0.1377 s/fwd_gpu. Speed verdict merged; final depth-5 p-rescore remains the lossless closure gate.</p>
+      </div>
+    </div>
     <div class="byline">
       <span><strong>Mark Ma</strong></span>
       <span>ML systems / inference</span>
