@@ -262,6 +262,7 @@ if available_gib < 80 or swap_used_kib != 0:
 PY
 
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
+  ${PROFILE_PTRACE_CAP:+--cap-add=SYS_PTRACE} \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
@@ -315,7 +316,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_GPU_COMMITTER="${FR13_GPU_COMMITTER:-0}" \
   -e FR13_COMMITTER_SYNCKILL="${FR13_COMMITTER_SYNCKILL:-0}" \
   -e FR13_GPU_COMMITTER_KERNEL="${FR13_GPU_COMMITTER_KERNEL:-/workspace/scripts/fr13_gpu_committer_kernel.py}" \
-  -e FR13_DEVICE_MULTIDRAFT="${FR13_DEVICE_MULTIDRAFT:-0}" \
+  -e FR13_DEVICE_MULTIDRAFT="${FR13_DEVICE_MULTIDRAFT:-1}" \
   -e FR13_DEVICE_MULTIDRAFT_KERNEL="${FR13_DEVICE_MULTIDRAFT_KERNEL:-/workspace/scripts/fr13_device_multidraft_kernel.py}" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-0}" \
