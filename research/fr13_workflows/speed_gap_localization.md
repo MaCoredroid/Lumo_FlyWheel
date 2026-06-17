@@ -1,3 +1,10 @@
+> **[RETRACTED 2026-06-17] The "consumer/agent-loop idle, our-code ~6ms" localization below is WITHDRAWN.**
+> It was derived from (a) the MIXED `offload_request_metrics.jsonl` (B=4+B=1 aggregated — I wrongly read the
+> b1 run as confounded) and (b) a SYNTHETIC generic-text prompt (accept flipped, unrepresentative). Both
+> invalid. On the CLEAN B=1 data the +28ms is REAL (cat6 step 0.260 vs E5 0.231) but UNLOCALIZED — pending an
+> INSTRUMENTED B=1 SWE-Verified re-run (per-phase forward/drafter/committer timers). The VERDICT (cat6 +4% TPS +
+> higher accept + lossless, true B=1) HOLDS. See `b1_data_clean_verification.md`. Kept below for history only.
+
 # FR13 Stage D: cat6-vs-E5 +28ms speed-gap LOCALIZATION (workflow wottfrivv, 2026-06-17)
 
 User reframe: cat6 commits +17% (4.82 vs 4.11) but deploy TPS only +4% (18.51 vs 17.8). User insisted the
