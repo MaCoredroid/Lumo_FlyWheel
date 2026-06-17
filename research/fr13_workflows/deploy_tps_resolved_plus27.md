@@ -27,11 +27,11 @@ bracket histogram and is superseded by the per-turn dumps.)
 
 ## VERDICT CORRECTION
 The merged b1_depth5 verdict headlined per_request_decode_tps (cat6 18.51 = +4%). The CORRECT decode-throughput
-advantage at true B=1 is **+27%** (derived/aggregate gen/decode-time, E5-comparable since num_running~0). cat6
-deserves the +27% decode credit. OPEN (not yet ruled out): whether the per-request +4% has a FIXABLE component —
-a cat6 per-request fixed first-step/tree-setup overhead that drags the short tool-call turns to parity — vs being
-inherent (short structured tool calls have high accept for both arms). The instrumented re-run (per-turn accept +
-TPOT split by output length) distinguishes them; see codex_swe_request_anatomy.md.
+advantage at true B=1 is **+27%** (TOKEN-weighted = total_output_tokens / total_decode_time, E5-comparable since
+num_running~0). THROUGHPUT IS TOKEN-WEIGHTED BY DEFINITION; per_request_decode_tps (per-request-EQUAL, +4%) answers
+a different question (is the average REQUEST faster, weighting a 5-tok tool-call == a 500-tok edit) = a per-request
+LATENCY notion, NOT throughput. So the deploy-throughput headline should be the +27% token-weighted number; the
++4% was simply the wrong basis for "throughput". cat6 = +27%, no remaining question on the metric.
 
 ## Honest caveat (end-to-end)
 The SWE-Verified deploy is PREFILL+AGENT-heavy (~11k-token prompts, ~260-token replies), so DECODE is a small

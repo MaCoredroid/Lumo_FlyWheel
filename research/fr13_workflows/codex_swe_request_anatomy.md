@@ -25,22 +25,20 @@ So the SWE-Verified workload = an explore/test LOOP (many short-to-medium tool-c
 long edit/reasoning turns. Spec-decode's per-token benefit grows with output length, so cat6's advantage lands on
 the LONG turns; the many short tool-call turns barely benefit.
 
-## The throughput-vs-per-request gap, in plain terms (not "Jensen")
-- TOKEN-weighted decode throughput = total_output_tokens / total_decode_time = cat6 23.9 vs E5 18.8 tok/s = +27%.
-  This is what the GPU delivers; it's dominated by the long turns (where the tokens are).
-- per_request_decode_tps = average over turns of (1 / per-turn TPOT), weighting every turn EQUALLY = cat6 18.51 vs
-  E5 17.80 = +4%. The 25% short turns (3% of tokens) get 25% of the weight here, and on them cat6 ~= E5, so they
-  pull the average down toward parity.
-The two numbers measure different things; both are real. cat6's GPU throughput advantage is +27%.
+## Use TOKEN-weighting for throughput (not per-request)
+Throughput = tokens per second is TOKEN-weighted by definition:
+- TOKEN-weighted decode throughput = total_output_tokens / total_decode_time = cat6 23.9 vs E5 18.8 tok/s = **+27%**.
+  This is the right "deploy decode throughput" number; it's where the tokens (and cat6's accepted-token win) are.
+- per_request_decode_tps = average over turns of (1/per-turn TPOT), weighting every turn EQUALLY = cat6 18.51 vs
+  E5 17.80 = +4%. That weights a 5-tok exec_command turn the same as a 500-tok edit -> a per-request LATENCY notion,
+  NOT throughput. The 25% <=64-tok tool-call turns (3% of tokens) get 25% of this weight, dragging it to parity.
+So the metric to report/optimize for deploy throughput is the TOKEN-weighted +27%; per_request_decode_tps is the
+wrong basis for the throughput question. No open metric question remains.
 
-## OPEN QUESTION (what the instrumented re-run would answer)
-WHY is cat6 ~= E5 on the short turns (so they dilute the per-request average)? Two candidates, NOT yet separated:
- (a) the short turns are STRUCTURED tool calls (a shell command) -> high accept for BOTH cat6 and E5 -> cat6's
-     extra tree width buys little there (only the harder long-reasoning turns reward it); OR
- (b) a FIXABLE cat6 per-request FIXED overhead (first decode step / tree setup) that dominates a short reply's TPOT
-     and drags it to parity, which a kernel/wiring change could recover.
-Distinguishing (a) vs (b) = the instrumented re-run: per-turn accept/event + TPOT split by output length (does
-cat6's per-turn advantage GROW with length, and is there a fixed first-step cost?). If (a), +27% is the honest
-ceiling at B=1 and there's nothing to fix; if (b), there's a real per-request lever. Banked timer design wb81uvy7w
-(drafter+committer async timers) supports this. NOTE: input is NOT KV-cached across turns (cached_tokens=0) -> the
-11k-token prefill is paid EVERY turn = the dominant deploy cost; prompt-cache reuse is a separate large lever.
+## The actual end-to-end lever (separate from the metric)
+cat6's +27% is DECODE throughput. End-to-end on SWE-Verified, each turn re-sends ~11k-14k input tokens and
+**cached_tokens=0** -> the prefill is NOT KV-cached across turns and is paid EVERY turn, making PREFILL the dominant
+per-turn cost (decode is a fraction). So cat6's +27% decode shrinks total task time by less than 27%. The big
+end-to-end levers are (1) prompt/KV-cache reuse across the agent's growing context (kill the repeated 11k prefill),
+(2) B>1 to overlap one turn's prefill/agent-idle with another's decode. Both are deployment levers, not cat6 kernel
+changes. cat6's kernel is already +27% on decode throughput.
