@@ -8216,7 +8216,7 @@ def _lumo_tree_canonical_multidraft_sample(
         counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
     else:
         counts = [int(x) for x in num_draft_tokens]
-    # FR13_DEVICE_MULTIDRAFT (default OFF): when ON, the temp>0 multidraft
+    # FR13_DEVICE_MULTIDRAFT (BAKED default ON = the deployed cat6/cat9 committer): the temp>0 multidraft
     # per-node decision runs ON-DEVICE (scripts/fr13_device_multidraft_kernel.py)
     # so the [nodes x vocab] host softmax DtoH below + the Python per-node
     # interpreter loop are ELIMINATED. The device committer computes the SAME
@@ -8224,11 +8224,12 @@ def _lumo_tree_canonical_multidraft_sample(
     # min-overlap, accept ~ min(1,p/q_mix), residual fallback) and produces the
     # SAME five committer products (distribution-lossless, NOT byte: device rng
     # draws differ but follow the identical distributions; proven offline by
-    # scripts/fr13_device_multidraft_offline_gate.py). DEFAULT-OFF => the host
-    # reference below runs byte-identical to HEAD. Fail-loud on disengagement
-    # (no silent host fallback, bug-class 9).
+    # scripts/fr13_device_multidraft_offline_gate.py). BAKED DEFAULT-ON (the
+    # deployed committer); FR13_DEVICE_MULTIDRAFT=0 restores the host-reference
+    # path (byte-identical to HEAD's host-ref, kept for A/B). Fail-loud on
+    # disengagement (no silent host fallback, bug-class 9).
     _fr13_device_multidraft = (
-        __import__('os').environ.get('FR13_DEVICE_MULTIDRAFT', '0') == '1'
+        __import__('os').environ.get('FR13_DEVICE_MULTIDRAFT', '1') == '1'
         and draft_probs is None
     )
     if _fr13_device_multidraft:
@@ -8292,7 +8293,7 @@ def _lumo_tree_canonical_multidraft_sample(
     except Exception:
         pass
     start = 0
-    # FR13_DEVICE_MULTIDRAFT loop-skip (default OFF). flag-off => _fr13_dm_counts
+    # FR13_DEVICE_MULTIDRAFT loop-skip (BAKED default ON). flag-off => _fr13_dm_counts
     # IS counts, so the legacy host per-node Python loop below runs byte-for-byte
     # unchanged. flag-on => the device committer fills the five product lists and
     # the legacy loop iterates EMPTY (the host walk never runs; the [nodes x

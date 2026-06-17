@@ -29,3 +29,18 @@ NET: 2 already baked, 3 have concrete blockers (1 = E5 byte-change, 2 = patcher 
 passed explicitly via the launchers (current state). No integration boot needed (nothing changes).
 Optional/out-of-scope: baking the FA2 flags would require lockstep-rewriting the idempotency anchor
 strings — a dedicated re-patch-verification task, NOT a one-boot safe bake; against the PIPELINE_LOCK decision.
+
+## ADDENDUM (user 2026-06-17): FR13_DEVICE_MULTIDRAFT BAKED default-ON
+Separate from the 4 flags above (which the workflow rejected). The device multidraft committer IS the
+deployed cat6/cat9 committer (b1 container_env FR13_DEVICE_MULTIDRAFT=1, set by fr13_b4_campaign_driver.sh:46).
+The user asked to bake it so it's the default for all trees instead of a campaign-driver flag.
+BAKE-SAFE (verified): (1) STRUCTURALLY tree-gated — the env is read INSIDE _lumo_tree_canonical_multidraft_sample
+(the tree committer, dispatch gated on tree_self_logits); native E5 (chain -> stock rejection_sample, separate
+fr10_launch_speed_server.sh launcher with no reference) NEVER reads it -> E5 byte-baseline untouched. (2) Single
+read site (L8231); NOT a re-patch idempotency anchor (no `in text` guard). (3) Deployed cat6/cat9 set =1
+explicitly -> byte-identical post-bake. (4) Device path is distribution-lossless vs host-ref (offline-proven,
+fr13_device_multidraft_offline_gate.py). EDITS: patch L8231 default '0'->'1'; forked launcher L319 :-0 -> :-1
+(the launcher always passes -e, so the patch default alone wouldn't take through it). CONSEQUENCE (flagged): the
+DEFAULT committer is now the device path (distribution-lossless, NOT byte-identical to HEAD's host-ref);
+FR13_DEVICE_MULTIDRAFT=0 restores the host-reference for A/B. Verify: forked-launcher boot engages device by
+default (device_multidraft_commit in the profile) + the [6,6,4,6] drafter fingerprint (committer-agnostic) holds.
