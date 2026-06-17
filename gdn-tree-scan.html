@@ -8,32 +8,34 @@
 <meta property="og:title" content="Lossless GDN Tree-Scan - Lumo FlyWheel Vol. III">
 <meta property="og:description" content="A preview of the proof and measurement stack behind lossless tree speculative decoding for a Gated-DeltaNet hybrid model.">
 <meta name="author" content="Mark Ma">
+<meta name="theme-color" content="#111723">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23111723'/%3E%3Cpath d='M14 39h10V25h8v14h18' fill='none' stroke='%237ccdec' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='24' cy='25' r='4' fill='%2390e4b8'/%3E%3Ccircle cx='40' cy='39' r='4' fill='%23ffd166'/%3E%3C/svg%3E">
 <style>
   :root {
-    color-scheme: light;
-    --bg: oklch(0.976 0.004 225);
-    --surface: oklch(0.996 0 0);
-    --surface-2: oklch(0.958 0.006 225);
-    --surface-3: oklch(0.928 0.011 225);
-    --ink: oklch(0.185 0.015 245);
-    --ink-2: oklch(0.285 0.02 245);
-    --muted: oklch(0.46 0.018 245);
-    --muted-2: oklch(0.61 0.014 245);
-    --rule: oklch(0.86 0.008 235);
-    --rule-2: oklch(0.78 0.012 235);
-    --accent: oklch(0.48 0.12 205);
-    --accent-dark: oklch(0.34 0.095 205);
-    --accent-soft: oklch(0.93 0.035 205);
-    --pass: oklch(0.48 0.11 155);
-    --pass-soft: oklch(0.93 0.04 155);
-    --warn: oklch(0.64 0.13 78);
-    --warn-soft: oklch(0.95 0.055 78);
-    --fail: oklch(0.55 0.14 28);
-    --fail-soft: oklch(0.94 0.045 28);
+    color-scheme: dark;
+    --bg: oklch(0.145 0.012 245);
+    --surface: oklch(0.19 0.014 245);
+    --surface-2: oklch(0.235 0.016 245);
+    --surface-3: oklch(0.29 0.018 245);
+    --ink: oklch(0.94 0.012 230);
+    --ink-2: oklch(0.82 0.016 230);
+    --muted: oklch(0.66 0.018 230);
+    --muted-2: oklch(0.52 0.018 230);
+    --rule: oklch(0.31 0.015 240);
+    --rule-2: oklch(0.43 0.017 240);
+    --accent: oklch(0.73 0.12 205);
+    --accent-dark: oklch(0.79 0.105 205);
+    --accent-soft: oklch(0.28 0.045 205);
+    --pass: oklch(0.75 0.13 155);
+    --pass-soft: oklch(0.25 0.05 155);
+    --warn: oklch(0.82 0.15 78);
+    --warn-soft: oklch(0.29 0.055 78);
+    --fail: oklch(0.73 0.15 28);
+    --fail-soft: oklch(0.29 0.055 28);
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
     --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
     --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
-    --shadow: 0 22px 70px oklch(0.2 0.025 240 / 0.08);
+    --shadow: 0 22px 70px oklch(0.04 0.02 245 / 0.42);
   }
 
   * { box-sizing: border-box; }
@@ -41,7 +43,8 @@
   body {
     margin: 0;
     background:
-      linear-gradient(180deg, oklch(0.962 0.008 224), var(--bg) 420px),
+      radial-gradient(980px 540px at 82% -8%, oklch(0.34 0.075 205 / 0.28), transparent 64%),
+      radial-gradient(860px 480px at -12% 12%, oklch(0.29 0.07 155 / 0.16), transparent 66%),
       var(--bg);
     color: var(--ink-2);
     font-family: var(--sans);
@@ -50,15 +53,15 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
-  ::selection { background: oklch(0.83 0.07 205); color: var(--ink); }
+  ::selection { background: oklch(0.42 0.085 205); color: var(--ink); }
   a {
     color: var(--accent-dark);
     text-decoration: none;
-    border-bottom: 1px solid oklch(0.55 0.11 205 / 0.34);
+    border-bottom: 1px solid oklch(0.76 0.11 205 / 0.36);
   }
   a:hover { border-bottom-color: currentColor; }
   a:focus-visible, button:focus-visible {
-    outline: 3px solid oklch(0.68 0.12 205);
+    outline: 3px solid var(--accent);
     outline-offset: 3px;
   }
   code, .mono {
@@ -124,7 +127,7 @@
     height: 10px;
     border-radius: 50%;
     background: var(--accent);
-    box-shadow: 0 0 0 6px oklch(0.7 0.12 205 / 0.14);
+    box-shadow: 0 0 0 6px oklch(0.7 0.12 205 / 0.12);
   }
   h1 {
     margin: 0;
@@ -215,6 +218,35 @@
     color: var(--ink-2);
     font-size: 15px;
     line-height: 1.45;
+  }
+
+  .margin-note {
+    color: var(--muted);
+    border-left: 1px solid var(--rule-2);
+    padding-left: 13px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .margin-note::before {
+    content: "plain note";
+    display: block;
+    margin-bottom: 7px;
+    color: var(--accent);
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .margin-note strong {
+    color: var(--ink);
+    font-weight: 800;
+  }
+  .margin-note p {
+    margin: 0 0 10px;
+  }
+  .margin-note p:last-child {
+    margin-bottom: 0;
   }
 
   .paper-nav {
@@ -393,7 +425,7 @@
     font-size: 11px;
   }
   .attempt.pass .tag { background: var(--pass-soft); color: var(--pass); }
-  .attempt.warn .tag { background: var(--warn-soft); color: oklch(0.44 0.105 78); }
+  .attempt.warn .tag { background: var(--warn-soft); color: var(--warn); }
   .attempt.fail .tag { background: var(--fail-soft); color: var(--fail); }
 
   .data-table-wrap {
@@ -439,7 +471,7 @@
     white-space: nowrap;
   }
   .verdict.pass { color: var(--pass); background: var(--pass-soft); }
-  .verdict.warn { color: oklch(0.44 0.105 78); background: var(--warn-soft); }
+  .verdict.warn { color: var(--warn); background: var(--warn-soft); }
   .verdict.fail { color: var(--fail); background: var(--fail-soft); }
   .verdict.info { color: var(--accent-dark); background: var(--accent-soft); }
 
@@ -468,16 +500,17 @@
   .equation {
     margin: 22px 0;
     padding: 18px 20px;
-    background: var(--ink);
-    color: oklch(0.94 0.01 225);
+    background: oklch(0.105 0.018 245);
+    color: var(--ink-2);
+    border: 1px solid var(--rule-2);
     border-radius: 8px;
     overflow-x: auto;
     font-family: var(--mono);
     font-size: 14px;
     line-height: 1.8;
   }
-  .equation .dim { color: oklch(0.76 0.035 225); }
-  .equation .hl { color: oklch(0.82 0.12 190); }
+  .equation .dim { color: var(--muted); }
+  .equation .hl { color: var(--accent); }
 
   .timeline {
     display: grid;
@@ -537,12 +570,40 @@
     header.hero { padding-top: 42px; }
     h1 { font-size: 42px; }
     .subhead { font-size: 19px; }
+    .byline span:not(:first-child)::before { content: none; }
     .status-board, .split { grid-template-columns: 1fr; }
     .section { margin: 54px 0; }
     .section h2 { font-size: 29px; }
     .claim { grid-template-columns: 1fr; gap: 5px; }
     .timeline-row { grid-template-columns: 1fr; gap: 5px; }
     .layer-map { grid-template-columns: repeat(8, 1fr); }
+  }
+
+  @media (min-width: 1040px) {
+    header.hero > .margin-note,
+    .section > .margin-note {
+      float: right;
+      clear: right;
+      width: 270px;
+      margin: 6px 0 20px 34px;
+    }
+    .section > .margin-note + p,
+    .section > .margin-note + .figure-band,
+    .section > .margin-note + .data-table-wrap {
+      margin-top: 0;
+    }
+  }
+
+  @media (max-width: 1039px) {
+    .margin-note {
+      display: block;
+      margin: 18px 0 22px;
+      padding: 13px 16px 13px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--rule);
+      border-left: 1px solid var(--rule-2);
+      border-radius: 7px;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -570,6 +631,10 @@
     <p class="kicker">Volume III - preview for the final paper</p>
     <h1>Lossless GDN Tree-Scan</h1>
     <p class="subhead">How a tree speculative decoder for a 75% recurrent hybrid model turned from a speed hack into a proof stack: native-op-order GDN scan, forked attention kernels, committer wiring, lossless gates, and a measurement harness that kept invalid wins out of the record.</p>
+    <aside class="margin-note">
+      <p><strong>First pass:</strong> the draft tree is a menu of guesses. The real model verifies that menu, then publishes only the longest safe prefix.</p>
+      <p><code>cat9</code>, <code>cat6</code>, and <code>cat10</code> are tree-shape nicknames. They are not model versions.</p>
+    </aside>
     <div class="byline">
       <span><strong>Mark Ma</strong></span>
       <span>ML systems / inference</span>
@@ -586,9 +651,9 @@
       <aside class="frontier">
         <h2>What stands now</h2>
         <div class="claim-list">
-          <div class="claim pass"><span class="state">LOSSLESS</span><p>Big-denom cat9 flip rate is within the native floor: 13.55% vs 13.99%, with overlapping intervals.</p></div>
-          <div class="claim pass"><span class="state">KERNEL</span><p>GDN scan/replay route uses native-order recurrence and byte-gated state logistics instead of cross-branch state sharing.</p></div>
-          <div class="claim warn"><span class="state">SPEED</span><p>Verify-forward tax is small; total tree TPS is now overhead-bound by propose/committer work that we own.</p></div>
+          <div class="claim pass"><span class="state">LOSSLESS</span><p>The big-denominator cat9 run, our 9-node tree shape, stays within native self-noise: 13.55% vs 13.99%.</p></div>
+          <div class="claim pass"><span class="state">KERNEL</span><p>GDN scan/replay means: verify candidate branches, then write back only the accepted chain in native order.</p></div>
+          <div class="claim warn"><span class="state">SPEED</span><p>Verify-forward tax is small; delivered-token speed is now limited by our tree builder and committer overhead.</p></div>
           <div class="claim warn"><span class="state">FINAL GATE</span><p>The final paper still needs the deployment temp-0.6 distributional gate and the profiled overhead split.</p></div>
         </div>
       </aside>
@@ -616,7 +681,7 @@
         <svg class="diagram" viewBox="0 0 1080 360" role="img" aria-label="Pipeline from tree propose to forked attention and GDN scan, then committer and measurement gates.">
           <defs>
             <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L0,6 L9,3 z" fill="oklch(0.34 0.095 205)"></path>
+              <path d="M0,0 L0,6 L9,3 z" fill="oklch(0.73 0.12 205)"></path>
             </marker>
           </defs>
           <rect x="20" y="58" width="190" height="96" class="box"></rect>
@@ -653,11 +718,15 @@
           <text x="614" y="294">OFF speed, ON lossless</text>
           <path d="M692 238 V154" class="arrow"></path>
         </svg>
-        <p class="caption">The key move is not only adding branches. The system is built as a gated proof pipeline: propose a tree, verify each branch in a native-op-order frame, commit only a distribution-safe path, then measure speed in the clean OFF regime.</p>
+        <p class="caption">Fresh-reader translation: the small tree is just a menu of guesses. The verifier checks the menu, the committer chooses the longest safe prefix, and the measurement gate makes sure we did not buy speed by changing the model's output distribution.</p>
       </div>
     </section>
 
     <section class="section" id="kernel">
+      <aside class="margin-note">
+        <p><strong>GDN:</strong> Gated-DeltaNet is the recurrent layer type in 48 of 64 layers. It keeps sequence memory, so sibling branches can accidentally read each other's state.</p>
+        <p><strong>WY:</strong> a compact linear-algebra recipe for branch-local updates. It is a way to avoid copying the whole recurrent state for every tree node.</p>
+      </aside>
       <div class="split">
         <div>
           <h2>The GDN kernel problem</h2>
@@ -665,9 +734,9 @@
           <p>The working rule became strict: no shared recurrent accumulator across branches, no full-state copy per spine, and no algebraically equivalent form unless it follows the native numerical order closely enough to survive the gates.</p>
         </div>
         <aside class="side-note">
-          <h3>Physical constraint</h3>
-          <p>On GB10, decode is weight-bandwidth-bound. Moving extra recurrent states through HBM can dominate a mathematically elegant kernel.</p>
-          <p>The published page should therefore price both <strong>correctness</strong> and <strong>state traffic</strong>, not just FLOPs.</p>
+          <h3>Fresh-reader translation</h3>
+          <p>Imagine every branch carrying a backpack of model memory. Copying that backpack for every branch is correct but slow. Sharing one backpack across branches is fast but wrong.</p>
+          <p>The kernel work is about carrying only the small path recipe, then materializing the full backpack only for the branch we actually publish.</p>
         </aside>
       </div>
 
@@ -695,7 +764,7 @@
           <span><span class="swatch" style="background:oklch(0.73 0.105 205)"></span>Gated-DeltaNet recurrence: 48 layers</span>
           <span><span class="swatch" style="background:oklch(0.72 0.11 155)"></span>Softmax attention: 16 layers</span>
         </div>
-        <p class="caption">This composition is why Vol. II's attention-mask-only view was insufficient. The recurrent majority needs a tree-aware scan, replay, or native-basis WY path.</p>
+        <p class="caption">This composition is why Vol. II's attention-mask-only view was insufficient. Attention can mask branches, but recurrent GDN layers also carry memory; they need a tree-aware scan, replay, or native-basis WY path.</p>
       </div>
 
       <div class="equation" aria-label="Gated DeltaNet recurrence">
@@ -711,7 +780,7 @@
         <div class="attempt fail">
           <span class="tag">Rejected</span>
           <h3>Shared packed tree</h3>
-          <p>One flattened tree with one recurrent state corrupts branches. Attention masks cannot hide sibling updates from the GDN accumulator.</p>
+          <p>One flattened tree with one recurrent state corrupts branches. In plain terms: branch B reads memory that branch A just wrote.</p>
         </div>
         <div class="attempt fail">
           <span class="tag">Rejected</span>
@@ -721,7 +790,7 @@
         <div class="attempt pass">
           <span class="tag">Viable</span>
           <h3>Native-basis WY tree</h3>
-          <p>Compact factors carry branch-local path products without per-node full-state copies. CPU validation hit fp32 4.19e-9, 0/9 argmax flips.</p>
+          <p>WY stores a compact recipe for each branch path instead of copying the whole GDN state. CPU validation hit fp32 4.19e-9, 0/9 argmax flips.</p>
         </div>
         <div class="attempt pass">
           <span class="tag">Shipped route</span>
@@ -733,6 +802,10 @@
 
     <section class="section" id="attention">
       <h2>The attention kernel and wiring work mattered as much as the GDN scan</h2>
+      <aside class="margin-note">
+        <p><strong>FA2:</strong> FlashAttention-2. We forked the attention path so attention rows can respect the tree, but attention was only one part of the lossless contract.</p>
+        <p><strong>Committer:</strong> the step that decides which verified draft tokens become public output and which branch state survives.</p>
+      </aside>
       <p>The final paper should not make the GDN kernel look isolated. The recurrent scan only becomes useful when the attention half, conv state, replay route, and committer agree on the same path semantics. Much of FR13 was spent proving which front was actually guilty.</p>
 
       <div class="timeline">
@@ -769,6 +842,10 @@
 
     <section class="section" id="lossless">
       <h2>Lossless evidence is a ladder, not a slogan</h2>
+      <aside class="margin-note">
+        <p><strong>Lossless:</strong> not "the text looks similar." It means the verifier can publish tokens without changing the target model's sampling distribution beyond native numerical noise.</p>
+        <p><strong>TV:</strong> total variation distance, a distribution-distance check for the sampled temp-0.6 gate.</p>
+      </aside>
       <p>The page should use the stronger headline because the core lossless story has teeth: native-path algebra, byte gates, default-off invariants, big-denom within-floor evidence, and a documented trust ledger. It should still label the final deployment distributional gate as final-paper work.</p>
 
       <div class="data-table-wrap">
@@ -819,6 +896,10 @@
 
     <section class="section" id="measurement">
       <h2>The measurement infrastructure is part of the contribution</h2>
+      <aside class="margin-note">
+        <p><strong>s/fwd:</strong> seconds per verify forward. It measures the verifier pass before accept-rate math turns it into delivered-token speed.</p>
+        <p><strong>B=1 vs B=4:</strong> batch-size choice. B=1 removes concurrency noise when comparing arms; B=4 can hide co-residency effects.</p>
+      </aside>
       <p>The project repeatedly found that attractive numbers were not wrong because the model was mysterious; they were wrong because the measurement basis was contaminated. The canonical infra turns those failure modes into explicit gates.</p>
 
       <div class="equation" aria-label="Speed accounting formulas">
@@ -854,6 +935,10 @@
 
     <section class="section" id="speed">
       <h2>The speed story is now sharper: the remaining delta is ours to profile</h2>
+      <aside class="margin-note">
+        <p><strong>How a tree wins:</strong> extra accepted tokens must outweigh the extra work to build, verify, and commit the tree.</p>
+        <p><code>cat6root</code> and <code>cat10</code> tested different tree menus. They clarified the bottleneck but did not beat cat9.</p>
+      </aside>
       <p>After the lossless chase, the speed work became a series of falsifiable attempts. Some fixed real overhead. Some did nothing. Some produced false wins that the measurement harness rejected. That is the scientific value of the trail.</p>
 
       <div class="data-table-wrap">
