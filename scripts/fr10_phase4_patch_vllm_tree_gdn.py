@@ -11367,6 +11367,87 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             and int(self.num_speculative_tokens) == 9
             and _fr10_tree_choices_current == _fr10_threethree_choices
         )
+        # FR13_RESHAPE_WIDE: GENERAL width-N caterpillar drafter. Engages for
+        # ANY tree_choices that is a single all-zeros spine with arbitrary-width
+        # leaf children hanging DIRECTLY off each spine node (incl root), and
+        # that matches NONE of the hand-rolled exact shapes above (so the
+        # verified default cat9/333/cat6root/cat10/cat3w/chain* paths stay
+        # byte-identical -- wide is purely additive). The caterpillar condition
+        # is: every node path p has an all-zeros PARENT path (p[:-1] all 0), so
+        # every off-spine node is a direct child of a spine node and its token
+        # is a pure topk read off the SAME spine logits -- no extra forward, no
+        # recurrent feed. That makes ANY width K (top-5/top-10/top-20/...)
+        # lossless by the drafter-agnostic committer, exactly like 333's rank-2
+        # read, just generalized to read rank-1..K-1 at any spine depth. Width
+        # per depth, spine depth, and the flat packing order are ALL derived
+        # from tree_choices (no per-shape hand-rolled stack).
+        _fr10_wide_choices_ok = (
+            _fr10_active_decode_mode == "tree_mtp"
+            and len(_fr10_tree_choices_current) > 0
+            and all(
+                len(_p) >= 1 and all(_e == 0 for _e in _p[:-1])
+                for _p in _fr10_tree_choices_current
+            )
+        )
+        _fr10_is_wide = (
+            _fr10_wide_choices_ok
+            and not (
+                _fr10_is_caterpillar
+                or _fr10_is_spine_only
+                or _fr10_is_chain3
+                or _fr10_is_cat3w
+                or _fr10_is_cat6root
+                or _fr10_is_cat10
+                or _fr10_is_333
+            )
+        )
+        # Build the wide plan from tree_choices: spine depth D (longest
+        # all-zeros path), per-parent-position width (max child-rank+1 among
+        # nodes whose parent is the spine node at that position; parent_pos =
+        # len(path)-1, 0=root, 1=spine0, ...), forward-step count (D-1), and
+        # the flat packing plan (parent_pos, child_rank) in sorted tree order.
+        # FAIL-LOUD on a spine gap (a missing all-zeros rung breaks the forward
+        # chain) so a malformed tree can never silently mis-pack.
+        _fr10_wide_D = 0
+        _fr10_wide_width = {}
+        _fr10_wide_plan = []
+        _fr10_wide_spine_steps = 0
+        if _fr10_is_wide:
+            _fr10_wide_D = max(
+                len(_p)
+                for _p in _fr10_tree_choices_current
+                if all(_e == 0 for _e in _p)
+            )
+            _fr10_wide_spine_set = set(_fr10_tree_choices_current)
+            for _fr10_wL in range(1, _fr10_wide_D + 1):
+                if tuple([0] * _fr10_wL) not in _fr10_wide_spine_set:
+                    raise RuntimeError(
+                        "FR13_RESHAPE_WIDE: spine gap, missing all-zeros path "
+                        "of length " + str(_fr10_wL) + " in "
+                        + repr(_fr10_tree_choices_current)
+                    )
+            for _p in _fr10_tree_choices_current:
+                _fr10_wpp = len(_p) - 1
+                _fr10_wrk = _p[-1]
+                _fr10_wide_width[_fr10_wpp] = max(
+                    _fr10_wide_width.get(_fr10_wpp, 0), _fr10_wrk + 1
+                )
+            _fr10_wide_spine_steps = _fr10_wide_D - 1
+            _fr10_wide_plan = [
+                (len(_p) - 1, _p[-1]) for _p in _fr10_tree_choices_current
+            ]
+            logger.info_once(
+                "FR13_RESHAPE_WIDE engaged: depth=%d spine_steps=%d "
+                "widths=%s nodes=%d tree=%s",
+                _fr10_wide_D,
+                _fr10_wide_spine_steps,
+                {
+                    _fr10_wk: _fr10_wide_width[_fr10_wk]
+                    for _fr10_wk in sorted(_fr10_wide_width)
+                },
+                len(_fr10_tree_choices_current),
+                repr(_fr10_tree_choices_current),
+            )
         # FR13_RESHAPE_DEPTH3: number of post-root spine forward steps and the
         # depth steps (1-based) at which the runner-up leaf is consumed. cat9
         # and chain5 keep the original depth-5 spine (4 steps, leaves at every
@@ -11379,13 +11460,26 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         # steps (loop steps 0,1 == depths 2,3), same as chain3/cat3w.
         if _fr10_is_chain3 or _fr10_is_cat3w or _fr10_is_333:
             _fr10_spine_steps = 2
+        elif _fr10_is_wide:
+            # FR13_RESHAPE_WIDE: D-1 post-root spine forwards (derived from the
+            # tree's all-zeros spine depth), so the step count always matches
+            # the committed tree depth (no over-run mutating KV/seq_lens).
+            _fr10_spine_steps = _fr10_wide_spine_steps
         else:
             _fr10_spine_steps = 4
         # FR13_RESHAPE_333: 3-3-3 consumes a rank-1 leaf at BOTH interior
         # spine steps (loop steps 0,1 -> token_index+1 in {1,2}); it ALSO
         # consumes a rank-2 leaf at the same steps (handled separately via
         # _fr10_leaf2_steps below).
-        if _fr10_is_spine_only or _fr10_is_chain3 or _fr10_is_cat6root:
+        if (
+            _fr10_is_spine_only
+            or _fr10_is_chain3
+            or _fr10_is_cat6root
+            or _fr10_is_wide
+        ):
+            # FR13_RESHAPE_WIDE collects ALL its leaves via its own per-depth
+            # topk capture (_fr10_wide_topk), so the legacy rank-1/rank-2 leaf
+            # collection is disabled here (empty _fr10_leaf_steps).
             _fr10_leaf_steps = frozenset()
         elif _fr10_is_cat3w:
             _fr10_leaf_steps = frozenset({1})
@@ -11408,6 +11502,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             or _fr10_is_cat6root
             or _fr10_is_cat10
             or _fr10_is_333
+            or _fr10_is_wide
         ):
             # FR10_CATERPILLAR_NATIVE_SPINE_TOP2: read-only drafter fix.
             # Run the native causal MTP spine unchanged for depth 5. At each
@@ -11569,6 +11664,20 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # FR13_RESHAPE_333: parallel list of the rank-2 (top-3) interior
             # leaves, collected only at _fr10_leaf2_steps (3-3-3 only).
             _fr10_leaf2_tokens = []
+            # FR13_RESHAPE_WIDE: per-parent-position topk INDICES (pos -> [B, w]
+            # tensor), captured off the SAME spine logits as the argmax. pos 0
+            # = root (read here), pos p>=1 = spine_{p-1} (read in the loop). The
+            # leaf at (parent_pos, rank>0) is wide_topk[parent_pos][:, rank] --
+            # a pure runner-up read, never fed forward. _fr10_logits is the root
+            # lm-head output (bound in BOTH the single-logits and legacy
+            # branches above).
+            _fr10_wide_topk = {}
+            if _fr10_is_wide:
+                _fr10_w_root = _fr10_wide_width.get(0, 1)
+                if _fr10_w_root > 1:
+                    _fr10_wide_topk[0] = torch.topk(
+                        _fr10_logits, _fr10_w_root, dim=-1
+                    ).indices
 
             # FR13_CHASE_DIAG (superset-chase Step 1; ONE flag, default OFF,
             # inert): (i) per-event INTEGER record {token_indices_to_sample -
@@ -11913,6 +12022,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
                         if (token_index + 1) in _fr10_leaf2_steps:
                             _fr10_leaf2_tokens.append(_fr10_step_top2[:, 2])
+                # FR13_RESHAPE_WIDE: capture this spine node's topk INDICES for
+                # the leaf packing (parent_pos = token_index+1). Read off the
+                # SAME _fr10_step_logits the spine argmax came from (one topk,
+                # no extra lm-head, no recurrent feed). Width is per-depth, so a
+                # depth that only carries the spine (width 1) reads nothing.
+                if _fr10_is_wide:
+                    _fr10_w_p = _fr10_wide_width.get(token_index + 1, 1)
+                    if _fr10_w_p > 1:
+                        _fr10_wide_topk[token_index + 1] = torch.topk(
+                            _fr10_step_logits, _fr10_w_p, dim=-1
+                        ).indices
 
             if _fr10_is_spine_only or _fr10_is_chain3:
                 # FR13_RESHAPE_DEPTH3 chain3 = pure depth-3 spine = the same
@@ -12056,6 +12176,41 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     ],
                     dim=1,
                 )
+            elif _fr10_is_wide:
+                # FR13_RESHAPE_WIDE general packer: emit one column per
+                # tree_choices node in sorted (len, path) order (== the
+                # tree_choices order vLLM already requires). rank 0 -> the
+                # spine token at depth parent_pos+1 (_fr10_spine_tokens[
+                # parent_pos]); rank k>0 -> the leaf = that parent spine
+                # node's topk column k (_fr10_wide_topk[parent_pos][:, k]).
+                # FAIL-LOUD if a needed spine token or topk column is missing
+                # (would otherwise mis-pack silently).
+                if len(_fr10_spine_tokens) != _fr10_wide_D:
+                    raise RuntimeError(
+                        "FR13_RESHAPE_WIDE: collected "
+                        + str(len(_fr10_spine_tokens))
+                        + " spine tokens, expected D=" + str(_fr10_wide_D)
+                    )
+                _fr10_wide_cols = []
+                for _fr10_pp, _fr10_rk in _fr10_wide_plan:
+                    if _fr10_rk == 0:
+                        _fr10_wide_cols.append(_fr10_spine_tokens[_fr10_pp])
+                    else:
+                        _fr10_wt = _fr10_wide_topk.get(_fr10_pp)
+                        if (
+                            _fr10_wt is None
+                            or _fr10_rk >= int(_fr10_wt.shape[1])
+                        ):
+                            raise RuntimeError(
+                                "FR13_RESHAPE_WIDE packing: missing topk "
+                                "rank=" + str(_fr10_rk) + " at parent_pos="
+                                + str(_fr10_pp) + " (width store "
+                                + ("absent" if _fr10_wt is None
+                                   else "cols=" + str(int(_fr10_wt.shape[1])))
+                                + ")"
+                            )
+                        _fr10_wide_cols.append(_fr10_wt[:, _fr10_rk])
+                _fr10_packed = torch.stack(_fr10_wide_cols, dim=1)
             else:
                 _fr10_packed = torch.stack(
                     [
@@ -12101,6 +12256,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 else "cat6root" if _fr10_is_cat6root
                                 else "cat10" if _fr10_is_cat10
                                 else "333" if _fr10_is_333
+                                else "wide" if _fr10_is_wide
                                 else "chain5" if _fr10_is_spine_only
                                 else "cat9"
                             ),
@@ -12536,6 +12692,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr10_is_cat6root
                 or _fr10_is_cat10
                 or _fr10_is_333
+                or _fr10_is_wide
             )
             and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
         ):

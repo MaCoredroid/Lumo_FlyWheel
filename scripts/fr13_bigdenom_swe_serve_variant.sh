@@ -53,6 +53,14 @@ CAT10_TREE="[(0,),(1,),(0,0),(0,1),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,1),(0,0,0,0,
 # 3-3-3 (depth-3, 3 candidates/depth: spine top-1 + rank-1 top-2 + rank-2 top-3 at
 # the root and both interior spine depths). EXPECT 9 (num_speculative_tokens=9).
 THREETHREE_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2)]"
+# FR13_RESHAPE_WIDE: width-5 shapes for the wider-not-deeper sweep. Both are
+# sorted (len, path) caterpillar trees consumed by the GENERAL width-N drafter
+# (top-5 runner-up reads off the spine logits; lossless by the drafter-agnostic
+# committer). Widths = the digit pattern per spine depth.
+#   cat555  = [5,5,5]      depth-3, 15 nodes (pad16). vs native E3.
+#   cat55222= [5,5,2,2,2]  depth-5, 16 nodes (== N_PAD=16). vs native E5.
+CAT555_TREE="[(0,),(1,),(2,),(3,),(4,),(0,0),(0,1),(0,2),(0,3),(0,4),(0,0,0),(0,0,1),(0,0,2),(0,0,3),(0,0,4)]"
+CAT55222_TREE="[(0,),(1,),(2,),(3,),(4,),(0,0),(0,1),(0,2),(0,3),(0,4),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,1),(0,0,0,0,0),(0,0,0,0,1)]"
 case "$KIND" in
   cat9)      LAUNCHER=locked; TREEARG="";             EXPECT_RATIO=9;  declare -a XFLAGS=() ;;
   cat9-opta) LAUNCHER=locked; TREEARG="";             EXPECT_RATIO=9;  declare -a XFLAGS=(FR13_GB10_FP8_GEMV_CFG=1) ;;
@@ -60,6 +68,8 @@ case "$KIND" in
   cat6root)  LAUNCHER=forked; TREEARG="$CAT6ROOT_TREE"; EXPECT_RATIO=6;  declare -a XFLAGS=() ;;
   cat10)     LAUNCHER=forked; TREEARG="$CAT10_TREE";    EXPECT_RATIO=10; declare -a XFLAGS=() ;;
   333)       LAUNCHER=forked; TREEARG="$THREETHREE_TREE"; EXPECT_RATIO=9; declare -a XFLAGS=() ;;
+  cat555)    LAUNCHER=forked; TREEARG="$CAT555_TREE";    EXPECT_RATIO=15; declare -a XFLAGS=() ;;
+  cat55222)  LAUNCHER=forked; TREEARG="$CAT55222_TREE";  EXPECT_RATIO=16; declare -a XFLAGS=() ;;
   *) echo "FAIL: unknown KIND=$KIND"; exit 2 ;;
 esac
 PROBE_MODE=tree_mtp
