@@ -418,7 +418,8 @@
   .flow-figure.is-paused .flow-edge,
   .flow-figure.is-paused .flow-node,
   .flow-figure.is-paused .bias-on,
-  .flow-figure.is-paused .scan-window {
+  .flow-figure.is-paused .scan-window,
+  .flow-figure.is-paused .cache-cursor {
     animation-play-state: paused;
   }
   .flow-control {
@@ -503,6 +504,10 @@
   .flow-svg .fa-fill { fill: var(--amber-soft); stroke: var(--amber); }
   .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
   .flow-svg .bad-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .meta-fill {
+    fill: rgba(255, 255, 255, 0.026);
+    stroke: var(--rule-2);
+  }
   .flow-svg .kernel-card {
     fill: rgba(255, 255, 255, 0.018);
     stroke: var(--rule);
@@ -527,6 +532,7 @@
   .flow-svg .native-edge { stroke: var(--cyan); }
   .flow-svg .tree-edge { stroke: var(--green); animation-duration: 2.9s; }
   .flow-svg .fa-edge { stroke: var(--amber); animation-duration: 2.1s; }
+  .flow-svg .warn-edge { stroke: var(--amber); animation-duration: 3s; }
   .flow-svg .commit-edge { stroke: var(--rose); animation-duration: 3.2s; }
   .flow-svg .bad-edge {
     stroke: var(--rose);
@@ -561,6 +567,12 @@
     stroke-width: 2;
     stroke-dasharray: 5 5;
     animation: scanWindow 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .flow-svg .cache-cursor {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
   }
   .flow-svg .legend-dot { stroke: none; }
   @keyframes flowDash {
@@ -909,7 +921,8 @@
     .flow-svg .flow-edge,
     .flow-svg .flow-node,
     .flow-svg .bias-on,
-    .flow-svg .scan-window {
+    .flow-svg .scan-window,
+    .flow-svg .cache-cursor {
       animation: none !important;
     }
     .flow-svg .flow-edge { stroke-dashoffset: 0; }
@@ -1287,13 +1300,13 @@
           <rect x="568" y="116" width="252" height="76" rx="10" class="callout"></rect>
           <text x="590" y="145" class="math">bias(i,j)=0 if j ancestor(i)</text>
           <text x="590" y="169" class="math">bias(i,j)=-inf otherwise</text>
-          <rect x="866" y="116" width="160" height="76" rx="10" class="node node-rose"></rect>
+          <rect x="866" y="116" width="160" height="76" rx="10" class="callout"></rect>
           <text x="888" y="145" class="label">lossless gate</text>
           <text x="888" y="168" class="tiny">match served native</text>
           <text x="888" y="186" class="tiny">not just real math</text>
 
           <path d="M162 192 V232" class="flow-edge native-edge" marker-end="url(#attn-arrow-cyan)"></path>
-          <path d="M418 192 V232" class="flow-edge bad-edge" marker-end="url(#attn-arrow-rose)"></path>
+          <path d="M418 192 V232" class="flow-edge fa-edge" marker-end="url(#attn-arrow-amber)"></path>
           <path d="M694 192 V232" class="flow-edge fa-edge" marker-end="url(#attn-arrow-amber)"></path>
           <path d="M418 192 C562 210 612 212 694 232" class="flow-edge fa-edge" marker-end="url(#attn-arrow-amber)"></path>
 
@@ -1334,9 +1347,9 @@
           <rect x="588" y="324" width="100" height="72" rx="8" class="flow-node bad-fill s2"></rect>
           <text x="612" y="354" class="label">Triton</text>
           <text x="608" y="377" class="tiny">softmax/PV</text>
-          <text x="428" y="442" class="flow-sub">What matches: ancestry mask semantics</text>
-          <text x="428" y="468" class="flow-sub">What changes: MMA, reductions, softmax path</text>
-          <text x="428" y="494" class="flow-sub">Role: fallback and diagnostic, not proof path</text>
+          <text x="428" y="442" class="flow-sub">Matches: ancestry mask semantics</text>
+          <text x="428" y="468" class="flow-sub">Differs: MMA / reduction / softmax</text>
+          <text x="428" y="494" class="flow-sub">Role: fallback, not proof path</text>
 
           <rect x="754" y="232" width="318" height="322" rx="12" class="flow-node fa-fill"></rect>
           <text x="780" y="264" class="flow-title">C. Forked FA2 tree-bias</text>
@@ -1355,7 +1368,7 @@
 
           <rect x="50" y="584" width="1022" height="72" rx="10" class="callout"></rect>
           <text x="76" y="610" class="math">output_i = softmax((Q_i K^T) * scale + tree_bias_i) V</text>
-          <text x="76" y="636" class="flow-sub">Native carrier stays FA2; only the additive ancestry bias is new.</text>
+          <text x="76" y="636" class="flow-sub">Color key: cyan=native FA2, amber=tree-bias path, rose=fallback/hazard, gray=checks.</text>
         </svg>
         <div class="code-grounding" aria-label="Code grounding for Figure 1">
           <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_patch_fa2_tree_bias.py">FA2 tree-bias patch</a>
@@ -1383,6 +1396,12 @@
             </marker>
             <marker id="gdn-arrow-green" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
+            </marker>
+            <marker id="gdn-arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#e7c76f"></path>
+            </marker>
+            <marker id="gdn-arrow-gray" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#7f7a70"></path>
             </marker>
             <marker id="gdn-arrow-rose" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
@@ -1426,7 +1445,7 @@
           <path d="M502 370 H562" class="flow-edge bad-edge" marker-end="url(#gdn-arrow-rose)"></path>
           <rect x="562" y="350" width="96" height="40" rx="8" class="flow-node bad-fill"></rect>
           <text x="586" y="375" class="label">n2</text>
-          <path d="M130 390 C205 418 374 418 454 390" class="flow-edge tree-edge" marker-end="url(#gdn-arrow-green)"></path>
+          <path d="M130 390 C205 418 374 418 454 390" class="flow-edge warn-edge" marker-end="url(#gdn-arrow-amber)"></path>
           <text x="76" y="438" class="math">row order says: state(b1) = step(state(n1), x_b1)</text>
           <text x="76" y="462" class="math">tree says:      state(b1) = step(state(n0), x_b1)</text>
           <rect x="724" y="330" width="318" height="110" rx="10" class="callout"></rect>
@@ -1438,30 +1457,29 @@
           <rect x="28" y="506" width="1064" height="226" rx="10" class="lane"></rect>
           <text x="52" y="538" class="flow-title">C. Shipped GDN tree-scan: parent-indexed h_cache plus replay</text>
           <text x="52" y="563" class="flow-sub">each node resumes from parent state, runs the native rank-1 update body, and exports only accepted-chain state</text>
-          <rect x="64" y="590" width="138" height="44" rx="8" class="node node-green"></rect>
+          <rect x="64" y="590" width="138" height="44" rx="8" class="meta-fill"></rect>
           <text x="86" y="616" class="label">parent[]</text>
-          <rect x="64" y="646" width="138" height="44" rx="8" class="node node-green"></rect>
+          <rect x="64" y="646" width="138" height="44" rx="8" class="meta-fill"></rect>
           <text x="86" y="672" class="label">strict_mask</text>
           <rect x="236" y="590" width="138" height="44" rx="8" class="node node-cyan"></rect>
           <text x="258" y="616" class="label">h0 state</text>
-          <rect x="236" y="646" width="138" height="44" rx="8" class="node node-cyan"></rect>
+          <rect x="236" y="646" width="138" height="44" rx="8" class="meta-fill"></rect>
           <text x="258" y="672" class="label">q/k/v/g/beta</text>
-          <path d="M374 612 H430" class="flow-edge tree-edge" marker-end="url(#gdn-arrow-green)"></path>
-          <path d="M374 668 H430" class="flow-edge tree-edge" marker-end="url(#gdn-arrow-green)"></path>
+          <path d="M374 612 H430" class="flow-edge quiet-edge" marker-end="url(#gdn-arrow-gray)"></path>
+          <path d="M374 668 H430" class="flow-edge quiet-edge" marker-end="url(#gdn-arrow-gray)"></path>
           <rect x="430" y="582" width="214" height="118" rx="10" class="flow-node tree-fill"></rect>
           <text x="452" y="612" class="label">_gdn_node_step</text>
           <text x="452" y="637" class="tiny">S *= exp(g)</text>
           <text x="452" y="658" class="tiny">v -= S k; v *= beta</text>
           <text x="452" y="679" class="tiny">S += v k^T; out = S q</text>
           <path d="M644 640 H696" class="flow-edge tree-edge" marker-end="url(#gdn-arrow-green)"></path>
-          <rect x="696" y="568" width="176" height="154" rx="10" class="node node-green"></rect>
+          <rect x="696" y="568" width="176" height="154" rx="10" class="meta-fill"></rect>
           <text x="718" y="598" class="label">h_cache</text>
-          <text x="718" y="622" class="tiny">row n0 post-state</text>
-          <text x="718" y="643" class="tiny">row n1 post-state</text>
-          <text x="718" y="664" class="tiny">row b1 post-state</text>
-          <text x="718" y="685" class="tiny">row n2 post-state</text>
-          <rect x="708" y="614" width="104" height="80" rx="8" class="scan-window"></rect>
-          <path d="M696 704 C642 728 552 724 538 700" class="flow-edge quiet-edge" marker-end="url(#gdn-arrow-green)"></path>
+          <text x="718" y="622" class="tiny">select parent row</text>
+          <text x="718" y="643" class="tiny">store post-state</text>
+          <text x="718" y="664" class="tiny">rows: n0 n1 b1 n2</text>
+          <text x="718" y="685" class="tiny">not row order</text>
+          <rect x="854" y="610" width="10" height="88" rx="5" class="cache-cursor"></rect>
           <path d="M872 640 H922" class="flow-edge commit-edge" marker-end="url(#gdn-arrow-rose)"></path>
           <rect x="922" y="582" width="136" height="118" rx="10" class="flow-node commit-fill"></rect>
           <text x="944" y="612" class="label">replay</text>
@@ -1469,7 +1487,7 @@
           <text x="944" y="658" class="tiny">native order</text>
           <text x="944" y="679" class="tiny">publish durable</text>
           <rect x="64" y="748" width="994" height="28" rx="8" class="callout"></rect>
-          <text x="88" y="767" class="math">Legend: S = GDN state, parent[] = tree edge table, h_cache = per-node post-state. Invariant: S_i = step(S_parent(i), x_i).</text>
+          <text x="88" y="767" class="flow-sub">Color key: cyan=native spine, rose=invalid/publish boundary, green=shipped GDN state flow, gray=metadata/cache.</text>
         </svg>
         <div class="code-grounding" aria-label="Code grounding for Figure 2">
           <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">GDN tree-scan kernel</a>
