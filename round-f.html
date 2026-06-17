@@ -225,7 +225,7 @@
 <div class="wrap">
   <div class="strip">
     <span class="l"><span class="dot"></span> Lumo&nbsp;FlyWheel · Serving&nbsp;Lab</span>
-    <span><a href="index.html">← Vol. I · Round-4b paper</a></span>
+    <span><a href="index.html">← Vol. I · Round-4b paper</a> &nbsp; <a href="gdn-tree-scan.html">Vol. III · Lossless GDN tree-scan →</a></span>
   </div>
 
   <header>
@@ -500,9 +500,10 @@
       <li><strong>Hardware &amp; runtime.</strong> Single NVIDIA GB10 (DGX Spark, sm_120, aarch64), 117 GB unified LPDDR5x at 273 GB/s. vLLM 0.19 + Arctic Inference 0.1.2, TP=1, Qwen 3.6-27B-FP8, driven by Codex CLI 0.128.0 through an inference proxy at <code>127.0.0.1:8022</code>.</li>
       <li><strong>Losslessness.</strong> "Lossless" means the published token stream is distribution-equivalent to the target model (Leviathan et&nbsp;al., ICML 2023; Chen et&nbsp;al., 2023). All speed claims are gated on byte-exact greedy equality plus rejection-sampling distribution tests — not a SWE quality re-run.</li>
       <li><strong>Telemetry caveat.</strong> <code>decode_sum_s</code> / <code>prefill_sum_s</code> / <code>spec_decode_*</code> are deltas of global vLLM Prometheus counters; they over-count under concurrency. The load-bearing signal is the server-side step-trace, and the clean per-request rate is <code>completion_tokens / upstream_compute_s</code>.</li>
-      <li><strong>Companion.</strong> This volume is the sequel to the <a href="index.html">Round-4b mini paper</a>, which it partially refutes. Read Vol. I first for the ablation methodology and the CNB-55 benchmark family it depends on.</li>
+      <li><strong>Companion.</strong> This volume is the sequel to the <a href="index.html">Round-4b mini paper</a>, which it partially refutes. The next preview is <a href="gdn-tree-scan.html">Vol. III, Lossless GDN Tree-Scan</a>.</li>
     </ol>
     <a class="backlink" href="index.html">← Read Volume I · Codex-Harness-Coupled Speculative Decoding (Round 4b)</a>
+    <a class="backlink" href="gdn-tree-scan.html">Read Volume III · Lossless GDN Tree-Scan →</a>
   </section>
 
   <footer>
