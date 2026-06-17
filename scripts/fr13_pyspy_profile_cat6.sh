@@ -63,13 +63,15 @@ echo "[5/6] sustained B=1 decode loop (background) + py-spy record"
   done ) &
 DECODE_PID=$!
 sleep 8   # let the first request warm + enter steady decode
-# pick the busiest python PID (the EngineCore worker running forwards) inside the container
-WPID=$(docker exec "$CONTAINER" bash -lc "ps -eo pid,pcpu,comm --sort=-pcpu | awk 'NR>1 && \$3 ~ /python|pt_main|VllmW/ {print \$1; exit}'")
+# target the EngineCore worker (runs forwards/committer/gdn-replay); fall back to top-CPU non-shell
+WPID=$(docker exec "$CONTAINER" bash -lc "ps -eo pid,comm | awk '/EngineCor/{print \$1; exit}'")
+[ -n "$WPID" ] || WPID=$(docker exec "$CONTAINER" bash -lc "ps -eo pid,pcpu,comm --sort=-pcpu | awk 'NR>1 && \$3 !~ /^ps|^bash|^awk|^sh\$|spy/ {print \$1; exit}'")
 echo "  worker pid (in-container) = $WPID"
 docker exec "$CONTAINER" bash -lc "ps -eo pid,pcpu,rss,comm --sort=-pcpu | head -6" | sed 's/^/  /'
-# flamegraph (40s) + speedscope + a few text dumps
-docker exec "$CONTAINER" bash -lc "py-spy record -d 40 -r 200 --nonblocking -s -p $WPID -o /logs/cat6_pyspy.svg" 2>&1 | tail -3
-docker exec "$CONTAINER" bash -lc "py-spy record -d 12 -r 200 --nonblocking -s -f speedscope -p $WPID -o /logs/cat6_pyspy.speedscope.json" 2>&1 | tail -2
+# flamegraph (40s) + speedscope + a few text dumps. -i/--idle captures off-GIL/blocked
+# frames (the .item() sync stalls + gdn-replay host work live there at B=1).
+docker exec "$CONTAINER" bash -lc "py-spy record -d 40 -r 200 -i --nonblocking -s -p $WPID -o /logs/cat6_pyspy.svg" 2>&1 | tail -3
+docker exec "$CONTAINER" bash -lc "py-spy record -d 12 -r 200 -i --nonblocking -s -f speedscope -p $WPID -o /logs/cat6_pyspy.speedscope.json" 2>&1 | tail -2
 for k in 1 2 3 4 5; do docker exec "$CONTAINER" bash -lc "py-spy dump --nonblocking -p $WPID" >> "$OUT/pyspy_dumps.txt" 2>&1 || true; sleep 1; done
 wait $DECODE_PID 2>/dev/null || true
 
