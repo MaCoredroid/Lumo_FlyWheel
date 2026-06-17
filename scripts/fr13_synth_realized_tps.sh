@@ -78,7 +78,10 @@ def req(maxtok):
         d=json.loads(resp.read().decode())
     return time.time()-t0, len(d["choices"][0].get("text","")), d
 def sfwd_read():
-    try: return json.load(open(SFWD))
+    import glob
+    fs=sorted(glob.glob(SFWD+"*"))
+    if not fs: return {}
+    try: return json.load(open(fs[-1]))
     except: return {}
 req(40)  # warmup
 # prefill baseline (1 token ~ prefill+overhead)
@@ -94,7 +97,7 @@ realized_tps=(MT-1)/decode_wall if decode_wall>0 else 0
 dD=b[KEYS[0]]-a[KEYS[0]]; dA=b[KEYS[1]]-a[KEYS[1]]; dG=b[KEYS[2]]-a[KEYS[2]]; dRT=b[KEYS[3]]-a[KEYS[3]]
 acc=dA/dD if dD else 0; comm=dG/dD if dD else 0; sfwd=dRT/dD if dD else 0
 # s_per_fwd_gpu from the async-cuda-event sidecar (idle-INDEPENDENT pure GPU forward)
-sec=sf.get("seconds",sf.get("accum_s",0)); steps=sf.get("steps",sf.get("n_steps",0))
+sec=sf.get("decode_forward_gpu_seconds",0); steps=sf.get("n_pure_decode_steps_timed",0)
 s_per_fwd_gpu = sec/steps if steps else 0
 gpu_basis_tps = comm/s_per_fwd_gpu if s_per_fwd_gpu else 0
 print(f"ARM={ARM}  (stream=FALSE, no consumer backpressure)")
