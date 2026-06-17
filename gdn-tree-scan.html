@@ -546,6 +546,15 @@
     fill: rgba(255, 255, 255, 0.03);
     stroke: rgba(255, 255, 255, 0.08);
   }
+  .flow-svg .code-label {
+    fill: var(--cyan);
+    font: 11px var(--mono);
+  }
+  .flow-svg .callout {
+    fill: rgba(255, 255, 255, 0.02);
+    stroke: var(--rule-2);
+    stroke-width: 1;
+  }
   .flow-svg .scan-window {
     fill: none;
     stroke: var(--green);
@@ -881,7 +890,7 @@
     }
     .claim { grid-template-columns: 1fr; gap: 4px; }
     .flow-figure .flow-svg {
-      width: 760px;
+      width: 960px;
       max-width: none;
     }
     .flow-why { grid-template-columns: 1fr; }
@@ -1227,7 +1236,7 @@
     <section class="section" id="math-flow">
       <h2>Animated Math Flow</h2>
       <aside class="sidenote">
-        <p><strong>How to read it:</strong> the blue lane is native MTP's linear spine. The amber lane is the FA2 tree fork: same FA2 realization, plus an ancestry bias. The green lane is the GDN tree scan: each node pulls its parent state, not the previous row's state.</p>
+        <p><strong>How to read it:</strong> Figure 1 is attention only: native FA2, Triton TREE_ATTN, and the forked FA2 tree-bias path. Figure 2 is GDN only: native spine, the wrong flattened-tree shortcut, and the shipped parent-state tree scan.</p>
         <p><strong>Reduced motion:</strong> the graph becomes static for readers who prefer less motion.</p>
       </aside>
       <p>The key math relationship is that the tree verifier is not a wider version of native decode. Native MTP has one recurrence chain. The tree verifier has many candidate rows, but each row must be evaluated as if native decode had walked that row's root-to-node path. The FA2 fork solves the attention half of that sentence; the GDN tree scan solves the recurrent-state half.</p>
@@ -1235,228 +1244,239 @@
       <figure class="figure flow-figure" aria-labelledby="kernel-compare-title" aria-describedby="kernel-compare-desc kernel-compare-caption">
         <div class="figure-head">
           <strong id="kernel-compare-title">Figure 1</strong>
-          <span>Kernel realization comparison: attention and recurrent state</span>
-          <button class="flow-control" type="button" aria-pressed="false" aria-label="Pause kernel comparison animation" title="Pause animation">Pause</button>
+          <span>Attention realization: native FA2, Triton TREE_ATTN, forked FA2 tree-bias</span>
+          <button class="flow-control" type="button" data-motion-label="attention figure animation" aria-pressed="false" aria-label="Pause attention figure animation" title="Pause animation">Pause</button>
         </div>
-        <p class="sr-only" id="kernel-compare-desc">Text equivalent: attention has three realizations. Native FLASH_ATTN is the target numeric path but has no tree mask. Triton TREE_ATTN expresses the tree mask through qq_bias but uses a different Triton attention realization. The shipped fork keeps the FA2 realization and adds tree_bias after QK and before softmax. GDN has two realizations. Native GDN is correct for the native MTP spine because each row consumes the previous row state. A flattened tree through native GDN contaminates sibling rows. The tree scan uses the parent index to resume from h_cache and replays only the accepted path into durable state.</p>
-        <svg class="diagram flow-svg" viewBox="0 0 1120 750" role="img" aria-labelledby="kernel-compare-svg-title kernel-compare-svg-desc">
-          <title id="kernel-compare-svg-title">Native attention and GDN kernels compared with shipped tree kernels</title>
-          <desc id="kernel-compare-svg-desc">Two-panel SVG. The top panel compares native FlashAttention, Triton TREE_ATTN, and forked FA2 with tree_bias. The bottom panel compares native GDN linear state flow, wrong flattened-tree flow, and the GDN tree scan that uses parent state and replay.</desc>
+        <p class="sr-only" id="kernel-compare-desc">Text equivalent: the attention figure compares three ways to run verifier attention. Native FA2 is the served target path and uses varlen_fwd, but it has no tree ancestry input. Triton TREE_ATTN can pass a tree mask through qq_bias, but it uses a different Triton attention realization. The shipped fork keeps the FA2 varlen carrier, adds tree_bias after the QK score tile and before softmax, keeps prefill native, and uses the fork only in decode when the tree-bias flag is enabled.</p>
+        <svg class="diagram flow-svg" viewBox="0 0 1120 720" role="img" aria-labelledby="kernel-compare-svg-title kernel-compare-svg-desc">
+          <title id="kernel-compare-svg-title">Attention realization comparison for tree verification</title>
+          <desc id="kernel-compare-svg-desc">Three-column SVG comparing native FA2 without a tree bias, Triton TREE_ATTN with qq_bias, and the forked FA2 path that inserts tree_bias into the native FA2 score tile before softmax.</desc>
           <defs>
-            <marker id="cmp-cyan" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <marker id="attn-arrow-cyan" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
             </marker>
-            <marker id="cmp-green" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
-            </marker>
-            <marker id="cmp-amber" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <marker id="attn-arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L9,3 z" fill="#e7c76f"></path>
             </marker>
-            <marker id="cmp-rose" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <marker id="attn-arrow-rose" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
             </marker>
           </defs>
 
-          <rect x="28" y="34" width="1064" height="306" rx="10" class="lane"></rect>
-          <text x="52" y="66" class="flow-title">Attention layer: same ancestry rule, different numeric realization</text>
-          <text x="52" y="91" class="flow-sub">the shipped path keeps native FA2's score/PV carrier and injects only the tree bias</text>
+          <rect x="28" y="34" width="1064" height="632" rx="10" class="lane"></rect>
+          <text x="52" y="66" class="flow-title">Verifier attention asks for ancestry masking without leaving native FA2 decode</text>
+          <text x="52" y="91" class="flow-sub">native FA2 is the numeric reference; Triton gives a mask path; the fork keeps FA2 and adds only tree_bias</text>
 
-          <rect x="62" y="116" width="122" height="42" rx="8" class="flow-node native-fill"></rect>
-          <text x="89" y="143" class="label">Q / K / V</text>
-          <rect x="202" y="116" width="122" height="42" rx="8" class="flow-node fa-fill"></rect>
-          <text x="222" y="143" class="label">tree mask</text>
+          <rect x="56" y="116" width="212" height="76" rx="10" class="flow-node native-fill"></rect>
+          <text x="78" y="145" class="label">common tensors</text>
+          <text x="78" y="168" class="tiny">Q, K, V, cu_seqlens</text>
+          <text x="78" y="186" class="tiny">block table, fp8 descale</text>
+          <rect x="324" y="116" width="188" height="76" rx="10" class="node node-amber"></rect>
+          <text x="346" y="145" class="label">tree contract</text>
+          <text x="346" y="168" class="tiny">row i may see prefix</text>
+          <text x="346" y="186" class="tiny">and ancestors only</text>
+          <rect x="568" y="116" width="252" height="76" rx="10" class="callout"></rect>
+          <text x="590" y="145" class="math">bias(i,j)=0 if j ancestor(i)</text>
+          <text x="590" y="169" class="math">bias(i,j)=-inf otherwise</text>
+          <rect x="866" y="116" width="160" height="76" rx="10" class="node node-rose"></rect>
+          <text x="888" y="145" class="label">lossless gate</text>
+          <text x="888" y="168" class="tiny">match served native</text>
+          <text x="888" y="186" class="tiny">not just real math</text>
 
-          <path d="M123 158 V176" class="flow-edge native-edge" marker-end="url(#cmp-cyan)"></path>
-          <path d="M263 158 C360 172 400 172 448 176" class="flow-edge bad-edge" marker-end="url(#cmp-rose)"></path>
-          <path d="M263 158 C568 164 688 166 790 176" class="flow-edge fa-edge" marker-end="url(#cmp-amber)"></path>
+          <path d="M162 192 V232" class="flow-edge native-edge" marker-end="url(#attn-arrow-cyan)"></path>
+          <path d="M418 192 V232" class="flow-edge bad-edge" marker-end="url(#attn-arrow-rose)"></path>
+          <path d="M694 192 V232" class="flow-edge fa-edge" marker-end="url(#attn-arrow-amber)"></path>
+          <path d="M418 192 C562 210 612 212 694 232" class="flow-edge fa-edge" marker-end="url(#attn-arrow-amber)"></path>
 
-          <rect x="62" y="176" width="302" height="126" rx="10" class="kernel-card"></rect>
-          <text x="84" y="207" class="flow-title">Native FLASH_ATTN</text>
-          <text x="84" y="235" class="math">_vllm_fa2_C.varlen_fwd</text>
-          <text x="84" y="262" class="flow-sub">target FA2/CUTLASS path</text>
-          <text x="84" y="286" class="flow-sub">linear MTP spine, no tree bias</text>
+          <rect x="50" y="232" width="318" height="322" rx="12" class="kernel-card"></rect>
+          <text x="76" y="264" class="flow-title">A. Native FA2 decode</text>
+          <text x="76" y="290" class="code-label">_vllm_fa2_C.varlen_fwd</text>
+          <rect x="76" y="316" width="104" height="34" rx="8" class="flow-node native-fill"></rect>
+          <text x="100" y="338" class="label">QK tile</text>
+          <path d="M180 333 H220" class="flow-edge native-edge" marker-end="url(#attn-arrow-cyan)"></path>
+          <rect x="220" y="316" width="104" height="34" rx="8" class="flow-node native-fill s2"></rect>
+          <text x="236" y="338" class="label">softmax</text>
+          <path d="M272 350 V384" class="flow-edge native-edge" marker-end="url(#attn-arrow-cyan)"></path>
+          <rect x="76" y="384" width="248" height="42" rx="8" class="flow-node native-fill s3"></rect>
+          <text x="112" y="411" class="label">PV output on native carrier</text>
+          <text x="76" y="460" class="flow-sub">What matches: served FA2/CUTLASS decode</text>
+          <text x="76" y="486" class="flow-sub">What is missing: no ancestry bias input</text>
+          <text x="76" y="512" class="flow-sub">Valid target: native MTP spine rows</text>
 
-          <rect x="409" y="176" width="302" height="126" rx="10" class="kernel-card"></rect>
-          <text x="431" y="207" class="flow-title">Triton TREE_ATTN fallback</text>
-          <text x="431" y="235" class="math">unified_attention + qq_bias</text>
-          <text x="431" y="262" class="flow-sub">tree mask is expressible</text>
-          <text x="431" y="286" class="flow-sub">different MMA / softmax carrier</text>
+          <rect x="402" y="232" width="318" height="322" rx="12" class="kernel-card"></rect>
+          <text x="428" y="264" class="flow-title">B. Triton TREE_ATTN</text>
+          <text x="428" y="290" class="code-label">unified_attention + qq_bias</text>
+          <g aria-label="Triton tree bias matrix">
+            <rect x="428" y="312" width="120" height="96" rx="8" class="node node-amber"></rect>
+            <rect x="452" y="333" width="17" height="17" class="bias-on"></rect>
+            <rect x="472" y="333" width="17" height="17" class="bias-off"></rect>
+            <rect x="492" y="333" width="17" height="17" class="bias-off"></rect>
+            <rect x="512" y="333" width="17" height="17" class="bias-off"></rect>
+            <rect x="452" y="354" width="17" height="17" class="bias-on"></rect>
+            <rect x="472" y="354" width="17" height="17" class="bias-on"></rect>
+            <rect x="492" y="354" width="17" height="17" class="bias-off"></rect>
+            <rect x="512" y="354" width="17" height="17" class="bias-off"></rect>
+            <rect x="452" y="375" width="17" height="17" class="bias-on"></rect>
+            <rect x="472" y="375" width="17" height="17" class="bias-off"></rect>
+            <rect x="492" y="375" width="17" height="17" class="bias-on"></rect>
+            <rect x="512" y="375" width="17" height="17" class="bias-off"></rect>
+          </g>
+          <path d="M548 360 H588" class="flow-edge bad-edge" marker-end="url(#attn-arrow-rose)"></path>
+          <rect x="588" y="324" width="100" height="72" rx="8" class="flow-node bad-fill s2"></rect>
+          <text x="612" y="354" class="label">Triton</text>
+          <text x="608" y="377" class="tiny">softmax/PV</text>
+          <text x="428" y="442" class="flow-sub">What matches: ancestry mask semantics</text>
+          <text x="428" y="468" class="flow-sub">What changes: MMA, reductions, softmax path</text>
+          <text x="428" y="494" class="flow-sub">Role: fallback and diagnostic, not proof path</text>
 
-          <rect x="750" y="176" width="302" height="126" rx="10" class="flow-node fa-fill s2"></rect>
-          <text x="772" y="207" class="flow-title">Forked FA2 tree path</text>
-          <text x="772" y="235" class="math">flash_attn + tree_bias</text>
-          <text x="772" y="262" class="flow-sub">same FA2 carrier as native</text>
-          <text x="772" y="286" class="flow-sub">bias after QK, before softmax</text>
+          <rect x="754" y="232" width="318" height="322" rx="12" class="flow-node fa-fill"></rect>
+          <text x="780" y="264" class="flow-title">C. Forked FA2 tree-bias</text>
+          <text x="780" y="290" class="code-label">flash_attn_varlen + tree_bias</text>
+          <rect x="782" y="316" width="88" height="34" rx="8" class="flow-node fa-fill"></rect>
+          <text x="803" y="338" class="label">QK tile</text>
+          <path d="M870 333 H906" class="flow-edge fa-edge" marker-end="url(#attn-arrow-amber)"></path>
+          <rect x="906" y="316" width="118" height="34" rx="8" class="flow-node fa-fill s2"></rect>
+          <text x="922" y="338" class="label">+ tree_bias</text>
+          <path d="M965 350 V384" class="flow-edge fa-edge" marker-end="url(#attn-arrow-amber)"></path>
+          <rect x="782" y="384" width="242" height="42" rx="8" class="flow-node fa-fill s3"></rect>
+          <text x="817" y="411" class="label">FA2 mask/softmax/PV</text>
+          <text x="780" y="460" class="flow-sub">Hook point: after QK, before softmax</text>
+          <text x="780" y="486" class="flow-sub">Decode: FR13_FA2_TREE_BIAS=1</text>
+          <text x="780" y="512" class="flow-sub">Prefill: native FA2 path</text>
 
-          <rect x="62" y="314" width="990" height="22" rx="8" class="node node-amber"></rect>
-          <text x="84" y="330" class="tiny">Takeaway: Triton supplies ancestry masking but not native FA2 realization; forked FA2 supplies both.</text>
-
-          <rect x="28" y="380" width="1064" height="312" rx="10" class="lane"></rect>
-          <text x="52" y="412" class="flow-title">GDN layer: same rank-1 update, different state source</text>
-          <text x="52" y="437" class="flow-sub">the native MTP spine is the reference; tree rows must not inherit from row order</text>
-
-          <rect x="62" y="462" width="282" height="166" rx="10" class="kernel-card"></rect>
-          <text x="84" y="495" class="flow-title">Native GDN on MTP spine</text>
-          <text x="84" y="522" class="math">S_t = step(S_{t-1}, x_t)</text>
-          <circle cx="108" cy="578" r="18" class="flow-node native-fill"></circle>
-          <text x="99" y="583" class="label">h0</text>
-          <path d="M126 578 H172" class="flow-edge native-edge" marker-end="url(#cmp-cyan)"></path>
-          <circle cx="192" cy="578" r="18" class="flow-node native-fill s2"></circle>
-          <text x="184" y="583" class="label">d0</text>
-          <path d="M210 578 H256" class="flow-edge native-edge" marker-end="url(#cmp-cyan)"></path>
-          <circle cx="276" cy="578" r="18" class="flow-node native-fill s3"></circle>
-          <text x="268" y="583" class="label">d1</text>
-          <text x="84" y="612" class="flow-sub">correct when parent(t)=t-1</text>
-
-          <rect x="416" y="462" width="282" height="166" rx="10" class="kernel-card"></rect>
-          <text x="438" y="495" class="flow-title">Wrong flattened tree</text>
-          <text x="438" y="522" class="math">row order becomes state order</text>
-          <circle cx="466" cy="578" r="18" class="flow-node bad-fill"></circle>
-          <text x="458" y="583" class="label">n0</text>
-          <path d="M484 578 H530" class="flow-edge bad-edge" marker-end="url(#cmp-rose)"></path>
-          <circle cx="550" cy="578" r="18" class="flow-node bad-fill s2"></circle>
-          <text x="542" y="583" class="label">n1</text>
-          <path d="M568 578 H614" class="flow-edge bad-edge" marker-end="url(#cmp-rose)"></path>
-          <circle cx="634" cy="578" r="18" class="flow-node bad-fill s3"></circle>
-          <text x="626" y="583" class="label">b1</text>
-          <text x="438" y="612" class="flow-sub">b1 wrongly consumes n1 state</text>
-
-          <rect x="770" y="462" width="282" height="166" rx="10" class="flow-node tree-fill"></rect>
-          <text x="792" y="495" class="flow-title">GDN tree-scan</text>
-          <text x="792" y="522" class="math">S_i = step(S_parent(i), x_i)</text>
-          <circle cx="814" cy="578" r="18" class="flow-node tree-fill"></circle>
-          <text x="806" y="583" class="label">n0</text>
-          <path d="M832 578 H878" class="flow-edge tree-edge" marker-end="url(#cmp-green)"></path>
-          <circle cx="898" cy="578" r="18" class="flow-node tree-fill s2"></circle>
-          <text x="890" y="583" class="label">n1</text>
-          <path d="M832 588 C860 634 920 636 948 594" class="flow-edge tree-edge" marker-end="url(#cmp-green)"></path>
-          <circle cx="970" cy="578" r="18" class="flow-node tree-fill s3"></circle>
-          <text x="962" y="583" class="label">b1</text>
-          <text x="792" y="548" class="flow-sub">resume from parent h_cache</text>
-
-          <text x="72" y="662" class="math">Degenerate chain: parent(i)=i-1, so tree scan collapses to native MTP spine.</text>
-          <text x="72" y="684" class="math">Branch case: parent(b1)=n0, not previous row n1.</text>
+          <rect x="50" y="584" width="1022" height="72" rx="10" class="callout"></rect>
+          <text x="76" y="610" class="math">output_i = softmax((Q_i K^T) * scale + tree_bias_i) V</text>
+          <text x="76" y="636" class="flow-sub">Native carrier stays FA2; only the additive ancestry bias is new.</text>
         </svg>
         <div class="code-grounding" aria-label="Code grounding for Figure 1">
           <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_patch_fa2_tree_bias.py">FA2 tree-bias patch</a>
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_FA2_TREE_BIAS_FORK.md">FA2 fork design note</a>
           <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_FA2_FORK_IS_DECODE_KERNEL_CORRECTION.md">decode-kernel correction</a>
-          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">GDN tree-scan kernel</a>
-          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr10_phase4_patch_vllm_tree_gdn.py">vLLM GDN wiring patch</a>
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_FULLATTN_OP_LOCALIZE_TASK.md">TREE_ATTN residual localization</a>
           <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_VERSION_STALENESS_AUDIT.md">pinned vLLM source re-read</a>
         </div>
-        <figcaption class="caption" id="kernel-compare-caption">The attention fork is not just a faster mask path: it keeps the native FA2 realization and adds the ancestry bias inside that path. The GDN fork is not a new recurrence: it runs the native rank-1 update body with a different state source, so a chain equals native MTP while a branch inherits from its parent node.</figcaption>
+        <figcaption class="caption" id="kernel-compare-caption">Figure 1 is intentionally attention-only. The reason Triton TREE_ATTN is not enough is not that its mask is wrong; it is that the verifier proof must land on the same served FA2 decode realization as native MTP. The fork injects the tree ancestry term inside that realization.</figcaption>
       </figure>
 
       <figure class="figure flow-figure" aria-labelledby="flow-title" aria-describedby="flow-long-desc flow-caption">
         <div class="figure-head">
           <strong id="flow-title">Figure 2</strong>
-          <span>Native spine versus FA2 tree fork plus GDN tree scan</span>
-          <button class="flow-control" type="button" aria-pressed="false" aria-label="Pause math-flow animation" title="Pause animation">Pause</button>
+          <span>GDN tree-scan kernel versus native GDN spine</span>
+          <button class="flow-control" type="button" data-motion-label="GDN kernel figure animation" aria-pressed="false" aria-label="Pause GDN kernel figure animation" title="Pause animation">Pause</button>
         </div>
-        <p class="sr-only" id="flow-long-desc">Text equivalent: native MTP moves through one linear recurrent state chain. FA2 tree fork gives candidate rows a tree ancestry bias so attention sees ancestors but not unrelated branches. GDN tree scan gives every tree node the recurrent state of its parent, stores post-state rows in h_cache, and replays only the accepted path before publishing durable vLLM state.</p>
-        <svg class="diagram flow-svg" viewBox="0 0 1120 590" role="img" aria-labelledby="flow-svg-title flow-svg-desc">
-          <title id="flow-svg-title">Native spine, FA2 tree fork, and GDN tree-scan math flow</title>
-          <desc id="flow-svg-desc">Three-lane diagram: a blue native MTP chain updates state from the previous token, an amber FA2 fork applies tree ancestry bias to attention rows, and a green GDN tree scan lets each node inherit from its parent state before replay commits only the accepted path.</desc>
+        <p class="sr-only" id="flow-long-desc">Text equivalent: the GDN figure compares native linear recurrent decode, the wrong flattened-tree shortcut, and the shipped tree-scan kernel. Native GDN is correct when every row's parent is the previous row. Flattening a candidate tree through the native packed state order makes siblings inherit impossible history. The tree scan loads the parent state from h_cache, runs the same rank-1 GDN update body, writes one post-state per node, and replays only the accepted chain into durable vLLM state.</p>
+        <svg class="diagram flow-svg" viewBox="0 0 1120 790" role="img" aria-labelledby="flow-svg-title flow-svg-desc">
+          <title id="flow-svg-title">GDN native spine, failed flattened tree, and tree-scan kernel</title>
+          <desc id="flow-svg-desc">Three-lane SVG focused only on Gated-DeltaNet state. The first lane shows native MTP spine recurrence. The second lane shows sibling contamination when tree rows are flattened into row order. The third lane shows parent-indexed h_cache, the shared GDN step, and accepted-chain replay.</desc>
           <defs>
-            <marker id="flow-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <marker id="gdn-arrow-cyan" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
             </marker>
-            <marker id="flow-arrow-green" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <marker id="gdn-arrow-green" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
             </marker>
-            <marker id="flow-arrow-amber" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-              <path d="M0,0 L0,6 L9,3 z" fill="#e7c76f"></path>
-            </marker>
-            <marker id="flow-arrow-rose" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+            <marker id="gdn-arrow-rose" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
               <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
             </marker>
           </defs>
 
-          <rect x="28" y="34" width="1064" height="136" rx="10" class="lane"></rect>
-          <text x="52" y="66" class="flow-title">Native MTP spine kernel</text>
-          <text x="52" y="91" class="flow-sub">one accepted chain, one recurrent state column</text>
-          <rect x="78" y="111" width="86" height="40" rx="8" class="flow-node native-fill"></rect>
-          <text x="100" y="136" class="label">S0</text>
-          <path d="M164 131 H254" class="flow-edge native-edge" marker-end="url(#flow-arrow)"></path>
-          <rect x="254" y="111" width="86" height="40" rx="8" class="flow-node native-fill s2"></rect>
-          <text x="276" y="136" class="label">S1</text>
-          <path d="M340 131 H430" class="flow-edge native-edge" marker-end="url(#flow-arrow)"></path>
-          <rect x="430" y="111" width="86" height="40" rx="8" class="flow-node native-fill s3"></rect>
-          <text x="452" y="136" class="label">S2</text>
-          <path d="M516 131 H606" class="flow-edge native-edge" marker-end="url(#flow-arrow)"></path>
-          <rect x="606" y="111" width="86" height="40" rx="8" class="flow-node native-fill"></rect>
-          <text x="628" y="136" class="label">S3</text>
-          <path d="M692 131 H782" class="flow-edge native-edge" marker-end="url(#flow-arrow)"></path>
-          <rect x="782" y="111" width="86" height="40" rx="8" class="flow-node native-fill s2"></rect>
-          <text x="804" y="136" class="label">S4</text>
-          <text x="910" y="125" class="math">S_t = step(S_{t-1}, x_t)</text>
-          <text x="910" y="148" class="flow-sub">native uses previous state</text>
+          <rect x="28" y="34" width="1064" height="202" rx="10" class="lane"></rect>
+          <text x="52" y="66" class="flow-title">A. Native GDN spine: one accepted state column</text>
+          <text x="52" y="91" class="flow-sub">the reference path is linear: each decode row consumes the previous accepted GDN state</text>
+          <text x="52" y="124" class="code-label">fused_recurrent_gated_delta_rule_packed_decode / fused_sigmoid_gating_delta_rule_update</text>
+          <circle cx="86" cy="172" r="22" class="flow-node native-fill"></circle>
+          <text x="77" y="177" class="label">S0</text>
+          <path d="M108 172 H172" class="flow-edge native-edge" marker-end="url(#gdn-arrow-cyan)"></path>
+          <rect x="172" y="149" width="72" height="46" rx="8" class="flow-node native-fill s2"></rect>
+          <text x="191" y="177" class="label">d0</text>
+          <path d="M244 172 H308" class="flow-edge native-edge" marker-end="url(#gdn-arrow-cyan)"></path>
+          <rect x="308" y="149" width="72" height="46" rx="8" class="flow-node native-fill s3"></rect>
+          <text x="327" y="177" class="label">d1</text>
+          <path d="M380 172 H444" class="flow-edge native-edge" marker-end="url(#gdn-arrow-cyan)"></path>
+          <rect x="444" y="149" width="72" height="46" rx="8" class="flow-node native-fill"></rect>
+          <text x="463" y="177" class="label">d2</text>
+          <path d="M516 172 H580" class="flow-edge native-edge" marker-end="url(#gdn-arrow-cyan)"></path>
+          <rect x="580" y="149" width="72" height="46" rx="8" class="flow-node native-fill s2"></rect>
+          <text x="599" y="177" class="label">d3</text>
+          <rect x="716" y="112" width="326" height="94" rx="10" class="callout"></rect>
+          <text x="738" y="140" class="math">S_t = GDN_step(S_{t-1}, x_t)</text>
+          <text x="738" y="164" class="flow-sub">native geometry: BV=32, warps=1, stages=3</text>
+          <text x="738" y="188" class="flow-sub">lossless target when parent(t)=t-1</text>
 
-          <rect x="28" y="204" width="1064" height="142" rx="10" class="lane"></rect>
-          <text x="52" y="236" class="flow-title">FA2 tree fork</text>
-          <text x="52" y="261" class="flow-sub">same FA2 kernel family; decode receives ancestry bias</text>
-          <rect x="80" y="286" width="146" height="36" rx="8" class="flow-node fa-fill"></rect>
-          <text x="104" y="309" class="label">candidate rows</text>
-          <path d="M226 304 H294" class="flow-edge fa-edge" marker-end="url(#flow-arrow-amber)"></path>
-          <g aria-label="tree bias matrix">
-            <rect x="294" y="264" width="130" height="72" rx="8" class="node node-amber"></rect>
-            <rect x="314" y="281" width="18" height="18" class="bias-on"></rect>
-            <rect x="336" y="281" width="18" height="18" class="bias-off"></rect>
-            <rect x="358" y="281" width="18" height="18" class="bias-off"></rect>
-            <rect x="380" y="281" width="18" height="18" class="bias-off"></rect>
-            <rect x="314" y="303" width="18" height="18" class="bias-on"></rect>
-            <rect x="336" y="303" width="18" height="18" class="bias-on"></rect>
-            <rect x="358" y="303" width="18" height="18" class="bias-off"></rect>
-            <rect x="380" y="303" width="18" height="18" class="bias-off"></rect>
-          </g>
-          <path d="M424 304 H492" class="flow-edge fa-edge" marker-end="url(#flow-arrow-amber)"></path>
-          <rect x="492" y="267" width="198" height="74" rx="10" class="flow-node fa-fill s2"></rect>
-          <text x="520" y="298" class="label">flash_attn_varlen</text>
-          <text x="520" y="322" class="tiny">QK + tree_bias -> softmax -> PV</text>
-          <path d="M690 304 H768" class="flow-edge fa-edge" marker-end="url(#flow-arrow-amber)"></path>
-          <rect x="768" y="286" width="146" height="36" rx="8" class="flow-node fa-fill s3"></rect>
-          <text x="790" y="309" class="label">attn outputs</text>
-          <text x="938" y="292" class="math">bias=0 on ancestors</text>
-          <text x="938" y="316" class="math">bias=-inf elsewhere</text>
+          <rect x="28" y="268" width="1064" height="206" rx="10" class="lane"></rect>
+          <text x="52" y="300" class="flow-title">B. Why a flattened tree through native state order fails</text>
+          <text x="52" y="325" class="flow-sub">a packed tree has branch-local parents; native packed recurrence has only previous-row state</text>
+          <rect x="70" y="350" width="120" height="40" rx="8" class="flow-node bad-fill"></rect>
+          <text x="96" y="375" class="label">n0 root</text>
+          <path d="M190 370 H250" class="flow-edge bad-edge" marker-end="url(#gdn-arrow-rose)"></path>
+          <rect x="250" y="350" width="96" height="40" rx="8" class="flow-node bad-fill s2"></rect>
+          <text x="274" y="375" class="label">n1</text>
+          <path d="M346 370 H406" class="flow-edge bad-edge" marker-end="url(#gdn-arrow-rose)"></path>
+          <rect x="406" y="350" width="96" height="40" rx="8" class="flow-node bad-fill s3"></rect>
+          <text x="430" y="375" class="label">b1</text>
+          <path d="M502 370 H562" class="flow-edge bad-edge" marker-end="url(#gdn-arrow-rose)"></path>
+          <rect x="562" y="350" width="96" height="40" rx="8" class="flow-node bad-fill"></rect>
+          <text x="586" y="375" class="label">n2</text>
+          <path d="M130 390 C205 418 374 418 454 390" class="flow-edge tree-edge" marker-end="url(#gdn-arrow-green)"></path>
+          <text x="76" y="438" class="math">row order says: state(b1) = step(state(n1), x_b1)</text>
+          <text x="76" y="462" class="math">tree says:      state(b1) = step(state(n0), x_b1)</text>
+          <rect x="724" y="330" width="318" height="110" rx="10" class="callout"></rect>
+          <text x="746" y="358" class="label">Why STree / WY did not transfer directly</text>
+          <text x="746" y="384" class="tiny">state existence is not enough</text>
+          <text x="746" y="405" class="tiny">served bf16/fp8 codegen must match native</text>
+          <text x="746" y="426" class="tiny">vLLM writeback must publish accepted state only</text>
 
-          <rect x="28" y="380" width="1064" height="166" rx="10" class="lane"></rect>
-          <text x="52" y="412" class="flow-title">GDN tree-scan kernel</text>
-          <text x="52" y="437" class="flow-sub">parent state first; replay only the accepted chain</text>
-          <circle cx="110" cy="482" r="24" class="flow-node tree-fill"></circle>
-          <text x="99" y="487" class="label">h0</text>
-          <path d="M134 482 H220" class="flow-edge tree-edge" marker-end="url(#flow-arrow-green)"></path>
-          <circle cx="244" cy="482" r="23" class="flow-node tree-fill s2"></circle>
-          <text x="237" y="487" class="label">n0</text>
-          <path d="M267 482 H348" class="flow-edge tree-edge" marker-end="url(#flow-arrow-green)"></path>
-          <circle cx="372" cy="482" r="23" class="flow-node tree-fill s3"></circle>
-          <text x="365" y="487" class="label">n1</text>
-          <path d="M395 482 H476" class="flow-edge tree-edge" marker-end="url(#flow-arrow-green)"></path>
-          <circle cx="500" cy="482" r="23" class="flow-node tree-fill"></circle>
-          <text x="493" y="487" class="label">n2</text>
-          <path d="M267 492 C294 532 326 542 352 526" class="flow-edge tree-edge" marker-end="url(#flow-arrow-green)"></path>
-          <circle cx="372" cy="526" r="21" class="flow-node tree-fill s2"></circle>
-          <text x="365" y="531" class="label">b1</text>
-          <text x="405" y="535" class="tiny">sibling child inherits n0 state</text>
-          <rect x="612" y="423" width="210" height="92" rx="10" class="node node-green"></rect>
-          <text x="634" y="452" class="label">h_cache</text>
-          <text x="634" y="477" class="tiny">one post-state per node</text>
-          <text x="634" y="501" class="tiny">child selects parent row</text>
-          <rect x="622" y="436" width="78" height="68" rx="8" class="scan-window"></rect>
-          <path d="M523 482 H612" class="flow-edge tree-edge" marker-end="url(#flow-arrow-green)"></path>
-          <path d="M822 469 H902" class="flow-edge commit-edge" marker-end="url(#flow-arrow-rose)"></path>
-          <rect x="902" y="431" width="154" height="76" rx="10" class="flow-node commit-fill"></rect>
-          <text x="930" y="462" class="label">replay</text>
-          <text x="930" y="486" class="tiny">publish accepted state</text>
-          <text x="66" y="570" class="math">Tree invariant: S_i = GDN_step(S_parent(i), x_i)</text>
-          <text x="502" y="570" class="math">Commit invariant: durable_state = native_scan(accepted_path)</text>
+          <rect x="28" y="506" width="1064" height="226" rx="10" class="lane"></rect>
+          <text x="52" y="538" class="flow-title">C. Shipped GDN tree-scan: parent-indexed h_cache plus replay</text>
+          <text x="52" y="563" class="flow-sub">each node resumes from parent state, runs the native rank-1 update body, and exports only accepted-chain state</text>
+          <rect x="64" y="590" width="138" height="44" rx="8" class="node node-green"></rect>
+          <text x="86" y="616" class="label">parent[]</text>
+          <rect x="64" y="646" width="138" height="44" rx="8" class="node node-green"></rect>
+          <text x="86" y="672" class="label">strict_mask</text>
+          <rect x="236" y="590" width="138" height="44" rx="8" class="node node-cyan"></rect>
+          <text x="258" y="616" class="label">h0 state</text>
+          <rect x="236" y="646" width="138" height="44" rx="8" class="node node-cyan"></rect>
+          <text x="258" y="672" class="label">q/k/v/g/beta</text>
+          <path d="M374 612 H430" class="flow-edge tree-edge" marker-end="url(#gdn-arrow-green)"></path>
+          <path d="M374 668 H430" class="flow-edge tree-edge" marker-end="url(#gdn-arrow-green)"></path>
+          <rect x="430" y="582" width="214" height="118" rx="10" class="flow-node tree-fill"></rect>
+          <text x="452" y="612" class="label">_gdn_node_step</text>
+          <text x="452" y="637" class="tiny">S *= exp(g)</text>
+          <text x="452" y="658" class="tiny">v -= S k; v *= beta</text>
+          <text x="452" y="679" class="tiny">S += v k^T; out = S q</text>
+          <path d="M644 640 H696" class="flow-edge tree-edge" marker-end="url(#gdn-arrow-green)"></path>
+          <rect x="696" y="568" width="176" height="154" rx="10" class="node node-green"></rect>
+          <text x="718" y="598" class="label">h_cache</text>
+          <text x="718" y="622" class="tiny">row n0 post-state</text>
+          <text x="718" y="643" class="tiny">row n1 post-state</text>
+          <text x="718" y="664" class="tiny">row b1 post-state</text>
+          <text x="718" y="685" class="tiny">row n2 post-state</text>
+          <rect x="708" y="614" width="104" height="80" rx="8" class="scan-window"></rect>
+          <path d="M696 704 C642 728 552 724 538 700" class="flow-edge quiet-edge" marker-end="url(#gdn-arrow-green)"></path>
+          <path d="M872 640 H922" class="flow-edge commit-edge" marker-end="url(#gdn-arrow-rose)"></path>
+          <rect x="922" y="582" width="136" height="118" rx="10" class="flow-node commit-fill"></rect>
+          <text x="944" y="612" class="label">replay</text>
+          <text x="944" y="637" class="tiny">accepted path</text>
+          <text x="944" y="658" class="tiny">native order</text>
+          <text x="944" y="679" class="tiny">publish durable</text>
+          <rect x="64" y="748" width="994" height="28" rx="8" class="callout"></rect>
+          <text x="88" y="767" class="math">Legend: S = GDN state, parent[] = tree edge table, h_cache = per-node post-state. Invariant: S_i = step(S_parent(i), x_i).</text>
         </svg>
-        <div class="flow-why" aria-label="Why each path alone is insufficient">
-          <div><strong>Native MTP</strong>Linear spine only; it gives no branch opportunity set for a tree verifier.</div>
-          <div><strong>FA2 fork</strong>Fixes attention ancestry, but recurrent GDN state would still be wrong without parent-state scan.</div>
-          <div><strong>GDN scan</strong>Computes branch-local states; losslessness still needs accepted-chain replay and durable writeback.</div>
-          <div><strong>STree / Triton</strong>Useful framing and masks, but not the served native FA2 plus bf16/fp8 vLLM realization.</div>
+        <div class="code-grounding" aria-label="Code grounding for Figure 2">
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">GDN tree-scan kernel</a>
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr10_phase4_patch_vllm_tree_gdn.py">vLLM GDN wiring patch</a>
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SEQ_TREE_SCAN_TASK.md">sequential tree-scan pivot</a>
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SCAN_BITEXACT_SRAM_NPAD_VERDICT_BIND.md">scan/SRAM/N_PAD verdict</a>
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr10-phase4-real-tensor-derisk-20260603.md">real-tensor de-risk</a>
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_VERSION_STALENESS_AUDIT.md">pinned vLLM source re-read</a>
         </div>
-        <figcaption class="caption" id="flow-caption">The animation intentionally separates two constraints. FA2 tree bias controls which tokens each attention row can see. GDN tree scan controls which recurrent state each row inherits. A rejected sibling such as b1 receives the parent n0 state; it never consumes prior row n1. Losslessness requires both halves, plus replay of the accepted path before vLLM publishes durable state.</figcaption>
+        <div class="flow-why" aria-label="Why the GDN tree scan is needed">
+          <div><strong>Native spine</strong>The proof target for a chain, but only when every row's parent is the previous row.</div>
+          <div><strong>Flattened tree</strong>Runs fast-looking row order, but siblings inherit impossible recurrent history.</div>
+          <div><strong>STree / WY</strong>Good stateful-tree framing; not enough for native bf16/fp8 serving and writeback.</div>
+          <div><strong>Our scan</strong>Uses parent h_cache, native update body, and accepted-path replay before state publication.</div>
+        </div>
+        <figcaption class="caption" id="flow-caption">Figure 2 is intentionally GDN-only. The kernel is not a new recurrence and not a whole-tree algebra shortcut. It is the native GDN rank-1 update applied from the correct parent state for every candidate node, followed by replay so vLLM publishes only the accepted native-compatible state.</figcaption>
       </figure>
     </section>
 
@@ -2184,9 +2204,10 @@ else:
   document.querySelectorAll('.flow-control').forEach((button) => {
     button.addEventListener('click', () => {
       const figure = button.closest('.flow-figure');
+      const label = button.dataset.motionLabel || 'animation';
       const paused = figure.classList.toggle('is-paused');
       button.setAttribute('aria-pressed', String(paused));
-      button.setAttribute('aria-label', paused ? 'Resume math-flow animation' : 'Pause math-flow animation');
+      button.setAttribute('aria-label', paused ? `Resume ${label}` : `Pause ${label}`);
       button.setAttribute('title', paused ? 'Resume animation' : 'Pause animation');
       button.textContent = paused ? 'Play' : 'Pause';
     });
