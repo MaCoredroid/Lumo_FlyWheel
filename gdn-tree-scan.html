@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lossless GDN Tree-Scan - Lumo FlyWheel Vol. III</title>
-<meta name="description" content="Illustrated research paper for lossless Gated-DeltaNet tree-scan: prior work, design trail, kernel math, vLLM wiring, measurement infrastructure, B=1 cat6/cat9 results, and failure library.">
+<meta name="description" content="Illustrated systems paper for a native-compatible Gated-DeltaNet tree verifier: FA2 tree bias, GDN tree scan/replay, vLLM state publication, B=1 decode results, and failure library.">
 <meta property="og:title" content="Lossless GDN Tree-Scan">
-<meta property="og:description" content="A standalone research paper on lossless tree speculative decoding for a Gated-DeltaNet hybrid model.">
+<meta property="og:description" content="A standalone systems paper on distribution-preserving tree verification for a Gated-DeltaNet hybrid model inside vLLM.">
 <meta name="author" content="Mark Ma">
 <meta name="theme-color" content="#111111">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Cpath d='M15 42h11V22h8v20h15' fill='none' stroke='%238bd3dd' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='26' cy='22' r='4' fill='%23e7c76f'/%3E%3Ccircle cx='34' cy='42' r='4' fill='%23a7d98d'/%3E%3Ccircle cx='49' cy='42' r='4' fill='%23d88989'/%3E%3C/svg%3E">
@@ -660,6 +660,10 @@
     color: var(--muted);
     font-size: 14px;
   }
+  .source-exhibit > .grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin: 16px;
+  }
 
   .compare-strip {
     display: grid;
@@ -924,14 +928,14 @@
   </div>
 
   <header class="hero">
-    <p class="kicker">Volume III / illustrated research paper</p>
+    <p class="kicker">Volume III / illustrated systems paper</p>
     <h1>Lossless GDN Tree-Scan</h1>
-    <p class="subhead">A target verifier for token trees on a 75% recurrent hybrid model. The reusable result is the verifier contract: branch-local Gated-DeltaNet state, tree-aware attention, vLLM state publication, and measurement gates that make any future drafter accountable to native decode.</p>
+    <p class="subhead">A native-compatible tree verifier for token trees on a 75% recurrent hybrid model. The contribution is served-realization equivalence for Qwen GDN inside vLLM: FA2 ancestry, path-local recurrent state, accepted-chain replay, and state publication all tied back to native decode.</p>
     <div class="hero-tldr" aria-label="TLDR and headline result">
-      <p class="tldr-copy"><strong>TL;DR:</strong> a draft tree is a menu of next-token guesses. The target model verifies that menu and publishes only the accepted prefix. On this Qwen hybrid, verification means two things at once: attention rows must see only their ancestors, and each GDN row must carry the recurrent state native decode would have produced on that branch. We use the native MTP head here, but the verifier can serve suffix decoding, MTP+suffix, or another drafter if it supplies the same tree contract.</p>
+      <p class="tldr-copy"><strong>TL;DR:</strong> a draft tree is a menu of next-token guesses. On this Qwen hybrid, the verifier is distribution-preserving only if two path-local facts hold at once: attention rows see prefix plus ancestors, and each GDN row carries the recurrent state native decode would have produced on that branch. We use the native MTP head here, but the verifier boundary can serve another drafter if it supplies the same tree contract.</p>
       <div class="hero-result">
         <span class="hero-number">+27%</span>
-        <p><strong>cat6root</strong> token-weighted decode throughput at clean B=1/temp-0.6: 23.88 tok/s vs 18.80 for native E5. Per-request latency view is 18.51 tok/s, +4.0%; both cat6root and cat9 are lossless within the native E5 floor.</p>
+        <p><strong>cat6root</strong> token-weighted decode throughput at clean B=1/temp-0.6 on four SWE/Codex tasks: 23.88 tok/s vs 18.80 for native E5. This is decode-only, not end-to-end wall time; the per-request latency view is +4.0%.</p>
       </div>
     </div>
     <div class="byline">
@@ -943,21 +947,12 @@
     <div class="paper-nav">
       <a href="#abstract">Abstract</a>
       <a href="#claims">Claims</a>
-      <a href="#impact">Impact</a>
       <a href="#design-trail">Design trail</a>
       <a href="#prior-work">Prior work</a>
-      <a href="#algorithm">Algorithm</a>
-      <a href="#math-flow">Math flow</a>
-      <a href="#kernel">Kernel and math</a>
-      <a href="#wiring">vLLM wiring</a>
-      <a href="#shapes">Tree shapes</a>
-      <a href="#setup">Setup</a>
       <a href="#results">Results</a>
-      <a href="#measurement">Measurement</a>
       <a href="#lossless">Lossless</a>
       <a href="#failure-library">Failure library</a>
       <a href="#limitations">Limits</a>
-      <a href="#config">Config</a>
       <a href="#receipts">Source trail</a>
     </div>
   </header>
@@ -965,24 +960,38 @@
   <main>
     <section class="section" id="abstract">
       <h2>Abstract</h2>
-      <p>We present a tree verifier for speculative decoding on Qwen 3.6-27B-FP8, a hybrid model whose 64 layers include 48 Gated-DeltaNet recurrent layers and 16 softmax-attention layers. Tree verification in this regime is not an attention-mask problem alone. Each candidate row must carry the GDN state that native decode would have produced along that row's root-to-node path, while each attention row must see only the same ancestor tokens.</p>
-      <p>The implementation combines a forked FlashAttention-2 tree-bias path, a Triton GDN tree scan/replay kernel, vLLM tree-shape packing, device-side multidraft commit, and deployment-mode measurement gates. In the clean B=1/temp-0.6 deployment run merged to <code>main</code> on June 17, 2026, both depth-5 tree shapes beat native E5 and both are lossless within the native floor. On token-weighted decode throughput, cat6root reaches 23.88 tok/s versus 18.80 for native E5, a +27% gain. On the per-request-equal latency view, cat6root reaches 18.51 tok/s versus 17.80, a +4.0% gain.</p>
+      <p>We present a native-compatible tree verifier for speculative decoding on Qwen 3.6-27B-FP8, a hybrid model whose 64 layers include 48 Gated-DeltaNet recurrent layers and 16 softmax-attention layers. The core problem is not tree speculative decoding in general; prior work already establishes that. The core problem is served-realization equivalence for this recurrent hybrid inside vLLM, including fp8/bf16 seams, the FA2 attention realization, GDN state publication, and accepted-chain replay.</p>
+      <p>Formally, the result is distribution-preserving within the native recurrent-oracle floor. In the rest of the page, <em>lossless</em> is shorthand for that scoped claim, not a universal bit-exact theorem. The implementation combines a forked FlashAttention-2 tree-bias path, a Triton GDN tree scan/replay kernel, vLLM tree-shape packing, device-side multidraft commit, and deployment-mode measurement gates. In the clean B=1/temp-0.6 deployment run merged to <code>main</code> on June 17, 2026, both depth-5 tree shapes beat native E5 and both close within the native floor.</p>
 
       <div class="abstract-grid">
         <div class="panel">
           <h2>Contribution</h2>
-          <p>This paper treats the result as a systems proof, not a benchmark-only result. The contribution is a target verifier for recurrent hybrid models: it accepts a candidate tree from a drafter, verifies attention and GDN state branch-locally, and publishes only the accepted native-compatible prefix.</p>
-          <p>Earlier pages covered the search arc. This page is self-contained: it states the problem, names the prior work, shows the design trail, gives the kernel invariant, quotes the implementation seams, explains the hardware limitation, reports the merged B=1 speed/lossless result, and records the failed routes that shaped the final design.</p>
+          <p>This paper treats the result as a systems proof, not a benchmark-only result. The contribution is a served target verifier for recurrent hybrid models: it accepts a candidate tree from a drafter, verifies attention and GDN state branch-locally, and publishes only the accepted native-compatible prefix.</p>
+          <p>Earlier pages covered the search arc. This page is self-contained: it states the problem, names the prior work, shows the design trail, gives the kernel invariant, quotes the implementation seams, reports the scoped B=1 result, and records the failed routes that shaped the final design.</p>
         </div>
         <aside class="panel">
           <h2>Status</h2>
           <div class="claim-list">
-            <div class="claim"><span class="state pass">SPEED</span><p>cat6root and cat9 both beat native E5 in the latest clean B=1 deployment run; cat6root is +27% on token-weighted decode throughput.</p></div>
-            <div class="claim"><span class="state pass">KERNEL</span><p>GDN scan/replay now separates verify state from durable accepted-chain state.</p></div>
-            <div class="claim"><span class="state info">MEASURE</span><p>Speed and lossless captures are separate modes with matched decode-forward denominators.</p></div>
-            <div class="claim"><span class="state pass">LOSSLESS</span><p>Exact depth-5 p-rescore now closes cat9 and cat6root within native E5's floor at clean B=1.</p></div>
+            <div class="claim"><span class="state pass">VERIFIER</span><p>Attention ancestry, path-local GDN state, replay, and vLLM writeback are tied to native decode.</p></div>
+            <div class="claim"><span class="state pass">SPEED</span><p>cat6root is +27% on decode-only token-weighted throughput in the clean B=1/temp-0.6, four-task deployment run.</p></div>
+            <div class="claim"><span class="state pass">FLOOR</span><p>Exact depth-5 p-rescore closes cat9 and cat6root within the native E5 recurrent-oracle floor.</p></div>
+            <div class="claim"><span class="state warn">LIMITS</span><p>Decode-only result; per-request view is +4.0%, end-to-end wall gains are smaller, and B=4 is a separate gate.</p></div>
           </div>
         </aside>
+      </div>
+
+      <div class="source-exhibit" aria-label="Falsification checks">
+        <div class="source-head">
+          <strong>What would falsify this?</strong>
+          <span>Skeptic checks before trusting the headline</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">GDN state</span><p>Branch rows inherit sibling recurrent state instead of the native root-to-node path state.</p></div>
+          <div class="box bad"><span class="tag">Attention</span><p>The FA2 fork changes the served native attention realization beyond the additive tree-bias term.</p></div>
+          <div class="box bad"><span class="tag">Replay</span><p>Accepted-chain replay publishes rejected branch state into vLLM's durable recurrent cache.</p></div>
+          <div class="box bad"><span class="tag">Measurement</span><p>Speed probes, oracle capture, or denominator choices change the served path being timed.</p></div>
+          <div class="box bad"><span class="tag">Oracle floor</span><p>p-rescore exceeds the native recurrent-oracle floor with enough margin to rule out numerical noise.</p></div>
+        </div>
       </div>
     </section>
 
@@ -1003,19 +1012,19 @@
           </thead>
           <tbody>
             <tr>
-              <td>Tree verification for this model must include GDN state, not only attention masks.</td>
+              <td>The novel systems claim is served-realization equivalence for Qwen GDN inside vLLM.</td>
               <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">GDN tree kernel</a> and scan/replay gates.</td>
-              <td>Path-local recurrent state equals native root-to-node recurrence.</td>
-              <td><span class="pill good">closed</span> Branch-local scan plus accepted-chain replay is the served contract.</td>
+              <td>FA2 realization, fp8/bf16 GDN state, accepted replay, and durable writeback all stay tied to native decode.</td>
+              <td><span class="pill good">closed</span> Branch-local scan plus accepted-chain replay is the served contract; attention masks alone are insufficient.</td>
             </tr>
             <tr>
               <td>cat6root is faster than native E5 on clean B=1 decode throughput.</td>
               <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/deploy_tps_resolved_plus27.md">deploy_tps_resolved_plus27.md</a>.</td>
-              <td>Token-weighted decode throughput: 23.88 tok/s versus 18.80.</td>
-              <td><span class="pill good">closed</span> +27% decode throughput; per-request-equal view is +4%.</td>
+              <td>Token-weighted decode throughput: 23.88 tok/s versus 18.80, clean B=1/temp-0.6, four SWE/Codex tasks.</td>
+              <td><span class="pill good">closed</span> +27% decode-only throughput; per-request-equal latency view is +4.0%, and end-to-end wall time is prefill/agent-heavy.</td>
             </tr>
             <tr>
-              <td>cat9 and cat6root are lossless within native E5's numerical floor at clean B=1.</td>
+              <td>cat9 and cat6root are distribution-preserving within native E5's recurrent-oracle floor at clean B=1.</td>
               <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/b1_depth5_lossless_verdict.md">b1_depth5_lossless_verdict.md</a>.</td>
               <td>Clear-margin argmax flip rate versus no-spec recurrent oracle.</td>
               <td><span class="pill good">closed</span> cat9 13.28%, cat6root 13.09%, native E5 12.90%; 40-turn sample, margins &lt;1 SE.</td>
@@ -1809,12 +1818,31 @@ else:
     </section>
 
     <section class="section" id="results">
-      <h2>Latest B=1 Result</h2>
+      <h2>Latest B=1 Decode Result</h2>
       <aside class="sidenote">
         <p><strong>B=1:</strong> one request stream. This removes co-residency noise that can hide whether the tree itself is faster.</p>
         <p><strong>Token-weighted TPS:</strong> total generated decode tokens divided by total decode time. This is the right throughput basis. Per-request TPS weights a 5-token tool call like a 500-token edit.</p>
       </aside>
-      <p>The merged B=1 depth-5 result uses four SWE/Codex tasks, temp 0.6 forced, vLLM-only GB10 deployment, and the matched pure-decode GPU timer. The result is not just that a tree beats native. Both cat9 and cat6root beat native E5, both are lossless within floor, and cat6root is the cleaner shape.</p>
+      <p>Read this result with its scope attached: clean B=1, temp 0.6 forced, four SWE/Codex tasks, vLLM-only GB10 deployment, and a matched pure-decode GPU timer. The headline is decode throughput, not full task wall time. Under that scope, both cat9 and cat6root beat native E5, both close within the native recurrent-oracle floor, and cat6root is the cleaner shape.</p>
+
+      <div class="grid" aria-label="Result scope">
+        <div class="box good">
+          <span class="tag">Headline</span>
+          <p>cat6root reaches 23.88 tok/s versus 18.80 for native E5: +27.0% token-weighted decode throughput.</p>
+        </div>
+        <div class="box info">
+          <span class="tag">Latency view</span>
+          <p>The per-request-equal view is 18.51 tok/s versus 17.80, or +4.0%; it is real but weights short tool turns heavily.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Wall-time caveat</span>
+          <p>SWE/Codex requests are prefill-heavy and prefix caching is off for this hybrid, so end-to-end task gains are smaller.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Batch caveat</span>
+          <p>B=4 remains a separate deployment gate because co-residency, scheduler, and prefill/decode effects change the surface.</p>
+        </div>
+      </div>
 
       <div class="table-wrap">
         <table>
@@ -1865,7 +1893,7 @@ else:
         </table>
       </div>
 
-      <p>The decomposition is the important paper point. cat6root commits 4.821 tokens/event versus 4.112 for native E5, a 17.2% committed-token gain, with essentially native verify-forward time. The old +4.0% headline is still true for the per-request-equal latency view, but it under-weights long outputs where the decode tokens actually are. Token-weighted decode throughput is the fair throughput basis: cat6root is 23.88 tok/s versus 18.80 for native E5.</p>
+      <p>The decomposition is the important paper point. cat6root commits 4.821 tokens/event versus 4.112 for native E5, a 17.2% committed-token gain, with essentially native verify-forward time. The old +4.0% headline is still true for the per-request-equal latency view, but it under-weights long outputs where the decode tokens actually are. Token-weighted decode throughput is the fair throughput basis for the scoped mechanism result: cat6root is 23.88 tok/s versus 18.80 for native E5.</p>
     </section>
 
     <section class="section" id="measurement">
@@ -1923,10 +1951,10 @@ else:
     <section class="section" id="lossless">
       <h2>Lossless Evidence and Closure Gates</h2>
       <aside class="sidenote">
-        <p><strong>Lossless does not mean similar text.</strong> It means the speculative path preserves the target model distribution, up to native numerical floor.</p>
+        <p><strong>Lossless shorthand:</strong> in this paper it means distribution-preserving within the native recurrent-oracle floor, not bit-exact equality to every native kernel intermediate.</p>
         <p><strong>BV A/B:</strong> a scan-only check showing whether different value-tile settings change the branch decision in a controlled regime.</p>
       </aside>
-      <p>The lossless chase found both numerical and wiring failure modes. A key lesson was that scan-only bit-exactness is not enough. BV A/B showed the scan op itself can be native-stable in a shallow single-forward regime, but live decode also feeds recurrent state through co-resident accepted chains, committer publication, conv prior windows, and deep attention layers.</p>
+      <p>The lossless chase found both numerical and wiring failure modes. A key lesson was that scan-only bit-exactness is not enough, and literal zero max-abs is not the right universal bar. BV A/B showed the scan op itself can be native-stable in a shallow single-forward regime, but live decode also feeds recurrent state through co-resident accepted chains, committer publication, conv prior windows, and deep attention layers.</p>
       <p>The exact depth-5 B=1 p-rescore is now closed. Against each arm's own no-spec recurrent oracle, native E5 has 630 clear-margin flips over 4,883 positions, 12.90%; cat9 has 645 over 4,858, 13.28%; cat6root has about 636 over about 4,860, 13.09%. Both tree arms are within the native E5 floor by less than one standard error. The caveat is sample size: this is a 40-turn sample per arm, so the paper treats the result as a clean B=1 closure, not as a universal guarantee for every future batch/concurrency regime.</p>
 
       <div class="table-wrap">
@@ -2092,7 +2120,7 @@ else:
     <section class="section" id="limitations">
       <h2>Threats to Validity</h2>
       <aside class="sidenote">
-        <p><strong>Honest scope:</strong> the result is strong for clean B=1 decode throughput and losslessness. It does not claim every deployment bottleneck is solved.</p>
+        <p><strong>Honest scope:</strong> the result is strong for clean B=1 decode throughput and distribution-preserving closure within the native floor. It does not claim every deployment bottleneck is solved.</p>
       </aside>
       <div class="grid">
         <div class="box warn">
