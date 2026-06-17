@@ -11436,15 +11436,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             _fr10_wide_plan = [
                 (len(_p) - 1, _p[-1]) for _p in _fr10_tree_choices_current
             ]
+            # NOTE: logger.info_once hashes (msg, *args) to dedup, so EVERY arg
+            # must be hashable -- pass the widths dict + tree as STRINGS, never
+            # the dict/list objects (a dict arg raises TypeError: unhashable
+            # type: 'dict' and kills the engine at warmup).
             logger.info_once(
                 "FR13_RESHAPE_WIDE engaged: depth=%d spine_steps=%d "
                 "widths=%s nodes=%d tree=%s",
                 _fr10_wide_D,
                 _fr10_wide_spine_steps,
-                {
+                str({
                     _fr10_wk: _fr10_wide_width[_fr10_wk]
                     for _fr10_wk in sorted(_fr10_wide_width)
-                },
+                }),
                 len(_fr10_tree_choices_current),
                 repr(_fr10_tree_choices_current),
             )
