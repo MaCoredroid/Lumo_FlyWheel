@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Lossless GDN Tree-Scan - Lumo FlyWheel Vol. III</title>
-<meta name="description" content="Standalone mini-paper preview for lossless Gated-DeltaNet tree-scan: prior work, kernel math, vLLM wiring, measurement infrastructure, and B=1 cat6/cat9 results.">
+<meta name="description" content="Illustrated research paper for lossless Gated-DeltaNet tree-scan: prior work, kernel math, vLLM wiring, measurement infrastructure, B=1 cat6/cat9 results, and failure library.">
 <meta property="og:title" content="Lossless GDN Tree-Scan">
-<meta property="og:description" content="A standalone research preview of lossless tree speculative decoding for a Gated-DeltaNet hybrid model.">
+<meta property="og:description" content="A standalone research paper on lossless tree speculative decoding for a Gated-DeltaNet hybrid model.">
 <meta name="author" content="Mark Ma">
 <meta name="theme-color" content="#111111">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Cpath d='M15 42h11V22h8v20h15' fill='none' stroke='%238bd3dd' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='26' cy='22' r='4' fill='%23e7c76f'/%3E%3Ccircle cx='34' cy='42' r='4' fill='%23a7d98d'/%3E%3Ccircle cx='49' cy='42' r='4' fill='%23d88989'/%3E%3C/svg%3E">
@@ -432,6 +432,82 @@
   .equation .hl { color: var(--amber); }
   .equation .ok { color: var(--green); }
 
+  .source-exhibit {
+    margin: 24px 0;
+    background: #0c0c0c;
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .source-exhibit .source-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .source-exhibit .source-head strong {
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .source-exhibit pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .source-exhibit code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .source-exhibit .source-note {
+    margin: 0;
+    padding: 0 16px 16px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .compare-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin: 24px 0;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--rule);
+  }
+  .compare-strip article {
+    min-height: 100%;
+    padding: 18px;
+    background: var(--paper);
+  }
+  .compare-strip h3 {
+    margin-bottom: 9px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .compare-strip p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -584,16 +660,42 @@
     .page { padding: 0 18px 72px; }
     .topbar { flex-direction: column; align-items: flex-start; }
     .topbar nav { justify-content: flex-start; }
-    header.hero { min-height: auto; padding-top: 42px; }
-    h1 { font-size: 44px; }
-    .subhead { font-size: 19px; }
+    header.hero { min-height: auto; padding: 26px 0 20px; }
+    h1 { font-size: 40px; }
+    .subhead {
+      margin-top: 18px;
+      font-size: 17px;
+      line-height: 1.48;
+    }
     .byline span:not(:first-child)::before { content: none; }
     .abstract-grid, .two-col, .shape-grid, .hero-tldr { grid-template-columns: 1fr; }
+    .compare-strip { grid-template-columns: 1fr; }
     .section { margin: 56px 0; }
     .section h2 { font-size: 30px; }
     .hero-result {
       justify-self: start;
       width: 100%;
+    }
+    .hero-tldr {
+      gap: 14px;
+      margin-top: 16px;
+      padding: 12px 0 14px;
+    }
+    .hero-tldr .tldr-copy {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .hero-number { font-size: 36px; }
+    .byline { margin-top: 16px; }
+    .paper-nav {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin-top: 18px;
+      padding-bottom: 6px;
+      scrollbar-color: var(--rule-2) transparent;
+    }
+    .paper-nav a {
+      flex: 0 0 auto;
     }
     .sidenote {
       display: block;
@@ -628,14 +730,14 @@
   </div>
 
   <header class="hero">
-    <p class="kicker">Volume III / standalone mini-paper preview</p>
+    <p class="kicker">Volume III / illustrated research paper</p>
     <h1>Lossless GDN Tree-Scan</h1>
-    <p class="subhead">A tree speculative decoder for a 75% recurrent hybrid model. The core result is not a wider attention mask; it is a branch-local Gated-DeltaNet scan, a forked attention path, vLLM committer wiring, and a measurement stack that separates losslessness from speed.</p>
+    <p class="subhead">A target verifier for token trees on a 75% recurrent hybrid model. The reusable result is the verifier contract: branch-local Gated-DeltaNet state, tree-aware attention, vLLM state publication, and measurement gates that make any future drafter accountable to native decode.</p>
     <div class="hero-tldr" aria-label="TLDR and headline result">
-      <p class="tldr-copy"><strong>TL;DR:</strong> a draft tree is a menu of next-token guesses. The target model verifies that menu and publishes only the accepted prefix. On this 75% recurrent model, that requires tree-aware attention plus branch-local GDN state; attention masks alone are not enough.</p>
+      <p class="tldr-copy"><strong>TL;DR:</strong> a draft tree is a menu of next-token guesses. The target model verifies that menu and publishes only the accepted prefix. On this Qwen hybrid, verification means two things at once: attention rows must see only their ancestors, and each GDN row must carry the recurrent state native decode would have produced on that branch. We use the native MTP head here, but the verifier can serve suffix decoding, MTP+suffix, or another drafter if it supplies the same tree contract.</p>
       <div class="hero-result">
         <span class="hero-number">18.51 tok/s</span>
-        <p><strong>cat6root</strong> at clean B=1/temp-0.6: +4.0% vs native E5, 3.82 accepted/event, 0.1377 s/fwd_gpu. Speed verdict merged; final depth-5 p-rescore remains the lossless closure gate.</p>
+        <p><strong>cat6root</strong> at clean B=1/temp-0.6: +4.0% vs native E5, 3.82 accepted/event, 0.1377 s/fwd_gpu. The speed verdict is merged; cat9 has deployment lossless-within-floor evidence, and exact depth-5 cat6/cat9 p-rescore is the current closure gate for this table.</p>
       </div>
     </div>
     <div class="byline">
@@ -646,27 +748,30 @@
     </div>
     <div class="paper-nav">
       <a href="#abstract">Abstract</a>
+      <a href="#impact">Impact</a>
       <a href="#prior-work">Prior work</a>
       <a href="#kernel">Kernel and math</a>
       <a href="#wiring">vLLM wiring</a>
       <a href="#shapes">Tree shapes</a>
       <a href="#results">Results</a>
       <a href="#measurement">Measurement</a>
-      <a href="#receipts">Receipts</a>
+      <a href="#lossless">Lossless</a>
+      <a href="#failure-library">Failure library</a>
+      <a href="#receipts">Source trail</a>
     </div>
   </header>
 
   <main>
     <section class="section" id="abstract">
       <h2>Abstract</h2>
-      <p>We present a lossless tree-scan verifier for tree speculative decoding on Qwen 3.6-27B-FP8, a hybrid model whose 64 layers include 48 Gated-DeltaNet recurrent layers and 16 softmax-attention layers. The problem is that a token tree is not only an attention-mask problem. Each candidate row must carry the GDN state that native decode would have produced along exactly that row's root-to-node path.</p>
-      <p>Our implementation combines a forked FlashAttention-2 tree-bias path, a Triton GDN tree scan/replay kernel, vLLM tree-shape packing, device-side multidraft commit, and deployment-mode measurement gates. In the latest clean B=1/temp-0.6 deployment run on four SWE/Codex tasks, both depth-5 tree shapes beat native E5: cat9 reaches 18.44 tok/s and cat6root reaches 18.51 tok/s versus 17.80 tok/s for native E5. Cat6root is the cleaner winner: 3.82 accepted tokens/event with essentially native verify-forward time, 0.1377 versus 0.1370 seconds per forward.</p>
+      <p>We present a tree verifier for speculative decoding on Qwen 3.6-27B-FP8, a hybrid model whose 64 layers include 48 Gated-DeltaNet recurrent layers and 16 softmax-attention layers. Tree verification in this regime is not an attention-mask problem alone. Each candidate row must carry the GDN state that native decode would have produced along that row's root-to-node path, while each attention row must see only the same ancestor tokens.</p>
+      <p>The implementation combines a forked FlashAttention-2 tree-bias path, a Triton GDN tree scan/replay kernel, vLLM tree-shape packing, device-side multidraft commit, and deployment-mode measurement gates. In the clean B=1/temp-0.6 deployment run merged to <code>main</code> on June 17, 2026, both depth-5 tree shapes beat native E5: cat9 reaches 18.44 tok/s and cat6root reaches 18.51 tok/s versus 17.80 tok/s for native E5. Cat6root is the cleaner speed result: 3.82 accepted tokens/event with essentially native verify-forward time, 0.1377 versus 0.1370 seconds per forward.</p>
 
       <div class="abstract-grid">
         <div class="panel">
           <h2>Contribution</h2>
-          <p>This preview treats the result as a systems proof, not a benchmark-only result. The contribution is a way to verify token trees for a recurrent hybrid model while keeping the target distribution tied to native decode.</p>
-          <p>Earlier pages covered the search arc. This page is self-contained: it states the problem, names the prior work, shows the kernel invariant, explains the hardware limitation, and gives the final B=1 speed numbers now merged to <code>main</code>.</p>
+          <p>This paper treats the result as a systems proof, not a benchmark-only result. The contribution is a target verifier for recurrent hybrid models: it accepts a candidate tree from a drafter, verifies attention and GDN state branch-locally, and publishes only the accepted native-compatible prefix.</p>
+          <p>Earlier pages covered the search arc. This page is self-contained: it states the problem, names the prior work, shows the kernel invariant, quotes the implementation seams, explains the hardware limitation, reports the merged B=1 speed result, and records the failed routes that shaped the final design.</p>
         </div>
         <aside class="panel">
           <h2>Status</h2>
@@ -674,9 +779,34 @@
             <div class="claim"><span class="state pass">SPEED</span><p>cat6root and cat9 both beat native E5 in the latest clean B=1 deployment run.</p></div>
             <div class="claim"><span class="state pass">KERNEL</span><p>GDN scan/replay now separates verify state from durable accepted-chain state.</p></div>
             <div class="claim"><span class="state info">MEASURE</span><p>Speed and lossless captures are separate modes with matched decode-forward denominators.</p></div>
-            <div class="claim"><span class="state warn">GATE</span><p>The merged speed verdict still labels final depth-5 p-rescore lossless evidence as pending.</p></div>
+            <div class="claim"><span class="state warn">GATE</span><p>The merged speed verdict still labels exact depth-5 E5/cat9/cat6 p-rescore as the closure gate for this result table.</p></div>
           </div>
         </aside>
+      </div>
+    </section>
+
+    <section class="section" id="impact">
+      <h2>Why This Matters</h2>
+      <aside class="sidenote">
+        <p><strong>Drafter:</strong> the cheap source of candidate tokens. In this artifact it is Qwen's native MTP head.</p>
+        <p><strong>Verifier:</strong> the target-model path that decides which candidates can be published without changing the model distribution.</p>
+      </aside>
+      <p>The durable value is not a single caterpillar shape. The durable value is a verifier that understands both sides of this hybrid model: softmax attention and Gated-DeltaNet recurrence. Once that verifier contract exists, the drafter can change. The current paper uses Qwen's native MTP head because it is available inside vLLM, but the same verifier boundary can accept suffix decoding, an MTP-plus-suffix hybrid, n-gram candidates, or a learned external drafter if it emits the tree descriptor and candidate ids.</p>
+      <p>The second value is methodological. This work is a compact museum of how losslessness and speed were chased without letting one fake the other: scan A/Bs, replay byte gates, recurrent-oracle p-rescore, ON/OFF instrumentation separation, deployment-regime speed, shape sweeps, and failure records for approaches that were mathematically tempting but not shippable.</p>
+
+      <div class="compare-strip" aria-label="Impact summary">
+        <article>
+          <h3>Reusable verifier</h3>
+          <p>The target path verifies arbitrary candidate trees as long as the drafter obeys the tree descriptor contract.</p>
+        </article>
+        <article>
+          <h3>Hybrid-model bridge</h3>
+          <p>The system handles both attention ancestry and recurrent branch state, which is exactly what Transformer-only tree verifiers do not need to solve.</p>
+        </article>
+        <article>
+          <h3>Evidence discipline</h3>
+          <p>The result includes the lossless chase, not just the winning speed row, so the reader can inspect why rejected routes failed.</p>
+        </article>
       </div>
     </section>
 
@@ -687,24 +817,39 @@
         <p><strong>Tree decoding:</strong> instead of one draft chain, the draft proposes several possible branches in one verification pass.</p>
       </aside>
       <p>Tree speculative decoding is well studied for Transformer-style attention stacks. <a href="https://arxiv.org/abs/2305.09781">SpecInfer</a> introduced tree-based speculative inference and parallel verification while preserving model quality. <a href="https://arxiv.org/abs/2402.12374">Sequoia</a> made the tree shape hardware-aware. <a href="https://arxiv.org/html/2406.16858v1">EAGLE-2</a> uses context-aware dynamic draft trees while keeping the output distribution unchanged. <a href="https://arxiv.org/html/2406.17276v2">OPT-Tree</a> frames the tree shape as an acceptance-versus-overhead optimization problem.</p>
-      <p>The closest prior work for this project is <a href="https://arxiv.org/abs/2505.14969">STree</a>, which studies speculative tree decoding for state-space and hybrid models by exploiting accumulated state-transition structure. Our work targets a different deployment surface: Qwen 3.6-27B in vLLM, with Gated-DeltaNet layers, forked FlashAttention-2 tree bias, a Triton GDN scan/replay kernel, device-side multidraft sampling, and deployment-mode speed/lossless gates.</p>
+      <p>The closest prior work for this project is <a href="https://arxiv.org/abs/2505.14969">STree</a>, which studies speculative tree decoding for state-space and hybrid models by exploiting accumulated state-transition structure. The key difference is the realization contract. For this vLLM/Qwen target, it is not enough to say that the algebraic state for a tree exists. The served verifier must reproduce native-path semantics through fp8/bf16 kernels, branch co-residency, durable state writeback, and rejection sampling.</p>
 
-      <div class="grid">
-        <div class="box info">
-          <span class="tag">Transformer tree work</span>
-          <h3>What it already gives us</h3>
-          <p>Tree verification, rejection sampling, dynamic shapes, and hardware-aware acceptance tradeoffs are established ideas.</p>
-        </div>
-        <div class="box warn">
-          <span class="tag">Hybrid-model gap</span>
-          <h3>What does not transfer directly</h3>
-          <p>A tree attention mask does not define the recurrent state for a sibling branch in a GDN layer.</p>
-        </div>
-        <div class="box good">
-          <span class="tag">This work</span>
-          <h3>What this project adds</h3>
-          <p>A concrete vLLM deployment path for branch-local GDN verification, committer state publication, and measurement gates.</p>
-        </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Line of Work</th>
+              <th>What Transfers</th>
+              <th>What Breaks for This Target</th>
+              <th>What We Add</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>SpecInfer / Sequoia / OPT-Tree / EAGLE-2</td>
+              <td>Candidate trees, verifier acceptance, dynamic or hardware-aware shapes.</td>
+              <td>They largely assume the target verification forward is the target decode distribution once attention ancestry is correct.</td>
+              <td>We keep the tree-accept idea but add recurrent-state verification and deployment lossless gates.</td>
+            </tr>
+            <tr>
+              <td>STree and SSM/hybrid tree work</td>
+              <td>Stateful models need tree-aware state construction, not only tree attention.</td>
+              <td>Accumulated transition sharing is not the same as matching the native served GDN kernel under bf16 state boundaries, branch co-residency, and vLLM writeback.</td>
+              <td>We implement a GDN scan/replay kernel whose invariant is path-local native recurrence, then gate it against native/deployment oracles.</td>
+            </tr>
+            <tr>
+              <td>vLLM / SGLang speculative serving</td>
+              <td>Scheduler, MTP heads, sampling, and production serving scaffolding.</td>
+              <td>Upstream GDN speculative paths can advance recurrent state for rejected tokens unless the committer/state publication path is fixed.</td>
+              <td>We wire accepted-path replay/remap, conv prior gathering, tree shape metadata, and device multidraft sampling into the served path.</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -724,6 +869,35 @@
         <div>S_t = S'_t + delta_t k_t^T</div>
         <div>o_t = S_t q_t</div>
         <div><span class="hl">Tree invariant:</span> S(node i) == native_scan(tokens on root-to-i path)</div>
+      </div>
+
+      <div class="compare-strip" aria-label="Native versus tree recurrence">
+        <article>
+          <h3>Native decode</h3>
+          <p>There is one chain: <code>S0 -> F(x1) -> S1 -> F(x2) -> S2</code>. The next token always inherits the immediately previous accepted state.</p>
+        </article>
+        <article>
+          <h3>Wrong tree shortcut</h3>
+          <p>A flat packed tree can run rows in parallel, but a shared accumulator makes sibling rows inherit impossible history.</p>
+        </article>
+        <article>
+          <h3>Our tree scan</h3>
+          <p>Each node selects its parent state from <code>h_cache</code>, applies the same rank-1 GDN step, and only the accepted path is replayed into durable state.</p>
+        </article>
+      </div>
+
+      <div class="source-exhibit">
+        <div class="source-head">
+          <strong>Source exhibit</strong>
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">fr10_gdn_tree_kernel.py</a>
+        </div>
+        <pre><code># shared by both tree scan and accepted-path replay
+state_i *= tl.exp(b_g)
+b_v -= tl.sum(state_i * b_k[None, :], axis=1)
+b_v *= b_beta
+state_i += b_v[:, None] * b_k[None, :]
+out_i = tl.sum(state_i * b_q[None, :], axis=1)</code></pre>
+        <p class="source-note">The design choice is not a new recurrence. It is the same rank-1 update body, reused in scan and replay, with native-alignment seams gated explicitly.</p>
       </div>
 
       <div class="figure" aria-labelledby="scan-title">
@@ -771,6 +945,7 @@
           <h3>Why <code>BV</code> and <code>h_cache</code> limit the kernel</h3>
           <p><code>BV</code> is the value-channel tile width, called <code>BLOCK_V</code> in the Triton kernel. One program holds a GDN state tile with shape <code>[BV, DIM_K]</code>. A tree scan needs a post-state for every padded node because each child must select its own parent state. That is the <code>h_cache</code>: <code>[N_PAD, BV, DIM_K]</code> in fp32.</p>
           <p>This is why native-match geometry does not scale directly. Native decode uses <code>BV32 / num_warps=1 / num_stages=3</code>. A full tree with <code>N_PAD=16</code> at that geometry would demand about 256KB of fp32 <code>h_cache</code> in one warp, roughly 2048 fp32 registers per lane, which spills. The deployed tree scan uses <code>BV16 / warps=8 / pad16</code> to fit. Native-alignment experiments use recompute/replay with one <code>[BV, DIM_K]</code> tile instead of caching every node.</p>
+          <p>The native-alignment seams that mattered were concrete: beta's bf16 round-trip, q/k l2-normalization by division rather than rsqrt, and the carried-state bf16 boundary after the output is computed. Those details sound small, but a tree verifier lives on margins. A one-ULP branch-local difference can become a different accepted prefix after deep recurrent and attention layers amplify it.</p>
         </div>
         <aside class="mini-card">
           <h3>Fresh-reader translation</h3>
@@ -787,6 +962,23 @@
         <div>&nbsp;&nbsp;h_cache[node] = state</div>
         <div><span class="ok">commit:</span> replay accepted spine in native order, then publish state</div>
       </div>
+
+      <div class="source-exhibit">
+        <div class="source-head">
+          <strong>Native seams</strong>
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">scan alignment hooks</a>
+        </div>
+        <pre><code>if SCAN_ALIGN:
+    b_beta = tl.sigmoid(b_raw_b.to(tl.float32)).to(tl.bfloat16).to(tl.float32)
+...
+if SCAN_ALIGN:
+    b_q = b_q / tl.sqrt(tl.sum(b_q * b_q) + 1e-6)
+    b_k = b_k / tl.sqrt(tl.sum(b_k * b_k) + 1e-6)
+...
+if SCAN_ALIGN:
+    state_i = state_i.to(tl.bfloat16).to(tl.float32)</code></pre>
+        <p class="source-note">These are not cosmetic differences. They are the explicit places where the served tree verifier can be aligned to the incumbent native packed-decode realization.</p>
+      </div>
     </section>
 
     <section class="section" id="wiring">
@@ -795,7 +987,8 @@
         <p><strong>FA2:</strong> FlashAttention-2. The attention layers need a tree-aware bias so each row sees exactly the ancestors it should see.</p>
         <p><strong>vLLM wiring:</strong> the page-level result depends on scheduler metadata, slot mapping, draft packing, sampling, and state publication matching the same tree.</p>
       </aside>
-      <p>The GDN scan is only one piece. The shipped tree path has to align five surfaces: the draft tree choices, the forked attention kernel, the recurrent scan/replay kernel, the multidraft committer, and the durable state writeback. Most of the engineering effort was chasing cases where one of those surfaces agreed with the shape but disagreed with the path semantics.</p>
+      <p>The GDN scan is only one piece. The shipped tree path has to align five surfaces: the candidate tree descriptor, the forked attention kernel, the recurrent scan/replay kernel, the multidraft committer, and the durable state writeback. Most of the engineering effort was chasing cases where one of those surfaces agreed with the shape but disagreed with the path semantics.</p>
+      <p>Today the candidate tree comes from Qwen's native MTP head: root and spine tokens from the same logits tensor, with runner-up leaves as top-k reads. The verifier should not care whether tomorrow's candidates come from suffix decoding, MTP plus suffix, or another drafter. It should care that the tree has stable parent indices, visible/strict ancestry masks, candidate ids, and accepted-path rows that can be replayed into native state.</p>
 
       <div class="figure" aria-labelledby="wiring-title">
         <div class="figure-head"><strong id="wiring-title">Figure 2</strong><span>vLLM decode path with tree verification</span></div>
@@ -847,8 +1040,8 @@
         </div>
         <div class="box good">
           <span class="tag">Drafter</span>
-          <h3>Single-logits packing</h3>
-          <p>The root and spine tokens are taken from the same logits tensor; runner-up leaves are top-k reads, not extra model forwards.</p>
+          <h3>Candidate contract</h3>
+          <p>The current drafter is native MTP packing. The verifier boundary is a tree descriptor plus candidate ids, so suffix or hybrid drafters can plug into the same target path.</p>
         </div>
         <div class="box info">
           <span class="tag">Committer</span>
@@ -1014,6 +1207,18 @@
         <div>deploy_TPS = request_decode_tokens / request_decode_seconds</div>
       </div>
 
+      <div class="source-exhibit">
+        <div class="source-head">
+          <strong>Measurement code</strong>
+          <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_measure.py">fr13_measure.py</a>
+        </div>
+        <pre><code># SPEED and LOSSLESS are SEPARATE boots/numbers.
+# SPEED: instrument OFF, no q-capture/oracle probes.
+# LOSSLESS: instrument ON, full-stream q-capture + recurrent oracle.
+# s/fwd_gpu divides decode-forward GPU time by matched pure-decode drafts.</code></pre>
+        <p class="source-note">This is why the paper reports speed and lossless as separate gates. Instrumentation changes the served path, so mixing modes would manufacture the wrong conclusion.</p>
+      </div>
+
       <div class="grid">
         <div class="box good">
           <span class="tag">Speed basis</span>
@@ -1028,7 +1233,7 @@
         <div class="box warn">
           <span class="tag">Lossless basis</span>
           <h3>Separate oracle mode</h3>
-          <p>The merged speed verdict still asks for the depth-5 E5/cat9/cat6 p-rescore gate before the final paper treats losslessness as closed for this exact run.</p>
+          <p>The merged speed verdict still asks for the depth-5 E5/cat9/cat6 p-rescore gate before this result table treats losslessness as closed for the exact cat6root run.</p>
         </div>
         <div class="box info">
           <span class="tag">Profiling basis</span>
@@ -1039,12 +1244,13 @@
     </section>
 
     <section class="section" id="lossless">
-      <h2>Lossless Evidence and Open Gates</h2>
+      <h2>Lossless Evidence and Closure Gates</h2>
       <aside class="sidenote">
         <p><strong>Lossless does not mean similar text.</strong> It means the speculative path preserves the target model distribution, up to native numerical floor.</p>
         <p><strong>BV A/B:</strong> a scan-only check showing whether different value-tile settings change the branch decision in a controlled regime.</p>
       </aside>
       <p>The lossless chase found both numerical and wiring failure modes. A key lesson was that scan-only bit-exactness is not enough. BV A/B showed the scan op itself can be native-stable in a shallow single-forward regime, but live decode also feeds recurrent state through co-resident accepted chains, committer publication, conv prior windows, and deep attention layers.</p>
+      <p>The deployment-regime cat9 lossless result is already established at the native-E5 floor in the big-denom recurrent-oracle consolidation: cat9 1181/8717 clear-margin flips, 13.548%, versus native E5 1224/8752, 13.985%, with overlapping Wilson intervals. The merged June 17 B=1 speed verdict is narrower: for the exact depth-5 E5/cat9/cat6 table above, it still names p-rescore as the binding closure gate, especially for cat6root.</p>
 
       <div class="table-wrap">
         <table>
@@ -1057,6 +1263,12 @@
             </tr>
           </thead>
           <tbody>
+            <tr>
+              <td>Deployment cat9 floor</td>
+              <td>cat9 versus native E5, each against its own no-spec recurrent oracle</td>
+              <td><span class="pill good">lossless-within-floor</span></td>
+              <td>Cat9 was not Wilson-separated above native E5 in the deployment big-denom rescore.</td>
+            </tr>
             <tr>
               <td>GDN scan A/B</td>
               <td class="num">BV A/B D16=D32=0.0</td>
@@ -1079,52 +1291,143 @@
               <td>Depth-5 p-rescore</td>
               <td>E5/cat9/cat6 temp-0.6 recurrent oracle</td>
               <td><span class="pill warn">pending in merged speed verdict</span></td>
-              <td>This is the binding final-paper gate for the exact B=1 result table.</td>
+              <td>This is the binding closure gate for the exact B=1 result table, especially the cat6root winner.</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <section class="section" id="discussion">
-      <h2>What the Final Paper Emphasizes</h2>
-      <p>The clean story is not "tree speculation is faster." The clean story is that lossless tree verification on a recurrent hybrid model has a different systems contract than Transformer-only tree verification. We had to align attention, recurrent state, sampling, durable state publication, and measurement before the speed result became credible.</p>
-      <div class="grid">
-        <div class="box info">
-          <span class="tag">Kernel design</span>
-          <h3>Show the tree scan</h3>
-          <p>Use the branch-local recurrence invariant, the <code>h_cache</code> budget, and replay-after-commit to explain why the kernel is necessary.</p>
-        </div>
-        <div class="box good">
-          <span class="tag">Evidence</span>
-          <h3>Show the gates</h3>
-          <p>Separate byte gates, recurrent-oracle gates, distributional gates, and speed gates. Do not let one pass imply all others.</p>
-        </div>
-        <div class="box warn">
-          <span class="tag">Speed</span>
-          <h3>Show the decomposition</h3>
-          <p>The verify-forward kernel is no longer the main B=1 bottleneck. The next optimization target is our propose/committer overhead.</p>
-        </div>
+    <section class="section" id="failure-library">
+      <h2>Failure Library: What Did Not Work</h2>
+      <aside class="sidenote">
+        <p><strong>Failure library:</strong> not a graveyard. It is the receipt trail for why the final kernel and measurement contract look the way they do.</p>
+        <p>Most failures were useful because they separated three questions: is the verifier lossless, is the kernel fast, and is the measurement regime honest?</p>
+      </aside>
+      <p>The path to the final verifier was not linear. The important negative results are part of the paper because they prevent the same mistakes from being rediscovered: attention-only fixes, native-looking kernels that spill, lossless gates that measure the wrong frame, and speed screens polluted by concurrency or instrumentation.</p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Attempt</th>
+              <th>Why It Looked Plausible</th>
+              <th>Why It Failed</th>
+              <th>What Survived</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Attention-mask-only tree</td>
+              <td>Transformer tree verifiers mainly need ancestry masking.</td>
+              <td>GDN layers also carry recurrent state. Sibling rows need different histories even when attention is masked correctly.</td>
+              <td>Forked FA2 tree bias remains necessary, but only as one half of the verifier.</td>
+            </tr>
+            <tr>
+              <td>Shared packed recurrent accumulator</td>
+              <td>Flattening the tree gives one efficient packed forward.</td>
+              <td>Siblings can inherit state from branches native decode never visited.</td>
+              <td>The branch-local <code>h_cache</code> scan and accepted-chain replay invariant.</td>
+            </tr>
+            <tr>
+              <td>STree-style state sharing as a direct transplant</td>
+              <td>STree is the closest published hybrid/SSM tree-decoding regime.</td>
+              <td>Our gate is served native realization, not only algebraic state existence. fp8/bf16 codegen, branch co-residency, and vLLM state publication matter.</td>
+              <td>Use STree as motivation, then add realization-level gates.</td>
+            </tr>
+            <tr>
+              <td>WY / whole-tree algebra route</td>
+              <td>It can be mathematically equivalent over real arithmetic and can reduce state traffic.</td>
+              <td>Different summation trees and chunked realization missed the native bit/within-floor target; it was dominated by the sequential replay route for the current deliverable.</td>
+              <td>Parked as a fallback idea; replay's accept-only and spill-free properties were retained.</td>
+            </tr>
+            <tr>
+              <td>Literal 0.0 max-abs as the only lossless bar</td>
+              <td>It is easy to audit and sounds rigorous.</td>
+              <td>Native itself has numerical floors. Chasing absolute zero can reject distribution-preserving routes and reward irrelevant kernel identity.</td>
+              <td>The bar moved to recurrent-oracle, clear-margin, within-native-floor evidence.</td>
+            </tr>
+            <tr>
+              <td>BV=4 shrink</td>
+              <td>Smaller tiles reduce <code>h_cache</code> pressure.</td>
+              <td>It changes tensor shape and reduction structure, adds many more programs, and does not match native packed decode.</td>
+              <td>Keep deployed <code>BV16/warps8</code>; use recompute/native alignment only when the gate requires it.</td>
+            </tr>
+            <tr>
+              <td>Native-match full-tree <code>BV32/w1/s3</code></td>
+              <td>It matches the native packed-decode geometry.</td>
+              <td>With <code>N_PAD=16</code>, the full <code>h_cache</code> register footprint spills catastrophically.</td>
+              <td>Native-match remains a correctness probe; deployed scan uses <code>BV16/w8</code>, and recompute removes the full cache.</td>
+            </tr>
+            <tr>
+              <td>Multi-spine / copied-state routes</td>
+              <td>Multiple chains can avoid branch-local tree state inside one packed scan.</td>
+              <td>They duplicate KV/state work, do not scale on bandwidth-bound decode, and were closed as non-shippable for this target.</td>
+              <td>The verifier can represent degenerate K-chain descriptors if a future drafter needs them, but the main mechanism stays tree-scan/replay.</td>
+            </tr>
+            <tr>
+              <td>cat3w and shallow width probes</td>
+              <td>Shallower trees should reduce recurrent depth and kernel work.</td>
+              <td>They did not recover the depth-5 accept economics and showed width/co-residency can hurt even when leaves are attention-invisible.</td>
+              <td>Depth-5 spine stays important; cat6root trims leaves without giving up the depth-5 spine.</td>
+            </tr>
+            <tr>
+              <td>cat10 root-sibling expansion</td>
+              <td>Add one rescue branch to cat9 and maybe improve step-0 rejection.</td>
+              <td>No pad win and no clean speed win versus cat6root; earlier reads were confounded by trajectory and denominators.</td>
+              <td>Root sibling is useful, but the leaner cat6root shape is the cleaner B=1 winner.</td>
+            </tr>
+            <tr>
+              <td>OPT-A fp8 GEMV path</td>
+              <td>The lm-head/proposer path looked like a speed lever.</td>
+              <td>Deployment screen showed it was neutral in the current bottleneck regime.</td>
+              <td>Speed focus shifted to tree-propose and device committer overhead.</td>
+            </tr>
+            <tr>
+              <td>B=4 speed read as the primary verdict</td>
+              <td>Serving wants batches, so B=4 seems more realistic.</td>
+              <td>Effective-concurrency and prefill/decode denominator confounds made cat9 look slower than it was. B=1 isolated the tree mechanism.</td>
+              <td>Use B=1 for clean mechanism attribution, then return to B=4 with the corrected gates.</td>
+            </tr>
+            <tr>
+              <td>Raw <code>/v1/completions</code> prompt probes</td>
+              <td>They are quick to run and easy to script.</td>
+              <td>They are off-distribution for the chat/thinking deployment and produced degenerate trajectories.</td>
+              <td>Deployment-regime Codex/SWE measurements became canonical.</td>
+            </tr>
+            <tr>
+              <td>Suffix/MTP shortcut before verifier closure</td>
+              <td>Suffix decoding could make drafting cheap and reduce overhead.</td>
+              <td>Without the target verifier, a cheap drafter only produces untrusted candidates.</td>
+              <td>Suffix decoding is now a good future drafter because the verifier boundary exists.</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
     <section class="section" id="receipts">
-      <h2>Receipts</h2>
-      <p>The final paper will cite source artifacts and rerun IDs directly. This preview points to the repo documents and raw results that ground the claims above.</p>
+      <h2>Source Trail</h2>
+      <p>The claims above are grounded in tracked source files, raw workflow outputs, and primary prior-work papers. The speed-fix work the user referred to is the merged <code>origin/fr13-speedfix</code> branch; it is now on <code>main</code> at merge commit <code>8de82da5</code>.</p>
       <ul class="receipt-list">
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/commit/8de82da5">Speed-fix merge commit</a> - B=1 depth-5 speed verdict merged into <code>main</code>.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/b1_depth5_speed_verdict.raw.json">B=1 depth-5 speed verdict</a> - merged final numbers for E5, cat9, and cat6root.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/overhead_profiling_future_work.raw.json">Overhead profiling frontier</a> - why the remaining delta is our tree-propose/committer path.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/reaim_measure_deployment_w8q5jg1k0.raw.json">Deployment measurement re-aim</a> - cat9 lossless-within-floor versus native E5 in the deployment regime.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">GDN tree kernel</a> - <code>BV</code>, <code>h_cache</code>, node scan, and replay/export logic.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_device_multidraft_kernel.py">Device multidraft committer</a> - temp-0.6 on-device SpecInfer residual rule.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr10_phase4_patch_vllm_tree_gdn.py">vLLM tree wiring patch</a> - cat6root packing, cat9 shape guards, and committer hooks.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_measure.py">Measurement harness</a> - deployment speed/lossless modes and matched timer basis.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_VERIFY_LITERATURE.md">Tree-verify literature notes</a> - local comparison notes for STree, SpecInfer, EAGLE, vLLM/SGLang, and lossless bars.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SCAN_BITEXACT_SRAM_NPAD_VERDICT_BIND.md">Scan/SRAM/N_PAD verdict</a> - native geometry, spill, and recompute tradeoffs.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_NODE5_LADDER_DIFFUSE_BIND.md">Node-5 ladder verdict</a> - diffuse GDN accumulation and the reason literal-zero chasing was not the right bar.</li>
         <li><a href="https://arxiv.org/abs/2305.09781">SpecInfer</a>, <a href="https://arxiv.org/abs/2402.12374">Sequoia</a>, <a href="https://arxiv.org/html/2406.16858v1">EAGLE-2</a>, <a href="https://arxiv.org/html/2406.17276v2">OPT-Tree</a>, and <a href="https://arxiv.org/abs/2505.14969">STree</a> - prior work context for tree speculative decoding.</li>
       </ul>
     </section>
   </main>
 
   <footer>
-    <p>Volume III preview. Standalone GitHub Pages mini-paper. Prior context remains available in <a href="index.html">Vol. I</a> and <a href="round-f.html">Vol. II</a>, but this page does not require them. Last updated 2026-06-17.</p>
+    <p>Volume III. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a> and <a href="round-f.html">Vol. II</a>, but this page does not require them. Last updated 2026-06-17.</p>
   </footer>
 </div>
 </body>
