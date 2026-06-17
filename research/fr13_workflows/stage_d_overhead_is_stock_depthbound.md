@@ -1,4 +1,16 @@
-# FR13 Stage D RESULT: the +28ms overhead is STOCK vLLM depth-bound tree-drafting, NOT our committer (2026-06-17)
+# [REFUTED 2026-06-17 — DO NOT TRUST THE MECHANISM BELOW] FR13 Stage D: "+28ms is stock depth-bound tree-drafting"
+
+> **REFUTED for cat6 by code-read (localization workflow wwtr26lo9 + user correction).** This doc's core
+> mechanism — that cat6 runs stock vLLM `propose_tree` with a `for level` growing-row per-level forward loop —
+> is WRONG. cat6root dispatches into the `FR10_CATERPILLAR_NATIVE_SPINE_TOP2` branch
+> (fr10_phase4_patch_vllm_tree_gdn.py L11402-11410), NOT `self.propose_tree`. Our drafter runs the NATIVE MTP
+> SPINE (single-row forwards, == E5) + one root `topk(k=2)`, with ZERO interior-leaf topk for cat6 (`_fr10_leaf_steps=frozenset()`).
+> So the drafter ≈ E5 (<0.1ms extra), and the +28ms is NOT the drafter/propose. I read STOCK vLLM instead of
+> OUR patched path — the exact error the "read OUR code not stock" rule warns against. The +28ms is ALSO not a
+> measured quantity (derived from committed/deploy-TPS, prefill-confounded: cat6 0.98 vs E5 0.65). Correct
+> localization + the boot-profile plan: see `stage_d_localization_vs_e5.md`. Kept below for history ONLY.
+
+# [ORIGINAL, REFUTED] FR13 Stage D RESULT: the +28ms overhead is STOCK vLLM depth-bound tree-drafting, NOT our committer (2026-06-17)
 
 ## The profile (4-way per-step split, B=1 t0.6, cat6 vs native E5)
 - verify forward (s/fwd_gpu): cat6 0.138 == native 0.137  -> ~0 tax (MEASURED, our forked-FA2 + GDN-tree-scan)
