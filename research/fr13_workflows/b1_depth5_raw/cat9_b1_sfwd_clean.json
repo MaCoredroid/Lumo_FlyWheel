@@ -1,0 +1,11 @@
+{
+  "sidecar_files": [
+    "output/fr13_sfwd_sidecar/cat9_b1.json.176"
+  ],
+  "decode_forward_gpu_seconds": 3642.9266873397796,
+  "n_pure_decode_steps_timed": 25257.0,
+  "n_drafts_in_timed_steps": 25257.0,
+  "s_per_fwd_gpu_per_specevent": 0.14423433849387415,
+  "s_per_fwd_gpu_per_forward": 0.14423433849387415,
+  "basis": "MATCHED pure-decode-only (numerator + denominator same steps); NOT the global spec_decode_num_drafts_total"
+}
