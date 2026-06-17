@@ -186,8 +186,19 @@ M_PREFILL_S = "vllm:request_prefill_time_seconds_sum"
 # B>1). Present only when the server booted with FR13_SFWD_GPU_TIMER=1 (the timer
 # is DEFAULT-OFF + byte-identical); absent => 0.0 here and s_per_fwd_gpu = None.
 M_DECODE_FWD_GPU_S = "vllm:fr13_decode_forward_gpu_seconds_total"
+# MATCHED denominators for s_per_fwd_gpu (both restricted to the SAME pure-decode
+# steps the timer measured). s_per_fwd_gpu MUST divide M_DECODE_FWD_GPU_S by one of
+# these, NOT by the GLOBAL M_DRAFTS (spec_decode_num_drafts_total): the global counter
+# includes drafts on mixed prefill+decode steps the timer excludes (~49% at B=4
+# deployment), so M_DECODE_FWD_GPU_S/M_DRAFTS reintroduces a prefill-load-dependent
+# confound that is arm-dependent -> defeats prefill-independence. M_DECODE_FWD_GPU_STEPS
+# = pure-decode forwards (per-FORWARD basis, matches the metric name + the banked B=1
+# 0.218 per-forward); M_DECODE_FWD_GPU_DRAFTS = drafts on those steps (per-spec-event).
+M_DECODE_FWD_GPU_STEPS = "vllm:fr13_decode_forward_gpu_steps_total"
+M_DECODE_FWD_GPU_DRAFTS = "vllm:fr13_decode_forward_gpu_drafts_total"
 COUNTERS = [M_DECODE_S, M_DRAFTS, M_ACCEPTED, M_DRAFT_TOK, M_GEN_TOK,
-            M_TPOT_SUM, M_TPOT_COUNT, M_PREFILL_S, M_DECODE_FWD_GPU_S]
+            M_TPOT_SUM, M_TPOT_COUNT, M_PREFILL_S, M_DECODE_FWD_GPU_S,
+            M_DECODE_FWD_GPU_STEPS, M_DECODE_FWD_GPU_DRAFTS]
 
 # Forms that must NEVER be reported as s/fwd (blocked + asserted, class-12).
 BANNED_SPEED_BASES = {"tps", "accept", "wall", "wall_clock", "req_elapsed", "http_elapsed"}
@@ -1469,14 +1480,19 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         drafts = md[M_DRAFTS]
         tpot_sum_d = md.get(M_TPOT_SUM, 0.0)
         fwd_gpu_d = md.get(M_DECODE_FWD_GPU_S, 0.0)
+        # MATCHED denominator (drafts on the pure-decode steps the timer measured),
+        # NOT the global M_DRAFTS (which adds mixed-step drafts the numerator excludes
+        # => prefill-load-dependent confound). None if the matched counter is absent
+        # (timer off / pre-fix run) -> re-derive from the sidecar.
+        fwd_gpu_drafts_d = md.get(M_DECODE_FWD_GPU_DRAFTS, 0.0)
         per_task.append({
             "instance_id": d.name,
             "drafts": drafts,
             "tok_per_draft": (md[M_DRAFT_TOK] / drafts) if drafts > 0 else None,
             "s_per_fwd": (md[M_DECODE_S] / drafts) if drafts > 0 else None,
             # FR13_SFWD_GPU_TIMER: prefill-INDEPENDENT decode-forward GPU time per
-            # spec event (None unless the server booted with the timer on).
-            "s_per_fwd_gpu": (fwd_gpu_d / drafts) if (drafts > 0 and fwd_gpu_d > 0) else None,
+            # spec event = pure-decode GPU sec / drafts-on-those-pure-decode-steps.
+            "s_per_fwd_gpu": (fwd_gpu_d / fwd_gpu_drafts_d) if (fwd_gpu_drafts_d > 0 and fwd_gpu_d > 0) else None,
             "accept_per_event": (md[M_ACCEPTED] / drafts) if drafts > 0 else None,
             "per_request_decode_tps": (md.get(M_TPOT_COUNT, 0.0) / tpot_sum_d) if tpot_sum_d > 0 else None,
         })
@@ -1487,14 +1503,22 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
 
     drafts = agg[M_DRAFTS]
     s_fwd = agg[M_DECODE_S] / drafts if drafts > 0 else None
-    # FR13_SFWD_GPU_TIMER: the PREFILL-INDEPENDENT decode-forward GPU time per
-    # spec event = d(fr13_decode_forward_gpu_seconds_total)/d(spec_decode_num_
-    # drafts_total). The wall-span s_fwd above absorbs co-resident chunked-prefill
-    # + idle in the decode window at B>1; this counter times ONLY the pure-decode
-    # model-forward (verify forward) GPU kernel, so it is the prefill-independent
-    # decode speed. None unless the server booted with FR13_SFWD_GPU_TIMER=1.
+    # FR13_SFWD_GPU_TIMER: the PREFILL-INDEPENDENT decode-forward GPU time per spec
+    # event = d(fr13_decode_forward_gpu_seconds_total)/d(fr13_decode_forward_gpu_
+    # drafts_total) -- the MATCHED denominator (drafts on the pure-decode steps the
+    # timer measured), NOT the global spec_decode_num_drafts_total. The global counter
+    # adds drafts from mixed prefill+decode steps the timer excludes (~49% at B=4
+    # deployment), which scales with prefill load and is arm-dependent => dividing by
+    # it reintroduces the very prefill confound the metric removes. Both numerator and
+    # this denominator are pure-decode-only. None unless the server booted timer ON
+    # with the matched-denominator synthetic lines (else re-derive from the sidecar).
     agg_fwd_gpu = agg.get(M_DECODE_FWD_GPU_S, 0.0)
-    s_fwd_gpu = (agg_fwd_gpu / drafts) if (drafts > 0 and agg_fwd_gpu > 0) else None
+    agg_fwd_gpu_drafts = agg.get(M_DECODE_FWD_GPU_DRAFTS, 0.0)
+    agg_fwd_gpu_steps = agg.get(M_DECODE_FWD_GPU_STEPS, 0.0)
+    s_fwd_gpu = (agg_fwd_gpu / agg_fwd_gpu_drafts) if (agg_fwd_gpu_drafts > 0 and agg_fwd_gpu > 0) else None
+    # per-pure-decode-FORWARD GPU time (matches the metric name + the banked B=1 0.218
+    # per-forward), reported alongside the per-spec-event s_fwd_gpu.
+    s_fwd_gpu_per_forward = (agg_fwd_gpu / agg_fwd_gpu_steps) if (agg_fwd_gpu_steps > 0 and agg_fwd_gpu > 0) else None
     accept_per_event = agg[M_ACCEPTED] / drafts if drafts > 0 else None
     committed_per_event = (accept_per_event + 1.0) if accept_per_event is not None else None
     derived_tps = (committed_per_event / s_fwd) if (s_fwd and committed_per_event) else None
@@ -1594,16 +1618,20 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         # FR13_SFWD_GPU_TIMER: prefill-INDEPENDENT decode-forward GPU time per spec
         # event. None unless the server booted with FR13_SFWD_GPU_TIMER=1.
         "s_per_fwd_gpu": s_fwd_gpu,
-        "s_per_fwd_gpu_basis": "d(fr13_decode_forward_gpu_seconds_total)/d(spec_decode_num_drafts_total)",
+        "s_per_fwd_gpu_per_forward": s_fwd_gpu_per_forward,
+        "s_per_fwd_gpu_basis": "d(fr13_decode_forward_gpu_seconds_total)/d(fr13_decode_forward_gpu_drafts_total) [MATCHED pure-decode drafts; NOT global spec_decode_num_drafts_total]",
         "s_per_fwd_gpu_note": (
             "PREFILL-INDEPENDENT: GPU-active time in the PURE-DECODE model-forward "
             "(tree TREE_ATTN / MTP verify forward) only, summed over uniform-decode "
-            "steps via async cuda events (gpu_model_runner.execute_model), divided "
-            "by spec events. EXCLUDES interleaved chunked-prefill (which the "
-            "wall-span s_per_fwd absorbs at B>1) + idle. None => server booted "
-            "timer-OFF (default; byte-identical). Verify prefill-independence: "
-            "~invariant to prefill_frac across boots, and at B=1 (no co-resident "
-            "interleave) s_per_fwd_gpu approaches the wall-span s_per_fwd."
+            "steps via async cuda events (gpu_model_runner.execute_model). Divided by "
+            "the MATCHED draft count (drafts on those same pure-decode steps), NOT the "
+            "global spec_decode_num_drafts_total: the global counter adds drafts from "
+            "mixed prefill+decode steps the timer excludes (~49% at B=4 deployment), a "
+            "prefill-load-dependent, arm-dependent confound that would defeat prefill-"
+            "independence. s_per_fwd_gpu_per_forward = per pure-decode FORWARD (matches "
+            "the banked B=1 ~0.218). None => timer-OFF (default; byte-identical) OR a "
+            "pre-fix run whose brackets lack the matched-denominator lines (re-derive "
+            "from the sidecar fwd_gpu/n_drafts_in_timed_steps)."
         ),
         "derived_tps_gpu": derived_tps_gpu,
         "derived_tps_gpu_note": (

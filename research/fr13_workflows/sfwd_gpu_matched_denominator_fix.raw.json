@@ -1,0 +1,23 @@
+{
+  "id": "sfwd_gpu_matched_denominator_fix",
+  "date": "2026-06-16",
+  "context": "Live red-team of the s/fwd_gpu timer DURING the temp-0.6 16-task sweep (arm-1 native E5, B=4 deployment, timer ON). Surfaced by a live preview = sidecar decode_forward_gpu_seconds / live spec_decode_num_drafts_total.",
+  "verify_holds": true,
+  "finding": "cmd_deploy_speed's s_per_fwd_gpu was NOT prefill-independent as shipped: it divided the (pure-decode-only) decode_forward_gpu_seconds by the GLOBAL spec_decode_num_drafts_total. The numerator is restricted to pure-decode (uniform_decode) steps the timer measures; the global drafts counter ALSO counts drafts on mixed prefill+decode steps the timer excludes. Conclusive on live native-E5: n_pure_decode_steps_timed=728 x maxB=4 = 2912 < global drafts 5701, so >=49% of the denominator's drafts are on NON-timed (mixed) steps. tok/draft=5.000 confirms drafts are per-sequence MTP-5 proposals (not a per-step counter artifact). The mixed-step fraction scales with prefill_frac, which differs per arm (native ~0.41 vs cat9 ~0.83) => the per-draft basis reintroduces an arm-dependent prefill confound ~1.7-2x, far larger than the ~3% cat9-vs-native margin => it would CORRUPT the deliverable comparison.",
+  "root_cause": "The metric's intent (decode-forward GPU time EXCLUDING co-resident prefill) requires numerator AND denominator both restricted to pure-decode steps. The timer was DESIGNED correctly and tracks the matched denominators in its sidecar (n_pure_decode_steps_timed, n_drafts_in_timed_steps). cmd_speed (the B=1 raw path) already used the matched sidecar denominator (timed_drafts) correctly. Only cmd_deploy_speed (the deployment path the sweep uses) divided by the global drafts counter. The workflow's smoke test ran at B=1 single-stream (drafts ~= pure-decode forwards, so the bug was invisible) and its B=4 GPU verify DIED on transient 500s, so the bug shipped uncaught.",
+  "fix": {
+    "files": ["scripts/fr13_measure.py", "scripts/run_swe_bench_q36_a.py", "scripts/fr13_sfwd_clean.py"],
+    "fr13_measure": "cmd_deploy_speed now divides decode_forward_gpu_seconds by the MATCHED M_DECODE_FWD_GPU_DRAFTS (drafts on the timed pure-decode steps), with M_DECODE_FWD_GPU_STEPS reported as the per-FORWARD basis (s_per_fwd_gpu_per_forward). Both new counters added to COUNTERS. None (not the contaminated global-drafts value) when the matched lines are absent (old run / timer off).",
+    "run_swe_bench": "_metrics_snapshot now emits 3 synthetic lines from the worker sidecar: decode_forward_gpu_seconds_total + the MATCHED denominators decode_forward_gpu_steps_total (n_pure_decode_steps_timed) + decode_forward_gpu_drafts_total (n_drafts_in_timed_steps). Double-count guard + default-OFF byte-identical preserved.",
+    "fr13_sfwd_clean": "NEW helper: re-derives the clean prefill-independent s_per_fwd_gpu DIRECTLY from a per-arm sidecar glob (fwd/n_drafts_in_timed_steps + fwd/n_pure_decode_steps), for in-flight sweep runs whose already-loaded run_swe_bench predates the matched-denominator lines."
+  },
+  "numbers_native_e5_b4_inflight": {
+    "broken_per_draft_global": 0.0231,
+    "clean_per_specevent_matched": 0.0497,
+    "clean_per_forward_matched": 0.166,
+    "drafts_per_pure_decode_step": 3.37,
+    "note": "clean per-forward 0.166 sits BELOW the banked B=1 wall-span 0.218 = correct (GPU-active strips the sampling/scheduling/idle the wall-span includes); stable across snapshots = prefill-independent."
+  },
+  "sweep_impact": "NO restart needed. The timer's raw sidecars (fwd_gpu + matched denominators) are correct and persist per-arm; the clean s_per_fwd_gpu is re-derived via fr13_sfwd_clean.py. The running deploy_speed_b4.json s_per_fwd_gpu will read None (its run_swe_bench predates the matched lines) -> use the helper. fr13_measure fix makes future sweeps' deploy json correct directly.",
+  "red_team_status": "Timer GPU measurement: HOLDS (correctly pure-decode-only, tracks matched denominators). Derivation: was BROKEN in cmd_deploy_speed, now FIXED. Low-overhead/default-OFF: unchanged (async events, no per-step sync; OFF byte-identical) - decisive ON-vs-OFF matched bench still deferred to a free GPU slot."
+}

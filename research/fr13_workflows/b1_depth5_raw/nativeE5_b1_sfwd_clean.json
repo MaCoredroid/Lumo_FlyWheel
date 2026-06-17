@@ -1,0 +1,11 @@
+{
+  "sidecar_files": [
+    "output/fr13_sfwd_sidecar/nativeE5_b1.json.171"
+  ],
+  "decode_forward_gpu_seconds": 3948.888381607091,
+  "n_pure_decode_steps_timed": 28815.0,
+  "n_drafts_in_timed_steps": 28815.0,
+  "s_per_fwd_gpu_per_specevent": 0.13704280345677913,
+  "s_per_fwd_gpu_per_forward": 0.13704280345677913,
+  "basis": "MATCHED pure-decode-only (numerator + denominator same steps); NOT the global spec_decode_num_drafts_total"
+}

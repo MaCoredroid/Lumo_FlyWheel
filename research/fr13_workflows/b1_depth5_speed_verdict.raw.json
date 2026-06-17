@@ -1,0 +1,16 @@
+{
+  "id": "b1_depth5_speed_verdict",
+  "date": "2026-06-17",
+  "regime": "B=1 (eff_conc=1, single-stream, no co-residency confound), temp-0.6 forced, 4-task subset_b4_four, deployment (codex/q36-a offload, GB10 vLLM-only). Depth-5 trio. RAW deploy_speed_b1.json copied to b1_depth5_raw/.",
+  "verdict_speed": "BOTH tree shapes BEAT native E5 on realized deploy-TPS at clean B=1, overturning the concurrency-confounded B=4 read (where cat9 looked ~18% SLOWER - that was eff_conc mismatch). cat6 is the cleaner winner.",
+  "arms": {
+    "nativeE5_b1": {"deploy_tps": 17.8, "s_per_fwd_gpu": 0.137, "accept_per_event": 3.11, "note": "the bar"},
+    "cat9_b1": {"deploy_tps": 18.4, "s_per_fwd_gpu": 0.144, "accept_per_event": 3.64, "vs_E5": "+3.4% deploy-TPS; +5% verify tax; +17% accept"},
+    "cat6root_b1": {"deploy_tps": 18.51, "s_per_fwd_gpu": 0.138, "accept_per_event": 3.82, "vs_E5": "+4.0% deploy-TPS; ZERO verify tax (0.138~=native); HIGHEST accept", "note": "WINNER on all axes; cat6 (6 nodes) >= cat9 (9 nodes) - fewer nodes, cheaper, accepts more"}
+  },
+  "committed_per_wall_decomposition": "TPS = committed/step / wall/step. cat6 commits +15.7% tokens/step but its step is +11% LONGER -> net only +4% TPS. The +0.026s/step extra wall is the OVERHEAD bucket (committer + tree-propose), NOT the verify forward (cat6 verify == native). And that overhead delta vs E5 is ENTIRELY OURS (native E5 + cat6 share identical stock scheduler/gaps/base-model/sampler that cancel) -> tuning target. See overhead_profiling_future_work.",
+  "honesty": "temp-0.6 forced (LUMO_PROXY_FORCE_TEMPERATURE=0.6 confirmed), device multidraft committer engaged on cat9/cat6 (FR13_DEVICE_MULTIDRAFT 'engaged' line, not host-ref), tok/draft cat9=9.0 cat6=6.0 (no #12 fork), GB10 vLLM-only, alienware untouched. attn = OUR forked FA2 (FR13_FA2_TREE_BIAS=1).",
+  "lossless_status": "PENDING - p-rescore (per-token clear-margin argmax flip-rate vs no-spec recurrent oracle) running for E5(floor)/cat9/cat6 via scripts/fr13_b1_lossless_prescore.sh. The speed WIN only counts if cat9/cat6 flip-rate is within E5's floor. (temp-0.6 full-vocab in-serving TV blocked on vLLM 0.19.2 -> offline flip-rate is the binding gate.) Verdict updated when it lands.",
+  "cut": "E3 + 333 (depth-3 arms) cut by user 2026-06-17 - focus is the depth-5 trio. cat55222/cat555 shape arms paused (post-tuning).",
+  "links": ["b4_concurrency_confound_switch_to_b1", "overhead_profiling_future_work", "reference_tree_tps_overhead_bound"]
+}
