@@ -35,10 +35,13 @@ Throughput = tokens per second is TOKEN-weighted by definition:
 So the metric to report/optimize for deploy throughput is the TOKEN-weighted +27%; per_request_decode_tps is the
 wrong basis for the throughput question. No open metric question remains.
 
-## The actual end-to-end lever (separate from the metric)
-cat6's +27% is DECODE throughput. End-to-end on SWE-Verified, each turn re-sends ~11k-14k input tokens and
-**cached_tokens=0** -> the prefill is NOT KV-cached across turns and is paid EVERY turn, making PREFILL the dominant
-per-turn cost (decode is a fraction). So cat6's +27% decode shrinks total task time by less than 27%. The big
-end-to-end levers are (1) prompt/KV-cache reuse across the agent's growing context (kill the repeated 11k prefill),
-(2) B>1 to overlap one turn's prefill/agent-idle with another's decode. Both are deployment levers, not cat6 kernel
-changes. cat6's kernel is already +27% on decode throughput.
+## Honest observation (a SEPARATE, deployment question — NOT pursued here)
+cat6's +27% is DECODE throughput. End-to-end on SWE-Verified the deploy is prefill-dominated: each turn re-sends
+~11k-14k input tokens, and prefix caching is OFF (cache_config_info enable_prefix_caching=False — the vLLM DEFAULT
+for this hybrid GDN/mamba model; prefix_cache_queries_total=0, prompt_tokens_cached_total=0 of 1.6M prompt tokens),
+so the full ~11k prefix is re-prefilled EVERY turn even though the agent's context is append-only. That makes
+PREFILL the dominant per-turn cost, so cat6's +27% decode shrinks total task wall by less than 27%. This is a
+DEPLOYMENT/serving question (prefix-cache reuse, or B>1), DISTINCT from the cat6 speed question and NOT investigated
+here (default prefix caching is off for hybrid GDN for correctness reasons; enabling it would need separate
+verification it doesn't break the GDN recurrent state / tree spec-decode). Recorded for honesty; cat6's kernel is
+already +27% on decode throughput regardless.
