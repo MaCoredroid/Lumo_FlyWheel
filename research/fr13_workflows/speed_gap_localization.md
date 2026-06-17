@@ -34,3 +34,27 @@ not greedy.) The workflow's analysis-5 "12ms/tok per-node walk" = the host-ref p
 GPU forward) for cat6 vs E5. PREDICTION: stream=false realized widens toward +17% (cat6's true token advantage),
 + s_per_fwd_gpu ~equal -> proves the deploy +4% is the consumer/idle span. scripts/fr13_synth_realized_tps.sh.
 The prior stream=TRUE probe was INVALID (slow python SSE client backpressured + inflated rdt to 0.226).
+
+## FINAL VERDICT (cat6 vs E5 stream=false synthetic + diff, 2026-06-17)
+Measured (scripts/fr13_synth_realized_tps.sh, stream=false, generic CPU-explanation prompt, B=1):
+| metric | cat6 | E5 |
+|---|---|---|
+| s_per_fwd_gpu (pure verify forward, idle-excl) | 0.1196 | 0.1177 |
+| realized_decode_tps | 14.02 | 15.12 |
+| accept/event | 2.208 | 2.333 |
+| committed/step | 3.200 | 3.333 |
+| non-forward gap (wall/step - s_per_fwd_gpu) | 0.1086 | 0.1027 |
+
+1. VERIFY FORWARD EQUAL: s_per_fwd_gpu cat6 0.1196 ~= E5 0.1177 (~1.6% tree tax; deploy was 0.7%). Not the diff.
+2. OUR-CODE per-step delta ~6ms (cat6 non-forward gap +0.0059 over E5 = tree drafter top-k + device committer
+   vs E5 chain). Tiny, NOT the +28ms.
+3. DEPLOY +28ms is CONSUMER-DOMINATED: synthetic (no consumer) reproduces only ~6ms; the other ~22ms is the
+   deploy consumer/agent-loop (codex side, outside vLLM rdt). Kernel/our-code is NOT the deploy bottleneck.
+4. ACCEPT IS WORKLOAD-DEPENDENT (new): generic synthetic text -> E5 accepts MORE (2.333 vs 2.208) -> E5 FASTER
+   (15.12 vs 14.02). codex SWE deploy -> cat6 accepts more (3.82 vs 3.11) -> cat6 faster (18.51 vs 17.8). cat6's
+   win is SPECIFIC to the structured-code (codex SWE) workload its tree was tuned for, NOT universal.
+
+VERDICT: cat6 WINS on the DEPLOYED workload (codex SWE: +4% TPS + lossless, the relevant result). The kernel is
+sound (forward equal, our-code ~6ms). The deploy +28ms is consumer/agent-loop-bound -> kernel/committer tuning
+gives ~0 deploy-TPS. Further speed = B>1 concurrency (overlap the consumer idle) or a better-accept shape; NOT a
+kernel lever. The user's "more accept should be way faster" is right ON-GPU but the deploy is consumer-paced.
