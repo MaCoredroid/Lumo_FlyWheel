@@ -3,16 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Lossless GDN Tree-Scan: Served-Realization Tree Verification - Lumo FlyWheel Vol. III</title>
-<meta name="description" content="Illustrated systems paper for served-realization tree verification on a recurrent hybrid model: FA2 tree bias, GDN tree scan/replay, vLLM state publication, B=1 decode results, and failure library.">
-<meta property="og:title" content="Lossless GDN Tree-Scan: Served-Realization Tree Verification">
+<title>Lossless-within-floor GDN Tree-Scan: Served-Realization Tree Verification - Lumo FlyWheel Vol. III</title>
+<meta name="description" content="Illustrated systems paper for distribution-preserving served-realization tree verification on a recurrent hybrid model: FA2 tree bias, GDN tree scan/replay, vLLM state publication, B=1 decode results, and failure library.">
+<meta property="og:title" content="Lossless-within-floor GDN Tree-Scan: Served-Realization Tree Verification">
 <meta property="og:description" content="A standalone systems paper on distribution-preserving served-realization tree verification for a Gated-DeltaNet hybrid model inside vLLM.">
 <meta name="author" content="Mark Ma">
-<meta name="theme-color" content="#111111">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Cpath d='M15 42h11V22h8v20h15' fill='none' stroke='%238bd3dd' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='26' cy='22' r='4' fill='%23e7c76f'/%3E%3Ccircle cx='34' cy='42' r='4' fill='%23a7d98d'/%3E%3Ccircle cx='49' cy='42' r='4' fill='%23d88989'/%3E%3C/svg%3E">
 <style>
   :root {
-    color-scheme: dark;
+    color-scheme: light dark;
     --bg: #111111;
     --paper: #171717;
     --paper-2: #202020;
@@ -31,9 +32,64 @@
     --green-soft: #233320;
     --amber-soft: #3b3018;
     --rose-soft: #3a2323;
+    --grid-major: rgba(255, 255, 255, 0.025);
+    --grid-minor: rgba(255, 255, 255, 0.018);
+    --grid-opacity: 0.42;
+    --link-underline: rgba(139, 211, 221, 0.36);
+    --soft-panel: rgba(255, 255, 255, 0.018);
+    --soft-panel-2: rgba(255, 255, 255, 0.012);
+    --soft-panel-3: rgba(255, 255, 255, 0.026);
+    --flow-wash: rgba(139, 211, 221, 0.035);
+    --flow-bg: #0c0c0c;
+    --flow-card-bg: #101010;
+    --control-bg: #121212;
+    --green-wash: rgba(167, 217, 141, 0.045);
+    --bias-on-fill: rgba(231, 199, 111, 0.5);
+    --bias-off-fill: rgba(255, 255, 255, 0.03);
+    --bias-off-stroke: rgba(255, 255, 255, 0.08);
+    --callout-fill: rgba(255, 255, 255, 0.02);
     --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
     --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
     --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f7;
+      --paper: #ffffff;
+      --paper-2: #eef1f0;
+      --paper-3: #dde3e1;
+      --ink: #151715;
+      --text: #303431;
+      --muted: #626a64;
+      --quiet: #7a827d;
+      --rule: #d8ddd9;
+      --rule-2: #b7c0bb;
+      --cyan: #1c7380;
+      --green: #3f7b3a;
+      --amber: #876812;
+      --rose: #a54444;
+      --cyan-soft: #e3f3f5;
+      --green-soft: #e4f2df;
+      --amber-soft: #f3ead2;
+      --rose-soft: #f5dfdf;
+      --grid-major: rgba(18, 24, 22, 0.055);
+      --grid-minor: rgba(18, 24, 22, 0.038);
+      --grid-opacity: 0.55;
+      --link-underline: rgba(28, 115, 128, 0.34);
+      --soft-panel: rgba(18, 24, 22, 0.028);
+      --soft-panel-2: rgba(18, 24, 22, 0.018);
+      --soft-panel-3: rgba(18, 24, 22, 0.038);
+      --flow-wash: rgba(28, 115, 128, 0.075);
+      --flow-bg: #fbfbfa;
+      --flow-card-bg: #ffffff;
+      --control-bg: #f8faf9;
+      --green-wash: rgba(63, 123, 58, 0.08);
+      --bias-on-fill: rgba(135, 104, 18, 0.22);
+      --bias-off-fill: rgba(18, 24, 22, 0.035);
+      --bias-off-stroke: rgba(18, 24, 22, 0.12);
+      --callout-fill: rgba(18, 24, 22, 0.025);
+    }
   }
 
   * { box-sizing: border-box; }
@@ -54,16 +110,16 @@
     inset: 0;
     z-index: -1;
     background:
-      linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
-      linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px);
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-minor) 1px, transparent 1px);
     background-size: 56px 56px;
-    opacity: 0.42;
+    opacity: var(--grid-opacity);
   }
   ::selection { background: var(--cyan-soft); color: var(--ink); }
   a {
     color: var(--cyan);
     text-decoration: none;
-    border-bottom: 1px solid rgba(139, 211, 221, 0.36);
+    border-bottom: 1px solid var(--link-underline);
   }
   a:hover { border-bottom-color: currentColor; }
   a:focus-visible {
@@ -421,9 +477,10 @@
   .flow-figure {
     clear: both;
     background:
-      linear-gradient(180deg, rgba(139, 211, 221, 0.035), transparent 36%),
-      #0c0c0c;
+      linear-gradient(180deg, var(--flow-wash), transparent 36%),
+      var(--flow-bg);
     overflow-x: auto;
+    scrollbar-color: var(--cyan) var(--paper-2);
   }
   .flow-figure.is-paused .flow-edge,
   .flow-figure.is-paused .flow-node,
@@ -435,7 +492,7 @@
   .flow-control {
     border: 1px solid var(--rule);
     border-radius: 6px;
-    background: #121212;
+    background: var(--control-bg);
     color: var(--text);
     font: 800 12px var(--mono);
     padding: 8px 10px;
@@ -459,7 +516,7 @@
     background: var(--rule);
   }
   .flow-why div {
-    background: #101010;
+    background: var(--flow-card-bg);
     padding: 13px 14px;
     color: var(--muted);
     font-size: 13px;
@@ -493,7 +550,7 @@
     outline: none;
   }
   .flow-svg .lane {
-    fill: rgba(255, 255, 255, 0.018);
+    fill: var(--soft-panel);
     stroke: var(--rule);
     stroke-width: 1;
   }
@@ -515,11 +572,11 @@
   .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
   .flow-svg .bad-fill { fill: var(--rose-soft); stroke: var(--rose); }
   .flow-svg .meta-fill {
-    fill: rgba(255, 255, 255, 0.026);
+    fill: var(--soft-panel-3);
     stroke: var(--rule-2);
   }
   .flow-svg .kernel-card {
-    fill: rgba(255, 255, 255, 0.018);
+    fill: var(--soft-panel);
     stroke: var(--rule);
     stroke-width: 1;
   }
@@ -555,19 +612,19 @@
     animation-duration: 4.4s;
   }
   .flow-svg .bias-on {
-    fill: rgba(231, 199, 111, 0.5);
+    fill: var(--bias-on-fill);
     animation: biasGlow 2.6s ease-in-out infinite;
   }
   .flow-svg .bias-off {
-    fill: rgba(255, 255, 255, 0.03);
-    stroke: rgba(255, 255, 255, 0.08);
+    fill: var(--bias-off-fill);
+    stroke: var(--bias-off-stroke);
   }
   .flow-svg .code-label {
     fill: var(--cyan);
     font: 11px var(--mono);
   }
   .flow-svg .callout {
-    fill: rgba(255, 255, 255, 0.02);
+    fill: var(--callout-fill);
     stroke: var(--rule-2);
     stroke-width: 1;
   }
@@ -625,7 +682,7 @@
     margin: 22px 0;
     border: 1px solid var(--rule);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.018);
+    background: var(--soft-panel);
   }
   .definition-box {
     max-width: 900px;
@@ -675,7 +732,7 @@
     padding: 15px 17px;
     border: 1px solid var(--rule);
     border-radius: 8px;
-    background: rgba(167, 217, 141, 0.045);
+    background: var(--green-wash);
   }
   .confidence-row strong {
     color: var(--green);
@@ -695,7 +752,7 @@
     margin: 26px 0;
     border: 1px solid var(--rule);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.012);
+    background: var(--soft-panel-2);
     overflow: hidden;
   }
   .fold > summary {
@@ -723,7 +780,7 @@
   }
   .fold[open] > summary {
     border-bottom: 1px solid var(--rule);
-    background: rgba(255, 255, 255, 0.018);
+    background: var(--soft-panel);
   }
   .fold[open] > summary::after { content: "-"; }
   .fold > summary small {
@@ -744,7 +801,7 @@
   .equation {
     margin: 22px 0;
     padding: 18px 20px;
-    background: #0c0c0c;
+    background: var(--flow-bg);
     border: 1px solid var(--rule-2);
     border-radius: 8px;
     overflow-x: auto;
@@ -759,7 +816,7 @@
 
   .source-exhibit {
     margin: 24px 0;
-    background: #0c0c0c;
+    background: var(--flow-bg);
     border: 1px solid var(--rule-2);
     border-radius: 8px;
     overflow: hidden;
@@ -877,6 +934,7 @@
     border: 1px solid var(--rule);
     border-radius: 8px;
     background: var(--paper);
+    scrollbar-color: var(--cyan) var(--paper-2);
   }
   table {
     border-collapse: collapse;
@@ -1081,6 +1139,22 @@
     }
     .glossary-strip div:last-child { border-bottom: 0; }
     .compare-strip { grid-template-columns: 1fr; }
+    .table-wrap::before,
+    .flow-figure::before {
+      display: inline-flex;
+      position: sticky;
+      left: 8px;
+      z-index: 1;
+      margin: 8px 8px 0;
+      padding: 4px 7px;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      background: var(--paper);
+      color: var(--muted);
+      font: 800 11px var(--mono);
+    }
+    .table-wrap::before { content: "wide table: scroll sideways"; }
+    .flow-figure::before { content: "wide figure: scroll sideways"; }
     .section { margin: 56px 0; }
     .section h2 { font-size: 30px; }
     .hero-result {
@@ -1155,11 +1229,11 @@
 
   <header class="hero">
     <p class="kicker">Volume III / illustrated systems paper</p>
-    <h1>Lossless GDN Tree-Scan</h1>
+    <h1>Lossless-within-floor GDN Tree-Scan</h1>
     <p class="title-subtitle">Served-Realization Tree Verification for Recurrent Hybrid Models</p>
     <p class="subhead">A native-compatible tree verifier for token trees on a 75% recurrent hybrid model. The contribution is served-realization equivalence for Qwen GDN inside vLLM: FA2 ancestry, path-local recurrent state, accepted-chain replay, and state publication all tied back to native decode.</p>
     <div class="hero-tldr" aria-label="TLDR and headline result">
-      <p class="tldr-copy"><strong>TL;DR:</strong> a draft tree is a menu of next-token guesses. On this Qwen hybrid, the verifier is distribution-preserving only if two path-local facts hold at once: attention rows see prefix plus ancestors, and each GDN row carries the recurrent state native decode would have produced on that branch. We use the native MTP head here, but the verifier boundary can serve another drafter if it supplies the same tree contract.</p>
+      <p class="tldr-copy"><strong>TL;DR:</strong> a draft tree is a menu of next-token guesses. On this Qwen hybrid, the verifier is distribution-preserving within the native recurrent-oracle floor only if two path-local facts hold at once: attention rows see prefix plus ancestors, and each GDN row carries the recurrent state native decode would have produced on that branch. We use the native MTP head here, but the verifier boundary can serve another drafter if it supplies the same tree contract.</p>
       <div class="hero-result">
         <span class="hero-number">+27%</span>
         <p><strong>cat6root</strong> (6-node root-branch tree) token-weighted decode throughput at clean B=1/temp-0.6 on four SWE/Codex tasks: 23.88 tok/s vs 18.80 for native E5 (native 5-step MTP spine). This is decode-only, not end-to-end wall time; the per-request latency view is +4.0%.</p>
@@ -1173,6 +1247,8 @@
     </div>
     <div class="paper-nav">
       <a href="#abstract">Abstract</a>
+      <a href="#reader-map">Reader map</a>
+      <a href="#contract">Contract</a>
       <a href="#claims">Claims</a>
       <a href="#prior-work">Prior work</a>
       <a href="#design-trail">Design trail</a>
@@ -1194,13 +1270,20 @@
         <p><strong>Formal lossless definition:</strong> in this paper, lossless means distribution-preserving within the native recurrent-oracle numerical floor, not bit-identical logits at every intermediate tensor.</p>
       </div>
 
-      <div class="glossary-strip" aria-label="Compact glossary">
+      <h3>Names in this paper</h3>
+      <div class="glossary-strip" aria-label="Names in this paper">
+        <div><dfn>GDN</dfn><span>Gated-DeltaNet recurrent layer; it carries hidden state across tokens.</span></div>
+        <div><dfn>MTP</dfn><span>multi-token prediction drafter used by native Qwen serving.</span></div>
         <div><dfn>E5</dfn><span>native 5-step MTP spine.</span></div>
         <div><dfn>cat9</dfn><span>9-node caterpillar tree: depth-5 spine plus four runner-up leaves.</span></div>
         <div><dfn>cat6root</dfn><span>6-node root-branch tree: depth-5 spine plus one root sibling.</span></div>
         <div><dfn>B=1</dfn><span>one request stream; isolates the tree mechanism from batching and co-residency noise.</span></div>
+        <div><dfn>B=4</dfn><span>four concurrent streams; still an open deployment gate after contaminated reads.</span></div>
         <div><dfn>temp-0.6</dfn><span>sampling temperature used for the deployment run and recurrent-oracle p-rescore.</span></div>
         <div><dfn>native floor</dfn><span>the native recurrent-oracle numerical floor the tree arms must stay within.</span></div>
+        <div><dfn>BV</dfn><span>value-tile width in the GDN scan kernel; it affects cache size and reduction shape.</span></div>
+        <div><dfn>Stage D</dfn><span>the remaining timing-attribution bucket after drafter, verify, and committer probes.</span></div>
+        <div><dfn>token-weighted TPS</dfn><span>total generated decode tokens divided by total decode seconds; this is the throughput headline.</span></div>
       </div>
 
       <div class="abstract-grid">
@@ -1232,6 +1315,156 @@
           <div class="box bad"><span class="tag">Measurement</span><p>Speed probes, oracle capture, or denominator choices change the served path being timed.</p></div>
           <div class="box bad"><span class="tag">Oracle floor</span><p>p-rescore exceeds the native recurrent-oracle floor with enough margin to rule out numerical noise.</p></div>
         </div>
+      </div>
+    </section>
+
+    <section class="section" id="reader-map">
+      <h2>Five-Minute Reader Map</h2>
+      <aside class="sidenote">
+        <p><strong>Read path:</strong> start here if the page feels too paper-sized. The appendices stay available, but the main argument is shorter.</p>
+      </aside>
+      <p>The shortest version is: tree verification for recurrent hybrids is not solved by attention masks; the verifier must also make every GDN state path-local and publish only the accepted chain. Under that contract, cat6root closes within the native floor and improves clean B=1 token-weighted decode throughput by 27%.</p>
+
+      <div class="source-exhibit" aria-label="Five-minute reading path">
+        <div class="source-head">
+          <strong>Read in this order</strong>
+          <span>The blog path before the full paper path</span>
+        </div>
+        <div class="grid">
+          <div class="box info"><span class="tag">Problem</span><p>Tree attention gives branch ancestry, but GDN recurrence also needs a separate state path per branch.</p></div>
+          <div class="box good"><span class="tag">Result</span><p>cat6root is +27% token-weighted decode throughput at clean B=1/temp-0.6; +4% is the per-request latency view.</p></div>
+          <div class="box info"><span class="tag">Contract</span><p>The verifier contract is FA2 tree bias, GDN branch-local scan, accepted-chain replay, and vLLM state publication.</p></div>
+          <div class="box warn"><span class="tag">Caveats</span><p>Lossless evidence is a 40-turn B=1 sample under native-floor gates; B=4 and Stage D attribution remain open.</p></div>
+          <div class="box warn"><span class="tag">Appendices</span><p>Kernel math, animated figures, failure library, config, and source trail are audit material rather than required first-read material.</p></div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Baseline and metric taxonomy used throughout the paper.</caption>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>What it means</th>
+              <th>What it is used for</th>
+              <th>Not the same as</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>no-spec native decode</td>
+              <td>Target model decoding without speculative candidates.</td>
+              <td>Recurrent-oracle floor and p-rescore reference.</td>
+              <td>Native MTP E5, which uses Qwen's built-in draft spine.</td>
+            </tr>
+            <tr>
+              <td>native E5</td>
+              <td>Native 5-step MTP spine in the served vLLM path.</td>
+              <td>Main speed baseline for depth-5 speculation.</td>
+              <td>A tree verifier; it has one linear spine, not sibling branches.</td>
+            </tr>
+            <tr>
+              <td>cat9</td>
+              <td>9-node tree: depth-5 spine plus four runner-up leaves.</td>
+              <td>Broad tree-shape evidence and lossless closure.</td>
+              <td>The leaner cat6root shape.</td>
+            </tr>
+            <tr>
+              <td>cat6root</td>
+              <td>6-node tree: depth-5 spine plus one root sibling.</td>
+              <td>Headline clean B=1 speed result.</td>
+              <td>A universal best tree; it is the cleanest current shape under these gates.</td>
+            </tr>
+            <tr>
+              <td>B=1</td>
+              <td>One active request stream.</td>
+              <td>Mechanism attribution: does the verifier/tree shape work without co-residency noise?</td>
+              <td>B=4 deployment scaling.</td>
+            </tr>
+            <tr>
+              <td>B=4</td>
+              <td>Four concurrent request streams.</td>
+              <td>Future deployment gate after carrier-clean remeasurement.</td>
+              <td>The old contaminated accept/event read.</td>
+            </tr>
+            <tr>
+              <td>token-weighted decode TPS</td>
+              <td>Total generated decode tokens divided by total decode seconds.</td>
+              <td>Throughput headline: +27% for cat6root.</td>
+              <td>Per-request TPS, which weights short and long turns equally.</td>
+            </tr>
+            <tr>
+              <td>end-to-end wall time</td>
+              <td>Full task time including prefill, tool calls, scheduler effects, and agent workflow.</td>
+              <td>Deployment impact caveat.</td>
+              <td>Decode-only kernel/mechanism speed.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="contract">
+      <h2>Verifier Contract</h2>
+      <aside class="sidenote">
+        <p><strong>Theorem style:</strong> this is the formal contract the implementation is trying to realize. The proof is structural; the numerical and served-path claims are empirical gates.</p>
+      </aside>
+      <p>The verifier receives a candidate tree from any drafter, not necessarily the native MTP head. The contract below is what makes the target path distribution-preserving within the native floor after verification and publication.</p>
+
+      <div class="definition-box" aria-label="Accepted-state theorem">
+        <p><strong>Accepted-state theorem, engineering form:</strong> assume the candidate tree only contains candidate token ids and parent links; attention rows can see only prefix plus ancestors; every GDN row is computed from its parent row's recurrent state; the committer applies the same SpecInfer residual rule; and durable state is replayed/published only for the accepted chain. Then the next served decode event starts from the same observable token prefix and recurrent state that native sequential decode would have reached on the accepted tokens, up to the native recurrent-oracle numerical floor.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Verifier contract: assumptions, invariants, and empirical gates.</caption>
+          <thead>
+            <tr>
+              <th>Part</th>
+              <th>Formal content</th>
+              <th>Served implementation</th>
+              <th>Gate</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Inputs</td>
+              <td>Prefix state, tree parent array, candidate token ids, sampling/RNG state.</td>
+              <td>vLLM tree-shape packing plus device multidraft metadata.</td>
+              <td>Shape guards for cat9/cat6root and canonical config flags.</td>
+            </tr>
+            <tr>
+              <td>Attention invariant</td>
+              <td>Row <code>i</code> attends to prompt tokens and ancestors of <code>i</code>, not siblings.</td>
+              <td>Forked FA2 decode path adds <code>tree_bias</code> before softmax while prefill stays native FA2.</td>
+              <td>FA2 fork correction and TREE_ATTN fallback separation.</td>
+            </tr>
+            <tr>
+              <td>GDN invariant</td>
+              <td><code>H_i = GDN_step(H_parent(i), x_i)</code>; siblings do not share recurrent state.</td>
+              <td>Triton GDN tree scan with branch-local <code>h_cache</code>.</td>
+              <td>Scan A/B and recurrent-oracle p-rescore.</td>
+            </tr>
+            <tr>
+              <td>Acceptance rule</td>
+              <td>Use the same speculative residual-mix rule as target verification.</td>
+              <td>Device multidraft commit at temp 0.6.</td>
+              <td>Distribution, not byte-identical host/device RNG, is the gate.</td>
+            </tr>
+            <tr>
+              <td>Publication invariant</td>
+              <td>Only accepted-prefix tokens and their native-compatible recurrent state become durable.</td>
+              <td>Accepted-chain replay and vLLM state writeback/remap.</td>
+              <td>Replay/page-stomp fixes plus contaminated-evidence quarantine.</td>
+            </tr>
+            <tr>
+              <td>Empirical closure</td>
+              <td>The theorem's numerical premise is not bit equality; it is within native recurrent-oracle floor.</td>
+              <td>B=1/temp-0.6 p-rescore and deployment-mode speed runs.</td>
+              <td>40-turn B=1 closure now; request-level bootstrap and B=4 remain future gates.</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -1268,7 +1501,7 @@
               <td>cat9 (9-node caterpillar tree) and cat6root are distribution-preserving within native E5's recurrent-oracle floor at clean B=1.</td>
               <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/b1_depth5_lossless_verdict.md">b1_depth5_lossless_verdict.md</a>.</td>
               <td>Clear-margin argmax flip rate versus no-spec recurrent oracle.</td>
-              <td><span class="pill good">closed</span> cat9 13.28%, cat6root 13.09%, native E5 12.90%; 40-turn sample, margins &lt;1 SE.</td>
+              <td><span class="pill good">closed</span> cat9 13.28%, cat6root 13.09%, native E5 12.90%; 40-turn sample, margins &lt;1 position-level SE, with request-level bootstrap still pending.</td>
             </tr>
             <tr>
               <td>The FA2 fork is part of the served result, not a cosmetic attention rewrite.</td>
@@ -2148,7 +2381,7 @@ else:
 
       <div class="confidence-row" aria-label="Result confidence">
         <strong>Confidence</strong>
-        <p>High confidence on clean B=1 decode throughput; medium confidence on end-to-end task impact; open on B=4 and Stage D attribution.</p>
+        <p>High confidence on clean B=1 decode throughput and within-floor closure under the current position-level p-rescore; medium confidence after accounting for request-level correlation; open on B=4, Stage D attribution, and more seeds.</p>
       </div>
 
       <div class="table-wrap">
@@ -2271,7 +2504,7 @@ else:
         <p><strong>BV A/B:</strong> a scan-only check showing whether different value-tile settings change the branch decision in a controlled regime.</p>
       </aside>
       <p>The lossless chase found both numerical and wiring failure modes. A key lesson was that scan-only bit-exactness is not enough, and literal zero max-abs is not the right universal bar. BV A/B showed the scan op itself can be native-stable in a shallow single-forward regime, but live decode also feeds recurrent state through co-resident accepted chains, committer publication, conv prior windows, and deep attention layers.</p>
-      <p>The exact depth-5 B=1 p-rescore is now closed. Against each arm's own no-spec recurrent oracle, native E5 has 630 clear-margin flips over 4,883 positions, 12.90%; cat9 (9-node caterpillar tree) has 645 over 4,858, 13.28%; cat6root (6-node root-branch tree) has about 636 over about 4,860, 13.09%. Both tree arms are within the native E5 floor by less than one standard error. The caveat is sample size: this is a 40-turn sample per arm, so the paper treats the result as a clean B=1 closure, not as a universal guarantee for every future batch/concurrency regime.</p>
+      <p>The exact depth-5 B=1 p-rescore is now closed. Against each arm's own no-spec recurrent oracle, native E5 has 630 clear-margin flips over 4,883 positions, 12.90%; cat9 (9-node caterpillar tree) has 645 over 4,858, 13.28%; cat6root (6-node root-branch tree) has about 636 over about 4,860, 13.09%. Both tree arms are within the native E5 floor by less than one position-level standard error. That SE is optimistic because positions inside the same SWE/Codex turn are correlated. The paper therefore treats the result as clean B=1 closure for the current sample, while request-level bootstrap, more seeds, and B=4 remain follow-up gates.</p>
 
       <div class="table-wrap">
         <table>
@@ -2590,7 +2823,7 @@ else:
         <div class="box warn">
           <span class="tag">Sample</span>
           <h3>Lossless sample size</h3>
-          <p>The exact cat6/cat9 p-rescore is a 40-turn sample per arm. It closes the clean B=1 table within native floor, with margins under one standard error.</p>
+          <p>The exact cat6/cat9 p-rescore is a 40-turn sample per arm. It closes the clean B=1 table within native floor under a position-level SE, but that SE is optimistic because positions within a turn are correlated. Request-level bootstrap and more seeds are the next statistical gates.</p>
         </div>
         <div class="box warn">
           <span class="tag">Metric</span>
