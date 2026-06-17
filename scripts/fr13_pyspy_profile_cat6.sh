@@ -49,6 +49,10 @@ while (( $(date +%s) < T0 + 1200 )); do
 done
 (( HEALTHY==1 )) || { echo FAIL-health; docker logs "$CONTAINER" 2>&1|tail -40; exit 2; }
 echo "healthy after $(( $(date +%s)-T0 ))s"
+echo "[3b] verify deployed-config flags engaged"
+docker exec "$CONTAINER" env | sort > "$OUT/container_env.txt"
+grep -iE '^(FR13_DEVICE_MULTIDRAFT|FR13_GPU_COMMITTER|FR13_REPLAY_ROUTE|FR10_DECODE_MODE_DEFAULT|LUMO_FB_KERNEL_ROWS|FR13_FA2_TREE_BIAS)=' "$OUT/container_env.txt" | sed 's/^/  /'
+grep -q '^FR13_DEVICE_MULTIDRAFT=1$' "$OUT/container_env.txt" || { echo "FAIL: device committer not engaged"; exit 3; }
 
 echo "[4/6] install py-spy in container"
 docker exec "$CONTAINER" bash -lc 'pip install -q py-spy 2>&1 | tail -2; which py-spy || python3 -m pip show py-spy 2>/dev/null | head -1' 2>&1 | tail -3
