@@ -262,6 +262,7 @@ if available_gib < 80 or swap_used_kib != 0:
 PY
 
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
+  ${PROFILE_PTRACE_CAP:+--cap-add=SYS_PTRACE} \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
