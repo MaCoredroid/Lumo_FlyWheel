@@ -74,10 +74,19 @@ reduce() {  # arm label expect bsize
 # ---- sequence: FIVE arms (user 2026-06-16) — depth-5 trio (E5 bar + cat9 + cat6) then
 # depth-3 pair (E3 bar + 333). cat10 + cat9_contam DROPPED. temp 0.6 forced via the
 # offload proxy (DEPLOY_FORCE_TEMP). Depth-matched compares: cat9/cat6 -> E5; 333 -> E3.
-run_native  nativeE5_${TAG}    5 5 1
-run_variant cat9_${TAG}        cat9     9  1
-run_variant cat6root_${TAG}    cat6root 6  1
-run_native  nativeE3_${TAG}    3 3 1
-run_variant threethree_${TAG}  333      9  1
+# Arm sequence: default = the depth-5 trio + depth-3 pair. Override with
+# SEQUENCE_FILE=<path> (a bash snippet that calls run_native/run_variant, which
+# are in scope here) to run a custom set of arms while reusing the SAME tested
+# helpers + env wiring (no duplication).
+if [[ -n "${SEQUENCE_FILE:-}" ]]; then
+  echo "===== CUSTOM SEQUENCE_FILE=$SEQUENCE_FILE ====="
+  source "$SEQUENCE_FILE"
+else
+  run_native  nativeE5_${TAG}    5 5 1
+  run_variant cat9_${TAG}        cat9     9  1
+  run_variant cat6root_${TAG}    cat6root 6  1
+  run_native  nativeE3_${TAG}    3 3 1
+  run_variant threethree_${TAG}  333      9  1
+fi
 
 echo "===== CAMPAIGN DRIVER DONE ====="
