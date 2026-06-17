@@ -16,17 +16,22 @@ per-request-equal metric diluted by short requests. NO kernel throttle.
 | per_request_decode_tps = 1/mean(per-request TPOT) | 18.51 | 17.80 | **+4%** | per-request EQUAL-weighted; the merged headline |
 | derived/aggregate = gen_tok / request_decode_time | 23.88 | 18.80 | **+27%** | TOKEN-weighted decode throughput; B=1-comparable |
 
-cat6 is faster on BOTH (TPOT percentiles: cat6 p25=50ms/p99=75ms vs E5 p25=75ms/p99=100ms — faster at every
-percentile, no slow tail). The +4%-vs-+27% gap is JENSEN: per_request_decode_tps weights every request equally,
-and **39% (E5) / 45% (cat6) of requests are <=64 tokens** where spec-decode barely helps (fixed first-step
-overhead dominates a short reply) -> cat6 ~= E5 there. The token-weighted aggregate ignores those and captures
-cat6's win on the long replies, where the extra accepted tokens accumulate. So cat6's GPU genuinely produces
-decode tokens +27% faster; the +4% under-counts it because of the short-reply-heavy workload, NOT a cat6 defect.
+cat6 is faster on BOTH (TPOT percentiles: cat6 faster at every percentile, no slow tail). The +4%-vs-+27% gap is
+a WEIGHTING difference: per_request_decode_tps averages 1/TPOT over turns EQUALLY, while the aggregate weights by
+tokens. Clean B=1 evidence (codex_swe_request_anatomy.md): ~25% of the 251 codex turns are <=64 output tokens
+(median 115), and those <=64 turns are only 3% of output tokens but get 25% of the per-request-equal weight; they
+are codex exec_command tool calls (explore/test) where spec-decode helps little, so cat6 ~= E5 on them. The
+token-weighted aggregate captures cat6's win on the LONG turns (where the tokens are). So cat6's GPU genuinely
+produces decode tokens +27% faster; the +4% under-counts it. (Earlier "39-45% <=64 tok" was from the coarse
+bracket histogram and is superseded by the per-turn dumps.)
 
 ## VERDICT CORRECTION
 The merged b1_depth5 verdict headlined per_request_decode_tps (cat6 18.51 = +4%). The CORRECT decode-throughput
-advantage at true B=1 is **+27%** (derived/aggregate gen/decode-time, E5-comparable since num_running~0). cat6
-deserves the +27% decode credit. NO throttle/kernel fix exists — cat6 already delivers +27%.
+advantage at true B=1 is **+27%** (TOKEN-weighted = total_output_tokens / total_decode_time, E5-comparable since
+num_running~0). THROUGHPUT IS TOKEN-WEIGHTED BY DEFINITION; per_request_decode_tps (per-request-EQUAL, +4%) answers
+a different question (is the average REQUEST faster, weighting a 5-tok tool-call == a 500-tok edit) = a per-request
+LATENCY notion, NOT throughput. So the deploy-throughput headline should be the +27% token-weighted number; the
++4% was simply the wrong basis for "throughput". cat6 = +27%, no remaining question on the metric.
 
 ## Honest caveat (end-to-end)
 The SWE-Verified deploy is PREFILL+AGENT-heavy (~11k-token prompts, ~260-token replies), so DECODE is a small
