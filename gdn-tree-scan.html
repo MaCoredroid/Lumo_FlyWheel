@@ -896,19 +896,19 @@
             <tr>
               <td>Can STree transfer directly?</td>
               <td>SSM/hybrid tree state sharing and accumulated transition thinking.</td>
-              <td>The relevant gap here is not algebraic state existence; it is served native realization under branch co-residency, bf16/fp8 codegen, and vLLM writeback.</td>
-              <td>Adopt the stateful-tree problem framing, but gate against native recurrent decode and deployment traces.</td>
+              <td>It frames the right family of problem, but it does not close the served-realization gap: branch co-residency, bf16/fp8 codegen, and vLLM state publication can still diverge from native decode.</td>
+              <td>Adopt the stateful-tree framing, then prove the serving path against native recurrent decode and deployment traces.</td>
             </tr>
             <tr>
               <td>Can WY replace the sequential scan?</td>
               <td>Whole-tree algebra / one-pass state formulations.</td>
-              <td>Real-arithmetic equivalence did not buy served-path equivalence. Different summation trees, byte/within-floor gates, and deployment risk made it a fallback, not the main line.</td>
-              <td>Use branch-local scan plus accepted-chain replay; keep WY as a documented parked route.</td>
+              <td>It was attractive for state traffic, but chunked WY is not the native verify oracle. Different summation trees and bf16 boundaries can change token decisions even when the real-number formula is equivalent.</td>
+              <td>Use branch-local sequential scan plus accepted-chain replay; keep WY as an oracle/fallback, not the correctness contract.</td>
             </tr>
             <tr>
               <td>Why fork FA2 attention?</td>
               <td>Default tree attention through a Triton <code>unified_attention</code> bias path versus native FA2.</td>
-              <td>The fallback path is not the native attention realization. The served verifier needs tree ancestry while staying on the FA2 decode path and native FA2 prefill path.</td>
+              <td>Triton tree attention can express the mask, but it is not native FA2's numerical realization. Stock FA2 keeps native numerics but cannot carry the tree mask.</td>
               <td>Patch FA2 so decode calls <code>flash_attn_varlen_func(..., tree_bias=...)</code> when <code>FR13_FA2_TREE_BIAS=1</code>; keep prefill native with <code>FR13_FA2_PREFILL_NATIVE=1</code>.</td>
             </tr>
             <tr>
@@ -916,6 +916,61 @@
               <td>Small probes, B=4 screens, raw prompt tests, big-denom deployment rescore, clean B=1 runs.</td>
               <td>Several earlier screens were confounded by trajectory, concurrency, or wrong denominators. The clean result needed deployment-regime runs plus separate lossless rescoring.</td>
               <td>Report speed, token-weighted throughput, per-request latency, and lossless gates as different measurements instead of collapsing them into one slogan.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Why the near-miss designs were not enough</h3>
+      <p>The three tempting shortcuts failed for different reasons. STree answered the high-level question, WY answered a speed-shaped math question, and Triton tree attention answered the mask question. None of those alone answered the actual serving question: will the token that leaves vLLM be the token the native recurrent target would have emitted under the same sampled setting?</p>
+
+      <div class="grid">
+        <div class="box warn">
+          <span class="tag">STree</span>
+          <h3>State exists is not the same as state matches</h3>
+          <p>STree is the closest prior-work lens because it treats tree decoding for stateful models. The missing piece for this system is realization. The literature survey notes that STree assumes the SSM tree forward equals the SSM sequential forward; our serving path had to prove that equality under vLLM, fp8/bf16 kernels, branch co-residency, and durable writeback. The practical warning showed up immediately: native vLLM tree attention was wired, but GDN recurrent state was still linear. On real Qwen tensors, non-linear branch nodes differed by <code>0.5618</code> until the FR10 GDN tree kernel was inserted. The custom kernel then matched the native production decode/update primitive at <code>7.45e-09</code> output max-abs and <code>7.63e-06</code> state max-abs.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">WY</span>
+          <h3>Equivalent algebra can still choose a different token</h3>
+          <p>WY-style whole-tree algebra was tempting because the tree scan carries expensive state. It promised a cleaner one-pass formulation and a route around <code>h_cache</code> pressure. The blocker was the oracle. Native verify for this target is a sequential rank-1 recurrence. Chunked WY is a prefill formulation, and a different summation tree is enough to change low-bit bf16/fp32 boundaries. For lossless speculative decoding, those low bits matter only when they move argmax or sampling residual decisions, but that is exactly where this project spent its time. So WY stayed useful as an fp32 oracle and last-resort speed idea; the shipped contract became sequential branch-local scan plus accepted-path replay.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">TREE_ATTN</span>
+          <h3>A correct mask on the wrong kernel is still the wrong verifier</h3>
+          <p>Triton <code>unified_attention(..., qq_bias=...)</code> could express tree ancestry, but native E5 used CUTLASS FlashAttention-2. The attention localization work found the mask/wiring could be right while the core attention op still differed: a post-fix <code>attn_out_raw</code> residual around <code>0.00195</code> per full-attention layer compounded across the 16 attention layers. Stock FA2 was not a drop-in answer either, because it had no tree-mask input; the plain flash path produced the wrong branch computation. The fork adds a real <code>tree_bias</code> input inside FA2 after QK and before softmax, preserving native FA2's MMA/reduction order while adding the ancestry constraint. Latest code verification says the deployed decode path uses that fork; <code>unified_attention</code> is only the fallback.</p>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Question</th>
+              <th>Evidence</th>
+              <th>Interpretation</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Was upstream tree attention enough for GDN?</td>
+              <td>Native vLLM tree spec had branch-node GDN contamination of <code>0.5618</code>; FR10 tree kernel vs native decode/update was <code>7.45e-09</code> output and <code>7.63e-06</code> state.</td>
+              <td>No. Attention ancestry without branch-local recurrent state is not a verifier for a GDN hybrid.</td>
+            </tr>
+            <tr>
+              <td>Was Triton tree attention the speed bottleneck?</td>
+              <td>B=1 chain-width backend ablation: TREE_ATTN <code>0.304121 s/fwd</code>, FLASH_ATTN <code>0.307007 s/fwd</code>, native <code>0.218160 s/fwd</code>.</td>
+              <td>No. TREE_ATTN was a lossless-realization issue, not the dominant B=1 speed tax. The speed work moved to GDN/replay/state and shape economics.</td>
+            </tr>
+            <tr>
+              <td>Why not use stock FA2?</td>
+              <td>Stock FA2 had no additive tree-mask input; the plain flash path measured around <code>0.427</code> because it computed causal attention, not branch ancestry.</td>
+              <td>FA2 had the right native realization but the wrong interface. The fork adds only the missing tree-bias input.</td>
+            </tr>
+            <tr>
+              <td>Why not make WY the proof path?</td>
+              <td>The repo decision says chunked WY is prefill-only and not bit-exact to the sequential verify oracle; the accepted route is sequential rank-1 tree-scan plus replay.</td>
+              <td>The verifier must match the served native recurrence first. Algebraic compression is allowed only after it survives that gate.</td>
             </tr>
           </tbody>
         </table>
@@ -1681,11 +1736,17 @@ else:
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/cat6_cat9_canonical_config.md">Canonical cat6/cat9 config</a> - load-bearing flags and the only intended tree-shape difference.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/bake_all_tree_flags_verdict.md">Tree-flag bake verdict</a> - which runtime flags were baked and which stayed explicit.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_FA2_FORK_IS_DECODE_KERNEL_CORRECTION.md">FA2 fork correction</a> - decode uses the forked FA2 tree-bias path; native FA2 prefill remains enabled.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_VERIFY_LITERATURE.md">Tree-verify literature mapping</a> - why prior lossless theorems assume verify-forward equals target decode, and why STree does not close the realization gap.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr10-phase4-real-tensor-derisk-20260603.md">FR10 real-tensor de-risk</a> - native vLLM tree state contamination and GDN tree-kernel agreement with native decode/update.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SEQ_TREE_SCAN_TASK.md">Sequential tree-scan pivot</a> - why chunked WY is parked for verify and the branch-local sequential scan became the correctness path.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_WY_CHASE_PLAN_BIND.md">WY/replay chase plan</a> - replay-route lineage, speed/scaling role, and why WY was not treated as the lossless proof route.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_FA2_TREE_BIAS_FORK.md">FA2 tree-bias fork design</a> - why Triton TREE_ATTN could not match native FA2 realization and why stock FA2 needed a tree-bias input.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_FULLATTN_OP_LOCALIZE_TASK.md">Full-attention localization</a> - the measured TREE_ATTN-vs-FA2 residual and compounding diagnosis that forced the fork.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_B1_BACKEND_ABLATION_BIND.md">B=1 backend ablation</a> - TREE_ATTN versus FLASH_ATTN speed comparison showing attention backend was not the dominant speed tax.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">GDN tree kernel</a> - <code>BV</code>, <code>h_cache</code>, node scan, and replay/export logic.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_device_multidraft_kernel.py">Device multidraft committer</a> - temp-0.6 on-device SpecInfer residual rule.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr10_phase4_patch_vllm_tree_gdn.py">vLLM tree wiring patch</a> - cat6root packing, cat9 shape guards, and committer hooks.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_measure.py">Measurement harness</a> - deployment speed/lossless modes and matched timer basis.</li>
-        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_VERIFY_LITERATURE.md">Tree-verify literature notes</a> - local comparison notes for STree, SpecInfer, EAGLE, vLLM/SGLang, and lossless bars.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SCAN_BITEXACT_SRAM_NPAD_VERDICT_BIND.md">Scan/SRAM/N_PAD verdict</a> - native geometry, spill, and recompute tradeoffs.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_NODE5_LADDER_DIFFUSE_BIND.md">Node-5 ladder verdict</a> - diffuse GDN accumulation and the reason literal-zero chasing was not the right bar.</li>
         <li><a href="https://arxiv.org/abs/2305.09781">SpecInfer</a>, <a href="https://arxiv.org/abs/2402.12374">Sequoia</a>, <a href="https://arxiv.org/html/2406.16858v1">EAGLE-2</a>, <a href="https://arxiv.org/html/2406.17276v2">OPT-Tree</a>, and <a href="https://arxiv.org/abs/2505.14969">STree</a> - prior work context for tree speculative decoding.</li>
