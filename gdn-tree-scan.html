@@ -927,6 +927,66 @@
   .pill.info { color: var(--cyan); background: var(--cyan-soft); }
   .pill.bad { color: var(--rose); background: var(--rose-soft); }
 
+  .failure-note {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-ledger {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .failure-card {
+    min-width: 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .failure-card.contaminated { border-color: var(--rose); }
+  .failure-card.superseded { border-color: var(--amber); }
+  .failure-card.settled { border-color: var(--rule-2); }
+  .failure-card.open { border-color: var(--cyan); }
+  .failure-card header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .failure-card h3 {
+    margin: 0;
+    min-width: 0;
+    max-width: 58ch;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.25;
+  }
+  .failure-card p {
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-card p:last-child { margin-bottom: 0; }
+  .failure-card ul {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 12px;
+    padding-left: 18px;
+    color: var(--text);
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .failure-card .conclusion {
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    color: var(--text);
+  }
+  .failure-card code { overflow-wrap: anywhere; }
+
   .shape-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2268,134 +2328,254 @@ else:
       </aside>
       <p>The path to the final verifier was not linear. The important negative results are part of the paper because they prevent the same mistakes from being rediscovered: attention-only fixes, native-looking kernels that spill, lossless gates that measure the wrong frame, and speed screens polluted by concurrency or instrumentation.</p>
 
-      <div class="grid" aria-label="Three failures that shaped the final design">
+      <div class="grid" aria-label="Three failure categories that shaped the final design">
         <div class="box warn">
-          <span class="tag">Failure 1</span>
-          <h3>Attention-only trees were insufficient</h3>
-          <p>Tree attention fixed ancestry visibility, but GDN rows still needed branch-local recurrent state.</p>
+          <span class="tag">Settled</span>
+          <h3>Some routes were real design dead ends</h3>
+          <p>Attention-only trees, shared recurrent accumulators, and native-match full-tree cache geometry each failed for structural reasons that later evidence did not overturn.</p>
         </div>
         <div class="box warn">
-          <span class="tag">Failure 2</span>
-          <h3>Algebra alone was not the served oracle</h3>
-          <p>STree and WY shaped the thinking, but native fp8/bf16 realization and vLLM writeback had to be proven directly.</p>
+          <span class="tag">Superseded</span>
+          <h3>Some conclusions were replaced by cleaner gates</h3>
+          <p>Literal-zero lossless, +4% as throughput, and propose-tree Stage D attribution were useful intermediate frames, but later B=1 and phase-local evidence rewrote them.</p>
         </div>
         <div class="box warn">
-          <span class="tag">Failure 3</span>
-          <h3>Metrics could invent or hide wins</h3>
-          <p>B=4, raw prompt probes, and per-request TPS each answered a different question than clean B=1 decode throughput.</p>
+          <span class="tag">Contaminated</span>
+          <h3>Some evidence had to be quarantined</h3>
+          <p>B=4 branch-yield reads, suffix/MTP shortcut accounting, and v1 hidden-state substitution each had later proof that the original measurement could not support its conclusion.</p>
         </div>
       </div>
 
       <details class="fold">
         <summary>
-          <span>Full failure library</span>
-          <small>Every rejected route is preserved as an audit trail rather than deleted from the paper.</small>
+          <span>Full failure library with later-status audit</span>
+          <small>Every rejected route is preserved, but contaminated and superseded conclusions are explicitly marked.</small>
         </summary>
         <div class="fold-body">
-          <div class="table-wrap">
-            <table>
-              <caption>Failure library: attempts, failure modes, and surviving lessons.</caption>
-              <thead>
-                <tr>
-                  <th>Attempt</th>
-                  <th>Why It Looked Plausible</th>
-                  <th>Why It Failed</th>
-                  <th>What Survived</th>
-                </tr>
-              </thead>
-              <tbody>
-            <tr>
-              <td>Attention-mask-only tree</td>
-              <td>Transformer tree verifiers mainly need ancestry masking.</td>
-              <td>GDN layers also carry recurrent state. Sibling rows need different histories even when attention is masked correctly.</td>
-              <td>Forked FA2 tree bias remains necessary, but only as one half of the verifier.</td>
-            </tr>
-            <tr>
-              <td>Shared packed recurrent accumulator</td>
-              <td>Flattening the tree gives one efficient packed forward.</td>
-              <td>Siblings can inherit state from branches native decode never visited.</td>
-              <td>The branch-local <code>h_cache</code> scan and accepted-chain replay invariant.</td>
-            </tr>
-            <tr>
-              <td>STree-style state sharing as a direct transplant</td>
-              <td>STree is the closest published hybrid/SSM tree-decoding regime.</td>
-              <td>Our gate is served native realization, not only algebraic state existence. fp8/bf16 codegen, branch co-residency, and vLLM state publication matter.</td>
-              <td>Use STree as motivation, then add realization-level gates.</td>
-            </tr>
-            <tr>
-              <td>WY / whole-tree algebra route</td>
-              <td>It can be mathematically equivalent over real arithmetic and can reduce state traffic.</td>
-              <td>Different summation trees and chunked realization missed the native bit/within-floor target; it was dominated by the sequential replay route for the current deliverable.</td>
-              <td>Parked as a fallback idea; replay's accept-only and spill-free properties were retained.</td>
-            </tr>
-            <tr>
-              <td>Literal 0.0 max-abs as the only lossless bar</td>
-              <td>It is easy to audit and sounds rigorous.</td>
-              <td>Native itself has numerical floors. Chasing absolute zero can reject distribution-preserving routes and reward irrelevant kernel identity.</td>
-              <td>The bar moved to recurrent-oracle, clear-margin, within-native-floor evidence.</td>
-            </tr>
-            <tr>
-              <td>BV=4 shrink</td>
-              <td>Smaller tiles reduce <code>h_cache</code> pressure.</td>
-              <td>It changes tensor shape and reduction structure, adds many more programs, and does not match native packed decode.</td>
-              <td>Keep deployed <code>BV16/warps8</code>; use recompute/native alignment only when the gate requires it.</td>
-            </tr>
-            <tr>
-              <td>Native-match full-tree <code>BV32/w1/s3</code></td>
-              <td>It matches the native packed-decode geometry.</td>
-              <td>With <code>N_PAD=16</code>, the full <code>h_cache</code> register footprint spills catastrophically.</td>
-              <td>Native-match remains a correctness probe; deployed scan uses <code>BV16/w8</code>, and recompute removes the full cache.</td>
-            </tr>
-            <tr>
-              <td>Multi-spine / copied-state routes</td>
-              <td>Multiple chains can avoid branch-local tree state inside one packed scan.</td>
-              <td>They duplicate KV/state work, do not scale on bandwidth-bound decode, and were closed as non-shippable for this target.</td>
-              <td>The verifier can represent degenerate K-chain descriptors if a future drafter needs them, but the main mechanism stays tree-scan/replay.</td>
-            </tr>
-            <tr>
-              <td>cat3w and shallow width probes</td>
-              <td>Shallower trees should reduce recurrent depth and kernel work.</td>
-              <td>They did not recover the depth-5 accept economics and showed width/co-residency can hurt even when leaves are attention-invisible.</td>
-              <td>Depth-5 spine stays important; cat6root trims leaves without giving up the depth-5 spine.</td>
-            </tr>
-            <tr>
-              <td>cat10 root-sibling expansion</td>
-              <td>Add one rescue branch to cat9 and maybe improve step-0 rejection.</td>
-              <td>No pad win and no clean speed win versus cat6root; earlier reads were confounded by trajectory and denominators.</td>
-              <td>Root sibling is useful, but the leaner cat6root shape is the cleaner B=1 winner.</td>
-            </tr>
-            <tr>
-              <td>OPT-A fp8 GEMV path</td>
-              <td>The lm-head/proposer path looked like a speed lever.</td>
-              <td>Deployment screen showed it was neutral in the current bottleneck regime.</td>
-              <td>Speed focus shifted to metric cleanup and direct phase timing; committer compute itself was later measured near E5.</td>
-            </tr>
-            <tr>
-              <td>Per-request TPS as the headline</td>
-              <td>It is a real latency view and matches how many vLLM summaries are read.</td>
-              <td>It weights a short shell-tool turn like a long edit turn, hiding where the generated decode tokens actually sit.</td>
-              <td>Keep per-request TPS as latency evidence, but headline token-weighted decode throughput.</td>
-            </tr>
-            <tr>
-              <td>B=4 speed read as the primary verdict</td>
-              <td>Serving wants batches, so B=4 seems more realistic.</td>
-              <td>Effective-concurrency and prefill/decode denominator confounds made cat9 look slower than it was. B=1 isolated the tree mechanism.</td>
-              <td>Use B=1 for clean mechanism attribution, then return to B=4 with the corrected gates.</td>
-            </tr>
-            <tr>
-              <td>Raw <code>/v1/completions</code> prompt probes</td>
-              <td>They are quick to run and easy to script.</td>
-              <td>They are off-distribution for the chat/thinking deployment and produced degenerate trajectories.</td>
-              <td>Deployment-regime Codex/SWE measurements became canonical.</td>
-            </tr>
-            <tr>
-              <td>Suffix/MTP shortcut before verifier closure</td>
-              <td>Suffix decoding could make drafting cheap and reduce overhead.</td>
-              <td>Without the target verifier, a cheap drafter only produces untrusted candidates.</td>
-              <td>Suffix decoding is now a good future drafter because the verifier boundary exists.</td>
-            </tr>
-              </tbody>
-            </table>
+          <p class="failure-note"><strong>Status key:</strong> <span class="pill good">settled</span> means later evidence still supports the negative result; <span class="pill warn">superseded</span> means the raw observation may be real but the old framing is replaced; <span class="pill bad">contaminated</span> means the old measurement or instrument cannot support the conclusion; <span class="pill info">open</span> means useful but not closed under the final gates.</p>
+          <p class="failure-note">This is intentionally verbose. The point is to show how the design converged: not by declaring every old route wrong, but by separating structural dead ends from bad evidence, stale framing, and still-open follow-up work.</p>
+
+          <div class="failure-ledger" aria-label="Detailed failure library">
+            <article class="failure-card settled">
+              <header>
+                <h3>Attention-mask-only tree</h3>
+                <span class="pill good">settled</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> most Transformer tree-verifier discussions reduce the problem to ancestry masking: row <code>i</code> can see the prompt and its ancestors, and cannot see siblings.</p>
+              <ul>
+                <li><strong>Evidence:</strong> the FR10 real-tensor de-risk showed native vLLM tree state contamination in the GDN path, while the custom GDN tree kernel matched the native isolated decode/update path at tiny numerical deltas.</li>
+                <li><strong>Later check:</strong> nothing in the B=1 closure overturned this. The final verifier still needs both FA2 tree bias and branch-local GDN state.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> tree attention is necessary but not sufficient. The paper's real invariant is attention ancestry plus path-local recurrent state plus accepted-chain replay. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr10-phase4-real-tensor-derisk-20260603.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header>
+                <h3>Shared packed recurrent accumulator</h3>
+                <span class="pill good">settled</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> flattening all tree nodes into one packed forward is the simplest way to keep the GPU path dense and avoid per-branch Python control flow.</p>
+              <ul>
+                <li><strong>Evidence:</strong> sibling rows can inherit recurrent state from branches that native sequential decode never visited. The bug is not visibility through attention; it is state lineage through GDN recurrence.</li>
+                <li><strong>Later check:</strong> the clean B=1 result closed only after branch-local scan and accepted-chain replay were part of the served contract.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> a single shared accumulator is invalid for co-resident branches. The surviving mechanism is the branch-local <code>h_cache</code> scan, followed by replay of the accepted chain before publishing state.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header>
+                <h3>STree-style state sharing as a direct transplant</h3>
+                <span class="pill good">settled</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> STree is the closest prior-work framing for tree decoding in SSM/hybrid models, so it was the right place to borrow language about stateful tree verification.</p>
+              <ul>
+                <li><strong>Evidence:</strong> the literature mapping found that prior lossless arguments assume the tree forward realizes the same target distribution as sequential decode.</li>
+                <li><strong>Gap:</strong> our problem is lower level: branch co-residency, bf16/fp8 codegen, FA2 versus Triton attention realization, and vLLM state publication can break served equivalence even when the algebraic state exists.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> STree transfers as problem framing, not as a drop-in implementation proof. This paper's differentiator is served-realization equivalence inside vLLM. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_VERIFY_LITERATURE.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header>
+                <h3>Triton <code>TREE_ATTN</code> as the proof attention path</h3>
+                <span class="pill warn">superseded</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> vLLM already had a tree-attention route through <code>unified_attention</code> with a bias mask, so it seemed natural to use that as the verifier's attention implementation.</p>
+              <ul>
+                <li><strong>Evidence then:</strong> the Triton path provided the right ancestry-mask semantics, but not the native FA2 decode realization.</li>
+                <li><strong>Later correction:</strong> the drift reanalysis corrected an earlier claim that the FA2 fork was prefill-only. With <code>FR13_FA2_TREE_BIAS=1</code>, the forked FA2 tree-bias kernel is the deployed decode path; the <code>0.00195</code> Triton residual is fallback evidence, not the proof path.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> Triton <code>TREE_ATTN</code> remains useful as a diagnostic/fallback, but the published verifier must stay on forked FA2 decode and native FA2 prefill. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TOTAL_DRIFT_REANALYSIS_LEADS_BIND.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card open">
+              <header>
+                <h3>WY / whole-tree algebra route</h3>
+                <span class="pill info">open parked</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> whole-tree algebra can express equivalent recurrent updates over real arithmetic and could reduce the per-node state traffic that makes tree verification expensive.</p>
+              <ul>
+                <li><strong>Evidence then:</strong> chunked-WY style routes missed the literal-zero bar and introduced summation-tree differences. That made them risky as the proof path.</li>
+                <li><strong>Later correction:</strong> the replay route that shipped is not chunked-WY; it is an accepted-chain replay kernel. WY was also never cleanly re-measured under the later within-native-floor bar.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> WY is not disproven as a future speed route, but it is parked. The final paper should not present it as failed theorem math; it failed the served-proof gate for this delivery. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_WY_CHASE_PLAN_BIND.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header>
+                <h3>Replay as the unifying lossless and accept-yield cure</h3>
+                <span class="pill warn">superseded</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> replay publishes only the accepted path, so it was tempting to believe it would fix both state contamination and the low accept/event traces.</p>
+              <ul>
+                <li><strong>Evidence then:</strong> the page-stomp bug was real: conv-remap could overwrite the replay-published state with stale or zero blocks.</li>
+                <li><strong>Later finding:</strong> after the page-stomp fix, replay produced token-identical behavior to legacy all-rows publish and accept/event around <code>2.08-2.15</code>. The state-publish change moved accept by zero in that gate.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> replay survives as the right publication invariant and a speed/scaling lever, but the "replay fixes accept collapse" framing is superseded. Accept defects had to be localized elsewhere. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_WY_CHASE_PLAN_BIND.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header>
+                <h3>Literal <code>0.0</code> max-abs as the only lossless bar</h3>
+                <span class="pill warn">superseded</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> bit-identical or max-abs-zero gates are easy to explain and hard to game.</p>
+              <ul>
+                <li><strong>Problem:</strong> native decode itself has recurrent-oracle numerical floors. A literal-zero gate can reject a route that preserves the sampled distribution within native noise.</li>
+                <li><strong>Later evidence:</strong> clean B=1 p-rescore closed native E5 at <code>12.90%</code>, cat9 at <code>13.28%</code>, and cat6root at about <code>13.09%</code>; both tree arms are within native floor by less than one standard error.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> "lossless" is formally distribution-preserving within the native recurrent-oracle floor, not bit-identical equality of every intermediate tensor. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/b1_depth5_lossless_verdict.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header>
+                <h3><code>BV=4</code> shrink and native-match full-tree <code>BV32/w1/s3</code></h3>
+                <span class="pill good">settled</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> smaller <code>BV</code> reduces branch cache pressure, while native <code>BV32/w1/s3</code> matches the baseline kernel geometry.</p>
+              <ul>
+                <li><strong>BV=4 issue:</strong> it changes the reduction/program shape and adds many more programs, so it is not a clean native-equivalence route.</li>
+                <li><strong>BV32 issue:</strong> a full tree with <code>N_PAD=16</code> would require about 256KB of fp32 <code>h_cache</code> in one warp, roughly 2048 fp32 registers per lane, which spills.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> the deployed scan stays at <code>BV16/warps8/pad16</code>. Native-match geometry is a correctness probe; recompute/replay is the way to avoid full-tree cache explosion. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SCAN_BITEXACT_SRAM_NPAD_VERDICT_BIND.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header>
+                <h3>Multi-spine and copied-state routes</h3>
+                <span class="pill good">settled</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> multiple native-like chains can avoid having a single recurrent scan understand a branch tree.</p>
+              <ul>
+                <li><strong>Failure mode:</strong> these routes duplicate KV/state work and turn the verifier into several expensive linear decodes. That fights the bandwidth-bound regime the tree was meant to improve.</li>
+                <li><strong>Later status:</strong> no later clean B=1 result required reviving this route. Once branch-local scan closed, copied-state spines became an implementation fallback, not the main mechanism.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> the descriptor can still represent degenerate K-chain cases if a future drafter needs them, but the paper should present tree-scan/replay as the served path.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header>
+                <h3><code>cat3w</code> and shallow-width probes</h3>
+                <span class="pill good">settled</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> shallower trees should reduce recurrent depth, lower scan work, and make the branch cache smaller.</p>
+              <ul>
+                <li><strong>Failure mode:</strong> shallow width did not recover the depth-5 accept economics. The model's native MTP spine already extracts value from depth; extra shallow siblings can add co-residency cost without enough accepted tokens.</li>
+                <li><strong>Later status:</strong> cat6root's clean B=1 win keeps the depth-5 spine and only adds the root sibling, which is a more conservative version of the same branch idea.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> the final shape lesson is not "make the tree wide." It is "preserve the depth-5 native spine, then add only branches that survive lossless and speed gates."</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header>
+                <h3><code>cat10</code> root-sibling expansion</h3>
+                <span class="pill bad">contaminated open</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> adding one rescue branch to cat9 should improve step-0 rejection without changing the spine.</p>
+              <ul>
+                <li><strong>Evidence then:</strong> a live add-one-node run dropped accept/event from <code>3.198</code> to <code>2.932</code>, suggesting branch dilution or packing damage.</li>
+                <li><strong>Later correction:</strong> the suffix frontier doc marks whether that drop was artifact or partly real as unsettled, and the WY/replay plan pins the cat10 <code>-28</code> issue to drafter-side S3 rather than verify replay.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> cat10 should be quarantined as an unresolved contaminated read, not used as the final branch-economics verdict. cat6root keeps the root-sibling idea in the cleaner B=1 shape. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SUFFIX_MTP_FRONTIER_BIND.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header>
+                <h3>OPT-A fp8 GEMV / <code>propose_tree</code> as the Stage D explanation</h3>
+                <span class="pill warn">superseded</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> the lm-head/proposer path looked like an obvious speed lever, and earlier Stage D framing treated growing-row proposal work as the likely source of overhead.</p>
+              <ul>
+                <li><strong>Later evidence:</strong> the Stage D localization shows cat6root uses <code>FR10_CATERPILLAR_NATIVE_SPINE_TOP2</code>, not the old <code>self.propose_tree</code> growing-row path. Extra root top-k is a tiny GPU-side stack of six integers, under <code>0.1ms</code>/step.</li>
+                <li><strong>Measured facts:</strong> verify forward is near equal (<code>0.13798s</code> cat6 versus <code>0.13704s</code> native), and isolated committer compute is about <code>0.34-0.35ms</code>.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> OPT-A/propose-tree is not the current bottleneck explanation. Remaining Stage D attribution needs direct step-wall phase timing, not another proposer micro-optimization. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/stage_d_localization_vs_e5.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header>
+                <h3>Per-request TPS and derived <code>+28ms</code> as headline facts</h3>
+                <span class="pill warn">superseded</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> per-request TPS is a real latency view, and derived per-step deltas are tempting when end-to-end request summaries are easy to collect.</p>
+              <ul>
+                <li><strong>Later correction:</strong> cat6root is <code>+4%</code> on per-request-equal decode TPS but <code>+27%</code> on token-weighted decode throughput. The per-request view underweights long decode turns, where most generated tokens are.</li>
+                <li><strong>Contaminated framing:</strong> the old <code>+28ms</code> cat6-slower statement was a derivation artifact; direct request decode time per draft showed cat6 at <code>201.9ms</code> versus E5 at <code>218.8ms</code>.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> keep per-request TPS as a latency caveat, but the throughput headline is token-weighted decode. Any Stage D overhead claim needs direct phase timers. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/deploy_tps_resolved_plus27.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header>
+                <h3>B=4 speed read as the primary verdict</h3>
+                <span class="pill bad">contaminated open</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> serving ultimately needs batching, so B=4 looked like the more deployment-relevant verdict than a clean B=1 mechanism run.</p>
+              <ul>
+                <li><strong>Raw diagnostic:</strong> B=4 tree returned <code>18.028</code> tok/s versus native <code>41.266</code>, with tree accept/event <code>2.024</code> versus native <code>3.794</code>.</li>
+                <li><strong>Later correction:</strong> the tree is a strict superset of native's depth-5 MTP spine. A correct tree verifier cannot accept fewer spine tokens than native. Therefore <code>2.024 &lt; 3.794</code> means the read was contaminated by dropping the spine, not a true branch-yield ceiling.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> B=4 remains an important deployment gate, but the old B=4 win/loss and break-even arithmetic should be marked contaminated. Clean B=1 is the mechanism proof; B=4 needs a refreshed carrier-clean run. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_WHY_SLOWER_VERDICT.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header>
+                <h3>Raw <code>/v1/completions</code> prompt probes</h3>
+                <span class="pill bad">contaminated regime</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> raw prompt probes are quick to run, deterministic enough for debugging, and cheap compared with a full Codex/SWE deployment measurement.</p>
+              <ul>
+                <li><strong>Failure mode:</strong> they do not exercise the chat/thinking deployment path, request anatomy, prompt lengths, or vLLM serving surfaces that dominate the actual result.</li>
+                <li><strong>Later status:</strong> the result section now uses Codex/SWE deployment traces and separates decode-only throughput from end-to-end wall time.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> raw completions probes are acceptable smoke tests, but contaminated as headline evidence. Deployment-regime measurements are canonical.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header>
+                <h3>Suffix/MTP shortcut before verifier closure</h3>
+                <span class="pill bad">refuted</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> suffix decoding or MTP-plus-suffix could make drafting cheaper, increasing accept/event without putting more weight on the verifier.</p>
+              <ul>
+                <li><strong>Later red-team:</strong> the "Design A beats native" claim was refuted: the measured analog saturated at <code>A/E 2.94</code>, below native <code>3.16</code>. The "add equals zero dilution" assumption was contradicted by the cat10 add-one-node drop.</li>
+                <li><strong>Contamination:</strong> the old accounting mixed baselines, leaned on a single-draw cat9 number, and was downstream of a still-failing lossless gate.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> suffix decoding is valuable after the verifier boundary exists, not before it. The surviving idea is adaptive confidence-gated suffix length downstream of lossless tree verification. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SUFFIX_MTP_FRONTIER_BIND.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header>
+                <h3>Hidden-state substitution localization v1</h3>
+                <span class="pill bad">contaminated instrument</span>
+              </header>
+              <p><strong>Why it looked plausible:</strong> substituting oracle hidden states into selected layers seemed like a direct way to localize where a wrong branch decision became irreversible.</p>
+              <ul>
+                <li><strong>Instrument defect:</strong> v1 hardcoded <code>forward_row:6</code>, <code>oracle_row:0</code>, and <code>skip:6</code> without deriving them from the committed token's provenance.</li>
+                <li><strong>Positive-control failure:</strong> splicing the oracle through all 64 layers still did not change the measured position, proving the splice never touched the computation being judged.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> any "no revert anywhere" or "diffuse accumulation" claim from v1 is invalid. Localization must first prove a positive-control splice at the measured unit. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SUBST_V1_INVALID_BIND.md">Receipt</a>.</p>
+            </article>
           </div>
         </div>
       </details>
@@ -2502,6 +2682,11 @@ else:
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/codex_swe_request_anatomy.md">Codex/SWE request anatomy</a> - output-length distribution and why token-weighted decode throughput is the right headline.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/stage_d_localization_vs_e5.md">Stage D localization</a> - drafter, verify forward, and isolated committer compute are near E5; live phase attribution remains open.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/stage_d_committer_microbench.md">Committer microbench</a> - device multidraft compute compared with native E5 rejection sampling.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_WHY_SLOWER_VERDICT.md">B=4 contamination verdict</a> - why the old <code>2.024 &lt; 3.794</code> accept/event read cannot be treated as a true tree-yield ceiling.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SWE_B4_DIAGNOSTIC_BIND.md">B=4 SWE diagnostic bind</a> - raw B=4 throughput, exact-token, and bag-TV measurements used as diagnostics rather than final mechanism verdict.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SUFFIX_MTP_FRONTIER_BIND.md">Suffix/MTP frontier bind</a> - red-team of the shortcut drafter thesis and the contaminated accounting behind the rejected Design A claim.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TOTAL_DRIFT_REANALYSIS_LEADS_BIND.md">Total drift reanalysis</a> - corrected FA2 decode-path status and TREE_ATTN fallback interpretation.</li>
+        <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SUBST_V1_INVALID_BIND.md">Substitution localization v1 invalid</a> - positive-control failure that quarantines the first hidden-state splice conclusion.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/cat6_cat9_canonical_config.md">Canonical cat6/cat9 config</a> - load-bearing flags and the only intended tree-shape difference.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/bake_all_tree_flags_verdict.md">Tree-flag bake verdict</a> - which runtime flags were baked and which stayed explicit.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_FA2_FORK_IS_DECODE_KERNEL_CORRECTION.md">FA2 fork correction</a> - decode uses the forked FA2 tree-bias path; native FA2 prefill remains enabled.</li>
