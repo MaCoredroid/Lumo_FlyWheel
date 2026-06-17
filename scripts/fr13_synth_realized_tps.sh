@@ -37,7 +37,9 @@ if [ "$ARM" = cat6 ]; then
     scripts/fr13_launch_forked_fa2_tree_server.sh > "$OUT/${ARM}_launch.log" 2>&1
 else
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=0.82 MAX_NUM_SEQS=1 \
+    BATCH_INVARIANT=0 FR10_METRICS=0 \
     ATTENTION_BACKEND=FLASH_ATTN FR10_ENABLE_TREE_GDN=0 \
+    FR10_DECODE_MODE_DEFAULT=naive_mtp \
     SPEC_CONFIG='{"method":"qwen3_5_mtp","num_speculative_tokens":5}' \
     FR13_SFWD_GPU_TIMER=1 FR13_SFWD_GPU_TIMER_JSON="$SFWD_JSON" \
     LOG_DIR="$REPO/$OUT/logs_$ARM" \
