@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Lossless GDN Tree-Scan - Lumo FlyWheel Vol. III</title>
-<meta name="description" content="Illustrated systems paper for a native-compatible Gated-DeltaNet tree verifier: FA2 tree bias, GDN tree scan/replay, vLLM state publication, B=1 decode results, and failure library.">
-<meta property="og:title" content="Lossless GDN Tree-Scan">
-<meta property="og:description" content="A standalone systems paper on distribution-preserving tree verification for a Gated-DeltaNet hybrid model inside vLLM.">
+<title>Lossless GDN Tree-Scan: Served-Realization Tree Verification - Lumo FlyWheel Vol. III</title>
+<meta name="description" content="Illustrated systems paper for served-realization tree verification on a recurrent hybrid model: FA2 tree bias, GDN tree scan/replay, vLLM state publication, B=1 decode results, and failure library.">
+<meta property="og:title" content="Lossless GDN Tree-Scan: Served-Realization Tree Verification">
+<meta property="og:description" content="A standalone systems paper on distribution-preserving served-realization tree verification for a Gated-DeltaNet hybrid model inside vLLM.">
 <meta name="author" content="Mark Ma">
 <meta name="theme-color" content="#111111">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Cpath d='M15 42h11V22h8v20h15' fill='none' stroke='%238bd3dd' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='26' cy='22' r='4' fill='%23e7c76f'/%3E%3Ccircle cx='34' cy='42' r='4' fill='%23a7d98d'/%3E%3Ccircle cx='49' cy='42' r='4' fill='%23d88989'/%3E%3C/svg%3E">
@@ -140,9 +140,19 @@
     letter-spacing: 0;
     text-wrap: balance;
   }
+  .title-subtitle {
+    max-width: 820px;
+    margin: 14px 0 0;
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
   .subhead {
     max-width: 900px;
-    margin: 24px 0 0;
+    margin: 18px 0 0;
     color: var(--text);
     font-size: 21px;
     line-height: 1.55;
@@ -611,7 +621,7 @@
   .mini-card p:last-child { margin-bottom: 0; }
 
   .definition-box,
-  .alias-strip {
+  .glossary-strip {
     margin: 22px 0;
     border: 1px solid var(--rule);
     border-radius: 8px;
@@ -628,17 +638,19 @@
     line-height: 1.55;
     text-wrap: pretty;
   }
-  .alias-strip {
+  .glossary-strip {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     overflow: hidden;
   }
-  .alias-strip div {
+  .glossary-strip div {
     padding: 14px 16px;
     border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
   }
-  .alias-strip div:last-child { border-right: 0; }
-  .alias-strip dfn {
+  .glossary-strip div:nth-child(3n) { border-right: 0; }
+  .glossary-strip div:nth-last-child(-n + 3) { border-bottom: 0; }
+  .glossary-strip dfn {
     display: block;
     color: var(--ink);
     font-family: var(--mono);
@@ -646,12 +658,37 @@
     font-style: normal;
     font-weight: 850;
   }
-  .alias-strip span {
+  .glossary-strip span {
     display: block;
     margin-top: 4px;
     color: var(--muted);
     font-size: 14px;
     line-height: 1.4;
+  }
+
+  .confidence-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 14px;
+    align-items: start;
+    margin: 20px 0 24px;
+    padding: 15px 17px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: rgba(167, 217, 141, 0.045);
+  }
+  .confidence-row strong {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .confidence-row p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
   }
 
   .fold {
@@ -969,14 +1006,20 @@
       font-size: 17px;
       line-height: 1.48;
     }
+    .title-subtitle {
+      margin-top: 10px;
+      font-size: 13px;
+    }
     .byline span:not(:first-child)::before { content: none; }
-    .abstract-grid, .two-col, .shape-grid, .hero-tldr { grid-template-columns: 1fr; }
-    .alias-strip { grid-template-columns: 1fr; }
-    .alias-strip div {
+    .abstract-grid, .two-col, .shape-grid, .hero-tldr, .confidence-row { grid-template-columns: 1fr; }
+    .glossary-strip { grid-template-columns: 1fr; }
+    .glossary-strip div,
+    .glossary-strip div:nth-child(3n),
+    .glossary-strip div:nth-last-child(-n + 3) {
       border-right: 0;
       border-bottom: 1px solid var(--rule);
     }
-    .alias-strip div:last-child { border-bottom: 0; }
+    .glossary-strip div:last-child { border-bottom: 0; }
     .compare-strip { grid-template-columns: 1fr; }
     .section { margin: 56px 0; }
     .section h2 { font-size: 30px; }
@@ -1053,6 +1096,7 @@
   <header class="hero">
     <p class="kicker">Volume III / illustrated systems paper</p>
     <h1>Lossless GDN Tree-Scan</h1>
+    <p class="title-subtitle">Served-Realization Tree Verification for Recurrent Hybrid Models</p>
     <p class="subhead">A native-compatible tree verifier for token trees on a 75% recurrent hybrid model. The contribution is served-realization equivalence for Qwen GDN inside vLLM: FA2 ancestry, path-local recurrent state, accepted-chain replay, and state publication all tied back to native decode.</p>
     <div class="hero-tldr" aria-label="TLDR and headline result">
       <p class="tldr-copy"><strong>TL;DR:</strong> a draft tree is a menu of next-token guesses. On this Qwen hybrid, the verifier is distribution-preserving only if two path-local facts hold at once: attention rows see prefix plus ancestors, and each GDN row carries the recurrent state native decode would have produced on that branch. We use the native MTP head here, but the verifier boundary can serve another drafter if it supplies the same tree contract.</p>
@@ -1090,10 +1134,13 @@
         <p><strong>Formal lossless definition:</strong> in this paper, lossless means distribution-preserving within the native recurrent-oracle numerical floor, not bit-identical logits at every intermediate tensor.</p>
       </div>
 
-      <div class="alias-strip" aria-label="Tree shape aliases">
+      <div class="glossary-strip" aria-label="Compact glossary">
         <div><dfn>E5</dfn><span>native 5-step MTP spine.</span></div>
         <div><dfn>cat9</dfn><span>9-node caterpillar tree: depth-5 spine plus four runner-up leaves.</span></div>
         <div><dfn>cat6root</dfn><span>6-node root-branch tree: depth-5 spine plus one root sibling.</span></div>
+        <div><dfn>B=1</dfn><span>one request stream; isolates the tree mechanism from batching and co-residency noise.</span></div>
+        <div><dfn>temp-0.6</dfn><span>sampling temperature used for the deployment run and recurrent-oracle p-rescore.</span></div>
+        <div><dfn>native floor</dfn><span>the native recurrent-oracle numerical floor the tree arms must stay within.</span></div>
       </div>
 
       <div class="abstract-grid">
@@ -1189,6 +1236,50 @@
           <div class="box info"><span class="tag">STree</span><p>The stateful-tree framing transfers. The missing gate is native served realization under branch co-residency, fp8/bf16 codegen, and vLLM writeback.</p></div>
           <div class="box good"><span class="tag">This work</span><p>The contribution is a native-compatible verifier path: FA2 tree bias, branch-local GDN scan, accepted-chain replay, and deployment evidence.</p></div>
         </div>
+      </div>
+    </section>
+
+    <section class="section" id="prior-work">
+      <h2>Prior Work</h2>
+      <aside class="sidenote">
+        <p><strong>Speculative decoding:</strong> a cheaper draft path guesses future tokens, then the full model verifies them. If the verifier rejects a guess, the algorithm falls back without changing the target distribution.</p>
+        <p><strong>Tree decoding:</strong> instead of one draft chain, the draft proposes several possible branches in one verification pass.</p>
+      </aside>
+      <p>Tree speculative decoding is well studied for Transformer-style attention stacks. <a href="https://arxiv.org/abs/2305.09781">SpecInfer</a> introduced tree-based speculative inference and parallel verification while preserving model quality. <a href="https://arxiv.org/abs/2402.12374">Sequoia</a> made the tree shape hardware-aware. <a href="https://arxiv.org/html/2406.16858v1">EAGLE-2</a> uses context-aware dynamic draft trees while keeping the output distribution unchanged. <a href="https://arxiv.org/html/2406.17276v2">OPT-Tree</a> frames the tree shape as an acceptance-versus-overhead optimization problem.</p>
+      <p>The closest prior work for this project is <a href="https://arxiv.org/abs/2505.14969">STree</a>, which studies speculative tree decoding for state-space and hybrid models by exploiting accumulated state-transition structure. The key difference is the realization contract. For this vLLM/Qwen target, it is not enough to say that the algebraic state for a tree exists. The served verifier must reproduce native-path semantics through fp8/bf16 kernels, branch co-residency, durable state writeback, and rejection sampling.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Prior-work positioning for tree speculative decoding and stateful hybrid serving.</caption>
+          <thead>
+            <tr>
+              <th>Line of Work</th>
+              <th>What Transfers</th>
+              <th>What Breaks for This Target</th>
+              <th>What We Add</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>SpecInfer / Sequoia / OPT-Tree / EAGLE-2</td>
+              <td>Candidate trees, verifier acceptance, dynamic or hardware-aware shapes.</td>
+              <td>They largely assume the target verification forward is the target decode distribution once attention ancestry is correct.</td>
+              <td>We keep the tree-accept idea but add recurrent-state verification and deployment lossless gates.</td>
+            </tr>
+            <tr>
+              <td>STree and SSM/hybrid tree work</td>
+              <td>Stateful models need tree-aware state construction, not only tree attention.</td>
+              <td>Accumulated transition sharing is not the same as matching the native served GDN kernel under bf16 state boundaries, branch co-residency, and vLLM writeback.</td>
+              <td>We implement a GDN scan/replay kernel whose invariant is path-local native recurrence, then gate it against native/deployment oracles.</td>
+            </tr>
+            <tr>
+              <td>vLLM / SGLang speculative serving</td>
+              <td>Scheduler, MTP heads, sampling, and production serving scaffolding.</td>
+              <td>Upstream GDN speculative paths can advance recurrent state for rejected tokens unless the committer/state publication path is fixed.</td>
+              <td>We wire accepted-path replay/remap, conv prior gathering, tree shape metadata, and device multidraft sampling into the served path.</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -1337,50 +1428,6 @@
       </details>
     </section>
 
-    <section class="section" id="prior-work">
-      <h2>Prior Work</h2>
-      <aside class="sidenote">
-        <p><strong>Speculative decoding:</strong> a cheaper draft path guesses future tokens, then the full model verifies them. If the verifier rejects a guess, the algorithm falls back without changing the target distribution.</p>
-        <p><strong>Tree decoding:</strong> instead of one draft chain, the draft proposes several possible branches in one verification pass.</p>
-      </aside>
-      <p>Tree speculative decoding is well studied for Transformer-style attention stacks. <a href="https://arxiv.org/abs/2305.09781">SpecInfer</a> introduced tree-based speculative inference and parallel verification while preserving model quality. <a href="https://arxiv.org/abs/2402.12374">Sequoia</a> made the tree shape hardware-aware. <a href="https://arxiv.org/html/2406.16858v1">EAGLE-2</a> uses context-aware dynamic draft trees while keeping the output distribution unchanged. <a href="https://arxiv.org/html/2406.17276v2">OPT-Tree</a> frames the tree shape as an acceptance-versus-overhead optimization problem.</p>
-      <p>The closest prior work for this project is <a href="https://arxiv.org/abs/2505.14969">STree</a>, which studies speculative tree decoding for state-space and hybrid models by exploiting accumulated state-transition structure. The key difference is the realization contract. For this vLLM/Qwen target, it is not enough to say that the algebraic state for a tree exists. The served verifier must reproduce native-path semantics through fp8/bf16 kernels, branch co-residency, durable state writeback, and rejection sampling.</p>
-
-      <div class="table-wrap">
-        <table>
-          <caption>Prior-work positioning for tree speculative decoding and stateful hybrid serving.</caption>
-          <thead>
-            <tr>
-              <th>Line of Work</th>
-              <th>What Transfers</th>
-              <th>What Breaks for This Target</th>
-              <th>What We Add</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>SpecInfer / Sequoia / OPT-Tree / EAGLE-2</td>
-              <td>Candidate trees, verifier acceptance, dynamic or hardware-aware shapes.</td>
-              <td>They largely assume the target verification forward is the target decode distribution once attention ancestry is correct.</td>
-              <td>We keep the tree-accept idea but add recurrent-state verification and deployment lossless gates.</td>
-            </tr>
-            <tr>
-              <td>STree and SSM/hybrid tree work</td>
-              <td>Stateful models need tree-aware state construction, not only tree attention.</td>
-              <td>Accumulated transition sharing is not the same as matching the native served GDN kernel under bf16 state boundaries, branch co-residency, and vLLM writeback.</td>
-              <td>We implement a GDN scan/replay kernel whose invariant is path-local native recurrence, then gate it against native/deployment oracles.</td>
-            </tr>
-            <tr>
-              <td>vLLM / SGLang speculative serving</td>
-              <td>Scheduler, MTP heads, sampling, and production serving scaffolding.</td>
-              <td>Upstream GDN speculative paths can advance recurrent state for rejected tokens unless the committer/state publication path is fixed.</td>
-              <td>We wire accepted-path replay/remap, conv prior gathering, tree shape metadata, and device multidraft sampling into the served path.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
     <section class="section" id="algorithm">
       <h2>Algorithm 1: Tree Verification on a GDN Hybrid</h2>
       <aside class="sidenote">
@@ -1524,12 +1571,18 @@
         <figcaption class="caption" id="kernel-compare-caption">Figure 1 is intentionally attention-only. The reason Triton TREE_ATTN is not enough is not that its mask is wrong; it is that the verifier proof must land on the same served FA2 decode realization as native MTP. The fork injects the tree ancestry term inside that realization.</figcaption>
       </figure>
 
-      <figure class="figure flow-figure" aria-labelledby="flow-title" aria-describedby="flow-long-desc flow-caption">
-        <div class="figure-head">
-          <strong id="flow-title">Figure 2</strong>
-          <span>GDN tree-scan kernel versus native GDN spine</span>
-          <button class="flow-control" type="button" data-motion-label="GDN kernel figure animation" aria-pressed="false" aria-label="Pause GDN kernel figure animation" title="Pause animation">Pause</button>
-        </div>
+      <details class="fold">
+        <summary>
+          <span>Figure 2: GDN tree-scan flow</span>
+          <small>Native spine, failed flattened tree shortcut, and the shipped parent-state scan.</small>
+        </summary>
+        <div class="fold-body">
+          <figure class="figure flow-figure" aria-labelledby="flow-title" aria-describedby="flow-long-desc flow-caption">
+            <div class="figure-head">
+              <strong id="flow-title">Figure 2</strong>
+              <span>GDN tree-scan kernel versus native GDN spine</span>
+              <button class="flow-control" type="button" data-motion-label="GDN kernel figure animation" aria-pressed="false" aria-label="Pause GDN kernel figure animation" title="Pause animation">Pause</button>
+            </div>
         <p class="sr-only" id="flow-long-desc">Text equivalent: the GDN figure compares native linear recurrent decode, the wrong flattened-tree shortcut, and the shipped tree-scan kernel. Native GDN is correct when every row's parent is the previous row. Flattening a candidate tree through the native packed state order makes siblings inherit impossible history. The tree scan loads the parent state from h_cache, runs the same rank-1 GDN update body, writes one post-state per node, and replays only the accepted chain into durable vLLM state.</p>
         <svg class="diagram flow-svg" viewBox="0 0 1120 790" role="img" aria-labelledby="flow-svg-title flow-svg-desc">
           <title id="flow-svg-title">GDN native spine, failed flattened tree, and tree-scan kernel</title>
@@ -1647,8 +1700,10 @@
           <div><strong>STree / WY</strong>Good stateful-tree framing; not enough for native bf16/fp8 serving and writeback.</div>
           <div><strong>Our scan</strong>Uses parent h_cache, native update body, and accepted-path replay before state publication.</div>
         </div>
-        <figcaption class="caption" id="flow-caption">Figure 2 is intentionally GDN-only. The kernel is not a new recurrence and not a whole-tree algebra shortcut. It is the native GDN rank-1 update applied from the correct parent state for every candidate node, followed by replay so vLLM publishes only the accepted native-compatible state.</figcaption>
-      </figure>
+            <figcaption class="caption" id="flow-caption">Figure 2 is intentionally GDN-only. The kernel is not a new recurrence and not a whole-tree algebra shortcut. It is the native GDN rank-1 update applied from the correct parent state for every candidate node, followed by replay so vLLM publishes only the accepted native-compatible state.</figcaption>
+          </figure>
+        </div>
+      </details>
     </section>
 
     <section class="section" id="kernel">
@@ -2029,6 +2084,11 @@ else:
           <span class="tag">Batch caveat</span>
           <p>B=4 remains a separate deployment gate because co-residency, scheduler, and prefill/decode effects change the surface.</p>
         </div>
+      </div>
+
+      <div class="confidence-row" aria-label="Result confidence">
+        <strong>Confidence</strong>
+        <p>High confidence on clean B=1 decode throughput; medium confidence on end-to-end task impact; open on B=4 and Stage D attribution.</p>
       </div>
 
       <div class="table-wrap">
