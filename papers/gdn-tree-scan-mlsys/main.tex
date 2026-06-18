@@ -94,6 +94,29 @@ SGLang hybrid serving & Adjacent production mechanisms: dual memory pools, Mamba
 \end{adjustbox}
 \end{table*}
 
+\section{Claim Scope and Evidence Map}
+
+The contribution is easiest to evaluate when each claim names its mechanism, measurement basis, and caveat. Table~\ref{tab:claims} makes that boundary explicit. The artifact receipts remain in the source trail; the paper body carries the facts needed to evaluate the argument without following every repository link.
+
+\begin{table*}[t]
+\caption{Claim, gate, and caveat map. The repository has a longer receipt ledger; this table keeps the academic claim boundary explicit.}
+\label{tab:claims}
+\centering
+\scriptsize
+\begin{adjustbox}{width=\textwidth}
+\begin{tabular}{L{0.24\textwidth} L{0.26\textwidth} L{0.25\textwidth} L{0.17\textwidth}}
+\toprule
+Claim & In-paper evidence & Gate & Status and limit \\
+\midrule
+The systems contribution is served-realization equivalence for Qwen GDN in vLLM. & FA2 tree-bias decode, branch-local GDN scan/replay, device multidraft commitment, and accepted-chain-only durable publication. & All target-verifier surfaces consume the same tree descriptor and accepted path. & Closed for the shipped B=1 path; not a claim of first GDN speculation. \\
+cat6root is faster than native E5 on clean B=1 decode throughput. & Table~\ref{tab:results}: 23.8768 versus 18.7962 token-weighted decode tokens/s. & Matched pure-decode GPU timer, probes off, temp-0.6, four SWE/Codex tasks. & +27.0\% decode-only; per-request-equal latency is +4.0\%. \\
+cat9 and cat6root close within the native recurrent-oracle floor. & Section~\ref{sec:lossless}: 13.28\% and 13.09\% clear-margin flips versus native E5 at 12.90\%. & Each arm is compared with its own no-spec recurrent oracle in the B=1 p-rescore. & Closed for this 40-turn sample; no TV-distance or request-cluster bootstrap yet. \\
+The measurement discipline is part of the result. & Speed runs disable probes; lossless runs enable oracle capture; token-weighted and per-request views are reported separately. & No mixing of raw prompt probes, oracle capture, B=4 co-residency, or denominator conventions. & Prevents false speed wins and false lossless failures; B=4 remains open. \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table*}
+
 \section{Verifier Contract}
 
 \sys{} verifies an arbitrary candidate tree, not only the native MTP drafter used in the current implementation. The input contract is a prefix state, a parent array, candidate token ids, and sampling state. The output contract is stronger: after verification and commitment, the next served decode event must start from the same observable token prefix and recurrent state that native sequential decode would have reached on the accepted tokens, up to the observed native recurrent-oracle numerical floor.
@@ -170,6 +193,26 @@ Figure~\ref{fig:pipeline} shows the served path. The drafter currently uses Qwen
 The attention side needed a real FA2 fork. vLLM's generic tree attention path could express an additive ancestry bias through a Triton \code{unified\_attention} route, but that route was not the same realization as native FA2 decode. The forked path adds an fp32 \code{tree\_bias} after the QK score tile and before softmax inside the FA2 varlen decode path, while keeping prefill on native FA2 \cite{dao2023flashattention}. This makes the attention half of tree verification a minimal extension of the native served carrier.
 
 The recurrent side needed branch-local state and publication discipline. During verification, each candidate row computes a GDN post-state from its parent row, not from the previous packed row. During commitment, the accepted chain is replayed in native order before durable state is written back. Rejected rows can influence acceptance decisions, but they must not become future model memory \cite{sglang2026issue25587}.
+
+\begin{table}[t]
+\caption{Surfaces that must agree on the same tree contract. Most failed routes broke one of these alignments.}
+\label{tab:surfaces}
+\centering
+\scriptsize
+\begin{adjustbox}{width=\columnwidth}
+\begin{tabular}{L{0.30\columnwidth} L{0.31\columnwidth} L{0.29\columnwidth}}
+\toprule
+Surface & Required alignment & Typical failure if isolated \\
+\midrule
+Candidate descriptor & Parent indices, candidate ids, visibility masks, and accepted-path rows match. & A drafter-specific shortcut cannot be replayed into native state. \\
+FA2 attention & Decode rows see prefix plus ancestors, with prefill left on native FA2. & A correct abstract mask runs on a non-native attention realization. \\
+GDN scan & Each node loads its parent recurrent state, not the previous packed row. & Sibling rows inherit impossible recurrent histories. \\
+Committer & The residual speculative rule is applied to the same candidate rows verified by the target. & Accepted tokens are counted against stale or mismatched probabilities. \\
+Publication & Only the accepted chain is replayed and made durable. & Rejected branch state leaks into the next decode event. \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
 
 \begin{figure}[t]
 \centering
@@ -277,6 +320,7 @@ Table~\ref{tab:results} is the core speed result. cat6root commits 4.821 tokens/
 The request anatomy explains why these metrics differ. In the cat6root B=1 trace, 24.7\% of turns have at most 64 output tokens, but those turns account for only 3\% of output tokens; they are mostly short shell-tool calls in the Codex agent loop. Speculative decoding helps more on longer turns, so per-request-equal averaging undercounts the decode-token gain. This does not imply a 27\% end-to-end task-wall gain, because the same workload repeatedly sends roughly 11k--14k prompt tokens and prefix caching is off for this hybrid setup.
 
 \section{Lossless Evidence and Measurement Discipline}
+\label{sec:lossless}
 
 The empirical lossless claim in this artifact is closure within the observed native recurrent-oracle flip floor. The exact B=1 depth-5 p-rescore compares each arm against its own no-spec recurrent oracle under temperature 0.6. Native E5 has 630 clear-margin flips over 4,883 positions, or 12.90\%; cat9 has 645 over 4,858, or 13.28\%; cat6root has about 636 over about 4,860, or 13.09\%. Both tree arms are within the native E5 floor by less than one position-level standard error, but this is not a TV-distance estimate and not a request-cluster bootstrap.
 
@@ -306,17 +350,50 @@ The measurement infrastructure is part of the contribution because it prevented 
 \begin{align}
 \mathrm{s/fwd\_gpu} &= \frac{\mathrm{decode\ forward\ GPU\ seconds}}{\mathrm{pure\ decode\ drafts}}, \\
 \mathrm{accept/event} &= \frac{\mathrm{accepted\ draft\ tokens}}{\mathrm{draft\ events}}, \\
+\mathrm{committed/event} &= \mathrm{accept/event}+1, \\
 \mathrm{deploy\ TPS} &= \frac{\mathrm{request\ decode\ tokens}}{\mathrm{request\ decode\ seconds}}.
 \end{align}
-Probe separation, deployment-path-only measurement, token weighting, and oracle-mode separation are all needed to make the numbers interpretable.
+Probe separation, deployment-path-only measurement, token weighting, and oracle-mode separation are all needed to make the numbers interpretable. This is why raw \code{/v1/completions} probes, B=4 screens, and oracle-enabled lossless traces are not treated as substitutes for the clean B=1 deployment-speed gate.
 
-\section{Failure Modes and Validity Limits}
+\section{Design Evolution and Negative Results}
 
-The failure library explains why the final verifier has its particular contract. Attention-mask-only trees failed because GDN recurrence still carried sibling-contaminated state. A shared packed recurrent accumulator was invalid for co-resident branches. STree-style state sharing transferred as a problem lens, not a served implementation proof. Triton \code{TREE\_ATTN} remained useful as a diagnostic/fallback, but the reported decode path had to stay on forked FA2.
+The failure library explains why the final verifier has its particular contract. It separates three questions that can otherwise blur together: whether the verifier preserves the target distribution within the native floor, whether the kernel is fast enough to matter, and whether the measurement regime is timing the served path. Table~\ref{tab:negative} condenses the HTML failure library into paper form.
 
-Other routes were not disproven as mathematics, only rejected as the proof path for this artifact. WY-style whole-tree algebra remains a possible future speed route, but it failed the served-proof gate for this delivery. Literal 0.0 max-abs was too strict because the native recurrent oracle itself has a numerical floor. B=4 speed reads were quarantined because a strict tree superset should not accept fewer spine tokens than native; the observed contaminated read violated that invariant.
+\begin{table*}[t]
+\caption{Negative results and superseded interpretations that shaped the final verifier. These are not all mathematical impossibilities; several are rejected only as served-proof routes for this artifact.}
+\label{tab:negative}
+\centering
+\scriptsize
+\begin{adjustbox}{width=\textwidth}
+\begin{tabular}{L{0.18\textwidth} L{0.25\textwidth} L{0.28\textwidth} L{0.19\textwidth}}
+\toprule
+Route or interpretation & Why it looked plausible & What failed & Paper consequence \\
+\midrule
+Attention-mask-only tree & Tree verification for attention-only LLMs mainly needs ancestry. & GDN rows still carried sibling-contaminated recurrent state. & Attention ancestry is necessary but not sufficient. \\
+Shared packed recurrent accumulator & Co-resident rows are efficient if packed sequentially. & Packed order is not native branch order, so sibling states leak. & The scan must be parent-indexed and branch-local. \\
+STree-style state sharing as direct transplant & STree gives the right stateful-tree problem lens. & Algebraic state construction is not the same as matching served bf16/fp8 GDN writeback. & STree is prior work, not the served-realization proof. \\
+Triton \code{TREE\_ATTN} as proof path & It can express a tree mask. & It is not the same FA2 decode realization as native serving. & The reported path uses a forked FA2 tree-bias decode kernel. \\
+WY / whole-tree algebra & It could reduce state traffic and expose more parallelism. & Different summation trees and bf16 boundaries are not the native sequential verify oracle. & Kept as future speed work; not the lossless proof route. \\
+Literal \(0.0\) max-abs as only lossless bar & Bit equality is easy to state. & Native recurrent-oracle comparisons already have a numerical flip floor. & The paper uses within-native-floor p-rescore, not bit-exact intermediate equality. \\
+cat10 and broad B=4 screens & Wider trees and batching are deployment-relevant. & Contaminated reads violated the expectation that a strict tree superset should not accept fewer spine tokens than native. & Clean B=1 is the mechanism proof; B=4 needs a refreshed carrier-clean run. \\
+Per-request TPS as headline & It is a latency-friendly summary. & It weights a short shell-tool turn like a long edit turn. & Token-weighted decode TPS is the throughput headline; per-request TPS is a caveat. \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table*}
 
-The remaining open gates are clear. First, B=4 needs a refreshed carrier-clean deployment run because scheduler, prefill, and co-residency change the surface. Second, Stage D overhead attribution is not settled: drafter, verify forward, and isolated committer compute are near E5, but live step-wall attribution needs direct phase timers. Third, end-to-end task wall time is prefill-heavy with prefix caching off, so the +27\% decode gain is not a full task-wall claim.
+Several rows are useful future work rather than dead ends. WY-style whole-tree algebra may still become a speed route if it can be tied back to the served sequential oracle. Cache-side or radix-style state sharing in vLLM would also be complementary to the current verifier rather than a replacement for it. The important point is that none of those routes is allowed to stand in for accepted-chain replay, path-local GDN state, or the deployment/lossless separation used in the reported result.
+
+\section{Threats to Validity}
+
+The result is strong for clean B=1 decode throughput and within-floor closure under the current recurrent-oracle p-rescore. It does not claim that every deployment bottleneck is solved.
+
+\begin{itemize}[leftmargin=*,noitemsep]
+    \item \textbf{Lossless sample size.} The exact cat9/cat6root p-rescore is a 40-turn B=1 sample per arm. The position-level standard error is informative but optimistic because positions within a turn are correlated; request-level bootstrap and more seeds remain open.
+    \item \textbf{Decode is not full task wall.} The +27.0\% number is decode throughput. SWE/Codex requests repeatedly send large repository context, and prefix caching is off for this hybrid setup, so end-to-end wall gains are smaller.
+    \item \textbf{B=4 needs refreshed treatment.} The clean mechanism result is B=1. Batching changes co-residency, scheduler pressure, and prefill/decode overlap, so the old B=4 diagnostics are not a final verdict.
+    \item \textbf{Stage D timing is open.} Drafter, verify forward, and isolated committer compute are near E5, but live phase attribution still needs direct step-wall timers.
+\end{itemize}
 
 \section{Canonical Configuration}
 

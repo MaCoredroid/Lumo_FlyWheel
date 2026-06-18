@@ -20,27 +20,39 @@
 \citation{pytorch2025sglang,sglang2026qwen,sglang2026specdocs}
 \citation{miao2023specinfer}
 \citation{dao2023flashattention}
-\citation{sglang2026issue25587}
-\@writefile{toc}{\contentsline {section}{\numberline {III}Verifier Contract}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {IV}System Design}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {III}Claim Scope and Evidence Map}{2}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Verifier Contract}{2}{}\protected@file@percent }
 \@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Tree verification on a recurrent hybrid target}}{2}{}\protected@file@percent }
 \newlabel{alg:tree}{{1}{2}}
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The tree shape is a cross-layer contract. Candidate packing, attention metadata, recurrent scan, commitment, replay, and metrics must consume the same descriptor.}}{2}{}\protected@file@percent }
 \newlabel{fig:pipeline}{{1}{2}}
-\citation{yang2024gated}
-\citation{qwen2026qwen36fp8}
+\@writefile{toc}{\contentsline {section}{\numberline {V}System Design}{2}{}\protected@file@percent }
+\citation{sglang2026issue25587}
 \@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Comparison layer for prior and adjacent work. The goal is to avoid promoting adjacent serving work into a direct fused-kernel baseline.}}{3}{}\protected@file@percent }
 \newlabel{tab:prior}{{I}{3}}
-\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Engineering form of the accepted-state verifier contract.}}{3}{}\protected@file@percent }
-\newlabel{tab:contract}{{II}{3}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The evaluated shapes. cat9 adds runner-up leaves to the depth-5 spine; cat6root keeps the spine and adds only a root sibling, reducing verifier work while preserving most of the acceptance gain.}}{3}{}\protected@file@percent }
-\newlabel{fig:shapes}{{2}{3}}
-\@writefile{toc}{\contentsline {section}{\numberline {V}GDN Scan and Replay Kernel}{3}{}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces The scan verifies all candidate nodes with parent-indexed recurrent state. Replay re-executes only the accepted chain and publishes durable GDN/conv state.}}{3}{}\protected@file@percent }
-\newlabel{fig:gdn}{{3}{3}}
-\@writefile{toc}{\contentsline {section}{\numberline {VI}Experimental Setup}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VII}Lossless Evidence and Measurement Discipline}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VIII}Failure Modes and Validity Limits}{4}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Claim, gate, and caveat map. The repository has a longer receipt ledger; this table keeps the academic claim boundary explicit.}}{3}{}\protected@file@percent }
+\newlabel{tab:claims}{{II}{3}}
+\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Engineering form of the accepted-state verifier contract.}}{3}{}\protected@file@percent }
+\newlabel{tab:contract}{{III}{3}}
+\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Surfaces that must agree on the same tree contract. Most failed routes broke one of these alignments.}}{3}{}\protected@file@percent }
+\newlabel{tab:surfaces}{{IV}{3}}
+\@writefile{toc}{\contentsline {section}{\numberline {VI}GDN Scan and Replay Kernel}{3}{}\protected@file@percent }
+\citation{yang2024gated}
+\citation{qwen2026qwen36fp8}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The evaluated shapes. cat9 adds runner-up leaves to the depth-5 spine; cat6root keeps the spine and adds only a root sibling, reducing verifier work while preserving most of the acceptance gain.}}{4}{}\protected@file@percent }
+\newlabel{fig:shapes}{{2}{4}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces The scan verifies all candidate nodes with parent-indexed recurrent state. Replay re-executes only the accepted chain and publishes durable GDN/conv state.}}{4}{}\protected@file@percent }
+\newlabel{fig:gdn}{{3}{4}}
+\@writefile{toc}{\contentsline {section}{\numberline {VII}Experimental Setup}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Lossless Evidence and Measurement Discipline}{4}{}\protected@file@percent }
+\newlabel{sec:lossless}{{VIII}{4}}
+\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Clean B=1 decode result. Throughput delta is token-weighted decode TPS relative to native E5.}}{5}{}\protected@file@percent }
+\newlabel{tab:results}{{V}{5}}
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Lossless closure gates and interpretation.}}{5}{}\protected@file@percent }
+\newlabel{tab:lossless}{{VI}{5}}
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Design Evolution and Negative Results}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {X}Threats to Validity}{5}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {XI}Canonical Configuration}{5}{}\protected@file@percent }
 \citation{lumo2026artifact}
 \citation{lumo2026receipts}
 \bibstyle{ieeetr}
@@ -59,17 +71,14 @@
 \bibcite{borobia2026component}{12}
 \bibcite{pytorch2025sglang}{13}
 \bibcite{sglang2026qwen}{14}
-\@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Clean B=1 decode result. Throughput delta is token-weighted decode TPS relative to native E5.}}{5}{}\protected@file@percent }
-\newlabel{tab:results}{{III}{5}}
-\@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Lossless closure gates and interpretation.}}{5}{}\protected@file@percent }
-\newlabel{tab:lossless}{{IV}{5}}
-\@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Load-bearing configuration choices in the shipped tree path.}}{5}{}\protected@file@percent }
-\newlabel{tab:config}{{V}{5}}
-\@writefile{toc}{\contentsline {section}{\numberline {IX}Canonical Configuration}{5}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {X}Conclusion}{5}{}\protected@file@percent }
-\newlabel{ReferencesStart}{{X}{5}}
-\@writefile{toc}{\contentsline {section}{References}{5}{}\protected@file@percent }
 \bibcite{sglang2026specdocs}{15}
 \bibcite{sglang2026issue25587}{16}
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Negative results and superseded interpretations that shaped the final verifier. These are not all mathematical impossibilities; several are rejected only as served-proof routes for this artifact.}}{6}{}\protected@file@percent }
+\newlabel{tab:negative}{{VII}{6}}
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Load-bearing configuration choices in the shipped tree path.}}{6}{}\protected@file@percent }
+\newlabel{tab:config}{{VIII}{6}}
+\@writefile{toc}{\contentsline {section}{\numberline {XII}Conclusion}{6}{}\protected@file@percent }
+\newlabel{ReferencesStart}{{XII}{6}}
+\@writefile{toc}{\contentsline {section}{References}{6}{}\protected@file@percent }
 \bibcite{lumo2026receipts}{17}
-\gdef \@abspage@last{6}
+\gdef \@abspage@last{7}
