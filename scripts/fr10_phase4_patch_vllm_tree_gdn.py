@@ -10303,6 +10303,10 @@ def _patch_gpu_model_runner_replay_draft_reqkey() -> bool:
         "                self._copy_draft_token_ids_to_cpu(scheduler_output)\n"
     )
     propose_inject = (
+        "                # FR13_DFWD_GPU_TIMER: time the DRAFTER (propose = all D\n"
+        "                # spine forwards) with async cuda events; inert unless\n"
+        "                # FR13_DFWD_GPU_TIMER=1 => byte-identical when off.\n"
+        "                _fr13_dfwd_ev = _fr13_dfwd_begin()\n"
         "                self._draft_token_ids = self.propose_draft_token_ids(\n"
         "                    scheduler_output,\n"
         "                    sampled_token_ids,\n"
@@ -10314,6 +10318,7 @@ def _patch_gpu_model_runner_replay_draft_reqkey() -> bool:
         "                    spec_decode_common_attn_metadata,\n"
         "                    slot_mappings,\n"
         "                )\n"
+        "                _fr13_dfwd_end(_fr13_dfwd_ev)\n"
         f"                # {sentinel}: remember the row owners for the GPU\n"
         "                # drafter tensor even when async scheduling skips the\n"
         "                # CPU DraftTokenIds handoff. First-spec rows after a\n"
@@ -15172,6 +15177,174 @@ def _fr13_sfwd_end(start_ev):
         return
     try:
         _fr13_sfwd_timer().end(start_ev)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+class _Fr13SpanTimer:
+    """FR13 component GPU-span timer (drafter / committer). DEFAULT-OFF; async
+    cuda-event spans, non-blocking drain, cumulative seconds + span count into a
+    prometheus Counter + JSON sidecar. Simpler than the verify timer: no
+    pure-decode gate (the wrapped op runs once per spec decode step). Inert
+    unless its flag env is "1" => byte-identical to the unpatched path."""
+
+    def __init__(self, flag, counter_name, sidecar_env, label):
+        import collections as _c
+        self._sidecar_env = sidecar_env
+        self._label = label
+        self._enabled = __import__("os").environ.get(flag, "0") == "1"
+        self._pending = _c.deque()
+        self._max_pending = 256
+        self._accum_s = 0.0
+        self._n_spans = 0
+        self._counter = None
+        if self._enabled:
+            try:
+                from prometheus_client import Counter as _C
+                self._counter = _C(counter_name, "FR13 " + label + " GPU seconds")
+            except Exception:  # noqa: BLE001
+                self._counter = None
+            import atexit as _atexit
+            _atexit.register(self._teardown)
+
+    def begin(self):
+        if not self._enabled:
+            return None
+        import torch as _t
+        if not _t.cuda.is_available():
+            return None
+        ev = _t.cuda.Event(enable_timing=True)
+        ev.record()
+        return ev
+
+    def end(self, start_ev):
+        if start_ev is None or not self._enabled:
+            return
+        import torch as _t
+        stop_ev = _t.cuda.Event(enable_timing=True)
+        stop_ev.record()
+        self._pending.append((start_ev, stop_ev))
+        self._drain(False)
+        if len(self._pending) > self._max_pending:
+            self._drain(True)
+
+    def _drain(self, blocking):
+        while self._pending:
+            a, b = self._pending[0]
+            try:
+                done = b.query()
+            except Exception:  # noqa: BLE001
+                self._pending.popleft()
+                continue
+            if not done and not blocking:
+                break
+            self._pending.popleft()
+            try:
+                if blocking and not done:
+                    b.synchronize()
+                _ms = a.elapsed_time(b)
+                self._accum_s += float(_ms) / 1000.0
+                self._n_spans += 1
+                if self._counter is not None:
+                    self._counter.inc(float(_ms) / 1000.0)
+            except Exception:  # noqa: BLE001
+                continue
+        self._dump()
+
+    def _dump(self):
+        out = __import__("os").environ.get(self._sidecar_env)
+        if not out:
+            return
+        try:
+            import json as _json
+            import pathlib as _pl
+            _p = (out.replace("{pid}", str(__import__("os").getpid()))
+                  if "{pid}" in out
+                  else out + "." + str(__import__("os").getpid()))
+            _pp = _pl.Path(_p)
+            _pp.parent.mkdir(parents=True, exist_ok=True)
+            _tmp = _pp.with_suffix(_pp.suffix + ".tmp")
+            _tmp.write_text(_json.dumps({
+                "schema": "fr13.span_gpu_timer.v1",
+                "label": self._label,
+                "gpu_seconds": self._accum_s,
+                "n_spans": self._n_spans,
+            }))
+            _tmp.replace(_pp)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _teardown(self):
+        try:
+            import torch as _t
+            if _t.cuda.is_available():
+                _t.cuda.synchronize()
+        except Exception:  # noqa: BLE001
+            pass
+        self._drain(True)
+        self._dump()
+
+
+_FR13_DFWD_TIMER = None
+_FR13_CFWD_TIMER = None
+
+
+def _fr13_dfwd_timer():
+    global _FR13_DFWD_TIMER
+    if _FR13_DFWD_TIMER is None:
+        _FR13_DFWD_TIMER = _Fr13SpanTimer(
+            "FR13_DFWD_GPU_TIMER",
+            "vllm:fr13_drafter_gpu_seconds",
+            "FR13_DFWD_GPU_TIMER_JSON",
+            "drafter",
+        )
+    return _FR13_DFWD_TIMER
+
+
+def _fr13_cfwd_timer():
+    global _FR13_CFWD_TIMER
+    if _FR13_CFWD_TIMER is None:
+        _FR13_CFWD_TIMER = _Fr13SpanTimer(
+            "FR13_CFWD_GPU_TIMER",
+            "vllm:fr13_committer_gpu_seconds",
+            "FR13_CFWD_GPU_TIMER_JSON",
+            "committer",
+        )
+    return _FR13_CFWD_TIMER
+
+
+def _fr13_dfwd_begin():
+    if __import__("os").environ.get("FR13_DFWD_GPU_TIMER", "0") != "1":
+        return None
+    try:
+        return _fr13_dfwd_timer().begin()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _fr13_dfwd_end(start_ev):
+    if start_ev is None:
+        return
+    try:
+        _fr13_dfwd_timer().end(start_ev)
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _fr13_cfwd_begin():
+    if __import__("os").environ.get("FR13_CFWD_GPU_TIMER", "0") != "1":
+        return None
+    try:
+        return _fr13_cfwd_timer().begin()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _fr13_cfwd_end(start_ev):
+    if start_ev is None:
+        return
+    try:
+        _fr13_cfwd_timer().end(start_ev)
     except Exception:  # noqa: BLE001
         pass
 '''
