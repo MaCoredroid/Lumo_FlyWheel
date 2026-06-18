@@ -42,7 +42,7 @@
 \maketitle
 
 \begin{abstract}
-\sys{} is a served-realization verifier for recurrent-hybrid speculative decoding in vLLM. It combines a forked FlashAttention-2 decode path with tree ancestry bias, a branch-local Triton Gated-DeltaNet scan/replay kernel, device-side multidraft commitment, and accepted-chain-only state publication for Qwen/Qwen3.6-27B-FP8. Unlike cache/scheduler-layer hybrid serving, algebraic state-sharing designs, or FPGA-oriented SSM speculation, the contribution is a fused vLLM/FA2/GDN realization at the target-verifier boundary. In a clean B=1, temperature-0.6, four-task SWE/Codex gate, the six-node root-branch tree reaches 23.88 token-weighted decode tokens/s versus 18.80 for native E5, a 27.0\% decode-throughput gain. The same run is only 4.0\% faster under a per-request-equal latency view, and end-to-end task wall time remains prefill-heavy. The empirical equivalence claim is scoped: the current gate is a sampled clear-margin p-rescore that closes within the observed native recurrent-oracle flip floor, not a full distribution-distance or request-cluster-bootstrap proof. We report the verifier contract, implementation seams, evidence gates, and failed routes that define this scoped decode-throughput result.
+\sys{} is a served-realization verifier for recurrent-hybrid speculative decoding in vLLM. It targets the public Qwen3.6-27B-FP8 checkpoint and combines a forked FlashAttention-2 decode path with tree ancestry bias, a branch-local Triton Gated-DeltaNet scan/replay kernel, device-side multidraft commitment, and accepted-chain-only state publication. Unlike cache/scheduler-layer hybrid serving, algebraic state-sharing designs, or FPGA-oriented SSM speculation, the contribution is a fused vLLM/FA2/GDN realization at the target-verifier boundary. In a clean batch-one (B=1), temperature-0.6, four-task SWE/Codex gate, the six-node root-branch tree reaches 23.88 token-weighted decode tokens/s versus 18.80 for the native five-step MTP baseline (E5), a 27.0\% decode-throughput gain. The same run is only 4.0\% faster under a per-request-equal latency view, and end-to-end task wall time remains prefill-heavy. The empirical equivalence claim is scoped: the current gate is a sampled clear-margin probability rescore (p-rescore) that closes within the observed native recurrent-oracle flip floor, not a full distribution-distance or request-cluster-bootstrap proof. We report the verifier contract, implementation seams, evidence gates, and negative implementation results that define this scoped decode-throughput result.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -102,7 +102,7 @@ SGLang hybrid serving & Adjacent production mechanisms: dual memory pools, Mamba
 
 \section{Claim Scope and Evidence Map}
 
-The contribution is easiest to evaluate when each claim names its mechanism, measurement basis, and caveat. Table~\ref{tab:claims} makes that boundary explicit. The artifact receipts remain in the source trail; the paper body carries the facts needed to evaluate the argument without following every repository link.
+The contribution is easiest to evaluate when each claim names its mechanism, measurement basis, and caveat. Table~\ref{tab:claims} makes that boundary explicit. The public repository artifact preserves the longer development record; the paper body carries the facts needed to evaluate the argument without following every repository link.
 
 \begin{table*}[t]
 \caption{Claim, gate, and caveat map. The repository has a longer receipt ledger; this table keeps the academic claim boundary explicit.}
@@ -118,7 +118,7 @@ The systems contribution is served-realization equivalence for Qwen GDN in vLLM.
 \rowsep
 cat6root is faster than native E5 on clean B=1 decode throughput. & Table~\ref{tab:results}: 23.88 versus 18.80 token-weighted decode tokens/s. & Matched pure-decode GPU timer, probes off, temp-0.6, four SWE/Codex tasks. & +27.0\% decode-only; per-request-equal latency is +4.0\%. \\
 \rowsep
-cat9 and cat6root close within the native recurrent-oracle floor. & Section~\ref{sec:lossless}: 13.28\% and 13.09\% clear-margin flips versus native E5 at 12.90\%. & Each arm is compared with its own no-spec recurrent oracle in the B=1 p-rescore. & Closed for this 40-turn sample; no TV-distance or request-cluster bootstrap yet. \\
+cat9 and cat6root close within the native recurrent-oracle floor. & Section~\ref{sec:equivalence}: 13.28\% and 13.09\% clear-margin flips versus native E5 at 12.90\%. & Each arm is compared with its own no-spec recurrent oracle in the B=1 p-rescore. & Closed for this 40-turn sample; no TV-distance or request-cluster bootstrap yet. \\
 \rowsep
 The measurement discipline is part of the result. & Speed runs disable probes; equivalence runs enable oracle capture; token-weighted and per-request views are reported separately. & No mixing of raw prompt probes, oracle capture, B=4 co-residency, or denominator conventions. & Prevents false speed wins and false equivalence failures; B=4 remains open. \\
 \bottomrule
@@ -440,7 +440,7 @@ The three speed views are related but not interchangeable. Multiplying the commi
 The request anatomy explains why these metrics differ. In the cat6root B=1 trace, 24.7\% of turns have at most 64 output tokens, but those turns account for only 3\% of output tokens; they are mostly short shell-tool calls in the Codex agent loop. Speculative decoding helps more on longer turns, so per-request-equal averaging undercounts the decode-token gain. This does not imply a 27\% end-to-end task-wall gain, because the same workload repeatedly sends roughly 11k--14k prompt tokens and prefix caching is off for this hybrid setup. The final B=1 receipts do not promote a clean task-wall speedup; they establish that task wall improves by less than the decode-only gain unless deployment work reduces repeated prefill or overlaps streams.
 
 \section{Empirical Equivalence Evidence and Measurement Discipline}
-\label{sec:lossless}
+\label{sec:equivalence}
 
 The empirical equivalence claim in this artifact is closure within the observed native recurrent-oracle flip floor. The exact B=1 depth-5 p-rescore compares each arm against its own no-spec recurrent oracle under temperature 0.6. Native E5 has 630 clear-margin flips over 4,883 positions, or 12.90\%; cat9 has 645 over 4,858, or 13.28\%; cat6root has about 636 over about 4,860, or 13.09\%. Both tree arms are within the native E5 floor by less than one position-level standard error, but this is not a TV-distance estimate and not a request-cluster bootstrap.
 
