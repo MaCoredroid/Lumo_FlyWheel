@@ -32,7 +32,7 @@
 
 \begin{document}
 
-\title{Served-Realization Tree Verification for Recurrent Hybrid Language Models}
+\title{GDN Tree-Scan: Served Tree Verification for Recurrent-Hybrid Language Models}
 
 \author{
     \IEEEauthorblockN{Zhiyuan Ma}
@@ -42,7 +42,9 @@
 \maketitle
 
 \begin{abstract}
-\sys{} is a served-realization verifier for recurrent-hybrid speculative decoding in vLLM. It targets the public Qwen3.6-27B-FP8 checkpoint and combines a forked FlashAttention-2 decode path with tree ancestry bias, a branch-local Triton Gated-DeltaNet scan/replay kernel, device-side multidraft commitment, and accepted-chain-only state publication. Unlike cache/scheduler-layer hybrid serving, algebraic state-sharing designs, or FPGA-oriented SSM speculation, the contribution is a fused vLLM/FA2/GDN realization at the target-verifier boundary. In a clean batch-one (B=1), temperature-0.6, four-task SWE/Codex gate, the six-node root-branch tree reaches 23.88 token-weighted decode tokens/s versus 18.80 for the native five-step MTP baseline (E5), a 27.0\% decode-throughput gain. The same run is only 4.0\% faster under a per-request-equal latency view, and end-to-end task wall time remains prefill-heavy. The empirical equivalence claim is scoped: the current gate is a sampled clear-margin probability rescore (p-rescore) that closes within the observed native recurrent-oracle flip floor, not a full distribution-distance or request-cluster-bootstrap proof. We report the verifier contract, implementation seams, evidence gates, and negative implementation results that define this scoped decode-throughput result.
+Tree speculative decoding verifies multiple candidate continuations in one target forward pass. For attention-only transformers, the verifier mainly needs an ancestry mask. Recurrent-hybrid language models break this assumption: a candidate row must also carry the recurrent state that native sequential decode would have produced along its root-to-node path. Otherwise, a verifier can use a correct attention mask while still conditioning on an impossible recurrent history.
+
+We present \sys{}, a served verifier for Gated-DeltaNet hybrid language models integrated into vLLM. The system combines FlashAttention-2 tree-bias attention, branch-local GDN scan/replay, device-side multidraft commitment, and accepted-chain-only state publication. On the public Qwen3.6-27B-FP8 checkpoint, in a clean batch-one (B=1) SWE/Codex decode gate at temperature 0.6, a six-node root-branch tree reaches 23.88 token-weighted decode tokens/s versus 18.80 for native five-step MTP (E5), a 27.0\% decode-throughput gain. The per-request-equal latency view is +4.0\%, and end-to-end task wall time remains prefill-heavy. Empirical equivalence evidence is scoped to recurrent-oracle probability-rescore (p-rescore) closure within the observed native flip floor, not a full distribution-distance proof.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -53,9 +55,9 @@ speculative decoding, recurrent models, Gated DeltaNet, vLLM, FlashAttention, ML
 
 Speculative decoding accelerates autoregressive generation by drafting candidate tokens and asking the target model to verify them in parallel. Tree-shaped speculative decoding generalizes a single draft chain into a candidate token tree, improving the opportunity set for each target forward pass while preserving the target distribution under the verifier acceptance rule \cite{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}. For attention-only Transformer stacks, the central verifier problem is largely an ancestry problem: row \(i\) may attend to the prompt and its ancestors, but not to sibling branches \cite{miao2023specinfer,li2024eagle}.
 
-Recurrent hybrid models break that simplification. Qwen3.6-style hybrid stacks contain many Gated-DeltaNet (GDN) recurrent layers in addition to softmax-attention layers, so a valid tree row needs two path-local facts: attention ancestry and recurrent state lineage \cite{yang2024gated,qwen2026qwen36fp8}. We use recurrent for any layer whose next-token output depends on a carried serving state; GDN is linear attention with such a carried state. The verifier must ensure that a node's GDN state equals the state native sequential decode would have produced along that node's root-to-node path. If sibling rows share a packed recurrent accumulator, a correct attention mask can still verify tokens from an impossible recurrent history.
+Recurrent hybrid models break that simplification. Qwen3.6-style hybrid stacks contain many Gated-DeltaNet (GDN) recurrent layers in addition to softmax-attention layers, so a valid tree row needs two path-local facts: attention ancestry and recurrent state lineage \cite{yang2024gated,qwen2026qwen36fp8}. We use recurrent for any layer whose next-token output depends on a carried serving state; GDN is linear attention with such a carried state. The verifier must ensure that a node's GDN state equals the state native sequential decode would have produced along that node's root-to-node path. If sibling rows share a packed recurrent accumulator, a correct attention mask can still verify tokens from an impossible recurrent history. Figure~\ref{fig:recurrent-pitfall} shows the minimal contamination case.
 
-This paper reports a served verifier for a recurrent hybrid target inside vLLM. The contribution is not ``tree speculative decoding'' in the abstract. It is served-realization equivalence as an implementation target: forked FlashAttention-2 (FA2) tree bias for attention, branch-local GDN scan and accepted-chain replay for recurrence, and vLLM state publication that makes rejected branch state non-durable \cite{dao2023flashattention,kwon2023efficient,lumo2026receipts}. To our knowledge, this is the first served, fused vLLM+FA2+GDN tree verifier for a production hybrid target; it does not claim first hybrid speculation or first stateful tree decoding.
+This paper reports a served verifier for a recurrent hybrid target inside vLLM. The contribution is not ``tree speculative decoding'' in the abstract. It is served-realization equivalence as an implementation target: forked FlashAttention-2 (FA2) tree bias for attention, branch-local GDN scan and accepted-chain replay for recurrence, and vLLM state publication that makes rejected branch state non-durable \cite{dao2023flashattention,kwon2023efficient,lumo2026receipts}. We are not aware of a prior public served implementation that closes this vLLM/FA2/GDN target-verifier boundary; the paper does not claim first hybrid speculation or first stateful tree decoding.
 
 The measured result is deliberately narrow. We use E5 for the native five-step multi-token prediction (MTP) spine and catN for N-node tree variants. In a clean B=1, temperature-0.6 deployment trace over four SWE/Codex tasks, cat6root, a six-node tree with a depth-5 native spine plus one root sibling, reaches 23.88 token-weighted decode tokens/s versus 18.80 for native E5, a 27.0\% decode-throughput gain. The root sibling is a depth-0 alternative: when native MTP would lose an event because the first spine token is rejected, the verifier can still commit the sibling branch, raising committed tokens/event from 4.11 to 4.82 while adding almost no verify-forward time. The per-request-equal latency view is 18.51 versus 17.80 tokens/s, or +4.0\%; this is useful but underweights long decode turns where most generated tokens occur. Both cat6root and cat9 close within the observed native recurrent-oracle flip floor in a 40-turn B=1 p-rescore, but full distribution-distance evidence, request-level bootstrap, more seeds, B=4, and Stage D timing remain open gates.
 
@@ -65,6 +67,61 @@ The paper makes three concrete contributions:
     \item A vLLM/FA2/GDN implementation path that preserves native serving machinery where possible and adds tree-specific state only at explicit seams.
     \item An evidence ledger that separates clean B=1 decode throughput, per-request latency, recurrent-oracle p-rescore, end-to-end wall caveats, and contaminated or still-open measurements.
 \end{itemize}
+
+\section{Claim Scope and Evidence Map}
+
+We intentionally separate three claims: the correctness contract, clean B=1 decode throughput, and the empirical equivalence gate. Table~\ref{tab:claims} makes that boundary explicit. The public repository artifact preserves the longer development record; the paper body carries the facts needed to evaluate the argument without following every repository link.
+
+\begin{table*}[t]
+\caption{Claim, gate, and caveat map. The repository has a longer receipt ledger; this table keeps the academic claim boundary explicit.}
+\label{tab:claims}
+\centering
+\scriptsize
+\begin{adjustbox}{width=\textwidth}
+\begin{tabular}{L{0.24\textwidth} L{0.26\textwidth} L{0.25\textwidth} L{0.17\textwidth}}
+\toprule
+Claim & In-paper evidence & Gate & Status and limit \\
+\midrule
+The systems contribution is served-realization equivalence for Qwen GDN in vLLM. & FA2 tree-bias decode, branch-local GDN scan/replay, device multidraft commitment, and accepted-chain-only durable publication. & All target-verifier surfaces consume the same tree descriptor and accepted path. & Closed for the shipped B=1 path; not a claim of first GDN speculation. \\
+\rowsep
+cat6root is faster than native E5 on clean B=1 decode throughput. & Table~\ref{tab:results}: 23.88 versus 18.80 token-weighted decode tokens/s. & Matched pure-decode GPU timer, probes off, temp-0.6, four SWE/Codex tasks. & +27.0\% decode-only; per-request-equal latency is +4.0\%. \\
+\rowsep
+cat9 and cat6root close within the native recurrent-oracle floor. & Section~\ref{sec:equivalence}: 13.28\% and 13.09\% clear-margin flips versus native E5 at 12.90\%. & Each arm is compared with its own no-spec recurrent oracle in the B=1 p-rescore. & Closed for this 40-turn sample; no TV-distance or request-cluster bootstrap yet. \\
+\rowsep
+The measurement discipline is part of the result. & Speed runs disable probes; equivalence runs enable oracle capture; token-weighted and per-request views are reported separately. & No mixing of raw prompt probes, oracle capture, B=4 co-residency, or denominator conventions. & Prevents false speed wins and false equivalence failures; B=4 remains open. \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table*}
+
+\begin{figure}[t]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tikzpicture}[
+    every node/.style={font=\scriptsize},
+    state/.style={rectangle, rounded corners, draw=#1!75, fill=#1!12, minimum width=1.65cm, minimum height=0.62cm, align=center},
+    arrow/.style={-{Latex[length=2mm]}, thick, draw=lumoGray},
+    bad/.style={-{Latex[length=2mm]}, thick, draw=lumoRose},
+    good/.style={-{Latex[length=2mm]}, thick, draw=lumoGreen}
+]
+\node[state=lumoCyan] (r1) at (0,1.0) {root\\\(n_0\)};
+\node[state=lumoCyan] (s1) at (2.1,1.0) {spine\\\(n_1\)};
+\node[state=lumoRose] (b1) at (4.2,1.0) {sibling\\\(b_1\)};
+\draw[arrow] (r1) -- (s1);
+\draw[bad] (s1) -- node[above, align=center] {wrong packed\\state} (b1);
+\node[align=center, text=lumoRose] at (4.2,0.25) {\(F(S_{n_1},x_{b_1})\)};
+\node[align=center] at (2.1,1.75) {linear packed scan};
+
+\node[state=lumoCyan] (r2) at (0,-1.0) {root\\\(n_0\)};
+\node[state=lumoGreen] (b2) at (4.2,-1.0) {sibling\\\(b_1\)};
+\draw[good] (r2) -- node[above, align=center] {correct parent\\state} (b2);
+\node[align=center, text=lumoGreen] at (4.2,-1.75) {\(F(S_{n_0},x_{b_1})\)};
+\node[align=center] at (2.1,-0.25) {tree recurrent scan};
+\end{tikzpicture}
+}%
+\caption{A correct attention mask does not make a recurrent tree verifier correct. A sibling row packed after a spine row must inherit the root state, not the previous packed row's recurrent state.}
+\label{fig:recurrent-pitfall}
+\end{figure}
 
 \section{Background and Related Work}
 
@@ -95,32 +152,6 @@ SpecMamba & Hidden-state backtracking and tree verification are first-class SSM 
 Component-aware self-speculation & Hybrid component structure determines speculative viability \cite{borobia2026component}. & Research Python implementation leaves fused CUDA, batched verification, and cache sharing as systems gaps. & A fused served path for Qwen GDN tree verification. \\
 \rowsep
 SGLang hybrid serving & Adjacent production mechanisms: dual memory pools, MambaRadixCache, parent tracing, MTP/EAGLE surfaces \cite{pytorch2025sglang,sglang2026qwen,sglang2026specdocs}. & Cache/scheduler-layer mechanisms are not directly comparable to this fused vLLM GDN tree-scan kernel. & A different layer of realization: vLLM + forked FA2 tree bias + branch-local GDN scan/replay + observed recurrent-oracle gates. \\
-\bottomrule
-\end{tabular}
-\end{adjustbox}
-\end{table*}
-
-\section{Claim Scope and Evidence Map}
-
-The contribution is easiest to evaluate when each claim names its mechanism, measurement basis, and caveat. Table~\ref{tab:claims} makes that boundary explicit. The public repository artifact preserves the longer development record; the paper body carries the facts needed to evaluate the argument without following every repository link.
-
-\begin{table*}[t]
-\caption{Claim, gate, and caveat map. The repository has a longer receipt ledger; this table keeps the academic claim boundary explicit.}
-\label{tab:claims}
-\centering
-\scriptsize
-\begin{adjustbox}{width=\textwidth}
-\begin{tabular}{L{0.24\textwidth} L{0.26\textwidth} L{0.25\textwidth} L{0.17\textwidth}}
-\toprule
-Claim & In-paper evidence & Gate & Status and limit \\
-\midrule
-The systems contribution is served-realization equivalence for Qwen GDN in vLLM. & FA2 tree-bias decode, branch-local GDN scan/replay, device multidraft commitment, and accepted-chain-only durable publication. & All target-verifier surfaces consume the same tree descriptor and accepted path. & Closed for the shipped B=1 path; not a claim of first GDN speculation. \\
-\rowsep
-cat6root is faster than native E5 on clean B=1 decode throughput. & Table~\ref{tab:results}: 23.88 versus 18.80 token-weighted decode tokens/s. & Matched pure-decode GPU timer, probes off, temp-0.6, four SWE/Codex tasks. & +27.0\% decode-only; per-request-equal latency is +4.0\%. \\
-\rowsep
-cat9 and cat6root close within the native recurrent-oracle floor. & Section~\ref{sec:equivalence}: 13.28\% and 13.09\% clear-margin flips versus native E5 at 12.90\%. & Each arm is compared with its own no-spec recurrent oracle in the B=1 p-rescore. & Closed for this 40-turn sample; no TV-distance or request-cluster bootstrap yet. \\
-\rowsep
-The measurement discipline is part of the result. & Speed runs disable probes; equivalence runs enable oracle capture; token-weighted and per-request views are reported separately. & No mixing of raw prompt probes, oracle capture, B=4 co-residency, or denominator conventions. & Prevents false speed wins and false equivalence failures; B=4 remains open. \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -224,11 +255,11 @@ The descriptor passed through vLLM is intentionally drafter-neutral: parent indi
 
 \subsection{MTP Draft Head and Committer}
 
-The shipped drafter does not introduce an auxiliary model. It runs the native causal MTP spine and reads the LM-head logits once per draft step. The argmax of that tensor is the child-rank-0 spine token and is the only token fed back into the next MTP hidden-state step. Off-spine tree nodes are read-only runner-up tokens from the same logits tensor: cat9 reads depth-local top-2 leaves on the interior spine steps, while cat6root reads only the root runner-up and then keeps the rest of the native spine. This is why the root-sibling tree can add a depth-0 alternative without adding a second recurrent trajectory in the drafter. The \code{FR13\_DRAFTER\_SINGLE\_LOGITS} path is load-bearing here: it makes the spine argmax and the runner-up leaf come from the same full-vocabulary logits tensor instead of recomputing the LM head through a second sampling helper.
+The shipped drafter does not introduce an auxiliary model. It runs the native causal MTP spine and reads the LM-head logits once per draft step. The argmax of that tensor is the child-rank-0 spine token and is the only token fed back into the next MTP hidden-state step. Off-spine tree nodes are read-only runner-up tokens from the same logits tensor: cat9 reads depth-local top-2 leaves on the interior spine steps, while cat6root reads only the root runner-up and then keeps the rest of the native spine. This is why the root-sibling tree can add a depth-0 alternative without adding a second recurrent trajectory in the drafter. The single-logits drafter path is load-bearing here: it makes the spine argmax and the runner-up leaf come from the same full-vocabulary logits tensor instead of recomputing the LM head through a second sampling helper.
 
-Partial tree acceptance also changes the next drafter input row. Stock linear MTP samples the next draft from the row at offset \(\mathrm{accepted\_len}\). In a tree, the committed leaf may be a different flat verifier row. The tree path therefore maps the next sampled row to \(\mathrm{base}+\mathrm{accepted\_path}[\mathrm{len}-1]\), or the root row when no draft token was accepted. This \code{FR13\_TREE\_SAMPLE\_ROW} rule prevents the next MTP step from conditioning on a rejected sibling's hidden state after an alternative branch wins.
+Partial tree acceptance also changes the next drafter input row. Stock linear MTP samples the next draft from the row at offset \(\mathrm{accepted\_len}\). In a tree, the committed leaf may be a different flat verifier row. The tree path therefore maps the next sampled row to \(\mathrm{base}+\mathrm{accepted\_path}[\mathrm{len}-1]\), or the root row when no draft token was accepted. This accepted-row sampling remap prevents the next MTP step from conditioning on a rejected sibling's hidden state after an alternative branch wins.
 
-At temperature 0.6 the committed output is selected by the deployed device multidraft committer, not by a greedy longest-common-prefix shortcut. For each parent, it consumes the target distribution over the node's child draft tokens, computes the SpecInfer-style residual-mix source weights, samples a draft source, accepts with \(\min(1,p/q_{\mathrm{mix}})\), and falls back to the target residual otherwise. The default-on \code{FR13\_DEVICE\_MULTIDRAFT} path moves this per-node decision onto device, eliminating the host \([N_{\mathrm{nodes}}\times |V|]\) softmax transfer and Python per-node loop while preserving the host reference distribution. The older pure-integer greedy GPU committer is only a temperature-0 tuning route; it is not the temperature-0.6 committer used for the reported deployment gate.
+At temperature 0.6 the committed output is selected by the deployed device multidraft committer, not by a greedy longest-common-prefix shortcut. For each parent, it consumes the target distribution over the node's child draft tokens, computes the SpecInfer-style residual-mix source weights, samples a draft source, accepts with \(\min(1,p/q_{\mathrm{mix}})\), and falls back to the target residual otherwise. The default-on device multidraft path moves this per-node decision onto device, eliminating the host \([N_{\mathrm{nodes}}\times |V|]\) softmax transfer and Python per-node loop while preserving the host reference distribution. The older pure-integer greedy GPU committer is only a temperature-0 tuning route; it is not the temperature-0.6 committer used for the reported deployment gate.
 
 \begin{table}[t]
 \caption{Surfaces that must agree on the same tree contract. Most failed routes broke one of these alignments.}
@@ -403,6 +434,32 @@ The publication path also handles non-attention state. After the device committe
 
 The target checkpoint is the public Hugging Face model \code{Qwen/Qwen3.6-27B-FP8}, a 64-layer hybrid model whose documented layout has 48 GDN recurrent layers and 16 softmax-attention layers \cite{qwen2026qwen36fp8}. The serving environment mounts it at \code{/models/qwen3.6-27b-fp8} and exposes it as \code{qwen3.6-27b} on GB10. The source-of-truth runtime is a \code{vllm/vllm-openai} image pinned to digest \texttt{sha256:3dbe092ec5b2cef63b6}\allowbreak\texttt{104d33fa75d6ce53a7870962}\allowbreak\texttt{529ada69f78bbbc38e776}, corresponding to vLLM 0.19.2rc1.dev134+gfe9c3d6c5, plus the forked FA2 \code{.so} swap and the boot-time tree-GDN patcher. The clean B=1 tree arms use the forked FA2 tree-server launcher; cat9 also has a locked wrapper, native E5 uses the native speed launcher, and the B=1 deploy wrapper pins \code{GPU\_UTIL=0.82}, \code{MAX\_NUM\_SEQS=1}, \code{MAX\_MODEL\_LEN=131072}, and \code{FR13\_DEVICE\_MULTIDRAFT=1}. The mounted model path and runtime image are pinned; the immutable Hugging Face snapshot hash inside the mount was not captured and is listed as a reproduction limitation. The workload is four SWE/Codex tasks in clean B=1 mode, temperature 0.6, with true sequential windows and \code{num\_running} near zero.
 
+\begin{table}[t]
+\caption{Experimental assumptions for the reported gate.}
+\label{tab:assumptions}
+\centering
+\scriptsize
+\begin{adjustbox}{width=\columnwidth}
+\begin{tabular}{L{0.30\columnwidth} L{0.60\columnwidth}}
+\toprule
+Field & Value \\
+\midrule
+Scope & B=1, temperature 0.6, four SWE/Codex tasks. \\
+\rowsep
+Target & Public \code{Qwen/Qwen3.6-27B-FP8}; local alias \code{qwen3.6-27b}. \\
+\rowsep
+Runtime & Pinned vLLM image, forked FA2 tree-bias decode path, and boot-time GDN patcher. \\
+\rowsep
+Primary metric & Token-weighted decode TPS. \\
+\rowsep
+Secondary metric & Per-request-equal TPS. \\
+\rowsep
+Not claimed & End-to-end task-wall gain, B=4 batching, or full TV-distance equivalence. \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
 Speed and empirical-equivalence evidence are measured in separate modes. Speed runs disable heavy capture/oracle probes; equivalence runs enable recurrent-oracle capture and p-rescore. This separation is not bookkeeping. Several earlier readings were confounded by raw prompt probes, B=4 co-residency, instrumentation overhead, or denominator mistakes, so the final result reports token-weighted decode throughput, per-request latency, p-rescore equivalence, and end-to-end wall caveats as different measurements.
 
 \subsection{Speed and Equivalence Infrastructure}
@@ -442,7 +499,7 @@ The request anatomy explains why these metrics differ. In the cat6root B=1 trace
 \section{Empirical Equivalence Evidence and Measurement Discipline}
 \label{sec:equivalence}
 
-The empirical equivalence claim in this artifact is closure within the observed native recurrent-oracle flip floor. The exact B=1 depth-5 p-rescore compares each arm against its own no-spec recurrent oracle under temperature 0.6. Native E5 has 630 clear-margin flips over 4,883 positions, or 12.90\%; cat9 has 645 over 4,858, or 13.28\%; cat6root has about 636 over about 4,860, or 13.09\%. Both tree arms are within the native E5 floor by less than one position-level standard error, but this is not a TV-distance estimate and not a request-cluster bootstrap.
+The empirical equivalence claim in this artifact is closure within the observed native recurrent-oracle flip floor. The exact B=1 depth-5 p-rescore compares each arm against its own no-spec recurrent oracle under temperature 0.6. Native E5 has 630 clear-margin flips over 4,883 positions, or 12.90\%; cat9 has 645 over 4,858, or 13.28\%; cat6root has about 636 over about 4,860, or 13.09\%. Native E5 has a nonzero flip rate because the oracle is not a bit-identical replay of the served trace; it is a no-spec recurrent decode path, so native E5 establishes the serving-frame and numerical floor. Both tree arms are within the native E5 floor by less than one position-level standard error, but this is not a TV-distance estimate and not a request-cluster bootstrap.
 
 \begin{table}[t]
 \caption{Empirical equivalence closure gates and interpretation.}
@@ -547,6 +604,8 @@ Attention & \code{FR13\_FA2\_TREE\_BIAS=1}, \code{FR13\_FA2\_PREFILL\_NATIVE=1}.
 \rowsep
 GDN scan geometry & \code{BV=16}, \code{num\_warps=8}, activation-ring \code{n\_pad}\(\leq16\); cat6root uses pad8 and cat9 uses pad16. \\
 \rowsep
+Drafter rows & \code{FR13\_DRAFTER\_SINGLE\_LOGITS=1}, \code{FR13\_TREE\_SAMPLE\_ROW=1}. \\
+\rowsep
 GDN batch variance fix & \code{LUMO\_FB\_KERNEL\_ROWS=1}, \code{LUMO\_FB\_PROJ\_PAD\_ROWS=16}. \\
 \rowsep
 Committer & \code{FR13\_DEVICE\_MULTIDRAFT=1} default-on for tree arms. \\
@@ -567,7 +626,7 @@ The committer row follows the later bake addendum: the older canonical-config ca
 
 \section*{Code and Artifacts}
 
-The implementation and measurement package is available in the public, commit-pinned repository artifact \cite{lumo2026receipts}. It includes the forked FA2 tree-bias patch, Triton GDN scan/replay kernel, vLLM wiring patch, launchers, and measurement harness used for the reported B=1 run.
+The implementation and measurement package is available in the public repository artifact pinned at commit \texttt{55f55854328b37f262e97d57b5863d8f}\allowbreak\texttt{add7ff76} \cite{lumo2026receipts}. It includes the forked FA2 tree-bias patch, Triton GDN scan/replay kernel, vLLM wiring patch, launchers, and measurement harness used for the reported B=1 run.
 
 \label{ReferencesStart}
 \bibliographystyle{ieeetr}

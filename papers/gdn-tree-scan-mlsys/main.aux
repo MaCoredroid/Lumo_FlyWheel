@@ -3,10 +3,10 @@
 \citation{miao2023specinfer,li2024eagle}
 \citation{yang2024gated,qwen2026qwen36fp8}
 \citation{dao2023flashattention,kwon2023efficient,lumo2026receipts}
-\citation{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}
 \providecommand \oddpage@label [2]{}
 \@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {II}Background and Related Work}{1}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {II}Claim Scope and Evidence Map}{1}{}\protected@file@percent }
+\citation{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}
 \citation{wu2025stree}
 \citation{zhong2025specmamba}
 \citation{borobia2026component}
@@ -19,48 +19,58 @@
 \citation{borobia2026component}
 \citation{pytorch2025sglang,sglang2026qwen,sglang2026specdocs}
 \citation{miao2023specinfer}
-\citation{dao2023flashattention}
-\@writefile{toc}{\contentsline {section}{\numberline {III}Claim Scope and Evidence Map}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {IV}Verifier Contract}{2}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces A correct attention mask does not make a recurrent tree verifier correct. A sibling row packed after a spine row must inherit the root state, not the previous packed row's recurrent state.}}{2}{}\protected@file@percent }
+\newlabel{fig:recurrent-pitfall}{{1}{2}}
+\@writefile{toc}{\contentsline {section}{\numberline {III}Background and Related Work}{2}{}\protected@file@percent }
 \@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Tree verification on a recurrent hybrid target}}{2}{}\protected@file@percent }
 \newlabel{alg:tree}{{1}{2}}
+\@writefile{toc}{\contentsline {section}{\numberline {IV}Verifier Contract}{2}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {V}System Design}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}FA2 Tree-Fork}{2}{}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Comparison layer for prior and adjacent work. The goal is to avoid promoting adjacent serving work into a direct fused-kernel baseline.}}{3}{}\protected@file@percent }
-\newlabel{tab:prior}{{I}{3}}
-\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Claim, gate, and caveat map. The repository has a longer receipt ledger; this table keeps the academic claim boundary explicit.}}{3}{}\protected@file@percent }
-\newlabel{tab:claims}{{II}{3}}
+\@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Claim, gate, and caveat map. The repository has a longer receipt ledger; this table keeps the academic claim boundary explicit.}}{3}{}\protected@file@percent }
+\newlabel{tab:claims}{{I}{3}}
+\@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Comparison layer for prior and adjacent work. The goal is to avoid promoting adjacent serving work into a direct fused-kernel baseline.}}{3}{}\protected@file@percent }
+\newlabel{tab:prior}{{II}{3}}
 \@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Engineering form of the accepted-state verifier contract.}}{3}{}\protected@file@percent }
 \newlabel{tab:contract}{{III}{3}}
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The tree shape is a cross-layer contract. Candidate packing, attention metadata, recurrent scan, commitment, replay, and metrics must consume the same descriptor.}}{3}{}\protected@file@percent }
-\newlabel{fig:pipeline}{{1}{3}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}FA2 Tree-Fork}{3}{}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The tree shape is a cross-layer contract. Candidate packing, attention metadata, recurrent scan, commitment, replay, and metrics must consume the same descriptor.}}{3}{}\protected@file@percent }
+\newlabel{fig:pipeline}{{2}{3}}
+\citation{dao2023flashattention}
 \citation{sglang2026issue25587}
-\citation{yang2024gated}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}MTP Draft Head and Committer}{4}{}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Surfaces that must agree on the same tree contract. Most failed routes broke one of these alignments.}}{4}{}\protected@file@percent }
 \newlabel{tab:surfaces}{{IV}{4}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The evaluated shapes. cat9 adds runner-up leaves to the depth-5 spine; cat6root keeps the spine and adds only a root sibling, reducing verifier rows while preserving a depth-0 alternative.}}{4}{}\protected@file@percent }
-\newlabel{fig:shapes}{{2}{4}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces The evaluated shapes. cat9 adds runner-up leaves to the depth-5 spine; cat6root keeps the spine and adds only a root sibling, reducing verifier rows while preserving a depth-0 alternative.}}{4}{}\protected@file@percent }
+\newlabel{fig:shapes}{{3}{4}}
 \@writefile{toc}{\contentsline {section}{\numberline {VI}GDN Scan and Replay Kernel}{4}{}\protected@file@percent }
+\citation{yang2024gated}
 \citation{lumo2026receipts}
-\citation{qwen2026qwen36fp8}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces The scan verifies all candidate nodes with parent-indexed recurrent state. Replay re-executes only the accepted chain and publishes durable GDN/conv state.}}{5}{}\protected@file@percent }
-\newlabel{fig:gdn}{{3}{5}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces The scan verifies all candidate nodes with parent-indexed recurrent state. Replay re-executes only the accepted chain and publishes durable GDN/conv state.}}{5}{}\protected@file@percent }
+\newlabel{fig:gdn}{{4}{5}}
 \@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Branch-local GDN scan and publication}}{5}{}\protected@file@percent }
 \newlabel{alg:gdn}{{2}{5}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}BV, \(N_{\mathrm  {PAD}}\), and Spill Boundary}{5}{}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces GDN scan geometry and the pad16 resource boundary.}}{5}{}\protected@file@percent }
 \newlabel{tab:bv-npad}{{V}{5}}
+\citation{qwen2026qwen36fp8}
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Experimental assumptions for the reported gate.}}{6}{}\protected@file@percent }
+\newlabel{tab:assumptions}{{VI}{6}}
 \@writefile{toc}{\contentsline {section}{\numberline {VII}Experimental Setup}{6}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Speed and Equivalence Infrastructure}{6}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VIII}Empirical Equivalence Evidence and Measurement Discipline}{6}{}\protected@file@percent }
-\newlabel{sec:equivalence}{{VIII}{6}}
-\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Clean B=1 decode result. Throughput delta is token-weighted decode TPS relative to native E5. Accept/event counts accepted draft tokens; committed tokens/event equals accept/event plus one guaranteed verifier token.}}{7}{}\protected@file@percent }
-\newlabel{tab:results}{{VI}{7}}
-\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Empirical equivalence closure gates and interpretation.}}{7}{}\protected@file@percent }
-\newlabel{tab:lossless}{{VII}{7}}
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Clean B=1 decode result. Throughput delta is token-weighted decode TPS relative to native E5. Accept/event counts accepted draft tokens; committed tokens/event equals accept/event plus one guaranteed verifier token.}}{7}{}\protected@file@percent }
+\newlabel{tab:results}{{VII}{7}}
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Empirical Equivalence Evidence and Measurement Discipline}{7}{}\protected@file@percent }
+\newlabel{sec:equivalence}{{VIII}{7}}
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Empirical equivalence closure gates and interpretation.}}{7}{}\protected@file@percent }
+\newlabel{tab:lossless}{{VIII}{7}}
 \@writefile{toc}{\contentsline {section}{\numberline {IX}Design Evolution and Negative Results}{7}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {X}Threats to Validity}{7}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {IX}{\ignorespaces Negative results and superseded interpretations that shaped the final verifier. These are not all mathematical impossibilities; several are rejected only as served-proof routes for this artifact.}}{8}{}\protected@file@percent }
+\newlabel{tab:negative}{{IX}{8}}
+\@writefile{toc}{\contentsline {section}{\numberline {X}Threats to Validity}{8}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {XI}Canonical Configuration}{8}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {X}{\ignorespaces Load-bearing configuration choices in the shipped tree path.}}{8}{}\protected@file@percent }
+\newlabel{tab:config}{{X}{8}}
+\@writefile{toc}{\contentsline {section}{\numberline {XII}Conclusion}{8}{}\protected@file@percent }
 \citation{lumo2026receipts}
 \bibstyle{ieeetr}
 \bibdata{ref}
@@ -71,14 +81,6 @@
 \bibcite{yang2024gated}{5}
 \bibcite{qwen2026qwen36fp8}{6}
 \bibcite{dao2023flashattention}{7}
-\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Negative results and superseded interpretations that shaped the final verifier. These are not all mathematical impossibilities; several are rejected only as served-proof routes for this artifact.}}{8}{}\protected@file@percent }
-\newlabel{tab:negative}{{VIII}{8}}
-\@writefile{lot}{\contentsline {table}{\numberline {IX}{\ignorespaces Load-bearing configuration choices in the shipped tree path.}}{8}{}\protected@file@percent }
-\newlabel{tab:config}{{IX}{8}}
-\@writefile{toc}{\contentsline {section}{\numberline {XI}Canonical Configuration}{8}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {XII}Conclusion}{8}{}\protected@file@percent }
-\newlabel{ReferencesStart}{{XII}{8}}
-\@writefile{toc}{\contentsline {section}{References}{8}{}\protected@file@percent }
 \bibcite{kwon2023efficient}{8}
 \bibcite{lumo2026receipts}{9}
 \bibcite{wu2025stree}{10}
@@ -88,4 +90,6 @@
 \bibcite{sglang2026qwen}{14}
 \bibcite{sglang2026specdocs}{15}
 \bibcite{sglang2026issue25587}{16}
+\newlabel{ReferencesStart}{{XII}{9}}
+\@writefile{toc}{\contentsline {section}{References}{9}{}\protected@file@percent }
 \gdef \@abspage@last{9}
