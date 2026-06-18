@@ -36,11 +36,13 @@ W.~Kwon, Z.~Li, S.~Zhuang, Y.~Sheng, L.~Zheng, C.~H. Yu, J.~E. Gonzalez,
   H.~Zhang, and I.~Stoica, ``Efficient memory management for large language
   model serving with pagedattention,'' 2023.
 
-\bibitem{lumo2026artifact}
-Z.~Ma, ``{GDN Tree-Scan GitHub Pages blueprint}.''
-  \url{https://macoredroid.github.io/Lumo_FlyWheel/gdn-tree-scan.html}, 2026.
-\newblock Live source page; fetched and byte-matched to local gh-pages source
-  on 2026-06-18.
+\bibitem{lumo2026receipts}
+Z.~Ma, ``{GDN Tree-Scan consolidated implementation and measurement
+  receipts}.''
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/55f55854328b37f262e97d57b5863d8fadd7ff76},
+  2026.
+\newblock Commit-pinned repository receipts for deploy TPS, equivalence gates,
+  runtime, launchers, kernels, and configuration.
 
 \bibitem{wu2025stree}
 Y.~Wu, Z.~Qin, A.~Wong, and S.~Soatto, ``Stree: Speculative tree decoding for
@@ -73,13 +75,5 @@ H.~Borobia, E.~Seguí-Mas, and G.~Tormo-Carbó, ``Component-aware
 {SGLang Project}, ``{Hybrid-GDN MTP speculative decoding is not lossless on
   Ascend NPU}.'' \url{https://github.com/sgl-project/sglang/issues/25587},
   2026.
-
-\bibitem{lumo2026receipts}
-Z.~Ma, ``{GDN Tree-Scan consolidated implementation and measurement
-  receipts}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/55f55854328b37f262e97d57b5863d8fadd7ff76},
-  2026.
-\newblock Commit-pinned repository receipts for deploy TPS, equivalence gates,
-  runtime, launchers, kernels, and configuration.
 
 \end{thebibliography}

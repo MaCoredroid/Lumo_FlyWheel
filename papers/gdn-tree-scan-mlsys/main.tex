@@ -36,6 +36,7 @@
 
 \author{
     \IEEEauthorblockN{Zhiyuan Ma}
+    \IEEEauthorblockA{\texttt{zhiyuanma0520@gmail.com}}
 }
 
 \maketitle
@@ -52,11 +53,11 @@ speculative decoding, recurrent models, Gated DeltaNet, vLLM, FlashAttention, ML
 
 Speculative decoding accelerates autoregressive generation by drafting candidate tokens and asking the target model to verify them in parallel. Tree-shaped speculative decoding generalizes a single draft chain into a candidate token tree, improving the opportunity set for each target forward pass while preserving the target distribution under the verifier acceptance rule \cite{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}. For attention-only Transformer stacks, the central verifier problem is largely an ancestry problem: row \(i\) may attend to the prompt and its ancestors, but not to sibling branches \cite{miao2023specinfer,li2024eagle}.
 
-Recurrent hybrid models break that simplification. Qwen 3.6-style hybrid stacks contain many Gated-DeltaNet (GDN) recurrent layers in addition to softmax-attention layers, so a valid tree row needs two path-local facts: attention ancestry and recurrent state lineage \cite{yang2024gated,qwen2026qwen36fp8}. We use recurrent for any layer whose next-token output depends on a carried serving state; GDN is linear attention with such a carried state. The verifier must ensure that a node's GDN state equals the state native sequential decode would have produced along that node's root-to-node path. If sibling rows share a packed recurrent accumulator, a correct attention mask can still verify tokens from an impossible recurrent history.
+Recurrent hybrid models break that simplification. Qwen3.6-style hybrid stacks contain many Gated-DeltaNet (GDN) recurrent layers in addition to softmax-attention layers, so a valid tree row needs two path-local facts: attention ancestry and recurrent state lineage \cite{yang2024gated,qwen2026qwen36fp8}. We use recurrent for any layer whose next-token output depends on a carried serving state; GDN is linear attention with such a carried state. The verifier must ensure that a node's GDN state equals the state native sequential decode would have produced along that node's root-to-node path. If sibling rows share a packed recurrent accumulator, a correct attention mask can still verify tokens from an impossible recurrent history.
 
-This paper reports a served verifier for a recurrent hybrid target inside vLLM. The contribution is not ``tree speculative decoding'' in the abstract. It is served-realization equivalence as an implementation target: forked FlashAttention-2 (FA2) tree bias for attention, branch-local GDN scan and accepted-chain replay for recurrence, and vLLM state publication that makes rejected branch state non-durable \cite{dao2023flashattention,kwon2023efficient,lumo2026artifact}. To our knowledge, this is the first served, fused vLLM+FA2+GDN tree verifier for a production hybrid target; it does not claim first hybrid speculation or first stateful tree decoding.
+This paper reports a served verifier for a recurrent hybrid target inside vLLM. The contribution is not ``tree speculative decoding'' in the abstract. It is served-realization equivalence as an implementation target: forked FlashAttention-2 (FA2) tree bias for attention, branch-local GDN scan and accepted-chain replay for recurrence, and vLLM state publication that makes rejected branch state non-durable \cite{dao2023flashattention,kwon2023efficient,lumo2026receipts}. To our knowledge, this is the first served, fused vLLM+FA2+GDN tree verifier for a production hybrid target; it does not claim first hybrid speculation or first stateful tree decoding.
 
-The measured result is deliberately narrow. We use E5 for the native five-step MTP spine and catN for N-node tree variants. In a clean B=1, temperature-0.6 deployment trace over four SWE/Codex tasks, cat6root, a six-node tree with a depth-5 native spine plus one root sibling, reaches 23.88 token-weighted decode tokens/s versus 18.80 for native E5, a 27.0\% decode-throughput gain. The root sibling is a depth-0 alternative: when native MTP would lose an event because the first spine token is rejected, the verifier can still commit the sibling branch, raising committed tokens/event from 4.11 to 4.82 while adding almost no verify-forward time. The per-request-equal latency view is 18.51 versus 17.80 tokens/s, or +4.0\%; this is useful but underweights long decode turns where most generated tokens occur. Both cat6root and cat9 close within the observed native recurrent-oracle flip floor in a 40-turn B=1 p-rescore, but full distribution-distance evidence, request-level bootstrap, more seeds, B=4, and Stage D timing remain open gates.
+The measured result is deliberately narrow. We use E5 for the native five-step multi-token prediction (MTP) spine and catN for N-node tree variants. In a clean B=1, temperature-0.6 deployment trace over four SWE/Codex tasks, cat6root, a six-node tree with a depth-5 native spine plus one root sibling, reaches 23.88 token-weighted decode tokens/s versus 18.80 for native E5, a 27.0\% decode-throughput gain. The root sibling is a depth-0 alternative: when native MTP would lose an event because the first spine token is rejected, the verifier can still commit the sibling branch, raising committed tokens/event from 4.11 to 4.82 while adding almost no verify-forward time. The per-request-equal latency view is 18.51 versus 17.80 tokens/s, or +4.0\%; this is useful but underweights long decode turns where most generated tokens occur. Both cat6root and cat9 close within the observed native recurrent-oracle flip floor in a 40-turn B=1 p-rescore, but full distribution-distance evidence, request-level bootstrap, more seeds, B=4, and Stage D timing remain open gates.
 
 The paper makes three concrete contributions:
 \begin{itemize}[leftmargin=*,noitemsep]
@@ -73,7 +74,7 @@ STree is the closest prior work for stateful tree decoding. It extends tree spec
 
 Recent hybrid serving and SSM speculation work sharpens the same boundary. SpecMamba identifies hidden-state backtracking, tree-verification incompatibility, and draft/target workload mismatch for Mamba speculative decoding, then targets an FPGA dataflow \cite{zhong2025specmamba}. Component-aware self-speculation shows that hybrid component structure matters: Falcon-H1 and Qwen3.5 behave differently because of how SSM/linear-attention components are integrated \cite{borobia2026component}. These papers explain why hybrid models create new verifier questions, but they do not close the vLLM/FA2/GDN served-realization path.
 
-SGLang is the closest adjacent production comparison and should be treated carefully. Its hybrid-model writeup separates KV cache from request-level Mamba state, introduces MambaRadixCache, and handles speculative verification with independent state slots and parent tracing \cite{pytorch2025sglang}. Its Qwen3-Next documentation and speculative-decoding documentation show active support for GDN/MTP-style hybrid models \cite{sglang2026qwen,sglang2026specdocs}. That is not an apple-to-apple fused-kernel baseline for this paper: much of the mechanism is cache/scheduler-layer work, while this artifact's shipped contribution is lower in the stack, at the vLLM, forked-FA2, branch-local GDN scan/replay, and publication boundary \cite{sglang2026issue25587,lumo2026artifact}.
+SGLang is the closest adjacent production comparison and should be treated carefully. Its hybrid-model writeup separates KV cache from request-level Mamba state, introduces MambaRadixCache, and handles speculative verification with independent state slots and parent tracing \cite{pytorch2025sglang}. Its Qwen3-Next documentation and speculative-decoding documentation show active support for GDN/MTP-style hybrid models \cite{sglang2026qwen,sglang2026specdocs}. That is not an apple-to-apple fused-kernel baseline for this paper: much of the mechanism is cache/scheduler-layer work, while this artifact's shipped contribution is lower in the stack, at the vLLM, forked-FA2, branch-local GDN scan/replay, and publication boundary \cite{sglang2026issue25587,lumo2026receipts}.
 
 \begin{table*}[t]
 \caption{Comparison layer for prior and adjacent work. The goal is to avoid promoting adjacent serving work into a direct fused-kernel baseline.}
@@ -285,7 +286,7 @@ Publication & Only the accepted chain is replayed and made durable. & Rejected b
 \node[rootbranch] (rr) at (0,-0.9) {};
 \foreach \a/\b in {r0/r1,r1/r2,r2/r3,r3/r4,r0/rr} \draw[edge] (\a)--(\b);
 \end{tikzpicture}
-\caption{The evaluated shapes. cat9 adds runner-up leaves to the depth-5 spine; cat6root keeps the spine and adds only a root sibling, reducing verifier work while preserving most of the acceptance gain.}
+\caption{The evaluated shapes. cat9 adds runner-up leaves to the depth-5 spine; cat6root keeps the spine and adds only a root sibling, reducing verifier rows while preserving a depth-0 alternative.}
 \label{fig:shapes}
 \end{figure}
 
@@ -354,7 +355,7 @@ The kernel keeps a post-state for each padded node in \code{h\_cache}. That tabl
 
 \subsection{BV, \(N_{\mathrm{PAD}}\), and Spill Boundary}
 
-We write \code{BV16/w8} for a value tile of 16 rows launched with eight Triton warps. The shipped scan locks \code{BV=16} and \code{num\_warps=8}; the native packed-decode geometry audited from the pinned runtime is \(BV=32\), one warp, and three stages. \(N_{\mathrm{PAD}}\) is the next power-of-two span used by the static tree masks and unrolled Triton loops. Thus a six-node cat6root tree occupies pad8, while nine-node cat9 and deeper deployed families occupy pad16; the runtime fails loud for activation rings with \code{n\_pad} greater than 16 \cite{lumo2026artifact}.
+We write \code{BV16/w8} for a value tile of 16 rows launched with eight Triton warps. The shipped scan locks \code{BV=16} and \code{num\_warps=8}; the native packed-decode geometry audited from the pinned runtime is \(BV=32\), one warp, and three stages. \(N_{\mathrm{PAD}}\) is the next power-of-two span used by the static tree masks and unrolled Triton loops. Thus a six-node cat6root tree occupies pad8, while nine-node cat9 and deeper deployed families occupy pad16; the runtime fails loud for activation rings with \code{n\_pad} greater than 16 \cite{lumo2026receipts}.
 
 The resource model is simple enough to expose. With \(DIM_K=128\), the scan's cached post-state footprint is
 \begin{equation}
@@ -564,9 +565,9 @@ The committer row follows the later bake addendum: the older canonical-config ca
 
 \sys{} turns a token tree into a served verifier for a recurrent hybrid language model by treating recurrent state as part of the tree contract. Attention ancestry is necessary, but not sufficient. The shipped path adds FA2 tree bias for softmax layers, branch-local GDN scan/replay for recurrent layers, and accepted-chain-only state publication for vLLM. Under the clean B=1 deployment gate, cat6root improves token-weighted decode throughput by 27.0\% while closing within the observed native recurrent-oracle flip floor. The result should be read with its caveats attached: decode-only, B=1, 40-turn p-rescore, no request-cluster bootstrap, no full distribution-distance estimate, prefill-heavy workload, and open B=4/Stage D follow-up.
 
-\section*{Artifact and Source Trail}
+\section*{Code and Artifacts}
 
-The source blueprint is the live GitHub Pages paper, fetched and byte-matched to the local \code{gh-pages} worktree on June 18, 2026 \cite{lumo2026artifact}. This provenance is intentionally separated from the main technical framing. The consolidated source receipts are the deployed TPS correction, B=1 equivalence verdict, request anatomy, Stage D localization, vLLM source-of-truth ledger, launchers, FA2 fork correction, GDN tree kernel, vLLM tree wiring patch, device multidraft committer, measurement harness, canonical config ledger, and bake addendum \cite{lumo2026receipts}.
+The implementation and measurement package is available in the public, commit-pinned repository artifact \cite{lumo2026receipts}. It includes the forked FA2 tree-bias patch, Triton GDN scan/replay kernel, vLLM wiring patch, launchers, and measurement harness used for the reported B=1 run.
 
 \label{ReferencesStart}
 \bibliographystyle{ieeetr}
