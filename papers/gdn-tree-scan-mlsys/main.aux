@@ -1,53 +1,34 @@
 \relax
 \citation{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}
 \citation{miao2023specinfer,li2024eagle}
-\citation{yang2024gated,lumo2026gdnpage}
-\citation{lumo2026kernel,lumo2026realTensorDerisk}
-\citation{dao2023flashattention,kwon2023efficient,lumo2026fa2patch,lumo2026kernel}
-\citation{lumo2026deploytps,lumo2026speedraw}
-\citation{lumo2026requestanatomy}
-\citation{lumo2026lossless,lumo2026staged}
+\citation{yang2024gated,qwen2026qwen36fp8}
+\citation{dao2023flashattention,kwon2023efficient,lumo2026artifact}
 \citation{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}
 \citation{wu2025stree}
-\citation{lumo2026treeverifyliterature,lumo2026realTensorDerisk}
-\citation{zhong2025specmamba}
-\citation{borobia2026component}
 \providecommand \oddpage@label [2]{}
 \@writefile{toc}{\contentsline {section}{\numberline {I}Introduction}{1}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {II}Background and Related Work}{1}{}\protected@file@percent }
+\citation{zhong2025specmamba}
+\citation{borobia2026component}
 \citation{pytorch2025sglang}
 \citation{sglang2026qwen,sglang2026specdocs}
-\citation{lumo2026gdnpage,sglang2026issue25587}
+\citation{sglang2026issue25587,lumo2026artifact}
 \citation{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}
 \citation{wu2025stree}
 \citation{zhong2025specmamba}
 \citation{borobia2026component}
 \citation{pytorch2025sglang,sglang2026qwen,sglang2026specdocs}
-\citation{lumo2026gdnpage,lumo2026lossless}
-\citation{lumo2026vllmpatch}
-\citation{lumo2026fa2patch,lumo2026fa2correction}
-\citation{lumo2026kernel}
-\citation{lumo2026devicecommit}
-\citation{lumo2026kernel,lumo2026vllmpatch}
-\citation{miao2023specinfer,lumo2026lossless,lumo2026kernel}
-\citation{lumo2026config,lumo2026vllmpatch}
-\citation{dao2023flashattention,lumo2026fa2patch,lumo2026fa2correction}
-\citation{lumo2026kernel,lumo2026vllmpatch,sglang2026issue25587}
+\citation{miao2023specinfer}
+\citation{dao2023flashattention}
+\citation{sglang2026issue25587}
 \@writefile{toc}{\contentsline {section}{\numberline {III}Verifier Contract}{2}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {IV}System Design}{2}{}\protected@file@percent }
 \@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Tree verification on a recurrent hybrid target}}{2}{}\protected@file@percent }
 \newlabel{alg:tree}{{1}{2}}
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The tree shape is a cross-layer contract. Candidate packing, attention metadata, recurrent scan, commitment, replay, and metrics must consume the same descriptor.}}{2}{}\protected@file@percent }
 \newlabel{fig:pipeline}{{1}{2}}
-\citation{yang2024gated,lumo2026kernel,lumo2026realTensorDerisk}
-\citation{lumo2026kernel,lumo2026scanverdict}
-\citation{lumo2026config}
-\citation{lumo2026kernel,lumo2026scanverdict}
-\citation{lumo2026lossless,lumo2026node5}
-\citation{lumo2026gdnpage,qwen2025next}
-\citation{lumo2026vllmsot,lumo2026forkedlauncher}
-\citation{lumo2026config,lumo2026speedlauncher}
-\citation{lumo2026deploytps,lumo2026requestanatomy}
+\citation{yang2024gated}
+\citation{qwen2026qwen36fp8}
 \@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Comparison layer for prior and adjacent work. The goal is to avoid promoting adjacent serving work into a direct fused-kernel baseline.}}{3}{}\protected@file@percent }
 \newlabel{tab:prior}{{I}{3}}
 \@writefile{lot}{\contentsline {table}{\numberline {II}{\ignorespaces Engineering form of the accepted-state verifier contract.}}{3}{}\protected@file@percent }
@@ -57,34 +38,11 @@
 \@writefile{toc}{\contentsline {section}{\numberline {V}GDN Scan and Replay Kernel}{3}{}\protected@file@percent }
 \@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces The scan verifies all candidate nodes with parent-indexed recurrent state. Replay re-executes only the accepted chain and publishes durable GDN/conv state.}}{3}{}\protected@file@percent }
 \newlabel{fig:gdn}{{3}{3}}
-\@writefile{toc}{\contentsline {section}{\numberline {VI}Experimental Setup}{3}{}\protected@file@percent }
-\citation{lumo2026measure,lumo2026lossless}
-\citation{lumo2026deploytps,lumo2026b4contam}
-\citation{lumo2026deploytps,lumo2026requestanatomy}
-\citation{lumo2026requestanatomy}
-\citation{lumo2026requestanatomy}
-\citation{lumo2026lossless}
-\citation{lumo2026lossless}
-\citation{lumo2026scanverdict}
-\citation{lumo2026kernel}
-\citation{lumo2026devicecommit}
-\citation{lumo2026lossless}
-\citation{lumo2026lossless,lumo2026gdnpage}
-\citation{lumo2026measure,lumo2026deploytps,lumo2026requestanatomy}
-\citation{lumo2026treeverifyliterature,lumo2026realTensorDerisk,lumo2026fa2correction}
-\citation{lumo2026wyplan,lumo2026lossless,lumo2026b4contam}
-\citation{lumo2026staged,lumo2026committerbench}
-\citation{lumo2026requestanatomy}
-\citation{lumo2026config}
-\citation{lumo2026config,lumo2026bakeflags}
-\citation{lumo2026config,lumo2026bakeflags}
-\citation{lumo2026bakeflags}
+\@writefile{toc}{\contentsline {section}{\numberline {VI}Experimental Setup}{4}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {VII}Lossless Evidence and Measurement Discipline}{4}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {VIII}Failure Modes and Validity Limits}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {IX}Canonical Configuration}{4}{}\protected@file@percent }
-\citation{lumo2026deploytps,lumo2026lossless}
-\citation{lumo2026gdnpage}
-\citation{lumo2026deploytps,lumo2026lossless,lumo2026requestanatomy,lumo2026staged,lumo2026vllmsot,lumo2026forkedlauncher,lumo2026speedlauncher,lumo2026fa2correction,lumo2026kernel,lumo2026vllmpatch,lumo2026devicecommit,lumo2026measure,lumo2026config,lumo2026bakeflags}
+\citation{lumo2026artifact}
+\citation{lumo2026receipts}
 \bibstyle{ieeetr}
 \bibdata{ref}
 \bibcite{miao2023specinfer}{1}
@@ -92,47 +50,26 @@
 \bibcite{li2024eagle}{3}
 \bibcite{wang2024opt}{4}
 \bibcite{yang2024gated}{5}
-\bibcite{lumo2026gdnpage}{6}
-\bibcite{lumo2026kernel}{7}
-\bibcite{lumo2026realTensorDerisk}{8}
-\bibcite{dao2023flashattention}{9}
-\bibcite{kwon2023efficient}{10}
-\bibcite{lumo2026fa2patch}{11}
-\bibcite{lumo2026deploytps}{12}
-\bibcite{lumo2026speedraw}{13}
-\bibcite{lumo2026requestanatomy}{14}
+\bibcite{qwen2026qwen36fp8}{6}
+\bibcite{dao2023flashattention}{7}
+\bibcite{kwon2023efficient}{8}
+\bibcite{lumo2026artifact}{9}
+\bibcite{wu2025stree}{10}
+\bibcite{zhong2025specmamba}{11}
+\bibcite{borobia2026component}{12}
+\bibcite{pytorch2025sglang}{13}
+\bibcite{sglang2026qwen}{14}
 \@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Clean B=1 decode result. Throughput delta is token-weighted decode TPS relative to native E5.}}{5}{}\protected@file@percent }
 \newlabel{tab:results}{{III}{5}}
 \@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Lossless closure gates and interpretation.}}{5}{}\protected@file@percent }
 \newlabel{tab:lossless}{{IV}{5}}
 \@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces Load-bearing configuration choices in the shipped tree path.}}{5}{}\protected@file@percent }
 \newlabel{tab:config}{{V}{5}}
+\@writefile{toc}{\contentsline {section}{\numberline {IX}Canonical Configuration}{5}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {X}Conclusion}{5}{}\protected@file@percent }
 \newlabel{ReferencesStart}{{X}{5}}
 \@writefile{toc}{\contentsline {section}{References}{5}{}\protected@file@percent }
-\bibcite{lumo2026lossless}{15}
-\bibcite{lumo2026staged}{16}
-\bibcite{wu2025stree}{17}
-\bibcite{lumo2026treeverifyliterature}{18}
-\bibcite{zhong2025specmamba}{19}
-\bibcite{borobia2026component}{20}
-\bibcite{pytorch2025sglang}{21}
-\bibcite{sglang2026qwen}{22}
-\bibcite{sglang2026specdocs}{23}
-\bibcite{sglang2026issue25587}{24}
-\bibcite{lumo2026vllmpatch}{25}
-\bibcite{lumo2026fa2correction}{26}
-\bibcite{lumo2026devicecommit}{27}
-\bibcite{lumo2026config}{28}
-\bibcite{lumo2026scanverdict}{29}
-\bibcite{lumo2026node5}{30}
-\bibcite{qwen2025next}{31}
-\bibcite{lumo2026vllmsot}{32}
-\bibcite{lumo2026forkedlauncher}{33}
-\bibcite{lumo2026speedlauncher}{34}
-\bibcite{lumo2026measure}{35}
-\bibcite{lumo2026b4contam}{36}
-\bibcite{lumo2026wyplan}{37}
-\bibcite{lumo2026committerbench}{38}
-\bibcite{lumo2026bakeflags}{39}
+\bibcite{sglang2026specdocs}{15}
+\bibcite{sglang2026issue25587}{16}
+\bibcite{lumo2026receipts}{17}
 \gdef \@abspage@last{6}
