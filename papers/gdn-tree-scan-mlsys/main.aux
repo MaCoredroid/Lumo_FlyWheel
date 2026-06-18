@@ -26,7 +26,6 @@
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces The tree shape is a cross-layer contract. Candidate packing, attention metadata, recurrent scan, commitment, replay, and metrics must consume the same descriptor.}}{2}{}\protected@file@percent }
 \newlabel{fig:pipeline}{{1}{2}}
 \@writefile{toc}{\contentsline {section}{\numberline {V}System Design}{2}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}FA2 Tree-Fork}{2}{}\protected@file@percent }
 \citation{dao2023flashattention}
 \citation{sglang2026issue25587}
 \@writefile{lot}{\contentsline {table}{\numberline {I}{\ignorespaces Comparison layer for prior and adjacent work. The goal is to avoid promoting adjacent serving work into a direct fused-kernel baseline.}}{3}{}\protected@file@percent }
@@ -35,36 +34,36 @@
 \newlabel{tab:claims}{{II}{3}}
 \@writefile{lot}{\contentsline {table}{\numberline {III}{\ignorespaces Engineering form of the accepted-state verifier contract.}}{3}{}\protected@file@percent }
 \newlabel{tab:contract}{{III}{3}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-A}}FA2 Tree-Fork}{3}{}\protected@file@percent }
 \citation{yang2024gated}
 \citation{lumo2026artifact}
 \@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {V-B}}MTP Draft Head and Committer}{4}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VI}GDN Scan and Replay Kernel}{4}{}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {IV}{\ignorespaces Surfaces that must agree on the same tree contract. Most failed routes broke one of these alignments.}}{4}{}\protected@file@percent }
 \newlabel{tab:surfaces}{{IV}{4}}
 \@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces The evaluated shapes. cat9 adds runner-up leaves to the depth-5 spine; cat6root keeps the spine and adds only a root sibling, reducing verifier work while preserving most of the acceptance gain.}}{4}{}\protected@file@percent }
 \newlabel{fig:shapes}{{2}{4}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}BV, \(N_{\mathrm  {PAD}}\), and Spill Boundary}{4}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VI}GDN Scan and Replay Kernel}{4}{}\protected@file@percent }
 \citation{qwen2026qwen36fp8}
 \@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces The scan verifies all candidate nodes with parent-indexed recurrent state. Replay re-executes only the accepted chain and publishes durable GDN/conv state.}}{5}{}\protected@file@percent }
 \newlabel{fig:gdn}{{3}{5}}
 \@writefile{loa}{\contentsline {algorithm}{\numberline {2}{\ignorespaces Branch-local GDN scan and publication}}{5}{}\protected@file@percent }
 \newlabel{alg:gdn}{{2}{5}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VI-A}}BV, \(N_{\mathrm  {PAD}}\), and Spill Boundary}{5}{}\protected@file@percent }
 \@writefile{lot}{\contentsline {table}{\numberline {V}{\ignorespaces GDN scan geometry and the pad16 resource boundary.}}{5}{}\protected@file@percent }
 \newlabel{tab:bv-npad}{{V}{5}}
 \@writefile{toc}{\contentsline {section}{\numberline {VII}Experimental Setup}{5}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Speed and Lossless Infrastructure}{6}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {VIII}Lossless Evidence and Measurement Discipline}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {\mbox  {VII-A}}Speed and Equivalence Infrastructure}{6}{}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {VIII}Empirical Equivalence Evidence and Measurement Discipline}{6}{}\protected@file@percent }
 \newlabel{sec:lossless}{{VIII}{6}}
-\citation{lumo2026artifact}
-\citation{lumo2026receipts}
-\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Clean B=1 decode result. Throughput delta is token-weighted decode TPS relative to native E5.}}{7}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VI}{\ignorespaces Clean B=1 decode result. Throughput delta is token-weighted decode TPS relative to native E5. Accept/event counts accepted draft tokens; committed tokens/event equals accept/event plus one guaranteed verifier token.}}{7}{}\protected@file@percent }
 \newlabel{tab:results}{{VI}{7}}
-\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Lossless closure gates and interpretation.}}{7}{}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {VII}{\ignorespaces Empirical equivalence closure gates and interpretation.}}{7}{}\protected@file@percent }
 \newlabel{tab:lossless}{{VII}{7}}
 \@writefile{toc}{\contentsline {section}{\numberline {IX}Design Evolution and Negative Results}{7}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {X}Threats to Validity}{7}{}\protected@file@percent }
 \@writefile{toc}{\contentsline {section}{\numberline {XI}Canonical Configuration}{7}{}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {XII}Conclusion}{7}{}\protected@file@percent }
+\citation{lumo2026artifact}
+\citation{lumo2026receipts}
 \bibstyle{ieeetr}
 \bibdata{ref}
 \bibcite{miao2023specinfer}{1}
@@ -76,6 +75,13 @@
 \bibcite{dao2023flashattention}{7}
 \bibcite{kwon2023efficient}{8}
 \bibcite{lumo2026artifact}{9}
+\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Negative results and superseded interpretations that shaped the final verifier. These are not all mathematical impossibilities; several are rejected only as served-proof routes for this artifact.}}{8}{}\protected@file@percent }
+\newlabel{tab:negative}{{VIII}{8}}
+\@writefile{lot}{\contentsline {table}{\numberline {IX}{\ignorespaces Load-bearing configuration choices in the shipped tree path.}}{8}{}\protected@file@percent }
+\newlabel{tab:config}{{IX}{8}}
+\@writefile{toc}{\contentsline {section}{\numberline {XII}Conclusion}{8}{}\protected@file@percent }
+\newlabel{ReferencesStart}{{XII}{8}}
+\@writefile{toc}{\contentsline {section}{References}{8}{}\protected@file@percent }
 \bibcite{wu2025stree}{10}
 \bibcite{zhong2025specmamba}{11}
 \bibcite{borobia2026component}{12}
@@ -84,10 +90,4 @@
 \bibcite{sglang2026specdocs}{15}
 \bibcite{sglang2026issue25587}{16}
 \bibcite{lumo2026receipts}{17}
-\@writefile{lot}{\contentsline {table}{\numberline {VIII}{\ignorespaces Negative results and superseded interpretations that shaped the final verifier. These are not all mathematical impossibilities; several are rejected only as served-proof routes for this artifact.}}{8}{}\protected@file@percent }
-\newlabel{tab:negative}{{VIII}{8}}
-\@writefile{lot}{\contentsline {table}{\numberline {IX}{\ignorespaces Load-bearing configuration choices in the shipped tree path.}}{8}{}\protected@file@percent }
-\newlabel{tab:config}{{IX}{8}}
-\newlabel{ReferencesStart}{{XII}{8}}
-\@writefile{toc}{\contentsline {section}{References}{8}{}\protected@file@percent }
-\gdef \@abspage@last{8}
+\gdef \@abspage@last{9}

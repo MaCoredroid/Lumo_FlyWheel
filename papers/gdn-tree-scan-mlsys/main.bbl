@@ -79,7 +79,7 @@ Z.~Ma, ``{GDN Tree-Scan consolidated implementation and measurement
   receipts}.''
   \url{https://github.com/MaCoredroid/Lumo_FlyWheel/tree/55f55854328b37f262e97d57b5863d8fadd7ff76},
   2026.
-\newblock Commit-pinned repository receipts for deploy TPS, lossless gates,
+\newblock Commit-pinned repository receipts for deploy TPS, equivalence gates,
   runtime, launchers, kernels, and configuration.
 
 \end{thebibliography}
