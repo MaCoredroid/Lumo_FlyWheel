@@ -28,6 +28,7 @@
 \newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
 \newcommand{\sys}{GDN Tree-Scan}
 \newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\rowsep}{\specialrule{0.15pt}{1.2pt}{1.2pt}}
 
 \begin{document}
 
@@ -85,9 +86,13 @@ SGLang is the closest adjacent production comparison and should be treated caref
 Line of work & What transfers & What breaks for this target & What \sys{} adds \\
 \midrule
 SpecInfer, Sequoia, EAGLE-2, OPT-Tree & Candidate trees, verifier acceptance, dynamic or hardware-aware shape selection \cite{miao2023specinfer,chen2024sequoia,li2024eagle,wang2024opt}. & The target verification forward is assumed to realize the target distribution once attention ancestry is correct. & Recurrent-state verification and deployment lossless gates. \\
+\rowsep
 STree & Stateful models need tree-aware state construction \cite{wu2025stree}. & Algebraic state sharing is not the same as matching native served GDN under bf16/fp8 and vLLM writeback. & A GDN scan/replay kernel gated against native/deployment oracles. \\
+\rowsep
 SpecMamba & Hidden-state backtracking and tree verification are first-class SSM obstacles \cite{zhong2025specmamba}. & FPGA dataflow and FIFO verification are not a served GPU/vLLM path for Qwen GDN. & Fused GPU kernels, FA2/vLLM compatibility, and deployment gates. \\
+\rowsep
 Component-aware self-speculation & Hybrid component structure determines speculative viability \cite{borobia2026component}. & Research Python implementation leaves fused CUDA, batched verification, and cache sharing as systems gaps. & A fused served path for Qwen GDN tree verification. \\
+\rowsep
 SGLang hybrid serving & Adjacent production mechanisms: dual memory pools, MambaRadixCache, parent tracing, MTP/EAGLE surfaces \cite{pytorch2025sglang,sglang2026qwen,sglang2026specdocs}. & Cache/scheduler-layer mechanisms are not directly comparable to this fused vLLM GDN tree-scan kernel. & A different layer of realization: vLLM + forked FA2 tree bias + branch-local GDN scan/replay + observed recurrent-oracle gates. \\
 \bottomrule
 \end{tabular}
@@ -109,8 +114,11 @@ The contribution is easiest to evaluate when each claim names its mechanism, mea
 Claim & In-paper evidence & Gate & Status and limit \\
 \midrule
 The systems contribution is served-realization equivalence for Qwen GDN in vLLM. & FA2 tree-bias decode, branch-local GDN scan/replay, device multidraft commitment, and accepted-chain-only durable publication. & All target-verifier surfaces consume the same tree descriptor and accepted path. & Closed for the shipped B=1 path; not a claim of first GDN speculation. \\
+\rowsep
 cat6root is faster than native E5 on clean B=1 decode throughput. & Table~\ref{tab:results}: 23.8768 versus 18.7962 token-weighted decode tokens/s. & Matched pure-decode GPU timer, probes off, temp-0.6, four SWE/Codex tasks. & +27.0\% decode-only; per-request-equal latency is +4.0\%. \\
+\rowsep
 cat9 and cat6root close within the native recurrent-oracle floor. & Section~\ref{sec:lossless}: 13.28\% and 13.09\% clear-margin flips versus native E5 at 12.90\%. & Each arm is compared with its own no-spec recurrent oracle in the B=1 p-rescore. & Closed for this 40-turn sample; no TV-distance or request-cluster bootstrap yet. \\
+\rowsep
 The measurement discipline is part of the result. & Speed runs disable probes; lossless runs enable oracle capture; token-weighted and per-request views are reported separately. & No mixing of raw prompt probes, oracle capture, B=4 co-residency, or denominator conventions. & Prevents false speed wins and false lossless failures; B=4 remains open. \\
 \bottomrule
 \end{tabular}
@@ -132,9 +140,13 @@ The measurement discipline is part of the result. & Speed runs disable probes; l
 Part & Formal content & Served implementation \\
 \midrule
 Inputs & Prefix state, parent array, candidate ids, sampling state. & vLLM tree packing plus multidraft metadata. \\
+\rowsep
 Attention & Row \(i\) sees prompt tokens and ancestors of \(i\), not siblings. & Forked FA2 adds \code{tree\_bias} before softmax; prefill stays native. \\
+\rowsep
 GDN & \(S_i=\mathrm{GDNStep}(S_{\mathrm{parent}(i)},x_i)\). & Triton GDN tree scan with branch-local \code{h\_cache}. \\
+\rowsep
 Acceptance & Apply the same residual speculative rule as target verification. & Device multidraft commit at temperature 0.6. \\
+\rowsep
 Publication & Only accepted-prefix tokens and their state become durable. & Accepted-chain replay and vLLM state writeback/remap. \\
 \bottomrule
 \end{tabular}
@@ -205,9 +217,13 @@ The recurrent side needed branch-local state and publication discipline. During 
 Surface & Required alignment & Typical failure if isolated \\
 \midrule
 Candidate descriptor & Parent indices, candidate ids, visibility masks, and accepted-path rows match. & A drafter-specific shortcut cannot be replayed into native state. \\
+\rowsep
 FA2 attention & Decode rows see prefix plus ancestors, with prefill left on native FA2. & A correct abstract mask runs on a non-native attention realization. \\
+\rowsep
 GDN scan & Each node loads its parent recurrent state, not the previous packed row. & Sibling rows inherit impossible recurrent histories. \\
+\rowsep
 Committer & The residual speculative rule is applied to the same candidate rows verified by the target. & Accepted tokens are counted against stale or mismatched probabilities. \\
+\rowsep
 Publication & Only the accepted chain is replayed and made durable. & Rejected branch state leaks into the next decode event. \\
 \bottomrule
 \end{tabular}
@@ -308,7 +324,9 @@ Speed and lossless evidence are measured in separate modes. Speed runs disable h
 Arm & Tree & Per-request TPS & Token-weighted TPS & Delta & s/fwd\_gpu & Accept/event \\
 \midrule
 Native E5 & Native 5-step MTP spine & 17.8018 & 18.7962 & baseline & 0.136955 & 3.1122 \\
+\rowsep
 cat9 & 9-node caterpillar: 5-spine + 4 leaves & 18.4366 & 22.6307 & +20.4\% & 0.144030 & 3.6406 \\
+\rowsep
 cat6root & 6-node root branch: 5-spine + root sibling & 18.5056 & 23.8768 & +27.0\% & 0.137719 & 3.8214 \\
 \bottomrule
 \end{tabular}
@@ -335,9 +353,13 @@ The empirical lossless claim in this artifact is closure within the observed nat
 Gate & Checked & Status \\
 \midrule
 Depth-5 p-rescore & E5/cat9/cat6root temp-0.6 recurrent oracle. & Within native floor. \\
+\rowsep
 GDN scan A/B & \(BV16=BV32=0.0\) in controlled scan. & Scan alone is clean. \\
+\rowsep
 Native path oracle & Path-local state versus native decode order. & Core invariant. \\
+\rowsep
 Device committer & Same residual-mix rule on device. & Residual-rule gate. \\
+\rowsep
 Broad cat9 floor & Big-denom deployment consolidation. & Overlapping floor intervals. \\
 \bottomrule
 \end{tabular}
@@ -370,12 +392,19 @@ The failure library explains why the final verifier has its particular contract.
 Route or interpretation & Why it looked plausible & What failed & Paper consequence \\
 \midrule
 Attention-mask-only tree & Tree verification for attention-only LLMs mainly needs ancestry. & GDN rows still carried sibling-contaminated recurrent state. & Attention ancestry is necessary but not sufficient. \\
+\rowsep
 Shared packed recurrent accumulator & Co-resident rows are efficient if packed sequentially. & Packed order is not native branch order, so sibling states leak. & The scan must be parent-indexed and branch-local. \\
+\rowsep
 STree-style state sharing as direct transplant & STree gives the right stateful-tree problem lens. & Algebraic state construction is not the same as matching served bf16/fp8 GDN writeback. & STree is prior work, not the served-realization proof. \\
+\rowsep
 Triton \code{TREE\_ATTN} as proof path & It can express a tree mask. & It is not the same FA2 decode realization as native serving. & The reported path uses a forked FA2 tree-bias decode kernel. \\
+\rowsep
 WY / whole-tree algebra & It could reduce state traffic and expose more parallelism. & Different summation trees and bf16 boundaries are not the native sequential verify oracle. & Kept as future speed work; not the lossless proof route. \\
+\rowsep
 Literal \(0.0\) max-abs as only lossless bar & Bit equality is easy to state. & Native recurrent-oracle comparisons already have a numerical flip floor. & The paper uses within-native-floor p-rescore, not bit-exact intermediate equality. \\
+\rowsep
 cat10 and broad B=4 screens & Wider trees and batching are deployment-relevant. & Contaminated reads violated the expectation that a strict tree superset should not accept fewer spine tokens than native. & Clean B=1 is the mechanism proof; B=4 needs a refreshed carrier-clean run. \\
+\rowsep
 Per-request TPS as headline & It is a latency-friendly summary. & It weights a short shell-tool turn like a long edit turn. & Token-weighted decode TPS is the throughput headline; per-request TPS is a caveat. \\
 \bottomrule
 \end{tabular}
@@ -410,10 +439,15 @@ The shipped cat9 and cat6root arms share one tree-serving configuration. The onl
 Surface & Choice \\
 \midrule
 Tree mode & \code{FR10\_ENABLE\_TREE\_GDN=1}, \code{FR10\_DECODE\_MODE\_DEFAULT=tree\_mtp}. \\
+\rowsep
 Attention & \code{FR13\_FA2\_TREE\_BIAS=1}, \code{FR13\_FA2\_PREFILL\_NATIVE=1}. \\
+\rowsep
 GDN batch variance fix & \code{LUMO\_FB\_KERNEL\_ROWS=1}, \code{LUMO\_FB\_PROJ\_PAD\_ROWS=16}. \\
+\rowsep
 Committer & \code{FR13\_DEVICE\_MULTIDRAFT=1} default-on for tree arms. \\
+\rowsep
 Safety & \code{FR10\_ALLOW\_LINEAR\_FALLBACK} unset. \\
+\rowsep
 Operational B=1 & \code{GPU\_UTIL=0.82}, \code{MAX\_NUM\_SEQS=1}. \\
 \bottomrule
 \end{tabular}
