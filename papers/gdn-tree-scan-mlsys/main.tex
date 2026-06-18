@@ -350,7 +350,49 @@ For a tree node \(i\), the invariant is \(S_i = \mathrm{native\_scan}(\mathrm{to
 \end{algorithmic}
 \end{algorithm}
 
-The kernel keeps a post-state for each padded node in \code{h\_cache}. That table has shape \([N_{\mathrm{PAD}}, BV, DIM_K]\) in fp32, where \(BV\) is the value-channel tile width. This is the main local resource constraint: native-match geometry such as \(BV32\), one warp, and three stages can spill for a full \(N_{\mathrm{PAD}}=16\) tree because the per-node state table becomes too large. The deployed scan uses \(BV16\), eight warps, and pad16 for cat9; cat6root uses the smaller six-node tree and pad8-style shape economics while sharing the same verifier contract.
+The kernel keeps a post-state for each padded node in \code{h\_cache}. That table has shape \([N_{\mathrm{PAD}}, BV, DIM_K]\) in fp32, where \(BV\) is the value-channel tile width. This is the main local resource constraint and the reason the kernel has an explicit tree-size boundary rather than an unbounded tree descriptor.
+
+\subsection{BV, \(N_{\mathrm{PAD}}\), and Spill Boundary}
+
+We write \code{BV16/w8} for a value tile of 16 rows launched with eight Triton warps. The shipped scan locks \code{BV=16} and \code{num\_warps=8}; the native packed-decode geometry audited from the pinned runtime is \(BV=32\), one warp, and three stages. \(N_{\mathrm{PAD}}\) is the next power-of-two span used by the static tree masks and unrolled Triton loops. Thus a six-node cat6root tree occupies pad8, while nine-node cat9 and deeper deployed families occupy pad16; the runtime fails loud for activation rings with \code{n\_pad} greater than 16 \cite{lumo2026artifact}.
+
+The resource model is simple enough to expose. With \(DIM_K=128\), the scan's cached post-state footprint is
+\begin{equation}
+M_h = N_{\mathrm{PAD}}\cdot BV\cdot DIM_K\cdot4\;\mathrm{bytes}.
+\end{equation}
+The corresponding register-pressure estimate for the cache alone is
+\begin{equation}
+R_h \approx \frac{N_{\mathrm{PAD}}\cdot BV\cdot DIM_K}{32W},
+\end{equation}
+where \(W\) is the warp count. This estimate is not a substitute for ptxas, because the working tile and live q/k/v/g/beta values add pressure, but it predicts the failure mode: the full tree cache grows with padded node count, not with batch size.
+
+\begin{table}[t]
+\caption{GDN scan geometry and the pad16 resource boundary.}
+\label{tab:bv-npad}
+\centering
+\scriptsize
+\begin{adjustbox}{width=\columnwidth}
+\begin{tabular}{L{0.27\columnwidth} C{0.15\columnwidth} L{0.25\columnwidth} L{0.25\columnwidth}}
+\toprule
+Geometry & \code{h\_cache} & Resource fact & Role \\
+\midrule
+Native one-node shape \(BV32/w1/s3, N=1\) & 16 KB & No full-tree state table. & Native packed-decode reference shape. \\
+\rowsep
+Full-tree native shape \(BV32/w1/s3, N=16\) & 256 KB & About 2048 cache fp32 values/lane before other live values; catastrophic spill. & Not deployable as a cached tree scan. \\
+\rowsep
+Deployed cat9 scan \(BV16/w8, N=16\) & 128 KB & Measured 254 regs/thread and 0 spill. & Shipped deepest tree-scan geometry. \\
+\rowsep
+cat6root scan \(BV16/w8, N=8\) & 64 KB & Half the cached state of cat9. & Explains near-native verify time with root-sibling gain. \\
+\rowsep
+Future pad32 \(BV16/w8, N=32\) & 256 KB & Register/SRAM hard wall for the cached scan. & Requires recompute or replay-style ancestry. \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+This is why \(BV\) is not a free lossless dial. Shrinking to \(BV=4\) reduces the cache, but it changes the tensor shape from native's \([32,128]\) reduction to \([4,128]\), changes compiler layout and reduction order, and increases the number of value-tile programs. The deployed \(BV16/w8\) point is not chosen because it proves native SASS identity; it is chosen because it is output-bit-exact to the banked scan reference at \(N_{\mathrm{PAD}}=1\) and \(16\), has measured zero spill, and preserves enough tile width for speed. The remaining bit-exactness obligation is against the native packed-decode geometry, which is why the code keeps an explicit diagnostic override and a separate recompute-from-spine route.
+
+The spill boundary applies to the scan, not to publication. The accepted-path replay kernel carries one \([BV,DIM_K]\) state tile and re-executes only the committed chain, so its state footprint is \(O(1)\) in tree size. The recompute-from-spine scan variant uses the same idea for verification: recompute each node's ancestry from the spine instead of caching every node post-state. That route can launch at native \(BV32/w1/s3\), removes the pad16 state-cache wall, and is the right path for trees wider than the current deployed family. Its cost is extra rank-1 replay work, not local-memory spill on the saturated decode bandwidth path.
 
 The scan and replay call the same node-step body. This is the key guard against a verifier that accepts under one recurrence but publishes under another. The body applies the native gate convention, beta's bf16 round trip, q/k normalization by division rather than reciprocal-square-root, output scaling, the rank-1 state update, and the carried-state bf16 boundary after output computation. These numeric seams are not cosmetic. In speculative decoding, a small branch-local numerical difference matters if it changes a clear-margin argmax or a residual sampling decision after many recurrent and attention layers.
 
@@ -498,6 +540,8 @@ Surface & Choice \\
 Tree mode & \code{FR10\_ENABLE\_TREE\_GDN=1}, \code{FR10\_DECODE\_MODE\_DEFAULT=tree\_mtp}. \\
 \rowsep
 Attention & \code{FR13\_FA2\_TREE\_BIAS=1}, \code{FR13\_FA2\_PREFILL\_NATIVE=1}. \\
+\rowsep
+GDN scan geometry & \code{BV=16}, \code{num\_warps=8}, activation-ring \code{n\_pad}\(\leq16\); cat6root uses pad8 and cat9 uses pad16. \\
 \rowsep
 GDN batch variance fix & \code{LUMO\_FB\_KERNEL\_ROWS=1}, \code{LUMO\_FB\_PROJ\_PAD\_ROWS=16}. \\
 \rowsep
