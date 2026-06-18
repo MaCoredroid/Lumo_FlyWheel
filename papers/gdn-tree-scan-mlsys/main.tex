@@ -202,9 +202,32 @@ Figure~\ref{fig:pipeline} shows the served path. The drafter currently uses Qwen
 \label{fig:pipeline}
 \end{figure}
 
-The attention side needed a real FA2 fork. vLLM's generic tree attention path could express an additive ancestry bias through a Triton \code{unified\_attention} route, but that route was not the same realization as native FA2 decode. The forked path adds an fp32 \code{tree\_bias} after the QK score tile and before softmax inside the FA2 varlen decode path, while keeping prefill on native FA2 \cite{dao2023flashattention}. This makes the attention half of tree verification a minimal extension of the native served carrier.
+\subsection{FA2 Tree-Fork}
+
+The attention side needed a real FA2 fork. vLLM's generic tree attention path could express an additive ancestry bias through a Triton \code{unified\_attention} route, but that route was not the same realization as native FA2 decode. The shipped fork leaves stock \code{varlen\_fwd} unchanged and adds a separate \code{varlen\_fwd\_tree\_bias} entry point for decode. For speculative query row \(i\) and speculative key row \(j\), the fork implements
+\begin{equation}
+\ell_{ij} = \mathrm{scale}\, q_i k_j^\top + b_{ij}, \qquad
+b_{ij} =
+\begin{cases}
+0, & j \in \mathrm{ancestors}(i),\\
+-\infty, & \text{otherwise,}
+\end{cases}
+\end{equation}
+with prefix-context columns still visible to every row. The dense fp32 \code{tree\_bias} matrix is passed as \([q,q]\) or batched \([B,q,q]\) metadata and is added after the QK score tile and before FA2 masking and softmax \cite{dao2023flashattention}. Internally the patch maps tile coordinates back to speculative suffix coordinates using \(\mathrm{context\_len}=\mathrm{seqlen}_k-\mathrm{seqlen}_q\) plus explicit query/key offsets, so the bias never applies to prefix columns by accident. The value injected into the FA2 accumulator is scaled so the external semantics are an additive bias on the scaled logits above.
+
+The fork is decode-only by construction. Prefill remains on native FA2, and decode uses the fork only when \code{FR13\_FA2\_TREE\_BIAS=1}, the decode metadata carries a non-empty bias matrix, and \code{max\_query\_len>1}. Empty or disabled tree metadata falls back to the existing vLLM attention path. ALiBi is fail-loud in the tree-bias route because adding two independent positional bias mechanisms would make the served-realization claim ambiguous.
 
 The recurrent side needed branch-local state and publication discipline. During verification, each candidate row computes a GDN post-state from its parent row, not from the previous packed row. During commitment, the accepted chain is replayed in native order before durable state is written back. Rejected rows can influence acceptance decisions, but they must not become future model memory \cite{sglang2026issue25587}.
+
+The descriptor passed through vLLM is intentionally drafter-neutral: parent indices, candidate ids, strict and visible ancestry masks, and accepted-path row ids. The current drafter is Qwen native MTP: the spine comes from the native MTP logits tensor, and runner-up leaves are top-\(k\) reads from the same candidate distribution. The verifier, however, only assumes that those rows have stable parent indices and acceptance probabilities. A suffix drafter, hybrid drafter, or future learned tree can reuse the same verifier if it supplies the same surfaces.
+
+\subsection{MTP Draft Head and Committer}
+
+The shipped drafter does not introduce an auxiliary model. It runs the native causal MTP spine and reads the LM-head logits once per draft step. The argmax of that tensor is the child-rank-0 spine token and is the only token fed back into the next MTP hidden-state step. Off-spine tree nodes are read-only runner-up tokens from the same logits tensor: cat9 reads depth-local top-2 leaves on the interior spine steps, while cat6root reads only the root runner-up and then keeps the rest of the native spine. This is why the root-sibling tree can add a depth-0 alternative without adding a second recurrent trajectory in the drafter. The \code{FR13\_DRAFTER\_SINGLE\_LOGITS} path is load-bearing here: it makes the spine argmax and the runner-up leaf come from the same full-vocabulary logits tensor instead of recomputing the LM head through a second sampling helper.
+
+Partial tree acceptance also changes the next drafter input row. Stock linear MTP samples the next draft from the row at offset \(\mathrm{accepted\_len}\). In a tree, the committed leaf may be a different flat verifier row. The tree path therefore maps the next sampled row to \(\mathrm{base}+\mathrm{accepted\_path}[\mathrm{len}-1]\), or the root row when no draft token was accepted. This \code{FR13\_TREE\_SAMPLE\_ROW} rule prevents the next MTP step from conditioning on a rejected sibling's hidden state after an alternative branch wins.
+
+At temperature 0.6 the committed output is selected by the deployed device multidraft committer, not by a greedy longest-common-prefix shortcut. For each parent, it consumes the target distribution over the node's child draft tokens, computes the SpecInfer-style residual-mix source weights, samples a draft source, accepts with \(\min(1,p/q_{\mathrm{mix}})\), and falls back to the target residual otherwise. The default-on \code{FR13\_DEVICE\_MULTIDRAFT} path moves this per-node decision onto device, eliminating the host \([N_{\mathrm{nodes}}\times |V|]\) softmax transfer and Python per-node loop while preserving the host reference distribution. The older pure-integer greedy GPU committer is only a temperature-0 tuning route; it is not the temperature-0.6 committer used for the reported deployment gate.
 
 \begin{table}[t]
 \caption{Surfaces that must agree on the same tree contract. Most failed routes broke one of these alignments.}
@@ -275,7 +298,7 @@ S'_t &= \exp(g_t) S_{t-1}, \\
 S_t &= S'_t + \Delta_t k_t^\top, \\
 o_t &= S_t q_t.
 \end{align}
-For a tree node \(i\), the invariant is \(S_i = \mathrm{native\_scan}(\mathrm{tokens}(\mathrm{root}\rightarrow i))\). This is simple to state and easy to violate in a packed GPU implementation \cite{yang2024gated}.
+For a tree node \(i\), the invariant is \(S_i = \mathrm{native\_scan}(\mathrm{tokens}(\mathrm{root}\rightarrow i))\). This is simple to state and easy to violate in a packed GPU implementation \cite{yang2024gated}. A linearized tree scan is wrong whenever a branch follows a sibling in memory. If branch node \(b_1\) is a child of root \(n_0\), the required state is \(S_{b_1}=F(S_{n_0},x_{b_1})\), not \(F(S_{n_1},x_{b_1})\) for the previous packed spine node \(n_1\).
 
 \begin{figure}[t]
 \centering
@@ -303,15 +326,49 @@ For a tree node \(i\), the invariant is \(S_i = \mathrm{native\_scan}(\mathrm{to
 \label{fig:gdn}
 \end{figure}
 
+\begin{algorithm}[t]
+\caption{Branch-local GDN scan and publication}
+\label{alg:gdn}
+\scriptsize
+\begin{algorithmic}[1]
+\REQUIRE Prior durable state \(S_0\), tree parent array \(p\), node features \(x_i\), accepted path \(A\)
+\FOR{node \(i\) in topological tree order}
+    \IF{\(p_i\) is root}
+        \STATE \(S_{\mathrm{parent}} \leftarrow S_0\)
+    \ELSE
+        \STATE \(S_{\mathrm{parent}} \leftarrow \code{h\_cache}[p_i]\)
+    \ENDIF
+    \STATE \((o_i,S_i) \leftarrow \mathrm{GDNNodeStep}(S_{\mathrm{parent}},x_i)\)
+    \STATE \(\code{h\_cache}[i] \leftarrow S_i\)
+\ENDFOR
+\STATE Device committer selects accepted node sequence \(A\)
+\STATE \(S \leftarrow S_0\)
+\FOR{node \(i\) in \(A\) in native order}
+    \STATE \((o,S) \leftarrow \mathrm{GDNNodeStep}(S,x_i)\)
+\ENDFOR
+\STATE Publish only replayed \(S\) and the matching convolution state
+\end{algorithmic}
+\end{algorithm}
+
 The kernel keeps a post-state for each padded node in \code{h\_cache}. That table has shape \([N_{\mathrm{PAD}}, BV, DIM_K]\) in fp32, where \(BV\) is the value-channel tile width. This is the main local resource constraint: native-match geometry such as \(BV32\), one warp, and three stages can spill for a full \(N_{\mathrm{PAD}}=16\) tree because the per-node state table becomes too large. The deployed scan uses \(BV16\), eight warps, and pad16 for cat9; cat6root uses the smaller six-node tree and pad8-style shape economics while sharing the same verifier contract.
 
-The numeric seams are also explicit. The scan alignment tracks beta's bf16 round trip, q/k normalization by division rather than reciprocal-square-root, and the carried-state bf16 boundary after output computation. These details are not cosmetic. In speculative decoding, a small branch-local numerical difference matters if it changes a clear-margin argmax or a residual sampling decision after many recurrent and attention layers.
+The scan and replay call the same node-step body. This is the key guard against a verifier that accepts under one recurrence but publishes under another. The body applies the native gate convention, beta's bf16 round trip, q/k normalization by division rather than reciprocal-square-root, output scaling, the rank-1 state update, and the carried-state bf16 boundary after output computation. These numeric seams are not cosmetic. In speculative decoding, a small branch-local numerical difference matters if it changes a clear-margin argmax or a residual sampling decision after many recurrent and attention layers.
+
+The publication path also handles non-attention state. After the device committer chooses a path, the runtime remaps GDN state and convolution state using the accepted node rows, with gather-before-scatter ordering so overlapping source and destination columns cannot race. The convolution prior for the next event is taken from the accepted leaf before remap. This makes the durable state exactly the replayed native-order chain, while rejected rows remain temporary verifier state in \code{h\_cache}.
 
 \section{Experimental Setup}
 
-The target checkpoint is the public Hugging Face model \code{Qwen/Qwen3.6-27B-FP8}, a 64-layer hybrid model whose documented layout has 48 GDN recurrent layers and 16 softmax-attention layers \cite{qwen2026qwen36fp8}. The serving environment mounts it at \code{/models/qwen3.6-27b-fp8} and exposes it as \code{qwen3.6-27b} on GB10. The source-of-truth runtime is a \code{vllm/vllm-openai} image pinned to digest \texttt{sha256:3dbe092ec5b2cef63b6}\allowbreak\texttt{104d33fa75d6ce53a7870962}\allowbreak\texttt{529ada69f78bbbc38e776}, corresponding to vLLM 0.19.2rc1.dev134+gfe9c3d6c5, plus the forked FA2 \code{.so} swap and the boot-time tree-GDN patcher. The clean B=1 tree arms use the forked FA2 tree-server launcher; cat9 also has a locked wrapper, native E5 uses the native speed launcher, and the B=1 deploy wrapper pins \code{GPU\_UTIL=0.82}, \code{MAX\_NUM\_SEQS=1}, and \code{MAX\_MODEL\_LEN=131072}. The receipts pin the mounted model path and runtime image but not the immutable Hugging Face revision hash downloaded into that mount; exact reproduction should record that revision at artifact packaging time. The workload is four SWE/Codex tasks in clean B=1 mode, temperature 0.6, with true sequential windows and \code{num\_running} near zero.
+The target checkpoint is the public Hugging Face model \code{Qwen/Qwen3.6-27B-FP8}, a 64-layer hybrid model whose documented layout has 48 GDN recurrent layers and 16 softmax-attention layers \cite{qwen2026qwen36fp8}. The serving environment mounts it at \code{/models/qwen3.6-27b-fp8} and exposes it as \code{qwen3.6-27b} on GB10. The source-of-truth runtime is a \code{vllm/vllm-openai} image pinned to digest \texttt{sha256:3dbe092ec5b2cef63b6}\allowbreak\texttt{104d33fa75d6ce53a7870962}\allowbreak\texttt{529ada69f78bbbc38e776}, corresponding to vLLM 0.19.2rc1.dev134+gfe9c3d6c5, plus the forked FA2 \code{.so} swap and the boot-time tree-GDN patcher. The clean B=1 tree arms use the forked FA2 tree-server launcher; cat9 also has a locked wrapper, native E5 uses the native speed launcher, and the B=1 deploy wrapper pins \code{GPU\_UTIL=0.82}, \code{MAX\_NUM\_SEQS=1}, \code{MAX\_MODEL\_LEN=131072}, and \code{FR13\_DEVICE\_MULTIDRAFT=1}. The receipts pin the mounted model path and runtime image but not the immutable Hugging Face revision hash downloaded into that mount; exact reproduction should record that revision at artifact packaging time. The workload is four SWE/Codex tasks in clean B=1 mode, temperature 0.6, with true sequential windows and \code{num\_running} near zero.
 
 Speed and lossless evidence are measured in separate modes. Speed runs disable heavy capture/oracle probes; lossless runs enable recurrent-oracle capture and p-rescore. This separation is not bookkeeping. Several earlier readings were confounded by raw prompt probes, B=4 co-residency, instrumentation overhead, or denominator mistakes, so the final result reports token-weighted decode throughput, per-request latency, lossless p-rescore, and end-to-end wall caveats as different measurements.
+
+\subsection{Speed and Lossless Infrastructure}
+
+The final gate uses the deployment regime, not the earlier raw-prompt microbench regime. The raw \code{/v1/completions} probes were useful for kernel debugging, but they produced off-distribution \code{<think></think>} loops and cross-boot trajectory forks that made accept/event non-comparable. The final runs use the SWE/Codex agent loop through the deployment proxy and bracket vLLM metrics per task. Engagement is fail-loud: native E5 must show five draft tokens per draft event, a tree arm must show \(|T|\), and tree metadata must carry parent indices and accepted-path rows.
+
+Speed mode is instrumentation-off except for low-overhead counters. It records raw vLLM deltas for decode seconds, draft events, accepted draft tokens, and generated tokens. When the pure-decode GPU timer is armed, \code{FR13\_SFWD\_GPU\_TIMER} records asynchronous CUDA events around model forward only on uniform decode steps; it excludes prefill and mixed prefill+decode steps and drains completed events without per-step synchronization. Optional \code{FR13\_DFWD\_GPU\_TIMER} and \code{FR13\_CFWD\_GPU\_TIMER} sidecars attribute drafter and committer spans, but these attribution timers are not substitutes for the deployment-speed gate.
+
+Lossless mode is instrumentation-on and intentionally not used for speed. The proxy pair-dump is converted back to a served-token source stream, and \code{fr13\_recurrent\_decode\_oracle.py} rescoring runs each arm's own no-spec recurrent decode path with speculative configuration disabled. This corrected an earlier oracle-frame mistake: chunked re-prefill is not the same as single-step recurrent decode for this hybrid target. The p-rescore then compares the served stream against the arm-local recurrent oracle and counts clear-margin argmax flips. That is why the paper reports a within-native-floor lossless gate, not a bit-exact trace claim and not a speed number from an oracle-enabled boot.
 
 \begin{table*}[t]
 \caption{Clean B=1 decode result. Throughput delta is token-weighted decode TPS relative to native E5.}
