@@ -1527,6 +1527,8 @@
         <div class="grid">
           <div class="box info"><span class="tag">SpecInfer / Sequoia</span><p>Candidate trees and verifier acceptance transfer. Recurrent-state publication inside a served hybrid model is outside their main proof surface.</p></div>
           <div class="box info"><span class="tag">STree</span><p>The stateful-tree framing transfers. The missing gate is native served realization under branch co-residency, fp8/bf16 codegen, and vLLM writeback.</p></div>
+          <div class="box info"><span class="tag">SpecMamba / SGLang</span><p>They identify the same SSM-state rollback and tree-verification incompatibility. Their solutions target FPGA dataflow or SGLang cache slots; this page targets a fused GPU/vLLM realization.</p></div>
+          <div class="box info"><span class="tag">Hybrid self-spec</span><p>Component-aware drafting on Falcon-H1/Qwen3.5 shows hybrid architecture matters, and explicitly leaves fused CUDA, batched verification, and cache sharing as the systems gap.</p></div>
           <div class="box good"><span class="tag">This work</span><p>The contribution is a native-compatible verifier path: FA2 tree bias, branch-local GDN scan, accepted-chain replay, and deployment evidence.</p></div>
         </div>
       </div>
@@ -1540,6 +1542,7 @@
       </aside>
       <p>Tree speculative decoding is well studied for Transformer-style attention stacks. <a href="https://arxiv.org/abs/2305.09781">SpecInfer</a> introduced tree-based speculative inference and parallel verification while preserving model quality. <a href="https://arxiv.org/abs/2402.12374">Sequoia</a> made the tree shape hardware-aware. <a href="https://arxiv.org/html/2406.16858v1">EAGLE-2</a> uses context-aware dynamic draft trees while keeping the output distribution unchanged. <a href="https://arxiv.org/html/2406.17276v2">OPT-Tree</a> frames the tree shape as an acceptance-versus-overhead optimization problem.</p>
       <p>The closest prior work for this project is <a href="https://arxiv.org/abs/2505.14969">STree</a>, which studies speculative tree decoding for state-space and hybrid models by exploiting accumulated state-transition structure. The key difference is the realization contract. For this vLLM/Qwen target, it is not enough to say that the algebraic state for a tree exists. The served verifier must reproduce native-path semantics through fp8/bf16 kernels, branch co-residency, durable state writeback, and rejection sampling.</p>
+      <p>Recent hybrid/SSM serving work sharpens the same boundary. <a href="https://arxiv.org/pdf/2509.19873">SpecMamba</a> names hidden-state backtracking, tree-verification incompatibility, and draft/target workload mismatch as the core obstacles for Mamba speculative decoding, then solves them in an FPGA setting with FIFO-based tree verification and hardware dataflow. <a href="https://arxiv.org/html/2605.01106v1">Component-Aware Self-Speculative Decoding in Hybrid Language Models</a> evaluates Falcon-H1 and Qwen3.5, showing that hybrid integration pattern determines whether an internal SSM/linear-attention drafter is viable; its implementation section explicitly leaves fused CUDA kernels, batched verification, and cache sharing as needed systems work. <a href="https://pytorch.org/blog/hybrid-models-meet-sglang-more-than-full-attention/">SGLang's hybrid-model production writeup</a> frames the operational issue similarly: SSM state updates are in-place, rejected tokens cannot be rolled back like KV cache, and EAGLE-tree attention masks do not by themselves maintain SSM state.</p>
 
       <div class="table-wrap">
         <table>
@@ -1564,6 +1567,24 @@
               <td>Stateful models need tree-aware state construction, not only tree attention.</td>
               <td>Accumulated transition sharing is not the same as matching the native served GDN kernel under bf16 state boundaries, branch co-residency, and vLLM writeback.</td>
               <td>We implement a GDN scan/replay kernel whose invariant is path-local native recurrence, then gate it against native/deployment oracles.</td>
+            </tr>
+            <tr>
+              <td>SpecMamba</td>
+              <td>Names the same Mamba/SSM obstacles: hidden-state backtracking, tree verification under sequential state, and draft/target workload mismatch.</td>
+              <td>Its solution is an FPGA accelerator with FIFO-based tree verification and hardware-specific dataflow, not a served GPU/vLLM path for Qwen GDN.</td>
+              <td>We use the problem framing, but our differentiator is fused GPU kernels, FA2/vLLM compatibility, and deployment-mode lossless gates.</td>
+            </tr>
+            <tr>
+              <td>Component-aware self-speculative decoding</td>
+              <td>Shows that hybrid component structure matters and evaluates Falcon-H1 and Qwen3.5 as distinct hybrid families.</td>
+              <td>The paper reports a research Python implementation and calls out fused CUDA, batched verification, and proper cache sharing as missing for realized speed.</td>
+              <td>We address that systems gap for a Qwen GDN served path: fused scan/replay kernel, tree verification, and vLLM state publication.</td>
+            </tr>
+            <tr>
+              <td>SGLang hybrid serving</td>
+              <td>Production framing for hybrid models: in-place SSM states need cache/state handling separate from ordinary KV cache.</td>
+              <td>Private cache slots and parent-index tracing solve the issue in SGLang's stack; they do not prove vLLM/FA2/GDN served equivalence.</td>
+              <td>We implement the analogous invariant in the vLLM path and document the FA2, GDN, replay, and committer gates.</td>
             </tr>
             <tr>
               <td>vLLM / SGLang speculative serving</td>
@@ -2937,6 +2958,9 @@ else:
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SCAN_BITEXACT_SRAM_NPAD_VERDICT_BIND.md">Scan/SRAM/N_PAD verdict</a> - native geometry, spill, and recompute tradeoffs.</li>
         <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_NODE5_LADDER_DIFFUSE_BIND.md">Node-5 ladder verdict</a> - diffuse GDN accumulation and the reason literal-zero chasing was not the right bar.</li>
         <li><a href="https://arxiv.org/abs/2305.09781">SpecInfer</a>, <a href="https://arxiv.org/abs/2402.12374">Sequoia</a>, <a href="https://arxiv.org/html/2406.16858v1">EAGLE-2</a>, <a href="https://arxiv.org/html/2406.17276v2">OPT-Tree</a>, and <a href="https://arxiv.org/abs/2505.14969">STree</a> - prior work context for tree speculative decoding.</li>
+        <li><a href="https://arxiv.org/pdf/2509.19873">SpecMamba</a> - newer Mamba speculative-decoding context for hidden-state backtracking, tree-verification incompatibility, and FIFO-based FPGA verification.</li>
+        <li><a href="https://arxiv.org/html/2605.01106v1">Component-Aware Self-Speculative Decoding in Hybrid Language Models</a> - hybrid self-spec context for Falcon-H1/Qwen3.5 and the remaining fused-CUDA, batched-verification, and cache-sharing systems gap.</li>
+        <li><a href="https://pytorch.org/blog/hybrid-models-meet-sglang-more-than-full-attention/">Hybrid Models Meet SGLang</a> - production serving context for in-place SSM state, private cache slots, parent indices, and why attention masks alone do not solve hybrid tree verification.</li>
           </ul>
         </div>
       </details>
