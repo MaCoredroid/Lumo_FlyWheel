@@ -35,13 +35,13 @@
 
 \author{
     \IEEEauthorblockN{Anonymous Authors}
-    \IEEEauthorblockA{MLSys-oriented artifact draft derived from the Lumo FlyWheel Volume III blueprint}
+    \IEEEauthorblockA{Anonymous Institution}
 }
 
 \maketitle
 
 \begin{abstract}
-Speculative decoding with token trees is well understood for attention-only targets, but recurrent hybrid language models add a second correctness boundary: each candidate branch must carry the recurrent state that native sequential decoding would have produced on that branch. We present \sys, a served target verifier for Qwen 3.6-27B-FP8 inside vLLM. The verifier combines a forked FlashAttention-2 decode path with tree ancestry bias, a branch-local Triton Gated-DeltaNet scan/replay kernel, device-side multidraft commitment, and explicit durable-state publication rules. The claim is scoped: lossless means distribution-preserving within the native recurrent-oracle numerical floor, not bit-identical equality at every intermediate tensor. On a clean B=1, temperature-0.6, four-task SWE/Codex deployment trace, the six-node root-branch tree reaches 23.88 token-weighted decode tokens/s versus 18.80 for native E5, a 27.0\% decode-throughput gain. The same run is only 4.0\% faster under a per-request-equal latency view, and end-to-end task wall time remains prefill-heavy. We report the verifier contract, implementation seams, evidence gates, and failed routes that define this scoped systems result.
+Speculative decoding with token trees is well understood for attention-only targets, but recurrent hybrid language models add a second correctness boundary: each candidate branch must carry the recurrent state that native sequential decoding would have produced on that branch. We present \sys, a served target verifier for Qwen 3.6-27B-FP8 inside vLLM. The verifier combines a forked FlashAttention-2 decode path with tree ancestry bias, a branch-local Triton Gated-DeltaNet scan/replay kernel, device-side multidraft commitment, and explicit durable-state publication rules. The evidence boundary is narrow: the current lossless gate is a sampled clear-margin p-rescore that closes within the observed native recurrent-oracle flip floor, not a full distribution-distance or request-cluster-bootstrap proof. In that same clean B=1, temperature-0.6, four-task SWE/Codex gate, the six-node root-branch tree reaches 23.88 token-weighted decode tokens/s versus 18.80 for native E5, a 27.0\% decode-throughput gain. The same run is only 4.0\% faster under a per-request-equal latency view, and end-to-end task wall time remains prefill-heavy. We report the verifier contract, implementation seams, evidence gates, and failed routes that define this scoped decode-throughput result.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -54,15 +54,15 @@ Speculative decoding accelerates autoregressive generation by drafting candidate
 
 Recurrent hybrid models break that simplification. Qwen 3.6-style hybrid stacks contain many Gated-DeltaNet (GDN) recurrent layers in addition to softmax-attention layers, so a valid tree row needs two path-local facts: attention ancestry and recurrent state lineage \cite{yang2024gated,lumo2026gdnpage}. The verifier must ensure that a node's GDN state equals the state native sequential decode would have produced along that node's root-to-node path. If sibling rows share a packed recurrent accumulator, a correct attention mask can still verify tokens from an impossible recurrent history \cite{lumo2026kernel,lumo2026realTensorDerisk}.
 
-This paper converts the live Lumo FlyWheel Volume III systems page into a compact MLSys-oriented LaTeX artifact \cite{lumo2026gdnpage}. The contribution is not ``tree speculative decoding'' in the abstract. It is served-realization equivalence for a recurrent hybrid target inside vLLM: forked FlashAttention-2 (FA2) tree bias for attention, branch-local GDN scan and accepted-chain replay for recurrence, and vLLM state publication that makes rejected branch state non-durable \cite{dao2023flashattention,kwon2023efficient,lumo2026fa2patch,lumo2026kernel}.
+This paper reports a served verifier for a recurrent hybrid target inside vLLM. The contribution is not ``tree speculative decoding'' in the abstract. It is served-realization equivalence as an implementation target: forked FlashAttention-2 (FA2) tree bias for attention, branch-local GDN scan and accepted-chain replay for recurrence, and vLLM state publication that makes rejected branch state non-durable \cite{dao2023flashattention,kwon2023efficient,lumo2026fa2patch,lumo2026kernel}.
 
-The measured result is deliberately narrow. In a clean B=1, temperature-0.6 deployment trace over four SWE/Codex tasks, cat6root, a six-node tree with a depth-5 native spine plus one root sibling, reaches 23.8768 token-weighted decode tokens/s versus 18.7962 for native E5, a 27.0\% decode-throughput gain \cite{lumo2026deploytps,lumo2026speedraw}. The per-request-equal latency view is 18.5056 versus 17.8018 tokens/s, or +4.0\%; this is useful but underweights long decode turns where most generated tokens occur \cite{lumo2026requestanatomy}. Both cat6root and cat9 close within the native recurrent-oracle floor in a 40-turn B=1 p-rescore, but request-level bootstrap, more seeds, B=4, and Stage D timing remain open gates \cite{lumo2026lossless,lumo2026staged}.
+The measured result is deliberately narrow. In a clean B=1, temperature-0.6 deployment trace over four SWE/Codex tasks, cat6root, a six-node tree with a depth-5 native spine plus one root sibling, reaches 23.8768 token-weighted decode tokens/s versus 18.7962 for native E5, a 27.0\% decode-throughput gain \cite{lumo2026deploytps,lumo2026speedraw}. The per-request-equal latency view is 18.5056 versus 17.8018 tokens/s, or +4.0\%; this is useful but underweights long decode turns where most generated tokens occur \cite{lumo2026requestanatomy}. Both cat6root and cat9 close within the observed native recurrent-oracle flip floor in a 40-turn B=1 p-rescore, but full distribution-distance evidence, request-level bootstrap, more seeds, B=4, and Stage D timing remain open gates \cite{lumo2026lossless,lumo2026staged}.
 
 The paper makes three concrete contributions:
 \begin{itemize}[leftmargin=*,noitemsep]
     \item A served verifier contract for recurrent hybrid token trees: attention ancestry, path-local GDN state, SpecInfer-style residual commitment, and accepted-chain-only durable publication.
     \item A vLLM/FA2/GDN implementation path that preserves native serving machinery where possible and adds tree-specific state only at explicit seams.
-    \item An evidence ledger that separates clean B=1 decode throughput, per-request latency, lossless p-rescore, end-to-end wall caveats, and contaminated or still-open measurements.
+    \item An evidence ledger that separates clean B=1 decode throughput, per-request latency, recurrent-oracle p-rescore, end-to-end wall caveats, and contaminated or still-open measurements.
 \end{itemize}
 
 \section{Background and Related Work}
@@ -89,7 +89,7 @@ SpecInfer, Sequoia, EAGLE-2, OPT-Tree & Candidate trees, verifier acceptance, dy
 STree & Stateful models need tree-aware state construction \cite{wu2025stree}. & Algebraic state sharing is not the same as matching native served GDN under bf16/fp8 and vLLM writeback. & A GDN scan/replay kernel gated against native/deployment oracles. \\
 SpecMamba & Hidden-state backtracking and tree verification are first-class SSM obstacles \cite{zhong2025specmamba}. & FPGA dataflow and FIFO verification are not a served GPU/vLLM path for Qwen GDN. & Fused GPU kernels, FA2/vLLM compatibility, and deployment gates. \\
 Component-aware self-speculation & Hybrid component structure determines speculative viability \cite{borobia2026component}. & Research Python implementation leaves fused CUDA, batched verification, and cache sharing as systems gaps. & A fused served path for Qwen GDN tree verification. \\
-SGLang hybrid serving & Adjacent production mechanisms: dual memory pools, MambaRadixCache, parent tracing, MTP/EAGLE surfaces \cite{pytorch2025sglang,sglang2026qwen,sglang2026specdocs}. & Cache/scheduler-layer mechanisms are not directly comparable to this fused vLLM GDN tree-scan kernel. & A different layer of realization: vLLM + forked FA2 tree bias + branch-local GDN scan/replay + distribution-preserving gates. \\
+SGLang hybrid serving & Adjacent production mechanisms: dual memory pools, MambaRadixCache, parent tracing, MTP/EAGLE surfaces \cite{pytorch2025sglang,sglang2026qwen,sglang2026specdocs}. & Cache/scheduler-layer mechanisms are not directly comparable to this fused vLLM GDN tree-scan kernel. & A different layer of realization: vLLM + forked FA2 tree bias + branch-local GDN scan/replay + observed recurrent-oracle gates. \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -97,7 +97,7 @@ SGLang hybrid serving & Adjacent production mechanisms: dual memory pools, Mamba
 
 \section{Verifier Contract}
 
-\sys{} verifies an arbitrary candidate tree, not only the native MTP drafter used in the current artifact. The input contract is a prefix state, a parent array, candidate token ids, and sampling state. The output contract is stronger: after verification and commitment, the next served decode event must start from the same observable token prefix and recurrent state that native sequential decode would have reached on the accepted tokens, up to the native recurrent-oracle numerical floor \cite{lumo2026gdnpage,lumo2026lossless}.
+\sys{} verifies an arbitrary candidate tree, not only the native MTP drafter used in the current implementation. The input contract is a prefix state, a parent array, candidate token ids, and sampling state. The output contract is stronger: after verification and commitment, the next served decode event must start from the same observable token prefix and recurrent state that native sequential decode would have reached on the accepted tokens, up to the observed native recurrent-oracle numerical floor \cite{lumo2026gdnpage,lumo2026lossless}.
 
 \begin{table}[t]
 \caption{Engineering form of the accepted-state verifier contract.}
@@ -119,7 +119,7 @@ Publication & Only accepted-prefix tokens and their state become durable. & Acce
 \end{adjustbox}
 \end{table}
 
-The contract can be summarized as an engineering theorem. Assume the tree contains only candidate ids and parent links; attention rows see only prefix plus ancestors; every GDN row is computed from its parent row's recurrent state; the committer applies the same residual rule as the target verifier; and durable state is replayed or published only for the accepted chain. Then the next served decode event is observationally equivalent to native sequential decode on the accepted prefix, within the native recurrent-oracle floor \cite{miao2023specinfer,lumo2026lossless,lumo2026kernel}.
+The contract can be summarized as an engineering invariant. Assume the tree contains only candidate ids and parent links; attention rows see only prefix plus ancestors; every GDN row is computed from its parent row's recurrent state; the committer applies the same residual rule as the target verifier; and durable state is replayed or published only for the accepted chain. Then the next served decode event has the same intended token-prefix and recurrent-state boundary as native sequential decode on the accepted prefix. The current evidence checks this boundary through recurrent-oracle p-rescore and targeted scan/replay gates rather than through a full distribution-distance proof \cite{miao2023specinfer,lumo2026lossless,lumo2026kernel}.
 
 \begin{algorithm}[t]
 \caption{Tree verification on a recurrent hybrid target}
@@ -251,7 +251,7 @@ The numeric seams are also explicit. The scan-alignment notes track beta's bf16 
 
 \section{Experimental Setup}
 
-The reported experiment uses Qwen 3.6-27B-FP8, a hybrid model with 48 GDN recurrent layers and 16 softmax-attention layers, served through vLLM 0.19.x on GB10 \cite{lumo2026gdnpage,lumo2026config}. Tree mode uses the forked FA2 tree-bias decode path, the GDN tree scan/replay route, and the device multidraft committer. The workload is four SWE/Codex tasks in clean B=1 mode, temperature 0.6, with true sequential windows and \code{num\_running} near zero \cite{lumo2026deploytps,lumo2026requestanatomy}.
+The reported experiment uses Qwen 3.6-27B-FP8, a hybrid model with 48 GDN recurrent layers and 16 softmax-attention layers, served from \code{/models/qwen3.6-27b-fp8} as \code{qwen3.6-27b} on GB10 \cite{lumo2026gdnpage,qwen2025next}. The source-of-truth runtime is a \code{vllm/vllm-openai} image pinned to digest \texttt{sha256:3dbe092ec5b2cef63b6}\allowbreak\texttt{104d33fa75d6ce53a7870962}\allowbreak\texttt{529ada69f78bbbc38e776}, corresponding to vLLM 0.19.2rc1.dev134+gfe9c3d6c5, plus the forked FA2 \code{.so} swap and the boot-time tree-GDN patcher \cite{lumo2026vllmsot,lumo2026forkedlauncher}. The clean B=1 tree arms use the forked FA2 tree-server launcher; cat9 also has a locked wrapper, native E5 uses the native speed launcher, and the B=1 deploy wrapper pins \code{GPU\_UTIL=0.82}, \code{MAX\_NUM\_SEQS=1}, and \code{MAX\_MODEL\_LEN=131072} \cite{lumo2026config,lumo2026speedlauncher}. The receipts pin the mounted model path but not an immutable upstream model snapshot hash; that remains a packaging requirement before submission. The workload is four SWE/Codex tasks in clean B=1 mode, temperature 0.6, with true sequential windows and \code{num\_running} near zero \cite{lumo2026deploytps,lumo2026requestanatomy}.
 
 Speed and lossless evidence are measured in separate modes. Speed runs disable heavy capture/oracle probes; lossless runs enable recurrent-oracle capture and p-rescore \cite{lumo2026measure,lumo2026lossless}. This separation is not bookkeeping. Several earlier readings were confounded by raw prompt probes, B=4 co-residency, instrumentation overhead, or denominator mistakes, so the final result reports token-weighted decode throughput, per-request latency, lossless p-rescore, and end-to-end wall caveats as different measurements \cite{lumo2026deploytps,lumo2026b4contam}.
 
@@ -279,7 +279,7 @@ The request anatomy explains why these metrics differ. In the cat6root B=1 trace
 
 \section{Lossless Evidence and Measurement Discipline}
 
-The formal claim is distribution-preserving within the native recurrent-oracle floor. The exact B=1 depth-5 p-rescore compares each arm against its own no-spec recurrent oracle under temperature 0.6. Native E5 has 630 clear-margin flips over 4,883 positions, or 12.90\%; cat9 has 645 over 4,858, or 13.28\%; cat6root has about 636 over about 4,860, or 13.09\% \cite{lumo2026lossless}. Both tree arms are within the native E5 floor by less than one position-level standard error.
+The empirical lossless claim in this artifact is closure within the observed native recurrent-oracle flip floor. The exact B=1 depth-5 p-rescore compares each arm against its own no-spec recurrent oracle under temperature 0.6. Native E5 has 630 clear-margin flips over 4,883 positions, or 12.90\%; cat9 has 645 over 4,858, or 13.28\%; cat6root has about 636 over about 4,860, or 13.09\% \cite{lumo2026lossless}. Both tree arms are within the native E5 floor by less than one position-level standard error, but this is not a TV-distance estimate and not a request-cluster bootstrap.
 
 \begin{table}[t]
 \caption{Lossless closure gates and interpretation.}
@@ -294,14 +294,14 @@ Gate & Checked & Status \\
 Depth-5 p-rescore & E5/cat9/cat6root temp-0.6 recurrent oracle. & Within native floor \cite{lumo2026lossless}. \\
 GDN scan A/B & \(BV16=BV32=0.0\) in controlled scan. & Scan alone is clean \cite{lumo2026scanverdict}. \\
 Native path oracle & Path-local state versus native decode order. & Core invariant \cite{lumo2026kernel}. \\
-Device committer & Same residual-mix rule on device. & Distribution-lossless \cite{lumo2026devicecommit}. \\
+Device committer & Same residual-mix rule on device. & Residual-rule gate \cite{lumo2026devicecommit}. \\
 Broad cat9 floor & Big-denom deployment consolidation. & Overlapping floor intervals \cite{lumo2026lossless}. \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
 \end{table}
 
-The statistical caveat matters. The p-rescore sample has roughly 4.9k positions per arm, but positions inside one SWE/Codex turn are correlated. The HTML blueprint therefore treats the current result as clean B=1 closure for the sample, not as a universal guarantee across all seeds, batch sizes, or prompt distributions \cite{lumo2026lossless,lumo2026gdnpage}. Request-level bootstrap and additional seeds are natural follow-up gates.
+The statistical caveat matters. The p-rescore sample has roughly 4.9k positions per arm, but positions inside one SWE/Codex turn are correlated. The result is therefore clean B=1 closure for the observed sample, not a universal guarantee across all seeds, batch sizes, or prompt distributions \cite{lumo2026lossless,lumo2026gdnpage}. Request-cluster bootstrap, additional seeds, and full distribution-distance measurements are follow-up gates.
 
 The measurement infrastructure is part of the contribution because it prevented false wins and false losses. The canonical formulas are:
 \begin{align}
@@ -336,7 +336,7 @@ Surface & Choice \\
 Tree mode & \code{FR10\_ENABLE\_TREE\_GDN=1}, \code{FR10\_DECODE\_MODE\_DEFAULT=tree\_mtp}. \\
 Attention & \code{FR13\_FA2\_TREE\_BIAS=1}, \code{FR13\_FA2\_PREFILL\_NATIVE=1}. \\
 GDN batch variance fix & \code{LUMO\_FB\_KERNEL\_ROWS=1}, \code{LUMO\_FB\_PROJ\_PAD\_ROWS=16}. \\
-Committer & \code{FR13\_DEVICE\_MULTIDRAFT} default-on for tree arms. \\
+Committer & \code{FR13\_DEVICE\_MULTIDRAFT=1} default-on for tree arms. \\
 Safety & \code{FR10\_ALLOW\_LINEAR\_FALLBACK} unset. \\
 Operational B=1 & \code{GPU\_UTIL=0.82}, \code{MAX\_NUM\_SEQS=1}. \\
 \bottomrule
@@ -344,15 +344,15 @@ Operational B=1 & \code{GPU\_UTIL=0.82}, \code{MAX\_NUM\_SEQS=1}. \\
 \end{adjustbox}
 \end{table}
 
-Some flags remain explicit on purpose. The FA2 tree-bias and native-prefill flags are default-off in the patcher to preserve patch idempotency anchors; baking them would require a separate re-patch verification task \cite{lumo2026config,lumo2026bakeflags}. The fixed-row in-projection pad should not be baked globally because it can perturb native E5 bytes, which define the lossless baseline \cite{lumo2026bakeflags}.
+The committer row follows the later bake addendum: the older canonical-config catalog still lists \code{FR13\_DEVICE\_MULTIDRAFT} as diagnostic/off, while the addendum records that it was baked default-on for tree arms after verifying that native E5 does not read the tree committer gate \cite{lumo2026config,lumo2026bakeflags}. Some flags remain explicit on purpose. The FA2 tree-bias and native-prefill flags are default-off in the patcher to preserve patch idempotency anchors; baking them would require a separate re-patch verification task \cite{lumo2026config,lumo2026bakeflags}. The fixed-row in-projection pad should not be baked globally because it can perturb native E5 bytes, which define the recurrent-oracle baseline \cite{lumo2026bakeflags}.
 
 \section{Conclusion}
 
-\sys{} turns a token tree into a served verifier for a recurrent hybrid language model by treating recurrent state as part of the tree contract. Attention ancestry is necessary, but not sufficient. The shipped path adds FA2 tree bias for softmax layers, branch-local GDN scan/replay for recurrent layers, and accepted-chain-only state publication for vLLM. Under the clean B=1 deployment gate, cat6root improves token-weighted decode throughput by 27.0\% while closing within the native recurrent-oracle floor \cite{lumo2026deploytps,lumo2026lossless}. The result should be read with its caveats attached: decode-only, B=1, 40-turn p-rescore, prefill-heavy workload, and open B=4/Stage D follow-up.
+\sys{} turns a token tree into a served verifier for a recurrent hybrid language model by treating recurrent state as part of the tree contract. Attention ancestry is necessary, but not sufficient. The shipped path adds FA2 tree bias for softmax layers, branch-local GDN scan/replay for recurrent layers, and accepted-chain-only state publication for vLLM. Under the clean B=1 deployment gate, cat6root improves token-weighted decode throughput by 27.0\% while closing within the observed native recurrent-oracle flip floor \cite{lumo2026deploytps,lumo2026lossless}. The result should be read with its caveats attached: decode-only, B=1, 40-turn p-rescore, no request-cluster bootstrap, no full distribution-distance estimate, prefill-heavy workload, and open B=4/Stage D follow-up.
 
 \section*{Artifact and Source Trail}
 
-The source blueprint is the live GitHub Pages paper, fetched and byte-matched to the local \code{gh-pages} worktree on June 18, 2026 \cite{lumo2026gdnpage}. The main source receipts are the deployed TPS correction, B=1 lossless verdict, request anatomy, Stage D localization, FA2 fork correction, GDN tree kernel, vLLM tree wiring patch, device multidraft committer, measurement harness, and canonical config ledger \cite{lumo2026deploytps,lumo2026lossless,lumo2026requestanatomy,lumo2026staged,lumo2026fa2correction,lumo2026kernel,lumo2026vllmpatch,lumo2026devicecommit,lumo2026measure,lumo2026config}.
+The source blueprint is the live GitHub Pages paper, fetched and byte-matched to the local \code{gh-pages} worktree on June 18, 2026 \cite{lumo2026gdnpage}. This provenance is intentionally separated from the main technical framing. The main source receipts are the deployed TPS correction, B=1 lossless verdict, request anatomy, Stage D localization, vLLM source-of-truth ledger, launchers, FA2 fork correction, GDN tree kernel, vLLM tree wiring patch, device multidraft committer, measurement harness, canonical config ledger, and bake addendum \cite{lumo2026deploytps,lumo2026lossless,lumo2026requestanatomy,lumo2026staged,lumo2026vllmsot,lumo2026forkedlauncher,lumo2026speedlauncher,lumo2026fa2correction,lumo2026kernel,lumo2026vllmpatch,lumo2026devicecommit,lumo2026measure,lumo2026config,lumo2026bakeflags}.
 
 \label{ReferencesStart}
 \bibliographystyle{ieeetr}

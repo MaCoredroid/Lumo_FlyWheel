@@ -30,12 +30,12 @@ S.~Yang, J.~Kautz, and A.~Hatamizadeh, ``Gated delta networks: Improving mamba2
 
 \bibitem{lumo2026kernel}
 {Lumo FlyWheel Contributors}, ``{GDN tree-scan kernel source}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py},
   2026.
 
 \bibitem{lumo2026realTensorDerisk}
 {Lumo FlyWheel Contributors}, ``{FR10 phase-4 real-tensor de-risk}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/docs/reports/auto_research/fr10-phase4-real-tensor-derisk-20260603.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/docs/reports/auto_research/fr10-phase4-real-tensor-derisk-20260603.md},
   2026.
 
 \bibitem{dao2023flashattention}
@@ -49,35 +49,35 @@ W.~Kwon, Z.~Li, S.~Zhuang, Y.~Sheng, L.~Zheng, C.~H. Yu, J.~E. Gonzalez,
 
 \bibitem{lumo2026fa2patch}
 {Lumo FlyWheel Contributors}, ``{FA2 tree-bias patch source}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_patch_fa2_tree_bias.py},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/scripts/fr13_patch_fa2_tree_bias.py},
   2026.
 
 \bibitem{lumo2026deploytps}
 {Lumo FlyWheel Contributors}, ``{FR13: cat6 deploy decode-throughput is +27\%,
   not +4\%}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/deploy_tps_resolved_plus27.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/research/fr13_workflows/deploy_tps_resolved_plus27.md},
   2026.
 
 \bibitem{lumo2026speedraw}
 {Lumo FlyWheel Contributors}, ``{B=1 depth-5 speed verdict raw JSON}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/b1_depth5_speed_verdict.raw.json},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/research/fr13_workflows/b1_depth5_speed_verdict.raw.json},
   2026.
 
 \bibitem{lumo2026requestanatomy}
 {Lumo FlyWheel Contributors}, ``{FR13: anatomy of the Codex plus SWE-Verified
   request stream}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/codex_swe_request_anatomy.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/research/fr13_workflows/codex_swe_request_anatomy.md},
   2026.
 
 \bibitem{lumo2026lossless}
 {Lumo FlyWheel Contributors}, ``{FR13 B=1 depth-5 lossless verdict}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/b1_depth5_lossless_verdict.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/research/fr13_workflows/b1_depth5_lossless_verdict.md},
   2026.
 
 \bibitem{lumo2026staged}
 {Lumo FlyWheel Contributors}, ``{FR13 Stage D: localize cat6-vs-E5 step
   overhead}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/stage_d_localization_vs_e5.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/research/fr13_workflows/stage_d_localization_vs_e5.md},
   2026.
 
 \bibitem{wu2025stree}
@@ -86,7 +86,7 @@ Y.~Wu, Z.~Qin, A.~Wong, and S.~Soatto, ``Stree: Speculative tree decoding for
 
 \bibitem{lumo2026treeverifyliterature}
 {Lumo FlyWheel Contributors}, ``{FR13 tree-verify literature mapping}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_VERIFY_LITERATURE.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/FR13_TREE_VERIFY_LITERATURE.md},
   2026.
 
 \bibitem{zhong2025specmamba}
@@ -119,58 +119,79 @@ H.~Borobia, E.~Seguí-Mas, and G.~Tormo-Carbó, ``Component-aware
 
 \bibitem{lumo2026vllmpatch}
 {Lumo FlyWheel Contributors}, ``{vLLM GDN tree wiring patch}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr10_phase4_patch_vllm_tree_gdn.py},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/scripts/fr10_phase4_patch_vllm_tree_gdn.py},
   2026.
 
 \bibitem{lumo2026fa2correction}
 {Lumo FlyWheel Contributors}, ``{FR13 FA2 fork is decode-kernel correction}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_FA2_FORK_IS_DECODE_KERNEL_CORRECTION.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/FR13_FA2_FORK_IS_DECODE_KERNEL_CORRECTION.md},
   2026.
 
 \bibitem{lumo2026devicecommit}
 {Lumo FlyWheel Contributors}, ``{Device multidraft committer source}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_device_multidraft_kernel.py},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/scripts/fr13_device_multidraft_kernel.py},
   2026.
 
 \bibitem{lumo2026config}
 {Lumo FlyWheel Contributors}, ``{FR13 canonical config: cat6 and cat9 shipped
   deploy}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/cat6_cat9_canonical_config.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/research/fr13_workflows/cat6_cat9_canonical_config.md},
   2026.
 
 \bibitem{lumo2026scanverdict}
 {Lumo FlyWheel Contributors}, ``{FR13 scan/SRAM/N-PAD verdict}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SCAN_BITEXACT_SRAM_NPAD_VERDICT_BIND.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/FR13_SCAN_BITEXACT_SRAM_NPAD_VERDICT_BIND.md},
   2026.
 
 \bibitem{lumo2026node5}
 {Lumo FlyWheel Contributors}, ``{FR13 node-5 ladder diffuse verdict}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_NODE5_LADDER_DIFFUSE_BIND.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/FR13_NODE5_LADDER_DIFFUSE_BIND.md},
+  2026.
+
+\bibitem{qwen2025next}
+{Qwen Team}, ``{Qwen3-Next-80B-A3B-Instruct}.''
+  \url{https://qwen.ai/blog?from=research.latest-advancements-list&id=4074cca80393150c248e508aa62983f9cb7d27cd},
+  2025.
+
+\bibitem{lumo2026vllmsot}
+{Lumo FlyWheel Contributors}, ``{FR13 vLLM source of truth and grounding
+  rule}.''
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/FR13_VLLM_SOURCE_OF_TRUTH.md},
+  2026.
+
+\bibitem{lumo2026forkedlauncher}
+{Lumo FlyWheel Contributors}, ``{FR13 forked FA2 tree server launcher}.''
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/scripts/fr13_launch_forked_fa2_tree_server.sh},
+  2026.
+
+\bibitem{lumo2026speedlauncher}
+{Lumo FlyWheel Contributors}, ``{FR10 native speed server launcher}.''
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/scripts/fr10_launch_speed_server.sh},
   2026.
 
 \bibitem{lumo2026measure}
 {Lumo FlyWheel Contributors}, ``{FR13 measurement harness}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_measure.py},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/scripts/fr13_measure.py},
   2026.
 
 \bibitem{lumo2026b4contam}
 {Lumo FlyWheel Contributors}, ``{FR13 B=4 contamination verdict}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_WHY_SLOWER_VERDICT.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/FR13_WHY_SLOWER_VERDICT.md},
   2026.
 
 \bibitem{lumo2026wyplan}
 {Lumo FlyWheel Contributors}, ``{FR13 WY and replay chase plan}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_WY_CHASE_PLAN_BIND.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/FR13_WY_CHASE_PLAN_BIND.md},
   2026.
 
 \bibitem{lumo2026committerbench}
 {Lumo FlyWheel Contributors}, ``{Stage D committer microbench}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/stage_d_committer_microbench.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/research/fr13_workflows/stage_d_committer_microbench.md},
   2026.
 
 \bibitem{lumo2026bakeflags}
 {Lumo FlyWheel Contributors}, ``{FR13 bake-for-all-trees analysis}.''
-  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/bake_all_tree_flags_verdict.md},
+  \url{https://github.com/MaCoredroid/Lumo_FlyWheel/blob/37c202bb769a5a3bc0d91b34ed74d2abcb4c3580/research/fr13_workflows/bake_all_tree_flags_verdict.md},
   2026.
 
 \end{thebibliography}
