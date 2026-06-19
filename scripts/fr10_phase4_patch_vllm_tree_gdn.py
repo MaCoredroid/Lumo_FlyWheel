@@ -11086,17 +11086,21 @@ def get_conv_copy_spec(
 
 def _patch_mamba_utils_preprocess_context_flag() -> bool:
     """FR13_APC_CONV_FIX: scope the get_conv_copy_spec tree-node override to the
-    preprocess_mamba (spec-advance) caller only. Both preprocess_mamba and
-    postprocess_mamba call collect_mamba_copy_meta -> state_copy_func(state,
-    block_ids, src_block_idx, bias + 1); but preprocess passes
-    bias = num_accepted_tokens_cpu[i] - 1 (a genuine accept count, our override's
-    premise) while postprocess passes bias = aligned_new_computed_tokens -
-    num_tokens_running_state (a BLOCK-ALIGNMENT REMAINDER, not an accept count).
-    The override misfiring on the remainder snapshots the WRONG conv block into
-    the APC align cache -> intermittent garbled/runaway poisoning (carrier b).
-    Set a module flag True only around preprocess's collect call so the override
-    fires there and falls through to stock suffix-slice in postprocess. Gated by
-    FR13_APC_CONV_FIX (default 1). Inert when APC off (align copy never runs)."""
+    preprocess (spec-advance) align caller only. Both preprocess_mamba and
+    postprocess_mamba route their copy bias through the phase-aware
+    _fr10_tree_accept_token_bias(..., phase=...): preprocess's linear_bias is
+    num_accepted_tokens_cpu[i] - 1 (a genuine accept count, the override's
+    premise) while postprocess's is a BLOCK-ALIGNMENT REMAINDER
+    (aligned_new_computed_tokens - num_tokens_running_state), NOT an accept count.
+    Tree-translating the remainder AND letting the accepted-node-row override
+    fire on it snapshots the WRONG conv block into the APC align cache ->
+    intermittent garbled/runaway poisoning (carrier b). At that single phase
+    chokepoint: (1) set a module flag the override reads (True=preprocess), and
+    (2) for postprocess return the RAW remainder (skip tree translation) so
+    get_conv_copy_spec falls through to stock suffix-slice. Gated by
+    FR13_APC_CONV_FIX (default 1). Inert when APC off (align copy never runs);
+    with the gate off, both the flag-respecting override branch and this raw
+    return are bypassed -> behavior byte-identical to pre-fix."""
     text = MAMBA_UTILS_PATH.read_text()
     sentinel = "# FR13_APC_CONV_PREPROCESS_FLAG"
     if sentinel in text:
@@ -11118,41 +11122,29 @@ def _patch_mamba_utils_preprocess_context_flag() -> bool:
         1,
     )
 
-    pre_anchor = (
-        "            collect_mamba_copy_meta(\n"
-        "                copy_bufs,\n"
-        "                kv_cache_config,\n"
-        "                mamba_state_copy_funcs,\n"
-        "                mamba_group_ids,\n"
-        "                prev_state_idx,\n"
-        "                curr_state_idx,\n"
-        "                input_batch.num_accepted_tokens_cpu[i] - 1,\n"
+    # Inject at the start of _fr10_tree_accept_token_bias (added by
+    # _patch_mamba_utils_tree_accept_bias, which runs before this). Its phase
+    # arg already distinguishes the two align callers.
+    bias_anchor = (
+        "    *,\n"
+        "    phase: str,\n"
+        ") -> int:\n"
     )
-    if text.count(pre_anchor) != 1:
-        raise RuntimeError("APC conv flag: preprocess collect anchor not unique")
+    if text.count(bias_anchor) != 1:
+        raise RuntimeError("APC conv flag: _fr10_tree_accept_token_bias signature anchor not unique")
     text = text.replace(
-        pre_anchor,
-        "            _fr13_mecopy._FR13_IN_PREPROCESS = True  " + sentinel + "\n"
-        + pre_anchor,
-        1,
-    )
-
-    post_anchor = (
-        "            collect_mamba_copy_meta(\n"
-        "                copy_bufs,\n"
-        "                kv_cache_config,\n"
-        "                mamba_state_copy_funcs,\n"
-        "                mamba_group_ids,\n"
-        "                src_block_idx,\n"
-        "                dest_block_idx,\n"
-        "                accept_token_bias,\n"
-    )
-    if text.count(post_anchor) != 1:
-        raise RuntimeError("APC conv flag: postprocess collect anchor not unique")
-    text = text.replace(
-        post_anchor,
-        "            _fr13_mecopy._FR13_IN_PREPROCESS = False  " + sentinel + "\n"
-        + post_anchor,
+        bias_anchor,
+        bias_anchor
+        + "    _fr13_mecopy._FR13_IN_PREPROCESS = phase == \"preprocess\"  " + sentinel + "\n"
+        "    if (\n"
+        "        os.environ.get(\"FR13_APC_CONV_FIX\", \"1\") == \"1\"\n"
+        "        and phase == \"postprocess\"\n"
+        "    ):\n"
+        "        # align boundary snapshot: bias is a block-alignment remainder,\n"
+        "        # NOT an accept count -> do not tree-translate it; the False flag\n"
+        "        # above makes get_conv_copy_spec fall through to stock suffix-\n"
+        "        # slice on the raw remainder (true vanilla-vLLM align snapshot).\n"
+        "        return int(linear_bias)\n",
         1,
     )
 
