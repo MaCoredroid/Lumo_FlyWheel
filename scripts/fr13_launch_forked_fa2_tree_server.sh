@@ -180,6 +180,23 @@ PY
 )}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
 
+# FR13_ENABLE_APC (default 0): prefix caching for the GDN-hybrid. With spec-decode on,
+# vLLM auto-forces mamba_cache_mode=align (config.py), which hard-requires chunked-prefill
+# (a 2nd behavioral change). Qwen3-Next uses the SD conv layout (VLLM_SSM_CONV_STATE_LAYOUT
+# unset -> "SD"), so is_conv_state_dim_first() is False -> the DS num_accepted>1 raise
+# (mamba_utils.py:315) does NOT apply. fp32 SSM-state cache = SGLang default + vLLM #26807
+# lossless lever. mamba_block_size multiple of 8 (causal_conv1d align), <= max-num-batched.
+# Default OFF => APC_FLAGS empty => serve command byte-identical to the locked cat9 path.
+FR13_ENABLE_APC=${FR13_ENABLE_APC:-0}
+MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-1024}
+MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
+APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-2048}
+if [[ "$FR13_ENABLE_APC" == "1" ]]; then
+  APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
+else
+  APC_FLAGS=""
+fi
+
 if [[ ! -f "$FORKED_FA2_SO" ]]; then
   echo "forked FA2 .so not found: $FORKED_FA2_SO" >&2
   exit 2
@@ -479,5 +496,5 @@ exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-na
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  --speculative-config \"\$SPEC_CONFIG\" \
+  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS \
   $(if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
