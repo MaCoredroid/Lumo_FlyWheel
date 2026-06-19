@@ -350,8 +350,12 @@ ALIVE=0
 curl -fsS -m 5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && ALIVE=1
 # (b) no NEW crash signature in the docker log produced AFTER the gen request
 docker logs "$CONTAINER" 2>&1 | tail -n "+$((LOGLEN_BEFORE+1))" > "$RUNDIR/docker_log_after_specgen.txt" || true
-CRASH_HITS=$(grep -cnE "NotImplementedError|does not yet support|does not support|Traceback \(most recent call last\)|EngineDeadError|EngineCore .*died|CUDA error|RuntimeError" \
-  "$RUNDIR/docker_log_after_specgen.txt" 2>/dev/null || echo 0)
+# NOTE: `grep -c` already prints 0 on no-match AND exits 1, so a trailing
+# `|| echo 0` yields the two-line string "0\n0" which breaks `(( CRASH_HITS == 0 ))`
+# with a syntax error -> a false GATE-D FAIL. Take the count robustly (single int).
+CRASH_HITS=$(grep -cE "NotImplementedError|does not yet support|does not support|Traceback \(most recent call last\)|EngineDeadError|EngineCore .*died|CUDA error|RuntimeError" \
+  "$RUNDIR/docker_log_after_specgen.txt" 2>/dev/null | head -1 || true)
+[[ "$CRASH_HITS" =~ ^[0-9]+$ ]] || CRASH_HITS=0
 echo "[gateD] specgen_http_rc=$RCD alive=$ALIVE post_gen_crash_hits=$CRASH_HITS"
 if (( ALIVE == 1 && CRASH_HITS == 0 && RCD == 0 )); then
   echo "GATE-D PASS: server survived spec-decode (num_accepted>1) under live APC, no post-gen crash"
