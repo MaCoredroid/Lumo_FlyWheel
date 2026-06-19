@@ -11022,7 +11022,10 @@ def _patch_mamba_state_utils_tree_conv_node_copy() -> bool:
         return False
 
     text = text.replace("import torch\n", "import os\n\nimport torch\n", 1)
-    replacement = """def get_conv_copy_spec(
+    replacement = """_FR13_IN_PREPROCESS = False  # FR13_APC_CONV_FIX align-context flag
+
+
+def get_conv_copy_spec(
     state: torch.Tensor,
     block_ids: list[int],
     cur_block_idx: int,
@@ -11037,6 +11040,10 @@ def _patch_mamba_state_utils_tree_conv_node_copy() -> bool:
         os.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp") == "tree_mtp"
         and os.environ.get("FR10_ENABLE_TREE_GDN", "1") == "1"
         and num_accepted_tokens > 1
+        and (
+            os.environ.get("FR13_APC_CONV_FIX", "1") != "1"
+            or _FR13_IN_PREPROCESS
+        )
     ):
         src_block_pos = cur_block_idx + num_accepted_tokens - 1
         if src_block_pos < len(block_ids):
@@ -11074,6 +11081,82 @@ def _patch_mamba_state_utils_tree_conv_node_copy() -> bool:
         raise RuntimeError("mamba state conv copy spec anchor not found")
     text = text[:start] + replacement + text[end + 1 :]
     MAMBA_STATE_UTILS_PATH.write_text(text)
+    return True
+
+
+def _patch_mamba_utils_preprocess_context_flag() -> bool:
+    """FR13_APC_CONV_FIX: scope the get_conv_copy_spec tree-node override to the
+    preprocess_mamba (spec-advance) caller only. Both preprocess_mamba and
+    postprocess_mamba call collect_mamba_copy_meta -> state_copy_func(state,
+    block_ids, src_block_idx, bias + 1); but preprocess passes
+    bias = num_accepted_tokens_cpu[i] - 1 (a genuine accept count, our override's
+    premise) while postprocess passes bias = aligned_new_computed_tokens -
+    num_tokens_running_state (a BLOCK-ALIGNMENT REMAINDER, not an accept count).
+    The override misfiring on the remainder snapshots the WRONG conv block into
+    the APC align cache -> intermittent garbled/runaway poisoning (carrier b).
+    Set a module flag True only around preprocess's collect call so the override
+    fires there and falls through to stock suffix-slice in postprocess. Gated by
+    FR13_APC_CONV_FIX (default 1). Inert when APC off (align copy never runs)."""
+    text = MAMBA_UTILS_PATH.read_text()
+    sentinel = "# FR13_APC_CONV_PREPROCESS_FLAG"
+    if sentinel in text:
+        return False
+
+    import_anchor = (
+        "from vllm.model_executor.layers.mamba.mamba_utils import (\n"
+        "    MambaStateCopyFunc,\n"
+        ")\n"
+    )
+    if text.count(import_anchor) != 1:
+        raise RuntimeError("APC conv flag: model_executor mamba_utils import anchor not unique")
+    text = text.replace(
+        import_anchor,
+        import_anchor
+        + "from vllm.model_executor.layers.mamba import (  " + sentinel + "\n"
+        "    mamba_utils as _fr13_mecopy,\n"
+        ")\n",
+        1,
+    )
+
+    pre_anchor = (
+        "            collect_mamba_copy_meta(\n"
+        "                copy_bufs,\n"
+        "                kv_cache_config,\n"
+        "                mamba_state_copy_funcs,\n"
+        "                mamba_group_ids,\n"
+        "                prev_state_idx,\n"
+        "                curr_state_idx,\n"
+        "                input_batch.num_accepted_tokens_cpu[i] - 1,\n"
+    )
+    if text.count(pre_anchor) != 1:
+        raise RuntimeError("APC conv flag: preprocess collect anchor not unique")
+    text = text.replace(
+        pre_anchor,
+        "            _fr13_mecopy._FR13_IN_PREPROCESS = True  " + sentinel + "\n"
+        + pre_anchor,
+        1,
+    )
+
+    post_anchor = (
+        "            collect_mamba_copy_meta(\n"
+        "                copy_bufs,\n"
+        "                kv_cache_config,\n"
+        "                mamba_state_copy_funcs,\n"
+        "                mamba_group_ids,\n"
+        "                src_block_idx,\n"
+        "                dest_block_idx,\n"
+        "                accept_token_bias,\n"
+    )
+    if text.count(post_anchor) != 1:
+        raise RuntimeError("APC conv flag: postprocess collect anchor not unique")
+    text = text.replace(
+        post_anchor,
+        "            _fr13_mecopy._FR13_IN_PREPROCESS = False  " + sentinel + "\n"
+        + post_anchor,
+        1,
+    )
+
+    MAMBA_UTILS_PATH.write_text(text)
     return True
 
 
@@ -15749,6 +15832,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sfwd_gpu_timer()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),
+        (MAMBA_UTILS_PATH, _patch_mamba_utils_preprocess_context_flag()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_gpu_committer()),
