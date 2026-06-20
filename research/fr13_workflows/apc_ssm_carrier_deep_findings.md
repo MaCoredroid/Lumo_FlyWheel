@@ -57,3 +57,12 @@ Forwarded in the launcher -e list. Tap-A producer + Tap-C are FR13_REPLAY_BOUNDA
 ## Status: OPEN. The snapshot-side approaches are confirmed not fixing the black-box. Next decision: (A) one
 unified per-copy diagnostic drill to close the committed-postprocess gap, or (B) commit-site write-through, or
 (C) reconsider APC scope for tree-spec. Awaiting user steer on resource investment.
+
+## UPDATE: cohort mismatch CONFIRMED (unidiag2, periodic diag) — snapshot-side approach is a dead end
+Steady-state per-copy diag: leaf=None for 48/50 temporal copies; leaf=VAL only 2/50, and when found the
+substitution fires CORRECTLY (leaf=80 in last_written, vs stock 87). So the collect-level substitution is
+correct when it fires but the leaf source covers almost none of the align's snapshot cohort. The align
+snapshots a request cohort that is mostly NOT in the committed-leaf map -> fundamentally cannot be fixed at
+the snapshot/collect site. PIVOT: commit-site write-through (ensure the committed leaf recurrent state sits
+in the exact slot the STOCK align snapshot reads, for ALL committed reqs, at commit time) — needs the GDN
+regular-decode state-slot addressing + how it relates to the align's block_ids source. CPU workflow next.
