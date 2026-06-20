@@ -11356,39 +11356,64 @@ def _patch_mamba_utils_collect_apc_leaf() -> bool:
             "APC collect leaf: collect_mamba_copy_meta skip anchor not unique"
         )
     inject = anchor + (
-        "    if os.environ.get(\"FR13_APC_SSM_SNAPSHOT\", \"0\") == \"1\":  " + sentinel + "\n"
+        "    _fr13_apc_leaf = None  " + sentinel + "\n"
+        "    if os.environ.get(\"FR13_APC_SSM_SNAPSHOT\", \"0\") == \"1\":\n"
         "        try:\n"
         "            from vllm.model_executor.layers.mamba import (\n"
-        "                mamba_utils as _fr13_cmm_me,\n"
         "                gdn_linear_attn as _fr13_cmm_gdn,\n"
         "            )\n"
         "            _fr13_cmm_map = getattr(\n"
         "                _fr13_cmm_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None\n"
         "            )\n"
-        "            _fr13_cmm_before = _fr13_cmm_me._FR13_CUR_SSM_LEAF_ROW\n"
-        "            _fr13_cmm_look = (\n"
+        "            _fr13_apc_leaf = (\n"
         "                _fr13_cmm_map.get(str(req_state.req_id))\n"
         "                if _fr13_cmm_map else None\n"
         "            )\n"
-        "            _fr13_cmm_me._FR13_CUR_SSM_LEAF_ROW = _fr13_cmm_look\n"
-        "            if os.environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\":\n"
-        "                _fr13_cmm_n = getattr(_fr13_cmm_gdn, \"_FR13_CMM_DIAG_N\", 0) + 1\n"
-        "                _fr13_cmm_gdn._FR13_CMM_DIAG_N = _fr13_cmm_n\n"
-        "                if _fr13_cmm_n <= 60:\n"
-        "                    import sys as _fr13_cmm_sys\n"
-        "                    print(\n"
-        "                        \"[FR13_CMM_DIAG] n=\" + str(_fr13_cmm_n)\n"
-        "                        + \" reqstate_id=\" + str(req_state.req_id)[:42]\n"
-        "                        + \" bias_set_before=\" + str(_fr13_cmm_before)\n"
-        "                        + \" lookup=\" + str(_fr13_cmm_look)\n"
-        "                        + \" mapsize=\" + str(len(_fr13_cmm_map) if _fr13_cmm_map else 0)\n"
-        "                        + \" keys=\" + str(list(_fr13_cmm_map.keys())[:2] if _fr13_cmm_map else []),\n"
-        "                        file=_fr13_cmm_sys.stderr, flush=True,\n"
-        "                    )\n"
         "        except Exception:\n"
-        "            pass\n"
+        "            _fr13_apc_leaf = None\n"
     )
     text = text.replace(anchor, inject, 1)
+    # 2nd anchor: substitute the temporal copy source pointer to the committed-leaf
+    # row DIRECTLY here (collect has the leaf + the state tensor). The
+    # get_temporal_copy_spec module-global path does NOT land at the override
+    # (proven: committed reqs still copy the stock row even with the leaf set right
+    # before the call), so write the leaf row's pointer into the copy buffer
+    # ourselves. This is the authoritative, race-free SSM-leaf snapshot.
+    anchor2 = (
+        "                copy_spec = state_copy_func(\n"
+        "                    state, block_ids, src_block_idx, accept_token_bias + 1\n"
+        "                )\n"
+    )
+    if text.count(anchor2) != 1:
+        raise RuntimeError(
+            "APC collect leaf: state_copy_func call anchor not unique"
+        )
+    inject2 = anchor2 + (
+        "                if (\n"
+        "                    _fr13_apc_leaf is not None\n"
+        "                    and getattr(state_copy_func, \"__name__\", \"\")\n"
+        "                    == \"get_temporal_copy_spec\"\n"
+        "                    and 0 <= int(_fr13_apc_leaf) < int(state.shape[0])\n"
+        "                ):  " + sentinel + "_SUB\n"
+        "                    from vllm.model_executor.layers.mamba.mamba_utils import (\n"
+        "                        MambaCopySpec as _fr13_mcs,\n"
+        "                    )\n"
+        "                    _fr13_ls = state[int(_fr13_apc_leaf)]\n"
+        "                    copy_spec = _fr13_mcs(\n"
+        "                        start_addr=_fr13_ls.data_ptr(),\n"
+        "                        num_elements=_fr13_ls.numel(),\n"
+        "                    )\n"
+        "                    if os.environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\":\n"
+        "                        import sys as _fr13_sub_sys\n"
+        "                        from vllm.model_executor.layers.mamba import (\n"
+        "                            gdn_linear_attn as _fr13_sub_gdn,\n"
+        "                        )\n"
+        "                        _fr13_sub_n = getattr(_fr13_sub_gdn, \"_FR13_SUB_DIAG_N\", 0) + 1\n"
+        "                        _fr13_sub_gdn._FR13_SUB_DIAG_N = _fr13_sub_n\n"
+        "                        if _fr13_sub_n <= 30:\n"
+        "                            print(\"[FR13_SUB_DIAG] substituted leaf=\" + str(_fr13_apc_leaf) + \" state_rows=\" + str(int(state.shape[0])), file=_fr13_sub_sys.stderr, flush=True)\n"
+    )
+    text = text.replace(anchor2, inject2, 1)
     MAMBA_UTILS_PATH.write_text(text)
     return True
 
