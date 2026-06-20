@@ -6450,6 +6450,43 @@ _FR13_RDAB_STAGE_COUNTS = {}
 _FR13_RDAB_RECORDS = 0
 
 
+def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, replay_rows, replay_lens):
+    """FR13_APC_SSM_SNAPSHOT: publish each req's committed accepted-LEAF node-bank
+    row (spec_state_indices[b, accepted_len-1] = the last row the tree committer
+    wrote, == the Tap-A producer's _rows_written[-1]) keyed by req_id (str), so
+    the get_temporal_copy_spec align override snapshots the COMMITTED-leaf SSM
+    recurrent state instead of the stale bias-chosen block_ids row (drill: stock
+    postprocess 480/480 STALE = the residual-garble carrier). One light GPU->CPU
+    sync per call (B=1 drill OK; once-per-step gating is a future speed opt). The
+    leaf node-bank row layout is shared across GDN layers, so any layer's commit
+    publishes the same value. Inert unless FR13_APC_SSM_SNAPSHOT=1 (default off ->
+    map never created, override never fires -> byte-identical to pre-fix)."""
+    if os.environ.get("FR13_APC_SSM_SNAPSHOT", "0") != "1":
+        return
+    try:
+        spec_idx = getattr(layer, "_fr13_replay_spec_idx", None)
+        if spec_idx is None:
+            return
+        req_ids = getattr(gdn_mod, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None) or []
+        leaf_map = getattr(gdn_mod, "_FR13_APC_SSM_LEAF_BY_REQ", None)
+        if leaf_map is None:
+            leaf_map = {}
+            gdn_mod._FR13_APC_SSM_LEAF_BY_REQ = leaf_map
+        spec_cpu = spec_idx.detach().to("cpu").tolist()
+        for _b in range(int(replay_rows)):
+            if _b >= len(replay_lens) or _b >= len(req_ids):
+                continue
+            _alen = int(replay_lens[_b])
+            if _alen <= 0:
+                continue
+            _row = spec_cpu[_b]
+            if 0 <= _alen - 1 < len(_row):
+                leaf_map[str(req_ids[_b])] = int(_row[_alen - 1])
+    except Exception:
+        # observe-only publish; never break the served commit on a tap failure
+        pass
+
+
 def _fr13_replay_durable_ab_enabled():
     """Resolve FR13_REPLAY_DURABLE_AB for the EngineCore worker.
 
@@ -8090,6 +8127,10 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                             ),
                             use_qk_l2norm_in_kernel=True,
                         )
+                        _fr13_publish_apc_ssm_leaf(
+                            _lumo_tree_commit_gdn, _fr13_layer,
+                            _fr13_replay_rows, _fr13_replay_lens,
+                        )
                         _fr13_flags[0].fill_(0)
                         if _fr13_bnd_layer_on:
                             _fr13_boundary_replay_post(
@@ -8737,6 +8778,10 @@ def _lumo_tree_canonical_multidraft_sample(
                             _fr13_layer._fr13_replay_output_scale
                         ),
                         use_qk_l2norm_in_kernel=True,
+                    )
+                    _fr13_publish_apc_ssm_leaf(
+                        _lumo_tree_commit_gdn, _fr13_layer,
+                        _fr13_replay_rows, _fr13_replay_lens,
                     )
                     _fr13_flags[0].fill_(0)
                     if _fr13_bnd_layer_on:
@@ -11023,6 +11068,7 @@ def _patch_mamba_state_utils_tree_conv_node_copy() -> bool:
 
     text = text.replace("import torch\n", "import os\n\nimport torch\n", 1)
     replacement = """_FR13_IN_PREPROCESS = False  # FR13_APC_CONV_FIX align-context flag
+_FR13_CUR_SSM_LEAF_ROW = None  # FR13_APC_SSM_SNAPSHOT committed-leaf row, per-call
 
 
 def get_conv_copy_spec(
@@ -11101,11 +11147,54 @@ def get_conv_copy_spec(
         start_addr=src_state.data_ptr(), num_elements=src_state.numel()
     )
 
+
+
+def get_temporal_copy_spec(
+    state: torch.Tensor,
+    block_ids: list[int],
+    cur_block_idx: int,
+    num_accepted_tokens: int,
+) -> MambaCopySpec:
+    \"\"\"Return a MambaCopySpec for copying a temporal (SSM/recurrent) state slice.\"\"\"
+    # FR13_APC_SSM_SNAPSHOT: the tree GDN committer writes the accepted-path
+    # per-depth SSM states into the spec_state_indices NODE BANK; the accepted
+    # LEAF row = spec_state_indices[b, accepted_len-1], published per-call as
+    # _FR13_CUR_SSM_LEAF_ROW by _fr10_tree_accept_token_bias. Stock reads
+    # state[block_ids[cur+num_accepted-1]] -- a block_ids row that can never
+    # reach the node bank -> the APC align snapshot copies a STALE/wrong SSM row
+    # (drill: get_temporal_copy_spec postprocess 480/480 stale), the residual-
+    # garble carrier. Read the committed leaf row instead (whole row, no slice --
+    # temporal is wrong-ROW, not position-shifted like conv).
+    if (
+        os.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp") == "tree_mtp"
+        and os.environ.get("FR10_ENABLE_TREE_GDN", "1") == "1"
+        and os.environ.get("FR13_APC_SSM_SNAPSHOT", "0") == "1"
+        and num_accepted_tokens > 1
+        and _FR13_CUR_SSM_LEAF_ROW is not None
+    ):
+        leaf_row = int(_FR13_CUR_SSM_LEAF_ROW)
+        if 0 <= leaf_row < int(state.shape[0]):
+            src_state = state[leaf_row]
+            return MambaCopySpec(
+                start_addr=src_state.data_ptr(), num_elements=src_state.numel()
+            )
+        if os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1":
+            raise RuntimeError(
+                "FR13 APC SSM leaf row out of range: "
+                f"leaf_row={leaf_row} state_rows={int(state.shape[0])}"
+            )
+    src_block_id = block_ids[cur_block_idx + num_accepted_tokens - 1]
+    src_state = state[src_block_id]
+    return MambaCopySpec(
+        start_addr=src_state.data_ptr(), num_elements=src_state.numel()
+    )
+
 """
     start = text.find("def get_conv_copy_spec(")
-    end = text.find("\ndef get_temporal_copy_spec(", start)
-    if start < 0 or end < 0:
-        raise RuntimeError("mamba state conv copy spec anchor not found")
+    _t_start = text.find("\ndef get_temporal_copy_spec(", start)
+    end = text.find("\nclass MambaStateCopyFuncCalculator", _t_start)
+    if start < 0 or _t_start < 0 or end < 0:
+        raise RuntimeError("mamba state conv/temporal copy spec anchor not found")
     text = text[:start] + replacement + text[end + 1 :]
     MAMBA_STATE_UTILS_PATH.write_text(text)
     return True
@@ -11163,6 +11252,22 @@ def _patch_mamba_utils_preprocess_context_flag() -> bool:
         bias_anchor,
         bias_anchor
         + "    _fr13_mecopy._FR13_IN_PREPROCESS = phase == \"preprocess\"  " + sentinel + "\n"
+        # FR13_APC_SSM_SNAPSHOT: republish this req's committed accepted-leaf node
+        # row (set at commit by the gdn committer into _FR13_APC_SSM_LEAF_BY_REQ)
+        # to the per-call _FR13_CUR_SSM_LEAF_ROW the get_temporal_copy_spec
+        # override reads. req_id is in scope here; the override is not. Inert when
+        # the flag is off (leaf stays None -> override falls through to stock).
+        "    if os.environ.get(\"FR13_APC_SSM_SNAPSHOT\", \"0\") == \"1\":  " + sentinel + "\n"
+        "        try:\n"
+        "            from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_gdn_leaf\n"
+        "            _fr13_leaf_map = getattr(_fr13_gdn_leaf, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
+        "            _fr13_mecopy._FR13_CUR_SSM_LEAF_ROW = (\n"
+        "                _fr13_leaf_map.get(str(req_id)) if _fr13_leaf_map else None\n"
+        "            )\n"
+        "        except Exception:\n"
+        "            _fr13_mecopy._FR13_CUR_SSM_LEAF_ROW = None\n"
+        "    else:\n"
+        "        _fr13_mecopy._FR13_CUR_SSM_LEAF_ROW = None\n"
         "    if (\n"
         "        os.environ.get(\"FR13_APC_CONV_FIX\", \"1\") == \"1\"\n"
         "        and phase == \"postprocess\"\n"
