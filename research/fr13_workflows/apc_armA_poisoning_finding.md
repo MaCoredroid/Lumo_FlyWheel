@@ -63,3 +63,24 @@ is already conclusive).
 - Conv-window snapshot fix (the actual remedy to make APC lossless).
 
 Artifacts: output/fr13_bigdenom_swe/cat9_apc/{health.json, proxy_pair_dumps/ (3603), deploy_speed_b1.json}.
+
+---
+## UPDATE 2026-06-20: stock-revert conv fix (c4875fca) is INSUFFICIENT — garble persists
+Re-ran arm A as `cat9_apc_fix` (FR13_APC_CONV_FIX=1: get_conv_copy_spec override scoped to preprocess,
+postprocess falls through to STOCK offset-slice). DECISIVE dump scan: **8 severely-garbled dumps**
+(same </parameter>×N / 用户说 / no-space-runaway signatures), ~same rate as the poison run's ~6.
+Agent outcome IDENTICAL to poison: 1/4 resolved (12907 511s), 3 gave_up (13033/13236/13398 124/906/67s)
+— NOT cache-OFF's full-wall+real-patches. So:
+- **Our override wrong-block misfire was NOT the dominant garble carrier.** Reverting it to stock
+  offset-slice did not reduce garble. The fix is still correct (wrong-block read was a real bug) but
+  orthogonal to the poison.
+- The garble carrier is elsewhere in the align path: the conv-window **reconstruction** (stock
+  offset-slice = position-shift, #25587 non-invertibility) OR the SSM-state snapshot OR another align
+  seam (block hashing #45477 under chunked-prefill?). NOT yet pinned empirically.
+- **METHOD CORRECTION: gate on the DUMP GARBLE SCAN, not the live per-window accept signal** — accept
+  looked "milder" (bouncing 1.0-1.2, not pinned-0) yet garble was unchanged. The intermittent garble
+  doesn't show reliably in per-window accept.
+NEXT: design workflow w84n4mdcz (SGLang snapshot-whole-row) — its committed-conv LAYOUT read is the
+diagnostic for whether conv-reconstruction is the carrier; if the offset-slice is correct for our
+layout, the carrier is elsewhere and needs empirical instrumentation (tap conv+ssm at a garbled turn
+under APC vs APC-OFF). Do NOT assume the snapshot fix works — gate it on the garble scan.
