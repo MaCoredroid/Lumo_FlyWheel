@@ -6450,7 +6450,7 @@ _FR13_RDAB_STAGE_COUNTS = {}
 _FR13_RDAB_RECORDS = 0
 
 
-def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, replay_rows, replay_lens):
+def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
     """FR13_APC_SSM_SNAPSHOT: publish each req's committed accepted-LEAF node-bank
     row (spec_state_indices[b, accepted_len-1] = the last row the tree committer
     wrote, == the Tap-A producer's _rows_written[-1]) keyed by req_id (str), so
@@ -6468,21 +6468,26 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, replay_rows, replay_lens):
         spec_idx = getattr(layer, "_fr13_replay_spec_idx", None)
         if spec_idx is None:
             return
-        req_ids = getattr(gdn_mod, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None) or []
         leaf_map = getattr(gdn_mod, "_FR13_APC_SSM_LEAF_BY_REQ", None)
         if leaf_map is None:
             leaf_map = {}
             gdn_mod._FR13_APC_SSM_LEAF_BY_REQ = leaf_map
         spec_cpu = spec_idx.detach().to("cpu").tolist()
-        for _b in range(int(replay_rows)):
-            if _b >= len(replay_lens) or _b >= len(req_ids):
+        # Key by the SPEC-row req_ids (same index space as replay_lens + spec_idx,
+        # both built by iterating _LUMO_FA_SPEC_ROW_REQ_IDS) — NOT the full
+        # _LUMO_FA_SAMPLER_ROW_REQ_IDS batch, which interleaves prefill/cmpl rows:
+        # the b-th sampler row != the b-th spec row on mixed prefill+decode batches,
+        # so the leaf was keyed to the wrong req_id and the postprocess lookup
+        # always missed -> _FR13_CUR_SSM_LEAF_ROW stayed None (trace wdkszxe8a).
+        for _b in range(int(len(spec_req_ids))):
+            if _b >= len(replay_lens) or _b >= len(spec_cpu):
                 continue
             _alen = int(replay_lens[_b])
             if _alen <= 0:
                 continue
             _row = spec_cpu[_b]
             if 0 <= _alen - 1 < len(_row):
-                leaf_map[str(req_ids[_b])] = int(_row[_alen - 1])
+                leaf_map[str(spec_req_ids[_b])] = int(_row[_alen - 1])
     except Exception:
         # observe-only publish; never break the served commit on a tap failure
         pass
@@ -8130,7 +8135,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                         )
                         _fr13_publish_apc_ssm_leaf(
                             _lumo_tree_commit_gdn, _fr13_layer,
-                            _fr13_replay_rows, _fr13_replay_lens,
+                            _fr13_spec_req_ids, _fr13_replay_lens,
                         )
                         _fr13_flags[0].fill_(0)
                         if _fr13_bnd_layer_on:
@@ -8782,7 +8787,7 @@ def _lumo_tree_canonical_multidraft_sample(
                     )
                     _fr13_publish_apc_ssm_leaf(
                         _lumo_tree_commit_gdn, _fr13_layer,
-                        _fr13_replay_rows, _fr13_replay_lens,
+                        _fr13_spec_req_ids, _fr13_replay_lens,
                     )
                     _fr13_flags[0].fill_(0)
                     if _fr13_bnd_layer_on:
@@ -11170,7 +11175,6 @@ def get_temporal_copy_spec(
         os.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp") == "tree_mtp"
         and os.environ.get("FR10_ENABLE_TREE_GDN", "1") == "1"
         and os.environ.get("FR13_APC_SSM_SNAPSHOT", "0") == "1"
-        and num_accepted_tokens > 1
         and _FR13_CUR_SSM_LEAF_ROW is not None
     ):
         leaf_row = int(_FR13_CUR_SSM_LEAF_ROW)
