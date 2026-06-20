@@ -11068,6 +11068,33 @@ def get_conv_copy_spec(
                 "(num_accepted_tokens > 1)."
             )
         src_state = state[src_block_id]
+    elif (
+        os.environ.get("FR13_APC_CONV_SNAPSHOT", "0") == "1"
+        and os.environ.get("FR13_APC_CONV_FIX", "1") == "1"
+        and not _FR13_IN_PREPROCESS
+    ):
+        # FR13_APC_CONV_SNAPSHOT: postprocess align boundary snapshot. Our
+        # committed-conv writeback (FR13_CONV_COMMITTED_PATH) overwrites the
+        # WHOLE row 0..state_len-1, so the whole row IS the committed K-1 window
+        # = exactly what the no-APC path carries forward in this block. Stock
+        # state[src_block_id, offset:] drops the first `offset` rows and copies a
+        # position-SHIFTED suffix into the dest row base -> non-invertible for
+        # our col-0 layout (SGLang #25587), the residual garble carrier. Snapshot
+        # the WHOLE row (faithful identity copy) so the matching whole-row restore
+        # reads it back byte-exactly (SGLang/NVIDIA #10335 snapshot-not-reconstruct).
+        src_state = state[src_block_id]
+    elif (
+        os.environ.get("FR13_APC_CONV_SNAPSHOT", "0") == "1"
+        and os.environ.get("FR13_APC_CONV_FIX", "1") == "1"
+        and _FR13_IN_PREPROCESS
+        and offset > 0
+    ):
+        # matching preprocess restore on the rare path where the tree override's
+        # range guard fell through (num_accepted>1, src_block_pos out of range):
+        # read the SAME whole row the snapshot persisted so both sides agree on
+        # layout+size (the dominant tree restore at the override above and the
+        # num_accepted==1 restore at offset==0 are already whole-row).
+        src_state = state[src_block_id]
     else:
         src_state = state[src_block_id, offset:]
     return MambaCopySpec(
