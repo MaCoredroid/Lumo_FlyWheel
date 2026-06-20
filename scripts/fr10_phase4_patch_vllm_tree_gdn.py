@@ -11424,6 +11424,7 @@ def _patch_mamba_utils_collect_apc_leaf() -> bool:
         "                        print(\"[FR13_SUB_DIAG] n=\" + str(_fr13_sub_n) + \" bias=\" + str(accept_token_bias) + \" preproc=\" + str(getattr(_fr13_sub_me, \"_FR13_IN_PREPROCESS\", \"?\")) + \" req=\" + str(req_state.req_id)[:34] + \" leaf=\" + str(_fr13_apc_leaf) + \" will_sub=\" + str(_fr13_sub_will) + \" stock_src=\" + str(_fr13_sub_sr), file=_fr13_sub_sys.stderr, flush=True)\n"
         "                if (\n"
         "                    _fr13_apc_leaf is not None\n"
+        "                    and os.environ.get(\"FR13_APC_SSM_WRITE_THROUGH\", \"0\") != \"1\"\n"
         "                    and getattr(state_copy_func, \"__name__\", \"\")\n"
         "                    == \"get_temporal_copy_spec\"\n"
         "                    and 0 <= int(_fr13_apc_leaf) < int(state.shape[0])\n"
@@ -11436,6 +11437,46 @@ def _patch_mamba_utils_collect_apc_leaf() -> bool:
         "                        start_addr=_fr13_ls.data_ptr(),\n"
         "                        num_elements=_fr13_ls.numel(),\n"
         "                    )\n"
+        # FR13_APC_SSM_WRITE_THROUGH (option 3): instead of the (ineffective) copy_spec
+        # pointer SUB, write the committed-leaf VALUE in-place INTO the exact block-pool
+        # row the stock align snapshot reads (block_ids[src_block_idx+accept_token_bias]).
+        # batch_memcpy_kernel reads the VALUE at apply time (tl.load) and apply runs
+        # synchronously AFTER collect in the same stream (workflow wd8yxwms3, 2 readers
+        # agree), so this collect-time mutation lands in the snapshot. Covers ALL committed
+        # reqs at the source; align cohort irrelevant. Gated, default off -> byte-identical.
+        "                if (\n"
+        "                    os.environ.get(\"FR13_APC_SSM_WRITE_THROUGH\", \"0\") == \"1\"\n"
+        "                    and getattr(state_copy_func, \"__name__\", \"\")\n"
+        "                    == \"get_temporal_copy_spec\"\n"
+        "                ):  " + sentinel + "_WT\n"
+        "                    from vllm.model_executor.layers.mamba import (\n"
+        "                        gdn_linear_attn as _fr13_wt_gdn,\n"
+        "                        mamba_utils as _fr13_wt_me,\n"
+        "                    )\n"
+        "                    _fr13_wt_seen = getattr(_fr13_wt_gdn, \"_FR13_WT_SEEN\", 0) + 1\n"
+        "                    _fr13_wt_gdn._FR13_WT_SEEN = _fr13_wt_seen\n"
+        "                    _fr13_wt_did = False\n"
+        "                    _fr13_wt_row = -1\n"
+        "                    _fr13_wt_pos = int(src_block_idx) + int(accept_token_bias)\n"
+        "                    if (\n"
+        "                        _fr13_apc_leaf is not None\n"
+        "                        and 0 <= int(_fr13_apc_leaf) < int(state.shape[0])\n"
+        "                        and 0 <= _fr13_wt_pos < len(block_ids)\n"
+        "                    ):\n"
+        "                        _fr13_wt_row = int(block_ids[_fr13_wt_pos])\n"
+        "                        if (\n"
+        "                            _fr13_wt_row != int(_fr13_apc_leaf)\n"
+        "                            and 0 <= _fr13_wt_row < int(state.shape[0])\n"
+        "                        ):\n"
+        "                            state[_fr13_wt_row].copy_(state[int(_fr13_apc_leaf)])\n"
+        "                            _fr13_wt_did = True\n"
+        "                            _fr13_wt_gdn._FR13_WT_FIRED = getattr(_fr13_wt_gdn, \"_FR13_WT_FIRED\", 0) + 1\n"
+        "                    if os.environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\" and (_fr13_wt_seen <= 40 or _fr13_wt_seen % 40 == 1):\n"
+        "                        import sys as _fr13_wt_sys\n"
+        "                        _fr13_wt_rid = str(req_state.req_id)\n"
+        "                        _fr13_wt_map = getattr(_fr13_wt_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
+        "                        _fr13_wt_mapleaf = _fr13_wt_map.get(_fr13_wt_rid) if _fr13_wt_map else None\n"
+        "                        print(\"[FR13_WT_DIAG] seen=\" + str(_fr13_wt_seen) + \" fired=\" + str(getattr(_fr13_wt_gdn, \"_FR13_WT_FIRED\", 0)) + \" preproc=\" + str(getattr(_fr13_wt_me, \"_FR13_IN_PREPROCESS\", \"?\")) + \" req=\" + _fr13_wt_rid[:34] + \" leaf=\" + str(_fr13_apc_leaf) + \" mapleaf=\" + str(_fr13_wt_mapleaf) + \" wt_pos=\" + str(_fr13_wt_pos) + \" wt_row=\" + str(_fr13_wt_row) + \" did=\" + str(_fr13_wt_did), file=_fr13_wt_sys.stderr, flush=True)\n"
     )
     text = text.replace(anchor2, inject2, 1)
     MAMBA_UTILS_PATH.write_text(text)
