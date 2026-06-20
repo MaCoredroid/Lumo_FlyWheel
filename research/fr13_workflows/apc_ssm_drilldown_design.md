@@ -63,3 +63,11 @@ conclude "fixed" from one non-give-up eager boot (autotune floor); re-run/confir
 
 Source: workflow wgzk90y3h output. Links apc_armA_poisoning_finding, vllm_43559_rootcause,
 sglang_mamba_radix_cache_design.
+
+---
+## DRILL RESULT 2026-06-20: SSM carrier CONFIRMED (cat9_apc_tap, 13033, eager+taps, 10060 tap records)
+Tap C stale_read (computed only for get_temporal_copy_spec):
+- **get_temporal_copy_spec: postprocess 480/480 STALE (100%), preprocess 464/2400 STALE (19%)** — reads a row NOT in the committer's written rows = the carrier. B_JOIN corroborates (READ_ROW_NOT_WRITTEN 10, NO_PRIOR_WRITE 21). e.g. snapshots src_row=69, committed=[35,70,37,75,39] -> 69 ∉ committed.
+- get_conv_copy_spec: stale_read NOT computed (tap only sets it for temporal) so can't isolate via taps; but the garble scan (conv snapshot 12 vs 6-8, no reduction) is the evidence conv isn't the dominant carrier.
+THE CORRECT ROW (Tap A committer producer): for accepted_path [1,2,4,6,8] (len 5) the committer writes per-depth SSM states to consecutive rows 849..853 (dst_rows col0..col4); the **accepted-LEAF = the last = row 853 = spec_state_indices[b, accepted_len-1]**. The snapshot must read THAT, not the bias-chosen row.
+WHY temporal lands wrong: get_temporal_copy_spec reads block_ids[cur_block_idx + num_accepted-1] where num_accepted = bias+1; in postprocess the conv FIX-2 (FR13_APC_CONV_FIX) returns the RAW alignment remainder as the bias (so conv falls through to whole-row), and the temporal copy inherits that raw remainder -> block_ids[cur+remainder] = wrong row. FIX: tree-aware get_temporal_copy_spec override gated FR13_APC_SSM_SNAPSHOT that reads the committed accepted-leaf row (NOT the bias-chosen one), in BOTH phases. Needs the committer's accepted-leaf row source (spec_state_indices[b,accepted_len-1] / the published last_written_rows leaf), since block_ids[cur+raw_remainder] is wrong. Implementation = careful (the override must reach the committed-leaf row; mirror how the conv override at :11048 derives its tree row but use the LEAF specifically).
