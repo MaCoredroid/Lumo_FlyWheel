@@ -11331,6 +11331,52 @@ def _patch_mamba_utils_preprocess_context_flag() -> bool:
     return True
 
 
+def _patch_mamba_utils_collect_apc_leaf() -> bool:
+    """FR13_APC_SSM_SNAPSHOT: set the committed accepted-leaf row PER-REQ inside
+    collect_mamba_copy_meta, immediately before the state_copy_func loop that calls
+    get_temporal_copy_spec. The bias-chokepoint republish to the module-global
+    _FR13_CUR_SSM_LEAF_ROW is RACY: the align runs all reqs' biases then all copies
+    in a batch (and in preprocess the bias runs AFTER collect), so the single global
+    is clobbered by the last (found=False) bias before the override reads it -> the
+    override always sees None -> stock stale row (proven: FR13_OV_DIAG bare_leaf=None
+    for all calls despite bias found=True). collect_mamba_copy_meta receives req_state
+    directly, so set the leaf from req_state.req_id RIGHT HERE -> the override (called
+    synchronously in the same collect) reads the correct per-req leaf in BOTH phases.
+    Gated FR13_APC_SSM_SNAPSHOT (default off -> never set -> stock -> byte-identical)."""
+    text = MAMBA_UTILS_PATH.read_text()
+    sentinel = "# FR13_APC_SSM_COLLECT_LEAF"
+    if sentinel in text:
+        return False
+    anchor = (
+        "    if src_block_idx == dest_block_idx and accept_token_bias == 0:\n"
+        "        return\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "APC collect leaf: collect_mamba_copy_meta skip anchor not unique"
+        )
+    inject = anchor + (
+        "    if os.environ.get(\"FR13_APC_SSM_SNAPSHOT\", \"0\") == \"1\":  " + sentinel + "\n"
+        "        try:\n"
+        "            from vllm.model_executor.layers.mamba import (\n"
+        "                mamba_utils as _fr13_cmm_me,\n"
+        "                gdn_linear_attn as _fr13_cmm_gdn,\n"
+        "            )\n"
+        "            _fr13_cmm_map = getattr(\n"
+        "                _fr13_cmm_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None\n"
+        "            )\n"
+        "            _fr13_cmm_me._FR13_CUR_SSM_LEAF_ROW = (\n"
+        "                _fr13_cmm_map.get(str(req_state.req_id))\n"
+        "                if _fr13_cmm_map else None\n"
+        "            )\n"
+        "        except Exception:\n"
+        "            pass\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    MAMBA_UTILS_PATH.write_text(text)
+    return True
+
+
 def _patch_eagle_tree_consumption_verify() -> bool:
     text = EAGLE_PATH.read_text()
     sentinel = "# FR10_TREE_DRAFT_CONSUMPTION_VERIFY"
@@ -16004,6 +16050,7 @@ def main() -> int:
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_preprocess_context_flag()),
+        (MAMBA_UTILS_PATH, _patch_mamba_utils_collect_apc_leaf()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_gpu_committer()),
