@@ -6081,6 +6081,44 @@ def _patch_scheduler_mamba_block_align_45477() -> bool:
     return True
 
 
+def _patch_apc_state_probe() -> bool:
+    """FR13_APC_STATE_PROBE: in collect_mamba_copy_meta, checksum the SOURCE and DEST
+    block of each mamba state (conv + ssm, distinguished by shape) per copy, tagged by
+    phase (pre=restore / post=snapshot) + abs_pos (num_computed_tokens), to JSONL. Used
+    to ISOLATE the aligned-boundary cache-hit lossy carrier (conv-content vs ssm-content
+    vs chunk-path) BEFORE patching: compare the warm-request post snapshot-SOURCE (the
+    full-prefill oracle conv/ssm of P at the boundary) vs a fresh full-prefill (req2) post
+    snapshot-SOURCE -> if they differ, the snapshot is contaminated (timing/spec-draft);
+    and the pre restore brings the cached value into the active DEST. Gated, default off."""
+    text = MAMBA_UTILS_PATH.read_text()
+    sentinel = "# FR13_APC_STATE_PROBE"
+    if sentinel in text:
+        return False
+    anchor = (
+        "            for state, state_copy_func in zip(kv_caches, mamba_state_copy_funcs):\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError("APC state probe: collect zip-loop anchor not unique/found")
+    inject = anchor + (
+        "                if os.environ.get(\"FR13_APC_STATE_PROBE\", \"0\") == \"1\":  " + sentinel + "\n"
+        "                    try:\n"
+        "                        import hashlib as _fr13_pp_h, json as _fr13_pp_j\n"
+        "                        from vllm.model_executor.layers.mamba import (\n"
+        "                            mamba_utils as _fr13_pp_me,\n"
+        "                        )\n"
+        "                        _fr13_pp_src = block_ids[src_block_idx]\n"
+        "                        _fr13_pp_ss = _fr13_pp_h.sha256(state[_fr13_pp_src].detach().to(\"cpu\").contiguous().numpy().tobytes()).hexdigest()[:16]\n"
+        "                        _fr13_pp_ds = _fr13_pp_h.sha256(state[dest_block_id].detach().to(\"cpu\").contiguous().numpy().tobytes()).hexdigest()[:16]\n"
+        "                        with open(\"/logs/fr13_apc_state_probe.jsonl\", \"a\") as _fr13_pp_f:\n"
+        "                            _fr13_pp_f.write(_fr13_pp_j.dumps({\"phase\": (\"pre\" if getattr(_fr13_pp_me, \"_FR13_IN_PREPROCESS\", False) else \"post\"), \"layer\": str(layer_name), \"abs\": int(req_state.num_computed_tokens), \"src_blk\": int(_fr13_pp_src), \"dst_blk\": int(dest_block_id), \"shape\": list(state.shape), \"src_sha\": _fr13_pp_ss, \"dst_sha\": _fr13_pp_ds}) + chr(10))\n"
+        "                    except Exception:\n"
+        "                        pass\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    MAMBA_UTILS_PATH.write_text(text)
+    return True
+
+
 def _patch_rejection_sampler_tree_lcp() -> bool:
     text = REJECTION_SAMPLER_PATH.read_text()
     sentinel = "# LUMO_TREE_PATH_LCP_MAX"
@@ -16199,6 +16237,7 @@ def main() -> int:
         (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_preprocess_context_flag()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_collect_apc_leaf()),
+        (MAMBA_UTILS_PATH, _patch_apc_state_probe()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_gpu_committer()),
