@@ -193,6 +193,16 @@ MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
 APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-2048}
 if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
+  # BAKE (2026-06-20): the GDN tree-committer APC lossless fix is ON by default whenever
+  # APC is on -- conv-window fix + SSM-leaf write-through into the align-snapshot row.
+  # Validated byte-lossless non-eager (fr13_apc_lossless_ab.sh: cache-hit==cache-miss) and
+  # coherent on the SWE workload (DIAG OFF; the diag misbehaves under CUDA-graph). These
+  # only take effect with APC on, so the non-APC locked path stays byte-identical.
+  : "${FR13_APC_CONV_FIX:=1}"
+  : "${FR13_APC_CONV_SNAPSHOT:=1}"
+  : "${FR13_APC_SSM_SNAPSHOT:=1}"
+  : "${FR13_APC_SSM_WRITE_THROUGH:=1}"
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SSM_SNAPSHOT FR13_APC_SSM_WRITE_THROUGH
 else
   APC_FLAGS=""
 fi
