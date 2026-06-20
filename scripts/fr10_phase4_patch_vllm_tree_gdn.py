@@ -6461,6 +6461,7 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, replay_rows, replay_lens):
     leaf node-bank row layout is shared across GDN layers, so any layer's commit
     publishes the same value. Inert unless FR13_APC_SSM_SNAPSHOT=1 (default off ->
     map never created, override never fires -> byte-identical to pre-fix)."""
+    import os  # injected into rejection_sampler.py which has no module-level os
     if os.environ.get("FR13_APC_SSM_SNAPSHOT", "0") != "1":
         return
     try:
