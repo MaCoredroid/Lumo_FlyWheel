@@ -6040,6 +6040,47 @@ def _patch_scheduler_spec_trace() -> bool:
     return True
 
 
+def _patch_scheduler_mamba_block_align_45477() -> bool:
+    """Backport vLLM PR #45477. In Scheduler._mamba_block_aligned_split the intermediate
+    prefill chunk is aligned by SIZE (num_new_tokens // block_size * block_size). When
+    num_computed_tokens is not block-aligned (budget-fragmented prefill, unaligned
+    resume/cache-hit), that leaves the chunk ENDING mid-block, so the mamba (conv+ssm)
+    state snapshot at that point is keyed by a block hash claiming a different token
+    count -> APC restore poison on the next cache hit. This is the prefill-after-hit
+    lossy carrier (all-stock reproduction DIFFERs at char 10). #45477 rounds the chunk
+    END position to a block boundary instead. Gated FR13_APC_BLOCK_ALIGN_45477 (default
+    1); only reached on the APC align path (need_mamba_block_aligned_split = APC on)."""
+    text = SCHEDULER_PATH.read_text()
+    sentinel = "# FR13_APC_BLOCK_ALIGN_45477"
+    if sentinel in text:
+        return False
+    anchor = (
+        "            if num_computed_tokens_after_sched < last_cache_position:\n"
+        "                # align to block_size\n"
+        "                num_new_tokens = num_new_tokens // block_size * block_size\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "45477: _mamba_block_aligned_split size-align anchor not unique/found"
+        )
+    inject = (
+        "            if num_computed_tokens_after_sched < last_cache_position:  " + sentinel + "\n"
+        "                import os as _fr13_ba_os\n"
+        "                if _fr13_ba_os.environ.get(\"FR13_APC_BLOCK_ALIGN_45477\", \"1\") == \"1\":\n"
+        "                    # #45477: round the chunk END position to a block boundary\n"
+        "                    # (lossless); size-rounding ends mid-block when computed is unaligned.\n"
+        "                    num_new_tokens = (\n"
+        "                        (num_computed_tokens + num_new_tokens) // block_size * block_size\n"
+        "                        - num_computed_tokens\n"
+        "                    )\n"
+        "                else:\n"
+        "                    num_new_tokens = num_new_tokens // block_size * block_size\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    SCHEDULER_PATH.write_text(text)
+    return True
+
+
 def _patch_rejection_sampler_tree_lcp() -> bool:
     text = REJECTION_SAMPLER_PATH.read_text()
     sentinel = "# LUMO_TREE_PATH_LCP_MAX"
@@ -16135,6 +16176,7 @@ def main() -> int:
         (GDN_ATTN_PATH, _patch_gdn_attn()),
         (GDN_LINEAR_PATH, _patch_gdn_linear()),
         (SCHEDULER_PATH, _patch_scheduler_spec_trace()),
+        (SCHEDULER_PATH, _patch_scheduler_mamba_block_align_45477()),
         (EAGLE_PATH, _patch_eagle_tree_consumption_verify()),
         (EAGLE_PATH, _patch_eagle_mtp_draft_trace()),
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
