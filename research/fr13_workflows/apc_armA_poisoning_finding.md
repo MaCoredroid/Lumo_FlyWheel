@@ -84,3 +84,7 @@ NEXT: design workflow w84n4mdcz (SGLang snapshot-whole-row) — its committed-co
 diagnostic for whether conv-reconstruction is the carrier; if the offset-slice is correct for our
 layout, the carrier is elsewhere and needs empirical instrumentation (tap conv+ssm at a garbled turn
 under APC vs APC-OFF). Do NOT assume the snapshot fix works — gate it on the garble scan.
+
+---
+## UPDATE 2026-06-20: conv whole-row snapshot (dec50857, FR13_APC_CONV_SNAPSHOT=1) did NOT reduce garble
+cat9_apc_snap garble scan: **12 severely-garbled dumps / 3948** (poison cat9_apc ~6, stock-revert cat9_apc_fix 8 — same ~0.2-0.3% order, if anything slightly more). 1/4 resolved (12907), 3 agent_gave_up. So the CONV copy was NOT the dominant garble carrier — neither conv fix (FIX-1 wrong-block, FIX-2 offset-slice->snapshot) moved the garble. The metric gains (0 zero-accept, healthier gen vs stock-revert) were trajectory noise, NOT a losslessness gain (live accept is not a garble detector, re-confirmed). => the SSM/temporal align snapshot (get_temporal_copy_spec, never tree-aware) is the prime carrier (apc_ssm_drilldown_design.md). Launching the one-task eager+taps drill to confirm via Tap C stale_read.
