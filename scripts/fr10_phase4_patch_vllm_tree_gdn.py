@@ -11272,7 +11272,7 @@ def _patch_mamba_utils_preprocess_context_flag() -> bool:
         "            if os.environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\":\n"
         "                _fr13_dn = getattr(_fr13_gdn_leaf, \"_FR13_APC_DIAG_N\", 0) + 1\n"
         "                _fr13_gdn_leaf._FR13_APC_DIAG_N = _fr13_dn\n"
-        "                if _fr13_dn % 200 == 1:\n"
+        "                if _fr13_dn <= 60 or _fr13_dn % 200 == 1:\n"
         "                    import sys as _fr13_sys\n"
         "                    print(\n"
         "                        \"[FR13_APC_DIAG] n=\" + str(_fr13_dn)\n"
