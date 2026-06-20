@@ -11181,20 +11181,21 @@ def get_temporal_copy_spec(
         _fr13_ovn = globals().get("_FR13_OV_DIAG_N", 0) + 1
         globals()["_FR13_OV_DIAG_N"] = _fr13_ovn
         if _fr13_ovn <= 80:
-            _fr13_ov_leaf = _FR13_CUR_SSM_LEAF_ROW
-            _fr13_ov_inrange = (
-                _fr13_ov_leaf is not None
-                and 0 <= int(_fr13_ov_leaf) < int(state.shape[0])
-            )
+            try:
+                from vllm.model_executor.layers.mamba import mamba_utils as _ov_me
+                _ov_import_leaf = getattr(_ov_me, "_FR13_CUR_SSM_LEAF_ROW", "MISSING")
+                _ov_same_mod = (_ov_me.__dict__ is globals())
+            except Exception as _ov_e:
+                _ov_import_leaf = "IMPERR:" + str(_ov_e)[:30]
+                _ov_same_mod = "ERR"
             print(
                 "[FR13_OV_DIAG] n=" + str(_fr13_ovn)
-                + " leaf=" + str(_fr13_ov_leaf)
-                + " inrange=" + str(_fr13_ov_inrange)
+                + " bare_leaf=" + str(_FR13_CUR_SSM_LEAF_ROW)
+                + " import_leaf=" + str(_ov_import_leaf)
+                + " same_module=" + str(_ov_same_mod)
+                + " mod=" + str(globals().get("__name__"))
                 + " state_rows=" + str(int(state.shape[0]))
-                + " num_acc=" + str(num_accepted_tokens)
-                + " ssm_snap=" + os.environ.get("FR13_APC_SSM_SNAPSHOT", "0")
-                + " decmode=" + os.environ.get("FR10_DECODE_MODE_DEFAULT", "tree_mtp")
-                + " fallback=" + os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0"),
+                + " num_acc=" + str(num_accepted_tokens),
                 file=_fr13_ov_sys.stderr, flush=True,
             )
     if (
