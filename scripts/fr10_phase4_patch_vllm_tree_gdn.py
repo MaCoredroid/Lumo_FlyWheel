@@ -11437,13 +11437,16 @@ def _patch_mamba_utils_collect_apc_leaf() -> bool:
         "                        start_addr=_fr13_ls.data_ptr(),\n"
         "                        num_elements=_fr13_ls.numel(),\n"
         "                    )\n"
-        # FR13_APC_SSM_WRITE_THROUGH (option 3): instead of the (ineffective) copy_spec
-        # pointer SUB, write the committed-leaf VALUE in-place INTO the exact block-pool
-        # row the stock align snapshot reads (block_ids[src_block_idx+accept_token_bias]).
-        # batch_memcpy_kernel reads the VALUE at apply time (tl.load) and apply runs
-        # synchronously AFTER collect in the same stream (workflow wd8yxwms3, 2 readers
-        # agree), so this collect-time mutation lands in the snapshot. Covers ALL committed
-        # reqs at the source; align cohort irrelevant. Gated, default off -> byte-identical.
+        # FR13_APC_SSM_WRITE_THROUGH (option 3, CORRECTED): write the committed-leaf VALUE
+        # in-place into the EXACT row the stock align snapshot reads. Two corrections from
+        # the cat9_apc_wt drill: (1) the dest row is derived from copy_spec.start_addr (the
+        # literal pointer the apply kernel tl.loads) NOT block_ids[src+bias] -- those two
+        # disagreed (658 vs 716) so the old WT wrote a row the snapshot never reads. SUB is
+        # disabled when WT=1 so copy_spec here is the STOCK temporal spec. (2) the leaf is
+        # the MAP value spec_idx[b][alen-1] (= committer write target / decode read), NOT
+        # Tap-A rows[-1] which was empirically +10 off and was the prior failure (and the
+        # old SUB's failure too). apply reads the VALUE at apply time, synchronously after
+        # collect (wd8yxwms3) -> this collect-time mutation lands. Gated, default off.
         "                if (\n"
         "                    os.environ.get(\"FR13_APC_SSM_WRITE_THROUGH\", \"0\") == \"1\"\n"
         "                    and getattr(state_copy_func, \"__name__\", \"\")\n"
@@ -11456,27 +11459,24 @@ def _patch_mamba_utils_collect_apc_leaf() -> bool:
         "                    _fr13_wt_seen = getattr(_fr13_wt_gdn, \"_FR13_WT_SEEN\", 0) + 1\n"
         "                    _fr13_wt_gdn._FR13_WT_SEEN = _fr13_wt_seen\n"
         "                    _fr13_wt_did = False\n"
-        "                    _fr13_wt_row = -1\n"
-        "                    _fr13_wt_pos = int(src_block_idx) + int(accept_token_bias)\n"
+        "                    _fr13_wt_rb = int(state[0].numel()) * int(state.element_size())\n"
+        "                    _fr13_wt_dest = (int(copy_spec.start_addr) - int(state.data_ptr())) // max(1, _fr13_wt_rb)\n"
+        "                    _fr13_wt_map = getattr(_fr13_wt_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
+        "                    _fr13_wt_leaf = _fr13_wt_map.get(str(req_state.req_id)) if _fr13_wt_map else None\n"
         "                    if (\n"
-        "                        _fr13_apc_leaf is not None\n"
-        "                        and 0 <= int(_fr13_apc_leaf) < int(state.shape[0])\n"
-        "                        and 0 <= _fr13_wt_pos < len(block_ids)\n"
+        "                        _fr13_wt_leaf is not None\n"
+        "                        and 0 <= int(_fr13_wt_leaf) < int(state.shape[0])\n"
+        "                        and 0 <= _fr13_wt_dest < int(state.shape[0])\n"
+        "                        and _fr13_wt_dest != int(_fr13_wt_leaf)\n"
         "                    ):\n"
-        "                        _fr13_wt_row = int(block_ids[_fr13_wt_pos])\n"
-        "                        if (\n"
-        "                            _fr13_wt_row != int(_fr13_apc_leaf)\n"
-        "                            and 0 <= _fr13_wt_row < int(state.shape[0])\n"
-        "                        ):\n"
-        "                            state[_fr13_wt_row].copy_(state[int(_fr13_apc_leaf)])\n"
-        "                            _fr13_wt_did = True\n"
-        "                            _fr13_wt_gdn._FR13_WT_FIRED = getattr(_fr13_wt_gdn, \"_FR13_WT_FIRED\", 0) + 1\n"
+        "                        state[_fr13_wt_dest].copy_(state[int(_fr13_wt_leaf)])\n"
+        "                        _fr13_wt_did = True\n"
+        "                        _fr13_wt_gdn._FR13_WT_FIRED = getattr(_fr13_wt_gdn, \"_FR13_WT_FIRED\", 0) + 1\n"
         "                    if os.environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\" and (_fr13_wt_seen <= 40 or _fr13_wt_seen % 40 == 1):\n"
         "                        import sys as _fr13_wt_sys\n"
-        "                        _fr13_wt_rid = str(req_state.req_id)\n"
-        "                        _fr13_wt_map = getattr(_fr13_wt_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
-        "                        _fr13_wt_mapleaf = _fr13_wt_map.get(_fr13_wt_rid) if _fr13_wt_map else None\n"
-        "                        print(\"[FR13_WT_DIAG] seen=\" + str(_fr13_wt_seen) + \" fired=\" + str(getattr(_fr13_wt_gdn, \"_FR13_WT_FIRED\", 0)) + \" preproc=\" + str(getattr(_fr13_wt_me, \"_FR13_IN_PREPROCESS\", \"?\")) + \" req=\" + _fr13_wt_rid[:34] + \" leaf=\" + str(_fr13_apc_leaf) + \" mapleaf=\" + str(_fr13_wt_mapleaf) + \" wt_pos=\" + str(_fr13_wt_pos) + \" wt_row=\" + str(_fr13_wt_row) + \" did=\" + str(_fr13_wt_did), file=_fr13_wt_sys.stderr, flush=True)\n"
+        "                        _fr13_wt_bipos = int(src_block_idx) + int(accept_token_bias)\n"
+        "                        _fr13_wt_birow = int(block_ids[_fr13_wt_bipos]) if 0 <= _fr13_wt_bipos < len(block_ids) else -1\n"
+        "                        print(\"[FR13_WT_DIAG] seen=\" + str(_fr13_wt_seen) + \" fired=\" + str(getattr(_fr13_wt_gdn, \"_FR13_WT_FIRED\", 0)) + \" preproc=\" + str(getattr(_fr13_wt_me, \"_FR13_IN_PREPROCESS\", \"?\")) + \" req=\" + str(req_state.req_id)[:34] + \" dest=\" + str(_fr13_wt_dest) + \" birow=\" + str(_fr13_wt_birow) + \" map_leaf=\" + str(_fr13_wt_leaf) + \" tapa=\" + str(_fr13_apc_leaf) + \" did=\" + str(_fr13_wt_did), file=_fr13_wt_sys.stderr, flush=True)\n"
     )
     text = text.replace(anchor2, inject2, 1)
     MAMBA_UTILS_PATH.write_text(text)
