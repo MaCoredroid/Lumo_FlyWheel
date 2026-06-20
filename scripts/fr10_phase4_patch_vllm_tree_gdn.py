@@ -6350,7 +6350,12 @@ def _fr13_boundary_replay_post(
     accepted_node_paths, accepted_lens_list, pre,
 ):
     torch.cuda.synchronize()
-    _row_req_ids = getattr(gdn_mod, '_LUMO_FA_SAMPLER_ROW_REQ_IDS', None) or []
+    # SPEC-row req_ids (aligned with the spec rows this producer iterates), NOT the
+    # full sampler batch: else _last_written is keyed to the wrong req on mixed
+    # prefill+decode batches and the Tap C stale_read verdict becomes a FALSE
+    # positive (it compares src_row against a different req's written rows). Same
+    # bug class as the leaf-publish fix.
+    _row_req_ids = getattr(gdn_mod, '_LUMO_FA_SPEC_ROW_REQ_IDS', None) or []
     _last_written = getattr(gdn_mod, '_FR13_BOUNDARY_LAST_WRITTEN_BY_REQ', None)
     if _last_written is None:
         _last_written = {}
