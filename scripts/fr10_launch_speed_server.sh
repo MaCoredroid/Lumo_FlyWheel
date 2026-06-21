@@ -108,6 +108,18 @@ print(len(ast.literal_eval(os.environ["TREE"])))
 PY
 )}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
+# APC (prefix caching) — gated, default OFF (byte-identical to the native E5 baseline
+# when off). For the SPINE TEST: native MTP-5 (FLASH_ATTN, no tree) + APC, to check
+# whether the cache-ON degradation is OUR-TREE-specific (the mamba 'align' cache is
+# linear-layout, native-aware but NOT tree/node-bank-aware). Mirrors the forked launcher.
+FR13_ENABLE_APC=${FR13_ENABLE_APC:-0}
+MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-1024}
+MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
+APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-$MAMBA_BLOCK_SIZE}
+APC_FLAGS=""
+if [[ "$FR13_ENABLE_APC" == "1" ]]; then
+  APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
+fi
 if [[ -z "${ATTENTION_BACKEND+x}" ]]; then
   ATTENTION_BACKEND=FLASH_ATTN
 fi
@@ -319,5 +331,5 @@ exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-na
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  \"\${SPEC_ARGS[@]}\" \
+  \"\${SPEC_ARGS[@]}\" $APC_FLAGS \
   $(if [[ "$ENFORCE_EAGER" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
