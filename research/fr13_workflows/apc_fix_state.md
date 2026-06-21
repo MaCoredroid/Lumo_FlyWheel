@@ -1,56 +1,69 @@
-# APC (GDN prefix-cache) fix state — cleaned up + baked (2026-06-21)
+# APC (GDN prefix-cache) fix state — CANONICAL (2026-06-21)
 
-Branch `fr13-prefix-cache`. Current, honest state of the APC work after the carrier was isolated.
-Supersedes the over-optimistic `apc_ssm_carrier_FIXED.md` (the SSM write-through is a PARTIAL sub-fix,
-not full losslessness).
+Branch `fr13-prefix-cache`. Current, honest state after the gross poison was root-caused and fixed.
+Supersedes every earlier carrier theory in this dir (`apc_ssm_carrier_FIXED.md`, the #43559 /
+chunk-vs-recurrent / WT-overshoot framings — all refuted below).
 
-## BAKED (default-ON whenever APC is enabled; non-APC path byte-identical)
-Launcher `fr13_launch_forked_fa2_tree_server.sh`, inside the `FR13_ENABLE_APC==1` block:
-- `FR13_APC_SSM_WRITE_THROUGH=1` — the proven sub-fix. In `collect_mamba_copy_meta`, writes the
-  committed accepted-leaf SSM value into the exact row the stock align snapshot reads (dest from
-  `copy_spec.start_addr`, leaf from the publish map). Byte-lossless for the single-hit A/B + the
-  spec-decode-boundary (num_accepted>1) cohort. Validated: `fr13_apc_lossless_ab.sh` MATCH.
-- `FR13_APC_SSM_SNAPSHOT=1` — populates the committed-leaf map the WT consumes.
-- `FR13_APC_CONV_FIX=1` / `FR13_APC_CONV_SNAPSHOT=1` — conv-window override on `get_conv_copy_spec`.
-  NOTE: for OUR GDN the conv is FUSED (`FR13_TREE_CONV_FUSED`), so `get_conv_copy_spec` isn't on the
-  copy path (state-probe saw only the 4-D SSM) → this override is ~a no-op for cat9; kept gated for
-  generality/other layouts.
-- `FR13_APC_BLOCK_ALIGN_45477=1` (in the `-e` list, correctness/always-on) — backport of vLLM PR
-  #45477 (chunk END block-alignment in `_mamba_block_aligned_split`). NO-OP in our B=1/aligned-budget
-  config (`num_computed_tokens` already block-aligned; `block_size`=832=13×64 is chunk-phase-aligned),
-  but a valid correctness fix for the budget-fragmented mid-block-snapshot case.
+## THE FIX (BAKED, default-ON whenever APC is on) — commit d228c76b
+`scripts/fr13_launch_forked_fa2_tree_server.sh` line ~205:
+```
+APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-$MAMBA_BLOCK_SIZE}
+```
+i.e. **default max-num-batched-tokens = the mamba block size**, so each chunked-prefill scheduler step
+crosses **at most one** mamba block boundary. APC-scoped (consumed only inside `APC_FLAGS`), so the
+non-APC locked cat9 serve command is **byte-identical**.
 
-Non-APC safety: with APC off, `--enable-prefix-caching` is absent → mamba `align` mode is off →
-`preprocess/postprocess_mamba`, `get_*_copy_spec`, the collect injects, and `_mamba_block_aligned_split`
-are not invoked. So the locked cat9 path is byte-identical regardless of these defaults.
+## ROOT CAUSE (proven, run_20260621T013300Z)
+vLLM mamba **`align` caches ONE checkpoint per scheduler step — the LAST block boundary it crosses**
+(vLLM #45238 "align keeps only one checkpoint"). With `max_num_batched=2048 > block_size=1024` a step
+spans ~2 blocks, so an **intermediate** boundary (e.g. 3072, crossed in the same step as 4096) is cached
+with the **step-END (overshoot) recurrent state**. A later cache hit at that boundary restores a grossly
+wrong GDN state → **total collapse at token 1** (`</think>\n\noutput_text\n\noutput_text…` degenerate
+loop). Forcing each step to ≤1 block makes step-end == boundary state → correct checkpoint → poison gone.
+Result: cache-ON output flips from `output_text` garbage to **coherent + on-task**; **TTFT cache-hit 3.96×**
+(miss 4.29s → hit 1.08s); GATE-A/B/C/D pass.
 
-## DIAGNOSTICS (default-OFF; do NOT enable in deployment)
-- `FR13_APC_STATE_PROBE` — conv/ssm src/dst checksum per copy (isolation probe; heavy CPU sync).
-- `FR13_APC_SSM_DIAG` — `FR13_WT_DIAG`/`FR13_SUB_DIAG` prints. **Misbehaves under CUDA-graph** — eager only.
-- `FR13_REPLAY_BOUNDARY_LOG` — Tap-A producer (layer-0, eager, torch.cuda.synchronize).
+## REFUTED CARRIER THEORIES (do not revisit)
+- **#43650 drop-final-block** — REFUTED + stays `FR13_APC_DROP_FINAL_BLOCK` default-OFF. The GDN restore
+  reads `ssm_state[block_table[:,0]]` anchored to `(seq_len-1)//block_size`, NOT the matched-block count
+  (prior red-team reader 2), and empirically still garbled at `max_num_batched=2048` — dropping a matched
+  block is a no-op on the restored state.
+- **#43559 fp-nondeterminism (autotune/shape variance)** — REFUTED from source: the FLA chunk kernel is
+  deterministic + length-invariant (autotune key `['H','K','V','BT']`, `T` is `do_not_specialize`,
+  sequential chunk accumulation, no split-K/atomics). batch-invariant mode doesn't touch the FLA Triton
+  kernels.
+- **WT-leaf overshoot** — the baked SSM write-through is INERT in the prefill reproduction (`map_leaf=None`,
+  `did=False`): a warm-req prefill has no decode-committed leaf. So WT was not the carrier here.
 
-## DEAD / superseded (gated, never runs in deployment)
-- The option-1 pointer-SUB in `_patch_mamba_utils_collect_apc_leaf` (`#..._SUB`): only fires when
-  `FR13_APC_SSM_WRITE_THROUGH != 1`, but WT is baked default-on → dead. Kept as a no-WT A/B fallback.
+## RESIDUAL (small, being closed) — NOT yet fully lossless
+Temp-0.6 precheck (1 prompt, 512 tok, same boot; clear-margin argmax-flip vs the no-spec RECURRENT oracle;
+`output/fr13_apc_temp06/PRECHECK_VERDICT.md`):
+- **cache-ON 9.18%** (Wilson95 [6.97, 11.99]) — **within the absolute 12.90% E5 floor**
+- **cache-OFF 6.05%** (Wilson95 [4.30, 8.47])
+- +3.12pp; clear-margin CIs overlap (n=512), but raw-flip is 2× (19.5% vs 9.6%, significant).
+Cause: cache-OFF prefills [0..end] continuously (no restart); cache-ON restores the boundary state and
+restarts the FLA chunk scan over the suffix — the FIRST suffix chunk's fold of the restored state is an
+artifact cache-OFF lacks. **Fix in progress (user ruling: close it now)** = bounded single-first-suffix-chunk
+recurrent recompute (`FR13_APC_HIT_RECURRENT_SUFFIX`, gated default-0): recompute only the first ≤64 suffix
+tokens via the bit-exact sequential rank-1 scan (`fr10_gdn_tree_kernel.py`), FLA the rest. O(64),
+prefill-only, NO whole-suffix serial scan (BARRED), NO WY (PARKED). Design workflow w0by0i7nn.
 
-## OPEN — the real remaining carrier (NOT fixed by the baked sub-fixes)
-APC is **not yet fully lossless**. Probe-isolated carrier (`42df9e89`): the GDN recurrent SSM state at a
-cache boundary is **chunk-vs-recurrent dependent** — a cache-hit's chunked suffix-prefill (FLA
-`chunk_gated_delta_rule`, CHUNK_SIZE=64) computes a *different* SSM than a contiguous full-prefill (probe:
-SSM checksum varies at abs=3328/4992, stable at 1664). Phase is fine (832=13×64); the divergence is the
-**fp-numerics / reduction order** of the chunked kernel. This is vLLM **#43559**. Fix in progress = route
-the cache-hit suffix-prefill through our **bit-exact sequential rank-1 scan** (the allowed, non-WY path;
-`fr10_gdn_tree_kernel.py`) instead of FLA's chunked kernel (workflow wvbmcp1ye). It is option-2a
-(recompute-from-spine, exact but token-sequential) — NOT a WY revival.
+## OTHER BAKED FLAGS (default-ON with APC; partial / for the decode-snapshot case)
+`FR13_APC_SSM_WRITE_THROUGH`, `FR13_APC_SSM_SNAPSHOT`, `FR13_APC_CONV_FIX`/`CONV_SNAPSHOT`,
+`FR13_APC_BLOCK_ALIGN_45477` — kept; they target the decode-committed-leaf snapshot (multi-turn), not the
+prefill overshoot that `max_num_batched=block_size` fixes. Conv is FUSED for our GDN so the conv override
+is ~no-op. All only fire under `--enable-prefix-caching`, so non-APC is byte-identical.
 
-## Measured wins (banked, independent of the open carrier)
-- **TTFT 2.09×** (cache-hit prefill 2.54s vs miss 5.31s, A/B) + **78.7% prompt-token cache reuse** on the
-  live 12907 workload. Decode-TPS unchanged (APC is prefill-only).
+## MEASURED WINS (banked)
+- Gross poison eliminated; cache-ON coherent + on-task.
+- **TTFT cache-hit 3.96×**; decode-TPS unaffected (APC is prefill-only).
+- cache-ON within the absolute 12.90% E5 lossless floor (residual to be closed to ≤ cache-OFF).
 
-## Reusable gates / instruments
-- `scripts/fr13_apc_lossless_ab.sh` — same-boot cache-miss vs cache-hit byte compare + TTFT.
-- `scripts/fr13_apc_prefill_after_hit.sh` — the prefill-after-hit reproduction (the carrier; ~10 min).
-- `FR13_APC_STATE_PROBE` — the conv/ssm state-checksum isolation probe.
+## INSTRUMENTS (reusable)
+- `scripts/fr13_apc_prefill_after_hit.sh` — greedy gross-poison reproduction (DIFFER/MATCH).
+- `scripts/fr13_apc_temp06_precheck.sh` — temp-0.6 cache-ON + cache-OFF same-boot capture → oracle src.
+- `scripts/fr13_recur_rescore_in_container.sh` + `fr13_recurrent_decode_oracle.py` — no-spec RECURRENT
+  oracle rescore → `total_clear_margin_flips`/`total_positions` (the binding lossless metric).
 
-Cross-refs: [[apc_ssm_carrier_FIXED]] (partial), [[why_option1_snapshot_side_failed]],
-[[sglang_mamba_radix_cache_design]].
+Ship gate still pending: temp-0.6 4-task (12907/13033/13236/13398) cache-OFF vs fixed-cache-ON —
+decode-TPS≈ + TTFT-win + coding-quality parity + cache-ON clear-margin ≤ cache-OFF.
