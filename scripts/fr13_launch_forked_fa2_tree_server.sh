@@ -190,7 +190,19 @@ SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens
 FR13_ENABLE_APC=${FR13_ENABLE_APC:-0}
 MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-1024}
 MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
-APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-2048}
+# APC LOSSLESS FIX (2026-06-21, proven run_20260621T013300Z): default max-num-batched-tokens to
+# the mamba block size so each chunked-prefill scheduler step crosses AT MOST ONE block boundary.
+# vLLM mamba 'align' caches ONE checkpoint per step (the last boundary it crosses); with a larger
+# budget a step spans multiple blocks and an INTERMEDIATE boundary is cached with the step-END
+# (overshoot) recurrent state (#45238), so a later cache hit at that boundary restores a grossly
+# wrong GDN state -> degenerate 'output_text' garbage. step<=1 block => step-end state == boundary
+# state => correct checkpoint => gross poison eliminated (cache-ON coherent + on-task, TTFT 3.96x).
+# This is the minimum legal value (align asserts block_size <= max-num-batched). APC-scoped:
+# consumed only inside APC_FLAGS below, so the non-APC locked cat9 serve command is byte-identical.
+# (#43650 drop-final-block was REFUTED: the GDN restore reads block_table col-0 anchored to
+# (seq_len-1)//block_size, NOT the matched-block count, so dropping a matched block is a no-op on
+# the restored state. Stays default-OFF.)
+APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-$MAMBA_BLOCK_SIZE}
 if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
   # BAKE (2026-06-20, carrier re-rooted 2026-06-21): GDN tree-committer APC sub-fixes ON by
