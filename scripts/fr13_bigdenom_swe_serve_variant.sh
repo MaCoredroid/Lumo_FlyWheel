@@ -28,7 +28,7 @@ ARM=${1:?usage: fr13_bigdenom_swe_serve_variant.sh <arm> <KIND> <subset.json>}
 KIND=${2:?cat9|cat9-opta|cat9-opt1|cat6root|cat10}
 SUBSET=${3:?subset json}
 
-RUNROOT=output/fr13_bigdenom_swe
+RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 ARMDIR="$RUNROOT/$ARM"
 [[ -f "$SUBSET" ]] || SUBSET="output/fr13_b1_gold_swe/$SUBSET"
 [[ -f "$SUBSET" ]] || { echo "FAIL: subset not found: $SUBSET"; exit 2; }
