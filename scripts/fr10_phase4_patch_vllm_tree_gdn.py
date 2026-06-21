@@ -11501,6 +11501,9 @@ def _patch_mamba_utils_collect_apc_leaf() -> bool:
         "                        _fr13_sub_sr = (int(copy_spec.start_addr) - int(state.data_ptr())) // max(1, _fr13_sub_rb)\n"
         "                        _fr13_sub_will = (_fr13_apc_leaf is not None and 0 <= int(_fr13_apc_leaf) < int(state.shape[0]))\n"
         "                        print(\"[FR13_SUB_DIAG] n=\" + str(_fr13_sub_n) + \" bias=\" + str(accept_token_bias) + \" preproc=\" + str(getattr(_fr13_sub_me, \"_FR13_IN_PREPROCESS\", \"?\")) + \" req=\" + str(req_state.req_id)[:34] + \" leaf=\" + str(_fr13_apc_leaf) + \" will_sub=\" + str(_fr13_sub_will) + \" stock_src=\" + str(_fr13_sub_sr), file=_fr13_sub_sys.stderr, flush=True)\n"
+        # DEAD-BY-DEFAULT (option-1 pointer-SUB, superseded): only fires when
+        # FR13_APC_SSM_WRITE_THROUGH != 1, but WT is baked default-ON with APC, so this never
+        # runs in deployment. Kept gated as a no-WT fallback for A/B isolation only.
         "                if (\n"
         "                    _fr13_apc_leaf is not None\n"
         "                    and os.environ.get(\"FR13_APC_SSM_WRITE_THROUGH\", \"0\") != \"1\"\n"
