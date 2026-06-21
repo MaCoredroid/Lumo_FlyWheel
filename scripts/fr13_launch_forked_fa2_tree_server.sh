@@ -193,20 +193,28 @@ MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
 APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-2048}
 if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
-  # BAKE (2026-06-20, scope corrected 2026-06-21): the GDN tree-committer APC sub-fixes are
-  # ON by default whenever APC is on. SSM-leaf write-through (the proven sub-fix: writes the
-  # committed accepted-leaf into the exact row the stock align snapshot reads, byte-lossless
-  # for the single-hit A/B + spec-decode-boundary cohort) + the conv-window fix. NOTE: these
-  # are PARTIAL -- they do NOT make APC fully lossless. The remaining carrier (probe 42df9e89)
-  # is the GDN chunk-vs-recurrent state dependence on the cache-hit suffix-prefill (vLLM
-  # #43559), fixed by the chunk-invariant scan route (option 3, in progress), NOT by these.
-  # They only take effect with APC on, so the non-APC locked cat9 path stays byte-identical
-  # (the align hooks/get_*_copy_spec are not even invoked without --enable-prefix-caching).
+  # BAKE (2026-06-20, carrier re-rooted 2026-06-21): GDN tree-committer APC sub-fixes ON by
+  # default with APC. SSM-leaf write-through (writes the committed accepted-leaf into the row
+  # the stock align snapshot reads; byte-lossless for the single-hit A/B + spec-decode-boundary
+  # cohort) + conv-window fix. These are PARTIAL -- they do NOT make APC fully lossless.
+  # CARRIER (source-confirmed wi887k5v3, refuting the earlier #43559 fp-nondeterminism theory):
+  # the FLA chunk kernel is deterministic + length-invariant, so the divergence is NOT numerics.
+  # It is vLLM #43650 -- MambaManager.find_longest_cache_hit reuses one mamba block too many;
+  # full-attention recomputes the boundary block but Mamba never drops it, so the SSM state
+  # restored at the boundary poisons the suffix (#45477: "No floating-point non-determinism is
+  # involved"). FIX = FR13_APC_DROP_FINAL_BLOCK (patcher _patch_mamba_drop_final_block_43650):
+  # drop one matched block so the boundary block is re-prefilled contiguously (chunked, ~one
+  # block -> decode-TPS untouched, rest of prefix still cached). Default 0 here UNTIL validated
+  # on the prefill-after-hit reproduction (garble->0 + boundary SSM matches the cache-OFF
+  # oracle); flip to 1 once it passes. All only take effect with APC on, so the non-APC locked
+  # cat9 path stays byte-identical (align hooks / find_longest_cache_hit not invoked without
+  # --enable-prefix-caching).
   : "${FR13_APC_CONV_FIX:=1}"
   : "${FR13_APC_CONV_SNAPSHOT:=1}"
   : "${FR13_APC_SSM_SNAPSHOT:=1}"
   : "${FR13_APC_SSM_WRITE_THROUGH:=1}"
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SSM_SNAPSHOT FR13_APC_SSM_WRITE_THROUGH
+  : "${FR13_APC_DROP_FINAL_BLOCK:=0}"
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SSM_SNAPSHOT FR13_APC_SSM_WRITE_THROUGH FR13_APC_DROP_FINAL_BLOCK
 else
   APC_FLAGS=""
 fi
@@ -321,6 +329,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_SSM_SNAPSHOT="${FR13_APC_SSM_SNAPSHOT:-0}" \
   -e FR13_APC_SSM_WRITE_THROUGH="${FR13_APC_SSM_WRITE_THROUGH:-0}" \
   -e FR13_APC_BLOCK_ALIGN_45477="${FR13_APC_BLOCK_ALIGN_45477:-1}" \
+  -e FR13_APC_DROP_FINAL_BLOCK="${FR13_APC_DROP_FINAL_BLOCK:-0}" \
   -e FR13_APC_STATE_PROBE="${FR13_APC_STATE_PROBE:-0}" \
   -e FR13_APC_SSM_DIAG="${FR13_APC_SSM_DIAG:-0}" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \

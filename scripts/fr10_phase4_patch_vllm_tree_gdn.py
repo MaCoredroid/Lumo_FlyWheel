@@ -48,6 +48,10 @@ MAMBA_STATE_UTILS_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/mamba/"
     "mamba_utils.py"
 )
+SINGLE_TYPE_MANAGER_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/"
+    "single_type_kv_cache_manager.py"
+)
 QWEN3_NEXT_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/models/qwen3_next.py"
 )
@@ -6078,6 +6082,56 @@ def _patch_scheduler_mamba_block_align_45477() -> bool:
     )
     text = text.replace(anchor, inject, 1)
     SCHEDULER_PATH.write_text(text)
+    return True
+
+
+def _patch_mamba_drop_final_block_43650() -> bool:
+    """Backport vLLM #43650 for the GDN tree-committer APC path. MambaManager
+    .find_longest_cache_hit matches the longest cached prefix and reuses the recurrent
+    SSM state at the FINAL matched block boundary -- but unlike FullAttention/
+    SlidingWindow (which drop the last matched block under eagle) Mamba never drops it.
+    On a cache hit the state restored at that boundary block poisons the suffix prefill,
+    while full-attention recomputes the boundary block correctly (Yifei Hu / #43650
+    over-reuse; companion #45477 states 'No floating-point non-determinism is involved'
+    -- it is block-index wiring, NOT a chunk-vs-recurrent fp gap). Fix: drop ONE matched
+    block so the boundary block is re-prefilled contiguously (one block, chunked ->
+    decode-TPS untouched, the rest of the prefix still cached). Mechanism mirrors the
+    #43650 PR (max_num_blocks -= 1). Gated FR13_APC_DROP_FINAL_BLOCK (default 0 = inert);
+    only reached on the APC prefix-cache lookup (find_longest_cache_hit is not called
+    without --enable-prefix-caching), so the non-APC path is byte-identical and the
+    flag-off path is the stock method."""
+    text = SINGLE_TYPE_MANAGER_PATH.read_text()
+    sentinel = "# FR13_APC_DROP_FINAL_BLOCK"
+    if sentinel in text:
+        return False
+    anchor = (
+        "        block_size = kv_cache_spec.block_size\n"
+        "        max_num_blocks = max_length // block_size\n"
+        "        # Search from right to left and early stop when a match is found.\n"
+        "        for i in range(max_num_blocks - 1, -1, -1):\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "43650: MambaManager.find_longest_cache_hit anchor not unique/found "
+            "(count=%d)" % text.count(anchor)
+        )
+    inject = (
+        "        block_size = kv_cache_spec.block_size\n"
+        "        max_num_blocks = max_length // block_size\n"
+        "        import os as _fr13_df_os  " + sentinel + "\n"
+        "        if (\n"
+        "            _fr13_df_os.environ.get(\"FR13_APC_DROP_FINAL_BLOCK\", \"0\") == \"1\"\n"
+        "            and max_num_blocks > 0\n"
+        "        ):\n"
+        "            # #43650: Mamba over-reuses the boundary block; full-attention\n"
+        "            # recomputes it. Drop one matched block so the boundary block is\n"
+        "            # re-prefilled contiguously (decode untouched; suffix still cached).\n"
+        "            max_num_blocks -= 1\n"
+        "        # Search from right to left and early stop when a match is found.\n"
+        "        for i in range(max_num_blocks - 1, -1, -1):\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    SINGLE_TYPE_MANAGER_PATH.write_text(text)
     return True
 
 
@@ -16241,6 +16295,7 @@ def main() -> int:
         (MAMBA_UTILS_PATH, _patch_mamba_utils_preprocess_context_flag()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_collect_apc_leaf()),
         (MAMBA_UTILS_PATH, _patch_apc_state_probe()),
+        (SINGLE_TYPE_MANAGER_PATH, _patch_mamba_drop_final_block_43650()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_gpu_committer()),
