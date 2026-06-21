@@ -238,7 +238,7 @@ PY
 echo "[warm] reset prefix cache + warm prefix P (greedy max_tokens=1)"
 curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" >/dev/null 2>&1 || true
 .venv/bin/python - "$PORT" "$MODEL" "$P_FILE" <<'PY'
-import json, sys, urllib.request, urllib.error
+import json, os, sys, urllib.request, urllib.error
 port, model, pfile = sys.argv[1], sys.argv[2], sys.argv[3]
 body = json.dumps({"model": model, "prompt": open(pfile).read(),
                    "temperature": 0.0, "max_tokens": 1, "stream": False}).encode()
@@ -259,7 +259,7 @@ PY
 echo "[capture] temp-$TEMP cache-ON request (full P+SUFFIX) -> served_token_ids"
 curl -fsS "http://127.0.0.1:$PORT/metrics" > "$RUNDIR/metrics_before_capture.txt" 2>&1 || true
 .venv/bin/python - "$PORT" "$MODEL" "$PROMPT_FILE" "$TEMP" "$SEED" "$TOP_K" "$MAX_TOKENS" "$SRC_OUT" "$RUNDIR/capture_raw.json" <<'PY'
-import json, sys, urllib.request, urllib.error
+import json, os, sys, urllib.request, urllib.error
 from pathlib import Path
 port, model, pfile = sys.argv[1], sys.argv[2], sys.argv[3]
 temp, seed, top_k, max_tokens = float(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6]), int(sys.argv[7])
@@ -273,6 +273,7 @@ body = json.dumps({
     "top_k": top_k,
     "max_tokens": max_tokens,
     "stream": False,
+    "ignore_eos": os.environ.get("IGNORE_EOS", "0") == "1",  # run past natural stop for tight-CI lossless rescore
     "return_token_ids": True,   # <-- load-bearing: choice["token_ids"] = served ids
     "vllm_xargs": {"fr10_decode_mode": "tree_mtp"},
 }).encode()
@@ -329,7 +330,7 @@ OFF_SRC_OUT="$RUNROOT/cat9_apc_off_src.json"
 echo "[capture-off] reset prefix cache -> temp-$TEMP cache-OFF (full prefill, no hit) -> served_token_ids"
 curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" >/dev/null 2>&1 || true
 .venv/bin/python - "$PORT" "$MODEL" "$PROMPT_FILE" "$TEMP" "$SEED" "$TOP_K" "$MAX_TOKENS" "$OFF_SRC_OUT" "$RUNDIR/capture_off_raw.json" <<'PY'
-import json, sys, urllib.request, urllib.error
+import json, os, sys, urllib.request, urllib.error
 from pathlib import Path
 port, model, pfile = sys.argv[1], sys.argv[2], sys.argv[3]
 temp, seed, top_k, max_tokens = float(sys.argv[4]), int(sys.argv[5]), int(sys.argv[6]), int(sys.argv[7])
@@ -338,6 +339,7 @@ prompt = open(pfile).read()
 body = json.dumps({
     "model": model, "prompt": prompt, "temperature": temp, "seed": seed, "top_k": top_k,
     "max_tokens": max_tokens, "stream": False, "return_token_ids": True,
+    "ignore_eos": os.environ.get("IGNORE_EOS", "0") == "1",  # run past natural stop for tight-CI lossless rescore
     "vllm_xargs": {"fr10_decode_mode": "tree_mtp"},
 }).encode()
 req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/completions",
