@@ -226,7 +226,12 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   : "${FR13_APC_SSM_SNAPSHOT:=1}"
   : "${FR13_APC_SSM_WRITE_THROUGH:=1}"
   : "${FR13_APC_DROP_FINAL_BLOCK:=0}"
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SSM_SNAPSHOT FR13_APC_SSM_WRITE_THROUGH FR13_APC_DROP_FINAL_BLOCK
+  # FR13_APC_HIT_RECURRENT_SUFFIX: bounded single-first-suffix-chunk recurrent
+  # recompute (bit-exact sequential rank-1 kernel) on APC cache-hit prefill
+  # rows to close the cache-ON clear-margin residual. Default 0 = inert /
+  # byte-identical (native chunk path unchanged). Only active under APC.
+  : "${FR13_APC_HIT_RECURRENT_SUFFIX:=0}"
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SSM_SNAPSHOT FR13_APC_SSM_WRITE_THROUGH FR13_APC_DROP_FINAL_BLOCK FR13_APC_HIT_RECURRENT_SUFFIX
 else
   APC_FLAGS=""
 fi
@@ -342,6 +347,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_SSM_WRITE_THROUGH="${FR13_APC_SSM_WRITE_THROUGH:-0}" \
   -e FR13_APC_BLOCK_ALIGN_45477="${FR13_APC_BLOCK_ALIGN_45477:-1}" \
   -e FR13_APC_DROP_FINAL_BLOCK="${FR13_APC_DROP_FINAL_BLOCK:-0}" \
+  -e FR13_APC_HIT_RECURRENT_SUFFIX="${FR13_APC_HIT_RECURRENT_SUFFIX:-0}" \
   -e FR13_APC_STATE_PROBE="${FR13_APC_STATE_PROBE:-0}" \
   -e FR13_APC_SSM_DIAG="${FR13_APC_SSM_DIAG:-0}" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \

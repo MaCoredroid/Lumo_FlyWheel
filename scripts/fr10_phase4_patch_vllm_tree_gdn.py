@@ -5449,22 +5449,194 @@ def _fr13_gdn_subop_mab(
                 ssm_state.dtype
             )
 '''
-        prefill_scan_replacement = '''            (
-                core_attn_out_non_spec,
-                last_recurrent_state,
-            ) = self.chunk_gated_delta_rule(
-                q=query_non_spec,
-                k=key_non_spec,
-                v=value_non_spec,
-                g=g_non_spec,
-                beta=beta_non_spec,
-                initial_state=initial_state,
-                output_final_state=True,
-                cu_seqlens=non_spec_query_start_loc,
-                chunk_indices=attn_metadata.chunk_indices,
-                chunk_offsets=attn_metadata.chunk_offsets,
-                use_qk_l2norm_in_kernel=False,
+        prefill_scan_replacement = '''            # FR13_APC_HIT_RECURRENT_SUFFIX (default 0 = inert / byte-identical).
+            # When enabled AND there is at least one APC cache-hit prefill row
+            # (has_initial_state True), recompute the first <=64-token suffix
+            # chunk of each cache-hit row with the bit-exact sequential rank-1
+            # native kernel (fused_sigmoid_gating_delta_rule_update) seeded by
+            # the restored boundary state, eliminating the chunked-prefill
+            # restart-fold artifact that drives the cache-ON clear-margin
+            # residual. Fresh rows (has_initial_state False) and, when the flag
+            # is off, ALL rows take the native chunk path UNCHANGED below.
+            _fr13_apc_active = bool(
+                os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "0") == "1"
+                and has_initial_state is not None
+                and bool(has_initial_state.any())
             )
+            if _fr13_apc_active:
+                # ---- gated bounded recurrent-suffix recompute ----
+                _fr13_qsl = non_spec_query_start_loc
+                _fr13_Nns = int(_fr13_qsl.numel()) - 1
+                _fr13_dev = query_non_spec.device
+                # query/key are [1, T, H, K]; value is [1, T, HV, V]; a/b are
+                # [T, HV] RAW gating; squeeze the leading batch dim for gather.
+                _fr13_q = query_non_spec.squeeze(0)
+                _fr13_k = key_non_spec.squeeze(0)
+                _fr13_v = value_non_spec.squeeze(0)
+                _fr13_a = a_non_spec
+                _fr13_b = b_non_spec
+                # initial_state is [Nns, HV, V, K] fp32 (ssm_state slice; HV is
+                # the value-head count, the same index used by the kernel h0
+                # read p_h0 = h0 + bos*HV*V*K). Row order == cu_seqlens segments.
+                # 1) first-chunk gather over ONLY cache-hit rows, L_r=min(64,len)
+                _fr13_FC = 64
+                _fr13_gather = []
+                _fr13_sub_cu = [0]
+                _fr13_hit_rows = []
+                _fr13_tail_rows = []      # hit rows with suffix_len > 64
+                _fr13_suffix_end = []     # per hit row, local end offset s_{r+1}
+                for _fr13_r in range(_fr13_Nns):
+                    if not bool(has_initial_state[_fr13_r]):
+                        continue
+                    _fr13_s = int(_fr13_qsl[_fr13_r])
+                    _fr13_e = int(_fr13_qsl[_fr13_r + 1])
+                    _fr13_L = min(_fr13_FC, _fr13_e - _fr13_s)
+                    _fr13_gather.extend(range(_fr13_s, _fr13_s + _fr13_L))
+                    _fr13_sub_cu.append(_fr13_sub_cu[-1] + _fr13_L)
+                    _fr13_hit_rows.append(_fr13_r)
+                    _fr13_suffix_end.append(_fr13_e)
+                    if (_fr13_e - _fr13_s) > _fr13_FC:
+                        _fr13_tail_rows.append(_fr13_r)
+                _fr13_gi = torch.as_tensor(_fr13_gather, dtype=torch.long, device=_fr13_dev)
+                _fr13_cu = torch.as_tensor(_fr13_sub_cu, dtype=torch.int32, device=_fr13_dev)
+                _fr13_hit_idx = torch.as_tensor(_fr13_hit_rows, dtype=torch.long, device=_fr13_dev)
+                # h0 for hit rows, contiguous [Nhit, HV, V, K] fp32.
+                _fr13_h0 = initial_state[_fr13_hit_idx].contiguous()
+                # 2) bit-exact sequential rank-1 recompute of the first chunks.
+                #    query/key are ALREADY l2-normed (fused_post_conv_prep
+                #    apply_l2norm=True) -> use_qk_l2norm_in_kernel=False (Option
+                #    B); a/b are RAW so the kernel derives g/beta. scale defaults
+                #    to K**-0.5 on both arms. inplace_final_state=False yields a
+                #    per-token state trajectory ht[bos+i_t] in fp32.
+                _fr13_o_fc, _fr13_ht = fused_sigmoid_gating_delta_rule_update(
+                    A_log=self.A_log,
+                    a=_fr13_a[_fr13_gi].contiguous(),
+                    b=_fr13_b[_fr13_gi].contiguous(),
+                    dt_bias=self.dt_bias,
+                    q=_fr13_q[_fr13_gi].unsqueeze(0).contiguous(),
+                    k=_fr13_k[_fr13_gi].unsqueeze(0).contiguous(),
+                    v=_fr13_v[_fr13_gi].unsqueeze(0).contiguous(),
+                    initial_state=_fr13_h0,
+                    inplace_final_state=False,
+                    cu_seqlens=_fr13_cu,
+                    ssm_state_indices=None,
+                    num_accepted_tokens=None,
+                    use_qk_l2norm_in_kernel=False,
+                )
+                # _fr13_o_fc: [sumL, HV, V] bf16 ; _fr13_ht: [sumL, HV, V, K] fp32
+                # post-first-chunk recurrent state per hit row = ht[sub_cu[i+1]-1]
+                _fr13_post = [
+                    _fr13_ht[int(_fr13_sub_cu[_fr13_i + 1]) - 1]
+                    for _fr13_i in range(len(_fr13_hit_rows))
+                ]
+                # 3) start from the native chunk over the WHOLE non-spec batch so
+                #    fresh rows + the tails of hit rows are filled exactly as
+                #    native; then OVERWRITE hit-row first-chunk outputs with the
+                #    serial o, and overwrite hit-row final state from the serial
+                #    path (post for suffix<=64, tail re-chunk for suffix>64).
+                (
+                    core_attn_out_non_spec,
+                    last_recurrent_state,
+                ) = self.chunk_gated_delta_rule(
+                    q=query_non_spec,
+                    k=key_non_spec,
+                    v=value_non_spec,
+                    g=g_non_spec,
+                    beta=beta_non_spec,
+                    initial_state=initial_state,
+                    output_final_state=True,
+                    cu_seqlens=non_spec_query_start_loc,
+                    chunk_indices=attn_metadata.chunk_indices,
+                    chunk_offsets=attn_metadata.chunk_offsets,
+                    use_qk_l2norm_in_kernel=False,
+                )
+                # scatter serial first-chunk outputs (bf16) into the flat output.
+                core_attn_out_non_spec[0, _fr13_gi] = _fr13_o_fc.to(
+                    core_attn_out_non_spec.dtype
+                )
+                # tail re-chunk for hit rows whose suffix_len > 64, seeded by the
+                # per-row post-first-chunk fp32 state. Build a reduced varlen
+                # batch over the tails [s_r+64, s_{r+1}); pass cu_seqlens only and
+                # let FLA recompute chunk_indices/chunk_offsets internally.
+                _fr13_final_by_row = {}
+                if len(_fr13_tail_rows) > 0:
+                    _fr13_tail_gather = []
+                    _fr13_tail_cu = [0]
+                    _fr13_tail_h0 = []
+                    _fr13_tail_order = []
+                    for _fr13_i, _fr13_r in enumerate(_fr13_hit_rows):
+                        _fr13_e = _fr13_suffix_end[_fr13_i]
+                        _fr13_s = int(_fr13_qsl[_fr13_r])
+                        if (_fr13_e - _fr13_s) <= _fr13_FC:
+                            # whole suffix in first chunk -> post IS the final.
+                            _fr13_final_by_row[_fr13_r] = _fr13_post[_fr13_i]
+                            continue
+                        _fr13_tstart = _fr13_s + _fr13_FC
+                        _fr13_tail_gather.extend(range(_fr13_tstart, _fr13_e))
+                        _fr13_tail_cu.append(
+                            _fr13_tail_cu[-1] + (_fr13_e - _fr13_tstart)
+                        )
+                        _fr13_tail_h0.append(_fr13_post[_fr13_i])
+                        _fr13_tail_order.append(_fr13_r)
+                    if len(_fr13_tail_order) > 0:
+                        _fr13_tgi = torch.as_tensor(
+                            _fr13_tail_gather, dtype=torch.long, device=_fr13_dev
+                        )
+                        _fr13_tcu = torch.as_tensor(
+                            _fr13_tail_cu, dtype=torch.int32, device=_fr13_dev
+                        )
+                        # stack per-row post states -> [Ntail, HV, V, K] fp32.
+                        _fr13_th0 = torch.stack(_fr13_tail_h0, dim=0).contiguous()
+                        (
+                            _fr13_tail_out,
+                            _fr13_tail_final,
+                        ) = self.chunk_gated_delta_rule(
+                            q=_fr13_q[_fr13_tgi].unsqueeze(0).contiguous(),
+                            k=_fr13_k[_fr13_tgi].unsqueeze(0).contiguous(),
+                            v=_fr13_v[_fr13_tgi].unsqueeze(0).contiguous(),
+                            g=g_non_spec.squeeze(0)[_fr13_tgi].unsqueeze(0).contiguous(),
+                            beta=beta_non_spec.squeeze(0)[_fr13_tgi].unsqueeze(0).contiguous(),
+                            initial_state=_fr13_th0,
+                            output_final_state=True,
+                            cu_seqlens=_fr13_tcu,
+                            chunk_indices=None,
+                            chunk_offsets=None,
+                            use_qk_l2norm_in_kernel=False,
+                        )
+                        # scatter tail outputs (bf16) into the flat output.
+                        core_attn_out_non_spec[0, _fr13_tgi] = (
+                            _fr13_tail_out.squeeze(0).to(core_attn_out_non_spec.dtype)
+                        )
+                        for _fr13_j, _fr13_r in enumerate(_fr13_tail_order):
+                            _fr13_final_by_row[_fr13_r] = _fr13_tail_final[_fr13_j]
+                else:
+                    # no tails -> every hit row's final state is its post state.
+                    for _fr13_i, _fr13_r in enumerate(_fr13_hit_rows):
+                        _fr13_final_by_row[_fr13_r] = _fr13_post[_fr13_i]
+                # overwrite last_recurrent_state for hit rows (fresh rows keep
+                # the native chunk final). last_recurrent_state is [Nns, HV, V, K]
+                # row-aligned to non_spec_state_indices_tensor / cu_seqlens.
+                for _fr13_r, _fr13_st in _fr13_final_by_row.items():
+                    last_recurrent_state[_fr13_r] = _fr13_st.to(
+                        last_recurrent_state.dtype
+                    )
+            else:
+                (
+                    core_attn_out_non_spec,
+                    last_recurrent_state,
+                ) = self.chunk_gated_delta_rule(
+                    q=query_non_spec,
+                    k=key_non_spec,
+                    v=value_non_spec,
+                    g=g_non_spec,
+                    beta=beta_non_spec,
+                    initial_state=initial_state,
+                    output_final_state=True,
+                    cu_seqlens=non_spec_query_start_loc,
+                    chunk_indices=attn_metadata.chunk_indices,
+                    chunk_offsets=attn_metadata.chunk_offsets,
+                    use_qk_l2norm_in_kernel=False,
+                )
             try:
                 _fr13_prefill_capture_path = os.environ.get("FR13_PREFILL_GDN_CAPTURE")
                 if _fr13_prefill_capture_path:
@@ -11612,7 +11784,7 @@ def _patch_mamba_utils_collect_apc_leaf() -> bool:
         "                        import sys as _fr13_wt_sys\n"
         "                        _fr13_wt_bipos = int(src_block_idx) + int(accept_token_bias)\n"
         "                        _fr13_wt_birow = int(block_ids[_fr13_wt_bipos]) if 0 <= _fr13_wt_bipos < len(block_ids) else -1\n"
-        "                        print(\"[FR13_WT_DIAG] seen=\" + str(_fr13_wt_seen) + \" fired=\" + str(getattr(_fr13_wt_gdn, \"_FR13_WT_FIRED\", 0)) + \" preproc=\" + str(getattr(_fr13_wt_me, \"_FR13_IN_PREPROCESS\", \"?\")) + \" req=\" + str(req_state.req_id)[:34] + \" dest=\" + str(_fr13_wt_dest) + \" birow=\" + str(_fr13_wt_birow) + \" map_leaf=\" + str(_fr13_wt_leaf) + \" tapa=\" + str(_fr13_apc_leaf) + \" did=\" + str(_fr13_wt_did), file=_fr13_wt_sys.stderr, flush=True)\n"
+        "                        print(\"[FR13_WT_DIAG] seen=\" + str(_fr13_wt_seen) + \" fired=\" + str(getattr(_fr13_wt_gdn, \"_FR13_WT_FIRED\", 0)) + \" bias=\" + str(int(accept_token_bias)) + \" preproc=\" + str(getattr(_fr13_wt_me, \"_FR13_IN_PREPROCESS\", \"?\")) + \" req=\" + str(req_state.req_id)[:34] + \" dest=\" + str(_fr13_wt_dest) + \" birow=\" + str(_fr13_wt_birow) + \" map_leaf=\" + str(_fr13_wt_leaf) + \" tapa=\" + str(_fr13_apc_leaf) + \" did=\" + str(_fr13_wt_did), file=_fr13_wt_sys.stderr, flush=True)\n"
     )
     text = text.replace(anchor2, inject2, 1)
     MAMBA_UTILS_PATH.write_text(text)
