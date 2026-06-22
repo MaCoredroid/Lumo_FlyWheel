@@ -7324,6 +7324,7 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         os.environ.get("FR13_APC_SSM_SNAPSHOT", "0") != "1"
         and os.environ.get("FR13_APC_VERBATIM", "0") != "1"
         and os.environ.get("FR13_APC_STALENESS_AUDIT", "0") != "1"
+        and os.environ.get("FR13_APC_SSM_LEAF_SRC", "0") != "1"
     ):
         return
     try:
@@ -8848,6 +8849,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     __import__('os').environ.get("FR13_APC_VERBATIM", "0") == "1"
                     or __import__('os').environ.get("FR13_APC_SSM_SNAPSHOT", "0") == "1"
                     or __import__('os').environ.get("FR13_APC_STALENESS_AUDIT", "0") == "1"
+                    or __import__('os').environ.get("FR13_APC_SSM_LEAF_SRC", "0") == "1"
                 )
                 if (
                     _ep_active
@@ -12198,6 +12200,57 @@ def _patch_mamba_utils_preprocess_context_flag() -> bool:
         1,
     )
 
+    MAMBA_UTILS_PATH.write_text(text)
+    return True
+
+
+def _patch_worker_mamba_collect_ssm_leaf_src() -> bool:
+    """FR13_APC_SSM_LEAF_SRC: redirect the stock align SSM snapshot SOURCE to the
+    tree committed-leaf node-bank row, fixing the clobber that defeated VERBATIM.
+
+    ROOT CAUSE (static, 2026-06-22): postprocess_mamba's per-req loop calls
+    collect_mamba_copy_meta, which only RECORDS src=block_ids[src_block_idx+
+    accept_bias] (block-pool) / dst=block_ids[dest_block_idx] into copy_bufs; the
+    ACTUAL batch_memcpy runs later in do_mamba_copy_block(copy_bufs) AFTER the loop.
+    For the tree, the committed accepted-leaf recurrent state lives in the NODE BANK
+    (spec_state_indices, published into gdn_linear_attn._FR13_APC_SSM_LEAF_BY_REQ),
+    NOT in the block-pool src row -> the stock copy snapshots a STALE row (measured
+    |blkrow-leaf|=93, 48/48 GDN layers, same_row=False). The FR13_APC_VERBATIM
+    in-place write to dst is performed inside the loop and then CLOBBERED by this
+    later batch_memcpy (fires 286x did=True yet 12907 still empties).
+
+    FIX: in collect_mamba_copy_meta, when recording the SSM (get_temporal_copy_spec,
+    whole-row, mamba_utils.py:421-424) src for a tree req with a published leaf, point
+    src at state[leaf_row] (the committed node-bank leaf) so do_mamba_copy_block copies
+    the CORRECT committed state into the block-aligned restore row that a stock align
+    cache-hit reads (dst = block_ids[dest_block_idx], identical to VERBATIM dst and the
+    gdn_attn restore row). Native-safe (no leaf published -> stock src). Gated
+    FR13_APC_SSM_LEAF_SRC (default "0" => byte-identical). Diag on FR13_APC_SSM_DIAG."""
+    text = MAMBA_UTILS_PATH.read_text()
+    sentinel = "# FR13_APC_SSM_LEAF_SRC"
+    if sentinel in text:
+        return False
+    anchor = "                src_ptrs_np[offset] = copy_spec.start_addr\n"
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "APC ssm leaf src: collect_mamba_copy_meta src_ptrs anchor not unique"
+        )
+    inject = anchor + (
+        "                if __import__('os').environ.get(\"FR13_APC_SSM_LEAF_SRC\", \"0\") == \"1\" and getattr(state_copy_func, \"__name__\", \"\") == \"get_temporal_copy_spec\":  " + sentinel + "\n"
+        "                    try:\n"
+        "                        from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_ls_gdn\n"
+        "                        _fr13_ls_lm = getattr(_fr13_ls_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
+        "                        _fr13_ls_leaf = _fr13_ls_lm.get(str(req_state.req_id)) if _fr13_ls_lm else None\n"
+        "                        if _fr13_ls_leaf is not None and 0 <= int(_fr13_ls_leaf) < int(state.shape[0]):\n"
+        "                            src_ptrs_np[offset] = state[int(_fr13_ls_leaf)].data_ptr()\n"
+        "                            _fr13_ls_gdn._FR13_LS_FIRED = getattr(_fr13_ls_gdn, \"_FR13_LS_FIRED\", 0) + 1\n"
+        "                            if __import__('os').environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\" and _fr13_ls_gdn._FR13_LS_FIRED <= 60:\n"
+        "                                import sys as _fr13_ls_sys\n"
+        "                                print(\"[FR13_APC_SSM_LEAF_SRC] fired=\" + str(_fr13_ls_gdn._FR13_LS_FIRED) + \" req=\" + str(req_state.req_id)[:34] + \" leaf_row=\" + str(int(_fr13_ls_leaf)) + \" dest=\" + str(int(block_ids[dest_block_idx])) + \" rows=\" + str(int(state.shape[0])), file=_fr13_ls_sys.stderr, flush=True)\n"
+        "                    except Exception:\n"
+        "                        pass\n"
+    )
+    text = text.replace(anchor, inject, 1)
     MAMBA_UTILS_PATH.write_text(text)
     return True
 
@@ -17112,6 +17165,10 @@ def main() -> int:
         # anchor is present and the leaf map is populated. Emits the FR13_APC_VERBATIM
         # commit-site write-through (default off => byte-identical; native-safe).
         (MAMBA_UTILS_PATH, _patch_mamba_utils_apc_align_tree_aware()),
+        # FR13_APC_SSM_LEAF_SRC: redirect the stock align SSM snapshot src to the
+        # committed node-bank leaf (fixes the do_mamba_copy_block clobber that
+        # defeated VERBATIM). Default OFF => byte-identical; native-safe.
+        (MAMBA_UTILS_PATH, _patch_worker_mamba_collect_ssm_leaf_src()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_gpu_committer()),
