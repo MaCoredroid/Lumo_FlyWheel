@@ -12230,23 +12230,29 @@ def _patch_worker_mamba_collect_ssm_leaf_src() -> bool:
     sentinel = "# FR13_APC_SSM_LEAF_SRC"
     if sentinel in text:
         return False
-    anchor = "                src_ptrs_np[offset] = copy_spec.start_addr\n"
+    # Anchor on the sizes_np assignment (the LAST of the stock src/dst/sizes triple)
+    # so both our src_ptrs AND sizes_np overrides land AFTER the stock writes and
+    # survive into do_mamba_copy_block. (conv get_conv_copy_spec returns a SUFFIX, so
+    # we must override the size to the whole node-bank leaf row, not just the ptr.)
+    anchor = "                sizes_np[offset] = copy_spec.num_elements * state.element_size()\n"
     if text.count(anchor) != 1:
         raise RuntimeError(
-            "APC ssm leaf src: collect_mamba_copy_meta src_ptrs anchor not unique"
+            "APC ssm leaf src: collect_mamba_copy_meta sizes_np anchor not unique"
         )
     inject = anchor + (
-        "                if __import__('os').environ.get(\"FR13_APC_SSM_LEAF_SRC\", \"0\") == \"1\" and getattr(state_copy_func, \"__name__\", \"\") == \"get_temporal_copy_spec\":  " + sentinel + "\n"
+        "                if __import__('os').environ.get(\"FR13_APC_SSM_LEAF_SRC\", \"0\") == \"1\" and getattr(state_copy_func, \"__name__\", \"\") in (\"get_temporal_copy_spec\", \"get_conv_copy_spec\"):  " + sentinel + "\n"
         "                    try:\n"
         "                        from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_ls_gdn\n"
         "                        _fr13_ls_lm = getattr(_fr13_ls_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
         "                        _fr13_ls_leaf = _fr13_ls_lm.get(str(req_state.req_id)) if _fr13_ls_lm else None\n"
         "                        if _fr13_ls_leaf is not None and 0 <= int(_fr13_ls_leaf) < int(state.shape[0]):\n"
-        "                            src_ptrs_np[offset] = state[int(_fr13_ls_leaf)].data_ptr()\n"
+        "                            _fr13_ls_row = state[int(_fr13_ls_leaf)]\n"
+        "                            src_ptrs_np[offset] = _fr13_ls_row.data_ptr()\n"
+        "                            sizes_np[offset] = _fr13_ls_row.numel() * state.element_size()\n"
         "                            _fr13_ls_gdn._FR13_LS_FIRED = getattr(_fr13_ls_gdn, \"_FR13_LS_FIRED\", 0) + 1\n"
-        "                            if __import__('os').environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\" and _fr13_ls_gdn._FR13_LS_FIRED <= 60:\n"
+        "                            if __import__('os').environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\" and _fr13_ls_gdn._FR13_LS_FIRED <= 80:\n"
         "                                import sys as _fr13_ls_sys\n"
-        "                                print(\"[FR13_APC_SSM_LEAF_SRC] fired=\" + str(_fr13_ls_gdn._FR13_LS_FIRED) + \" req=\" + str(req_state.req_id)[:34] + \" leaf_row=\" + str(int(_fr13_ls_leaf)) + \" dest=\" + str(int(block_ids[dest_block_idx])) + \" rows=\" + str(int(state.shape[0])), file=_fr13_ls_sys.stderr, flush=True)\n"
+        "                                print(\"[FR13_APC_SSM_LEAF_SRC] fired=\" + str(_fr13_ls_gdn._FR13_LS_FIRED) + \" bank=\" + str(getattr(state_copy_func, \"__name__\", \"\")) + \" req=\" + str(req_state.req_id)[:28] + \" leaf_row=\" + str(int(_fr13_ls_leaf)) + \" dest=\" + str(int(block_ids[dest_block_idx])) + \" rows=\" + str(int(state.shape[0])), file=_fr13_ls_sys.stderr, flush=True)\n"
         "                    except Exception:\n"
         "                        pass\n"
     )
