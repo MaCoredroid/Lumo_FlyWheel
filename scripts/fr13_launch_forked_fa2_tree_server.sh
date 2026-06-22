@@ -231,9 +231,45 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   # rows to close the cache-ON clear-margin residual. Default 0 = inert /
   # byte-identical (native chunk path unchanged). Only active under APC.
   : "${FR13_APC_HIT_RECURRENT_SUFFIX:=0}"
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SSM_SNAPSHOT FR13_APC_SSM_WRITE_THROUGH FR13_APC_DROP_FINAL_BLOCK FR13_APC_HIT_RECURRENT_SUFFIX
+  # FR13_APC_VERBATIM: corrected commit-site write-through (patcher
+  # _patch_mamba_utils_apc_align_tree_aware emits the FR13_APC_VERBATIM block).
+  # Writes the committed accepted-leaf conv+SSM state, whole-row in-place, into the
+  # EXACT block-pool row a stock UNMODIFIED align cache-HIT re-prefill restores from
+  # (dest = block_ids[aligned_new_computed_tokens//block_size - 1]) so cache-ON is
+  # byte-lossless for the decode-committed-leaf case. Default 0 = inert (body never
+  # runs => byte-identical) UNTIL validated on GPU; flip to 1 in a drill. Only takes
+  # effect under --enable-prefix-caching, so the non-APC locked cat9 path is unchanged.
+  : "${FR13_APC_VERBATIM:=0}"
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SSM_SNAPSHOT FR13_APC_SSM_WRITE_THROUGH FR13_APC_DROP_FINAL_BLOCK FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_VERBATIM
 else
   APC_FLAGS=""
+fi
+
+# CUDAGRAPH_MODE knob (CARRIER re-rooted 2026-06-21): the cache-ON garble is NOT the SSM
+# align-snapshot stale-row (that is refuted -- EAGER cache-ON replay with 70% cache hits is
+# byte-coherent and even solves the bug, WRITE_THROUGH did=False). It is GRAPH-SPECIFIC: the
+# FULL decode CUDA-graph reads GDN recurrent state via capture-time-baked persistent indexing,
+# so after an APC cache-hit re-prefill writes the restored boundary state into block-pool rows,
+# the captured graph reads the wrong row -> wrong initial recurrent state -> empty/garbage
+# (align-mode sibling of vLLM #34874; matches open #43559). Confirmed by the eager-vs-graph
+# A/B on the 12907 10-turn replay (eager ....ok...., graph ....GGGG.. at the cat-blob turn).
+# FIX = cudagraph_mode=PIECEWISE: keep graph capture for the dense GEMMs/norms/MLP (decode TPS
+# preserved) but run the GDN/mamba scan EAGER every step so it always reads the live restored
+# state. Unset = vLLM default FULL_AND_PIECEWISE (the poisoned regime). Only matters with APC on.
+CG_FLAGS=""
+if [[ -n "${CUDAGRAPH_MODE:-}" ]]; then
+  CG_FLAGS="--compilation-config '{\"cudagraph_mode\":\"$CUDAGRAPH_MODE\"}'"
+fi
+# FR13_FULL_ATTN_KV_FP8 (gated, default OFF): set the FULL-ATTENTION KV cache to fp8.
+# DISCRIMINATOR for the APC tree residual locus (research w284wg523, #43559): fp8 KV
+# only touches full-attn KV storage precision, never the mamba/GDN recurrent state.
+# If cat6root+APC+fp8KV recovers the agent -> residual is FULL-ATTN-KV (the post-RoPE-K
+# boundary seam); if not -> GDN-state-content. (The #43559 fp8-recovery claim was struck
+# unverified, so treat this strictly as a DISCRIMINATOR, validate losslessness before any
+# ship.) Off -> kv_cache_dtype=auto (byte-identical to now). Only meaningful with APC on.
+KV_FP8_FLAGS=""
+if [[ "${FR13_FULL_ATTN_KV_FP8:-0}" == "1" ]]; then
+  KV_FP8_FLAGS="--kv-cache-dtype fp8"
 fi
 
 if [[ ! -f "$FORKED_FA2_SO" ]]; then
@@ -348,8 +384,24 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_BLOCK_ALIGN_45477="${FR13_APC_BLOCK_ALIGN_45477:-1}" \
   -e FR13_APC_DROP_FINAL_BLOCK="${FR13_APC_DROP_FINAL_BLOCK:-0}" \
   -e FR13_APC_HIT_RECURRENT_SUFFIX="${FR13_APC_HIT_RECURRENT_SUFFIX:-0}" \
+  -e FR13_APC_HIT_SUFFIX_CAP="${FR13_APC_HIT_SUFFIX_CAP:-64}" \
   -e FR13_APC_STATE_PROBE="${FR13_APC_STATE_PROBE:-0}" \
+  -e FR13_APC_CACHEHIT_VALUE_PROBE="${FR13_APC_CACHEHIT_VALUE_PROBE:-0}" \
+  -e FR13_APC_VALUE_VS_ORACLE="${FR13_APC_VALUE_VS_ORACLE:-0}" \
+  -e FR13_APC_VALUE_VS_ORACLE_LOG="${FR13_APC_VALUE_VS_ORACLE_LOG:-/logs/fr13_apc_value_vs_oracle.jsonl}" \
+  -e FR13_APC_CACHE_AB="${FR13_APC_CACHE_AB:-0}" \
+  -e FR13_APC_CACHE_AB_LOG="${FR13_APC_CACHE_AB_LOG:-/logs/fr13_apc_cache_ab.jsonl}" \
+  -e FR13_APC_CACHE_AB_BLOCK="${FR13_APC_CACHE_AB_BLOCK:-${MAMBA_BLOCK_SIZE:-1024}}" \
+  -e FR13_APC_COMMIT_SITE_WT="${FR13_APC_COMMIT_SITE_WT:-0}" \
+  -e FR13_APC_ALIGN_TREE_AWARE="${FR13_APC_ALIGN_TREE_AWARE:-0}" \
+  -e FR13_APC_VERBATIM="${FR13_APC_VERBATIM:-0}" \
   -e FR13_APC_SSM_DIAG="${FR13_APC_SSM_DIAG:-0}" \
+  -e FR13_APC_GRAPH_REPLAY_BARRIER="${FR13_APC_GRAPH_REPLAY_BARRIER:-0}" \
+  -e FR13_APC_GRAPH_REPLAY_BARRIER_DEBUG="${FR13_APC_GRAPH_REPLAY_BARRIER_DEBUG:-0}" \
+  -e FR13_APC_INDEX_RERESOLVE="${FR13_APC_INDEX_RERESOLVE:-0}" \
+  -e FR13_APC_POS_PROBE="${FR13_APC_POS_PROBE:-0}" \
+  -e FR13_APC_POS_PROBE_LOG="${FR13_APC_POS_PROBE_LOG:-/logs/fr13_apc_pos_probe.jsonl}" \
+  -e FR13_APC_MROPE_TAIL_ZERO="${FR13_APC_MROPE_TAIL_ZERO:-0}" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \
   -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
   -e FR13_EAGER_PACK="$FR13_EAGER_PACK" \
@@ -544,5 +596,5 @@ exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-na
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS \
+  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS $CG_FLAGS $KV_FP8_FLAGS \
   $(if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
