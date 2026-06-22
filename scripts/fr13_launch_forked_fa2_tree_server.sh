@@ -209,28 +209,17 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   # default with APC. SSM-leaf write-through (writes the committed accepted-leaf into the row
   # the stock align snapshot reads; byte-lossless for the single-hit A/B + spec-decode-boundary
   # cohort) + conv-window fix. These are PARTIAL -- they do NOT make APC fully lossless.
-  # CARRIER (source-confirmed wi887k5v3, refuting the earlier #43559 fp-nondeterminism theory):
-  # the FLA chunk kernel is deterministic + length-invariant, so the divergence is NOT numerics.
-  # It is vLLM #43650 -- MambaManager.find_longest_cache_hit reuses one mamba block too many;
-  # full-attention recomputes the boundary block but Mamba never drops it, so the SSM state
-  # restored at the boundary poisons the suffix (#45477: "No floating-point non-determinism is
-  # involved"). FIX = FR13_APC_DROP_FINAL_BLOCK (patcher _patch_mamba_drop_final_block_43650):
-  # drop one matched block so the boundary block is re-prefilled contiguously (chunked, ~one
-  # block -> decode-TPS untouched, rest of prefix still cached). Default 0 here UNTIL validated
-  # on the prefill-after-hit reproduction (garble->0 + boundary SSM matches the cache-OFF
-  # oracle); flip to 1 once it passes. All only take effect with APC on, so the non-APC locked
-  # cat9 path stays byte-identical (align hooks / find_longest_cache_hit not invoked without
-  # --enable-prefix-caching).
+  # CARRIER (research high-conf, 2026-06-22): the tree+APC defect is a cache-ADDRESSING /
+  # wrong-row issue -- the tree committer writes the accepted-leaf state to a NODE-bank row
+  # != the block-aligned row that align reads on a cache-hit -> stale-row poison. The
+  # architecturally-correct fix is FR13_APC_VERBATIM (copy the committed leaf VALUE into the
+  # block-aligned restore row, below). The earlier wrong-row SSM writers (SSM_WRITE_THROUGH,
+  # COMMIT_SITE_WT, ALIGN_TREE_AWARE, DROP_FINAL_BLOCK, HIT_RECURRENT_SUFFIX) were confirmed
+  # dead and removed. All APC flags only take effect with APC on, so the non-APC locked cat9
+  # path stays byte-identical (align hooks not invoked without --enable-prefix-caching).
   : "${FR13_APC_CONV_FIX:=1}"
   : "${FR13_APC_CONV_SNAPSHOT:=1}"
   : "${FR13_APC_SSM_SNAPSHOT:=1}"
-  : "${FR13_APC_SSM_WRITE_THROUGH:=1}"
-  : "${FR13_APC_DROP_FINAL_BLOCK:=0}"
-  # FR13_APC_HIT_RECURRENT_SUFFIX: bounded single-first-suffix-chunk recurrent
-  # recompute (bit-exact sequential rank-1 kernel) on APC cache-hit prefill
-  # rows to close the cache-ON clear-margin residual. Default 0 = inert /
-  # byte-identical (native chunk path unchanged). Only active under APC.
-  : "${FR13_APC_HIT_RECURRENT_SUFFIX:=0}"
   # FR13_APC_VERBATIM: corrected commit-site write-through (patcher
   # _patch_mamba_utils_apc_align_tree_aware emits the FR13_APC_VERBATIM block).
   # Writes the committed accepted-leaf conv+SSM state, whole-row in-place, into the
@@ -240,7 +229,7 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   # runs => byte-identical) UNTIL validated on GPU; flip to 1 in a drill. Only takes
   # effect under --enable-prefix-caching, so the non-APC locked cat9 path is unchanged.
   : "${FR13_APC_VERBATIM:=0}"
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SSM_SNAPSHOT FR13_APC_SSM_WRITE_THROUGH FR13_APC_DROP_FINAL_BLOCK FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_VERBATIM
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SSM_SNAPSHOT FR13_APC_VERBATIM
 else
   APC_FLAGS=""
 fi
@@ -380,28 +369,12 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_CONV_FIX="${FR13_APC_CONV_FIX:-1}" \
   -e FR13_APC_CONV_SNAPSHOT="${FR13_APC_CONV_SNAPSHOT:-0}" \
   -e FR13_APC_SSM_SNAPSHOT="${FR13_APC_SSM_SNAPSHOT:-0}" \
-  -e FR13_APC_SSM_WRITE_THROUGH="${FR13_APC_SSM_WRITE_THROUGH:-0}" \
   -e FR13_APC_BLOCK_ALIGN_45477="${FR13_APC_BLOCK_ALIGN_45477:-1}" \
-  -e FR13_APC_DROP_FINAL_BLOCK="${FR13_APC_DROP_FINAL_BLOCK:-0}" \
-  -e FR13_APC_HIT_RECURRENT_SUFFIX="${FR13_APC_HIT_RECURRENT_SUFFIX:-0}" \
-  -e FR13_APC_HIT_SUFFIX_CAP="${FR13_APC_HIT_SUFFIX_CAP:-64}" \
-  -e FR13_APC_STATE_PROBE="${FR13_APC_STATE_PROBE:-0}" \
-  -e FR13_APC_CACHEHIT_VALUE_PROBE="${FR13_APC_CACHEHIT_VALUE_PROBE:-0}" \
-  -e FR13_APC_VALUE_VS_ORACLE="${FR13_APC_VALUE_VS_ORACLE:-0}" \
-  -e FR13_APC_VALUE_VS_ORACLE_LOG="${FR13_APC_VALUE_VS_ORACLE_LOG:-/logs/fr13_apc_value_vs_oracle.jsonl}" \
   -e FR13_APC_CACHE_AB="${FR13_APC_CACHE_AB:-0}" \
   -e FR13_APC_CACHE_AB_LOG="${FR13_APC_CACHE_AB_LOG:-/logs/fr13_apc_cache_ab.jsonl}" \
   -e FR13_APC_CACHE_AB_BLOCK="${FR13_APC_CACHE_AB_BLOCK:-${MAMBA_BLOCK_SIZE:-1024}}" \
-  -e FR13_APC_COMMIT_SITE_WT="${FR13_APC_COMMIT_SITE_WT:-0}" \
-  -e FR13_APC_ALIGN_TREE_AWARE="${FR13_APC_ALIGN_TREE_AWARE:-0}" \
   -e FR13_APC_VERBATIM="${FR13_APC_VERBATIM:-0}" \
   -e FR13_APC_SSM_DIAG="${FR13_APC_SSM_DIAG:-0}" \
-  -e FR13_APC_GRAPH_REPLAY_BARRIER="${FR13_APC_GRAPH_REPLAY_BARRIER:-0}" \
-  -e FR13_APC_GRAPH_REPLAY_BARRIER_DEBUG="${FR13_APC_GRAPH_REPLAY_BARRIER_DEBUG:-0}" \
-  -e FR13_APC_INDEX_RERESOLVE="${FR13_APC_INDEX_RERESOLVE:-0}" \
-  -e FR13_APC_POS_PROBE="${FR13_APC_POS_PROBE:-0}" \
-  -e FR13_APC_POS_PROBE_LOG="${FR13_APC_POS_PROBE_LOG:-/logs/fr13_apc_pos_probe.jsonl}" \
-  -e FR13_APC_MROPE_TAIL_ZERO="${FR13_APC_MROPE_TAIL_ZERO:-0}" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \
   -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
   -e FR13_EAGER_PACK="$FR13_EAGER_PACK" \
