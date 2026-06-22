@@ -7310,9 +7310,20 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
     # copy override (those are independently gated by SSM_SNAPSHOT/CONV_SNAPSHOT/
     # SSM_WRITE_THROUGH). Both flags default "0" -> early return -> map never
     # created -> byte-identical to pre-fix.
+    # FR13_APC_STALENESS_AUDIT also needs the leaf map populated (its read-only
+    # postprocess audit compares the block-aligned restore row against this
+    # committed-leaf value). Publish is read-only (records the committed
+    # accepted-leaf row index) and never mutates state nor enables any wrong-row
+    # copy override (those are independently gated by SSM_SNAPSHOT/CONV_SNAPSHOT/
+    # SSM_WRITE_THROUGH), so firing it under the audit flag keeps STOCK mode
+    # genuinely stock (SSM_SNAPSHOT can stay 0 -> get_temporal_copy_spec override
+    # never redirects the snapshot row) while still giving the audit a
+    # committed_leaf to compare against. All three flags default "0" -> early
+    # return -> map never created -> byte-identical to pre-fix.
     if (
         os.environ.get("FR13_APC_SSM_SNAPSHOT", "0") != "1"
         and os.environ.get("FR13_APC_VERBATIM", "0") != "1"
+        and os.environ.get("FR13_APC_STALENESS_AUDIT", "0") != "1"
     ):
         return
     try:
@@ -7339,6 +7350,22 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
             _row = spec_cpu[_b]
             if 0 <= _alen - 1 < len(_row):
                 leaf_map[str(spec_req_ids[_b])] = int(_row[_alen - 1])
+        # FR13_SA_PUB needle (a): FAIL-LOUD engagement proof that the publisher ran
+        # and populated the leaf map (gated FR13_APC_SSM_DIAG; default-OFF =>
+        # byte-neutral; observe-only stderr -> docker_full.log).
+        if os.environ.get("FR13_APC_SSM_DIAG", "0") == "1":
+            import sys as _fr13_sa_pub_sys
+            _fr13_sa_pub_keys = list(leaf_map.keys())[:3]
+            print(
+                "[FR13_SA_PUB] called spec_idx_none="
+                + str(spec_idx is None)
+                + " mapsize="
+                + str(len(leaf_map))
+                + " keys="
+                + str(_fr13_sa_pub_keys),
+                file=_fr13_sa_pub_sys.stderr,
+                flush=True,
+            )
     except Exception:
         # observe-only publish; never break the served commit on a tap failure
         pass
@@ -8809,16 +8836,18 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     _lumo_tree_commit_gdn._FR13_BOUNDARY_EVENT = int(getattr(
                         _lumo_tree_commit_gdn, '_FR13_BOUNDARY_EVENT', 0
                     )) + 1
-                # FR13_APC_VERBATIM / FR13_APC_SSM_SNAPSHOT need the per-layer
-                # publish (_fr13_publish_apc_ssm_leaf at the legacy loop below) to
-                # populate gdn_linear_attn._FR13_APC_SSM_LEAF_BY_REQ. The
-                # EAGER_PACK all-layer fast loop does NOT publish, so route to the
-                # verbatim per-layer loop when either is on (publish is read-only;
-                # numerics of the replay are identical either path). Both default
-                # "0" -> fast loop unchanged -> byte-identical locked cat9 path.
+                # FR13_APC_VERBATIM / FR13_APC_SSM_SNAPSHOT / FR13_APC_STALENESS_AUDIT
+                # need the per-layer publish (_fr13_publish_apc_ssm_leaf at the
+                # legacy loop below) to populate
+                # gdn_linear_attn._FR13_APC_SSM_LEAF_BY_REQ. The EAGER_PACK
+                # all-layer fast loop does NOT publish, so route to the verbatim
+                # per-layer loop when any is on (publish is read-only; numerics of
+                # the replay are identical either path). All default "0" -> fast
+                # loop unchanged -> byte-identical locked cat9 path.
                 _fr13_apc_publish_on = (
                     __import__('os').environ.get("FR13_APC_VERBATIM", "0") == "1"
                     or __import__('os').environ.get("FR13_APC_SSM_SNAPSHOT", "0") == "1"
+                    or __import__('os').environ.get("FR13_APC_STALENESS_AUDIT", "0") == "1"
                 )
                 if (
                     _ep_active
@@ -12289,6 +12318,116 @@ def _patch_mamba_utils_apc_align_tree_aware() -> bool:
         "            if os.environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\" and (_fr13_vb_seen <= 40 or _fr13_vb_seen % 40 == 1):\n"
         "                import sys as _fr13_vb_sys\n"
         "                print(\"[FR13_APC_VERBATIM] seen=\" + str(_fr13_vb_seen) + \" fired=\" + str(getattr(_fr13_vb_gdn, \"_FR13_VB_FIRED\", 0)) + \" req=\" + str(req_state.req_id)[:34] + \" leaf_row=\" + str(_fr13_vb_leaf) + \" dest_block_idx=\" + str(_fr13_vb_destidx) + \" block_aligned_row=\" + str(_fr13_vb_blkrow) + \" aligned_nct=\" + str(int(aligned_new_computed_tokens)) + \" run_state=\" + str(int(num_tokens_running_state)) + \" block_size=\" + str(int(mamba_spec.block_size)) + \" did=\" + str(_fr13_vb_did), file=_fr13_vb_sys.stderr, flush=True)\n"
+        # ----------------------------------------------------------------- #
+        # FR13_APC_STALENESS_AUDIT (READ-ONLY, default "0" => body never runs
+        # => byte-identical; the locked cat9 + non-APC path is untouched).
+        #
+        # MEASUREMENT POINT (A): measure, PER GDN LAYER bank, the magnitude
+        #   |block_aligned_row - committed_leaf_row|
+        # of the recurrent-state cache row a future align cache-HIT restores
+        # (block_aligned_row = the STOCK align snapshot dest row
+        #  block_ids[aligned_new_computed_tokens//block_size - 1], identical to
+        #  the VERBATIM dest _fr13_vb_blkrow) versus the COMMITTED accepted-leaf
+        # node-bank row (_FR13_APC_SSM_LEAF_BY_REQ[req_id], identical to the
+        # value VERBATIM copies). Both rows live in the SAME ssm_state/conv bank
+        # in THIS boot, so this is a pure in-boot read -- NO recompute, NO
+        # substitute, NO geometry block.
+        #
+        # This block is INDEPENDENT of the FR13_APC_VERBATIM gate, and runs
+        # AFTER the VERBATIM copy above, so:
+        #   * STOCK (FR13_APC_VERBATIM=0): the bank row is UNTOUCHED, so this
+        #     reads the raw |stale_row - committed_leaf| = the asserted
+        #     wrong-row STALENESS (never previously measured live).
+        #   * VERBATIM ON (FR13_APC_VERBATIM=1): the copy already landed, so
+        #     this reads the POST-copy residual: ~0 iff VERBATIM's write truly
+        #     reaches the row the cache restores; STILL big => VERBATIM writes
+        #     the right value but it is NOT reaching the restore row = a
+        #     FIXABLE WIRING bug (not the fresh-prefill 0.0289 gap).
+        # The recomputation of blkrow/leaf below is from the SAME primitives as
+        # the VERBATIM block so the two configs measure the SAME rows.
+        "        if os.environ.get(\"FR13_APC_STALENESS_AUDIT\", \"0\") == \"1\":  # FR13_APC_STALENESS_AUDIT\n"
+        "            try:\n"
+        "                import json as _fr13_sa_json\n"
+        "                import torch as _fr13_sa_torch\n"
+        "                from vllm.model_executor.layers.mamba import (\n"
+        "                    gdn_linear_attn as _fr13_sa_gdn,\n"
+        "                )\n"
+        "                _fr13_sa_lm = getattr(_fr13_sa_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
+        "                _fr13_sa_leaf = (\n"
+        "                    _fr13_sa_lm.get(str(req_state.req_id)) if _fr13_sa_lm else None\n"
+        "                )\n"
+        "                _fr13_sa_seen = getattr(_fr13_sa_gdn, \"_FR13_SA_SEEN\", 0) + 1\n"
+        "                _fr13_sa_gdn._FR13_SA_SEEN = _fr13_sa_seen\n"
+        "                _fr13_sa_step = getattr(_fr13_sa_gdn, \"_FR13_SA_STEP\", 0) + 1\n"
+        "                _fr13_sa_gdn._FR13_SA_STEP = _fr13_sa_step\n"
+        "                _fr13_sa_vb = os.environ.get(\"FR13_APC_VERBATIM\", \"0\")\n"
+        "                if os.environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\":\n"
+        "                    import sys as _fr13_sa_dsys\n"
+        "                    print(\"[FR13_SA_DIAG] enter lm=\" + str(_fr13_sa_lm is not None) + \" leaf=\" + str(_fr13_sa_leaf is not None) + \" req=\" + str(req_state.req_id)[:48] + \" anct=\" + str(aligned_new_computed_tokens) + \" ntrs=\" + str(num_tokens_running_state), file=_fr13_sa_dsys.stderr, flush=True)\n"
+        "                _fr13_sa_fire = (\n"
+        "                    _fr13_sa_leaf is not None\n"
+        "                    and aligned_new_computed_tokens >= num_tokens_running_state\n"
+        "                )\n"
+        "                if _fr13_sa_fire:\n"
+        "                    _fr13_sa_bs = int(mamba_spec.block_size)\n"
+        "                    _fr13_sa_destidx = (\n"
+        "                        int(aligned_new_computed_tokens) // max(1, _fr13_sa_bs) - 1\n"
+        "                    )\n"
+        "                    _fr13_sa_log = os.environ.get(\n"
+        "                        \"FR13_APC_STALENESS_AUDIT_LOG\",\n"
+        "                        \"/logs/fr13_apc_staleness_audit.jsonl\",\n"
+        "                    )\n"
+        "                    _fr13_sa_fh = getattr(_fr13_sa_gdn, \"_FR13_SA_FH\", None)\n"
+        "                    if _fr13_sa_fh is None:\n"
+        "                        try:\n"
+        "                            os.makedirs(os.path.dirname(_fr13_sa_log) or \".\", exist_ok=True)\n"
+        "                        except Exception:\n"
+        "                            pass\n"
+        "                        _fr13_sa_fh = open(_fr13_sa_log, \"a\", buffering=1, encoding=\"utf-8\")\n"
+        "                        _fr13_sa_gdn._FR13_SA_FH = _fr13_sa_fh\n"
+        "                    if _fr13_sa_destidx >= 0:\n"
+        "                        for _fr13_sa_gid in mamba_group_ids:\n"
+        "                            _fr13_sa_bids = req_state.block_ids[_fr13_sa_gid]\n"
+        "                            if not (0 <= _fr13_sa_destidx < len(_fr13_sa_bids)):\n"
+        "                                continue\n"
+        "                            _fr13_sa_blkrow = int(_fr13_sa_bids[_fr13_sa_destidx])\n"
+        "                            for _fr13_sa_ln in kv_cache_config.kv_cache_groups[_fr13_sa_gid].layer_names:\n"
+        "                                for _fr13_sa_bi, _fr13_sa_state in enumerate(forward_context[_fr13_sa_ln].kv_cache):\n"
+        "                                    _fr13_sa_n = int(_fr13_sa_state.shape[0])\n"
+        "                                    if not (0 <= int(_fr13_sa_leaf) < _fr13_sa_n and 0 <= _fr13_sa_blkrow < _fr13_sa_n):\n"
+        "                                        continue\n"
+        "                                    _fr13_sa_bank = \"ssm\" if _fr13_sa_state.dim() >= 4 else (\"conv\" if _fr13_sa_state.dim() == 3 else \"other\")\n"
+        "                                    _fr13_sa_d = (\n"
+        "                                        _fr13_sa_state[_fr13_sa_blkrow].to(_fr13_sa_torch.float32)\n"
+        "                                        - _fr13_sa_state[int(_fr13_sa_leaf)].to(_fr13_sa_torch.float32)\n"
+        "                                    ).abs()\n"
+        "                                    _fr13_sa_max = float(_fr13_sa_d.max().item())\n"
+        "                                    _fr13_sa_mean = float(_fr13_sa_d.mean().item())\n"
+        "                                    _fr13_sa_rec = {\n"
+        "                                        \"schema\": \"fr13.apc_staleness_audit.v1\",\n"
+        "                                        \"step\": int(_fr13_sa_step),\n"
+        "                                        \"seen\": int(_fr13_sa_seen),\n"
+        "                                        \"verbatim_on\": str(_fr13_sa_vb),\n"
+        "                                        \"layer\": str(_fr13_sa_ln),\n"
+        "                                        \"bank\": _fr13_sa_bank,\n"
+        "                                        \"bank_idx\": int(_fr13_sa_bi),\n"
+        "                                        \"group_id\": int(_fr13_sa_gid),\n"
+        "                                        \"blkrow\": int(_fr13_sa_blkrow),\n"
+        "                                        \"leafrow\": int(_fr13_sa_leaf),\n"
+        "                                        \"same_row\": bool(_fr13_sa_blkrow == int(_fr13_sa_leaf)),\n"
+        "                                        \"maxabs\": _fr13_sa_max,\n"
+        "                                        \"mean\": _fr13_sa_mean,\n"
+        "                                        \"req\": str(req_state.req_id)[:48],\n"
+        "                                        \"aligned_nct\": int(aligned_new_computed_tokens),\n"
+        "                                        \"run_state\": int(num_tokens_running_state),\n"
+        "                                        \"block_size\": int(mamba_spec.block_size),\n"
+        "                                        \"dest_block_idx\": int(_fr13_sa_destidx),\n"
+        "                                    }\n"
+        "                                    _fr13_sa_fh.write(_fr13_sa_json.dumps(_fr13_sa_rec) + chr(10))\n"
+        "            except Exception as _fr13_sa_exc:\n"
+        "                if os.environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\":\n"
+        "                    import sys as _fr13_sa_sys\n"
+        "                    print(\"[FR13_APC_STALENESS_AUDIT] EXC \" + repr(_fr13_sa_exc), file=_fr13_sa_sys.stderr, flush=True)\n"
     )
     text = text.replace(anchor, inject, 1)
     MAMBA_UTILS_PATH.write_text(text)
