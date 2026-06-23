@@ -386,12 +386,10 @@ payload = {
     "temperature": temp,
     "max_tokens": maxtok,
     "stream": False,
+    "return_token_ids": True,
 }
 if temp > 0:
     payload["seed"] = seed
-if maxtok > 1:
-    # request per-token logprobs so we can recover EXACT generated token-ids.
-    payload["logprobs"] = 1
 body = json.dumps(payload).encode()
 req = urllib.request.Request(
     f"http://127.0.0.1:{port}/v1/completions",
@@ -415,17 +413,22 @@ if status != 200:
 if genout:
     d = json.loads(data)
     ch = d["choices"][0]
-    lp = ch.get("logprobs") or {}
     gen_ids = None
-    # Preferred: explicit token_ids if the image exposes them.
-    if isinstance(lp.get("token_ids"), list):
-        gen_ids = [int(x) for x in lp["token_ids"]]
+    # return_token_ids=True puts the served (generated) token-ids at the choice
+    # level (vLLM /v1/completions, same as fr13_gold_margin_probe.py L102).
+    if isinstance(ch.get("token_ids"), list):
+        gen_ids = [int(x) for x in ch["token_ids"]]
+    elif isinstance((ch.get("logprobs") or {}).get("token_ids"), list):
+        gen_ids = [int(x) for x in ch["logprobs"]["token_ids"]]
     if gen_ids is None:
         raise SystemExit(
-            "FAIL: cannot capture EXACT generated token-ids from the completion "
-            "response (logprobs.token_ids absent). Re-tokenizing the text is "
-            "NOT byte-safe across the P|G boundary -> R2 would miss the cached "
-            "block. keys=" + repr(list(lp.keys())))
+            "FAIL: cannot capture EXACT generated token-ids (return_token_ids gave "
+            "no choice.token_ids). Re-tokenizing text is NOT byte-safe across P|G. "
+            "choice keys=" + repr(list(ch.keys())))
+    # If the image returns prompt+generated under token_ids, slice off the prompt.
+    _pt = ch.get("prompt_token_ids")
+    if isinstance(_pt, list) and len(gen_ids) > maxtok and gen_ids[:len(_pt)] == [int(x) for x in _pt]:
+        gen_ids = gen_ids[len(_pt):]
     if len(gen_ids) < 1:
         raise SystemExit("FAIL: zero generated token-ids captured")
     json.dump(gen_ids, open(genout, "w"))
