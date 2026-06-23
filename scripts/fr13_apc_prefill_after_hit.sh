@@ -53,7 +53,47 @@ mkdir -p "$RUNDIR/logs"
 export FR13_ENABLE_APC=1
 export MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-1024}
 export MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
-export APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-2048}
+# GENREGION gate: cap MUST equal the mamba block (1024) -- the #45238/#45477
+# fix. Do NOT raise it (a larger cap reintroduces the silent-0%-hit trap and
+# breaks the R3 chunk-end-on-boundary geometry).
+export APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-1024}
+
+# ---- FR13_APC_CACHE_AB: the CORRECT cache-ON vs cache-OFF losslessness probe.
+# Default off (inert). When set =1 the launcher's docker -e plumbs it into the
+# GDN forward; the req1(cache-ON)/req2(cache-OFF) geometry below then dumps
+# h_on / h_off to /logs/fr13_apc_cache_ab.jsonl. block size for the OFF-arm
+# boundary enumeration follows MAMBA_BLOCK_SIZE.
+export FR13_APC_CACHE_AB=${FR13_APC_CACHE_AB:-0}
+export FR13_APC_CACHE_AB_LOG=${FR13_APC_CACHE_AB_LOG:-/logs/fr13_apc_cache_ab.jsonl}
+export FR13_APC_CACHE_AB_BLOCK=${FR13_APC_CACHE_AB_BLOCK:-$MAMBA_BLOCK_SIZE}
+
+# ---- FR13_APC_CACHE_AB_GENREGION: pinned phase req_ids (purely req-derived
+# phase; NO env phase toggle). The arms read these from the container env and
+# match each row's req_id (plumbed via _LUMO_FA_SAMPLER_ROW_REQ_IDS) -> R2=ON
+# (h_on), R3=OFF (h_off); R0 (warm) and unpinned reqs record nothing. The
+# driver pins the engine req_id of each /v1/completions call via the
+# X-Request-Id header (vLLM OpenAIServing._base_request_id promotes it to the
+# engine-side req_id == input_batch.req_ids[i]).
+export FR13_APC_AB_R0_REQ=${FR13_APC_AB_R0_REQ:-R0}
+export FR13_APC_AB_R2_REQ=${FR13_APC_AB_R2_REQ:-R2}
+export FR13_APC_AB_R3_REQ=${FR13_APC_AB_R3_REQ:-R3}
+
+# ---- deployed-lossless config for the GENREGION gate (design BOOT block) ----
+# FR13_APC_SSM_LEAF_SRC=1 tests the FIXED restore (the value the carrier
+# redirects). ENFORCE_EAGER=1 (diagnostics eager). APC_MAX_NUM_BATCHED_TOKENS
+# == block (the #45238/#45477 fix; do NOT raise). FR10_DECODE_MODE_DEFAULT=
+# tree_mtp so R0 actually tree-generates. FR13_APC_BLOCK_ALIGN_45477=1 so R3's
+# chunk ends land exactly on 1024/2048/3072.
+export FR13_APC_SSM_LEAF_SRC=${FR13_APC_SSM_LEAF_SRC:-1}
+export ENFORCE_EAGER=${ENFORCE_EAGER:-1}
+export FR13_APC_CONV_FIX=${FR13_APC_CONV_FIX:-1}
+export FR13_APC_BLOCK_ALIGN_45477=${FR13_APC_BLOCK_ALIGN_45477:-1}
+export FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
+export APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-1024}
+# target generated-region block boundary to certify (k*block, k>k_P). With
+# P=2048 (k_P=2) and G>=1024, B*=3072 is in the generated region.
+export FR13_APC_AB_PROMPT_TOKENS=${FR13_APC_AB_PROMPT_TOKENS:-2048}
+export FR13_APC_AB_TARGET_BOUNDARY=${FR13_APC_AB_TARGET_BOUNDARY:-3072}
 
 # ---- forked cat9 TREE flags (exactly serve_variant's forked-arm pinset) ----
 # Default cat9 TREE (launcher default => num_speculative_tokens=9). FR10_METRICS=0
@@ -114,11 +154,21 @@ CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=0.82 MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR"
   LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 \
   FR13_ENABLE_APC=1 \
   FR13_APC_DROP_FINAL_BLOCK="${FR13_APC_DROP_FINAL_BLOCK:-0}" \
+  FR13_APC_CACHE_AB="${FR13_APC_CACHE_AB:-0}" \
+  FR13_APC_CACHE_AB_LOG="${FR13_APC_CACHE_AB_LOG:-/logs/fr13_apc_cache_ab.jsonl}" \
+  FR13_APC_CACHE_AB_BLOCK="${FR13_APC_CACHE_AB_BLOCK:-$MAMBA_BLOCK_SIZE}" \
+  FR13_APC_AB_R2_REQ="${FR13_APC_AB_R2_REQ:-R2}" \
+  FR13_APC_AB_R3_REQ="${FR13_APC_AB_R3_REQ:-R3}" \
+  FR13_APC_SSM_LEAF_SRC="${FR13_APC_SSM_LEAF_SRC:-1}" \
+  FR13_APC_CONV_FIX="${FR13_APC_CONV_FIX:-1}" \
+  FR13_APC_BLOCK_ALIGN_45477="${FR13_APC_BLOCK_ALIGN_45477:-1}" \
+  FR10_DECODE_MODE_DEFAULT="${FR10_DECODE_MODE_DEFAULT:-tree_mtp}" \
+  ENFORCE_EAGER="${ENFORCE_EAGER:-1}" \
   MAMBA_BLOCK_SIZE="$MAMBA_BLOCK_SIZE" \
   MAMBA_SSM_CACHE_DTYPE="$MAMBA_SSM_CACHE_DTYPE" \
   APC_MAX_NUM_BATCHED_TOKENS="$APC_MAX_NUM_BATCHED_TOKENS" \
   FR13_RUN_DIR="$PWD/$RUNDIR" LOG_DIR="$PWD/$RUNDIR/logs" \
-  scripts/fr13_launch_forked_fa2_tree_server.sh > "$RUNDIR/launch.log" 2>&1
+  "${LAUNCHER_SCRIPT:-scripts/fr13_launch_forked_fa2_tree_server.sh}" > "$RUNDIR/launch.log" 2>&1
 RC=$?
 if (( RC != 0 )); then echo "FAIL: launcher rc=$RC"; tail -40 "$RUNDIR/launch.log"; exit 2; fi
 
@@ -264,35 +314,235 @@ sys.exit(0 if status == 200 else 1)
 PY
 }
 
-# ---- PREFILL-AFTER-HIT repro: warm a PREFIX P, then send full P+SUFFIX so the cache
-# HITS P and PREFILLS the new suffix from the restored state (the geometry the identical-
-# prompt A/B misses). completion_1 = cache-ON, completion_2 = cache-OFF oracle.
-P_FILE="$RUNDIR/prefix_P.txt"
-.venv/bin/python - "$PROMPT_FILE" "$P_FILE" <<'PY'
-import sys
-full = open(sys.argv[1]).read()
-open(sys.argv[2], "w").write(full[: int(len(full) * 0.80)])  # P = first 80%; last 20% = new suffix
-PY
-echo "[repro] warm prefix P (caches P's blocks incl the conv window at P's boundary)"
-curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" >/dev/null 2>&1
-send_completion 0 1 "$RUNDIR/warm_P.json" "$P_FILE" | tee "$RUNDIR/warm_P_http.txt"
-echo "[repro] req #1 cache-ON: full P+SUFFIX (HITS P, PREFILLS suffix from restored state)"
-send_completion 0 160 "$RUNDIR/completion_1.json" "$PROMPT_FILE" | tee "$RUNDIR/completion_1_http.txt"
-RC1=${PIPESTATUS[0]}
-curl -fsS "http://127.0.0.1:$PORT/metrics" > "$RUNDIR/metrics_after_req1.txt" 2>&1 || true
-echo "[repro] req #2 cache-OFF oracle: reset, then full P+SUFFIX (full prefill, no hit)"
-curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" >/dev/null 2>&1
-send_completion 0 160 "$RUNDIR/completion_2.json" "$PROMPT_FILE" | tee "$RUNDIR/completion_2_http.txt"
-RC2=${PIPESTATUS[0]}
-curl -fsS "http://127.0.0.1:$PORT/metrics" > "$RUNDIR/metrics_after_req2.txt" 2>&1 || true
-if (( RC1 != 0 || RC2 != 0 )); then
-  echo "GATE-C FAIL: a completions request errored (req1 rc=$RC1 req2 rc=$RC2)"
-  echo "--- req1 body ---"; head -c 600 "$RUNDIR/completion_1.json"; echo
-  echo "--- req2 body ---"; head -c 600 "$RUNDIR/completion_2.json"; echo
-  exit 5
-fi
+# =================================================================================
+# FR13_APC_CACHE_AB_GENREGION two-phase geometry (R0 / R2 / R3).
+# R0 (warm): prefix-prefill P (token_count(P)%1024==0) then TREE-DECODE G>=1024
+#   so a block boundary B*=3072 falls in the GENERATED region. Capture R0's
+#   EXACT generated token-ids (PG_IDS = P_ids + G_ids) for byte-identical replay.
+# R2 (cache-ON, h_on): prompt=[P_ids + G_ids[:G2]] so it HITS cached blocks up to
+#   and INCLUDING B*=3072 and re-prefills a <=1024 tail in ONE step.
+# R3 (cache-OFF, h_off): reset cache, fresh prefill the FULL [P_ids+G_ids]; the
+#   chunk completing [2048,3072) emits h_off@3072 (native chunked incumbent).
+# Phase is purely req-derived in the GDN arms (X-Request-Id R0/R2/R3).
+# =================================================================================
+PROMPT_TOKENS=${FR13_APC_AB_PROMPT_TOKENS:-2048}
+TARGET_BOUNDARY=${FR13_APC_AB_TARGET_BOUNDARY:-3072}
+GEN_TOKENS=${FR13_APC_AB_GEN_TOKENS:-1024}
+BLOCK=${MAMBA_BLOCK_SIZE:-1024}
 
-# Assert all three prefix-cache counters are > 0 in the post-req2 /metrics.
+# ---- /tokenize-pin P to exactly PROMPT_TOKENS tokens on the FULL completions-
+# wrapped string (NOT char-fraction). Iteratively trim the raw prompt text until
+# POST /tokenize reports exactly PROMPT_TOKENS ids; assert %BLOCK==0. Emits
+# P_IDS_FILE (json list of token ids).
+P_IDS_FILE="$RUNDIR/P_ids.json"
+.venv/bin/python - "$PORT" "$PROMPT_FILE" "$P_IDS_FILE" "$PROMPT_TOKENS" "$BLOCK" <<'PY'
+import json, sys, urllib.request, urllib.error
+port, pfile, out, want, block = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
+full = open(pfile).read()
+def tok(text):
+    body = json.dumps({"model": "qwen3.6-27b", "prompt": text}).encode()
+    req = urllib.request.Request(
+        f"http://127.0.0.1:{port}/tokenize",
+        data=body, headers={"Content-Type": "application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=120) as r:
+        d = json.loads(r.read().decode())
+    # vLLM /tokenize returns {"count":N,"tokens":[ids...],...}
+    ids = d.get("tokens")
+    if ids is None:
+        ids = d.get("token_ids")
+    if ids is None:
+        raise SystemExit(f"FAIL: /tokenize returned no token list: keys={list(d.keys())}")
+    return [int(x) for x in ids]
+ids_full = tok(full)
+if len(ids_full) < want:
+    raise SystemExit(f"FAIL: prompt only {len(ids_full)} tokens < wanted {want}; pick a longer source")
+if want % block != 0:
+    raise SystemExit(f"FAIL: PROMPT_TOKENS {want} %% block {block} != 0")
+# Exact id-space pin: take the first `want` ids. We feed R0's prompt as TOKEN
+# IDS directly (vLLM /v1/completions accepts prompt=[int,...]) so the count is
+# exact regardless of detokenize round-trips.
+p_ids = ids_full[:want]
+if len(p_ids) != want:
+    raise SystemExit(f"FAIL: could not pin P to {want} ids (got {len(p_ids)})")
+json.dump(p_ids, open(out, "w"))
+print(f"[tokenize] P pinned to {len(p_ids)} ids (want={want}, %{block}=={want % block})")
+PY
+(( $? == 0 )) || { echo "FAIL: P token-pin"; exit 4; }
+
+# ---- a token-id completion helper: posts prompt=<id list> with a pinned
+# X-Request-Id; captures the EXACT generated token-ids via logprobs. Fails loud
+# if the response does not expose generated token-ids (no silent re-tokenize).
+send_ids(){  # args: req_id prompt_ids_json temp maxtok seed outfile [gen_ids_out]
+  local rid="$1" pidsf="$2" temp="$3" maxtok="$4" seed="$5" outfile="$6" genout="${7:-}"
+  .venv/bin/python - "$PORT" "$rid" "$pidsf" "$temp" "$maxtok" "$seed" "$outfile" "$genout" <<'PY'
+import json, sys, urllib.request, urllib.error
+port, rid, pidsf, temp, maxtok, seed, outfile, genout = (
+    sys.argv[1], sys.argv[2], sys.argv[3], float(sys.argv[4]),
+    int(sys.argv[5]), int(sys.argv[6]), sys.argv[7], sys.argv[8])
+p_ids = json.load(open(pidsf))
+payload = {
+    "model": "qwen3.6-27b",
+    "prompt": p_ids,
+    "temperature": temp,
+    "max_tokens": maxtok,
+    "stream": False,
+}
+if temp > 0:
+    payload["seed"] = seed
+if maxtok > 1:
+    # request per-token logprobs so we can recover EXACT generated token-ids.
+    payload["logprobs"] = 1
+body = json.dumps(payload).encode()
+req = urllib.request.Request(
+    f"http://127.0.0.1:{port}/v1/completions",
+    data=body,
+    headers={"Content-Type": "application/json", "X-Request-Id": rid},
+    method="POST")
+try:
+    with urllib.request.urlopen(req, timeout=1800) as r:
+        status = r.status
+        data = r.read().decode()
+except urllib.error.HTTPError as e:
+    status = e.code
+    data = e.read().decode()
+except Exception as e:
+    status = -1
+    data = json.dumps({"client_error": str(e)})
+open(outfile, "w").write(data)
+print(f"HTTP {status}")
+if status != 200:
+    sys.exit(1)
+if genout:
+    d = json.loads(data)
+    ch = d["choices"][0]
+    lp = ch.get("logprobs") or {}
+    gen_ids = None
+    # Preferred: explicit token_ids if the image exposes them.
+    if isinstance(lp.get("token_ids"), list):
+        gen_ids = [int(x) for x in lp["token_ids"]]
+    if gen_ids is None:
+        raise SystemExit(
+            "FAIL: cannot capture EXACT generated token-ids from the completion "
+            "response (logprobs.token_ids absent). Re-tokenizing the text is "
+            "NOT byte-safe across the P|G boundary -> R2 would miss the cached "
+            "block. keys=" + repr(list(lp.keys())))
+    if len(gen_ids) < 1:
+        raise SystemExit("FAIL: zero generated token-ids captured")
+    json.dump(gen_ids, open(genout, "w"))
+    print(f"[capture] req={rid} captured {len(gen_ids)} generated token-ids")
+sys.exit(0)
+PY
+}
+
+G_IDS_FILE="$RUNDIR/G_ids.json"
+PG_IDS_FILE="$RUNDIR/PG_ids.json"
+R2_IDS_FILE="$RUNDIR/R2_ids.json"
+
+echo "[R0] warm: reset cache, prefill P then TREE-DECODE G>=$GEN_TOKENS (temp 0.6, seed)"
+curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" >/dev/null 2>&1
+send_ids "$FR13_APC_AB_R0_REQ" "$P_IDS_FILE" 0.6 "$GEN_TOKENS" 1234 \
+  "$RUNDIR/R0.json" "$G_IDS_FILE" | tee "$RUNDIR/R0_http.txt"
+RC0=${PIPESTATUS[0]}
+if (( RC0 != 0 )); then echo "FAIL: R0 errored (rc=$RC0)"; head -c 800 "$RUNDIR/R0.json"; echo; exit 5; fi
+
+# Build PG_IDS = P_ids + G_ids; R2 prompt = P_ids + G_ids[:G2] (G2 s.t. R2 hits
+# blocks incl TARGET_BOUNDARY and re-prefills a <=BLOCK tail in one step:
+# TARGET < len(R2) <= TARGET+BLOCK). Assert TARGET in generated region.
+.venv/bin/python - "$P_IDS_FILE" "$G_IDS_FILE" "$PG_IDS_FILE" "$R2_IDS_FILE" \
+  "$PROMPT_TOKENS" "$TARGET_BOUNDARY" "$BLOCK" <<'PY'
+import json, sys
+p = json.load(open(sys.argv[1])); g = json.load(open(sys.argv[2]))
+pgout, r2out = sys.argv[3], sys.argv[4]
+ptok, target, block = int(sys.argv[5]), int(sys.argv[6]), int(sys.argv[7])
+pg = list(p) + list(g)
+if not (ptok < target):
+    raise SystemExit(f"FAIL: target {target} not > prompt_tokens {ptok} (boundary not in GENERATED region)")
+if not (ptok < target <= len(pg)):
+    raise SystemExit(f"FAIL: target {target} not in (len(P)={ptok}, len(P+G)={len(pg)}] -- generate more G")
+# R2 length: pick the smallest multiple s.t. target < len <= target+block, so R2
+# hits cached blocks through `target` and re-prefills a <=block tail in one step.
+r2_len = min(len(pg), target + block)
+if not (target < r2_len <= target + block):
+    raise SystemExit(f"FAIL: cannot size R2 tail (r2_len={r2_len}, target={target}, block={block})")
+r2 = pg[:r2_len]
+json.dump(pg, open(pgout, "w"))
+json.dump(r2, open(r2out, "w"))
+print(f"[build] len(P)={ptok} len(G)={len(g)} len(P+G)={len(pg)} len(R2)={r2_len} target={target}")
+PY
+(( $? == 0 )) || { echo "FAIL: PG/R2 build (see above)"; exit 5; }
+
+# ---- R2 (cache-ON, h_on): keep cache warm (NO reset). Hits incl TARGET.
+curl -fsS "http://127.0.0.1:$PORT/metrics" > "$RUNDIR/metrics_before_R2.txt" 2>&1 || true
+echo "[R2] cache-ON: prompt=[P+G[:G2]] (HITS cached blocks incl $TARGET_BOUNDARY)"
+send_ids "$FR13_APC_AB_R2_REQ" "$R2_IDS_FILE" 0 1 0 "$RUNDIR/R2.json" "" | tee "$RUNDIR/R2_http.txt"
+RC2=${PIPESTATUS[0]}
+curl -fsS "http://127.0.0.1:$PORT/metrics" > "$RUNDIR/metrics_after_R2.txt" 2>&1 || true
+if (( RC2 != 0 )); then echo "FAIL: R2 errored (rc=$RC2)"; head -c 800 "$RUNDIR/R2.json"; echo; exit 5; fi
+
+# ---- R3 (cache-OFF, h_off): RESET (force-preempt, clears mamba_state_idx),
+# then fresh prefill the FULL [P+G]. Assert hits-delta==0 (cross-request MISS).
+curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" >/dev/null 2>&1
+curl -fsS "http://127.0.0.1:$PORT/metrics" > "$RUNDIR/metrics_before_R3.txt" 2>&1 || true
+echo "[R3] cache-OFF: reset, fresh prefill FULL [P+G] (chunk completing [2048,3072) -> h_off@3072)"
+send_ids "$FR13_APC_AB_R3_REQ" "$PG_IDS_FILE" 0 1 0 "$RUNDIR/R3.json" "" | tee "$RUNDIR/R3_http.txt"
+RC3=${PIPESTATUS[0]}
+curl -fsS "http://127.0.0.1:$PORT/metrics" > "$RUNDIR/metrics_after_R3.txt" 2>&1 || true
+if (( RC3 != 0 )); then echo "FAIL: R3 errored (rc=$RC3)"; head -c 800 "$RUNDIR/R3.json"; echo; exit 5; fi
+
+# ---- cache-hit asserts: R2 hits incremented + prompt_tokens_cached >= TARGET;
+# R3 hits-delta == 0 (cross-request miss => cache-OFF incumbent).
+.venv/bin/python - "$RUNDIR/metrics_before_R2.txt" "$RUNDIR/metrics_after_R2.txt" \
+  "$RUNDIR/metrics_before_R3.txt" "$RUNDIR/metrics_after_R3.txt" "$TARGET_BOUNDARY" <<'PY'
+import sys, re
+from pathlib import Path
+def sums(path):
+    s = {}
+    for line in Path(path).read_text().splitlines():
+        if line.startswith("#"):
+            continue
+        m = re.match(r"^(vllm:[a-zA-Z_]+)(\{[^}]*\})?\s+([0-9.eE+-]+)\s*$", line)
+        if not m:
+            continue
+        try:
+            s[m.group(1)] = s.get(m.group(1), 0.0) + float(m.group(3))
+        except ValueError:
+            pass
+    return s
+b2, a2, b3, a3, target = sums(sys.argv[1]), sums(sys.argv[2]), sums(sys.argv[3]), sums(sys.argv[4]), int(sys.argv[5])
+def hits(s):
+    return s.get("vllm:prefix_cache_hits_total", s.get("vllm:gpu_prefix_cache_hits_total", 0.0))
+r2_hits_delta = hits(a2) - hits(b2)
+r2_cached = a2.get("vllm:prompt_tokens_cached_total", 0.0)
+r3_hits_delta = hits(a3) - hits(b3)
+print(f"[asserts] R2 hits_delta={r2_hits_delta} prompt_tokens_cached_total(after R2)={r2_cached}")
+print(f"[asserts] R3 hits_delta={r3_hits_delta}")
+ok = True
+if not (r2_hits_delta > 0):
+    print(f"FAIL: R2 prefix_cache_hits did NOT increment (delta={r2_hits_delta}) -> R2 did not HIT the generated block"); ok = False
+if not (r2_cached >= target):
+    print(f"FAIL: prompt_tokens_cached_total {r2_cached} < target {target} -> R2 did not cache through the boundary"); ok = False
+if not (abs(r3_hits_delta) < 1e-9):
+    print(f"FAIL: R3 hits_delta != 0 ({r3_hits_delta}) -> R3 is NOT a clean cross-request MISS (not cache-OFF incumbent)"); ok = False
+if ok:
+    print("CACHE-ASSERTS PASS: R2 hit incl boundary, R3 clean miss")
+    sys.exit(0)
+sys.exit(8)
+PY
+CACHE_RC=$?
+if (( CACHE_RC != 0 )); then echo "GATE FAIL: cache-hit asserts (rc=$CACHE_RC)"; GATE_FAIL=1; else GATE_FAIL=0; fi
+
+# ---- REDUCE: SOUND GENREGION verdict over the dumped h_on/h_off JSONL.
+AB_JSONL="$RUNDIR/logs/fr13_apc_cache_ab.jsonl"
+[[ -s "$AB_JSONL" ]] || AB_JSONL="$RUNDIR/fr13_apc_cache_ab.jsonl"
+echo "[reduce] $AB_JSONL --prompt-tokens $PROMPT_TOKENS --target-boundary $TARGET_BOUNDARY"
+.venv/bin/python scripts/fr13_apc_cache_ab_reduce.py "$AB_JSONL" \
+  --prompt-tokens "$PROMPT_TOKENS" --target-boundary "$TARGET_BOUNDARY" \
+  --on-req "$FR13_APC_AB_R2_REQ" --off-req "$FR13_APC_AB_R3_REQ" \
+  --out "$RUNDIR/fr13_apc_cache_ab_verdict.json" | tee "$RUNDIR/reduce_stdout.txt" || true
+
+# Keep the legacy GATE-C metric-sum check too (engagement sanity).
+# Assert all three prefix-cache counters are > 0 in the post-R3 /metrics.
+cp -f "$RUNDIR/metrics_after_R3.txt" "$RUNDIR/metrics_after_req2.txt" 2>/dev/null || true
 # Names verified present in THIS image (vllm/vllm-openai@sha256:3dbe092...):
 #   vllm:prefix_cache_queries_total
 #   vllm:prefix_cache_hits_total   (this image; NOT the older gpu_prefix_cache_* name)
@@ -347,31 +597,40 @@ else:
     sys.exit(7)
 PY
 GATEC_RC=$?
-if (( GATEC_RC != 0 )); then echo "GATE-C verdict rc=$GATEC_RC (FAIL)"; GATE_FAIL=1; else GATE_FAIL=0; fi
+# Legacy engagement sanity only -- do NOT clobber the GENREGION cache-asserts
+# GATE_FAIL (the binding gate is the reducer verdict + the R2-hit/R3-miss
+# asserts above). Record it separately.
+if (( GATEC_RC != 0 )); then echo "[engage] GATE-C metric-sum rc=$GATEC_RC (FAIL)"; ENGAGE_FAIL=1; else ENGAGE_FAIL=0; fi
 
-# ---- LOSSLESS A/B: req1 (cache MISS) vs req2 (cache HIT), identical greedy prompt.
-# If the APC SSM snapshot/restore is lossless, the cache-hit continuation is
-# byte-identical to the cache-miss continuation. A DIFFER = the carrier still poisons.
-echo "[lossless] comparing req1 (miss) vs req2 (hit) greedy continuations"
-.venv/bin/python - "$RUNDIR/completion_1.json" "$RUNDIR/completion_2.json" <<'PY'
+# ---- LOSSLESS verdict: the SOUND GENREGION reducer (scripts/fr13_apc_cache_ab_reduce.py)
+# already ran above and wrote $RUNDIR/fr13_apc_cache_ab_verdict.json. Surface its
+# label here. The byte-stream A/B over completion text is NOT the instrument for
+# this gate (the binding axis is per-element h_on vs h_off at the generated-region
+# boundary 3072 with per-channel argmax match).
+echo "[lossless] GENREGION reducer verdict (h_on R2 vs h_off R3 @ $TARGET_BOUNDARY):"
+LOSSLESS_RC=1
+if [[ -s "$RUNDIR/fr13_apc_cache_ab_verdict.json" ]]; then
+  .venv/bin/python - "$RUNDIR/fr13_apc_cache_ab_verdict.json" <<'PY'
 import sys, json
-def text(f):
-    try:
-        d = json.load(open(f)); return d["choices"][0]["text"]
-    except Exception as e:
-        return f"<<parse-error {e}>>"
-c1, c2 = text(sys.argv[1]), text(sys.argv[2])
-if c1 == c2:
-    print(f"LOSSLESS-MATCH: C1==C2 ({len(c1)} chars) -> APC cache-hit byte-identical to miss")
-    sys.exit(0)
-i = next((k for k in range(min(len(c1), len(c2))) if c1[k] != c2[k]), min(len(c1), len(c2)))
-print(f"LOSSLESS-DIFFER: first divergence at char {i} (len C1={len(c1)} C2={len(c2)})")
-print("  C1[i:i+90]=", repr(c1[i:i+90]))
-print("  C2[i:i+90]=", repr(c2[i:i+90]))
-sys.exit(1)
+d = json.load(open(sys.argv[1]))
+v = d.get("verdict")
+print(f"  verdict={v} n_matched_at_target={d.get('n_matched_at_target')} "
+      f"fp_max_abs={d.get('OVERALL_ssm_fp_max_abs')} "
+      f"all_argmax_match={d.get('all_argmax_match')} guards={d.get('guards')}")
+# rc: 0 LOSSLESS, 2 VACUOUS, 3 ARGMAX_FLIP escalate, 1 NOT_LOSSLESS
+sys.exit({"LOSSLESS": 0, "VACUOUS": 2,
+          "ARGMAX_FLIP_WITHIN_ULP_ESCALATE": 3}.get(v, 1))
 PY
-LOSSLESS_RC=$?
-echo "[lossless] verdict rc=$LOSSLESS_RC ($([ $LOSSLESS_RC -eq 0 ] && echo LOSSLESS || echo POISON))"
+  LOSSLESS_RC=$?
+else
+  echo "  (no verdict json produced -- reducer found no records?)"
+fi
+case "$LOSSLESS_RC" in
+  0) echo "[lossless] LOSSLESS";;
+  2) echo "[lossless] VACUOUS (gate did not measure the target boundary -- check R2 hit/R3 miss + G length)";;
+  3) echo "[lossless] ARGMAX-FLIP within ULP -> ESCALATE to user (parked floor vs real defect)";;
+  *) echo "[lossless] NOT-LOSSLESS";;
+esac
 
 # ---- TTFT: prefill latency cache-MISS vs cache-HIT (the APC speed win). Send the same
 # long prompt max_tokens=1 (so time_total ~= prefill+TTFT); reset cache first for a true
@@ -420,13 +679,22 @@ else
 fi
 
 # ---- overall verdict ----
-echo "=== APC GATE-0 SUMMARY ==="
-echo "GATE-A (boot)        : PASS"
-echo "GATE-B (apc engaged) : PASS"
-echo "GATE-C (cache hits)  : $([[ "${GATE_FAIL:-1}" == "0" ]] && echo PASS || echo FAIL)"
-echo "GATE-D (no crash)    : $([[ "${GATED_FAIL:-1}" == "0" ]] && echo PASS || echo FAIL)"
+echo "=== FR13_APC_CACHE_AB_GENREGION SUMMARY ==="
+echo "GATE-A (boot)              : PASS"
+echo "GATE-B (apc engaged)       : PASS"
+echo "CACHE-ASSERTS (R2 hit/R3 miss) : $([[ "${GATE_FAIL:-1}" == "0" ]] && echo PASS || echo FAIL)"
+echo "GATE-D (no crash)          : $([[ "${GATED_FAIL:-1}" == "0" ]] && echo PASS || echo FAIL)"
+case "${LOSSLESS_RC:-1}" in
+  0) LOSSLESS_LABEL=LOSSLESS;;
+  2) LOSSLESS_LABEL=VACUOUS;;
+  3) LOSSLESS_LABEL=ARGMAX_FLIP_ESCALATE;;
+  *) LOSSLESS_LABEL=NOT_LOSSLESS;;
+esac
+echo "LOSSLESS (h_on vs h_off @ $TARGET_BOUNDARY) : $LOSSLESS_LABEL"
+# OVERALL PASS requires: cache-asserts pass, no crash, and the reducer verdict
+# is LOSSLESS. VACUOUS / ARGMAX_FLIP / NOT_LOSSLESS => not a clean PASS.
 OVERALL=0
-[[ "${GATE_FAIL:-1}" == "0" && "${GATED_FAIL:-1}" == "0" ]] || OVERALL=1
+[[ "${GATE_FAIL:-1}" == "0" && "${GATED_FAIL:-1}" == "0" && "${LOSSLESS_RC:-1}" == "0" ]] || OVERALL=1
 echo "OVERALL: $([[ "$OVERALL" == "0" ]] && echo PASS || echo FAIL)  (rundir=$RUNDIR)"
 # teardown runs via the EXIT trap
 exit $OVERALL

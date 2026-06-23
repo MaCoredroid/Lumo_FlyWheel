@@ -149,6 +149,12 @@ def _patch_gdn_attn() -> bool:
         (
             "    num_accepted_tokens: torch.Tensor | None = None  # shape: [batch,]\n"
             "\n"
+            "    # FR13_APC_CACHE_AB: per-row ABSOLUTE pre-forward computed-token\n"
+            "    # count (= context_lens_tensor non-spec-filtered, aligned with\n"
+            "    # has_initial_state). The block-boundary source for both AB arms.\n"
+            "    # Default None => inert / byte-identical when FR13_APC_CACHE_AB=0.\n"
+            "    context_lens: torch.Tensor | None = None\n"
+            "\n"
             "    # FR10: static tree descriptors for GDN speculative verification.\n"
             "    fr10_tree_parent: torch.Tensor | None = None\n"
             "    fr10_tree_strict_mask: torch.Tensor | None = None\n"
@@ -747,6 +753,11 @@ def _patch_gdn_attn() -> bool:
         "            nums_dict=nums_dict,\n",
         (
             "            num_accepted_tokens=num_accepted_tokens,\n"
+            "            context_lens=(\n"
+            "                context_lens_tensor[~spec_sequence_masks_cpu]\n"
+            "                if spec_sequence_masks_cpu is not None\n"
+            "                else context_lens_tensor\n"
+            "            ),\n"
             "            fr10_tree_parent=self.fr10_tree_parent,\n"
             "            fr10_tree_strict_mask=self.fr10_tree_strict_mask,\n"
             "            fr10_tree_visible_mask=self.fr10_tree_visible_mask,\n"
@@ -776,6 +787,26 @@ def _patch_gdn_linear() -> bool:
         "import ast\nimport hashlib\nimport json\nimport os\nimport time\nimport torch\n",
         1,
     )
+    # FR13_APC_CACHE_AB: read the per-row ABSOLUTE computed-token count
+    # (GDNAttentionMetadata.context_lens, non-spec-filtered at the build site)
+    # right next to the existing has_initial_state read so BOTH AB arms can key
+    # their boundary_pos on the absolute position. getattr default None =>
+    # inert / byte-identical when the field is absent or the flag is off.
+    if "_fr13_ab_context_lens = getattr(attn_metadata" not in text:
+        _ab_ctx_anchor = (
+            "        has_initial_state = attn_metadata.has_initial_state\n"
+        )
+        if text.count(_ab_ctx_anchor) != 1:
+            raise RuntimeError(
+                "FR13_APC_CACHE_AB context_lens read anchor not unique/found "
+                "(count=%d)" % text.count(_ab_ctx_anchor)
+            )
+        text = text.replace(
+            _ab_ctx_anchor,
+            _ab_ctx_anchor
+            + "        _fr13_ab_context_lens = getattr(attn_metadata, \"context_lens\", None)\n",
+            1,
+        )
     text = text.replace(
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
@@ -6115,6 +6146,15 @@ def _fr13_gdn_subop_mab(
                 "(count=%d)" % text.count(ab_anchor)
             )
         ab_inject = '''            # FR13_APC_CACHE_AB (default 0 = inert / byte-identical).
+            # SOUND GENREGION instrument (FR13_APC_CACHE_AB_GENREGION): matches
+            # h_on (R2 cache-HIT restored boundary, the FR13_APC_SSM_LEAF_SRC
+            # value) against h_off (R3 native chunked cache-OFF running state at
+            # the SAME absolute generated-region block boundary). Phase is
+            # derived PURELY from the driver-pinned req_id (R2 -> on, R3 -> off,
+            # everything else -> skip); there is NO env phase toggle. Read-only:
+            # never mutates ssm_state / conv_state / last_recurrent_state /
+            # initial_state. When the flag is off (or no R2/R3 req pinned) the
+            # whole block is one cheap os.environ check => byte-identical.
             if (
                 os.environ.get("FR13_APC_CACHE_AB", "0") == "1"
                 and has_initial_state is not None
@@ -6155,8 +6195,76 @@ def _fr13_gdn_subop_mab(
                                 _fr13_ab_bs = 0
                         if _fr13_ab_bs <= 0:
                             _fr13_ab_bs = 1024
+                        # driver-pinned phase req_ids (purely req-derived phase;
+                        # NO env phase toggle). R2 => ON arm, R3 => OFF arm.
+                        _fr13_ab_r2 = os.environ.get("FR13_APC_AB_R2_REQ", "")
+                        _fr13_ab_r3 = os.environ.get("FR13_APC_AB_R3_REQ", "")
                         _fr13_ab_qsl = non_spec_query_start_loc
                         _fr13_ab_N = int(_fr13_ab_qsl.numel()) - 1
+                        # ---- FAIL-LOUD row-alignment guards (flagged risk) ----
+                        # The AB arms iterate _fr13_ab_r over NON-SPEC rows
+                        # (0.._fr13_ab_N-1). context_lens (built non-spec-filtered
+                        # = context_lens_tensor[~spec_sequence_masks_cpu], aligned
+                        # with has_initial_state at gdn_attn.py:982-983) and
+                        # last_recurrent_state ([Nns,HV,V,K], non_spec cu_seqlens
+                        # row order) and initial_state (ssm_state[non_spec...])
+                        # MUST all have exactly _fr13_ab_N rows, else a per-row
+                        # read is mis-keyed and the verdict is silently wrong.
+                        if _fr13_ab_context_lens is None:
+                            raise RuntimeError(
+                                "FR13_APC_CACHE_AB: attn_metadata.context_lens is "
+                                "None on a num_prefills>0 forward (field not "
+                                "plumbed at the build site) -- cannot key "
+                                "boundary_pos; refusing to record."
+                            )
+                        if int(_fr13_ab_context_lens.numel()) != _fr13_ab_N:
+                            raise RuntimeError(
+                                "FR13_APC_CACHE_AB: context_lens numel "
+                                + str(int(_fr13_ab_context_lens.numel()))
+                                + " != non_spec rows " + str(_fr13_ab_N)
+                                + " (non-spec filtering misaligned vs "
+                                "has_initial_state)"
+                            )
+                        if int(has_initial_state.numel()) != _fr13_ab_N:
+                            raise RuntimeError(
+                                "FR13_APC_CACHE_AB: has_initial_state numel "
+                                + str(int(has_initial_state.numel()))
+                                + " != non_spec rows " + str(_fr13_ab_N)
+                            )
+                        if (
+                            last_recurrent_state is not None
+                            and int(last_recurrent_state.shape[0]) != _fr13_ab_N
+                        ):
+                            raise RuntimeError(
+                                "FR13_APC_CACHE_AB: last_recurrent_state rows "
+                                + str(int(last_recurrent_state.shape[0]))
+                                + " != non_spec rows " + str(_fr13_ab_N)
+                                + " ([Nns,HV,V,K] row order misaligned vs "
+                                "non_spec_state_indices_tensor)"
+                            )
+                        if int(non_spec_state_indices_tensor.numel()) != _fr13_ab_N:
+                            raise RuntimeError(
+                                "FR13_APC_CACHE_AB: non_spec_state_indices_tensor "
+                                "numel " + str(int(non_spec_state_indices_tensor.numel()))
+                                + " != non_spec rows " + str(_fr13_ab_N)
+                            )
+                        # per-row req_ids: _LUMO_FA_SAMPLER_ROW_REQ_IDS is in
+                        # FULL-BATCH order. On a pure non-spec prefill (num_spec
+                        # _decodes==0) full-batch order == non-spec order and
+                        # len == _fr13_ab_N; if a spec row interleaves the lengths
+                        # diverge => FAIL LOUD (do not guess the mapping).
+                        _fr13_ab_req_ids = (
+                            globals().get("_LUMO_FA_SAMPLER_ROW_REQ_IDS") or []
+                        )
+                        _fr13_ab_phase_active = bool(_fr13_ab_r2) or bool(_fr13_ab_r3)
+                        if _fr13_ab_phase_active and len(_fr13_ab_req_ids) != _fr13_ab_N:
+                            raise RuntimeError(
+                                "FR13_APC_CACHE_AB: _LUMO_FA_SAMPLER_ROW_REQ_IDS len "
+                                + str(len(_fr13_ab_req_ids))
+                                + " != non_spec rows " + str(_fr13_ab_N)
+                                + " -- prefill-path req_id plumb missing or batch "
+                                "interleaves spec rows; cannot align R2/R3 phase."
+                            )
                         _fr13_ab_dev = query_non_spec.device
                         # squeeze the leading batch dim for per-row gather.
                         _fr13_ab_q = query_non_spec.squeeze(0)
@@ -6170,6 +6278,50 @@ def _fr13_gdn_subop_mab(
                             _fr13_ab_width = int(conv_state.shape[-1])
                         except Exception:
                             _fr13_ab_width = None
+                        _fr13_ab_nprefills = int(
+                            getattr(attn_metadata, "num_prefills", -1)
+                        )
+
+                        def _fr13_ab_fp(_fr13_ab_state):
+                            # Widened fingerprint over the WHOLE [HV,V,K] row:
+                            # (a) full-row argmax channel idx + value;
+                            # (b) deterministic >=64-element stride sample;
+                            # (c) ssm_max_abs / ssm_sum_abs scalars (secondary).
+                            _fr13_ab_flat = _fr13_ab_state.flatten()
+                            _fr13_ab_numel = int(_fr13_ab_flat.numel())
+                            _fr13_ab_amax = torch.argmax(_fr13_ab_flat.abs())
+                            _fr13_ab_amax_i = int(_fr13_ab_amax.item())
+                            _fr13_ab_amax_v = float(
+                                _fr13_ab_flat[_fr13_ab_amax_i].item()
+                            )
+                            _fr13_ab_nsamp = 64
+                            if _fr13_ab_numel <= _fr13_ab_nsamp:
+                                _fr13_ab_idx = list(range(_fr13_ab_numel))
+                            else:
+                                _fr13_ab_stride = _fr13_ab_numel // _fr13_ab_nsamp
+                                if _fr13_ab_stride < 1:
+                                    _fr13_ab_stride = 1
+                                _fr13_ab_idx = list(range(
+                                    0, _fr13_ab_numel, _fr13_ab_stride
+                                ))[:_fr13_ab_nsamp]
+                            _fr13_ab_sample = [
+                                float(_fr13_ab_flat[_fr13_ab_jj].item())
+                                for _fr13_ab_jj in _fr13_ab_idx
+                            ]
+                            return {
+                                "ssm_argmax_idx": _fr13_ab_amax_i,
+                                "ssm_argmax_val": _fr13_ab_amax_v,
+                                "ssm_numel": _fr13_ab_numel,
+                                "ssm_sample_idx": [int(_x) for _x in _fr13_ab_idx],
+                                "ssm_fp": _fr13_ab_sample,
+                                "ssm_max_abs": float(
+                                    _fr13_ab_flat.abs().max().item()
+                                ),
+                                "ssm_sum_abs": float(
+                                    _fr13_ab_flat.abs().sum().item()
+                                ),
+                            }
+
                         _fr13_ab_recs = []
                         for _fr13_ab_r in range(_fr13_ab_N):
                             _fr13_ab_s = int(_fr13_ab_qsl[_fr13_ab_r])
@@ -6180,14 +6332,42 @@ def _fr13_gdn_subop_mab(
                             _fr13_ab_row = int(
                                 non_spec_state_indices_tensor[_fr13_ab_r].item()
                             )
-                            _fr13_ab_hit = bool(has_initial_state[_fr13_ab_r])
-                            if _fr13_ab_hit:
-                                # ---- ON arm: h_on = the RESTORED boundary state.
-                                # initial_state[r] is the restored ssm boundary
-                                # (NOT zeroed for hit rows). The cache-hit re-prefill
-                                # this step covers SUFFIX, so the boundary logical
-                                # position = total_len - suffix_len; total_len is
-                                # recorded so the reducer can recover boundary_pos.
+                            _fr13_ab_ctx = int(
+                                _fr13_ab_context_lens[_fr13_ab_r].item()
+                            )
+                            _fr13_ab_rid = (
+                                str(_fr13_ab_req_ids[_fr13_ab_r])
+                                if _fr13_ab_r < len(_fr13_ab_req_ids)
+                                else None
+                            )
+                            # phase is PURELY req-derived; no env toggle.
+                            _fr13_ab_is_on = (
+                                bool(_fr13_ab_r2)
+                                and _fr13_ab_rid is not None
+                                and _fr13_ab_rid == _fr13_ab_r2
+                            )
+                            _fr13_ab_is_off = (
+                                bool(_fr13_ab_r3)
+                                and _fr13_ab_rid is not None
+                                and _fr13_ab_rid == _fr13_ab_r3
+                            )
+                            if _fr13_ab_is_on:
+                                # ---- ON arm (R2): h_on = the RESTORED boundary.
+                                # REAL-RESTORE gate (a) cache-hit row, (b) ctx is
+                                # block-aligned and >= block, (c) single-step
+                                # suffix re-prefill (num_prefills==1). boundary_pos
+                                # = absolute int(ctx[r]). If the gate fails we do
+                                # NOT record (reducer reports VACUOUS) rather than
+                                # mis-record a non-restore row.
+                                _fr13_ab_hit = bool(has_initial_state[_fr13_ab_r])
+                                if not (
+                                    _fr13_ab_hit
+                                    and _fr13_ab_bs > 0
+                                    and _fr13_ab_ctx >= _fr13_ab_bs
+                                    and (_fr13_ab_ctx % _fr13_ab_bs) == 0
+                                    and _fr13_ab_nprefills == 1
+                                ):
+                                    continue
                                 _fr13_ab_h_on = (
                                     initial_state[_fr13_ab_r].detach().to(torch.float32)
                                 )
@@ -6200,31 +6380,19 @@ def _fr13_gdn_subop_mab(
                                         )
                                 except Exception:
                                     _fr13_ab_conv_on = None
-                                _fr13_ab_recs.append({
-                                    "schema": "fr13.apc_cache_ab.v1",
+                                _fr13_ab_fpd = _fr13_ab_fp(_fr13_ab_h_on)
+                                _fr13_ab_rec = {
+                                    "schema": "fr13.apc_cache_ab.v2",
                                     "phase": "on",
+                                    "req_id": _fr13_ab_rid,
                                     "layer": _fr13_ab_layer,
                                     "row_in_batch": int(_fr13_ab_r),
                                     "state_row": _fr13_ab_row,
                                     "block_size": int(_fr13_ab_bs),
                                     "suffix_len": int(_fr13_ab_len),
                                     "total_len": None,
-                                    "boundary_pos": None,
-                                    "ssm_max_abs": float(
-                                        _fr13_ab_h_on.abs().max().item()
-                                    ),
-                                    "ssm_sum_abs": float(
-                                        _fr13_ab_h_on.abs().sum().item()
-                                    ),
-                                    "ssm_fp": [
-                                        float(_fr13_ab_h_on.flatten()[
-                                            int(_fr13_ab_fpi)
-                                        ].item())
-                                        for _fr13_ab_fpi in range(
-                                            0,
-                                            min(8, int(_fr13_ab_h_on.numel())),
-                                        )
-                                    ],
+                                    "boundary_pos": int(_fr13_ab_ctx),
+                                    "num_prefills": _fr13_ab_nprefills,
                                     "conv_max_abs": (
                                         None if _fr13_ab_conv_on is None
                                         else float(_fr13_ab_conv_on.abs().max().item())
@@ -6234,91 +6402,64 @@ def _fr13_gdn_subop_mab(
                                         else float(_fr13_ab_conv_on.abs().sum().item())
                                     ),
                                     "conv_width": _fr13_ab_width,
-                                })
+                                }
+                                _fr13_ab_rec.update(_fr13_ab_fpd)
+                                _fr13_ab_recs.append(_fr13_ab_rec)
+                            elif _fr13_ab_is_off:
+                                # ---- OFF arm (R3): h_off = R3's NATIVE chunked
+                                # cache-OFF running state (last_recurrent_state)
+                                # at the step whose absolute token range ENDS on a
+                                # block boundary k*block. RELOCATED out of the
+                                # not-has_initial_state branch: fires on EVERY
+                                # chunked step of R3 regardless of
+                                # has_initial_state, emits ONLY on the
+                                # boundary-completing step (ctx + query_len ==
+                                # k*block). Read-only; never mutates state.
+                                if last_recurrent_state is None:
+                                    continue
+                                _fr13_ab_seen = _fr13_ab_ctx + _fr13_ab_len
+                                if (
+                                    _fr13_ab_bs <= 0
+                                    or _fr13_ab_seen <= 0
+                                    or (_fr13_ab_seen % _fr13_ab_bs) != 0
+                                ):
+                                    # not a boundary-completing step -> skip.
+                                    continue
+                                _fr13_ab_bp = int(_fr13_ab_seen)
+                                # in-forward read-only sanity assert: the recorded
+                                # boundary == seen-token count at emission.
+                                if _fr13_ab_bp != (_fr13_ab_ctx + _fr13_ab_len):
+                                    raise RuntimeError(
+                                        "FR13_APC_CACHE_AB OFF: boundary_pos "
+                                        + str(_fr13_ab_bp) + " != ctx+query_len "
+                                        + str(_fr13_ab_ctx + _fr13_ab_len)
+                                    )
+                                _fr13_ab_h_off = (
+                                    last_recurrent_state[_fr13_ab_r]
+                                    .detach().to(torch.float32)
+                                )
+                                _fr13_ab_fpd = _fr13_ab_fp(_fr13_ab_h_off)
+                                _fr13_ab_rec = {
+                                    "schema": "fr13.apc_cache_ab.v2",
+                                    "phase": "off",
+                                    "req_id": _fr13_ab_rid,
+                                    "layer": _fr13_ab_layer,
+                                    "row_in_batch": int(_fr13_ab_r),
+                                    "state_row": _fr13_ab_row,
+                                    "block_size": int(_fr13_ab_bs),
+                                    "suffix_len": int(_fr13_ab_len),
+                                    "total_len": int(_fr13_ab_seen),
+                                    "boundary_pos": int(_fr13_ab_bp),
+                                    "num_prefills": _fr13_ab_nprefills,
+                                    "conv_max_abs": None,
+                                    "conv_sum_abs": None,
+                                    "conv_width": _fr13_ab_width,
+                                }
+                                _fr13_ab_rec.update(_fr13_ab_fpd)
+                                _fr13_ab_recs.append(_fr13_ab_rec)
                             else:
-                                # ---- OFF arm: fresh full prefill of this row over
-                                # [s, e). Recompute h_off (= the cache-OFF chunk-scan
-                                # boundary) at EVERY block boundary boundary_pos =
-                                # k*block_size with 0 < boundary_pos < len, by
-                                # re-running chunk_gated_delta_rule over the row's OWN
-                                # conv-prepped tokens [s, s+boundary_pos) from a ZERO
-                                # initial state. boundary_pos is block-aligned hence
-                                # chunk-aligned (block_size multiple of FLA chunk 64).
-                                _fr13_ab_bnds = list(range(
-                                    _fr13_ab_bs, _fr13_ab_len, _fr13_ab_bs
-                                ))
-                                for _fr13_ab_bp in _fr13_ab_bnds:
-                                    _fr13_ab_gi = torch.arange(
-                                        _fr13_ab_s, _fr13_ab_s + _fr13_ab_bp,
-                                        device=_fr13_ab_dev, dtype=torch.long,
-                                    )
-                                    _fr13_ab_h0 = torch.zeros_like(
-                                        initial_state[_fr13_ab_r:_fr13_ab_r + 1]
-                                    )
-                                    _fr13_ab_cu = torch.tensor(
-                                        [0, int(_fr13_ab_bp)],
-                                        dtype=torch.int32, device=_fr13_ab_dev,
-                                    )
-                                    (
-                                        _fr13_ab_o,
-                                        _fr13_ab_hf,
-                                    ) = self.chunk_gated_delta_rule(
-                                        q=_fr13_ab_q[_fr13_ab_gi].unsqueeze(0).contiguous(),
-                                        k=_fr13_ab_k[_fr13_ab_gi].unsqueeze(0).contiguous(),
-                                        v=_fr13_ab_v[_fr13_ab_gi].unsqueeze(0).contiguous(),
-                                        g=_fr13_ab_g[_fr13_ab_gi].unsqueeze(0).contiguous(),
-                                        beta=_fr13_ab_beta[_fr13_ab_gi].unsqueeze(0).contiguous(),
-                                        initial_state=_fr13_ab_h0,
-                                        output_final_state=True,
-                                        cu_seqlens=_fr13_ab_cu,
-                                        chunk_indices=None,
-                                        chunk_offsets=None,
-                                        use_qk_l2norm_in_kernel=False,
-                                    )
-                                    _fr13_ab_h_off = (
-                                        _fr13_ab_hf[0].detach().to(torch.float32)
-                                    )
-                                    # conv window at boundary_pos = last (width-1)
-                                    # pre-conv inputs ending at boundary_pos. We
-                                    # report the digest of the conv-OUTPUT window
-                                    # at the boundary token (the row's conv-prepped
-                                    # state is downstream of conv); for the conv tap
-                                    # comparison we use the restored conv window
-                                    # (ON) vs the fresh prefill's conv_state row
-                                    # AFTER the full prefill writes it -- but that
-                                    # stores the window at total_len, not
-                                    # boundary_pos, so conv h_off is recorded as
-                                    # None here and the conv verdict is ssm-led (see
-                                    # reducer + risk note).
-                                    _fr13_ab_recs.append({
-                                        "schema": "fr13.apc_cache_ab.v1",
-                                        "phase": "off",
-                                        "layer": _fr13_ab_layer,
-                                        "row_in_batch": int(_fr13_ab_r),
-                                        "state_row": _fr13_ab_row,
-                                        "block_size": int(_fr13_ab_bs),
-                                        "suffix_len": None,
-                                        "total_len": int(_fr13_ab_len),
-                                        "boundary_pos": int(_fr13_ab_bp),
-                                        "ssm_max_abs": float(
-                                            _fr13_ab_h_off.abs().max().item()
-                                        ),
-                                        "ssm_sum_abs": float(
-                                            _fr13_ab_h_off.abs().sum().item()
-                                        ),
-                                        "ssm_fp": [
-                                            float(_fr13_ab_h_off.flatten()[
-                                                int(_fr13_ab_fpi)
-                                            ].item())
-                                            for _fr13_ab_fpi in range(
-                                                0,
-                                                min(8, int(_fr13_ab_h_off.numel())),
-                                            )
-                                        ],
-                                        "conv_max_abs": None,
-                                        "conv_sum_abs": None,
-                                        "conv_width": _fr13_ab_width,
-                                    })
+                                # R0 (warm) and any unpinned req: record nothing.
+                                continue
                         _fr13_ab_log = os.environ.get(
                             "FR13_APC_CACHE_AB_LOG",
                             "/logs/fr13_apc_cache_ab.jsonl",
@@ -6338,29 +6479,36 @@ def _fr13_gdn_subop_mab(
                                 _fr13_ab_log, "a", buffering=1, encoding="utf-8"
                             )
                             _fr13_ab_gdn._FR13_APC_CACHE_AB_FH = _fr13_ab_fh
-                        _fr13_ab_seen = int(
+                        _fr13_ab_nseen = int(
                             getattr(_fr13_ab_gdn, "_FR13_APC_CACHE_AB_SEEN", 0)
                         )
                         for _fr13_ab_rec in _fr13_ab_recs:
                             _fr13_ab_fh.write(
                                 _fr13_ab_json.dumps(_fr13_ab_rec) + chr(10)
                             )
-                            _fr13_ab_seen += 1
-                            if _fr13_ab_seen <= 80 or _fr13_ab_seen % 60 == 1:
+                            _fr13_ab_nseen += 1
+                            if _fr13_ab_nseen <= 80 or _fr13_ab_nseen % 60 == 1:
                                 print(
-                                    "[FR13_APC_CACHE_AB] n=" + str(_fr13_ab_seen)
+                                    "[FR13_APC_CACHE_AB] n=" + str(_fr13_ab_nseen)
                                     + " phase=" + str(_fr13_ab_rec["phase"])
+                                    + " req=" + str(_fr13_ab_rec["req_id"])
                                     + " layer=" + str(_fr13_ab_rec["layer"])
                                     + " state_row=" + str(_fr13_ab_rec["state_row"])
                                     + " boundary_pos=" + str(_fr13_ab_rec["boundary_pos"])
                                     + " suffix_len=" + str(_fr13_ab_rec["suffix_len"])
-                                    + " total_len=" + str(_fr13_ab_rec["total_len"])
                                     + " block_size=" + str(_fr13_ab_rec["block_size"])
+                                    + " ssm_argmax_idx=" + str(_fr13_ab_rec["ssm_argmax_idx"])
                                     + " ssm_max_abs=" + str(_fr13_ab_rec["ssm_max_abs"]),
                                     file=_fr13_ab_sys.stderr, flush=True,
                                 )
-                        _fr13_ab_gdn._FR13_APC_CACHE_AB_SEEN = _fr13_ab_seen
+                        _fr13_ab_gdn._FR13_APC_CACHE_AB_SEEN = _fr13_ab_nseen
                     except Exception as _fr13_ab_exc:
+                        # FAIL-LOUD: a RuntimeError from the alignment / sanity
+                        # asserts must NOT be swallowed (a swallowed mis-key =
+                        # wrong verdict). Re-raise those; only diagnostic /
+                        # logging hiccups print-and-continue.
+                        if isinstance(_fr13_ab_exc, RuntimeError):
+                            raise
                         try:
                             import sys as _fr13_ab_sys2
                             print(
@@ -11021,6 +11169,31 @@ def _patch_gpu_model_runner_decode_mode_globals() -> bool:
         "        except Exception as _fr10_mode_exc:\n"
         "            if __import__(\"os\").environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
         "                raise RuntimeError(\"FR10 tree decode-mode global failed for rejection_sampler: \" + type(_fr10_mode_exc).__name__ + \":\" + str(_fr10_mode_exc)) from _fr10_mode_exc\n"
+        "        # FR13_APC_CACHE_AB: plumb the per-row req_ids on the PREFILL\n"
+        "        # path. The spec-path plumb (FR13_TREE_REQKEY) only sets\n"
+        "        # _LUMO_FA_SAMPLER_ROW_REQ_IDS inside the spec-decode\n"
+        "        # num_decode_draft_tokens block, so a pure cache-hit re-prefill\n"
+        "        # (R2) / fresh prefill (R3) forward has NO row->req_id map and the\n"
+        "        # AB arms cannot discriminate phase. This runs on EVERY\n"
+        "        # _prepare_inputs (full-batch order; on a pure non-spec prefill\n"
+        "        # full-batch order == non-spec order and len == non_spec rows, the\n"
+        "        # AB arm asserts that equality fail-loud). Gated on\n"
+        "        # FR13_APC_CACHE_AB=1 => byte-neutral / no behavior change when off.\n"
+        "        if __import__(\"os\").environ.get(\"FR13_APC_CACHE_AB\", \"0\") == \"1\":\n"
+        "            try:\n"
+        "                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_ab_rk_gdn\n"
+        "                _fr13_ab_rk_nreqs = getattr(self.input_batch, \"num_reqs\", None)\n"
+        "                if _fr13_ab_rk_nreqs is None:\n"
+        "                    _fr13_ab_rk_nreqs = len(self.input_batch.req_ids)\n"
+        "                _fr13_ab_rk_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = [\n"
+        "                    str(_fr13_ab_rk_rid)\n"
+        "                    for _fr13_ab_rk_rid in self.input_batch.req_ids[:int(_fr13_ab_rk_nreqs)]\n"
+        "                ]\n"
+        "            except Exception as _fr13_ab_rk_exc:\n"
+        "                raise RuntimeError(\n"
+        "                    \"FR13_APC_CACHE_AB prefill req_id plumb failed: \"\n"
+        "                    + type(_fr13_ab_rk_exc).__name__ + \":\" + str(_fr13_ab_rk_exc)\n"
+        "                ) from _fr13_ab_rk_exc\n"
         "\n"
         "        use_spec_decode = len(scheduler_output.scheduled_spec_decode_tokens) > 0\n"
     )
