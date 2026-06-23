@@ -327,7 +327,7 @@ PY
 # =================================================================================
 PROMPT_TOKENS=${FR13_APC_AB_PROMPT_TOKENS:-2048}
 TARGET_BOUNDARY=${FR13_APC_AB_TARGET_BOUNDARY:-3072}
-GEN_TOKENS=${FR13_APC_AB_GEN_TOKENS:-1024}
+GEN_TOKENS=${FR13_APC_AB_GEN_TOKENS:-2048}
 BLOCK=${MAMBA_BLOCK_SIZE:-1024}
 
 # ---- /tokenize-pin P to exactly PROMPT_TOKENS tokens on the FULL completions-
@@ -462,11 +462,17 @@ if not (ptok < target):
     raise SystemExit(f"FAIL: target {target} not > prompt_tokens {ptok} (boundary not in GENERATED region)")
 if not (ptok < target <= len(pg)):
     raise SystemExit(f"FAIL: target {target} not in (len(P)={ptok}, len(P+G)={len(pg)}] -- generate more G")
-# R2 length: pick the smallest multiple s.t. target < len <= target+block, so R2
-# hits cached blocks through `target` and re-prefills a <=block tail in one step.
-r2_len = min(len(pg), target + block)
+# R2 length: a PARTIAL block past `target` (target + block//2, NOT block-aligned)
+# so APC hits the COMPLETE cached blocks [0,target] and re-prefills the partial
+# tail [target, r2_len] in ONE step -> the ON arm fires the restore AT target.
+# (A block-aligned r2_len would be a full cached block -> no re-prefill, no ON arm.)
+r2_len = target + block // 2
+if (r2_len % block) == 0:
+    raise SystemExit(f"FAIL: r2_len {r2_len} block-aligned -> last block fully cached, no re-prefill tail")
+if r2_len > len(pg):
+    raise SystemExit(f"FAIL: need len(P+G) >= {r2_len} for a partial R2 tail past target {target}; got {len(pg)} -- raise FR13_APC_AB_GEN_TOKENS")
 if not (target < r2_len <= target + block):
-    raise SystemExit(f"FAIL: cannot size R2 tail (r2_len={r2_len}, target={target}, block={block})")
+    raise SystemExit(f"FAIL: r2_len {r2_len} not in (target {target}, target+block {target+block}]")
 r2 = pg[:r2_len]
 json.dump(pg, open(pgout, "w"))
 json.dump(r2, open(r2out, "w"))
