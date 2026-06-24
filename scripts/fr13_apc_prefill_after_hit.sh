@@ -239,30 +239,24 @@ fi
 PAIR_DUMP=${PAIR_DUMP:-output/fr13_bigdenom_swe/cat9_b1/proxy_pair_dumps/pair_01781570708536496433_000002_initial.json}
 PROMPT_FILE="$RUNDIR/long_prompt.txt"
 .venv/bin/python - "$PAIR_DUMP" "$PROMPT_FILE" <<'PY'
-import json, sys
+import json, sys, os
 from pathlib import Path
 src, out = sys.argv[1], sys.argv[2]
+# Use the SAME flattener as the applypatch gate (scripts/fr13_apc_replay.py:
+# flatten_to_prompt) -- it wraps each message in <|role|>\n markers and APPENDS
+# the <|assistant|>\n generation cue so the model actually GENERATES a real turn.
+# The prior ad-hoc flattener dumped all string values (leaking type labels like
+# "reasoning_text"/"input_text") and had NO assistant cue -> the model saw
+# malformed pseudo-structure ending in a user msg and emitted EOS after 1 token.
+sys.path.insert(0, os.path.join(os.getcwd(), "scripts"))
 text = None
 p = Path(src)
 if p.is_file():
     try:
+        from fr13_apc_replay import flatten_to_prompt
         d = json.loads(p.read_text())
         req = d.get("request", {})
-        parts = []
-        instr = req.get("instructions")
-        if isinstance(instr, str):
-            parts.append(instr)
-        for msg in req.get("input", []) or []:
-            c = msg.get("content")
-            if isinstance(c, str):
-                parts.append(c)
-            elif isinstance(c, list):
-                for seg in c:
-                    if isinstance(seg, dict):
-                        for v in seg.values():
-                            if isinstance(v, str):
-                                parts.append(v)
-        blob = "\n\n".join(x for x in parts if x)
+        blob = flatten_to_prompt(req)
         if len(blob) > 8000:  # ~>2000 tokens
             text = blob
     except Exception as e:
