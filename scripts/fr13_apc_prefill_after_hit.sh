@@ -338,9 +338,16 @@ BLOCK=${MAMBA_BLOCK_SIZE:-1024}
 # POST /tokenize reports exactly PROMPT_TOKENS ids; assert %BLOCK==0. Emits
 # P_IDS_FILE (json list of token ids).
 P_IDS_FILE="$RUNDIR/P_ids.json"
-.venv/bin/python - "$PORT" "$PROMPT_FILE" "$P_IDS_FILE" "$PROMPT_TOKENS" "$BLOCK" <<'PY'
+# FR13_APC_AB_FULL_PROMPT (default 0): feed the WHOLE real prompt (directive intact
+# at the tail -> natural long generation), NO tail-truncation, NO block-align. The
+# restore boundary B* is then derived = ceil_block(L) (first block boundary in the
+# GENERATED region). This is the fix for "truncating to PROMPT_TOKENS cuts the tail
+# directive -> short gen" (the eliciting directive is always the last input message).
+FULL_PROMPT="${FR13_APC_AB_FULL_PROMPT:-0}"
+.venv/bin/python - "$PORT" "$PROMPT_FILE" "$P_IDS_FILE" "$PROMPT_TOKENS" "$BLOCK" "$FULL_PROMPT" "$RUNDIR/P_len.txt" <<'PY'
 import json, sys, urllib.request, urllib.error
 port, pfile, out, want, block = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
+full_prompt, lenout = sys.argv[6], sys.argv[7]
 full = open(pfile).read()
 def tok(text):
     body = json.dumps({"model": "qwen3.6-27b", "prompt": text}).encode()
@@ -357,20 +364,37 @@ def tok(text):
         raise SystemExit(f"FAIL: /tokenize returned no token list: keys={list(d.keys())}")
     return [int(x) for x in ids]
 ids_full = tok(full)
-if len(ids_full) < want:
-    raise SystemExit(f"FAIL: prompt only {len(ids_full)} tokens < wanted {want}; pick a longer source")
-if want % block != 0:
-    raise SystemExit(f"FAIL: PROMPT_TOKENS {want} %% block {block} != 0")
-# Exact id-space pin: take the first `want` ids. We feed R0's prompt as TOKEN
-# IDS directly (vLLM /v1/completions accepts prompt=[int,...]) so the count is
-# exact regardless of detokenize round-trips.
-p_ids = ids_full[:want]
-if len(p_ids) != want:
-    raise SystemExit(f"FAIL: could not pin P to {want} ids (got {len(p_ids)})")
-json.dump(p_ids, open(out, "w"))
-print(f"[tokenize] P pinned to {len(p_ids)} ids (want={want}, %{block}=={want % block})")
+if full_prompt == "1":
+    # whole real prompt, no truncation, no block-align (directive survives at tail)
+    p_ids = list(ids_full)
+    json.dump(p_ids, open(out, "w"))
+    open(lenout, "w").write(str(len(p_ids)))
+    print(f"[tokenize] FULL_PROMPT P = {len(p_ids)} ids (no truncation; B* will be ceil_block)")
+else:
+    if len(ids_full) < want:
+        raise SystemExit(f"FAIL: prompt only {len(ids_full)} tokens < wanted {want}; pick a longer source")
+    if want % block != 0:
+        raise SystemExit(f"FAIL: PROMPT_TOKENS {want} %% block {block} != 0")
+    # Exact id-space pin: take the first `want` ids. We feed R0's prompt as TOKEN
+    # IDS directly (vLLM /v1/completions accepts prompt=[int,...]) so the count is
+    # exact regardless of detokenize round-trips.
+    p_ids = ids_full[:want]
+    if len(p_ids) != want:
+        raise SystemExit(f"FAIL: could not pin P to {want} ids (got {len(p_ids)})")
+    json.dump(p_ids, open(out, "w"))
+    open(lenout, "w").write(str(len(p_ids)))
+    print(f"[tokenize] P pinned to {len(p_ids)} ids (want={want}, %{block}=={want % block})")
 PY
 (( $? == 0 )) || { echo "FAIL: P token-pin"; exit 4; }
+# FULL_PROMPT: re-derive PROMPT_TOKENS = real L and B* = ceil_block(L) (gen region)
+if [[ "$FULL_PROMPT" == "1" ]]; then
+  L=$(cat "$RUNDIR/P_len.txt")
+  PROMPT_TOKENS="$L"
+  TARGET_BOUNDARY=$(( ( (L + BLOCK - 1) / BLOCK ) * BLOCK ))
+  # if L is already block-aligned, ceil_block == L (not > L); bump one block so B* is in gen region
+  if (( TARGET_BOUNDARY <= L )); then TARGET_BOUNDARY=$(( TARGET_BOUNDARY + BLOCK )); fi
+  echo "[full_prompt] real L=$L -> PROMPT_TOKENS=$PROMPT_TOKENS TARGET_BOUNDARY=$TARGET_BOUNDARY (need G>=$(( TARGET_BOUNDARY + BLOCK/2 - L )) ; budget B*+block/2=$(( TARGET_BOUNDARY + BLOCK/2 )))"
+fi
 
 # ---- a token-id completion helper: posts prompt=<id list> with a pinned
 # X-Request-Id; captures the EXACT generated token-ids via logprobs. Fails loud
