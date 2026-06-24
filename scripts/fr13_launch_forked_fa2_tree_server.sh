@@ -231,9 +231,7 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   # SOURCE = what a cache-HIT restores). DETERMINISTIC 4-ARM VERIFY (src_ptrs = batch_memcpy
   # source, eager, real 12907):
   #   stock           UNFAITHFUL 208/240  (baseline staleness)
-  #   FR13_APC_VERBATIM UNFAITHFUL 208/240 (=stock) -- CLOBBERED: its in-loop dst write is
   #                    overwritten by do_mamba_copy_block's batch_memcpy AFTER the loop. DEAD.
-  #   FR13_APC_SSM_SNAPSHOT UNFAITHFUL 224/240 -- MIS-WIRED: its get_temporal_copy_spec
   #                    override does NOT reach the memcpy source (still reads row 74). DEAD.
   #   FR13_APC_SNAP_FIX FAITHFUL 240/240  (src=committed leaf) -- THE ONLY WORKING FIX.
   # SNAP_FIX rewrites src_ptrs_np[offset-1]=state[leaf].data_ptr() in collect_mamba_copy_meta
@@ -252,9 +250,7 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   : "${FR13_APC_CONV_FIX:=1}"
   : "${FR13_APC_CONV_SNAPSHOT:=1}"
   : "${FR13_APC_SNAP_FIX:=1}"        # BAKED 2026-06-24: verify3b FAITHFUL 240/240 (the working SSM node-bank fix)
-  : "${FR13_APC_SSM_SNAPSHOT:=0}"    # RETIRED: verify3b UNFAITHFUL (mis-wired, never reached the memcpy source)
-  : "${FR13_APC_VERBATIM:=0}"        # RETIRED: verify3b UNFAITHFUL=stock (clobbered by the post-loop batch_memcpy)
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SSM_SNAPSHOT FR13_APC_VERBATIM
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX
 else
   APC_FLAGS=""
 fi
@@ -395,24 +391,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_CONV_COMMITTED_PATH="$FR13_CONV_COMMITTED_PATH" \
   -e FR13_APC_CONV_FIX="${FR13_APC_CONV_FIX:-1}" \
   -e FR13_APC_CONV_SNAPSHOT="${FR13_APC_CONV_SNAPSHOT:-0}" \
-  -e FR13_APC_SSM_SNAPSHOT="${FR13_APC_SSM_SNAPSHOT:-0}" \
   -e FR13_APC_BLOCK_ALIGN_45477="${FR13_APC_BLOCK_ALIGN_45477:-1}" \
-  -e FR13_APC_CACHE_AB="${FR13_APC_CACHE_AB:-0}" \
-  -e FR13_APC_CACHE_AB_LOG="${FR13_APC_CACHE_AB_LOG:-/logs/fr13_apc_cache_ab.jsonl}" \
-  -e FR13_APC_CACHE_AB_BLOCK="${FR13_APC_CACHE_AB_BLOCK:-${MAMBA_BLOCK_SIZE:-1024}}" \
-  -e FR13_APC_AB_R2_REQ="${FR13_APC_AB_R2_REQ:-}" \
-  -e FR13_APC_AB_R3_REQ="${FR13_APC_AB_R3_REQ:-}" \
-  -e FR13_APC_VERBATIM="${FR13_APC_VERBATIM:-0}" \
-  -e FR13_APC_SSM_LEAF_SRC="${FR13_APC_SSM_LEAF_SRC:-0}" \
-  -e FR13_APC_SSM_DIAG="${FR13_APC_SSM_DIAG:-0}" \
-  -e FR13_APC_VALUE_VS_ORACLE="${FR13_APC_VALUE_VS_ORACLE:-0}" \
-  -e FR13_APC_VALUE_VS_ORACLE_LOG="${FR13_APC_VALUE_VS_ORACLE_LOG:-/logs/fr13_apc_value_vs_oracle.jsonl}" \
-  -e FR13_APC_HIT_RECURRENT_SUFFIX="${FR13_APC_HIT_RECURRENT_SUFFIX:-0}" \
-  -e FR13_APC_HIT_SUFFIX_CAP="${FR13_APC_HIT_SUFFIX_CAP:-64}" \
-  -e FR13_APC_STALENESS_AUDIT="${FR13_APC_STALENESS_AUDIT:-0}" \
-  -e FR13_APC_STALENESS_AUDIT_LOG="${FR13_APC_STALENESS_AUDIT_LOG:-/logs/fr13_apc_staleness_audit.jsonl}" \
-  -e FR13_APC_SNAP_FIDELITY="${FR13_APC_SNAP_FIDELITY:-0}" \
-  -e FR13_APC_SNAP_FIDELITY_LOG="${FR13_APC_SNAP_FIDELITY_LOG:-/logs/fr13_apc_snap_fidelity.jsonl}" \
   -e FR13_APC_SNAP_FIX="${FR13_APC_SNAP_FIX:-0}" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \
   -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \

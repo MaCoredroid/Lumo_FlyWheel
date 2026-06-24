@@ -108,7 +108,7 @@ export BATCH_INVARIANT=0
 # Hard-assert no diagnostic / state-probe / argmax-gate / sfwd-timer flag is live
 # in THIS shell (any would contaminate the clean speed read or add eager syncs).
 _DIAG_FLAGS=(FR13_SFWD_GPU_TIMER FR13_COMMIT_ARGMAX_GATE FR13_FORK_MARGIN_DUMP \
-  FR13_CHASE_DIAG FR13_FIX1_SELFCHECK FR13_APC_STATE_PROBE FR13_APC_SSM_DIAG \
+  FR13_CHASE_DIAG FR13_FIX1_SELFCHECK \
   FR13_REPLAY_BOUNDARY_LOG FR13_GDN_SUBOP_MAB FR13_FA2_MAB FR13_REPLAY_DURABLE_AB \
   FR13_TCF_SELFCHECK)
 for f in "${_DIAG_FLAGS[@]}"; do
@@ -134,8 +134,6 @@ export FR13_ENABLE_APC=1
 export MAMBA_BLOCK_SIZE=1024
 export MAMBA_SSM_CACHE_DTYPE=float32
 unset APC_MAX_NUM_BATCHED_TOKENS 2>/dev/null || true   # launcher defaults to block_size = the #45238 fix
-export FR13_APC_HIT_RECURRENT_SUFFIX=1
-export FR13_APC_DROP_FINAL_BLOCK=0                      # REFUTED carrier, pinned off
 
 bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM_ON" "$KIND" "$SUBSET"
 ON_RC=$?
@@ -155,8 +153,7 @@ echo
 echo "########## ARM 2: cache-OFF (no APC / baseline) ##########"
 # Defensive: ensure no APC env leaks into the cache-OFF boot.
 unset FR13_ENABLE_APC MAMBA_BLOCK_SIZE MAMBA_SSM_CACHE_DTYPE APC_MAX_NUM_BATCHED_TOKENS \
-      FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT \
-      FR13_APC_SSM_SNAPSHOT FR13_APC_SSM_WRITE_THROUGH FR13_APC_DROP_FINAL_BLOCK \
+      FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT \
       FR13_APC_BLOCK_ALIGN_45477 2>/dev/null || true
 
 bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM_OFF" "$KIND" "$SUBSET"
