@@ -6,6 +6,14 @@ IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870
 CONTAINER=${CONTAINER:-fr13-forked-fa2-tree}
 PORT=${PORT:-9950}
 GPU_UTIL=${GPU_UTIL:-0.88}
+# DURABLE OOM GUARD (2026-06-24): ALWAYS cap the container cgroup so the host keeps
+# ~12GiB headroom -> Claude/watchdog/tmux can NEVER be the kernel OOM victim (GB10
+# unified mem; the killer takes a -1000 proc only when nothing else can be freed).
+# If a caller sets GPU_UTIL too high for this cap, the CONTAINER cgroup-OOMs at boot
+# (relaunchable + LOUD), never the host. Diagnostics should also run ENFORCE_EAGER=1
+# (the cuda-graph CAPTURE spike is the real trigger; eager stays flat). Default-ON so
+# no caller can forget it (the repeat OOMs were callers that didn't set it).
+DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-105g}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
 MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
 ATTENTION_BACKEND=${ATTENTION_BACKEND:-TREE_ATTN}
@@ -350,7 +358,7 @@ if available_gib < 80 or swap_used_kib != 0:
 PY
 
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
-  ${DOCKER_MEM_CAP:+--memory="$DOCKER_MEM_CAP" --memory-swap="$DOCKER_MEM_CAP"} \
+  --memory="$DOCKER_MEM_CAP" --memory-swap="$DOCKER_MEM_CAP" \
   ${PROFILE_PTRACE_CAP:+--cap-add=SYS_PTRACE} \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
