@@ -205,31 +205,38 @@ MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
 APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-$MAMBA_BLOCK_SIZE}
 if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
-  # BAKE (2026-06-20, carrier re-rooted 2026-06-21): GDN tree-committer APC sub-fixes ON by
-  # default with APC. SSM-leaf write-through (writes the committed accepted-leaf into the row
-  # the stock align snapshot reads; byte-lossless for the single-hit A/B + spec-decode-boundary
-  # cohort) + conv-window fix. These are PARTIAL -- they do NOT make APC fully lossless.
-  # CARRIER (research high-conf, 2026-06-22): the tree+APC defect is a cache-ADDRESSING /
-  # wrong-row issue -- the tree committer writes the accepted-leaf state to a NODE-bank row
-  # != the block-aligned row that align reads on a cache-hit -> stale-row poison. The
-  # architecturally-correct fix is FR13_APC_VERBATIM (copy the committed leaf VALUE into the
-  # block-aligned restore row, below). The earlier wrong-row SSM writers (SSM_WRITE_THROUGH,
-  # COMMIT_SITE_WT, ALIGN_TREE_AWARE, DROP_FINAL_BLOCK, HIT_RECURRENT_SUFFIX) were confirmed
-  # dead and removed. All APC flags only take effect with APC on, so the non-APC locked cat9
-  # path stays byte-identical (align hooks not invoked without --enable-prefix-caching).
+  # BAKE (2026-06-24, GPU-VERIFIED via verify3b output/fr13_apc_verify3b): the tree+APC
+  # node-bank staleness fix. The defect: the tree committer writes the accepted-leaf state
+  # to a DYNAMIC node-bank row (spec_state_indices[req, accepted_len-1]) != the static
+  # block-pool src row the stock align snapshot reads -> the postprocess SSM snapshot copies
+  # a STALE row (measured snap_src_row=74 vs committed leaf, |diff|~14-18, on the batch_memcpy
+  # SOURCE = what a cache-HIT restores). DETERMINISTIC 4-ARM VERIFY (src_ptrs = batch_memcpy
+  # source, eager, real 12907):
+  #   stock           UNFAITHFUL 208/240  (baseline staleness)
+  #   FR13_APC_VERBATIM UNFAITHFUL 208/240 (=stock) -- CLOBBERED: its in-loop dst write is
+  #                    overwritten by do_mamba_copy_block's batch_memcpy AFTER the loop. DEAD.
+  #   FR13_APC_SSM_SNAPSHOT UNFAITHFUL 224/240 -- MIS-WIRED: its get_temporal_copy_spec
+  #                    override does NOT reach the memcpy source (still reads row 74). DEAD.
+  #   FR13_APC_SNAP_FIX FAITHFUL 240/240  (src=committed leaf) -- THE ONLY WORKING FIX.
+  # SNAP_FIX rewrites src_ptrs_np[offset-1]=state[leaf].data_ptr() in collect_mamba_copy_meta
+  # AFTER the stock record, so do_mamba_copy_block copies the committed-leaf state into the
+  # block-aligned restore row. Wrote_back==leaf_ptr verified; cuda-graph-safe (host-side
+  # collect rewrite, not in the captured graph); native-safe (no leaf published -> stock src).
+  # SCOPE: makes cache-ON lossless w.r.t. the committed-leaf SSM state (necessary for lossless
+  # APC). It is NOT a fix for the agentic tool-call "crash" (that is the cache-INDEPENDENT
+  # qwen free-form-runaway flake, audit output/.../wuez11596 -- fires even at 0% cache hit),
+  # and "src faithful" is necessary-not-sufficient for full losslessness (committed-leaf vs
+  # fresh-prefill is a separate cross-boot residual). VERBATIM (clobbered) + SSM_SNAPSHOT
+  # (mis-wired) RETIRED to 0. Conv path (CONV_FIX/CONV_SNAPSHOT) UNCHANGED (separate, not
+  # re-verified here -- a conv node-bank analogue may need the same SNAP_FIX-style redirect;
+  # follow-up). All APC flags only take effect with APC on, so the non-APC locked cat9 path
+  # stays byte-identical (align hooks not invoked without --enable-prefix-caching).
   : "${FR13_APC_CONV_FIX:=1}"
   : "${FR13_APC_CONV_SNAPSHOT:=1}"
-  : "${FR13_APC_SSM_SNAPSHOT:=1}"
-  # FR13_APC_VERBATIM: corrected commit-site write-through (patcher
-  # _patch_mamba_utils_apc_align_tree_aware emits the FR13_APC_VERBATIM block).
-  # Writes the committed accepted-leaf conv+SSM state, whole-row in-place, into the
-  # EXACT block-pool row a stock UNMODIFIED align cache-HIT re-prefill restores from
-  # (dest = block_ids[aligned_new_computed_tokens//block_size - 1]) so cache-ON is
-  # byte-lossless for the decode-committed-leaf case. Default 0 = inert (body never
-  # runs => byte-identical) UNTIL validated on GPU; flip to 1 in a drill. Only takes
-  # effect under --enable-prefix-caching, so the non-APC locked cat9 path is unchanged.
-  : "${FR13_APC_VERBATIM:=0}"
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SSM_SNAPSHOT FR13_APC_VERBATIM
+  : "${FR13_APC_SNAP_FIX:=1}"        # BAKED 2026-06-24: verify3b FAITHFUL 240/240 (the working SSM node-bank fix)
+  : "${FR13_APC_SSM_SNAPSHOT:=0}"    # RETIRED: verify3b UNFAITHFUL (mis-wired, never reached the memcpy source)
+  : "${FR13_APC_VERBATIM:=0}"        # RETIRED: verify3b UNFAITHFUL=stock (clobbered by the post-loop batch_memcpy)
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SSM_SNAPSHOT FR13_APC_VERBATIM
 else
   APC_FLAGS=""
 fi
@@ -343,6 +350,7 @@ if available_gib < 80 or swap_used_kib != 0:
 PY
 
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
+  ${DOCKER_MEM_CAP:+--memory="$DOCKER_MEM_CAP" --memory-swap="$DOCKER_MEM_CAP"} \
   ${PROFILE_PTRACE_CAP:+--cap-add=SYS_PTRACE} \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
@@ -378,8 +386,15 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_VERBATIM="${FR13_APC_VERBATIM:-0}" \
   -e FR13_APC_SSM_LEAF_SRC="${FR13_APC_SSM_LEAF_SRC:-0}" \
   -e FR13_APC_SSM_DIAG="${FR13_APC_SSM_DIAG:-0}" \
+  -e FR13_APC_VALUE_VS_ORACLE="${FR13_APC_VALUE_VS_ORACLE:-0}" \
+  -e FR13_APC_VALUE_VS_ORACLE_LOG="${FR13_APC_VALUE_VS_ORACLE_LOG:-/logs/fr13_apc_value_vs_oracle.jsonl}" \
+  -e FR13_APC_HIT_RECURRENT_SUFFIX="${FR13_APC_HIT_RECURRENT_SUFFIX:-0}" \
+  -e FR13_APC_HIT_SUFFIX_CAP="${FR13_APC_HIT_SUFFIX_CAP:-64}" \
   -e FR13_APC_STALENESS_AUDIT="${FR13_APC_STALENESS_AUDIT:-0}" \
   -e FR13_APC_STALENESS_AUDIT_LOG="${FR13_APC_STALENESS_AUDIT_LOG:-/logs/fr13_apc_staleness_audit.jsonl}" \
+  -e FR13_APC_SNAP_FIDELITY="${FR13_APC_SNAP_FIDELITY:-0}" \
+  -e FR13_APC_SNAP_FIDELITY_LOG="${FR13_APC_SNAP_FIDELITY_LOG:-/logs/fr13_apc_snap_fidelity.jsonl}" \
+  -e FR13_APC_SNAP_FIX="${FR13_APC_SNAP_FIX:-0}" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \
   -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
   -e FR13_EAGER_PACK="$FR13_EAGER_PACK" \

@@ -5902,6 +5902,276 @@ def _fr13_gdn_subop_mab(
                         )
                     except Exception:
                         pass
+            # FR13_APC_LAYERDIFF (default 0 = inert / byte-identical). Per-layer,
+            # per-arm GDN OUTPUT tap for the APC second-carrier localizer. When
+            # enabled AND this non-spec prefill batch's request id is in the pinned
+            # set FR13_APC_LAYERDIFF_REQIDS (the R2 cache-ON-warm + R3 cache-OFF-
+            # reset reqs for ONE teacher-forced position), dump for THIS GDN
+            # linear_attn layer the LAST-position (the token being predicted)
+            # output of three GDN sub-components:
+            #   * core_attn_out : core_attn_out_non_spec[last] (post-scan, PRE
+            #     norm/out_proj -- the GDN attention contribution this layer adds
+            #     to the residual stream).
+            #   * conv1d_out    : _fr13_prefill_conv_out_capture[last] (the conv1d
+            #     branch output at the last position).
+            #   * ssm_scan      : last_recurrent_state[row] flattened-digest +
+            #     core_attn_out[last] argmax (the SSM scan boundary state the cache
+            #     would store; the recurrent scan's per-position output is folded
+            #     into core_attn_out, so we record the scan FINAL STATE digest as
+            #     the ssm component's value-signature).
+            # The two arms are distinguishable by req_id; the reducer joins by
+            # (layer_index, component) and walks layers ascending to find the FIRST
+            # GDN layer whose cache-ON output diverges from cache-OFF. EAGER-ONLY:
+            # the tap .item()/.cpu()-copies, so it RAISES under cuda-graph capture
+            # (class-6 fail-loud); the deploy/diagnostic boot for this gate is
+            # ENFORCE_EAGER=1. When the env flag is off the whole block is one
+            # cheap os.environ check.
+            if os.environ.get("FR13_APC_LAYERDIFF", "0") == "1":
+                _fr13_ld_cap = False
+                try:
+                    _fr13_ld_cap = (
+                        torch.cuda.is_available()
+                        and torch.cuda.is_current_stream_capturing()
+                    )
+                except Exception:
+                    _fr13_ld_cap = False
+                if _fr13_ld_cap:
+                    raise RuntimeError(
+                        "FR13_APC_LAYERDIFF is an EAGER-ONLY tap (.item()/cpu copy) "
+                        "but the current stream is CUDA-graph capturing. Boot the "
+                        "layerdiff diagnostic with ENFORCE_EAGER=1."
+                    )
+                # control-flow-only sentinel for "unrelated batch -> skip" (NOT a
+                # RuntimeError, so it never trips the fail-loud re-raise below).
+                class _FR13_LD_SKIP_T(Exception):
+                    pass
+                _FR13_LD_SKIP = _FR13_LD_SKIP_T()
+                try:
+                    import json as _fr13_ld_json
+                    import sys as _fr13_ld_sys
+                    from vllm.model_executor.layers.mamba import (
+                        gdn_linear_attn as _fr13_ld_gdn,
+                    )
+                    # which req_ids are in THIS batch (set every _prepare_inputs
+                    # by FR13_TREE_REQKEY: input_batch.req_ids[:num_reqs]). For the
+                    # single-request teacher-force arms num_reqs==1, so the single
+                    # non-spec prefill row maps to req_ids[0].
+                    _fr13_ld_batch_reqs = [
+                        str(_x)
+                        for _x in (
+                            _fr13_ld_gdn.__dict__.get(
+                                "_LUMO_FA_SAMPLER_ROW_REQ_IDS"
+                            )
+                            or []
+                        )
+                    ]
+                    _fr13_ld_want = {
+                        _x.strip()
+                        for _x in os.environ.get(
+                            "FR13_APC_LAYERDIFF_REQIDS", ""
+                        ).split(",")
+                        if _x.strip()
+                    }
+                    # gate on req-id membership: if a pin set is given, at least
+                    # one batch req must be in it (else this batch is unrelated,
+                    # e.g. the capture/warm reqs -> skip silently). With no pin set
+                    # we dump every prefill batch (dev convenience).
+                    _fr13_ld_hit_reqs = (
+                        [r for r in _fr13_ld_batch_reqs if r in _fr13_ld_want]
+                        if _fr13_ld_want
+                        else list(_fr13_ld_batch_reqs)
+                    )
+                    if _fr13_ld_want and not _fr13_ld_hit_reqs:
+                        # this batch is unrelated (e.g. the capture/warm reqs);
+                        # skip silently -- handled by the `_fr13_ld_skip` guard.
+                        raise _FR13_LD_SKIP
+                    _fr13_ld_qsl = non_spec_query_start_loc
+                    _fr13_ld_N = int(_fr13_ld_qsl.numel()) - 1
+                    # align batch req_ids to non-spec rows. For a pure prefill
+                    # teacher-force step the non-spec rows are the batch requests
+                    # in order; if the lengths disagree we cannot safely key
+                    # (FAIL-LOUD: a mis-key = wrong carrier verdict).
+                    if _fr13_ld_want and len(_fr13_ld_batch_reqs) != _fr13_ld_N:
+                        raise RuntimeError(
+                            "FR13_APC_LAYERDIFF: batch req_ids len "
+                            + str(len(_fr13_ld_batch_reqs))
+                            + " != non-spec prefill rows "
+                            + str(_fr13_ld_N)
+                            + " (cannot key arms; expected 1 teacher-force req "
+                            "per arm). reqs=" + repr(_fr13_ld_batch_reqs)
+                        )
+                    _fr13_ld_layer = str(getattr(self, "prefix", "?"))
+                    # parse a numeric layer index out of '...layers.<N>...'.
+                    _fr13_ld_lidx = -1
+                    try:
+                        _fr13_ld_parts = _fr13_ld_layer.split(".")
+                        for _fr13_ld_pi, _fr13_ld_pp in enumerate(_fr13_ld_parts):
+                            if _fr13_ld_pp == "layers" and _fr13_ld_pi + 1 < len(_fr13_ld_parts):
+                                _fr13_ld_lidx = int(_fr13_ld_parts[_fr13_ld_pi + 1])
+                                break
+                    except Exception:
+                        _fr13_ld_lidx = -1
+                    # core_attn_out_non_spec is [1, T, HV, V]; conv capture is
+                    # [T, conv_dim]; both indexed by the flat token position.
+                    _fr13_ld_core = core_attn_out_non_spec.squeeze(0)
+                    _fr13_ld_conv = None
+                    try:
+                        _fr13_ld_conv = _fr13_prefill_conv_out_capture
+                    except NameError:
+                        _fr13_ld_conv = None
+                    _fr13_ld_recs = []
+                    for _fr13_ld_r in range(_fr13_ld_N):
+                        # the row's req_id (when keyed); else row index string.
+                        if _fr13_ld_r < len(_fr13_ld_batch_reqs):
+                            _fr13_ld_rid = _fr13_ld_batch_reqs[_fr13_ld_r]
+                        else:
+                            _fr13_ld_rid = "row" + str(_fr13_ld_r)
+                        if _fr13_ld_want and _fr13_ld_rid not in _fr13_ld_want:
+                            continue
+                        _fr13_ld_s = int(_fr13_ld_qsl[_fr13_ld_r])
+                        _fr13_ld_e = int(_fr13_ld_qsl[_fr13_ld_r + 1])
+                        if _fr13_ld_e <= _fr13_ld_s:
+                            continue
+                        _fr13_ld_last = _fr13_ld_e - 1   # the predicted token row
+                        # --- core_attn_out (post-scan, last position) ---
+                        _fr13_ld_cv = (
+                            _fr13_ld_core[_fr13_ld_last].reshape(-1).to(torch.float32)
+                        )
+                        _fr13_ld_core_absmax = float(_fr13_ld_cv.abs().max().item())
+                        _fr13_ld_core_l2 = float(_fr13_ld_cv.norm().item())
+                        _fr13_ld_core_argmax = int(_fr13_ld_cv.abs().argmax().item())
+                        _fr13_ld_core_sum = float(_fr13_ld_cv.sum().item())
+                        # --- conv1d_out (last position) ---
+                        _fr13_ld_conv_absmax = None
+                        _fr13_ld_conv_l2 = None
+                        _fr13_ld_conv_argmax = None
+                        _fr13_ld_conv_sum = None
+                        try:
+                            if _fr13_ld_conv is not None:
+                                _fr13_ld_cw = (
+                                    _fr13_ld_conv[_fr13_ld_last]
+                                    .reshape(-1)
+                                    .to(torch.float32)
+                                )
+                                _fr13_ld_conv_absmax = float(_fr13_ld_cw.abs().max().item())
+                                _fr13_ld_conv_l2 = float(_fr13_ld_cw.norm().item())
+                                _fr13_ld_conv_argmax = int(_fr13_ld_cw.abs().argmax().item())
+                                _fr13_ld_conv_sum = float(_fr13_ld_cw.sum().item())
+                        except Exception:
+                            pass
+                        # --- ssm_scan: final recurrent state digest for this row
+                        #     (the boundary state the cache stores) ---
+                        _fr13_ld_ssm_absmax = None
+                        _fr13_ld_ssm_l2 = None
+                        _fr13_ld_ssm_argmax = None
+                        _fr13_ld_ssm_sum = None
+                        try:
+                            if (
+                                last_recurrent_state is not None
+                                and _fr13_ld_r < int(last_recurrent_state.shape[0])
+                            ):
+                                _fr13_ld_sw = (
+                                    last_recurrent_state[_fr13_ld_r]
+                                    .reshape(-1)
+                                    .to(torch.float32)
+                                )
+                                _fr13_ld_ssm_absmax = float(_fr13_ld_sw.abs().max().item())
+                                _fr13_ld_ssm_l2 = float(_fr13_ld_sw.norm().item())
+                                _fr13_ld_ssm_argmax = int(_fr13_ld_sw.abs().argmax().item())
+                                _fr13_ld_ssm_sum = float(_fr13_ld_sw.sum().item())
+                        except Exception:
+                            pass
+                        _fr13_ld_state_row = (
+                            int(non_spec_state_indices_tensor[_fr13_ld_r].item())
+                            if non_spec_state_indices_tensor is not None
+                            else -1
+                        )
+                        for _fr13_ld_comp, _fr13_ld_vals in (
+                            ("core_attn_out", (
+                                _fr13_ld_core_absmax, _fr13_ld_core_l2,
+                                _fr13_ld_core_argmax, _fr13_ld_core_sum,
+                            )),
+                            ("conv1d_out", (
+                                _fr13_ld_conv_absmax, _fr13_ld_conv_l2,
+                                _fr13_ld_conv_argmax, _fr13_ld_conv_sum,
+                            )),
+                            ("ssm_scan", (
+                                _fr13_ld_ssm_absmax, _fr13_ld_ssm_l2,
+                                _fr13_ld_ssm_argmax, _fr13_ld_ssm_sum,
+                            )),
+                        ):
+                            _fr13_ld_recs.append({
+                                "schema": "fr13.apc_layerdiff.v1",
+                                "module": "gdn_linear_attn",
+                                "req_id": _fr13_ld_rid,
+                                "layer": _fr13_ld_layer,
+                                "layer_index": _fr13_ld_lidx,
+                                "component": _fr13_ld_comp,
+                                "row_in_batch": int(_fr13_ld_r),
+                                "state_row": _fr13_ld_state_row,
+                                "last_pos": int(_fr13_ld_last),
+                                "suffix_len": int(_fr13_ld_e - _fr13_ld_s),
+                                "absmax": _fr13_ld_vals[0],
+                                "l2": _fr13_ld_vals[1],
+                                "argmax": _fr13_ld_vals[2],
+                                "sum": _fr13_ld_vals[3],
+                                "num_prefills": int(attn_metadata.num_prefills),
+                            })
+                    # persist to the mounted log (survives teardown) + needle.
+                    _fr13_ld_log = os.environ.get(
+                        "FR13_APC_LAYERDIFF_LOG",
+                        "/logs/fr13_apc_layerdiff.jsonl",
+                    )
+                    _fr13_ld_fh = getattr(
+                        _fr13_ld_gdn, "_FR13_APC_LAYERDIFF_FH", None
+                    )
+                    if _fr13_ld_fh is None:
+                        try:
+                            os.makedirs(
+                                os.path.dirname(_fr13_ld_log) or ".",
+                                exist_ok=True,
+                            )
+                        except Exception:
+                            pass
+                        _fr13_ld_fh = open(  # noqa: SIM115
+                            _fr13_ld_log, "a", buffering=1, encoding="utf-8"
+                        )
+                        _fr13_ld_gdn._FR13_APC_LAYERDIFF_FH = _fr13_ld_fh
+                    _fr13_ld_seen = int(
+                        getattr(_fr13_ld_gdn, "_FR13_APC_LAYERDIFF_SEEN", 0)
+                    )
+                    for _fr13_ld_rec in _fr13_ld_recs:
+                        _fr13_ld_fh.write(
+                            _fr13_ld_json.dumps(_fr13_ld_rec) + chr(10)
+                        )
+                        _fr13_ld_seen += 1
+                        if _fr13_ld_seen <= 90 or _fr13_ld_seen % 96 == 1:
+                            print(
+                                "[FR13_APC_LAYERDIFF] n=" + str(_fr13_ld_seen)
+                                + " req=" + str(_fr13_ld_rec["req_id"])
+                                + " L=" + str(_fr13_ld_rec["layer_index"])
+                                + " comp=" + str(_fr13_ld_rec["component"])
+                                + " absmax=" + str(_fr13_ld_rec["absmax"])
+                                + " argmax=" + str(_fr13_ld_rec["argmax"])
+                                + " last_pos=" + str(_fr13_ld_rec["last_pos"]),
+                                file=_fr13_ld_sys.stderr, flush=True,
+                            )
+                    _fr13_ld_gdn._FR13_APC_LAYERDIFF_SEEN = _fr13_ld_seen
+                except _FR13_LD_SKIP_T:
+                    pass
+                except Exception as _fr13_ld_exc:
+                    # FAIL-LOUD on a key/align RuntimeError (a swallowed mis-key =
+                    # wrong carrier verdict); only diagnostic hiccups print+pass.
+                    if isinstance(_fr13_ld_exc, RuntimeError):
+                        raise
+                    try:
+                        import sys as _fr13_ld_sys2
+                        print(
+                            "[FR13_APC_LAYERDIFF] EXC " + repr(_fr13_ld_exc),
+                            file=_fr13_ld_sys2.stderr, flush=True,
+                        )
+                    except Exception:
+                        pass
             try:
                 _fr13_prefill_capture_path = os.environ.get("FR13_PREFILL_GDN_CAPTURE")
                 if _fr13_prefill_capture_path:
@@ -7473,6 +7743,8 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         and os.environ.get("FR13_APC_VERBATIM", "0") != "1"
         and os.environ.get("FR13_APC_STALENESS_AUDIT", "0") != "1"
         and os.environ.get("FR13_APC_SSM_LEAF_SRC", "0") != "1"
+        and os.environ.get("FR13_APC_SNAP_FIDELITY", "0") != "1"
+        and os.environ.get("FR13_APC_SNAP_FIX", "0") != "1"
     ):
         return
     try:
@@ -8986,6 +9258,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                         _lumo_tree_commit_gdn, '_FR13_BOUNDARY_EVENT', 0
                     )) + 1
                 # FR13_APC_VERBATIM / FR13_APC_SSM_SNAPSHOT / FR13_APC_STALENESS_AUDIT
+                # / FR13_APC_SSM_LEAF_SRC / FR13_APC_SNAP_FIDELITY / FR13_APC_SNAP_FIX
                 # need the per-layer publish (_fr13_publish_apc_ssm_leaf at the
                 # legacy loop below) to populate
                 # gdn_linear_attn._FR13_APC_SSM_LEAF_BY_REQ. The EAGER_PACK
@@ -8998,6 +9271,8 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     or __import__('os').environ.get("FR13_APC_SSM_SNAPSHOT", "0") == "1"
                     or __import__('os').environ.get("FR13_APC_STALENESS_AUDIT", "0") == "1"
                     or __import__('os').environ.get("FR13_APC_SSM_LEAF_SRC", "0") == "1"
+                    or __import__('os').environ.get("FR13_APC_SNAP_FIDELITY", "0") == "1"
+                    or __import__('os').environ.get("FR13_APC_SNAP_FIX", "0") == "1"
                 )
                 if (
                     _ep_active
@@ -12434,6 +12709,458 @@ def _patch_worker_mamba_collect_ssm_leaf_src() -> bool:
     return True
 
 
+def _patch_worker_mamba_snap_fidelity() -> bool:
+    """FR13_APC_SNAP_FIDELITY (READ-ONLY, default "0" => body never runs =>
+    byte-identical; the locked cat9 + non-APC path is untouched).
+
+    DECISIVE in-process measurement for the tree+cache-ON lossy carrier. At each
+    POSTPROCESS SSM snapshot (collect_mamba_copy_meta, copy_func ==
+    get_temporal_copy_spec, phase == "postprocess"), records ONE jsonl row per
+    (req_id, layer, boundary) comparing:
+
+      * snap_src_row : the row the snapshot ACTUALLY copies FROM = the copy-spec
+        src, recovered from copy_spec.start_addr exactly like the C-tap:
+          (copy_spec.start_addr - state.data_ptr()) // row_bytes
+        (get_temporal_copy_spec returns the WHOLE row src=block_ids[src_block_idx
+        + accept_token_bias], so src_in_row_byte_off == 0). Its fp32 state digest
+        (absmax / l2 / argmax) is the state the stock cache-ON snapshot persists.
+
+      * committed_row : the committed-leaf node-bank row == the published
+        gdn_linear_attn._FR13_APC_SSM_LEAF_BY_REQ[req_id] == spec_state_indices[
+        req, accepted_len-1] (the in-place committed-leaf recurrent state the next
+        decode reads directly, == the row the cache-OFF path keeps and reads).
+        Its fp32 digest is the FAITHFUL target. committed_col = accept_token_bias
+        (the postprocess accept-bias the snapshot uses, already tree-translated by
+        _fr10_tree_accept_token_bias) is logged for cross-check; the block-pool
+        addressed row block_ids[src_block_idx + accept_token_bias] == snap_src_row
+        is the geometric src, while the committed-leaf node-bank row is the
+        published leaf (different index space -> the carrier).
+
+      * leaf_src_row : the row FR13_APC_SSM_LEAF_SRC redirects to (== the published
+        leaf), recorded verbatim for the analyst.
+
+      * diff_absmax / rows_match / argmax_match : |state[snap_src_row] -
+        state[committed_row]| over fp32 + row/argmax equality. diff_absmax > a
+        bf16 ULP (relative, ~2^-8 of the row scale) OR rows_match == False is the
+        SMOKING GUN: the snapshot copies a DIFFERENT state than the committed-leaf
+        in-place state that cache-OFF carries forward.
+
+    FAIL-LOUD: when the committed leaf is NOT available on a postprocess SSM
+    snapshot (no leaf map / req not keyed), that IS a finding -- recorded with
+    error="committed_leaf_unavailable" + a loud rate-limited stderr needle (never
+    crashes the served run; matches the observe-only VALUE_VS_ORACLE /
+    STALENESS_AUDIT style). The reducer treats a record-set with only such errors
+    as VACUOUS-with-finding.
+
+    EAGER-ONLY: the tap does .item()/.cpu() reads, so it RAISES under cuda-graph
+    capture (class-6 fail-loud); the diagnostic boot for this gate is
+    ENFORCE_EAGER=1. Phase is taken from the module global _FR13_BOUNDARY_PHASE,
+    which THIS patch sets in preprocess_mamba/postprocess_mamba (gated on the same
+    flag), so the gate is self-contained and does NOT require
+    FR13_REPLAY_BOUNDARY_LOG. The leaf map is populated by
+    _fr13_publish_apc_ssm_leaf, which is routed-on by adding FR13_APC_SNAP_FIDELITY
+    to the publisher gate + the committer's _fr13_apc_publish_on set (separate
+    edits). Default "0" => phase markers + tap body never run => byte-identical."""
+    text = MAMBA_UTILS_PATH.read_text()
+    sentinel = "# FR13_APC_SNAP_FIDELITY"
+    if sentinel in text:
+        return False
+
+    # (1) phase markers, gated on FR13_APC_SNAP_FIDELITY *or* FR13_APC_SNAP_FIX,
+    #     self-contained so the gate does not depend on FR13_REPLAY_BOUNDARY_LOG.
+    #     preprocess marker on a preprocess-only anchor, postprocess marker on a
+    #     postprocess-only anchor; both untouched by the boundary_log patch (which
+    #     uses different anchors). CRITICAL: the FIX (SNAP_FIX block) gates on
+    #     _FR13_BOUNDARY_PHASE=="postprocess", and the deployed cuda-graph SOLVE
+    #     runs SNAP_FIX=1 with SNAP_FIDELITY=0 (the fidelity tap is eager-only and
+    #     raises under capture). So the marker MUST also fire under SNAP_FIX alone
+    #     or the fix would never see phase=="postprocess" -> vacuous. These markers
+    #     are pure CPU string assignments in host-side pre/postprocess_mamba (NOT
+    #     inside the captured graph), so they are cuda-graph-safe.
+    pre_phase_anchor = (
+        "    resumed_req_ids = scheduler_output.scheduled_cached_reqs.resumed_req_ids\n"
+    )
+    if text.count(pre_phase_anchor) != 1:
+        raise RuntimeError(
+            "APC snap fidelity: preprocess phase anchor not unique"
+        )
+    text = text.replace(
+        pre_phase_anchor,
+        pre_phase_anchor
+        + "    if os.environ.get(\"FR13_APC_SNAP_FIDELITY\", \"0\") == \"1\" or os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\":  " + sentinel + "\n"
+        "        globals()[\"_FR13_BOUNDARY_PHASE\"] = \"preprocess\"\n",
+        1,
+    )
+
+    post_phase_anchor = (
+        "    num_accepted_tokens_cpu = input_batch.num_accepted_tokens_cpu\n"
+    )
+    if text.count(post_phase_anchor) != 1:
+        raise RuntimeError(
+            "APC snap fidelity: postprocess phase anchor not unique"
+        )
+    text = text.replace(
+        post_phase_anchor,
+        post_phase_anchor
+        + "    if os.environ.get(\"FR13_APC_SNAP_FIDELITY\", \"0\") == \"1\" or os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\":  " + sentinel + "\n"
+        "        globals()[\"_FR13_BOUNDARY_PHASE\"] = \"postprocess\"\n",
+        1,
+    )
+
+    # (2) the snapshot-fidelity tap, in collect_mamba_copy_meta after the
+    #     src/dst/sizes triple is recorded (offset += 1). offset += 1 is unique
+    #     and is NOT consumed by the LEAF_SRC / boundary_log patches.
+    tap_anchor = "                offset += 1\n"
+    if text.count(tap_anchor) != 1:
+        raise RuntimeError(
+            "APC snap fidelity: collect offset++ anchor not unique"
+        )
+    tap_inject = tap_anchor + (
+        # ---------------------------------------------------------------- #
+        # FR13_APC_SNAP_FIX (default "0" => no override => stock src =>
+        # byte-identical). THE FIX: at the postprocess SSM snapshot copy,
+        # redirect the copy SOURCE to the EXACT committed node-bank leaf row
+        # (_FR13_APC_SSM_LEAF_BY_REQ[req_id] == spec_state_indices[req,
+        # accepted_len-1]) -- the SAME committed_row the snap-fidelity tap
+        # validated. The stock block-pool src row
+        # block_ids[cur_block_idx+num_accepted-1] holds a WRONG recurrent
+        # state (measured 48/48 UNFAITHFUL, diff up to 23.05 at L0), so the
+        # cache-ON snapshot persists a stale state -> the tree x cache-ON
+        # lossy carrier. We rewrite src_ptrs_np[offset-1] (the entry just
+        # recorded for THIS get_temporal_copy_spec copy) so
+        # do_mamba_copy_block's batch_memcpy copies the FAITHFUL committed-leaf
+        # state into the cache dst block.
+        #
+        # SOURCE-ONLY + minimal: gated on phase=="postprocess" AND
+        # state_copy_func is get_temporal_copy_spec (the SSM whole-row snapshot)
+        # -- the CONV path, dst_ptrs_np (cache block row), sizes_np
+        # (num_elements, already a whole row), and the preprocess restore are
+        # ALL UNTOUCHED. Uses the EXACT validated published leaf -- does NOT
+        # invent a new index (the patch history's wrong-row writers are not
+        # repeated). Native MTP never publishes the leaf map -> auto-no-op
+        # (native-safe). Runs STANDALONE (does NOT require the eager-only
+        # FR13_APC_SNAP_FIDELITY tap); when both are on the tap re-reads
+        # src_ptrs_np[offset-1] and self-proves rows_match=True / diff~0.
+        "                if (  " + sentinel + "\n"
+        "                    os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\"\n"
+        "                    and globals().get(\"_FR13_BOUNDARY_PHASE\", \"?\") == \"postprocess\"\n"
+        "                    and getattr(state_copy_func, \"__name__\", \"\") == \"get_temporal_copy_spec\"\n"
+        "                ):\n"
+        "                    globals()[\"_FR13_SNAP_FIX_LAST_ENT\"] = None\n"
+        "                    globals()[\"_FR13_SNAP_FIX_LAST_APPLIED\"] = False\n"
+        "                    try:\n"
+        "                        from vllm.model_executor.layers.mamba import (\n"
+        "                            gdn_linear_attn as _fr13_fx_gdn,\n"
+        "                        )\n"
+        "                        _fr13_fx_lm = getattr(_fr13_fx_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
+        "                        _fr13_fx_leaf = (\n"
+        "                            _fr13_fx_lm.get(str(getattr(req_state, \"req_id\", None)))\n"
+        "                            if _fr13_fx_lm else None\n"
+        "                        )\n"
+        "                        _fr13_fx_n = int(state.shape[0])\n"
+        "                        _fr13_fx_ent = int(offset) - 1\n"
+        "                        if (\n"
+        "                            _fr13_fx_leaf is not None\n"
+        "                            and 0 <= int(_fr13_fx_leaf) < _fr13_fx_n\n"
+        "                            and 0 <= _fr13_fx_ent < int(src_ptrs_np.shape[0])\n"
+        "                        ):\n"
+        "                            src_ptrs_np[_fr13_fx_ent] = (\n"
+        "                                state[int(_fr13_fx_leaf)].data_ptr()\n"
+        "                            )\n"
+        "                            globals()[\"_FR13_SNAP_FIX_LAST_ENT\"] = _fr13_fx_ent\n"
+        "                            globals()[\"_FR13_SNAP_FIX_LAST_APPLIED\"] = True\n"
+        "                            _fr13_fx_gdn._FR13_SNAP_FIX_FIRED = int(\n"
+        "                                getattr(_fr13_fx_gdn, \"_FR13_SNAP_FIX_FIRED\", 0)\n"
+        "                            ) + 1\n"
+        "                            if (\n"
+        "                                os.environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\"\n"
+        "                                and _fr13_fx_gdn._FR13_SNAP_FIX_FIRED <= 80\n"
+        "                            ):\n"
+        "                                import sys as _fr13_fx_sys\n"
+        "                                # raw-readback diagnostics: prove WHAT landed in\n"
+        "                                # src_ptrs_np[ent] immediately after the write +\n"
+        "                                # whether this local is the persistent buffer\n"
+        "                                # batch_memcpy copies + state geometry, so the\n"
+        "                                # write->readback contradiction can be root-caused\n"
+        "                                # from real data (no re-guessing the fix).\n"
+        "                                try:\n"
+        "                                    _fr13_fx_np_persist = (\n"
+        "                                        int(src_ptrs_np.ctypes.data)\n"
+        "                                        == int(copy_bufs.src_ptrs.np.ctypes.data)\n"
+        "                                    )\n"
+        "                                except Exception as _fr13_fx_pe:\n"
+        "                                    _fr13_fx_np_persist = \"ERR:\" + str(_fr13_fx_pe)[:24]\n"
+        "                                print(\n"
+        "                                    \"[FR13_APC_SNAP_FIX] fired=\"\n"
+        "                                    + str(_fr13_fx_gdn._FR13_SNAP_FIX_FIRED)\n"
+        "                                    + \" req=\" + str(getattr(req_state, \"req_id\", None))[:28]\n"
+        "                                    + \" leaf_row=\" + str(int(_fr13_fx_leaf))\n"
+        "                                    + \" dest_row=\" + str(int(dest_block_id))\n"
+        "                                    + \" ent=\" + str(_fr13_fx_ent)\n"
+        "                                    + \" wrote_back=\" + str(int(src_ptrs_np[_fr13_fx_ent]))\n"
+        "                                    + \" leaf_ptr=\" + str(int(state[int(_fr13_fx_leaf)].data_ptr()))\n"
+        "                                    + \" st_base=\" + str(int(state.data_ptr()))\n"
+        "                                    + \" row_bytes=\" + str(int(state[0].numel()) * int(state.element_size()))\n"
+        "                                    + \" dtype=\" + str(src_ptrs_np.dtype)\n"
+        "                                    + \" contig=\" + str(bool(state.is_contiguous()))\n"
+        "                                    + \" np_is_persist=\" + str(_fr13_fx_np_persist),\n"
+        "                                    file=_fr13_fx_sys.stderr, flush=True,\n"
+        "                                )\n"
+        "                    except Exception as _fr13_fx_exc:\n"
+        "                        if os.environ.get(\"FR13_APC_SSM_DIAG\", \"0\") == \"1\":\n"
+        "                            import sys as _fr13_fx_esys\n"
+        "                            print(\n"
+        "                                \"[FR13_APC_SNAP_FIX] EXC \" + repr(_fr13_fx_exc),\n"
+        "                                file=_fr13_fx_esys.stderr, flush=True,\n"
+        "                            )\n"
+        # ---------------------------------------------------------------- #
+        "                if (  " + sentinel + "\n"
+        "                    os.environ.get(\"FR13_APC_SNAP_FIDELITY\", \"0\") == \"1\"\n"
+        "                    and globals().get(\"_FR13_BOUNDARY_PHASE\", \"?\") == \"postprocess\"\n"
+        "                    and getattr(state_copy_func, \"__name__\", \"\") == \"get_temporal_copy_spec\"\n"
+        "                ):\n"
+        "                    _fr13_sf_cap = False\n"
+        "                    try:\n"
+        "                        import torch as _fr13_sf_torch0\n"
+        "                        _fr13_sf_cap = (\n"
+        "                            _fr13_sf_torch0.cuda.is_available()\n"
+        "                            and _fr13_sf_torch0.cuda.is_current_stream_capturing()\n"
+        "                        )\n"
+        "                    except Exception:\n"
+        "                        _fr13_sf_cap = False\n"
+        "                    if _fr13_sf_cap:\n"
+        "                        raise RuntimeError(\n"
+        "                            \"FR13_APC_SNAP_FIDELITY tap is eager-only; \"\n"
+        "                            \"ran under cuda-graph capture (set ENFORCE_EAGER=1)\"\n"
+        "                        )\n"
+        "                    try:\n"
+        "                        import torch as _fr13_sf_torch\n"
+        "                        from vllm.model_executor.layers.mamba import (\n"
+        "                            gdn_linear_attn as _fr13_sf_gdn,\n"
+        "                        )\n"
+        "                        _fr13_sf_req = str(getattr(req_state, \"req_id\", None))\n"
+        "                        _fr13_sf_layer = str(layer_name)\n"
+        "                        _fr13_sf_es = int(state.element_size())\n"
+        "                        _fr13_sf_row_bytes = int(state[0].numel()) * _fr13_sf_es\n"
+        "                        _fr13_sf_blkpool_src = int(src_block_idx) + int(accept_token_bias)\n"
+        "                        _fr13_sf_blkpool_row = (\n"
+        "                            int(block_ids[_fr13_sf_blkpool_src])\n"
+        "                            if 0 <= _fr13_sf_blkpool_src < len(block_ids)\n"
+        "                            else -1\n"
+        "                        )\n"
+        "                        _fr13_sf_lm = getattr(_fr13_sf_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
+        "                        _fr13_sf_leaf = (\n"
+        "                            _fr13_sf_lm.get(_fr13_sf_req) if _fr13_sf_lm else None\n"
+        "                        )\n"
+        "                        _fr13_sf_n = int(state.shape[0])\n"
+        "                        # CONTIGUITY-SAFE recovery: the SSM kv-cache state is\n"
+        "                        # NON-contiguous (per-row physical padding; e.g. phys\n"
+        "                        # stride 3342336B vs logical row_bytes 3145728B = 17/16).\n"
+        "                        # So state[r].data_ptr() == st_base + r * stride(0) * es,\n"
+        "                        # NOT st_base + r * row_bytes. Recovering snap_src_row via\n"
+        "                        # (ptr-base)//row_bytes is INVALID on a strided tensor and\n"
+        "                        # mislabels the committed-leaf pointer (the 48/48\n"
+        "                        # 'UNFAITHFUL' was this TAP ARTIFACT, not a fix failure).\n"
+        "                        # Use the PHYSICAL row stride for the row index AND a\n"
+        "                        # POINTER-EQUALITY verdict that needs no geometry at all.\n"
+        "                        _fr13_sf_fix_on = (\n"
+        "                            os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\"\n"
+        "                        )\n"
+        "                        _fr13_sf_ent = int(offset) - 1\n"
+        "                        _fr13_sf_fixed = bool(\n"
+        "                            globals().get(\"_FR13_SNAP_FIX_LAST_ENT\") == _fr13_sf_ent\n"
+        "                            and globals().get(\"_FR13_SNAP_FIX_LAST_APPLIED\") is True\n"
+        "                        )\n"
+        "                        _fr13_sf_contig = bool(state.is_contiguous())\n"
+        "                        _fr13_sf_phys_stride = int(state.stride(0)) * _fr13_sf_es\n"
+        "                        # the actual source pointer batch_memcpy will read for\n"
+        "                        # THIS copy entry (reflects the SNAP_FIX override when on).\n"
+        "                        if 0 <= _fr13_sf_ent < int(src_ptrs_np.shape[0]):\n"
+        "                            _fr13_sf_src_ptr = int(src_ptrs_np[_fr13_sf_ent])\n"
+        "                        else:\n"
+        "                            _fr13_sf_src_ptr = int(copy_spec.start_addr)\n"
+        "                        _fr13_sf_base = int(state.data_ptr())\n"
+        "                        _fr13_sf_byte_off = _fr13_sf_src_ptr - _fr13_sf_base\n"
+        "                        # PHYSICAL-stride row recovery (exact for strided tensors:\n"
+        "                        # ptr - base is always a multiple of phys_stride).\n"
+        "                        if _fr13_sf_phys_stride > 0 and _fr13_sf_byte_off % _fr13_sf_phys_stride == 0:\n"
+        "                            _fr13_sf_src_row = _fr13_sf_byte_off // _fr13_sf_phys_stride\n"
+        "                            _fr13_sf_in_row = 0\n"
+        "                        else:\n"
+        "                            _fr13_sf_src_row = (\n"
+        "                                _fr13_sf_byte_off // _fr13_sf_phys_stride\n"
+        "                                if _fr13_sf_phys_stride > 0 else -1\n"
+        "                            )\n"
+        "                            _fr13_sf_in_row = (\n"
+        "                                _fr13_sf_byte_off % _fr13_sf_phys_stride\n"
+        "                                if _fr13_sf_phys_stride > 0 else _fr13_sf_byte_off\n"
+        "                            )\n"
+        "                        _fr13_sf_seen = int(getattr(_fr13_sf_gdn, \"_FR13_SF_SEEN\", 0)) + 1\n"
+        "                        _fr13_sf_gdn._FR13_SF_SEEN = _fr13_sf_seen\n"
+        "                        # open the persistent jsonl FH (module-global on gdn).\n"
+        "                        _fr13_sf_log = os.environ.get(\n"
+        "                            \"FR13_APC_SNAP_FIDELITY_LOG\",\n"
+        "                            \"/logs/fr13_apc_snap_fidelity.jsonl\",\n"
+        "                        )\n"
+        "                        _fr13_sf_fh = getattr(_fr13_sf_gdn, \"_FR13_SF_FH\", None)\n"
+        "                        if _fr13_sf_fh is None:\n"
+        "                            try:\n"
+        "                                os.makedirs(os.path.dirname(_fr13_sf_log) or \".\", exist_ok=True)\n"
+        "                            except Exception:\n"
+        "                                pass\n"
+        "                            _fr13_sf_fh = open(_fr13_sf_log, \"a\", buffering=1, encoding=\"utf-8\")\n"
+        "                            _fr13_sf_gdn._FR13_SF_FH = _fr13_sf_fh\n"
+        "                        # digest helper: absmax / l2 / argmax over fp32 of a row.\n"
+        "                        def _fr13_sf_digest(_row):\n"
+        "                            _f = _row.reshape(-1).to(_fr13_sf_torch.float32)\n"
+        "                            return (\n"
+        "                                float(_f.abs().max().item()),\n"
+        "                                float(_f.norm().item()),\n"
+        "                                int(_f.argmax().item()),\n"
+        "                            )\n"
+        "                        _fr13_sf_src_ok = (0 <= _fr13_sf_src_row < _fr13_sf_n)\n"
+        "                        _fr13_sf_src_dig = (\n"
+        "                            _fr13_sf_digest(state[_fr13_sf_src_row])\n"
+        "                            if _fr13_sf_src_ok else (None, None, None)\n"
+        "                        )\n"
+        "                        if _fr13_sf_leaf is None or not (0 <= int(_fr13_sf_leaf) < _fr13_sf_n):\n"
+        "                            # FAIL-LOUD finding: no committed leaf to compare on a\n"
+        "                            # postprocess SSM snapshot row.\n"
+        "                            _fr13_sf_rec = {\n"
+        "                                \"schema\": \"fr13.apc_snap_fidelity.v1\",\n"
+        "                                \"seen\": int(_fr13_sf_seen),\n"
+        "                                \"phase\": \"postprocess\",\n"
+        "                                \"req_id\": _fr13_sf_req,\n"
+        "                                \"layer\": _fr13_sf_layer,\n"
+        "                                \"copy_func\": \"get_temporal_copy_spec\",\n"
+        "                                \"error\": \"committed_leaf_unavailable\",\n"
+        "                                \"snap_src_row\": int(_fr13_sf_src_row),\n"
+        "                                \"snap_src_in_row_byte_off\": int(_fr13_sf_in_row),\n"
+        "                                \"snap_src_absmax\": _fr13_sf_src_dig[0],\n"
+        "                                \"snap_src_l2\": _fr13_sf_src_dig[1],\n"
+        "                                \"snap_src_argmax\": _fr13_sf_src_dig[2],\n"
+        "                                \"committed_row\": None,\n"
+        "                                \"leaf_src_row\": (None if _fr13_sf_leaf is None else int(_fr13_sf_leaf)),\n"
+        "                                \"committed_col_accept_bias\": int(accept_token_bias),\n"
+        "                                \"blkpool_src_idx\": int(_fr13_sf_blkpool_src),\n"
+        "                                \"blkpool_addressed_row\": int(_fr13_sf_blkpool_row),\n"
+        "                                \"src_block_idx\": int(src_block_idx),\n"
+        "                                \"dest_block_idx\": int(dest_block_idx),\n"
+        "                                \"dest_row\": int(dest_block_id),\n"
+        "                                \"state_rows\": int(_fr13_sf_n),\n"
+        "                                \"leaf_map_present\": bool(_fr13_sf_lm is not None),\n"
+        "                                \"contig\": bool(_fr13_sf_contig),\n"
+        "                                \"phys_stride\": int(_fr13_sf_phys_stride),\n"
+        "                                \"row_bytes\": int(_fr13_sf_row_bytes),\n"
+        "                            }\n"
+        "                            _fr13_sf_fh.write(json.dumps(_fr13_sf_rec) + chr(10))\n"
+        "                            if _fr13_sf_seen <= 80 or _fr13_sf_seen % 60 == 1:\n"
+        "                                import sys as _fr13_sf_sys\n"
+        "                                print(\n"
+        "                                    \"[FR13_SNAP_FIDELITY] FINDING committed_leaf_unavailable\"\n"
+        "                                    + \" n=\" + str(_fr13_sf_seen)\n"
+        "                                    + \" req=\" + _fr13_sf_req[:34]\n"
+        "                                    + \" layer=\" + _fr13_sf_layer\n"
+        "                                    + \" snap_src_row=\" + str(int(_fr13_sf_src_row))\n"
+        "                                    + \" leaf_map_present=\" + str(_fr13_sf_lm is not None),\n"
+        "                                    file=_fr13_sf_sys.stderr, flush=True,\n"
+        "                                )\n"
+        "                        else:\n"
+        "                            _fr13_sf_leaf_i = int(_fr13_sf_leaf)\n"
+        "                            _fr13_sf_leaf_dig = _fr13_sf_digest(state[_fr13_sf_leaf_i])\n"
+        "                            # DECISIVE verdict = POINTER equality (geometry-free):\n"
+        "                            # does the memcpy source pointer equal the committed-leaf\n"
+        "                            # row pointer? With SNAP_FIX on the override set\n"
+        "                            # src_ptrs_np[ent] = state[leaf].data_ptr() exactly, so\n"
+        "                            # this is True by construction. torch indexing handles\n"
+        "                            # the non-contiguous stride correctly for both pointers.\n"
+        "                            _fr13_sf_leaf_ptr = int(state[_fr13_sf_leaf_i].data_ptr())\n"
+        "                            _fr13_sf_rows_match = bool(_fr13_sf_src_ptr == _fr13_sf_leaf_ptr)\n"
+        "                            # value diff via TORCH indexing (stride-correct), NOT\n"
+        "                            # pointer math: source row the memcpy reads =\n"
+        "                            # state[snap_src_row] (physical-stride recovered). If the\n"
+        "                            # recovered row is out of range, fall back to comparing\n"
+        "                            # by pointer-equality only (diff 0 iff pointers match).\n"
+        "                            if _fr13_sf_src_ok:\n"
+        "                                _fr13_sf_diff = (\n"
+        "                                    state[_fr13_sf_src_row].to(_fr13_sf_torch.float32)\n"
+        "                                    - state[_fr13_sf_leaf_i].to(_fr13_sf_torch.float32)\n"
+        "                                ).abs()\n"
+        "                                _fr13_sf_diff_absmax = float(_fr13_sf_diff.max().item())\n"
+        "                            elif _fr13_sf_rows_match:\n"
+        "                                _fr13_sf_diff_absmax = 0.0\n"
+        "                            else:\n"
+        "                                _fr13_sf_diff_absmax = None\n"
+        "                            _fr13_sf_argmax_match = bool(\n"
+        "                                _fr13_sf_src_dig[2] is not None\n"
+        "                                and _fr13_sf_src_dig[2] == _fr13_sf_leaf_dig[2]\n"
+        "                            )\n"
+        "                            _fr13_sf_rec = {\n"
+        "                                \"schema\": \"fr13.apc_snap_fidelity.v1\",\n"
+        "                                \"seen\": int(_fr13_sf_seen),\n"
+        "                                \"phase\": \"postprocess\",\n"
+        "                                \"req_id\": _fr13_sf_req,\n"
+        "                                \"layer\": _fr13_sf_layer,\n"
+        "                                \"copy_func\": \"get_temporal_copy_spec\",\n"
+        "                                \"snap_src_row\": int(_fr13_sf_src_row),\n"
+        "                                \"snap_src_in_row_byte_off\": int(_fr13_sf_in_row),\n"
+        "                                \"snap_src_absmax\": _fr13_sf_src_dig[0],\n"
+        "                                \"snap_src_l2\": _fr13_sf_src_dig[1],\n"
+        "                                \"snap_src_argmax\": _fr13_sf_src_dig[2],\n"
+        "                                \"committed_row\": _fr13_sf_leaf_i,\n"
+        "                                \"committed_absmax\": _fr13_sf_leaf_dig[0],\n"
+        "                                \"committed_l2\": _fr13_sf_leaf_dig[1],\n"
+        "                                \"committed_argmax\": _fr13_sf_leaf_dig[2],\n"
+        "                                \"leaf_src_row\": _fr13_sf_leaf_i,\n"
+        "                                \"committed_col_accept_bias\": int(accept_token_bias),\n"
+        "                                \"blkpool_src_idx\": int(_fr13_sf_blkpool_src),\n"
+        "                                \"blkpool_addressed_row\": int(_fr13_sf_blkpool_row),\n"
+        "                                \"src_block_idx\": int(src_block_idx),\n"
+        "                                \"dest_block_idx\": int(dest_block_idx),\n"
+        "                                \"dest_row\": int(dest_block_id),\n"
+        "                                \"state_rows\": int(_fr13_sf_n),\n"
+        "                                \"diff_absmax\": _fr13_sf_diff_absmax,\n"
+        "                                \"rows_match\": _fr13_sf_rows_match,\n"
+        "                                \"argmax_match\": _fr13_sf_argmax_match,\n"
+        "                                \"snap_fix_on\": bool(_fr13_sf_fix_on),\n"
+        "                                \"snap_fix_applied\": bool(_fr13_sf_fixed),\n"
+        "                                \"contig\": bool(_fr13_sf_contig),\n"
+        "                                \"phys_stride\": int(_fr13_sf_phys_stride),\n"
+        "                                \"row_bytes\": int(_fr13_sf_row_bytes),\n"
+        "                                \"src_ptr\": int(_fr13_sf_src_ptr),\n"
+        "                                \"leaf_ptr\": int(_fr13_sf_leaf_ptr),\n"
+        "                            }\n"
+        "                            _fr13_sf_fh.write(json.dumps(_fr13_sf_rec) + chr(10))\n"
+        "                            if _fr13_sf_seen <= 80 or _fr13_sf_seen % 60 == 1 or not _fr13_sf_rows_match:\n"
+        "                                import sys as _fr13_sf_sys\n"
+        "                                print(\n"
+        "                                    \"[FR13_SNAP_FIDELITY] n=\" + str(_fr13_sf_seen)\n"
+        "                                    + \" req=\" + _fr13_sf_req[:28]\n"
+        "                                    + \" layer=\" + _fr13_sf_layer\n"
+        "                                    + \" snap_src_row=\" + str(int(_fr13_sf_src_row))\n"
+        "                                    + \" committed_row=\" + str(_fr13_sf_leaf_i)\n"
+        "                                    + \" rows_match=\" + str(_fr13_sf_rows_match)\n"
+        "                                    + \" diff_absmax=\" + str(_fr13_sf_diff_absmax)\n"
+        "                                    + \" argmax_match=\" + str(_fr13_sf_argmax_match)\n"
+        "                                    + \" snap_fix_on=\" + str(_fr13_sf_fix_on)\n"
+        "                                    + \" snap_fix_applied=\" + str(_fr13_sf_fixed)\n"
+        "                                    + \" contig=\" + str(_fr13_sf_contig)\n"
+        "                                    + \" phys_stride=\" + str(_fr13_sf_phys_stride),\n"
+        "                                    file=_fr13_sf_sys.stderr, flush=True,\n"
+        "                                )\n"
+        "                    except Exception as _fr13_sf_exc:\n"
+        "                        import sys as _fr13_sf_esys\n"
+        "                        print(\n"
+        "                            \"[FR13_SNAP_FIDELITY] EXC \" + repr(_fr13_sf_exc),\n"
+        "                            file=_fr13_sf_esys.stderr, flush=True,\n"
+        "                        )\n"
+    )
+    text = text.replace(tap_anchor, tap_inject, 1)
+
+    MAMBA_UTILS_PATH.write_text(text)
+    return True
+
+
 def _patch_mamba_utils_apc_align_tree_aware() -> bool:
     """Emit the FR13_APC_VERBATIM commit-site write-through into postprocess_mamba.
 
@@ -15480,6 +16207,126 @@ def _fr13_flash_attn_op_capture(
         logger.warning("FR13 flash attention op capture failed: %s", exc)
 
 
+# FR13_APC_LAYERDIFF (full_attention arm): per-layer, per-arm LAST-position
+# attention-output digest, schema-compatible with the GDN linear_attn tap so the
+# reducer joins both module families by (layer_index, component). EAGER-ONLY: it
+# .item()/cpu-copies, so it RAISES under cuda-graph capture (class-6 fail-loud).
+# Keyed by req_id read from the GDN module's _LUMO_FA_SAMPLER_ROW_REQ_IDS global
+# (set every _prepare_inputs to input_batch.req_ids[:num_reqs]); for the single-
+# request teacher-force arms there is exactly one sequence so the last-position
+# row is output[num_actual_tokens-1].
+def _fr13_apc_layerdiff_fa(layer, output, num_actual_tokens, attn_metadata):
+    if os.environ.get("FR13_APC_LAYERDIFF", "0") != "1":
+        return
+    try:
+        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+            raise RuntimeError(
+                "FR13_APC_LAYERDIFF full-attn tap is EAGER-ONLY but the stream is "
+                "CUDA-graph capturing. Boot with ENFORCE_EAGER=1."
+            )
+    except RuntimeError:
+        raise
+    except Exception:
+        return
+    import json as _ld_json
+    import sys as _ld_sys
+    try:
+        from vllm.model_executor.layers.mamba import gdn_linear_attn as _ld_gdn
+    except Exception:
+        _ld_gdn = None
+    layer_name = str(getattr(layer, "layer_name", ""))
+    # numeric layer index out of '...layers.<N>...'
+    lidx = -1
+    try:
+        parts = layer_name.split(".")
+        for _pi, _pp in enumerate(parts):
+            if _pp == "layers" and _pi + 1 < len(parts):
+                lidx = int(parts[_pi + 1])
+                break
+    except Exception:
+        lidx = -1
+    batch_reqs = [
+        str(_x)
+        for _x in (
+            (getattr(_ld_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None) if _ld_gdn else None)
+            or []
+        )
+    ]
+    want = {
+        _x.strip()
+        for _x in os.environ.get("FR13_APC_LAYERDIFF_REQIDS", "").split(",")
+        if _x.strip()
+    }
+    # per-sequence last-position via query_start_loc (cu_seqlens of this forward).
+    try:
+        qsl = attn_metadata.query_start_loc.detach().to(torch.long).cpu().tolist()
+    except Exception:
+        qsl = [0, int(num_actual_tokens)]
+    n_seq = max(len(qsl) - 1, 0)
+    if want and len(batch_reqs) != n_seq:
+        # cannot safely key the arms -> FAIL-LOUD (a mis-key = wrong verdict).
+        raise RuntimeError(
+            "FR13_APC_LAYERDIFF full-attn: batch req_ids len "
+            + str(len(batch_reqs))
+            + " != attn sequences "
+            + str(n_seq)
+            + " (layer=" + layer_name + ", reqs=" + repr(batch_reqs) + ")"
+        )
+    log = os.environ.get("FR13_APC_LAYERDIFF_LOG", "/logs/fr13_apc_layerdiff.jsonl")
+    fh = globals().get("_FR13_APC_LAYERDIFF_FA_FH")
+    if fh is None:
+        try:
+            os.makedirs(os.path.dirname(log) or ".", exist_ok=True)
+        except Exception:
+            pass
+        fh = open(log, "a", buffering=1, encoding="utf-8")  # noqa: SIM115
+        globals()["_FR13_APC_LAYERDIFF_FA_FH"] = fh
+    seen = int(globals().get("_FR13_APC_LAYERDIFF_FA_SEEN", 0))
+    recs = []
+    for _i in range(n_seq):
+        rid = batch_reqs[_i] if _i < len(batch_reqs) else ("row" + str(_i))
+        if want and rid not in want:
+            continue
+        s = int(qsl[_i]); e = int(qsl[_i + 1])
+        if e <= s:
+            continue
+        last = e - 1
+        if last >= int(output.shape[0]):
+            continue
+        ov = output[last].reshape(-1).to(torch.float32)
+        recs.append({
+            "schema": "fr13.apc_layerdiff.v1",
+            "module": "full_attention",
+            "req_id": rid,
+            "layer": layer_name,
+            "layer_index": lidx,
+            "component": "full_attn",
+            "row_in_batch": int(_i),
+            "state_row": -1,
+            "last_pos": int(last),
+            "suffix_len": int(e - s),
+            "absmax": float(ov.abs().max().item()),
+            "l2": float(ov.norm().item()),
+            "argmax": int(ov.abs().argmax().item()),
+            "sum": float(ov.sum().item()),
+            "num_prefills": int(getattr(attn_metadata, "num_prefills", -1)),
+        })
+    for rec in recs:
+        fh.write(_ld_json.dumps(rec) + chr(10))
+        seen += 1
+        if seen <= 90 or seen % 96 == 1:
+            print(
+                "[FR13_APC_LAYERDIFF_FA] n=" + str(seen)
+                + " req=" + str(rec["req_id"])
+                + " L=" + str(rec["layer_index"])
+                + " comp=full_attn absmax=" + str(rec["absmax"])
+                + " argmax=" + str(rec["argmax"])
+                + " last_pos=" + str(rec["last_pos"]),
+                file=_ld_sys.stderr, flush=True,
+            )
+    globals()["_FR13_APC_LAYERDIFF_FA_SEEN"] = seen
+
+
 '''
         if helper_anchor not in text:
             raise RuntimeError("flash_attn logger anchor not found")
@@ -15543,6 +16390,12 @@ def _fr13_flash_attn_op_capture(
                     output[:num_actual_tokens],
                     key_cache,
                     value_cache,
+                    attn_metadata,
+                )
+                _fr13_apc_layerdiff_fa(
+                    layer,
+                    output[:num_actual_tokens],
+                    num_actual_tokens,
                     attn_metadata,
                 )
                 return output
@@ -17348,6 +18201,12 @@ def main() -> int:
         # committed node-bank leaf (fixes the do_mamba_copy_block clobber that
         # defeated VERBATIM). Default OFF => byte-identical; native-safe.
         (MAMBA_UTILS_PATH, _patch_worker_mamba_collect_ssm_leaf_src()),
+        # FR13_APC_SNAP_FIDELITY: READ-ONLY in-process tap proving whether the
+        # postprocess SSM snapshot copies the FAITHFUL committed-leaf recurrent
+        # state or a stale/contaminated one. Default OFF => byte-identical.
+        # Must run AFTER the accept-bias + LEAF_SRC patches (its offset++ anchor
+        # is unconsumed by them).
+        (MAMBA_UTILS_PATH, _patch_worker_mamba_snap_fidelity()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_gpu_committer()),
