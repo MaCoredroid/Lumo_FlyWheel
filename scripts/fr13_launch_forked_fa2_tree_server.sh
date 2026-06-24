@@ -14,6 +14,16 @@ GPU_UTIL=${GPU_UTIL:-0.88}
 # (the cuda-graph CAPTURE spike is the real trigger; eager stays flat). Default-ON so
 # no caller can forget it (the repeat OOMs were callers that didn't set it).
 DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-105g}
+# UNIFIED-MEM OOM lesson (2026-06-24, dmesg-confirmed): the --memory cap does NOT
+# constrain GPU/unified allocation (NVRM bypasses the cgroup), and a GPU OOM makes
+# the kernel nuke the whole systemd --user session (sd-pam/systemd at +100) -> the
+# login session tears down via SIGTERM, which oom_score_adj CANNOT prevent (claude
+# was never a direct victim yet died with the session). So: (1) expandable_segments
+# curbs eager caching-allocator fragmentation growth across varying prefill lengths;
+# (2) a detached gpu_oom_guard (spawned below, post-boot) docker-kills THIS container
+# if unified-avail nears the wall -> relaunchable+loud instead of a session kill.
+PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
+GPU_OOM_GUARD=${GPU_OOM_GUARD:-1}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
 MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
 ATTENTION_BACKEND=${ATTENTION_BACKEND:-TREE_ATTN}
@@ -364,6 +374,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
   "${NSYS_DOCKER_ARGS[@]}" \
+  -e PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF" \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
   -e LUMO_BATCH_INVARIANT_VLLM="${LUMO_BATCH_INVARIANT_VLLM:-$BATCH_INVARIANT}" \
   -e LUMO_NSYS_WRAP_VLLM="$LUMO_NSYS_WRAP_VLLM" \
@@ -599,3 +610,15 @@ exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-na
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
   --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS $CG_FLAGS $KV_FP8_FLAGS \
   $(if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
+
+# DURABLE OOM BACKSTOP: spawn the detached GPU/unified-mem guard for THIS container.
+# It docker-kills the container if unified-avail nears the wall, converting an
+# incipient GPU OOM (which would otherwise nuke the systemd --user session and take
+# Claude down with it) into a relaunchable+loud container kill. Self-exits when the
+# container is gone. Default-ON in the chokepoint so no caller can forget it.
+if [[ "${GPU_OOM_GUARD:-1}" == "1" ]]; then
+  GPU_GUARD_NAME_GLOB="$CONTAINER" setsid bash "$(dirname "$0")/gpu_oom_guard.sh" \
+    >/dev/null 2>&1 </dev/null &
+  disown 2>/dev/null || true
+  echo "[launch] gpu_oom_guard armed for container=$CONTAINER (floor=${GPU_GUARD_FLOOR_MIB:-9000}MiB)"
+fi
