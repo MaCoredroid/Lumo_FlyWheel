@@ -23,8 +23,12 @@ MAX_OUT=${MAX_OUT:-384}
 LIMIT_TURNS=${LIMIT_TURNS:-0}
 CAT6ROOT_TREE="[(0,),(1,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0)]"
 CONTAINER="fr13-apc-multiturn"
+# CONFIG_ARM = boot config (strip a trailing digit): on2->on, cfg2->cfg = the SAME-CONFIG
+# second boot for the cross-boot autotune FLOOR BRACKET. The label/output keeps $ARM
+# (replay_on2.json, launch_on2.log) so the floor boot is captured separately.
+CONFIG_ARM=${ARM%[0-9]}
 mkdir -p "$RUNDIR/logs"
-echo "=== single-arm: $ARM into $RUNDIR (max_out=$MAX_OUT) ==="
+echo "=== single-arm: $ARM (config=$CONFIG_ARM) into $RUNDIR (max_out=$MAX_OUT) ==="
 
 _hygiene() {
   pgrep -af 'oom_protect_watchdog\.sh' | grep -qv pgrep || { setsid bash scripts/oom_protect_watchdog.sh >/dev/null 2>&1 </dev/null & disown; }
@@ -40,7 +44,7 @@ docker ps -a --format '{{.Names}}'|grep -i fr13|xargs -r docker rm -f >/dev/null
 sleep 2
 LAUNCH="$RUNDIR/logs/launch_${ARM}.log"
 echo "[$ARM] booting..."
-case "$ARM" in
+case "$CONFIG_ARM" in
   oracle)
     CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=$GPU_UTIL MAX_NUM_SEQS=1 \
       FR12_NO_SPECULATIVE_CONFIG=1 ATTENTION_BACKEND=FLASH_ATTN \
@@ -50,8 +54,8 @@ case "$ARM" in
       setsid bash scripts/fr10_launch_speed_server.sh > "$LAUNCH" 2>&1 & ;;
   off|on|cfg)
     APC=0; CONFIG_ONLY=0
-    [ "$ARM" = "on" ] && APC=1
-    [ "$ARM" = "cfg" ] && { APC=1; CONFIG_ONLY=1; }
+    [ "$CONFIG_ARM" = "on" ] && APC=1
+    [ "$CONFIG_ARM" = "cfg" ] && { APC=1; CONFIG_ONLY=1; }
     CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=$GPU_UTIL MAX_NUM_SEQS=1 \
       TREE="$CAT6ROOT_TREE" FR10_METRICS=0 ENFORCE_EAGER=1 BATCH_INVARIANT=1 FR13_BI_TREE_ATTN=1 \
       LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 \
