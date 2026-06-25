@@ -6,7 +6,11 @@ export LUMO_PROXY_RETRY_UPSTREAM_400=1
 export LUMO_PROXY_AUTO_CONTINUE=1
 export LUMO_PROXY_AUTO_CONTINUE_MESSAGE="Continue working on this task. Do not stop until you have left a concrete source edit that makes the tests pass. If your previous attempt did not pass, read the failure and try a different approach. Do not spend time on environment/pip/conda setup."
 export LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=10
-export LUMO_PROXY_MAX_OUTPUT_TOKENS=80000
+# Cap max_output_tokens to bound the qwen tool-call runaway (flavor-2 endless-reasoning
+# would grind to 80000 tok ~= 83min). 16384 is ABOVE the observed legit-tool-call max
+# (10710 tok; legit p99.9=8592) so it truncates ZERO legit turns, while cutting a runaway
+# to ~17min. Data: 4000-dump analysis 2026-06-25. Override via env if needed.
+export LUMO_PROXY_MAX_OUTPUT_TOKENS=${LUMO_PROXY_MAX_OUTPUT_TOKENS:-16384}
 export LUMO_PROXY_NONSTREAM_BYPASS=1
 export LUMO_PROXY_REQUEST_DUMP_DIR=/tmp/lumo_proxy_request_dumps
 # Temperature is overridable by the caller's env (e.g. the experiment runner
