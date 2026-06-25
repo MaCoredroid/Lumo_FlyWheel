@@ -5511,6 +5511,7 @@ def _fr13_gdn_subop_mab(
                             "call_path": _fr13_call_path,
                             "capture_saved_index": int(_fr13_saved_total),
                             "layer_prefix": _fr13_prefix,
+                            "layer_name": str(self.prefix),
                             "num_actual_tokens": int(num_actual_tokens),
                             "num_prefills": int(attn_metadata.num_prefills),
                             "num_decodes": int(attn_metadata.num_decodes),
@@ -11449,6 +11450,54 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                            _fr13_fx_gdn._FR13_SNAP_FIX_FIRED = int(\n"
         "                                getattr(_fr13_fx_gdn, \"_FR13_SNAP_FIX_FIRED\", 0)\n"
         "                            ) + 1\n"
+        # ------------------------------------------------------------------ #
+        # FR13_APC_CACHEROW_DUMP (default "0" => no read, no write =>
+        # byte-identical). DIAGNOSTIC-ONLY: at the postprocess SSM snapshot
+        # copy, dump the cache tensor's STOCK src row (what stock
+        # get_temporal_copy_spec would have copied, mamba_utils.py:421) and the
+        # LEAF row (the SNAP_FIX redirect target) so an offline diff vs the
+        # no-cache prefill final_state localizes the carrier: stale-write
+        # (stock_row diverges) vs leaf-unfaithful (leaf_row diverges) vs the
+        # #27264-class mamba block-table wraparound (stock/dest row idx >=
+        # state.shape[0], or row idx colliding across turns). SOURCE-ONLY read
+        # of `state` rows (.detach().cpu().clone()); never mutates state, dst,
+        # or sizes. Capture-safe (skips under cuda-graph capture). Lives INSIDE
+        # the SNAP_FIX try (24-sp), AFTER the FIRED bump, so _cd_n reads the
+        # just-incremented counter and any exception is swallowed by the
+        # enclosing except. Reuses in-scope locals (state, block_ids,
+        # src_block_idx, accept_token_bias, dest_block_id, req_state,
+        # layer_name, _fr13_fx_leaf, _fr13_fx_n). Flag OFF => no I/O.\n"
+        "                        if os.environ.get(\"FR13_APC_CACHEROW_DUMP\", \"0\") == \"1\":  " + sentinel + "\n"
+        "                            import os as _cd_os\n"
+        "                            _cd_n = int(getattr(_fr13_fx_gdn, \"_FR13_SNAP_FIX_FIRED\", 0))\n"
+        "                            _cd_lim = int(_cd_os.environ.get(\"FR13_APC_CACHEROW_DUMP_LIMIT\", \"80\"))\n"
+        "                            _cd_cap = (\n"
+        "                                torch.cuda.is_available()\n"
+        "                                and torch.cuda.is_current_stream_capturing()\n"
+        "                            )\n"
+        "                            if _cd_n <= _cd_lim and not _cd_cap:\n"
+        "                                _cd_stock = int(block_ids[src_block_idx + accept_token_bias])\n"
+        "                                _cd_dest = int(dest_block_id)\n"
+        "                                _cd_blkmax = max(int(_b) for _b in block_ids)\n"
+        "                                _cd_dir = _cd_os.environ.get(\"FR13_APC_CACHEROW_DUMP\")\n"
+        "                                _cd_os.makedirs(_cd_dir, exist_ok=True)\n"
+        "                                _cd_safe = str(layer_name).replace(\".\", \"_\")\n"
+        "                                torch.save({\n"
+        "                                    \"schema\": \"fr13.apc_cacherow_dump.v1\",\n"
+        "                                    \"layer\": str(layer_name),\n"
+        "                                    \"req_id\": str(getattr(req_state, \"req_id\", None)),\n"
+        "                                    \"snap_fired\": _cd_n,\n"
+        "                                    \"stock_row_idx\": _cd_stock,\n"
+        "                                    \"leaf_row_idx\": int(_fr13_fx_leaf),\n"
+        "                                    \"dest_row_idx\": _cd_dest,\n"
+        "                                    \"num_block_ids\": int(len(block_ids)),\n"
+        "                                    \"max_block_id\": _cd_blkmax,\n"
+        "                                    \"state_rows\": int(_fr13_fx_n),\n"
+        "                                    \"stock_row\": state[_cd_stock].detach().cpu().clone(),\n"
+        "                                    \"leaf_row\": state[int(_fr13_fx_leaf)].detach().cpu().clone(),\n"
+        "                                }, _cd_os.path.join(\n"
+        "                                    _cd_dir, \"cacherow_\" + _cd_safe + \"_n\" + str(_cd_n) + \".pt\",\n"
+        "                                ))\n"
         "                    except Exception:\n"
         "                        pass\n"
     )
