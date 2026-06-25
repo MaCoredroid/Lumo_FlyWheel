@@ -69,6 +69,11 @@ case "$CMD" in
     # lossless arm must byte-match native. Use DEPLOY_FORCE_TEMP=0.0 ONLY for the deterministic temp-0
     # argmax-flip lossless gate, never for the deployment speed/accept run.
     FORCE_TEMP="${DEPLOY_FORCE_TEMP:-0.6}"
+    # FRESH per-rollout dumps: clear OUR remote pair/request dump dirs before relaunching the
+    # proxy so each rollout's fetch pulls ONLY this rollout's dumps. The dirs otherwise
+    # accumulate across runs and every arm's rsync pulls the whole history -> the
+    # "byte-identical copied dumps" that confounded prior per-arm runaway/cache analysis.
+    ssh "${SSH_OPTS[@]}" "$HOST" "rm -rf $REMOTE_PAIR_DUMPS/* $REMOTE_REQ_DUMPS/* 2>/dev/null; mkdir -p $REMOTE_PAIR_DUMPS $REMOTE_REQ_DUMPS" >/dev/null 2>&1 || true
     ssh "${SSH_OPTS[@]}" "$HOST" "\
       LUMO_PROXY_OFFLOAD_REPO=$REMOTE_REPO \
       LUMO_PROXY_OFFLOAD_VENV=$REMOTE_VENV \
