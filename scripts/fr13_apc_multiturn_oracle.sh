@@ -63,7 +63,7 @@ boot_arm() {
         TREE="$CAT6ROOT_TREE" FR10_METRICS=0 ENFORCE_EAGER=1 BATCH_INVARIANT=1 FR13_BI_TREE_ATTN=1 \
         LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 \
         FR13_ENABLE_APC=$apc FR13_APC_CONFIG_ONLY=0 \
-        MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 \
+        MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-1024} MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32} \
         FR13_RUN_DIR="$PWD/$RUNDIR" LOG_DIR="$PWD/$RUNDIR/logs" \
         setsid bash scripts/fr13_launch_forked_fa2_tree_server.sh > "$launch_log" 2>&1 &
       ;;
