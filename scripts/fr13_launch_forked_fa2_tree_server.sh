@@ -222,7 +222,19 @@ MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
 # the restored state. Stays default-OFF.)
 APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-$MAMBA_BLOCK_SIZE}
 if [[ "$FR13_ENABLE_APC" == "1" ]]; then
-  APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
+  # FR13_APC_CONFIG_ONLY=1 => apply the APC serve CONFIG (chunked-prefill + max-num-batched
+  # + mamba flags) but WITHOUT --enable-prefix-caching. This is the matched-config cache-OFF
+  # arm: it isolates the cache RESTORE (proven lossless within-boot) from the chunked-prefill
+  # config that the cache REQUIRES (the gross-poison fix max_num_batched=1024 changes the GDN
+  # chunk-boundary recurrence). Matched-config A/B = config_only vs full-APC, toggling only the cache.
+  if [[ "${FR13_APC_CONFIG_ONLY:-0}" == "1" ]]; then
+    # matched-config cache-OFF: only the chunked-prefill knobs that change GDN numerics.
+    # The mamba-block-size/ssm-cache-dtype are cache-specific (vLLM rejects them without
+    # --enable-prefix-caching), so they are dropped along with the cache flag.
+    APC_FLAGS="--enable-chunked-prefill --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
+  else
+    APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
+  fi
   # BAKE (2026-06-24, GPU-VERIFIED via verify3b output/fr13_apc_verify3b): the tree+APC
   # node-bank staleness fix. The defect: the tree committer writes the accepted-leaf state
   # to a DYNAMIC node-bank row (spec_state_indices[req, accepted_len-1]) != the static
