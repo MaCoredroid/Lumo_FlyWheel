@@ -49,6 +49,10 @@ mkdir -p "$ARMDIR/logs"
 
 # Arm dispatch: launcher + TREE + extra flags + expected draft-token ratio.
 CAT6ROOT_TREE="[(0,),(1,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0)]"
+# chain5 = the linear 5-spine (cat6root MINUS the (1,) sibling branch). Apples-to-
+# apples spine vs cat6root tree on the SAME forked launcher + APC; the spine is
+# lossless w.r.t. APC without the recompute (snapshot matches native block layout).
+CHAIN5_TREE="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0)]"
 CAT10_TREE="[(0,),(1,),(0,0),(0,1),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,1),(0,0,0,0,0),(0,0,0,0,1)]"
 # 3-3-3 (depth-3, 3 candidates/depth: spine top-1 + rank-1 top-2 + rank-2 top-3 at
 # the root and both interior spine depths). EXPECT 9 (num_speculative_tokens=9).
@@ -72,6 +76,7 @@ case "$KIND" in
   cat9-opta) LAUNCHER=locked; TREEARG="";             EXPECT_RATIO=9;  declare -a XFLAGS=(FR13_GB10_FP8_GEMV_CFG=1) ;;
   cat9-opt1) LAUNCHER=locked; TREEARG="";             EXPECT_RATIO=9;  declare -a XFLAGS=(FR13_GPU_COMMITTER=1 FR13_COMMITTER_SYNCKILL=1) ;;
   cat6root)  LAUNCHER=forked; TREEARG="$CAT6ROOT_TREE"; EXPECT_RATIO=6;  declare -a XFLAGS=() ;;
+  chain5)    LAUNCHER=forked; TREEARG="$CHAIN5_TREE";   EXPECT_RATIO=5;  declare -a XFLAGS=() ;;
   cat10)     LAUNCHER=forked; TREEARG="$CAT10_TREE";    EXPECT_RATIO=10; declare -a XFLAGS=() ;;
   333)       LAUNCHER=forked; TREEARG="$THREETHREE_TREE"; EXPECT_RATIO=9; declare -a XFLAGS=() ;;
   cat555)    LAUNCHER=forked; TREEARG="$CAT555_TREE";    EXPECT_RATIO=15; declare -a XFLAGS=() ;;
