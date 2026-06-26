@@ -264,7 +264,8 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   : "${FR13_APC_SNAP_FIX:=1}"        # BAKED 2026-06-24: verify3b FAITHFUL 240/240 (the working SSM node-bank fix)
   : "${FR13_APC_CONV_SNAP_FIX:=0}"   # CLR: conv node-bank leaf redirect (default OFF -> byte-identical)
   : "${FR13_APC_PRE_SNAP_FIX:=0}"    # CLR: preprocess SSM redirect (default OFF -> byte-identical)
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX
+  : "${FR13_APC_HIT_RECURRENT_SUFFIX:=0}"  # CLR: bounded recurrent-suffix recompute on APC cache-hit prefills (default OFF -> native chunk path, byte-identical). FR13_APC_HIT_SUFFIX_CAP (unset=>64) caps recurrent rebuild len; pass-through below.
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX
 else
   APC_FLAGS=""
 fi
@@ -409,6 +410,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_SNAP_FIX="${FR13_APC_SNAP_FIX:-0}" \
   -e FR13_APC_CONV_SNAP_FIX="${FR13_APC_CONV_SNAP_FIX:-0}" \
   -e FR13_APC_PRE_SNAP_FIX="${FR13_APC_PRE_SNAP_FIX:-0}" \
+  -e FR13_APC_HIT_RECURRENT_SUFFIX="${FR13_APC_HIT_RECURRENT_SUFFIX:-0}" \
+  -e FR13_APC_HIT_SUFFIX_CAP="${FR13_APC_HIT_SUFFIX_CAP:-}" \
   -e FR13_APC_LEAF_CROSSCHECK="${FR13_APC_LEAF_CROSSCHECK:-0}" \
   -e FR13_APC_CACHEROW_DUMP="${FR13_APC_CACHEROW_DUMP:-}" \
   -e FR13_APC_CACHEROW_DUMP_LIMIT="${FR13_APC_CACHEROW_DUMP_LIMIT:-80}" \
