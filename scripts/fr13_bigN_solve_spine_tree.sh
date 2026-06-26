@@ -42,16 +42,18 @@ run_one() {  # arm kind i
   echo "$A -> $v $rr" | tee -a "$ROOT/RESULTS.txt"
 }
 
-# TREE: lossless via whole-suffix recurrent recompute
-export FR13_APC_HIT_RECURRENT_SUFFIX=1 FR13_APC_HIT_SUFFIX_CAP=1000000
-for i in $(seq 1 "$N"); do run_one tree cat6root "$i"; done
-# CACHE-OFF control = the general give-up-flake floor (tree cat6root, NO APC). Run SECOND
-# (before spine) so the BINDING comparison rate(tree cache-ON) vs rate(cacheoff) is available
-# after 2N boots, not all 3N: >> => cache-ON-systematic, ~= => the asymmetry was the flake.
-# Sampling fix still applies (proxy default).
-unset FR13_ENABLE_APC FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP \
-      MAMBA_BLOCK_SIZE MAMBA_SSM_CACHE_DTYPE CUDAGRAPH_MODE APC_MAX_NUM_BATCHED_TOKENS 2>/dev/null || true
-for i in $(seq 1 "$N"); do run_one cacheoff cat6root "$i"; done
+# INTERLEAVED tree (cache-ON, lossless cap=1e6) <-> cacheoff (cache-OFF control) per i, so the
+# BINDING comparison rate(tree) vs rate(cacheoff) builds PAIRWISE (first read after 1 pair, not
+# after 2N boots). The give-up flake floors both arms; the cache signal is the DIFFERENCE:
+# tree >> cacheoff => residual-triggered runaway/give-up, ~= => general flake (cache effectively fine).
+for i in $(seq 1 "$N"); do
+  export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
+  export FR13_APC_HIT_RECURRENT_SUFFIX=1 FR13_APC_HIT_SUFFIX_CAP=1000000
+  run_one tree cat6root "$i"
+  unset FR13_ENABLE_APC FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP \
+        MAMBA_BLOCK_SIZE MAMBA_SSM_CACHE_DTYPE CUDAGRAPH_MODE APC_MAX_NUM_BATCHED_TOKENS 2>/dev/null || true
+  run_one cacheoff cat6root "$i"
+done
 # SPINE (secondary): re-arm APC, lossless without recompute. Re-set the APC env the
 # cacheoff block unset above.
 export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
