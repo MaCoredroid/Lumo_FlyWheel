@@ -43,10 +43,16 @@ def main():
     # trajectory field (final_state per chunk).
     ap.add_argument("--on-field", default="initial_state", choices=["initial_state", "final_state"])
     ap.add_argument("--nc-field", default="final_state", choices=["initial_state", "final_state"])
+    # --max-call: ignore ON captures with call-index > this. The global call-index
+    # is shared across runs for the first LIMIT_PER_PREFIX-per-layer (same forward
+    # event order), so windowing an UNARMED run to the ARMED run's max call-index
+    # gives a DEPTH-MATCHED control (same replay turns) with no new boot.
+    ap.add_argument("--max-call", type=int, default=10**12)
     a = ap.parse_args()
     # latest-per-layer ON-arm state (restored seed or recompute write-back)
     on = {}
-    for p in sorted(glob.glob(f"{a.on_dir}/{a.on_prefix}.call*.pt"), key=ci, reverse=True)[:a.on_topk]:
+    _on_files = [p for p in glob.glob(f"{a.on_dir}/{a.on_prefix}.call*.pt") if ci(p) <= a.max_call]
+    for p in sorted(_on_files, key=ci, reverse=True)[:a.on_topk]:
         try: pay = torch.load(p, map_location="cpu", weights_only=False)
         except Exception: continue
         li = lyr(pay)
