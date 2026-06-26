@@ -133,6 +133,12 @@ echo "########## ARM 1: cache-ON (APC fixes baked) — run FIRST to surface issu
 export FR13_ENABLE_APC=1
 export MAMBA_BLOCK_SIZE=1024
 export MAMBA_SSM_CACHE_DTYPE=float32
+# The first-suffix-chunk recurrent recompute residual fix. The launcher defaults
+# this OFF (:=0) so the locked cat9/cat6root non-APC serve stays byte-identical;
+# the shipgate must EXPLICITLY arm it for the cache-ON arm (ported into the live
+# patcher 2026-06-26 e67eaf39; before that this export was inert). CAP unset=>64.
+export FR13_APC_HIT_RECURRENT_SUFFIX=1
+export FR13_APC_HIT_SUFFIX_CAP=${FR13_APC_HIT_SUFFIX_CAP:-64}
 unset APC_MAX_NUM_BATCHED_TOKENS 2>/dev/null || true   # launcher defaults to block_size = the #45238 fix
 
 bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM_ON" "$KIND" "$SUBSET"
@@ -154,6 +160,7 @@ echo "########## ARM 2: cache-OFF (no APC / baseline) ##########"
 # Defensive: ensure no APC env leaks into the cache-OFF boot.
 unset FR13_ENABLE_APC MAMBA_BLOCK_SIZE MAMBA_SSM_CACHE_DTYPE APC_MAX_NUM_BATCHED_TOKENS \
       FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT \
+      FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP \
       FR13_APC_BLOCK_ALIGN_45477 2>/dev/null || true
 
 bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM_OFF" "$KIND" "$SUBSET"
