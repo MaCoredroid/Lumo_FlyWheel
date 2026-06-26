@@ -140,7 +140,10 @@ CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=0.82 MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR"
   MAMBA_BLOCK_SIZE="$MAMBA_BLOCK_SIZE" \
   MAMBA_SSM_CACHE_DTYPE="$MAMBA_SSM_CACHE_DTYPE" \
   FR13_RUN_DIR="$PWD/$RUNDIR" LOG_DIR="$PWD/$RUNDIR/logs" \
-  scripts/fr13_launch_forked_fa2_tree_server.sh > "$RUNDIR/launch.log" 2>&1
+  "${LAUNCHER_SCRIPT:-scripts/fr13_launch_forked_fa2_tree_server.sh}" > "$RUNDIR/launch.log" 2>&1
+  # SPEC_CONFIG / ATTENTION_BACKEND propagate via the inherited environment (the
+  # launchers read them with ${VAR:-default}); for native: LAUNCHER_SCRIPT=
+  # scripts/fr10_launch_speed_server.sh ATTENTION_BACKEND=FLASH_ATTN SPEC_CONFIG='{...num_speculative_tokens:5}'
 RC=$?
 if (( RC != 0 )); then echo "FAIL: launcher rc=$RC"; tail -40 "$RUNDIR/launch.log"; exit 2; fi
 

@@ -360,6 +360,22 @@ PY
 LOSSLESS_RC=$?
 echo "[lossless] verdict rc=$LOSSLESS_RC ($([ $LOSSLESS_RC -eq 0 ] && echo LOSSLESS || echo POISON))"
 
+# ---- TTFT: prefill latency cache-MISS vs cache-HIT (the APC speed win). Send the same
+# long prompt max_tokens=1 (so time_total ~= prefill+TTFT); reset cache first for a true
+# miss, then resend for a hit. curl -w gives wall-clock per request.
+echo "[ttft] measuring prefill cache-MISS vs cache-HIT"
+ttft_req(){ curl -s -o /dev/null -w '%{time_total}' -m 900 -X POST "http://127.0.0.1:$PORT/v1/completions" \
+  -H 'Content-Type: application/json' \
+  --data-binary @<(.venv/bin/python -c "import json;print(json.dumps({'model':'qwen3.6-27b','prompt':open('$PROMPT_FILE').read(),'temperature':0,'max_tokens':1}))"); }
+curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" >/dev/null 2>&1
+T_MISS=$(ttft_req); echo "[ttft] cache-MISS prefill: ${T_MISS}s"
+T_HIT=$(ttft_req);  echo "[ttft] cache-HIT  prefill: ${T_HIT}s"
+.venv/bin/python -c "
+m=float('$T_MISS'); h=float('$T_HIT')
+print(f'[ttft] APC speedup: {m/h:.2f}x  (miss {m:.3f}s -> hit {h:.3f}s)')
+print('TTFT-WIN' if h < m*0.9 else 'TTFT-NO-WIN')
+" 2>/dev/null || echo "[ttft] parse failed (miss=$T_MISS hit=$T_HIT)"
+
 # ---- GATE-D: ONE temp-0.6 generation (max_tokens=128) so spec-decode runs ----
 # num_accepted>1 with APC live. Then assert the server is STILL alive and the
 # docker log has no NEW crash/NotImplementedError after this generation (the

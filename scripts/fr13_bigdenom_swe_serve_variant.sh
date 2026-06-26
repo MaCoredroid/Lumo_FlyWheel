@@ -212,10 +212,14 @@ grep -q "worker_env_seen=\[1\]" "$ARMDIR/worker_environ_needle.txt" \
   || { echo "FAIL: no vLLM worker with FR10_DECODE_MODE_DEFAULT in /proc environ"; exit 3; }
 echo "worker environ needle OK ($KIND)"
 
-# ---- FULL CUDA capture needle ----
+# ---- FULL CUDA capture needle (skip under --enforce-eager: no graphs to capture) ----
 docker logs "$CONTAINER" > "$ARMDIR/boot_log_snapshot.txt" 2>&1
-grep -m1 "Graph capturing finished" "$ARMDIR/boot_log_snapshot.txt" \
-  || { echo "FAIL: no 'Graph capturing finished' in boot log"; exit 3; }
+if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then
+  echo "[capture needle] SKIPPED (ENFORCE_EAGER=1: eager mode has no CUDA graph capture)"
+else
+  grep -m1 "Graph capturing finished" "$ARMDIR/boot_log_snapshot.txt" \
+    || { echo "FAIL: no 'Graph capturing finished' in boot log"; exit 3; }
+fi
 
 # ---- OPT engagement needle in boot/serve log (OPT-1 logs once; OPT-A patcher prints) ----
 case "$KIND" in
@@ -367,6 +371,7 @@ S0=$(date +%s)
   --subset "$SUBSET" \
   --out-root "$ARMDIR/swe_out" \
   --concurrency "$SWE_CONCURRENCY" \
+  --eval-timeout-s "${EVAL_TIMEOUT_S:-1800}" \
   "${WALL_ARGS[@]}" \
   "${EVAL_ARGS[@]}" \
   "${CODEX_ARGS[@]}" \
