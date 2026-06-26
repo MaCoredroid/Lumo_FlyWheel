@@ -177,6 +177,32 @@ def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, An
             normalized["top_p"] = float(_force_top_p)
         except ValueError:
             pass
+    # Qwen3/Qwen3-Next THINKING-mode sampling (Qwen official: temp 0.6, top_p 0.95,
+    # top_k 20, min_p 0, presence_penalty ~1.0-1.5). The served requests carry ONLY
+    # temperature with top_k/min_p/presence_penalty null = the degenerate regime Qwen
+    # warns against ("DO NOT use greedy decoding -> endless repetition/degeneration"),
+    # which makes <think> run away into repetition loops that never close </think> ->
+    # reasoning-only dead turns (agent_gave_up) AND the tool-call argument runaway.
+    # Each guard is default-OFF (unset -> request unchanged); KEEP UNSET for the
+    # lossless A/B gate (changing the sampling distribution invalidates within-floor).
+    _force_top_k = os.environ.get("LUMO_PROXY_FORCE_TOP_K")
+    if _force_top_k:
+        try:
+            normalized["top_k"] = int(_force_top_k)
+        except ValueError:
+            pass
+    _force_presence_penalty = os.environ.get("LUMO_PROXY_FORCE_PRESENCE_PENALTY")
+    if _force_presence_penalty:
+        try:
+            normalized["presence_penalty"] = float(_force_presence_penalty)
+        except ValueError:
+            pass
+    _force_min_p = os.environ.get("LUMO_PROXY_FORCE_MIN_P")
+    if _force_min_p:
+        try:
+            normalized["min_p"] = float(_force_min_p)
+        except ValueError:
+            pass
     _fr10_decode_mode = os.environ.get("LUMO_PROXY_FR10_DECODE_MODE")
     if _fr10_decode_mode:
         extra = normalized.get("vllm_xargs")
