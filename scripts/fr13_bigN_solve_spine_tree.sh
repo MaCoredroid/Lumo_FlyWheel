@@ -44,9 +44,15 @@ for i in $(seq 1 "$N"); do run_one tree cat6root "$i"; done
 # SPINE: lossless without recompute
 export FR13_APC_HIT_RECURRENT_SUFFIX=0; unset FR13_APC_HIT_SUFFIX_CAP
 for i in $(seq 1 "$N"); do run_one spine chain5 "$i"; done
+# CACHE-OFF control = the general give-up-flake floor (tree cat6root, NO APC). The
+# binding verdict is rate(tree cache-ON) vs rate(cacheoff): >> => cache-ON-systematic,
+# ~= => the asymmetry was the flake. Sampling fix still applies (proxy default).
+unset FR13_ENABLE_APC FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP \
+      MAMBA_BLOCK_SIZE MAMBA_SSM_CACHE_DTYPE CUDAGRAPH_MODE APC_MAX_NUM_BATCHED_TOKENS 2>/dev/null || true
+for i in $(seq 1 "$N"); do run_one cacheoff cat6root "$i"; done
 
 echo "=== SOLVE RATES ===" | tee -a "$ROOT/RESULTS.txt"
-for arm in tree spine; do
+for arm in tree spine cacheoff; do
   res=$(grep -cE "^${arm}_r[0-9]+ -> verdict=resolved" "$ROOT/RESULTS.txt" || true)
   tot=$(grep -cE "^${arm}_r[0-9]+ -> verdict=" "$ROOT/RESULTS.txt" || true)
   echo "$arm: ${res}/${tot} resolved" | tee -a "$ROOT/RESULTS.txt"
