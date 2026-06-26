@@ -101,6 +101,54 @@ RETRY_PROMPT_SETUP_LOOP = (
 )
 
 
+def _prior_attempt_brief(trace_path: Path) -> str:
+    """Summarize the prior codex attempt (files it inspected + its last message) so an
+    agent_gave_up retry can be re-driven IN-CONTEXT rather than re-exploring from scratch."""
+    files: list[str] = []
+    last_msg = ""
+    try:
+        for line in trace_path.read_text(errors="replace").splitlines():
+            try:
+                item = json.loads(line).get("item", {})
+            except Exception:  # noqa: BLE001
+                continue
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") == "command_execution":
+                cmd = str(item.get("command", ""))
+                for tok in cmd.replace("'", " ").replace('"', " ").split():
+                    t = tok.strip(",;:()[]")
+                    if t.endswith(".py") and "/" in t and t not in files:
+                        files.append(t)
+            elif item.get("type") == "agent_message":
+                txt = item.get("text", "")
+                if isinstance(txt, str) and txt.strip():
+                    last_msg = txt.strip()
+    except Exception:  # noqa: BLE001
+        pass
+    parts: list[str] = []
+    if files:
+        parts.append("You already inspected: " + ", ".join(files[:8]) + ".")
+    if last_msg:
+        parts.append('Your last message was: "' + last_msg[:400] + '".')
+    return " ".join(parts)
+
+
+def _retry_prompt_continue(brief: str) -> str:
+    """State-conditional continuation for agent_gave_up: the agent EXPLORED then emitted a
+    tool-call-free terminal reply (general temp-0.6 codex flake; reasoning is inert on Qwen3.6
+    in this stack). Re-drive it with its own accumulated context + a hard must-act directive."""
+    pre = (brief + " ") if brief else ""
+    return (
+        "Your previous attempt EXPLORED the code but STOPPED with NO edit in the working tree -- "
+        "that is a FAILED attempt, not a completed one. " + pre +
+        "Do NOT read or grep files again; you have enough context. Your VERY NEXT action MUST be "
+        "an apply_patch that edits the source to implement the fix described in /workspace/AGENTS.md. "
+        "Every response you produce must call a tool -- never end your turn with an analysis-only or "
+        "summary message. Do not stop until the source files are edited."
+    )
+
+
 def _iso_now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -869,34 +917,49 @@ def _process_one(
     # to a single retry to cap the wall-time premium.
     if not patch_text.strip():
         cause = _classify_empty_patch_cause(codex_trace)
-        retry_prompt = RETRY_PROMPT_SETUP_LOOP if cause == "setup_loop" else RETRY_PROMPT_EMPTY
-        summary["empty_patch_retry"] = {"cause": cause, "attempted": True}
-        print(f"[{_iso_now()}]    {instance_id}: empty patch ({cause}); retrying codex once",
-              flush=True)
-        retry_trace = task_dir / "codex_trace_retry.jsonl"
-        retry_stderr = task_dir / "codex_stderr_retry.log"
-        retry_stdout = task_dir / "codex_stdout_retry.log"
-        retry_dcgm = _spawn_dcgm_sampler(task_dir / "dcgm_samples_retry.jsonl")
-        codex_meta_retry = _run_codex_dispatch(
-            workspace=workspace_path, endpoint=endpoint, model=model,
-            timeout_s=agent_wall_s, instance_id=instance_id,
-            stdout_path=retry_stdout, stderr_path=retry_stderr, trace_path=retry_trace,
-            prompt=retry_prompt,
-        )
-        _stop_dcgm_sampler(retry_dcgm)
-        summary["codex_retry"] = codex_meta_retry
-        try:
-            retry_patch = _extract_patch(cache_path, workspace_path, instance["base_commit"])
-        except Exception as exc:  # noqa: BLE001
-            retry_patch = ""
-            summary["patch_extract_error_retry"] = f"{type(exc).__name__}: {exc}"
-        if retry_patch.strip():
-            patch_text = retry_patch
-            summary["empty_patch_retry"]["recovered_patch_bytes"] = len(retry_patch)
-            print(f"[{_iso_now()}]    {instance_id}: retry produced {len(retry_patch)}B patch",
+        # Bundle B #2/#3/#8 -> in-context continuation: an agent_gave_up attempt EXPLORED
+        # then emitted a tool-call-free terminal reply (general temp-0.6 codex flake). Re-drive
+        # it up to SWE_EMPTY_PATCH_RETRIES times with its OWN accumulated context + a hard
+        # must-act directive (a plain fresh re-roll re-confirms the stop ~88% of the time).
+        max_retries = max(1, int(os.environ.get("SWE_EMPTY_PATCH_RETRIES", "2")))
+        summary["empty_patch_retry"] = {"cause": cause, "attempted": True,
+                                        "max_retries": max_retries, "recovered_patch_bytes": 0}
+        prev_trace = codex_trace
+        for ridx in range(1, max_retries + 1):
+            if cause == "setup_loop":
+                retry_prompt = RETRY_PROMPT_SETUP_LOOP
+            else:
+                retry_prompt = _retry_prompt_continue(_prior_attempt_brief(prev_trace))
+            suffix = "" if ridx == 1 else str(ridx)
+            print(f"[{_iso_now()}]    {instance_id}: empty patch ({cause}); retry {ridx}/{max_retries}",
                   flush=True)
+            retry_trace = task_dir / f"codex_trace_retry{suffix}.jsonl"
+            retry_stderr = task_dir / f"codex_stderr_retry{suffix}.log"
+            retry_stdout = task_dir / f"codex_stdout_retry{suffix}.log"
+            retry_dcgm = _spawn_dcgm_sampler(task_dir / f"dcgm_samples_retry{suffix}.jsonl")
+            codex_meta_retry = _run_codex_dispatch(
+                workspace=workspace_path, endpoint=endpoint, model=model,
+                timeout_s=agent_wall_s, instance_id=instance_id,
+                stdout_path=retry_stdout, stderr_path=retry_stderr, trace_path=retry_trace,
+                prompt=retry_prompt,
+            )
+            _stop_dcgm_sampler(retry_dcgm)
+            summary[f"codex_retry{suffix}"] = codex_meta_retry
+            try:
+                retry_patch = _extract_patch(cache_path, workspace_path, instance["base_commit"])
+            except Exception as exc:  # noqa: BLE001
+                retry_patch = ""
+                summary[f"patch_extract_error_retry{suffix}"] = f"{type(exc).__name__}: {exc}"
+            prev_trace = retry_trace
+            if retry_patch.strip():
+                patch_text = retry_patch
+                summary["empty_patch_retry"]["recovered_patch_bytes"] = len(retry_patch)
+                summary["empty_patch_retry"]["attempts_used"] = ridx
+                print(f"[{_iso_now()}]    {instance_id}: retry {ridx} produced {len(retry_patch)}B patch",
+                      flush=True)
+                break
         else:
-            summary["empty_patch_retry"]["recovered_patch_bytes"] = 0
+            summary["empty_patch_retry"]["attempts_used"] = max_retries
 
     metrics_post.write_text(_metrics_snapshot(DEFAULT_METRICS_URL), encoding="utf-8")
 
