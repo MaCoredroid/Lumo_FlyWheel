@@ -17,7 +17,11 @@ mkdir -p "$ROOT"
 echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/bigN_root.txt 2>/dev/null || true
 export RUNROOT="$ROOT"
 # deployment regime (matches the shipgate ARM-ON)
-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 SEED=1313
+# OFFLOAD_CODEX default 0 (on-GB10): this is a SOLVE-RATE test, not a speed test, so
+# the unified-memory contention the offload avoids is irrelevant here. The offload
+# (codex on alienware) is currently unreachable from alienware->GB10 anyway. Override
+# OFFLOAD_CODEX=1 only for a speed run once the alienware network is restored.
+export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=${OFFLOAD_CODEX:-0} DEPLOY_FORCE_TEMP=0.6 SEED=1313
 export FR10_METRICS=0 BATCH_INVARIANT=0
 export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
 unset APC_MAX_NUM_BATCHED_TOKENS 2>/dev/null || true
@@ -41,15 +45,18 @@ run_one() {  # arm kind i
 # TREE: lossless via whole-suffix recurrent recompute
 export FR13_APC_HIT_RECURRENT_SUFFIX=1 FR13_APC_HIT_SUFFIX_CAP=1000000
 for i in $(seq 1 "$N"); do run_one tree cat6root "$i"; done
-# SPINE: lossless without recompute
-export FR13_APC_HIT_RECURRENT_SUFFIX=0; unset FR13_APC_HIT_SUFFIX_CAP
-for i in $(seq 1 "$N"); do run_one spine chain5 "$i"; done
-# CACHE-OFF control = the general give-up-flake floor (tree cat6root, NO APC). The
-# binding verdict is rate(tree cache-ON) vs rate(cacheoff): >> => cache-ON-systematic,
-# ~= => the asymmetry was the flake. Sampling fix still applies (proxy default).
+# CACHE-OFF control = the general give-up-flake floor (tree cat6root, NO APC). Run SECOND
+# (before spine) so the BINDING comparison rate(tree cache-ON) vs rate(cacheoff) is available
+# after 2N boots, not all 3N: >> => cache-ON-systematic, ~= => the asymmetry was the flake.
+# Sampling fix still applies (proxy default).
 unset FR13_ENABLE_APC FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP \
       MAMBA_BLOCK_SIZE MAMBA_SSM_CACHE_DTYPE CUDAGRAPH_MODE APC_MAX_NUM_BATCHED_TOKENS 2>/dev/null || true
 for i in $(seq 1 "$N"); do run_one cacheoff cat6root "$i"; done
+# SPINE (secondary): re-arm APC, lossless without recompute. Re-set the APC env the
+# cacheoff block unset above.
+export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
+export FR13_APC_HIT_RECURRENT_SUFFIX=0; unset FR13_APC_HIT_SUFFIX_CAP
+for i in $(seq 1 "$N"); do run_one spine chain5 "$i"; done
 
 echo "=== SOLVE RATES ===" | tee -a "$ROOT/RESULTS.txt"
 for arm in tree spine cacheoff; do

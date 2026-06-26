@@ -303,7 +303,7 @@ if [[ "$OFFLOAD_CODEX" == "1" ]]; then
               --codex-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
   echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT)"
 else
-  LUMO_PROXY_FORCE_TEMPERATURE=0.0 \
+  LUMO_PROXY_FORCE_TEMPERATURE="${DEPLOY_FORCE_TEMP:-0.6}" \
   LUMO_PROXY_REQUEST_DUMP_DIR="$PWD/$ARMDIR/proxy_request_dumps" \
   LUMO_PROXY_PAIR_DUMP_DIR="$PWD/$ARMDIR/proxy_pair_dumps" \
   LUMO_PROXY_LOG_PATH="$PWD/$ARMDIR/proxy.log" \
@@ -323,7 +323,7 @@ else
     sleep 2
   done
   (( PROXY_OK == 1 )) || { echo "FAIL: proxy not healthy"; tail -20 "$ARMDIR/proxy.nohup" 2>/dev/null; exit 5; }
-  grep -q "LUMO_PROXY_FORCE_TEMPERATURE=0.0" "$ARMDIR/proxy_env.txt" || { echo "FAIL: proxy temp pin missing"; exit 5; }
+  grep -q "LUMO_PROXY_FORCE_TEMPERATURE=${DEPLOY_FORCE_TEMP:-0.6}" "$ARMDIR/proxy_env.txt" || { echo "FAIL: proxy temp pin missing (expected ${DEPLOY_FORCE_TEMP:-0.6})"; exit 5; }
   grep -q "LUMO_PROXY_PAIR_DUMP_DIR=" "$ARMDIR/proxy_env.txt" || { echo "FAIL: proxy pair-dump pin missing"; exit 5; }
   echo "proxy OK"
 fi

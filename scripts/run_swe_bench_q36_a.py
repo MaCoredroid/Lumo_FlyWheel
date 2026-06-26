@@ -72,8 +72,7 @@ CODEX_TEMPLATE = (
     "-c 'model_reasoning_effort=\"high\"' "
     "-c 'model_supports_reasoning_summaries=true' "
     "-c 'model_reasoning_summary=\"auto\"' "
-    "--model {model} "
-    "\"{prompt}\""
+    "--model {model}"
 )
 
 # Default operator prompt (first attempt).
@@ -456,8 +455,15 @@ def _run_codex(
         workspace=str(workspace),
         endpoint=endpoint,
         model=model,
-        prompt=prompt,
     )
+    # Pass the prompt as a separate argv element instead of shell-embedding it.
+    # The dynamic agent_gave_up retry prompt is built from the prior-attempt trace
+    # (arbitrary code/quotes/braces); inlining it as "\"{prompt}\"" + shlex.split
+    # raised ValueError("No closing quotation") on an unbalanced quote and crashed
+    # the orchestrator (verdict=orchestrator_crash -> NORESULT). A list argv passes
+    # the prompt verbatim with no shell parsing, robust to any content.
+    cmd_argv = shlex.split(cmd)
+    cmd_argv.append(prompt)
     started = time.monotonic()
     rc: int | None = None
     timed_out = False
@@ -467,7 +473,7 @@ def _run_codex(
          stderr_path.open("w", encoding="utf-8") as stderr_f:
         try:
             completed = subprocess.run(
-                shlex.split(cmd),
+                cmd_argv,
                 stdout=trace_f,
                 stderr=stderr_f,
                 timeout=max(timeout_s, 30),
@@ -937,12 +943,19 @@ def _process_one(
             retry_stderr = task_dir / f"codex_stderr_retry{suffix}.log"
             retry_stdout = task_dir / f"codex_stdout_retry{suffix}.log"
             retry_dcgm = _spawn_dcgm_sampler(task_dir / f"dcgm_samples_retry{suffix}.jsonl")
-            codex_meta_retry = _run_codex_dispatch(
-                workspace=workspace_path, endpoint=endpoint, model=model,
-                timeout_s=agent_wall_s, instance_id=instance_id,
-                stdout_path=retry_stdout, stderr_path=retry_stderr, trace_path=retry_trace,
-                prompt=retry_prompt,
-            )
+            try:
+                codex_meta_retry = _run_codex_dispatch(
+                    workspace=workspace_path, endpoint=endpoint, model=model,
+                    timeout_s=agent_wall_s, instance_id=instance_id,
+                    stdout_path=retry_stdout, stderr_path=retry_stderr, trace_path=retry_trace,
+                    prompt=retry_prompt,
+                )
+            except Exception as exc:  # noqa: BLE001 — a retry dispatch failure must never crash the task
+                _stop_dcgm_sampler(retry_dcgm)
+                summary[f"codex_retry{suffix}_dispatch_error"] = f"{type(exc).__name__}: {exc}"
+                print(f"[{_iso_now()}]    {instance_id}: retry {ridx} dispatch failed "
+                      f"({type(exc).__name__}: {exc}); keeping empty patch as failed", flush=True)
+                break
             _stop_dcgm_sampler(retry_dcgm)
             summary[f"codex_retry{suffix}"] = codex_meta_retry
             try:
