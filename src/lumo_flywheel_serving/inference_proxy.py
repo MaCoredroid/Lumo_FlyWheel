@@ -200,6 +200,13 @@ def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, An
     tools = normalized.get("tools")
     if not isinstance(tools, list):
         return normalized
+    # LUMO_PROXY_TOOL_STRICT=1 marks each function tool strict:true so vLLM applies
+    # an argument-JSON grammar at decode time (with VLLM_ENFORCE_STRICT_TOOL_CALLING=
+    # true on the server). This stops the cache-ON tool-call RUNAWAY (the model can no
+    # longer derail mid-argument-string and orphan the quote). Default unset/0 =>
+    # byte-identical to before (the locked pipeline + the lossless A/B must run with it
+    # OFF, since the grammar mask changes the verified distribution and masks the residual).
+    _tool_strict = os.environ.get("LUMO_PROXY_TOOL_STRICT") == "1"
     normalized_tools: list[Any] = []
     for tool in tools:
         if (
@@ -210,8 +217,12 @@ def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, An
         ):
             function = dict(tool["function"])
             flattened = {"type": "function", **function}
+            if _tool_strict:
+                flattened["strict"] = True
             normalized_tools.append(flattened)
             continue
+        if _tool_strict and isinstance(tool, dict) and tool.get("type") == "function":
+            tool = {**tool, "strict": True}
         normalized_tools.append(tool)
     normalized["tools"] = normalized_tools
     return normalized
