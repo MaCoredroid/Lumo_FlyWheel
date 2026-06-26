@@ -42,10 +42,19 @@ export LUMO_PROXY_REQUEST_DUMP_DIR=${LUMO_PROXY_REQUEST_DUMP_DIR:-/tmp/lumo_prox
 export LUMO_PROXY_FORCE_TEMPERATURE=${LUMO_PROXY_FORCE_TEMPERATURE:-0.6}
 # pair-dump dir is read from the env by inference_proxy (LUMO_PROXY_PAIR_DUMP_DIR)
 [ -n "${LUMO_PROXY_PAIR_DUMP_DIR:-}" ] && export LUMO_PROXY_PAIR_DUMP_DIR
-[ -n "${LUMO_PROXY_FORCE_TOP_P:-}" ] && export LUMO_PROXY_FORCE_TOP_P || unset LUMO_PROXY_FORCE_TOP_P
-[ -n "${LUMO_PROXY_FORCE_TOP_K:-}" ] && export LUMO_PROXY_FORCE_TOP_K || unset LUMO_PROXY_FORCE_TOP_K
-[ -n "${LUMO_PROXY_FORCE_PRESENCE_PENALTY:-}" ] && export LUMO_PROXY_FORCE_PRESENCE_PENALTY || unset LUMO_PROXY_FORCE_PRESENCE_PENALTY
-[ -n "${LUMO_PROXY_FORCE_MIN_P:-}" ] && export LUMO_PROXY_FORCE_MIN_P || unset LUMO_PROXY_FORCE_MIN_P
+# Qwen3/Qwen3-Next thinking-mode sampling is the GENERAL default for ALL agentic
+# serving (no-spec / spine / tree, cache on|off) -- the degenerate temperature-only
+# regime causes <think> + tool-call argument runaway regardless of inference path.
+# Opt OUT with LUMO_PROXY_QWEN_SAMPLING=0 ONLY for the lossless A/B gate (presence_penalty
+# shifts the argmax, which would skew the within-floor / argmax-flip comparison).
+if [ "${LUMO_PROXY_QWEN_SAMPLING:-1}" = "1" ]; then
+  export LUMO_PROXY_FORCE_TOP_P=${LUMO_PROXY_FORCE_TOP_P:-0.95}
+  export LUMO_PROXY_FORCE_TOP_K=${LUMO_PROXY_FORCE_TOP_K:-20}
+  export LUMO_PROXY_FORCE_PRESENCE_PENALTY=${LUMO_PROXY_FORCE_PRESENCE_PENALTY:-1.0}
+  export LUMO_PROXY_FORCE_MIN_P=${LUMO_PROXY_FORCE_MIN_P:-0}
+else
+  unset LUMO_PROXY_FORCE_TOP_P LUMO_PROXY_FORCE_TOP_K LUMO_PROXY_FORCE_PRESENCE_PENALTY LUMO_PROXY_FORCE_MIN_P
+fi
 [ -n "${LUMO_PROXY_FR10_DECODE_MODE:-}" ] && export LUMO_PROXY_FR10_DECODE_MODE || unset LUMO_PROXY_FR10_DECODE_MODE
 export LUMO_TRACK_B_REQUEST_METRICS_OUT=${LUMO_TRACK_B_REQUEST_METRICS_OUT:-/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl}
 

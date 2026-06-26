@@ -21,10 +21,16 @@ export LUMO_PROXY_REQUEST_DUMP_DIR=/tmp/lumo_proxy_request_dumps
 # Temperature is overridable by the caller's env (e.g. the experiment runner
 # switching temp 1.0<->0.6). Leave top_p unforced unless the caller explicitly
 # sets LUMO_PROXY_FORCE_TOP_P; the agentic B4 baseline uses the model default.
-if [ -n "${LUMO_PROXY_FORCE_TOP_P:-}" ]; then
-  export LUMO_PROXY_FORCE_TOP_P
+# Qwen3 thinking-mode sampling = GENERAL default for all agentic serving (no-spec /
+# spine / tree, cache on|off); opt OUT with LUMO_PROXY_QWEN_SAMPLING=0 for the lossless
+# A/B gate only. The degenerate temp-only regime causes <think>/tool-call runaway.
+if [ "${LUMO_PROXY_QWEN_SAMPLING:-1}" = "1" ]; then
+  export LUMO_PROXY_FORCE_TOP_P=${LUMO_PROXY_FORCE_TOP_P:-0.95}
+  export LUMO_PROXY_FORCE_TOP_K=${LUMO_PROXY_FORCE_TOP_K:-20}
+  export LUMO_PROXY_FORCE_PRESENCE_PENALTY=${LUMO_PROXY_FORCE_PRESENCE_PENALTY:-1.0}
+  export LUMO_PROXY_FORCE_MIN_P=${LUMO_PROXY_FORCE_MIN_P:-0}
 else
-  unset LUMO_PROXY_FORCE_TOP_P
+  unset LUMO_PROXY_FORCE_TOP_P LUMO_PROXY_FORCE_TOP_K LUMO_PROXY_FORCE_PRESENCE_PENALTY LUMO_PROXY_FORCE_MIN_P
 fi
 if [ -n "${LUMO_PROXY_FR10_DECODE_MODE:-}" ]; then
   export LUMO_PROXY_FR10_DECODE_MODE
