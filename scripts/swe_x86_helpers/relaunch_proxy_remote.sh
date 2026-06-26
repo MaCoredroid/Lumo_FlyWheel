@@ -30,8 +30,13 @@ cd "$REPO" || { echo "FAIL: cd $REPO"; exit 2; }
 export LUMO_PROXY_RETRY_UPSTREAM_400=1
 export LUMO_PROXY_AUTO_CONTINUE=1
 export LUMO_PROXY_AUTO_CONTINUE_MESSAGE="${LUMO_PROXY_AUTO_CONTINUE_MESSAGE:-Continue working on this task. Do not stop until you have left a concrete source edit that makes the tests pass. If your previous attempt did not pass, read the failure and try a different approach. Do not spend time on environment/pip/conda setup.}"
-export LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=${LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES:-10}
-export LUMO_PROXY_MAX_OUTPUT_TOKENS=${LUMO_PROXY_MAX_OUTPUT_TOKENS:-80000}
+# 10 -> 3 (proxy default): the 10x whole-turn auto-continue is the "doom loop" antipattern
+# (research wcf7colyp); with the 16384 cap each retry is a ~12min capped runaway so 10x = ~2hr.
+export LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=${LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES:-3}
+# Cap max_output_tokens to bound the qwen tool-call runaway (flavor-2 endless-reasoning
+# grinds to 80000 tok ~= 83min). 16384 is ABOVE the observed legit-tool-call max (10710
+# tok; legit p99.9=8592) so it truncates ZERO legit turns, cutting a runaway to ~17min.
+export LUMO_PROXY_MAX_OUTPUT_TOKENS=${LUMO_PROXY_MAX_OUTPUT_TOKENS:-16384}
 export LUMO_PROXY_NONSTREAM_BYPASS=1
 export LUMO_PROXY_REQUEST_DUMP_DIR=${LUMO_PROXY_REQUEST_DUMP_DIR:-/tmp/lumo_proxy_request_dumps}
 export LUMO_PROXY_FORCE_TEMPERATURE=${LUMO_PROXY_FORCE_TEMPERATURE:-0.6}

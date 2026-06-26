@@ -207,8 +207,12 @@ echo "worker environ needle OK ($KIND)"
 
 # ---- class 9: FULL CUDA capture needle ----
 docker logs "$CONTAINER" > "$ARMDIR/boot_log_snapshot.txt" 2>&1
-grep -m1 "Graph capturing finished" "$ARMDIR/boot_log_snapshot.txt" \
-  || { echo "FAIL: no 'Graph capturing finished' in boot log (capture needle)"; exit 3; }
+if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then
+  echo "[capture needle] skipped (ENFORCE_EAGER=1: eager mode, no graph capture — diagnostic/tap boot)"
+else
+  grep -m1 "Graph capturing finished" "$ARMDIR/boot_log_snapshot.txt" \
+    || { echo "FAIL: no 'Graph capturing finished' in boot log (capture needle)"; exit 3; }
+fi
 
 # ---- identical warmup probe (fires engagement needles before codex) ----
 curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_before_warmup.txt"

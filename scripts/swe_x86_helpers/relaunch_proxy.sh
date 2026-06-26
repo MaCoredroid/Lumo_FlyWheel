@@ -5,8 +5,17 @@ cd /home/mark/shared/lumoFlyWheel
 export LUMO_PROXY_RETRY_UPSTREAM_400=1
 export LUMO_PROXY_AUTO_CONTINUE=1
 export LUMO_PROXY_AUTO_CONTINUE_MESSAGE="Continue working on this task. Do not stop until you have left a concrete source edit that makes the tests pass. If your previous attempt did not pass, read the failure and try a different approach. Do not spend time on environment/pip/conda setup."
-export LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=10
-export LUMO_PROXY_MAX_OUTPUT_TOKENS=80000
+# 10 was a "doom loop" antipattern (research wcf7colyp: OpenAI/Anthropic/harnesses do
+# NOT retry the whole turn 10x; finer-grained single-request retry is the norm). Combined
+# with the 16384 max-token cap each retry is a ~12min capped runaway, so 10x = ~2hr.
+# Revert to the proxy's own default (3): bounds the flavor-2 runaway while still recovering
+# a model that planned a tool call in text but didn't emit it (1-2 nudges).
+export LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=${LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES:-3}
+# Cap max_output_tokens to bound the qwen tool-call runaway (flavor-2 endless-reasoning
+# would grind to 80000 tok ~= 83min). 16384 is ABOVE the observed legit-tool-call max
+# (10710 tok; legit p99.9=8592) so it truncates ZERO legit turns, while cutting a runaway
+# to ~17min. Data: 4000-dump analysis 2026-06-25. Override via env if needed.
+export LUMO_PROXY_MAX_OUTPUT_TOKENS=${LUMO_PROXY_MAX_OUTPUT_TOKENS:-16384}
 export LUMO_PROXY_NONSTREAM_BYPASS=1
 export LUMO_PROXY_REQUEST_DUMP_DIR=/tmp/lumo_proxy_request_dumps
 # Temperature is overridable by the caller's env (e.g. the experiment runner

@@ -6,6 +6,24 @@ IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870
 CONTAINER=${CONTAINER:-fr13-forked-fa2-tree}
 PORT=${PORT:-9950}
 GPU_UTIL=${GPU_UTIL:-0.88}
+# DURABLE OOM GUARD (2026-06-24): ALWAYS cap the container cgroup so the host keeps
+# ~12GiB headroom -> Claude/watchdog/tmux can NEVER be the kernel OOM victim (GB10
+# unified mem; the killer takes a -1000 proc only when nothing else can be freed).
+# If a caller sets GPU_UTIL too high for this cap, the CONTAINER cgroup-OOMs at boot
+# (relaunchable + LOUD), never the host. Diagnostics should also run ENFORCE_EAGER=1
+# (the cuda-graph CAPTURE spike is the real trigger; eager stays flat). Default-ON so
+# no caller can forget it (the repeat OOMs were callers that didn't set it).
+DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-105g}
+# UNIFIED-MEM OOM lesson (2026-06-24, dmesg-confirmed): the --memory cap does NOT
+# constrain GPU/unified allocation (NVRM bypasses the cgroup), and a GPU OOM makes
+# the kernel nuke the whole systemd --user session (sd-pam/systemd at +100) -> the
+# login session tears down via SIGTERM, which oom_score_adj CANNOT prevent (claude
+# was never a direct victim yet died with the session). So: (1) expandable_segments
+# curbs eager caching-allocator fragmentation growth across varying prefill lengths;
+# (2) a detached gpu_oom_guard (spawned below, post-boot) docker-kills THIS container
+# if unified-avail nears the wall -> relaunchable+loud instead of a session kill.
+PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
+GPU_OOM_GUARD=${GPU_OOM_GUARD:-1}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
 MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
 ATTENTION_BACKEND=${ATTENTION_BACKEND:-TREE_ATTN}
@@ -180,6 +198,105 @@ PY
 )}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS,\"speculative_token_tree\":\"$TREE\"}"}
 
+# FR13_ENABLE_APC (default 0): prefix caching for the GDN-hybrid. With spec-decode on,
+# vLLM auto-forces mamba_cache_mode=align (config.py), which hard-requires chunked-prefill
+# (a 2nd behavioral change). Qwen3-Next uses the SD conv layout (VLLM_SSM_CONV_STATE_LAYOUT
+# unset -> "SD"), so is_conv_state_dim_first() is False -> the DS num_accepted>1 raise
+# (mamba_utils.py:315) does NOT apply. fp32 SSM-state cache = SGLang default + vLLM #26807
+# lossless lever. mamba_block_size multiple of 8 (causal_conv1d align), <= max-num-batched.
+# Default OFF => APC_FLAGS empty => serve command byte-identical to the locked cat9 path.
+FR13_ENABLE_APC=${FR13_ENABLE_APC:-0}
+MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-1024}
+MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
+# APC LOSSLESS FIX (2026-06-21, proven run_20260621T013300Z): default max-num-batched-tokens to
+# the mamba block size so each chunked-prefill scheduler step crosses AT MOST ONE block boundary.
+# vLLM mamba 'align' caches ONE checkpoint per step (the last boundary it crosses); with a larger
+# budget a step spans multiple blocks and an INTERMEDIATE boundary is cached with the step-END
+# (overshoot) recurrent state (#45238), so a later cache hit at that boundary restores a grossly
+# wrong GDN state -> degenerate 'output_text' garbage. step<=1 block => step-end state == boundary
+# state => correct checkpoint => gross poison eliminated (cache-ON coherent + on-task, TTFT 3.96x).
+# This is the minimum legal value (align asserts block_size <= max-num-batched). APC-scoped:
+# consumed only inside APC_FLAGS below, so the non-APC locked cat9 serve command is byte-identical.
+# (#43650 drop-final-block was REFUTED: the GDN restore reads block_table col-0 anchored to
+# (seq_len-1)//block_size, NOT the matched-block count, so dropping a matched block is a no-op on
+# the restored state. Stays default-OFF.)
+APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-$MAMBA_BLOCK_SIZE}
+if [[ "$FR13_ENABLE_APC" == "1" ]]; then
+  # FR13_APC_CONFIG_ONLY=1 => apply the APC serve CONFIG (chunked-prefill + max-num-batched
+  # + mamba flags) but WITHOUT --enable-prefix-caching. This is the matched-config cache-OFF
+  # arm: it isolates the cache RESTORE (proven lossless within-boot) from the chunked-prefill
+  # config that the cache REQUIRES (the gross-poison fix max_num_batched=1024 changes the GDN
+  # chunk-boundary recurrence). Matched-config A/B = config_only vs full-APC, toggling only the cache.
+  if [[ "${FR13_APC_CONFIG_ONLY:-0}" == "1" ]]; then
+    # matched-config cache-OFF: only the chunked-prefill knobs that change GDN numerics.
+    # The mamba-block-size/ssm-cache-dtype are cache-specific (vLLM rejects them without
+    # --enable-prefix-caching), so they are dropped along with the cache flag.
+    APC_FLAGS="--enable-chunked-prefill --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
+  else
+    APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
+  fi
+  # BAKE (2026-06-24, GPU-VERIFIED via verify3b output/fr13_apc_verify3b): the tree+APC
+  # node-bank staleness fix. The defect: the tree committer writes the accepted-leaf state
+  # to a DYNAMIC node-bank row (spec_state_indices[req, accepted_len-1]) != the static
+  # block-pool src row the stock align snapshot reads -> the postprocess SSM snapshot copies
+  # a STALE row (measured snap_src_row=74 vs committed leaf, |diff|~14-18, on the batch_memcpy
+  # SOURCE = what a cache-HIT restores). DETERMINISTIC 4-ARM VERIFY (src_ptrs = batch_memcpy
+  # source, eager, real 12907):
+  #   stock           UNFAITHFUL 208/240  (baseline staleness)
+  #                    overwritten by do_mamba_copy_block's batch_memcpy AFTER the loop. DEAD.
+  #                    override does NOT reach the memcpy source (still reads row 74). DEAD.
+  #   FR13_APC_SNAP_FIX FAITHFUL 240/240  (src=committed leaf) -- THE ONLY WORKING FIX.
+  # SNAP_FIX rewrites src_ptrs_np[offset-1]=state[leaf].data_ptr() in collect_mamba_copy_meta
+  # AFTER the stock record, so do_mamba_copy_block copies the committed-leaf state into the
+  # block-aligned restore row. Wrote_back==leaf_ptr verified; cuda-graph-safe (host-side
+  # collect rewrite, not in the captured graph); native-safe (no leaf published -> stock src).
+  # SCOPE: makes cache-ON lossless w.r.t. the committed-leaf SSM state (necessary for lossless
+  # APC). It is NOT a fix for the agentic tool-call "crash" (that is the cache-INDEPENDENT
+  # qwen free-form-runaway flake, audit output/.../wuez11596 -- fires even at 0% cache hit),
+  # and "src faithful" is necessary-not-sufficient for full losslessness (committed-leaf vs
+  # fresh-prefill is a separate cross-boot residual). VERBATIM (clobbered) + SSM_SNAPSHOT
+  # (mis-wired) RETIRED to 0. Conv path (CONV_FIX/CONV_SNAPSHOT) UNCHANGED (separate, not
+  # re-verified here -- a conv node-bank analogue may need the same SNAP_FIX-style redirect;
+  # follow-up). All APC flags only take effect with APC on, so the non-APC locked cat9 path
+  # stays byte-identical (align hooks not invoked without --enable-prefix-caching).
+  : "${FR13_APC_CONV_FIX:=1}"
+  : "${FR13_APC_CONV_SNAPSHOT:=1}"
+  : "${FR13_APC_SNAP_FIX:=1}"        # BAKED 2026-06-24: verify3b FAITHFUL 240/240 (the working SSM node-bank fix)
+  : "${FR13_APC_CONV_SNAP_FIX:=0}"   # CLR: conv node-bank leaf redirect (default OFF -> byte-identical)
+  : "${FR13_APC_PRE_SNAP_FIX:=0}"    # CLR: preprocess SSM redirect (default OFF -> byte-identical)
+  : "${FR13_APC_HIT_RECURRENT_SUFFIX:=0}"  # CLR: bounded recurrent-suffix recompute on APC cache-hit prefills (default OFF -> native chunk path, byte-identical). FR13_APC_HIT_SUFFIX_CAP (unset=>64) caps recurrent rebuild len; pass-through below.
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX
+else
+  APC_FLAGS=""
+fi
+
+# CUDAGRAPH_MODE knob (CARRIER re-rooted 2026-06-21): the cache-ON garble is NOT the SSM
+# align-snapshot stale-row (that is refuted -- EAGER cache-ON replay with 70% cache hits is
+# byte-coherent and even solves the bug, WRITE_THROUGH did=False). It is GRAPH-SPECIFIC: the
+# FULL decode CUDA-graph reads GDN recurrent state via capture-time-baked persistent indexing,
+# so after an APC cache-hit re-prefill writes the restored boundary state into block-pool rows,
+# the captured graph reads the wrong row -> wrong initial recurrent state -> empty/garbage
+# (align-mode sibling of vLLM #34874; matches open #43559). Confirmed by the eager-vs-graph
+# A/B on the 12907 10-turn replay (eager ....ok...., graph ....GGGG.. at the cat-blob turn).
+# FIX = cudagraph_mode=PIECEWISE: keep graph capture for the dense GEMMs/norms/MLP (decode TPS
+# preserved) but run the GDN/mamba scan EAGER every step so it always reads the live restored
+# state. Unset = vLLM default FULL_AND_PIECEWISE (the poisoned regime). Only matters with APC on.
+CG_FLAGS=""
+if [[ -n "${CUDAGRAPH_MODE:-}" ]]; then
+  CG_FLAGS="--compilation-config '{\"cudagraph_mode\":\"$CUDAGRAPH_MODE\"}'"
+fi
+# FR13_FULL_ATTN_KV_FP8 (gated, default OFF): set the FULL-ATTENTION KV cache to fp8.
+# DISCRIMINATOR for the APC tree residual locus (research w284wg523, #43559): fp8 KV
+# only touches full-attn KV storage precision, never the mamba/GDN recurrent state.
+# If cat6root+APC+fp8KV recovers the agent -> residual is FULL-ATTN-KV (the post-RoPE-K
+# boundary seam); if not -> GDN-state-content. (The #43559 fp8-recovery claim was struck
+# unverified, so treat this strictly as a DISCRIMINATOR, validate losslessness before any
+# ship.) Off -> kv_cache_dtype=auto (byte-identical to now). Only meaningful with APC on.
+KV_FP8_FLAGS=""
+if [[ "${FR13_FULL_ATTN_KV_FP8:-0}" == "1" ]]; then
+  KV_FP8_FLAGS="--kv-cache-dtype fp8"
+fi
+
 if [[ ! -f "$FORKED_FA2_SO" ]]; then
   echo "forked FA2 .so not found: $FORKED_FA2_SO" >&2
   exit 2
@@ -262,11 +379,13 @@ if available_gib < 80 or swap_used_kib != 0:
 PY
 
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
+  --memory="$DOCKER_MEM_CAP" --memory-swap="$DOCKER_MEM_CAP" \
   ${PROFILE_PTRACE_CAP:+--cap-add=SYS_PTRACE} \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
   "${NSYS_DOCKER_ARGS[@]}" \
+  -e PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF" \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
   -e LUMO_BATCH_INVARIANT_VLLM="${LUMO_BATCH_INVARIANT_VLLM:-$BATCH_INVARIANT}" \
   -e LUMO_NSYS_WRAP_VLLM="$LUMO_NSYS_WRAP_VLLM" \
@@ -285,6 +404,17 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_TREE_REMAP_SEQ="${FR13_TREE_REMAP_SEQ:-1}" \
   -e FR13_TREE_BONUS_SELF="${FR13_TREE_BONUS_SELF:-1}" \
   -e FR13_CONV_COMMITTED_PATH="$FR13_CONV_COMMITTED_PATH" \
+  -e FR13_APC_CONV_FIX="${FR13_APC_CONV_FIX:-1}" \
+  -e FR13_APC_CONV_SNAPSHOT="${FR13_APC_CONV_SNAPSHOT:-0}" \
+  -e FR13_APC_BLOCK_ALIGN_45477="${FR13_APC_BLOCK_ALIGN_45477:-1}" \
+  -e FR13_APC_SNAP_FIX="${FR13_APC_SNAP_FIX:-0}" \
+  -e FR13_APC_CONV_SNAP_FIX="${FR13_APC_CONV_SNAP_FIX:-0}" \
+  -e FR13_APC_PRE_SNAP_FIX="${FR13_APC_PRE_SNAP_FIX:-0}" \
+  -e FR13_APC_HIT_RECURRENT_SUFFIX="${FR13_APC_HIT_RECURRENT_SUFFIX:-0}" \
+  -e FR13_APC_HIT_SUFFIX_CAP="${FR13_APC_HIT_SUFFIX_CAP:-64}" \
+  -e FR13_APC_LEAF_CROSSCHECK="${FR13_APC_LEAF_CROSSCHECK:-0}" \
+  -e FR13_APC_CACHEROW_DUMP="${FR13_APC_CACHEROW_DUMP:-}" \
+  -e FR13_APC_CACHEROW_DUMP_LIMIT="${FR13_APC_CACHEROW_DUMP_LIMIT:-80}" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \
   -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
   -e FR13_EAGER_PACK="$FR13_EAGER_PACK" \
@@ -479,5 +609,17 @@ exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-na
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  --speculative-config \"\$SPEC_CONFIG\" \
+  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS $CG_FLAGS $KV_FP8_FLAGS \
   $(if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
+
+# DURABLE OOM BACKSTOP: spawn the detached GPU/unified-mem guard for THIS container.
+# It docker-kills the container if unified-avail nears the wall, converting an
+# incipient GPU OOM (which would otherwise nuke the systemd --user session and take
+# Claude down with it) into a relaunchable+loud container kill. Self-exits when the
+# container is gone. Default-ON in the chokepoint so no caller can forget it.
+if [[ "${GPU_OOM_GUARD:-1}" == "1" ]]; then
+  GPU_GUARD_NAME_GLOB="$CONTAINER" setsid bash "$(dirname "$0")/gpu_oom_guard.sh" \
+    >/dev/null 2>&1 </dev/null &
+  disown 2>/dev/null || true
+  echo "[launch] gpu_oom_guard armed for container=$CONTAINER (floor=${GPU_GUARD_FLOOR_MIB:-9000}MiB)"
+fi
