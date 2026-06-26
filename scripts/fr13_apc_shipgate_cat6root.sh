@@ -139,6 +139,13 @@ export MAMBA_SSM_CACHE_DTYPE=float32
 # patcher 2026-06-26 e67eaf39; before that this export was inert). CAP unset=>64.
 export FR13_APC_HIT_RECURRENT_SUFFIX=1
 export FR13_APC_HIT_SUFFIX_CAP=${FR13_APC_HIT_SUFFIX_CAP:-64}
+# CUDA-graph carrier fix (re-rooted 2026-06-21, launcher L273-283): default FULL graphs
+# read GDN recurrent state via capture-time-baked indexing, so after an APC cache-hit
+# re-prefill the captured graph reads the WRONG block-pool row -> garbage/runaway tool
+# calls (#43559). PIECEWISE keeps graph capture for dense GEMMs/norms/MLP (decode TPS
+# preserved) but runs the GDN/mamba scan EAGER so it reads the live restored row. This
+# is the coding-quality carrier; the recompute above is the per-token lossless residual.
+export CUDAGRAPH_MODE=${CUDAGRAPH_MODE:-PIECEWISE}
 unset APC_MAX_NUM_BATCHED_TOKENS 2>/dev/null || true   # launcher defaults to block_size = the #45238 fix
 
 bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM_ON" "$KIND" "$SUBSET"
@@ -160,7 +167,7 @@ echo "########## ARM 2: cache-OFF (no APC / baseline) ##########"
 # Defensive: ensure no APC env leaks into the cache-OFF boot.
 unset FR13_ENABLE_APC MAMBA_BLOCK_SIZE MAMBA_SSM_CACHE_DTYPE APC_MAX_NUM_BATCHED_TOKENS \
       FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT \
-      FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP \
+      FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP CUDAGRAPH_MODE \
       FR13_APC_BLOCK_ALIGN_45477 2>/dev/null || true
 
 bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM_OFF" "$KIND" "$SUBSET"
