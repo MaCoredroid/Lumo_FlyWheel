@@ -6519,7 +6519,15 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
     # to redirect the snapshot source to the committed accepted-leaf row). Publish is
     # read-only (records the committed accepted-leaf row index); it never mutates
     # state. Default "0" -> early return -> map never created -> byte-identical.
-    if os.environ.get("FR13_APC_SNAP_FIX", "0") != "1":
+    # Gate widened to the 3-flag OR so the conv-leaf publish (CONV_SNAP_FIX) and
+    # the preprocess SSM redirect (PRE_SNAP_FIX) can populate their maps even when
+    # the original postprocess SSM SNAP_FIX is off. All three default "0" -> early
+    # return -> neither map created -> byte-identical to pre-fix.
+    if (
+        os.environ.get("FR13_APC_SNAP_FIX", "0") != "1"
+        and os.environ.get("FR13_APC_CONV_SNAP_FIX", "0") != "1"
+        and os.environ.get("FR13_APC_PRE_SNAP_FIX", "0") != "1"
+    ):
         return
     try:
         spec_idx = getattr(layer, "_fr13_replay_spec_idx", None)
@@ -6529,6 +6537,21 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         if leaf_map is None:
             leaf_map = {}
             gdn_mod._FR13_APC_SSM_LEAF_BY_REQ = leaf_map
+        # FR13_APC_CONV_SNAP_FIX / FR13_APC_PRE_SNAP_FIX (both default 0 -> inert):
+        # the conv committed leaf shares the SAME node-bank row index as the SSM
+        # leaf under FR13_REPLAY_ROUTE (conv+ssm written into the same committed
+        # accepted-leaf row), so publish it from the identical spec_cpu row. No new
+        # GPU sync (reuses spec_cpu below). Off by default -> conv map never created.
+        _fr13_conv_pub = (
+            os.environ.get("FR13_APC_CONV_SNAP_FIX", "0") == "1"
+            or os.environ.get("FR13_APC_PRE_SNAP_FIX", "0") == "1"
+        )
+        conv_leaf_map = None
+        if _fr13_conv_pub:
+            conv_leaf_map = getattr(gdn_mod, "_FR13_APC_CONV_LEAF_BY_REQ", None)
+            if conv_leaf_map is None:
+                conv_leaf_map = {}
+                gdn_mod._FR13_APC_CONV_LEAF_BY_REQ = conv_leaf_map
         spec_cpu = spec_idx.detach().to("cpu").tolist()
         # Key by the SPEC-row req_ids (same index space as replay_lens + spec_idx,
         # both built by iterating _LUMO_FA_SPEC_ROW_REQ_IDS) — NOT the full
@@ -6545,6 +6568,8 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
             _row = spec_cpu[_b]
             if 0 <= _alen - 1 < len(_row):
                 leaf_map[str(spec_req_ids[_b])] = int(_row[_alen - 1])
+                if conv_leaf_map is not None:
+                    conv_leaf_map[str(spec_req_ids[_b])] = int(_row[_alen - 1])
     except Exception:
         # observe-only publish; never break the served commit on a tap failure
         pass
@@ -11367,7 +11392,11 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
     text = text.replace(
         pre_phase_anchor,
         pre_phase_anchor
-        + "    if os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\":  " + sentinel + "\n"
+        + "    if (\n"  # + sentinel widened: SNAP_FIX OR CONV_SNAP_FIX OR PRE_SNAP_FIX
+        "        os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\"\n"
+        "        or os.environ.get(\"FR13_APC_CONV_SNAP_FIX\", \"0\") == \"1\"\n"
+        "        or os.environ.get(\"FR13_APC_PRE_SNAP_FIX\", \"0\") == \"1\"\n"
+        "    ):  " + sentinel + "\n"
         "        globals()[\"_FR13_BOUNDARY_PHASE\"] = \"preprocess\"\n",
         1,
     )
@@ -11382,7 +11411,11 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
     text = text.replace(
         post_phase_anchor,
         post_phase_anchor
-        + "    if os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\":  " + sentinel + "\n"
+        + "    if (\n"  # + sentinel widened: SNAP_FIX OR CONV_SNAP_FIX OR PRE_SNAP_FIX
+        "        os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\"\n"
+        "        or os.environ.get(\"FR13_APC_CONV_SNAP_FIX\", \"0\") == \"1\"\n"
+        "        or os.environ.get(\"FR13_APC_PRE_SNAP_FIX\", \"0\") == \"1\"\n"
+        "    ):  " + sentinel + "\n"
         "        globals()[\"_FR13_BOUNDARY_PHASE\"] = \"postprocess\"\n",
         1,
     )
@@ -11419,22 +11452,68 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         # invent a new index (the patch history's wrong-row writers are not
         # repeated). Native MTP never publishes the leaf map -> auto-no-op
         # (native-safe). Runs STANDALONE.
-        "                if (  " + sentinel + "\n"
-        "                    os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\"\n"
-        "                    and globals().get(\"_FR13_BOUNDARY_PHASE\", \"?\") == \"postprocess\"\n"
-        "                    and getattr(state_copy_func, \"__name__\", \"\") == \"get_temporal_copy_spec\"\n"
-        "                ):\n"
+        # GENERALIZED redirect (CLR-minimal). _fr13_fx_func resolves which copy
+        # this is; per-func we pick the matching committed-leaf map + the gate
+        # that authorizes a redirect for THIS phase. (a) get_temporal_copy_spec
+        # (SSM) -> _FR13_APC_SSM_LEAF_BY_REQ, fires at postprocess under
+        # FR13_APC_SNAP_FIX (UNCHANGED default-ON-arm behavior) AND at preprocess
+        # under FR13_APC_PRE_SNAP_FIX. (b) get_conv_copy_spec (conv prior-window)
+        # -> _FR13_APC_CONV_LEAF_BY_REQ, fires under FR13_APC_CONV_SNAP_FIX at
+        # postprocess (and preprocess when PRE_SNAP_FIX). Each branch independently
+        # default-OFF; ALL flags off -> neither _fr13_fx_*_on True -> the whole
+        # block is dead (byte-identical to pre-CLR). dst_ptrs_np/sizes_np and the
+        # restore-read are never touched (write-SOURCE only).
+        "                _fr13_fx_func = getattr(state_copy_func, \"__name__\", \"\")  " + sentinel + "\n"
+        "                _fr13_fx_phase = globals().get(\"_FR13_BOUNDARY_PHASE\", \"?\")\n"
+        "                _fr13_fx_pre_on = os.environ.get(\"FR13_APC_PRE_SNAP_FIX\", \"0\") == \"1\"\n"
+        "                _fr13_fx_ssm_on = (\n"
+        "                    _fr13_fx_func == \"get_temporal_copy_spec\"\n"
+        "                    and (\n"
+        "                        (os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\"\n"
+        "                         and _fr13_fx_phase == \"postprocess\")\n"
+        "                        or (_fr13_fx_pre_on and _fr13_fx_phase == \"preprocess\")\n"
+        "                    )\n"
+        "                )\n"
+        "                _fr13_fx_conv_on = (\n"
+        "                    _fr13_fx_func == \"get_conv_copy_spec\"\n"
+        "                    and os.environ.get(\"FR13_APC_CONV_SNAP_FIX\", \"0\") == \"1\"\n"
+        "                    and (\n"
+        "                        _fr13_fx_phase == \"postprocess\"\n"
+        "                        or (_fr13_fx_pre_on and _fr13_fx_phase == \"preprocess\")\n"
+        "                    )\n"
+        "                )\n"
+        "                if _fr13_fx_ssm_on or _fr13_fx_conv_on:\n"
         "                    globals()[\"_FR13_SNAP_FIX_LAST_ENT\"] = None\n"
         "                    globals()[\"_FR13_SNAP_FIX_LAST_APPLIED\"] = False\n"
         "                    try:\n"
         "                        from vllm.model_executor.layers.mamba import (\n"
         "                            gdn_linear_attn as _fr13_fx_gdn,\n"
         "                        )\n"
-        "                        _fr13_fx_lm = getattr(_fr13_fx_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
+        "                        _fr13_fx_mapname = (\n"
+        "                            \"_FR13_APC_CONV_LEAF_BY_REQ\" if _fr13_fx_conv_on\n"
+        "                            else \"_FR13_APC_SSM_LEAF_BY_REQ\"\n"
+        "                        )\n"
+        "                        _fr13_fx_lm = getattr(_fr13_fx_gdn, _fr13_fx_mapname, None)\n"
+        "                        _fr13_fx_reqkey = str(getattr(req_state, \"req_id\", None))\n"
         "                        _fr13_fx_leaf = (\n"
-        "                            _fr13_fx_lm.get(str(getattr(req_state, \"req_id\", None)))\n"
+        "                            _fr13_fx_lm.get(_fr13_fx_reqkey)\n"
         "                            if _fr13_fx_lm else None\n"
         "                        )\n"
+        "                        if os.environ.get(\"FR13_APC_LEAF_CROSSCHECK\", \"0\") == \"1\":\n"
+        "                            _fr13_xc_s = getattr(_fr13_fx_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
+        "                            _fr13_xc_c = getattr(_fr13_fx_gdn, \"_FR13_APC_CONV_LEAF_BY_REQ\", None)\n"
+        "                            if _fr13_xc_s and _fr13_xc_c:\n"
+        "                                _fr13_xc_sv = _fr13_xc_s.get(_fr13_fx_reqkey)\n"
+        "                                _fr13_xc_cv = _fr13_xc_c.get(_fr13_fx_reqkey)\n"
+        "                                if (\n"
+        "                                    _fr13_xc_sv is not None\n"
+        "                                    and _fr13_xc_cv is not None\n"
+        "                                    and int(_fr13_xc_sv) != int(_fr13_xc_cv)\n"
+        "                                ):\n"
+        "                                    logger.error(\n"
+        "                                        \"FR13_APC_LEAF_CROSSCHECK mismatch req=%s ssm=%s conv=%s\",\n"
+        "                                        _fr13_fx_reqkey, _fr13_xc_sv, _fr13_xc_cv,\n"
+        "                                    )\n"
         "                        _fr13_fx_n = int(state.shape[0])\n"
         "                        _fr13_fx_ent = int(offset) - 1\n"
         "                        if (\n"
@@ -11485,6 +11564,7 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                                torch.save({\n"
         "                                    \"schema\": \"fr13.apc_cacherow_dump.v1\",\n"
         "                                    \"layer\": str(layer_name),\n"
+        "                                    \"copy_func\": _fr13_fx_func,\n"
         "                                    \"req_id\": str(getattr(req_state, \"req_id\", None)),\n"
         "                                    \"snap_fired\": _cd_n,\n"
         "                                    \"stock_row_idx\": _cd_stock,\n"
@@ -11496,7 +11576,9 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                                    \"stock_row\": state[_cd_stock].detach().cpu().clone(),\n"
         "                                    \"leaf_row\": state[int(_fr13_fx_leaf)].detach().cpu().clone(),\n"
         "                                }, _cd_os.path.join(\n"
-        "                                    _cd_dir, \"cacherow_\" + _cd_safe + \"_n\" + str(_cd_n) + \".pt\",\n"
+        "                                    _cd_dir,\n"
+        "                                    \"cacherow_\" + (\"conv\" if _fr13_fx_conv_on else \"ssm\")\n"
+        "                                    + \"_\" + _cd_safe + \"_n\" + str(_cd_n) + \".pt\",\n"
         "                                ))\n"
         "                    except Exception:\n"
         "                        pass\n"
