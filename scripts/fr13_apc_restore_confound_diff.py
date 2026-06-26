@@ -36,21 +36,31 @@ def main():
     ap.add_argument("--on-dir", required=True); ap.add_argument("--on-prefix", default="oncache_gdn")
     ap.add_argument("--nc-dir", required=True); ap.add_argument("--nc-prefix", default="nocache_gdn")
     ap.add_argument("--on-topk", type=int, default=200)
+    # --on-field: which ON-arm tensor to diff. initial_state = the RESTORED seed
+    # (cross-turn signal: did the fix make next-turn's restored seed faithful).
+    # final_state = the post-recompute WRITE-BACK (disambiguator: did the recompute
+    # itself produce a recurrent-exact boundary state). nc-field is the no-cache
+    # trajectory field (final_state per chunk).
+    ap.add_argument("--on-field", default="initial_state", choices=["initial_state", "final_state"])
+    ap.add_argument("--nc-field", default="final_state", choices=["initial_state", "final_state"])
     a = ap.parse_args()
-    # latest-per-layer restored initial_state (the cache-hit restored state)
+    # latest-per-layer ON-arm state (restored seed or recompute write-back)
     on = {}
     for p in sorted(glob.glob(f"{a.on_dir}/{a.on_prefix}.call*.pt"), key=ci, reverse=True)[:a.on_topk]:
         try: pay = torch.load(p, map_location="cpu", weights_only=False)
         except Exception: continue
         li = lyr(pay)
-        if li is not None and li not in on: on[li] = pay.get("initial_state").float()
+        v = pay.get(a.on_field)
+        if li is not None and li not in on and v is not None: on[li] = v.float()
     # full no-cache trajectory per layer (every chunk's final_state)
     traj = defaultdict(list)
     for p in sorted(glob.glob(f"{a.nc_dir}/{a.nc_prefix}.call*.pt"), key=ci):
         try: pay = torch.load(p, map_location="cpu", weights_only=False)
         except Exception: continue
         li = lyr(pay)
-        if li is not None: traj[li].append(pay.get("final_state").float())
+        v = pay.get(a.nc_field)
+        if li is not None and v is not None: traj[li].append(v.float())
+    print(f"# ON={a.on_prefix}.{a.on_field}  vs  NC={a.nc_prefix}.{a.nc_field}", flush=True)
     print(f"{'L':>3} {'mindist':>8} {'nat/chunk':>9} {'ratio':>6}  verdict", flush=True)
     real = []
     for li in sorted(set(on) & set(traj)):
