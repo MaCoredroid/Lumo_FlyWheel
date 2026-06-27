@@ -16460,9 +16460,49 @@ def _fr13_write_replay_durable_ab_sidecar() -> None:
         print("FR13_REPLAY_DURABLE_AB sidecar write failed: %s" % exc)
 
 
+def _fr13_write_apc_env_sidecar() -> None:
+    """Bridge the FR13_APC_* masters to the mp/spawn EngineCore worker.
+
+    The worker's curated env DROPS the bare FR13_APC_* masters (audit 2026-06-27:
+    only FR13_APC_HIT_RECURRENT_SUFFIX + FR13_APC_LEAF_CROSSCHECK survive into the
+    worker; SNAP_FIX / SNAP_FIX_ZEROACCEPT / CONV_FIX / CONV_SNAPSHOT / CONV_SNAP_FIX /
+    PRE_SNAP_FIX / HIT_SUFFIX_CAP / BLOCK_ALIGN_45477 are all dropped). The os.environ
+    gates in the patched gdn file then read DEFAULTS in the worker (cap=64 not 1e6,
+    SNAP_FIX off, etc.), making every env-gated APC fix VACUOUS. pid-1 has the full
+    env: write the present FR13_APC_* values as key=value lines into a /logs sidecar;
+    the patched gdn-file module-load (see _patch_gdn_linear) injects them into the
+    worker's os.environ BEFORE any gate reads. No FR13_APC_* set (locked non-APC
+    path) -> sidecar removed -> byte-identical.
+    """
+    import os
+    flag_path = os.environ.get("FR13_APC_ENV_FLAG_FILE", "/logs/fr13_apc_env.flag")
+    keys = [
+        "FR13_APC_SNAP_FIX", "FR13_APC_SNAP_FIX_ZEROACCEPT", "FR13_APC_CONV_FIX",
+        "FR13_APC_CONV_SNAPSHOT", "FR13_APC_CONV_SNAP_FIX", "FR13_APC_PRE_SNAP_FIX",
+        "FR13_APC_HIT_SUFFIX_CAP", "FR13_APC_BLOCK_ALIGN_45477", "FR13_APC_LEAF_CROSSCHECK",
+    ]
+    present = [(k, os.environ[k]) for k in keys if k in os.environ]
+    try:
+        if present:
+            os.makedirs(os.path.dirname(flag_path) or ".", exist_ok=True)
+            with open(flag_path, "w") as _fh:
+                for k, v in present:
+                    _fh.write(k + "=" + v + "\n")
+            print("FR13_APC env sidecar written (worker-env bridge): " + flag_path
+                  + " keys=" + ",".join(k for k, _ in present))
+        else:
+            try:
+                os.remove(flag_path)
+            except FileNotFoundError:
+                pass
+    except Exception as exc:  # pragma: no cover - best-effort, fail-safe-OFF
+        print("FR13_APC env sidecar write failed: %s" % exc)
+
+
 def main() -> int:
     _fr13_write_subop_mab_sidecar()
     _fr13_write_replay_durable_ab_sidecar()
+    _fr13_write_apc_env_sidecar()
     patch_steps = [
         (REQUEST_PATH, _patch_request_decode_mode()),
         (SCHED_OUTPUT_PATH, _patch_sched_output_decode_mode()),
