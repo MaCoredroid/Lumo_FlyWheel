@@ -275,6 +275,36 @@ print(f"spec engagement OK: drafts delta={d} draft_tokens/drafts={ratio}")
 PY
 (( $? == 0 )) || { echo "FAIL: spec engagement raw-counter assert"; exit 4; }
 
+# ---- FR13 APC worker-env engagement assert (only for APC arms) ----
+# The APC fixes read os.environ.get(FR13_APC_*) INSIDE the EngineCore worker (pid 176).
+# That dict is intact in the worker (spawn inherits the full parent os.environ; the
+# "dropped" symptom was a /proc/PID/environ artifact from setproctitle, NOT a real
+# drop — verified 2026-06-27). The gdn module-import bridge in the worker writes
+# /logs/fr13_apc_bridge_loaded.flag recording the LIVE os.environ values the gates
+# read. Grep it for the masters this arm REQUIRES before recording any APC verdict, so
+# a vacuous (defaults-only) run can never masquerade as engaged. Default-OFF arms set
+# no FR13_APC_REQUIRE_* and this whole block is skipped -> locked non-APC path unchanged.
+if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}" ]]; then
+  APC_MARKER="${FR13_APC_BRIDGE_MARKER_FILE:-/logs/fr13_apc_bridge_loaded.flag}"
+  # copy the worker-written marker out of the container's /logs to the arm dir
+  docker exec "$CONTAINER" sh -c "cat '$APC_MARKER' 2>/dev/null" > "$ARMDIR/apc_bridge_marker.txt" 2>/dev/null
+  # any bridge error file is a hard fail (a swallowed read must never look like engagement)
+  if docker exec "$CONTAINER" sh -c "test -f /logs/fr13_apc_bridge_error.flag" 2>/dev/null; then
+    echo "FAIL: APC bridge error flag present in worker:"; docker exec "$CONTAINER" cat /logs/fr13_apc_bridge_error.flag 2>/dev/null; exit 4
+  fi
+  APC_MARKER_TXT="$(cat "$ARMDIR/apc_bridge_marker.txt" 2>/dev/null)"
+  [[ -n "$APC_MARKER_TXT" ]] || { echo "FAIL: APC engagement marker $APC_MARKER absent/empty in worker (gdn bridge did not run)"; docker logs "$CONTAINER" 2>&1 | tail -30; exit 4; }
+  if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}" ]]; then
+    grep -q "SNAP_FIX=${FR13_APC_REQUIRE_SNAP_FIX}\b" "$ARMDIR/apc_bridge_marker.txt" \
+      || { echo "FAIL: APC worker SNAP_FIX != required ${FR13_APC_REQUIRE_SNAP_FIX} (vacuous gate). marker: $APC_MARKER_TXT"; exit 4; }
+  fi
+  if [[ -n "${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}" ]]; then
+    grep -q "HIT_SUFFIX_CAP=${FR13_APC_REQUIRE_HIT_SUFFIX_CAP}\b" "$ARMDIR/apc_bridge_marker.txt" \
+      || { echo "FAIL: APC worker HIT_SUFFIX_CAP != required ${FR13_APC_REQUIRE_HIT_SUFFIX_CAP} (cap defaulted to 64 = vacuous). marker: $APC_MARKER_TXT"; exit 4; }
+  fi
+  echo "APC worker-env engagement OK: $APC_MARKER_TXT"
+fi
+
 curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" \
   > "$ARMDIR/reset_prefix_cache.txt" 2>&1 || echo "WARN: reset_prefix_cache failed (non-fatal)"
 

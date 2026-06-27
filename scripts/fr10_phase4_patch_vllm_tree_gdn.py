@@ -1295,14 +1295,36 @@ def _patch_gdn_linear() -> bool:
         # FR13_GDN_SUBOP_MAB != "1" the helper returns immediately and the
         # locked cat9 default path is byte-identical.
         mab_helper = '''
-# FR13 APC worker-env bridge (2/2): the mp/spawn worker's curated env drops the bare
-# FR13_APC_* masters, so the os.environ gates would read DEFAULTS in the worker (cap=64,
-# SNAP_FIX off) = vacuous. pid-1 wrote /logs/fr13_apc_env.flag; inject the missing
-# FR13_APC_* into os.environ ONCE at this gdn-file import, before any gate reads.
-# Self-gating: skips when SNAP_FIX is already present (pid-1); never overwrites an explicit
-# worker value; no sidecar (locked non-APC path) -> open() raises -> no-op.
+# FR13 APC worker-env PROOF + bridge (runs at gdn_linear_attn module import IN THE
+# EngineCore worker pid 176). VERIFIED 2026-06-27 (in-container spawn+setproctitle
+# probe): the mp/spawn worker inherits the FULL parent os.environ — every FR13_APC_*
+# master (SNAP_FIX, HIT_SUFFIX_CAP, ...) and PYTHONPATH are LIVE in the worker's
+# os.environ, which is exactly the dict every APC gate reads (e.g. patcher 5516/6735/
+# 11412). The "vars dropped in the worker" premise was a /proc/PID/environ ARTIFACT:
+# set_process_title -> setproctitle("VLLM::EngineCore") overwrites the contiguous
+# argv+environ memory block (8384 leading NUL bytes; 0 readable vars), so reading
+# /proc is unreliable AFTER boot, while os.environ is intact. The gates therefore
+# already engage; this block is the POSITIVE worker-side engagement proof + a
+# belt-and-suspenders inject for any hypothetical future curated-env path.
+#
+# Two-part contract:
+#  (1) INJECT (self-gated): only when SNAP_FIX is ABSENT from the live dict (a future
+#      curated path) do we read the pid-1 sidecar and fill the missing FR13_APC_* —
+#      never overwriting an explicit worker value, no sidecar (locked non-APC path)
+#      -> open() raises -> inject skipped. On the proven full-inherit path this branch
+#      is correctly a no-op (SNAP_FIX present).
+#  (2) MARKER (UNCONDITIONAL): ALWAYS write /logs/fr13_apc_bridge_loaded.flag recording
+#      what the worker's LIVE os.environ holds for the gate-bearing keys. This is the
+#      real engagement proof (the gates read THIS dict), independent of whether the
+#      inject branch fired. variant.sh greps this marker for SNAP_FIX/CAP before
+#      recording any APC verdict, so a swallowed/absent bridge can never masquerade as
+#      "engaged". Locked non-APC path: SNAP_FIX defaults ABSENT in pid-1's child env
+#      too, so the marker simply records ABSENT/64 and the variant APC-assert (only run
+#      for APC arms) is skipped -> byte-identical behaviour, no inject, no os.environ
+#      mutation.
+import os as _fr13apc_os
+_fr13apc_pid = str(_fr13apc_os.getpid())
 try:
-    import os as _fr13apc_os
     if "FR13_APC_SNAP_FIX" not in _fr13apc_os.environ:
         _fr13apc_fp = _fr13apc_os.environ.get("FR13_APC_ENV_FLAG_FILE", "/logs/fr13_apc_env.flag")
         with open(_fr13apc_fp) as _fr13apc_fh:
@@ -1312,14 +1334,31 @@ try:
                     _fr13apc_k, _fr13apc_v = _fr13apc_line.split("=", 1)
                     if _fr13apc_k.startswith("FR13_APC_") and _fr13apc_k not in _fr13apc_os.environ:
                         _fr13apc_os.environ[_fr13apc_k] = _fr13apc_v
-        print("FR13_APC_ENV_BRIDGE_LOADED worker pid=" + str(_fr13apc_os.getpid()) + " SNAP_FIX=" + _fr13apc_os.environ.get("FR13_APC_SNAP_FIX", "ABSENT") + " ZEROACCEPT=" + _fr13apc_os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "ABSENT") + " HIT_SUFFIX_CAP=" + _fr13apc_os.environ.get("FR13_APC_HIT_SUFFIX_CAP", "ABSENT") + " CONV_FIX=" + _fr13apc_os.environ.get("FR13_APC_CONV_FIX", "ABSENT"), flush=True)
-        # host-checkable engagement marker (vLLM swallows bare worker stdout, so the print
-        # above is unreliable; /logs is bind-mounted so the host can confirm the worker took
-        # the inject branch AND what it injected — this is the fail-loud engagement proof).
-        with open(_fr13apc_os.environ.get("FR13_APC_BRIDGE_MARKER_FILE", "/logs/fr13_apc_bridge_loaded.flag"), "w") as _fr13apc_m:
-            _fr13apc_m.write("pid=" + str(_fr13apc_os.getpid()) + " SNAP_FIX=" + _fr13apc_os.environ.get("FR13_APC_SNAP_FIX", "ABSENT") + " HIT_SUFFIX_CAP=" + _fr13apc_os.environ.get("FR13_APC_HIT_SUFFIX_CAP", "ABSENT") + " ZEROACCEPT=" + _fr13apc_os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "ABSENT"))
-except Exception:
-    pass
+except Exception as _fr13apc_inject_exc:
+    # fail-loud: a swallowed inject error must NOT look like a clean skip
+    try:
+        with open(_fr13apc_os.environ.get("FR13_APC_BRIDGE_ERR_FILE", "/logs/fr13_apc_bridge_error.flag"), "w") as _fr13apc_e:
+            _fr13apc_e.write("pid=" + _fr13apc_pid + " inject_exc=" + repr(_fr13apc_inject_exc))
+    except Exception:
+        pass
+# UNCONDITIONAL engagement proof: record the LIVE os.environ values the gates will read.
+try:
+    _fr13apc_snap = _fr13apc_os.environ.get("FR13_APC_SNAP_FIX", "ABSENT")
+    _fr13apc_cap = _fr13apc_os.environ.get("FR13_APC_HIT_SUFFIX_CAP", "ABSENT")
+    _fr13apc_za = _fr13apc_os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "ABSENT")
+    _fr13apc_conv = _fr13apc_os.environ.get("FR13_APC_CONV_FIX", "ABSENT")
+    _fr13apc_hrs = _fr13apc_os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "ABSENT")
+    print("FR13_APC_ENV_BRIDGE_LOADED worker pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " ZEROACCEPT=" + _fr13apc_za + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs, flush=True)
+    # /logs is bind-mounted; vLLM swallows bare worker stdout so the file is the reliable
+    # host-checkable proof of what the worker's live os.environ holds AT gdn import.
+    with open(_fr13apc_os.environ.get("FR13_APC_BRIDGE_MARKER_FILE", "/logs/fr13_apc_bridge_loaded.flag"), "w") as _fr13apc_m:
+        _fr13apc_m.write("pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " ZEROACCEPT=" + _fr13apc_za + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs)
+except Exception as _fr13apc_marker_exc:
+    try:
+        with open(_fr13apc_os.environ.get("FR13_APC_BRIDGE_ERR_FILE", "/logs/fr13_apc_bridge_error.flag"), "w") as _fr13apc_e:
+            _fr13apc_e.write("pid=" + _fr13apc_pid + " marker_exc=" + repr(_fr13apc_marker_exc))
+    except Exception:
+        pass
 
 _FR13_GDN_SUBOP_MAB_FLAG = None
 
