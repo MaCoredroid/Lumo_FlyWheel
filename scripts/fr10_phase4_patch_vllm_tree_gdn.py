@@ -6710,6 +6710,7 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         os.environ.get("FR13_APC_SNAP_FIX", "0") != "1"
         and os.environ.get("FR13_APC_CONV_SNAP_FIX", "0") != "1"
         and os.environ.get("FR13_APC_PRE_SNAP_FIX", "0") != "1"
+        and os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "0") != "1"
     ):
         return
     try:
@@ -6742,13 +6743,25 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         # the b-th sampler row != the b-th spec row on mixed prefill+decode batches,
         # so the leaf was keyed to the wrong req_id and the postprocess lookup
         # always missed -> _FR13_CUR_SSM_LEAF_ROW stayed None (trace wdkszxe8a).
+        _zero_on = os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "0") == "1"
         for _b in range(int(len(spec_req_ids))):
             if _b >= len(replay_lens) or _b >= len(spec_cpu):
                 continue
             _alen = int(replay_lens[_b])
-            if _alen <= 0:
-                continue
             _row = spec_cpu[_b]
+            if _alen <= 0:
+                # ZERO-ACCEPT (all tree drafts rejected): the committed state is the root
+                # token's post-step state, stored by the replay into LINEAR column 0
+                # (spec_state_indices[b,0] == _row[0]). Stock publish SKIPS this, so SNAP_FIX
+                # falls back to the stale bias row block_ids[cur-1] -> wrong restored seed on a
+                # cache hit whose boundary lands on a zero-accept step (shared by spine+tree).
+                # Publish _row[0] so SNAP_FIX redirects to the committed-root row.
+                # Default-OFF (FR13_APC_SNAP_FIX_ZEROACCEPT) -> byte-identical when off.
+                if _zero_on and len(_row) > 0:
+                    leaf_map[str(spec_req_ids[_b])] = int(_row[0])
+                    if conv_leaf_map is not None:
+                        conv_leaf_map[str(spec_req_ids[_b])] = int(_row[0])
+                continue
             if 0 <= _alen - 1 < len(_row):
                 leaf_map[str(spec_req_ids[_b])] = int(_row[_alen - 1])
                 if conv_leaf_map is not None:
