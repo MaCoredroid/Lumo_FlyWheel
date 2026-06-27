@@ -5523,7 +5523,7 @@ def _fr13_gdn_subop_mab(
             # residual. Fresh rows (has_initial_state False) and, when the flag
             # is off, ALL rows take the native chunk path UNCHANGED below.
             _fr13_apc_active = bool(
-                os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "1") == "1"
+                os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "0") == "1"
                 and has_initial_state is not None
                 and bool(has_initial_state.any())
             )
@@ -5552,7 +5552,7 @@ def _fr13_gdn_subop_mab(
                 # skipped because suffix_len <= FC). Bigger cap = more recurrent
                 # compute on the (rare) re-prefill step; pure-decode steps are
                 # untouched. Read per-call so an A/B can flip it without a rebuild.
-                _fr13_FC = int(os.environ.get("FR13_APC_HIT_SUFFIX_CAP") or "1000000")
+                _fr13_FC = int(os.environ.get("FR13_APC_HIT_SUFFIX_CAP") or "64")
                 if _fr13_FC < 1:
                     _fr13_FC = 64
                 _fr13_gather = []

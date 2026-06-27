@@ -265,8 +265,17 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   : "${FR13_APC_SNAP_FIX_ZEROACCEPT:=1}"  # BAKED 2026-06-27 (user call): publish committed-root row (_row[0]) for zero-accept (accepted_len==0) steps (shared spine+tree carrier). APC-only -> non-APC locked cat9 path byte-identical
   : "${FR13_APC_CONV_SNAP_FIX:=0}"   # CLR: conv node-bank leaf redirect (default OFF -> byte-identical)
   : "${FR13_APC_PRE_SNAP_FIX:=0}"    # CLR: preprocess SSM redirect (default OFF -> byte-identical)
-  : "${FR13_APC_HIT_RECURRENT_SUFFIX:=1}"  # BAKED 2026-06-27 (user call): recurrent-suffix recompute on APC cache-hit prefills — the COMMON non-spec prefill path (spine+tree, fires on has_initial_state.any()), NOT tree-only. APC-only -> non-APC locked cat9 path byte-identical.
-  : "${FR13_APC_HIT_SUFFIX_CAP:=1000000}"  # BAKED 2026-06-27 (user call): cap=1e6 = recompute the WHOLE cache-hit suffix recurrently (the intended value-vs-oracle fix per fr10_phase4_patch_vllm_tree_gdn.py:5547), NOT the first-64 (which doesn't even reach the offset-73 divergence). Cost is on the rare re-prefill step only.
+  # HRS UN-BAKED 2026-06-27 (user) — CURRENT DIRECTION. The recurrent-suffix roll (HIT_RECURRENT_SUFFIX)
+  # is SUPERSEDED by the SGLang-faithful EXACT-SEED fix (FR13_APC_EXACT_SEED, in progress; worktree
+  # wf_4f4d8bf1). ROOT: cache-ON fails the coding agent regardless of HRS (HRS=1 0/2, HRS=0 0/3,
+  # spine+cache 0/3, cache-OFF 3/3) because the cached GDN checkpoint is the RECURRENT-decode kernel's
+  # realization, not the CHUNKED-prefill realization cache-OFF holds (kernels differ ~0.0078 >> 1 bf16
+  # ULP). HRS-recurrent re-prefills the hit remainder via the recurrent kernel != chunked -> cannot be
+  # bit-exact. THE FIX (SGLang MambaRadixCache / Execution-State-Capsules 2606.20537 / Sparse-Prefix-
+  # Caching 2605.05219): cache chunked-realization checkpoints ONLY at 64-aligned positions (chunked-only
+  # chain, exact base) + restore the remainder THROUGH the chunked kernel. HRS stays OFF until that lands.
+  : "${FR13_APC_HIT_RECURRENT_SUFFIX:=0}"  # un-baked (was :=1 2026-06-27) -> native chunk path, byte-identical
+  : "${FR13_APC_HIT_SUFFIX_CAP:=64}"       # inert while HRS=0 (was :=1000000)
   export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP
 else
   APC_FLAGS=""
