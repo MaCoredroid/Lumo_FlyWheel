@@ -1317,7 +1317,7 @@ try:
         # above is unreliable; /logs is bind-mounted so the host can confirm the worker took
         # the inject branch AND what it injected — this is the fail-loud engagement proof).
         with open(_fr13apc_os.environ.get("FR13_APC_BRIDGE_MARKER_FILE", "/logs/fr13_apc_bridge_loaded.flag"), "w") as _fr13apc_m:
-            _fr13apc_m.write("pid=" + str(_fr13apc_os.getpid()) + " SNAP_FIX=" + _fr13apc_os.environ.get("FR13_APC_SNAP_FIX", "ABSENT") + " HIT_SUFFIX_CAP=" + _fr13apc_os.environ.get("FR13_APC_HIT_SUFFIX_CAP", "ABSENT") + " ZEROACCEPT=" + _fr13apc_os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "ABSENT") + "\n")
+            _fr13apc_m.write("pid=" + str(_fr13apc_os.getpid()) + " SNAP_FIX=" + _fr13apc_os.environ.get("FR13_APC_SNAP_FIX", "ABSENT") + " HIT_SUFFIX_CAP=" + _fr13apc_os.environ.get("FR13_APC_HIT_SUFFIX_CAP", "ABSENT") + " ZEROACCEPT=" + _fr13apc_os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "ABSENT"))
 except Exception:
     pass
 
