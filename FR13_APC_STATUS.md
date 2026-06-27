@@ -117,6 +117,17 @@ align "restores the block-aligned row," that row already holds the correct commi
 **IN-FLIGHT (flag-gated, default off):**
 - `FR13_APC_VERBATIM` — the SSM-axis tree fix above. Validation in progress.
 
+> **STALE — this file was frozen 2026-06-22 (its only commit) and is SUPERSEDED by the launcher
+> bake block `fr13_launch_forked_fa2_tree_server.sh:238-269` (last touched 2026-06-27). When they
+> disagree, the LAUNCHER wins. CORRECTION 2026-06-27: `FR13_APC_HIT_RECURRENT_SUFFIX` (+`_HIT_SUFFIX_CAP`)
+> below is NOT dead — it was swept into this bucket on 06-22 while default-OFF/GPU-unvalidated and a
+> DIFFERENT flag (`VERBATIM`) was the in-flight path, then RE-PORTED live into the patcher on 06-26
+> (commit `e67eaf39`). It is an UNRESOLVED in-flight fix for the +3.12pp temp-0.6 clear-margin residual
+> (the first-suffix-chunk fold of the restored boundary state), pending a GPU clear-margin-vs-recurrent-
+> oracle re-measurement. `FR13_APC_SNAP_FIX_ZEROACCEPT` (created 06-27, `d658debe`) post-dates this file
+> entirely (live default-OFF in-flight fix for the shared spine+tree zero-accept-publish-skip carrier).
+> These two STACK with SNAP_FIX (different defects); SNAP_FIX did not supersede them.**
+
 **DEAD (default-off cruft, cleanup pending — all confounded/refuted prior carrier theories):**
 - `FR13_APC_VALUE_VS_ORACLE` (+`_LOG`/`_FH`), `FR13_APC_CACHEHIT_VALUE_PROBE`,
   `FR13_APC_ALIGN_TREE_AWARE`, `FR13_APC_COMMIT_SITE_WT`, `FR13_APC_SSM_WRITE_THROUGH`
