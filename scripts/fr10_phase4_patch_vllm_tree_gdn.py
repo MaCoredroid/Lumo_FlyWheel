@@ -5523,7 +5523,7 @@ def _fr13_gdn_subop_mab(
             # residual. Fresh rows (has_initial_state False) and, when the flag
             # is off, ALL rows take the native chunk path UNCHANGED below.
             _fr13_apc_active = bool(
-                os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "0") == "1"
+                os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "1") == "1"
                 and has_initial_state is not None
                 and bool(has_initial_state.any())
             )
@@ -6771,10 +6771,10 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
     # the original postprocess SSM SNAP_FIX is off. All three default "0" -> early
     # return -> neither map created -> byte-identical to pre-fix.
     if (
-        os.environ.get("FR13_APC_SNAP_FIX", "0") != "1"
+        os.environ.get("FR13_APC_SNAP_FIX", "1") != "1"
         and os.environ.get("FR13_APC_CONV_SNAP_FIX", "0") != "1"
         and os.environ.get("FR13_APC_PRE_SNAP_FIX", "0") != "1"
-        and os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "0") != "1"
+        and os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "1") != "1"
     ):
         return
     try:
@@ -6807,7 +6807,7 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         # the b-th sampler row != the b-th spec row on mixed prefill+decode batches,
         # so the leaf was keyed to the wrong req_id and the postprocess lookup
         # always missed -> _FR13_CUR_SSM_LEAF_ROW stayed None (trace wdkszxe8a).
-        _zero_on = os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "0") == "1"
+        _zero_on = os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "1") == "1"
         for _b in range(int(len(spec_req_ids))):
             if _b >= len(replay_lens) or _b >= len(spec_cpu):
                 continue
@@ -8308,7 +8308,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 # the replay are identical either path). Default "0" -> fast
                 # loop unchanged -> byte-identical locked cat9 path.
                 _fr13_apc_publish_on = (
-                    __import__('os').environ.get("FR13_APC_SNAP_FIX", "0") == "1"
+                    __import__('os').environ.get("FR13_APC_SNAP_FIX", "1") == "1"
                 )
                 if (
                     _ep_active
@@ -11476,7 +11476,7 @@ def get_conv_copy_spec(
             )
         src_state = state[src_block_id]
     elif (
-        os.environ.get("FR13_APC_CONV_SNAPSHOT", "0") == "1"
+        os.environ.get("FR13_APC_CONV_SNAPSHOT", "1") == "1"
         and os.environ.get("FR13_APC_CONV_FIX", "1") == "1"
         and not _FR13_IN_PREPROCESS
     ):
@@ -11491,7 +11491,7 @@ def get_conv_copy_spec(
         # reads it back byte-exactly (SGLang/NVIDIA #10335 snapshot-not-reconstruct).
         src_state = state[src_block_id]
     elif (
-        os.environ.get("FR13_APC_CONV_SNAPSHOT", "0") == "1"
+        os.environ.get("FR13_APC_CONV_SNAPSHOT", "1") == "1"
         and os.environ.get("FR13_APC_CONV_FIX", "1") == "1"
         and _FR13_IN_PREPROCESS
         and offset > 0
@@ -11653,7 +11653,7 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         pre_phase_anchor,
         pre_phase_anchor
         + "    if (\n"  # + sentinel widened: SNAP_FIX OR CONV_SNAP_FIX OR PRE_SNAP_FIX
-        "        os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\"\n"
+        "        os.environ.get(\"FR13_APC_SNAP_FIX\", \"1\") == \"1\"\n"
         "        or os.environ.get(\"FR13_APC_CONV_SNAP_FIX\", \"0\") == \"1\"\n"
         "        or os.environ.get(\"FR13_APC_PRE_SNAP_FIX\", \"0\") == \"1\"\n"
         "    ):  " + sentinel + "\n"
@@ -11672,7 +11672,7 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         post_phase_anchor,
         post_phase_anchor
         + "    if (\n"  # + sentinel widened: SNAP_FIX OR CONV_SNAP_FIX OR PRE_SNAP_FIX
-        "        os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\"\n"
+        "        os.environ.get(\"FR13_APC_SNAP_FIX\", \"1\") == \"1\"\n"
         "        or os.environ.get(\"FR13_APC_CONV_SNAP_FIX\", \"0\") == \"1\"\n"
         "        or os.environ.get(\"FR13_APC_PRE_SNAP_FIX\", \"0\") == \"1\"\n"
         "    ):  " + sentinel + "\n"
@@ -11729,7 +11729,7 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                _fr13_fx_ssm_on = (\n"
         "                    _fr13_fx_func == \"get_temporal_copy_spec\"\n"
         "                    and (\n"
-        "                        (os.environ.get(\"FR13_APC_SNAP_FIX\", \"0\") == \"1\"\n"
+        "                        (os.environ.get(\"FR13_APC_SNAP_FIX\", \"1\") == \"1\"\n"
         "                         and _fr13_fx_phase == \"postprocess\")\n"
         "                        or (_fr13_fx_pre_on and _fr13_fx_phase == \"preprocess\")\n"
         "                    )\n"
