@@ -21,6 +21,9 @@ echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7
 export RUNROOT="$ROOT"
 export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
 export FR10_METRICS=0 BATCH_INVARIANT=0
+# ATTEMPT-1 metric (user 2026-06-27): stop-on-first-giveup, no retries. cache-OFF solves attempt-1
+# with 0 give-ups, so this is a fair + faster (~12-15min/boot saved) + more sensitive discriminator.
+export SWE_EMPTY_PATCH_RETRIES=0
 # IDENTICAL deployed APC config:
 export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
 export FR13_APC_HIT_RECURRENT_SUFFIX=1 FR13_APC_HIT_SUFFIX_CAP=1000000

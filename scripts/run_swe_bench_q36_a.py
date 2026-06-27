@@ -927,7 +927,12 @@ def _process_one(
         # then emitted a tool-call-free terminal reply (general temp-0.6 codex flake). Re-drive
         # it up to SWE_EMPTY_PATCH_RETRIES times with its OWN accumulated context + a hard
         # must-act directive (a plain fresh re-roll re-confirms the stop ~88% of the time).
-        max_retries = max(1, int(os.environ.get("SWE_EMPTY_PATCH_RETRIES", "2")))
+        # SWE_EMPTY_PATCH_RETRIES=0 -> stop-on-first-giveup (record the attempt-1 verdict, no
+        # retries). Fair as an iteration metric because cache-OFF solves attempt-1 with ZERO
+        # give-ups (bigN cacheoff_r1/2/3: 0 gave_up, 0 retry); the retry path only ever fires on
+        # the degraded cache-ON arm, so skipping it cuts ~12-15min/boot without penalising the
+        # clean arm. Default stays 2 for the final ship-rate gate.
+        max_retries = max(0, int(os.environ.get("SWE_EMPTY_PATCH_RETRIES", "2")))
         summary["empty_patch_retry"] = {"cause": cause, "attempted": True,
                                         "max_retries": max_retries, "recovered_patch_bytes": 0}
         prev_trace = codex_trace
