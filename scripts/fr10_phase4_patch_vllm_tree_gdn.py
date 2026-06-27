@@ -1295,6 +1295,26 @@ def _patch_gdn_linear() -> bool:
         # FR13_GDN_SUBOP_MAB != "1" the helper returns immediately and the
         # locked cat9 default path is byte-identical.
         mab_helper = '''
+# FR13 APC worker-env bridge (2/2): the mp/spawn worker's curated env drops the bare
+# FR13_APC_* masters, so the os.environ gates would read DEFAULTS in the worker (cap=64,
+# SNAP_FIX off) = vacuous. pid-1 wrote /logs/fr13_apc_env.flag; inject the missing
+# FR13_APC_* into os.environ ONCE at this gdn-file import, before any gate reads.
+# Self-gating: skips when SNAP_FIX is already present (pid-1); never overwrites an explicit
+# worker value; no sidecar (locked non-APC path) -> open() raises -> no-op.
+try:
+    import os as _fr13apc_os
+    if "FR13_APC_SNAP_FIX" not in _fr13apc_os.environ:
+        _fr13apc_fp = _fr13apc_os.environ.get("FR13_APC_ENV_FLAG_FILE", "/logs/fr13_apc_env.flag")
+        with open(_fr13apc_fp) as _fr13apc_fh:
+            for _fr13apc_line in _fr13apc_fh:
+                _fr13apc_line = _fr13apc_line.strip()
+                if "=" in _fr13apc_line:
+                    _fr13apc_k, _fr13apc_v = _fr13apc_line.split("=", 1)
+                    if _fr13apc_k.startswith("FR13_APC_") and _fr13apc_k not in _fr13apc_os.environ:
+                        _fr13apc_os.environ[_fr13apc_k] = _fr13apc_v
+        print("FR13_APC_ENV_BRIDGE_LOADED worker pid=" + str(_fr13apc_os.getpid()) + " SNAP_FIX=" + _fr13apc_os.environ.get("FR13_APC_SNAP_FIX", "ABSENT") + " ZEROACCEPT=" + _fr13apc_os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "ABSENT") + " HIT_SUFFIX_CAP=" + _fr13apc_os.environ.get("FR13_APC_HIT_SUFFIX_CAP", "ABSENT") + " CONV_FIX=" + _fr13apc_os.environ.get("FR13_APC_CONV_FIX", "ABSENT"), flush=True)
+except Exception:
+    pass
 
 _FR13_GDN_SUBOP_MAB_FLAG = None
 
