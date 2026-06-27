@@ -311,11 +311,6 @@ else
   LUMO_PROXY_STATE_ROOT="/tmp/fr13_bigdenom_proxy_state_${ARM}" \
   bash scripts/swe_x86_helpers/relaunch_proxy.sh > "$ARMDIR/proxy_launch.log" 2>&1
   sleep 3
-  PROXY_PID=$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null || true)
-  if [[ -n "$PROXY_PID" ]] && [[ -r "/proc/$PROXY_PID/environ" ]]; then
-    tr '\0' '\n' < "/proc/$PROXY_PID/environ" | grep -E "^LUMO_(PROXY|TRACK_B)" | sort \
-      > "$ARMDIR/proxy_env.txt"
-  fi
   P0=$(date +%s); PROXY_OK=0
   while (( $(date +%s) < P0 + 60 )); do
     CODE=$(curl -s -o /dev/null -m 3 -w '%{http_code}' "http://127.0.0.1:$PROXY_PORT/v1/models" 2>/dev/null)
@@ -323,6 +318,18 @@ else
     sleep 2
   done
   (( PROXY_OK == 1 )) || { echo "FAIL: proxy not healthy"; tail -20 "$ARMDIR/proxy.nohup" 2>/dev/null; exit 5; }
+  # Capture the proxy env AFTER it is confirmed healthy: the pid file / /proc/PID/environ lag the
+  # health endpoint, so capturing at the bare `sleep 3` above RACED startup -> empty proxy_env.txt
+  # -> spurious "proxy temp pin missing" NORESULT even though the proxy WAS launched with the temp.
+  # Retry the read briefly until the forced-temp line appears.
+  for _i in $(seq 1 12); do
+    PROXY_PID=$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null || true)
+    if [[ -n "$PROXY_PID" ]] && [[ -r "/proc/$PROXY_PID/environ" ]]; then
+      tr '\0' '\n' < "/proc/$PROXY_PID/environ" | grep -E "^LUMO_(PROXY|TRACK_B)" | sort > "$ARMDIR/proxy_env.txt"
+    fi
+    grep -q "LUMO_PROXY_FORCE_TEMPERATURE=" "$ARMDIR/proxy_env.txt" 2>/dev/null && break
+    sleep 1
+  done
   grep -q "LUMO_PROXY_FORCE_TEMPERATURE=${DEPLOY_FORCE_TEMP:-0.6}" "$ARMDIR/proxy_env.txt" || { echo "FAIL: proxy temp pin missing (expected ${DEPLOY_FORCE_TEMP:-0.6})"; exit 5; }
   grep -q "LUMO_PROXY_PAIR_DUMP_DIR=" "$ARMDIR/proxy_env.txt" || { echo "FAIL: proxy pair-dump pin missing"; exit 5; }
   echo "proxy OK"
