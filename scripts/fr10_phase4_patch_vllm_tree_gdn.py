@@ -5552,7 +5552,7 @@ def _fr13_gdn_subop_mab(
                 # skipped because suffix_len <= FC). Bigger cap = more recurrent
                 # compute on the (rare) re-prefill step; pure-decode steps are
                 # untouched. Read per-call so an A/B can flip it without a rebuild.
-                _fr13_FC = int(os.environ.get("FR13_APC_HIT_SUFFIX_CAP") or "64")
+                _fr13_FC = int(os.environ.get("FR13_APC_HIT_SUFFIX_CAP") or "1000000")
                 if _fr13_FC < 1:
                     _fr13_FC = 64
                 _fr13_gather = []

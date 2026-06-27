@@ -265,8 +265,9 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   : "${FR13_APC_SNAP_FIX_ZEROACCEPT:=1}"  # BAKED 2026-06-27 (user call): publish committed-root row (_row[0]) for zero-accept (accepted_len==0) steps (shared spine+tree carrier). APC-only -> non-APC locked cat9 path byte-identical
   : "${FR13_APC_CONV_SNAP_FIX:=0}"   # CLR: conv node-bank leaf redirect (default OFF -> byte-identical)
   : "${FR13_APC_PRE_SNAP_FIX:=0}"    # CLR: preprocess SSM redirect (default OFF -> byte-identical)
-  : "${FR13_APC_HIT_RECURRENT_SUFFIX:=1}"  # BAKED 2026-06-27 (user call): bounded recurrent-suffix recompute on APC cache-hit prefills, cap 64 (intended O(64), NOT the barred whole-suffix). APC-only -> non-APC locked cat9 path byte-identical. FR13_APC_HIT_SUFFIX_CAP unset=>64.
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX
+  : "${FR13_APC_HIT_RECURRENT_SUFFIX:=1}"  # BAKED 2026-06-27 (user call): recurrent-suffix recompute on APC cache-hit prefills — the COMMON non-spec prefill path (spine+tree, fires on has_initial_state.any()), NOT tree-only. APC-only -> non-APC locked cat9 path byte-identical.
+  : "${FR13_APC_HIT_SUFFIX_CAP:=1000000}"  # BAKED 2026-06-27 (user call): cap=1e6 = recompute the WHOLE cache-hit suffix recurrently (the intended value-vs-oracle fix per fr10_phase4_patch_vllm_tree_gdn.py:5547), NOT the first-64 (which doesn't even reach the offset-73 divergence). Cost is on the rare re-prefill step only.
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP
 else
   APC_FLAGS=""
 fi
