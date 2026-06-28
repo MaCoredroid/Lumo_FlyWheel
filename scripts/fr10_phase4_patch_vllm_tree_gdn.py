@@ -1348,11 +1348,12 @@ try:
     _fr13apc_za = _fr13apc_os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "ABSENT")
     _fr13apc_conv = _fr13apc_os.environ.get("FR13_APC_CONV_FIX", "ABSENT")
     _fr13apc_hrs = _fr13apc_os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "ABSENT")
-    print("FR13_APC_ENV_BRIDGE_LOADED worker pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " ZEROACCEPT=" + _fr13apc_za + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs, flush=True)
+    _fr13apc_shadow = _fr13apc_os.environ.get("FR13_APC_SHADOW", "ABSENT")
+    print("FR13_APC_ENV_BRIDGE_LOADED worker pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " ZEROACCEPT=" + _fr13apc_za + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs + " SHADOW=" + _fr13apc_shadow, flush=True)
     # /logs is bind-mounted; vLLM swallows bare worker stdout so the file is the reliable
     # host-checkable proof of what the worker's live os.environ holds AT gdn import.
     with open(_fr13apc_os.environ.get("FR13_APC_BRIDGE_MARKER_FILE", "/logs/fr13_apc_bridge_loaded.flag"), "w") as _fr13apc_m:
-        _fr13apc_m.write("pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " ZEROACCEPT=" + _fr13apc_za + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs)
+        _fr13apc_m.write("pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " ZEROACCEPT=" + _fr13apc_za + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs + " SHADOW=" + _fr13apc_shadow)
 except Exception as _fr13apc_marker_exc:
     try:
         with open(_fr13apc_os.environ.get("FR13_APC_BRIDGE_ERR_FILE", "/logs/fr13_apc_bridge_error.flag"), "w") as _fr13apc_e:
@@ -6775,6 +6776,11 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         and os.environ.get("FR13_APC_CONV_SNAP_FIX", "0") != "1"
         and os.environ.get("FR13_APC_PRE_SNAP_FIX", "0") != "1"
         and os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "1") != "1"
+        # FR13_APC_SHADOW: when shadow-logging, still populate the leaf + tags
+        # maps so the redirect-site write-side shadow check can read them. Adds
+        # a condition ONLY when SHADOW=1 -> SHADOW unset/0 leaves the gate-OR
+        # byte-identical to pre-shadow.
+        and os.environ.get("FR13_APC_SHADOW", "0") != "1"
     ):
         return
     try:
@@ -6808,11 +6814,48 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         # so the leaf was keyed to the wrong req_id and the postprocess lookup
         # always missed -> _FR13_CUR_SSM_LEAF_ROW stayed None (trace wdkszxe8a).
         _zero_on = os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "1") == "1"
+        # FR13_APC_SHADOW: publish a per-req row-class tag (spine / branch /
+        # zero-accept + accepted_len) keyed by req_id onto the SAME gdn module
+        # the redirect site reads, so the write-side shadow check can name the
+        # stale class. is_branch uses the committer rowbug semantic: a pure
+        # chain (spine) publishes path [1..L] so path[-1]==accepted_len; a tree
+        # branch accept diverges so path[-1]!=accepted_len. Source = the
+        # committer's per-spec-row accepted node paths global (same index space
+        # as replay_lens). Default OFF -> the whole block is skipped -> no map.
+        _shadow_on = os.environ.get("FR13_APC_SHADOW", "0") == "1"
+        _shadow_paths = None
+        if _shadow_on:
+            try:
+                tag_map = getattr(gdn_mod, "_FR13_APC_SHADOW_TAGS_BY_REQ", None)
+                if tag_map is None:
+                    tag_map = {}
+                    gdn_mod._FR13_APC_SHADOW_TAGS_BY_REQ = tag_map
+                _shadow_paths = globals().get(
+                    "_LUMO_TREE_LAST_ACCEPTED_NODE_PATHS_KERNEL"
+                )
+            except Exception:
+                tag_map = None
         for _b in range(int(len(spec_req_ids))):
             if _b >= len(replay_lens) or _b >= len(spec_cpu):
                 continue
             _alen = int(replay_lens[_b])
             _row = spec_cpu[_b]
+            if _shadow_on:
+                try:
+                    _is_zero = _alen <= 0
+                    _is_branch = False
+                    if (not _is_zero) and _shadow_paths is not None and _b < len(_shadow_paths):
+                        _p = _shadow_paths[_b]
+                        _is_branch = bool(_p) and int(_p[-1]) != _alen
+                    _is_spine = (not _is_zero) and (not _is_branch)
+                    tag_map[str(spec_req_ids[_b])] = {
+                        "accepted_len": int(_alen),
+                        "is_spine": bool(_is_spine),
+                        "is_branch": bool(_is_branch),
+                        "is_zero_accept": bool(_is_zero),
+                    }
+                except Exception:
+                    pass
             if _alen <= 0:
                 # ZERO-ACCEPT (all tree drafts rejected): the committed state is the root
                 # token's post-step state, stored by the replay into LINEAR column 0
@@ -11631,6 +11674,117 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
     if sentinel in text:
         return False
 
+    # ------------------------------------------------------------------ #
+    # FR13_APC_SHADOW write-side shadow log helper (module scope). Default
+    # OFF (FR13_APC_SHADOW != "1") => never called from any gated site =>
+    # the helper def is inert dead code, byte-identical to pre-shadow. It
+    # compares the row align RESTORES (the block-aligned src row) against the
+    # row the committer WROTE (the committed accepted-leaf / committed-root
+    # node-bank row) and appends ONE json line per call, TAGGED by row class
+    # (spine / branch / zero-accept) so the offline reducer can name WHICH
+    # class is stale on a cache hit. Bitwise int-view equality (mirrors
+    # _fr13_tcf_sc_compare in gdn_linear_attn) + per-row argmax match +
+    # max_abs. Wrapped in try/except: a logging failure can NEVER crash the
+    # served forward. Rate-limited (FR13_APC_SHADOW_LOG_EVERY) + capped
+    # (FR13_APC_SHADOW_LOG_CAP). `json`/`os`/`torch`/`logger` are all live at
+    # mamba_utils module scope (json/os imported by the accept-bias patch).
+    shadow_helper_anchor = "\ndef collect_mamba_copy_meta(\n"
+    if text.count(shadow_helper_anchor) != 1:
+        raise RuntimeError(
+            "APC shadow log: collect_mamba_copy_meta module anchor not unique"
+        )
+    shadow_helper = (
+        "_FR13_APC_SHADOW_STATE = {\"seen\": 0, \"written\": 0, \"fh\": None}\n"
+        "\n"
+        "\n"
+        "def _fr13_apc_shadow_log(carrier, x_restore, x_committed, tag_dict):  # FR13_APC_SHADOW\n"
+        "    \"\"\"FR13_APC_SHADOW: write-side shadow check (log-only, no behavior).\n"
+        "\n"
+        "    x_restore  = the BLOCK-ALIGNED row align RESTORES on a cache hit.\n"
+        "    x_committed= the COMMITTED accepted-leaf (or committed-root for a\n"
+        "                 zero-accept step) node-bank row the committer WROTE.\n"
+        "    A faithful cache hit must restore EXACTLY the committed value;\n"
+        "    is_stale = the two rows differ (int-view) -> the restored seed is\n"
+        "    not the committed-leaf state. Tagged by row class via tag_dict so\n"
+        "    the reducer names the stale class. NEVER raises (try/except).\n"
+        "    \"\"\"\n"
+        "    try:\n"
+        "        if os.environ.get(\"FR13_APC_SHADOW\", \"0\") != \"1\":\n"
+        "            return\n"
+        "        _st = _FR13_APC_SHADOW_STATE\n"
+        "        _st[\"seen\"] += 1\n"
+        "        try:\n"
+        "            _every = int(os.environ.get(\"FR13_APC_SHADOW_LOG_EVERY\", \"1\"))\n"
+        "        except Exception:\n"
+        "            _every = 1\n"
+        "        if _every < 1:\n"
+        "            _every = 1\n"
+        "        try:\n"
+        "            _cap = int(os.environ.get(\"FR13_APC_SHADOW_LOG_CAP\", \"20000\"))\n"
+        "        except Exception:\n"
+        "            _cap = 20000\n"
+        "        if (_st[\"seen\"] % _every) != 0:\n"
+        "            return\n"
+        "        if _st[\"written\"] >= _cap:\n"
+        "            return\n"
+        "        # int-view bitwise equality + argmax match + max_abs (tensors\n"
+        "        # are single node-bank rows; cheap to flatten to fp32 once).\n"
+        "        _is_stale = True\n"
+        "        _argmax_match = False\n"
+        "        _max_abs = float(\"nan\")\n"
+        "        try:\n"
+        "            _a = x_restore\n"
+        "            _b = x_committed\n"
+        "            if hasattr(_a, \"shape\") and hasattr(_b, \"shape\") and tuple(_a.shape) == tuple(_b.shape):\n"
+        "                _ai, _bi = _a, _b\n"
+        "                if _ai.dtype == torch.bfloat16:\n"
+        "                    _ai, _bi = _ai.view(torch.int16), _bi.view(torch.int16)\n"
+        "                elif _ai.dtype == torch.float16:\n"
+        "                    _ai, _bi = _ai.view(torch.int16), _bi.view(torch.int16)\n"
+        "                elif _ai.dtype == torch.float32:\n"
+        "                    _ai, _bi = _ai.view(torch.int32), _bi.view(torch.int32)\n"
+        "                _is_stale = not bool(torch.equal(_ai, _bi))\n"
+        "                _af = _a.detach().to(torch.float32).reshape(-1)\n"
+        "                _bf = _b.detach().to(torch.float32).reshape(-1)\n"
+        "                _max_abs = float((_af - _bf).abs().max().item())\n"
+        "                _argmax_match = bool(int(_af.argmax().item()) == int(_bf.argmax().item()))\n"
+        "        except Exception:\n"
+        "            # fall through with the conservative defaults above\n"
+        "            pass\n"
+        "        _rec = {\"carrier\": str(carrier), \"is_stale\": bool(_is_stale),\n"
+        "                \"max_abs\": _max_abs, \"argmax_match\": bool(_argmax_match)}\n"
+        "        try:\n"
+        "            for _k, _v in dict(tag_dict).items():\n"
+        "                _rec[str(_k)] = _v\n"
+        "        except Exception:\n"
+        "            pass\n"
+        "        _path = os.environ.get(\"FR13_APC_SHADOW_LOG\", \"/logs/apc_shadow.jsonl\")\n"
+        "        if _st[\"fh\"] is None:\n"
+        "            try:\n"
+        "                _d = os.path.dirname(_path)\n"
+        "                if _d:\n"
+        "                    os.makedirs(_d, exist_ok=True)\n"
+        "            except Exception:\n"
+        "                pass\n"
+        "            _st[\"fh\"] = open(_path, \"a\")\n"
+        "        _st[\"fh\"].write(json.dumps(_rec) + \"\\n\")\n"
+        "        _st[\"fh\"].flush()\n"
+        "        _st[\"written\"] += 1\n"
+        "    except Exception:\n"
+        "        # observe-only: a shadow-log failure must never break the copy.\n"
+        "        try:\n"
+        "            logger.warning(\"FR13_APC_SHADOW log error (swallowed)\")\n"
+        "        except Exception:\n"
+        "            pass\n"
+        "\n"
+        "\n"
+    )
+    text = text.replace(
+        shadow_helper_anchor,
+        "\n" + shadow_helper + "def collect_mamba_copy_meta(\n",
+        1,
+    )
+
     # (1) phase markers, gated on FR13_APC_SNAP_FIX,
     #     self-contained so the gate does not depend on FR13_REPLAY_BOUNDARY_LOG.
     #     preprocess marker on a preprocess-only anchor, postprocess marker on a
@@ -11789,6 +11943,62 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                            _fr13_fx_gdn._FR13_SNAP_FIX_FIRED = int(\n"
         "                                getattr(_fr13_fx_gdn, \"_FR13_SNAP_FIX_FIRED\", 0)\n"
         "                            ) + 1\n"
+        # ------------------------------------------------------------------ #
+        # FR13_APC_SHADOW (default "0" => no read, no log => byte-identical).
+        # WRITE-SIDE shadow check: at this redirect site BOTH rows are named --
+        # the BLOCK-ALIGNED row align RESTORES on a cache hit
+        # (_sd_stock = block_ids[src_block_idx + accept_token_bias], the stock
+        # get_temporal_copy_spec source) and the COMMITTED accepted-leaf row the
+        # committer WROTE (_fr13_fx_leaf). Log restore-vs-committed TAGGED by row
+        # class (spine / branch / zero-accept) so the reducer says WHICH class is
+        # stale. Tags come from the publisher-populated per-req map
+        # (_FR13_APC_SHADOW_TAGS_BY_REQ, gated SHADOW-on at publish). Index
+        # equality (_sd_stock == leaf) is the decisive write-side signal; the
+        # tensor-value compare (_fr13_apc_shadow_log) adds is_stale/max_abs/
+        # argmax. SOURCE-ONLY reads of `state` rows; never mutates state/dst/
+        # sizes; capture-safe (skips under cuda-graph capture). Lives INSIDE the
+        # SNAP_FIX try (28-sp, under the leaf-valid `if`), AFTER the FIRED bump,
+        # so the redirect-applied case is the one logged. Flag OFF => no I/O.\n"
+        "                            if os.environ.get(\"FR13_APC_SHADOW\", \"0\") == \"1\":  " + sentinel + "\n"
+        "                                _sd_cap = (\n"
+        "                                    torch.cuda.is_available()\n"
+        "                                    and torch.cuda.is_current_stream_capturing()\n"
+        "                                )\n"
+        "                                if not _sd_cap:\n"
+        "                                    _sd_stock = int(block_ids[src_block_idx + accept_token_bias])\n"
+        "                                    _sd_req = str(getattr(req_state, \"req_id\", None))\n"
+        "                                    _sd_tags = {}\n"
+        "                                    _sd_tm = getattr(_fr13_fx_gdn, \"_FR13_APC_SHADOW_TAGS_BY_REQ\", None)\n"
+        "                                    if _sd_tm is not None:\n"
+        "                                        _sd_tags = dict(_sd_tm.get(_sd_req, {}))\n"
+        "                                    _sd_alen = int(_sd_tags.get(\"accepted_len\", -1))\n"
+        "                                    _sd_is_spine = bool(_sd_tags.get(\"is_spine\", False))\n"
+        "                                    _sd_is_branch = bool(_sd_tags.get(\"is_branch\", False))\n"
+        "                                    _sd_is_zero = bool(_sd_tags.get(\"is_zero_accept\", _sd_alen == 0))\n"
+        "                                    _sd_idx_eq = bool(_sd_stock == int(_fr13_fx_leaf))\n"
+        "                                    if 0 <= _sd_stock < _fr13_fx_n and 0 <= int(_fr13_fx_leaf) < _fr13_fx_n:\n"
+        "                                        _sd_restore = state[_sd_stock]\n"
+        "                                        _sd_committed = state[int(_fr13_fx_leaf)]\n"
+        "                                    else:\n"
+        "                                        _sd_restore = None\n"
+        "                                        _sd_committed = None\n"
+        "                                    _fr13_apc_shadow_log(\n"
+        "                                        \"ssm\", _sd_restore, _sd_committed,\n"
+        "                                        {\n"
+        "                                            \"req_id\": _sd_req,\n"
+        "                                            \"layer\": str(layer_name),\n"
+        "                                            \"is_spine_row\": _sd_is_spine,\n"
+        "                                            \"is_branch_row\": _sd_is_branch,\n"
+        "                                            \"accepted_len\": _sd_alen,\n"
+        "                                            \"is_zero_accept\": _sd_is_zero,\n"
+        "                                            \"is_cache_hit_row\": True,\n"
+        "                                            \"restore_row_idx\": _sd_stock,\n"
+        "                                            \"committed_leaf_idx\": int(_fr13_fx_leaf),\n"
+        "                                            \"index_equal\": _sd_idx_eq,\n"
+        "                                            \"copy_func\": _fr13_fx_func,\n"
+        "                                        },\n"
+        "                                    )\n"
+        # ------------------------------------------------------------------ #
         # ------------------------------------------------------------------ #
         # FR13_APC_CACHEROW_DUMP (default "0" => no read, no write =>
         # byte-identical). DIAGNOSTIC-ONLY: at the postprocess SSM snapshot
@@ -16544,6 +16754,8 @@ def _fr13_write_apc_env_sidecar() -> None:
         "FR13_APC_SNAP_FIX", "FR13_APC_SNAP_FIX_ZEROACCEPT", "FR13_APC_CONV_FIX",
         "FR13_APC_CONV_SNAPSHOT", "FR13_APC_CONV_SNAP_FIX", "FR13_APC_PRE_SNAP_FIX",
         "FR13_APC_HIT_SUFFIX_CAP", "FR13_APC_BLOCK_ALIGN_45477", "FR13_APC_LEAF_CROSSCHECK",
+        "FR13_APC_SHADOW", "FR13_APC_SHADOW_LOG",
+        "FR13_APC_SHADOW_LOG_EVERY", "FR13_APC_SHADOW_LOG_CAP",
     ]
     present = [(k, os.environ[k]) for k in keys if k in os.environ]
     try:

@@ -284,7 +284,7 @@ PY
 # read. Grep it for the masters this arm REQUIRES before recording any APC verdict, so
 # a vacuous (defaults-only) run can never masquerade as engaged. Default-OFF arms set
 # no FR13_APC_REQUIRE_* and this whole block is skipped -> locked non-APC path unchanged.
-if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}" ]]; then
+if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}${FR13_APC_REQUIRE_SHADOW:-}" ]]; then
   APC_MARKER="${FR13_APC_BRIDGE_MARKER_FILE:-/logs/fr13_apc_bridge_loaded.flag}"
   # copy the worker-written marker out of the container's /logs to the arm dir
   docker exec "$CONTAINER" sh -c "cat '$APC_MARKER' 2>/dev/null" > "$ARMDIR/apc_bridge_marker.txt" 2>/dev/null
@@ -301,6 +301,10 @@ if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}" ]]
   if [[ -n "${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}" ]]; then
     grep -q "HIT_SUFFIX_CAP=${FR13_APC_REQUIRE_HIT_SUFFIX_CAP}\b" "$ARMDIR/apc_bridge_marker.txt" \
       || { echo "FAIL: APC worker HIT_SUFFIX_CAP != required ${FR13_APC_REQUIRE_HIT_SUFFIX_CAP} (cap defaulted to 64 = vacuous). marker: $APC_MARKER_TXT"; exit 4; }
+  fi
+  if [[ -n "${FR13_APC_REQUIRE_SHADOW:-}" ]]; then
+    grep -q "SHADOW=${FR13_APC_REQUIRE_SHADOW}\b" "$ARMDIR/apc_bridge_marker.txt" \
+      || { echo "FAIL: APC worker SHADOW != required ${FR13_APC_REQUIRE_SHADOW} (shadow-log gate vacuous: env not bridged into worker). marker: $APC_MARKER_TXT"; exit 4; }
   fi
   echo "APC worker-env engagement OK: $APC_MARKER_TXT"
 fi
