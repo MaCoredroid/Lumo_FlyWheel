@@ -17,10 +17,18 @@
 #
 # GATE 1 (NON-VACUITY) runs FIRST: assert >=1 pair-dump with cached_tokens>0 AND
 #   >=1 shadow record with is_cache_hit_row=True. Else {"non_vacuous": false} + exit 2.
-# GATE 2: group stale records by row class (spine/branch/zero-accept) and by layer,
-#   report per-class stale counts + fraction (over cache-hit rows only).
-# VERDICT: ROOT class = the class with the highest CONFIDENT-stale fraction on
-#   cache-hit rows. Diagnosed prediction = branch and/or zero-accept stale, spine clean.
+# GATE 2: group cache-hit rows by row class (spine/branch/zero-accept) and by layer.
+#   Two orthogonal lenses:
+#     VALUE   : on FIRED rows (carrier "ssm", redirect_fired=True) the SNAP_FIX
+#               redirect applied but still landed a stale row -> is_stale / index_equal
+#               / max_abs / argmax. value_root = class with most is_stale fired rows.
+#     COVERAGE: on NO-FIRE rows (carrier "ssm_nofire", redirect_fired=False) the
+#               redirect did NOT apply (leaf absent or out of range) -> the STOCK
+#               block-aligned (stale) row was served, invisible to the fired log.
+#               coverage_root = class with the most redirect_fired=False rows.
+# VERDICT: report BOTH value_root and coverage_root. The coverage_root is the
+#   SNAP_FIX coverage-gap candidate ROOT. Diagnosed prediction = branch and/or
+#   zero-accept is the value_root and/or coverage_root, spine clean.
 #
 # is_stale here = the int-view-bitwise stale bit recorded at write
 # (restore_row != committed_leaf_row). The decisive write-side signal is the
@@ -168,19 +176,38 @@ def main():
         except Exception:
             confident = False
 
+        # COVERAGE: did the SNAP_FIX redirect fire for this cache-hit row?
+        # redirect_fired=False (carrier "ssm_nofire") = the row was served the
+        # STOCK block-aligned (stale) state -> a coverage-gap candidate ROOT.
+        # Older records without the field default to fired=True (no-fire log is
+        # a strict superset, so absence == fired).
+        redirect_fired = bool(r.get("redirect_fired", True))
+        leaf_present = r.get("leaf_present")
+
         c = classes.setdefault(cls, {
             "rows": 0, "stale": 0, "idx_stale": 0, "confident_stale": 0,
             "max_abs_max": 0.0, "argmax_flips": 0,
+            "n_fired": 0, "n_nofire": 0, "n_nofire_leaf_absent": 0,
         })
         c["rows"] += 1
-        if is_stale:
-            c["stale"] += 1
-        if idx_stale:
-            c["idx_stale"] += 1
-        if confident:
-            c["confident_stale"] += 1
-        if am is False:
-            c["argmax_flips"] += 1
+        if redirect_fired:
+            c["n_fired"] += 1
+        else:
+            c["n_nofire"] += 1
+            if leaf_present is False:
+                c["n_nofire_leaf_absent"] += 1
+        # is_stale / index / confident stats are meaningful only for FIRED rows
+        # (no-fire rows have x_committed=None -> is_stale defaults True, no ref);
+        # gate them on redirect_fired so the value-root reflects real compares.
+        if redirect_fired:
+            if is_stale:
+                c["stale"] += 1
+            if idx_stale:
+                c["idx_stale"] += 1
+            if confident:
+                c["confident_stale"] += 1
+            if am is False:
+                c["argmax_flips"] += 1
         try:
             if ma is not None and float(ma) == float(ma):
                 c["max_abs_max"] = max(c["max_abs_max"], float(ma))
@@ -189,38 +216,73 @@ def main():
 
         lk = str(r.get("layer"))
         lc = by_layer.setdefault(lk, {})
-        lcc = lc.setdefault(cls, {"rows": 0, "stale": 0, "idx_stale": 0, "confident_stale": 0})
+        lcc = lc.setdefault(cls, {
+            "rows": 0, "stale": 0, "idx_stale": 0, "confident_stale": 0,
+            "n_fired": 0, "n_nofire": 0,
+        })
         lcc["rows"] += 1
-        lcc["stale"] += int(is_stale)
-        lcc["idx_stale"] += int(idx_stale)
-        lcc["confident_stale"] += int(confident)
+        if redirect_fired:
+            lcc["n_fired"] += 1
+            lcc["stale"] += int(is_stale)
+            lcc["idx_stale"] += int(idx_stale)
+            lcc["confident_stale"] += int(confident)
+        else:
+            lcc["n_nofire"] += 1
 
-    # per-class fractions
+    # per-class summary. Value stats (stale/idx/confident) are over FIRED rows
+    # (the rows with a faithful committed-leaf reference). Coverage stats
+    # (n_fired/n_nofire) are over all cache-hit rows of the class.
     summary = {}
+    coverage = {}
     for cls, c in classes.items():
+        fired = max(c["n_fired"], 1)
         rows = max(c["rows"], 1)
         summary[cls] = {
             "rows": c["rows"],
+            "n_fired": c["n_fired"],
+            "n_nofire": c["n_nofire"],
             "stale": c["stale"],
-            "stale_frac": c["stale"] / rows,
+            "stale_frac": c["stale"] / fired,
             "idx_stale": c["idx_stale"],
-            "idx_stale_frac": c["idx_stale"] / rows,
+            "idx_stale_frac": c["idx_stale"] / fired,
             "confident_stale": c["confident_stale"],
-            "confident_stale_frac": c["confident_stale"] / rows,
+            "confident_stale_frac": c["confident_stale"] / fired,
             "max_abs_max": c["max_abs_max"],
             "argmax_flips": c["argmax_flips"],
         }
+        coverage[cls] = {
+            "rows": c["rows"],
+            "n_fired": c["n_fired"],
+            "n_nofire": c["n_nofire"],
+            "n_nofire_leaf_absent": c["n_nofire_leaf_absent"],
+            # fraction of this class's cache-hit rows where SNAP_FIX did NOT fire
+            # (served the stock block-aligned / stale row).
+            "nofire_frac": c["n_nofire"] / rows,
+        }
 
-    # -------- VERDICT: root class = highest confident-stale fraction -------- #
-    ranked = sorted(
+    # -------- VALUE verdict: class with most is_stale FIRED rows -------- #
+    value_ranked = sorted(
         summary.items(),
-        key=lambda kv: (kv[1]["confident_stale_frac"], kv[1]["idx_stale_frac"], kv[1]["rows"]),
+        key=lambda kv: (kv[1]["confident_stale"], kv[1]["confident_stale_frac"],
+                        kv[1]["idx_stale"], kv[1]["n_fired"]),
         reverse=True,
     )
-    root_class = ranked[0][0] if ranked else None
+    value_root = value_ranked[0][0] if value_ranked else None
+
+    # -------- COVERAGE verdict: class with most redirect_fired=False rows -------- #
+    # (served-stale SNAP_FIX coverage gap = the likely real root the fired-only
+    # log was blind to). Rank by raw no-fire count, then no-fire fraction.
+    cov_ranked = sorted(
+        coverage.items(),
+        key=lambda kv: (kv[1]["n_nofire"], kv[1]["nofire_frac"], kv[1]["rows"]),
+        reverse=True,
+    )
+    coverage_root = cov_ranked[0][0] if (cov_ranked and cov_ranked[0][1]["n_nofire"] > 0) else None
+
     spine = summary.get("spine", {})
     diagnosed_match = (
-        root_class in ("branch", "zero_accept")
+        (value_root in ("branch", "zero_accept")
+         or coverage_root in ("branch", "zero_accept"))
         and float(spine.get("confident_stale_frac", 0.0)) == 0.0
     )
 
@@ -233,15 +295,32 @@ def main():
         "pair_dumps_cached_tokens_gt0": n_pair_hit,
         "max_abs_floor": args.max_abs_floor,
         "by_class": summary,
+        "coverage": coverage,
         "by_layer": by_layer,
-        "root_row_class": root_class,
-        "root_ranking": [
-            {"class": k, "confident_stale_frac": v["confident_stale_frac"],
-             "idx_stale_frac": v["idx_stale_frac"], "rows": v["rows"]}
-            for k, v in ranked
+        # value_root = where the FIRED redirect still lands a stale row;
+        # coverage_root = where the redirect does NOT fire (served stale). The
+        # coverage_root is the SNAP_FIX coverage-gap candidate the fired-only
+        # log could not see.
+        "value_root": value_root,
+        "coverage_root": coverage_root,
+        "value_ranking": [
+            {"class": k, "confident_stale": v["confident_stale"],
+             "confident_stale_frac": v["confident_stale_frac"],
+             "n_fired": v["n_fired"]}
+            for k, v in value_ranked
+        ],
+        "coverage_ranking": [
+            {"class": k, "n_nofire": v["n_nofire"],
+             "nofire_frac": v["nofire_frac"],
+             "n_nofire_leaf_absent": v["n_nofire_leaf_absent"], "rows": v["rows"]}
+            for k, v in cov_ranked
         ],
         "diagnosed_prediction_matches": diagnosed_match,
-        "diagnosed_prediction": "branch and/or zero_accept stale, spine clean",
+        "diagnosed_prediction": (
+            "branch and/or zero_accept is the value_root (fired-but-stale) "
+            "and/or the coverage_root (redirect did not fire -> served stale); "
+            "spine clean"
+        ),
     }
     print(json.dumps(out, indent=2))
     sys.exit(0)
