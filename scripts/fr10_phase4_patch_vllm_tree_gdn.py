@@ -62,6 +62,20 @@ FP8_UTILS_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/"
     "quantization/utils/fp8_utils.py"
 )
+# FR13_APC_EXACT_SEED block-hash pivot targets. The APC prefix block hash
+# (BlockHashWithGroupId) is the ONLY identity that bridges /v1/responses turns
+# (the slot col-0 key was proven non-stable across turns), so the chunked-prefill
+# checkpoint is stored on the BlockPool instance keyed by that hash. All three
+# files (block_pool, kv_cache_manager, single_type_kv_cache_manager) live in the
+# SAME EngineCore process as the worker (UniProcExecutor, TP=1, in-process driver
+# worker), so a module-global staging map + a BlockPool instance dict are visible
+# across every WRITE/RESTORE hop -- no IPC needed.
+BLOCK_POOL_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/block_pool.py"
+)
+KV_CACHE_MANAGER_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/kv_cache_manager.py"
+)
 
 
 def _patch_gdn_attn() -> bool:
@@ -786,6 +800,17 @@ def _patch_gdn_linear() -> bool:
             "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
+            "# FR13_APC_EXACT_SEED block-hash pivot module globals (default-OFF\n"
+            "# inert: populated only under FR13_APC_EXACT_SEED=1). Cross-component\n"
+            "# bridges live here because every hop (GDN drain, worker pre/postprocess,\n"
+            "# block_pool, kv_cache_manager) runs in the SAME EngineCore process.\n"
+            "_FR13_ES_PENDING_BY_REQ = {}  # WRITE 1(a)->1(b): req_id -> [ {pos,state} ]\n"
+            "_FR13_ES_BLOCK_PENDING = {}   # WRITE 1(b)->1(c): (req_id,block_id) -> payload\n"
+            "_FR13_ES_HIT_HASHES = {}      # RESTORE (a)->(b): req_id -> {hash,pos}\n"
+            "_FR13_ES_RESTORE_BY_REQ = {}  # RESTORE (b)->(c): req_id -> {pos,state}\n"
+            "_FR13_ES_BLOCK_POOL = None    # published once by kv_cache_manager\n"
+            "_FR13_ES_BLOCK_SIZE = None    # runtime mamba block_size (manager-published)\n"
+            "_FR13_ES_GATE_LOG_COUNT = 0   # iter5 ALL-GATES diagnostic throttle (first ~50)\n"
             "# FR13_EAGER_PACK (FIX-2): read ONCE at module scope (flag plan: env is\n"
             "# read once per boot; init-time allocations are flag-conditional but\n"
             "# fixed for the life of the process).\n"
@@ -1348,12 +1373,12 @@ try:
     _fr13apc_za = _fr13apc_os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "ABSENT")
     _fr13apc_conv = _fr13apc_os.environ.get("FR13_APC_CONV_FIX", "ABSENT")
     _fr13apc_hrs = _fr13apc_os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "ABSENT")
-    _fr13apc_shadow = _fr13apc_os.environ.get("FR13_APC_SHADOW", "ABSENT")
-    print("FR13_APC_ENV_BRIDGE_LOADED worker pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " ZEROACCEPT=" + _fr13apc_za + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs + " SHADOW=" + _fr13apc_shadow, flush=True)
+    _fr13apc_es = _fr13apc_os.environ.get("FR13_APC_EXACT_SEED", "ABSENT")
+    print("FR13_APC_ENV_BRIDGE_LOADED worker pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " ZEROACCEPT=" + _fr13apc_za + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs + " EXACT_SEED=" + _fr13apc_es, flush=True)
     # /logs is bind-mounted; vLLM swallows bare worker stdout so the file is the reliable
     # host-checkable proof of what the worker's live os.environ holds AT gdn import.
     with open(_fr13apc_os.environ.get("FR13_APC_BRIDGE_MARKER_FILE", "/logs/fr13_apc_bridge_loaded.flag"), "w") as _fr13apc_m:
-        _fr13apc_m.write("pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " ZEROACCEPT=" + _fr13apc_za + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs + " SHADOW=" + _fr13apc_shadow)
+        _fr13apc_m.write("pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " ZEROACCEPT=" + _fr13apc_za + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs)
 except Exception as _fr13apc_marker_exc:
     try:
         with open(_fr13apc_os.environ.get("FR13_APC_BRIDGE_ERR_FILE", "/logs/fr13_apc_bridge_error.flag"), "w") as _fr13apc_e:
@@ -5473,6 +5498,28 @@ def _fr13_gdn_subop_mab(
         prefill_conv_replacement = '''        if attn_metadata.num_prefills > 0:
             assert mixed_qkv_non_spec is not None
             _fr13_prefill_pre_conv_capture = mixed_qkv_non_spec.detach().clone()
+            # FR13_APC_CONV_RESTORE_CAPTURE (default 0 -> inert / byte-identical).
+            # On a cache-HIT prefill row, conv_state[non_spec_state_indices_tensor]
+            # currently holds the RESTORED conv window seed (the K-1 prior-window
+            # snapshot read back by physical block_id) -- this is the conv twin of
+            # the SSM initial_state restored seed. causal_conv1d_fn below mutates
+            # conv_state IN PLACE at those same cache_indices, so the seed MUST be
+            # snapshotted HERE, before the kernel call, or it is lost. Default OFF
+            # -> no read, no clone -> off-path byte-identical.
+            _fr13_prefill_conv_restore_capture = None
+            if (
+                os.environ.get("FR13_APC_CONV_RESTORE_CAPTURE", "0") == "1"
+                and non_spec_state_indices_tensor is not None
+            ):
+                _fr13_prefill_conv_restore_capture = (
+                    conv_state.index_select(
+                        0,
+                        non_spec_state_indices_tensor.to(torch.long),
+                    )
+                    .detach()
+                    .cpu()
+                    .clone()
+                )
             mixed_qkv_non_spec_T = mixed_qkv_non_spec.transpose(0, 1)
             # - "cache_indices" updates the conv_state cache in positions
             #   pointed to by "state_indices_tensor"
@@ -5523,8 +5570,23 @@ def _fr13_gdn_subop_mab(
             # restart-fold artifact that drives the cache-ON clear-margin
             # residual. Fresh rows (has_initial_state False) and, when the flag
             # is off, ALL rows take the native chunk path UNCHANGED below.
+            # FR13_APC_EXACT_SEED (GAP-c chunked remainder): when the exact-seed
+            # fix is ON, the cache-hit restored seed (initial_state[hit row] ==
+            # ssm_state[non_spec_state_indices_tensor]) is the EXACT chunked
+            # checkpoint at a 64-ALIGNED boundary (the committer published it via
+            # the SNAP_FIX redirect). The <64 remainder must therefore go through
+            # the SAME chunked kernel from that chunk-aligned boundary -> the
+            # DEFAULT whole-batch chunk_gated_delta_rule below is exactly that
+            # (Sparse-Prefix-Caching Remark 1: resume-from-chunk-boundary +
+            # chunked suffix == cold full chunked prefill, token-for-token). The
+            # RECURRENT first-chunk recompute (HRS) is what makes the remainder
+            # NON-chunked and thus NOT bit-exact, so EXACT_SEED FORCES the
+            # chunked branch (disables the recurrent-suffix path). Default OFF ->
+            # gate unchanged -> byte-identical.
+            _fr13_es_on = os.environ.get("FR13_APC_EXACT_SEED", "0") == "1"
             _fr13_apc_active = bool(
-                os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "0") == "1"
+                not _fr13_es_on
+                and os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "0") == "1"
                 and has_initial_state is not None
                 and bool(has_initial_state.any())
             )
@@ -5697,6 +5759,93 @@ def _fr13_gdn_subop_mab(
                         last_recurrent_state.dtype
                     )
             else:
+                # ---- RESTORE (c): BLOCK-HASH PIVOT seed ----
+                # FR13_APC_EXACT_SEED (default OFF -> no read -> byte-identical).
+                # For each cache-HIT prefill row (has_initial_state[r] True), the
+                # worker preprocess hop staged the EXACT chunked checkpoint by
+                # req_id in _FR13_ES_RESTORE_BY_REQ. Use the runner non-spec row
+                # map (_LUMO_FA_NONSPEC_ROW_REQ_IDS) to get this row's req_id, look
+                # up its restored {pos,state}, and overwrite initial_state[r] with
+                # that bit-exact 64/block-aligned seed BEFORE the chunked kernel.
+                # The hit_length is a block_size (1024)-multiple => 64-aligned =>
+                # the chunked remainder below is bit-exact to a cold full prefill
+                # (Sparse-Prefix-Caching Remark 1). Per-row gather is host-side; the
+                # whole block is skipped under cuda-graph capture (warmup).
+                if (
+                    os.environ.get("FR13_APC_EXACT_SEED", "0") == "1"
+                    and initial_state is not None
+                    and has_initial_state is not None
+                    and non_spec_query_start_loc is not None
+                    and not (
+                        torch.cuda.is_available()
+                        and torch.cuda.is_current_stream_capturing()
+                    )
+                ):
+                    try:
+                        _fr13_es_rmap = globals().get(
+                            "_FR13_ES_RESTORE_BY_REQ", None
+                        )
+                        _fr13_es_nsr2 = globals().get(
+                            "_LUMO_FA_NONSPEC_ROW_REQ_IDS", None
+                        )
+                        # PREFILL-CAPTURE absolute-base bridge: this restore loop is
+                        # the ONLY site that knows each cache-HIT row's absolute seed
+                        # base (the restored block-aligned pos; num_computed_tokens is
+                        # NOT on GDNAttentionMetadata, only has_initial_state =
+                        # context_lens>0 is). Stash {row -> abs_base} here so the
+                        # per-segment prefill-capture block below can split each row
+                        # at ABSOLUTE block_size multiples. Cache-MISS rows are absent
+                        # from this map => the capture block treats their base as 0.
+                        # Per-forward scratch (reset each restore pass); EXACT_SEED-
+                        # gated so the default path never creates it.
+                        _fr13_es_segbase = {}
+                        if _fr13_es_rmap and _fr13_es_nsr2 is not None:
+                            _fr13_es_Nns2 = int(non_spec_query_start_loc.numel()) - 1
+                            for _fr13_es_r2 in range(
+                                min(len(_fr13_es_nsr2), _fr13_es_Nns2)
+                            ):
+                                if not bool(has_initial_state[_fr13_es_r2]):
+                                    continue
+                                _fr13_es_rid2 = str(_fr13_es_nsr2[_fr13_es_r2])
+                                _fr13_es_rec2 = _fr13_es_rmap.pop(
+                                    _fr13_es_rid2, None
+                                )
+                                if _fr13_es_rec2 is None:
+                                    continue
+                                _fr13_es_st2 = _fr13_es_rec2.get("state")
+                                if _fr13_es_st2 is None:
+                                    continue
+                                initial_state[_fr13_es_r2] = _fr13_es_st2.to(
+                                    device=initial_state.device,
+                                    dtype=initial_state.dtype,
+                                )
+                                # absolute base of the restored seed (block-aligned).
+                                try:
+                                    _fr13_es_segbase[int(_fr13_es_r2)] = int(
+                                        _fr13_es_rec2.get("pos")
+                                    )
+                                except Exception:
+                                    pass
+                                try:
+                                    with open(os.environ.get(
+                                        "FR13_APC_EXACT_SEED_ENG_LOG",
+                                        "/logs/fr13_apc_exact_seed_eng.log",
+                                    ), "a", buffering=1) as _fr13_es_fh2:
+                                        _fr13_es_fh2.write(
+                                            "ES_SEED_APPLIED req=" + _fr13_es_rid2
+                                            + " pos=" + str(_fr13_es_rec2.get("pos"))
+                                            + " row=" + str(_fr13_es_r2) + chr(10)
+                                        )
+                                except Exception:
+                                    pass
+                                print(
+                                    "FR13ES ES_SEED_APPLIED req=" + _fr13_es_rid2
+                                    + " pos=" + str(_fr13_es_rec2.get("pos"))
+                                    + " row=" + str(_fr13_es_r2),
+                                    flush=True,
+                                )
+                    except Exception:
+                        pass
                 (
                     core_attn_out_non_spec,
                     last_recurrent_state,
@@ -5791,6 +5940,25 @@ def _fr13_gdn_subop_mab(
                             ),
                             "pre_conv": _fr13_prefill_pre_conv_capture.detach().cpu().clone(),
                             "conv_out": _fr13_prefill_conv_out_capture.detach().cpu().clone(),
+                            # FR13_APC_CONV_RESTORE_CAPTURE: per-row RESTORED conv
+                            # window seed (conv twin of "initial_state"), already on
+                            # CPU and only set when the flag is ON (else None). The
+                            # row order matches state_indices / has_initial_state /
+                            # query_start_loc segments. "block_ids" duplicates the
+                            # physical cache rows (== state_indices) so the diff can
+                            # tell cached-full-block vs partial-tail by row, and
+                            # "seg_starts" gives each row's aligned base position.
+                            "conv_restore": _fr13_prefill_conv_restore_capture,
+                            "block_ids": (
+                                None
+                                if non_spec_state_indices_tensor is None
+                                else non_spec_state_indices_tensor.detach().cpu().clone()
+                            ),
+                            "seg_starts": (
+                                None
+                                if non_spec_query_start_loc is None
+                                else non_spec_query_start_loc.detach().cpu().clone()
+                            ),
                             "a_non_spec": a_non_spec.detach().cpu().clone(),
                             "b_non_spec": b_non_spec.detach().cpu().clone(),
                             "query": query_non_spec.squeeze(0).detach().cpu().clone(),
@@ -5825,6 +5993,593 @@ def _fr13_gdn_subop_mab(
             ssm_state[non_spec_state_indices_tensor] = last_recurrent_state.to(
                 ssm_state.dtype
             )
+            # FR13_APC_EXACT_SEED checkpoint[0] capture (default OFF -> no-op ->
+            # off-path byte-identical). For a FRESH cache-MISS prefill row
+            # (has_initial_state False <=> num_computed_tokens==0, backend.py:443
+            # / gdn_attn.py:337) the tokens in THIS forward span ARE the full
+            # prefix [0, prefill_len): no cross-step accumulation is needed. We
+            # re-prefill EXACTLY [0, p0) with p0=(plen//64)*64 through the SAME
+            # chunked kernel (self.chunk_gated_delta_rule, initial_state=None,
+            # output_final_state=True) -> the kernel's final_state IS the EXACT
+            # chunked realization at the 64-boundary p0 (Sparse-Prefix-Caching
+            # Remark 1). It uses the prefill's OWN already-l2-normed bf16
+            # query_non_spec/key_non_spec (fused_post_conv_prep apply_l2norm=True)
+            # with use_qk_l2norm_in_kernel=False -> LITERALLY the same op as the
+            # cold full prefill (fp32 seams 1-3 collapse: no in-kernel l2norm
+            # division, the prefill's external recip-multiply norm is reused). The
+            # checkpoint is keyed by req_id from the runner non-spec row map and
+            # stored under the SAME per-layer attrs the committer chain reads
+            # (layer._fr13_apc_chunked_ckpt_by_req / _fr13_apc_abs_pos_by_req), so
+            # the chain wires end-to-end with zero committer change. Runs in the
+            # prefill branch (num_prefills>0), the eager/chunked path that is NOT
+            # in the captured decode graph, so initial_state=None + dynamic p0 is
+            # graph-safe (same as the chunk call above it). Until checkpoint[0]
+            # exists the committer publishes no chunked ptr and the SNAP_FIX
+            # redirect falls back to the recurrent leaf (current behavior) ->
+            # FAIL-SAFE, never wrong.
+            #
+            # PIECEWISE ENGAGEMENT INSTRUMENTATION (default OFF when EXACT_SEED
+            # unset -> no I/O -> byte-identical). The empty engagement log on the
+            # PIECEWISE boot could not distinguish ckpt0-never-captured from
+            # captured-but-mismatched. _fr13_es_eng_log_line writes one grep-able
+            # line to FR13_APC_EXACT_SEED_ENG_LOG (the SAME file the drain +
+            # restore use) so the EARLIEST link is directly observable. Best-
+            # effort I/O, never raises into the served prefill. Only the per-req
+            # CAPTURE/SKIP markers (below) and this batch-level SKIP fire, all
+            # gated on EXACT_SEED=="1". The logger def itself is BOUND ONLY under
+            # EXACT_SEED=="1" so the OFF path executes zero new statements (Python
+            # names are function-scoped, so the binding made here is still in scope
+            # for the capture `if` below; every call site is EXACT_SEED-gated too).
+            if os.environ.get("FR13_APC_EXACT_SEED", "0") == "1":
+                def _fr13_es_eng_log_line(_es_msg):
+                    # STDOUT MIRROR (PIECEWISE pinning): print with "FR13ES "
+                    # prefix for `docker logs` grep (the file write below does not
+                    # land in the read-only shadow-gate mount). Best-effort; this
+                    # closure is bound only under EXACT_SEED=="1" -> off-path
+                    # unaffected. File write kept as-is.
+                    try:
+                        print("FR13ES " + str(_es_msg), flush=True)
+                    except Exception:
+                        pass
+                    try:
+                        _es_lp = os.environ.get(
+                            "FR13_APC_EXACT_SEED_ENG_LOG",
+                            "/logs/fr13_apc_exact_seed_eng.log",
+                        )
+                        with open(_es_lp, "a", buffering=1) as _es_fh:
+                            _es_fh.write(str(_es_msg) + chr(10))
+                    except Exception:
+                        pass
+                # batch-level SKIP markers: these gate sub-conditions block the
+                # WHOLE capture before any per-req rid is known, so log them at
+                # batch granularity (req=batch). No CUDA->host sync here:
+                # num_prefills is a host int, the rest are None-checks / a
+                # capturing bool. is_current_stream_capturing is checked LAST so a
+                # warmup capture pass is reported as reason=capturing (and skipped)
+                # rather than running the sync-bearing capture body.
+                if not (attn_metadata.num_prefills > 0):
+                    _fr13_es_eng_log_line(
+                        "ES_CKPT0_SKIP req=batch reason=no_prefill"
+                    )
+                elif has_initial_state is None:
+                    _fr13_es_eng_log_line(
+                        "ES_CKPT0_SKIP req=batch reason=no_has_initial_state"
+                    )
+                elif non_spec_query_start_loc is None:
+                    _fr13_es_eng_log_line(
+                        "ES_CKPT0_SKIP req=batch reason=no_nonspec_qsl"
+                    )
+                elif globals().get("_LUMO_FA_NONSPEC_ROW_REQ_IDS", None) is None:
+                    _fr13_es_eng_log_line(
+                        "ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map"
+                    )
+                elif (
+                    torch.cuda.is_available()
+                    and torch.cuda.is_current_stream_capturing()
+                ):
+                    _fr13_es_eng_log_line(
+                        "ES_CKPT0_SKIP req=batch reason=capturing"
+                    )
+            if (
+                os.environ.get("FR13_APC_EXACT_SEED", "0") == "1"
+                and attn_metadata.num_prefills > 0
+                and has_initial_state is not None
+                and non_spec_query_start_loc is not None
+                # CUDA-GRAPH SAFETY (PIECEWISE deploy): the ckpt0 capture below
+                # does device->host syncs (bool(has_initial_state[r]),
+                # int(non_spec_query_start_loc[r]) / [r+1], .numel()) and a
+                # @torch.compiler.disable chunked kernel call -- illegal under a
+                # capture stream. Real cache-MISS prefills run eager at inference
+                # (NOT in the captured decode graph), so skipping under capture
+                # only no-ops the WARMUP pass: no checkpoint[0] is published ->
+                # the committer chain stays without an exact base -> SNAP_FIX
+                # redirect falls back to the recurrent leaf (fail-safe). Mirrors
+                # the capture guards already in this literal (e.g. :5780).
+                and not (
+                    torch.cuda.is_available()
+                    and torch.cuda.is_current_stream_capturing()
+                )
+            ):
+                try:
+                    _fr13_es_nsr = globals().get(
+                        "_LUMO_FA_NONSPEC_ROW_REQ_IDS", None
+                    )
+                    _fr13_es_Nns = int(non_spec_query_start_loc.numel()) - 1
+                    if _fr13_es_nsr is not None and _fr13_es_Nns > 0:
+                        # GPU VALIDATION (the one runtime check that the documented
+                        # split order matches the live non_spec row order): the
+                        # published real-req non-spec list cannot be LONGER than the
+                        # live non-spec row count (padded zero-len rows only ADD to
+                        # Nns and sit at the BACK; the first len(nsr) rows are the
+                        # real reqs in batch order). A longer list => mis-keyed map
+                        # (key-collision class #27264) => abort capture (publish no
+                        # checkpoint rather than a possibly-misaligned one).
+                        assert len(_fr13_es_nsr) <= _fr13_es_Nns, (
+                            "FR13_APC_EXACT_SEED nonspec row map len "
+                            + str(len(_fr13_es_nsr))
+                            + " > live Nns "
+                            + str(_fr13_es_Nns)
+                        )
+                        # ===== COMMITTER-CHAIN base (per-layer attrs) =====
+                        # UNCHANGED: this FRESH-cache-MISS ckpt0 capture feeds the
+                        # rejection-sampler DRAIN's committer chain (the SNAP_FIX
+                        # in-place SSM redirect via _FR13_APC_SSM_CHUNKED_PTR_BY_REQ),
+                        # a SEPARATE consumer from the block-hash cache store. It is
+                        # kept intact; the PER-SEGMENT block-hash WRITE capture is
+                        # ADDED below it (publishes to _FR13_ES_PENDING_BY_REQ).
+                        _fr13_es_ckmap = getattr(
+                            self, "_fr13_apc_chunked_ckpt_by_req", None
+                        )
+                        if _fr13_es_ckmap is None:
+                            _fr13_es_ckmap = {}
+                            self._fr13_apc_chunked_ckpt_by_req = _fr13_es_ckmap
+                        _fr13_es_absmap = getattr(
+                            self, "_fr13_apc_abs_pos_by_req", None
+                        )
+                        if _fr13_es_absmap is None:
+                            _fr13_es_absmap = {}
+                            self._fr13_apc_abs_pos_by_req = _fr13_es_absmap
+                        for _fr13_es_r in range(len(_fr13_es_nsr)):
+                            # GAP-a KEY FIX (req_id->STATE-SLOT). Keyed by the stable
+                            # physical SSM SLOT (block_table col-0 row), constant
+                            # across this sequence's /v1/responses turns.
+                            _fr13_es_slot = int(
+                                non_spec_state_indices_tensor[_fr13_es_r]
+                            )
+                            _fr13_es_key = str(_fr13_es_slot)
+                            _fr13_es_dbg_rid = str(_fr13_es_nsr[_fr13_es_r])
+                            # CACHE-HIT PERSISTENCE (slot-keyed): leave the prior
+                            # turn's slot-keyed chain UNTOUCHED on a cache-hit (the
+                            # drain on this same slot continues it).
+                            if bool(has_initial_state[_fr13_es_r]):
+                                _fr13_es_eng_log_line(
+                                    "ES_CKPT0_SKIP slot=" + _fr13_es_key
+                                    + " req=" + _fr13_es_dbg_rid
+                                    + " reason=hit_recurrent_seed_keep_chain"
+                                )
+                                continue
+                            _fr13_es_s = int(
+                                non_spec_query_start_loc[_fr13_es_r]
+                            )
+                            _fr13_es_e = int(
+                                non_spec_query_start_loc[_fr13_es_r + 1]
+                            )
+                            _fr13_es_plen = _fr13_es_e - _fr13_es_s
+                            _fr13_es_p0 = (_fr13_es_plen // 64) * 64
+                            _fr13_es_rid = _fr13_es_key
+                            # STALE-PTR / POS invalidation on a fresh re-base.
+                            _fr13_es_ptrmap = globals().get(
+                                "_FR13_APC_SSM_CHUNKED_PTR_BY_REQ", None
+                            )
+                            if _fr13_es_ptrmap is not None:
+                                _fr13_es_ptrmap.pop(_fr13_es_rid, None)
+                            _fr13_es_posmap = globals().get(
+                                "_FR13_APC_SSM_CHUNKED_POS_BY_REQ", None
+                            )
+                            if _fr13_es_posmap is not None:
+                                _fr13_es_posmap.pop(_fr13_es_rid, None)
+                            if _fr13_es_p0 <= 0:
+                                _fr13_es_absmap[_fr13_es_rid] = _fr13_es_plen
+                                _fr13_es_ckmap.pop(_fr13_es_rid, None)
+                                _fr13_es_eng_log_line(
+                                    "ES_CKPT0_SKIP slot=" + _fr13_es_key
+                                    + " req=" + _fr13_es_dbg_rid
+                                    + " reason=plen_lt_chunk plen="
+                                    + str(_fr13_es_plen)
+                                )
+                                continue
+                            # re-prefill [0, p0) through the SAME chunked kernel.
+                            _fr13_es_q0 = query_non_spec[
+                                :, _fr13_es_s:_fr13_es_s + _fr13_es_p0
+                            ].contiguous()
+                            _fr13_es_k0 = key_non_spec[
+                                :, _fr13_es_s:_fr13_es_s + _fr13_es_p0
+                            ].contiguous()
+                            _fr13_es_v0 = value_non_spec[
+                                :, _fr13_es_s:_fr13_es_s + _fr13_es_p0
+                            ].contiguous()
+                            _fr13_es_g0 = g_non_spec[
+                                :, _fr13_es_s:_fr13_es_s + _fr13_es_p0
+                            ].contiguous()
+                            _fr13_es_b0 = beta_non_spec[
+                                :, _fr13_es_s:_fr13_es_s + _fr13_es_p0
+                            ].contiguous()
+                            _fr13_es_cu0 = torch.tensor(
+                                [0, _fr13_es_p0],
+                                device=_fr13_es_q0.device,
+                                dtype=torch.int32,
+                            )
+                            _fr13_es_o0, _fr13_es_final0 = (
+                                self.chunk_gated_delta_rule(
+                                    q=_fr13_es_q0,
+                                    k=_fr13_es_k0,
+                                    v=_fr13_es_v0,
+                                    g=_fr13_es_g0,
+                                    beta=_fr13_es_b0,
+                                    initial_state=None,
+                                    output_final_state=True,
+                                    cu_seqlens=_fr13_es_cu0,
+                                    chunk_indices=None,
+                                    chunk_offsets=None,
+                                    use_qk_l2norm_in_kernel=False,
+                                )
+                            )
+                            assert _fr13_es_p0 % 64 == 0
+                            _fr13_es_ckmap[_fr13_es_rid] = {
+                                "pos": _fr13_es_p0,
+                                "state": _fr13_es_final0[0]
+                                .detach()
+                                .to(torch.float32)
+                                .clone(),
+                            }
+                            _fr13_es_absmap[_fr13_es_rid] = _fr13_es_plen
+                            _fr13_es_eng_log_line(
+                                "ES_CKPT0_CAPTURE slot=" + _fr13_es_key
+                                + " req=" + _fr13_es_dbg_rid
+                                + " pos=" + str(_fr13_es_p0)
+                                + " plen=" + str(_fr13_es_plen)
+                            )
+                            # OPTION-B PREFIX-TAIL PRIME: prime the committer chain's
+                            # pend_map with the (plen-p0) RAW prefill-tail tokens at
+                            # absolute [p0, plen) so the first 64-chunk drain folds
+                            # the correct absolute-aligned token set.
+                            _fr13_es_pendmap = getattr(
+                                self, "_fr13_apc_pending_kvab", None
+                            )
+                            if _fr13_es_pendmap is None:
+                                _fr13_es_pendmap = {}
+                                self._fr13_apc_pending_kvab = _fr13_es_pendmap
+                            _fr13_es_pendmap.pop(_fr13_es_rid, None)
+                            _fr13_es_tail = _fr13_es_plen - _fr13_es_p0
+                            if _fr13_es_tail > 0:
+                                _fr13_es_KH = (
+                                    int(self.num_k_heads) // int(self.tp_size)
+                                )
+                                _fr13_es_DK = int(self.head_k_dim)
+                                _fr13_es_rawk_full = mixed_qkv_non_spec[
+                                    _fr13_es_s + _fr13_es_p0:_fr13_es_s + _fr13_es_plen,
+                                    _fr13_es_KH * _fr13_es_DK:2 * _fr13_es_KH * _fr13_es_DK,
+                                ]
+                                _fr13_es_rawk_full = _fr13_es_rawk_full.reshape(
+                                    _fr13_es_tail, _fr13_es_KH, _fr13_es_DK
+                                )
+                                _fr13_es_rawv_full = value_non_spec.squeeze(0)[
+                                    _fr13_es_s + _fr13_es_p0:_fr13_es_s + _fr13_es_plen
+                                ]
+                                _fr13_es_rawa_full = a_non_spec[
+                                    _fr13_es_s + _fr13_es_p0:_fr13_es_s + _fr13_es_plen
+                                ]
+                                _fr13_es_rawb_full = b_non_spec[
+                                    _fr13_es_s + _fr13_es_p0:_fr13_es_s + _fr13_es_plen
+                                ]
+                                _fr13_es_pend = {
+                                    "k": [], "v": [], "a": [], "b": []
+                                }
+                                for _fr13_es_t in range(_fr13_es_tail):
+                                    _fr13_es_pend["k"].append(
+                                        _fr13_es_rawk_full[_fr13_es_t].clone()
+                                    )
+                                    _fr13_es_pend["v"].append(
+                                        _fr13_es_rawv_full[_fr13_es_t].clone()
+                                    )
+                                    _fr13_es_pend["a"].append(
+                                        _fr13_es_rawa_full[_fr13_es_t].clone()
+                                    )
+                                    _fr13_es_pend["b"].append(
+                                        _fr13_es_rawb_full[_fr13_es_t].clone()
+                                    )
+                                _fr13_es_pendmap[_fr13_es_rid] = _fr13_es_pend
+                        # ===== END committer-chain base (unchanged) =====
+                        # PREFILL-CAPTURE (Iteration 3): the incremental decode
+                        # drain NEVER crosses a block_size boundary in a single turn
+                        # (~128 decode tokens reach only ~pos 896 < block_size 1024),
+                        # so its `_ck_pos % block_size == 0` WRITE gate never fired
+                        # and ES_WRITE=0 (nothing stored). The cache-block checkpoint
+                        # is now captured HERE, during prefill, PER block_size
+                        # segment, for BOTH cache-MISS (seed=zero) and cache-HIT
+                        # (seed=the RESTORED chunked base initial_state[r], which
+                        # EXTENDS the chunked chain across turns). Each block_size-
+                        # aligned boundary's chunked final_state is published to the
+                        # EXISTING WRITE path (_FR13_ES_PENDING_BY_REQ[real req_id]);
+                        # the worker postprocess hop re-keys {pos}->block_id and the
+                        # block_pool insert hop stores it under the prefix block hash.
+                        #
+                        # Per-segment seeded by the prior segment's chunked
+                        # final_state == one continuous chunked pass token-for-token
+                        # (Sparse-Prefix-Caching Remark 1), since block_size is a
+                        # multiple of FLA_CHUNK_SIZE (64). Only output_final_state is
+                        # consumed, so this works with BOTH FlashInfer and Triton
+                        # backends. q/k/v/g/beta are the prefill's OWN
+                        # fused_post_conv_prep outputs (q/k already l2-normed + bf16)
+                        # -> use_qk_l2norm_in_kernel=False, the cache-OFF convention.
+                        #
+                        # Runtime block_size (manager-published), never the literal
+                        # 1024. If block_size is unknown OR not a 64-multiple, skip
+                        # the per-segment capture (fail-safe: nothing stored, restore
+                        # falls back to the recurrent leaf -- never wrong).
+                        # This injected literal lives in gdn_linear_attn's module
+                        # namespace, so globals() IS that module dict -> the
+                        # _FR13_ES_PENDING_BY_REQ object read here is the SAME one the
+                        # worker postprocess hop drains (cross-component bridge). Same
+                        # convention as the restore loop's _FR13_ES_RESTORE_BY_REQ /
+                        # _LUMO_FA_NONSPEC_ROW_REQ_IDS reads above.
+                        _fr13_es_bs = globals().get("_FR13_ES_BLOCK_SIZE", None)
+                        _fr13_es_segbase_map = locals().get(
+                            "_fr13_es_segbase", None
+                        )
+                        if _fr13_es_segbase_map is None:
+                            _fr13_es_segbase_map = {}
+                        _fr13_es_pend_by_req = globals().get(
+                            "_FR13_ES_PENDING_BY_REQ", None
+                        )
+                        # ---- ALL-GATES DIAGNOSTIC (iter5 meta-lesson) ----------
+                        # Emit, in ONE boot, EVERY sub-condition of the capture gate
+                        # so a single forward reveals which one blocks the WRITE
+                        # (block_size None? pending None? plen<=0? hit-with-no-base?)
+                        # rather than discovering them one-per-boot. ES_GATE_REACHED
+                        # first PROVES this block is on the executed path; the
+                        # ES_GATE line then dumps row-0's probe values. Throttled to
+                        # the first ~50 forwards (module-global counter) so a long
+                        # decode run does not spam the log. All reads here are
+                        # host-side syncs, legal because this whole block already
+                        # skips cuda-graph capture (see the outer gate guard).
+                        try:
+                            _fr13_es_gc = int(
+                                globals().get("_FR13_ES_GATE_LOG_COUNT", 0)
+                            )
+                            if _fr13_es_gc < 50:
+                                globals()["_FR13_ES_GATE_LOG_COUNT"] = (
+                                    _fr13_es_gc + 1
+                                )
+                                _fr13_es_eng_log_line("ES_GATE_REACHED")
+                                _fr13_es_g_nrows = (
+                                    len(_fr13_es_nsr)
+                                    if _fr13_es_nsr is not None else -1
+                                )
+                                _fr13_es_g_r0_hit = None
+                                _fr13_es_g_r0_b0 = None
+                                _fr13_es_g_r0_plen = None
+                                if (
+                                    _fr13_es_g_nrows > 0
+                                    and non_spec_query_start_loc is not None
+                                    and has_initial_state is not None
+                                ):
+                                    try:
+                                        _fr13_es_g_r0_hit = bool(
+                                            has_initial_state[0]
+                                        )
+                                    except Exception:
+                                        pass
+                                    try:
+                                        _fr13_es_g_r0_b0 = int(
+                                            _fr13_es_segbase_map.get(0, 0)
+                                        )
+                                    except Exception:
+                                        pass
+                                    try:
+                                        _fr13_es_g_r0_plen = int(
+                                            non_spec_query_start_loc[1]
+                                        ) - int(non_spec_query_start_loc[0])
+                                    except Exception:
+                                        pass
+                                _fr13_es_eng_log_line(
+                                    "ES_GATE bs=" + str(_fr13_es_bs)
+                                    + " pend_none="
+                                    + str(_fr13_es_pend_by_req is None)
+                                    + " segbase_n="
+                                    + str(len(_fr13_es_segbase_map))
+                                    + " nrows=" + str(_fr13_es_g_nrows)
+                                    + " row0_hit=" + str(_fr13_es_g_r0_hit)
+                                    + " row0_b0=" + str(_fr13_es_g_r0_b0)
+                                    + " row0_plen=" + str(_fr13_es_g_r0_plen)
+                                )
+                        except Exception:
+                            pass
+                        # ---- END ALL-GATES DIAGNOSTIC -------------------------
+                        if (
+                            _fr13_es_bs is not None
+                            and int(_fr13_es_bs) > 0
+                            and int(_fr13_es_bs) % 64 == 0
+                            and _fr13_es_pend_by_req is not None
+                        ):
+                            _fr13_es_bs = int(_fr13_es_bs)
+                            for _fr13_es_r in range(len(_fr13_es_nsr)):
+                                _fr13_es_dbg_rid = str(_fr13_es_nsr[_fr13_es_r])
+                                # REAL req_id is the WRITE-path key: the worker
+                                # postprocess hop reads str(req_state.req_id) and
+                                # re-keys {pos}->block_id; the block_pool insert hop
+                                # then stores under the prefix block hash (the stable
+                                # cross-turn identity). KEEP req_id here (stable
+                                # WITHIN the request); the cross-turn bridge is the
+                                # hash store, not this key.
+                                _fr13_es_rid = _fr13_es_dbg_rid
+                                _fr13_es_s = int(
+                                    non_spec_query_start_loc[_fr13_es_r]
+                                )
+                                _fr13_es_e = int(
+                                    non_spec_query_start_loc[_fr13_es_r + 1]
+                                )
+                                _fr13_es_plen = _fr13_es_e - _fr13_es_s
+                                if _fr13_es_plen <= 0:
+                                    # padded zero-len row.
+                                    continue
+                                _fr13_es_hit = bool(
+                                    has_initial_state[_fr13_es_r]
+                                )
+                                # ABSOLUTE base of this row's seed: cache-HIT rows
+                                # start at the restored block-aligned pos (stashed by
+                                # the restore loop above); cache-MISS rows start at 0.
+                                _fr13_es_b0 = int(
+                                    _fr13_es_segbase_map.get(int(_fr13_es_r), 0)
+                                )
+                                if _fr13_es_hit and _fr13_es_b0 <= 0:
+                                    # HIT row whose absolute base is unknown (restore
+                                    # record absent) -> cannot place boundaries on the
+                                    # absolute grid; skip (fail-safe). The restore
+                                    # plumbing still seeded initial_state for the
+                                    # served forward; we just don't re-capture.
+                                    _fr13_es_eng_log_line(
+                                        "ES_PREFILL_CAPTURE_SKIP req="
+                                        + _fr13_es_dbg_rid
+                                        + " reason=hit_no_base row="
+                                        + str(_fr13_es_r)
+                                    )
+                                    continue
+                                _fr13_es_end_abs = _fr13_es_b0 + _fr13_es_plen
+                                # first ABSOLUTE block_size boundary strictly past b0.
+                                _fr13_es_first_bnd = (
+                                    (_fr13_es_b0 // _fr13_es_bs) + 1
+                                ) * _fr13_es_bs
+                                if _fr13_es_first_bnd > _fr13_es_end_abs:
+                                    # this row crosses no block_size boundary -> no
+                                    # block-aligned checkpoint to store (the decode
+                                    # turn that eventually crosses one will re-prefill
+                                    # and capture it). Nothing to do.
+                                    continue
+                                # per-segment seed: cache-HIT -> the RESTORED chunked
+                                # base (already in initial_state[r], applied by the
+                                # restore loop); cache-MISS -> zero. Shape [1,HV,V,K]
+                                # fp32 to match the kernel's initial_state contract.
+                                if _fr13_es_hit:
+                                    _fr13_es_seed = (
+                                        initial_state[_fr13_es_r]
+                                        .detach()
+                                        .to(torch.float32)
+                                        .unsqueeze(0)
+                                        .clone()
+                                    )
+                                else:
+                                    _fr13_es_seed = None
+                                _fr13_es_seg_lo_abs = _fr13_es_b0
+                                _fr13_es_bnd = _fr13_es_first_bnd
+                                _fr13_es_published = 0
+                                # walk each ABSOLUTE block_size boundary inside the
+                                # row, advancing the per-segment seed by the chunked
+                                # final_state of the just-completed segment.
+                                while _fr13_es_bnd <= _fr13_es_end_abs:
+                                    # local token span [lo, hi) for [seg_lo_abs, bnd).
+                                    _fr13_es_lo = _fr13_es_s + (
+                                        _fr13_es_seg_lo_abs - _fr13_es_b0
+                                    )
+                                    _fr13_es_hi = _fr13_es_s + (
+                                        _fr13_es_bnd - _fr13_es_b0
+                                    )
+                                    _fr13_es_qs = query_non_spec[
+                                        :, _fr13_es_lo:_fr13_es_hi
+                                    ].contiguous()
+                                    _fr13_es_ks = key_non_spec[
+                                        :, _fr13_es_lo:_fr13_es_hi
+                                    ].contiguous()
+                                    _fr13_es_vs = value_non_spec[
+                                        :, _fr13_es_lo:_fr13_es_hi
+                                    ].contiguous()
+                                    _fr13_es_gs = g_non_spec[
+                                        :, _fr13_es_lo:_fr13_es_hi
+                                    ].contiguous()
+                                    _fr13_es_bs_slice = beta_non_spec[
+                                        :, _fr13_es_lo:_fr13_es_hi
+                                    ].contiguous()
+                                    _fr13_es_seg_n = _fr13_es_hi - _fr13_es_lo
+                                    _fr13_es_cu = torch.tensor(
+                                        [0, _fr13_es_seg_n],
+                                        device=_fr13_es_qs.device,
+                                        dtype=torch.int32,
+                                    )
+                                    _fr13_es_o_s, _fr13_es_final_s = (
+                                        self.chunk_gated_delta_rule(
+                                            q=_fr13_es_qs,
+                                            k=_fr13_es_ks,
+                                            v=_fr13_es_vs,
+                                            g=_fr13_es_gs,
+                                            beta=_fr13_es_bs_slice,
+                                            initial_state=_fr13_es_seed,
+                                            output_final_state=True,
+                                            cu_seqlens=_fr13_es_cu,
+                                            chunk_indices=None,
+                                            chunk_offsets=None,
+                                            use_qk_l2norm_in_kernel=False,
+                                        )
+                                    )
+                                    # this segment's final_state IS the EXACT chunked
+                                    # checkpoint at the ABSOLUTE block_size boundary
+                                    # _fr13_es_bnd (state covers [0, bnd)).
+                                    assert _fr13_es_bnd % _fr13_es_bs == 0
+                                    _fr13_es_ck_state = (
+                                        _fr13_es_final_s[0]
+                                        .detach()
+                                        .to(torch.float32)
+                                        .clone()
+                                    )
+                                    # ---- WRITE 1(a): publish to the EXISTING path ----
+                                    # keyed by REAL req_id; the worker postprocess hop
+                                    # maps {pos}->block_id and the block_pool insert
+                                    # stores it under the prefix BlockHashWithGroupId.
+                                    _fr13_es_lst = _fr13_es_pend_by_req.get(
+                                        _fr13_es_rid
+                                    )
+                                    if _fr13_es_lst is None:
+                                        _fr13_es_lst = []
+                                        _fr13_es_pend_by_req[_fr13_es_rid] = (
+                                            _fr13_es_lst
+                                        )
+                                    # de-dup by pos (a re-prefill may re-cross the
+                                    # same boundary): replace any prior entry.
+                                    _fr13_es_lst[:] = [
+                                        _e
+                                        for _e in _fr13_es_lst
+                                        if int(_e.get("pos")) != int(_fr13_es_bnd)
+                                    ]
+                                    _fr13_es_lst.append({
+                                        "pos": int(_fr13_es_bnd),
+                                        "state": _fr13_es_ck_state.cpu(),
+                                    })
+                                    _fr13_es_eng_log_line(
+                                        "ES_PREFILL_CAPTURE pos="
+                                        + str(_fr13_es_bnd)
+                                        + " req=" + _fr13_es_dbg_rid
+                                        + " hit=" + str(_fr13_es_hit)
+                                        + " layer="
+                                        + str(getattr(self, "prefix", "?"))
+                                    )
+                                    _fr13_es_published += 1
+                                    # advance the seed to this boundary's chunked
+                                    # final_state and step to the next block_size
+                                    # boundary (cross-segment chunked chain).
+                                    _fr13_es_seed = (
+                                        _fr13_es_final_s.detach()
+                                        .to(torch.float32)
+                                        .clone()
+                                    )
+                                    _fr13_es_seg_lo_abs = _fr13_es_bnd
+                                    _fr13_es_bnd = _fr13_es_bnd + _fr13_es_bs
+                except Exception as _fr13_es_capture_exc:
+                    # never break the served prefill on a capture failure; absent
+                    # checkpoint -> committer publishes no chunked ptr -> recurrent
+                    # leaf fallback (current behavior).
+                    logger.warning(
+                        "FR13_APC_EXACT_SEED ckpt0 capture failed: %s",
+                        _fr13_es_capture_exc,
+                    )
 '''
         if prefill_scan_needle not in text:
             raise RuntimeError("FR13 prefill scan capture needle not found")
@@ -6776,11 +7531,6 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         and os.environ.get("FR13_APC_CONV_SNAP_FIX", "0") != "1"
         and os.environ.get("FR13_APC_PRE_SNAP_FIX", "0") != "1"
         and os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "1") != "1"
-        # FR13_APC_SHADOW: when shadow-logging, still populate the leaf + tags
-        # maps so the redirect-site write-side shadow check can read them. Adds
-        # a condition ONLY when SHADOW=1 -> SHADOW unset/0 leaves the gate-OR
-        # byte-identical to pre-shadow.
-        and os.environ.get("FR13_APC_SHADOW", "0") != "1"
     ):
         return
     try:
@@ -6814,48 +7564,11 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         # so the leaf was keyed to the wrong req_id and the postprocess lookup
         # always missed -> _FR13_CUR_SSM_LEAF_ROW stayed None (trace wdkszxe8a).
         _zero_on = os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "1") == "1"
-        # FR13_APC_SHADOW: publish a per-req row-class tag (spine / branch /
-        # zero-accept + accepted_len) keyed by req_id onto the SAME gdn module
-        # the redirect site reads, so the write-side shadow check can name the
-        # stale class. is_branch uses the committer rowbug semantic: a pure
-        # chain (spine) publishes path [1..L] so path[-1]==accepted_len; a tree
-        # branch accept diverges so path[-1]!=accepted_len. Source = the
-        # committer's per-spec-row accepted node paths global (same index space
-        # as replay_lens). Default OFF -> the whole block is skipped -> no map.
-        _shadow_on = os.environ.get("FR13_APC_SHADOW", "0") == "1"
-        _shadow_paths = None
-        if _shadow_on:
-            try:
-                tag_map = getattr(gdn_mod, "_FR13_APC_SHADOW_TAGS_BY_REQ", None)
-                if tag_map is None:
-                    tag_map = {}
-                    gdn_mod._FR13_APC_SHADOW_TAGS_BY_REQ = tag_map
-                _shadow_paths = globals().get(
-                    "_LUMO_TREE_LAST_ACCEPTED_NODE_PATHS_KERNEL"
-                )
-            except Exception:
-                tag_map = None
         for _b in range(int(len(spec_req_ids))):
             if _b >= len(replay_lens) or _b >= len(spec_cpu):
                 continue
             _alen = int(replay_lens[_b])
             _row = spec_cpu[_b]
-            if _shadow_on:
-                try:
-                    _is_zero = _alen <= 0
-                    _is_branch = False
-                    if (not _is_zero) and _shadow_paths is not None and _b < len(_shadow_paths):
-                        _p = _shadow_paths[_b]
-                        _is_branch = bool(_p) and int(_p[-1]) != _alen
-                    _is_spine = (not _is_zero) and (not _is_branch)
-                    tag_map[str(spec_req_ids[_b])] = {
-                        "accepted_len": int(_alen),
-                        "is_spine": bool(_is_spine),
-                        "is_branch": bool(_is_branch),
-                        "is_zero_accept": bool(_is_zero),
-                    }
-                except Exception:
-                    pass
             if _alen <= 0:
                 # ZERO-ACCEPT (all tree drafts rejected): the committed state is the root
                 # token's post-step state, stored by the replay into LINEAR column 0
@@ -6876,6 +7589,520 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
     except Exception:
         # observe-only publish; never break the served commit on a tap failure
         pass
+
+
+def _fr13_es_eng_log(_msg):
+    """FR13_APC_EXACT_SEED engagement logger (default OFF -> no I/O ->
+    byte-identical). Appends a single grep-able line to
+    $FR13_APC_EXACT_SEED_ENG_LOG (default /logs/fr13_apc_exact_seed_eng.log)
+    so the chain-publish / redirect-used / redirect-fallback events are PROVABLE
+    at the next gate. The per-layer restore-confound diff alone was byte-
+    identical to the EXACT_SEED=0 baseline and fooled the red-team once -- a
+    direct runtime line removes that ambiguity. Best-effort, never raises."""
+    import os as _eng_os
+    if _eng_os.environ.get("FR13_APC_EXACT_SEED", "0") != "1":
+        return
+    # STDOUT MIRROR (PIECEWISE pinning): the file write below never lands in the
+    # shadow-gate container (read-only repo mount / swallowed write), so ALSO
+    # print to stdout with a "FR13ES " prefix for `docker logs` grep. Best-effort,
+    # never raises into the served path; under the EXACT_SEED gate (byte-identical
+    # when off). File write kept as-is (harmless when it lands).
+    try:
+        print("FR13ES " + str(_msg), flush=True)
+    except Exception:
+        pass
+    try:
+        _eng_path = _eng_os.environ.get(
+            "FR13_APC_EXACT_SEED_ENG_LOG", "/logs/fr13_apc_exact_seed_eng.log"
+        )
+        with open(_eng_path, "a", buffering=1) as _eng_fh:
+            _eng_fh.write(str(_msg) + chr(10))
+    except Exception:
+        pass
+
+
+def _fr13_apc_exact_seed_recompute(
+    gdn_mod, layer, spec_req_ids, replay_lens, bank, accepted_node_paths,
+):
+    """FR13_APC_EXACT_SEED (default OFF -> early return -> byte-identical).
+
+    THE EXACT-SEED FIX v2 (SGLang MambaRadixCache + Sparse-Prefix-Caching
+    Remark 1 + Execution-State-Capsules Alg.1). The APC cache snapshot must
+    persist the CHUNKED-prefill kernel realization at a chunk(64)-ALIGNED
+    boundary, NOT the recurrent-decode/tree-verify realization that
+    _fr13_replay_launch just wrote into the bank leaf row. The two kernels
+    (chunk_gated_delta_rule vs the sequential rank-1 replay) are physically
+    distinct and NOT bit-exact (~0.0078 >> 1 bf16 ULP) -> a cache hit that
+    restores the recurrent leaf re-prefills from a non-exact seed and stays
+    wrong (FR13 HRS=0 failure + Capsules FP8-divergence remark).
+
+    v2 CLOSES the three v1 (NO-GO) gaps:
+
+    GAP-a (EXACT BASE -- chunked-ONLY chain).  v1 seeded the chunked recompute
+    from `bank[_h0_row]` = the prior RECURRENT committed leaf, so the chunked
+    suffix-replay INHERITED the recurrent error.  v2 maintains a persistent
+    per-(layer,req) chunked-ONLY checkpoint chain:
+        layer._fr13_apc_chunked_ckpt_by_req[req_id] = {"pos": p0, "state": H}
+    where checkpoint[0] is captured at TURN-1 chunked prefill (the prefill
+    branch's chunked last_recurrent_state at the deepest 64-multiple; see the
+    prefill_scan_replacement capture) and each checkpoint[k] is computed by
+    running EXACTLY the 64 accepted tokens of chunk k through
+    chunk_gated_delta_rule seeded by checkpoint[k-1].state (NOT the bank).
+    Because every link is the chunked kernel seeded by the prior chunked
+    state, checkpoint[k] == the cold full chunked prefill state at p0=k*64
+    token-for-token (Sparse-Prefix-Caching Remark 1 determinism).
+
+    GAP-b (64-ALIGN).  v1 snapshotted at the committed-leaf position (not
+    64-aligned).  v2 carries a committer-local absolute-position counter
+    layer._fr13_apc_abs_pos_by_req[req_id] (bumped by accepted_len each commit;
+    seeded from the turn-1 prefill end), advances/publishes the chain ONLY when
+    a NEW 64-boundary is crossed, and asserts new_p0 % 64 == 0.  Between
+    boundaries nothing is published -> the SNAP_FIX redirect falls back to the
+    recurrent leaf (no chunk-aligned cache snapshot is taken on those steps
+    anyway).
+
+    GAP-c (CHUNKED REMAINDER) is handled on the RESTORE side in
+    prefill_scan_replacement (the cache-hit first-chunk recurrent call is routed
+    through chunk_gated_delta_rule under FR13_APC_EXACT_SEED), NOT here.
+
+    Cross-step token availability (the data-not-here flag): one decode step's
+    rings hold only n_pad(<=16) tree slots and are overwritten each step, so a
+    full 64-token chunk span is NOT present at any single committer call.  v2
+    accumulates accepted (k,v,a,b) tokens into a per-(layer,req) rolling buffer
+    (capacity 64) appended each commit; when it reaches 64 it drains EXACTLY one
+    64-chunk into the chunked recompute and keeps the <64 remainder.  Each
+    chunked call's input span is therefore EXACTLY <=64 (statically bounded).
+
+    Runs host-side in the committer block (eager replay path), OUTSIDE any
+    captured decode graph, so the @torch.compiler.disable chunked kernel is
+    fine.  The published staging tensor is a per-layer persistent buffer
+    (boot-stable data_ptr) so the postprocess SNAP_FIX read is capture-safe.
+    The live bank leaf row is NEVER mutated.
+    """
+    import os  # injected scope (rejection_sampler) has no module-level os
+    if os.environ.get("FR13_APC_EXACT_SEED", "0") != "1":
+        return
+    # CUDA-GRAPH SAFETY (PIECEWISE deploy): the whole drain body does device->host
+    # syncs (int(replay_lens[_b]), the [int(x) for x in accepted_node_paths[_b]]
+    # list-comp over a CUDA tensor, len(_pend["k"]) >= _CHUNK after stacking CUDA
+    # tensors) plus the @torch.compiler.disable chunked kernel -- all illegal
+    # under a capture stream. At inference this runs in the eager committer/replay
+    # path OUTSIDE the captured decode graph, so it is fine; but during WARMUP the
+    # capture phase would execute it and crash. Skip the entire EXACT_SEED chain
+    # advance under capture: the chain simply does not advance that step (no ptr
+    # published -> SNAP_FIX redirect falls back to the recurrent leaf, fail-safe),
+    # which is acceptable since real cache-hit prefills/commits are not captured.
+    # Mirrors the established `is_current_stream_capturing` guards in this patcher
+    # (e.g. :2769, :2825, :5009-5018, :7641).
+    try:
+        if (
+            torch.cuda.is_available()
+            and torch.cuda.is_current_stream_capturing()
+        ):
+            return
+    except Exception:
+        pass
+    try:
+        # The GDN layer's OWN ChunkGatedDeltaRule instance -- the SAME object
+        # the cache-OFF prefill calls (gdn_linear_attn.py:990) -- so backend
+        # routing (GB10 -> Triton/FLA) + arg conventions are bit-identical to
+        # the cache-OFF realization we are matching. scale defaults to K**-0.5.
+        _es_chunk = getattr(layer, "chunk_gated_delta_rule", None)
+        if _es_chunk is None:
+            return
+        # v2 indexes the rings by the accepted TREE NODE IDs (accepted_node_paths)
+        # and tracks the absolute position with its OWN committer-local counter
+        # (abs_map below) -- it does NOT consume spec_idx/prev_lens (those are the
+        # v1 bank-leaf seed inputs the chunked-only chain deliberately drops).
+        ring_k = getattr(layer, "_fr13_replay_ring_k", None)
+        ring_v = getattr(layer, "_fr13_replay_ring_v", None)
+        ring_a = getattr(layer, "_fr13_replay_ring_a", None)
+        ring_b = getattr(layer, "_fr13_replay_ring_b", None)
+        if (
+            ring_k is None or ring_v is None or ring_a is None
+            or ring_b is None or bank is None
+        ):
+            return
+        A_log = layer.A_log
+        dt_bias = layer.dt_bias
+        n_pad = int(ring_k.size(1))
+        rows = int(min(len(spec_req_ids), len(replay_lens)))
+        # ---- per-layer persistent stores (mirror _FR13_BOUNDARY_* pattern) ----
+        # chunked-only checkpoint chain: req_id -> {"pos": int, "state": Tensor}
+        ckpt_map = getattr(layer, "_fr13_apc_chunked_ckpt_by_req", None)
+        if ckpt_map is None:
+            ckpt_map = {}
+            layer._fr13_apc_chunked_ckpt_by_req = ckpt_map
+        # committer-local absolute-position counter: req_id -> int (GAP-b).
+        abs_map = getattr(layer, "_fr13_apc_abs_pos_by_req", None)
+        if abs_map is None:
+            abs_map = {}
+            layer._fr13_apc_abs_pos_by_req = abs_map
+        # cross-step rolling accepted-token buffer (GAP-a cross-step): req_id ->
+        # {"k":[t,KH,DK], "v":[t,VH,DV], "a":[t,VH], "b":[t,VH]} fp32/bf16 lists
+        # of per-token tensors, capacity drained 64 at a time.
+        pend_map = getattr(layer, "_fr13_apc_pending_kvab", None)
+        if pend_map is None:
+            pend_map = {}
+            layer._fr13_apc_pending_kvab = pend_map
+        # Persistent per-(layer,REQ) staging buffers: req_id -> [*bank-row-shape]
+        # tensor, reused across commits (no per-step alloc; data_ptr boot-stable
+        # for the postprocess SNAP_FIX read).
+        #
+        # ALIASING FIX (companion to the persistence fix). The earlier design
+        # keyed the staging buffer by the commit-batch ROW INDEX _b (one row of a
+        # [B,...] bank, ptr_map[_rid]=stage[_b].data_ptr()). With the persistence
+        # fix keeping ptrs live across non-draining commits, that aliased: the
+        # spec-decode row order (_LUMO_FA_SPEC_ROW_REQ_IDS = input_batch order) is
+        # NOT stable across steps, so a later commit could place a DIFFERENT req
+        # at row _b and its drain's stage[_b].copy_() would overwrite the buffer
+        # that the prior req's still-live ptr points at -> a snapshot would read
+        # another req's state. Keying the buffer by req_id makes each published
+        # ptr point at a buffer DEDICATED to that req (only that req's own drain
+        # ever writes it), so the live ptr is always valid for its req. Buffers
+        # for evicted reqs are pruned below to bound the map.
+        stage_map = getattr(layer, "_fr13_apc_exact_seed_stage_by_req", None)
+        if stage_map is None:
+            stage_map = {}
+            layer._fr13_apc_exact_seed_stage_by_req = stage_map
+        # raw-pointer publish map (keyed by req_id str), consulted by the
+        # SNAP_FIX redirect under FR13_APC_EXACT_SEED.
+        ptr_map = getattr(gdn_mod, "_FR13_APC_SSM_CHUNKED_PTR_BY_REQ", None)
+        if ptr_map is None:
+            ptr_map = {}
+            gdn_mod._FR13_APC_SSM_CHUNKED_PTR_BY_REQ = ptr_map
+        # GAP-2 POSITION-LABEL FAIL-SAFE: parallel pos map keyed by req_id str,
+        # holding the ABSOLUTE 64-aligned boundary _ck_pos of the LAST published
+        # chunked checkpoint for this req. The SNAP_FIX redirect reads this and
+        # only swaps the src_ptr when the published pos == aligned_new_computed_
+        # tokens for that req at that snapshot; on mismatch it FALLS BACK to the
+        # recurrent leaf (never writes a position-wrong seed). Kept in lock-step
+        # with ptr_map: written next to every ptr_map[_rid]=... publish, popped
+        # next to every ptr_map.pop(_rid) invalidation.
+        pos_map = getattr(gdn_mod, "_FR13_APC_SSM_CHUNKED_POS_BY_REQ", None)
+        if pos_map is None:
+            pos_map = {}
+            gdn_mod._FR13_APC_SSM_CHUNKED_POS_BY_REQ = pos_map
+        _CHUNK = 64
+        _A = A_log.to(torch.float32)
+        _dtb = dt_bias.to(torch.float32)
+        # GAP-a KEY FIX (req_id->STATE-SLOT) DRAIN side. The chain MUST persist
+        # per-SEQUENCE across /v1/responses turns, but spec_req_ids[_b] changes
+        # every turn (prefill->decode->turn) -> the old str(req_id) key NEVER
+        # overlapped the turn-1 prefill STORE key (measured store/drain overlap
+        # 0 -> 91k ES_DRAIN_NOCKPT). The STABLE per-sequence identity is the
+        # physical SSM slot == block_table col-0 row. layer._fr13_replay_spec_idx
+        # is a snapshot of the live spec_state_indices_tensor[:num_spec_decodes]
+        # (gdn_linear_attn copy at scan time), and the real gdn_attn builder sets
+        # spec_state_indices_tensor = block_table_tensor[spec_mask, :num_spec+1]
+        # (gdn_attn.py:255,276) so column 0 == block_table[seq,0] == the SAME
+        # physical slot the prefill STORE keyed on
+        # (non_spec_state_indices_tensor[r] = block_table[~spec_mask,0],
+        # gdn_attn.py:207,279). We therefore key all maps by str(int(col0 slot)).
+        # The committed-leaf column (accepted_len-1) is a TREE-SCRATCH row that is
+        # NOT stable across turns, so we deliberately key on col 0, not the leaf.
+        # ONE host sync for the whole batch (col 0), then index per row. Fail-safe:
+        # if the slot tensor is missing/short for a row we fall back to req_id for
+        # THAT row (preserves the prior behavior rather than crashing the commit).
+        _es_slot_col0 = None
+        try:
+            _es_si = getattr(layer, "_fr13_replay_spec_idx", None)
+            if _es_si is not None and int(_es_si.size(0)) >= rows:
+                _es_slot_col0 = [
+                    int(_x) for _x in _es_si[:rows, 0].detach().cpu().tolist()
+                ]
+        except Exception:
+            _es_slot_col0 = None
+        for _b in range(rows):
+            try:
+                _dbg_rid = str(spec_req_ids[_b])
+                if _es_slot_col0 is not None and _b < len(_es_slot_col0):
+                    _rid = str(_es_slot_col0[_b])
+                else:
+                    # slot unavailable for this row -> fail-safe to req_id key (no
+                    # cross-turn persistence for this row, same as pre-fix).
+                    _rid = _dbg_rid
+                _alen = int(replay_lens[_b])
+                if _alen <= 0:
+                    # zero-accept commit advances no absolute position and
+                    # appends nothing; leave any existing checkpoint/ptr stale-
+                    # cleared (do not publish a non-aligned snapshot).
+                    ptr_map.pop(_rid, None)
+                    pos_map.pop(_rid, None)
+                    continue
+                # ---- node chain = accepted path node IDs (rings are filled by
+                # TREE NODE ID over n_pad slots, NOT linear order; identical to
+                # _fr13_replay_durable_ab's _nodes construction MINUS the root:
+                # the root(0) state is already folded into the seed checkpoint,
+                # so the chain APPENDS only the newly accepted tokens). ----
+                _path = [int(x) for x in accepted_node_paths[_b]]
+                _nodes = [
+                    max(0, min(int(n), n_pad - 1)) for n in _path[:_alen]
+                ]
+                if not _nodes:
+                    ptr_map.pop(_rid, None)
+                    pos_map.pop(_rid, None)
+                    continue
+                _node_t = torch.tensor(
+                    _nodes, device=ring_k.device, dtype=torch.long
+                )
+                _k_tok = ring_k[_b].index_select(0, _node_t)          # [t,KH,DK]
+                _v_tok = ring_v[_b].index_select(0, _node_t)          # [t,VH,DV]
+                _a_tok = ring_a[_b].index_select(0, _node_t)          # [t,VH]
+                _bb_tok = ring_b[_b].index_select(0, _node_t)         # [t,VH]
+                # ---- append accepted tokens to the rolling buffer ----
+                _pend = pend_map.get(_rid)
+                if _pend is None:
+                    _pend = {"k": [], "v": [], "a": [], "b": []}
+                    pend_map[_rid] = _pend
+                for _t in range(len(_nodes)):
+                    _pend["k"].append(_k_tok[_t].clone())
+                    _pend["v"].append(_v_tok[_t].clone())
+                    _pend["a"].append(_a_tok[_t].clone())
+                    _pend["b"].append(_bb_tok[_t].clone())
+                # ---- advance the committer-local absolute position (GAP-b) ----
+                _prev_abs = int(abs_map.get(_rid, 0))
+                _new_abs = _prev_abs + len(_nodes)
+                abs_map[_rid] = _new_abs
+                # checkpoint anchor: prefer the captured turn-1 prefill ckpt; if
+                # absent the chain has no exact base yet -> do NOT publish a ptr
+                # (fall back to the recurrent leaf, current behavior). The chain
+                # only becomes exact once checkpoint[0] exists.
+                _ck = ckpt_map.get(_rid)
+                if _ck is None:
+                    # No exact base captured for this req -> cannot build an
+                    # exact chunked checkpoint. Drop pending (it would grow
+                    # unbounded) and skip publishing.
+                    _pend["k"].clear(); _pend["v"].clear()
+                    _pend["a"].clear(); _pend["b"].clear()
+                    ptr_map.pop(_rid, None)
+                    pos_map.pop(_rid, None)
+                    # PIECEWISE diagnosis: a commit with NO ckpt0 base. If this is
+                    # the only ES_* the boot emits (no ES_CKPT0_CAPTURE upstream),
+                    # the EARLIEST link is the never-captured ckpt0 -> chain never
+                    # publishes -> restore takes the recurrent leaf. Distinguishes
+                    # ckpt0-never-captured from captured-but-mismatched. Best-
+                    # effort I/O via the drain's engagement logger.
+                    _fr13_es_eng_log(
+                        "ES_DRAIN_NOCKPT slot=" + str(_rid)
+                        + " req=" + str(_dbg_rid)
+                        + " layer=" + str(getattr(layer, "prefix", "?"))
+                    )
+                    continue
+                _ck_pos = int(_ck["pos"])
+                _ck_state = _ck["state"]
+                # ---- drain whole 64-chunks: while we have crossed a 64-boundary
+                # AND >=64 buffered tokens cover [ck_pos, ck_pos+64), recompute
+                # one chunk through the chunked kernel seeded by ck_state. ----
+                _published = False
+                while (
+                    _new_abs >= _ck_pos + _CHUNK
+                    and len(_pend["k"]) >= _CHUNK
+                ):
+                    _kc = torch.stack(_pend["k"][:_CHUNK], 0)         # [64,KH,DK]
+                    _vc = torch.stack(_pend["v"][:_CHUNK], 0)         # [64,VH,DV]
+                    _ac = torch.stack(_pend["a"][:_CHUNK], 0).to(torch.float32)
+                    _bc = torch.stack(_pend["b"][:_CHUNK], 0).to(torch.float32)
+                    # ---- FP32 SEAM-1 (l2norm convention) ----
+                    # The rings store key_spec PRE-l2norm (raw). The cache-OFF
+                    # prefill applies l2norm EXTERNALLY in the post-conv kernel
+                    # (fused_gdn_prefill_post_conv.py:84-91) as RECIPROCAL-then-
+                    # MULTIPLY in fp32 -> bf16, then calls the chunked kernel with
+                    # use_qk_l2norm_in_kernel=False. The previous chain passed the
+                    # RAW k with use_qk_l2norm_in_kernel=True, which routes to
+                    # l2norm_fwd (l2norm.py:73) = DIRECT DIVISION x/sqrt(...) -- a
+                    # different fp32 op-order -> different bf16 rounding -> non-zero
+                    # at fp32 vs checkpoint[0] (which uses the prefill's externally
+                    # normed tensors with =False). Replicate the prefill op-order
+                    # EXACTLY (1.0/sqrt(sumsq+1e-6) then *) over the last (head_k)
+                    # dim, in fp32, cast to the ring dtype, and pass =False so the
+                    # kernel consumes k AS-IS. q is zeros (state recurrence is
+                    # q-independent; q only affects the discarded output), so its
+                    # norm is irrelevant -> leave q raw with =False.
+                    _kc_f32 = _kc.to(torch.float32)
+                    _k_inv = 1.0 / torch.sqrt(
+                        (_kc_f32 * _kc_f32).sum(dim=-1, keepdim=True) + 1e-6
+                    )
+                    _kc = (_kc_f32 * _k_inv).to(ring_k.dtype)
+                    _qc = torch.zeros_like(_kc).unsqueeze(0).contiguous()
+                    _kc = _kc.unsqueeze(0).contiguous()
+                    _vc = _vc.unsqueeze(0).contiguous()
+                    # ---- FP32 SEAM-2 (gate op-order) ----
+                    # Match the prefill kernel's THRESHOLDED softplus exactly
+                    # (fused_gdn_prefill_post_conv.py:136-140):
+                    #   x = a + dt_bias
+                    #   sp = where(x>0, x+log(1+exp(-x)), log(1+exp(x)))
+                    #   sp = where(x<=20.0, sp, x)
+                    #   g = -exp(A_log) * sp
+                    # (the two-branch numerically-stable form + a hard cutoff at
+                    # x<=20.0). Inlined rather than torch.nn.functional.softplus to
+                    # remove any boundary ambiguity at x==20.0.
+                    # FIX 2 (bit-exact softplus): use log(1.0 + exp(z)) NOT
+                    # log1p(exp(z)). The cache-OFF kernel
+                    # (fused_gdn_prefill_post_conv.py:138) computes
+                    #   tl.log(1.0 + tl.exp(-x)) / tl.log(1.0 + tl.exp(x))
+                    # and torch.log1p(y) is NOT bit-identical to torch.log(1.0+y)
+                    # at fp32 (different primitive, different rounding) -> the
+                    # chain-step states would diverge by a ULP from the cache-OFF
+                    # realization. Match the kernel's add-then-log op exactly so the
+                    # multi-chunk chain drain is bit-exact (ckpt0 capture is
+                    # unaffected: it consumes the prefill's own g_non_spec tensors,
+                    # produced by this SAME kernel, not this inlined path).
+                    _x = _ac + _dtb
+                    _sp = torch.where(
+                        _x > 0,
+                        _x + torch.log(1.0 + torch.exp(-_x)),
+                        torch.log(1.0 + torch.exp(_x)),
+                    )
+                    _sp = torch.where(_x <= 20.0, _sp, _x)
+                    _gc = (-torch.exp(_A) * _sp).unsqueeze(0).contiguous()
+                    # ---- FP32 SEAM-3 (beta) ----
+                    # prefill: beta = sigmoid(b) in fp32 (line 145). Match.
+                    _betac = torch.sigmoid(_bc).unsqueeze(0).contiguous()
+                    _h0 = _ck_state.to(torch.float32).unsqueeze(0).clone()
+                    _cu = torch.tensor(
+                        [0, _CHUNK], device=ring_k.device, dtype=torch.int32
+                    )
+                    _out, _final = _es_chunk(
+                        q=_qc,
+                        k=_kc,
+                        v=_vc,
+                        g=_gc,
+                        beta=_betac,
+                        initial_state=_h0,
+                        output_final_state=True,
+                        cu_seqlens=_cu,
+                        chunk_indices=None,
+                        chunk_offsets=None,
+                        use_qk_l2norm_in_kernel=False,
+                    )
+                    _ck_pos = _ck_pos + _CHUNK
+                    # GAP-b assert: the advanced checkpoint MUST be 64-aligned.
+                    assert _ck_pos % _CHUNK == 0, (
+                        "FR13_APC_EXACT_SEED checkpoint pos not 64-aligned: "
+                        + str(_ck_pos)
+                    )
+                    _ck_state = _final[0].detach().clone()
+                    # drop the consumed 64 tokens, keep the <64 remainder.
+                    del _pend["k"][:_CHUNK]; del _pend["v"][:_CHUNK]
+                    del _pend["a"][:_CHUNK]; del _pend["b"][:_CHUNK]
+                    # ---- WRITE 1(a): DISABLED (Iteration 3 prefill-capture) ----
+                    # This decode-drain publish to _FR13_ES_PENDING_BY_REQ is the
+                    # BROKEN incremental path: a single turn decodes only ~128 tokens
+                    # so _ck_pos reaches only ~896 and NEVER crosses a block_size
+                    # (1024) boundary -> `_ck_pos % block_size == 0` never fired ->
+                    # ES_WRITE=0 (nothing stored). The cache-block checkpoint is now
+                    # produced by PREFILL-CAPTURE (per block_size segment) in the GDN
+                    # prefill scan, which IS the sole source of cache-block WRITEs.
+                    # The drain's INTERNAL chunked compute below (_stage_buf / ptr_map
+                    # / pos_map) is LEFT INTACT -- it still feeds the committer-chain
+                    # SNAP_FIX redirect; only this cache-block publish is removed.
+                    if False:  # FR13 prefill-capture supersedes the drain WRITE
+                        _es_bs = getattr(gdn_mod, "_FR13_ES_BLOCK_SIZE", None)
+                        if _es_bs and int(_ck_pos) % int(_es_bs) == 0:
+                            _es_pend_by_req = getattr(
+                                gdn_mod, "_FR13_ES_PENDING_BY_REQ", None
+                            )
+                            if _es_pend_by_req is None:
+                                _es_pend_by_req = {}
+                                gdn_mod._FR13_ES_PENDING_BY_REQ = _es_pend_by_req
+                            _es_lst = _es_pend_by_req.get(_dbg_rid)
+                            if _es_lst is None:
+                                _es_lst = []
+                                _es_pend_by_req[_dbg_rid] = _es_lst
+                            # de-dup by pos (a later commit may re-cross the same
+                            # boundary on a re-prefill); replace any prior entry.
+                            _es_lst[:] = [
+                                _e for _e in _es_lst if int(_e.get("pos")) != int(_ck_pos)
+                            ]
+                            _es_lst.append({
+                                "pos": int(_ck_pos),
+                                "state": _ck_state.detach().to(torch.float32).cpu().clone(),
+                            })
+                            _fr13_es_eng_log(
+                                "ES_PENDING req=" + str(_dbg_rid)
+                                + " pos=" + str(_ck_pos)
+                                + " layer=" + str(getattr(layer, "prefix", "?"))
+                            )
+                    # publish this 64-aligned chunked checkpoint as the cache
+                    # snapshot SOURCE for a future hit. Per-req dedicated buffer
+                    # (aliasing fix): allocate once per req_id (boot-stable
+                    # data_ptr), then copy_ in place so the published ptr stays
+                    # valid across the persistence window.
+                    _stage_buf = stage_map.get(_rid)
+                    if _stage_buf is None:
+                        _stage_buf = torch.empty(
+                            tuple(bank.shape[1:]),
+                            dtype=bank.dtype, device=bank.device,
+                        )
+                        stage_map[_rid] = _stage_buf
+                    _stage_buf.copy_(_ck_state.to(_stage_buf.dtype))
+                    ptr_map[_rid] = int(_stage_buf.data_ptr())
+                    # GAP-2: publish the ABSOLUTE 64-aligned boundary this
+                    # checkpoint represents (state covers [0, _ck_pos)). The
+                    # SNAP_FIX redirect only consumes the chunked ptr when this
+                    # pos == aligned_new_computed_tokens for the req at the
+                    # snapshot (else recurrent-leaf fallback). _ck_pos was just
+                    # advanced to the new boundary above; keep pos_map in
+                    # lock-step with ptr_map.
+                    pos_map[_rid] = int(_ck_pos)
+                    _published = True
+                    # ENGAGEMENT LOG (FR13_APC_EXACT_SEED only): the chain just
+                    # drained a 64-chunk and published the persistent chunked ptr
+                    # for this req at boundary _ck_pos on this layer. Provable
+                    # evidence that the chain FIRES + ADVANCES across turns (the
+                    # baseline-identical restore diff that fooled us once had NO
+                    # such line). Best-effort; never breaks the served commit.
+                    _fr13_es_eng_log(
+                        "ES_CHAIN_PUBLISH slot=" + str(_rid)
+                        + " req=" + str(_dbg_rid)
+                        + " boundary=" + str(_ck_pos)
+                        + " layer=" + str(getattr(layer, "prefix", "?"))
+                    )
+                # persist the advanced chain head.
+                _ck["pos"] = _ck_pos
+                _ck["state"] = _ck_state
+                # PERSISTENCE FIX (multi-turn break root): do NOT pop the ptr on a
+                # commit that did not cross a fresh 64-boundary. The per-req
+                # staging buffer stage_map[_rid] is boot-stable (allocated once
+                # per req_id, copy_'d in place), so the ptr published by the most
+                # recent drain stays a VALID exact 64-aligned chunked checkpoint
+                # for this req. The cache snapshot (postprocess_mamba, mamba_utils
+                # :256) fires on a block_size-aligned schedule that is DECOUPLED
+                # from the 64-token chunk drain, so popping here left the redirect
+                # with chunked_ptr=None on virtually every snapshot -> the restore
+                # was byte-identical to the EXACT_SEED=0 baseline (the proven
+                # inertness). Keeping the latest 64-aligned checkpoint live lets
+                # any later block-aligned snapshot read it; the GAP-c restore
+                # routes the <64 remainder through the chunked kernel from that
+                # boundary (Remark 1). The ptr is cleared only when the chain
+                # invalidates the base (zero-accept reset / no ckpt0 / dropped
+                # chunk-1 remainder above) OR a fresh cache-miss prefill re-bases
+                # this req_id (ckpt0-capture stale-ptr pop) -> never a stale-WRONG
+                # snapshot, and the per-req buffer rules out cross-req aliasing.
+            except Exception:
+                # per-row: never poison the served commit; on failure the
+                # exact-seed entry is simply absent and the SNAP_FIX redirect
+                # falls back to the recurrent leaf (current behavior).
+                continue
+    except Exception:
+        # whole-helper guard: a chunked-recompute import/setup failure must not
+        # break the served commit (fail-safe to the recurrent-leaf SNAP_FIX).
+        pass
+
+
+# FR13_APC_EXACT_SEED checkpoint[0] capture was MOVED.  The former
+# _fr13_apc_exact_seed_capture_ckpt0 helper lived in the rejection_sampler
+# injected literal (uncalled + unreachable from gdn_linear_attn, and gated on a
+# rare 64-aligned-prefill-END so it almost never fired).  checkpoint[0] is now
+# captured INLINE in the gdn_linear_attn prefill_scan_replacement (the
+# "FR13_APC_EXACT_SEED checkpoint[0] capture" block just after the prefill
+# `ssm_state[non_spec_state_indices_tensor] = last_recurrent_state` init), where
+# the prefill q/k/v/g/beta inputs live: it re-prefills [0, p0) through the SAME
+# chunked kernel (initial_state=None) for ANY fresh prefix (not just 64-aligned
+# ends), keyed by req_id from the runner non-spec row map
+# (_LUMO_FA_NONSPEC_ROW_REQ_IDS), storing layer._fr13_apc_chunked_ckpt_by_req /
+# _fr13_apc_abs_pos_by_req that the committer chain already reads.
 
 
 def _fr13_replay_durable_ab_enabled():
@@ -8352,6 +9579,10 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 # loop unchanged -> byte-identical locked cat9 path.
                 _fr13_apc_publish_on = (
                     __import__('os').environ.get("FR13_APC_SNAP_FIX", "1") == "1"
+                    # FR13_APC_EXACT_SEED also needs the per-layer loop (the
+                    # eager-pack fast loop runs no publish/recompute hook). Default
+                    # OFF -> gate unchanged -> fast loop unchanged -> byte-identical.
+                    or __import__('os').environ.get("FR13_APC_EXACT_SEED", "0") == "1"
                 )
                 if (
                     _ep_active
@@ -8536,6 +9767,15 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                         _fr13_publish_apc_ssm_leaf(
                             _lumo_tree_commit_gdn, _fr13_layer,
                             _fr13_spec_req_ids, _fr13_replay_lens,
+                        )
+                        # FR13_APC_EXACT_SEED (default OFF -> no-op): overwrite the
+                        # APC snapshot SOURCE with the CHUNKED-prefill realization
+                        # of this chunk boundary (cache-OFF kernel) so a future
+                        # cache hit restores an EXACT seed, not the recurrent leaf.
+                        _fr13_apc_exact_seed_recompute(
+                            _lumo_tree_commit_gdn, _fr13_layer,
+                            _fr13_spec_req_ids, _fr13_replay_lens,
+                            _fr13_ssm_bank, _fr13_replay_gdn_node_paths,
                         )
                         _fr13_flags[0].fill_(0)
                         if _fr13_bnd_layer_on:
@@ -9188,6 +10428,13 @@ def _lumo_tree_canonical_multidraft_sample(
                     _fr13_publish_apc_ssm_leaf(
                         _lumo_tree_commit_gdn, _fr13_layer,
                         _fr13_spec_req_ids, _fr13_replay_lens,
+                    )
+                    # FR13_APC_EXACT_SEED (default OFF -> no-op): see twin call in
+                    # the eager-pack-disabled branch above.
+                    _fr13_apc_exact_seed_recompute(
+                        _lumo_tree_commit_gdn, _fr13_layer,
+                        _fr13_spec_req_ids, _fr13_replay_lens,
+                        _fr13_ssm_bank, _fr13_replay_gdn_node_paths,
                     )
                     _fr13_flags[0].fill_(0)
                     if _fr13_bnd_layer_on:
@@ -10590,6 +11837,42 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "                    for _fr13_rk_key in list(_fr13_rk_by_req.keys()):\n"
         "                        if _fr13_rk_key not in _fr13_rk_live:\n"
         "                            del _fr13_rk_by_req[_fr13_rk_key]\n"
+        "                    # FR13_APC_EXACT_SEED (GAP-a) NON-SPEC/prefill row map.\n"
+        "                    # The non-spec (prefill / chunked-prefill / first-decode)\n"
+        "                    # row order produced by vLLM's\n"
+        "                    # split_decodes_prefills_and_extends is the COMPLEMENT of\n"
+        "                    # the spec-row mask: gdn_attn.py:189 sets\n"
+        "                    # spec_sequence_masks_cpu = num_decode_draft_tokens_cpu>=0,\n"
+        "                    # so non-spec = num_decode_draft_tokens < 0, in BATCH\n"
+        "                    # order (gdn_attn.py:279-281 boolean-mask preserves order\n"
+        "                    # == the order non_spec_state_indices_tensor /\n"
+        "                    # last_recurrent_state rows are produced). Padded zero-len\n"
+        "                    # rows live at the BACK with no req_id, naturally excluded\n"
+        "                    # by range(num_reqs). Published EVERY step (no path\n"
+        "                    # buffers needed): observe-only list of req_id strings,\n"
+        "                    # value-inert to all flags; the gdn prefill ckpt0 capture\n"
+        "                    # (FR13_APC_EXACT_SEED only) keys checkpoint[0] by it.\n"
+        "                    _fr13_rk_nonspec_rids = [\n"
+        "                        _fr13_rk_req_ids[_fr13_rk_i]\n"
+        "                        for _fr13_rk_i in range(num_reqs)\n"
+        "                        if int(num_decode_draft_tokens[_fr13_rk_i]) < 0\n"
+        "                    ]\n"
+        "                    _fr13_rk_gdn._LUMO_FA_NONSPEC_ROW_REQ_IDS = (\n"
+        "                        _fr13_rk_nonspec_rids\n"
+        "                    )\n"
+        "                    # Fail-loud partition assert: every i is classified\n"
+        "                    # exactly once (predicate is >=0 xor <0), so spec+nonspec\n"
+        "                    # must cover the whole real batch with no overlap. Guards\n"
+        "                    # against a future runner change adding a third bucket.\n"
+        "                    _fr13_rk_nspec_n = sum(\n"
+        "                        1\n"
+        "                        for _fr13_rk_i in range(num_reqs)\n"
+        "                        if int(num_decode_draft_tokens[_fr13_rk_i]) >= 0\n"
+        "                    )\n"
+        "                    assert (\n"
+        "                        len(_fr13_rk_nonspec_rids) + _fr13_rk_nspec_n\n"
+        "                        == num_reqs\n"
+        "                    ), \"FR13 spec/nonspec row partition != num_reqs\"\n"
         "                    _fr13_rk_paths = getattr(\n"
         "                        _fr13_rk_gdn, \"_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR\", None\n"
         "                    )\n"
@@ -10715,6 +11998,97 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
     if anchor not in text:
         raise RuntimeError("gpu_model_runner num_decode_draft_tokens anchor not found")
     text = text.replace(anchor, inject, 1)
+
+    # FR13_APC_EXACT_SEED (GAP-a FIX 1): EVERY-STEP non-spec row publish.
+    # The in-reqkey publish above lives inside _prepare_inputs' spec-decode
+    # path (it only fires when the persistent num_decode_draft_tokens.np buffer
+    # is refreshed, i.e. on use_spec_decode steps). ckpt0 capture, however,
+    # happens on a PREFILL forward, which is frequently a PURE-prefill step
+    # (scheduled_spec_decode_tokens empty -> use_spec_decode False): on such a
+    # step the spec-decode block (and the in-reqkey publish nested in it) is
+    # skipped entirely, so _LUMO_FA_NONSPEC_ROW_REQ_IDS is ABSENT or STALE and
+    # the capture either skips (-> recurrent leaf, gate != 0.0) or mis-keys.
+    # FIX: publish the non-spec row map on EVERY _prepare_inputs call, anchored
+    # at the use_spec_decode classification line (runs for prefill AND spec
+    # steps). On a pure-prefill step gdn_attn.py:178-181 receives
+    # num_decode_draft_tokens_cpu=None (gpu_model_runner.py:2235 gates the
+    # extra-arg on use_spec_decode), so spec_sequence_masks is None and EVERY
+    # real row is non-spec in plain batch order (non_spec_query_start_loc =
+    # full query_start_loc). We therefore replicate vLLM's OWN spec/non-spec
+    # classification bit-exactly (gpu_model_runner.py:2030 + 2048-2059): a row
+    # is SPEC iff use_spec_decode AND its req_id is in
+    # scheduled_spec_decode_tokens AND it has finished prefill
+    # (num_computed_tokens_cpu >= num_prompt_tokens); NON-SPEC otherwise. This
+    # is computed from scheduler_output (not the persistent .np buffer, which
+    # CpuGpuBuffer zero-inits and does NOT refresh on a prefill step), so it is
+    # correct on every step. Gated behind FR13_APC_EXACT_SEED (default OFF ->
+    # this block does nothing -> off-path byte-identical); the partition assert
+    # is kept. Publishes the SAME module global the in-reqkey path does, so
+    # keeping both is harmless (the every-step value overwrites first, the
+    # spec-step in-reqkey value re-publishes an identical list later).
+    es_sentinel = "# FR13_APC_EXACT_SEED_NONSPEC_EVERYSTEP"
+    es_anchor = (
+        "        use_spec_decode = len(scheduler_output.scheduled_spec_decode_tokens) > 0\n"
+        "        if not use_spec_decode:\n"
+    )
+    es_inject = (
+        "        use_spec_decode = len(scheduler_output.scheduled_spec_decode_tokens) > 0\n"
+        f"        {es_sentinel}: publish the non-spec row map on EVERY step (the\n"
+        "        # in-reqkey publish only fires on spec steps; ckpt0 capture runs on\n"
+        "        # a possibly-pure-prefill step). Default OFF -> no-op.\n"
+        "        if __import__(\"os\").environ.get(\"FR13_APC_EXACT_SEED\", \"0\") == \"1\":\n"
+        "            try:\n"
+        "                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13es_gdn\n"
+        "                _fr13es_n = self.input_batch.num_reqs\n"
+        "                _fr13es_rids = [\n"
+        "                    str(_fr13es_rid)\n"
+        "                    for _fr13es_rid in self.input_batch.req_ids[:_fr13es_n]\n"
+        "                ]\n"
+        "                # Replicate gpu_model_runner.py:2047-2059 exactly: a row is\n"
+        "                # spec iff its req_id is scheduled with draft tokens AND it has\n"
+        "                # finished prefill. On a pure-prefill step\n"
+        "                # scheduled_spec_decode_tokens is empty -> _fr13es_spec_idx is\n"
+        "                # empty -> every row is non-spec (matches gdn_attn.py:199 when\n"
+        "                # num_decode_draft_tokens_cpu is None).\n"
+        "                _fr13es_spec_idx = set()\n"
+        "                if use_spec_decode:\n"
+        "                    for _fr13es_rid2, _fr13es_dtoks in (\n"
+        "                        scheduler_output.scheduled_spec_decode_tokens.items()\n"
+        "                    ):\n"
+        "                        _fr13es_ix = self.input_batch.req_id_to_index[_fr13es_rid2]\n"
+        "                        if (\n"
+        "                            self.input_batch.num_computed_tokens_cpu[_fr13es_ix]\n"
+        "                            >= self.input_batch.num_prompt_tokens[_fr13es_ix]\n"
+        "                        ):\n"
+        "                            _fr13es_spec_idx.add(_fr13es_ix)\n"
+        "                _fr13es_nonspec = [\n"
+        "                    _fr13es_rids[_fr13es_i]\n"
+        "                    for _fr13es_i in range(_fr13es_n)\n"
+        "                    if _fr13es_i not in _fr13es_spec_idx\n"
+        "                ]\n"
+        "                # Fail-loud partition assert: spec + non-spec cover the whole\n"
+        "                # real batch with no overlap (every i is in exactly one set).\n"
+        "                assert (\n"
+        "                    len(_fr13es_nonspec) + len(_fr13es_spec_idx) == _fr13es_n\n"
+        "                ), \"FR13 everystep spec/nonspec row partition != num_reqs\"\n"
+        "                _fr13es_gdn._LUMO_FA_NONSPEC_ROW_REQ_IDS = _fr13es_nonspec\n"
+        "            except Exception as _fr13es_exc:\n"
+        "                if __import__(\"os\").environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
+        "                    raise RuntimeError(\n"
+        "                        \"FR13_APC_EXACT_SEED everystep nonspec publish failed: \"\n"
+        "                        + type(_fr13es_exc).__name__\n"
+        "                        + \":\"\n"
+        "                        + str(_fr13es_exc)\n"
+        "                    ) from _fr13es_exc\n"
+        "        if not use_spec_decode:\n"
+    )
+    if es_sentinel not in text:
+        if es_anchor not in text:
+            raise RuntimeError(
+                "gpu_model_runner use_spec_decode everystep anchor not found"
+            )
+        text = text.replace(es_anchor, es_inject, 1)
+
     GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
 
@@ -11305,6 +12679,33 @@ def collect_mamba_copy_meta(
                 accept_token_bias,
                 phase="postprocess",
             )
+            if os.environ.get("FR13_APC_EXACT_SEED", "0") == "1":
+                # GAP-2 POSITION-LABEL FAIL-SAFE: stash the block-aligned snapshot
+                # boundary (aligned_new_computed_tokens) for THIS req so the
+                # collect_mamba_copy_meta SNAP_FIX redirect can compare it against
+                # the committer chain's published chunked-checkpoint pos and ONLY
+                # swap the src_ptr on an EXACT match (else recurrent-leaf fallback,
+                # never a position-wrong seed). aligned_new_computed_tokens is in
+                # scope here (postprocess_mamba per-req loop) but NOT inside
+                # collect_mamba_copy_meta, so we publish it through a module map
+                # keyed by req_id. Best-effort; never breaks the served snapshot.
+                try:
+                    from vllm.model_executor.layers.mamba import (
+                        gdn_linear_attn as _fr13_es_apos_gdn,
+                    )
+                    _fr13_es_apos_map = getattr(
+                        _fr13_es_apos_gdn,
+                        "_FR13_APC_SSM_ALIGNED_POS_BY_REQ",
+                        None,
+                    )
+                    if _fr13_es_apos_map is None:
+                        _fr13_es_apos_map = {}
+                        _fr13_es_apos_gdn._FR13_APC_SSM_ALIGNED_POS_BY_REQ = (
+                            _fr13_es_apos_map
+                        )
+                    _fr13_es_apos_map[str(req_id)] = int(aligned_new_computed_tokens)
+                except Exception:
+                    pass
             src_block_idx = mamba_state_idx[req_id]
 """
     if postprocess_old not in text:
@@ -11674,160 +13075,6 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
     if sentinel in text:
         return False
 
-    # ------------------------------------------------------------------ #
-    # FR13_APC_SHADOW write-side shadow log helper (module scope). Default
-    # OFF (FR13_APC_SHADOW != "1") => never called from any gated site =>
-    # the helper def is inert dead code, byte-identical to pre-shadow. It
-    # compares the row align RESTORES (the block-aligned src row) against the
-    # row the committer WROTE (the committed accepted-leaf / committed-root
-    # node-bank row) and appends ONE json line per call, TAGGED by row class
-    # (spine / branch / zero-accept) so the offline reducer can name WHICH
-    # class is stale on a cache hit. Bitwise int-view equality (mirrors
-    # _fr13_tcf_sc_compare in gdn_linear_attn) + per-row argmax match +
-    # max_abs. Wrapped in try/except: a logging failure can NEVER crash the
-    # served forward. Rate-limited (FR13_APC_SHADOW_LOG_EVERY) + capped
-    # (FR13_APC_SHADOW_LOG_CAP). `json`/`os`/`torch`/`logger` are all live at
-    # mamba_utils module scope (json/os imported by the accept-bias patch).
-    shadow_helper_anchor = "\ndef collect_mamba_copy_meta(\n"
-    if text.count(shadow_helper_anchor) != 1:
-        raise RuntimeError(
-            "APC shadow log: collect_mamba_copy_meta module anchor not unique"
-        )
-    shadow_helper = (
-        "_FR13_APC_SHADOW_STATE = {\"seen\": 0, \"written\": 0, \"fh\": None, \"buf\": [], \"atexit\": False}\n"
-        "\n"
-        "\n"
-        "def _fr13_apc_shadow_flush():  # FR13_APC_SHADOW\n"
-        "    \"\"\"Flush the buffered shadow records to the JSONL file. Best-effort,\n"
-        "    never raises. Called in batches from _fr13_apc_shadow_log and once at\n"
-        "    interpreter exit (atexit) so no record is lost at teardown.\"\"\"\n"
-        "    try:\n"
-        "        _st = _FR13_APC_SHADOW_STATE\n"
-        "        _buf = _st.get(\"buf\") or []\n"
-        "        if not _buf:\n"
-        "            return\n"
-        "        _path = os.environ.get(\"FR13_APC_SHADOW_LOG\", \"/logs/apc_shadow.jsonl\")\n"
-        "        if _st[\"fh\"] is None:\n"
-        "            try:\n"
-        "                _d = os.path.dirname(_path)\n"
-        "                if _d:\n"
-        "                    os.makedirs(_d, exist_ok=True)\n"
-        "            except Exception:\n"
-        "                pass\n"
-        "            _st[\"fh\"] = open(_path, \"a\")\n"
-        "        _st[\"fh\"].write(\"\".join(_buf))\n"
-        "        _st[\"fh\"].flush()\n"
-        "        _st[\"buf\"] = []\n"
-        "    except Exception:\n"
-        "        pass\n"
-        "\n"
-        "\n"
-        "def _fr13_apc_shadow_log(carrier, x_restore, x_committed, tag_dict):  # FR13_APC_SHADOW\n"
-        "    \"\"\"FR13_APC_SHADOW: write-side shadow check (log-only, no behavior).\n"
-        "\n"
-        "    DEFAULT PATH IS INDEX-ONLY + NON-PERTURBING: x_restore/x_committed are\n"
-        "    None and tag_dict already carries the decisive CPU-int signals\n"
-        "    (restore_row_idx / committed_leaf_idx / index_equal / redirect_fired /\n"
-        "    leaf_present + the row-class tags). On the None path this function does\n"
-        "    ZERO torch ops -- no state[...] read, no .item(), no GPU->CPU sync --\n"
-        "    so it is safe to call on every commit inside the spec-decode tree path\n"
-        "    (the per-forward .item() sync corrupted turn-0 generation). is_stale is\n"
-        "    set None (value compare unavailable on the index-only run).\n"
-        "\n"
-        "    VALUE PATH (opt-in, FR13_APC_SHADOW_VALUE=1 -> the call site passes the\n"
-        "    actual tensor rows): int-view bitwise equality + argmax match + max_abs.\n"
-        "    For a separate careful run only. NEVER raises (try/except).\n"
-        "\n"
-        "    Writes are BUFFERED (module-level list) and flushed in batches (no\n"
-        "    per-record file I/O on the forward path); a final atexit flush is\n"
-        "    registered once so no record is lost at teardown.\n"
-        "    \"\"\"\n"
-        "    try:\n"
-        "        if os.environ.get(\"FR13_APC_SHADOW\", \"0\") != \"1\":\n"
-        "            return\n"
-        "        _st = _FR13_APC_SHADOW_STATE\n"
-        "        if not _st.get(\"atexit\"):\n"
-        "            try:\n"
-        "                import atexit as _fr13_atexit\n"
-        "                _fr13_atexit.register(_fr13_apc_shadow_flush)\n"
-        "                _st[\"atexit\"] = True\n"
-        "            except Exception:\n"
-        "                _st[\"atexit\"] = True\n"
-        "        _st[\"seen\"] += 1\n"
-        "        try:\n"
-        "            _every = int(os.environ.get(\"FR13_APC_SHADOW_LOG_EVERY\", \"1\"))\n"
-        "        except Exception:\n"
-        "            _every = 1\n"
-        "        if _every < 1:\n"
-        "            _every = 1\n"
-        "        try:\n"
-        "            _cap = int(os.environ.get(\"FR13_APC_SHADOW_LOG_CAP\", \"20000\"))\n"
-        "        except Exception:\n"
-        "            _cap = 20000\n"
-        "        if (_st[\"seen\"] % _every) != 0:\n"
-        "            return\n"
-        "        if _st[\"written\"] >= _cap:\n"
-        "            return\n"
-        "        # is_stale defaults None (index-only run -> no value reference).\n"
-        "        # Only when BOTH tensor rows are passed (FR13_APC_SHADOW_VALUE=1 at\n"
-        "        # the call site) do we touch torch -> int-view eq + argmax + max_abs.\n"
-        "        _is_stale = None\n"
-        "        _argmax_match = None\n"
-        "        _max_abs = None\n"
-        "        if x_restore is not None and x_committed is not None:\n"
-        "            try:\n"
-        "                _a = x_restore\n"
-        "                _b = x_committed\n"
-        "                if hasattr(_a, \"shape\") and hasattr(_b, \"shape\") and tuple(_a.shape) == tuple(_b.shape):\n"
-        "                    _ai, _bi = _a, _b\n"
-        "                    if _ai.dtype == torch.bfloat16:\n"
-        "                        _ai, _bi = _ai.view(torch.int16), _bi.view(torch.int16)\n"
-        "                    elif _ai.dtype == torch.float16:\n"
-        "                        _ai, _bi = _ai.view(torch.int16), _bi.view(torch.int16)\n"
-        "                    elif _ai.dtype == torch.float32:\n"
-        "                        _ai, _bi = _ai.view(torch.int32), _bi.view(torch.int32)\n"
-        "                    _is_stale = not bool(torch.equal(_ai, _bi))\n"
-        "                    _af = _a.detach().to(torch.float32).reshape(-1)\n"
-        "                    _bf = _b.detach().to(torch.float32).reshape(-1)\n"
-        "                    _max_abs = float((_af - _bf).abs().max().item())\n"
-        "                    _argmax_match = bool(int(_af.argmax().item()) == int(_bf.argmax().item()))\n"
-        "            except Exception:\n"
-        "                _is_stale = None\n"
-        "                _argmax_match = None\n"
-        "                _max_abs = None\n"
-        "        _rec = {\"carrier\": str(carrier), \"is_stale\": _is_stale,\n"
-        "                \"max_abs\": _max_abs, \"argmax_match\": _argmax_match}\n"
-        "        try:\n"
-        "            for _k, _v in dict(tag_dict).items():\n"
-        "                _rec[str(_k)] = _v\n"
-        "        except Exception:\n"
-        "            pass\n"
-        "        _st[\"buf\"].append(json.dumps(_rec) + \"\\n\")\n"
-        "        _st[\"written\"] += 1\n"
-        "        # batched flush: no per-record file I/O on the forward path.\n"
-        "        try:\n"
-        "            _flush_every = int(os.environ.get(\"FR13_APC_SHADOW_FLUSH_EVERY\", \"256\"))\n"
-        "        except Exception:\n"
-        "            _flush_every = 256\n"
-        "        if _flush_every < 1:\n"
-        "            _flush_every = 1\n"
-        "        if len(_st[\"buf\"]) >= _flush_every or _st[\"written\"] >= _cap:\n"
-        "            _fr13_apc_shadow_flush()\n"
-        "    except Exception:\n"
-        "        # observe-only: a shadow-log failure must never break the copy.\n"
-        "        try:\n"
-        "            logger.warning(\"FR13_APC_SHADOW log error (swallowed)\")\n"
-        "        except Exception:\n"
-        "            pass\n"
-        "\n"
-        "\n"
-    )
-    text = text.replace(
-        shadow_helper_anchor,
-        "\n" + shadow_helper + "def collect_mamba_copy_meta(\n",
-        1,
-    )
-
     # (1) phase markers, gated on FR13_APC_SNAP_FIX,
     #     self-contained so the gate does not depend on FR13_REPLAY_BOUNDARY_LOG.
     #     preprocess marker on a preprocess-only anchor, postprocess marker on a
@@ -11956,6 +13203,104 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                            _fr13_fx_lm.get(_fr13_fx_reqkey)\n"
         "                            if _fr13_fx_lm else None\n"
         "                        )\n"
+        # FR13_APC_EXACT_SEED (default OFF -> _fr13_fx_chunked_ptr stays None ->
+        # redirect uses state[leaf] = recurrent leaf = current behavior). When ON
+        # AND this is the SSM snapshot (_fr13_fx_ssm_on), look up the raw data_ptr
+        # of the CHUNKED-realization staging row the committer recomputed for this
+        # req (_FR13_APC_SSM_CHUNKED_PTR_BY_REQ[req_id]) and snapshot THAT instead
+        # of the recurrent bank leaf row, so a future cache hit restores an EXACT
+        # chunk-boundary seed. Only the SSM path; conv is unchanged.
+        "                        _fr13_fx_chunked_ptr = None\n"
+        "                        _fr13_es_fallback_reason = \"\"\n"
+        # slot key default (bound at the SNAP_FIX level next to the other redirect
+        # locals so the ES_REDIRECT_* log lines below -- which run under the
+        # EXACT_SEED gate even on the conv path where _fr13_fx_ssm_on is False --
+        # always have it defined). Overwritten with block_ids[src_block_idx] inside
+        # the SSM EXACT_SEED branch. Same inertness class as _fr13_es_fallback_reason
+        # above: never READ when EXACT_SEED is off -> off-path byte-identical.
+        "                        _fr13_fx_slotkey = _fr13_fx_reqkey\n"
+        # CUDA-GRAPH SAFETY (PIECEWISE deploy): skip the whole EXACT_SEED
+        # chunked-ptr redirect (lookup + GAP-2 pos validation + the
+        # engagement-log file I/O below) under a capture stream so the
+        # snapshot machinery stays byte-identical to the EXACT_SEED-OFF default
+        # during warmup (_fr13_fx_chunked_ptr stays None -> recurrent-leaf src).
+        # collect_mamba_copy_meta runs in the host-side snapshot scheduler at
+        # inference (NOT inside the captured decode graph), so the redirect is
+        # live for served snapshots; only the warmup capture pass is no-op'd.
+        # Mirrors the FR13_APC_CACHEROW_DUMP capture guard at :12860 below.
+        "                        _fr13_es_capturing = (\n"
+        "                            torch.cuda.is_available()\n"
+        "                            and torch.cuda.is_current_stream_capturing()\n"
+        "                        )\n"
+        "                        if (\n"
+        "                            _fr13_fx_ssm_on\n"
+        "                            and not _fr13_es_capturing\n"
+        "                            and os.environ.get(\"FR13_APC_EXACT_SEED\", \"0\") == \"1\"\n"
+        "                        ):\n"
+        # GAP-a KEY FIX (req_id->STATE-SLOT) REDIRECT side. The committer chain now
+        # keys _FR13_APC_SSM_CHUNKED_PTR_BY_REQ / _POS_BY_REQ by the physical SSM
+        # SLOT (block_table col-0 row), not req_id, so this redirect MUST look them
+        # up by the SAME slot or the get() always misses (the byte-identical
+        # inertness we are fixing). In collect_mamba_copy_meta the persistent col-0
+        # slot for THIS sequence is block_ids[src_block_idx] -- the FIRST block of
+        # the seq's block list, identical to mamba_state_idx[req_id] and to
+        # get_temporal_copy_spec's base (it reads block_ids[src_block_idx +
+        # num_accepted-1] for the LEAF; index 0 of the same list is the base). It
+        # EQUALS the prefill STORE key (non_spec_state_indices_tensor[r] =
+        # block_table[seq,0]) and the decode DRAIN key (spec col-0). Derived INSIDE
+        # the EXACT_SEED gate so the EXACT_SEED-OFF path is byte-identical (zero new
+        # statements). Fail-safe: if block_ids/src_block_idx are unavailable, fall
+        # back to the req_id key (no chunked redirect this snapshot == pre-fix).
+        "                            try:\n"
+        "                                _fr13_fx_slotkey = str(int(block_ids[int(src_block_idx)]))\n"
+        "                            except Exception:\n"
+        "                                _fr13_fx_slotkey = _fr13_fx_reqkey\n"
+        "                            _fr13_fx_cm = getattr(\n"
+        "                                _fr13_fx_gdn, \"_FR13_APC_SSM_CHUNKED_PTR_BY_REQ\", None\n"
+        "                            )\n"
+        "                            if _fr13_fx_cm:\n"
+        "                                _fr13_fx_chunked_ptr = _fr13_fx_cm.get(_fr13_fx_slotkey)\n"
+        # GAP-2 POSITION-LABEL FAIL-SAFE GUARD. A chunked ptr is only a VALID
+        # snapshot source if the boundary it represents (pos_map[req], the
+        # committer chain's last published 64-aligned _ck_pos) EXACTLY equals
+        # the block-aligned position this snapshot persists
+        # (aligned_new_computed_tokens, stashed per-req by postprocess_mamba).
+        # If the pos is missing or mismatched the published checkpoint is for a
+        # DIFFERENT boundary -> writing it here would seed the cache with a
+        # position-wrong state. So drop the chunked ptr (-> recurrent-leaf
+        # fallback, never wrong) and record the reason for the engagement log.
+        # OFF -> _fr13_fx_chunked_ptr already None -> this whole block is dead.
+        "                            if _fr13_fx_chunked_ptr is not None:\n"
+        "                                _fr13_fx_pm = getattr(\n"
+        "                                    _fr13_fx_gdn, \"_FR13_APC_SSM_CHUNKED_POS_BY_REQ\", None\n"
+        "                                )\n"
+        "                                _fr13_fx_apm = getattr(\n"
+        "                                    _fr13_fx_gdn, \"_FR13_APC_SSM_ALIGNED_POS_BY_REQ\", None\n"
+        "                                )\n"
+        "                                _fr13_fx_ckpos = (\n"
+        "                                    _fr13_fx_pm.get(_fr13_fx_slotkey)\n"
+        "                                    if _fr13_fx_pm else None\n"
+        "                                )\n"
+        # aligned-pos map stays req_id-keyed (postprocess_mamba publishes it by
+        # req_id); the chunked pub_pos above is slot-keyed. Both describe THIS
+        # sequence at THIS snapshot, so the pub_pos==aligned_pos exact-boundary
+        # guard still compares like-for-like.
+        "                                _fr13_fx_apos = (\n"
+        "                                    _fr13_fx_apm.get(_fr13_fx_reqkey)\n"
+        "                                    if _fr13_fx_apm else None\n"
+        "                                )\n"
+        "                                if _fr13_fx_ckpos is None:\n"
+        "                                    _fr13_fx_chunked_ptr = None\n"
+        "                                    _fr13_es_fallback_reason = \"no_pub_pos\"\n"
+        "                                elif _fr13_fx_apos is None:\n"
+        "                                    _fr13_fx_chunked_ptr = None\n"
+        "                                    _fr13_es_fallback_reason = \"no_aligned_pos\"\n"
+        "                                elif int(_fr13_fx_ckpos) != int(_fr13_fx_apos):\n"
+        "                                    _fr13_fx_chunked_ptr = None\n"
+        "                                    _fr13_es_fallback_reason = (\n"
+        "                                        \"pos_mismatch pub=\" + str(_fr13_fx_ckpos)\n"
+        "                                        + \" aligned=\" + str(_fr13_fx_apos)\n"
+        "                                    )\n"
         "                        if os.environ.get(\"FR13_APC_LEAF_CROSSCHECK\", \"0\") == \"1\":\n"
         "                            _fr13_xc_s = getattr(_fr13_fx_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None)\n"
         "                            _fr13_xc_c = getattr(_fr13_fx_gdn, \"_FR13_APC_CONV_LEAF_BY_REQ\", None)\n"
@@ -11978,149 +13323,64 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                            and 0 <= int(_fr13_fx_leaf) < _fr13_fx_n\n"
         "                            and 0 <= _fr13_fx_ent < int(src_ptrs_np.shape[0])\n"
         "                        ):\n"
-        "                            src_ptrs_np[_fr13_fx_ent] = (\n"
-        "                                state[int(_fr13_fx_leaf)].data_ptr()\n"
-        "                            )\n"
+        # FR13_APC_EXACT_SEED: if a chunked-realization staging ptr was published
+        # for this req, snapshot THAT raw pointer (the chunk-boundary EXACT seed)
+        # instead of the recurrent bank-leaf row. _fr13_fx_chunked_ptr is None
+        # unless FR13_APC_EXACT_SEED=1 -> default path unchanged (byte-identical).
+        "                            if _fr13_fx_chunked_ptr is not None:\n"
+        "                                src_ptrs_np[_fr13_fx_ent] = int(_fr13_fx_chunked_ptr)\n"
+        "                            else:\n"
+        "                                src_ptrs_np[_fr13_fx_ent] = (\n"
+        "                                    state[int(_fr13_fx_leaf)].data_ptr()\n"
+        "                                )\n"
+        # ENGAGEMENT LOG (FR13_APC_EXACT_SEED only): record whether THIS snapshot
+        # actually swapped to the chunked checkpoint (ES_REDIRECT_USED) or fell
+        # back to the recurrent bank leaf because no chunked ptr was live for the
+        # req at snapshot time (ES_REDIRECT_FALLBACK). This is the line that makes
+        # the multi-turn break (or its fix) PROVABLE -- the restore-confound diff
+        # alone was byte-identical to the EXACT_SEED=0 baseline. Best-effort I/O,
+        # never raises into the served snapshot. Only logs under EXACT_SEED=1.
+        # LOG DECOUPLED FROM CAPTURE GUARD (PIECEWISE diagnosis): the
+        # ES_REDIRECT_USED / ES_REDIRECT_FALLBACK verdict must ALWAYS be recorded
+        # at inference so a single boot pins whether the redirect engaged or fell
+        # back. collect_mamba_copy_meta runs HOST-SIDE EAGER under PIECEWISE
+        # (post-forward snapshot scheduler, is_current_stream_capturing()==False),
+        # so this fires every served snapshot; only the actual GPU->CPU SYNCS keep
+        # their capture guard (the chunked-ptr lookup above), NOT this file I/O.
+        # EXACT_SEED-OFF -> condition False -> byte-identical (no I/O).
+        "                            if os.environ.get(\"FR13_APC_EXACT_SEED\", \"0\") == \"1\":\n"
+        "                                try:\n"
+        "                                    _fr13_es_lp = os.environ.get(\n"
+        "                                        \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
+        "                                        \"/logs/fr13_apc_exact_seed_eng.log\",\n"
+        "                                    )\n"
+        "                                    if _fr13_fx_chunked_ptr is not None:\n"
+        "                                        _fr13_es_msg = (\n"
+        "                                            \"ES_REDIRECT_USED slot=\" + str(_fr13_fx_slotkey)\n"
+        "                                            + \" req=\" + str(_fr13_fx_reqkey)\n"
+        "                                            + \" ent=\" + str(_fr13_fx_ent)\n"
+        "                                        )\n"
+        "                                    else:\n"
+        "                                        _fr13_es_msg = (\n"
+        "                                            \"ES_REDIRECT_FALLBACK slot=\" + str(_fr13_fx_slotkey)\n"
+        "                                            + \" req=\" + str(_fr13_fx_reqkey)\n"
+        "                                            + (\" reason=\" + _fr13_es_fallback_reason\n"
+        "                                               if _fr13_es_fallback_reason else \"\")\n"
+        "                                        )\n"
+        # STDOUT MIRROR (PIECEWISE pinning): print with "FR13ES " prefix for
+        # `docker logs` grep (the file write does not land in the read-only
+        # shadow-gate mount). Inside the EXACT_SEED-gated try -> off-path
+        # unaffected; best-effort (the enclosing except swallows any failure).
+        "                                    print(\"FR13ES \" + _fr13_es_msg, flush=True)\n"
+        "                                    with open(_fr13_es_lp, \"a\", buffering=1) as _fr13_es_fh:\n"
+        "                                        _fr13_es_fh.write(_fr13_es_msg + chr(10))\n"
+        "                                except Exception:\n"
+        "                                    pass\n"
         "                            globals()[\"_FR13_SNAP_FIX_LAST_ENT\"] = _fr13_fx_ent\n"
         "                            globals()[\"_FR13_SNAP_FIX_LAST_APPLIED\"] = True\n"
         "                            _fr13_fx_gdn._FR13_SNAP_FIX_FIRED = int(\n"
         "                                getattr(_fr13_fx_gdn, \"_FR13_SNAP_FIX_FIRED\", 0)\n"
         "                            ) + 1\n"
-        # ------------------------------------------------------------------ #
-        # FR13_APC_SHADOW (default "0" => no read, no log => byte-identical).
-        # WRITE-SIDE shadow check: at this redirect site BOTH rows are named --
-        # the BLOCK-ALIGNED row align RESTORES on a cache hit
-        # (_sd_stock = block_ids[src_block_idx + accept_token_bias], the stock
-        # get_temporal_copy_spec source) and the COMMITTED accepted-leaf row the
-        # committer WROTE (_fr13_fx_leaf). Log restore-vs-committed TAGGED by row
-        # class (spine / branch / zero-accept) so the reducer says WHICH class is
-        # stale. Tags come from the publisher-populated per-req map
-        # (_FR13_APC_SHADOW_TAGS_BY_REQ, gated SHADOW-on at publish). Index
-        # equality (_sd_stock == leaf) is the decisive write-side signal; the
-        # tensor-value compare (_fr13_apc_shadow_log) adds is_stale/max_abs/
-        # argmax. SOURCE-ONLY reads of `state` rows; never mutates state/dst/
-        # sizes; capture-safe (skips under cuda-graph capture). Lives INSIDE the
-        # SNAP_FIX try (28-sp, under the leaf-valid `if`), AFTER the FIRED bump,
-        # so the redirect-applied case is the one logged. Flag OFF => no I/O.\n"
-        "                            if os.environ.get(\"FR13_APC_SHADOW\", \"0\") == \"1\":  " + sentinel + "\n"
-        "                                _sd_cap = (\n"
-        "                                    torch.cuda.is_available()\n"
-        "                                    and torch.cuda.is_current_stream_capturing()\n"
-        "                                )\n"
-        "                                if not _sd_cap:\n"
-        "                                    _sd_stock = int(block_ids[src_block_idx + accept_token_bias])\n"
-        "                                    _sd_req = str(getattr(req_state, \"req_id\", None))\n"
-        "                                    _sd_tags = {}\n"
-        "                                    _sd_tm = getattr(_fr13_fx_gdn, \"_FR13_APC_SHADOW_TAGS_BY_REQ\", None)\n"
-        "                                    if _sd_tm is not None:\n"
-        "                                        _sd_tags = dict(_sd_tm.get(_sd_req, {}))\n"
-        "                                    _sd_alen = int(_sd_tags.get(\"accepted_len\", -1))\n"
-        "                                    _sd_is_spine = bool(_sd_tags.get(\"is_spine\", False))\n"
-        "                                    _sd_is_branch = bool(_sd_tags.get(\"is_branch\", False))\n"
-        "                                    _sd_is_zero = bool(_sd_tags.get(\"is_zero_accept\", _sd_alen == 0))\n"
-        "                                    _sd_idx_eq = bool(_sd_stock == int(_fr13_fx_leaf))\n"
-        # INDEX-ONLY by default (NON-PERTURBING): _sd_idx_eq is a pure CPU int
-        # compare; restore_row_idx / committed_leaf_idx are CPU ints. We do NOT
-        # read state[...] (which forces a GPU->CPU sync via the helper's .item()
-        # in the spec-decode tree path -> corrupted turn-0 generation) UNLESS
-        # FR13_APC_SHADOW_VALUE=1 is set (opt-in, separate careful run). Even then
-        # apply the STALE_HIT_DETECT fast-path: if stock==leaf the row IS the leaf
-        # by construction -> skip the read (value compare trivially faithful).
-        "                                    _sd_restore = None\n"
-        "                                    _sd_committed = None\n"
-        "                                    if (\n"
-        "                                        os.environ.get(\"FR13_APC_SHADOW_VALUE\", \"0\") == \"1\"\n"
-        "                                        and not _sd_idx_eq\n"
-        "                                        and 0 <= _sd_stock < _fr13_fx_n\n"
-        "                                        and 0 <= int(_fr13_fx_leaf) < _fr13_fx_n\n"
-        "                                    ):\n"
-        "                                        _sd_restore = state[_sd_stock]\n"
-        "                                        _sd_committed = state[int(_fr13_fx_leaf)]\n"
-        "                                    _fr13_apc_shadow_log(\n"
-        "                                        \"ssm\", _sd_restore, _sd_committed,\n"
-        "                                        {\n"
-        "                                            \"req_id\": _sd_req,\n"
-        "                                            \"layer\": str(layer_name),\n"
-        "                                            \"is_spine_row\": _sd_is_spine,\n"
-        "                                            \"is_branch_row\": _sd_is_branch,\n"
-        "                                            \"accepted_len\": _sd_alen,\n"
-        "                                            \"is_zero_accept\": _sd_is_zero,\n"
-        "                                            \"is_cache_hit_row\": True,\n"
-        "                                            \"redirect_fired\": True,\n"
-        "                                            \"leaf_present\": True,\n"
-        "                                            \"restore_row_idx\": _sd_stock,\n"
-        "                                            \"committed_leaf_idx\": int(_fr13_fx_leaf),\n"
-        "                                            \"index_equal\": _sd_idx_eq,\n"
-        "                                            \"copy_func\": _fr13_fx_func,\n"
-        "                                        },\n"
-        "                                    )\n"
-        # ------------------------------------------------------------------ #
-        # FR13_APC_SHADOW NO-FIRE coverage log (default "0" => no read, no log\n"
-        # => byte-identical). RED-TEAM GAP CLOSER: the fired-row log above only\n"
-        # sees cache-hit rows where the SNAP_FIX redirect APPLIED (leaf present\n"
-        # + in range). The diagnosed derail most likely lives in the rows where\n"
-        # the redirect does NOT fire -- a cache-hit SSM snapshot row whose req\n"
-        # has NO published committed leaf (leaf absent) or whose leaf is out of\n"
-        # range -> stock get_temporal_copy_spec persists the BLOCK-ALIGNED\n"
-        # (stale) row that the next hit restores, and the fired-row log never\n"
-        # sees it. Here, at 24-sp (inside the SNAP_FIX try, AFTER the leaf-valid\n"
-        # `if`), when _FR13_SNAP_FIX_LAST_APPLIED is False for an SSM copy, we\n"
-        # emit ONE no-fire record: x_restore = state[stock_block_aligned] (the\n"
-        # row actually served), x_committed = None (no faithful reference), and\n"
-        # redirect_fired=False + leaf_present (leaf existed but redirect skipped)\n"
-        # + the row-class tags. A branch/zero-accept cache-hit row with\n"
-        # redirect_fired=False = SNAP_FIX coverage gap = served stale = ROOT\n"
-        # candidate. SOURCE-ONLY read of state[stock]; never mutates state/dst/\n"
-        # sizes; capture-safe (skips under capture); rate-limited by the helper.\n"
-        # _FR13_SNAP_FIX_LAST_APPLIED is reset False at the top of the redirect\n"
-        # block and set True only when the redirect fired, so it is the exact\n"
-        # no-fire predicate. Flag OFF => no I/O.\n"
-        "                        if (\n"
-        "                            os.environ.get(\"FR13_APC_SHADOW\", \"0\") == \"1\"\n"  # FR13_APC_SNAP_FIDELITY
-        "                            and _fr13_fx_ssm_on\n"
-        "                            and not globals().get(\"_FR13_SNAP_FIX_LAST_APPLIED\", False)\n"
-        "                        ):\n"
-        "                            _sn_cap = (\n"
-        "                                torch.cuda.is_available()\n"
-        "                                and torch.cuda.is_current_stream_capturing()\n"
-        "                            )\n"
-        "                            if not _sn_cap:\n"
-        "                                _sn_stock = int(block_ids[src_block_idx + accept_token_bias])\n"
-        "                                _sn_req = str(getattr(req_state, \"req_id\", None))\n"
-        "                                _sn_tags = {}\n"
-        "                                _sn_tm = getattr(_fr13_fx_gdn, \"_FR13_APC_SHADOW_TAGS_BY_REQ\", None)\n"
-        "                                if _sn_tm is not None:\n"
-        "                                    _sn_tags = dict(_sn_tm.get(_sn_req, {}))\n"
-        "                                _sn_alen = int(_sn_tags.get(\"accepted_len\", -1))\n"
-        "                                _sn_is_spine = bool(_sn_tags.get(\"is_spine\", False))\n"
-        "                                _sn_is_branch = bool(_sn_tags.get(\"is_branch\", False))\n"
-        "                                _sn_is_zero = bool(_sn_tags.get(\"is_zero_accept\", _sn_alen == 0))\n"
-        "                                _sn_leaf_present = _fr13_fx_leaf is not None\n"
-        # NO-FIRE is INDEX-ONLY by construction: there is no committed-leaf\n"
-        # reference (x_committed=None always), so the helper does no value\n"
-        # compare regardless. Pass x_restore=None too -> ZERO torch ops, ZERO\n"
-        # GPU read on this path (the decisive signal is redirect_fired=False +\n"
-        # the CPU-int restore_row_idx / row-class tags).\n"
-        "                                _fr13_apc_shadow_log(\n"
-        "                                    \"ssm_nofire\", None, None,\n"
-        "                                    {\n"
-        "                                        \"req_id\": _sn_req,\n"
-        "                                        \"layer\": str(layer_name),\n"
-        "                                        \"is_spine_row\": _sn_is_spine,\n"
-        "                                        \"is_branch_row\": _sn_is_branch,\n"
-        "                                        \"accepted_len\": _sn_alen,\n"
-        "                                        \"is_zero_accept\": _sn_is_zero,\n"
-        "                                        \"is_cache_hit_row\": True,\n"
-        "                                        \"redirect_fired\": False,\n"
-        "                                        \"leaf_present\": bool(_sn_leaf_present),\n"
-        "                                        \"restore_row_idx\": _sn_stock,\n"
-        "                                        \"committed_leaf_idx\": (\n"
-        "                                            int(_fr13_fx_leaf)\n"
-        "                                            if _fr13_fx_leaf is not None else -1\n"
-        "                                        ),\n"
-        "                                        \"copy_func\": _fr13_fx_func,\n"
-        "                                    },\n"
-        "                                )\n"
         # ------------------------------------------------------------------ #
         # FR13_APC_CACHEROW_DUMP (default "0" => no read, no write =>
         # byte-identical). DIAGNOSTIC-ONLY: at the postprocess SSM snapshot
@@ -16876,9 +18136,10 @@ def _fr13_write_apc_env_sidecar() -> None:
         "FR13_APC_SNAP_FIX", "FR13_APC_SNAP_FIX_ZEROACCEPT", "FR13_APC_CONV_FIX",
         "FR13_APC_CONV_SNAPSHOT", "FR13_APC_CONV_SNAP_FIX", "FR13_APC_PRE_SNAP_FIX",
         "FR13_APC_HIT_SUFFIX_CAP", "FR13_APC_BLOCK_ALIGN_45477", "FR13_APC_LEAF_CROSSCHECK",
-        "FR13_APC_SHADOW", "FR13_APC_SHADOW_LOG",
-        "FR13_APC_SHADOW_LOG_EVERY", "FR13_APC_SHADOW_LOG_CAP",
-        "FR13_APC_SHADOW_VALUE", "FR13_APC_SHADOW_FLUSH_EVERY",
+        # FR13_APC_EXACT_SEED: the chunked-realization exact-seed fix (default OFF).
+        # Must reach the worker or the committer recompute + SNAP_FIX redirect read
+        # the default ("0") and the fix is vacuous (the curated-env drop trap).
+        "FR13_APC_EXACT_SEED",
     ]
     present = [(k, os.environ[k]) for k in keys if k in os.environ]
     try:
@@ -16896,6 +18157,452 @@ def _fr13_write_apc_env_sidecar() -> None:
                 pass
     except Exception as exc:  # pragma: no cover - best-effort, fail-safe-OFF
         print("FR13_APC env sidecar write failed: %s" % exc)
+
+
+def _patch_block_pool_exact_seed() -> bool:
+    """FR13_APC_EXACT_SEED block-hash checkpoint storage on the BlockPool.
+
+    Stores the chunked-prefill checkpoint payload keyed by the APC prefix block
+    hash (BlockHashWithGroupId), mirroring the lifetime of
+    cached_block_hash_to_block: created in __init__, populated at the insert
+    anchor in cache_full_blocks (pop the (request_id, block_id) payload staged by
+    the worker postprocess hop), evicted in _maybe_evict_cached_block (before
+    reset_hash, using the already-captured block_hash) and cleared in
+    reset_prefix_cache. All bodies are gated on FR13_APC_EXACT_SEED=='1' so the
+    default path is byte-identical (the dict is created empty + never touched).
+
+    Anchor-based + sentinel-guarded (idempotent). The (req_id, block_id) staging
+    map lives in the gdn_linear_attn module (the WRITE bridge's 1(b) hop fills it,
+    this 1(c) hop drains it); both run in the same EngineCore process.
+    """
+    text = BLOCK_POOL_PATH.read_text()
+    sentinel = "# FR13_APC_ES_BLOCK_POOL"
+    if sentinel in text:
+        return False
+
+    # (init) instance dict, mirrors cached_block_hash_to_block lifetime.
+    init_anchor = (
+        "        # Cache for block lookup\n"
+        "        self.cached_block_hash_to_block: BlockHashToBlockMap = "
+        "BlockHashToBlockMap()\n"
+    )
+    if text.count(init_anchor) != 1:
+        raise RuntimeError("APC ES block_pool init anchor not unique")
+    text = text.replace(
+        init_anchor,
+        init_anchor
+        + "        # FR13_APC_EXACT_SEED: per-blockhash chunked-prefill checkpoint\n"
+        "        # store, keyed by BlockHashWithGroupId (the cross-turn identity).\n"
+        "        self._fr13_es_ckpt: dict = {}  " + sentinel + "\n",
+        1,
+    )
+
+    # (insert) at the cache anchor pop the worker-staged payload by (rid, blk_id).
+    insert_anchor = (
+        "            blk.block_hash = block_hash_with_group_id\n"
+        "            self.cached_block_hash_to_block.insert("
+        "block_hash_with_group_id, blk)\n"
+    )
+    if text.count(insert_anchor) != 1:
+        raise RuntimeError("APC ES block_pool insert anchor not unique")
+    text = text.replace(
+        insert_anchor,
+        insert_anchor
+        + "            import os as _fr13_es_os  " + sentinel + "\n"
+        "            if _fr13_es_os.environ.get(\"FR13_APC_EXACT_SEED\", \"0\") == \"1\":\n"
+        "                try:\n"
+        "                    from vllm.model_executor.layers.mamba import (\n"
+        "                        gdn_linear_attn as _fr13_es_gdn,\n"
+        "                    )\n"
+        "                    _fr13_es_stage = getattr(\n"
+        "                        _fr13_es_gdn, \"_FR13_ES_BLOCK_PENDING\", None\n"
+        "                    )\n"
+        "                    _fr13_es_pl = (\n"
+        "                        _fr13_es_stage.pop(\n"
+        "                            (str(request.request_id), int(blk.block_id)), None\n"
+        "                        )\n"
+        "                        if _fr13_es_stage is not None else None\n"
+        "                    )\n"
+        "                    if _fr13_es_pl is not None:\n"
+        "                        self._fr13_es_ckpt[block_hash_with_group_id] = _fr13_es_pl\n"
+        "                        _fr13_es_hx = block_hash_with_group_id.hex()\n"
+        "                        _fr13_es_msg = (\n"
+        "                            \"ES_WRITE hash=\" + _fr13_es_hx\n"
+        "                            + \" pos=\" + str(_fr13_es_pl.get(\"pos\"))\n"
+        "                            + \" req=\" + str(request.request_id)\n"
+        "                        )\n"
+        "                        print(\"FR13ES \" + _fr13_es_msg, flush=True)\n"
+        "                        try:\n"
+        "                            with open(_fr13_es_os.environ.get(\n"
+        "                                \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
+        "                                \"/logs/fr13_apc_exact_seed_eng.log\",\n"
+        "                            ), \"a\", buffering=1) as _fr13_es_fh:\n"
+        "                                _fr13_es_fh.write(_fr13_es_msg + chr(10))\n"
+        "                        except Exception:\n"
+        "                            pass\n"
+        "                except Exception:\n"
+        "                    pass\n",
+        1,
+    )
+
+    # (evict) pop the checkpoint BEFORE reset_hash, using the captured block_hash.
+    evict_anchor = (
+        "            # block not found in cached_block_hash_to_block,\n"
+        "            # eviction is not needed\n"
+        "            return False\n"
+        "\n"
+        "        block.reset_hash()\n"
+    )
+    if text.count(evict_anchor) != 1:
+        raise RuntimeError("APC ES block_pool evict anchor not unique")
+    text = text.replace(
+        evict_anchor,
+        "            # block not found in cached_block_hash_to_block,\n"
+        "            # eviction is not needed\n"
+        "            return False\n"
+        "\n"
+        "        # FR13_APC_EXACT_SEED: drop the per-blockhash checkpoint in lock-\n"
+        "        # step with the cache map eviction (block_hash captured above, the\n"
+        "        # same key cache_full_blocks stored under). " + sentinel + "\n"
+        "        try:\n"
+        "            self._fr13_es_ckpt.pop(block_hash, None)\n"
+        "        except Exception:\n"
+        "            pass\n"
+        "        block.reset_hash()\n",
+        1,
+    )
+
+    # (reset) clear the whole checkpoint store on a prefix-cache reset.
+    reset_anchor = (
+        "        # Remove all hashes so that no new blocks will hit.\n"
+        "        self.cached_block_hash_to_block = BlockHashToBlockMap()\n"
+    )
+    if text.count(reset_anchor) != 1:
+        raise RuntimeError("APC ES block_pool reset anchor not unique")
+    text = text.replace(
+        reset_anchor,
+        reset_anchor
+        + "        # FR13_APC_EXACT_SEED: clear the checkpoint store too. " + sentinel + "\n"
+        "        try:\n"
+        "            self._fr13_es_ckpt = {}\n"
+        "        except Exception:\n"
+        "            pass\n",
+        1,
+    )
+
+    BLOCK_POOL_PATH.write_text(text)
+    return True
+
+
+def _patch_kv_cache_manager_exact_seed() -> bool:
+    """FR13_APC_EXACT_SEED RESTORE stash at the kv_cache_manager hop.
+
+    get_computed_blocks() has `request` AND the returned hit length, so the hit
+    prefix block hash for the mamba group is reconstructable: the MambaManager
+    matched at block index (num_new_computed_tokens // block_size - 1), and the
+    cache key is make_block_hash_with_group_id(request.block_hashes[idx],
+    mamba_group_id) -- the SAME BlockHashWithGroupId cache_full_blocks stored
+    under (kv_cache_utils.make_block_hash_with_group_id is the single packer both
+    sides use). We stash {req_id -> hit BlockHashWithGroupId} on a manager-side
+    dict that the worker preprocess_mamba hop reads. Gated on FR13_APC_EXACT_SEED;
+    default path byte-identical (no stash, no read).
+
+    The mamba group id is resolved once from kv_cache_config (the group whose
+    spec is a MambaSpec); the block_size used is that group's runtime block_size.
+    """
+    text = KV_CACHE_MANAGER_PATH.read_text()
+    sentinel = "# FR13_APC_ES_KVCM"
+    if sentinel in text:
+        return False
+
+    anchor = (
+        "        computed_blocks, num_new_computed_tokens = (\n"
+        "            self.coordinator.find_longest_cache_hit(\n"
+        "                request.block_hashes, max_cache_hit_length\n"
+        "            )\n"
+        "        )\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError("APC ES kv_cache_manager hit anchor not unique")
+    text = text.replace(
+        anchor,
+        anchor
+        + "        import os as _fr13_es_os  " + sentinel + "\n"
+        "        # FR13_APC_ES iter5 fix: the OUTER gate is EXACT_SEED-ONLY (was\n"
+        "        # additionally gated on num_new_computed_tokens > 0). On turn-0\n"
+        "        # (fresh prefill / cache-MISS) num_new_computed_tokens == 0, so the\n"
+        "        # whole block was skipped and _FR13_ES_BLOCK_SIZE stayed None ->\n"
+        "        # the GDN prefill-capture gate (`bs is not None`) never passed ->\n"
+        "        # ES_WRITE=0. block_size + pending-map are now published on EVERY\n"
+        "        # get_computed_blocks (independent of the hit length); ONLY the\n"
+        "        # hit-hash stash keeps the num_new_computed_tokens > 0 dependency.\n"
+        "        if (\n"
+        "            _fr13_es_os.environ.get(\"FR13_APC_EXACT_SEED\", \"0\") == \"1\"\n"
+        "        ):\n"
+        "            try:\n"
+        "                # resolve the mamba group + its runtime block_size once.\n"
+        "                _fr13_es_grp = getattr(self, \"_fr13_es_mamba_group\", None)\n"
+        "                _fr13_es_bs = getattr(self, \"_fr13_es_mamba_block_size\", None)\n"
+        "                if _fr13_es_grp is None or _fr13_es_bs is None:\n"
+        "                    from vllm.v1.kv_cache_interface import MambaSpec as _fr13_es_MS\n"
+        "                    for _fr13_es_gi, _fr13_es_g in enumerate(\n"
+        "                        self.kv_cache_config.kv_cache_groups\n"
+        "                    ):\n"
+        "                        if isinstance(_fr13_es_g.kv_cache_spec, _fr13_es_MS):\n"
+        "                            _fr13_es_grp = _fr13_es_gi\n"
+        "                            _fr13_es_bs = int(_fr13_es_g.kv_cache_spec.block_size)\n"
+        "                            break\n"
+        "                    self._fr13_es_mamba_group = _fr13_es_grp\n"
+        "                    self._fr13_es_mamba_block_size = _fr13_es_bs\n"
+        "                if _fr13_es_grp is not None and _fr13_es_bs:\n"
+        "                    # iter5: publish block_size + init the pending map on\n"
+        "                    # EVERY get_computed_blocks (now that the outer gate is\n"
+        "                    # EXACT_SEED-only this runs on turn-0 too) so the GDN\n"
+        "                    # prefill-capture `bs is not None` gate passes from the\n"
+        "                    # very first fresh prefill -- not only after a hit landed\n"
+        "                    # on a block_size boundary.\n"
+        "                    from vllm.model_executor.layers.mamba import (\n"
+        "                        gdn_linear_attn as _fr13_es_gdn0,\n"
+        "                    )\n"
+        "                    _fr13_es_gdn0._FR13_ES_BLOCK_SIZE = int(_fr13_es_bs)\n"
+        "                    if getattr(_fr13_es_gdn0, \"_FR13_ES_PENDING_BY_REQ\", None) is None:\n"
+        "                        _fr13_es_gdn0._FR13_ES_PENDING_BY_REQ = {}\n"
+        "                if (\n"
+        "                    _fr13_es_grp is not None and _fr13_es_bs\n"
+        "                    and num_new_computed_tokens > 0\n"
+        "                    and num_new_computed_tokens % _fr13_es_bs == 0\n"
+        "                ):\n"
+        "                    from vllm.v1.core.kv_cache_utils import (\n"
+        "                        make_block_hash_with_group_id as _fr13_es_pack,\n"
+        "                        BlockHashListWithBlockSize as _fr13_es_BHLWBS,\n"
+        "                    )\n"
+        "                    # Mirror the coordinator's _get_block_hashes: when the\n"
+        "                    # mamba group block_size != hash_block_size the stored\n"
+        "                    # key is the MERGED block_size-granular hash, NOT the\n"
+        "                    # raw request.block_hashes[idx]. hash_block_size lives on\n"
+        "                    # the block_pool (BlockPool.hash_block_size).\n"
+        "                    _fr13_es_hbs = int(getattr(\n"
+        "                        self.block_pool, \"hash_block_size\", _fr13_es_bs\n"
+        "                    ))\n"
+        "                    if _fr13_es_bs == _fr13_es_hbs:\n"
+        "                        _fr13_es_bhl = request.block_hashes\n"
+        "                    else:\n"
+        "                        _fr13_es_bhl = _fr13_es_BHLWBS(\n"
+        "                            request.block_hashes, _fr13_es_hbs, _fr13_es_bs\n"
+        "                        )\n"
+        "                    _fr13_es_idx = num_new_computed_tokens // _fr13_es_bs - 1\n"
+        "                    _fr13_es_bh = _fr13_es_bhl[_fr13_es_idx]\n"
+        "                    _fr13_es_key = _fr13_es_pack(_fr13_es_bh, _fr13_es_grp)\n"
+        "                    # publish onto the gdn module global so the worker\n"
+        "                    # preprocess hop (same process) can read it by req_id.\n"
+        "                    from vllm.model_executor.layers.mamba import (\n"
+        "                        gdn_linear_attn as _fr13_es_gdn,\n"
+        "                    )\n"
+        "                    _fr13_es_map = getattr(\n"
+        "                        _fr13_es_gdn, \"_FR13_ES_HIT_HASHES\", None\n"
+        "                    )\n"
+        "                    if _fr13_es_map is None:\n"
+        "                        _fr13_es_map = {}\n"
+        "                        _fr13_es_gdn._FR13_ES_HIT_HASHES = _fr13_es_map\n"
+        "                    _fr13_es_map[str(request.request_id)] = {\n"
+        "                        \"hash\": _fr13_es_key,\n"
+        "                        \"pos\": int(num_new_computed_tokens),\n"
+        "                    }\n"
+        "                    # also publish the block_pool handle once (same\n"
+        "                    # process) for the worker preprocess ckpt read.\n"
+        "                    if getattr(\n"
+        "                        _fr13_es_gdn, \"_FR13_ES_BLOCK_POOL\", None\n"
+        "                    ) is None:\n"
+        "                        _fr13_es_gdn._FR13_ES_BLOCK_POOL = self.block_pool\n"
+        "                    # publish the runtime mamba block_size for the GDN\n"
+        "                    # drain's WRITE 1(a) pos%block_size==0 gate (never a\n"
+        "                    # literal 1024).\n"
+        "                    _fr13_es_gdn._FR13_ES_BLOCK_SIZE = int(_fr13_es_bs)\n"
+        "            except Exception:\n"
+        "                pass\n",
+        1,
+    )
+
+    KV_CACHE_MANAGER_PATH.write_text(text)
+    return True
+
+
+def _patch_worker_mamba_exact_seed() -> bool:
+    """FR13_APC_EXACT_SEED worker hops: WRITE 1(b) (postprocess) + RESTORE (b)
+    (preprocess). Both run in the worker (same EngineCore process), so they bridge
+    the scheduler-side block_pool/manager via the gdn_linear_attn module-global
+    staging map + the scheduler's manager-side hit-hash dict (reached through the
+    runner's kv_cache_manager handle is NOT needed -- the manager stashes by
+    req_id onto a dict we read by req_id; the runner has `requests[req_id]`
+    req_state, and the manager dict is found via the gdn module too).
+
+    WRITE 1(b): postprocess_mamba -- for each committed req, pop the per-req
+    pending checkpoints (staged at pos%block_size==0 by the GDN drain) and map
+    each {pos} -> block_id = req_state.block_ids[mamba_group][pos//block_size - 1],
+    then move it to the (req_id, block_id) staging map that cache_full_blocks
+    drains. RESTORE (b): preprocess_mamba -- for the manager-stashed hit hash of
+    each req, read block_pool._fr13_es_ckpt[hash] and stage it onto
+    req_state._fr13_es_restore for the GDN prefill seed hop.
+
+    The runner exposes block_pool / kv_cache_manager hit map through the gdn
+    module globals the scheduler side writes (block_pool ckpt store is read via a
+    module-global handle the manager publishes). Default path byte-identical.
+
+    Two new FUNCTIONS appended to mamba_utils + two anchor injections. The path is
+    already registered (MAMBA_UTILS_PATH) -- this only adds functions/anchors.
+    """
+    text = MAMBA_UTILS_PATH.read_text()
+    sentinel = "# FR13_APC_ES_WORKER"
+    if sentinel in text:
+        return False
+
+    # Append the two helper functions at module end.
+    helpers = (
+        "\n\n"
+        "def _fr13_es_worker_postprocess(req_state, mamba_group_id, block_size):  "
+        + sentinel + "\n"
+        "    \"\"\"FR13_APC_EXACT_SEED WRITE 1(b): drain this req's pending chunked\n"
+        "    checkpoints (staged by the GDN drain at pos%block_size==0) into the\n"
+        "    (req_id, block_id) staging map cache_full_blocks pops from. Default OFF\n"
+        "    -> early return. Maps pos -> block_ids[mamba_group][pos//block_size-1].\n"
+        "    \"\"\"\n"
+        "    import os as _es_os\n"
+        "    if _es_os.environ.get(\"FR13_APC_EXACT_SEED\", \"0\") != \"1\":\n"
+        "        return\n"
+        "    try:\n"
+        "        from vllm.model_executor.layers.mamba import (\n"
+        "            gdn_linear_attn as _es_gdn,\n"
+        "        )\n"
+        "        _es_pend = getattr(_es_gdn, \"_FR13_ES_PENDING_BY_REQ\", None)\n"
+        "        if not _es_pend:\n"
+        "            return\n"
+        "        _es_rid = str(getattr(req_state, \"req_id\", None))\n"
+        "        _es_list = _es_pend.get(_es_rid)\n"
+        "        if not _es_list:\n"
+        "            return\n"
+        "        _es_stage = getattr(_es_gdn, \"_FR13_ES_BLOCK_PENDING\", None)\n"
+        "        if _es_stage is None:\n"
+        "            _es_stage = {}\n"
+        "            _es_gdn._FR13_ES_BLOCK_PENDING = _es_stage\n"
+        "        _es_blocks = req_state.block_ids[mamba_group_id]\n"
+        "        _es_kept = []\n"
+        "        for _es_pl in _es_list:\n"
+        "            _es_pos = int(_es_pl.get(\"pos\"))\n"
+        "            _es_bidx = _es_pos // int(block_size) - 1\n"
+        "            if 0 <= _es_bidx < len(_es_blocks):\n"
+        "                _es_bid = int(_es_blocks[_es_bidx])\n"
+        "                _es_stage[(_es_rid, _es_bid)] = _es_pl\n"
+        "            else:\n"
+        "                # block not yet allocated for this pos -> keep pending.\n"
+        "                _es_kept.append(_es_pl)\n"
+        "        if _es_kept:\n"
+        "            _es_pend[_es_rid] = _es_kept\n"
+        "        else:\n"
+        "            _es_pend.pop(_es_rid, None)\n"
+        "    except Exception:\n"
+        "        pass\n"
+        "\n\n"
+        "def _fr13_es_worker_preprocess(req_state, block_pool):  " + sentinel + "\n"
+        "    \"\"\"FR13_APC_EXACT_SEED RESTORE (b): for this req's manager-stashed hit\n"
+        "    hash, read block_pool._fr13_es_ckpt[hash] and stage it onto\n"
+        "    req_state._fr13_es_restore for the GDN prefill seed hop. Default OFF ->\n"
+        "    early return. The hit-hash dict is published by the kv_cache_manager\n"
+        "    (same process) onto the gdn module global for cross-component reach.\n"
+        "    \"\"\"\n"
+        "    import os as _es_os\n"
+        "    if _es_os.environ.get(\"FR13_APC_EXACT_SEED\", \"0\") != \"1\":\n"
+        "        return\n"
+        "    try:\n"
+        "        from vllm.model_executor.layers.mamba import (\n"
+        "            gdn_linear_attn as _es_gdn,\n"
+        "        )\n"
+        "        _es_hm = getattr(_es_gdn, \"_FR13_ES_HIT_HASHES\", None)\n"
+        "        if not _es_hm:\n"
+        "            return\n"
+        "        if block_pool is None:\n"
+        "            block_pool = getattr(_es_gdn, \"_FR13_ES_BLOCK_POOL\", None)\n"
+        "        _es_rid = str(getattr(req_state, \"req_id\", None))\n"
+        "        _es_hit = _es_hm.pop(_es_rid, None)\n"
+        "        if _es_hit is None or block_pool is None:\n"
+        "            return\n"
+        "        _es_store = getattr(block_pool, \"_fr13_es_ckpt\", None)\n"
+        "        if _es_store is None:\n"
+        "            return\n"
+        "        _es_key = _es_hit.get(\"hash\")\n"
+        "        _es_pl = _es_store.get(_es_key)\n"
+        "        _es_seeded = _es_pl is not None\n"
+        "        if _es_seeded:\n"
+        "            _es_rec = {\n"
+        "                \"pos\": int(_es_pl.get(\"pos\")),\n"
+        "                \"state\": _es_pl.get(\"state\"),\n"
+        "            }\n"
+        "            req_state._fr13_es_restore = _es_rec\n"
+        "            # also publish by req_id for the GDN prefill seed hop, which\n"
+        "            # only has the row->req_id map (_LUMO_FA_NONSPEC_ROW_REQ_IDS),\n"
+        "            # not the req_state object.\n"
+        "            _es_rbr = getattr(_es_gdn, \"_FR13_ES_RESTORE_BY_REQ\", None)\n"
+        "            if _es_rbr is None:\n"
+        "                _es_rbr = {}\n"
+        "                _es_gdn._FR13_ES_RESTORE_BY_REQ = _es_rbr\n"
+        "            _es_rbr[_es_rid] = _es_rec\n"
+        "        _es_hx = _es_key.hex() if _es_key is not None else \"?\"\n"
+        "        _es_msg = (\n"
+        "            \"ES_RESTORE hash=\" + _es_hx\n"
+        "            + \" pos=\" + str(_es_hit.get(\"pos\"))\n"
+        "            + \" req=\" + _es_rid\n"
+        "            + \" seeded=\" + str(bool(_es_seeded))\n"
+        "        )\n"
+        "        print(\"FR13ES \" + _es_msg, flush=True)\n"
+        "        try:\n"
+        "            with open(_es_os.environ.get(\n"
+        "                \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
+        "                \"/logs/fr13_apc_exact_seed_eng.log\",\n"
+        "            ), \"a\", buffering=1) as _es_fh:\n"
+        "                _es_fh.write(_es_msg + chr(10))\n"
+        "        except Exception:\n"
+        "            pass\n"
+        "    except Exception:\n"
+        "        pass\n"
+    )
+    text = text + helpers
+
+    # WRITE 1(b) anchor: postprocess_mamba dest_block_idx line (after the copy
+    # meta is collected for the committed block, the req IS committing a block).
+    post_anchor = (
+        "            dest_block_idx = aligned_new_computed_tokens // "
+        "mamba_spec.block_size - 1\n"
+    )
+    if text.count(post_anchor) != 1:
+        raise RuntimeError("APC ES worker postprocess anchor not unique")
+    text = text.replace(
+        post_anchor,
+        post_anchor
+        + "            for _es_gid in mamba_group_ids:  " + sentinel + "\n"
+        "                _fr13_es_worker_postprocess(\n"
+        "                    req_state, _es_gid, mamba_spec.block_size\n"
+        "                )\n",
+        1,
+    )
+
+    # RESTORE (b) anchor: preprocess_mamba per-req loop head (req_state bound).
+    pre_anchor = (
+        "    for i, req_id in enumerate(input_batch.req_ids):\n"
+        "        req_state = requests[req_id]\n"
+        "        prev_state_idx = mamba_state_idx.get(req_id)\n"
+    )
+    if text.count(pre_anchor) != 1:
+        raise RuntimeError("APC ES worker preprocess anchor not unique")
+    text = text.replace(
+        pre_anchor,
+        "    for i, req_id in enumerate(input_batch.req_ids):\n"
+        "        req_state = requests[req_id]\n"
+        "        _fr13_es_worker_preprocess(req_state, None)  " + sentinel + "\n"
+        "        prev_state_idx = mamba_state_idx.get(req_id)\n",
+        1,
+    )
+
+    MAMBA_UTILS_PATH.write_text(text)
+    return True
 
 
 def main() -> int:
@@ -16943,6 +18650,13 @@ def main() -> int:
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_gpu_committer()),
         (FP8_UTILS_PATH, _patch_fp8_utils_gb10_gemv_cfg()),
+        # FR13_APC_EXACT_SEED block-hash checkpoint pivot (default OFF ->
+        # byte-identical). WRITE 3-hop: GDN drain -> worker postprocess ->
+        # block_pool insert (keyed by BlockHashWithGroupId). RESTORE: kv_cache_
+        # manager stash -> worker preprocess -> GDN prefill seed.
+        (BLOCK_POOL_PATH, _patch_block_pool_exact_seed()),
+        (KV_CACHE_MANAGER_PATH, _patch_kv_cache_manager_exact_seed()),
+        (MAMBA_UTILS_PATH, _patch_worker_mamba_exact_seed()),
     ]
     patched: dict[str, bool] = {}
     for path, did_patch in patch_steps:
