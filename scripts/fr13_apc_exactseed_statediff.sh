@@ -14,9 +14,10 @@ B=${B:-1024}
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 RD=output/fr13_apc_exactseed_statediff/run_${TS}; mkdir -p "$RD/logs"
 echo "$RD" > /home/mark/.claude/jobs/22c39bb9/tmp/eseed_root.txt
-# hardlink (same filesystem) instead of copy: instant, no 102G dup per boot.
-cp -l "$OLD_REF"/ref_gdn*.pt "$RD/logs/" 2>/dev/null || cp "$OLD_REF"/ref_gdn*.pt "$RD/logs/" 2>/dev/null
-cp -l "$OLD_REF"/ref_logit*.pt "$RD/logs/" 2>/dev/null || cp "$OLD_REF"/ref_logit*.pt "$RD/logs/" 2>/dev/null
+# symlink the REF (hardlinks are "Operation not permitted" on this fs; full cp = 100G/boot):
+# instant, host-side reduce follows the symlinks (container only WRITES on_b*, never reads ref_*).
+ln -s "$PWD/$OLD_REF"/ref_gdn*.pt "$RD/logs/" 2>/dev/null || cp "$OLD_REF"/ref_gdn*.pt "$RD/logs/" 2>/dev/null
+ln -s "$PWD/$OLD_REF"/ref_logit*.pt "$RD/logs/" 2>/dev/null || cp "$OLD_REF"/ref_logit*.pt "$RD/logs/" 2>/dev/null
 echo "=== EXACT_SEED STATE-DIFF  rundir=$RD  REF=$(ls "$RD/logs"/ref_gdn*.pt 2>/dev/null|wc -l) gdn  block=$B + EXACT_SEED=1 ==="
 PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" >/dev/null 2>&1 || true
 for p in fr13 swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
