@@ -6396,21 +6396,22 @@ def _fr13_gdn_subop_mab(
                         except Exception:
                             pass
                         # ---- END ALL-GATES DIAGNOSTIC -------------------------
-                        # iter6: vLLM forces the actual mamba block_size to 816
-                        # (interface.py:606 "attention page >= mamba page" + 0.37%
-                        # pad), which is NOT a multiple of FLA_CHUNK_SIZE=64. The old
-                        # `_fr13_es_bs % 64 == 0` precondition therefore NEVER passed
-                        # (816 % 64 == 48) -> ES_PREFILL_CAPTURE=0 -> drift stuck 77.96.
-                        # Capture at the real 816 boundary anyway: the chunked kernel
-                        # handles the partial last chunk, and the DOMINANT cause-A is
-                        # recurrent-vs-chunked REALIZATION of the restored base (fixed
-                        # by storing the chunked checkpoint), not the 816-vs-832 tail
-                        # reassociation (a bounded ~fp residual). Measure the drift; if
-                        # it collapses off 77.96 toward fp the mechanism is proven and
-                        # we can refine to a 64-aligned checkpoint for true bit-exact.
+                        # iter8: vLLM align-mode welds the checkpoint position to the
+                        # cache BLOCK boundary, so a block-boundary checkpoint is only
+                        # bit-exact when block_size is a multiple of FLA_CHUNK_SIZE=64.
+                        # vLLM's default forced value (816 = 16x51) is NOT 64-aligned;
+                        # iter6 waived this gate and accepted a residual -- WRONG (the
+                        # field never accepts one; user rejected residuals). RESTORE the
+                        # gate: capture ONLY when block_size is 64-aligned, and satisfy
+                        # it at the SOURCE by forcing a 64-aligned block_size via
+                        # --block-size (e.g. 1024) -- vLLM's own "all"-mode rule
+                        # block = lcm(chunk, align), and SGLang/Marconi. If bs is not
+                        # 64-aligned the ES_GATE diagnostic surfaces it and capture
+                        # stays OFF (no silent lossy write).
                         if (
                             _fr13_es_bs is not None
                             and int(_fr13_es_bs) > 0
+                            and int(_fr13_es_bs) % 64 == 0
                             and _fr13_es_pend_by_req is not None
                         ):
                             _fr13_es_bs = int(_fr13_es_bs)
@@ -18225,47 +18226,82 @@ def _patch_block_pool_exact_seed() -> bool:
         "                    from vllm.model_executor.layers.mamba import (\n"
         "                        gdn_linear_attn as _fr13_es_gdn,\n"
         "                    )\n"
-        "                    _fr13_es_stage = getattr(\n"
-        "                        _fr13_es_gdn, \"_FR13_ES_BLOCK_PENDING\", None\n"
+        "                    # iter8 WRITE 1(c): bind pos->hash DIRECTLY at the insert\n"
+        "                    # (request, blk, block_hash_with_group_id all coexist here).\n"
+        "                    # Block at local index i is absolute block (num_cached + i);\n"
+        "                    # its END pos = (num_cached+i+1)*block_size -- exactly the\n"
+        "                    # block_size-multiple the GDN prefill-capture published.\n"
+        "                    # Replaces the racy postprocess relay + the broken\n"
+        "                    # (req_id, block_id) staging key that gave ES_WRITE=0.\n"
+        "                    _fr13_es_pend = getattr(\n"
+        "                        _fr13_es_gdn, \"_FR13_ES_PENDING_BY_REQ\", None\n"
         "                    )\n"
-        "                    _fr13_es_pl = (\n"
-        "                        _fr13_es_stage.pop(\n"
-        "                            (str(request.request_id), int(blk.block_id)), None\n"
-        "                        )\n"
-        "                        if _fr13_es_stage is not None else None\n"
+        "                    _fr13_es_rid = str(request.request_id)\n"
+        "                    _fr13_es_lst = (\n"
+        "                        _fr13_es_pend.get(_fr13_es_rid)\n"
+        "                        if _fr13_es_pend is not None else None\n"
         "                    )\n"
-        "                    if _fr13_es_pl is not None:\n"
-        "                        self._fr13_es_ckpt[block_hash_with_group_id] = _fr13_es_pl\n"
-        "                        _fr13_es_hx = block_hash_with_group_id.hex()\n"
-        "                        _fr13_es_msg = (\n"
-        "                            \"ES_WRITE hash=\" + _fr13_es_hx\n"
-        "                            + \" pos=\" + str(_fr13_es_pl.get(\"pos\"))\n"
-        "                            + \" req=\" + str(request.request_id)\n"
+        "                    if _fr13_es_lst:\n"
+        "                        _fr13_es_pos = (\n"
+        "                            (int(num_cached_blocks) + int(i) + 1)\n"
+        "                            * int(block_size)\n"
         "                        )\n"
-        "                        print(\"FR13ES \" + _fr13_es_msg, flush=True)\n"
-        "                        try:\n"
-        "                            with open(_fr13_es_os.environ.get(\n"
-        "                                \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
-        "                                \"/logs/fr13_apc_exact_seed_eng.log\",\n"
-        "                            ), \"a\", buffering=1) as _fr13_es_fh:\n"
-        "                                _fr13_es_fh.write(_fr13_es_msg + chr(10))\n"
-        "                        except Exception:\n"
-        "                            pass\n"
-        "                    elif _fr13_es_stage:\n"
-        "                        try:\n"
-        "                            _fr13_es_mm = (\"ES_INSERT_MISS req=\"\n"
-        "                                + str(request.request_id) + \" blk=\"\n"
-        "                                + str(blk.block_id) + \" stage_n=\"\n"
-        "                                + str(len(_fr13_es_stage)) + \" k3=\"\n"
-        "                                + str(list(_fr13_es_stage.keys())[:3]))\n"
-        "                            print(\"FR13ES \" + _fr13_es_mm, flush=True)\n"
-        "                            with open(_fr13_es_os.environ.get(\n"
-        "                                \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
-        "                                \"/logs/fr13_apc_exact_seed_eng.log\",\n"
-        "                            ), \"a\", buffering=1) as _fr13_es_fh3:\n"
-        "                                _fr13_es_fh3.write(_fr13_es_mm + chr(10))\n"
-        "                        except Exception:\n"
-        "                            pass\n"
+        "                        _fr13_es_match = None\n"
+        "                        for _fr13_es_e in _fr13_es_lst:\n"
+        "                            if int(_fr13_es_e.get(\"pos\")) == int(\n"
+        "                                _fr13_es_pos\n"
+        "                            ):\n"
+        "                                _fr13_es_match = _fr13_es_e\n"
+        "                                break\n"
+        "                        if _fr13_es_match is not None:\n"
+        "                            self._fr13_es_ckpt[block_hash_with_group_id] = (\n"
+        "                                _fr13_es_match\n"
+        "                            )\n"
+        "                            try:\n"
+        "                                _fr13_es_hx = (\n"
+        "                                    block_hash_with_group_id.hex()\n"
+        "                                    if hasattr(\n"
+        "                                        block_hash_with_group_id, \"hex\")\n"
+        "                                    else str(block_hash_with_group_id)\n"
+        "                                )\n"
+        "                            except Exception:\n"
+        "                                _fr13_es_hx = str(block_hash_with_group_id)\n"
+        "                            _fr13_es_msg = (\n"
+        "                                \"ES_WRITE hash=\" + _fr13_es_hx\n"
+        "                                + \" pos=\" + str(_fr13_es_pos)\n"
+        "                                + \" req=\" + _fr13_es_rid\n"
+        "                            )\n"
+        "                            print(\"FR13ES \" + _fr13_es_msg, flush=True)\n"
+        "                            try:\n"
+        "                                with open(_fr13_es_os.environ.get(\n"
+        "                                    \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
+        "                                    \"/logs/fr13_apc_exact_seed_eng.log\",\n"
+        "                                ), \"a\", buffering=1) as _fr13_es_fh:\n"
+        "                                    _fr13_es_fh.write(\n"
+        "                                        _fr13_es_msg + chr(10)\n"
+        "                                    )\n"
+        "                            except Exception:\n"
+        "                                pass\n"
+        "                        else:\n"
+        "                            try:\n"
+        "                                _fr13_es_mm = (\n"
+        "                                    \"ES_INSERT_MISS req=\" + _fr13_es_rid\n"
+        "                                    + \" want_pos=\" + str(_fr13_es_pos)\n"
+        "                                    + \" have=\" + str(\n"
+        "                                        [int(_z.get(\"pos\"))\n"
+        "                                         for _z in _fr13_es_lst]\n"
+        "                                    )\n"
+        "                                )\n"
+        "                                print(\"FR13ES \" + _fr13_es_mm, flush=True)\n"
+        "                                with open(_fr13_es_os.environ.get(\n"
+        "                                    \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
+        "                                    \"/logs/fr13_apc_exact_seed_eng.log\",\n"
+        "                                ), \"a\", buffering=1) as _fr13_es_fh3:\n"
+        "                                    _fr13_es_fh3.write(\n"
+        "                                        _fr13_es_mm + chr(10)\n"
+        "                                    )\n"
+        "                            except Exception:\n"
+        "                                pass\n"
         "                except Exception:\n"
         "                    pass\n",
         1,

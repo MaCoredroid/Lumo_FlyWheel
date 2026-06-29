@@ -206,14 +206,7 @@ SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens
 # lossless lever. mamba_block_size multiple of 8 (causal_conv1d align), <= max-num-batched.
 # Default OFF => APC_FLAGS empty => serve command byte-identical to the locked cat9 path.
 FR13_ENABLE_APC=${FR13_ENABLE_APC:-0}
-# SPEC+CACHE LOSSLESS DEFAULT = 8192 (2026-06-28, FR13_APC_BLOCKSIZE_FINDING.md). At 1024
-# the align-mode block-aligned chunked prefill folds the GDN recurrence at ~30 boundaries
-# over a 30K prefix; spec-decode amplifies that cumulative fp drift into a tool-call runaway
-# (cat6root cache-ON 0/3 @1024). Coarsening to 8192 (~3 boundaries) drops the drift below
-# spec's tolerance -> cache-ON + cat6root tree resolved 12907 with real cache hits + spec
-# engaged + no runaway. Tradeoff: coarser mamba cache = slightly less mamba-TTFT (KV TTFT +
-# spec TPS preserved). Overridable; the drift curve picks the smallest-lossless value.
-MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-8192}
+MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-1024}
 MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
 # APC LOSSLESS FIX (2026-06-21, proven run_20260621T013300Z): default max-num-batched-tokens to
 # the mamba block size so each chunked-prefill scheduler step crosses AT MOST ONE block boundary.
@@ -240,7 +233,13 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
     # --enable-prefix-caching), so they are dropped along with the cache flag.
     APC_FLAGS="--enable-chunked-prefill --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
   else
-    APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS"
+    # FR13 64-align: in align mode mamba_block_size is OVERRIDDEN to block_size
+    # (interface.py _align_hybrid_block_size L612-613), and block_size is only
+    # kernel-aligned (16) -> 816, NOT a multiple of FLA_CHUNK_SIZE=64. Setting
+    # --block-size to a 64-multiple (>= the ~816-token mamba page, <= max-num-batched)
+    # forces a 64-aligned block_size so the mamba checkpoint at a block boundary is
+    # BIT-EXACT (no residual). Default OFF (empty) => byte-identical to prior runs.
+    APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS ${APC_BLOCK_SIZE:+--block-size $APC_BLOCK_SIZE}"
   fi
   # BAKE (2026-06-24, GPU-VERIFIED via verify3b output/fr13_apc_verify3b): the tree+APC
   # node-bank staleness fix. The defect: the tree committer writes the accepted-leaf state
@@ -270,6 +269,8 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   : "${FR13_APC_CONV_SNAPSHOT:=1}"
   : "${FR13_APC_SNAP_FIX:=1}"        # BAKED 2026-06-24: verify3b FAITHFUL 240/240 (the working SSM node-bank fix)
   : "${FR13_APC_SNAP_FIX_ZEROACCEPT:=1}"  # BAKED 2026-06-27 (user call): publish committed-root row (_row[0]) for zero-accept (accepted_len==0) steps (shared spine+tree carrier). APC-only -> non-APC locked cat9 path byte-identical
+  : "${FR13_APC_CONV_SNAP_FIX:=0}"   # CLR: conv node-bank leaf redirect (default OFF -> byte-identical)
+  : "${FR13_APC_PRE_SNAP_FIX:=0}"    # CLR: preprocess SSM redirect (default OFF -> byte-identical)
   # HRS UN-BAKED 2026-06-27 (user) — CURRENT DIRECTION. The recurrent-suffix roll (HIT_RECURRENT_SUFFIX)
   # is SUPERSEDED by the SGLang-faithful EXACT-SEED fix (FR13_APC_EXACT_SEED, in progress; worktree
   # wf_4f4d8bf1). ROOT: cache-ON fails the coding agent regardless of HRS (HRS=1 0/2, HRS=0 0/3,
@@ -281,7 +282,15 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   # chain, exact base) + restore the remainder THROUGH the chunked kernel. HRS stays OFF until that lands.
   : "${FR13_APC_HIT_RECURRENT_SUFFIX:=0}"  # un-baked (was :=1 2026-06-27) -> native chunk path, byte-identical
   : "${FR13_APC_HIT_SUFFIX_CAP:=64}"       # inert while HRS=0 (was :=1000000)
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT
+  # EXACT-SEED fix v2 (default OFF -> locked path byte-identical): make the cached SSM
+  # checkpoint the CHUNKED-prefill realization at a 64-ALIGNED boundary (chunked-only chain,
+  # exact base) instead of the recurrent committed leaf, and restore the <64 remainder THROUGH
+  # the chunked kernel (EXACT_SEED forces the native chunk branch on cache-hit prefills). SGLang
+  # MambaRadixCache + Sparse-Prefix-Caching Remark 1 + Execution-State-Capsules Alg.1. Requires
+  # FR13_APC_SNAP_FIX=1 (overrides the SNAP_FIX redirect source). When ON it DISABLES the HRS
+  # recurrent-suffix path (a recurrent remainder is not chunk-bit-exact).
+  : "${FR13_APC_EXACT_SEED:=0}"
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP FR13_APC_EXACT_SEED
 else
   APC_FLAGS=""
 fi
@@ -297,11 +306,6 @@ fi
 # FIX = cudagraph_mode=PIECEWISE: keep graph capture for the dense GEMMs/norms/MLP (decode TPS
 # preserved) but run the GDN/mamba scan EAGER every step so it always reads the live restored
 # state. Unset = vLLM default FULL_AND_PIECEWISE (the poisoned regime). Only matters with APC on.
-# BAKED 2026-06-29 (user): default to PIECEWISE so the cuda-graph baked-row carrier is neutralized
-# in the deployed config. Confirmed the 1024-fails solve test + the chunk drift curve already ran
-# under PIECEWISE/eager (so those failures are residual cause-A/char-8, NOT cuda-graph). Stays the
-# default UNTIL full cuda-graph is proven lossless with APC. Override via CUDAGRAPH_MODE=... .
-CUDAGRAPH_MODE=${CUDAGRAPH_MODE:-PIECEWISE}
 CG_FLAGS=""
 if [[ -n "${CUDAGRAPH_MODE:-}" ]]; then
   CG_FLAGS="--compilation-config '{\"cudagraph_mode\":\"$CUDAGRAPH_MODE\"}'"
@@ -418,6 +422,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e LUMO_NSYS_TRACE="$LUMO_NSYS_TRACE" \
   -e LUMO_NSYS_OUTPUT="$LUMO_NSYS_OUTPUT" \
   -e FR13_BI_TREE_ATTN="$FR13_BI_TREE_ATTN" \
+  -e FR13_TORCH_DET_WARN="${FR13_TORCH_DET_WARN:-0}" \
+  -e FR13_TORCH_DET_WARN_LOG="${FR13_TORCH_DET_WARN_LOG:-/logs/fr13_torch_det_warn.log}" \
   -e FR13_TREE_PER_REQ_GEN="${FR13_TREE_PER_REQ_GEN:-1}" \
   -e FR13_TREE_REQKEY="${FR13_TREE_REQKEY:-1}" \
   -e FR13_TREE_REMAP_SEQ="${FR13_TREE_REMAP_SEQ:-1}" \
@@ -428,6 +434,14 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_BLOCK_ALIGN_45477="${FR13_APC_BLOCK_ALIGN_45477:-1}" \
   -e FR13_APC_SNAP_FIX="${FR13_APC_SNAP_FIX:-0}" \
   -e FR13_APC_SNAP_FIX_ZEROACCEPT="${FR13_APC_SNAP_FIX_ZEROACCEPT:-0}" \
+  -e FR13_APC_CONV_SNAP_FIX="${FR13_APC_CONV_SNAP_FIX:-0}" \
+  -e FR13_APC_PRE_SNAP_FIX="${FR13_APC_PRE_SNAP_FIX:-0}" \
+  -e FR13_APC_HIT_RECURRENT_SUFFIX="${FR13_APC_HIT_RECURRENT_SUFFIX:-0}" \
+  -e FR13_APC_HIT_SUFFIX_CAP="${FR13_APC_HIT_SUFFIX_CAP:-64}" \
+  -e FR13_APC_EXACT_SEED="${FR13_APC_EXACT_SEED:-0}" \
+  -e FR13_APC_LEAF_CROSSCHECK="${FR13_APC_LEAF_CROSSCHECK:-0}" \
+  -e FR13_APC_CACHEROW_DUMP="${FR13_APC_CACHEROW_DUMP:-}" \
+  -e FR13_APC_CACHEROW_DUMP_LIMIT="${FR13_APC_CACHEROW_DUMP_LIMIT:-80}" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \
   -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
   -e FR13_EAGER_PACK="$FR13_EAGER_PACK" \
@@ -439,6 +453,9 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FORK_MARGIN_DUMP="$FR13_FORK_MARGIN_DUMP" \
   -e FR13_FORK_MARGIN_DUMP_PATH="$FR13_FORK_MARGIN_DUMP_PATH" \
   -e FR13_REPLAY_ROUTE="${FR13_REPLAY_ROUTE:-1}" \
+  -e FR13_REPLAY_BOUNDARY_LOG="${FR13_REPLAY_BOUNDARY_LOG:-0}" \
+  -e FR13_REPLAY_BOUNDARY_LAYERS="${FR13_REPLAY_BOUNDARY_LAYERS:-layers.0.linear_attn}" \
+  -e FR13_REPLAY_BOUNDARY_PATH="${FR13_REPLAY_BOUNDARY_PATH:-/logs/fr13_replay_boundary.jsonl}" \
   -e FR13_CHASE_DIAG="$FR13_CHASE_DIAG" \
   -e FR13_CHASE_DIAG_DIR="$FR13_CHASE_DIAG_DIR" \
   -e FR13_CHASE_TOPK="$FR13_CHASE_TOPK" \
@@ -450,6 +467,9 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e LUMO_FB_KERNEL_ROWS="$LUMO_FB_KERNEL_ROWS" \
   -e LUMO_FB_PROJ_PAD_ROWS="$LUMO_FB_PROJ_PAD_ROWS" \
   -e FR13_GB10_FP8_GEMV_CFG="${FR13_GB10_FP8_GEMV_CFG:-0}" \
+  -e FR13_SFWD_GPU_TIMER="${FR13_SFWD_GPU_TIMER:-0}" \
+  -e FR13_SFWD_GPU_TIMER_JSON="${FR13_SFWD_GPU_TIMER_JSON:-}" \
+  -e FR13_SFWD_GPU_TIMER_MAXPENDING="${FR13_SFWD_GPU_TIMER_MAXPENDING:-256}" \
   -e FR13_GPU_COMMITTER="${FR13_GPU_COMMITTER:-0}" \
   -e FR13_COMMITTER_SYNCKILL="${FR13_COMMITTER_SYNCKILL:-0}" \
   -e FR13_GPU_COMMITTER_KERNEL="${FR13_GPU_COMMITTER_KERNEL:-/workspace/scripts/fr13_gpu_committer_kernel.py}" \
@@ -475,6 +495,25 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_FA2_TREE_BIAS="$FR13_FA2_TREE_BIAS" \
   -e FR13_FA2_PREFILL_NATIVE="$FR13_FA2_PREFILL_NATIVE" \
   -e FR13_TREE_ATTN_EXP2_SOFTMAX="$FR13_TREE_ATTN_EXP2_SOFTMAX" \
+  -e FR10_TREE_GDN_COUNTER_DUMP=/logs/fr10_tree_gdn_counters.json \
+  -e FR10_TREE_GDN_CAPTURE_PAYLOAD="${FR10_TREE_GDN_CAPTURE_PAYLOAD:-}" \
+  -e FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX="${FR10_TREE_GDN_CAPTURE_PAYLOAD_LAYER_PREFIX:-}" \
+  -e FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS="${FR10_TREE_GDN_CAPTURE_PAYLOAD_NUM_TOKENS:-}" \
+  -e FR10_TREE_GDN_COMMIT_HANDOFF_LOG="${FR10_TREE_GDN_COMMIT_HANDOFF_LOG:-}" \
+  -e FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX="${FR10_TREE_GDN_COMMIT_HANDOFF_LAYER_PREFIX:-}" \
+  -e FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT="${FR10_TREE_GDN_COMMIT_HANDOFF_LIMIT:-32}" \
+  -e FR10_TREE_GDN_SRC_NATIVE_PAYLOAD="${FR10_TREE_GDN_SRC_NATIVE_PAYLOAD:-}" \
+  -e FR10_TREE_DEPTH_POSITION_LOG=/logs/fr10_tree_depth_positions.jsonl \
+  -e FR10_ROOT_HIDDEN_CAPTURE="${FR10_ROOT_HIDDEN_CAPTURE:-}" \
+  -e FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS="${FR10_ROOT_HIDDEN_CAPTURE_NUM_TOKENS:-}" \
+  -e FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW="${FR10_ROOT_HIDDEN_CAPTURE_ROOT_ROW:-0}" \
+  -e FR10_ROOT_HIDDEN_CAPTURE_POSITION="${FR10_ROOT_HIDDEN_CAPTURE_POSITION:-}" \
+  -e FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS="${FR10_ROOT_LOGIT_CAPTURE_NUM_TOKENS:-}" \
+  -e FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW="${FR10_ROOT_LOGIT_CAPTURE_ROOT_ROW:-}" \
+  -e FR10_LAYER_HIDDEN_CAPTURE="${FR10_LAYER_HIDDEN_CAPTURE:-}" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS="${FR10_LAYER_HIDDEN_CAPTURE_NUM_TOKENS:-}" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_ROWS="${FR10_LAYER_HIDDEN_CAPTURE_ROWS:-}" \
+  -e FR10_LAYER_HIDDEN_CAPTURE_SKIP="${FR10_LAYER_HIDDEN_CAPTURE_SKIP:-0}" \
   -e FR10_LAYER_HIDDEN_CAPTURE_LIMIT="${FR10_LAYER_HIDDEN_CAPTURE_LIMIT:-1}" \
   -e FR12_FULL_ATTN_CAPTURE="${FR12_FULL_ATTN_CAPTURE:-}" \
   -e FR12_FULL_ATTN_CAPTURE_LAYER_PREFIX="${FR12_FULL_ATTN_CAPTURE_LAYER_PREFIX:-}" \
@@ -482,6 +521,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR12_FULL_ATTN_CAPTURE_SKIP="${FR12_FULL_ATTN_CAPTURE_SKIP:-0}" \
   -e FR12_FULL_ATTN_CAPTURE_LIMIT="${FR12_FULL_ATTN_CAPTURE_LIMIT:-1}" \
   -e FR12_SUBKERNEL_CAPTURE="${FR12_SUBKERNEL_CAPTURE:-}" \
+  -e FR13_TCF_DIAG_OVERRIDE="${FR13_TCF_DIAG_OVERRIDE:-0}" \
+  -e FR13_TCF_SELFCHECK="${FR13_TCF_SELFCHECK:-0}" \
   -e FR12_SUBKERNEL_CAPTURE_DEBUG_LOG="${FR12_SUBKERNEL_CAPTURE_DEBUG_LOG:-}" \
   -e FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX="${FR12_SUBKERNEL_CAPTURE_LAYER_PREFIX:-language_model.model.layers.0.linear_attn}" \
   -e FR12_SUBKERNEL_CAPTURE_NUM_TOKENS="${FR12_SUBKERNEL_CAPTURE_NUM_TOKENS:-}" \
@@ -489,25 +530,49 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR12_SUBKERNEL_CAPTURE_LIMIT="${FR12_SUBKERNEL_CAPTURE_LIMIT:-1}" \
   -e FR12_SUBKERNEL_CAPTURE_Z="${FR12_SUBKERNEL_CAPTURE_Z:-0}" \
   -e FR12_SUBKERNEL_CAPTURE_INPUT="${FR12_SUBKERNEL_CAPTURE_INPUT:-0}" \
+  -e FR13_TREE_ATTN_OP_CAPTURE="${FR13_TREE_ATTN_OP_CAPTURE:-}" \
+  -e FR13_TREE_ATTN_OP_CAPTURE_LAYER="${FR13_TREE_ATTN_OP_CAPTURE_LAYER:-language_model.model.layers.3.self_attn}" \
+  -e FR13_TREE_ATTN_OP_CAPTURE_SKIP="${FR13_TREE_ATTN_OP_CAPTURE_SKIP:-0}" \
   -e FR13_TREE_ATTN_OP_CAPTURE_LIMIT="${FR13_TREE_ATTN_OP_CAPTURE_LIMIT:-1}" \
+  -e FR13_FA2_MAB="${FR13_FA2_MAB:-0}" \
+  -e FR13_FA2_MAB_DUMP="${FR13_FA2_MAB_DUMP:-/logs/fr13_fa2_mab.jsonl}" \
+  -e FR13_FA2_MAB_LAYER="${FR13_FA2_MAB_LAYER:-*}" \
+  -e FR13_FA2_MAB_SKIP="${FR13_FA2_MAB_SKIP:-0}" \
   -e FR13_FA2_MAB_LIMIT="${FR13_FA2_MAB_LIMIT:-1}" \
   -e FR13_GDN_SUBOP_MAB="${FR13_GDN_SUBOP_MAB:-0}" \
+  -e FR13_GDN_SUBOP_MAB_DUMP="${FR13_GDN_SUBOP_MAB_DUMP:-/logs/fr13_gdn_subop_mab.jsonl}" \
+  -e FR13_GDN_SUBOP_MAB_LAYER="${FR13_GDN_SUBOP_MAB_LAYER:-language_model.model.layers.0.linear_attn}" \
+  -e FR13_GDN_SUBOP_MAB_SKIP="${FR13_GDN_SUBOP_MAB_SKIP:-0}" \
   -e FR13_GDN_SUBOP_MAB_LIMIT="${FR13_GDN_SUBOP_MAB_LIMIT:-1}" \
   -e FR13_GDN_SUBOP_MAB_EXPECT_TREE_N="${FR13_GDN_SUBOP_MAB_EXPECT_TREE_N:-10}" \
+  -e FR13_GDN_SUBOP_MAB_THRESHOLD="${FR13_GDN_SUBOP_MAB_THRESHOLD:-0.0}" \
+  -e FR13_REPLAY_DURABLE_AB="${FR13_REPLAY_DURABLE_AB:-0}" \
+  -e FR13_REPLAY_DURABLE_AB_LAYERS="${FR13_REPLAY_DURABLE_AB_LAYERS:-}" \
+  -e FR13_REPLAY_DURABLE_AB_PATH="${FR13_REPLAY_DURABLE_AB_PATH:-/logs/fr13_replay_durable_ab.jsonl}" \
+  -e FR13_REPLAY_DURABLE_AB_FLAG_FILE="${FR13_REPLAY_DURABLE_AB_FLAG_FILE:-/logs/fr13_replay_durable_ab.flag}" \
   -e VLLM_RAY_EXTRA_ENV_VARS_TO_COPY="$VLLM_RAY_EXTRA_ENV_VARS_TO_COPY" \
   -e VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="$VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY" \
+  -e FR13_FLASH_ATTN_OP_CAPTURE="${FR13_FLASH_ATTN_OP_CAPTURE:-}" \
+  -e FR13_FLASH_ATTN_OP_CAPTURE_LAYER="${FR13_FLASH_ATTN_OP_CAPTURE_LAYER:-language_model.model.layers.3.self_attn}" \
+  -e FR13_FLASH_ATTN_OP_CAPTURE_SKIP="${FR13_FLASH_ATTN_OP_CAPTURE_SKIP:-0}" \
   -e FR13_FLASH_ATTN_OP_CAPTURE_LIMIT="${FR13_FLASH_ATTN_OP_CAPTURE_LIMIT:-1}" \
+  -e FR13_PREPROCESS_INPUT_CAPTURE="${FR13_PREPROCESS_INPUT_CAPTURE:-}" \
+  -e FR13_PREPROCESS_INPUT_CAPTURE_NUM_TOKENS="${FR13_PREPROCESS_INPUT_CAPTURE_NUM_TOKENS:-}" \
+  -e FR13_PREPROCESS_INPUT_CAPTURE_SKIP="${FR13_PREPROCESS_INPUT_CAPTURE_SKIP:-0}" \
   -e FR13_PREPROCESS_INPUT_CAPTURE_LIMIT="${FR13_PREPROCESS_INPUT_CAPTURE_LIMIT:-1}" \
-  -e FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX="${FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX:-1}" \
-  -e FR10_SPINE_LOGIT_CAPTURE_LIMIT="${FR10_SPINE_LOGIT_CAPTURE_LIMIT:-1}" \
-  -e FR13_FINAL_LOGIT_CAPTURE_LIMIT="${FR13_FINAL_LOGIT_CAPTURE_LIMIT:-1}" \
   -e FR13_PREFILL_GDN_CAPTURE="${FR13_PREFILL_GDN_CAPTURE:-}" \
   -e FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX="${FR13_PREFILL_GDN_CAPTURE_LAYER_PREFIX:-}" \
+  -e FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX="${FR13_PREFILL_GDN_CAPTURE_LIMIT_PER_PREFIX:-1}" \
   -e FR13_APC_CONV_RESTORE_CAPTURE="${FR13_APC_CONV_RESTORE_CAPTURE:-0}" \
+  -e FR10_SPINE_LOGIT_CAPTURE="${FR10_SPINE_LOGIT_CAPTURE:-}" \
+  -e FR10_SPINE_LOGIT_CAPTURE_SKIP="${FR10_SPINE_LOGIT_CAPTURE_SKIP:-0}" \
+  -e FR10_SPINE_LOGIT_CAPTURE_LIMIT="${FR10_SPINE_LOGIT_CAPTURE_LIMIT:-1}" \
   -e FR13_FINAL_LOGIT_CAPTURE="${FR13_FINAL_LOGIT_CAPTURE:-}" \
   -e FR13_FINAL_LOGIT_CAPTURE_NUM_TOKENS="${FR13_FINAL_LOGIT_CAPTURE_NUM_TOKENS:-}" \
   -e FR13_FINAL_LOGIT_CAPTURE_ROWS="${FR13_FINAL_LOGIT_CAPTURE_ROWS:-}" \
   -e FR13_FINAL_LOGIT_CAPTURE_SKIP="${FR13_FINAL_LOGIT_CAPTURE_SKIP:-0}" \
+  -e FR13_FINAL_LOGIT_CAPTURE_LIMIT="${FR13_FINAL_LOGIT_CAPTURE_LIMIT:-1}" \
+  -e FR13_HIDDEN_SUBSTITUTE="${FR13_HIDDEN_SUBSTITUTE:-}" \
   -e LUMO_MTP_DRAFT_TRACE_FILE="$LUMO_MTP_DRAFT_TRACE_FILE" \
   -e LUMO_TREE_SAMPLER_DEBUG_LOG="$LUMO_TREE_SAMPLER_DEBUG_LOG" \
   -e LUMO_TREE_PATH_LCP_LOG="$LUMO_TREE_PATH_LCP_LOG" \
