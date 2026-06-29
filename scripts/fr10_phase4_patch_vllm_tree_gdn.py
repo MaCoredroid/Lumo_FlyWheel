@@ -6396,10 +6396,21 @@ def _fr13_gdn_subop_mab(
                         except Exception:
                             pass
                         # ---- END ALL-GATES DIAGNOSTIC -------------------------
+                        # iter6: vLLM forces the actual mamba block_size to 816
+                        # (interface.py:606 "attention page >= mamba page" + 0.37%
+                        # pad), which is NOT a multiple of FLA_CHUNK_SIZE=64. The old
+                        # `_fr13_es_bs % 64 == 0` precondition therefore NEVER passed
+                        # (816 % 64 == 48) -> ES_PREFILL_CAPTURE=0 -> drift stuck 77.96.
+                        # Capture at the real 816 boundary anyway: the chunked kernel
+                        # handles the partial last chunk, and the DOMINANT cause-A is
+                        # recurrent-vs-chunked REALIZATION of the restored base (fixed
+                        # by storing the chunked checkpoint), not the 816-vs-832 tail
+                        # reassociation (a bounded ~fp residual). Measure the drift; if
+                        # it collapses off 77.96 toward fp the mechanism is proven and
+                        # we can refine to a 64-aligned checkpoint for true bit-exact.
                         if (
                             _fr13_es_bs is not None
                             and int(_fr13_es_bs) > 0
-                            and int(_fr13_es_bs) % 64 == 0
                             and _fr13_es_pend_by_req is not None
                         ):
                             _fr13_es_bs = int(_fr13_es_bs)
