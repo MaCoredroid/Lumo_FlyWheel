@@ -8042,11 +8042,10 @@ def _fr13_apc_exact_seed_recompute(
                     # publishes -> restore takes the recurrent leaf. Distinguishes
                     # ckpt0-never-captured from captured-but-mismatched. Best-
                     # effort I/O via the drain's engagement logger.
-                    _fr13_es_eng_log(
-                        "ES_DRAIN_NOCKPT slot=" + str(_rid)
-                        + " req=" + str(_dbg_rid)
-                        + " layer=" + str(getattr(layer, "prefix", "?"))
-                    )
+                    # ES_DRAIN_NOCKPT log REMOVED (was 154k/168k container-log lines =
+                    # 92% spam; the drain has no ckpt under EXACT_SEED because
+                    # prefill-capture supersedes it -> it just skips here). Dropping
+                    # the per-step x 48-layer log cuts host I/O + log churn.
                     continue
                 _ck_pos = int(_ck["pos"])
                 _ck_state = _ck["state"]
