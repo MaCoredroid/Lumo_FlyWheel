@@ -297,6 +297,11 @@ fi
 # FIX = cudagraph_mode=PIECEWISE: keep graph capture for the dense GEMMs/norms/MLP (decode TPS
 # preserved) but run the GDN/mamba scan EAGER every step so it always reads the live restored
 # state. Unset = vLLM default FULL_AND_PIECEWISE (the poisoned regime). Only matters with APC on.
+# BAKED 2026-06-29 (user): default to PIECEWISE so the cuda-graph baked-row carrier is neutralized
+# in the deployed config. Confirmed the 1024-fails solve test + the chunk drift curve already ran
+# under PIECEWISE/eager (so those failures are residual cause-A/char-8, NOT cuda-graph). Stays the
+# default UNTIL full cuda-graph is proven lossless with APC. Override via CUDAGRAPH_MODE=... .
+CUDAGRAPH_MODE=${CUDAGRAPH_MODE:-PIECEWISE}
 CG_FLAGS=""
 if [[ -n "${CUDAGRAPH_MODE:-}" ]]; then
   CG_FLAGS="--compilation-config '{\"cudagraph_mode\":\"$CUDAGRAPH_MODE\"}'"
