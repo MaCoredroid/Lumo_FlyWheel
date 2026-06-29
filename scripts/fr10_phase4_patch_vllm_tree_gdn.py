@@ -838,14 +838,73 @@ def _patch_gdn_linear() -> bool:
             "# inert: populated only under FR13_APC_EXACT_SEED=1). Cross-component\n"
             "# bridges live here because every hop (GDN drain, worker pre/postprocess,\n"
             "# block_pool, kv_cache_manager) runs in the SAME EngineCore process.\n"
-            "_FR13_ES_PENDING_BY_REQ = {}  # WRITE 1(a)->1(b): req_id -> [ {pos,state} ]\n"
+            "# iter9 UNIFIED BIDIRECTIONAL JOIN (FR13_APC_EXACT_SEED). Two proven\n"
+            "# bugs are fixed together: (BUG-1 TIMING) the block_pool insert for\n"
+            "# block N runs ONE block BEFORE the GDN capture publishes block N, so a\n"
+            "# one-shot bind-at-insert can never catch its own block -> the join is\n"
+            "# now BIDIRECTIONAL: whichever side (capture OR insert) lands second\n"
+            "# binds the pair. (BUG-2 PER-LAYER) the capture runs once per GDN layer\n"
+            "# but the old pending entry had no layer key and de-duped by pos, so 48\n"
+            "# layers collapsed to 1 -> the pending is now nested per (pos, layer)\n"
+            "# and the stored ckpt holds ALL layers' states.\n"
+            "# SHAPES:\n"
+            "#   _FR13_ES_PENDING_BY_REQ: { req_id: { pos(int): { layer(str): cpu_state } } }\n"
+            "#   _FR13_ES_HASH_BY_REQ:    { req_id: { pos(int): block_hash_with_group_id } }\n"
+            "_FR13_ES_PENDING_BY_REQ = {}  # WRITE 1(a): req_id->{pos->{layer->state}}\n"
+            "_FR13_ES_HASH_BY_REQ = {}     # WRITE: req_id->{pos->block_hash_with_group_id}\n"
             "_FR13_ES_CONTEXT_LENS = None  # builder->capture: per-(non-spec)-row b0\n"
-            "_FR13_ES_BLOCK_PENDING = {}   # WRITE 1(b)->1(c): (req_id,block_id) -> payload\n"
+            "_FR13_ES_BLOCK_PENDING = {}   # (legacy; iter8 relay disabled, kept inert)\n"
             "_FR13_ES_HIT_HASHES = {}      # RESTORE (a)->(b): req_id -> {hash,pos}\n"
-            "_FR13_ES_RESTORE_BY_REQ = {}  # RESTORE (b)->(c): req_id -> {pos,state}\n"
-            "_FR13_ES_BLOCK_POOL = None    # published once by kv_cache_manager\n"
+            "_FR13_ES_RESTORE_BY_REQ = {}  # RESTORE (b)->(c): req_id -> {pos,layers}\n"
+            "_FR13_ES_BLOCK_POOL = None    # block_pool handle (insert primes it)\n"
             "_FR13_ES_BLOCK_SIZE = None    # runtime mamba block_size (manager-published)\n"
             "_FR13_ES_GATE_LOG_COUNT = 0   # iter5 ALL-GATES diagnostic throttle (first ~50)\n"
+            "\n"
+            "\n"
+            "def _fr13_es_try_bind(req_id, pos):\n"
+            "    \"\"\"FR13_APC_EXACT_SEED bidirectional join. Called from BOTH the GDN\n"
+            "    capture (after it records (pos,layer)->state) and the block_pool\n"
+            "    insert (after it records pos->hash). Binds the (hash, layers) pair\n"
+            "    the FIRST time both sides have met for this (req_id,pos); the stored\n"
+            "    ckpt value is the SAME `layers` dict object (shared ref), so as the\n"
+            "    remaining GDN layers' captures land they fill the already-stored\n"
+            "    dict -> by the time any later turn RESTORES this hash, all 48 layers\n"
+            "    are present (no overwrite churn). Exception-safe; returns True iff a\n"
+            "    store happened on this call.\"\"\"\n"
+            "    try:\n"
+            "        h = _FR13_ES_HASH_BY_REQ.get(req_id, {}).get(pos)\n"
+            "        layers = _FR13_ES_PENDING_BY_REQ.get(req_id, {}).get(pos)\n"
+            "        if h is None or not layers:\n"
+            "            return False\n"
+            "        bp = globals().get(\"_FR13_ES_BLOCK_POOL\")\n"
+            "        store = getattr(bp, \"_fr13_es_ckpt\", None) if bp is not None else None\n"
+            "        if store is None:\n"
+            "            return False\n"
+            "        store[h] = {\"pos\": int(pos), \"layers\": layers}\n"
+            "        try:\n"
+            "            _hx = h.hex() if hasattr(h, \"hex\") else str(h)\n"
+            "        except Exception:\n"
+            "            _hx = str(h)\n"
+            "        _msg = (\n"
+            "            \"ES_WRITE hash=\" + _hx + \" pos=\" + str(pos)\n"
+            "            + \" req=\" + str(req_id) + \" nlayers=\" + str(len(layers))\n"
+            "        )\n"
+            "        try:\n"
+            "            print(\"FR13ES \" + _msg, flush=True)\n"
+            "        except Exception:\n"
+            "            pass\n"
+            "        try:\n"
+            "            with open(os.environ.get(\n"
+            "                \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
+            "                \"/logs/fr13_apc_exact_seed_eng.log\",\n"
+            "            ), \"a\", buffering=1) as _fh:\n"
+            "                _fh.write(_msg + chr(10))\n"
+            "        except Exception:\n"
+            "            pass\n"
+            "        return True\n"
+            "    except Exception:\n"
+            "        return False\n"
+            "\n"
             "# FR13_EAGER_PACK (FIX-2): read ONCE at module scope (flag plan: env is\n"
             "# read once per boot; init-time allocations are flag-conditional but\n"
             "# fixed for the life of the process).\n"
@@ -5842,12 +5901,33 @@ def _fr13_gdn_subop_mab(
                                 if not bool(has_initial_state[_fr13_es_r2]):
                                     continue
                                 _fr13_es_rid2 = str(_fr13_es_nsr2[_fr13_es_r2])
-                                _fr13_es_rec2 = _fr13_es_rmap.pop(
+                                # iter9 PER-LAYER: this restore loop runs ONCE PER GDN
+                                # LAYER (self is the layer), but the restore record is
+                                # staged ONCE per scheduler step (worker preprocess),
+                                # keyed by req_id and SHARED across all 48 layers. The
+                                # old code .pop()'d it, which was fine when all layers
+                                # collapsed to ONE state (BUG-2) -- but now each layer
+                                # must read its own state from the SAME record, so a
+                                # pop on layer-0 would strip layers 1..47. Use .get()
+                                # so every layer sees the record; it is cleared/overw-
+                                # ritten by the next step's worker preprocess.
+                                _fr13_es_rec2 = _fr13_es_rmap.get(
                                     _fr13_es_rid2, None
                                 )
                                 if _fr13_es_rec2 is None:
                                     continue
-                                _fr13_es_st2 = _fr13_es_rec2.get("state")
+                                # iter9 PER-LAYER seed (BUG-2 fix): the restored ckpt
+                                # holds ALL GDN layers' states keyed by layer prefix.
+                                # `self` IS this GDN layer, so layers[self.prefix] is
+                                # THIS layer's bit-exact checkpoint. The whole ckpt
+                                # was popped once for this req above (segbase still
+                                # uses rec2["pos"]); index the layer here.
+                                _fr13_es_layers2 = _fr13_es_rec2.get("layers")
+                                if not _fr13_es_layers2:
+                                    continue
+                                _fr13_es_st2 = _fr13_es_layers2.get(
+                                    str(getattr(self, "prefix", "?"))
+                                )
                                 if _fr13_es_st2 is None:
                                     continue
                                 initial_state[_fr13_es_r2] = _fr13_es_st2.to(
@@ -6599,36 +6679,46 @@ def _fr13_gdn_subop_mab(
                                         .to(torch.float32)
                                         .clone()
                                     )
-                                    # ---- WRITE 1(a): publish to the EXISTING path ----
-                                    # keyed by REAL req_id; the worker postprocess hop
-                                    # maps {pos}->block_id and the block_pool insert
-                                    # stores it under the prefix BlockHashWithGroupId.
-                                    _fr13_es_lst = _fr13_es_pend_by_req.get(
-                                        _fr13_es_rid
+                                    # ---- WRITE 1(a): per-(pos,layer) publish ----
+                                    # iter9 UNIFIED JOIN. Nest the chunked checkpoint
+                                    # per (pos -> layer) so the 48 GDN layers no
+                                    # longer collapse to 1 (BUG-2 PER-LAYER): each
+                                    # layer's forward records THIS layer's state into
+                                    # the shared per-pos `layers` dict. Then call the
+                                    # module-global bidirectional bind: if the
+                                    # block_pool insert already recorded pos->hash for
+                                    # this req, the pair binds NOW (capture-initiated
+                                    # direction); otherwise the insert will bind later
+                                    # (BUG-1 TIMING). The stored ckpt is the SAME
+                                    # `layers` dict object, so the remaining layers'
+                                    # captures keep filling the already-stored ckpt.
+                                    _fr13_es_layer = str(
+                                        getattr(self, "prefix", "?")
                                     )
-                                    if _fr13_es_lst is None:
-                                        _fr13_es_lst = []
-                                        _fr13_es_pend_by_req[_fr13_es_rid] = (
-                                            _fr13_es_lst
+                                    _fr13_es_d = (
+                                        _fr13_es_pend_by_req
+                                        .setdefault(_fr13_es_rid, {})
+                                        .setdefault(int(_fr13_es_bnd), {})
+                                    )
+                                    _fr13_es_d[_fr13_es_layer] = (
+                                        _fr13_es_ck_state.cpu()
+                                    )
+                                    try:
+                                        _fr13_es_bindfn = globals().get(
+                                            "_fr13_es_try_bind"
                                         )
-                                    # de-dup by pos (a re-prefill may re-cross the
-                                    # same boundary): replace any prior entry.
-                                    _fr13_es_lst[:] = [
-                                        _e
-                                        for _e in _fr13_es_lst
-                                        if int(_e.get("pos")) != int(_fr13_es_bnd)
-                                    ]
-                                    _fr13_es_lst.append({
-                                        "pos": int(_fr13_es_bnd),
-                                        "state": _fr13_es_ck_state.cpu(),
-                                    })
+                                        if _fr13_es_bindfn is not None:
+                                            _fr13_es_bindfn(
+                                                _fr13_es_rid, int(_fr13_es_bnd)
+                                            )
+                                    except Exception:
+                                        pass
                                     _fr13_es_eng_log_line(
                                         "ES_PREFILL_CAPTURE pos="
                                         + str(_fr13_es_bnd)
                                         + " req=" + _fr13_es_dbg_rid
                                         + " hit=" + str(_fr13_es_hit)
-                                        + " layer="
-                                        + str(getattr(self, "prefix", "?"))
+                                        + " layer=" + _fr13_es_layer
                                     )
                                     _fr13_es_published += 1
                                     # advance the seed to this boundary's chunked
@@ -18283,70 +18373,66 @@ def _patch_block_pool_exact_seed() -> bool:
         "                    from vllm.model_executor.layers.mamba import (\n"
         "                        gdn_linear_attn as _fr13_es_gdn,\n"
         "                    )\n"
-        "                    # iter8 WRITE 1(c): bind pos->hash DIRECTLY at the insert\n"
-        "                    # (request, blk, block_hash_with_group_id all coexist here).\n"
-        "                    # Block at local index i is absolute block (num_cached + i);\n"
-        "                    # its END pos = (num_cached+i+1)*block_size -- exactly the\n"
-        "                    # block_size-multiple the GDN prefill-capture published.\n"
-        "                    # Replaces the racy postprocess relay + the broken\n"
-        "                    # (req_id, block_id) staging key that gave ES_WRITE=0.\n"
-        "                    _fr13_es_pend = getattr(\n"
-        "                        _fr13_es_gdn, \"_FR13_ES_PENDING_BY_REQ\", None\n"
-        "                    )\n"
+        "                    # iter9 UNIFIED BIDIRECTIONAL JOIN. The insert for block N\n"
+        "                    # runs ONE block BEFORE the GDN capture publishes block N\n"
+        "                    # (BUG-1 TIMING: want_pos always one ahead of the pending),\n"
+        "                    # so binding only at the insert can NEVER catch its own\n"
+        "                    # block. Instead: (1) prime the block_pool handle global so\n"
+        "                    # the capture-initiated bind can reach this store on turn-0\n"
+        "                    # (cache-MISS skips the kv_cache_manager publish), (2)\n"
+        "                    # record pos->hash, (3) call the module-global bind -- which\n"
+        "                    # binds NOW iff the capture already published this pos, else\n"
+        "                    # the capture binds later. Block at local index i is\n"
+        "                    # absolute block (num_cached+i); its END pos =\n"
+        "                    # (num_cached+i+1)*block_size -- the block_size-multiple the\n"
+        "                    # GDN prefill-capture publishes. self IS the block_pool, so\n"
+        "                    # priming _FR13_ES_BLOCK_POOL=self guarantees the store is\n"
+        "                    # reachable from BOTH directions for turn-0.\n"
+        "                    if getattr(\n"
+        "                        _fr13_es_gdn, \"_FR13_ES_BLOCK_POOL\", None\n"
+        "                    ) is None:\n"
+        "                        _fr13_es_gdn._FR13_ES_BLOCK_POOL = self\n"
         "                    _fr13_es_rid = str(request.request_id)\n"
-        "                    _fr13_es_lst = (\n"
-        "                        _fr13_es_pend.get(_fr13_es_rid)\n"
-        "                        if _fr13_es_pend is not None else None\n"
+        "                    _fr13_es_pos = (\n"
+        "                        (int(num_cached_blocks) + int(i) + 1)\n"
+        "                        * int(block_size)\n"
         "                    )\n"
-        "                    if _fr13_es_lst:\n"
-        "                        _fr13_es_pos = (\n"
-        "                            (int(num_cached_blocks) + int(i) + 1)\n"
-        "                            * int(block_size)\n"
+        "                    _fr13_es_hbr = getattr(\n"
+        "                        _fr13_es_gdn, \"_FR13_ES_HASH_BY_REQ\", None\n"
+        "                    )\n"
+        "                    if _fr13_es_hbr is None:\n"
+        "                        _fr13_es_hbr = {}\n"
+        "                        _fr13_es_gdn._FR13_ES_HASH_BY_REQ = _fr13_es_hbr\n"
+        "                    _fr13_es_hbr.setdefault(_fr13_es_rid, {})[\n"
+        "                        int(_fr13_es_pos)\n"
+        "                    ] = block_hash_with_group_id\n"
+        "                    _fr13_es_bound = False\n"
+        "                    _fr13_es_bindfn = getattr(\n"
+        "                        _fr13_es_gdn, \"_fr13_es_try_bind\", None\n"
+        "                    )\n"
+        "                    if _fr13_es_bindfn is not None:\n"
+        "                        _fr13_es_bound = bool(_fr13_es_bindfn(\n"
+        "                            _fr13_es_rid, int(_fr13_es_pos)\n"
+        "                        ))\n"
+        "                    # ES_INSERT_MISS only when the bind did NOT happen AND\n"
+        "                    # there IS already some pending for this req (a future\n"
+        "                    # diagnostic; the common case is the capture binds later).\n"
+        "                    if not _fr13_es_bound:\n"
+        "                        _fr13_es_pend = getattr(\n"
+        "                            _fr13_es_gdn, \"_FR13_ES_PENDING_BY_REQ\", None\n"
         "                        )\n"
-        "                        _fr13_es_match = None\n"
-        "                        for _fr13_es_e in _fr13_es_lst:\n"
-        "                            if int(_fr13_es_e.get(\"pos\")) == int(\n"
-        "                                _fr13_es_pos\n"
-        "                            ):\n"
-        "                                _fr13_es_match = _fr13_es_e\n"
-        "                                break\n"
-        "                        if _fr13_es_match is not None:\n"
-        "                            self._fr13_es_ckpt[block_hash_with_group_id] = (\n"
-        "                                _fr13_es_match\n"
-        "                            )\n"
-        "                            try:\n"
-        "                                _fr13_es_hx = (\n"
-        "                                    block_hash_with_group_id.hex()\n"
-        "                                    if hasattr(\n"
-        "                                        block_hash_with_group_id, \"hex\")\n"
-        "                                    else str(block_hash_with_group_id)\n"
-        "                                )\n"
-        "                            except Exception:\n"
-        "                                _fr13_es_hx = str(block_hash_with_group_id)\n"
-        "                            _fr13_es_msg = (\n"
-        "                                \"ES_WRITE hash=\" + _fr13_es_hx\n"
-        "                                + \" pos=\" + str(_fr13_es_pos)\n"
-        "                                + \" req=\" + _fr13_es_rid\n"
-        "                            )\n"
-        "                            print(\"FR13ES \" + _fr13_es_msg, flush=True)\n"
-        "                            try:\n"
-        "                                with open(_fr13_es_os.environ.get(\n"
-        "                                    \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
-        "                                    \"/logs/fr13_apc_exact_seed_eng.log\",\n"
-        "                                ), \"a\", buffering=1) as _fr13_es_fh:\n"
-        "                                    _fr13_es_fh.write(\n"
-        "                                        _fr13_es_msg + chr(10)\n"
-        "                                    )\n"
-        "                            except Exception:\n"
-        "                                pass\n"
-        "                        else:\n"
+        "                        _fr13_es_rp = (\n"
+        "                            _fr13_es_pend.get(_fr13_es_rid)\n"
+        "                            if _fr13_es_pend is not None else None\n"
+        "                        )\n"
+        "                        if _fr13_es_rp:\n"
         "                            try:\n"
         "                                _fr13_es_mm = (\n"
         "                                    \"ES_INSERT_MISS req=\" + _fr13_es_rid\n"
         "                                    + \" want_pos=\" + str(_fr13_es_pos)\n"
         "                                    + \" have=\" + str(\n"
-        "                                        [int(_z.get(\"pos\"))\n"
-        "                                         for _z in _fr13_es_lst]\n"
+        "                                        sorted(int(_z)\n"
+        "                                               for _z in _fr13_es_rp.keys())\n"
         "                                    )\n"
         "                                )\n"
         "                                print(\"FR13ES \" + _fr13_es_mm, flush=True)\n"
@@ -18678,11 +18764,16 @@ def _patch_worker_mamba_exact_seed() -> bool:
         "            return\n"
         "        _es_key = _es_hit.get(\"hash\")\n"
         "        _es_pl = _es_store.get(_es_key)\n"
-        "        _es_seeded = _es_pl is not None\n"
+        "        # iter9 PER-LAYER: the stored ckpt is now\n"
+        "        # {\"pos\":pos, \"layers\":{layer->state}} (BUG-2 fix). Pass the layers\n"
+        "        # dict through unchanged; the GDN seed indexes layers[self.prefix]\n"
+        "        # per-layer. seeded == the layers dict is present and non-empty.\n"
+        "        _es_layers = _es_pl.get(\"layers\") if _es_pl is not None else None\n"
+        "        _es_seeded = bool(_es_layers)\n"
         "        if _es_seeded:\n"
         "            _es_rec = {\n"
         "                \"pos\": int(_es_pl.get(\"pos\")),\n"
-        "                \"state\": _es_pl.get(\"state\"),\n"
+        "                \"layers\": _es_layers,\n"
         "            }\n"
         "            req_state._fr13_es_restore = _es_rec\n"
         "            # also publish by req_id for the GDN prefill seed hop, which\n"
