@@ -776,6 +776,40 @@ def _patch_gdn_attn() -> bool:
         ),
         1,
     )
+    # FR13_APC_EXACT_SEED (default-OFF, byte-identical when the env flag is
+    # unset): stash the per-request ABSOLUTE base (num already-computed tokens
+    # == b0) onto the gdn_linear_attn module so the prefill-capture can place
+    # block_size boundaries on the absolute grid WITHOUT depending on the
+    # cache-hit RESTORE loop (which is empty for the first store and absent for
+    # chunked continuation rows). context_lens_tensor is the b0 in the SAME
+    # full-batch indexing that has_initial_state starts in; we slice it by
+    # ~spec_sequence_masks_cpu EXACTLY as the line below slices has_initial_state
+    # so the stashed list lines up with the capture's has_initial_state[r] /
+    # non_spec_query_start_loc[r] (both non-spec-sliced) row indexing. The .cpu()
+    # is host-bound for this small int list and runs in the metadata builder
+    # (not a capture-graph path), so it is acceptable.
+    text = text.replace(
+        "        if num_prefills > 0:\n"
+        "            has_initial_state = context_lens_tensor > 0\n",
+        (
+            "        if num_prefills > 0:\n"
+            "            has_initial_state = context_lens_tensor > 0\n"
+            "            if os.environ.get(\"FR13_APC_EXACT_SEED\", \"0\") == \"1\":\n"
+            "                try:\n"
+            "                    from vllm.model_executor.layers.mamba import (\n"
+            "                        gdn_linear_attn as _fr13_es_gdn_clmod,\n"
+            "                    )\n"
+            "                    _fr13_es_clt = context_lens_tensor\n"
+            "                    if spec_sequence_masks_cpu is not None:\n"
+            "                        _fr13_es_clt = _fr13_es_clt[~spec_sequence_masks_cpu]\n"
+            "                    _fr13_es_gdn_clmod._FR13_ES_CONTEXT_LENS = (\n"
+            "                        _fr13_es_clt.detach().to(\"cpu\").tolist()\n"
+            "                    )\n"
+            "                except Exception:\n"
+            "                    pass\n"
+        ),
+        1,
+    )
     GDN_ATTN_PATH.write_text(text)
     return True
 
@@ -805,6 +839,7 @@ def _patch_gdn_linear() -> bool:
             "# bridges live here because every hop (GDN drain, worker pre/postprocess,\n"
             "# block_pool, kv_cache_manager) runs in the SAME EngineCore process.\n"
             "_FR13_ES_PENDING_BY_REQ = {}  # WRITE 1(a)->1(b): req_id -> [ {pos,state} ]\n"
+            "_FR13_ES_CONTEXT_LENS = None  # builder->capture: per-(non-spec)-row b0\n"
             "_FR13_ES_BLOCK_PENDING = {}   # WRITE 1(b)->1(c): (req_id,block_id) -> payload\n"
             "_FR13_ES_HIT_HASHES = {}      # RESTORE (a)->(b): req_id -> {hash,pos}\n"
             "_FR13_ES_RESTORE_BY_REQ = {}  # RESTORE (b)->(c): req_id -> {pos,state}\n"
@@ -6438,12 +6473,34 @@ def _fr13_gdn_subop_mab(
                                 _fr13_es_hit = bool(
                                     has_initial_state[_fr13_es_r]
                                 )
-                                # ABSOLUTE base of this row's seed: cache-HIT rows
-                                # start at the restored block-aligned pos (stashed by
-                                # the restore loop above); cache-MISS rows start at 0.
-                                _fr13_es_b0 = int(
-                                    _fr13_es_segbase_map.get(int(_fr13_es_r), 0)
+                                # ABSOLUTE base of this row's seed (b0 == num
+                                # already-computed tokens). PREFER the metadata
+                                # builder's per-row context_lens stash (set under
+                                # FR13_APC_EXACT_SEED): it is correct for cache-HIT
+                                # AND chunked-continuation rows, breaking the
+                                # restore<->store chicken-and-egg that pinned the
+                                # restore-derived base to 0. The _FR13_ES_CONTEXT_LENS
+                                # list is non-spec-sliced in the SAME row order as
+                                # has_initial_state / non_spec_query_start_loc here.
+                                # Fall back to the restore-loop segbase_map (cache-HIT
+                                # rows start at the restored block-aligned pos; cache-
+                                # MISS rows at 0) when the stash is absent.
+                                _fr13_es_clens = globals().get(
+                                    "_FR13_ES_CONTEXT_LENS", None
                                 )
+                                if (
+                                    isinstance(_fr13_es_clens, list)
+                                    and _fr13_es_r < len(_fr13_es_clens)
+                                ):
+                                    _fr13_es_b0 = int(
+                                        _fr13_es_clens[_fr13_es_r]
+                                    )
+                                else:
+                                    _fr13_es_b0 = int(
+                                        _fr13_es_segbase_map.get(
+                                            int(_fr13_es_r), 0
+                                        )
+                                    )
                                 if _fr13_es_hit and _fr13_es_b0 <= 0:
                                     # HIT row whose absolute base is unknown (restore
                                     # record absent) -> cannot place boundaries on the
