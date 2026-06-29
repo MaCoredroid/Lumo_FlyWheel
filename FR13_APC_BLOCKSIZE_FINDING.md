@@ -52,10 +52,13 @@ token) and the **decode-spec TPS win** are preserved. The shipping value should 
    machinery; ~tens ⇒ the bug. Magnitude settles it and picks the sweet-spot block.
 3. **Spine untested; only one task.**
 
-## Recommended config (interim)
-`MAMBA_BLOCK_SIZE=8192` + `APC_MAX_NUM_BATCHED_TOKENS=8192` for cache-ON + cat6root
-spec. Treat as the validated-working value; the drift curve will pick the smallest
-lossless block for the final shipping config.
+## Config (BAKED 2026-06-28)
+`mamba_block_size=8192` is now the **default** in `scripts/fr13_launch_forked_fa2_tree_server.sh`
+(L209; `max_num_batched_tokens` auto-follows it at L223), and in the e2e gate. So the
+spec+tree+cache server defaults to the lossless lever; `MAMBA_BLOCK_SIZE` env still
+overrides. No-spec launchers (`fr10_launch_speed_server.sh`) keep 1024 (no-spec tolerates
+the drift). The drift curve may later refine 8192 down to the smallest lossless block for
+more TTFT; until then 8192 is the baked, validated-working value.
 
 ## Next
 Drift curve → smallest-lossless `mamba_block_size` → big-N (N≥6) validation on
