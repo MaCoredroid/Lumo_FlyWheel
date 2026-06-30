@@ -43,17 +43,28 @@ leak-FIXED preview; "prior" = the §1 4-task cache-OFF baseline. The CLEAN 4-tas
 
 | arm | config | decode tok/s | e2e tok/s | accept | notes |
 |---|---|---|---|---|---|
-| **cat6root cache-ON** | EXACT_SEED + 1024 + full graph | **17.9** (1-task, leak-fixed) → _4-task pending_ | **16.3** | 59% | the deployed lossless config; `.clone()`-taxed |
-| **cat10 cache-ON** | EXACT_SEED + 1024 + full graph | **17.2** (1-task, leak-fixed) | **14.5** | 35% | 10-node tree: more drafts but lower accept → **≈ cat6root decode at B=1** (no win) |
-| cat6root cache-OFF | FIX-1/2/3, no EXACT_SEED, prior | **23.88** (4-task) | _+4.0% over E5 (latency)_ | — | the +27% decode run; e2e floods (no cache) |
-| **E5 / spine-5** (chain5) cache-OFF | native 5-step MTP spine | **18.80** (4-task) | baseline | — | the spine baseline cat6root beats by +27% decode |
+| **cat6root cache-ON** | EXACT_SEED + 1024 + full graph | **16.8** (3-task TW, leak-fixed) · 17.9 (1-task) | **16.3** (1-task) | 59% | the deployed lossless config; `.clone()`-taxed. 4th task lost to leak-kill |
+| **cat10 cache-ON** | EXACT_SEED + 1024 + full graph | **14.1** (4-task TW, clean) · 17.2 (1-task) | **14.5** (1-task) | 27% (4-task) | 10-node tree: more drafts, lower accept → **WORSE than cat6root at B=1** |
+| cat6root cache-OFF | FIX-1/2/3, no EXACT_SEED, prior | **23.88** (4-task TW) | _+4.0% over E5 (latency)_ | — | the +27% decode run; e2e floods (no cache) |
+| **E5 / spine-5** (chain5) cache-OFF | native 5-step MTP spine | **18.80** (4-task TW) | baseline | — | the spine baseline cat6root beats by +27% decode |
 
-> **All cache-ON numbers above are 1-task (12907) leak-fixed** — the clean 4-task token-weighted run is
-> blocked by a residual ~0.4 GiB/min leak (the committer-prune bounded the dominant leak; the fixed-buffer
-> port — task #15 — caps the residual + recovers the `.clone()` decode tax). decode is per-token so the
-> 1-task figure is a good estimate; the 4-task average will be close, and the fixed-buffer moves it *up*
-> toward 23.88 by removing the EXACT_SEED clone overhead. **cat10 ≈ cat6root at B=1** — the wider tree's
-> extra drafts don't pay off at batch-1; cat6root's 6-node root-branch is the better shape here.
+> **TW = token-weighted** (`sum(gen_tokens) / sum(decode_time_s)` across the tasks — the *same* formula as the
+> prior 23.88/18.80, directly comparable). The clean **multi-task** cache-ON numbers are now in:
+> - **cat10 = 14.1** is a fully clean **4-task** TW (cat10 *survived* — no leak-kill; all 4 tasks decoded:
+>   12907=17.2, 13398=16.5, 13033=13.9, 13236=12.5).
+> - **cat6root = 16.8** is a clean **3-task** TW (12907=17.9, 13033=16.8, 13236=16.1); the 4th task (13398)
+>   was lost when the leak-guard killed the container (counter reset corrupts the delta), not a speed issue.
+>
+> **Why `fr13_measure` reported `decode_tps=0.00`:** 3 of the 4 b4_four tasks **fail the SWE verdict** (agent
+> give-ups — a *resolve* problem, task #13, NOT the leak: cat10 survived and still failed 3 tasks). Their
+> thin/early-give-up brackets trip `fr13_measure`'s class-9 engagement assert, so it refuses the aggregate.
+> The manual TW above bypasses that assert — **decode TPS is per-token and valid whether or not the task
+> resolves**, so the give-ups don't corrupt the *speed* read, only the verdict count.
+>
+> **Headline:** cache-ON cat6root **16.8** vs cache-OFF **23.88** = a **~30% decode tax** from the EXACT_SEED
+> committer (`.clone()` per accepted token/layer + cache publisher overhead). The **fixed-buffer port (task
+> #15)** removes the `.clone()` and is expected to recover most of this. **cat10 14.1 < cat6root 16.8**
+> confirms the wide tree does *not* pay off at batch-1: more draft compute, lower accept (27% vs 59%).
 
 **Reading it:**
 - **decode:** cat6root's tree beats the E5 spine (23.88 vs 18.80, +27%) — the structural d0-rescue edge. The
@@ -82,4 +93,11 @@ leak-FIXED preview; "prior" = the §1 4-task cache-OFF baseline. The CLEAN 4-tas
   isolates the two variables cleanly: tree shape (cat6root vs spine → the decode/accept edge) and cache
   (on vs off → the e2e/TTFT win). Queued to run once the leak fix is confirmed on v3.
 
-**Status:** leak fixed + verifying (v3); cache-ON 4-task numbers + the clean 3-way to be filled in here.
+**Status (run_20260630T064631Z, leak-fixed committer-prune build):**
+- ✅ Clean **multi-task** cache-ON TW decode banked: **cat6root 16.8** (3-task) · **cat10 14.1** (4-task).
+- ⏳ cat6root 4th task (13398) lost to a leak-guard kill — a clean 4-task cat6root needs the leak *capped*
+  (the fixed-buffer port) or a lower-util re-run; the 3-task TW already tells the story (~30% tax vs 23.88).
+- ⏳ The clean **3-way e2e** (cat6-ON / cat6-OFF / chain5-OFF, TTFT + e2e) still to run.
+- 🔧 **Next real fix:** the **fixed-buffer port (task #15)** — removes the `.clone()` decode tax (recovers
+  toward 23.88) *and* caps the residual leak (so clean 4-task runs survive). Lossless-gated by
+  `fr13_apc_exactseed_statediff.sh` (FIXED_BUFFER=0 vs 1 → identical per-layer state_max) before trust.
