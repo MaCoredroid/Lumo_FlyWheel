@@ -43,9 +43,17 @@ leak-FIXED preview; "prior" = the §1 4-task cache-OFF baseline. The CLEAN 4-tas
 
 | arm | config | decode tok/s | e2e tok/s | accept | notes |
 |---|---|---|---|---|---|
-| **cat6root cache-ON** | EXACT_SEED + 1024 + full graph | **17.9** (early) → _pending 4-task_ | **16.3** (early) | 59% | the deployed lossless config; `.clone()`-taxed |
-| cat6root cache-OFF | FIX-1/2/3, no EXACT_SEED, prior | **23.88** | _+4.0% over E5 (latency)_ | — | the +27% decode run; e2e floods (no cache) |
-| **E5 / spine-5** (chain5) cache-OFF | native 5-step MTP spine | **18.80** | baseline | — | the spine baseline cat6root beats by +27% decode |
+| **cat6root cache-ON** | EXACT_SEED + 1024 + full graph | **17.9** (1-task, leak-fixed) → _4-task pending_ | **16.3** | 59% | the deployed lossless config; `.clone()`-taxed |
+| **cat10 cache-ON** | EXACT_SEED + 1024 + full graph | **17.2** (1-task, leak-fixed) | **14.5** | 35% | 10-node tree: more drafts but lower accept → **≈ cat6root decode at B=1** (no win) |
+| cat6root cache-OFF | FIX-1/2/3, no EXACT_SEED, prior | **23.88** (4-task) | _+4.0% over E5 (latency)_ | — | the +27% decode run; e2e floods (no cache) |
+| **E5 / spine-5** (chain5) cache-OFF | native 5-step MTP spine | **18.80** (4-task) | baseline | — | the spine baseline cat6root beats by +27% decode |
+
+> **All cache-ON numbers above are 1-task (12907) leak-fixed** — the clean 4-task token-weighted run is
+> blocked by a residual ~0.4 GiB/min leak (the committer-prune bounded the dominant leak; the fixed-buffer
+> port — task #15 — caps the residual + recovers the `.clone()` decode tax). decode is per-token so the
+> 1-task figure is a good estimate; the 4-task average will be close, and the fixed-buffer moves it *up*
+> toward 23.88 by removing the EXACT_SEED clone overhead. **cat10 ≈ cat6root at B=1** — the wider tree's
+> extra drafts don't pay off at batch-1; cat6root's 6-node root-branch is the better shape here.
 
 **Reading it:**
 - **decode:** cat6root's tree beats the E5 spine (23.88 vs 18.80, +27%) — the structural d0-rescue edge. The
