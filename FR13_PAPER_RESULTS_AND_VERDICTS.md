@@ -110,7 +110,20 @@ workflow):** this is the **cache-INDEPENDENT char-8 tool-call flaky-decode** —
 project's own criterion (garbled-tokens = lossy; coherent-but-off-task = not), this is **NOT a losslessness
 break**. Already established 2026-06-29 that char-8 is cache-independent (≈50/64 cold-at-break, fires
 cache-OFF). The "cache-OFF resolves / cache-ON fails" pattern (4/4 in a tiny 2×2) is consistent with sampling
-luck at temp 0.6 (no seed pin). **Open confirmation:** N-repeat resolve-rate ON vs OFF, Fisher-exact, on the
+luck at temp 0.6 (no seed pin).
+
+> **First proven-config (EXACT_SEED=1) data — tree×cache matrix, killed at 2/6 (E5 done), 2026-06-30:** the
+> pattern **FLIPPED** — **E5 cache-ON RESOLVED** (55 turns, TTFT 3.0s, e2e 15.11, 89% hit) while **E5 cache-OFF
+> FAILED** (112 turns, TTFT 15.9s, e2e 9.75). If the cache were behaviorally lossy, cache-ON would fail *more*;
+> here it *resolved* while cache-OFF flailed → strong evidence resolve is **sampling noise, not a cache
+> effect** (the earlier 4/4 was luck), consistent with EXACT_SEED's bit-exact proof. The e5_OFF failure was a
+> **pure over-inspection give-up**: 112 turns, 30k tokens, **0 `apply_patch` attempts**, no char-8, no
+> truncation — inspected endlessly, never edited (same model resolved it in 55 turns on e5_ON). That's the
+> give-up problem (task #13/#16), NOT lossiness. Decode/accept (22.63 vs 16.31, 4.06 vs 3.04) is the
+> failed-vs-resolved regime confound, not a cache cost (s_per_fwd matched-regime ~246ms both, §2). Matrix being
+> re-run with a thinking budget to cut the give-up + make arms fast.
+
+**Open confirmation:** N-repeat resolve-rate ON vs OFF, Fisher-exact, on the
 `EXACT_SEED=1` config (the rategate/blocksweep as written use `=0` = the lossy config — re-point to `=1`).
 
 > **Terminology (the word "retry" is misleading — use these instead):** three distinct mechanisms exist; only
