@@ -113,6 +113,21 @@ cache-OFF). The "cache-OFF resolves / cache-ON fails" pattern (4/4 in a tiny 2×
 luck at temp 0.6 (no seed pin). **Open confirmation:** N-repeat resolve-rate ON vs OFF, Fisher-exact, on the
 `EXACT_SEED=1` config (the rategate/blocksweep as written use `=0` = the lossy config — re-point to `=1`).
 
+> **Terminology (the word "retry" is misleading — use these instead):** three distinct mechanisms exist; only
+> the third is a true retry, and it is DISABLED.
+> - **continue / nudge** — when the agent stops without editing, the proxy injects a forceful in-session
+>   directive ("your VERY NEXT action MUST be an `apply_patch`…", `LUMO_PROXY_AUTO_CONTINUE=1`). **Context is
+>   preserved** — same conversation, same repo state. This is what handles give-ups now.
+> - **re-issue** — when codex returns ZERO tokens / disconnects mid-stream (a transport quirk over the
+>   alienware link), the runner re-asks codex from the existing state (`zero_token_retry_count` in the code, a
+>   misnomer; the prompt builder is literally `_retry_prompt_continue`). **Not** a restart — nothing is discarded.
+> - **retry (clean-context restart)** — `SWE_EMPTY_PATCH_RETRIES`, which discards the conversation and starts the
+>   task over. **Set to 0 (disabled)** — explicitly replaced by the in-session continue/nudge above.
+>
+> So a slow agentic run = the agent grinding through many **continued** turns (context intact) on a hard task,
+> NOT clean-context restarts. The high continue/nudge rate (agent stopping without editing more than expected)
+> is the open give-up question (task #13) — being researched against Qwen3+Codex+vLLM best-practice.
+
 ---
 
 ## 6. Measurement methodology (paper-grade, baked into `fr13_decode_accounting.py`)
