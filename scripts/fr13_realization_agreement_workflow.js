@@ -1,0 +1,158 @@
+export const meta = {
+  name: 'fr13-realization-agreement',
+  description: 'USER FRAMING (2026-06-15): "we as kernel designers should make sure prefill and our committer and teacher-forcing almost agree." A flip IS our tree-verify committer\'s realization disagreeing with the no-spec oracle\'s realization (diffusion deep-dive carrier = our rank-1 tree-scan over [0,1,3,5] vs 1687-tok chunked-prefill teacher-force). Before deciding to RELAX the flip bar, check the MATH of the flip + whether a KERNEL ROUNDING / dtype / op-order change to OUR tree-verify scan makes the three realizations (chunked-prefill / deployment recurrent-decode / our committer) argmax-AGREE, dropping flips toward native 3. Pinned seam = GDN scan stores b_h.to(bf16) every token fed recurrently (bf16-store boundary) + conv anchor-row 1-ULP. KEY SUBTLETY: agreement target = the DEPLOYMENT recurrent-decode (which ITSELF bf16-stores b_h), so "fix" = MATCH that rounding boundary/op-order EXACTLY, NOT maximize precision. CPU read-only, adversarial verify. Output FR13_REALIZATION_AGREEMENT.md.',
+  phases: [
+    { title: 'Analyze' },
+    { title: 'Verify' },
+  ],
+}
+
+const CTX = [
+'FR13 on DGX Spark GB10 (sm_121, bf16/fp8 GDN-hybrid Qwen3-Next: ~48 GDN linear-attn + 16 full-attn layers).',
+'Repo /home/mark/shared/lumoFlyWheel. CPU-ONLY, READ-ONLY (a GPU reshape A/B runs concurrently - do NOT edit',
+'code or boot; read banked captures + our code + vLLM source via scripts/vllm_src.sh; write ONLY',
+'FR13_REALIZATION_AGREEMENT.md). Pathspec commits.',
+'',
+'GROUNDING RULE (user, EMPHATIC): read vLLM source DIRECTLY from the pinned running image via',
+'`scripts/vllm_src.sh <relpath>` (image vllm/vllm-openai@sha256:3dbe092e = 0.19.2rc1.dev134), NEVER a /tmp cache',
+'(they drift 15/40/123 lines). CHECK ARTIFACT TIMESTAMPS before reading any output.',
+'',
+'THE USER FRAMING (this is the SPINE of the task): "what a flip means is our kernel realizations do not agree;',
+'we as kernel designers should make sure PREFILL and our COMMITTER and TEACHER-FORCING almost agree." Engage',
+'this literally + quantitatively. A flip = argmax(our committer\'s tree-verify forward logits at served pos i)',
+'!= argmax(the no-spec oracle\'s forward logits at pos i), clear-margin (deviation_nat>1.0 or out-of-topk). So a',
+'flip is the DISAGREEMENT between two realizations of the SAME model forward.',
+'',
+'THE THREE REALIZATIONS (name them precisely, read each kernel):',
+'  (1) CHUNKED-PREFILL: native chunked gated-delta-rule (WY/UT, fla chunk kernel) - how a prompt builds GDN',
+'      state. This is what the node5/node7 ladder "clean"/teacher-force used (1687-tok chunked teacher-force).',
+'  (2) DEPLOYMENT RECURRENT-DECODE: native fused_sigmoid_gating_delta_rule_update (rank-1, one token at a time,',
+'      stores b_h.to(bf16) per token). This is the ACTUAL generation path + the deployment-correct ORACLE',
+'      (scripts/fr13_recurrent_decode_oracle.py, _forward_core_decode_non_spec).',
+'  (3) OUR TREE-VERIFY COMMITTER: our rank-1 _tree_gdn / _gdn_node_step tree-scan in',
+'      src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py over the accepted path, + the LCP committer',
+'      _lumo_tree_path_lcp_max_greedy_sample (fr10_phase4_patch_vllm_tree_gdn.py ~:6610). What cat9 commits.',
+'',
+'BANKED MEASURED EVIDENCE (diffusion deep-dive FR13_DIFFUSION_DEEP_DIVE.md 5164c454, verify HOLDS; +',
+'research/fr13_workflows/fr13_diffusion_deep_dive_raw.json): per-layer cat9-verify-vs-native divergence is',
+'MEASURED (output/fr13_node5_ladder, output/fr13_node7_ladder; INPUT byte-exact 0.0 = apples-to-apples).',
+'first-nonzero = L0 GDN; growth = GEOMETRIC ~1.166x/layer (NOT additive-ULP, NOT "32x gate" - that was a stale',
+'FR12 narrative; per-layer ratios median 1.10, all in [1.0,1.34]); total ~14,800x over 64 layers -> residual',
+'max_abs ~2.5 at final_norm; flip crystallizes L60 locks L61. PINNED per-layer floor source = GDN recurrent',
+'SCAN: fp32 compute but **stores b_h.to(bf16) EVERY token, fed recurrently** (the bf16-store boundary is where',
+'the per-token ULP enters); conv1d anchor-row 1-bf16-ULP = the spine onset seed. NOT FA2-fork (2-ULP, no depth',
+'growth), NOT fp8 in_proj/o_proj (M-invariant), NOT gate (fp32-internal amplifier). VERDICT was "genuinely',
+'diffuse per-layer, lever = topology not kernel-align" BUT native-E5=3 = existence proof a 3-flip realization',
+'exists at the SAME model/fp8/frame (NOT irreducible).',
+'',
+'THE HARD COUNTER-EVIDENCE you MUST confront (do not hand-wave): FR13_SCAN_NOT_E2E_CARRIER_BIND - aligning our',
+'scan STATE to native packed-decode via RECOMPUTE made the scan bit-exact (int-view 0.0) YET e2e flips ROSE',
+'23->32 (recurrent oracle, same frame, artifact-checked). So "align our scan to native decode" was ALREADY',
+'tested at the STATE level and did NOT help - because recompute changed the TRAJECTORY (recomputed each node',
+'from spine -> different accepted path). Your job: is a per-op ROUNDING/op-order alignment (that keeps the',
+'tree-scan structure, just matches native decode\'s b_h-store boundary / l2norm / op-order) DIFFERENT from the',
+'recompute test + plausibly helpful, OR does the diffuse+recompute-rose evidence say kernel-align is dead?',
+'',
+'YOUR JOB (quantitative, from banked captures + reading all 3 kernels):',
+'1. THE FLIP MATH (make it exact): a flip happens iff the accumulated realization-residual at final_norm',
+'   exceeds the token\'s CLEAN margin at the lm-head GEMV. From node5/node7: residual max_abs ~2.5 vs clean',
+'   margin 1-2 nat at structural boundaries. Write the inequality + the measured numbers: at what residual does',
+'   a given-margin token flip; how the 1.166x/layer growth reaches the crossing; why structural boundaries',
+'   (small margin) flip and format-fixed positions (huge margin) do not. This is the "math behind flip".',
+'2. THE THREE PAIRWISE GAPS (quantify from banked captures + code; the CORE of the user framing):',
+'   (a) PREFILL <-> DECODE: does native\'s OWN chunked-prefill argmax-AGREE with native\'s OWN recurrent-decode?',
+'       The banked chunk-vs-recurrent ~6e-5 gap (FR13 two-tier gate) - is it argmax-clean or does it ITSELF',
+'       flip? CRITICAL: the node5/node7 "clean" teacher-force is CHUNKED-PREFILL (1) but the deployment oracle',
+'       is RECURRENT-DECODE (2). If prefill != decode at the argmax level, then SOME of the carrier analysis',
+'       (node5 used prefill) is MEASUREMENT-FRAME, not a real deployment loss. Reconcile: the binding 23 was',
+'       scored vs the RECURRENT oracle (correct frame), so 23 is real - but quantify how much prefill-vs-decode',
+'       frame-mismatch inflates the node-ladder carrier picture.',
+'   (b) DECODE <-> OUR COMMITTER: the REAL loss. Does our tree-scan realization argmax-agree with the',
+'       deployment recurrent-decode? This is what the 23 flips measure (vs native 3).',
+'   (c) PREFILL <-> OUR COMMITTER: what node5 measured (live tree-scan vs chunked-prefill clean).',
+'   Tabulate each pairwise gap with the banked numbers. The user wants all three to "almost agree".',
+'3. KERNEL MITIGATIONS (the constructive ask - "anything we could do with our kernel on rounding or other"):',
+'   READ all 3 kernels op-by-op (vllm_src.sh for native (1)(2); fr10_gdn_tree_kernel.py for ours (3)). For the',
+'   GDN recurrent step compare EXACTLY: b_h accumulation dtype, the .to(bf16) STORE boundary + WHERE it lands,',
+'   l2norm rsqrt placement/dtype, the gate sigmoid op-order, conv anchor-row silu/bf16. For EACH difference',
+'   between OUR tree-scan (3) and the DEPLOYMENT recurrent-decode (2), state: is it an ALIGNABLE rounding/',
+'   op-order seam our kernel could adopt to match (2) exactly -> our committer agrees with the oracle -> flip',
+'   drops, OR is it INTRINSIC to tree-vs-linear (a topology diff no rounding fixes)? THE SUBTLETY (state it',
+'   explicitly): the agreement target is the DEPLOYMENT recurrent-decode (2) which ITSELF bf16-stores b_h - so',
+'   the fix is to MATCH (2)\'s store boundary / op-order EXACTLY, NOT to keep fp32 (more precise but DISAGREES',
+'   with the bf16-store deployment path). Rank the candidate alignments by plausible flip-reduction.',
+'4. RECONCILE with the recompute-rose + diffuse verdict (do not contradict it silently): why a store-boundary/',
+'   op-order alignment is or is not the same lever as the recompute STATE-alignment that failed; whether the',
+'   "50+ layers each 1.1x diffuse" picture means NO single rounding change lands native (-> the user should',
+'   relax / topology is the only lever) or whether matching ONE recurrent op-order across ALL layers (a single',
+'   code change applied 48x) is exactly the kind of systematic alignment that could collapse the diffuse floor',
+'   (native=3 says a clean realization exists). Be quantitative + honest either way.',
+'5. ONE CHEAP NON-VACUOUS TEST: a CPU or single-GPU-A/B that confirms/refutes the top kernel-alignment candidate',
+'   (e.g. align our tree-scan b_h-store boundary / l2norm op-order to native decode\'s, re-score vs the',
+'   RECURRENT oracle - same frame as the binding 23). Must be NON-VACUOUS (powered discriminator: neg-control',
+'   flips, oracle engaged, reshape/flag actually applied) - the session burned 4 vacuous instruments.',
+'',
+'REWARD-HACK GUARDRAILS (hard): aligning OUR kernel\'s op-order/rounding to native\'s recurrent-decode realization',
+'is NUMERICS ALIGNMENT = AUTHORIZED (reference_no_reroute_reward_hacking: chunk64/bf16-boundaries/op-order/raw-g/',
+'l2norm). BANNED: splice/route-around (native = A/B oracle ONLY, never a served-path splice), copy-recurrent',
+'multi-spine (NOT-lossless CLOSED), dense, forced-spine. recompute is OUR kernel but NOT byte-lossless (369 tok',
+'diffs) so NOT a drop-in. The deliverable is OUR kernel COMPUTING, matched to native\'s realization. Do NOT make',
+'a close/pass-fail or relax decision - that is the user\'s call; your job is to tell them whether a kernel',
+'mitigation exists + how strong, so they can decide relax-vs-fix.',
+'',
+'DELIVERABLE: FR13_REALIZATION_AGREEMENT.md = (1) the flip-math inequality with measured numbers, (2) the three',
+'pairwise-gap table, (3) the ranked kernel-alignment candidates (each: alignable-seam vs topology, reward-hack-',
+'safe, plausible flip-reduction), (4) the reconciliation with recompute-rose + diffuse, (5) the single cheap',
+'non-vacuous test. Quote FR13_BUG_CLASS_PLAYBOOK rows (#9 vacuous, #10 codegen-identity, #12 depth-accumulation/',
+'trajectory). Commit pathspec. Be SKEPTICAL - the "diffuse, topology-only" verdict is the incumbent; only',
+'overturn it with op-by-op kernel evidence, not narrative.',
+].join('\n');
+
+phase('Analyze');
+const A_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['flipMath','pairwiseGaps','kernelAlignmentCandidates','reconcileRecomputeAndDiffuse','cheapTest','verdict','committed','notes'],
+  properties: {
+    flipMath: { type: 'string', description: 'exact inequality (accumulated residual at final_norm vs clean margin) with the measured numbers from node5/node7 (residual ~2.5 vs margin 1-2nat, 1.166x/layer growth to crossing); why structural boundaries flip + format-fixed do not' },
+    pairwiseGaps: { type: 'string', description: 'table of the 3 pairwise argmax/max_abs gaps: prefill<->decode (does native prefill argmax-agree with native decode? frame-mismatch inflation), decode<->our-committer (the real 23-vs-3 loss), prefill<->our-committer (node5). Quantified from banked captures' },
+    kernelAlignmentCandidates: { type: 'string', description: 'op-by-op compare of our tree-scan (3) vs deployment recurrent-decode (2): b_h dtype, bf16-store boundary, l2norm rsqrt, gate op-order, conv anchor-row. EACH difference tagged alignable-seam-to-(2) vs topology-intrinsic, with plausible flip-reduction + the match-not-maximize-precision subtlety stated' },
+    reconcileRecomputeAndDiffuse: { type: 'string', description: 'why a store-boundary/op-order alignment is/ isnt the same lever as the recompute STATE-align that ROSE flips; whether diffuse "50+ layers 1.1x" means no single rounding change lands native OR a single op-order applied 48x could collapse it (native=3 exists). honest + quantitative' },
+    cheapTest: { type: 'string', description: 'ONE non-vacuous CPU or single-GPU-A/B to confirm/refute the top alignment candidate, scored vs the RECURRENT oracle; the non-vacuity proof (neg-control, oracle engaged, flag applied)' },
+    verdict: { type: 'string', description: 'is there a KERNEL ROUNDING/op-order mitigation that makes our committer agree with the deployment oracle (-> pursue it, drop flips) OR is the disagreement topology-intrinsic (-> relax/topology only)? For the user relax-vs-fix decision. NO close/pass-fail.' },
+    committed: { type: 'string' },
+    notes: { type: 'string' },
+  },
+};
+const a = await agent(
+  CTX + '\n\nTASK (Analyze, no GPU, read-only). Do steps 1-5 quantitatively from banked captures + op-by-op '
+  + 'reading of all 3 kernels (vllm_src.sh for native, fr10_gdn_tree_kernel.py for ours). Write '
+  + 'FR13_REALIZATION_AGREEMENT.md, commit pathspec. Return the schema.',
+  { label: 'realization-agreement', phase: 'Analyze', schema: A_SCHEMA, model: 'opus' }
+);
+
+phase('Verify');
+const V_SCHEMA = {
+  type: 'object', additionalProperties: false,
+  required: ['holds','flipMathGrounded','pairwiseGapsGrounded','candidatesOpLevel','reconcileHonest','testNonVacuous','rewardHackCheck','recommendation','issues'],
+  properties: {
+    holds: { type: 'boolean' },
+    flipMathGrounded: { type: 'string', description: 'is the flip inequality + numbers from ACTUAL banked node5/node7 captures (spot-check), not re-asserted?' },
+    pairwiseGapsGrounded: { type: 'string', description: 'are the 3 pairwise gaps real numbers from captures/code, esp. the prefill-vs-decode argmax-agreement (frame-mismatch) claim?' },
+    candidatesOpLevel: { type: 'string', description: 'is the op-by-op kernel compare REAL (read both kernels via vllm_src.sh + our file, cite the b_h-store/l2norm/op-order lines), not narrative? Is the match-not-maximize-precision subtlety correct?' },
+    reconcileHonest: { type: 'string', description: 'does it honestly confront recompute-rose + the diffuse verdict, not silently contradict? does it overturn "topology-only" only with op-level evidence?' },
+    testNonVacuous: { type: 'string', description: 'is the proposed cheap test a powered non-vacuous discriminator (not another zeros-ref / disengaged oracle / unapplied flag)?' },
+    rewardHackCheck: { type: 'string', description: 'is the mitigation numerics-alignment of OUR kernel (authorized), NOT splice/copy/dense/multi-spine/native-served-path?' },
+    recommendation: { type: 'string', description: 'single: does a kernel rounding/op-order mitigation plausibly exist (pursue) or not (relax/topology). For the user. No close/pass-fail.' },
+    issues: { type: 'string' },
+  },
+};
+const v = await agent(
+  CTX + '\n\nADVERSARIALLY VERIFY: ' + JSON.stringify(a) + '. Default holds=false if the flip math/pairwise gaps '
+  + 'are re-asserted not read from banked captures, the kernel-alignment candidates are narrative not op-by-op '
+  + '(must cite the actual b_h-store/l2norm/op-order lines in BOTH native via vllm_src.sh AND our '
+  + 'fr10_gdn_tree_kernel.py), the recompute-rose/diffuse counter-evidence is hand-waved, the cheap test is '
+  + 'vacuous, or any mitigation is a reward-hack (splice/copy/dense/native-served-path). No close/pass-fail.',
+  { label: 'verify-realization-agreement', phase: 'Verify', schema: V_SCHEMA, agentType: 'general-purpose' }
+);
+
+return { a, v };

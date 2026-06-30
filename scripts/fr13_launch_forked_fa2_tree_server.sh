@@ -295,21 +295,22 @@ else
   APC_FLAGS=""
 fi
 
-# CUDAGRAPH_MODE knob (CARRIER re-rooted 2026-06-21): the cache-ON garble is NOT the SSM
-# align-snapshot stale-row (that is refuted -- EAGER cache-ON replay with 70% cache hits is
-# byte-coherent and even solves the bug, WRITE_THROUGH did=False). It is GRAPH-SPECIFIC: the
-# FULL decode CUDA-graph reads GDN recurrent state via capture-time-baked persistent indexing,
-# so after an APC cache-hit re-prefill writes the restored boundary state into block-pool rows,
-# the captured graph reads the wrong row -> wrong initial recurrent state -> empty/garbage
-# (align-mode sibling of vLLM #34874; matches open #43559). Confirmed by the eager-vs-graph
-# A/B on the 12907 10-turn replay (eager ....ok...., graph ....GGGG.. at the cat-blob turn).
-# FIX = cudagraph_mode=PIECEWISE: keep graph capture for the dense GEMMs/norms/MLP (decode TPS
-# preserved) but run the GDN/mamba scan EAGER every step so it always reads the live restored
-# state. Unset = vLLM default FULL_AND_PIECEWISE (the poisoned regime). Only matters with APC on.
-CG_FLAGS=""
-if [[ -n "${CUDAGRAPH_MODE:-}" ]]; then
-  CG_FLAGS="--compilation-config '{\"cudagraph_mode\":\"$CUDAGRAPH_MODE\"}'"
-fi
+# CUDAGRAPH_MODE — FULL GRAPH IS THE DEFAULT (FR13 BAKED 2026-06-30).
+# HISTORY (CARRIER 2026-06-21): full-graph cache-ON produced garble — the FULL decode CUDA-graph
+# reads GDN recurrent state via persistent block-pool indexing, and after an APC cache-hit re-prefill
+# the captured graph appeared to read the wrong row -> garbage (align-mode sibling of vLLM #34874 /
+# #43559). The interim mitigation was cudagraph_mode=PIECEWISE (run the GDN/mamba scan EAGER every
+# step), which preserved dense-GEMM graph capture but cost the GDN-scan decode TPS.
+# SUPERSEDED BY EXACT_SEED: the garble was a SYMPTOM of the LOSSY cache restoring the WRONG mamba
+# realization (recurrent-kernel state instead of the chunked-prefill realization), not a graph bug.
+# A byte-level kernel trace disproved the seed-row hypothesis (the captured seed already reads the
+# correct committed-leaf node-bank column every step). With FR13_APC_EXACT_SEED (chunked checkpoint
+# at 64-aligned boundaries) the cache restores the CORRECT state, so FULL_AND_PIECEWISE + cache-ON is
+# garble-free — probe run_20260630T030153Z: "Capturing CUDA graphs" + enforce_eager=False + 46/55
+# cached turns, CJK=0, coherent. So default to FULL graph for decode-TPS recovery; override
+# CUDAGRAPH_MODE=PIECEWISE only for diagnostics. Only matters with APC on.
+CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}"
+CG_FLAGS="--compilation-config '{\"cudagraph_mode\":\"$CUDAGRAPH_MODE\"}'"
 # FR13_FULL_ATTN_KV_FP8 (gated, default OFF): set the FULL-ATTENTION KV cache to fp8.
 # DISCRIMINATOR for the APC tree residual locus (research w284wg523, #43559): fp8 KV
 # only touches full-attn KV storage precision, never the mamba/GDN recurrent state.

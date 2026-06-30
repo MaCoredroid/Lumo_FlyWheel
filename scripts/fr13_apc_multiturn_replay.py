@@ -19,8 +19,18 @@
 # each turn's shared conversation prefix is a genuine APC restore from the prior
 # turns' blocks (the deployed multi-turn condition). cached_tokens is logged per turn
 # to PROVE the cache engaged on the ON arm and stayed 0 on oracle/OFF.
-import argparse, json, sys, time, urllib.request
+import argparse, json, os, sys, time, urllib.request
 from pathlib import Path
+
+# FR13_REPLAY_TEMP (default 0.0): deployment-temp override for the replay sampling
+# temperature. The DEFAULT preserves the legacy greedy/argmax behavior (temp=0.0) so
+# every existing caller is byte-identical. The drift-curve harness sets it to 0.6 (the
+# deployment temp) so the captured decode trajectory after a cache hit follows the same
+# sampled path as production -> the argmax-flip count is measured on the deployment path,
+# not an artificial greedy one. The raw captured logits (FR13_FINAL_LOGIT_CAPTURE) are
+# pre-temperature so the logit max_abs/KL are temp-independent; only the SAMPLED token
+# sequence (and thus argmax-flip locations downstream) depends on this.
+_REPLAY_TEMP = float(os.environ.get("FR13_REPLAY_TEMP", "0.0"))
 
 
 def post(port, path, payload, timeout=2400):
@@ -110,7 +120,7 @@ def main():
     a = ap.parse_args()
 
     turns = load_trajectory(a.dumps_dir, a.limit_turns)
-    print(f"[replay arm={a.arm}] {len(turns)} turns from {a.dumps_dir}  cap={a.max_output_tokens}  reset_each={a.reset_each}", flush=True)
+    print(f"[replay arm={a.arm}] {len(turns)} turns from {a.dumps_dir}  cap={a.max_output_tokens}  reset_each={a.reset_each}  temp={_REPLAY_TEMP}", flush=True)
     if not turns:
         print("FAIL: no turns loaded", file=sys.stderr); return 2
 
@@ -122,7 +132,7 @@ def main():
         if a.reset_each:
             reset_cache(a.port); time.sleep(0.5)
         r = dict(req)
-        r["temperature"] = 0.0
+        r["temperature"] = _REPLAY_TEMP
         r["top_p"] = 1.0
         r["store"] = False
         r["stream"] = False

@@ -700,8 +700,15 @@ def _run_codex_remote(
         workspace=remote_ws,
         endpoint=endpoint,
         model=model,
-        prompt=prompt,
     )
+    # BUGFIX: CODEX_TEMPLATE no longer carries a {prompt} placeholder — the local path
+    # appends the prompt as a separate argv element (see L459-466). The remote path used
+    # to pass prompt=prompt into .format(), which silently DROPPED it (str.format ignores
+    # unused kwargs) -> the remote codex launched with NO prompt -> "No prompt provided via
+    # stdin" -> empty patch / agent_gave_up in ~3s (every offload SWE episode). Append the
+    # prompt as a shell-quoted positional arg so it survives the ssh remote login shell and
+    # reaches `codex exec` as its positional prompt, mirroring the local argv append.
+    remote_cmd = remote_cmd + " " + shlex.quote(prompt)
     timed_out = False
     rc: int | None = None
     # run codex over SSH; trace (codex --json) -> trace_path, ssh stderr -> stderr_path.

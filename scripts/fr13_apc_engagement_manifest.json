@@ -1,0 +1,125 @@
+{
+  "_schema": "fr13.apc_engagement_manifest.v1",
+  "_doc": "Manifest-driven unified engagement gate for vLLM APC fixes on Qwen3-Next GDN-hybrid. For EACH active APC fix flag the gate asserts (a) flag=1 in the WORKER via the bridge marker AND (b) the engagement counter incremented >0. counter_key=null means the counter is MISSING and the gate FAILS LOUD (a flag with no engagement counter can never be silently trusted). See FR13_APC_UNIFIED_ENGAGEMENT_GATE.md.",
+  "_bridge_marker_file": "/logs/fr13_apc_bridge_loaded.flag",
+  "_engagement_file": "/logs/fr13_apc_engagement.flag",
+  "_bridge_error_file": "/logs/fr13_apc_bridge_error.flag",
+  "fixes": [
+    {
+      "flag": "FR13_APC_SNAP_FIX",
+      "required_value": "1",
+      "bridge_field": "SNAP_FIX",
+      "counter_key": "FR13_SNAP_FIX_FIRED",
+      "counter_global": "gdn._FR13_SNAP_FIX_FIRED",
+      "code_site": "scripts/fr10_phase4_patch_vllm_tree_gdn.py:12284",
+      "process": "worker",
+      "vacuity_risk": "predicate (leaf-miss no-fire) + bridge",
+      "status": "counter EXISTS"
+    },
+    {
+      "flag": "FR13_APC_CONV_FIX",
+      "required_value": "1",
+      "bridge_field": "CONV_FIX",
+      "counter_key": "FR13_CONV_REDIRECT_FIRED",
+      "counter_global": "gdn._FR13_CONV_REDIRECT_FIRED",
+      "code_site": "scripts/fr10_phase4_patch_vllm_tree_gdn.py:12288",
+      "process": "worker",
+      "vacuity_risk": "predicate (the documented func== mismatch) + bridge",
+      "status": "counter EXISTS"
+    },
+    {
+      "flag": "FR13_APC_SNAP_FIX_ZEROACCEPT",
+      "required_value": "1",
+      "bridge_field": "ZEROACCEPT",
+      "counter_key": null,
+      "counter_global": "gdn._FR13_ZEROACCEPT_FIRED (ADD: bump in _fr13_publish_apc_ssm_leaf zero-accept branch)",
+      "code_site": "scripts/fr10_phase4_patch_vllm_tree_gdn.py:~6937 (zero-accept publish branch)",
+      "process": "worker",
+      "vacuity_risk": "predicate + bridge",
+      "status": "counter MISSING — ADD before gating"
+    },
+    {
+      "flag": "FR13_APC_HIT_RECURRENT_SUFFIX",
+      "required_value": "1",
+      "bridge_field": "HIT_RECURRENT_SUFFIX",
+      "counter_key": null,
+      "counter_global": "gdn._FR13_HRS_FIRED (ADD: bump at the recurrent-suffix recompute site)",
+      "code_site": "scripts/fr10_phase4_patch_vllm_tree_gdn.py:~5609 (_fr13_post recurrent-exact)",
+      "process": "worker",
+      "vacuity_risk": "predicate + bridge",
+      "status": "counter MISSING — ADD before gating"
+    },
+    {
+      "flag": "FR13_APC_HIT_SUFFIX_CAP",
+      "required_value": "1000000",
+      "bridge_field": "HIT_SUFFIX_CAP",
+      "counter_key": null,
+      "counter_global": "n/a until HRS path active (cap is a value, not a fire site); gate on FR13_HRS_FIRED when HRS=1",
+      "code_site": "inert while HIT_RECURRENT_SUFFIX=0",
+      "process": "worker",
+      "vacuity_risk": "bridge (the documented cap-defaulted-to-64) + predicate",
+      "status": "counter N/A — gate via HRS counter when HRS on"
+    },
+    {
+      "flag": "FR13_APC_SHADOW",
+      "required_value": "1",
+      "bridge_field": "SHADOW",
+      "counter_key": null,
+      "counter_global": "gdn._FR13_SHADOW_FIRED (ADD: bump inside _patch_scheduler_apc_shadow after the hit is zeroed)",
+      "code_site": "scripts/fr10_phase4_patch_vllm_tree_gdn.py:6406-6407 (re-prefill zeroing)",
+      "process": "scheduler-pid1",
+      "vacuity_risk": "predicate (num_new_local_computed_tokens>0 must hold) + bridge",
+      "status": "counter MISSING — ADD before gating; NOTE: do NOT reuse _FR13_APC_SHADOW_STATE['written'] (that is the shadow-LOG record count, a different opt-in diagnostic)"
+    },
+    {
+      "flag": "FR13_APC_EXACT_SEED",
+      "required_value": "1",
+      "bridge_field": "EXACT_SEED",
+      "counter_key": null,
+      "counter_global": "gdn._FR13_EXACT_SEED_USED (== worktree ES_REDIRECT_USED); MISSING on this branch (impl lives only on worktree wf_4f4d8bf1-0a7-2)",
+      "code_site": "worktree patcher ~:12790 (ES_REDIRECT_USED) — NOT on fr13-apc-ssm-shadow",
+      "process": "worker",
+      "vacuity_risk": "ALL THREE: e (no -e in launcher) + bridge (not in marker L1352 / sidecar keys L17178) + predicate (req_id cross-turn keying -> USED=0)",
+      "status": "MOST EXPOSED — add -e passthrough + marker field + sidecar key + counter when merged"
+    },
+    {
+      "_family": "SSM REPLAY COMMIT PATH (write-side) — added 2026-06-28",
+      "flag": "FR13_REPLAY_ROUTE",
+      "required_value": "1",
+      "bridge_field": null,
+      "counter_key": null,
+      "counter_global": "_FR13_REPLAY_LAUNCH_FIRED (ADD: module global in fr10_gdn_tree_kernel.py, bump once per launch_tree_gdn_replay call)",
+      "code_site": "src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py:1073 (launch_tree_gdn_replay) / kernel :908; callers fr10_phase4_patch_vllm_tree_gdn.py:8629,:9281",
+      "process": "worker",
+      "precondition": "num_spec_decodes>0 (write-side: needs a spec-decode commit, NOT a cache hit)",
+      "vacuity_risk": "predicate (baked-ON :=1 everywhere so e/bridge are moot; the real risk is a silent fall-back to a non-replay commit path -> no fire). NO bridge field today (not in marker; flag is hard-baked in -e :435).",
+      "status": "counter MISSING — the SSM commit path has NO fired-counter at all; ADD _FR13_REPLAY_LAUNCH_FIRED before gating. This is the most predicate-exposed of my family."
+    },
+    {
+      "_family": "SSM REPLAY COMMIT PATH (write-side)",
+      "flag": "FR13_REPLAY_DURABLE_AB",
+      "required_value": "1",
+      "bridge_field": null,
+      "counter_key": "FR13_RDAB_RECORDS",
+      "counter_global": "module global _FR13_RDAB_RECORDS (fr10_phase4_patch_vllm_tree_gdn.py:6826, bump :7072) — EXISTS; surface it in the engagement dump",
+      "code_site": "_fr13_replay_durable_ab fr10_phase4_patch_vllm_tree_gdn.py:7086; caller :8665 (guarded by _fr13_replay_durable_ab_enabled :6973 + _fr13_rdab_layer_match)",
+      "process": "worker",
+      "precondition": "num_spec_decodes>0 AND a matching probed layer (_fr13_rdab_layer_match); observe-only A/B, not a served fix",
+      "vacuity_risk": "predicate (layer-match + enable guard) + bridge (own sidecar flag _fr13_write_replay_durable_ab_sidecar :17162-ish, NOT the APC sidecar; default-OFF deletes the flag file so OFF is byte-identical)",
+      "status": "counter EXISTS (_FR13_RDAB_RECORDS); also writes its own JSONL so the file's existence is a usable proxy. ADD to the engagement dump."
+    },
+    {
+      "_family": "SSM REPLAY COMMIT PATH (scheduler-side neighbor)",
+      "flag": "FR13_APC_BLOCK_ALIGN_45477",
+      "required_value": "1",
+      "bridge_field": null,
+      "counter_global": "_FR13_APC_BLOCK_ALIGN_FIRED (ADD: bump in the ==1 branch of the 45477 inject)",
+      "counter_key": null,
+      "code_site": "_patch_scheduler_mamba_block_align_45477 fr10_phase4_patch_vllm_tree_gdn.py:6361-6373 (the num_new_tokens block-END align)",
+      "process": "scheduler-pid1",
+      "precondition": "APC align path reached (need_mamba_block_aligned_split = APC on) AND num_computed_tokens_after_sched < last_cache_position (the unaligned-resume branch)",
+      "vacuity_risk": "bridge (MARKER OMITS it; it IS in sidecar keys L17181 + -e :416, so it reaches the worker, but the host gate can only see it if the marker prints it) + predicate (the branch must be taken)",
+      "status": "counter MISSING — ADD _FR13_APC_BLOCK_ALIGN_FIRED (scheduler-pid1, write to the engagement file from pid-1 like SHADOW). ALSO add BLOCK_ALIGN_45477 to the bridge marker print L1352."
+    }
+  ]
+}

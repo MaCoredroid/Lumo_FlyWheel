@@ -106,13 +106,23 @@
         {{- '<|im_start|>system\n' ~ sysc ~ '<|im_end|>\n' -}}
     {%- endif -%}
 {%- endif -%}
-{# -------- Interleaved-thinking boundary: last REAL user query -------- #}
+{# -------- Interleaved-thinking boundary: FIRST real user query (the task) -------- #}
+{# FR13: anchor the thinking-visibility window at the FIRST real user query, not the last.
+   This is a single-task agentic loop: the codex harness injects continuation/retry user
+   nudges ("Continue working on this task...", "Your previous attempt EXPLORED...") mid-episode.
+   With a LAST-user boundary those nudges reset the window to the end and HIDE the entire
+   reasoning chain -> the model re-derives blind each turn and stalls in reasoning-only (no
+   tool call) -> ~100% attempt-1 give-up. Anchoring at the first real task keeps the whole
+   episode's <think> chain visible (true interleaved thinking). Tool-response user turns are
+   already skipped; we now also stop later task-continuation nudges from collapsing the window. #}
 {%- set ns = namespace(last_user_index=-1) -%}
 {%- for m in messages -%}
     {%- if m.role == "user" -%}
         {%- set uc = render_content(m.content, false)|trim -%}
         {%- if not (uc.startswith('<tool_response>') and uc.endswith('</tool_response>')) -%}
-            {%- set ns.last_user_index = loop.index0 -%}
+            {%- if ns.last_user_index == -1 -%}
+                {%- set ns.last_user_index = loop.index0 -%}
+            {%- endif -%}
         {%- endif -%}
     {%- endif -%}
 {%- endfor -%}
@@ -134,6 +144,9 @@
         {%- set reasoning_content = '' -%}
         {%- if message.reasoning_content is string -%}
             {%- set reasoning_content = message.reasoning_content -%}
+        {%- elif message.reasoning is string -%}
+            {# FR13: vLLM's Responses-API adapter (responses/utils.py _construct_single_message_from_response_item) emits prior reasoning items as message.reasoning, NOT reasoning_content. Without this branch the interleaved-thinking chain is silently dropped at render -> the model re-derives from scratch each turn and stalls in reasoning-only (no tool call) -> ~100% attempt-1 give-up. Baked on by default. #}
+            {%- set reasoning_content = message.reasoning -%}
         {%- else -%}
             {%- if '</think>' in content -%}
                 {%- set reasoning_content = content.split('</think>')[0].rstrip('\n').split('<think>')[-1].lstrip('\n') -%}
