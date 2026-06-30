@@ -1163,6 +1163,108 @@ def _normalize_input_for_nonstreaming(request_json: dict[str, Any]) -> dict[str,
     return out
 
 
+def _parse_think_budget() -> int | None:
+    """LUMO_PROXY_THINK_BUDGET=N — per-turn thinking-token cap for the </think>-injection cap.
+
+    Unset / non-int / <=0 -> None (feature OFF -> byte-identical legacy path). The cap is the
+    only spec-safe way to bound Qwen3.6 thinking in our stack: native thinking_token_budget is
+    voided by MTP, and enable_thinking / reasoning_effort are not forwarded by the Responses API
+    (build_chat_params only passes reasoning_effort + the continue flags), so we force the close
+    via a continue_final_message re-issue (see _think_build_cutoff_prefill).
+    """
+    v = os.environ.get("LUMO_PROXY_THINK_BUDGET", "").strip()
+    if not v:
+        return None
+    try:
+        n = int(v)
+    except ValueError:
+        return None
+    return n if n > 0 else None
+
+
+def _think_extract_reasoning(parsed: dict[str, Any]) -> str:
+    """Concatenate the reasoning-item text from a Responses output."""
+    parts: list[str] = []
+    for it in parsed.get("output", []) or []:
+        if isinstance(it, dict) and it.get("type") == "reasoning":
+            for c in it.get("content") or []:
+                if isinstance(c, dict) and c.get("text"):
+                    parts.append(c["text"])
+            if isinstance(it.get("text"), str) and it["text"]:
+                parts.append(it["text"])
+    return "".join(parts)
+
+
+def _think_response_hit_budget(parsed: dict[str, Any]) -> bool:
+    """True iff call A stopped because it hit max_output_tokens (the thinking cap bit)."""
+    inc = parsed.get("incomplete_details")
+    return isinstance(inc, dict) and inc.get("reason") == "max_output_tokens"
+
+
+def _think_response_has_action(parsed: dict[str, Any]) -> bool:
+    """True iff the response already carries a tool call or a non-empty assistant message."""
+    for it in parsed.get("output", []) or []:
+        if not isinstance(it, dict):
+            continue
+        if it.get("type") == "function_call":
+            return True
+        if it.get("type") == "message":
+            for c in it.get("content") or []:
+                if isinstance(c, dict) and (c.get("text") or "").strip():
+                    return True
+    return False
+
+
+def _think_build_cutoff_prefill(reasoning_text: str) -> dict[str, Any]:
+    """Partial assistant message that continue_final_message will continue.
+
+    OPEN <think> + call-A's reasoning + a TERSE cutoff, with NO </think>: the model must GENERATE
+    the close itself, so the qwen3 reasoning-parser (which only watches generated tokens) sees the
+    </think> and labels the continuation as a MESSAGE -> the tool call parses. Prefilling a CLOSED
+    </think> instead mislabels the whole continuation as reasoning and the tool call is lost
+    (verified on qwen3.6-27b). The cutoff must be terse/decisive; the verbose Qwen official framing
+    lets the model keep thinking (also verified).
+    """
+    cutoff = os.environ.get(
+        "LUMO_PROXY_THINK_CUTOFF",
+        "\n\nOkay, I have analyzed enough. I will stop reasoning and act now.",
+    )
+    return {
+        "id": "msg_thinkcap_prefill",
+        "type": "message",
+        "role": "assistant",
+        "status": "incomplete",
+        "content": [
+            {
+                "type": "output_text",
+                "text": "<think>\n" + reasoning_text + cutoff,
+                "annotations": [],
+            }
+        ],
+    }
+
+
+def _think_merge_continuation(
+    call_a: dict[str, Any], call_b: dict[str, Any]
+) -> dict[str, Any]:
+    """Present call-A's full per-turn reasoning + call-B's action items (drop call-B's tiny
+    generated-close reasoning stub) so codex sees one well-formed reasoning+action turn — keeping
+    the interleaved-thinking chain intact for the next turn."""
+    a_reasoning = [
+        it
+        for it in (call_a.get("output") or [])
+        if isinstance(it, dict) and it.get("type") == "reasoning"
+    ]
+    b_actions = [
+        it
+        for it in (call_b.get("output") or [])
+        if isinstance(it, dict) and it.get("type") != "reasoning"
+    ]
+    merged = dict(call_b)
+    merged["output"] = a_reasoning + b_actions
+    return merged
+
+
 def _synthesize_sse_stream_from_non_streaming_json(
     handler: BaseHTTPRequestHandler,
     response_json: dict[str, Any],
@@ -1940,6 +2042,10 @@ def build_proxy_handler(
             # so PR #39055's promotion path applies, then synthesize an SSE
             # stream back to codex on the response.
             nonstream_bypass_active = False
+            # FR13 thinking cap (LUMO_PROXY_THINK_BUDGET): default OFF -> these stay falsey and the
+            # cap code below is fully skipped (byte-identical legacy path).
+            think_cap_active = False
+            think_cap_answer_budget = 32768
             if self.path == "/v1/responses":
                 try:
                     request_json = json.loads(raw_body.decode("utf-8"))
@@ -1967,6 +2073,20 @@ def build_proxy_handler(
                     # back in the transcript — non-streaming validation rejects them otherwise.
                     normalized_req = _normalize_input_for_nonstreaming(normalized_req)
                     nonstream_bypass_active = True
+                    # FR13 thinking cap: bound PER-TURN thinking at N so a runaway can't starve the
+                    # answer (char-8 truncation) or dead-end in reasoning-only. Cap call A at N and
+                    # remember the original budget for call B's answer; if call A dead-ends in
+                    # thinking, force-close </think> via a continue_final_message re-issue (below).
+                    # Interleaved-safe: per-turn, the prior reasoning chain is untouched.
+                    _tb = _parse_think_budget()
+                    if _tb is not None:
+                        _omax = normalized_req.get("max_output_tokens")
+                        think_cap_answer_budget = (
+                            _omax if isinstance(_omax, int) and _omax > 0 else 32768
+                        )
+                        if not isinstance(_omax, int) or _omax > _tb:
+                            normalized_req["max_output_tokens"] = _tb
+                        think_cap_active = True
                 request_sampling = {
                     key: normalized_req[key]
                     for key in ("temperature", "top_p", "max_output_tokens", "stream")
@@ -2155,6 +2275,51 @@ def build_proxy_handler(
                 elif isinstance(parsed, dict):
                     non_streaming_parsed = parsed
                     _pair_dump_upstream("initial", payload, parsed)
+                # FR13 thinking cap, call B (the </think> injection). Call A was capped at the
+                # thinking budget. If it dead-ended in reasoning (hit the budget, emitted no action),
+                # force-close the thinking via a continue_final_message re-issue: a partial assistant
+                # turn = OPEN <think> + call-A's reasoning + a terse cutoff (NO </think>), so the
+                # model GENERATES the close + the tool call and the parser labels it correctly.
+                # Runs BEFORE auto-continue so a successful close pre-empts the user-nudge fallback.
+                if (
+                    think_cap_active
+                    and isinstance(non_streaming_parsed, dict)
+                    and _think_response_hit_budget(non_streaming_parsed)
+                    and not _think_response_has_action(non_streaming_parsed)
+                ):
+                    _reasoning_txt = _think_extract_reasoning(non_streaming_parsed)
+                    if _reasoning_txt.strip():
+                        cont_req = dict(normalized_req)
+                        cont_input = list(cont_req.get("input", []) or [])
+                        cont_input.append(_think_build_cutoff_prefill(_reasoning_txt))
+                        cont_req["input"] = cont_input
+                        cont_req["max_output_tokens"] = think_cap_answer_budget
+                        cont_payload = json.dumps(cont_req).encode("utf-8")
+                        try:
+                            _cont_sent = time.time()
+                            cont_resp = requests.post(
+                                f"{upstream_base_url}{self.path}",
+                                data=cont_payload,
+                                headers=headers,
+                                timeout=_up_timeout,
+                                stream=False,
+                            )
+                            if upstream_compute_accum_s is not None:
+                                upstream_compute_accum_s += time.time() - _cont_sent
+                            if cont_resp.status_code == 200:
+                                try:
+                                    cont_parsed = cont_resp.json()
+                                except json.JSONDecodeError:
+                                    cont_parsed = None
+                                if isinstance(cont_parsed, dict):
+                                    _pair_dump_upstream(
+                                        "think_cap_continue", cont_payload, cont_parsed
+                                    )
+                                    non_streaming_parsed = _think_merge_continuation(
+                                        non_streaming_parsed, cont_parsed
+                                    )
+                        except requests.RequestException:
+                            pass
                 # Auto-continue retry loop (Qwen3 #1817 / Qwen3.5-9B #10 workaround):
                 # qwen3.5-27b in thinking mode sometimes plans tool calls in
                 # reasoning/text ("Now let me create X") and then fails to emit
