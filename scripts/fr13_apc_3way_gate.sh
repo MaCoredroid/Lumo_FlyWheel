@@ -72,10 +72,12 @@ run_arm() {
 }
 
 # no-leak cache-OFF baselines FIRST (the apples-to-apples replacements for historic 23.88/18.80)
+# CAT6ON_UTIL default 0.65 keeps the 4-task cat6_ON arm under the leak ceiling; for a 1-task run
+# (SUBSET=...astropy12907.json) the leak is a non-factor, so pass CAT6ON_UTIL=0.76 for a uniform-util
+# apples-to-apples comparison across all three arms.
 run_arm cat6_OFF   cat6root 0 0 0.76 6
 run_arm chain5_OFF chain5   0 0 0.76 5
-# leak-prone cache-ON arm LAST, lower util to survive the ~90min 4-task run
-run_arm cat6_ON    cat6root 1 1 0.65 6
+run_arm cat6_ON    cat6root 1 1 "${CAT6ON_UTIL:-0.65}" 6
 
 echo ""
 echo "=== CLEAN 3-WAY SUMMARY (b4_four 4-task TW, current build) ==="
