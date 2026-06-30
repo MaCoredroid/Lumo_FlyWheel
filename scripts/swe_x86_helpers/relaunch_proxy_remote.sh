@@ -43,6 +43,10 @@ export LUMO_PROXY_AUTO_CONTINUE_MAX_RETRIES=${LUMO_PROXY_AUTO_CONTINUE_MAX_RETRI
 # (81920 complex coding) per the model card -- raise for thinking headroom (still bounds runaway).
 export LUMO_PROXY_MAX_OUTPUT_TOKENS=${LUMO_PROXY_MAX_OUTPUT_TOKENS:-32768}
 export LUMO_PROXY_NONSTREAM_BYPASS=1
+# FR13 thinking cap (LUMO_PROXY_THINK_BUDGET=N): per-turn </think>-injection cap, forwarded from
+# the offload helper. Empty/unset -> OFF -> byte-identical legacy path (the locked pipeline runs OFF).
+export LUMO_PROXY_THINK_BUDGET=${LUMO_PROXY_THINK_BUDGET:-}
+[ -n "${LUMO_PROXY_THINK_CUTOFF:-}" ] && export LUMO_PROXY_THINK_CUTOFF
 export LUMO_PROXY_REQUEST_DUMP_DIR=${LUMO_PROXY_REQUEST_DUMP_DIR:-/tmp/lumo_proxy_request_dumps}
 export LUMO_PROXY_FORCE_TEMPERATURE=${LUMO_PROXY_FORCE_TEMPERATURE:-0.6}
 # pair-dump dir is read from the env by inference_proxy (LUMO_PROXY_PAIR_DUMP_DIR)
