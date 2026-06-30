@@ -377,9 +377,12 @@ def _write_agents_md(workspace: Path, instance: dict) -> None:
     body.append("## How to work (important)")
     body.append("")
     body.append(
-        "- Reason carefully and thoroughly before each tool call. First inspect "
-        "the relevant source files to confirm your understanding of the bug, "
-        "then make the minimal correct edit.\n"
+        "- Be DECISIVE: inspect only enough to LOCATE the bug (usually 2-4 files), "
+        "then make the minimal CORRECT edit immediately. Do NOT keep re-reading or "
+        "re-inspecting once you've found the cause -- most fixes here are only a "
+        "few lines, so commit to an `apply_patch` early rather than over-analyzing. "
+        "If you have inspected for several turns without editing, that is a FAILED "
+        "approach: stop inspecting and write your best edit now.\n"
         "- Do NOT spend your time trying to `pip install` or build/conda the "
         "project — the grader runs in its own prepared environment. If an "
         "install/build command fails, do not retry it; just edit the source.\n"
