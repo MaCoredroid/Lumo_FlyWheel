@@ -7208,6 +7208,65 @@ def _patch_scheduler_spec_trace() -> bool:
     return True
 
 
+def _patch_scheduler_fr13_freereq_cleanup() -> bool:
+    """FR13 LEAK FIX: the EXACT_SEED/committer per-(layer,req) GPU-tensor dicts
+    (_fr13_apc_pending_kvab / _fr13_apc_chunked_ckpt_by_req / _fr13_apc_abs_pos_by_req on each
+    registered GDN layer) + the module-level req-keyed dicts are populated EVERY turn but never
+    popped when vLLM frees the request -> ~0.7 GiB/min unified-mem leak the gpu_oom_guard kills
+    (~30min, exit-137; confirmed killing sg_cat6root_ON / eg_ON). Hook Scheduler._free_request
+    (the single request-free chokepoint, SAME EngineCore process as the GDN layers) to purge
+    them. Best-effort: never raises into the free path. FR13_LEAK_PROBE=1 logs dict sizes."""
+    text = SCHEDULER_PATH.read_text()
+    sentinel = "# FR13_FREEREQ_LEAK_CLEANUP"
+    if sentinel in text:
+        return False
+    nl = "\n"
+    anchor = "        delay_free_blocks |= connector_delay_free_blocks"
+    if anchor not in text:
+        raise RuntimeError("FR13 _free_request anchor (delay_free_blocks |= ...) not found")
+    inject = nl.join(
+        [
+            "        " + sentinel,
+            "        try:",
+            "            _fr13_gdn = __import__('vllm.model_executor.layers.mamba.gdn_linear_attn', fromlist=['x'])",
+            "            _fr13_keys = (request_id, str(request_id))",
+            "            for _fr13_nm in (",
+            "                '_FR10_TREE_ACCEPTED_PATH_BY_REQ_ID', '_FR13_APC_SSM_LEAF_BY_REQ',",
+            "                '_FR13_APC_CONV_LEAF_BY_REQ', '_FR13_APC_SSM_ALIGNED_POS_BY_REQ',",
+            "                '_FR13_BOUNDARY_LAST_WRITTEN_BY_REQ', '_FR13_ES_PENDING_BY_REQ',",
+            "                '_FR13_ES_HASH_BY_REQ', '_FR13_ES_RESTORE_BY_REQ',",
+            "            ):",
+            "                _fr13_d = getattr(_fr13_gdn, _fr13_nm, None)",
+            "                if isinstance(_fr13_d, dict):",
+            "                    for _fr13_k in _fr13_keys:",
+            "                        _fr13_d.pop(_fr13_k, None)",
+            "            _fr13_layers = getattr(_fr13_gdn, '_FR13_REPLAY_LAYERS', None)",
+            "            if isinstance(_fr13_layers, dict):",
+            "                for _fr13_ly in list(_fr13_layers.values()):",
+            "                    for _fr13_nm in ('_fr13_apc_pending_kvab', '_fr13_apc_chunked_ckpt_by_req', '_fr13_apc_abs_pos_by_req'):",
+            "                        _fr13_ld = getattr(_fr13_ly, _fr13_nm, None)",
+            "                        if isinstance(_fr13_ld, dict):",
+            "                            for _fr13_k in _fr13_keys:",
+            "                                _fr13_ld.pop(_fr13_k, None)",
+            "            import os as _fr13_os",
+            "            if _fr13_os.environ.get('FR13_LEAK_PROBE', '0') == '1':",
+            "                _fr13_n = getattr(self, '_fr13_freecount', 0) + 1",
+            "                self._fr13_freecount = _fr13_n",
+            "                if _fr13_n % 25 == 0:",
+            "                    _fr13_lys = getattr(_fr13_gdn, '_FR13_REPLAY_LAYERS', {}) or {}",
+            "                    _fr13_pk = sum(len(getattr(_l, '_fr13_apc_pending_kvab', {}) or {}) for _l in _fr13_lys.values())",
+            "                    _fr13_ck = sum(len(getattr(_l, '_fr13_apc_chunked_ckpt_by_req', {}) or {}) for _l in _fr13_lys.values())",
+            "                    print('FR13LEAK frees=%d pend_kvab=%d ckpt=%d' % (_fr13_n, _fr13_pk, _fr13_ck), flush=True)",
+            "        except Exception:",
+            "            pass",
+            "        delay_free_blocks |= connector_delay_free_blocks",
+        ]
+    )
+    text = text.replace(anchor, inject, 1)
+    SCHEDULER_PATH.write_text(text)
+    return True
+
+
 def _patch_scheduler_mamba_block_align_45477() -> bool:
     """Backport vLLM PR #45477. In Scheduler._mamba_block_aligned_split the intermediate
     prefill chunk is aligned by SIZE (num_new_tokens // block_size * block_size). When
@@ -8243,6 +8302,34 @@ def _fr13_apc_exact_seed_recompute(
                 # exact-seed entry is simply absent and the SNAP_FIX redirect
                 # falls back to the recurrent leaf (current behavior).
                 continue
+        # FR13 LEAK FIX (B=1-safe interim; the fixed-buffer port is the general fix):
+        # prune the slot/req-keyed GPU dicts (per-layer _fr13_apc_pending_kvab /
+        # _chunked_ckpt_by_req / _abs_pos_by_req / _exact_seed_stage_by_req) to the
+        # ACTIVE batch slots+reqs so they don't accumulate one DEAD entry per finished
+        # request (the real ~0.7 GiB/min leak; within-request growth is already bounded
+        # by the 64-drain del _pend[:64]). Only fires when oversized; never raises.
+        try:
+            _fr13_active = set()
+            for _fr13_b in range(rows):
+                try:
+                    _fr13_active.add(str(int(_es_slot_col0[_fr13_b])))
+                except Exception:
+                    pass
+                try:
+                    _fr13_active.add(str(spec_req_ids[_fr13_b]))
+                except Exception:
+                    pass
+            for _fr13_m in (
+                getattr(layer, "_fr13_apc_pending_kvab", None),
+                getattr(layer, "_fr13_apc_chunked_ckpt_by_req", None),
+                getattr(layer, "_fr13_apc_abs_pos_by_req", None),
+                getattr(layer, "_fr13_apc_exact_seed_stage_by_req", None),
+            ):
+                if isinstance(_fr13_m, dict) and len(_fr13_m) > max(4, 2 * rows):
+                    for _fr13_k in [_kk for _kk in list(_fr13_m) if _kk not in _fr13_active]:
+                        _fr13_m.pop(_fr13_k, None)
+        except Exception:
+            pass
     except Exception:
         # whole-helper guard: a chunked-recompute import/setup failure must not
         # break the served commit (fail-safe to the recurrent-leaf SNAP_FIX).
@@ -18861,6 +18948,7 @@ def main() -> int:
         (GDN_ATTN_PATH, _patch_gdn_attn()),
         (GDN_LINEAR_PATH, _patch_gdn_linear()),
         (SCHEDULER_PATH, _patch_scheduler_spec_trace()),
+        (SCHEDULER_PATH, _patch_scheduler_fr13_freereq_cleanup()),
         (SCHEDULER_PATH, _patch_scheduler_mamba_block_align_45477()),
         (EAGLE_PATH, _patch_eagle_tree_consumption_verify()),
         (EAGLE_PATH, _patch_eagle_mtp_draft_trace()),
