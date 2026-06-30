@@ -19,33 +19,10 @@ echo "$RUNROOT" > /home/mark/.claude/jobs/22c39bb9/tmp/threeway_root.txt
 echo "=== FR13 CLEAN 3-WAY  b4_four(4-task)  B=1 temp0.6  FULL GRAPH  -> $RUNROOT ==="
 export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g FR10_METRICS=0
 
-reduce() {  # $1 = swe_out root -> token-weighted decode/e2e + mean TTFT + gen + cache-hit%
-  .venv/bin/python - "$1" <<'PY' 2>/dev/null
-import sys,re,glob,os
-def parse(f):
-    d={}
-    try:
-        for ln in open(f):
-            ln=ln.strip()
-            if ln.startswith('#') or not ln: continue
-            m=re.match(r'(\S+?)(\{[^}]*\})?\s+([0-9eE.+-]+)$',ln)
-            if m: d[m.group(1)]=d.get(m.group(1),0.0)+float(m.group(3))
-    except: pass
-    return d
-root=sys.argv[1]; tg=td=te=tft=tfc=ph=pq=0.0
-for pre in glob.glob(os.path.join(root,'**','vllm_metrics_pre.txt'),recursive=True):
-    post=pre.replace('_pre.txt','_post.txt')
-    if not os.path.exists(post): continue
-    a=parse(pre); b=parse(post)
-    def df(k): return b.get(k,0)-a.get(k,0)
-    tg+=df('vllm:generation_tokens_total'); td+=df('vllm:request_decode_time_seconds_sum')
-    te+=df('vllm:e2e_request_latency_seconds_sum')
-    tft+=df('vllm:time_to_first_token_seconds_sum'); tfc+=df('vllm:time_to_first_token_seconds_count')
-    ph+=df('vllm:prefix_cache_hits_total'); pq+=df('vllm:prefix_cache_queries_total')
-dec=f"{tg/td:.2f}" if td>0 else "NA"; e2e=f"{tg/te:.2f}" if te>0 else "NA"
-ttft=f"{tft/tfc:.2f}s" if tfc>0 else "NA"; hit=f"{100*ph/pq:.0f}%" if pq>0 else "NA"
-print(f"decode={dec} e2e={e2e} ttft={ttft} cache_hit={hit} gen={tg:.0f} dec_s={td:.0f}")
-PY
+reduce() {  # $1 = swe_out root -> full decode+cache accounting (s_per_fwd, accept/event,
+            # token-weighted tok/s, prefix-hit%, TTFT, e2e) via the shared reducer
+  .venv/bin/python scripts/fr13_decode_accounting.py "$1" "$(basename "$(dirname "$1")")" 2>/dev/null \
+    || echo "  (reduce failed for $1)"
 }
 
 run_arm() {
