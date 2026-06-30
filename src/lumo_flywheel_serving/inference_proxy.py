@@ -1215,6 +1215,33 @@ def _think_response_has_action(parsed: dict[str, Any]) -> bool:
     return False
 
 
+def _think_response_has_complete_action(parsed: dict[str, Any]) -> bool:
+    """True iff the turn landed a COMPLETE action: a function_call with PARSEABLE JSON arguments,
+    or a non-empty assistant message. A function_call whose args are truncated (unparseable JSON)
+    does NOT count -> the cap fires and call B regenerates the action cleanly with a full budget.
+    This is what makes a TIGHT budget safe: without it, a turn that hits the budget mid-apply_patch
+    leaves a partial tool call (= an 'action'), the cap stays quiet, and the truncated JSON args
+    surface as the char-8 400. Messages are treated as complete (a truncated analysis message is
+    not char-8; the auto-continue nudge handles it)."""
+    for it in parsed.get("output", []) or []:
+        if not isinstance(it, dict):
+            continue
+        if it.get("type") == "function_call":
+            args = it.get("arguments")
+            if not isinstance(args, str):
+                return True  # already-structured args = complete
+            try:
+                json.loads(args)
+                return True  # valid JSON args = complete tool call
+            except (ValueError, TypeError):
+                continue  # truncated args -> NOT complete; keep scanning / let the cap fire
+        if it.get("type") == "message":
+            for c in it.get("content") or []:
+                if isinstance(c, dict) and (c.get("text") or "").strip():
+                    return True
+    return False
+
+
 def _think_build_cutoff_prefill(reasoning_text: str) -> dict[str, Any]:
     """Partial assistant message that continue_final_message will continue.
 
@@ -2285,7 +2312,7 @@ def build_proxy_handler(
                     think_cap_active
                     and isinstance(non_streaming_parsed, dict)
                     and _think_response_hit_budget(non_streaming_parsed)
-                    and not _think_response_has_action(non_streaming_parsed)
+                    and not _think_response_has_complete_action(non_streaming_parsed)
                 ):
                     _reasoning_txt = _think_extract_reasoning(non_streaming_parsed)
                     if _reasoning_txt.strip():
