@@ -61,18 +61,29 @@ leak-FIXED preview; "prior" = the §1 4-task cache-OFF baseline. The CLEAN 4-tas
 > The manual TW above bypasses that assert — **decode TPS is per-token and valid whether or not the task
 > resolves**, so the give-ups don't corrupt the *speed* read, only the verdict count.
 >
-> **Headline:** cache-ON cat6root **16.8** vs cache-OFF **23.88** = a **~30% decode tax** from the EXACT_SEED
-> committer (`.clone()` per accepted token/layer + cache publisher overhead). The **fixed-buffer port (task
-> #15)** removes the `.clone()` and is expected to recover most of this. **cat10 14.1 < cat6root 16.8**
-> confirms the wide tree does *not* pay off at batch-1: more draft compute, lower accept (27% vs 59%).
+> **Headline:** cache-ON cat6root **16.8** vs cache-OFF **23.88** = a **~30% decode tax** from the cache-ON
+> machinery. **The `.clone()` is NOT the dominant part of that tax** — disproven by a live FB=0-vs-FB=1
+> A/B (`scripts/fr13_apc_fb_speedgate.sh`, run_20260630T100418Z): FB=0 decode 15.30 (gen 13306) vs FB=1
+> decode 15.93 (gen 21927) — a +4% delta swamped by 65% trajectory-length variance (temp 0.6), i.e. noise.
+> The per-token `.clone()` append is real but small; and the committer **drain never fires live**
+> (`ES_CHAIN_PUBLISH=0`), so the buffer port only touches the (cleared-each-commit) append. The ~30% tax is
+> therefore **structural** — prefill-capture, the SNAP_FIX redirect, and/or the committer's per-step
+> host-sync (`_es_si[:rows,0].cpu()`), NOT the clone. The fixed-buffer port is **validated-lossless** (unit
+> test, 9018 bit-exact chunks) and env-gated (`FR13_APC_FIXED_BUFFER`, default OFF) but is **not** the decode
+> recovery; it stands as a leak-bounding / memory option. **cat10 14.1 < cat6root 16.8** confirms the wide
+> tree does *not* pay off at batch-1: more draft compute, lower accept (27% vs 59%).
 
 **Reading it:**
-- **decode:** cat6root's tree beats the E5 spine (23.88 vs 18.80, +27%) — the structural d0-rescue edge. The
-  current cache-ON early decode (17.9, leak-fixed; was 15.7 leak-era) trails 23.88 by the `.clone()` tax +
-  1-task variance + config; the fixed-buffer port recovers the `.clone()` part.
+- **decode:** cache-OFF cat6root's tree beats the E5 spine (23.88 vs 18.80, +27%) — the structural d0-rescue
+  edge. But turning the cache **ON** *drops* cat6root decode to 16.8 — **below** both cache-OFF (23.88) and
+  the E5 spine (18.80). So the lossless cache currently **trades decode for TTFT**; it does not preserve the
+  decode win. The ~30% cache-ON decode cost is structural (not the `.clone()`, per the FB A/B above) and
+  remains an open profiling target (per-step committer host-sync / prefill-capture / redirect).
 - **e2e:** the prior cat6root cache-OFF was only **+4%** e2e over E5 — the +27% decode win drowned in
-  re-prefill. cache-ON's e2e (16.3 early) is where the cache should show its win (TTFT cut on cache hits) —
-  the clean 3-way E5/cat6-OFF e2e numbers (same config) quantify it.
+  re-prefill. The cache's whole justification is the **TTFT cut on cache hits** buying back e2e despite the
+  decode loss. **Whether the cache is net-positive on e2e is THE open headline question** — the clean 3-way
+  (cat6-ON / cat6-OFF / chain5-OFF, multi-task TW + TTFT) settles it. Single-task reads are too noisy (the FB
+  A/B showed 30%+ swings), so the 3-way must be multi-task token-weighted.
 
 > **Comparability caveat:** the prior 23.88/18.80 are the FIX-1/2/3 era (cache-OFF), graph-mode + block-size
 > NOT cleanly logged (likely vLLM-default `FULL_AND_PIECEWISE` + the ~816 align-floor block); current is
@@ -88,8 +99,10 @@ leak-FIXED preview; "prior" = the §1 4-task cache-OFF baseline. The CLEAN 4-tas
   cache-OFF. The new cache-ON is the deployed lossless config (EXACT_SEED + 64-aligned block 1024 + full
   graph). A side-by-side of cache-ON-current vs cache-OFF-prior mixes two axes (config + cache).
 - **The clean three-way** (recommended, current config, all on the same build):
-  `cat6root cache-ON` vs `cat6root cache-OFF` vs `chain5/E5 cache-OFF`, 1 task (12907) each (fits inside the
-  serving window now that the leak is fixed), reporting **decode TPS + e2e TPS + TTFT + accept%**. This
+  `cat6root cache-ON` vs `cat6root cache-OFF` vs `chain5/E5 cache-OFF`, **multi-task token-weighted** (4-task
+  b4_four — single-task is too noisy: the FB A/B saw 30%+ decode swings from temp-0.6 trajectory variance),
+  reporting **decode TPS + e2e TPS + TTFT + accept%**. cat6-ON needs GPU_UTIL≈0.65 to outrun the residual
+  leak for the ~90min 4-task run; the cache-OFF arms have no committer leak. This
   isolates the two variables cleanly: tree shape (cat6root vs spine → the decode/accept edge) and cache
   (on vs off → the e2e/TTFT win). Queued to run once the leak fix is confirmed on v3.
 
@@ -98,6 +111,12 @@ leak-FIXED preview; "prior" = the §1 4-task cache-OFF baseline. The CLEAN 4-tas
 - ⏳ cat6root 4th task (13398) lost to a leak-guard kill — a clean 4-task cat6root needs the leak *capped*
   (the fixed-buffer port) or a lower-util re-run; the 3-task TW already tells the story (~30% tax vs 23.88).
 - ⏳ The clean **3-way e2e** (cat6-ON / cat6-OFF / chain5-OFF, TTFT + e2e) still to run.
-- 🔧 **Next real fix:** the **fixed-buffer port (task #15)** — removes the `.clone()` decode tax (recovers
-  toward 23.88) *and* caps the residual leak (so clean 4-task runs survive). Lossless-gated by
-  `fr13_apc_exactseed_statediff.sh` (FIXED_BUFFER=0 vs 1 → identical per-layer state_max) before trust.
+- ✅ **Fixed-buffer port (task #15) — DONE + validated-lossless, but NOT the decode recovery.** Env-gated
+  `FR13_APC_FIXED_BUFFER` (default OFF, OFF-path byte-identical), unit-test bit-exact (9018 chunks). The live
+  FB A/B (run_20260630T100418Z) showed the `.clone()` is **not** the dominant cache-ON decode cost (+4% delta
+  = noise vs 65% trajectory variance; drain doesn't fire live, `ES_CHAIN_PUBLISH=0`). Kept **OFF** by default
+  (no clear win). The state-diff harness can't gate it (it tests prefill-capture, not the committer drain).
+- 🔍 **Open headline question:** the **3-way e2e** (multi-task TW) — does cache-ON's TTFT win beat its ~30%
+  decode loss vs cache-OFF + the E5 spine? This is now the deciding measurement.
+- 🔬 **Open profiling target:** locate the structural ~30% cache-ON decode cost (per-step committer host-sync
+  `_es_si[:rows,0].cpu()` / prefill-capture / SNAP_FIX redirect) — the real lever for preserving both speedups.
