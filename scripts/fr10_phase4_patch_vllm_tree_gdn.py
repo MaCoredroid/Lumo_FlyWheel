@@ -10080,15 +10080,13 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                             _lumo_tree_commit_gdn, _fr13_layer,
                             _fr13_spec_req_ids, _fr13_replay_lens,
                         )
-                        # FR13_APC_EXACT_SEED (default OFF -> no-op): overwrite the
-                        # APC snapshot SOURCE with the CHUNKED-prefill realization
-                        # of this chunk boundary (cache-OFF kernel) so a future
-                        # cache hit restores an EXACT seed, not the recurrent leaf.
-                        _fr13_apc_exact_seed_recompute(
-                            _lumo_tree_commit_gdn, _fr13_layer,
-                            _fr13_spec_req_ids, _fr13_replay_lens,
-                            _fr13_ssm_bank, _fr13_replay_gdn_node_paths,
-                        )
+                        # FR13: vestigial EXACT_SEED committer call REMOVED. It never
+                        # published (ES_CHAIN_PUBLISH=0) -- it is leftover v1 scaffolding
+                        # superseded by PREFILL-CAPTURE (the sole lossless cache-write
+                        # source). Running it cost 48 host syncs/step (eager, outside the
+                        # cuda graph) + the committer memory leak + the per-token clone
+                        # tax, for zero functional benefit. Removed to make decode
+                        # sync-free; losslessness is unaffected (prefill-capture stands).
                         _fr13_flags[0].fill_(0)
                         if _fr13_bnd_layer_on:
                             _fr13_boundary_replay_post(
@@ -10741,13 +10739,9 @@ def _lumo_tree_canonical_multidraft_sample(
                         _lumo_tree_commit_gdn, _fr13_layer,
                         _fr13_spec_req_ids, _fr13_replay_lens,
                     )
-                    # FR13_APC_EXACT_SEED (default OFF -> no-op): see twin call in
-                    # the eager-pack-disabled branch above.
-                    _fr13_apc_exact_seed_recompute(
-                        _lumo_tree_commit_gdn, _fr13_layer,
-                        _fr13_spec_req_ids, _fr13_replay_lens,
-                        _fr13_ssm_bank, _fr13_replay_gdn_node_paths,
-                    )
+                    # FR13: vestigial EXACT_SEED committer call REMOVED (twin of the
+                    # removal in the eager-pack branch above; same rationale -- never
+                    # published, superseded by prefill-capture, cost 48 syncs/step).
                     _fr13_flags[0].fill_(0)
                     if _fr13_bnd_layer_on:
                         _fr13_boundary_replay_post(
