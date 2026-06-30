@@ -8002,6 +8002,20 @@ def _fr13_apc_exact_seed_recompute(
             pos_map = {}
             gdn_mod._FR13_APC_SSM_CHUNKED_POS_BY_REQ = pos_map
         _CHUNK = 64
+        # FR13_APC_FIXED_BUFFER (default OFF -> Python-list path, byte-identical to
+        # the shipped committer). When ON, the per-(layer,req) rolling accepted-token
+        # buffer is a PRE-ALLOCATED [cap, ...] tensor written by ONE batched copy_
+        # per commit, instead of a Python list of per-token .clone()s (one clone per
+        # accepted token per layer per step) -> removes the decode-side .clone() tax
+        # (the ~30% cache-ON gap vs 23.88) AND bounds the buffer memory (the residual
+        # leak). LOSSLESS INVARIANT: the drained 64-chunk fed to the chunked kernel is
+        # bit-identical either way -- same ring index_select values, same append order,
+        # same dtype -> the kernel input (hence published state) is identical. Gated by
+        # fr13_apc_exactseed_statediff.sh (FIXED_BUFFER=0 vs 1 -> identical per-layer
+        # state_max) BEFORE this flag is trusted/baked. Overflow -> row-except ->
+        # recurrent-leaf fallback (fail-safe; the gate would catch a stalled chain).
+        _fr13_fixedbuf = os.environ.get("FR13_APC_FIXED_BUFFER", "0") == "1"
+        _FB_CAP = 256  # >> _CHUNK + n_pad(<=16); single-buffer holds remainder + 1 commit
         _A = A_log.to(torch.float32)
         _dtb = dt_bias.to(torch.float32)
         # GAP-a KEY FIX (req_id->STATE-SLOT) DRAIN side. The chain MUST persist
@@ -8071,13 +8085,41 @@ def _fr13_apc_exact_seed_recompute(
                 # ---- append accepted tokens to the rolling buffer ----
                 _pend = pend_map.get(_rid)
                 if _pend is None:
-                    _pend = {"k": [], "v": [], "a": [], "b": []}
+                    if _fr13_fixedbuf:
+                        _pend = {"buf": None, "n": 0}
+                    else:
+                        _pend = {"k": [], "v": [], "a": [], "b": []}
                     pend_map[_rid] = _pend
-                for _t in range(len(_nodes)):
-                    _pend["k"].append(_k_tok[_t].clone())
-                    _pend["v"].append(_v_tok[_t].clone())
-                    _pend["a"].append(_a_tok[_t].clone())
-                    _pend["b"].append(_bb_tok[_t].clone())
+                if _fr13_fixedbuf:
+                    _t_n = len(_nodes)
+                    if _pend.get("buf") is None:
+                        # lazy-alloc once per req (need the per-token shapes); dtype/
+                        # device match the ring tensors so copy_ is an exact copy.
+                        _pend["buf"] = {
+                            "k": torch.empty((_FB_CAP,) + tuple(_k_tok.shape[1:]),
+                                             dtype=_k_tok.dtype, device=_k_tok.device),
+                            "v": torch.empty((_FB_CAP,) + tuple(_v_tok.shape[1:]),
+                                             dtype=_v_tok.dtype, device=_v_tok.device),
+                            "a": torch.empty((_FB_CAP,) + tuple(_a_tok.shape[1:]),
+                                             dtype=_a_tok.dtype, device=_a_tok.device),
+                            "b": torch.empty((_FB_CAP,) + tuple(_bb_tok.shape[1:]),
+                                             dtype=_bb_tok.dtype, device=_bb_tok.device),
+                        }
+                        _pend["n"] = 0
+                    _fb = _pend["buf"]; _fb_n = int(_pend["n"])
+                    if _fb_n + _t_n > _FB_CAP:
+                        raise RuntimeError("fr13 fixedbuf overflow")  # -> recurrent leaf
+                    _fb["k"][_fb_n:_fb_n + _t_n].copy_(_k_tok)
+                    _fb["v"][_fb_n:_fb_n + _t_n].copy_(_v_tok)
+                    _fb["a"][_fb_n:_fb_n + _t_n].copy_(_a_tok)
+                    _fb["b"][_fb_n:_fb_n + _t_n].copy_(_bb_tok)
+                    _pend["n"] = _fb_n + _t_n
+                else:
+                    for _t in range(len(_nodes)):
+                        _pend["k"].append(_k_tok[_t].clone())
+                        _pend["v"].append(_v_tok[_t].clone())
+                        _pend["a"].append(_a_tok[_t].clone())
+                        _pend["b"].append(_bb_tok[_t].clone())
                 # ---- advance the committer-local absolute position (GAP-b) ----
                 _prev_abs = int(abs_map.get(_rid, 0))
                 _new_abs = _prev_abs + len(_nodes)
@@ -8091,8 +8133,11 @@ def _fr13_apc_exact_seed_recompute(
                     # No exact base captured for this req -> cannot build an
                     # exact chunked checkpoint. Drop pending (it would grow
                     # unbounded) and skip publishing.
-                    _pend["k"].clear(); _pend["v"].clear()
-                    _pend["a"].clear(); _pend["b"].clear()
+                    if _fr13_fixedbuf:
+                        _pend["n"] = 0
+                    else:
+                        _pend["k"].clear(); _pend["v"].clear()
+                        _pend["a"].clear(); _pend["b"].clear()
                     ptr_map.pop(_rid, None)
                     pos_map.pop(_rid, None)
                     # PIECEWISE diagnosis: a commit with NO ckpt0 base. If this is
@@ -8114,12 +8159,22 @@ def _fr13_apc_exact_seed_recompute(
                 _published = False
                 while (
                     _new_abs >= _ck_pos + _CHUNK
-                    and len(_pend["k"]) >= _CHUNK
+                    and (int(_pend["n"]) if _fr13_fixedbuf else len(_pend["k"])) >= _CHUNK
                 ):
-                    _kc = torch.stack(_pend["k"][:_CHUNK], 0)         # [64,KH,DK]
-                    _vc = torch.stack(_pend["v"][:_CHUNK], 0)         # [64,VH,DV]
-                    _ac = torch.stack(_pend["a"][:_CHUNK], 0).to(torch.float32)
-                    _bc = torch.stack(_pend["b"][:_CHUNK], 0).to(torch.float32)
+                    if _fr13_fixedbuf:
+                        # .clone() the 64-row slice (once per DRAIN, not per token) so
+                        # the chunk is a fresh tensor independent of the post-drain
+                        # roll below -- exactly mirrors torch.stack's fresh output.
+                        _fb = _pend["buf"]
+                        _kc = _fb["k"][:_CHUNK].clone()                # [64,KH,DK]
+                        _vc = _fb["v"][:_CHUNK].clone()                # [64,VH,DV]
+                        _ac = _fb["a"][:_CHUNK].clone().to(torch.float32)
+                        _bc = _fb["b"][:_CHUNK].clone().to(torch.float32)
+                    else:
+                        _kc = torch.stack(_pend["k"][:_CHUNK], 0)         # [64,KH,DK]
+                        _vc = torch.stack(_pend["v"][:_CHUNK], 0)         # [64,VH,DV]
+                        _ac = torch.stack(_pend["a"][:_CHUNK], 0).to(torch.float32)
+                        _bc = torch.stack(_pend["b"][:_CHUNK], 0).to(torch.float32)
                     # ---- FP32 SEAM-1 (l2norm convention) ----
                     # The rings store key_spec PRE-l2norm (raw). The cache-OFF
                     # prefill applies l2norm EXTERNALLY in the post-conv kernel
@@ -8201,8 +8256,20 @@ def _fr13_apc_exact_seed_recompute(
                     )
                     _ck_state = _final[0].detach().clone()
                     # drop the consumed 64 tokens, keep the <64 remainder.
-                    del _pend["k"][:_CHUNK]; del _pend["v"][:_CHUNK]
-                    del _pend["a"][:_CHUNK]; del _pend["b"][:_CHUNK]
+                    if _fr13_fixedbuf:
+                        # roll the <64 remainder down to the front. .clone() the source
+                        # slice to avoid an overlapping copy_ (dst[:rem] vs src[64:n]
+                        # overlap when n>128); cheap (<64 rows, once per drain).
+                        _fb = _pend["buf"]; _nn = int(_pend["n"]); _rem = _nn - _CHUNK
+                        if _rem > 0:
+                            _fb["k"][:_rem].copy_(_fb["k"][_CHUNK:_nn].clone())
+                            _fb["v"][:_rem].copy_(_fb["v"][_CHUNK:_nn].clone())
+                            _fb["a"][:_rem].copy_(_fb["a"][_CHUNK:_nn].clone())
+                            _fb["b"][:_rem].copy_(_fb["b"][_CHUNK:_nn].clone())
+                        _pend["n"] = max(0, _rem)
+                    else:
+                        del _pend["k"][:_CHUNK]; del _pend["v"][:_CHUNK]
+                        del _pend["a"][:_CHUNK]; del _pend["b"][:_CHUNK]
                     # ---- WRITE 1(a): DISABLED (Iteration 3 prefill-capture) ----
                     # This decode-drain publish to _FR13_ES_PENDING_BY_REQ is the
                     # BROKEN incremental path: a single turn decodes only ~128 tokens
