@@ -6709,7 +6709,12 @@ def _fr13_gdn_subop_mab(
                                         .setdefault(int(_fr13_es_bnd), {})
                                     )
                                     _fr13_es_d[_fr13_es_layer] = (
-                                        _fr13_es_ck_state.cpu()
+                                        # GB10 unified memory: keep the checkpoint
+                                        # GPU-resident. .cpu() gave NO memory saving
+                                        # (same pool) + a device->host stream sync;
+                                        # the restore .to(device)s it either way, and
+                                        # FIX A (LRU cap) bounds the store.
+                                        _fr13_es_ck_state
                                     )
                                     try:
                                         _fr13_es_bindfn = globals().get(
