@@ -49,3 +49,25 @@ attribution (the prior run's cache-OFF arm lacked these).
 - capture `docker_full.log` per arm (char-8 400s land here)
 - capture proxy request/pair dumps on BOTH arms
 - tally char-8-per-turn + char-8-on-apply_patch per arm
+
+---
+
+## RESULTS — chain5 (forked) vs native-MTP A/B (run_20260701T172042Z, cache-OFF, cap=500, N=1)
+
+| task | native | chain5 |
+|---|---|---|
+| 12907 | resolved | resolved |
+| 13453 | resolved | tests_failed |
+| 14508 | resolved | tests_failed |
+| 14539 | resolved | resolved |
+| 14995 | resolved | resolved |
+| **total** | **5/5** | **3/5** |
+
+**Verdict (honest):**
+- **char-8 is NOT the carrier** — gate: chain5 4 char-8 (15.4/1k-turns) < native 10 (44.6/1k), PASS(char8-lossless). Both arms 0 degeneration. char-8 is survivable (native resolved 5/5 with 10 char-8) and NOT elevated on the forked kernel.
+- **The 5/5-vs-3/5 gap is NOT statistically significant** (Fisher p=0.44) — well within seed noise at N=1, temp 0.6. Divergences (13453, 14508) are `tests_failed` = real patches, wrong fixes; heterogeneous (chain5 recovered 12907/14539/14995) → leans SEED, kernel not proven a carrier.
+- **Adjudicator (temp-0.6, no teacher-forcing):** the replica self-noise gate (scripts/fr13_replica_selfnoise_run.sh + fr13_replica_selfnoise_gate.py) — K seed-replicas per config, CMH stratified test vs native's self-noise floor. Recommended focused run: 13453+14508, K=4-5.
+- Per-task wall-clock: native mean 18.6 min, chain5 21.8 min (both cache-OFF); variance dominated by clean-context retries (SWE_EMPTY_PATCH_RETRIES=2 → up to 3 sessions, ~30-60 min on hard tasks).
+
+## NEXT: native+EXACT_SEED (run_20260701T205744Z) — does the lossless deployment cache preserve native 5/5?
+Booting: Qwen3_5MTP + method=mtp num_spec=5 + enable_prefix_caching=True + APC bridge EXACT_SEED=1 on the native FLASH_ATTN path. WATCH: ES must capture/restore on real requests (boot warmup showed ES_CKPT0_SKIP reason=no_nonspec_row_map — confirm engagement on real multi-turn traffic, else cache is inert).
