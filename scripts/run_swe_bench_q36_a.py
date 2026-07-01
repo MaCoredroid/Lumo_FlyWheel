@@ -18,7 +18,8 @@ scripts/build_swe_bench_subset.py):
 
 Defaults follow the spec:
   - Concurrency: 1 (LLD-05 §4.6 default; bump after Sprint-1 validation).
-  - Codex wall budget: 25 min (spec §6) + 5 min eval buffer.
+  - Codex wall budget: NO harness cap by default (0 = unlimited; codex self-limits on
+    stream_idle_timeout_ms + turn limit). Eval buffer: 30 min. Override: SWE_AGENT_WALL_S / --agent-wall-s.
   - Proxy: http://127.0.0.1:8022/v1
   - Reasoning effort: high (carried over from launch_qwen36_ablation_point.py).
   - Temperature is governed by the vLLM relaunch bundle (Q36-A: temp=0.6).
@@ -47,12 +48,16 @@ DEFAULT_HF_HOME = REPO_ROOT / ".cache" / "huggingface"
 DEFAULT_ENDPOINT = "http://127.0.0.1:8022/v1"
 DEFAULT_METRICS_URL = "http://127.0.0.1:9950/metrics"
 DEFAULT_MODEL = "qwen3.6-27b"
-DEFAULT_AGENT_WALL_S = 40 * 60  # per-attempt codex wall. Raised 25->40min (user 2026-07-01):
-# hard tasks that genuinely need >25min were TIMED OUT mid-fix -> partial/wrong patch -> tests_failed
-# (e.g. chain5 astropy-13453: timed_out=True at 27min). With nudge-only (SWE_EMPTY_PATCH_RETRIES=0)
-# a task now gets ONE attempt, so the old fresh-session retry no longer silently grants ~3x the wall;
-# a single longer wall gives legit hard tasks room to finish. Per-turn runaway is still bounded by
-# MAX_OUTPUT (32768) + the in-session nudge; this only affects the multi-turn agent wall.
+DEFAULT_AGENT_WALL_S = 0  # per-attempt codex wall. 0 = NO upper limit (user 2026-07-01):
+# hard tasks that genuinely need a long time were TIMED OUT mid-fix -> partial/wrong patch ->
+# tests_failed (e.g. chain5 astropy-13453: timed_out=True at 27min under the old 25-min cap). With
+# nudge-only (SWE_EMPTY_PATCH_RETRIES=0) a task gets ONE attempt, so the old fresh-session retry no
+# longer silently grants extra wall-time -> we remove the harness cap entirely and let codex run to
+# its own natural completion. This does NOT mean "hang forever": codex self-terminates on its own
+# stream_idle_timeout_ms=600000 (10-min no-output idle) and its internal turn limit, and per-turn
+# generation is bounded by MAX_OUTPUT (32768). Set SWE_AGENT_WALL_S>0 (or --agent-wall-s N) to
+# reinstate a hard per-attempt wall of N seconds. NOTE: serial (concurrency=1) so a single stuck
+# task can stall the whole sweep; the codex idle timeout is the real backstop.
 DEFAULT_EVAL_TIMEOUT_S = 30 * 60
 DEFAULT_MODEL_NAME_TAG = "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a"
 # Same capture path used by launch_qwen36_ablation_point.py / Track B benches.
@@ -481,7 +486,8 @@ def _run_codex(
                 cmd_argv,
                 stdout=trace_f,
                 stderr=stderr_f,
-                timeout=max(timeout_s, 30),
+                # timeout_s<=0 => NO harness wall (codex runs to its own idle/turn limit).
+                timeout=(None if timeout_s <= 0 else max(timeout_s, 30)),
                 check=False,
             )
             rc = completed.returncode
@@ -725,7 +731,8 @@ def _run_codex_remote(
              stderr_path.open("w", encoding="utf-8") as ef:
             completed = subprocess.run(
                 ssh_codex, stdout=tf, stderr=ef,
-                timeout=max(timeout_s, 30) + 120, check=False,
+                # timeout_s<=0 => NO harness wall (codex runs to its own idle/turn limit).
+                timeout=(None if timeout_s <= 0 else max(timeout_s, 30) + 120), check=False,
             )
         rc = completed.returncode
         if rc == 255:
@@ -1154,7 +1161,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument("--model-name", default=DEFAULT_MODEL_NAME_TAG)
-    parser.add_argument("--agent-wall-s", type=int, default=DEFAULT_AGENT_WALL_S)
+    parser.add_argument("--agent-wall-s", type=int,
+                        default=int(os.environ.get("SWE_AGENT_WALL_S", str(DEFAULT_AGENT_WALL_S))))
     parser.add_argument("--eval-timeout-s", type=int, default=DEFAULT_EVAL_TIMEOUT_S)
     parser.add_argument("--concurrency", type=int, default=1,
                         help="Agent concurrency. LLD-05 §4.6 default is 1; raise after Sprint-1 validation.")
