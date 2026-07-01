@@ -25,7 +25,7 @@ set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
 
 ARM=${1:?usage: fr13_bigdenom_swe_serve_variant.sh <arm> <KIND> <subset.json>}
-KIND=${2:?cat9|cat9-opta|cat9-opt1|nativemtp5|cat6root|cat10}
+KIND=${2:?cat9|cat9-opta|cat9-opt1|nativemtp5|nativemtp5apc|nativemtp5_exseed|cat6root|cat10}
 SUBSET=${3:?subset json}
 
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
@@ -86,6 +86,34 @@ case "$KIND" in
   # chain5(forked)-vs-native-MTP A/B for the char-8 tool-call regression.
   nativemtp5) LAUNCHER=native; TREEARG="";            EXPECT_RATIO=5;  declare -a XFLAGS=() ;;
   nativemtp5apc) LAUNCHER=native; TREEARG="";         EXPECT_RATIO=5;  declare -a XFLAGS=(NATIVE_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32) ;;
+  # nativemtp5_exseed = NATIVE MTP-5 decode (clean native kernel: FLASH_ATTN, native
+  # qwen3_5_mtp spec, NO speculative_token_tree, NO forked-fa2 tree-attn) + the
+  # patcher's LOSSLESS deployment cache FR13_APC_EXACT_SEED=1. It uses LAUNCHER=forked
+  # ONLY to run the in-container patcher (fr10_phase4_patch_vllm_tree_gdn.py, line 590)
+  # that ships EXACT_SEED — but overrides the launcher's TREE defaults to a native
+  # config via XFLAGS. Draft is linear MTP-5 => draft_tokens/drafts==5 (EXPECT 5),
+  # launcher-agnostic (proves the MTP drafter ran). EXACT_SEED is tree-independent:
+  # its non-spec row map publishes on EVERY _prepare_inputs step incl. pure prefill
+  # (patcher ~L11720), ckpt0 capture + restore key off block hashes + non-spec prefill
+  # rows, never tree parents. The forked launcher's tree-conv path self-gates off
+  # (use_fr10_tree_conv requires decode_mode==tree_mtp AND fr10_tree_parent != None;
+  # naive_mtp + no tree => both False => native causal_conv1d path). XFLAGS:
+  #   ATTENTION_BACKEND=FLASH_ATTN            -> clean native kernel (no TREE_ATTN)
+  #   SPEC_CONFIG=native qwen3_5_mtp,5 tokens -> native MTP-5, NO speculative_token_tree
+  #   FR10_DECODE_MODE_DEFAULT=naive_mtp      -> linear MTP path (NOT tree_mtp)
+  #   FR13_REPLAY_ROUTE/FA2_TREE_BIAS/FA2_PREFILL_NATIVE/TREE_SAMPLE_ROW/
+  #   CONV_COMMITTED_PATH=0                   -> un-leak the forked launcher tree env
+  #   FR13_ENABLE_APC=1 + MAMBA/APC block flags-> triggers forked APC_FLAGS branch (L224)
+  #   FR13_APC_EXACT_SEED=1                   -> the lossless deployment cache under test
+  nativemtp5_exseed) LAUNCHER=forked; TREEARG=""; EXPECT_RATIO=5; declare -a XFLAGS=(
+        ATTENTION_BACKEND=FLASH_ATTN
+        'SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":5}'
+        FR10_DECODE_MODE_DEFAULT=naive_mtp
+        FR13_REPLAY_ROUTE=0 FR13_FA2_TREE_BIAS=0 FR13_FA2_PREFILL_NATIVE=0
+        FR13_TREE_SAMPLE_ROW=0 FR13_CONV_COMMITTED_PATH=0
+        FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=1
+        MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32
+        FR13_APC_REQUIRE_SNAP_FIX=1) ;;
   cat6root)  LAUNCHER=forked; TREEARG="$CAT6ROOT_TREE"; EXPECT_RATIO=6;  declare -a XFLAGS=() ;;
   chain5)    LAUNCHER=forked; TREEARG="$CHAIN5_TREE";   EXPECT_RATIO=5;  declare -a XFLAGS=() ;;
   cat10)     LAUNCHER=forked; TREEARG="$CAT10_TREE";    EXPECT_RATIO=10; declare -a XFLAGS=() ;;
@@ -96,7 +124,20 @@ case "$KIND" in
   cat55221)  LAUNCHER=forked; TREEARG="$CAT55221_TREE";  EXPECT_RATIO=15; declare -a XFLAGS=() ;;
   *) echo "FAIL: unknown KIND=$KIND"; exit 2 ;;
 esac
-PROBE_MODE=tree_mtp
+# NATIVE_DECODE: arms whose DECODE is the native/linear MTP path (no tree), so the
+# tree-flag class-9 pins + the tree-only worker environ needle DO NOT APPLY and the
+# native-appropriate asserts run instead. Covers LAUNCHER=native (nativemtp5[apc], no
+# patcher) AND nativemtp5_exseed (LAUNCHER=forked ONLY to run the patcher for
+# EXACT_SEED, but a native FLASH_ATTN+qwen3_5_mtp config with no speculative_token_tree
+# and FR10_DECODE_MODE_DEFAULT=naive_mtp). Both prove the drafter ran via the launcher-
+# agnostic draft_tokens/drafts==5 spec-ratio assert, NOT via TREE_ATTN/tree env.
+NATIVE_DECODE=0
+if [[ "$LAUNCHER" == "native" || "$KIND" == "nativemtp5_exseed" ]]; then NATIVE_DECODE=1; fi
+# Per-request decode-mode xarg for the warmup probe: naive_mtp for native-decode arms
+# (tree_mtp would ask the patched resolver for a tree that does not exist), tree_mtp
+# for the tree/reshape arms. The native launcher ignores the xarg (no patcher), but
+# nativemtp5_exseed DOES load the patcher, so it must ask for the mode it actually runs.
+if (( NATIVE_DECODE == 1 )); then PROBE_MODE=naive_mtp; else PROBE_MODE=tree_mtp; fi
 # B=4 co-residency knobs (default B=1 = byte-identical to the prior runs).
 # MAX_NUM_SEQS_OVR + SWE_CONCURRENCY env override the boot co-residency + the
 # number of concurrent codex tasks. For genuine B=4 co-residency pass a 4-task
@@ -207,15 +248,31 @@ echo "healthy after $(( $(date +%s) - T0 ))s"
 # native config instead (the spec method + no tree env leaked in). All other
 # (locked/forked) arms keep the identical class-9 gate.
 docker exec "$CONTAINER" env | sort > "$ARMDIR/container_env.txt"
-if [[ "$LAUNCHER" == "native" ]]; then
-  # Native MTP: assert the stock spec method is live and NO tree env leaked in.
+if (( NATIVE_DECODE == 1 )); then
+  # Native MTP: assert the stock spec method is live (native qwen3_5_mtp, NO
+  # speculative_token_tree) and NO tree env leaked in. Applies to LAUNCHER=native AND
+  # nativemtp5_exseed (LAUNCHER=forked with the tree env overridden to native via XFLAGS).
   grep -q "^SPEC_CONFIG=.*qwen3_5_mtp" "$ARMDIR/container_env.txt" \
     || { echo "FAIL: native SPEC_CONFIG (qwen3_5_mtp) not in container env"; exit 3; }
+  grep -q "^SPEC_CONFIG=.*speculative_token_tree" "$ARMDIR/container_env.txt" \
+    && { echo "FAIL: native arm SPEC_CONFIG carries speculative_token_tree (not the native MTP path)"; exit 3; }
   for forbidden in "FR10_DECODE_MODE_DEFAULT=tree_mtp" "FR13_REPLAY_ROUTE=1" "FR13_FA2_TREE_BIAS=1"; do
     grep -q "^$forbidden$" "$ARMDIR/container_env.txt" \
       && { echo "FAIL: native arm leaked tree env: $forbidden (not the fr9 path)"; exit 3; }
   done
-  echo "container env OK (native MTP: qwen3_5_mtp, no tree env)"
+  # nativemtp5_exseed: also assert the FLASH_ATTN native kernel + the EXACT_SEED /
+  # APC prefix-caching flags are LIVE in the container env (the whole point of the arm).
+  # The forked launcher only emits APC_FLAGS when FR13_ENABLE_APC=1, and EXACT_SEED
+  # requires SNAP_FIX=1 (baked ON when APC is on); verify both reached the container.
+  if [[ "$KIND" == "nativemtp5_exseed" ]]; then
+    grep -q "^ATTENTION_BACKEND=FLASH_ATTN$" "$ARMDIR/container_env.txt" \
+      || { echo "FAIL: nativemtp5_exseed ATTENTION_BACKEND != FLASH_ATTN (native kernel)"; exit 3; }
+    grep -q "^FR13_APC_EXACT_SEED=1$" "$ARMDIR/container_env.txt" \
+      || { echo "FAIL: nativemtp5_exseed FR13_APC_EXACT_SEED=1 not in container env"; exit 3; }
+    grep -q "^FR13_APC_SNAP_FIX=1$" "$ARMDIR/container_env.txt" \
+      || { echo "FAIL: nativemtp5_exseed FR13_APC_SNAP_FIX=1 not live (EXACT_SEED requires it)"; exit 3; }
+  fi
+  echo "container env OK (native MTP: qwen3_5_mtp, no tree env; KIND=$KIND)"
 else
   NEEDS=("FR13_DRAFTER_SINGLE_LOGITS=1" "FR13_EAGER_PACK=1" "FR13_TREE_CONV_FUSED=1" \
          "VLLM_BATCH_INVARIANT=0" "LUMO_BATCH_INVARIANT_VLLM=0" \
@@ -236,10 +293,12 @@ else
 fi
 
 # ---- worker /proc environ bridge-needle (tree path only) ----
-# Keyed on FR10_DECODE_MODE_DEFAULT, which the native path intentionally does not
-# set. For nativemtp5 the equivalent proof (the stock MTP drafter actually ran) is
-# the spec-engagement ratio assert below, so skip this tree-only needle.
-if [[ "$LAUNCHER" != "native" ]]; then
+# Keyed on FR10_DECODE_MODE_DEFAULT=tree_mtp, the TREE decode path. The native-decode
+# arms either do not set it (LAUNCHER=native) or set it to naive_mtp
+# (nativemtp5_exseed); either way the tree-only needle DOES NOT APPLY. The equivalent
+# proof (the MTP drafter actually ran) is the spec-engagement ratio assert below, so
+# skip this needle for all native-decode arms.
+if (( NATIVE_DECODE == 0 )); then
   docker exec "$CONTAINER" bash -lc '
 hit=""; pids=""
 for p in $(ls /proc | grep -E "^[0-9]+$"); do
@@ -260,7 +319,7 @@ echo "SUMMARY worker_env_seen=[$hit] pids=[$pids]"
     || { echo "FAIL: no vLLM worker with FR10_DECODE_MODE_DEFAULT in /proc environ"; exit 3; }
   echo "worker environ needle OK ($KIND)"
 else
-  echo "worker environ needle SKIPPED (native MTP: no FR10_DECODE_MODE_DEFAULT; spec-ratio assert covers drafter-ran)"
+  echo "worker environ needle SKIPPED (native-decode arm: no tree_mtp decode mode; spec-ratio assert covers drafter-ran)"
 fi
 
 # ---- FULL CUDA capture needle (skip under --enforce-eager: no graphs to capture) ----
