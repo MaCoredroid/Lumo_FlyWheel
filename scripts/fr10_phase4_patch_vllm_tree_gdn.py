@@ -5950,24 +5950,25 @@ def _fr13_gdn_subop_mab(
                                     )
                                 except Exception:
                                     pass
-                                try:
-                                    with open(os.environ.get(
-                                        "FR13_APC_EXACT_SEED_ENG_LOG",
-                                        "/logs/fr13_apc_exact_seed_eng.log",
-                                    ), "a", buffering=1) as _fr13_es_fh2:
-                                        _fr13_es_fh2.write(
-                                            "ES_SEED_APPLIED req=" + _fr13_es_rid2
-                                            + " pos=" + str(_fr13_es_rec2.get("pos"))
-                                            + " row=" + str(_fr13_es_r2) + chr(10)
-                                        )
-                                except Exception:
-                                    pass
-                                print(
-                                    "FR13ES ES_SEED_APPLIED req=" + _fr13_es_rid2
-                                    + " pos=" + str(_fr13_es_rec2.get("pos"))
-                                    + " row=" + str(_fr13_es_r2),
-                                    flush=True,
-                                )
+                                if os.environ.get("FR13_SERVE_LOG", "0") in ("1", "true"):  # FR13_SERVE_LOG gate: silence ES_SEED_APPLIED (dominant per-restore log)
+                                    try:
+                                        with open(os.environ.get(
+                                            "FR13_APC_EXACT_SEED_ENG_LOG",
+                                            "/logs/fr13_apc_exact_seed_eng.log",
+                                        ), "a", buffering=1) as _fr13_es_fh2:
+                                            _fr13_es_fh2.write(
+                                                "ES_SEED_APPLIED req=" + _fr13_es_rid2
+                                                + " pos=" + str(_fr13_es_rec2.get("pos"))
+                                                + " row=" + str(_fr13_es_r2) + chr(10)
+                                            )
+                                    except Exception:
+                                        pass
+                                    print(
+                                        "FR13ES ES_SEED_APPLIED req=" + _fr13_es_rid2
+                                        + " pos=" + str(_fr13_es_rec2.get("pos"))
+                                        + " row=" + str(_fr13_es_r2),
+                                        flush=True,
+                                    )
                     except Exception:
                         pass
                 (
@@ -13088,9 +13089,10 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         # `docker logs` grep (the file write does not land in the read-only
         # shadow-gate mount). Inside the EXACT_SEED-gated try -> off-path
         # unaffected; best-effort (the enclosing except swallows any failure).
-        "                                    print(\"FR13ES \" + _fr13_es_msg, flush=True)\n"
-        "                                    with open(_fr13_es_lp, \"a\", buffering=1) as _fr13_es_fh:\n"
-        "                                        _fr13_es_fh.write(_fr13_es_msg + chr(10))\n"
+        "                                    if os.environ.get(\"FR13_SERVE_LOG\", \"0\") in (\"1\", \"true\"):  # FR13_SERVE_LOG gate: silence ES_REDIRECT\n"
+        "                                        print(\"FR13ES \" + _fr13_es_msg, flush=True)\n"
+        "                                        with open(_fr13_es_lp, \"a\", buffering=1) as _fr13_es_fh:\n"
+        "                                            _fr13_es_fh.write(_fr13_es_msg + chr(10))\n"
         "                                except Exception:\n"
         "                                    pass\n"
         "                            globals()[\"_FR13_SNAP_FIX_LAST_ENT\"] = _fr13_fx_ent\n"
@@ -18006,14 +18008,15 @@ def _patch_block_pool_exact_seed() -> bool:
         "                                               for _z in _fr13_es_rp.keys())\n"
         "                                    )\n"
         "                                )\n"
-        "                                print(\"FR13ES \" + _fr13_es_mm, flush=True)\n"
-        "                                with open(_fr13_es_os.environ.get(\n"
-        "                                    \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
-        "                                    \"/logs/fr13_apc_exact_seed_eng.log\",\n"
-        "                                ), \"a\", buffering=1) as _fr13_es_fh3:\n"
-        "                                    _fr13_es_fh3.write(\n"
-        "                                        _fr13_es_mm + chr(10)\n"
-        "                                    )\n"
+        "                                if os.environ.get(\"FR13_SERVE_LOG\", \"0\") in (\"1\", \"true\"):  # FR13_SERVE_LOG gate: silence ES_INSERT_MISS\n"
+        "                                    print(\"FR13ES \" + _fr13_es_mm, flush=True)\n"
+        "                                    with open(_fr13_es_os.environ.get(\n"
+        "                                        \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
+        "                                        \"/logs/fr13_apc_exact_seed_eng.log\",\n"
+        "                                    ), \"a\", buffering=1) as _fr13_es_fh3:\n"
+        "                                        _fr13_es_fh3.write(\n"
+        "                                            _fr13_es_mm + chr(10)\n"
+        "                                        )\n"
         "                            except Exception:\n"
         "                                pass\n"
         "                except Exception:\n"
