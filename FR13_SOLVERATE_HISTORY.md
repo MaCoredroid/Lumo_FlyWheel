@@ -1,5 +1,11 @@
 # FR13 astropy b4 Longitudinal Solve-Rate History
 
+> **⚠️ CORRECTION (2026-07-01): the "current run is IN-LINE, not a regression" verdict below is WRONG.**
+> This survey never scanned the `fr9_*` dirs and missed `fr9_b4temp06_lowmem088_mtp5_s1` which resolved
+> **8/16 on the identical astropy-16** (2026-06-02). The current pipeline's 1–2/16 IS a real ~6-task
+> **char-8 regression**. The b4 CORE-4 analysis here is still valid (13033/13236/13398 are hard), but the
+> full-16 discriminates. See **FR13_CHAR8_REGRESSION_FINDINGS.md** for the corrected picture.
+
 Scope: astropy b4 CORE gate = **12907 / 13033 / 13236 / 13398**. Verdicts sourced from
 `per_task/astropy__astropy-<id>/eval/eval_report.json` (`resolved` => passed). Config inferred
 from run-dir names + `boot_log_snapshot.txt`. Cell legend: `R`=resolved, `T`=failed:tests_failed,
