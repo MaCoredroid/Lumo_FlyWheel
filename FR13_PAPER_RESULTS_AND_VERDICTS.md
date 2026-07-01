@@ -80,6 +80,37 @@ prefill-side, not decode.**
 context from cache.** The benefit metric besides TTFT is **e2e tok/s** (request-level), quantified by **prefix
 hit rate**. Decode tok/s is cache-neutral; do NOT look for the cache win there.
 
+### 3a. Full tree×cache matrix — proven config (EXACT_SEED=1, cap=500), 12907, 2026-07-01 ✅
+
+Six arms (chain5/cat6root/cat8 × cache OFF/ON), thinking cap `LUMO_PROXY_THINK_BUDGET=500` live on all,
+**all 6 RESOLVED**. Speed reported in the **two field-standard lenses** — nobody reports an agentic run as a
+single tok/s: *serving* reports Output-Speed + TTFT **separately** (Output-Speed is decode-only ⇒ cache-neutral
+by construction), *agentic* reports a **wall-clock duration** per task (Artificial Analysis / SWE-bench). This
+supersedes the length-confounded "e2e tok/s" above.
+
+**Serving lens (Artificial Analysis / vLLM):**
+| arm | Output-Speed (decode tok/s) | TPOT (ms) | **TTFT (s)** | accept/ev | s_per_fwd |
+|---|---|---|---|---|---|
+| chain5 OFF / ON | 17.7 / 17.1 | 56 / 59 | **11.78 / 2.60** | 3.39 / 3.19 | 248 / 246 ms |
+| cat6 OFF / ON | 15.4 / 16.5 | 65 / 61 | **11.40 / 2.53** | 2.81 / 3.10 | 247 / 249 ms |
+| cat8 OFF / ON | 18.0 / 16.0 | 55 / 63 | **10.17 / 2.94** | 3.48 / 2.97 | 248 / 249 ms |
+
+- **Output-Speed is cache-NEUTRAL** (ON≈OFF within ±10% per tree); s_per_fwd flat ~247 ms across all 6.
+- **TTFT is the cache win: ~4× on every tree** (11.78→2.60, 11.40→2.53, 10.17→2.94 s).
+
+**Agentic lens (AA Coding Agents / SWE-bench):** the "speed" is **wall-clock time / task** (a *duration*):
+| arm | wall-clock/task (agent) | turns | cap fires | hit% | resolve |
+|---|---|---|---|---|---|
+| chain5 OFF / ON | 15.8 / **7.1** min | 11 / 22 | 3 / 2 | — / 88 | ✅ / ✅ |
+| cat6 OFF / ON | 12.1 / **7.6** min | 14 / 20 | 2 / 2 | — / 89 | ✅ / ✅ |
+| cat8 OFF / ON | **7.3 / 11.3** min | 11 / 14 | 1 / 4 | — / 85 | ✅ / ✅ |
+
+**VERDICT — the cache win reports cleanly as TTFT ~4× (serving) + wall-clock faster (agentic); Output-Speed is
+correctly flat.** All six arms met the 30-min/task bar (max 15.8 min). Wall-clock ON-vs-OFF is
+**path-confounded** by resolve variance (cat8_ON ran 14 turns / 4 cap-fires vs cat8_OFF's 11 / 1, so its
+wall-clock ran longer *despite* the cache — its TTFT still shows the prefill win 10.17→2.94 s). **TTFT + hit%
+are the un-confounded cache metrics.** Standard-lens reducer: `scripts/fr13_standard_metrics.py`.
+
 ---
 
 ## 4. Tree shape — acceptance is DEPTH-limited, not width-limited
@@ -92,12 +123,16 @@ value is concentrated at depth-1 (the **~27% d0-rescue**).
 | chain5 (E5 spine) | 5 | none | 3.25 | ~248 ms |
 | **cat6root** | 6 | @depth-1 only | **3.68** (resolved) | ~246 ms |
 | cat10 | 10 | @all 5 depths | ~3.5 (depths 4-5 DEAD) | ~264 ms (+18ms for 0 accept) |
-| **cat8** | 8 | @depths 1-3 | **TBD (matrix in flight)** | TBD |
+| **cat8** | 8 | @depths 1-3 | 3.48 (OFF) / 2.97 (ON) | **~248 ms (NO penalty)** |
 
-**VERDICT (so far) — cat6root is the B=1 sweet spot among {chain5, cat6, cat10}:** cat10's wider tree costs
-+18 ms/forward to verify but buys **no extra acceptance** (depths 4-5 are past the accept frontier). **OPEN:**
-cat8 (siblings at depths 1-3, the accept frontier) is the hypothesis for a better middle ground — being tested
-now in the tree×cache matrix. *Caveat: B=1 only; wider may pay at concurrency / with a stronger drafter.*
+**VERDICT — at B=1, tree width up to 8 nodes is essentially FREE on s_per_fwd.** chain5/cat6/cat8 = 5/6/8 nodes
+all clock **~247-249 ms/forward** (the tree verify is negligible vs the ~27 GB fp8 weight load); only cat10's 10
+nodes cost the +18 ms (its depth-4/5 siblings are past the accept frontier). **But the extra width buys no clear
+extra acceptance on 12907:** accept/event is **3.0-3.5 across all three trees** with no monotone scaling in node
+count (chain5 3.2-3.4, cat6 2.8-3.1, cat8 3.0-3.5), and the OFF-vs-ON spread is resolve-regime noise (different
+turn counts, single task). So **cat6root remains the validated sweet spot; cat8 is a no-penalty equal, not a
+clear win** on this single task — ranking them decisively needs an N-repeat within a matched resolve-regime.
+*Caveat: B=1 only; wider may pay at concurrency / with a stronger drafter.*
 
 ---
 
@@ -122,6 +157,17 @@ luck at temp 0.6 (no seed pin).
 > give-up problem (task #13/#16), NOT lossiness. Decode/accept (22.63 vs 16.31, 4.06 vs 3.04) is the
 > failed-vs-resolved regime confound, not a cache cost (s_per_fwd matched-regime ~246ms both, §2). Matrix being
 > re-run with a thinking budget to cut the give-up + make arms fast.
+
+> **FULL 6/6 matrix — proven config (EXACT_SEED=1) + thinking cap (cap=500), 2026-07-01: LOSSLESSNESS HOLDS
+> BEHAVIORALLY.** All six arms (chain5/cat6/cat8 × cache OFF/ON) **RESOLVED** — the proven cache preserves
+> resolve on *every* tree, both ON and OFF (3/3 trees resolve both ways). This retires the "cache-ON fails /
+> cache-OFF resolves" artifact: at the behavioral level cache-ON is indistinguishable from cache-OFF, consistent
+> with EXACT_SEED's bit-exact L0 proof (§1). The **thinking cap** (`LUMO_PROXY_THINK_BUDGET=500` — the
+> `</think>`-injection via `continue_final_message`, validated this session) fired **1-4×/arm and cut the
+> give-up**: e5_OFF, which *failed* at 112 turns / 0 `apply_patch` on 2026-06-30, now **resolves in 11 turns**.
+> Every arm met the 30-min/task bar (max 15.8 min agent wall-clock). Per-arm two-lens metrics in §3a; reducer
+> `scripts/fr13_standard_metrics.py`. **Open confirmation still stands:** N-repeat resolve-rate ON vs OFF
+> (Fisher-exact) for a statistical lossless claim — 6/6 is 3 matched pairs, not yet powered.
 
 **Open confirmation:** N-repeat resolve-rate ON vs OFF, Fisher-exact, on the
 `EXACT_SEED=1` config (the rategate/blocksweep as written use `=0` = the lossy config — re-point to `=1`).
