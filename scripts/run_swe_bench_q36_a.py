@@ -47,7 +47,12 @@ DEFAULT_HF_HOME = REPO_ROOT / ".cache" / "huggingface"
 DEFAULT_ENDPOINT = "http://127.0.0.1:8022/v1"
 DEFAULT_METRICS_URL = "http://127.0.0.1:9950/metrics"
 DEFAULT_MODEL = "qwen3.6-27b"
-DEFAULT_AGENT_WALL_S = 25 * 60
+DEFAULT_AGENT_WALL_S = 40 * 60  # per-attempt codex wall. Raised 25->40min (user 2026-07-01):
+# hard tasks that genuinely need >25min were TIMED OUT mid-fix -> partial/wrong patch -> tests_failed
+# (e.g. chain5 astropy-13453: timed_out=True at 27min). With nudge-only (SWE_EMPTY_PATCH_RETRIES=0)
+# a task now gets ONE attempt, so the old fresh-session retry no longer silently grants ~3x the wall;
+# a single longer wall gives legit hard tasks room to finish. Per-turn runaway is still bounded by
+# MAX_OUTPUT (32768) + the in-session nudge; this only affects the multi-turn agent wall.
 DEFAULT_EVAL_TIMEOUT_S = 30 * 60
 DEFAULT_MODEL_NAME_TAG = "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a"
 # Same capture path used by launch_qwen36_ablation_point.py / Track B benches.
