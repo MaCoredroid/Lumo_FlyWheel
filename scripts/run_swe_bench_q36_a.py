@@ -934,12 +934,15 @@ def _process_one(
         # then emitted a tool-call-free terminal reply (general temp-0.6 codex flake). Re-drive
         # it up to SWE_EMPTY_PATCH_RETRIES times with its OWN accumulated context + a hard
         # must-act directive (a plain fresh re-roll re-confirms the stop ~88% of the time).
-        # SWE_EMPTY_PATCH_RETRIES=0 -> stop-on-first-giveup (record the attempt-1 verdict, no
-        # retries). Fair as an iteration metric because cache-OFF solves attempt-1 with ZERO
-        # give-ups (bigN cacheoff_r1/2/3: 0 gave_up, 0 retry); the retry path only ever fires on
-        # the degraded cache-ON arm, so skipping it cuts ~12-15min/boot without penalising the
-        # clean arm. Default stays 2 for the final ship-rate gate.
-        max_retries = max(0, int(os.environ.get("SWE_EMPTY_PATCH_RETRIES", "2")))
+        # DEFAULT 0 = NUDGE-ONLY (project decision, user 2026-07-01): the new-context retry (a
+        # FRESH codex session with only a brief of the prior attempt) is REMOVED by default. It
+        # predates and is SUPERSEDED by the in-session nudge (LUMO_PROXY_AUTO_CONTINUE_MESSAGE),
+        # which recovers empty-patch give-ups IN-SESSION with FULL context preserved — strictly
+        # better, because the clean-context restart "empirically breaks the explain-instead-of-act
+        # stall" (relaunch_proxy_remote.sh). Running both was redundant + the retry is ~3x slower on
+        # hard tasks + loses context. Set SWE_EMPTY_PATCH_RETRIES>=1 ONLY to re-enable the legacy
+        # fresh-session retry (small tail-resolve gain at a big wall-time cost).
+        max_retries = max(0, int(os.environ.get("SWE_EMPTY_PATCH_RETRIES", "0")))
         summary["empty_patch_retry"] = {"cause": cause, "attempted": True,
                                         "max_retries": max_retries, "recovered_patch_bytes": 0}
         prev_trace = codex_trace
