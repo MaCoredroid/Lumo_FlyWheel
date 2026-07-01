@@ -48,19 +48,32 @@ def _iso(s):
 
 
 def wall_clock(swe_out):
-    """Agent wall-clock per task from runner_metadata: full span (started->ended) and the
-    agent-only sum (all codex attempts, excl. the grader). Retry-aware."""
-    m = _find(swe_out, 'runner_metadata.json')
-    full = agent = None
-    st, en = _iso(m.get('started_at', '')), _iso(m.get('ended_at', ''))
-    if st and en:
-        full = (en - st).total_seconds()
-    agent = 0.0
-    for k in ('codex', 'codex_retry', 'codex_retry2'):
-        v = m.get(k)
-        if isinstance(v, dict) and isinstance(v.get('elapsed_s'), (int, float)):
-            agent += v['elapsed_s']
-    return (full, agent or None, m)
+    """Aggregate agent wall-clock across ALL tasks (one runner_metadata per task). Returns a dict
+    with n_tasks + total/mean full-span (started->ended) and agent-only (sum of codex attempts,
+    excl. grader). Retry-aware. Works for 1 task (n=1) and N tasks (per-task mean)."""
+    files = glob.glob(os.path.join(swe_out, '**', 'runner_metadata.json'), recursive=True)
+    tot_full = tot_agent = 0.0
+    n = 0
+    for p in files:
+        try:
+            m = json.load(open(p))
+        except Exception:
+            continue
+        n += 1
+        st, en = _iso(m.get('started_at', '')), _iso(m.get('ended_at', ''))
+        if st and en:
+            tot_full += (en - st).total_seconds()
+        for k in ('codex', 'codex_retry', 'codex_retry2'):
+            v = m.get(k)
+            if isinstance(v, dict) and isinstance(v.get('elapsed_s'), (int, float)):
+                tot_agent += v['elapsed_s']
+    return {
+        'n_tasks': n,
+        'total_full_s': tot_full or None,
+        'total_agent_s': tot_agent or None,
+        'mean_full_s': (tot_full / n) if n else None,
+        'mean_agent_s': (tot_agent / n) if n else None,
+    }
 
 
 def per_turn(arm_dir):
@@ -129,23 +142,28 @@ def collect(arg, label=None):
     pc_q = g(d, 'vllm:prefix_cache_queries_total')
     reqs = g(d, 'vllm:e2e_request_latency_seconds_count')
     cs = _find(swe_out, 'campaign_summary.json')
-    full_s, agent_s, _ = wall_clock(swe_out)
+    wc = wall_clock(swe_out)
     pt = per_turn(arm_dir)
     div = lambda x, y: (x / y) if y else None
     ctx = pt['ctx']
+    vc = cs.get('verdict_counts') or {}
+    n_resolved = vc.get('resolved', 0) if isinstance(vc, dict) else 0
     return {
         'label': label,
+        'n_tasks': wc['n_tasks'],
         'resolve': cs.get('resolved_rate'),
-        'verdict_counts': cs.get('verdict_counts'),
+        'resolved_count': f"{n_resolved}/{wc['n_tasks']}" if wc['n_tasks'] else None,
+        'verdict_counts': vc,
         # SERVING lens
         'output_speed_tok_s': div(gen, dec),
         'tpot_ms': div(1000 * dec, gen),
         'ttft_mean_s': div(ttft_s, ttft_c),
         'accept_per_event': div(acc_tok, drafts),
         's_per_fwd_ms': div(1000 * dec, drafts),
-        # AGENTIC lens
-        'wall_clock_full_s': full_s,       # started_at -> ended_at (incl. grader)
-        'wall_clock_agent_s': agent_s,     # sum of codex attempts (excl. grader)
+        # AGENTIC lens (per-task means for multi-task; = the single value for n=1)
+        'wall_clock_mean_agent_s': wc['mean_agent_s'],   # mean codex time / task (excl. grader)
+        'wall_clock_total_agent_s': wc['total_agent_s'], # total codex time across all tasks
+        'wall_clock_mean_full_s': wc['mean_full_s'],     # mean started->ended / task (incl grader)
         'turns': pt['turns'],
         'cap_fires': pt['cap_fires'],
         'context_start_tok': ctx[0] if ctx else None,
@@ -164,15 +182,15 @@ def fmt(m):
     f = lambda v, p='%.2f': (p % v) if isinstance(v, (int, float)) else str(v)
     mn = lambda v: ('%.1f min' % (v / 60.0)) if isinstance(v, (int, float)) else '?'
     L = [f"==== {m['label']} — standard metrics ====",
-         f"  resolve: {m['resolve']}   verdicts={m['verdict_counts']}",
+         f"  resolve: {m['resolved_count']} ({m['resolve']})   verdicts={m['verdict_counts']}   [N={m['n_tasks']} task(s)]",
          "  [SERVING lens — Artificial Analysis / vLLM]",
          f"    Output Speed  = {f(m['output_speed_tok_s'])} tok/s   (decode-only; cache-NEUTRAL)",
          f"    TPOT          = {f(m['tpot_ms'])} ms/token",
          f"    TTFT (mean)   = {f(m['ttft_mean_s'])} s   (prefix-cache shows HERE)",
          f"    accept/event  = {f(m['accept_per_event'])}    s_per_fwd = {f(m['s_per_fwd_ms'])} ms",
          "  [AGENTIC lens — AA Coding Agents / SWE-bench]",
-         f"    wall-clock/task = {f(m['wall_clock_agent_s'])} s ({mn(m['wall_clock_agent_s'])} agent) | full {f(m['wall_clock_full_s'])} s ({mn(m['wall_clock_full_s'])} incl grader)",
-         f"    turns         = {m['turns']}   (thinking-cap fires: {m['cap_fires']})",
+         f"    mean wall-clock/task = {mn(m['wall_clock_mean_agent_s'])} agent | {mn(m['wall_clock_mean_full_s'])} incl grader | total {mn(m['wall_clock_total_agent_s'])}",
+         f"    turns (total /{m['n_tasks']} tasks) = {m['turns']}   (thinking-cap fires: {m['cap_fires']})",
          f"    context window: {m['context_start_tok']} -> {m['context_final_tok']} tok",
          f"    cache hit rate= {f(100*m['cache_hit_rate'],'%.0f') if isinstance(m['cache_hit_rate'],(int,float)) else 'NA'}%",
          "    TOKEN USAGE (AA breakdown):",
