@@ -881,6 +881,14 @@ def _patch_gdn_linear() -> bool:
             "        if store is None:\n"
             "            return False\n"
             "        store[h] = {\"pos\": int(pos), \"layers\": layers}\n"
+            "        try:  # FR13 leak fix: LRU-bound (block-eviction reaper never fires)\n"
+            "            _cap = getattr(bp, \"_fr13_es_ckpt_cap\", 64)\n"
+            "            if hasattr(store, \"move_to_end\"):\n"
+            "                store.move_to_end(h)\n"
+            "                while len(store) > _cap:\n"
+            "                    store.popitem(last=False)\n"
+            "        except Exception:\n"
+            "            pass\n"
             "        try:\n"
             "            _hx = h.hex() if hasattr(h, \"hex\") else str(h)\n"
             "        except Exception:\n"
@@ -17891,7 +17899,13 @@ def _patch_block_pool_exact_seed() -> bool:
         init_anchor
         + "        # FR13_APC_EXACT_SEED: per-blockhash chunked-prefill checkpoint\n"
         "        # store, keyed by BlockHashWithGroupId (the cross-turn identity).\n"
-        "        self._fr13_es_ckpt: dict = {}  " + sentinel + "\n",
+        "        # FR13 leak fix (host-RSS): LRU-bound this store. Its only other\n"
+        "        # reaper is block-eviction, which never fires at low KV pressure\n"
+        "        # (kv_usage~0 at B=1) -> it grows unbounded across distinct block-hashes.\n"
+        "        # Cap >= one task's live blocks so an in-task restore never misses\n"
+        "        # (lossless); old dead-task checkpoints drop. Tune FR13_ES_CKPT_CAP.\n"
+        "        self._fr13_es_ckpt = __import__('collections').OrderedDict()  " + sentinel + "\n"
+        "        self._fr13_es_ckpt_cap = int(__import__('os').environ.get('FR13_ES_CKPT_CAP', '64'))\n",
         1,
     )
 
@@ -18035,7 +18049,7 @@ def _patch_block_pool_exact_seed() -> bool:
         reset_anchor
         + "        # FR13_APC_EXACT_SEED: clear the checkpoint store too. " + sentinel + "\n"
         "        try:\n"
-        "            self._fr13_es_ckpt = {}\n"
+        "            self._fr13_es_ckpt = __import__('collections').OrderedDict()  # FR13 leak fix: keep LRU type\n"
         "        except Exception:\n"
         "            pass\n",
         1,
