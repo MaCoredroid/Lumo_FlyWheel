@@ -320,11 +320,92 @@ def _normalize_responses_output_items(value: Any) -> None:
             _normalize_responses_output_items(value[key])
 
 
+def _repair_truncated_json(s: str) -> str | None:
+    """Best-effort repair of TAIL-TRUNCATED JSON (the char-8 failure shape).
+
+    A prior-turn tool call whose ``arguments`` were cut off mid-generation (hit
+    max_output_tokens) leaves an unterminated string + unclosed containers, e.g.
+    ``{"cmd": "printf '*** Begin Patch...`` with no closing quote/brace. Codex
+    re-sends that spent turn in every subsequent transcript, and vLLM's
+    ``_postprocess_messages`` does ``json.loads(arguments)`` while RENDERING the
+    input → raises ``JSONDecodeError: Unterminated string ... (char 8)`` → 400.
+    Bounded retry can't help (identical payload re-parses identically), so the
+    whole turn/session dies. This is history: the truncated call already ran (or
+    failed); we only need it to be *parseable* so the render succeeds and the
+    CURRENT turn can proceed. Close the open string + unclosed containers and
+    return valid JSON, or None if it can't be made valid safely.
+    """
+    if not s:
+        return None
+    stack: list[str] = []
+    in_string = False
+    escape = False
+    for ch in s:
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch in "{[":
+            stack.append(ch)
+        elif ch in "}]":
+            if stack:
+                stack.pop()
+    rep = s
+    if in_string and escape:  # truncated mid-escape → drop the dangling backslash
+        rep = rep[:-1]
+    if in_string:
+        rep = rep + '"'
+    st = rep.rstrip()
+    # Resolve a dangling separator left by truncation before closing containers:
+    # a trailing ':' = key with no value → add null; a trailing ',' = start of a
+    # next element that never arrived → drop it.
+    while st and st[-1] in ",:":
+        if st[-1] == ":":
+            st = st + " null"
+            break
+        st = st[:-1].rstrip()
+    rep = st
+    for opener in reversed(stack):
+        rep += "}" if opener == "{" else "]"
+    try:
+        json.loads(rep)
+    except json.JSONDecodeError:
+        return None
+    return rep
+
+
 def _normalize_function_call_arguments(arguments: str) -> str:
     try:
         decoded, end = json.JSONDecoder().raw_decode(arguments)
     except json.JSONDecodeError:
-        return arguments
+        # Malformed/truncated arguments in the transcript (the char-8 poison).
+        # Repair to valid JSON so vLLM can render the history instead of 400ing
+        # the whole request. Gated by LUMO_PROXY_REPAIR_TOOLCALL_JSON (default on).
+        if os.environ.get("LUMO_PROXY_REPAIR_TOOLCALL_JSON", "1").lower() not in {"1", "true", "yes"}:
+            return arguments
+        repaired = _repair_truncated_json(arguments)
+        if repaired is None:
+            # Unrepairable (e.g. mid-string corruption / empty): stub to an empty
+            # object. This is a SPENT historical turn — a valid-but-empty args
+            # value unblocks the render; the sibling function_call_output still
+            # carries what actually happened. Strictly better than a fatal 400.
+            repaired = "{}"
+        try:
+            sys.stderr.write(
+                f"[proxy][char8-repair] transcript tool-call arguments unparseable "
+                f"(len={len(arguments)}, head={arguments[:32]!r}) → "
+                f"{'repaired' if repaired != '{}' else 'stubbed {}'}\n"
+            )
+            sys.stderr.flush()
+        except Exception:  # noqa: BLE001
+            pass
+        return repaired
     if not arguments[end:].strip():
         return arguments
     return json.dumps(decoded, separators=(",", ":"))

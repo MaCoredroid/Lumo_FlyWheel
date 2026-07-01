@@ -20,6 +20,8 @@ from lumo_flywheel_serving.inference_proxy import (
     TrackBRequestMetricsCapture,
     _classify_regime,
     _extract_response_metadata,
+    _normalize_function_call_arguments,
+    _repair_truncated_json,
     _normalize_request_shaping_policy,
     _write_chunked_stream,
     encode_oracle_snapshot_header,
@@ -1470,3 +1472,76 @@ def test_parse_session_request_id_returns_none_for_unprefixed() -> None:
 def test_parse_session_request_id_handles_separator_in_suffix() -> None:
     rid = f"{LUMO_REQUEST_ID_PREFIX}sess_aaa{LUMO_REQUEST_ID_SEP}has{LUMO_REQUEST_ID_SEP}more__seps"
     assert parse_session_request_id(rid) == "sess_aaa"
+
+
+# --- char-8 transcript-poison repair (task #12) --------------------------------
+# A prior-turn tool call cut off mid-arguments (hit max_output) leaves an
+# unterminated string + unclosed containers. Codex re-sends it every turn and
+# vLLM's _postprocess_messages does json.loads(arguments) while RENDERING the
+# input -> "Unterminated string ... (char 8)" 400 -> the whole turn/session dies
+# (bounded retry can't fix a deterministic re-parse). We repair the spent history
+# to valid JSON so the render succeeds and the current turn proceeds.
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        '{"cmd": "printf hello wor',                # truncated mid-value string
+        '{"command": "*** Begin Patch\\n*** Update', # real apply_patch shape, truncated
+        '{"a":[1,2,{"b":"cc',                        # nested unclosed containers
+        '{"a":',                                     # dangling colon (key, no value)
+        '{"a":1,',                                   # dangling comma (next elem missing)
+        '{"p":"a\\\\',                               # truncated mid-escape
+    ],
+)
+def test_repair_truncated_json_yields_valid_json(raw: str) -> None:
+    repaired = _repair_truncated_json(raw)
+    assert repaired is not None
+    json.loads(repaired)  # must parse — the whole point
+
+
+def test_repair_truncated_json_returns_none_when_unrepairable() -> None:
+    # empty / mid-string corruption (bare unquoted token) can't be tail-closed
+    assert _repair_truncated_json("") is None
+    assert _repair_truncated_json('{"id": bareword, "x":') is None
+
+
+def test_normalize_function_call_arguments_passthrough_valid() -> None:
+    # valid JSON is returned unchanged (no needless re-serialization churn)
+    assert _normalize_function_call_arguments('{"a":1}') == '{"a":1}'
+
+
+def test_normalize_function_call_arguments_repairs_truncated() -> None:
+    out = _normalize_function_call_arguments('{"cmd": "printf hello wor')
+    json.loads(out)  # valid
+    assert out != '{"cmd": "printf hello wor'
+
+
+def test_normalize_function_call_arguments_stubs_unrepairable() -> None:
+    # unrepairable spent history -> empty-object stub (never a fatal 400)
+    assert _normalize_function_call_arguments("") == "{}"
+
+
+def test_normalize_function_call_arguments_respects_disable_flag(monkeypatch) -> None:
+    monkeypatch.setenv("LUMO_PROXY_REPAIR_TOOLCALL_JSON", "0")
+    raw = '{"cmd": "printf hello wor'
+    assert _normalize_function_call_arguments(raw) == raw  # untouched when disabled
+
+
+def test_request_normalizer_sanitizes_poisoned_transcript_tool_call() -> None:
+    # end-to-end through the REQUEST entry point: a poisoned function_call in the
+    # input transcript must come out as valid JSON so vLLM won't 400 the render.
+    payload = {
+        "input": [
+            {"type": "message", "role": "user", "content": "fix it"},
+            {
+                "type": "function_call",
+                "name": "shell",
+                "call_id": "c1",
+                "arguments": '{"cmd": "printf \'*** Begin Patch\\n*** Update File: a.py',
+            },
+        ]
+    }
+    normalized = normalize_responses_request_payload(payload)
+    fc = next(i for i in normalized["input"] if i.get("type") == "function_call")
+    json.loads(fc["arguments"])  # must parse now
