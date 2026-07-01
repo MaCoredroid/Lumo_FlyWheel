@@ -58,6 +58,15 @@ NUM_SPECULATIVE_TOKENS=${NUM_SPECULATIVE_TOKENS:-5}
 SPEC_METHOD=${SPEC_METHOD:-qwen3_5_mtp}
 SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"$SPEC_METHOD\",\"num_speculative_tokens\":$NUM_SPECULATIVE_TOKENS}"}
 
+# Optional STOCK vLLM prefix caching (NATIVE_ENABLE_APC=1) — vanilla APC on the native MTP kernel,
+# to isolate the CACHE axis vs the cache-OFF native baseline. This is stock --enable-prefix-caching
+# (the potentially-lossy vanilla path), NOT the forked EXACT_SEED (forked-launcher-only). Default
+# OFF = cache-off (the byte path native ran at 5/5).
+APC_FLAGS=""
+if [[ "${NATIVE_ENABLE_APC:-0}" == "1" ]]; then
+  APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size ${MAMBA_BLOCK_SIZE:-1024} --mamba-ssm-cache-dtype ${MAMBA_SSM_CACHE_DTYPE:-float32} ${APC_BLOCK_SIZE:+--block-size $APC_BLOCK_SIZE}"
+fi
+
 LOG_DIR=${LOG_DIR:-"${FR13_RUN_DIR:-$REPO/output/fr13_native_mtp/live}/logs"}
 
 mkdir -p "$LOG_DIR"
@@ -121,7 +130,7 @@ exec vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b \
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  --speculative-config \"\$SPEC_CONFIG\" \
+  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS \
   $(if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
 
 # DURABLE OOM BACKSTOP: spawn the detached GPU/unified-mem guard for THIS container
