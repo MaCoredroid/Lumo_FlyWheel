@@ -897,18 +897,19 @@ def _patch_gdn_linear() -> bool:
             "            \"ES_WRITE hash=\" + _hx + \" pos=\" + str(pos)\n"
             "            + \" req=\" + str(req_id) + \" nlayers=\" + str(len(layers))\n"
             "        )\n"
-            "        try:\n"
-            "            print(\"FR13ES \" + _msg, flush=True)\n"
-            "        except Exception:\n"
-            "            pass\n"
-            "        try:\n"
-            "            with open(os.environ.get(\n"
-            "                \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
-            "                \"/logs/fr13_apc_exact_seed_eng.log\",\n"
-            "            ), \"a\", buffering=1) as _fh:\n"
-            "                _fh.write(_msg + chr(10))\n"
-            "        except Exception:\n"
-            "            pass\n"
+            "        if os.environ.get(\"FR13_SERVE_LOG\", \"0\") in (\"1\", \"true\"):  # FR13_SERVE_LOG gate (default OFF): silence ~5/sec ES_WRITE I/O\n"
+            "            try:\n"
+            "                print(\"FR13ES \" + _msg, flush=True)\n"
+            "            except Exception:\n"
+            "                pass\n"
+            "            try:\n"
+            "                with open(os.environ.get(\n"
+            "                    \"FR13_APC_EXACT_SEED_ENG_LOG\",\n"
+            "                    \"/logs/fr13_apc_exact_seed_eng.log\",\n"
+            "                ), \"a\", buffering=1) as _fh:\n"
+            "                    _fh.write(_msg + chr(10))\n"
+            "            except Exception:\n"
+            "                pass\n"
             "        return True\n"
             "    except Exception:\n"
             "        return False\n"
@@ -6160,6 +6161,11 @@ def _fr13_gdn_subop_mab(
                     # land in the read-only shadow-gate mount). Best-effort; this
                     # closure is bound only under EXACT_SEED=="1" -> off-path
                     # unaffected. File write kept as-is.
+                    # FR13_SERVE_LOG gate (default OFF): silence all 12 callers on the
+                    # hot ES path (per-block x 48-layer prints + file reopens). Speed
+                    # runs keep this off; measure client-side on the codex harness.
+                    if os.environ.get("FR13_SERVE_LOG", "0") not in ("1", "true"):
+                        return
                     try:
                         print("FR13ES " + str(_es_msg), flush=True)
                     except Exception:
