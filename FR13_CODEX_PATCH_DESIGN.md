@@ -95,3 +95,19 @@ Built + deployed the 2-line Variant-B patch (codex-runner:v1, v1-stock kept). Pr
 **Root cause (online research, confirmed):** apply_patch's V4A `*** Begin Patch` exact-context grammar is an OpenAI/GPT-trained format. Qwen3-Coder's edit training is **search-and-replace diff patches** + the XML `qwen3_coder` tool format (not V4A). So Qwen cannot reliably emit valid apply_patch hunks → net-negative (wasted turns, 0 success, shell fallback anyway). Qwen's own recommended harness = `qwen-code` (native XML tools + Qwen-suited edit tool). Sources: qwenlm.github.io/blog/qwen3-coder, qwen.readthedocs.io function_call, Qwen3-Coder-Next tech report (search-and-replace FIM).
 
 **DECISION: rolled back** (`docker tag codex-runner:v1-stock codex-runner:v1` on alienware) → the proven shell-fallback harness (Qwen-aligned, 5/5 baseline). The patch is validated + reversible (re-tag the built image to reinstate). **Proper future path if structured edits are wanted:** add a Qwen-native **search-and-replace edit tool** (matching its training), not apply_patch. The char-8 transcript-repair fix + uncapped wall remain in effect (independent of this).
+
+---
+## qwen-code HARNESS PROBE — PASS (2026-07-02, run_20260702T065250Z, astropy-12907, offload)
+Swapped SWE agent codex -> qwen-code (SWE_AGENT=qwen_code, qwen-code-runner:v1 = qwen 0.19.4). 1-task probe:
+- **temp 0.6 CONFIRMED** on /v1/chat/completions: qwen-code sends NO temperature; the proxy
+  normalize_chat_completions_request_payload injects 0.6 (verified on the temp-absent body). Essential —
+  without it qwen-code ran at vLLM's ~1.0 default.
+- **tool-render OK**: 28 chat/completions turns, 15 native XML tools, streaming, ZERO jinja/400 errors
+  (qwen3-openai-codex.jinja accepts qwen-code's framing — the one flagged compat risk, cleared).
+- **workspace edited**: patch.diff = 504B (qwen-code search/replace edits, git-diff captured).
+- **verdict: RESOLVED** — qwen-code SOLVED astropy-12907, which BOTH stock codex and the apply_patch-patched
+  codex FAILED (wrong-fix). Direct evidence the Qwen-native harness edits better for this model.
+- clean startup (no /v1/models 403), qwen exit clean.
+DECISION: qwen-code harness ADOPTED. Campaign restarted on it (native+cache -> cat8+cache-ON 16 -> replica),
+all SWE_AGENT=qwen_code LUMO_PROXY_ALLOW_MODELS_GET=1, temp 0.6. char-8 should NOT recur (XML tools, not V4A).
+Reversible: unset SWE_AGENT -> byte-identical codex; codex-runner:v1-stock kept.
