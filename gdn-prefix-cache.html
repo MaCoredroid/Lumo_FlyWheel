@@ -1,0 +1,2589 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bit-Exact Prefix Caching for a Recurrent Hybrid: Lossless GDN State Restore under Speculative Decoding - Lumo FlyWheel Vol. IV</title>
+<meta name="description" content="Illustrated systems paper on making vLLM automatic prefix caching lossless for a Gated-DeltaNet hybrid model under MTP/tree speculative decoding: the two-layer state-restore defect, the EXACT_SEED chunked-realization checkpoint design, two-lens serving results, and the failure library.">
+<meta property="og:title" content="Bit-Exact Prefix Caching for a Recurrent Hybrid: Lossless GDN State Restore under Speculative Decoding">
+<meta property="og:description" content="A standalone systems paper on lossless automatic prefix caching for a Gated-DeltaNet hybrid model served with speculative decoding inside vLLM.">
+<meta name="author" content="Mark Ma">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Crect x='9' y='40' width='12' height='12' rx='3' fill='%238bd3dd'/%3E%3Crect x='26' y='40' width='12' height='12' rx='3' fill='%23a7d98d'/%3E%3Crect x='43' y='40' width='12' height='12' rx='3' fill='%23e7c76f'/%3E%3Cpath d='M49 32 V18 H15 v14' fill='none' stroke='%23d88989' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #111111;
+    --paper: #171717;
+    --paper-2: #202020;
+    --paper-3: #292929;
+    --ink: #f2efe7;
+    --text: #d8d3c8;
+    --muted: #a8a196;
+    --quiet: #7f776d;
+    --rule: #3b3934;
+    --rule-2: #565147;
+    --cyan: #8bd3dd;
+    --green: #a7d98d;
+    --amber: #e7c76f;
+    --rose: #d88989;
+    --cyan-soft: #193235;
+    --green-soft: #233320;
+    --amber-soft: #3b3018;
+    --rose-soft: #3a2323;
+    --grid-major: rgba(255, 255, 255, 0.025);
+    --grid-minor: rgba(255, 255, 255, 0.018);
+    --grid-opacity: 0.42;
+    --link-underline: rgba(139, 211, 221, 0.36);
+    --soft-panel: rgba(255, 255, 255, 0.018);
+    --soft-panel-2: rgba(255, 255, 255, 0.012);
+    --soft-panel-3: rgba(255, 255, 255, 0.026);
+    --flow-wash: rgba(139, 211, 221, 0.035);
+    --flow-bg: #0c0c0c;
+    --flow-card-bg: #101010;
+    --control-bg: #121212;
+    --green-wash: rgba(167, 217, 141, 0.045);
+    --bias-on-fill: rgba(231, 199, 111, 0.5);
+    --bias-off-fill: rgba(255, 255, 255, 0.03);
+    --bias-off-stroke: rgba(255, 255, 255, 0.08);
+    --callout-fill: rgba(255, 255, 255, 0.02);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f7;
+      --paper: #ffffff;
+      --paper-2: #eef1f0;
+      --paper-3: #dde3e1;
+      --ink: #151715;
+      --text: #303431;
+      --muted: #626a64;
+      --quiet: #7a827d;
+      --rule: #d8ddd9;
+      --rule-2: #b7c0bb;
+      --cyan: #1c7380;
+      --green: #3f7b3a;
+      --amber: #876812;
+      --rose: #a54444;
+      --cyan-soft: #e3f3f5;
+      --green-soft: #e4f2df;
+      --amber-soft: #f3ead2;
+      --rose-soft: #f5dfdf;
+      --grid-major: rgba(18, 24, 22, 0.055);
+      --grid-minor: rgba(18, 24, 22, 0.038);
+      --grid-opacity: 0.55;
+      --link-underline: rgba(28, 115, 128, 0.34);
+      --soft-panel: rgba(18, 24, 22, 0.028);
+      --soft-panel-2: rgba(18, 24, 22, 0.018);
+      --soft-panel-3: rgba(18, 24, 22, 0.038);
+      --flow-wash: rgba(28, 115, 128, 0.075);
+      --flow-bg: #fbfbfa;
+      --flow-card-bg: #ffffff;
+      --control-bg: #f8faf9;
+      --green-wash: rgba(63, 123, 58, 0.08);
+      --bias-on-fill: rgba(135, 104, 18, 0.22);
+      --bias-off-fill: rgba(18, 24, 22, 0.035);
+      --bias-off-stroke: rgba(18, 24, 22, 0.12);
+      --callout-fill: rgba(18, 24, 22, 0.025);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-minor) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: var(--grid-opacity);
+  }
+  ::selection { background: var(--cyan-soft); color: var(--ink); }
+  a {
+    color: var(--cyan);
+    text-decoration: none;
+    border-bottom: 1px solid var(--link-underline);
+  }
+  a:hover { border-bottom-color: currentColor; }
+  a:focus-visible {
+    outline: 3px solid var(--cyan);
+    outline-offset: 3px;
+  }
+  strong { color: var(--ink); font-weight: 720; }
+  code, .mono {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    color: var(--cyan);
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 28px 92px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .brandmark {
+    color: var(--ink);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .topbar nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px 16px;
+  }
+  .topbar a {
+    color: var(--muted);
+    border-bottom-color: transparent;
+  }
+  .topbar a:hover { color: var(--cyan); }
+
+  header.hero {
+    min-height: 88vh;
+    display: grid;
+    align-content: center;
+    padding: 52px 0 42px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .kicker {
+    margin: 0 0 18px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h1 {
+    max-width: 980px;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: clamp(42px, 7vw, 82px);
+    line-height: 1.02;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .title-subtitle {
+    max-width: 820px;
+    margin: 14px 0 0;
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+  .subhead {
+    max-width: 900px;
+    margin: 18px 0 0;
+    color: var(--text);
+    font-size: 21px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .hero-tldr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.46fr);
+    gap: 22px;
+    align-items: end;
+    max-width: 980px;
+    margin: 26px 0 0;
+    padding: 18px 0 20px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero-tldr p {
+    margin: 0;
+    color: var(--text);
+  }
+  .hero-tldr .tldr-copy {
+    max-width: 68ch;
+    font-size: 18px;
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+  .hero-result {
+    justify-self: end;
+    width: min(100%, 330px);
+  }
+  .hero-number {
+    display: block;
+    color: var(--green);
+    font-family: var(--serif);
+    font-size: clamp(40px, 4.3vw, 62px);
+    line-height: 0.96;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .hero-result p {
+    margin-top: 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: 28px 0 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .byline span:not(:first-child)::before {
+    content: "/";
+    color: var(--rule-2);
+    margin-right: 14px;
+  }
+  .paper-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 34px 0 0;
+  }
+  .paper-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .paper-nav a:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+
+  .section {
+    margin: 74px 0;
+  }
+  .section h2 {
+    max-width: 780px;
+    margin: 0 0 16px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1.12;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .section h3 {
+    margin: 0 0 8px;
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1.3;
+  }
+  .section > p,
+  .main-col > p {
+    max-width: 74ch;
+    margin: 0 0 18px;
+    text-wrap: pretty;
+  }
+  .main-col > p:last-child,
+  .section > p:last-child { margin-bottom: 0; }
+
+  .abstract-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    margin-top: 34px;
+  }
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 22px;
+  }
+  .panel h2,
+  .panel h3 {
+    margin: 0 0 12px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .panel p {
+    margin: 0 0 14px;
+  }
+  .panel p:last-child { margin-bottom: 0; }
+  .claim-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .claim {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .claim:last-child { border-bottom: 0; padding-bottom: 0; }
+  .claim .state {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    color: var(--muted);
+  }
+  .claim p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .state.pass { color: var(--green); }
+  .state.warn { color: var(--amber); }
+  .state.info { color: var(--cyan); }
+
+  .sidenote {
+    color: var(--muted);
+    border-left: 1px solid var(--rule-2);
+    padding-left: 13px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .sidenote::before {
+    content: "plain explanation";
+    display: block;
+    margin-bottom: 7px;
+    color: var(--amber);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .sidenote p {
+    margin: 0 0 10px;
+  }
+  .sidenote p:last-child { margin-bottom: 0; }
+
+  .figure {
+    margin: 28px 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px;
+    overflow: hidden;
+  }
+  .figure-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .figure-head strong { color: var(--cyan); }
+  .caption {
+    max-width: 78ch;
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .diagram text {
+    font-family: var(--mono);
+    fill: var(--text);
+    font-size: 13px;
+  }
+  .diagram .label {
+    fill: var(--ink);
+    font-weight: 800;
+  }
+  .diagram .tiny {
+    fill: var(--muted);
+    font-size: 11px;
+  }
+  .diagram .node {
+    fill: var(--paper-2);
+    stroke: var(--rule-2);
+    stroke-width: 1.2;
+  }
+  .diagram .node-cyan { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .diagram .node-green { fill: var(--green-soft); stroke: var(--green); }
+  .diagram .node-amber { fill: var(--amber-soft); stroke: var(--amber); }
+  .diagram .node-rose { fill: var(--rose-soft); stroke: var(--rose); }
+  .diagram .edge {
+    stroke: var(--rule-2);
+    stroke-width: 1.6;
+    fill: none;
+  }
+  .diagram .arrow {
+    stroke: var(--cyan);
+    stroke-width: 1.6;
+    fill: none;
+    marker-end: url(#arrow);
+  }
+  .diagram .dash {
+    stroke-dasharray: 6 5;
+  }
+
+  .flow-figure {
+    clear: both;
+    background:
+      linear-gradient(180deg, var(--flow-wash), transparent 36%),
+      var(--flow-bg);
+    overflow-x: auto;
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  .flow-figure.is-paused .flow-edge,
+  .flow-figure.is-paused .flow-node,
+  .flow-figure.is-paused .bias-on,
+  .flow-figure.is-paused .scan-window,
+  .flow-figure.is-paused .cache-cursor {
+    animation-play-state: paused;
+  }
+  .flow-control {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--control-bg);
+    color: var(--text);
+    font: 800 12px var(--mono);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1), color 160ms cubic-bezier(0.25, 1, 0.5, 1), background 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .flow-control:hover,
+  .flow-control:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-why {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 16px 0 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--rule);
+  }
+  .flow-why div {
+    background: var(--flow-card-bg);
+    padding: 13px 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .flow-why strong {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .code-grounding {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .code-grounding a {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 7px 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .code-grounding a:hover,
+  .code-grounding a:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-svg .lane {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-title {
+    fill: var(--ink);
+    font: 800 16px var(--mono);
+  }
+  .flow-svg .flow-sub {
+    fill: var(--muted);
+    font: 12px var(--mono);
+  }
+  .flow-svg .math {
+    fill: var(--text);
+    font: 13px var(--mono);
+  }
+  .flow-svg .native-fill { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .flow-svg .tree-fill { fill: var(--green-soft); stroke: var(--green); }
+  .flow-svg .fa-fill { fill: var(--amber-soft); stroke: var(--amber); }
+  .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .bad-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .meta-fill {
+    fill: var(--soft-panel-3);
+    stroke: var(--rule-2);
+  }
+  .flow-svg .kernel-card {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-node {
+    stroke-width: 1.4;
+    animation: nodePulse 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .flow-svg .flow-node.s2 { animation-delay: 0.35s; }
+  .flow-svg .flow-node.s3 { animation-delay: 0.7s; }
+  .flow-svg .flow-edge {
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 10 9;
+    animation: flowDash 2.4s linear infinite;
+  }
+  .flow-svg .native-edge { stroke: var(--cyan); }
+  .flow-svg .tree-edge { stroke: var(--green); animation-duration: 2.9s; }
+  .flow-svg .fa-edge { stroke: var(--amber); animation-duration: 2.1s; }
+  .flow-svg .warn-edge { stroke: var(--amber); animation-duration: 3s; }
+  .flow-svg .commit-edge { stroke: var(--rose); animation-duration: 3.2s; }
+  .flow-svg .bad-edge {
+    stroke: var(--rose);
+    stroke-dasharray: 7 8;
+    animation-duration: 3.8s;
+  }
+  .flow-svg .quiet-edge {
+    stroke: var(--rule-2);
+    stroke-dasharray: 2 8;
+    animation-duration: 4.4s;
+  }
+  .flow-svg .bias-on {
+    fill: var(--bias-on-fill);
+    animation: biasGlow 2.6s ease-in-out infinite;
+  }
+  .flow-svg .bias-off {
+    fill: var(--bias-off-fill);
+    stroke: var(--bias-off-stroke);
+  }
+  .flow-svg .code-label {
+    fill: var(--cyan);
+    font: 11px var(--mono);
+  }
+  .flow-svg .callout {
+    fill: var(--callout-fill);
+    stroke: var(--rule-2);
+    stroke-width: 1;
+  }
+  .flow-svg .scan-window {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    animation: scanWindow 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .flow-svg .cache-cursor {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+  }
+  .flow-svg .legend-dot { stroke: none; }
+  @keyframes flowDash {
+    to { stroke-dashoffset: -38; }
+  }
+  @keyframes nodePulse {
+    0%, 100% { opacity: 0.82; }
+    45%, 55% { opacity: 1; stroke-width: 2.7; }
+  }
+  @keyframes biasGlow {
+    0%, 100% { opacity: 0.48; }
+    50% { opacity: 1; }
+  }
+  @keyframes scanWindow {
+    0%, 100% { transform: translateX(0); opacity: 0.65; }
+    50% { transform: translateX(96px); opacity: 1; }
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.52fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .mini-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .mini-card p {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .mini-card p:last-child { margin-bottom: 0; }
+
+  .definition-box,
+  .glossary-strip {
+    margin: 22px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel);
+  }
+  .definition-box {
+    max-width: 900px;
+    padding: 16px 18px;
+  }
+  .definition-box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .glossary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+  }
+  .glossary-strip div {
+    padding: 14px 16px;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .glossary-strip div:nth-child(3n) { border-right: 0; }
+  .glossary-strip div:nth-last-child(-n + 3) { border-bottom: 0; }
+  .glossary-strip dfn {
+    display: block;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .glossary-strip span {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .confidence-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 14px;
+    align-items: start;
+    margin: 20px 0 24px;
+    padding: 15px 17px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--green-wash);
+  }
+  .confidence-row strong {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .confidence-row p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .fold {
+    margin: 26px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel-2);
+    overflow: hidden;
+  }
+  .fold > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    min-height: 58px;
+    padding: 15px 18px;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 850;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary::after {
+    content: "+";
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--cyan);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .fold[open] > summary {
+    border-bottom: 1px solid var(--rule);
+    background: var(--soft-panel);
+  }
+  .fold[open] > summary::after { content: "-"; }
+  .fold > summary small {
+    display: block;
+    grid-column: 1;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .fold-body {
+    padding: 18px;
+  }
+  .fold-body > :first-child { margin-top: 0; }
+  .fold-body > :last-child { margin-bottom: 0; }
+
+  .equation {
+    margin: 22px 0;
+    padding: 18px 20px;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .equation .muted { color: var(--muted); }
+  .equation .hl { color: var(--amber); }
+  .equation .ok { color: var(--green); }
+
+  .source-exhibit {
+    margin: 24px 0;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .source-exhibit .source-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .source-exhibit .source-head strong {
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .source-exhibit pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .source-exhibit code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .source-exhibit .source-note {
+    margin: 0;
+    padding: 0 16px 16px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .source-exhibit > .grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin: 16px;
+  }
+
+  .compare-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin: 24px 0;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--rule);
+  }
+  .compare-strip article {
+    min-height: 100%;
+    padding: 18px;
+    background: var(--paper);
+  }
+  .compare-strip h3 {
+    margin-bottom: 9px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .compare-strip p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .box {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .box .tag {
+    display: inline-flex;
+    margin-bottom: 10px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 760;
+  }
+  .box.good .tag { color: var(--green); background: var(--green-soft); }
+  .box.warn .tag { color: var(--amber); background: var(--amber-soft); }
+  .box.bad .tag { color: var(--rose); background: var(--rose-soft); }
+  .box.info .tag { color: var(--cyan); background: var(--cyan-soft); }
+  .box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--paper);
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  table {
+    border-collapse: collapse;
+    min-width: 760px;
+    width: 100%;
+    font-size: 14px;
+  }
+  caption {
+    caption-side: top;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+    text-align: left;
+  }
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--rule);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--paper-2);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num {
+    font-family: var(--mono);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .pill {
+    display: inline-flex;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .pill.good { color: var(--green); background: var(--green-soft); }
+  .pill.warn { color: var(--amber); background: var(--amber-soft); }
+  .pill.info { color: var(--cyan); background: var(--cyan-soft); }
+  .pill.bad { color: var(--rose); background: var(--rose-soft); }
+
+  .failure-note {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-ledger {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .failure-card {
+    min-width: 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .failure-card.contaminated { border-color: var(--rose); }
+  .failure-card.superseded { border-color: var(--amber); }
+  .failure-card.settled { border-color: var(--rule-2); }
+  .failure-card.open { border-color: var(--cyan); }
+  .failure-card header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .failure-card h3 {
+    margin: 0;
+    min-width: 0;
+    max-width: 58ch;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.25;
+  }
+  .failure-card p {
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-card p:last-child { margin-bottom: 0; }
+  .failure-card ul {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 12px;
+    padding-left: 18px;
+    color: var(--text);
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .failure-card .conclusion {
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    color: var(--text);
+  }
+  .failure-card code { overflow-wrap: anywhere; }
+
+  .shape-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .shape {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .shape h3 {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .shape h3 span {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .path-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .path-list li {
+    padding: 3px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .receipt-list {
+    columns: 2 330px;
+    column-gap: 34px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .receipt-list li {
+    break-inside: avoid;
+    margin: 0 0 12px;
+    font-size: 15px;
+  }
+
+  footer {
+    margin-top: 86px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  @media (min-width: 1040px) {
+    header.hero > .sidenote,
+    .section > .sidenote {
+      float: right;
+      clear: right;
+      width: 282px;
+      margin: 6px 0 20px 34px;
+    }
+  }
+  @media (max-width: 960px) {
+    .page { padding: 0 18px 72px; }
+    .topbar { flex-direction: column; align-items: flex-start; }
+    .topbar nav { justify-content: flex-start; }
+    header.hero { min-height: auto; padding: 26px 0 20px; }
+    h1 { font-size: 40px; }
+    .subhead {
+      margin-top: 18px;
+      font-size: 17px;
+      line-height: 1.48;
+    }
+    .title-subtitle {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .byline span:not(:first-child)::before { content: none; }
+    .abstract-grid, .two-col, .shape-grid, .hero-tldr, .confidence-row { grid-template-columns: 1fr; }
+    .glossary-strip { grid-template-columns: 1fr; }
+    .glossary-strip div,
+    .glossary-strip div:nth-child(3n),
+    .glossary-strip div:nth-last-child(-n + 3) {
+      border-right: 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .glossary-strip div:last-child { border-bottom: 0; }
+    .compare-strip { grid-template-columns: 1fr; }
+    .table-wrap::before,
+    .flow-figure::before {
+      display: inline-flex;
+      position: sticky;
+      left: 8px;
+      z-index: 1;
+      margin: 8px 8px 0;
+      padding: 4px 7px;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      background: var(--paper);
+      color: var(--muted);
+      font: 800 11px var(--mono);
+    }
+    .table-wrap::before { content: "wide table: scroll sideways"; }
+    .flow-figure::before { content: "wide figure: scroll sideways"; }
+    .section { margin: 56px 0; }
+    .section h2 { font-size: 30px; }
+    .hero-result {
+      justify-self: start;
+      width: 100%;
+    }
+    .hero-tldr {
+      gap: 14px;
+      margin-top: 16px;
+      padding: 12px 0 14px;
+    }
+    .hero-tldr .tldr-copy {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .hero-number { font-size: 36px; }
+    .byline { margin-top: 16px; }
+    .paper-nav {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin-top: 18px;
+      padding-bottom: 6px;
+      scrollbar-color: var(--rule-2) transparent;
+    }
+    .paper-nav a {
+      flex: 0 0 auto;
+    }
+    .sidenote {
+      display: block;
+      margin: 18px 0 22px;
+      padding: 13px 16px 13px 14px;
+      background: var(--paper-2);
+      border: 1px solid var(--rule);
+      border-left: 1px solid var(--rule-2);
+      border-radius: 7px;
+    }
+    .claim { grid-template-columns: 1fr; gap: 4px; }
+    .flow-figure .flow-svg {
+      width: 960px;
+      max-width: none;
+    }
+    .flow-why { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    .flow-svg .flow-edge,
+    .flow-svg .flow-node,
+    .flow-svg .bias-on,
+    .flow-svg .scan-window,
+    .flow-svg .cache-cursor {
+      animation: none !important;
+    }
+    .flow-svg .flow-edge { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brandmark">Lumo FlyWheel / Serving Lab</div>
+    <nav aria-label="Site navigation">
+      <a href="index.html">Vol. I</a>
+      <a href="round-f.html">Vol. II</a>
+      <a href="gdn-tree-scan.html">Vol. III</a>
+      <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Repository</a>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <p class="kicker">Volume IV / illustrated systems paper</p>
+    <h1>Bit-Exact Prefix Caching for a Recurrent Hybrid</h1>
+    <p class="title-subtitle">Lossless GDN State Restore under Speculative Decoding in vLLM</p>
+    <p class="subhead">Vol. III shipped a tree verifier with one standing caveat: prefix caching stayed off for this hybrid model, so every agentic turn re-paid prefill on an 11&ndash;14k-token conversation. This page turns the cache on and proves the state restore bit-exact. The contribution is a state-restore contract for recurrent hybrids: a cache hit must hand decode the exact committed GDN state, in the exact kernel realization, that a no-cache run would have produced.</p>
+    <div class="hero-tldr" aria-label="TLDR and headline result">
+      <p class="tldr-copy"><strong>TL;DR:</strong> attention KV is per-token addressable, so a prefix cache can just re-read it. Gated-DeltaNet state is one evolving vector, and under speculative decoding three different kernels write it. vLLM's align-mode cache restored a stale row in the wrong kernel realization, which poisoned the model into empty patches. The fix, <code>EXACT_SEED</code>, caches the chunked-prefill realization at 64-aligned positions, keyed by the prefix block hash, and restores it bit-exactly. Decode speed is untouched by construction; the entire payoff is prefill-side.</p>
+      <div class="hero-result">
+        <span class="hero-number">~4&times;</span>
+        <p><strong>TTFT</strong> on every speculative arm in the matched tree&times;cache matrix: 11.78&nbsp;&rarr;&nbsp;2.60&nbsp;s (chain5), 11.40&nbsp;&rarr;&nbsp;2.53&nbsp;s (cat6root), 10.17&nbsp;&rarr;&nbsp;2.94&nbsp;s (cat8), at 85&ndash;89% prefix hit on live SWE/Codex serving. Single task, one run per arm; decode throughput is flat by design, and TTFT plus hit rate are the un-confounded cache metrics.</p>
+      </div>
+    </div>
+    <div class="byline">
+      <span><strong>Mark Ma</strong></span>
+      <span>ML systems / inference</span>
+      <span>Qwen 3.6-27B FP8 / GB10</span>
+      <span>July 2026</span>
+    </div>
+    <div class="paper-nav">
+      <a href="#abstract">Abstract</a>
+      <a href="#reader-map">Reader map</a>
+      <a href="#contract">Contract</a>
+      <a href="#claims">Claims</a>
+      <a href="#prior-work">Prior work</a>
+      <a href="#defect">Defect</a>
+      <a href="#design-trail">Design trail</a>
+      <a href="#mechanism">Mechanism</a>
+      <a href="#results">Results</a>
+      <a href="#lossless">Lossless</a>
+      <a href="#failure-library">Failure library</a>
+      <a href="#limitations">Limits</a>
+      <a href="#receipts">Source trail</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="abstract">
+      <h2>Abstract</h2>
+      <p>We present a lossless automatic-prefix-caching (APC) design for Qwen 3.6-27B-FP8, a hybrid model whose 64 layers include 48 Gated-DeltaNet (GDN) recurrent layers, served with MTP/tree speculative decoding inside a forked vLLM 0.19.2. Prefix caching is the default deployment lever for agentic workloads: the SWE/Codex loop resends an append-only 11&ndash;14k-token conversation every turn, and with the cache off, that prefill dominated task wall time. But for a recurrent hybrid the cache must store more than attention KV. It must checkpoint the GDN recurrent state, and under speculative decoding that state is written by three different kernels into two different layouts.</p>
+      <p>Turning on vLLM's align-mode cache as-is poisoned the model: acceptance collapsed, output garbled, and the coding agent gave up with empty patches. We root-caused this to a two-layer defect. First, a staleness bug: the align snapshot reads a block-aligned state row that the tree committer never wrote, so the cache stored a stale or branch-loser row. Second, a realization gap: even the correct row holds the recurrent-decode kernel's realization of the state, while a cache hit resumes through the chunked-prefill kernel; the two realizations differ by roughly 0.0078 per block boundary and the error compounds across boundaries. The fix chain &mdash; <code>SNAP_FIX</code> for staleness, <code>EXACT_SEED</code> for the realization gap &mdash; caches the chunked-prefill realization at 64-aligned checkpoint positions, keyed by the APC prefix block hash, and restores it verbatim. The L0 mechanism gate passed on June&nbsp;29, 2026: the restored checkpoint is bit-exact, and across the live replay 47 of 48 GDN layers sit at floating-point-level drift, with the residual attributable to a measurement artifact that the no-cache control itself exceeds.</p>
+
+      <div class="definition-box" aria-label="Formal definition of lossless for this paper">
+        <p><strong>Lossless, as claimed here, is a ladder:</strong> L0 (mechanism) &mdash; the restored GDN state is bit-exact against a continuous no-cache reference; passed. L1&ndash;L2 (behavioral) &mdash; cache-ON preserves task resolution on every tree&times;cache arm; holds on the full 6/6 matrix, which is three matched pairs and not yet statistically powered. L3 (statistical) &mdash; an N-repeat Fisher-exact resolve-rate comparison; still open. "Lossless" in this page means L0 proven plus L1&ndash;L2 consistent, not a closed statistical claim.</p>
+      </div>
+
+      <h3>Names in this paper</h3>
+      <div class="glossary-strip" aria-label="Names in this paper">
+        <div><dfn>APC</dfn><span>vLLM automatic prefix caching: reuse KV and mamba state for a previously seen prompt prefix.</span></div>
+        <div><dfn>GDN</dfn><span>Gated-DeltaNet recurrent layer; carries one evolving state tensor across tokens instead of per-token KV.</span></div>
+        <div><dfn>align mode</dfn><span>vLLM's mamba cache mode for this model: one state checkpoint per request at the last block boundary.</span></div>
+        <div><dfn>realization</dfn><span>the numerical trajectory a specific kernel produces; chunked-prefill and recurrent-decode kernels realize the same math differently.</span></div>
+        <div><dfn>EXACT_SEED</dfn><span>our fix: chunked-realization checkpoints at 64-aligned positions, keyed by prefix block hash, restored verbatim.</span></div>
+        <div><dfn>SNAP_FIX</dfn><span>the write-side fix that snapshots the committed accepted-leaf row instead of a stale block-aligned row.</span></div>
+        <div><dfn>chain5 / E5</dfn><span>the forked tree kernel run as a linear 5-node chain &mdash; native-MTP-5 topology, not the stock native kernel.</span></div>
+        <div><dfn>cat6root / cat8</dfn><span>6-node and 8-node speculative token trees from Vol. III's verifier.</span></div>
+        <div><dfn>TTFT</dfn><span>time to first token of a turn; the metric prefix caching actually moves.</span></div>
+        <div><dfn>s_per_fwd</dfn><span>decode-forward GPU seconds per draft event; the confound-resistant decode-cost metric.</span></div>
+        <div><dfn>12907</dfn><span>astropy-12907, the SWE-Verified proxy task used for live gates.</span></div>
+        <div><dfn>char-8</dfn><span>a truncated tool-call JSON re-parse failure ("Unterminated string &hellip; char 8"); cache-independent, fixed proxy-side.</span></div>
+      </div>
+
+      <div class="abstract-grid">
+        <div class="panel">
+          <h2>Contribution</h2>
+          <p>This page treats prefix caching for recurrent hybrids as a correctness problem first and a speed problem second. The contribution is the cache contract &mdash; committed state only, single kernel realization, aligned checkpoint positions, turn-stable identity &mdash; plus a working implementation of that contract inside vLLM's align mode, validated by a bit-exact state diff rather than by output vibes.</p>
+          <p>The tree verifier this cache serves is Vol. III's subject, with its own formal writeup, <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/papers/gdn-tree-scan-mlsys/main.pdf">GDN Tree-Scan: Served Tree Verification for Recurrent-Hybrid Language Models</a>. This page is self-contained: it states why recurrent state breaks prefix caching, shows the two-layer defect, gives the EXACT_SEED mechanism, reports the two-lens serving result, and records the failed routes.</p>
+        </div>
+        <aside class="panel">
+          <h2>Status</h2>
+          <div class="claim-list">
+            <div class="claim"><span class="state pass">RESTORE</span><p>EXACT_SEED checkpoint restore is bit-exact (L0 gate passed 2026-06-29); the live replay holds 47/48 GDN layers at fp-level drift.</p></div>
+            <div class="claim"><span class="state pass">SPEED</span><p>TTFT ~4&times; with 85&ndash;89% prefix hit on every arm of the single-task B=1 matrix; decode cost is flat (~247&nbsp;ms/forward ON and OFF).</p></div>
+            <div class="claim"><span class="state pass">BEHAVIOR</span><p>All six tree&times;cache arms resolve the proxy task; the old "cache-ON fails" pattern is retired.</p></div>
+            <div class="claim"><span class="state warn">LIMITS</span><p>Single proxy task; statistical lossless gate open; EXACT_SEED proven and gate-used but not yet the launch default.</p></div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="source-exhibit" aria-label="Falsification checks">
+        <div class="source-head">
+          <strong>What would falsify this?</strong>
+          <span>Skeptic checks before trusting the headline</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Restore</span><p>A cache-hit turn whose restored GDN state differs from the continuous no-cache reference beyond fp round-off at matched positions.</p></div>
+          <div class="box bad"><span class="tag">Realization</span><p>A cached row that re-enters decode through a different kernel realization than the one that wrote it.</p></div>
+          <div class="box bad"><span class="tag">Engagement</span><p>A gate that reported PASS while the fix flag never actually fired &mdash; the vacuous-gate failure this campaign hit three separate ways.</p></div>
+          <div class="box bad"><span class="tag">Attribution</span><p>TTFT or wall-clock wins that come from trajectory luck rather than cache hits; only TTFT plus hit rate are treated as un-confounded.</p></div>
+          <div class="box bad"><span class="tag">Behavior</span><p>A powered N-repeat showing cache-ON resolves fewer tasks than cache-OFF on the proven config.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="reader-map">
+      <h2>Five-Minute Reader Map</h2>
+      <aside class="sidenote">
+        <p><strong>Read path:</strong> the main argument is the problem, the defect, the mechanism, and the results. Everything else is audit material and stays in folds.</p>
+      </aside>
+      <p>The shortest version: a prefix cache for a recurrent hybrid is a state-checkpointing system, not a KV lookup. vLLM's align mode checkpoints the wrong row in the wrong kernel realization once a tree committer is in the loop. We fixed the row (<code>SNAP_FIX</code>), then fixed the realization (<code>EXACT_SEED</code>), proved the restore bit-exact, and banked a ~4&times; TTFT win at 85&ndash;89% prefix hit &mdash; on a single-task B=1 matrix, one run per arm &mdash; with decode untouched.</p>
+
+      <div class="source-exhibit" aria-label="Five-minute reading path">
+        <div class="source-head">
+          <strong>Read in this order</strong>
+          <span>The blog path before the full paper path</span>
+        </div>
+        <div class="grid">
+          <div class="box info"><span class="tag">Problem</span><p>Attention KV is per-token addressable; GDN state is one evolving vector written by three kernels under spec decode.</p></div>
+          <div class="box bad"><span class="tag">Defect</span><p>The align cache stored a stale row (staleness) holding the wrong kernel's numbers (realization gap). Both had to fall.</p></div>
+          <div class="box good"><span class="tag">Mechanism</span><p>EXACT_SEED: capture the chunked realization at 64-aligned positions during prefill, key by prefix block hash, restore verbatim.</p></div>
+          <div class="box good"><span class="tag">Result</span><p>TTFT ~4&times; on every arm of the single-task B=1 matrix, 85&ndash;89% hit, decode flat, all six arms resolve the proxy task. The cache's payoff is entirely prefill-side.</p></div>
+          <div class="box warn"><span class="tag">Caveats</span><p>Single proxy task; three matched pairs are not statistical power; the forked tree arms have a separate open structured-output defect.</p></div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Metric taxonomy used throughout the paper.</caption>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>What it means</th>
+              <th>What it is used for</th>
+              <th>Not the same as</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>TTFT</td>
+              <td>Seconds from request to first generated token of a turn.</td>
+              <td>The headline cache metric; prefill reuse is what a prefix cache buys.</td>
+              <td>Decode throughput, which a decode-side cache read cannot improve.</td>
+            </tr>
+            <tr>
+              <td>prefix hit rate</td>
+              <td>Fraction of prompt tokens served from cache on a turn.</td>
+              <td>The engagement metric; proves the cache is non-vacuous.</td>
+              <td>A speed number; it is the lever, not the outcome.</td>
+            </tr>
+            <tr>
+              <td>Output-Speed</td>
+              <td>Decode tokens per second, serving-lens convention.</td>
+              <td>Showing decode is cache-neutral, as it must be.</td>
+              <td>A cache win; flat ON-vs-OFF is the correct reading.</td>
+            </tr>
+            <tr>
+              <td>s_per_fwd</td>
+              <td>Decode-forward GPU time per draft event.</td>
+              <td>Confound-resistant decode-cost check (~247&ndash;249 ms, weight-bandwidth-bound).</td>
+              <td>Token throughput; it prices the forward, not the acceptance.</td>
+            </tr>
+            <tr>
+              <td>wall-clock / task</td>
+              <td>Agent minutes to resolve a task, agentic-lens convention.</td>
+              <td>Deployment-impact view; cache-ON chain5 lands at 7.1 min vs 15.8 OFF.</td>
+              <td>A clean cache metric; it is path-confounded by resolve variance.</td>
+            </tr>
+            <tr>
+              <td>state drift</td>
+              <td>max|&Delta;| of restored GDN state vs a continuous no-cache reference.</td>
+              <td>The L0 lossless gate; fp ceiling &asymp; 0.0078.</td>
+              <td>Output-text similarity, which hides state corruption until it cascades.</td>
+            </tr>
+            <tr>
+              <td>resolve</td>
+              <td>Whether the agent's patch resolves the SWE task.</td>
+              <td>Behavioral-losslessness readout (timing-insensitive).</td>
+              <td>A model-capability score; runs here are capped proxy gates.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section class="section" id="contract">
+      <h2>The Cache Contract</h2>
+      <aside class="sidenote">
+        <p><strong>Theorem style:</strong> this is the contract the implementation realizes. The proof obligation is structural; the bit-exact and behavioral claims are empirical gates.</p>
+        <p><strong>Why a contract:</strong> every bug in this campaign was a violation of exactly one clause below, which is how we know the clause list is load-bearing.</p>
+      </aside>
+      <p>A prefix cache for an attention-only model has an easy contract: cached KV rows are immutable per-token facts, so restoring them is a read. A recurrent hybrid adds a stateful clause. On a cache hit, decode resumes from a stored recurrent state, and that state must be indistinguishable from the state a no-cache run would have reached at the same position.</p>
+
+      <div class="definition-box" aria-label="Cache-restore contract">
+        <p><strong>Restore contract, engineering form:</strong> assume checkpoints are taken only from committed tokens (never speculative candidates); every cached state row holds the chunked-prefill kernel's realization; checkpoint positions are multiples of the FLA chunk size (64) so the chunked scan is restartable bit-exactly; checkpoints are keyed by the APC prefix block hash, the only identity stable across turns; and the working state dtype is fp32 end-to-end. Then a cache hit followed by re-prefilling the tail through the same chunked kernel produces the same GDN state, bit-for-bit, as a continuous no-cache prefill of the full prefix.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Contract clauses, their served implementation, and the gate that checks each.</caption>
+          <thead>
+            <tr>
+              <th>Clause</th>
+              <th>Formal content</th>
+              <th>Served implementation</th>
+              <th>Gate</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Committed state only</td>
+              <td>Snapshots read the committed accepted-leaf state, never a stale or branch-loser row.</td>
+              <td><code>FR13_APC_SNAP_FIX=1</code> redirects the align snapshot source to the tree committer's node-bank leaf; <code>SNAP_FIX_ZEROACCEPT=1</code> covers zero-accept steps.</td>
+              <td>Deterministic 4-arm verify: stock UNFAITHFUL 208/240, SNAP_FIX FAITHFUL 240/240.</td>
+            </tr>
+            <tr>
+              <td>Single realization</td>
+              <td>Cached rows only ever hold the chunked-prefill kernel's numbers.</td>
+              <td><code>FR13_APC_EXACT_SEED=1</code> captures checkpoints during prefill through the chunked kernel; the recurrent-decode and spec node-bank realizations never enter the cache.</td>
+              <td>Eager state-diff vs continuous no-cache reference: bit-exact.</td>
+            </tr>
+            <tr>
+              <td>Aligned positions</td>
+              <td>Checkpoint positions are multiples of FLA_CHUNK_SIZE=64, so a restored chunked scan is a legal restart point.</td>
+              <td><code>--block-size 1024</code> (16&times;64); align's own default is 816 = 16&times;51, which is not 64-aligned and cannot be bit-exact even in principle.</td>
+              <td>Same state-diff; block-size independence is the structural check.</td>
+            </tr>
+            <tr>
+              <td>Stable identity</td>
+              <td>Checkpoints are keyed by an identity that survives prefill &rarr; decode &rarr; next turn.</td>
+              <td>Keyed by the bare APC prefix block hash on the <code>BlockPool</code>; per-request keying was proven dead (0/4 store&cap;drain overlap).</td>
+              <td>Live engagement counters: checkpoints stored and restored on real hits (<code>ES_WRITE</code> &gt; 2000, <code>seeded=True</code> restores).</td>
+            </tr>
+            <tr>
+              <td>One boundary per step</td>
+              <td>A scheduler step crosses at most one block boundary, so no intermediate boundary is cached with overshoot state.</td>
+              <td><code>max_num_batched_tokens = mamba_block_size</code> (the June-21 gross-poison fix).</td>
+              <td>Cache-ON coherence probe; TTFT hit/miss 4.29&nbsp;s &rarr; 1.08&nbsp;s.</td>
+            </tr>
+            <tr>
+              <td>fp32 state</td>
+              <td>The working SSM state never round-trips through bf16.</td>
+              <td><code>--mamba-ssm-cache-dtype float32</code> (SGLang discipline; vLLM #26807).</td>
+              <td>Asserted at boot; default <code>auto</code> would silently truncate.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The proof obligation is that these clauses compose: committed-only fixes what is written, single-realization and aligned-positions fix how it is written, stable-identity fixes where it lives, and the restore path re-runs the tail through the same kernel that produced the checkpoint. Under all clauses at once, restore is a restart of the same computation, which is why the gate can demand bit-exactness rather than a tolerance.</p>
+    </section>
+
+    <section class="section" id="claims">
+      <h2>Claims and Evidence</h2>
+      <aside class="sidenote">
+        <p><strong>Pill key:</strong> <span class="pill good">closed</span> holds under the current gates; <span class="pill warn">open</span> is consistent but not powered or not finished; <span class="pill info">context</span> is scope, not a claim.</p>
+      </aside>
+      <div class="table-wrap">
+        <table>
+          <caption>Every claim this page makes, with its artifact and caveat.</caption>
+          <thead>
+            <tr>
+              <th>Claim</th>
+              <th>Evidence artifact</th>
+              <th>Gate</th>
+              <th>Status and caveat</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>EXACT_SEED restore is bit-exact (L0)</td>
+              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_EXACT_SEED_SUCCESS.md">EXACT_SEED success record</a></td>
+              <td>Eager state-diff at block 1024, live seq-49 replay, 48 GDN layers</td>
+              <td><span class="pill good">closed</span> 47/48 layers at fp-level (~0.0005 mean); the layer-0 residual is a cross-position metric artifact the no-cache control itself exceeds (38.44 vs 30.11).</td>
+            </tr>
+            <tr>
+              <td>The defect was two-layer: staleness, then realization gap</td>
+              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_PAPER_RESULTS_AND_VERDICTS.md">results &amp; verdicts doc &sect;1</a></td>
+              <td>Instrumented taps (480/480 stale snapshots) + kernel-realization diff on real vLLM 0.19.2</td>
+              <td><span class="pill good">closed</span> SNAP_FIX was necessary-not-sufficient; EXACT_SEED closed the remainder.</td>
+            </tr>
+            <tr>
+              <td>Cache win is TTFT ~4&times; at 85&ndash;89% hit</td>
+              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_PAPER_RESULTS_AND_VERDICTS.md">tree&times;cache matrix &sect;3a</a></td>
+              <td>Six-arm matched matrix, proven config, standard-lens reducer</td>
+              <td><span class="pill good">closed</span> for the un-confounded metrics; single task, one run per arm.</td>
+            </tr>
+            <tr>
+              <td>Decode cost of the cache is ~zero</td>
+              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_PAPER_RESULTS_AND_VERDICTS.md">results &amp; verdicts doc &sect;2</a></td>
+              <td>s_per_fwd, matched context; 245&ndash;249 ms ON and OFF</td>
+              <td><span class="pill good">closed</span> decode is weight-bandwidth-bound (~27 GB fp8/forward); the cache's 7.89 MiB is 0.028% of that stream.</td>
+            </tr>
+            <tr>
+              <td>Behavioral losslessness holds</td>
+              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_PAPER_RESULTS_AND_VERDICTS.md">results &amp; verdicts doc &sect;5</a></td>
+              <td>All six tree&times;cache arms resolve the proxy task (2026-07-01)</td>
+              <td><span class="pill warn">open</span> consistent with L0, but 3 matched pairs is not power; N-repeat Fisher gate pending.</td>
+            </tr>
+            <tr>
+              <td>Deployment config is native MTP-5 + EXACT_SEED</td>
+              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CHAIN5_VS_NATIVE_MTP_PLAN.md">chain5-vs-native localization</a></td>
+              <td>qwen-code harness: native+cache 4/5 with char-8 = 0; forked tree arm stalls</td>
+              <td><span class="pill warn">open</span> the residual defect sits in the forked tree kernel/config's structured output, not the cache; three config axes still confounded.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid" aria-label="Positioning before the deep dive">
+        <div class="box info"><span class="tag">Not claimed</span><p>No end-to-end wall-time headline. Wall-clock improved on two of three arms (15.8&rarr;7.1, 12.1&rarr;7.6 min) but is path-confounded and reported as a lens, not a claim.</p></div>
+        <div class="box info"><span class="tag">Not claimed</span><p>No decode speedup from the cache. A decode forward reads the same weights either way; a cache cannot and does not make it faster.</p></div>
+        <div class="box info"><span class="tag">Not claimed</span><p>No statistical lossless theorem at temp 0.6. The distributional gate is not computable from banked data; what exists is bit-exact state restore plus behavioral consistency.</p></div>
+      </div>
+    </section>
+
+    <section class="section" id="prior-work">
+      <h2>Prior Work</h2>
+      <aside class="sidenote">
+        <p><strong>Fairness note:</strong> upstream issues are cited as evidence that this defect class is real and unsolved on our pinned stack, not as evidence that any project's current head is broken.</p>
+      </aside>
+      <p>The anchor is vLLM issue <a href="https://github.com/vllm-project/vllm/issues/43559">#43559</a>: accuracy drops ~20% when <code>--enable-prefix-caching</code> is combined with MTP speculative decoding on a Qwen3.6 GDN-hybrid (the reporter's model is 35B-A3B &mdash; same architecture family and feature combination as ours, not the same weights). Our root-cause read of that thread decomposes it into two carriers: a scheduler-level block-misalignment poisoning under short prompts plus concurrency, for which <a href="https://github.com/vllm-project/vllm/pull/45477">#45477</a> (keep chunk ends block-aligned) is the right fix; and the conv-window reconstruction non-invertibility in the mamba copy-specs, which we proved live on our tree committer (an 18.375 conv divergence at a multi-accept boundary while the recurrent state stayed byte-exact). At the time of writing, every fix PR in that cluster except <a href="https://github.com/vllm-project/vllm/pull/45473">#45473</a> (merged, DS-layout tail-copy; does not close the issue) remains open: <a href="https://github.com/vllm-project/vllm/pull/43650">#43650</a>, <a href="https://github.com/vllm-project/vllm/pull/45477">#45477</a>, <a href="https://github.com/vllm-project/vllm/pull/45614">#45614</a>, <a href="https://github.com/vllm-project/vllm/pull/40738">#40738</a>, <a href="https://github.com/vllm-project/vllm/pull/26807">#26807</a>. Two adjacent vLLM behaviors shaped our gates: the silent zero-hit trap when align's single checkpoint boundary lands inside request-unique tokens (<a href="https://github.com/vllm-project/vllm/issues/45238">#45238</a>), and the spec-reject SSM rollback gap (<a href="https://github.com/vllm-project/vllm/issues/39809">#39809</a>).</p>
+      <p>The design we ported is SGLang's <a href="https://github.com/sgl-project/sglang">MambaRadixCache</a>: recurrent state is not block-addressable, so SGLang stores a full state snapshot per radix-tree node in a decoupled checkpoint pool and copies it into a fresh active slot on a hit. The <a href="https://pytorch.org/blog/hybrid-models-meet-sglang-more-than-full-attention/">Hybrid Models Meet SGLang</a> post is the production framing of the same point: attention masks and KV reuse alone do not serve hybrid models. SGLang issue <a href="https://github.com/sgl-project/sglang/issues/25587">#25587</a> documents conv-state restoration after partial acceptance as a live lossless failure mode; its own body scopes the divergence to Ascend NPU, so we cite it for the defect class, not as an NVIDIA claim. On the paper side, Execution-State-Capsules (<a href="https://arxiv.org/abs/2606.20537">arXiv:2606.20537</a>) and Sparse-Prefix-Caching (<a href="https://arxiv.org/abs/2605.05219">arXiv:2605.05219</a>) both cache recurrent checkpoints at aligned positions and restore through the same kernel &mdash; Sparse-Prefix-Caching's alignment remark is the formal basis for our 64-aligned clause &mdash; and <a href="https://arxiv.org/abs/2509.19873">SpecMamba</a> is the closest speculative-decoding treatment of state backtracking for Mamba models. The <a href="https://www.ai21.com/blog/vllm-debugging-mamba-bug/">AI21 mamba-debugging post</a> is the methodology precedent: single-token state corruption in vLLM is found by state diffing, not output reading.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Positioning: what transfers from prior work, what breaks on this target, what we add.</caption>
+          <thead>
+            <tr>
+              <th>Line of work</th>
+              <th>What transfers</th>
+              <th>What breaks for this target</th>
+              <th>What we add</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>SGLang MambaRadixCache</td>
+              <td>fp32 working state; page-aligned snapshots; snapshot-not-reconstruct for the conv window; never cache speculative state.</td>
+              <td>Per-radix-node checkpoint trees, the int8 checkpoint pool, ping-pong slot donation, and dual-LRU are SGLang-internal architecture; vLLM align has one block pool and one checkpoint.</td>
+              <td>The same disciplines realized inside vLLM align mode, keyed by the existing prefix block hash, with no new pool.</td>
+            </tr>
+            <tr>
+              <td>vLLM align mode</td>
+              <td>The checkpoint-at-block-boundary skeleton and the prefix-hash identity.</td>
+              <td>Its copy-specs assume native linear MTP layout (stale row under a tree committer), its default block size is not 64-aligned, and its cached rows mix kernel realizations.</td>
+              <td>SNAP_FIX (committed-leaf source), 64-aligned block size, and chunked-realization-only checkpoints.</td>
+            </tr>
+            <tr>
+              <td>State-capsule / sparse-prefix papers</td>
+              <td>Aligned chunked checkpoints restored through the same kernel are bit-exact by construction.</td>
+              <td>They assume a single writer; a served spec-decode stack has three (chunked prefill, recurrent decode, spec node-bank).</td>
+              <td>A committed-state publication rule that makes the multi-writer stack look like a single writer to the cache.</td>
+            </tr>
+            <tr>
+              <td>Vol. III tree verifier</td>
+              <td>The tree contract: path-local state, accepted-chain replay, native-compatible publication.</td>
+              <td>Vol. III explicitly ran with prefix caching off; its wall-time caveat was this page's problem statement.</td>
+              <td>The cache that removes that caveat without touching the verifier's lossless envelope.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="problem">
+      <h2>Why Recurrent State Breaks Prefix Caching</h2>
+      <aside class="sidenote">
+        <p><strong>Plainly:</strong> attention remembers per token; GDN remembers in one running summary. You can re-read per-token memory from a cache. A running summary has to be checkpointed, and a checkpoint is only valid if it was taken at the right place, from the right tokens, by the right kernel.</p>
+      </aside>
+      <p>For the 16 softmax-attention layers, APC is the classic win: KV rows for the shared prefix are content-hashed, found, and reused, and the model recomputes nothing. For the 48 GDN layers there is no per-token cache to re-read. The recurrent state at position <em>t</em> summarizes everything before it, and vLLM's align mode therefore keeps exactly one state checkpoint per request, at the last <code>mamba_block_size</code> boundary. A cache hit restores that single row and re-runs the remaining tail.</p>
+      <p>Speculative decoding is what turns this from delicate into broken. Under spec decode this model's GDN state has three writers: the chunked-prefill kernel writes boundary states during prefill; the recurrent-decode kernel (<code>fused_sigmoid_gating_delta_rule_update</code>) advances state token-by-token during decode; and the tree committer publishes per-node accepted states into a node bank whose layout no longer matches the linear block formula the align snapshot reads. The three writers produce two different memory layouts and two different numerical realizations of the same mathematical state. A cache that snapshots without knowing who wrote what stores the wrong row, the wrong numbers, or both.</p>
+
+      <div class="figure" aria-labelledby="fig1-title">
+        <div class="figure-head"><strong id="fig1-title">Figure 1</strong><span>One prefix, two memories: per-token KV restores by lookup; recurrent state needs a valid checkpoint</span></div>
+        <svg class="diagram" viewBox="0 0 1120 430" role="img" aria-label="Comparison of attention KV caching and GDN recurrent state checkpointing under speculative decoding">
+          <defs>
+            <marker id="f1-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+          </defs>
+          <text x="24" y="36" class="label">A. Attention KV (16 layers): per-token, addressable</text>
+          <rect x="24" y="52" width="52" height="40" rx="6" class="node node-cyan"></rect>
+          <rect x="82" y="52" width="52" height="40" rx="6" class="node node-cyan"></rect>
+          <rect x="140" y="52" width="52" height="40" rx="6" class="node node-cyan"></rect>
+          <rect x="198" y="52" width="52" height="40" rx="6" class="node node-cyan"></rect>
+          <rect x="256" y="52" width="52" height="40" rx="6" class="node node-cyan"></rect>
+          <text x="36" y="77" class="tiny">kv0</text>
+          <text x="94" y="77" class="tiny">kv1</text>
+          <text x="152" y="77" class="tiny">kv2</text>
+          <text x="210" y="77" class="tiny">kv3</text>
+          <text x="268" y="77" class="tiny">kv4</text>
+          <path d="M330 72 H420" class="arrow" style="marker-end:url(#f1-arrow)"></path>
+          <rect x="428" y="52" width="180" height="40" rx="6" class="node node-green"></rect>
+          <text x="448" y="77" class="tiny">hit = re-read the rows</text>
+
+          <text x="24" y="150" class="label">B. GDN state (48 layers): one evolving vector, one checkpoint</text>
+          <path d="M24 196 H560" class="edge"></path>
+          <circle cx="60" cy="196" r="13" class="node node-cyan"></circle>
+          <circle cx="150" cy="196" r="13" class="node node-cyan"></circle>
+          <circle cx="240" cy="196" r="13" class="node node-cyan"></circle>
+          <circle cx="330" cy="196" r="13" class="node node-amber"></circle>
+          <circle cx="420" cy="196" r="13" class="node node-cyan"></circle>
+          <circle cx="510" cy="196" r="13" class="node node-cyan"></circle>
+          <text x="30" y="232" class="tiny">state evolves every token; only one row survives:</text>
+          <path d="M330 214 V252" class="arrow" style="marker-end:url(#f1-arrow)"></path>
+          <rect x="240" y="258" width="212" height="40" rx="6" class="node node-amber"></rect>
+          <text x="254" y="283" class="tiny">checkpoint @ last block boundary</text>
+
+          <text x="640" y="150" class="label">C. Under spec decode, three writers</text>
+          <rect x="640" y="170" width="200" height="44" rx="8" class="node node-cyan"></rect>
+          <text x="654" y="189" class="tiny">chunked prefill kernel</text>
+          <text x="654" y="205" class="tiny">writes boundary states</text>
+          <rect x="640" y="226" width="200" height="44" rx="8" class="node node-green"></rect>
+          <text x="654" y="245" class="tiny">recurrent decode kernel</text>
+          <text x="654" y="261" class="tiny">advances token-by-token</text>
+          <rect x="640" y="282" width="200" height="44" rx="8" class="node node-rose"></rect>
+          <text x="654" y="301" class="tiny">tree committer node-bank</text>
+          <text x="654" y="317" class="tiny">per-node accepted states</text>
+          <path d="M848 192 L940 236" class="edge dash"></path>
+          <path d="M848 248 H940" class="edge dash"></path>
+          <path d="M848 304 L940 260" class="edge dash"></path>
+          <rect x="940" y="226" width="170" height="44" rx="8" class="node node-amber"></rect>
+          <text x="954" y="245" class="tiny">one cache row,</text>
+          <text x="954" y="261" class="tiny">three candidate truths</text>
+
+          <text x="24" y="356" class="tiny">Color key: cyan = per-token / chunked-prefill facts, green = live decode, amber = the cached checkpoint, rose = spec-decode structures.</text>
+          <text x="24" y="378" class="tiny">The whole campaign is the question in panel C: which writer's state, at which position, in which realization, is the row the cache stores and restores?</text>
+        </svg>
+        <p class="caption">Figure 1 is intentionally memory-only. Nothing about tree verification appears here; Vol. III already covers it. The point is narrower: for attention layers a prefix cache is a lookup, while for GDN layers it is a checkpoint/restore system with three concurrent writers, and its correctness is a contract about who wrote the row, where, and with which kernel.</p>
+      </div>
+    </section>
+    <section class="section" id="defect">
+      <h2>The Two-Layer Defect</h2>
+      <aside class="sidenote">
+        <p><strong>Staleness:</strong> the cache saved a row nobody committed.</p>
+        <p><strong>Realization gap:</strong> even the right row held the wrong kernel's numbers. Two kernels can compute the same math and still disagree by more than bf16 round-off.</p>
+      </aside>
+      <p>Turning APC on with the tree verifier live poisoned the model within one evaluation arm: mean acceptance collapsed to 1.00, generation degenerated to 3.8 tok/s, a fraction of turns emitted repeated-token garble, and the coding agent gave up with zero-byte patches on three of four tasks. The root cause decomposed into two independent defects stacked on the same restore path.</p>
+      <p><strong>Layer 1 &mdash; staleness.</strong> Align's snapshot formula reads <code>state[block_ids[cur_block_idx + num_accepted_tokens - 1]]</code>. That formula is correct for native MTP, which writes each speculative position's state to consecutive block-pool slots. The tree committer cannot keep that layout &mdash; a tree has branches &mdash; so it publishes per-node accepted states into a node bank. At any multi-accept boundary the formula reads a row the committer never wrote. Instrumented taps made this unambiguous: 480 of 480 postprocess snapshots read a stale row; in one traced event the snapshot took row 69 while the committer had written rows 35, 70, 37, 75, 39. <code>SNAP_FIX</code> repairs the write side by pointing the snapshot source at the committed accepted-leaf row (FAITHFUL 240/240 in the deterministic four-arm verify), and <code>SNAP_FIX_ZEROACCEPT</code> covers steps that accept nothing.</p>
+      <p><strong>Layer 2 &mdash; the realization gap.</strong> With the row fixed, cache-ON tree runs at block 1024 still failed the proxy task 0/3. The reason, verified on the real deployed vLLM 0.19.2 source: prefill writes the cache with the chunked kernel, decode advances state with the recurrent kernel, and a cache hit can restore a recurrent-realization row and continue it through the chunked kernel. The two realizations differ by about 0.0078 per boundary &mdash; far above one bf16 ULP &mdash; and the error re-accumulates at every block boundary, roughly 30 of them across a 30k-token prefix at block 1024. Raising <code>mamba_block_size</code> to 8192 "fixed" the task by crossing ~3 boundaries instead of ~30, which is dilution, not repair: the same dial also forces up to a block's worth of mamba tail re-prefill per hit, taxing exactly the TTFT the cache exists to win. Block size was a lose-lose dial; the real fix had to make the cached row and the resuming kernel agree.</p>
+
+      <div class="equation" aria-label="Drift chain across the fix ladder">
+        <div><span class="muted">state drift, max|&Delta;| vs continuous no-cache reference @ live replay:</span></div>
+        <div>77.96 <span class="muted">(block 816, align default, lossy)</span> &rarr; 38.36 <span class="muted">(block 1024, no EXACT_SEED)</span> &rarr; <span class="ok">30.11 (block 1024, EXACT_SEED)</span></div>
+        <div><span class="muted">and the residual 30.11 is a cross-position metric artifact:</span> <span class="hl">the no-cache control differs from itself by 38.44 at the same probe</span></div>
+      </div>
+
+      <div class="figure" aria-labelledby="fig2-title">
+        <div class="figure-head"><strong id="fig2-title">Figure 2</strong><span>What a cache hit restored before the fixes: the wrong row, then the wrong realization</span></div>
+        <svg class="diagram" viewBox="0 0 1120 400" role="img" aria-label="Two-layer defect diagram: stale row selection and kernel realization mismatch">
+          <defs>
+            <marker id="f2-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
+            </marker>
+            <marker id="f2-arrow-g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
+            </marker>
+          </defs>
+          <text x="24" y="36" class="label">Layer 1: staleness &mdash; the align formula vs the tree node bank</text>
+          <rect x="24" y="56" width="230" height="46" rx="8" class="node node-rose"></rect>
+          <text x="38" y="76" class="tiny">align snapshot reads</text>
+          <text x="38" y="92" class="tiny">block_ids[cur+acc-1] = row 69</text>
+          <rect x="24" y="116" width="230" height="46" rx="8" class="node node-green"></rect>
+          <text x="38" y="136" class="tiny">committer wrote node bank</text>
+          <text x="38" y="152" class="tiny">rows 35, 70, 37, 75, 39 (leaf = last)</text>
+          <path d="M262 79 H360" class="arrow" style="stroke: var(--rose); marker-end:url(#f2-arrow)"></path>
+          <text x="270" y="70" class="tiny">stale row cached</text>
+          <path d="M262 139 H360" class="arrow" style="stroke: var(--green); marker-end:url(#f2-arrow-g)"></path>
+          <text x="270" y="130" class="tiny">SNAP_FIX source</text>
+          <rect x="368" y="88" width="170" height="46" rx="8" class="node node-amber"></rect>
+          <text x="382" y="108" class="tiny">prefix-hash cache row</text>
+          <text x="382" y="124" class="tiny">(what a hit restores)</text>
+
+          <text x="600" y="36" class="label">Layer 2: realization gap &mdash; who wrote it vs who resumes it</text>
+          <rect x="600" y="56" width="220" height="46" rx="8" class="node node-green"></rect>
+          <text x="614" y="76" class="tiny">recurrent decode kernel wrote</text>
+          <text x="614" y="92" class="tiny">the committed row</text>
+          <rect x="600" y="116" width="220" height="46" rx="8" class="node node-cyan"></rect>
+          <text x="614" y="136" class="tiny">chunked prefill kernel resumes</text>
+          <text x="614" y="152" class="tiny">from it on a hit</text>
+          <path d="M828 79 L920 106" class="edge dash"></path>
+          <path d="M828 139 L920 112" class="edge dash"></path>
+          <rect x="928" y="88" width="168" height="46" rx="8" class="node node-rose"></rect>
+          <text x="942" y="108" class="tiny">~0.0078 per boundary,</text>
+          <text x="942" y="124" class="tiny">&times; ~30 boundaries @1024</text>
+
+          <text x="24" y="220" class="label">The fix: make the cache single-realization (EXACT_SEED)</text>
+          <rect x="24" y="240" width="250" height="46" rx="8" class="node node-cyan"></rect>
+          <text x="38" y="260" class="tiny">capture during prefill,</text>
+          <text x="38" y="276" class="tiny">through the chunked kernel only</text>
+          <path d="M282 263 H370" class="arrow" style="stroke: var(--green); marker-end:url(#f2-arrow-g)"></path>
+          <rect x="378" y="240" width="250" height="46" rx="8" class="node node-amber"></rect>
+          <text x="392" y="260" class="tiny">64-aligned checkpoint,</text>
+          <text x="392" y="276" class="tiny">keyed by prefix block hash</text>
+          <path d="M636 263 H724" class="arrow" style="stroke: var(--green); marker-end:url(#f2-arrow-g)"></path>
+          <rect x="732" y="240" width="250" height="46" rx="8" class="node node-green"></rect>
+          <text x="746" y="260" class="tiny">hit: seed state, finish tail</text>
+          <text x="746" y="276" class="tiny">through the same chunked kernel</text>
+          <text x="24" y="330" class="tiny">Color key: cyan = chunked-prefill realization, green = committed/correct path, amber = the cached checkpoint, rose = the defect.</text>
+          <text x="24" y="352" class="tiny">Same kernel writes, same kernel resumes, at a 64-aligned position: the restore becomes a legal restart of the same computation, so the gate can demand bit-exactness.</text>
+        </svg>
+        <p class="caption">Figure 2 is intentionally restore-only. Nothing here changes what the verifier computes; both defects live in what the cache saves and hands back. Layer 1 is a wrong address, layer 2 is a wrong numerical dialect, and each masked the other: fixing the row alone still failed the task, and no block-size setting could fix either.</p>
+      </div>
+    </section>
+
+    <section class="section" id="design-trail">
+      <h2>How We Arrived at EXACT_SEED</h2>
+      <aside class="sidenote">
+        <p><strong>Reading the table:</strong> each row is a question the campaign had to answer, what was tried, what the instruments actually showed, and what survived into the final design.</p>
+      </aside>
+      <p>The design was not derived; it was cornered. The cache went from NO-GO poisoning on June 19 to a bit-exact restore on June 29, and nearly every intermediate conclusion was overturned by a better instrument. The trail matters because the failure modes &mdash; scalar metrics that miss poisoning, gates that pass vacuously, headline drift numbers inflated by the measuring harness &mdash; are the reusable content.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Design questions, attempts, discoveries, and final choices.</caption>
+          <thead>
+            <tr>
+              <th>Design question</th>
+              <th>What we tried</th>
+              <th>Discovery</th>
+              <th>Final choice</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Is APC safe to just enable?</td>
+              <td>Gate-0: boot, engagement, non-vacuous hits, no-crash.</td>
+              <td>Engages cleanly (hit rate 38.5&rarr;51.3%, healthy acceptance 5.00) &mdash; but the scalar acceptance metric later proved blind to real poisoning.</td>
+              <td>Keep Gate-0 as an engagement gate only; lossless verdicts must scan raw output dumps and state, never scalars.</td>
+            </tr>
+            <tr>
+              <td>Which carrier poisons &mdash; conv window or SSM state?</td>
+              <td>Two conv fixes (stock-revert, whole-row snapshot).</td>
+              <td>Garble count stayed flat (6 &rarr; 8 &rarr; 12/3948): the conv bug is real but orthogonal. Taps then showed the SSM temporal snapshot stale 480/480.</td>
+              <td>The SSM align snapshot is the carrier; conv fixes kept as hygiene.</td>
+            </tr>
+            <tr>
+              <td>How do you fix a stale snapshot source?</td>
+              <td>Pointer substitution (<code>SSM_SNAPSHOT</code>), a VERBATIM publisher, then value write-through.</td>
+              <td>The pointer redirect was computed but never reached the copy buffer; VERBATIM got clobbered by the stock copy running after it.</td>
+              <td><code>SNAP_FIX</code>: rewrite the source pointer inside <code>collect_mamba_copy_meta</code> itself &mdash; FAITHFUL 240/240, CUDA-graph-safe, baked.</td>
+            </tr>
+            <tr>
+              <td>Why does the fixed row still fail at block 1024?</td>
+              <td>Block-size sweep and a drift curve.</td>
+              <td>8192 resolves where 1024 fails 0/3; drift falls as boundaries get rarer (77.96 pre-fix, 49.70 @2048 on the drift curve) &mdash; boundary-count-dependent, so the defect is per-boundary re-accumulation, not a single bad value.</td>
+              <td>Diagnose a kernel-realization mismatch on the real 0.19.2 source; reject block size as a lose-lose dial.</td>
+            </tr>
+            <tr>
+              <td>Was the cache causing the char-8 tool-call failures?</td>
+              <td>A conjunction analysis (cache&and;spec, Fisher p=0.004).</td>
+              <td>Its own red-team dismantled it: the "engaged" label was warmup-contaminated, and ~50 of 64 breaking requests were cold-cache. char-8 is a truncated-tool-call re-parse flake, cache-independent.</td>
+              <td>Treat char-8 as a proxy-layer defect; it was later fixed by repairing truncated tool-call JSON in the proxy (65/67 poison strings repaired).</td>
+            </tr>
+            <tr>
+              <td>Can a hit be bit-identical to no-cache?</td>
+              <td><code>HIT_RECURRENT_SUFFIX</code>: recompute the suffix with the recurrent kernel on a hit.</td>
+              <td>Structurally cannot be bit-exact &mdash; the recurrent kernel is not the chunked kernel; un-baked after solve-rate evidence.</td>
+              <td><code>EXACT_SEED</code>: cache only the chunked realization at 64-aligned positions and finish the tail through the same chunked kernel. Bit-exact by construction, then verified.</td>
+            </tr>
+            <tr>
+              <td>What identity keys a checkpoint?</td>
+              <td>Per-request keying with a decode-time drain.</td>
+              <td>No physical identity survives prefill &rarr; decode &rarr; next turn (0/4 store&cap;drain overlap, 91k drain misses); a turn decodes ~128 tokens and never crosses a boundary.</td>
+              <td>Key by the bare APC prefix block hash and capture during prefill &mdash; the identity the cache manager itself matches on.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <details class="fold">
+        <summary>
+          <span>Near-miss ledger: the five instruments that kept the chase honest</span>
+          <small>Exact-seed state-diff, per-carrier stale-inject, recompute-shadow, drift curve, engagement manifest.</small>
+        </summary>
+        <div class="fold-body">
+          <div class="grid">
+            <div class="box info">
+              <span class="tag">State-diff</span>
+              <h3>Exact-seed state diff</h3>
+              <p>Replays a live agentic sequence (seq 49) with cache ON and diffs every GDN layer's restored state against a continuous no-cache reference. This is the L0 gate; it is also what exposed the layer-0 accumulator artifact (the no-cache control differs from itself by 38.44 across probe positions).</p>
+            </div>
+            <div class="box info">
+              <span class="tag">Stale-inject</span>
+              <h3>Per-carrier stale injection</h3>
+              <p>You cannot make one carrier fresh while keeping the rest cached &mdash; <code>num_computed_tokens</code> couples them &mdash; so isolation is inverted: force a full fresh re-prefill, then inject the stale value over exactly one carrier (conv / SSM / KV / position) and watch which one derails.</p>
+            </div>
+            <div class="box info">
+              <span class="tag">Shadow</span>
+              <h3>Recompute shadow</h3>
+              <p>On every cache-hit forward, dump both the restored state and a same-forward no-cache recompute. The carrier scorecard it produced &mdash; conv faithful 48/48, SSM faithful 48/48 post-fix, position faithful &mdash; is what narrowed the residual to the realization gap.</p>
+            </div>
+            <div class="box warn">
+              <span class="tag">Drift curve</span>
+              <h3>Block-size drift curve</h3>
+              <p>Defined to discriminate bug from fp machinery: ~0.0078 means kernel round-off, tens mean a wrong row. It measured 77.96/49.70 falling with block size &mdash; the signature of per-boundary re-accumulation &mdash; and later caught that headline drift numbers were inflated by capture misalignment (per-element mean &asymp; 0.0069).</p>
+            </div>
+            <div class="box warn">
+              <span class="tag">Engagement</span>
+              <h3>Vacuous-gate manifest</h3>
+              <p>Three separate fixes "validated" while never firing: a flag not passed through docker, a flag dropped by the worker env bridge, and a code predicate that never matched. The engagement manifest asserts, per flag, worker-visible flag=1 AND an engagement counter &gt; 0, or the verdict is untrusted.</p>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="section" id="mechanism">
+      <h2>EXACT_SEED: The Mechanism</h2>
+      <aside class="sidenote">
+        <p><strong>One sentence:</strong> during prefill, at every 64-aligned block boundary, save each GDN layer's chunked-kernel state onto the prefix-hash cache block; on a hit, seed each layer from that checkpoint and finish the remainder through the same chunked kernel.</p>
+      </aside>
+      <p>The mechanism is a checkpoint pipeline with one rule: nothing enters the cache except the chunked-prefill realization of committed tokens, at 64-aligned positions, under the prefix block hash. Six implementation facts make that rule hold in a real vLLM, and each one was a bug before it was a fact.</p>
+
+      <div class="equation" aria-label="EXACT_SEED algorithm">
+        <div><span class="muted">Algorithm 1 &mdash; EXACT_SEED (all behind FR13_APC_EXACT_SEED=1; default-off path byte-identical)</span></div>
+        <div>1&nbsp; force block_size = 1024 = 16&times;64 <span class="muted">(align's 816 = 16&times;51 is not a chunk multiple; not restartable bit-exactly)</span></div>
+        <div>2&nbsp; prefill: chunked kernel runs; capture per-GDN-layer state at each 64-aligned boundary <span class="muted">(capture in prefill, not decode &mdash; decode never crosses a boundary)</span></div>
+        <div>3&nbsp; absolute position b0 := context_lens from the gdn builder <span class="muted">(non-spec-sliced; fixes the stuck-at-0 base)</span></div>
+        <div>4&nbsp; bind (req, pos) &rarr; block_hash bidirectionally <span class="muted">(the insert runs one block ahead of the capture; either side completes the pair)</span></div>
+        <div>5&nbsp; store {pos: {layer: state}} for all 48 GDN layers on BlockPool under the <span class="hl">bare content hash</span>; evict with the block; LRU-bounded, GPU-resident</div>
+        <div>6&nbsp; hit: manager reconstructs the hash &rarr; worker seeds initial_state per layer &rarr; <span class="ok">tail (&lt;64 remainder + decoded suffix) re-runs through the same chunked kernel</span></div>
+      </div>
+
+      <div class="figure" aria-labelledby="fig3-title">
+        <div class="figure-head"><strong id="fig3-title">Figure 3</strong><span>The checkpoint pipeline: capture, bind, store, seed &mdash; one realization end to end</span></div>
+        <svg class="diagram" viewBox="0 0 1120 420" role="img" aria-label="EXACT_SEED pipeline from prefill capture through prefix-hash store to cache-hit seeding">
+          <defs>
+            <marker id="f3-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+          </defs>
+          <text x="24" y="36" class="label">Turn N: prefill writes checkpoints</text>
+          <rect x="24" y="52" width="216" height="60" rx="8" class="node node-cyan"></rect>
+          <text x="38" y="76" class="tiny">chunked prefill scan</text>
+          <text x="38" y="92" class="tiny">(the only kernel that writes)</text>
+          <path d="M248 82 H320" class="arrow" style="marker-end:url(#f3-arrow)"></path>
+          <rect x="328" y="52" width="216" height="60" rx="8" class="node node-cyan"></rect>
+          <text x="342" y="70" class="tiny">capture @ 64-aligned</text>
+          <text x="342" y="86" class="tiny">boundaries, per GDN layer</text>
+          <text x="342" y="102" class="tiny">(48 layers, absolute positions)</text>
+          <path d="M552 82 H624" class="arrow" style="marker-end:url(#f3-arrow)"></path>
+          <rect x="632" y="52" width="216" height="60" rx="8" class="node node-amber"></rect>
+          <text x="646" y="70" class="tiny">bidirectional (req,pos) join</text>
+          <text x="646" y="86" class="tiny">binds capture to block hash</text>
+          <text x="646" y="102" class="tiny">(insert runs one block ahead)</text>
+          <path d="M856 82 H928" class="arrow" style="marker-end:url(#f3-arrow)"></path>
+          <rect x="936" y="52" width="160" height="60" rx="8" class="node node-amber"></rect>
+          <text x="950" y="76" class="tiny">BlockPool store,</text>
+          <text x="950" y="92" class="tiny">key = bare block hash</text>
+
+          <text x="24" y="180" class="label">Turn N+1: a hit seeds the same computation</text>
+          <rect x="24" y="196" width="216" height="60" rx="8" class="node node-green"></rect>
+          <text x="38" y="220" class="tiny">prefix match on block hash</text>
+          <text x="38" y="236" class="tiny">(85&ndash;89% of prompt tokens)</text>
+          <path d="M248 226 H320" class="arrow" style="marker-end:url(#f3-arrow)"></path>
+          <rect x="328" y="196" width="216" height="60" rx="8" class="node node-green"></rect>
+          <text x="342" y="214" class="tiny">restore checkpoint,</text>
+          <text x="342" y="230" class="tiny">seed initial_state</text>
+          <text x="342" y="246" class="tiny">per layer (.get, not .pop)</text>
+          <path d="M552 226 H624" class="arrow" style="marker-end:url(#f3-arrow)"></path>
+          <rect x="632" y="196" width="216" height="60" rx="8" class="node node-cyan"></rect>
+          <text x="646" y="214" class="tiny">tail &lt; 64 tokens + new turn</text>
+          <text x="646" y="230" class="tiny">re-run through the same</text>
+          <text x="646" y="246" class="tiny">chunked kernel</text>
+          <path d="M856 226 H928" class="arrow" style="marker-end:url(#f3-arrow)"></path>
+          <rect x="936" y="196" width="160" height="60" rx="8" class="node node-green"></rect>
+          <text x="950" y="220" class="tiny">state == no-cache,</text>
+          <text x="950" y="236" class="tiny">bit-for-bit</text>
+
+          <rect x="24" y="300" width="1072" height="66" rx="8" class="node"></rect>
+          <text x="40" y="326" class="tiny">What never enters the cache: recurrent-decode realizations, spec node-bank rows, uncommitted candidate tokens, positions that are not 64-aligned.</text>
+          <text x="40" y="348" class="tiny">Color key: cyan = chunked realization, amber = identity plumbing, green = the hit path. Decode is untouched: the cache is invisible to the forward pass.</text>
+        </svg>
+        <p class="caption">Figure 3 is intentionally cache-only. The speculative verifier from Vol. III runs unchanged above this pipeline; the committer's only new duty is publishing the committed leaf so clause one of the contract holds. Everything else is prefill-side plumbing, which is why the decode-cost table in the results is flat.</p>
+      </div>
+
+      <p>Two engineering notes survived deployment hardening. The checkpoint store is LRU-bounded on the <code>BlockPool</code> and kept GPU-resident &mdash; an early version leaked host RSS by never evicting, and a <code>.cpu()</code> copy per checkpoint was both the leak's amplifier and a needless sync on GB10's unified memory. And a decode-time committer that recomputed checkpoints during decode turned out to be vestigial: deleting its 608 lines removed 48 host-syncs per step and re-verified bit-identical, confirming the prefill-capture chain is the entire working mechanism.</p>
+    </section>
+
+    <section class="section" id="shapes">
+      <h2>The Arms: chain5, cat6root, cat8</h2>
+      <aside class="sidenote">
+        <p><strong>Why three trees:</strong> the cache claim must hold on whatever the drafter is. The matrix crosses cache ON/OFF with the native spine and two tree shapes from Vol. III's verifier.</p>
+      </aside>
+      <p>The tree&times;cache matrix uses three speculative arms, each run with the cache on and off. chain5 is the forked tree kernel run as a linear 5-node chain &mdash; native-MTP-5 topology on the tree code path, not the stock native kernel. cat6root is Vol. III's headline 6-node tree. cat8 adds siblings at depths 1&ndash;3. At B=1 the tree width up to 8 nodes is essentially free on forward time (~247&ndash;249 ms across all three), so the matrix isolates the cache axis rather than re-litigating tree shape. The stock native arm is separate: the deployment config called native MTP-5 + EXACT_SEED runs vLLM's own <code>qwen3_5_mtp</code> path with no forked kernel, under a different launcher from every matrix arm.</p>
+
+      <div class="shape-grid">
+        <article class="shape">
+          <h3>chain5 <span>forked kernel, 5-chain</span></h3>
+          <svg class="diagram" viewBox="0 0 300 160" role="img" aria-label="chain5 linear spine">
+            <path d="M48 80 H252" class="edge"></path>
+            <circle cx="48" cy="80" r="17" class="node node-cyan"></circle>
+            <circle cx="99" cy="80" r="17" class="node node-cyan"></circle>
+            <circle cx="150" cy="80" r="17" class="node node-cyan"></circle>
+            <circle cx="201" cy="80" r="17" class="node node-cyan"></circle>
+            <circle cx="252" cy="80" r="17" class="node node-cyan"></circle>
+            <text x="42" y="85">0</text><text x="93" y="85">1</text><text x="144" y="85">2</text><text x="195" y="85">3</text><text x="246" y="85">4</text>
+          </svg>
+          <ul class="path-list">
+            <li>TTFT 11.78 &rarr; 2.60 s</li>
+            <li>hit 88% / resolve both arms</li>
+          </ul>
+        </article>
+
+        <article class="shape">
+          <h3>cat6root <span>6 nodes</span></h3>
+          <svg class="diagram" viewBox="0 0 300 160" role="img" aria-label="cat6root tree: spine plus root sibling">
+            <path d="M48 80 H252" class="edge"></path>
+            <path d="M48 80 V35" class="edge"></path>
+            <circle cx="48" cy="80" r="15" class="node node-cyan"></circle>
+            <circle cx="99" cy="80" r="15" class="node node-cyan"></circle>
+            <circle cx="150" cy="80" r="15" class="node node-cyan"></circle>
+            <circle cx="201" cy="80" r="15" class="node node-cyan"></circle>
+            <circle cx="252" cy="80" r="15" class="node node-cyan"></circle>
+            <circle cx="48" cy="35" r="14" class="node node-green"></circle>
+          </svg>
+          <ul class="path-list">
+            <li>TTFT 11.40 &rarr; 2.53 s</li>
+            <li>hit 89% / resolve both arms</li>
+          </ul>
+        </article>
+
+        <article class="shape">
+          <h3>cat8 <span>8 nodes</span></h3>
+          <svg class="diagram" viewBox="0 0 300 160" role="img" aria-label="cat8 tree: spine plus siblings at depths 1 to 3">
+            <path d="M48 80 H252" class="edge"></path>
+            <path d="M99 80 V35" class="edge"></path>
+            <path d="M150 80 V35" class="edge"></path>
+            <path d="M201 80 V35" class="edge"></path>
+            <circle cx="48" cy="80" r="15" class="node node-cyan"></circle>
+            <circle cx="99" cy="80" r="15" class="node node-cyan"></circle>
+            <circle cx="150" cy="80" r="15" class="node node-cyan"></circle>
+            <circle cx="201" cy="80" r="15" class="node node-cyan"></circle>
+            <circle cx="252" cy="80" r="15" class="node node-cyan"></circle>
+            <circle cx="99" cy="35" r="14" class="node node-amber"></circle>
+            <circle cx="150" cy="35" r="14" class="node node-amber"></circle>
+            <circle cx="201" cy="35" r="14" class="node node-amber"></circle>
+          </svg>
+          <ul class="path-list">
+            <li>TTFT 10.17 &rarr; 2.94 s</li>
+            <li>hit 85% / resolve both arms</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="section" id="setup">
+      <h2>Experimental Setup</h2>
+      <aside class="sidenote">
+        <p><strong>Why setup matters:</strong> several plausible cache verdicts died to setup confounds &mdash; warmup-contaminated labels, cross-boot comparisons, and gates that measured the wrong config. The reported matrix is single-boot-per-arm, matched-config, engagement-checked.</p>
+      </aside>
+      <div class="grid">
+        <div class="box info">
+          <span class="tag">Model</span>
+          <h3>Qwen 3.6-27B FP8</h3>
+          <p>Hybrid stack, 64 layers: 48 Gated-DeltaNet recurrent layers and 16 softmax-attention layers. Served as <code>qwen3.6-27b</code>; internal notes also call it by its architecture-family alias Qwen3-Next-27B.</p>
+        </div>
+        <div class="box info">
+          <span class="tag">Serving</span>
+          <h3>Forked vLLM 0.19.2 on GB10</h3>
+          <p>DGX Spark GB10 (unified LPDDR5X, 273 GB/s), string-patched fork; spec method <code>qwen3_5_mtp</code>, <code>num_speculative_tokens</code> = the tree's node count (5 chain5 / 6 cat6root / 8 cat8), tree arms via an explicit token-tree literal.</p>
+        </div>
+        <div class="box info">
+          <span class="tag">Workload</span>
+          <h3>SWE/Codex agentic loop</h3>
+          <p>Proxy task astropy-12907, temp 0.6, B=1. The agent resends an append-only 11&ndash;14k-token conversation each turn &mdash; the exact workload prefix caching exists for. The agent runs on a separate box, so only the GB10 prefill fraction is cache-addressable.</p>
+        </div>
+        <div class="box info">
+          <span class="tag">Measurement</span>
+          <h3>Two lenses, engagement-checked</h3>
+          <p>Serving lens (Output-Speed, TPOT, TTFT) and agentic lens (wall-clock/task), reduced by <code>fr13_standard_metrics.py</code>; every arm asserts real cache hits and fired fix flags before its numbers count.</p>
+        </div>
+      </div>
+      <p>All six matrix arms ran the proven cache config &mdash; <code>EXACT_SEED=1</code>, <code>SNAP_FIX=1</code>, block 1024, fp32 SSM state &mdash; plus a proxy-side thinking cap (<code>LUMO_PROXY_THINK_BUDGET=500</code>) that cut a give-up failure mode orthogonal to caching. The cap fired 1&ndash;4 times per arm on both ON and OFF sides, so it does not favor either cache state.</p>
+    </section>
+    <section class="section" id="results">
+      <h2>The Two-Lens Result</h2>
+      <aside class="sidenote">
+        <p><strong>Why two lenses:</strong> nobody honest reports an agentic run as a single tok/s. Serving practice reports Output-Speed and TTFT separately; agentic practice reports wall-clock per task. The cache win lives in TTFT; Output-Speed being flat is the correct outcome, not a miss.</p>
+      </aside>
+      <p>Read this result with its scope attached: one SWE-Verified proxy task (astropy-12907), temp 0.6, B=1, one run per arm, proven cache config on all six arms, thinking cap live on all six. Under that scope, the cache delivers TTFT ~4&times; on every speculative arm at 85&ndash;89% prefix hit, decode cost is unchanged, and every arm resolves the task with the cache on and off.</p>
+
+      <div class="grid" aria-label="Result scope">
+        <div class="box good">
+          <span class="tag">Headline</span>
+          <p>TTFT 11.78 &rarr; 2.60 s (chain5), 11.40 &rarr; 2.53 s (cat6root), 10.17 &rarr; 2.94 s (cat8): ~4&times; on every tree, at 85&ndash;89% prefix hit.</p>
+        </div>
+        <div class="box info">
+          <span class="tag">Decode view</span>
+          <p>Output-Speed is cache-neutral (&plusmn;10% per tree, s_per_fwd flat ~247 ms) &mdash; by construction: a decode forward reads the same weights either way.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Wall-clock caveat</span>
+          <p>Agent wall-clock improved on chain5 (15.8 &rarr; 7.1 min) and cat6root (12.1 &rarr; 7.6 min) but reversed on cat8 &mdash; path-confounded by turn count and resolve variance, so it is a lens, not a claim.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Sample caveat</span>
+          <p>Single task, one seed per arm, temp 0.6. TTFT and hit rate are stable across arms; anything trajectory-shaped is not.</p>
+        </div>
+      </div>
+
+      <div class="confidence-row" aria-label="Result confidence">
+        <strong>Confidence</strong>
+        <p>High on TTFT ~4&times; and 85&ndash;89% hit (mechanically tied to prefill reuse, consistent across all three arms); high on decode-neutrality (confound-resistant metric); medium on wall-clock direction; open on N-repeat statistics and any batch size above one.</p>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Serving lens: tree&times;cache matrix, proven config, astropy-12907, 2026-07-01. OFF / ON per cell.</caption>
+          <thead>
+            <tr>
+              <th>Arm</th>
+              <th>Output-Speed (tok/s)</th>
+              <th>TPOT (ms)</th>
+              <th>TTFT (s)</th>
+              <th>Accept/event</th>
+              <th>s_per_fwd (ms)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>chain5 (forked kernel, 5-chain)</td>
+              <td class="num">17.7 / 17.1</td>
+              <td class="num">56 / 59</td>
+              <td class="num">11.78 / 2.60</td>
+              <td class="num">3.39 / 3.19</td>
+              <td class="num">248 / 246</td>
+            </tr>
+            <tr>
+              <td>cat6root (6-node tree)</td>
+              <td class="num">15.4 / 16.5</td>
+              <td class="num">65 / 61</td>
+              <td class="num">11.40 / 2.53</td>
+              <td class="num">2.81 / 3.10</td>
+              <td class="num">247 / 249</td>
+            </tr>
+            <tr>
+              <td>cat8 (8-node tree)</td>
+              <td class="num">18.0 / 16.0</td>
+              <td class="num">55 / 63</td>
+              <td class="num">10.17 / 2.94</td>
+              <td class="num">3.48 / 2.97</td>
+              <td class="num">248 / 249</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Agentic lens: same six arms. Wall-clock is path-confounded; TTFT and hit rate are the un-confounded cache metrics.</caption>
+          <thead>
+            <tr>
+              <th>Arm</th>
+              <th>Wall-clock / task (min)</th>
+              <th>Turns</th>
+              <th>Cap fires</th>
+              <th>Prefix hit % (ON)</th>
+              <th>Resolve</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>chain5 OFF / ON</td>
+              <td class="num">15.8 / 7.1</td>
+              <td class="num">11 / 22</td>
+              <td class="num">3 / 2</td>
+              <td class="num">88</td>
+              <td><span class="pill good">both</span></td>
+            </tr>
+            <tr>
+              <td>cat6root OFF / ON</td>
+              <td class="num">12.1 / 7.6</td>
+              <td class="num">14 / 20</td>
+              <td class="num">2 / 2</td>
+              <td class="num">89</td>
+              <td><span class="pill good">both</span></td>
+            </tr>
+            <tr>
+              <td>cat8 OFF / ON</td>
+              <td class="num">7.3 / 11.3</td>
+              <td class="num">11 / 14</td>
+              <td class="num">1 / 4</td>
+              <td class="num">85</td>
+              <td><span class="pill good">both</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The decomposition is the paper point. Decode is weight-bandwidth-bound: every forward streams ~27 GB of fp8 weights, the cache's working set adds 7.89 MiB (0.028%), and s_per_fwd confirms the arithmetic &mdash; 245&ndash;249 ms per forward with the cache on or off, all three trees. The cache's entire payoff is the prefill it deletes. In an earlier pre-matrix comparison &mdash; cross-arm and superseded by the matrix above, so indicative only &mdash; a cache-ON run served 2.33 M of its 2.68 M prompt tokens (87%) from cache and averaged 2.74 s TTFT, against 46.1 s on a cache-OFF run with a longer accumulated context. In an agentic loop that compounding per-turn prefill deletion, not decode, is what moves task time.</p>
+    </section>
+
+    <section class="section" id="lossless">
+      <h2>Lossless Evidence and Gates</h2>
+      <aside class="sidenote">
+        <p><strong>The metric trap:</strong> the residual drift number (30.11) looks alarming until you learn the no-cache control differs from itself by 38.44 under the same reducer. Layer 0 is a long-horizon accumulator; a flat absolute threshold cannot judge it.</p>
+      </aside>
+      <p>The L0 gate replays a live agentic sequence (seq 49) with the cache on and diffs every GDN layer's state against a continuous no-cache reference. With EXACT_SEED at block 1024, 47 of 48 layers sit at floating-point-level drift (per-layer mean &asymp; 0.0005 against an fp ceiling of &asymp; 0.0078), and the checkpoint chain fires on 22 of 23 turns. The one apparent exception, layer 0, is a measurement artifact rather than a restore error: its forget gate is &asymp;1 (<code>exp(A_log).min() = 0.0038</code>), which makes it a long-horizon accumulator with state magnitude ~90 versus ~1 elsewhere, and the diff harness pairs snapshots from different sequence positions. The decisive control: two positions of the <em>no-cache</em> reference differ in layer 0 by 38.44 &mdash; more than the cache's 30.11. The restore introduces less layer-0 difference than the no-cache baseline's own position spread.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Lossless closure gates and what each proves.</caption>
+          <thead>
+            <tr>
+              <th>Gate</th>
+              <th>What was checked</th>
+              <th>Status</th>
+              <th>Why it matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>L0 state restore</td>
+              <td>Per-layer GDN state diff, cache-ON vs continuous no-cache, live replay @ block 1024</td>
+              <td><span class="pill good">bit-exact</span></td>
+              <td>47/48 layers fp-level; drift chain 77.96 &rarr; 38.36 &rarr; 30.11 with the residual attributed to the reducer, not the restore.</td>
+            </tr>
+            <tr>
+              <td>Committer-deletion control</td>
+              <td>L0 re-verify after deleting the vestigial decode-time committer</td>
+              <td><span class="pill good">bit-identical</span></td>
+              <td>Confirms the prefill-capture chain is the whole mechanism; the deletion also removed 48 host-syncs/step and a leak.</td>
+            </tr>
+            <tr>
+              <td>Live engagement</td>
+              <td>Checkpoints stored and restored under CUDA-graph serving on a real task</td>
+              <td><span class="pill good">non-vacuous</span></td>
+              <td>ES_WRITE &gt; 2000 stores, seeded restores on real hits, zero garble in the trace &mdash; the historical cache-ON derail mode absent.</td>
+            </tr>
+            <tr>
+              <td>Behavioral matrix</td>
+              <td>Six arms (3 trees &times; cache ON/OFF) on the proxy task, proven config</td>
+              <td><span class="pill good">6/6 resolve</span></td>
+              <td>Retires the "cache-ON fails / cache-OFF resolves" pattern; behaviorally ON is indistinguishable from OFF.</td>
+            </tr>
+            <tr>
+              <td>Statistical resolve gate</td>
+              <td>N-repeat resolve-rate ON vs OFF, Fisher-exact, proven config</td>
+              <td><span class="pill warn">open</span></td>
+              <td>6/6 is three matched pairs &mdash; consistent, not powered. This is the remaining formal gate.</td>
+            </tr>
+            <tr>
+              <td>Temp-0.6 distributional gate</td>
+              <td>TV(q,p) drift at deployment temperature</td>
+              <td><span class="pill warn">not computable</span></td>
+              <td>The sampled q was never banked; producing a number would be a vacuous instrument. Only the temp-0 argmax pass exists (13.548% vs native 13.985%, overlapping CIs, Vol. III-era).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>One earlier gate deserves its correction in print. On June 30, before the thinking cap, the matrix's first two arms produced the opposite of the feared pattern: E5 cache-ON resolved in 55 turns while E5 cache-OFF flailed for 112 turns with zero patch attempts. If the cache were behaviorally lossy, cache-ON should fail more, not less. That flip, plus the 6/6 matrix a day later, is what converts "the cache no longer fails tasks" from hope into evidence &mdash; while the pending Fisher gate keeps it honest.</p>
+    </section>
+
+    <section class="section" id="measurement">
+      <h2>Measurement Discipline</h2>
+      <aside class="sidenote">
+        <p><strong>The rule:</strong> a number is quotable only if its denominator survived red-team. This campaign retired more headline numbers than it kept.</p>
+      </aside>
+      <p>The measurement stack is part of the contribution because the first version of nearly every number here was wrong. The two-lens convention (serving: Output-Speed and TTFT separately; agentic: wall-clock per task) replaced a string of self-inflicted artifacts &mdash; token-weighted throughput compared against per-request throughput, cross-boot walls compared as A/B, and engagement labels contaminated by warmup probes.</p>
+
+      <div class="equation" aria-label="Metric definitions">
+        <div>s_per_fwd = decode_forward_gpu_seconds / draft_events <span class="muted">(drafts == forwards at B=1, verified to &le;0.1%)</span></div>
+        <div>Output-Speed = decode_tokens / decode_seconds <span class="muted">(cache-neutral by construction)</span></div>
+        <div>TTFT = first-token latency per turn <span class="muted">(the cache metric; pairs with prefix hit %)</span></div>
+        <div>wall_clock_per_task = agent minutes to resolution <span class="muted">(deployment lens; path-confounded)</span></div>
+      </div>
+
+      <details class="fold">
+        <summary>
+          <span>The do-not-quote ledger</span>
+          <small>Numbers that exist in the notes and are explicitly not clean; kept here so they are never rediscovered as headlines.</small>
+        </summary>
+        <div class="fold-body">
+          <div class="table-wrap">
+            <table>
+              <caption>Retired or quarantined numbers and why.</caption>
+              <thead>
+                <tr>
+                  <th>Number</th>
+                  <th>What it seemed to say</th>
+                  <th>Why it is not quotable</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="num">~4.8&times;</td>
+                  <td>Conversation-tokens-serviced per wall-second, cache-ON vs OFF</td>
+                  <td>Counts cache-reused tokens as serviced work across different trajectories; the source doc says verbatim "do not quote it as one."</td>
+                </tr>
+                <tr>
+                  <td class="num">1463 vs 1921 s</td>
+                  <td>Task wall, cache-ON vs OFF</td>
+                  <td>Cross-boot N=1 with different agent trajectories; the same-boot A/B it called for was superseded by the matrix's TTFT lens.</td>
+                </tr>
+                <tr>
+                  <td class="num">&minus;30%</td>
+                  <td>A cache-ON decode tax</td>
+                  <td>Retracted: token-weighted 23.88 was compared against a per-request 16.8 (basis mismatch); on the matched task, cache-era decode actually beats historic.</td>
+                </tr>
+                <tr>
+                  <td class="num">~2&times;</td>
+                  <td>End-to-end tok/s from the cache</td>
+                  <td>Length-confounded; superseded by the two-lens matrix in the same document.</td>
+                </tr>
+                <tr>
+                  <td class="num">p = 0.004</td>
+                  <td>char-8 caused by cache&and;spec</td>
+                  <td>Label contamination: "engaged" was a per-boot max including the warmup probe; ~50 of 64 breaking requests were cold-cache. Overturned by its own red-team.</td>
+                </tr>
+                <tr>
+                  <td class="num">77.96</td>
+                  <td>Headline state drift</td>
+                  <td>Inflated by capture position/turn misalignment and outlier channels; honest per-element mean is &asymp; 0.0069. Kept only as a relative rung in the fix ladder.</td>
+                </tr>
+                <tr>
+                  <td>any resolve rate</td>
+                  <td>Model capability</td>
+                  <td>All runs here are capped proxy gates (cap=500), not SWE-Verified scores; the notes forbid reading them as capability.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+
+      <details class="fold">
+        <summary>
+          <span>The vacuous-gate problem and the engagement manifest</span>
+          <small>Three ways a fix flag can be ON and do nothing; the manifest that makes such verdicts untrusted.</small>
+        </summary>
+        <div class="fold-body">
+          <p>Three separate fixes in this campaign "validated" while never executing. The flag was not passed through docker (<code>-e</code> missing); the flag was dropped by the worker environment bridge; or the code-path predicate never matched, so the flag was live and the fix never fired. The first two surface in a bridge marker; the third only surfaces in an engagement counter, which is exactly how two earlier fixes looked validated while inert.</p>
+          <div class="grid">
+            <div class="box bad"><span class="tag">Mode e</span><p>Flag never entered the container. EXACT_SEED's first launcher pass missed the <code>-e</code> passthrough.</p></div>
+            <div class="box bad"><span class="tag">Mode bridge</span><p>Flag dropped by the worker env sidecar's allowlist before reaching the process that needed it.</p></div>
+            <div class="box bad"><span class="tag">Mode predicate</span><p>Flag live, predicate never matches: a conv fix keyed on a function name that never appeared; a checkpoint store keyed by an identity that never recurred.</p></div>
+          </div>
+          <p class="source-note">The manifest rule: for every active fix flag, assert worker-visible flag = 1 AND an engagement counter &gt; 0, from the correct process domain, or mark the verdict UNTRUSTED. A zero counter must be made honest by preconditioning on the traffic that should fire it.</p>
+        </div>
+      </details>
+    </section>
+
+    <section class="section" id="failure-library">
+      <h2>Failure Library: What Did Not Work</h2>
+      <aside class="sidenote">
+        <p><strong>Not a graveyard:</strong> the ledger is the receipt trail for why the final design is committed-state, single-realization, hash-keyed &mdash; and why the measurement doctrine is as paranoid as it is.</p>
+      </aside>
+      <p>The chase from poisoning to bit-exact took eleven days and burned through five fix designs, two carrier theories, and three headline numbers. The negative results are first-class content: they separate structural dead ends from bad evidence, and they are how the same mistakes stay dead.</p>
+
+      <div class="grid" aria-label="Failure categories">
+        <div class="box warn">
+          <span class="tag">Settled</span>
+          <h3>Some routes were real dead ends</h3>
+          <p>Recurrent-kernel tail recompute, pointer-substitution fixes, per-request checkpoint keying, and conv-window repairs as the poison fix each failed for structural reasons later evidence upheld.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Superseded</span>
+          <h3>Some conclusions were replaced</h3>
+          <p>The 8192 block-size "fix", the VERBATIM publisher, and the early speed headlines were real observations whose framing did not survive better instruments.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Contaminated</span>
+          <h3>Some evidence was quarantined</h3>
+          <p>The char-8 cache-conjunction verdict, the 30% decode-tax read, and a wrong-version source audit each had proof the measurement could not support its conclusion.</p>
+        </div>
+      </div>
+
+      <details class="fold">
+        <summary>
+          <span>Full failure ledger with later-status audit</span>
+          <small>Every rejected route, what it looked like, and what killed it.</small>
+        </summary>
+        <div class="fold-body">
+          <p class="failure-note"><strong>Status key:</strong> <span class="pill good">settled</span> later evidence still supports the negative result; <span class="pill warn">superseded</span> the observation was real but the framing is replaced; <span class="pill bad">contaminated</span> the measurement cannot support the conclusion; <span class="pill info">open</span> parked, not disproven.</p>
+
+          <div class="failure-ledger" aria-label="Detailed failure library">
+            <article class="failure-card settled">
+              <header><h3>Conv-window fixes as the poison fix</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked plausible:</strong> the conv copy-spec reconstructs a non-invertible window by position-shifting, a provable wrong-state bug (18.375 divergence at a multi-accept boundary), and upstream discussion pointed the same way.</p>
+              <ul>
+                <li><strong>Evidence:</strong> two independent conv fixes left the garble count flat (6 &rarr; 8 &rarr; 12 of 3948 dumps) and the agent outcome unchanged.</li>
+                <li><strong>Later check:</strong> the recompute-shadow scorecard measured the conv restore faithful 48/48 once the SSM fixes landed.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> a real bug is not automatically the bug. The conv fixes stayed as hygiene; the carrier was the SSM temporal snapshot. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/apc_ssm_drilldown_design.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Pointer-substitution SSM fix</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked plausible:</strong> if the snapshot reads the wrong row, redirect the copy-spec's source pointer to the committed leaf &mdash; minimal, surgical.</p>
+              <ul>
+                <li><strong>Evidence:</strong> diagnostics showed the substitution computed (<code>will_sub=True</code>) yet the agent still gave up empty; the reassigned spec never reached the batch copy's pointer buffer.</li>
+                <li><strong>Extra trap:</strong> the stale-detector was index-based, so any value-level fix would read "stale" forever &mdash; an index-vs-value confusion that misdirected the whole option.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> fix the value at the pointer the kernel will load, inside the function that owns the buffer &mdash; which is what SNAP_FIX does. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/why_option1_snapshot_side_failed.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>VERBATIM publisher</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked plausible:</strong> port SGLang's snapshot-verbatim discipline: at commit, copy the committed state into the exact row align will read.</p>
+              <ul>
+                <li><strong>Evidence:</strong> confirmed firing (48 diagnostic hits) but clobbered &mdash; the stock copy ran after it and overwrote the published row.</li>
+                <li><strong>Later check:</strong> retired when SNAP_FIX won the same objective at the copy-meta layer; its publisher plumbing was deliberately kept and later reused by EXACT_SEED.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> right discipline, wrong layer. Publishing before a stock overwrite is a race you lose; owning the copy source is not.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>HIT_RECURRENT_SUFFIX (recurrent tail recompute)</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked plausible:</strong> on a hit, recompute the suffix token-by-token with the recurrent kernel &mdash; an exact-looking O(64) repair.</p>
+              <ul>
+                <li><strong>Evidence:</strong> baked, then un-baked within a day: solve rates did not move (0/2 with, 0/3 without), and the structural reason emerged &mdash; the recurrent kernel's realization is not the chunked kernel's, so the repair cannot be bit-exact even when correct.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> the realization gap cannot be patched from the recurrent side; it defined EXACT_SEED's single-realization clause.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>mamba_block_size = 8192 band-aid</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked plausible:</strong> it was the first config that ever resolved the proxy task with spec and cache both live (1024 failed 0/3).</p>
+              <ul>
+                <li><strong>Evidence:</strong> it works by crossing ~3 boundaries instead of ~30 &mdash; diluting the realization error, not fixing it &mdash; and costs up to a block of mamba tail re-prefill per hit, taxing TTFT.</li>
+                <li><strong>Later check:</strong> with EXACT_SEED, block 1024 is lossless; the "block-1024 bad zone" was a pre-fix artifact. The default reverted the same day the fix landed.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> a dial that trades correctness against the metric you are optimizing is a symptom detector, not a fix. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_BLOCKSIZE_FINDING.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>char-8 as a cache&and;spec effect</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked plausible:</strong> a Fisher test on 1917 rollouts said the malformed-tool-call runaway co-occurred with engaged cache plus spec at p = 0.004.</p>
+              <ul>
+                <li><strong>Evidence:</strong> the "engaged" label was the per-boot cache maximum including the warmup probe; the smoking gun showed 82.4% "engaged" with 0.0% actual hit at the failing request. ~50 of 64 determinable breaks were cold-cache; char-8 fires cache-OFF too.</li>
+                <li><strong>Later correction:</strong> root-caused as a truncated tool-call re-parse in the transcript renderer and fixed proxy-side (65/67 real poison strings repaired, 100% no-400).</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> the strongest-looking statistic of the campaign was a labeling bug. Engagement must be measured at the failing request, not the boot. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_SESSION_FINDINGS_20260629.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>The 30% cache decode tax</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked plausible:</strong> cache-ON decode read 16.8 tok/s against the historic 23.88 headline.</p>
+              <ul>
+                <li><strong>Evidence:</strong> basis mismatch &mdash; 23.88 was token-weighted, the comparison was per-request (same run: 18.51); on the matched task, cache-era decode beats historic (17.87 vs 17.61).</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> same basis on both sides of every comparison, or no comparison. Formally retracted in the results doc.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Per-request checkpoint keying</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked plausible:</strong> requests are the natural unit of serving state.</p>
+              <ul>
+                <li><strong>Evidence:</strong> no request identity survives prefill &rarr; decode &rarr; next turn (0/4 store&cap;drain overlap, 91k drain misses); a decode-side drain also never crosses a block boundary (~128 tokens/turn).</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> the only turn-stable identity is the prefix content hash the cache manager itself matches on &mdash; so that is the key.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Layer-0 drift as a restore bug</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked plausible:</strong> 30.11 max-abs on one layer screams corruption.</p>
+              <ul>
+                <li><strong>Evidence:</strong> layer 0 is a forget-gate&asymp;1 accumulator with state magnitude ~90; the reducer pairs different sequence positions; the no-cache control differs from itself by 38.44 under the same pairing.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> a flat absolute threshold cannot judge an accumulator; the artifact was in the diagnostic, and the verdict stood on the other 47 layers plus the control.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Decode-time checkpoint committer</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked plausible:</strong> checkpoints during decode would keep the cache fresh past the prefill boundary.</p>
+              <ul>
+                <li><strong>Evidence:</strong> it never fired in the working chain (publish counter zero), cost 48 host-syncs per step plus a leak and a per-token clone, and deleting its 608 lines re-verified bit-identical.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> vestigial by measurement. The prefill-capture chain is the entire mechanism.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>Root-causing on the wrong vLLM version</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked plausible:</strong> an early source audit cited exact files and line numbers &mdash; from v0.22.0, while the deployment runs 0.19.2rc1.dev134.</p>
+              <ul>
+                <li><strong>Evidence:</strong> the cited paths did not exist in the deployed build; the structural conclusions happened to survive re-verification on the real source, the citations did not.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> version-pin the source you audit. Every mechanism claim in this page was re-grounded on the deployed 0.19.2 tree.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>Blaming CUDA graphs for the garble</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked plausible:</strong> full-graph capture plus cache-ON garbled while eager did not, so PIECEWISE capture shipped as a mitigation.</p>
+              <ul>
+                <li><strong>Evidence:</strong> the graph was amplifying the lossy cache, not causing it; with EXACT_SEED live, full-graph capture plus cache-ON runs coherent (46/55 cached turns, zero garble) and full graph mode was re-baked.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> when two suspects co-occur, fix the state and retest the graph &mdash; the cheaper suspect was downstream.</p>
+            </article>
+
+            <article class="failure-card open">
+              <header><h3>Forked tree arms under a nudge-free harness</h3><span class="pill info">open</span></header>
+              <p><strong>Why it matters here:</strong> on the qwen-code harness (no auto-continue net), native MTP-5 with the cache resolves 4/5 with zero char-8, while a forked-kernel tree arm stalls 8/8 with empty patches.</p>
+              <ul>
+                <li><strong>Evidence so far:</strong> the forked config degrades structured tool-call output; the cache is exonerated (ON in both arms). TREE_ATTN vs num_spec vs topology remain confounded.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> the lossless deployment configuration today is native MTP-5 + EXACT_SEED; the forked tree arms wait on a de-confounding grid. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CHAIN5_VS_NATIVE_MTP_PLAN.md">Receipt</a>.</p>
+            </article>
+          </div>
+        </div>
+      </details>
+    </section>
+    <section class="section" id="limitations">
+      <h2>Threats to Validity</h2>
+      <aside class="sidenote">
+        <p><strong>Honest scope:</strong> the mechanism claim is strong (bit-exact state restore); the behavioral claim is consistent but unpowered; the deployment recommendation is current as of 2026-07-02 and carries an open confound.</p>
+      </aside>
+      <div class="grid">
+        <div class="box warn">
+          <span class="tag">Sample</span>
+          <h3>One proxy task, one run per arm</h3>
+          <p>The matrix is astropy-12907 at temp 0.6 with a single seed per arm. TTFT and hit rate replicate across arms; resolve outcomes and wall-clock do not constitute statistics. The N-repeat Fisher-exact gate on the proven config is the open formal step, and solve rates here are capped proxy-gate numbers, not SWE-Verified scores.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Distribution</span>
+          <h3>Temp-0.6 drift is unmeasured</h3>
+          <p>The binding distributional gate at deployment temperature is not computable from banked data (the sampled q was never captured); what exists is bit-exact state restore plus the Vol. III-era temp-0 argmax pass. A dedicated capture is queued.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Fork status</span>
+          <h3>Tree arms carry an open defect</h3>
+          <p>As of 2026-07-02, on a nudge-free harness the forked-kernel tree config degrades structured tool-call output (8/8 empty patches) while native MTP-5 with the cache resolves 4/5 with zero char-8. The cache is exonerated &mdash; it was on in both arms &mdash; but the deployable lossless config today is native MTP-5 + EXACT_SEED, and TREE_ATTN / num_spec / topology remain confounded.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Defaults</span>
+          <h3>Proven is not yet default</h3>
+          <p>EXACT_SEED is proven at L0, used by every gate, and behaviorally validated, but the launcher still ships it default-off pending the bake task. The char-8 proxy repair landed on 2026-07-01; a post-fix full-scale rerun of the earlier regression comparison has not happened yet.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="config">
+      <h2>Canonical Config Appendix</h2>
+      <aside class="sidenote">
+        <p><strong>Why include config:</strong> for a caching result the flags are the paper. One missing flag silently moves the run onto a different cache mode, block geometry, or kernel realization &mdash; and this campaign has the vacuous-gate scars to prove it.</p>
+      </aside>
+      <p>The launcher is the declared source of truth; where any note disagrees with it, the launcher wins. The cache stack below is what the six-arm matrix ran, and what the pending bake task will make the default.</p>
+      <details class="fold">
+        <summary>
+          <span>Config table: load-bearing cache flags</span>
+          <small>Kept as appendix material so the result remains reproducible.</small>
+        </summary>
+        <div class="fold-body">
+          <div class="table-wrap">
+            <table>
+              <caption>Canonical cache configuration and why each choice matters.</caption>
+              <thead>
+                <tr>
+                  <th>Config surface</th>
+                  <th>Load-bearing choice</th>
+                  <th>Why it matters</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Master switch</td>
+                  <td><code>FR13_ENABLE_APC=1</code> (default 0)</td>
+                  <td>Gates the whole stack; the default-off path is byte-identical to the locked pre-cache serve command.</td>
+                </tr>
+                <tr>
+                  <td>Cache mode</td>
+                  <td><code>--enable-prefix-caching --enable-chunked-prefill</code> (align auto-forced)</td>
+                  <td>Qwen3-Next rejects <code>mamba_cache_mode="all"</code> with spec decode; align is the only available mode and is what the contract hardens.</td>
+                </tr>
+                <tr>
+                  <td>Block geometry</td>
+                  <td><code>MAMBA_BLOCK_SIZE=1024</code> + <code>APC_BLOCK_SIZE=1024</code></td>
+                  <td>1024 = 16&times;64 makes checkpoints FLA-chunk-aligned; align's own 816 = 16&times;51 cannot be bit-exact. The 8192 band-aid is retired.</td>
+                </tr>
+                <tr>
+                  <td>Step/boundary coupling</td>
+                  <td><code>max_num_batched_tokens = mamba_block_size</code></td>
+                  <td>One boundary per scheduler step; without it, intermediate boundaries are cached with overshoot state (the June-21 gross poison).</td>
+                </tr>
+                <tr>
+                  <td>State dtype</td>
+                  <td><code>--mamba-ssm-cache-dtype float32</code></td>
+                  <td>Default <code>auto</code> truncates the write-back to bf16 and reopens a precision hole under the fp ceiling.</td>
+                </tr>
+                <tr>
+                  <td>Write-side fixes</td>
+                  <td><code>FR13_APC_SNAP_FIX=1</code>, <code>FR13_APC_SNAP_FIX_ZEROACCEPT=1</code> (baked)</td>
+                  <td>Committed-leaf snapshot source under the tree committer; zero-accept steps publish the committed root.</td>
+                </tr>
+                <tr>
+                  <td>Restore fix</td>
+                  <td><code>FR13_APC_EXACT_SEED=1</code> (gate config; launch default still 0)</td>
+                  <td>The chunked-realization checkpoint chain of this paper. Requires SNAP_FIX; supersedes the recurrent-suffix repair.</td>
+                </tr>
+                <tr>
+                  <td>Graph mode</td>
+                  <td><code>CUDAGRAPH_MODE=FULL_AND_PIECEWISE</code> (re-baked 2026-06-30)</td>
+                  <td>The earlier full-graph garble was the lossy cache amplified, not a graph bug; with EXACT_SEED, full capture is clean.</td>
+                </tr>
+                <tr>
+                  <td>Spec method</td>
+                  <td><code>qwen3_5_mtp</code>; <code>num_speculative_tokens</code> = tree node count (5 chain5 / 6 cat6root / 8 cat8), tree arms via explicit token-tree literal</td>
+                  <td>The speculative half of the interaction under test.</td>
+                </tr>
+                <tr>
+                  <td>Proxy layer</td>
+                  <td><code>LUMO_PROXY_THINK_BUDGET=500</code> (matrix arms); truncated tool-call JSON repair on (default)</td>
+                  <td>The thinking cap cuts a give-up mode orthogonal to caching; the JSON repair closes the cache-independent char-8 flake.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="section" id="receipts">
+      <h2>Source Trail</h2>
+      <p>The claims above are grounded in tracked evidence files, raw workflow verdicts, code, and upstream issues. The APC campaign was developed on <code>fr13-prefix-cache</code>, merged to <code>main</code> on 2026-06-26, and hardened on <code>main</code> through HEAD <code>4005bf91</code> (2026-07-02).</p>
+      <details class="fold">
+        <summary>
+          <span>Full source trail</span>
+          <small>Links to repo artifacts, workflow verdicts, code paths, upstream issues, and prior-work papers.</small>
+        </summary>
+        <div class="fold-body">
+          <ul class="receipt-list">
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_PAPER_RESULTS_AND_VERDICTS.md">Results &amp; verdicts (living doc)</a> - the two-lens matrix, decode-neutrality, behavioral losslessness, and the decode-tax retraction.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_EXACT_SEED_SUCCESS.md">EXACT_SEED L0 success record</a> - the bit-exact gate, the six-part fix chain, and the layer-0 artifact analysis.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_SESSION_FINDINGS_20260629.md">2026-06-29 session findings</a> - char-8 overturned, the kernel-realization root cause, and the redesign greenlight.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_LOSSLESS_REDESIGN.md">Lossless redesign</a> - R1 single realization / R2 fine checkpoints / R3 fp32, grounded on the deployed 0.19.2 source.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_STATUS.md">Mid-campaign evidence record (frozen 2026-06-22)</a> - the spine-lossless proof, the SGLang port table, and the do-not-quote speed framing.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_BLOCKSIZE_FINDING.md">Block-size finding</a> - 8192 resolves / 1024 fails, and why that was a band-aid.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_EXACT_SEED_PIVOT_CHECKPOINT.md">Exact-seed pivot checkpoint</a> - the identity-keying dead ends that shaped the block-hash design.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/prefix_cache_enable_plan.md">Enable plan</a> - the SGLang-informed disciplines and the flag-gated rollout.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/apc_gate0_verdict.md">Gate-0 verdict</a> - engagement, non-vacuous hits, and the scalar-metric blindspot lesson.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/apc_armA_poisoning_finding.md">Arm-A poisoning finding</a> - the NO-GO evidence chain: accept collapse, garble census, empty patches.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/apc_ssm_drilldown_design.md">SSM drill-down</a> - the 480/480 stale-snapshot taps and the committed-leaf row identification.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/apc_ssm_carrier_FIXED.md">SSM carrier fixed</a> - the byte-lossless A/B that validated the write-side fix in deployment form.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/why_option1_snapshot_side_failed.md">Why option 1 failed</a> - the pointer-substitution forensics and the index-vs-value trap.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/sglang_mamba_radix_cache_design.md">SGLang MambaRadixCache source-dive</a> - the reference design and the port/no-port disciplines table.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/vllm_43559_rootcause.md">vLLM #43559 root cause</a> - the two-carrier decomposition and the fix-PR landscape.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/research/fr13_workflows/apc_flag_cleanup_plan.md">Flag cleanup plan</a> - the keep/remove lists and the publisher-reuse constraint.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_UNIFIED_ENGAGEMENT_GATE.md">Unified engagement gate</a> - the three vacuity modes and the manifest design.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SPEC_CACHE_DEGENERATION_LITERATURE.md">Spec&times;cache degeneration literature</a> - the vLLM issue landscape mapped to this config.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CHAR8_REGRESSION_FINDINGS.md">char-8 regression findings</a> - the mechanism, the cache-independence stats, and the proxy fix.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_UNRESOLVED_FAILURE_MODES.md">Unresolved failure modes</a> - the 57/33/10 failure split and the degeneration watchlist.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TEMP06_DRIFT_GATE.md">Temp-0.6 drift gate</a> - why the distributional number is not computable from banked data.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CHAIN5_VS_NATIVE_MTP_PLAN.md">chain5-vs-native localization</a> - the 2026-07-02 qwen-code verdicts behind the deployment recommendation.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SOLVERATE_HISTORY.md">Solve-rate history (longitudinal run table)</a> - longitudinal context, with its own corrected baseline.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_launch_forked_fa2_tree_server.sh">Forked launcher</a> - the bake block; the declared source of truth for flag state.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr10_phase4_patch_vllm_tree_gdn.py">vLLM patcher</a> - SNAP_FIX, the EXACT_SEED chain, and the engagement counters.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_standard_metrics.py">Standard-lens reducer</a> - the serving/agentic two-lens metric converter.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/inference_proxy.py">Inference proxy</a> - the thinking cap and the truncated tool-call JSON repair.</li>
+            <li><a href="https://github.com/vllm-project/vllm/issues/43559">vLLM #43559</a> - the APC + MTP accuracy-drop anchor issue (Qwen3.6 GDN family).</li>
+            <li><a href="https://github.com/vllm-project/vllm/pull/45477">vLLM #45477</a>, <a href="https://github.com/vllm-project/vllm/pull/43650">#43650</a>, <a href="https://github.com/vllm-project/vllm/pull/45614">#45614</a>, <a href="https://github.com/vllm-project/vllm/pull/40738">#40738</a>, <a href="https://github.com/vllm-project/vllm/pull/26807">#26807</a> - the open upstream fix-PR cluster; <a href="https://github.com/vllm-project/vllm/pull/45473">#45473</a> is the one merged (and insufficient) piece.</li>
+            <li><a href="https://github.com/vllm-project/vllm/issues/45238">vLLM #45238</a> - the silent zero-hit boundary trap behind the hit-rate gate.</li>
+            <li><a href="https://github.com/vllm-project/vllm/issues/39809">vLLM #39809</a> - the spec-reject SSM rollback gap in the same defect class.</li>
+            <li><a href="https://github.com/sgl-project/sglang/issues/25587">SGLang #25587</a> - conv-state restoration after partial acceptance as a live hybrid-MTP failure mode (NPU-scoped by its own report).</li>
+            <li><a href="https://pytorch.org/blog/hybrid-models-meet-sglang-more-than-full-attention/">Hybrid Models Meet SGLang</a> - production framing of hybrid-state serving.</li>
+            <li><a href="https://arxiv.org/abs/2606.20537">Execution-State-Capsules</a> and <a href="https://arxiv.org/abs/2605.05219">Sparse-Prefix-Caching</a> - aligned recurrent checkpointing; the alignment remark underpinning the 64-aligned clause.</li>
+            <li><a href="https://arxiv.org/abs/2509.19873">SpecMamba</a> - speculative decoding with Mamba state backtracking, the nearest spec-side prior work.</li>
+            <li><a href="https://www.ai21.com/blog/vllm-debugging-mamba-bug/">AI21: one token to corrupt them all</a> - the state-diff debugging methodology precedent.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/papers/gdn-tree-scan-mlsys/main.pdf">Vol. III formal PDF</a> - the tree verifier this cache serves.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Volume IV. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a>, <a href="round-f.html">Vol. II</a>, and <a href="gdn-tree-scan.html">Vol. III</a>, but this page does not require them. Last updated 2026-07-02.</p>
+  </footer>
+</div>
+</body>
+</html>

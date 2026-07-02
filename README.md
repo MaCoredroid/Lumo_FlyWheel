@@ -8,6 +8,7 @@ It contains self-contained HTML mini-papers:
 - [`index.html`](index.html): Track-B Round-4b speculative-decoding ablation.
 - [`round-f.html`](round-f.html): Volume II, the Round-F / Gated-DeltaNet reversal.
 - [`gdn-tree-scan.html`](gdn-tree-scan.html): Volume III preview for the lossless GDN tree-scan paper.
+- [`gdn-prefix-cache.html`](gdn-prefix-cache.html): Volume IV, bit-exact prefix caching (APC / EXACT_SEED) under speculative decoding.
 
 The full source, run drivers, graders, and formal report live on
 [`main`](https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main).
