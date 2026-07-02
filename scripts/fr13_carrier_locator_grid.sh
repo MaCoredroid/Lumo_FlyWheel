@@ -74,8 +74,11 @@ for c in cells:
     if not os.path.isfile(f):
         print(f"cell {c}: NO RESULT"); continue
     s = json.load(open(f))["summary"]; rows[c] = s
+    sp = s.get("spec") or {}
     print(f"cell {c:<2}({kindof[c]:<18}) malformed_rate={s['malformed_rate']}  "
           f"clean_toolcall_rate={s['clean_toolcall_rate']}  n_ok={s['n_ok']}  labels={s['labels']}")
+    print(f"      spec(same-prompt): accepted/step={sp.get('accepted_per_step')} accept_rate={sp.get('accept_rate')} "
+          f"draft_width={sp.get('draft_width')}")
 def r(c): return rows.get(c, {}).get("malformed_rate")
 def read(name, hi, lo, verdict_hi):
     if hi in rows and lo in rows:

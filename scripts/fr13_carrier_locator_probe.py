@@ -41,6 +41,42 @@ def post(endpoint, body, timeout=240):
         return json.loads(r.read())
 
 
+def spec_counters(metrics_endpoint):
+    """Snapshot vLLM spec-decode counters (for a clean same-prompt accept-rate per cell)."""
+    keys = ("vllm:spec_decode_num_draft_tokens_total", "vllm:spec_decode_num_accepted_tokens_total",
+            "vllm:spec_decode_num_drafts_total", "vllm:generation_tokens_total")
+    out = dict.fromkeys(keys, 0.0)
+    try:
+        req = urllib.request.Request(metrics_endpoint, headers={"Authorization": "Bearer EMPTY"})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            for ln in r.read().decode("utf-8", "ignore").splitlines():
+                for k in keys:
+                    if ln.startswith(k) and (" " in ln):
+                        try:
+                            out[k] = float(ln.split()[-1])
+                        except Exception:
+                            pass
+    except Exception:
+        return None
+    return out
+
+
+def spec_delta(before, after):
+    if not before or not after:
+        return None
+    d = {k: after.get(k, 0) - before.get(k, 0) for k in before}
+    dt = d["vllm:spec_decode_num_draft_tokens_total"]
+    ac = d["vllm:spec_decode_num_accepted_tokens_total"]
+    dr = d["vllm:spec_decode_num_drafts_total"]
+    gt = d["vllm:generation_tokens_total"]
+    return {
+        "drafts": dr, "draft_tokens": dt, "accepted_tokens": ac, "generation_tokens": gt,
+        "accept_rate": round(ac / dt, 4) if dt else None,
+        "accepted_per_step": round(ac / dr, 3) if dr else None,
+        "draft_width": round(dt / dr, 2) if dr else None,
+    }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--endpoint", default="http://127.0.0.1:9950/v1/chat/completions")
@@ -65,6 +101,8 @@ def main():
     rows = []
     n_ok = n_err = 0
     t0 = time.time()
+    metrics_endpoint = a.endpoint.rsplit("/v1/", 1)[0] + "/metrics"
+    spec_before = spec_counters(metrics_endpoint)   # clean same-prompt spec-accept per cell
     for pf in files:
         pr = load_prompt(pf)
         if not pr:
@@ -99,12 +137,14 @@ def main():
                 row["logprobs"] = ch.get("logprobs")
             rows.append(row)
 
+    spec_after = spec_counters(metrics_endpoint)
     total = n_ok
     malformed = labels.get("malformed_markup", 0)
     summary = {
         "cell": a.cell, "endpoint": a.endpoint, "model": a.model,
         "n_prompts": len(files), "samples": a.samples, "n_ok": n_ok, "n_err": n_err,
         "elapsed_s": round(time.time() - t0, 1),
+        "spec": spec_delta(spec_before, spec_after),   # accept_rate/accepted_per_step on THESE prompts
         "labels": dict(labels),
         "malformed_markup": malformed,
         "malformed_rate": round(malformed / total, 4) if total else None,
