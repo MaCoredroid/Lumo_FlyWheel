@@ -114,6 +114,18 @@ case "$KIND" in
         FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=1
         MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32
         FR13_APC_REQUIRE_SNAP_FIX=1) ;;
+  # flash_ns8_exseed = CARRIER-LOCATOR cell C: identical to nativemtp5_exseed (clean FLASH_ATTN
+  # naive-MTP kernel, EXACT_SEED cache) but num_speculative_tokens=8 -> isolates draft DEPTH (5->8)
+  # under the clean kernel. If this stays clean while cat8 corrupts, depth is not the carrier.
+  flash_ns8_exseed) LAUNCHER=forked; TREEARG=""; EXPECT_RATIO=8; declare -a XFLAGS=(
+        ATTENTION_BACKEND=FLASH_ATTN
+        'SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":8}'
+        FR10_DECODE_MODE_DEFAULT=naive_mtp
+        FR13_REPLAY_ROUTE=0 FR13_FA2_TREE_BIAS=0 FR13_FA2_PREFILL_NATIVE=0
+        FR13_TREE_SAMPLE_ROW=0 FR13_CONV_COMMITTED_PATH=0
+        FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=1
+        MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32
+        FR13_APC_REQUIRE_SNAP_FIX=1) ;;
   cat6root)  LAUNCHER=forked; TREEARG="$CAT6ROOT_TREE"; EXPECT_RATIO=6;  declare -a XFLAGS=() ;;
   chain5)    LAUNCHER=forked; TREEARG="$CHAIN5_TREE";   EXPECT_RATIO=5;  declare -a XFLAGS=() ;;
   cat10)     LAUNCHER=forked; TREEARG="$CAT10_TREE";    EXPECT_RATIO=10; declare -a XFLAGS=() ;;
@@ -132,7 +144,7 @@ esac
 # and FR10_DECODE_MODE_DEFAULT=naive_mtp). Both prove the drafter ran via the launcher-
 # agnostic draft_tokens/drafts==5 spec-ratio assert, NOT via TREE_ATTN/tree env.
 NATIVE_DECODE=0
-if [[ "$LAUNCHER" == "native" || "$KIND" == "nativemtp5_exseed" ]]; then NATIVE_DECODE=1; fi
+if [[ "$LAUNCHER" == "native" || "$KIND" == "nativemtp5_exseed" || "$KIND" == "flash_ns8_exseed" ]]; then NATIVE_DECODE=1; fi
 # Per-request decode-mode xarg for the warmup probe: naive_mtp for native-decode arms
 # (tree_mtp would ask the patched resolver for a tree that does not exist), tree_mtp
 # for the tree/reshape arms. The native launcher ignores the xarg (no patcher), but
@@ -416,6 +428,25 @@ fi
 
 curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" \
   > "$ARMDIR/reset_prefix_cache.txt" 2>&1 || echo "WARN: reset_prefix_cache failed (non-fatal)"
+
+# ---- PROBE_ONLY: generation-level carrier locator (skip offload proxy + SWE) ----
+# The server is booted, healthy, spec-engaged and APC-verified above. PROBE_ONLY replays banked
+# tool-call-boundary prompts N times DIRECTLY against local vLLM (temp 0.6 lives in the probe body)
+# and measures the malformed-markup emission rate — no agent, no nudge net, no offload tunnel = the
+# clean de-confounder for {FLASH,TREE}x{ns5,ns8}. Additive: PROBE_ONLY unset => original SWE path.
+if [[ "${PROBE_ONLY:-0}" == "1" ]]; then
+  : "${PROBE_PROMPTS:?PROBE_ONLY needs PROBE_PROMPTS=<dir of chatreq_*.json>}"
+  echo "[probe-only] carrier locator: cell=$ARM prompts=$PROBE_PROMPTS samples=${PROBE_SAMPLES:-20} limit=${PROBE_PROMPT_LIMIT:-20}"
+  PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/python scripts/fr13_carrier_locator_probe.py \
+    --endpoint "http://127.0.0.1:$PORT/v1/chat/completions" --model qwen3.6-27b \
+    --cell "$ARM" --prompts "$PROBE_PROMPTS" \
+    --prompt-limit "${PROBE_PROMPT_LIMIT:-20}" --samples "${PROBE_SAMPLES:-20}" \
+    ${PROBE_LOGPROBS:+--logprobs} \
+    --out "$ARMDIR/carrier_probe.json" > "$ARMDIR/carrier_probe_stdout.log" 2>&1
+  PRC=$?
+  echo "[probe-only] rc=$PRC -> $ARMDIR/carrier_probe.json"; tail -30 "$ARMDIR/carrier_probe_stdout.log" 2>/dev/null || true
+  exit $PRC
+fi
 
 # ---- launch canonical proxy (forced temp 0.0 + pair dumps), OFFLOAD-gated ----
 mkdir -p "$ARMDIR/proxy_pair_dumps" "$ARMDIR/proxy_request_dumps"
