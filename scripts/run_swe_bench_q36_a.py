@@ -85,6 +85,30 @@ CODEX_TEMPLATE = (
     "--model {model}"
 )
 
+# qwen-code agent harness (SWE_AGENT=qwen_code). Qwen's own CLI: native XML tools +
+# search/replace edits over /v1/chat/completions — aligned with Qwen's training, unlike
+# codex's V4A apply_patch. ENTRYPOINT of qwen-code-runner:v1 is `qwen`, so we append its
+# flags; the prompt is appended as the LAST argv element = the value of the trailing `-p`
+# (works for both the local argv path and the remote shlex.quote path). --yolo auto-approves
+# all edits/shell; --max-session-turns bounds a task (no harness wall) so a stuck task can't
+# hang the serial queue. Sampling (temp 0.6) is forced proxy-side on /v1/chat/completions.
+QWEN_CODE_TEMPLATE = (
+    "docker run --rm --name {container_name} --network=host -u 1000:1000 "
+    "-v {workspace}:/workspace:rw "
+    "-e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} "
+    "-e OPENAI_MODEL={model} -e QWEN_MODEL={model} -e HOME=/tmp "
+    "-w /workspace qwen-code-runner:v1 "
+    "--yolo --output-format json --max-session-turns 80 -p"
+)
+
+
+def _agent_template() -> str:
+    """Pick the agent command template from SWE_AGENT (default 'codex' = byte-identical)."""
+    agent = os.environ.get("SWE_AGENT", "codex").strip().lower()
+    if agent in ("qwen_code", "qwen-code", "qwen"):
+        return QWEN_CODE_TEMPLATE
+    return CODEX_TEMPLATE
+
 # Default operator prompt (first attempt).
 DEFAULT_CODEX_PROMPT = (
     "Read the task prompt at /workspace/AGENTS.md and complete it in this workspace. "
@@ -460,7 +484,7 @@ def _run_codex(
       - stderr_path: codex_stderr.log (codex CLI stderr noise)
     """
     container_name = f"swe-codex-{instance_id.replace('/', '_')[:48]}-{int(time.time())}"
-    cmd = CODEX_TEMPLATE.format(
+    cmd = _agent_template().format(
         container_name=container_name,
         workspace=str(workspace),
         endpoint=endpoint,
@@ -706,7 +730,7 @@ def _run_codex_remote(
 
     # the codex docker on alienware mounts the remote workspace + hits the
     # alienware-local proxy endpoint. ~ expands on the remote login shell.
-    remote_cmd = CODEX_TEMPLATE.format(
+    remote_cmd = _agent_template().format(
         container_name=container_name,
         workspace=remote_ws,
         endpoint=endpoint,

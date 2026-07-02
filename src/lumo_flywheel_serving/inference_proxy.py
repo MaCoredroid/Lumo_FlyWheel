@@ -157,7 +157,72 @@ def is_inference_get_path(path: str) -> bool:
     if not path:
         return False
     base = path.split("?", 1)[0]
-    return base in INFERENCE_GET_PATHS
+    if base in INFERENCE_GET_PATHS:
+        return True
+    # qwen-code (OpenAI-compatible provider) probes GET /v1/models at startup and
+    # hard-fails on a 403; codex 0.128 does NOT (and a bare /v1/models passthrough
+    # was reverted for it). Gate the allowance behind an env flag so the codex path
+    # stays byte-identical (default 403) and only the qwen-code arm opts in.
+    if base == "/v1/models" and os.environ.get(
+        "LUMO_PROXY_ALLOW_MODELS_GET", ""
+    ).lower() in {"1", "true", "yes"}:
+        return True
+    return False
+
+
+def normalize_chat_completions_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Apply the same env-gated sampling pins to a /v1/chat/completions body.
+
+    qwen-code (and any OpenAI-chat client) hits /v1/chat/completions, which the
+    proxy previously forwarded VERBATIM — so LUMO_PROXY_FORCE_TEMPERATURE (the
+    temp-0.6 hard constraint) never reached it. This mirrors the sampling pins from
+    normalize_responses_request_payload onto the chat schema's TOP-LEVEL keys
+    (same names: temperature/top_p/top_k/presence_penalty/min_p; but max_tokens,
+    NOT max_output_tokens). Every knob is default-OFF (unset -> body unchanged), so
+    with no env set this is a byte-identical passthrough (preserves the lossless A/B).
+    """
+    normalized = dict(payload)
+    _ft = os.environ.get("LUMO_PROXY_FORCE_TEMPERATURE")
+    if _ft:
+        try:
+            normalized["temperature"] = float(_ft)
+        except ValueError:
+            pass
+    _ftp = os.environ.get("LUMO_PROXY_FORCE_TOP_P")
+    if _ftp:
+        try:
+            normalized["top_p"] = float(_ftp)
+        except ValueError:
+            pass
+    _ftk = os.environ.get("LUMO_PROXY_FORCE_TOP_K")
+    if _ftk:
+        try:
+            normalized["top_k"] = int(_ftk)
+        except ValueError:
+            pass
+    _fpp = os.environ.get("LUMO_PROXY_FORCE_PRESENCE_PENALTY")
+    if _fpp:
+        try:
+            normalized["presence_penalty"] = float(_fpp)
+        except ValueError:
+            pass
+    _fmp = os.environ.get("LUMO_PROXY_FORCE_MIN_P")
+    if _fmp:
+        try:
+            normalized["min_p"] = float(_fmp)
+        except ValueError:
+            pass
+    _fmo = os.environ.get("LUMO_PROXY_MAX_OUTPUT_TOKENS")
+    if _fmo:
+        try:
+            cap = int(_fmo)
+        except ValueError:
+            cap = None
+        if cap is not None:
+            cur = normalized.get("max_tokens")
+            if not isinstance(cur, int) or cur > cap:
+                normalized["max_tokens"] = cap
+    return normalized
 
 
 def normalize_responses_request_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -2216,6 +2281,27 @@ def build_proxy_handler(
                     request_json = parsed_json if isinstance(parsed_json, dict) else None
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     request_json = None
+                # qwen-code path: force sampling pins (temp 0.6 hard constraint) on the
+                # chat body and re-serialize. Env-gated -> unset = byte-identical passthrough
+                # (so the codex/responses regime and the lossless A/B are unaffected).
+                if isinstance(request_json, dict):
+                    req_dump_dir = os.environ.get("LUMO_PROXY_REQUEST_DUMP_DIR")
+                    if req_dump_dir:
+                        try:
+                            import pathlib as _pl
+                            _pl.Path(req_dump_dir).mkdir(parents=True, exist_ok=True)
+                            with open(f"{req_dump_dir}/chatreq_{int(time.time()*1000)}.json", "wb") as _rf:
+                                _rf.write(raw_body)
+                        except Exception:
+                            pass
+                    normalized_req = normalize_chat_completions_request_payload(request_json)
+                    payload = json.dumps(normalized_req).encode("utf-8")
+                    headers["Content-Type"] = "application/json"
+                    request_sampling = {
+                        key: normalized_req[key]
+                        for key in ("temperature", "top_p", "max_tokens", "stream")
+                        if key in normalized_req
+                    }
             request_class = _extract_request_class(request_json, self.headers)
             try:
                 ticket = admission.acquire(request_class)
