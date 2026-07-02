@@ -107,3 +107,32 @@ the forked (tree) kernels need a nudge net.
 MUST be a tool call") when choices[].message has no tool_calls; (or a qwen-code-side continue-on-no-tool-call
 setting). Then re-run cat8 + the replica gate. The replica gate (native vs chain5) is CONFOUNDED without this
 (chain5=forked would stall like cat8), so it is NOT launched.
+
+---
+## LOCALIZATION VERDICT (workflow wke1prow4, 2026-07-02) — forked config degrades structured output; NOT parser, NOT small-N; but CONFOUNDED
+Forked cat8+qwen-code stalls localized (trace + vLLM-parser analysis, high conf on the mechanism):
+- **NOT the vLLM #39056 parser bug (decisively ruled out):** 0 well-formed `<function=…>` XML-in-text on BOTH
+  arms; NATIVE logs MORE parse warnings (25/156 ≈16%) than FORKED (10/54 ≈20%) yet native RESOLVES 4/5 by
+  recovering across turns. vLLM correctly logs forked output as "not well-formed (invalid token)"/"mismatched
+  tag" — the parser is right; the forked config GENERATES structurally-broken markup. A #39055 promotion would
+  not help (broken XML is outside reasoning + native already resolves at higher warning rate).
+- **Failure taxonomy (9 forked tasks, corrected by the adversarial reviewer):** 3/9 malformed tool-call XML
+  (13453,13579,13977 — the carrier), rest heterogeneous: empty-args loop (14096), degenerate thinking
+  (13398,14182), off-topic-but-real-work (13033), real-work-no-patch (13236,12907). Net: forked = structured-
+  output degrader + a give-up amplifier; native = 4/5, 5/5 real multi-turn, 0 give-ups.
+- **LINCHPIN:** astropy-13453 resolves on native (20 turns, 41 clean tool_use, 429B) but stalls empty turn-1 on
+  forked (malformed `<tool_search>…</function></tool_call>` XML+JSON mix). Resolves in ~13 native-class runs;
+  collapses to empty ONLY on forked. Strong, but the clean in-run A/B is N=2 (native ran 5 tasks, forked 9,
+  overlap only 12907+13453) — "small-N strongly-supported by cross-config history, NOT an airtight matched control."
+- **CONFOUND (must de-confound):** the arms differ in THREE coupled vars — attention_backend TREE_ATTN vs
+  FLASH_ATTN, num_spec 8 vs 5, tree-topology vs linear chain. prefix_caching+EXACT_SEED ON in BOTH (cache is NOT
+  the diff). So "the kernel is the only diff" is FALSE; root could be num_spec=8 / tree-spec-acceptance collapse.
+- **auto-continue = partial workaround** (not expected): rescues only the malformed-XML subset (~3/9), useless
+  for the degenerate/off-topic ones. **fix_kind = kernel_carrier_accept: native (FLASH_ATTN, num_spec=5) is the
+  lossless config; do NOT ship forked; parser/proxy won't rescue it.**
+- **This is the XML dialect of the char-8 carrier** (malformed tool-call JSON on codex) — same forked/tree/spec
+  structured-output-boundary fragility, unprotected because qwen-code hits /v1/chat/completions.
+**NEXT:** (1) native-16 run (run_20260702T135901Z) = the matched native control on the SAME 16-task set the
+verdict said was missing. (2) DE-CONFOUNDING GRID on 13453(+13579): A native FA2 ns5 / B forked TREE ns8 /
+C FLASH_ATTN ns8 / D TREE_ATTN ns5 — inspect post-</think> tool-call markup: if C garbles → root is spec-depth;
+if only B/D (TREE_ATTN) → root is the kernel. (3) build the structured-output-integrity CARRIER GATE.
