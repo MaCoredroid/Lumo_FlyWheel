@@ -47,12 +47,16 @@ def spec_counters(metrics_endpoint):
     error rather than returning silent None, so a transient failure is visible not invisible."""
     keys = ("vllm:spec_decode_num_draft_tokens_total", "vllm:spec_decode_num_accepted_tokens_total",
             "vllm:spec_decode_num_drafts_total", "vllm:generation_tokens_total")
+    import subprocess
     last_err = "unknown"
     for _attempt in range(5):
         out = dict.fromkeys(keys, 0.0)
         try:
-            with urllib.request.urlopen(metrics_endpoint, timeout=20) as r:  # /metrics is unauthenticated
-                body = r.read().decode("utf-8", "ignore")
+            # use curl (proven reliable on this /metrics endpoint all session; urllib got
+            # ConnectionResetError). -s silent, -m 20 timeout.
+            p = subprocess.run(["curl", "-s", "-m", "20", metrics_endpoint],
+                               capture_output=True, text=True, timeout=25)
+            body = p.stdout or ""
             found = False
             for ln in body.splitlines():
                 for k in keys:
@@ -63,7 +67,7 @@ def spec_counters(metrics_endpoint):
                             pass
             if found:
                 return out
-            last_err = "spec-counters-not-found-in-metrics"
+            last_err = f"spec-counters-not-found (rc={p.returncode}, bodylen={len(body)})"
         except Exception as e:
             last_err = f"{type(e).__name__}: {str(e)[:80]}"
     return {"_error": last_err}   # non-None so spec_delta surfaces the cause
