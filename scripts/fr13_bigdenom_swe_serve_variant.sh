@@ -114,6 +114,16 @@ case "$KIND" in
         FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=1
         MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32
         FR13_APC_REQUIRE_SNAP_FIX=1) ;;
+  # flash_ns5_nocache = CARRIER-LOCATOR cell A0: forked launcher (=> the forked FA2 .so IS mounted +
+  # copied over stock at launch, L590) + clean FLASH_ATTN naive-MTP ns5, but CACHE OFF (no APC/EXACT_SEED).
+  # vs stock-native N (LAUNCHER=native, stock .so) isolates the FORKED FA2 .so; vs tree D0 isolates the
+  # TREE_ATTN kernel; vs cache-on A isolates the cache effect OFF the tree path.
+  flash_ns5_nocache) LAUNCHER=forked; TREEARG=""; EXPECT_RATIO=5; declare -a XFLAGS=(
+        ATTENTION_BACKEND=FLASH_ATTN
+        'SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":5}'
+        FR10_DECODE_MODE_DEFAULT=naive_mtp
+        FR13_REPLAY_ROUTE=0 FR13_FA2_TREE_BIAS=0 FR13_FA2_PREFILL_NATIVE=0
+        FR13_TREE_SAMPLE_ROW=0 FR13_CONV_COMMITTED_PATH=0) ;;
   # flash_ns8_exseed = CARRIER-LOCATOR cell C: identical to nativemtp5_exseed (clean FLASH_ATTN
   # naive-MTP kernel, EXACT_SEED cache) but num_speculative_tokens=8 -> isolates draft DEPTH (5->8)
   # under the clean kernel. If this stays clean while cat8 corrupts, depth is not the carrier.
@@ -144,7 +154,7 @@ esac
 # and FR10_DECODE_MODE_DEFAULT=naive_mtp). Both prove the drafter ran via the launcher-
 # agnostic draft_tokens/drafts==5 spec-ratio assert, NOT via TREE_ATTN/tree env.
 NATIVE_DECODE=0
-if [[ "$LAUNCHER" == "native" || "$KIND" == "nativemtp5_exseed" || "$KIND" == "flash_ns8_exseed" ]]; then NATIVE_DECODE=1; fi
+if [[ "$LAUNCHER" == "native" || "$KIND" == "nativemtp5_exseed" || "$KIND" == "flash_ns8_exseed" || "$KIND" == "flash_ns5_nocache" ]]; then NATIVE_DECODE=1; fi
 # Per-request decode-mode xarg for the warmup probe: naive_mtp for native-decode arms
 # (tree_mtp would ask the patched resolver for a tree that does not exist), tree_mtp
 # for the tree/reshape arms. The native launcher ignores the xarg (no patcher), but
