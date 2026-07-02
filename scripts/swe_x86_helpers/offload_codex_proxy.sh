@@ -89,6 +89,7 @@ case "$CMD" in
       LUMO_PROXY_REQUEST_DUMP_DIR=$REMOTE_REQ_DUMPS \
       LUMO_PROXY_THINK_BUDGET=${LUMO_PROXY_THINK_BUDGET:-} \
       LUMO_PROXY_THINK_CUTOFF=${LUMO_PROXY_THINK_CUTOFF:-} \
+      LUMO_PROXY_ALLOW_MODELS_GET=${LUMO_PROXY_ALLOW_MODELS_GET:-} \
       bash $REMOTE_REPO/relaunch_proxy_remote.sh" \
       > "$ARMDIR/offload_proxy_launch.log" 2>&1 \
       || { echo "FAIL: remote proxy launch rc=$?"; cat "$ARMDIR/offload_proxy_launch.log"; exit 5; }
