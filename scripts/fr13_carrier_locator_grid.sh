@@ -27,7 +27,7 @@ set -uo pipefail
 REPO=/home/mark/shared/lumoFlyWheel; cd "$REPO"
 source "$REPO/.lumo.local.env" 2>/dev/null || true   # LUMO_SUDO_PASSWORD for the container restart machinery
 
-CELLS=${CELLS:-"N A0 A D0 D B"}                 # "N A0 D0 D" alone gives all THREE primary carrier reads
+CELLS=${CELLS:-"B B0 D0 D A0 N A"}              # B/B0 = cat8 cache on/off (branching-tree penalty); N A0 D0 D = 3-carrier
 STAMP=${STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}
 RUNROOT=${RUNROOT:-output/fr13_carrier_locator/run_$STAMP}
 SUBSET=${SUBSET:-output/fr13_b1_gold_swe/subset_b4_sixteen.json}   # parsed by variant; PROBE_ONLY ignores tasks
@@ -37,9 +37,9 @@ PROBE_PROMPT_LIMIT=${PROBE_PROMPT_LIMIT:-16}
 mkdir -p "$RUNROOT"
 
 declare -A KINDOF=( [N]=nativemtp5 [A0]=flash_ns5_nocache [A]=nativemtp5_exseed
-                    [D0]=chain5 [D]=chain5 [B]=cat8 [C]=flash_ns8_exseed )
-# cache ON via env for the tree/branching cache cells (empty XFLAGS); A/C bake it in their KIND; N/A0/D0 off.
-declare -A APCENV=( [N]="" [A0]="" [A]="" [D0]=""
+                    [D0]=chain5 [D]=chain5 [B]=cat8 [B0]=cat8 [C]=flash_ns8_exseed )
+# cache ON via env for the tree/branching cache cells (empty XFLAGS); A/C bake it in their KIND; N/A0/D0/B0 off.
+declare -A APCENV=( [N]="" [A0]="" [A]="" [D0]="" [B0]=""
                     [D]="FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=1"
                     [B]="FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=1" [C]="" )
 
@@ -67,7 +67,7 @@ echo "=== GRID DONE — per-cell malformed-markup rate + the three carrier reads
 import json, os, sys
 runroot = sys.argv[1]; cells = sys.argv[2:]
 kindof = {"N":"nativemtp5","A0":"flash_ns5_nocache","A":"nativemtp5_exseed",
-          "D0":"chain5","D":"chain5","B":"cat8","C":"flash_ns8_exseed"}
+          "D0":"chain5","D":"chain5","B":"cat8","B0":"cat8","C":"flash_ns8_exseed"}
 rows = {}
 for c in cells:
     f = os.path.join(runroot, f"cell_{c}_{kindof[c]}", "carrier_probe.json")
@@ -88,8 +88,9 @@ def read(name, hi, lo, verdict_hi):
 print("\nTHREE CARRIER READS (one variable each):")
 read("forked-FA2 .so", "A0", "N",  "forked FA2 .so IS a carrier")
 read("TREE_ATTN kernel", "D0", "A0", "TREE_ATTN kernel IS a carrier")
-read("cache-on-tree",   "D",  "D0", "APC/EXACT_SEED x tree IS a carrier")
+read("cache-on-chain(ns5)", "D",  "D0", "APC/EXACT_SEED x chain-tree IS a carrier")
+read("cache-on-BRANCH(cat8)", "B", "B0", "APC/EXACT_SEED x BRANCHING cat8 tree IS a carrier (spine-5 proof does NOT cover it)")
 read("  (cache off-tree ctrl)", "A", "A0", "cache hurts off-tree too (not tree-specific)")
-read("branching (ns8 vs ns5)", "B", "D", "cat8 branching adds carrier")
+read("branching vs chain", "B0", "D0", "cat8 branching (cache off) worse than chain5 (cache off)")
 PY
 echo "CARRIER LOCATOR GRID COMPLETE run=$RUNROOT"
