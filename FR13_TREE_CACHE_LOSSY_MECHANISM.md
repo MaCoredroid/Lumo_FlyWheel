@@ -82,3 +82,42 @@ different token under cache. **All arrows point to tree+cache being lossy on the
 **not yet proven** to the field's standard because the accept-rate and free-gen-logit-flip instruments are
 trajectory/metastability-confounded. The teacher-forced served-vs-recompute sibling-node argmax diff is the
 one experiment that settles it.
+
+---
+
+## REFINED CARRIER — the tree GDN kernel realization, not the branching co-residency (workflow wkrqdt1gl, 2026-07-02)
+
+Sharper answer under the "assume cache lossless on native MTP" framing:
+
+**The exact intersection:** the cache-seeded `ssm_state` enters the tree path at
+`fr10_phase4_patch_vllm_tree_gdn.py:5043` (`h0=ssm_state` into `launch_tree_gdn_prepared`) →
+`_tree_gdn_kernel` `_gdn_node_step` per-node **fp32-carry** recurrence (`fr10_gdn_tree_kernel.py:625-709,
+693`) — a **DIFFERENT kernel realization** than native MTP's chunked-FLA
+`fused_sigmoid_gating_delta_rule_update` (patch:4189-4207). Same fp32 seed, **different rounding order →
+drift**, gate-amplified ~16-32× and compounded over layers 46→63 to ~0.59 final-logit drift.
+
+**Why the cache specifically triggers it (producer≠consumer):** on a cache HIT the SSM seed is *produced by
+the prefill* (chunked-FLA) and *consumed by decode*. On **MTP both sides are chunked-FLA** (consumer==producer)
+→ the handoff is bit-exact. On **tree the decode side is `_tree_gdn_kernel`** (different kernel) → the
+prefill→decode handoff is lossy. Cache-OFF keeps state in-kernel (no cross-kernel handoff) → self-consistent →
+recovers. This reconciles the empirical: **cat8-OFF this session recovered** — 13453 **resolved** (vs cat8-ON
+empty), spec-accept **3.39/step** (vs cat8-ON 2.3-3.0, ≈ native 3.27).
+
+**SPINE BREAKS TOO (`spine_breaks_like_tree`):** the tree branch is gated on MODE only
+(`use_fr10_tree = mode==tree_mtp AND fr10_tree_parent not None`, patch:4218-4223), **not on siblings**. A linear
+chain5/spine still builds a non-null parent chain → routes to `_tree_gdn_kernel`, not native FLA. So the carrier
+is the **tree-kernel realization itself** (fp-order + per-edge `-0.0→+0.0` handoff flip, kernel:1004-1008), which
+BOTH spine and tree hit. Branching only ADDS the co-residency gather (kernel:644-648, 0.0289 gap) on top — it is
+not the root cause.
+
+**FIX LOCUS:** `fr10_gdn_tree_kernel.py:693` (`_gdn_node_step`) — align its rounding basis to native chunked-FLA
+at the conv/scan seed; **OR** enable the bit-exact per-path recompute kernel (`FR13_SCAN_ALIGN_MODE=recompute`,
+kernel:776-787, OFF by default) for BOTH spine and branch — first validated vs a native per-path packed-decode
+oracle (`FR12_NATIVE_SPINE_ORACLE=1` exists, variant:499).
+
+**Adversarial (do not overclaim):** SOUND + code-grounded, but the fp-order diff is not PROVEN the *dominant*
+carrier vs the co-residency gap or FA2/TREE_ATTN (chain5 runs TREE_ATTN, never bisected out); the spine-only
+fp-delta magnitude is unmeasured; the 16-32× amplification is inherited from prior, not re-derived.
+**Minimal confirming check:** capture per-path GDN output for chain5 (SPINE) under `SCAN_ALIGN=recompute` vs
+default, byte-diff vs the FLA packed-decode oracle. recompute→bit-exact on spine ⇒ locus confirmed, FA2/TREE_ATTN
+exonerated by elimination.
