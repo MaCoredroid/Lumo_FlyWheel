@@ -44,3 +44,17 @@ SPEED (recompute TPS ≥ 0.90×default). Reuse fr13_apc_e2e_lossless_gate.sh + f
    AND the recompute fix's bit-exactness before any temp-0.6/SWE compute. If G1 fails, G2/G3 are moot.
 3. Only then G2 (add the q-vs-p TV Sig-0 + a vs-native reducer + a recompute grid cell) and G3 (lift the
    variant:304-305 hard-block on FR13_SCAN_ALIGN=1 + thin driver).
+
+---
+
+## INVERSION (workflow wk8akwphe, user-driven) — the tree-kernel drift CANCELS; the fix is EXACT_SEED, and it needs VERIFYING not building
+
+The user's two questions (APC = prefill-only; native prefill/decode are also two modes) forced the right frame. Result: **do NOT implement (a) recompute OR (b) tree-produce-cache.**
+
+**Why both are wrong:** cache-OFF tree's cross-turn durable seed is **also FLA-produced** — with APC off, context_lens=0 (patch:793), so regenerated tokens re-prefill COLD through FLA `chunk_gated_delta_rule` whose final overwrites `ssm_state[non_spec]` (patch:6123), which the tree decode reads as h0 (patch:5048). So **both arms seed from FLA and both run the same tree decode.** The tree kernel's per-node/handoff drift (`-0.0→+0.0` flip, kernel:782-787) is **real but IDENTICAL in cache-ON and cache-OFF → it CANCELS in the cache-ON==cache-OFF comparison.** So the tree kernel is **not** the cache-carrier. A tree-produced checkpoint (b) would *create* an FLA-vs-tree mismatch; recompute (a) targets native-exactness we don't need.
+
+**The actual invariant (matches the user's reasoning):** cache-ON == cache-OFF iff the **restored seed == cold FLA prefill** at the boundary. That is exactly what **EXACT_SEED already does**: FLA checkpoint at a 64-aligned boundary + FLA-continued <64 remainder = bit-exact to cold FLA prefill (Sparse-Prefix-Caching Remark 1). **Minimal change = NONE.** Keep `FR13_APC_EXACT_SEED=1`, `HRS=0`, `--block-size 1024`, fp32 ssm cache.
+
+**THE TENSION (unresolved, decisive):** the banked cat8-ON run that was 0/8-empty **had EXACT_SEED=1**. So either (i) EXACT_SEED isn't actually delivering bit-exactness (restore imperfection real), OR (ii) the cat8-ON empty-stalls were the **nudge confound** (qwen-code stalls on forked arms regardless of cache), NOT the cache — in which case the whole cache-carrier hunt partly chased the nudge.
+
+**THE DECISIVE UNRUN GATE (the one thing to do):** cache-ON(EXACT_SEED+1024) vs cache-OFF(same config, APC off), **SAME prompt, temp 0.6, piecewise, N≥3/arm, Fisher-tested, non-vacuity-guarded** (assert real cache hits ES_WRITE>2000 + ES_RESTORE>0 AND spec engaged). PASS = resolve + malformed rate match cache-OFF (NOT byte-identical). It is **designed but NEVER RUN** — the exact failure mode as the historical lossless-gate miss. L0 state-diff PASSED; L1 live proxy was running, unfinished.
