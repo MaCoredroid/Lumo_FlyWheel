@@ -85,3 +85,13 @@ apply_patch_tool.rs json tool, tool_config.rs Some(Function) arm.
 4. Alienware `codex-linux-x64` vendor path unverified — confirm before the COPY layer.
 5. No evidence apply_patch editing resolves MORE than the working shell fallback — the ≥8-task control gates
    campaign use. Keep `codex-runner:v1-stock` for one-command rollback.
+
+---
+## L2 RESULT + DECISION (2026-07-02) — routing PROVEN, but apply_patch is a Qwen training mismatch → ROLLED BACK
+Built + deployed the 2-line Variant-B patch (codex-runner:v1, v1-stock kept). Probes:
+- **L1 PASS**: patched codex advertises 12 tools incl. `apply_patch` as `type:"function"` (absent on stock).
+- **L2 (astropy-12907, 1 task, live vLLM)**: `unsupported call: apply_patch` = **0** (was 4 on stock) → **routing PROVEN**. BUT **14 `apply_patch verification failed`, 0 successes** (e.g. "Expected update hunk to start with a @@ context marker, got: 'def _cdot(...)'"). The model then **fell back to shell** and landed an 851B patch (verdict=failed, wrong fix — same as stock, + 14 wasted turns).
+
+**Root cause (online research, confirmed):** apply_patch's V4A `*** Begin Patch` exact-context grammar is an OpenAI/GPT-trained format. Qwen3-Coder's edit training is **search-and-replace diff patches** + the XML `qwen3_coder` tool format (not V4A). So Qwen cannot reliably emit valid apply_patch hunks → net-negative (wasted turns, 0 success, shell fallback anyway). Qwen's own recommended harness = `qwen-code` (native XML tools + Qwen-suited edit tool). Sources: qwenlm.github.io/blog/qwen3-coder, qwen.readthedocs.io function_call, Qwen3-Coder-Next tech report (search-and-replace FIM).
+
+**DECISION: rolled back** (`docker tag codex-runner:v1-stock codex-runner:v1` on alienware) → the proven shell-fallback harness (Qwen-aligned, 5/5 baseline). The patch is validated + reversible (re-tag the built image to reinstate). **Proper future path if structured edits are wanted:** add a Qwen-native **search-and-replace edit tool** (matching its training), not apply_patch. The char-8 transcript-repair fix + uncapped wall remain in effect (independent of this).
