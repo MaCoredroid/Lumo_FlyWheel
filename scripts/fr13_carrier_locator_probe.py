@@ -42,28 +42,36 @@ def post(endpoint, body, timeout=240):
 
 
 def spec_counters(metrics_endpoint):
-    """Snapshot vLLM spec-decode counters (for a clean same-prompt accept-rate per cell)."""
+    """Snapshot vLLM spec-decode counters (for a clean same-prompt accept-rate per cell).
+    Retries (the /metrics endpoint can be slow while the server is mid-probe) and surfaces the
+    error rather than returning silent None, so a transient failure is visible not invisible."""
     keys = ("vllm:spec_decode_num_draft_tokens_total", "vllm:spec_decode_num_accepted_tokens_total",
             "vllm:spec_decode_num_drafts_total", "vllm:generation_tokens_total")
-    out = dict.fromkeys(keys, 0.0)
-    try:
-        req = urllib.request.Request(metrics_endpoint, headers={"Authorization": "Bearer EMPTY"})
-        with urllib.request.urlopen(req, timeout=15) as r:
-            for ln in r.read().decode("utf-8", "ignore").splitlines():
+    last_err = "unknown"
+    for _attempt in range(5):
+        out = dict.fromkeys(keys, 0.0)
+        try:
+            with urllib.request.urlopen(metrics_endpoint, timeout=20) as r:  # /metrics is unauthenticated
+                body = r.read().decode("utf-8", "ignore")
+            found = False
+            for ln in body.splitlines():
                 for k in keys:
                     if ln.startswith(k) and (" " in ln):
                         try:
-                            out[k] = float(ln.split()[-1])
+                            out[k] = float(ln.split()[-1]); found = True
                         except Exception:
                             pass
-    except Exception:
-        return None
-    return out
+            if found:
+                return out
+            last_err = "spec-counters-not-found-in-metrics"
+        except Exception as e:
+            last_err = f"{type(e).__name__}: {str(e)[:80]}"
+    return {"_error": last_err}   # non-None so spec_delta surfaces the cause
 
 
 def spec_delta(before, after):
-    if not before or not after:
-        return None
+    if not before or not after or "_error" in before or "_error" in after:
+        return {"error": (before or {}).get("_error") or (after or {}).get("_error") or "no-counters"}
     d = {k: after.get(k, 0) - before.get(k, 0) for k in before}
     dt = d["vllm:spec_decode_num_draft_tokens_total"]
     ac = d["vllm:spec_decode_num_accepted_tokens_total"]
