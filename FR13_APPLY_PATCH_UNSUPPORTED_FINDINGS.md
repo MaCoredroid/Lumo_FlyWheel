@@ -21,18 +21,45 @@ not a regression.
    call, which does NOT match the freeform grammar codex registered → router rejects: **"unsupported call:
    apply_patch"** → model degrades to shell edits.
 
-## Exact config knob (verified against installed codex 0.139.0 via `codex exec --strict-config`)
-- `apply_patch_tool_type`, `tools.apply_patch`, `include_apply_patch_tool` → **ALL "unknown configuration field"** (not valid keys in 0.139).
-- `features.apply_patch_freeform` → **ACCEPTED** (valid key). This is the real toggle:
-  - `true`  = GPT-5 freeform `type:"custom"` grammar (non-OpenAI endpoints reject / can't round-trip).
-  - `false` = standard **function-calling** apply_patch (what Qwen3.6 CAN emit over our vLLM responses API).
-- alienware `~/.codex/config.toml` sets `model = "gpt-5.5"` (overridden by our `--model qwen3.6-27b`), does
-  NOT set `apply_patch_freeform` → codex uses its default (suspected freeform=on for the responses wire).
+## CORRECTION (research workflow wnws53l2k, 2026-07-02) — candidate fix REFUTED, wrong binary
+My earlier `--strict-config` probing hit the **host** codex 0.139.0. **The harness actually runs codex
+0.128.0 INSIDE the `codex-runner:v1` container** (`run_swe_bench_q36_a.py:62` pins tag
+`q36-a::codex-cli-0.128.0`; `--strict-config` isn't even a valid arg on 0.128 `codex exec`). The workflow
+empirically captured the real `tools` list the 0.128.0 container sends (mock `/v1/responses`):
+- baseline (current template) → **NO apply_patch tool** (11 tools, 45340 B).
+- `-c experimental_use_freeform_apply_patch=false` → **byte-identical to baseline** (=false is the default → NO-OP).
+- `-c apply_patch_tool_type="function"`, `-c include_apply_patch_tool=true`, `-c features.apply_patch_freeform=false` → **all silently ignored**, still NO apply_patch tool.
+- `-c experimental_use_freeform_apply_patch=true` → registers apply_patch, but ONLY as `{"type":"custom","name":"apply_patch","format":{"type":"grammar","syntax":"lark"}}` (FREEFORM lark grammar), **never `type:"function"`**.
+So **there is NO `-c` flag that yields a routable FUNCTION-form apply_patch.** The prior candidate
+(`features.apply_patch_freeform=false`) is a **no-op** and must NOT be shipped.
 
-## Candidate fix (to be validated by the workflow + a live probe)
-Add to CODEX_TEMPLATE: `-c 'features.apply_patch_freeform=false'` → register apply_patch as a routable
-FUNCTION tool for qwen3.6-27b → the model's calls route to the real handler instead of "unsupported".
-UNVALIDATED empirically (needs a codex probe against a live vLLM endpoint; not run yet — arms paused).
+**Why (deeper):** the `unsupported call: apply_patch` error is raised **client-side inside the container's
+Rust codex**, validating the model's returned call against the tools *codex itself* registered — NOT
+against what the proxy returns. So proxy/jinja tool-injection **cannot** fix routing. codex's base
+`instructions` (20771 chars) direct the model to use apply_patch 5×, so Qwen emits it even with no tool
+registered → registry miss → "unsupported call". Real trace: model emits
+`{"type":"function_call","name":"apply_patch","arguments":"{\"cmd\":\"apply_patch\\n*** Update File...\"}"}`
+→ codex writes `function_call_output "unsupported call: apply_patch"`.
+
+## The two coherent routes (workflow verdict: fix_holds=true, must_probe=true, confidence=high)
+- **ROUTE A — RECOMMENDED — do nothing.** Shell fallback is **proven survivable**: leafsrc runs logged
+  **3774** `unsupported call: apply_patch` events yet still resolved (5/5 native baseline). apply_patch
+  routing is NOT the char-8 blocker and NOT the resolve-cause. Ship no change; resume the campaign on the
+  current harness. Lowest risk; matches measurement discipline.
+- **ROUTE B — only if structured edits are genuinely wanted (multi-part, higher risk):**
+  (i) CODEX_TEMPLATE `-c experimental_use_freeform_apply_patch=true` (registers the custom/lark tool
+      client-side so the router stops rejecting a matching `custom_tool_call`);
+  (ii) NEW proxy response-side branch (`inference_proxy.py` near `normalize_responses_response_payload` /
+      the streaming emitters ~1583-1608/1747-1805, which today emit ONLY `type:"function_call"`):
+      transform the model's `function_call` named apply_patch into a Responses `custom_tool_call` item,
+      stripping the `{"cmd":...}` JSON wrapper into the raw `*** Begin Patch…*** End Patch` text (vLLM has
+      ZERO custom_tool_call emission path, so the proxy is the only place to synthesize it). Env-gated,
+      default OFF.
+  Validate with PROBE 1 (1 astropy-separability task, live vLLM: router error DISAPPEARS + a
+  patch_apply/function_call_output reports files changed + `git diff` produced via apply_patch not sed) AND
+  a ≥8-task control showing no regression vs the shell-fallback resolve rate BEFORE any campaign use.
+  Risks: moves the action distribution off the proven-survivable shell path (could resolve FEWER); re-opens
+  char-8 exposure on truncated patch args; the new proxy path can corrupt EVERY tool call if buggy.
 
 ## Why it matters (link to char-8)
 Because apply_patch is rejected, the model crams patch content **inline into shell args** — and those are
