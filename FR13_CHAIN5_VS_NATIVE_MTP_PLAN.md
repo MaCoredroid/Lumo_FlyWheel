@@ -87,3 +87,23 @@ Harness = qwen-code (SWE_AGENT=qwen_code), temp 0.6, cache-ON EXACT_SEED, offloa
 three char-8 smoking-guns (13453/14508/14539) RECOVERED on qwen-code. Only 12907 (the seed-flaky task both
 agents miss) failed. Net: qwen-code native+cache ≈ 5/5 baseline within seed noise, with char-8 gone. Confirms
 apply_patch/char-8 was the codex-specific blocker; the Qwen-native harness clears it.
+
+---
+## qwen-code CAMPAIGN P1.5 — cat8+cache-ON (forked-tree) STOPPED at 8/16: forked-kernel + qwen-code STALLS (output/fr13_tree_cache_matrix/run_20260702T092119Z, 2026-07-02)
+KILLED at 8/16 (decisive): **8/8 EMPTY-patch give-ups, 0 resolved.** qwen-code announces intent ("I'll explore
+the source files...") then STOPS with no tool call (is_error:False, empty patch, 2-7 turns) — the task#13
+announce-then-stall give-up.
+**LINCHPIN (kernel-attributable):** astropy-13453 RESOLVED on P1 native kernel (28-turn run, real patch) but
+STALLS EMPTY on cat8 forked-fa2 TREE_ATTN kernel — SAME task, SAME qwen-code, only the DECODE KERNEL differs.
+So the forked-tree kernel induces the no-tool-call stall; native does not.
+**Root cause:** forked-fa2 tree-attn kernel makes the model prone to no-tool-call stalls on the agentic loop.
+Codex SURVIVED this because its /v1/responses AUTO_CONTINUE nudge re-prompts on a no-function_call turn
+(chain5 got 3/5, cat8-OFF 4/16 under codex). qwen-code uses /v1/chat/completions which has NO nudge net
+(AUTO_CONTINUE is /v1/responses-only — design-flagged) => stalls go unrecovered => empty patch.
+**Contrast:** P1 native+cache qwen-code = 4/5, char-8=0 (works). So qwen-code is GREAT on the native kernel;
+the forked (tree) kernels need a nudge net.
+**FIX (required before ANY forked arm incl. the chain5 replica gate):** add a qwen-code nudge net — a proxy
+/v1/chat/completions AUTO_CONTINUE analog that re-prompts ("your turn stopped without editing; next action
+MUST be a tool call") when choices[].message has no tool_calls; (or a qwen-code-side continue-on-no-tool-call
+setting). Then re-run cat8 + the replica gate. The replica gate (native vs chain5) is CONFOUNDED without this
+(chain5=forked would stall like cat8), so it is NOT launched.
