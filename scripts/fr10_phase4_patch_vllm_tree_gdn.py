@@ -4343,7 +4343,12 @@ def _fr13_gdn_subop_mab(
                     device=query_spec.device,
                 )
                 _fr13_replay_route_on = (
-                    True  # FR13_REPLAY_ROUTE baked ON
+                    # FR13_REPLAY_ROUTE: baked ON by default (serving unchanged);
+                    # env-gated so a G1 kernel-capture can set FR13_REPLAY_ROUTE=0
+                    # to keep the per-node tree_state scratch alive for
+                    # FR10_TREE_GDN_CAPTURE_PAYLOAD. tree-path only (use_fr10_tree),
+                    # so naive_mtp/native is unaffected.
+                    os.environ.get("FR13_REPLAY_ROUTE", "1") == "1"
                 )
                 if _fr13_replay_route_on:
                     # FR13_REPLAY_ROUTE: the per-node scratch (tree_state) no
