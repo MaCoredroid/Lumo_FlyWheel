@@ -439,6 +439,18 @@ fi
 curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" \
   > "$ARMDIR/reset_prefix_cache.txt" 2>&1 || echo "WARN: reset_prefix_cache failed (non-fatal)"
 
+# ---- CAPTURE_ONLY: G1 kernel-confirm capture (boot + warmup fired the tree-decode payload dump, exit) ----
+# The warmup above ran a tree_mtp decode; with FR10_TREE_GDN_CAPTURE_PAYLOAD + FR12_SUBKERNEL_CAPTURE set
+# (and FR13_REPLAY_ROUTE=0 so the per-node tree_state scratch survives), the tree GDN kernel saved the
+# per-node payload + subkernel gdn_scan_out to /logs (mapped to $ARMDIR/logs). Verify + exit before SWE.
+if [[ "${CAPTURE_ONLY:-0}" == "1" ]]; then
+  ls -la "$ARMDIR/logs"/*.pt 2>/dev/null | tee "$ARMDIR/g1_capture_manifest.txt" || true
+  N=$(ls "$ARMDIR/logs"/*payload*.pt "$ARMDIR/logs"/*subkernel*.pt 2>/dev/null | wc -l)
+  echo "[capture-only] SCAN_ALIGN_MODE=${FR13_SCAN_ALIGN_MODE:-body} captured $N .pt -> $ARMDIR/logs"
+  if [[ "$N" -ge 1 ]]; then echo "CAPTURE_ONLY_OK"; exit 0; else
+    echo "FAIL: no capture .pt produced (warmup tree-decode did not fire the layer-0 capture)"; exit 6; fi
+fi
+
 # ---- PROBE_ONLY: generation-level carrier locator (skip offload proxy + SWE) ----
 # The server is booted, healthy, spec-engaged and APC-verified above. PROBE_ONLY replays banked
 # tool-call-boundary prompts N times DIRECTLY against local vLLM (temp 0.6 lives in the probe body)
