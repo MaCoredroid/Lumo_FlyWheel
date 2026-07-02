@@ -71,3 +71,19 @@ attribution (the prior run's cache-OFF arm lacked these).
 
 ## NEXT: native+EXACT_SEED (run_20260701T205744Z) — does the lossless deployment cache preserve native 5/5?
 Booting: Qwen3_5MTP + method=mtp num_spec=5 + enable_prefix_caching=True + APC bridge EXACT_SEED=1 on the native FLASH_ATTN path. WATCH: ES must capture/restore on real requests (boot warmup showed ES_CKPT0_SKIP reason=no_nonspec_row_map — confirm engagement on real multi-turn traffic, else cache is inert).
+
+---
+## qwen-code CAMPAIGN P1 — native+cache (EXACT_SEED), 5-task (output/fr13_tree_cache_matrix/run_20260702T074032Z, 2026-07-02)
+Harness = qwen-code (SWE_AGENT=qwen_code), temp 0.6, cache-ON EXACT_SEED, offload.
+| task | qwen-code native+cache | codex history |
+|---|---|---|
+| 12907 | failed | codex stock+patched BOTH failed (flaky/seed) |
+| 13453 | **resolved** | codex FAILED (char-8) |
+| 14508 | **resolved** | codex FAILED (char-8 death) |
+| 14539 | **resolved** | codex FAILED (char-8) |
+| 14995 | **resolved** | codex FAILED |
+| **total** | **4/5** | codex native-OFF baseline 5/5 (no cache; survived char-8) |
+**char-8 = 0** (server docker_full.log) — ELIMINATED vs codex (which hit char-8 on these exact tasks). All
+three char-8 smoking-guns (13453/14508/14539) RECOVERED on qwen-code. Only 12907 (the seed-flaky task both
+agents miss) failed. Net: qwen-code native+cache ≈ 5/5 baseline within seed noise, with char-8 gone. Confirms
+apply_patch/char-8 was the codex-specific blocker; the Qwen-native harness clears it.
