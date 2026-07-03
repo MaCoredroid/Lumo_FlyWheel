@@ -89,9 +89,21 @@ def scan_align_mode() -> str:
     ``FR13_SCAN_ALIGN_MODE`` selects how the geometry seam is realized:
       * ``body`` (default): body seams only on the UNCHANGED scan launch
         geometry (BV16/w8) -- the cheap body-seam A/B.
+        PARKED KNOWN-ISSUE (2026-07-03, cat8 cache-ON 13453 nudge-free qwen-code,
+        output/fr13_cat8_seams2): FR13_SCAN_ALIGN_MODE=body engaged the cache
+        multi-turn (ES_SEED_APPLIED=2016, 76% hit) but emitted 3 MALFORMED
+        tool-call XML errors (qwen3xml "not well-formed line 9 col 1") that the
+        SAME-prompt baseline (no SCAN_ALIGN) had ZERO of -> body-seam path
+        appears to CORRUPT the generation (adds char-8), NOT just realign
+        rounding. n=1; parked (not a flake vs baseline, but unconfirmed). Do NOT
+        deploy body as the fix; use recompute. Revisit when auditing the body
+        seam (l2norm div-by-sqrt / beta bf16 round-trip) codegen.
       * ``recompute``: the deployable geometry fix -- recompute each tree node
         from the spine (ancestry replay, one [BLOCK_V, DIM_K] fp32 tile, no
         h_cache) at native BV32/w1/s3, removing leaf co-residency.
+        (2026-07-03: ENGAGES cat8 cache-ON 13453 46min under FULL cuda graph =
+        the leading tree+cache give-up fix candidate; resolve+speed still to
+        confirm.)
     The mode is only consulted when scan_align_on() is True; when SCAN_ALIGN is
     off the served path never reads it.
     """
