@@ -75,3 +75,25 @@ Ran ONE nudge-less qwen-code SWE arm, cat8 cache-ON + `FR13_APC_EXACT_SEED=1` + 
 **CONCLUSION — the "tree+cache leaning-LOSSY" verdict FLIPS to leaning-LOSSLESS-with-agent-confound.** The cat8-ON 0/8 empties reproduce **with ES proven bit-exact (@1024) AND observed firing+aligned (@832)**, as single-`read_file` agent give-ups — so the carrier of the empties is the **agent (interleaved-thinking attempt-1 give-up), not the cache restore.** Combined with the INVERSION (the tree-kernel drift cancels cache-ON vs cache-OFF because cache-OFF also seeds from cold FLA), the cache-on-tree/spine path has **no remaining identified lossy mechanism.** 
 
 **THE ONE RESIDUAL (still never run, per the historical miss):** the temp-0.6 q-vs-p TV / L1 piecewise-Fisher cache-ON-vs-OFF gate would close this to *certainty* (it would show subtle distributional lossiness if any exists, agent-free). It remains designed-not-run. Everything the existing data + code can establish points to **lossless**; the give-up empties are the agent, and the honest close requires fixing task #13 (interleaved-thinking give-up) so the arm can actually attempt tasks — not a cache fix.
+
+---
+
+## CORRECTION (2026-07-03, user-caught) — the ES_OBSERVE "flip to leaning-LOSSLESS" was WRONG. Cache-ON IS the carrier.
+
+The section above concluded the cat8-ON empties were the nudge-free agent giving up, not the cache. **That is refuted by the control I failed to consult: the SAME nudge-free qwen-code, cat8, with cache OFF, on the SAME tasks.**
+
+**The clean same-agent cache ON-vs-OFF contrast** (agent = nudge-free qwen-code throughout; kernel = cat8 forked tree throughout; the ONLY variable is `FR13_APC_EXACT_SEED`/APC):
+
+| task | cat8 cache-**OFF** (`EXACT_SEED=0`) | cat8 cache-**ON** (`EXACT_SEED=1`, `ES_WRITE=2795`) |
+|---|---|---|
+| 13453 | **12 turns, 29 read_file, 408B patch** (deep engage) | **2 turns, 1 read_file, 0B** (instant give-up) |
+| 13579 | **22 turns, 1433B patch** (deep engage) | **2 turns, 1 read_file, 0B** (instant give-up) |
+| native (control) | — | all attempt (13453=408B, 13579=1046B, 13033=980B, …) |
+
+Runs: cache-OFF = `output/fr13_carrier_swe/run_20260702T212430Z/m_cat8off`; cache-ON = `output/fr13_tree_cache_matrix/run_20260702T092119Z/m_cat8on` + `output/fr13_es_observe/run_20260702T235258Z/m_cat8on_obs`.
+
+**Where my ES_OBSERVE reasoning went wrong:** the cache-OFF *solve* I had cited earlier (377B on 13453, 072605Z) was **codex WITH the AUTO_CONTINUE nudge** — a different agent — so I dismissed the OFF-solve as a nudge artifact and concluded "nudge-free agent just gives up." But the **`fr13_carrier_swe` runs ARE nudge-free qwen-code with cache OFF, and they engage 12–22 turns and produce real patches.** Holding the nudge-free agent fixed, turning the cache ON collapses 12–22 turns of engagement into a 1-read give-up. **The carrier is cache-ON on the tree kernel, not the agent.**
+
+**Reconciling with the L0 bit-exact PASS:** L0 (`FR13_APC_EXACT_SEED_SUCCESS.md`) proves the **prefill SSM checkpoint restore** is bit-exact @1024. It does **not** test the **tree-decode branching verify** — the num_spec sibling-fork committer path (greedy-LCP over the co-resident h_cache scan) that the spine-5 lossless proof never covered (see `project_fr13_statediff_no_drain`, `project_fr13_tree_cache_lossy`). So "prefill restore bit-exact" and "cache-ON degrades cat8 tree decode enough to flip the agent to give-up" are **both true and not contradictory**: the lossy channel is downstream of the bit-exact restore, in the branching verify. The INVERSION (tree-kernel seed drift cancels cache-on-vs-off) covered the recurrent SEED only, NOT the decode trajectory — and the empirical trajectory does NOT cancel (accept 3.39→2.3-3.0; attempt→give-up).
+
+**CORRECTED VERDICT: leaning-LOSSY stands — now with the strongest evidence yet** (clean same-nudge-free-agent cat8 cache-OFF-engages vs cache-ON-gives-up on 13453/13579). Residual caveats: N=2 both-arm tasks; the two arms are different boots (a same-boot cache-ON-vs-OFF L1 Fisher / the temp-0.6 q-vs-p TV gate would make it airtight — still the one unrun gate). But the agent-give-up explanation is dead: the same nudge-free agent solves cat8 with cache OFF.
