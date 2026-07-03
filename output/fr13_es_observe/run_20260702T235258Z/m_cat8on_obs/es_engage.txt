@@ -1,0 +1,20 @@
+FR13_APC env sidecar written (worker-env bridge): /logs/fr13_apc_env.flag keys=FR13_APC_SNAP_FIX,FR13_APC_SNAP_FIX_ZEROACCEPT,FR13_APC_CONV_FIX,FR13_APC_CONV_SNAPSHOT,FR13_APC_CONV_SNAP_FIX,FR13_APC_PRE_SNAP_FIX,FR13_APC_HIT_SUFFIX_CAP,FR13_APC_BLOCK_ALIGN_45477,FR13_APC_LEAF_CROSSCHECK,FR13_APC_EXACT_SEED
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map
+(EngineCore pid=176) FR13ES ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map

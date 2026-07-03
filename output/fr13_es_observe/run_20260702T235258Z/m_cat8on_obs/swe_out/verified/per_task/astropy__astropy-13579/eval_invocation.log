@@ -1,0 +1,3 @@
+[offload host=alienware worker_rc=1]
+
+-- stderr --

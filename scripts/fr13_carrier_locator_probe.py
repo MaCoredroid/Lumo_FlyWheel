@@ -119,35 +119,49 @@ def main():
         pr = load_prompt(pf)
         if not pr:
             continue
-        for s in range(a.samples):
-            body = {"model": a.model, "messages": pr["messages"], "temperature": a.temperature,
-                    "max_tokens": a.max_tokens, "stream": False}
-            if pr["tools"]:
-                body["tools"] = pr["tools"]
-            if a.logprobs:
-                body["logprobs"] = True
-                body["top_logprobs"] = 20
-            try:
-                resp = post(a.endpoint, body)
-            except Exception as e:
-                n_err += 1
-                rows.append({"prompt": os.path.basename(pf), "sample": s, "label": "REQ_ERR", "err": str(e)[:120]})
-                continue
-            n_ok += 1
-            ch = (resp.get("choices") or [{}])[0]
+        # ONE request per prompt with n=samples => the ~20k-token prompt is prefilled ONCE and vLLM
+        # samples `n` independent temp-0.6 continuations. Collapses cache-OFF prefills from
+        # prompts*samples down to prompts (the prefill dominates: 138:1 prefill:decode). If the server
+        # ignores n (returns 1 choice) or the request errors, fall back to the per-sample loop.
+        body = {"model": a.model, "messages": pr["messages"], "temperature": a.temperature,
+                "max_tokens": a.max_tokens, "stream": False, "n": a.samples}
+        if pr["tools"]:
+            body["tools"] = pr["tools"]
+        choices = None
+        try:
+            resp = post(a.endpoint, body, timeout=max(300, a.samples * 90))
+            choices = resp.get("choices") or []
+        except Exception as e:
+            choices = None
+            _n_err_msg = str(e)[:120]
+
+        def _record(ch, si):
+            nonlocal n_ok
             msg = ch.get("message") or {}
             text = msg.get("content") or ""
             tcs = msg.get("tool_calls")
-            if tcs:                                   # parser lifted a well-formed call => clean
-                lab = "clean_toolcall"
-            else:
-                lab = classify_text(text) or "clean_notoolcall"
+            lab = "clean_toolcall" if tcs else (classify_text(text) or "clean_notoolcall")
             labels[lab] += 1
-            row = {"prompt": os.path.basename(pf), "sample": s, "label": lab,
-                   "n_tool_calls": len(tcs or []), "finish": ch.get("finish_reason"), "text_head": text[:200]}
-            if a.logprobs:
-                row["logprobs"] = ch.get("logprobs")
-            rows.append(row)
+            n_ok += 1
+            rows.append({"prompt": os.path.basename(pf), "sample": si, "label": lab,
+                         "n_tool_calls": len(tcs or []), "finish": ch.get("finish_reason"),
+                         "text_head": text[:200]})
+
+        if choices and len(choices) >= 2:            # n honored -> one prefill, many samples
+            for si, ch in enumerate(choices):
+                _record(ch, si)
+        else:                                        # n ignored or errored -> per-sample fallback
+            if choices and len(choices) == 1 and a.samples == 1:
+                _record(choices[0], 0)
+            else:
+                for s in range(a.samples):
+                    try:
+                        r1 = post(a.endpoint, {k: v for k, v in body.items() if k != "n"})
+                        _record((r1.get("choices") or [{}])[0], s)
+                    except Exception as e:
+                        n_err += 1
+                        rows.append({"prompt": os.path.basename(pf), "sample": s,
+                                     "label": "REQ_ERR", "err": str(e)[:120]})
 
     spec_after = spec_counters(metrics_endpoint)
     total = n_ok

@@ -1,0 +1,1 @@
+OFFLOAD_PROXY_OK host=alienware upstream=http://100.103.10.122:9950 (forced temp 0.6, pair dumps on, auto-continue on)
