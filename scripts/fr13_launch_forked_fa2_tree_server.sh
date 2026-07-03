@@ -269,7 +269,7 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   : "${FR13_APC_CONV_SNAPSHOT:=1}"
   : "${FR13_APC_SNAP_FIX:=1}"        # BAKED 2026-06-24: verify3b FAITHFUL 240/240 (the working SSM node-bank fix)
   : "${FR13_APC_SNAP_FIX_ZEROACCEPT:=1}"  # BAKED 2026-06-27 (user call): publish committed-root row (_row[0]) for zero-accept (accepted_len==0) steps (shared spine+tree carrier). APC-only -> non-APC locked cat9 path byte-identical
-  : "${FR13_APC_CONV_SNAP_FIX:=0}"   # CLR: conv node-bank leaf redirect (default OFF -> byte-identical)
+  : "${FR13_APC_CONV_SNAP_FIX:=1}"   # BAKED 2026-07-03: conv twin of the SSM SNAP_FIX. temp-0.6 TV gate proved cache-restore lossy (tv_mean~0.2, floor 0) = CONV window sourced from base block-pool row not committed accepted-leaf; EXACT_SEED re-seeds SSM only, never conv. Real-task 13453: give-up 2t -> 8t engage w/ this on (workflow wqz0zlae6, 3-agent convergent). PARTIAL (redirect still falls back on some rows -> residual source-rewrite pending). APC-only -> non-APC path byte-identical
   : "${FR13_APC_PRE_SNAP_FIX:=0}"    # CLR: preprocess SSM redirect (default OFF -> byte-identical)
   # HRS UN-BAKED 2026-06-27 (user) — CURRENT DIRECTION. The recurrent-suffix roll (HIT_RECURRENT_SUFFIX)
   # is SUPERSEDED by the SGLang-faithful EXACT-SEED fix (FR13_APC_EXACT_SEED, in progress; worktree
