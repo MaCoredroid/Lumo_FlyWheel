@@ -79,25 +79,34 @@ def main():
         try:
             _reset_cache(base)                     # force a cold MISS
             q_fresh = _first_token_dist(post(a.endpoint, body, timeout=300))
-            q_restore = _first_token_dist(post(a.endpoint, body, timeout=300))  # 2nd = HIT -> ES restore
+            q_restore = _first_token_dist(post(a.endpoint, body, timeout=300))  # 2nd POST = HIT -> restore
+            _reset_cache(base)                     # FLOOR: 3rd POST = another cold MISS (within-boot determinism)
+            q_miss2 = _first_token_dist(post(a.endpoint, body, timeout=300))
         except Exception as e:
             rows.append({"prompt": os.path.basename(pf), "tv": None, "err": str(e)[:120]})
             continue
-        tv = _tv(q_fresh, q_restore)
-        rows.append({"prompt": os.path.basename(pf), "tv": tv,
+        tv = _tv(q_fresh, q_restore)          # miss-vs-hit = cache-restore effect
+        floor = _tv(q_fresh, q_miss2)         # miss-vs-miss = within-boot determinism floor
+        rows.append({"prompt": os.path.basename(pf), "tv": tv, "floor": floor,
                      "argmax_fresh": max(q_fresh, key=q_fresh.get) if q_fresh else None,
                      "argmax_restore": max(q_restore, key=q_restore.get) if q_restore else None})
 
     tvs = [r["tv"] for r in rows if r.get("tv") is not None]
+    floors = [r["floor"] for r in rows if r.get("floor") is not None]
     argmax_flips = sum(1 for r in rows if r.get("argmax_fresh") is not None
                        and r.get("argmax_fresh") != r.get("argmax_restore"))
+    tv_max = max(tvs) if tvs else None
+    floor_max = max(floors) if floors else None
+    # LOSSY only if the cache-restore TV clears the within-boot determinism floor by a margin
+    lossy = bool(tvs and floors and tv_max > max(floor_max * 3, floor_max + 1e-3, 5e-3))
     summary = {
         "cell": a.cell, "n_prompts": len(files), "n_ok": len(tvs),
-        "tv_max": max(tvs) if tvs else None,
-        "tv_mean": (sum(tvs) / len(tvs)) if tvs else None,
+        "tv_max": tv_max, "tv_mean": (sum(tvs) / len(tvs)) if tvs else None,
+        "floor_max": floor_max, "floor_mean": (sum(floors) / len(floors)) if floors else None,
         "argmax_flips": argmax_flips,
-        "verdict": ("LOSSLESS(restore==fresh)" if tvs and max(tvs) < 1e-3
-                    else "LOSSY(restore!=fresh)" if tvs else "NO_DATA"),
+        "verdict": ("NO_DATA" if not tvs else
+                    "LOSSY(restore!=fresh, ABOVE floor)" if lossy else
+                    "LOSSLESS(restore==fresh, within floor)"),
     }
     os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
     json.dump({"summary": summary, "rows": rows}, open(a.out, "w"), indent=1)
