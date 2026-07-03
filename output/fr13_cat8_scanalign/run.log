@@ -1,0 +1,64 @@
+=== BIGDENOM-VARIANT SWEServe ARM cat8_recompute kind=cat8 launcher=forked expect=8 xflags=[none] subset=output/fr13_b1_gold_swe/subset_one_13453.json ===
+2026-07-03T21:04:26Z
+ba61bed4b96301e8621dfc5075b21f7585e0de66
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=110.3GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117           7         110           0           0         110
+Swap:             15           0          15
+healthy after 515s
+container env OK (cat8)
+PID 1 cmd=[/usr/bin/python3 /usr/local/bin/vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 0.0.0.0 --port 9950 --max-num-seqs 1 --gpu-memory-utilization 0.82 --max-model-len 131072 --seed 0 --attention-backend TREE_ATTN --gdn-prefill-backend triton --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config {"method":"qwen3_5_mtp","num_speculative_tokens":8,"speculative_token_tree":"[(0,),(1,),(0,0),(0,1),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,0,0)]"} --enable-prefix-caching --enable-chunked-prefill --mamba-block-size 1024 --mamba-ssm-cache-dtype float32 --max-num-batched-tokens 1024 --compilation-config {"cudagraph_mode":"FULL_AND_PIECEWISE"} ]
+   FR13_GPU_COMMITTER=0
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":8,"speculative_token_tree":"[(0,),(1,),(0,0),(0,1),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,0,0)]"}
+   FR13_COMMITTER_SYNCKILL=0
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 175 cmd=[/usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(51) ]
+   FR13_GPU_COMMITTER=0
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":8,"speculative_token_tree":"[(0,),(1,),(0,0),(0,1),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,0,0)]"}
+   FR13_COMMITTER_SYNCKILL=0
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 176 cmd=[VLLM::EngineCore                                                                                                                   ]
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 637 cmd=[bash -lc 
+hit=""; pids=""
+for p in $(ls /proc | grep -E "^[0-9]+$"); do
+  e="/proc/$p/environ"; [ -r "$e" ] || continue
+  cmd="$(tr "\0" " " < /proc/$p/cmdline 2>/dev/null || true)"
+  case "$cmd" in *vllm*|*VllmWorker*|*EngineCore*|*python*) ;; *) continue ;; esac
+  dm="$(tr "\0" "\n" < "$e" | grep -E "^FR10_DECODE_MODE_DEFAULT=" || true)"
+  if [ -n "$dm" ]; then
+    pids="$pids $p"
+    echo "PID $p cmd=[$cmd]"
+    tr "\0" "\n" < "$e" | grep -E "^(FR10_DECODE_MODE_DEFAULT|LUMO_FB_KERNEL_ROWS|FR13_GB10_FP8_GEMV_CFG|FR13_GPU_COMMITTER|FR13_COMMITTER_SYNCKILL|SPEC_CONFIG|FR13_REPLAY_ROUTE)=" | sed "s/^/   /"
+    hit="1"
+  fi
+done
+echo "SUMMARY worker_env_seen=[$hit] pids=[$pids]"
+ ]
+   FR13_GB10_FP8_GEMV_CFG=0
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_COMMITTER_SYNCKILL=0
+   LUMO_FB_KERNEL_ROWS=1
+   FR13_REPLAY_ROUTE=1
+   FR13_GPU_COMMITTER=0
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":8,"speculative_token_tree":"[(0,),(1,),(0,0),(0,1),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,0,0)]"}
+SUMMARY worker_env_seen=[1] pids=[ 1 175 176 637]
+worker environ needle OK (cat8)
+(EngineCore pid=176) INFO 07-03 21:12:53 [gpu_model_runner.py:7192] Graph capturing finished in 2 secs, took 0.13 GiB
+spec engagement OK: drafts delta=5.0 draft_tokens/drafts=8.0
+proxy OK
+WARN: eval offload alienware UNREACHABLE — eval attempted locally
+[teardown] kill proxy + docker rm -f fr13-bigdenom-cat8_recompute + recover_host_memory
+               total        used        free      shared  buff/cache   available
+Mem:             117           7         110           0           0         110
+Swap:             15           0          15
+2026-07-03T22:01:21Z
