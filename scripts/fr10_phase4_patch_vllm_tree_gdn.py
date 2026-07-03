@@ -9643,53 +9643,11 @@ def _lumo_tree_canonical_multidraft_sample(
     # deployed committer); FR13_DEVICE_MULTIDRAFT=0 restores the host-reference
     # path (byte-identical to HEAD's host-ref, kept for A/B). Fail-loud on
     # disengagement (no silent host fallback, bug-class 9).
-    # FR13_TREE_REJECTION_SAMPLER (ONE flag, default OFF => byte-identical to
-    # HEAD's committer path; this early-return block is never entered when OFF,
-    # and the new module is never imported). ON routes the temp>0 tree commit
-    # through the VECTORIZED, cuda-graph-safe rejection sampler
-    # (src/lumo_flywheel_serving/fr13_tree_rejection_sampler.py) which reproduces
-    # the SAME distribution-lossless SpecInfer/multidraft accept rule as
-    # FR13_DEVICE_MULTIDRAFT but WITHOUT the per-node Python .item() walk (the
-    # per-node distribution math is vectorized [N,F] tensor ops, randomness is
-    # pre-drawn per request from the request's own seeded generator, and the
-    # top-down descent is a pure integer index chase with ONE compact readback).
-    # It returns the SAME five committer products. Distribution-lossless, NOT
-    # byte (Gumbel-max torch draws differ from the numpy/torch.multinomial draws
-    # but follow the identical categoricals -- measured by the temp-0.6 q-vs-p TV
-    # gate). Fail-loud on disengagement (draft_probs!=None, missing logits): no
-    # silent host fallback (bug-class 9). Read once per call; OFF short-circuits
-    # BEFORE any import so an OFF boot is verbatim HEAD.
-    # FR13_TREE_REJECTION_SAMPLER (ONE flag, default OFF => byte-identical to
-    # HEAD's committer path). ON routes the temp>0 tree commit through the
-    # VECTORIZED, cuda-graph-safe rejection sampler
-    # (src/lumo_flywheel_serving/fr13_tree_rejection_sampler.py) which reproduces
-    # the SAME distribution-lossless SpecInfer/multidraft accept rule as
-    # FR13_DEVICE_MULTIDRAFT but WITHOUT the per-node Python .item() walk (per-
-    # node distribution math = vectorized [N,F] tensor ops; randomness pre-drawn
-    # per request from the request's own seeded generator; top-down descent = a
-    # pure integer index chase with ONE compact readback). Returns the SAME five
-    # committer products, then flows into the SAME shared finalizer tail as the
-    # device-multidraft path (via _fr13_dm_counts=[] loop-skip). Distribution-
-    # lossless, NOT byte (Gumbel-max torch draws differ but follow identical
-    # categoricals -- measured by the temp-0.6 q-vs-p TV gate). This flag WINS
-    # over FR13_DEVICE_MULTIDRAFT when both are set. Fail-loud on disengagement
-    # (no silent host fallback, bug-class 9). OFF => the import never happens and
-    # the device/host path is verbatim HEAD.
-    _fr13_tree_rejection_sampler = (
-        __import__('os').environ.get('FR13_TREE_REJECTION_SAMPLER', '0') == '1'
-        and draft_probs is None
-    )
     _fr13_device_multidraft = (
-        (not _fr13_tree_rejection_sampler)
-        and __import__('os').environ.get('FR13_DEVICE_MULTIDRAFT', '1') == '1'
+        __import__('os').environ.get('FR13_DEVICE_MULTIDRAFT', '1') == '1'
         and draft_probs is None
     )
-    if _fr13_tree_rejection_sampler:
-        # Same DtoH-skip contract as the device committer: the [nodes x vocab]
-        # host softmax is unused (the vectorized sampler owns the decision).
-        target_probs_cpu = None
-        self_probs_cpu = None
-    elif _fr13_device_multidraft:
+    if _fr13_device_multidraft:
         # device path decides every request -> the [nodes x vocab] host softmax
         # DtoH is SKIPPED (its only consumer is the host per-node loop, which is
         # skipped). The actual on-device commit runs at the loop anchor below.
@@ -9756,48 +9714,7 @@ def _lumo_tree_canonical_multidraft_sample(
     # the legacy loop iterates EMPTY (the host walk never runs; the [nodes x
     # vocab] softmax DtoH above was already skipped).
     _fr13_dm_counts = counts
-    if _fr13_tree_rejection_sampler:
-        # FR13_TREE_REJECTION_SAMPLER dispatch: same five-product contract as the
-        # device-multidraft committer, then the same _fr13_dm_counts=[] loop-skip
-        # so the shared finalizer tail runs unchanged. Vectorized + cuda-graph-
-        # safe; distribution-lossless (see the module docstring).
-        try:
-            from lumo_flywheel_serving.fr13_tree_rejection_sampler import (
-                fr13_tree_rejection_commit as _fr13_trs_commit,
-            )
-            if not globals().get('_FR13_TREE_REJECTION_SAMPLER_NEEDLE_DONE'):
-                globals()['_FR13_TREE_REJECTION_SAMPLER_NEEDLE_DONE'] = True
-                try:
-                    from vllm.logger import init_logger as _fr13_trs_il
-                    _fr13_trs_il('vllm.fr13_tree_rejection_sampler').info(
-                        'FR13_TREE_REJECTION_SAMPLER engaged: vectorized cuda-'
-                        'graph-safe tree rejection committer (no per-node .item() '
-                        'walk), n_req=%d' % len(counts)
-                    )
-                except Exception:
-                    print('FR13_TREE_REJECTION_SAMPLER engaged', flush=True)
-            (
-                out_rows, accepted_rows, accepted_lens,
-                accepted_node_paths, accepted_token_rows,
-            ) = _fr13_trs_commit(
-                num_draft_tokens,
-                draft_token_ids,
-                tree_parent_indices,
-                target_logits,
-                tree_self_logits,
-                draft_probs,
-                bonus_token_ids,
-                max_spec_len,
-                generators=generators,
-            )
-        except Exception as _fr13_trs_exc:
-            raise RuntimeError(
-                'FR13_TREE_REJECTION_SAMPLER failed (no silent fallback, '
-                'class 9): ' + type(_fr13_trs_exc).__name__ + ':'
-                + str(_fr13_trs_exc)
-            ) from _fr13_trs_exc
-        _fr13_dm_counts = []
-    elif _fr13_device_multidraft:
+    if _fr13_device_multidraft:
         try:
             import importlib.util as _fr13_dm_ilu, os as _fr13_dm_os
             _fr13_dm_path = _fr13_dm_os.environ.get(
