@@ -1,0 +1,29 @@
+{
+ "summary": {
+  "cell": "tacap",
+  "n_prompts": 2,
+  "n_ok": 2,
+  "tv_max": 0.9253074204937366,
+  "tv_mean": 0.49607884875305064,
+  "floor_max": 0.0,
+  "floor_mean": 0.0,
+  "argmax_flips": 1,
+  "verdict": "LOSSY(restore!=fresh, ABOVE floor)"
+ },
+ "rows": [
+  {
+   "prompt": "chatreq_1782984522259.json",
+   "tv": 0.06685027701236464,
+   "floor": 0.0,
+   "argmax_fresh": "The",
+   "argmax_restore": "The"
+  },
+  {
+   "prompt": "chatreq_1782984610737.json",
+   "tv": 0.9253074204937366,
+   "floor": 0.0,
+   "argmax_fresh": "Good",
+   "argmax_restore": "Let"
+  }
+ ]
+}
