@@ -546,6 +546,27 @@ def _patch_gdn_attn() -> bool:
             "                            dtype=_fr13_dtype,\n"
             "                            device=device,\n"
             "                        )\n"
+            "                        # PATH A (FR13_APC_BLOCK_REFOLD): per-step PROCESSED\n"
+            "                        # g/beta stash. The rings hold raw a,b (kernel path);\n"
+            "                        # the chunked re-fold needs the fused_post_conv_prep\n"
+            "                        # g,beta, which are not otherwise persisted past the\n"
+            "                        # forward. Pre-allocated here (NEVER lazily in the\n"
+            "                        # captured forward, gate-4 root-cause #2) so E1 is a\n"
+            "                        # pure index_copy under capture. Allocation is FLAG-\n"
+            "                        # GATED so the OFF path allocates nothing new -> byte-\n"
+            "                        # identical; E1's copy is gated on the SAME flag, so\n"
+            "                        # the buffers exist iff they are written.\n"
+            "                        if os.environ.get(\"FR13_APC_BLOCK_REFOLD\", \"0\") == \"1\":\n"
+            "                            _fr13_layer._fr13_refold_g_step = torch.zeros(\n"
+            "                                (_fr13_ring_bs, n_pad, _fr13_vh),\n"
+            "                                dtype=torch.float32,\n"
+            "                                device=device,\n"
+            "                            )\n"
+            "                            _fr13_layer._fr13_refold_beta_step = torch.zeros(\n"
+            "                                (_fr13_ring_bs, n_pad, _fr13_vh),\n"
+            "                                dtype=torch.float32,\n"
+            "                                device=device,\n"
+            "                            )\n"
             "                        _fr13_layer._fr13_replay_prev_lens = torch.zeros(\n"
             "                            (_fr13_ring_bs,),\n"
             "                            dtype=torch.int32,\n"
@@ -859,6 +880,20 @@ def _patch_gdn_linear() -> bool:
             "_FR13_ES_BLOCK_POOL = None    # block_pool handle (insert primes it)\n"
             "_FR13_ES_BLOCK_SIZE = None    # runtime mamba block_size (manager-published)\n"
             "_FR13_ES_GATE_LOG_COUNT = 0   # iter5 ALL-GATES diagnostic throttle (first ~50)\n"
+            "# ---- PATH A (FR13_APC_BLOCK_REFOLD) module globals ----\n"
+            "# Faithful tree+APC decode-block re-fold. All three maps are created\n"
+            "# ONLY when the flag is on (the E1 stash / E2 fold / E3 seed sites each\n"
+            "# short-circuit on the flag BEFORE touching these). Default '0' -> no\n"
+            "# read, no map growth -> byte-identical to today.\n"
+            "#   _FR13_REFOLD_TAIL: { req_id: { layer(str): {'k','v','g','beta','off'} } }\n"
+            "#     per-req pre-allocated 64-wide device tail buffers (index/copy only).\n"
+            "#   _FR13_REFOLD_CKPT: { req_id: { layer(str): fp32 state } } rolling faithful\n"
+            "#     checkpoint seeded from the restored base on a HIT (E3), advanced by E2.\n"
+            "#   _FR13_REFOLD_ABS:  { req_id: int } running absolute accepted-token count.\n"
+            "_FR13_REFOLD_TAIL = {}        # PATH A: per-req 64-wide k/v/g/beta tail rings\n"
+            "_FR13_REFOLD_CKPT = {}        # PATH A: per-req,per-layer rolling faithful seed\n"
+            "_FR13_REFOLD_ABS = {}         # PATH A: per-req running absolute accepted count\n"
+            "_FR13_REFOLD_ON = (os.environ.get(\"FR13_APC_BLOCK_REFOLD\", \"0\") == \"1\")\n"
             "\n"
             "\n"
             "def _fr13_es_try_bind(req_id, pos):\n"
@@ -5036,6 +5071,22 @@ def _fr13_gdn_subop_mab(
                         self._fr13_replay_ring_b[fr10_b, :tree_n].copy_(
                             b[start:end]
                         )
+                        # PATH A (FR13_APC_BLOCK_REFOLD, default OFF -> this
+                        # whole block is skipped -> byte-identical). Stash THIS
+                        # step's PROCESSED g_tree/beta_tree (the fused_post_conv
+                        # _prep outputs the chunked re-fold needs; the rings only
+                        # hold raw a,b) into pre-allocated per-layer buffers. Pure
+                        # index/copy under capture: no allocation, no .item(), no
+                        # host sync. The host-eager committer (E2) later gathers
+                        # the accepted columns from these + the k/v rings and folds
+                        # a 64-block through chunk_gated_delta_rule.
+                        if globals().get("_FR13_REFOLD_ON", False):
+                            self._fr13_refold_g_step[fr10_b, :tree_n].copy_(
+                                g_tree[start:end]
+                            )
+                            self._fr13_refold_beta_step[fr10_b, :tree_n].copy_(
+                                beta_tree[start:end]
+                            )
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
                         k=key_spec[0, start:end].contiguous(),
@@ -5881,7 +5932,16 @@ def _fr13_gdn_subop_mab(
                 # (Sparse-Prefix-Caching Remark 1). Per-row gather is host-side; the
                 # whole block is skipped under cuda-graph capture (warmup).
                 if (
-                    os.environ.get("FR13_APC_EXACT_SEED", "0") == "1"
+                    (
+                        os.environ.get("FR13_APC_EXACT_SEED", "0") == "1"
+                        # PATH A shares the SAME _FR13_ES_RESTORE_BY_REQ restore
+                        # channel; when REFOLD is on we must run this loop so the
+                        # re-folded 64-block seed (written by the committer via
+                        # _fr13_es_try_bind) restores into initial_state[r] on the
+                        # next turn. Both flags "0" -> condition False -> loop is
+                        # never entered -> byte-identical.
+                        or globals().get("_FR13_REFOLD_ON", False)
+                    )
                     and initial_state is not None
                     and has_initial_state is not None
                     and non_spec_query_start_loc is not None
@@ -5949,6 +6009,56 @@ def _fr13_gdn_subop_mab(
                                     device=initial_state.device,
                                     dtype=initial_state.dtype,
                                 )
+                                # PATH A E3 (FR13_APC_BLOCK_REFOLD): this HIT row
+                                # just restored the faithful block-aligned base for
+                                # THIS layer. Seed the rolling per-(req,layer)
+                                # checkpoint from it so the FIRST decode block this
+                                # turn chains its chunked re-fold from the faithful
+                                # base rather than an implicit zero. fp32 clone (the
+                                # committer fold advances it in fp32). Best-effort;
+                                # a miss just means the first block chains from None
+                                # (== a cold prefill from 0). REFOLD-gated -> the
+                                # EXACT_SEED-only path never touches these maps.
+                                if globals().get("_FR13_REFOLD_ON", False):
+                                    try:
+                                        _fr13_rf_ckpt = globals().setdefault(
+                                            "_FR13_REFOLD_CKPT", {}
+                                        )
+                                        _fr13_rf_ck_lyr = _fr13_rf_ckpt.setdefault(
+                                            _fr13_es_rid2, {}
+                                        )
+                                        _fr13_rf_ck_lyr[
+                                            str(getattr(self, "prefix", "?"))
+                                        ] = (
+                                            initial_state[_fr13_es_r2]
+                                            .detach()
+                                            .to(torch.float32)
+                                            .clone()
+                                        )
+                                        # reset the running absolute count + drop any
+                                        # stale tail: a fresh restored base starts a
+                                        # new fold chain at this row's restored pos.
+                                        # Keyed per (req, layer) to match the
+                                        # committer fold's abs bookkeeping.
+                                        try:
+                                            globals().setdefault(
+                                                "_FR13_REFOLD_ABS", {}
+                                            )[(
+                                                _fr13_es_rid2,
+                                                str(getattr(self, "prefix", "?")),
+                                            )] = int(_fr13_es_rec2.get("pos"))
+                                        except Exception:
+                                            pass
+                                        _fr13_rf_tail = globals().setdefault(
+                                            "_FR13_REFOLD_TAIL", {}
+                                        )
+                                        if _fr13_es_rid2 in _fr13_rf_tail:
+                                            _fr13_rf_tail[_fr13_es_rid2].pop(
+                                                str(getattr(self, "prefix", "?")),
+                                                None,
+                                            )
+                                    except Exception:
+                                        pass
                                 # absolute base of the restored seed (block-aligned).
                                 try:
                                     _fr13_es_segbase[int(_fr13_es_r2)] = int(
@@ -7749,6 +7859,174 @@ _FR13_RDAB_STAGE_COUNTS = {}
 _FR13_RDAB_RECORDS = 0
 
 
+def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
+    """PATH A (FR13_APC_BLOCK_REFOLD): faithful tree+APC decode-block re-fold.
+
+    Runs HOST-EAGER in the tree committer (post-decode; the committer already
+    does .item()/.tolist(), so is_current_stream_capturing()==False here). For
+    this (layer, req) it gathers THIS step's accepted-path k/v/g/beta columns
+    from the per-layer replay rings (k,v) + the PATH-A g/beta step stash (E1),
+    appends them into a per-(req,layer) 64-wide device tail, and every time the
+    tail crosses a 64-token boundary it folds the completed 64-block through the
+    SAME chunk_gated_delta_rule the lossless prefill MISS-loop uses, seeded from
+    the rolling faithful checkpoint (_FR13_REFOLD_CKPT, initialized on a HIT by
+    E3). The folded state is written to the prefill-capture restore channel
+    (_FR13_ES_PENDING_BY_REQ + _fr13_es_try_bind) so a future cache HIT restores
+    the faithful re-folded seed instead of the recurrent tree-decode leaf.
+
+    Bit-exactness (SSM): identical to the L0-PASS chained per-64-block MISS-loop
+    (same kernel, use_qk_l2norm_in_kernel=False with pre-l2normed q/k, fp32 seed
+    carry, seed-chaining associative over 64-aligned boundaries). CONV TWIN is a
+    DECLARED KNOWN RESIDUAL in v1: chunk_gated_delta_rule does NOT re-fold the
+    causal_conv1d kernel-1 window, so conv_state stays on the tree-decode leaf;
+    the localization exonerated conv-seed, so v1 leaves the conv re-run out.
+
+    Best-effort: any failure is swallowed so a tap fault NEVER breaks the served
+    commit (absent checkpoint -> restore falls back to the recurrent leaf = the
+    current behavior). Inert unless FR13_APC_BLOCK_REFOLD=1.
+    """
+    import os as _rf_os
+    try:
+        if not getattr(gdn_mod, "_FR13_REFOLD_ON", False):
+            return
+        acc_len = int(acc_len)
+        if acc_len <= 0:
+            # zero-accept step: nothing to fold this step (all drafts rejected).
+            return
+        _rf_bs = 64
+        _rf_prefix = str(getattr(layer, "prefix", "?"))
+        _rf_ring_k = getattr(layer, "_fr13_replay_ring_k", None)
+        _rf_ring_v = getattr(layer, "_fr13_replay_ring_v", None)
+        _rf_g_step = getattr(layer, "_fr13_refold_g_step", None)
+        _rf_beta_step = getattr(layer, "_fr13_refold_beta_step", None)
+        if (
+            _rf_ring_k is None
+            or _rf_ring_v is None
+            or _rf_g_step is None
+            or _rf_beta_step is None
+        ):
+            return
+        _rf_tree_n = int(_rf_ring_k.size(1))
+        # accepted tree-node indices for this row (host list), clamped in-range.
+        _rf_cols = [
+            int(_c) for _c in node_path[:acc_len]
+            if 0 <= int(_c) < _rf_tree_n
+        ]
+        if not _rf_cols:
+            return
+        _rf_idx = torch.tensor(
+            _rf_cols, dtype=torch.long, device=_rf_ring_k.device
+        )
+        # gather THIS step's accepted columns (k,v from rings; g,beta from the
+        # E1 step stash). Shapes: k=[n,Hk,Dk], v=[n,Hv,Dv], g=[n,Hv], beta=[n,Hv].
+        _rf_k = _rf_ring_k[row].index_select(0, _rf_idx).to(torch.float32)
+        _rf_v = _rf_ring_v[row].index_select(0, _rf_idx).to(torch.float32)
+        _rf_g = _rf_g_step[row].index_select(0, _rf_idx).to(torch.float32)
+        _rf_beta = _rf_beta_step[row].index_select(0, _rf_idx).to(torch.float32)
+        # per-(req,layer) rolling tail of accepted tokens awaiting a 64-fold.
+        _rf_tail_map = gdn_mod._FR13_REFOLD_TAIL.setdefault(req_id, {})
+        _rf_ent = _rf_tail_map.get(_rf_prefix)
+        if _rf_ent is None:
+            _rf_ent = {"k": _rf_k, "v": _rf_v, "g": _rf_g, "beta": _rf_beta}
+        else:
+            _rf_ent = {
+                "k": torch.cat([_rf_ent["k"], _rf_k], dim=0),
+                "v": torch.cat([_rf_ent["v"], _rf_v], dim=0),
+                "g": torch.cat([_rf_ent["g"], _rf_g], dim=0),
+                "beta": torch.cat([_rf_ent["beta"], _rf_beta], dim=0),
+            }
+        # running absolute accepted-token count. Keyed per (req, layer): every
+        # GDN layer folds the SAME 64-block boundaries (tails advance in
+        # lockstep), but each layer runs this fn and mutates the base, so a
+        # req-only key would let layer 0's advance corrupt layer 1's boundary.
+        # The per-layer key keeps each layer's block-end pos independent (and
+        # equal). E3 seeds this from the restored pos on a HIT.
+        _rf_abs_map = gdn_mod._FR13_REFOLD_ABS
+        _rf_abs_key = (req_id, _rf_prefix)
+        _rf_abs_base = int(
+            _rf_abs_map.get(_rf_abs_key, _rf_abs_map.get(req_id, 0))
+        )
+        # fold every completed 64-block currently held in the tail.
+        while int(_rf_ent["k"].size(0)) >= _rf_bs:
+            _rf_blk_k = _rf_ent["k"][:_rf_bs].unsqueeze(0).contiguous()
+            _rf_blk_v = _rf_ent["v"][:_rf_bs].unsqueeze(0).contiguous()
+            _rf_blk_g = _rf_ent["g"][:_rf_bs].unsqueeze(0).contiguous()
+            _rf_blk_beta = _rf_ent["beta"][:_rf_bs].unsqueeze(0).contiguous()
+            _rf_ck_map = gdn_mod._FR13_REFOLD_CKPT.setdefault(req_id, {})
+            _rf_seed = _rf_ck_map.get(_rf_prefix)
+            if _rf_seed is not None:
+                _rf_seed = _rf_seed.to(
+                    device=_rf_blk_k.device, dtype=torch.float32
+                )
+                if _rf_seed.dim() == 3:
+                    _rf_seed = _rf_seed.unsqueeze(0)
+            _rf_cu = torch.tensor(
+                [0, _rf_bs], device=_rf_blk_k.device, dtype=torch.int32
+            )
+            # THE FOLD: the MISS-loop chunk_gated_delta_rule call. q is passed as
+            # k (the rings never store q -- "q-side ops never touch state", GDN
+            # ring comment): the SSM recurrent final_state depends ONLY on
+            # k,v,g,beta, and we discard the output (_rf_o), keeping only
+            # final_state, so the q placeholder is state-exact. use_qk_l2norm_in
+            # _kernel=False because k (and q) are ALREADY l2-normed by
+            # fused_post_conv_prep (apply_l2norm=True), identical to the MISS-loop.
+            _rf_o, _rf_final = layer.chunk_gated_delta_rule(
+                q=_rf_blk_k,
+                k=_rf_blk_k,
+                v=_rf_blk_v,
+                g=_rf_blk_g,
+                beta=_rf_blk_beta,
+                initial_state=_rf_seed,
+                output_final_state=True,
+                cu_seqlens=_rf_cu,
+                chunk_indices=None,
+                chunk_offsets=None,
+                use_qk_l2norm_in_kernel=False,
+            )
+            _rf_fold_state = _rf_final[0].detach().to(torch.float32).clone()
+            # absolute boundary this block completes (block-aligned pos).
+            _rf_blk_end = _rf_abs_base + _rf_bs
+            # WRITE to the restore channel (the SAME hop prefill-capture uses).
+            _rf_pend = getattr(gdn_mod, "_FR13_ES_PENDING_BY_REQ", None)
+            _rf_bindfn = getattr(gdn_mod, "_fr13_es_try_bind", None)
+            if _rf_pend is not None:
+                _rf_d = (
+                    _rf_pend.setdefault(req_id, {})
+                    .setdefault(int(_rf_blk_end), {})
+                )
+                _rf_d[_rf_prefix] = _rf_fold_state
+                if _rf_bindfn is not None:
+                    try:
+                        _rf_bindfn(req_id, int(_rf_blk_end))
+                    except Exception:
+                        pass
+            # advance the rolling faithful checkpoint + trim the folded tokens.
+            _rf_ck_map[_rf_prefix] = _rf_fold_state
+            _rf_ent = {
+                "k": _rf_ent["k"][_rf_bs:],
+                "v": _rf_ent["v"][_rf_bs:],
+                "g": _rf_ent["g"][_rf_bs:],
+                "beta": _rf_ent["beta"][_rf_bs:],
+            }
+            _rf_abs_base = _rf_blk_end
+            if _rf_os.environ.get("FR13_SERVE_LOG", "0") in ("1", "true"):
+                try:
+                    print(
+                        "FR13_REFOLD_APPLIED req=" + str(req_id)
+                        + " pos=" + str(int(_rf_blk_end))
+                        + " blk=" + str(int(_rf_blk_end // _rf_bs)),
+                        flush=True,
+                    )
+                except Exception:
+                    pass
+        # persist the (possibly trimmed) tail + advanced abs base.
+        _rf_tail_map[_rf_prefix] = _rf_ent
+        _rf_abs_map[_rf_abs_key] = int(_rf_abs_base)
+    except Exception:
+        # never break the served commit on a re-fold tap failure.
+        pass
+
+
 def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
     """FR13_APC_SNAP_FIX: publish each req's committed accepted-LEAF node-bank
     row (spec_state_indices[b, accepted_len-1] = the last row the tree committer
@@ -9313,6 +9591,11 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                     # eager-pack fast loop runs no publish/recompute hook). Default
                     # OFF -> gate unchanged -> fast loop unchanged -> byte-identical.
                     or __import__('os').environ.get("FR13_APC_EXACT_SEED", "0") == "1"
+                    # PATH A (FR13_APC_BLOCK_REFOLD) folds per (layer,row) in the
+                    # verbatim per-layer loop (the fast loop has no fold hook), so
+                    # route through it when REFOLD is on. Default OFF -> gate
+                    # unchanged -> byte-identical.
+                    or __import__('os').environ.get("FR13_APC_BLOCK_REFOLD", "0") == "1"
                 )
                 if (
                     _ep_active
@@ -9498,6 +9781,33 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                             _lumo_tree_commit_gdn, _fr13_layer,
                             _fr13_spec_req_ids, _fr13_replay_lens,
                         )
+                        # PATH A (FR13_APC_BLOCK_REFOLD, default OFF -> the fn
+                        # early-returns on _FR13_REFOLD_ON=False, and the guard
+                        # below skips it entirely -> byte-identical). Host-eager
+                        # here (the committer just did .item()s). Fold each row's
+                        # accepted 64-blocks for THIS layer, seeded from the rolling
+                        # faithful checkpoint, into the prefill-capture restore
+                        # channel. Fires only on 64-aligned crossings with acc_len>0
+                        # (the fn itself skips zero-accept + sub-64 tails).
+                        if getattr(
+                            _lumo_tree_commit_gdn, "_FR13_REFOLD_ON", False
+                        ):
+                            for _fr13_rf_b in range(len(_fr13_spec_req_ids)):
+                                if (
+                                    _fr13_rf_b >= len(_fr13_replay_lens)
+                                    or _fr13_rf_b >= len(
+                                        _fr13_replay_gdn_node_paths
+                                    )
+                                ):
+                                    continue
+                                _fr13_pathA_refold(
+                                    _lumo_tree_commit_gdn,
+                                    _fr13_layer,
+                                    _fr13_rf_b,
+                                    str(_fr13_spec_req_ids[_fr13_rf_b]),
+                                    int(_fr13_replay_lens[_fr13_rf_b]),
+                                    _fr13_replay_gdn_node_paths[_fr13_rf_b],
+                                )
                         # FR13: vestigial EXACT_SEED committer call REMOVED. It never
                         # published (ES_CHAIN_PUBLISH=0) -- it is leftover v1 scaffolding
                         # superseded by PREFILL-CAPTURE (the sole lossless cache-write
@@ -10157,6 +10467,26 @@ def _lumo_tree_canonical_multidraft_sample(
                         _lumo_tree_commit_gdn, _fr13_layer,
                         _fr13_spec_req_ids, _fr13_replay_lens,
                     )
+                    # PATH A (FR13_APC_BLOCK_REFOLD) twin of the greedy-committer
+                    # fold hop above (same rationale + inertness). Default OFF ->
+                    # skipped -> byte-identical.
+                    if getattr(
+                        _lumo_tree_commit_gdn, "_FR13_REFOLD_ON", False
+                    ):
+                        for _fr13_rf_b in range(len(_fr13_spec_req_ids)):
+                            if (
+                                _fr13_rf_b >= len(_fr13_replay_lens)
+                                or _fr13_rf_b >= len(_fr13_replay_gdn_node_paths)
+                            ):
+                                continue
+                            _fr13_pathA_refold(
+                                _lumo_tree_commit_gdn,
+                                _fr13_layer,
+                                _fr13_rf_b,
+                                str(_fr13_spec_req_ids[_fr13_rf_b]),
+                                int(_fr13_replay_lens[_fr13_rf_b]),
+                                _fr13_replay_gdn_node_paths[_fr13_rf_b],
+                            )
                     # FR13: vestigial EXACT_SEED committer call REMOVED (twin of the
                     # removal in the eager-pack branch above; same rationale -- never
                     # published, superseded by prefill-capture, cost 48 syncs/step).
