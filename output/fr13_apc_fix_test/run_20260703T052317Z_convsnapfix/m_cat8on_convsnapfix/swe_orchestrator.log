@@ -1,0 +1,14 @@
+[eval-offload] eval step -> alienware (native x86_64)
+[codex-offload] codex docker -> alienware (x86); endpoint=http://127.0.0.1:8023/v1 (GB10 stays vLLM-only — uncontended deploy-speed)
+=== [2026-07-03T05:32:10Z] dataset=princeton-nlp/SWE-bench_Verified tag=verified n=2 concurrency=1 ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[startup-gc] removing stale worktree: /home/mark/shared/lumoFlyWheel/output/fr13_es_observe/run_20260702T235258Z/m_cat8on_obs/swe_out/verified/per_task/astropy__astropy-13236/workspace
+[2026-07-03T05:32:12Z] -> astropy__astropy-13453
+Preparing worktree (detached HEAD 19cc80471)
+HEAD is now at 19cc80471 Merge pull request #13444 from eerovaher/unit-format-docs
+[2026-07-03T05:35:16Z] <- astropy__astropy-13453 verdict=failed elapsed_total=183.3s
+[2026-07-03T05:35:16Z] -> astropy__astropy-13579
+Preparing worktree (detached HEAD 0df94ff70)
+HEAD is now at 0df94ff70 Merge pull request #13574 from pllim/rm-corpus-404
+[2026-07-03T05:39:24Z] <- astropy__astropy-13579 verdict=failed elapsed_total=248.3s
+=== [2026-07-03T05:39:24Z] DONE n=2 resolved_rate=0.0 verdicts={'failed': 2} ===
