@@ -1,0 +1,71 @@
+{
+ "summary": {
+  "cell": "cat8_EAGER_exseed",
+  "n_prompts": 8,
+  "n_ok": 8,
+  "tv_max": 0.9739134240490807,
+  "tv_mean": 0.317930288179571,
+  "floor_max": 0.0,
+  "floor_mean": 0.0,
+  "argmax_flips": 3,
+  "verdict": "LOSSY(restore!=fresh, ABOVE floor)"
+ },
+ "rows": [
+  {
+   "prompt": "chatreq_1782984498322.json",
+   "tv": 0.012364850966248524,
+   "floor": 0.0,
+   "argmax_fresh": "Let",
+   "argmax_restore": "Let"
+  },
+  {
+   "prompt": "chatreq_1782984522259.json",
+   "tv": 0.7793678343764512,
+   "floor": 0.0,
+   "argmax_fresh": "The",
+   "argmax_restore": "Now"
+  },
+  {
+   "prompt": "chatreq_1782984545873.json",
+   "tv": 0.00042140152507415214,
+   "floor": 0.0,
+   "argmax_fresh": "Let",
+   "argmax_restore": "Let"
+  },
+  {
+   "prompt": "chatreq_1782984567116.json",
+   "tv": 0.07935961671349298,
+   "floor": 0.0,
+   "argmax_fresh": "Let",
+   "argmax_restore": "Let"
+  },
+  {
+   "prompt": "chatreq_1782984575671.json",
+   "tv": 0.06006498753718944,
+   "floor": 0.0,
+   "argmax_fresh": "Let",
+   "argmax_restore": "Let"
+  },
+  {
+   "prompt": "chatreq_1782984587974.json",
+   "tv": 0.06006498753718944,
+   "floor": 0.0,
+   "argmax_fresh": "Let",
+   "argmax_restore": "Let"
+  },
+  {
+   "prompt": "chatreq_1782984600275.json",
+   "tv": 0.5778852027318416,
+   "floor": 0.0,
+   "argmax_fresh": "Let",
+   "argmax_restore": "The"
+  },
+  {
+   "prompt": "chatreq_1782984610737.json",
+   "tv": 0.9739134240490807,
+   "floor": 0.0,
+   "argmax_fresh": "Now",
+   "argmax_restore": "Let"
+  }
+ ]
+}
