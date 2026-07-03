@@ -1,0 +1,29 @@
+{
+ "summary": {
+  "cell": "native_exseed",
+  "n_prompts": 2,
+  "n_ok": 2,
+  "tv_max": 0.9602502582644142,
+  "tv_mean": 0.8806010734935568,
+  "floor_max": 0.0,
+  "floor_mean": 0.0,
+  "argmax_flips": 2,
+  "verdict": "LOSSY(restore!=fresh, ABOVE floor)"
+ },
+ "rows": [
+  {
+   "prompt": "chatreq_1782984522259.json",
+   "tv": 0.8009518887226994,
+   "floor": 0.0,
+   "argmax_fresh": "The",
+   "argmax_restore": "Now"
+  },
+  {
+   "prompt": "chatreq_1782984610737.json",
+   "tv": 0.9602502582644142,
+   "floor": 0.0,
+   "argmax_fresh": "Now",
+   "argmax_restore": "Let"
+  }
+ ]
+}
