@@ -1475,9 +1475,10 @@ try:
     _fr13apc_cap = _fr13apc_os.environ.get("FR13_APC_HIT_SUFFIX_CAP", "ABSENT")
     _fr13apc_za = _fr13apc_os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "ABSENT")
     _fr13apc_conv = _fr13apc_os.environ.get("FR13_APC_CONV_FIX", "ABSENT")
+    _fr13apc_convsnap = _fr13apc_os.environ.get("FR13_APC_CONV_SNAP_FIX", "ABSENT")
     _fr13apc_hrs = _fr13apc_os.environ.get("FR13_APC_HIT_RECURRENT_SUFFIX", "ABSENT")
     _fr13apc_es = _fr13apc_os.environ.get("FR13_APC_EXACT_SEED", "ABSENT")
-    print("FR13_APC_ENV_BRIDGE_LOADED worker pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " ZEROACCEPT=" + _fr13apc_za + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " CONV_FIX=" + _fr13apc_conv + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs + " EXACT_SEED=" + _fr13apc_es, flush=True)
+    print("FR13_APC_ENV_BRIDGE_LOADED worker pid=" + _fr13apc_pid + " SNAP_FIX=" + _fr13apc_snap + " ZEROACCEPT=" + _fr13apc_za + " HIT_SUFFIX_CAP=" + _fr13apc_cap + " CONV_FIX=" + _fr13apc_conv + " CONV_SNAP_FIX=" + _fr13apc_convsnap + " HIT_RECURRENT_SUFFIX=" + _fr13apc_hrs + " EXACT_SEED=" + _fr13apc_es, flush=True)
     # /logs is bind-mounted; vLLM swallows bare worker stdout so the file is the reliable
     # host-checkable proof of what the worker's live os.environ holds AT gdn import.
     with open(_fr13apc_os.environ.get("FR13_APC_BRIDGE_MARKER_FILE", "/logs/fr13_apc_bridge_loaded.flag"), "w") as _fr13apc_m:
