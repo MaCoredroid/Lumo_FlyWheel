@@ -976,6 +976,16 @@ def _patch_gdn_linear() -> bool:
             "                    store.popitem(last=False)\n"
             "        except Exception:\n"
             "            pass\n"
+            "        # NOTE (FR13 leak): do NOT pop this (req,pos) from PENDING here.\n"
+            "        # try_bind runs ONCE PER GDN LAYER and the ckpt store holds the\n"
+            "        # SAME `layers` dict object by shared ref -- layers 1..47 keep\n"
+            "        # filling it via setdefault on later forwards. Popping now would\n"
+            "        # make the next layer setdefault a FRESH empty dict (not the stored\n"
+            "        # one) -> the ckpt would keep only layer-0's state (BUG-2 regress,\n"
+            "        # LOSSY restore). The bounded drain of PENDING is done at the WRITE\n"
+            "        # site (per-req newest-N boundary cap, once all layers for a pos are\n"
+            "        # captured) + at _free_request; the ckpt LRU cap can only truly\n"
+            "        # free once the WRITE-site cap releases PENDING's ref.\n"
             "        try:\n"
             "            _hx = h.hex() if hasattr(h, \"hex\") else str(h)\n"
             "        except Exception:\n"
@@ -6895,6 +6905,160 @@ def _fr13_gdn_subop_mab(
                                     # turn that eventually crosses one will re-prefill
                                     # and capture it). Nothing to do.
                                     continue
+                                # ---- FR13 leak fix (per-turn PENDING prune) --------
+                                # _FR13_ES_PENDING_BY_REQ[req] accumulates one
+                                # {layer->state} dict per block boundary and is NEVER
+                                # released within a request (the only within-request
+                                # drain, _fr13_es_worker_postprocess, is disabled; the
+                                # bind copies the SAME dict object into the ckpt store
+                                # by shared REF, so FIX A's count-cap on the ckpt cannot
+                                # free the tensors while PENDING still pins them). Over
+                                # a long multi-turn (~40k-token) request this is the
+                                # DOMINANT unbounded tensor-holder (~2 MiB/layer x 48
+                                # layers x every boundary ever captured). Fix: at the
+                                # top of THIS prefill's capture, drop every PENDING
+                                # boundary strictly BELOW this prefill's first boundary
+                                # (_fr13_es_first_bnd). Those are prior-turn boundaries:
+                                # by the time a later turn re-prefills, all 48 layers
+                                # long since filled their {layer->state} dict AND bound
+                                # it into the LRU-capped ckpt store, which now solely
+                                # owns them -> releasing PENDING's ref lets the ckpt LRU
+                                # actually free memory. LOSSLESS: the restore path reads
+                                # _FR13_ES_RESTORE_BY_REQ (staged from the ckpt store by
+                                # hash), NEVER PENDING; boundaries at/above first_bnd
+                                # (this prefill's own set, still being filled by later
+                                # layers) are untouched, so per-layer accumulation is
+                                # preserved. Default-safe: this whole block is EXACT_
+                                # SEED / REFOLD gated; when PENDING is small the prune
+                                # is a cheap no-op. Best-effort; never breaks capture.
+                                try:
+                                    _fr13_es_prq = _fr13_es_pend_by_req.get(
+                                        _fr13_es_rid
+                                    )
+                                    if _fr13_es_prq:
+                                        _fr13_es_hmap = globals().get(
+                                            "_FR13_ES_HASH_BY_REQ"
+                                        )
+                                        _fr13_es_hsub = (
+                                            _fr13_es_hmap.get(_fr13_es_rid)
+                                            if isinstance(_fr13_es_hmap, dict)
+                                            else None
+                                        )
+                                        for _fr13_es_op in [
+                                            _fr13_es_kk
+                                            for _fr13_es_kk in list(
+                                                _fr13_es_prq.keys()
+                                            )
+                                            if int(_fr13_es_kk)
+                                            < int(_fr13_es_first_bnd)
+                                        ]:
+                                            _fr13_es_prq.pop(_fr13_es_op, None)
+                                            if _fr13_es_hsub is not None:
+                                                _fr13_es_hsub.pop(
+                                                    _fr13_es_op, None
+                                                )
+                                except Exception:
+                                    pass
+                                # ---- FR13 leak fix (defensive newest-N safety cap) --
+                                # Belt-and-suspenders for the pathological case the
+                                # within-request completeness drain cannot reach: a
+                                # boundary whose {layer->state} dict NEVER reaches
+                                # len(_FR13_REPLAY_LAYERS) (e.g. a layer's forward was
+                                # skipped by a mid-prefill exception, or a MISS block
+                                # whose insert never binds it) -> it would sit in
+                                # PENDING forever (until _free_request). Bound PENDING
+                                # per-req to the newest FR13_ES_PENDING_CAP boundaries,
+                                # evicting the LOWEST (oldest) pos first -- BUT ONLY
+                                # boundaries already bound in the ckpt store (their hash
+                                # -> ckpt entry present), so a live restore (which reads
+                                # the ckpt, never PENDING) can NEVER miss a state we
+                                # drop here. Default cap 256 (>> the ~48 boundaries a
+                                # 40k prefill creates, so a healthy prefill is NEVER
+                                # touched -> byte-identical); set FR13_ES_PENDING_CAP=0
+                                # to disable. Size note: at 256 x ~48 layers x ~2 MiB
+                                # this is a hard ~24 GiB ceiling PER REQ only if every
+                                # boundary is incomplete-yet-bound (impossible in
+                                # practice); the real steady state under the completeness
+                                # drain is a handful of in-flight boundaries.
+                                try:
+                                    _fr13_es_pcap = int(
+                                        os.environ.get(
+                                            "FR13_ES_PENDING_CAP", "256"
+                                        )
+                                    )
+                                except Exception:
+                                    _fr13_es_pcap = 256
+                                if _fr13_es_pcap > 0:
+                                    try:
+                                        _fr13_es_prqc = (
+                                            _fr13_es_pend_by_req.get(
+                                                _fr13_es_rid
+                                            )
+                                        )
+                                        if (
+                                            _fr13_es_prqc is not None
+                                            and len(_fr13_es_prqc)
+                                            > _fr13_es_pcap
+                                        ):
+                                            _fr13_es_bp = globals().get(
+                                                "_FR13_ES_BLOCK_POOL"
+                                            )
+                                            _fr13_es_ckstore = getattr(
+                                                _fr13_es_bp,
+                                                "_fr13_es_ckpt",
+                                                None,
+                                            )
+                                            _fr13_es_hmapc = globals().get(
+                                                "_FR13_ES_HASH_BY_REQ"
+                                            )
+                                            _fr13_es_hsubc = (
+                                                _fr13_es_hmapc.get(
+                                                    _fr13_es_rid
+                                                )
+                                                if isinstance(
+                                                    _fr13_es_hmapc, dict
+                                                )
+                                                else None
+                                            )
+                                            # oldest-first, drop only ckpt-bound pos,
+                                            # until at/under cap.
+                                            for _fr13_es_cp in sorted(
+                                                _fr13_es_prqc.keys()
+                                            ):
+                                                if (
+                                                    len(_fr13_es_prqc)
+                                                    <= _fr13_es_pcap
+                                                ):
+                                                    break
+                                                _fr13_es_cph = (
+                                                    _fr13_es_hsubc.get(
+                                                        _fr13_es_cp
+                                                    )
+                                                    if _fr13_es_hsubc
+                                                    is not None
+                                                    else None
+                                                )
+                                                if (
+                                                    _fr13_es_cph is not None
+                                                    and isinstance(
+                                                        _fr13_es_ckstore,
+                                                        dict,
+                                                    )
+                                                    and _fr13_es_cph
+                                                    in _fr13_es_ckstore
+                                                ):
+                                                    _fr13_es_prqc.pop(
+                                                        _fr13_es_cp, None
+                                                    )
+                                                    if (
+                                                        _fr13_es_hsubc
+                                                        is not None
+                                                    ):
+                                                        _fr13_es_hsubc.pop(
+                                                            _fr13_es_cp, None
+                                                        )
+                                    except Exception:
+                                        pass
                                 # per-segment seed: cache-HIT -> the RESTORED chunked
                                 # base (already in initial_state[r], applied by the
                                 # restore loop); cache-MISS -> zero. Shape [1,HV,V,K]
@@ -7006,6 +7170,79 @@ def _fr13_gdn_subop_mab(
                                             _fr13_es_bindfn(
                                                 _fr13_es_rid, int(_fr13_es_bnd)
                                             )
+                                    except Exception:
+                                        pass
+                                    # ---- FR13 leak fix (WITHIN-request drain) -----
+                                    # The per-turn prune (top of this capture) only
+                                    # drops PRIOR-turn boundaries. It does NOTHING for
+                                    # the boundaries THIS single prefill just wrote:
+                                    # a 40k-token first prefill walks ~48 boundaries
+                                    # x 48 layers in ONE capture pass and, with no
+                                    # within-request drain, pins them ALL in PENDING
+                                    # (the ckpt shares the SAME `layers` dict by ref,
+                                    # so FIX A's count-cap frees nothing while PENDING
+                                    # holds it) until _free_request. That is the
+                                    # DOMINANT holder that OOMed nativeexseed_q. Drain
+                                    # HERE, keyed off a COMPLETENESS signal: a boundary
+                                    # whose `layers` dict has one entry per registered
+                                    # GDN layer (len == len(_FR13_REPLAY_LAYERS)) is
+                                    # FULLY captured -- all layers' forwards have landed
+                                    # AND (by construction of try_bind, which stores the
+                                    # SAME dict object) the ckpt store already owns that
+                                    # complete dict. Releasing PENDING's ref then frees
+                                    # NOTHING the restore path needs (restore reads
+                                    # _FR13_ES_RESTORE_BY_REQ<-ckpt, never PENDING) and
+                                    # lets FIX A's ckpt LRU actually reclaim on eviction.
+                                    # LOSSLESS: we only pop a pos once its dict is
+                                    # COMPLETE and bound; an incomplete (still-filling)
+                                    # pos is untouched, so per-layer accumulation is
+                                    # preserved. Within one prefill each layer visits
+                                    # each boundary exactly once, so a popped pos is
+                                    # never resurrected by a later layer this pass; a
+                                    # LATER turn re-prefills and re-binds a fresh
+                                    # complete dict (idempotent). Env-gated
+                                    # (FR13_ES_PENDING_DRAIN, default '1'); '0' restores
+                                    # the pre-fix hold-until-free behavior byte-for-byte.
+                                    try:
+                                        if os.environ.get(
+                                            "FR13_ES_PENDING_DRAIN", "1"
+                                        ) == "1":
+                                            _fr13_es_nly = len(
+                                                globals().get(
+                                                    "_FR13_REPLAY_LAYERS", {}
+                                                ) or {}
+                                            )
+                                            if (
+                                                _fr13_es_nly > 0
+                                                and len(_fr13_es_d)
+                                                >= _fr13_es_nly
+                                            ):
+                                                # complete -> ckpt owns the shared dict.
+                                                _fr13_es_prq2 = (
+                                                    _fr13_es_pend_by_req.get(
+                                                        _fr13_es_rid
+                                                    )
+                                                )
+                                                if _fr13_es_prq2 is not None:
+                                                    _fr13_es_prq2.pop(
+                                                        int(_fr13_es_bnd), None
+                                                    )
+                                                _fr13_es_hmap2 = globals().get(
+                                                    "_FR13_ES_HASH_BY_REQ"
+                                                )
+                                                if isinstance(
+                                                    _fr13_es_hmap2, dict
+                                                ):
+                                                    _fr13_es_hsub2 = (
+                                                        _fr13_es_hmap2.get(
+                                                            _fr13_es_rid
+                                                        )
+                                                    )
+                                                    if _fr13_es_hsub2 is not None:
+                                                        _fr13_es_hsub2.pop(
+                                                            int(_fr13_es_bnd),
+                                                            None,
+                                                        )
                                     except Exception:
                                         pass
                                     _fr13_es_eng_log_line(
@@ -7529,7 +7766,7 @@ def _patch_scheduler_fr13_freereq_cleanup() -> bool:
             "                '_FR10_TREE_ACCEPTED_PATH_BY_REQ_ID', '_FR13_APC_SSM_LEAF_BY_REQ',",
             "                '_FR13_APC_CONV_LEAF_BY_REQ', '_FR13_APC_SSM_ALIGNED_POS_BY_REQ',",
             "                '_FR13_BOUNDARY_LAST_WRITTEN_BY_REQ', '_FR13_ES_PENDING_BY_REQ',",
-            "                '_FR13_ES_HASH_BY_REQ', '_FR13_ES_RESTORE_BY_REQ',",
+            "                '_FR13_ES_HASH_BY_REQ', '_FR13_ES_RESTORE_BY_REQ', '_FR13_ES_HIT_HASHES',",
             "                '_FR13_REFOLD_TAIL', '_FR13_REFOLD_CKPT',",
             "                '_FR13_REFOLD_SEEDED', '_FR13_REFOLD_WROTE',",
             "            ):",
