@@ -305,7 +305,14 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   : "${FR13_APC_FIXED_BUFFER:=0}"
   : "${FR13_APC_BLOCK_REFOLD:=0}"
   : "${FR13_APC_REFOLD_TO_SNAPSHOT:=0}"  # fold->snapshot chunked-ptr publish (default OFF -> byte-identical; needs BLOCK_REFOLD+EXACT_SEED+SNAP_FIX to be observable)
-  : "${FR13_APC_CONV_LEAF_COMPLETE:=0}"  # conv leaf always-place-a-row + SSM-leaf backstop (default OFF -> byte-identical; needs CONV_SNAP_FIX to be observable)
+  # BAKED 2026-07-04 (user): CONV_LEAF_COMPLETE default ON. The conv wrong-row write (snapshot
+  # falling back to base col-0 instead of the committed accepted-leaf among co-resident tree rows)
+  # was the PRIMARY carrier of the tree+cache agent give-up — dose-response proven on 13453:
+  # conv broken -> 2-6-turn drift give-up; CONV_SNAP_FIX partial -> 8 turns; complete -> 16
+  # coherent turns, drift GONE, conv_leafmap 25200 hits / 0 misses (fixv1 gate, campaign doc §17).
+  # Correctness-directional (only ever substitutes a COMMITTED row for a provably-wrong one);
+  # auto-no-op for native (leaf maps only published by the tree committer); cache-OFF byte-identical.
+  : "${FR13_APC_CONV_LEAF_COMPLETE:=1}"
   export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP FR13_APC_EXACT_SEED FR13_APC_FIXED_BUFFER FR13_APC_BLOCK_REFOLD FR13_APC_REFOLD_TO_SNAPSHOT FR13_APC_CONV_LEAF_COMPLETE
 else
   APC_FLAGS=""

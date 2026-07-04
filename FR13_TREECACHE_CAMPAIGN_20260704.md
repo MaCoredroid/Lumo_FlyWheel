@@ -318,3 +318,9 @@ v2 cannot move it). Consequences: (a) route seam = cold-prefill realization pari
 make align prefill end-state match CONFIG_ONLY's realization); (b) route choice decides context economics
 (subagent quarantine vs monolithic 49k wall) -> the context track covers it harness-side regardless;
 (c) full N=8 route probe still queued for true per-config distributions (task #1).
+
+## 19. BAKED (user): FR13_APC_CONV_LEAF_COMPLETE default ON
+
+The drift-give-up fix is now default for every cache-ON boot (launcher :308 block). Rationale §17-18;
+correctness-directional, native auto-no-op, cache-OFF byte-identical. REFOLD_TO_SNAPSHOT stays default
+OFF until the v2 gate proves the SSM half (refold_published>0, redirect_used>0, lossless gates).
