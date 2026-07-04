@@ -968,14 +968,19 @@ def _patch_gdn_linear() -> bool:
             "        if store is None:\n"
             "            return False\n"
             "        store[h] = {\"pos\": int(pos), \"layers\": layers}\n"
-            "        try:  # FR13 leak fix: LRU-bound (block-eviction reaper never fires)\n"
-            "            _cap = getattr(bp, \"_fr13_es_ckpt_cap\", 64)\n"
-            "            if hasattr(store, \"move_to_end\"):\n"
-            "                store.move_to_end(h)\n"
-            "                while len(store) > _cap:\n"
-            "                    store.popitem(last=False)\n"
-            "        except Exception:\n"
-            "            pass\n"
+            "        # FR13 FIX A (ckpt LRU cap) DISABLED for now (user): FIX C (the\n"
+            "        # .cpu() revert of faecc88d) is the real leak fix; this cap freed\n"
+            "        # NOTHING while the ckpt was GPU-resident. Re-enable if the now\n"
+            "        # host-resident ckpt store is shown to grow unbounded.\n"
+            "        if False:  # was: LRU-bound _fr13_es_ckpt (block-eviction reaper never fires)\n"
+            "            try:\n"
+            "                _cap = getattr(bp, \"_fr13_es_ckpt_cap\", 64)\n"
+            "                if hasattr(store, \"move_to_end\"):\n"
+            "                    store.move_to_end(h)\n"
+            "                    while len(store) > _cap:\n"
+            "                        store.popitem(last=False)\n"
+            "            except Exception:\n"
+            "                pass\n"
             "        # NOTE (FR13 leak): do NOT pop this (req,pos) from PENDING here.\n"
             "        # try_bind runs ONCE PER GDN LAYER and the ckpt store holds the\n"
             "        # SAME `layers` dict object by shared ref -- layers 1..47 keep\n"
@@ -6983,7 +6988,7 @@ def _fr13_gdn_subop_mab(
                                 try:
                                     _fr13_es_pcap = int(
                                         os.environ.get(
-                                            "FR13_ES_PENDING_CAP", "256"
+                                            "FR13_ES_PENDING_CAP", "0"  # FIX B DISABLED for now (user); FIX C .cpu() is the real fix
                                         )
                                     )
                                 except Exception:
@@ -7210,7 +7215,7 @@ def _fr13_gdn_subop_mab(
                                     # the pre-fix hold-until-free behavior byte-for-byte.
                                     try:
                                         if os.environ.get(
-                                            "FR13_ES_PENDING_DRAIN", "1"
+                                            "FR13_ES_PENDING_DRAIN", "0"  # FIX B DISABLED for now (user); FIX C .cpu() is the real fix
                                         ) == "1":
                                             _fr13_es_nly = len(
                                                 globals().get(
