@@ -425,3 +425,20 @@ Paired eager teacher-forced boots (cache vs CONFIG_ONLY, byte-identical turn-1 p
   (h3_threading_confirmed=true). The June-28 position-wiring suspicion is now measured-and-closed.
 - OPS incident banked: the ladder reduce OOM class (unified-memory reducer) -> session protections +
   capped self-demoting scopes + streaming reducer (memory file updated).
+
+## 26. v4 gate + honest downgrade: single-gate verdicts retired — RATES are the instrument now
+
+- m_tree_cache_fixv4 (f2f2b7a5, refold flags ON): 735s, 6 turns, 0B, give-up class (monolithic route,
+  tool-less terminal). Counters: conv 5568/0 clean; snapshot_events=0 = RUN-LENGTH artifact (no 1024
+  boundary crossed in 6 turns) => refold consume liveness UNTESTED by this draw, v4 edit unfalsified
+  (scope re-audited clean; default path flag-gated).
+- DOWNGRADE (red-team of our own narrative): the conv dose-response (2-6 -> 8 -> 16 -> 32 turns) was
+  OVERFIT to n=1 draws. §22 already measured healthy-trajectory rate ~4/16 under tree+cache with conv
+  fixed. v3's 32-turn/patch draw and v4's 6-turn draw are both consistent with that distribution.
+  DURABLE claims kept: conv wrong-row eliminated (counters, n=3 runs), context wall eliminated (R1),
+  prefill bit-exact (§25). OPEN: the decode/graph term (§25) still degrades the trajectory distribution.
+- NEW INSTRUMENT OF RECORD: the RATE MATRIX = R1-regime re-baseline x §20 A/B combined:
+  arms {tree_nocache, native_cache, tree_cache_convonly, tree_cache_refold} x server seeds {0,1,2,3}
+  (SEED env varies the boot seed => genuine trajectory draws; seed pinned => per-config determinism).
+  Metrics: give-up/patch/resolve rates, turns, route choice, refold counters (long draws exercise
+  boundaries), per-arm memory. Speed tax measured separately logging-off (task #4).
