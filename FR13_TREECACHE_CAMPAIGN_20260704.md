@@ -55,3 +55,22 @@ Plan detail: `research/fr13_workflows/FR13_SESSION_DIGEST_AND_PLAN.md`.
   n=1 per arm at screen stage — any positive gets a repeat (n≥2) + base repeat before declaring.
 
 Results: `output/fr13_phase4_mainpick/PHASE4_SUMMARY.txt` (output/ gitignored — numbers get banked here on close).
+
+## 5. Phase-4 RESULTS (2026-07-04): both fixes NULL — give-up persists
+
+| arm (fr13-mainpick, task 13453, guard 6500) | engaged proof | verdict | dur | patch |
+|---|---|---|---|---|
+| m_tree_cache_base (main) | ES_SEED 1008 | give-up | 843s | 0 |
+| m_tree_recompute_np (NP=1) | env: SCAN_ALIGN=1 MODE=recompute NP=1; ES_SEED 240 | give-up | 751s | 0 |
+| m_tree_recompute (NP=0) | env: SCAN_ALIGN=1 MODE=recompute NP=0; ES_SEED 240 | give-up | 624s | 0 |
+| m_tree_patha | REFOLD_APPLIED=432 ENTER=8 (docker_full.log); RESTORE_OTHER=30 | give-up | 613s | 0 |
+| m_tree_nocache (control) | no eng log (correct) | **resolved** | 1719s | 551B |
+
+- SCAN_ALIGN=recompute does NOT fix the give-up (either NP variant). The 6c70ed8c "engages 46min"
+  anecdote is dead (memory-error/n=1 confound, as the bbd9619c close-out suspected).
+- Path A engages (fold fires 432x) but REFOLD_RESTORE_OTHER=30 with no RESTORE_USED → the bind still
+  doesn't land the fold into the restore path; give-up unchanged. "Bind-fixed but inert" CONFIRMED.
+- Positive side-finding: NP=1 boots, cuda-graph-captures, serves (was GPU-untested).
+- Carrier therefore OUTSIDE the SSM scan/re-fold family. Leading untouched suspect: full-attn
+  POSITION base on cache-hit boundary turns (patcher _fr10_mrope_base, 2026-06-28 finding, never
+  verified fixed for the tree path). Give-up autopsy workflow in flight.
