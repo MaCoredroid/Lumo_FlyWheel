@@ -7658,6 +7658,7 @@ def _patch_scheduler_fr13_freereq_cleanup() -> bool:
             "                '_FR13_REFOLD_TAIL', '_FR13_REFOLD_CKPT',",
             "                '_FR13_REFOLD_SEEDED', '_FR13_REFOLD_WROTE',",
             "                '_FR13_APC_SSM_CHUNKED_PTR_BY_REQ',",
+            "                '_FR13_APC_SSM_RUNNING_POS_BY_REQ',",
             "            ):",
             "                _fr13_d = getattr(_fr13_gdn, _fr13_nm, None)",
             "                if isinstance(_fr13_d, dict):",
@@ -8269,6 +8270,13 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
         # per-(req,layer) rolling tail of accepted tokens awaiting a 64-fold.
         _rf_tail_map = gdn_mod._FR13_REFOLD_TAIL.setdefault(req_id, {})
         _rf_ent = _rf_tail_map.get(_rf_prefix)
+        # FR13_APC_REFOLD_TO_SNAPSHOT: a FRESH fold epoch == the per-(req,layer)
+        # tail was EMPTY before this step's append -- i.e. the first fold of the
+        # request for this layer, or the E3 hit-restore just popped the tail
+        # (_fr13_rf_tail[rid].pop(prefix)). Captured HERE (before the append/cat
+        # below) so the abs-base region can (re)seed abs_base from the ABSOLUTE
+        # running committed pos on exactly those steps. Inert unless the flag is on.
+        _rf_fresh = _rf_ent is None
         if _rf_ent is None:
             _rf_ent = {"k": _rf_k, "v": _rf_v, "g": _rf_g, "beta": _rf_beta}
         else:
@@ -8289,6 +8297,44 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
         _rf_abs_base = int(
             _rf_abs_map.get(_rf_abs_key, _rf_abs_map.get(req_id, 0))
         )
+        # FR13_APC_REFOLD_TO_SNAPSHOT abs-base seed (default OFF -> the whole
+        # block is skipped -> abs_base is EXACTLY the pre-fix value -> byte-
+        # identical). On a FRESH fold epoch, overwrite abs_base with the request's
+        # ABSOLUTE committed token count at decode start -- num_tokens_running_state
+        # (= num_computed_tokens + num_scheduled_tokens - num_draft_tokens, the
+        # end-of-step running position INCLUDING the prompt), stashed per-req by
+        # postprocess_mamba into _FR13_APC_SSM_RUNNING_POS_BY_REQ. This moves the
+        # fold OUT of decode-relative space (the v1 default abs_base=0, which made
+        # _rf_blk_end count only decode tokens from 0) INTO the SAME absolute
+        # coordinate the snapshot consumer publishes (aligned_new_computed_tokens),
+        # so _rf_blk_end can equal the snapshot boundary on publish steps. Covers:
+        #   * cold turn-1  -> running pos == prompt length (no hit, E3 never fired);
+        #   * hit turns    -> running pos == full prompt length, SUPERSEDING the E3
+        #                     hit-boundary seed (rec2['pos'], which is the shorter
+        #                     hit prefix, NOT the decode-start position) so the fold
+        #                     and E3 now AGREE on the absolute base;
+        #   * mid-request re-base -> E3 pops the tail -> _rf_fresh -> reseed.
+        # Runs before _rf_tail_len/fold below; best-effort (a missing running pos
+        # just leaves the v1 abs_base -> safe, never wrong).
+        if (
+            _rf_fresh
+            and _rf_os.environ.get(
+                "FR13_APC_REFOLD_TO_SNAPSHOT", "0"
+            ) == "1"
+        ):
+            try:
+                _rf_run_map = getattr(
+                    gdn_mod, "_FR13_APC_SSM_RUNNING_POS_BY_REQ", None
+                )
+                _rf_run_pos = (
+                    _rf_run_map.get(str(req_id)) if _rf_run_map else None
+                )
+                if _rf_run_pos is not None:
+                    _rf_abs_base = int(_rf_run_pos)
+                    _rf_abs_map[_rf_abs_key] = _rf_abs_base
+                    gdn_mod._fr13_obs_bump("refold_abs_seeded")
+            except Exception:
+                pass
         _rf_tail_len = int(_rf_ent["k"].size(0))
         if _rf_dbg and _rf_tail_len < _rf_bs:
             # ACCUMULATING but not yet a full 64-block: throttled progress log so
@@ -13910,6 +13956,22 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                                    _fr13_es_fallback_reason = \"no_aligned_pos\"\n"
         "                                elif int(_fr13_fx_ckpos) != int(_fr13_fx_apos):\n"
         "                                    _fr13_fx_chunked_ptr = None\n"
+        # FR13_OBS refold_pub_miss: the fold DID publish a chunked-realization at
+        # _fr13_fx_ckpos (== _rf_blk_end, an on-boundary fold so ckpos is a 1024-
+        # multiple) but it != the snapshot's aligned_new_computed_tokens (also a
+        # 1024-multiple) -> dropped. So this counter measures ONLY the OFF-BY-WHOLE-
+        # BLOCK class (published boundary is a different 1024-multiple than the
+        # consumer's, e.g. an E3 mid-request re-base seeded abs_base to a stale
+        # prior-step running-pos). IT DOES NOT SEE THE SUB-64 RESIDUAL: when the
+        # decode-start abs_base (== prompt length P) is not a multiple of 64,
+        # _rf_blk_end = P + 64k is never 0 mod 1024, so _rf_on_boundary never fires,
+        # publish never happens, and BOTH refold_published AND refold_pub_miss stay
+        # 0 (indistinguishable from "fold never ran"). Read the next gate as:
+        # refold_published==0 -> sub-64-residual/coverage (P not 64-aligned or no
+        # fresh seed) -> needs the tail-to-64 alignment (open issue #1); published>0
+        # & pub_miss high -> off-by-block; published>0 & pub_miss~0 & redirect_used>0
+        # -> win.
+        "                                    _fr13_fx_gdn._fr13_obs_bump(\"refold_pub_miss\")\n"
         "                                    _fr13_es_fallback_reason = (\n"
         "                                        \"pos_mismatch pub=\" + str(_fr13_fx_ckpos)\n"
         "                                        + \" aligned=\" + str(_fr13_fx_apos)\n"
@@ -14149,7 +14211,36 @@ def _patch_mamba_utils_apc_align_tree_aware() -> bool:
         raise RuntimeError(
             "APC align tree-aware: postprocess new_num_computed_tokens anchor not unique"
         )
-    inject = anchor + "        # FR13_APC_ALIGN_TREE_AWARE\n"  # FR13_APC retired-flag idempotency sentinel (VERBATIM+STALENESS_AUDIT bodies removed)
+    inject = (
+        anchor
+        + "        # FR13_APC_ALIGN_TREE_AWARE\n"  # FR13_APC retired-flag idempotency sentinel (VERBATIM+STALENESS_AUDIT bodies removed)
+        # FR13_APC_REFOLD_TO_SNAPSHOT abs-base SOURCE (default OFF -> the map is
+        # never written -> nothing downstream reads it -> byte-identical). Runs for
+        # EVERY committed req EVERY step (8-space indent, top of the postprocess_mamba
+        # per-req loop body, before the aligned-copy `if`). Publishes THIS req's
+        # ABSOLUTE running committed position -- num_tokens_running_state, the same
+        # end-of-step position the consumer folds into aligned_new_computed_tokens --
+        # onto the gdn module global _FR13_APC_SSM_RUNNING_POS_BY_REQ, keyed
+        # str(req_id). The Path A committer fold (_fr13_pathA_refold) reads it to
+        # seed _FR13_REFOLD_ABS in the ABSOLUTE coordinate space on a fresh fold
+        # epoch, so _rf_blk_end tracks the committed count (not decode-relative 0)
+        # and can equal aligned_new_computed_tokens on a publish/snapshot step.
+        # Same-process module bridge (identical pattern to the aligned-pos stash).
+        + "        if os.environ.get(\"FR13_APC_REFOLD_TO_SNAPSHOT\", \"0\") == \"1\":\n"
+        + "            try:\n"
+        + "                from vllm.model_executor.layers.mamba import (\n"
+        + "                    gdn_linear_attn as _fr13_rp_gdn,\n"
+        + "                )\n"
+        + "                _fr13_rp_map = getattr(\n"
+        + "                    _fr13_rp_gdn, \"_FR13_APC_SSM_RUNNING_POS_BY_REQ\", None\n"
+        + "                )\n"
+        + "                if _fr13_rp_map is None:\n"
+        + "                    _fr13_rp_map = {}\n"
+        + "                    _fr13_rp_gdn._FR13_APC_SSM_RUNNING_POS_BY_REQ = _fr13_rp_map\n"
+        + "                _fr13_rp_map[str(req_id)] = int(num_tokens_running_state)\n"
+        + "            except Exception:\n"
+        + "                pass\n"
+    )
     text = text.replace(anchor, inject, 1)
     MAMBA_UTILS_PATH.write_text(text)
     return True
