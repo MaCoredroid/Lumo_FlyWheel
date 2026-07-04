@@ -8072,10 +8072,14 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
                     pass
         # fold every completed 64-block currently held in the tail.
         while int(_rf_ent["k"].size(0)) >= _rf_bs:
-            _rf_blk_k = _rf_ent["k"][:_rf_bs].unsqueeze(0).contiguous()
-            _rf_blk_v = _rf_ent["v"][:_rf_bs].unsqueeze(0).contiguous()
-            _rf_blk_g = _rf_ent["g"][:_rf_bs].unsqueeze(0).contiguous()
-            _rf_blk_beta = _rf_ent["beta"][:_rf_bs].unsqueeze(0).contiguous()
+            # chunk_gated_delta_rule requires bf16 INPUTS (asserts on fp32); the
+            # fp32 stash was a lossless upcast of the model's bf16 k/v/g/beta, so
+            # bf16->fp32->bf16 round-trips to the EXACT MISS-loop inputs (bit-exact).
+            # The recurrent state (_rf_seed / final_state) stays fp32 (the carry).
+            _rf_blk_k = _rf_ent["k"][:_rf_bs].unsqueeze(0).to(torch.bfloat16).contiguous()
+            _rf_blk_v = _rf_ent["v"][:_rf_bs].unsqueeze(0).to(torch.bfloat16).contiguous()
+            _rf_blk_g = _rf_ent["g"][:_rf_bs].unsqueeze(0).to(torch.bfloat16).contiguous()
+            _rf_blk_beta = _rf_ent["beta"][:_rf_bs].unsqueeze(0).to(torch.bfloat16).contiguous()
             _rf_ck_map = gdn_mod._FR13_REFOLD_CKPT.setdefault(req_id, {})
             _rf_seed = _rf_ck_map.get(_rf_prefix)
             if _rf_seed is not None:
