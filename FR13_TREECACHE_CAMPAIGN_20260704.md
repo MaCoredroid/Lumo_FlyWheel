@@ -74,3 +74,17 @@ Results: `output/fr13_phase4_mainpick/PHASE4_SUMMARY.txt` (output/ gitignored �
 - Carrier therefore OUTSIDE the SSM scan/re-fold family. Leading untouched suspect: full-attn
   POSITION base on cache-hit boundary turns (patcher _fr10_mrope_base, 2026-06-28 finding, never
   verified fixed for the tree path). Give-up autopsy workflow in flight.
+
+## 6. Native+cache completion run + give-up autopsy (2026-07-04, later)
+
+- **m_native_cache under guard-6500: dur=997s, patch_bytes=398, verdict=failed, mem min 8.86GB, COMPLETED (no OOM).**
+  - Boundary story CLOSED: plateau ~8.86GB < old 9000MiB fence; the fence was killing healthy runs. Guard floor
+    or GPU_UTIL must change permanently (proposal stands: GPU_UTIL 0.82→0.78, keep floor 9000).
+  - NO give-up: full 17min engagement + real patch (vs Jul-2 resolve — today's patch failed eval, n=1, temp 0.6).
+- Give-up phenotype ledger: 0-byte/no-tool-call/off-task-drift = 4/4 tree+cache arms, 0/2 elsewhere → TREE×CACHE interaction.
+- Autopsy (research/fr13_workflows/FR13_GIVEUP_AUTOPSY.md, adversarially verified): give-up = coherent off-task
+  topic-hijack (web-dev attractor keyed on "HTML write" tokens), NOT char-8/garble (0 XML warnings in give-ups);
+  NO cache hits ever fired (row0_hit=False ×50 all arms) → not discrete hit-corruption; first divergence = turn-1
+  route flip at COLD prefill (cache-ON numerics: align-mode chunked prefill + fp32 SSM dtype), deterministic per config.
+- In flight: m_tree_cache_base_r2 (B=1 same-config repeat = playbook gate). Then full-attn capture on first
+  post-restore turn (the unmeasured subsystem, H3).
