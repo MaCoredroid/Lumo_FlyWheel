@@ -968,6 +968,7 @@ def _patch_gdn_linear() -> bool:
             "        if store is None:\n"
             "            return False\n"
             "        store[h] = {\"pos\": int(pos), \"layers\": layers}\n"
+            "        _fr13_obs_bump(\"es_write\")  # FR13_OBS: full count (ES_WRITE log below is SERVE_LOG-throttled)\n"
             "        try:  # FR13 leak fix: LRU-bound (block-eviction reaper never fires)\n"
             "            _cap = getattr(bp, \"_fr13_es_ckpt_cap\", 64)\n"
             "            if hasattr(store, \"move_to_end\"):\n"
@@ -1184,6 +1185,72 @@ def _patch_gdn_linear() -> bool:
             "_FR13_BOUNDARY_LAST_WRITTEN_BY_REQ = {}\n"
             "_FR13_BOUNDARY_FH = None\n"
             "_FR13_BOUNDARY_HEADER_DONE = False\n"
+            "\n"
+            "\n"
+            "# ---- FR13_OBS uniform observability registry (campaign 2026-07-04) ----\n"
+            "# Plain-int counters, ALWAYS ON (NOT gated on FR13_SERVE_LOG/EXACT_SEED):\n"
+            "# a single dict increment, no I/O / torch / sync, exception-safe = free.\n"
+            "# They carry the FULL count behind every FIRST-N / env-gated log line so a\n"
+            "# reader can never mistake a throttle window or an env-silent arm for\n"
+            "# 'clean' (FR13_GATE_BLINDSPOT). Other patched modules import\n"
+            "# gdn_linear_attn and call _fr13_obs_bump(key).\n"
+            "_FR13_OBS = {}\n"
+            "_FR13_OBS_LAST_SUMMARY_T = 0.0\n"
+            "_FR13_OBS_START_T = time.time()\n"
+            "_FR13_OBS_ATEXIT_DONE = False\n"
+            "\n"
+            "\n"
+            "def _fr13_obs_bump(key, n=1):\n"
+            "    # Unconditional single-int increment; never raises, does NO I/O.\n"
+            "    try:\n"
+            "        _FR13_OBS[key] = _FR13_OBS.get(key, 0) + n\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "\n"
+            "\n"
+            "def _fr13_obs_final_dump():\n"
+            "    # atexit best-effort dump: /logs/fr13_obs_final.json (override via\n"
+            "    # FR13_OBS_FINAL_PATH) + one FR13_OBS_FINAL eng line if the writer was\n"
+            "    # ever bound. Never raises.\n"
+            "    try:\n"
+            "        _obs_payload = {\n"
+            "            \"obs\": dict(_FR13_OBS),\n"
+            "            \"wall_s\": round(\n"
+            "                time.time()\n"
+            "                - float(globals().get(\"_FR13_OBS_START_T\", time.time())),\n"
+            "                3,\n"
+            "            ),\n"
+            "            \"ts\": round(time.time(), 6),\n"
+            "            \"pid\": os.getpid(),\n"
+            "        }\n"
+            "    except Exception:\n"
+            "        return\n"
+            "    try:\n"
+            "        _obs_fp = os.environ.get(\n"
+            "            \"FR13_OBS_FINAL_PATH\", \"/logs/fr13_obs_final.json\"\n"
+            "        )\n"
+            "        _obs_par = os.path.dirname(_obs_fp)\n"
+            "        if _obs_par:\n"
+            "            os.makedirs(_obs_par, exist_ok=True)\n"
+            "        with open(_obs_fp, \"w\") as _obs_wfh:\n"
+            "            _obs_wfh.write(json.dumps(_obs_payload, default=str))\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "    try:\n"
+            "        _obs_w = globals().get(\"_FR13_OBS_ENG_WRITER\")\n"
+            "        if _obs_w is not None:\n"
+            "            _obs_w(\"FR13_OBS_FINAL \" + json.dumps(_obs_payload, default=str))\n"
+            "    except Exception:\n"
+            "        pass\n"
+            "\n"
+            "\n"
+            "if not globals().get(\"_FR13_OBS_ATEXIT_DONE\"):\n"
+            "    globals()[\"_FR13_OBS_ATEXIT_DONE\"] = True\n"
+            "    try:\n"
+            "        import atexit as _fr13_obs_atexit\n"
+            "        _fr13_obs_atexit.register(_fr13_obs_final_dump)\n"
+            "    except Exception:\n"
+            "        pass\n"
             "\n"
             "\n"
             "def _fr13_chase_on():\n"
@@ -6224,6 +6291,7 @@ def _fr13_gdn_subop_mab(
                                     )
                                 except Exception:
                                     pass
+                                _fr13_obs_bump("es_seed_applied")  # FR13_OBS: full count (ES_SEED_APPLIED log below is SERVE_LOG-throttled)
                                 if os.environ.get("FR13_SERVE_LOG", "0") in ("1", "true"):  # FR13_SERVE_LOG gate: silence ES_SEED_APPLIED (dominant per-restore log)
                                     try:
                                         with open(os.environ.get(
@@ -6454,6 +6522,32 @@ def _fr13_gdn_subop_mab(
                             _es_fh.write(str(_es_msg) + chr(10))
                     except Exception:
                         pass
+                    # FR13_OBS periodic summary: piggy-backs on this already
+                    # SERVE_LOG-gated writer (we only reach here when SERVE_LOG is
+                    # on) -> SERVE_LOG semantics unchanged. Append one
+                    # FR13_OBS_SUMMARY line at most once per >=60s so the FULL
+                    # unthrottled registry sits beside the throttled per-event lines.
+                    try:
+                        _obs_now = time.monotonic()
+                        if _obs_now - float(globals().get(
+                            "_FR13_OBS_LAST_SUMMARY_T", 0.0
+                        )) >= 60.0:
+                            globals()["_FR13_OBS_LAST_SUMMARY_T"] = _obs_now
+                            _obs_lp = os.environ.get(
+                                "FR13_APC_EXACT_SEED_ENG_LOG",
+                                "/logs/fr13_apc_exact_seed_eng.log",
+                            )
+                            with open(_obs_lp, "a", buffering=1) as _obs_fh:
+                                _obs_fh.write(
+                                    "FR13_OBS_SUMMARY "
+                                    + json.dumps(dict(_FR13_OBS)) + chr(10)
+                                )
+                    except Exception:
+                        pass
+                # FR13_OBS: expose this SERVE_LOG writer so the atexit final dump can
+                # emit an FR13_OBS_FINAL line through it (best-effort; only bound
+                # under EXACT_SEED, matching where this closure is defined).
+                globals()["_FR13_OBS_ENG_WRITER"] = _fr13_es_eng_log_line
                 # batch-level SKIP markers: these gate sub-conditions block the
                 # WHOLE capture before any per-req rid is known, so log them at
                 # batch granularity (req=batch). No CUDA->host sync here:
@@ -6462,18 +6556,22 @@ def _fr13_gdn_subop_mab(
                 # warmup capture pass is reported as reason=capturing (and skipped)
                 # rather than running the sync-bearing capture body.
                 if not (attn_metadata.num_prefills > 0):
+                    _fr13_obs_bump("es_ckpt0_skip")  # FR13_OBS: full count (batch SKIP log is SERVE_LOG-throttled)
                     _fr13_es_eng_log_line(
                         "ES_CKPT0_SKIP req=batch reason=no_prefill"
                     )
                 elif has_initial_state is None:
+                    _fr13_obs_bump("es_ckpt0_skip")  # FR13_OBS: full count (batch SKIP log is SERVE_LOG-throttled)
                     _fr13_es_eng_log_line(
                         "ES_CKPT0_SKIP req=batch reason=no_has_initial_state"
                     )
                 elif non_spec_query_start_loc is None:
+                    _fr13_obs_bump("es_ckpt0_skip")  # FR13_OBS: full count (batch SKIP log is SERVE_LOG-throttled)
                     _fr13_es_eng_log_line(
                         "ES_CKPT0_SKIP req=batch reason=no_nonspec_qsl"
                     )
                 elif globals().get("_LUMO_FA_NONSPEC_ROW_REQ_IDS", None) is None:
+                    _fr13_obs_bump("es_ckpt0_skip")  # FR13_OBS: full count (batch SKIP log is SERVE_LOG-throttled)
                     _fr13_es_eng_log_line(
                         "ES_CKPT0_SKIP req=batch reason=no_nonspec_row_map"
                     )
@@ -6481,6 +6579,7 @@ def _fr13_gdn_subop_mab(
                     torch.cuda.is_available()
                     and torch.cuda.is_current_stream_capturing()
                 ):
+                    _fr13_obs_bump("es_ckpt0_skip")  # FR13_OBS: full count (batch SKIP log is SERVE_LOG-throttled)
                     _fr13_es_eng_log_line(
                         "ES_CKPT0_SKIP req=batch reason=capturing"
                     )
@@ -6556,6 +6655,7 @@ def _fr13_gdn_subop_mab(
                             # turn's slot-keyed chain UNTOUCHED on a cache-hit (the
                             # drain on this same slot continues it).
                             if bool(has_initial_state[_fr13_es_r]):
+                                _fr13_obs_bump("es_ckpt0_skip")  # FR13_OBS: full count (slot SKIP log is SERVE_LOG-throttled)
                                 _fr13_es_eng_log_line(
                                     "ES_CKPT0_SKIP slot=" + _fr13_es_key
                                     + " req=" + _fr13_es_dbg_rid
@@ -6585,6 +6685,7 @@ def _fr13_gdn_subop_mab(
                             if _fr13_es_p0 <= 0:
                                 _fr13_es_absmap[_fr13_es_rid] = _fr13_es_plen
                                 _fr13_es_ckmap.pop(_fr13_es_rid, None)
+                                _fr13_obs_bump("es_ckpt0_skip")  # FR13_OBS: full count (slot SKIP log is SERVE_LOG-throttled)
                                 _fr13_es_eng_log_line(
                                     "ES_CKPT0_SKIP slot=" + _fr13_es_key
                                     + " req=" + _fr13_es_dbg_rid
@@ -6637,6 +6738,7 @@ def _fr13_gdn_subop_mab(
                                 .clone(),
                             }
                             _fr13_es_absmap[_fr13_es_rid] = _fr13_es_plen
+                            _fr13_obs_bump("es_ckpt0_capture")  # FR13_OBS: full count (CAPTURE log is SERVE_LOG-throttled)
                             _fr13_es_eng_log_line(
                                 "ES_CKPT0_CAPTURE slot=" + _fr13_es_key
                                 + " req=" + _fr13_es_dbg_rid
@@ -6747,11 +6849,31 @@ def _fr13_gdn_subop_mab(
                         # decode run does not spam the log. All reads here are
                         # host-side syncs, legal because this whole block already
                         # skips cuda-graph capture (see the outer gate guard).
+                        # FR13_OBS unthrottled tallies (bump BEFORE the first-50
+                        # throttle so counts are complete). es_gate_reached =
+                        # every time this gate is on the executed path;
+                        # es_row0_hit_true/false = the row-0 cache-hit tally that
+                        # the throttled ES_GATE detail line only samples (the false
+                        # "no cache hits ever" was that 50-forward window read as
+                        # the whole run).
+                        _fr13_obs_bump("es_gate_reached")
+                        try:
+                            if (
+                                _fr13_es_nsr is not None
+                                and len(_fr13_es_nsr) > 0
+                                and has_initial_state is not None
+                            ):
+                                if bool(has_initial_state[0]):
+                                    _fr13_obs_bump("es_row0_hit_true")
+                                else:
+                                    _fr13_obs_bump("es_row0_hit_false")
+                        except Exception:
+                            pass
                         try:
                             _fr13_es_gc = int(
                                 globals().get("_FR13_ES_GATE_LOG_COUNT", 0)
                             )
-                            if _fr13_es_gc < 50:
+                            if _fr13_es_gc < 50:  # FR13_OBS: full count in registry es_gate_reached / es_row0_hit_*
                                 globals()["_FR13_ES_GATE_LOG_COUNT"] = (
                                     _fr13_es_gc + 1
                                 )
@@ -6796,6 +6918,9 @@ def _fr13_gdn_subop_mab(
                                     + " row0_hit=" + str(_fr13_es_g_r0_hit)
                                     + " row0_b0=" + str(_fr13_es_g_r0_b0)
                                     + " row0_plen=" + str(_fr13_es_g_r0_plen)
+                                    + " gates_total=" + str(
+                                        _FR13_OBS.get("es_gate_reached", 0)
+                                    )
                                 )
                         except Exception:
                             pass
@@ -7523,6 +7648,7 @@ def _patch_scheduler_fr13_freereq_cleanup() -> bool:
             "        " + sentinel,
             "        try:",
             "            _fr13_gdn = __import__('vllm.model_executor.layers.mamba.gdn_linear_attn', fromlist=['x'])",
+            "            _fr13_gdn._fr13_obs_bump('free_request_fired')  # FR13_OBS: unconditional per-free count",
             "            _fr13_keys = (request_id, str(request_id))",
             "            for _fr13_nm in (",
             "                '_FR10_TREE_ACCEPTED_PATH_BY_REQ_ID', '_FR13_APC_SSM_LEAF_BY_REQ',",
@@ -8409,6 +8535,7 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
             if conv_leaf_map is None:
                 conv_leaf_map = {}
                 gdn_mod._FR13_APC_CONV_LEAF_BY_REQ = conv_leaf_map
+            gdn_mod._fr13_obs_bump("conv_snapshot_events")  # FR13_OBS: conv-publish denominator (0 = not applicable)
         spec_cpu = spec_idx.detach().to("cpu").tolist()
         # Key by the SPEC-row req_ids (same index space as replay_lens + spec_idx,
         # both built by iterating _LUMO_FA_SPEC_ROW_REQ_IDS) — NOT the full
@@ -8419,6 +8546,8 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         _zero_on = os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "1") == "1"
         for _b in range(int(len(spec_req_ids))):
             if _b >= len(replay_lens) or _b >= len(spec_cpu):
+                if conv_leaf_map is not None:
+                    gdn_mod._fr13_obs_bump("conv_leafmap_miss")  # FR13_OBS: row out of range -> no conv leaf placed
                 continue
             _alen = int(replay_lens[_b])
             _row = spec_cpu[_b]
@@ -8434,11 +8563,17 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
                     leaf_map[str(spec_req_ids[_b])] = int(_row[0])
                     if conv_leaf_map is not None:
                         conv_leaf_map[str(spec_req_ids[_b])] = int(_row[0])
+                        gdn_mod._fr13_obs_bump("conv_leafmap_hit")  # FR13_OBS: conv committed-root row published
+                elif conv_leaf_map is not None:
+                    gdn_mod._fr13_obs_bump("conv_leafmap_miss")  # FR13_OBS: zero-accept, no conv leaf placed (wrong-row fallback)
                 continue
             if 0 <= _alen - 1 < len(_row):
                 leaf_map[str(spec_req_ids[_b])] = int(_row[_alen - 1])
                 if conv_leaf_map is not None:
                     conv_leaf_map[str(spec_req_ids[_b])] = int(_row[_alen - 1])
+                    gdn_mod._fr13_obs_bump("conv_leafmap_hit")  # FR13_OBS: conv committed-leaf row published
+            elif conv_leaf_map is not None:
+                gdn_mod._fr13_obs_bump("conv_leafmap_miss")  # FR13_OBS: accepted-leaf idx out of range, no conv leaf placed
     except Exception:
         # observe-only publish; never break the served commit on a tap failure
         pass
@@ -13578,6 +13713,8 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                        from vllm.model_executor.layers.mamba import (\n"
         "                            gdn_linear_attn as _fr13_fx_gdn,\n"
         "                        )\n"
+        "                        if _fr13_fx_ssm_on:  # FR13_OBS: SSM snapshot denominator (0 = not applicable vs engaged-never-fell-back)\n"
+        "                            _fr13_fx_gdn._fr13_obs_bump(\"snapshot_events\")\n"
         "                        _fr13_fx_mapname = (\n"
         "                            \"_FR13_APC_CONV_LEAF_BY_REQ\" if _fr13_fx_conv_on\n"
         "                            else \"_FR13_APC_SSM_LEAF_BY_REQ\"\n"
@@ -13712,9 +13849,15 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         # for this req, snapshot THAT raw pointer (the chunk-boundary EXACT seed)
         # instead of the recurrent bank-leaf row. _fr13_fx_chunked_ptr is None
         # unless FR13_APC_EXACT_SEED=1 -> default path unchanged (byte-identical).
+        # FR13_OBS: bump the redirect verdict UNCONDITIONALLY here (BEFORE the
+        # EXACT_SEED-gated ES_REDIRECT_* log below), so redirect_engaged/used/
+        # fallback are complete even when EXACT_SEED=0 silences the log lines.
+        "                            _fr13_fx_gdn._fr13_obs_bump(\"redirect_engaged\")\n"
         "                            if _fr13_fx_chunked_ptr is not None:\n"
+        "                                _fr13_fx_gdn._fr13_obs_bump(\"redirect_used\")\n"
         "                                src_ptrs_np[_fr13_fx_ent] = int(_fr13_fx_chunked_ptr)\n"
         "                            else:\n"
+        "                                _fr13_fx_gdn._fr13_obs_bump(\"redirect_fallback\")\n"
         "                                src_ptrs_np[_fr13_fx_ent] = (\n"
         "                                    state[int(_fr13_fx_leaf)].data_ptr()\n"
         "                                )\n"
