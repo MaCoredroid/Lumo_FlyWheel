@@ -938,6 +938,12 @@ def _patch_gdn_linear() -> bool:
             "_FR13_REFOLD_TAIL = {}        # PATH A: per-req 64-wide k/v/g/beta tail rings\n"
             "_FR13_REFOLD_CKPT = {}        # PATH A: per-req,per-layer rolling faithful seed\n"
             "_FR13_REFOLD_ABS = {}         # PATH A: per-req running absolute accepted count\n"
+            "# DIAGNOSTIC (SERVE_LOG-gated): str(req_id) -> set(int pos) that Path A\n"
+            "# folded AND wrote to the restore channel. The restore site cross-checks\n"
+            "# each restored (req,pos) against this to decide USED vs OTHER, proving\n"
+            "# whether Path A's folded seed is what actually restores (vs a co-resident\n"
+            "# leaf / EXACT_SEED prefill-capture value at the same pos).\n"
+            "_FR13_REFOLD_WROTE = {}       # PATH A: req -> {pos} folded+written this run\n"
             "_FR13_REFOLD_ON = (os.environ.get(\"FR13_APC_BLOCK_REFOLD\", \"0\") == \"1\")\n"
             "\n"
             "\n"
@@ -6044,6 +6050,43 @@ def _fr13_gdn_subop_mab(
                                     _fr13_es_rid2, None
                                 )
                                 if _fr13_es_rec2 is None:
+                                    # PATH A DIAGNOSTIC (SERVE_LOG-gated): a cache-HIT
+                                    # row with NO restore record -> initial_state[r]
+                                    # stays the recurrent/co-resident leaf (the BUG-1
+                                    # TIMING fallback: the fold wrote+bound too late,
+                                    # or the block_pool insert never bound its hash).
+                                    # If Path A folded a block for this req that never
+                                    # reached the restore, this is where it is lost.
+                                    if (
+                                        globals().get("_FR13_REFOLD_ON", False)
+                                        and os.environ.get("FR13_SERVE_LOG", "0")
+                                        in ("1", "true")
+                                    ):
+                                        try:
+                                            _fr13_rf_fc = int(globals().get(
+                                                "_FR13_REFOLD_FALLBACK_LOGN", 0
+                                            ))
+                                            if _fr13_rf_fc < 30:
+                                                globals()[
+                                                    "_FR13_REFOLD_FALLBACK_LOGN"
+                                                ] = _fr13_rf_fc + 1
+                                                _fr13_rf_w = (
+                                                    globals().get(
+                                                        "_FR13_REFOLD_WROTE", {}
+                                                    ) or {}
+                                                ).get(_fr13_es_rid2, set())
+                                                print(
+                                                    "FR13_REFOLD_RESTORE_FALLBACK"
+                                                    " req=" + _fr13_es_rid2
+                                                    + " prefix="
+                                                    + str(getattr(
+                                                        self, "prefix", "?"))
+                                                    + " path_a_wrote="
+                                                    + str(sorted(_fr13_rf_w)[:6]),
+                                                    flush=True,
+                                                )
+                                        except Exception:
+                                            pass
                                     continue
                                 # iter9 PER-LAYER seed (BUG-2 fix): the restored ckpt
                                 # holds ALL GDN layers' states keyed by layer prefix.
@@ -6063,6 +6106,50 @@ def _fr13_gdn_subop_mab(
                                     device=initial_state.device,
                                     dtype=initial_state.dtype,
                                 )
+                                # PATH A DIAGNOSTIC (SERVE_LOG-gated): this HIT row
+                                # restored a ckpt seed at rec2["pos"]. Cross-check
+                                # that pos against _FR13_REFOLD_WROTE[req] to decide
+                                # whether the seed just applied IS a Path-A folded
+                                # block (USED) or some OTHER ckpt at this pos (e.g.
+                                # the EXACT_SEED prefill-capture value). Throttled;
+                                # REFOLD-gated (off-path never runs).
+                                if (
+                                    globals().get("_FR13_REFOLD_ON", False)
+                                    and os.environ.get("FR13_SERVE_LOG", "0")
+                                    in ("1", "true")
+                                ):
+                                    try:
+                                        _fr13_rf_pos = int(
+                                            _fr13_es_rec2.get("pos")
+                                        )
+                                        _fr13_rf_wrote = globals().get(
+                                            "_FR13_REFOLD_WROTE", {}
+                                        ) or {}
+                                        _fr13_rf_used = (
+                                            _fr13_rf_pos
+                                            in _fr13_rf_wrote.get(
+                                                _fr13_es_rid2, set()
+                                            )
+                                        )
+                                        _fr13_rf_uc = int(globals().get(
+                                            "_FR13_REFOLD_RESTORE_LOGN", 0
+                                        ))
+                                        if _fr13_rf_uc < 30:
+                                            globals()[
+                                                "_FR13_REFOLD_RESTORE_LOGN"
+                                            ] = _fr13_rf_uc + 1
+                                            print(
+                                                ("FR13_REFOLD_RESTORE_USED"
+                                                 if _fr13_rf_used
+                                                 else "FR13_REFOLD_RESTORE_OTHER")
+                                                + " req=" + _fr13_es_rid2
+                                                + " pos=" + str(_fr13_rf_pos)
+                                                + " prefix="
+                                                + str(getattr(self, "prefix", "?")),
+                                                flush=True,
+                                            )
+                                    except Exception:
+                                        pass
                                 # PATH A E3 (FR13_APC_BLOCK_REFOLD): this HIT row
                                 # just restored the faithful block-aligned base for
                                 # THIS layer. Seed the rolling per-(req,layer)
@@ -8123,9 +8210,46 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
                     .setdefault(int(_rf_blk_end), {})
                 )
                 _rf_d[_rf_prefix] = _rf_fold_state
+                # DIAGNOSTIC: record that Path A folded+wrote THIS (req,pos) so the
+                # restore site can prove USED vs OTHER. Kept even when off-path? No
+                # -- this whole fn is REFOLD-gated, so the map only grows under the
+                # flag (byte-identical off).
+                try:
+                    _rf_wrote = getattr(gdn_mod, "_FR13_REFOLD_WROTE", None)
+                    if _rf_wrote is not None:
+                        _rf_wrote.setdefault(str(req_id), set()).add(
+                            int(_rf_blk_end)
+                        )
+                except Exception:
+                    pass
                 if _rf_bindfn is not None:
                     try:
-                        _rf_bindfn(req_id, int(_rf_blk_end))
+                        # _fr13_es_try_bind returns True iff the (hash,layers) pair
+                        # bound into block_pool._fr13_es_ckpt on THIS call. It is
+                        # called once per GDN layer; the FIRST layer to find the
+                        # block_pool insert already present binds (BUG-1 TIMING: the
+                        # insert for block N runs one block before capture, so early
+                        # layers may all return False and the entry stays pending
+                        # until the insert side calls back). We log the per-call
+                        # result, throttled, so a single run shows whether ANY bind
+                        # landed for a folded pos.
+                        _rf_bound = bool(_rf_bindfn(req_id, int(_rf_blk_end)))
+                        if _rf_dbg:
+                            _rf_bc = int(
+                                getattr(gdn_mod, "_FR13_REFOLD_BIND_COUNT", 0)
+                            )
+                            if _rf_bc < 60:
+                                try:
+                                    gdn_mod._FR13_REFOLD_BIND_COUNT = _rf_bc + 1
+                                    print(
+                                        "FR13_REFOLD_BIND req=" + str(req_id)
+                                        + " pos=" + str(int(_rf_blk_end))
+                                        + " prefix=" + _rf_prefix
+                                        + " bound=" + str(_rf_bound),
+                                        flush=True,
+                                    )
+                                except Exception:
+                                    pass
                     except Exception:
                         pass
             # advance the rolling faithful checkpoint + trim the folded tokens.
