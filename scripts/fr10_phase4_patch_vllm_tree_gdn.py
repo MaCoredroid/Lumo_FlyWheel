@@ -7657,6 +7657,7 @@ def _patch_scheduler_fr13_freereq_cleanup() -> bool:
             "                '_FR13_ES_HASH_BY_REQ', '_FR13_ES_RESTORE_BY_REQ',",
             "                '_FR13_REFOLD_TAIL', '_FR13_REFOLD_CKPT',",
             "                '_FR13_REFOLD_SEEDED', '_FR13_REFOLD_WROTE',",
+            "                '_FR13_APC_SSM_CHUNKED_PTR_BY_REQ',",
             "            ):",
             "                _fr13_d = getattr(_fr13_gdn, _fr13_nm, None)",
             "                if isinstance(_fr13_d, dict):",
@@ -8441,6 +8442,45 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
                                     pass
                     except Exception:
                         pass
+            # FR13_APC_REFOLD_TO_SNAPSHOT (default 0 -> inert -> byte-identical):
+            # publish THIS 64-block's chunked-realization SSM final_state into the
+            # snapshot redirect channel _FR13_APC_SSM_CHUNKED_PTR_BY_REQ, keyed
+            # (str(req_id) -> {layer_prefix -> {'pos','state'}}). The consumer
+            # (collect_mamba_copy_meta under FR13_APC_EXACT_SEED) reads
+            # rec['state'].data_ptr() as the snapshot SOURCE and rec['pos'] for
+            # its exact-boundary GAP-2 guard. We store the TENSOR OBJECT (a strong
+            # ref) -- NOT a bare data_ptr int -- so Python cannot free it out from
+            # under the later async batch_memcpy (Q2 lifetime); the module map
+            # keeps it alive until _free_request pops it or the next fold for this
+            # (req,layer) overwrites it (a distinct clone each block, so no alias).
+            # PER-LAYER key (_rf_prefix): each GDN layer's fold output is a
+            # distinct staging tensor, so its data_ptr is layer-specific. Gated on
+            # _rf_on_boundary ALONE (NOT _rf_is_seeded): a cold turn-1 fold has
+            # abs_base=0 so _rf_blk_end is decode-relative and MISMATCHES the
+            # absolute aligned pos -> the consumer pos guard drops it (fallback,
+            # never wrong); seeded turns land on the absolute boundary and are
+            # used. OPEN ISSUE #1 (cold-seed): turn-1 coverage gap remains until a
+            # cold-prefill->Path A abs seed lands (documented, deferred).
+            if (
+                _rf_on_boundary
+                and _rf_os.environ.get(
+                    "FR13_APC_REFOLD_TO_SNAPSHOT", "0"
+                ) == "1"
+            ):
+                try:
+                    _rf_cmap = getattr(
+                        gdn_mod, "_FR13_APC_SSM_CHUNKED_PTR_BY_REQ", None
+                    )
+                    if _rf_cmap is None:
+                        _rf_cmap = {}
+                        gdn_mod._FR13_APC_SSM_CHUNKED_PTR_BY_REQ = _rf_cmap
+                    _rf_cmap.setdefault(str(req_id), {})[_rf_prefix] = {
+                        "pos": int(_rf_blk_end),
+                        "state": _rf_fold_state,
+                    }
+                    gdn_mod._fr13_obs_bump("refold_published")
+                except Exception:
+                    pass
             # advance the rolling faithful checkpoint + trim the folded tokens.
             _rf_ck_map[_rf_prefix] = _rf_fold_state
             _rf_ent = {
@@ -8544,10 +8584,27 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
         # so the leaf was keyed to the wrong req_id and the postprocess lookup
         # always missed -> _FR13_CUR_SSM_LEAF_ROW stayed None (trace wdkszxe8a).
         _zero_on = os.environ.get("FR13_APC_SNAP_FIX_ZEROACCEPT", "1") == "1"
+        # FR13_APC_CONV_LEAF_COMPLETE (default 0 -> byte-identical): when on, the
+        # conv leaf map ALWAYS places a valid in-range committed row for every
+        # committed req (never leaves the entry absent -> the consumer redirect can
+        # never fall through to the stock col-0 base row = the wrong-row carrier).
+        # No conv fold: conv stays on the recurrent leaf (its realization is
+        # exonerated); only the ROW is corrected. All fallbacks land on _row[0]
+        # (the committed-root row). OFF -> every new branch takes the original
+        # conv_leafmap_miss bump.
+        _conv_complete = os.environ.get("FR13_APC_CONV_LEAF_COMPLETE", "0") == "1"
         for _b in range(int(len(spec_req_ids))):
             if _b >= len(replay_lens) or _b >= len(spec_cpu):
                 if conv_leaf_map is not None:
-                    gdn_mod._fr13_obs_bump("conv_leafmap_miss")  # FR13_OBS: row out of range -> no conv leaf placed
+                    if (
+                        _conv_complete
+                        and _b < len(spec_cpu)
+                        and len(spec_cpu[_b]) > 0
+                    ):
+                        conv_leaf_map[str(spec_req_ids[_b])] = int(spec_cpu[_b][0])
+                        gdn_mod._fr13_obs_bump("conv_leaf_completed")  # FR13_OBS: CONV_LEAF_COMPLETE placed root row instead of leaving miss
+                    else:
+                        gdn_mod._fr13_obs_bump("conv_leafmap_miss")  # FR13_OBS: row out of range -> no conv leaf placed
                 continue
             _alen = int(replay_lens[_b])
             _row = spec_cpu[_b]
@@ -8565,7 +8622,14 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
                         conv_leaf_map[str(spec_req_ids[_b])] = int(_row[0])
                         gdn_mod._fr13_obs_bump("conv_leafmap_hit")  # FR13_OBS: conv committed-root row published
                 elif conv_leaf_map is not None:
-                    gdn_mod._fr13_obs_bump("conv_leafmap_miss")  # FR13_OBS: zero-accept, no conv leaf placed (wrong-row fallback)
+                    if _conv_complete and len(_row) > 0:
+                        # CONV_LEAF_COMPLETE: place the committed-root row even when
+                        # the SSM ZEROACCEPT publish is off, so the conv redirect
+                        # never falls back to the stock col-0 base row.
+                        conv_leaf_map[str(spec_req_ids[_b])] = int(_row[0])
+                        gdn_mod._fr13_obs_bump("conv_leaf_completed")  # FR13_OBS: CONV_LEAF_COMPLETE placed zero-accept root row
+                    else:
+                        gdn_mod._fr13_obs_bump("conv_leafmap_miss")  # FR13_OBS: zero-accept, no conv leaf placed (wrong-row fallback)
                 continue
             if 0 <= _alen - 1 < len(_row):
                 leaf_map[str(spec_req_ids[_b])] = int(_row[_alen - 1])
@@ -8573,7 +8637,13 @@ def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
                     conv_leaf_map[str(spec_req_ids[_b])] = int(_row[_alen - 1])
                     gdn_mod._fr13_obs_bump("conv_leafmap_hit")  # FR13_OBS: conv committed-leaf row published
             elif conv_leaf_map is not None:
-                gdn_mod._fr13_obs_bump("conv_leafmap_miss")  # FR13_OBS: accepted-leaf idx out of range, no conv leaf placed
+                if _conv_complete and len(_row) > 0:
+                    # CONV_LEAF_COMPLETE: accepted-leaf idx out of range -> place the
+                    # committed-root row rather than leaving the entry absent.
+                    conv_leaf_map[str(spec_req_ids[_b])] = int(_row[0])
+                    gdn_mod._fr13_obs_bump("conv_leaf_completed")  # FR13_OBS: CONV_LEAF_COMPLETE placed root row on out-of-range leaf
+                else:
+                    gdn_mod._fr13_obs_bump("conv_leafmap_miss")  # FR13_OBS: accepted-leaf idx out of range, no conv leaf placed
     except Exception:
         # observe-only publish; never break the served commit on a tap failure
         pass
@@ -13733,6 +13803,7 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         # of the recurrent bank leaf row, so a future cache hit restores an EXACT
         # chunk-boundary seed. Only the SSM path; conv is unchanged.
         "                        _fr13_fx_chunked_ptr = None\n"
+        "                        _fr13_fx_chunked_state = None  " + sentinel + " (strong ref for lifetime+validate)\n"
         "                        _fr13_es_fallback_reason = \"\"\n"
         # slot key default (bound at the SNAP_FIX level next to the other redirect
         # locals so the ES_REDIRECT_* log lines below -- which run under the
@@ -13773,6 +13844,17 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         # the EXACT_SEED gate so the EXACT_SEED-OFF path is byte-identical (zero new
         # statements). Fail-safe: if block_ids/src_block_idx are unavailable, fall
         # back to the req_id key (no chunked redirect this snapshot == pre-fix).
+        # GAP-a REWIRE (FR13_APC_REFOLD_TO_SNAPSHOT). The fold PRODUCER
+        # (_fr13_pathA_refold) publishes rec = {'pos','state'} keyed
+        # (str(req_id) -> {layer_prefix -> rec}). When REFOLD_TO_SNAPSHOT=1 we
+        # look up by (req_id, str(layer_name)) and take rec['state'].data_ptr()
+        # (tensor object kept alive by the module map -> no dangling ptr) + a
+        # local strong ref _fr13_fx_chunked_state, and rec['pos'] for the GAP-2
+        # guard. When OFF we run the LEGACY slot-keyed two-map read VERBATIM
+        # (dead: the maps are empty unless a REFOLD_TO_SNAPSHOT=1 producer
+        # published) -> byte-identical to pre-wiring. _fr13_fx_slotkey stays
+        # computed for the ES_REDIRECT_* log lines below in both arms. Open
+        # issues #2 (req_id key) + #3 (per-layer key) resolved here.
         "                            try:\n"
         "                                _fr13_fx_slotkey = str(int(block_ids[int(src_block_idx)]))\n"
         "                            except Exception:\n"
@@ -13780,33 +13862,42 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                            _fr13_fx_cm = getattr(\n"
         "                                _fr13_fx_gdn, \"_FR13_APC_SSM_CHUNKED_PTR_BY_REQ\", None\n"
         "                            )\n"
-        "                            if _fr13_fx_cm:\n"
-        "                                _fr13_fx_chunked_ptr = _fr13_fx_cm.get(_fr13_fx_slotkey)\n"
-        # GAP-2 POSITION-LABEL FAIL-SAFE GUARD. A chunked ptr is only a VALID
-        # snapshot source if the boundary it represents (pos_map[req], the
-        # committer chain's last published 64-aligned _ck_pos) EXACTLY equals
-        # the block-aligned position this snapshot persists
-        # (aligned_new_computed_tokens, stashed per-req by postprocess_mamba).
-        # If the pos is missing or mismatched the published checkpoint is for a
-        # DIFFERENT boundary -> writing it here would seed the cache with a
-        # position-wrong state. So drop the chunked ptr (-> recurrent-leaf
-        # fallback, never wrong) and record the reason for the engagement log.
+        "                            _fr13_fx_ckpos = None\n"
+        "                            if os.environ.get(\"FR13_APC_REFOLD_TO_SNAPSHOT\", \"0\") == \"1\":\n"
+        "                                _fr13_fx_chunked_rec = (\n"
+        "                                    _fr13_fx_cm.get(_fr13_fx_reqkey, {}).get(str(layer_name))\n"
+        "                                    if _fr13_fx_cm else None\n"
+        "                                )\n"
+        "                                if _fr13_fx_chunked_rec is not None:\n"
+        "                                    _fr13_fx_chunked_state = _fr13_fx_chunked_rec.get(\"state\")\n"
+        "                                    if _fr13_fx_chunked_state is not None:\n"
+        "                                        _fr13_fx_chunked_ptr = _fr13_fx_chunked_state.data_ptr()\n"
+        "                                        _fr13_fx_ckpos = _fr13_fx_chunked_rec.get(\"pos\")\n"
+        "                            else:\n"
+        # LEGACY slot-keyed two-map read (byte-identical dead path when
+        # REFOLD_TO_SNAPSHOT=0; the maps are unassigned/empty so this yields None).
+        "                                if _fr13_fx_cm:\n"
+        "                                    _fr13_fx_chunked_ptr = _fr13_fx_cm.get(_fr13_fx_slotkey)\n"
+        "                                if _fr13_fx_chunked_ptr is not None:\n"
+        "                                    _fr13_fx_pm = getattr(\n"
+        "                                        _fr13_fx_gdn, \"_FR13_APC_SSM_CHUNKED_POS_BY_REQ\", None\n"
+        "                                    )\n"
+        "                                    _fr13_fx_ckpos = (\n"
+        "                                        _fr13_fx_pm.get(_fr13_fx_slotkey)\n"
+        "                                        if _fr13_fx_pm else None\n"
+        "                                    )\n"
+        # GAP-2 POSITION-LABEL FAIL-SAFE GUARD (shared by both arms). A chunked
+        # ptr is only a VALID snapshot source if the boundary it represents
+        # (rec['pos'] / pos_map[slot]) EXACTLY equals the block-aligned position
+        # this snapshot persists (aligned_new_computed_tokens, stashed per-req by
+        # postprocess_mamba, req_id-keyed). If missing/mismatched the published
+        # checkpoint is for a DIFFERENT boundary -> drop the chunked ptr (->
+        # recurrent-leaf fallback, never wrong) and record the reason for the log.
         # OFF -> _fr13_fx_chunked_ptr already None -> this whole block is dead.
         "                            if _fr13_fx_chunked_ptr is not None:\n"
-        "                                _fr13_fx_pm = getattr(\n"
-        "                                    _fr13_fx_gdn, \"_FR13_APC_SSM_CHUNKED_POS_BY_REQ\", None\n"
-        "                                )\n"
         "                                _fr13_fx_apm = getattr(\n"
         "                                    _fr13_fx_gdn, \"_FR13_APC_SSM_ALIGNED_POS_BY_REQ\", None\n"
         "                                )\n"
-        "                                _fr13_fx_ckpos = (\n"
-        "                                    _fr13_fx_pm.get(_fr13_fx_slotkey)\n"
-        "                                    if _fr13_fx_pm else None\n"
-        "                                )\n"
-        # aligned-pos map stays req_id-keyed (postprocess_mamba publishes it by
-        # req_id); the chunked pub_pos above is slot-keyed. Both describe THIS
-        # sequence at THIS snapshot, so the pub_pos==aligned_pos exact-boundary
-        # guard still compares like-for-like.
         "                                _fr13_fx_apos = (\n"
         "                                    _fr13_fx_apm.get(_fr13_fx_reqkey)\n"
         "                                    if _fr13_fx_apm else None\n"
@@ -13840,6 +13931,32 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                                    )\n"
         "                        _fr13_fx_n = int(state.shape[0])\n"
         "                        _fr13_fx_ent = int(offset) - 1\n"
+        # FR13_APC_CONV_LEAF_COMPLETE backstop (default 0 -> byte-identical): on
+        # the conv snapshot, if the conv committed-leaf row is missing/out-of-range
+        # redirect to the SSM leaf row (shares the identical committed node-bank
+        # row under FR13_REPLAY_ROUTE) instead of falling through to the stock
+        # col-0 base row (= the wrong-row conv carrier). Uses _fr13_fx_n above.
+        "                        if (\n"
+        "                            _fr13_fx_conv_on\n"
+        "                            and os.environ.get(\"FR13_APC_CONV_LEAF_COMPLETE\", \"0\") == \"1\"\n"
+        "                            and (\n"
+        "                                _fr13_fx_leaf is None\n"
+        "                                or not (0 <= int(_fr13_fx_leaf) < _fr13_fx_n)\n"
+        "                            )\n"
+        "                        ):\n"
+        "                            _fr13_bk_map = getattr(\n"
+        "                                _fr13_fx_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None\n"
+        "                            )\n"
+        "                            _fr13_bk_leaf = (\n"
+        "                                _fr13_bk_map.get(_fr13_fx_reqkey)\n"
+        "                                if _fr13_bk_map else None\n"
+        "                            )\n"
+        "                            if (\n"
+        "                                _fr13_bk_leaf is not None\n"
+        "                                and 0 <= int(_fr13_bk_leaf) < _fr13_fx_n\n"
+        "                            ):\n"
+        "                                _fr13_fx_leaf = int(_fr13_bk_leaf)\n"
+        "                                _fr13_fx_gdn._fr13_obs_bump(\"conv_leaf_completed\")\n"
         "                        if (\n"
         "                            _fr13_fx_leaf is not None\n"
         "                            and 0 <= int(_fr13_fx_leaf) < _fr13_fx_n\n"
@@ -13855,6 +13972,41 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                            _fr13_fx_gdn._fr13_obs_bump(\"redirect_engaged\")\n"
         "                            if _fr13_fx_chunked_ptr is not None:\n"
         "                                _fr13_fx_gdn._fr13_obs_bump(\"redirect_used\")\n"
+        # FR13_REFOLD_VALIDATE (best-effort, host-eager, throttled to first K): the
+        # fold(chunked) state we are about to snapshot MUST be R-equal but
+        # bit-different vs the resident recurrent committed-leaf bank row
+        # state[leaf] (chunked-vs-recurrent gap ~0.0078/boundary). PASS in a small
+        # realization band; FAIL on a gross diff (wrong tokens/boundary/inputs) or
+        # a ~0 diff (the fold merely copied the recurrent row = no chunked work).
+        # Reuses tensors already resident (NO recompute); syncs .item() so it is
+        # skipped under cuda-graph capture; swallows all. Log via FR13_SERVE_LOG.
+        "                                if _fr13_fx_chunked_state is not None:\n"
+        "                                    try:\n"
+        "                                        _fr13_vk = int(os.environ.get(\"FR13_APC_REFOLD_VALIDATE_K\", \"16\"))\n"
+        "                                        _fr13_vc = int(getattr(_fr13_fx_gdn, \"_FR13_REFOLD_VALIDATE_COUNT\", 0))\n"
+        "                                        if _fr13_vc < _fr13_vk and not _fr13_es_capturing:\n"
+        "                                            _fr13_fx_gdn._FR13_REFOLD_VALIDATE_COUNT = _fr13_vc + 1\n"
+        "                                            _fr13_vref = state[int(_fr13_fx_leaf)]\n"
+        "                                            if tuple(_fr13_vref.shape) == tuple(_fr13_fx_chunked_state.shape):\n"
+        "                                                _fr13_vd = float(\n"
+        "                                                    (_fr13_vref.to(torch.float32)\n"
+        "                                                     - _fr13_fx_chunked_state.to(torch.float32))\n"
+        "                                                    .abs().max().item()\n"
+        "                                                )\n"
+        "                                                if _fr13_vd >= 1.0 or _fr13_vd < 1e-12:\n"
+        "                                                    _fr13_fx_gdn._fr13_obs_bump(\"refold_validate_fail\")\n"
+        "                                                else:\n"
+        "                                                    _fr13_fx_gdn._fr13_obs_bump(\"refold_validate_pass\")\n"
+        "                                                if os.environ.get(\"FR13_SERVE_LOG\", \"0\") in (\"1\", \"true\"):\n"
+        "                                                    print(\n"
+        "                                                        \"FR13_REFOLD_VALIDATE req=\" + str(_fr13_fx_reqkey)\n"
+        "                                                        + \" layer=\" + str(layer_name)\n"
+        "                                                        + \" pos=\" + str(_fr13_fx_ckpos)\n"
+        "                                                        + \" dist=\" + str(_fr13_vd),\n"
+        "                                                        flush=True,\n"
+        "                                                    )\n"
+        "                                    except Exception:\n"
+        "                                        pass\n"
         "                                src_ptrs_np[_fr13_fx_ent] = int(_fr13_fx_chunked_ptr)\n"
         "                            else:\n"
         "                                _fr13_fx_gdn._fr13_obs_bump(\"redirect_fallback\")\n"
