@@ -145,3 +145,31 @@ Results: `output/fr13_phase4_mainpick/PHASE4_SUMMARY.txt` (output/ gitignored �
 **HIT_RECURRENT_SUFFIX=0 confirmed deliberate** (launcher :286 un-bake 2026-06-27): HRS re-prefills
 the hit remainder through the recurrent kernel (≠ chunked realization, cannot be bit-exact);
 superseded by EXACT_SEED; empirically identical give-up with HRS on/off. No action.
+
+## 11. Code-read verdicts (workflow wv4iajyw8, adversarially cross-examined): BOTH remaining seams REFUTED — sole survivor = H1 cold-prefill amplification
+
+- **Position base: REFUTED.** _fr10_mrope_base = unconditional num_computed_tokens_cpu (patcher :11828-30),
+  no cache/restore branch; remap fires ONLY on tree decode rows (:11831) so it cannot touch turn-1 prefill;
+  KV slots computed flat BEFORE remap (:11692-96) = cache-correct; depth-collapse is pure topology, proven
+  lossless (tree+no-cache resolves with identical remap). Jun-28 finding was diagnosis-only, its trigger
+  (real hit) never fires here. H3 capture = positive closer only (predict positions[root]==num_computed_tokens, 0.0 vs oracle).
+- **SSM write-row: REFUTED.** SNAP_FIX redirects the decode snapshot to the committed accepted-leaf
+  (:13715-20 via :8439 publish; banked FAITHFUL 240/240). The EXACT_SEED SSM-snapshot override
+  (_FR13_APC_SSM_CHUNKED_PTR_BY_REQ) is DEAD CODE — zero producers — which EXPLAINS the every-gate
+  ES_REDIRECT_FALLBACK. ES prefill/block-hash captures recompute from tokens (row-independent);
+  decode-drain relay is a disabled no-op (:18922). Residual real defect: CONV_SNAP_FIX still PARTIAL
+  (wrong-row conv write possible at num_accepted>1) — inert here (no hit consumes it), hygiene-fix later.
+- **Sole survivor H1:** cache-ON boot flags (align-mode prefill machinery + fp32 SSM dtype) perturb the
+  turn-1 COLD-prefill GDN realization (~1e-2 class); TREE decode amplifies it into a deterministic turn-1
+  route flip (monolithic vs Explore-subagent, byte-identical input) -> long single-context drift onto the
+  web-dev attractor -> no tool call. Explains all 6 facts incl. native robustness + geometry-independence.
+  RESIDUAL (medium): cache-root-defect vs benign trajectory-selection — but the engineering target is the
+  same either way: **cold-prefill realization parity** (cache-ON turn-1 bit-exact to CONFIG_ONLY turn-1).
+- **Rescue-path gap noted and REJECTED per charter:** terminal completions end stop_reason=null so
+  auto-continue never fires; injecting a nudge there would convert stops to resolves — BANNED (nudge=lossy,
+  user 2026-07-04). Recorded only so nobody re-proposes it as a fix.
+- **Decisive next test (flag-only): FR13_APC_EXACT_SEED=0** keeping prefix-caching+chunked+fp32+1024.
+  Persists => ES machinery exonerated, carrier = plain cache-config x tree (H1 confirmed).
+  Resolves => EXACT_SEED prefill-capture side-computation implicated.
+- Path A retry (§10) condition FAILED: write side reads clean => nothing for the fold to fix. Parked
+  unless user overrides.
