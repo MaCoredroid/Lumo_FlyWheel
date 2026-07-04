@@ -476,6 +476,28 @@ def _patch_gdn_attn() -> bool:
             "                        dtype=torch.int32,\n"
             "                        device=device,\n"
             "                    )\n"
+            "                    # PATH A (FR13_APC_BLOCK_REFOLD): STACKED per-step\n"
+            "                    # PROCESSED g/beta stash, allocated INIT-TIME (eager,\n"
+            "                    # pre-capture) alongside the rings so the captured\n"
+            "                    # forward only WRITES it (E1 is a pure index_copy;\n"
+            "                    # lazy alloc in _forward_core would fault under capture).\n"
+            "                    # FLAG-GATED so the OFF path allocates nothing new ->\n"
+            "                    # byte-identical; the E1 stash is gated on the SAME flag\n"
+            "                    # AND getattr-guards the buffer, so it only writes when\n"
+            "                    # the buffer exists.\n"
+            "                    _fr13_ep_refold_g = None\n"
+            "                    _fr13_ep_refold_beta = None\n"
+            "                    if os.environ.get(\"FR13_APC_BLOCK_REFOLD\", \"0\") == \"1\":\n"
+            "                        _fr13_ep_refold_g = torch.zeros(\n"
+            "                            (_fr13_ep_count, _fr13_ring_bs, n_pad, _fr13_ep_vh),\n"
+            "                            dtype=torch.float32,\n"
+            "                            device=device,\n"
+            "                        )\n"
+            "                        _fr13_ep_refold_beta = torch.zeros(\n"
+            "                            (_fr13_ep_count, _fr13_ring_bs, n_pad, _fr13_ep_vh),\n"
+            "                            dtype=torch.float32,\n"
+            "                            device=device,\n"
+            "                        )\n"
             "                    _fr13_ep_alog = torch.stack(\n"
             "                        [_l.A_log.detach() for _l in _fr13_ep_layers]\n"
             "                    ).contiguous()\n"
@@ -488,6 +510,12 @@ def _patch_gdn_attn() -> bool:
             "                        _fr13_layer._fr13_replay_ring_v = _fr13_ep_ring_v[_fr13_row]\n"
             "                        _fr13_layer._fr13_replay_ring_a = _fr13_ep_ring_a[_fr13_row]\n"
             "                        _fr13_layer._fr13_replay_ring_b = _fr13_ep_ring_b[_fr13_row]\n"
+            "                        if _fr13_ep_refold_g is not None:\n"
+            "                            _fr13_layer._fr13_refold_g_step = _fr13_ep_refold_g[_fr13_row]\n"
+            "                            _fr13_layer._fr13_refold_beta_step = _fr13_ep_refold_beta[_fr13_row]\n"
+            "                        else:\n"
+            "                            _fr13_layer._fr13_refold_g_step = None\n"
+            "                            _fr13_layer._fr13_refold_beta_step = None\n"
             "                        _fr13_layer._fr13_replay_prev_lens = _fr13_ep_prev_lens[_fr13_row]\n"
             "                        _fr13_layer._fr13_replay_spec_idx = _fr13_ep_spec_idx[_fr13_row]\n"
             "                        _fr13_layer._fr13_replay_flags = _fr13_ep_flags[_fr13_row]\n"
@@ -567,6 +595,9 @@ def _patch_gdn_attn() -> bool:
             "                                dtype=torch.float32,\n"
             "                                device=device,\n"
             "                            )\n"
+            "                        else:\n"
+            "                            _fr13_layer._fr13_refold_g_step = None\n"
+            "                            _fr13_layer._fr13_refold_beta_step = None\n"
             "                        _fr13_layer._fr13_replay_prev_lens = torch.zeros(\n"
             "                            (_fr13_ring_bs,),\n"
             "                            dtype=torch.int32,\n"
@@ -5075,12 +5106,22 @@ def _fr13_gdn_subop_mab(
                         # whole block is skipped -> byte-identical). Stash THIS
                         # step's PROCESSED g_tree/beta_tree (the fused_post_conv
                         # _prep outputs the chunked re-fold needs; the rings only
-                        # hold raw a,b) into pre-allocated per-layer buffers. Pure
-                        # index/copy under capture: no allocation, no .item(), no
-                        # host sync. The host-eager committer (E2) later gathers
-                        # the accepted columns from these + the k/v rings and folds
-                        # a 64-block through chunk_gated_delta_rule.
-                        if globals().get("_FR13_REFOLD_ON", False):
+                        # hold raw a,b) into the per-layer buffers PRE-ALLOCATED
+                        # eager at metadata-builder init (NEVER here -- alloc under
+                        # capture faults). Pure index/copy under capture: no
+                        # allocation, no .item(), no host sync. The buffer getattr-
+                        # guard makes a missing buffer SKIP (belt-and-suspenders:
+                        # never AttributeError-crash the captured forward). The
+                        # host-eager committer (E2) later gathers the accepted
+                        # columns from these + the k/v rings and folds a 64-block
+                        # through chunk_gated_delta_rule.
+                        if (
+                            globals().get("_FR13_REFOLD_ON", False)
+                            and getattr(self, "_fr13_refold_g_step", None)
+                            is not None
+                            and getattr(self, "_fr13_refold_beta_step", None)
+                            is not None
+                        ):
                             self._fr13_refold_g_step[fr10_b, :tree_n].copy_(
                                 g_tree[start:end]
                             )
