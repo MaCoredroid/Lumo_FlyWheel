@@ -117,3 +117,31 @@ Results: `output/fr13_phase4_mainpick/PHASE4_SUMMARY.txt` (output/ gitignored �
   max_num_batched stayed 1024 (overshoot-invariant violation, silent).
 - Scope: cache-ON boots only; CONFIG_ONLY + non-APC paths byte-identical. NOT the give-up fix
   (§8: give-up is geometry-independent) — this is cache-correctness hygiene.
+
+## 10. Fix-arm dispositions after the geometry bake (2026-07-04)
+
+**Recompute (SCAN_ALIGN=recompute, ±NODE_PARALLEL): RETIRED for the give-up — wrong-in-theory.**
+1. Target = SSM scan/seed realization content; Track A measured the restored SSM state BIT-EXACT
+   (min_dist=0.0 x 48 layers) — it aligns something already exact at the boundaries.
+2. Decisive control 0d12cdbf: native+EXACT_SEED has HIGHER first-token TV than cat8 yet resolves
+   => seed-realization drift does not predict give-up => aligning it cannot fix give-up.
+3. SCAN_ALIGN/K1 family separately refuted as a lossless lever (moved deployed scan state 22.8x
+   AWAY from native).
+4. Both NP variants gave up (fastest arms, turn 2); give-up is geometry-independent so 1024 does
+   not rescue the mechanism. Positive side-finding kept: NP=1 boots + cuda-graph-captures + serves.
+
+**Path A (FR13_APC_BLOCK_REFOLD): theory NOT refuted — today's null was VACUOUS. RETRY QUEUED.**
+1. Fold fired 432x but RESTORE_USED=0 / RESTORE_OTHER=30: its output was never consumed; the
+   theory (faithful write-side checkpoint on the accepted path) went untested.
+2. Bind publishes at runtime block size: at 832 the bind grid was tangled (0/60 bind diagnostic);
+   at the baked 1024 the bind grid coincides with the checkpoint grid — a different experiment.
+3. Overlaps live suspect #2 (ES write-row selection under tree decode; code-read in flight).
+4. Retry conditions: geometry=1024 (baked default), engagement gate = RESTORE_USED>0 (REFOLD_APPLIED
+   alone is insufficient — proven today); run ONLY if the code-read confirms the write-side seam is
+   broken in a way the fold would fix; if the write path reads clean, Path A stays retired too.
+   Skeptical prior stays on record: c9deb112 ("restored boundaries already faithful via
+   prefill-capture") — drawn at 832 with the overshoot hole open, so re-evaluate at 1024.
+
+**HIT_RECURRENT_SUFFIX=0 confirmed deliberate** (launcher :286 un-bake 2026-06-27): HRS re-prefills
+the hit remainder through the recurrent kernel (≠ chunked realization, cannot be bit-exact);
+superseded by EXACT_SEED; empirically identical give-up with HRS on/off. No action.
