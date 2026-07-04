@@ -235,3 +235,23 @@ superseded by EXACT_SEED; empirically identical give-up with HRS on/off. No acti
   checkpoint producer** (or SGLang-style recompute-clean-linear-scan) for boundaries crossed during
   decode, + the conv twin (incl. the wrong-row gap). Conv-only rewrite would leave the SSM realization
   term in place.
+
+## 15. Flag ladder CLOSED: 8/8 — carrier is prefix-caching x tree decode itself
+
+| variant (all cat8+cache on 13453, nudge-free) | give-up |
+|---|---|
+| base @832 x2, recompute NP0/NP1 @832, patha @832 | 5/5 |
+| align1024 (ES=1, fp32) | give-up |
+| es0 (ES=0, fp32) | give-up (240k hits) |
+| dtypeauto (ES=0, auto dtype) | give-up (344k hits) |
+
+Eliminated by the ladder: geometry (832/1024), EXACT_SEED machinery, fp32 SSM dtype, SSM-content fixes
+(recompute), Path A fold. Common to all 8: --enable-prefix-caching + tree decode + hits consumed.
+=> E' stands as the lead: decode-side snapshot states (recurrent-realization; tree branch-contaminated
+committed-leaf per STree/June evidence) written into the mamba cache and consumed by turn-2+ hits.
+Cold-route-flip (A) present in all variants but cannot be sufficient alone (native+cache engages with
+the same cold config; every cold-config permutation still gave up only WITH tree).
+NOTE: per-turn reset_prefix_cache as an A-vs-E' splitter is REJECTED — reset itself is a known
+corruption artifact (project_fr13_apc_cache_causes_corruption).
+NEXT = fix of record (§14): wire EXACT_SEED's decode-side chunked-realization producer + conv twin;
+gated behind the FR13_OBS instrumentation land (in flight) so the fix run has trustworthy counters.
