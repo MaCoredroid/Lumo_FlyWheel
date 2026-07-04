@@ -301,8 +301,8 @@ else
          "FR13_REPLAY_ROUTE=1" "FR13_FA2_TREE_BIAS=1" "FR13_CONV_COMMITTED_PATH=1" \
          "FR10_DECODE_MODE_DEFAULT=tree_mtp" \
          "LUMO_FB_KERNEL_ROWS=1" "LUMO_FB_PROJ_PAD_ROWS=16")
-  if grep -q "^FR13_SCAN_ALIGN=1$" "$ARMDIR/container_env.txt"; then
-    echo "FAIL: FR13_SCAN_ALIGN=1 present — K1 must NOT be baked"; exit 3
+  if grep -q "^FR13_SCAN_ALIGN=1$" "$ARMDIR/container_env.txt" && [ "${FR13_ALLOW_SCAN_ALIGN:-0}" != "1" ]; then
+    echo "FAIL: FR13_SCAN_ALIGN=1 present — K1 must NOT be baked (set FR13_ALLOW_SCAN_ALIGN=1 for the recompute diagnostic)"; exit 3
   fi
   for need in "${NEEDS[@]}"; do
     grep -q "^$need$" "$ARMDIR/container_env.txt" || { echo "FAIL: env pin missing: $need"; exit 3; }
