@@ -306,3 +306,15 @@ m_tree_cache_fixv1 (cf060312: BLOCK_REFOLD=1 REFOLD_TO_SNAPSHOT=1 CONV_LEAF_COMP
   (b) investigate the compression failure source (model-empty summary = serving residue at high ctx
   vs harness artifact; alienware-side proxy logs — GB10-side pair dumps empty for offloaded arms);
   (c) re-run gate; the context-wall question may also re-implicate the monolithic route (context bloat).
+
+## 18. Route mini-probe (free, from today's 8 traces): the turn-1 route flip is SYSTEMATIC, tree x cache
+
+first tool call at turn 1: agent(subagent) = tree+nocache, native+cache (2/2); read_file(monolithic) =
+ALL SIX tree+cache variants (base x2, align1024, es0, dtypeauto, fixv1) — spanning geometry, ES on/off,
+dtype, conv/refold fixes. Config-independent coin-flip explanation ~1% class => systematic logit shift
+pinned to tree x cache. Carrier must be what all six share vs native: ALIGN-MODE CACHE PREFILL feeding
+the TREE decoder's first steps (third seam, separate from the write-side v2 work — es0 in the set proves
+v2 cannot move it). Consequences: (a) route seam = cold-prefill realization parity (candidate fix class:
+make align prefill end-state match CONFIG_ONLY's realization); (b) route choice decides context economics
+(subagent quarantine vs monolithic 49k wall) -> the context track covers it harness-side regardless;
+(c) full N=8 route probe still queued for true per-config distributions (task #1).
