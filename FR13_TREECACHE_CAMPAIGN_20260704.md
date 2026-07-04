@@ -192,3 +192,24 @@ superseded by EXACT_SEED; empirically identical give-up with HRS on/off. No acti
   the route-decision shift is SYSTEMATIC (larger than noise), leaning corrupt over select.
   Margin probe (teacher-forced, first-divergent-token, tree+cache vs tree+no-cache) promoted to
   the decisive instrument after the flag ladder.
+
+## 13. CORRECTION (Fable first-hand re-read of code+artifacts): "no cache hits" premise FALSE — conv wrong-row carrier RESURRECTED as lead
+
+- Prometheus per-task brackets (definitive, not throttled): tree+cache base = **138,944 prefix-cache HITS**
+  (77% of 180,635 queries); es0 = 239,616; native = 524,288 (engages!); nocache = 0. The autopsy's
+  "row0_hit=False x50 => no hit ever fired" was the 50-forward throttle window (all cold turn-1) —
+  scalar-blindspot class. Every hit-dependent inference downstream (incl. code-read "conv write inert",
+  cross-exam "H1 sole survivor") inherited the false premise.
+- **Lead hypothesis (E): conv wrong-row write -> hit-restore corruption.** CONV_SNAP_FIX is PARTIAL
+  (code-read confirmed in code): at num_accepted>1 the conv snapshot can capture base col-0 instead of the
+  committed accepted-leaf. Run-level: base arm logged **ES_REDIRECT_FALLBACK x384** (wrong-row copied)
+  vs native **0**. Commit trail: 4063b346 "conv carrier confirmed, source-rewrite next" — the source-rewrite
+  was NEVER WRITTEN (branch pivoted to Track A/B; 1053c604 only baked the flag).
+- Explains the full 2x2 + all nulls: tree-only (wrong leaf among co-resident rows), cache-only (consumed
+  on hit), ES-independent (conv restore in es0 too), geometry-independent, recompute/PathA-null (SSM-side),
+  degrade turns 2/3/6 = at/after first hit turn. The turn-1 route flip remains a separate (possibly benign)
+  cold-config effect — dtypeauto arm splits its dtype term; margin probe quantifies it.
+- **Fix of record to implement: the conv source-rewrite** (finish 4063b346's "next"): publish the conv
+  accepted-leaf row for EVERY snapshot boundary (incl. zero-accept + commit-timing gaps) and rewrite BOTH
+  src_ptrs AND sizes to the committed-leaf row so the redirect can never fall back. Then tree+cache give-up
+  gate; then lossless gates; then the 16-task matrix.
