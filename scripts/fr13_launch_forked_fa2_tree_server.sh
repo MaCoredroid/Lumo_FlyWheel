@@ -238,8 +238,20 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
     # kernel-aligned (16) -> 816, NOT a multiple of FLA_CHUNK_SIZE=64. Setting
     # --block-size to a 64-multiple (>= the ~816-token mamba page, <= max-num-batched)
     # forces a 64-aligned block_size so the mamba checkpoint at a block boundary is
-    # BIT-EXACT (no residual). Default OFF (empty) => byte-identical to prior runs.
-    APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS ${APC_BLOCK_SIZE:+--block-size $APC_BLOCK_SIZE}"
+    # BIT-EXACT (no residual).
+    # BAKED 2026-07-04 (user): APC_BLOCK_SIZE now DEFAULTS to APC_MAX_NUM_BATCHED_TOKENS
+    # (=MAMBA_BLOCK_SIZE=1024) instead of unset. Unset let vLLM pick 832 for tree arms,
+    # violating the documented invariant (FR13_APC_EXACT_SEED_SUCCESS.md): block_size must
+    # be (1) a 64-multiple [FLA_CHUNK_SIZE bit-exact boundary checkpoints], (2) >= ~816
+    # [mamba page floor], (3) == max-num-batched [overshoot fix d228c76b / vLLM #45238:
+    # one boundary per prefill step]. NOTE the 2026-07-04 A/B: 832-vs-1024 did NOT change
+    # the tree+cache give-up (6/6 both geometries) — this bake is cache-correctness
+    # hygiene, not the give-up fix (see FR13_TREECACHE_CAMPAIGN_20260704.md §8-9).
+    APC_BLOCK_SIZE=${APC_BLOCK_SIZE:-$APC_MAX_NUM_BATCHED_TOKENS}
+    if (( APC_BLOCK_SIZE % 64 != 0 )) || (( APC_BLOCK_SIZE < 816 )) || (( APC_BLOCK_SIZE > APC_MAX_NUM_BATCHED_TOKENS )); then
+      echo "FAIL: APC_BLOCK_SIZE=$APC_BLOCK_SIZE violates the block-size invariant (64-multiple, >=816, <= max-num-batched=$APC_MAX_NUM_BATCHED_TOKENS)"; exit 2
+    fi
+    APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS --block-size $APC_BLOCK_SIZE"
   fi
   # BAKE (2026-06-24, GPU-VERIFIED via verify3b output/fr13_apc_verify3b): the tree+APC
   # node-bank staleness fix. The defect: the tree committer writes the accepted-leaf state

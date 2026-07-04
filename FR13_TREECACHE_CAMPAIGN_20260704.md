@@ -107,3 +107,13 @@ Results: `output/fr13_phase4_mainpick/PHASE4_SUMMARY.txt` (output/ gitignored �
 - Survivors (must be TREE x CACHE interactions): (1) full-attn position base on restored prefixes x
   tree depth-positions (_fr10_mrope_base class, named 06-28, never verified fixed for tree) -> H3 capture;
   (2) ES write-side row selection during TREE decode (wrong-bank-row class) -> code read + targeted probe.
+
+## 9. BAKED (2026-07-04, user): APC_BLOCK_SIZE defaults to 1024 on mainline
+
+- Launcher now defaults `APC_BLOCK_SIZE:=$APC_MAX_NUM_BATCHED_TOKENS` (=MAMBA_BLOCK_SIZE=1024) in the
+  cache-ON branch + FAIL-LOUD guard enforcing the documented invariant: 64-multiple AND >=816 AND
+  == max-num-batched (FR13_APC_EXACT_SEED_SUCCESS.md constraints; overshoot fix d228c76b/#45238).
+- Closes the config hole where tree cache arms booted at vLLM's native 832 rounding while
+  max_num_batched stayed 1024 (overshoot-invariant violation, silent).
+- Scope: cache-ON boots only; CONFIG_ONLY + non-APC paths byte-identical. NOT the give-up fix
+  (§8: give-up is geometry-independent) — this is cache-correctness hygiene.
