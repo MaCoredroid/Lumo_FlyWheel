@@ -213,3 +213,25 @@ superseded by EXACT_SEED; empirically identical give-up with HRS on/off. No acti
   accepted-leaf row for EVERY snapshot boundary (incl. zero-accept + commit-timing gaps) and rewrite BOTH
   src_ptrs AND sizes to the committed-leaf row so the redirect can never fall back. Then tree+cache give-up
   gate; then lossless gates; then the 16-task matrix.
+
+## 14. CORRECTION of §13's marker reading + refined lead (E')
+
+§13 conflated markers. Corrected semantics (from patcher :13722-13760 + :8362-8444):
+- ES_REDIRECT_FALLBACK is the **SSM snapshot** redirect (not conv); its fallback target is the
+  SNAP_FIX committed-leaf = CORRECT ROW but the RECURRENT-decode realization — the exact realization
+  EXACT_SEED v2 was designed to replace with chunked checkpoints, whose producer
+  (_FR13_APC_SSM_CHUNKED_PTR_BY_REQ) is DEAD CODE. So 384 fallbacks = "tree snapshots stored
+  recurrent-realization states 384 times", not wrong-row evidence.
+- The marker only logs under EXACT_SEED=1 (es0 silent ≠ clean) and only fires when the tree
+  committer publishes the leaf map (native zero lines = NOT APPLICABLE, not clean). Three arms,
+  three different meanings of "no lines" — the uniform-instrumentation fix (§15) addresses this class.
+- **Refined lead E′ (coherent with the whole June arc):** turn-2+ hits consume mamba-cache states
+  written by DECODE-side snapshots. For TREE these are (a) recurrent-realization (chunked producer dead)
+  and (b) branch-CONTAMINATED committed-leaf states (STree 2505.14969; spine+APC was PROVEN lossless
+  while tree was 0/4 — the June finding). HRS partially fixed this family (17/48→5/48), was un-baked in
+  favor of EXACT_SEED, whose decode-side half never got wired ⇒ the June carrier is UNFIXED in today's
+  builds. Native immune: single-spine states are never branch-contaminated. Explains every cell + null.
+- Fix of record (supersedes conv-only §13 fix): **wire EXACT_SEED's decode-side chunked-realization
+  checkpoint producer** (or SGLang-style recompute-clean-linear-scan) for boundaries crossed during
+  decode, + the conv twin (incl. the wrong-row gap). Conv-only rewrite would leave the SSM realization
+  term in place.
