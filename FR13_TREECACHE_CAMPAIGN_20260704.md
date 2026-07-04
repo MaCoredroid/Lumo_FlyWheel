@@ -287,3 +287,22 @@ redirect_fallback==0 AND conv_leafmap_miss==0; then the give-up gate.
 
 **Sequencing decision (user):** WAIT for FR13_OBS to land before implementing — same-file edits, and the
 fix gate depends on the new counters. GPU idles in the interim by design.
+
+## 17. Fix v1 gate result: PHENOTYPE CHANGED — drift give-up GONE, new wall = context compression
+
+m_tree_cache_fixv1 (cf060312: BLOCK_REFOLD=1 REFOLD_TO_SNAPSHOT=1 CONV_LEAF_COMPLETE=1, 13453):
+- dur=872s, 16 turns (free_request_fired=16) vs 2-6-turn give-ups — ~3x engagement; coherent throughout;
+  terminal = qwen-code CONTEXT COMPRESSION FAILURE at ~49k tokens (COMPRESSION_FAILED_EMPTY_SUMMARY),
+  NOT the off-task drift. patch_bytes=0/failed formally, but the old give-up phenotype is GONE (n=1).
+- CONV HALF ENGAGED PERFECTLY: conv_snapshot_events=25200, conv_leafmap_hit=25200, miss=0 — wrong-row
+  conv write eliminated. Dose-response holds: conv partial 2->8 turns (4063b346), conv complete ->16.
+- SSM HALF NOT ENGAGED: REFOLD_APPLIED=1344 (fold runs) but refold_published=0; snapshot_events=48,
+  redirect_engaged=96, ALL fallback (redirect_used=0). Cause: fold abs-base (_FR13_REFOLD_ABS) only
+  seeded on E3 hit-restore and evidently never seeded here -> _rf_blk_end never matches the aligned
+  boundary -> publish dropped (STRUCTURAL#1 generalized).
+- First run judged on unthrottled OBS counters (es_row0_hit_true=4368 — honest hit counting throughout).
+- ITERATION 2: (a) seed _FR13_REFOLD_ABS at prefill/E0 from absolute committed length (covers cold +
+  hit turns) -> refold_published>0 -> redirect_used>0 -> SSM snapshots become chunked-realization;
+  (b) investigate the compression failure source (model-empty summary = serving residue at high ctx
+  vs harness artifact; alienware-side proxy logs — GB10-side pair dumps empty for offloaded arms);
+  (c) re-run gate; the context-wall question may also re-implicate the monolithic route (context bloat).
