@@ -324,3 +324,20 @@ make align prefill end-state match CONFIG_ONLY's realization); (b) route choice 
 The drift-give-up fix is now default for every cache-ON boot (launcher :308 block). Rationale §17-18;
 correctness-directional, native auto-no-op, cache-OFF byte-identical. REFOLD_TO_SNAPSHOT stays default
 OFF until the v2 gate proves the SSM half (refold_published>0, redirect_used>0, lossless gates).
+
+## 20. Bake policy for the refold half (user 2026-07-04): measure quality contribution vs speed tax first
+
+v1 (CONV_LEAF_COMPLETE) is baked: zero-compute (row-index publish), proven give-up carrier. The refold
+publish (v2/v3, FR13_APC_REFOLD_TO_SNAPSHOT) is a COMPUTE fix with a real cost (fold = chunked FLA
+re-fold per 64-block + clones/stashes; Path A history estimated ~0.8-1% decode tax class) and its
+behavioral benefit is UNPROVEN — v1 alone already yields coherent 16-turn engagement, and the SSM
+realization epsilon may be behaviorally negligible (native ships the same epsilon class and works).
+
+DECISION GATE before any bake of v2/v3 — A/B (cat8+cache conv-only vs conv+refold), measure:
+ (i) agent quality: turns / patch / resolve on 13453 (+1-2 more tasks), route distribution (probe metric);
+ (ii) losslessness: per-token argmax-flip vs each arm's own no-spec oracle (binding instrument);
+ (iii) speed: canonical fr13_measure deploy-speed s/fwd + derived TPS (tax must be quantified).
+BAKE only if (i) or (ii) improves materially AND the tax is acceptable (~<=1%); otherwise v2/v3 remain a
+documented opt-in correctness lever (the EXACT_SEED-complete configuration) and the DEFAULT deployed
+tree+cache config = conv-only. The 16-task speed matrix (task #4) runs cat8 = conv-only default unless
+this gate says otherwise.
