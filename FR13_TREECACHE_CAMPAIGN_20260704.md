@@ -96,3 +96,14 @@ Results: `output/fr13_phase4_mainpick/PHASE4_SUMMARY.txt` (output/ gitignored â€
   (nocache resolved; native+cache engaged 17min w/ 398B patch, failed eval, n=1).
 - Conclusion: reproducible config-deterministic TREE x CACHE defect. Next = staged diagnostics:
   turn-1 route-flip replay probe (N=8/config) + H3 full-attn capture under cache.
+
+## 8. align1024 A/B: NULL â€” give-up survives perfect grid geometry
+
+- m_tree_cache_align1024 (APC_BLOCK_SIZE=1024: bs=1024==block==max_num_batched confirmed in boot+ES_GATE):
+  dur=554s patch_bytes=0 verdict=failed. Same give-up band. ES_SEED 816.
+- Excludes: 832-grid / overshoot-invariant violation as the give-up carrier (still a hygiene fix:
+  docs require block 64-multiple + >=816 + ==max_num_batched; tree arms must pass APC_BLOCK_SIZE).
+- Tally: 6/6 tree+cache give-ups (base x2 @832, recompute NP0/NP1 @832, patha @832, align @1024).
+- Survivors (must be TREE x CACHE interactions): (1) full-attn position base on restored prefixes x
+  tree depth-positions (_fr10_mrope_base class, named 06-28, never verified fixed for tree) -> H3 capture;
+  (2) ES write-side row selection during TREE decode (wrong-bank-row class) -> code read + targeted probe.
