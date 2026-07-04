@@ -7155,12 +7155,17 @@ def _fr13_gdn_subop_mab(
                                         .setdefault(int(_fr13_es_bnd), {})
                                     )
                                     _fr13_es_d[_fr13_es_layer] = (
-                                        # GB10 unified memory: keep the checkpoint
-                                        # GPU-resident. .cpu() gave NO memory saving
-                                        # (same pool) + a device->host stream sync;
-                                        # the restore .to(device)s it either way, and
-                                        # FIX A (LRU cap) bounds the store.
-                                        _fr13_es_ck_state
+                                        # REVERT faecc88d (THE ~10GB/min leak regression):
+                                        # store the checkpoint HOST-resident (.cpu()). On
+                                        # GB10 UNIFIED memory a GPU tensor lives in the
+                                        # CUDA caching allocator, which RESERVES in large
+                                        # chunks and does NOT return freed blocks to the
+                                        # OS -> FIX A (ckpt LRU) + FIX B (PENDING drain)
+                                        # popping refs freed NOTHING visible -> MemAvailable
+                                        # cratered ~10GB/min -> OOM. A .cpu() (host malloc)
+                                        # tensor frees the instant PENDING/ckpt drop it.
+                                        # Restore .to()s it back to device (:6117) -> lossless.
+                                        _fr13_es_ck_state.cpu()
                                     )
                                     try:
                                         _fr13_es_bindfn = globals().get(
@@ -8510,7 +8515,7 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
                     _rf_pend.setdefault(req_id, {})
                     .setdefault(int(_rf_blk_end), {})
                 )
-                _rf_d[_rf_prefix] = _rf_fold_state
+                _rf_d[_rf_prefix] = _rf_fold_state.cpu()  # host-resident (same leak revert as faecc88d): CUDA allocator never returns GPU blocks; restore .to()s it back. Rolling ckpt below stays GPU (re-used as next fold seed).
                 # DIAGNOSTIC: record that Path A folded+wrote THIS (req,pos) so the
                 # restore site can prove USED vs OTHER. Kept even when off-path? No
                 # -- this whole fn is REFOLD-gated, so the map only grows under the
