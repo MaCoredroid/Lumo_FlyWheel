@@ -442,3 +442,25 @@ Paired eager teacher-forced boots (cache vs CONFIG_ONLY, byte-identical turn-1 p
   (SEED env varies the boot seed => genuine trajectory draws; seed pinned => per-config determinism).
   Metrics: give-up/patch/resolve rates, turns, route choice, refold counters (long draws exercise
   boundaries), per-arm memory. Speed tax measured separately logging-off (task #4).
+
+## 27. Refold status HONEST: NEVER FIRED — usefulness UNMEASURABLE until liveness proven
+
+redirect_used=0 on ALL refold runs to date: v1 published=0 (unengaged), v3 published=96 but used=0
+(the -1 skew, v4's fix), v4 snapshot_events=0 (6-turn draw too short to cross a 1024 boundary).
+=> the v4 consume-hop fix is UNTESTED and refold's agent-behavior value is UNKNOWN (can't help via a
+path that never executes).
+
+TWO-STAGE REFOLD GATE — both BEFORE the speed gate (task #4), per user:
+ STAGE A (LIVENESS, mechanical): prove redirect_used>0 on a draw long enough to cross >=1 boundary
+   (snapshot_events>0). Needs a non-give-up draw; the rate matrix's refold arms across 4 seeds are the
+   vehicle (>=1 long draw expected). If refold NEVER fires across all draws => it is IRRELEVANT to agent
+   behavior in practice (give-ups terminate before turns-2+ restores matter) => valid conclusion: deploy
+   conv-only, refold stays a documented lever. This is the instrument-vacuity guard: a "refold arm" with
+   used=0 IS conv-only in disguise; the A/B would be vacuous.
+ STAGE B (USEFULNESS, behavioral): ONLY on liveness-confirmed draws, compare refold-ON vs conv-only
+   give-up/patch/resolve RATE + route distribution (the §20 A/B, rate-based per §26 — NOT single draws).
+   Bake refold only if it materially improves the rate AND its speed tax is <=1% (fr13_measure).
+
+ORDERING: eager route probe (running, route-drift localization) -> rate matrix (Stage A liveness +
+Stage B usefulness, conv-only vs refold x seeds) -> speed gate on the winning deployed config.
+Refold is a candidate lever, NOT a shipped fix, until Stage A+B pass.
