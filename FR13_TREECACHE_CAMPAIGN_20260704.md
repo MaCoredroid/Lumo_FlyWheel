@@ -389,3 +389,19 @@ indistinguishable from native+cache (15/1). Full square: cache alone = NO effect
 tree alone = healthy; ONLY tree x cache collapses (4/16 delegate, 6/16 NO_TOOL). The cold-prefill route
 defect is 100% the interaction term. Fix path = task #10 ladder (first divergent op feeding the tree
 decoder's first steps under align-prefill). Full reduce: research/fr13_workflows/fr13_route_probe_2x2_reduce.txt
+
+## 24. v3 gate: BEST TREE+CACHE RUN EVER — 32 turns, real patch, no wall; refold half-live
+
+m_tree_cache_fixv3 (d3f9b325: conv baked + BLOCK_REFOLD=1 REFOLD_TO_SNAPSHOT=1, R1 budget 75k, fence 0.78):
+- dur=1187s, 32 turns (2x fixv1, 5-16x the give-up era), **patch_bytes=377** (FIRST tree+cache patch ever),
+  verdict=failed (eval). ZERO compression events — R1 confirmed end-to-end (wall eliminated).
+- Give-up phenotype: fully dead across drift AND wall classes. Remaining gap = patch QUALITY
+  (native+cache also failed w/ 398B patch; only no-cache resolved; all n=1 -> R1-regime re-baselines +
+  §20 A/B are the discriminators).
+- Refold pipeline (unthrottled counters, OBS_LAST_SUMMARY authoritative — atexit JSON raced teardown,
+  known limit): seeds refold_seed_statep=6910, contiguity refold_abs_seeded=1440 vs fail-closed
+  lineage_block=96, realign_skip=31584, **refold_published=96 (FIRST ever >0)**, pub_miss=48;
+  BUT redirect_engaged=672 / **redirect_used=0** -> the consume hop never matched a published state.
+  v4 = consume-hop debug: publish-key (req,layer.prefix)->{pos,tensor} vs consumer lookup key/timing;
+  grep shows the consumer's literal map reference may have drifted from the producer's (:8702-8732).
+- conv again perfect: 68352/68352, miss=0 (n=2 for the baked fix).
