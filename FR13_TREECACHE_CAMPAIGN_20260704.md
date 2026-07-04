@@ -88,3 +88,11 @@ Results: `output/fr13_phase4_mainpick/PHASE4_SUMMARY.txt` (output/ gitignored â€
   route flip at COLD prefill (cache-ON numerics: align-mode chunked prefill + fp32 SSM dtype), deterministic per config.
 - In flight: m_tree_cache_base_r2 (B=1 same-config repeat = playbook gate). Then full-attn capture on first
   post-restore turn (the unmeasured subsystem, H3).
+
+## 7. Repeat gate PASSED (2026-07-04): give-up is reproducible
+
+- m_tree_cache_base_r2 (identical config, fresh boot): dur=530s, patch_bytes=0, verdict=failed, mem min 14GB.
+- Day tally: tree+cache give-up **5/5** (base x2, recompute NP=0/1, patha) vs **0/3** non-tree-cache
+  (nocache resolved; native+cache engaged 17min w/ 398B patch, failed eval, n=1).
+- Conclusion: reproducible config-deterministic TREE x CACHE defect. Next = staged diagnostics:
+  turn-1 route-flip replay probe (N=8/config) + H3 full-attn capture under cache.
