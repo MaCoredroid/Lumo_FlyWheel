@@ -381,3 +381,11 @@ Per-request seed=k (common random numbers), byte-identical real turn-1 request, 
 - 3/16 genuine tool-less stops at turn 1 = the give-up class exists at turn 1 under tree+cache only.
 - Full reduce: research/fr13_workflows/fr13_route_probe_3arm_reduce.txt. 2x2 control (native_nocache)
   running; cold-prefill localization ladder staged (task #10) = the fix path.
+
+## 23. Route probe 2x2 COMPLETE: pure interaction, attribution closed
+
+native_nocache control (N=16 paired seeds): 14x Explore + 2x todo_write, 16/16 tool_calls — statistically
+indistinguishable from native+cache (15/1). Full square: cache alone = NO effect (native cells identical);
+tree alone = healthy; ONLY tree x cache collapses (4/16 delegate, 6/16 NO_TOOL). The cold-prefill route
+defect is 100% the interaction term. Fix path = task #10 ladder (first divergent op feeding the tree
+decoder's first steps under align-prefill). Full reduce: research/fr13_workflows/fr13_route_probe_2x2_reduce.txt
