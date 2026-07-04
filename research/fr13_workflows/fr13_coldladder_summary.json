@@ -1,0 +1,1767 @@
+{
+ "gdn": {
+  "first_divergent_gdn_layer": null,
+  "n_layers": 48,
+  "per_layer": [
+   {
+    "layer": 0,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 1,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 2,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 4,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 5,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 6,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 8,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 9,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 10,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 12,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 13,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 14,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 16,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 17,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 18,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 20,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 21,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 22,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 24,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 25,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 26,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 28,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 29,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 30,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 32,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 33,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 34,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 36,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 37,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 38,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 40,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 41,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 42,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 44,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 45,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 46,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 48,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 49,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 50,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 52,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 53,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 54,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 56,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 57,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 58,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 60,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 61,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   },
+   {
+    "layer": 62,
+    "n_captures": [
+     2,
+     2
+    ],
+    "tail_num_actual_tokens": [
+     108,
+     108
+    ],
+    "tail_tokens_match": true,
+    "final_state_max_abs": 0.0,
+    "conv_out_max_abs": 0.0,
+    "core_out_max_abs": 0.0,
+    "initial_state_max_abs": 0.0,
+    "core_out_argmax": {
+     "rows": 5184,
+     "flips": 0,
+     "frac": 0.0
+    },
+    "diverged": false
+   }
+  ]
+ },
+ "logits": {
+  "available": true,
+  "cache_num_tokens": 1,
+  "config_num_tokens": 1,
+  "num_tokens_match": true,
+  "cache_saved_index": 26,
+  "config_saved_index": 26,
+  "cache_picked_single_row": true,
+  "config_picked_single_row": true,
+  "cache_logit_census": [
+   {
+    "saved_index": 0,
+    "num_tokens": 1,
+    "argmax": 79566
+   },
+   {
+    "saved_index": 1,
+    "num_tokens": 1,
+    "argmax": 79320
+   },
+   {
+    "saved_index": 2,
+    "num_tokens": 1,
+    "argmax": 3074
+   },
+   {
+    "saved_index": 3,
+    "num_tokens": 1,
+    "argmax": 6999
+   },
+   {
+    "saved_index": 4,
+    "num_tokens": 1,
+    "argmax": 6602
+   },
+   {
+    "saved_index": 5,
+    "num_tokens": 1,
+    "argmax": 51273
+   },
+   {
+    "saved_index": 6,
+    "num_tokens": 1,
+    "argmax": 7561
+   },
+   {
+    "saved_index": 7,
+    "num_tokens": 1,
+    "argmax": 279
+   },
+   {
+    "saved_index": 8,
+    "num_tokens": 1,
+    "argmax": 1438
+   },
+   {
+    "saved_index": 9,
+    "num_tokens": 1,
+    "argmax": 15645
+   },
+   {
+    "saved_index": 10,
+    "num_tokens": 1,
+    "argmax": 3019
+   },
+   {
+    "saved_index": 11,
+    "num_tokens": 1,
+    "argmax": 248046
+   },
+   {
+    "saved_index": 12,
+    "num_tokens": 1,
+    "argmax": 15
+   },
+   {
+    "saved_index": 13,
+    "num_tokens": 1,
+    "argmax": 271
+   },
+   {
+    "saved_index": 14,
+    "num_tokens": 1,
+    "argmax": 2496
+   },
+   {
+    "saved_index": 15,
+    "num_tokens": 1,
+    "argmax": 13
+   },
+   {
+    "saved_index": 16,
+    "num_tokens": 1,
+    "argmax": 60190
+   },
+   {
+    "saved_index": 17,
+    "num_tokens": 1,
+    "argmax": 198
+   },
+   {
+    "saved_index": 18,
+    "num_tokens": 1,
+    "argmax": 29
+   },
+   {
+    "saved_index": 19,
+    "num_tokens": 1,
+    "argmax": 31838
+   },
+   {
+    "saved_index": 20,
+    "num_tokens": 1,
+    "argmax": 6849
+   },
+   {
+    "saved_index": 21,
+    "num_tokens": 1,
+    "argmax": 3054
+   },
+   {
+    "saved_index": 22,
+    "num_tokens": 1,
+    "argmax": 599
+   },
+   {
+    "saved_index": 23,
+    "num_tokens": 1,
+    "argmax": 248046
+   },
+   {
+    "saved_index": 24,
+    "num_tokens": 1,
+    "argmax": 16451
+   },
+   {
+    "saved_index": 25,
+    "num_tokens": 1,
+    "argmax": 1845
+   },
+   {
+    "saved_index": 26,
+    "num_tokens": 1,
+    "argmax": 9764
+   }
+  ],
+  "config_logit_census": [
+   {
+    "saved_index": 0,
+    "num_tokens": 1,
+    "argmax": 79566
+   },
+   {
+    "saved_index": 1,
+    "num_tokens": 1,
+    "argmax": 79320
+   },
+   {
+    "saved_index": 2,
+    "num_tokens": 1,
+    "argmax": 3074
+   },
+   {
+    "saved_index": 3,
+    "num_tokens": 1,
+    "argmax": 6999
+   },
+   {
+    "saved_index": 4,
+    "num_tokens": 1,
+    "argmax": 6602
+   },
+   {
+    "saved_index": 5,
+    "num_tokens": 1,
+    "argmax": 51273
+   },
+   {
+    "saved_index": 6,
+    "num_tokens": 1,
+    "argmax": 7561
+   },
+   {
+    "saved_index": 7,
+    "num_tokens": 1,
+    "argmax": 279
+   },
+   {
+    "saved_index": 8,
+    "num_tokens": 1,
+    "argmax": 1438
+   },
+   {
+    "saved_index": 9,
+    "num_tokens": 1,
+    "argmax": 15645
+   },
+   {
+    "saved_index": 10,
+    "num_tokens": 1,
+    "argmax": 3019
+   },
+   {
+    "saved_index": 11,
+    "num_tokens": 1,
+    "argmax": 248046
+   },
+   {
+    "saved_index": 12,
+    "num_tokens": 1,
+    "argmax": 15
+   },
+   {
+    "saved_index": 13,
+    "num_tokens": 1,
+    "argmax": 271
+   },
+   {
+    "saved_index": 14,
+    "num_tokens": 1,
+    "argmax": 2496
+   },
+   {
+    "saved_index": 15,
+    "num_tokens": 1,
+    "argmax": 13
+   },
+   {
+    "saved_index": 16,
+    "num_tokens": 1,
+    "argmax": 60190
+   },
+   {
+    "saved_index": 17,
+    "num_tokens": 1,
+    "argmax": 198
+   },
+   {
+    "saved_index": 18,
+    "num_tokens": 1,
+    "argmax": 29
+   },
+   {
+    "saved_index": 19,
+    "num_tokens": 1,
+    "argmax": 31838
+   },
+   {
+    "saved_index": 20,
+    "num_tokens": 1,
+    "argmax": 6849
+   },
+   {
+    "saved_index": 21,
+    "num_tokens": 1,
+    "argmax": 3054
+   },
+   {
+    "saved_index": 22,
+    "num_tokens": 1,
+    "argmax": 599
+   },
+   {
+    "saved_index": 23,
+    "num_tokens": 1,
+    "argmax": 248046
+   },
+   {
+    "saved_index": 24,
+    "num_tokens": 1,
+    "argmax": 16451
+   },
+   {
+    "saved_index": 25,
+    "num_tokens": 1,
+    "argmax": 1845
+   },
+   {
+    "saved_index": 26,
+    "num_tokens": 1,
+    "argmax": 9764
+   }
+  ],
+  "cache_top20": [
+   {
+    "token_id": 9764,
+    "logit": 31.625,
+    "logprob": -0.00107
+   },
+   {
+    "token_id": 760,
+    "logit": 24.5,
+    "logprob": -7.12607
+   },
+   {
+    "token_id": 21765,
+    "logit": 23.375,
+    "logprob": -8.25107
+   },
+   {
+    "token_id": 101600,
+    "logit": 18.125,
+    "logprob": -13.50107
+   },
+   {
+    "token_id": 53,
+    "logit": 17.75,
+    "logprob": -13.87607
+   },
+   {
+    "token_id": 1919,
+    "logit": 17.625,
+    "logprob": -14.00107
+   },
+   {
+    "token_id": 6558,
+    "logit": 16.75,
+    "logprob": -14.87607
+   },
+   {
+    "token_id": 69060,
+    "logit": 16.5,
+    "logprob": -15.12607
+   },
+   {
+    "token_id": 23982,
+    "logit": 16.0,
+    "logprob": -15.62607
+   },
+   {
+    "token_id": 248068,
+    "logit": 15.8125,
+    "logprob": -15.81357
+   },
+   {
+    "token_id": 1112,
+    "logit": 15.5,
+    "logprob": -16.12607
+   },
+   {
+    "token_id": 77264,
+    "logit": 15.5,
+    "logprob": -16.12607
+   },
+   {
+    "token_id": 10071,
+    "logit": 15.4375,
+    "logprob": -16.18857
+   },
+   {
+    "token_id": 1042,
+    "logit": 15.0625,
+    "logprob": -16.56357
+   },
+   {
+    "token_id": 40,
+    "logit": 14.3125,
+    "logprob": -17.31357
+   },
+   {
+    "token_id": 31248,
+    "logit": 14.1875,
+    "logprob": -17.43857
+   },
+   {
+    "token_id": 2229,
+    "logit": 14.0,
+    "logprob": -17.62607
+   },
+   {
+    "token_id": 1596,
+    "logit": 14.0,
+    "logprob": -17.62607
+   },
+   {
+    "token_id": 56757,
+    "logit": 14.0,
+    "logprob": -17.62607
+   },
+   {
+    "token_id": 2324,
+    "logit": 13.9375,
+    "logprob": -17.68857
+   }
+  ],
+  "config_top20": [
+   {
+    "token_id": 9764,
+    "logit": 31.625,
+    "logprob": -0.00107
+   },
+   {
+    "token_id": 760,
+    "logit": 24.5,
+    "logprob": -7.12607
+   },
+   {
+    "token_id": 21765,
+    "logit": 23.375,
+    "logprob": -8.25107
+   },
+   {
+    "token_id": 101600,
+    "logit": 18.125,
+    "logprob": -13.50107
+   },
+   {
+    "token_id": 53,
+    "logit": 17.75,
+    "logprob": -13.87607
+   },
+   {
+    "token_id": 1919,
+    "logit": 17.625,
+    "logprob": -14.00107
+   },
+   {
+    "token_id": 6558,
+    "logit": 16.75,
+    "logprob": -14.87607
+   },
+   {
+    "token_id": 69060,
+    "logit": 16.5,
+    "logprob": -15.12607
+   },
+   {
+    "token_id": 23982,
+    "logit": 16.0,
+    "logprob": -15.62607
+   },
+   {
+    "token_id": 248068,
+    "logit": 15.8125,
+    "logprob": -15.81357
+   },
+   {
+    "token_id": 1112,
+    "logit": 15.5,
+    "logprob": -16.12607
+   },
+   {
+    "token_id": 77264,
+    "logit": 15.5,
+    "logprob": -16.12607
+   },
+   {
+    "token_id": 10071,
+    "logit": 15.4375,
+    "logprob": -16.18857
+   },
+   {
+    "token_id": 1042,
+    "logit": 15.0625,
+    "logprob": -16.56357
+   },
+   {
+    "token_id": 40,
+    "logit": 14.3125,
+    "logprob": -17.31357
+   },
+   {
+    "token_id": 31248,
+    "logit": 14.1875,
+    "logprob": -17.43857
+   },
+   {
+    "token_id": 2229,
+    "logit": 14.0,
+    "logprob": -17.62607
+   },
+   {
+    "token_id": 1596,
+    "logit": 14.0,
+    "logprob": -17.62607
+   },
+   {
+    "token_id": 56757,
+    "logit": 14.0,
+    "logprob": -17.62607
+   },
+   {
+    "token_id": 2324,
+    "logit": 13.9375,
+    "logprob": -17.68857
+   }
+  ],
+  "cache_argmax": 9764,
+  "config_argmax": 9764,
+  "argmax_flip": false,
+  "logit_max_abs": 0.0,
+  "cache_top1_top2_margin": 7.125,
+  "config_top1_top2_margin": 7.125
+ },
+ "hidden_stack": {
+  "available": false,
+  "note": "no cross-arm input_ids match among hidden captures (all warmup, or NUM_TOKENS mismatch)"
+ },
+ "input_buffer": {
+  "available": false,
+  "note": "no cross-arm input_ids_scheduled match"
+ },
+ "full_attn_l3_h3": {
+  "available": true,
+  "cache_dumps": 8,
+  "config_dumps": 8,
+  "h3_threading_confirmed": true,
+  "note": "non-empty full_attn dumps in EAGER => --enforce-eager threaded (H3 fix)",
+  "stage_keys": [
+   "attn_out_gated",
+   "attn_out_raw",
+   "gate_sigmoid",
+   "input_hidden",
+   "k_after_rope",
+   "k_norm_out",
+   "o_proj_out",
+   "positions",
+   "q_after_rope",
+   "q_norm_out",
+   "qkv_proj",
+   "v"
+  ],
+  "layer_prefix": "language_model.model.layers.3.self_attn"
+ },
+ "api_route": {
+  "cache": {
+   "available": true,
+   "first_token": "Let",
+   "first_token_logprob": -0.0010704031446948647,
+   "top_logprobs": [
+    {
+     "token": "Let",
+     "logprob": -0.00107
+    },
+    {
+     "token": "The",
+     "logprob": -7.12607
+    },
+    {
+     "token": "Looking",
+     "logprob": -8.25107
+    },
+    {
+     "token": "\u8ba9\u6211",
+     "logprob": -13.50107
+    },
+    {
+     "token": "V",
+     "logprob": -13.87607
+    },
+    {
+     "token": "This",
+     "logprob": -14.00107
+    },
+    {
+     "token": " Let",
+     "logprob": -14.87607
+    },
+    {
+     "token": "Alright",
+     "logprob": -15.12607
+    },
+    {
+     "token": "Ah",
+     "logprob": -15.62607
+    },
+    {
+     "token": "<think>",
+     "logprob": -15.81357
+    },
+    {
+     "token": "Hmm",
+     "logprob": -16.12607
+    },
+    {
+     "token": "let",
+     "logprob": -16.12607
+    },
+    {
+     "token": "Look",
+     "logprob": -16.18857
+    },
+    {
+     "token": " let",
+     "logprob": -16.56357
+    },
+    {
+     "token": "I",
+     "logprob": -17.31357
+    },
+    {
+     "token": "Okay",
+     "logprob": -17.43857
+    },
+    {
+     "token": "Looks",
+     "logprob": -17.62607
+    },
+    {
+     "token": "Le",
+     "logprob": -17.62607
+    },
+    {
+     "token": "We",
+     "logprob": -17.62607
+    },
+    {
+     "token": "All",
+     "logprob": -17.68857
+    }
+   ],
+   "finish_reason": "length"
+  },
+  "config": {
+   "available": true,
+   "first_token": "Let",
+   "first_token_logprob": -0.0010704031446948647,
+   "top_logprobs": [
+    {
+     "token": "Let",
+     "logprob": -0.00107
+    },
+    {
+     "token": "The",
+     "logprob": -7.12607
+    },
+    {
+     "token": "Looking",
+     "logprob": -8.25107
+    },
+    {
+     "token": "\u8ba9\u6211",
+     "logprob": -13.50107
+    },
+    {
+     "token": "V",
+     "logprob": -13.87607
+    },
+    {
+     "token": "This",
+     "logprob": -14.00107
+    },
+    {
+     "token": " Let",
+     "logprob": -14.87607
+    },
+    {
+     "token": "Alright",
+     "logprob": -15.12607
+    },
+    {
+     "token": "Ah",
+     "logprob": -15.62607
+    },
+    {
+     "token": "<think>",
+     "logprob": -15.81357
+    },
+    {
+     "token": "Hmm",
+     "logprob": -16.12607
+    },
+    {
+     "token": "let",
+     "logprob": -16.12607
+    },
+    {
+     "token": "Look",
+     "logprob": -16.18857
+    },
+    {
+     "token": " let",
+     "logprob": -16.56357
+    },
+    {
+     "token": "I",
+     "logprob": -17.31357
+    },
+    {
+     "token": "Okay",
+     "logprob": -17.43857
+    },
+    {
+     "token": "Looks",
+     "logprob": -17.62607
+    },
+    {
+     "token": "Le",
+     "logprob": -17.62607
+    },
+    {
+     "token": "We",
+     "logprob": -17.62607
+    },
+    {
+     "token": "All",
+     "logprob": -17.68857
+    }
+   ],
+   "finish_reason": "length"
+  }
+ },
+ "classification_hint": "NO MEASURABLE COLD-PREFILL DIVERGENCE in the captured ladder: per-layer states, residual stack, input buffer AND route logits all within floor. The route flip is NOT in the cold prefill numerics captured here (look at sampling/seed handling or a deeper decode forward)."
+}

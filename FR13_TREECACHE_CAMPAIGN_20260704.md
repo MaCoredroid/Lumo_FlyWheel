@@ -405,3 +405,23 @@ m_tree_cache_fixv3 (d3f9b325: conv baked + BLOCK_REFOLD=1 REFOLD_TO_SNAPSHOT=1, 
   v4 = consume-hop debug: publish-key (req,layer.prefix)->{pos,tensor} vs consumer lookup key/timing;
   grep shows the consumer's literal map reference may have drifted from the producer's (:8702-8732).
 - conv again perfect: 68352/68352, miss=0 (n=2 for the baked fix).
+
+## 25. Cold-ladder verdict: PREFILL EXONERATED BIT-EXACT — route drift localizes to DECODE accumulation (or graph replay)
+
+Paired eager teacher-forced boots (cache vs CONFIG_ONLY, byte-identical turn-1 prompt, max_tokens=1):
+- ALL 48 GDN layers: final_state/conv/core max_abs = 0.0, argmax flips 0/5184 rows. Route (token-1)
+  logits BYTE-IDENTICAL (top-5 equal, margin 7.125 both, max_abs=0.0).
+- => the cold-prefill COMPUTATION is bit-exact across the cache config bundle (align mode, mamba-block,
+  fp32 dtype, block-size) in EAGER. The §22 route collapse is NOT a prefill numerics defect.
+- RECONCILIATION (two live axes): (1) POSITION — the ladder measured token-1 ('Let', think-start); the
+  route fork is at <answer> after ~hundreds of TREE-DECODE steps: drift accumulates in decode under the
+  cache config (think text identical across arms per probe => the logit delta at the fork position is
+  the target); (2) GRAPH MODE — ladder ran eager (capture requirement); probe/production run
+  FULL_AND_PIECEWISE (same label both arms, but cache config changes the captured programs).
+- NEXT INSTRUMENT (task #10 iter-2): teacher-force prompt + identical think text to the <answer> fork,
+  capture logits THERE, 2x2 (cache/config_only x eager/graphs). Discriminates decode-accumulation vs
+  graph-replay vs (if 0.0 everywhere) sampler-path.
+- H3 CLOSED positively for free: --enforce-eager threading fixed + full_attn dumps captured both arms
+  (h3_threading_confirmed=true). The June-28 position-wiring suspicion is now measured-and-closed.
+- OPS incident banked: the ladder reduce OOM class (unified-memory reducer) -> session protections +
+  capped self-demoting scopes + streaming reducer (memory file updated).
