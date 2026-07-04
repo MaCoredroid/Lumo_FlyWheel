@@ -498,6 +498,20 @@ def _patch_gdn_attn() -> bool:
             "                            dtype=torch.float32,\n"
             "                            device=device,\n"
             "                        )\n"
+            "                    if os.environ.get(\"FR13_SERVE_LOG\", \"0\") in (\"1\", \"true\"):\n"
+            "                        try:\n"
+            "                            print(\n"
+            "                                \"FR13_REFOLD_ALLOC pack=stacked flag=\"\n"
+            "                                + os.environ.get(\"FR13_APC_BLOCK_REFOLD\", \"0\")\n"
+            "                                + \" rows=\" + str(int(_fr13_ep_count))\n"
+            "                                + \" ring_bs=\" + str(int(_fr13_ring_bs))\n"
+            "                                + \" n_pad=\" + str(int(n_pad))\n"
+            "                                + \" vh=\" + str(int(_fr13_ep_vh))\n"
+            "                                + \" g=\" + (\"tensor\" if _fr13_ep_refold_g is not None else \"None\"),\n"
+            "                                flush=True,\n"
+            "                            )\n"
+            "                        except Exception:\n"
+            "                            pass\n"
             "                    _fr13_ep_alog = torch.stack(\n"
             "                        [_l.A_log.detach() for _l in _fr13_ep_layers]\n"
             "                    ).contiguous()\n"
@@ -7926,12 +7940,24 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
     current behavior). Inert unless FR13_APC_BLOCK_REFOLD=1.
     """
     import os as _rf_os
+    _rf_dbg = _rf_os.environ.get("FR13_SERVE_LOG", "0") in ("1", "true")
+
+    def _rf_skip(_reason):
+        # best-effort diagnostic: which early-return fired (FR13_SERVE_LOG only).
+        if _rf_dbg:
+            try:
+                print("FR13_REFOLD_SKIP " + _reason, flush=True)
+            except Exception:
+                pass
+
     try:
         if not getattr(gdn_mod, "_FR13_REFOLD_ON", False):
+            _rf_skip("reason=flag_off")
             return
         acc_len = int(acc_len)
         if acc_len <= 0:
             # zero-accept step: nothing to fold this step (all drafts rejected).
+            _rf_skip("reason=zero_accept acc_len=" + str(acc_len))
             return
         _rf_bs = 64
         _rf_prefix = str(getattr(layer, "prefix", "?"))
@@ -7945,15 +7971,55 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
             or _rf_g_step is None
             or _rf_beta_step is None
         ):
+            _rf_skip(
+                "reason=buf_none prefix=" + _rf_prefix
+                + " ringk=" + ("None" if _rf_ring_k is None else "T")
+                + " ringv=" + ("None" if _rf_ring_v is None else "T")
+                + " g=" + ("None" if _rf_g_step is None else "T")
+                + " beta=" + ("None" if _rf_beta_step is None else "T")
+            )
             return
-        _rf_tree_n = int(_rf_ring_k.size(1))
-        # accepted tree-node indices for this row (host list), clamped in-range.
-        _rf_cols = [
-            int(_c) for _c in node_path[:acc_len]
-            if 0 <= int(_c) < _rf_tree_n
-        ]
+        _rf_tree_n = int(_rf_ring_k.size(1))  # ring dim-1 == N_PAD (tree_n_pad)
+        # accepted RING-NODE walk. MUST mirror the replay kernel exactly
+        # (fr10_gdn_tree_kernel.py launch_tree_gdn_replay :1351): the committed
+        # path of length acc_len is walked as node[t=0]=0 (ROOT ring col), then
+        # node[t]=accepted_paths[t-1] for t=1..acc_len-1 -- i.e. the ROOT is
+        # PREPENDED and the stored path supplies the remaining acc_len-1 nodes.
+        # `node_path` here IS accepted_paths (the GDN +1 node ids, already ring-
+        # index space; the kernel loads k_ring + node*stride directly). Clamp to
+        # [0, N_PAD-1] exactly like the kernel (tl.maximum(0)/tl.minimum(N_PAD-1)).
+        _rf_walk = [0]
+        for _rf_c in node_path[: max(0, acc_len - 1)]:
+            _rf_ci = int(_rf_c)
+            if _rf_ci < 0:
+                _rf_ci = 0
+            elif _rf_ci > _rf_tree_n - 1:
+                _rf_ci = _rf_tree_n - 1
+            _rf_walk.append(_rf_ci)
+        _rf_cols = _rf_walk
         if not _rf_cols:
+            _rf_skip(
+                "reason=no_cols acc_len=" + str(acc_len)
+                + " tree_n=" + str(_rf_tree_n)
+                + " path_head=" + str(list(node_path[:8]))
+            )
             return
+        if _rf_dbg:
+            # one-time-ish ENTRY log (throttled by a module counter so it does
+            # not flood): confirms the fn reached the accumulation stage.
+            _rf_ec = int(getattr(gdn_mod, "_FR13_REFOLD_ENTER_COUNT", 0))
+            if _rf_ec < 8:
+                try:
+                    gdn_mod._FR13_REFOLD_ENTER_COUNT = _rf_ec + 1
+                    print(
+                        "FR13_REFOLD_ENTER req=" + str(req_id)
+                        + " prefix=" + _rf_prefix
+                        + " acc_len=" + str(acc_len)
+                        + " ncols=" + str(len(_rf_cols)),
+                        flush=True,
+                    )
+                except Exception:
+                    pass
         _rf_idx = torch.tensor(
             _rf_cols, dtype=torch.long, device=_rf_ring_k.device
         )
@@ -7986,6 +8052,24 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
         _rf_abs_base = int(
             _rf_abs_map.get(_rf_abs_key, _rf_abs_map.get(req_id, 0))
         )
+        _rf_tail_len = int(_rf_ent["k"].size(0))
+        if _rf_dbg and _rf_tail_len < _rf_bs:
+            # ACCUMULATING but not yet a full 64-block: throttled progress log so
+            # we can see the tail growing toward the first fold (or stalling).
+            _rf_pc = int(getattr(gdn_mod, "_FR13_REFOLD_PROG_COUNT", 0))
+            if _rf_pc < 40:
+                try:
+                    gdn_mod._FR13_REFOLD_PROG_COUNT = _rf_pc + 1
+                    print(
+                        "FR13_REFOLD_ACCUM req=" + str(req_id)
+                        + " prefix=" + _rf_prefix
+                        + " tail=" + str(_rf_tail_len)
+                        + " abs_base=" + str(_rf_abs_base)
+                        + " +this=" + str(len(_rf_cols)),
+                        flush=True,
+                    )
+                except Exception:
+                    pass
         # fold every completed 64-block currently held in the tail.
         while int(_rf_ent["k"].size(0)) >= _rf_bs:
             _rf_blk_k = _rf_ent["k"][:_rf_bs].unsqueeze(0).contiguous()
@@ -8062,9 +8146,25 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
         # persist the (possibly trimmed) tail + advanced abs base.
         _rf_tail_map[_rf_prefix] = _rf_ent
         _rf_abs_map[_rf_abs_key] = int(_rf_abs_base)
-    except Exception:
-        # never break the served commit on a re-fold tap failure.
-        pass
+    except Exception as _rf_exc:
+        # never break the served commit on a re-fold tap failure. Under
+        # FR13_SERVE_LOG, surface the ACTUAL exception (repr + first tb frame)
+        # so a swallowed fault is diagnosable in one re-run.
+        if _rf_dbg:
+            try:
+                import traceback as _rf_tb
+                _rf_frames = _rf_tb.format_exc().strip().splitlines()
+                _rf_first = ""
+                for _rf_ln in _rf_frames:
+                    if _rf_ln.strip().startswith("File "):
+                        _rf_first = _rf_ln.strip()
+                        break
+                print(
+                    "FR13_REFOLD_EXC " + repr(_rf_exc) + " | " + _rf_first,
+                    flush=True,
+                )
+            except Exception:
+                pass
 
 
 def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
