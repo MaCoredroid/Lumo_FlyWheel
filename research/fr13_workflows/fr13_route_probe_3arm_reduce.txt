@@ -1,0 +1,71 @@
+
+FAIL: one or more arms had errors (see !!! above).
+==============================================================================
+FR13 turn-1 COLD-PREFILL ROUTE-FLIP replay  —  reduce
+==============================================================================
+
+### cat8_cache   (cache=True  exact_seed_eng=True  nonempty=10/16)
+  route distribution:
+       6x  read_file
+       3x  agent_subagent
+       3x  NO_TOOL(finish=length)
+       3x  NO_TOOL(finish=stop)
+       1x  explore_subagent[Explore]
+  route mode        : read_file
+  finish_reasons    : {'tool_calls': 10, 'length': 3, 'stop': 3}
+  full-stream split : identical=False distinct=6/16 char=12 ws_tok=1 bpe_tok=7
+  think-chan split  : identical=True distinct=1/16 char=None ws_tok=None bpe_tok=None
+  split prefix tail : '␞<answer>'
+      ->  "I'll start by exploring the codebase to understand how HTML table output"
+      ->  '␞<toolcall> <tool_call name=read_file>{"file_path": "/workspace/AGENTS.md"}'
+      ->  '␞<toolcall>'
+      ->  "I'll start by exploring the codebase to understand how ASCII table output"
+
+### cat8_nocache   (cache=False  exact_seed_eng=False  nonempty=16/16)
+  route distribution:
+      13x  agent_subagent
+       3x  explore_subagent[Explore]
+  route mode        : agent_subagent
+  finish_reasons    : {'tool_calls': 16}
+  full-stream split : identical=False distinct=12/16 char=68 ws_tok=10 bpe_tok=19
+  think-chan split  : identical=True distinct=1/16 char=None ws_tok=None bpe_tok=None
+  split prefix tail : "␞<answer> I'll start by exploring the codebase to understand how"
+      ->  'HTML table output works and where the `formats` parameter should be applied.'
+      ->  'ASCII table output to HTML works and where the `formats` parameter is'
+
+### native_exseed   (cache=True  exact_seed_eng=True  nonempty=16/16)
+  route distribution:
+      15x  explore_subagent[Explore]
+       1x  tool:todo_write
+  route mode        : explore_subagent[Explore]
+  finish_reasons    : {'tool_calls': 16}
+  full-stream split : identical=False distinct=14/16 char=12 ws_tok=1 bpe_tok=7
+  think-chan split  : identical=True distinct=1/16 char=None ws_tok=None bpe_tok=None
+  split prefix tail : '␞<answer>'
+      ->  "I'll start by exploring the codebase to understand how HTML table output"
+      ->  "I'll start by exploring the codebase to understand how HTML table writing"
+      ->  "I'll investigate the issue where HTML table output ignores the `formats` parameter."
+      ->  '␞<toolcall> <tool_call name=todo_write>{"todos": [{"content": "Explore the codebase to understand how HTML table'
+      ->  "I'll investigate the codebase to understand how HTML table writing works and"
+      ->  "I'll investigate the codebase to understand how HTML table output handles the"
+      ->  "I'll investigate the HTML writer in astropy's ASCII module to understand how"
+      ->  '␞<toolcall> <tool_call name=agent>{"description": "Explore HTML table writing", "prompt": "I need to understand'
+
+### native_nocache   (cache=None  exact_seed_eng=None  nonempty=0/0)
+  !!! ERRORS: NO SAMPLES (route_probe.sh did not run or produced nothing)
+  route distribution:
+  route mode        : None
+  finish_reasons    : {}
+  full-stream split : identical=None distinct=None/None char=None ws_tok=None bpe_tok=n/a
+  think-chan split  : identical=None distinct=None/None char=None ws_tok=None bpe_tok=n/a
+
+==============================================================================
+CROSS-ARM  (autopsy H1: cold-prefill route split cache vs no-cache)
+==============================================================================
+  cat8_cache       route_mode = read_file
+  cat8_nocache     route_mode = agent_subagent
+  native_exseed    route_mode = explore_subagent[Explore]
+  native_nocache   route_mode = None
+
+  cat8_cache vs cat8_nocache modal route: FLIP  (read_file  vs  agent_subagent)
+  cache-vs-nocache stream split: char=None ws_tok=None bpe_tok=None

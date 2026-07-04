@@ -363,3 +363,21 @@ this gate says otherwise.
   R2b (runner image v2: retry + deterministic elision) + R4 (structured compaction + subagent
   quarantine) = later engineering cycle. Prompt caching OFF on proxy (cache_read=0) = separate
   gated experiment. Full doc: FR13_CONTEXT_COMPRESSION_DESIGN.md.
+
+## 22. Route probe (paired seeds, N=16/arm): SYSTEMATIC turn-1 behavioral collapse under tree+cache
+
+Per-request seed=k (common random numbers), byte-identical real turn-1 request, cold prefill enforced:
+| arm | delegation | read_file | NO_TOOL |
+|---|---|---|---|
+| cat8 no-cache | 16/16 | 0 | 0 |
+| native+cache | 16/16 (15 Explore + 1 todo_write) | 0 | 0 |
+| cat8+cache (conv baked) | **4/16** | 6/16 | **6/16** (3 finish=length, 3 GENUINE finish=stop) |
+
+- Route luck REFUTED at N=16: P(delegate) collapses 1.0 -> 0.25 only in tree x cache; native+cache is
+  as healthy as no-cache => the cold term is the INTERACTION (align-prefill x tree decode), not cache alone.
+- Divergence point precision: think channel byte-identical across all 16 seeds in EVERY arm; the fork is
+  exactly at the first <answer> token — cache arms fork there immediately, no-cache forks ~10 tokens deeper.
+  The distortion concentrates at the high-entropy route-decision position.
+- 3/16 genuine tool-less stops at turn 1 = the give-up class exists at turn 1 under tree+cache only.
+- Full reduce: research/fr13_workflows/fr13_route_probe_3arm_reduce.txt. 2x2 control (native_nocache)
+  running; cold-prefill localization ladder staged (task #10) = the fix path.
