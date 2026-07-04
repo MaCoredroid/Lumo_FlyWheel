@@ -341,3 +341,25 @@ BAKE only if (i) or (ii) improves materially AND the tax is acceptable (~<=1%); 
 documented opt-in correctness lever (the EXACT_SEED-complete configuration) and the DEFAULT deployed
 tree+cache config = conv-only. The 16-task speed matrix (task #4) runs cat8 = conv-only default unless
 this gate says otherwise.
+
+## 21. Context track landed (workflow wvwfyxud7, adversarially audited): 49k wall root-caused + R1/fence SHIPPED
+
+- ROOT CAUSE (verified in-image, qwen-code v0.19.4): hard limit 48875.2 = computeThresholds over a
+  65536 context budget = 131072 (served) minus a 65536 OUTPUT RESERVE the agent can never use (proxy
+  caps output at 32768). Audit re-derived the exact formula from the minified chunk and fixed two
+  math bugs in the draft.
+- SHIPPED R1: QWEN_CODE_MAX_OUTPUT_TOKENS=32768 threaded into QWEN_CODE_TEMPLATE -> hard limit 75304
+  (+54%, clears the 13453 class with ~26k headroom). Uniform across arms.
+- SHIPPED fence fix (§2 durable): serve_variant GPU_UTIL default 0.82 -> 0.78 (+4.7GB guard clearance;
+  orthogonal to R1 — KV pool pre-allocated at boot, R1 is footprint-neutral).
+- RE-BASELINE REQUIRED (audit): post-R1 runs are a different regime — do not compare to pre-R1 banked
+  numbers; re-run all four arms before cross-arm claims.
+- AUDIT OVERRULED R2a auto-exclusion: labeling compression-abort terminals is fine; EXCLUDING them
+  selectively rescues tree+cache (§18 route flip makes it arm-coupled). Exclusion only after the R3b
+  serving-health probe, identical rule all arms.
+- Compression side-query facts: served by the arm under test at temp 0.6 + presence_penalty 1.0 (!)
+  asking 9-section XML over 49k tokens, maxAttempts~1, hard-stop by design; auto-continue confirmed
+  inert on qwen-code AND a banned nudge anyway. R3b probe (2x2 boot x sampling) queued GPU-gated;
+  R2b (runner image v2: retry + deterministic elision) + R4 (structured compaction + subagent
+  quarantine) = later engineering cycle. Prompt caching OFF on proxy (cache_read=0) = separate
+  gated experiment. Full doc: FR13_CONTEXT_COMPRESSION_DESIGN.md.

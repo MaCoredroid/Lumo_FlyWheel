@@ -221,7 +221,7 @@ trap teardown EXIT
 # extra flags exported into THIS shell so the launcher's docker -e picks them up.
 for kv in "${XFLAGS[@]:-}"; do [[ -n "$kv" ]] && export "$kv"; done
 if [[ "$LAUNCHER" == "locked" ]]; then
-  CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.82}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
+  CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   FR13_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \
   scripts/fr13_launch_locked.sh > "$ARMDIR/launch.log" 2>&1
   RC=$?
@@ -232,7 +232,7 @@ elif [[ "$LAUNCHER" == "native" ]]; then
   # deliberately do NOT export the locked cat9 flags here (they are tree-only and
   # inert on the native path). Same CONTAINER/PORT/RUN_DIR wiring as the others so
   # the offload proxy / health / warmup / teardown machinery is identical.
-  CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.82}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
+  CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   FR13_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \
   scripts/fr13_launch_native_mtp_server.sh > "$ARMDIR/launch.log" 2>&1
   RC=$?
@@ -242,7 +242,7 @@ else
   # (LUMO_FB_KERNEL_ROWS=1, LUMO_FB_PROJ_PAD_ROWS=16) so the only difference vs
   # cat9 is the TREE shape. The forked launcher defaults these flags ON except
   # the LUMO_FB pad, which we pin here for a like-for-like vs the deployed cat9.
-  CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.82}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
+  CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   TREE="$TREEARG" FR10_METRICS=0 BATCH_INVARIANT=0 \
   LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 \
   FR13_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \

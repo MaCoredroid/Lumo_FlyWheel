@@ -97,6 +97,12 @@ QWEN_CODE_TEMPLATE = (
     "-v {workspace}:/workspace:rw "
     "-e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} "
     "-e OPENAI_MODEL={model} -e QWEN_MODEL={model} -e HOME=/tmp "
+    # R1 context-budget fix (FR13_CONTEXT_COMPRESSION_DESIGN, verified in-image v0.19.4):
+    # qwen-code reserves max(ESCALATED_MAX_TOKENS=64000, outputTokenLimit=65536) output tokens
+    # unless overridden -> contextLimit = 131072-65536 = 65536 -> hard limit 48875.2. The proxy
+    # caps real output at LUMO_PROXY_MAX_OUTPUT_TOKENS=32768, so reserve exactly that:
+    # contextLimit=98304 -> hard limit 75304 (+54%). Uniform across all arms (eval-fair).
+    "-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 "
     "-w /workspace qwen-code-runner:v1 "
     "--yolo --output-format json --max-session-turns 80 -p"
 )
