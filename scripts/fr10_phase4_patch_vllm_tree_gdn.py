@@ -7009,6 +7009,97 @@ def _fr13_gdn_subop_mab(
                                     )
                                     continue
                                 _fr13_es_end_abs = _fr13_es_b0 + _fr13_es_plen
+                                # FR13_APC_REFOLD_TO_SNAPSHOT state@P seed (v3;
+                                # default OFF -> skipped -> byte-identical). Fold THIS
+                                # prefill row's tokens [b0, end_abs) from its
+                                # (restored/continuation) seed to the row's END chunked
+                                # state and stash it as the rolling Path A checkpoint
+                                # _FR13_REFOLD_CKPT[req][layer]. After the LAST prefill
+                                # step end_abs == P (the decode-start committed length),
+                                # so the fresh decode fold chains from state@P ==
+                                # chunk-fold[0,P) and its published boundary state
+                                # reflects ALL tokens <= B (LINEAGE COMPLETE) instead of
+                                # the E3 hit-boundary seed (state@rec2pos, missing
+                                # [rec2pos,P)) or a cold zero seed (missing [0,P)).
+                                # Mirrors the E3 seed hop (CKPT + REFOLD_ABS + tail pop)
+                                # but at the ABSOLUTE decode-start position, and covers
+                                # BOTH cold (seed=None) and hit/continuation
+                                # (seed=initial_state[r], already restored above).
+                                # Best-effort under the outer try/except; a fault leaves
+                                # the pre-v3 seed (safe). Redundant with the served
+                                # prefill scan (recomputes state@P host-eager) -- an
+                                # accepted probe cost, gated OFF by default.
+                                if os.environ.get(
+                                    "FR13_APC_REFOLD_TO_SNAPSHOT", "0"
+                                ) == "1":
+                                    try:
+                                        _fr13_rf_sd = None
+                                        if _fr13_es_hit:
+                                            _fr13_rf_sd = (
+                                                initial_state[_fr13_es_r]
+                                                .detach()
+                                                .to(torch.float32)
+                                                .unsqueeze(0)
+                                                .clone()
+                                            )
+                                        _fr13_rf_cu = torch.tensor(
+                                            [0, int(_fr13_es_plen)],
+                                            device=query_non_spec.device,
+                                            dtype=torch.int32,
+                                        )
+                                        _fr13_rf_o, _fr13_rf_fs = (
+                                            self.chunk_gated_delta_rule(
+                                                q=query_non_spec[
+                                                    :, _fr13_es_s:_fr13_es_e
+                                                ].contiguous(),
+                                                k=key_non_spec[
+                                                    :, _fr13_es_s:_fr13_es_e
+                                                ].contiguous(),
+                                                v=value_non_spec[
+                                                    :, _fr13_es_s:_fr13_es_e
+                                                ].contiguous(),
+                                                g=g_non_spec[
+                                                    :, _fr13_es_s:_fr13_es_e
+                                                ].contiguous(),
+                                                beta=beta_non_spec[
+                                                    :, _fr13_es_s:_fr13_es_e
+                                                ].contiguous(),
+                                                initial_state=_fr13_rf_sd,
+                                                output_final_state=True,
+                                                cu_seqlens=_fr13_rf_cu,
+                                                chunk_indices=None,
+                                                chunk_offsets=None,
+                                                use_qk_l2norm_in_kernel=False,
+                                            )
+                                        )
+                                        _fr13_rf_lyr = str(
+                                            getattr(self, "prefix", "?")
+                                        )
+                                        globals().setdefault(
+                                            "_FR13_REFOLD_CKPT", {}
+                                        ).setdefault(_fr13_es_rid, {})[
+                                            _fr13_rf_lyr
+                                        ] = (
+                                            _fr13_rf_fs[0]
+                                            .detach()
+                                            .to(torch.float32)
+                                            .clone()
+                                        )
+                                        globals().setdefault(
+                                            "_FR13_REFOLD_ABS", {}
+                                        )[(_fr13_es_rid, _fr13_rf_lyr)] = int(
+                                            _fr13_es_end_abs
+                                        )
+                                        _fr13_rf_tl = globals().setdefault(
+                                            "_FR13_REFOLD_TAIL", {}
+                                        )
+                                        if _fr13_es_rid in _fr13_rf_tl:
+                                            _fr13_rf_tl[_fr13_es_rid].pop(
+                                                _fr13_rf_lyr, None
+                                            )
+                                        _fr13_obs_bump("refold_seed_statep")
+                                    except Exception:
+                                        pass
                                 # first ABSOLUTE block_size boundary strictly past b0.
                                 _fr13_es_first_bnd = (
                                     (_fr13_es_b0 // _fr13_es_bs) + 1
@@ -7664,10 +7755,11 @@ def _patch_scheduler_fr13_freereq_cleanup() -> bool:
             "                if isinstance(_fr13_d, dict):",
             "                    for _fr13_k in _fr13_keys:",
             "                        _fr13_d.pop(_fr13_k, None)",
-            "            _fr13_absd = getattr(_fr13_gdn, '_FR13_REFOLD_ABS', None)",
-            "            if isinstance(_fr13_absd, dict):",
-            "                for _fr13_ak in [__k for __k in list(_fr13_absd) if (isinstance(__k, tuple) and __k and __k[0] in _fr13_keys)]:",
-            "                    _fr13_absd.pop(_fr13_ak, None)",
+            "            for _fr13_tk_nm in ('_FR13_REFOLD_ABS', '_FR13_REFOLD_PUB_OK'):",
+            "                _fr13_absd = getattr(_fr13_gdn, _fr13_tk_nm, None)",
+            "                if isinstance(_fr13_absd, dict):",
+            "                    for _fr13_ak in [__k for __k in list(_fr13_absd) if (isinstance(__k, tuple) and __k and __k[0] in _fr13_keys)]:",
+            "                        _fr13_absd.pop(_fr13_ak, None)",
             "            _fr13_layers = getattr(_fr13_gdn, '_FR13_REPLAY_LAYERS', None)",
             "            if isinstance(_fr13_layers, dict):",
             "                for _fr13_ly in list(_fr13_layers.values()):",
@@ -8322,6 +8414,27 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
                 "FR13_APC_REFOLD_TO_SNAPSHOT", "0"
             ) == "1"
         ):
+            # v3 ADVERSARIAL-VERIFY LINEAGE GATE (supersedes the v2 running-pos
+            # OVERWRITE). The v2 code did `_rf_abs_base = running-pos`, which
+            # DESYNCED the fold LABEL from the SEED COVERAGE: E3/Edit C seed
+            # _FR13_REFOLD_CKPT to state@X AND _FR13_REFOLD_ABS to EXACTLY X (E3
+            # X=rec2pos; Edit C X=end_abs=P), so the published label is faithful to
+            # coverage ONLY while abs_base is LEFT at that map value. Replacing it
+            # with an independently-sourced running-pos (which can differ from the
+            # CKPT origin by a num_tokens_running_state pre/post off-by-one, by the
+            # hit-gap [rec2pos,P), or by a stale CKPT on a reused req_id) can emit a
+            # WRONG state that still satisfies the GAP-2 ckpos==apos guard (the guard
+            # checks the LABEL, never the actual token coverage) = CACHE POISON.
+            # FIX: do NOT overwrite abs_base -- keep it == CKPT coverage (faithful
+            # label). Use running-pos ONLY as an independent CROSS-CHECK: the first
+            # accepted decode token sits at the committed decode-start length (==
+            # running-pos), so this fold chain is publishable IFF abs_base (seed
+            # coverage) == running-pos (first tail-token pos) -- i.e. the seed is
+            # CONTIGUOUS with the tail. Any mismatch marks the chain NON-publishable
+            # so a gapped/mislabeled state is never emitted (safe no-publish == the
+            # v2 floor). Verdict stored per (req,layer) for the realign-head+publish
+            # gates below. Default OFF path never reaches here (REFOLD_TO_SNAPSHOT).
+            _rf_pub_ok_fresh = False
             try:
                 _rf_run_map = getattr(
                     gdn_mod, "_FR13_APC_SSM_RUNNING_POS_BY_REQ", None
@@ -8329,10 +8442,22 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
                 _rf_run_pos = (
                     _rf_run_map.get(str(req_id)) if _rf_run_map else None
                 )
-                if _rf_run_pos is not None:
-                    _rf_abs_base = int(_rf_run_pos)
-                    _rf_abs_map[_rf_abs_key] = _rf_abs_base
+                if (
+                    _rf_run_pos is not None
+                    and int(_rf_run_pos) == int(_rf_abs_base)
+                ):
+                    _rf_pub_ok_fresh = True
                     gdn_mod._fr13_obs_bump("refold_abs_seeded")
+                else:
+                    gdn_mod._fr13_obs_bump("refold_lineage_block")
+            except Exception:
+                _rf_pub_ok_fresh = False
+            try:
+                _rf_pubmap = getattr(gdn_mod, "_FR13_REFOLD_PUB_OK", None)
+                if _rf_pubmap is None:
+                    _rf_pubmap = {}
+                    gdn_mod._FR13_REFOLD_PUB_OK = _rf_pubmap
+                _rf_pubmap[_rf_abs_key] = bool(_rf_pub_ok_fresh)
             except Exception:
                 pass
         _rf_tail_len = int(_rf_ent["k"].size(0))
@@ -8353,6 +8478,90 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
                     )
                 except Exception:
                     pass
+        # FR13_APC_REFOLD_TO_SNAPSHOT sub-64 REALIGN HEAD (v3; default OFF -> the
+        # whole block is skipped -> _rf_ent/_rf_abs_base untouched -> byte-identical).
+        # The fresh decode fold chains from state@P (the decode-start committed
+        # position, seeded into _FR13_REFOLD_CKPT by the prefill state@P stash) with
+        # _rf_abs_base == P. P is generally NOT 64-aligned, so the full-64 loop below
+        # would set _rf_blk_end = P + 64k, which is never 0 mod 1024 -> _rf_on_boundary
+        # (hence refold_published) stays 0 for arbitrary prompts (v2 KNOWN RESIDUAL).
+        # Realign the chain to the ABSOLUTE 64-grid ONCE by folding a SHORT first
+        # chunk of head = (-abs_base) % 64 accepted tokens -- the first decode tokens
+        # [P, ceil64(P)) -- through the SAME chunk_gated_delta_rule, seeded from the
+        # rolling state@P checkpoint. The state advances to state@ceil64(P)
+        # (COVERAGE-PRESERVING: the head tokens are FOLDED into the seed, never
+        # dropped) and abs_base becomes 64-aligned; thereafter the full-64 loop lands
+        # _rf_blk_end on 64-multiples and every 16th on a 1024-multiple, so on-boundary
+        # publish fires for ANY P. Guarded by abs_base % 64 != 0 so it runs at most
+        # once per chain (abs_base stays 64-aligned after). A <64 segment is a valid
+        # chunk_gated_delta_rule call (the prefill capture folds arbitrary seg_n incl.
+        # <64; the EXACT_SEED restore folds the <64 remainder chunked) so the partial
+        # head is well-formed; the single split-at-P chunk is within the chunked
+        # realization floor (same class as the restore's own remainder-recompute).
+        # refold_align_skip counts the head tokens consumed for realignment.
+        # v3 lineage verdict for THIS (req,layer) chain (set on the fresh epoch
+        # above; False for stale/gapped/skewed chains and whenever the flag is OFF
+        # or the map is empty). Gates BOTH the realign head and the snapshot publish
+        # so only a seed CONTIGUOUS with the tail (abs_base == running-pos) ever
+        # advances the chain onto the publish grid.
+        _rf_pub_ok = bool(
+            getattr(gdn_mod, "_FR13_REFOLD_PUB_OK", {}).get(_rf_abs_key, False)
+        )
+        if (
+            _rf_os.environ.get("FR13_APC_REFOLD_TO_SNAPSHOT", "0") == "1"
+            and _rf_pub_ok
+            and (int(_rf_abs_base) % _rf_bs) != 0
+        ):
+            _rf_head = (-int(_rf_abs_base)) % _rf_bs
+            if 0 < _rf_head < _rf_bs and int(_rf_ent["k"].size(0)) >= _rf_head:
+                _rf_hk = _rf_ent["k"][:_rf_head].unsqueeze(0).to(torch.bfloat16).contiguous()
+                _rf_hv = _rf_ent["v"][:_rf_head].unsqueeze(0).to(torch.bfloat16).contiguous()
+                _rf_hg = _rf_ent["g"][:_rf_head].unsqueeze(0).to(torch.bfloat16).contiguous()
+                _rf_hb = _rf_ent["beta"][:_rf_head].unsqueeze(0).to(torch.bfloat16).contiguous()
+                _rf_hck = gdn_mod._FR13_REFOLD_CKPT.setdefault(req_id, {})
+                _rf_hseed = _rf_hck.get(_rf_prefix)
+                if _rf_hseed is not None:
+                    _rf_hseed = _rf_hseed.to(
+                        device=_rf_hk.device, dtype=torch.float32
+                    )
+                    if _rf_hseed.dim() == 3:
+                        _rf_hseed = _rf_hseed.unsqueeze(0)
+                _rf_hcu = torch.tensor(
+                    [0, _rf_head], device=_rf_hk.device, dtype=torch.int32
+                )
+                _rf_ho, _rf_hfinal = layer.chunk_gated_delta_rule(
+                    q=_rf_hk,
+                    k=_rf_hk,
+                    v=_rf_hv,
+                    g=_rf_hg,
+                    beta=_rf_hb,
+                    initial_state=_rf_hseed,
+                    output_final_state=True,
+                    cu_seqlens=_rf_hcu,
+                    chunk_indices=None,
+                    chunk_offsets=None,
+                    use_qk_l2norm_in_kernel=False,
+                )
+                _rf_hck[_rf_prefix] = _rf_hfinal[0].detach().to(torch.float32).clone()
+                _rf_ent = {
+                    "k": _rf_ent["k"][_rf_head:],
+                    "v": _rf_ent["v"][_rf_head:],
+                    "g": _rf_ent["g"][_rf_head:],
+                    "beta": _rf_ent["beta"][_rf_head:],
+                }
+                _rf_abs_base = int(_rf_abs_base) + _rf_head
+                gdn_mod._fr13_obs_bump("refold_align_skip", _rf_head)
+                if _rf_dbg:
+                    try:
+                        print(
+                            "FR13_REFOLD_ALIGN req=" + str(req_id)
+                            + " prefix=" + _rf_prefix
+                            + " head=" + str(_rf_head)
+                            + " abs_base=" + str(int(_rf_abs_base)),
+                            flush=True,
+                        )
+                    except Exception:
+                        pass
         # fold every completed 64-block currently held in the tail.
         while int(_rf_ent["k"].size(0)) >= _rf_bs:
             # chunk_gated_delta_rule requires bf16 INPUTS (asserts on fp32); the
@@ -8509,6 +8718,7 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
             # cold-prefill->Path A abs seed lands (documented, deferred).
             if (
                 _rf_on_boundary
+                and _rf_pub_ok
                 and _rf_os.environ.get(
                     "FR13_APC_REFOLD_TO_SNAPSHOT", "0"
                 ) == "1"
@@ -13961,16 +14171,31 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         # multiple) but it != the snapshot's aligned_new_computed_tokens (also a
         # 1024-multiple) -> dropped. So this counter measures ONLY the OFF-BY-WHOLE-
         # BLOCK class (published boundary is a different 1024-multiple than the
-        # consumer's, e.g. an E3 mid-request re-base seeded abs_base to a stale
-        # prior-step running-pos). IT DOES NOT SEE THE SUB-64 RESIDUAL: when the
-        # decode-start abs_base (== prompt length P) is not a multiple of 64,
-        # _rf_blk_end = P + 64k is never 0 mod 1024, so _rf_on_boundary never fires,
-        # publish never happens, and BOTH refold_published AND refold_pub_miss stay
-        # 0 (indistinguishable from "fold never ran"). Read the next gate as:
-        # refold_published==0 -> sub-64-residual/coverage (P not 64-aligned or no
-        # fresh seed) -> needs the tail-to-64 alignment (open issue #1); published>0
-        # & pub_miss high -> off-by-block; published>0 & pub_miss~0 & redirect_used>0
-        # -> win.
+        # consumer's, e.g. abs_base off by the running-pos publish timing so ckpos ==
+        # apos + delta). V3 FIXED THE SUB-64 RESIDUAL: the sub-64 REALIGN HEAD
+        # (_fr13_pathA_refold, gated FR13_APC_REFOLD_TO_SNAPSHOT) folds a short
+        # head = (-abs_base) % 64 first chunk so abs_base becomes 64-aligned; the
+        # full-64 loop then lands _rf_blk_end on 1024-multiples for ANY P, so publish
+        # fires and refold_published > 0. refold_align_skip counts those head tokens.
+        # V3 ADVERSARIAL-VERIFY LINEAGE GATE: abs_base is NO LONGER overwritten with
+        # running-pos (that desynced LABEL from SEED coverage = poison risk). abs_base
+        # stays == the CKPT seed's coverage endpoint (E3 rec2pos / Edit C end_abs=P),
+        # so the label is faithful to coverage BY CONSTRUCTION; running-pos is used
+        # ONLY to CROSS-CHECK contiguity (abs_base == running-pos == first-tail-token
+        # pos). A chain that fails the cross-check is marked NON-publishable (neither
+        # realigned nor published) so a gapped/mislabeled state can NEVER reach this
+        # ckpos==apos guard. Because the label is now faithful, ckpos==apos here
+        # PROVES the emitted state covers exactly [0, apos) (within the chunked
+        # realization floor). Read the v3 gate as: refold_abs_seeded>0 -> chains
+        # passed the contiguity cross-check (publishable); refold_lineage_block>0 ->
+        # chains dropped as non-contiguous (running-pos != CKPT coverage: hit-gap,
+        # stale, or timing skew -- SAFE no-publish, NOT corruption); refold_align_skip>0
+        # -> the realign head ran on a publishable chain (reached the 64-grid);
+        # refold_seed_statep>0 -> the prefill stashed state@P as the fold seed;
+        # refold_published==0 despite abs_seeded>0 -> decode too short to reach the
+        # first post-realign 1024-boundary; published>0 & pub_miss high -> off-by-block
+        # (a residual 1024-multiple mismatch, still a SAFE drop); published>0 &
+        # pub_miss~0 & redirect_used>0 -> win.
         "                                    _fr13_fx_gdn._fr13_obs_bump(\"refold_pub_miss\")\n"
         "                                    _fr13_es_fallback_reason = (\n"
         "                                        \"pos_mismatch pub=\" + str(_fr13_fx_ckpos)\n"
