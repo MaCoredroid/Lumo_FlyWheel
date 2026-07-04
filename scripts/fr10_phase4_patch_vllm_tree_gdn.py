@@ -938,6 +938,7 @@ def _patch_gdn_linear() -> bool:
             "_FR13_REFOLD_TAIL = {}        # PATH A: per-req 64-wide k/v/g/beta tail rings\n"
             "_FR13_REFOLD_CKPT = {}        # PATH A: per-req,per-layer rolling faithful seed\n"
             "_FR13_REFOLD_ABS = {}         # PATH A: per-req running absolute accepted count\n"
+            "_FR13_REFOLD_SEEDED = {}      # PATH A: req -> set(prefix) HIT-seeded (E3) this turn\n"
             "# DIAGNOSTIC (SERVE_LOG-gated): str(req_id) -> set(int pos) that Path A\n"
             "# folded AND wrote to the restore channel. The restore site cross-checks\n"
             "# each restored (req,pos) against this to decide USED vs OTHER, proving\n"
@@ -6190,6 +6191,22 @@ def _fr13_gdn_subop_mab(
                                             )] = int(_fr13_es_rec2.get("pos"))
                                         except Exception:
                                             pass
+                                        # PATH A bind fix: mark this (req,layer)
+                                        # fold chain HIT-seeded from a genuine
+                                        # restored 832-boundary so the committer
+                                        # publishes/binds ONLY here (never on a
+                                        # cache-MISS 0-relative pos -> no false
+                                        # bind onto a prompt block hash).
+                                        try:
+                                            globals().setdefault(
+                                                "_FR13_REFOLD_SEEDED", {}
+                                            ).setdefault(
+                                                _fr13_es_rid2, set()
+                                            ).add(str(getattr(
+                                                self, "prefix", "?"
+                                            )))
+                                        except Exception:
+                                            pass
                                         _fr13_rf_tail = globals().setdefault(
                                             "_FR13_REFOLD_TAIL", {}
                                         )
@@ -7512,11 +7529,17 @@ def _patch_scheduler_fr13_freereq_cleanup() -> bool:
             "                '_FR13_APC_CONV_LEAF_BY_REQ', '_FR13_APC_SSM_ALIGNED_POS_BY_REQ',",
             "                '_FR13_BOUNDARY_LAST_WRITTEN_BY_REQ', '_FR13_ES_PENDING_BY_REQ',",
             "                '_FR13_ES_HASH_BY_REQ', '_FR13_ES_RESTORE_BY_REQ',",
+            "                '_FR13_REFOLD_TAIL', '_FR13_REFOLD_CKPT',",
+            "                '_FR13_REFOLD_SEEDED', '_FR13_REFOLD_WROTE',",
             "            ):",
             "                _fr13_d = getattr(_fr13_gdn, _fr13_nm, None)",
             "                if isinstance(_fr13_d, dict):",
             "                    for _fr13_k in _fr13_keys:",
             "                        _fr13_d.pop(_fr13_k, None)",
+            "            _fr13_absd = getattr(_fr13_gdn, '_FR13_REFOLD_ABS', None)",
+            "            if isinstance(_fr13_absd, dict):",
+            "                for _fr13_ak in [__k for __k in list(_fr13_absd) if (isinstance(__k, tuple) and __k and __k[0] in _fr13_keys)]:",
+            "                    _fr13_absd.pop(_fr13_ak, None)",
             "            _fr13_layers = getattr(_fr13_gdn, '_FR13_REPLAY_LAYERS', None)",
             "            if isinstance(_fr13_layers, dict):",
             "                for _fr13_ly in list(_fr13_layers.values()):",
@@ -8201,10 +8224,50 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
             _rf_fold_state = _rf_final[0].detach().to(torch.float32).clone()
             # absolute boundary this block completes (block-aligned pos).
             _rf_blk_end = _rf_abs_base + _rf_bs
+            # PUBLISH/BIND only at a real cache-block boundary. The block-hash
+            # keys _fr13_es_try_bind reads are recorded at multiples of the
+            # runtime mamba block_size (_FR13_ES_BLOCK_SIZE, e.g. 832), NOT at
+            # the 64-token fold granularity -- a per-64 publish binds 0/N
+            # (proven 60/60 bound=False: bind pos 21696 vs restore boundary
+            # 21632=832x26). The fold + rolling checkpoint still advance every
+            # 64 (bit-exact); only the cross-turn PUBLISH lands on the 832-
+            # boundary that owns a hash. HIT-seed gate: publish only when this
+            # (req,layer) fold chain was seeded from a genuine restored 832-
+            # boundary (E3). On a cache-MISS abs_base defaults to 0, so a
+            # 0-relative "832" would false-bind decode content onto a PROMPT
+            # block hash -> corruption; the seed gate suppresses that.
+            _rf_es_bs = int(getattr(gdn_mod, "_FR13_ES_BLOCK_SIZE", 0) or 0)
+            _rf_seeded_map = getattr(gdn_mod, "_FR13_REFOLD_SEEDED", None)
+            _rf_is_seeded = bool(
+                _rf_seeded_map is not None
+                and _rf_prefix in _rf_seeded_map.get(req_id, ())
+            )
+            _rf_on_boundary = (
+                _rf_es_bs > 0
+                and (_rf_es_bs % _rf_bs) == 0
+                and (int(_rf_blk_end) % _rf_es_bs) == 0
+            )
+            _rf_at_block = _rf_on_boundary and _rf_is_seeded
+            if _rf_dbg and _rf_on_boundary:
+                _rf_bhc = int(
+                    getattr(gdn_mod, "_FR13_REFOLD_BLOCKHIT_COUNT", 0)
+                )
+                if _rf_bhc < 30:
+                    try:
+                        gdn_mod._FR13_REFOLD_BLOCKHIT_COUNT = _rf_bhc + 1
+                        print(
+                            "FR13_REFOLD_BLOCKHIT req=" + str(req_id)
+                            + " pos=" + str(int(_rf_blk_end))
+                            + " es_bs=" + str(_rf_es_bs)
+                            + " seeded=" + str(_rf_is_seeded),
+                            flush=True,
+                        )
+                    except Exception:
+                        pass
             # WRITE to the restore channel (the SAME hop prefill-capture uses).
             _rf_pend = getattr(gdn_mod, "_FR13_ES_PENDING_BY_REQ", None)
             _rf_bindfn = getattr(gdn_mod, "_fr13_es_try_bind", None)
-            if _rf_pend is not None:
+            if _rf_pend is not None and _rf_at_block:
                 _rf_d = (
                     _rf_pend.setdefault(req_id, {})
                     .setdefault(int(_rf_blk_end), {})
