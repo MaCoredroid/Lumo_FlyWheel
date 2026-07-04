@@ -255,3 +255,35 @@ NOTE: per-turn reset_prefix_cache as an A-vs-E' splitter is REJECTED — reset i
 corruption artifact (project_fr13_apc_cache_causes_corruption).
 NEXT = fix of record (§14): wire EXACT_SEED's decode-side chunked-realization producer + conv twin;
 gated behind the FR13_OBS instrumentation land (in flight) so the fix run has trustworthy counters.
+
+## 16. HRS vs EXACT_SEED, the missing producer, and the Path A reframe (fix spec for task #7)
+
+**The gap both addressed:** a hit needs the GDN state at the hit boundary; stored states come from two
+kernels that are R-equal but bit-different (chunked-prefill vs sequential-recurrent, ~0.0078/boundary).
+
+- **HRS** = accept mixed lineage, roll the nearest checkpoint forward over the suffix with the RECURRENT
+  kernel. Replaced the stock restart-fold (the gross-corruption carrier). Partial by construction: right
+  continuation, wrong realization -> residual 5/48 layers mismatched (from 17/48, some 27x, pre-HRS).
+- **EXACT_SEED v2** = keep the cache PURE chunked-lineage: capture only chunked-kernel realizations at
+  64-aligned boundaries; restore remainders THROUGH the chunked kernel; restored state bit-exact to
+  cache-OFF (min_dist=0.0 proven). Better design; HRS correctly un-baked in its favor.
+- **The defect: only EXACT_SEED's PREFILL half was wired.** Decode-crossed blocks enter the cache via the
+  decode-side snapshot = recurrent-kernel bank state, and for TREE a branch-co-resident bank state
+  (June: spine+APC lossless, tree+APC 0/4). The snapshot redirect CONSUMER exists
+  (_FR13_APC_SSM_CHUNKED_PTR_BY_REQ read, patcher ~:13644) but NO PRODUCER assigns it -> falls back
+  every time (384x logged). Native tolerates its own recurrent-lineage writes (single spine = eps-off
+  only); tree's are contaminated (grossly off) -> only tree x cache dies.
+- **Path A REFRAME:** the fold IS the orphaned producer — an accepted-path chunked-FLA re-fold of the
+  decoded 64-block (fired 432x) — but it publishes to _FR13_ES_PENDING_BY_REQ/try_bind, a channel the
+  snapshot never reads (hence REFOLD_APPLIED=432 / RESTORE_USED=0). Two halves of the same fix, built
+  at different times, never connected.
+
+**Task #7 fix spec:** connect the fold output to _FR13_APC_SSM_CHUNKED_PTR_BY_REQ (+ conv twin, + close
+the conv wrong-row gap). Flag-gated default-OFF, byte-identical OFF. Caveats to verify in implementation:
+(a) fold FIDELITY never end-to-end validated (firing != correct output) — validate vs a token-recompute
+oracle on the first wired boundary; (b) fold inputs must be tokens+prior-chunked-state (lineage-clean),
+not bank rows. Engagement gate on the fix run (FR13_OBS counters): snapshot redirect_used>0 AND
+redirect_fallback==0 AND conv_leafmap_miss==0; then the give-up gate.
+
+**Sequencing decision (user):** WAIT for FR13_OBS to land before implementing — same-file edits, and the
+fix gate depends on the new counters. GPU idles in the interim by design.
