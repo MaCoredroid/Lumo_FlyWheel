@@ -1,0 +1,248 @@
+--- a/scripts/fr10_phase4_patch_vllm_tree_gdn.py
++++ b/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+@@ -17521,6 +17521,237 @@
+     return True
+ 
+ 
++def _patch_gpu_model_runner_fr13_mem_dump() -> bool:
++    """FR13_MEM_DUMP (DEFAULT-OFF): per-engine-step in-worker memory + FR13-map
++    size probe for the serving-phase unified-mem leak hunt.
++
++    Docker-exec introspection is useless here (a fresh CUDA context sees none of
++    the worker's allocator state), so this MUST run inside the EngineCore/worker
++    process. Every FR13_MEM_DUMP_EVERY (default 50) execute_model steps it prints
++    ONE line ("FR13MEM ...") to stdout (-> docker_full.log) carrying:
++      - torch.cuda.memory_allocated / memory_reserved (MiB) + memory_stats
++        allocated/reserved current,
++      - process RSS from /proc/self/status VmRSS (the GB10 unified-mem signal),
++      - len + (cpu,gpu) tensor-bytes of every FR13 module-level req-keyed map in
++        gdn_linear_attn, the per-layer APC dicts summed over _FR13_REPLAY_LAYERS,
++        the block_pool EXACT_SEED checkpoint OrderedDict, and mamba_utils'
++        _FR10_TREE_ACCEPTED_PATH_BY_REQ_ID.
++
++    Host-side reads ONLY (no device sync, no DtoH, no kernel launch); skipped
++    while a cuda graph is capturing; wrapped so it can NEVER raise into serving.
++    Flag OFF => a single module-bool check per step => byte-identical default
++    path. Hooks the existing per-step host callback site right after
++    _fr13_sfwd_end(_fr13_sfwd_ev) in execute_model (injected by the SFWD timer
++    patch, which is registered immediately before this one)."""
++    text = GPU_MODEL_RUNNER_PATH.read_text()
++    sentinel = "# FR13_MEM_DUMP"
++    if sentinel in text:
++        return False
++
++    module_block = '''
++
++# FR13_MEM_DUMP: flag-gated per-engine-step memory + FR13-map-size probe.
++# Inert unless FR13_MEM_DUMP=1 => byte-identical to the unpatched step path
++# (one module-bool check per step). See the patch docstring for the design.
++_FR13_MEMDUMP_ON = __import__("os").environ.get("FR13_MEM_DUMP", "0") == "1"
++try:
++    _FR13_MEMDUMP_EVERY = int(
++        __import__("os").environ.get("FR13_MEM_DUMP_EVERY", "50")
++    )
++    if _FR13_MEMDUMP_EVERY < 1:
++        _FR13_MEMDUMP_EVERY = 50
++except Exception:
++    _FR13_MEMDUMP_EVERY = 50
++_FR13_MEMDUMP_STEP = 0
++_FR13_MEMDUMP_GDN_MAPS = (
++    "_FR13_ES_PENDING_BY_REQ",
++    "_FR13_ES_HASH_BY_REQ",
++    "_FR13_ES_RESTORE_BY_REQ",
++    "_FR13_ES_HIT_HASHES",
++    "_FR13_ES_BLOCK_PENDING",
++    "_FR13_BOUNDARY_LAST_WRITTEN_BY_REQ",
++    "_FR13_APC_SSM_LEAF_BY_REQ",
++    "_FR13_APC_CONV_LEAF_BY_REQ",
++    "_FR13_APC_SSM_ALIGNED_POS_BY_REQ",
++    "_FR13_APC_SSM_CHUNKED_PTR_BY_REQ",
++    "_FR13_APC_SSM_CHUNKED_POS_BY_REQ",
++    "_LUMO_FA_TREE_ACCEPT_BY_REQ",
++)
++_FR13_MEMDUMP_LAYER_MAPS = (
++    "_fr13_apc_pending_kvab",
++    "_fr13_apc_chunked_ckpt_by_req",
++    "_fr13_apc_abs_pos_by_req",
++)
++
++
++def _fr13_memdump_bytes(obj, budget):
++    """Bounded nested walk summing torch-tensor storage as (cpu_bytes,
++    gpu_bytes, budget_left). The node budget caps the probe cost so a huge
++    leaking map cannot make the diagnostic itself expensive."""
++    import torch as _t
++    cpu_b = 0
++    gpu_b = 0
++    stack = [obj]
++    while stack and budget > 0:
++        cur = stack.pop()
++        budget -= 1
++        try:
++            if isinstance(cur, _t.Tensor):
++                nb = cur.numel() * cur.element_size()
++                if cur.is_cuda:
++                    gpu_b += nb
++                else:
++                    cpu_b += nb
++            elif isinstance(cur, dict):
++                stack.extend(cur.values())
++            elif isinstance(cur, (list, tuple, set)):
++                stack.extend(cur)
++        except Exception:
++            continue
++    return cpu_b, gpu_b, budget
++
++
++def _fr13_memdump_step():
++    global _FR13_MEMDUMP_STEP
++    if not _FR13_MEMDUMP_ON:
++        return
++    try:
++        _FR13_MEMDUMP_STEP += 1
++        if (_FR13_MEMDUMP_STEP % _FR13_MEMDUMP_EVERY) != 0:
++            return
++        import os as _os
++        import sys as _sys
++        import torch as _t
++        try:
++            if _t.cuda.is_available() and _t.cuda.is_current_stream_capturing():
++                return
++        except Exception:
++            pass
++        parts = ["FR13MEM", "step=" + str(_FR13_MEMDUMP_STEP)]
++        try:
++            parts.append(
++                "cuda_alloc_mb=%.1f" % (_t.cuda.memory_allocated() / 1048576.0)
++            )
++            parts.append(
++                "cuda_reserved_mb=%.1f" % (_t.cuda.memory_reserved() / 1048576.0)
++            )
++            try:
++                _ms = _t.cuda.memory_stats()
++                parts.append(
++                    "cuda_reserved_cur_mb=%.1f"
++                    % (_ms.get("reserved_bytes.all.current", 0) / 1048576.0)
++                )
++                parts.append(
++                    "cuda_alloc_cur_mb=%.1f"
++                    % (_ms.get("allocated_bytes.all.current", 0) / 1048576.0)
++                )
++            except Exception:
++                pass
++        except Exception:
++            pass
++        try:
++            with open("/proc/self/status", "r") as _fh:
++                for _ln in _fh:
++                    if _ln.startswith("VmRSS:"):
++                        parts.append("rss_mb=%.1f" % (float(_ln.split()[1]) / 1024.0))
++                        break
++        except Exception:
++            pass
++        _budget = 20000
++        try:
++            _gdn = _sys.modules.get(
++                "vllm.model_executor.layers.mamba.gdn_linear_attn"
++            )
++            if _gdn is not None:
++                for _nm in _FR13_MEMDUMP_GDN_MAPS:
++                    _d = getattr(_gdn, _nm, None)
++                    if isinstance(_d, dict):
++                        _cb, _gb, _budget = _fr13_memdump_bytes(_d, _budget)
++                        parts.append(
++                            _nm + "=" + str(len(_d)) + "/c" + str(_cb) + "/g" + str(_gb)
++                        )
++                _lys = getattr(_gdn, "_FR13_REPLAY_LAYERS", None)
++                if isinstance(_lys, dict):
++                    parts.append("_FR13_REPLAY_LAYERS=" + str(len(_lys)))
++                    for _lnm in _FR13_MEMDUMP_LAYER_MAPS:
++                        _tot = 0
++                        _cb = 0
++                        _gb = 0
++                        for _ly in _lys.values():
++                            _ld = getattr(_ly, _lnm, None)
++                            if isinstance(_ld, dict):
++                                _tot += len(_ld)
++                                _c2, _g2, _budget = _fr13_memdump_bytes(_ld, _budget)
++                                _cb += _c2
++                                _gb += _g2
++                        parts.append(
++                            _lnm + "=" + str(_tot) + "/c" + str(_cb) + "/g" + str(_gb)
++                        )
++                _bp = getattr(_gdn, "_FR13_ES_BLOCK_POOL", None)
++                _ck = getattr(_bp, "_fr13_es_ckpt", None) if _bp is not None else None
++                if isinstance(_ck, dict):
++                    _cb, _gb, _budget = _fr13_memdump_bytes(_ck, _budget)
++                    parts.append(
++                        "_fr13_es_ckpt=" + str(len(_ck)) + "/c" + str(_cb)
++                        + "/g" + str(_gb) + "/cap"
++                        + str(getattr(_bp, "_fr13_es_ckpt_cap", "?"))
++                    )
++        except Exception:
++            pass
++        try:
++            _mu = _sys.modules.get("vllm.v1.worker.mamba_utils")
++            _md = (
++                getattr(_mu, "_FR10_TREE_ACCEPTED_PATH_BY_REQ_ID", None)
++                if _mu is not None else None
++            )
++            if isinstance(_md, dict):
++                _cb, _gb, _budget = _fr13_memdump_bytes(_md, _budget)
++                parts.append(
++                    "_FR10_TREE_ACCEPTED_PATH_BY_REQ_ID=" + str(len(_md))
++                    + "/c" + str(_cb) + "/g" + str(_gb)
++                )
++        except Exception:
++            pass
++        _line = " ".join(parts)
++        try:
++            print(_line, flush=True)
++        except Exception:
++            pass
++        _lp = _os.environ.get("FR13_MEM_DUMP_LOG")
++        if _lp:
++            try:
++                with open(_lp, "a", buffering=1) as _fh2:
++                    _fh2.write(_line + chr(10))
++            except Exception:
++                pass
++    except Exception:
++        pass
++'''
++    text = text + module_block
++
++    anchor = (
++        "        _fr13_sfwd_end(_fr13_sfwd_ev)\n"
++        "\n"
++        "        with record_function_or_nullcontext(\"gpu_model_runner: postprocess\"):\n"
++    )
++    if anchor not in text:
++        raise RuntimeError(
++            "FR13_MEM_DUMP: per-step hook anchor (_fr13_sfwd_end + postprocess "
++            "record_function) not found in gpu_model_runner.py -- the "
++            "FR13_SFWD_GPU_TIMER patch must be registered before this one."
++        )
++    inject = (
++        "        _fr13_sfwd_end(_fr13_sfwd_ev)\n"
++        "        _fr13_memdump_step()  # FR13_MEM_DUMP per-step host probe (inert unless FR13_MEM_DUMP=1)\n"
++        "\n"
++        "        with record_function_or_nullcontext(\"gpu_model_runner: postprocess\"):\n"
++    )
++    text = text.replace(anchor, inject, 1)
++
++    GPU_MODEL_RUNNER_PATH.write_text(text)
++    return True
++
++
+ def _patch_fp8_utils_gb10_gemv_cfg() -> bool:
+     """OPT-A: GB10/sm_121-tuned fp8 w8a8 block-scaled-mm decode config.
+ 
+@@ -18455,6 +18686,7 @@
+         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
+         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_boundary_tap_d()),
+         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sfwd_gpu_timer()),
++        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_mem_dump()),
+         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
+         (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),
+         (MAMBA_UTILS_PATH, _patch_mamba_utils_preprocess_context_flag()),
