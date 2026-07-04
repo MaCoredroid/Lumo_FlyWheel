@@ -173,3 +173,22 @@ superseded by EXACT_SEED; empirically identical give-up with HRS on/off. No acti
   Resolves => EXACT_SEED prefill-capture side-computation implicated.
 - Path A retry (§10) condition FAILED: write side reads clean => nothing for the fold to fix. Parked
   unless user overrides.
+
+## 12. Flag-decomposition ladder (H1 chase)
+
+| arm | flags (delta vs resolving CONFIG_ONLY) | verdict |
+|---|---|---|
+| m_tree_cache_es0 | +prefix-caching(align) +mamba-block-size +fp32-ssm-dtype +block-size-1024, ES=0 | **give-up** (637s/0B, es_seed_lines=0) — 7/7; EXACT_SEED machinery EXONERATED |
+| m_tree_cache_dtypeauto (running) | same minus fp32 (dtype=auto) | ? |
+
+- es0 give-up => carrier is in the BASE cache config, not the ES seed/restore machinery.
+- dtype=auto resolves => fp32 SSM cache dtype is the perturber. Still gives up => carrier =
+  align-mode prefill machinery itself (inseparable from prefix caching; mamba_cache_mode='all'
+  hard-blocked for Qwen3-Next+spec) => fix = bit-exact align-mode prefill parity.
+- Note: decomposition must run from the give-up side — vLLM rejects the mamba dtype/block flags
+  without --enable-prefix-caching, so fp32 cannot be added to CONFIG_ONLY.
+- Determinism note (user challenge, answered): launcher pins --seed 0 every boot => per-config
+  trajectories are REPRODUCIBLE; and 6/7 give-up variants differ numerically from each other =>
+  the route-decision shift is SYSTEMATIC (larger than noise), leaning corrupt over select.
+  Margin probe (teacher-forced, first-divergent-token, tree+cache vs tree+no-cache) promoted to
+  the decisive instrument after the flag ladder.
