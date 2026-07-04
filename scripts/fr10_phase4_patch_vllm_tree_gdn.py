@@ -8730,10 +8730,27 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
                     if _rf_cmap is None:
                         _rf_cmap = {}
                         gdn_mod._FR13_APC_SSM_CHUNKED_PTR_BY_REQ = _rf_cmap
-                    _rf_cmap.setdefault(str(req_id), {})[_rf_prefix] = {
+                    # RANK-1 FIX (per-pos history, NOT single-slot overwrite):
+                    # the old body wrote ONE rec per (req,layer), so by the time
+                    # the snapshot for boundary apos persisted, the fold had
+                    # advanced one B-block and the slot already held apos+B --
+                    # the exact-apos state was GONE (int(ckpos)!=int(apos) always
+                    # -> refold_pub_miss -> redirect_used=0). Retain EVERY
+                    # published B-boundary keyed by int(_rf_blk_end) so the
+                    # consumer can index the exact aligned_new_computed_tokens it
+                    # needs. Cap to the last 16 boundaries (whole req entry freed
+                    # at _free_request 7751); each entry still stores the tensor
+                    # OBJECT (strong ref) so the lifetime invariant is preserved.
+                    _rf_lhist = _rf_cmap.setdefault(
+                        str(req_id), {}
+                    ).setdefault(_rf_prefix, {})
+                    _rf_lhist[int(_rf_blk_end)] = {
                         "pos": int(_rf_blk_end),
                         "state": _rf_fold_state,
                     }
+                    if len(_rf_lhist) > 16:
+                        for _rf_old in sorted(_rf_lhist)[:-16]:
+                            _rf_lhist.pop(_rf_old, None)
                     gdn_mod._fr13_obs_bump("refold_published")
                 except Exception:
                     pass
@@ -14120,9 +14137,29 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                            )\n"
         "                            _fr13_fx_ckpos = None\n"
         "                            if os.environ.get(\"FR13_APC_REFOLD_TO_SNAPSHOT\", \"0\") == \"1\":\n"
-        "                                _fr13_fx_chunked_rec = (\n"
+        # RANK-1 FIX (index the per-pos history by the EXACT aligned boundary):
+        # fetch apos (aligned_new_computed_tokens, stashed per-req at postprocess)
+        # BEFORE the lookup, then select the history entry whose key == int(apos).
+        # rec['pos']==apos by construction, so the GAP-2 pos guard (14153-14203)
+        # passes tautologically on a genuine hit and redirect_used fires; a
+        # missing boundary yields rec=None -> recurrent-leaf fallback (never a
+        # position-wrong seed). apm0 guarded (map may be absent early) -> None ->
+        # apos0 None -> rec None -> fallback; matches the existing map-guard style.
+        "                                _fr13_fx_apm0 = getattr(\n"
+        "                                    _fr13_fx_gdn, \"_FR13_APC_SSM_ALIGNED_POS_BY_REQ\", None\n"
+        "                                )\n"
+        "                                _fr13_fx_apos0 = (\n"
+        "                                    _fr13_fx_apm0.get(_fr13_fx_reqkey)\n"
+        "                                    if _fr13_fx_apm0 else None\n"
+        "                                )\n"
+        "                                _fr13_fx_chunked_hist = (\n"
         "                                    _fr13_fx_cm.get(_fr13_fx_reqkey, {}).get(str(layer_name))\n"
         "                                    if _fr13_fx_cm else None\n"
+        "                                )\n"
+        "                                _fr13_fx_chunked_rec = (\n"
+        "                                    _fr13_fx_chunked_hist.get(int(_fr13_fx_apos0))\n"
+        "                                    if (_fr13_fx_chunked_hist is not None and _fr13_fx_apos0 is not None)\n"
+        "                                    else None\n"
         "                                )\n"
         "                                if _fr13_fx_chunked_rec is not None:\n"
         "                                    _fr13_fx_chunked_state = _fr13_fx_chunked_rec.get(\"state\")\n"
