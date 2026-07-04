@@ -115,6 +115,20 @@ def scan_align_mode() -> str:
     return raw
 
 
+def recompute_node_parallel_on() -> bool:
+    """Whether the recompute kernel spreads per-node ancestry replay across a
+    3-D grid (grid z = node index) instead of the serial in-kernel i-loop.
+
+    Default OFF: FR13_RECOMPUTE_NODE_PARALLEL unset/0/false => the recompute
+    kernel keeps the for-i static_range loop (NODE_PARALLEL=False constexpr =>
+    the node-parallel branch is dead code, byte-identical launch/geometry).
+    ON only changes WHERE each node runs (one program per output node); the
+    per-node replay from b_h0 and all math are bit-identical.
+    """
+    raw = os.environ.get("FR13_RECOMPUTE_NODE_PARALLEL", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 # FR13_NPAD_INVARIANT: the canonical N_PAD-invariant reduction order.
 # The deployed cat9 tree has N_PAD = 1 << (9-1).bit_length() = 16; smaller trees
 # (e.g. the leaf-free chain5 spine, N_PAD = 8) recompile the scan/reduction loop
@@ -774,6 +788,7 @@ def _tree_gdn_recompute_kernel(
     COUNT_INVOCATION: tl.constexpr,
     STORE_NODE_STATES: tl.constexpr,
     SCAN_ALIGN: tl.constexpr = False,
+    NODE_PARALLEL: tl.constexpr = False,
 ):
     # FR13_SCAN_ALIGN recompute-from-spine (SRAM EXIT-2, re-pinned to native
     # w1/s3). DEPLOYABLE geometry fix: signature-identical to _tree_gdn_kernel
@@ -799,6 +814,10 @@ def _tree_gdn_recompute_kernel(
     # MUST omit it to match native, NOT our own h_cache scan.
     pid_vh = tl.program_id(0)
     pid_v = tl.program_id(1)
+    # FR13_RECOMPUTE_NODE_PARALLEL: grid-z is the output node index when ON; when
+    # OFF pid_i is the constexpr literal 0 (program_id(2) is never emitted), so
+    # every use of pid_i below constant-folds to today's codegen.
+    pid_i = tl.program_id(2) if NODE_PARALLEL else 0
     head_group = NUM_VH // NUM_KH
     pid_kh = pid_vh // head_group
     offs_n = tl.arange(0, N_PAD)
@@ -810,7 +829,11 @@ def _tree_gdn_recompute_kernel(
             invocation_counter,
             1,
             sem="relaxed",
-            mask=(pid_vh == 0) & (pid_v == 0),
+            # Under NODE_PARALLEL only the grid-z==0 program increments, so the
+            # counter still goes up exactly once per launch (not N_PAD times).
+            # OFF: pid_i is the constexpr 0 => (pid_i == 0) folds to True =>
+            # this mask is byte-identical to today's.
+            mask=(pid_vh == 0) & (pid_v == 0) & (pid_i == 0),
         )
 
     h0_base = h0
@@ -832,7 +855,17 @@ def _tree_gdn_recompute_kernel(
     b_a_log = tl.load(A_log + pid_vh).to(tl.float32) if RAW_GATING else 0.0
     b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32) if RAW_GATING else 0.0
 
-    for i in tl.static_range(0, N_PAD):
+    if NODE_PARALLEL:
+        # FR13_RECOMPUTE_NODE_PARALLEL ON: this program handles exactly ONE
+        # output node i = pid_i (grid-z). The body below is CHARACTER-FOR-
+        # CHARACTER identical to the serial else-branch, only the source of `i`
+        # differs (a single grid value vs an unrolled static_range var). The
+        # per-node replay from b_h0, the j-loop, the register-resident state_i,
+        # and BOTH store masks `(i < N_ACTUAL)` are the same -> bit-exact to one
+        # iteration of the serial loop. Padded nodes (pid_i >= N_ACTUAL) self-
+        # mask via the store guards (all-False store), matching the serial loop
+        # which likewise never stores those rows.
+        i = pid_i
         # One fresh tile per output node: replay the whole path-to-root in
         # ascending node order (parent < child by tree construction, so j
         # ascending is a topological replay of the ancestry chain), then node i.
@@ -914,6 +947,89 @@ def _tree_gdn_recompute_kernel(
                 state_i,
                 mask=(i < N_ACTUAL) & v_mask[:, None],
             )
+    else:
+        for i in tl.static_range(0, N_PAD):
+            # One fresh tile per output node: replay the whole path-to-root in
+            # ascending node order (parent < child by tree construction, so j
+            # ascending is a topological replay of the ancestry chain), then node i.
+            state_i = b_h0
+            out_i = tl.zeros((BLOCK_V,), dtype=tl.float32)
+            for j in tl.static_range(0, N_PAD):
+                # j is replayed iff it is on node i's path: an ancestor
+                # (strict_mask[i, j]) or i itself. Inactive j leaves state_i
+                # untouched via tl.where(on_path, ...).
+                is_anc = (tl.load(strict_mask + i * N_PAD + j) != 0)
+                on_path = ((j == i) | is_anc) & (j < N_ACTUAL) & (i < N_ACTUAL)
+                b_q = tl.load(
+                    q + (j * NUM_KH + pid_kh) * DIM_K + offs_k,
+                    mask=on_path,
+                    other=0.0,
+                ).to(tl.float32)
+                b_k = tl.load(
+                    k + (j * NUM_KH + pid_kh) * DIM_K + offs_k,
+                    mask=on_path,
+                    other=0.0,
+                ).to(tl.float32)
+                b_v = tl.load(
+                    v + (j * NUM_VH + pid_vh) * DIM_V + offs_v,
+                    mask=on_path & v_mask,
+                    other=0.0,
+                ).to(tl.float32)
+                b_b = tl.load(
+                    beta + j * NUM_VH + pid_vh,
+                    mask=on_path,
+                    other=0.0,
+                ).to(tl.float32)
+                b_g = tl.load(
+                    g + j * NUM_VH + pid_vh,
+                    mask=on_path,
+                    other=0.0,
+                ).to(tl.float32)
+                b_raw_a = b_g
+                b_raw_b = b_b
+                if RAW_GATING:
+                    b_raw_b = tl.load(
+                        raw_b + j * NUM_VH + pid_vh,
+                        mask=on_path,
+                        other=0.0,
+                    ).to(tl.float32)
+                    b_raw_a = tl.load(
+                        raw_a + j * NUM_VH + pid_vh,
+                        mask=on_path,
+                        other=0.0,
+                    ).to(tl.float32)
+                new_state, out_j = _gdn_node_step(
+                    state_i,
+                    b_q,
+                    b_k,
+                    b_v,
+                    b_b,
+                    b_g,
+                    b_raw_a,
+                    b_raw_b,
+                    b_a_log,
+                    b_dt_bias,
+                    OUTPUT_SCALE=OUTPUT_SCALE,
+                    USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+                    RAW_GATING=RAW_GATING,
+                    SCAN_ALIGN=SCAN_ALIGN,
+                )
+                state_i = tl.where(on_path[:, None], new_state, state_i)
+                # The output for node i is produced when j == i (the last replayed
+                # step on the path). out_j for j != i is discarded; j == i is always
+                # reached since i is on its own path.
+                out_i = tl.where(j == i, out_j, out_i)
+            tl.store(
+                out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
+                out_i,
+                mask=(i < N_ACTUAL) & v_mask,
+            )
+            if STORE_NODE_STATES:
+                tl.store(
+                    state + ((i * NUM_VH + pid_vh) * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+                    state_i,
+                    mask=(i < N_ACTUAL) & v_mask[:, None],
+                )
 
 
 @triton.jit
@@ -1921,7 +2037,17 @@ def launch_tree_gdn_prepared(
     # h_cache scan for mode=body (or when the flag is off).
     if _scan_align and scan_align_mode() == "recompute":
         _rbv = _NATIVE_PACKED_BV
-        rgrid = (num_vh, triton.cdiv(dim_v, _rbv))
+        # FR13_RECOMPUTE_NODE_PARALLEL: read once. OFF (default) => the EXACT
+        # current 2-D grid + NODE_PARALLEL=False constexpr, so grid rank, grid
+        # dims and kernel specialization are byte-identical to today. ON => add a
+        # grid-z dim of n_pad (one program per node slot; the kernel's
+        # static_range(0, N_PAD) node-index domain equals n_pad, so slots
+        # 0..N_PAD-1 each get a program) and select the node-parallel branch.
+        _node_parallel = recompute_node_parallel_on()
+        if _node_parallel:
+            rgrid = (num_vh, triton.cdiv(dim_v, _rbv), n_pad)
+        else:
+            rgrid = (num_vh, triton.cdiv(dim_v, _rbv))
         _tree_gdn_recompute_kernel[rgrid](
             q,
             k,
@@ -1958,6 +2084,7 @@ def launch_tree_gdn_prepared(
             COUNT_INVOCATION=count_invocation,
             STORE_NODE_STATES=store_node_states,
             SCAN_ALIGN=_scan_align,
+            NODE_PARALLEL=_node_parallel,
             num_warps=_NATIVE_PACKED_NUM_WARPS,
             num_stages=_NATIVE_PACKED_NUM_STAGES,
         )
