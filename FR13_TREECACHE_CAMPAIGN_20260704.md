@@ -1257,3 +1257,40 @@ parity (git diff inside /testbed) -> then matrix. Task #9.
   QWEN_STREAM_IDLE_TIMEOUT_MS to 240s (documented knob). (5) NO AUTO-RETRY (nudge analysis): engine-generating
   -while-client-silent is the SAME signature for a transport wedge AND a model runaway (the known cache-ON
   class) — auto-replay would selectively erase model failures = a nudge. Stalls => NA + classification only.
+
+## 60. HRS preload (wf_4479679c-4f7) + uniform garble scan: HRS is DEAD CODE under today's lattice while its
+## designated domain is served by the exact path it was built to replace; garble <=> decode-boundary crossing
+## (post-fix biconditional); s4 garble correction; per-row hybrid re-arm designed
+
+- UNIFORM SCAN (fr13_garble_scan.py, committed 08e4de92) CORRECTS my earlier weak scan (class-12: >8KB-only
+  missed sub-8KB episodes): tcfix_s4 has 2 GARBLE episodes (pipe-repetition + 479-CJK run_shell arg; Angular/
+  webpack GitHub-issue hallucination) + empty final. POST-FIX TABLE: s1 CLEAN/resolved (0 boundary-crossing
+  turns, max 487 gen tok) | s2 GARBLE x3/failed (3 crossings: 7415/7018/2280 tok turns) | s3 CLEAN/NA-stall |
+  s4 GARBLE x2/failed (1 crossing: 1496) | nat_s1 CLEAN/failed-nearmiss (0 crossings, max 467).
+  **Post-fix biconditional: garble <=> >=1 turn crossing a 1024-token decode boundary (5/5 runs).** Native is
+  UNDERPOWERED as a control (its turns never exceed ~500 tok => never arms the mechanism) => the forced-
+  boundary probe is the binding discriminator, arms {tree+cache, tree+NOCACHE, native+cache} x max_tokens~1600.
+  Historic-scan nuance: PRE-fix-era traces show garble WITHOUT crossings (m_tree_cache_base_r2, tcv_s1,
+  m_cat8on_obs) = the OLD carriers (pool residue / copy-src poison), consistent with both being real and fixed.
+  Causality caveat (H2): for a FIRST episode, crossing->garble vs garble->runaway-length->crossing not yet
+  separated; restore-propagation for later episodes well-supported (corrupted crossed blocks re-hit every turn).
+- HRS STATE (H1, file:line): fully implemented (patcher :5978-6174, recurrent roll-forward from restored
+  boundary state, CAP=64 default) but DEAD CODE twice over: launcher HRS:=0 AND a WHOLE-BATCH veto at :6002
+  (`not _fr13_es_on` — EXACT_SEED=1 unconditionally disables HRS even if =1). Live tree+cache arms force
+  ES=1 => HRS never engages. WHAT RUNS INSTEAD at decode-crossed hit rows: EXACT_SEED's chunk-resume from the
+  ES_REDIRECT_FALLBACK RECURRENT-lineage state (decode-side chunked producer unwired, §14/§16) = the
+  restart-fold realization-mismatch family — THE §57 GARBLE CANDIDATE. HRS's designated domain is currently
+  handled by the exact path HRS was written to replace.
+- RE-ARM DESIGN (H1): per-row hybrid, flag FR13_APC_HRS_ON_DECODE_CROSSED (default 0 = byte-identical):
+  relax the :6002 veto per-row; ONLY decode-crossed hit rows (discriminator: per-req snapshot_events>0 /
+  chunked-ptr absence) take HRS roll-forward with CAP covering the remainder from the last CLEAN aligned
+  boundary (<=1023) => lineage self-consistent, restart-fold mismatch eliminated; prefill-aligned rows keep
+  EXACT_SEED's proven bit-exact chunked restore untouched. HONEST: within-floor fix (recurrent epsilon =
+  the class native itself ships), NOT bit-exact; the bit-exact alternative (wire the chunked producer,
+  §16 task#7) stays de-prioritized per user. SGLang citation woven per user directive (MambaRadixCache:
+  states stored ONLY at stage boundaries, all-or-nothing prefix reuse, recompute-forward-from-checkpoint).
+  Speed: tax lands on hit-time only (decode untouched, HBM-bound); ~1 crossed-hit/turn worst case; quantify
+  via fr13_measure hit-time before bake.
+- BENCHMARK NOTE (user): official SWE-bench Verified runs agents INSIDE the per-instance image (full runtime
+  deps) — our agent-in-bare-worktree deviates from the published convention; §58's instance_image mode is the
+  return to standard. Resolve rates before that fix are not externally comparable.
