@@ -113,8 +113,12 @@ E
 }
 arm_cache_expect(){ case "$1" in cat8_cache) echo "True";; cat8_nocache) echo "False";; esac; }
 
-# battery lines: "tag seed reset"
-arm_battery(){ case "$1" in
+# battery lines: "tag seed reset". BATTERY_PHASES (space-sep, e.g. "P1") filters
+# to matching phases (default: all) — used by short diagnostic boots (§51 E4CAP).
+BATTERY_PHASES="${BATTERY_PHASES:-}"
+arm_battery(){ _arm_battery_raw "$1" | { if [[ -n "$BATTERY_PHASES" ]]; then
+    grep -E "^($(echo "$BATTERY_PHASES" | tr ' ' '|'))_"; else cat; fi; }; }
+_arm_battery_raw(){ case "$1" in
   cat8_cache)
     for k in 1 2 3 4 5 6 7 8 9 10; do echo "P1_$k 5 1"; done
     for k in 1 2 3 4 5 6; do echo "P2_$k 5 0"; done

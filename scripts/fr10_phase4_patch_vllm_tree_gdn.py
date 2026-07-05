@@ -20081,6 +20081,273 @@ def _patch_gpu_model_runner_zero_mamba() -> bool:
     return True
 
 
+def _patch_gdn_linear_attn_prefill_carry_trace() -> bool:
+    """FR13_APC_PREFILL_CARRY_TRACE (D-E4CAP; default OFF; PATCH-TIME gated ->
+    when the env flag is not "1" at patch time this returns False and the
+    installed source stays byte-identical to the pre-edit patcher's output).
+
+    Campaign sec.51 (FR13_TREECACHE_CAMPAIGN_20260704): E5 removed the
+    ACCUMULATING recycled-pool carrier, leaving ONE deterministic cold-path
+    fixed point ('The'@-0.0111) that is E5-invariant (identical pre/post E5) =>
+    it is NOT a fresh-alloc pool row. Top suspect = the UNGUARDED chunked-prefill
+    SSM carry: initial_state = ssm_state[non_spec_state_indices_tensor] (read),
+    zeroed only for ~has_initial_state rows, then the carry WRITE
+    ssm_state[non_spec_state_indices_tensor] = last_recurrent_state. ~24.7k
+    prompt / max_num_batched=1024 => ~24 chunks, has_initial_state=True at every
+    chunk boundary, so a null/stale-row read can feed the prefill accumulation
+    deterministically. This tracer is the DECISIVE one-boot discriminator: it
+    logs, per prefill forward per layer, the non_spec_state_indices (flag id==0 =
+    null row), the AS-READ initial_state per-row fingerprint (BEFORE the zeroing)
+    and the written last_recurrent_state per-row fingerprint. Diff
+    request-1-vs-2 per chunk: first-divergence at id 0 => S1 null row; at a
+    non-fresh non-zero id => S2 stale carry index; identical + no null =>
+    recurrent exonerated.
+
+    READ-ONLY: every tensor is .detach()ed, no compute-path tensor is mutated,
+    and control flow is UNCHANGED when the flag is off (patch-time gate -> no
+    injection at all). The whole trace body is wrapped in try/except so a trace
+    failure can NEVER break serving (prints one FR13_CARRY_TRACE_ERROR line then
+    self-disables). Volume is bounded by FR13_APC_PREFILL_CARRY_TRACE_LIMIT
+    (default 20000 records) and the jsonl path by
+    FR13_APC_PREFILL_CARRY_TRACE_PATH. Boot needle + first-record print + a
+    line-buffered file prove engagement (class 9). Runs LAST on
+    gdn_linear_attn.py, so its anchors match the post-_patch_gdn_linear text
+    (the read/zero/write region is heavily rewritten by that patch; raw-image
+    anchors do not survive)."""
+    if os.environ.get("FR13_APC_PREFILL_CARRY_TRACE", "0") != "1":
+        return False
+    text = GDN_LINEAR_PATH.read_text()
+    sentinel = "# FR13_APC_PREFILL_CARRY_TRACE"
+    if sentinel in text:
+        return False
+
+    mod_anchor = (
+        "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", "
+        "\"tree_mtp\")\n"
+    )
+    if text.count(mod_anchor) != 1:
+        raise RuntimeError(
+            "carry_trace: gdn_linear module-level anchor not unique/found"
+        )
+    mod_block = '''
+
+# FR13_APC_PREFILL_CARRY_TRACE (D-E4CAP): READ-ONLY, default-OFF prefill carry
+# tracer. See patcher _patch_gdn_linear_attn_prefill_carry_trace for the full
+# carrier writeup (campaign sec.51). PATCH-TIME gated: this block is injected
+# only when FR13_APC_PREFILL_CARRY_TRACE == "1" at patch time, so OFF => the
+# installed source is byte-identical. All tensor reads are .detach()ed; no
+# compute-path tensor is mutated.
+import json as _fr13pct_json
+import os as _fr13pct_os
+
+_FR13PCT_ON = _fr13pct_os.environ.get("FR13_APC_PREFILL_CARRY_TRACE", "1") != "0"
+_FR13PCT_PATH = _fr13pct_os.environ.get(
+    "FR13_APC_PREFILL_CARRY_TRACE_PATH", "/logs/fr13_prefill_carry_trace.jsonl"
+)
+try:
+    _FR13PCT_LIMIT = int(
+        _fr13pct_os.environ.get("FR13_APC_PREFILL_CARRY_TRACE_LIMIT", "20000")
+    )
+except Exception:
+    _FR13PCT_LIMIT = 20000
+_fr13pct_seq = 0
+_fr13pct_cur_seq = 0
+_fr13pct_records = 0
+_fr13pct_fh = None
+_fr13pct_disabled = False
+_fr13pct_cap_printed = False
+_fr13pct_first = True
+
+
+def _fr13pct_open():
+    global _fr13pct_fh
+    if _fr13pct_fh is None:
+        _dirn = _fr13pct_os.path.dirname(_FR13PCT_PATH)
+        if _dirn:
+            _fr13pct_os.makedirs(_dirn, exist_ok=True)
+        _fr13pct_fh = open(_FR13PCT_PATH, "a", buffering=1)
+    return _fr13pct_fh
+
+
+def _fr13pct_rowfp(t):
+    # Per-row abs-sum fingerprint == float(row.detach().float().abs().sum()).
+    # ONE device sync (single .cpu().tolist()) instead of per-row .item().
+    if t is None:
+        return None
+    f = t.detach().float().abs()
+    return [
+        float(_x) for _x in f.reshape(f.shape[0], -1).sum(dim=1).cpu().tolist()
+    ]
+
+
+def _fr13pct_emit(rec):
+    global _fr13pct_records, _fr13pct_cap_printed, _fr13pct_first
+    if _fr13pct_records >= _FR13PCT_LIMIT:
+        if not _fr13pct_cap_printed:
+            _fr13pct_cap_printed = True
+            print(
+                "FR13_CARRY_TRACE cap reached: records="
+                + str(_fr13pct_records),
+                flush=True,
+            )
+        return
+    _fh = _fr13pct_open()
+    _fh.write(_fr13pct_json.dumps(rec) + chr(10))
+    _fr13pct_records += 1
+    if _fr13pct_first:
+        _fr13pct_first = False
+        print(
+            "FR13_CARRY_TRACE first record written: path=" + _FR13PCT_PATH,
+            flush=True,
+        )
+
+
+def _fr13pct_common(_seq, mod, attn_metadata, indices, has_initial_state):
+    _seq_lens = None
+    try:
+        _qsl = getattr(attn_metadata, "non_spec_query_start_loc", None)
+        if _qsl is not None:
+            _seq_lens = [
+                int(_x)
+                for _x in (_qsl[1:] - _qsl[:-1]).detach().cpu().tolist()
+            ]
+    except Exception:
+        _seq_lens = None
+    _his = None
+    try:
+        if has_initial_state is not None:
+            _his = [
+                bool(_x) for _x in has_initial_state.detach().cpu().tolist()
+            ]
+    except Exception:
+        _his = None
+    _idx = None
+    try:
+        if indices is not None:
+            _idx = [int(_x) for _x in indices.detach().cpu().tolist()]
+    except Exception:
+        _idx = None
+    return {
+        "seq": int(_seq),
+        "layer": getattr(mod, "prefix", None),
+        "num_prefills": int(getattr(attn_metadata, "num_prefills", -1)),
+        "seq_lens": _seq_lens,
+        "has_initial_state": _his,
+        "state_indices": _idx,
+    }
+
+
+def _fr13pct_read(mod, attn_metadata, indices, has_initial_state, initial_state):
+    global _fr13pct_seq, _fr13pct_cur_seq, _fr13pct_disabled
+    if not _FR13PCT_ON or _fr13pct_disabled:
+        return
+    try:
+        _fr13pct_seq += 1
+        _fr13pct_cur_seq = _fr13pct_seq
+        _rec = _fr13pct_common(
+            _fr13pct_cur_seq, mod, attn_metadata, indices, has_initial_state
+        )
+        _rec["site"] = "read"
+        _rec["read_fp"] = _fr13pct_rowfp(initial_state)
+        _fr13pct_emit(_rec)
+    except Exception as _exc:
+        _fr13pct_disabled = True
+        print(
+            "FR13_CARRY_TRACE_ERROR read: "
+            + type(_exc).__name__ + ": " + str(_exc),
+            flush=True,
+        )
+
+
+def _fr13pct_write(mod, attn_metadata, indices, last_recurrent_state):
+    global _fr13pct_disabled
+    if not _FR13PCT_ON or _fr13pct_disabled:
+        return
+    try:
+        _rec = _fr13pct_common(
+            _fr13pct_cur_seq,
+            mod,
+            attn_metadata,
+            indices,
+            getattr(attn_metadata, "has_initial_state", None),
+        )
+        _rec["site"] = "write"
+        _rec["write_indices"] = _rec.get("state_indices")
+        _rec["written_fp"] = _fr13pct_rowfp(last_recurrent_state)
+        _fr13pct_emit(_rec)
+    except Exception as _exc:
+        _fr13pct_disabled = True
+        print(
+            "FR13_CARRY_TRACE_ERROR write: "
+            + type(_exc).__name__ + ": " + str(_exc),
+            flush=True,
+        )
+
+
+if _FR13PCT_ON:
+    print(
+        "FR13_APC_PREFILL_CARRY_TRACE boot needle: prefill carry tracer ACTIVE "
+        "(flag ON at patch time), path=" + _FR13PCT_PATH
+        + " limit=" + str(_FR13PCT_LIMIT),
+        flush=True,
+    )
+'''
+    text = text.replace(mod_anchor, mod_anchor + mod_block, 1)
+
+    read_anchor = (
+        "            initial_state = ssm_state[non_spec_state_indices_tensor]"
+        ".contiguous()  # type: ignore[index]\n"
+        "            assert has_initial_state is not None\n"
+        "            initial_state[~has_initial_state, ...] = 0"
+        "  # type: ignore[operator]\n"
+    )
+    if text.count(read_anchor) != 1:
+        raise RuntimeError(
+            "carry_trace: gdn_linear read/zero anchor not unique/found"
+        )
+    read_inject = (
+        "            initial_state = ssm_state[non_spec_state_indices_tensor]"
+        ".contiguous()  # type: ignore[index]\n"
+        "            assert has_initial_state is not None\n"
+        "            if _FR13PCT_ON:  " + sentinel + "\n"
+        "                _fr13pct_read(\n"
+        "                    self,\n"
+        "                    attn_metadata,\n"
+        "                    non_spec_state_indices_tensor,\n"
+        "                    has_initial_state,\n"
+        "                    initial_state,\n"
+        "                )\n"
+        "            initial_state[~has_initial_state, ...] = 0"
+        "  # type: ignore[operator]\n"
+    )
+    text = text.replace(read_anchor, read_inject, 1)
+
+    write_anchor = (
+        "            # Init cache\n"
+        "            ssm_state[non_spec_state_indices_tensor] = "
+        "last_recurrent_state.to(\n"
+        "                ssm_state.dtype\n"
+        "            )\n"
+    )
+    if text.count(write_anchor) != 1:
+        raise RuntimeError(
+            "carry_trace: gdn_linear carry-write anchor not unique/found"
+        )
+    write_inject = write_anchor + (
+        "            if _FR13PCT_ON:  " + sentinel + "\n"
+        "                _fr13pct_write(\n"
+        "                    self,\n"
+        "                    attn_metadata,\n"
+        "                    non_spec_state_indices_tensor,\n"
+        "                    last_recurrent_state,\n"
+        "                )\n"
+    )
+    text = text.replace(write_anchor, write_inject, 1)
+
+    GDN_LINEAR_PATH.write_text(text)
+    return True
+
+
 def main() -> int:
     _fr13_write_subop_mab_sidecar()
     _fr13_write_replay_durable_ab_sidecar()
@@ -20141,6 +20408,12 @@ def main() -> int:
         # tree node-bank reads (campaign sec.47/48 request-order carrier).
         (SINGLE_TYPE_MANAGER_PATH, _patch_single_type_manager_zero_mamba()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_zero_mamba()),
+        # FR13_APC_PREFILL_CARRY_TRACE (D-E4CAP; default OFF / PATCH-TIME gated
+        # -> byte-identical source when the env flag is not "1"). READ-ONLY
+        # tracer of the chunked-prefill SSM carry read/zero/write to localize
+        # the residual deterministic cold-path carrier (campaign sec.51). MUST
+        # run after _patch_gdn_linear so its anchors match the post-patch text.
+        (GDN_LINEAR_PATH, _patch_gdn_linear_attn_prefill_carry_trace()),
     ]
     patched: dict[str, bool] = {}
     for path, did_patch in patch_steps:
