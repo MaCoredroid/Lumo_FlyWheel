@@ -1,0 +1,36 @@
+{
+ "source_request": "output/fr13_baseline_main/m_tree_cache_base/proxy_request_dumps/chatreq_1783153435884.json",
+ "turn1_byte_identical_across_arms": true,
+ "model": "qwen3.6-27b",
+ "n_tools": 15,
+ "tool_names": [
+  "tool_search",
+  "agent",
+  "skill",
+  "list_directory",
+  "read_file",
+  "grep_search",
+  "glob",
+  "edit",
+  "notebook_edit",
+  "write_file",
+  "run_shell_command",
+  "todo_write",
+  "ask_user_question",
+  "exit_plan_mode",
+  "enter_plan_mode"
+ ],
+ "n_messages": 2,
+ "roles": [
+  "system",
+  "user"
+ ],
+ "system_content_len": 48294,
+ "user_content_parts": 5,
+ "orig_had_temperature": false,
+ "orig_max_tokens": 65536,
+ "sha256_tools_canon": "9d12fd4bf2527b969da87523581cce38744ccdd9ab45eea7c433e3e8d44b9667",
+ "sha256_messages_canon": "698ce22713371c4d9764b570e6f5b87915653df7b1415dd9caf528b51128f5df",
+ "system_sha8": "fe0ce9ac",
+ "user_sha8": "db831f25"
+}

@@ -849,3 +849,63 @@ N=16 paired seeds + repeats, logprobs top-20) — decision table: systematic-shi
 margin; RNG-offset => patcher generator fix; boot-variance => multi-boot margin distribution. Then carrier-2
 (§34 miss-vs-hit 8/16) same-boot margin gate with HRS/ES arms. Pending tasks (shelve refold §41, speed matrix
 §20/task#4) gated behind behavior parity per user order.
+
+## 47. §45 OVERTURNED: the "identical preamble" premise was a REDUCER BUG; carrier = REQUEST-ORDER state
+## contamination at decode step 1, within-boot measurable (workflow wf_20eeac71-6c4 + first-hand verify)
+
+THREE MINING RESULTS (each re-verified first-hand against raw artifacts before banking):
+
+1. PREMISE REFUTED (reducer bug, class 9+12). The §22/§45 claim "think channel byte-identical across all 16
+   seeds in every arm; fork at the route token" is FALSE for cat8_cache. The 2x2 reducer compared
+   message.reasoning_content — which is NULL on this server for ALL samples (1 distinct empty string) — instead
+   of the populated message.reasoning. Verified: reasoning_content null 16/16; real reasoning = 8 DISTINCT
+   strings/16 in cat8_cache (fork at TOKEN 1, char 0), 1 distinct/16 in cat8_nocache. Every downstream §45
+   deduction inherited this vacuous measurement.
+2. THE SMOKING GUN (seeded2turn logprobs — the probe already had logprobs=True and nobody read them): within
+   ONE cat8_cache boot, the token-1 chosen-token logprob on the byte-identical cold request VARIES BY REQUEST:
+   send order 1..16 = -0.001, -0.049x4, -0.075, -0.129, -0.910x2, -0.001, -0.477, -1.374, -1.153, -0.317,
+   -0.004, -0.008. cat8_nocache: -0.001 FLAT 16/16. Logprobs are raw log_softmax of the LOGITS (pre-temperature,
+   RNG-independent; sampler.py:82-83,291-292) => step-1 LOGITS differ across requests on identical cold input
+   => PER-REQUEST-HISTORY STATE CONTAMINATION (bug-class 1), systematic, within-boot, NOT stochastic/diffuse.
+3. ORDER≡SEED CONFOUND: every prior probe sent seed=i as the i-th request — seed and send-position were NEVER
+   separated. Fixed-point signature present: cache seeds 2-7 = byte-identical 71-token read_file completions
+   (deterministic given predecessor, class-1's discriminator); seed 1 (the boot's FIRST request) is byte-
+   identical to nocache (277-char reasoning, route agent, LOSSLESS). Every first-request-of-boot ever measured
+   was clean: route_probe seed1, seeded2turn seed1 (-0.001), famz run (seed1, bit-exact 12/12 triples), famz
+   run_s2 (seed2, non-flip), and the §25/§35/§44 instruments (single-request boots) — 5+ boots, ZERO
+   counterexamples. => §45's "flip is stochastic cross-boot / not reproducible per-seed" = position/history-
+   keying misread as stochasticity (famz s2's seed-2 request was its boot's REQUEST #1 = clean; route_probe's
+   seed-2 was REQUEST #2 = post-contamination). All prior bit-exact evidence (§25/§35/§44) measured REQUEST #1
+   and is VACUOUS for this carrier.
+4. GARBLE CLASS: 6/16 cold cache samples are token-salad runaways (finish=length/stop, digit/multilingual
+   salad) — gross corruption on the cold path, consistent with the apc-runaway lossless finding
+   (project_fr13_apc_runaway_and_graph_fix); read_file 6/16 = coherent-but-wrong reinterpretation; only 4/16
+   healthy. This is CORRUPTION dynamics, not a benign route preference.
+5. FLOORS RECONCILED (the §32-vs-§44 contradiction): the "cross-boot autotune floor" is dominated by a
+   SUPPRESSIBLE async/timing term. Per-step capture (.cpu() sync each decode step) makes boots byte-
+   reproducible: famz (sync window 0..40) floor=0 through step ~40; seeded2turn pass-2 (logit capture LIMIT=8 =
+   sync 0..7) bit-exact steps 0-7 with the fork EXACTLY at step 8; route_probe_eager (no capture) forks. Same
+   seed, same config, same payload (sha 6b2e9fb7 all instruments) — only the sync-window width differs, and the
+   fork tracks its edge. §34's same-boot resend divergence (bytes differ, fixed kernels) confirms the async
+   term. => a REPRODUCIBLE LOCALIZATION REGIME exists (eager + per-step sync): request-1-vs-request-N state
+   diff on identical input = the op-localization §35/§44 failed at. Caveat: sync perturbs the near-tie sampling
+   (famz seed2 todo_write vs unsynced read_file) — use for localization, not behavior gates.
+6. RNG PATH AUDITED (class 2): per-request torch.Generator (gpu_model_runner.py:1142) everywhere incl. tree
+   committer (FR13_TREE_PER_REQ_GEN hard-ON, patcher:10917-19; device committer re-seeds a fresh dev_gen from
+   1 randint/step, fr13_device_multidraft_kernel.py:342-352) — draws per step FIXED, accept-independent.
+   Secondary carrier noted (per-request gen advances 1/DECODE-STEP, so cumulative-accept differences shift the
+   generator offset at a given OUTPUT position) — but RNG cannot explain the logit-level (logprob) deltas in
+   (2). LOGIT instrument: chat logprobs are reliable for token 1 (normal sampler path, read-only, raw);
+   spec-committed tokens' top_logprobs are UNRELIABLE (tree topology mismatch, gold_margin_probe.py:363-370).
+7. ERRATUM: §44's per-seed route table (todo@{1,12,16}...) is the EAGER probe's table, not the graph probe's
+   (graph cat8_cache: agent@{1,10,12,13}, read_file@{2-7}, NO_TOOL@{8,9,11,14,15,16}). Also eager healthy
+   route = todo_write vs graph healthy route = agent (both stable 16/16 nocache; both collapse under cache).
+
+NEXT (rp2, GPU, launched): scripts/probes/fr13_rp2_order_probe.sh — the ORDER-vs-SEED discriminator. Fixed
+seed=5 x10 sequential cold (reset each) + x6 no-reset (fixed-seed miss-vs-hit) + seeds 1-8 sweep, on cat8_cache;
+fixed-seed + sweep control on cat8_nocache. Readout = token-1 chosen logprob + top-20 (zero-perturbation) +
+route + per-request prefix-cache metric brackets. PREDICTIONS: P1 sample-1 clean ('Let'~-0.001/agent), later
+positions drift => ORDER CONFIRMED (seed exonerated) => localize under the sync regime (request-1 vs request-N
+GDN/conv state on identical input, first divergent tensor = the stale-state reader). P1 flat => order refuted
+=> P3 spread would implicate a genuine seed->forward leak. Control flat. Probe assets committed under
+scripts/probes/ (harness+payload were previously scratchpad-only).
