@@ -485,3 +485,15 @@ NEXT INSTRUMENT (task #10 iter-3): DECODE-STEP ladder = extend §25's cold ladde
 teacher-force the identical token sequence through cache-ON vs cache-OFF tree boots (eager), capture
 per-DECODE-STEP GDN state (SSM+conv, all rows) + logits, report first divergent decode step + op.
 Then classify WIRING (block-index/layout) vs KERNEL (accumulation order) and fix to 0.0.
+
+## 29. EAGER 2x2 VERDICT: DECODE NUMERICS confirmed, graph-replay artifact REFUTED
+
+| mode | cat8_cache healthy-route | cat8_nocache healthy-route |
+|---|---|---|
+| GRAPH (§22, FULL_AND_PIECEWISE) | 4/16 (25%) | 16/16 |
+| EAGER (--enforce-eager in live argv) | 3/16 (todo_write 3, read_file 10, NO_TOOL 3) | 12/12 todo_write (100%) |
+
+Collapse magnitude IDENTICAL across modes (cache ~19-25% healthy, nocache ~100% both) => the route-token
+logit shift is present WITHOUT cuda-graph capture => REAL decode numerics, NOT a graph artifact. All temp
+0.6, paired seeds. Confirms §28: cache-config decode losslessness violation on the tree path.
+NEXT: decode-step ladder (below) localizes the first divergent decode step/op; fix to 0.0; re-probe.
