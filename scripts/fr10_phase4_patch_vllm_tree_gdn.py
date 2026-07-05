@@ -876,6 +876,116 @@ def _patch_gdn_attn() -> bool:
         ),
         1,
     )
+    # FR13_TREE_GDN_SLOT_PIN (new flag, default-OFF): inject a module-level pin
+    # helper + per-request slot cache, and a flag-gated call site that re-derives
+    # ONLY the tree/spec node-bank scratch columns of spec_state_indices_tensor.
+    # Injected at the tail so the counter-block anchor (created by the import
+    # replace above) is already present. Idempotency is inherited from the
+    # function-level `if "fr10_tree_parent" in text: return False` sentinel.
+    text = text.replace(
+        "_FR10_TREE_COUNTERS = []\n"
+        "_FR10_SIGNAL_INSTALLED = False\n",
+        (
+            "_FR10_TREE_COUNTERS = []\n"
+            "_FR10_SIGNAL_INSTALLED = False\n"
+            "_FR13_TREE_GDN_PIN_SLOTS = {}\n"
+            "\n"
+            "\n"
+            "def _fr13_tree_gdn_slot_pin(\n"
+            "    spec_state_indices_tensor,\n"
+            "    raw_block_table,\n"
+            "    seq_lens,\n"
+            "    spec_sequence_masks,\n"
+            "    block_size,\n"
+            "    num_spec,\n"
+            "):\n"
+            "    # FR13_TREE_GDN_SLOT_PIN helper (only reached when the env flag is\n"
+            "    # set). Pins the tree/spec node-bank scratch columns 1..num_spec of\n"
+            "    # spec_state_indices_tensor to a per-request stable 'none'-style slot\n"
+            "    # (the first-seen align scratch window, reused every decode step)\n"
+            "    # while leaving column 0 = the live running block (= align\n"
+            "    # start_index = mamba_state_idx) untouched, so align's checkpoint\n"
+            "    # store + cross-turn hit-restore stay byte-identical. Keyed on the\n"
+            "    # request's logical-block-0 physical id (allocated once, never\n"
+            "    # migrates). Returns spec_state_indices_tensor unchanged whenever the\n"
+            "    # pin is not applicable (no spec rows / unexpected shape).\n"
+            "    if (\n"
+            "        raw_block_table is None\n"
+            "        or spec_sequence_masks is None\n"
+            "        or spec_state_indices_tensor is None\n"
+            "    ):\n"
+            "        return spec_state_indices_tensor\n"
+            "    width = int(num_spec) + 1\n"
+            "    if (\n"
+            "        width <= 1\n"
+            "        or spec_state_indices_tensor.dim() != 2\n"
+            "        or spec_state_indices_tensor.size(-1) < width\n"
+            "    ):\n"
+            "        return spec_state_indices_tensor\n"
+            "    spec_rows = torch.nonzero(spec_sequence_masks, as_tuple=False).flatten()\n"
+            "    if (\n"
+            "        spec_rows.numel() == 0\n"
+            "        or spec_rows.numel() != spec_state_indices_tensor.size(0)\n"
+            "    ):\n"
+            "        return spec_state_indices_tensor\n"
+            "    start = torch.clamp(\n"
+            "        (seq_lens.to(torch.int64) - 1) // int(block_size), min=0\n"
+            "    )\n"
+            "    out = spec_state_indices_tensor.clone()\n"
+            "    for _i in range(int(spec_rows.numel())):\n"
+            "        _r = int(spec_rows[_i].item())\n"
+            "        _start = int(start[_r].item())\n"
+            "        _key = int(raw_block_table[_r, 0].item())\n"
+            "        _pinned = _FR13_TREE_GDN_PIN_SLOTS.get(_key)\n"
+            "        if _pinned is None:\n"
+            "            _pinned = (\n"
+            "                raw_block_table[_r, _start + 1 : _start + width]\n"
+            "                .detach()\n"
+            "                .clone()\n"
+            "            )\n"
+            "            _FR13_TREE_GDN_PIN_SLOTS[_key] = _pinned\n"
+            "        _n = min(int(_pinned.numel()), width - 1)\n"
+            "        if _n > 0:\n"
+            "            out[_i, 1 : 1 + _n] = _pinned[:_n].to(\n"
+            "                dtype=out.dtype, device=out.device\n"
+            "            )\n"
+            "    return out\n"
+        ),
+        1,
+    )
+    text = text.replace(
+        "            assert num_accepted_tokens is not None\n"
+        "            num_accepted_tokens = num_accepted_tokens[spec_sequence_masks]\n",
+        (
+            "            assert num_accepted_tokens is not None\n"
+            "            num_accepted_tokens = num_accepted_tokens[spec_sequence_masks]\n"
+            "            # FR13_TREE_GDN_SLOT_PIN (default-OFF; env unset -> the\n"
+            "            # `== \"1\"` gate is False -> block skipped -> byte-identical\n"
+            "            # served path). When enabled, re-derive ONLY the tree/spec\n"
+            "            # node-bank scratch columns 1..num_spec of\n"
+            "            # spec_state_indices_tensor from a per-request stable\n"
+            "            # 'none'-style pinned slot; column 0 (live running block) and\n"
+            "            # the entire non_spec / checkpoint gather stay byte-identical.\n"
+            "            # Runs before the CUDA-graph buffer copy below so eager and\n"
+            "            # captured indexing agree.\n"
+            "            if (\n"
+            "                os.environ.get(\"FR13_TREE_GDN_SLOT_PIN\", \"0\") == \"1\"\n"
+            "                and spec_sequence_masks is not None\n"
+            "                and spec_state_indices_tensor is not None\n"
+            "                and self.vllm_config.cache_config.mamba_cache_mode == \"align\"\n"
+            "                and isinstance(self.kv_cache_spec, MambaSpec)\n"
+            "            ):\n"
+            "                spec_state_indices_tensor = _fr13_tree_gdn_slot_pin(\n"
+            "                    spec_state_indices_tensor,\n"
+            "                    m.block_table_tensor,\n"
+            "                    m.seq_lens,\n"
+            "                    spec_sequence_masks,\n"
+            "                    self.kv_cache_spec.block_size,\n"
+            "                    self.num_spec,\n"
+            "                )\n"
+        ),
+        1,
+    )
     GDN_ATTN_PATH.write_text(text)
     return True
 
