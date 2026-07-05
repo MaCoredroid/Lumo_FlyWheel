@@ -724,3 +724,18 @@ flags (FR13_APC_FIXED_BUFFER no-consumer, FR13_APC_REQUIRE_SHADOW never-passable
 slot-pin in-process gate instrument), the new slot-pin flag. SEQUENCE: do the removal AFTER the slot-pin
 fix applies (single patcher-edit-stream at a time — the slot-pin worktree is mid-flight off main; avoid
 same-19k-file diff conflict).
+
+## 42. Slot-pin = NO-OP (proven algebraically); real fix = DEDICATED node-bank (SGLang extra_buffer)
+FR13_TREE_GDN_SLOT_PIN (committed e7cbf9f4, default-OFF, correct+verified) is a NUMERICAL NO-OP in the
+deployed config: (a) verify proved first-seen pinned window == stock align scratch by algebra (caches
+raw[start+1:start+num_spec+1] == spec[1:num_spec+1], first write identity); (b) block_size=1024 + prefix
+~15k + fork@~step8 => start=(seqlen-1)//1024=14 CONSTANT thru the fork => align already uses block-14
+scratch every step => re-deriving it changes nothing. Arm C == Arm B (still gives up). Cheap gate couldn't
+even measure it: FR13_DECODE_GDN_CAPTURE state dump STILL doesn't fire (only logit.* — 2nd H3-class
+instrument failure, insertion point off the executed decode path); algebra is decisive, no measurement
+needed. §40 "rotating gather" localization directionally right (align IS block-indexed) but rotation does
+NOT fire within the fork window (no 1024-boundary crossed at ~15k+8). The align-vs-none diff at the fork is
+NOT the index — it's the BUFFER/ALLOCATOR: align puts the tree GDN state in the shared block-pool (stride/
+co-residency); 'none' uses a dedicated contiguous buffer. REAL FIX = give tree spec-decode a DEDICATED GDN
+state buffer (SGLang extra_buffer / per-draft slots) so decode layout matches 'none'. Allocator/stride
+patch, scoping next.
