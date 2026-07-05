@@ -1019,3 +1019,35 @@ producer boot needle + record counters (batches of 9 = num_spec+1 spec blocks, +
 - Interpretation note: the fixed point is self-sustaining (request N's read_file trajectory rewrites ~the same
   residue request N+1 reads) — which is why pre-fix rp2 showed EVOLVING states (varying trajectories wrote
   varying residue into recycled rows) while post-fix rp3 shows a binary clean/fixed-point.
+
+## 51. Residual carrier cross-exam (wf_3dd23e9b-cbc): D1's null-exoneration REFUTED; top suspect = NULL-ROW
+## write/read by the UNGUARDED chunked-prefill SSM carry; D-E4CAP trace = the decisive one-boot discriminator
+
+- KEY CORRECTION (D3, source-proven): the null guards D1 cited (fused_sigmoid_gating.py:114/163,
+  fused_recurrent.py:114/163, causal_conv1d.py:137-140) protect the SPEC/DECODE kernels and conv ONLY. The
+  PREFILL SSM carry — initial_state = ssm_state[non_spec_state_indices] (gdn_linear_attn.py:984, zeroed only
+  for ~has_initial_state rows at :986) and the carry WRITE ssm_state[...] = last_recurrent_state (:1004) —
+  is plain UNGUARDED torch indexing. And "cold prefill reads zero state" is FALSE here: ~24.7k prompt /
+  max_num_batched=1024 => ~24 chunks, has_initial_state=True at every chunk boundary. The recurrent-carry
+  read/write path IS live on every cold request.
+- E5-INVARIANCE constraint (first-hand, this session): the residual fixed point 'The'@-0.0111 is IDENTICAL
+  pre-E5 (rp2 positions 2-7) and post-E5 (rp3 positions 2-10) => the residual carrier is NOT fresh-alloc pool
+  rows; E5 only removed the ACCUMULATING second mechanism on top of it. Two mechanisms confirmed:
+  (i) accumulator = recycled fresh rows (E5-fixed), (ii) write-once request-1 residue (open).
+- SURVIVORS (all k1-k8 constraints): S1 NULL ROW (block 0) — request #1's unguarded carry WRITE deposits
+  state into null at some chunk; null is never re-zeroed (never in get_new_blocks => outside E5; reset only
+  rebuilds hashes) => every later cold request's carry READ at that chunk consumes it deterministically. Hit
+  path restores the checkpoint and skips the accumulation => P2 healthy (measured). nocache = none-mode
+  passthrough, no null padding => flat (measured). S2 = same carry but a stale NON-fresh pool id escaping
+  request-2's own alloc set (align start/reshuffle off-by-one). S3 = stale mamba bookkeeping
+  (mamba_state_idx/last_state_block_idx surviving reset) — weak (sequential-finish clears it).
+- REFUTED: FR13 persistent rings (all baked-on-both-paths, decode-only; nocache flat 0.0 kills them);
+  BY_REQ maps (uuid keys); D1's high-confidence null-not-carrier verdict (rested on decode-kernel guards +
+  the false cold-reads-zero premise).
+- NEXT: D-E4CAP (one boot, read-only, default-OFF FR13_APC_PREFILL_CARRY_TRACE): per prefill chunk log
+  {chunk_idx, has_initial_state, non_spec_state_indices ids (flag id==0), as-read initial_state fingerprint
+  per layer} to a side jsonl; run >=3 identical cold requests (reset between); diff request-1-vs-2 per chunk.
+  Verdicts: first-divergence at id 0 => S1 (fix = mask the :1004 write for index==0, mirroring the fused-
+  kernel guard, + optionally zero-null knob); at a non-fresh non-zero id => S2 (fix = correct the carry
+  index); identical fingerprints + no null => recurrent exonerated => hunt non-recurrent (full-attn null row /
+  positional / sampler buffers). Then fix + rp4 P1x10 all-clean gate.
