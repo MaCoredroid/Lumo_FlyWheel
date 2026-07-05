@@ -558,3 +558,23 @@ refold_published=0 snapshot_events=0 — refold does NOT engage (short single-tu
 1024 DECODE boundary => no decode snapshots to redirect; conv-only in disguise, §27 trap). Killed w/
 refutation. Refold value deferred to the REAL agentic rate matrix (long trajectories cross boundaries;
 v3 gate had snapshot_events=336). Seeded probe keeps its cache-conv route/state + same-boot miss/hit signals.
+
+## 34. DECISIVE: two floor-controlled cache route carriers; fix target = ROUTE-DISTRIBUTION parity (not byte-exact)
+
+Seeded probe, 3 arms (payload identity confirmed: turn1_send==turn2_send byte-identical, resend mode):
+- CONTROL (engine determinism): nocache resend (same prompt+seed twice, no hit) = bytes DIFFER 16/16
+  (same-boot nondeterminism exists) BUT route-flip 0/16. nocache_b identical: 0/16 flip. => the route
+  decision is ROCK-STABLE on the lossless reference despite byte nondeterminism. => "same-seed byte-
+  identical streams" is NOT achievable even same-boot; ROUTE is the robust gate.
+- CARRIER 1 (cold-config decode, turn-1): cache-conv 5/16 healthy vs nocache 16/16 AND nocache_b 16/16
+  (floor arm agrees => NOT autotune, systematic cache-config effect). The turn-1 route collapse is real;
+  conv fix did NOT fix it (still 5/16).
+- CARRIER 2 (restore path, turn-2 hit): cache flips route 8/16 miss->hit while nocache flips 0/16
+  (floor-free, same-boot). The EXACT_SEED restore flips the agent route half the time.
+
+TWO SEPARATE cache losslessness violations, both ROUTE-level, both floor-controlled. NO FIX yet.
+FIX TARGET REFRAMED: NOT byte-exact decode (engine isn't byte-reproducible even lossless) but
+ROUTE-DISTRIBUTION PARITY: cache-ON turn-1 must match nocache 16/16 (carrier 1) and cache hit must not
+flip route vs miss (carrier 2). Localization next: pass-2 state capture for carrier 1 (cold decode op);
+carrier 2 = the EXACT_SEED restore path (which state the hit restores differently). Both are behavioral-
+lossless targets, achievable without chasing unattainable byte-exactness.
