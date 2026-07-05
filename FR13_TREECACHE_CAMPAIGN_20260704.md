@@ -739,3 +739,20 @@ NOT the index — it's the BUFFER/ALLOCATOR: align puts the tree GDN state in th
 co-residency); 'none' uses a dedicated contiguous buffer. REAL FIX = give tree spec-decode a DEDICATED GDN
 state buffer (SGLang extra_buffer / per-draft slots) so decode layout matches 'none'. Allocator/stride
 patch, scoping next.
+
+## 43. HONEST RECKONING: node-bank likely ALSO a no-op; §40 layout-localization is a FALSE LEAD; carrier is diffuse/unmeasured
+Chain of evidence forces this: §35 proved cache(align) vs nocache(none) GDN DECODE state is BIT-EXACT
+through step 7 (torch.equal, 48 layers). cache=align uses the block-pool buffer; nocache=none uses a
+dedicated contiguous buffer. So align-buffer and none-buffer produce IDENTICAL GDN state values. Therefore
+NO GDN-state layout change — neither the INDEX (slot-pin, §42 no-op) NOR the BUFFER (dedicated node-bank)
+— can alter the bit-exact values => a node-bank is ALSO predicted a no-op. => §40/§42's "align GDN slot/
+buffer layout" localization is a FALSE LEAD: the GDN state is bit-exact, so it is NOT the carrier.
+WHERE THE CARRIER ACTUALLY IS: everything MEASURED through step 7 is bit-exact (GDN state §35, token-1
+logits §25). The route flips at step ~30, past the step-8 autotune fork. The one path NEVER measured =
+the 16 FULL-ATTENTION layers' KV under align (block storage) vs none (contiguous) — H3 capture NEVER fired
+(instrument broken 2x). So the honest next step is NOT another GDN-layout fix (they keep hitting no-ops)
+but MEASURE THE UNMEASURED: fix the H3/full-attn capture instrument, compare full-attn KV/output cache-vs-
+nocache at turn-1. If it differs => that's the carrier. If it too is bit-exact => the carrier is a genuinely
+DIFFUSE distributional effect past the autotune fork (op-unlocalizable, §35) and the fix options collapse to
+(A) amplification-reduction (keep diffuse drift below the route-flip margin) or (B) accept the give-up rate.
+This is a research-before-deadend gate: measure the full-attn path BEFORE any wall call.
