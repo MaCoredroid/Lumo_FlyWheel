@@ -1157,3 +1157,25 @@ decode boundary):
   binding verdict for task #5/bake. HRS deletion stays CONTINGENT on that gate (if live engagement/resolve
   lags nocache, HRS / EXACT_SEED-decode-half is the ready lever for the epsilon; if live passes, the eager
   epsilon is a documented floor note).
+
+## 56. LIVE SWE GATE: tree+cache (both fixes) RESOLVES astropy-13453 nudge-free — the campaign's missing cell
+## FILLED; tnc reference arm wall-censored (NA, re-running unwalled per user rule)
+
+output/fr13_live_gate/ (git 3d94cea6 serving build; qwen-code offloaded to alienware, SWE_EMPTY_PATCH_RETRIES=0,
+temp 0.6, real astropy__astropy-13453; engagement needles verified live in the serve container: E5 producer+
+consumer + "[FR13_APC_COPY_SRC_FIX] engaged ... stale0=1"):
+- **tcfix (cat8 TREE + EXACT_SEED cache + E5 + COPY_SRC_FIX): rc=0 dur=1194s turns=34 first=agent
+  patch_bytes=551 verdict=RESOLVED.** Round-1 route = agent (the §37 master switch, healthy for the first
+  time under cache: pre-fix 9/9 read_file); 34 engaged turns; real patch; eval resolved; ZERO nudges. This is
+  the FIRST tree+cache resolve in campaign history (pre-fix: 0 resolves across all runs, §37/§41) — the cell
+  the campaign existed to fix. Hit-heavy by construction (every turn 2+ hits the growing prefix) => the §55
+  realization epsilon produced no behavioral damage across ~33 hit-serving turns.
+- tnc reference: NA / WALL-CENSORED. I mistakenly carried AGENT_WALL_S=2400 from tcv_s2_redo (user rule: NO
+  agent wall on gates — total-time caps right-censor the signal; banked to memory). The wall's docker-kill
+  destroyed the buffered trace (traces flush at clean exit — turns=0/first=NONE is a kill artifact, NOT agent
+  behavior: the server processed healthy multi-turn traffic for ~40min, POSTs + KV oscillation observed live)
+  and aborted before patch extraction. tnc's historic behavior on this build lineage: resolved (56t).
+  RE-RUN launching with AGENT_WALL_S unset (timeout_s<=0 => no harness wall, runner-native).
+- Gate reading so far: the cell under test PASSED its half decisively (delegate + engage + patch + resolve,
+  matching the tnc behavior class). The unwalled tnc re-run completes the like-for-like pair for the record;
+  bake (E5+COPY_SRC_FIX default-ON, user directive) proceeds after it lands.
