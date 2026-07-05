@@ -519,3 +519,18 @@ rows}. Reduce: first-divergent-token vs cache-OFF ref, split by turn-1 (cold => 
 carrier, refold-invariant) vs turn-2 (hit => does refold push divergence later / reduce it = refold's
 value). ONE probe answers both the route-drift localization AND the refold-usefulness question at token
 level (cheaper + deterministic than the rate matrix). Byte-identical-stream gate = campaign standard.
+
+## 31. PIVOT (user): real task, not synthetic probe
+
+Localization stays on REAL input (route_probe_payload IS the real astropy-13453 turn-1 request — not
+synthetic); DROP the reconstructed synthetic turn-2. Split:
+- TURN-1 decode-carrier localization: real turn-1 request, seeded temp-0.6, cache-ON-conv vs cache-OFF
+  (CONFIG_ONLY = lossless ref) + a cache-OFF FLOOR-BRACKET 2nd boot (bounds the tokens-11-71 autotune
+  fork so it can't masquerade as signal), per-decode-step GDN STATE capture (state diverges BEFORE the
+  sampled route token flips + beats the ~1-ULP floor; cold ladder showed cross-boot state hits 0.0 when
+  truly identical). First divergent-STATE step/layer/component = the carrier op. WINDOWED two-pass
+  (OOM-safe per §25 incident).
+- REFOLD value + BEHAVIORAL verdict: the REAL agentic multi-turn task (rate matrix), NOT a synthetic
+  2-turn — refold's turn-2+ restore domain tested on the live SWE task where hits genuinely fire.
+Instrument built by workflow wf_8d07a324-3fb (seeded2turn_* + decode_gdn_capture patch, default-OFF
+byte-identical); adopting its turn-1 half + floor bracket, deferring turn-2 to the real rate matrix.
