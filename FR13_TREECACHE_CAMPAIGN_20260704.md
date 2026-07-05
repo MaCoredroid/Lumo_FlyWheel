@@ -1112,3 +1112,23 @@ matched + py_compile; call-site name verified in scope (patched:814/830).
 rp5 GATE (launching): full battery fix-ON+E5-ON. PREDICT P1 x10 ALL agent (tok1 spread ~0 vs request-1),
 fixed point GONE; P2 agent byte-stable; P3 all clean; _FR13_COPY_SRC_FIX_N>0. Then carrier-2 seeded2turn gate,
 native regression arm, live SWE gate -> bake E5+COPY_SRC_FIX default-ON (user directive) -> cleanup -> speed.
+
+## 54. rp5 GATE PASS 24/24: carrier-1 CLOSED at probe level — tree+cache cold route == tree+no-cache;
+## fixed-seed miss-vs-hit flip GONE; ORDER_DEPENDENT=False
+
+rp5 (output/fr13_rp5_copyfix/, FR13_APC_COPY_SRC_FIX=1 default + FR13_APC_ZERO_MAMBA_ON_ALLOC=1, engagement:
+"[FR13_APC_COPY_SRC_FIX] engaged ... stale_len=1 stale0=1" fired at request 2 exactly as pinned + in-container
+patched source verified):
+| phase | result |
+|---|---|
+| P1 seed5 x10 cold | agent x10, ct=264 IDENTICAL, tok1 'Let'@-0.0033 IDENTICAL — spread 0.0 (rp3: 1 agent + 9x read_file fixed point; rp2: 4 routes, spread 1.31) |
+| P2 seed5 x6 hits | agent x6 byte-stable @-0.0037 (was glob x6 pre-fix) — miss-vs-hit ROUTE FLIP GONE at fixed seed |
+| P3 seeds 1-8 cold | agent x8, tok1 identical, healthy ct variation 254-361 (pre-fix: garble/NO_TOOL majority) |
+Reducer verdicts: ORDER_DEPENDENT=False, SEED_EFFECT_EXTRA=False, all spreads 0.0000 — the cat8+cache arm now
+carries the EXACT signature of the cat8+nocache control (agent x all, flat tok1, entropy only in downstream
+lengths). User bar "choose agent instead of read_file" MET at probe level.
+REMAINING GATES before bake (user directive: bake E5+COPY_SRC_FIX default-ON after verification): (1) formal
+carrier-2 seeded2turn re-run, 16 seeds miss-vs-hit, predict 0/16 flips (was 8/16 §34); (2) native+cache
+regression arm (predict unchanged 15-16/16 healthy); (3) LIVE SWE-Verified nudge-free gate (task #5) —
+tree+cache must engage/resolve like tree+no-cache on astropy-13453 class tasks. Then: bake, DELETE dead
+patches (user list), speed matrix.
