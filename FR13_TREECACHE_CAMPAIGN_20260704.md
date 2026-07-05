@@ -706,3 +706,21 @@ DECISIVE EXPERIMENT: route probe Arm C = cat8+cache + slot-pin patch, N=16 paire
 delegation (~no-cache 16/16) => layout IS the carrier, SHIP (zero TTFT); Arm C ~4/16 => not layout. Cheapest
 pre-GPU gate: in-process same-boot torch.equal GDN decode steps 0-15 Arm C vs no-cache (bit-exact past step 8
 CONFIRMS; step-8 fork inconclusive per §29 autotune floor). Full: research/fr13_workflows/FR13_KV_GDN_DECOUPLE_DESIGN.md
+
+## 41. Rate matrix PAUSED (pre-fix baseline); reprefill/refold/recompute to be SHELVED after slot-pin
+
+PAUSED (user 2026-07-05): the rate matrix measures the UNFIXED give-up rate — we re-run on the FIXED
+(slot-pin §40) build anyway, and native+cache-healthy is already known (§22, 16/16). PARTIAL PRE-FIX
+BASELINE (real task astropy-13453): tnc(no-cache) 1 RESOLVED (56t,agent) | tcv(conv) 2/2 give-up (6t,9t) |
+trf(refold-inert) 1 give-up(4t) + 2 engage-no-resolve(39t/45t, ~380B failed-eval). Tree+cache: 0 resolves,
+~3/5 non-give-up, all draw-variance (refold inert). Confirms §37 (cache flips to read_file route, never
+resolves) as the pre-fix state; the slot-pin Arm C is now the decisive verdict, not this matrix.
+
+SHELVE (user): remove the confirmed-DEAD machinery (git preserves): REFOLD (FR13_APC_BLOCK_REFOLD,
+FR13_APC_REFOLD_TO_SNAPSHOT, v1-v4 fold/consume-hop/per-boundary-history — never consumed, §36) + RECOMPUTE
+(FR13_SCAN_ALIGN=recompute, FR13_RECOMPUTE_NODE_PARALLEL — retired for give-up, §10) + the §-audit dead
+flags (FR13_APC_FIXED_BUFFER no-consumer, FR13_APC_REQUIRE_SHADOW never-passable gate). KEEP: conv
+(CONV_LEAF_COMPLETE, working), EXACT_SEED/align (kept under §40 slot-pin), FR13_DECODE_GDN_CAPTURE (the
+slot-pin in-process gate instrument), the new slot-pin flag. SEQUENCE: do the removal AFTER the slot-pin
+fix applies (single patcher-edit-stream at a time — the slot-pin worktree is mid-flight off main; avoid
+same-19k-file diff conflict).
