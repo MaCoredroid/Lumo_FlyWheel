@@ -652,3 +652,14 @@ recurrent + continues recurrent (consistent). So T2 can be BOTH fast AND route-f
 block-pool approach. GATE for T2: store-recurrent+forward-recurrent == full-cold within route-distribution
 (re-run the route probe under T2). SEQUENCE: T1 proves the route fix -> T2 makes it deployable.
 Prerequisite = the decouple feasibility (workflow wemm3xfin: can vLLM cache KV while GDN recomputes).
+
+## 39. DECOUPLE ABANDONS EXACT_SEED (not on top of it); EXACT_SEED was never the culprit
+§15: es0 (EXACT_SEED OFF) STILL gave up => the route flip is vLLM's BASE prefix-caching putting GDN state
+in the block-pool, NOT EXACT_SEED. EXACT_SEED/conv/refold were add-ons patching the block-pool GDN RESTORE
+(a path decouple removes). Under decouple: KEEP full-attn KV cache (standard vLLM, TTFT win, exact);
+ABANDON block-pool GDN state (-> recompute T1 / recurrent-node T2); EXACT_SEED + conv-fix + refold all
+become MOOT (no block-pool restore to fix). Net: shed the whole EXACT_SEED->conv->refold stack, replace
+with SGLang-validated recompute. CRUX (workflow wemm3xfin): the model INTERLEAVES attn+GDN layers, so a
+decoupled forward must use CACHED KV for attn layers but RECOMPUTE-from-tokens for GDN layers IN ONE PASS
+-- is per-layer-type cache behavior expressible in vLLM's hybrid allocator, or does it force both into the
+same block-pool? Config/patch vs deep-patcher hinges on that.
