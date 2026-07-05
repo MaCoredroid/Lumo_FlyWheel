@@ -672,3 +672,37 @@ was DONE and the GPU sat idle ~15min. FIX: killed the waiters, replaced with ONE
 (rate_finish.sh: tnc_s2/s3, nat_s1/2/3, tcv2redo) — single script, sequential run() calls, no inter-script
 pgrep waits. LESSON: never gate a queued job on `pgrep -f <sibling-script-name>` (self/sibling-match);
 use a container/marker-file check or a single sequential driver.
+
+## 40. DECOUPLE DEAD but PREMISE CORRECTED + carrier LOCALIZED to a SLOT seam (workflow wemm3xfin, source-verified)
+
+DECOUPLE = STRUCTURALLY IMPOSSIBLE (live vLLM /tmp/lumo_tree_patch_probe/vllm): (1) ONE num_computed_tokens
+per request drives the whole 64-layer stack (kv_cache_manager.py:176-216) — can't feed attn the hit-suffix
+while GDN gets the full prefix in one forward; (2) config coupling forces mamba_cache_mode none->align when
+prefix-caching on (config.py:436-480; Qwen3-Next forbids 'all' qwen3_next.py:717); (3) coordinator MIN
+collapses the combined hit across attn+mamba groups (kv_cache_coordinator.py:453-544) so uncached GDN kills
+the attn TTFT too; (4) even a shadow-recompute: GDN state depends on lower full-attn OUTPUTS (shared
+residual, interleaved layers qwen3_next.py:512-535) -> must recompute O(L^2) attn -> no TTFT; (5) align
+RESTORES GDN by cheap gather/scatter COPY, not recompute — "uncache to recompute" is strictly worse. §38/§39
+T1/T2 decouple/recompute = RETRACTED.
+
+PREMISE CORRECTED (my §37-39 over-generalized): GDN block-pool caching is BENIGN IN ISOLATION — native+cache
+is 16/16 healthy (§22/§23) with GDN cached in align. Only TREE(cat8) x cache collapses (4/16). => the
+carrier is NOT "GDN caching" but the TREE x ALIGN interaction.
+
+CARRIER LOCALIZED (source, not numeric — this is why §35 op-localization failed: it's a SLOT/WIRING address,
+not a kernel op): align gathers the GDN checkpoint rows at (seq_len-1)//block_size — a ROTATING block-pool
+row (utils.py:879-891); the tree drafter binds its node bank into spec_state_indices_tensor[:, :num_spec+1]
+(gdn_attn.py:266-268); 'none'/no-cache keeps a FIXED leading slot. So on turn-1 COLD decode the tree's
+co-resident GDN node-bank slots COLLIDE with align's rotating gather position — a layout mismatch, zero hit
+involved. (Consistent: §29 collapse persists EAGER 3/16 = real not graph-baked; §25/§35 bit-exact through
+step 7 then step-8+ distributional shift = the slot layout diverges as decode proceeds.)
+
+THE FIX (zero TTFT cost, feasible): PIN the tree's GDN DECODE to a fixed contiguous 'none'-style slot for
+spec/tree requests (override the align branch of mamba_get_block_table_tensor, utils.py:873-891, to a stable
+node-bank slot instead of re-gathering at (seq_len-1)//block_size), leaving align's checkpoint gather (KV +
+GDN restore) UNTOUCHED. Removes exactly the turn-1 layout difference; keeps both caches; no recompute.
+
+DECISIVE EXPERIMENT: route probe Arm C = cat8+cache + slot-pin patch, N=16 paired seeds. Arm C >=~14/16
+delegation (~no-cache 16/16) => layout IS the carrier, SHIP (zero TTFT); Arm C ~4/16 => not layout. Cheapest
+pre-GPU gate: in-process same-boot torch.equal GDN decode steps 0-15 Arm C vs no-cache (bit-exact past step 8
+CONFIRMS; step-8 fork inconclusive per §29 autotune floor). Full: research/fr13_workflows/FR13_KV_GDN_DECOUPLE_DESIGN.md
