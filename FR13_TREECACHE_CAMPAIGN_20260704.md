@@ -635,3 +635,20 @@ later trajectory variance, decoupled from round 1. => carrier-1 (round-1 route f
 it both starves resolution (monolithic route never resolves) and causes ~1/3 give-ups. Fixing carrier-1
 (restore the agent/delegation route under cache) plausibly fixes BOTH the give-up AND the 0-resolve.
 Highest-leverage target; refold/conv/speed all downstream of it.
+
+## 38. DECOUPLE fix = TWO TIERS; incremental (SGLang-style) is the deployment target and is realization-consistent by construction
+
+The fix for carrier-1 (§37 master switch): cache full-attn KV, put GDN on a recompute path (not block-pool)
+so decode realization matches no-cache (§35 bit-exact) -> route returns to 'agent'. TWO tiers:
+- T1 FULL-COLD (safe, slow): recompute the WHOLE GDN prefix contiguously each turn (= the exact no-cache
+  path). Provably no route flip (§35). PROVE-THE-CONCEPT tier: does the round-1 route return to agent?
+- T2 INCREMENTAL (SGLang-style, the DEPLOYMENT target, user 2026-07-05): store the GDN RECURRENT state at
+  turn/radix-node boundaries AS THE CANONICAL-KERNEL REALIZATION, and on the next turn recompute FORWARD
+  over only the NEW tokens THROUGH THE CANONICAL (recurrent) KERNEL. Cost O(new tokens) not O(prefix).
+KEY INSIGHT (resolves the safe-vs-fast tension): T2 is realization-CONSISTENT BY CONSTRUCTION — store
+recurrent + forward recurrent = same kernel throughout, NO chunked-vs-recurrent mismatch. Our block-pool
+failure was storing a CHUNKED realization then restoring into RECURRENT decode (mismatch); SGLang/T2 stores
+recurrent + continues recurrent (consistent). So T2 can be BOTH fast AND route-flip-free — unlike the
+block-pool approach. GATE for T2: store-recurrent+forward-recurrent == full-cold within route-distribution
+(re-run the route probe under T2). SEQUENCE: T1 proves the route fix -> T2 makes it deployable.
+Prerequisite = the decouple feasibility (workflow wemm3xfin: can vLLM cache KV while GDN recomputes).
