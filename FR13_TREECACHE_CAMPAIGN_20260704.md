@@ -909,3 +909,57 @@ positions drift => ORDER CONFIRMED (seed exonerated) => localize under the sync 
 GDN/conv state on identical input, first divergent tensor = the stale-state reader). P1 flat => order refuted
 => P3 spread would implicate a genuine seed->forward leak. Control flat. Probe assets committed under
 scripts/probes/ (harness+payload were previously scratchpad-only).
+
+## 48. CARRIER LOCALIZED (rp2 + seam-hunt convergence): recycled mamba block-pool rows are NEVER ZEROED —
+## request N's cold prefill/decode reads request N-1's GDN/conv residue; vLLM zeroes only FULL-ATTN blocks
+
+rp2 (scripts/probes/fr13_rp2_order_probe.sh, output/fr13_rp2_order/, 24+10 samples, engagement asserts all
+green, per-sample hit-bracket verified):
+- P1 (seed=5 FIXED x10, reset before each, hitD=0 all): request #1 CLEAN (agent, 'Let'@-0.0006); #2-#7
+  byte-identical read_file fixed point ('The'@-0.0111, ct=71); #8-#10 drift on (NO_TOOL/-0.0045, -0.3527,
+  tool_search/-1.3121). Spread 1.31 nats, 4 distinct routes AT ONE SEED => ORDER_DEPENDENT=True. SEED IS
+  EXONERATED — the campaign's entire per-seed framing was position/history in disguise.
+- P3 (seeds 1-8 on the by-then contaminated pool): mostly garble/NO_TOOL incl. 3-9-token salads; seeds 2 and 7
+  = FULL clean recoveries (agent@-0.0006) right after 3-9-token predecessors — outcome tracks the residue left
+  by the PREDECESSOR (short predecessor => little residue), not the seed. (The reducer's naive
+  SEED_EFFECT_EXTRA=True flag is an artifact of comparing spreads across different pool histories; the s2/s7
+  cleans at previously-"bad" seeds directly refute a seed term.)
+- P2 (seed=5 x6 NO-reset => full-prefix HIT, hitD=23552 each): stable glob route, tok1 'Let'@-0.038..-0.180.
+  The hit RESTORES the state written by the (contaminated) P1_10 prefill => hits FREEZE the writer's
+  contamination: consistent-but-wrong. Carrier-2 (§34 miss-vs-hit flips) is this same residue seen through the
+  restore path — predicted to collapse under the same fix.
+- CONTROL cat8_nocache: spread 0.0000 — tok1 EXACTLY 'Let'@-0.0035 on all 10 (6x fixed-seed + 4-seed sweep),
+  all agent. CONTROL_CLEAN=True.
+
+MECHANISM (seam-hunt wf_5fda85e5-3c4: two independent audits converged, then adversarial cross-exam corrected
+the read-site attribution; all file:line source-verified):
+- vLLM DOES zero newly-allocated blocks — but ONLY full-attention groups: new_block_ids is recorded by
+  FullAttentionSpec managers (single_type_kv_cache_manager.py:213-214,241-242) and consumed by
+  scheduler.py:913-917 -> gpu_model_runner.py:1087-1088 (_zero_block_ids); needs_kv_cache_zeroing=
+  has_mamba_layers (kv_cache_interface.py:608) yet MambaManager.allocate_new_blocks (:934-1010) NEVER records
+  its blocks. get_new_blocks pops freed blocks with NO memset (block_pool.py:322-352); reset_prefix_cache
+  rebuilds the hash map but never touches contents (block_pool.py:443-476). Boot zeroes everything ONCE
+  (gpu_model_runner.py:6498) => request #1 clean, always.
+- S1 (owns the TOKEN-1 drift): align chunked-prefill chunk-k>0 running-state carry reads
+  ssm_state[non_spec_state_indices] with has_initial_state=True (gdn_linear_attn.py:982-1006 zeroes only
+  ~has_initial_state rows) through the align rotating gather (utils.py:874-892) + the num_spec>0-only block
+  reshuffle (single_type_kv_cache_manager.py:966-1001) that native never executes => a recycled residual row
+  can feed the prefill accumulation => token-1 logits shift. (Exact chunk/row = E4 if ever needed.)
+- S2 (owns the tokens-2+ garble): tree spec node-bank/conv prior-window residual reads at num_accepted>1
+  (patcher:3069-3076; gdn_linear_attn.py:864-877,957-977) — the long-suspected conv-prior-window carrier
+  (project_fr13_conv_priorwindow_root), now explained as pool residue. Spec-decode-gated => cannot touch
+  token-1 (cross-exam correction of both audits).
+- 2x2 CLOSED: nocache 'none' = fixed request-local rows fully rewritten (utils.py:874 passthrough) => clean;
+  native+cache: num_spec=0 => no spec rows, empty reshuffle, col-0 freshly written => clean; full-attn KV IS
+  zeroed on alloc => §44's full-attn bit-exactness was a REAL exoneration. §25/§35/§43/§44 all measured
+  REQUEST #1 => vacuous for this carrier (why the campaign kept measuring bit-exact).
+- REFUTED with verified grounds: _fr13_es_ckpt (cleared on reset + hit-only + P2-healthy-while-P1-drifts),
+  all *_BY_REQ maps (random_uuid ids, no collision, freed per request), slot-pin (default-OFF no-op). The old
+  "reset_prefix_cache was the artifact" memory is EXPLAINED: reset doesn't corrupt — it frees-not-zeroes,
+  exposing residue to the next cold request.
+
+FIX IN FLIGHT (E5, workflow wf_39bf3af0-1a8): flag-gated FR13_APC_ZERO_MAMBA_ON_ALLOC — route MambaManager-
+allocated blocks through the SAME zeroing path full-attn already uses (+ engagement needle; default-OFF
+byte-identical; adversarial verify incl. hit-path-must-not-zero footgun). Then rp3 = rp2 battery with flag ON:
+predict P1 flat agent@~-0.0006 x10, garble gone, P2 hit arm inherits a CLEAN writer. E2 (es0 order arm) held
+in reserve — E5's outcome supersedes it if flat.
