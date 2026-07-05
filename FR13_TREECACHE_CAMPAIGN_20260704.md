@@ -1051,3 +1051,33 @@ producer boot needle + record counters (batches of 9 = num_spec+1 spec blocks, +
   kernel guard, + optionally zero-null knob); at a non-fresh non-zero id => S2 (fix = correct the carry
   index); identical fingerprints + no null => recurrent exonerated => hunt non-recurrent (full-attn null row /
   positional / sampler buffers). Then fix + rp4 P1x10 all-clean gate.
+
+## 52. E4CAP TRACE VERDICT: the residual carrier = the CHUNK-BOUNDARY STATE COPY silently carrying ZEROS for
+## every request after the first — request 1's carry works; request 2+ prefill runs stateless per chunk
+
+E4CAP boot (output/fr13_e4cap_trace/, tracer+E5 ON, P1 x10; engagement: boot needles both procs, first-record
+print, 20000 records/48 layers): layer-14 (and by construction all layers) per-chunk as-read/as-written carry:
+- REQUEST 1: healthy. chunk k writes state (fp ~581-1046) to its gathered block; chunk k+1 READS THE SAME VALUE
+  at the NEXT block id => the inter-chunk copy (mamba_utils preprocess_mamba: prev_state_idx->curr_state_idx,
+  collect_mamba_copy_meta + do_mamba_copy_block) is moving the carry forward correctly (e.g. write 818.771@id19
+  -> read 818.771@id20).
+- REQUEST 2..N: chunk-0 compute LOSSLESS (writes the identical 818.771 — byte-identical input, zero init), but
+  EVERY continuation chunk reads 0.0 with has_initial_state=True: the copy contributes ZEROS at every boundary
+  (writes stay healthy: 917.78@144, ... => the chain computes chunk-local state from a zero carry each time).
+  25 chunks/request, all zero-carry. P1_2..P1_10 traces identical => the deterministic fixed point.
+- REDUCE-TRAP CAUGHT (class 12): fr13_e4cap_reduce's naive verdict "S1_NULL_ROW" compared the WARMUP segment
+  (which legitimately self-uses null-table [0]) vs request 1. Real pair (req1 vs req2) shows the zero-carry.
+- POOL RECYCLING EXONERATED for this phenotype: block ids ascend virgin all boot (19->143->267->391..., stride
+  124/request; the pool never recycled in 10 requests) yet request 2+ still flips => the residual carrier was
+  NEVER pool-content-keyed. UNIFICATION: pre-E5, a zero... a MISSING/WRONG-SOURCE copy read whatever the
+  destination/source rows held = recycled RESIDUE (varying => §48's accumulating corruption); post-E5/virgin
+  rows it reads ZEROS (deterministic fixed point). ONE mechanism spans both eras; E5 remains correct hygiene
+  (fresh rows must be zeroed) and is what made the defect deterministic enough to trace.
+- WHY req-1-vs-rest: the copy is driven by preprocess_mamba (mamba_utils.py:150-220, mamba_state_idx keyed by
+  req uuid — clean) but the PATCHER rewrites the copy internals: accept-token-bias override
+  (_fr10_tree_accept_token_bias, patcher:13543 — returns linear bias 0 for clean prefills, no crash observed
+  => not the carrier) AND the replaced collect_mamba_copy_meta with the EXACT_SEED/SNAP_FIX src_ptr REDIRECT
+  (GAP-2 comment patcher:13671-97: swap src on published-checkpoint pos match, else recurrent-leaf fallback).
+  PRIME SUSPECT: request-2+ prefill boundary copies take a redirect/fallback whose src resolves to an
+  E5-zeroed spec column (or otherwise-zero row), while request 1 (no published/first-seen map state) copies
+  natively. Focused source workflow launched to pin the exact branch + minimal fix.
