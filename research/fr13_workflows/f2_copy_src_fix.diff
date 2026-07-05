@@ -1,0 +1,67 @@
+diff --git a/scripts/fr10_phase4_patch_vllm_tree_gdn.py b/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+index 3488f4ab..59c3c04e 100644
+--- a/scripts/fr10_phase4_patch_vllm_tree_gdn.py
++++ b/scripts/fr10_phase4_patch_vllm_tree_gdn.py
+@@ -13528,9 +13528,48 @@ def _fr10_tree_current_accepted_path(batch_index: int) -> list[int] | None:
+     return None
+ 
+ 
+-def _fr10_tree_record_request_accept(req_id: str, batch_index: int) -> None:
++def _fr10_tree_record_request_accept(
++    req_id: str, batch_index: int, num_draft_tokens: int | None = None
++) -> None:
+     if not _fr10_tree_mamba_mode_active():
+         return
++    # FR13_APC_COPY_SRC_FIX (default ON; kill-switch FR13_APC_COPY_SRC_FIX=0
++    # restores the old behavior for A/B). Root fix for the campaign sec.52 E4CAP
++    # zero-carry: _LUMO_FA_LAST_ACCEPTED_TREE_LENS/_NODE_PATHS are batch-position-
++    # keyed module globals published ONLY at a tree spec-decode COMMIT and NEVER
++    # cleared on request finish/admit. On a cold chunked-PREFILL step this request
++    # ran no spec decode (num_draft_tokens == 0), so those globals still hold a
++    # PREVIOUS request's accepted tree. Stamping that stale tree under this
++    # req_id makes the next chunk-boundary running-state carry translate linear
++    # offset 0 into a tree-node offset >= 1 (path elem = node_id + 1), shifting
++    # the copy SOURCE (get_temporal_copy_spec: block_ids[prev+bias]) to a
++    # never-written, E5-zeroed future block => the carry propagates 0.0
++    # (req 2+ read 0.0 while req 1, whose globals were empty at boot, carried
++    # 818.771). Only stamp a tree that was actually committed for THIS request
++    # THIS step. num_draft_tokens is threaded from postprocess_mamba
++    # (len(scheduled_spec_decode_tokens[req_id])); the decode-side translation
++    # (num_draft_tokens > 0 => fresh commit) is unchanged.
++    if (
++        os.environ.get("FR13_APC_COPY_SRC_FIX", "1") == "1"
++        and num_draft_tokens is not None
++        and int(num_draft_tokens) <= 0
++    ):
++        _fr13_stale = _fr10_tree_current_accepted_path(batch_index)
++        if _fr13_stale:
++            _fr13_n = int(globals().get("_FR13_COPY_SRC_FIX_N", 0)) + 1
++            globals()["_FR13_COPY_SRC_FIX_N"] = _fr13_n
++            if _fr13_n == 1:
++                import sys as _fr13_fx_sys
++                print(
++                    "[FR13_APC_COPY_SRC_FIX] engaged: suppressed stale accepted-"
++                    "tree stamp on cold prefill carry (req=" + str(req_id)
++                    + " bi=" + str(batch_index)
++                    + " stale_len=" + str(len(_fr13_stale))
++                    + " stale0=" + str(_fr13_stale[0]) + ")",
++                    file=_fr13_fx_sys.stderr, flush=True,
++                )
++        _FR10_TREE_ACCEPTED_PATH_BY_REQ_ID.pop(str(req_id), None)
++        return
+     path = _fr10_tree_current_accepted_path(batch_index)
+     if path is None:
+         return
+@@ -13651,7 +13690,11 @@ def collect_mamba_copy_meta(
+         num_computed_tokens = req_state.num_computed_tokens
+ """
+     postprocess_inject = """        req_state = requests[req_id]
+-        _fr10_tree_record_request_accept(req_id, i)
++        _fr10_tree_record_request_accept(
++            req_id,
++            i,
++            len(scheduled_spec_decode_tokens_dict.get(req_id, [])),
++        )
+         num_computed_tokens = req_state.num_computed_tokens
+ """
+     if postprocess_anchor not in text:

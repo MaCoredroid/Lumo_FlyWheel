@@ -1081,3 +1081,34 @@ print, 20000 records/48 layers): layer-14 (and by construction all layers) per-c
   PRIME SUSPECT: request-2+ prefill boundary copies take a redirect/fallback whose src resolves to an
   E5-zeroed spec column (or otherwise-zero row), while request 1 (no published/first-seen map state) copies
   natively. Focused source workflow launched to pin the exact branch + minimal fix.
+
+## 53. RESIDUAL CARRIER PINNED + FIX SHIPPED (wf_63d39450-55e): stale batch-position accepted-tree globals
+## poison the prefill carry's copy SOURCE; freshness-gated fix FR13_APC_COPY_SRC_FIX (default ON)
+
+PIN (F1, all links source-verified; F2 independently re-confirmed A/B/C):
+- The chunk-boundary carry copy is STOCK; its accept_token_bias is POISONED for request 2+. Chain:
+  _LUMO_FA_LAST_ACCEPTED_TREE_LENS/_NODE_PATHS[i] are BATCH-POSITION-keyed module globals written ONLY at a
+  tree spec-decode COMMIT (patcher:10325-33/11213-19) and NEVER cleared on finish/admit. On request 2+'s
+  chunk-0 POSTPROCESS, _fr10_tree_record_request_accept (patcher:13531-40) stamps that STALE tree (elements =
+  node_id+1 >= 1, patcher:10234-36) under the NEW req_id. The next chunk-boundary PREPROCESS translates linear
+  bias 0 -> tree_bias=path[0]>=1 (patcher:13543-13626; no crash: a path EXISTS) and get_temporal_copy_spec
+  (mamba_utils.py:421) computes src = block_ids[prev_state_idx + bias] = a FUTURE, never-written, E5-zeroed
+  block => whole-row ZERO carry, every boundary. Request 1 dodges (globals empty at boot => bias 0 => stock
+  src = the just-written running state). Self-sustaining across requests. Class 1 (the exact hazard the
+  tree-VERIFY path already guards via FR13_TREE_REQKEY; the mamba-copy path was left on raw globals). Pre-E5
+  the shifted src read recycled RESIDUE (=§48's accumulator); post-E5 zeros (deterministic) — one defect,
+  both eras. E5 stays (correct hygiene; NOT the fix).
+- num_accepted_tokens_cpu admit-reset EXONERATED stock (gpu_input_batch add_request resets to 1 => linear 0).
+FIX (F2, SHIP; adversarial verify PASS on all axes incl. the decode-boundary bar): freshness-gate the stamp —
+thread num_draft_tokens=len(scheduled_spec_decode_tokens[req_id]) into _fr10_tree_record_request_accept; when
+FR13_APC_COPY_SRC_FIX=1 (runtime default ON) AND num_draft_tokens<=0 (no spec decode this step = cold prefill
+= no fresh tree) SUPPRESS the stale stamp (pop) instead of stamping. Decode steps (ndt>0 = fresh commit) are
+byte-identical — translation preserved exactly where needed ("needed IFF the carried step accepted a
+multi-token tree IFF ndt>0"). Kill-switch =0 restores old behavior for A/B. Needle: one-shot
+"[FR13_APC_COPY_SRC_FIX] engaged..." + counter _FR13_COPY_SRC_FIX_N (engagement gate >0 on any multi-request
+cold boot). Hit/restore path untouched (P2 stays healthy); request-1 unchanged (ON==OFF proven); native
+short-circuits; no tensor ops; eager-only region. Self-test: all 6 mamba_utils patch fns regen + anchors
+matched + py_compile; call-site name verified in scope (patched:814/830).
+rp5 GATE (launching): full battery fix-ON+E5-ON. PREDICT P1 x10 ALL agent (tok1 spread ~0 vs request-1),
+fixed point GONE; P2 agent byte-stable; P3 all clean; _FR13_COPY_SRC_FIX_N>0. Then carrier-2 seeded2turn gate,
+native regression arm, live SWE gate -> bake E5+COPY_SRC_FIX default-ON (user directive) -> cleanup -> speed.
