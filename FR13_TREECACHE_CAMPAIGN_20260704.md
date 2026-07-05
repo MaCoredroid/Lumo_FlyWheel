@@ -622,3 +622,16 @@ tcv_s2 hung 37min (codex container on alienware Up but producing nothing; vLLM f
 trace=0/0-tool-calls). Killed rc=137, recorded NA (excluded from rate — infra, not give-up). WATCHDOG
 HEURISTIC for the loop: a run with codex_trace.jsonl size 0 (or unchanged) for >15min = HUNG -> kill +
 clean alienware codex + re-run. Replacement queued with AGENT_WALL_S=2400 to bound future hangs.
+
+## 37. CARRIER-1 IS THE MASTER SWITCH: cache flips round-1 route agent->read_file (9/9 real runs), read_file never resolves
+
+Round-1 tool across ALL tree+cache real runs (give-up AND non-give-up): read_file 9/9. The non-give-up ones
+(fixv1 17t, fixv3 32t, trf_s2 39t, trf_s3 45t) ALSO took read_file. The ONLY run on the healthy 'agent'
+(delegation) route = tnc_s1 (NO-CACHE), which RESOLVED. => "non-give-up = not-read_file" REFUTED.
+REAL PATTERN: no-cache -> agent -> RESOLVES; tree+cache -> read_file -> 0 RESOLVES (0/9), give-up ~1/3.
+The cache UNIVERSALLY flips the round-1 route agent->read_file in the real harness (9/9, stronger than the
+seeded probe's ~1/3 healthy — real-harness turn-1 prompt more biased). Give-up-vs-engage WITHIN read_file is
+later trajectory variance, decoupled from round 1. => carrier-1 (round-1 route flip) is the MASTER SWITCH:
+it both starves resolution (monolithic route never resolves) and causes ~1/3 give-ups. Fixing carrier-1
+(restore the agent/delegation route under cache) plausibly fixes BOTH the give-up AND the 0-resolve.
+Highest-leverage target; refold/conv/speed all downstream of it.
