@@ -1229,3 +1229,31 @@ working testbed env: reproduce + pytest before finishing"); (4) REJECTED: baking
 (non-durable across 500+ instances, drifts from eval). Validation ladder: env smoke (import astropy + qwen
 --version in-image) -> one-instance probe (trace shows import astropy rc=0 + pytest collecting) -> patch
 parity (git diff inside /testbed) -> then matrix. Task #9.
+
+## 59. Offload stream-stall diagnosis (wf_1b8212ee-707): WAN ruled out; wedge = GB10 emit/serialize (or proxy
+## read) with generation CONTINUING; fix stack designed (instrument-first, watchdog, model-invisible heartbeat);
+## auto-retry REJECTED as nudge-unsafe; possible unification with the garble family via a parser wedge
+
+- PATH: qwen-code (alienware docker, --network=host) -> inference_proxy :8023 (SSE relay) -> tailscale ->
+  GB10 vLLM :9950. The 120s detector = qwen-code's BUILT-IN stream-idle default (unconfigured; codex's 600s
+  applies only to /v1/responses). Proxy has NO heartbeat + 1200s upstream timeout => client 120s always trips
+  first.
+- FORENSICS: WAN RULED OUT (offload_link_state.log: link up every 10s across BOTH incidents). Engine
+  generation CONTINUED through the silence (Running:1, 11-14 tok/s, ~1080 tokens produced for the stalled req
+  that never reached the client). Wedge = engine emit/serialize vs proxy iter_content — UNRESOLVABLE from
+  artifacts because the proxy capture is gated to /v1/responses (chat path = ZERO rows; class-9 vacuous
+  instrument). Stall correlates with the LARGEST request of the run (167KB, pos=35840 restore), not with time.
+- UNIFICATION HYPOTHESIS (flagged for the new instrument): generated-but-undelivered is ALSO the signature of
+  a GARBLED/runaway generation wedging the qwen3xml tool-parser (unterminated tool-call buffers => no deltas
+  emitted) — i.e. the s3 stall may be carrier-3's garble surfacing through the parser on the deepest-context
+  request. The chat-path capture (below) records upstream bytes => next occurrence is attributable.
+- FIX STACK (designed; implement with the workspace fix AFTER the native n=3 series; all env-gated):
+  (1) INSTRUMENT-FIRST: chat-path per-chunk timestamped capture + terminal-reason logging in
+  _write_chunked_stream (closes the blind spot). (2) RUN-LEVEL STALL WATCHDOG keyed on TRACE GROWTH (not
+  wallclock, not SSE): no growth for LUMO_SWE_STALL_KILL_S => kill + classify infra_stall_suspect. Replaces
+  walls; covers the pre-first-byte mode (tcv_s2's 37-min hang). (3) EMPTY-DELTA SSE HEARTBEAT, chat-path only:
+  ': ping' comments are PROVEN stripped by the qwen SDK; an empty chat.completion.chunk resets the idle timer
+  and is dropped pre-model (model-invisible; 0 injected on clean runs => byte-identical). (4) Belt: raise
+  QWEN_STREAM_IDLE_TIMEOUT_MS to 240s (documented knob). (5) NO AUTO-RETRY (nudge analysis): engine-generating
+  -while-client-silent is the SAME signature for a transport wedge AND a model runaway (the known cache-ON
+  class) — auto-replay would selectively erase model failures = a nudge. Stalls => NA + classification only.
