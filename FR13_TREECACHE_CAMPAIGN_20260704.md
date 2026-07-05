@@ -464,3 +464,24 @@ TWO-STAGE REFOLD GATE — both BEFORE the speed gate (task #4), per user:
 ORDERING: eager route probe (running, route-drift localization) -> rate matrix (Stage A liveness +
 Stage B usefulness, conv-only vs refold x seeds) -> speed gate on the winning deployed config.
 Refold is a candidate lever, NOT a shipped fix, until Stage A+B pass.
+
+## 28. REFRAME (user): the route drift IS a cache LOSSLESSNESS VIOLATION on the tree DECODE path
+
+Refold EXONERATED: route probe cache arm has FR13_APC_BLOCK_REFOLD=0 REFOLD_TO_SNAPSHOT=0 (only
+EXACT_SEED=1). The drift exists with refold fully off => not refold.
+
+User's losslessness logic (correct): probe resets prefix cache before EVERY sample => cold prefill,
+ZERO hits => cache-ON must == cache-OFF on turn-1 IF the cache is lossless. It doesn't (cache collapses
+delegation 16/16 -> ~4/16; eager cache confirming ~same => real numerics not graph). Eliminations:
+prefill bit-exact (§25), no hit (reset), refold off => the ONLY residue is DECODE (tokens 2..~30).
+CARRIER = enabling the cache CONFIG (--enable-prefix-caching + block-mamba layout) is NOT decode-lossless
+on the TREE path: the co-resident node-bank GDN rows are read/written through block-pool indexing
+(cache-ON) vs contiguous (cache-OFF), diverging fp-accumulation per step until the route token flips at
+temp 0.6. Tree-only because native=single spine (one row, layout-invariant); tree=co-resident rows
+(layout-sensitive) — the campaign's core co-residency, now at DECODE not restore.
+
+FIX TARGET (crisp): make tree+cache-ON decode BIT-IDENTICAL to tree+cache-OFF on identical input.
+NEXT INSTRUMENT (task #10 iter-3): DECODE-STEP ladder = extend §25's cold ladder INTO decode —
+teacher-force the identical token sequence through cache-ON vs cache-OFF tree boots (eager), capture
+per-DECODE-STEP GDN state (SSM+conv, all rows) + logits, report first divergent decode step + op.
+Then classify WIRING (block-index/layout) vs KERNEL (accumulation order) and fix to 0.0.
