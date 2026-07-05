@@ -790,3 +790,33 @@ from nocache-state (on identical input, floor=0) = the CLEAN carrier onset §35 
 step 7). Sharp onset => localized carrier (draft-pattern-triggered layout divergence, actionable). Gradual
 ramp / no divergence until a late route-token fork => DIFFUSE confirmed => §43 (A) amplification-reduction or
 (B) accept-rate — escalate the fork with an airtight case. This is the research-before-deadend gate.
+
+## 45. §43 CLOSED — DIFFUSE confirmed, op-localization impossible by construction, ALL fix levers exhausted (WALL)
+Two final results close the localization arc:
+- FLIP-SEED CAPTURE UNWORKABLE: re-booted SEED=2 (prior route_probe = read_file/FLIP) => todo_write (NON-flip),
+  completion_tokens 202 vs seed-1's 182 (genuinely different trajectory). The flip is STOCHASTIC cross-boot
+  (confirms §34: cache route unstable, nocache rock-stable), NOT reproducible per-seed. => there is NO clean
+  flip trajectory to capture => cache-vs-nocache op-localization is impossible BY CONSTRUCTION (the two arms
+  are different boots; the autotune floor forks them before the route token; the flip doesn't pin to a seed).
+- DETERMINISM LEVER EXHAUSTED (the last untested (A) amplification-reduction candidate):
+  (a) TARGETED M-invariance (LUMO_FB_KERNEL_ROWS=1, authorized #42960 pad-block) is ALREADY ACTIVE in
+      §29/route_probe/famz — and the route STILL flips 3/16. So the projection-GEMM M-variance is NOT the cause.
+  (b) FULL VLLM_BATCH_INVARIANT is COUNTERPRODUCTIVE on GB10 (launcher:142-143): takes the REDUCED override
+      branch, perturbs fp8/scan, cat9+BI=34. Not a clean determinism test and known-bad. (FR13_BI_TREE_ATTN
+      Method-A requires full BI => coupled to the bad path.)
+
+NET (all measured, all bit-exact; all levers dead): logits bit-exact (§25), GDN state bit-exact (§35),
+full-attn KV bit-exact (§44/famz). Fix levers: slot-pin no-op (§42), node-bank predicted no-op (§43),
+decouple structurally impossible (§40), targeted M-invariance active-but-ineffective, full BI counterproductive.
+=> the §37 MASTER-SWITCH route flip (tree+cache -> read_file, 0/9 resolves, ~1/3 give-up) has NO localizable
+numerical carrier and NO remaining clean fix lever. It is a DIFFUSE stochastic distributional effect of the
+tree x cache-config interaction, riding the cross-boot autotune floor that cache is sensitive to and nocache
+is robust to (WHY cache is boundary-sensitive is the residual mystery, but it is not op-localizable).
+
+WALL (escalated to user): the charter (tree(cat8)+cache resolving like no-cache) is not reachable via
+localization/op-fix/determinism. tree+no-cache resolves (§22, tnc 56t); native+cache is 16/16 healthy
+(§22/§23). ONLY the tree x cache COMBINATION collapses. Decision fork for the user: (A) quantify via the
+rate matrix (§26) then accept/ship tree+cache-conv-only if the rate is acceptable (§37 indicates 0 resolves,
+likely not); (B) ship a proven single-benefit config (tree+no-cache decode-speed OR native-MTP+cache TTFT),
+abandoning the combination; (C) a fundamentally different attack on the tree x cache interaction (unscoped).
+(Acceptance-pattern angle REFUTED: bit-exact logits => identical tree accept/reject decisions.)
