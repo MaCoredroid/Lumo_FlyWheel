@@ -756,3 +756,37 @@ nocache at turn-1. If it differs => that's the carrier. If it too is bit-exact =
 DIFFUSE distributional effect past the autotune fork (op-unlocalizable, §35) and the fix options collapse to
 (A) amplification-reduction (keep diffuse drift below the route-flip margin) or (B) accept the give-up rate.
 This is a research-before-deadend gate: measure the full-attn path BEFORE any wall call.
+
+## 44. §43 full-attn measured — bit-exact at seed=1 but seed=1 is a NON-FLIP coincidence seed; decisive flip-seed capture (seed=2) launching
+Full-attn capture instrument (H3) FIXED and PROVEN after 3 failure modes: (1) graph-vs-eager — captures
+live inside the @support_torch_compile model forward, so they only run in EAGER (never CUDA-graph replay);
+requires --enforce-eager (route_probe/famz already do). (2) FR12 layer-pin + prefill-throttle (workflow
+wekb306lm fix: per-(prefix,step) windowed, all 16 self_attn layers, ENGAGED breadcrumb). (3) run-script
+path bug: famz_run LOG_DIR="$PWD/$cdir" double-prefixed an already-ABSOLUTE $cdir -> container wrote /logs
+to an off-tree mount, FAIL-LOUD-5 found 0 (FALSE vacuous). Fixed -> 680 non-trivial .pt/arm, all 16 layers,
+steps 2-66, widths {1,9}. Served model confirmed /models/qwen3.6-27b-fp8 (Qwen3_5 VL GDN-hybrid, 64 layers,
+full-attn @[3,7,..,63], 48 GDN) — the "80B" label was stale.
+
+RESULT (3 arms, --enforce-eager FB-pinned, SEED=1, cold turn-1): full-attn q/k/attn_out/o_proj cache(align)
+vs nocache(none) = BYTE-IDENTICAL (torch.equal, max_abs=0.0, 12/12 output triples, all 16 layers, steps
+2-66). FLOOR (nocacheA vs nocacheB) ALSO byte-identical => the engine is byte-REPRODUCIBLE cross-boot in
+this eager FB-pinned regime (floor=0), UNLIKE §32's stream-fork. Route todo_write all 3 arms.
+
+RED-TEAM (why this is NOT §43's answer): SEED=1 is one of cache's 3/16 NON-FLIP coincidence seeds (per-seed
+table below). At seed=1 cache AND nocache both route todo_write => identical trajectory => byte-identical
+state TRIVIALLY (same tokens in => same state out). It CANNOT localize where cache!=nocache because at
+seed=1 they don't differ. Per §40 the tree co-resident node-bank divergence is DRAFT-PATTERN- (hence seed-)
+dependent: seed=1's drafts don't trigger it; the ~13/16 flip seeds do. GDN corroborator crashed (None.detach,
+optional) — but §35 already has GDN bit-exact. Determinism-as-fix REFUTED: route_probe.sh uses the SAME
+FB-pin flags as famz, and §29's flip (3/16 vs 12/12) already survives them.
+
+PER-SEED ROUTE TABLE (eager route_probe, FB-pinned): nocache = todo_write 16/16 (rock-stable healthy).
+cache = todo_write@{1,12,16} (non-flip), read_file@{2,3,4,5,6,7,10,11,13,14} (FLIP), NO_TOOL@{8,9,15}.
+
+DECISIVE NEXT (launching): capture full-attn at a FLIP seed (SEED=2: cache=read_file, nocache=todo_write),
+wide window (FA_LIMIT=200, MAX_TOKENS=512). §35 established the preamble (think) is byte-identical across
+arms with the fork AT the route token, so through the identical preamble the FIRST step cache-state diverges
+from nocache-state (on identical input, floor=0) = the CLEAN carrier onset §35 couldn't reach (it stopped at
+step 7). Sharp onset => localized carrier (draft-pattern-triggered layout divergence, actionable). Gradual
+ramp / no divergence until a late route-token fork => DIFFUSE confirmed => §43 (A) amplification-reduction or
+(B) accept-rate — escalate the fork with an airtight case. This is the research-before-deadend gate.
