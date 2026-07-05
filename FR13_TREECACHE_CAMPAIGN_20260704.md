@@ -534,3 +534,20 @@ synthetic); DROP the reconstructed synthetic turn-2. Split:
   2-turn — refold's turn-2+ restore domain tested on the live SWE task where hits genuinely fire.
 Instrument built by workflow wf_8d07a324-3fb (seeded2turn_* + decode_gdn_capture patch, default-OFF
 byte-identical); adopting its turn-1 half + floor bracket, deferring turn-2 to the real rate matrix.
+
+## 32. FLOOR MEASURED: cross-boot byte-divergence confounds turn-1 localization; two clean signals survive
+
+Floor bracket (cat8_nocache bootA vs bootB, SAME seed, lossless-vs-itself, turn-1): 0/16 seeds
+byte-identical — streams fork at char ~25 (MID-PREAMBLE, before the route token ~char 130). Confirms
+feedback_no_cross_boot_byte_gate (autotune forks decode at ~step 6). => BYTE first-divergence localization
+of the turn-1 route drift is DEAD (floor forks before the route decision). Two signals survive:
+1. ROUTE DISTRIBUTION over seeds (§22/§29): cache 3-4/16 vs nocache 16/16 — robust to the floor (huge
+   effect vs per-seed noise). Behavioral truth, but not the OP.
+2. FLOOR-REFERENCED EARLY-STEP STATE (pass-2): prefill is bit-exact cross-boot (§25, step-0 identical all
+   boots); decode divergence accumulates from step 1. Capture GDN state at steps 0-6 (pre-fork) for
+   cache-ON + nocache-A + nocache-B; the carrier is the earliest step where cache-vs-nocache state
+   divergence EXCEEDS the nocache-A-vs-B floor. Set pass-2 STEP_LO=0 STEP_HI=6.
+3. SAME-BOOT MISS-vs-HIT (cache arm turn-1 vs turn-2, ZERO cross-boot confound): lossless restore =>
+   turn-2(hit) byte-identical to turn-1(miss); a fork = pure RESTORE-losslessness failure (refold's
+   domain). This is the clean refold gate, floor-free.
+Pass-1 (streams+hits+obs) completing; pass-2 = floor-referenced state at steps 0-6.
