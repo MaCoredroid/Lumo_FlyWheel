@@ -578,3 +578,25 @@ ROUTE-DISTRIBUTION PARITY: cache-ON turn-1 must match nocache 16/16 (carrier 1) 
 flip route vs miss (carrier 2). Localization next: pass-2 state capture for carrier 1 (cold decode op);
 carrier 2 = the EXACT_SEED restore path (which state the hit restores differently). Both are behavioral-
 lossless targets, achievable without chasing unattainable byte-exactness.
+
+## 35. Carrier-1 op-localization CONFOUNDED — cache==nocache BIT-EXACT through step 7; the effect is distributional, past the autotune fork
+
+Pass-2 logit capture (decode steps 0-7, cache-conv vs nocache vs nocacheB, per-step spine logits):
+- Steps 0-7: cache-ON logits BIT-IDENTICAL to nocache (torch.equal=True, max_abs=0.0) AND to nocacheB.
+  Distinct steps confirmed (argmax varies 79566/79320/3074/...). The cache config does NOT perturb early
+  decode — bit-exact (extends §25 prefill-exact into decode).
+- The byte fork (§32, char~25 = token ~8) is at step 8, JUST past the window; there ALL arms
+  (nocache A/B AND cache) fork together (autotune floor). The route DECISION is ~step 30, downstream of
+  the step-8 fork.
+- CONSEQUENCE: carrier-1's OP is NOT deterministically localizable. The carrier acts at the route token
+  (~step 30), but the autotune floor forks the streams at step 8 FIRST => no clean same-input cross-arm
+  window at the route token. Through step 7 (clean window) there is NOTHING to localize (bit-exact).
+- So carrier-1 (route dist 5/16 vs 16/16, systematic per §34) is a DISTRIBUTIONAL effect emerging past
+  the fork, NOT a single early-decode op. The FR13_DECODE_GDN_CAPTURE state dump also never fired
+  (env-threaded but insertion point off the executed path; H3-class) — but the logits already answer it.
+- STATE-CAPTURE FIX PATH IS A DEAD END for carrier-1. Two viable paths:
+  (a) TEACHER-FORCE the model's OWN preamble (the byte-identical natural continuation, NOT off-distribution
+      forcing) to reach the route token with identical input across arms => clean cache-vs-nocache logit
+      compare AT the route token. This is the only deterministic localization left.
+  (b) Treat carrier-1 as a behavioral RATE effect (charter = no give-up) and measure the deployment
+      give-up RATE on the real agentic task (rate matrix) with conv-fix + R1 already in. If acceptable, ship.
