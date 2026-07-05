@@ -820,3 +820,32 @@ rate matrix (§26) then accept/ship tree+cache-conv-only if the rate is acceptab
 likely not); (B) ship a proven single-benefit config (tree+no-cache decode-speed OR native-MTP+cache TTFT),
 abandoning the combination; (C) a fundamentally different attack on the tree x cache interaction (unscoped).
 (Acceptance-pattern angle REFUTED: bit-exact logits => identical tree accept/reject decisions.)
+
+## 46. WALL REJECTED (user 2026-07-05): new attack — the §45 conclusion has four cracks; carrier localization resumes
+User directive: fix tree+cache to BEHAVE LIKE tree+no-cache and localize the carrier; cleanup/refold-decision/
+speed-matrix only AFTER behavior parity. §45's "stochastic/diffuse/unmeasurable" is rejected as a wall. Re-read
+of the evidence finds four cracks, none tested:
+1. NEAR-TIE DEDUCTION (untested): §22's own data says the think preamble is byte-identical across all 16 seeds
+   WITHIN each arm, fork exactly at the route token. Identical within-boot preamble => identical route-token
+   LOGITS across seeds within that boot => the per-seed route split inside the cache boot (§44 table: todo@3,
+   read_file@10, NO_TOOL@3 seeds) can ONLY be the seeded sampler drawing at a NEAR-TIE top1-top2 margin, while
+   nocache 16/16 stability = decisive margin. That is a SYSTEMATIC, within-boot-measurable margin shift — not a
+   stochastic effect. §45's "flip is stochastic cross-boot" is exactly the phenotype a near-tie predicts (autotune
+   wobble moves a near-tie across the sampling threshold boot-to-boot); it is NOT evidence of diffuseness.
+2. UNEXPLOITED INSTRUMENT: per-token API logprobs/top_logprobs at the route token — zero server-side
+   perturbation, on-distribution (no teacher-forcing, §30-compliant), within-boot (immune to the cross-boot
+   autotune floor §32), never used in this campaign. §12 promoted a "margin probe" as decisive months of
+   sections ago; it was never run.
+3. FLOOR CONTRADICTION UNRECONCILED: §32 (nocache cross-boot forks at char ~25) vs §44 (nocacheA-vs-B
+   byte-identical, floor=0) — same claimed regime. Whatever differs may yield a byte-reproducible regime =
+   direct byte-localization at the route token. §45's "impossible by construction" rests on the §32 floor.
+4. RNG-OFFSET ALTERNATIVE UN-AUDITED (playbook class 2): if the tree accept/commit/sample path consumes RNG
+   as a function of accept counts (or draws from a global generator), routes can flip with ZERO logit shift.
+   §45 dismissed acceptance-pattern via "bit-exact logits" measured only on non-flip trajectories.
+IN FLIGHT: CPU workflow wf_20eeac71-6c4 (mine probe streams: verify preamble-identity deduction + between-arm
+lcp; reconcile floors + per-arm flag audit incl. HRS; source-audit RNG path + logprobs safety + cache cold-path
+deltas; adversarial verify; margin-probe design). NEXT GPU: route-token margin probe (cat8_cache vs cat8_nocache,
+N=16 paired seeds + repeats, logprobs top-20) — decision table: systematic-shift => within-boot config bisect by
+margin; RNG-offset => patcher generator fix; boot-variance => multi-boot margin distribution. Then carrier-2
+(§34 miss-vs-hit 8/16) same-boot margin gate with HRS/ES arms. Pending tasks (shelve refold §41, speed matrix
+§20/task#4) gated behind behavior parity per user order.
