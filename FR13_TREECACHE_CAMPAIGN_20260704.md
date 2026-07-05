@@ -551,3 +551,10 @@ of the turn-1 route drift is DEAD (floor forks before the route decision). Two s
    turn-2(hit) byte-identical to turn-1(miss); a fork = pure RESTORE-losslessness failure (refold's
    domain). This is the clean refold gate, floor-free.
 Pass-1 (streams+hits+obs) completing; pass-2 = floor-referenced state at steps 0-6.
+
+## 33. Seeded-probe refold arm VACUOUS (killed); refold value -> real rate matrix only
+cat8_cache_refold (eager seeded, flags ON, turn2_hit=5/5, es_seed_applied=481): redirect_used=0
+refold_published=0 snapshot_events=0 — refold does NOT engage (short single-turn completions cross no
+1024 DECODE boundary => no decode snapshots to redirect; conv-only in disguise, §27 trap). Killed w/
+refutation. Refold value deferred to the REAL agentic rate matrix (long trajectories cross boundaries;
+v3 gate had snapshot_events=336). Seeded probe keeps its cache-conv route/state + same-boot miss/hit signals.
