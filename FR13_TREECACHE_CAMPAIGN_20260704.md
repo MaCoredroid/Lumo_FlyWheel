@@ -1132,3 +1132,28 @@ carrier-2 seeded2turn re-run, 16 seeds miss-vs-hit, predict 0/16 flips (was 8/16
 regression arm (predict unchanged 15-16/16 healthy); (3) LIVE SWE-Verified nudge-free gate (task #5) —
 tree+cache must engage/resolve like tree+no-cache on astropy-13453 class tasks. Then: bake, DELETE dead
 patches (user list), speed matrix.
+
+## 55. Carrier-2 formal gate (eager seeded2turn, fixes ON): corruption GONE, hit-side DETERMINISTIC; residual =
+## near-tie route split miss-vs-hit (7/16, one-directional) — deployment regime already clean; live gate decides
+
+output/fr13_s2t_gate/ (arm B cat8_cache only, N=16, resend mode, EAGER 0.78; engagement: both fix needles,
+turn2 hits 16/16, turn1 hits 0, es_seed_applied=1440, snapshot_events=0 — completions ~130t never cross the
+decode boundary):
+- turn-2 (hit): delegate agent 16/16, stable ~131c contents — the RESTORED trajectory is deterministic-healthy.
+  (§34 pre-fix: hit flips scattered 8/16 on corrupted turn-1s.)
+- turn-1 (cold): SPLITS agent 9 / todo_write 7 — a genuine near-tie at temp 0.6 in this eager boot (both
+  routes healthy; eager's historic healthy route was todo_write, graph's is agent).
+- Miss-vs-hit route flips 7/16, ALL todo->agent (no agent-turn1 ever flips). Byte-level: 0/16 identical,
+  first-div median token 6 — SAME signature as §34's nocache resend control (bytes differ 16/16, same-boot
+  async floor) => byte-forks are the KNOWN floor, NOT restore evidence. The honest deficit vs the nocache
+  control = route-flip rate 7/16 vs 0/16, structure = near-tie cold margin vs decisive hit margin.
+- CLASSIFICATION: no corruption anywhere (transformed from §34); residual = REALIZATION-EPSILON-scale margin
+  difference between the live chunk-carry realization (cold) and the restore realization (hit) surfacing at a
+  near-tie — the §16 epsilon family, NOT our (fixed) carriers. DEPLOYMENT REGIME (graph): rp5 cold agent x24
+  spread 0.0 == fresh same-build nocache graph control (agent x16), miss==hit stable — parity HOLDS where it
+  ships. The stale eager-nocache reference (todo x12, old build) makes eager-side attribution unresolvable
+  without another control boot — not worth GPU ahead of the binding gate.
+- DECISION (per feedback_live_swe_verified_only): the LIVE SWE-Verified gate in the deployment regime is the
+  binding verdict for task #5/bake. HRS deletion stays CONTINGENT on that gate (if live engagement/resolve
+  lags nocache, HRS / EXACT_SEED-decode-half is the ready lever for the epsilon; if live passes, the eager
+  epsilon is a documented floor note).
