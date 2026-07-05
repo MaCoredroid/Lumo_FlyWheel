@@ -1,0 +1,67 @@
+--- /tmp/claude-1000/-home-mark-shared/8245ff29-3bc7-469e-950a-7b8a1ab41d2a/scratchpad/e5_selftest/pristine_gpu_model_runner.py	2026-07-05 16:24:50.954060543 +0000
++++ /tmp/claude-1000/-home-mark-shared/8245ff29-3bc7-469e-950a-7b8a1ab41d2a/scratchpad/e5_selftest/on/gpu_model_runner.py	2026-07-05 16:25:36.790609004 +0000
+@@ -1038,6 +1038,64 @@
+         """Zero the KV cache memory for the given block IDs."""
+         if hasattr(self, "_kv_block_zeroer"):
+             self._kv_block_zeroer.zero_block_ids(block_ids)
++        self._fr13_zero_mamba_block_ids(block_ids)  # FR13_APC_ZERO_MAMBA_ON_ALLOC
++
++    def _fr13_zero_mamba_block_ids(self, block_ids) -> None:
++        # FR13_APC_ZERO_MAMBA_ON_ALLOC: KVBlockZeroer (worker/utils.py) only zeros
++        # FullAttentionSpec tensors; mamba conv_state/ssm_state pool rows
++        # are never zeroed on (re)alloc, so recycled rows carry request
++        # N-1 residual into the cold-prefill chunk-carry read
++        # (gdn_linear_attn has_initial_state=True) and tree node-bank
++        # reads. Zero those rows, indexed by the fresh mamba block ids
++        # MambaManager recorded into new_block_ids.
++        if not block_ids:
++            return
++        st = getattr(self, "_fr13zm_state_tensors", None)
++        if st is None:
++            import os as _fr13zm_os
++            if _fr13zm_os.environ.get("FR13_APC_ZERO_MAMBA_ON_ALLOC", "1") == "0":
++                self._fr13zm_state_tensors = []
++                self._fr13zm_calls = 0
++                self._fr13zm_blocks = 0
++                return
++            st = []
++            _sfc = self.compilation_config.static_forward_context
++            for _grp in self._kv_cache_spec_attn_group_iterator():
++                if not isinstance(_grp.kv_cache_spec, MambaSpec):
++                    continue
++                for _ln in _grp.layer_names:
++                    _layer = _sfc.get(_ln)
++                    _kv = getattr(_layer, "kv_cache", None)
++                    if isinstance(_kv, (list, tuple)):
++                        for _t in _kv:
++                            if isinstance(_t, torch.Tensor):
++                                st.append(_t)
++            self._fr13zm_state_tensors = st
++            self._fr13zm_calls = 0
++            self._fr13zm_blocks = 0
++            print(
++                "FR13_APC_ZERO_MAMBA boot needle: gpu_model_runner "
++                + "registered " + str(len(st))
++                + " mamba state tensors for on-alloc zeroing (flag ON)",
++                flush=True,
++            )
++        if not st:
++            return
++        _idx = torch.as_tensor(
++            block_ids, dtype=torch.long, device=st[0].device
++        )
++        for _t in st:
++            _t[_idx] = 0
++        self._fr13zm_calls += 1
++        self._fr13zm_blocks += len(block_ids)
++        if self._fr13zm_calls % 100 == 1:
++            print(
++                "FR13_APC_ZERO_MAMBA zero engaged: calls="
++                + str(self._fr13zm_calls)
++                + " cumulative_block_rows=" + str(self._fr13zm_blocks)
++                + " last_batch=" + str(len(block_ids)),
++                flush=True,
++            )
+ 
+     # Note: used for model runner override.
+     def _init_device_properties(self) -> None:

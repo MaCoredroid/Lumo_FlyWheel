@@ -1,0 +1,63 @@
+--- /tmp/claude-1000/-home-mark-shared/8245ff29-3bc7-469e-950a-7b8a1ab41d2a/scratchpad/e5_selftest/pristine_single_type.py	2026-07-05 16:24:50.952813932 +0000
++++ /tmp/claude-1000/-home-mark-shared/8245ff29-3bc7-469e-950a-7b8a1ab41d2a/scratchpad/e5_selftest/on/single_type_kv_cache_manager.py	2026-07-05 16:25:36.789441881 +0000
+@@ -25,6 +25,37 @@
+ )
+ from vllm.v1.request import Request
+ 
++# FR13_APC_ZERO_MAMBA_ON_ALLOC producer-side recorder. See patcher
++# _patch_single_type_manager_zero_mamba for the full carrier writeup.
++import os as _fr13zm_os
++_FR13_ZM_ON = _fr13zm_os.environ.get("FR13_APC_ZERO_MAMBA_ON_ALLOC", "1") != "0"
++_fr13zm_events = 0
++_fr13zm_blocks = 0
++
++
++def _fr13zm_record(mgr, ids):
++    if not ids:
++        return
++    mgr.new_block_ids.extend(ids)
++    global _fr13zm_events, _fr13zm_blocks
++    _fr13zm_events += 1
++    _fr13zm_blocks += len(ids)
++    if _fr13zm_events % 100 == 1:
++        print(
++            "FR13_APC_ZERO_MAMBA record engaged: events=" + str(_fr13zm_events)
++            + " cumulative_block_ids=" + str(_fr13zm_blocks)
++            + " last_batch=" + str(len(ids)),
++            flush=True,
++        )
++
++
++if _FR13_ZM_ON:
++    print(
++        "FR13_APC_ZERO_MAMBA boot needle: single_type_kv_cache_manager "
++        "mamba fresh-alloc recording ACTIVE (flag ON at patch time)",
++        flush=True,
++    )
++
+ 
+ class SingleTypeKVCacheManager(ABC):
+     """
+@@ -940,9 +971,12 @@
+             # speculative decoding (MTP/EAGLE) with linear attention.
+             if self.num_speculative_blocks > 0:
+                 num_tokens += self.block_size * self.num_speculative_blocks
+-            return super().allocate_new_blocks(
++            _fr13zm_new = super().allocate_new_blocks(
+                 request_id, num_tokens, num_tokens_main_model
+             )
++            if _FR13_ZM_ON:  # FR13_APC_ZERO_MAMBA_ON_ALLOC
++                _fr13zm_record(self, [b.block_id for b in _fr13zm_new])
++            return _fr13zm_new
+         else:
+             # We don't allocate blocks for lookahead tokens in align mode, because if
+             # x * block_size tokens are scheduled, num_tokens is
+@@ -1007,6 +1041,8 @@
+                 new_blocks = self.block_pool.get_new_blocks(num_new_blocks)
+                 req_blocks.extend(new_blocks)
+                 self._allocated_block_reqs.add(request_id)
++                if _FR13_ZM_ON:  # FR13_APC_ZERO_MAMBA_ON_ALLOC
++                    _fr13zm_record(self, [b.block_id for b in new_blocks])
+                 return req_blocks[prev_block_len:]
+ 
+     def free(self, request_id: str) -> None:

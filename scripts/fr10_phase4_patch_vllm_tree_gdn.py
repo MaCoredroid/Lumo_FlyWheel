@@ -19860,6 +19860,227 @@ def _patch_worker_mamba_exact_seed() -> bool:
     return True
 
 
+def _patch_single_type_manager_zero_mamba() -> bool:
+    """FR13_APC_ZERO_MAMBA_ON_ALLOC (default OFF; PATCH-TIME gated -> when the
+    env flag is not "1" at patch time this returns False and the installed
+    source stays byte-identical to the pre-edit patcher's output).
+
+    Carrier (FR13_TREECACHE_CAMPAIGN_20260704 sec.47/48, wf_5fda85e5-3c4):
+    vLLM zeros freshly-allocated blocks ONLY for full-attention groups. The base
+    SingleTypeKVCacheManager records new_block_ids solely when the spec is
+    (TQ)FullAttentionSpec (allocate_new_blocks / allocate_new_computed_blocks);
+    MambaManager NEVER records its blocks, and vLLM's KVBlockZeroer
+    (worker/utils.py init_meta) explicitly SKIPS mamba layers ("Only
+    AttentionSpec layers are processed; Mamba layers are skipped"). block_pool
+    get_new_blocks pops freed rows with no memset and reset_prefix_cache never
+    zeros contents => recycled GDN conv/ssm state-pool rows carry request N-1
+    residual into request N's cold prefill (align chunk-carry read
+    has_initial_state=True, gdn_linear_attn) and into the tree spec node-bank
+    reads => the sec.47 request-order contamination. Request #1 is clean only
+    because the model runner zeros everything once at boot.
+
+    Producer-side fix: under the flag, record the block ids MambaManager freshly
+    POPS FROM THE POOL -- both the non-align super() path and the align custom
+    path, and NEVER the null/reused blocks -- into the manager's new_block_ids so
+    they ride the existing take_new_block_ids -> new_block_ids_to_zero channel
+    (KVCacheManager.take_new_block_ids already iterates every single_type
+    manager; the drain fires each step because needs_kv_cache_zeroing ==
+    has_mamba_layers). The CONSUMER side is gpu_model_runner.
+    _fr13_zero_mamba_block_ids, which zeros the conv_state/ssm_state ROWS for
+    those ids: the generic KVBlockZeroer alone targets the FULL-ATTENTION tensors
+    (wrong shape/strides for the mamba conv/ssm pools), so a mamba-specific
+    zeroer is required. Because there is ONE shared block pool, any id in the
+    drained list is owned by exactly one group, so zeroing that id's row in the
+    mamba tensors (free for a full-attn id, owned for a mamba id) is always
+    safe. Boot needle + throttled counter prove engagement (class 9)."""
+    if os.environ.get("FR13_APC_ZERO_MAMBA_ON_ALLOC", "0") != "1":
+        return False
+    text = SINGLE_TYPE_MANAGER_PATH.read_text()
+    sentinel = "# FR13_APC_ZERO_MAMBA_ON_ALLOC"
+    if sentinel in text:
+        return False
+
+    mod_anchor = "from vllm.v1.request import Request\n"
+    if text.count(mod_anchor) != 1:
+        raise RuntimeError(
+            "zero_mamba: single_type module import anchor not unique/found"
+        )
+    mod_inject = mod_anchor + (
+        "\n"
+        "# FR13_APC_ZERO_MAMBA_ON_ALLOC producer-side recorder. See patcher\n"
+        "# _patch_single_type_manager_zero_mamba for the full carrier writeup.\n"
+        "import os as _fr13zm_os\n"
+        "_FR13_ZM_ON = _fr13zm_os.environ.get("
+        "\"FR13_APC_ZERO_MAMBA_ON_ALLOC\", \"1\") != \"0\"\n"
+        "_fr13zm_events = 0\n"
+        "_fr13zm_blocks = 0\n"
+        "\n"
+        "\n"
+        "def _fr13zm_record(mgr, ids):\n"
+        "    if not ids:\n"
+        "        return\n"
+        "    mgr.new_block_ids.extend(ids)\n"
+        "    global _fr13zm_events, _fr13zm_blocks\n"
+        "    _fr13zm_events += 1\n"
+        "    _fr13zm_blocks += len(ids)\n"
+        "    if _fr13zm_events % 100 == 1:\n"
+        "        print(\n"
+        "            \"FR13_APC_ZERO_MAMBA record engaged: events=\""
+        " + str(_fr13zm_events)\n"
+        "            + \" cumulative_block_ids=\" + str(_fr13zm_blocks)\n"
+        "            + \" last_batch=\" + str(len(ids)),\n"
+        "            flush=True,\n"
+        "        )\n"
+        "\n"
+        "\n"
+        "if _FR13_ZM_ON:\n"
+        "    print(\n"
+        "        \"FR13_APC_ZERO_MAMBA boot needle: single_type_kv_cache_manager \"\n"
+        "        \"mamba fresh-alloc recording ACTIVE (flag ON at patch time)\",\n"
+        "        flush=True,\n"
+        "    )\n"
+    )
+    text = text.replace(mod_anchor, mod_inject, 1)
+
+    nonalign_anchor = (
+        "            return super().allocate_new_blocks(\n"
+        "                request_id, num_tokens, num_tokens_main_model\n"
+        "            )\n"
+    )
+    if text.count(nonalign_anchor) != 1:
+        raise RuntimeError(
+            "zero_mamba: MambaManager non-align allocate anchor not unique/found"
+        )
+    nonalign_inject = (
+        "            _fr13zm_new = super().allocate_new_blocks(\n"
+        "                request_id, num_tokens, num_tokens_main_model\n"
+        "            )\n"
+        "            if _FR13_ZM_ON:  " + sentinel + "\n"
+        "                _fr13zm_record(self, [b.block_id for b in _fr13zm_new])\n"
+        "            return _fr13zm_new\n"
+    )
+    text = text.replace(nonalign_anchor, nonalign_inject, 1)
+
+    align_anchor = (
+        "                new_blocks = self.block_pool.get_new_blocks(num_new_blocks)\n"
+        "                req_blocks.extend(new_blocks)\n"
+        "                self._allocated_block_reqs.add(request_id)\n"
+        "                return req_blocks[prev_block_len:]\n"
+    )
+    if text.count(align_anchor) != 1:
+        raise RuntimeError(
+            "zero_mamba: MambaManager align allocate anchor not unique/found"
+        )
+    align_inject = (
+        "                new_blocks = self.block_pool.get_new_blocks(num_new_blocks)\n"
+        "                req_blocks.extend(new_blocks)\n"
+        "                self._allocated_block_reqs.add(request_id)\n"
+        "                if _FR13_ZM_ON:  " + sentinel + "\n"
+        "                    _fr13zm_record(self, [b.block_id for b in new_blocks])\n"
+        "                return req_blocks[prev_block_len:]\n"
+    )
+    text = text.replace(align_anchor, align_inject, 1)
+
+    SINGLE_TYPE_MANAGER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_zero_mamba() -> bool:
+    """FR13_APC_ZERO_MAMBA_ON_ALLOC consumer side (PATCH-TIME gated -> no
+    injection / byte-identical source when the flag is not "1" at patch time).
+
+    Adds the mamba-specific zeroing that vLLM's KVBlockZeroer (worker/utils.py)
+    does NOT do. _zero_block_ids is invoked from _update_states BEFORE the
+    forward (execute_model -> _update_states -> _prepare_inputs -> model()), so
+    the zero lands ahead of the prefill chunk-carry / tree node-bank read. We
+    zero conv_state/ssm_state ROW block_id for every id MambaManager recorded
+    into new_block_ids (dim-0 of each mamba state tensor is indexed by block id;
+    see _reshape_kv_cache_tensors target_shape=(num_blocks, *shape) and
+    gdn_linear_attn ssm_state[non_spec_state_indices_tensor]). Reads the layer
+    kv_cache exactly like KVBlockZeroer.init_meta does
+    (static_forward_context[layer].kv_cache), filtering MambaSpec groups."""
+    if os.environ.get("FR13_APC_ZERO_MAMBA_ON_ALLOC", "0") != "1":
+        return False
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_APC_ZERO_MAMBA_ON_ALLOC"
+    if sentinel in text:
+        return False
+    anchor = (
+        "    def _zero_block_ids(self, block_ids: list[int]) -> None:\n"
+        "        \"\"\"Zero the KV cache memory for the given block IDs.\"\"\"\n"
+        "        if hasattr(self, \"_kv_block_zeroer\"):\n"
+        "            self._kv_block_zeroer.zero_block_ids(block_ids)\n"
+    )
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            "zero_mamba: gpu_model_runner _zero_block_ids anchor not unique/found"
+        )
+    inject = anchor + (
+        "        self._fr13_zero_mamba_block_ids(block_ids)  " + sentinel + "\n"
+        "\n"
+        "    def _fr13_zero_mamba_block_ids(self, block_ids) -> None:\n"
+        "        " + sentinel + ": KVBlockZeroer (worker/utils.py) only zeros\n"
+        "        # FullAttentionSpec tensors; mamba conv_state/ssm_state pool rows\n"
+        "        # are never zeroed on (re)alloc, so recycled rows carry request\n"
+        "        # N-1 residual into the cold-prefill chunk-carry read\n"
+        "        # (gdn_linear_attn has_initial_state=True) and tree node-bank\n"
+        "        # reads. Zero those rows, indexed by the fresh mamba block ids\n"
+        "        # MambaManager recorded into new_block_ids.\n"
+        "        if not block_ids:\n"
+        "            return\n"
+        "        st = getattr(self, \"_fr13zm_state_tensors\", None)\n"
+        "        if st is None:\n"
+        "            import os as _fr13zm_os\n"
+        "            if _fr13zm_os.environ.get("
+        "\"FR13_APC_ZERO_MAMBA_ON_ALLOC\", \"1\") == \"0\":\n"
+        "                self._fr13zm_state_tensors = []\n"
+        "                self._fr13zm_calls = 0\n"
+        "                self._fr13zm_blocks = 0\n"
+        "                return\n"
+        "            st = []\n"
+        "            _sfc = self.compilation_config.static_forward_context\n"
+        "            for _grp in self._kv_cache_spec_attn_group_iterator():\n"
+        "                if not isinstance(_grp.kv_cache_spec, MambaSpec):\n"
+        "                    continue\n"
+        "                for _ln in _grp.layer_names:\n"
+        "                    _layer = _sfc.get(_ln)\n"
+        "                    _kv = getattr(_layer, \"kv_cache\", None)\n"
+        "                    if isinstance(_kv, (list, tuple)):\n"
+        "                        for _t in _kv:\n"
+        "                            if isinstance(_t, torch.Tensor):\n"
+        "                                st.append(_t)\n"
+        "            self._fr13zm_state_tensors = st\n"
+        "            self._fr13zm_calls = 0\n"
+        "            self._fr13zm_blocks = 0\n"
+        "            print(\n"
+        "                \"FR13_APC_ZERO_MAMBA boot needle: gpu_model_runner \"\n"
+        "                + \"registered \" + str(len(st))\n"
+        "                + \" mamba state tensors for on-alloc zeroing (flag ON)\",\n"
+        "                flush=True,\n"
+        "            )\n"
+        "        if not st:\n"
+        "            return\n"
+        "        _idx = torch.as_tensor(\n"
+        "            block_ids, dtype=torch.long, device=st[0].device\n"
+        "        )\n"
+        "        for _t in st:\n"
+        "            _t[_idx] = 0\n"
+        "        self._fr13zm_calls += 1\n"
+        "        self._fr13zm_blocks += len(block_ids)\n"
+        "        if self._fr13zm_calls % 100 == 1:\n"
+        "            print(\n"
+        "                \"FR13_APC_ZERO_MAMBA zero engaged: calls=\"\n"
+        "                + str(self._fr13zm_calls)\n"
+        "                + \" cumulative_block_rows=\" + str(self._fr13zm_blocks)\n"
+        "                + \" last_batch=\" + str(len(block_ids)),\n"
+        "                flush=True,\n"
+        "            )\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def main() -> int:
     _fr13_write_subop_mab_sidecar()
     _fr13_write_replay_durable_ab_sidecar()
@@ -19913,6 +20134,13 @@ def main() -> int:
         (BLOCK_POOL_PATH, _patch_block_pool_exact_seed()),
         (KV_CACHE_MANAGER_PATH, _patch_kv_cache_manager_exact_seed()),
         (MAMBA_UTILS_PATH, _patch_worker_mamba_exact_seed()),
+        # FR13_APC_ZERO_MAMBA_ON_ALLOC (default OFF / PATCH-TIME gated ->
+        # byte-identical source when the env flag is not "1" at patch time).
+        # Zeros recycled GDN conv/ssm state-pool rows on (re)allocation so
+        # request N-1 residual can't leak into request N's cold prefill /
+        # tree node-bank reads (campaign sec.47/48 request-order carrier).
+        (SINGLE_TYPE_MANAGER_PATH, _patch_single_type_manager_zero_mamba()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_zero_mamba()),
     ]
     patched: dict[str, bool] = {}
     for path, did_patch in patch_steps:

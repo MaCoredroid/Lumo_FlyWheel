@@ -427,6 +427,18 @@ if available_gib < 80 or swap_used_kib != 0:
     )
 PY
 
+# FR13 §48 class-9 trap fix: auto-forward EVERY experiment flag set in this shell
+# (FR<N>_*, LUMO_*, VLLM_*) into the container so a new flag can never be silently
+# absent in-container (the patcher reads flags at patch time inside the container).
+# Placed BEFORE the explicit -e list: docker takes the LAST occurrence of a name,
+# so the explicit entries below keep their ${VAR:-default} semantics unchanged.
+FR13_ENV_FORWARD_ARGS=()
+while IFS= read -r _v; do
+  case "$(declare -p "$_v" 2>/dev/null)" in declare\ -a*|declare\ -A*) continue;; esac
+  [[ "${!_v}" == *$'\n'* ]] && continue
+  FR13_ENV_FORWARD_ARGS+=( -e "${_v}=${!_v}" )
+done < <(compgen -v | grep -E '^(FR[0-9]+_|LUMO_|VLLM_)' | sort)
+
 docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   --memory="$DOCKER_MEM_CAP" --memory-swap="$DOCKER_MEM_CAP" \
   ${PROFILE_PTRACE_CAP:+--cap-add=SYS_PTRACE} \
@@ -434,6 +446,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
   "${NSYS_DOCKER_ARGS[@]}" \
+  "${FR13_ENV_FORWARD_ARGS[@]}" \
   -e PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF" \
   -e VLLM_BATCH_INVARIANT="$BATCH_INVARIANT" \
   -e LUMO_BATCH_INVARIANT_VLLM="${LUMO_BATCH_INVARIANT_VLLM:-$BATCH_INVARIANT}" \

@@ -963,3 +963,31 @@ allocated blocks through the SAME zeroing path full-attn already uses (+ engagem
 byte-identical; adversarial verify incl. hit-path-must-not-zero footgun). Then rp3 = rp2 battery with flag ON:
 predict P1 flat agent@~-0.0006 x10, garble gone, P2 hit arm inherits a CLEAN writer. E2 (es0 order arm) held
 in reserve — E5's outcome supersedes it if flat.
+
+## 49. E5 fix BUILT + adversarially verified SHIP; launcher -e whitelist trap closed; rp3 causal gate launching
+
+E5 (wf_39bf3af0-1a8, build + independent adversarial verify, both with executed evidence):
+- FR13_APC_ZERO_MAMBA_ON_ALLOC: producer hooks in MambaManager.allocate_new_blocks (both branches) record
+  ONLY freshly-popped block ids (get_new_blocks results; never null/reused/hit blocks) into new_block_ids;
+  they ride the EXISTING drain (take_new_block_ids iterates ALL single-type managers, kv_cache_manager.py:543-548
+  -> scheduler.py:913-917 -> _zero_block_ids in _update_states, BEFORE the forward). Consumer adds the
+  mamba-specific row zeroer the stock KVBlockZeroer deliberately lacks (worker/utils.py:115-124 "Mamba layers
+  are skipped"): zeros conv/ssm dim-0 rows (= block ids; reshape target_shape=(num_blocks,*shape)) for the
+  drained ids. Zero == the boot-zeroed request-#1 value == the lossless-proven semantic.
+- VERIFY = SHIP: hit-path safe at the allocator level (hit blocks arrive via allocate_new_computed_blocks
+  touch path, never hooked; align reused-spec-block branch records nothing; null block never enqueued);
+  full-patcher 3-config run: OFF byte-identical (sha equal HEAD-vs-edited), ON compiles + AST-verified;
+  anchors 4/4 count==1 with fail-loud collision guards; engagement needles (boot needle per side + throttled
+  counters, first fire at event 1); uniprocess (UniProcExecutor TP=1) => no env-bridge risk. Non-blocking
+  notes: combined-list cross-zeroing is dead-row-harmless; external-computed-tokens path unhooked (KV
+  connector only, not deployed); cached tensor-list refs stable (ES copies contents, never reallocates).
+- LAUNCHER TRAP CLOSED (user directive): docker-run env was an explicit -e whitelist — any NEW FR13_* flag
+  silently absent in-container (class 9). Fixed with a prefix catch-all (FR<N>_*/LUMO_*/VLLM_* auto-forwarded,
+  placed BEFORE the explicit list so explicit ${VAR:-default} entries win on duplicates => zero semantic change
+  for existing flags). bash -n + isolated dry-test pass.
+- rp3 = rp2 battery, cat8_cache arm, flag ON (output/fr13_rp3_zerofix). PREDICTIONS (banked pre-run, verify
+  V5): thesis-right => P1 all agent@~-0.0006 spread~0, no garble; P2 hit arm inherits a CLEAN writer (carrier-2
+  gone); P3 clean at ALL seeds; needles: producer record events>0, consumer "registered ~96 mamba state
+  tensors" (48 GDN x conv+ssm) + zero calls>0. Partial-fix (S2 residue via an unhooked alloc site) => token-1
+  flat but continuation garble persists. Wrong-seam => P1 still spreads WITH full engagement (N>0). Vacuous =>
+  rp2 reproduced AND needles absent/N==0. Engagement asserts gate any conclusion (class 9).
