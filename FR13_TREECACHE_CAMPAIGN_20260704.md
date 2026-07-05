@@ -616,3 +616,9 @@ engages long (trf_s2 39t+patch, under R1 budget). So the give-up is NOT determin
 it's a broader trajectory-variance RATE. Tree+cache real-task tally: tnc 1 resolved(56t) | tcv/trf cache
 arms so far 1 engaged(39t,patch,failed-eval) + 2 give-up(4-6t) = 0 RESOLVED, ~1/3 non-give-up, all n small.
 Non-give-up config = still no such thing; it's a draw rate.
+
+## (ops) 2026-07-05 infra hang: codex-on-alienware stall
+tcv_s2 hung 37min (codex container on alienware Up but producing nothing; vLLM fine, offload LINK up,
+trace=0/0-tool-calls). Killed rc=137, recorded NA (excluded from rate — infra, not give-up). WATCHDOG
+HEURISTIC for the loop: a run with codex_trace.jsonl size 0 (or unchanged) for >15min = HUNG -> kill +
+clean alienware codex + re-run. Replacement queued with AGENT_WALL_S=2400 to bound future hangs.
