@@ -1294,3 +1294,29 @@ parity (git diff inside /testbed) -> then matrix. Task #9.
 - BENCHMARK NOTE (user): official SWE-bench Verified runs agents INSIDE the per-instance image (full runtime
   deps) — our agent-in-bare-worktree deviates from the published convention; §58's instance_image mode is the
   return to standard. Resolve rates before that fix are not externally comparable.
+
+## 61. Native control series COMPLETE: resolve PARITY (1/3 vs 1/3); native never arms the boundary mechanism
+## (0 crossings in 3 runs) => forced-boundary probe = the attribution instrument (launching)
+
+| arm | run | turns | patch | verdict | garble (uniform scan) | boundary-crossing turns |
+|---|---|---|---|---|---|---|
+| tree+cache | s1 | 34 | 551B | RESOLVED | clean | 0 |
+| tree+cache | s2 | 49 | 377B | failed | x3 | 3 (7415/7018/2280 tok) |
+| tree+cache | s4 | 28 | 477B | failed | x2 | 1 (1496 tok) |
+| native+cache | s1 | 34 | 377B | failed | clean | 0 (max 467) |
+| native+cache | s2 | 67 | 429B | RESOLVED | clean | 0 (max 319) |
+| native+cache | s3 | 42 | 377B | failed | clean | 0 (max 297) |
+- RESOLVE AXIS: parity 1/3 vs 1/3 (identical near-miss patch classes both arms; blind-emission luck under the
+  broken agent env §58 — rates jump for ALL arms once the official-benchmark env lands). Round-1 route =
+  agent 6/6. Give-up class: extinct (0/6).
+- GARBLE AXIS: biconditional garble<=>crossing intact 6/6; native runs NEVER produce >1024-token turns on this
+  task (natural style) => native cleanliness is real but UNARMED — cannot discharge attribution.
+- NEXT (GPU, launching): forced-boundary probe — real payload, min_tokens forcing ~1600-token generations
+  (mechanism-attribution probe, NOT a behavior gate; live-SWE remains the gate class), 3 turns/seed
+  (t1 cold long-gen crosses boundary => decode-side snapshot writes [engagement: snapshot_events>0, the cell
+  no probe has ever exercised]; t2/t3 resend+extend => hits restore the crossed blocks), N=6 seeds/arm, arms
+  {cat8_cache(fixes ON), cat8_nocache(CONFIG_ONLY — no boundary machinery: splits long-gen-itself vs
+  align-boundary machinery), native_exseed(+cache, forced long: tree-specificity)}. Readout = garble scanner
+  per turn + snapshot/hit OBS brackets. PREDICTIONS: restart-fold-mismatch story => tree+cache garbles
+  (t2/t3 amplified), tree+nocache CLEAN (no cache machinery), native+cache clean-or-epsilon; long-gen-itself
+  story => tree+nocache garbles too; sampling-tail => all arms equal.
