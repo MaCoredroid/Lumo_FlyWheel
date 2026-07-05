@@ -600,3 +600,19 @@ Pass-2 logit capture (decode steps 0-7, cache-conv vs nocache vs nocacheB, per-s
       compare AT the route token. This is the only deterministic localization left.
   (b) Treat carrier-1 as a behavioral RATE effect (charter = no give-up) and measure the deployment
       give-up RATE on the real agentic task (rate matrix) with conv-fix + R1 already in. If acceptable, ship.
+
+## 36. REFOLD v4 CONFIRMED NON-FUNCTIONAL (its proper domain); route framing refined; give-up is a RATE
+
+trf_s2 (refold ON, 39 turns = long trajectory, boundaries crossed): redirect_engaged=576 refold_published=192
+snapshot_events=288 es_seed=4978 -- the decode-side machinery ENGAGED for the first time. BUT redirect_used=0
+(all 576 FELL BACK). => v4's per-boundary-history + apos-indexed consume-hop STILL does not match/consume;
+refold has NEVER consumed a state across v1-v4 (4 attempts). => ALL refold arms are VACUOUS (conv-only in
+disguise, §27/§33 trap); the §20 refold A/B CANNOT be run until the consume-hop works. trf_s2's 39-turn
+engagement was a good DRAW (refold inert), NOT a refold effect. DECISION: shelve refold (4 failed consume
+attempts, deep rabbit hole, zero payoff); campaign focus = carrier-1 + give-up RATE.
+
+ROUTE FRAMING REFINED (trf_s2 overturns "read_file => give-up"): read_file route gives up (trf_s1 4t) OR
+engages long (trf_s2 39t+patch, under R1 budget). So the give-up is NOT deterministic on the turn-1 route;
+it's a broader trajectory-variance RATE. Tree+cache real-task tally: tnc 1 resolved(56t) | tcv/trf cache
+arms so far 1 engaged(39t,patch,failed-eval) + 2 give-up(4-6t) = 0 RESOLVED, ~1/3 non-give-up, all n small.
+Non-give-up config = still no such thing; it's a draw rate.
