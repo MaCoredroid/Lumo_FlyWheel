@@ -497,3 +497,25 @@ Collapse magnitude IDENTICAL across modes (cache ~19-25% healthy, nocache ~100% 
 logit shift is present WITHOUT cuda-graph capture => REAL decode numerics, NOT a graph artifact. All temp
 0.6, paired seeds. Confirms §28: cache-config decode losslessness violation on the tree path.
 NEXT: decode-step ladder (below) localizes the first divergent decode step/op; fix to 0.0; re-probe.
+
+## 30. INSTRUMENT CORRECTION (user): seeded temp-0.6 paired streams, NOT teacher-forcing; + refold is structurally untestable by a reset-probe
+
+Two user corrections to the §28 decode-ladder plan:
+1. NO teacher-forcing (off-distribution risk). Use the campaign's SAME-SEED PAIRED STREAMS: cache-ON vs
+   cache-OFF, both tree, temp 0.6, FIXED SEED. Lossless <=> identical logits+seed => identical samples.
+   First divergent TOKEN localizes where cache-config numerics first flip a real sampled token
+   (on-distribution, deterministic, paired). Per-step GDN state capture: first STATE divergence (precedes
+   the token flip) pins the carrier op.
+2. Refold is structurally UNTESTABLE by the route probe: probe RESETS cache each sample => cold => NO hit
+   => refold (restore-side) cannot fire, cannot affect the result. So refold CANNOT solve the turn-1 route
+   drift — but the reset-probe also cannot MEASURE refold. Deployment give-up = TWO possibly-separate
+   carriers: (a) turn-1 COLD decode drift (route probe; refold irrelevant) + (b) turn-2+ RESTORE
+   losslessness (refold's actual domain, never exercised by a reset-probe).
+
+NEW INSTRUMENT (task #10, replaces teacher-force ladder): 2-TURN SEEDED PROBE. A 2-turn conversation at
+temp 0.6 + fixed seed; turn-2 re-sends turn-1 and HITS the cached prefix. Arms: cache-OFF (lossless ref)
+vs cache-ON conv-only vs cache-ON refold. Per-decode-step dump {logits, sampled token, GDN state all
+rows}. Reduce: first-divergent-token vs cache-OFF ref, split by turn-1 (cold => localizes route-drift
+carrier, refold-invariant) vs turn-2 (hit => does refold push divergence later / reduce it = refold's
+value). ONE probe answers both the route-drift localization AND the refold-usefulness question at token
+level (cheaper + deterministic than the rate matrix). Byte-identical-stream gate = campaign standard.
