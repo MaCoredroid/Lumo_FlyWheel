@@ -991,3 +991,31 @@ E5 (wf_39bf3af0-1a8, build + independent adversarial verify, both with executed 
   tensors" (48 GDN x conv+ssm) + zero calls>0. Partial-fix (S2 residue via an unhooked alloc site) => token-1
   flat but continuation garble persists. Wrong-seam => P1 still spreads WITH full engagement (N>0). Vacuous =>
   rp2 reproduced AND needles absent/N==0. Engagement asserts gate any conclusion (class 9).
+
+## 50. rp3 VERDICT: E5 kills the accumulating carrier (P1 spread 1.31 -> 0.0019 nats, garble ELIMINATED);
+## residual = ONE deterministic cold-path fixed point, request-1-vs-rest keyed; hit path now HEALTHY+stable
+
+rp3 = rp2 battery, cat8_cache, FR13_APC_ZERO_MAMBA_ON_ALLOC=1 (output/fr13_rp3_zerofix/). Engagement PROVEN:
+producer boot needle + record counters (batches of 9 = num_spec+1 spec blocks, +1/decode-boundary), consumer
+"registered 96 mamba state tensors" (=48 GDN x conv+ssm, exact prediction) + zero counters (524 rows by call
+101). Results vs rp2 (same battery, fix OFF):
+| phase | rp2 (fix OFF) | rp3 (fix ON) |
+|---|---|---|
+| P1 seed5 x10 cold | spread 1.31 nats, 4 routes, garble x3, progressive drift | spread 0.0019, routes {agent(#1), read_file(#2-10) x9 IDENTICAL}, NO garble |
+| P2 seed5 x6 hits | glob x6 (contaminated-stable), tok1 wobble .038-.180 | agent x6 (HEALTHY route), tok1 -0.0149 BYTE-STABLE (spread 0.0) |
+| P3 seeds 1-8 cold | mostly garble/NO_TOOL + 2 clean recoveries | read_file@-0.0111 x8 IDENTICAL (spread 0.0, seed-independent) |
+- CONFIRMED: the §48 pool-residue carrier is REAL and E5 removes it — accumulation, garble/salad, history
+  sensitivity, and seed sensitivity are ALL gone. The hit path (carrier-2 axis) is now on the HEALTHY agent
+  route with byte-stable behavior (formal carrier-2 gate = seeded2turn re-run, pending).
+- RESIDUAL (the one remaining defect): every cold request AFTER the first lands on ONE deterministic fixed
+  point (read_file, tok1 'The'@-0.0111, ct=68) — identical across positions 2-10 AND across seeds 1-8.
+  Request-1-vs-rest keying + E5-resistance narrows it to state OUTSIDE the fresh-alloc pool rows: prime
+  suspects = the NULL/padding block row (padded spec-tree nodes; never from get_new_blocks => never zeroed
+  by E5; request 1's decode pollutes it once via unmasked padded-node writes, every later request reads it
+  identically at cold prefill/first-decode => a FIXED POINT exactly as observed) or a persistent ring/buffer
+  with a cache-gated consumer. Residual-hunt workflow wf_3dd23e9b-cbc (null-block write audit + ring audit +
+  adversarial cross-exam) in flight; E5b candidate = extend the zeroer to the null row per admit (or mask
+  padded writes at the writer) -> predict P1 x10 ALL clean.
+- Interpretation note: the fixed point is self-sustaining (request N's read_file trajectory rewrites ~the same
+  residue request N+1 reads) — which is why pre-fix rp2 showed EVOLVING states (varying trajectories wrote
+  varying residue into recycled rows) while post-fix rp3 shows a binary clean/fixed-point.
