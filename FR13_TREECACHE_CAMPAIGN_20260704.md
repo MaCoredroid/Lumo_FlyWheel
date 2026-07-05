@@ -663,3 +663,12 @@ with SGLang-validated recompute. CRUX (workflow wemm3xfin): the model INTERLEAVE
 decoupled forward must use CACHED KV for attn layers but RECOMPUTE-from-tokens for GDN layers IN ONE PASS
 -- is per-layer-type cache behavior expressible in vLLM's hybrid allocator, or does it force both into the
 same block-pool? Config/patch vs deep-patcher hinges on that.
+
+## (ops) 2026-07-05 pgrep-wait DEADLOCK — the chained queue stalled
+The 3 chained waiters (tnc_extra/nat_extra/tcv_s2_redo) each waited via `pgrep -f 'trf_first.sh|...'`.
+BUG: pgrep -f matches a process's full COMMAND LINE, and each waiter's cmdline CONTAINS the sibling script
+names (in its own wait pattern) -> every waiter matched a sibling -> all 3 deadlocked while the real driver
+was DONE and the GPU sat idle ~15min. FIX: killed the waiters, replaced with ONE sequential driver
+(rate_finish.sh: tnc_s2/s3, nat_s1/2/3, tcv2redo) — single script, sequential run() calls, no inter-script
+pgrep waits. LESSON: never gate a queued job on `pgrep -f <sibling-script-name>` (self/sibling-match);
+use a container/marker-file check or a single sequential driver.
