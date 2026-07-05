@@ -1179,3 +1179,33 @@ consumer + "[FR13_APC_COPY_SRC_FIX] engaged ... stale0=1"):
 - Gate reading so far: the cell under test PASSED its half decisively (delegate + engage + patch + resolve,
   matching the tnc behavior class). The unwalled tnc re-run completes the like-for-like pair for the record;
   bake (E5+COPY_SRC_FIX default-ON, user directive) proceeds after it lands.
+
+## 57. s1-vs-s2 trace forensics (wf_9363ecce-d74): s2's near-miss patch = healthy draw variance, BUT s2 carries
+## a GARBLE signature in the long hit-heavy trajectory — a residual-corruption SIGNAL pointing at the unfixed
+## decode-boundary restore family (HRS domain); native n=3 control queued
+
+- PATCH AXIS (draw variance, benign): both runs' REASONING found the identical correct fix (the upstream
+  astropy PR pair: 'self.data.cols = cols' + 'self.data._set_col_formats()'). s1 emitted both lines in ONE
+  clean edit -> 551B -> RESOLVED. s2 stated the cols line >=4 times but DROPPED it from the emitted edit ->
+  377B single-line patch -> failed (the applier iterates self.data.cols which is never set on the HTML path
+  => no-op). s2's 377B artifact matches the historic ~377-398B near-miss family INCLUDING native+cache's 398B
+  => end-artifact difference alone = solution-luck variance.
+- GARBLE AXIS (the signal): s2 contains 3 unambiguous generation-degradation episodes at the sanctioned
+  instrument (codex_trace agent messages): edit#62 file_path arg = 22.7KB hallucinated academic text ending in
+  a '2.1.2.1...' repetition loop (tool-rejected); edit#70 = 29.9KB fake climate paper + Debian apt text
+  (tool-rejected); FINAL thinking block (11KB) opens coherently then derails into the same fake paper and
+  terminates in Chinese /etc/profile.d instructions -> empty final answer. Plus the Explore subagent collapsed
+  (93-char non-answer vs s1's 3,952-char report). s1: ZERO garbled blocks. Cost asymmetry 2.2x (2602s/49 calls
+  vs 1194s/34; incl. 22 doomed dependency-install shell calls — the eval workspace lacks packaging/Python.h/
+  pip, so agent-side verification is impossible for EITHER arm; harness gap noted, common across arms).
+- CLASSIFICATION (medium confidence, honest caveats: n=1 pair, garble was tool-rejected and did NOT corrupt
+  the submitted patch, no same-build control yet): serving-side QUALITY-DEGRADATION SIGNAL in long
+  trajectories. MECHANISM CANDIDATE: long turns cross 1024-token DECODE boundaries -> decode-side snapshot
+  writes (recurrent/branch realizations; EXACT_SEED's decode half was never wired, §16) -> later HITS restore
+  them. The rp probes could never see this (completions <=448t cross no decode boundary; §55's own obs showed
+  snapshot_events=0). This is exactly the E' family = HRS's designated domain (user 2026-07-05: HRS preferred,
+  speed-first, SGLang-proven).
+- ATTRIBUTION PLAN (in motion): tcfix_s4 (running) + native+cache n=3 (nativemtp5_exseed, queued on GPU
+  handoff) = the more-seeds + native-control the verdict demands. Garble reproducing in tree arms but not
+  native => decode-boundary tree-state restore confirmed as carrier-3 -> HRS=1 arm gate (+ fr13_measure
+  hit-recompute tax). Garble equal on native or non-reproducing => downgrade to temp-0.6 sampling-tail.
