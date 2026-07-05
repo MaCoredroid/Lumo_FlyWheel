@@ -1209,3 +1209,23 @@ consumer + "[FR13_APC_COPY_SRC_FIX] engaged ... stale0=1"):
   handoff) = the more-seeds + native-control the verdict demands. Garble reproducing in tree arms but not
   native => decode-boundary tree-state restore confirmed as carrier-3 -> HRS=1 arm gate (+ fr13_measure
   hit-recompute tax). Garble equal on native or non-reproducing => downgrade to temp-0.6 sampling-tail.
+
+## 58. Eval-workspace root cause + fix design (wf_d717de65-cfc): agent and grader live in DISJOINT envs;
+## fix = run the agent INSIDE the SWE-bench per-instance image (SWE_AGENT_ENV=instance_image, default OFF)
+
+ROOT CAUSE (file:line-verified + image-probed): the agent works on a SOURCE-ONLY git worktree (run_swe_bench
+_q36_a.py:358-374) rsynced to alienware and mounted into qwen-code-runner:v1 (node:22-bookworm; probe: NO pip,
+NO Python.h, NO conda, import astropy/numpy FAIL) — while the EVAL runs inside official SWE-bench per-instance
+images (swe_eval_x86_worker.py:107-136; /opt/miniconda3/envs/testbed with editable astropy). Nothing exposes a
+usable env to the agent => self-verification structurally impossible (the AGENTS.md "do NOT pip/build" copy is
+a band-aid). SECONDARY: the rsynced .git is a worktree POINTER to a GB10 path => git is broken inside the
+agent container (patch extraction immune — runs on GB10, :463-469).
+FIX (designed, implementation AFTER the native n=3 attribution series; ON only for the 16-task matrix):
+(1) SWE_AGENT_ENV=instance_image mode — run qwen-code INSIDE the instance image editing /testbed (agent gets
+the testbed conda env + a real git repo; SWE-agent/OpenHands convention); (2) one-time relocatable node+qwen
+bundle on alienware (official nodejs tarball for glibc-compat, qwen-code version PINNED to runner:v1 for
+cross-arm fairness) bind-mounted :ro into any instance image; (3) flag-coupled prompt copy update ("you have a
+working testbed env: reproduce + pytest before finishing"); (4) REJECTED: baking deps into qwen-code-runner
+(non-durable across 500+ instances, drifts from eval). Validation ladder: env smoke (import astropy + qwen
+--version in-image) -> one-instance probe (trace shows import astropy rc=0 + pytest collecting) -> patch
+parity (git diff inside /testbed) -> then matrix. Task #9.
