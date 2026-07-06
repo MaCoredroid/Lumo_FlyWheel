@@ -104,8 +104,21 @@ OFFTASK_PATTERNS = [
 ]
 OFFTASK_RE = [(re.compile(p, re.IGNORECASE | re.MULTILINE), name) for p, name in OFFTASK_PATTERNS]
 
-# a short cycle of 1..15 chars repeated >= 6 times in a row (=> at least ~7 copies)
+# Repetition loop. The 2026-07-06 fix: the naive r"(.{1,15})\1{6,}" FALSE-POSITIVES
+# on normal INDENTED CODE (a repeated "\n        " newline+indent, or "\n    }" brace
+# rows) — it flagged 2/3 replay samples that were on-task Python (fr13_garble_replay
+# §65). Fix: the repeated unit must contain a NON-WHITESPACE, NON-STRUCTURAL char
+# (i.e. not pure whitespace / braces / punctuation that legitimately repeats in code).
+# Genuine garble cycles ("2.1.2.1", "| | |", "0000...") still match. Applied to a
+# WHITESPACE-COLLAPSED view so indentation can't pad a cycle.
 REPLOOP_RE = re.compile(r"(.{1,15}?)\1{6,}", re.DOTALL)
+_REP_STRUCTURAL = set(" \t\n\r{}()[];,.:")
+
+def _rep_is_genuine(unit: str) -> bool:
+    # reject cycles whose unit is entirely whitespace / code-structural punctuation
+    return any(ch not in _REP_STRUCTURAL for ch in unit) and \
+        len(set(unit.strip())) >= 1 and unit.strip() != "" and \
+        not all(ch in "{}()[];,. \t\n\r" for ch in unit)
 CJK_RE = re.compile(r"[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯]")
 
 
@@ -213,12 +226,14 @@ def scan_block(detector_out: list[Episode], *, ev_idx: int, turn: int, level: st
     elif (not is_tool) and n > args.max_block_bytes:
         add("oversized_block", f"{kind}={n}B (>{args.max_block_bytes}B)")
 
-    # 4 -- repetition loop
-    m = REPLOOP_RE.search(text)
+    # 4 -- repetition loop (whitespace-collapsed so indentation can't pad a cycle;
+    # unit must be non-structural so normal indented code / brace rows don't fire)
+    collapsed = re.sub(r"[ \t]+", " ", text)
+    m = REPLOOP_RE.search(collapsed)
     if m:
         cyc = m.group(1)
         span = m.end() - m.start()
-        if span >= 24 and cyc.strip():  # require a meaningful run, not '\n\n\n'
+        if span >= 24 and _rep_is_genuine(cyc):
             add("repetition_loop", f"cycle {cyc!r} x~{span // max(1, len(cyc))} over {span}B")
 
     # 5 -- script-mix (CJK in a latin/code task)
