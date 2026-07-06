@@ -48,7 +48,7 @@ run_arm(){
     local i
     for (( i=1; i<=N; i++ )); do
       curl -s -o /dev/null -m20 -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" 2>/dev/null
-      python3 -c "import json,sys;d=json.load(open('$PAYLOAD'));d['max_tokens']=$MAX_TOKENS;d['temperature']=0.6;d['seed']=$i;json.dump(d,open('$cdir/send_$i.json','w'))"
+      python3 -c "import json,sys;d=json.load(open('$PAYLOAD'));d['max_tokens']=$MAX_TOKENS;d['temperature']=0.6;d['seed']=$i;d['stream']=False;d.pop('stream_options',None);json.dump(d,open('$cdir/send_$i.json','w'))"
       curl -sS -m900 -H 'Content-Type: application/json' -H 'Authorization: Bearer EMPTY' \
         --data-binary @"$cdir/send_$i.json" "http://127.0.0.1:$PORT/v1/chat/completions" > "$cdir/s_$i.json" 2>"$cdir/s_$i.err"
       python3 - "$cdir/s_$i.json" "$i" <<'PY'
