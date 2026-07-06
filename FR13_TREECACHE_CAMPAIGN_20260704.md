@@ -1524,3 +1524,17 @@ split should make each a coherent, independently-shippable/testable unit (Produc
 it benefits native+cache too, per FR13_CACHE_FIX_KT.md). This sharpens §70's "flag=module": group modules
 under Product-1 (tree verify) vs Product-2 (spec-decode prefix cache) so each product can be lifted/shipped/
 regression-gated on its own. Design note for #10; no action now.
+
+## 72. Official-env PRODUCTION-VALIDATED (one-instance probe, task #9 DONE) — agent reproduces + pytests in-image
+- oneinst probe (astropy-13453, SWE_AGENT_ENV=instance_image now DEFAULT cc0d23e2, unwalled, heartbeat-only):
+  agent_env=instance_image, agent container ran the OFFICIAL sweb.eval.x86_64.astropy_1776_astropy-13453 image
+  (not qwen-code-runner). Trace (42 tools: 3 edit, 14 run_shell, 18 read, 5 grep): agent REPRODUCED the bug
+  with live astropy (`from astropy.table import Table...` x5), ran the REAL suites (pytest test_html.py /
+  test_write.py / test_connect.py -k html), and ITERATED reproduce->edit->retest — the benchmark-faithful
+  debugging the bare-worktree legacy env structurally could not do (§58). patch=713B, verdict=failed,
+  error=null => patch APPLIED + eval RAN clean => a legitimate strict-hidden-test quality draw, NOT an env/
+  harness artifact. All 16 astropy instance images pre-pulled to alienware (16/16). #9 fully done.
+- MATRIX de-risked + ready: subset_b4_sixteen (16 astropy Verified, fr9-matched), arms cat8+cache vs
+  native+cache (both baked), B=4 depth-matched, official env (default), UNWALLED, hot-path logging OFF,
+  heartbeat-only offload. Delivers resolve-rate n=16/arm + canonical speed (fr13_measure s/fwd + TPS) +
+  conclusive garble cache-vs-input attribution. Launching.
