@@ -134,12 +134,18 @@ def _agent_template() -> str:
 # runtime is injected read-only from a relocatable host bundle (built by
 # scripts/prepare_qwen_agent_bundle.sh) so NO per-instance image is rebuilt.
 def _swe_agent_env() -> str:
-    """'instance_image' when SWE_AGENT_ENV selects the in-image agent env, else
-    'legacy' (default) = current qwen-code-runner:v1-over-worktree behavior."""
-    val = os.environ.get("SWE_AGENT_ENV", "").strip().lower()
-    if val in ("instance_image", "instance-image", "instance"):
-        return "instance_image"
-    return "legacy"
+    """Agent environment. DEFAULT = 'instance_image' (user 2026-07-06): the agent
+    runs INSIDE the official SWE-bench per-instance eval image with the conda
+    'testbed' env — the benchmark-faithful setup (smoke-proven §67: import astropy
+    editable + qwen 0.19.4 in-image). Requires the per-instance image on the codex
+    host + the ~/qwen_agent_bundle (both provisioned; run prepare_qwen_agent_bundle.sh
+    once). Set SWE_AGENT_ENV=legacy (or worktree) to fall back to the old
+    qwen-code-runner:v1-over-bare-worktree behavior (which cannot self-verify, §58).
+    A missing image FAILS LOUD per-instance (never silently falls back)."""
+    val = os.environ.get("SWE_AGENT_ENV", "instance_image").strip().lower()
+    if val in ("legacy", "worktree", "0", "off", "none"):
+        return "legacy"
+    return "instance_image"
 
 
 def _instance_image_name(instance_id: str, *, arch: str = "x86_64",
