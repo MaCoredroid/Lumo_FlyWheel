@@ -2091,3 +2091,16 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
 - TWO clean tests queued (after the B=1 control): (1) 13453 tree+cache @B=1 current build (exact §66 gate) — extinct
   there => fix holds on its gate, fr9-8 give-ups task-dependent NOT regression; gives up => regressed. (2) tree+cache
   worktree-env vs instance_image on same tasks — isolates whether the env change is the give-up vector.
+
+## 105. GIVE-UP FIX VERIFIED PRESENT + WORKING (user: "check if the fix is in there and working") — but wrong carrier
+- BOTH fixes engage + do their job in the give-up runs: FR13_APC_COPY_SRC_FIX logs "engaged: suppressed stale
+  accepted-tree stamp on cold prefill carry" (chain5 stale_len=1, cat8 stale_len=3; log THROTTLED to first hit,
+  _FR13_COPY_SRC_FIX_N counter increments silently => firing repeatedly). FR13_APC_ZERO_MAMBA 201-401 record events.
+  Both byte-unchanged since §66 (§104). §66 give-up-extinct used ONLY these 2 (bake 984c36e9 = launcher-only, 14 lines).
+- So the fix is NOT broken/regressed — it catches its carrier (the §52/§66 cold-prefill stale-tree 0.0-carry). BUT
+  give-ups persist WITH it fully engaged => these give-ups are a DIFFERENT give-up mechanism the §66 fix doesn't
+  cover. §66 fixed give-up on ITS carrier (13453/B=1); a separate give-up carrier hits fr9-8 (B=1 and B=4).
+- DEFINITIVE TEST queued: fix-ON vs fix-OFF (FR13_APC_COPY_SRC_FIX=0 FR13_APC_ZERO_MAMBA_ON_ALLOC=0) A/B on split4.
+  give-ups unchanged => different carrier (fix irrelevant here); more give-ups off => fix helps but insufficient.
+- Ties to §102/103: the persistent give-up = the EXACT_SEED-restore x TREE-decode carrier (B), which is NOT the
+  cold-prefill stale-tree carrier the §66 fix targets. Two different cache-give-up carriers; §66 fixed one.
