@@ -2117,3 +2117,15 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
 - LAUNCHED CONC=1 isolation (BSIZE=1 CONC=1, serial single agent, no cross-agent cache): chain5+cache + cat8+cache on
   split4. chain5+cache CONC=1 ~resolves => carrier (B) = concurrent cache-SHARING (the CONC lever); still gives up =>
   single-agent cache-restore issue. This directly tests the §66(CONC=1)-vs-now(CONC=4) hypothesis.
+
+## 107. GOAL clarified (user 2026-07-06): the SHARED prefix cache must work for native+mtp AND branch AND spine
+- The cross-agent shared prefix cache (CONC>=2, concurrent agents reusing the qwen-code system-prompt prefix) is a
+  REQUIRED Product-2 feature (the TTFT speedup). The deliverable = it works for ALL decode paths: native+mtp,
+  tree-branch (cat8), tree-spine (chain5). NOT ship-native / drop-branches.
+- STATUS: native+mtp already works under the shared cache @CONC=4 (native+exseed 3/4, 0 give-ups). The TREE path
+  (branch + spine) does NOT (carrier B give-ups). So the FIX TARGET is: make the EXACT_SEED shared-cache RESTORE
+  correct in the TREE decode path (TREE_ATTN + tree_mtp GDN/conv restored-state handling) under concurrent
+  cache-sharing, matching native's behavior.
+- The running CONC=1 test is the DIAGNOSTIC (confirms carrier B = concurrent cache-sharing if chain5+cache CONC=1
+  resolves). The FIX then = tree-path concurrent shared-cache restore correctness. Keep branches + keep cache +
+  keep concurrency; fix the tree restore to match native.
