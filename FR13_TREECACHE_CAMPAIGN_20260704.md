@@ -2024,3 +2024,15 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   * chain5 B1==B4 (spine batch-robust) + cat8 recovers at B=1 => the BRANCHES' co-residency is the carrier.
 - FOLLOW-UP (deployment): if spine5+cache B=1 works, run chain5+cache at B=4 (the current chain5 B=4 arm2 is
   NOCACHE) to confirm the shippable config survives co-residency. That is the go/no-go for the tree product.
+
+## 100. FRAMING CORRECTION (user 2026-07-06): NO spine "deliverable" — the BRANCHES are the product; FIX them
+- RETRACT the §99 "shippable candidate = spine5+cache" framing. There is no ship-the-spine fallback: the branches
+  (cat8/cat9 superset leaves) ARE the product — they carry the speedup (superset acceptance > 5-spine 3.076,
+  [[project_fr13_suffix_fusion_prototype]]). Dropping to the spine throws away the whole point.
+- chain5(spine5) = DIAGNOSTIC / control arm ONLY — it isolates the carrier (branches vs spine), it is NOT a product.
+  Likewise spine5+cache B=1 = a diagnostic (spine+cache clean => the branches are the SOLE thing to fix), not a deliverable.
+- CORRECTED PLAN: these experiments LOCALIZE the branch carrier (branches' co-resident-accepted-chain GDN drift,
+  amplified at B=4). AFTER the data lands, FIX the branch case — reduce the branch co-residency drift to native's
+  floor while KEEPING the branches (levers: tree-reshape/root-sibling, spine M-invariance, targeted fp32 at the
+  drift-critical points; [[reference_diffuse_gdn_accumulation_explained]] [[project_fr13_amplification_levers_queued]]).
+  The deliverable is the FIXED branch tree (fast AND agentically-correct), NOT the spine.
