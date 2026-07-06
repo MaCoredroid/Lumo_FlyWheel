@@ -42,7 +42,7 @@ if (( MAX_NUM_SEQS >= 4 )); then
   # to the host ES cache, so shrinking KV directly frees room for ES. 0.50 keeps a
   # ~30G KV pool (~8x the observed peak, ample for 4 long concurrent turns) and frees
   # ~34G for the ES cache + system => no wedge even if ES scales ~4x B=1's 9G.
-  GPU_UTIL=${GPU_UTIL:-0.50}
+  GPU_UTIL=${GPU_UTIL:-0.62}
 fi
 ATTENTION_BACKEND=${ATTENTION_BACKEND:-TREE_ATTN}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}

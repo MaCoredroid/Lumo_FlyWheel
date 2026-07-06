@@ -257,6 +257,12 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
         f"-e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} "
         f"-e OPENAI_MODEL={model} -e QWEN_MODEL={model} -e HOME=/tmp "
         f"-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 "
+        # §79: instance-image agents were MISSING the idle-timeout raise (the legacy
+        # QWEN_CODE_TEMPLATE had it, this default path did not) => qwen used its 120s
+        # default => at B>=4 a request that QUEUES for capacity waits >120s for its
+        # first chunk and the client aborts "after 0 chunks" => 0B. 600s tolerates the
+        # B=4 queue (heartbeat can't cover pre-first-byte queue wait). Overridable.
+        f"-e QWEN_STREAM_IDLE_TIMEOUT_MS=${{QWEN_STREAM_IDLE_TIMEOUT_MS:-600000}} "
         f"-e PATH={_INSTANCE_CONTAINER_PATH} "
         f"-e SWE_AGENTS_B64='{agents_md_b64}' -e SWE_PROMPT_B64='{prompt_b64}' "
         f"-e SWE_BASE_COMMIT='{base_commit}' "
