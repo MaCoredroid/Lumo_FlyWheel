@@ -1673,3 +1673,44 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   (FR13_APC_ZERO_MAMBA events=301). Max concurrency 3.53x@131k (~16x@28k) => capacity NOT binding; the
   "Waiting:3 reason=capacity" is the §80 idle-bound pattern (agents tool-exec remotely) + prefill chunking
   at max_num_batched_tokens=1024 (APC overshoot fix), NOT a wedge. No preemptions; host 91G/26G healthy.
+
+## 81. B=4 DEGRADATION REPRODUCES ON A HEALTHY SERVER (wedge ruled out) — mechanism characterized, TWO
+## candidate carriers identified (batch-variant numerics vs concurrent cache-restore); localization queued
+- RESULT: cat8cache_m16 (B=4+tree+cache, memory-fixed config) 3/3 completed = ALL 0B `agent_gave_up`. This
+  reproduces §76 EXACTLY but now on a HEALTHY server (accept 2.95 tok/draft, no preemption, no wedge, host
+  91G/26G, prefix-hit 72-80%). So the §77 memory wedge is RULED OUT as the cause; a genuine B=4 degradation
+  remains. (Decisive control astropy-13453 — resolved-attempted 377B at B=1 per §72 — still in flight.)
+- MECHANISM (from traces, NOT scalar metrics): the degradation is INTERMITTENT STRUCTURED-OUTPUT CORRUPTION,
+  not random garble. Exploration is always correct (right greps/globs/file reads). What breaks:
+  * 12907: stray `</think>` leaked into visible text; malformed repro scripts (NameError undefined `M`/`cm1`);
+    1543 out-tok over 5 turns; EMPTY final turn (result="\n\n") => harness reads empty as done => give-up.
+  * 13033: 7586 out-tok/6 turns (real work) but first todo_write RAMBLED to the max_tokens limit + truncated
+    mid-JSON (non-array `todos`); a later read_file used wrong param name (`path` not `file_path`); repeated
+    empty `\n\n` turns; empty final => give-up. 5/6 turns ended CLEANLY on stop_reason=tool_use — only 1
+    derailed. Intermittent, low-rate.
+  * 13236: 1065 out-tok/7 turns, give-up.
+- CONFIG-BUG BRANCH CLOSED: not a low max_tokens cap — QWEN_CODE_MAX_OUTPUT_TOKENS=32768, proxy
+  LUMO_PROXY_MAX_OUTPUT_TOKENS 16-32k (generous). A todo_write truncating at 16k+ = a RAMBLE to the limit
+  (degradation), not a small cap. Sampling pins verified active (LUMO_PROXY_FORCE_TEMPERATURE=0.6, asserted
+  at boot). So this is a genuine per-token quality defect that occasionally derails a generation into a
+  loop/malformed-JSON => breaks the tool-call => give-up. Consistent with the KNOWN low-rate garble tail
+  ([[project_fr13_treecache_SOLVED]] "garble=low-rate tail, HRS parked-pending-matrix") being AMPLIFIED at B=4.
+- TWO CANDIDATE CARRIERS (both testable, both explain B=1-clean / B=4-broken):
+  (A) BATCH-VARIANT KERNEL NUMERICS: VLLM_BATCH_INVARIANT=0 + LUMO_BATCH_INVARIANT_VLLM=0 for this run. Batch-
+      variant GEMM/attn make a seq's logits depend on its batch-mates => NO-OP at B=1 (single seq), but
+      PERTURB logits at B=4 (co-resident batch). temp 0.6 turns the perturbation into different token draws
+      that occasionally derail. Known fix exists ([[project_l0c_triton_autotune_drift]]
+      LUMO_BATCH_INVARIANT_VLLM=1 + FLASH_ATTN) — but TREE_ATTN vs batch-invariant-FLASH_ATTN compat is a risk.
+  (B) CONCURRENT EXACT_SEED CACHE-RESTORE (§76 hypo): 4 agents share the qwen-code system-prompt prefix (72-80%
+      hit); if that shared-prefix restore is lossy under concurrent B=4 access (cross-request batch-row/state
+      interaction), all degrade. The baked fixes (E5 ZERO_MAMBA, COPY_SRC_FIX) are within-request-ordering =>
+      structurally cannot cover cross-request concurrency.
+- LOCALIZATION PLAN (decisive controls on the give-up subset {12907,13033,13236,+1}, gated on 13453):
+  Cell A: B=4+tree+cache+BATCH_INVARIANT=1  -> tests carrier (A)
+  Cell B: B=4+tree+NO-cache                  -> tests carrier (B): clean => cache is the B=4 carrier (Product-2
+          concurrent-restore bug); still-broken => cache exonerated, it's batching (A)/generic co-residency
+  Cell C: B=1+tree+cache (sanity)            -> re-confirm these tasks resolve at B=1 (12907 did @504B, §77)
+  DECISION RULE: the full 16+16 B=4 cache matrix is ~0-resolve (low info); after 13453 confirms, ABORT it and
+  run the localizing cells (path to the FIX) instead of grinding 32 give-ups. Headline speed matrix falls back
+  to B=1 (the SOLVED/lossless regime) per §76's pre-registered plan; B=4 degradation = separate reported
+  finding + fix track.
