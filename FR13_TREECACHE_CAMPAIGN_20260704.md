@@ -1631,3 +1631,45 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   reserving KV STEALS from the ES cache. My 0.78->0.80 bump was the wrong direction. FIX: B>=4 GPU_UTIL 0.80
   ->0.50 => KV pool ~30G (8x the 3.5G peak, ample) + frees ~34G for the ES cache (no wedge even at ES ~4x B=1's
   9G). Keep DOCKER_MEM_CAP=112g. Killed the wedging run pre-emptively; relaunching at 0.50.
+
+## 79. B=4 0B = queue-wait CLIENT-timeout (committed 94089801) — the idle-timeout raise never reached the
+## instance-image agent; GPU_UTIL 0.50->0.62 to drain the queue faster
+- At GPU_UTIL=0.50 the KV pool got small enough that new turns QUEUED for capacity (7 waiting). A queued
+  request that waited >120s for its first chunk hit the qwen-code client's DEFAULT 120s idle timeout and
+  aborted "after 0 chunks" => 0B. Two sub-bugs: (1) the §59 240s idle-timeout raise was on the LEGACY
+  QWEN_CODE_TEMPLATE and never reached the now-default `_instance_agent_command` (qwen used 120s); (2) the
+  SSE heartbeat only fires AFTER the first byte, so it can't cover a pre-first-byte queue wait.
+- FIX: thread QWEN_STREAM_IDLE_TIMEOUT_MS=600000 into `_instance_agent_command` + GPU_UTIL 0.50->0.62
+  (balance: enough KV to drain the queue vs host room for the ~25G ES cache). Committed 94089801.
+
+## 80. SPEED-METRIC EMISSION VERIFIED CLEAN (user: "emit all speed metrix cleanly, check previous doc") +
+## caught/killed a metrics-contaminating ORPHAN runner mid-relaunch
+- USER ASK: confirm the matrix emits every metric the campaign uses (§75 list) with no gaps, and that the
+  logging-off speed regime (FR10_METRICS=0) doesn't suppress the ones the reduce needs.
+- VERIFIED all §75 + deploy-speed metrics land in the per-task brackets (full 485-line /metrics scrape) at
+  http://127.0.0.1:9950/metrics — mapped each doc metric to its emitting counter:
+  * accept depth profile      -> vllm:spec_decode_num_accepted_tokens_per_pos_total (+ num_drafts/accepted)
+  * accepted tok/draft        -> num_accepted_tokens_total / num_drafts_total
+  * prefix cache hit rate      -> vllm:prefix_cache_hits_total / prefix_cache_queries_total
+  * KV cache usage             -> vllm:kv_cache_usage_perc  (RENAMED from gpu_cache_usage_perc; both present)
+  * throughput                 -> vllm:generation_tokens_total / prompt_tokens_total
+  * preemptions / queue        -> vllm:num_preemptions_total, num_requests_running/waiting_by_reason
+  * s/fwd numerator            -> vllm:request_decode_time_seconds_sum
+  * s/fwd_gpu (pure-decode)    -> vllm:fr13_decode_forward_gpu_seconds_total  (SFWD timer sidecar SYNTHESIZED
+                                  into the bracket by the runner; live-verified injected @431s, NOT vacuous)
+  * deploy-speed reduce        -> fr13_measure.py deploy-speed keys on exactly M_DECODE_S/M_DRAFTS/M_ACCEPTED/
+                                  M_DECODE_FWD_GPU_S — all live on :9950.
+- FR10_METRICS=0 is CORRECT and required for the clean deploy (fr13_measure.py:73/96 PINS it): it only gates
+  hot-path diagnostics (conv_diag, q-capture, flip-layer), NOT the deploy-speed counters or the brackets.
+- CONTAMINATION CAUGHT: the relaunch left an ORPHAN run_swe_bench (PPID=1, started 07:06, 19min before the
+  fresh 07:25 driver) pointing at the SAME runroot + proxy. It had dispatched 4 stale swe-qwen containers on
+  alienware (suffix 1783322693) that were still hitting the shared server => would co-reside with the fresh
+  arm and inflate s/fwd (wall-span) + pollute accept counters, and collide on per_task dirs. Killed the
+  orphan (wrote 0 artifacts) + its 4 stale containers; verified exactly ONE runner remains (PPID=serve_variant)
+  and no stale per_task dirs. Fresh arm now clean.
+- LIVE BOOT CONFIG confirmed via cache_config_info: gpu_memory_utilization=0.62, mamba_block_size=1024,
+  mamba_ssm_cache_dtype=float32, prefix_caching=True, max_num_seqs=4, speculative tree = cat8
+  [(0,),(1,),(0,0),(0,1),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,0,0)] num_spec=8. Both baked fixes engage
+  (FR13_APC_ZERO_MAMBA events=301). Max concurrency 3.53x@131k (~16x@28k) => capacity NOT binding; the
+  "Waiting:3 reason=capacity" is the §80 idle-bound pattern (agents tool-exec remotely) + prefill chunking
+  at max_num_batched_tokens=1024 (APC overshoot fix), NOT a wedge. No preemptions; host 91G/26G healthy.
