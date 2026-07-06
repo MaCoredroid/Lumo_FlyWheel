@@ -1232,7 +1232,7 @@
     <p class="kicker">Volume IV / illustrated systems paper</p>
     <h1>Bit-Exact Prefix Caching for a Recurrent Hybrid</h1>
     <p class="title-subtitle">Lossless GDN State Restore under Speculative Decoding in vLLM</p>
-    <p class="subhead">Vol. III shipped a tree verifier with one standing caveat: prefix caching stayed off for this hybrid model, so every agentic turn re-paid prefill on an 11&ndash;14k-token conversation. This page turns the cache on and proves the state restore bit-exact. The contribution is a state-restore contract for recurrent hybrids: a cache hit must hand decode the exact committed GDN state, in the exact kernel realization, that a no-cache run would have produced.</p>
+    <p class="subhead">Vol. III shipped a tree verifier with one standing caveat: prefix caching stayed off for this hybrid model, so every agentic turn re-paid prefill on an 11&ndash;14k-token conversation. This page turns the cache on: the prefill state restore is bit-exact on a single stream, the native decode path stays behaviorally clean under concurrent caching, and the forked tree decode path is the open frontier. The contribution is a state-restore contract for recurrent hybrids: a cache hit must hand decode the exact committed GDN state, in the exact kernel realization, that a no-cache run would have produced.</p>
     <div class="hero-tldr" aria-label="TLDR and headline result">
       <p class="tldr-copy"><strong>TL;DR:</strong> attention KV is per-token addressable, so a prefix cache can just re-read it. Gated-DeltaNet state is one evolving vector, and under speculative decoding three different kernels write it. vLLM's align-mode cache restored a stale row in the wrong kernel realization, which poisoned the model into empty patches. The fix, <code>EXACT_SEED</code>, caches the chunked-prefill realization at 64-aligned positions, keyed by the prefix block hash, and restores it bit-exactly. Decode speed is untouched by construction; the entire payoff is prefill-side.</p>
       <div class="hero-result">
@@ -1253,10 +1253,12 @@
       <a href="#claims">Claims</a>
       <a href="#prior-work">Prior work</a>
       <a href="#defect">Defect</a>
+      <a href="#read-side">Read-side</a>
       <a href="#design-trail">Design trail</a>
       <a href="#mechanism">Mechanism</a>
       <a href="#results">Results</a>
       <a href="#lossless">Lossless</a>
+      <a href="#concurrency">Frontier</a>
       <a href="#failure-library">Failure library</a>
       <a href="#limitations">Limits</a>
       <a href="#receipts">Source trail</a>
@@ -1267,10 +1269,23 @@
     <section class="section" id="abstract">
       <h2>Abstract</h2>
       <p>We present a lossless automatic-prefix-caching (APC) design for Qwen 3.6-27B-FP8, a hybrid model whose 64 layers include 48 Gated-DeltaNet (GDN) recurrent layers, served with MTP/tree speculative decoding inside a forked vLLM 0.19.2. Prefix caching is the default deployment lever for agentic workloads: the SWE/Codex loop resends an append-only 11&ndash;14k-token conversation every turn, and with the cache off, that prefill dominated task wall time. But for a recurrent hybrid the cache must store more than attention KV. It must checkpoint the GDN recurrent state, and under speculative decoding that state is written by three different kernels into two different layouts.</p>
-      <p>Turning on vLLM's align-mode cache as-is poisoned the model: acceptance collapsed, output garbled, and the coding agent gave up with empty patches. We root-caused this to a two-layer defect. First, a staleness bug: the align snapshot reads a block-aligned state row that the tree committer never wrote, so the cache stored a stale or branch-loser row. Second, a realization gap: even the correct row holds the recurrent-decode kernel's realization of the state, while a cache hit resumes through the chunked-prefill kernel; the two realizations differ by roughly 0.0078 per block boundary and the error compounds across boundaries. The fix chain &mdash; <code>SNAP_FIX</code> for staleness, <code>EXACT_SEED</code> for the realization gap &mdash; caches the chunked-prefill realization at 64-aligned checkpoint positions, keyed by the APC prefix block hash, and restores it verbatim. The L0 mechanism gate passed on June&nbsp;29, 2026: the restored checkpoint is bit-exact, and across the live replay 47 of 48 GDN layers sit at floating-point-level drift, with the residual attributable to a measurement artifact that the no-cache control itself exceeds.</p>
+      <p>Turning on vLLM's align-mode cache as-is poisoned the model: acceptance collapsed, output garbled, and the coding agent gave up with empty patches. We root-caused this to a two-layer defect. First, a staleness bug: the align snapshot reads a block-aligned state row that the tree committer never wrote, so the cache stored a stale or branch-loser row. Second, a realization gap: even the correct row holds the recurrent-decode kernel's realization of the state, while a cache hit resumes through the chunked-prefill kernel; the two realizations differ by roughly 0.0078 per block boundary and the error compounds across boundaries. The fix chain &mdash; <code>SNAP_FIX</code> for staleness, <code>EXACT_SEED</code> for the realization gap &mdash; caches the chunked-prefill realization at 64-aligned checkpoint positions, keyed by the APC prefix block hash, and restores it verbatim. The L0 mechanism gate passed on June&nbsp;29, 2026: the restored checkpoint is bit-exact for the boot's first request (a scope this page later corrects &mdash; see <a href="#read-side">Read-side</a>), and across the live replay 47 of 48 GDN layers sit at floating-point-level drift, with the residual attributable to a measurement artifact that the no-cache control itself exceeds.</p>
 
       <div class="definition-box" aria-label="Formal definition of lossless for this paper">
-        <p><strong>Lossless, as claimed here, is a ladder:</strong> L0 (mechanism) &mdash; the restored GDN state is bit-exact against a continuous no-cache reference; passed. L1&ndash;L2 (behavioral) &mdash; cache-ON preserves task resolution on every tree&times;cache arm; holds on the full 6/6 matrix, which is three matched pairs and not yet statistically powered. L3 (statistical) &mdash; an N-repeat Fisher-exact resolve-rate comparison; still open. "Lossless" in this page means L0 proven plus L1&ndash;L2 consistent, not a closed statistical claim.</p>
+        <p><strong>Lossless is two axes, not one ladder.</strong> <em>Numerical</em> losslessness (the restored state matches a no-cache reference) is necessary but not sufficient; <em>behavioral</em> losslessness (the served token distribution, and the agent's trajectory, match cache-off) is the deployment-binding axis. This page reports numerical closure on the single-stream path and is honest that the behavioral axis is <strong>settled for the native decode path and open for the tree decode path</strong>. Two corrections since first publication sharpen the claim: our bit-exact state diff measured only the first request of a boot (Section&nbsp;<a href="#read-side">Read-side</a>), and the one sufficient distributional gate &mdash; a temp-0.6 q-vs-p total-variation test &mdash; was designed, found not computable from banked data, and <strong>never run</strong> (Section&nbsp;<a href="#lossless">Lossless</a>).</p>
+      </div>
+
+      <div class="source-exhibit" aria-label="Update since first publication">
+        <div class="source-head">
+          <strong>Update &mdash; July 2026</strong>
+          <span>What changed between the first publication and 2026-07-06</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Third carrier</span><p>A read-side defect surfaced: vLLM never zeroes recycled recurrent-state pool rows, so request&nbsp;N reads request&nbsp;N&minus;1's residue. Every earlier "bit-exact" measurement had unknowingly used only request&nbsp;#1 of a boot. Fixed by two newly-baked allocator fixes.</p></div>
+          <div class="box warn"><span class="tag">Honest axis</span><p>Every historical lossless gate validated a mode-preserving invariant a lossy kernel can pass. Numerical closure is now demoted to necessary-not-sufficient; the sufficient distributional gate is still unrun.</p></div>
+          <div class="box good"><span class="tag">Native works</span><p>Under concurrent shared caching (four agents, one server), the native decode path resolves with the cache on and no give-ups &mdash; the deployable Product-1 result.</p></div>
+          <div class="box warn"><span class="tag">Tree is the frontier</span><p>The forked tree decode path has two open carriers under the shared cache &mdash; branch drift and a restore&times;tree-decode give-up. The goal is to fix the tree restore to match native, keeping branches, cache, and concurrency.</p></div>
+        </div>
       </div>
 
       <h3>Names in this paper</h3>
@@ -1281,6 +1296,12 @@
         <div><dfn>realization</dfn><span>the numerical trajectory a specific kernel produces; chunked-prefill and recurrent-decode kernels realize the same math differently.</span></div>
         <div><dfn>EXACT_SEED</dfn><span>our fix: chunked-realization checkpoints at 64-aligned positions, keyed by prefix block hash, restored verbatim.</span></div>
         <div><dfn>SNAP_FIX</dfn><span>the write-side fix that snapshots the committed accepted-leaf row instead of a stale block-aligned row.</span></div>
+        <div><dfn>ZERO_MAMBA</dfn><span>the read-side fix: zero freshly-(re)allocated recurrent-state pool rows, which stock vLLM leaves uninitialized.</span></div>
+        <div><dfn>COPY_SRC_FIX</dfn><span>freshness gate that stops a stale accepted-tree stamp from redirecting a cold prefill's state-carry copy to an unwritten row.</span></div>
+        <div><dfn>naive_mtp / tree_mtp</dfn><span>the two decode paths: native linear MTP on FLASH_ATTN, versus the forked tree verifier on TREE_ATTN.</span></div>
+        <div><dfn>greedy-LCP</dfn><span>the tree committer's acceptance rule (longest prefix matching the verify argmax); it is not exact rejection sampling.</span></div>
+        <div><dfn>CONC=4 / B=4</dfn><span>four concurrent agents sharing one server and its prefix cache; the deployment regime for the shared-cache feature.</span></div>
+        <div><dfn>give-up vs ramble</dfn><span>the two tree failure shapes: an empty-patch give-up after a couple of turns, versus a long garbled trajectory.</span></div>
         <div><dfn>chain5 / E5</dfn><span>the forked tree kernel run as a linear 5-node chain &mdash; native-MTP-5 topology, not the stock native kernel.</span></div>
         <div><dfn>cat6root / cat8</dfn><span>6-node and 8-node speculative token trees from Vol. III's verifier.</span></div>
         <div><dfn>TTFT</dfn><span>time to first token of a turn; the metric prefix caching actually moves.</span></div>
@@ -1293,15 +1314,16 @@
         <div class="panel">
           <h2>Contribution</h2>
           <p>This page treats prefix caching for recurrent hybrids as a correctness problem first and a speed problem second. The contribution is the cache contract &mdash; committed state only, single kernel realization, aligned checkpoint positions, turn-stable identity &mdash; plus a working implementation of that contract inside vLLM's align mode, validated by a bit-exact state diff rather than by output vibes.</p>
-          <p>The tree verifier this cache serves is Vol. III's subject, with its own formal writeup, <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/papers/gdn-tree-scan-mlsys/main.pdf">GDN Tree-Scan: Served Tree Verification for Recurrent-Hybrid Language Models</a>. This page is self-contained: it states why recurrent state breaks prefix caching, shows the two-layer defect, gives the EXACT_SEED mechanism, reports the two-lens serving result, and records the failed routes.</p>
+          <p>The tree verifier this cache serves is Vol. III's subject, with its own formal writeup, <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/papers/gdn-tree-scan-mlsys/main.pdf">GDN Tree-Scan: Served Tree Verification for Recurrent-Hybrid Language Models</a>. This page is self-contained: it states why recurrent state breaks prefix caching, shows the write-side defect and the read-side carrier that followed it, gives the EXACT_SEED mechanism, reports the two-lens serving result, is honest about which lossless gates were ever sufficient, and ends at the current frontier &mdash; the cache works on the native decode path under concurrency, and the tree path is the open fix.</p>
         </div>
         <aside class="panel">
           <h2>Status</h2>
           <div class="claim-list">
             <div class="claim"><span class="state pass">RESTORE</span><p>EXACT_SEED checkpoint restore is bit-exact (L0 gate passed 2026-06-29); the live replay holds 47/48 GDN layers at fp-level drift.</p></div>
             <div class="claim"><span class="state pass">SPEED</span><p>TTFT ~4&times; with 85&ndash;89% prefix hit on every arm of the single-task B=1 matrix; decode cost is flat (~247&nbsp;ms/forward ON and OFF).</p></div>
-            <div class="claim"><span class="state pass">BEHAVIOR</span><p>All six tree&times;cache arms resolve the proxy task; the old "cache-ON fails" pattern is retired.</p></div>
-            <div class="claim"><span class="state warn">LIMITS</span><p>Single proxy task; statistical lossless gate open; EXACT_SEED proven and gate-used but not yet the launch default.</p></div>
+            <div class="claim"><span class="state pass">NATIVE</span><p>Under concurrent shared caching (four agents), the native decode path resolves cache-on with no give-ups (3/4 vs 4/4 cache-off) &mdash; the deployable result.</p></div>
+            <div class="claim"><span class="state warn">TREE</span><p>The forked tree path has two open carriers under the shared cache: branch drift (ramble) and a restore&times;tree-decode give-up. Native is immune to both.</p></div>
+            <div class="claim"><span class="state warn">LIMITS</span><p>The sufficient distributional gate is still unrun; behavioral losslessness is settled for native, open for the tree.</p></div>
           </div>
         </aside>
       </div>
@@ -1326,7 +1348,7 @@
       <aside class="sidenote">
         <p><strong>Read path:</strong> the main argument is the problem, the defect, the mechanism, and the results. Everything else is audit material and stays in folds.</p>
       </aside>
-      <p>The shortest version: a prefix cache for a recurrent hybrid is a state-checkpointing system, not a KV lookup. vLLM's align mode checkpoints the wrong row in the wrong kernel realization once a tree committer is in the loop. We fixed the row (<code>SNAP_FIX</code>), then fixed the realization (<code>EXACT_SEED</code>), proved the restore bit-exact, and banked a ~4&times; TTFT win at 85&ndash;89% prefix hit &mdash; on a single-task B=1 matrix, one run per arm &mdash; with decode untouched.</p>
+      <p>The shortest version: a prefix cache for a recurrent hybrid is a state-checkpointing system, not a KV lookup. vLLM's align mode checkpoints the wrong row in the wrong kernel realization once a tree committer is in the loop; we fixed the row (<code>SNAP_FIX</code>), fixed the realization (<code>EXACT_SEED</code>), and banked a ~4&times; TTFT win at 85&ndash;89% prefix hit on a single-task matrix with decode untouched. Then two things widened the story: a read-side carrier showed the bit-exact proof had only ever measured a boot's first request, and the concurrency regime showed the cache works on the native decode path but not yet on the tree path. The honest state is numerical closure on the single stream, native decode behaviorally clean under shared caching, and the tree decode path the open frontier.</p>
 
       <div class="source-exhibit" aria-label="Five-minute reading path">
         <div class="source-head">
@@ -1338,7 +1360,8 @@
           <div class="box bad"><span class="tag">Defect</span><p>The align cache stored a stale row (staleness) holding the wrong kernel's numbers (realization gap). Both had to fall.</p></div>
           <div class="box good"><span class="tag">Mechanism</span><p>EXACT_SEED: capture the chunked realization at 64-aligned positions during prefill, key by prefix block hash, restore verbatim.</p></div>
           <div class="box good"><span class="tag">Result</span><p>TTFT ~4&times; on every arm of the single-task B=1 matrix, 85&ndash;89% hit, decode flat, all six arms resolve the proxy task. The cache's payoff is entirely prefill-side.</p></div>
-          <div class="box warn"><span class="tag">Caveats</span><p>Single proxy task; three matched pairs are not statistical power; the forked tree arms have a separate open structured-output defect.</p></div>
+          <div class="box bad"><span class="tag">Read-side</span><p>A third carrier: recycled recurrent-state rows are never zeroed, so a later request reads the previous one's residue. It hid because every bit-exact test used the first request of a boot.</p></div>
+          <div class="box warn"><span class="tag">Frontier</span><p>Under concurrent shared caching, native decode works and the forked tree path does not &mdash; two open carriers. Fixing the tree restore to match native is the current goal.</p></div>
         </div>
       </div>
 
@@ -1508,16 +1531,22 @@
               <td><span class="pill good">closed</span> decode is weight-bandwidth-bound (~27 GB fp8/forward); the cache's 7.89 MiB is 0.028% of that stream.</td>
             </tr>
             <tr>
-              <td>Behavioral losslessness holds</td>
-              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_PAPER_RESULTS_AND_VERDICTS.md">results &amp; verdicts doc &sect;5</a></td>
-              <td>All six tree&times;cache arms resolve the proxy task (2026-07-01)</td>
-              <td><span class="pill warn">open</span> consistent with L0, but 3 matched pairs is not power; N-repeat Fisher gate pending.</td>
+              <td>The bit-exact proof was request-#1-only</td>
+              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CACHE_FIX_KT.md">cache-fix catalog (read-side)</a></td>
+              <td>Recycled recurrent rows never zeroed; order-probe fix-off vs fix-on</td>
+              <td><span class="pill bad">corrected</span> the proof measured a boot's first request; the read-side carrier is now closed by ZERO_MAMBA + COPY_SRC (order-probe 24/24, spread 0.0).</td>
             </tr>
             <tr>
-              <td>Deployment config is native MTP-5 + EXACT_SEED</td>
-              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CHAIN5_VS_NATIVE_MTP_PLAN.md">chain5-vs-native localization</a></td>
-              <td>qwen-code harness: native+cache 4/5 with char-8 = 0; forked tree arm stalls</td>
-              <td><span class="pill warn">open</span> the residual defect sits in the forked tree kernel/config's structured output, not the cache; three config axes still confounded.</td>
+              <td>Native decode + shared cache is behaviorally clean</td>
+              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREECACHE_CAMPAIGN_20260704.md">campaign log &sect;103</a></td>
+              <td>Four concurrent agents, four tasks, official env: native 3/4 cache-on, no give-ups</td>
+              <td><span class="pill good">closed</span> the sufficient distributional gate is still unrun, so this is behavioral-consistent, not distributionally-proven.</td>
+            </tr>
+            <tr>
+              <td>The tree decode path is the open frontier</td>
+              <td><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_CACHE_LOSSY_MECHANISM.md">tree+cache lossy mechanism</a></td>
+              <td>Two carriers: branch drift (ramble) and restore&times;tree-decode (give-up); native immune</td>
+              <td><span class="pill warn">open</span> the fix target is the tree decode path's handling of the restored state under concurrent sharing.</td>
             </tr>
           </tbody>
         </table>
@@ -1720,6 +1749,111 @@
       </div>
     </section>
 
+    <section class="section" id="read-side">
+      <h2>The Third Carrier: Uninitialized Recurrent Memory</h2>
+      <aside class="sidenote">
+        <p><strong>Write-side vs read-side:</strong> the two-layer defect above was about what the cache <em>stored</em>. This one is about what a fresh request <em>reads</em> before it writes &mdash; memory the allocator handed out without clearing.</p>
+        <p><strong>Why it hid:</strong> a boot zeroes all memory once, so the first request of every boot is always clean. Every bit-exact test we ran happened to be a first request.</p>
+      </aside>
+      <p>The defect above is a write-side family: the cache saved the wrong row (staleness) in the wrong numerical dialect (the realization gap), and <code>SNAP_FIX</code> plus <code>EXACT_SEED</code> fixed what gets written. On 2026-07-05 a third, independent carrier surfaced on the read side &mdash; and it forced a correction to this page's own bit-exact claim.</p>
+      <p><strong>The mechanism.</strong> vLLM zeroes freshly allocated cache blocks, but only for full-attention groups; the recurrent-state (mamba/GDN) pool rows are never memset on (re)allocation. A boot zeroes the whole pool once, so request&nbsp;#1 always starts from clean state. But when a later request is handed a recycled row, it reads the previous request's residue as its recurrent seed on the cold prefill path. The corruption is therefore keyed by <em>request order within a boot</em>, not by sampling seed &mdash; and that is exactly why it evaded detection.</p>
+      <p><strong>The vacuity correction.</strong> Every earlier "bit-exact" instrument in this campaign sent seed <em>i</em> as the <em>i</em>-th request of a boot, conflating seed with send-order, and each single-request probe measured request&nbsp;#1. So all of them measured clean state and were vacuous for this carrier. The smoking gun was a logprob capture that had been recorded and never read: on a byte-identical cold request, the tree-cache arm's first-token log-probability varied with send order across a full boot (roughly &minus;0.001 down to &minus;1.37), while the no-cache control held &minus;0.001 flat on all sixteen. Log-probabilities are pre-temperature and seed-independent, so identical cold inputs producing different logits is a per-request state contamination, not sampling noise. Our L0 state diff was not wrong; it was narrow &mdash; it proved the prefill restore bit-exact for the first request, which is a necessary rung, not the whole claim.</p>
+
+      <div class="figure" aria-labelledby="fig3-title">
+        <div class="figure-head"><strong id="fig3-title">Figure 3</strong><span>Request #1 starts from zeroed memory; request #2 inherits the residue a recycled row still holds</span></div>
+        <svg class="diagram" viewBox="0 0 1120 360" role="img" aria-label="Read-side carrier: recycled recurrent-state rows are never zeroed, so a later request reads the previous request's residue">
+          <defs>
+            <marker id="f4-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+            <marker id="f4-arrow-r" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
+            </marker>
+          </defs>
+          <text x="24" y="34" class="label">Boot: the whole pool is zeroed once</text>
+          <rect x="24" y="48" width="150" height="40" rx="6" class="node node-green"></rect>
+          <text x="38" y="72" class="tiny">pool = all zeros</text>
+
+          <text x="24" y="132" class="label">Request #1 (always clean)</text>
+          <rect x="24" y="148" width="150" height="44" rx="8" class="node node-cyan"></rect>
+          <text x="38" y="168" class="tiny">alloc fresh rows</text>
+          <text x="38" y="184" class="tiny">(zeroed at boot)</text>
+          <path d="M182 170 H262" class="arrow" style="marker-end:url(#f4-arrow)"></path>
+          <rect x="270" y="148" width="170" height="44" rx="8" class="node node-cyan"></rect>
+          <text x="284" y="168" class="tiny">read 0 &rarr; write state</text>
+          <text x="284" y="184" class="tiny">clean seed</text>
+          <path d="M448 170 H528" class="arrow" style="marker-end:url(#f4-arrow)"></path>
+          <rect x="536" y="148" width="150" height="44" rx="8" class="node node-green"></rect>
+          <text x="550" y="172" class="tiny">correct route</text>
+
+          <text x="24" y="240" class="label">Request #2 (recycled row, never re-zeroed)</text>
+          <rect x="24" y="256" width="150" height="44" rx="8" class="node node-rose"></rect>
+          <text x="38" y="276" class="tiny">alloc recycled row</text>
+          <text x="38" y="292" class="tiny">(holds #1's residue)</text>
+          <path d="M182 278 H262" class="arrow" style="marker-end:url(#f4-arrow-r)"></path>
+          <rect x="270" y="256" width="170" height="44" rx="8" class="node node-rose"></rect>
+          <text x="284" y="276" class="tiny">read residue as seed</text>
+          <text x="284" y="292" class="tiny">contaminated cold start</text>
+          <path d="M448 278 H528" class="arrow" style="marker-end:url(#f4-arrow-r)"></path>
+          <rect x="536" y="256" width="150" height="44" rx="8" class="node node-rose"></rect>
+          <text x="550" y="280" class="tiny">give-up / garble</text>
+
+          <rect x="720" y="148" width="376" height="152" rx="8" class="node"></rect>
+          <text x="738" y="172" class="tiny">The two fixes:</text>
+          <text x="738" y="196" class="tiny">ZERO_MAMBA_ON_ALLOC &mdash; zero every freshly</text>
+          <text x="738" y="212" class="tiny">allocated recurrent row (what stock vLLM skips).</text>
+          <text x="738" y="236" class="tiny">COPY_SRC_FIX &mdash; on a cold prefill, drop a stale</text>
+          <text x="738" y="252" class="tiny">accepted-tree stamp so the state-carry copy does</text>
+          <text x="738" y="268" class="tiny">not redirect to an unwritten, zeroed row.</text>
+          <text x="738" y="292" class="tiny">Result: order-dependence gone, spread 0.0.</text>
+        </svg>
+        <p class="caption">Figure 3 is intentionally allocation-only. The corruption is a property of the memory a request is handed, not of its tokens or its seed &mdash; which is why a per-token, single-request, seed-swept instrument could pass while the defect was live. The order-keyed signature is the tell: same input, different output as a function of position in the request stream.</p>
+      </div>
+
+      <p><strong>The fixes.</strong> Two allocator-layer fixes, both now baked default-on. <code>ZERO_MAMBA_ON_ALLOC</code> records freshly popped recurrent-block ids and zeroes their conv and SSM rows &mdash; the memset stock vLLM performs for attention blocks but not for mamba. <code>COPY_SRC_FIX</code> closes the residual: a batch-position-keyed accepted-tree stamp was never cleared when a request finished, so a later cold prefill inherited a stale tree, and the state-carry copy then redirected its source to a future, never-written (now zeroed) row &mdash; a whole-row zero carry. The fix freshness-gates the stamp, suppressing it on a cold prefill that has no fresh tree of its own. Because the corruption is a read-side, order-keyed property, these fixes belong to the universal allocator family: native inherits them for free as insurance, while the tree was the config observably bitten by the residue reads.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Order-probe gate: first-token route across a boot, fix off then on. Spread is the log-prob range across a fixed seed sent repeatedly.</caption>
+          <thead>
+            <tr>
+              <th>Probe</th>
+              <th>Fix off (baseline)</th>
+              <th>Fix on (ZERO_MAMBA + COPY_SRC)</th>
+              <th>Reading</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Fixed seed, 10 cold requests</td>
+              <td class="num">spread 1.31 nats, 4 routes, garble &times;3</td>
+              <td class="num">spread 0.0, one route, no garble</td>
+              <td>Order-dependence at a single seed &mdash; the carrier's signature &mdash; is eliminated.</td>
+            </tr>
+            <tr>
+              <td>Fixed seed, 6 cache-hit requests</td>
+              <td class="num">route flips miss-vs-hit</td>
+              <td class="num">byte-stable, spread 0.0</td>
+              <td>The restore path stops freezing in the contaminated state.</td>
+            </tr>
+            <tr>
+              <td>No-cache control</td>
+              <td class="num">spread 0.0</td>
+              <td class="num">spread 0.0</td>
+              <td>The control was always clean &mdash; the arm now matches it exactly.</td>
+            </tr>
+            <tr>
+              <td>Order-dependence verdict</td>
+              <td><span class="pill bad">ORDER_DEPENDENT</span></td>
+              <td><span class="pill good">24/24, spread 0.0</span></td>
+              <td>The tree-cache arm now carries the identical signature to no-cache.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>With both fixes baked, the campaign recorded the first tree-plus-cache SWE resolution in its history (astropy-13453, 34 turns, a 551-byte patch) &mdash; the give-up route that had been fatal on every prior cache-on run finally reached a real edit. That result held at a single stream; the concurrency regime, below, is where it comes apart again.</p>
+    </section>
+
     <section class="section" id="design-trail">
       <h2>How We Arrived at EXACT_SEED</h2>
       <aside class="sidenote">
@@ -1839,8 +1973,8 @@
         <div>6&nbsp; hit: manager reconstructs the hash &rarr; worker seeds initial_state per layer &rarr; <span class="ok">tail (&lt;64 remainder + decoded suffix) re-runs through the same chunked kernel</span></div>
       </div>
 
-      <div class="figure" aria-labelledby="fig3-title">
-        <div class="figure-head"><strong id="fig3-title">Figure 3</strong><span>The checkpoint pipeline: capture, bind, store, seed &mdash; one realization end to end</span></div>
+      <div class="figure" aria-labelledby="fig4-title">
+        <div class="figure-head"><strong id="fig4-title">Figure 4</strong><span>The checkpoint pipeline: capture, bind, store, seed &mdash; one realization end to end</span></div>
         <svg class="diagram" viewBox="0 0 1120 420" role="img" aria-label="EXACT_SEED pipeline from prefill capture through prefix-hash store to cache-hit seeding">
           <defs>
             <marker id="f3-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
@@ -1889,7 +2023,7 @@
           <text x="40" y="326" class="tiny">What never enters the cache: recurrent-decode realizations, spec node-bank rows, uncommitted candidate tokens, positions that are not 64-aligned.</text>
           <text x="40" y="348" class="tiny">Color key: cyan = chunked realization, amber = identity plumbing, green = the hit path. Decode is untouched: the cache is invisible to the forward pass.</text>
         </svg>
-        <p class="caption">Figure 3 is intentionally cache-only. The speculative verifier from Vol. III runs unchanged above this pipeline; the committer's only new duty is publishing the committed leaf so clause one of the contract holds. Everything else is prefill-side plumbing, which is why the decode-cost table in the results is flat.</p>
+        <p class="caption">Figure 4 is intentionally cache-only. The speculative verifier from Vol. III runs unchanged above this pipeline; the committer's only new duty is publishing the committed leaf so clause one of the contract holds. Everything else is prefill-side plumbing, which is why the decode-cost table in the results is flat.</p>
       </div>
 
       <p>Two engineering notes survived deployment hardening. The checkpoint store is LRU-bounded on the <code>BlockPool</code> and kept GPU-resident &mdash; an early version leaked host RSS by never evicting, and a <code>.cpu()</code> copy per checkpoint was both the leak's amplifier and a needless sync on GB10's unified memory. And a decode-time committer that recomputed checkpoints during decode turned out to be vestigial: deleting its 608 lines removed 48 host-syncs per step and re-verified bit-identical, confirming the prefill-capture chain is the entire working mechanism.</p>
@@ -2131,8 +2265,20 @@
             <tr>
               <td>L0 state restore</td>
               <td>Per-layer GDN state diff, cache-ON vs continuous no-cache, live replay @ block 1024</td>
-              <td><span class="pill good">bit-exact</span></td>
-              <td>47/48 layers fp-level; drift chain 77.96 &rarr; 38.36 &rarr; 30.11 with the residual attributed to the reducer, not the restore.</td>
+              <td><span class="pill good">bit-exact</span> <span class="pill warn">request #1 only</span></td>
+              <td>47/48 layers fp-level; but it measured the first request of a boot &mdash; see the read-side correction row.</td>
+            </tr>
+            <tr>
+              <td>Read-side vacuity</td>
+              <td>Whether the bit-exact probes ever exercised a recycled recurrent-state row</td>
+              <td><span class="pill bad">corrected</span></td>
+              <td>They did not: seed was conflated with send-order, so every probe measured request&nbsp;#1's zeroed state. Now closed by ZERO_MAMBA + COPY_SRC (order-probe 24/24, spread 0.0).</td>
+            </tr>
+            <tr>
+              <td>Greedy-LCP committer</td>
+              <td>Does the spec-decode losslessness theorem cover the branch-fork verify?</td>
+              <td><span class="pill bad">no theorem</span></td>
+              <td>The committer accepts by longest-prefix-match to the verify argmax, not exact rejection sampling &mdash; so a perturbed seed can change the committed token with nothing to prevent it. The spine-5 proof never exercises the sibling fork.</td>
             </tr>
             <tr>
               <td>Committer-deletion control</td>
@@ -2160,15 +2306,142 @@
             </tr>
             <tr>
               <td>Temp-0.6 distributional gate</td>
-              <td>TV(q,p) drift at deployment temperature</td>
-              <td><span class="pill warn">not computable</span></td>
-              <td>The sampled q was never banked; producing a number would be a vacuous instrument. Only the temp-0 argmax pass exists (13.548% vs native 13.985%, overlapping CIs, Vol. III-era).</td>
+              <td>TV(q,p) drift at deployment temperature &mdash; the one sufficient test</td>
+              <td><span class="pill bad">designed, never run</span></td>
+              <td>The sampled q was never banked; it was queued behind the speed campaign and remains the single missing sufficient measurement. Only the temp-0 argmax pass exists (13.5% vs native 14.0%, overlapping CIs), which is necessary-not-sufficient.</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <p>One earlier gate deserves its correction in print. On June 30, before the thinking cap, the matrix's first two arms produced the opposite of the feared pattern: E5 cache-ON resolved in 55 turns while E5 cache-OFF flailed for 112 turns with zero patch attempts. If the cache were behaviorally lossy, cache-ON should fail more, not less. That flip, plus the 6/6 matrix a day later, is what converts "the cache no longer fails tasks" from hope into evidence &mdash; while the pending Fisher gate keeps it honest.</p>
+      <h3>Numerical closure is not behavioral closure</h3>
+      <p>Reviewing the full gate history against source produced an uncomfortable finding: every gate that ever passed validated a mode-preserving or self-consistent invariant &mdash; a temp-0 argmax match, a byte-identical committer rewrite, a superset over the tree's <em>own</em> drafts, or a teacher-forced oracle that re-converges by construction. Each is exactly the kind of invariant a kernel can satisfy while still reshaping the temp-0.6 sampled tail at the high-entropy tool-call and code-fence boundaries where the corruption actually lives. The one gate that measures the deployment-binding quantity &mdash; the total variation between the verify and decode distributions at serving temperature &mdash; was fully designed, found not computable from banked data, and never run. So this page now treats losslessness as two required axes: a <em>numerical</em> axis (the L0 rungs above, necessary-not-sufficient) and a <em>behavioral</em> axis (a generation-integrity tier plus the distributional gate, with the agent and its nudge net held constant across arms).</p>
+      <p>Two structural reasons the numerical axis cannot stand alone here. First, the tree committer accepts tokens by greedy longest-prefix-match to the verify argmax, not by exact rejection sampling &mdash; and the standard speculative-decoding losslessness theorem holds <em>only</em> under exact rejection sampling. "Lossless" on this path has only ever meant "committed token equals the verify argmax"; if that argmax is computed from a perturbed recurrent seed, the committed token can differ from a clean per-path forward with no theorem to forbid it. Second, the published bit-exact proof covers the prefill restore, not the branching verify: the state-diff harness captures the prefill scan and never exercises the sibling-fork committer path, so the branch-fork verify has no losslessness proof anywhere. These are not contradictions with the L0 pass &mdash; they locate the open channel downstream of it.</p>
+
+      <div class="confidence-row" aria-label="Lossless confidence">
+        <strong>Confidence</strong>
+        <p>High that the single-stream prefill restore is numerically closed and that the read-side carrier is fixed; medium that the native decode path is behaviorally lossless under concurrent caching (it resolves without give-ups, but the sufficient distributional gate has not run); leaning-lossy, not proven-lossy, on the tree decode path under the cache &mdash; the clean same-agent contrast points at the cache, and the one experiment that would settle it is still unrun.</p>
+      </div>
+
+      <p>One earlier gate deserves its correction in print. On June 30, before the thinking cap, the matrix's first two arms produced the opposite of the feared pattern: the tree-spine (chain5) arm resolved in 55 turns with the cache on while the same arm flailed for 112 turns with zero patch attempts cache-off. That flip retired the crude "cache-ON always fails" reading &mdash; but it was a single-stream, single-task result on a tree arm, and the concurrency work below shows it does not generalize once several agents share one cache.</p>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>Where It Stands: Native Works, the Tree Is the Frontier</h2>
+      <aside class="sidenote">
+        <p><strong>The deployment regime:</strong> the point of a shared prefix cache is that many agents reuse the same system-prompt prefix. So the binding test is not one stream &mdash; it is several agents concurrently sharing one server and one cache.</p>
+        <p><strong>Two failure shapes:</strong> a <em>give-up</em> is an empty patch after a couple of turns; a <em>ramble</em> is a long garbled trajectory. They have different carriers.</p>
+      </aside>
+      <p>Everything above is single-stream. The feature the cache exists to enable is concurrent: several coding agents, each replaying the same lengthy system prompt, sharing one server's prefix cache for the compounding time-to-first-token win. Under that regime the single-stream result does not survive on the tree path &mdash; and pinning down why is the current frontier. The controlled grid below runs four concurrent agents on four SWE tasks, crossing the decode path against the cache, in the official per-instance evaluation image.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Four concurrent agents, four SWE tasks, official env: resolves per cell, decode path &times; cache. Both allocator fixes baked.</caption>
+          <thead>
+            <tr>
+              <th>Decode path</th>
+              <th>Cache off</th>
+              <th>Cache on (EXACT_SEED)</th>
+              <th>Reading</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>native (naive_mtp / FLASH_ATTN)</td>
+              <td class="num">4/4</td>
+              <td class="num">3/4, no give-ups</td>
+              <td><span class="pill good">deployable</span> the cache is behaviorally clean on native.</td>
+            </tr>
+            <tr>
+              <td>chain5 (tree spine / TREE_ATTN)</td>
+              <td class="num">3/4</td>
+              <td class="num">1/4</td>
+              <td><span class="pill warn">give-ups</span> the cache drops the pure spine &mdash; carrier B is not branch-specific.</td>
+            </tr>
+            <tr>
+              <td>cat8 (tree branches / TREE_ATTN)</td>
+              <td class="num">1/4</td>
+              <td class="num">0/4</td>
+              <td><span class="pill bad">both carriers</span> branch drift and cache give-up compound.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The grid separates two independent carriers, both living in the forked tree decode path, both of which native's decode path is immune to.</p>
+      <div class="grid" aria-label="The two tree-path carriers">
+        <div class="box warn">
+          <span class="tag">Carrier A &mdash; branch drift</span>
+          <h3>Cache-off ramble</h3>
+          <p>Cache off, native resolves 4/4 but the branch tree drops to 1/4 with long garbled trajectories, while the pure spine stays at 3/4. This is the known diffuse GDN drift &mdash; roughly a floating-point unit of realization error per recurrent layer, correlated and compounding across 48 layers until an argmax flips. The forked spine drifts at native's level; the co-resident branches add the excess. It is branch-specific.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Carrier B &mdash; restore &times; tree-decode</span>
+          <h3>Cache-on give-up</h3>
+          <p>Turning the cache on drops the pure spine from 3/4 to 1/4 and the branches from 1/4 to 0/4, as empty-patch give-ups. It is not branch-specific &mdash; it hits the linear spine too. The tell: the identical, engaged EXACT_SEED restore leaves native at 3/4 with no give-ups. The restore itself is fine; the tree decode path's handling of the restored recurrent and conv state is the carrier.</p>
+        </div>
+      </div>
+
+      <p><strong>Isolating carrier B.</strong> An early reading blamed a "different cache path" on native. That was wrong, and correcting it sharpened the diagnosis. The native arm genuinely engages the same cache &mdash; the same allocator-zeroing fix fires hundreds of times, at a 92% prefix-hit rate &mdash; and so does the tree spine. The one variable left between a native resolve and a tree give-up, on the same task with the cache on, is the decode kernel: native runs linear MTP on FLASH_ATTN, the tree runs the forked verifier on TREE_ATTN. A per-task control makes it clean: on the same task, the tree spine resolves with the cache off and gives up with the cache on. Same tree decode path, cache the only difference.</p>
+
+      <div class="figure" aria-labelledby="fig5-title">
+        <div class="figure-head"><strong id="fig5-title">Figure 5</strong><span>The same engaged restore feeds two decode paths; only the forked tree path gives up</span></div>
+        <svg class="diagram" viewBox="0 0 1120 340" role="img" aria-label="The EXACT_SEED restore feeds both the native and tree decode paths; native is immune, the tree path gives up">
+          <defs>
+            <marker id="f5-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+            <marker id="f5-arrow-g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
+            </marker>
+            <marker id="f5-arrow-r" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
+            </marker>
+          </defs>
+          <rect x="24" y="132" width="230" height="60" rx="8" class="node node-amber"></rect>
+          <text x="40" y="156" class="tiny">shared EXACT_SEED cache</text>
+          <text x="40" y="174" class="tiny">restore (engaged, ~92% hit)</text>
+          <path d="M262 150 L360 96" class="arrow" style="marker-end:url(#f5-arrow-g)"></path>
+          <path d="M262 174 L360 244" class="arrow" style="marker-end:url(#f5-arrow-r)"></path>
+
+          <rect x="368" y="66" width="250" height="60" rx="8" class="node node-green"></rect>
+          <text x="384" y="90" class="tiny">native decode</text>
+          <text x="384" y="106" class="tiny">naive_mtp + FLASH_ATTN</text>
+          <path d="M626 96 H706" class="arrow" style="marker-end:url(#f5-arrow-g)"></path>
+          <rect x="714" y="66" width="180" height="60" rx="8" class="node node-green"></rect>
+          <text x="728" y="96" class="tiny">3/4, no give-ups</text>
+          <text x="728" y="112" class="tiny">immune</text>
+
+          <rect x="368" y="214" width="250" height="60" rx="8" class="node node-rose"></rect>
+          <text x="384" y="238" class="tiny">tree decode</text>
+          <text x="384" y="254" class="tiny">tree_mtp + TREE_ATTN</text>
+          <path d="M626 244 H706" class="arrow" style="marker-end:url(#f5-arrow-r)"></path>
+          <rect x="714" y="214" width="180" height="60" rx="8" class="node node-rose"></rect>
+          <text x="728" y="244" class="tiny">give-up (spine + branch)</text>
+          <text x="728" y="260" class="tiny">carrier B</text>
+
+          <rect x="912" y="132" width="184" height="76" rx="8" class="node"></rect>
+          <text x="926" y="156" class="tiny">Same restore, same</text>
+          <text x="926" y="172" class="tiny">hit rate, same fixes.</text>
+          <text x="926" y="188" class="tiny">Only the decode kernel</text>
+          <text x="926" y="204" class="tiny">differs &rarr; the carrier.</text>
+          <text x="24" y="308" class="tiny">Color key: amber = the shared cache, green = the immune native path, rose = the tree path that gives up. The restore is exonerated; its consumer is not.</text>
+        </svg>
+        <p class="caption">Figure 5 is intentionally decode-path-only. The cache, its hit rate, and both allocator fixes are held identical across the two branches; the only variable is the kernel that consumes the restored state. That is what turns "the cache is lossy" into the sharper, testable claim: the tree decode path's handling of a restored recurrent state is lossy, and the native path's is not.</p>
+      </div>
+
+      <p><strong>The concurrency reframe.</strong> A final correction reshaped the whole target. The give-ups appear at four concurrent agents, and the earlier single-stream result that looked clean was, in fact, run one agent at a time. So the difference between "solved" and "gives up" tracks concurrency itself: several agents sharing one prefix cache is a regime the single-agent fixes were never tested against. That makes the goal precise. The cross-agent shared cache is a required product feature &mdash; it is where the time-to-first-token win comes from &mdash; and it must hold for every decode path: native, tree spine, and tree branches. Native already holds. The deliverable is to make the shared-cache restore correct in the tree decode path under concurrent sharing, matching native, without dropping the branches, the cache, or the concurrency.</p>
+
+      <div class="source-exhibit" aria-label="Product framing">
+        <div class="source-head">
+          <strong>Two products, one open seam</strong>
+          <span>What is deployable now and what is being fixed</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Product 1 &mdash; native + shared cache</span><p>Native MTP decode with the concurrent shared prefix cache: resolves with no give-ups, the read-side carrier fixed, the time-to-first-token win intact. Deployable now.</p></div>
+          <div class="box warn"><span class="tag">Product 2 &mdash; tree superset + shared cache</span><p>The token-tree verifier is the point &mdash; its superset acceptance is the decode speedup Vol.&nbsp;III measured &mdash; so the tree is not something to drop for the spine. Its shared-cache restore is the open fix: two carriers to close before the branches inherit what native already has.</p></div>
+        </div>
+      </div>
     </section>
 
     <section class="section" id="measurement">
@@ -2291,7 +2564,7 @@
           <small>Every rejected route, what it looked like, and what killed it.</small>
         </summary>
         <div class="fold-body">
-          <p class="failure-note"><strong>Status key:</strong> <span class="pill good">settled</span> later evidence still supports the negative result; <span class="pill warn">superseded</span> the observation was real but the framing is replaced; <span class="pill bad">contaminated</span> the measurement cannot support the conclusion; <span class="pill info">open</span> parked, not disproven.</p>
+          <p class="failure-note"><strong>Status key:</strong> <span class="pill good">settled</span> later evidence still supports the negative result; <span class="pill warn">superseded</span> the observation was real but the framing is replaced; <span class="pill bad">contaminated</span> the measurement cannot support the conclusion; <span class="pill bad">corrected</span> a claim this page has since retracted; <span class="pill info">open</span> parked, not disproven.</p>
 
           <div class="failure-ledger" aria-label="Detailed failure library">
             <article class="failure-card settled">
@@ -2415,6 +2688,34 @@
               </ul>
               <p class="conclusion"><strong>Conclusion:</strong> the lossless deployment configuration today is native MTP-5 + EXACT_SEED; the forked tree arms wait on a de-confounding grid. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CHAIN5_VS_NATIVE_MTP_PLAN.md">Receipt</a>.</p>
             </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>The bit-exact proof was complete</h3><span class="pill bad">corrected</span></header>
+              <p><strong>Why it looked plausible:</strong> the L0 state diff showed 47/48 layers at floating-point drift with the residual attributable to the reducer &mdash; a clean bit-exact restore.</p>
+              <ul>
+                <li><strong>Evidence:</strong> every probe sent seed <em>i</em> as the <em>i</em>-th request of a boot, and a boot zeroes memory once, so all of them measured request&nbsp;#1's clean state. A recycled recurrent-state row &mdash; the read-side carrier &mdash; is never re-zeroed and was never in the sample.</li>
+                <li><strong>Later check:</strong> a re-read logprob capture showed the first-token distribution moving with send-order on identical cold input (spread 1.31 nats) while the no-cache control held flat.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> the proof was narrow, not wrong &mdash; it covered the prefill restore for the first request. Order-swept, multi-request probes are now the bar. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CACHE_FIX_KT.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>"Give-up extinct" generalizes</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked plausible:</strong> after the read-side fixes baked, a clean gate reported the give-up class extinct (0/9) and the first-ever tree-plus-cache resolve.</p>
+              <ul>
+                <li><strong>Evidence:</strong> that gate ran one agent at a time on a single task. The give-ups return at four concurrent agents sharing the cache &mdash; a regime the single-agent fixes were never tested against.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> the fixes closed their carrier; a second carrier lives in concurrent shared-cache restore on the tree path. The measurement completes the earlier one rather than contradicting it. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREECACHE_CAMPAIGN_20260704.md">Receipt</a>.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>The tree-kernel drift cancels, so the cache is safe</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked plausible:</strong> cache-off also re-seeds cold from the same prefill kernel, so the tree kernel's per-node drift is identical on and off &mdash; it should cancel in the on-vs-off comparison, making the cache a non-carrier.</p>
+              <ul>
+                <li><strong>Evidence:</strong> the cancellation holds for the recurrent seed but not for the downstream branching trajectory. Holding the nudge-free agent fixed, cat8 with the cache off engages 12&ndash;22 turns and produces real patches, while the same arm with the cache on gives up in two turns on the same tasks.</li>
+              </ul>
+              <p class="conclusion"><strong>Conclusion:</strong> leaning-lossy stands. The seed-level cancellation is real but partial; the lossy channel is the branch-fork verify, downstream of the bit-exact restore. <a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_SPINE_LOSSLESS_GATES.md">Receipt</a>.</p>
+            </article>
           </div>
         </div>
       </details>
@@ -2422,28 +2723,28 @@
     <section class="section" id="limitations">
       <h2>Threats to Validity</h2>
       <aside class="sidenote">
-        <p><strong>Honest scope:</strong> the mechanism claim is strong (bit-exact state restore); the behavioral claim is consistent but unpowered; the deployment recommendation is current as of 2026-07-02 and carries an open confound.</p>
+        <p><strong>Honest scope:</strong> the numerical restore is closed on the single stream; the behavioral axis is settled for the native decode path and open for the tree. The one sufficient distributional gate has still not run. Current as of 2026-07-06.</p>
       </aside>
       <div class="grid">
         <div class="box warn">
-          <span class="tag">Sample</span>
-          <h3>One proxy task, one run per arm</h3>
-          <p>The matrix is astropy-12907 at temp 0.6 with a single seed per arm. TTFT and hit rate replicate across arms; resolve outcomes and wall-clock do not constitute statistics. The N-repeat Fisher-exact gate on the proven config is the open formal step, and solve rates here are capped proxy-gate numbers, not SWE-Verified scores.</p>
+          <span class="tag">Concurrency</span>
+          <h3>The tree path is open under shared caching</h3>
+          <p>At four concurrent agents sharing one cache, native decode resolves cache-on (3/4, no give-ups) but the tree path does not: two carriers &mdash; branch drift (ramble) and a restore&times;tree-decode give-up. The fix target is the tree decode path's handling of the restored state under concurrent sharing; branches, cache, and concurrency all stay.</p>
         </div>
         <div class="box warn">
           <span class="tag">Distribution</span>
-          <h3>Temp-0.6 drift is unmeasured</h3>
-          <p>The binding distributional gate at deployment temperature is not computable from banked data (the sampled q was never captured); what exists is bit-exact state restore plus the Vol. III-era temp-0 argmax pass. A dedicated capture is queued.</p>
+          <h3>The sufficient gate has never run</h3>
+          <p>The deployment-binding distributional gate (temp-0.6 total variation between the verify and decode distributions) was designed, found not computable from banked data, and never run. Every gate that did pass was mode-preserving or self-consistent &mdash; necessary, not sufficient. Until it runs, the tree verdict is leaning-lossy, not proven.</p>
         </div>
         <div class="box warn">
-          <span class="tag">Fork status</span>
-          <h3>Tree arms carry an open defect</h3>
-          <p>As of 2026-07-02, on a nudge-free harness the forked-kernel tree config degrades structured tool-call output (8/8 empty patches) while native MTP-5 with the cache resolves 4/5 with zero char-8. The cache is exonerated &mdash; it was on in both arms &mdash; but the deployable lossless config today is native MTP-5 + EXACT_SEED, and TREE_ATTN / num_spec / topology remain confounded.</p>
+          <span class="tag">Bit-exact scope</span>
+          <h3>The proof is narrow, twice over</h3>
+          <p>The L0 bit-exact result measured only the first request of a boot (before the read-side carrier was found) and covers the prefill restore, not the branch-fork verify. Both gaps are now named; neither is closed for the tree path.</p>
         </div>
         <div class="box warn">
-          <span class="tag">Defaults</span>
-          <h3>Proven is not yet default</h3>
-          <p>EXACT_SEED is proven at L0, used by every gate, and behaviorally validated, but the launcher still ships it default-off pending the bake task. The char-8 proxy repair landed on 2026-07-01; a post-fix full-scale rerun of the earlier regression comparison has not happened yet.</p>
+          <span class="tag">Statistics</span>
+          <h3>Small N, single seeds</h3>
+          <p>The concurrency grid is four tasks with one run per cell; the single-stream matrix is one task per cell. Resolve outcomes are directional, not powered. Solve rates are capped proxy-gate numbers, not SWE-Verified scores, and the harness only recently moved to the official per-instance evaluation image.</p>
         </div>
       </div>
     </section>
@@ -2453,7 +2754,7 @@
       <aside class="sidenote">
         <p><strong>Why include config:</strong> for a caching result the flags are the paper. One missing flag silently moves the run onto a different cache mode, block geometry, or kernel realization &mdash; and this campaign has the vacuous-gate scars to prove it.</p>
       </aside>
-      <p>The launcher is the declared source of truth; where any note disagrees with it, the launcher wins. The cache stack below is what the six-arm matrix ran, and what the pending bake task will make the default.</p>
+      <p>The launcher is the declared source of truth; where any note disagrees with it, the launcher wins. The stack below is the current baked state as of 2026-07-06: the write-side, conv, and read-side fixes ship default-on, while EXACT_SEED remains a gate-only flag pending its decode-side completion.</p>
       <details class="fold">
         <summary>
           <span>Config table: load-bearing cache flags</span>
@@ -2502,9 +2803,29 @@
                   <td>Committed-leaf snapshot source under the tree committer; zero-accept steps publish the committed root.</td>
                 </tr>
                 <tr>
+                  <td>Conv-window fixes</td>
+                  <td><code>FR13_APC_CONV_SNAP_FIX=1</code> (baked 07-03), <code>FR13_APC_CONV_LEAF_COMPLETE=1</code> (baked 07-04)</td>
+                  <td>Conv twins of the SSM snapshot: the conv window is sourced from the committed accepted leaf at every snapshot boundary. A temp-0.6 TV gate proved the pre-fix conv restore lossy; CONV_SNAP_FIX is still partial (falls back on some rows).</td>
+                </tr>
+                <tr>
+                  <td>Read-side fixes</td>
+                  <td><code>FR13_APC_ZERO_MAMBA_ON_ALLOC=1</code>, <code>FR13_APC_COPY_SRC_FIX=1</code> (baked 07-06)</td>
+                  <td>Zero freshly-allocated recurrent rows (the memset stock vLLM skips for mamba), and freshness-gate the accepted-tree stamp so a cold prefill's carry copy does not redirect to an unwritten row. Close the order-keyed residue carrier.</td>
+                </tr>
+                <tr>
                   <td>Restore fix</td>
-                  <td><code>FR13_APC_EXACT_SEED=1</code> (gate config; launch default still 0)</td>
-                  <td>The chunked-realization checkpoint chain of this paper. Requires SNAP_FIX; supersedes the recurrent-suffix repair.</td>
+                  <td><code>FR13_APC_EXACT_SEED=1</code> (gate config; launch default still 0, decode-side redirect partial)</td>
+                  <td>The chunked-realization checkpoint chain of this paper. Requires SNAP_FIX; supersedes the recurrent-suffix repair. The prefill capture and restore are wired; the decode-side chunked-pointer redirect is not yet landed, so it falls back to the recurrent bank leaf.</td>
+                </tr>
+                <tr>
+                  <td>Concurrency / memory</td>
+                  <td><code>MAX_NUM_SEQS=4</code> (batch-aware): at B&ge;4 the launcher drops <code>GPU_UTIL</code> to 0.62 to free host room for the checkpoint store (0.88 at B=1)</td>
+                  <td>The shared-cache regime is the deployment target. On a GDN hybrid the recurrent checkpoint store, not KV, is the memory story; reserving KV steals from it. The "10 GB/min leak" was a bounded ~9.2 GB plateau (the checkpoint store at its LRU cap) grazing the guard fence, not a leak; the serving harness also widened its own fence (0.82&rarr;0.78).</td>
+                </tr>
+                <tr>
+                  <td>Eval harness</td>
+                  <td><code>SWE_AGENT_ENV=instance_image</code> (default)</td>
+                  <td>The agent now runs inside the official SWE-bench per-instance image (testbed conda, editable repo), so it and the grader share one environment. The earlier bare-worktree agent could not self-verify and deviated from published convention, so pre-fix resolve rates are not externally comparable.</td>
                 </tr>
                 <tr>
                   <td>Graph mode</td>
@@ -2530,7 +2851,7 @@
 
     <section class="section" id="receipts">
       <h2>Source Trail</h2>
-      <p>The claims above are grounded in tracked evidence files, raw workflow verdicts, code, and upstream issues. The APC campaign was developed on <code>fr13-prefix-cache</code>, merged to <code>main</code> on 2026-06-26, and hardened on <code>main</code> through HEAD <code>4005bf91</code> (2026-07-02).</p>
+      <p>The claims above are grounded in tracked evidence files, raw workflow verdicts, code, and upstream issues. The APC campaign was developed on <code>fr13-prefix-cache</code>, merged to <code>main</code> on 2026-06-26, and the read-side, conv, concurrency, and honesty findings on this page run through the §46&ndash;§107 tree+cache campaign on <code>main</code> to HEAD <code>2e268e1e</code> (2026-07-06).</p>
       <details class="fold">
         <summary>
           <span>Full source trail</span>
@@ -2538,6 +2859,12 @@
         </summary>
         <div class="fold-body">
           <ul class="receipt-list">
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREECACHE_CAMPAIGN_20260704.md">Tree+cache campaign log (§1&ndash;§107)</a> - the read-side carrier, the two allocator fixes, the B=4 grid, the two tree carriers, and the concurrency reframe.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CACHE_FIX_KT.md">Cache-fix catalog (KT)</a> - every prefix-cache fix by flag, its native-vs-tree applicability, and the write-side / read-side root-cause split.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_CACHE_LOSSY_MECHANISM.md">Tree+cache lossy mechanism</a> - the greedy-LCP committer, the producer-consumer kernel carrier, and the per-depth continue-rate signature.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_SPINE_LOSSLESS_GATES.md">Tree/spine lossless gates</a> - the inversion, the ES_OBSERVE flip, and the same-agent cache-off-vs-on correction.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_LOSSLESS_GATE_MISS.md">Lossless-gate miss</a> - why every historical gate was mode-preserving and the sufficient distributional gate never ran.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_FLAG_DEADCODE_AUDIT.md">Flag / dead-code audit</a> - the current baked-vs-dead flag state, with the EXACT_SEED decode-side partial-wiring finding.</li>
             <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_PAPER_RESULTS_AND_VERDICTS.md">Results &amp; verdicts (living doc)</a> - the two-lens matrix, decode-neutrality, behavioral losslessness, and the decode-tax retraction.</li>
             <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_EXACT_SEED_SUCCESS.md">EXACT_SEED L0 success record</a> - the bit-exact gate, the six-part fix chain, and the layer-0 artifact analysis.</li>
             <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_APC_SESSION_FINDINGS_20260629.md">2026-06-29 session findings</a> - char-8 overturned, the kernel-realization root cause, and the redesign greenlight.</li>
@@ -2582,7 +2909,7 @@
   </main>
 
   <footer>
-    <p>Volume IV. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a>, <a href="round-f.html">Vol. II</a>, and <a href="gdn-tree-scan.html">Vol. III</a>, but this page does not require them. Last updated 2026-07-02.</p>
+    <p>Volume IV. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a>, <a href="round-f.html">Vol. II</a>, and <a href="gdn-tree-scan.html">Vol. III</a>, but this page does not require them. Last updated 2026-07-06.</p>
   </footer>
 </div>
 </body>
