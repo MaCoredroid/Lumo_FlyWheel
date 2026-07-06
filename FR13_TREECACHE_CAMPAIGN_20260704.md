@@ -1320,3 +1320,25 @@ parity (git diff inside /testbed) -> then matrix. Task #9.
   per turn + snapshot/hit OBS brackets. PREDICTIONS: restart-fold-mismatch story => tree+cache garbles
   (t2/t3 amplified), tree+nocache CLEAN (no cache machinery), native+cache clean-or-epsilon; long-gen-itself
   story => tree+nocache garbles too; sampling-tail => all arms equal.
+
+## 62. Forced-boundary probe: ENGAGEMENT-PROVEN NULL — the restore-mismatch mechanism ran hard (snapshot_events
+## =864, live ES_REDIRECT_FALLBACKs) and 18/18 forced-long turns stayed CLEAN; pivot to LIVE-RUN garble hunt
+## (user directive)
+
+- fb probe cat8_cache arm (output/fr13_fb_probe/, fixes ON, N=6 seeds x3 turns, min_tokens=1200 forcing >=1
+  decode-boundary crossing per turn): ALL 18 turns clean (0 CJK, 0 repetition, 0 offtask, healthy finishes).
+  NOT vacuous: eng log shows snapshot_events climbing to 864 (decode-boundary snapshot writes fired throughout)
+  + ES_REDIRECT_FALLBACK lines live at the tail (the §60 recurrent-lineage fallback consumed on hits). The
+  §60 restart-fold-mismatch mechanism EXECUTED at scale and produced no garble in forced-prose continuation.
+  (My probe's docker-log needle grep was wrong — counters live in fr13_apc_exact_seed_eng.log; corrected.)
+  Remaining arms killed as no-longer-decision-relevant (they only mattered had the cache arm garbled).
+- RE-RANKING: the pure decode-crossed restore epsilon is exonerated as the garble TRIGGER (it remains the
+  §55 route-margin epsilon; HRS stays the designated lever for THAT, not for garble). Live-garble ingredients
+  the probe lacked: (a) TOOL-ARGUMENT/constrained-decoding contexts (every live episode sat inside a tool-arg
+  string or terminal thinking — the qwen3xml parser regime; ties to §59's parser-wedge stall unification);
+  (b) natural runaway onset + restore-propagation lock-in (H2's causality caveat).
+- PIVOT (user 2026-07-06): live runs, not prompt probes. Plan: (1) more live tcfix seeds NOW under the exact
+  s2/s4 conditions (legacy env, unwalled, scanner post-hoc) to grow the garble sample; (2) once the §59
+  chat-path capture lands+deploys, subsequent live runs record upstream bytes => the next garble episode is
+  fully attributable (engine-emitted garbage vs transport artifact) and the exact garbling request is
+  replayable; (3) exact-context replay of a captured garbling turn = the precision instrument if needed.
