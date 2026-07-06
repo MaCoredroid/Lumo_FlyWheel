@@ -1714,3 +1714,24 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   run the localizing cells (path to the FIX) instead of grinding 32 give-ups. Headline speed matrix falls back
   to B=1 (the SOLVED/lossless regime) per §76's pre-registered plan; B=4 degradation = separate reported
   finding + fix track.
+
+## 82. B=4 arm ABORTED (clean, no wedge) — pivot to the CONFOUND CHECK first (task-hardness not yet ruled out)
+- FINAL B=4 tally: 5/5 completed = 0B agent_gave_up; the 2 long-runners (13398 @38min, 13453 @40min) are in a
+  SLOW-LOOP degradation mode (13453 control waiter TIMED OUT at 28min still running) heading for the 90min
+  AGENT_WALL — not clean deep work. So degradation is ~TOTAL, in two flavors: fast-give-up + slow-loop.
+- CONFOUND I had NOT ruled out: are these specific tasks just HARD at B=1? I only had a B=1 resolve for 12907
+  (§72, 504B); 13033/13236/13977/14096 had NO B=1 verdict on record. Before building the whole B=4 investigation
+  (batch-invariant / no-cache cells) on "B=4 is the carrier", the LINCHPIN control is the give-up tasks at B=1.
+- ABORTED the B=4 matrix via SIGTERM (driver + runner + serve_variant). serve_variant's `trap teardown EXIT`
+  ran cleanly => docker rm -f + recover_host_memory => host 5G used / 112G avail (NO §77 wedge; the SIGTERM
+  path preserved the trap, unlike the pkill -9 that wedged in §77). Alienware agents cleaned (0 remain).
+- LAUNCHED CELL C (confound check): B=1/CONC=1 + locked cat8 + cache (SOLVED regime, no co-residency) on
+  subset_b4_giveup4 {12907,13033,13236,13977}. scripts/probes/fr13_cellC_seq.sh, RUNROOT=output/fr13_cellC.
+  DECISION RULE:
+  * Cell C tasks RESOLVE / stop giving up  => B=4 is confirmed the carrier => run cells A (BATCH_INVARIANT=1)
+    + B (no-cache) to localize which B>1 mechanism, + the B=1 headline speed matrix (tree+cache vs native+cache).
+  * Cell C tasks ALSO give up at B=1        => TASK-HARDNESS, thesis REFUTED => the B=4 give-ups were NOT a
+    co-residency regression; re-examine (config regression? subset just hard?) before any B=4 carrier claim.
+- Cell A/B build note: the LOCKED launcher (fr13_launch_locked.sh) BAKES BATCH_INVARIANT=0 (line 28) and the
+  APC flags; a control needs an env-gated `:-0` override (default-preserving) or the forked launcher. Deferred
+  until Cell C confirms the thesis is real.
