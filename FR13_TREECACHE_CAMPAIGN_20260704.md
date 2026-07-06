@@ -2104,3 +2104,16 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   give-ups unchanged => different carrier (fix irrelevant here); more give-ups off => fix helps but insufficient.
 - Ties to §102/103: the persistent give-up = the EXACT_SEED-restore x TREE-decode carrier (B), which is NOT the
   cold-prefill stale-tree carrier the §66 fix targets. Two different cache-give-up carriers; §66 fixed one.
+
+## 106. CONC confound (user: "why are 4 running together at B=1?") — B=1 CONC=4 = cross-agent cache sharing, NOT single-agent
+- B=1 = MAX_NUM_SEQS=1 (server batches 1 seq/forward, no model co-residency). But I ran CONC=4 => 4 agent containers
+  concurrent, sharing the ONE server + the PREFIX CACHE (same qwen-code system prompt). So even at MAX_NUM_SEQS=1
+  there is CROSS-AGENT cache interaction => my "B=1" was NOT a clean single-agent test.
+- KEY connection: §66 give-up-extinct was single-task probes = effectively CONC=1. ALL my give-up runs are CONC=4.
+  So the §66-SOLVED-vs-now-gives-up difference may be CONC=1 vs CONC=4 => carrier (B) could be CONCURRENT cache-SHARING
+  that §66 never tested (the fix handles single-agent cold-prefill; cross-agent concurrent restore is a new regime).
+- B=1 CONC=4 partial (pre-pivot): chain5+cache 0/4 (4 give-up), cat8+cache 1/4 (3 give-up), chain5+nc 1/4 0-give-up
+  (control clean => not a blanket B=1 fail), cat8+nc not-run.
+- LAUNCHED CONC=1 isolation (BSIZE=1 CONC=1, serial single agent, no cross-agent cache): chain5+cache + cat8+cache on
+  split4. chain5+cache CONC=1 ~resolves => carrier (B) = concurrent cache-SHARING (the CONC lever); still gives up =>
+  single-agent cache-restore issue. This directly tests the §66(CONC=1)-vs-now(CONC=4) hypothesis.
