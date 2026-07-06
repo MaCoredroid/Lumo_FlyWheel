@@ -2213,3 +2213,15 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   must stay 0/4 (reproduce). B=1 must stay 4/4 both flag states. If flag=1 does NOT clear give-ups => read is dead
   under baked config => carrier is elsewhere => LEAK_PROBE + per-token argmax to relocalize. Do NOT flip default
   until the gate passes.
+
+## 114. CARRIER B FIX GATE PASSED (partial) — 0/4 -> 2/4, give-ups 4->1. Carrier B CONFIRMED = the positional globals
+- chain5+cache @ B=4 (seqs4,conc4), FR13_FREE_TREE_POSGLOBALS=1: 14309 R (574B), 14365 R (989B), 12907 give-up->
+  2009B tests_failed (near-miss, no longer give-up), 14096 still give-up. = 2/4 resolved, 1 give-up. FLAG-OFF baseline
+  = 0/4, all 4 give-ups. So the fix RECOVERS give-ups at B=4 => carrier B = the never-cleared batch-position tree_mtp
+  globals, CONFIRMED (the workflow localization was right; the adversarial-verify "0 verified" caution resolved by the
+  GPU gate). Give-ups 4->1, resolves 0->2, approaching native's 3/4.
+- PARTIAL: 14096 still gives up (resolves at CONC=1 => a residual concurrency carrier the fix didn't fully cover:
+  either a 2nd carrier-B-class global instance, or a torn/interleaved read, or 14096 flake). Do NOT default-ON yet
+  (gate target was ~4/4); the flag stays default-0, kept as the confirmed-effective lever.
+- NEXT: (1) rerun flag-ON x2 seeds to separate 14096 residual-carrier vs temp-0.6 flake; (2) if residual, LEAK_PROBE +
+  per-token argmax on 14096 @CONC=2 to find the 2nd seam; (3) then the branch (cat8+cache) needs this fix + carrier A'.
