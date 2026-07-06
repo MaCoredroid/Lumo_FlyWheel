@@ -1992,3 +1992,15 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   by co-resident batching), NOT the tree per se => fixable by making the tree B=4-batch-invariant. tree+cache B=1
   <4/4 => the tree degrades regardless of batch (fundamental). Crosses the batch axis on the exact split4 tasks.
 - Full design now covers: spec-method (native/tree/chain5) x cache (exseed/off) x batch (B1/B4).
+
+## 97. CACHE-SEPARATION ANSWER (B=4) — the cache is FINE on native; the TREE is the primary carrier
+- native + EXACT_SEED cache (the SAME cache tree+cache used) = 3/4 RESOLVED, ZERO give-ups: 12907 R (10t, 2
+  toolcall_err recovered), 14096 R (28t/11.3k tok — worked hard but resolved), 14309 R, 14365 tests_failed
+  (near-miss, patch produced). vs tree + EXACT_SEED = 0/4 give-ups. SAME cache, only spec-method differs.
+- 2x2 at B=4:  native+nc 4/4 | native+cache 3/4(no giveup) ; tree+nc 1/4 | tree+cache 0/4.
+  => (1) the EXACT_SEED cache is NOT an independent give-up carrier — it barely dents native (4/4->3/4, no
+  give-ups; adds turns/effort but native powers through). USER Q "is native+cache good?" = YES.
+  (2) the TREE is the primary carrier (cache-off already 4/4->1/4).
+  (3) the cache only COMPOUNDS on the tree (tree+nc 1/4 -> tree+cache 0/4) and specifically converts the tree's
+  failures into GIVE-UPS (tree+nc rambles/tests_failed; tree+cache empty-final give-ups).
+- CAVEAT: ALL B=4. The tree-vs-B4-co-residency split is still open (§96). chain5 (branches) + B=1 controls pending.
