@@ -228,7 +228,15 @@ _INSTANCE_WRAPPER = (
     "PROMPT=$(printf %s \"$SWE_PROMPT_B64\" | base64 -d); "
     "/opt/qwen/bin/qwen --yolo --output-format json --max-session-turns 80 -p \"$PROMPT\"; "
     "rc=$?; "
-    "git -C /testbed diff --no-color --binary \"$SWE_BASE_COMMIT\" > /out/patch.diff 2>/dev/null; "
+    # Diff against HEAD, NOT base_commit. In the SWE-bench per-instance image /testbed
+    # HEAD is `<base_commit> + the committed env-setup commit` (efa06c664 "SWE-bench";
+    # e.g. it pins setuptools==68.0.0 in pyproject.toml). `git diff <base_commit>` would
+    # capture that env-setup delta (~305B) as part of the patch (polluting/masking the
+    # agent's real edits, breaking eval) — the §73 matrix-abort bug. The env-setup is
+    # COMMITTED at HEAD, so `git diff HEAD` yields ONLY the agent's uncommitted source
+    # edits (matches the gold-patch convention; eval applies on top of the same
+    # env-setup state). AGENTS.md is untracked so still excluded.
+    "git -C /testbed diff --no-color --binary HEAD > /out/patch.diff 2>/dev/null; "
     "exit $rc"
 )
 

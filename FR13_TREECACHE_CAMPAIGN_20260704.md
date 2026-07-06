@@ -1538,3 +1538,24 @@ regression-gated on its own. Design note for #10; no action now.
   native+cache (both baked), B=4 depth-matched, official env (default), UNWALLED, hot-path logging OFF,
   heartbeat-only offload. Delivers resolve-rate n=16/arm + canonical speed (fr13_measure s/fwd + TPS) +
   conclusive garble cache-vs-input attribution. Launching.
+
+## 73. MATRIX ABORTED after 2 tasks — HARNESS BUG in instance-image patch extraction (found + fixed);
+## re-validating before relaunch. NOT a fix/B=4/env regression.
+- SYMPTOM: cat8+cache arm tasks 12907 + 13236 both failed with the IDENTICAL 305B patch (pyproject.toml
+  `setuptools==68.0.0` pin — a build-config edit, not a bug fix), pytest_hits=0. Two different bugs, same patch
+  = systematic, not natural.
+- RED-TEAM RULED OUT: (a) ENV — smoke on all 3 images (12907/13236/13453) PASSED (import astropy + pytest
+  collects 193-194 tests); env is fine. (b) B=4-fix-regression — 13236 scanned CLEAN (no garble) yet still
+  degenerate => not a cache/co-residency degeneration. (c) cross-contamination — patches differ per instance.
+- ROOT CAUSE (proven in-image): the per-instance /testbed HEAD is `efa06c664 "SWE-bench"` = base_commit + a
+  COMMITTED env-setup commit that pins setuptools==68.0.0. My extraction did `git diff <base_commit>`, which
+  captures that env-setup delta (305B) as the "patch", masking the agent's real source edits and breaking eval.
+  (Even the oneinst 713B "success" was 305B-setup + ~408B real edits => its eval was also confounded.)
+- FIX (run_swe_bench_q36_a.py _INSTANCE_WRAPPER): `git -C /testbed diff HEAD` instead of `<base_commit>`. The
+  env-setup is committed at HEAD so it cancels; only the agent's uncommitted SOURCE edits remain (identical to
+  the gold-patch convention since HEAD and base_commit share identical source — setup only touched pyproject).
+  VERIFIED in-image: git diff HEAD~1 shows table.py+pyproject; git diff HEAD shows ONLY the agent's table.py edit.
+- IMPACT: the matrix would have produced ALL-GARBAGE resolve numbers (every patch polluted, eval broken).
+  Killed after 2 tasks; ~10h saved. The two failures were partly this bug + partly weak agent draws (12907
+  garble, 13236 explored-but-no-edit). Re-validate on 13453 (made real edits) => expect a clean ~408B patch +
+  possibly resolved, then relaunch the full matrix.
