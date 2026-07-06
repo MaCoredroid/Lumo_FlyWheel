@@ -1874,3 +1874,26 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   * tree+no-cache FAILS (~0/4, like tree+cache) => the TREE SPEC-DECODE ITSELF degrades agentic output (worse: the
     verify-kernel product is not agentic-lossless even without the cache).
   Waiter bbt39z2sv (correct path output/fr13_tree_nocache/cat8nocache_tnc/...).
+
+## 90. SPLIT RESULT — the TREE spec-decode is the FUNDAMENTAL agentic carrier (not just the cache). 3-way, n=4:
+- native (cache-off, native-MTP): 4/4 R, FAST (12907 378s / 6min).
+- tree+cache (cache-on, tree):    0/4 — fast 0B give-ups.
+- tree+no-cache (cache-off, tree): 1/4 R (14309 774B/9min) + 2 tests_failed near-miss (14365 767B/24min,
+  14096 898B/44min) + 12907 still running @51min. SLOW (3-8x native) + WORSE patches.
+- CONTROLLED per-task reads (same task, cache-OFF, ONLY spec-method differs => not seed noise, not cache):
+  * 12907: native 6min RESOLVE vs tree 51min+ not-done (8x+ slower).
+  * 14096: native RESOLVE (1066B) vs tree WRONG patch (898B tests_failed) @44min.
+  => the TREE spec-decode degrades agentic output vs native MTP: slower (degenerate = more turns) AND lower
+  quality (wrong patches). The cache adds a SECOND, faster failure mode (0B give-ups) on top.
+- HEADLINE: "lossless within floor" (token-level argmax/TV within the native floor) does NOT hold at the AGENTIC
+  task level. The tree's per-token distribution shift COMPOUNDS over multi-turn agentic trajectories into worse
+  coding — exactly the [[reference_scalar_metric_per_token_blindspot]] failure, now measured on the binding LIVE
+  SWE gate ([[feedback_live_swe_verified_only]]). Both the tree kernel AND the cache degrade; neither is clean.
+- CAVEAT: n=4, single-seed, temp 0.6 stochastic. BUT the per-task controlled deltas (native-vs-tree on the SAME
+  task, same cache/harness/temp) are large and consistent-direction => credible as systematic, not seed noise.
+  To harden: rerun native + tree_nocache at ≥2 seeds on ≥8 tasks. Direction is not in doubt.
+- STRATEGIC IMPLICATION: this challenges the whole "ship tree spec-decode with speedup+losslessness" premise —
+  the tree is agentically WORSE than native MTP on real SWE tasks, so a speed matrix (tree-vs-native SPEED) is
+  moot for a shippable product until the tree's agentic degradation is understood/fixed. The §66 "tree+cache
+  SOLVED (give-up extinct 0/9)" gate must have been on an easier task-set (these fr9-tasks discriminate). This is
+  a checkpoint for the user: fix the tree's agentic distribution shift, or reconsider the tree product vs native.
