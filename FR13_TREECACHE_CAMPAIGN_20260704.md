@@ -2309,3 +2309,31 @@ engagement instrument's nonempty_clears will decide (residue exists at free? if 
    against give-ups (cache-on) not just no-cache flips.
 3. Binding gate stays restore/flip-oracle first (fr13_oracle_stream_teacher_force --threshold 1.0),
    SWE give-up rate as e2e confirmation. n=4 conc=4 SWE alone is too noisy (§116).
+
+## §118 RED-TEAM: A' workflow recommendation (build FR13_FA2_QPAD) REJECTED — stale/overturned lever (2026-07-06)
+
+The A' localization workflow (wc6gr0qm7, 842k tokens, 7 agents, holds=True) concluded carrier A' =
+forked-FA2 query-tile M-dependence, fix = build FR13_FA2_QPAD. **REJECTED on two grounds:**
+
+1. **QPAD is OVERTURNED + already built.** The workflow's basis FR13_FA2_MDEPENDENT_BIND (2026-06-14)
+   was FALSIFIED the SAME DAY by FR13_FA2_CARRIER_OVERTURNED_BIND (commit 8b7684dd): QPAD (built
+   030a1c22) fixed the named L31 3.9e-3->0.0 but e2e flips stayed 24 (>= cat9's 22); first-nonzero is
+   L0-GDN (2 bf16-ULP) UPSTREAM of the first full-attn layer, so an FA2-tile fix cannot remove it.
+   Branch fr13-fa2-qpad archived to remote, NOT merged. "Do NOT iterate QPAD." The workflow read the
+   MDEPENDENT bind but MISSED the OVERTURNED bind. (Caught by memory project_fr13_22flip_carrier_l0gdn.)
+
+2. **The whole branch no-cache drift question is RESOLVED (2026-06-15).** Big-denom SWE-quality gate
+   over ~8.7k positions: cat9 13.548% CI[12.85,14.28] ~= native 13.985% CI[13.27,14.73], CIs OVERLAP,
+   cat9 slightly LOWER => cat9 IS lossless-vs-native at B=1 scale. The "22 vs 3 flips" was a small-
+   sample confound (native 0.59% on 4 easy prompts vs 14% at scale). All M-invariance + reshape levers
+   refuted. Pivot to speed was the disposition.
+
+**Reconciliation => the LIVE problem is NOT carrier A' (branch no-cache drift, resolved).** It is tree
++ CACHE under CONCURRENCY (B=4) => give-ups = carrier B (cache+concurrency). project_fr13_treecache_
+SOLVED shows tree+cache SOLVED+BAKED at CONC=1; this session shows it degrades at B=4. So the actual
+open cell = the tree-path shared prefix-cache restore UNDER CONCURRENCY. REFOCUS there.
+
+**Next:** engagement-proven carrier-B A/B on the CORRECT axis (cat9+cache CONC=4, flag off vs on),
+reading the FR13_POSGLOBALS marker + nonempty_clears — decides if the positional globals are even the
+concurrency carrier (nonempty_clears=0 => not; pivot to localize the real cache+concurrency seam).
+DROP the FA2/QPAD/BI/batch-variance-drift path (resolved or overturned).
