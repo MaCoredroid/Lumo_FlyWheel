@@ -115,6 +115,98 @@ def _agent_template() -> str:
         return QWEN_CODE_TEMPLATE
     return CODEX_TEMPLATE
 
+
+# --- FR13 §58: SWE_AGENT_ENV=instance_image (default unset='legacy') -----------
+# When unset/'legacy' EVERY code path below is byte-identical to the current
+# behavior. When ='instance_image', the qwen-code agent runs INSIDE the official
+# SWE-bench per-instance eval image editing /testbed (a real git checkout at
+# base_commit with the conda 'testbed' env), so it can `import astropy` + run a
+# repro pytest before finishing — the env the grader already uses. The node+qwen
+# runtime is injected read-only from a relocatable host bundle (built by
+# scripts/prepare_qwen_agent_bundle.sh) so NO per-instance image is rebuilt.
+def _swe_agent_env() -> str:
+    """'instance_image' when SWE_AGENT_ENV selects the in-image agent env, else
+    'legacy' (default) = current qwen-code-runner:v1-over-worktree behavior."""
+    val = os.environ.get("SWE_AGENT_ENV", "").strip().lower()
+    if val in ("instance_image", "instance-image", "instance"):
+        return "instance_image"
+    return "legacy"
+
+
+def _instance_image_name(instance_id: str, *, arch: str = "x86_64",
+                         namespace: str = "swebench", tag: str = "latest") -> str:
+    """Per-instance SWE-bench eval image name, derived via swebench's OWN naming
+    util (TestSpec.instance_image_key) rather than hand-rolled — so it is
+    byte-identical to what the eval targets. The eval (swe_eval_x86_worker.py)
+    calls make_test_spec(namespace='swebench', instance_image_tag='latest') whose
+    arch defaults to 'x86_64' (the codex host, alienware, is x86_64).
+    instance_image_key reads ONLY instance_id/arch/namespace/tag, so a minimal
+    TestSpec reproduces the exact name (incl. the '__'->'_1776_' remap + .lower()).
+    Fails loud (ImportError) if swebench is not installed on the codex host."""
+    from swebench.harness.test_spec.test_spec import TestSpec
+    spec = TestSpec(
+        instance_id=instance_id, repo="", version="", repo_script_list=[],
+        eval_script_list=[], env_script_list=[], arch=arch,
+        FAIL_TO_PASS=[], PASS_TO_PASS=[], language="py", docker_specs={},
+        namespace=namespace, instance_image_tag=tag,
+    )
+    return spec.instance_image_key
+
+
+# Fully-explicit container PATH (NO host '$PATH' dependency — a literal '$PATH'
+# would survive shlex.split on the local argv path and land in the container
+# verbatim, and would expand to the WRONG host on the ssh path). Puts the qwen
+# shim + the conda 'testbed' env (import astropy / pytest) ahead of conda base +
+# the standard ubuntu PATH the eval image ships.
+_INSTANCE_CONTAINER_PATH = (
+    "/opt/qwen/bin:/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/bin:"
+    "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+)
+# In-container wrapper. Contains NO single quotes so it survives `bash -c
+# '<wrapper>'` under BOTH shlex.split (local argv) AND the remote ssh login
+# shell. It: (1) materializes AGENTS.md into /testbed from a base64 env
+# (brace/quote-safe for any problem statement), (2) runs qwen whose
+# --output-format json stream is the ONLY stdout -> the trace (identical shape to
+# legacy), (3) extracts the patch with the SAME git flags as legacy
+# _extract_patch, INSIDE /testbed (a real git checkout at base_commit — the
+# secondary broken-.git finding does not apply here), writing it to the /out
+# bind-mount (a fresh dir, NOT /testbed, so it never pollutes the diff; AGENTS.md
+# is untracked so `git diff <base_commit>` excludes it exactly as legacy does),
+# (4) preserves qwen's exit code.
+_INSTANCE_WRAPPER = (
+    "printf %s \"$SWE_AGENTS_B64\" | base64 -d > /testbed/AGENTS.md; "
+    "PROMPT=$(printf %s \"$SWE_PROMPT_B64\" | base64 -d); "
+    "/opt/qwen/bin/qwen --yolo --output-format json --max-session-turns 80 -p \"$PROMPT\"; "
+    "rc=$?; "
+    "git -C /testbed diff --no-color --binary \"$SWE_BASE_COMMIT\" > /out/patch.diff 2>/dev/null; "
+    "exit $rc"
+)
+
+
+def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
+                            model: str, host_out_dir: str, bundle_src: str,
+                            agents_md_b64: str, prompt_b64: str,
+                            base_commit: str) -> str:
+    """Render the instance_image docker command. Same qwen flags/env as the
+    legacy qwen-code template, but the image is the per-instance eval image, the
+    node+qwen runtime is bind-mounted read-only from the host bundle at
+    /opt/qwen, PATH is prepended, workdir is /testbed, and AGENTS.md/prompt are
+    passed base64 (brace/quote-safe). Pure string builder — self-testable with no
+    docker/GPU. Runs as -u 0:0 because /testbed + the conda env are root-owned in
+    the eval image."""
+    return (
+        f"docker run --rm --name {container_name} --network=host -u 0:0 "
+        f"-e OPENAI_API_KEY=EMPTY -e OPENAI_BASE_URL={endpoint} "
+        f"-e OPENAI_MODEL={model} -e QWEN_MODEL={model} -e HOME=/tmp "
+        f"-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 "
+        f"-e PATH={_INSTANCE_CONTAINER_PATH} "
+        f"-e SWE_AGENTS_B64='{agents_md_b64}' -e SWE_PROMPT_B64='{prompt_b64}' "
+        f"-e SWE_BASE_COMMIT='{base_commit}' "
+        f"-v {host_out_dir}:/out -v {bundle_src}:/opt/qwen:ro "
+        f"-w /testbed {image} "
+        f"bash -c '{_INSTANCE_WRAPPER}'"
+    )
+
 # Default operator prompt (first attempt).
 DEFAULT_CODEX_PROMPT = (
     "Read the task prompt at /workspace/AGENTS.md and complete it in this workspace. "
@@ -361,6 +453,14 @@ def _hydrate_workspace(
     base_commit: str,
     workspace_path: Path,
 ) -> None:
+    if _swe_agent_env() == "instance_image":
+        # No source worktree: /testbed lives inside the per-instance eval image.
+        # The workspace dir is only a host-side staging area (AGENTS.md + the
+        # /out mount that receives the extracted patch).
+        if workspace_path.exists():
+            shutil.rmtree(workspace_path)
+        workspace_path.mkdir(parents=True, exist_ok=True)
+        return
     if workspace_path.exists():
         shutil.rmtree(workspace_path)
     workspace_path.parent.mkdir(parents=True, exist_ok=True)
@@ -375,6 +475,12 @@ def _hydrate_workspace(
 
 
 def _remove_workspace(cache_path: Path, workspace_path: Path) -> None:
+    if _swe_agent_env() == "instance_image":
+        # instance_image mode never registered a git worktree; just drop the
+        # host staging dir (cache_path is None in this mode).
+        if workspace_path.exists():
+            shutil.rmtree(workspace_path, ignore_errors=True)
+        return
     abs_workspace = workspace_path.resolve() if workspace_path.exists() else workspace_path
     if not abs_workspace.exists():
         return
@@ -416,16 +522,35 @@ def _write_agents_md(workspace: Path, instance: dict) -> None:
     # real source edit before finishing.
     body.append("## How to work (important)")
     body.append("")
-    body.append(
-        "- Reason carefully and thoroughly before each tool call. First inspect "
-        "the relevant source files to confirm your understanding of the bug, "
-        "then make the minimal correct edit.\n"
-        "- Do NOT spend your time trying to `pip install` or build/conda the "
-        "project — the grader runs in its own prepared environment. If an "
-        "install/build command fails, do not retry it; just edit the source.\n"
-        "- You MUST finish by leaving an actual code change in the working tree. "
-        "Do not stop until you have edited the source files to implement the fix."
-    )
+    if _swe_agent_env() == "instance_image":
+        # instance_image mode: the agent runs INSIDE the prepared testbed env
+        # (conda 'testbed' with the project editable-installed, on PATH), so the
+        # "do NOT install/build" band-aid is replaced with a "reproduce + verify"
+        # instruction — the whole point of §58 is that self-verification is now
+        # possible.
+        body.append(
+            "- Reason carefully and thoroughly before each tool call. First inspect "
+            "the relevant source files to confirm your understanding of the bug, "
+            "then make the minimal correct edit.\n"
+            "- You have a WORKING prepared environment: the project is already "
+            "installed and importable (run `python -c \"import <project>\"` to "
+            "confirm). REPRODUCE the bug with a short `python`/`pytest` command, "
+            "make your fix, then RE-RUN it to verify the fix before finishing. You "
+            "do NOT need to (re)install or build the project.\n"
+            "- You MUST finish by leaving an actual code change in the working tree. "
+            "Do not stop until you have edited the source files to implement the fix."
+        )
+    else:
+        body.append(
+            "- Reason carefully and thoroughly before each tool call. First inspect "
+            "the relevant source files to confirm your understanding of the bug, "
+            "then make the minimal correct edit.\n"
+            "- Do NOT spend your time trying to `pip install` or build/conda the "
+            "project — the grader runs in its own prepared environment. If an "
+            "install/build command fails, do not retry it; just edit the source.\n"
+            "- You MUST finish by leaving an actual code change in the working tree. "
+            "Do not stop until you have edited the source files to implement the fix."
+        )
     body.append("")
     (workspace / "AGENTS.md").write_text("\n".join(body) + "\n", encoding="utf-8")
 
@@ -461,6 +586,12 @@ def _classify_empty_patch_cause(trace_path: Path) -> str:
 
 
 def _extract_patch(cache_path: Path, workspace: Path, base_commit: str) -> str:
+    if _swe_agent_env() == "instance_image":
+        # The patch was produced by `git -C /testbed diff --no-color --binary
+        # <base_commit>` INSIDE the eval image (same flags as below) and copied to
+        # <workspace>/patch.diff by the agent run. Read it back here.
+        pf = Path(workspace) / "patch.diff"
+        return pf.read_text(encoding="utf-8", errors="replace") if pf.is_file() else ""
     # Stage tracked-file diffs and untracked file additions against base_commit.
     proc = subprocess.run(
         ["git", "-C", str(workspace), "diff", "--no-color", "--binary", base_commit],
@@ -479,6 +610,7 @@ def _run_codex(
     stdout_path: Path,
     stderr_path: Path,
     trace_path: Path,
+    base_commit: str | None = None,
     prompt: str = DEFAULT_CODEX_PROMPT,
 ) -> dict[str, Any]:
     """Run codex-runner:v1 and capture trace/stdout/stderr to separate files.
@@ -489,6 +621,13 @@ def _run_codex(
         --json is the agent output mode)
       - stderr_path: codex_stderr.log (codex CLI stderr noise)
     """
+    if _swe_agent_env() == "instance_image":
+        return _run_agent_instance(
+            remote_host=None, workspace=workspace, endpoint=endpoint, model=model,
+            timeout_s=timeout_s, instance_id=instance_id, base_commit=base_commit,
+            stdout_path=stdout_path, stderr_path=stderr_path, trace_path=trace_path,
+            prompt=prompt,
+        )
     container_name = f"swe-codex-{instance_id.replace('/', '_')[:48]}-{int(time.time())}"
     cmd = _agent_template().format(
         container_name=container_name,
@@ -694,6 +833,7 @@ def _run_codex_remote(
     stdout_path: Path,
     stderr_path: Path,
     trace_path: Path,
+    base_commit: str | None = None,
     prompt: str = DEFAULT_CODEX_PROMPT,
 ) -> dict[str, Any]:
     """Run codex-runner:v1 ON alienware (x86) over SSH, keeping the GB10 vLLM-only.
@@ -706,6 +846,13 @@ def _run_codex_remote(
     flagged (req #4) so the harness never reads a wire-stalled trajectory as a
     real run.
     """
+    if _swe_agent_env() == "instance_image":
+        return _run_agent_instance(
+            remote_host=host, workspace=workspace, endpoint=endpoint, model=model,
+            timeout_s=timeout_s, instance_id=instance_id, base_commit=base_commit,
+            stdout_path=stdout_path, stderr_path=stderr_path, trace_path=trace_path,
+            prompt=prompt,
+        )
     started = time.monotonic()
     safe_id = instance_id.replace("/", "_")[:48]
     remote_ws = f"{_CODEX_REMOTE_ROOT}/{safe_id}/workspace"
@@ -803,6 +950,161 @@ def _run_codex_remote(
         "network_drop": net_drop,
         "ws_down_rc": down.returncode,
     }
+
+
+def _run_agent_instance(
+    *,
+    remote_host: str | None,
+    workspace: Path,
+    endpoint: str,
+    model: str,
+    timeout_s: int,
+    instance_id: str,
+    base_commit: str | None,
+    stdout_path: Path,
+    stderr_path: Path,
+    trace_path: Path,
+    prompt: str = DEFAULT_CODEX_PROMPT,
+) -> dict[str, Any]:
+    """SWE_AGENT_ENV=instance_image (§58): run qwen-code INSIDE the SWE-bench
+    per-instance eval image editing /testbed, with the node+qwen runtime injected
+    read-only from the host bundle. remote_host=None -> local docker (GB10);
+    else -> docker on the codex host (alienware) over SSH, mirroring the legacy
+    offload plumbing (fail-loud image precondition, network-drop classification,
+    generous SSH timeout). The wrapper extracts the patch to a /out bind-mount;
+    we copy it back to <workspace>/patch.diff where _extract_patch reads it."""
+    import base64 as _b64
+    started = time.monotonic()
+    safe_id = instance_id.replace("/", "_")[:48]
+    container_name = f"swe-qwen-{safe_id}-{int(time.time())}"
+    image = _instance_image_name(instance_id)
+    if not base_commit:
+        raise RuntimeError(
+            "SWE_AGENT_ENV=instance_image requires base_commit (the agent's "
+            "patch is `git diff <base_commit>` inside /testbed)")
+    agents_md_path = Path(workspace) / "AGENTS.md"
+    agents_md_text = (agents_md_path.read_text(encoding="utf-8")
+                      if agents_md_path.is_file() else "")
+    agents_b64 = _b64.b64encode(agents_md_text.encode("utf-8")).decode("ascii")
+    # The shared operator/retry prompts reference `/workspace/AGENTS.md` (the
+    # legacy qwen-code-runner mount). In instance_image mode AGENTS.md is written
+    # to /testbed/AGENTS.md, the workdir is /testbed, and there is NO /workspace
+    # mount — so remap the path here (confined to this mode; legacy never calls
+    # this function) or the agent is told to read a file that does not exist.
+    prompt = prompt.replace("/workspace/", "/testbed/")
+    prompt_b64 = _b64.b64encode(prompt.encode("utf-8")).decode("ascii")
+    net_drop = False
+    timed_out = False
+    rc: int | None = None
+    patch_local = Path(workspace) / "patch.diff"
+
+    if remote_host:
+        # Fail loud (memory: fail-loud on missing infra): the per-instance eval
+        # image MUST already be on the codex host — no silent fallback.
+        insp = _net_retry(
+            ["ssh", *_EVAL_SSH_OPTS, remote_host,
+             f"docker image inspect {shlex.quote(image)} >/dev/null 2>&1 "
+             f"&& echo present || echo absent"],
+            what=f"img_inspect:{instance_id}", timeout=60, max_attempts=3)
+        if "present" not in (insp.stdout or ""):
+            raise RuntimeError(
+                f"SWE_AGENT_ENV=instance_image: image {image} ABSENT on codex host "
+                f"{remote_host} (pull it / run the eval first; refusing to fall back)")
+        remote_out = f"{_CODEX_REMOTE_ROOT}/{safe_id}/out"
+        mk = _net_retry(
+            ["ssh", *_EVAL_SSH_OPTS, remote_host,
+             f"mkdir -p {remote_out} && rm -f {remote_out}/patch.diff && echo ok"],
+            what=f"qwen_out_mkdir:{instance_id}", timeout=30)
+        if mk.returncode != 0:
+            net_drop = mk.returncode == 255
+            stderr_path.write_text(f"remote out mkdir failed rc={mk.returncode}\n{mk.stderr}",
+                                   encoding="utf-8")
+            trace_path.write_text("", encoding="utf-8")
+            return {"elapsed_s": round(time.monotonic() - started, 3), "exit_code": -1,
+                    "timed_out": False, "container_name": container_name, "offloaded": True,
+                    "codex_host": remote_host, "network_drop": net_drop,
+                    "agent_env": "instance_image", "instance_image": image}
+        # ~ expands on the remote login shell (the whole cmd is one ssh arg).
+        cmd = _instance_agent_command(
+            container_name=container_name, image=image, endpoint=endpoint, model=model,
+            host_out_dir=remote_out, bundle_src="~/qwen_agent_bundle",
+            agents_md_b64=agents_b64, prompt_b64=prompt_b64, base_commit=base_commit)
+        ssh_cmd = ["ssh", *_EVAL_SSH_OPTS, "-o", "ConnectTimeout=20", remote_host, cmd]
+        try:
+            with trace_path.open("w", encoding="utf-8") as tf, \
+                 stderr_path.open("w", encoding="utf-8") as ef:
+                completed = subprocess.run(
+                    ssh_cmd, stdout=tf, stderr=ef,
+                    timeout=(None if timeout_s <= 0 else max(timeout_s, 30) + 120),
+                    check=False)
+            rc = completed.returncode
+            if rc == 255:
+                net_drop = True
+                _codex_net_log(f"QWEN_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            _net_retry(["ssh", *_EVAL_SSH_OPTS, remote_host,
+                        f"docker kill {container_name} 2>/dev/null; "
+                        f"docker wait {container_name} 2>/dev/null; echo killed"],
+                       what=f"qwen_kill:{instance_id}", timeout=60, max_attempts=2)
+            rc = -1
+        elapsed = time.monotonic() - started
+        # copy the extracted patch back (ok_rcs includes 1 = scp "no such file"
+        # when the agent left no edit -> empty patch, handled downstream).
+        pd = _net_retry(
+            ["scp", *_EVAL_SSH_OPTS, f"{remote_host}:{remote_out}/patch.diff", str(patch_local)],
+            what=f"qwen_patch_down:{instance_id}", timeout=120, max_attempts=4, ok_rcs=(0, 1))
+        if pd.returncode != 0 and not patch_local.is_file():
+            patch_local.write_text("", encoding="utf-8")
+        _net_retry(["ssh", *_EVAL_SSH_OPTS, remote_host,
+                    f"docker rm -f {container_name} 2>/dev/null; "
+                    f"rm -rf {_CODEX_REMOTE_ROOT}/{safe_id}; echo ok"],
+                   what=f"qwen_cleanup:{instance_id}", timeout=60, max_attempts=2)
+        if not stdout_path.is_file():
+            stdout_path.write_text("", encoding="utf-8")
+        return {"elapsed_s": round(elapsed, 3), "exit_code": rc if rc is not None else -1,
+                "timed_out": timed_out, "container_name": container_name, "offloaded": True,
+                "codex_host": remote_host, "network_drop": net_drop,
+                "agent_env": "instance_image", "instance_image": image}
+
+    # ---- local docker path (secondary; production uses --codex-host) ----
+    insp = subprocess.run(["docker", "image", "inspect", image],
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if insp.returncode != 0:
+        raise RuntimeError(
+            f"SWE_AGENT_ENV=instance_image: image {image} ABSENT locally "
+            f"(pull it first; refusing to fall back)")
+    cmd = _instance_agent_command(
+        container_name=container_name, image=image, endpoint=endpoint, model=model,
+        host_out_dir=str(Path(workspace).resolve()),
+        bundle_src=os.path.expanduser("~/qwen_agent_bundle"),
+        agents_md_b64=agents_b64, prompt_b64=prompt_b64, base_commit=base_commit)
+    cmd_argv = shlex.split(cmd)
+    try:
+        with trace_path.open("w", encoding="utf-8") as tf, \
+             stderr_path.open("w", encoding="utf-8") as ef:
+            completed = subprocess.run(
+                cmd_argv, stdout=tf, stderr=ef,
+                timeout=(None if timeout_s <= 0 else max(timeout_s, 30)), check=False)
+        rc = completed.returncode
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        subprocess.run(["docker", "kill", container_name], check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            subprocess.run(["docker", "wait", container_name], check=False,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+        except subprocess.TimeoutExpired:
+            pass
+        rc = -1
+    elapsed = time.monotonic() - started
+    if not patch_local.is_file():
+        patch_local.write_text("", encoding="utf-8")
+    if not stdout_path.is_file():
+        stdout_path.write_text("", encoding="utf-8")
+    return {"elapsed_s": round(elapsed, 3), "exit_code": rc if rc is not None else -1,
+            "timed_out": timed_out, "container_name": container_name,
+            "agent_env": "instance_image", "instance_image": image}
 
 
 def _run_codex_dispatch(**kwargs: Any) -> dict[str, Any]:
@@ -905,13 +1207,23 @@ def _process_one(
 
     cache_path = None
     try:
-        cache_path = _ensure_repo_cache(instance["repo"], repo_cache_root)
-        _fetch_commit(cache_path, instance["base_commit"])
-        _hydrate_workspace(
-            cache_path=cache_path,
-            base_commit=instance["base_commit"],
-            workspace_path=workspace_path,
-        )
+        if _swe_agent_env() == "instance_image":
+            # instance_image mode: /testbed lives inside the per-instance eval
+            # image, so skip the repo clone/fetch/worktree entirely; the
+            # workspace is only a host staging dir (AGENTS.md + /out patch sink).
+            _hydrate_workspace(
+                cache_path=None,
+                base_commit=instance["base_commit"],
+                workspace_path=workspace_path,
+            )
+        else:
+            cache_path = _ensure_repo_cache(instance["repo"], repo_cache_root)
+            _fetch_commit(cache_path, instance["base_commit"])
+            _hydrate_workspace(
+                cache_path=cache_path,
+                base_commit=instance["base_commit"],
+                workspace_path=workspace_path,
+            )
         _write_agents_md(workspace_path, instance)
     except Exception as exc:  # noqa: BLE001
         summary["status"] = "hydration_failed"
@@ -952,6 +1264,7 @@ def _process_one(
         model=model,
         timeout_s=agent_wall_s,
         instance_id=instance_id,
+        base_commit=instance["base_commit"],
         stdout_path=codex_stdout,
         stderr_path=codex_stderr,
         trace_path=codex_trace,
@@ -1004,6 +1317,7 @@ def _process_one(
                 codex_meta_retry = _run_codex_dispatch(
                     workspace=workspace_path, endpoint=endpoint, model=model,
                     timeout_s=agent_wall_s, instance_id=instance_id,
+                    base_commit=instance["base_commit"],
                     stdout_path=retry_stdout, stderr_path=retry_stderr, trace_path=retry_trace,
                     prompt=retry_prompt,
                 )
