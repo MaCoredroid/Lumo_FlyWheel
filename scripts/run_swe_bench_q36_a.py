@@ -109,7 +109,9 @@ QWEN_CODE_TEMPLATE = (
     # QWEN_STREAM_IDLE_TIMEOUT_MS (env precedence: config field > env > default).
     # Modest raise (240000ms) paired with the runner stall-watchdog; on the live
     # ssh/offload path ${VAR:-240000} shell-expands remotely. Overridable via env.
-    "-e QWEN_STREAM_IDLE_TIMEOUT_MS=${QWEN_STREAM_IDLE_TIMEOUT_MS:-240000} "
+    # NOTE: double braces — this string goes through str.format(); single braces
+    # parse as a replacement field and crash dispatch (KeyError, tcfix_i5).
+    "-e QWEN_STREAM_IDLE_TIMEOUT_MS=${{QWEN_STREAM_IDLE_TIMEOUT_MS:-240000}} "
     "-w /workspace qwen-code-runner:v1 "
     "--yolo --output-format json --max-session-turns 80 -p"
 )
