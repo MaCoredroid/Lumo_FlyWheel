@@ -1559,3 +1559,11 @@ regression-gated on its own. Design note for #10; no action now.
   Killed after 2 tasks; ~10h saved. The two failures were partly this bug + partly weak agent draws (12907
   garble, 13236 explored-but-no-edit). Re-validate on 13453 (made real edits) => expect a clean ~408B patch +
   possibly resolved, then relaunch the full matrix.
+
+## 74. Patch-extraction fix VALIDATED (oneinst re-run) — matrix relaunching with true patch capture
+- oneinst 13453 with the git-diff-HEAD fix: patch=377B SOURCE-ONLY (html.py `+ self.data._set_col_formats()`),
+  0 setuptools lines, eval ran clean (error=None), verdict=failed. The 377B = the KNOWN incomplete near-miss
+  (drops `self.data.cols = cols`, §57) — a legitimate quality draw, NOT the harness bug. Extraction now
+  captures exactly the agent's real edits; the matrix will produce TRUE resolve numbers.
+- RELAUNCHING the matrix (same config: tree+cache vs native+cache, 16 tasks, B=4, baked, official env,
+  logging-off, heartbeat, WALL=5400 backstop). Per-task garble scan + patch-shape check inline.
