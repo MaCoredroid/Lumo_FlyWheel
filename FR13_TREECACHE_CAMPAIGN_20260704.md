@@ -1824,3 +1824,19 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   * native-current recovers toward 8/8 => the TREE spec-decode is the regression (distribution shift => degenerate).
   * native-current ALSO ~0/8 => the HARNESS/ENV is the regression (offload stream, instance_image env, or proxy),
     NOT the spec method => fix the harness, not the kernel. (The mid-word truncation smells harness/stream.)
+
+## 87. TREE+CACHE = 0/8 on fr9-resolved-8 (final) — NATIVE control launched (the decisive tree-vs-harness split)
+- Tree arm FINAL: 0/8. 5 graded all failed (12907/14096/14365/14539 = 0B give-up, 14309 = 779B tests_failed
+  near-miss); 3 (13453/14508/14995) were long-LOOPING (13453 @20min, same as the B=4 matrix) producing nothing =>
+  torn down (clean, no wedge, host 5G/112G) to free the GPU rather than wait ~70min for them to wall. So tree+cache
+  ≈ 0/8 vs fr9's 8/8 — massive regression, char-8 NOT the carrier (0 repair firings all run).
+- The long-LOOP tasks are themselves a signal: 3/8 of the fr9-resolved tasks make the tree pipeline run 20-40min
+  producing nothing (vs fr9 resolving them). Degenerate long loops + 0B give-ups + a near-miss = the tree pipeline
+  degrades agentic output across the board on tasks fr9 handled.
+- LAUNCHED the NATIVE MTP-5 control (bgkv2s8g6): natE5, cache-OFF (native path carries no tree/APC), SAME 8 tasks,
+  SAME current harness (offload + instance_image + proxy + transcript-repair), B=4. This is the clean spec-method
+  isolation. Reading it against tree's 0/8:
+  * native ≈ 8/8 => the TREE spec-decode pipeline is the amplifier (a real agentic-quality regression vs native
+    MTP — despite "lossless within floor"; the small distribution shift may be enough to degrade multi-turn tool use).
+  * native ≈ 0/8 => the HARNESS/ENV regressed since fr9 (offload stream / instance_image env / proxy), spec-method
+    exonerated => the fix is in the harness, and BOTH products (tree AND native) are currently blocked by it.
