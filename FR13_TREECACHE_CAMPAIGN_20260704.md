@@ -2183,3 +2183,18 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
 - DEPRECATED (invalid under convention — MAX_NUM_SEQS=1 but CONC=4): the earlier "B=1 CONC=4" runs
   (chain5+cache 0/4, cat8+cache 1/4, chain5+nc 1/4-partial). Superseded by the true-B=1 (CONC=1) runs above.
 - Future launches: B=1 => BSIZE=1 CONC=1; B=4 => BSIZE=4 CONC=4. No mixing.
+
+## 112. CARRIER B SEAM LOCALIZED (code) — never-cleared batch-position/req-keyed tree_mtp globals
+- The tree_mtp COMMIT publishes module globals `_LUMO_FA_LAST_ACCEPTED_TREE_ROWS/LENS/NODE_PATHS/TOKEN_IDS`
+  (patcher 4785-4975, set at 10325-10331), batch-position/req-keyed, and per line 7850 "populated EVERY turn but
+  NEVER CLEARED". Line 8268: "_last_written keyed to the WRONG req on MIXED batch". These are all TREE_MTP-gated;
+  line 4614 states "so naive_mtp/native is unaffected" => WHY NATIVE IS IMMUNE to carrier B.
+- => CARRIER B = these never-cleared, batch-position/req-keyed tree_mtp globals cross-contaminating between
+  CONCURRENT agents (CONC>=2). The §66 COPY_SRC_FIX patched ONE instance (cold-prefill stale-tree stamp); the
+  others remain. Candidates to audit: _LUMO_FA_LAST_ACCEPTED_* (4785+), the req_id->state-slot dicts (6772), and
+  _last_written (8268). native's naive_mtp path touches none => immune.
+- FIX direction: make every tree_mtp cross-turn global req_id-keyed (not batch-position) AND cleared on
+  _free_request/admit (hook exists, 7852-7868), OR extend the COPY_SRC_FIX freshness-gate to all of them.
+  Then re-verify chain5+cache @B=4 resolves like native. (Carrier A' branched-restore + A ramble = separate.)
+- NEXT: pin WHICH global carries via a targeted cross-request probe (CONC=2, 2 distinct reqs, diff the global
+  between agent-1 commit and agent-2 read), then fix + re-run @B=4.
