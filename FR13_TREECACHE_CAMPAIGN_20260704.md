@@ -1752,3 +1752,37 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   * Cell A: B=4 + tree + cache + BATCH_INVARIANT=1 BI_TREE_ATTN=1 -> resolves => batch-variance is it; give-up => not
   If Cell A fixes it, the HEADLINE speed matrix runs at B=4+BI (co-residency throughput AND correctness — the
   ideal deliverable); if Cell B fixes it, the fix is in the concurrent-restore path; if neither, deeper co-residency.
+
+## 84. RETRACTION — §76-§83 "B=4 co-residency degradation" is a PHANTOM; the real issue is the KNOWN char-8
+## regression (pre-documented 2026-07-01). Course-corrected by auditing prior docs.
+- The Cell C confound check + an audit of the campaign's OWN prior docs (FR13_SOLVERATE_HISTORY.md,
+  FR13_CHAR8_REGRESSION_FINDINGS.md) OVERTURN the B=4 thesis:
+  * Cell C (B=1) tally: 12907 RESOLVED 504B, but 13033 + 13236 GAVE UP at B=1 TOO. So the give-ups are NOT
+    B=4-specific.
+  * History (authoritative, careful prior analysis): 13033/13236/13398 are STRUCTURALLY UNSOLVABLE (fail in
+    EVERY config, B=1 and B=4); 12907 is a KNOWN ~50/50 char-8 coin-flip (~40 R vs ~40 P/T across runs,
+    resolves/fails on different SEEDS under the SAME config). => 12907 R@B=1 / giveup@B=4 is WITHIN its seed
+    variance, NOT a batch effect. My "5/5 give-up @ B=4" = hard tasks + coin-flip, batch-independent.
+- THE REAL REGRESSION (already characterized 2026-07-01, FR13_CHAR8_REGRESSION_FINDINGS.md): fr9 (2026-06-02)
+  resolved 8/16 on the IDENTICAL astropy-16; the current pipeline gets 1-2/16 = a real ~6-task CHAR-8 regression.
+  Carrier = the model generating MALFORMED TOOL-CALL JSON args => stored in the transcript => re-parsed by vLLM
+  => terminal 400 => apply_patch never lands => 0-byte patch => patch_apply_failed. DECODE-side (tunnel cleared),
+  CACHE-independent (fires ON 15/16 + OFF 7/9), CAP-independent (40+ turns), and BATCH-independent. The malformed
+  args I logged in §81 (13033 "must be an array", 12907 </think> leak / NameError repro) ARE char-8 — I
+  re-discovered it under the wrong "B=4 co-residency" frame.
+- 12907 is the smoking gun BOTH ways: char-8 off => resolves 504B (my Cell C + the doc's control); char-8 fires
+  => give-up (my B=4 run). It is the char-8 coin-flip, not the batch size.
+- FIX (already SCOPED + DECIDED, user 2026-07-01) = BOTH: (1) json_repair on the outgoing transcript (repair the
+  stored malformed args BEFORE vLLM re-parses => breaks the terminal-400 loop; DISTRIBUTION-NEUTRAL, safe for
+  lossless work; json_repair pip-installed) (2) guided_json (JSON grammar on tool-call args; changes
+  distribution; apply equally in an A/B). Status: NEVER IMPLEMENTED ("resume the char-8 fix").
+- CORRECTED PLAN:
+  1. CANCEL the B=4 localization cells (A/B) — invalid (giveup4 subset is dominated by structurally-hard tasks +
+     the 12907 coin-flip; cannot see the char-8 regression). Task #11 (B=4 carrier) = CLOSED as misframed.
+  2. IMPLEMENT the char-8 fix (json_repair transcript-repair in the offload proxy first; then guided_json).
+  3. RERUN the FULL-16 (the discriminating subset, NOT CORE-4) => watch char-8 + empty-patches vanish and the
+     solve-rate climb back toward fr9's 8/16.
+  4. THEN the speed matrix on the RECOVERED pipeline (json_repair is distribution-neutral => speed unaffected;
+     but tasks now run to completion => representative decode + real resolve rate).
+- The serve_variant BATCH_INVARIANT="${BATCH_INVARIANT:-0}" edit is harmless (default-preserving) — left in place.
+  Cell C wound down (its last task 13977 is now moot).
