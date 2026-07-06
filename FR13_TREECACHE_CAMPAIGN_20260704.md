@@ -2276,3 +2276,36 @@ not token streams; identity there needs no bug. Arms verified as separate boots,
 **Status:** carrier-B fix efficacy = UNKNOWN (was "works, partial"). Carrier A' localization
 workflow (wc6gr0qm7) in flight; 4/5 branched-restore seams refuted, 1 (FR13_CONV_COMMITTED_PATH)
 flagged corrupts=medium, in adversarial verify.
+
+## §117 REFRAME: carrier A' = prior-localized branch-drift (co-residency batch variance), NOT a restore seam (2026-07-06)
+
+The A' localization workflow (wc6gr0qm7) REFUTED all 5 branched-restore seams (conv prior-window,
+FR13_CONV_COMMITTED_PATH, GDN SSM feed, copy-source, node-path remap) — correctly, because
+carrier A' is NOT a restore seam. Cross-referencing prior binds (the synthesis agent read them):
+
+- **FR13_BRANCH_FLIP_LOCALIZED_BIND (2026-06-14):** the branch's excess flips (cat9 22 vs spine 5,
+  =+17) are SPINE-PERTURBATION via co-residency BATCH VARIANCE — 11/11 channel-2 flips land on the
+  SPINE rows, 0 on off-spine leaves. Branches do NOT fail their own verification; they perturb the
+  co-resident spine at num_accepted∈{4,5} (deep full-accept). Exact perturbing op uncertain (fp8
+  M-config REFUTED on GB10 = M-invariant default; TREE_ATTN + GDN scan/conv/gate bit-exact ruled out).
+- **+17 (in_proj_ba pad, LUMO_FB_PROJ_PAD_ROWS=16) is ALREADY BAKED** into locked cat9
+  (FR13_WIDTH_CARRIER_INPROJ_BA: lossless + accept~native + speed-neutral). So current runs HAVE it.
+- **+2 spine = PARKED** (cascade artifact; BV/warps fix REFUTED, scan bit-exact both geometries).
+- **BI Method-A (FR13_BI_TREE_ATTN, built+wired, default-off) = PARTIAL** (within-boot same-seed
+  still flips finish-reason).
+
+**Unification hypothesis:** carrier A' (branch give-up) AND carrier B (concurrency amplification)
+are likely the SAME co-residency BATCH-VARIANCE mechanism — which is why B=4 amplifies and why the
+branch (more co-residents) degrades more. The cache AMPLIFIES the residual branch drift into
+give-ups (matches project_fr13_tree_agentic_degradation: cache converts rambles->give-ups). My
+positional-global fix (§112, carrier B) may be a RED HERRING vs the batch-variance carrier — the
+engagement instrument's nonempty_clears will decide (residue exists at free? if 0 => not the carrier).
+
+**Revised plan (supersedes the branched-restore A' fix):**
+1. Engagement-check the positional-global fix (nonempty_clears>0?) — cheap, decides if carrier B is
+   even these globals. Seq fr13_carrierB_clean_seq.sh prepped (cat9 golden branch, flag off/on).
+2. Re-test the batch-variance lever on the CURRENT (post-+17-bake, cache-ON) build: BI Method-A +
+   possibly tree-reshape (de-amplify leaf co-residency) — the diffuse-drift levers, now measured
+   against give-ups (cache-on) not just no-cache flips.
+3. Binding gate stays restore/flip-oracle first (fr13_oracle_stream_teacher_force --threshold 1.0),
+   SWE give-up rate as e2e confirmation. n=4 conc=4 SWE alone is too noisy (§116).
