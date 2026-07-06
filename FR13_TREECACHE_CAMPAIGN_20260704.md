@@ -1934,3 +1934,18 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   * native+cache <4/4 => the cache is an INDEPENDENT carrier (degrades native too) => must fix cache AND tree.
   arm2 chain5(spine): ~4/4 => tree BRANCHES are the carrier (spine native-parity); ~1/4 => forked kernel degrades.
 - Full 2x2 + shape after this run resolves BOTH the user's cache-separation and the tree-shape localization.
+
+## 93. DATA PROVENANCE (user 2026-07-06: "all data newly tested not from old docs")
+- VERIFIED by file mtime — the CORE conclusions rest on data tested TODAY 2026-07-06 on the current pipeline:
+  native+nocache 4/4 (09:38-09:56), tree+cache 0/4 (09:07-09:09), tree+nocache 1/4 (10:28-11:03). native+cache
+  + chain5 running now (fresh). NOT from docs.
+- OLD-DOC dependencies, demoted to HYPOTHESIS (do NOT conclude from these; freshly re-test):
+  * "fr9 8/8 on the astropy-16" (2026-06-02) = used ONLY to select the fr9-resolved-8 subset. The BASELINE I
+    conclude against is the FRESH native 4/4, not the old fr9 number. Stop citing fr9 as current.
+  * §91 mechanism ("diffuse GDN drift, chain5 drifts 2 ≤ native 3, 13% within-floor, native 7x less") = June 13-14
+    TOKEN-LEVEL measurements. §91 leaned on them as established — CORRECTION: they are a hypothesis, token-level
+    ≠ agentic. The mechanism verdict MUST come from the FRESH chain5-agentic + native+cache runs, not the docs.
+  * "13033/13236 unsolvable, 12907 coin-flip" (history doc) = but FRESHLY CORROBORATED this session by Cell C
+    (12907 R @B=1, 13033/13236 giveup @B=1) — so this one has fresh backing.
+- RULE forward: every claim in the tree-degradation conclusion must trace to a TODAY-dated result file, or be
+  explicitly flagged as an untested hypothesis.
