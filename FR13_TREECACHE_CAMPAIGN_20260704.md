@@ -2129,3 +2129,19 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
 - The running CONC=1 test is the DIAGNOSTIC (confirms carrier B = concurrent cache-sharing if chain5+cache CONC=1
   resolves). The FIX then = tree-path concurrent shared-cache restore correctness. Keep branches + keep cache +
   keep concurrency; fix the tree restore to match native.
+
+## 108. CARRIER (B) CONFIRMED = CONCURRENT SHARED-CACHE restore (user's CONC question) — the decisive result
+- chain5+cache (tree spine): CONC=1 = 3/4 resolved, 0 give-ups (12907 504B, 14096 956B, 14309 583B; 14365 running)
+  vs CONC=4 = 0/4, ALL 4 give-ups. SAME config+tasks; ONLY concurrency differs => carrier (B) = the CONCURRENT
+  cross-agent shared prefix-cache restore in the TREE decode path. NOT a regression, NOT fundamental, NOT single-request.
+- RECONCILES: §66 give-up-extinct was CONC=1 (single-task probes) => single-agent shared-cache works, fix valid.
+  ALL my give-ups are CONC=4 => the concurrent shared-cache restore is a regime §66 never tested + the §66 fix
+  (single-agent cold-prefill stale-tree) doesn't cover.
+- vs the GOAL (§107): native+exseed CONC=4 = 3/4 (concurrent shared cache WORKS for native); chain5+cache CONC=4 =
+  0/4 (BREAKS for tree spine) but CONC=1 = 3/4 (works single-agent). => FIX = make the TREE-path concurrent
+  EXACT_SEED restore correct under cross-agent cache-sharing, matching native's (which is correct at CONC=4).
+- NEXT: (1) cat8+cache CONC=1 (arm2) — does the branch also recover at CONC=1 (=> both carriers concurrency-gated)?
+  (2) LOCALIZE the cross-agent restore bug: at CONC>1 the tree-path GDN/conv restore for agent-2 reads state
+  cross-contaminated by agent-1's concurrent cache write/slot (the tree keys state by batch-row/req; native's
+  naive_mtp path keys it correctly). Bind the exact cross-request seam.
+- CAVEAT: swap grew to 2.3GiB under CONC=1 cache-on (ES cache pressure); mem 13G avail. Watch the hygiene gate.
