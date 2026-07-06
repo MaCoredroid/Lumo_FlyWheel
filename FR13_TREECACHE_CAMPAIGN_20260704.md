@@ -2198,3 +2198,18 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   Then re-verify chain5+cache @B=4 resolves like native. (Carrier A' branched-restore + A ramble = separate.)
 - NEXT: pin WHICH global carries via a targeted cross-request probe (CONC=2, 2 distinct reqs, diff the global
   between agent-1 commit and agent-2 read), then fix + re-run @B=4.
+
+## 113. CARRIER B FIX implemented (workflow wpvuj9720) — flag-gated FR13_FREE_TREE_POSGLOBALS, default-0
+- Workflow (12 agents, adversarial verify) localized carrier B's mechanism-class to 5 NEVER-CLEARED batch-position
+  tree_mtp globals (_LUMO_FA_LAST_ACCEPTED_TREE_ROWS/LENS/NODE_PATHS/TOKEN_IDS + _LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL),
+  read positionally by _fr10_tree_current_accepted_path(bi). Other candidates VERIFIED OUT (req_id-keyed/self-cleaning/
+  already-popped). CAVEAT: the verify could NOT prove the stale read reaches the restore under the BAKED config
+  (CONV_FIX=1 may route around one read path) => "0 verified"; the fix is the leading hypothesis, GPU gate decides.
+- FIX: clear the 5 positional globals wholesale on _free_request (Scheduler hook, 7897), gated FR13_FREE_TREE_POSGLOBALS
+  (default '0' => byte-identical/inert). Safe: fires only at request-free (never mid-step); legit cross-turn restore
+  uses the req_id-keyed path; co-scheduled reqs republish the whole list before any read. Generator compiles, emitted
+  block parses, launcher default :=0 + auto-forwarded by the FR13_* catch-all (468-469). NOT baked =1.
+- GATE (definitive): chain5+cache @ B=4 (seqs4,conc4) with flag=1 must go 0/4 -> ~4/4 (match native's 3/4). Flag=0
+  must stay 0/4 (reproduce). B=1 must stay 4/4 both flag states. If flag=1 does NOT clear give-ups => read is dead
+  under baked config => carrier is elsewhere => LEAK_PROBE + per-token argmax to relocalize. Do NOT flip default
+  until the gate passes.

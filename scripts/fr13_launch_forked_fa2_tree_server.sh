@@ -342,7 +342,12 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   #    accepted-tree can't poison the chunk-boundary state-copy SOURCE (was propagating zeros to
   #    every request after the first). Runtime-gated (default ON); decode-boundary byte-identical.
   : "${FR13_APC_COPY_SRC_FIX:=1}"
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP FR13_APC_EXACT_SEED FR13_APC_BLOCK_REFOLD FR13_APC_REFOLD_TO_SNAPSHOT FR13_APC_CONV_LEAF_COMPLETE FR13_APC_ZERO_MAMBA_ON_ALLOC FR13_APC_COPY_SRC_FIX
+  #  - FREE_TREE_POSGLOBALS (§112/carrier-B): clear the never-cleared batch-position
+  #    tree_mtp accepted-tree globals on _free_request so a concurrent agent reusing
+  #    batch-position 0 can't read the freed request's residue. Default 0 (byte-identical);
+  #    flip to 1 only after the B=4 gate confirms 0/4 -> ~4/4.
+  : "${FR13_FREE_TREE_POSGLOBALS:=0}"
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP FR13_APC_EXACT_SEED FR13_APC_BLOCK_REFOLD FR13_APC_REFOLD_TO_SNAPSHOT FR13_APC_CONV_LEAF_COMPLETE FR13_APC_ZERO_MAMBA_ON_ALLOC FR13_APC_COPY_SRC_FIX FR13_FREE_TREE_POSGLOBALS
 else
   APC_FLAGS=""
 fi
