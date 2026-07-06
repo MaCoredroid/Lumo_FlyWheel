@@ -2152,3 +2152,19 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   single-agent; the ENTIRE give-up problem is the CONCURRENT shared-cache restore. One concurrency bug, not a deep
   tree defect. Fix it => tree+cache resolves @CONC=4 like native (the deliverable).
 - swap cleared to 0 after arm1 teardown (transient pressure). cat8+cache CONC=1 (arm2) running => confirms branch.
+
+## 110. REFINEMENT — the branch has a SECOND give-up carrier that is NOT concurrency-gated (persists single-agent)
+- CONC=1 single-agent: chain5+cache(spine) = 4/4 (0 give-ups) BUT cat8+cache(branch) = 1/4 (2 give-ups, 3/4 done).
+  cat8+cache is 1/4 at BOTH CONC=1 and CONC=4 => the branch give-ups are NOT concurrency-gated.
+- Per-task control (single-agent): 14096 + 14309 RESOLVE on the spine but GIVE UP on the branch. The branch give-ups
+  are SHORT clean quits (3-4 turns, garble-CLEAN) — NOT the diffuse-drift ramble (carrier A). => a distinct
+  WITHIN-REQUEST branched-tree cache-restore fragility (the branched tree has more co-resident accepted-chain state
+  to restore than the linear spine).
+- => THREE tree-path issues now separated:
+  (B)  concurrent cross-agent shared-cache restore => SPINE give-ups (fixed at CONC=1: spine 4/4). cross-agent.
+  (A') within-request BRANCHED-tree cache restore => BRANCH give-ups single-agent (short quits). within-request, branch-only.
+  (A)  branch diffuse-drift ramble (cache-off) => cat8+nc quality tail (rambles, not give-up).
+- FIX SCOPE for the branch deliverable: (B) concurrent restore + (A') within-request branched restore. Spine-only would
+  need just (B) but spine is a diagnostic, not the product (§100). Localize (A') = the branched EXACT_SEED restore's
+  extra co-resident state (accepted-chain nodes) that the linear spine restore doesn't exercise.
+- CAVEAT n=4 temp0.6; 14365 (last cat8+cache CONC=1) pending.
