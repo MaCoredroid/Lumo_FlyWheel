@@ -2239,3 +2239,40 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   branched-tree EXACT_SEED restore (the co-resident accepted-chain state feed) that gives up even single-agent, vs
   the spine's simpler restore that's clean at CONC=1.
 - chain5+cache flag-on run2 (14096 flake vs 2nd seam) still running.
+
+## §116 RED-TEAM RETRACTION: §114/§115 carrier-B "fix works" is UNVERIFIED (2026-07-06)
+
+Re-examined run2 (b0o2ox5ue, output/fr13_fixbranch, both arms B=4 conc=4 flag-on). Two infra
+faults invalidate the fix-efficacy conclusion — caught by the "audit infra before ANY conclusion"
++ "engagement check / fail-loud before any number" discipline:
+
+1. **cat8 branch arm's tree was MIS-SERVED.** driver.log: `class-9 FAIL-LOUD [deploy-speed
+   cat8cache_fixon_fb B=4]: tok/draft=8.0 != expected 9.0 -- served shape is NOT what was
+   requested (silent fallback / wrong tree). Nothing recorded.` The branch SWE run used an
+   8-draft tree, not the requested 9 => its 0/4 does NOT cleanly test the intended branch shape.
+   (seq passed `cat8 9 1`; CAT8_TREE descriptor yields 8 draft — arg/descriptor mismatch to fix.)
+
+2. **FR13_FREE_TREE_POSGLOBALS engagement was UNPROVEN.** The fix fires SILENTLY (no marker).
+   It is forwarded by construction (launcher compgen `^FR13_` whitelist, line 474) but there is
+   zero runtime evidence it engaged in run1 (2/4) OR run2 (0/4). So BOTH numbers are
+   uninterpretable for the flag. §114's "2/4 = fix works" = a single B=4/conc=4/n=4 point with
+   known run-to-run variance (chain5+cache flag-on: run1 2/4, run2 0/4).
+
+**Byte-identity was a FALSE alarm (not a run bug):** run2's two arms share 14365=617B (easy task,
+same final DIFF regardless of spec shape) + 12907=0B (both empty give-ups). Patches are diffs,
+not token streams; identity there needs no bug. Arms verified as separate boots, different specs
+(num_spec 8 vs 5, both max_num_seqs=4 conc=4).
+
+**Corrective actions:**
+- Added ENGAGEMENT INSTRUMENT to the carrier-B fix (patcher ~7909): counts fires + non-empty
+  clears, prints `FR13_POSGLOBALS ENGAGED fires=N nonempty_clears=M last_cleared=K` on 1st fire
+  + every 50. Absence of this line after a flag-on run => discard. non-empty=0 => the clear is a
+  NO-OP (globals empty at free) => carrier isn't these globals (itself decisive).
+- Re-run must: (a) fix the cat8 tree arg so served==requested (assert_engaged passes), (b) show
+  the POSGLOBALS marker, (c) pair flag-on vs flag-off back-to-back, (d) recognize n=4 conc=4 SWE
+  is too noisy alone — the binding gate is restore-vs-oracle (per feedback_verify_notstale...),
+  SWE = e2e confirmation.
+
+**Status:** carrier-B fix efficacy = UNKNOWN (was "works, partial"). Carrier A' localization
+workflow (wc6gr0qm7) in flight; 4/5 branched-restore seams refuted, 1 (FR13_CONV_COMMITTED_PATH)
+flagged corrupts=medium, in adversarial verify.
