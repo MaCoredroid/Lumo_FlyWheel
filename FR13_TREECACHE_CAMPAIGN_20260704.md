@@ -1567,3 +1567,16 @@ regression-gated on its own. Design note for #10; no action now.
   captures exactly the agent's real edits; the matrix will produce TRUE resolve numbers.
 - RELAUNCHING the matrix (same config: tree+cache vs native+cache, 16 tasks, B=4, baked, official env,
   logging-off, heartbeat, WALL=5400 backstop). Per-task garble scan + patch-shape check inline.
+
+## 75. B=4 REGIME OBSERVATION (user: all prior tests B=1; watch infra/kernel faithfulness under B=4)
+Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
+- TREE VERIFY KERNEL faithful under co-residency: spec-decode accept depth profile pos0 94.8% / pos1 78% /
+  pos2 60% / pos3 42%, 3.09 accepted tok/draft — smooth depth decay, no cliff/anomaly from B=4 batching.
+- BOTH BAKED FIXES ENGAGE at B=4: E5 boot needle ACTIVE + 96 mamba state tensors registered; COPY_SRC_FIX
+  engaged. (The fixes were B=1-validated; confirmed live-engaging in the B=4 regime.)
+- PREFIX CACHE (Product 2) heavily utilized: hit rate 78-79.5% (45.7M/60M cumulative) => the RESTORE path is
+  under CONSTANT stress at B=4 (vs the sparse B=1 gate) — the real faithfulness test. KV cache 7-21% (peak at
+  3 running), NO preemptions => no capacity pressure, no preemption-driven state-churn carrier risk.
+- THROUGHPUT: gen 38 tok/s at B=3 vs ~15 at B=1 (co-residency gain); prompt bursts ~985 tok/s (turn prefills).
+- Armed a persistent B=4 anomaly monitor (KV>85% / preemption / prefix-hit<40% / engine error). Agentic
+  faithfulness (garble/quality) pending completions; first patches spot-checked for source-only + garble scan.
