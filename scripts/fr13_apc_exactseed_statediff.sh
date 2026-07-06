@@ -20,7 +20,7 @@ ln -s "$PWD/$OLD_REF"/ref_gdn*.pt "$RD/logs/" 2>/dev/null || cp "$OLD_REF"/ref_g
 ln -s "$PWD/$OLD_REF"/ref_logit*.pt "$RD/logs/" 2>/dev/null || cp "$OLD_REF"/ref_logit*.pt "$RD/logs/" 2>/dev/null
 echo "=== EXACT_SEED STATE-DIFF  rundir=$RD  REF=$(ls "$RD/logs"/ref_gdn*.pt 2>/dev/null|wc -l) gdn  block=$B + EXACT_SEED=1 ==="
 PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" >/dev/null 2>&1 || true
-for p in fr13 swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
+for p in fr13 swe-agent swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
 
 echo "[ESEED] boot align@b=$B with FR13_APC_EXACT_SEED=1 @ $(date -u +%H:%M:%S)"
 ARM=on RUNDIR="$RD" DUMPS="$SRC" LIMIT_TURNS=$((SEQ+1)) PORT="$PORT" GPU_UTIL="$GPU_UTIL" \

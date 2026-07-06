@@ -19,7 +19,7 @@ ROOT=output/fr13_spine_cache_engaged/run_$TS
 mkdir -p "$ROOT"
 echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/spine_cache_engaged_root.txt 2>/dev/null || true
 export RUNROOT="$ROOT"
-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
+export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
 export FR10_METRICS=0 BATCH_INVARIANT=0
 # ATTEMPT-1 metric (user 2026-06-27): stop-on-first-giveup, no retries. cache-OFF solves attempt-1
 # with 0 give-ups, so this is a fair + faster (~12-15min/boot saved) + more sensitive discriminator.
@@ -41,7 +41,7 @@ run_one() {
   local SO="$ROOT/$A/swe_orchestrator.log"
   local mk; mk=$(cat "$ROOT/$A/apc_bridge_marker.txt" 2>/dev/null)
   local eng; eng=$(grep -qE "FAIL: APC (worker|engagement|bridge)" "$ROOT/${A}.serve.log" 2>/dev/null && echo "VACUOUS(exit4)" || echo "ENGAGED")
-  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/codex_trace*.jsonl 2>/dev/null | wc -l)
+  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/{agent,codex}_trace*.jsonl 2>/dev/null | wc -l)
   local v; v=$(grep -oE "verdict=(resolved|failed)" "$SO" 2>/dev/null | tail -1)
   [ -z "$v" ] && v="verdict=NORESULT(see ${A}.serve.log)"
   echo "$A -> $v | engagement=$eng | marker=[$mk] | runaway=$ru" | tee -a "$ROOT/RESULTS.txt"

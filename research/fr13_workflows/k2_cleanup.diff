@@ -1,0 +1,1339 @@
+diff --git a/scripts/fr13_apc_3way_gate.sh b/scripts/fr13_apc_3way_gate.sh
+index 70b4bec7..576d820b 100755
+--- a/scripts/fr13_apc_3way_gate.sh
++++ b/scripts/fr13_apc_3way_gate.sh
+@@ -17,7 +17,7 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
+ RUNROOT=output/fr13_apc_3way/run_$TS; mkdir -p "$RUNROOT"; export RUNROOT
+ echo "$RUNROOT" > /home/mark/.claude/jobs/22c39bb9/tmp/threeway_root.txt
+ echo "=== FR13 CLEAN 3-WAY  b4_four(4-task)  B=1 temp0.6  FULL GRAPH  -> $RUNROOT ==="
+-export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g FR10_METRICS=0
++export MAX_NUM_SEQS_OVR=1 OFFLOAD_AGENT=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g FR10_METRICS=0
+ 
+ reduce() {  # $1 = swe_out root -> full decode+cache accounting (s_per_fwd, accept/event,
+             # token-weighted tok/s, prefix-hit%, TTFT, e2e) via the shared reducer
+diff --git a/scripts/fr13_apc_blocksweep.sh b/scripts/fr13_apc_blocksweep.sh
+index 8c6da7c9..66e0eb78 100755
+--- a/scripts/fr13_apc_blocksweep.sh
++++ b/scripts/fr13_apc_blocksweep.sh
+@@ -38,12 +38,12 @@ for i in $(seq 1 "$N"); do
+     docker rm -f "fr13-bigdenom-$ARM" >/dev/null 2>&1 || true
+     BLKENV=""; [ "$APC" = "1" ] && BLKENV="MAMBA_BLOCK_SIZE=$BLOCK APC_BLOCK_SIZE=$BLOCK"
+     env FR13_ENABLE_APC=$APC FR13_APC_CONFIG_ONLY=0 $BLKENV MAMBA_SSM_CACHE_DTYPE=float32 \
+-      DEPLOY_FORCE_TEMP=0.6 OFFLOAD_CODEX=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 \
++      DEPLOY_FORCE_TEMP=0.6 OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 \
+       FR10_METRICS=0 BATCH_INVARIANT=0 DOCKER_MEM_CAP="$DOCKER_MEM_CAP" RUNROOT="$RUNROOT" \
+       bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" cat6root "$SUBSET" > "$RLOG" 2>&1 </dev/null
+     V=$(grep -hoE "resolved_rate=[0-9.]+" "$RLOG" 2>/dev/null | tail -1)
+     VERD=$(echo "$V" | grep -qE "resolved_rate=1" && echo resolved || echo failed)
+-    TR=$(find "$RUNROOT/$ARM" -path "*per_task*/codex_trace.jsonl" 2>/dev/null | head -1)
++    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" \) 2>/dev/null | head -1)
+     C8=0; [ -n "$TR" ] && C8=$(grep -cE 'Unterminated|column 9 \(char 8\)|EOF while parsing a string' "$TR" 2>/dev/null || echo 0)
+     printf '%s\t%s\t%d\t%s\t%s\t%s\n' "$tag" "$BLOCK" "$i" "$VERD" "$C8" "$RLOG" >> "$SUMMARY"
+     echo "  => verdict=$VERD char8=$C8"
+diff --git a/scripts/fr13_apc_drift_curve_extend.sh b/scripts/fr13_apc_drift_curve_extend.sh
+index 29c72098..372253de 100644
+--- a/scripts/fr13_apc_drift_curve_extend.sh
++++ b/scripts/fr13_apc_drift_curve_extend.sh
+@@ -13,7 +13,7 @@ SRC=output/fr13_apc_rategate/run_20260625T084654Z/rg_OFF_r1/proxy_pair_dumps
+ SEQ=49; PORT=9953; GPU_UTIL=0.82; REPLAY_TEMP=0.6; K_DECODE=8; GDN_LIMIT=80
+ echo "=== drift curve EXTEND  D=$D  blocks=[8192 4096]  reuse REF=$(ls "$D"/logs/ref_gdn*.pt 2>/dev/null|wc -l) gdn ==="
+ PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" >/dev/null 2>&1 || true
+-for p in fr13 swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
++for p in fr13 swe-agent swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
+ 
+ for B in 8192 4096; do
+   echo "[EXTEND] boot align@b=$B (capture on_b${B}) @ $(date -u +%H:%M:%S)"
+@@ -29,7 +29,7 @@ for B in 8192 4096; do
+     FR13_FINAL_LOGIT_CAPTURE_LIMIT="$K_DECODE" \
+     bash scripts/fr13_apc_multiturn_one_arm.sh >> "$D/logs/boot_extend_b${B}.log" 2>&1
+   echo "  boot b=$B rc=$? captures=$(find "$D" -name "on_b${B}_gdn*.pt" 2>/dev/null|wc -l) @ $(date -u +%H:%M:%S)"
+-  for p in fr13 swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
++  for p in fr13 swe-agent swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
+ done
+ 
+ echo "=== REDUCE all four blocks vs continuous REF @ $(date -u +%H:%M:%S) ==="
+diff --git a/scripts/fr13_apc_drift_fixtest.sh b/scripts/fr13_apc_drift_fixtest.sh
+index 04087cf1..72dd9461 100644
+--- a/scripts/fr13_apc_drift_fixtest.sh
++++ b/scripts/fr13_apc_drift_fixtest.sh
+@@ -19,7 +19,7 @@ cp "$OLD_REF"/ref_gdn*.pt "$RD/logs/" 2>/dev/null
+ cp "$OLD_REF"/ref_logit*.pt "$RD/logs/" 2>/dev/null
+ echo "=== FIX TEST  rundir=$RD  REF reused=$(ls "$RD/logs"/ref_gdn*.pt 2>/dev/null|wc -l) gdn  block=$B + PRE_SNAP_FIX=1 ==="
+ PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" >/dev/null 2>&1 || true
+-for p in fr13 swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
++for p in fr13 swe-agent swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
+ 
+ # background non-vacuity canary: grep the worker fire counters while the container is alive
+ ( CF="$RD/logs/fire_canary.txt"; for i in $(seq 1 240); do
+diff --git a/scripts/fr13_apc_e2e_lossless_gate.sh b/scripts/fr13_apc_e2e_lossless_gate.sh
+index c6949796..8ed8f792 100644
+--- a/scripts/fr13_apc_e2e_lossless_gate.sh
++++ b/scripts/fr13_apc_e2e_lossless_gate.sh
+@@ -30,7 +30,7 @@ N=${N:-5}                                    # rollouts per arm
+ ARMS=${ARMS:-"ON OFF"}                        # ON=cache+spec ; OFF=no-cache+spec (single var)
+ KIND=${KIND:-cat6root}
+ SUBSET=${SUBSET:-output/fr13_b1_gold_swe/subset_astropy12907.json}
+-OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
++OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
+ DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-105g}; export DOCKER_MEM_CAP
+ TS=$(date -u +%Y%m%dT%H%M%SZ)
+ RUNROOT=${RUNROOT:-output/fr13_apc_e2e_gate/run_${TS}}
+@@ -39,7 +39,7 @@ echo "$RUNROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1ad
+ SUMMARY="$RUNROOT/e2e_gate_rollouts.tsv"
+ printf 'arm\trollout\tverdict\tcached_max\tspec_ok\tchar8\ttrace_bytes\trun_log\n' > "$SUMMARY"
+ echo "=== FR13 APC SPEC+CACHE E2E LOSSLESS GATE  N=$N/arm  arms='$ARMS'  KIND=$KIND  subset=$SUBSET ==="
+-echo "    runroot=$RUNROOT  offload=$OFFLOAD_CODEX  memcap=$DOCKER_MEM_CAP"
++echo "    runroot=$RUNROOT  offload=$OFFLOAD_AGENT  memcap=$DOCKER_MEM_CAP"
+ 
+ _hygiene() {
+   pgrep -af 'oom_protect_watchdog\.sh' | grep -qv pgrep || { setsid bash scripts/oom_protect_watchdog.sh >/dev/null 2>&1 </dev/null & disown; }
+@@ -63,7 +63,7 @@ for i in $(seq 1 "$N"); do
+     FR13_ENABLE_APC=$APC FR13_APC_CONFIG_ONLY=0 \
+       MAMBA_BLOCK_SIZE="${MAMBA_BLOCK_SIZE:-8192}" MAMBA_SSM_CACHE_DTYPE="${MAMBA_SSM_CACHE_DTYPE:-float32}" \
+       APC_MAX_NUM_BATCHED_TOKENS="${APC_MAX_NUM_BATCHED_TOKENS:-1024}" \
+-      DEPLOY_FORCE_TEMP=0.6 OFFLOAD_CODEX="$OFFLOAD_CODEX" MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 \
++      DEPLOY_FORCE_TEMP=0.6 OFFLOAD_AGENT="$OFFLOAD_AGENT" MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 \
+       FR10_METRICS=0 BATCH_INVARIANT=0 DOCKER_MEM_CAP="$DOCKER_MEM_CAP" RUNROOT="$RUNROOT" \
+       bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" "$KIND" "$SUBSET" > "$RLOG" 2>&1 </dev/null
+     # --- parse ---
+@@ -72,7 +72,7 @@ for i in $(seq 1 "$N"); do
+     # real cache hits: max cached_tokens anywhere in this arm's artifacts (proxy/trace)
+     CMAX=$(grep -rhoE "\"cached_tokens\"\s*:\s*[0-9]+" "$RUNROOT/$ARM" "$RLOG" 2>/dev/null | grep -oE "[0-9]+" | sort -rn | head -1)
+     CMAX=${CMAX:-0}
+-    TR=$(find "$RUNROOT/$ARM" -path "*per_task*/codex_trace.jsonl" 2>/dev/null | head -1)
++    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" \) 2>/dev/null | head -1)
+     C8=0; TB=0
+     [[ -n "$TR" ]] && { C8=$(grep -acE 'Unterminated|column 9 \(char 8\)|EOF while parsing a string|[\x{4e00}-\x{9fff}]' "$TR" 2>/dev/null || echo 0); TB=$(wc -c <"$TR" 2>/dev/null || echo 0); }
+     printf '%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n' "$arm" "$i" "$VERD" "$CMAX" "$SPEC_OK" "$C8" "$TB" "$RLOG" >> "$SUMMARY"
+diff --git a/scripts/fr13_apc_engaged_test.sh b/scripts/fr13_apc_engaged_test.sh
+index e0802dcd..e15b40fc 100644
+--- a/scripts/fr13_apc_engaged_test.sh
++++ b/scripts/fr13_apc_engaged_test.sh
+@@ -25,7 +25,7 @@ ROOT=output/fr13_apc_engaged/run_$TS
+ mkdir -p "$ROOT"
+ echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/apc_engaged_root.txt 2>/dev/null || true
+ export RUNROOT="$ROOT"
+-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
++export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
+ export FR10_METRICS=0 BATCH_INVARIANT=0
+ # IDENTICAL deployed APC config:
+ export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
+@@ -46,7 +46,7 @@ run_one() {
+   local mk; mk=$(cat "$ROOT/$A/apc_bridge_marker.txt" 2>/dev/null)
+   [ -z "$mk" ] && mk=$(grep -oE "APC worker-env engagement OK: .*" "$ROOT/${A}.serve.log" 2>/dev/null | tail -1)
+   local eng; eng=$(grep -qE "FAIL: APC (worker|engagement|bridge)" "$ROOT/${A}.serve.log" 2>/dev/null && echo "VACUOUS(exit4)" || echo "ENGAGED")
+-  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/codex_trace*.jsonl 2>/dev/null | wc -l)
++  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/{agent,codex}_trace*.jsonl 2>/dev/null | wc -l)
+   local v; v=$(grep -oE "verdict=(resolved|failed)" "$SO" 2>/dev/null | tail -1)
+   [ -z "$v" ] && v="verdict=NORESULT(see ${A}.serve.log)"
+   echo "$A -> $v | engagement=$eng | marker=[$mk] | runaway=$ru" | tee -a "$ROOT/RESULTS.txt"
+diff --git a/scripts/fr13_apc_exactseed_statediff.sh b/scripts/fr13_apc_exactseed_statediff.sh
+index aef315db..0930a7f8 100644
+--- a/scripts/fr13_apc_exactseed_statediff.sh
++++ b/scripts/fr13_apc_exactseed_statediff.sh
+@@ -20,7 +20,7 @@ ln -s "$PWD/$OLD_REF"/ref_gdn*.pt "$RD/logs/" 2>/dev/null || cp "$OLD_REF"/ref_g
+ ln -s "$PWD/$OLD_REF"/ref_logit*.pt "$RD/logs/" 2>/dev/null || cp "$OLD_REF"/ref_logit*.pt "$RD/logs/" 2>/dev/null
+ echo "=== EXACT_SEED STATE-DIFF  rundir=$RD  REF=$(ls "$RD/logs"/ref_gdn*.pt 2>/dev/null|wc -l) gdn  block=$B + EXACT_SEED=1 ==="
+ PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" >/dev/null 2>&1 || true
+-for p in fr13 swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
++for p in fr13 swe-agent swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
+ 
+ echo "[ESEED] boot align@b=$B with FR13_APC_EXACT_SEED=1 @ $(date -u +%H:%M:%S)"
+ ARM=on RUNDIR="$RD" DUMPS="$SRC" LIMIT_TURNS=$((SEQ+1)) PORT="$PORT" GPU_UTIL="$GPU_UTIL" \
+diff --git a/scripts/fr13_apc_fb_speedgate.sh b/scripts/fr13_apc_fb_speedgate.sh
+index 93c31bf4..a5d6041e 100755
+--- a/scripts/fr13_apc_fb_speedgate.sh
++++ b/scripts/fr13_apc_fb_speedgate.sh
+@@ -17,7 +17,7 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
+ RUNROOT=output/fr13_apc_fb_speedgate/run_$TS; mkdir -p "$RUNROOT"; export RUNROOT
+ echo "$RUNROOT" > /home/mark/.claude/jobs/22c39bb9/tmp/fb_speedgate_root.txt
+ echo "=== FR13 FB DECODE A/B  cat6root  12907 1-task  B=1 temp0.6  FULL GRAPH+EXACT_SEED  FB=0 vs FB=1 -> $RUNROOT ==="
+-export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
++export MAX_NUM_SEQS_OVR=1 OFFLOAD_AGENT=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
+   GPU_UTIL="${GPU_UTIL:-0.76}" GPU_GUARD_FLOOR_MIB="${GPU_GUARD_FLOOR_MIB:-3000}" FR10_METRICS=0
+ 
+ manual_decode() {  # $1 = swe_out root -> token-weighted decode TPS (sum gen / sum decode)
+diff --git a/scripts/fr13_apc_hrs0_swe_test.sh b/scripts/fr13_apc_hrs0_swe_test.sh
+index 94a02007..7e0e4c74 100644
+--- a/scripts/fr13_apc_hrs0_swe_test.sh
++++ b/scripts/fr13_apc_hrs0_swe_test.sh
+@@ -16,7 +16,7 @@ ROOT=output/fr13_apc_hrs0_swe/run_$TS
+ mkdir -p "$ROOT"
+ echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/hrs0_swe_root.txt 2>/dev/null || true
+ export RUNROOT="$ROOT"
+-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
++export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
+ export FR10_METRICS=0 BATCH_INVARIANT=0 SWE_EMPTY_PATCH_RETRIES=0
+ # deployed APC config, but the SUBTRACTIVE change: HIT_RECURRENT_SUFFIX=0
+ export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
+diff --git a/scripts/fr13_apc_rategate.sh b/scripts/fr13_apc_rategate.sh
+index 9cbc4ada..22d2a7dd 100644
+--- a/scripts/fr13_apc_rategate.sh
++++ b/scripts/fr13_apc_rategate.sh
+@@ -61,14 +61,14 @@ for i in $(seq 1 "$N"); do
+     # belt: remove any stale container of this name
+     docker rm -f "fr13-bigdenom-$ARM" >/dev/null 2>&1 || true
+     FR13_ENABLE_APC=$APC FR13_APC_CONFIG_ONLY=$CFG MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 \
+-      DEPLOY_FORCE_TEMP=0.6 OFFLOAD_CODEX=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 \
++      DEPLOY_FORCE_TEMP=0.6 OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 \
+       FR10_METRICS=0 BATCH_INVARIANT=0 DOCKER_MEM_CAP="$DOCKER_MEM_CAP" \
+       RUNROOT="$RUNROOT" \
+       bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" cat6root "$SUBSET" > "$RLOG" 2>&1 </dev/null
+     # parse verdict + char-8 from the rollout artifacts
+     V=$(grep -hoE "resolved_rate=[0-9.]+" "$RLOG" 2>/dev/null | tail -1)
+     VERD=$(echo "$V" | grep -qE "resolved_rate=1" && echo resolved || echo failed)
+-    TR=$(find "$RUNROOT/$ARM" -path "*per_task*/codex_trace.jsonl" 2>/dev/null | head -1)
++    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" \) 2>/dev/null | head -1)
+     C8=0; TB=0
+     [[ -n "$TR" ]] && { C8=$(grep -cE 'Unterminated|column 9 \(char 8\)|EOF while parsing a string' "$TR" 2>/dev/null); TB=$(wc -c <"$TR" 2>/dev/null); }
+     printf '%s\t%d\t%s\t%s\t%s\t%s\n' "$arm" "$i" "$VERD" "$C8" "$TB" "$RLOG" >> "$SUMMARY"
+diff --git a/scripts/fr13_apc_shipgate_cat6root.sh b/scripts/fr13_apc_shipgate_cat6root.sh
+index 12703c62..73fc2a92 100644
+--- a/scripts/fr13_apc_shipgate_cat6root.sh
++++ b/scripts/fr13_apc_shipgate_cat6root.sh
+@@ -20,9 +20,9 @@
+ #
+ # Both arms reuse the canonical x86-offload SWE harness
+ # (scripts/fr13_bigdenom_swe_serve_variant.sh KIND=cat6root): vLLM ALONE on the
+-# GB10, codex-runner:v1 + inference_proxy OFFLOADED to alienware, pair-dumps
+-# rsynced back. This is the SANCTIONED codex path (codex-runner:v1 on alienware),
+-# NOT the legacy on-GB10 8022 codex / OOM-guard. METRICS OFF on both arms
++# GB10, the SWE agent (qwen-code-runner:v1) + inference_proxy OFFLOADED to
++# alienware, pair-dumps rsynced back. This is the SANCTIONED offload path (the
++# agent container on alienware), NOT the legacy on-GB10 8022 path / OOM-guard. METRICS OFF on both arms
+ # (FR10_METRICS=0, BATCH_INVARIANT=0, no FR13_*_DIAG / STATE_PROBE / argmax-gate /
+ # SFWD_GPU_TIMER) so the deploy-speed read is the clean /metrics decode bracket.
+ #
+@@ -66,7 +66,7 @@
+ # pre-boot hygiene (recover_host_memory + assert MemAvailable>=95GiB + swap=0 +
+ # docker-empty) and a clean teardown (docker rm -f + recover) on EXIT, so this
+ # driver just runs them back-to-back with an extra recover between. During each
+-# codex run the GB10 is vLLM-ONLY (codex+proxy on alienware).
++# agent run the GB10 is vLLM-ONLY (agent+proxy on alienware).
+ # =================================================================================
+ set -uo pipefail
+ cd /home/mark/shared/lumoFlyWheel
+@@ -91,7 +91,7 @@ ARM_ON=${ARM_ON:-cat6root_apcon_b1}
+ #      pinned by the offload proxy DEPLOY_FORCE_TEMP=0.6 = the real deployment temp).
+ export MAX_NUM_SEQS_OVR=${MAX_NUM_SEQS_OVR:-1}   # B=1
+ export SWE_CONCURRENCY=${SWE_CONCURRENCY:-1}      # single-stream, no co-residency confound
+-export OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}          # codex+proxy on alienware (SANCTIONED), GB10 vLLM-only
++export OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}          # agent+proxy on alienware (SANCTIONED), GB10 vLLM-only
+ export DEPLOY_FORCE_TEMP=${DEPLOY_FORCE_TEMP:-0.6}
+ # seed: the proxy/orchestrator pin SEED 1313 is the canonical deployment seed; the
+ # offload proxy forces temp 0.6. (run_swe_bench_q36_a temperature is governed by the
+diff --git a/scripts/fr13_apc_shipgate_plainalign.sh b/scripts/fr13_apc_shipgate_plainalign.sh
+index 838311a7..c2ce5c2a 100644
+--- a/scripts/fr13_apc_shipgate_plainalign.sh
++++ b/scripts/fr13_apc_shipgate_plainalign.sh
+@@ -42,7 +42,7 @@ ARM_ON=${ARM_ON:-cat6root_plainalign_b1}
+ 
+ export MAX_NUM_SEQS_OVR=${MAX_NUM_SEQS_OVR:-1}
+ export SWE_CONCURRENCY=${SWE_CONCURRENCY:-1}
+-export OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
++export OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
+ export DEPLOY_FORCE_TEMP=${DEPLOY_FORCE_TEMP:-0.6}
+ export SEED=${SEED:-1313}
+ 
+@@ -128,7 +128,7 @@ for arm in (arm_on, arm_off):
+     for pt in sorted(glob.glob(f"{runroot}/{arm}/swe_out/*/per_task/*")):
+         tid=os.path.basename(pt)
+         cjk=0; rt=0.0
+-        for tf in glob.glob(pt+"/codex_trace*.jsonl"):
++        for tf in glob.glob(pt+"/agent_trace*.jsonl") + glob.glob(pt+"/codex_trace*.jsonl"):
+             items=[json.loads(l).get('item',json.loads(l)) for l in open(tf)]
+             msgs=[it.get('text','') or '' for it in items if it.get('type')=='agent_message']
+             cjk+=sum(1 for m in msgs for ch in m if '一'<=ch<='鿿')
+diff --git a/scripts/fr13_apc_speedgate_cat6_cat10.sh b/scripts/fr13_apc_speedgate_cat6_cat10.sh
+index 37ebd6ff..6c09a58a 100755
+--- a/scripts/fr13_apc_speedgate_cat6_cat10.sh
++++ b/scripts/fr13_apc_speedgate_cat6_cat10.sh
+@@ -15,7 +15,7 @@ echo "=== FR13 SPEED GATE  cat6root+cat10  cache-ON only  4-task(b4_four)  B=1 t
+ # B=1 + temp 0.6 deployment regime; metrics-OFF clean speed read; full graph is the launcher default now
+ # GPU_UTIL 0.76 (down from serve_variant's 0.82) + guard floor 3000: the 4-task run died exit-137
+ # (unified-mem spike on GB10) at 0.82/floor-4000; lower util gives prefill-spike headroom.
+-export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
++export MAX_NUM_SEQS_OVR=1 OFFLOAD_AGENT=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
+   GPU_UTIL="${GPU_UTIL:-0.76}" GPU_GUARD_FLOOR_MIB="${GPU_GUARD_FLOOR_MIB:-3000}" FR10_METRICS=0
+ 
+ run_arm() {
+diff --git a/scripts/fr13_apc_spine_hrs0_test.sh b/scripts/fr13_apc_spine_hrs0_test.sh
+index 184c7cdd..d50b2369 100644
+--- a/scripts/fr13_apc_spine_hrs0_test.sh
++++ b/scripts/fr13_apc_spine_hrs0_test.sh
+@@ -16,7 +16,7 @@ ROOT=output/fr13_apc_spine_hrs0/run_$TS
+ mkdir -p "$ROOT"
+ echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/hrs0_swe_root.txt 2>/dev/null || true
+ export RUNROOT="$ROOT"
+-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
++export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
+ export FR10_METRICS=0 BATCH_INVARIANT=0 SWE_EMPTY_PATCH_RETRIES=0
+ # deployed APC config, but the SUBTRACTIVE change: HIT_RECURRENT_SUFFIX=0
+ export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
+diff --git a/scripts/fr13_apc_stale_or_not_gate.sh b/scripts/fr13_apc_stale_or_not_gate.sh
+index 55991079..2caf3c8c 100755
+--- a/scripts/fr13_apc_stale_or_not_gate.sh
++++ b/scripts/fr13_apc_stale_or_not_gate.sh
+@@ -20,7 +20,7 @@
+ # toggling only the flag file between them.
+ #
+ # Usage: fr13_apc_stale_or_not_gate.sh [N_SEEDS]   (default 3)
+-#   env: AGENT_WALL_S, OFFLOAD_CODEX(=1 default), OFFLOAD_HOST, EVAL_HOST, DEPLOY_FORCE_TEMP
++#   env: AGENT_WALL_S, OFFLOAD_AGENT(=1 default), OFFLOAD_HOST, EVAL_HOST, DEPLOY_FORCE_TEMP
+ # ============================================================================
+ set -uo pipefail
+ cd /home/mark/shared/lumoFlyWheel
+@@ -43,7 +43,7 @@ EXPECT_RATIO=6
+ PROBE_MODE=tree_mtp
+ 
+ # ---- offload codex config (serve_variant.sh:42-47) ----
+-OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
++OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
+ OFFLOAD_HOST=${OFFLOAD_HOST:-alienware}
+ OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}
+ GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}
+@@ -60,7 +60,7 @@ SHADOW_FLAG_HOST="$LOG_DIR/fr13_apc_shadow_now.flag"
+ SHADOW_FLAG_CONTAINER="/logs/fr13_apc_shadow_now.flag"
+ 
+ echo "=== FR13 APC STALE-OR-NOT GATE  arm=$ARM container=$CONTAINER port=$PORT ==="
+-echo "    rundir=$ARMDIR  instance=$INSTANCE  N_SEEDS=$N_SEEDS  offload=$OFFLOAD_CODEX"
++echo "    rundir=$ARMDIR  instance=$INSTANCE  N_SEEDS=$N_SEEDS  offload=$OFFLOAD_AGENT"
+ echo "    shadow flag (host)=$SHADOW_FLAG_HOST -> (container)=$SHADOW_FLAG_CONTAINER"
+ date -u +%Y-%m-%dT%H:%M:%SZ | tee "$ARMDIR/arm_started_at.txt"
+ git rev-parse HEAD | tee "$ARMDIR/git_head.txt"
+@@ -101,7 +101,7 @@ teardown(){
+   echo "[teardown] kill proxy + docker rm -f $CONTAINER + recover_host_memory"
+   kill "$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null)" 2>/dev/null
+   pkill -f "lumo_flywheel_serving.inference_proxy" 2>/dev/null
+-  if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++  if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+       bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
+   fi
+@@ -242,16 +242,16 @@ PY
+ # ============================================================================
+ # PHASE 2 — launch the OFFLOAD codex proxy ONCE and HOLD it (serve_variant.sh:315-338).
+ # The proxy pins the deployment temp (DEPLOY_FORCE_TEMP=0.6) and serves ALL 2*N
+-# codex episodes. CODEX_ARGS point the orchestrator at this held proxy.
++# codex episodes. AGENT_ARGS point the orchestrator at this held proxy.
+ # ============================================================================
+ mkdir -p "$ARMDIR/proxy_pair_dumps" "$ARMDIR/proxy_request_dumps"
+-CODEX_ARGS=()
+-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+-  echo "[offload] OFFLOAD_CODEX=1 — proxy+codex on $OFFLOAD_HOST, GB10 stays vLLM-only"
++AGENT_ARGS=()
++if [[ "$OFFLOAD_AGENT" == "1" ]]; then
++  echo "[offload] OFFLOAD_AGENT=1 — proxy+agent on $OFFLOAD_HOST, GB10 stays vLLM-only"
+   if ! ssh -o BatchMode=yes -o ConnectTimeout=15 "$OFFLOAD_HOST" \
+         "curl -fsS -m 6 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo ok" \
+         2>/dev/null | grep -q ok; then
+-    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_CODEX=0)"
++    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_AGENT=0)"
+     exit 5
+   fi
+   echo "[offload] alienware -> GB10 vLLM $GB10_TS_IP:$PORT/health OK"
+@@ -267,8 +267,8 @@ if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+   # temp-pin assertion (offload helper already checks; re-assert here for the gate record)
+   grep -q "LUMO_PROXY_FORCE_TEMPERATURE=$DEPLOY_FORCE_TEMP" "$ARMDIR/proxy_env.txt" \
+     || { echo "FAIL: offload proxy temp pin missing (expected $DEPLOY_FORCE_TEMP)"; exit 5; }
+-  CODEX_ARGS=(--codex-host "$OFFLOAD_HOST" \
+-              --codex-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
++  AGENT_ARGS=(--agent-host "$OFFLOAD_HOST" \
++              --agent-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
+   echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT, temp $DEPLOY_FORCE_TEMP)"
+ else
+   # Local proxy fallback (serve_variant.sh:340-369). temp pinned via env.
+@@ -357,7 +357,7 @@ run_episode(){
+     --eval-timeout-s "${EVAL_TIMEOUT_S:-1800}" \
+     "${WALL_ARGS[@]}" \
+     "${EVAL_ARGS[@]}" \
+-    "${CODEX_ARGS[@]}" \
++    "${AGENT_ARGS[@]}" \
+     > "$epdir/swe_orchestrator.log" 2>&1
+   local rc=$?
+   s1=$(date +%s)
+@@ -369,7 +369,7 @@ run_episode(){
+   tail -3 "$epdir/swe_orchestrator.log"
+ 
+   # 4) fetch offload pair-dumps for this episode (serve_variant.sh:435-439).
+-  if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++  if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+       bash "$OFFLOAD_HELPER" fetch "$OFFLOAD_HOST" "$epdir" \
+       > "$epdir/offload_fetch.log" 2>&1 || echo "WARN: [$tag] offload fetch errors"
+@@ -414,11 +414,13 @@ for m in metas:
+         # tolerate either exact or suffix match; take the first real one
+         pass
+     verdict = (meta.get("eval_report") or {}).get("verdict", "missing")
+-    codex = meta.get("codex") or {}
++    codex = meta.get("agent") or meta.get("codex") or {}
+     codex_elapsed = codex.get("elapsed_s")
+     timed_out = codex.get("timed_out")
+     patch_bytes = meta.get("patch_bytes")
+-    cand = m.parent / "codex_trace.jsonl"
++    cand = m.parent / "agent_trace.jsonl"
++    if not cand.is_file():
++        cand = m.parent / "codex_trace.jsonl"
+     if cand.is_file():
+         trace_path = cand
+     break
+diff --git a/scripts/fr13_b4_campaign_driver.sh b/scripts/fr13_b4_campaign_driver.sh
+index 25e3b7b0..e6082968 100644
+--- a/scripts/fr13_b4_campaign_driver.sh
++++ b/scripts/fr13_b4_campaign_driver.sh
+@@ -2,7 +2,7 @@
+ # FR13 deployment campaign driver (batch-parameterized): run the depth-matched arms
+ # SERIALLY (GPU is serialized) and reduce deploy-speed after each. native bars use the
+ # native serve (SPEC_N); tree arms use the variant vehicle (KIND) + the device multidraft
+-# committer. Each arm: fresh boot, B=$BSIZE co-residency, OFFLOAD_CODEX per arg, timer ON.
++# committer. Each arm: fresh boot, B=$BSIZE co-residency, OFFLOAD_AGENT per arg, timer ON.
+ #
+ # Env: BSIZE (vLLM max_num_seqs, default 4), CONC (codex concurrency, default 4),
+ #      TAG (arm-name + sidecar + deploy-json suffix, default b4), RUNROOT, SUBSET, WALL.
+@@ -26,7 +26,7 @@ mkdir -p "$RUNROOT" output/fr13_sfwd_sidecar
+ run_native() {  # arm spec_n expect offload
+   local arm=$1 spec_n=$2 expect=$3 offload=$4
+   echo "===== NATIVE ARM $arm (E$spec_n) B=$BSIZE offload=$offload ====="
+-  OFFLOAD_CODEX=$offload SPEC_N=$spec_n MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL \
++  OFFLOAD_AGENT=$offload SPEC_N=$spec_n MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL \
+     FR13_SFWD_GPU_TIMER=1 \
+     FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
+     bash scripts/fr13_bigdenom_swe_serve.sh "$arm" native "$SUBSET" \
+@@ -42,7 +42,7 @@ run_variant() {  # arm kind expect offload
+   # FR13_DEVICE_MULTIDRAFT=1 -> the device-side temp>0 multidraft committer (the real
+   # t0.6 speed lever; lossless-within-floor; user 2026-06-16 accepted). Engages on tree
+   # arms at temp>0 only; no-op for the native bars.
+-  OFFLOAD_CODEX=$offload MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL \
++  OFFLOAD_AGENT=$offload MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL \
+     FR13_DEVICE_MULTIDRAFT=1 \
+     FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
+     FR13_SFWD_GPU_TIMER=1 \
+diff --git a/scripts/fr13_bigN_solve_spine_tree.sh b/scripts/fr13_bigN_solve_spine_tree.sh
+index 249b1618..3bd48622 100755
+--- a/scripts/fr13_bigN_solve_spine_tree.sh
++++ b/scripts/fr13_bigN_solve_spine_tree.sh
+@@ -17,11 +17,11 @@ mkdir -p "$ROOT"
+ echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/bigN_root.txt 2>/dev/null || true
+ export RUNROOT="$ROOT"
+ # deployment regime (matches the shipgate ARM-ON)
+-# OFFLOAD_CODEX default 0 (on-GB10): this is a SOLVE-RATE test, not a speed test, so
++# OFFLOAD_AGENT default 0 (on-GB10): this is a SOLVE-RATE test, not a speed test, so
+ # the unified-memory contention the offload avoids is irrelevant here. The offload
+ # (codex on alienware) is currently unreachable from alienware->GB10 anyway. Override
+-# OFFLOAD_CODEX=1 only for a speed run once the alienware network is restored.
+-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=${OFFLOAD_CODEX:-0} DEPLOY_FORCE_TEMP=0.6 SEED=1313
++# OFFLOAD_AGENT=1 only for a speed run once the alienware network is restored.
++export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-0}} DEPLOY_FORCE_TEMP=0.6 SEED=1313
+ export FR10_METRICS=0 BATCH_INVARIANT=0
+ export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
+ unset APC_MAX_NUM_BATCHED_TOKENS 2>/dev/null || true
+diff --git a/scripts/fr13_bigdenom_autoadvance.sh b/scripts/fr13_bigdenom_autoadvance.sh
+index ac4ef6f8..cee4abde 100755
+--- a/scripts/fr13_bigdenom_autoadvance.sh
++++ b/scripts/fr13_bigdenom_autoadvance.sh
+@@ -34,7 +34,7 @@ arm_done() {  # <arm_dir_name>
+   local a="$1"
+   [[ -f "$RUNROOT/$a/arm_ended_at.txt" ]] || return 1
+   # no campaign serving/agent container still up
+-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qE "fr13-bigdenom|swe-codex"; then
++  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qE "fr13-bigdenom|swe-agent|swe-codex"; then
+     return 1
+   fi
+   return 0
+diff --git a/scripts/fr13_bigdenom_swe_serve.sh b/scripts/fr13_bigdenom_swe_serve.sh
+index 893d606a..f0f07370 100755
+--- a/scripts/fr13_bigdenom_swe_serve.sh
++++ b/scripts/fr13_bigdenom_swe_serve.sh
+@@ -36,17 +36,17 @@ CONTAINER="fr13-bigdenom-$ARM"
+ PORT=9950
+ PROXY_PORT=8022
+ EVAL_HOST=${EVAL_HOST:-alienware}
+-# --- FR13 CODEX-OFFLOAD (the unified-memory contamination fix) -----------------
+-# OFFLOAD_CODEX=1 (DEFAULT for clean deploy-speed): run the inference_proxy AND
+-# the codex-runner docker on alienware (x86) so the GB10 runs ONLY vLLM during
+-# the codex agent loop. The GB10's 273 GB/s Grace+Blackwell unified memory is
++# --- FR13 AGENT-OFFLOAD (the unified-memory contamination fix) -----------------
++# OFFLOAD_AGENT=1 (DEFAULT for clean deploy-speed): run the inference_proxy AND
++# the SWE agent docker (qwen-code-runner:v1) on alienware (x86) so the GB10 runs
++# ONLY vLLM during the agent loop. The GB10's 273 GB/s Grace+Blackwell unified memory is
+ # then uncontended -> the timing-sensitive deploy-speed (s/fwd) is clean. The
+ # lossless (argmax/distributional) numbers are timing-independent so unaffected.
+-# OFFLOAD_CODEX=0 = the legacy on-GB10 path (fallback if alienware is down).
++# OFFLOAD_AGENT=0 = the legacy on-GB10 path (fallback if alienware is down).
+ # Flag-gated so nothing about the canonical measurement BASIS changes — only the
+ # codex+proxy LOCATION. s/fwd is ALWAYS read LOCALLY from the GB10 vLLM /metrics
+ # (never across the wire) so a Spark<->alienware blip can't corrupt the speed.
+-OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
++OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
+ OFFLOAD_HOST=${OFFLOAD_HOST:-alienware}
+ OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}   # 8022 is taken on alienware
+ GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}             # GB10 tailscale IP (gx10-edb9-1)
+@@ -105,7 +105,7 @@ teardown(){
+   # kill any link watchdog
+   [[ -n "${WATCHDOG_PID:-}" ]] && kill "$WATCHDOG_PID" 2>/dev/null
+   # OFFLOAD: stop the remote proxy on alienware (clean teardown, req #5)
+-  if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++  if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+       bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
+   fi
+@@ -260,15 +260,15 @@ curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" \
+   > "$ARMDIR/reset_prefix_cache.txt" 2>&1 || echo "WARN: reset_prefix_cache failed (non-fatal)"
+ 
+ # ---- launch canonical proxy: temp 0.0 pin + served-stream pair dumps ON ----
+-# Two paths, flag-gated by OFFLOAD_CODEX:
+-#   OFFLOAD_CODEX=1 (default): proxy runs ON ALIENWARE (-> GB10:9950 over
++# Two paths, flag-gated by OFFLOAD_AGENT:
++#   OFFLOAD_AGENT=1 (default): proxy runs ON ALIENWARE (-> GB10:9950 over
+ #     tailscale); pair-dumps captured LOCALLY on alienware (rsynced back after
+ #     the run). The GB10 runs ONLY vLLM during the codex loop = clean s/fwd.
+-#   OFFLOAD_CODEX=0: legacy on-GB10 proxy (the prior co-located path).
++#   OFFLOAD_AGENT=0: legacy on-GB10 proxy (the prior co-located path).
+ mkdir -p "$ARMDIR/proxy_pair_dumps" "$ARMDIR/proxy_request_dumps"
+-CODEX_ARGS=()
+-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+-  echo "[offload] OFFLOAD_CODEX=1 — proxy+codex on $OFFLOAD_HOST, GB10 stays vLLM-only"
++AGENT_ARGS=()
++if [[ "$OFFLOAD_AGENT" == "1" ]]; then
++  echo "[offload] OFFLOAD_AGENT=1 — proxy+agent on $OFFLOAD_HOST, GB10 stays vLLM-only"
+   # (a) the GB10 vLLM must be reachable from alienware over tailscale before we
+   #     start the remote proxy (req #6: measurement-side health is GB10-local,
+   #     but the request-side path needs the link up to begin).
+@@ -276,7 +276,7 @@ if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+         "curl -fsS -m 6 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo ok" \
+         2>/dev/null | grep -q ok; then
+     echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health"
+-    echo "      (network/firewall — set OFFLOAD_CODEX=0 to fall back to the on-GB10 path)"
++    echo "      (network/firewall — set OFFLOAD_AGENT=0 to fall back to the on-GB10 path)"
+     exit 5
+   fi
+   echo "[offload] alienware -> GB10 vLLM $GB10_TS_IP:$PORT/health OK"
+@@ -296,11 +296,11 @@ if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+   cp "$ARMDIR/offload_proxy_env.txt" "$ARMDIR/proxy_env.txt" 2>/dev/null || true
+   # the codex orchestrator runs the codex docker on alienware against the
+   # alienware-local proxy (127.0.0.1:8023). vLLM /metrics still read GB10-locally.
+-  CODEX_ARGS=(--codex-host "$OFFLOAD_HOST" \
+-              --codex-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
++  AGENT_ARGS=(--agent-host "$OFFLOAD_HOST" \
++              --agent-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
+   echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT; forced temp 0.0, pair dumps on, auto-continue on)"
+ else
+-  echo "[offload] OFFLOAD_CODEX=0 — legacy on-GB10 proxy+codex (co-located)"
++  echo "[offload] OFFLOAD_AGENT=0 — legacy on-GB10 proxy+agent (co-located)"
+   LUMO_PROXY_FORCE_TEMPERATURE=0.0 \
+   LUMO_PROXY_REQUEST_DUMP_DIR="$PWD/$ARMDIR/proxy_request_dumps" \
+   LUMO_PROXY_PAIR_DUMP_DIR="$PWD/$ARMDIR/proxy_pair_dumps" \
+@@ -363,7 +363,7 @@ WALL_ARGS=()
+ LINKLOG="$ARMDIR/offload_link_state.log"
+ LINK_DEAD_MARKER="$ARMDIR/offload_link_dead.flag"
+ WATCHDOG_PID=""
+-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+   rm -f "$LINK_DEAD_MARKER"
+   ( down_since=0
+     while true; do
+@@ -399,7 +399,7 @@ S0=$(date +%s)
+   --concurrency "$SWE_CONCURRENCY" \
+   "${WALL_ARGS[@]}" \
+   "${EVAL_ARGS[@]}" \
+-  "${CODEX_ARGS[@]}" \
++  "${AGENT_ARGS[@]}" \
+   > "$ARMDIR/swe_orchestrator.log" 2>&1
+ SWERC=$?
+ S1=$(date +%s)
+@@ -414,7 +414,7 @@ tail -5 "$ARMDIR/swe_orchestrator.log"
+ # ---- OFFLOAD: fetch the alienware pair-dumps back (resilient rsync, req #3) --
+ # the deploy-lossless recurrent-oracle rescore (a SEPARATE GB10 vLLM-only GPU
+ # phase) reads these. A dropped rsync must not lose the served stream.
+-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+   LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+     bash "$OFFLOAD_HELPER" fetch "$OFFLOAD_HOST" "$PWD/$ARMDIR" \
+     > "$ARMDIR/offload_fetch.log" 2>&1 || echo "WARN: offload pair-dump fetch had errors (see offload_fetch.log)"
+@@ -441,7 +441,7 @@ health = {"swe_orchestrator_rc": rc, "swe_window_wall_s": wall,
+ flags = []
+ for m in metas:
+     meta = json.loads(m.read_text())
+-    codex = meta.get("codex") or {}
++    codex = meta.get("agent") or meta.get("codex") or {}
+     t = {"instance_id": meta.get("instance_id"),
+          "codex_elapsed_s": codex.get("elapsed_s"),
+          "codex_timed_out": codex.get("timed_out"),
+diff --git a/scripts/fr13_bigdenom_swe_serve_variant.sh b/scripts/fr13_bigdenom_swe_serve_variant.sh
+index c2f1b4a3..5f31948e 100644
+--- a/scripts/fr13_bigdenom_swe_serve_variant.sh
++++ b/scripts/fr13_bigdenom_swe_serve_variant.sh
+@@ -36,10 +36,10 @@ CONTAINER="fr13-bigdenom-$ARM"
+ PORT=9950
+ PROXY_PORT=8022
+ EVAL_HOST=${EVAL_HOST:-alienware}
+-# --- FR13 CODEX-OFFLOAD (unified-memory contamination fix; see fr13_bigdenom_swe_serve.sh) ---
+-# OFFLOAD_CODEX=1 (default): proxy+codex on alienware, GB10 stays vLLM-only =
++# --- FR13 AGENT-OFFLOAD (unified-memory contamination fix; see fr13_bigdenom_swe_serve.sh) ---
++# OFFLOAD_AGENT=1 (default): proxy+codex on alienware, GB10 stays vLLM-only =
+ # clean deploy-speed (s/fwd read GB10-locally, stall-immune). =0 = legacy.
+-OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
++OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
+ OFFLOAD_HOST=${OFFLOAD_HOST:-alienware}
+ OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}
+ GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}
+@@ -204,7 +204,7 @@ teardown(){
+   kill "$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null)" 2>/dev/null
+   pkill -f "lumo_flywheel_serving.inference_proxy" 2>/dev/null
+   [[ -n "${WATCHDOG_PID:-}" ]] && kill "$WATCHDOG_PID" 2>/dev/null
+-  if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++  if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+       bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
+   fi
+@@ -411,7 +411,7 @@ PY
+ # read. Grep it for the masters this arm REQUIRES before recording any APC verdict, so
+ # a vacuous (defaults-only) run can never masquerade as engaged. Default-OFF arms set
+ # no FR13_APC_REQUIRE_* and this whole block is skipped -> locked non-APC path unchanged.
+-if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}${FR13_APC_REQUIRE_SHADOW:-}" ]]; then
++if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}" ]]; then
+   APC_MARKER="${FR13_APC_BRIDGE_MARKER_FILE:-/logs/fr13_apc_bridge_loaded.flag}"
+   # copy the worker-written marker out of the container's /logs to the arm dir
+   docker exec "$CONTAINER" sh -c "cat '$APC_MARKER' 2>/dev/null" > "$ARMDIR/apc_bridge_marker.txt" 2>/dev/null
+@@ -429,10 +429,6 @@ if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}${FR
+     grep -q "HIT_SUFFIX_CAP=${FR13_APC_REQUIRE_HIT_SUFFIX_CAP}\b" "$ARMDIR/apc_bridge_marker.txt" \
+       || { echo "FAIL: APC worker HIT_SUFFIX_CAP != required ${FR13_APC_REQUIRE_HIT_SUFFIX_CAP} (cap defaulted to 64 = vacuous). marker: $APC_MARKER_TXT"; exit 4; }
+   fi
+-  if [[ -n "${FR13_APC_REQUIRE_SHADOW:-}" ]]; then
+-    grep -q "SHADOW=${FR13_APC_REQUIRE_SHADOW}\b" "$ARMDIR/apc_bridge_marker.txt" \
+-      || { echo "FAIL: APC worker SHADOW != required ${FR13_APC_REQUIRE_SHADOW} (shadow-log gate vacuous: env not bridged into worker). marker: $APC_MARKER_TXT"; exit 4; }
+-  fi
+   echo "APC worker-env engagement OK: $APC_MARKER_TXT"
+ fi
+ 
+@@ -472,13 +468,13 @@ fi
+ 
+ # ---- launch canonical proxy (forced temp 0.0 + pair dumps), OFFLOAD-gated ----
+ mkdir -p "$ARMDIR/proxy_pair_dumps" "$ARMDIR/proxy_request_dumps"
+-CODEX_ARGS=()
+-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+-  echo "[offload] OFFLOAD_CODEX=1 — proxy+codex on $OFFLOAD_HOST, GB10 stays vLLM-only"
++AGENT_ARGS=()
++if [[ "$OFFLOAD_AGENT" == "1" ]]; then
++  echo "[offload] OFFLOAD_AGENT=1 — proxy+agent on $OFFLOAD_HOST, GB10 stays vLLM-only"
+   if ! ssh -o BatchMode=yes -o ConnectTimeout=15 "$OFFLOAD_HOST" \
+         "curl -fsS -m 6 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo ok" \
+         2>/dev/null | grep -q ok; then
+-    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_CODEX=0 to fall back)"
++    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_AGENT=0 to fall back)"
+     exit 5
+   fi
+   echo "[offload] alienware -> GB10 vLLM $GB10_TS_IP:$PORT/health OK"
+@@ -491,8 +487,8 @@ if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+     || { echo "FAIL: offload proxy start"; cat "$ARMDIR/offload_start.log"; exit 5; }
+   cat "$ARMDIR/offload_start.log"
+   cp "$ARMDIR/offload_proxy_env.txt" "$ARMDIR/proxy_env.txt" 2>/dev/null || true
+-  CODEX_ARGS=(--codex-host "$OFFLOAD_HOST" \
+-              --codex-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
++  AGENT_ARGS=(--agent-host "$OFFLOAD_HOST" \
++              --agent-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
+   echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT)"
+ else
+   LUMO_PROXY_FORCE_TEMPERATURE="${DEPLOY_FORCE_TEMP:-0.6}" \
+@@ -545,7 +541,7 @@ WALL_ARGS=()
+ LINKLOG="$ARMDIR/offload_link_state.log"
+ LINK_DEAD_MARKER="$ARMDIR/offload_link_dead.flag"
+ WATCHDOG_PID=""
+-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+   rm -f "$LINK_DEAD_MARKER"
+   ( down_since=0
+     while true; do
+@@ -578,7 +574,7 @@ S0=$(date +%s)
+   --eval-timeout-s "${EVAL_TIMEOUT_S:-1800}" \
+   "${WALL_ARGS[@]}" \
+   "${EVAL_ARGS[@]}" \
+-  "${CODEX_ARGS[@]}" \
++  "${AGENT_ARGS[@]}" \
+   > "$ARMDIR/swe_orchestrator.log" 2>&1
+ SWERC=$?
+ S1=$(date +%s)
+@@ -590,7 +586,7 @@ tail -5 "$ARMDIR/swe_orchestrator.log"
+ [[ -n "$WATCHDOG_PID" ]] && kill "$WATCHDOG_PID" 2>/dev/null && WATCHDOG_PID=""
+ 
+ # ---- OFFLOAD: fetch alienware pair-dumps back (resilient rsync, req #3) ----
+-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+   LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+     bash "$OFFLOAD_HELPER" fetch "$OFFLOAD_HOST" "$PWD/$ARMDIR" \
+     > "$ARMDIR/offload_fetch.log" 2>&1 || echo "WARN: offload fetch errors (see offload_fetch.log)"
+@@ -618,7 +614,7 @@ metas = sorted(armdir.glob("swe_out/*/per_task/*/runner_metadata.json"))
+ health = {"swe_orchestrator_rc": rc, "swe_window_wall_s": wall, "tasks": []}
+ for m in metas:
+     meta = json.loads(m.read_text())
+-    codex = meta.get("codex") or {}
++    codex = meta.get("agent") or meta.get("codex") or {}
+     health["tasks"].append({"instance_id": meta.get("instance_id"),
+         "codex_elapsed_s": codex.get("elapsed_s"),
+         "codex_timed_out": codex.get("timed_out"),
+diff --git a/scripts/fr13_char8_degeneration_gate.py b/scripts/fr13_char8_degeneration_gate.py
+index 9b326ea3..513fbd83 100755
+--- a/scripts/fr13_char8_degeneration_gate.py
++++ b/scripts/fr13_char8_degeneration_gate.py
+@@ -36,7 +36,8 @@ SPACELESS = re.compile(r"[a-z]{35,}")                              # merged word
+ 
+ 
+ def _traces(arm_dir):
+-    return glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "codex_trace*.jsonl"), recursive=True)
++    return (glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "agent_trace*.jsonl"), recursive=True)
++            + glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "codex_trace*.jsonl"), recursive=True))
+ 
+ 
+ def _server_logs(arm_dir):
+@@ -82,7 +83,7 @@ def arm_stats(arm_dir):
+                 pass
+     else:
+         src = "codex_stderr (no server log)"
+-        for f in glob.glob(os.path.join(arm_dir, "**", "codex_stderr*.log"), recursive=True):
++        for f in glob.glob(os.path.join(arm_dir, "**", "agent_stderr*.log"), recursive=True) + glob.glob(os.path.join(arm_dir, "**", "codex_stderr*.log"), recursive=True):
+             try:
+                 char8 += sum(1 for ln in open(f, errors="ignore") if CHAR8_SIG.search(ln))
+             except Exception:
+@@ -105,7 +106,7 @@ def arm_stats(arm_dir):
+             elif (fm in ("patch_apply_failed", "empty_patch")) or (v in ("patch_apply_failed",)):
+                 # char-8 present in THIS task's turn flow (stderr, not source)?
+                 blob = ""
+-                for sf in glob.glob(os.path.join(d, "codex_stderr*.log")):
++                for sf in glob.glob(os.path.join(d, "agent_stderr*.log")) + glob.glob(os.path.join(d, "codex_stderr*.log")):
+                     try:
+                         blob += open(sf, errors="ignore").read()
+                     except Exception:
+diff --git a/scripts/fr13_launch_forked_fa2_tree_server.sh b/scripts/fr13_launch_forked_fa2_tree_server.sh
+index 4cbbe4b3..0b98c1c0 100755
+--- a/scripts/fr13_launch_forked_fa2_tree_server.sh
++++ b/scripts/fr13_launch_forked_fa2_tree_server.sh
+@@ -302,7 +302,6 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
+   # FR13_APC_SNAP_FIX=1 (overrides the SNAP_FIX redirect source). When ON it DISABLES the HRS
+   # recurrent-suffix path (a recurrent remainder is not chunk-bit-exact).
+   : "${FR13_APC_EXACT_SEED:=0}"
+-  : "${FR13_APC_FIXED_BUFFER:=0}"
+   : "${FR13_APC_BLOCK_REFOLD:=0}"
+   : "${FR13_APC_REFOLD_TO_SNAPSHOT:=0}"  # fold->snapshot chunked-ptr publish (default OFF -> byte-identical; needs BLOCK_REFOLD+EXACT_SEED+SNAP_FIX to be observable)
+   # BAKED 2026-07-04 (user): CONV_LEAF_COMPLETE default ON. The conv wrong-row write (snapshot
+@@ -325,7 +324,7 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
+   #    accepted-tree can't poison the chunk-boundary state-copy SOURCE (was propagating zeros to
+   #    every request after the first). Runtime-gated (default ON); decode-boundary byte-identical.
+   : "${FR13_APC_COPY_SRC_FIX:=1}"
+-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP FR13_APC_EXACT_SEED FR13_APC_FIXED_BUFFER FR13_APC_BLOCK_REFOLD FR13_APC_REFOLD_TO_SNAPSHOT FR13_APC_CONV_LEAF_COMPLETE FR13_APC_ZERO_MAMBA_ON_ALLOC FR13_APC_COPY_SRC_FIX
++  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP FR13_APC_EXACT_SEED FR13_APC_BLOCK_REFOLD FR13_APC_REFOLD_TO_SNAPSHOT FR13_APC_CONV_LEAF_COMPLETE FR13_APC_ZERO_MAMBA_ON_ALLOC FR13_APC_COPY_SRC_FIX
+ else
+   APC_FLAGS=""
+ fi
+@@ -494,7 +493,6 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
+   -e FR13_APC_REFOLD_TO_SNAPSHOT="${FR13_APC_REFOLD_TO_SNAPSHOT:-0}" \
+   -e FR13_APC_CONV_LEAF_COMPLETE="${FR13_APC_CONV_LEAF_COMPLETE:-0}" \
+   -e FR13_SERVE_LOG="${FR13_SERVE_LOG:-0}" \
+-  -e FR13_APC_FIXED_BUFFER="${FR13_APC_FIXED_BUFFER:-0}" \
+   -e FR13_LEAK_PROBE="${FR13_LEAK_PROBE:-0}" \
+   -e FR13_APC_LEAF_CROSSCHECK="${FR13_APC_LEAF_CROSSCHECK:-0}" \
+   -e FR13_APC_CACHEROW_DUMP="${FR13_APC_CACHEROW_DUMP:-}" \
+diff --git a/scripts/fr13_matched_control.sh b/scripts/fr13_matched_control.sh
+index ad43ca9e..9e966c61 100644
+--- a/scripts/fr13_matched_control.sh
++++ b/scripts/fr13_matched_control.sh
+@@ -24,7 +24,7 @@ ROOT=output/fr13_matched_control/run_$TS
+ mkdir -p "$ROOT"
+ echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/matched_root.txt 2>/dev/null || true
+ export RUNROOT="$ROOT"
+-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
++export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
+ export FR10_METRICS=0 BATCH_INVARIANT=0
+ # cache OFF + PIECEWISE (the only matchable confound). fp32-SSM/block are cache-inherent -> not set.
+ export FR13_ENABLE_APC=0 CUDAGRAPH_MODE=PIECEWISE
+@@ -38,7 +38,7 @@ run_one() {
+   echo "=== [$A] cache-OFF PIECEWISE $(date -u +%H:%M:%SZ) ===" | tee -a "$ROOT/RESULTS.txt"
+   bash scripts/fr13_bigdenom_swe_serve_variant.sh "$A" cat6root "$SUBSET" > "$ROOT/${A}.serve.log" 2>&1 || true
+   local SO="$ROOT/$A/swe_orchestrator.log"
+-  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/codex_trace*.jsonl 2>/dev/null | wc -l)
++  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/{agent,codex}_trace*.jsonl 2>/dev/null | wc -l)
+   local v; v=$(grep -oE "verdict=(resolved|failed)" "$SO" 2>/dev/null | tail -1)
+   [ -z "$v" ] && v="verdict=NORESULT(see ${A}.serve.log)"
+   echo "$A -> $v | runaway=$ru" | tee -a "$ROOT/RESULTS.txt"
+diff --git a/scripts/fr13_nospec_cache_swe.sh b/scripts/fr13_nospec_cache_swe.sh
+index 06934203..1968fa90 100755
+--- a/scripts/fr13_nospec_cache_swe.sh
++++ b/scripts/fr13_nospec_cache_swe.sh
+@@ -31,7 +31,7 @@
+ # Usage:  N=3 bash scripts/fr13_nospec_cache_swe.sh
+ #   N (env, default 3)         repeats per arm (temp-0.6 agentic solve is flaky -> RATE)
+ #   ONLY (env, optional)       "on" or "off" to run a single arm
+-#   OFFLOAD_CODEX (env, def 0) 1 = codex/proxy on alienware (matches bigN default 0 = on-GB10)
++#   OFFLOAD_AGENT (env, def 0) 1 = codex/proxy on alienware (matches bigN default 0 = on-GB10)
+ #
+ # NO GPU run is performed by writing this script; it is a RUNNER (boots vLLM when invoked).
+ set -uo pipefail
+@@ -49,7 +49,7 @@ export RUNROOT="$ROOT"
+ 
+ # ---- deployment regime: MATCH the tree/spine arms (fr13_bigN_solve_spine_tree.sh) ----
+ # Solve-rate test (not a speed test) -> B=1, single concurrent codex task.
+-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=${OFFLOAD_CODEX:-0} \
++export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-0}} \
+        DEPLOY_FORCE_TEMP=0.6 SEED=1313
+ export FR10_METRICS=0 BATCH_INVARIANT=0
+ # constrained decoding PAUSED -> LUMO_PROXY_TOOL_STRICT unset (no grammar), same as bigN.
+diff --git a/scripts/fr13_nospec_serve_one.sh b/scripts/fr13_nospec_serve_one.sh
+index e951c323..ce36fdef 100755
+--- a/scripts/fr13_nospec_serve_one.sh
++++ b/scripts/fr13_nospec_serve_one.sh
+@@ -29,7 +29,7 @@ PROXY_PORT=8022
+ EVAL_HOST=${EVAL_HOST:-alienware}
+ 
+ # --- codex offload (same machinery as fr13_bigdenom_swe_serve_variant.sh) ---
+-OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
++OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
+ OFFLOAD_HOST=${OFFLOAD_HOST:-alienware}
+ OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}
+ GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}
+@@ -78,7 +78,7 @@ teardown(){
+   kill "$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null)" 2>/dev/null
+   pkill -f "lumo_flywheel_serving.inference_proxy" 2>/dev/null
+   [[ -n "${WATCHDOG_PID:-}" ]] && kill "$WATCHDOG_PID" 2>/dev/null
+-  if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++  if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+       bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
+   fi
+@@ -181,13 +181,13 @@ curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" \
+ # eval pre-flight + /metrics-bracketed SWE window). The orchestrator + verdict path are
+ # byte-identical to the spec arms so the rate is apples-to-apples.
+ mkdir -p "$ARMDIR/proxy_pair_dumps" "$ARMDIR/proxy_request_dumps"
+-CODEX_ARGS=()
+-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+-  echo "[offload] OFFLOAD_CODEX=1 — proxy+codex on $OFFLOAD_HOST, GB10 stays vLLM-only"
++AGENT_ARGS=()
++if [[ "$OFFLOAD_AGENT" == "1" ]]; then
++  echo "[offload] OFFLOAD_AGENT=1 — proxy+agent on $OFFLOAD_HOST, GB10 stays vLLM-only"
+   if ! ssh -o BatchMode=yes -o ConnectTimeout=15 "$OFFLOAD_HOST" \
+         "curl -fsS -m 6 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo ok" \
+         2>/dev/null | grep -q ok; then
+-    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_CODEX=0 to fall back)"
++    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_AGENT=0 to fall back)"
+     exit 5
+   fi
+   echo "[offload] alienware -> GB10 vLLM $GB10_TS_IP:$PORT/health OK"
+@@ -200,8 +200,8 @@ if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+     || { echo "FAIL: offload proxy start"; cat "$ARMDIR/offload_start.log"; exit 5; }
+   cat "$ARMDIR/offload_start.log"
+   cp "$ARMDIR/offload_proxy_env.txt" "$ARMDIR/proxy_env.txt" 2>/dev/null || true
+-  CODEX_ARGS=(--codex-host "$OFFLOAD_HOST" \
+-              --codex-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
++  AGENT_ARGS=(--agent-host "$OFFLOAD_HOST" \
++              --agent-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
+   echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT)"
+ else
+   LUMO_PROXY_FORCE_TEMPERATURE="${DEPLOY_FORCE_TEMP:-0.6}" \
+@@ -249,7 +249,7 @@ WALL_ARGS=()
+ LINKLOG="$ARMDIR/offload_link_state.log"
+ LINK_DEAD_MARKER="$ARMDIR/offload_link_dead.flag"
+ WATCHDOG_PID=""
+-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+   rm -f "$LINK_DEAD_MARKER"
+   ( down_since=0
+     while true; do
+@@ -282,7 +282,7 @@ S0=$(date +%s)
+   --eval-timeout-s "${EVAL_TIMEOUT_S:-1800}" \
+   "${WALL_ARGS[@]}" \
+   "${EVAL_ARGS[@]}" \
+-  "${CODEX_ARGS[@]}" \
++  "${AGENT_ARGS[@]}" \
+   > "$ARMDIR/swe_orchestrator.log" 2>&1
+ SWERC=$?
+ S1=$(date +%s)
+@@ -293,7 +293,7 @@ tail -5 "$ARMDIR/swe_orchestrator.log"
+ 
+ [[ -n "$WATCHDOG_PID" ]] && kill "$WATCHDOG_PID" 2>/dev/null && WATCHDOG_PID=""
+ 
+-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
++if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+   LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
+     bash "$OFFLOAD_HELPER" fetch "$OFFLOAD_HOST" "$PWD/$ARMDIR" \
+     > "$ARMDIR/offload_fetch.log" 2>&1 || echo "WARN: offload fetch errors (see offload_fetch.log)"
+@@ -314,7 +314,7 @@ metas = sorted(armdir.glob("swe_out/*/per_task/*/runner_metadata.json"))
+ health = {"swe_orchestrator_rc": rc, "swe_window_wall_s": wall, "tasks": []}
+ for m in metas:
+     meta = json.loads(m.read_text())
+-    codex = meta.get("codex") or {}
++    codex = meta.get("agent") or meta.get("codex") or {}
+     health["tasks"].append({"instance_id": meta.get("instance_id"),
+         "codex_elapsed_s": codex.get("elapsed_s"),
+         "codex_timed_out": codex.get("timed_out"),
+diff --git a/scripts/fr13_replica_selfnoise_run.sh b/scripts/fr13_replica_selfnoise_run.sh
+index aaea8325..a0d4496a 100755
+--- a/scripts/fr13_replica_selfnoise_run.sh
++++ b/scripts/fr13_replica_selfnoise_run.sh
+@@ -15,7 +15,7 @@ SUBSET=${SUBSET:-output/fr13_b1_gold_swe/subset_char8_localize.json}
+ K=${K:-5}
+ CONFIGS=${CONFIGS:-"native:nativemtp5 chain5:chain5"}   # space-sep name:kind pairs (both cache-OFF)
+ # same deployment regime as the matrix (offload codex, forced temp 0.6). cache OFF (no APC env).
+-export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g
++export MAX_NUM_SEQS_OVR=1 OFFLOAD_AGENT=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g
+ export GPU_UTIL=${GPU_UTIL:-0.6} LUMO_PROXY_THINK_BUDGET=${LUMO_PROXY_THINK_BUDGET:-500}
+ 
+ echo "=== FR13 REPLICA SELF-NOISE  K=$K  CONFIGS='$CONFIGS'  SUBSET=$SUBSET -> $RUNROOT ==="
+diff --git a/scripts/fr13_spine_cache_engaged_test.sh b/scripts/fr13_spine_cache_engaged_test.sh
+index 4d17c701..fd29d778 100644
+--- a/scripts/fr13_spine_cache_engaged_test.sh
++++ b/scripts/fr13_spine_cache_engaged_test.sh
+@@ -19,7 +19,7 @@ ROOT=output/fr13_spine_cache_engaged/run_$TS
+ mkdir -p "$ROOT"
+ echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/spine_cache_engaged_root.txt 2>/dev/null || true
+ export RUNROOT="$ROOT"
+-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
++export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
+ export FR10_METRICS=0 BATCH_INVARIANT=0
+ # ATTEMPT-1 metric (user 2026-06-27): stop-on-first-giveup, no retries. cache-OFF solves attempt-1
+ # with 0 give-ups, so this is a fair + faster (~12-15min/boot saved) + more sensitive discriminator.
+@@ -41,7 +41,7 @@ run_one() {
+   local SO="$ROOT/$A/swe_orchestrator.log"
+   local mk; mk=$(cat "$ROOT/$A/apc_bridge_marker.txt" 2>/dev/null)
+   local eng; eng=$(grep -qE "FAIL: APC (worker|engagement|bridge)" "$ROOT/${A}.serve.log" 2>/dev/null && echo "VACUOUS(exit4)" || echo "ENGAGED")
+-  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/codex_trace*.jsonl 2>/dev/null | wc -l)
++  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/{agent,codex}_trace*.jsonl 2>/dev/null | wc -l)
+   local v; v=$(grep -oE "verdict=(resolved|failed)" "$SO" 2>/dev/null | tail -1)
+   [ -z "$v" ] && v="verdict=NORESULT(see ${A}.serve.log)"
+   echo "$A -> $v | engagement=$eng | marker=[$mk] | runaway=$ru" | tee -a "$ROOT/RESULTS.txt"
+diff --git a/scripts/fr13_spine_cache_test.sh b/scripts/fr13_spine_cache_test.sh
+index e4c01192..9220e810 100644
+--- a/scripts/fr13_spine_cache_test.sh
++++ b/scripts/fr13_spine_cache_test.sh
+@@ -19,7 +19,7 @@ ROOT=output/fr13_spine_cache/run_$TS
+ mkdir -p "$ROOT"
+ echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/spine_root.txt 2>/dev/null || true
+ export RUNROOT="$ROOT"
+-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
++export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
+ export FR10_METRICS=0 BATCH_INVARIANT=0
+ # IDENTICAL to the failing tree arm except the shape (chain5 not cat6root):
+ export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
+@@ -33,7 +33,7 @@ run_one() {
+   echo "=== [$A] chain5 cache-ON cap=1e6 $(date -u +%H:%M:%SZ) ===" | tee -a "$ROOT/RESULTS.txt"
+   bash scripts/fr13_bigdenom_swe_serve_variant.sh "$A" chain5 "$SUBSET" > "$ROOT/${A}.serve.log" 2>&1 || true
+   local SO="$ROOT/$A/swe_orchestrator.log"
+-  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/codex_trace*.jsonl 2>/dev/null | wc -l)
++  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/{agent,codex}_trace*.jsonl 2>/dev/null | wc -l)
+   local v; v=$(grep -oE "verdict=(resolved|failed)" "$SO" 2>/dev/null | tail -1)
+   [ -z "$v" ] && v="verdict=NORESULT(see ${A}.serve.log)"
+   echo "$A -> $v | runaway=$ru" | tee -a "$ROOT/RESULTS.txt"
+diff --git a/scripts/fr13_structured_output_carrier_gate.py b/scripts/fr13_structured_output_carrier_gate.py
+index 7c400f9c..fe80e665 100644
+--- a/scripts/fr13_structured_output_carrier_gate.py
++++ b/scripts/fr13_structured_output_carrier_gate.py
+@@ -79,7 +79,8 @@ def classify_text(txt):
+ 
+ 
+ def _traces(arm_dir):
+-    return glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "codex_trace*.jsonl"), recursive=True)
++    return (glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "agent_trace*.jsonl"), recursive=True)
++            + glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "codex_trace*.jsonl"), recursive=True))
+ 
+ 
+ def _server_logs(arm_dir):
+diff --git a/scripts/fr13_tree_cache_matrix.sh b/scripts/fr13_tree_cache_matrix.sh
+index 4f8b9422..a4417a44 100755
+--- a/scripts/fr13_tree_cache_matrix.sh
++++ b/scripts/fr13_tree_cache_matrix.sh
+@@ -13,7 +13,7 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
+ RUNROOT=output/fr13_tree_cache_matrix/run_$TS; mkdir -p "$RUNROOT"; export RUNROOT
+ echo "$RUNROOT" > /home/mark/.claude/jobs/22c39bb9/tmp/matrix_root.txt
+ echo "=== FR13 TREE x CACHE MATRIX (EXACT_SEED=1 cache-ON) 12907 -> $RUNROOT ==="
+-export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
++export MAX_NUM_SEQS_OVR=1 OFFLOAD_AGENT=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
+   GPU_UTIL="${GPU_UTIL:-0.76}" GPU_GUARD_FLOOR_MIB="${GPU_GUARD_FLOOR_MIB:-3000}" FR10_METRICS=0
+ 
+ # tag:KIND:APC:EXSEED  (cache-OFF first per tree = no leak)
+diff --git a/scripts/fr13_zeroaccept_test.sh b/scripts/fr13_zeroaccept_test.sh
+index 3d34d559..355af0f9 100644
+--- a/scripts/fr13_zeroaccept_test.sh
++++ b/scripts/fr13_zeroaccept_test.sh
+@@ -18,7 +18,7 @@ ROOT=output/fr13_zeroaccept/run_$TS
+ mkdir -p "$ROOT"
+ echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/zeroaccept_root.txt 2>/dev/null || true
+ export RUNROOT="$ROOT"
+-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
++export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
+ export FR10_METRICS=0 BATCH_INVARIANT=0
+ # IDENTICAL to the failing tree arm, PLUS the zero-accept fix:
+ export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
+@@ -33,7 +33,7 @@ run_one() {
+   echo "=== [$A] cat6root cache-ON ZEROACCEPT=1 $(date -u +%H:%M:%SZ) ===" | tee -a "$ROOT/RESULTS.txt"
+   bash scripts/fr13_bigdenom_swe_serve_variant.sh "$A" cat6root "$SUBSET" > "$ROOT/${A}.serve.log" 2>&1 || true
+   local SO="$ROOT/$A/swe_orchestrator.log"
+-  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/codex_trace*.jsonl 2>/dev/null | wc -l)
++  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/{agent,codex}_trace*.jsonl 2>/dev/null | wc -l)
+   local v; v=$(grep -oE "verdict=(resolved|failed)" "$SO" 2>/dev/null | tail -1)
+   [ -z "$v" ] && v="verdict=NORESULT(see ${A}.serve.log)"
+   echo "$A -> $v | runaway=$ru" | tee -a "$ROOT/RESULTS.txt"
+diff --git a/scripts/probes/fr13_garble_scan.py b/scripts/probes/fr13_garble_scan.py
+index e3b08733..bc346a74 100644
+--- a/scripts/probes/fr13_garble_scan.py
++++ b/scripts/probes/fr13_garble_scan.py
+@@ -36,7 +36,8 @@ two can be told apart -- onset << first boundary => the runaway is not boundary-
+ 
+ Usage
+   python3 scripts/probes/fr13_garble_scan.py TRACE [TRACE ...] [--json OUT.json]
+-  python3 scripts/probes/fr13_garble_scan.py 'output/fr13_live_gate/*/swe_out/**/codex_trace.jsonl'
++  python3 scripts/probes/fr13_garble_scan.py 'output/fr13_live_gate/*/swe_out/**/agent_trace.jsonl' \
++                                             'output/fr13_live_gate/*/swe_out/**/codex_trace.jsonl'
+ 
+ Exit code: 0 if every trace is CLEAN, 1 if any trace has >=1 garble episode (usable as a gate).
+ """
+@@ -388,7 +389,9 @@ def print_report(rep: TraceReport, args) -> None:
+ 
+ def main(argv=None) -> int:
+     ap = argparse.ArgumentParser(description="FR13 garble / generation-degradation scanner for codex traces.")
+-    ap.add_argument("traces", nargs="+", help="codex_trace.jsonl path(s); globs allowed")
++    ap.add_argument("traces", nargs="+",
++                    help="agent_trace.jsonl / codex_trace.jsonl path(s); globs allowed "
++                         "(the emitter still writes codex_trace.jsonl for backward-compat)")
+     ap.add_argument("--tokenizer", default=DEFAULT_TOKENIZER,
+                     help="qwen tokenizer.json (falls back to chars/4 if unavailable)")
+     ap.add_argument("--block-size", type=int, default=1024, help="mamba decode block size (default 1024)")
+diff --git a/scripts/run_swe_bench_q36_a.py b/scripts/run_swe_bench_q36_a.py
+index 61396ff5..976e3ead 100644
+--- a/scripts/run_swe_bench_q36_a.py
++++ b/scripts/run_swe_bench_q36_a.py
+@@ -252,7 +252,7 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
+     )
+ 
+ # Default operator prompt (first attempt).
+-DEFAULT_CODEX_PROMPT = (
++DEFAULT_AGENT_PROMPT = (
+     "Read the task prompt at /workspace/AGENTS.md and complete it in this workspace. "
+     "Edit the source files directly to implement the fix. Do not write a diff file -- "
+     "modify the files in place so that running pytest passes the tests described in the prompt."
+@@ -644,7 +644,7 @@ def _extract_patch(cache_path: Path, workspace: Path, base_commit: str) -> str:
+     return proc.stdout
+ 
+ 
+-def _run_codex(
++def _run_agent_local(
+     *,
+     workspace: Path,
+     endpoint: str,
+@@ -655,7 +655,7 @@ def _run_codex(
+     stderr_path: Path,
+     trace_path: Path,
+     base_commit: str | None = None,
+-    prompt: str = DEFAULT_CODEX_PROMPT,
++    prompt: str = DEFAULT_AGENT_PROMPT,
+ ) -> dict[str, Any]:
+     """Run codex-runner:v1 and capture trace/stdout/stderr to separate files.
+ 
+@@ -672,7 +672,7 @@ def _run_codex(
+             stdout_path=stdout_path, stderr_path=stderr_path, trace_path=trace_path,
+             prompt=prompt,
+         )
+-    container_name = f"swe-codex-{instance_id.replace('/', '_')[:48]}-{int(time.time())}"
++    container_name = f"swe-agent-{instance_id.replace('/', '_')[:48]}-{int(time.time())}"
+     cmd = _agent_template().format(
+         container_name=container_name,
+         workspace=str(workspace),
+@@ -744,7 +744,7 @@ _EVAL_SSH_OPTS = [
+ ]
+ 
+ # --- FR13 CODEX-OFFLOAD config (the unified-memory contamination fix) ---------
+-# When CODEX_HOST is set (via --codex-host), the codex-runner Docker runs on a
++# When AGENT_HOST is set (via --codex-host), the codex-runner Docker runs on a
+ # native x86 box (alienware) instead of locally on the GB10. The workspace is
+ # rsynced there before the run and the (modified) workspace is rsynced back
+ # after, so patch extraction + eval stay on the GB10 unchanged. This leaves the
+@@ -752,15 +752,15 @@ _EVAL_SSH_OPTS = [
+ # bandwidth (273 GB/s, shared Grace CPU + Blackwell GPU) is uncontended and the
+ # timing-sensitive deploy-speed numbers (s/fwd) are clean. The lossless numbers
+ # are timing-independent so unaffected; only WHERE the codex compute runs moves.
+-# The codex docker on alienware hits the alienware-LOCAL proxy (CODEX_ENDPOINT,
++# The codex docker on alienware hits the alienware-LOCAL proxy (AGENT_ENDPOINT,
+ # default 127.0.0.1:8023 — 8022 is occupied on alienware by an unrelated host
+ # service). Reuses the eval-offload SSH/rsync plumbing (_net_retry below).
+-CODEX_HOST: str | None = None
++AGENT_HOST: str | None = None
+ # alienware-local proxy the offloaded codex docker hits (8022 is taken on
+ # alienware by an unrelated host service; the offload proxy listens on 8023).
+-CODEX_ENDPOINT: str | None = None
+-_CODEX_REMOTE_ROOT = "~/lumo_proxy_offload/codex_work"
+-_CODEX_NET_LOG = DEFAULT_OUT_ROOT / "swe_codex_offload_network.log"
++AGENT_ENDPOINT: str | None = None
++_AGENT_REMOTE_ROOT = "~/lumo_proxy_offload/codex_work"
++_AGENT_NET_LOG = DEFAULT_OUT_ROOT / "swe_codex_offload_network.log"
+ _REMOTE_BASE = "~/swe_eval_offload"
+ _REMOTE_WORKER = "~/swe_eval_offload/swe_eval_x86_worker.py"
+ _REMOTE_VENV_PY = "~/swe_eval_offload/venv/bin/python"
+@@ -857,10 +857,10 @@ _RSYNC_RESILIENT = [
+ ]
+ 
+ 
+-def _codex_net_log(msg: str) -> None:
++def _agent_net_log(msg: str) -> None:
+     try:
+-        _CODEX_NET_LOG.parent.mkdir(parents=True, exist_ok=True)
+-        with _CODEX_NET_LOG.open("a", encoding="utf-8") as f:
++        _AGENT_NET_LOG.parent.mkdir(parents=True, exist_ok=True)
++        with _AGENT_NET_LOG.open("a", encoding="utf-8") as f:
+             f.write(f"[{_iso_now()}] {msg}\n")
+     except Exception:  # noqa: BLE001
+         pass
+@@ -963,7 +963,7 @@ def _monitor_proc_with_stall_watchdog(
+     }
+ 
+ 
+-def _run_codex_remote(
++def _run_agent_remote(
+     *,
+     host: str,
+     workspace: Path,
+@@ -975,7 +975,7 @@ def _run_codex_remote(
+     stderr_path: Path,
+     trace_path: Path,
+     base_commit: str | None = None,
+-    prompt: str = DEFAULT_CODEX_PROMPT,
++    prompt: str = DEFAULT_AGENT_PROMPT,
+ ) -> dict[str, Any]:
+     """Run codex-runner:v1 ON alienware (x86) over SSH, keeping the GB10 vLLM-only.
+ 
+@@ -996,8 +996,8 @@ def _run_codex_remote(
+         )
+     started = time.monotonic()
+     safe_id = instance_id.replace("/", "_")[:48]
+-    remote_ws = f"{_CODEX_REMOTE_ROOT}/{safe_id}/workspace"
+-    container_name = f"swe-codex-{safe_id}-{int(time.time())}"
++    remote_ws = f"{_AGENT_REMOTE_ROOT}/{safe_id}/workspace"
++    container_name = f"swe-agent-{safe_id}-{int(time.time())}"
+     net_drop = False
+ 
+     mk = _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"mkdir -p {remote_ws} && echo ok"],
+@@ -1015,7 +1015,7 @@ def _run_codex_remote(
+                     what=f"codex_ws_up:{instance_id}", timeout=600, max_attempts=5)
+     if up.returncode != 0:
+         net_drop = True
+-        _codex_net_log(f"WS_UP_FAIL {instance_id} rc={up.returncode} (network-drop)")
++        _agent_net_log(f"WS_UP_FAIL {instance_id} rc={up.returncode} (network-drop)")
+         stderr_path.write_text(f"workspace rsync up failed rc={up.returncode}\n{up.stderr}", encoding="utf-8")
+         trace_path.write_text("", encoding="utf-8")
+         return {"elapsed_s": round(time.monotonic() - started, 3), "exit_code": -1,
+@@ -1072,7 +1072,7 @@ def _run_codex_remote(
+     if stall_killed:
+         # infra_stall_suspect: the agent trace stopped growing (a suspected GB10
+         # emit/transport wedge). Killed + CLASSIFIED; NEVER retried (nudge ban).
+-        _codex_net_log(f"CODEX_STALL_KILL {instance_id} no trace growth for {stall_kill_s}s "
++        _agent_net_log(f"CODEX_STALL_KILL {instance_id} no trace growth for {stall_kill_s}s "
+                        "(infra_stall_suspect; NOT agent_gave_up, NOT retried)")
+         rc = -1
+     elif timed_out:
+@@ -1084,7 +1084,7 @@ def _run_codex_remote(
+     elif rc == 255:
+         # SSH transport died — CLASSIFY network-drop (req #4), not a model run.
+         net_drop = True
+-        _codex_net_log(f"CODEX_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
++        _agent_net_log(f"CODEX_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
+     elapsed = time.monotonic() - started
+ 
+     # rsync the (modified) workspace back to the GB10 for patch extraction.
+@@ -1093,11 +1093,11 @@ def _run_codex_remote(
+                       what=f"codex_ws_down:{instance_id}", timeout=600, max_attempts=5)
+     if down.returncode != 0:
+         net_drop = True
+-        _codex_net_log(f"WS_DOWN_FAIL {instance_id} rc={down.returncode} (network-drop) — "
++        _agent_net_log(f"WS_DOWN_FAIL {instance_id} rc={down.returncode} (network-drop) — "
+                        "patch may be incomplete; FLAGGED")
+     # cleanup the remote workspace (non-fatal)
+     _net_retry(["ssh", *_EVAL_SSH_OPTS, host,
+-                f"docker rm -f {container_name} 2>/dev/null; rm -rf {_CODEX_REMOTE_ROOT}/{safe_id}; echo ok"],
++                f"docker rm -f {container_name} 2>/dev/null; rm -rf {_AGENT_REMOTE_ROOT}/{safe_id}; echo ok"],
+                what=f"codex_cleanup:{instance_id}", timeout=60, max_attempts=2)
+ 
+     if not stdout_path.is_file():
+@@ -1131,7 +1131,7 @@ def _run_agent_instance(
+     stdout_path: Path,
+     stderr_path: Path,
+     trace_path: Path,
+-    prompt: str = DEFAULT_CODEX_PROMPT,
++    prompt: str = DEFAULT_AGENT_PROMPT,
+ ) -> dict[str, Any]:
+     """SWE_AGENT_ENV=instance_image (§58): run qwen-code INSIDE the SWE-bench
+     per-instance eval image editing /testbed, with the node+qwen runtime injected
+@@ -1193,7 +1193,7 @@ def _run_agent_instance(
+                 f"first; if this instance publishes no {sweb_arch} variant it is "
+                 f"arch-restricted — run the agent on a host matching an available "
+                 f"arch (x86_64 => alienware offload). Refusing to fall back.")
+-        remote_out = f"{_CODEX_REMOTE_ROOT}/{safe_id}/out"
++        remote_out = f"{_AGENT_REMOTE_ROOT}/{safe_id}/out"
+         mk = _net_retry(
+             ["ssh", *_EVAL_SSH_OPTS, remote_host,
+              f"mkdir -p {remote_out} && rm -f {remote_out}/patch.diff && echo ok"],
+@@ -1224,7 +1224,7 @@ def _run_agent_instance(
+             rc = completed.returncode
+             if rc == 255:
+                 net_drop = True
+-                _codex_net_log(f"QWEN_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
++                _agent_net_log(f"QWEN_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
+         except subprocess.TimeoutExpired:
+             timed_out = True
+             _net_retry(["ssh", *_EVAL_SSH_OPTS, remote_host,
+@@ -1242,7 +1242,7 @@ def _run_agent_instance(
+             patch_local.write_text("", encoding="utf-8")
+         _net_retry(["ssh", *_EVAL_SSH_OPTS, remote_host,
+                     f"docker rm -f {container_name} 2>/dev/null; "
+-                    f"rm -rf {_CODEX_REMOTE_ROOT}/{safe_id}; echo ok"],
++                    f"rm -rf {_AGENT_REMOTE_ROOT}/{safe_id}; echo ok"],
+                    what=f"qwen_cleanup:{instance_id}", timeout=60, max_attempts=2)
+         if not stdout_path.is_file():
+             stdout_path.write_text("", encoding="utf-8")
+@@ -1295,18 +1295,18 @@ def _run_agent_instance(
+                     "host_arch": host_machine, "image_arch": sweb_arch}
+ 
+ 
+-def _run_codex_dispatch(**kwargs: Any) -> dict[str, Any]:
+-    """Route the codex run to alienware (CODEX_HOST set) or local (GB10).
++def _run_agent_dispatch(**kwargs: Any) -> dict[str, Any]:
++    """Route the codex run to alienware (AGENT_HOST set) or local (GB10).
+ 
+     On the offload path the codex docker on alienware must hit the alienware-
+-    LOCAL proxy, so the GB10-side `--endpoint` is overridden with CODEX_ENDPOINT.
++    LOCAL proxy, so the GB10-side `--endpoint` is overridden with AGENT_ENDPOINT.
+     """
+-    if CODEX_HOST:
++    if AGENT_HOST:
+         kwargs = dict(kwargs)
+-        if CODEX_ENDPOINT:
+-            kwargs["endpoint"] = CODEX_ENDPOINT
+-        return _run_codex_remote(host=CODEX_HOST, **kwargs)
+-    return _run_codex(**kwargs)
++        if AGENT_ENDPOINT:
++            kwargs["endpoint"] = AGENT_ENDPOINT
++        return _run_agent_remote(host=AGENT_HOST, **kwargs)
++    return _run_agent_local(**kwargs)
+ 
+ 
+ def _run_eval(
+@@ -1446,7 +1446,7 @@ def _process_one(
+     # Start the DCGM/NVML sampler in parallel with the Codex agent.
+     dcgm_proc = _spawn_dcgm_sampler(dcgm_samples)
+ 
+-    codex_meta = _run_codex_dispatch(
++    codex_meta = _run_agent_dispatch(
+         workspace=workspace_path,
+         endpoint=endpoint,
+         model=model,
+@@ -1457,6 +1457,10 @@ def _process_one(
+         stderr_path=codex_stderr,
+         trace_path=codex_trace,
+     )
++    summary["agent"] = codex_meta
++    # Backward-compat: keep the legacy "codex" key so existing reducers
++    # (meta.get("codex") in fr13_bigdenom_swe_serve.sh, fr13_standard_metrics.py)
++    # still resolve. New reducers read meta.get("agent") or meta.get("codex").
+     summary["codex"] = codex_meta
+ 
+     _stop_dcgm_sampler(dcgm_proc)
+@@ -1502,7 +1506,7 @@ def _process_one(
+             retry_stdout = task_dir / f"codex_stdout_retry{suffix}.log"
+             retry_dcgm = _spawn_dcgm_sampler(task_dir / f"dcgm_samples_retry{suffix}.jsonl")
+             try:
+-                codex_meta_retry = _run_codex_dispatch(
++                codex_meta_retry = _run_agent_dispatch(
+                     workspace=workspace_path, endpoint=endpoint, model=model,
+                     timeout_s=agent_wall_s, instance_id=instance_id,
+                     base_commit=instance["base_commit"],
+@@ -1643,8 +1647,9 @@ def _aggregate(per_task_root: Path, summary_path: Path, predictions_path: Path,
+             repo_pass_counter[repo] += 1
+         if (meta.get("eval_report") or {}).get("eval_wall_clock_seconds") is not None:
+             eval_wall.append(float(meta["eval_report"]["eval_wall_clock_seconds"]))
+-        if (meta.get("codex") or {}).get("elapsed_s") is not None:
+-            codex_wall.append(float(meta["codex"]["elapsed_s"]))
++        _agent_block = meta.get("agent") or meta.get("codex") or {}
++        if _agent_block.get("elapsed_s") is not None:
++            codex_wall.append(float(_agent_block["elapsed_s"]))
+         pred_file = task_dir / "eval" / "predictions.jsonl"
+         if pred_file.is_file():
+             predictions_lines.extend(
+@@ -1707,26 +1712,28 @@ def main(argv: list[str] | None = None) -> int:
+                         help="SSH host to offload the eval step to (native x86_64). When set, "
+                              "the agent runs locally on arm64 but eval runs on the x86 box — "
+                              "recovers old-python instances + keeps the dataset single-arch.")
+-    parser.add_argument("--codex-host", default=None,
+-                        help="SSH host to offload the codex-runner Docker to (native x86_64, "
+-                             "e.g. alienware). When set, the codex agent loop runs on the x86 box "
++    parser.add_argument("--agent-host", "--codex-host", dest="agent_host", default=None,
++                        help="SSH host to offload the SWE agent Docker to (native x86_64, "
++                             "e.g. alienware). When set, the agent loop runs on the x86 box "
+                              "(workspace rsynced there + back) so the GB10 runs ONLY vLLM and the "
+-                             "unified-memory bandwidth is uncontended = clean deploy-speed numbers.")
+-    parser.add_argument("--codex-endpoint", default=None,
+-                        help="The codex docker on --codex-host hits this (alienware-local) proxy "
++                             "unified-memory bandwidth is uncontended = clean deploy-speed numbers. "
++                             "--codex-host is a deprecated alias kept so queued serve scripts parse.")
++    parser.add_argument("--agent-endpoint", "--codex-endpoint", dest="agent_endpoint", default=None,
++                        help="The agent docker on --agent-host hits this (alienware-local) proxy "
+                              "endpoint (default http://127.0.0.1:8023/v1). Distinct from --endpoint "
+-                             "(the on-GB10 legacy proxy) because 8022 is taken on alienware.")
++                             "(the on-GB10 legacy proxy) because 8022 is taken on alienware. "
++                             "--codex-endpoint is a deprecated alias.")
+     args = parser.parse_args(argv)
+ 
+-    global EVAL_HOST, CODEX_HOST, CODEX_ENDPOINT
++    global EVAL_HOST, AGENT_HOST, AGENT_ENDPOINT
+     EVAL_HOST = args.eval_host
+     if EVAL_HOST:
+         print(f"[eval-offload] eval step -> {EVAL_HOST} (native x86_64)", flush=True)
+-    CODEX_HOST = args.codex_host
+-    CODEX_ENDPOINT = args.codex_endpoint or (
+-        "http://127.0.0.1:8023/v1" if CODEX_HOST else None)
+-    if CODEX_HOST:
+-        print(f"[codex-offload] codex docker -> {CODEX_HOST} (x86); endpoint={CODEX_ENDPOINT} "
++    AGENT_HOST = args.agent_host
++    AGENT_ENDPOINT = args.agent_endpoint or (
++        "http://127.0.0.1:8023/v1" if AGENT_HOST else None)
++    if AGENT_HOST:
++        print(f"[codex-offload] codex docker -> {AGENT_HOST} (x86); endpoint={AGENT_ENDPOINT} "
+               f"(GB10 stays vLLM-only — uncontended deploy-speed)", flush=True)
+ 
+     dataset_name, instance_ids = _load_subset(args.subset)
+diff --git a/scripts/swe_x86_helpers/offload_validate_during_run.sh b/scripts/swe_x86_helpers/offload_validate_during_run.sh
+index 4080e9de..301084c8 100755
+--- a/scripts/swe_x86_helpers/offload_validate_during_run.sh
++++ b/scripts/swe_x86_helpers/offload_validate_during_run.sh
+@@ -24,12 +24,12 @@ mkdir -p "$ARMDIR"
+ log(){ echo "[$(date -u +%H:%M:%SZ)] $*"; }
+ 
+ # (A) wait up to 8 min for the alienware codex docker to appear (offloaded run live)
+-log "waiting for alienware codex docker (swe-codex-*) to go live..." | tee -a "$BLIPLOG"
++log "waiting for alienware agent docker (swe-agent-* / legacy swe-codex-*) to go live..." | tee -a "$BLIPLOG"
+ CODEX_LIVE=0
+ W0=$(date +%s)
+ while (( $(date +%s) < W0 + 480 )); do
+   CN=$(ssh "${SSH_OPTS[@]}" "$OFFLOAD_HOST" \
+-        "docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 '^swe-codex-'" 2>/dev/null)
++        "docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 -E '^(swe-agent|swe-codex)-'" 2>/dev/null)
+   if [[ -n "$CN" ]]; then CODEX_LIVE=1; echo "alienware codex container live: $CN" | tee -a "$BLIPLOG"; break; fi
+   sleep 5
+ done
+@@ -44,8 +44,8 @@ fi
+   docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
+   echo "--- GB10 inference_proxy python procs (must be NONE on the GB10) ---"
+   pgrep -af "lumo_flywheel_serving.inference_proxy" || echo "(none — good)"
+-  echo "--- GB10 codex-runner / swe-codex procs (must be NONE on the GB10) ---"
+-  pgrep -af "codex-runner|swe-codex|codex exec" || echo "(none — good)"
++  echo "--- GB10 agent-runner (qwen-code-runner/codex-runner) / swe-agent procs (must be NONE on the GB10) ---"
++  pgrep -af "codex-runner|qwen-code-runner|swe-agent|swe-codex|codex exec" || echo "(none — good)"
+   echo "--- GB10 docker containers matching codex/swe (must be NONE) ---"
+   docker ps --format '{{.Names}}' | grep -E 'codex|swe' || echo "(none — good)"
+   echo "--- GB10 top CPU procs (vllm should dominate; no codex/proxy) ---"
+diff --git a/scripts/swe_x86_helpers/relaunch_proxy_remote.sh b/scripts/swe_x86_helpers/relaunch_proxy_remote.sh
+index 1813311c..ec1b1bd6 100644
+--- a/scripts/swe_x86_helpers/relaunch_proxy_remote.sh
++++ b/scripts/swe_x86_helpers/relaunch_proxy_remote.sh
+@@ -2,7 +2,7 @@
+ # FR13 CODEX-OFFLOAD: launch the inference_proxy ON ALIENWARE (x86), forwarding
+ # to the GB10 vLLM over tailscale, capturing pair-dumps LOCALLY on alienware.
+ #
+-# This is relaunch_proxy.sh adapted for the offloaded codex path (OFFLOAD_CODEX=1
++# This is relaunch_proxy.sh adapted for the offloaded codex path (OFFLOAD_AGENT=1
+ # in fr13_bigdenom_swe_serve.sh). It runs on the alienware box (rsynced there with
+ # the repo src/ + model_registry.yaml). The GB10 runs ONLY vLLM (no proxy, no codex
+ # docker) so the timing-sensitive deploy-speed numbers are uncontended by the

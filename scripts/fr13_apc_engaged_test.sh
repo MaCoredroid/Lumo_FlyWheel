@@ -25,7 +25,7 @@ ROOT=output/fr13_apc_engaged/run_$TS
 mkdir -p "$ROOT"
 echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/apc_engaged_root.txt 2>/dev/null || true
 export RUNROOT="$ROOT"
-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
+export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=0 DEPLOY_FORCE_TEMP=0.6 SEED=1313
 export FR10_METRICS=0 BATCH_INVARIANT=0
 # IDENTICAL deployed APC config:
 export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
@@ -46,7 +46,7 @@ run_one() {
   local mk; mk=$(cat "$ROOT/$A/apc_bridge_marker.txt" 2>/dev/null)
   [ -z "$mk" ] && mk=$(grep -oE "APC worker-env engagement OK: .*" "$ROOT/${A}.serve.log" 2>/dev/null | tail -1)
   local eng; eng=$(grep -qE "FAIL: APC (worker|engagement|bridge)" "$ROOT/${A}.serve.log" 2>/dev/null && echo "VACUOUS(exit4)" || echo "ENGAGED")
-  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/codex_trace*.jsonl 2>/dev/null | wc -l)
+  local ru; ru=$(grep -lE "Unterminated string" "$ROOT/$A/swe_out/verified/per_task/"*/{agent,codex}_trace*.jsonl 2>/dev/null | wc -l)
   local v; v=$(grep -oE "verdict=(resolved|failed)" "$SO" 2>/dev/null | tail -1)
   [ -z "$v" ] && v="verdict=NORESULT(see ${A}.serve.log)"
   echo "$A -> $v | engagement=$eng | marker=[$mk] | runaway=$ru" | tee -a "$ROOT/RESULTS.txt"

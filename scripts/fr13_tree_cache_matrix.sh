@@ -13,7 +13,7 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
 RUNROOT=output/fr13_tree_cache_matrix/run_$TS; mkdir -p "$RUNROOT"; export RUNROOT
 echo "$RUNROOT" > /home/mark/.claude/jobs/22c39bb9/tmp/matrix_root.txt
 echo "=== FR13 TREE x CACHE MATRIX (EXACT_SEED=1 cache-ON) 12907 -> $RUNROOT ==="
-export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
+export MAX_NUM_SEQS_OVR=1 OFFLOAD_AGENT=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
   GPU_UTIL="${GPU_UTIL:-0.76}" GPU_GUARD_FLOOR_MIB="${GPU_GUARD_FLOOR_MIB:-3000}" FR10_METRICS=0
 
 # tag:KIND:APC:EXSEED  (cache-OFF first per tree = no leak)

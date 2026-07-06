@@ -20,7 +20,7 @@
 # toggling only the flag file between them.
 #
 # Usage: fr13_apc_stale_or_not_gate.sh [N_SEEDS]   (default 3)
-#   env: AGENT_WALL_S, OFFLOAD_CODEX(=1 default), OFFLOAD_HOST, EVAL_HOST, DEPLOY_FORCE_TEMP
+#   env: AGENT_WALL_S, OFFLOAD_AGENT(=1 default), OFFLOAD_HOST, EVAL_HOST, DEPLOY_FORCE_TEMP
 # ============================================================================
 set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
@@ -43,7 +43,7 @@ EXPECT_RATIO=6
 PROBE_MODE=tree_mtp
 
 # ---- offload codex config (serve_variant.sh:42-47) ----
-OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
+OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
 OFFLOAD_HOST=${OFFLOAD_HOST:-alienware}
 OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}
 GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}
@@ -60,7 +60,7 @@ SHADOW_FLAG_HOST="$LOG_DIR/fr13_apc_shadow_now.flag"
 SHADOW_FLAG_CONTAINER="/logs/fr13_apc_shadow_now.flag"
 
 echo "=== FR13 APC STALE-OR-NOT GATE  arm=$ARM container=$CONTAINER port=$PORT ==="
-echo "    rundir=$ARMDIR  instance=$INSTANCE  N_SEEDS=$N_SEEDS  offload=$OFFLOAD_CODEX"
+echo "    rundir=$ARMDIR  instance=$INSTANCE  N_SEEDS=$N_SEEDS  offload=$OFFLOAD_AGENT"
 echo "    shadow flag (host)=$SHADOW_FLAG_HOST -> (container)=$SHADOW_FLAG_CONTAINER"
 date -u +%Y-%m-%dT%H:%M:%SZ | tee "$ARMDIR/arm_started_at.txt"
 git rev-parse HEAD | tee "$ARMDIR/git_head.txt"
@@ -101,7 +101,7 @@ teardown(){
   echo "[teardown] kill proxy + docker rm -f $CONTAINER + recover_host_memory"
   kill "$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null)" 2>/dev/null
   pkill -f "lumo_flywheel_serving.inference_proxy" 2>/dev/null
-  if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+  if [[ "$OFFLOAD_AGENT" == "1" ]]; then
     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
       bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
   fi
@@ -242,16 +242,16 @@ PY
 # ============================================================================
 # PHASE 2 — launch the OFFLOAD codex proxy ONCE and HOLD it (serve_variant.sh:315-338).
 # The proxy pins the deployment temp (DEPLOY_FORCE_TEMP=0.6) and serves ALL 2*N
-# codex episodes. CODEX_ARGS point the orchestrator at this held proxy.
+# codex episodes. AGENT_ARGS point the orchestrator at this held proxy.
 # ============================================================================
 mkdir -p "$ARMDIR/proxy_pair_dumps" "$ARMDIR/proxy_request_dumps"
-CODEX_ARGS=()
-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
-  echo "[offload] OFFLOAD_CODEX=1 — proxy+codex on $OFFLOAD_HOST, GB10 stays vLLM-only"
+AGENT_ARGS=()
+if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+  echo "[offload] OFFLOAD_AGENT=1 — proxy+agent on $OFFLOAD_HOST, GB10 stays vLLM-only"
   if ! ssh -o BatchMode=yes -o ConnectTimeout=15 "$OFFLOAD_HOST" \
         "curl -fsS -m 6 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo ok" \
         2>/dev/null | grep -q ok; then
-    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_CODEX=0)"
+    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_AGENT=0)"
     exit 5
   fi
   echo "[offload] alienware -> GB10 vLLM $GB10_TS_IP:$PORT/health OK"
@@ -267,8 +267,8 @@ if [[ "$OFFLOAD_CODEX" == "1" ]]; then
   # temp-pin assertion (offload helper already checks; re-assert here for the gate record)
   grep -q "LUMO_PROXY_FORCE_TEMPERATURE=$DEPLOY_FORCE_TEMP" "$ARMDIR/proxy_env.txt" \
     || { echo "FAIL: offload proxy temp pin missing (expected $DEPLOY_FORCE_TEMP)"; exit 5; }
-  CODEX_ARGS=(--codex-host "$OFFLOAD_HOST" \
-              --codex-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
+  AGENT_ARGS=(--agent-host "$OFFLOAD_HOST" \
+              --agent-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
   echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT, temp $DEPLOY_FORCE_TEMP)"
 else
   # Local proxy fallback (serve_variant.sh:340-369). temp pinned via env.
@@ -357,7 +357,7 @@ run_episode(){
     --eval-timeout-s "${EVAL_TIMEOUT_S:-1800}" \
     "${WALL_ARGS[@]}" \
     "${EVAL_ARGS[@]}" \
-    "${CODEX_ARGS[@]}" \
+    "${AGENT_ARGS[@]}" \
     > "$epdir/swe_orchestrator.log" 2>&1
   local rc=$?
   s1=$(date +%s)
@@ -369,7 +369,7 @@ run_episode(){
   tail -3 "$epdir/swe_orchestrator.log"
 
   # 4) fetch offload pair-dumps for this episode (serve_variant.sh:435-439).
-  if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+  if [[ "$OFFLOAD_AGENT" == "1" ]]; then
     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
       bash "$OFFLOAD_HELPER" fetch "$OFFLOAD_HOST" "$epdir" \
       > "$epdir/offload_fetch.log" 2>&1 || echo "WARN: [$tag] offload fetch errors"
@@ -414,11 +414,13 @@ for m in metas:
         # tolerate either exact or suffix match; take the first real one
         pass
     verdict = (meta.get("eval_report") or {}).get("verdict", "missing")
-    codex = meta.get("codex") or {}
+    codex = meta.get("agent") or meta.get("codex") or {}
     codex_elapsed = codex.get("elapsed_s")
     timed_out = codex.get("timed_out")
     patch_bytes = meta.get("patch_bytes")
-    cand = m.parent / "codex_trace.jsonl"
+    cand = m.parent / "agent_trace.jsonl"
+    if not cand.is_file():
+        cand = m.parent / "codex_trace.jsonl"
     if cand.is_file():
         trace_path = cand
     break

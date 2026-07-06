@@ -2,7 +2,7 @@
 # FR13 CODEX-OFFLOAD: launch the inference_proxy ON ALIENWARE (x86), forwarding
 # to the GB10 vLLM over tailscale, capturing pair-dumps LOCALLY on alienware.
 #
-# This is relaunch_proxy.sh adapted for the offloaded codex path (OFFLOAD_CODEX=1
+# This is relaunch_proxy.sh adapted for the offloaded codex path (OFFLOAD_AGENT=1
 # in fr13_bigdenom_swe_serve.sh). It runs on the alienware box (rsynced there with
 # the repo src/ + model_registry.yaml). The GB10 runs ONLY vLLM (no proxy, no codex
 # docker) so the timing-sensitive deploy-speed numbers are uncontended by the

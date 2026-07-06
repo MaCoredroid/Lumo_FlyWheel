@@ -17,11 +17,11 @@ mkdir -p "$ROOT"
 echo "$ROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1adda7f44337/scratchpad/bigN_root.txt 2>/dev/null || true
 export RUNROOT="$ROOT"
 # deployment regime (matches the shipgate ARM-ON)
-# OFFLOAD_CODEX default 0 (on-GB10): this is a SOLVE-RATE test, not a speed test, so
+# OFFLOAD_AGENT default 0 (on-GB10): this is a SOLVE-RATE test, not a speed test, so
 # the unified-memory contention the offload avoids is irrelevant here. The offload
 # (codex on alienware) is currently unreachable from alienware->GB10 anyway. Override
-# OFFLOAD_CODEX=1 only for a speed run once the alienware network is restored.
-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=${OFFLOAD_CODEX:-0} DEPLOY_FORCE_TEMP=0.6 SEED=1313
+# OFFLOAD_AGENT=1 only for a speed run once the alienware network is restored.
+export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-0}} DEPLOY_FORCE_TEMP=0.6 SEED=1313
 export FR10_METRICS=0 BATCH_INVARIANT=0
 export FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32 CUDAGRAPH_MODE=PIECEWISE
 unset APC_MAX_NUM_BATCHED_TOKENS 2>/dev/null || true

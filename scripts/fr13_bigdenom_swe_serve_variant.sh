@@ -36,10 +36,10 @@ CONTAINER="fr13-bigdenom-$ARM"
 PORT=9950
 PROXY_PORT=8022
 EVAL_HOST=${EVAL_HOST:-alienware}
-# --- FR13 CODEX-OFFLOAD (unified-memory contamination fix; see fr13_bigdenom_swe_serve.sh) ---
-# OFFLOAD_CODEX=1 (default): proxy+codex on alienware, GB10 stays vLLM-only =
+# --- FR13 AGENT-OFFLOAD (unified-memory contamination fix; see fr13_bigdenom_swe_serve.sh) ---
+# OFFLOAD_AGENT=1 (default): proxy+codex on alienware, GB10 stays vLLM-only =
 # clean deploy-speed (s/fwd read GB10-locally, stall-immune). =0 = legacy.
-OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
+OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
 OFFLOAD_HOST=${OFFLOAD_HOST:-alienware}
 OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}
 GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}
@@ -204,7 +204,7 @@ teardown(){
   kill "$(cat /tmp/track_b_e2e_proxy_${PROXY_PORT}.pid 2>/dev/null)" 2>/dev/null
   pkill -f "lumo_flywheel_serving.inference_proxy" 2>/dev/null
   [[ -n "${WATCHDOG_PID:-}" ]] && kill "$WATCHDOG_PID" 2>/dev/null
-  if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+  if [[ "$OFFLOAD_AGENT" == "1" ]]; then
     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
       bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
   fi
@@ -411,7 +411,7 @@ PY
 # read. Grep it for the masters this arm REQUIRES before recording any APC verdict, so
 # a vacuous (defaults-only) run can never masquerade as engaged. Default-OFF arms set
 # no FR13_APC_REQUIRE_* and this whole block is skipped -> locked non-APC path unchanged.
-if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}${FR13_APC_REQUIRE_SHADOW:-}" ]]; then
+if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}" ]]; then
   APC_MARKER="${FR13_APC_BRIDGE_MARKER_FILE:-/logs/fr13_apc_bridge_loaded.flag}"
   # copy the worker-written marker out of the container's /logs to the arm dir
   docker exec "$CONTAINER" sh -c "cat '$APC_MARKER' 2>/dev/null" > "$ARMDIR/apc_bridge_marker.txt" 2>/dev/null
@@ -428,10 +428,6 @@ if [[ -n "${FR13_APC_REQUIRE_SNAP_FIX:-}${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}${FR
   if [[ -n "${FR13_APC_REQUIRE_HIT_SUFFIX_CAP:-}" ]]; then
     grep -q "HIT_SUFFIX_CAP=${FR13_APC_REQUIRE_HIT_SUFFIX_CAP}\b" "$ARMDIR/apc_bridge_marker.txt" \
       || { echo "FAIL: APC worker HIT_SUFFIX_CAP != required ${FR13_APC_REQUIRE_HIT_SUFFIX_CAP} (cap defaulted to 64 = vacuous). marker: $APC_MARKER_TXT"; exit 4; }
-  fi
-  if [[ -n "${FR13_APC_REQUIRE_SHADOW:-}" ]]; then
-    grep -q "SHADOW=${FR13_APC_REQUIRE_SHADOW}\b" "$ARMDIR/apc_bridge_marker.txt" \
-      || { echo "FAIL: APC worker SHADOW != required ${FR13_APC_REQUIRE_SHADOW} (shadow-log gate vacuous: env not bridged into worker). marker: $APC_MARKER_TXT"; exit 4; }
   fi
   echo "APC worker-env engagement OK: $APC_MARKER_TXT"
 fi
@@ -472,13 +468,13 @@ fi
 
 # ---- launch canonical proxy (forced temp 0.0 + pair dumps), OFFLOAD-gated ----
 mkdir -p "$ARMDIR/proxy_pair_dumps" "$ARMDIR/proxy_request_dumps"
-CODEX_ARGS=()
-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
-  echo "[offload] OFFLOAD_CODEX=1 — proxy+codex on $OFFLOAD_HOST, GB10 stays vLLM-only"
+AGENT_ARGS=()
+if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+  echo "[offload] OFFLOAD_AGENT=1 — proxy+agent on $OFFLOAD_HOST, GB10 stays vLLM-only"
   if ! ssh -o BatchMode=yes -o ConnectTimeout=15 "$OFFLOAD_HOST" \
         "curl -fsS -m 6 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo ok" \
         2>/dev/null | grep -q ok; then
-    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_CODEX=0 to fall back)"
+    echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health (set OFFLOAD_AGENT=0 to fall back)"
     exit 5
   fi
   echo "[offload] alienware -> GB10 vLLM $GB10_TS_IP:$PORT/health OK"
@@ -491,8 +487,8 @@ if [[ "$OFFLOAD_CODEX" == "1" ]]; then
     || { echo "FAIL: offload proxy start"; cat "$ARMDIR/offload_start.log"; exit 5; }
   cat "$ARMDIR/offload_start.log"
   cp "$ARMDIR/offload_proxy_env.txt" "$ARMDIR/proxy_env.txt" 2>/dev/null || true
-  CODEX_ARGS=(--codex-host "$OFFLOAD_HOST" \
-              --codex-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
+  AGENT_ARGS=(--agent-host "$OFFLOAD_HOST" \
+              --agent-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
   echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT)"
 else
   LUMO_PROXY_FORCE_TEMPERATURE="${DEPLOY_FORCE_TEMP:-0.6}" \
@@ -545,7 +541,7 @@ WALL_ARGS=()
 LINKLOG="$ARMDIR/offload_link_state.log"
 LINK_DEAD_MARKER="$ARMDIR/offload_link_dead.flag"
 WATCHDOG_PID=""
-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+if [[ "$OFFLOAD_AGENT" == "1" ]]; then
   rm -f "$LINK_DEAD_MARKER"
   ( down_since=0
     while true; do
@@ -578,7 +574,7 @@ S0=$(date +%s)
   --eval-timeout-s "${EVAL_TIMEOUT_S:-1800}" \
   "${WALL_ARGS[@]}" \
   "${EVAL_ARGS[@]}" \
-  "${CODEX_ARGS[@]}" \
+  "${AGENT_ARGS[@]}" \
   > "$ARMDIR/swe_orchestrator.log" 2>&1
 SWERC=$?
 S1=$(date +%s)
@@ -590,7 +586,7 @@ tail -5 "$ARMDIR/swe_orchestrator.log"
 [[ -n "$WATCHDOG_PID" ]] && kill "$WATCHDOG_PID" 2>/dev/null && WATCHDOG_PID=""
 
 # ---- OFFLOAD: fetch alienware pair-dumps back (resilient rsync, req #3) ----
-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+if [[ "$OFFLOAD_AGENT" == "1" ]]; then
   LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
     bash "$OFFLOAD_HELPER" fetch "$OFFLOAD_HOST" "$PWD/$ARMDIR" \
     > "$ARMDIR/offload_fetch.log" 2>&1 || echo "WARN: offload fetch errors (see offload_fetch.log)"
@@ -618,7 +614,7 @@ metas = sorted(armdir.glob("swe_out/*/per_task/*/runner_metadata.json"))
 health = {"swe_orchestrator_rc": rc, "swe_window_wall_s": wall, "tasks": []}
 for m in metas:
     meta = json.loads(m.read_text())
-    codex = meta.get("codex") or {}
+    codex = meta.get("agent") or meta.get("codex") or {}
     health["tasks"].append({"instance_id": meta.get("instance_id"),
         "codex_elapsed_s": codex.get("elapsed_s"),
         "codex_timed_out": codex.get("timed_out"),

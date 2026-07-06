@@ -36,7 +36,8 @@ two can be told apart -- onset << first boundary => the runaway is not boundary-
 
 Usage
   python3 scripts/probes/fr13_garble_scan.py TRACE [TRACE ...] [--json OUT.json]
-  python3 scripts/probes/fr13_garble_scan.py 'output/fr13_live_gate/*/swe_out/**/codex_trace.jsonl'
+  python3 scripts/probes/fr13_garble_scan.py 'output/fr13_live_gate/*/swe_out/**/agent_trace.jsonl' \
+                                             'output/fr13_live_gate/*/swe_out/**/codex_trace.jsonl'
 
 Exit code: 0 if every trace is CLEAN, 1 if any trace has >=1 garble episode (usable as a gate).
 """
@@ -388,7 +389,9 @@ def print_report(rep: TraceReport, args) -> None:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="FR13 garble / generation-degradation scanner for codex traces.")
-    ap.add_argument("traces", nargs="+", help="codex_trace.jsonl path(s); globs allowed")
+    ap.add_argument("traces", nargs="+",
+                    help="agent_trace.jsonl / codex_trace.jsonl path(s); globs allowed "
+                         "(the emitter still writes codex_trace.jsonl for backward-compat)")
     ap.add_argument("--tokenizer", default=DEFAULT_TOKENIZER,
                     help="qwen tokenizer.json (falls back to chars/4 if unavailable)")
     ap.add_argument("--block-size", type=int, default=1024, help="mamba decode block size (default 1024)")

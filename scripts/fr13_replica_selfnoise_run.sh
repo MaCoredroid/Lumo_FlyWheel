@@ -15,7 +15,7 @@ SUBSET=${SUBSET:-output/fr13_b1_gold_swe/subset_char8_localize.json}
 K=${K:-5}
 CONFIGS=${CONFIGS:-"native:nativemtp5 chain5:chain5"}   # space-sep name:kind pairs (both cache-OFF)
 # same deployment regime as the matrix (offload codex, forced temp 0.6). cache OFF (no APC env).
-export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g
+export MAX_NUM_SEQS_OVR=1 OFFLOAD_AGENT=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g
 export GPU_UTIL=${GPU_UTIL:-0.6} LUMO_PROXY_THINK_BUDGET=${LUMO_PROXY_THINK_BUDGET:-500}
 
 echo "=== FR13 REPLICA SELF-NOISE  K=$K  CONFIGS='$CONFIGS'  SUBSET=$SUBSET -> $RUNROOT ==="

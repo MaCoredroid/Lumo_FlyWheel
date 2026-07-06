@@ -13,7 +13,7 @@ SRC=output/fr13_apc_rategate/run_20260625T084654Z/rg_OFF_r1/proxy_pair_dumps
 SEQ=49; PORT=9953; GPU_UTIL=0.82; REPLAY_TEMP=0.6; K_DECODE=8; GDN_LIMIT=80
 echo "=== drift curve EXTEND  D=$D  blocks=[8192 4096]  reuse REF=$(ls "$D"/logs/ref_gdn*.pt 2>/dev/null|wc -l) gdn ==="
 PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" >/dev/null 2>&1 || true
-for p in fr13 swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
+for p in fr13 swe-agent swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
 
 for B in 8192 4096; do
   echo "[EXTEND] boot align@b=$B (capture on_b${B}) @ $(date -u +%H:%M:%S)"
@@ -29,7 +29,7 @@ for B in 8192 4096; do
     FR13_FINAL_LOGIT_CAPTURE_LIMIT="$K_DECODE" \
     bash scripts/fr13_apc_multiturn_one_arm.sh >> "$D/logs/boot_extend_b${B}.log" 2>&1
   echo "  boot b=$B rc=$? captures=$(find "$D" -name "on_b${B}_gdn*.pt" 2>/dev/null|wc -l) @ $(date -u +%H:%M:%S)"
-  for p in fr13 swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
+  for p in fr13 swe-agent swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
 done
 
 echo "=== REDUCE all four blocks vs continuous REF @ $(date -u +%H:%M:%S) ==="

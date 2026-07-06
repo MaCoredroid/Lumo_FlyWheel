@@ -15,7 +15,7 @@ echo "=== FR13 SPEED GATE  cat6root+cat10  cache-ON only  4-task(b4_four)  B=1 t
 # B=1 + temp 0.6 deployment regime; metrics-OFF clean speed read; full graph is the launcher default now
 # GPU_UTIL 0.76 (down from serve_variant's 0.82) + guard floor 3000: the 4-task run died exit-137
 # (unified-mem spike on GB10) at 0.82/floor-4000; lower util gives prefill-spike headroom.
-export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
+export MAX_NUM_SEQS_OVR=1 OFFLOAD_AGENT=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
   GPU_UTIL="${GPU_UTIL:-0.76}" GPU_GUARD_FLOOR_MIB="${GPU_GUARD_FLOOR_MIB:-3000}" FR10_METRICS=0
 
 run_arm() {

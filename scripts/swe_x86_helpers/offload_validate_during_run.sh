@@ -24,12 +24,12 @@ mkdir -p "$ARMDIR"
 log(){ echo "[$(date -u +%H:%M:%SZ)] $*"; }
 
 # (A) wait up to 8 min for the alienware codex docker to appear (offloaded run live)
-log "waiting for alienware codex docker (swe-codex-*) to go live..." | tee -a "$BLIPLOG"
+log "waiting for alienware agent docker (swe-agent-* / legacy swe-codex-*) to go live..." | tee -a "$BLIPLOG"
 CODEX_LIVE=0
 W0=$(date +%s)
 while (( $(date +%s) < W0 + 480 )); do
   CN=$(ssh "${SSH_OPTS[@]}" "$OFFLOAD_HOST" \
-        "docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 '^swe-codex-'" 2>/dev/null)
+        "docker ps --format '{{.Names}}' 2>/dev/null | grep -m1 -E '^(swe-agent|swe-codex)-'" 2>/dev/null)
   if [[ -n "$CN" ]]; then CODEX_LIVE=1; echo "alienware codex container live: $CN" | tee -a "$BLIPLOG"; break; fi
   sleep 5
 done
@@ -44,8 +44,8 @@ fi
   docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}'
   echo "--- GB10 inference_proxy python procs (must be NONE on the GB10) ---"
   pgrep -af "lumo_flywheel_serving.inference_proxy" || echo "(none — good)"
-  echo "--- GB10 codex-runner / swe-codex procs (must be NONE on the GB10) ---"
-  pgrep -af "codex-runner|swe-codex|codex exec" || echo "(none — good)"
+  echo "--- GB10 agent-runner (qwen-code-runner/codex-runner) / swe-agent procs (must be NONE on the GB10) ---"
+  pgrep -af "codex-runner|qwen-code-runner|swe-agent|swe-codex|codex exec" || echo "(none — good)"
   echo "--- GB10 docker containers matching codex/swe (must be NONE) ---"
   docker ps --format '{{.Names}}' | grep -E 'codex|swe' || echo "(none — good)"
   echo "--- GB10 top CPU procs (vllm should dominate; no codex/proxy) ---"

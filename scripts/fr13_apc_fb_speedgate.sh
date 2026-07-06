@@ -17,7 +17,7 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
 RUNROOT=output/fr13_apc_fb_speedgate/run_$TS; mkdir -p "$RUNROOT"; export RUNROOT
 echo "$RUNROOT" > /home/mark/.claude/jobs/22c39bb9/tmp/fb_speedgate_root.txt
 echo "=== FR13 FB DECODE A/B  cat6root  12907 1-task  B=1 temp0.6  FULL GRAPH+EXACT_SEED  FB=0 vs FB=1 -> $RUNROOT ==="
-export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
+export MAX_NUM_SEQS_OVR=1 OFFLOAD_AGENT=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g \
   GPU_UTIL="${GPU_UTIL:-0.76}" GPU_GUARD_FLOOR_MIB="${GPU_GUARD_FLOOR_MIB:-3000}" FR10_METRICS=0
 
 manual_decode() {  # $1 = swe_out root -> token-weighted decode TPS (sum gen / sum decode)

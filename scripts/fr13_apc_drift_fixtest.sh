@@ -19,7 +19,7 @@ cp "$OLD_REF"/ref_gdn*.pt "$RD/logs/" 2>/dev/null
 cp "$OLD_REF"/ref_logit*.pt "$RD/logs/" 2>/dev/null
 echo "=== FIX TEST  rundir=$RD  REF reused=$(ls "$RD/logs"/ref_gdn*.pt 2>/dev/null|wc -l) gdn  block=$B + PRE_SNAP_FIX=1 ==="
 PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" >/dev/null 2>&1 || true
-for p in fr13 swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
+for p in fr13 swe-agent swe-codex codex; do docker ps -aq --filter "name=$p" | xargs -r docker rm -f >/dev/null 2>&1; done
 
 # background non-vacuity canary: grep the worker fire counters while the container is alive
 ( CF="$RD/logs/fire_canary.txt"; for i in $(seq 1 240); do

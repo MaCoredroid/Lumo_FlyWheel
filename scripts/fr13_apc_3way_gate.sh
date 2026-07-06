@@ -17,7 +17,7 @@ TS=$(date -u +%Y%m%dT%H%M%SZ)
 RUNROOT=output/fr13_apc_3way/run_$TS; mkdir -p "$RUNROOT"; export RUNROOT
 echo "$RUNROOT" > /home/mark/.claude/jobs/22c39bb9/tmp/threeway_root.txt
 echo "=== FR13 CLEAN 3-WAY  b4_four(4-task)  B=1 temp0.6  FULL GRAPH  -> $RUNROOT ==="
-export MAX_NUM_SEQS_OVR=1 OFFLOAD_CODEX=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g FR10_METRICS=0
+export MAX_NUM_SEQS_OVR=1 OFFLOAD_AGENT=1 DEPLOY_FORCE_TEMP=0.6 DOCKER_MEM_CAP=105g FR10_METRICS=0
 
 reduce() {  # $1 = swe_out root -> full decode+cache accounting (s_per_fwd, accept/event,
             # token-weighted tok/s, prefix-hit%, TTFT, e2e) via the shared reducer

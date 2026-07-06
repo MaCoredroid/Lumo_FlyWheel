@@ -38,12 +38,12 @@ for i in $(seq 1 "$N"); do
     docker rm -f "fr13-bigdenom-$ARM" >/dev/null 2>&1 || true
     BLKENV=""; [ "$APC" = "1" ] && BLKENV="MAMBA_BLOCK_SIZE=$BLOCK APC_BLOCK_SIZE=$BLOCK"
     env FR13_ENABLE_APC=$APC FR13_APC_CONFIG_ONLY=0 $BLKENV MAMBA_SSM_CACHE_DTYPE=float32 \
-      DEPLOY_FORCE_TEMP=0.6 OFFLOAD_CODEX=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 \
+      DEPLOY_FORCE_TEMP=0.6 OFFLOAD_AGENT=1 MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 \
       FR10_METRICS=0 BATCH_INVARIANT=0 DOCKER_MEM_CAP="$DOCKER_MEM_CAP" RUNROOT="$RUNROOT" \
       bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" cat6root "$SUBSET" > "$RLOG" 2>&1 </dev/null
     V=$(grep -hoE "resolved_rate=[0-9.]+" "$RLOG" 2>/dev/null | tail -1)
     VERD=$(echo "$V" | grep -qE "resolved_rate=1" && echo resolved || echo failed)
-    TR=$(find "$RUNROOT/$ARM" -path "*per_task*/codex_trace.jsonl" 2>/dev/null | head -1)
+    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" \) 2>/dev/null | head -1)
     C8=0; [ -n "$TR" ] && C8=$(grep -cE 'Unterminated|column 9 \(char 8\)|EOF while parsing a string' "$TR" 2>/dev/null || echo 0)
     printf '%s\t%s\t%d\t%s\t%s\t%s\n' "$tag" "$BLOCK" "$i" "$VERD" "$C8" "$RLOG" >> "$SUMMARY"
     echo "  => verdict=$VERD char8=$C8"

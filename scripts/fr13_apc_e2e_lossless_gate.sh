@@ -30,7 +30,7 @@ N=${N:-5}                                    # rollouts per arm
 ARMS=${ARMS:-"ON OFF"}                        # ON=cache+spec ; OFF=no-cache+spec (single var)
 KIND=${KIND:-cat6root}
 SUBSET=${SUBSET:-output/fr13_b1_gold_swe/subset_astropy12907.json}
-OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
+OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
 DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-105g}; export DOCKER_MEM_CAP
 TS=$(date -u +%Y%m%dT%H%M%SZ)
 RUNROOT=${RUNROOT:-output/fr13_apc_e2e_gate/run_${TS}}
@@ -39,7 +39,7 @@ echo "$RUNROOT" > /tmp/claude-1000/-home-mark-shared/46f03809-5059-4e30-936d-1ad
 SUMMARY="$RUNROOT/e2e_gate_rollouts.tsv"
 printf 'arm\trollout\tverdict\tcached_max\tspec_ok\tchar8\ttrace_bytes\trun_log\n' > "$SUMMARY"
 echo "=== FR13 APC SPEC+CACHE E2E LOSSLESS GATE  N=$N/arm  arms='$ARMS'  KIND=$KIND  subset=$SUBSET ==="
-echo "    runroot=$RUNROOT  offload=$OFFLOAD_CODEX  memcap=$DOCKER_MEM_CAP"
+echo "    runroot=$RUNROOT  offload=$OFFLOAD_AGENT  memcap=$DOCKER_MEM_CAP"
 
 _hygiene() {
   pgrep -af 'oom_protect_watchdog\.sh' | grep -qv pgrep || { setsid bash scripts/oom_protect_watchdog.sh >/dev/null 2>&1 </dev/null & disown; }
@@ -63,7 +63,7 @@ for i in $(seq 1 "$N"); do
     FR13_ENABLE_APC=$APC FR13_APC_CONFIG_ONLY=0 \
       MAMBA_BLOCK_SIZE="${MAMBA_BLOCK_SIZE:-8192}" MAMBA_SSM_CACHE_DTYPE="${MAMBA_SSM_CACHE_DTYPE:-float32}" \
       APC_MAX_NUM_BATCHED_TOKENS="${APC_MAX_NUM_BATCHED_TOKENS:-1024}" \
-      DEPLOY_FORCE_TEMP=0.6 OFFLOAD_CODEX="$OFFLOAD_CODEX" MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 \
+      DEPLOY_FORCE_TEMP=0.6 OFFLOAD_AGENT="$OFFLOAD_AGENT" MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 \
       FR10_METRICS=0 BATCH_INVARIANT=0 DOCKER_MEM_CAP="$DOCKER_MEM_CAP" RUNROOT="$RUNROOT" \
       bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" "$KIND" "$SUBSET" > "$RLOG" 2>&1 </dev/null
     # --- parse ---
@@ -72,7 +72,7 @@ for i in $(seq 1 "$N"); do
     # real cache hits: max cached_tokens anywhere in this arm's artifacts (proxy/trace)
     CMAX=$(grep -rhoE "\"cached_tokens\"\s*:\s*[0-9]+" "$RUNROOT/$ARM" "$RLOG" 2>/dev/null | grep -oE "[0-9]+" | sort -rn | head -1)
     CMAX=${CMAX:-0}
-    TR=$(find "$RUNROOT/$ARM" -path "*per_task*/codex_trace.jsonl" 2>/dev/null | head -1)
+    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" \) 2>/dev/null | head -1)
     C8=0; TB=0
     [[ -n "$TR" ]] && { C8=$(grep -acE 'Unterminated|column 9 \(char 8\)|EOF while parsing a string|[\x{4e00}-\x{9fff}]' "$TR" 2>/dev/null || echo 0); TB=$(wc -c <"$TR" 2>/dev/null || echo 0); }
     printf '%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n' "$arm" "$i" "$VERD" "$CMAX" "$SPEC_OK" "$C8" "$TB" "$RLOG" >> "$SUMMARY"

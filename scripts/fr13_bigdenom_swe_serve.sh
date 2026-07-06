@@ -36,17 +36,17 @@ CONTAINER="fr13-bigdenom-$ARM"
 PORT=9950
 PROXY_PORT=8022
 EVAL_HOST=${EVAL_HOST:-alienware}
-# --- FR13 CODEX-OFFLOAD (the unified-memory contamination fix) -----------------
-# OFFLOAD_CODEX=1 (DEFAULT for clean deploy-speed): run the inference_proxy AND
-# the codex-runner docker on alienware (x86) so the GB10 runs ONLY vLLM during
-# the codex agent loop. The GB10's 273 GB/s Grace+Blackwell unified memory is
+# --- FR13 AGENT-OFFLOAD (the unified-memory contamination fix) -----------------
+# OFFLOAD_AGENT=1 (DEFAULT for clean deploy-speed): run the inference_proxy AND
+# the SWE agent docker (qwen-code-runner:v1) on alienware (x86) so the GB10 runs
+# ONLY vLLM during the agent loop. The GB10's 273 GB/s Grace+Blackwell unified memory is
 # then uncontended -> the timing-sensitive deploy-speed (s/fwd) is clean. The
 # lossless (argmax/distributional) numbers are timing-independent so unaffected.
-# OFFLOAD_CODEX=0 = the legacy on-GB10 path (fallback if alienware is down).
+# OFFLOAD_AGENT=0 = the legacy on-GB10 path (fallback if alienware is down).
 # Flag-gated so nothing about the canonical measurement BASIS changes — only the
 # codex+proxy LOCATION. s/fwd is ALWAYS read LOCALLY from the GB10 vLLM /metrics
 # (never across the wire) so a Spark<->alienware blip can't corrupt the speed.
-OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
+OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
 OFFLOAD_HOST=${OFFLOAD_HOST:-alienware}
 OFFLOAD_PROXY_PORT=${LUMO_OFFLOAD_PROXY_PORT:-8023}   # 8022 is taken on alienware
 GB10_TS_IP=${GB10_TS_IP:-100.103.10.122}             # GB10 tailscale IP (gx10-edb9-1)
@@ -105,7 +105,7 @@ teardown(){
   # kill any link watchdog
   [[ -n "${WATCHDOG_PID:-}" ]] && kill "$WATCHDOG_PID" 2>/dev/null
   # OFFLOAD: stop the remote proxy on alienware (clean teardown, req #5)
-  if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+  if [[ "$OFFLOAD_AGENT" == "1" ]]; then
     LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
       bash "$OFFLOAD_HELPER" stop "$OFFLOAD_HOST" >> "$ARMDIR/offload_teardown.log" 2>&1 || true
   fi
@@ -260,15 +260,15 @@ curl -fsS -X POST "http://127.0.0.1:$PORT/reset_prefix_cache" \
   > "$ARMDIR/reset_prefix_cache.txt" 2>&1 || echo "WARN: reset_prefix_cache failed (non-fatal)"
 
 # ---- launch canonical proxy: temp 0.0 pin + served-stream pair dumps ON ----
-# Two paths, flag-gated by OFFLOAD_CODEX:
-#   OFFLOAD_CODEX=1 (default): proxy runs ON ALIENWARE (-> GB10:9950 over
+# Two paths, flag-gated by OFFLOAD_AGENT:
+#   OFFLOAD_AGENT=1 (default): proxy runs ON ALIENWARE (-> GB10:9950 over
 #     tailscale); pair-dumps captured LOCALLY on alienware (rsynced back after
 #     the run). The GB10 runs ONLY vLLM during the codex loop = clean s/fwd.
-#   OFFLOAD_CODEX=0: legacy on-GB10 proxy (the prior co-located path).
+#   OFFLOAD_AGENT=0: legacy on-GB10 proxy (the prior co-located path).
 mkdir -p "$ARMDIR/proxy_pair_dumps" "$ARMDIR/proxy_request_dumps"
-CODEX_ARGS=()
-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
-  echo "[offload] OFFLOAD_CODEX=1 — proxy+codex on $OFFLOAD_HOST, GB10 stays vLLM-only"
+AGENT_ARGS=()
+if [[ "$OFFLOAD_AGENT" == "1" ]]; then
+  echo "[offload] OFFLOAD_AGENT=1 — proxy+agent on $OFFLOAD_HOST, GB10 stays vLLM-only"
   # (a) the GB10 vLLM must be reachable from alienware over tailscale before we
   #     start the remote proxy (req #6: measurement-side health is GB10-local,
   #     but the request-side path needs the link up to begin).
@@ -276,7 +276,7 @@ if [[ "$OFFLOAD_CODEX" == "1" ]]; then
         "curl -fsS -m 6 http://$GB10_TS_IP:$PORT/health >/dev/null 2>&1 && echo ok" \
         2>/dev/null | grep -q ok; then
     echo "FAIL: alienware cannot reach GB10 vLLM at http://$GB10_TS_IP:$PORT/health"
-    echo "      (network/firewall — set OFFLOAD_CODEX=0 to fall back to the on-GB10 path)"
+    echo "      (network/firewall — set OFFLOAD_AGENT=0 to fall back to the on-GB10 path)"
     exit 5
   fi
   echo "[offload] alienware -> GB10 vLLM $GB10_TS_IP:$PORT/health OK"
@@ -296,11 +296,11 @@ if [[ "$OFFLOAD_CODEX" == "1" ]]; then
   cp "$ARMDIR/offload_proxy_env.txt" "$ARMDIR/proxy_env.txt" 2>/dev/null || true
   # the codex orchestrator runs the codex docker on alienware against the
   # alienware-local proxy (127.0.0.1:8023). vLLM /metrics still read GB10-locally.
-  CODEX_ARGS=(--codex-host "$OFFLOAD_HOST" \
-              --codex-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
+  AGENT_ARGS=(--agent-host "$OFFLOAD_HOST" \
+              --agent-endpoint "http://127.0.0.1:$OFFLOAD_PROXY_PORT/v1")
   echo "proxy OK (OFFLOADED to $OFFLOAD_HOST:$OFFLOAD_PROXY_PORT; forced temp 0.0, pair dumps on, auto-continue on)"
 else
-  echo "[offload] OFFLOAD_CODEX=0 — legacy on-GB10 proxy+codex (co-located)"
+  echo "[offload] OFFLOAD_AGENT=0 — legacy on-GB10 proxy+agent (co-located)"
   LUMO_PROXY_FORCE_TEMPERATURE=0.0 \
   LUMO_PROXY_REQUEST_DUMP_DIR="$PWD/$ARMDIR/proxy_request_dumps" \
   LUMO_PROXY_PAIR_DUMP_DIR="$PWD/$ARMDIR/proxy_pair_dumps" \
@@ -363,7 +363,7 @@ WALL_ARGS=()
 LINKLOG="$ARMDIR/offload_link_state.log"
 LINK_DEAD_MARKER="$ARMDIR/offload_link_dead.flag"
 WATCHDOG_PID=""
-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+if [[ "$OFFLOAD_AGENT" == "1" ]]; then
   rm -f "$LINK_DEAD_MARKER"
   ( down_since=0
     while true; do
@@ -399,7 +399,7 @@ S0=$(date +%s)
   --concurrency "$SWE_CONCURRENCY" \
   "${WALL_ARGS[@]}" \
   "${EVAL_ARGS[@]}" \
-  "${CODEX_ARGS[@]}" \
+  "${AGENT_ARGS[@]}" \
   > "$ARMDIR/swe_orchestrator.log" 2>&1
 SWERC=$?
 S1=$(date +%s)
@@ -414,7 +414,7 @@ tail -5 "$ARMDIR/swe_orchestrator.log"
 # ---- OFFLOAD: fetch the alienware pair-dumps back (resilient rsync, req #3) --
 # the deploy-lossless recurrent-oracle rescore (a SEPARATE GB10 vLLM-only GPU
 # phase) reads these. A dropped rsync must not lose the served stream.
-if [[ "$OFFLOAD_CODEX" == "1" ]]; then
+if [[ "$OFFLOAD_AGENT" == "1" ]]; then
   LUMO_OFFLOAD_PROXY_PORT="$OFFLOAD_PROXY_PORT" \
     bash "$OFFLOAD_HELPER" fetch "$OFFLOAD_HOST" "$PWD/$ARMDIR" \
     > "$ARMDIR/offload_fetch.log" 2>&1 || echo "WARN: offload pair-dump fetch had errors (see offload_fetch.log)"
@@ -441,7 +441,7 @@ health = {"swe_orchestrator_rc": rc, "swe_window_wall_s": wall,
 flags = []
 for m in metas:
     meta = json.loads(m.read_text())
-    codex = meta.get("codex") or {}
+    codex = meta.get("agent") or meta.get("codex") or {}
     t = {"instance_id": meta.get("instance_id"),
          "codex_elapsed_s": codex.get("elapsed_s"),
          "codex_timed_out": codex.get("timed_out"),

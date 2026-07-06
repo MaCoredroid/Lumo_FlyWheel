@@ -42,7 +42,7 @@ ARM_ON=${ARM_ON:-cat6root_plainalign_b1}
 
 export MAX_NUM_SEQS_OVR=${MAX_NUM_SEQS_OVR:-1}
 export SWE_CONCURRENCY=${SWE_CONCURRENCY:-1}
-export OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}
+export OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}
 export DEPLOY_FORCE_TEMP=${DEPLOY_FORCE_TEMP:-0.6}
 export SEED=${SEED:-1313}
 
@@ -128,7 +128,7 @@ for arm in (arm_on, arm_off):
     for pt in sorted(glob.glob(f"{runroot}/{arm}/swe_out/*/per_task/*")):
         tid=os.path.basename(pt)
         cjk=0; rt=0.0
-        for tf in glob.glob(pt+"/codex_trace*.jsonl"):
+        for tf in glob.glob(pt+"/agent_trace*.jsonl") + glob.glob(pt+"/codex_trace*.jsonl"):
             items=[json.loads(l).get('item',json.loads(l)) for l in open(tf)]
             msgs=[it.get('text','') or '' for it in items if it.get('type')=='agent_message']
             cjk+=sum(1 for m in msgs for ch in m if '一'<=ch<='鿿')

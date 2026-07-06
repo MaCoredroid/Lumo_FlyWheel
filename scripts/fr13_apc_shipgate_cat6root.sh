@@ -20,9 +20,9 @@
 #
 # Both arms reuse the canonical x86-offload SWE harness
 # (scripts/fr13_bigdenom_swe_serve_variant.sh KIND=cat6root): vLLM ALONE on the
-# GB10, codex-runner:v1 + inference_proxy OFFLOADED to alienware, pair-dumps
-# rsynced back. This is the SANCTIONED codex path (codex-runner:v1 on alienware),
-# NOT the legacy on-GB10 8022 codex / OOM-guard. METRICS OFF on both arms
+# GB10, the SWE agent (qwen-code-runner:v1) + inference_proxy OFFLOADED to
+# alienware, pair-dumps rsynced back. This is the SANCTIONED offload path (the
+# agent container on alienware), NOT the legacy on-GB10 8022 path / OOM-guard. METRICS OFF on both arms
 # (FR10_METRICS=0, BATCH_INVARIANT=0, no FR13_*_DIAG / STATE_PROBE / argmax-gate /
 # SFWD_GPU_TIMER) so the deploy-speed read is the clean /metrics decode bracket.
 #
@@ -66,7 +66,7 @@
 # pre-boot hygiene (recover_host_memory + assert MemAvailable>=95GiB + swap=0 +
 # docker-empty) and a clean teardown (docker rm -f + recover) on EXIT, so this
 # driver just runs them back-to-back with an extra recover between. During each
-# codex run the GB10 is vLLM-ONLY (codex+proxy on alienware).
+# agent run the GB10 is vLLM-ONLY (agent+proxy on alienware).
 # =================================================================================
 set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
@@ -91,7 +91,7 @@ ARM_ON=${ARM_ON:-cat6root_apcon_b1}
 #      pinned by the offload proxy DEPLOY_FORCE_TEMP=0.6 = the real deployment temp).
 export MAX_NUM_SEQS_OVR=${MAX_NUM_SEQS_OVR:-1}   # B=1
 export SWE_CONCURRENCY=${SWE_CONCURRENCY:-1}      # single-stream, no co-residency confound
-export OFFLOAD_CODEX=${OFFLOAD_CODEX:-1}          # codex+proxy on alienware (SANCTIONED), GB10 vLLM-only
+export OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-1}}          # agent+proxy on alienware (SANCTIONED), GB10 vLLM-only
 export DEPLOY_FORCE_TEMP=${DEPLOY_FORCE_TEMP:-0.6}
 # seed: the proxy/orchestrator pin SEED 1313 is the canonical deployment seed; the
 # offload proxy forces temp 0.6. (run_swe_bench_q36_a temperature is governed by the

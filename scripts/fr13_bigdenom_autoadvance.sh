@@ -34,7 +34,7 @@ arm_done() {  # <arm_dir_name>
   local a="$1"
   [[ -f "$RUNROOT/$a/arm_ended_at.txt" ]] || return 1
   # no campaign serving/agent container still up
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qE "fr13-bigdenom|swe-codex"; then
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qE "fr13-bigdenom|swe-agent|swe-codex"; then
     return 1
   fi
   return 0

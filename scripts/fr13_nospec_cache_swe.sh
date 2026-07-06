@@ -31,7 +31,7 @@
 # Usage:  N=3 bash scripts/fr13_nospec_cache_swe.sh
 #   N (env, default 3)         repeats per arm (temp-0.6 agentic solve is flaky -> RATE)
 #   ONLY (env, optional)       "on" or "off" to run a single arm
-#   OFFLOAD_CODEX (env, def 0) 1 = codex/proxy on alienware (matches bigN default 0 = on-GB10)
+#   OFFLOAD_AGENT (env, def 0) 1 = codex/proxy on alienware (matches bigN default 0 = on-GB10)
 #
 # NO GPU run is performed by writing this script; it is a RUNNER (boots vLLM when invoked).
 set -uo pipefail
@@ -49,7 +49,7 @@ export RUNROOT="$ROOT"
 
 # ---- deployment regime: MATCH the tree/spine arms (fr13_bigN_solve_spine_tree.sh) ----
 # Solve-rate test (not a speed test) -> B=1, single concurrent codex task.
-export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_CODEX=${OFFLOAD_CODEX:-0} \
+export MAX_NUM_SEQS_OVR=1 SWE_CONCURRENCY=1 OFFLOAD_AGENT=${OFFLOAD_AGENT:-${OFFLOAD_CODEX:-0}} \
        DEPLOY_FORCE_TEMP=0.6 SEED=1313
 export FR10_METRICS=0 BATCH_INVARIANT=0
 # constrained decoding PAUSED -> LUMO_PROXY_TOOL_STRICT unset (no grammar), same as bigN.

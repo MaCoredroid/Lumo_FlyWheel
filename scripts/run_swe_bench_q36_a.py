@@ -252,7 +252,7 @@ def _instance_agent_command(*, container_name: str, image: str, endpoint: str,
     )
 
 # Default operator prompt (first attempt).
-DEFAULT_CODEX_PROMPT = (
+DEFAULT_AGENT_PROMPT = (
     "Read the task prompt at /workspace/AGENTS.md and complete it in this workspace. "
     "Edit the source files directly to implement the fix. Do not write a diff file -- "
     "modify the files in place so that running pytest passes the tests described in the prompt."
@@ -644,7 +644,7 @@ def _extract_patch(cache_path: Path, workspace: Path, base_commit: str) -> str:
     return proc.stdout
 
 
-def _run_codex(
+def _run_agent_local(
     *,
     workspace: Path,
     endpoint: str,
@@ -655,7 +655,7 @@ def _run_codex(
     stderr_path: Path,
     trace_path: Path,
     base_commit: str | None = None,
-    prompt: str = DEFAULT_CODEX_PROMPT,
+    prompt: str = DEFAULT_AGENT_PROMPT,
 ) -> dict[str, Any]:
     """Run codex-runner:v1 and capture trace/stdout/stderr to separate files.
 
@@ -672,7 +672,7 @@ def _run_codex(
             stdout_path=stdout_path, stderr_path=stderr_path, trace_path=trace_path,
             prompt=prompt,
         )
-    container_name = f"swe-codex-{instance_id.replace('/', '_')[:48]}-{int(time.time())}"
+    container_name = f"swe-agent-{instance_id.replace('/', '_')[:48]}-{int(time.time())}"
     cmd = _agent_template().format(
         container_name=container_name,
         workspace=str(workspace),
@@ -744,7 +744,7 @@ _EVAL_SSH_OPTS = [
 ]
 
 # --- FR13 CODEX-OFFLOAD config (the unified-memory contamination fix) ---------
-# When CODEX_HOST is set (via --codex-host), the codex-runner Docker runs on a
+# When AGENT_HOST is set (via --codex-host), the codex-runner Docker runs on a
 # native x86 box (alienware) instead of locally on the GB10. The workspace is
 # rsynced there before the run and the (modified) workspace is rsynced back
 # after, so patch extraction + eval stay on the GB10 unchanged. This leaves the
@@ -752,15 +752,15 @@ _EVAL_SSH_OPTS = [
 # bandwidth (273 GB/s, shared Grace CPU + Blackwell GPU) is uncontended and the
 # timing-sensitive deploy-speed numbers (s/fwd) are clean. The lossless numbers
 # are timing-independent so unaffected; only WHERE the codex compute runs moves.
-# The codex docker on alienware hits the alienware-LOCAL proxy (CODEX_ENDPOINT,
+# The codex docker on alienware hits the alienware-LOCAL proxy (AGENT_ENDPOINT,
 # default 127.0.0.1:8023 — 8022 is occupied on alienware by an unrelated host
 # service). Reuses the eval-offload SSH/rsync plumbing (_net_retry below).
-CODEX_HOST: str | None = None
+AGENT_HOST: str | None = None
 # alienware-local proxy the offloaded codex docker hits (8022 is taken on
 # alienware by an unrelated host service; the offload proxy listens on 8023).
-CODEX_ENDPOINT: str | None = None
-_CODEX_REMOTE_ROOT = "~/lumo_proxy_offload/codex_work"
-_CODEX_NET_LOG = DEFAULT_OUT_ROOT / "swe_codex_offload_network.log"
+AGENT_ENDPOINT: str | None = None
+_AGENT_REMOTE_ROOT = "~/lumo_proxy_offload/codex_work"
+_AGENT_NET_LOG = DEFAULT_OUT_ROOT / "swe_codex_offload_network.log"
 _REMOTE_BASE = "~/swe_eval_offload"
 _REMOTE_WORKER = "~/swe_eval_offload/swe_eval_x86_worker.py"
 _REMOTE_VENV_PY = "~/swe_eval_offload/venv/bin/python"
@@ -857,10 +857,10 @@ _RSYNC_RESILIENT = [
 ]
 
 
-def _codex_net_log(msg: str) -> None:
+def _agent_net_log(msg: str) -> None:
     try:
-        _CODEX_NET_LOG.parent.mkdir(parents=True, exist_ok=True)
-        with _CODEX_NET_LOG.open("a", encoding="utf-8") as f:
+        _AGENT_NET_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with _AGENT_NET_LOG.open("a", encoding="utf-8") as f:
             f.write(f"[{_iso_now()}] {msg}\n")
     except Exception:  # noqa: BLE001
         pass
@@ -963,7 +963,7 @@ def _monitor_proc_with_stall_watchdog(
     }
 
 
-def _run_codex_remote(
+def _run_agent_remote(
     *,
     host: str,
     workspace: Path,
@@ -975,7 +975,7 @@ def _run_codex_remote(
     stderr_path: Path,
     trace_path: Path,
     base_commit: str | None = None,
-    prompt: str = DEFAULT_CODEX_PROMPT,
+    prompt: str = DEFAULT_AGENT_PROMPT,
 ) -> dict[str, Any]:
     """Run codex-runner:v1 ON alienware (x86) over SSH, keeping the GB10 vLLM-only.
 
@@ -996,8 +996,8 @@ def _run_codex_remote(
         )
     started = time.monotonic()
     safe_id = instance_id.replace("/", "_")[:48]
-    remote_ws = f"{_CODEX_REMOTE_ROOT}/{safe_id}/workspace"
-    container_name = f"swe-codex-{safe_id}-{int(time.time())}"
+    remote_ws = f"{_AGENT_REMOTE_ROOT}/{safe_id}/workspace"
+    container_name = f"swe-agent-{safe_id}-{int(time.time())}"
     net_drop = False
 
     mk = _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"mkdir -p {remote_ws} && echo ok"],
@@ -1015,7 +1015,7 @@ def _run_codex_remote(
                     what=f"codex_ws_up:{instance_id}", timeout=600, max_attempts=5)
     if up.returncode != 0:
         net_drop = True
-        _codex_net_log(f"WS_UP_FAIL {instance_id} rc={up.returncode} (network-drop)")
+        _agent_net_log(f"WS_UP_FAIL {instance_id} rc={up.returncode} (network-drop)")
         stderr_path.write_text(f"workspace rsync up failed rc={up.returncode}\n{up.stderr}", encoding="utf-8")
         trace_path.write_text("", encoding="utf-8")
         return {"elapsed_s": round(time.monotonic() - started, 3), "exit_code": -1,
@@ -1072,7 +1072,7 @@ def _run_codex_remote(
     if stall_killed:
         # infra_stall_suspect: the agent trace stopped growing (a suspected GB10
         # emit/transport wedge). Killed + CLASSIFIED; NEVER retried (nudge ban).
-        _codex_net_log(f"CODEX_STALL_KILL {instance_id} no trace growth for {stall_kill_s}s "
+        _agent_net_log(f"CODEX_STALL_KILL {instance_id} no trace growth for {stall_kill_s}s "
                        "(infra_stall_suspect; NOT agent_gave_up, NOT retried)")
         rc = -1
     elif timed_out:
@@ -1084,7 +1084,7 @@ def _run_codex_remote(
     elif rc == 255:
         # SSH transport died — CLASSIFY network-drop (req #4), not a model run.
         net_drop = True
-        _codex_net_log(f"CODEX_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
+        _agent_net_log(f"CODEX_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
     elapsed = time.monotonic() - started
 
     # rsync the (modified) workspace back to the GB10 for patch extraction.
@@ -1093,11 +1093,11 @@ def _run_codex_remote(
                       what=f"codex_ws_down:{instance_id}", timeout=600, max_attempts=5)
     if down.returncode != 0:
         net_drop = True
-        _codex_net_log(f"WS_DOWN_FAIL {instance_id} rc={down.returncode} (network-drop) — "
+        _agent_net_log(f"WS_DOWN_FAIL {instance_id} rc={down.returncode} (network-drop) — "
                        "patch may be incomplete; FLAGGED")
     # cleanup the remote workspace (non-fatal)
     _net_retry(["ssh", *_EVAL_SSH_OPTS, host,
-                f"docker rm -f {container_name} 2>/dev/null; rm -rf {_CODEX_REMOTE_ROOT}/{safe_id}; echo ok"],
+                f"docker rm -f {container_name} 2>/dev/null; rm -rf {_AGENT_REMOTE_ROOT}/{safe_id}; echo ok"],
                what=f"codex_cleanup:{instance_id}", timeout=60, max_attempts=2)
 
     if not stdout_path.is_file():
@@ -1131,7 +1131,7 @@ def _run_agent_instance(
     stdout_path: Path,
     stderr_path: Path,
     trace_path: Path,
-    prompt: str = DEFAULT_CODEX_PROMPT,
+    prompt: str = DEFAULT_AGENT_PROMPT,
 ) -> dict[str, Any]:
     """SWE_AGENT_ENV=instance_image (§58): run qwen-code INSIDE the SWE-bench
     per-instance eval image editing /testbed, with the node+qwen runtime injected
@@ -1193,7 +1193,7 @@ def _run_agent_instance(
                 f"first; if this instance publishes no {sweb_arch} variant it is "
                 f"arch-restricted — run the agent on a host matching an available "
                 f"arch (x86_64 => alienware offload). Refusing to fall back.")
-        remote_out = f"{_CODEX_REMOTE_ROOT}/{safe_id}/out"
+        remote_out = f"{_AGENT_REMOTE_ROOT}/{safe_id}/out"
         mk = _net_retry(
             ["ssh", *_EVAL_SSH_OPTS, remote_host,
              f"mkdir -p {remote_out} && rm -f {remote_out}/patch.diff && echo ok"],
@@ -1224,7 +1224,7 @@ def _run_agent_instance(
             rc = completed.returncode
             if rc == 255:
                 net_drop = True
-                _codex_net_log(f"QWEN_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
+                _agent_net_log(f"QWEN_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
         except subprocess.TimeoutExpired:
             timed_out = True
             _net_retry(["ssh", *_EVAL_SSH_OPTS, remote_host,
@@ -1242,7 +1242,7 @@ def _run_agent_instance(
             patch_local.write_text("", encoding="utf-8")
         _net_retry(["ssh", *_EVAL_SSH_OPTS, remote_host,
                     f"docker rm -f {container_name} 2>/dev/null; "
-                    f"rm -rf {_CODEX_REMOTE_ROOT}/{safe_id}; echo ok"],
+                    f"rm -rf {_AGENT_REMOTE_ROOT}/{safe_id}; echo ok"],
                    what=f"qwen_cleanup:{instance_id}", timeout=60, max_attempts=2)
         if not stdout_path.is_file():
             stdout_path.write_text("", encoding="utf-8")
@@ -1295,18 +1295,18 @@ def _run_agent_instance(
                     "host_arch": host_machine, "image_arch": sweb_arch}
 
 
-def _run_codex_dispatch(**kwargs: Any) -> dict[str, Any]:
-    """Route the codex run to alienware (CODEX_HOST set) or local (GB10).
+def _run_agent_dispatch(**kwargs: Any) -> dict[str, Any]:
+    """Route the codex run to alienware (AGENT_HOST set) or local (GB10).
 
     On the offload path the codex docker on alienware must hit the alienware-
-    LOCAL proxy, so the GB10-side `--endpoint` is overridden with CODEX_ENDPOINT.
+    LOCAL proxy, so the GB10-side `--endpoint` is overridden with AGENT_ENDPOINT.
     """
-    if CODEX_HOST:
+    if AGENT_HOST:
         kwargs = dict(kwargs)
-        if CODEX_ENDPOINT:
-            kwargs["endpoint"] = CODEX_ENDPOINT
-        return _run_codex_remote(host=CODEX_HOST, **kwargs)
-    return _run_codex(**kwargs)
+        if AGENT_ENDPOINT:
+            kwargs["endpoint"] = AGENT_ENDPOINT
+        return _run_agent_remote(host=AGENT_HOST, **kwargs)
+    return _run_agent_local(**kwargs)
 
 
 def _run_eval(
@@ -1446,7 +1446,7 @@ def _process_one(
     # Start the DCGM/NVML sampler in parallel with the Codex agent.
     dcgm_proc = _spawn_dcgm_sampler(dcgm_samples)
 
-    codex_meta = _run_codex_dispatch(
+    codex_meta = _run_agent_dispatch(
         workspace=workspace_path,
         endpoint=endpoint,
         model=model,
@@ -1457,6 +1457,10 @@ def _process_one(
         stderr_path=codex_stderr,
         trace_path=codex_trace,
     )
+    summary["agent"] = codex_meta
+    # Backward-compat: keep the legacy "codex" key so existing reducers
+    # (meta.get("codex") in fr13_bigdenom_swe_serve.sh, fr13_standard_metrics.py)
+    # still resolve. New reducers read meta.get("agent") or meta.get("codex").
     summary["codex"] = codex_meta
 
     _stop_dcgm_sampler(dcgm_proc)
@@ -1502,7 +1506,7 @@ def _process_one(
             retry_stdout = task_dir / f"codex_stdout_retry{suffix}.log"
             retry_dcgm = _spawn_dcgm_sampler(task_dir / f"dcgm_samples_retry{suffix}.jsonl")
             try:
-                codex_meta_retry = _run_codex_dispatch(
+                codex_meta_retry = _run_agent_dispatch(
                     workspace=workspace_path, endpoint=endpoint, model=model,
                     timeout_s=agent_wall_s, instance_id=instance_id,
                     base_commit=instance["base_commit"],
@@ -1643,8 +1647,9 @@ def _aggregate(per_task_root: Path, summary_path: Path, predictions_path: Path,
             repo_pass_counter[repo] += 1
         if (meta.get("eval_report") or {}).get("eval_wall_clock_seconds") is not None:
             eval_wall.append(float(meta["eval_report"]["eval_wall_clock_seconds"]))
-        if (meta.get("codex") or {}).get("elapsed_s") is not None:
-            codex_wall.append(float(meta["codex"]["elapsed_s"]))
+        _agent_block = meta.get("agent") or meta.get("codex") or {}
+        if _agent_block.get("elapsed_s") is not None:
+            codex_wall.append(float(_agent_block["elapsed_s"]))
         pred_file = task_dir / "eval" / "predictions.jsonl"
         if pred_file.is_file():
             predictions_lines.extend(
@@ -1707,26 +1712,28 @@ def main(argv: list[str] | None = None) -> int:
                         help="SSH host to offload the eval step to (native x86_64). When set, "
                              "the agent runs locally on arm64 but eval runs on the x86 box — "
                              "recovers old-python instances + keeps the dataset single-arch.")
-    parser.add_argument("--codex-host", default=None,
-                        help="SSH host to offload the codex-runner Docker to (native x86_64, "
-                             "e.g. alienware). When set, the codex agent loop runs on the x86 box "
+    parser.add_argument("--agent-host", "--codex-host", dest="agent_host", default=None,
+                        help="SSH host to offload the SWE agent Docker to (native x86_64, "
+                             "e.g. alienware). When set, the agent loop runs on the x86 box "
                              "(workspace rsynced there + back) so the GB10 runs ONLY vLLM and the "
-                             "unified-memory bandwidth is uncontended = clean deploy-speed numbers.")
-    parser.add_argument("--codex-endpoint", default=None,
-                        help="The codex docker on --codex-host hits this (alienware-local) proxy "
+                             "unified-memory bandwidth is uncontended = clean deploy-speed numbers. "
+                             "--codex-host is a deprecated alias kept so queued serve scripts parse.")
+    parser.add_argument("--agent-endpoint", "--codex-endpoint", dest="agent_endpoint", default=None,
+                        help="The agent docker on --agent-host hits this (alienware-local) proxy "
                              "endpoint (default http://127.0.0.1:8023/v1). Distinct from --endpoint "
-                             "(the on-GB10 legacy proxy) because 8022 is taken on alienware.")
+                             "(the on-GB10 legacy proxy) because 8022 is taken on alienware. "
+                             "--codex-endpoint is a deprecated alias.")
     args = parser.parse_args(argv)
 
-    global EVAL_HOST, CODEX_HOST, CODEX_ENDPOINT
+    global EVAL_HOST, AGENT_HOST, AGENT_ENDPOINT
     EVAL_HOST = args.eval_host
     if EVAL_HOST:
         print(f"[eval-offload] eval step -> {EVAL_HOST} (native x86_64)", flush=True)
-    CODEX_HOST = args.codex_host
-    CODEX_ENDPOINT = args.codex_endpoint or (
-        "http://127.0.0.1:8023/v1" if CODEX_HOST else None)
-    if CODEX_HOST:
-        print(f"[codex-offload] codex docker -> {CODEX_HOST} (x86); endpoint={CODEX_ENDPOINT} "
+    AGENT_HOST = args.agent_host
+    AGENT_ENDPOINT = args.agent_endpoint or (
+        "http://127.0.0.1:8023/v1" if AGENT_HOST else None)
+    if AGENT_HOST:
+        print(f"[codex-offload] codex docker -> {AGENT_HOST} (x86); endpoint={AGENT_ENDPOINT} "
               f"(GB10 stays vLLM-only — uncontended deploy-speed)", flush=True)
 
     dataset_name, instance_ids = _load_subset(args.subset)

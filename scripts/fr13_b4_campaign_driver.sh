@@ -2,7 +2,7 @@
 # FR13 deployment campaign driver (batch-parameterized): run the depth-matched arms
 # SERIALLY (GPU is serialized) and reduce deploy-speed after each. native bars use the
 # native serve (SPEC_N); tree arms use the variant vehicle (KIND) + the device multidraft
-# committer. Each arm: fresh boot, B=$BSIZE co-residency, OFFLOAD_CODEX per arg, timer ON.
+# committer. Each arm: fresh boot, B=$BSIZE co-residency, OFFLOAD_AGENT per arg, timer ON.
 #
 # Env: BSIZE (vLLM max_num_seqs, default 4), CONC (codex concurrency, default 4),
 #      TAG (arm-name + sidecar + deploy-json suffix, default b4), RUNROOT, SUBSET, WALL.
@@ -26,7 +26,7 @@ mkdir -p "$RUNROOT" output/fr13_sfwd_sidecar
 run_native() {  # arm spec_n expect offload
   local arm=$1 spec_n=$2 expect=$3 offload=$4
   echo "===== NATIVE ARM $arm (E$spec_n) B=$BSIZE offload=$offload ====="
-  OFFLOAD_CODEX=$offload SPEC_N=$spec_n MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL \
+  OFFLOAD_AGENT=$offload SPEC_N=$spec_n MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL \
     FR13_SFWD_GPU_TIMER=1 \
     FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
     bash scripts/fr13_bigdenom_swe_serve.sh "$arm" native "$SUBSET" \
@@ -42,7 +42,7 @@ run_variant() {  # arm kind expect offload
   # FR13_DEVICE_MULTIDRAFT=1 -> the device-side temp>0 multidraft committer (the real
   # t0.6 speed lever; lossless-within-floor; user 2026-06-16 accepted). Engages on tree
   # arms at temp>0 only; no-op for the native bars.
-  OFFLOAD_CODEX=$offload MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL \
+  OFFLOAD_AGENT=$offload MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL \
     FR13_DEVICE_MULTIDRAFT=1 \
     FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
     FR13_SFWD_GPU_TIMER=1 \
