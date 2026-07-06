@@ -2145,3 +2145,10 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   cross-contaminated by agent-1's concurrent cache write/slot (the tree keys state by batch-row/req; native's
   naive_mtp path keys it correctly). Bind the exact cross-request seam.
 - CAVEAT: swap grew to 2.3GiB under CONC=1 cache-on (ES cache pressure); mem 13G avail. Watch the hygiene gate.
+
+## 109. chain5+cache CONC=1 FINAL = 4/4 (0 give-ups) — airtight: tree+cache is PERFECT single-agent
+- Full arm: chain5+cache CONC=1 = 4/4 RESOLVED (12907/14096/14309/14365 all R, 0 give-ups) vs CONC=4 = 0/4 all
+  give-ups. Even resolved 14365 (a near-miss at CONC=4 AND on native). => the tree+cache decode path is CORRECT
+  single-agent; the ENTIRE give-up problem is the CONCURRENT shared-cache restore. One concurrency bug, not a deep
+  tree defect. Fix it => tree+cache resolves @CONC=4 like native (the deliverable).
+- swap cleared to 0 after arm1 teardown (transient pressure). cat8+cache CONC=1 (arm2) running => confirms branch.
