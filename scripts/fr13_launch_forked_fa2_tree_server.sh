@@ -313,7 +313,19 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   # Correctness-directional (only ever substitutes a COMMITTED row for a provably-wrong one);
   # auto-no-op for native (leaf maps only published by the tree committer); cache-OFF byte-identical.
   : "${FR13_APC_CONV_LEAF_COMPLETE:=1}"
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP FR13_APC_EXACT_SEED FR13_APC_FIXED_BUFFER FR13_APC_BLOCK_REFOLD FR13_APC_REFOLD_TO_SNAPSHOT FR13_APC_CONV_LEAF_COMPLETE
+  # BAKED 2026-07-06 (user): the two tree+cache give-up CARRIER FIXES default ON. Together they
+  # fill the campaign's missing cell — tree+cache now resolves nudge-free like tree+no-cache
+  # (give-up class extinct 0/9 live runs; rp5 probe 24/24 route parity; i6 RESOLVED through a 103s
+  # offload wedge). Both default-OFF-byte-identical; cache-OFF / native unaffected.
+  #  - ZERO_MAMBA_ON_ALLOC (§48/E5): zero recycled GDN conv/ssm pool rows on fresh alloc (vLLM
+  #    zeroes only full-attn blocks) so request N can't read request N-1's residue on the cold path.
+  #    PATCH-TIME gated => MUST be =1 here or the zeroing injection is skipped entirely.
+  : "${FR13_APC_ZERO_MAMBA_ON_ALLOC:=1}"
+  #  - COPY_SRC_FIX (§52/§53): freshness-gate the tree->linear accept-bias so a stale batch-position
+  #    accepted-tree can't poison the chunk-boundary state-copy SOURCE (was propagating zeros to
+  #    every request after the first). Runtime-gated (default ON); decode-boundary byte-identical.
+  : "${FR13_APC_COPY_SRC_FIX:=1}"
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP FR13_APC_EXACT_SEED FR13_APC_FIXED_BUFFER FR13_APC_BLOCK_REFOLD FR13_APC_REFOLD_TO_SNAPSHOT FR13_APC_CONV_LEAF_COMPLETE FR13_APC_ZERO_MAMBA_ON_ALLOC FR13_APC_COPY_SRC_FIX
 else
   APC_FLAGS=""
 fi
