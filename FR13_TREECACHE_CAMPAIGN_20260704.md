@@ -1470,3 +1470,44 @@ parity (git diff inside /testbed) -> then matrix. Task #9.
 - DECISION: tier A is safe to delete now (reachability gate); tiers B/C surgically extract dead code from the
   just-baked EXACT_SEED restore + kernel body-mode = real regression risk vs low hygiene value (all default-OFF,
   git-preserved). Escalated to user.
+
+## 69. Cleanup deep-dive: the substantive dead code is RUNTIME COMMITTER-PATH code (not offline-verifiable);
+## route to the modularization refactor (#10). Safe part (§68) stands. + patcher modularization assessment
+- INVESTIGATION (built an offline gen-patched harness + an AST OFF-equivalence folder, research/fr13_workflows/
+  cleanup_{genpatch,offeq}.py): the folder PROVED all _FR13_REFOLD_ON refs use globals().get(...,False)/getattr
+  (...,False) => the global def is safely deletable (disjuncts harmlessly return False). BUT the folder also
+  showed the AST approach over-reaches (it folds ALL baked constant conditions e.g. REPLAY_ROUTE `if True:`,
+  not just target flags) so fold(HEAD) != the exact deletion target — the monolith's dozens of interleaved
+  baked flags defeat whole-file static folding.
+- KEY FINDING (architecture): _fr13_pathA_refold (927 lines, patcher 8372-9298) + its 2 call-sites (10727-10746,
+  11409-11428) are REAL runtime functions in the patcher SIDECAR (imported at inference time), living INSIDE
+  the tree committer _lumo_tree_commit_gdn — the critical path that just made everything work. They are NOT in
+  the injected vllm files, so the offline patched-file diff CANNOT verify their deletion; it needs a GPU
+  BOOT-GATE (rp5 + a hit live-run). That is disproportionate risk (nicking the baked committer) + GPU cost for
+  pure hygiene on a SOLVED+BAKED system.
+- DECISION: the safe cleanup (§68: rename + 2 zero-footprint flags, byte-identity proven) STANDS. The
+  substantive deletions (refold fn+globals+call-sites, PRE_SNAP AND/OR terms, kernel SCAN_ALIGN/RECOMPUTE) are
+  ROUTED to the modularization refactor (#10) — where the committer and each dead flag become separable modules,
+  deletable one-seam-at-a-time with the byte-identity + boot gates as part of that planned careful work. Doing
+  risky monolith surgery now, then re-touching it all in the refactor, is wasteful.
+
+## 70. PATCHER MODULARIZATION ASSESSMENT (task #10, user question) — YES, recommended; incremental + gated
+- WHY (the cleanup pain is the argument): fr10_phase4_patch_vllm_tree_gdn.py is 20,476 lines — a single module
+  that (a) defines runtime sidecar functions (committer, refold, ES restore) AND (b) builds injected-code
+  strings via text.replace anchors, with ~20 flags' logic INTERLEAVED line-by-line. Deleting one dead flag =
+  surgically extracting interleaved strings/branches from the baked EXACT_SEED region. Adding a fix = finding
+  the right anchor in 20k lines. This is the primary maintainability risk now that the science is done.
+- TARGET SHAPE: (1) a thin orchestrator (main() + apply-order + per-seam dependency decls); (2) one module per
+  SEAM/target-file (gdn_attn, gdn_linear, mamba_utils, committer, ES-restore, conv-fix, E5-zeroing, copy-src-fix,
+  refold, ...), each owning its anchors + injected strings + runtime sidecar fns; (3) FLAG = MODULE: a dead flag
+  becomes a deletable module, not interleaved lines. (4) a registry so apply-order + which-file-each-touches is
+  explicit.
+- HARD CONSTRAINT: boot-critical; the baked fixes depend on BYTE-EXACT injected output. Any refactor MUST prove
+  byte-identical patched vllm files (the cleanup_genpatch harness + sha-diff is the ready gate) AND pass the
+  runtime boot-gate (rp5 + live-run) per migrated seam.
+- MIGRATION (incremental, NOT big-bang): move ONE seam at a time out of the monolith into its module; after each,
+  gen-patched sha == pre-move sha (byte-identical output) => commit. Start with the LEAF seams (self-contained:
+  refold, slot-pin, decode-capture, E5, copy-src-fix) which are easy wins AND let the dead ones be dropped as
+  their module is retired. The interleaved ES/committer core moves last, most carefully.
+- SEQUENCING: DESIGN now (this §); IMPLEMENT after the #7 speed matrix (do not destabilize the just-baked solved
+  state before the headline speed+resolve numbers are captured). The dead-flag deletions ride the migration.
