@@ -1978,3 +1978,17 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   in my B=4 runs => a B=1<->B=4 difference in the fix's reach. Can't yet call it task-dependent vs regressed.
 - CLEAN FRESH TEST (queued after cachesep): tree+cache on astropy-13453 at B=1 (exact §66 config), current build.
   give-up extinct there => fix holds on its gate (fr9-8/B=4 is a broader regime); gives up => regressed since §66.
+
+## 96. BATCH-AXIS confound (user 2026-07-06: "could be B4 vs B1, account for it") — VALID, partially revises §88
+- All my tree conclusions are B=4; §66 give-up-extinct + 13453 resolve were B=1. So "the tree degrades" may be
+  "the tree degrades UNDER B=4 co-residency". HINT already in-hand (under-weighted): 12907 tree+cache RESOLVES at
+  B=1 (Cell C, 504B) but GIVES UP at B=4 — same task+config, only batch differs. And native is 4/4 AT B=4
+  (tolerates co-residency). => §88 "tree is the carrier" needs the qualifier "AT B=4" until tested at B=1.
+- This re-opens the B=4 axis I closed as a "phantom" in §84: §84 lumped 12907's B=4 give-up in with hard-task
+  give-ups, but 12907 is NOT hard (resolves at B=1) => its B=4 give-up IS a real B=4 effect on the TREE (native
+  unaffected). §84's phantom call was about the giveup4 subset; it does NOT exonerate a tree-specific B=4 effect.
+- CONTROL queued (fr13_b1_treecache_seq.sh, after cachesep): tree+cache B=1 + tree+nocache B=1 on split4.
+  tree+cache B=1 ~4/4 => the tree's carrier is B=4 CO-RESIDENCY (batch-variant numerics / diffuse-drift amplified
+  by co-resident batching), NOT the tree per se => fixable by making the tree B=4-batch-invariant. tree+cache B=1
+  <4/4 => the tree degrades regardless of batch (fundamental). Crosses the batch axis on the exact split4 tasks.
+- Full design now covers: spec-method (native/tree/chain5) x cache (exseed/off) x batch (B1/B4).
