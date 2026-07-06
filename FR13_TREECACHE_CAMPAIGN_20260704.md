@@ -2077,3 +2077,17 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
 - FIX SCOPE (revises "just fix the branches"): must fix BOTH (A) branch co-residency drift AND (B) the exact-seed
   restore's interaction with the tree decode path (GDN/conv restored-state handling). Keep branches + keep cache.
 - Relaunching the B=1 control (batch axis) to see if either carrier is B=4-co-residency-specific (recovers at B=1).
+
+## 104. GIVE-UP REGRESSION CHECK (user: "give-up sounds regression, check config + cleanup") — fix code byte-UNCHANGED
+- git diff e038cfef(§66 SOLVED bake)..HEAD: the give-up-FIX CODE is BYTE-UNCHANGED — patcher
+  fr10_phase4_patch_vllm_tree_gdn.py (ZERO_MAMBA/COPY_SRC/EXACT_SEED-restore/conv-restore) has ZERO diff. The
+  cleanup (25faf493) only removed FR13_APC_FIXED_BUFFER + FR13_APC_REQUIRE_SHADOW (DEAD, default 0, zero remaining
+  refs) + codex->qwen_code rename. Give-up flags = §66 defaults (verified engaged, ZERO_MAMBA events=901, §95).
+  => NO give-up-fix code/flag regression.
+- Launcher changes: additive batch-mem (MAX_NUM_SEQS>=4 => 112g/0.62; inert at B=1) + the dead-flag removal.
+- THE ONE substantive change vs §66: AGENT ENV. §66 "give-up extinct 0/9" was measured in the OLD `worktree` env;
+  ALL my give-up runs are in `instance_image` (§9 default). Real then-vs-now diff. BUT native RESOLVES in
+  instance_image (4/4) => not a blanket env break; at most an env x tree+cache interaction.
+- TWO clean tests queued (after the B=1 control): (1) 13453 tree+cache @B=1 current build (exact §66 gate) — extinct
+  there => fix holds on its gate, fr9-8 give-ups task-dependent NOT regression; gives up => regressed. (2) tree+cache
+  worktree-env vs instance_image on same tasks — isolates whether the env change is the give-up vector.
