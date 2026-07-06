@@ -1786,3 +1786,21 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
      but tasks now run to completion => representative decode + real resolve rate).
 - The serve_variant BATCH_INVARIANT="${BATCH_INVARIANT:-0}" edit is harmless (default-preserving) — left in place.
   Cell C wound down (its last task 13977 is now moot).
+
+## 85. char-8 fix STATE audited + the discriminating measurement LAUNCHED
+- The char-8 transcript-repair is IMPLEMENTED + DEPLOYED (the doc's "never implemented" was STALE): inference_proxy
+  `_repair_truncated_json` + `_normalize_function_call_arguments`, gated `LUMO_PROXY_REPAIR_TOOLCALL_JSON` (default
+  ON). VERIFIED live on the offload proxy at alienware ~/lumo_proxy_offload/repo/src/... (repair refs present, synced
+  2026-07-05). So it was ACTIVE in every recent run. It closes the terminal-400 loop (repairs the stored malformed
+  args so vLLM can re-render history) but does NOT PREVENT malformed generation — that needs guided_json (unbuilt).
+- So either transcript-repair alone is insufficient, or there is a decode-side amplifier vs fr9 (fr9 = native MTP-5,
+  cache OFF; current = tree cat8 + APC cache + forked-fa2). Per FR13_CHAR8_REGRESSION_FINDINGS §3 the amplifier is
+  decode-side. UNKNOWN which — needs the discriminating measurement.
+- LAUNCHED (bafc8acof): the CURRENT tree+cache pipeline on the 8 fr9-RESOLVED tasks
+  {12907,13453,14096,14309,14365,14508,14539,14995} (subset_fr9_resolved8), B=4, transcript-repair ON (default).
+  This is the FIRST measurement on the DISCRIMINATING subset (fr9 got 8/8 here). READ:
+  * recovers toward 8/8 => transcript-repair closed the regression => proceed to the speed matrix.
+  * stuck ~1-2/8 => insufficient => (a) native-MTP-5 cache-OFF control on the SAME 8 tasks to localize the amplifier
+    (native recovers + tree stuck => tree/cache is the amplifier), (b) implement guided_json to PREVENT malformed gen.
+- Health monitor b30yiff6p (clean: mem-wedge + exited-container, no pgrep self-match — the prior brwky0rod fired a
+  FALSE SERVER_DOWN alarm by matching its own cmdline). Waiter bmdjgyz0x for the first 4 results.
