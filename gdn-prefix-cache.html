@@ -1298,7 +1298,8 @@
         <div><dfn>SNAP_FIX</dfn><span>the write-side fix that snapshots the committed accepted-leaf row instead of a stale block-aligned row.</span></div>
         <div><dfn>ZERO_MAMBA</dfn><span>the read-side fix: zero freshly-(re)allocated recurrent-state pool rows, which stock vLLM leaves uninitialized.</span></div>
         <div><dfn>COPY_SRC_FIX</dfn><span>freshness gate that stops a stale accepted-tree stamp from redirecting a cold prefill's state-carry copy to an unwritten row.</span></div>
-        <div><dfn>naive_mtp / tree_mtp</dfn><span>the two decode paths: native linear MTP on FLASH_ATTN, versus the forked tree verifier on TREE_ATTN.</span></div>
+        <div><dfn>native (naive_mtp)</dfn><span>stock vLLM's built-in linear MTP decode on unforked FLASH_ATTN &mdash; no Lumo kernels.</span></div>
+        <div><dfn>tree (tree_mtp)</dfn><span>the full Lumo tree-verify stack of <a href="gdn-tree-scan.html">Vol.&nbsp;III</a>: forked FA2 tree-bias attention, the Triton GDN tree scan/replay kernel, tree-shape packing, and the device multidraft committer, on TREE_ATTN.</span></div>
         <div><dfn>greedy-LCP</dfn><span>the tree committer's acceptance rule (longest prefix matching the verify argmax); it is not exact rejection sampling.</span></div>
         <div><dfn>CONC=4 / B=4</dfn><span>four concurrent agents sharing one server and its prefix cache; the deployment regime for the shared-cache feature.</span></div>
         <div><dfn>give-up vs ramble</dfn><span>the two tree failure shapes: an empty-patch give-up after a couple of turns, versus a long garbled trajectory.</span></div>
@@ -2333,6 +2334,17 @@
         <p><strong>Two failure shapes:</strong> a <em>give-up</em> is an empty patch after a couple of turns; a <em>ramble</em> is a long garbled trajectory. They have different carriers.</p>
       </aside>
       <p>Everything above is single-stream. The feature the cache exists to enable is concurrent: several coding agents, each replaying the same lengthy system prompt, sharing one server's prefix cache for the compounding time-to-first-token win. Under that regime the single-stream result does not survive on the tree path &mdash; and pinning down why is the current frontier. The controlled grid below runs four concurrent agents on four SWE tasks, crossing the decode path against the cache, in the official per-instance evaluation image.</p>
+
+      <div class="source-exhibit" aria-label="Native versus the tree stack">
+        <div class="source-head">
+          <strong>Native vs the tree stack</strong>
+          <span>The two decode paths this grid crosses &mdash; the full definitions live in <a href="gdn-tree-scan.html">Vol.&nbsp;III</a></span>
+        </div>
+        <div class="grid">
+          <div class="box info"><span class="tag">Native (naive_mtp)</span><p>Stock vLLM's built-in linear multi-token-prediction decode on unforked FLASH_ATTN. No Lumo kernels &mdash; it is the reference the tree stack is measured against, and the path the shared cache already works on.</p></div>
+          <div class="box good"><span class="tag">Tree (tree_mtp)</span><p>The whole Lumo tree-verify stack from <a href="gdn-tree-scan.html">Vol.&nbsp;III</a>: the forked FlashAttention-2 tree-bias attention, the Triton GDN tree scan/replay kernel, vLLM tree-shape packing, and the device multidraft committer, running on TREE_ATTN. Its superset acceptance is the decode speedup; it is also where both open cache carriers live.</p></div>
+        </div>
+      </div>
 
       <div class="table-wrap">
         <table>
