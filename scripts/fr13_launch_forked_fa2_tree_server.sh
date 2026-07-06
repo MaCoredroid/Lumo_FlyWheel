@@ -26,6 +26,16 @@ PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 GPU_OOM_GUARD=${GPU_OOM_GUARD:-1}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
 MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
+# BATCH-AWARE MEMORY (user 2026-07-06): B>=4 co-residency needs more room for KV
+# (4 concurrent contexts) + the host-side EXACT_SEED prefix cache, which grows with
+# concurrency. B=1-tuned defaults (105g cap, 0.78 util) wedged the container at B=4
+# (§76-77: exited container held ~100G unified mem). Agents are OFFLOADED to alienware
+# (GB10 = vLLM-only), so the container can safely take more of the 117G box while
+# still leaving OS headroom. Only auto-bumps when the caller hasn't set these.
+if (( MAX_NUM_SEQS >= 4 )); then
+  DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-112g}   # +7g host room for the B>=4 KV+ES-cache footprint
+  GPU_UTIL=${GPU_UTIL:-0.80}               # modest KV bump; ES-cache host room prioritized (KV was 20%% used)
+fi
 ATTENTION_BACKEND=${ATTENTION_BACKEND:-TREE_ATTN}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
 FR10_METRICS=${FR10_METRICS:-0}

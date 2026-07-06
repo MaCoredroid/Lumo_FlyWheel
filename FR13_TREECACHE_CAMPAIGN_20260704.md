@@ -1604,3 +1604,18 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   (2) Prefix cache 79% already saves most turn-prefill TTFT (Product 2 working). (3) Decode HBM-bound; accept
   3.09 tok/draft is the working decode lever (Product 1). Net: the biggest live speed lever is batch-fill
   (orchestration), not kernel — but it trades against B=4 correctness until the co-residency carrier is fixed.
+
+## 77. B=4 MEMORY WEDGE root-caused + fixed (user: "b4 needs more memory for kv and cache"); config NOT
+## contaminated by cleanup; matrix relaunching with batch-aware memory
+- ROOT CAUSE: the matrix ran GPU_UTIL=0.78 (the B=1 leak-fence value) + max_num_seqs=4. At B=4 the container's
+  KV reservation (63G) + the growing HOST-side ES prefix cache exceeded the 105g DOCKER_MEM_CAP => container
+  cgroup-OOM => Exited(0) mid-arm => the exited-but-unremoved container held ~101G unified mem (the wedge) =>
+  in-flight agents hammered a dead server => 0B tasks. NOT model degradation (12907 RESOLVED 504B in a stable
+  window); NOT a cleanup config contamination (git diff 6554ffc6..HEAD on all serve/launcher configs = only the
+  bake lines + the 1 deleted flag, no GPU_UTIL/guard/mem change).
+- FIX (user directive, launcher batch-aware): MAX_NUM_SEQS>=4 => DOCKER_MEM_CAP 105g->112g (+7g host room for
+  the B>=4 KV+ES-cache footprint; safe because agents are OFFLOADED to alienware => GB10 is vLLM-only, 5g OS
+  headroom) + GPU_UTIL 0.78->0.80 (modest KV bump; KV was only 20% used so ES-cache host room is the real
+  need). Wedge cleared (used 101G->4G) by removing the exited container (teardown trap does docker rm -f; my
+  pkill -9 had bypassed it).
+- RELAUNCHING with GPU_UTIL=0.80 DOCKER_MEM_CAP=112g forced through serve_variant's 0.78 default.
