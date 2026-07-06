@@ -13653,6 +13653,28 @@ def _fr10_tree_accept_token_bias(
                 _fr13_pk_sid = str(req_id)
                 if _fr13_pk_sid in _fr13_pk_spec:
                     _fr13_pk_j = _fr13_pk_spec.index(_fr13_pk_sid)
+                # DIAGNOSTIC: log the first reads UNCONDITIONALLY to distinguish
+                # (a) map empty / sid-miss => j=None => probe/fix silent no-op, from
+                # (b) j==batch_index => misindex genuinely absent (mechanism refuted),
+                # from (c) j!=batch_index => misindex present (marker should fire).
+                if os.environ.get("FR13_TREE_POSREAD_PROBE", "0") == "1":
+                    _fr13_pk_seen = getattr(
+                        _fr13_pk_gdn, "_FR13_POSREAD_SEEN_N", 0
+                    ) + 1
+                    _fr13_pk_gdn._FR13_POSREAD_SEEN_N = _fr13_pk_seen
+                    if _fr13_pk_seen <= 12:
+                        print(
+                            "FR13_POSREAD_SEEN n=%d maplen=%d sid_in=%s j=%s bi=%d phase=%s"
+                            % (
+                                _fr13_pk_seen,
+                                len(_fr13_pk_spec),
+                                (_fr13_pk_sid in _fr13_pk_spec),
+                                str(_fr13_pk_j),
+                                int(batch_index),
+                                str(phase),
+                            ),
+                            flush=True,
+                        )
                 if (
                     os.environ.get("FR13_TREE_POSREAD_PROBE", "0") == "1"
                     and _fr13_pk_j is not None

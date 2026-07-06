@@ -2400,3 +2400,26 @@ Default-off => byte-identical (no-op at CONC=1 since spec-idx==full-idx there).
 branch redirect (FR13_APC_CONV_SNAP_FIX=1 + FR13_APC_CONV_LEAF_COMPLETE=1), symmetric to the already-ON
 SSM twin (FR13_APC_SNAP_FIX). Testable by flag-flip on 14309 branch+cache (should flip give-up->RESOLVE).
 Independent of B (different file/trigger/fix).
+
+## §121 CARRIER-B: the misindex path is DEAD (SEEN=0) — real carrier is in REPLAY_ROUTE (2026-07-06)
+
+The corrected fix (FR13_TREE_POSREAD_REQKEY) + misindex probe + an unconditional SEEN trace ALL show
+the _fr10_tree_accept_token_bias POSTPROCESS branch NEVER RUNS: FR13_POSREAD_SEEN=0, MISINDEX=0 over a
+full 4/4 spine+cache CONC=4 run (server ready, other FR13 markers alive => patcher deploys fine, path
+just dead). ROOT: FR13_REPLAY_ROUTE is baked ON (fr10_phase4...:4615 default "1"); its comments state
+"the ssm half of the [next-step] remap is DEAD" (2690/2922/10411). So the workflow (wh6qqzexx) localized
+carrier B to a LEGACY path REPLAY_ROUTE bypasses. THREE carrier-B hypotheses now failed, all in the WRONG
+(dead/legacy) code region: (1) clear-on-free positional globals [refuted], (2) accept_token_bias
+spec-row/full-batch misindex [path DEAD, SEEN=0]. Pattern: code-reads latch onto dead legacy paths
+alongside the live REPLAY_ROUTE. LESSON: instrument the LIVE path empirically (the SEEN diagnostic did this
+decisively).
+
+**Real carrier B = the REPLAY_ROUTE restore** (_tree_gdn_replay_kernel + _fr13_replay_ssm_state, 5289).
+GOOD: an EXISTING instrument covers it — FR13_REPLAY_BOUNDARY_LOG (Tap A producer 8266 -> Tap C stale-read
+verdict 8270): compares consumer src_row vs _last_written[req] (already spec-row-keyed, 8305-8309). Enable
+at CONC=4 vs CONC=1: Tap C stale_read>0 @CONC=4 localizes carrier B in the replay restore; ==0 refutes.
+Note: boundary-log is EAGER-ONLY (1412) => the diagnostic run may need enforce_eager.
+
+FR13_TREE_POSREAD_REQKEY kept default-off (moot: dead path) + FR13_POSREAD_SEEN diagnostic committed for
+future path-liveness checks. Spine+cache CONC=4 REQKEY=1 stayed ~0-1/4 (noise), confirming the fix is
+inert.
