@@ -1342,3 +1342,24 @@ parity (git diff inside /testbed) -> then matrix. Task #9.
   chat-path capture lands+deploys, subsequent live runs record upstream bytes => the next garble episode is
   fully attributable (engine-emitted garbage vs transport artifact) and the exact garbling request is
   replayable; (3) exact-context replay of a captured garbling turn = the precision instrument if needed.
+
+## 63. First instrumented live run: the WEDGE IS MEASURED (transient 38-91s self-recovering emit pauses,
+## bridged by the heartbeat) — but my trace-growth watchdog FALSE-KILLED the healthy run (signal wrong for
+## qwen's flush-at-exit trace); watchdog disabled pending metrics-based redesign
+
+- tcfix_i5 (instrumented, §59 stack ON): 25 requests captured with per-chunk timing. NORMAL cadence ~0.5s
+  inter-chunk. Request #6: 46 chunks -> 91.3s MID-STREAM SILENCE -> resumed -> completed (upstream_done);
+  6 heartbeats bridged it. Request #23: same at 38.2s. => the §59 stall class = TRANSIENT SELF-RECOVERING
+  ENGINE-SIDE EMIT PAUSES, request-correlated, with a heavy tail (s3's fatal was the tail crossing the old
+  120s client timer). Heartbeat + idle-raise WORK: pre-fix, these gaps would have burned turn(s).
+- FALSE KILL (mine): runner watchdog keyed on trace-file growth — but qwen-code's trace FLUSHES AT EXIT ONLY
+  (0 bytes all run, re-confirmed) => "no growth for 600s" fired on a HEALTHY 25-request run at 605.9s and
+  docker-killed the client mid-request (#24 broken_pipe, empty trace, turns=0). J2's no-false-kill test used
+  a growing fake trace = class-8 offline!=live. Artifacts preserved: output/fr13_live_gate/tcfix_i5_watchdogkill.
+- ACTIONS: batch relaunched with LUMO_SWE_STALL_KILL_S=0 (watchdog OFF; heartbeat+240s idle remain the stall
+  protection — they demonstrably bridge the wedge). WATCHDOG REDESIGN (follow-up, before re-enable): key on
+  GB10 /metrics vllm generation_tokens_total growth (moves every decode step of any live request; local poll,
+  no ssh; detects both pre-first-byte and permanent-wedge modes without trusting client write patterns).
+- WEDGE HUNT NEXT: the capture's chunk-timestamp arrays localize the pause onset within the request; correlate
+  wedged requests (#6/#23 class) with engine-side events (boundary snapshots? scheduler states?) once 2-3 more
+  instrumented specimens land.
