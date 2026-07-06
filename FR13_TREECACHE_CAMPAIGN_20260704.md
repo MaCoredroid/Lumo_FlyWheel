@@ -1921,3 +1921,16 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   * chain5 ≈ 1/4 => even the forked spine degrades => deeper (kernel realization itself, not just branches).
 - ANSWER FORMING for the user: fundamental DIFFUSE distribution shift (not a single bug), FIXABLE by reshaping to
   native's drift floor — but likely at the cost of the tree's branch-speedup. chain5 result decides it.
+## 92. CACHE-SEPARATION (user 2026-07-06: "separate the cause of cache; is native+cache still good?")
+- Gap the user caught: my 2x2 was incomplete. HAD: native+nc=4/4, tree+nc=1/4, tree+cache=0/4. The tree+nc=1/4
+  DOES localize a carrier to the TREE (degrades cache-OFF, independent of cache). But native+cache was NEVER
+  run => can't say if the cache is ALSO an independent carrier (degrades native too) or only harms the tree.
+- LAUNCHED (bd3e6ocx3) the missing cell + the shape control, 2-arm on subset_split4:
+  arm1 nativeapc_cs = native MTP-5 + cache (nativemtp5apc: NATIVE_ENABLE_APC=1, block_size=1024, ssm float32);
+  arm2 chain5nc_cs  = forked pure-spine + cache-off.
+  DECODE:
+  * native+cache ~4/4 => the cache is FINE on native => cache harm is TREE-SPECIFIC (tree+cache interaction);
+    combined with tree+nc=1/4, the TREE is the carrier and the cache only compounds it ON the tree.
+  * native+cache <4/4 => the cache is an INDEPENDENT carrier (degrades native too) => must fix cache AND tree.
+  arm2 chain5(spine): ~4/4 => tree BRANCHES are the carrier (spine native-parity); ~1/4 => forked kernel degrades.
+- Full 2x2 + shape after this run resolves BOTH the user's cache-separation and the tree-shape localization.
