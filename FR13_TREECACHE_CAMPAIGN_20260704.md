@@ -1897,3 +1897,27 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   moot for a shippable product until the tree's agentic degradation is understood/fixed. The §66 "tree+cache
   SOLVED (give-up extinct 0/9)" gate must have been on an easier task-set (these fr9-tasks discriminate). This is
   a checkpoint for the user: fix the tree's agentic distribution shift, or reconsider the tree product vs native.
+
+## 91. MECHANISM (user chose "dig into the tree mechanism") — it's the KNOWN diffuse GDN drift, NOT a new bug;
+## chain5 spine test launched to bridge token-drift => agentic-degradation
+- The tree's token-level divergence was ALREADY dual-verified (2026-06-14, [[reference_diffuse_gdn_accumulation_explained]]):
+  DIFFUSE GDN accumulation — per-layer ~1-bf16-ULP finite-precision realization diffs (fp non-assoc / reduction
+  order / cast timing / Triton codegen) at EVERY GDN layer, correlated, compounding over ~48 layers (amplified by
+  gate 1/rms + deep full-attn) until the argmax flips. "Death by a thousand cuts, NO single broken op" => NOT a
+  single fixable build bug. The carrier = the GDN recurrent STATE-FEED across the CO-RESIDENT accepted chain at
+  num_accepted>1 (the tree's BRANCHES/depth) = chunk-vs-recurrent realization diff, born at L0 GDN.
+- FIXABLE (not physics): native runs the SAME model+fp8+64 layers and drifts 7x LESS (3 flips vs tree's 22) =
+  existence proof. And chain5 (pure spine, NO branches) drifts 2 ≤ native 3. So the forked kernel's SPINE is
+  native-parity; the BRANCHES add the drift. Primary lever = TREE-RESHAPE (shallower + fewer co-resident branches).
+- THE NEW CONNECTION (this session): the campaign ACCEPTED the tree at "13% within-floor" (per-depth argmax +
+  bag-TV≤0.0593 + accept≥native). This session proves that acceptance was TOO LOOSE for agentic use — a 13% per-
+  token flip COMPOUNDS over a multi-turn trajectory into rambling + wrong patches (native 4/4 vs tree 0-1/4). The
+  real bar is native's DRIFT LEVEL (≈3 flips), not 13%/22-flips. [[reference_scalar_metric_per_token_blindspot]].
+- BRIDGE EXPERIMENT (bhqn0e79s): chain5 = forked kernel, PURE 5-SPINE [(0,)..(0,0,0,0,0)], cache-OFF (verified
+  enable_prefix_caching=False), on subset_split4. 3-way cache-off: native 4/4 vs cat8(branches) 1/4 vs chain5(spine)?
+  * chain5 ≈ 4/4 => CONFIRMED: the branches/co-residency drift is the agentic carrier; the spine is native-parity =>
+    the FIX is a native-drift-level tree shape (fewer/shallower branches), trading branch speculative-depth (speed)
+    for agentic correctness. The tree's SPEED advantage (branches = superset accept) is coupled to its drift.
+  * chain5 ≈ 1/4 => even the forked spine degrades => deeper (kernel realization itself, not just branches).
+- ANSWER FORMING for the user: fundamental DIFFUSE distribution shift (not a single bug), FIXABLE by reshaping to
+  native's drift floor — but likely at the cost of the tree's branch-speedup. chain5 result decides it.
