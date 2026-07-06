@@ -2036,3 +2036,13 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   floor while KEEPING the branches (levers: tree-reshape/root-sibling, spine M-invariance, targeted fp32 at the
   drift-critical points; [[reference_diffuse_gdn_accumulation_explained]] [[project_fr13_amplification_levers_queued]]).
   The deliverable is the FIXED branch tree (fast AND agentically-correct), NOT the spine.
+
+## 101. DECISIVE B=4 SHAPE result — the BRANCHES are the carrier (spine 3/4 recovers, branches 0-1/4)
+- Full split4 @B=4: native+nc 4/4 | native+EXACT_SEED 3/4 (no give-ups) | chain5(spine5) 3/4 (12907 R 14t,
+  14096 R 29t, 14309 R 8t, 14365 tests_failed 8t) | cat8+nc 1/4 (ramble) | cat8+cache 0/4 (give-ups).
+- chain5(pure spine5) RECOVERS to native-level (3/4, no give-ups, no ramble — concise 8-14 turns like native;
+  14365 the lone miss is a hard task native+EXACT_SEED also missed). cat8(branches) collapses (0-1/4, ramble
+  + give-ups). SAME B=4 + same forked kernel; ONLY the shape differs => the tree BRANCHES (co-resident accepted
+  chain => diffuse GDN drift) are the AGENTIC CARRIER, fresh-confirmed. The forked kernel + spine are clean.
+- Launched the B=1 control (BSIZE=1 CONC=4, spine5+cache first) to cross the batch axis: does cat8 recover at B=1
+  (=> branch degradation is B=4-co-residency, reshape/BI-fixable) or degrade at B=1 too (=> fundamental)?
