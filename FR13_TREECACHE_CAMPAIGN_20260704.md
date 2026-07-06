@@ -1963,3 +1963,18 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   * native+exseed <4/4 => the EXACT_SEED cache is an INDEPENDENT carrier (degrades native too).
 - FRESH failure-mode detail (fr13_failmode.py) is now standard per arm: char-8 ABSENT all arms (0 firings); tree+cache
   fails via GIVE-UP (empty-final, 3-6 turns); tree+no-cache via GARBLE/RAMBLE (5279 tok, >64KB traces); native clean.
+
+## 95. SELF-CHECK (user: "I thought tree+cache give-up is largely fixed?") — reconciled, NOT a contradiction
+- VERIFIED FRESH: the §66 give-up fix IS ENGAGED in my tree+cache runs (docker_full.log: FR13_APC_ZERO_MAMBA
+  record engaged events=901, zero engaged calls=301; launcher defaults both flags =1, lines 340/344). So the 4/5
+  give-ups are NOT a disengaged-config artifact.
+- RECONCILIATION with §66 "give-up extinct 0/9": reading the actual §66 text — (1) "0/9" was mostly astropy-13453
+  at B=1 (narrow gate); (2) §66 ITSELF noted cat8_cache STILL had a "QUALITY tail" ("hallucinated C++ class ->
+  runaway to 2400 cap" = the ramble/garble phenotype) and PARKED it PENDING the 16-task speed matrix. So §66 fixed
+  the EARLY-QUIT give-up on a narrow B=1 gate but DEFERRED the ramble tail to the matrix. My fr9-resolved-8 work IS
+  that parked matrix => I'm COMPLETING §66's measurement, not contradicting it; it shows tree+cache degrades broadly
+  (early give-ups AND rambles).
+- OPEN: my give-ups are fr9-8/B=4; §66 extinct was 13453/B=1. 13453 itself resolved at B=1 (§66) but long-looped
+  in my B=4 runs => a B=1<->B=4 difference in the fix's reach. Can't yet call it task-dependent vs regressed.
+- CLEAN FRESH TEST (queued after cachesep): tree+cache on astropy-13453 at B=1 (exact §66 config), current build.
+  give-up extinct there => fix holds on its gate (fr9-8/B=4 is a broader regime); gives up => regressed since §66.
