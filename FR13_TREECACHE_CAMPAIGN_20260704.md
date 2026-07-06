@@ -1391,3 +1391,26 @@ parity (git diff inside /testbed) -> then matrix. Task #9.
 - NEXT: catch an ATTRIBUTABLE garble = replay a known s2/s4 garbling request (captured chatreq_*.json) against
   a populated cache (deterministic, now fully instrumented) OR more seeds until a long-turn draw. Then the
   bake decision (E5+COPY_SRC_FIX now backed by resolves through real load + wedge survival).
+
+## 65. GARBLE ATTRIBUTION (exact-request replay, fr13_garble_replay.sh): REPRODUCED on the real deep-conversation
+## input at LOW rate; weakly cache-associated (1/8 vs 0/8, NOT significant); HRS off delete-list, matrix settles it
+- Replayed the CAPTURED s2 garble-producing request (msgs=28, whose live response was the 7415-tok garble),
+  N=8 cold per arm, seed-varied, max_tokens=2400, hand-audited (my inline + committed scanner both had a
+  repetition FALSE-POSITIVE on indented code — FIXED, scanner re-verified). TRUE genuine-garble counts:
+  | arm | genuine garble | phenotype |
+  |---|---|---|
+  | cat8_cache (E5+COPY_SRC_FIX ON) | 1/8 (s6) | on-task start -> hallucinated C++ class (147 cpp markers vs 16 py) -> runaway to 2400 cap. SAME phenotype as live s2/s4. |
+  | cat8_nocache (CONFIG_ONLY) | 0/8 | all on-task, clean tool-call terminals |
+- FINDINGS (honest): (1) garble is REAL + REPRODUCIBLE on the real 28-msg agentic conversation input — FIRST
+  controlled reproduction (the synthetic forced-boundary probe §62 got 0/18 => the TRIGGER is the deep
+  tool-heavy multi-turn CONTEXT, not synthetic length or the boundary alone). (2) Directionally cache-
+  associated (1/8 cache vs 0/8 nocache; ALL campaign-historical garble on cache configs) BUT 1 event at n=8 =
+  Fisher p~1.0, NOT significant. (3) It is a QUALITY tail (patch quality), NOT a give-up; behavior charter
+  unaffected. (4) The repetition detector over-fired on indented code (2/3 replay flags were on-task Python);
+  scanner FIXED (whitespace-collapse + non-structural unit; committed).
+- DISPOSITION: HRS comes OFF the delete list -> PARKED PENDING the 16-task speed matrix, which measures
+  garble-rate at n=16/arm (cat8+cache vs native+cache, both deep agentic contexts) = the conclusive cache-vs-
+  input attribution instrument. If the matrix shows a cache-vs-native garble-rate GAP, HRS (per-row hybrid,
+  §60) is the ready lever (speed-first, SGLang-referenced). If no gap, garble is an input/sampling tail
+  common to the model. PROCEEDING to BAKE E5+COPY_SRC_FIX now (charter met; garble does not block — it is a
+  low-rate quality tail, not a give-up).
