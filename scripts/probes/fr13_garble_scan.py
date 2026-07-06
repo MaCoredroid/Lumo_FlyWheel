@@ -322,7 +322,15 @@ def scan_trace(path: str, args) -> TraceReport:
     over = [t.turn for t in per_turn if t.crosses_boundary]
     # distinct garbled *generation* events (content detectors, excluding the structural empty-final)
     distinct_events = sorted({ep.event for ep in eps if ep.detector != "empty_final_answer"})
-    verdict = "GARBLE" if eps else "CLEAN"
+    # VERDICT (2026-07-06 fix): empty_final_answer ALONE is NOT garble — it is a
+    # benign terminal state (model ends on a tool call with no closing message;
+    # result subtype=success, is_error=False). A real GARBLE verdict requires a
+    # CONTENT-degradation detector (oversized arg/block, repetition, script-mix,
+    # off-task document). tcfix_i5 (relaunch): 21 clean turns, 0 boundary
+    # crossings, only an empty-final => was mislabeled GARBLE. Empty-final is kept
+    # as a reported detector hit (BENIGN_TERMINAL) but does not set the verdict.
+    _content_eps = [ep for ep in eps if ep.detector != "empty_final_answer"]
+    verdict = "GARBLE" if _content_eps else "CLEAN"
     return TraceReport(
         trace=path,
         verdict=verdict,
