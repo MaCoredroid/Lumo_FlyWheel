@@ -1814,6 +1814,19 @@ def main(argv: list[str] | None = None) -> int:
             res = {"instance_id": iid, "status": "orchestrator_crash",
                    "error": f"{type(exc).__name__}: {exc}",
                    "traceback": traceback.format_exc()}
+            # PERSIST the crash (2026-07-06): previously the traceback lived only
+            # in this in-memory dict — an orchestrator_crash left NOTHING on disk
+            # to diagnose (cost a wasted GPU boot to rediscover via reproduction).
+            # Print to the run log AND write a per-task crash file.
+            print(f"[{_iso_now()}] !! {iid} orchestrator_crash: {res['error']}\n"
+                  f"{res['traceback']}", flush=True)
+            try:
+                crash_dir = per_task_root / iid  # same layout as _process_one task_dir
+                crash_dir.mkdir(parents=True, exist_ok=True)
+                (crash_dir / "orchestrator_crash.json").write_text(
+                    json.dumps(res, indent=1), encoding="utf-8")
+            except Exception:
+                pass
         verdict = (res.get("eval_report") or {}).get("verdict", res.get("status", "?"))
         print(f"[{_iso_now()}] <- {iid} verdict={verdict} elapsed_total={time.time()-t0:.1f}s",
               flush=True)
