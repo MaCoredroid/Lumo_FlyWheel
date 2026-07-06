@@ -1619,3 +1619,15 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   need). Wedge cleared (used 101G->4G) by removing the exited container (teardown trap does docker rm -f; my
   pkill -9 had bypassed it).
 - RELAUNCHING with GPU_UTIL=0.80 DOCKER_MEM_CAP=112g forced through serve_variant's 0.78 default.
+
+## 78. B=4 memory REVERSED (user insight): SHRINK the over-provisioned KV pool to free the host ES cache —
+## this is a GDN-hybrid, mamba state is the memory story
+- MEASURED (live, 0.80 config): KV pool usage 0-6% (~3.5G peak) of the 58G reservation = ~16x over-provisioned;
+  vLLM reported 5.54x concurrency at 131k => ~26x at the agents' real ~28k contexts (B=4 needs 4). Meanwhile
+  host hit 106G used / 10G avail => the ES cache was ballooning toward another wedge (8 concurrent agents seen,
+  not 4 — extra trajectories inflating ES).
+- USER INSIGHT (correct): this is a GDN-HYBRID (48 mamba / 16 attn) => the device block-pool is mostly mamba
+  state and the HOST-side EXACT_SEED mamba-checkpoint cache is the thing that grows/wedges. On UNIFIED memory,
+  reserving KV STEALS from the ES cache. My 0.78->0.80 bump was the wrong direction. FIX: B>=4 GPU_UTIL 0.80
+  ->0.50 => KV pool ~30G (8x the 3.5G peak, ample) + frees ~34G for the ES cache (no wedge even at ES ~4x B=1's
+  9G). Keep DOCKER_MEM_CAP=112g. Killed the wedging run pre-emptively; relaunching at 0.50.

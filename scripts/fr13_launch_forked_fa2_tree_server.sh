@@ -34,7 +34,15 @@ MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
 # still leaving OS headroom. Only auto-bumps when the caller hasn't set these.
 if (( MAX_NUM_SEQS >= 4 )); then
   DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-112g}   # +7g host room for the B>=4 KV+ES-cache footprint
-  GPU_UTIL=${GPU_UTIL:-0.80}               # modest KV bump; ES-cache host room prioritized (KV was 20%% used)
+  # SHRINK the device KV/mamba pool (user 2026-07-06). This is a GDN-HYBRID (48 mamba
+  # layers vs 16 attention): the device block-pool is mostly mamba state, and the
+  # HOST-side EXACT_SEED mamba-checkpoint cache is what wedges under B=4 concurrency.
+  # Measured live: KV pool usage 0-6% (~3.5G peak) of a 58G reservation at 0.80 =>
+  # ~16x over-provisioned. On UNIFIED memory every GB reserved for KV is a GB denied
+  # to the host ES cache, so shrinking KV directly frees room for ES. 0.50 keeps a
+  # ~30G KV pool (~8x the observed peak, ample for 4 long concurrent turns) and frees
+  # ~34G for the ES cache + system => no wedge even if ES scales ~4x B=1's 9G.
+  GPU_UTIL=${GPU_UTIL:-0.50}
 fi
 ATTENTION_BACKEND=${ATTENTION_BACKEND:-TREE_ATTN}
 FR10_DECODE_MODE_DEFAULT=${FR10_DECODE_MODE_DEFAULT:-tree_mtp}
