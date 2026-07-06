@@ -2062,3 +2062,18 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   (B) EXACT_SEED-restore x TREE-decode => give-up (chain5+cache spine gives up; cat8+cache 0/4). NOT branch-specific.
   native's naive_mtp path has NEITHER. Both live in the forked tree_mtp/TREE_ATTN pipeline.
 - CAVEAT: chain5+cache@B=4 is 1/4 so far (14309 give-up); await full arm to quantify (B). Per-task control clean.
+
+## 103. COMPLETE B=4 grid (split4) — TWO carriers confirmed, both in the forked tree path
+  shape\cache | nocache | EXACT_SEED
+  native      | 4/4     | 3/4 (no give-ups)
+  chain5(sp5) | 3/4     | 1/4
+  cat8(branch)| 1/4     | 0/4
+- chain5+cache@B=4 = 1/4 (12907 R; 14096+14309 GIVE-UP; 14365 tests_failed). Per-task: 14096,14309 RESOLVE on
+  chain5+nc, GIVE-UP on chain5+cache => the exact-seed restore drops the SPINE 3/4->1/4 (carrier B, not branch-specific).
+- TWO carriers, both in forked tree_mtp/TREE_ATTN, native(naive_mtp) immune to both:
+  (A) BRANCH DRIFT (cache-off ramble): native 4/4 -> cat8 1/4 (spine chain5 3/4 mostly clean).
+  (B) EXACT_SEED-restore x TREE-decode (give-up): chain5 3/4 -> 1/4; native+exseed 3/4 no-giveup (same engaged restore).
+  They COMPOUND: cat8+cache 0/4 = branch-drift + cache-give-up together.
+- FIX SCOPE (revises "just fix the branches"): must fix BOTH (A) branch co-residency drift AND (B) the exact-seed
+  restore's interaction with the tree decode path (GDN/conv restored-state handling). Keep branches + keep cache.
+- Relaunching the B=1 control (batch axis) to see if either carrier is B=4-co-residency-specific (recovers at B=1).
