@@ -2004,3 +2004,12 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   (3) the cache only COMPOUNDS on the tree (tree+nc 1/4 -> tree+cache 0/4) and specifically converts the tree's
   failures into GIVE-UPS (tree+nc rambles/tests_failed; tree+cache empty-final give-ups).
 - CAVEAT: ALL B=4. The tree-vs-B4-co-residency split is still open (§96). chain5 (branches) + B=1 controls pending.
+
+## 98. B=1 control refined (user: "separate spine5 and cat8") — cross SHAPE x BATCH
+- The co-residency drift lives in the tree BRANCHES (co-resident accepted chain, [[reference_diffuse_gdn_accumulation_explained]]),
+  not the pure spine. So the B=1 control must separate chain5(spine5) from cat8(branches):
+  | shape | B=1 (new) | B=4 (have) |  chain5(spine5): B=1 vs arm2 ; cat8: B=1 vs 0/4(cache),1/4(nc)
+  - cat8 recovers at B=1 + chain5 same B1==B4 => the BRANCHES' B=4 co-residency is the carrier (reshape/BI-fixable).
+  - cat8 degrades at B=1 too => fundamental. chain5 same B1==B4 => spine batch-robust.
+- fr13_b1_treecache_seq.sh (launch BSIZE=1): cat8+nocache B=1, chain5+nocache B=1 (clean shape compare, cache off),
+  + cat8+cache B=1 (direct §66-style give-up test). Runs after cachesep's chain5 B=4 arm (= spine5@B=4).
