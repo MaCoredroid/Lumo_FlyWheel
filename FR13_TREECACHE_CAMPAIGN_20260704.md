@@ -2423,3 +2423,19 @@ Note: boundary-log is EAGER-ONLY (1412) => the diagnostic run may need enforce_e
 FR13_TREE_POSREAD_REQKEY kept default-off (moot: dead path) + FR13_POSREAD_SEEN diagnostic committed for
 future path-liveness checks. Spine+cache CONC=4 REQKEY=1 stayed ~0-1/4 (noise), confirming the fix is
 inert.
+
+## §122 CARRIER-B LOCALIZED (empirically, live path): 384 stale reads in the REPLAY h0 restore (2026-07-06)
+
+After 3 failed code-read hypotheses (all in dead/legacy paths), the EXISTING Tap C stale-read instrument
+(FR13_REPLAY_BOUNDARY_LOG=1, ENFORCE_EAGER, layers.0.linear_attn) on the LIVE replay restore FIRED at
+CONC=4: **stale_read:true x384** / 14208 Tap C consumer reads (spine+cache, split4). Carrier B = the
+replay h0 initial-state restore reads a row THIS req never wrote => cross-req/stale GDN recurrent state =>
+corrupted carry => give-up. Consumer (Tap B, fr10_phase4...:5091): reads ssm_state[read_row] where
+read_row = spec_state_indices_tensor[fr10_b, read_col] (read_col = min(lens_now-1, ...)); Tap C compares
+read_row vs _last_written[req] (Tap A producer, already spec-row-keyed) => 384 rows not written by this
+req. This is the FIRST decisive carrier-B localization (in the path that actually runs), vs the refuted
+misindex (dead path). NOTE: the boundary jsonl was in the container's /logs (NOT host-mounted) => lost on
+--rm; re-run must persist it (mounted path) + a CONC=1 control (stale_read ~0 expected) to (a) confirm
+concurrency-specificity, (b) capture read_row-vs-written to distinguish index-shift vs state-not-refreshed
+=> the fix (spec_state_indices row assignment / refresh under concurrency; likely spec-row/req keying like
+the leaf-publish + ZERO/refresh on realloc).
