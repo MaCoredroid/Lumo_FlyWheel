@@ -1949,3 +1949,17 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
     (12907 R @B=1, 13033/13236 giveup @B=1) — so this one has fresh backing.
 - RULE forward: every claim in the tree-degradation conclusion must trace to a TODAY-dated result file, or be
   explicitly flagged as an untested hypothesis.
+
+## 94. CACHE-SEPARATION CORRECTED (user rigor) — native+EXACT_SEED, not native+standard-prefix-cache
+- CAUGHT mid-run: the first native+cache arm used kind `nativemtp5apc` = native + the STANDARD vLLM prefix cache
+  (enable_prefix_caching=True), NOT the FR13 EXACT_SEED cache that tree+cache used. That's a cache-TYPE mismatch =>
+  not a clean separation. KILLED it.
+- CORRECTED arm (nativeexseed_cs, kind `nativemtp5_exseed`): native MTP-5 (chain, FLASH_ATTN) + the IDENTICAL cache
+  config as tree+cache: FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=1 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32,
+  tree features OFF (REPLAY_ROUTE=0, FA2_TREE_BIAS=0, naive_mtp). Now the ONLY difference vs tree+cache is the
+  spec-method (native chain vs cat8 tree); the EXACT_SEED cache is held CONSTANT.
+  * native+exseed ~4/4 => the EXACT_SEED cache is FINE on native => cache harm is TREE-SPECIFIC (tree is the carrier;
+    the cache only compounds on the tree). Combined with tree+nc=1/4 => TREE is the primary carrier.
+  * native+exseed <4/4 => the EXACT_SEED cache is an INDEPENDENT carrier (degrades native too).
+- FRESH failure-mode detail (fr13_failmode.py) is now standard per arm: char-8 ABSENT all arms (0 firings); tree+cache
+  fails via GIVE-UP (empty-final, 3-6 turns); tree+no-cache via GARBLE/RAMBLE (5279 tok, >64KB traces); native clean.
