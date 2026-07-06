@@ -1580,3 +1580,27 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
 - THROUGHPUT: gen 38 tok/s at B=3 vs ~15 at B=1 (co-residency gain); prompt bursts ~985 tok/s (turn prefills).
 - Armed a persistent B=4 anomaly monitor (KV>85% / preemption / prefix-hit<40% / engine error). Agentic
   faithfulness (garble/quality) pending completions; first patches spot-checked for source-only + garble scan.
+
+## 76. B=4 REGIME DEGRADES AGENT OUTPUT (finding) — infra faithful, but co-residency degenerates generations;
+## decisive control (13453 B=1-vs-B=4) in flight; speedup observations noted
+- arm-1 (cat8+cache, B=4/CONC=4): 3/3 completions DEGENERATE — 13579 (4 tools, 0B), 13033 (8 tools, GARBLE,
+  0B), 13236 (1 grep -> clean "Found 34 matches" -> qwen-code ended subtype=success turn 2, 0B). All 0B (no
+  valid edit), all failed. vs B=1 oneinst 13453 = 377B + pytest (real work).
+- NOT infra: SSE 26/26 upstream_done (no truncation), spec-accept depth profile healthy (3.09 tok/draft),
+  fixes engaged, KV unpressured, no preemptions. The MODEL OUTPUT degrades (garble / early-stop / no-edit) even
+  on CLEAN inputs (13236 got a clean grep result then emitted a degenerate stop).
+- HYPOTHESIS: a B=4 CO-RESIDENCY carrier the B=1 fixes (E5/COPY_SRC_FIX, both within-request-ordering) don't
+  cover. 79% prefix-hit = the 4 concurrent agents share the qwen-code SYSTEM-PROMPT prefix; if that shared-
+  prefix restore is lossy under concurrent co-residency (cross-request batch-row/state interaction), all agents
+  degrade. This is exactly the regime the B=1 gate structurally could not test.
+- DECISIVE CONTROL IN FLIGHT: astropy-13453 (resolved-attempted 377B at B=1) is running in the B=4 matrix. If
+  it returns 0B/degenerate => B=4 co-residency confirmed as cause => restart matrix at B=1 (validated regime)
+  for the clean headline resolve+speed numbers, AND open a B=4-co-residency faithfulness investigation (new
+  carrier). If 13453 works at B=4 => the 3 failures are hard-task variance => continue B=4.
+- SPEEDUP OBSERVATIONS (user: note speedup potential): (1) BATCH UNDERFILL — Running mostly 1-3 (rarely full 4)
+  because agents tool-execute on alienware (remote) => GPU idle between turns; the workload is OVERHEAD/idle-
+  bound, not compute-bound. Raising CONC above BSIZE (e.g. 8 agents for 4 slots) keeps the batch fuller during
+  others' tool-exec => higher aggregate GPU util (tradeoff: more co-residency = the faithfulness risk above).
+  (2) Prefix cache 79% already saves most turn-prefill TTFT (Product 2 working). (3) Decode HBM-bound; accept
+  3.09 tok/draft is the working decode lever (Product 1). Net: the biggest live speed lever is batch-fill
+  (orchestration), not kernel — but it trades against B=4 correctness until the co-residency carrier is fixed.
