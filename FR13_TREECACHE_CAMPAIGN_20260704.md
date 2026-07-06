@@ -2168,3 +2168,18 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   need just (B) but spine is a diagnostic, not the product (§100). Localize (A') = the branched EXACT_SEED restore's
   extra co-resident state (accepted-chain nodes) that the linear spine restore doesn't exercise.
 - CAVEAT n=4 temp0.6; 14365 (last cat8+cache CONC=1) pending.
+
+## 111. CONVENTION (user 2026-07-06): B=1 == MAX_NUM_SEQS=1 + CONC=1; B=4 == MAX_NUM_SEQS=4 + CONC=4
+- From now B=1 = single-agent (no cross-agent cache sharing, no co-residency); B=4 = 4 concurrent agents (sharing
+  cache + co-resident). Ties batch to concurrency; kills the hybrid "B=1 CONC=4" (the confound §106).
+- RE-MAPPED clean grid (split4), give-ups in parens:
+  arm             | B=1 (seqs1,conc1) | B=4 (seqs4,conc4)
+  native+nc       | (not run)         | 4/4
+  native+exseed   | (not run)         | 3/4
+  chain5+cache sp | 4/4 (0 gu)        | 0/4 (all gu)      <- give-up = B=4-only => carrier B (concurrency)
+  chain5+nc    sp | (not run)         | 3/4
+  cat8+cache   br | 1/4 (2-3 gu)      | 0/4 (all gu)      <- gives up at BOTH => carrier A'(B=1) + B(extra @B=4)
+  cat8+nc      br | RUNNING           | 1/4 (ramble)      <- carrier A
+- DEPRECATED (invalid under convention — MAX_NUM_SEQS=1 but CONC=4): the earlier "B=1 CONC=4" runs
+  (chain5+cache 0/4, cat8+cache 1/4, chain5+nc 1/4-partial). Superseded by the true-B=1 (CONC=1) runs above.
+- Future launches: B=1 => BSIZE=1 CONC=1; B=4 => BSIZE=4 CONC=4. No mixing.
