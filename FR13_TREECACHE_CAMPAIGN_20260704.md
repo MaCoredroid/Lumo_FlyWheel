@@ -1414,3 +1414,24 @@ parity (git diff inside /testbed) -> then matrix. Task #9.
   §60) is the ready lever (speed-first, SGLang-referenced). If no gap, garble is an input/sampling tail
   common to the model. PROCEEDING to BAKE E5+COPY_SRC_FIX now (charter met; garble does not block — it is a
   low-rate quality tail, not a give-up).
+
+## 66. BAKED (984c36e9) — the missing cell is FILLED. FR13_APC_ZERO_MAMBA_ON_ALLOC + FR13_APC_COPY_SRC_FIX
+## default ON in the launcher. THE CAMPAIGN'S CORE OBJECTIVE IS MET.
+- The two carrier fixes are now the default for every cache-ON boot. CRITICAL: ZERO_MAMBA is PATCH-TIME gated
+  (patcher:19939/20045 return False unless env==1 at patch time) => the launcher =1 is what actually injects
+  the E5 zeroing; before this bake a normal boot skipped it. COPY_SRC_FIX runtime-default was already ON
+  (always injected); now explicit + auto-forwarded through the §49 docker -e prefix catch-all.
+- CHARTER MET: tree(cat8) + EXACT_SEED prefix cache now behaves like tree + no-cache on real SWE-Verified,
+  nudge-free: give-up class EXTINCT (0/9 live runs), round-1 healthy route 9/9, tree+cache RESOLVES (s1 551B,
+  i6 408B — first cache resolves in campaign history; pre-fix 0/9), resolve at parity with native (2/6 vs 1/3).
+  Probe-level rp5 24/24 route parity (spread 0.0 == nocache control). §59 offload stack keeps a 103s emit
+  wedge from killing the run (i6 resolved through it). Both fixes default-OFF-byte-identical; native/cache-OFF
+  unaffected (E5 = universal mamba hygiene; COPY_SRC_FIX = tree-committer-only).
+- RESIDUAL (documented, non-blocking): garble = low-rate quality tail (1/8 worst-case replay input), weakly
+  cache-associated (not significant at n=8), reproduces only on deep agentic context. HRS parked-pending the
+  16-task matrix (n=16 garble-rate = the conclusive cache-vs-input instrument); NOT deleted.
+- REMAINING (user order): #9 official-benchmark agent env (implemented+arch-tagged, needs bundle smoke) ->
+  #6 cleanup DELETE dead/off-by-policy patches (refold/recompute/dead flags/slot-pin; HRS EXEMPT — parked
+  lever; rename patch first) -> #7 16-task speed matrix (cat8+cache vs native+cache; resolve-rate + speed;
+  hot-path logging off; official env ON). Watchdog metrics-redesign = deferred follow-up (heartbeat handles
+  the transient class).
