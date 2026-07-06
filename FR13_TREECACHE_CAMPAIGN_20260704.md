@@ -1363,3 +1363,31 @@ parity (git diff inside /testbed) -> then matrix. Task #9.
 - WEDGE HUNT NEXT: the capture's chunk-timestamp arrays localize the pause onset within the request; correlate
   wedged requests (#6/#23 class) with engine-side events (boundary snapshots? scheduler states?) once 2-3 more
   instrumented specimens land.
+
+## 64. INSTRUMENTED BATCH COMPLETE (i5-relaunch/i6/i7): §59 stack VALIDATED IN PRODUCTION — i6 RESOLVED
+## through a 103s wedge; 0 content-garble this round (no long-turn draw); scanner false-positive fixed
+| run | turns | patch | verdict | garble (fixed scanner) | max emit-gap | heartbeats | boundary crossings |
+|---|---|---|---|---|---|---|---|
+| tcfix_i5 (relaunch) | 21 | 0 | failed | CLEAN (empty-final only) | 8.7s | 0 | 0 |
+| tcfix_i6 | 23 | 408 | **RESOLVED** | CLEAN | 103.4s | 6 | 0 |
+| tcfix_i7 | 27 | 398 | failed | CLEAN | 26.1s | 1 | 0 |
+- §59 STACK VALIDATED: i6 RESOLVED while surviving a 103.4s mid-stream emit wedge (6 heartbeats bridged it) —
+  pre-fix that gap crosses the 120s client timer => fatal patch-less give-up (the s3 class). The fix converts
+  a fatal stall into a resolved task. Task #8 = validated-in-production (capture+heartbeat+idle-raise). The
+  watchdog stays OFF (§63 false-kill; metrics-based redesign pending, NOT needed — heartbeat handles the
+  transient class; watchdog is only for a PERMANENT wedge, which hasn't recurred).
+- WEDGE CHARACTERIZED (n=3 instrumented runs, per-chunk capture): TRANSIENT SELF-RECOVERING engine-side emit
+  pauses, request-correlated, heavy-tailed (0.5s normal; tail 26/38/91/103s). All self-recovered
+  (upstream_done). NOT correlated with garble (i6 wedged 103s + CLEAN + resolved).
+- GARBLE: 0 content-garble across the instrumented batch — BUT no run drew a >1024-token turn (max 332-397t),
+  so the decode-boundary mechanism was never armed => consistent with the surviving "real garble only on
+  crossing turns" picture (2/7 earlier runs), NOT evidence against it. SCANNER FIX (0242224e): empty_final_
+  answer alone is BENIGN (subtype=success terminal), no longer sets GARBLE; i5-relaunch corrected CLEAN;
+  s2/s4 stay GARBLE. So the real garble tally is 2/9 valid tree+cache runs, both crossing turns; every
+  crossing-free run (tree AND native) content-clean.
+- RESOLVE TALLY: tree+cache 2/6 (s1 551B, i6 408B), native+cache 1/3 — parity within small-n; give-up class
+  extinct 0/9, round-1 agent/todo (healthy) 9/9. The behavior charter (tree+cache behaves like tree+no-cache)
+  HOLDS on live SWE across the fixed stack.
+- NEXT: catch an ATTRIBUTABLE garble = replay a known s2/s4 garbling request (captured chatreq_*.json) against
+  a populated cache (deterministic, now fully instrumented) OR more seeds until a long-turn draw. Then the
+  bake decision (E5+COPY_SRC_FIX now backed by resolves through real load + wedge survival).
