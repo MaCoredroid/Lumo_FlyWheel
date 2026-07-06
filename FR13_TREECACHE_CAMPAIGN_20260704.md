@@ -1511,3 +1511,16 @@ parity (git diff inside /testbed) -> then matrix. Task #9.
   their module is retired. The interleaved ES/committer core moves last, most carefully.
 - SEQUENCING: DESIGN now (this §); IMPLEMENT after the #7 speed matrix (do not destabilize the just-baked solved
   state before the headline speed+resolve numbers are captured). The dead-flag deletions ride the migration.
+
+## 71. Modularization framing (user 2026-07-06) — TWO SHIPPABLE PRODUCTS define the module boundaries
+When modularizing the patcher (#10), organize around the TWO major shipped products, not incidentally:
+  PRODUCT 1: the TREE VERIFY KERNEL PIPELINE (drafter-agnostic lossless tree verify/commit — the fr10 GDN
+             tree kernel + device multidraft committer + FA2 tree-attn + tree-attn backend).
+  PRODUCT 2: PREFIX CACHE FOR SPEC-DECODE (works for BOTH native-MTP and tree) — the align/EXACT_SEED prefix
+             cache lossless-restore stack: E5 zero-on-alloc + COPY_SRC_FIX + conv-fix/SNAP_FIX/CONV_LEAF stack
+             + BLOCK_ALIGN_45477 + the ES restore path. Cache-side is SPEC-METHOD-AGNOSTIC (native or tree).
+These are two independently-valuable deliverables that today are tangled in one 20k-line file. The module
+split should make each a coherent, independently-shippable/testable unit (Product 2 esp. is not tree-specific —
+it benefits native+cache too, per FR13_CACHE_FIX_KT.md). This sharpens §70's "flag=module": group modules
+under Product-1 (tree verify) vs Product-2 (spec-decode prefix cache) so each product can be lifted/shipped/
+regression-gated on its own. Design note for #10; no action now.
