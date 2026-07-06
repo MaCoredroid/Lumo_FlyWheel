@@ -153,6 +153,41 @@ def _instance_image_name(instance_id: str, *, arch: str = "x86_64",
     return spec.instance_image_key
 
 
+def _host_arch(remote_host: str | None) -> str:
+    """uname -m of the AGENT host (local when remote_host is None). Returns the
+    raw machine string ('x86_64' | 'aarch64' | ...)."""
+    if remote_host:
+        r = _net_retry(["ssh", *_EVAL_SSH_OPTS, remote_host, "uname -m"],
+                       what=f"host_arch:{remote_host}", timeout=30, max_attempts=2)
+        return (r.stdout or "").strip() or "unknown"
+    return os.uname().machine
+
+
+# uname -m -> the arch token swebench uses in image names.
+_SWEB_ARCH = {"x86_64": "x86_64", "amd64": "x86_64", "aarch64": "arm64", "arm64": "arm64"}
+
+
+def _record_image_arch_tag(workspace: Path, instance_id: str, entry: dict) -> None:
+    """USER 2026-07-05: some official SWE-bench per-instance images are x86_64-only
+    (fine for the alienware offload, NOT runnable on GB10/aarch64) — persist a
+    per-instance arch tag so FUTURE runs know placement constraints without
+    rediscovering them. Sidecar: <workspace>/../images_arch.json (merge-update);
+    the same fields also ride the returned codex_meta into runner_metadata.json."""
+    try:
+        sidecar = Path(workspace).parent / "images_arch.json"
+        data: dict = {}
+        if sidecar.is_file():
+            try:
+                data = json.loads(sidecar.read_text(encoding="utf-8"))
+            except Exception:
+                data = {}
+        data[instance_id] = entry
+        sidecar.write_text(json.dumps(data, indent=1, sort_keys=True),
+                           encoding="utf-8")
+    except Exception:
+        pass  # tag is observability; never fail the run for it
+
+
 # Fully-explicit container PATH (NO host '$PATH' dependency — a literal '$PATH'
 # would survive shlex.split on the local argv path and land in the container
 # verbatim, and would expand to the WRONG host on the ssh path). Puts the qwen
@@ -977,7 +1012,20 @@ def _run_agent_instance(
     started = time.monotonic()
     safe_id = instance_id.replace("/", "_")[:48]
     container_name = f"swe-qwen-{safe_id}-{int(time.time())}"
-    image = _instance_image_name(instance_id)
+    # ARCH PLACEMENT (user 2026-07-05): derive the image variant from the AGENT
+    # host's architecture. Some instances only publish x86_64 images — those must
+    # run on the x86 offload host; on an aarch64 host with no arm64 variant we
+    # fail LOUD (never silently fall back to the bare-worktree env, class 9).
+    host_machine = _host_arch(remote_host)
+    sweb_arch = _SWEB_ARCH.get(host_machine)
+    if sweb_arch is None:
+        raise RuntimeError(
+            f"SWE_AGENT_ENV=instance_image: unsupported agent-host arch "
+            f"{host_machine!r} (host={remote_host or 'local'})")
+    image = _instance_image_name(instance_id, arch=sweb_arch)
+    _record_image_arch_tag(workspace, instance_id, {
+        "image": image, "image_arch": sweb_arch, "agent_host": remote_host or "local",
+        "host_machine": host_machine})
     if not base_commit:
         raise RuntimeError(
             "SWE_AGENT_ENV=instance_image requires base_commit (the agent's "
@@ -1009,7 +1057,10 @@ def _run_agent_instance(
         if "present" not in (insp.stdout or ""):
             raise RuntimeError(
                 f"SWE_AGENT_ENV=instance_image: image {image} ABSENT on codex host "
-                f"{remote_host} (pull it / run the eval first; refusing to fall back)")
+                f"{remote_host} (host arch={host_machine}). Pull it / run the eval "
+                f"first; if this instance publishes no {sweb_arch} variant it is "
+                f"arch-restricted — run the agent on a host matching an available "
+                f"arch (x86_64 => alienware offload). Refusing to fall back.")
         remote_out = f"{_CODEX_REMOTE_ROOT}/{safe_id}/out"
         mk = _net_retry(
             ["ssh", *_EVAL_SSH_OPTS, remote_host,
@@ -1023,7 +1074,8 @@ def _run_agent_instance(
             return {"elapsed_s": round(time.monotonic() - started, 3), "exit_code": -1,
                     "timed_out": False, "container_name": container_name, "offloaded": True,
                     "codex_host": remote_host, "network_drop": net_drop,
-                    "agent_env": "instance_image", "instance_image": image}
+                    "agent_env": "instance_image", "instance_image": image,
+                    "host_arch": host_machine, "image_arch": sweb_arch}
         # ~ expands on the remote login shell (the whole cmd is one ssh arg).
         cmd = _instance_agent_command(
             container_name=container_name, image=image, endpoint=endpoint, model=model,
@@ -1065,7 +1117,8 @@ def _run_agent_instance(
         return {"elapsed_s": round(elapsed, 3), "exit_code": rc if rc is not None else -1,
                 "timed_out": timed_out, "container_name": container_name, "offloaded": True,
                 "codex_host": remote_host, "network_drop": net_drop,
-                "agent_env": "instance_image", "instance_image": image}
+                "agent_env": "instance_image", "instance_image": image,
+                    "host_arch": host_machine, "image_arch": sweb_arch}
 
     # ---- local docker path (secondary; production uses --codex-host) ----
     insp = subprocess.run(["docker", "image", "inspect", image],
@@ -1073,6 +1126,8 @@ def _run_agent_instance(
     if insp.returncode != 0:
         raise RuntimeError(
             f"SWE_AGENT_ENV=instance_image: image {image} ABSENT locally "
+            f"(host arch={host_machine}; x86_64-only instances must run offloaded "
+            f"on alienware via --codex-host) "
             f"(pull it first; refusing to fall back)")
     cmd = _instance_agent_command(
         container_name=container_name, image=image, endpoint=endpoint, model=model,
@@ -1104,7 +1159,8 @@ def _run_agent_instance(
         stdout_path.write_text("", encoding="utf-8")
     return {"elapsed_s": round(elapsed, 3), "exit_code": rc if rc is not None else -1,
             "timed_out": timed_out, "container_name": container_name,
-            "agent_env": "instance_image", "instance_image": image}
+            "agent_env": "instance_image", "instance_image": image,
+                    "host_arch": host_machine, "image_arch": sweb_arch}
 
 
 def _run_codex_dispatch(**kwargs: Any) -> dict[str, Any]:
