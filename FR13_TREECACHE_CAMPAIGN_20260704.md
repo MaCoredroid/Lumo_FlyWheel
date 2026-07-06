@@ -2046,3 +2046,19 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   chain => diffuse GDN drift) are the AGENTIC CARRIER, fresh-confirmed. The forked kernel + spine are clean.
 - Launched the B=1 control (BSIZE=1 CONC=4, spine5+cache first) to cross the batch axis: does cat8 recover at B=1
   (=> branch degradation is B=4-co-residency, reshape/BI-fixable) or degrade at B=1 too (=> fundamental)?
+
+## 102. CORRECTION (user: "I thought native is exact seed?") — it IS; the carrier is EXACT_SEED-restore x TREE-decode
+- I WAS WRONG in §101/§97 chat to say "native uses a different cache path". native+exseed sets FR13_APC_EXACT_SEED=1
+  and the restore GENUINELY ENGAGES: ZERO_MAMBA zero engaged calls=301, prefix-cache-hit 91.7%. chain5+cache also
+  engages it (calls=101). SAME exact-seed cache, both exercise it.
+- The ONLY difference is the DECODE PATH: native+exseed = naive_mtp + FLASH_ATTN; chain5/cat8 = tree_mtp + TREE_ATTN.
+- CLEAN per-task control (14309, B=4): chain5+NOCACHE (tree_mtp) RESOLVES 14309; chain5+CACHE (tree_mtp + exact-seed)
+  GIVES UP 14309. Same tree decode path, cache the only diff => the EXACT_SEED RESTORE in the TREE decode path is a
+  give-up carrier — and it hits the pure SPINE (chain5), not just branches. native (naive_mtp/FLASH_ATTN) with the
+  IDENTICAL engaged exact-seed restore = 3/4 no give-ups => the restore itself is fine; the TREE-decode-path's
+  handling of the restored GDN/conv state is the carrier.
+- => TWO carriers in the forked TREE path (revises §101 "branches sole carrier"):
+  (A) BRANCH DRIFT (cache-off) => ramble (cat8+nc 1/4; chain5+nc spine 3/4 => branch-specific).
+  (B) EXACT_SEED-restore x TREE-decode => give-up (chain5+cache spine gives up; cat8+cache 0/4). NOT branch-specific.
+  native's naive_mtp path has NEITHER. Both live in the forked tree_mtp/TREE_ATTN pipeline.
+- CAVEAT: chain5+cache@B=4 is 1/4 so far (14309 give-up); await full arm to quantify (B). Per-task control clean.
