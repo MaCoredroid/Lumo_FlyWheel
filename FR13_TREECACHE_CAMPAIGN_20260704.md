@@ -2225,3 +2225,17 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   (gate target was ~4/4); the flag stays default-0, kept as the confirmed-effective lever.
 - NEXT: (1) rerun flag-ON x2 seeds to separate 14096 residual-carrier vs temp-0.6 flake; (2) if residual, LEAK_PROBE +
   per-token argmax on 14096 @CONC=2 to find the 2nd seam; (3) then the branch (cat8+cache) needs this fix + carrier A'.
+
+## 115. Carrier-B fix helps SPINE not BRANCH — the branch is A'-dominated (needs carrier A' fixed too)
+- cat8+cache @ B=4 FLAG-ON (FR13_FREE_TREE_POSGLOBALS=1) = 0/4 resolved, 3 give-ups + 14365 tests_failed. vs
+  flag-OFF 0/4 (all 4 give-ups). Marginal (only 14365 give-up->near-miss). CONTRAST: chain5+cache (spine) same fix
+  = 0/4 -> 2/4 (§114).
+- => the carrier-B fix (clear positional globals) works for the SPINE (carrier B only) but NOT the BRANCH, because
+  the branch is dominated by carrier A' (the within-request branched-tree EXACT_SEED restore — the extra co-resident
+  accepted-chain state the linear spine doesn't exercise; branch gives up even single-agent @CONC=1, §110). The
+  B-fix doesn't touch A'.
+- => DELIVERABLE (branch = product) needs BOTH: (B) positional-global clear [done, effective on spine] + (A')
+  within-request branched restore [NOT localized yet]. Next: workflow-localize carrier A' like carrier B — audit the
+  branched-tree EXACT_SEED restore (the co-resident accepted-chain state feed) that gives up even single-agent, vs
+  the spine's simpler restore that's clean at CONC=1.
+- chain5+cache flag-on run2 (14096 flake vs 2nd seam) still running.
