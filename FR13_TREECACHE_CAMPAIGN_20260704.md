@@ -1860,3 +1860,17 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
     not agentic-lossless).
 - CONTRADICTS the §66 "tree+cache SOLVED (give-up extinct 0/9)" claim: either that fix regressed, or its gate task-
   set was easier than these 8 fr9-resolved tasks. The tree+no-cache control + a re-check of the §66 gate resolves it.
+
+## 89. Native 4/4 CONFIRMED (harness exonerated); tree-vs-cache SPLIT control launched
+- Native MTP-5 final at teardown: 4/4 RESOLVED (12907/14096/14309/14365 — the exact tasks tree+cache failed). The
+  other 4 tasks were still running (native cache-off is SLOW: full-context reprocess/turn; 13453 @41min heading to
+  the 90min wall) — torn down since 4/4 already exonerates the harness. NOTE the CONFOUND for future runs: cache-off
+  arms (native, tree+no-cache) are ~25-40min/task => a full 8-task arm is ~1.5-2hr; use the 4-task split subsets.
+- LAUNCHED the tree-vs-cache SPLIT (bm3taqn0w): TREE cat8 + cache-OFF (FR13_ENABLE_APC=0), on subset_split4 =
+  {12907,14096,14309,14365} (the 4 native-resolved / tree+cache-failed tasks), B=4, temp 0.6. The decisive split:
+  * tree+no-cache RESOLVES (~4/4, like native) => the APC EXACT_SEED cache is the AGENTIC CARRIER. The tree verify
+    kernel is fine; the cache breaks multi-turn quality. Ship implication: tree WITHOUT exact-seed cache (decode
+    speedup kept, TTFT cache speedup lost) — directly against [[feedback_goal_spec_plus_cache_lossless]] "both speedups".
+  * tree+no-cache FAILS (~0/4, like tree+cache) => the TREE SPEC-DECODE ITSELF degrades agentic output (worse: the
+    verify-kernel product is not agentic-lossless even without the cache).
+  Waiter bbt39z2sv (correct path output/fr13_tree_nocache/cat8nocache_tnc/...).
