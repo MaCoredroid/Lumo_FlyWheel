@@ -1840,3 +1840,23 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
     MTP — despite "lossless within floor"; the small distribution shift may be enough to degrade multi-turn tool use).
   * native ≈ 0/8 => the HARNESS/ENV regressed since fr9 (offload stream / instance_image env / proxy), spec-method
     exonerated => the fix is in the harness, and BOTH products (tree AND native) are currently blocked by it.
+
+## 88. DECISIVE — the HARNESS IS EXONERATED; the regression IS the tree+cache pipeline (native 4/4 vs tree 0/8)
+- NATIVE MTP-5 (cache-OFF, temp 0.6 CONFIRMED on the agent-path proxy LUMO_PROXY_FORCE_TEMPERATURE=0.6, current
+  offload+instance_image harness) on the SAME 8 fr9-resolved tasks: 12907=504B R, 14096=1066B R, 14309=574B R,
+  14365=989B R => 4/4 RESOLVED (heading 8/8). The EXACT 4 tasks tree+cache FAILED (12907/14096/14365 giveup,
+  14309 tests_failed) NATIVE RESOLVES. Same harness, same tasks, same temp — only spec-method+cache differ.
+- CONCLUSION: the HARNESS/ENV is EXONERATED (native reproduces fr9's 8/8 on the CURRENT stack). The fr9->current
+  regression (8/8 -> 0/8) lives in the TREE+CACHE PIPELINE. char-8 also exonerated (0 repair firings). This is a
+  REAL AGENTIC-QUALITY regression: the tree pipeline's "lossless within floor" (per-token argmax/TV within the
+  native MTP floor) does NOT translate to task-level parity — the ~13% per-token flip COMPOUNDS over a long
+  multi-turn trajectory into give-ups / degenerate turns ([[reference_scalar_metric_per_token_blindspot]]).
+- CAVEAT — two variables still bundled: native is cache-OFF, tree is cache-ON. So the carrier is tree-spec-method
+  AND/OR the APC cache. Prior finding (8f39589a) says "tree+NOcache RESOLVES; tree+cache GIVES UP" => the CACHE is
+  the strong suspect. NEXT CONTROL: tree + cache-OFF on the SAME 8 tasks:
+  * tree+no-cache RESOLVES (like native) => the APC EXACT_SEED cache is the agentic carrier (ship tree WITHOUT the
+    cache: keep the decode speedup, lose the TTFT cache speedup) — contradicts [[feedback_goal_spec_plus_cache_lossless]].
+  * tree+no-cache ALSO fails => the TREE spec-decode itself degrades agentic output (worse: the verify kernel is
+    not agentic-lossless).
+- CONTRADICTS the §66 "tree+cache SOLVED (give-up extinct 0/9)" claim: either that fix regressed, or its gate task-
+  set was easier than these 8 fr9-resolved tasks. The tree+no-cache control + a re-check of the §66 gate resolves it.
