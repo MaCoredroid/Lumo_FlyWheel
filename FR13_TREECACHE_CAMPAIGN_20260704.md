@@ -1435,3 +1435,15 @@ parity (git diff inside /testbed) -> then matrix. Task #9.
   lever; rename patch first) -> #7 16-task speed matrix (cat8+cache vs native+cache; resolve-rate + speed;
   hot-path logging off; official env ON). Watchdog metrics-redesign = deferred follow-up (heartbeat handles
   the transient class).
+
+## 67. Official-benchmark agent env — bundle built + smoke PASS (task #9 near-done)
+- prepare_qwen_agent_bundle.sh built ~/qwen_agent_bundle on alienware: node v22.23.1 + qwen 0.19.4 (version
+  PINNED to qwen-code-runner:v1 => cross-arm fairness). Official nodejs.org tarball => runs on the eval image
+  glibc (portability risk cleared).
+- §58 ENV SMOKE PASS (instance image swebench/sweb.eval.x86_64.astropy_1776_astropy-13453 + bundle mounted ro):
+  `import astropy` -> /testbed/astropy/__init__.py 5.2.dev (EDITABLE install — agent edits take effect on
+  import, impossible in the bare-worktree legacy env), `qwen --version` -> 0.19.4, SMOKE_OK. The agent now gets
+  a working testbed env to reproduce+pytest — the return to official SWE-bench convention.
+- REMAINING for #9: rung-2 one-instance probe (trace shows import astropy rc=0 + pytest collecting) — folding
+  into the matrix's first instance (SWE_AGENT_ENV=instance_image) rather than a separate boot; arch-tag +
+  fail-loud placement already in the runner (§58 addendum).
