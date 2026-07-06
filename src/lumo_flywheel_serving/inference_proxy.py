@@ -6,6 +6,7 @@ import hashlib
 import itertools
 import json
 import os
+import queue
 import sys
 import threading
 import time
@@ -928,6 +929,176 @@ def _synthetic_response_completed_block(context: dict[str, Any] | None = None) -
     )
 
 
+# --- FR13 offload SSE stream-stall fix-stack (all env-gated, default OFF) ------
+# Diagnosis (FR13 §59): on the qwen-code /v1/chat/completions offload path a
+# mid-stream upstream idle (GB10 per-request emit/transport wedge) produced 120s
+# of downstream silence that tripped qwen-code's stream-idle abort — with a clean
+# engine, a healthy WAN, and ZERO proxy forensics (pair_dumps=0, [PROXY-INIT]-only
+# log). These helpers add, all default-OFF so the relay stays byte-identical:
+#   (1) a per-chunk-timestamped capture + terminal-reason record (localizes
+#       engine-emit vs proxy vs WAN on the NEXT occurrence), and
+#   (3) a model-invisible empty-delta heartbeat that resets the client idle timer
+#       during a transient upstream idle so the SAME generation is delivered
+#       (nudge-free: no re-attempt, no re-prompt, identical trajectory). A `: ping`
+#       comment is proven ineffective (the OpenAI SDK strips it before yielding);
+#       an empty-delta chat.completion.chunk is a valid chunk the SDK yields (timer
+#       resets) then qwen-code drops before content merging (model-invisible).
+_SSE_HEARTBEAT_TICK = object()  # sentinel: upstream idle exceeded heartbeat interval
+
+
+def _sse_heartbeat_interval_s() -> float:
+    """LUMO_PROXY_SSE_HEARTBEAT_S (seconds). 0/unset/invalid => 0.0 (OFF)."""
+    raw = os.environ.get("LUMO_PROXY_SSE_HEARTBEAT_S", "").strip()
+    if not raw:
+        return 0.0
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    return val if val > 0 else 0.0
+
+
+def _sse_capture_enabled() -> bool:
+    """Chat-path SSE capture is ON when LUMO_PROXY_SSE_LOG is truthy OR
+    LUMO_PROXY_SSE_CAPTURE_DIR is set. Default OFF."""
+    if os.environ.get("LUMO_PROXY_SSE_LOG", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return True
+    return bool(os.environ.get("LUMO_PROXY_SSE_CAPTURE_DIR", "").strip())
+
+
+def _empty_chat_heartbeat_block(chat_id: str, model: str | None, created: int | None) -> bytes:
+    """A single empty-delta chat.completion.chunk SSE frame mirroring the upstream
+    id/model. Valid ChatCompletionChunk => the SDK yields it (resets qwen-code's
+    stream-idle timer) but the empty delta with no finish_reason is dropped before
+    content merging => model-invisible. NEVER emitted on the /v1/responses path."""
+    payload = {
+        "id": chat_id,
+        "object": "chat.completion.chunk",
+        "created": created if isinstance(created, int) else int(time.time()),
+        "model": model if isinstance(model, str) else "",
+        "choices": [{"index": 0, "delta": {}, "finish_reason": None}],
+    }
+    return b"data: " + json.dumps(payload, separators=(",", ":")).encode("utf-8") + b"\n\n"
+
+
+def _iter_upstream_with_heartbeat(upstream: requests.Response, heartbeat_s: float):
+    """Yield upstream.iter_content(8192) chunks; when heartbeat_s>0, yield the
+    _SSE_HEARTBEAT_TICK sentinel whenever no upstream chunk arrives within
+    heartbeat_s. A SINGLE background reader thread feeds a bounded queue; this
+    generator (run in the caller's thread) is the sole consumer, so the downstream
+    writer stays single-threaded (no interleaved chunked frames). Any reader-side
+    exception is re-raised in the caller thread so the existing RequestException
+    handling is preserved. heartbeat_s<=0 => a plain pass-through, byte-identical
+    to the pre-fix `for chunk in upstream.iter_content(chunk_size=8192)`."""
+    if heartbeat_s <= 0:
+        yield from upstream.iter_content(chunk_size=8192)
+        return
+    q: "queue.Queue[tuple[Any, Any]]" = queue.Queue(maxsize=256)
+    stop = threading.Event()
+    done = object()
+
+    def _reader() -> None:
+        try:
+            for chunk in upstream.iter_content(chunk_size=8192):
+                if stop.is_set():
+                    return
+                while not stop.is_set():
+                    try:
+                        q.put(("chunk", chunk), timeout=0.5)
+                        break
+                    except queue.Full:
+                        continue
+        except BaseException as exc:  # noqa: BLE001 - surfaced in the consumer thread
+            if not stop.is_set():
+                try:
+                    q.put(("exc", exc), timeout=0.5)
+                except queue.Full:
+                    pass
+            return
+        if not stop.is_set():
+            try:
+                q.put((done, None), timeout=0.5)
+            except queue.Full:
+                pass
+
+    reader = threading.Thread(target=_reader, name="lumo-sse-upstream-reader", daemon=True)
+    reader.start()
+    try:
+        while True:
+            try:
+                kind, val = q.get(timeout=heartbeat_s)
+            except queue.Empty:
+                yield _SSE_HEARTBEAT_TICK
+                continue
+            if kind == "chunk":
+                yield val
+            elif kind == "exc":
+                raise val
+            else:
+                return
+    finally:
+        stop.set()
+
+
+def _write_sse_capture_record(cap: dict[str, Any]) -> None:
+    """Persist one chat-path SSE stream record (DISTINCT shape from the
+    /v1/responses track-B row). Appends jsonl to LUMO_PROXY_SSE_CAPTURE_DIR and/or
+    logs a compact terminal-reason line to stderr when LUMO_PROXY_SSE_LOG is set.
+    Never raises into the relay."""
+    try:
+        record = {
+            "schema": "lumo.fr13.sse_stream_capture.v1",
+            "request_path": cap.get("request_path"),
+            "id": cap.get("id"),
+            "model": cap.get("model"),
+            "ts_headers": cap.get("ts_headers"),
+            "ts_first_byte": cap.get("ts_first_byte"),
+            "ts_end": cap.get("ts_end"),
+            "elapsed_s": (
+                round(cap["ts_end"] - cap["ts_headers"], 4)
+                if cap.get("ts_end") and cap.get("ts_headers") else None
+            ),
+            "chunk_count": cap.get("chunk_count", 0),
+            "max_inter_chunk_gap_s": round(cap.get("max_inter_chunk_gap_s", 0.0), 4),
+            "heartbeat_sent": cap.get("heartbeat_sent", 0),
+            "stall_detected": cap.get("stall_detected", 0),
+            "terminal_reason": cap.get("terminal_reason"),
+            "chunk_ts": cap.get("chunk_ts") or [],
+        }
+        line = json.dumps(record, separators=(",", ":"))
+        cap_dir = os.environ.get("LUMO_PROXY_SSE_CAPTURE_DIR", "").strip()
+        if cap_dir:
+            import pathlib as _pl
+            _pl.Path(cap_dir).mkdir(parents=True, exist_ok=True)
+            # ThreadingHTTPServer serves requests concurrently and a record line
+            # can exceed the 4096B atomic-append size (chunk_ts up to 5000 ts), so
+            # guard the append with fcntl.LOCK_EX to avoid interleaved/corrupt jsonl
+            # rows — mirrors TrackBRequestMetricsCapture. Best-effort on OSError.
+            with open(f"{cap_dir}/sse_chat_capture.jsonl", "a", encoding="utf-8") as fh:
+                try:
+                    fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+                    try:
+                        fh.write(line + "\n")
+                        fh.flush()
+                    finally:
+                        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+                except OSError:
+                    pass
+        if os.environ.get("LUMO_PROXY_SSE_LOG", "").strip().lower() in {"1", "true", "yes", "on"}:
+            sys.stderr.write(
+                "[SSE-CAPTURE] " + json.dumps(
+                    {k: record[k] for k in (
+                        "id", "request_path", "chunk_count", "max_inter_chunk_gap_s",
+                        "heartbeat_sent", "stall_detected", "terminal_reason",
+                        "ts_first_byte", "elapsed_s")},
+                    separators=(",", ":"),
+                ) + "\n"
+            )
+            sys.stderr.flush()
+    except Exception:
+        pass
+
+
 def _iso_ts(seconds: float) -> str:
     return datetime.fromtimestamp(seconds, UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
@@ -1719,6 +1890,7 @@ def _write_chunked_stream(
     upstream: requests.Response,
     *,
     capture_state: dict[str, Any] | None = None,
+    request_path: str | None = None,
 ) -> None:
     def write_chunk(chunk: bytes) -> None:
         handler.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
@@ -1727,6 +1899,27 @@ def _write_chunked_stream(
         handler.wfile.flush()
         if capture_state is not None and capture_state.get("ts_first_byte") is None:
             capture_state["ts_first_byte"] = time.time()
+
+    # FR13 offload SSE fix-stack state (all default OFF => the pre-fix relay).
+    # Heartbeat is CHAT-PATH ONLY (never /v1/responses); capture is path-tagged.
+    _hb_interval_s = _sse_heartbeat_interval_s() if request_path == "/v1/chat/completions" else 0.0
+    _cap: dict[str, Any] | None = None
+    if _sse_capture_enabled():
+        _cap = {
+            "request_path": request_path, "id": None, "model": None,
+            "ts_headers": time.time(), "ts_first_byte": None, "ts_end": None,
+            "chunk_count": 0, "chunk_ts": [], "max_inter_chunk_gap_s": 0.0,
+            "heartbeat_sent": 0, "stall_detected": 0, "terminal_reason": None,
+            "_prev_ts": None,
+        }
+    _stream_meta: dict[str, Any] | None = (
+        {"id": None, "model": None, "created": None}
+        if (_hb_interval_s > 0 or _cap is not None) else None
+    )
+    _hb_sent = 0
+    _stall_detected = 0
+    _terminal_reason: str | None = None
+    _sse_cap_max_ts = 5000
 
     pending = b""
     saw_event = False
@@ -1761,15 +1954,56 @@ def _write_chunked_stream(
     current_response_id_for_synth: str | None = None
     next_synth_output_index = 0
     try:
-        for chunk in upstream.iter_content(chunk_size=8192):
+        for chunk in _iter_upstream_with_heartbeat(upstream, _hb_interval_s):
+            if chunk is _SSE_HEARTBEAT_TICK:
+                # Upstream produced no bytes within the heartbeat interval: emit a
+                # model-invisible empty-delta chat chunk so the client idle timer
+                # resets and the SAME generation keeps flowing (nudge-free). Only
+                # once we have mirrored the upstream id (post-first-byte); a
+                # pre-first-byte wedge is left to the runner stall-watchdog.
+                _stall_detected += 1
+                if _stream_meta is not None and _stream_meta.get("id"):
+                    write_chunk(_empty_chat_heartbeat_block(
+                        _stream_meta["id"], _stream_meta.get("model"),
+                        _stream_meta.get("created")))
+                    _hb_sent += 1
+                if _cap is not None:
+                    _cap["heartbeat_sent"] = _hb_sent
+                    _cap["stall_detected"] = _stall_detected
+                continue
             if not chunk:
                 continue
             pending += chunk
+            if _cap is not None:
+                _now_ts = time.time()
+                _cap["chunk_count"] += 1
+                if _cap["_prev_ts"] is not None:
+                    _gap = _now_ts - _cap["_prev_ts"]
+                    if _gap > _cap["max_inter_chunk_gap_s"]:
+                        _cap["max_inter_chunk_gap_s"] = _gap
+                _cap["_prev_ts"] = _now_ts
+                if _cap["ts_first_byte"] is None:
+                    _cap["ts_first_byte"] = _now_ts
+                if len(_cap["chunk_ts"]) < _sse_cap_max_ts:
+                    _cap["chunk_ts"].append(round(_now_ts, 4))
             while True:
                 block, pending = _pop_sse_block(pending)
                 if block is None:
                     break
                 normalized = normalize_responses_sse_block(block)
+                if _stream_meta is not None and _stream_meta.get("id") is None:
+                    for _p in _responses_sse_payloads(block):
+                        _cid = _p.get("id")
+                        if isinstance(_cid, str) and _cid:
+                            _stream_meta["id"] = _cid
+                            if isinstance(_p.get("model"), str):
+                                _stream_meta["model"] = _p["model"]
+                            if isinstance(_p.get("created"), int):
+                                _stream_meta["created"] = _p["created"]
+                            if _cap is not None:
+                                _cap["id"] = _stream_meta["id"]
+                                _cap["model"] = _stream_meta["model"]
+                            break
                 if _sse_dump_fh is not None:
                     _sse_dump_fh.write(b"=== block ===\n")
                     _sse_dump_fh.write(normalized)
@@ -1887,14 +2121,20 @@ def _write_chunked_stream(
             capture_state["response_id"] = synthetic_response_context.get("id")
             capture_state["model"] = synthetic_response_context.get("model")
             capture_state["saw_response_completed"] = saw_completed
+        _terminal_reason = (
+            "first_byte_never" if (_cap is not None and _cap["ts_first_byte"] is None)
+            else "upstream_done"
+        )
     except (BrokenPipeError, ConnectionResetError):
         # Codex occasionally abandons an HTTP stream after it already has the
         # terminal event. Treat that as a cancelled client, not a proxy crash.
+        _terminal_reason = "broken_pipe"
         if _sse_dump_fh is not None:
             try: _sse_dump_fh.close()
             except Exception: pass
         return
-    except requests.RequestException:
+    except requests.RequestException as _up_exc:
+        _terminal_reason = "upstream_exception:" + type(_up_exc).__name__
         terminal_block = (
             _synthetic_response_completed_block(synthetic_response_context)
             if saw_event and not saw_completed
@@ -1914,6 +2154,13 @@ def _write_chunked_stream(
         if _sse_dump_fh is not None:
             try: _sse_dump_fh.close()
             except Exception: pass
+        if _cap is not None:
+            _cap["ts_end"] = time.time()
+            _cap["heartbeat_sent"] = _hb_sent
+            _cap["stall_detected"] = _stall_detected
+            _cap["terminal_reason"] = _terminal_reason or "unknown"
+            _cap.pop("_prev_ts", None)
+            _write_sse_capture_record(_cap)
 
 
 def _read_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
@@ -2660,7 +2907,7 @@ def build_proxy_handler(
 
             if response_headers.get("Transfer-Encoding") == "chunked":
                 try:
-                    _write_chunked_stream(self, upstream, capture_state=capture_state)
+                    _write_chunked_stream(self, upstream, capture_state=capture_state, request_path=self.path)
                 finally:
                     admission.release(ticket)
                 if capture_active and capture_state is not None:

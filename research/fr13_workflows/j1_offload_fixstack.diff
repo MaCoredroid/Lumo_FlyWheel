@@ -1,0 +1,564 @@
+diff --git a/scripts/run_swe_bench_q36_a.py b/scripts/run_swe_bench_q36_a.py
+index 8502f595..0e79ae50 100644
+--- a/scripts/run_swe_bench_q36_a.py
++++ b/scripts/run_swe_bench_q36_a.py
+@@ -103,6 +103,13 @@ QWEN_CODE_TEMPLATE = (
+     # caps real output at LUMO_PROXY_MAX_OUTPUT_TOKENS=32768, so reserve exactly that:
+     # contextLimit=98304 -> hard limit 75304 (+54%). Uniform across all arms (eval-fair).
+     "-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 "
++    # FR13 §59 belt: raise qwen-code's stream-idle abort (built-in default 120000ms)
++    # so a transient mid-stream upstream flake (GB10 emit/transport wedge) is not
++    # converted into a fatal patch-less give-up. qwen-code 0.19.4 reads
++    # QWEN_STREAM_IDLE_TIMEOUT_MS (env precedence: config field > env > default).
++    # Modest raise (240000ms) paired with the runner stall-watchdog; on the live
++    # ssh/offload path ${VAR:-240000} shell-expands remotely. Overridable via env.
++    "-e QWEN_STREAM_IDLE_TIMEOUT_MS=${QWEN_STREAM_IDLE_TIMEOUT_MS:-240000} "
+     "-w /workspace qwen-code-runner:v1 "
+     "--yolo --output-format json --max-session-turns 80 -p"
+ )
+@@ -857,6 +864,103 @@ def _codex_net_log(msg: str) -> None:
+         pass
+ 
+ 
++# --- FR13 §59 runner stall-watchdog (default OFF) ----------------------------
++# Diagnosis: a per-request GB10 emit/transport wedge froze the offloaded qwen-code
++# agent mid-stream. With SWE_AGENT_WALL_S=0 the harness imposes NO wall, so a
++# pre-first-byte wedge (Mode B, the client idle guard never arms) hung one banked
++# run for 37 min until an external watchdog. This bounds BOTH modes by KILLING the
++# ssh (and best-effort the remote container) when the agent's trace stops growing,
++# keying on TRACE GROWTH (not wallclock) so a legitimately slow-but-progressing
++# task survives. It KILLS + CLASSIFIES (cause=infra_stall_suspect); it NEVER
++# retries or discards — that would risk the firm nudge ban.
++def _stall_kill_s() -> float:
++    """LUMO_SWE_STALL_KILL_S seconds; 0/unset/invalid => 0.0 (watchdog OFF)."""
++    raw = os.environ.get("LUMO_SWE_STALL_KILL_S", "").strip()
++    if not raw:
++        return 0.0
++    try:
++        val = float(raw)
++    except (TypeError, ValueError):
++        return 0.0
++    return val if val > 0 else 0.0
++
++
++def _kill_proc(proc: Any) -> None:
++    try:
++        proc.kill()
++    except Exception:  # noqa: BLE001 - already-dead proc, etc.
++        pass
++
++
++def _monitor_proc_with_stall_watchdog(
++    proc: Any,
++    *,
++    trace_path: Path,
++    wall_timeout_s: float | None,
++    stall_kill_s: float,
++    poll_s: float = 5.0,
++    on_stall_kill: Any = None,
++) -> dict[str, Any]:
++    """Block until ``proc`` exits, enforcing an optional wall timeout AND (when
++    stall_kill_s>0) a trace-growth stall-watchdog.
++
++    Returns metadata: {returncode, timed_out, stall_killed, last_trace_growth_ts}.
++    On a stall (no ``trace_path`` byte-growth for stall_kill_s) the local proc is
++    killed AFTER invoking on_stall_kill() (best-effort remote cleanup). On a wall
++    timeout the local proc is killed (caller handles remote cleanup, mirroring the
++    legacy path). NEVER retries. stall_kill_s<=0 disables the stall-watchdog, so
++    the OFF behavior matches the legacy blocking subprocess.run(timeout=wall)."""
++    start = time.monotonic()
++    last_size = -1
++    last_growth_mono = start
++    last_growth_ts = time.time()
++    timed_out = False
++    stall_killed = False
++    rc: int | None = None
++    while True:
++        try:
++            rc = proc.wait(timeout=poll_s)
++            break
++        except subprocess.TimeoutExpired:
++            pass
++        now = time.monotonic()
++        try:
++            size = trace_path.stat().st_size
++        except OSError:
++            size = last_size
++        if size > last_size:
++            last_size = size
++            last_growth_mono = now
++            last_growth_ts = time.time()
++        if wall_timeout_s and wall_timeout_s > 0 and (now - start) >= wall_timeout_s:
++            timed_out = True
++            _kill_proc(proc)
++            try:
++                rc = proc.wait(timeout=30)
++            except subprocess.TimeoutExpired:
++                rc = -1
++            break
++        if stall_kill_s and stall_kill_s > 0 and (now - last_growth_mono) >= stall_kill_s:
++            stall_killed = True
++            if on_stall_kill is not None:
++                try:
++                    on_stall_kill()
++                except Exception:  # noqa: BLE001 - best-effort remote cleanup
++                    pass
++            _kill_proc(proc)
++            try:
++                rc = proc.wait(timeout=30)
++            except subprocess.TimeoutExpired:
++                rc = -1
++            break
++    return {
++        "returncode": rc if rc is not None else -1,
++        "timed_out": timed_out,
++        "stall_killed": stall_killed,
++        "last_trace_growth_ts": last_growth_ts,
++    }
++
++
+ def _run_codex_remote(
+     *,
+     host: str,
+@@ -938,26 +1042,47 @@ def _run_codex_remote(
+     # SSH timeout = codex wall + a teardown buffer; a true codex timeout is
+     # handled by killing the remote container (mirrors the local path).
+     ssh_codex = ["ssh", *_EVAL_SSH_OPTS, "-o", f"ConnectTimeout=20", host, remote_cmd]
+-    try:
+-        with trace_path.open("w", encoding="utf-8") as tf, \
+-             stderr_path.open("w", encoding="utf-8") as ef:
+-            completed = subprocess.run(
+-                ssh_codex, stdout=tf, stderr=ef,
+-                # timeout_s<=0 => NO harness wall (codex runs to its own idle/turn limit).
+-                timeout=(None if timeout_s <= 0 else max(timeout_s, 30) + 120), check=False,
+-            )
+-        rc = completed.returncode
+-        if rc == 255:
+-            # SSH transport died — CLASSIFY network-drop (req #4), not a model run.
+-            net_drop = True
+-            _codex_net_log(f"CODEX_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
+-    except subprocess.TimeoutExpired:
+-        timed_out = True
++    # FR13 §59: Popen + trace-growth stall-watchdog (env LUMO_SWE_STALL_KILL_S,
++    # default 0=OFF). Wall timeout is enforced inside the monitor so OFF behavior
++    # matches the legacy subprocess.run(timeout=wall). timeout_s<=0 => no wall.
++    stall_kill_s = _stall_kill_s()
++    wall_timeout_s = None if timeout_s <= 0 else max(timeout_s, 30) + 120
++    stall_killed = False
++    last_trace_growth_ts: float | None = None
++
++    def _remote_stall_kill() -> None:
++        # best-effort kill the remote container so a stalled run doesn't linger
++        _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"docker kill {container_name} 2>/dev/null; "
++                    f"docker wait {container_name} 2>/dev/null; echo killed"],
++                   what=f"codex_stall_kill:{instance_id}", timeout=60, max_attempts=2)
++
++    with trace_path.open("w", encoding="utf-8") as tf, \
++         stderr_path.open("w", encoding="utf-8") as ef:
++        proc = subprocess.Popen(ssh_codex, stdout=tf, stderr=ef)
++        mon = _monitor_proc_with_stall_watchdog(
++            proc, trace_path=trace_path, wall_timeout_s=wall_timeout_s,
++            stall_kill_s=stall_kill_s, poll_s=5.0, on_stall_kill=_remote_stall_kill,
++        )
++    rc = mon["returncode"]
++    timed_out = mon["timed_out"]
++    stall_killed = mon["stall_killed"]
++    last_trace_growth_ts = mon["last_trace_growth_ts"]
++    if stall_killed:
++        # infra_stall_suspect: the agent trace stopped growing (a suspected GB10
++        # emit/transport wedge). Killed + CLASSIFIED; NEVER retried (nudge ban).
++        _codex_net_log(f"CODEX_STALL_KILL {instance_id} no trace growth for {stall_kill_s}s "
++                       "(infra_stall_suspect; NOT agent_gave_up, NOT retried)")
++        rc = -1
++    elif timed_out:
+         # best-effort kill the remote container so it doesn't linger on alienware
+         _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"docker kill {container_name} 2>/dev/null; "
+                     f"docker wait {container_name} 2>/dev/null; echo killed"],
+                    what=f"codex_kill:{instance_id}", timeout=60, max_attempts=2)
+         rc = -1
++    elif rc == 255:
++        # SSH transport died — CLASSIFY network-drop (req #4), not a model run.
++        net_drop = True
++        _codex_net_log(f"CODEX_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
+     elapsed = time.monotonic() - started
+ 
+     # rsync the (modified) workspace back to the GB10 for patch extraction.
+@@ -975,7 +1100,7 @@ def _run_codex_remote(
+ 
+     if not stdout_path.is_file():
+         stdout_path.write_text("", encoding="utf-8")
+-    return {
++    result: dict[str, Any] = {
+         "elapsed_s": round(elapsed, 3),
+         "exit_code": rc if rc is not None else -1,
+         "timed_out": timed_out,
+@@ -984,7 +1109,12 @@ def _run_codex_remote(
+         "codex_host": host,
+         "network_drop": net_drop,
+         "ws_down_rc": down.returncode,
++        "stall_killed": stall_killed,
+     }
++    if stall_killed:
++        result["cause"] = "infra_stall_suspect"
++        result["last_trace_growth_ts"] = last_trace_growth_ts
++    return result
+ 
+ 
+ def _run_agent_instance(
+diff --git a/scripts/swe_x86_helpers/offload_codex_proxy.sh b/scripts/swe_x86_helpers/offload_codex_proxy.sh
+index eae16d55..45468f2d 100644
+--- a/scripts/swe_x86_helpers/offload_codex_proxy.sh
++++ b/scripts/swe_x86_helpers/offload_codex_proxy.sh
+@@ -74,6 +74,14 @@ case "$CMD" in
+     # accumulate across runs and every arm's rsync pulls the whole history -> the
+     # "byte-identical copied dumps" that confounded prior per-arm runaway/cache analysis.
+     ssh "${SSH_OPTS[@]}" "$HOST" "rm -rf $REMOTE_PAIR_DUMPS/* $REMOTE_REQ_DUMPS/* 2>/dev/null; mkdir -p $REMOTE_PAIR_DUMPS $REMOTE_REQ_DUMPS" >/dev/null 2>&1 || true
++    # FR13 §59 offload stream-stall fix-stack (default OFF; ENABLE at a LATER relaunch,
++    # not now). The three LUMO_PROXY_SSE_* envs below are wired-through with OFF defaults
++    # (empty LOG/CAPTURE_DIR + HEARTBEAT_S=0 => byte-identical relay). To turn them on at
++    # the next relaunch, export before invoking this script (do NOT add a '#'-comment
++    # INSIDE the quoted ssh env block below — it would comment out the launch command):
++    #   export LUMO_PROXY_SSE_LOG=1                                  # per-request terminal-reason -> offload_proxy.log
++    #   export LUMO_PROXY_SSE_CAPTURE_DIR="$REMOTE_ROOT/sse_capture" # per-chunk-timestamped chat-path capture jsonl
++    #   export LUMO_PROXY_SSE_HEARTBEAT_S=15                         # empty-delta heartbeat on upstream idle (chat only)
+     ssh "${SSH_OPTS[@]}" "$HOST" "\
+       LUMO_PROXY_OFFLOAD_REPO=$REMOTE_REPO \
+       LUMO_PROXY_OFFLOAD_VENV=$REMOTE_VENV \
+@@ -87,6 +95,9 @@ case "$CMD" in
+       LUMO_PROXY_QWEN_SAMPLING=${LUMO_PROXY_QWEN_SAMPLING:-1} \
+       LUMO_PROXY_PAIR_DUMP_DIR=$REMOTE_PAIR_DUMPS \
+       LUMO_PROXY_REQUEST_DUMP_DIR=$REMOTE_REQ_DUMPS \
++      LUMO_PROXY_SSE_LOG=${LUMO_PROXY_SSE_LOG:-} \
++      LUMO_PROXY_SSE_CAPTURE_DIR=${LUMO_PROXY_SSE_CAPTURE_DIR:-} \
++      LUMO_PROXY_SSE_HEARTBEAT_S=${LUMO_PROXY_SSE_HEARTBEAT_S:-0} \
+       LUMO_PROXY_THINK_BUDGET=${LUMO_PROXY_THINK_BUDGET:-} \
+       LUMO_PROXY_THINK_CUTOFF=${LUMO_PROXY_THINK_CUTOFF:-} \
+       LUMO_PROXY_ALLOW_MODELS_GET=${LUMO_PROXY_ALLOW_MODELS_GET:-} \
+diff --git a/src/lumo_flywheel_serving/inference_proxy.py b/src/lumo_flywheel_serving/inference_proxy.py
+index b23740ab..b34d5549 100644
+--- a/src/lumo_flywheel_serving/inference_proxy.py
++++ b/src/lumo_flywheel_serving/inference_proxy.py
+@@ -6,6 +6,7 @@ import hashlib
+ import itertools
+ import json
+ import os
++import queue
+ import sys
+ import threading
+ import time
+@@ -928,6 +929,176 @@ def _synthetic_response_completed_block(context: dict[str, Any] | None = None) -
+     )
+ 
+ 
++# --- FR13 offload SSE stream-stall fix-stack (all env-gated, default OFF) ------
++# Diagnosis (FR13 §59): on the qwen-code /v1/chat/completions offload path a
++# mid-stream upstream idle (GB10 per-request emit/transport wedge) produced 120s
++# of downstream silence that tripped qwen-code's stream-idle abort — with a clean
++# engine, a healthy WAN, and ZERO proxy forensics (pair_dumps=0, [PROXY-INIT]-only
++# log). These helpers add, all default-OFF so the relay stays byte-identical:
++#   (1) a per-chunk-timestamped capture + terminal-reason record (localizes
++#       engine-emit vs proxy vs WAN on the NEXT occurrence), and
++#   (3) a model-invisible empty-delta heartbeat that resets the client idle timer
++#       during a transient upstream idle so the SAME generation is delivered
++#       (nudge-free: no re-attempt, no re-prompt, identical trajectory). A `: ping`
++#       comment is proven ineffective (the OpenAI SDK strips it before yielding);
++#       an empty-delta chat.completion.chunk is a valid chunk the SDK yields (timer
++#       resets) then qwen-code drops before content merging (model-invisible).
++_SSE_HEARTBEAT_TICK = object()  # sentinel: upstream idle exceeded heartbeat interval
++
++
++def _sse_heartbeat_interval_s() -> float:
++    """LUMO_PROXY_SSE_HEARTBEAT_S (seconds). 0/unset/invalid => 0.0 (OFF)."""
++    raw = os.environ.get("LUMO_PROXY_SSE_HEARTBEAT_S", "").strip()
++    if not raw:
++        return 0.0
++    try:
++        val = float(raw)
++    except (TypeError, ValueError):
++        return 0.0
++    return val if val > 0 else 0.0
++
++
++def _sse_capture_enabled() -> bool:
++    """Chat-path SSE capture is ON when LUMO_PROXY_SSE_LOG is truthy OR
++    LUMO_PROXY_SSE_CAPTURE_DIR is set. Default OFF."""
++    if os.environ.get("LUMO_PROXY_SSE_LOG", "").strip().lower() in {"1", "true", "yes", "on"}:
++        return True
++    return bool(os.environ.get("LUMO_PROXY_SSE_CAPTURE_DIR", "").strip())
++
++
++def _empty_chat_heartbeat_block(chat_id: str, model: str | None, created: int | None) -> bytes:
++    """A single empty-delta chat.completion.chunk SSE frame mirroring the upstream
++    id/model. Valid ChatCompletionChunk => the SDK yields it (resets qwen-code's
++    stream-idle timer) but the empty delta with no finish_reason is dropped before
++    content merging => model-invisible. NEVER emitted on the /v1/responses path."""
++    payload = {
++        "id": chat_id,
++        "object": "chat.completion.chunk",
++        "created": created if isinstance(created, int) else int(time.time()),
++        "model": model if isinstance(model, str) else "",
++        "choices": [{"index": 0, "delta": {}, "finish_reason": None}],
++    }
++    return b"data: " + json.dumps(payload, separators=(",", ":")).encode("utf-8") + b"\n\n"
++
++
++def _iter_upstream_with_heartbeat(upstream: requests.Response, heartbeat_s: float):
++    """Yield upstream.iter_content(8192) chunks; when heartbeat_s>0, yield the
++    _SSE_HEARTBEAT_TICK sentinel whenever no upstream chunk arrives within
++    heartbeat_s. A SINGLE background reader thread feeds a bounded queue; this
++    generator (run in the caller's thread) is the sole consumer, so the downstream
++    writer stays single-threaded (no interleaved chunked frames). Any reader-side
++    exception is re-raised in the caller thread so the existing RequestException
++    handling is preserved. heartbeat_s<=0 => a plain pass-through, byte-identical
++    to the pre-fix `for chunk in upstream.iter_content(chunk_size=8192)`."""
++    if heartbeat_s <= 0:
++        yield from upstream.iter_content(chunk_size=8192)
++        return
++    q: "queue.Queue[tuple[Any, Any]]" = queue.Queue(maxsize=256)
++    stop = threading.Event()
++    done = object()
++
++    def _reader() -> None:
++        try:
++            for chunk in upstream.iter_content(chunk_size=8192):
++                if stop.is_set():
++                    return
++                while not stop.is_set():
++                    try:
++                        q.put(("chunk", chunk), timeout=0.5)
++                        break
++                    except queue.Full:
++                        continue
++        except BaseException as exc:  # noqa: BLE001 - surfaced in the consumer thread
++            if not stop.is_set():
++                try:
++                    q.put(("exc", exc), timeout=0.5)
++                except queue.Full:
++                    pass
++            return
++        if not stop.is_set():
++            try:
++                q.put((done, None), timeout=0.5)
++            except queue.Full:
++                pass
++
++    reader = threading.Thread(target=_reader, name="lumo-sse-upstream-reader", daemon=True)
++    reader.start()
++    try:
++        while True:
++            try:
++                kind, val = q.get(timeout=heartbeat_s)
++            except queue.Empty:
++                yield _SSE_HEARTBEAT_TICK
++                continue
++            if kind == "chunk":
++                yield val
++            elif kind == "exc":
++                raise val
++            else:
++                return
++    finally:
++        stop.set()
++
++
++def _write_sse_capture_record(cap: dict[str, Any]) -> None:
++    """Persist one chat-path SSE stream record (DISTINCT shape from the
++    /v1/responses track-B row). Appends jsonl to LUMO_PROXY_SSE_CAPTURE_DIR and/or
++    logs a compact terminal-reason line to stderr when LUMO_PROXY_SSE_LOG is set.
++    Never raises into the relay."""
++    try:
++        record = {
++            "schema": "lumo.fr13.sse_stream_capture.v1",
++            "request_path": cap.get("request_path"),
++            "id": cap.get("id"),
++            "model": cap.get("model"),
++            "ts_headers": cap.get("ts_headers"),
++            "ts_first_byte": cap.get("ts_first_byte"),
++            "ts_end": cap.get("ts_end"),
++            "elapsed_s": (
++                round(cap["ts_end"] - cap["ts_headers"], 4)
++                if cap.get("ts_end") and cap.get("ts_headers") else None
++            ),
++            "chunk_count": cap.get("chunk_count", 0),
++            "max_inter_chunk_gap_s": round(cap.get("max_inter_chunk_gap_s", 0.0), 4),
++            "heartbeat_sent": cap.get("heartbeat_sent", 0),
++            "stall_detected": cap.get("stall_detected", 0),
++            "terminal_reason": cap.get("terminal_reason"),
++            "chunk_ts": cap.get("chunk_ts") or [],
++        }
++        line = json.dumps(record, separators=(",", ":"))
++        cap_dir = os.environ.get("LUMO_PROXY_SSE_CAPTURE_DIR", "").strip()
++        if cap_dir:
++            import pathlib as _pl
++            _pl.Path(cap_dir).mkdir(parents=True, exist_ok=True)
++            # ThreadingHTTPServer serves requests concurrently and a record line
++            # can exceed the 4096B atomic-append size (chunk_ts up to 5000 ts), so
++            # guard the append with fcntl.LOCK_EX to avoid interleaved/corrupt jsonl
++            # rows — mirrors TrackBRequestMetricsCapture. Best-effort on OSError.
++            with open(f"{cap_dir}/sse_chat_capture.jsonl", "a", encoding="utf-8") as fh:
++                try:
++                    fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
++                    try:
++                        fh.write(line + "\n")
++                        fh.flush()
++                    finally:
++                        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
++                except OSError:
++                    pass
++        if os.environ.get("LUMO_PROXY_SSE_LOG", "").strip().lower() in {"1", "true", "yes", "on"}:
++            sys.stderr.write(
++                "[SSE-CAPTURE] " + json.dumps(
++                    {k: record[k] for k in (
++                        "id", "request_path", "chunk_count", "max_inter_chunk_gap_s",
++                        "heartbeat_sent", "stall_detected", "terminal_reason",
++                        "ts_first_byte", "elapsed_s")},
++                    separators=(",", ":"),
++                ) + "\n"
++            )
++            sys.stderr.flush()
++    except Exception:
++        pass
++
++
+ def _iso_ts(seconds: float) -> str:
+     return datetime.fromtimestamp(seconds, UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+ 
+@@ -1719,6 +1890,7 @@ def _write_chunked_stream(
+     upstream: requests.Response,
+     *,
+     capture_state: dict[str, Any] | None = None,
++    request_path: str | None = None,
+ ) -> None:
+     def write_chunk(chunk: bytes) -> None:
+         handler.wfile.write(f"{len(chunk):X}\r\n".encode("ascii"))
+@@ -1728,6 +1900,27 @@ def _write_chunked_stream(
+         if capture_state is not None and capture_state.get("ts_first_byte") is None:
+             capture_state["ts_first_byte"] = time.time()
+ 
++    # FR13 offload SSE fix-stack state (all default OFF => the pre-fix relay).
++    # Heartbeat is CHAT-PATH ONLY (never /v1/responses); capture is path-tagged.
++    _hb_interval_s = _sse_heartbeat_interval_s() if request_path == "/v1/chat/completions" else 0.0
++    _cap: dict[str, Any] | None = None
++    if _sse_capture_enabled():
++        _cap = {
++            "request_path": request_path, "id": None, "model": None,
++            "ts_headers": time.time(), "ts_first_byte": None, "ts_end": None,
++            "chunk_count": 0, "chunk_ts": [], "max_inter_chunk_gap_s": 0.0,
++            "heartbeat_sent": 0, "stall_detected": 0, "terminal_reason": None,
++            "_prev_ts": None,
++        }
++    _stream_meta: dict[str, Any] | None = (
++        {"id": None, "model": None, "created": None}
++        if (_hb_interval_s > 0 or _cap is not None) else None
++    )
++    _hb_sent = 0
++    _stall_detected = 0
++    _terminal_reason: str | None = None
++    _sse_cap_max_ts = 5000
++
+     pending = b""
+     saw_event = False
+     saw_completed = False
+@@ -1761,15 +1954,56 @@ def _write_chunked_stream(
+     current_response_id_for_synth: str | None = None
+     next_synth_output_index = 0
+     try:
+-        for chunk in upstream.iter_content(chunk_size=8192):
++        for chunk in _iter_upstream_with_heartbeat(upstream, _hb_interval_s):
++            if chunk is _SSE_HEARTBEAT_TICK:
++                # Upstream produced no bytes within the heartbeat interval: emit a
++                # model-invisible empty-delta chat chunk so the client idle timer
++                # resets and the SAME generation keeps flowing (nudge-free). Only
++                # once we have mirrored the upstream id (post-first-byte); a
++                # pre-first-byte wedge is left to the runner stall-watchdog.
++                _stall_detected += 1
++                if _stream_meta is not None and _stream_meta.get("id"):
++                    write_chunk(_empty_chat_heartbeat_block(
++                        _stream_meta["id"], _stream_meta.get("model"),
++                        _stream_meta.get("created")))
++                    _hb_sent += 1
++                if _cap is not None:
++                    _cap["heartbeat_sent"] = _hb_sent
++                    _cap["stall_detected"] = _stall_detected
++                continue
+             if not chunk:
+                 continue
+             pending += chunk
++            if _cap is not None:
++                _now_ts = time.time()
++                _cap["chunk_count"] += 1
++                if _cap["_prev_ts"] is not None:
++                    _gap = _now_ts - _cap["_prev_ts"]
++                    if _gap > _cap["max_inter_chunk_gap_s"]:
++                        _cap["max_inter_chunk_gap_s"] = _gap
++                _cap["_prev_ts"] = _now_ts
++                if _cap["ts_first_byte"] is None:
++                    _cap["ts_first_byte"] = _now_ts
++                if len(_cap["chunk_ts"]) < _sse_cap_max_ts:
++                    _cap["chunk_ts"].append(round(_now_ts, 4))
+             while True:
+                 block, pending = _pop_sse_block(pending)
+                 if block is None:
+                     break
+                 normalized = normalize_responses_sse_block(block)
++                if _stream_meta is not None and _stream_meta.get("id") is None:
++                    for _p in _responses_sse_payloads(block):
++                        _cid = _p.get("id")
++                        if isinstance(_cid, str) and _cid:
++                            _stream_meta["id"] = _cid
++                            if isinstance(_p.get("model"), str):
++                                _stream_meta["model"] = _p["model"]
++                            if isinstance(_p.get("created"), int):
++                                _stream_meta["created"] = _p["created"]
++                            if _cap is not None:
++                                _cap["id"] = _stream_meta["id"]
++                                _cap["model"] = _stream_meta["model"]
++                            break
+                 if _sse_dump_fh is not None:
+                     _sse_dump_fh.write(b"=== block ===\n")
+                     _sse_dump_fh.write(normalized)
+@@ -1887,14 +2121,20 @@ def _write_chunked_stream(
+             capture_state["response_id"] = synthetic_response_context.get("id")
+             capture_state["model"] = synthetic_response_context.get("model")
+             capture_state["saw_response_completed"] = saw_completed
++        _terminal_reason = (
++            "first_byte_never" if (_cap is not None and _cap["ts_first_byte"] is None)
++            else "upstream_done"
++        )
+     except (BrokenPipeError, ConnectionResetError):
+         # Codex occasionally abandons an HTTP stream after it already has the
+         # terminal event. Treat that as a cancelled client, not a proxy crash.
++        _terminal_reason = "broken_pipe"
+         if _sse_dump_fh is not None:
+             try: _sse_dump_fh.close()
+             except Exception: pass
+         return
+-    except requests.RequestException:
++    except requests.RequestException as _up_exc:
++        _terminal_reason = "upstream_exception:" + type(_up_exc).__name__
+         terminal_block = (
+             _synthetic_response_completed_block(synthetic_response_context)
+             if saw_event and not saw_completed
+@@ -1914,6 +2154,13 @@ def _write_chunked_stream(
+         if _sse_dump_fh is not None:
+             try: _sse_dump_fh.close()
+             except Exception: pass
++        if _cap is not None:
++            _cap["ts_end"] = time.time()
++            _cap["heartbeat_sent"] = _hb_sent
++            _cap["stall_detected"] = _stall_detected
++            _cap["terminal_reason"] = _terminal_reason or "unknown"
++            _cap.pop("_prev_ts", None)
++            _write_sse_capture_record(_cap)
+ 
+ 
+ def _read_json_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
+@@ -2660,7 +2907,7 @@ def build_proxy_handler(
+ 
+             if response_headers.get("Transfer-Encoding") == "chunked":
+                 try:
+-                    _write_chunked_stream(self, upstream, capture_state=capture_state)
++                    _write_chunked_stream(self, upstream, capture_state=capture_state, request_path=self.path)
+                 finally:
+                     admission.release(ticket)
+                 if capture_active and capture_state is not None:

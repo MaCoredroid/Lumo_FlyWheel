@@ -74,6 +74,14 @@ case "$CMD" in
     # accumulate across runs and every arm's rsync pulls the whole history -> the
     # "byte-identical copied dumps" that confounded prior per-arm runaway/cache analysis.
     ssh "${SSH_OPTS[@]}" "$HOST" "rm -rf $REMOTE_PAIR_DUMPS/* $REMOTE_REQ_DUMPS/* 2>/dev/null; mkdir -p $REMOTE_PAIR_DUMPS $REMOTE_REQ_DUMPS" >/dev/null 2>&1 || true
+    # FR13 §59 offload stream-stall fix-stack (default OFF; ENABLE at a LATER relaunch,
+    # not now). The three LUMO_PROXY_SSE_* envs below are wired-through with OFF defaults
+    # (empty LOG/CAPTURE_DIR + HEARTBEAT_S=0 => byte-identical relay). To turn them on at
+    # the next relaunch, export before invoking this script (do NOT add a '#'-comment
+    # INSIDE the quoted ssh env block below — it would comment out the launch command):
+    #   export LUMO_PROXY_SSE_LOG=1                                  # per-request terminal-reason -> offload_proxy.log
+    #   export LUMO_PROXY_SSE_CAPTURE_DIR="$REMOTE_ROOT/sse_capture" # per-chunk-timestamped chat-path capture jsonl
+    #   export LUMO_PROXY_SSE_HEARTBEAT_S=15                         # empty-delta heartbeat on upstream idle (chat only)
     ssh "${SSH_OPTS[@]}" "$HOST" "\
       LUMO_PROXY_OFFLOAD_REPO=$REMOTE_REPO \
       LUMO_PROXY_OFFLOAD_VENV=$REMOTE_VENV \
@@ -87,6 +95,9 @@ case "$CMD" in
       LUMO_PROXY_QWEN_SAMPLING=${LUMO_PROXY_QWEN_SAMPLING:-1} \
       LUMO_PROXY_PAIR_DUMP_DIR=$REMOTE_PAIR_DUMPS \
       LUMO_PROXY_REQUEST_DUMP_DIR=$REMOTE_REQ_DUMPS \
+      LUMO_PROXY_SSE_LOG=${LUMO_PROXY_SSE_LOG:-} \
+      LUMO_PROXY_SSE_CAPTURE_DIR=${LUMO_PROXY_SSE_CAPTURE_DIR:-} \
+      LUMO_PROXY_SSE_HEARTBEAT_S=${LUMO_PROXY_SSE_HEARTBEAT_S:-0} \
       LUMO_PROXY_THINK_BUDGET=${LUMO_PROXY_THINK_BUDGET:-} \
       LUMO_PROXY_THINK_CUTOFF=${LUMO_PROXY_THINK_CUTOFF:-} \
       LUMO_PROXY_ALLOW_MODELS_GET=${LUMO_PROXY_ALLOW_MODELS_GET:-} \

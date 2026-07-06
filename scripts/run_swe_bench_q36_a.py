@@ -103,6 +103,13 @@ QWEN_CODE_TEMPLATE = (
     # caps real output at LUMO_PROXY_MAX_OUTPUT_TOKENS=32768, so reserve exactly that:
     # contextLimit=98304 -> hard limit 75304 (+54%). Uniform across all arms (eval-fair).
     "-e QWEN_CODE_MAX_OUTPUT_TOKENS=32768 "
+    # FR13 §59 belt: raise qwen-code's stream-idle abort (built-in default 120000ms)
+    # so a transient mid-stream upstream flake (GB10 emit/transport wedge) is not
+    # converted into a fatal patch-less give-up. qwen-code 0.19.4 reads
+    # QWEN_STREAM_IDLE_TIMEOUT_MS (env precedence: config field > env > default).
+    # Modest raise (240000ms) paired with the runner stall-watchdog; on the live
+    # ssh/offload path ${VAR:-240000} shell-expands remotely. Overridable via env.
+    "-e QWEN_STREAM_IDLE_TIMEOUT_MS=${QWEN_STREAM_IDLE_TIMEOUT_MS:-240000} "
     "-w /workspace qwen-code-runner:v1 "
     "--yolo --output-format json --max-session-turns 80 -p"
 )
@@ -857,6 +864,103 @@ def _codex_net_log(msg: str) -> None:
         pass
 
 
+# --- FR13 §59 runner stall-watchdog (default OFF) ----------------------------
+# Diagnosis: a per-request GB10 emit/transport wedge froze the offloaded qwen-code
+# agent mid-stream. With SWE_AGENT_WALL_S=0 the harness imposes NO wall, so a
+# pre-first-byte wedge (Mode B, the client idle guard never arms) hung one banked
+# run for 37 min until an external watchdog. This bounds BOTH modes by KILLING the
+# ssh (and best-effort the remote container) when the agent's trace stops growing,
+# keying on TRACE GROWTH (not wallclock) so a legitimately slow-but-progressing
+# task survives. It KILLS + CLASSIFIES (cause=infra_stall_suspect); it NEVER
+# retries or discards — that would risk the firm nudge ban.
+def _stall_kill_s() -> float:
+    """LUMO_SWE_STALL_KILL_S seconds; 0/unset/invalid => 0.0 (watchdog OFF)."""
+    raw = os.environ.get("LUMO_SWE_STALL_KILL_S", "").strip()
+    if not raw:
+        return 0.0
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        return 0.0
+    return val if val > 0 else 0.0
+
+
+def _kill_proc(proc: Any) -> None:
+    try:
+        proc.kill()
+    except Exception:  # noqa: BLE001 - already-dead proc, etc.
+        pass
+
+
+def _monitor_proc_with_stall_watchdog(
+    proc: Any,
+    *,
+    trace_path: Path,
+    wall_timeout_s: float | None,
+    stall_kill_s: float,
+    poll_s: float = 5.0,
+    on_stall_kill: Any = None,
+) -> dict[str, Any]:
+    """Block until ``proc`` exits, enforcing an optional wall timeout AND (when
+    stall_kill_s>0) a trace-growth stall-watchdog.
+
+    Returns metadata: {returncode, timed_out, stall_killed, last_trace_growth_ts}.
+    On a stall (no ``trace_path`` byte-growth for stall_kill_s) the local proc is
+    killed AFTER invoking on_stall_kill() (best-effort remote cleanup). On a wall
+    timeout the local proc is killed (caller handles remote cleanup, mirroring the
+    legacy path). NEVER retries. stall_kill_s<=0 disables the stall-watchdog, so
+    the OFF behavior matches the legacy blocking subprocess.run(timeout=wall)."""
+    start = time.monotonic()
+    last_size = -1
+    last_growth_mono = start
+    last_growth_ts = time.time()
+    timed_out = False
+    stall_killed = False
+    rc: int | None = None
+    while True:
+        try:
+            rc = proc.wait(timeout=poll_s)
+            break
+        except subprocess.TimeoutExpired:
+            pass
+        now = time.monotonic()
+        try:
+            size = trace_path.stat().st_size
+        except OSError:
+            size = last_size
+        if size > last_size:
+            last_size = size
+            last_growth_mono = now
+            last_growth_ts = time.time()
+        if wall_timeout_s and wall_timeout_s > 0 and (now - start) >= wall_timeout_s:
+            timed_out = True
+            _kill_proc(proc)
+            try:
+                rc = proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                rc = -1
+            break
+        if stall_kill_s and stall_kill_s > 0 and (now - last_growth_mono) >= stall_kill_s:
+            stall_killed = True
+            if on_stall_kill is not None:
+                try:
+                    on_stall_kill()
+                except Exception:  # noqa: BLE001 - best-effort remote cleanup
+                    pass
+            _kill_proc(proc)
+            try:
+                rc = proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                rc = -1
+            break
+    return {
+        "returncode": rc if rc is not None else -1,
+        "timed_out": timed_out,
+        "stall_killed": stall_killed,
+        "last_trace_growth_ts": last_growth_ts,
+    }
+
+
 def _run_codex_remote(
     *,
     host: str,
@@ -938,26 +1042,47 @@ def _run_codex_remote(
     # SSH timeout = codex wall + a teardown buffer; a true codex timeout is
     # handled by killing the remote container (mirrors the local path).
     ssh_codex = ["ssh", *_EVAL_SSH_OPTS, "-o", f"ConnectTimeout=20", host, remote_cmd]
-    try:
-        with trace_path.open("w", encoding="utf-8") as tf, \
-             stderr_path.open("w", encoding="utf-8") as ef:
-            completed = subprocess.run(
-                ssh_codex, stdout=tf, stderr=ef,
-                # timeout_s<=0 => NO harness wall (codex runs to its own idle/turn limit).
-                timeout=(None if timeout_s <= 0 else max(timeout_s, 30) + 120), check=False,
-            )
-        rc = completed.returncode
-        if rc == 255:
-            # SSH transport died — CLASSIFY network-drop (req #4), not a model run.
-            net_drop = True
-            _codex_net_log(f"CODEX_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
-    except subprocess.TimeoutExpired:
-        timed_out = True
+    # FR13 §59: Popen + trace-growth stall-watchdog (env LUMO_SWE_STALL_KILL_S,
+    # default 0=OFF). Wall timeout is enforced inside the monitor so OFF behavior
+    # matches the legacy subprocess.run(timeout=wall). timeout_s<=0 => no wall.
+    stall_kill_s = _stall_kill_s()
+    wall_timeout_s = None if timeout_s <= 0 else max(timeout_s, 30) + 120
+    stall_killed = False
+    last_trace_growth_ts: float | None = None
+
+    def _remote_stall_kill() -> None:
+        # best-effort kill the remote container so a stalled run doesn't linger
+        _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"docker kill {container_name} 2>/dev/null; "
+                    f"docker wait {container_name} 2>/dev/null; echo killed"],
+                   what=f"codex_stall_kill:{instance_id}", timeout=60, max_attempts=2)
+
+    with trace_path.open("w", encoding="utf-8") as tf, \
+         stderr_path.open("w", encoding="utf-8") as ef:
+        proc = subprocess.Popen(ssh_codex, stdout=tf, stderr=ef)
+        mon = _monitor_proc_with_stall_watchdog(
+            proc, trace_path=trace_path, wall_timeout_s=wall_timeout_s,
+            stall_kill_s=stall_kill_s, poll_s=5.0, on_stall_kill=_remote_stall_kill,
+        )
+    rc = mon["returncode"]
+    timed_out = mon["timed_out"]
+    stall_killed = mon["stall_killed"]
+    last_trace_growth_ts = mon["last_trace_growth_ts"]
+    if stall_killed:
+        # infra_stall_suspect: the agent trace stopped growing (a suspected GB10
+        # emit/transport wedge). Killed + CLASSIFIED; NEVER retried (nudge ban).
+        _codex_net_log(f"CODEX_STALL_KILL {instance_id} no trace growth for {stall_kill_s}s "
+                       "(infra_stall_suspect; NOT agent_gave_up, NOT retried)")
+        rc = -1
+    elif timed_out:
         # best-effort kill the remote container so it doesn't linger on alienware
         _net_retry(["ssh", *_EVAL_SSH_OPTS, host, f"docker kill {container_name} 2>/dev/null; "
                     f"docker wait {container_name} 2>/dev/null; echo killed"],
                    what=f"codex_kill:{instance_id}", timeout=60, max_attempts=2)
         rc = -1
+    elif rc == 255:
+        # SSH transport died — CLASSIFY network-drop (req #4), not a model run.
+        net_drop = True
+        _codex_net_log(f"CODEX_SSH_TRANSPORT_DROP {instance_id} rc=255 (network-drop, not a fork)")
     elapsed = time.monotonic() - started
 
     # rsync the (modified) workspace back to the GB10 for patch extraction.
@@ -975,7 +1100,7 @@ def _run_codex_remote(
 
     if not stdout_path.is_file():
         stdout_path.write_text("", encoding="utf-8")
-    return {
+    result: dict[str, Any] = {
         "elapsed_s": round(elapsed, 3),
         "exit_code": rc if rc is not None else -1,
         "timed_out": timed_out,
@@ -984,7 +1109,12 @@ def _run_codex_remote(
         "codex_host": host,
         "network_drop": net_drop,
         "ws_down_rc": down.returncode,
+        "stall_killed": stall_killed,
     }
+    if stall_killed:
+        result["cause"] = "infra_stall_suspect"
+        result["last_trace_growth_ts"] = last_trace_growth_ts
+    return result
 
 
 def _run_agent_instance(
