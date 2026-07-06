@@ -2337,3 +2337,34 @@ open cell = the tree-path shared prefix-cache restore UNDER CONCURRENCY. REFOCUS
 reading the FR13_POSGLOBALS marker + nonempty_clears — decides if the positional globals are even the
 concurrency carrier (nonempty_clears=0 => not; pivot to localize the real cache+concurrency seam).
 DROP the FA2/QPAD/BI/batch-variance-drift path (resolved or overturned).
+
+## §119 RE-CORRECTION: "A' dissolved" was an OVERCLAIM — A' is a REAL, distinct carrier (2026-07-06, user caught it)
+
+I wrongly dissolved carrier A' (§117-§118) by citing the cat9-NO-cache-TOKEN-level lossless
+(2026-06-15 big-denom) to dismiss the cat8-CACHE-AGENTIC give-up. Those are different measurements.
+The user asked "did you test cat8+cache at B=1?" — I had, and the answer refutes the dissolution:
+
+**branch + cache at B=1 = ~1/4, REPRODUCIBLE + BRANCH-SPECIFIC (not n=4 noise):**
+- cat8cache CONC=1: 12907 R, 14096/14309 give, 14365 X
+- cat8cache B=1:    12907 R, 14096/14309/14365 give
+- cat9_b1 / cat9_apc / _fix / _snap: 12907 R, others give  (2nd task set 13033/13236/13398 same pattern)
+- => 12907 ALWAYS resolves, the others ALWAYS give up — deterministic per-task across many boots.
+- CONTROL: native+cache B=1 = 3/4 (0 give-ups, nativeexseed_cs); spine(chain5)+cache B=1 = 4/4.
+  => the give-up is BRANCH-SPECIFIC (cache is fine on native + on the spine), not cache-general.
+
+cat8 was served CORRECTLY (CAT8_TREE = 8 nodes, EXPECT_RATIO=8). The tok/draft 8!=9 FAIL-LOUD was a
+WRONG expect=9 arg in the seq, NOT a mis-served tree — so the cat8 SWE give-up data is VALID. (This also
+softens §116's "tree mis-served" fault to "wrong assert arg"; the engagement-unproven fault stands.)
+
+**TWO real carriers (task #13 was right; my dissolution was wrong):**
+- **A' = branch + cache, SINGLE-AGENT give-up** (native 4/4 -> branch ~1/4 at B=1). The BIGGER drop.
+  NOT a restore-column bug (workflow refuted) => the cache x branch-drift interaction (cache converts
+  the branch's rambles into give-ups). NOT localized to a seam yet.
+- **B = concurrency give-up** (spine+cache 4/4 CONC=1 -> 0/4 CONC=4). Localized to positional globals
+  (candidate), fix UNVERIFIED (A/B running).
+- The branch is floored ~1/4 at BOTH B=1 and B=4 (A' dominates) => the SPINE is the clean B-probe; the
+  running cat9+cache CONC=4 A/B is the product config but A'-confounded for isolating B.
+
+**Next:** (1) let the running A/B finish for the engagement marker + product-level B-fix data; (2)
+LOCALIZE A' by diffing 12907(resolves) vs 14096/14309(give up) under branch+cache B=1 — deterministic
+per-task = highly localizable. Product (branch+cache+conc) needs BOTH A' and B fixed.
