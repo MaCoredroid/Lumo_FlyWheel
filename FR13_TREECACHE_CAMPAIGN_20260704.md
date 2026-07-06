@@ -1735,3 +1735,20 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
 - Cell A/B build note: the LOCKED launcher (fr13_launch_locked.sh) BAKES BATCH_INVARIANT=0 (line 28) and the
   APC flags; a control needs an env-gated `:-0` override (default-preserving) or the forked launcher. Deferred
   until Cell C confirms the thesis is real.
+
+## 83. CONFOUND RULED OUT — B=4 is the carrier (clean controlled result); localization cells armed
+- CELL C (B=1) first result = DECISIVE: astropy-12907 RESOLVED 504B (verdict=resolved, 11 turns, 4388 out-tok,
+  the correct source-only separable.py fix `cright[-right.shape[0]:, -right.shape[1]:] = 1`). vs the SAME task
+  at B=4 = agent_gave_up (0B, 5 turns, 1543 out-tok, </think> leak). IDENTICAL build (both baked fixes + APC +
+  EXACT_SEED + cat8 tree, verified in cache_config_info); the ONLY difference is max_num_seqs 1 vs 4. At B=1 it
+  does MORE turns + MORE tokens + a CORRECT patch. => task-hardness REFUTED; the B=4 give-up is a genuine
+  regression caused by B=4 (batch/co-residency). (n=1 of 4; 13033 running to confirm the pattern, but 12907 is
+  the highest-signal task — known-good at B=1 per §72 — so this is already a clean controlled confirmation.)
+- cat8 uses LAUNCHER=forked (serve_variant:142) => the forked launcher respects env flags, but serve_variant:246
+  passed BATCH_INVARIANT=0 hardcoded. Made a DEFAULT-PRESERVING edit: BATCH_INVARIANT="${BATCH_INVARIANT:-0}"
+  (golden LOCKED launcher untouched). Cell B (no-cache) needs only FR13_ENABLE_APC=0 (no code edit).
+- LOCALIZATION ARMED (scripts/probes/fr13_localize_seq.sh, B=4 on giveup4, run after Cell C completes):
+  * Cell B: B=4 + tree + NO-cache (FR13_ENABLE_APC=0) + BI=0  -> resolves => cache is the carrier; give-up => not cache
+  * Cell A: B=4 + tree + cache + BATCH_INVARIANT=1 BI_TREE_ATTN=1 -> resolves => batch-variance is it; give-up => not
+  If Cell A fixes it, the HEADLINE speed matrix runs at B=4+BI (co-residency throughput AND correctness — the
+  ideal deliverable); if Cell B fixes it, the fix is in the concurrent-restore path; if neither, deeper co-residency.
