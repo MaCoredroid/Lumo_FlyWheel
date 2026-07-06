@@ -1804,3 +1804,23 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
     (native recovers + tree stuck => tree/cache is the amplifier), (b) implement guided_json to PREVENT malformed gen.
 - Health monitor b30yiff6p (clean: mem-wedge + exited-container, no pgrep self-match — the prior brwky0rod fired a
   FALSE SERVER_DOWN alarm by matching its own cmdline). Waiter bmdjgyz0x for the first 4 results.
+
+## 86. char-8 measurement: tree+cache = ~0/8 on fr9-resolved-8, but the mechanism is NOT the documented char-8
+- RESULT (first 4/8): 12907 giveup, 14096 giveup, 14365 giveup, 14309 = 779B tests_failed. 0 resolved (fr9 = 8/8).
+  Big regression CONFIRMED on the discriminating subset — but the CARRIER is NOT the documented char-8:
+  * char8-repair firings = 0 (live alienware proxy log /tmp/lumo_offload_proxy_8023.log); 0 proxy 400s/errors. So
+    the "malformed-JSON-in-transcript => 400" shape that the deployed transcript-repair targets is NOT occurring.
+  * 14365 gave up after 3 turns / 416 out-tok, ending on a TEXT turn truncated MID-WORD ("...search for a s") with
+    NO tool call => degenerate/truncated final turn => give-up. This is the degeneration/early-stop mode (the char-8
+    doc's ~10% watchlist), NOT the transcript-malformed-JSON char-8 (57%). Possibly a stream/transport cut OR the
+    tree's distribution shift producing degenerate short turns. (2 toolresult_errors in-trace = parseable-but-wrong
+    args, which the transcript-repair does NOT touch.)
+- So task #12 "char-8" is ALSO partly mis-framed for the CURRENT pipeline state: the deployed transcript-repair
+  addresses a shape that isn't firing; the live blocker is degenerate/truncated turns. The regression fr9->current
+  spans MANY changes: native MTP-5 -> tree cat8, cache OFF -> ON, on-GB10 -> offload harness, worktree -> official
+  instance_image env. Need to localize.
+- DECISIVE NEXT CONTROL: NATIVE MTP-5 (fr9 spec method) on the SAME 8 tasks, CURRENT harness (offload + instance_
+  image + proxy). Isolates spec-method from harness/env:
+  * native-current recovers toward 8/8 => the TREE spec-decode is the regression (distribution shift => degenerate).
+  * native-current ALSO ~0/8 => the HARNESS/ENV is the regression (offload stream, instance_image env, or proxy),
+    NOT the spec method => fix the harness, not the kernel. (The mid-word truncation smells harness/stream.)
