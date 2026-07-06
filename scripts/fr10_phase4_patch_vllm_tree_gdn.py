@@ -13628,7 +13628,60 @@ def _fr10_tree_accept_token_bias(
         return int(linear_bias)
     path = None
     if phase == "postprocess":
-        path = _fr10_tree_current_accepted_path(batch_index)
+        # FR13 carrier-B misindex fix (FR13_TREE_POSREAD_REQKEY, default "0" =>
+        # byte-identical). _fr10_tree_current_accepted_path indexes the SPEC-ROW-
+        # ordered globals (_LUMO_FA_LAST_ACCEPTED_TREE_*) by the FULL-BATCH
+        # batch_index. On a mixed prefill+decode batch (needs CONC>=2) spec-row
+        # order != full-batch order, so the positional read returns a DIFFERENT
+        # concurrent request's accepted path => wrong accept_token_bias => wrong
+        # copy source-block => corrupted GDN/conv carry. Resolve via the SPEC-ROW
+        # map instead (exactly the keying the devs already applied to the leaf
+        # publish, 9017-9022). The PROBE counter (FR13_TREE_POSREAD_PROBE) proves
+        # the mechanism autotune-immune: 0 @CONC=1, >0 @CONC=4.
+        _fr13_pk_j = None
+        if (
+            os.environ.get("FR13_TREE_POSREAD_REQKEY", "0") == "1"
+            or os.environ.get("FR13_TREE_POSREAD_PROBE", "0") == "1"
+        ):
+            try:
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_pk_gdn,
+                )
+                _fr13_pk_spec = getattr(
+                    _fr13_pk_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None
+                ) or []
+                _fr13_pk_sid = str(req_id)
+                if _fr13_pk_sid in _fr13_pk_spec:
+                    _fr13_pk_j = _fr13_pk_spec.index(_fr13_pk_sid)
+                if (
+                    os.environ.get("FR13_TREE_POSREAD_PROBE", "0") == "1"
+                    and _fr13_pk_j is not None
+                    and _fr13_pk_j != int(batch_index)
+                ):
+                    _fr13_pk_n = getattr(
+                        _fr13_pk_gdn, "_FR13_TREE_POSREAD_MISINDEX_N", 0
+                    ) + 1
+                    _fr13_pk_gdn._FR13_TREE_POSREAD_MISINDEX_N = _fr13_pk_n
+                    if _fr13_pk_n == 1 or _fr13_pk_n % 50 == 0:
+                        print(
+                            "FR13_POSREAD_MISINDEX n=%d full_i=%d spec_j=%d req=%s"
+                            % (
+                                _fr13_pk_n,
+                                int(batch_index),
+                                _fr13_pk_j,
+                                _fr13_pk_sid,
+                            ),
+                            flush=True,
+                        )
+            except Exception:
+                _fr13_pk_j = None
+        if (
+            os.environ.get("FR13_TREE_POSREAD_REQKEY", "0") == "1"
+            and _fr13_pk_j is not None
+        ):
+            path = _fr10_tree_current_accepted_path(_fr13_pk_j)
+        else:
+            path = _fr10_tree_current_accepted_path(batch_index)
     if path is None:
         path = _FR10_TREE_ACCEPTED_PATH_BY_REQ_ID.get(str(req_id))
     if not path:

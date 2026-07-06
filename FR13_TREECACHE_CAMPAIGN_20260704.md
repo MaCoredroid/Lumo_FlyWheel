@@ -2368,3 +2368,35 @@ softens §116's "tree mis-served" fault to "wrong assert arg"; the engagement-un
 **Next:** (1) let the running A/B finish for the engagement marker + product-level B-fix data; (2)
 LOCALIZE A' by diffing 12907(resolves) vs 14096/14309(give up) under branch+cache B=1 — deterministic
 per-task = highly localizable. Product (branch+cache+conc) needs BOTH A' and B fixed.
+
+## §120 CARRIER-B ROOT FOUND + my clear-on-free fix REFUTED (2026-07-06, code-read wh6qqzexx)
+
+Interleaved code-read (verified 3 ways) found carrier B's REAL mechanism and refuted my §112 fix:
+
+**Carrier B = SPEC-ROW vs FULL-BATCH MISINDEX.** _fr10_tree_current_accepted_path(batch_index)
+(fr10_phase4...:13543) indexes the SPEC-ROW-ordered globals (_LUMO_FA_LAST_ACCEPTED_TREE_*, published
+10363-10371) by the FULL-BATCH batch_index (the enumerate `i` at 13748). On a mixed prefill+decode batch
+(CONC>=2) spec-row order != full-batch order => a request reads a DIFFERENT concurrent req's accepted
+path => wrong accept_token_bias => wrong copy source-block => corrupted GDN/conv carry => give-up.
+Verified: (1) globals built spec-row (iterates num_spec_decodes); (2) _LUMO_FA_SPEC_ROW_REQ_IDS is
+spec-compacted (num_decode_draft_tokens>=0); (3) devs ALREADY hit + fixed this for the leaf publish
+(comment 9017-9022: "Key by SPEC-row req_ids ... NOT the full SAMPLER_ROW batch"); the positional
+reader was the one place missed. (4) EMPIRICAL: spine+cache CONC=4 flag-on (my clear-on-free) did NOT
+recover (0/4) — consistent with the diagnosis.
+
+**My §112 fix (FR13_FREE_TREE_POSGLOBALS clear-on-free) is WRONG** — the corruption occurs with all
+globals FRESHLY + correctly published this step; clear-on-free never runs while both reqs are live. It
+cleared real residue (nonempty_clears=1) but that residue was never the bug.
+
+**CORRECT fix (implemented, default-off): FR13_TREE_POSREAD_REQKEY** — resolve the postprocess path via
+_LUMO_FA_SPEC_ROW_REQ_IDS.index(req_id) instead of the positional batch_index (fr10_phase4...:13630).
+Plus FR13_TREE_POSREAD_PROBE (misindex counter, autotune-immune): predicts 0 @CONC=1, >0 @CONC=4.
+Default-off => byte-identical (no-op at CONC=1 since spec-idx==full-idx there).
+
+**Gate (restore-vs-oracle FIRST):** (1) probe counter 0@CONC=1, >0@CONC=4 -> 0 with REQKEY=1; (2) spine
++cache CONC=4 flips 0/4 -> ~4/4, CONC=1 byte-identical. Then SWE confirm.
+
+**A-cache (14309, separate carrier):** the fix ALREADY EXISTS default-off — enable the conv-snapshot
+branch redirect (FR13_APC_CONV_SNAP_FIX=1 + FR13_APC_CONV_LEAF_COMPLETE=1), symmetric to the already-ON
+SSM twin (FR13_APC_SNAP_FIX). Testable by flag-flip on 14309 branch+cache (should flip give-up->RESOLVE).
+Independent of B (different file/trigger/fix).
