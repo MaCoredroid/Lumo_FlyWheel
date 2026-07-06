@@ -2013,3 +2013,14 @@ Live snapshot, cat8+cache matrix arm, MAX_NUM_SEQS=4:
   - cat8 degrades at B=1 too => fundamental. chain5 same B1==B4 => spine batch-robust.
 - fr13_b1_treecache_seq.sh (launch BSIZE=1): cat8+nocache B=1, chain5+nocache B=1 (clean shape compare, cache off),
   + cat8+cache B=1 (direct §66-style give-up test). Runs after cachesep's chain5 B=4 arm (= spine5@B=4).
+
+## 99. SHIPPABLE candidate = spine5+cache (user: "add spine5+cache arm") — added FIRST to the B=1 control
+- chain5(spine5)+EXACT_SEED cache is the actual PRODUCT target: native-drift-level kernel (drifts 2 <= native 3)
+  WITH the cache = both speedups (decode + TTFT) AND (hoped) agentic correctness. Testing only spine5+nocache
+  would miss it. Added chain5+cache B=1 FIRST in fr13_b1_treecache_seq.sh.
+- Full B=1 control now: chain5+cache, cat8+cache, chain5+nc, cat8+nc (shape x cache at B=1). Reads:
+  * chain5+cache B=1 ~4/4 => SHIPPABLE config works at B=1 => then test chain5+cache at B=4 (deployment/co-residency).
+  * cat8+cache B=1 ~4/4 (recovers) => cat8's B=4 give-up = co-residency (§66-style test).
+  * chain5 B1==B4 (spine batch-robust) + cat8 recovers at B=1 => the BRANCHES' co-residency is the carrier.
+- FOLLOW-UP (deployment): if spine5+cache B=1 works, run chain5+cache at B=4 (the current chain5 B=4 arm2 is
+  NOCACHE) to confirm the shippable config survives co-residency. That is the go/no-go for the tree product.
