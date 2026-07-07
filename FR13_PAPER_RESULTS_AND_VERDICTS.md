@@ -209,3 +209,41 @@ luck at temp 0.6 (no seed pin).
 - **Behavioral-losslessness:** N-repeat resolve-rate ON vs OFF (Fisher) on `EXACT_SEED=1` to convert the
   char-8 "consistent-with-flake" into "statistically proven not-cache".
 - **char-8 robustness (task #12):** constrained tool-call decoding / json_repair (cache-independent flake).
+
+---
+
+## Cache / quality contribution — honest decomposition (upstream-verified 2026-07-07, wf_7d8464d1)
+
+Verified against upstream vLLM github (issue/PR numbers cited). Framing is deliberately un-inflated.
+
+**GENUINELY NOVEL (unreported upstream) = branched/tree GDN spec-decode + prefix-cache losslessness.**
+vLLM ships no tree/branched spec-decode; the only upstream rollback-parity artifact (#46187 ReplaySSM, OPEN)
+concedes "no parity data yet." Ours = the two-carrier diagnosis — (a) branched-accept ROW-ADDRESSING
+(accepted token k = tree node path[k], NOT stock linear row num_accepted-1; measured 48/48 UNFAITHFUL,
+diff ~23 at L0; fixed by leaf-map/SNAP_FIX → the stateless-tree runrow commit) + (b) the align-boundary
+CROSS-KERNEL numeric-basis mismatch (tree GDN decode kernel vs chunk_gated_delta_rule restore fold, ~1-2 ULP
+compounding over ~48 GDN layers) — PLUS a MEASURED within-floor lossless gate (per-depth argmax + live
+SWE-Verified behavioral resolve parity). This is the tree EXTENSION of the known-open linear-chain problem.
+
+**UPSTREAMABLE stock fixes (we hit + fixed, did NOT discover — the "mostly stock-vLLM territory" bucket):**
+- B=4 GDN restore-path device-assert (gdn_linear_attn.py:986, initial_state[~has_initial_state]) — same class
+  as #39809 (mamba PC + MTP illegal-memory at batch>1) / #35288 (MTP corruption at concurrency≥4, OPEN).
+- APC-overshoot fix (max_num_batched_tokens = block_size) IS #45238 (align-mode PC drops to 0% hit, OPEN).
+- The mamba cache write-contract + restore-path corrections ride entirely on stock spec-state tensors.
+
+**KNOWN-UPSTREAM we merely mitigate (NOT ours):**
+- char-8 tool-call JSON → HTTP 400: #43713 (qwen3_xml emits invalid JSON, OPEN) + #43995 (renderer
+  json.loads(arguments) 400 on malformed re-fed history, OPEN; only empty-arg subcase fixed #19419/PR#25223).
+  LUMO_PROXY_RETRY_UPSTREAM_400 = client-side workaround, not a root-cause fix, not upstreamable as-is.
+- Linear-chain GDN spec-decode state-rollback losslessness = #39273 (OPEN) — do NOT claim; ours is the extension.
+- Base mamba/GDN prefix-cache + spec-decode enablement (#26201 umbrella, #33705/#33726) — actively-worked upstream.
+
+**SGLang attribution:** the working cache discipline is ported from SGLang MambaRadixCache
+(research/fr13_workflows/sglang_mamba_radix_cache_design.md): block-aligned snapshots + "snapshot the
+committed state, restore VERBATIM, never reconstruct" (= the stateless-tree runrow commit). The per-radix-node
+checkpoint tree + ping-pong slot did NOT port (vLLM keeps one checkpoint at the last block boundary).
+
+**Honesty guards:** within-floor, NOT bit-exact (REFOLD non-functional, redirect_used=0 → recurrent-leaf
+fallback 100%, cross-basis residual eaten); greedy-LCP committer carries NO rejection-sampler losslessness
+theorem (so "lossless" = within-floor + behavioral resolve parity, not a proven guarantee); fork-bound (the
+contributable form is the diagnosis + gate methodology, a tree extension of #39273, not a mergeable PR).
