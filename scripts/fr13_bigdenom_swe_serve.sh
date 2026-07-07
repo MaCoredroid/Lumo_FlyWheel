@@ -325,9 +325,9 @@ else
     || { echo "FAIL: proxy temp pin missing (class 9)"; exit 5; }
   grep -q "LUMO_PROXY_PAIR_DUMP_DIR=" "$ARMDIR/proxy_env.txt" \
     || { echo "FAIL: proxy pair-dump pin missing (class 9)"; exit 5; }
-  grep -q "LUMO_PROXY_AUTO_CONTINUE=1" "$ARMDIR/proxy_env.txt" \
-    || { echo "FAIL: proxy auto-continue pin missing (early-exit class fe927e74)"; exit 5; }
-  echo "proxy OK (forced temp 0.0, pair dumps on, auto-continue on)"
+  grep -q "LUMO_PROXY_AUTO_CONTINUE=0" "$ARMDIR/proxy_env.txt" \
+    || { echo "FAIL: proxy NUDGE NOT DISABLED — LUMO_PROXY_AUTO_CONTINUE must be 0 for the honest give-up gate"; exit 5; }
+  echo "proxy OK (forced temp 0.0, pair dumps on, NUDGE OFF)"
 fi
 
 # ---- eval offload pre-flight (attempt eval; do NOT fail the gate on infra) ----

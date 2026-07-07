@@ -28,7 +28,9 @@ cd "$REPO" || { echo "FAIL: cd $REPO"; exit 2; }
 
 # Preserve the exact proxy semantics of the on-GB10 gold-gate path.
 export LUMO_PROXY_RETRY_UPSTREAM_400=1
-export LUMO_PROXY_AUTO_CONTINUE=1
+# NUDGE BANNED (user 2026-07-04 / 2026-07-07): the auto-continue re-prompt confounds the
+# give-up gate (masks the model's explain-instead-of-act stall). Default OFF; overridable.
+export LUMO_PROXY_AUTO_CONTINUE=${LUMO_PROXY_AUTO_CONTINUE:-0}
 # FR13: FORCEFUL in-session nudge (substitutes the harness empty-patch-retry directive that
 # empirically breaks the explain-instead-of-act stall) so recovery happens IN-SESSION with full
 # context preserved, instead of the clean-context restart (SWE_EMPTY_PATCH_RETRIES=0).

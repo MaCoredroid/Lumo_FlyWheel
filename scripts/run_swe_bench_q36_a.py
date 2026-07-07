@@ -59,7 +59,7 @@ DEFAULT_AGENT_WALL_S = 0  # per-attempt codex wall. 0 = NO upper limit (user 202
 # reinstate a hard per-attempt wall of N seconds. NOTE: serial (concurrency=1) so a single stuck
 # task can stall the whole sweep; the codex idle timeout is the real backstop.
 DEFAULT_EVAL_TIMEOUT_S = 30 * 60
-DEFAULT_MODEL_NAME_TAG = "qwen3.6-27b-fp8::codex-cli-0.128.0::q36-a"
+DEFAULT_MODEL_NAME_TAG = "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a"
 # Same capture path used by launch_qwen36_ablation_point.py / Track B benches.
 DEFAULT_PROXY_CAPTURE = Path("/tmp/track_b_e2e_proxy_capture/request_metrics.jsonl")
 DEFAULT_DCGM_SAMPLER = REPO_ROOT / "scripts" / "sample_dcgm_during_task.py"
@@ -113,13 +113,17 @@ QWEN_CODE_TEMPLATE = (
     # parse as a replacement field and crash dispatch (KeyError, tcfix_i5).
     "-e QWEN_STREAM_IDLE_TIMEOUT_MS=${{QWEN_STREAM_IDLE_TIMEOUT_MS:-240000}} "
     "-w /workspace qwen-code-runner:v1 "
-    "--yolo --output-format json --max-session-turns 80 -p"
+    # user 2026-07-07: NO turn limit (100000 = effectively unlimited); tasks run to natural
+    # submit/give-up. Backstop = 600s stall-watchdog + QWEN_STREAM_IDLE_TIMEOUT_MS, NOT a turn cap.
+    "--yolo --output-format json --max-session-turns 100000 -p"
 )
 
 
 def _agent_template() -> str:
-    """Pick the agent command template from SWE_AGENT (default 'codex' = byte-identical)."""
-    agent = os.environ.get("SWE_AGENT", "codex").strip().lower()
+    """Pick the agent command template from SWE_AGENT (default 'qwen_code' — user 2026-07-07).
+    Codex has a built-in nudge/auto-continue that suppresses give-ups and CONFOUNDS the give-up
+    gate; qwen-code is the honest agent (native XML tools, aligned with Qwen training)."""
+    agent = os.environ.get("SWE_AGENT", "qwen_code").strip().lower()
     if agent in ("qwen_code", "qwen-code", "qwen"):
         return QWEN_CODE_TEMPLATE
     return CODEX_TEMPLATE
@@ -226,7 +230,7 @@ _INSTANCE_CONTAINER_PATH = (
 _INSTANCE_WRAPPER = (
     "printf %s \"$SWE_AGENTS_B64\" | base64 -d > /testbed/AGENTS.md; "
     "PROMPT=$(printf %s \"$SWE_PROMPT_B64\" | base64 -d); "
-    "/opt/qwen/bin/qwen --yolo --output-format json --max-session-turns 80 -p \"$PROMPT\"; "
+    "/opt/qwen/bin/qwen --yolo --output-format json --max-session-turns 100000 -p \"$PROMPT\"; "
     "rc=$?; "
     # Diff against HEAD, NOT base_commit. In the SWE-bench per-instance image /testbed
     # HEAD is `<base_commit> + the committed env-setup commit` (efa06c664 "SWE-bench";

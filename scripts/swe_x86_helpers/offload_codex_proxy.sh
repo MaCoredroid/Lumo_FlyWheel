@@ -121,9 +121,9 @@ case "$CMD" in
       || { echo "FAIL: remote proxy temp pin missing/mismatch (class 9; expected $FORCE_TEMP)"; exit 5; }
     grep -q "LUMO_PROXY_PAIR_DUMP_DIR=" "$ARMDIR/offload_proxy_env.txt" \
       || { echo "FAIL: remote proxy pair-dump pin missing (class 9)"; exit 5; }
-    grep -q "LUMO_PROXY_AUTO_CONTINUE=1" "$ARMDIR/offload_proxy_env.txt" \
-      || { echo "FAIL: remote proxy auto-continue pin missing"; exit 5; }
-    echo "OFFLOAD_PROXY_OK host=$HOST upstream=$UPSTREAM (forced temp $FORCE_TEMP, pair dumps on, auto-continue on)"
+    grep -q "LUMO_PROXY_AUTO_CONTINUE=0" "$ARMDIR/offload_proxy_env.txt" \
+      || { echo "FAIL: remote proxy NUDGE NOT DISABLED — LUMO_PROXY_AUTO_CONTINUE must be 0 for the honest give-up gate (nudge confounds it)"; exit 5; }
+    echo "OFFLOAD_PROXY_OK host=$HOST upstream=$UPSTREAM (forced temp $FORCE_TEMP, pair dumps on, NUDGE OFF)"
     ;;
 
   fetch)

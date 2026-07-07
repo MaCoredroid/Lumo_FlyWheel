@@ -3,7 +3,8 @@ set -u
 cd /home/mark/shared/lumoFlyWheel
 # preserve exact env (bypass kept ON; auto-continue + forced temp intact)
 export LUMO_PROXY_RETRY_UPSTREAM_400=1
-export LUMO_PROXY_AUTO_CONTINUE=1
+# NUDGE BANNED (user 2026-07-04 / 2026-07-07): confounds the give-up gate. Default OFF; overridable.
+export LUMO_PROXY_AUTO_CONTINUE=${LUMO_PROXY_AUTO_CONTINUE:-0}
 export LUMO_PROXY_AUTO_CONTINUE_MESSAGE="Continue working on this task. Do not stop until you have left a concrete source edit that makes the tests pass. If your previous attempt did not pass, read the failure and try a different approach. Do not spend time on environment/pip/conda setup."
 # 10 was a "doom loop" antipattern (research wcf7colyp: OpenAI/Anthropic/harnesses do
 # NOT retry the whole turn 10x; finer-grained single-request retry is the norm). Combined
