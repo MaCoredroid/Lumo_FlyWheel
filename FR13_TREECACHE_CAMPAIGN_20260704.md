@@ -2490,3 +2490,22 @@ carrier B in GRAPH mode with >=2 seeds (is spine+cache reliably 4/4@CONC=1 and 0
 robustly in graph mode, "carrier B" may be n=4 noise, not a distinct bug. Need a give-up-tracking signal
 that works UNDER cuda-graph (not the eager-only boundary log) -- e.g. a cheap per-req counter that survives
 capture, or compare graph-mode restored state to a graph-mode oracle.
+
+## §127 A' pivot: obs EXONERATES conv/SSM restore → align-mode chunked-prefill machinery (2026-07-07)
+
+Graph-mode obs (SERVE_LOG=1, cat8+cache B=1, 12907 R + 14096 give both in counters):
+  conv_leafmap_hit=181296 conv_leafmap_miss=0 (conv redirect 100% hit)
+  redirect_engaged=1344 redirect_fallback=1344 (fallback = FAITHFUL recurrent leaf, not wrong)
+  es_row0_hit_true dominant, es_row0_hit_false stuck at 96 (not growing w/ give-up task)
+=> the conv/SSM cache RESTORE is faithful for BOTH resolve AND give-up tasks => NOT the A' carrier.
+This CONFIRMS project_fr13_apc_spec_specific_carrier (2026-06-28): GDN restore faithful 48/48, position
+REFUTED, and the carrier = ALIGN-MODE block-aligned chunked-prefill MACHINERY (not the cached value —
+proven by a SHADOW bypass that stayed 0/3). --enable-prefix-caching flips mamba_cache_mode none->align =>
+_mamba_block_aligned_split saves/reloads the GDN recurrence at MAMBA_BLOCK_SIZE (1024) boundaries =>
+boundary-sensitive fp re-accumulation, tolerated by no-spec but derails spec+cache.
+
+**FIX CANDIDATE (memory project_fr13_apc_blocksize_fix): raise MAMBA_BLOCK_SIZE (1024->8192) so the
+prefill isn't block-split => fewer/no boundary save-reload => solves like CFG (mode=none) while KEEPING
+cache.** TEST NOW: cat8+cache B=1 GRAPH, MAMBA_BLOCK_SIZE=8192 vs baseline 1024 (=1/4). Gate: does
+14096/14309 flip give-up -> resolve? (Open caveat from SGLang grounding: measure whether the align-vs-none
+diff is ~0.0078 cumulative-fp or a larger per-boundary BUG — block_size=8192 fewer boundaries distinguishes.)
