@@ -5349,7 +5349,11 @@ def _fr13_gdn_subop_mab(
                         h0_is_bank=True,
                         h0_index_row=fr10_b * spec_state_indices_tensor.size(-1),
                         h0_batch_index=fr10_b,
-                        h0_use_accepted_column=True,
+                        # STATELESS-TREE: FR13_TREE_RUNROW_INIT -> seed the scan h0
+                        # from col 0 (running row) instead of accepted col nacc-1.
+                        h0_use_accepted_column=(
+                            os.environ.get("FR13_TREE_RUNROW_INIT", "0") != "1"
+                        ),
                         n_actual=tree_n,
                         n_pad=tree_n_pad,
                         strict_mask=attn_metadata.fr10_tree_strict_mask,
@@ -10475,6 +10479,33 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                 )
             _fr13_replay_rows = len(_fr13_replay_gdn_node_paths)
             _fr13_bnd_on = _lumo_tree_commit_gdn._fr13_boundary_on()
+            # FR13 STATELESS-TREE (default all-OFF -> byte-identical): the three
+            # flags are ONE lifecycle (write leaf->col0 + init-read col0 + burn
+            # cols 1:). Fail loud on partial enable (corrupts decode/cache; also
+            # a mixed SSM/conv page on restore).
+            _fr13_runrow_commit = (
+                os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "0") == "1"
+            )
+            _fr13_runrow_init = (
+                os.environ.get("FR13_TREE_RUNROW_INIT", "0") == "1"
+            )
+            _fr13_burn_node_bank = (
+                os.environ.get("FR13_APC_BURN_NODE_BANK", "0") == "1"
+            )
+            if len({
+                _fr13_runrow_commit,
+                _fr13_runrow_init,
+                _fr13_burn_node_bank,
+            }) != 1:
+                raise RuntimeError(
+                    "FR13 STATELESS-TREE: COMMIT_TO_RUNNING_ROW/TREE_RUNROW_INIT/"
+                    "BURN_NODE_BANK must all be set together (got commit=%r "
+                    "init=%r burn=%r)" % (
+                        _fr13_runrow_commit,
+                        _fr13_runrow_init,
+                        _fr13_burn_node_bank,
+                    )
+                )
             # FR13_REPLAY_DURABLE_AB (PRIME lead, observe-only): when ON, force
             # the verbatim per-layer replay loop (so the durable-state A/B can
             # tap H_ours fresh per layer) and carry the SAME per-event counter
@@ -10696,6 +10727,9 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                         num_spec_decodes=_fr13_replay_rows,
                         output_scale=float(_ep_stacks['output_scale']),
                         use_qk_l2norm_in_kernel=True,
+                        runrow_commit=_fr13_runrow_commit,
+                        runrow_init=_fr13_runrow_init,
+                        burn_node_bank=_fr13_burn_node_bank,
                     )
                     # ONE all-layer clear preserves the per-layer
                     # clear-after-consume invariant: every layer row's [0] is
@@ -10757,11 +10791,18 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                                 _fr13_layer._fr13_replay_output_scale
                             ),
                             use_qk_l2norm_in_kernel=True,
+                            runrow_commit=_fr13_runrow_commit,
+                            runrow_init=_fr13_runrow_init,
+                            burn_node_bank=_fr13_burn_node_bank,
                         )
-                        _fr13_publish_apc_ssm_leaf(
-                            _lumo_tree_commit_gdn, _fr13_layer,
-                            _fr13_spec_req_ids, _fr13_replay_lens,
-                        )
+                        if not _fr13_runrow_commit:
+                            # STATELESS-TREE: col 0 is now the authoritative
+                            # committed-leaf running row, read map-free by the
+                            # cache; the leaf-map/SNAP_FIX publish is unused.
+                            _fr13_publish_apc_ssm_leaf(
+                                _lumo_tree_commit_gdn, _fr13_layer,
+                                _fr13_spec_req_ids, _fr13_replay_lens,
+                            )
                         # PATH A (FR13_APC_BLOCK_REFOLD, default OFF -> the fn
                         # early-returns on _FR13_REFOLD_ON=False, and the guard
                         # below skips it entirely -> byte-identical). Host-eager
@@ -11349,6 +11390,31 @@ def _lumo_tree_canonical_multidraft_sample(
                 )
             _fr13_replay_rows = len(_fr13_replay_gdn_node_paths)
             _fr13_bnd_on = _lumo_tree_commit_gdn._fr13_boundary_on()
+            # FR13 STATELESS-TREE (default all-OFF -> byte-identical): one lifecycle,
+            # fail loud on partial enable. (Sampled-committer twin; live @ temp>0.)
+            _fr13_runrow_commit = (
+                os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "0") == "1"
+            )
+            _fr13_runrow_init = (
+                os.environ.get("FR13_TREE_RUNROW_INIT", "0") == "1"
+            )
+            _fr13_burn_node_bank = (
+                os.environ.get("FR13_APC_BURN_NODE_BANK", "0") == "1"
+            )
+            if len({
+                _fr13_runrow_commit,
+                _fr13_runrow_init,
+                _fr13_burn_node_bank,
+            }) != 1:
+                raise RuntimeError(
+                    "FR13 STATELESS-TREE: COMMIT_TO_RUNNING_ROW/TREE_RUNROW_INIT/"
+                    "BURN_NODE_BANK must all be set together (got commit=%r "
+                    "init=%r burn=%r)" % (
+                        _fr13_runrow_commit,
+                        _fr13_runrow_init,
+                        _fr13_burn_node_bank,
+                    )
+                )
             if _fr13_replay_rows:
                 if int(_accepted_path_buf.size(0)) < _fr13_replay_rows:
                     raise RuntimeError(
@@ -11443,11 +11509,16 @@ def _lumo_tree_canonical_multidraft_sample(
                             _fr13_layer._fr13_replay_output_scale
                         ),
                         use_qk_l2norm_in_kernel=True,
+                        runrow_commit=_fr13_runrow_commit,
+                        runrow_init=_fr13_runrow_init,
+                        burn_node_bank=_fr13_burn_node_bank,
                     )
-                    _fr13_publish_apc_ssm_leaf(
-                        _lumo_tree_commit_gdn, _fr13_layer,
-                        _fr13_spec_req_ids, _fr13_replay_lens,
-                    )
+                    if not _fr13_runrow_commit:
+                        # STATELESS-TREE: col 0 authoritative; leaf-map publish unused.
+                        _fr13_publish_apc_ssm_leaf(
+                            _lumo_tree_commit_gdn, _fr13_layer,
+                            _fr13_spec_req_ids, _fr13_replay_lens,
+                        )
                     # PATH A (FR13_APC_BLOCK_REFOLD) twin of the greedy-committer
                     # fold hop above (same rationale + inertness). Default OFF ->
                     # skipped -> byte-identical.
@@ -14114,7 +14185,14 @@ def get_temporal_copy_spec(
     num_accepted_tokens: int,
 ) -> MambaCopySpec:
     \"\"\"Return a MambaCopySpec for copying a temporal (SSM/recurrent) state slice.\"\"\"
-    src_block_id = block_ids[cur_block_idx + num_accepted_tokens - 1]
+    if os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "0") == "1":
+        # STATELESS-TREE: col 0 (block_ids[cur_block_idx], the req running row)
+        # now holds the committed leaf (RUNROW_COMMIT); snapshot it directly,
+        # map-free = native semantics. The accepted-leaf linear column
+        # (cur_block_idx+nacc-1) is BURNED post-commit, so it must NOT be read.
+        src_block_id = block_ids[cur_block_idx]
+    else:
+        src_block_id = block_ids[cur_block_idx + num_accepted_tokens - 1]
     src_state = state[src_block_id]
     return MambaCopySpec(
         start_addr=src_state.data_ptr(), num_elements=src_state.numel()

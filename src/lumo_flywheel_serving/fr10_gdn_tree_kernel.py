@@ -1064,8 +1064,21 @@ def _tree_gdn_replay_kernel(
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
     RAW_GATING: tl.constexpr,
     SCAN_ALIGN: tl.constexpr = False,
+    RUNROW_COMMIT: tl.constexpr = False,
+    RUNROW_INIT: tl.constexpr = False,
+    BURN_NODE_BANK: tl.constexpr = False,
 ):
     # FR13_REPLAY_ROUTE accepted-path chain replay (sibling of the scan).
+    #
+    # FR13 STATELESS-TREE (default all-False -> byte-identical):
+    #   RUNROW_INIT   -> seed h0 from col 0 (the req running row) instead of the
+    #                    positional accepted-leaf col nacc-1.
+    #   RUNROW_COMMIT -> after the accepted-path loop, also store the committed
+    #                    leaf `state` into col 0, so col 0 becomes native's
+    #                    authoritative running row (snapshot/restore/next-init).
+    #   BURN_NODE_BANK-> zero the ephemeral spec cols 1..num_spec after the
+    #                    col-0 commit (col 0 preserved) = tree keeps zero lifespan.
+    # The three form one lifecycle and are gated together by the committer.
     #
     # The scan no longer exports per-node states to HBM
     # (STORE_NODE_STATES=False); instead this kernel re-executes the
@@ -1092,7 +1105,12 @@ def _tree_gdn_replay_kernel(
     # snapshot of the accepted-lens buffer (the committer refills the live
     # buffer with the NEW lens before this kernel launches).
     prev_len = tl.load(prev_lens + pid_b).to(tl.int64)
-    h0_col = tl.maximum(prev_len - 1, 0)
+    if RUNROW_INIT:
+        # STATELESS-TREE: prev step's RUNROW_COMMIT wrote its committed leaf into
+        # col 0 (the req running row); read init from there = native semantics.
+        h0_col = tl.zeros([], dtype=tl.int64)
+    else:
+        h0_col = tl.maximum(prev_len - 1, 0)
     h0_row = tl.load(spec_state_indices + pid_b * SPEC_COLS + h0_col).to(tl.int64)
     # Read the whole h0 tile into registers BEFORE any store: a later
     # publish in this same program may target the h0 bank row itself
@@ -1196,6 +1214,37 @@ def _tree_gdn_replay_kernel(
             state,
             mask=active & v_mask[:, None],
         )
+    if RUNROW_COMMIT:
+        # STATELESS-TREE: at loop exit `state` holds the committed leaf (last
+        # active t; inactive t preserved it via tl.where at :1199) -- the SAME
+        # bytes stored to col nacc-1 above, so this is byte-identical on the
+        # no-cache path. Deposit into col 0 (the req running row) so col 0 is
+        # native's authoritative source for snapshot / restore / next-step init.
+        rr_row = tl.load(spec_state_indices + pid_b * SPEC_COLS + 0).to(tl.int64)
+        tl.store(
+            state_bank
+            + rr_row * BANK_STRIDE
+            + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            state,
+            mask=v_mask[:, None],
+        )
+    if BURN_NODE_BANK:
+        # Zero the ephemeral spec cols 1..num_spec (col 0 preserved). Nothing
+        # downstream reads them post-fix (h0 + snapshot both read col 0; the next
+        # step's scan writes its own nodes fresh) => tree keeps zero lifespan.
+        for _bc in tl.static_range(1, SPEC_COLS):
+            z_row = tl.load(
+                spec_state_indices + pid_b * SPEC_COLS + _bc
+            ).to(tl.int64)
+            tl.store(
+                state_bank
+                + z_row * BANK_STRIDE
+                + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+                + offs_k[None, :],
+                tl.zeros([BLOCK_V, DIM_K], dtype=tl.float32),
+                mask=v_mask[:, None],
+            )
 
 
 def launch_tree_gdn_replay(
@@ -1214,6 +1263,9 @@ def launch_tree_gdn_replay(
     num_spec_decodes: int,
     output_scale: float,
     use_qk_l2norm_in_kernel: bool = True,
+    runrow_commit: bool = False,
+    runrow_init: bool = False,
+    burn_node_bank: bool = False,
 ) -> None:
     """Launch the FR13 accepted-path replay (the durable-state publish).
 
@@ -1333,6 +1385,9 @@ def launch_tree_gdn_replay(
         USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
         RAW_GATING=True,
         SCAN_ALIGN=scan_align_on(),
+        RUNROW_COMMIT=runrow_commit,
+        RUNROW_INIT=runrow_init,
+        BURN_NODE_BANK=burn_node_bank,
         num_warps=8,
     )
 
@@ -1377,6 +1432,9 @@ def _tree_gdn_replay_all_layers_kernel(
     USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
     RAW_GATING: tl.constexpr,
     SCAN_ALIGN: tl.constexpr = False,
+    RUNROW_COMMIT: tl.constexpr = False,
+    RUNROW_INIT: tl.constexpr = False,
+    BURN_NODE_BANK: tl.constexpr = False,
 ):
     # FR13_EAGER_PACK (FIX-2 item 2b): all-layer batched sibling of
     # _tree_gdn_replay_kernel. ONE launch covers every GDN layer; pid0 packs
@@ -1437,7 +1495,12 @@ def _tree_gdn_replay_all_layers_kernel(
     # snapshot of the accepted-lens buffer (the committer refills the live
     # buffer with the NEW lens before this kernel launches).
     prev_len = tl.load(prev_layer + pid_b).to(tl.int64)
-    h0_col = tl.maximum(prev_len - 1, 0)
+    if RUNROW_INIT:
+        # STATELESS-TREE: prev step's RUNROW_COMMIT wrote the committed leaf into
+        # col 0 (the req running row); seed init from there = native semantics.
+        h0_col = tl.zeros([], dtype=tl.int64)
+    else:
+        h0_col = tl.maximum(prev_len - 1, 0)
     h0_row = tl.load(spec_layer + pid_b * SPEC_COLS + h0_col).to(tl.int64)
     # Read the whole h0 tile into registers BEFORE any store: a later
     # publish in this same program may target the h0 bank row itself
@@ -1541,6 +1604,33 @@ def _tree_gdn_replay_all_layers_kernel(
             state,
             mask=active & v_mask[:, None],
         )
+    if RUNROW_COMMIT:
+        # STATELESS-TREE (see single-layer sibling): `state` == committed leaf at
+        # loop exit; deposit into col 0 = the req running row (byte-identical bytes
+        # to col nacc-1) so col 0 is native's authoritative source.
+        rr_row = tl.load(spec_layer + pid_b * SPEC_COLS + 0).to(tl.int64)
+        tl.store(
+            state_bank
+            + rr_row * BANK_STRIDE
+            + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            state,
+            mask=v_mask[:, None],
+        )
+    if BURN_NODE_BANK:
+        # Zero ephemeral spec cols 1..num_spec (col 0 preserved) => zero lifespan.
+        for _bc in tl.static_range(1, SPEC_COLS):
+            z_row = tl.load(
+                spec_layer + pid_b * SPEC_COLS + _bc
+            ).to(tl.int64)
+            tl.store(
+                state_bank
+                + z_row * BANK_STRIDE
+                + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K
+                + offs_k[None, :],
+                tl.zeros([BLOCK_V, DIM_K], dtype=tl.float32),
+                mask=v_mask[:, None],
+            )
 
 
 def build_replay_bank_pointer_table(
@@ -1623,6 +1713,9 @@ def launch_tree_gdn_replay_all_layers(
     num_spec_decodes: int,
     output_scale: float,
     use_qk_l2norm_in_kernel: bool = True,
+    runrow_commit: bool = False,
+    runrow_init: bool = False,
+    burn_node_bank: bool = False,
 ) -> None:
     """Launch the FR13_EAGER_PACK batched all-layer accepted-path replay.
 
@@ -1777,6 +1870,9 @@ def launch_tree_gdn_replay_all_layers(
         USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
         RAW_GATING=True,
         SCAN_ALIGN=scan_align_on(),
+        RUNROW_COMMIT=runrow_commit,
+        RUNROW_INIT=runrow_init,
+        BURN_NODE_BANK=burn_node_bank,
         num_warps=8,
     )
 
