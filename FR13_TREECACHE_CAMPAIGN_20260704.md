@@ -2509,3 +2509,16 @@ prefill isn't block-split => fewer/no boundary save-reload => solves like CFG (m
 cache.** TEST NOW: cat8+cache B=1 GRAPH, MAMBA_BLOCK_SIZE=8192 vs baseline 1024 (=1/4). Gate: does
 14096/14309 flip give-up -> resolve? (Open caveat from SGLang grounding: measure whether the align-vs-none
 diff is ~0.0078 cumulative-fp or a larger per-boundary BUG — block_size=8192 fewer boundaries distinguishes.)
+
+## §128 block_size=8192 A' test: WEAK partial (14309 flip, n=1) + speed cost (2026-07-07)
+
+cat8+cache B=1 GRAPH, mamba_block_size=8192 CONFIRMED engaged (max_num_batched=8192 coupled). Seed1:
+  bs=8192: 12907 R(13m) · 14309 R(7m, FLIPPED give->R) · 14096 give · 14365 give = 2/4
+  bs=1024 baseline:      12907 R · 14309 give · 14096 give · 14365 X = 1/4
+Net: 14309 rescued (the align-mode-boundary direction has SOME support — fewer boundaries helped one
+deterministic-give task), but 14096/14365 still fail AND 12907 got 2x SLOWER (the project_fr13_apc_
+blocksize_fix mamba-TTFT tradeoff). n=1/task temp-0.6 => a single give->R flip is NOT robust (the pattern
+that misled repeatedly this session). NOT a clean fix. Confirmation run2 (fresh boot = effective seed2)
+launched: if 14309 resolves AGAIN at bs=8192, the flip is real (baseline gave up deterministically across
+many prior runs); if it gives up, seed1 was noise. Even if real, bs=8192 = marginal (+1) at a speed cost,
+and 14096 needs 0 boundaries (bigger block_size, memory-risky) or the boundary save/reload made bit-faithful.
