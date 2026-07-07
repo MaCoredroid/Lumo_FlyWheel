@@ -2564,3 +2564,18 @@ Roadmap decision (§129 close): replace the SNAP_FIX source-redirect with "copy 
 **Roadmap correction:**
 - #11 (copy-into-block-pool) → REFUTED. Reframed to: **re-establish whether carrier B is a real distinct concurrency defect** (spine+cache 4/4@CONC1 → 0/4@CONC4 in GRAPH mode, ≥2 seeds, graph-safe obs) vs. n=4 temp-0.6 noise / the char-8 tool-call issue (#12) — BEFORE any more localization (5 attempts failed on a now-falsified premise). See project_fr13_carrierB_zeroed_restore + project_fr13_b4_phantom_char8_real.
 - #14 corrected: **SNAP_FIX STAYS** (working req-keyed carrier-a fix). Delete only the exact_seed umbrella + HRS + refold + chunked-checkpoint staging (carrier-(b) numeric-debt, dead/non-functional).
+
+---
+
+## §131 (2026-07-07) — STATELESS-TREE design LOCKED (CASE B verified) + conv trace launched
+
+User escalated the roadmap to a governing principle: **the tree maintains ZERO persistent state** — copy committed leaf → native running rows, BURN all tree scratch each step; native's stock req-keyed cache owns snapshot/restore/concurrency. "MAKE ALL DATA the tree has beyond native MTP throw-away; simplicity wins; HBM copy is fast; no setbacks, no leak."
+
+Design workflow (wf_b3553f11) confirmed **CASE B** and I verified the linchpins directly in the kernel:
+- Node-bank **col 0 IS native's running row** (spec_state_indices[b,0]==block_table[b,0]); cols 1..num_spec = ephemeral spec blocks.
+- Replay writes committed leaf to col **nacc-1** not col 0 (kernel:1182-1198); next step reads init positionally off col nacc-1 (kernel:634-639/1094-1096) ⇒ col 0 STALE for nacc≥2. This IS carrier B (ephemeral non-req-owned block + persistent leaf-map/redirect) and WHY SNAP_FIX exists.
+- Verified: (1) `state` at replay-loop exit == committed leaf = same bytes as col nacc-1 (kernel:1181) ⇒ col-0 store byte-identical; (2) h0 loaded before any store (kernel:1097-1107) ⇒ read-col0-then-write-col0 safe.
+
+Fix = 3 co-dependent flags (default 0 ⇒ byte-identical, fail-loud if partial): FR13_APC_COMMIT_TO_RUNNING_ROW + FR13_TREE_RUNROW_INIT + FR13_APC_BURN_NODE_BANK. Resolves the accept_token_bias worry cleanly (cache source → block_ids[cur_block_idx]=col0 map-free, no force-bias-0). Full spec: **FR13_STATELESS_TREE_DESIGN.md**.
+
+**Conv half PENDING (wck7xl1oz):** conv is a different mechanism (fr13_tree_conv_fused / replay_conv_state_linear_remap) and appears to already read col0 (patch:2124/2445) — tracing whether it's already col-0-authoritative (needs only burn+cache-retarget) or stale like SSM (needs full reroute). Conv must ALSO become throw-away or it's a residual leak. Implement once conv lands; validate no-cache byte-identity OFF-vs-ON + graph CONC1-vs-CONC4 (spine5 AND cat8 × graph/eager).
