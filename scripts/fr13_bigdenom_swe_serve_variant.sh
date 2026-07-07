@@ -111,9 +111,9 @@ case "$KIND" in
         FR10_DECODE_MODE_DEFAULT=naive_mtp
         FR13_REPLAY_ROUTE=0 FR13_FA2_TREE_BIAS=0 FR13_FA2_PREFILL_NATIVE=0
         FR13_TREE_SAMPLE_ROW=0 FR13_CONV_COMMITTED_PATH=0
-        FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=1
+        FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=0
         MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32
-        FR13_APC_REQUIRE_SNAP_FIX=1) ;;
+        ) ;;
   # flash_ns5_nocache = CARRIER-LOCATOR cell A0: forked launcher (=> the forked FA2 .so IS mounted +
   # copied over stock at launch, L590) + clean FLASH_ATTN naive-MTP ns5, but CACHE OFF (no APC/EXACT_SEED).
   # vs stock-native N (LAUNCHER=native, stock .so) isolates the FORKED FA2 .so; vs tree D0 isolates the
@@ -133,9 +133,9 @@ case "$KIND" in
         FR10_DECODE_MODE_DEFAULT=naive_mtp
         FR13_REPLAY_ROUTE=0 FR13_FA2_TREE_BIAS=0 FR13_FA2_PREFILL_NATIVE=0
         FR13_TREE_SAMPLE_ROW=0 FR13_CONV_COMMITTED_PATH=0
-        FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=1
+        FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=0
         MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32
-        FR13_APC_REQUIRE_SNAP_FIX=1) ;;
+        ) ;;
   cat6root)  LAUNCHER=forked; TREEARG="$CAT6ROOT_TREE"; EXPECT_RATIO=6;  declare -a XFLAGS=() ;;
   chain5)    LAUNCHER=forked; TREEARG="$CHAIN5_TREE";   EXPECT_RATIO=5;  declare -a XFLAGS=() ;;
   cat10)     LAUNCHER=forked; TREEARG="$CAT10_TREE";    EXPECT_RATIO=10; declare -a XFLAGS=() ;;
@@ -289,10 +289,8 @@ if (( NATIVE_DECODE == 1 )); then
   if [[ "$KIND" == "nativemtp5_exseed" ]]; then
     grep -q "^ATTENTION_BACKEND=FLASH_ATTN$" "$ARMDIR/container_env.txt" \
       || { echo "FAIL: nativemtp5_exseed ATTENTION_BACKEND != FLASH_ATTN (native kernel)"; exit 3; }
-    grep -q "^FR13_APC_EXACT_SEED=1$" "$ARMDIR/container_env.txt" \
-      || { echo "FAIL: nativemtp5_exseed FR13_APC_EXACT_SEED=1 not in container env"; exit 3; }
-    grep -q "^FR13_APC_SNAP_FIX=1$" "$ARMDIR/container_env.txt" \
-      || { echo "FAIL: nativemtp5_exseed FR13_APC_SNAP_FIX=1 not live (EXACT_SEED requires it)"; exit 3; }
+    grep -q "^FR13_APC_EXACT_SEED=0$" "$ARMDIR/container_env.txt" \
+      || { echo "FAIL: FR13_APC_EXACT_SEED must be DEPRECATED-OFF (=0) — leaking es_ckpt store"; exit 3; }
   fi
   echo "container env OK (native MTP: qwen3_5_mtp, no tree env; KIND=$KIND)"
 else

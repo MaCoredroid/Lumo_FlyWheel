@@ -1026,6 +1026,16 @@ def _patch_gdn_linear() -> bool:
             "# SHAPES:\n"
             "#   _FR13_ES_PENDING_BY_REQ: { req_id: { pos(int): { layer(str): cpu_state } } }\n"
             "#   _FR13_ES_HASH_BY_REQ:    { req_id: { pos(int): block_hash_with_group_id } }\n"
+            "# FR13 DEPRECATION (leak fix 2026-07-07): FR13_APC_EXACT_SEED /\n"
+            "# FR13_APC_HIT_RECURRENT_SUFFIX / FR13_APC_BLOCK_REFOLD /\n"
+            "# FR13_APC_REFOLD_TO_SNAPSHOT permanently force-OFF. The block-hash-keyed\n"
+            "# _fr13_es_ckpt store's only per-entry reaper is block-eviction, which\n"
+            "# never fires at low KV pressure -> unbounded growth -> host OOM ~3.5h.\n"
+            "# Hard-clear at gdn import (this EngineCore process hosts EVERY gate, TP=1)\n"
+            "# BEFORE _FR13_REFOLD_ON and every request-time gate, so no stray export\n"
+            "# can re-engage them.\n"
+            "for _fr13_dep_k in (\"FR13_APC_EXACT_SEED\", \"FR13_APC_HIT_RECURRENT_SUFFIX\", \"FR13_APC_BLOCK_REFOLD\", \"FR13_APC_REFOLD_TO_SNAPSHOT\"):\n"
+            "    os.environ[_fr13_dep_k] = \"0\"\n"
             "_FR13_ES_PENDING_BY_REQ = {}  # WRITE 1(a): req_id->{pos->{layer->state}}\n"
             "_FR13_ES_HASH_BY_REQ = {}     # WRITE: req_id->{pos->block_hash_with_group_id}\n"
             "_FR13_ES_CONTEXT_LENS = None  # builder->capture: per-(non-spec)-row b0\n"
@@ -19637,10 +19647,8 @@ def _fr13_write_apc_env_sidecar() -> None:
         "FR13_APC_SNAP_FIX", "FR13_APC_SNAP_FIX_ZEROACCEPT", "FR13_APC_CONV_FIX",
         "FR13_APC_CONV_SNAPSHOT", "FR13_APC_CONV_SNAP_FIX", "FR13_APC_PRE_SNAP_FIX",
         "FR13_APC_HIT_SUFFIX_CAP", "FR13_APC_BLOCK_ALIGN_45477", "FR13_APC_LEAF_CROSSCHECK",
-        # FR13_APC_EXACT_SEED: the chunked-realization exact-seed fix (default OFF).
-        # Must reach the worker or the committer recompute + SNAP_FIX redirect read
-        # the default ("0") and the fix is vacuous (the curated-env drop trap).
-        "FR13_APC_EXACT_SEED",
+        # FR13_APC_EXACT_SEED intentionally NOT forwarded (DEPRECATED 2026-07-07 —
+        # leaking _fr13_es_ckpt store; force-OFF at gdn import, see _patch_gdn_linear).
     ]
     present = [(k, os.environ[k]) for k in keys if k in os.environ]
     try:

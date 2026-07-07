@@ -310,7 +310,7 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   # bit-exact. THE FIX (SGLang MambaRadixCache / Execution-State-Capsules 2606.20537 / Sparse-Prefix-
   # Caching 2605.05219): cache chunked-realization checkpoints ONLY at 64-aligned positions (chunked-only
   # chain, exact base) + restore the remainder THROUGH the chunked kernel. HRS stays OFF until that lands.
-  : "${FR13_APC_HIT_RECURRENT_SUFFIX:=0}"  # un-baked (was :=1 2026-06-27) -> native chunk path, byte-identical
+  FR13_APC_HIT_RECURRENT_SUFFIX=0  # DEPRECATED 2026-07-07: hard-off (leaking es_ckpt; force-off at gdn import too)
   : "${FR13_APC_HIT_SUFFIX_CAP:=64}"       # inert while HRS=0 (was :=1000000)
   # EXACT-SEED fix v2 (default OFF -> locked path byte-identical): make the cached SSM
   # checkpoint the CHUNKED-prefill realization at a 64-ALIGNED boundary (chunked-only chain,
@@ -319,9 +319,9 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   # MambaRadixCache + Sparse-Prefix-Caching Remark 1 + Execution-State-Capsules Alg.1. Requires
   # FR13_APC_SNAP_FIX=1 (overrides the SNAP_FIX redirect source). When ON it DISABLES the HRS
   # recurrent-suffix path (a recurrent remainder is not chunk-bit-exact).
-  : "${FR13_APC_EXACT_SEED:=0}"
-  : "${FR13_APC_BLOCK_REFOLD:=0}"
-  : "${FR13_APC_REFOLD_TO_SNAPSHOT:=0}"  # fold->snapshot chunked-ptr publish (default OFF -> byte-identical; needs BLOCK_REFOLD+EXACT_SEED+SNAP_FIX to be observable)
+  FR13_APC_EXACT_SEED=0  # DEPRECATED 2026-07-07: hard-off (leaking es_ckpt store)
+  FR13_APC_BLOCK_REFOLD=0  # DEPRECATED 2026-07-07: hard-off
+  FR13_APC_REFOLD_TO_SNAPSHOT=0  # DEPRECATED 2026-07-07: hard-off
   # BAKED 2026-07-04 (user): CONV_LEAF_COMPLETE default ON. The conv wrong-row write (snapshot
   # falling back to base col-0 instead of the committed accepted-leaf among co-resident tree rows)
   # was the PRIMARY carrier of the tree+cache agent give-up — dose-response proven on 13453:
@@ -508,12 +508,12 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_SNAP_FIX_ZEROACCEPT="${FR13_APC_SNAP_FIX_ZEROACCEPT:-0}" \
   -e FR13_APC_CONV_SNAP_FIX="${FR13_APC_CONV_SNAP_FIX:-0}" \
   -e FR13_APC_PRE_SNAP_FIX="${FR13_APC_PRE_SNAP_FIX:-0}" \
-  -e FR13_APC_HIT_RECURRENT_SUFFIX="${FR13_APC_HIT_RECURRENT_SUFFIX:-0}" \
+  -e FR13_APC_HIT_RECURRENT_SUFFIX=0 \
   -e FR13_APC_HIT_SUFFIX_CAP="${FR13_APC_HIT_SUFFIX_CAP:-64}" \
-  -e FR13_APC_EXACT_SEED="${FR13_APC_EXACT_SEED:-0}" \
+  -e FR13_APC_EXACT_SEED=0 \
   -e FR13_TREE_GDN_SLOT_PIN="${FR13_TREE_GDN_SLOT_PIN:-0}" \
-  -e FR13_APC_BLOCK_REFOLD="${FR13_APC_BLOCK_REFOLD:-0}" \
-  -e FR13_APC_REFOLD_TO_SNAPSHOT="${FR13_APC_REFOLD_TO_SNAPSHOT:-0}" \
+  -e FR13_APC_BLOCK_REFOLD=0 \
+  -e FR13_APC_REFOLD_TO_SNAPSHOT=0 \
   -e FR13_APC_CONV_LEAF_COMPLETE="${FR13_APC_CONV_LEAF_COMPLETE:-0}" \
   -e FR13_SERVE_LOG="${FR13_SERVE_LOG:-0}" \
   -e FR13_LEAK_PROBE="${FR13_LEAK_PROBE:-0}" \
