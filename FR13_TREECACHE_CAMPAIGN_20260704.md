@@ -2455,3 +2455,20 @@ direction: make the leaf-map lookup req-correct under concurrency (spec-row keyi
 fix 9017-9022) and/or forbid the zeroed-block fallback (fall back to the committed recurrent bank row, not
 a fresh block). This is the FIRST clean concurrency-specific carrier-B localization; measured on the LIVE
 path (Tap C), autotune-immune (byte-digest of the copy source).
+
+## §124 RETRACT §123: zeroed-source stale is NOT carrier B (sample-size confound) (2026-07-07)
+
+User "zeroed-source should be zero ideally" prompted a closer look that REFUTES §123. §123 compared
+CONC=1 @1/4 tasks (7 zeroed) vs CONC=4 @4/4 (476). APPLES-TO-APPLES (both 4/4 tasks, preprocess=RESTORE):
+  CONC=1 preprocess zeroed-stale = **616**  vs  CONC=4 = **238**.
+So CONC=1 has MORE zeroed-source restore reads than CONC=4 => NOT concurrency-specific => NOT carrier B.
+The "68x" was a partial-vs-full sample-size confound ([[feedback_check_artifact_before_concluding]] again).
+Worse: spine+cache CONC=1 RESOLVES (see SWE result) DESPITE 616 zeroed reads => the zeroed-source Tap C
+verdict is BENIGN (does not cause give-ups). So the Tap C stale-read instrument (even the zeroed-source
+subset, even split by phase) does NOT isolate carrier B. FIFTH failed carrier-B localization signal.
+
+Carrier B (spine+cache 4/4@CONC=1 -> 0/4@CONC=4 give-up difference) remains REAL but UN-LOCALIZED. Its
+mechanism is NOT the accept_token_bias misindex (dead path, SEEN=0), NOT clear-on-free, NOT the zeroed
+cache-restore read. Next: need a signal that TRACKS the give-up (correlate a per-req instrument with the
+CONC=4 give-ups), OR re-examine whether carrier B is even robust (n=4; re-confirm spine+cache 4/4 vs 0/4
+across seeds before spending more localization effort). DO NOT implement a fix for the zeroed-source read.
