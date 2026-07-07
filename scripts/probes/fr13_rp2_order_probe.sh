@@ -108,10 +108,20 @@ MAMBA_BLOCK_SIZE=1024
 MAMBA_SSM_CACHE_DTYPE=float32
 E
       ;;
+    cat8_cache_hrs) cat <<E
+TREE=$CAT8_TREE
+FR13_ENABLE_APC=1
+FR13_APC_EXACT_SEED=0
+FR13_APC_HIT_RECURRENT_SUFFIX=1
+FR13_APC_HIT_SUFFIX_CAP=64
+MAMBA_BLOCK_SIZE=1024
+MAMBA_SSM_CACHE_DTYPE=float32
+E
+      ;;
     *) echo "FAIL_UNKNOWN_ARM"; return 1 ;;
   esac
 }
-arm_cache_expect(){ case "$1" in cat8_cache) echo "True";; cat8_nocache) echo "False";; esac; }
+arm_cache_expect(){ case "$1" in cat8_cache) echo "True";; cat8_cache_hrs) echo "True";; cat8_nocache) echo "False";; esac; }
 
 # battery lines: "tag seed reset". BATTERY_PHASES (space-sep, e.g. "P1") filters
 # to matching phases (default: all) — used by short diagnostic boots (§51 E4CAP).
@@ -119,7 +129,7 @@ BATTERY_PHASES="${BATTERY_PHASES:-}"
 arm_battery(){ _arm_battery_raw "$1" | { if [[ -n "$BATTERY_PHASES" ]]; then
     grep -E "^($(echo "$BATTERY_PHASES" | tr ' ' '|'))_"; else cat; fi; }; }
 _arm_battery_raw(){ case "$1" in
-  cat8_cache)
+  cat8_cache|cat8_cache_hrs)
     for k in 1 2 3 4 5 6 7 8 9 10; do echo "P1_$k 5 1"; done
     for k in 1 2 3 4 5 6; do echo "P2_$k 5 0"; done
     for s in 1 2 3 4 5 6 7 8; do echo "P3_s$s $s 1"; done ;;
@@ -186,6 +196,11 @@ run_arm(){
         grep -q "speculative_token_tree" "$cdir/container_env.txt" || { echo "FAIL: no tree in SPEC_CONFIG"; exit 4; };;
       cat8_nocache)
         grep -q "^FR13_APC_EXACT_SEED=0$" "$cdir/container_env.txt" || { echo "FAIL: EXACT_SEED!=0"; exit 4; }
+        grep -q "^ATTENTION_BACKEND=TREE_ATTN$" "$cdir/container_env.txt" || { echo "FAIL: backend!=TREE_ATTN"; exit 4; }
+        grep -q "speculative_token_tree" "$cdir/container_env.txt" || { echo "FAIL: no tree in SPEC_CONFIG"; exit 4; };;
+      cat8_cache_hrs)
+        grep -q "^FR13_APC_EXACT_SEED=0$" "$cdir/container_env.txt" || { echo "FAIL: EXACT_SEED!=0"; exit 4; }
+        grep -q "^FR13_APC_HIT_RECURRENT_SUFFIX=1$" "$cdir/container_env.txt" || { echo "FAIL: HRS!=1"; exit 4; }
         grep -q "^ATTENTION_BACKEND=TREE_ATTN$" "$cdir/container_env.txt" || { echo "FAIL: backend!=TREE_ATTN"; exit 4; }
         grep -q "speculative_token_tree" "$cdir/container_env.txt" || { echo "FAIL: no tree in SPEC_CONFIG"; exit 4; };;
     esac
