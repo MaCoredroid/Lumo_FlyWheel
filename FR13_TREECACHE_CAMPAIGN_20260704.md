@@ -2439,3 +2439,19 @@ misindex (dead path). NOTE: the boundary jsonl was in the container's /logs (NOT
 concurrency-specificity, (b) capture read_row-vs-written to distinguish index-shift vs state-not-refreshed
 => the fix (spec_state_indices row assignment / refresh under concurrency; likely spec-row/req keying like
 the leaf-publish + ZERO/refresh on realloc).
+
+## §123 CARRIER-B CLEANLY LOCALIZED: zeroed-source cache-restore reads, 68x concurrency-specific (2026-07-07)
+
+CONC=1-vs-CONC=4 spine Tap C control DISAMBIGUATES (the total stale count was a red herring):
+  TOTAL stale: CONC=1=432, CONC=4=480 (NOT concurrency-specific = benign cache-source-from-valid-block).
+  ZEROED-SOURCE stale: CONC=1=**7**, CONC=4=**476** (68x) = CARRIER B.
+=> Carrier B = the get_temporal_copy_spec SSM cache RESTORE (preprocess) reads a ZEROED block as its
+copy SOURCE 476x @CONC=4 (src_first8 all-0) => copies zeros into the working recurrent state => wipes it
+=> garble/give-up. Concurrency-specific: the SSM committed-leaf redirect (_FR13_APC_SSM_LEAF_BY_REQ,
+FR13_APC_SNAP_FIX default-ON) MISSES under cross-agent load and falls back to the stock source =
+block_ids[src_block_idx+accept_token_bias-1] = a fresh ZERO_MAMBA_ON_ALLOC'd block. Same root class as
+the leaf-publish spec-row/full-batch keying: the leaf map is cross-req contaminated at CONC>=2. FIX
+direction: make the leaf-map lookup req-correct under concurrency (spec-row keying, like the leaf-publish
+fix 9017-9022) and/or forbid the zeroed-block fallback (fall back to the committed recurrent bank row, not
+a fresh block). This is the FIRST clean concurrency-specific carrier-B localization; measured on the LIVE
+path (Tap C), autotune-immune (byte-digest of the copy source).
