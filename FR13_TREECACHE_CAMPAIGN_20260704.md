@@ -2543,3 +2543,24 @@ ptr; fallback reason not in obs (add a reason counter: no_pub_pos/no_aligned_pos
 irrelevant => bs=1024 lossless. CAVEAT (SGLang grounding): chunked-prefill RECOMPUTE bit-exactness is hard
 (treated negligible), BUT save/restore of the ACTUAL realized state CAN be bit-exact — that's the target.
 NEXT: instrument the fallback REASON (why the position guard drops the ptr) + why ckpt0 capture is skipped.
+
+---
+
+## §130 (2026-07-07) — COPY-INTO-BLOCK-POOL **REFUTED** at design: it is value-equivalent to SNAP_FIX. SNAP_FIX is already req-keyed = the tree ALREADY caches like native on the restore path.
+
+Roadmap decision (§129 close): replace the SNAP_FIX source-redirect with "copy the tree's committed leaf INTO the stock block-pool row" so vLLM's stock req-keyed cache handles snapshot+restore natively → carrier B disappears. Premise: SNAP_FIX redirects the snapshot source to a **positional** node-bank row `b`, and carrier B is a positional restore read to remove.
+
+**Design+verify workflow (wf_09627ba6) REFUTED the premise. Independently confirmed in source:**
+- **Redirect lookup is REQ-KEYED, not positional:** `_fr13_fx_reqkey = str(req_state.req_id)` → `_fr13_fx_lm.get(_fr13_fx_reqkey)` (patch :14356-14360).
+- **Leaf publish is REQ-KEYED:** `leaf_map[str(spec_req_ids[_b])] = int(_row[_alen-1])` (:9080), spec_req_ids from `_LUMO_FA_SPEC_ROW_REQ_IDS`. The old positional SAMPLER_ROW keying was already the FIXED past bug (:9025-9030).
+- **Source-pointer-only, restore untouched:** `src_ptrs_np[_fr13_fx_ent] = state[int(_fr13_fx_leaf)].data_ptr()` (:14644-14646). Restore already reads req-keyed `block_table[:,0]` (gdn_attn :851/923).
+
+**Consequence — the plan is DEAD:**
+1. It deposits the same req-keyed leaf VALUE into the same req-keyed row → the stock snapshot then writes a **byte-identical** cache block. Pure data-flow refactor (redirect-read → pre-deposit-then-stock-read), identical output. If SNAP_FIX gives tree 0/4 @CONC4, this gives the identical 0/4. **Reproduces carrier B, does not remove it.**
+2. It resurrects the **retired `FR13_APC_VERBATIM` dead-writer class** (commit-site write-through into the live pool, removed :14756-14785) — a net-new mutation of the req's running-state block that SNAP_FIX deliberately avoids. Strictly worse.
+
+**The reframe (important):** the tree is NOT positional at restore. SNAP_FIX + stock snapshot + stock restore are **req-keyed end-to-end** — the tree ALREADY "uses vLLM's stock req-keyed cache like native." There is no positional restore read for any fix to remove. So **carrier B, if real, is NOT a restore-keying bug.** Candidates not touched by any value-refactor: module globals (`_FR13_BOUNDARY_PHASE`), publish/leaf-map machinery under CONC>1, conv path.
+
+**Roadmap correction:**
+- #11 (copy-into-block-pool) → REFUTED. Reframed to: **re-establish whether carrier B is a real distinct concurrency defect** (spine+cache 4/4@CONC1 → 0/4@CONC4 in GRAPH mode, ≥2 seeds, graph-safe obs) vs. n=4 temp-0.6 noise / the char-8 tool-call issue (#12) — BEFORE any more localization (5 attempts failed on a now-falsified premise). See project_fr13_carrierB_zeroed_restore + project_fr13_b4_phantom_char8_real.
+- #14 corrected: **SNAP_FIX STAYS** (working req-keyed carrier-a fix). Delete only the exact_seed umbrella + HRS + refold + chunked-checkpoint staging (carrier-(b) numeric-debt, dead/non-functional).
