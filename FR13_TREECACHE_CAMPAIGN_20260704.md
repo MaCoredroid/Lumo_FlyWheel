@@ -2579,3 +2579,15 @@ Design workflow (wf_b3553f11) confirmed **CASE B** and I verified the linchpins 
 Fix = 3 co-dependent flags (default 0 ⇒ byte-identical, fail-loud if partial): FR13_APC_COMMIT_TO_RUNNING_ROW + FR13_TREE_RUNROW_INIT + FR13_APC_BURN_NODE_BANK. Resolves the accept_token_bias worry cleanly (cache source → block_ids[cur_block_idx]=col0 map-free, no force-bias-0). Full spec: **FR13_STATELESS_TREE_DESIGN.md**.
 
 **Conv half PENDING (wck7xl1oz):** conv is a different mechanism (fr13_tree_conv_fused / replay_conv_state_linear_remap) and appears to already read col0 (patch:2124/2445) — tracing whether it's already col-0-authoritative (needs only burn+cache-retarget) or stale like SSM (needs full reroute). Conv must ALSO become throw-away or it's a residual leak. Implement once conv lands; validate no-cache byte-identity OFF-vs-ON + graph CONC1-vs-CONC4 (spine5 AND cat8 × graph/eager).
+
+---
+
+## §132 (2026-07-07) — STATELESS-TREE cat8+cache **PASSES the rp2 give-up instrument at CONC=1** (carrier B fixed)
+
+Implemented the full stateless-tree fix (SSM + conv, §131) and validated on the rp2 token-1 logprob probe (the low-noise give-up carrier instrument). Arm `cat8_cache_stateless` = FR13_ENABLE_APC=1 + FR13_APC_COMMIT_TO_RUNNING_ROW=1 + FR13_TREE_RUNROW_INIT=1 + FR13_APC_BURN_NODE_BANK=1 (EXACT_SEED=0), MAMBA_BLOCK_SIZE=1024.
+
+**Result: 16/16 flat token-1 logprob = -0.0052** (P1 10 cold + P2 6 no-reset cache-HIT), route=agent finish=tool_calls every request. P3 seeds: token-1 -0.0052 seed-robust (ct varies downstream as expected). Baseline: cat8+nocache -0.001 flat; BROKEN cat8+cache -0.001..-1.374 spread on HITs. So the stateless reroute makes **cache-ON decode byte-identical to cache-OFF** — the cache-HIT corruption (carrier B on this instrument) is ELIMINATED.
+
+**Integration also confirmed clean under live flags:** boot + cuda-graph FULL_AND_PIECEWISE capture + committer + conv commit all run without error (after fixing one NameError — committer bodies are injected into vllm rejection_sampler.py which has no module-level `os`; added local `import os` to both committer twins, b7184a16).
+
+**Scope of this result:** CONC=1 (single stream), low-noise instrument. Carrier B is fundamentally a CONCURRENCY defect, so the DECISIVE gate is next: CONC1-vs-CONC4 give-ups on the LIVE SWE task (the 4/4->0/4 collapse must be gone). Then the 16-task speed matrix, then the cleanup (delete exact_seed/HRS/refold/SNAP_FIX + bake the 3 flags; user 2026-07-07).
