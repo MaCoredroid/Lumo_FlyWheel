@@ -10,7 +10,17 @@ This doc accumulates the loose results + verdicts. Detailed sub-docs: `FR13_SPEE
 
 ---
 
-## 1. Losslessness — the two-layer cache fix  ✅ EXACT_SEED proven (L0)
+## 1. Losslessness — the branched-tree cache fix  ✅ (stateless-tree, EXACT_SEED superseded)
+
+> **⚠️ ATTRIBUTION CORRECTION (user 2026-07-07): EXACT_SEED, SNAP_FIX, HRS, REFOLD are DELETED
+> scaffolding — NOT our contribution.** They were the *earlier* mechanisms (and our linear-chain
+> #39273 attempts); all on the cleanup #14 delete list. The KEPT / SHIP mechanism that achieves the
+> same losslessness is the **STATELESS-TREE runrow-commit + burn** (`FR13_APC_COMMIT_TO_RUNNING_ROW`
+> + `FR13_TREE_RUNROW_INIT` + `FR13_APC_BURN_NODE_BANK`) — proven at rp2 **16/16 flat -0.0052 with
+> EXACT_SEED=0** on real 23552-token cache hits. The novel contribution is ONLY the branched/tree GDN
+> spec-decode + prefix-cache losslessness (tree extension of open #39273), via this stateless mechanism.
+> The EXACT_SEED/SNAP_FIX numbers BELOW are retained as historical L0 evidence pending the cleanup-#14
+> rewrite; read them as "the earlier mechanism proved block-1024 lossless is achievable," not as the ship fix.
 
 The APC cache stored the WRONG SSM state, in two layers:
 - **Layer 1 (staleness):** the snapshot read a stale node-bank row (|diff|~14-18). Fixed by **`SNAP_FIX`**
@@ -244,6 +254,14 @@ committed state, restore VERBATIM, never reconstruct" (= the stateless-tree runr
 checkpoint tree + ping-pong slot did NOT port (vLLM keeps one checkpoint at the last block boundary).
 
 **Honesty guards:** within-floor, NOT bit-exact (REFOLD non-functional, redirect_used=0 → recurrent-leaf
-fallback 100%, cross-basis residual eaten); greedy-LCP committer carries NO rejection-sampler losslessness
-theorem (so "lossless" = within-floor + behavioral resolve parity, not a proven guarantee); fork-bound (the
-contributable form is the diagnosis + gate methodology, a tree extension of #39273, not a mergeable PR).
+fallback 100%, cross-basis residual eaten); the residual lives in the CACHE numeric (cross-kernel ULP), NOT
+the committer. **CORRECTION (user 2026-07-07):** at our regime (temp 0.6, deploy AND gate) the tree committer
+is the CANONICAL MULTIDRAFT *sampled* committer `_lumo_tree_canonical_multidraft_sample` — distribution-
+preserving via the "verified FR10 rule" (constructive rejection-sampler convergence proof, see
+reference_lossless_specdecode_gate_methodology); it "cannot force-commit the spine without changing acceptance
+distributions." greedy-LCP `_lumo_tree_path_lcp_max_greedy_sample` runs ONLY on the `all_greedy` (temp-0)
+dispatch (patch:11700), which we never use. So the committer IS distribution-preserving — the earlier
+"greedy-LCP → no theorem" framing (also in FR13_TREE_CACHE_ARCHITECTURE.md §4b) was WRONG for temp 0.6.
+Remaining honest bound: byte-exact is not guaranteed (distribution-preserving + within-floor cache, not
+bit-exact); fork-bound (contributable form = diagnosis + gate methodology, a tree extension of #39273, not a
+mergeable PR).
