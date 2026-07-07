@@ -81,12 +81,34 @@ must ALSO become throw-away or it's a residual leak. Design completes once the t
 
 ---
 
+## Invariant (user 2026-07-07, sharpened — the acceptance bar)
+
+The tree must be **behaviorally indistinguishable from native+MTP at the data layer**:
+1. **No persistent data beyond native+MTP** — no leaf-map, no SNAP_FIX redirect, no exact_seed staging.
+2. **Read/write access behavior identical to native+MTP** — same block-pool/running rows read & written,
+   same timing (init reads col0; commit writes col0; cache snapshot reads col0; restore reads col0).
+3. **Only the spec-decoding MATH differs** — the branched tree scan. Its within-step branch workspace
+   (node-bank cols `1..num_spec`) is the sole delta vs native's narrower linear-MTP draft scratch, and is
+   BURNED every step ⇒ **zero lifespan, zero persistent extra data.**
+
+Consequence: if the tree's persistent-data access pattern == native+MTP's, **carrier B is impossible by
+construction** (it is a cache-behavior divergence, and native has none). Access-equivalence PROVES it;
+the CONC4 give-up test CONFIRMS it.
+
 ## Validation (no-setback gates)
-1. **`FR13_APC_CACHEROW_DUMP`**: assert WRITTEN(col0) == SNAPSHOT-SOURCE(col0) == RESTORE(col0) byte-exact
+1. **Access-equivalence to native+MTP (the PROOF gate)**: instrument the block-pool rows the tree
+   reads/writes per step (init-read, commit-write, snapshot-source, restore-read) and assert they equal
+   native+MTP's on the same trajectory — same rows, same timing. No tree-extra persistent tensor touched
+   on the cache path. If equal ⇒ carrier B cannot exist.
+2. **`FR13_APC_CACHEROW_DUMP`**: assert WRITTEN(col0) == SNAPSHOT-SOURCE(col0) == RESTORE(col0) byte-exact
    + graph-safe obs `runrow_commit_events`/`burn_events` prove the path fired in one boot.
-2. **NO-CACHE continuous-decode byte-identity**: tree+no-cache, flags OFF vs ON, same seed, temp 0.6,
+3. **NO-CACHE continuous-decode byte-identity**: tree+no-cache, flags OFF vs ON, same seed, temp 0.6,
    CONC=1, GRAPH — streams byte-identical (proves the reroute doesn't regress the 0-give-up path).
-3. **Graph-mode CONC1-vs-CONC4 carrier B**: live SWE-Verified agentic, flags ON, rows = spine5 AND cat8
-   × graph AND eager; CONC4 give-up rate matches CONC1 + native (the 4/4→0/4 collapse gone).
+4. **Graph-mode CONC1-vs-CONC4 carrier B (the CONFIRM gate)**: live SWE-Verified agentic, flags ON, rows =
+   spine5 AND cat8 × graph AND eager; CONC4 give-up rate matches CONC1 + native (the 4/4→0/4 collapse gone).
+
+**Conv is held to the identical bar**: conv init-read / commit-write / snapshot-source / restore-read must
+equal native's conv access pattern, no persistent conv-extra (CONV_SNAP_FIX / _FR13_APC_CONV_LEAF_BY_REQ
+deleted), conv branch scratch burned. (wck7xl1oz determines whether conv already meets this or needs the reroute.)
 
 Then #14 physically deletes SNAP_FIX (SSM+conv) + leaf-maps + exact_seed/HRS/refold.
