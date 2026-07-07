@@ -14367,7 +14367,7 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         # chunk-boundary seed. Only the SSM path; conv is unchanged.
         "                        _fr13_fx_chunked_ptr = None\n"
         "                        _fr13_fx_chunked_state = None  " + sentinel + " (strong ref for lifetime+validate)\n"
-        "                        _fr13_es_fallback_reason = \"\"\n"
+        "                        _fr13_es_fallback_reason = \"no_record\"\n"
         # slot key default (bound at the SNAP_FIX level next to the other redirect
         # locals so the ES_REDIRECT_* log lines below -- which run under the
         # EXACT_SEED gate even on the conv path where _fr13_fx_ssm_on is False --
@@ -14624,6 +14624,23 @@ def _patch_worker_mamba_snap_fidelity() -> bool:
         "                                src_ptrs_np[_fr13_fx_ent] = int(_fr13_fx_chunked_ptr)\n"
         "                            else:\n"
         "                                _fr13_fx_gdn._fr13_obs_bump(\"redirect_fallback\")\n"
+        # FR13_OBS: WHY the bit-exact checkpoint was missing (no_record = never\n"
+        # captured; no_pub_pos/no_aligned_pos/pos_mismatch = captured but the GAP-2\n"
+        # position guard dropped it). Take the first token (pos_mismatch carries\n"
+        # values). This localizes the exact-seed wiring bug that forces bs=1024 to\n"
+        # degrade to the within-floor recurrent leaf.\n"
+        "                                _fr13_fb_reason = str(_fr13_es_fallback_reason or \"no_record\").split(\" \")[0]\n"
+        "                                _fr13_fx_gdn._fr13_obs_bump(\"es_fb_\" + _fr13_fb_reason)\n"
+        # FR13_APC_ES_NO_FALLBACK (default 0 -> byte-identical): user directive\n"
+        # 'delete the fallback' -- fail LOUD instead of silently using the within-\n"
+        # floor recurrent leaf, so the missing checkpoint is fixed, not masked.\n"
+        "                                if os.environ.get(\"FR13_APC_ES_NO_FALLBACK\", \"0\") == \"1\":\n"
+        "                                    raise RuntimeError(\n"
+        "                                        \"FR13_APC_ES_NO_FALLBACK: exact-seed checkpoint MISSING at restore \"\n"
+        "                                        + \"(reason=\" + str(_fr13_es_fallback_reason)\n"
+        "                                        + \" req=\" + str(_fr13_fx_reqkey)\n"
+        "                                        + \" layer=\" + str(layer_name) + \") -- no recurrent-leaf fallback\"\n"
+        "                                    )\n"
         "                                src_ptrs_np[_fr13_fx_ent] = (\n"
         "                                    state[int(_fr13_fx_leaf)].data_ptr()\n"
         "                                )\n"
