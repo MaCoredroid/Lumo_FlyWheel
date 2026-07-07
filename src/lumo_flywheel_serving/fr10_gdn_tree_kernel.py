@@ -472,6 +472,11 @@ def gather_committed_path_conv_prior(
             lens > 0, read_node_cols, torch.zeros_like(read_node_cols)
         )
         read_node_cols = torch.clamp(read_node_cols, min=0, max=spec_cols - 1)
+    if os.environ.get("FR13_TREE_RUNROW_INIT", "0") == "1":
+        # STATELESS-TREE: seed the next-step conv prior from col 0 (the running
+        # row holding this-step's committed leaf, deposited by the post-accept
+        # conv committer), not the accepted-leaf node column. Mirrors SSM h0_col=0.
+        read_node_cols = torch.zeros((b, 1), dtype=torch.long, device=device)
     bank_rows = spec_state_indices[:b].to(torch.long).gather(1, read_node_cols)
     prior_state_bank = torch.index_select(
         conv_state, 0, bank_rows.reshape(-1)

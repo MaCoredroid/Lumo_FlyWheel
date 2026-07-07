@@ -50,6 +50,8 @@ forward, FIX-2 layer-keyed cache pattern) and passed in as arguments.
 
 from __future__ import annotations
 
+import os
+
 import torch
 
 
@@ -312,6 +314,12 @@ def prepare_committed_path_conv_rows(
             lens > 0, read_node_cols, torch.zeros_like(read_node_cols)
         )
         read_node_cols = torch.clamp(read_node_cols, min=0, max=spec_cols - 1)
+    if os.environ.get("FR13_TREE_RUNROW_INIT", "0") == "1":
+        # STATELESS-TREE: seed the next-step conv prior from col 0 (the running
+        # row, where the post-accept committer deposited this-step's committed
+        # leaf window), not the accepted-leaf node column. Mirrors the SSM
+        # RUNROW_INIT (h0_col=0). read_node_cols stays available for callers.
+        read_node_cols = torch.zeros((b, 1), dtype=torch.long, device=device)
     bank_rows = spec_state_indices[:b].to(torch.long).gather(1, read_node_cols)
     return read_node_cols, bank_rows
 

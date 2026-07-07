@@ -5295,6 +5295,11 @@ def _fr13_gdn_subop_mab(
                                 attn_metadata.num_spec_decodes
                             )
                             self._fr13_replay_ssm_state = ssm_state
+                            # STATELESS-TREE: stage the LIVE conv cache view too
+                            # (same fixed-attribute pattern), so the post-accept
+                            # conv committer can copy this-step's committed leaf
+                            # window -> col 0 and burn the ephemeral cols.
+                            self._fr13_replay_conv_state = conv_state
                         self._fr13_replay_ring_k[fr10_b, :tree_n].copy_(
                             key_spec[0, start:end]
                         )
@@ -8973,6 +8978,59 @@ def _fr13_pathA_refold(gdn_mod, layer, row, req_id, acc_len, node_path):
                 pass
 
 
+def _fr13_conv_commit_to_col0(
+    replay_layers,
+    accepted_path_buf,
+    accepted_lens_buf,
+    replay_rows,
+    do_commit,
+    do_burn,
+):
+    """STATELESS-TREE conv committer (post-accept, host-eager; conv has no kernel).
+
+    Copies THIS step's committed-leaf conv window into col 0 (the req running row)
+    for every committed (row, layer), then burns the ephemeral spec cols
+    1..num_spec. Leaf node id = accepted_paths[b, acc_len-1] (post-refill = THIS
+    step's accept); dst col0 == spec_state_indices[b,0] == block_table[b,0] == the
+    SSM RUNROW_COMMIT target, so conv + SSM commit to / init from the SAME running
+    row. Byte-neutral on no-cache decode (col0 receives the same window the current
+    accepted-leaf-node read carries; burned cols are regenerated fresh next forward).
+    """
+    if replay_rows <= 0 or not (do_commit or do_burn):
+        return
+    import torch
+    for _prefix in sorted(replay_layers):
+        _layer = replay_layers[_prefix]
+        _conv = getattr(_layer, "_fr13_replay_conv_state", None)
+        _ssi = getattr(_layer, "_fr13_replay_spec_idx", None)
+        if _conv is None or _ssi is None:
+            raise RuntimeError(
+                "FR13 STATELESS-TREE conv commit: missing staged conv_state/"
+                "spec_idx for layer " + str(_prefix)
+            )
+        _spec_cols = int(_ssi.shape[1])
+        _dev = _ssi.device
+        _rows = torch.arange(replay_rows, device=_dev)
+        _alen = accepted_lens_buf[:replay_rows].to(_dev)
+        _leaf_pos = (_alen - 1).clamp(min=0)
+        _leaf_node = accepted_path_buf[:replay_rows].to(_dev).gather(
+            1, _leaf_pos.view(-1, 1).to(torch.long)
+        ).view(-1)
+        # zero-accept rows commit the ROOT (col 0) window (acc_len==0 -> col0).
+        _leaf_node = torch.where(
+            _alen > 0, _leaf_node, torch.zeros_like(_leaf_node)
+        ).clamp(0, _spec_cols - 1).to(torch.long)
+        _dst = _ssi[:replay_rows, 0].to(torch.long)
+        if do_commit:
+            _src = _ssi[_rows, _leaf_node].to(torch.long)
+            # index_select snapshots the source rows before the write -> no alias
+            # hazard even when a leaf row coincides with col 0.
+            _conv.index_copy_(0, _dst, _conv.index_select(0, _src))
+        if do_burn and _spec_cols > 1:
+            _burn = _ssi[:replay_rows, 1:_spec_cols].reshape(-1).to(torch.long)
+            _conv.index_fill_(0, _burn, 0.0)
+
+
 def _fr13_publish_apc_ssm_leaf(gdn_mod, layer, spec_req_ids, replay_lens):
     """FR13_APC_SNAP_FIX: publish each req's committed accepted-LEAF node-bank
     row (spec_state_indices[b, accepted_len-1] = the last row the tree committer
@@ -10506,6 +10564,17 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                         _fr13_burn_node_bank,
                     )
                 )
+            # STATELESS-TREE conv committer (post-accept; gated -> no-op when the
+            # flags are OFF). Copies this-step's committed conv leaf -> col0 + burns
+            # ephemeral cols, so conv shares the SSM running row. Host-eager.
+            _fr13_conv_commit_to_col0(
+                _fr13_replay_layers,
+                _accepted_path_buf,
+                _accepted_lens_buf,
+                _fr13_replay_rows,
+                _fr13_runrow_commit,
+                _fr13_burn_node_bank,
+            )
             # FR13_REPLAY_DURABLE_AB (PRIME lead, observe-only): when ON, force
             # the verbatim per-layer replay loop (so the durable-state A/B can
             # tap H_ours fresh per layer) and carry the SAME per-event counter
@@ -11415,6 +11484,15 @@ def _lumo_tree_canonical_multidraft_sample(
                         _fr13_burn_node_bank,
                     )
                 )
+            # STATELESS-TREE conv committer (post-accept; gated -> no-op when OFF).
+            _fr13_conv_commit_to_col0(
+                _fr13_replay_layers,
+                _accepted_path_buf,
+                _accepted_lens_buf,
+                _fr13_replay_rows,
+                _fr13_runrow_commit,
+                _fr13_burn_node_bank,
+            )
             if _fr13_replay_rows:
                 if int(_accepted_path_buf.size(0)) < _fr13_replay_rows:
                     raise RuntimeError(
