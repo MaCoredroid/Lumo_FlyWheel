@@ -2522,3 +2522,24 @@ that misled repeatedly this session). NOT a clean fix. Confirmation run2 (fresh 
 launched: if 14309 resolves AGAIN at bs=8192, the flip is real (baseline gave up deterministically across
 many prior runs); if it gives up, seed1 was noise. Even if real, bs=8192 = marginal (+1) at a speed cost,
 and 14096 needs 0 boundaries (bigger block_size, memory-risky) or the boundary save/reload made bit-faithful.
+
+## §129 THE REAL A' FIX (user framing): exact-seed's bit-exact path is DEAD => bs=1024 degrades (2026-07-07)
+
+User: "we use exact seed, we should be able to make it work at bs=1024; if not, need a fix." CORRECT.
+EXACT_SEED's job = restore the BIT-EXACT committed state so block boundaries don't matter. The obs
+(SERVE_LOG eng log) shows its bit-exact path is VACUOUS:
+  es_ckpt0_capture=144 vs es_ckpt0_SKIP=11185 (checkpoint captured ~1%, skipped ~99%)
+  redirect_engaged=1440, redirect_USED=0, redirect_fallback=1440 (1536 ES_REDIRECT_FALLBACK lines)
+=> the bit-exact chunked checkpoint is essentially never captured AND never used at the restore; it ALWAYS
+falls back to the recurrent-leaf row, which is faithful only WITHIN FLOOR (~1-2 ULP, memory: conv/ssm 48/48
+max ratio 1.34-1.95), NOT bit-exact. bs=1024's many boundaries accumulate the ~1-2 ULP -> derail (amplified
+by spec). block_size=8192 just reduces boundary COUNT (workaround, noisy 2/4 + 2x speed cost) — NOT the fix.
+
+**REAL FIX = make exact-seed BIT-EXACT at the boundary so bs=1024 works:** (a) find why es_ckpt0 is SKIPPED
+99% (es_ckpt0_skip=11185) — the checkpoint isn't being captured; (b) find why the restore redirect always
+FALLS BACK (redirect_used=0) — the GAP-2 position guard (ckpos==apos, fr10_phase4...:14472-14495) drops the
+ptr; fallback reason not in obs (add a reason counter: no_pub_pos/no_aligned_pos/pos_mismatch). If captured
++ used, the restore copies the EXACT realized state (bit-exact by construction, unlike recompute) => boundary
+irrelevant => bs=1024 lossless. CAVEAT (SGLang grounding): chunked-prefill RECOMPUTE bit-exactness is hard
+(treated negligible), BUT save/restore of the ACTUAL realized state CAN be bit-exact — that's the target.
+NEXT: instrument the fallback REASON (why the position guard drops the ptr) + why ckpt0 capture is skipped.
