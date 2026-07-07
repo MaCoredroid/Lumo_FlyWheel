@@ -2472,3 +2472,21 @@ mechanism is NOT the accept_token_bias misindex (dead path, SEEN=0), NOT clear-o
 cache-restore read. Next: need a signal that TRACKS the give-up (correlate a per-req instrument with the
 CONC=4 give-ups), OR re-examine whether carrier B is even robust (n=4; re-confirm spine+cache 4/4 vs 0/4
 across seeds before spending more localization effort). DO NOT implement a fix for the zeroed-source read.
+
+## §125 THE EAGER CONFOUND: all Tap C data (§122-§124) is in the WRONG regime (2026-07-07)
+
+Correction to §124's "benign": tapCc1 (CONC=1 + ENFORCE_EAGER, the boundary-log run) SWE result =
+**1/4** (12907/14096/14309 GIVE UP, 14365 R) — NOT the 4/4 that founded carrier B (spine+cache CONC=1
+graph = 4/4). So ENFORCE_EAGER ITSELF degrades the spine to ~1/4 at CONC=1. The FR13_REPLAY_BOUNDARY_LOG
+is EAGER-ONLY (raises under capture), so EVERY Tap C run (§122-§124) was in a degraded eager regime where
+the give-up baseline is already broken => the Tap C stale-read / zeroed-source data CANNOT study carrier B
+(a graph-mode phenomenon). This invalidates the whole Tap C localization approach for carrier B.
+
+**Net after this saga:** carrier B (spine+cache 4/4@CONC=1 -> 0/4@CONC=4, GRAPH mode) is REAL but
+UN-LOCALIZED after 5 attempts; the eager-only boundary instrument cannot reach it. DO NOT implement a
+zeroed-source fix (refuted + eager-confounded). REQUIRED next step BEFORE more localization: RE-ESTABLISH
+carrier B in GRAPH mode with >=2 seeds (is spine+cache reliably 4/4@CONC=1 and 0/4@CONC=4?), because
+(a) eager degrades it and (b) n=4 temp-0.6 has shown heavy run-to-run variance. If it does not replicate
+robustly in graph mode, "carrier B" may be n=4 noise, not a distinct bug. Need a give-up-tracking signal
+that works UNDER cuda-graph (not the eager-only boundary log) -- e.g. a cheap per-req counter that survives
+capture, or compare graph-mode restored state to a graph-mode oracle.
