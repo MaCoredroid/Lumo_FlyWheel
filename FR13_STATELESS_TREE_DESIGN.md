@@ -72,12 +72,31 @@ COMMIT-without-retarget leaves the cache reading bias-chosen rows.
   `_fr13_publish_apc_ssm_leaf` (patch:10761-10764).
 - **Burn (4):** constexpr `BURN_NODE_BANK` trailing zero-loop over cols `1..num_spec` after the col-0 store.
 
-### Conv half — PENDING TRACE (wck7xl1oz)
-Conv is a DIFFERENT mechanism (fr13_tree_conv_fused, replay_conv_state_linear_remap,
-gather_committed_path_conv_prior) and appears to already read from col 0 (`conv_state_indices=ssi[:,0]`,
-patch:2124/2445). Being traced: is conv already col-0-authoritative via its linear-remap (⇒ conv needs
-only burn + cache-retarget + delete CONV_SNAP_FIX), or stale like SSM (⇒ needs the full reroute)? Conv
-must ALSO become throw-away or it's a residual leak. Design completes once the trace lands.
+### Conv half — RESOLVED (wck7xl1oz): CASE B for emulation, cache already col-0
+Conv splits: (i) **emulation cross-step carrier** (gather-prior ← per-node write-back) is STALE like SSM —
+committed window at the LEAF NODE column, col 0 = root window ⇒ needs COMMIT+INIT+BURN; (ii) **mamba cache**
+(`get_conv_copy_spec`) ALREADY reads col-0 whole-row map-free (patch:14065/14089/14101 offset-0) ⇒ NO retarget.
+So the COMMIT (col 0 ← committed leaf window) fixes the emulation read AND the conv cache in one write (today
+conv cache reads col0=root for nacc≥2 = latent bug + part of carrier B). Reuses the SAME 3 flags, **no Triton,
+no new flags** — pure Python index ops in the committer + prepared-rows helper:
+- **COMMIT** (`FR13_APC_COMMIT_TO_RUNNING_ROW`): 2nd `index_copy_` after patch:3858 — `_fr10_new_state[leaf]`
+  (`_fr13_committed_read_cols[b]` = leaf node id, :2791) → `spec_state_indices[b,0]`.
+- **INIT** (`FR13_TREE_RUNROW_INIT`): in `prepare_committed_path_conv_rows` (fr13_tree_conv_fused.py:283-316)
+  return `read_bank_rows = spec_state_indices[:,0]` when on; feed to gather at patch:2797; mirror OFF-arm
+  gather at kernel:475.
+- **BURN** (`FR13_APC_BURN_NODE_BANK`): `conv_state.index_fill_(0, spec_state_indices[b,1:tree_n], 0.0)` after
+  COMMIT (page-safe: index_fill_ on the conv as_strided view touches conv rows only).
+- **Cache/cleanup**: no edit; CONV_SNAP_FIX/`_FR13_APC_CONV_LEAF_BY_REQ` already default-OFF/inert ⇒ pure dead-code deletion.
+
+**Dep-guard (critical):** the mamba block is ONE physical page holding conv(kv0)+ssm(kv1) as as_strided views;
+native restore rewrites col 0 for the WHOLE page. So col 0 must hold the committed frontier for BOTH slices —
+partial enable (SSM rerouted, conv not) = mixed-page corruption on restore. Hence ONE flag spans both; the
+fail-loud guard adds a third trap: SSM-rerouted-without-conv-rerouted.
+
+**Resolved sub-questions:** width-K window is INTERIOR to one bank row [dim,state_len] (whole-row copy/burn,
+no per-tap handling); the `causal_conv1d_update` sliding offset lives ONLY on non-live diagnostic/spine-oracle
+arms — the tree emulation reads the window with no offset and the cache copies whole-row offset-0, so col-0 is
+a closed offset-free loop.
 
 ---
 
