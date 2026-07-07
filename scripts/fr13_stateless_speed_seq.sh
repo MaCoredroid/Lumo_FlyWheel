@@ -10,7 +10,7 @@
 
 # ---- Arm 1: native MTP-5 + CACHE ON (the fair bar; NO tree/stateless flags) ----
 # nativemtp5apc = LAUNCHER=native + NATIVE_ENABLE_APC=1 + MAMBA/APC block flags (XFLAGS).
-run_variant nativemtp5apc_${TAG}      nativemtp5apc  5  1
+run_variant nativemtp5_${TAG}         nativemtp5     5  1  # native+APC crashes on GDN@B=4 (stock vLLM device assert); no-cache is native's working bar
 
 # ---- stateless-tree 3-flag lifecycle (tree arms ONLY; set AFTER the native arm) ----
 export FR13_APC_COMMIT_TO_RUNNING_ROW=1 FR13_TREE_RUNROW_INIT=1 FR13_APC_BURN_NODE_BANK=1
