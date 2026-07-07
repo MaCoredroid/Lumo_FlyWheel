@@ -10540,7 +10540,9 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             # FR13 STATELESS-TREE (default all-OFF -> byte-identical): the three
             # flags are ONE lifecycle (write leaf->col0 + init-read col0 + burn
             # cols 1:). Fail loud on partial enable (corrupts decode/cache; also
-            # a mixed SSM/conv page on restore).
+            # a mixed SSM/conv page on restore). This committer runs in vLLM's
+            # rejection_sampler.py namespace (no bare `os`), so import locally.
+            import os
             _fr13_runrow_commit = (
                 os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "0") == "1"
             )
@@ -11461,6 +11463,8 @@ def _lumo_tree_canonical_multidraft_sample(
             _fr13_bnd_on = _lumo_tree_commit_gdn._fr13_boundary_on()
             # FR13 STATELESS-TREE (default all-OFF -> byte-identical): one lifecycle,
             # fail loud on partial enable. (Sampled-committer twin; live @ temp>0.)
+            # rejection_sampler.py namespace has no bare `os` -> import locally.
+            import os
             _fr13_runrow_commit = (
                 os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "0") == "1"
             )
