@@ -36,7 +36,7 @@ native+cache is the behavioral **apples bar, NOT the same cache mechanism**. Nov
 | knob | value |
 |---|---|
 | B / concurrency | 4 / 4 (B=4 campaign); 1 / 1 (B=1) |
-| **effective decode batch (cat8 measured)** | **~1.3** (Running==1 80.3% of 1826 ticks) — cause is **agentic request sparsity + offload round-trip latency**, NOT the `max_num_batched_tokens=1024` throttle (4 decode tokens ≪ 1024) |
+| **effective decode batch (measured, GENERAL)** | **~1.3** (cat8 Running==1 80% of 1826 samples; native even more serial at 85%) — vLLM **serializes** the 4 queued requests. NOT sparsity (`Waiting>0` 94% of samples — 4 requests ARE queued), NOT the 1024 throttle, NOT preemption (≤2). Waiting reqs mostly un-prefilled (`prompt_tput=0` ~78%); Running spikes to 2–4 only in prefill bursts, then drains to 1. Exact V1-scheduler reason TBD (needs source read). |
 | agent / nudge | qwen-code (honest give-up gate) / **OFF** (`LUMO_PROXY_AUTO_CONTINUE=0`) |
 | wall / turn limit | **0 (none)** / 100000 (none); only 600s stall-watchdog |
 | temp / seed | 0.6 (proxy-forced) / 0 |
@@ -101,7 +101,7 @@ Definitions: `s_per_fwd_gpu` is per-DRAFT (`_basis=/drafts`); `s_per_fwd_gpu_per
 ## 4. Red-team ledger
 1. **Speed verdict REVERSED** (es=1 preview → es=0 final): cat8 wins +10.2%, not native. Confounded partial-subset preview was the trap.
 2. **Metric:** `derived_tps_gpu` (committed/s_per_fwd_gpu); `s_per_fwd_gpu` is per-draft not per-forward.
-3. **Effective-batch ~1.3 cause:** agentic sparsity + offload latency, NOT the 1024 throttle.
+3. **Effective-batch ~1.3 — investigated, both prior causes wrong:** NOT the 1024 throttle, NOT agentic sparsity (`Waiting>0` 94% — requests ARE queued), NOT preemption. vLLM serializes the 4 queued requests (bursty prefill admission → drain to 1); general to native (85% R1) + cat8 (80% R1). Exact V1-scheduler policy TBD.
 4. **Quality verdict:** tree degrades (5 vs 1 give-ups) — token-lossless-within-floor ≠ agentic parity.
 5. **Dual finding:** tree = speed win + quality loss. B=1 (HBM-bound) tests if speed win grows + quality gap persists.
 
