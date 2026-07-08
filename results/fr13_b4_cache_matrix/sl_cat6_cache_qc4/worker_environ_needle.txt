@@ -1,0 +1,44 @@
+PID 1 cmd=[/usr/bin/python3 /usr/local/bin/vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 0.0.0.0 --port 9950 --max-num-seqs 4 --gpu-memory-utilization 0.78 --max-model-len 131072 --seed 0 --attention-backend TREE_ATTN --gdn-prefill-backend triton --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config {"method":"qwen3_5_mtp","num_speculative_tokens":6,"speculative_token_tree":"[(0,),(1,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0)]"} --enable-prefix-caching --enable-chunked-prefill --mamba-block-size 1024 --mamba-ssm-cache-dtype float32 --max-num-batched-tokens 1024 --block-size 1024 --compilation-config {"cudagraph_mode":"FULL_AND_PIECEWISE"} ]
+   FR13_GPU_COMMITTER=0
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":6,"speculative_token_tree":"[(0,),(1,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0)]"}
+   FR13_COMMITTER_SYNCKILL=0
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 175 cmd=[/usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(51) ]
+   FR13_GPU_COMMITTER=0
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":6,"speculative_token_tree":"[(0,),(1,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0)]"}
+   FR13_COMMITTER_SYNCKILL=0
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 176 cmd=[VLLM::EngineCore                                                                                                                   ]
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 640 cmd=[bash -lc 
+hit=""; pids=""
+for p in $(ls /proc | grep -E "^[0-9]+$"); do
+  e="/proc/$p/environ"; [ -r "$e" ] || continue
+  cmd="$(tr "\0" " " < /proc/$p/cmdline 2>/dev/null || true)"
+  case "$cmd" in *vllm*|*VllmWorker*|*EngineCore*|*python*) ;; *) continue ;; esac
+  dm="$(tr "\0" "\n" < "$e" | grep -E "^FR10_DECODE_MODE_DEFAULT=" || true)"
+  if [ -n "$dm" ]; then
+    pids="$pids $p"
+    echo "PID $p cmd=[$cmd]"
+    tr "\0" "\n" < "$e" | grep -E "^(FR10_DECODE_MODE_DEFAULT|LUMO_FB_KERNEL_ROWS|FR13_GB10_FP8_GEMV_CFG|FR13_GPU_COMMITTER|FR13_COMMITTER_SYNCKILL|SPEC_CONFIG|FR13_REPLAY_ROUTE)=" | sed "s/^/   /"
+    hit="1"
+  fi
+done
+echo "SUMMARY worker_env_seen=[$hit] pids=[$pids]"
+ ]
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":6,"speculative_token_tree":"[(0,),(1,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0)]"}
+   FR13_GPU_COMMITTER=0
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_COMMITTER_SYNCKILL=0
+   FR13_REPLAY_ROUTE=1
+   FR13_GB10_FP8_GEMV_CFG=0
+   LUMO_FB_KERNEL_ROWS=1
+SUMMARY worker_env_seen=[1] pids=[ 1 175 176 640]

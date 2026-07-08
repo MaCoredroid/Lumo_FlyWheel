@@ -1,0 +1,48 @@
+diff --git a/astropy/coordinates/sky_coordinate.py b/astropy/coordinates/sky_coordinate.py
+index ab475f7d0..70776452c 100644
+--- a/astropy/coordinates/sky_coordinate.py
++++ b/astropy/coordinates/sky_coordinate.py
+@@ -1,6 +1,7 @@
+ import copy
+ import operator
+ import re
++import threading
+ import warnings
+ 
+ import erfa
+@@ -33,6 +34,12 @@ from .sky_coordinate_parsers import (
+ 
+ __all__ = ["SkyCoord", "SkyCoordInfo"]
+ 
++# Thread-local storage for preserving the original AttributeError message
++# when a property getter raises AttributeError. This is needed because Python's
++# C implementation treats AttributeError from descriptors as "not found" and
++# calls __getattr__, which would otherwise overwrite the original error.
++_skycoord_last_error = threading.local()
++
+ 
+ class SkyCoordInfo(MixinInfo):
+     """
+@@ -895,9 +902,21 @@ class SkyCoord(ShapedLikeNDArray):
+                 return self.transform_to(attr)
+ 
+         # Fail
+-        raise AttributeError(
++        # Check if the attribute is defined on the class hierarchy (e.g., a
++        # property on a subclass). If so, Python's C implementation may have
++        # called us because the descriptor raised AttributeError. In that case,
++        # we should re-raise the original error rather than misleading the user.
++        for cls in type(self).__mro__:
++            if attr in cls.__dict__:
++                if hasattr(_skycoord_last_error, "error"):
++                    raise _skycoord_last_error.error
++        # Not a descriptor on the class - raise the standard error and save it
++        # in case a descriptor's __getattr__ fallback needs it.
++        error = AttributeError(
+             f"'{self.__class__.__name__}' object has no attribute '{attr}'"
+         )
++        _skycoord_last_error.error = error
++        raise error
+ 
+     def __setattr__(self, attr, val):
+         # This is to make anything available through __getattr__ immutable

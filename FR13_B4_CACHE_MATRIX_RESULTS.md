@@ -1,21 +1,25 @@
 # FR13 — Cache-ON Speed/Quality Matrix (B=4 + B=1) — living results doc
 
-**Status:** B=4 `native+cache` **DONE 16/16**; `cat8+cache` **DONE 16/16**; `cat6+cache` **RUNNING**. B=1 pair queued behind B=4 cat6.
-**Maintained + committed each tick** by monitor loop cron `1a91cac8`, artifacts under `results/`.
-**Every number independently extracted from artifact files + adversarially verified** (workflow `wf_12862543-571`); the B=4 speed verdict below **reverses** an earlier preliminary claim that was based on a confounded es=1 preview.
+**Status:** B=4 **3-arm matrix COMPLETE** — `native+cache`, `cat8+cache`, `cat6+cache` all DONE 16/16. Now running: **`native+nocache`** control (KIND flash_ns5_nocache, isolates the cache). B=1 CANCELLED. Serialization-fix shot (§7) queued after native+nocache.
+**Every number independently extracted from artifact files + adversarially verified** (workflow `wf_12862543-571`).
 
-> ⚠️ **Matrix spans 3 binaries.** cat8 = `8c27f454` (PRE leak-fix — the EXACT_SEED/HRS/refold code-deprecation `37bd90e2` is NOT in cat8's build; it avoided the es_ckpt OOM via explicit env `es=0` + tree-path never engaging es_ckpt). native = `ecd7aedd` (POST fix). cat6 = pending (≥ `d8af472d`).
+> ⚠️ **Matrix spans 3+ binaries.** cat8 = `8c27f454` (PRE leak-fix — the EXACT_SEED/HRS/refold deprecation `37bd90e2` is NOT in cat8's build; it avoided the es_ckpt OOM via explicit env `es=0`). native = `ecd7aedd` (POST fix). cat6 = `d8af472d`+.
 
 ---
 
-## THE B=4 VERDICT (both arms 16/16, apples): the tree is a SPEED WIN and a QUALITY LOSS
+## THE B=4 VERDICT (3 arms × 16/16): the tree buys DECODE SPEED, pays AGENTIC GIVE-UPS — and the smaller tree is the better tree
 
-| axis | winner | margin | why |
-|---|---|---|---|
-| **Speed** (per committed token) | **cat8 (tree)** | **+10.2%** | tree accept 3.588 vs native 3.050 (**+17.6%**) beats its tiny per-forward cost (+2.7%) |
-| **Quality** (give-ups) | **native** | 5 vs 1 give-ups | tree meanders → empty patch where native converges or at least attempts |
+| arm | accept | s_per_fwd_gpu | **derived_tps_gpu** | resolved | give-ups |
+|---|---|---|---|---|---|
+| native+cache (MTP-5) | 3.050 | 0.1276 | 31.74 | **8/16 (50%)** | **1** |
+| cat8+cache (8-node) | 3.588 | 0.1312 | 34.98 | 6/16 (38%) | 5 |
+| **cat6+cache (6-node)** | 3.850 | **0.1209** | **40.12** | 6/16 (38%) | 5 |
 
-**The tree buys decode speed at the cost of agentic reliability.** Its higher accept-per-forward (more tree candidates) makes it faster per committed token; but the same tree, though token-lossless-within-floor, shifts agent trajectories enough to cause **5× more give-ups**. Token-lossless ≠ agentic-parity. B=1 tests whether the speed win grows (HBM-bound) and whether the quality gap persists.
+**Speed:** the trees beat native (cat6 **+26%**, cat8 +10%), and **cat6 (6-node) is the FASTEST** — cheaper per-forward than cat8 (0.1209 vs 0.1312, fewer positions) with high accept. ⚠️ **Red-team caveat:** cat6's accept (3.850) is *higher* than cat8's (3.588) even though it's a *thinner* tree — structurally it should accept ≤, so a chunk of that is **trajectory noise** (each arm's agent generates different tokens at temp 0.6, so accept isn't perfectly apples). The **robust** part is the per-forward: cat6's is structurally cheapest, so even discounting accept to cat8's level (→ ~37.9) **cat6 still > cat8**. So "cat6 fastest" holds; the exact +26% margin is accept-confounded.
+
+**Quality:** native best (8/16, 1 give-up). **Both trees identical: 6/16 resolved, 5 give-ups** — the tree-degradation is **SIZE-ROBUST** (shrinking 8→6 nodes did not reduce give-ups; cat6's give-up *set* differs — 2 cat6-specific — but the count matches). Resolve is on-par between trees, ~2 below native.
+
+**Net:** the tree trades ~2 resolves (give-up cost, size-robust) for decode speed. **cat6 is the better tree** — fastest, same quality as cat8. If the tree ships, it's cat6, and the give-ups must be attacked at the trajectory level (not tree size). `native+nocache` (running) isolates whether the cache itself moves give-ups/speed; the serialization fix (§7) could lift the whole matrix's decode concurrency.
 
 ---
 
