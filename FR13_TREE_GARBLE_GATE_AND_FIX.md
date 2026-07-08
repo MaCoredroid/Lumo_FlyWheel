@@ -29,6 +29,37 @@ Artifacts: `output/fr13_garble_gate/{tree_n15,native_n15}.jsonl`.
 **This is now the STAGE-E fix gate:** apply the fix (M-invariance / batch-invariant tree-attn), re-run
 the tree arm, KEEP iff the undefined-name rate drops toward native's 0.00% at acceptable accept.
 
+## ✅ STAGE-E LEVER 1 RESULT (2026-07-08) — pad-block M-invariance cuts garble 68%
+
+The cron's named "primary" `FR13_BI_TREE_ATTN` (num_splits=1 under BI) is **inert for tree shapes**
+(max_seqlen_q=tree_len>1 ⇒ num_splits stays 0) and needs full `VLLM_BATCH_INVARIANT`, which is
+**counterproductive on GB10** (reduced override branch perturbs fp8/scan; prior cat9+BI=34). The
+launcher's actual **targeted** M-invariance is the **pad-block in_proj GEMM** (`LUMO_FB_KERNEL_ROWS=1`,
+#42960-authorized, lossless): pads the VERIFY-path (`num_spec_decodes>1`) projection to a fixed
+`LUMO_FB_PROJ_PAD_ROWS`(=16) row group ⇒ GEMM tiling independent of co-resident branch count M.
+
+| arm (N=15×3, thinking-off, no-cache) | undefined-name | samples w/ undef | accept |
+|---|---|---|---|
+| tree baseline | 9.56% | 32/45 | ~4.1 |
+| **tree + `LUMO_FB_KERNEL_ROWS=1`** | **3.10%** | **15/45** | **4.55** |
+| native | 0.00% | 0/45 | — |
+
+**−68% garble, accept NOT tanked** (lossless-by-design). This **localizes the garble mechanism**: the
+tree-verify wrong-accepts are driven by M-dependent (co-residency) batch-variance in the in_proj GEMM
+tiling — making it M-invariant makes the verify reject near-neighbors it used to accept. Confirms the
+"drafter-proposes / drifted-tree-verify-wrongly-accepts" mechanism (recurrent-oracle clear-margin flips
+= these wrong-accepts).
+
+**Caveats:** cross-boot A/B (baseline vs fix are different boots) — but −68% with the *same* residual
+identifiers (input_wcsheader 10→7, applied_index 6→4) is far beyond autotune noise. **Not yet
+same-boot-provable** (LUMO_FB is a container-start env, not per-request toggleable).
+
+**RESIDUAL 3.10% ⇒ next levers** (the batch-variance also enters elsewhere in the verify forward):
+o_proj / MLP GEMM pad-block, tree-attention reduction, GDN scan. Each: add M-invariant padding at the
+site, re-gate. Target: 3.10% → native 0.00%. **DIRECT confirm option** (per user 2026-07-08): on a
+garbling seed, trace `(drafter proposal, tree-verify accept/reject, recurrent-oracle argmax)` at the
+garble position to show wrong-accept-of-a-draft vs bonus-resample.
+
 ---
 
 
