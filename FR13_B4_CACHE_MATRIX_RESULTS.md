@@ -88,7 +88,11 @@ Definitions: `s_per_fwd_gpu` is per-DRAFT (`_basis=/drafts`); `s_per_fwd_gpu_per
 | **cat8 GU → native WRONG-PATCH** | **14598, 13398** | native *produces* a patch (tests fail); cat8 **gave up** (empty). Both fail to solve, but native attempts where the tree bails. |
 | native GU → cat8 PASS | 14096 | native 11m give-up vs cat8 33m pass |
 
-**TREE-AGENTIC-DEGRADATION CONFIRMED.** Of cat8's **5 give-ups, native gives up on ZERO** — 3 solves + 2 wrong-patches. Native gives up on exactly **1** task total (14096). cat8 burned **9.6 agent-hours across its 5 give-ups** (13398 4.5h, 13579 2.8h). The deficit is **non-convergence (meander → empty patch)**, not wrong code — the tree's give-ups are tree-*induced* (native proves the agent can at least attempt a patch on every one of them). Extends [[project_fr13_tree_agentic_degradation]].
+**These are EXHAUSTIVE give-ups, NOT quick bails.** Every cat8 give-up **tried 39 min – 4.5 h** before emitting an empty patch: 13398 **4.5h**, 13579 **2.8h**, 14508 **52m**, 14539 **51m**, 14598 **39m** — minimum effort **39 min**. This is the **honest give-up gate**: nudge is OFF (`LUMO_PROXY_AUTO_CONTINUE=0`), so an empty patch stands as a give-up. **Before the fix** (codex + nudge), empty patches were auto-continued 3× ("you MUST apply_patch"), which *masked* give-ups — so a give-up here means the model genuinely ground for **30 min+** (often hours) and could not converge, not a lazy quick bail. (native's single give-up, 14096, was quicker at **11 min**.)
+
+**TREE-AGENTIC-DEGRADATION CONFIRMED.** Of cat8's **5 give-ups, native gives up on ZERO** — 3 solves + 2 wrong-patches. Native gives up on exactly **1** task total (14096). cat8 burned **9.6 agent-hours across its 5 give-ups**. The deficit is **non-convergence (meander → empty patch)**, not wrong code — the tree's give-ups are tree-*induced* (native proves the agent can at least attempt a patch on every one of them). Extends [[project_fr13_tree_agentic_degradation]].
+
+> **Scaffold note:** the 77.2% official Qwen3.6-27B SWE-Verified is temp 1.0 on Qwen's internal scaffold, which likely includes nudge/retry-style continuation. We run **qwen-code with nudge OFF** at temp 0.6 on a hard 16-subset — deliberately un-masked, so these numbers are a stricter honest floor, not comparable to the headline.
 
 ---
 
