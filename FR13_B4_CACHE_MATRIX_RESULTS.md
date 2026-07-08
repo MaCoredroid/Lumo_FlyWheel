@@ -7,7 +7,7 @@
 
 ---
 
-## THE B=4 VERDICT (3 arms × 16/16): the tree buys DECODE SPEED, pays AGENTIC GIVE-UPS — and the smaller tree is the better tree
+## THE B=4 VERDICT (3 arms × 16/16): the tree buys DECODE SPEED, pays AGENTIC GIVE-UPS; the two tree sizes are quality-equal (which is faster = UNRESOLVED, cat8⊃cat6)
 
 | arm | accept | s_per_fwd_gpu | **derived_tps_gpu** | resolved | give-ups |
 |---|---|---|---|---|---|
@@ -15,11 +15,15 @@
 | cat8+cache (8-node) | 3.588 | 0.1312 | 34.98 | 6/16 (38%) | 5 |
 | **cat6+cache (6-node)** | 3.850 | **0.1209** | **40.12** | 6/16 (38%) | 5 |
 
-**Speed — PROVISIONAL, pending the serialization/concurrency fix.** As measured the trees beat native (cat6 **+26%**, cat8 +10%) and cat6 (6-node) is fastest. **But two confounds mean this is NOT final:** (1) **accept-confounded** — cat6's accept (3.850) is *higher* than cat8's (3.588) despite being a *thinner* tree, which is structurally backwards, so a chunk is **trajectory noise** (each arm's agent generates different tokens at temp 0.6). (2) **concurrency-confounded** — all arms ran at effective decode batch ~1.3 (the §7 serialization bug), not true B=4; the clean speed ranking should be re-measured after the serialization fix lands. The only **robust** claim today: cat6's per-forward is structurally cheapest (0.1209, fewer positions), so even discounting accept to cat8's level (→ ~37.9) **cat6 > cat8**. Treat "cat6 fastest / +26%" as provisional until (a) the serialization fix gives true B=4 and (b) a same-trajectory accept re-measure.
+**Speed — PROVISIONAL. cat6-vs-cat8 is UNRESOLVED; cat6-vs-native is directionally real.** As measured the trees beat native (cat6 +26%, cat8 +10%). BUT:
+- **cat8 is a strict SUPERSET of cat6** (verified from code: `cat8 = cat6 ∪ {(0,1),(0,0,1)}`, same depth-5 spine + `(1,)` root sibling). A superset tree **must accept ≥ its subset on identical draft/target tokens** (cat6's best path is available to cat8, plus extras). So cat6's measured accept **3.850 > cat8's 3.588 is structurally impossible on matched inputs → pure trajectory noise** (temp 0.6, different tokens per arm).
+- Therefore **"cat6 faster than cat8" is NOT established** (I earlier over-claimed it). On matched trajectories cat8 accepts ≥ cat6; the real question is whether cat6's fewer-nodes **per-forward saving** (6 vs 8 positions) outweighs cat8's genuine (small, diminishing-returns) **extra accept** from the 2 added siblings. Net sign unknown → needs a **same-trajectory** measurement.
+- **concurrency-confounded** too — all arms ran at effective batch ~1.3 (§7 serialization bug), not true B=4.
+- What DOES hold: **both trees out-accept native's linear chain**, so the tree>native speed edge is directionally real (cat8's +10% is on matched 16-task apples; cat6>native likewise but accept-inflated). Re-measure cat6-vs-cat8 same-trajectory after the §7 fix before ranking the trees.
 
 **Quality:** native best (8/16, 1 give-up). **Both trees identical: 6/16 resolved, 5 give-ups** — the tree-degradation is **SIZE-ROBUST** (shrinking 8→6 nodes did not reduce give-ups; cat6's give-up *set* differs — 2 cat6-specific — but the count matches). Resolve is on-par between trees, ~2 below native.
 
-**Net:** the tree trades ~2 resolves (give-up cost, size-robust) for decode speed. **cat6 is the better tree** — fastest, same quality as cat8. If the tree ships, it's cat6, and the give-ups must be attacked at the trajectory level (not tree size). `native+nocache` (running) isolates whether the cache itself moves give-ups/speed; the serialization fix (§7) could lift the whole matrix's decode concurrency.
+**Net:** the tree trades ~2 resolves (give-up cost, size-robust) for a real decode-speed edge over native. **cat6 and cat8 are quality-equal** (6/16, 5 give-ups each). **Which tree is faster is UNRESOLVED** — cat8 ⊃ cat6, so cat8 accepts ≥ cat6 on matched tokens; cat6's cheaper per-forward vs cat8's (small) extra accept is a genuine open question needing a same-trajectory measure. So the shippable-tree choice (cat6 vs cat8) is TBD; both carry the same give-up cost, which must be attacked at the trajectory level (not tree size). `native+nocache` (running) isolates whether the cache itself moves give-ups/speed; the §7 serialization fix could lift the matrix's decode concurrency and enable a clean tree-vs-tree re-measure.
 
 ---
 
