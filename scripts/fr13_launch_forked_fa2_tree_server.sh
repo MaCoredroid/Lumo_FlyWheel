@@ -235,7 +235,18 @@ MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
 # (#43650 drop-final-block was REFUTED: the GDN restore reads block_table col-0 anchored to
 # (seq_len-1)//block_size, NOT the matched-block count, so dropping a matched block is a no-op on
 # the restored state. Stays default-OFF.)
-APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-$MAMBA_BLOCK_SIZE}
+# BAKED 2026-07-08 (serialization fix; shot output/fr13_serialization_shot): default raised 1024->4096
+# to un-serialize co-resident decode (max_num_batched==block starved decode -> forced-4-concurrent
+# Running mean 1.3->3.20). The #45238 gross-poison invariant (step<=1 block) is now re-enforced
+# PER-REQUEST by --long-prefill-token-threshold=$MAMBA_BLOCK_SIZE (baked below), NOT by
+# max_num_batched==block -> per-request chunk boundaries stay at the SAME 1024 positions (B=1 byte-
+# identical; B>1 within-floor lossless: cache-ON clear-margin 4.55% < 12.90% floor, recurrent-oracle
+# gated). Revert = set APC_MAX_NUM_BATCHED_TOKENS=$MAMBA_BLOCK_SIZE (the coupling assert below enforces
+# that raising it REQUIRES the threshold, so you can't half-revert into #45238).
+APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-4096}
+# BAKED 2026-07-08 (serialization fix): per-request prefill-chunk cap = mamba block (was unset/OFF).
+# Set here (before the coupling assert below) so the baked max_num_batched=4096 stays #45238-safe.
+LUMO_LONG_PREFILL_THRESHOLD=${LUMO_LONG_PREFILL_THRESHOLD:-$MAMBA_BLOCK_SIZE}
 if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   # FR13_APC_CONFIG_ONLY=1 => apply the APC serve CONFIG (chunked-prefill + max-num-batched
   # + mamba flags) but WITHOUT --enable-prefix-caching. This is the matched-config cache-OFF
@@ -262,18 +273,32 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
     # one boundary per prefill step]. NOTE the 2026-07-04 A/B: 832-vs-1024 did NOT change
     # the tree+cache give-up (6/6 both geometries) — this bake is cache-correctness
     # hygiene, not the give-up fix (see FR13_TREECACHE_CAMPAIGN_20260704.md §8-9).
-    APC_BLOCK_SIZE=${APC_BLOCK_SIZE:-$APC_MAX_NUM_BATCHED_TOKENS}
+    # BAKED 2026-07-08 (serialization fix): APC_BLOCK_SIZE now pins to $MAMBA_BLOCK_SIZE (the mamba
+    # page / GDN-checkpoint boundary), DECOUPLED from max_num_batched (was :=max_num_batched). The
+    # old "(3) block_size == max_num_batched" #45238 invariant is superseded by the per-request
+    # threshold below; block_size stays 1024 so the GDN checkpoint at a block boundary is bit-exact.
+    APC_BLOCK_SIZE=${APC_BLOCK_SIZE:-$MAMBA_BLOCK_SIZE}
     if (( APC_BLOCK_SIZE % 64 != 0 )) || (( APC_BLOCK_SIZE < 816 )) || (( APC_BLOCK_SIZE > APC_MAX_NUM_BATCHED_TOKENS )); then
       echo "FAIL: APC_BLOCK_SIZE=$APC_BLOCK_SIZE violates the block-size invariant (64-multiple, >=816, <= max-num-batched=$APC_MAX_NUM_BATCHED_TOKENS)"; exit 2
     fi
+    # COUPLING ASSERT (serialization-fix footgun-guard): raising max_num_batched above the mamba block
+    # is ONLY safe when the per-request threshold re-enforces step<=1 block; otherwise #45238 gross-
+    # poison (garbage cache-ON output) returns. Fail loud rather than silently corrupt.
+    if (( APC_MAX_NUM_BATCHED_TOKENS > MAMBA_BLOCK_SIZE )); then
+      if [[ -z "${LUMO_LONG_PREFILL_THRESHOLD:-}" ]] || (( LUMO_LONG_PREFILL_THRESHOLD > MAMBA_BLOCK_SIZE )); then
+        echo "FAIL: APC_MAX_NUM_BATCHED_TOKENS=$APC_MAX_NUM_BATCHED_TOKENS > MAMBA_BLOCK_SIZE=$MAMBA_BLOCK_SIZE requires LUMO_LONG_PREFILL_THRESHOLD<=$MAMBA_BLOCK_SIZE (else #45238 gross-poison). Set the threshold or lower max_num_batched."; exit 2
+      fi
+    fi
     APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS --block-size $APC_BLOCK_SIZE"
-    # SERIALIZATION-FIX flag (2026-07-08, wf_1c4af669 source-verified): optional per-request
-    # prefill-chunk cap. DEFAULT OFF (unset) => byte-identical to the baked config. Set
-    # LUMO_LONG_PREFILL_THRESHOLD (= mamba block, 1024) together with APC_MAX_NUM_BATCHED_TOKENS>block
-    # (e.g. 4096) + APC_BLOCK_SIZE pinned to the mamba block, to break the decode-serialization
-    # (max_num_batched==block starves co-resident decode) WITHOUT reintroducing the #45238 overshoot:
-    # the threshold re-enforces the <=1-block-per-request-per-step invariant directly, so per-request
-    # chunk boundaries stay at the same 1024 positions. UNTESTED for losslessness => gate before baking.
+    # SERIALIZATION-FIX flag (2026-07-08, wf_1c4af669 source-verified): per-request prefill-chunk cap.
+    # BAKED default = $MAMBA_BLOCK_SIZE (set above). With APC_MAX_NUM_BATCHED_TOKENS=4096 + APC_BLOCK_SIZE
+    # pinned to the mamba block, this breaks the decode-serialization (max_num_batched==block starved
+    # co-resident decode) WITHOUT reintroducing the #45238 overshoot: the threshold re-enforces the
+    # <=1-block-per-request-per-step invariant directly, so per-request chunk boundaries stay at the
+    # same 1024 positions. GATED: shot output/fr13_serialization_shot PASSED throughput (forced-4-conc
+    # Running mean 1.3->3.20) AND within-floor lossless (cache-ON clear-margin 4.55% < 12.90% floor,
+    # recurrent-oracle). Empty LUMO_LONG_PREFILL_THRESHOLD reverts (but then also lower max_num_batched
+    # per the coupling assert). Only added when APC_MAX_NUM_BATCHED_TOKENS>block (else it is a no-op).
     if [[ -n "${LUMO_LONG_PREFILL_THRESHOLD:-}" ]]; then
       APC_FLAGS="$APC_FLAGS --long-prefill-token-threshold $LUMO_LONG_PREFILL_THRESHOLD"
     fi

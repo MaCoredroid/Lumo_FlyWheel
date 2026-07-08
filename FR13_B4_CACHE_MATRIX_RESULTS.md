@@ -166,7 +166,16 @@ Effect: 4 decodes (~28 tok) + one-to-three full 1024-token prefill blocks (disti
 
 **APC losslessness — NO conflict** (verified): #45238 requires only (i) `mamba_block_size=1024` (untouched) and (ii) ≤1 block-boundary per request per step. The `max_num_batched=1024` value was only a *proxy* for (ii); the threshold re-enforces (ii) **directly + per-request**, so per-request chunk boundaries stay at the *same* 1024 positions → align fp-profile unchanged. ⚠️ Raising `max_num_batched` **alone** (the naive fix) WOULD re-poison (#45238) — the threshold is what makes it safe.
 
-**Status: UNTESTED.** Batch-*composition* change (co-scheduling a prefill chunk with the spec-decodes) can perturb non-batch-invariant GEMM tiling ~1 ULP → must pass the temp-0.6 recurrent-oracle lossless gate before use. **Synthetic 4-concurrent shot** (Running histogram + lossless gate) queued to run **after cat6 frees the GPU** (`scripts/fr13_serialization_shot.sh`). Fallbacks if lossless regresses: `LUMO_BATCH_INVARIANT_VLLM=1`, conservative 2048, or scope to cache-OFF only — none touch `mamba_block_size`.
+**Status: SHOT RUN → BOTH GATES PASS → BAKED (2026-07-08, `output/fr13_serialization_shot/`).**
+
+| gate | result | verdict |
+|---|---|---|
+| **Throughput** (forced 4-concurrent ~30K-tok distinct-prefix load, Running histogram) | fix Running dist `{1:1, 3:1, 4:3}` **mean 3.20** vs baseline 80-85% R1 (mean ~1.3); R4 hit 3/5 samples (baseline never) | **UN-SERIALIZES** ✓ (confirms the throttle was the cause) |
+| **Lossless** (temp-0.6 recurrent-oracle, cache-ON vs cache-OFF, same fix-config boot) | cache-ON clear-margin **4.55%** (4/88; oracle EOS-stopped at 88) vs cache-OFF 3.71% (19/512); Δ+0.83pp (baseline was +3.12pp); RECURRENT_PATH_ENGAGED both | **WITHIN 12.90% floor** ✓ |
+
+**BAKED** into `fr13_launch_forked_fa2_tree_server.sh`: `APC_MAX_NUM_BATCHED_TOKENS` default `1024→4096`, `LUMO_LONG_PREFILL_THRESHOLD` default `unset→1024`, `APC_BLOCK_SIZE` pinned to `MAMBA_BLOCK_SIZE` (decoupled from max_num_batched). A **coupling assert** fails loud if max_num_batched>block without threshold≤block (prevents a half-revert into #45238). **B=1 byte-identical** (per-request chunks stay 1024 via the threshold → GDN recurrence unchanged); only B>1 co-scheduling changes.
+
+**Red-team caveats (honest):** throughput n=5 Running samples (small, but the R4 shift is qualitative); lossless is **1 prompt** at the standard precheck rigor (same as the baseline verdict) — a broader multi-prompt lossless confirmation is recommended before full trust. Per [[reference_b4_effective_batch_agentic_sparsity]] real agentic load is request-sparse (~B1.3), so the fix removes the *ceiling* (mechanism confirmed) but real-world benefit is gated on actual concurrency. Fallbacks if a broader gate regresses: `LUMO_BATCH_INVARIANT_VLLM=1`, conservative 2048, or scope to cache-OFF — none touch `mamba_block_size`; revert = `APC_MAX_NUM_BATCHED_TOKENS=1024`.
 
 ## 8. Open items
 - **cat6+cache (B=4)** running → 3rd matrix cell (smaller tree: keep speed win with fewer give-ups?).

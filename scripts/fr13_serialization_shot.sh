@@ -7,7 +7,7 @@
 #   budget => waiting prefill chunk rounds to 0 => break => decode+prefill mutually exclusive => ~B1.
 #   Fix keeps per-request chunks <=1 block (threshold), so #45238 overshoot is NOT reintroduced.
 # GPU-SOLO: run ONLY when GPU free (0 fr13 containers). Two stages, sequential.
-#   Stage A THROUGHPUT: boot fix server, fire 4 concurrent ~24K-token requests, sample the
+#   Stage A THROUGHPUT: boot fix server, fire 4 concurrent ~30K-token requests, sample the
 #     scheduler Running histogram. PASS = shifts from ~80% R1 toward R2-R4 + prompt_tput>0 w/ Running>0.
 #   Stage B LOSSLESS: fr13_apc_temp06_precheck.sh with the SAME fix env (recurrent-oracle gate).
 #     PASS = cache-ON clear-margin argmax-flip rate <= cache-OFF (within-floor).
@@ -43,14 +43,14 @@ curl -fsS -m 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 || { echo "FAIL: 
 # confirm the fix flags are live in the engine args
 docker logs "$C" 2>&1 | grep -oE "max_num_batched_tokens': [0-9]+|long_prefill_token_threshold': [0-9]+|mamba_block_size': [0-9]+" | sort -u | sed 's/^/  engine-arg: /'
 
-echo "=== [shot] firing 4 concurrent ~24K-token distinct-prefix requests (temp 0.6, 256 max_tokens) + sampling Running ==="
+echo "=== [shot] firing 4 concurrent ~30K-token distinct-prefix requests (temp 0.6, 256 max_tokens) + sampling Running ==="
 MARK_TS=$(date +%s)
 .venv/bin/python - "$PORT" "$RUNDIR" <<'PY' &
 import sys,json,urllib.request,concurrent.futures,time
 port,rundir=sys.argv[1],sys.argv[2]
 def req(i):
     # distinct long prompt (~24K tokens) so each must fully prefill (no shared cache)
-    filler=" ".join(f"tok{i}_{j}" for j in range(24000))
+    filler=" ".join(f"tok{i}_{j}" for j in range(6000))
     msg=[{"role":"user","content":f"Request {i} distinct prefix {i}*{i}. {filler}\nSummarize in one word."}]
     data=json.dumps({"model":"qwen3.6-27b","messages":msg,"temperature":0.6,"max_tokens":256,"seed":i}).encode()
     r=urllib.request.Request(f"http://127.0.0.1:{port}/v1/chat/completions",data=data,headers={"Content-Type":"application/json"})
