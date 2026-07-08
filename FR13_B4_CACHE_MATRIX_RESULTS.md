@@ -7,13 +7,20 @@
 
 ---
 
-## THE B=4 VERDICT (3 arms × 16/16): the tree buys DECODE SPEED, pays AGENTIC GIVE-UPS; the two tree sizes are quality-equal (which is faster = UNRESOLVED, cat8⊃cat6)
+## THE B=4 VERDICT (4 arms × 16/16): the tree buys DECODE SPEED, pays AGENTIC GIVE-UPS; the two tree sizes are quality-equal (which is faster = UNRESOLVED, cat8⊃cat6); our CACHE = TTFT win, slight quality cost
 
-| arm | accept | s_per_fwd_gpu | **derived_tps_gpu** | resolved | give-ups |
-|---|---|---|---|---|---|
-| native+cache (MTP-5) | 3.050 | 0.1276 | 31.74 | **8/16 (50%)** | **1** |
-| cat8+cache (8-node) | 3.588 | 0.1312 | 34.98 | 6/16 (38%) | 5 |
-| **cat6+cache (6-node)** | 3.850 | **0.1209** | **40.12** | 6/16 (38%) | 5 |
+| arm | accept | s_per_fwd_gpu | **derived_tps_gpu** | prefill_frac | resolved | give-ups |
+|---|---|---|---|---|---|---|
+| native+cache (MTP-5) | 3.050 | 0.1276 | 31.74 | 0.151 | **8/16 (50%)** | **1** |
+| **native+nocache** (control) | 3.336 | 0.073⚠️ | 59.13⚠️ | **0.419** | **9/16 (56%)** | **0** |
+| cat8+cache (8-node) | 3.588 | 0.1312 | 34.98 | 0.169 | 6/16 (38%) | 5 |
+| **cat6+cache (6-node)** | 3.850 | **0.1209** | **40.12** | 0.169 | 6/16 (38%) | 5 |
+
+**⚠️ native+nocache's 59.13 derived_tps_gpu is a MEASUREMENT ARTIFACT, not a real 2× speedup.** Decode is *identical* to native+cache (same MTP-5/FLASH_ATTN kernel; the cache only touches prefill), so decode speed MUST be ~equal — and the **sfwd sidecar (cumulative per-step) confirms it: native+nocache 165.8 ms/step vs native+cache 148.8 ms/step** (~equal, if anything nocache slightly slower). The deploy-speed per-draft window-delta (0.073) is spurious — computed over a **high-prefill (0.419), low-decode-step (14720 vs 39298)** window. Use the sidecar per-step for decode; do NOT rank the arms on native+nocache's 59.13.
+
+**CACHE EFFECT (native+cache vs native+nocache — same launcher/decode, only the prefix cache differs):**
+- **Speed = TTFT/prefill, not decode.** The cache slashes **prefill_frac 0.419 → 0.151** (skips re-prefilling the shared agentic context — its real win), while **decode per-forward is unchanged** (~150-165 ms/step both). So the cache helps wall-clock via TTFT, invisible to the decode-only metric.
+- **Quality = slight cost.** Cache 8/16-resolved + 1 give-up (14096) vs nocache **9/16 + 0 give-ups** — the cache *introduced* native's only give-up (14096) and one fewer resolve. **n=1-2, and 14096's give-up was an 11-min quick-quit → plausibly stochastic**; don't overclaim a systematic cache quality regression, but the direction is "cache slightly hurt native." (Relevant to #12: 14096's give-up is cache-related, not tree/graph.)
 
 **Speed — PROVISIONAL. cat6-vs-cat8 is UNRESOLVED; cat6-vs-native is directionally real.** As measured the trees beat native (cat6 +26%, cat8 +10%). BUT:
 - **cat8 is a strict SUPERSET of cat6** (verified from code: `cat8 = cat6 ∪ {(0,1),(0,0,1)}`, same depth-5 spine + `(1,)` root sibling). A superset tree **must accept ≥ its subset on identical draft/target tokens** (cat6's best path is available to cat8, plus extras). So cat6's measured accept **3.850 > cat8's 3.588 is structurally impossible on matched inputs → pure trajectory noise** (temp 0.6, different tokens per arm).

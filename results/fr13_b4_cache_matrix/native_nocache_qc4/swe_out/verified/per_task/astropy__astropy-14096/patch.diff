@@ -1,0 +1,25 @@
+diff --git a/astropy/coordinates/sky_coordinate.py b/astropy/coordinates/sky_coordinate.py
+index ab475f7d0..8b8af1b42 100644
+--- a/astropy/coordinates/sky_coordinate.py
++++ b/astropy/coordinates/sky_coordinate.py
+@@ -894,6 +894,20 @@ class SkyCoord(ShapedLikeNDArray):
+             if frame_cls is not None and self.frame.is_transformable_to(frame_cls):
+                 return self.transform_to(attr)
+ 
++        # Check if attr is a property defined on any class in the MRO
++        # (including the instance's own class). If so, re-invoke its getter
++        # to surface the real underlying error (Python's property mechanism
++        # catches AttributeError from getters and falls back to __getattr__,
++        # which gives a misleading message).
++        for cls in type(self).__mro__:
++            if cls is SkyCoord:
++                break  # Don't look beyond SkyCoord
++            cls_attr = getattr(cls, attr, None)
++            if isinstance(cls_attr, property) and cls_attr.fget:
++                cls_attr.fget(self)
++                # If we get here, the property returned normally; return its value
++                # (shouldn't happen since __getattr__ means normal lookup failed)
++
+         # Fail
+         raise AttributeError(
+             f"'{self.__class__.__name__}' object has no attribute '{attr}'"

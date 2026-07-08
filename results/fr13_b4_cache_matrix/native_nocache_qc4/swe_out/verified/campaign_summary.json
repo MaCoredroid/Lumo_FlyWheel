@@ -1,0 +1,35 @@
+{
+  "model_name_or_path": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+  "started_at": "2026-07-08T06:13:21Z",
+  "ended_at": "2026-07-08T10:54:14Z",
+  "instances_total": 16,
+  "verdict_counts": {
+    "resolved": 9,
+    "failed": 7
+  },
+  "failure_mode_counts": {
+    "tests_passed": 9,
+    "tests_failed": 7
+  },
+  "per_repo_total": {
+    "astropy/astropy": 16
+  },
+  "per_repo_resolved": {
+    "astropy/astropy": 9
+  },
+  "eval_wall_seconds": {
+    "p50": 50.976,
+    "p90": 52.483,
+    "p99": 53.388,
+    "min": 40.172,
+    "max": 53.388
+  },
+  "codex_wall_seconds": {
+    "p50": 2546.686,
+    "p90": 7648.012,
+    "p99": 12895.227,
+    "min": 592.422,
+    "max": 12895.227
+  },
+  "resolved_rate": 0.5625
+}
