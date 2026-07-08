@@ -270,6 +270,16 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
       echo "FAIL: APC_BLOCK_SIZE=$APC_BLOCK_SIZE violates the block-size invariant (64-multiple, >=816, <= max-num-batched=$APC_MAX_NUM_BATCHED_TOKENS)"; exit 2
     fi
     APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS --block-size $APC_BLOCK_SIZE"
+    # SERIALIZATION-FIX flag (2026-07-08, wf_1c4af669 source-verified): optional per-request
+    # prefill-chunk cap. DEFAULT OFF (unset) => byte-identical to the baked config. Set
+    # LUMO_LONG_PREFILL_THRESHOLD (= mamba block, 1024) together with APC_MAX_NUM_BATCHED_TOKENS>block
+    # (e.g. 4096) + APC_BLOCK_SIZE pinned to the mamba block, to break the decode-serialization
+    # (max_num_batched==block starves co-resident decode) WITHOUT reintroducing the #45238 overshoot:
+    # the threshold re-enforces the <=1-block-per-request-per-step invariant directly, so per-request
+    # chunk boundaries stay at the same 1024 positions. UNTESTED for losslessness => gate before baking.
+    if [[ -n "${LUMO_LONG_PREFILL_THRESHOLD:-}" ]]; then
+      APC_FLAGS="$APC_FLAGS --long-prefill-token-threshold $LUMO_LONG_PREFILL_THRESHOLD"
+    fi
   fi
   # BAKE (2026-06-24, GPU-VERIFIED via verify3b output/fr13_apc_verify3b): the tree+APC
   # node-bank staleness fix. The defect: the tree committer writes the accepted-leaf state

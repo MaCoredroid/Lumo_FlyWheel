@@ -113,7 +113,24 @@ Novel = stateless-tree lossless prefix cache for branched/tree GDN spec-decode (
 ## 6. Artifact archive (`results/`)
 `results/fr13_b4_cache_matrix/` — full artifacts incl raw `dcgm_samples.jsonl` for cat8 (done) + native (done); refreshed at completion. B=1 → `results/fr13_b1_cache_matrix/`.
 
-## 7. Open items
-- **cat6+cache (B=4)** running now → 3rd cell (does the smaller 6-node tree keep the speed win with fewer give-ups?).
-- **B=1 pair** launches after cat6 → decisive HBM-bound speed test.
-- Then task #14 cleanup (delete dead deprecated code, rename `codex_trace.jsonl`→`qwen_trace.jsonl`).
+## 7. The "B=4 ≈ B=1" serialization: root cause FOUND (source-verified), fix PROPOSED (UNTESTED)
+
+Investigated via workflow `wf_1c4af669-5c7` (web + live-container source read + adversarial synthesis). Both my earlier explanations were wrong; this is the source-verified answer.
+
+**Root cause** (live container `vllm/v1/core/sched/scheduler.py`): `max_num_batched_tokens=1024` is set **exactly equal** to `mamba_block_size=1024` (the APC #45238 overshoot weld). Each step, the scheduler deducts the running decodes from the single 1024-token budget first (~28 tok for 4 spec-decodes; each decode = 1+num_lookahead), leaving **<1024** for the waiting loop. With `mamba_cache_mode='align'` (auto for hybrid+prefix-caching), `_mamba_block_aligned_split` rounds any non-final prefill chunk **down** to a 1024 multiple → residual <1024 → chunk=0 → **`break`** → **no waiting request is prefilled while any decode runs**. Prefill and decode become mutually exclusive per step; long agentic prompts (~24 blocks) serialize one-at-a-time → effective decode batch pinned ~1. **General** (native MTP-5 + tree), **not structural** — the Running=2→4 prefill *bursts* prove co-residence is architecturally allowed, just budget-starved. Corroborated by vLLM issue #36697 (Qwen3.5 Mamba). Likely the same root as the historical "carrier-B = concurrency" agentic degradation.
+
+**Proposed fix (two flags, BOTH required):**
+1. ADD `--long-prefill-token-threshold 1024` (= mamba block; currently unset=0) — caps *every request's* per-step prefill chunk to ≤1 mamba block on both scheduler paths.
+2. RAISE `--max-num-batched-tokens 1024 → 4096` (keep `mamba-block-size 1024` + `block-size 1024` unchanged).
+
+Effect: 4 decodes (~28 tok) + one-to-three full 1024-token prefill blocks (distinct waiting requests) co-schedule in one forward pass → requests accumulate into the decode set instead of serializing.
+
+**APC losslessness — NO conflict** (verified): #45238 requires only (i) `mamba_block_size=1024` (untouched) and (ii) ≤1 block-boundary per request per step. The `max_num_batched=1024` value was only a *proxy* for (ii); the threshold re-enforces (ii) **directly + per-request**, so per-request chunk boundaries stay at the *same* 1024 positions → align fp-profile unchanged. ⚠️ Raising `max_num_batched` **alone** (the naive fix) WOULD re-poison (#45238) — the threshold is what makes it safe.
+
+**Status: UNTESTED.** Batch-*composition* change (co-scheduling a prefill chunk with the spec-decodes) can perturb non-batch-invariant GEMM tiling ~1 ULP → must pass the temp-0.6 recurrent-oracle lossless gate before use. **Synthetic 4-concurrent shot** (Running histogram + lossless gate) queued to run **after cat6 frees the GPU** (`scripts/fr13_serialization_shot.sh`). Fallbacks if lossless regresses: `LUMO_BATCH_INVARIANT_VLLM=1`, conservative 2048, or scope to cache-OFF only — none touch `mamba_block_size`.
+
+## 8. Open items
+- **cat6+cache (B=4)** running → 3rd matrix cell (smaller tree: keep speed win with fewer give-ups?).
+- **Serialization-fix shot** after cat6 (§7).
+- B=1 pair **CANCELLED** (user 2026-07-08 — "B=4" is already ~B=1; fix the config instead).
+- Task #14 cleanup (delete dead deprecated code, rename `codex_trace.jsonl`→`qwen_trace.jsonl`).
