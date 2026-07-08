@@ -44,7 +44,9 @@ native+cache is the behavioral **apples bar, NOT the same cache mechanism**. Nov
 | APC serve flags (6) | `--enable-prefix-caching --enable-chunked-prefill --mamba-block-size 1024 --mamba-ssm-cache-dtype float32 --max-num-batched-tokens 1024 --block-size 1024` (#45238 overshoot fix) |
 | cudagraph / gpu_util / max_len | FULL_AND_PIECEWISE (GRAPH) / 0.78 / 131072 |
 
-**Deprecated-OFF (in native `ecd7aedd`, NOT cat8 `8c27f454`):** EXACT_SEED / HIT_RECURRENT_SUFFIX / BLOCK_REFOLD / REFOLD_TO_SNAPSHOT force-`"0"` at GDN import (patcher L1037-1038).
+**Two flag categories (do not conflate):**
+- **Deprecated / force-OFF (DEAD)** — `EXACT_SEED`, `HIT_RECURRENT_SUFFIX`, `BLOCK_REFOLD`, `REFOLD_TO_SNAPSHOT` force-`"0"` at GDN import (patcher L1037-1038; present in native `ecd7aedd`, NOT in cat8 `8c27f454`).
+- **Baked-ON working cache-correctness fixes** — `FR13_APC_SNAP_FIX=1` (the SSM node-bank snapshot fix: on commit, publish the committed accepted-LEAF SSM state to the node-bank so cache restore is faithful — verified FAITHFUL 240/240, baked 2026-06-24, the working fix), `SNAP_FIX_ZEROACCEPT=1` (same for accepted_len==0), `CONV_FIX=1`. **All forked tree arms (cat8, cat6) + native boot with these =1** (verified identical in cat8's `docker_full.log`). SNAP_FIX is in #14 cleanup only to *review* whether it's now redundant with the stateless-tree flags — it is correct and required as configured.
 
 | | native+cache | cat8+cache | cat6+cache |
 |---|---|---|---|
