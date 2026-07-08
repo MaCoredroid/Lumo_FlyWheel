@@ -25,24 +25,29 @@ import sys, json, ast, argparse, builtins, urllib.request, concurrent.futures
 BUILTINS = set(dir(builtins)) | {"self", "cls", "__name__", "np", "torch", "os", "sys", "re", "math"}
 
 # ---- identifier-consistency probes: force DEFINE distinctive multi-word ids + heavy REUSE ----
+# SHORT + identifier-dense (2026-07-08): the distinctive multi-word ids are the garble BAIT (tree
+# commits near-neighbors -> NameError/undefined). Keep functions TINY so they COMPLETE in the token
+# budget (the long "do real work" versions truncated 55/90 at 700 tok -> confounded the signal).
+_TAIL = ("\nKeep it UNDER 12 lines. NO docstring, NO comments. Trivial body (assign each variable a "
+         "simple expression, then combine them into the return). The ONLY goal is to USE each exact "
+         "variable name >=3 times, spelled IDENTICALLY every time. Output ONLY a ```python block.")
 PROMPTS = [
     ("wcs_slice",
-     "Write ONE self-contained Python function `compute_sliced_wcs_dropped(input_wcs_header, sliced_pixel_bounds)`.\n"
-     "Inside, define and then reuse (each at least 4 times) these EXACT variables:\n"
-     "  world_coordinate_offset_values, dropped_dimension_index_map, pixel_keep_boolean_mask, sliced_world_result.\n"
-     "Do real work: iterate the pixel bounds, fill the offset values, build the keep mask, assemble sliced_world_result, return it.\n"
-     "Output ONLY the function in a ```python block. Use each variable name EXACTLY and consistently."),
+     "Write ONE tiny Python function `compute_sliced_wcs_dropped(input_wcs_header, sliced_pixel_bounds)` "
+     "that defines and reuses these EXACT variables: world_coordinate_offset_values, "
+     "dropped_dimension_index_map, pixel_keep_boolean_mask, sliced_world_result." + _TAIL),
     ("token_ledger",
-     "Write ONE Python function `reconcile_transaction_ledger(pending_entries_list, applied_entry_index)`.\n"
-     "Define and reuse (>=4x each): running_balance_accumulator, reversed_entry_signature, mismatched_column_names, final_reconciled_rows.\n"
-     "Return final_reconciled_rows. Output ONLY a ```python block; keep every identifier spelled identically."),
+     "Write ONE tiny Python function `reconcile_transaction_ledger(pending_entries_list, applied_entry_index)` "
+     "that defines and reuses these EXACT variables: running_balance_accumulator, reversed_entry_signature, "
+     "mismatched_column_names, final_reconciled_rows. Return final_reconciled_rows." + _TAIL),
     ("matrix_build",
-     "Write ONE Python function `build_and_verify_sliced_matrix(header_dict_config, expected_row_count)`.\n"
-     "Define and reuse (>=4x each): crpix_reference_pixel, crval_reference_value, computed_slice_shape, verification_passed_flag.\n"
-     "Use the literal expected_row_count (do NOT substitute a different number). Return verification_passed_flag. ```python only."),
+     "Write ONE tiny Python function `build_and_verify_sliced_matrix(header_dict_config, expected_row_count)` "
+     "that defines and reuses these EXACT variables: crpix_reference_pixel, crval_reference_value, "
+     "computed_slice_shape, verification_passed_flag. Return verification_passed_flag." + _TAIL),
 ]
 
 def extract_code(text):
+    text = text or ""   # None content (empty-budget / refusal gens) -> "" (scored as empty, tracked separately)
     if "```" in text:
         import re
         blocks = re.findall(r"```(?:python)?\n(.*?)```", text, re.S)
@@ -85,29 +90,38 @@ def undefined_names(code):
     return (loads, len(undef), undef)
 
 def score_sample(text):
+    empty = not (text or "").strip()
     code = extract_code(text)
     loads, nundef, undef = undefined_names(code)
     syntax_ok = undef != ["<syntaxerror>"]
     return {"loads": loads, "undefined": (0 if not syntax_ok else nundef),
-            "syntax_error": not syntax_ok, "undefined_names": (undef if syntax_ok else [])}
+            "syntax_error": not syntax_ok, "empty": empty,
+            "undefined_names": (undef if syntax_ok else [])}
 
 def score_file(path):
     rows = [json.loads(l) for l in open(path)]
-    scored = [dict(r, **score_sample(r.get("text", r.get("completion", "")))) for r in rows]
+    scored = [dict(r, **score_sample(r.get("text") or r.get("completion") or "")) for r in rows]
     n = len(scored)
     tot_loads = sum(s["loads"] for s in scored) or 1
     tot_undef = sum(s["undefined"] for s in scored)
     syn_err = sum(s["syntax_error"] for s in scored)
+    n_empty = sum(1 for s in scored if s.get("empty"))
     print(f"  n={n}  undefined-name-rate={100*tot_undef/tot_loads:.2f}%  "
-          f"samples-with-undef={sum(1 for s in scored if s['undefined']>0)}/{n}  syntax-errors={syn_err}/{n}")
+          f"samples-with-undef={sum(1 for s in scored if s['undefined']>0)}/{n}  "
+          f"syntax-errors={syn_err}/{n}  empty-gens={n_empty}/{n}")
     ex = [s["undefined_names"] for s in scored if s["undefined"] > 0][:5]
     if ex: print("  example undefined refs:", ex)
     return {"n": n, "undefined_rate": tot_undef/tot_loads, "syntax_err": syn_err,
             "samples_with_undef": sum(1 for s in scored if s['undefined']>0)}
 
 def gen_one(endpoint, model, prompt, seed):
+    # enable_thinking=false: the qwen3 reasoning parser + codex template thinks ENDLESSLY on these
+    # synthetic single-turn prompts (no agentic scaffold to resolve it) -> 3000 tokens, content EMPTY.
+    # Thinking-OFF -> the model emits code directly (finish=stop ~100 tok). The garble we measure is
+    # tree-verify drift at EMISSION (thinking-independent), so this is a valid + fast proxy.
     body = json.dumps({"model": model, "messages": [{"role": "user", "content": prompt}],
-                       "temperature": 0.6, "max_tokens": 900, "seed": seed}).encode()
+                       "temperature": 0.6, "max_tokens": 700, "seed": seed,
+                       "chat_template_kwargs": {"enable_thinking": False}}).encode()
     r = urllib.request.Request(endpoint.rstrip("/") + "/chat/completions", data=body,
                                headers={"Content-Type": "application/json"})
     try:
@@ -119,11 +133,17 @@ def gen_one(endpoint, model, prompt, seed):
 def run(args):
     tasks = [(name, prompt, seed) for (name, prompt) in PROMPTS for seed in range(args.n)]
     out = []
+    # INCREMENTAL write (2026-07-08): flush each result as it lands so a mid-run kill preserves
+    # partial progress (the harness kills long background tasks). Final rewrite dedups/orders below.
+    fh_inc = open(args.out + ".partial", "w")
     with concurrent.futures.ThreadPoolExecutor(args.concurrency) as ex:
         futs = {ex.submit(gen_one, args.endpoint, args.model, p, s): (name, s) for (name, p, s) in tasks}
         for f in concurrent.futures.as_completed(futs):
             name, s = futs[f]
-            out.append({"arm": args.arm, "prompt": name, "seed": s, "text": f.result()})
+            rec = {"arm": args.arm, "prompt": name, "seed": s, "text": f.result()}
+            out.append(rec)
+            fh_inc.write(json.dumps(rec) + "\n"); fh_inc.flush()
+    fh_inc.close()
     with open(args.out, "w") as fh:
         for r in out: fh.write(json.dumps(r) + "\n")
     print(f"[{args.arm}] wrote {len(out)} samples -> {args.out}")

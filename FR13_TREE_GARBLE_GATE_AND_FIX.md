@@ -1,5 +1,37 @@
 # FR13 — Tree near-neighbor GARBLE: reproduction gate + fix ladder
 
+## ✅ G1 BASELINE MEASURED (2026-07-08) — GARBLE CONFIRMED, tree ≫ native
+
+Ran `scripts/fr13_garble_gate.py` (identifier-consistency probes + AST undefined-name scorer),
+**N=15 × 3 prompts = 45 gens/arm**, identical prompts+seeds, `enable_thinking=false`, temp 0.6, NO cache.
+Only the backend differs.
+
+| arm | undefined-name rate | samples w/ undef | syntax-err | verdict |
+|---|---|---|---|---|
+| **native** (FLASH_ATTN, MTP-5) | **0.00%** | 0/45 | 0/45 | clean |
+| **tree** (cat6root, TREE_ATTN) | **9.56%** | **32/45 (71%)** | 0/45 | **GARBLE** |
+
+The tree systematically corrupts EVERY multi-word identifier into a near-neighbor — dropped underscore
+(`input_wcsheader`←input_wcs_header, `expected_rowcount`←expected_row_count), truncation
+(`verification`←verification_passed_flag, `applied_index`←applied_entry_index), abbreviation
+(`crpix_ref_pixel`←crpix_reference_pixel, `crval_ref_value`←…_value), **wrong word**
+(`expected_row_length`←…_count, `input_wcs_helper`←…_header), camelCase (`finalReconciled_rows`),
+doubling (`applied_index_index`). Native emits all of them correctly (0 undefined). This is the
+tree-verify-drift → near-neighbor commit → NameError → agentic give-up mechanism, isolated at emission.
+
+**Gate build notes (this run):** (1) `enable_thinking=false` REQUIRED — with thinking on, the qwen3
+parser + codex template think endlessly on synthetic single-turn prompts (3000 tok, content empty →
+vacuous 0.00% for BOTH arms). (2) Prompts shortened to complete in-budget (the long "do real work"
+versions truncated 55/90 at 700 tok → confounded). (3) Gate writes incrementally (`.partial`) — the
+harness kills long background tasks; foreground N=15 (~8 min/arm) is the reliable cadence.
+Artifacts: `output/fr13_garble_gate/{tree_n15,native_n15}.jsonl`.
+
+**This is now the STAGE-E fix gate:** apply the fix (M-invariance / batch-invariant tree-attn), re-run
+the tree arm, KEEP iff the undefined-name rate drops toward native's 0.00% at acceptable accept.
+
+---
+
+
 ## The pathology (wf_2629d92b, 2026-07-08, supervisor-confirmed)
 Tree spec-decode commits **plausible-but-wrong NEIGHBOR tokens** inside otherwise-correct code:
 `wcs_dict`↔`wcs_header`, `astrop`↔`astropy`, `readFile`↔`read_file`, `result_slice`↔`result_sliced`, `20`↔`ny` → NameError / "tool not found" → typo-fix **loop** → budget burn → empty patch. Reproducible in BOTH tree arms (cat6, cat8), ABSENT in native. Comprehension intact; **emission** degrades.
