@@ -27,21 +27,18 @@ GPU_OOM_GUARD=${GPU_OOM_GUARD:-1}
 MAX_MODEL_LEN=${MAX_MODEL_LEN:-131072}
 MAX_NUM_SEQS=${MAX_NUM_SEQS:-4}
 # BATCH-AWARE MEMORY (user 2026-07-06): B>=4 co-residency needs more room for KV
-# (4 concurrent contexts) + the host-side EXACT_SEED prefix cache, which grows with
-# concurrency. B=1-tuned defaults (105g cap, 0.78 util) wedged the container at B=4
-# (§76-77: exited container held ~100G unified mem). Agents are OFFLOADED to alienware
-# (GB10 = vLLM-only), so the container can safely take more of the 117G box while
-# still leaving OS headroom. Only auto-bumps when the caller hasn't set these.
+# (4 concurrent contexts). B=1-tuned defaults (105g cap, 0.78 util) wedged the container
+# at B=4 (§76-77: exited container held ~100G unified mem). Agents are OFFLOADED to
+# alienware (GB10 = vLLM-only), so the container can safely take more of the 117G box
+# while still leaving OS headroom. Only auto-bumps when the caller hasn't set these.
 if (( MAX_NUM_SEQS >= 4 )); then
-  DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-112g}   # +7g host room for the B>=4 KV+ES-cache footprint
+  DOCKER_MEM_CAP=${DOCKER_MEM_CAP:-112g}   # +7g host room for the B>=4 KV footprint
   # SHRINK the device KV/mamba pool (user 2026-07-06). This is a GDN-HYBRID (48 mamba
-  # layers vs 16 attention): the device block-pool is mostly mamba state, and the
-  # HOST-side EXACT_SEED mamba-checkpoint cache is what wedges under B=4 concurrency.
-  # Measured live: KV pool usage 0-6% (~3.5G peak) of a 58G reservation at 0.80 =>
-  # ~16x over-provisioned. On UNIFIED memory every GB reserved for KV is a GB denied
-  # to the host ES cache, so shrinking KV directly frees room for ES. 0.50 keeps a
-  # ~30G KV pool (~8x the observed peak, ample for 4 long concurrent turns) and frees
-  # ~34G for the ES cache + system => no wedge even if ES scales ~4x B=1's 9G.
+  # layers vs 16 attention): the device block-pool is mostly mamba state. Measured live:
+  # KV pool usage 0-6% (~3.5G peak) of a 58G reservation at 0.80 => ~16x over-provisioned.
+  # On UNIFIED memory every GB reserved for KV is a GB denied to the host/system, so
+  # shrinking KV frees unified room. 0.62 keeps a ~30G KV pool (~8x the observed peak,
+  # ample for 4 long concurrent turns) and frees ~34G for the system => no wedge at B=4.
   GPU_UTIL=${GPU_UTIL:-0.62}
 fi
 ATTENTION_BACKEND=${ATTENTION_BACKEND:-TREE_ATTN}
@@ -311,27 +308,8 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   : "${FR13_APC_SNAP_FIX_ZEROACCEPT:=1}"  # BAKED 2026-06-27 (user call): publish committed-root row (_row[0]) for zero-accept (accepted_len==0) steps (shared spine+tree carrier). APC-only -> non-APC locked cat9 path byte-identical
   : "${FR13_APC_CONV_SNAP_FIX:=1}"   # BAKED 2026-07-03: conv twin of the SSM SNAP_FIX. temp-0.6 TV gate proved cache-restore lossy (tv_mean~0.2, floor 0) = CONV window sourced from base block-pool row not committed accepted-leaf; EXACT_SEED re-seeds SSM only, never conv. Real-task 13453: give-up 2t -> 8t engage w/ this on (workflow wqz0zlae6, 3-agent convergent). PARTIAL (redirect still falls back on some rows -> residual source-rewrite pending). APC-only -> non-APC path byte-identical
   : "${FR13_APC_PRE_SNAP_FIX:=0}"    # CLR: preprocess SSM redirect (default OFF -> byte-identical)
-  # HRS UN-BAKED 2026-06-27 (user) — CURRENT DIRECTION. The recurrent-suffix roll (HIT_RECURRENT_SUFFIX)
-  # is SUPERSEDED by the SGLang-faithful EXACT-SEED fix (FR13_APC_EXACT_SEED, in progress; worktree
-  # wf_4f4d8bf1). ROOT: cache-ON fails the coding agent regardless of HRS (HRS=1 0/2, HRS=0 0/3,
-  # spine+cache 0/3, cache-OFF 3/3) because the cached GDN checkpoint is the RECURRENT-decode kernel's
-  # realization, not the CHUNKED-prefill realization cache-OFF holds (kernels differ ~0.0078 >> 1 bf16
-  # ULP). HRS-recurrent re-prefills the hit remainder via the recurrent kernel != chunked -> cannot be
-  # bit-exact. THE FIX (SGLang MambaRadixCache / Execution-State-Capsules 2606.20537 / Sparse-Prefix-
-  # Caching 2605.05219): cache chunked-realization checkpoints ONLY at 64-aligned positions (chunked-only
-  # chain, exact base) + restore the remainder THROUGH the chunked kernel. HRS stays OFF until that lands.
-  FR13_APC_HIT_RECURRENT_SUFFIX=0  # DEPRECATED 2026-07-07: hard-off (leaking es_ckpt; force-off at gdn import too)
-  : "${FR13_APC_HIT_SUFFIX_CAP:=64}"       # inert while HRS=0 (was :=1000000)
-  # EXACT-SEED fix v2 (default OFF -> locked path byte-identical): make the cached SSM
-  # checkpoint the CHUNKED-prefill realization at a 64-ALIGNED boundary (chunked-only chain,
-  # exact base) instead of the recurrent committed leaf, and restore the <64 remainder THROUGH
-  # the chunked kernel (EXACT_SEED forces the native chunk branch on cache-hit prefills). SGLang
-  # MambaRadixCache + Sparse-Prefix-Caching Remark 1 + Execution-State-Capsules Alg.1. Requires
-  # FR13_APC_SNAP_FIX=1 (overrides the SNAP_FIX redirect source). When ON it DISABLES the HRS
-  # recurrent-suffix path (a recurrent remainder is not chunk-bit-exact).
-  FR13_APC_EXACT_SEED=0  # DEPRECATED 2026-07-07: hard-off (leaking es_ckpt store)
-  FR13_APC_BLOCK_REFOLD=0  # DEPRECATED 2026-07-07: hard-off
-  FR13_APC_REFOLD_TO_SNAPSHOT=0  # DEPRECATED 2026-07-07: hard-off
+  # (2026-07-08 cleanup #14: removed the DEAD HRS / EXACT_SEED / BLOCK_REFOLD / REFOLD_TO_SNAPSHOT
+  #  flag block + comments — force-off at gdn import + impl deleted from the patcher. git preserves.)
   # BAKED 2026-07-04 (user): CONV_LEAF_COMPLETE default ON. The conv wrong-row write (snapshot
   # falling back to base col-0 instead of the committed accepted-leaf among co-resident tree rows)
   # was the PRIMARY carrier of the tree+cache agent give-up — dose-response proven on 13453:
@@ -357,7 +335,7 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   #    batch-position 0 can't read the freed request's residue. Default 0 (byte-identical);
   #    flip to 1 only after the B=4 gate confirms 0/4 -> ~4/4.
   : "${FR13_FREE_TREE_POSGLOBALS:=0}"
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_HIT_RECURRENT_SUFFIX FR13_APC_HIT_SUFFIX_CAP FR13_APC_EXACT_SEED FR13_APC_BLOCK_REFOLD FR13_APC_REFOLD_TO_SNAPSHOT FR13_APC_CONV_LEAF_COMPLETE FR13_APC_ZERO_MAMBA_ON_ALLOC FR13_APC_COPY_SRC_FIX FR13_FREE_TREE_POSGLOBALS
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_CONV_LEAF_COMPLETE FR13_APC_ZERO_MAMBA_ON_ALLOC FR13_APC_COPY_SRC_FIX FR13_FREE_TREE_POSGLOBALS
 else
   APC_FLAGS=""
 fi
@@ -368,14 +346,13 @@ fi
 # the captured graph appeared to read the wrong row -> garbage (align-mode sibling of vLLM #34874 /
 # #43559). The interim mitigation was cudagraph_mode=PIECEWISE (run the GDN/mamba scan EAGER every
 # step), which preserved dense-GEMM graph capture but cost the GDN-scan decode TPS.
-# SUPERSEDED BY EXACT_SEED: the garble was a SYMPTOM of the LOSSY cache restoring the WRONG mamba
-# realization (recurrent-kernel state instead of the chunked-prefill realization), not a graph bug.
-# A byte-level kernel trace disproved the seed-row hypothesis (the captured seed already reads the
-# correct committed-leaf node-bank column every step). With FR13_APC_EXACT_SEED (chunked checkpoint
-# at 64-aligned boundaries) the cache restores the CORRECT state, so FULL_AND_PIECEWISE + cache-ON is
-# garble-free — probe run_20260630T030153Z: "Capturing CUDA graphs" + enforce_eager=False + 46/55
-# cached turns, CJK=0, coherent. So default to FULL graph for decode-TPS recovery; override
-# CUDAGRAPH_MODE=PIECEWISE only for diagnostics. Only matters with APC on.
+# RESOLVED (not a graph bug): the garble was a SYMPTOM of the cache restoring the WRONG mamba
+# node-bank row on a cache-hit re-prefill, not the captured graph reading a stale index. The baked
+# SNAP_FIX / CONV_SNAP_FIX node-bank redirects (restore the committed-accepted-leaf column instead of
+# the base block-pool row) make cache-restore correct, so FULL_AND_PIECEWISE + cache-ON is garble-free
+# — probe run_20260630T030153Z: "Capturing CUDA graphs" + enforce_eager=False + 46/55 cached turns,
+# CJK=0, coherent. So default to FULL graph for decode-TPS recovery; override CUDAGRAPH_MODE=PIECEWISE
+# only for diagnostics. Only matters with APC on.
 CUDAGRAPH_MODE="${CUDAGRAPH_MODE:-FULL_AND_PIECEWISE}"
 CG_FLAGS="--compilation-config '{\"cudagraph_mode\":\"$CUDAGRAPH_MODE\"}'"
 # FR13_FULL_ATTN_KV_FP8 (gated, default OFF): set the FULL-ATTENTION KV cache to fp8.
@@ -518,12 +495,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_SNAP_FIX_ZEROACCEPT="${FR13_APC_SNAP_FIX_ZEROACCEPT:-0}" \
   -e FR13_APC_CONV_SNAP_FIX="${FR13_APC_CONV_SNAP_FIX:-0}" \
   -e FR13_APC_PRE_SNAP_FIX="${FR13_APC_PRE_SNAP_FIX:-0}" \
-  -e FR13_APC_HIT_RECURRENT_SUFFIX=0 \
-  -e FR13_APC_HIT_SUFFIX_CAP="${FR13_APC_HIT_SUFFIX_CAP:-64}" \
-  -e FR13_APC_EXACT_SEED=0 \
   -e FR13_TREE_GDN_SLOT_PIN="${FR13_TREE_GDN_SLOT_PIN:-0}" \
-  -e FR13_APC_BLOCK_REFOLD=0 \
-  -e FR13_APC_REFOLD_TO_SNAPSHOT=0 \
   -e FR13_APC_CONV_LEAF_COMPLETE="${FR13_APC_CONV_LEAF_COMPLETE:-0}" \
   -e FR13_SERVE_LOG="${FR13_SERVE_LOG:-0}" \
   -e FR13_LEAK_PROBE="${FR13_LEAK_PROBE:-0}" \
