@@ -1,0 +1,4 @@
+# metrics fetch failed: RemoteDisconnected: Remote end closed connection without response
+vllm:fr13_decode_forward_gpu_seconds_total 8936.557267532
+vllm:fr13_decode_forward_gpu_steps_total 54575.0
+vllm:fr13_decode_forward_gpu_drafts_total 67860.0

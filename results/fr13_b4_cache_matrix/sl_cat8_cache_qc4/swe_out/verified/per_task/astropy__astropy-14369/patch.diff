@@ -1,0 +1,20 @@
+diff --git a/astropy/units/format/cds.py b/astropy/units/format/cds.py
+index 307e987ed..bfb035a5c 100644
+--- a/astropy/units/format/cds.py
++++ b/astropy/units/format/cds.py
+@@ -147,6 +147,7 @@ class CDS(Base):
+             """
+             main : factor combined_units
+                  | combined_units
++                 | product_of_units division_of_units
+                  | DIMENSIONLESS
+                  | OPEN_BRACKET combined_units CLOSE_BRACKET
+                  | OPEN_BRACKET DIMENSIONLESS CLOSE_BRACKET
+@@ -165,7 +166,6 @@ class CDS(Base):
+         def p_combined_units(p):
+             """
+             combined_units : product_of_units
+-                           | division_of_units
+             """
+             p[0] = p[1]
+ 

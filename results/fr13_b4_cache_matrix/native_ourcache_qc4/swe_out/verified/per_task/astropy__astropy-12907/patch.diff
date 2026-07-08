@@ -1,0 +1,34 @@
+diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
+index a308e2729..be77313e9 100644
+--- a/astropy/modeling/separable.py
++++ b/astropy/modeling/separable.py
+@@ -233,16 +233,26 @@ def _cstack(left, right):
+     """
+     noutp = _compute_n_outputs(left, right)
+ 
+-    if isinstance(left, Model):
++    if isinstance(left, CompoundModel):
++        cleft = _separable(left)
++        mat = np.zeros((noutp, left.shape[1]))
++        mat[:cleft.shape[0], :cleft.shape[1]] = cleft
++        cleft = mat
++    elif isinstance(left, Model):
+         cleft = _coord_matrix(left, 'left', noutp)
+     else:
+         cleft = np.zeros((noutp, left.shape[1]))
+         cleft[: left.shape[0], : left.shape[1]] = left
+-    if isinstance(right, Model):
++    if isinstance(right, CompoundModel):
++        cright = _separable(right)
++        mat = np.zeros((noutp, right.shape[1]))
++        mat[-cright.shape[0]:, -cright.shape[1]:] = cright
++        cright = mat
++    elif isinstance(right, Model):
+         cright = _coord_matrix(right, 'right', noutp)
+     else:
+         cright = np.zeros((noutp, right.shape[1]))
+-        cright[-right.shape[0]:, -right.shape[1]:] = 1
++        cright[-right.shape[0]:, -right.shape[1]:] = right
+ 
+     return np.hstack([cleft, cright])
+ 
