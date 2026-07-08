@@ -1,5 +1,36 @@
 # FR13_CLEANUP_PLAN.md — Dead-Flag Surgical Cleanup (EXACT_SEED / HRS / BLOCK_REFOLD / REFOLD_TO_SNAPSHOT)
 
+## STATUS (2026-07-08) — DONE vs DEFERRED
+
+Executed the **cleanly-separable bulk** (the plan's §5 "smaller, lower-risk landing" — stop before the
+step-6 entangled collapses). Each increment boot-validated (cat6root cache-ON → /health, 0 asserts).
+
+| # | What | Lines | State | Commit |
+|---|---|---|---|---|
+| 1 | 5 dead diagnostic scripts (§2) | — | ✅ DONE | 8208ee17 |
+| 2 | Launcher dead-flag block + export + docker -e + stale comments (§3) | -48 | ✅ DONE, bash -n | 7d5fe608 |
+| Tier A | 3 `_patch_*_exact_seed` INSTALLER fns + dispatch + path constants (E-FN1/2/3, E-PATH) | -560 | ✅ DONE, boot-valid | 3bbef4b4 |
+| Tier B | `_fr13_pathA_refold` fn (R-PATHA) + 2 force-off call sites (R-CALL) | -599 | ⏳ boot-validating | — |
+
+**DEFERRED (inert, force-off-guarded, behavior-preserving — safe to leave; map above is the guide):**
+- **E-CAP** (ES capture tail, ~789 ln) — the `if EXACT_SEED=="1":` block is INTERLEAVED with the LIVE
+  PREFILL-CAPTURE path (the sole lossless cache-write source) + nested gates + dead re-prefill calls.
+  Not a clean single-if cut; needs indentation analysis. Now DOUBLY inert (force-off AND Tier A
+  uninstalled the block_pool hooks it captured into).
+- **Step-6 entangled** (H2 / E-RESTORE / R-REWIRE / R-INTERLEAVE) — woven through the live
+  `chunk_gated_delta_rule` scan + the baked SNAP_FIX `get_temporal_copy_spec` override. Collapsing the
+  if/else wrappers risks the working fixes for zero behavior change.
+- **Force-off loop (1029-1038) + inert globals (`_FR13_ES_*`, `_FR13_REFOLD_*`)** — the loop is what
+  keeps everything above inert; removed LAST, only after step-6. Kept.
+
+Rationale: the two headline families' functional machinery (exact_seed INSTALLERS + refold FUNCTION,
+~1159 ln) is gone and boot-validated; the remnants are inert wrappers entangled with the working baked
+SNAP_FIX / live scan / live PREFILL-CAPTURE. Removing them safely is a dedicated future pass, not worth
+risking the shipped fixes now. `git` preserves all removed code.
+
+---
+
+
 ## 0. Scope & the one fact that makes this safe
 
 Four flag families are dead and **already force-off at gdn import** — the emitted loop at
