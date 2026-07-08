@@ -1,31 +1,24 @@
-# FR13 — the "E5 / spine ≠ native-MTP" naming confound
-### READ THIS before trusting ANY tree-vs-"native" drift / lossless / amplification conclusion.
+# FR13 — "E5" is an OVERLOADED label (naming hazard). Always name WHICH native.
+### Read before trusting any tree-vs-"native"/"E5" drift, lossless, or amplification claim.
 
-## The confound in one line
-In FR13 drift/lossless docs, **"E5", "native-E5", "spine5", "chain5"** have been used loosely as "the native baseline" — but they are **NOT** stock native + MTP-5. **`E5` = `chain5` = a FORKED, TREE_ATTN linear spine.** Any conclusion of the form *"the tree's X is shared with native"* or *"native does Y"* is **suspect** until you check WHICH baseline it used. (User caught this 2026-07-08; confirmed from code.)
+## The hazard in one line
+**"E5" means different things in different FR13 docs.** In some it is `chain5` (a FORKED TREE_ATTN linear spine — NOT native); in others it is a genuine **native-MTP-5 capture**. So "shared with E5" / "E5 = the bar" is only meaningful once you check which construction that doc used. (User flagged 2026-07-08; I first *over*-corrected — see below.)
 
-## What each label ACTUALLY is (from `scripts/fr13_bigdenom_swe_serve_variant.sh` KIND table)
-| label used in docs | KIND | launcher | attention | decode | tree? | = true native? |
-|---|---|---|---|---|---|---|
-| stock native+MTP5 | `nativemtp5` | **native** (stock .so) | FLASH_ATTN | naive_mtp | no | **YES — the only fully-stock baseline** |
-| forked native+MTP5 | `nativemtp5_exseed`, `flash_ns5_nocache` | **forked** | FLASH_ATTN | naive_mtp | no | native *decode*, forked kernel/cache |
-| "E5" / "spine5" / "chain5" | `chain5` | **forked** | **TREE_ATTN** | tree (linear spine, M=1) | **YES (linear)** | **NO — a forked TREE_ATTN spine** |
-| the tree | `cat6root`, `cat8`, `cat9` | forked | TREE_ATTN | tree (branched, M>1) | yes | the tree |
+## What "E5" resolves to, per context (verified from code + captures)
+| where | "E5" actually is | KIND / capture | launcher | attention | = native-MTP-decode? |
+|---|---|---|---|---|---|
+| APC 3-way gate (`fr13_apc_3way_gate.sh:6`) | **chain5** | `chain5` | forked | **TREE_ATTN** | **NO** — forked TREE_ATTN spine |
+| **spine-drift study** (`FR13_E5_VS_CAT9_SPINE_DRIFT.md`, `wsvy4vn5k`) | **native MTP-5 capture** | `output/fr10_native_mtp5_same8_*` (num_spec=5) | (unconfirmed from json) | (unconfirmed) | **likely YES** (labeled "E5 native MTP-5 capture") |
+| lossless gate bar (`fr13_b1_lossless_prescore.sh`, most docs) | the **depth-5 within-floor bar** | `nativeE5_*` (MTP-5 spec) | — | — | a valid *reference frame* (legit use) |
 
-Evidence: `fr13_apc_3way_gate.sh:6` "chain5 = ... the **E5/spine baseline**"; `chain5) LAUNCHER=forked; TREEARG=$CHAIN5_TREE` (serve-variant L140). `NAT_SPEC='{...qwen3_5_mtp, num_speculative_tokens:5}'` in the finalizer just sets the MTP-5 **spec**, not a stock launcher — the `nativeE5_*` arms were served forked-with-TREE_ATTN too.
+Our current matrix arms (all forked): `nativemtp5_exseed`/`flash_ns5_nocache` = native-MTP-decode (FLASH_ATTN, naive_mtp); `cat6`/`cat8` = tree (TREE_ATTN). The truly-stock baseline is `nativemtp5` (LAUNCHER=native), not run in this matrix.
 
-## Which conclusions this CONFOUNDS
-- **"the ~1.166×/layer amplification is SHARED with native/E5" (spine-drift study `wsvy4vn5k`)** — measured `cat9` (TREE_ATTN tree) vs `chain5`≡E5 (TREE_ATTN spine). BOTH are TREE_ATTN, so of course they share the amplification. **It does NOT establish the amplification is shared with native-MTP-decode (FLASH_ATTN).** ⇒ the derived ranking *"amplification-reduction is only a secondary margin-buffer"* is **UNSUPPORTED** for our tree-vs-native garble question.
-- Any "spine5/E5 behaves like native" claim: `chain5` shares the TREE_ATTN kernel + co-residency machinery with the tree, so it is **not** a clean native control — only a "tree without branches (M=1)" control (which is still useful for isolating *branches/M*, just not for isolating *TREE_ATTN vs FLASH_ATTN*).
+## Is the amplification / M-dependence conclusion confounded? — NO (probably), with a caveat
+**I initially claimed it was — that was an overstatement.** The spine-drift study that concluded *"the ~1.166×/layer amplification is shared with native; the differential is co-residency/branches"* actually used a **native-MTP-5 capture** as E5 (not chain5), and its ladder is native-referenced:
+`native(E5) ≈ 3 flips  <  chain5 (tree kernels, NO branches) ≈ 5  <  cat9 (branches) ≈ 17`.
+So the **branches (co-residency)** are the differential (+~12–14), the tree KERNELS add only ~2 over native, and amplification is genuinely shared. That conclusion **stands as the leading hypothesis** ⇒ the garble-fix ranking **M-invariance / batch-invariant PRIMARY, amplification-reduction SECONDARY** is *plausible and native-referenced*, not confounded.
 
-## What IS clean (the ground truth we now have)
-- The **garble differential** (tree garbles, "native" doesn't) is `cat6`/`cat8` (TREE_ATTN tree) vs `flash_ns5_nocache`/`nativemtp5_exseed` (FLASH_ATTN naive_mtp) — **both forked**. So it cleanly isolates **tree-decode vs native-MTP-decode** (NOT launcher). That comparison is VALID.
-- The truly-stock baseline (`nativemtp5`, LAUNCHER=native) exists but was **not run** in this B=4 matrix (we chose `flash_ns5_nocache` to keep the `s_per_fwd_gpu` timer). If a "vs fully-stock" number is ever needed, run `nativemtp5`.
+**The only open caveat:** the fr10 capture's exact launcher/attention isn't confirmed from its json, and it predates our current clean arms. So **re-confirm with G0** (per-layer drift `tree` vs our known-config `flash_ns5_nocache`, in `FR13_TREE_GARBLE_GATE_AND_FIX.md`) before betting the fix on it — cheap insurance, not a debunk.
 
 ## THE RULE going forward
-When you write **"tree vs native,"** always name WHICH native:
-- **(a) stock** `nativemtp5` (LAUNCHER=native), or
-- **(b) forked native-MTP-decode** `flash_ns5_nocache` / `nativemtp5_exseed` (FLASH_ATTN naive_mtp), or
-- **(c) chain5 / spine5 / "E5"** — a **TREE_ATTN spine, NOT native.**
-
-They have different numerics. The clean **tree-vs-native-MTP-decode** per-layer drift comparison (**G0** in `FR13_TREE_GARBLE_GATE_AND_FIX.md`) has **never** been run against baseline (b); do it before ranking the garble-fix levers — do not inherit the E5=chain5 study's ranking.
+When you write **"tree vs native" / "E5"**, name WHICH: (a) stock `nativemtp5` (LAUNCHER=native), (b) forked native-MTP-decode `flash_ns5_nocache`/`nativemtp5_exseed`, (c) chain5/spine5 (TREE_ATTN spine — NOT native), or (d) the depth-5 lossless *bar* (a reference frame). Don't let "E5" silently stand in for "native" — check the construction. G0 removes the ambiguity by measuring against a baseline whose config we fully control.

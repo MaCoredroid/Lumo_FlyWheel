@@ -20,24 +20,25 @@ Every rung compares **3 arms on identical prompts+seeds**: `no-spec` (ground tru
 
 **Recommend:** G3 (confirm) → **G1 is the fix-iteration gate** → G2/G4 confirm. All GPU-solo. Note the give-up "count" confound: exclude engine stream-hangs (`No stream activity 600000ms after 0 chunks`) — those are a separate tree failure mode, not garble.
 
-## FIX ladder — levers UN-RANKED pending a ground-up drift measurement (do NOT trust the old spine-drift ranking)
+## FIX ladder — leading ranking from the (native-referenced) spine-drift study, G0 re-confirms
 Root = verify-forward drift tilts the committed token to a near-neighbor (`flip = drift > margin`).
 
-> ⚠️ **CONFOUND (2026-07-08, user caught).** The spine-drift study `wsvy4vn5k` that concluded *"amplification is SHARED with native, so the differential is only co-residency M-dependence"* used **`E5` = `chain5`, which is a FORKED TREE_ATTN linear spine — NOT native-MTP-decode** (`fr13_apc_3way_gate.sh:6`: "chain5 = the E5/spine baseline"; `chain5` KIND is `LAUNCHER=forked`). So "shared amplification" only shows it's shared between **two TREE_ATTN things** — it says **nothing** about whether the tree's amplification differs from **native-MTP-decode** (FLASH_ATTN, `naive_mtp`), which is the actual garble baseline. **The tree-vs-native-MTP per-layer drift comparison has NEVER been run against the real native-MTP baseline.** We now HAVE it: `nativemtp5_exseed` / `flash_ns5_nocache` (forked, FLASH_ATTN, naive_mtp) — so the garble differential is TREE_ATTN-tree vs FLASH_ATTN-native, both forked (NOT launcher-confounded). **Do NOT pre-rank the levers.**
+> **Naming note (see `FR13_E5_CONFOUND.md`):** "E5" is overloaded. The spine-drift study `wsvy4vn5k` that ranked these levers used `E5` = a **native-MTP-5 capture** (fr10, num_spec=5), NOT chain5 — so its conclusion IS native-referenced (ladder: native≈3 flips < chain5-tree-kernels≈5 < cat9-branches≈17). So the ranking below is the **leading hypothesis, not confounded**; the only caveat is that capture's exact config isn't confirmed and it predates our clean arms → **G0 re-confirms cheaply** against a baseline we control.
 
-**G0 — GROUND-UP DRIFT MEASUREMENT (run first, decides the ranking):** on one fixed code-heavy input, capture per-layer hidden states for `tree` (cat6/cat8, TREE_ATTN) vs `native-MTP-decode` (flash_ns5_nocache, FLASH_ATTN) — same tokens. Plot per-layer drift(tree→native). Then it tells us which lever is differential:
-- if the tree's drift **slope/amplification** is higher than native-MTP's (not just offset) → **amplification-reduction IS differential** (fp32 hotspots / rms-clamp / re-anchor) — possibly PRIMARY, contra the confounded study.
-- if the tree's drift is a **specific-layer / M-dependent jump** (e.g. L0 GDN birth-amplitude) over a native-matched slope → **M-invariance / batch-invariant tree-attn** is the differential lever.
-- likely BOTH contribute; G0 apportions.
+**G0 — ground-up drift re-confirm (cheap insurance, run first):** on one fixed code-heavy input, capture per-layer hidden states for `tree` (cat6/cat8, TREE_ATTN) vs `native-MTP-decode` (`flash_ns5_nocache`, FLASH_ATTN, known config) — same tokens. If the tree's excess is a **branch/M-dependent jump** over a native-matched amplification slope → confirms M-invariance is primary. If instead the tree's **slope** is higher → amplification-reduction is more differential than the study found. Either way it re-grounds the ranking on a config we fully control.
 
-**Candidate levers (rank AFTER G0):**
-- **Spine M-invariance** ([[project_fr13_22flip_carrier_l0gdn]]) — spine logits independent of co-resident branch count M.
-- **Batch-invariant tree-attention** (`FR13_BI_TREE_ATTN`, partially built) — kill branches-perturb-spine batch-variance.
-- **Amplification-reduction** ([[project_fr13_amplification_levers_queued]]) — targeted fp32 at hotspots (deep full-attn + GDN gate `1/rms`), rms-clamp, residual re-anchor. **NOTE its "secondary" status came from the confounded E5=chain5 study — treat as an open candidate until G0.**
-- **Commit-confidence gate** (cheap dial): commit only where verify is confident; near-tie → clean sample. Speed↔quality knob; fixes marginal ties not drifted top-tokens.
-- **Re-verify backstop** (expensive): re-run committed spine through a clean non-co-resident forward, roll back mismatches.
+**PRIMARY (spine-drift ladder: branches/co-residency = the ~+12–14 excess):**
+1. **Spine M-invariance** ([[project_fr13_22flip_carrier_l0gdn]]) — spine logits independent of co-resident branch count M.
+2. **Batch-invariant tree-attention** (`FR13_BI_TREE_ATTN`, partially built) — kill branches-perturb-spine batch-variance.
 
-Iterate each against **G1** (garble rate) — keep what cuts garble at acceptable accept-cost. The win vs. the earlier queued work: we now have (a) a **cheap high-n gate that SEES the pathology** (code-correctness, where scalar per-token gates were blind) AND (b) the **true native-MTP baseline** the old drift studies never used.
+**SECONDARY (shared-floor margin buffer; the tree kernels add only ~2 over native → amplification is largely shared):** [[project_fr13_amplification_levers_queued]]
+3. **Targeted fp32** at hotspots (deep full-attn + GDN gate `1/rms`), **rms-clamp**, **residual re-anchor**.
+
+**CHEAP DIAL / BACKSTOP:**
+4. **Commit-confidence gate** — commit only where verify is confident; near-tie → clean sample (speed↔quality knob; fixes marginal ties, not drifted top-tokens).
+5. **Re-verify backstop** (expensive) — re-run committed spine through a clean non-co-resident forward, roll back mismatches.
+
+Iterate each against **G1** (garble rate). The win vs. the earlier queued work: we now have (a) a **cheap high-n gate that SEES the pathology** (code-correctness, where scalar per-token gates were blind) AND (b) a **known-config native-MTP baseline** for G0 to re-ground the ranking.
 
 ## Sequencing
 GPU busy (native+nocache → serialization shot). Build the G1/G3 harness now (CPU); run when GPU frees. A targeted kernel-read (where exactly the drift enters the verify forward) picks fp32 site #2 precisely.
