@@ -106,6 +106,30 @@ Definitions: `s_per_fwd_gpu` is per-DRAFT (`_basis=/drafts`); `s_per_fwd_gpu_per
 
 ---
 
+## 3b. WHY the tree gives up — TOKEN-LEVEL DEGENERATION (mechanism study, workflow `wf_2629d92b` + firsthand trace eyeball)
+
+Studied 4 give-up tasks pairwise (tree trace vs native trace, same task). **Comprehension is intact; emission & convergence degrade** — on every task the tree reaches the *same* root-cause diagnosis as native, then fails to emit clean code.
+
+**Two confounds first (firsthand grep of the traces):** some "give-ups" are **engine stream-hangs**, not the model bailing — the final record is `[API Error: No stream activity for 600000ms after 0 chunks]` (600 s idle-watchdog abort after producing **0 tokens**). Counting these out:
+| arm | raw give-ups | engine-hangs (0-chunk stalls) | **semantic give-ups** |
+|---|---|---|---|
+| cat6 | 5 | 1 (14508) | **4** |
+| cat8 | 5 | 2 (14508, 14539) | **3** |
+| native | 1 | 0 | **1** |
+Both the hangs AND the semantic give-ups are tree-*specific* (native solved 14508 & 14539; native never hangs) — but they are **different failure modes**.
+
+**Dominant SEMANTIC mechanism = near-neighbor code-token garble** (spec-decode-attributable, med-high; reproducible in BOTH tree arms, ABSENT in native). The tree commits plausible-but-wrong **neighbor tokens** inside otherwise-correct code:
+- cat6 (13579): `WCS(header=wcs_dict)` for `wcs_header` → NameError; `HighLevelWCSWrapper(ll_sliced)` for `ll_sliced_wcs`; undefined `kept_vals`; `ll._pixel_keep`.
+- cat8 (13579): tool name `readFile ` for `read_file` → "Tool not found"; path `/testbed/astrop/...` (astropy→astrop); `result_slice` for `result_sliced`; literal `20` for `ny`.
+- The model narrates its own corruption: *"Typo in my script"*, *"More typos"*, *"I keep making typos. Let me be more careful."* → it **loops** re-fixing typos (re-introducing old ones), never getting a clean run.
+- **Grind-then-quit, not quit-early:** tree traces overflow the 64 KiB trace cap still in the *explore* phase (cat6 3311 s / cat8 10093 s wall) while native finished the whole fix+verify in the same budget (1308 s, 19 turns) with **zero** self-inflicted NameErrors.
+
+**Per-task:** 13579 = garble→loop (med-high); 14508 = engine-hang (med-high, serving hang not semantic); 14369 = thinking-runaway→empty (plausible); 14182 = **NOT attributable** — give-up moment off-trace (truncation), likely task-hard + temp-0.6. So **3 of 4 spec-decode-attributable, 1 task-hard.**
+
+**Causal link for "token-lossless-within-floor ≠ agentic-parity":** the tiny within-floor draft-tree divergence manifests as **near-neighbor identifier/literal substitution** in generated code — exactly the signature of a branched draft committing a plausible-but-wrong token. **Fixable direction = KERNEL/NUMERICS** (reduce within-floor draft divergence / the queued amplification-reduction levers), **NOT tree size** (both trees do it), **NOT scaffold**, **NOT tokenizer/parser**. Confidence **medium** (n=4, 1 task/arm, 3 mechanisms, temp-0.6 not fully excludable). Full quotes: `wf_2629d92b`.
+
+---
+
 ## 4. Red-team ledger
 1. **Speed verdict REVERSED** (es=1 preview → es=0 final): cat8 wins +10.2%, not native. Confounded partial-subset preview was the trap.
 2. **Metric:** `derived_tps_gpu` (committed/s_per_fwd_gpu); `s_per_fwd_gpu` is per-draft not per-forward.
