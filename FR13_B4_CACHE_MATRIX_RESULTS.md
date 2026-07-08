@@ -1,6 +1,6 @@
 # FR13 — Cache-ON Speed/Quality Matrix (B=4 + B=1) — living results doc
 
-**Status:** IN PROGRESS. B=4: `native+cache` running (14/16 graded); `cat8+cache` DONE (16/16); `cat6+cache` QUEUED. B=1 pair (`cat6+cache`, `native+cache`) queued behind the B=4 cat6 arm.
+**Status:** IN PROGRESS. B=4: `native+cache` running (15/16 graded, only 13398 left); `cat8+cache` DONE (16/16); `cat6+cache` QUEUED. B=1 pair (`cat6+cache`, `native+cache`) queued behind the B=4 cat6 arm.
 **Maintained + committed each tick** by monitor loop cron `1a91cac8`, with the artifact archive under `results/`.
 **Every number below is independently extracted from the artifact files and cross-verified** (workflow `wf_12862543-571`, adversarial completeness critic). Corrections from that pass are folded in.
 
@@ -85,19 +85,20 @@ native's tree machinery is explicitly un-leaked via XFLAGS (`FR13_FA2_TREE_BIAS=
 | arm | graded | PASS | give-ups | genuine fail |
 |---|---|---|---|---|
 | **cat8+cache** | 16/16 | 6 | **5** | 5 |
-| **native+cache** (provisional) | 14/16 | 8 | **1** | 5 |
+| **native+cache** (provisional) | 15/16 | 8 | **1** | 6 |
 
-native pending: **13398, 14598** (the two remaining discriminating give-up tasks). WALL=0 so no wall-censoring; counts can still change.
+native pending: **13398** (last discriminating give-up task). WALL=0 so no wall-censoring; count can still change.
 
-### Head-to-head — EQUAL DENOMINATOR, the 13 tasks both had graded (not 6/16 vs 7/13)
-cat8 = **5 pass / 3 giveup / 5 fail** · native = **7 pass / 1 giveup / 5 fail** · **the same 5 tests fail on both** (13033, 13977, 14182, 14365, 14369 — genuinely hard).
+### Head-to-head — EQUAL DENOMINATOR, the 15 tasks both had graded
+cat8 (on these 15) = **6 pass / 5 giveup / 4 fail** · native = **8 pass / 1 giveup / 6 fail**. Same 5 tests fail-with-patch on both (13033, 13977, 14182, 14365, 14369 — genuinely hard).
 
 | divergence | tasks | detail |
 |---|---|---|
-| **cat8 GU → native PASS** | **13579, 14508, 14539** | native solves all 3, and **far faster**: 22m / 42m / 19m vs cat8's give-up grind **2.8h / 52m / 51m** |
+| **cat8 GU → native PASS** | **13579, 14508, 14539** | native solves all 3, **far faster**: 22m / 42m / 19m vs cat8's give-up grind **2.8h / 52m / 51m** |
+| **cat8 GU → native WRONG-PATCH** | **14598** | native *produced* a patch (tests failed, 95m); **cat8 gave up** (empty patch, 39m). Both fail to solve, but native attempts where the tree bails. |
 | native GU → cat8 PASS | 14096 | native 11m give-up vs cat8 33m pass |
 
-**The tree (cat8) gives up MORE** — native resolves 3 tree-giveups while cat8 recovers only 1. And cat8 burned **9.6 agent-hours across its 5 give-ups** (13398 alone ran **4.5h**) vs native's minutes. The deficit is **non-convergence (meander → empty patch)**, not wrong code: excluding give-ups, cat8 5-pass/8-patched vs native 7-pass/12-patched is far closer. **This tree-agentic-degradation delta is the headline** — but it's **provisional** (native 14/16; verdict finalizes when 13398/14598 grade: native-passes-both ⇒ confirmed; native-also-gives-up ⇒ narrows to task-difficulty).
+**Key refinement (14598):** of cat8's **5 give-ups**, native gives up on **ZERO** — it solves 3 (13579/14508/14539), produces a wrong-but-real patch on 1 (14598), and 13398 pends. Native gives up on exactly **1** task total (14096, which cat8 passes). So the tree's give-ups are **tree-induced bail-outs, not unsolvable tasks** — on 14598 native proves the agent *can* at least produce a patch attempt where the tree quit. The deficit is **non-convergence (meander → empty patch)**, not wrong code. **This tree-agentic-degradation delta is the headline**, now strong; still one task (13398) from final (native-passes-or-attempts ⇒ 0/5 tree-giveups reproduced by native ⇒ confirmed; native-also-gives-up ⇒ 13398 is a genuinely give-up-inducing task).
 
 ---
 
