@@ -68,7 +68,7 @@ for i in $(seq 1 "$N"); do
     # parse verdict + char-8 from the rollout artifacts
     V=$(grep -hoE "resolved_rate=[0-9.]+" "$RLOG" 2>/dev/null | tail -1)
     VERD=$(echo "$V" | grep -qE "resolved_rate=1" && echo resolved || echo failed)
-    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" \) 2>/dev/null | head -1)
+    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" -o -path "*per_task*/qwen_trace.jsonl" \) 2>/dev/null | head -1)
     C8=0; TB=0
     [[ -n "$TR" ]] && { C8=$(grep -cE 'Unterminated|column 9 \(char 8\)|EOF while parsing a string' "$TR" 2>/dev/null); TB=$(wc -c <"$TR" 2>/dev/null); }
     printf '%s\t%d\t%s\t%s\t%s\t%s\n' "$arm" "$i" "$VERD" "$C8" "$TB" "$RLOG" >> "$SUMMARY"

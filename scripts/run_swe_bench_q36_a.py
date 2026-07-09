@@ -35,6 +35,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from collections import Counter
@@ -115,7 +116,7 @@ QWEN_CODE_TEMPLATE = (
     "-w /workspace qwen-code-runner:v1 "
     # user 2026-07-07: NO turn limit (100000 = effectively unlimited); tasks run to natural
     # submit/give-up. Backstop = 600s stall-watchdog + QWEN_STREAM_IDLE_TIMEOUT_MS, NOT a turn cap.
-    "--yolo --output-format json --max-session-turns 100000 -p"
+    "--yolo --output-format stream-json --max-session-turns 100000 -p"
 )
 
 
@@ -220,8 +221,13 @@ _INSTANCE_CONTAINER_PATH = (
 # '<wrapper>'` under BOTH shlex.split (local argv) AND the remote ssh login
 # shell. It: (1) materializes AGENTS.md into /testbed from a base64 env
 # (brace/quote-safe for any problem statement), (2) runs qwen whose
-# --output-format json stream is the ONLY stdout -> the trace (identical shape to
-# legacy), (3) extracts the patch with the SAME git flags as legacy
+# --output-format stream-json emits NDJSON events live (one JSON object per line,
+# flushed as each event occurs) as the ONLY stdout -> the trace. This replaces the
+# old buffered `json` single-array framing, which did one giant process.stdout.write
+# at process.exit() that drained only ONE 64KiB pipe buffer -> every >64KB trace was
+# clamped to exactly 65536 bytes, cut mid-string, losing the terminal result record.
+# NDJSON also matches the .jsonl filename and lets the byte-growth watchdog see real
+# streaming growth, (3) extracts the patch with the SAME git flags as legacy
 # _extract_patch, INSIDE /testbed (a real git checkout at base_commit — the
 # secondary broken-.git finding does not apply here), writing it to the /out
 # bind-mount (a fresh dir, NOT /testbed, so it never pollutes the diff; AGENTS.md
@@ -230,7 +236,7 @@ _INSTANCE_CONTAINER_PATH = (
 _INSTANCE_WRAPPER = (
     "printf %s \"$SWE_AGENTS_B64\" | base64 -d > /testbed/AGENTS.md; "
     "PROMPT=$(printf %s \"$SWE_PROMPT_B64\" | base64 -d); "
-    "/opt/qwen/bin/qwen --yolo --output-format json --max-session-turns 100000 -p \"$PROMPT\"; "
+    "/opt/qwen/bin/qwen --yolo --output-format stream-json --max-session-turns 100000 -p \"$PROMPT\"; "
     "rc=$?; "
     # Diff against HEAD, NOT base_commit. In the SWE-bench per-instance image /testbed
     # HEAD is `<base_commit> + the committed env-setup commit` (efa06c664 "SWE-bench";
@@ -350,6 +356,45 @@ def _retry_prompt_continue(brief: str) -> str:
 
 def _iso_now() -> str:
     return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+_GIT_LOCK = threading.Lock()  # serialize per-task git ops when --concurrency>1
+
+
+def _autocommit_task_artifacts(task_dir: Path, instance_id: str) -> None:
+    """Best-effort auto-commit+push of ONE task's curated trace artifacts to the
+    shared branch. NEVER raises (whole-body try/except = the `|| true` contract).
+    output/ is .gitignored so traces are force-added (git add -f), matching the
+    440k+ artifacts already tracked under output/. Commit uses an EXPLICIT pathspec
+    (git commit -- <paths>, NOT add-all) so it never sweeps another session's staged
+    work on the shared branch, and carries the repo Co-Authored-By trailer. _GIT_LOCK
+    serializes git so --concurrency>1 tasks don't race on index.lock.
+    LUMO_SWE_AUTOCOMMIT=0 disables it (e.g. a big campaign that doesn't want a push
+    per task)."""
+    try:
+        if os.environ.get("LUMO_SWE_AUTOCOMMIT", "1").strip().lower() in ("0", "off", "false", "no"):
+            return
+        rels = ("runner_metadata.json", "patch.diff", "qwen_trace.jsonl",
+                "eval/predictions.jsonl", "eval/eval_report.json",
+                "orchestrator_crash.json")
+        paths = [str(task_dir / r) for r in rels if (task_dir / r).is_file()]
+        if not paths:
+            return
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        def _git(argv, timeout=120):
+            return subprocess.run(["git", *argv], cwd=str(REPO_ROOT), env=env,
+                                  check=False, stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL, timeout=timeout).returncode
+        msg = (f"FR13 SWE auto-commit: {instance_id} trace artifacts\n\n"
+               "Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>")
+        with _GIT_LOCK:
+            _git(["add", "-f", "--", *paths])
+            # -m/msg MUST precede the `--` pathspec separator; nothing-to-commit=>rc1
+            # (ok), non-fast-forward push=>rc!=0 (ok).
+            if _git(["commit", "-m", msg, "--", *paths]) == 0:
+                _git(["push", "origin", "HEAD"], timeout=300)
+    except Exception:
+        pass  # auto-commit is observability; a git error must never fail the run
 
 
 def _metrics_text(metrics_url: str) -> str:
@@ -684,10 +729,10 @@ def _run_agent_local(
     """Run codex-runner:v1 and capture trace/stdout/stderr to separate files.
 
     Track B layout (matching launch_qwen36_ablation_point.py):
-      - trace_path : the --json event stream from `codex exec`
-      - stdout_path: codex_stdout.log (kept for parity; usually empty when
-        --json is the agent output mode)
-      - stderr_path: codex_stderr.log (codex CLI stderr noise)
+      - trace_path : the stream-json NDJSON event stream from the qwen-code agent
+      - stdout_path: qwen_stdout.log (kept for parity; usually empty when
+        stream-json is the agent output mode)
+      - stderr_path: qwen_stderr.log (qwen-code CLI stderr noise)
     """
     if _swe_agent_env() == "instance_image":
         return _run_agent_instance(
@@ -1396,9 +1441,9 @@ def _process_one(
 
     workspace_path = task_dir / "workspace"
     patch_path = task_dir / "patch.diff"
-    codex_stdout = task_dir / "codex_stdout.log"
-    codex_stderr = task_dir / "codex_stderr.log"
-    codex_trace = task_dir / "codex_trace.jsonl"
+    qwen_stdout = task_dir / "qwen_stdout.log"
+    qwen_stderr = task_dir / "qwen_stderr.log"
+    qwen_trace = task_dir / "qwen_trace.jsonl"
     prompt_md = task_dir / "prompt.md"
     metrics_pre = task_dir / "vllm_metrics_pre.txt"
     metrics_post = task_dir / "vllm_metrics_post.txt"
@@ -1477,9 +1522,9 @@ def _process_one(
         timeout_s=agent_wall_s,
         instance_id=instance_id,
         base_commit=instance["base_commit"],
-        stdout_path=codex_stdout,
-        stderr_path=codex_stderr,
-        trace_path=codex_trace,
+        stdout_path=qwen_stdout,
+        stderr_path=qwen_stderr,
+        trace_path=qwen_trace,
     )
     summary["agent"] = codex_meta
     # Backward-compat: keep the legacy "codex" key so existing reducers
@@ -1500,7 +1545,7 @@ def _process_one(
     # re-launch codex ONCE with a state-conditional directive prompt. Bounded
     # to a single retry to cap the wall-time premium.
     if not patch_text.strip():
-        cause = _classify_empty_patch_cause(codex_trace)
+        cause = _classify_empty_patch_cause(qwen_trace)
         # Bundle B #2/#3/#8 -> in-context continuation: an agent_gave_up attempt EXPLORED
         # then emitted a tool-call-free terminal reply (general temp-0.6 codex flake). Re-drive
         # it up to SWE_EMPTY_PATCH_RETRIES times with its OWN accumulated context + a hard
@@ -1516,7 +1561,7 @@ def _process_one(
         max_retries = max(0, int(os.environ.get("SWE_EMPTY_PATCH_RETRIES", "0")))
         summary["empty_patch_retry"] = {"cause": cause, "attempted": True,
                                         "max_retries": max_retries, "recovered_patch_bytes": 0}
-        prev_trace = codex_trace
+        prev_trace = qwen_trace
         for ridx in range(1, max_retries + 1):
             if cause == "setup_loop":
                 retry_prompt = RETRY_PROMPT_SETUP_LOOP
@@ -1525,9 +1570,9 @@ def _process_one(
             suffix = "" if ridx == 1 else str(ridx)
             print(f"[{_iso_now()}]    {instance_id}: empty patch ({cause}); retry {ridx}/{max_retries}",
                   flush=True)
-            retry_trace = task_dir / f"codex_trace_retry{suffix}.jsonl"
-            retry_stderr = task_dir / f"codex_stderr_retry{suffix}.log"
-            retry_stdout = task_dir / f"codex_stdout_retry{suffix}.log"
+            retry_trace = task_dir / f"qwen_trace_retry{suffix}.jsonl"
+            retry_stderr = task_dir / f"qwen_stderr_retry{suffix}.log"
+            retry_stdout = task_dir / f"qwen_stdout_retry{suffix}.log"
             retry_dcgm = _spawn_dcgm_sampler(task_dir / f"dcgm_samples_retry{suffix}.jsonl")
             try:
                 codex_meta_retry = _run_agent_dispatch(
@@ -1861,6 +1906,7 @@ def main(argv: list[str] | None = None) -> int:
         verdict = (res.get("eval_report") or {}).get("verdict", res.get("status", "?"))
         print(f"[{_iso_now()}] <- {iid} verdict={verdict} elapsed_total={time.time()-t0:.1f}s",
               flush=True)
+        _autocommit_task_artifacts(per_task_root / iid, iid)
         return res
 
     if args.concurrency <= 1:

@@ -37,7 +37,8 @@ SPACELESS = re.compile(r"[a-z]{35,}")                              # merged word
 
 def _traces(arm_dir):
     return (glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "agent_trace*.jsonl"), recursive=True)
-            + glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "codex_trace*.jsonl"), recursive=True))
+            + glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "codex_trace*.jsonl"), recursive=True)
+            + glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "qwen_trace*.jsonl"), recursive=True))
 
 
 def _server_logs(arm_dir):
@@ -83,7 +84,7 @@ def arm_stats(arm_dir):
                 pass
     else:
         src = "codex_stderr (no server log)"
-        for f in glob.glob(os.path.join(arm_dir, "**", "agent_stderr*.log"), recursive=True) + glob.glob(os.path.join(arm_dir, "**", "codex_stderr*.log"), recursive=True):
+        for f in glob.glob(os.path.join(arm_dir, "**", "agent_stderr*.log"), recursive=True) + glob.glob(os.path.join(arm_dir, "**", "codex_stderr*.log"), recursive=True) + glob.glob(os.path.join(arm_dir, "**", "qwen_stderr*.log"), recursive=True):
             try:
                 char8 += sum(1 for ln in open(f, errors="ignore") if CHAR8_SIG.search(ln))
             except Exception:
@@ -106,7 +107,7 @@ def arm_stats(arm_dir):
             elif (fm in ("patch_apply_failed", "empty_patch")) or (v in ("patch_apply_failed",)):
                 # char-8 present in THIS task's turn flow (stderr, not source)?
                 blob = ""
-                for sf in glob.glob(os.path.join(d, "agent_stderr*.log")) + glob.glob(os.path.join(d, "codex_stderr*.log")):
+                for sf in glob.glob(os.path.join(d, "agent_stderr*.log")) + glob.glob(os.path.join(d, "codex_stderr*.log")) + glob.glob(os.path.join(d, "qwen_stderr*.log")):
                     try:
                         blob += open(sf, errors="ignore").read()
                     except Exception:

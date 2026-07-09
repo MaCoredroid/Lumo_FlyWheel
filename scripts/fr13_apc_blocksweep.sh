@@ -43,7 +43,7 @@ for i in $(seq 1 "$N"); do
       bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" cat6root "$SUBSET" > "$RLOG" 2>&1 </dev/null
     V=$(grep -hoE "resolved_rate=[0-9.]+" "$RLOG" 2>/dev/null | tail -1)
     VERD=$(echo "$V" | grep -qE "resolved_rate=1" && echo resolved || echo failed)
-    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" \) 2>/dev/null | head -1)
+    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" -o -path "*per_task*/qwen_trace.jsonl" \) 2>/dev/null | head -1)
     C8=0; [ -n "$TR" ] && C8=$(grep -cE 'Unterminated|column 9 \(char 8\)|EOF while parsing a string' "$TR" 2>/dev/null || echo 0)
     printf '%s\t%s\t%d\t%s\t%s\t%s\n' "$tag" "$BLOCK" "$i" "$VERD" "$C8" "$RLOG" >> "$SUMMARY"
     echo "  => verdict=$VERD char8=$C8"

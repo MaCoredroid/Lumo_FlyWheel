@@ -72,7 +72,7 @@ for i in $(seq 1 "$N"); do
     # real cache hits: max cached_tokens anywhere in this arm's artifacts (proxy/trace)
     CMAX=$(grep -rhoE "\"cached_tokens\"\s*:\s*[0-9]+" "$RUNROOT/$ARM" "$RLOG" 2>/dev/null | grep -oE "[0-9]+" | sort -rn | head -1)
     CMAX=${CMAX:-0}
-    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" \) 2>/dev/null | head -1)
+    TR=$(find "$RUNROOT/$ARM" \( -path "*per_task*/agent_trace.jsonl" -o -path "*per_task*/codex_trace.jsonl" -o -path "*per_task*/qwen_trace.jsonl" \) 2>/dev/null | head -1)
     C8=0; TB=0
     [[ -n "$TR" ]] && { C8=$(grep -acE 'Unterminated|column 9 \(char 8\)|EOF while parsing a string|[\x{4e00}-\x{9fff}]' "$TR" 2>/dev/null || echo 0); TB=$(wc -c <"$TR" 2>/dev/null || echo 0); }
     printf '%s\t%d\t%s\t%s\t%s\t%s\t%s\t%s\n' "$arm" "$i" "$VERD" "$CMAX" "$SPEC_OK" "$C8" "$TB" "$RLOG" >> "$SUMMARY"

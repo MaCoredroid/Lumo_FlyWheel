@@ -420,6 +420,8 @@ for m in metas:
     patch_bytes = meta.get("patch_bytes")
     cand = m.parent / "agent_trace.jsonl"
     if not cand.is_file():
+        cand = m.parent / "qwen_trace.jsonl"
+    if not cand.is_file():
         cand = m.parent / "codex_trace.jsonl"
     if cand.is_file():
         trace_path = cand

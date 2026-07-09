@@ -80,7 +80,8 @@ def classify_text(txt):
 
 def _traces(arm_dir):
     return (glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "agent_trace*.jsonl"), recursive=True)
-            + glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "codex_trace*.jsonl"), recursive=True))
+            + glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "codex_trace*.jsonl"), recursive=True)
+            + glob.glob(os.path.join(arm_dir, "**", "per_task", "*", "qwen_trace*.jsonl"), recursive=True))
 
 
 def _server_logs(arm_dir):
