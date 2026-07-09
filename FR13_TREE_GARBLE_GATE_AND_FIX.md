@@ -29,7 +29,35 @@ Artifacts: `output/fr13_garble_gate/{tree_n15,native_n15}.jsonl`.
 **This is now the STAGE-E fix gate:** apply the fix (M-invariance / batch-invariant tree-attn), re-run
 the tree arm, KEEP iff the undefined-name rate drops toward native's 0.00% at acceptable accept.
 
-## ✅ STAGE-E LEVER 1 RESULT (2026-07-08) — pad-block M-invariance cuts garble 68%
+## ❌ STAGE-E LEVER 1 — REFUTED (2026-07-09): the "68%" was CROSS-BOOT AUTOTUNE VARIANCE
+
+**Red-team re-ran the BASELINE (LUMO_FB OFF) on a fresh boot → 2.96% (18/45), vs boot-1's 9.56%
+(32/45). The pad-block "fix" was 3.10% (15/45) — INSIDE the baseline's own boot-to-boot swing.** So the
+apparent −68% was the boot-1 autotune realization being unlucky, NOT the pad-block. The lever shows **no
+demonstrable effect**. DO NOT bake `LUMO_FB_KERNEL_ROWS=1` on this evidence.
+
+| config (identical prompts/seeds, N=15×3) | undefined-name | samples | boot |
+|---|---|---|---|
+| baseline | 9.56% | 32/45 | boot-1 |
+| baseline | **2.96%** | 18/45 | boot-2 (SAME config) |
+| pad-block "fix" | 3.10% | 15/45 | fix-boot |
+| native | 0.00% | 0/45 | — |
+
+**MEASUREMENT WALL:** the tree garble rate `p` is **set by the per-boot autotune realization** (2.96–9.56%
+baseline; the count difference 32 vs 18 is ~4σ for a fixed binomial p → the true p differs per boot). So a
+cross-boot single-lever A/B CANNOT distinguish a fix from boot noise. What still holds: garble is real
+(tree 3–9.5% vs native 0.00%; native clean across boots) and the wrong-accept mechanism stands. What's
+gone: any claim that a *specific lever* fixes it, measured this way.
+
+**To validate ANY garble fix, need one of:** (a) same-boot A/B (per-request flag — awkward: the verify
+in_proj GEMM is batched, so per-request padding within a batch isn't clean); (b) many-boot averaging (~5-10
+boots/config, expensive); (c) **live-SWE give-up test** (end-to-end over many turns averages boot-variance
+AND measures what matters). The variance itself is a LEAD: garble may be an autotune/kernel-selection
+artifact → deterministic kernel pinning could be the real lever, not GEMM padding.
+
+<details><summary>original (now-refuted) lever-1 writeup</summary>
+
+### pad-block M-invariance cuts garble 68% [REFUTED — cross-boot variance, see above]
 
 The cron's named "primary" `FR13_BI_TREE_ATTN` (num_splits=1 under BI) is **inert for tree shapes**
 (max_seqlen_q=tree_len>1 ⇒ num_splits stays 0) and needs full `VLLM_BATCH_INVARIANT`, which is
@@ -59,6 +87,7 @@ o_proj / MLP GEMM pad-block, tree-attention reduction, GDN scan. Each: add M-inv
 site, re-gate. Target: 3.10% → native 0.00%. **DIRECT confirm option** (per user 2026-07-08): on a
 garbling seed, trace `(drafter proposal, tree-verify accept/reject, recurrent-oracle argmax)` at the
 garble position to show wrong-accept-of-a-draft vs bonus-resample.
+</details>
 
 ---
 
