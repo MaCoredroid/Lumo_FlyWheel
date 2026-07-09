@@ -195,14 +195,25 @@ def _extract_name(err):
 def analyze_trace(path):
     events = _norm_events(_iter_records(path))
     tool_calls, errors, flags = [], [], []
-    seen_idents = set()          # identifiers that appeared in tool inputs (established)
+    seen_idents = set()          # identifiers ESTABLISHED anywhere in the session:
+                                 # agent tool inputs AND tool results (source it read).
+                                 # Mining results is what lets a garbled 'from_geodentic'
+                                 # match the correct 'from_geodetic' the agent read from src.
     err_classes = []
+    # first pass: build the established-identifier pool from BOTH inputs and results
+    for ev in events:
+        for t in ev.get("tools", []):
+            for m in _IDENT.findall(_salient(t)):
+                seen_idents.add(m)
+        # mine result/text bodies too (bounded), keeping only api-ish names
+        body = " ".join(ev.get("errors", []) + [ev.get("text", "")])[:20000]
+        for m in _IDENT.findall(body):
+            if ("_" in m or not m.islower()) and 6 <= len(m) <= 40:
+                seen_idents.add(m)
     for ev in events:
         for t in ev.get("tools", []):
             sal = _salient(t)
             tool_calls.append((t["name"], sal))
-            for m in _IDENT.findall(sal):
-                seen_idents.add(m)
         for e in ev.get("errors", []):
             if not e.strip():
                 continue
