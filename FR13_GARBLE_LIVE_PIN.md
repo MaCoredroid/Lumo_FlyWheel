@@ -61,3 +61,27 @@ tree vs native on shared instance_ids so common env noise cancels.
 
 Re-run the same 16 tasks (subset_b4_sixteen.json) cat8+cache-ON; give-ups drop toward
 native AND `fr13_garble_watch.py arm` shows no NEAR-NEIGHBOR flags.
+
+## Instrument status (2026-07-09, later) — fast probes compromised
+
+Tried to build a FAST fix-selection instrument on a dedicated cat8 server
+(fr13-cat8-repro :9950). Three approaches, all compromised:
+1. scripts/fr13_geodetic_reproducer.py (from_geodetic, KNOWN api) -> 0/36 garbles.
+   HIGH-MARGIN: the model spells a known API confidently; drift only flips LOW-MARGIN
+   NOVEL identifiers. Wrong prompt class.
+2. G1 gate (scripts/fr13_garble_gate.py, novel multi-word ids) -> DOES elicit (~9.56%),
+   but the RATE is cross-boot autotune-noise-dominated (2.96-9.56% baseline swing) and a
+   server-flag fix needs a reboot -> cross-boot A/B can't separate fix from noise.
+3. scripts/fr13_wa_capture.py accept-time p_tree (top_logprobs=1) -> INCONCLUSIVE: the
+   "low p_tree" verdict is dominated by a recurring EXACT -12.422 / -22.042 = vLLM
+   PLACEHOLDER for a committed token outside top-1, NOT the true accept-time p_target.
+   5/21 HIGH (drift), 16/21 "LOW" (mostly placeholder artifact). Needs correct node->output
+   alignment + high top_logprobs, OR a distribution-at-a-controlled-position probe.
+
+Mechanism is ALREADY established (forward drift, prior offline parity gate + chi-square;
+per reference_diffuse_gdn_accumulation_explained the drift is DIFFUSE ~1 ULP/layer over 48
+layers, native drifts 7x less). So the fix = a GLOBAL diffuse-drift-reduction lever
+(targeted fp32 accumulation / rms-clamp / residual re-anchor per
+project_fr13_amplification_levers_queued), and the clean gate = a per-layer accumulation
+ladder (tree-verify vs no-spec on identical input), NOT a garble-rate or committed-token
+probe. Next: map existing per-layer drift infra + design the fix+gate (workflow).
