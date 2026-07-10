@@ -264,3 +264,12 @@ own target argmax is drifted (forward). CAVEAT: force-spine may cut accept rate 
 it's the diagnostic; the ship fix = a corrected tie-break (prefer spine on ties, require a margin for alt paths).
 PLUMBING: FR13_* diagnostic flags (gate, force_spine) don't reach the forward worker pid176 via env-copy (2 vacuous
 gate boots); need the SIDECAR mechanism (mirror _fr13_gdn_subop_mab_enabled @1776-1794) for whichever flag we test.
+
+## PLUMBING (2026-07-10): ALL env-copy fails to reach the forward worker -> SIDECAR required
+Confirmed: neither VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY=FR13_ NOR VLLM_RAY_EXTRA_ENV_VARS_TO_COPY=<flag>
+gets FR13_FORCE_SPINE_COMMIT / FR13_COMMIT_ARGMAX_GATE to EngineCore forward worker pid176 (86GB GPU). The MAB
+worked ONLY via its sidecar (_fr13_write_subop_mab_sidecar @18948 writes /logs flag at pid-1; resolver
+_fr13_gdn_subop_mab_enabled @1776 reads env-then-sidecar). So ANY committer diagnostic/fix flag needs the SAME
+sidecar. FR13_FORCE_SPINE_COMMIT is read PER-CALL at TWO injected sites (@8919, @10433). SHIP FIX (spine-preferring
+LCP tie-break @9232) will ALSO need OFF-gating via a sidecar flag OR be a baked code change (baked=in-worker, no
+propagation issue, but not byte-identical-OFF).
