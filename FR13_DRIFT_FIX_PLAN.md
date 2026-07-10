@@ -97,3 +97,22 @@ Direction LOCKED:
    measure speed, verify the garble drops (teacher-forced oracle-flip gate + live-SWE 13398).
 This is the sanctioned speed-preserving path (spine M-invariance), NOT tree-reshape (speed cost)
 and NOT amplification levers (superseded).
+
+## LOCALIZATION RESOLVED (2026-07-10) — carrier = conv1d prior-window (skip the broken MAB)
+The per-layer ladder in FR13_E5_VS_CAT9_SPINE_DRIFT.md ALREADY localized it (don't need the crashing MAB):
+enter L0 byte-exact -> pre_conv(in_proj)=0.0 (pad-block fixed in_proj_ba) -> FIRST-nonzero sub-op =
+`conv1d_out` = 0.000977 (1 bf16-ULP) at num_accepted>1. Named prime carrier = the conv1d PRIOR-WINDOW /
+state-bank column geometry (project_fr13_conv_priorwindow_root: "conv1d_out wrong bank-row at num_accepted>1;
+OPEN"). Mechanism = the deep SPINE row's depthwise-conv receptive window is contaminated by CO-RESIDENT
+BRANCH rows instead of its true spine ancestry (M-dependent). Fix target = fr10_phase4_patch_vllm_tree_gdn.py
+~:797-818 (conv source-index wiring). Existing PARTIAL infra aimed here: FR13_CONV_COMMITTED_PATH (baked ON,
+snapshots committed-path conv rows) + FR13_TREE_CONV_FUSED (source-by-width, gather_committed_path_conv_prior)
+— but garble PERSISTS -> the source-by-width wiring is INCOMPLETE (some conv window index still co-resident-keyed
+at num_accepted>1). This is M-DEPENDENT + the fix is a RE-INDEX/WIRING correction = COMPUTE-FREE, NO HBM ->
+passes the hard no-HBM-tax rule cleanly.
+
+REVISED PLAN (autonomous): (a) MAP the conv prior-window path — what FR13_CONV_COMMITTED_PATH/TREE_CONV_FUSED
+do, WHICH index is still co-resident-keyed at num_accepted>1, why garble persists. (b) DESIGN the compute-only
+re-index fix (key the deep spine row's conv window to the spine/path0 ancestry, not the flat co-resident
+layout). default-OFF flag, byte-identical off. (c) BUILD + measure speed (expect ~0 tax) + verify garble drops
+(teacher-forced oracle-flip gate + live-SWE 13398 fr13_garble_watch). NO HBM copies.
