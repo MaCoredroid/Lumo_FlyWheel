@@ -12,7 +12,11 @@ RUNROOT=${RUNROOT:-output/fr13_garble_fix_v1/cat8_dedicated}
 mkdir -p "$RUNROOT/logs"
 
 # cat8 tree shape (variant L60) — spine + rank-2 siblings at first 3 depths, 8 nodes.
+# ARM_KIND=cat9 leaves TREE empty so the forked launcher uses its 9-node cat9 default
+# (the studied config; MAB/ladder/reducer are all cat9-native, EXPECT_TREE_N=10).
 CAT8_TREE="[(0,),(1,),(0,0),(0,1),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,0,0)]"
+ARM_KIND=${ARM_KIND:-cat8}
+if [[ "$ARM_KIND" == "cat9" ]]; then TREE_LAUNCH=""; else TREE_LAUNCH="$CAT8_TREE"; fi
 
 # cat8+cache baked config (fr13_garble_fix_run.sh) — stateless-tree trio + APC.
 export FR13_APC_COMMIT_TO_RUNNING_ROW=1 FR13_TREE_RUNROW_INIT=1 FR13_APC_BURN_NODE_BANK=1
@@ -31,7 +35,7 @@ PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/python -c \
 # BAKED in_proj_ba pad (LUMO_FB_KERNEL_ROWS=1, PROJ_PAD_ROWS=16). The forked launcher
 # defaults FIX-1/2/3, REPLAY_ROUTE, FA2_TREE_BIAS, CONV_COMMITTED_PATH ON.
 CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="${MAX_NUM_SEQS:-4}" \
-  TREE="$CAT8_TREE" FR10_METRICS=0 BATCH_INVARIANT="${BATCH_INVARIANT:-0}" \
+  TREE="$TREE_LAUNCH" FR10_METRICS=0 BATCH_INVARIANT="${BATCH_INVARIANT:-0}" \
   LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 \
   FR13_RUN_DIR="$PWD/$RUNROOT" LOG_DIR="$PWD/$RUNROOT/logs" \
   scripts/fr13_launch_forked_fa2_tree_server.sh > "$RUNROOT/launch.log" 2>&1
