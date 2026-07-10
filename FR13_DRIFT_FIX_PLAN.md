@@ -273,3 +273,22 @@ _fr13_gdn_subop_mab_enabled @1776 reads env-then-sidecar). So ANY committer diag
 sidecar. FR13_FORCE_SPINE_COMMIT is read PER-CALL at TWO injected sites (@8919, @10433). SHIP FIX (spine-preferring
 LCP tie-break @9232) will ALSO need OFF-gating via a sidecar flag OR be a baked code change (baked=in-worker, no
 propagation issue, but not byte-identical-OFF).
+
+## COURSE-CORRECTION (2026-07-10, agent red-team): greedy-LCP was the WRONG committer
+The greedy-LCP committer (_lumo_tree_path_lcp_max_greedy_sample) + FR13_FORCE_SPINE_COMMIT are TEMP-0 ONLY
+(all_greedy path). Production + the localizer baseline run at TEMP 0.6 -> not all_greedy -> dispatch @11556->11590
+to the SAMPLED multidraft committer _lumo_tree_canonical_multidraft_sample (@10419) -> fr13_device_multidraft_commit
+= SpecInfer residual-mix accept (accept ~ min(1,p/q_mix), residual fallback; @10458). So the baseline wrong-accepts
+(applied_entry_idx 21/21) came from the SAMPLED committer; FORCE_SPINE hard-raises on it (can't test) and my
+greedy-LCP "leaf wins the tie-break" hypothesis targets an off-production committer. Agent proved this behaviorally
+(FORCE_SPINE raised from pid176 at temp0.6) + built a clean byte-identical-OFF sidecar (in worktree
+agent-a9f91400978bbd3fc, reusable pattern) — but FORCE_SPINE itself is now moot for production.
+
+CORRECTED FIX LOCUS = the SAMPLED committer accept rule (@10419-10684, _canonical_accept_prob @10655). Since the
+device multidraft sampler was PROVEN distribution-equivalent (offline parity 22/22), a wrong-accept there means the
+INPUTS are off: the tree-verify p_target for the garble is high enough vs q_mix to accept, despite the true model
+giving 1e-6. NEXT: capture the accept-time p_target (tree-verify) + q_mix for a garbled draft token in the SAMPLED
+committer (its own _canonical_accept_prob dump / LUMO_TREE_SAMPLER_DEBUG_LOG, with the sidecar pattern to reach
+pid176) -> p_target INFLATED = forward drift (back to the hard problem); p_target LOW but committed = a residual-mix
+accept-logic bug (fixable in the committer). This is the wa_capture goal done RIGHT (in-process accept-prob, correct
+node alignment, not surfaced logprobs). Do NOT re-run the greedy FORCE_SPINE test for production.
