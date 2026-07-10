@@ -162,3 +162,25 @@ NEXT (autonomous build):
    FR12_NATIVE_SPINE; live-SWE 13398 fr13_garble_watch same-boot A/B; speed derived_tps_gpu ~0.
 HARD RULE reaffirmed: compute-only, NO HBM copy (loop reorder / same kernel launch). Do NOT promote taps to fp32
 (regresses L0 to 0.0625). If conv1d_out->0 but e2e flips persist -> scan/tree-reshape, NOT another per-op patch.
+
+## CONV-REPLICA FIX REFUTED (2026-07-10, VERIFIED first-hand) — carrier is recurrent conv-STATE content
+Offline bit-match harness (scripts/fr13_conv_replica_offline_gate.py, run INSIDE the live image, no boot)
+PROVES our tree-conv (fused_tree_conv_taps_acc + triton_ex2_silu_bf16) is ALREADY BIT-EXACT to native
+causal_conv1d_update: 0 int-view mismatches across 36 configs + spec-decode num_accepted>=3 + D1
+offset-engaged + D2 byte-preserving window-build. Only fp32-products (MODE2) diverge = the known 0.0625
+regression -> bf16 products are CORRECT. So the design doc's "bf16-tap MAC realization" attribution
+(FR13_CONV_FIX_DESIGN.md §2b) is WRONG; DO NOT build FR13_CONV_EX2_REPLICA (dead).
+
+=> the production conv1d_out=9.77e-4 (from byte-exact pre_conv=0.0 + bit-exact conv + byte-preserving
+window-build) can ONLY come from the conv-STATE BANK CONTENT being 1-ULP different = a RECURRENT carry.
+Since the conv writes bit-exactly, the taint ORIGIN is UPSTREAM of the decode conv: prefill state-seed
+(chunked/tree prefill conv path) OR the tree-verify committed-state write-back — NOT a decode-op numerics
+fix and likely NOT compute-only/no-HBM. The per-token ladder sees conv1d_out as "first-nonzero" only
+because it READS a pre-tainted state; the true first-nonzero is in a PRIOR forward's state write.
+
+CONSEQUENCE for the no-HBM rule: the cheap compute-only conv fix is EXHAUSTED. The remaining carrier
+(recurrent state-seed) has no identified compute-only/no-HBM fix -> cost-gate juncture.
+
+BONUS (free, unrelated to garble): the harness's V2 = a single fused Triton conv kernel (MAC+silu) is
+bit-exact and collapses the current pytorch-mul+cast+3adds+separate-silu into ONE kernel = a device-node/
+speed win, no correctness justification needed. Un-wired; available if wanted.
