@@ -305,6 +305,14 @@ token (e.g. applied_entry_idx's _idx), read its target_prob_at_draft_token: INFL
 ~1e-6 but accepted => multidraft ACCEPT-LOGIC bug (q_mix mis-weight / residual resample committing a low-p token)
 = a FIXABLE committer bug. Likely eager-only (dump syncs/.item()s). This is the fork that ends the investigation.
 
+## *** [OVERTURNED 2026-07-10 — DO NOT USE. See FR13_GARBLE_COMMITTER_CLEARED.md + FR13_GARBLE_DRIFT_BINDING_PROVEN.md] ***
+## The "ACCEPT-LOGIC bug" below is WRONG (stale). The 1.99e-6 was target_RAW_prob_draft (RAW, PRE-constraint, temp-1.0)
+## read at a NON-COMMIT gather node. The committer is PROVEN to commit each token at EXACTLY its POST-constraint
+## target_prob_draft (offline gate 22/22), so a genuinely-1.99e-6 token CANNOT commit at ~8-13% — mathematically. A
+## commit_trace instrument (fr13_device_multidraft_kernel.py) measured the committer's OWN input AT the actual commit
+## node: committed_prob = 0.0809 (IN the top-p nucleus) for expected_row_count->expected_rows_count, while no-spec masks
+## it at ~1e-6. => the garble IS forward drift (tree-verify inflates the near-neighbor into the nucleus; the correct
+## committer commits it). The committer is NOT the bug. [Kept below for history only.]
 ## *** DECIDING RESULT (2026-07-10): NOT forward drift — it's a multidraft ACCEPT-LOGIC bug ***
 LUMO_TREE_SAMPLER_DEBUG_LOG works (reaches the forward worker unlike FR13_ flags; all_greedy=False confirms the
 sampled path). tree_logit_gather rows carry target_raw_prob_draft = the tree-verify's prob for each drafted token.
