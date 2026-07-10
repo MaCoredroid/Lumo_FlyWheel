@@ -223,6 +223,13 @@ SPEC_CONFIG=${SPEC_CONFIG:-"{\"method\":\"qwen3_5_mtp\",\"num_speculative_tokens
 FR13_ENABLE_APC=${FR13_ENABLE_APC:-0}
 MAMBA_BLOCK_SIZE=${MAMBA_BLOCK_SIZE:-1024}
 MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
+# CONV-STATE dtype (FR13 garble fp32-seed fix, 2026-07-10). vLLM keys the GDN conv_state
+# bank off --mamba-cache-dtype (default auto=bf16) while --mamba-ssm-cache-dtype only sets the
+# temporal/SSM state (mamba_utils.py gated_delta_net_state_dtype). The conv_state bf16 bank is the
+# DOMINANT residual drift seed (conv1d_out 9.77e-4 = 1 bf16-ULP, FR13_GARBLE_DRIFT_BINDING_PROVEN.md);
+# fp32 shrinks it ~2^16 to clear the amplification margin. DEFAULT EMPTY => flag omitted => conv_state
+# bf16 => serve command byte-identical to HEAD. Set MAMBA_CACHE_DTYPE=float32 to enable the fix.
+MAMBA_CACHE_DTYPE=${MAMBA_CACHE_DTYPE:-}
 # APC LOSSLESS FIX (2026-06-21, proven run_20260621T013300Z): default max-num-batched-tokens to
 # the mamba block size so each chunked-prefill scheduler step crosses AT MOST ONE block boundary.
 # vLLM mamba 'align' caches ONE checkpoint per step (the last boundary it crosses); with a larger
@@ -290,6 +297,10 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
       fi
     fi
     APC_FLAGS="--enable-prefix-caching --enable-chunked-prefill --mamba-block-size $MAMBA_BLOCK_SIZE --mamba-ssm-cache-dtype $MAMBA_SSM_CACHE_DTYPE --max-num-batched-tokens $APC_MAX_NUM_BATCHED_TOKENS --block-size $APC_BLOCK_SIZE"
+    # FR13 garble fp32-seed fix: fp32 conv_state bank (default OFF => flag omitted => byte-identical).
+    if [[ -n "${MAMBA_CACHE_DTYPE:-}" ]]; then
+      APC_FLAGS="$APC_FLAGS --mamba-cache-dtype $MAMBA_CACHE_DTYPE"
+    fi
     # SERIALIZATION-FIX flag (2026-07-08, wf_1c4af669 source-verified): per-request prefill-chunk cap.
     # BAKED default = $MAMBA_BLOCK_SIZE (set above). With APC_MAX_NUM_BATCHED_TOKENS=4096 + APC_BLOCK_SIZE
     # pinned to the mamba block, this breaks the decode-serialization (max_num_batched==block starved
