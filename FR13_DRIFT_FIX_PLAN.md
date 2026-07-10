@@ -139,3 +139,26 @@ same-boot A/B. (5) speed derived_tps_gpu ON vs OFF ~0.
 KEY RISK (#3): the L0->L63 GROWTH is dominated by the DIFFUSE GDN recurrent SCAN state-feed (reference_gdn_verify_sequential_dispatch),
 which the conv fix does NOT touch. If perfect conv alignment does NOT collapse the flips -> route to tree-reshape,
 NOT another per-op patch. So conv-replica is NECESSARY-maybe-not-SUFFICIENT. Design detail: FR13_CONV_FIX_DESIGN.md.
+
+## Native kernel located + build plan (2026-07-10)
+Native `_causal_conv1d_update_kernel` (Triton, readable) at
+/tmp/lumo_vllm_main_audit/vllm-v0.22.0/.../mamba/ops/causal_conv1d.py (host copy; LIVE served =
+v0.19.2rc1.dev134 — match THAT via the offline harness since bit-exact is codegen/SASS-sensitive, class-10).
+Structure: loads width taps explicitly col0(oldest)..col3(newest) (width-4), then a fused fp32 MAC + ex2.approx
+silu + bf16 store in ONE Triton program. Our replica target = fused_tree_conv_taps_acc (fr13_tree_conv_fused.py:236-251,
+current order (((bias+p0)+p1)+p2)+p3, bf16 products cast f32) + triton_ex2_silu_bf16 (fr13_ex2_silu.py).
+§6 OPTIMISM: conv1d_out is FIRST-NONZERO, GDN scan is M-invariant-as-op (downstream), so a bit-exact conv replica
+should CASCADE the whole L0-GDN to 0 (feedback_fr12_subkernel_zero_gate) -> plausibly SUFFICIENT.
+
+NEXT (autonomous build):
+1. OFFLINE BIT-MATCH HARNESS (the cheap loop, NO model boot): a script run INSIDE the live vLLM image
+   (docker run lumo-flywheel-vllm...v0.19, no server) that imports native causal_conv1d_update + our
+   fused_tree_conv_taps_acc+triton_ex2_silu_bf16, feeds IDENTICAL random bf16 window/weights/bias/conv_state,
+   compares int-view (RAW 0.0, NOT atol). Iterate our MAC order + silu until bit-exact vs native. Random inputs
+   expose the order/rounding diff (no captured real inputs needed for MAC-order matching).
+2. Wire FR13_CONV_EX2_REPLICA (default OFF, sidecar for spawn worker, byte-identical off) selecting the matched
+   replica MAC/silu in fr13_tree_conv_fused.py + fr13_ex2_silu.py.
+3. GPU GATES: engagement assert; per-layer ladder conv1d_out->0 within-boot; teacher-forced oracle-flip vs
+   FR12_NATIVE_SPINE; live-SWE 13398 fr13_garble_watch same-boot A/B; speed derived_tps_gpu ~0.
+HARD RULE reaffirmed: compute-only, NO HBM copy (loop reorder / same kernel launch). Do NOT promote taps to fp32
+(regresses L0 to 0.0625). If conv1d_out->0 but e2e flips persist -> scan/tree-reshape, NOT another per-op patch.
