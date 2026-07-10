@@ -116,3 +116,26 @@ do, WHICH index is still co-resident-keyed at num_accepted>1, why garble persist
 re-index fix (key the deep spine row's conv window to the spine/path0 ancestry, not the flat co-resident
 layout). default-OFF flag, byte-identical off. (c) BUILD + measure speed (expect ~0 tax) + verify garble drops
 (teacher-forced oracle-flip gate + live-SWE 13398 fr13_garble_watch). NO HBM copies.
+
+## FIX DESIGN (2026-07-10, wf_9b24f818) — REALIZATION REPLICA, not a re-index
+Re-index premise REFUTED: the deep-spine conv window is ALREADY spine-keyed (fr10_tree_conv_source_indices
+= parent-chain ancestry, :3371; flat/co-resident source is diagnostic-only). The residual conv1d_out=9.77e-4
+(1 bf16-ULP) from byte-exact pre_conv=0.0 is a KERNEL REALIZATION diff: OUR tree-conv (fused_tree_conv_taps_acc
+bf16-tap MAC @fr13_tree_conv_fused.py:236-251 + triton_ex2_silu_bf16 @fr13_ex2_silu.py:17-23) produces a
+different bf16 than native causal_conv1d_update on IDENTICAL input. Only num_accepted>=3 (deep-accept) carries
+enough ULP to flip an argmax.
+
+FIX = FR13_CONV_EX2_REPLICA (default OFF, sidecar for spawn worker): (a) align tap-MAC accumulation ORDER to
+native's column order (native oldest..newest; reverse the width<=4 loop if it differs); (b) make
+triton_ex2_silu_bf16 a bit-exact ex2.approx replica of native's silu (mul -x,log2(e) -> ex2.approx.f32 -> 1+ ->
+div -> cvt.rn.bf16). KEEP bf16 taps (fp32-taps REGRESSES L0 to 0.0625). PURE COMPUTE, ZERO HBM (same kernel
+launch, loop reorder) -> passes no-HBM rule. FR12_NATIVE_SPINE oracle (copies spine rows) = validation-only, BANNED as ship.
+
+VALIDATION (cheap-first): (1) engagement assert (worker self-report, replica fired>0). (2) OFFLINE per-layer
+ladder BOOT-FREE: capture spine-only conv inputs (pre_conv+conv_state+weights+bias) for clean layers L0/4/8/12/24/36/44,
+iterate replica vs native causal_conv1d_update on IDENTICAL inputs until conv1d_out==0.0 RAW/int-view (NOT atol)
+every clean layer. (3) teacher-forced oracle-flip gate vs FR12_NATIVE_SPINE. (4) live-SWE 13398 fr13_garble_watch
+same-boot A/B. (5) speed derived_tps_gpu ON vs OFF ~0.
+KEY RISK (#3): the L0->L63 GROWTH is dominated by the DIFFUSE GDN recurrent SCAN state-feed (reference_gdn_verify_sequential_dispatch),
+which the conv fix does NOT touch. If perfect conv alignment does NOT collapse the flips -> route to tree-reshape,
+NOT another per-op patch. So conv-replica is NECESSARY-maybe-not-SUFFICIENT. Design detail: FR13_CONV_FIX_DESIGN.md.
