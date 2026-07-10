@@ -82,6 +82,65 @@ import numpy as np
 
 
 # ---------------------------------------------------------------------------
+# MEASUREMENT-ONLY commit trace (FR13 garble mechanism binding, 2026-07-10).
+# Gated on LUMO_TREE_SAMPLER_DEBUG_LOG (the ONE diagnostic flag proven to reach
+# the forward EngineCore worker). When the flag is UNSET this is a no-op and the
+# committer is byte-identical to HEAD. It logs, at the EXACT commit node, the
+# tree-verify prob the committer actually committed each token at -- so a
+# committed near-neighbor misspell's accept-time p_target can be read WITHOUT the
+# gather->commit alignment trap, then joined to the no-spec localizer. Writes to a
+# `.commit` sibling of the debug log so it never interleaves with tree_logit_gather.
+# ---------------------------------------------------------------------------
+_FR13_COMMIT_TRACE_FH = None
+_FR13_COMMIT_TRACE_TRIED = False
+
+
+def _fr13_commit_trace_fh():
+    global _FR13_COMMIT_TRACE_FH, _FR13_COMMIT_TRACE_TRIED
+    if _FR13_COMMIT_TRACE_TRIED:
+        return _FR13_COMMIT_TRACE_FH
+    _FR13_COMMIT_TRACE_TRIED = True
+    path = os.environ.get("LUMO_TREE_SAMPLER_DEBUG_LOG")
+    if not path:
+        return None
+    try:
+        _FR13_COMMIT_TRACE_FH = open(path + ".commit", "a", buffering=1)
+    except Exception:
+        _FR13_COMMIT_TRACE_FH = None
+    return _FR13_COMMIT_TRACE_FH
+
+
+def _fr13_commit_trace_emit(fh, *, req, node, token_id, accepted, p_row,
+                            child_drafts):
+    """Emit one commit-decision record. EAGER/diagnostic only (syncs .item())."""
+    import json as _j
+    try:
+        p_norm = p_row / p_row.sum()
+        cd = [int(t) for t in child_drafts]
+        child_probs = [float(p_norm[t].item()) for t in cd]
+        committed_prob = float(p_norm[int(token_id)].item())
+        amax = int(torch.argmax(p_norm).item())
+        rec = {
+            "event": "commit_trace",
+            "req": int(req),
+            "node": int(node),
+            "committed_token": int(token_id),
+            "committed_prob": committed_prob,          # tree-verify p the committer USED for what it emitted
+            "committed_is_argmax": bool(int(token_id) == amax),
+            "argmax_token": amax,
+            "argmax_prob": float(p_norm[amax].item()),
+            "accepted": bool(accepted),                # True=accept path, False=residual resample
+            "overlap_mass": float(sum(child_probs)),
+            "child_drafts": cd,
+            "child_probs": child_probs,
+            "argmax_drafted": bool(amax in cd),
+        }
+        fh.write(_j.dumps(rec) + chr(10))
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
 # HOST REFERENCE per-node rule (the distribution ground truth).
 # Transcribed verbatim from sample_deterministic_multidraft_rejection_step
 # (fr10_tree_rejection_sampler.py :170-218) -- the draft_probs=None / MTP path
@@ -390,6 +449,12 @@ def fr13_device_multidraft_commit(
                 p_row, child_draft_tensor, generator=dev_gen,
             )
             selected_child = int(children[int(source_index)])
+            _ct_fh = _fr13_commit_trace_fh()
+            if _ct_fh is not None:
+                _fr13_commit_trace_emit(
+                    _ct_fh, req=req_i, node=selected_child, token_id=token_id,
+                    accepted=accepted, p_row=p_row, child_drafts=child_drafts,
+                )
             row.append(int(token_id))
             if not accepted:
                 break
