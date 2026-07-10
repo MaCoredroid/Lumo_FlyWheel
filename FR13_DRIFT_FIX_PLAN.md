@@ -213,3 +213,24 @@ Localizer classifies each garble occurrence -> (a) wrong-accept near-neighbor, (
   does it re-emit from_geodentic / geodeode? If deterministic -> cheap reproducer (capture once, replay cheap).
 - LOCALIZER (same boot): at the garble token, teacher-force (max_tokens=1, top_logprobs=20, reset_prefix_cache) the
   prefix -> the no-spec prefill dist (avoids the -12.422 placeholder); compare to what the tree committed -> classify.
+
+## LOCALIZER VERDICT (2026-07-10, VERIFIED) — misspell is a MIX; damaging class IS a spec wrong-accept
+scripts/fr13_garble_localizer.py (measurement-only, teacher-force /v1/completions max_tokens=1 top_logprobs=20
+temp=1.0 on exact return_token_ids prefixes, 0 placeholder hits, determinism 6/6, within-boot). Reproducer = G1
+(this boot 40% garble = 75 garbles/180 gens). Verdict over 75:
+- WRONG_ACCEPT 39 (52%): TRUNCATION/dropped-char (applied_entry_index->applied_entry_idx 21/21; input_wcs_header->
+  input_ws_header; world_coordinate_offset_values->trunc). The no-spec model gives the CORRECT spelling ~0.9999 and
+  the committed garble ~1e-6 (BELOW top-20), yet the tree committed it. = GENUINE spec-decode wrong-accept (proven).
+- MODEL_TAIL 31 (41%): PLURAL/camelCase (expected_row_count->expected_rows_count; camelCase). The model itself is
+  ~50/50 (p 0.37 each) -> would garble at temp 0.6 WITHOUT spec-decode. NOT spec-specific. (Still NameErrors, but
+  a spec fix won't touch it.)
+- OTHER 5: genuinely ambiguous (trailing-s).
+CONCLUSION: the wrong-accept hypothesis HOLDS for the truncation class (the NameError-causing one). Fix locus =
+the tree spec-decode COMMIT/ACCEPT path for that class. OPEN NEXT: WHY does the tree accept a token the model gives
+~1e-6? Two candidates: (a) tree-verify forward DRIFT-inflates the garble's target prob (but conv bit-exact + amp dead
++ no compute-only fix found), OR (b) the tree COMMIT path is LENIENT (greedy-argmax / LCP / top-k membership) rather
+than proper rejection sampling with the TRUE target. Determine via: read the tree commit code (_patch_rejection_sampler_
+tree_lcp ~8008, _patch_rejection_sampler_gpu_committer ~18781) + measure the tree-verify accept-time target prob for
+a garble with CORRECT node alignment (the final nail wa_capture missed). NOTE memory: sampler kernel proven
+distribution-equivalent (offline parity 22/22) — so if commit uses THAT sampler with the true target it'd reject ->
+leans toward drift OR a DIFFERENT commit path than the tested sampler.
