@@ -82,3 +82,18 @@ lead") compares our replay GDN recurrent state vs the native sequential kernel o
 chain (directly tests the scan-state-feed hypothesis) — also eager-only, may also be fragile.
 RECOMMENDATION: get a user call on the speed tradeoff (A preserves speed but is deep + tooling-blocked;
 B is simpler but costs speed). All fix-validation is slow live-SWE (fast instruments compromised).
+
+## DECISION (user 2026-07-10) — PATH A, with a hard no-HBM-tax rule
+Direction LOCKED:
+1. FIX THE TOOLING — repair the FR13_GDN_SUBOP_MAB device-assert (and/or find a cheaper
+   localization) so we can actually localize the surviving M-dependent sub-op.
+2. LOCALIZE cheaply — which ops need M-invariance (conv1d_update vs fused_sigmoid_gating scan
+   vs anything else surviving the pad-block), with a MEASURED SPEED COST for each candidate fix.
+3. HARD RULE — NO HBM TAX. Any M-invariance fix must be COMPUTE-ONLY (no extra HBM traffic /
+   no added copies), because GB10 is memory-bandwidth-bound (273 GB/s) — compute is ~free,
+   bandwidth is the ceiling. The pad-block is the template (pads a GEMM = more compute, zero
+   extra HBM). Reject any fix that adds HBM copies/reads even if numerically correct.
+4. APPLY — build the compute-only M-invariance fix for each localized op (default-OFF flag),
+   measure speed, verify the garble drops (teacher-forced oracle-flip gate + live-SWE 13398).
+This is the sanctioned speed-preserving path (spine M-invariance), NOT tree-reshape (speed cost)
+and NOT amplification levers (superseded).
