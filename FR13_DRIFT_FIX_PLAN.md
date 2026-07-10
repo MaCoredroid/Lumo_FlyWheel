@@ -234,3 +234,18 @@ tree_lcp ~8008, _patch_rejection_sampler_gpu_committer ~18781) + measure the tre
 a garble with CORRECT node alignment (the final nail wa_capture missed). NOTE memory: sampler kernel proven
 distribution-equivalent (offline parity 22/22) — so if commit uses THAT sampler with the true target it'd reject ->
 leans toward drift OR a DIFFERENT commit path than the tested sampler.
+
+## COMMIT PATH = GREEDY-ARGMAX (2026-07-10) -> reframes the wrong-accept away from 1-ULP drift
+The tree committer (_lumo_tree_path_lcp_max_greedy_sample, patch ~18784; FR13_COMMIT_ARGMAX_GATE @8050-8073)
+commits the ARGMAX of the tree-verify logits ROW for each committed position (greedy, LCP path). So a wrong-accept
+(model true dist: correct p=0.9999 vs committed garble p=1e-6, a 12-NAT gap) means the tree-verify logits ROW's
+argmax literally IS the garble token. A 1-ULP diffuse drift CANNOT flip a 12-nat-gap argmax -> the "1-ULP drift"
+framing is WRONG for the wrong-accept class. Two candidates, distinguished by FR13_COMMIT_ARGMAX_GATE:
+  ch1 = COMMITTER ROW-MAPPING BUG: the greedy committer indexes the WRONG tree-node's logits row -> commits that
+        node's token (a near-neighbor drafted at a different position). LEGIT FIX. Fits: native clean (no tree),
+        conv bit-exact (numerics fine), 12-nat gap (whole different row).
+  ch2 = verify-forward argmax at THAT row is grossly wrong (not 1-ULP).
+DECISIVE NEXT EXPERIMENT: boot cat8 EAGER + FR13_COMMIT_ARGMAX_GATE=1, run G1 reproducer, capture the gate jsonl
+(/logs/fr13_commit_argmax_gate.jsonl): for the wrong-accept garbles, is served_token != argmax-of-indexed-row
+(ch1 row-mapping mismatch) OR is the verify-forward argmax itself the garble (ch2)? ch1 mismatch -> row-mapping fix.
+This is the localizer->fix bridge. Eager-only gate; within-boot; reproducer = G1 (fr13_garble_gate).
