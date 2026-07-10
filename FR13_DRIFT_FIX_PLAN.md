@@ -292,3 +292,15 @@ committer (its own _canonical_accept_prob dump / LUMO_TREE_SAMPLER_DEBUG_LOG, wi
 pid176) -> p_target INFLATED = forward drift (back to the hard problem); p_target LOW but committed = a residual-mix
 accept-logic bug (fixable in the committer). This is the wa_capture goal done RIGHT (in-process accept-prob, correct
 node alignment, not surfaced logprobs). Do NOT re-run the greedy FORCE_SPINE test for production.
+
+## CORRECTED DIAGNOSTIC (2026-07-10): the sampled committer already records accept-time p_target
+_lumo_tree_canonical_multidraft_sample builds step_trace_rows (@10680) with, per accept step:
+target_prob_at_draft_token_ids (= tree-verify p_target for each drafted token @10672), canonical_accept_prob
+(=min(1,p_target/q_mix) @10655), selected_token_id, accepted. Gated by LUMO_TREE_SAMPLER_DEBUG_LOG (dump write).
+This IS the accept-time p_target capture done RIGHT (in-process, correct node alignment, the SAMPLED committer,
+NOT surfaced logprobs). NEXT EXPERIMENT: boot cat8 (temp 0.6) + LUMO_TREE_SAMPLER_DEBUG_LOG=<path> (check if LUMO_
+reaches the worker via docker -e like LUMO_FB did, else sidecar) + run the reproducer -> for a committed garble
+token (e.g. applied_entry_idx's _idx), read its target_prob_at_draft_token: INFLATED (>>1e-6) => forward drift
+(the tree-verify gives the garble high prob -> back to the hard drift problem, but now with a clean measurement);
+~1e-6 but accepted => multidraft ACCEPT-LOGIC bug (q_mix mis-weight / residual resample committing a low-p token)
+= a FIXABLE committer bug. Likely eager-only (dump syncs/.item()s). This is the fork that ends the investigation.
