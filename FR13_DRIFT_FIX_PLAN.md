@@ -304,3 +304,22 @@ token (e.g. applied_entry_idx's _idx), read its target_prob_at_draft_token: INFL
 (the tree-verify gives the garble high prob -> back to the hard drift problem, but now with a clean measurement);
 ~1e-6 but accepted => multidraft ACCEPT-LOGIC bug (q_mix mis-weight / residual resample committing a low-p token)
 = a FIXABLE committer bug. Likely eager-only (dump syncs/.item()s). This is the fork that ends the investigation.
+
+## *** DECIDING RESULT (2026-07-10): NOT forward drift — it's a multidraft ACCEPT-LOGIC bug ***
+LUMO_TREE_SAMPLER_DEBUG_LOG works (reaches the forward worker unlike FR13_ flags; all_greedy=False confirms the
+sampled path). tree_logit_gather rows carry target_raw_prob_draft = the tree-verify's prob for each drafted token.
+MEASURED on the EXACT garble: _idx -> _index (applied_entry_idx): tree-verify target_raw_prob_draft = 1.99e-06 (x3,
+identical). no-spec model (localizer teacher-force) = ~1e-6. => the tree-verify forward is NOT drifted; it correctly
+scores the garble ~2e-6 (== no-spec). Aggregate: 1740 near-neighbor garble drafts, median tree-verify prob 0.001,
+truncations ~1e-10 ('ied'->'plied' 4e-10); the only HIGH(>0.1) are genuinely-ambiguous ('_list'->'list' 0.5 =
+model-tail). So the WRONG-ACCEPT is the multidraft committer (fr13_device_multidraft_commit / _lumo_tree_canonical_
+multidraft_sample, accept~min(1,p_target/q_mix)+residual) COMMITTING a draft it itself scores ~2e-6 at ~13% instead
+of 2e-6 = ACCEPT-LOGIC / q_mix / residual bug, spec-decode-specific, in OUR committer. NOT numeric drift.
+
+CONSEQUENCE: the ENTIRE drift/M-invariance chase (conv bit-exact, amplification superseded, pad-block) was the WRONG
+problem for this garble. Fix locus = the multidraft accept computation @10419-10684 + fr13_device_multidraft_commit
+@10566 + the q_mix computation. TENSION w/ offline parity gate (22/22 device==host): either the host reference ALSO
+over-commits (algorithm issue) OR the q inputs (q_mix/q_draft for the near-neighbor node) are mis-computed
+(min(1, 2e-6/tiny_q)=1 -> always accept, residual not correcting). NEXT: read the accept + q_mix -> find why a
+2e-6-p_target draft commits at ~13%. Fix = correct the accept/q_mix (compute-only). NOT a reward-hack: committing a
+token at ~6500x its true (and tree-verify-agreed) prob is a genuine correctness bug. Data: output/fr13_dbg/dbg_snapshot.jsonl.
