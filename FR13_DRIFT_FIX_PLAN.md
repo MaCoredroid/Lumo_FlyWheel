@@ -249,3 +249,18 @@ DECISIVE NEXT EXPERIMENT: boot cat8 EAGER + FR13_COMMIT_ARGMAX_GATE=1, run G1 re
 (/logs/fr13_commit_argmax_gate.jsonl): for the wrong-accept garbles, is served_token != argmax-of-indexed-row
 (ch1 row-mapping mismatch) OR is the verify-forward argmax itself the garble (ch2)? ch1 mismatch -> row-mapping fix.
 This is the localizer->fix bridge. Eager-only gate; within-boot; reproducer = G1 (fr13_garble_gate).
+
+## MECHANISM LOCALIZED (2026-07-10): wrong-accept = LCP COMMIT-PATH, a leaf winning the tie-break
+The greedy committer _lumo_tree_path_lcp_max_greedy_sample (@8851; scoring @9206-9272) commits the MAX-LCP path:
+per root-to-leaf path, LCP = longest prefix where drafts[node]==parent_targets[node] (draft matches per-node
+target argmax); tie-break = plain `lcp > best_lcp` (earliest leaf). Committed row = drafts[best_path[:lcp]] + a
+bonus target token at the boundary. So the wrong-accept _idx is committed because a LEAF/SIBLING path's LCP WON
+(pulling in its garbled draft) — the KNOWN "lcp boundary shifts under co-residency / a leaf wins on sub-1-nat
+margin" issue (code comments @8080-8086, partial "deterministic rank-2" mitigation, incomplete). = spec-decode
+COMMIT-PATH bug, NOT numeric drift. Existing lever FR13_FORCE_SPINE_COMMIT (@9258) commits the spine path ONLY.
+DECISIVE TEST: run the reproducer with FR13_FORCE_SPINE_COMMIT=1 -> garble VANISHES => confirmed alt-path-winning
+(fix = spine-preferring / margin-gated LCP tie-break, likely compute-only); garble PERSISTS => the spine node's
+own target argmax is drifted (forward). CAVEAT: force-spine may cut accept rate (rejects valid alt accepts) ->
+it's the diagnostic; the ship fix = a corrected tie-break (prefer spine on ties, require a margin for alt paths).
+PLUMBING: FR13_* diagnostic flags (gate, force_spine) don't reach the forward worker pid176 via env-copy (2 vacuous
+gate boots); need the SIDECAR mechanism (mirror _fr13_gdn_subop_mab_enabled @1776-1794) for whichever flag we test.
