@@ -2540,16 +2540,12 @@ def _fr13_gdn_subop_mab(
                     # excluded; dtype uniformity is the no-op-cast license
                     # for the fused tap mul.
                     _fr13_tree_conv_fused_check()
-                    # FR13 garble fp32-SEED fix (2026-07-10): when the conv_state bank is fp32
-                    # (MAMBA_CACHE_DTYPE=float32), upcast the bf16 tap operands to fp32 so the fused
-                    # tap-MAC COMPUTES + STORES the recurrent conv bank in fp32 -> the tree-vs-native
-                    # conv_state difference (the ~1 bf16-ULP drift seed, FR13_GARBLE_DRIFT_BINDING_PROVEN.md)
-                    # shrinks ~2^16 to fp32-ULP. mixed_qkv_spec is reused post-conv as the scan input
-                    # (the SSM state is already fp32 via MAMBA_SSM_CACHE_DTYPE, so fp32 q/k/v is accepted).
-                    # DEFAULT (bf16 conv_state) => this branch is skipped => tap-MAC bf16 => byte-identical.
-                    if conv_state.dtype == torch.float32 and mixed_qkv_spec.dtype != torch.float32:
-                        mixed_qkv_spec = mixed_qkv_spec.to(torch.float32)
-                        conv_weights = conv_weights.to(torch.float32)
+                    # NOTE (FR13 garble fp32-seed fix, PARKED 2026-07-10): a global upcast of
+                    # mixed_qkv_spec to fp32 here CASCADES — mixed_qkv_spec is the post-conv scan
+                    # input AND the FR13_REPLAY_ROUTE staging-ring source (bf16 byte-copy contract).
+                    # A correct fp32-conv needs conv-ONLY fp32 (fp32 tap compute + a separate fp32
+                    # conv-output for the bank write + fp32 bank + bf16 downcast for scan/ring), not a
+                    # blanket upcast. See FR13_GARBLE_DRIFT_BINDING_PROVEN.md. Reverted to strict assert.
                     if not (
                         mixed_qkv_spec.dtype
                         == conv_state.dtype
