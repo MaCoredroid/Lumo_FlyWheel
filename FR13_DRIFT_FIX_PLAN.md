@@ -184,3 +184,15 @@ CONSEQUENCE for the no-HBM rule: the cheap compute-only conv fix is EXHAUSTED. T
 BONUS (free, unrelated to garble): the harness's V2 = a single fused Triton conv kernel (MAC+silu) is
 bit-exact and collapses the current pytorch-mul+cast+3adds+separate-silu into ONE kernel = a device-node/
 speed win, no correctness justification needed. Un-wired; available if wanted.
+
+## NEW FRONT (user 2026-07-10): REPRODUCER first, then LOCALIZER
+Foundation check (user challenge): the "misspell == 1-ULP spine flip" link is UNPROVEN, and the observed
+13398 garble is a MIX: from_geodentic ×9 (near-neighbor), from_geodec ×2 (trunc), AND from_geode+hundreds-of-"ode"
+(DEGENERATE REPETITION loop @ trace line 835 tool_use — verified real, not artifact). The repetition does NOT
+fit a 1-ULP flip. No stable cheap reproducer exists (geodetic=0-elicit, G1=boot-noisy, wa_capture=placeholder,
+live-SWE=90min stochastic). PLAN: (1) build a GOOD reproducer = deterministic capture-REPLAY: reconstruct the
+exact garbling context (messages from the qwen_trace, OR pair-dump prompt_token_ids+seed) and replay on cat8-tree
+vs no-spec, same boot/seed -> stable, cheap, faithful reproduction + differential. (2) GOOD localizer = at the
+garbling token, in-process compare tree-verify vs no-spec commit/logits -> CLASSIFY each garble: (a) spec wrong-accept
+(tree commits what no-spec rejects), (b) numeric argmax flip, (c) drafter repetition rubber-stamped. Only THEN fix.
+Pair-dump infra exists (proxy_pair_dumps/pair_*.json in other runs; NOT saved for cat8_nofix_g5).
