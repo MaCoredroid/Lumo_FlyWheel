@@ -196,3 +196,20 @@ vs no-spec, same boot/seed -> stable, cheap, faithful reproduction + differentia
 garbling token, in-process compare tree-verify vs no-spec commit/logits -> CLASSIFY each garble: (a) spec wrong-accept
 (tree commits what no-spec rejects), (b) numeric argmax flip, (c) drafter repetition rubber-stamped. Only THEN fix.
 Pair-dump infra exists (proxy_pair_dumps/pair_*.json in other runs; NOT saved for cat8_nofix_g5).
+
+## JUDGMENT (2026-07-10): MISSPELL and RUNAWAY are TWO issues (related, distinct mechanisms)
+- MISSPELL (from_geodentic ~13%): single-token near-neighbor wrong-accept = spec-decode drafter proposes
+  near-neighbor + tree-verify rubber-stamps (the 1-ULP-drift candidate; native clean -> spec-specific). PRIORITY.
+- RUNAWAY (from_geode+hundreds "ode", 1x): degenerate repetition attractor = drafter proposes a repeat + tree
+  accepts (self-high-prob once started); a decoding pathology AMPLIFIED by spec, NOT a single argmax flip.
+  Track SEPARATELY; likely a different fix (repetition in drafter/verify-accept), not M-invariance.
+Localizer classifies each garble occurrence -> (a) wrong-accept near-neighbor, (b) numeric drift-flip, (c) drafter-repetition.
+
+## REPRODUCER design (within-boot; garble is boot-autotune-dependent):
+- Pair-dumps capture the FULL request (instructions=system + input=conversation, Responses-API) but NO seed/token_ids;
+  cat8_nofix_g5 didn't save them. So: fresh cat8 boot + run 13398 (or shorter) with pair-dumps ON + live garble-watch
+  on the streaming trace -> capture a garbling turn's request WITHIN the boot.
+- CHEAP replay: extract the PREFIX ending right before "from_geode", generate ~10 tokens on cat8 (fixed seed) ->
+  does it re-emit from_geodentic / geodeode? If deterministic -> cheap reproducer (capture once, replay cheap).
+- LOCALIZER (same boot): at the garble token, teacher-force (max_tokens=1, top_logprobs=20, reset_prefix_cache) the
+  prefix -> the no-spec prefill dist (avoids the -12.422 placeholder); compare to what the tree committed -> classify.
