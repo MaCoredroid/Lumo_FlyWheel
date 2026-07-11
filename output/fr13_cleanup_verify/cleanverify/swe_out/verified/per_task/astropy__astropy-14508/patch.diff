@@ -1,0 +1,36 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced8..30395c3a9 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1299,6 +1299,31 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
++    # Try using repr() first, which gives the shortest representation that
++    # round-trips uniquely. This avoids unnecessarily long strings like
++    # "0.009124999999999999" for values that can be represented as "0.009125".
++    value_str_repr = repr(value)
++
++    # Normalize: ensure there's a decimal point or an exponent marker.
++    if "." not in value_str_repr and "e" not in value_str_repr.lower():
++        value_str_repr += ".0"
++
++    # Normalize exponent format: lowercase 'e' -> 'E', normalize exponent padding.
++    if "e" in value_str_repr.lower():
++        upper = value_str_repr.upper()
++        significand, exponent = upper.split("E")
++        if exponent[0] in ("+", "-"):
++            sign = exponent[0]
++            exponent = exponent[1:]
++        else:
++            sign = ""
++        value_str_repr = f"{significand}E{sign}{int(exponent):02d}"
++
++    # If the repr-based string fits within 20 characters, use it.
++    if len(value_str_repr) <= 20:
++        return value_str_repr
++
++    # Fall back to .16G formatting for values that don't fit with repr.
+     value_str = f"{value:.16G}"
+     if "." not in value_str and "E" not in value_str:
+         value_str += ".0"
