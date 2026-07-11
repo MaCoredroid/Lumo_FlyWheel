@@ -20,7 +20,7 @@ boot_and_gate() {  # $1=arm  $2..=extra "K=V" env
   echo "--- [$ARM] boot cat8 tree  env: $* @ $(date -u +%H:%M:%S) ---"
   docker ps -aq --filter "name=fr13" | xargs -r docker rm -f >/dev/null 2>&1 || true
   PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" >/dev/null 2>&1 || true
-  CONTAINER=$C PORT=$PORT GPU_UTIL=0.8 MAX_NUM_SEQS=8 \
+  env CONTAINER=$C PORT=$PORT GPU_UTIL=0.8 MAX_NUM_SEQS=8 \
     ATTENTION_BACKEND=TREE_ATTN \
     SPEC_CONFIG='{"method":"qwen3_5_mtp","num_speculative_tokens":8,"speculative_token_tree":"'"$CAT8"'"}' \
     GPU_GUARD_FLOOR_MIB=3000 "$@" \
@@ -41,7 +41,7 @@ boot_and_gate() {  # $1=arm  $2..=extra "K=V" env
   docker rm -f "$C" >/dev/null 2>&1 || true; wait $LPID 2>/dev/null || true
 }
 
-boot_and_gate default
+# default already measured this session at 9.62% (same-session baseline); re-run just the 2 flag arms
 boot_and_gate conv_native  FR12_TREE_CONV_NATIVE_PRIOR_READ=1
 boot_and_gate geom_native  FR13_TREE_GDN_GEOM_OVERRIDE=BV=32,num_warps=4,num_stages=3
 
