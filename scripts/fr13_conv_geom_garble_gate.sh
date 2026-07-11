@@ -31,7 +31,7 @@ boot_and_gate() {  # $1=arm  $2..=extra "K=V" env
     [[ -n "$(docker ps -aq -f name=$C -f status=exited)" ]] && { echo "[$ARM] exited"; break; }
     sleep 10
   done
-  [ "$OK" = 1 ] || { echo "FAIL [$ARM] not healthy"; tail -25 "$RUN/boot_$ARM.log"; docker rm -f "$C" >/dev/null 2>&1; return 1; }
+  [ "$OK" = 1 ] || { echo "FAIL [$ARM] not healthy"; docker logs --tail 60 "$C" > "$RUN/dockerlogs_$ARM.log" 2>&1; echo "  --- crash tail ---"; grep -iE 'error|assert|raise|Traceback|Exception|CUDA' "$RUN/dockerlogs_$ARM.log" 2>/dev/null | tail -12 | sed 's/^/    /'; docker rm -f "$C" >/dev/null 2>&1; return 1; }
   # fail-loud: confirm the intended flag actually engaged in the worker
   echo "  [$ARM] engaged: CONV_NATIVE=$(docker exec $C printenv FR12_TREE_CONV_NATIVE_PRIOR_READ 2>/dev/null||echo -) GEOM=$(docker exec $C printenv FR13_TREE_GDN_GEOM_OVERRIDE 2>/dev/null||echo -)"
   local MODEL=$(curl -fsS -m5 "http://127.0.0.1:$PORT/v1/models" | .venv/bin/python -c "import json,sys;print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
