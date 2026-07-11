@@ -110,55 +110,13 @@ def _fr13_commit_trace_fh():
     return _FR13_COMMIT_TRACE_FH
 
 
-# ---------------------------------------------------------------------------
-# FR13 garble COMMITTER DRIFT-BAND BIAS (2026-07-10). Default OFF (byte-identical).
-# The tree-verify FORWARD drift inflates a near-neighbor from ~1e-6 (masked) into
-# the top-p nucleus at committed_prob ~0.06-0.15 while the CORRECT token stays the
-# argmax at ~0.9 (FR13_GARBLE_DRIFT_BINDING_PROVEN.md). At a CONFIDENT node (argmax
-# >= tau_high) a committed low-band sibling (p < tau_low) is ~all drift (localizer
-# 13/16 wrong-accept). So at confident nodes tighten the target: zero the low-band
-# tail (keep the argmax), renormalize, then run the STANDARD SpecInfer committer on
-# the tightened target. Genuinely-ambiguous nodes (argmax < tau_high) are untouched.
-# NOT bit-exact (a small calibrated distribution shift, more faithful to the true
-# model) -- the alternative lossless path is the fp32-conv forward fix.
-# Flags: LUMO_TREE_COMMIT_DRIFT_BIAS (on when set & != "0"),
-#        LUMO_TREE_COMMIT_DRIFT_TAU_HIGH (default 0.85),
-#        LUMO_TREE_COMMIT_DRIFT_TAU_LOW  (default 0.20).
-# ---------------------------------------------------------------------------
-def _fr13_drift_bias_params():
-    on = os.environ.get("LUMO_TREE_COMMIT_DRIFT_BIAS", "") not in ("", "0")
-    th = float(os.environ.get("LUMO_TREE_COMMIT_DRIFT_TAU_HIGH", "0.85"))
-    tl = float(os.environ.get("LUMO_TREE_COMMIT_DRIFT_TAU_LOW", "0.20"))
-    return on, th, tl
-
-
-def _fr13_tighten_np(p, tau_high, tau_low):
-    """numpy: zero the low-band tail at confident nodes, renormalize. Host reference."""
-    amax = int(np.argmax(p))
-    if float(p[amax]) < tau_high:
-        return p
-    q = p.copy()
-    lowmask = q < tau_low
-    lowmask[amax] = False
-    q[lowmask] = 0.0
-    s = float(q.sum())
-    return (q / s) if s > 0.0 else p
-
-
-def _fr13_tighten_torch(p, tau_high, tau_low):
-    """torch (on-device): same tightening. Device committer. EAGER (.item branch)."""
-    if torch is None:
-        return p
-    amax = int(torch.argmax(p).item())
-    if float(p[amax].item()) < tau_high:
-        return p
-    lowmask = p < tau_low
-    lowmask[amax] = False
-    q = torch.where(lowmask, torch.zeros_like(p), p)
-    s = q.sum()
-    return (q / s) if float(s.item()) > 0.0 else p
-
-
+# NOTE (2026-07-10): a committer DRIFT-BAND BIAS was built + live-tested here and
+# ABANDONED as a class (user decision). The committer only ever sees the DRIFTED
+# target, so it cannot distinguish a drift-inflated garble branch (true ~1e-6) from
+# a genuine alternative (true ~0.2); any spine>branch bias is either distribution-
+# breaking or ineffective (live A/B: the drift depresses the correct argmax to ~0.80
+# so garbles slip the threshold; blunt; boot-fragile). Deleted. The commit-trace
+# instrument below (measurement-only) is kept. See FR13_GARBLE_FIX_DECISION.md.
 def _fr13_commit_trace_emit(fh, *, req, node, token_id, accepted, p_row,
                             child_drafts):
     """Emit one commit-decision record. EAGER/diagnostic only (syncs .item())."""
@@ -222,9 +180,6 @@ def host_multidraft_accept_probs(
     """
     p = np.asarray(target_probs_row, dtype=np.float64)
     p = p / p.sum()  # normalize() in the reference
-    _fr13_db_on, _fr13_db_th, _fr13_db_tl = _fr13_drift_bias_params()
-    if _fr13_db_on:
-        p = _fr13_tighten_np(p, _fr13_db_th, _fr13_db_tl)
     tokens = np.asarray(child_draft_tokens, dtype=np.int64)
     overlaps = p[tokens].astype(np.float64, copy=True)
     overlap_mass = float(overlaps.sum())
@@ -284,9 +239,6 @@ def host_multidraft_step(
     tokens = np.asarray(child_draft_tokens, dtype=np.int64)
     p = np.asarray(target_probs_row, dtype=np.float64)
     p = p / p.sum()
-    _fr13_db_on, _fr13_db_th, _fr13_db_tl = _fr13_drift_bias_params()
-    if _fr13_db_on:
-        p = _fr13_tighten_np(p, _fr13_db_th, _fr13_db_tl)
     if d["all_reject"]:
         token = int(rng.choice(p.shape[0], p=p))
         return token, 0, False
@@ -344,9 +296,6 @@ def device_multidraft_node_step(
     # normalize (reference normalize()); softmax already sums ~1 but match the
     # reference's explicit renorm for the residual mass arithmetic.
     p = p / p.sum()
-    _fr13_db_on, _fr13_db_th, _fr13_db_tl = _fr13_drift_bias_params()
-    if _fr13_db_on:
-        p = _fr13_tighten_torch(p, _fr13_db_th, _fr13_db_tl)
     tokens = child_draft_tokens.to(torch.long)
     overlaps = p[tokens].to(torch.float64)
     overlap_mass = overlaps.sum()

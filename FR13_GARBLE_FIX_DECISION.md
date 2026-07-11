@@ -38,6 +38,21 @@ proving the mechanism and testing both candidate fixes head-to-head.
   **blunt** (garbles overlap genuine commits in (argmax,committed_prob) space — no clean
   threshold). Kept default-OFF as a tunable diagnostic; NOT recommended (does not work).
 
+## COMMITTER-SIDE MITIGATION ABANDONED AS A CLASS (user decision 2026-07-11)
+
+Not just the one bias — the ENTIRE committer-side direction is abandoned, on a first-principles
+wall: the committer only ever sees the DRIFTED target. It commits each token at exactly its
+target prob (SpecInfer canonical multi-draft, symmetric across a node's children; no spine-first
+priority; proven, offline gate 22/22). The garble is a two-candidate node (correct spine token +
+near-neighbor branch) where the committer commits the branch at the drifted target's inflated prob.
+Any committer fix must either (a) stay distribution-correct → commits the same drifted prob → no
+help, or (b) bias spine>branch → not lossless AND ineffective (the drift depresses the correct
+argmax to ~0.80 so garbles slip any threshold; blunt; boot-fragile). The committer cannot tell a
+drift-inflated garble (true ~1e-6) from a genuine alternative (true ~0.2) without the no-spec
+target, which spec-decode does not compute. => no committer-side lever can be both clean and
+effective. The drift-band bias code was DELETED (commit-trace instrument kept); the committer is
+distribution-lossless again.
+
 ## Decision: ACCEPT within-floor; reshape is the on-demand escape hatch
 
 Both cheap/targeted fixes failed on evidence; the forward-drift fix is exhausted (M-invariance
