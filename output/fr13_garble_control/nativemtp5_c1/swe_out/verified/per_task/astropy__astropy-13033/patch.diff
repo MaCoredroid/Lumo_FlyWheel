@@ -1,0 +1,27 @@
+diff --git a/astropy/timeseries/core.py b/astropy/timeseries/core.py
+index c279f35f8..434e064d7 100644
+--- a/astropy/timeseries/core.py
++++ b/astropy/timeseries/core.py
+@@ -74,6 +74,22 @@ class BaseTimeSeries(QTable):
+                                  "as the first column{} but time series has no columns"
+                                  .format(self.__class__.__name__, required_columns[0], plural))
+ 
++            elif not self._required_columns_relax and len(self.colnames) < len(required_columns):
++
++                if self.colnames == required_columns[:len(self.colnames)]:
++                    # Columns are in correct order but some are missing
++                    missing = [col for col in required_columns if col not in self.colnames]
++                    missing_str = "', '".join(missing)
++                    raise ValueError(
++                        "{} object is invalid - missing required column{}: '{}'"
++                        .format(self.__class__.__name__,
++                                's' if len(missing) > 1 else '',
++                                missing_str))
++
++                raise ValueError("{} object is invalid - expected '{}' "
++                                 "as the first column{} but found '{}'"
++                                 .format(self.__class__.__name__, required_columns[0], plural, self.colnames[0]))
++
+             elif self.colnames[:len(required_columns)] != required_columns:
+ 
+                 raise ValueError("{} object is invalid - expected '{}' "
