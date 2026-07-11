@@ -31,7 +31,7 @@ run_arm() {
   docker ps -aq --filter "name=fr13-bigdenom-$ARM" | xargs -r docker rm -f >/dev/null 2>&1 || true
   PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" >/dev/null 2>&1 || true
   local EXTRA=""
-  if [ "$APC" = "1" ]; then EXTRA="FR13_APC_EXACT_SEED=$EXSEED MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32"; fi
+  if [ "$APC" = "1" ]; then EXTRA="MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32"; fi
   env FR13_ENABLE_APC=$APC FR13_APC_CONFIG_ONLY=0 FR13_LEAK_PROBE=1 \
       GPU_UTIL="$GUTIL" GPU_GUARD_FLOOR_MIB=3000 $EXTRA \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh "$ARM" "$KIND" "$SUBSET" > "$RUNROOT/${ARM}.log" 2>&1 </dev/null
