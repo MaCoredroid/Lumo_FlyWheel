@@ -277,7 +277,13 @@ def main() -> int:
 
     spine_parent = [-1, *range(len(spine_only_order) - 1)]
     spine_tree = Tree(tuple(spine_parent))
-    spine_n_pad = padded_nodes(len(spine_rows))
+    # FR13 CONFOUND FIX (2026-07-11): hold N_PAD at the FULL-tree value (padded_nodes(n_actual),
+    # =16 for cat9) instead of padded_nodes(len(spine_rows)) (=8). Otherwise the spine-only arm's
+    # SMALLER N_PAD varies the reduction-loop compile constant, confounding intra-request
+    # CO-RESIDENCY (the M carrier under test) with the already-known/already-pinned N_PAD-span
+    # codegen effect (FR13_NPAD_INVARIANT). At fixed N_PAD, spine_only_vs_original_full isolates
+    # pure branch co-residency: does node-0's realization change when branch nodes are present?
+    spine_n_pad = padded_nodes(n_actual)
     strict, visible = spine_tree.masks(device, spine_n_pad)
     spine_row_tensor = torch.tensor(spine_rows, dtype=torch.long)
     spine_out, spine_state = launch_tree_gdn_prepared(
