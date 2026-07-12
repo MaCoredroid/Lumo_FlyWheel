@@ -2718,6 +2718,9 @@ def _fr13_gdn_subop_mab(
                     ).detach().to(torch.float32).cpu().clone()
                 if _fr12_native_prior_read:
                     _fr10_prior_read_mode = "native_tail_pre_remap"
+                    if not globals().get("_FR12_NPR_ENGAGED_ANNOUNCED"):
+                        globals()["_FR12_NPR_ENGAGED_ANNOUNCED"] = True
+                        print("[FR12_NATIVE_PRIOR_READ ENGAGED] conv prior <- col-0 native (skips committed-path leaf snapshot)", flush=True)
                     _fr10_conv_read_cols = torch.zeros(
                         (int(attn_metadata.num_spec_decodes), 1),
                         dtype=torch.long,
