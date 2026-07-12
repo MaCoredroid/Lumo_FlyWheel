@@ -477,3 +477,18 @@ of call12 vs a CLEAN node0-at-pos190 (teacher-force, argmax '_row') => FIRST div
 layer => mamba (I mis-exonerated); a full_attn layer => attention KV; norm/mlp => elsewhere. Captured call11-15
 to output/fr13_garble_ladder/live/. NEXT: same-boot re-run with teacher-force FIRST (CLEAN node0=call0) + LIVE
 (garble), diff per-layer.
+
+## PER-LAYER LADDER RESULT (2026-07-12): first divergence at layer 0 (GDN) => REOPENS mamba col-0
+Same-boot node0 per-layer diff, CLEAN (call1 pos187 '_row') vs GARBLE (call21 pos191 '_rows'):
+ - input_hidden IDENTICAL (rel_l2=0.0000 cos=1.00000) => node0 input token matches, NO embedding/upstream
+   confound.
+ - FIRST divergence at LAYER 0 (linear_attention/GDN, rel_l2=0.5887 cos=0.857), stays high (0.5-1.4) all 64
+   layers. GDN layers have NO RoPE => a GDN-layer-0 divergence is NOT a position artifact => points at the
+   col-0 MAMBA state the GDN reads. This REOPENS the mamba col-0 (contradicts the COMMITTER_NATIVE exoneration
+   -- which only replaced the SSM col-0 WRITE; something in the mamba col-0 read by GDN layer 0 still differs).
+CAVEAT (must resolve): CLEAN at pos187 vs garble pos191 = 4-token offset (chat-template assistant markers). IF
+those 4 tokens are CONTENT the mamba processes, col-0 differs legitimately (confound). IF they're role-markers
+only, the mamba (content-only, no position) divergence = the corruption. rel_l2=0.5887 at L0 is LARGER than a
+4-token re-tokenization of the same text should cause, leaning toward real corruption -- but not conclusive.
+NEXT: confirm the CLEAN prefix tokens == the LIVE committed tokens (4-gap = markers vs content); if content
+matches => mamba col-0 CONFIRMED corrupt => re-examine what COMMITTER_NATIVE missed (conv col-0? the h0 read?).
