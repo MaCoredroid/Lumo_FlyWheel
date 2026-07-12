@@ -21,15 +21,20 @@ def post(ep, path, payload, timeout=300):
     return json.loads(urllib.request.urlopen(r, timeout=timeout).read())
 
 
+def _base(ep):
+    return ep.rstrip("/")[:-3] if ep.rstrip("/").endswith("/v1") else ep.rstrip("/")
+
+
 def tokenize_messages(ep, model, content):
-    # templated prompt ids (chat template + generation prompt), thinking OFF like the gate
+    # /tokenize lives at the SERVER ROOT (not /v1). templated prompt ids, thinking OFF like the gate.
+    base = _base(ep)
     for body in (
         {"model": model, "messages": [{"role": "user", "content": content}],
          "add_generation_prompt": True, "chat_template_kwargs": {"enable_thinking": False}},
         {"model": model, "messages": [{"role": "user", "content": content}], "add_generation_prompt": True},
     ):
         try:
-            d = post(ep, "/tokenize", body, 60)
+            d = post(base, "/tokenize", body, 60)
             toks = d.get("tokens", d.get("token_ids"))
             if toks:
                 return [int(t) for t in toks]
@@ -38,18 +43,23 @@ def tokenize_messages(ep, model, content):
     raise RuntimeError("tokenize messages failed")
 
 
-def gen(ep, model, prompt_ids, seed):
-    d = post(ep, "/v1/completions", {"model": model, "prompt": prompt_ids, "max_tokens": 700,
-                                     "temperature": 0.6, "seed": seed, "return_token_ids": True,
-                                     "logprobs": 1})
-    ch = d["choices"][0]
-    text = ch.get("text", "")
-    tids = ch.get("token_ids") or (ch.get("logprobs", {}) or {}).get("token_ids")
-    return text, ([int(t) for t in tids] if tids else None)
+def gen(ep, model, content, seed):
+    # PROVEN path: chat/completions, thinking OFF, NO logprobs (the list-prompt+logprobs completions
+    # path OOM-killed the server). Returns generated text; token ids come from re-tokenizing the text.
+    d = post(_base(ep), "/v1/chat/completions", {"model": model,
+             "messages": [{"role": "user", "content": content}], "max_tokens": 700,
+             "temperature": 0.6, "seed": seed, "chat_template_kwargs": {"enable_thinking": False}})
+    return d["choices"][0]["message"]["content"]
+
+
+def tokenize_text(ep, model, text):
+    d = post(_base(ep), "/tokenize", {"model": model, "prompt": text}, 60)
+    toks = d.get("tokens", d.get("token_ids"))
+    return [int(t) for t in toks] if toks else None
 
 
 def tf_argmax(ep, model, ctx_ids, k=20):
-    d = post(ep, "/v1/completions", {"model": model, "prompt": ctx_ids, "max_tokens": 1,
+    d = post(_base(ep), "/v1/completions", {"model": model, "prompt": ctx_ids, "max_tokens": 1,
                                      "temperature": 0.0, "logprobs": k, "return_token_ids": True})
     ch = d["choices"][0]
     lp = ch.get("logprobs", {}) or {}
@@ -64,7 +74,7 @@ def tf_argmax(ep, model, ctx_ids, k=20):
 
 def detok(ep, model, tid):
     try:
-        return post(ep, "/detokenize", {"model": model, "tokens": [tid]}, 30).get("prompt", f"<{tid}>")
+        return post(_base(ep), "/detokenize", {"model": model, "tokens": [tid]}, 30).get("prompt", f"<{tid}>")
     except Exception:
         return f"<{tid}>"
 
@@ -82,12 +92,14 @@ def main():
     for (name, content) in PROMPTS:
         pids = tokenize_messages(ep, model, content)
         for seed in range(8):
-            text, gids = gen(ep, model, pids, seed)
+            text = gen(ep, model, content, seed)
             loads, nundef, undef = undefined_names(text)
             print(f"  [{name} seed{seed}] len(text)={len(text)} undefined={nundef} {undef[:4]}", flush=True)
-            if nundef > 0 and gids:
-                garbled = {"name": name, "prompt_ids": pids, "gen_ids": gids, "text": text, "undef": undef}
-                break
+            if nundef > 0:
+                gids = tokenize_text(ep, model, text)
+                if gids:
+                    garbled = {"name": name, "prompt_ids": pids, "gen_ids": gids, "text": text, "undef": undef}
+                    break
         if garbled:
             break
     if not garbled:
