@@ -41,9 +41,24 @@ defect that accepts an impossible token. This doc breaks down the numbers and lo
 - **UN-REFUTED, compute-only lever:** branch-node forward CORRECTNESS vs the path-rerun oracle,
   never tested on the current (post-conv-fix, stateless-baked) build.
 
-## Running experiment (scripts/fr13_branch_seed_localize.sh)
-Capture served cat8 per-node GDN stages (body-only; scan/recompute modes deleted), then diff each
-node vs native per-path FLA replay (fr12_branch_path_oracle_probe.py), split spine vs branch.
-- **BRANCH drifts, SPINE ~0.0** → confirmed: the branch-path forward is the seed → targeted
-  compute-only fix (which state a branch reads/replays) → gate temp-0.6 garble + native-B8 + live SWE.
-- Branch ~0.0 too → re-aim.
+## Reconciliation with the spine M-invariance work (FR13_WIDTH_CARRIER_INPROJ_BA_BIND.md)
+The "M-invariance NO-GO" framing is CORRECTED. Spine M-invariance was FOUND and is BAKED:
+- The +17 leaf co-residency carrier = the **bf16 in_proj_ba GEMM** (M-keyed: bf16 cuBLASLt Split-K
+  differs M=10 vs M=5). FIX = pad in_proj_ba to fixed M (`LUMO_FB_PROJ_PAD_ROWS=16`, baked). Flips 26→18.
+- The bind doc's refutations (qkvz/o_proj/conv M-invariant, state byte-exact) were all **SPINE-row**
+  checks. So the residual ~18 flips = **BRANCH-node seeds the spine fixes never covered.** in_proj_ba
+  pad covers all rows, so branches are ALSO in_proj_ba-M-invariant ⇒ the branch seed is a
+  BRANCH-SPECIFIC op: the conv prior-window along the branch PATH, or the branch state read.
+
+## Infra-rot blocker (2026-07-12): the branch-path oracle capture is DEAD on the stateless build
+`fr13_branch_seed_localize.sh` v1 CRASHED-by-design: `FR10_TREE_GDN_CAPTURE_PAYLOAD` (the oracle's
+input source) raises a fail-loud RuntimeError under `FR13_REPLAY_ROUTE=1` (patcher :4316) — it fed the
+DELETED scan scratch. `REPLAY_ROUTE=0` would allocate an EMPTY scratch (scan store deleted) ⇒ garbage.
+So `fr12_branch_path_oracle_probe.py` cannot be fed as-is. Killed the boot (concrete refutation).
+- `FR12_SUBKERNEL_CAPTURE` DOES fire on the replay path (patcher :4336 tree, :5383 native) and taps
+  per-node stages (input_hidden, pre_conv, conv1d_out, h0_state_in, gdn_scan_out).
+- PATH FORWARD to re-enable branch localization: a CPU reducer that reconstructs each node's root→node
+  path from the captured `pre_conv` (post-in_proj inputs, available on replay) and replays the native
+  recurrent update — no patcher surgery. OR go straight at the branch fix: read the replay kernel's
+  per-node conv/state handling, propose a compute-only branch-path fix, gate end-to-end on the temp-0.6
+  garble gate (the ultimate test; doesn't need the oracle).
