@@ -32,12 +32,26 @@ def chunked(Wm, N, chunk):
         outs.append(torch.matmul(X[s:min(s + chunk, N)], Wm.t()))
     return torch.cat(outs, 0)
 
-print("=== FIX VALIDATION (N=9 rows): chunked-<=CHUNK vs per-row M=1 (native ground truth) ===", flush=True)
-for chunk in (1, 4, 5):
-    for nm in ("a", "b"):
-        served9 = gemm(W[nm], 9)                      # what the tree does now (M=9)
-        native_perrow = torch.cat([gemm(W[nm], 1) if False else torch.matmul(X[i:i+1], W[nm].t()) for i in range(9)], 0)
-        fixed = chunked(W[nm], 9, chunk)
-        d_served = (served9.float() - native_perrow.float()).abs().max().item()
-        d_fixed = (fixed.float() - native_perrow.float()).abs().max().item()
-        print(f"  chunk={chunk} in_proj_{nm}: served(M=9)-vs-native={d_served:.3e}  FIXED(chunk)-vs-native={d_fixed:.3e}", flush=True)
+def bmm_fix(Wm, N):
+    Xb = X[:N].unsqueeze(1)                       # [N,1,5120] -> M=1 per batch
+    Wb = Wm.t().unsqueeze(0).expand(N, -1, -1)    # [N,5120,48]
+    return torch.bmm(Xb, Wb).squeeze(1)          # [N,48], ONE launch
+
+print("=== FIX VALIDATION (N=9): each form vs per-row M=1 (native ground truth) ===", flush=True)
+for nm in ("a", "b"):
+    native_perrow = torch.cat([torch.matmul(X[i:i+1], W[nm].t()) for i in range(9)], 0)
+    served9 = gemm(W[nm], 9)
+    forms = {
+        "served(M=9)": served9,
+        "chunk=1": chunked(W[nm], 9, 1),
+        "chunk=8": chunked(W[nm], 9, 8),
+        "bmm(M=1xN)": bmm_fix(W[nm], 9),
+    }
+    for label, out in forms.items():
+        d = (out.float() - native_perrow.float()).abs().max().item()
+        print(f"  in_proj_{nm} {label:14s} vs-native = {d:.3e}", flush=True)
+# all-rows check: does an M=8 GEMM give ALL 8 rows == per-row M=1?
+for nm in ("a", "b"):
+    m8 = gemm(W[nm], 8)
+    pr = torch.cat([torch.matmul(X[i:i+1], W[nm].t()) for i in range(8)], 0)
+    print(f"  in_proj_{nm} M=8 ALL-8-rows vs per-row-M1 = {(m8.float()-pr.float()).abs().max().item():.3e}", flush=True)
