@@ -177,3 +177,22 @@ physical row-order alignment on the branched layout at num_accepted>1* (fr13_pat
 context_len mapping; sorted tree_choices order the bias assumes). NEXT: the winner_spine test -- does the
 matrix garble COMMIT on a branch node (winner_spine>0, num_accepted>1 branch path) or the spine (==0)? That
 verifies branch-specificity for the real repro AND tells whether the corrupt prefix is built by a branch commit.
+
+## CRUX RE-READ (2026-07-12): CAG proves argmax-of-INDEXED-row, NOT that the indexed row is the RIGHT node
+Reconciling the paradox (all verify ops validated correct, yet verify argmax grossly wrong): CAG's ch1_match
+= (committed == argmax of the ROW THE COMMITTER INDEXED). 0 big-margin mismatches proves the committer
+faithfully serves the argmax of WHATEVER row it read -- it does NOT prove that row is the correct node for the
+committed path position. A DISCRETE WRONG-ROW-INDEX (routing) bug -- committer/verify reads node X's output
+when the accepted-path node at that depth is Y (X!=Y) -- is CONSISTENT WITH EVERY OBSERVATION:
+  (1) CAG-clean: committed == argmax(logits[X]), a faithful serve of the (wrong) indexed row.
+  (2) VERIFY_NATIVE persists: making ALL rows bit-exact-native fixes logits[X]'s VALUES but X is still the
+      wrong node => garble persists; the small value change explains the 2->1 undefined shift.
+  (3) branch-specific: wrong-row-index only manifests with branches (multiple rows to confuse); spine has one
+      path so no row ambiguity.
+  (4) all ops validated: the COMPUTE is correct; the READ (which row) is wrong.
+=> STRONGEST UNIFYING HYPOTHESIS: a discrete row-index/routing bug picks the wrong node's verify logits for a
+committed position at num_accepted>1 with branches. This is NOT a compute bug (why 4 compute-fixes all missed).
+CHECK: log, per committed token, the NODE INDEX the committer indexed, and verify it equals the accepted-path
+node at that depth (and that argmax(logits[correct_node]) == the non-spec ground-truth token). Instrument the
+committer's row selection, not the compute. Aligns with agent's "physical row-order vs sorted tree_choices"
+pointer and memory's "conv1d_out wrong bank-row at num_accepted>1".
