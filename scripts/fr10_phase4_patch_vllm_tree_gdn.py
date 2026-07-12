@@ -5597,6 +5597,17 @@ def _fr13_gdn_subop_mab(
                 "FR13_DECODE_GDN_CAPTURE runtime anchor (FR12_SUBKERNEL_CAPTURE guard) "
                 "not found in emitted tree-decode source"
             )
+        # BAKE the capture path at patch time (pid 1, env PRESENT). FR13_* vars are
+        # dropped from the EngineCore worker's curated env, so os.environ.get() at
+        # worker forward-time reads None => capture silently inert (no dc.pt = the
+        # vacuous dccap run). Empty (unset at patch time) => "" => `if _fr13_dc_path`
+        # False => byte-identical default. Layer-prefix left as env (defaults "*" =
+        # all layers incl L0, which is fine even if dropped).
+        _fr13_dc_baked_path = os.environ.get("FR13_DECODE_GDN_CAPTURE") or ""
+        _fr13_dc_capture_block = _fr13_dc_capture_block.replace(
+            '_fr13_dc_path = os.environ.get("FR13_DECODE_GDN_CAPTURE")',
+            "_fr13_dc_path = " + repr(_fr13_dc_baked_path),
+        )
         text = text.replace(
             _fr13_dc_runtime_anchor,
             _fr13_dc_capture_block + _fr13_dc_runtime_anchor,
