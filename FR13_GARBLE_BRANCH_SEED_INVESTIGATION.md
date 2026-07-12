@@ -162,3 +162,23 @@ inner-stage capture (h0_state_in @4351, conv1d_out) wasn't dropped in the statel
 CPU reducer (replay native fused_sigmoid_gating_delta_rule_update from h0_state_in+conv1d_out+weights
 vs captured gdn_scan_out) gives the first non-confounded branch-vs-native drift number. NOT thrash —
 the infra works; it's a SKIP/stage-selection fix, done fresh next cycle.
+
+## 2026-07-12 ROOT-CAUSE of the capture wall: host-sync mid-forward crashes live decode
+NUM_TOKENS=9 correctly targeted the tree decode: captured pre_conv (9,10240) with tree metadata
+(tree_parent, spec_query_start_loc) — format + filter PROVEN right. BUT stages stop at
+input_hidden+pre_conv; conv1d_out/h0_state_in/gdn_scan_out MISSING and score=syntax-errors 6/6 (all
+500s). The .pt host-sync SAVE mid-forward crashes the request right after pre_conv. This is the SAME
+failure mode as the MAB re-runs => **any host-syncing capture (FR12 .pt save OR MAB re-run) crashes
+live decode on the stateless build.** That is the true root cause of all 6-7 localizer stalls — not a
+missing flag. The Jun-6 captures that worked used a CONTROLLED single-forward driver
+(fr13_node5_ladder_drive style), not the live concurrent garble gate.
+
+**PATH FORWARD (instrument rebuild, pick one):**
+(a) Controlled single-forward capture: drive ONE request through a garbling prompt, capture the ONE
+    tree-decode L0 payload cleanly (no concurrent stream), like node5_ladder_drive. Lowest risk.
+(b) Defer the FR12 save to forward-END (accumulate all stages GPU-side, single save after o_proj) so
+    no mid-forward host sync — patcher surgery, higher blast radius.
+(c) Device-side capture (copy to a pre-alloced device buffer per stage, D2H once at the end).
+=> This is a focused instrument-rebuild task, NOT tail-of-session flag tweaking. The garble
+characterization is complete (branch co-residency, ~492x amp, seed=branch h0-init, scan-math refuted);
+the block is purely the capture instrument.
