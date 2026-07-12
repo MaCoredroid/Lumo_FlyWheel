@@ -907,6 +907,64 @@ def _tree_gdn_replay_kernel(
             )
 
 
+def _fr13_native_committer_replay(
+    *, state_bank, spec_state_indices, accepted_paths, accepted_lens,
+    k_ring, v_ring, a_ring, b_ring, A_log, dt_bias, num_spec_decodes,
+    output_scale, use_qk_l2norm_in_kernel, burn_node_bank, spec_cols,
+) -> None:
+    """FR13_COMMITTER_NATIVE: rebuild col-0 (the running row) by running each request's committed path
+    [node 0] ++ accepted_paths[:acc_len] through NATIVE fused_sigmoid_gating (bit-exact to no-spec), instead
+    of the custom _tree_gdn_replay_kernel whose gross state-carry corruption at num_accepted>1 x branches is
+    the garble root (output prob probe: near-impossible token, 15-nat gap). Validated offline vs pytorch-fp32
+    ground truth at 1.19e-7 (scripts/fr13_native_committer_validate.py). REQUIRES runrow_init (col-0 h0);
+    EAGER only (dynamic gather shapes break CUDA-graph capture). q is zeros (state-only; q never touches state)."""
+    from vllm.model_executor.layers.fla.ops import (
+        fused_sigmoid_gating_delta_rule_update as _sg,
+    )
+    dev = state_bank.device
+    B = int(num_spec_decodes)
+    num_kh, dim_k = int(k_ring.shape[2]), int(k_ring.shape[3])
+    num_vh, dim_v = int(v_ring.shape[2]), int(v_ring.shape[3])
+    seg_k, seg_v, seg_a, seg_b, seg_len = [], [], [], [], []
+    for b in range(B):
+        L = int(accepted_lens[b].item())
+        nodes = torch.cat([
+            torch.zeros(1, dtype=torch.long, device=dev),
+            accepted_paths[b, :L].to(torch.long),
+        ])
+        seg_k.append(k_ring[b, nodes])
+        seg_v.append(v_ring[b, nodes])
+        seg_a.append(a_ring[b, nodes])
+        seg_b.append(b_ring[b, nodes])
+        seg_len.append(int(nodes.numel()))
+    T = int(sum(seg_len))
+    max_T = int(max(seg_len))
+    q = torch.zeros(1, T, num_kh, dim_k, device=dev, dtype=k_ring.dtype)
+    k = torch.cat(seg_k, 0).reshape(1, T, num_kh, dim_k).contiguous()
+    v = torch.cat(seg_v, 0).reshape(1, T, num_vh, dim_v).contiguous()
+    aa = torch.cat(seg_a, 0).reshape(1, T, num_vh).contiguous()
+    bb = torch.cat(seg_b, 0).reshape(1, T, num_vh).contiguous()
+    cu = torch.tensor(
+        [0] + list(torch.tensor(seg_len).cumsum(0).tolist()),
+        device=dev, dtype=torch.int32,
+    )
+    # ssm_state_indices [B, max_T] every col = the col-0 running row: init reads col 0 = h0; the write-back is
+    # PER-TOKEN, so the final token (col T-1) deposits the committed-path final state to that same row = col-0.
+    ssi = torch.zeros(B, max_T, device=dev, dtype=torch.int32)
+    col0 = spec_state_indices[:B, 0].to(torch.int32)
+    for b in range(B):
+        ssi[b, :] = col0[b]
+    _sg(
+        A_log=A_log, a=aa, b=bb, dt_bias=dt_bias, q=q, k=k, v=v, scale=output_scale,
+        initial_state=state_bank, inplace_final_state=True, cu_seqlens=cu,
+        ssm_state_indices=ssi, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+    )
+    if burn_node_bank:
+        for b in range(B):
+            rows = spec_state_indices[b, 1:spec_cols].to(torch.long)
+            state_bank[rows] = 0.0
+
+
 def launch_tree_gdn_replay(
     *,
     state_bank: torch.Tensor,
@@ -1013,6 +1071,19 @@ def launch_tree_gdn_replay(
             f"A_log/dt_bias must cover {num_vh} value heads, got "
             f"{A_log.numel()}/{dt_bias.numel()}"
         )
+    if os.environ.get("FR13_COMMITTER_NATIVE") == "1" and runrow_init:
+        # Route the committed-path state rebuild through NATIVE fused_sigmoid_gating (bit-exact to no-spec)
+        # instead of the custom replay kernel. Tests whether the gross state-carry corruption (garble root)
+        # is in this committer. EAGER only (dynamic gather). Falls through to custom if not runrow_init.
+        _fr13_native_committer_replay(
+            state_bank=state_bank, spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths, accepted_lens=accepted_lens,
+            k_ring=k_ring, v_ring=v_ring, a_ring=a_ring, b_ring=b_ring,
+            A_log=A_log, dt_bias=dt_bias, num_spec_decodes=num_spec_decodes,
+            output_scale=output_scale, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            burn_node_bank=burn_node_bank, spec_cols=spec_cols,
+        )
+        return
     grid = (int(num_spec_decodes), num_vh, triton.cdiv(dim_v, BV))
     _tree_gdn_replay_kernel[grid](
         k_ring,

@@ -796,7 +796,7 @@ def _patch_gdn_linear() -> bool:
             "# FR13_EAGER_PACK (FIX-2): read ONCE at module scope (flag plan: env is\n"
             "# read once per boot; init-time allocations are flag-conditional but\n"
             "# fixed for the life of the process).\n"
-            "_FR13_EAGER_PACK = True  # FR13_EAGER_PACK baked ON\n"
+            "_FR13_EAGER_PACK = " + ("True" if os.environ.get("FR13_EAGER_PACK", "1") == "1" else "False") + "  # FR13_EAGER_PACK baked from PATCH-TIME env (worker-env drops it)\n"
             "# FR13_TREE_CONV_FUSED (FIX-3): read ONCE at module scope; default OFF\n"
             "# until the byte A/B + live gate pass. ON fuses the tree causal-conv\n"
             "# emulation's per-node state write-back loop / per-col tap loop /\n"
