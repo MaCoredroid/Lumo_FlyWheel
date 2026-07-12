@@ -12,7 +12,7 @@ Run against a healthy ship endpoint (port 9955). CPU-side (HTTP only) — uses t
 """
 import json, sys, urllib.request
 sys.path.insert(0, "scripts")
-from fr13_garble_gate import PROMPTS, undefined_names
+from fr13_garble_gate import PROMPTS, score_sample
 
 
 def post(ep, path, payload, timeout=300):
@@ -93,12 +93,14 @@ def main():
         pids = tokenize_messages(ep, model, content)
         for seed in range(8):
             text = gen(ep, model, content, seed)
-            loads, nundef, undef = undefined_names(text)
-            print(f"  [{name} seed{seed}] len(text)={len(text)} undefined={nundef} {undef[:4]}", flush=True)
-            if nundef > 0:
+            sc = score_sample(text)  # extracts code block FIRST, then undefined-name check
+            print(f"  [{name} seed{seed}] len={len(text)} undefined={sc['undefined']} "
+                  f"syntax_err={sc['syntax_error']} {sc['undefined_names'][:4]}", flush=True)
+            if sc["undefined"] > 0:
                 gids = tokenize_text(ep, model, text)
                 if gids:
-                    garbled = {"name": name, "prompt_ids": pids, "gen_ids": gids, "text": text, "undef": undef}
+                    garbled = {"name": name, "prompt_ids": pids, "gen_ids": gids, "text": text,
+                               "undef": sc["undefined_names"]}
                     break
         if garbled:
             break
