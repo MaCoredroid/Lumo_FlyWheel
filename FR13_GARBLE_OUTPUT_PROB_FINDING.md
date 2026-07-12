@@ -645,3 +645,19 @@ attribution to the committer +1 is refuted.
 indices + prepare_committed_path_conv_rows) and the SSM col-0 -- NOT the committer
 column. Ladder must capture on the fused path (FR13_TREE_CONV_FUSED=1), which is
 what actually runs.
+
+================================================================================
+## BREAKTHROUGH (2026-07-12): garble KILLED by BATCH_INVARIANT + BI_TREE_ATTN
+After refuting committer / GDN-scan / GDN-state (whole-GDN-native) / in_proj_ba (bmm), booted
+BATCH_INVARIANT=1 + FR13_BI_TREE_ATTN=1 (graph, cache OFF, GPU_UTIL=0.78). Deterministic greedy matrix
+garble GONE: _rows_garble=FALSE, clean coherent code, decode 7.4s (graph, no speed collapse). BI patches
+confirmed applied (tree_attn.py/batch_invariant.py True). => The garble IS an M-dependence / co-residency
+effect (directive was right), killed by making GEMMs+reductions+tree-attention batch-invariant. It is a
+DIFFERENT M-dependent op than in_proj_ba (bmm alone did NOT fix it). GDN scan/state already exonerated
+(native), so the carrier is a GEMM/reduction/attention that BATCH_INVARIANT covers.
+
+NEXT = BISECT for a TARGETED compute-only fix (full BATCH_INVARIANT takes the GB10 REDUCED path = speed
+cost; not shippable as-is):
+(1) BATCH_INVARIANT=1 + FR13_BI_TREE_ATTN=0 -> garble gone? YES=GEMM/reduction carrier (bisect which);
+    NO=the TREE ATTENTION (BI_TREE_ATTN) is the carrier (FA2 MMA-grouping M-dependence, 2/16 single-ULP).
+(2) then localize the single op + a targeted batch-invariant fix for it, gate temp-0.6 + live SWE cache-ON.
