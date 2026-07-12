@@ -182,3 +182,22 @@ missing flag. The Jun-6 captures that worked used a CONTROLLED single-forward dr
 => This is a focused instrument-rebuild task, NOT tail-of-session flag tweaking. The garble
 characterization is complete (branch co-residency, ~492x amp, seed=branch h0-init, scan-math refuted);
 the block is purely the capture instrument.
+
+## 2026-07-12 ISOLATION VERDICT: eager CLEAN, FR12 capture is the crash (root cause proven)
+Clean eager cat8 gate (NO capture, NO MAB): n=36, undefined-name-rate=9.32%, **syntax-errors=0/36**.
+=> EAGER IS CLEAN (garbles normally at 9.32% with the classic near-neighbor identifiers like
+runningBalanceaccumulator). So the host-syncing CAPTURE (FR12 .pt / MAB re-runs), NOT eager, crashes
+the decode — root cause PROVEN, not assumed. Bonus: clean same-boot cat8 eager baseline = 9.32%.
+
+REFINED crash locus: the warmup capture completed all 3 outer stages (input/gate/o_proj) fine; the
+tree-decode capture broke right after pre_conv. So the TREE-PATH stage captures are the crash:
+conv1d_out @3903 (create=True, reads mixed_qkv_spec + starts a NEW payload) and/or h0_state_in @4349.
+The saved payload had input_hidden+pre_conv = the payload conv1d_out's create=True flushed before the
+crash. Likely cause: the conv1d_out capture's create=True payload-boundary + host-sync during the
+tree replay loop, OR a tensor changed by the stateless cleanup.
+
+REBUILD (scoped patcher surgery, next focused cycle): fix the FR12 tree-path capture — either make it
+NON-syncing (accumulate stages device-side, single D2H at forward-end) or fix the create=True boundary
+so all inner stages land in one payload. Then eager (proven clean) + fixed-FR12 = complete branch
+capture => the CPU native-replay reducer => the branch-vs-native sub-op drift. Eager is NOT the
+blocker (proven); the FR12 tree-path capture is.
