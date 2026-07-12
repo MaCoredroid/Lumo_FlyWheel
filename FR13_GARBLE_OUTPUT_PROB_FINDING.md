@@ -147,3 +147,17 @@ num_accepted>1-specific, so the tree attention at MULTI-ACCEPT is UNTESTED. Both
 DECISIVE LOCALIZER: capture the live col-0 (SSM+conv) at the deterministic garble step vs a native forward's
 state -- col-0 WRONG => (a) state; col-0 CORRECT => (b) attention (then apply the same per-node-native
 treatment to the FA2 tree attention). Do this BEFORE any more fixes.
+
+## KEY RE-DIRECTION (2026-07-12): branch-specific + VERIFY_NATIVE-persists => ATTENTION, not col-0/GDN
+Chain of facts: (1) garble is BRANCH-SPECIFIC -- spine-only is garble-free (M-invariance baked), only the
+tree/branches garble (reference_garble_within_floor_closed, garble_batch_exonerated_empirical). (2)
+VERIFY_NATIVE computes each node's GDN output from its OWN root->node ancestor path, ISOLATED from sibling
+branches => removes GDN branch co-residency. (3) garble PERSISTS with VERIFY_NATIVE. => the branch
+contamination is NOT in the GDN (isolating it didn't help) and NOT in col-0 (col-0 = pre-branch committed
+prefix, built identically for spine-only which is garble-free). => the contamination is in the FA2 TREE
+ATTENTION, where sibling branches co-reside via the tree mask (strict_mask/visible_mask). The FA2-fork
+"byte-exact 14/16" validated the NO-COPY optimization vs a same-tree copy reference -- NOT mask correctness
+vs a branchless/native reference, and likely not at the garble's num_accepted>1 branch config. => col-0 was
+the WRONG prime suspect. NEXT: audit the tree attention mask construction+application for a node attending to
+a SIBLING branch's KV (visibility leak); then apply per-node-native isolation to the FA2 attention (analog of
+VERIFY_NATIVE) OR fix the mask.
