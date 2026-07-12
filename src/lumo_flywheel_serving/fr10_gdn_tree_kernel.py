@@ -4,6 +4,9 @@ import os
 from dataclasses import dataclass
 
 
+_FR13_COMMITTER_NATIVE_ANNOUNCED = False
+
+
 def _fr13_committer_native_on() -> bool:
     """FR13_COMMITTER_NATIVE, worker-env-drop-proof: the EngineCore worker gets a curated env that drops
     FR13_* vars, so os.environ is unreliable at worker runtime. The launcher (pid-1, env present) writes a
@@ -933,6 +936,11 @@ def _fr13_native_committer_replay(
     from vllm.model_executor.layers.fla.ops import (
         fused_sigmoid_gating_delta_rule_update as _sg,
     )
+    global _FR13_COMMITTER_NATIVE_ANNOUNCED
+    if not _FR13_COMMITTER_NATIVE_ANNOUNCED:
+        _FR13_COMMITTER_NATIVE_ANNOUNCED = True
+        print(f"[FR13_COMMITTER_NATIVE ENGAGED] native committed-path replay via fused_sigmoid_gating "
+              f"(num_spec_decodes={int(num_spec_decodes)})", flush=True)
     dev = state_bank.device
     B = int(num_spec_decodes)
     num_kh, dim_k = int(k_ring.shape[2]), int(k_ring.shape[3])
