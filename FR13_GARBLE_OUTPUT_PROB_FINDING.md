@@ -81,3 +81,16 @@ helps (matches every observation). DECISIVE next step: capture, at the accept, t
 rank/logit of the ACCEPTED token vs the argmax (the sampler HAS these logits). Accepted tokens with LOW
 target rank => sampler bug (b). HIGH target rank => state corruption (a), and then conv-routing/verify-scan.
 Do NOT build another blind state fix until (a) vs (b) is settled. See memory feedback_garble_pin_accept_not_rates.
+
+## CAG greedy diagnostic (2026-07-12): garble is STATE (verify argmax wrong), NOT accept-logic
+FR13_COMMIT_ARGMAX_GATE armed (via sidecar; worker drops the env flag) + FR13_DEVICE_MULTIDRAFT=0 (Python
+committer, since CAG lives in the greedy committer bypassed by the device committer). 1275 greedy commits:
+big-margin mismatch (committed != verify argmax, |margin|>2 nats) = 0; only 15 argmax-TIE mismatches.
+=> the committer FAITHFULLY serves the verify argmax; it NEVER commits a low-logit token. ACCEPT-LOGIC
+REFUTED. YET matrix prompt garbled at GREEDY (expected_rows for expected_row_count, undefined=2) => the
+garbled token WAS the verify argmax => the verify FORWARD produces a grossly-wrong argmax => STATE corruption.
+Greedy reproduces the garble DETERMINISTICALLY (no temp-0.6 sampling) = a clean repro + per-token
+verify-argmax classifier for testing fixes. in_proj/conv-compute/SSM-committer already exonerated => remaining
+verify-forward state ops: conv STATE routing (prior-window num_accepted>1) or the verify SCAN (_tree_gdn_kernel)
+or attention. NEXT: test each at greedy+CAG (does the matrix verify argmax become expected_row_count?).
+NOTE: wcs greedy clean, ledger greedy syntax-err, matrix greedy garbles => garble is prompt/position-specific.
