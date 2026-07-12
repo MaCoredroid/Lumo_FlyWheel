@@ -505,3 +505,17 @@ either (a) enable /v1/completions on the cat9 boot, or (b) capture the LIVE comm
 force them via a token-id path. The ladder INFRA works (captures + projection + diff all functional); the only
 gap is exact-token CLEAN. The GDN-layer-0 lean toward mamba is SUGGESTIVE (rel_l2 0.5887 > a 4-token re-tok
 should cause, and GDN has no RoPE) but NOT proven.
+
+## EXACT-TOKEN LADDER (2026-07-12): points at mamba/GDN col-0 (layer 0), reopens it -- 1-pos caveat
+Exact-token diff (teacher-force exact committed IDs via /v1/completions, 4-token re-tok confound ELIMINATED):
+CLEAN node0 (pos192 '_row') vs GARBLE node0 (pos191 '_rows'). input_hidden IDENTICAL (cos=1.0) => same input
+token, no upstream confound. FIRST divergence at LAYER 0 (linear_attention/GDN, rel_l2=0.5868), stays high --
+SAME profile as the confounded 4-token diff. Since the 4-token confound is gone yet the profile persists =>
+NOT a tokenization artifact; GDN has no RoPE => points at the col-0 MAMBA state GDN layer 0 reads. REOPENS the
+mamba col-0 (COMMITTER_NATIVE only replaced the SSM col-0 WRITE; VERIFY_NATIVE also READS the same col-0 h0 and
+didn't fix -- consistent). CAVEATS (not 100% clean): (1) residual 1-position offset (LIVE re-run committed 1
+fewer token than the saved exact_tokens; CLEAN pos192 vs garble pos191); (2) NON-MONOTONIC profile (layer 2
+GDN drops to 0.32 while 0/1 are 0.58/0.89) -- a pure col-0 corruption should propagate uniformly. NEXT:
+position-matched CLEAN (recapture the CURRENT LIVE garble prefix, CLEAN at the exact garble pos) to eliminate
+the 1-token offset; if layer-0 GDN divergence persists pos-matched => mamba col-0 CONFIRMED => re-examine the
+col-0 h0 read (SSM vs conv) that COMMITTER_NATIVE/VERIFY_NATIVE both consume.
