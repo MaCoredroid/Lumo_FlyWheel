@@ -455,3 +455,14 @@ committed prefix through 'expected'. Existing captures: output/fr13_node5_ladder
 live_node5_finallogits.pt}. This ENDS the component-guessing with a per-layer ground truth; build the fix on
 the first divergent layer's op only. Next: find the ladder BOOT config (which sets FR10_LAYER_HIDDEN/
 FR10_ROOT_HIDDEN/ROWS/SKIP), adapt for node0+matrix, boot, drive, analyze.
+
+## FOUNDATION CONFIRMED (2026-07-12, ladder boot): teacher-force is NOT a tokenization confound
+Ladder drive (chat-based, cat9 eager) reproduced garble (undefined=2 expected_rows), clean teacher-force argmax
+'_row' lp=-0.000 vs '_rows' -13.88 (13.9-nat gap re-confirmed). Tokenization boundary check: the garble region
+tokenizes as [' =',' (','expected','_rows',','] -- 'expected' is a CLEAN token boundary immediately followed by
+'_rows'. So the teacher-force prefix (ending 'expected') asks the EXACT SAME question (next after 'expected')
+as the trajectory (which committed '_rows'). => teacher-force VALID, NOT a confound => the carried-state
+framing HOLDS (fresh state '_row' vs trajectory '_rows' at the identical boundary). Captured 30 node0 per-layer
+LAYER_HIDDEN forwards (~2.7MB each, non-vacuous) for the per-layer localization. NEXT: identify the garble
+forward (node0 argmax='_rows', ~committer step 12), capture the CLEAN root per-layer (FR10_ROOT_HIDDEN re-run),
+diff per-layer => first divergent layer = corrupt op.
