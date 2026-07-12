@@ -248,3 +248,15 @@ verify is written by step 11's commit (branch [0,1,4] acc=3, leaf node 4): the c
 CONV window to col-0. NEXT: audit the CONV col-0 WRITE/commit (_fr13_conv_commit_to_col0 + the tcf-fused
 snapshot) for a wrong-node / wrong-window / wrong-bank-row read at num_accepted>1 branch paths -- read-only,
 no config change, no crash. A compute-only fix there is the ship-fix direction.
+
+## RED-TEAM CORRECTION (2026-07-12): VERIFY_NATIVE exonerates SSM scan COMPUTE, NOT the col-0 STATE write
+Prior note over-sharpened to "CONV col-0 only". VERIFY_NATIVE recomputes each node's GDN OUTPUT with
+inplace_final_state=False (NO state write-back) and READS col-0 h0 (carried SSM) as its initial state; the
+node output also uses value_spec (post-conv, which reads the col-0 conv window). So VERIFY_NATIVE persisting is
+consistent with EITHER a corrupt col-0 SSM h OR a corrupt col-0 conv window feeding it -- it validated the
+scan COMPUTE (per-node recurrence math == native), NOT the carried col-0 STATE that step-11's committer wrote.
+The carried col-0 STATE (SSM h + conv window) written by the branch-leaf commit is the suspect, and NEITHER
+half is cleanly exonerated (COMMITTER_NATIVE "garble unchanged" may have been vacuous -- worker-env drop, like
+FR12_NPR/CAG/DEVICE_MULTIDRAFT all were). => audit BOTH col-0 writes: conv window AND SSM h, for a
+wrong-node/window/bank-row read at num_accepted>1 branch leaf node4=(0,0,1). The clean fix-test is to make the
+FULL col-0 write native (SSM h + conv window) with VERIFIED engagement + no fused/greedy crash.
