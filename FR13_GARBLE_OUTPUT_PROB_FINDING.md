@@ -729,3 +729,20 @@ Prove => ship Tier2 (one reject path); disprove => the greedy/temp>0 accept rule
 reason the greedy gate was unfaithful). Adversarial fixes for either tier: delegate BEFORE the
 FR13_FORCE_SPINE_COMMIT raise (L9120); unified guard on tree_parent_indices ONLY (tree_token_ids is
 greedy-only, L9860 -> temp>0 batches would silently lose the committer).
+
+## KEY INSIGHT (2026-07-12): greedy & temp-0.6 garble = SAME drift, different accept manifestation
+Read the two accept rules. Greedy (_lumo_tree_path_lcp_max_greedy_sample) commits the target ARGMAX
+(one-hot). temp>0 device-multidraft (sample_deterministic_multidraft_rejection_step) SAMPLES the spread
+softmax p via rng (source=rng.choice(weights), accept~min(1,p/q_mix), residual~p). BOTH read the SAME
+drifted verify logits. The drift depresses the correct token to ~0.80 and inflates the garble to ~0.2, so:
+  - GREEDY: argmax(drifted) -> commits garble ONLY when drift flips the argmax (>50%). Lower sensitivity.
+  - TEMP-0.6: samples p -> commits garble ~20%/token -> accumulates to matrix_build 15/15.
+=> The greedy gate is NOT "unreliable", it is a LOWER-SENSITIVITY drift detector; the BATCH_INVARIANT
+"false negative" was the perturbation nudging that ONE argmax back to correct without zeroing the drift
+(temp-0.6 still sampled it). CONSEQUENCE: the drift (STATE corruption) is common to both; the greedy
+per-layer LADDER localization (first divergence = GDN LAYER 0 col-0) TRANSFERS to the temp-0.6 garble.
+So the conv col-0 running window (the only layer-0 state uncovered by whole-GDN-native) remains the prime
+suspect, now on solid footing. A fix must ZERO the drift (temp-0.6 ~0/15), not just flip the greedy argmax.
+UNIFY COROLLARY: routing greedy through the multidraft is lossless IFF p is forced one-hot (argmax delta);
+then multidraft accept_prob=1 for the argmax + residual->argmax == greedy argmax-accept (== LCP-max on
+distinct-draft trees like cat9). Tier2 = one-hot-p greedy branch, flag-gated, byte-identical accepted-set gate.
