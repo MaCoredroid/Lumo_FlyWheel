@@ -661,3 +661,11 @@ cost; not shippable as-is):
 (1) BATCH_INVARIANT=1 + FR13_BI_TREE_ATTN=0 -> garble gone? YES=GEMM/reduction carrier (bisect which);
     NO=the TREE ATTENTION (BI_TREE_ATTN) is the carrier (FA2 MMA-grouping M-dependence, 2/16 single-ULP).
 (2) then localize the single op + a targeted batch-invariant fix for it, gate temp-0.6 + live SWE cache-ON.
+
+## BISECTION-1 (2026-07-12): carrier is a GEMM/REDUCTION, NOT the tree attention
+BATCH_INVARIANT=1 + FR13_BI_TREE_ATTN=0 (graph, cache OFF): greedy garble STILL GONE (_rows_garble=False,
+decode 7.4s). => the tree attention is NOT the carrier; the carrier is a GEMM or reduction that
+VLLM_BATCH_INVARIANT overrides. Since in_proj_ba bmm alone did NOT fix it, it is a DIFFERENT op. Prime
+suspects (run every layer, M-dependence amplifies ~492x): RMSNorm reduction, o_proj/MLP bf16 GEMM,
+in_proj_qkvz (though fp8 per-row = memory says M-indep). NEXT: enumerate the batch_invariant overrides +
+bisect to the single op, then a TARGETED batch-invariant fix (no full-BI speed tax).
