@@ -437,3 +437,21 @@ col-0 window as-read at step 12 -> check for GROSS anomaly (zeros/NaN/discontinu
 needed); or (b) build a CONV-COMMITTER-NATIVE (recompute conv col-0 fresh over accepted path [0,1,2,5], write,
 needle-gate) analogous to COMMITTER_NATIVE -- garble clears => conv write bug. If conv ALSO exonerated => the
 carried-state framing itself needs re-examination (teacher-force tokenization confound recheck).
+
+## ENDGAME localizer FOUND (2026-07-12): adapt the per-layer LADDER for the node0 matrix garble
+All indirect leads exhausted/refuted (mamba exonerated; KV over-predicts=refuted; RoPE secondary; conv-write
+plausibly-correct: BURN rewrites node4 window fresh each step, only physical-row-stability untested). The
+DEFINITIVE localizer is the DIRECT per-layer capture, and the infra EXISTS: scripts/fr13_node5_ladder_drive.py
++ fr13_nodestep_realization_ladder.py + fr13_ladder_table.py. It's a same-boot TOP-DOWN PER-LAYER GATE:
+ - PHASE LIVE: drive prompt (tree_mtp), FR10_LAYER_HIDDEN captures the tree-verify NODE-ROW hidden at EVERY
+   layer + FR13_FINAL_LOGIT the projected logits (node5 ladder used ROWS=6=node5; for the garble use ROWS=0=
+   node0 root at the [0,2] acc=0 garble step).
+ - PHASE CLEAN: teacher-force the accepted prefix (max_tokens=1), FR10_ROOT_HIDDEN captures the clean
+   last-row hidden at EVERY layer + FR10_ROOT_LOGIT. This is the RIGHT fresh reference.
+ - Diff LIVE vs CLEAN per-layer => FIRST divergent layer localizes the corruption to a specific op (a mamba
+   layer => mamba after all; a full-attn layer => attention KV/pos; the norm/mlp => elsewhere).
+ADAPTATION: matrix_build prompt, ROWS=0 (node0 root), target the [0,2] acc=0 garble step (SKIP window), cut =
+committed prefix through 'expected'. Existing captures: output/fr13_node5_ladder/{clean_prefix_layers.pt,
+live_node5_finallogits.pt}. This ENDS the component-guessing with a per-layer ground truth; build the fix on
+the first divergent layer's op only. Next: find the ladder BOOT config (which sets FR10_LAYER_HIDDEN/
+FR10_ROOT_HIDDEN/ROWS/SKIP), adapt for node0+matrix, boot, drive, analyze.
