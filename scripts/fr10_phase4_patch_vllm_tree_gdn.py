@@ -6115,6 +6115,30 @@ def _lumo_fb_proj_padded(self, proj, src, spans, row_len, pad_rows):
         _parts.append(_out_padded[_ps:_ps + (_e - _s)])
     return torch.cat(_parts, dim=0)
 
+
+def _lumo_fb_proj_bmm(self, proj, src):
+    """Per-row-M=1 batched bmm for the bf16 in_proj_ba GEMM.
+
+    ROOT CAUSE (GB10 microbench, fr13_inproj_ba_mkey_microbench): the bf16 cuBLASLt
+    kernel for in_proj_ba SWITCHES at M>=9 (M<=8 == M=1 bit-for-bit; M>=9 differs by
+    ~1 bf16 ULP, 9.8e-4). The tree verify runs M=tree_n(>=9)/xconcurrency => the WRONG
+    kernel => ~1 ULP seed that amplifies ~492x into the near-neighbor garble. native
+    (M<=8, incl B=8) is on the CLEAN side => 0% garble.
+
+    FIX: run each row as its own M=1 GEMM via a single batched bmm => every row uses the
+    M=1 kernel => bit-EXACT to native (microbench vs-native=0.0), M-invariant for ANY M.
+    Compute-only: the weight is a broadcast VIEW (no copy/HBM tax), ONE launch. Keeps
+    branches. bias added post-matmul to match nn.Linear.
+    """
+    _W = proj.weight  # [out, in], bf16
+    _out = torch.bmm(
+        src.unsqueeze(1),
+        _W.t().unsqueeze(0).expand(src.shape[0], -1, -1),
+    ).squeeze(1)
+    if getattr(proj, "bias", None) is not None:
+        _out = _out + proj.bias
+    return _out
+
 '''
         # Insert the helpers at MODULE scope (column 0) -- they are top-level
         # `def`s, so they MUST go before a class definition, NOT before a class
@@ -6143,17 +6167,30 @@ def _lumo_fb_proj_padded(self, proj, src, spans, row_len, pad_rows):
         "        else:\n"
         "            mixed_qkvz, _ = self.in_proj_qkvz(hidden_states)\n"
         "            ba, _ = self.in_proj_ba(hidden_states)\n"
-        "            # LUMO_FB ba-proj batch-invariance (H1 width carrier). Gate-OFF\n"
-        "            # (LUMO_FB_KERNEL_ROWS!=\"1\") => _lumo_fb_proj_meta returns None\n"
-        "            # => stock `ba` above is used unchanged (byte-identical).\n"
-        "            _lumo_fb_spans = _lumo_fb_proj_spans(_lumo_fb_proj_meta(self))\n"
-        "            if _lumo_fb_spans is not None:\n"
+        "            # in_proj_ba M-keying fix. FR13_INPROJ_BA_BMM=1 => per-row-M=1 bmm\n"
+        "            # (bit-EXACT to native, kills the M>=9 cuBLASLt kernel-switch ~1 ULP\n"
+        "            # garble seed) on the spec-decode path. Else LUMO_FB pad (nspec-only,\n"
+        "            # partial). Else stock `ba` above (byte-identical). LUMO_FB_KERNEL_ROWS\n"
+        "            # must be \"1\" for _lumo_fb_proj_meta to be non-None (baked in ship).\n"
+        "            _lumo_fb_meta = _lumo_fb_proj_meta(self)\n"
+        "            if (os.environ.get(\"FR13_INPROJ_BA_BMM\") == \"1\"\n"
+        "                    and _lumo_fb_meta is not None\n"
+        "                    and int(getattr(_lumo_fb_meta, \"num_prefills\", 0)) == 0\n"
+        "                    and int(getattr(_lumo_fb_meta, \"num_decodes\", 0)) == 0\n"
+        "                    and int(getattr(_lumo_fb_meta, \"num_spec_decodes\", 0)) >= 1):\n"
         "                try:\n"
-        "                    ba = _lumo_fb_proj_padded(\n"
-        "                        self, self.in_proj_ba, hidden_states, *_lumo_fb_spans\n"
-        "                    )\n"
+        "                    ba = _lumo_fb_proj_bmm(self, self.in_proj_ba, hidden_states)\n"
         "                except Exception:\n"
         "                    ba, _ = self.in_proj_ba(hidden_states)\n"
+        "            else:\n"
+        "                _lumo_fb_spans = _lumo_fb_proj_spans(_lumo_fb_meta)\n"
+        "                if _lumo_fb_spans is not None:\n"
+        "                    try:\n"
+        "                        ba = _lumo_fb_proj_padded(\n"
+        "                            self, self.in_proj_ba, hidden_states, *_lumo_fb_spans\n"
+        "                        )\n"
+        "                    except Exception:\n"
+        "                        ba, _ = self.in_proj_ba(hidden_states)\n"
         "\n"
     )
     text = text.replace(inproj_ba_needle, inproj_ba_replacement, 1)
