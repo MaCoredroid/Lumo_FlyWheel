@@ -34,3 +34,15 @@ a wrong prior -> next verify grossly corrupted -> commits near-impossible token.
 ~1-ULP realization. NEXT: (a) confirm the replay `state`/ring indexing follows the committed path (not
 position) under branches; (b) the fix = route the committed-path replay through native so col-0 prior is
 native-correct (synth's recommendation); (c) gate live temp-0.6 + cache-ON, same-boot vs native 0%.
+
+## Red-team refinement (2026-07-12): replay READS by node-id (correct) => bug is upstream at FILL time
+Read _tree_gdn_replay_kernel loop (L793-891): node = accepted_paths[pid_b, t-1]; reads k_ring[node]/
+v_ring[node]/a_ring/b_ring by NODE-ID (not position); state=where(active,new,state) ends at committed leaf;
+deposits to col 0. The replay READ is co-residency-clean (node-id indexed). => the gross corruption is NOT
+the replay indexing but UPSTREAM: (i) accepted_paths built wrong under branches, (ii) the ring buffers
+(k/v/a/b) FILLED wrong for committed nodes at verify time (position-vs-id co-residency), or (iii) the verify
+scan _tree_gdn_kernel itself. The finding is robust (gross 15-nat, num_accepted>1 X branches, STATE-CARRY not
+verify-compute since 1-step teacher-force is correct). DEFINITIVE TEST = route the committed-path state
+through native (fused_sigmoid_gating per committed path) so col-0 is native-correct regardless of which
+upstream op leaks; if garble->0 the state-carry chain was the bug. Cheaper bisect: capture tree col-0 state
+post-multi-accept vs prefill state, OR toggle-bisect the fill/scan/committer flags (each a reboot).
