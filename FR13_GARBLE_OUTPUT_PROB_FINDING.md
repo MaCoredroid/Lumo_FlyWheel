@@ -105,3 +105,19 @@ untested half of col-0 state, num_accepted>1 prior-window = memory's OPEN bug) a
 WITHOUT committer-native (that combo works, produced records + the deterministic matrix garble). Conv
 committer infra scouted: prepare_committed_path_conv_rows / gather_committed_path_conv_prior
 (fr13_tree_conv_fused.py), replay_conv_state_linear_remap (fr13_replay_conv_remap.py).
+
+## Strategic reassessment (2026-07-12): conv committer looks correct on read -> definitive next = per-node native VERIFY
+Read _fr13_conv_commit_to_col0 (patcher L7056): copies accepted-leaf conv window _ssi[b,leaf_node] -> col-0;
+looks CORRECT (leaf's stored window IS its path-window; RUNROW_INIT reads col-0). So conv-routing wrong-bank-row
+not obvious (likely fixed by the STATELESS-TREE rework). Every individual op is now either bit-exact
+(in_proj/conv-compute), within-floor (attention 2-ULP), algebraically-clean+~1e-5 (verify scan realization),
+or looks-correct (conv committer) -- yet garble is GROSS + deterministic. Two untested possibilities: (a) a
+DISCRETE index bug in the verify scan per-node h0/node read at num_accepted>1 x branches; (b) the SSM committer
+fix doesn't correct col-0 in the LIVE path (validated offline 1.19e-7, never verified live => "ineffective"
+could mean "buggy wiring" not "wrong op").
+DEFINITIVE NEXT (the deliverable, tests both at once): replace the verify scan node outputs with PER-NODE
+native single-seq recurrence (each node's ancestor path through fused_sigmoid_gating = validated Test-A
+mechanism, NO unsolved multi-seq convention; slow N-launches but correctness-only, gated). Fix site =
+launch_tree_gdn_prepared (fr10_gdn_tree_kernel.py L1723 -> _tree_gdn_kernel L1904). Test at greedy+CAG
+(deterministic matrix repro): garble->0 => GDN verify was the corruption; persists => GDN ruled out (=> the
+committed-STATE carry, needing live col-0 verification). Do NOT build another blind sub-op fix.
