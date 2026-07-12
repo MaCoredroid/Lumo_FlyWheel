@@ -466,3 +466,14 @@ framing HOLDS (fresh state '_row' vs trajectory '_rows' at the identical boundar
 LAYER_HIDDEN forwards (~2.7MB each, non-vacuous) for the per-layer localization. NEXT: identify the garble
 forward (node0 argmax='_rows', ~committer step 12), capture the CLEAN root per-layer (FR10_ROOT_HIDDEN re-run),
 diff per-layer => first divergent layer = corrupt op.
+
+## GARBLE FORWARD PINPOINTED (2026-07-12, ladder): call12 node0 pos190 argmax '_rows'
+Projected each of 30 LIVE node0 captures' final_norm_hidden through lm_head: call12 (node0 pos190) argmax=
+'_rows' (10630) <<GARBLE; call15 (pos193) also '_rows'. Adjacent calls clean (call11 pos185 '_slice', call14
+pos192 ' expected'). So step-12's node0 (predicting pos190) is the garble, reading the state committed by
+step-11 (branch [0,1,4] acc=3). Capture structure: 64 layers, pattern [GDN,GDN,GDN,full_attn]x16 (linear_
+attention vs full_attention), each layer entry = {layer_idx, layer_type, hidden, residual}. => per-layer diff
+of call12 vs a CLEAN node0-at-pos190 (teacher-force, argmax '_row') => FIRST divergent layer localizes: a GDN
+layer => mamba (I mis-exonerated); a full_attn layer => attention KV; norm/mlp => elsewhere. Captured call11-15
+to output/fr13_garble_ladder/live/. NEXT: same-boot re-run with teacher-force FIRST (CLEAN node0=call0) + LIVE
+(garble), diff per-layer.
