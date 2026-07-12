@@ -352,3 +352,18 @@ corrects values not positions). NOT a small drift (garble is gross 15-nat). NEXT
 slot-mapping / commit for committed branch tokens (tree_attn.py fork + the FR13 KV commit) for a wrong-position
 write; then a KV-position capture or native-attention test. The FA2 "byte-exact 14/16" validated the fork
 OUTPUT, NOT the committed-KV write POSITIONS across steps.
+
+## RED-TEAM CORRECTION (2026-07-12): "mamba fully exonerated" OVER-CLAIMED — conv col-0 WRITE runtime untested
+COMMITTER_NATIVE natively replaced the SSM col-0 WRITE (exonerated). But the CONV col-0 WRITE
+(_fr13_conv_commit_to_col0, copies node4's node-bank window -> col-0) was only AUDITED static-correct
+(node-selection right), NEVER replaced-with-native-and-tested. The conv audit itself flagged a RUNTIME risk it
+could not settle statically: (1) physical col-0 row stability across the two steps, (2) whether the node bank
+row read for node4 holds this-step's fresh window or a STALE value, (3) remap disturbing col-0. The
+native_prior_read test only tested the conv READ source (=col-0, vacuous), NOT the conv WRITE value. So the
+honest suspect set for the trajectory-accumulated carried state is: SSM col-0 EXONERATED; CONV col-0 WRITE
+RUNTIME VALUE (co-suspect); ATTENTION KV / seq-position (co-suspect, audit running). Both remaining suspects
+are best settled by the DEFINITIVE test I've deferred: a DIRECT STATE CAPTURE at the deterministic step 12 --
+dump col-0 conv window + the committed-prefix KV + position_ids, and compare to a fresh-prefill of the same
+committed ids. Whichever component DIFFERS from fresh is the corruption (mamba SSM should match = confirms
+exoneration; if conv col-0 or KV differs = localized). Instruments exist: FR13_CHASE_DIAG H6 (conv-prior bytes
+as-read), and a KV/position dump to add. This ends the indirect component-guessing.
