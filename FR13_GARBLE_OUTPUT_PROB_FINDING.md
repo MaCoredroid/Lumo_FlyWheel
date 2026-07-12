@@ -260,3 +260,26 @@ half is cleanly exonerated (COMMITTER_NATIVE "garble unchanged" may have been va
 FR12_NPR/CAG/DEVICE_MULTIDRAFT all were). => audit BOTH col-0 writes: conv window AND SSM h, for a
 wrong-node/window/bank-row read at num_accepted>1 branch leaf node4=(0,0,1). The clean fix-test is to make the
 FULL col-0 write native (SSM h + conv window) with VERIFIED engagement + no fused/greedy crash.
+
+## CONV col-0 WRITE audit result (2026-07-12): STATIC-CORRECT for B=1 cat9; remaining conv risk = runtime physical-row
+Audit traced write->read loop for winner [0,1,4] (leaf node4=(0,0,1) acc=3). _fr13_conv_commit_to_col0
+(L7112-7162): _leaf_node = _accepted_path_buf[b, acc_len-1] = GDN col 5 (=sampler node4, +1 GDN offset;
+col0=running row). Reads _ssi[b,5]=node4's tree-correct branch window (ancestry [0,1,2,5] via
+build_tree_conv_state_src_indices), writes to col-0 (_ssi[b,0]). NO sibling swap (node3 at col4 not read), NO
+linear-position indexing, NO wrong bank-row. The linear "flat_source" table (the contiguous-block bug) exists
+but is consumed ONLY in the FR10_METRICS diagnostic block, not the live path. Bank is live (self.
+_fr13_replay_conv_state=conv_state), spec-idx same-row-order snapshot. RUNROW_INIT=1 forces the next read to
+col-0 (two comments at L2364/L2734 claiming leaf-node-col read are STALE, not bugs). => CONV col-0 write is
+static-correct for B=1; not the wrong-node bug.
+LATENT bug (INERT for matrix garble, candidate for B=4 AGENTIC): commit early-fill _accepted_path_buf is in
+SAMPLER-row order but _ssi is SPEC-row order; the compact remap _fr13_src_i is applied only to the LATE refill
+(after commit). At B>1 reordered batches (sampler row b != spec row b), the commit pairs req b's leaf id with a
+DIFFERENT req's spec-idx row = cross-request wrong-bank-row commit. Inert at B=1 (sampler==spec order). This is
+a strong candidate for the separate B=4 agentic-degradation carrier (carrier B=concurrency).
+REMAINING B=1 conv suspects (need LIVE CAPTURE): (1) physical col-0 row stability -- commit writes _ssi[b,0]
+snapshotted THIS step; next step reads spec_state_indices[b,0] NEXT step; if block_table[b,0] reassigned
+between steps the read consumes a different physical row (orphaned carrier). (2) page-safe remap
+(replay_conv_state_linear_remap_prepared) writing into col-0 before re-commit. Instruments: FR13_CHASE_DIAG H6
+conv tap (L2536-2559, prior window bytes as-read), FR13_TCF_SELFCHECK=1 (L2484-2523 byte A/B of
+read_cols/bank_rows/prior_bank). Capture _leaf_node/_src/_dst at commit + col-0 bytes before/after + byte-join
+vs next step's H6 window.
