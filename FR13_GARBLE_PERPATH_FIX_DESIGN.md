@@ -79,3 +79,18 @@ num_accepted_tokens for its custom kernel (patcher ~L1813/1847/1893) — the fix
 metadata PATH-decomposed, not rebuild from scratch. Next: (1) study the tree's spec_state_indices builder,
 (2) redo Test B with the correct convention to fully validate the batched call, (3) wire into the patcher
 behind a flag, (4) measure conv residual, (5) gate temp-0.6 + live SWE cache-ON.
+
+## Convention learning + committer-FIRST plan (2026-07-12, post gross-corruption finding)
+Tried validating the batched MULTI-seq native call (Test B) with num_accepted_tokens=1 to route init from
+col 0. WRONG: passing num_accepted_tokens turns on IS_SPEC_DECODING (multi-query verify processing), NOT a
+plain per-path recurrence — it BROKE Test A (0.0 -> 5.9e-2). For a plain per-path linear recurrence use the
+NON-spec continuous-batching path (num_accepted=None); single-seq works (Test A 0.0 bit-exact); the ORIGINAL
+multi-seq idx=arange crash is a separate 1D-index/cu_seqlens layout issue (DEFERRED).
+
+REVISED PLAN given the garble is a GROSS state-carry corruption at num_accepted>1 x branches (not realization):
+1. COMMITTER-FIRST (leading hypothesis, uses VALIDATED single-seq native): after the accept, rebuild col-0
+   by running the committed path (linear, acc_len tokens, from prev col-0) through single-seq
+   fused_sigmoid_gating => native-correct col-0. This is the fr13_native_spec_vs_nospec / Test A mechanism
+   (bit-exact 0.0). If garble->0 the committer col-0 was the bug.
+2. If committer-fix insufficient, the VERIFY scan needs per-path native too (multi-seq convention TBD).
+Committer fix is the tractable, validated first build; gate on the reproducible wcs_slice seed1 garble.
