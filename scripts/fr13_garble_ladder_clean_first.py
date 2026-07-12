@@ -45,15 +45,17 @@ def main():
     except Exception:
         pass
 
-    # ---- CLEAN FIRST: teacher-force -> node0 CLEAN captured as call0 ----
+    # ---- CLEAN FIRST: CONTINUATION (max_tokens=5 so SPEC-DECODE runs -> first-decode node0 captured as call0) ----
+    # max_tokens=1 does a plain decode (shape[0]=1, no tree) -> LAYER_HIDDEN (NUM_TOKENS=10) skips it.
     body = {"model": M, "messages": [{"role": "user", "content": content},
                                      {"role": "assistant", "content": prefix}],
-            "max_tokens": 1, "temperature": 0.0, "logprobs": True, "top_logprobs": 5,
+            "max_tokens": 5, "temperature": 0.0, "logprobs": True, "top_logprobs": 5,
             "add_generation_prompt": False, "continue_final_message": True,
             "chat_template_kwargs": {"enable_thinking": False}}
     dc = post("/v1/chat/completions", body)
     lp = dc["choices"][0]["logprobs"]["content"][0]
-    print(f"[CLEAN call0] argmax {lp['token']!r} lp={lp['logprob']:.3f}", flush=True)
+    print(f"[CLEAN call0] first-token argmax {lp['token']!r} lp={lp['logprob']:.3f} "
+          f"(should be '_row'; captured as LAYER_HIDDEN call0)", flush=True)
 
     # ---- LIVE: matrix greedy -> garble node0 captured as a later call ----
     d = post("/v1/chat/completions", {"model": M, "messages": [{"role": "user", "content": content}],
