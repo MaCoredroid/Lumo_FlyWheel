@@ -17,7 +17,7 @@ export FR10_DECODE_MODE_DEFAULT=tree_mtp
 
 # --- PIPELINE-ON (the gold-gate serving path) ---
 export FR13_DRAFTER_SINGLE_LOGITS=1   # FIX-1
-export FR13_EAGER_PACK=1              # FIX-2  (replay-coupled)
+export FR13_EAGER_PACK=${FR13_EAGER_PACK:-1}   # FIX-2 (replay-coupled); env-overridable for committer-native test
 export FR13_TREE_CONV_FUSED=1         # FIX-3  (requires REPLAY_ROUTE=1)
 export FR13_TREE_SAMPLE_ROW=1         # FIX-A
 export FR13_REPLAY_ROUTE=1            # replay route (ALWAYS ON)
