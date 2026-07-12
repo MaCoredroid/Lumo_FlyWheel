@@ -122,3 +122,28 @@ the B=1 branch source; that lead is weak — not chasing it further without evid
 - **Only unconfounded next step:** rebuild the branch-path oracle on the WORKING FR12_SUBKERNEL_CAPTURE
   (CPU reducer: reconstruct root→node path from captured per-node pre_conv, replay native recurrent
   update, compare to captured branch scan_out). That is the clean branch-vs-OWN-path drift measurement.
+
+## 2026-07-12 SCAN_ALIGN REFUTED (user's "it's a bias" reframe — scan-body tested)
+FR13_SCAN_ALIGN=1 (match native's 3 scan-body BIAS seams: l2norm div-vs-rsqrt, beta bf16-roundtrip,
+K1 carried-state bf16-roundtrip = the depth-growth recurrent carrier) applied to the served REPLAY
+path via _gdn_node_step. Clean N=216 run, ENGAGED (worker FR13_SCAN_ALIGN=1), syntax 5/216:
+**undefined-name-rate = 12.89%** vs default no-cache 9.62% = NOT a reduction (slightly worse).
+=> The scan-body per-token PRECISION bias is NOT the dominant seed. (First boot failed on pure
+720s health-timeout — SCAN_ALIGN=1 forces kernel recompile+graph re-capture; fixed via BOOT_TIMEOUT.)
+NOT baking SCAN_ALIGN (refuted; keep fp32-carry default).
+
+**Every NAMEABLE bias/seed candidate is now refuted:** scan-body precision (SCAN_ALIGN, empirical),
+conv (already native-bf16-matched), geometry/BV (inert+harmful), in_proj_ba (B>=2-only, spine-fixed),
+SSM-cache-dtype (already fp32), fp32-conv (asymmetric), committer (proven correct). The user's
+insight holds (it's a systematic bias, ~492x amplified) but the remaining biased op is the
+STRUCTURAL co-residency (branch present vs absent), which is UN-localized — every per-op localizer
+(payload-oracle, MAB) is rotted or side-effectful on the current build (5 failed attempts).
+
+**Datapoint:** cat6+cache=9.91% ~= cat8+cache=5.96-9.92% => garble does NOT scale with branch COUNT;
+it's the PRESENCE of any branch co-residency (saturated), consistent with a structural (not additive)
+co-residency seed.
+
+**NEXT (honest):** the co-residency op needs a WORKING localizer. Options: (a) minimal read-only
+eager branch-vs-native L0 probe (capture served M10 stages read-only + compute native L0 offline from
+captured inputs — no MAB re-run side effects), or (b) dedicated rebuild of the branch-path oracle for
+the stateless build. NOT another quick flag test — the nameable flags are exhausted.
