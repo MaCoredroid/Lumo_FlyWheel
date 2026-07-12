@@ -799,6 +799,7 @@ def _patch_gdn_linear() -> bool:
             "_FR13_EAGER_PACK = " + ("True" if os.environ.get("FR13_EAGER_PACK", "1") == "1" else "False") + "  # FR13_EAGER_PACK baked from PATCH-TIME env (worker-env drops it)\n"
             "_FR13_VERIFY_NATIVE = " + ("True" if os.environ.get("FR13_VERIFY_NATIVE", "0") == "1" else "False") + "  # FR13_VERIFY_NATIVE baked from PATCH-TIME env (worker drops FR13_*); per-node native verify diagnostic\n"
             "_FR13_VERIFY_NATIVE_ANNOUNCED = False\n"
+            "_FR12_NPR = " + ("True" if os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1" else "False") + "  # FR12_TREE_CONV_NATIVE_PRIOR_READ baked from PATCH-TIME env (worker drops FR12_*); conv-prior localization diagnostic\n"
             "# FR13_TREE_CONV_FUSED (FIX-3): read ONCE at module scope; default OFF\n"
             "# until the byte A/B + live gate pass. ON fuses the tree causal-conv\n"
             "# emulation's per-node state write-back loop / per-col tap loop /\n"
@@ -2163,7 +2164,7 @@ def _fr13_gdn_subop_mab(
             if (
                 _fr12_subkernel_capture_enabled
                 or _fr13_gdn_subop_mab_on
-                or os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1"
+                or bool(globals().get("_FR12_NPR", False))
             ):
                 _fr12_pre_conv_spec = mixed_qkv_spec.detach().clone()
             if _fr13_gdn_subop_mab_on:
@@ -2239,9 +2240,7 @@ def _fr13_gdn_subop_mab(
                             + "/"
                             + str(conv_weights.dtype)
                         )
-                _fr12_native_prior_read = (
-                    os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1"
-                )
+                _fr12_native_prior_read = bool(globals().get("_FR12_NPR", False))
                 _fr12_full_state_capture = (
                     os.environ.get("FR12_TREE_CONV_STATE_FULL_CAPTURE", "0") == "1"
                 )
