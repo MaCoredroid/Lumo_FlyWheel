@@ -301,3 +301,18 @@ E5 bar = fused_sigmoid_gating (L959). Both native, LINEAR, no branching, no garb
 then run each root->leaf PATH recurrence through the NATIVE kernel (native-exact per committed token;
 redundant recompute = cheap rank-1 FLOPs only, cat8 11 vs 8 nodes ~40% recurrence overhead). USES native
 kernel (sidesteps SCAN_ALIGN codegen-mimic). UNVERIFIED — next: design+prototype per-path native recurrence.
+
+---
+
+## 2026-07-12 — RETRACTION: the "9e-4 node-step realization = seed" was a SPINE (non-causal) proxy
+
+Adversarial workflow (wf_f5f44a60) refuted my own localization. fr13_tree_vs_native_bias.py measured
+_gdn_node_step in a hand-written LINEAR _chain_kernel = the garble-FREE spine (chain5), NOT the served
+branched _tree_gdn_kernel co-residency scan. A diff fully present on the garble-free spine cannot be the
+branch-garble differentiator (same in_proj_ba proxy trap). Corroboration: SCAN_ALIGN made garble WORSE
+(12.89 vs 9.62%). CONV now bit-exact-clean (0.0 vs native causal_conv1d, 6 seeds x 3 scales). Two more
+~9e-4 carriers sit OUTSIDE the verify-scan fix: committer/replay _tree_gdn_replay_kernel (depth-growing)
+and in_proj_ba padded form (bmm-native OFF; NOTE: bmm was earlier engaged+refuted end-to-end). Branch-garble
+seed is UNLOCALIZED; deterministic ladder exhausted. NEXT = EMPIRICAL: (a) output prob probe (garbled-token
+prob tree vs clean), (b) live gate with WHOLE GDN forward native (verify scan + replay), branches intact.
+Full verdict: output/fr13_drift_localization_workflow_verdict.md
