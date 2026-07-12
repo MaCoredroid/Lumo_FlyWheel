@@ -94,3 +94,14 @@ verify-argmax classifier for testing fixes. in_proj/conv-compute/SSM-committer a
 verify-forward state ops: conv STATE routing (prior-window num_accepted>1) or the verify SCAN (_tree_gdn_kernel)
 or attention. NEXT: test each at greedy+CAG (does the matrix verify argmax become expected_row_count?).
 NOTE: wcs greedy clean, ledger greedy syntax-err, matrix greedy garbles => garble is prompt/position-specific.
+
+## Committer-native greedy re-test (2026-07-12): BLOCKED by crash; committer stays OUT
+Boot COMMITTER_NATIVE=1 + DEVICE_MULTIDRAFT=0 + CAG + greedy crashed on first request: EngineDeadError,
+RuntimeError in _lumo_tree_path_lcp_max_greedy_sample path-LCP log "expanded size (6) must match existing
+(10) at dim 0" — a committer-native x greedy-committer interaction bug (default-OFF code). Last cycle's
+greedy+CAG WITHOUT committer-native did not crash. Not debugging (committer is out on 2 prior evidences:
+temp-0.6 persist + prob-probe grossness unchanged). NEXT: build the CONV state-routing native fix (the
+untested half of col-0 state, num_accepted>1 prior-window = memory's OPEN bug) and test at greedy+CAG
+WITHOUT committer-native (that combo works, produced records + the deterministic matrix garble). Conv
+committer infra scouted: prepare_committed_path_conv_rows / gather_committed_path_conv_prior
+(fr13_tree_conv_fused.py), replay_conv_state_linear_remap (fr13_replay_conv_remap.py).
