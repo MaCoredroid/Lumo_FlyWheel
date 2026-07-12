@@ -243,3 +243,26 @@ sub-op capture couldn't localize. The in_proj_ba bmm fix is kept default-OFF (a 
 improvement, but not the garble fix).
 Every accessible hypothesis is now eliminated with engagement-verified data. Remaining seed is
 capture-blocked; localizing it needs the instrument rebuild (controlled single-forward, non-syncing).
+
+## 2026-07-12 FR12 capture crash diagnosed as NON-CUDA (rotted instrument, resists line-fix)
+CUDA_LAUNCH_BLOCKING=1 minimal capture: reached tree decode (num_tokens=9, captured input_hidden+
+pre_conv) but NO CUDA error / traceback in the container logs, requests still break (syntax errors).
+So the FR12 crash is NOT an async CUDA fault and NOT a catchable exception — the read-only tree-path
+taps (conv1d_out@3903 / h0_state_in@4349) either corrupt the spec-decode state or stall the engine in
+a way that breaks generation, with no diagnosable error. This instrument is rotted beyond a line-fix.
+=> The sub-op localizer cannot be revived by patching; it needs a from-scratch DEVICE-SIDE capture
+(pre-alloc device buffers per stage, single D2H at forward-end, no mid-forward host op) — substantial
+patcher surgery.
+
+## SESSION SUMMARY (garble drive, ~20 cycles): comprehensive elimination, seed capture-blocked
+SOLID: garble is real (tree ~9% undefined-name vs native 0%); requires branches (chain5 kills it).
+ELIMINATED (engagement-verified): GEMM M-keying entirely (in_proj_ba M>=9 switch real via microbench
+but bit-exact fix ENGAGED-and-refuted 10.99/7.80 vs 9.32; only bf16 GEMMs are in_proj_a/b, all else
+fp8 M-invariant); geometry (0.0); scan-align (worse, 12.89%); conv (native-matched); batch-invariance
+(counterproductive GB10); committer (class); SSM-dtype (already fp32). CORRECTED amplification physics
+(x492 not x14800; systematic-seed x exp, but native-seed-0 asserted not measured — reference confound
+in the ladder). PINNED: seed = non-GEMM tree-vs-native GDN recurrent-state (h0) realization /
+co-residency, born at L0 w/ bit-identical input. BLOCKED: localizing it needs the sub-op capture (rotted,
+non-line-fixable) OR the branch-path oracle (rotted) — both require the device-side capture rebuild.
+NET: one bit-exactness artifact (bmm in_proj_ba, default-OFF); no garble fix. Next real investment =
+device-side capture rebuild (substantial), NOT more incremental cron experiments.
