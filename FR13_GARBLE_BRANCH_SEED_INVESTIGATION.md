@@ -62,3 +62,23 @@ So `fr12_branch_path_oracle_probe.py` cannot be fed as-is. Killed the boot (conc
   recurrent update — no patcher surgery. OR go straight at the branch fix: read the replay kernel's
   per-node conv/state handling, propose a compute-only branch-path fix, gate end-to-end on the temp-0.6
   garble gate (the ultimate test; doesn't need the oracle).
+
+## 2026-07-12 red-team corrections (two of my own leads weakened)
+- **Conv prior-window is NOT the branch defect.** fr13_tree_conv_fused.py builds each node's conv
+  window from ITS OWN root→node path (build_tree_conv_window_source_indices :98-104: last `width` rows
+  of `[prior] ++ [width-1+path_node for path_node in path]`; state write-back :119-159 gathers per
+  path). Branch conv is path-aware by construction ⇒ not the seed.
+- **The node5-ladder 0.012 "branch drift" is CONFOUNDED.** node5=(0,1) is a BRANCH candidate; the
+  ladder's "clean" reference is the full-context re-run of the COMMITTED sequence. A branch that was
+  NOT the committed continuation legitimately differs from the committed clean — that 0.012 is a
+  reference artifact (branch-vs-committed), not a proven branch bug. Same reference-confound the BV
+  doc flagged.
+- **What survives: chain5 (spine-only) kills the garble = the STRONG evidence** the garble requires
+  branches. But WHY is now open between (a) branch nodes seeded wrong (needs the path-rerun oracle to
+  confirm — rotted) vs (b) a residual M-dependent op still perturbing accept at branch commits
+  (in_proj_ba fixed, but 18 flips remain). Conv ruled out; scan bit-exact; in_proj_ba padded ⇒ the
+  live suspects are the branch STATE (h0 read/realization) and any un-audited M-keyed op on the
+  branch commit path.
+- **Only unconfounded next step:** rebuild the branch-path oracle on the WORKING FR12_SUBKERNEL_CAPTURE
+  (CPU reducer: reconstruct root→node path from captured per-node pre_conv, replay native recurrent
+  update, compare to captured branch scan_out). That is the clean branch-vs-OWN-path drift measurement.
