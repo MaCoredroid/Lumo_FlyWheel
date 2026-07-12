@@ -319,3 +319,19 @@ kernel numerics is the garble + COMMITTER_NATIVE is the fix. Boot-variance (2.96
 is the detectable signal. ALT (fully deterministic, offline): compare custom _tree_gdn_replay_kernel col-0 vs
 _fr13_native_committer_replay col-0 for branch path [0,1,4] acc=3 (SSM audit lead #2) -- kernel-vs-kernel, no
 server, no crash; gross divergence => custom kernel bug.
+
+## COMMITTER_NATIVE result (2026-07-12): SSM col-0 write EXONERATED (non-vacuous, needle fired)
+Boot locked cat9 (APC-off, eager) + FR13_COMMITTER_NATIVE=1 + temp-0.6 garble gate (tree arm). Needle
+[FR13_COMMITTER_NATIVE ENGAGED] num_spec_decodes=1 FIRED (non-vacuous). Tree undefined-name rate = 8.04%
+(15/33 early; matches known tree baseline 8-11%). => making the SSM col-0 STATE write fully native
+(fused_sigmoid_gating replay, bit-exact-to-no-spec) does NOT reduce the garble => SSM col-0 write is NOT the
+bug. Settles the prior "unchanged" as VALID (needle confirms). Combined w/ VERIFY_NATIVE (GDN scan compute
+exonerated), the ENTIRE SSM/GDN path is clean (scan compute + col-0 state write). NOTE: _fr13_native_committer_
+replay ALSO burns node cols (burn_node_bank param) => if the bug were BURN-aliasing it would survive
+COMMITTER_NATIVE too (not distinguished here); and COMMITTER_NATIVE does NOT touch the CONV col-0.
+=> REMAINING carried-state suspects (teacher-force proved trajectory-accumulated): (1) CONV col-0 (write
+compute -- fused snapshot never replaced-native+tested since native_prior_read crashes w/ fused; runtime
+physical-row/aliasing), (2) col-0/col-k BURN aliasing (cheap host check: is spec_state_indices[b,0] in
+[b,1:SPEC_COLS]?), (3) KV cache (least likely: committed tokens all correct). NEXT: cheap host-side aliasing
+detector on the live committer launch (real code, no worker-drop/fused-crash) + a fused-compatible conv-col-0
+native test.
