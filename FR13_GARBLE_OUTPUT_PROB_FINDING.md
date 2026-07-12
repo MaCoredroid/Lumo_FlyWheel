@@ -57,3 +57,15 @@ step's accept decision using the branched tree scan from col-0) is the remaining
 Reduction 9.3%->2.9% is cross-boot (unconfirmed vs same-config baseline; boot variance +-3-6%); the ROBUST
 signal is garble PERSISTS. NEXT: route the VERIFY scan per-path native too (multi-seq convention). Also:
 eager committer host-syncs make it too slow to gate -> batch the .item() calls for a usable gate.
+
+## Prob probe on COMMITTER-FIXED config (2026-07-12): garble STILL GROSS -> SSM committer EXONERATED
+Boot ship EAGER_PACK=1 + FR13_COMMITTER_NATIVE=1 (batched syncs), ENGAGED confirmed. Reproduced garble
+(wcs_slice seed1: 'pixel_keep' = truncated pixel_keep_boolean_mask). Teacher-force: pos 132 committed '\n'
+| clean argmax '_boolean' lp=-0.00 (~prob 1.0) | committed rank=None (OUT of clean top-20 = near-impossible).
+=> the surviving garble is STILL GROSS (~unchanged from the pre-fix 15-nat gap). The bit-exact-correct SSM
+committer col-0 did NOT change the grossness => the SSM state-carry was NOT the garble source. The gross
+corruption is in THIS step's verify INPUTS the committer doesn't touch: the CONV prior-window STATE ROUTING
+(memory project_fr13_conv_priorwindow_root: wrong bank-row at num_accepted>1, OPEN; conv COMPUTE is bit-exact
+0.0 but the state ROUTING is separate) or the verify scan. NEXT: audit + fix the conv committed-path state
+routing at num_accepted>1 (analogous to the SSM committer). Keep SSM committer default-OFF (validated but not
+the cure). Prose flip at pos 27 ' sliced' rank2 gap0.38 = normal sampling, not garble.
