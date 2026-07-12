@@ -118,3 +118,21 @@ num_accepted=None (col-0 init), inplace_final_state=True, cu_seqlens=[0,m]. i.e.
    overhead-bound anyway per [[reference_tree_tps_overhead_bound]]).
 4. If garble PERSISTS with whole-GDN per-path native => the ~9e-4-amplification thesis is wrong; reconsider.
 Do NOT build the batched call first -- prove the fix works cheaply-correct before optimizing.
+
+## THESIS REFUTED (2026-07-12): whole-GDN-native does NOT fix garble — DO NOT BUILD per-path
+Co-armed FR13_VERIFY_NATIVE=1 + FR13_COMMITTER_NATIVE=1 (eager, cache OFF, GPU_UTIL=0.78; fixed the
+all-layers committer-native 3D spec_state_indices crash first). BOTH needles fired non-vacuously
+(VERIFY_NATIVE per-node native verify + COMMITTER_NATIVE native fused_sigmoid_gating col-0 replay,
+num_spec_decodes=1). Deterministic greedy matrix: **_rows_garble=TRUE, degenerate=False, decode=36s**.
+=> Making the ENTIRE GDN per-node path native-exact (verify scan OUTPUT + col-0 STATE replay; conv already
+bit-exact per memory) does NOT kill the garble. The ~9e-4 GDN-kernel cross-layer-amplification thesis is
+REFUTED. The per-path native recurrence fix would NOT work. Do not build it.
+
+**Redirect:** the garble root is UPSTREAM of the GDN scan/committer compute — the per-node ACTIVATIONS
+(in_proj/conv q/k/v/a/b) the ring feeds the native replay, OR the full_attention/residual path. The
+native committer/verify faithfully replay whatever activations they're given; if the branch-node
+activations are live-corrupt (in_proj co-residency at tree M=10, the directive's L0-sub-op framing), both
+natives inherit it. in_proj/conv "bit-exact" was OFFLINE/synthetic -> re-verify LIVE co-resident M=10.
+NEXT: ladder on the whole-GDN-native boot (or capture the live ring k/v/a/b per accepted branch node,
+M=10 tree vs M=5 spine/sequential) to localize the corrupt activation. GDN scan+state now EXONERATED
+by construction (native doesn't fix) -- stop hunting the committer/scan.
