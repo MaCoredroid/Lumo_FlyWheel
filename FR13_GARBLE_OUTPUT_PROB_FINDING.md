@@ -492,3 +492,16 @@ only, the mamba (content-only, no position) divergence = the corruption. rel_l2=
 4-token re-tokenization of the same text should cause, leaning toward real corruption -- but not conclusive.
 NEXT: confirm the CLEAN prefix tokens == the LIVE committed tokens (4-gap = markers vs content); if content
 matches => mamba col-0 CONFIRMED corrupt => re-examine what COMMITTER_NATIVE missed (conv col-0? the h0 read?).
+
+## LADDER CONFOUND CONFIRMED (2026-07-12): CLEAN re-tokenization != LIVE committed => diff not clean
+Positions: LIVE call20 (pos187) predicts '_shape'; CLEAN call1 (pos187) predicts '_row' -- SAME absolute
+position, DIFFERENT content. So the chat-teacher-force prefix 'computed_slice_shape = (expected' re-tokenizes
+4 tokens SHORTER than the LIVE committed sequence (CLEAN reaches 'expected' at pos186, LIVE at pos190). The
+mamba states differ from the re-tokenization itself => the GDN-layer-0 divergence is CONFOUNDED; cannot
+conclude mamba from it. ROOT BLOCKER: a clean per-layer diff needs the CLEAN to use the EXACT LIVE committed
+token IDs (not re-tokenized text). cat9 (fr13_launch_locked) exposes ONLY /v1/chat/completions (no
+/v1/completions with prompt=ids, which the node5 ladder used on fr10_launch_speed_server). => to resolve:
+either (a) enable /v1/completions on the cat9 boot, or (b) capture the LIVE committed token IDs and teacher-
+force them via a token-id path. The ladder INFRA works (captures + projection + diff all functional); the only
+gap is exact-token CLEAN. The GDN-layer-0 lean toward mamba is SUGGESTIVE (rel_l2 0.5887 > a 4-token re-tok
+should cause, and GDN has no RoPE) but NOT proven.
