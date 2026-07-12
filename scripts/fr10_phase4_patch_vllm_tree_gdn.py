@@ -799,7 +799,6 @@ def _patch_gdn_linear() -> bool:
             "_FR13_EAGER_PACK = " + ("True" if os.environ.get("FR13_EAGER_PACK", "1") == "1" else "False") + "  # FR13_EAGER_PACK baked from PATCH-TIME env (worker-env drops it)\n"
             "_FR13_VERIFY_NATIVE = " + ("True" if os.environ.get("FR13_VERIFY_NATIVE", "0") == "1" else "False") + "  # FR13_VERIFY_NATIVE baked from PATCH-TIME env (worker drops FR13_*); per-node native verify diagnostic\n"
             "_FR13_VERIFY_NATIVE_ANNOUNCED = False\n"
-            "_FR13_COMMITTER_NATIVE = " + ("True" if os.environ.get("FR13_COMMITTER_NATIVE", "0") == "1" else "False") + "  # FR13_COMMITTER_NATIVE baked from PATCH-TIME env; native col-0 committed-path replay (co-arm w/ VERIFY_NATIVE = whole-GDN-native garble thesis test)\n"
             "_FR12_NPR = " + ("True" if os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1" else "False") + "  # FR12_TREE_CONV_NATIVE_PRIOR_READ baked from PATCH-TIME env (worker drops FR12_*); conv-prior localization diagnostic\n"
             "# FR13_TREE_CONV_FUSED (FIX-3): read ONCE at module scope; default OFF\n"
             "# until the byte A/B + live gate pass. ON fuses the tree causal-conv\n"
@@ -8630,7 +8629,6 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             # forward and cleared here -- not a per-step Python dict.
             from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
                 launch_tree_gdn_replay as _fr13_replay_launch,
-                _fr13_native_committer_replay as _fr13_native_committer,
             )
             _fr13_replay_layers = getattr(
                 _lumo_tree_commit_gdn, '_FR13_REPLAY_LAYERS', None
@@ -8999,36 +8997,6 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                             runrow_init=_fr13_runrow_init,
                             burn_node_bank=_fr13_burn_node_bank,
                         )
-                        if _FR13_COMMITTER_NATIVE and not (
-                            torch.cuda.is_available()
-                            and torch.cuda.is_current_stream_capturing()
-                        ):
-                            # FR13_COMMITTER_NATIVE (diagnostic, EAGER-only): overwrite
-                            # col-0 (running row) with the NATIVE committed-path replay
-                            # (fused_sigmoid_gating, validated 1.19e-7). Co-armed with
-                            # FR13_VERIFY_NATIVE => whole-GDN-native => tests the ~9e-4
-                            # cross-layer amplification thesis on the deterministic garble.
-                            _fr13_native_committer(
-                                state_bank=_fr13_ssm_bank,
-                                spec_state_indices=_fr13_layer._fr13_replay_spec_idx,
-                                accepted_paths=_accepted_path_buf,
-                                accepted_lens=_accepted_lens_buf,
-                                k_ring=_fr13_layer._fr13_replay_ring_k,
-                                v_ring=_fr13_layer._fr13_replay_ring_v,
-                                a_ring=_fr13_layer._fr13_replay_ring_a,
-                                b_ring=_fr13_layer._fr13_replay_ring_b,
-                                A_log=_fr13_layer.A_log,
-                                dt_bias=_fr13_layer.dt_bias,
-                                num_spec_decodes=_fr13_replay_rows,
-                                output_scale=float(
-                                    _fr13_layer._fr13_replay_output_scale
-                                ),
-                                use_qk_l2norm_in_kernel=True,
-                                burn_node_bank=_fr13_burn_node_bank,
-                                spec_cols=int(
-                                    _fr13_layer._fr13_replay_spec_idx.shape[1]
-                                ),
-                            )
                         if not _fr13_runrow_commit:
                             # STATELESS-TREE: col 0 is now the authoritative
                             # committed-leaf running row, read map-free by the
@@ -9551,7 +9519,6 @@ def _lumo_tree_canonical_multidraft_sample(
             # see the greedy committer for the full rationale.
             from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
                 launch_tree_gdn_replay as _fr13_replay_launch,
-                _fr13_native_committer_replay as _fr13_native_committer,
             )
             _fr13_replay_layers = getattr(
                 _lumo_tree_commit_gdn, '_FR13_REPLAY_LAYERS', None
@@ -9733,31 +9700,6 @@ def _lumo_tree_canonical_multidraft_sample(
                         runrow_init=_fr13_runrow_init,
                         burn_node_bank=_fr13_burn_node_bank,
                     )
-                    if _FR13_COMMITTER_NATIVE and not (
-                        torch.cuda.is_available()
-                        and torch.cuda.is_current_stream_capturing()
-                    ):
-                        _fr13_native_committer(
-                            state_bank=_fr13_ssm_bank,
-                            spec_state_indices=_fr13_layer._fr13_replay_spec_idx,
-                            accepted_paths=_accepted_path_buf,
-                            accepted_lens=_accepted_lens_buf,
-                            k_ring=_fr13_layer._fr13_replay_ring_k,
-                            v_ring=_fr13_layer._fr13_replay_ring_v,
-                            a_ring=_fr13_layer._fr13_replay_ring_a,
-                            b_ring=_fr13_layer._fr13_replay_ring_b,
-                            A_log=_fr13_layer.A_log,
-                            dt_bias=_fr13_layer.dt_bias,
-                            num_spec_decodes=_fr13_replay_rows,
-                            output_scale=float(
-                                _fr13_layer._fr13_replay_output_scale
-                            ),
-                            use_qk_l2norm_in_kernel=True,
-                            burn_node_bank=_fr13_burn_node_bank,
-                            spec_cols=int(
-                                _fr13_layer._fr13_replay_spec_idx.shape[1]
-                            ),
-                        )
                     if not _fr13_runrow_commit:
                         # STATELESS-TREE: col 0 authoritative; leaf-map publish unused.
                         _fr13_publish_apc_ssm_leaf(
