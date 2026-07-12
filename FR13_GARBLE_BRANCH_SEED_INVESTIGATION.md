@@ -226,3 +226,20 @@ kernel work, and it builds on the in_proj_ba HYPOTHESIS which the rotted capture
 seed is hypothesized (in_proj_ba M-keying, unconfirmed — capture rotted); the remaining path is a
 custom M-invariant bf16 GEMM (un-tried, substantial, unconfirmed-hypothesis). This is a
 comprehensively-researched boundary, NOT a premature no-go.
+
+## 2026-07-12 GEMM-M-keying hypothesis COMPREHENSIVELY ELIMINATED (in_proj_ba fix refuted)
+Microbench found bf16 in_proj_ba cuBLASLt kernel switches at M>=9 (~1 ULP) — REAL. Per-row-M=1 bmm
+fix bit-exact to native (0.0), ENGAGED-verified (logger.error rows=9 & rows=36). BUT end-to-end garble
+UNCHANGED: CONC=4=10.99%, CONC=1=7.80% vs baseline 9.32% (native 0%). => in_proj_ba M-keying is real
+but NOT causal.
+Weight-map reconciliation (config modules_to_not_convert + layer-0 scale_inv check): the ONLY bf16
+(M-keyed cuBLASLt) GEMMs in the GDN layer are in_proj_a/in_proj_b (FIXED). All else fp8 (in_proj_qkv/z,
+out_proj, MLP — M-invariant, BLOCK_SIZE_M=64 single-tile for M<=64) or elementwise (layernorms, gate
+norm). Full-attn layers are fp8 too. => NO remaining GEMM M-switches at M>=9.
+**CONCLUSION: the garble is NOT a GEMM M-keying effect.** The M>=9 correlation was a PROXY (tree always
+M>=9, native M<=8, so any tree-vs-native diff tracks M>=9). The real seed is a NON-GEMM tree-vs-native
+difference — co-residency / recurrent-state handoff / conv-or-attn packing — the class the rotted
+sub-op capture couldn't localize. The in_proj_ba bmm fix is kept default-OFF (a real bit-exactness
+improvement, but not the garble fix).
+Every accessible hypothesis is now eliminated with engagement-verified data. Remaining seed is
+capture-blocked; localizing it needs the instrument rebuild (controlled single-forward, non-syncing).
