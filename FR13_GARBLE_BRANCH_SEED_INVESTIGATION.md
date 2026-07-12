@@ -85,6 +85,24 @@ reduction levers (fp32 state accumulation / rms-clamp / re-anchor, [[project_fr1
 in_proj_ba pad is B>=2-only (patcher :6077 `_nspec > 1`) and GEMM rows are independent, so it is NOT
 the B=1 branch source; that lead is weak — not chasing it further without evidence.
 
+## 2026-07-12 cycle: mis-diagnosis corrected + ship baselines + candidate vetting
+- **CORRECTED my own error:** the MAB-eager run's "18/18 syntax errors" was NOT corrupted output — it
+  was 18/18 `<HTTP 500>` (requests failed when MAB fires live). Normal syntax-error rate = 0/72
+  (cat8_cacheon, cat8_bake, native all 0). MAB fails requests live; not viable — but "corrupts output"
+  was wrong; "fails the requests" is right.
+- **SHIP-CONFIG BASELINES (clean, syntax 0, the numbers the fix must beat):**
+  cat8+cache=5.96% (one boot; 9.86–9.92% other boots — BOOT-VARIABLE), cat6+cache=9.91%, native=0.00%.
+  So the fix needs same-boot A/B (or a drive-to-~0) since boot-variance (6–10%) can swamp a partial fix.
+- **Candidates VETTED & REFUTED this cycle:** SSM-cache-dtype — already float32 (launcher:225), matches
+  native, not the seed. (Adds to the refuted list: geometry, fp32-conv, committer, M-inv-spine-done.)
+- **Amplification levers doc is SUPERSEDED (2026-06-15)** and not armable — the targeted-fp32 lever
+  (fp32 at the RMSNorm gate + the ~4 deep full-attn hotspots where small act → large 1/rms multiplies
+  drift) needs IMPLEMENTATION.
+- **SOLE un-refuted compute-only direction:** targeted-fp32 at the amplification hotspots. It is
+  UN-TESTED for garble (2026-07-10 tested fp32-CONV, NOT fp32-RMSNorm-gate / full-attn-hotspots) — so
+  not refuted, just unbuilt. NEXT: implement (default-OFF flag, targeted not whole-model = no HBM tax),
+  gate same-boot A/B on cat8+cache garble vs native-0%, then live SWE. Build carefully; don't rush.
+
 ## 2026-07-12 red-team corrections (two of my own leads weakened)
 - **Conv prior-window is NOT the branch defect.** fr13_tree_conv_fused.py builds each node's conv
   window from ITS OWN root→node path (build_tree_conv_window_source_indices :98-104: last `width` rows
