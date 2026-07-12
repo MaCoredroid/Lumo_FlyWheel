@@ -1,5 +1,10 @@
 # FR13 garble — BRANCH-node seed investigation (2026-07-12, frontier re-open)
 
+> **GOAL (user, firm): cat6/cat8 BRANCHED trees garble-free. chain5/spine-only/tree-reshape is an
+> ANTI-SOLUTION and is OFF THE TABLE — removing branches deletes the deliverable (branches = accept =
+> speed). Any past "chain5 kills garble" result is used ONLY as a diagnostic that branch co-residency
+> is the carrier; the fix must KEEP branches and correct their forward compute-only.**
+
 User reopened the garble drive (the 2026-07-10 "accept within-floor" close is REFERENCE, not a
 wall): native GDN with **real batching** has 0% garble, so our machinery has a specific, findable
 defect that accepts an impossible token. This doc breaks down the numbers and localizes it.
