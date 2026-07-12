@@ -53,6 +53,29 @@ forward (tree TPS is overhead-bound). Optimize later to root->LEAF paths (11 vs 
 temp-0.6 garble gate + live SWE-Verified WITH cache ON, cat8 AND cat6, same-boot A/B vs native 0%,
 same config as fr13_launch_locked. Never chain5/reshape (branches are the deliverable).
 
+## Multi-path calling convention (from fused_sigmoid_gating.py kernel, red-teamed)
+`fr13_perpath_realistic_validate.py`: Test A (single chain from NON-ZERO committed h0) == packed_decode,
+max|d|=0.0 — bit-exactness holds with real state. Test B (naive batched multi-path) CRASHED because the
+kernel's spec/continuous-batching convention is:
+- `cu_seqlens` [N_seq+1] segments the flattened q/k/v (batch dim must be 1).
+- `ssm_state_indices` is **2D [N_seq, tokens]**; initial state for seq i_n is read from the BANK at
+  `state_idx = ssm_state_indices[i_n, num_accepted_tokens[i_n]-1]` (spec) or `[i_n, 0]` (non-spec).
+- **State slot 0 = NULL_BLOCK_ID: `if state_idx <= 0: return`** (skips the sequence). Real slots are >=1.
+- `num_accepted_tokens` [N_seq] is REQUIRED for spec decoding (selects init-read + write-back slot).
+- `initial_state` is the full state BANK (not a per-seq stack); indexed by state_idx.
+My naive Test B (1D arange incl. slot 0, no num_accepted, stacked state) violated all of this => crash.
+NOT a fix failure — this is exactly how native MTP already drives the kernel.
+
+## Overhead (resolved favorably)
+Native MTP presents ALL spec sequences in ONE fused_sigmoid_gating call per layer. Presenting the tree
+PATHS as the sequences => still ONE call per layer = **native-MTP launch parity** (viable). N separate
+single-seq calls (~8 paths x 48 layers = 384/step) would be too heavy — do NOT do that; use the batched
+call. So the batched multi-path call is both NECESSARY (overhead) and SUFFICIENT (native-exact).
+
 ## Status
-Mechanism bit-exact-validated. Next: prototype layout index-math offline (fr13_perpath_layout.py),
-then wire into the patcher's tree GDN path behind a flag, measure conv residual, gate.
+Mechanism bit-exact-validated incl. non-zero committed h0 (Test A). Batched multi-path convention now
+understood (2D indices, NULL slot 0, num_accepted). The tree ALREADY builds spec_state_indices_tensor +
+num_accepted_tokens for its custom kernel (patcher ~L1813/1847/1893) — the fix should REUSE/adapt that
+metadata PATH-decomposed, not rebuild from scratch. Next: (1) study the tree's spec_state_indices builder,
+(2) redo Test B with the correct convention to fully validate the batched call, (3) wire into the patcher
+behind a flag, (4) measure conv residual, (5) gate temp-0.6 + live SWE cache-ON.
