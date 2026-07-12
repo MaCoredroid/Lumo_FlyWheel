@@ -283,3 +283,21 @@ between steps the read consumes a different physical row (orphaned carrier). (2)
 conv tap (L2536-2559, prior window bytes as-read), FR13_TCF_SELFCHECK=1 (L2484-2523 byte A/B of
 read_cols/bank_rows/prior_bank). Capture _leaf_node/_src/_dst at commit + col-0 bytes before/after + byte-join
 vs next step's H6 window.
+
+## BOTH col-0 write audits CLEAN (2026-07-12): node-selection correct -> narrowed to NUMERICS/ALIASING (runtime)
+SSM audit: RUNROW_COMMIT (fr10_gdn_tree_kernel.py:892-906) writes leaf `state` to col-0 row
+(spec_state_indices[b,0]); leaf selected by NODE id via +1 anchor ring gather (chain [anchor,0,1,4]=ring
+[0,1,2,5]); scratch linear cols burned; M-invariant by construction; custom kernel gathers IDENTICAL node set
+as _fr13_native_committer_replay. NO wrong-node/sibling/bank-row/M defect. So BOTH conv+SSM col-0 writes are
+static-correct => bug is NOT node-selection. Two runtime leads BOTH audits name:
+ (a) custom-kernel NUMERICS/HANDOFF vs native committer (state+0.0 norm :829, prev_lens snapshot :782,
+     h0-row aliasing) -- testable via FR13_COMMITTER_NATIVE (native col-0, bit-exact-to-no-spec, needle L973).
+ (b) col-0/col-k ROW ALIASING: RUNROW_COMMIT writes col-0 (:892) THEN BURN_NODE_BANK zeroes rows
+     spec_state_indices[b,1..SPEC_COLS-1] (:907-922); if col-0 row aliases a burned node row => BURN destroys
+     the committed leaf. NOTE (b) would corrupt SPINE commits too (spine also RUNROW_COMMIT+BURN) => since
+     spine is garble-free, (b) is LESS likely UNLESS aliasing is branch/step-specific. (a) is more plausibly
+     branch-specific (num_accepted>1 branch numerics).
+DECISIVE TEST: re-run FR13_COMMITTER_NATIVE with VERIFIED needle + matrix greedy, NO winner-log (the prior
+greedy crash was in the path-LCP LOG, gated on LUMO_TREE_PATH_LCP_LOG/FR10_METRICS -- OFF => no crash). If
+garble clears => custom kernel numerics/burn is the bug + COMMITTER_NATIVE is the fix. If persists (engaged)
+=> SSM col-0 exonerated => conv runtime or KV.
