@@ -404,3 +404,19 @@ this unconfirmed+over-predicting mechanism. SETTLE with the decisive capture (_f
 the [0,2] verify, does linear committed slot hold the accepted leaf's KV (correct => refuted) or a rejected
 sibling's (misplaced => confirmed, edge-case)? If refuted, attention KV is exonerated too and the suspect
 returns to conv col-0 WRITE runtime (direct capture) or the RoPE mrope-anchor mismatch (patcher 10703-10717).
+
+## RoPE mrope-anchor lead evaluated (2026-07-12): likely secondary (consistent off-by-one = relative-invariant)
+Patcher 10703-10724: for a spec row with sched==tree_n, self.positions (=_fr10_depth_pos, => slot_mapping) uses
+base=num_computed-1+depth_offsets; mrope_positions (=_fr10_mrope_depth_pos, => RoPE for Qwen3.x uses_mrope)
+uses base=num_computed+depth_offsets. A CONSISTENT +1 in RoPE is relative-invariant (all tree tokens shifted
+equally) => likely HARMLESS in isolation; only a SLOT-vs-RoPE mismatch (KV stored at slot num_computed-1+d
+but RoPE'd with num_computed+d) or an old-committed-vs-new-tree base mismatch would bite. Secondary to the KV
+misplacement.
+STATUS: indirect leads EXHAUSTED. All mamba components exonerated (non-vacuous); attention KV-misplacement
+hypothesis OVER-PREDICTS (8-11% not pervasive) so likely refuted-or-edge-case; RoPE likely harmless; conv col-0
+WRITE runtime never native-tested. ONLY a DIRECT CAPTURE settles which carried component actually differs from
+a fresh prefill. DECISIVE NEXT (the endgame): boot matrix greedy + eager, capture at the deterministic [0,2]
+garble step -- (1) committed-prefix KV via _fr13_tree_attn_op_capture (does linear slot hold accepted leaf or
+rejected sibling?), (2) col-0 conv window (FR13_CHASE_DIAG H6), (3) RoPE positions (FR10_METRICS) -- and diff
+vs a fresh prefill of the committed ids. The component that DIFFERS is the corruption; SSM should match
+(confirms exoneration). This ends the component-guessing; build the fix ONLY on the confirmed component.
