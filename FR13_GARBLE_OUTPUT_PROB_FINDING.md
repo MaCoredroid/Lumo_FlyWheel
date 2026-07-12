@@ -420,3 +420,20 @@ garble step -- (1) committed-prefix KV via _fr13_tree_attn_op_capture (does line
 rejected sibling?), (2) col-0 conv window (FR13_CHASE_DIAG H6), (3) RoPE positions (FR10_METRICS) -- and diff
 vs a fresh prefill of the committed ids. The component that DIFFERS is the corruption; SSM should match
 (confirms exoneration). This ends the component-guessing; build the fix ONLY on the confirmed component.
+
+## KV-misplacement REFUTED by over-prediction (2026-07-12); pivot to conv col-0 WRITE runtime
+Dispositive: if committed-prefix KV were ~3/5-wrong on EVERY accept (agent's "no attention remap" => all
+non-spine accepts misplaced), the model would condition on a badly-corrupted history and produce GARBAGE.
+Observed = coherent code, 8-11% undefined names. node0 (the garbling node) attends over the WHOLE prefix each
+step, so pervasive recent-KV corruption would garble node0 CONSTANTLY, not 8-11%. => the accepted KV IS
+correctly placed (a stock-vLLM block_table re-point the agent missed; vLLM not host-readable to confirm, but
+the code working at 8-11% proves it). Agent's mechanism over-predicts => REFUTED. RoPE mrope-anchor = secondary
+(consistent off-by-one relative-invariant). => LEADING SUSPECT (by elimination) = the CONV col-0 WRITE runtime
+value: _fr13_conv_commit_to_col0 copies node4's node-bank window -> col-0; node-SELECTION audited correct +
+conv COMPUTE bit-exact, but the RUNTIME copy (is the node-bank row read this-step's fresh node4 window or a
+STALE value? physical-row stability? remap disturbing col-0?) was NEVER native-tested (COMMITTER_NATIVE = SSM
+only; native_prior_read tested the READ not the WRITE). TEST: (a) FR13_CHASE_DIAG H6 conv tap dumps the conv
+col-0 window as-read at step 12 -> check for GROSS anomaly (zeros/NaN/discontinuity, self-evident, no fresh ref
+needed); or (b) build a CONV-COMMITTER-NATIVE (recompute conv col-0 fresh over accepted path [0,1,2,5], write,
+needle-gate) analogous to COMMITTER_NATIVE -- garble clears => conv write bug. If conv ALSO exonerated => the
+carried-state framing itself needs re-examination (teacher-force tokenization confound recheck).
