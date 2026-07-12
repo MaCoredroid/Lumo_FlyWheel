@@ -669,3 +669,18 @@ VLLM_BATCH_INVARIANT overrides. Since in_proj_ba bmm alone did NOT fix it, it is
 suspects (run every layer, M-dependence amplifies ~492x): RMSNorm reduction, o_proj/MLP bf16 GEMM,
 in_proj_qkvz (though fp8 per-row = memory says M-indep). NEXT: enumerate the batch_invariant overrides +
 bisect to the single op, then a TARGETED batch-invariant fix (no full-BI speed tax).
+
+## RETRACTED (2026-07-12): BATCH_INVARIANT "breakthrough" was a GREEDY-GATE CONFOUND
+The greedy _rows-at-idx-65 gate showed garble GONE with BATCH_INVARIANT. But the temp-0.6 per-prompt gate
+on the SAME boot: matrix_build 15/15 garbled, token_ledger 13/15, wcs_slice 2/15 (overall 11.90% undefined
+= baseline 9.56%, native 0%). => BATCH_INVARIANT does NOT fix the garble. The greedy flip was a confound
+(perturbed one near-tie clean; mechanism intact -- matrix_build 15/15 at temp0.6 PROVES it).
+
+**METHODOLOGY FIX (critical):** the greedy deterministic _rows/idx-65 gate has FALSE NEGATIVES (greedy
+clean != fixed; matrix_build greedy-clean but temp0.6 15/15 garbled on the SAME prompt). Do NOT trust
+greedy=False as "fixed". USE the temp-0.6 per-prompt gate (matrix_build undefined rate: 15/15 garbled =
+present, ~0 = fixed) as the garble metric. NOTE: prior greedy=TRUE refutations (whole-GDN-native,
+in_proj_ba bmm, committer) still stand -- those failed to fix even the greedy, so definitely not temp0.6.
+BATCH_INVARIANT (GEMM+reduction batch-invariance) + BI_TREE_ATTN (attention) BOTH insufficient => the
+garble is NOT a batch-invariance issue in GEMMs/reductions/attention (and not GDN/in_proj). NEXT: re-gate
+on temp-0.6 matrix_build; the carrier is elsewhere (routing/logic? a non-batch-invariant M-dependence?).
