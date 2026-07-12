@@ -301,3 +301,21 @@ DECISIVE TEST: re-run FR13_COMMITTER_NATIVE with VERIFIED needle + matrix greedy
 greedy crash was in the path-LCP LOG, gated on LUMO_TREE_PATH_LCP_LOG/FR10_METRICS -- OFF => no crash). If
 garble clears => custom kernel numerics/burn is the bug + COMMITTER_NATIVE is the fix. If persists (engaged)
 => SSM col-0 exonerated => conv runtime or KV.
+
+## COMMITTER_NATIVE greedy re-test CRASHED (2026-07-12): diagnostic path-LCP block plumbing bug
+Boot ship + FR13_COMMITTER_NATIVE=1 (sidecar present, worker-drop-proof) + matrix greedy (device committer
+default). Request 500'd, needle=0 (crashed before engaging). Root cause: at greedy (all_greedy), the Python
+_lumo_tree_path_lcp_max_greedy_sample runs; its diagnostic committer block (patcher L8938-9030, the replay/
+durable-AB/apc-leaf publish, wrapped in the "FR10 tree path-LCP log" try) invokes the native committer replay
+with a WRONG-SHAPED spec_state_indices (size-10 tree vs [B,SPEC_COLS]) => _fr13_prepare_committer_layout
+(fr10_gdn_tree_kernel.py:951 `ssi[b,:]=col0[b]`) RuntimeError "expanded size (6) must match existing size (10)"
+=> fail-loud re-raise at L9030-9037 kills EngineCore. This IS the summary's "COMMITTER_NATIVE greedy 6v10
+crash" -- a plumbing bug in the COMMITTER_NATIVE+greedy DIAGNOSTIC wiring, NOT the committer math. The
+deterministic-greedy path for COMMITTER_NATIVE is blocked until this is fixed.
+PLAN: COMMITTER_NATIVE at TEMP 0.6 via fr13_garble_gate.py avoids all_greedy => no path-LCP block => no crash;
+COMMITTER_NATIVE still engages in the GDN forward (needle confirms). Compare the tree garble RATE with
+COMMITTER_NATIVE=1 to the known tree rate (8-11%) / native (0%). If it drops to ~0% => custom RUNROW_COMMIT
+kernel numerics is the garble + COMMITTER_NATIVE is the fix. Boot-variance (2.96-9.56%) means eliminate-to-0
+is the detectable signal. ALT (fully deterministic, offline): compare custom _tree_gdn_replay_kernel col-0 vs
+_fr13_native_committer_replay col-0 for branch path [0,1,4] acc=3 (SSM audit lead #2) -- kernel-vs-kernel, no
+server, no crash; gross divergence => custom kernel bug.
