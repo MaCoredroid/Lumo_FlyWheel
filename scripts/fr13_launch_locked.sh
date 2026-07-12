@@ -21,6 +21,9 @@ export FR13_EAGER_PACK=1              # FIX-2  (replay-coupled)
 export FR13_TREE_CONV_FUSED=1         # FIX-3  (requires REPLAY_ROUTE=1)
 export FR13_TREE_SAMPLE_ROW=1         # FIX-A
 export FR13_REPLAY_ROUTE=1            # replay route (ALWAYS ON)
+export FR13_APC_COMMIT_TO_RUNNING_ROW=1  # stateless col-0 lifecycle (write leaf->col0)
+export FR13_TREE_RUNROW_INIT=1           #   ... read col-0
+export FR13_APC_BURN_NODE_BANK=1         #   ... burn node cols (all 3 = one lifecycle, now baked default-on)
 export FR13_FA2_TREE_BIAS=1
 export FR13_FA2_PREFILL_NATIVE=1
 export FR13_TREE_ATTN_EXP2_SOFTMAX=1

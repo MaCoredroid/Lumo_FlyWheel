@@ -314,7 +314,7 @@ def prepare_committed_path_conv_rows(
             lens > 0, read_node_cols, torch.zeros_like(read_node_cols)
         )
         read_node_cols = torch.clamp(read_node_cols, min=0, max=spec_cols - 1)
-    if os.environ.get("FR13_TREE_RUNROW_INIT", "0") == "1":
+    if os.environ.get("FR13_TREE_RUNROW_INIT", "1") == "1":
         # STATELESS-TREE: seed the next-step conv prior from col 0 (the running
         # row, where the post-accept committer deposited this-step's committed
         # leaf window), not the accepted-leaf node column. Mirrors the SSM

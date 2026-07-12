@@ -4997,7 +4997,7 @@ def _fr13_gdn_subop_mab(
                         # STATELESS-TREE: FR13_TREE_RUNROW_INIT -> seed the scan h0
                         # from col 0 (running row) instead of accepted col nacc-1.
                         h0_use_accepted_column=(
-                            os.environ.get("FR13_TREE_RUNROW_INIT", "0") != "1"
+                            os.environ.get("FR13_TREE_RUNROW_INIT", "1") != "1"
                         ),
                         n_actual=tree_n,
                         n_pad=tree_n_pad,
@@ -8547,13 +8547,13 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             # rejection_sampler.py namespace (no bare `os`), so import locally.
             import os
             _fr13_runrow_commit = (
-                os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "0") == "1"
+                os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "1") == "1"
             )
             _fr13_runrow_init = (
-                os.environ.get("FR13_TREE_RUNROW_INIT", "0") == "1"
+                os.environ.get("FR13_TREE_RUNROW_INIT", "1") == "1"
             )
             _fr13_burn_node_bank = (
-                os.environ.get("FR13_APC_BURN_NODE_BANK", "0") == "1"
+                os.environ.get("FR13_APC_BURN_NODE_BANK", "1") == "1"
             )
             if len({
                 _fr13_runrow_commit,
@@ -9433,13 +9433,13 @@ def _lumo_tree_canonical_multidraft_sample(
             # rejection_sampler.py namespace has no bare `os` -> import locally.
             import os
             _fr13_runrow_commit = (
-                os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "0") == "1"
+                os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "1") == "1"
             )
             _fr13_runrow_init = (
-                os.environ.get("FR13_TREE_RUNROW_INIT", "0") == "1"
+                os.environ.get("FR13_TREE_RUNROW_INIT", "1") == "1"
             )
             _fr13_burn_node_bank = (
-                os.environ.get("FR13_APC_BURN_NODE_BANK", "0") == "1"
+                os.environ.get("FR13_APC_BURN_NODE_BANK", "1") == "1"
             )
             if len({
                 _fr13_runrow_commit,
@@ -12097,7 +12097,7 @@ def get_temporal_copy_spec(
     num_accepted_tokens: int,
 ) -> MambaCopySpec:
     \"\"\"Return a MambaCopySpec for copying a temporal (SSM/recurrent) state slice.\"\"\"
-    if os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "0") == "1":
+    if os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "1") == "1":
         # STATELESS-TREE: col 0 (block_ids[cur_block_idx], the req running row)
         # now holds the committed leaf (RUNROW_COMMIT); snapshot it directly,
         # map-free = native semantics. The accepted-leaf linear column
