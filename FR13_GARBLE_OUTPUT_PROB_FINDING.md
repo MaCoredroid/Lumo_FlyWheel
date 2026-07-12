@@ -196,3 +196,22 @@ CHECK: log, per committed token, the NODE INDEX the committer indexed, and verif
 node at that depth (and that argmax(logits[correct_node]) == the non-spec ground-truth token). Instrument the
 committer's row selection, not the compute. Aligns with agent's "physical row-order vs sorted tree_choices"
 pointer and memory's "conv1d_out wrong bank-row at num_accepted>1".
+
+## LOCALIZED to a committer step (2026-07-12, winner-log correlation, deterministic matrix greedy)
+Ran matrix_build at temp 0 (greedy seed 0) on locked cat9 + DEVICE_MULTIDRAFT=0 + winner-log
+(LUMO_TREE_PATH_LCP_LOG) + CAG. Deterministic garble reproduced: undefined=['expected_rows',
+'crpix_reference_value','expected_rows']. Correlated each garble token to its committer step (winner log
+tree_path_lcp_max.jsonl, 50 steps; 35/50 are BRANCH commits winner_leaf!=spine_leaf, acc 3-5). The garble
+'_rows' (truncating expected_row_count) is emitted at step 12 AND step 35, BOTH identical:
+  winner_path=[0,2] (root->node2=(0,1), a BRANCH), accepted_len=0, all path_scores lcp=0.
+  context ends '(expected'. DRAFTER drafts node0='_row', node1='_count' => 'expected_row_count' (CORRECT).
+  parent_target_ids[0]='_rows' = the VERIFY/target argmax after '(expected' = '_rows' (WRONG; correct='_row').
+  => verify REJECTS the drafter's correct '_row' (draft != parent_target => acc=0), commits bonus '_rows'.
+So the garble = the TREE VERIFY FORWARD's target-argmax at the ROOT node0 is '_rows', overriding the correct
+draft '_row'. NOT a committer accept-logic bug (committer faithfully served the verify argmax) -- the verify
+FORWARD's node0 argmax is wrong. node0=root=spine node, but computed in the M=10 tree forward (co-resident
+with 9 branch nodes). DECISIVE OPEN Q: is verify-argmax '_rows' the M=10 co-residency CORRUPTION, or the
+model's genuine clean argmax (making the drafter's '_row' the anomaly)? => teacher-force the clean prefill
+argmax after '(expected': clean='_row' + tree='_rows' => M-dependent root corruption CONFIRMED; clean='_rows'
+=> not a garble. Note: VERIFY_NATIVE (GDN per-node) didn't fix it => if confirmed, root corruption is in the
+M=10 FA2 attention or the prefill-vs-tree logits path at node0, NOT the GDN scan.
