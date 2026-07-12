@@ -84,18 +84,16 @@ def test_kernel_shared_node_step_body_used_by_scan_and_replay() -> None:
     assert ktext.count("def _gdn_node_step(") == 1
     # def + 4 call sites that inline the one shared body (same bit-exactness
     # basis): scan + single-layer replay + FR13_EAGER_PACK batched all-layer
-    # replay + FR13_SCAN_ALIGN recompute-from-spine. All four forward the same
-    # constexprs (USE_QK_L2NORM_IN_KERNEL / RAW_GATING / SCAN_ALIGN).
-    assert ktext.count("_gdn_node_step(") == 5
+    # replay. All three forward the same constexprs (USE_QK_L2NORM_IN_KERNEL /
+    # RAW_GATING / SCAN_ALIGN). (recompute-from-spine route removed 2026-07-12.)
+    assert ktext.count("_gdn_node_step(") == 4
     assert "def _tree_gdn_replay_kernel(" in ktext
     assert "def launch_tree_gdn_replay(" in ktext
     assert "def _tree_gdn_replay_all_layers_kernel(" in ktext
     assert "def launch_tree_gdn_replay_all_layers(" in ktext
-    assert "def _tree_gdn_recompute_kernel(" in ktext
-    # Identical constexpr plumbing at all 4 call sites (scan, replay, batched,
-    # recompute).
-    assert ktext.count("USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,") == 4
-    assert ktext.count("RAW_GATING=RAW_GATING,") == 4
+    # Identical constexpr plumbing at all 3 call sites (scan, replay, batched).
+    assert ktext.count("USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,") == 3
+    assert ktext.count("RAW_GATING=RAW_GATING,") == 3
     # SCAN_ALIGN is forwarded at every shared-body call site (4) so the OFF
     # default stays byte-identical and the aligned arm reaches the body.
     assert ktext.count("SCAN_ALIGN=SCAN_ALIGN,") == 4

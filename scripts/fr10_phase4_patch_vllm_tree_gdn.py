@@ -4326,27 +4326,13 @@ def _fr13_gdn_subop_mab(
                     # scan runs with STORE_NODE_STATES=False and the durable
                     # accepted states are produced by the committer replay.
                     tree_state_all = None
-                else:
-                    tree_state_all = torch.empty(
-                        (
-                            attn_metadata.num_spec_decodes,
-                            tree_n_pad,
-                            value_tree.size(1),
-                            value_tree.size(2),
-                            query_spec.size(3),
-                        ),
-                        dtype=torch.float32,
-                        device=query_spec.device,
-                    )
                 for fr10_b in range(attn_metadata.num_spec_decodes):
                     # Full CUDA graph capture cannot tolerate GPU->CPU syncs.
                     # In pure tree-spec decode vLLM lays each spec decode out as
                     # one fixed tree block, so offsets are static from tree_n.
                     start = fr10_b * tree_n
                     end = start + tree_n
-                    tree_state = (
-                        None if _fr13_replay_route_on else tree_state_all[fr10_b]
-                    )
+                    tree_state = None  # STATELESS-TREE: replay-only, no per-node scratch
                     if os.environ.get("FR12_SUBKERNEL_CAPTURE"):
                         try:
                             _fr12_capture_h0_col = torch.clamp(
@@ -5019,7 +5005,6 @@ def _fr13_gdn_subop_mab(
                         visible_mask=attn_metadata.fr10_tree_visible_mask,
                         out=core_attn_out_spec[0, start:end],
                         state=tree_state,
-                        store_node_states=not _fr13_replay_route_on,
                         output_scale=self.head_k_dim**-0.5,
                         use_qk_l2norm_in_kernel=True,
                         invocation_counter=(
@@ -5297,12 +5282,6 @@ def _fr13_gdn_subop_mab(
                     # and writes the bank LINEAR columns directly (including
                     # the zero-accept row-0 refresh), so nothing is published
                     # here and the next-step ssm remap is skipped.
-                    if not _fr13_replay_route_on:
-                        ssm_state.index_copy_(
-                            0,
-                            spec_state_indices_tensor[fr10_b, :tree_n].to(torch.long),
-                            tree_state[:tree_n].to(dtype=ssm_state.dtype),
-                        )
                     if _fr10_commit_handoff_active:
                         try:
                             _fr10_curr_conv = globals().get(
