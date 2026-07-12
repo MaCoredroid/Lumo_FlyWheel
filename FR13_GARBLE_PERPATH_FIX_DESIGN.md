@@ -94,3 +94,27 @@ REVISED PLAN given the garble is a GROSS state-carry corruption at num_accepted>
    (bit-exact 0.0). If garble->0 the committer col-0 was the bug.
 2. If committer-fix insufficient, the VERIFY scan needs per-path native too (multi-seq convention TBD).
 Committer fix is the tractable, validated first build; gate on the reproducible wcs_slice seed1 garble.
+
+## Convention validation (2026-07-12, empirical sweep in-container)
+Kernel read (fused_sigmoid_gating.py): init read = ssm_state_indices[i_n,0] (num_accepted=None);
+INPLACE final-state write reads ssm_state_indices[i_n*stride_seq + i_t] for EVERY token i_t => a 1D idx
+too short => OOB (Test B original crash). Ground-truth convention (gdn_linear_attn.py:1142, stock/MAB):
+`ssm_state_indices = torch.full((1, m), prior_conv_bank)` 2D [N_seq, m], values=VALID bank rows,
+num_accepted=None (col-0 init), inplace_final_state=True, cu_seqlens=[0,m]. i.e. ONE sequence at a time.
+
+**Empirical sweep (scripts/fr13_perpath_sweep.py, in-container):**
+- SINGLE-seq per-path native: inplace=True, slot_start=0, ndim=2 => **max|d|=0.0 BIT-EXACT** (also ndim=1).
+  slot_start=1 and inplace=False both => 5.9e-2 (WRONG) -- convention-sensitive.
+- MULTI-seq (3 paths in ONE call, cu_seqlens): path0 contaminated (1.28 vs 0.0 standalone). The batched
+  multi-path call does NOT yield independent per-path outputs with the layouts tried -- co-residency /
+  slot-0-skip. **Batched multi-path = UNSOLVED optimization blocker.** vLLM's own code only shows
+  single-seq [1,m] per call, not N independent paths per call.
+
+**=> CORRECTNESS-FIRST plan (revised, right engineering order):**
+1. Build per-path native with **N SEPARATE single-seq calls** (each proven bit-exact 0.0), ignore overhead.
+   Wire into the tree GDN verify + committer + conv behind a flag. This is the CORRECTNESS vehicle.
+2. GATE: does garble die (greedy + temp-0.6, cache-ON, cat8/cat6)? If YES => mechanism PROVEN.
+3. ONLY THEN optimize: solve the batched multi-path convention (or accept N-call overhead if
+   overhead-bound anyway per [[reference_tree_tps_overhead_bound]]).
+4. If garble PERSISTS with whole-GDN per-path native => the ~9e-4-amplification thesis is wrong; reconsider.
+Do NOT build the batched call first -- prove the fix works cheaply-correct before optimizing.
