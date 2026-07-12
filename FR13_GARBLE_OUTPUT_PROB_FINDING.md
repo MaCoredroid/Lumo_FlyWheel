@@ -121,3 +121,18 @@ mechanism, NO unsolved multi-seq convention; slow N-launches but correctness-onl
 launch_tree_gdn_prepared (fr10_gdn_tree_kernel.py L1723 -> _tree_gdn_kernel L1904). Test at greedy+CAG
 (deterministic matrix repro): garble->0 => GDN verify was the corruption; persists => GDN ruled out (=> the
 committed-STATE carry, needing live col-0 verification). Do NOT build another blind sub-op fix.
+
+## VERIFY_NATIVE result (2026-07-12): GDN scan COMPUTE ruled out -> corruption is the col-0 STATE feeding it
+Boot ship + FR13_VERIFY_NATIVE=1 + DEVICE_MULTIDRAFT=0 + CAG, EAGER. ENGAGED (per-node native verify tree_n=10,
+non-vacuous). Matrix greedy: undefined 2->1 (output CHANGED deterministically, so the fix TOOK EFFECT), but
+the core garble (expected_rows truncation) PERSISTS. CAG: 1397 records, 0 big-margin mismatches => committer
+still faithful, verify argmax STILL wrong. => replacing the GDN scan node OUTPUTS with bit-exact-native ones
+does NOT fix the verify argmax => the GDN scan COMPUTE is NOT the corruption. My fix fed the scan the NATIVE
+inputs (query_spec/key_spec/value_spec, which native/no-spec uses and is garble-free) + col-0 h0 => the
+corruption is in the GDN INPUTS: the col-0 running STATE (SSM h0 read at spec_state_indices[b,0] AND/OR the
+conv prior-window that produces value_spec/q/k). 4th compute-fix ineffective (in_proj, conv-compute, SSM
+committer, GDN scan) => the bug is STATE/DATA-ROUTING, not compute. NEXT: directly verify col-0 correctness
+(SSM + conv) in the live path via a targeted col-0 dump vs a native forward, OR combine correct SSM+conv
+committers (COMMITTER_NATIVE crashes at greedy -- fix the path-LCP 6v10 first). value_spec/q/k are the native
+tensors (native is clean) so they're likely correct => the SSM col-0 h0 is the prime suspect, and the SSM
+committer fix being ineffective may mean it does NOT actually correct live col-0 (never verified live).
