@@ -703,3 +703,29 @@ GRAPH-COMPATIBLE capture of the verify's INPUT state (GDN col-0 h0 + conv col-0 
 num_accepted>1 commit, CLEAN(sequential) vs garble(tree), on the temp-0.6 path, to localize WHICH state
 component drifts (GDN col-0 / conv col-0 / physical-row spec_state_indices routing). Confirmed NOT: forward
 compute, GDN scan, in_proj_ba, attention, accept committer.
+
+## whole-GDN-native EXONERATED on the RELIABLE gate (2026-07-12, definitive)
+Via canonical harness (scripts/fr13_garble_test.sh) EAGER + FR13_VERIFY_NATIVE=1 + FR13_COMMITTER_NATIVE=1
+(both needles FIRED: VERIFY_NATIVE tree_n=10, COMMITTER_NATIVE num_spec_decodes=3; DEVICE_MULTIDRAFT engaged
+= ship accept path). temp-0.6 matrix_build = 15/15 garbled = NOT FIXED. Upgrades the earlier greedy-only
+finding to the reliable gate. ALSO confirmed eager is NOT a garble confound (eager baseline matrix_build
+15/15 == graph). So on the RELIABLE gate, EXONERATED: forward compute (BATCH_INVARIANT), GDN scan+state
+(whole-native), attention (BI_TREE_ATTN), in_proj_ba (bmm greedy), accept committer (device-multidraft code
+proven faithful). REMAINING (uncovered by ALL of the above): the CONV col-0 running window (COMMITTER_NATIVE
+rebuilds GDN col-0 from POST-conv ring activations, so a corrupt conv col-0 is INHERITED not fixed) and the
+KV cache content/routing (attention COMPUTE is BI but KV CONTENT for branch nodes is not). NEXT: test the
+conv col-0 (running window) on the reliable gate; then KV routing.
+
+## UNIFY commit path (user directive): design verified, Tier2 needs a losslessness PROOF
+Workflow wf_6b781ea9 (7 agents, adversarial): greedy uses _lumo_tree_path_lcp_max_greedy_sample (LCP-path-
+max); temp>0 uses device-multidraft (stochastic softmax+multinomial). Routing greedy through multidraft AS-IS
+is NOT lossless (Case B). Tier1 (single dispatch entry, delegate greedy internally) = byte-identical + CAG
+free, but does NOT run reject-sampling for greedy (keeps LCP-max) => does not honor "reject sampling even
+greedy". Tier2 (multidraft reject runs greedy via one-hot-p deterministic branch + deterministic tie-break +
+device kernel OFF) = the literal unification, but adversarial CORRECTNESS lens: "sequential argmax-descent ==
+global max-LCP path" for multi-node BRANCHES is UNPROVEN. GATING QUESTION (offline, decisive): does the
+deterministic multidraft descent accept the SAME path as the greedy LCP-max committer on branching trees?
+Prove => ship Tier2 (one reject path); disprove => the greedy/temp>0 accept rules genuinely differ (a real
+reason the greedy gate was unfaithful). Adversarial fixes for either tier: delegate BEFORE the
+FR13_FORCE_SPINE_COMMIT raise (L9120); unified guard on tree_parent_indices ONLY (tree_token_ids is
+greedy-only, L9860 -> temp>0 batches would silently lose the committer).
