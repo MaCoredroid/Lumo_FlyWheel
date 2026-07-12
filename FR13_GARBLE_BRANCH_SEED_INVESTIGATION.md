@@ -147,3 +147,18 @@ co-residency seed.
 eager branch-vs-native L0 probe (capture served M10 stages read-only + compute native L0 offline from
 captured inputs — no MAB re-run side effects), or (b) dedicated rebuild of the branch-path oracle for
 the stateless build. NOT another quick flag test — the nameable flags are exhausted.
+
+## 2026-07-12 read-only FR12_SUBKERNEL_CAPTURE (6th attempt) — INFRA ALIVE, wrong events/stages
+Read-only eager FR12_SUBKERNEL_CAPTURE (no MAB re-run, no rotted payload) FIRED on the current build:
+42MB subk.pt, eager, NO 500 — the capture infra is alive (vs 5 prior total failures). BUT:
+- Captured shape (2048,5120) = PREFILL forwards, not the 9-row tree decode. LIMIT=12 consumed all
+  prefills before any spec-decode event.
+- Stages = input_hidden/gate_out/o_proj_out (OUTER) only. MISSING the inner GDN stages
+  (pre_conv/conv1d_out/gdn_scan_out/h0_state_in) needed to localize — those only populate on the
+  tree-decode path (patcher:4336-4351), which wasn't reached.
+NEXT (concrete): FR12_SUBKERNEL_CAPTURE_SKIP past the prefills (each garble-gate prompt = 1 prefill
+then N tree decodes) to land on spec-decode events (num_spec_decodes>1, ~9 rows), and confirm the
+inner-stage capture (h0_state_in @4351, conv1d_out) wasn't dropped in the stateless cleanup. Then the
+CPU reducer (replay native fused_sigmoid_gating_delta_rule_update from h0_state_in+conv1d_out+weights
+vs captured gdn_scan_out) gives the first non-confounded branch-vs-native drift number. NOT thrash —
+the infra works; it's a SKIP/stage-selection fix, done fresh next cycle.
