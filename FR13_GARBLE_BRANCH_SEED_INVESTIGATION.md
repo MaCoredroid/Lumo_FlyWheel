@@ -266,3 +266,38 @@ co-residency, born at L0 w/ bit-identical input. BLOCKED: localizing it needs th
 non-line-fixable) OR the branch-path oracle (rotted) — both require the device-side capture rebuild.
 NET: one bit-exactness artifact (bmm in_proj_ba, default-OFF); no garble fix. Next real investment =
 device-side capture rebuild (substantial), NOT more incremental cron experiments.
+
+---
+
+## 2026-07-12 — Deterministic microbench sweep OVERTURNS "capture rebuild needed"
+
+The prior conclusion ("next = device-side capture rebuild") is superseded. Capture is DEAD for the
+served tree (the tree uses the custom REPLAY kernel; fused_sigmoid/DECODE_GDN anchors are on the native
+`else` branch, never executed by the tree; FR13_EAGER_PACK is a baked transport opt, not a route toggle).
+Instead, **deterministic offline microbenches (no server, no boot variance)** localized the seed cleanly.
+
+**Refuted as seed/co-residency carrier (all diffs measured, deterministic):**
+- in_proj fp8 qkv/z/out: row-0 bit-identical (0.0e+00) for M=1..12 AND independent of neighbor content
+  (`per_token_group_quant_fp8` = per-row). `scripts/fr13_fp8_inproj_mkey_microbench.py`.
+- seam-d (l2norm rsqrt vs div): `scripts/fr13_rsqrt_bias_microbench.py` — rsqrt signed_mean=-2.8e-13,
+  pos_frac=0.5001 (UNBIASED); rsqrt actually LESS biased than div. rsqrt-vs-div diff ~1 ULP zero-mean.
+- scan algebra: ancestor-masked `state_i=where(ancestor,h_j,state_i)` — spine ignores branch VALUES.
+- conv window: `build_tree_conv_window_source_indices` path-indexed — only path-ancestors, no branch leak.
+- in_proj bf16 a/b: M-keyed but engaged-and-refuted live earlier.
+=> tree per-node INPUTS to conv/scan are BIT-IDENTICAL to native.
+
+**The seed = node-step realization diff** (`_gdn_node_step` vs native `fused_recurrent`).
+`scripts/fr13_nodestep_realization_ladder.py` (depth 64, DEFAULT fp32 vs SCAN_ALIGN native-realization):
+- max|out diff| plateaus ~1e-5; signed_mean ~-1e-7 EVERY depth; pos_frac 0.49-0.51 => **UNBIASED**.
+- carried-state divergence FLAT/contractive: 7.2e-4@d1 -> 4.5e-4@d64 (decay gate exp(g<0) shrinks it)
+  => GDN token-recurrence does **NOT** amplify the seed within a layer.
+=> ~492x garble amplification is **CROSS-LAYER** (64-layer residual stack), not the GDN scan.
+=> **realization-matching (SCAN_ALIGN) CANNOT zero garble** (~1e-5 unbiased nudge, same order as seed);
+   the old "SCAN_ALIGN 10.27 vs 9.62" refutation was boot noise — now confirmed deterministically.
+
+**Fix target (stock vLLM gdn_linear_attn.py):** no-spec ground truth = packed_decode (L1085);
+E5 bar = fused_sigmoid_gating (L959). Both native, LINEAR, no branching, no garble. Tree needs branching
+=> custom kernel => seed. **Fix (branch-preserving, no weight-HBM tax):** in_proj+conv once for all nodes,
+then run each root->leaf PATH recurrence through the NATIVE kernel (native-exact per committed token;
+redundant recompute = cheap rank-1 FLOPs only, cat8 11 vs 8 nodes ~40% recurrence overhead). USES native
+kernel (sidesteps SCAN_ALIGN codegen-mimic). UNVERIFIED — next: design+prototype per-path native recurrence.
