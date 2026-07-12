@@ -7,7 +7,9 @@ set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
 ARM=${1:?arm label}; shift; FLAGS=("$@")
 PORT=9955; N=${N:-24}; CONC=${CONC:-4}; C=fr13-garble-flag-$ARM
-CAT8='[(0,),(1,),(0,0),(0,1),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,0,0)]'
+# TREE_GEOM/NUM_SPEC parametrize cat6 vs cat8 (default cat8). cat6=[(0,),(1,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0)] NUM_SPEC=6
+CAT8="${TREE_GEOM:-[(0,),(1,),(0,0),(0,1),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,0,0)]}"
+NUM_SPEC="${NUM_SPEC:-8}"
 TS=$(date -u +%Y%m%dT%H%M%SZ); RUN=output/fr13_flag_garble/${ARM}_$TS; mkdir -p "$RUN"
 echo "=== FLAG garble gate [$ARM]  flags=[${FLAGS[*]}]  -> $RUN ==="
 docker ps -aq --filter "name=fr13" | xargs -r docker rm -f >/dev/null 2>&1 || true
@@ -15,7 +17,7 @@ PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_serv
 
 env CONTAINER=$C PORT=$PORT GPU_UTIL=0.8 MAX_NUM_SEQS=8 \
   ATTENTION_BACKEND=TREE_ATTN \
-  SPEC_CONFIG='{"method":"qwen3_5_mtp","num_speculative_tokens":8,"speculative_token_tree":"'"$CAT8"'"}' \
+  SPEC_CONFIG='{"method":"qwen3_5_mtp","num_speculative_tokens":'"$NUM_SPEC"',"speculative_token_tree":"'"$CAT8"'"}' \
   GPU_GUARD_FLOOR_MIB=3000 "${FLAGS[@]}" \
   bash scripts/fr13_launch_forked_fa2_tree_server.sh > "$RUN/boot.log" 2>&1 &
 LPID=$!; T0=$SECONDS; OK=0
