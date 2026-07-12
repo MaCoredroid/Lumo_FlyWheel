@@ -46,3 +46,14 @@ verify-compute since 1-step teacher-force is correct). DEFINITIVE TEST = route t
 through native (fused_sigmoid_gating per committed path) so col-0 is native-correct regardless of which
 upstream op leaks; if garble->0 the state-carry chain was the bug. Cheaper bisect: capture tree col-0 state
 post-multi-accept vs prefill state, OR toggle-bisect the fill/scan/committer flags (each a reboot).
+
+## Committer-native fix gate result (2026-07-12): ENGAGED but garble PERSISTS -> verify scan implicated
+Boot: ship EAGER_PACK=1 + FR13_COMMITTER_NATIVE=1, EAGER. ENGAGED confirmed (print fired, non-vacuous).
+Garble gate (11 samples, eager crawls due to 48 per-layer host-syncs): undefined-name-rate=2.86%,
+3/11 samples STILL garble (final_reconciliation_rows, applied_entries_list = near-neighbor garbles).
+=> committer col-0 state-carry fix (validated bit-exact 1.19e-7) ENGAGED but did NOT eliminate garble.
+The committer col-0 (state for NEXT step) was NOT the sole root; the VERIFY SCAN (_tree_gdn_kernel, THIS
+step's accept decision using the branched tree scan from col-0) is the remaining gross corruption.
+Reduction 9.3%->2.9% is cross-boot (unconfirmed vs same-config baseline; boot variance +-3-6%); the ROBUST
+signal is garble PERSISTS. NEXT: route the VERIFY scan per-path native too (multi-seq convention). Also:
+eager committer host-syncs make it too slow to gate -> batch the .item() calls for a usable gate.
