@@ -69,3 +69,15 @@ corruption is in THIS step's verify INPUTS the committer doesn't touch: the CONV
 0.0 but the state ROUTING is separate) or the verify scan. NEXT: audit + fix the conv committed-path state
 routing at num_accepted>1 (analogous to the SSM committer). Keep SSM committer default-OFF (validated but not
 the cure). Prose flip at pos 27 ' sliced' rank2 gap0.38 = normal sampling, not garble.
+
+## Strategic reframe (2026-07-12): accept-LOGIC hypothesis (2 validated state-fixes now ineffective)
+Two bit-exact-correct fixes have now ENGAGED but left the gross garble UNCHANGED: in_proj_ba (earlier) and
+the SSM committer (now). The garble is a GROSS wrong-accept of a near-impossible token (out of clean top-20).
+For a rejection sampler to accept an out-of-top-20 token, EITHER (a) the tree's VERIFY target logits are
+grossly wrong (state corruption: conv routing / verify scan) OR (b) the accept LOGIC itself accepts a
+drafter's low-prob proposal that the target rejects (the custom FR13_DEVICE_MULTIDRAFT rejection sampler).
+The pattern of validated-but-ineffective STATE fixes raises (b) -- if the sampler is the bug, NO state fix
+helps (matches every observation). DECISIVE next step: capture, at the accept, the tree's VERIFY target
+rank/logit of the ACCEPTED token vs the argmax (the sampler HAS these logits). Accepted tokens with LOW
+target rank => sampler bug (b). HIGH target rank => state corruption (a), and then conv-routing/verify-scan.
+Do NOT build another blind state fix until (a) vs (b) is settled. See memory feedback_garble_pin_accept_not_rates.
