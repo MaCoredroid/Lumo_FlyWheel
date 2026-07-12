@@ -1603,21 +1603,20 @@ def launch_tree_gdn_replay_all_layers(
         # fused_sigmoid_gating (validated 1.19e-7) instead of the batched custom replay kernel, to test
         # whether the gross state-carry corruption (garble root) is here. banks_list[L] is the per-layer
         # fp32 bank; k_rings[L]/... are per-layer ring slices; A_logs[L]/dt_biases[L] per-layer params.
-        _spec_cols = int(spec_state_indices.shape[1])
-        # Compute the committed-path node layout ONCE (shared across all layers) -> one host sync total,
-        # not B*num_layers. Per-layer calls then only gather rings (device ops).
-        _layout = _fr13_prepare_committer_layout(
-            accepted_paths=accepted_paths, accepted_lens=accepted_lens,
-            spec_state_indices=spec_state_indices, num_spec_decodes=num_spec_decodes,
-        )
+        # spec_state_indices is STACKED (L, B, SPEC_COLS); _fr13_prepare_committer_layout + the native
+        # replay both want a 2D [B, SPEC_COLS] per-layer view. Physical row maps are layer-invariant so
+        # the nodes/cu layout could be shared, but pass each layer's own 2D slice (spec_state_indices[_L])
+        # so the col-0 init read + node-bank burn address the correct per-layer rows. (was: 3D passed as
+        # 2D -> col0[b] became a [SPEC_COLS] vector -> "expanded size 6 vs 10" crash.)
+        _spec_cols = int(spec_state_indices.shape[2])
         for _L in range(int(num_layers)):
             _fr13_native_committer_replay(
-                state_bank=banks_list[_L], spec_state_indices=spec_state_indices,
+                state_bank=banks_list[_L], spec_state_indices=spec_state_indices[_L],
                 accepted_paths=accepted_paths, accepted_lens=accepted_lens,
                 k_ring=k_rings[_L], v_ring=v_rings[_L], a_ring=a_rings[_L], b_ring=b_rings[_L],
                 A_log=A_logs[_L], dt_bias=dt_biases[_L], num_spec_decodes=num_spec_decodes,
                 output_scale=output_scale, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
-                burn_node_bank=burn_node_bank, spec_cols=_spec_cols, layout=_layout,
+                burn_node_bank=burn_node_bank, spec_cols=_spec_cols,
             )
         return
     grid = (int(num_layers) * int(num_spec_decodes), num_vh, triton.cdiv(dim_v, BV))
