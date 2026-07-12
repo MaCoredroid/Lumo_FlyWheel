@@ -215,3 +215,21 @@ model's genuine clean argmax (making the drafter's '_row' the anomaly)? => teach
 argmax after '(expected': clean='_row' + tree='_rows' => M-dependent root corruption CONFIRMED; clean='_rows'
 => not a garble. Note: VERIFY_NATIVE (GDN per-node) didn't fix it => if confirmed, root corruption is in the
 M=10 FA2 attention or the prefill-vs-tree logits path at node0, NOT the GDN scan.
+
+## CONFIRMED garble is REAL + corruption is TRAJECTORY-ACCUMULATED STATE (2026-07-12, teacher-force)
+Teacher-forced the clean prefill dist after the exact prefix ending '(expected' (chat continue_final_message,
+max_tokens=1, top-20 logprobs, on the spec server -- first decoded token = prefill dist):
+  '_row'  lp=-0.000 (~prob 1.0)  = CLEAN argmax
+  '_rows' lp=-13.875 (~prob 1e-6) = the garbled token, near-impossible
+=> 13.9-nat gap. The garble is REAL (clean overwhelmingly wants '_row'; the model is NOT quirky). YET the tree
+verify at step 12 committed '_rows' (parent_target[0]). SAME question (next token after '(expected'), DIFFERENT
+answer: isolated teacher-force = '_row' (CLEAN); step-12-in-trajectory = '_rows' (CORRUPT). The ONLY difference
+is the STATE the two forwards consume: teacher-force builds mamba/GDN + KV FRESH from the prefix prefill;
+step 12 reads state ACCUMULATED over 11 spec-decode commits (35/50 branch commits, num_accepted 3-5).
+=> CORRUPTION IS TRAJECTORY-ACCUMULATED CARRIED STATE (col-0 GDN mamba recurrent state and/or KV cache written
+by the spec-decode committer at num_accepted>1 branch commits), NOT the verify COMPUTE (VERIFY_NATIVE reads the
+same corrupt state => can't fix), NOT the prefill/model (fresh state = clean). This UNIFIES: branch-specific
+(branch commits accumulate the corruption), VERIFY_NATIVE-persists, all-verify-ops-validated, CAG-faithful.
+NEXT: localize mamba col-0 vs KV -- (a) matrix greedy with APC cache OFF (spec ON): still garbles => mamba
+col-0 state; clean => APC KV. (b) which commit writes the corrupt state (step 11 branch acc=3 precedes the
+step-12 garble). Then a compute-only fix to the state write.
