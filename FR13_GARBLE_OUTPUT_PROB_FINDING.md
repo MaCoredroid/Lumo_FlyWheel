@@ -367,3 +367,26 @@ dump col-0 conv window + the committed-prefix KV + position_ids, and compare to 
 committed ids. Whichever component DIFFERS from fresh is the corruption (mamba SSM should match = confirms
 exoneration; if conv col-0 or KV differs = localized). Instruments exist: FR13_CHASE_DIAG H6 (conv-prior bytes
 as-read), and a KV/position dump to add. This ends the indirect component-guessing.
+
+## STRONG UNIFYING HYPOTHESIS (2026-07-12, KV audit): attention KV NOT re-linearized (GDN state IS)
+KV audit (agent, 180k tok) decisive lead: the GDN/mamba carried state IS explicitly re-linearized along the
+accepted path -- launch_tree_state_linear_remap (fr10_gdn_tree_kernel.py:354-388): "column k must contain the
+state for accepted_paths[b,k]". The ATTENTION KV cache is NOT: tree verify writes each node's K/V at FLAT tree
+slots (slot_mapping = num_computed+arange, linear node order; tree_attn.py reshape_and_cache_flash), NO
+attention-side remap for accepted branch nodes (grep: accepted_paths never touches kv/block_table/slot; no
+index_copy/scatter/gather on KV in src/). So accepted non-spine nodes' K/V stay at flat slots while the next
+step reads LINEAR committed slots => reads a REJECTED sibling / root-scratch slot instead of the accepted leaf.
+RECONCILES ALL FACTS: (1) mamba exonerated <=> mamba HAS the remap, attention doesn't (explains why
+VERIFY_NATIVE + COMMITTER_NATIVE failed -- both mamba-only). (2) branch-specific: cat9 spine nodes at flat
+slots 0,1,3,5,7 (branches 2,4,6,8 interleave) => ANY accept non-contiguous => misplaced; chain5 spine
+contiguous 0,1,2,3,4 => clean. Branches' PRESENCE creates the non-linearity. (3) earlier branch commits clean:
+committed TOKEN unaffected; misplaced KV corrupts a LATER read. (4) both garbles [0,2] acc=0: that step commits
+nothing, just READS the committed prefix the preceding [0,1,4] len=3 commit populated (first flat!=linear leaf
+accept). CAVEAT (must confirm before fixing): assumes stock vLLM does NOT re-point block_table to accepted flat
+slots (agent found no such code, not proven). DECISIVE CAPTURE (hook exists: _fr13_tree_attn_op_capture patcher
+15122): after [0,1,4] len=3 commit + at [0,2] len=0 verify, dump KV rows at (a) accepted flat tree slots vs (b)
+linear committed slots slot(num_computed-accepted_len..num_computed-1); (a)!=(b) for the leaf => confirmed. Also
+check RoPE mrope-vs-regular anchor mismatch (patcher 10703-10717: _fr10_state_base=num_computed-1 vs
+_fr10_mrope_base=num_computed). FIX direction (no-HBM-tax): correct the committed-KV ADDRESSING (block_table/
+read positions) for non-linear accepts = metadata, not a KV move; OR add the attention analogue of
+launch_tree_state_linear_remap.
