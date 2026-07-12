@@ -8866,6 +8866,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
                         runrow_commit=_fr13_runrow_commit,
                         runrow_init=_fr13_runrow_init,
                         burn_node_bank=_fr13_burn_node_bank,
+                        banks_list=_ep_banks,
                     )
                     # ONE all-layer clear preserves the per-layer
                     # clear-after-consume invariant: every layer row's [0] is

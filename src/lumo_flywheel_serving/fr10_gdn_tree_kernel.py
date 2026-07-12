@@ -1467,6 +1467,7 @@ def launch_tree_gdn_replay_all_layers(
     runrow_commit: bool = False,
     runrow_init: bool = False,
     burn_node_bank: bool = False,
+    banks_list=None,
 ) -> None:
     """Launch the FR13_EAGER_PACK batched all-layer accepted-path replay.
 
@@ -1581,6 +1582,22 @@ def launch_tree_gdn_replay_all_layers(
         raise ValueError("stacked A_logs/dt_biases must be contiguous")
     if not (spec_state_indices.is_contiguous() and prev_lens.is_contiguous()):
         raise ValueError("stacked spec_state_indices/prev_lens must be contiguous")
+    if _fr13_committer_native_on() and runrow_init and banks_list is not None:
+        # SHIP path (EAGER_PACK on): route each layer's committed-path state rebuild through NATIVE
+        # fused_sigmoid_gating (validated 1.19e-7) instead of the batched custom replay kernel, to test
+        # whether the gross state-carry corruption (garble root) is here. banks_list[L] is the per-layer
+        # fp32 bank; k_rings[L]/... are per-layer ring slices; A_logs[L]/dt_biases[L] per-layer params.
+        _spec_cols = int(spec_state_indices.shape[1])
+        for _L in range(int(num_layers)):
+            _fr13_native_committer_replay(
+                state_bank=banks_list[_L], spec_state_indices=spec_state_indices,
+                accepted_paths=accepted_paths, accepted_lens=accepted_lens,
+                k_ring=k_rings[_L], v_ring=v_rings[_L], a_ring=a_rings[_L], b_ring=b_rings[_L],
+                A_log=A_logs[_L], dt_bias=dt_biases[_L], num_spec_decodes=num_spec_decodes,
+                output_scale=output_scale, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+                burn_node_bank=burn_node_bank, spec_cols=_spec_cols,
+            )
+        return
     grid = (int(num_layers) * int(num_spec_decodes), num_vh, triton.cdiv(dim_v, BV))
     _tree_gdn_replay_all_layers_kernel[grid](
         k_rings,
