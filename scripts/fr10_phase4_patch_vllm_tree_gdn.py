@@ -5604,6 +5604,10 @@ def _fr13_gdn_subop_mab(
         # False => byte-identical default. Layer-prefix left as env (defaults "*" =
         # all layers incl L0, which is fine even if dropped).
         _fr13_dc_baked_path = os.environ.get("FR13_DECODE_GDN_CAPTURE") or ""
+        print(
+            "[FR13_DECODE_GDN bake] patch-time path=" + repr(_fr13_dc_baked_path),
+            flush=True,
+        )
         _fr13_dc_capture_block = _fr13_dc_capture_block.replace(
             '_fr13_dc_path = os.environ.get("FR13_DECODE_GDN_CAPTURE")',
             "_fr13_dc_path = " + repr(_fr13_dc_baked_path),
