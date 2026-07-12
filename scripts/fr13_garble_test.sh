@@ -47,6 +47,13 @@ if ! curl -s --retry 90 --retry-delay 6 --retry-all-errors -o /dev/null \
 fi
 echo "[health] 200 OK"
 
+# Eager-diagnostic sidecars: the EngineCore worker drops FR13_* env, and committer-native reads a sidecar
+# flag file OR the env. Arm the sidecar ONLY when explicitly requested (never unconditionally -- an orphan
+# flag would silently turn committer-native ON).
+for _a in "$@"; do
+  [[ "$_a" == "FR13_COMMITTER_NATIVE=1" ]] && { docker exec fr13-lad touch /logs/fr13_committer_native.flag 2>/dev/null && echo "[sidecar] committer-native armed"; }
+done
+
 # The reliable gate: temp-0.6 tree-vs-native undefined-name rate (fr13_garble_gate.py).
 OUT="$REPO/output/fr13_garble_gate_test.jsonl"
 python3 "$HERE/fr13_garble_gate.py" run --endpoint "$EP/v1" --model qwen3.6-27b \
