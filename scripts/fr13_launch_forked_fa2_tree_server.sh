@@ -399,6 +399,14 @@ fi
 
 mkdir -p "$LOG_DIR"
 LOG_DIR=$(realpath "$LOG_DIR")
+# FR13_COMMITTER_NATIVE sidecar (worker-env-drop-proof): the EngineCore worker drops FR13_* env vars, so
+# fr10_gdn_tree_kernel reads this sidecar (written here in pid-1 where the env IS present). See its
+# _fr13_committer_native_on(). Removed when the flag is off so a stale file can't leak into a later boot.
+if [[ "${FR13_COMMITTER_NATIVE:-0}" == "1" ]]; then
+  : > "$LOG_DIR/fr13_committer_native.flag"
+else
+  rm -f "$LOG_DIR/fr13_committer_native.flag" 2>/dev/null || true
+fi
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
 set -a

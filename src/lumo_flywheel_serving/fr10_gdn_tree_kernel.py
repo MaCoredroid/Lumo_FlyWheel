@@ -3,6 +3,18 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+
+def _fr13_committer_native_on() -> bool:
+    """FR13_COMMITTER_NATIVE, worker-env-drop-proof: the EngineCore worker gets a curated env that drops
+    FR13_* vars, so os.environ is unreliable at worker runtime. The launcher (pid-1, env present) writes a
+    sidecar flag file; read that OR the env (for offline/eager use). Read fresh each call (cheap stat)."""
+    if os.environ.get("FR13_COMMITTER_NATIVE") == "1":
+        return True
+    for _p in ("/logs/fr13_committer_native.flag", "/tmp/fr13_committer_native.flag"):
+        if os.path.exists(_p):
+            return True
+    return False
+
 import torch
 import triton
 import triton.language as tl
@@ -1071,7 +1083,7 @@ def launch_tree_gdn_replay(
             f"A_log/dt_bias must cover {num_vh} value heads, got "
             f"{A_log.numel()}/{dt_bias.numel()}"
         )
-    if os.environ.get("FR13_COMMITTER_NATIVE") == "1" and runrow_init:
+    if _fr13_committer_native_on() and runrow_init:
         # Route the committed-path state rebuild through NATIVE fused_sigmoid_gating (bit-exact to no-spec)
         # instead of the custom replay kernel. Tests whether the gross state-carry corruption (garble root)
         # is in this committer. EAGER only (dynamic gather). Falls through to custom if not runrow_init.
