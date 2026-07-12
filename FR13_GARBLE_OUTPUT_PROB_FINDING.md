@@ -136,3 +136,14 @@ committer, GDN scan) => the bug is STATE/DATA-ROUTING, not compute. NEXT: direct
 committers (COMMITTER_NATIVE crashes at greedy -- fix the path-LCP 6v10 first). value_spec/q/k are the native
 tensors (native is clean) so they're likely correct => the SSM col-0 h0 is the prime suspect, and the SSM
 committer fix being ineffective may mean it does NOT actually correct live col-0 (never verified live).
+
+## RED-TEAM CORRECTION (2026-07-12): VERIFY_NATIVE rules out GDN-scan COMPUTE only; ATTENTION not ruled out
+Prior note over-concluded "corruption is col-0 state". VERIFY_NATIVE only replaced the GDN linear-attn outputs;
+the verify forward is GDN layers + FULL-ATTENTION layers (Qwen3.6 hybrid). "garble persists with native GDN"
+=> corruption is EITHER (a) the col-0 running STATE feeding the GDN, OR (b) the FA2 TREE ATTENTION at
+num_accepted>1 x branches -- which the GDN fix does NOT touch. The FA2-fork "byte-exact 14/16, 2 single-ULP"
+(project_fr13_fa2_fork_nocopy_floor) was measured at a specific config (likely num_accepted=1); the garble is
+num_accepted>1-specific, so the tree attention at MULTI-ACCEPT is UNTESTED. Both (a) and (b) remain open.
+DECISIVE LOCALIZER: capture the live col-0 (SSM+conv) at the deterministic garble step vs a native forward's
+state -- col-0 WRONG => (a) state; col-0 CORRECT => (b) attention (then apply the same per-node-native
+treatment to the FA2 tree attention). Do this BEFORE any more fixes.
