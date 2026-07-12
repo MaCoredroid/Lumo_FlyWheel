@@ -6693,6 +6693,7 @@ _FR13_COMMITTER_SYNCKILL_NEEDLE_DONE = False
 # armed.
 _FR13_COMMIT_ARGMAX_GATE = (
     __import__('os').environ.get('FR13_COMMIT_ARGMAX_GATE', '0') == '1'
+    or __import__('os').path.exists('/logs/fr13_commit_argmax_gate.arm')
 )
 _FR13_COMMIT_ARGMAX_GATE_NEEDLE_DONE = False
 _FR13_COMMIT_ARGMAX_GATE_FH = None

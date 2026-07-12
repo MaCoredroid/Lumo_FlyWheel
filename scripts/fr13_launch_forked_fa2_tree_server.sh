@@ -407,6 +407,13 @@ if [[ "${FR13_COMMITTER_NATIVE:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_native.flag" 2>/dev/null || true
 fi
+# FR13_COMMIT_ARGMAX_GATE sidecar (same worker-env-drop workaround): the worker curation drops the flag
+# (keeps only *_DUMP). The patched rejection_sampler reads this sidecar OR the (dropped) env.
+if [[ "${FR13_COMMIT_ARGMAX_GATE:-0}" == "1" ]]; then
+  : > "$LOG_DIR/fr13_commit_argmax_gate.arm"
+else
+  rm -f "$LOG_DIR/fr13_commit_argmax_gate.arm" 2>/dev/null || true
+fi
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
 set -a
