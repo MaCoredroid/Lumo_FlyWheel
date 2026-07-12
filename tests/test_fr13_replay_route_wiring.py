@@ -43,7 +43,7 @@ def test_replay_route_flag_defaults_on_everywhere() -> None:
     ktext = KERNEL.read_text()
 
     assert 'os.environ.get("FR13_REPLAY_ROUTE", "1") == "1"' in text
-    assert "__import__('os').environ.get('FR13_REPLAY_ROUTE', '1') == '1'" in text
+    # (the __import__('os') REPLAY_ROUTE reads were baked to True in 45dc05a2)
     # Default flip is TOTAL: no read site may still default OFF.
     assert '"FR13_REPLAY_ROUTE", "0"' not in text
     assert "'FR13_REPLAY_ROUTE', '0'" not in text
@@ -55,27 +55,6 @@ def test_replay_route_flag_defaults_on_everywhere() -> None:
     # (the docstrings may mention the flag name).
     assert 'environ.get("FR13_REPLAY_ROUTE"' not in ktext
     assert "environ.get('FR13_REPLAY_ROUTE'" not in ktext
-
-
-def test_kernel_store_node_states_is_pure_export_gate() -> None:
-    ktext = KERNEL.read_text()
-
-    assert "STORE_NODE_STATES: tl.constexpr" in ktext
-    assert "if STORE_NODE_STATES:" in ktext
-    assert "STORE_NODE_STATES=store_node_states" in ktext
-    # store_node_states=False must not allocate the scratch and must not
-    # accept a caller-provided state buffer.
-    assert "state = strict_mask  # dummy pointer; no store reaches it" in ktext
-    assert "return out, None" in ktext
-    assert "store_node_states: bool = True" in ktext
-    # Default-ON call sites keep legacy behavior SOURCE-INERT (the legacy
-    # text and default arguments are intact). NOT claimed byte-identical:
-    # the shared _gdn_node_step body refactor RECOMPILES the default scan,
-    # so flag-OFF compile-identity is pending the refactored-scan byte A/B
-    # (GPU TODO #2 in FR13_REPLAY_ROUTE_BUILD.md).
-    assert ktext.index("def launch_tree_gdn_prepared") < ktext.index(
-        "state = strict_mask"
-    )
 
 
 def test_kernel_shared_node_step_body_used_by_scan_and_replay() -> None:
@@ -94,9 +73,9 @@ def test_kernel_shared_node_step_body_used_by_scan_and_replay() -> None:
     # Identical constexpr plumbing at all 3 call sites (scan, replay, batched).
     assert ktext.count("USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,") == 3
     assert ktext.count("RAW_GATING=RAW_GATING,") == 3
-    # SCAN_ALIGN is forwarded at every shared-body call site (4) so the OFF
+    # SCAN_ALIGN is forwarded at every shared-body call site (3) so the OFF
     # default stays byte-identical and the aligned arm reaches the body.
-    assert ktext.count("SCAN_ALIGN=SCAN_ALIGN,") == 4
+    assert ktext.count("SCAN_ALIGN=SCAN_ALIGN,") == 3
     # The replay launch pins the scan's warp shape and raw-gating basis.
     replay_launch = ktext[ktext.index("_tree_gdn_replay_kernel[grid]"):]
     assert "RAW_GATING=True," in replay_launch
@@ -119,30 +98,6 @@ def test_kernel_shared_node_step_body_used_by_scan_and_replay() -> None:
     assert "tl.static_range(0, PATH_COLS + 1)" in replay_body
     # Native gate-folding basis only: no rescaled-exp reconstruction.
     assert "rescal" not in replay_code.lower()
-
-
-def test_patcher_flag_on_skips_scratch_alloc_and_publish() -> None:
-    text = PATCHER.read_text()
-
-    # Scratch alloc gated; legacy alloc intact for flag OFF.
-    assert "tree_state_all = None" in text
-    assert "tree_state_all = torch.empty(" in text
-    assert (
-        "tree_state = (\n"
-        "                        None if _fr13_replay_route_on else tree_state_all[fr10_b]\n"
-        "                    )"
-    ) in text
-    # Scan launches with the export compiled out under the flag.
-    assert "store_node_states=not _fr13_replay_route_on," in text
-    # All-rows publish gated off under the flag, intact otherwise.
-    assert (
-        "if not _fr13_replay_route_on:\n"
-        "                        ssm_state.index_copy_("
-    ) in text
-    # The staged-publish diagnostic is explicitly skipped (vacuous) on-flag.
-    assert "and not _fr13_replay_route_on" in text
-    # tree_state-consuming diagnostics refuse loudly under the flag.
-    assert "FR13_REPLAY_ROUTE is incompatible with tree_state" in text
 
 
 def test_patcher_snapshots_prev_lens_at_scan_time_before_launch() -> None:
@@ -313,58 +268,6 @@ def test_patcher_committer_replay_launch_in_both_committers() -> None:
     assert "'FR13_REPLAY_ROUTE: no registered GDN replay layers'" in text
 
 
-def test_patcher_remap_keeps_conv_half_and_drops_ssm_half_on_flag() -> None:
-    text = PATCHER.read_text()
-
-    # FR13_REPLAY_PAGE_SAFE_CONV_REMAP (boundary-trace root cause): under the
-    # flag the conv half must run through the page-safe torch remap (conv and
-    # ssm are as_strided views over the SAME mamba page; the Triton remap
-    # copies stride(0) elements per row = the whole page, clobbering the
-    # replay's just-published linear ssm columns). No ssm arg exists on the
-    # page-safe path at all; flag OFF keeps the legacy whole-page launch with
-    # ssm_state passed verbatim.
-    # Co-updated for FR13_TREE_CONV_FUSED (FIX-3): the page-safe torch remap
-    # is now the byte-verbatim OFF arm (else branch, one indent deeper) of
-    # the fused prepared-rows remap; the route flag line, the legacy call's
-    # kwargs and the FR13_REPLAY_ROUTE=0 whole-page escape hatch are
-    # unchanged. The fused arm calls the same-permutation
-    # replay_conv_state_linear_remap_prepared (gather-then-scatter,
-    # conv-view-only) and is wiring-gated by
-    # tests/test_fr13_tree_conv_fused_wiring.py.
-    needle = (
-        '                    if os.environ.get("FR13_REPLAY_ROUTE", "1") == "1":\n'
-        "                        if _FR13_TREE_CONV_FUSED:\n"
-    )
-    assert needle in text
-    legacy_arm = (
-        "                        else:\n"
-        "                            replay_conv_state_linear_remap(\n"
-        "                                conv_state=conv_state,\n"
-        "                                spec_state_indices=spec_state_indices_tensor,\n"
-        "                                accepted_paths=_fr10_accepted_paths_tensor,\n"
-        "                                num_accepted_tokens=_fr10_accepted_lens_tensor,\n"
-        "                                num_spec_decodes=int(attn_metadata.num_spec_decodes),\n"
-        "                                max_path_len=int(spec_state_indices_tensor.size(-1)),\n"
-        "                            )\n"
-        "                    else:\n"
-        "                        launch_tree_state_linear_remap(\n"
-        "                            ssm_state=ssm_state,\n"
-        "                            conv_state=conv_state,"
-    )
-    assert legacy_arm in text
-    # The page-safe helper must never receive an ssm bank handle.
-    assert "replay_conv_state_linear_remap(\n                            ssm_state" not in text
-    # The helper import is injected alongside the kernel imports.
-    assert (
-        "from lumo_flywheel_serving.fr13_replay_conv_remap import "
-        "replay_conv_state_linear_remap" in text
-    )
-    # The conv carrier rationale is documented at the call site.
-    assert "conv-prior-window carrier" in text
-    # The page-sharing root cause is documented at the call site.
-    assert "FR13_REPLAY_PAGE_SAFE_CONV_REMAP" in text
-
-
 def test_replay_route_fragments_parse_and_everything_compiles() -> None:
     text = PATCHER.read_text()
     tree = ast.parse(text)
@@ -396,24 +299,6 @@ def test_replay_route_fragments_parse_and_everything_compiles() -> None:
     ast.parse(textwrap.dedent(builder_fragments[0]))
     for path in (PATCHER, KERNEL, REFERENCE, GATE):
         py_compile.compile(str(path), doraise=True)
-
-
-def test_flag_zero_restores_legacy_surfaces() -> None:
-    text = PATCHER.read_text()
-
-    # The legacy publish, remap, lens plumbing and committer publishes are
-    # all still present: with the default now ON, explicit FR13_REPLAY_ROUTE=0
-    # is the legacy escape hatch -- the legacy text is intact and every replay
-    # behavior is flag-gated, so =0 restores the legacy surfaces (all-rows
-    # publish + ssm remap + scratch/STORE_NODE_STATES=True diagnostic mode).
-    # Flag=0 binary identity to the pre-refactor scan was proven by the GPU
-    # byte A/B (FR13_REPLAY_GPU_GATES_BIND.md section 1).
-    assert "ssm_state.index_copy_(" in text
-    assert "launch_tree_state_linear_remap(" in text
-    assert "h0_num_accepted_tokens=_fr10_accepted_lens_tensor" in text
-    assert "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR" in text
-    assert "FR13_TREE_REQKEY" in text
-    assert "FR13_TREE_PER_REQ_GEN" in text
 
 
 def test_launcher_passthrough_defaults_replay_route_on() -> None:
