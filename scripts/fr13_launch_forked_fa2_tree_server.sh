@@ -414,6 +414,14 @@ if [[ "${FR13_COMMIT_ARGMAX_GATE:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_commit_argmax_gate.arm" 2>/dev/null || true
 fi
+# FR13_DEVICE_MULTIDRAFT off-sidecar (worker-env-drop-proof): DEVICE_MULTIDRAFT defaults ON and is dropped
+# from the worker env, so FR13_DEVICE_MULTIDRAFT=0 can't turn it off via env. This sidecar forces the
+# Python committer loop (needed for the CAG gate; also a decisive device-vs-Python garble A/B).
+if [[ "${FR13_DEVICE_MULTIDRAFT:-1}" == "0" ]]; then
+  : > "$LOG_DIR/fr13_device_multidraft_off.arm"
+else
+  rm -f "$LOG_DIR/fr13_device_multidraft_off.arm" 2>/dev/null || true
+fi
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
 set -a

@@ -9088,6 +9088,7 @@ def _lumo_tree_canonical_multidraft_sample(
     # disengagement (no silent host fallback, bug-class 9).
     _fr13_device_multidraft = (
         __import__('os').environ.get('FR13_DEVICE_MULTIDRAFT', '1') == '1'
+        and not __import__('os').path.exists('/logs/fr13_device_multidraft_off.arm')
         and draft_probs is None
     )
     if _fr13_device_multidraft:
