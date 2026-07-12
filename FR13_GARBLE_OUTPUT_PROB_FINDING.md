@@ -390,3 +390,17 @@ check RoPE mrope-vs-regular anchor mismatch (patcher 10703-10717: _fr10_state_ba
 _fr10_mrope_base=num_computed). FIX direction (no-HBM-tax): correct the committed-KV ADDRESSING (block_table/
 read positions) for non-linear accepts = metadata, not a KV move; OR add the attention analogue of
 launch_tree_state_linear_remap.
+
+## RED-TEAM of the KV hypothesis (2026-07-12): it OVER-PREDICTS -> must capture, not build
+The "no attention KV remap => accepted non-spine nodes misplaced" mechanism predicts PERVASIVE corruption: in
+cat9 the spine is at flat slots 0,1,3,5,7 so EVERY multi-token accept is non-contiguous -- e.g. spine accept
+[0,1,3,5,7] => linear slots 2,3,4 read nodes 2,3,4 (rejected siblings) instead of accepted 3,5,7 => ~3/5
+committed-KV positions wrong on EVERY accept => garble ~most tokens. But observed garble is only 8-11%. So
+EITHER (i) stock vLLM DOES re-point the block_table / the slot_mapping accounts for the tree (=> KV correct,
+hypothesis REFUTED), OR (ii) the misplacement is an EDGE CASE (only certain accepts, e.g. acc=0 or the
+len>0->len=0 transition), which the agent's "all non-spine accepts" mechanism does NOT predict. The 8-11%
+non-pervasive rate is strong evidence the KV is MOSTLY correctly placed. => DO NOT build the KV-remap fix on
+this unconfirmed+over-predicting mechanism. SETTLE with the decisive capture (_fr13_tree_attn_op_capture): at
+the [0,2] verify, does linear committed slot hold the accepted leaf's KV (correct => refuted) or a rejected
+sibling's (misplaced => confirmed, edge-case)? If refuted, attention KV is exonerated too and the suspect
+returns to conv col-0 WRITE runtime (direct capture) or the RoPE mrope-anchor mismatch (patcher 10703-10717).
