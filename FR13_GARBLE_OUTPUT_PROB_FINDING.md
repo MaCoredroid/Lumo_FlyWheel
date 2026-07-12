@@ -607,3 +607,41 @@ instead of within-floor sibling). Legacy +1 restorable via env
 GATE (pending reboot): greedy garble -> GONE; ladder col-0 GDN-layer diff -> ~0;
 temp-0.6 garble gate -> 0% (native parity); spine argmax lossless; live SWE-
 Verified with cache ON (FR13_ENABLE_APC=1).
+
+================================================================================
+## REFUTED (2026-07-12): the conv-committer +1 was NOT the bug — I analyzed the
+## DEAD non-fused path. Reverted.
+
+Same-config A/B on the locked cat9 boot (GPU_UTIL=0.78, cache OFF), ONLY the conv
+committer column differs (needle legacy_plus1 confirms which):
+- **legacy +1 (baseline)**: greedy _rows_garble=TRUE but CLEAN well-formed code;
+  temp0.6 n=15 syntax_bad=0/45, undef_samples=29/45 (the _rows identifier garble).
+- **my -1 (proposed fix)**: greedy _rows_garble=FALSE (gone) BUT temp0.6 n=15
+  syntax_bad=114/120 (95%) = DEGENERATE (repetition loops, digit spam, truncated
+  signatures). undef=2/120 only because the scorer can't detect names in
+  unparseable code.
+
+=> The -1 is STRICTLY WORSE (trades mild identifier garble for gross degeneracy).
++1 is the correct ship column and was REVERTED.
+
+**Root of my error:** I read the NON-FUSED conv forward (the `else:` branch at
+L3482, `_fr10_tree_n = len(parent)`) and concluded "conv bank node-indexed, +1 is
+off-by-one". But the ACTIVE ship path is `FR13_TREE_CONV_FUSED=1`, whose bank is
+**+1-ANCHORED** (boot log: `gdn_linear_attn.py:196 conv emulation engaged:
+fused=1 tree_n=10` — col0=anchor, tree-node k -> col k+1, same as GDN). So
+accepted_path_buf=node_id+1 is the CORRECT column and the -1 reads the wrong
+node. The workflow's "surviving candidate" cited the same dead non-fused L3482 —
+also refuted. A code-proof on the wrong code path is not a proof.
+
+**Genuine clue retained:** the -1 DID remove the _rows garble (29/45 -> ~0), so
+the conv committer column DOES couple to _rows. But since +1 (correct column)
+STILL has _rows garble, the _rows root is NOT the committer column selection --
+it's the WINDOW CONTENT at the (correct) column, or the SSM col-0, on the FUSED
+path. The per-layer ladder col-0 corruption (GDN layer-0) STANDS; only its
+attribution to the committer +1 is refuted.
+
+**NEXT:** re-hunt the _rows col-0 corruption on the ACTIVE fused conv path
+(src/lumo_flywheel_serving/fr13_tree_conv_fused.py: build_tree_conv_state_src_
+indices + prepare_committed_path_conv_rows) and the SSM col-0 -- NOT the committer
+column. Ladder must capture on the fused path (FR13_TREE_CONV_FUSED=1), which is
+what actually runs.

@@ -7153,31 +7153,15 @@ def _fr13_conv_commit_to_col0(
         ).clamp(0, _spec_cols - 1).to(torch.long)
         _dst = _ssi[:replay_rows, 0].to(torch.long)
         if do_commit:
-            # FR13 GARBLE ROOT FIX (2026-07-12): the conv bank is NODE-INDEXED
-            # (forward writes node i -> col i via path_node_tensors[i]; the
-            # committed-path read uses the RAW node id). But accepted_path_buf
-            # here is the GDN/SSM +1-ANCHORED path (node_id+1) -- correct for
-            # the anchored SSM bank (col0 = running-row anchor) but OFF-BY-ONE
-            # on the anchorless conv bank, so the legacy read _ssi[b, leaf+1]
-            # fetched node(leaf+1)'s window into col 0 (branch leaves 2,4,6 ->
-            # deeper subtree nodes 3,5,7 = gross wrong-window garble; spine
-            # leaves 1,3,5,7 -> siblings 2,4,6,8 = within-floor). Subtract the
-            # anchor so col = the leaf node's OWN window; alen==0 keeps col 0
-            # (leaf_node forced to 0 -> (0-1).clamp = 0 = running row).
-            import os as _os_cc
-            _cc_legacy = _os_cc.environ.get("FR13_CONV_COMMIT_PLUS1_LEGACY", "0") == "1"
-            if _cc_legacy:
-                _conv_col = _leaf_node
-            else:
-                _conv_col = (_leaf_node - 1).clamp(min=0)
-            if not globals().get("_FR13_CONV_COMMIT_FIX_ANNOUNCED", False):
-                globals()["_FR13_CONV_COMMIT_FIX_ANNOUNCED"] = True
-                print(
-                    "[FR13_CONV_COMMIT_NODEIDX ENGAGED] conv col = leaf-1 "
-                    "(legacy_plus1=%s)" % _cc_legacy,
-                    flush=True,
-                )
-            _src = _ssi[_rows, _conv_col].to(torch.long)
+            # NOTE (2026-07-12): the ACTIVE ship path is FR13_TREE_CONV_FUSED (the
+            # fused conv bank is +1-ANCHORED, tree_n=10, col0=anchor, tree-node k
+            # -> col k+1), so accepted_path_buf=node_id+1 is the CORRECT column
+            # here. A tried "-1 node-index" fix (from mis-reading the DEAD non-
+            # fused L3482 forward) was empirically REFUTED: same-config A/B showed
+            # +1 => clean coherent code (with the _rows identifier garble),
+            # -1 => 95% syntax-broken degeneracy. Keep +1. The _rows garble root
+            # is NOT this committer column; re-hunt on the fused conv path.
+            _src = _ssi[_rows, _leaf_node].to(torch.long)
             # index_select snapshots the source rows before the write -> no alias
             # hazard even when a leaf row coincides with col 0.
             _conv.index_copy_(0, _dst, _conv.index_select(0, _src))
