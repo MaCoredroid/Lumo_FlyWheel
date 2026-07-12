@@ -201,3 +201,28 @@ NON-syncing (accumulate stages device-side, single D2H at forward-end) or fix th
 so all inner stages land in one payload. Then eager (proven clean) + fixed-FR12 = complete branch
 capture => the CPU native-replay reducer => the branch-vs-native sub-op drift. Eager is NOT the
 blocker (proven); the FR12 tree-path capture is.
+
+## 2026-07-12 COMPREHENSIVE RECONCILIATION: seed = bf16 in_proj_ba M-keying; standard fixes all dead
+Reconciling every result: the co-residency seed is the bf16 in_proj_ba GEMM's cuBLASLt M-dependent
+kernel selection (tree-verify M=tree_n vs the sequential reference M=1/5 → different Split-K → last-bit
+a/b differ → systematic same-sign bias → amplified ~492x → garble). Evidence chain:
+- fp8 GEMMs (in_proj_qkvz, o_proj): ALREADY M-invariant on GB10 (single-program-per-row, fixed
+  BLOCK_K; fp8 config lookup returns None → default M-invariant). NOT the seed. (FR13_BI_COUNTERPRODUCTIVE C3)
+- bf16 in_proj_ba: M-keyed (the +17 spine carrier, FR13_WIDTH_CARRIER_INPROJ_BA_BIND). THE candidate.
+- scan: bit-exact + SCAN_ALIGN made garble WORSE (12.89%) → scan is not the seed.
+- conv: native-bf16-matched.
+- Standard fixes for the bf16 M-keying ALL DEAD: full BI = COUNTERPRODUCTIVE on GB10 (breaks fp8
+  consistency, 6.67%>4.76%); the LUMO_FB pad = nspec(batch)-invariance, B>=2-only, does NOT address
+  the INTRA-TREE (tree_n) M at B=1; forcing cat8's M=9 to match native's M=5 cuBLASLt kernel = not
+  feasible (kernel selection opaque). Making it CONSISTENT (pad to fixed M) != making it match native.
+
+**The ONE un-tried thread:** a CUSTOM M-invariant bf16 in_proj_ba GEMM — mirror the fp8 GEMM's
+single-program-per-row / fixed-BLOCK_K structure for the bf16 ba projection so each output row's
+a/b is computed M-independently (== the sequential M=1 reference == native). This is NOT full BI (which
+breaks fp8) and NOT the nspec-pad (batch-only); it's a targeted bf16-GEMM rewrite. Substantial custom
+kernel work, and it builds on the in_proj_ba HYPOTHESIS which the rotted capture cannot yet CONFIRM.
+
+**HONEST STATE:** every standard/nameable compute-only fix is now refuted with clean evidence; the
+seed is hypothesized (in_proj_ba M-keying, unconfirmed — capture rotted); the remaining path is a
+custom M-invariant bf16 GEMM (un-tried, substantial, unconfirmed-hypothesis). This is a
+comprehensively-researched boundary, NOT a premature no-go.
