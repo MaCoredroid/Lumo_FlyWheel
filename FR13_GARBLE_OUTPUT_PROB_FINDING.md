@@ -684,3 +684,22 @@ in_proj_ba bmm, committer) still stand -- those failed to fix even the greedy, s
 BATCH_INVARIANT (GEMM+reduction batch-invariance) + BI_TREE_ATTN (attention) BOTH insufficient => the
 garble is NOT a batch-invariance issue in GEMMs/reductions/attention (and not GDN/in_proj). NEXT: re-gate
 on temp-0.6 matrix_build; the carrier is elsewhere (routing/logic? a non-batch-invariant M-dependence?).
+
+## STATE-DRIFT CONFIRMED via the ACTIVE device-multidraft committer code (2026-07-12)
+Live-path boot log: temp-0.6 (ship/reliable gate) runs FR13_DEVICE_MULTIDRAFT (device temp>0 committer),
+NOT the greedy Python committer my prior tests used. fr13_device_multidraft_kernel.py docstring: accept
+DISTRIBUTION proven identical to host reference (per-node accept-prob match); the committed near-neighbor
+garble is because "the drift depresses the correct argmax to ~0.80" and inflates the garble branch from
+true ~1e-6 to ~0.2 => the ACCEPT rule faithfully commits DRIFTED verify probs. So the accept committer is
+CLEARED (again, on the ACTIVE path). Garble = gross FORWARD DRIFT (correct ~0.80 / garble ~0.2, ~12-nat
+inflation) in the verify probabilities. Compute exonerated on the reliable gate (BATCH_INVARIANT temp-0.6
+15/15) => the drift is STATE corruption feeding the verify at branch num_accepted>1.
+
+**TOOLING BLOCKER (the real wall):** the reliable gate is temp-0.6 (graph mode, device-multidraft), but
+the state diagnostics (VERIFY_NATIVE/COMMITTER_NATIVE) are EAGER-ONLY, and eager itself degrades quality
+(confounds temp-0.6). The greedy gate is graph-compatible but has false negatives (BATCH_INVARIANT
+confound). So I cannot cleanly test a state fix on the reliable gate. NEXT = close this gap: a
+GRAPH-COMPATIBLE capture of the verify's INPUT state (GDN col-0 h0 + conv col-0 running window) at a branch
+num_accepted>1 commit, CLEAN(sequential) vs garble(tree), on the temp-0.6 path, to localize WHICH state
+component drifts (GDN col-0 / conv col-0 / physical-row spec_state_indices routing). Confirmed NOT: forward
+compute, GDN scan, in_proj_ba, attention, accept committer.
