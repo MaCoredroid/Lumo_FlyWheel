@@ -233,3 +233,18 @@ same corrupt state => can't fix), NOT the prefill/model (fresh state = clean). T
 NEXT: localize mamba col-0 vs KV -- (a) matrix greedy with APC cache OFF (spec ON): still garbles => mamba
 col-0 state; clean => APC KV. (b) which commit writes the corrupt state (step 11 branch acc=3 precedes the
 step-12 garble). Then a compute-only fix to the state write.
+
+## conv-prior flag test CRASHED (2026-07-12) + suspect sharpened to CONV col-0 (VERIFY_NATIVE logic)
+FR12_TREE_CONV_NATIVE_PRIOR_READ baked non-vacuous (verified _FR12_NPR=True in emitted gdn_linear_attn.py,
+read+needle same module) but the request 500'd: EngineCore UnboundLocalError '_fr13_tcf_prep' in "FR10 tree
+state linear remap". Root cause: native_prior_read SKIPS the fused-prep block (sets _fr13_tcf_prep at 2422)
+but the remap USES it (2652-2666) => genuinely incompatible with FR13_TREE_CONV_FUSED=1 (the exclusion at
+patcher L868-880 is REAL; TCF_DIAG_OVERRIDE just moved the init-raise to a runtime crash). Needle=0 = crashed
+before reaching it. So this diagnostic can't run on the locked (fused) config without a real remap-guard fix.
+BUT the suspect is now SHARP: VERIFY_NATIVE (verified-engaged) makes the SSM/GDN scan OUTPUT native-correct per
+node yet garble persists, AND VERIFY_NATIVE does NOT touch the CONV state (only the GDN linear-attn scan). So
+the carried-state corruption lives in the CONV col-0 (write and/or read), not the SSM. The col-0 for step 12's
+verify is written by step 11's commit (branch [0,1,4] acc=3, leaf node 4): the committer copies leaf node 4's
+CONV window to col-0. NEXT: audit the CONV col-0 WRITE/commit (_fr13_conv_commit_to_col0 + the tcf-fused
+snapshot) for a wrong-node / wrong-window / wrong-bank-row read at num_accepted>1 branch paths -- read-only,
+no config change, no crash. A compute-only fix there is the ship-fix direction.
