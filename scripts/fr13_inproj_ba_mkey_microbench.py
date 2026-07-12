@@ -16,18 +16,28 @@ X = (torch.randn(16, 5120, generator=g, device=dev, dtype=torch.bfloat16) * 0.1)
 def gemm(Wm, M):
     return torch.matmul(X[:M], Wm.t())  # [M, 48]
 
-print("=== bf16 in_proj_ba M-keying: row-0 output at M vs M=1 (same input row X[0]) ===", flush=True)
-any_nonzero = False
+print("=== THRESHOLD SWEEP: row-0 output at M vs M=1 (find the kernel-switch point) ===", flush=True)
 for nm in ("a", "b"):
-    outs = {M: gemm(W[nm], M) for M in (1, 5, 9, 16)}
-    base = outs[1][0].float()
-    for M in (5, 9, 16):
-        d = (outs[M][0].float() - base).abs().max().item()
-        rel = d / (base.abs().max().item() + 1e-30)
-        print(f"  in_proj_{nm} row0: M={M} vs M=1  max_abs={d:.3e}  rel={rel:.2e}", flush=True)
-        if d > 0:
-            any_nonzero = True
-    # also compare a middle row (row 4) M=9 vs M=16 (both contain row 4)
-    d49 = (gemm(W[nm], 9)[4].float() - gemm(W[nm], 16)[4].float()).abs().max().item()
-    print(f"  in_proj_{nm} row4: M=9 vs M=16 max_abs={d49:.3e}", flush=True)
-print(f"VERDICT: in_proj_ba is {'M-KEYED (seed candidate CONFIRMED)' if any_nonzero else 'ROW-INDEPENDENT (in_proj_ba REFUTED as seed)'}", flush=True)
+    base = gemm(W[nm], 1)[0].float()
+    row = []
+    for M in range(1, 13):
+        d = (gemm(W[nm], M)[0].float() - base).abs().max().item()
+        row.append(f"M{M}={d:.1e}")
+    print(f"  in_proj_{nm} row0: " + "  ".join(row), flush=True)
+
+# ---- FIX VALIDATION: compute all 9 rows via <=CHUNK-row sub-GEMMs vs the served M=9 vs native M=1 ----
+def chunked(Wm, N, chunk):
+    outs = []
+    for s in range(0, N, chunk):
+        outs.append(torch.matmul(X[s:min(s + chunk, N)], Wm.t()))
+    return torch.cat(outs, 0)
+
+print("=== FIX VALIDATION (N=9 rows): chunked-<=CHUNK vs per-row M=1 (native ground truth) ===", flush=True)
+for chunk in (1, 4, 5):
+    for nm in ("a", "b"):
+        served9 = gemm(W[nm], 9)                      # what the tree does now (M=9)
+        native_perrow = torch.cat([gemm(W[nm], 1) if False else torch.matmul(X[i:i+1], W[nm].t()) for i in range(9)], 0)
+        fixed = chunked(W[nm], 9, chunk)
+        d_served = (served9.float() - native_perrow.float()).abs().max().item()
+        d_fixed = (fixed.float() - native_perrow.float()).abs().max().item()
+        print(f"  chunk={chunk} in_proj_{nm}: served(M=9)-vs-native={d_served:.3e}  FIXED(chunk)-vs-native={d_fixed:.3e}", flush=True)
