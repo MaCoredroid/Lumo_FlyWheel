@@ -534,3 +534,19 @@ same), so the corrupt col-0 that GDN L0 reads is the CONV col-0 PRIOR WINDOW (fe
 static-correct but NEVER native-tested. VERIFY_NATIVE reads the same col-0 => inherited, didn't fix (consistent).
 NEXT: test the conv col-0 prior directly (native conv replay / capture the conv col-0 vs sequential); a
 compute-only fix to the conv col-0 write/read is the ship-fix direction.
+
+## Cumulative-onset test INCONCLUSIVE (2026-07-12): capture-matching fouled it
+Cumulative diff (nearest-by-position CLEAN vs LIVE) gave input_hidden rel_l2=1.25/1.38 (NOT identical) => it
+matched captures with DIFFERENT tokens (CLEAN-continuation forwards don't land at predictable call numbers;
+nearest-by-position is unreliable). So the cumulative-vs-step-specific question is UNRESOLVED by this run --
+honest null, not a signal. The clean result stands: exact-token diff (auto-matched by argmax '_row'/'_rows' =>
+input IDENTICAL) shows layer-0 GDN divergence => mamba col-0 CONFIRMED corrupt. The ladder capture-gating is
+too fragile for multi-position matching (CLEAN continuations capture unpredictably); the SINGLE-position
+exact-token diff is the reliable instrument. CONSOLIDATED STATE: the corruption is the col-0 MAMBA state built
+by the stateless-tree commit (task #11), NOT attention/verify-compute (both ruled out by the ladder + prior
+tests). COMMITTER_NATIVE (native col-0 replay) agrees with the custom kernel => both corrupt from a shared
+input (the previous-step col-0 h0 they replay from = CUMULATIVE, or the tree-scan leaf final_state at M=10).
+FIX DIRECTION: correct the col-0 mamba state build so it equals the sequential-prefill col-0 (the ladder CLEAN
+reference). Next: re-examine the col-0 WRITE value (leaf final_state copied, and whether it carries the prior
+col-0 corruption) -- the memory's OPEN project_fr13_conv_priorwindow_root + the confirmed col-0 corruption
+converge here.
