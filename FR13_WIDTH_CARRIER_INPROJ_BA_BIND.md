@@ -70,3 +70,17 @@ proven additive). NEXT (for the user): the +13 residual needs its own localizati
 re-run A/B per the doc covers only the ba seam; the rest is a fresh carrier hunt — candidate channels:
 fp8 in_proj_qkvz M-keying, gate/o_proj co-residency, full-attn KV co-residency). LOSSLESS + leaf-edge
 intact, so BA_PROJ_BI_ON is a keep-able partial improvement (default-OFF, flag-gated).
+
+## in_proj_ba bmm REFUTED as the garble root (2026-07-12, non-vacuous)
+Booted FR13_INPROJ_BA_BMM=1 EAGER (graph mode = vacuous: get_forward_context().attn_metadata is None in
+the captured forward, so both bmm AND the env-gated pad silently fall to stock). EAGER: needle FIRED
+non-vacuously ("FR13_INPROJ_BA_BMM ENGAGED: per-row-M=1 bmm rows=10" = the tree_n=10 verify forward). a/b
+now bit-exact to native. Deterministic greedy matrix garble PERSISTS (_rows_garble=True, decode 34s).
+=> in_proj_ba (a/b projection M>=9 kernel switch) is NOT the garble root. Combined with the same-day
+whole-GDN-native refutation (scan+col0-state native, garble persists) and in_proj_qkvz fp8 per-row
+M-independence (memory): the garble is NOT in in_proj_ba, in_proj_qkvz, GDN scan, or GDN col-0 state.
+REMAINING L0 suspects: CONV (feeds BOTH prior tests' post-conv activations -> if live-corrupt for branch
+nodes at M=10 both inherit it; "conv bit-exact" was OFFLINE synthetic) and full_ATTENTION (not covered by
+any GDN/in_proj fix). NOTE (infra): FR13_INPROJ_BA_BMM + the LUMO_FB pad are BOTH graph-vacuous
+(forward-context None) -> if ever shipped they must engage in graph, not just eager. Speed of the bmm
+UNMEASURED (refuted before speed gate reached).
