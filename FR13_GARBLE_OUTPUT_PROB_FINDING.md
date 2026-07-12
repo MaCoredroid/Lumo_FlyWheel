@@ -550,3 +550,60 @@ FIX DIRECTION: correct the col-0 mamba state build so it equals the sequential-p
 reference). Next: re-examine the col-0 WRITE value (leaf final_state copied, and whether it carries the prior
 col-0 corruption) -- the memory's OPEN project_fr13_conv_priorwindow_root + the confirmed col-0 corruption
 converge here.
+
+================================================================================
+## ROOT CAUSE FOUND + FIXED (2026-07-12): conv committer +1 off-by-one on the
+## NODE-INDEXED conv bank
+
+**The bug (code-proven, exhaustive trace across all 3 consumers + adversarial-
+verified surviving candidate).** `_fr13_conv_commit_to_col0`
+(scripts/fr10_phase4_patch_vllm_tree_gdn.py, in the `helper` r''' block) commits
+this-step's accepted-leaf conv window into col-0 (the running row). It reads the
+source column as `_src = _ssi[b, _leaf_node]` where `_leaf_node =
+accepted_path_buf[b, acc_len-1]`. The caller (L8726 packed / L9612 sampled)
+passes `_accepted_path_buf` = `_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR`, filled from
+`_gdn_path = [int(node_id)+1 ...]` (L8473-8497) = the GDN/SSM **+1-ANCHORED**
+path.
+
+But the CONV bank is **NODE-INDEXED, no anchor**:
+- Forward write: `for node_i in range(tree_n): window(path_node_tensors[node_i])
+  -> spec_state_indices[b, node_i]` (L3482, L3542). path_node_tensors[i] = root-
+  to-node-i path (L255-263), node0's path = [0] (NO empty-anchor prepend).
+- Committed-path read (`prepare_committed_path_conv_rows`, L310): indexes with
+  the RAW node id `accepted_paths[b, len-1]`, comment "node-indexed layout".
+
+So the committer borrowed the SSM's +1 convention (correct there: the SSM/GDN
+bank IS +1-anchored, col0=running-row anchor, realized by prepend-0 in
+_fr13_prepare_committer_layout) and MISAPPLIED it to the anchorless conv bank ->
+reads node(leaf+1)'s window into col-0. Its own docstring is wrong ("Leaf node id
+= accepted_paths[b, acc_len-1]") -- the caller passes the +1 GDN buffer, not raw
+accepted_paths.
+
+**Reconciles every prior fact:** COMMITTER_NATIVE / VERIFY_NATIVE are SSM-side
+(recompute via prepend-0, correct) and NEVER touch the conv col-0 prior -> can't
+fix. Compute bit-exact (only the selected bank ROW is wrong; every node's conv
+window CONTENT is correct). Node-selection audits passed (the correct node id IS
+chosen; the +1 is a SEPARATE column-routing step). Cumulative (each commit writes
+a corrupt col-0 that next step's RUNROW_INIT reads).
+
+**Branch specificity (why 8-11%, not 100%):** interleaved (len,path) numbering.
+Spine leaves 1,3,5,7 -> +1 = siblings 2,4,6,8 (last-tap-only diff => within
+argmax floor => spine stayed lossless "by luck"). Branch leaves 2,4,6 -> +1 =
+3,5,7 = different/deeper subtree => GROSS wrong window => garble. Branch nodes
+live at depth>=2 so every branch commit is num_accepted>1 (matches the multi-
+token-accept specificity).
+
+**BASELINE (live fr13-lad, buggy, cache OFF, DEVICE_MULTIDRAFT=1, exact-token
+greedy /v1/completions of matrix_build):** garble present at gen positions 64,67
+(token '_rows' 1748/10630 where '_row' is correct), gen_len=221. Deterministic.
+
+**FIX:** conv committer uses the node-indexed leaf column
+`_conv_col = (_leaf_node - 1).clamp(min=0)` (alen>0 -> leaf node id; alen==0 ->
+col-0 running row). Compute-only, no HBM tax, spine strictly improves (exact node
+instead of within-floor sibling). Legacy +1 restorable via env
+`FR13_CONV_COMMIT_PLUS1_LEGACY=1` for same-config A/B. Needle:
+`[FR13_CONV_COMMIT_NODEIDX ENGAGED]`.
+
+GATE (pending reboot): greedy garble -> GONE; ladder col-0 GDN-layer diff -> ~0;
+temp-0.6 garble gate -> 0% (native parity); spine argmax lossless; live SWE-
+Verified with cache ON (FR13_ENABLE_APC=1).
