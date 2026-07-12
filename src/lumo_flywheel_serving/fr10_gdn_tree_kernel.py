@@ -922,10 +922,41 @@ def _tree_gdn_replay_kernel(
             )
 
 
+def _fr13_prepare_committer_layout(*, accepted_paths, accepted_lens, spec_state_indices, num_spec_decodes):
+    """Compute the per-request committed-path node layout ONCE (it depends only on accepted_paths/
+    accepted_lens/spec_state_indices, all SHARED across the ~48 GDN layers). This is the only host sync;
+    hoisting it out of the per-layer loop eliminates B*47 syncs that made the eager committer crawl.
+    Returns (nodes_list, cu, ssi, T, max_T)."""
+    dev = accepted_paths.device
+    B = int(num_spec_decodes)
+    acc = accepted_lens[:B].tolist()  # ONE host sync for all requests
+    nodes_list, seg_len = [], []
+    for b in range(B):
+        L = int(acc[b])
+        nodes = torch.cat([
+            torch.zeros(1, dtype=torch.long, device=dev),
+            accepted_paths[b, :L].to(torch.long),
+        ])
+        nodes_list.append(nodes)
+        seg_len.append(int(nodes.numel()))
+    T = int(sum(seg_len))
+    max_T = int(max(seg_len))
+    cu = torch.tensor(
+        [0] + list(torch.tensor(seg_len).cumsum(0).tolist()),
+        device=dev, dtype=torch.int32,
+    )
+    ssi = torch.zeros(B, max_T, device=dev, dtype=torch.int32)
+    col0 = spec_state_indices[:B, 0].to(torch.int32)
+    for b in range(B):
+        ssi[b, :] = col0[b]
+    return nodes_list, cu, ssi, T, max_T
+
+
 def _fr13_native_committer_replay(
     *, state_bank, spec_state_indices, accepted_paths, accepted_lens,
     k_ring, v_ring, a_ring, b_ring, A_log, dt_bias, num_spec_decodes,
     output_scale, use_qk_l2norm_in_kernel, burn_node_bank, spec_cols,
+    layout=None,
 ) -> None:
     """FR13_COMMITTER_NATIVE: rebuild col-0 (the running row) by running each request's committed path
     [node 0] ++ accepted_paths[:acc_len] through NATIVE fused_sigmoid_gating (bit-exact to no-spec), instead
@@ -945,35 +976,20 @@ def _fr13_native_committer_replay(
     B = int(num_spec_decodes)
     num_kh, dim_k = int(k_ring.shape[2]), int(k_ring.shape[3])
     num_vh, dim_v = int(v_ring.shape[2]), int(v_ring.shape[3])
-    seg_k, seg_v, seg_a, seg_b, seg_len = [], [], [], [], []
-    for b in range(B):
-        L = int(accepted_lens[b].item())
-        nodes = torch.cat([
-            torch.zeros(1, dtype=torch.long, device=dev),
-            accepted_paths[b, :L].to(torch.long),
-        ])
-        seg_k.append(k_ring[b, nodes])
-        seg_v.append(v_ring[b, nodes])
-        seg_a.append(a_ring[b, nodes])
-        seg_b.append(b_ring[b, nodes])
-        seg_len.append(int(nodes.numel()))
-    T = int(sum(seg_len))
-    max_T = int(max(seg_len))
+    # ssm_state_indices [B, max_T] every col = the col-0 running row: init reads col 0 = h0; the write-back
+    # is PER-TOKEN, so the final token (col T-1) deposits the committed-path final state to that row = col-0.
+    if layout is None:
+        layout = _fr13_prepare_committer_layout(
+            accepted_paths=accepted_paths, accepted_lens=accepted_lens,
+            spec_state_indices=spec_state_indices, num_spec_decodes=num_spec_decodes,
+        )
+    nodes_list, cu, ssi, T, max_T = layout
+    # Per-layer: ring GATHER only (device index_select on precomputed node tensors -> NO host sync).
     q = torch.zeros(1, T, num_kh, dim_k, device=dev, dtype=k_ring.dtype)
-    k = torch.cat(seg_k, 0).reshape(1, T, num_kh, dim_k).contiguous()
-    v = torch.cat(seg_v, 0).reshape(1, T, num_vh, dim_v).contiguous()
-    aa = torch.cat(seg_a, 0).reshape(1, T, num_vh).contiguous()
-    bb = torch.cat(seg_b, 0).reshape(1, T, num_vh).contiguous()
-    cu = torch.tensor(
-        [0] + list(torch.tensor(seg_len).cumsum(0).tolist()),
-        device=dev, dtype=torch.int32,
-    )
-    # ssm_state_indices [B, max_T] every col = the col-0 running row: init reads col 0 = h0; the write-back is
-    # PER-TOKEN, so the final token (col T-1) deposits the committed-path final state to that same row = col-0.
-    ssi = torch.zeros(B, max_T, device=dev, dtype=torch.int32)
-    col0 = spec_state_indices[:B, 0].to(torch.int32)
-    for b in range(B):
-        ssi[b, :] = col0[b]
+    k = torch.cat([k_ring[b, nodes_list[b]] for b in range(B)], 0).reshape(1, T, num_kh, dim_k).contiguous()
+    v = torch.cat([v_ring[b, nodes_list[b]] for b in range(B)], 0).reshape(1, T, num_vh, dim_v).contiguous()
+    aa = torch.cat([a_ring[b, nodes_list[b]] for b in range(B)], 0).reshape(1, T, num_vh).contiguous()
+    bb = torch.cat([b_ring[b, nodes_list[b]] for b in range(B)], 0).reshape(1, T, num_vh).contiguous()
     _sg(
         A_log=A_log, a=aa, b=bb, dt_bias=dt_bias, q=q, k=k, v=v, scale=output_scale,
         initial_state=state_bank, inplace_final_state=True, cu_seqlens=cu,
@@ -1588,6 +1604,12 @@ def launch_tree_gdn_replay_all_layers(
         # whether the gross state-carry corruption (garble root) is here. banks_list[L] is the per-layer
         # fp32 bank; k_rings[L]/... are per-layer ring slices; A_logs[L]/dt_biases[L] per-layer params.
         _spec_cols = int(spec_state_indices.shape[1])
+        # Compute the committed-path node layout ONCE (shared across all layers) -> one host sync total,
+        # not B*num_layers. Per-layer calls then only gather rings (device ops).
+        _layout = _fr13_prepare_committer_layout(
+            accepted_paths=accepted_paths, accepted_lens=accepted_lens,
+            spec_state_indices=spec_state_indices, num_spec_decodes=num_spec_decodes,
+        )
         for _L in range(int(num_layers)):
             _fr13_native_committer_replay(
                 state_bank=banks_list[_L], spec_state_indices=spec_state_indices,
@@ -1595,7 +1617,7 @@ def launch_tree_gdn_replay_all_layers(
                 k_ring=k_rings[_L], v_ring=v_rings[_L], a_ring=a_rings[_L], b_ring=b_rings[_L],
                 A_log=A_logs[_L], dt_bias=dt_biases[_L], num_spec_decodes=num_spec_decodes,
                 output_scale=output_scale, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
-                burn_node_bank=burn_node_bank, spec_cols=_spec_cols,
+                burn_node_bank=burn_node_bank, spec_cols=_spec_cols, layout=_layout,
             )
         return
     grid = (int(num_layers) * int(num_spec_decodes), num_vh, triton.cdiv(dim_v, BV))
