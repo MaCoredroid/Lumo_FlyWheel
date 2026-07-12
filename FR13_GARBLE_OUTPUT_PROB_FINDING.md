@@ -519,3 +519,18 @@ GDN drops to 0.32 while 0/1 are 0.58/0.89) -- a pure col-0 corruption should pro
 position-matched CLEAN (recapture the CURRENT LIVE garble prefix, CLEAN at the exact garble pos) to eliminate
 the 1-token offset; if layer-0 GDN divergence persists pos-matched => mamba col-0 CONFIRMED => re-examine the
 col-0 h0 read (SSM vs conv) that COMMITTER_NATIVE/VERIFY_NATIVE both consume.
+
+## MAMBA col-0 CONFIRMED (2026-07-12): layer-0 GDN divergence is RoPE-free, offset explained away
+LIVE re-run garble = gen idx 65 / abs pos192 (SAME as saved exact_tokens) => CLEAN(committed[:192]) and garble
+process the IDENTICAL 192-token prefix. The node0 "position" difference (CLEAN 192 vs garble 191) is a
+draft-position-vs-prefix-last CONVENTION artifact = pure RoPE, affects ONLY the full_attention layers. KEY:
+layers 0,1,2 are ALL linear_attention (GDN), BEFORE the first full_attention (layer 3), so they have NO RoPE
+=> their diff is a CLEAN comparison (identical tokens + input_hidden identical + no RoPE). Layer 0 GDN diverges
+rel_l2=0.5868 => the col-0 MAMBA state the spec-decode built != the sequential-prefill col-0 = CORRUPT.
+CONFIRMED without a pos-matched re-boot (the 1-pos offset only inflates the attention-layer diffs, which I now
+DISCOUNT). Per-layer non-monotonic (L0=0.58,L1=0.89,L2=0.32) = per-layer col-0 corruption (each GDN layer's own
+col-0). => mamba col-0 REOPENED + CONFIRMED. RECONCILE: SSM col-0 WRITE exonerated (COMMITTER_NATIVE native =
+same), so the corrupt col-0 that GDN L0 reads is the CONV col-0 PRIOR WINDOW (feeds conv->SSM) -- audited
+static-correct but NEVER native-tested. VERIFY_NATIVE reads the same col-0 => inherited, didn't fix (consistent).
+NEXT: test the conv col-0 prior directly (native conv replay / capture the conv col-0 vs sequential); a
+compute-only fix to the conv col-0 write/read is the ship-fix direction.
