@@ -6163,23 +6163,33 @@ def _lumo_fb_proj_bmm(self, proj, src):
     )
     if inproj_ba_needle not in text:
         raise RuntimeError("LUMO_FB in_proj_ba needle not found")
+    # BAKE the flag at PATCH time (pid 1, env PRESENT). The EngineCore worker (pid 176)
+    # runs a CURATED env that DROPS most FR13_* vars (only ~14/66 reach it), so an
+    # os.environ.get() at worker forward-time would read None and the bmm would silently
+    # never fire (the flag-gate's docker-exec printenv checks pid-1, NOT pid-176 -> false
+    # engagement). Baking a literal + a one-time worker-side engaged log = unambiguous.
+    _inproj_bmm_on = "True" if os.environ.get("FR13_INPROJ_BA_BMM") == "1" else "False"
     inproj_ba_replacement = (
         "        else:\n"
         "            mixed_qkvz, _ = self.in_proj_qkvz(hidden_states)\n"
         "            ba, _ = self.in_proj_ba(hidden_states)\n"
-        "            # in_proj_ba M-keying fix. FR13_INPROJ_BA_BMM=1 => per-row-M=1 bmm\n"
-        "            # (bit-EXACT to native, kills the M>=9 cuBLASLt kernel-switch ~1 ULP\n"
-        "            # garble seed) on the spec-decode path. Else LUMO_FB pad (nspec-only,\n"
-        "            # partial). Else stock `ba` above (byte-identical). LUMO_FB_KERNEL_ROWS\n"
-        "            # must be \"1\" for _lumo_fb_proj_meta to be non-None (baked in ship).\n"
+        "            # in_proj_ba M-keying fix: per-row-M=1 bmm is bit-EXACT to native and\n"
+        "            # kills the M>=9 cuBLASLt kernel-switch ~1 ULP garble seed. Flag BAKED\n"
+        "            # at patch time (worker env drops FR13_*). Else LUMO_FB pad. Else stock.\n"
         "            _lumo_fb_meta = _lumo_fb_proj_meta(self)\n"
-        "            if (os.environ.get(\"FR13_INPROJ_BA_BMM\") == \"1\"\n"
+        "            if (" + _inproj_bmm_on + "\n"
         "                    and _lumo_fb_meta is not None\n"
         "                    and int(getattr(_lumo_fb_meta, \"num_prefills\", 0)) == 0\n"
         "                    and int(getattr(_lumo_fb_meta, \"num_decodes\", 0)) == 0\n"
         "                    and int(getattr(_lumo_fb_meta, \"num_spec_decodes\", 0)) >= 1):\n"
         "                try:\n"
         "                    ba = _lumo_fb_proj_bmm(self, self.in_proj_ba, hidden_states)\n"
+        "                    if not globals().get(\"_FR13_INPROJ_BA_BMM_LOGGED\"):\n"
+        "                        globals()[\"_FR13_INPROJ_BA_BMM_LOGGED\"] = True\n"
+        "                        logger.error(\n"
+        "                            \"FR13_INPROJ_BA_BMM ENGAGED: per-row-M=1 bmm rows=%d\",\n"
+        "                            int(hidden_states.shape[0]),\n"
+        "                        )\n"
         "                except Exception:\n"
         "                    ba, _ = self.in_proj_ba(hidden_states)\n"
         "            else:\n"
