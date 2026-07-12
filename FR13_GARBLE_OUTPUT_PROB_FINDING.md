@@ -335,3 +335,20 @@ physical-row/aliasing), (2) col-0/col-k BURN aliasing (cheap host check: is spec
 [b,1:SPEC_COLS]?), (3) KV cache (least likely: committed tokens all correct). NEXT: cheap host-side aliasing
 detector on the live committer launch (real code, no worker-drop/fused-crash) + a fused-compatible conv-col-0
 native test.
+
+## MAJOR REFRAME (2026-07-12): mamba FULLY exonerated -> corruption is the ATTENTION KV cache
+Confirmed conv col-0 READ = col-0 via RUNROW_INIT (fr13_tree_conv_fused.py:317-322 forces read_node_cols=0 =>
+bank_rows=spec_state_indices[b,0]=col-0), IDENTICAL to what FR12_TREE_CONV_NATIVE_PRIOR_READ reads => that
+conv test was VACUOUS, and the conv col-0 read is exonerated (read col-0 + write static-correct [audit] +
+compute bit-exact). So the ENTIRE mamba state (SSM col-0 + conv col-0) is exonerated across scan compute,
+col-0 write, col-0 read, and value. Yet teacher-force proves the carried state is corrupt. => the corrupt
+carried-state component is the ATTENTION KV CACHE (committed-prefix K/V), the ONE carried component
+VERIFY_NATIVE + COMMITTER_NATIVE never touch (both GDN/mamba-only). Consistent: the garbling verify is at the
+ROOT node0, whose full-attention layers read the committed-prefix KV; if that KV is corrupt, node0 garbles and
+no mamba-side native fix helps. LEADING KV hypothesis: a KV WRITE-POSITION / slot-mapping routing bug for
+committed BRANCH tokens (step 11 branch commit [0,1,4] writes the committed KV; step 12 node0 reads it). This
+is branch-specific (branch node KV positions) AND survives every VALUE-correcting native fix (VERIFY_NATIVE
+corrects values not positions). NOT a small drift (garble is gross 15-nat). NEXT: audit the tree KV
+slot-mapping / commit for committed branch tokens (tree_attn.py fork + the FR13 KV commit) for a wrong-position
+write; then a KV-position capture or native-attention test. The FA2 "byte-exact 14/16" validated the fork
+OUTPUT, NOT the committed-KV write POSITIONS across steps.
