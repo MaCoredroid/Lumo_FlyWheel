@@ -161,3 +161,19 @@ vs a branchless/native reference, and likely not at the garble's num_accepted>1 
 the WRONG prime suspect. NEXT: audit the tree attention mask construction+application for a node attending to
 a SIBLING branch's KV (visibility leak); then apply per-node-native isolation to the FA2 attention (analog of
 VERIFY_NATIVE) OR fix the mask.
+
+## FA2 MASK-LEAK REFUTED (agent audit, 2026-07-12) -> paradox: ALL verify ops validated, garble persists
+Explore audit (3 independent ways): (1) decoded the LIVE captured tree_attn_bias 10x10 on a genuine
+multi-level branched tree parent=[-1,0,1,1,2,2,4,4,6,6] -- every row visible set = {self}U{ancestors}, NO
+sibling/cousin ever visible; (2) strict/visible masks are GDN-ONLY, never touch FA2; (3) branched-vs-branchless
+per-node FA2 validator fr13_fa2_tree_path_ref.py WAS RUN + PASSED to bf16 floor (max_abs 2^-10, one elem;
+a real leak = O(1)). => FA2 mask sibling-leak REFUTED. So NOW every verify-forward op is validated correct
+(in_proj bit-exact, conv bit-exact, GDN scan VERIFY_NATIVE, FA2 mask ancestor-only) YET verify argmax is
+grossly wrong (CAG). PARADOX => the gross error is NOT in the verify-forward compute; it is in the CARRIED
+PREFIX/STATE the (correct) forward consumes -- KV cache + col-0 GDN (SSM h0 + conv prior) built by the
+num_accepted>1 branch-path commit -- OR my foundational "branch-specific" assumption is mismeasured for THIS
+deterministic matrix repro. Agent's own pointer: away from *which KV is visible*, toward *value realization /
+physical row-order alignment on the branched layout at num_accepted>1* (fr13_patch_fa2_tree_bias.py:57
+context_len mapping; sorted tree_choices order the bias assumes). NEXT: the winner_spine test -- does the
+matrix garble COMMIT on a branch node (winner_spine>0, num_accepted>1 branch path) or the spine (==0)? That
+verifies branch-specificity for the real repro AND tells whether the corrupt prefix is built by a branch commit.

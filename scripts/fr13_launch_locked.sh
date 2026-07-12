@@ -50,5 +50,6 @@ export FR13_CHASE_DIAG="$(diag FR13_CHASE_DIAG)"
 export FR13_BI_TREE_ATTN="$(diag FR13_BI_TREE_ATTN)"
 export FR10_METRICS="$(diag FR10_METRICS)"
 
-echo "[locked] cat9 num_spec=9 TREE_ATTN | pipeline ON | diagnostics armed: ${!ARMED[*]:-none}"
+_armed_list="${!ARMED[*]}"   # assign first: `${!ARMED[*]:-none}` mis-parses with >1 key ("invalid variable name")
+echo "[locked] cat9 num_spec=9 TREE_ATTN | pipeline ON | diagnostics armed: ${_armed_list:-none}"
 exec "$HERE/fr13_launch_forked_fa2_tree_server.sh" "$@"
