@@ -68,6 +68,23 @@ So `fr12_branch_path_oracle_probe.py` cannot be fed as-is. Killed the boot (conc
   per-node conv/state handling, propose a compute-only branch-path fix, gate end-to-end on the temp-0.6
   garble gate (the ultimate test; doesn't need the oracle).
 
+## 2026-07-12 HONEST STATUS: localization instruments are dead-ended; pivot to empirical fix-search
+Four GPU boots trying to localize the branch sub-op ALL failed — recorded honestly, not rationalized:
+1. payload/branch-oracle capture → fail-loud RuntimeError (rotted: fed the deleted scan scratch).
+2. CAPTURE_ONLY warmup → 0 events (warmup too shallow to fire L0 capture).
+3. MAB + FULL graph → engaged (sidecar) but host-syncs mis-run under graph capture + boot overran
+   the 720s health window.
+4. MAB + ENFORCE_EAGER → booted healthy (rc=0) BUT 0 MAB events + **18/18 syntax-errors** (0%
+   undefined-rate is a MIRAGE — unparseable output). The MAB re-runs scan arms (M5/M1) DURING live
+   decode with SIDE EFFECTS that corrupt the real forward. MAB is not viable for live localization.
+**Decision: stop fighting the MAB/oracle instruments.** The garble is well-characterized (branch
+co-residency forward drift, spine clean). Pivot to EMPIRICAL fix-search against the WORKING plain
+garble gate (fr13_flag_garble_gate.sh, baseline 9.62%, native 0%, reliable): arm a compute-only
+candidate, measure the garble rate, keep it if it drops — no MAB needed. Candidates: amplification-
+reduction levers (fp32 state accumulation / rms-clamp / re-anchor, [[project_fr13_amplification_levers_queued]]).
+in_proj_ba pad is B>=2-only (patcher :6077 `_nspec > 1`) and GEMM rows are independent, so it is NOT
+the B=1 branch source; that lead is weak — not chasing it further without evidence.
+
 ## 2026-07-12 red-team corrections (two of my own leads weakened)
 - **Conv prior-window is NOT the branch defect.** fr13_tree_conv_fused.py builds each node's conv
   window from ITS OWN root→node path (build_tree_conv_window_source_indices :98-104: last `width` rows
