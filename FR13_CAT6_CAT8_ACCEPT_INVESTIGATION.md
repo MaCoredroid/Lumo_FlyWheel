@@ -396,3 +396,19 @@ baseline stays 6.25e-2 as negative control. Refuted/dead: KV-pad, bias-only reor
 NEXT: implement FR13_FA2_MAB_REORDER arm; if deep_pi-row_m5==0 => promote A' to live call-site-local reorder
 in fr13_patch_fa2_tree_bias.py tree-decode wiring (flag-gated) + gate same-seed byte-identity + accept + lossless
 + garble 0. commits: (this doc) research finding.
+
+## FIX A' FULLY VALIDATED (whole spine bit-exact) — 2026-07-13
+MAB run_reorder2: contiguous-spine reorder pi=[spine depth-order]+[branches topological]=[0,1,3,5,7,8,2,4,6]:
+- deep_vs_M6 = 0.000e+00, WHOLE-spine_vs_M6 = 0.000e+00 (EVERY spine depth bit-exact vs spine-only, 256 ev/16 layers)
+- deep_vs_M9(fix magnitude) = 6.25e-2 (cat8 deep moves 1 ULP to the spine-only truth)
+- nondeep_relabel = 0.125 = ~1 ULP @ mag16 (branch nodes legitimately shift ~1ULP; NOT corruption — anchor-slide gave 16.3)
+- negative control (interleaved identity) stays 6.25e-2 (contiguity IS the property)
+=> A' is the mechanism-guaranteed, lossless (exact relabel), no-HBM-tax fix. NUMERICS PROVEN.
+LIVE-IMPLEMENTATION COMPLICATION (red-teamed BEFORE coding): the live FA2 decode call
+(fr13_patch_fa2_tree_bias.py:570) uses PAGED KV (key_cache/value_cache + block_table), NOT the dense
+contiguous KV the MAB re-call used. A' needs spine KEYS at contiguous score-tile columns => must reorder the
+suffix KV, which for paged KV touches cache slots the COMMITTER + GDN read later = carrier-B surface. Options:
+(1) global spine-first tree DEFINITION (KV naturally contiguous, needs carrier-B audit of positional consumers:
+GDN conv leaf-map, committer col-0); (2) call-site-local paged-KV suffix reorder (slot_mapping or dense-suffix
+hybrid). Next: gauge carrier-B surface + design live impl; gate greedy cat8-spine≥cat6-spine + lossless vs
+NON-SPEC + garble 0/undef temp06.
