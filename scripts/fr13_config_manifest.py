@@ -21,14 +21,11 @@ import json, os, sys, hashlib, glob
 # Keys that MUST be identical across every arm for a fair A/B. A difference here is a
 # confound (the whole point of this tool).
 HARNESS_KEYS = [
-    "AGENT_WALL_S",              # wall / timeout (EMPTY = no-wall)
+    "wall_arg",                  # DERIVED from runlog: "" = no-wall (grep --agent-wall-s)
+    "concurrency",              # DERIVED from runlog: --concurrency N
     "LUMO_PROXY_AUTO_CONTINUE",  # nudge (0 = OFF, the honest give-up gate)
-    "SWE_CONCURRENCY",           # codex concurrency
-    "MAX_NUM_SEQS", "MAX_NUM_SEQS_OVR",  # vLLM B
-    "DEPLOY_FORCE_TEMP", "LUMO_PROXY_FORCE_TEMP",  # sampling temp
+    "LUMO_PROXY_FORCE_TEMPERATURE",  # sampling temp (0.6)
     "SWE_AGENT_ENV",             # per-instance image vs local
-    "LUMO_AGENT", "SWE_AGENT",   # which agent (qwen_code)
-    "SEED", "VLLM_SEED",
 ]
 # Keys that are EXPECTED to vary per arm (the independent variable). Recorded, not hashed
 # into harness_hash.
@@ -65,8 +62,27 @@ def h(obj):
     return hashlib.sha256(json.dumps(obj, sort_keys=True).encode()).hexdigest()[:16]
 
 
+def grep_runlog(armdir):
+    """wall_arg (empty=no-wall) + concurrency from the arm's sibling runlog."""
+    arm = os.path.basename(armdir.rstrip("/"))
+    runlog = os.path.join(os.path.dirname(armdir.rstrip("/")), arm + ".runlog")
+    out = {"wall_arg": "<no-wall>", "concurrency": "<unset>"}
+    txt = read_first(runlog) or ""
+    import re
+    mw = re.search(r"--agent-wall-s[= ]([0-9]+)", txt)
+    if mw:
+        out["wall_arg"] = mw.group(1)
+    mc = re.search(r"--concurrency[= ]([0-9]+)", txt)
+    if mc:
+        out["concurrency"] = mc.group(1)
+    return out
+
+
 def manifest_for(armdir):
     env = parse_env(os.path.join(armdir, "container_env.txt"))
+    # merge the proxy env (nudge/temp live there, not in the container env)
+    env.update(parse_env(os.path.join(armdir, "offload_proxy_env.txt")))
+    env.update(grep_runlog(armdir))
     git = read_first(os.path.join(armdir, "git_head.txt"))
     # tree extracted from SPEC_CONFIG for readability
     tree = None
@@ -103,9 +119,9 @@ def main():
         print("no arm dirs with container_env.txt found under:", sys.argv[1:]); return
     print("=== per-arm harness (must-match) ===")
     for d, m in manifests:
-        print(f"  {m['arm']:<32} harness_hash={m['harness_hash']}  wall={m['harness']['AGENT_WALL_S']!r} "
-              f"nudge={m['harness']['LUMO_PROXY_AUTO_CONTINUE']!r} conc={m['harness']['SWE_CONCURRENCY']!r} "
-              f"B={m['harness'].get('MAX_NUM_SEQS_OVR') or m['harness'].get('MAX_NUM_SEQS')!r}")
+        print(f"  {m['arm']:<32} harness_hash={m['harness_hash']}  wall={m['harness']['wall_arg']!r} "
+              f"conc={m['harness']['concurrency']!r} nudge={m['harness']['LUMO_PROXY_AUTO_CONTINUE']!r} "
+              f"temp={m['harness']['LUMO_PROXY_FORCE_TEMPERATURE']!r}")
     hashes = {m["harness_hash"] for _, m in manifests}
     if len(hashes) == 1:
         print(f"\nOK — all {len(manifests)} arms share harness_hash {hashes.pop()} => APPLES (no harness confound).")
