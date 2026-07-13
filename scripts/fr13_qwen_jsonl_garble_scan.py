@@ -155,22 +155,33 @@ def scan(d):
                 gdefined |= _bound_names(ast.parse(code))
             except Exception:
                 pass
-    n_script = n_syntax_bad = n_undef = n_nonpy = 0    # pass 2: score self-contained scripts
+    n_script = n_syntax_bad = n_undef = n_nonpy = n_edge = 0    # pass 2: score scripts
     undef_ex = []
     for code in scripts:
         if not _looks_python(code):
             n_nonpy += 1                 # PLY grammar / config / text the agent quoted — not garble
             continue
         n_script += 1
-        u = undefined(code, gdefined)
-        if u is None:
-            n_syntax_bad += 1
-        elif u:
+        try:
+            tr = ast.parse(code)
+        except SyntaxError as e:
+            # f-string parse errors from shlex-extracted `python -c` are nested-quote/brace
+            # EXTRACTION artifacts, not garble (garble corrupts identifiers -> undef). Class
+            # them as edges, not syntax_bad.
+            if "f-string" in (e.msg or "").lower():
+                n_edge += 1
+            else:
+                n_syntax_bad += 1
+            continue
+        L = {x.id for x in ast.walk(tr) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Load)}
+        u = L - _bound_names(tr) - BI - gdefined
+        if u:
             n_undef += 1
             if len(undef_ex) < 12:
                 undef_ex.append(sorted(u)[:6])
     return dict(files=len(files), scripts=n_script, syntax_bad=n_syntax_bad, undef=n_undef,
-                fragments=n_frag, malformed=n_malformed, nonpython=n_nonpy, undef_ex=undef_ex)
+                fragments=n_frag, malformed=n_malformed, nonpython=n_nonpy, fstring_edges=n_edge,
+                undef_ex=undef_ex)
 
 
 def main():
@@ -184,7 +195,7 @@ def main():
         print(f"  chatreq={s['files']}  self_contained_scripts={s['scripts']}  "
               f"syntax_bad={s['syntax_bad']} ({100*s['syntax_bad']/sc:.1f}%)  "
               f"undef={s['undef']} ({100*s['undef']/sc:.1f}%)  "
-              f"malformed_toolargs={s['malformed']}  edit_fragments={s['fragments']}(unscored)  nonpython={s.get('nonpython',0)}(skipped)")
+              f"malformed_toolargs={s['malformed']}  edit_fragments={s['fragments']}(unscored)  nonpython={s.get('nonpython',0)}(skipped)  fstring_edges={s.get('fstring_edges',0)}")
         if s["undef_ex"]:
             print(f"  undef_examples: {s['undef_ex'][:6]}")
 
