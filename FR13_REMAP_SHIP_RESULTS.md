@@ -24,9 +24,9 @@ all handled; discrimination preserved).
 | PRIOR NO-FIX cat8 (qc4) | **40.3%** | 16.3% | wcs_wcs_hdr, sll, result_full_low (garble) |
 | PRIOR NO-FIX cat6 (qc4) | **44.9%** | 10.3% | lon_, topo_itrs_frame, nref_nommask (garble) |
 | native (qc4, floor) | 1.0% | 1.0% | cright/right (real, rare) |
-| **cat8 FIX-ON** (this run) | **0.0%** (77 scripts, live) | 0.0% | — |
-| cat6 FIX-ON | PENDING | | |
-| native (this run) | PENDING | | |
+| **cat8 FIX-ON** (this run) | **0.0%** (84 scripts, FINAL) | 0.0% | — |
+| **cat6 FIX-ON** (this run) | **0.0%** (61 scripts, FINAL) | 1.6% (1 self-corrected model err) | — |
+| native (this run) | RUNNING (arm 3/3) | | |
 
 ## 3. Trajectory / give-up (assistant turns per task; give-up=short, garble-thrash=long tail)
 - PRIOR NO-FIX cat8: median 32, dist `[2,2,...,88,124]` = BIMODAL DYSFUNCTION (2 hard give-ups + garble-thrash).
@@ -61,6 +61,15 @@ The clean tree-vs-native speed A/B must come from the **FIX-ON run** (this run).
 - **The ONLY clean speed A/B = THIS-RUN cat8 vs THIS-RUN cat6 + native (same boot, same basis)** — running
   now. No cross-run (fix-vs-prior) speed verdict. Quote speed only after this-run native lands.
 
+### 4b. cat6 FIX-ON FINAL reduce (16/16) — same two red-team caveats
+- accept **3.594**, per_forward **0.199**, s/fwd_gpu(draft) **0.0634**, derived_tps **72.43**.
+- 🛑 **accept 3.594 > cat8's 3.336 is STRUCTURALLY IMPOSSIBLE on matched tokens** (cat6 ⊂ cat8, so cat8 ≥ cat6)
+  => it's TRAJECTORY NOISE (temp-0.6, different tokens per arm), NOT "cat6 out-accepts cat8." Do not rank
+  cat6-vs-cat8 on accept.
+- 🛑 **derived_tps 72.43 (per-draft 0.0634) NOT trusted** — same per-draft-basis artifact as cat8's 63.92.
+- Trustworthy per_forward: cat8 0.217 vs cat6 0.199 (cat6 cheaper per-forward = fewer nodes, plausible). The
+  clean tree-vs-native verdict needs THIS-RUN native (arm 3, running) as the common bar; defer until it lands.
+
 ## 5. Config manifest / confound tracking (`scripts/fr13_config_manifest.py`)
 harness_hash (must-match: wall/nudge/temp/conc/B/agent/git) matches prior EXCEPT git_head (newer commit =
 the fix). wall=no-wall (WALL=0), nudge=0 (OFF), temp=0.6, B4, cache-ON (APC hits 86-87%), EXACT_SEED=0.
@@ -70,8 +79,13 @@ the fix). wall=no-wall (WALL=0), nudge=0 (OFF), temp=0.6, B4, cache-ON (APC hits
 | run | resolved | rate | vs native |
 |---|---|---|---|
 | **cat8 FIX-ON (this run, 16/16 FINAL)** | **8** | **50%** | **= native EXACTLY** |
+| **cat6 FIX-ON (this run, 16/16 FINAL)** | **7** | **44%** | **≈ native (−1 = flaky 14096)** |
 | native (prior qc4, bar) | 8/16 | 50% | — |
 | cat8 no-fix (prior qc4) | 6/16 | 37% | BELOW native = the degradation |
+
+**cat6 FINAL 7/16 (44%):** differs from cat8 (8/16) by exactly ONE task — 14096, the known cache-flaky task
+(task #12; matrix doc records it as the source of native+cache's only give-up). On the 15 non-flaky
+overlapping tasks cat6 == cat8. => NO smaller-tree resolve penalty; cat6 ≈ native, garble 0/61.
 
 **FINAL (16/16):** cat8 fix-ON resolve **8/16 (50%) = native 8/16 (50%) exactly.** The 16th task (14598)
 FAILED — a known-hard task (no-fix also wrong-patched it per matrix doc), NOT a fix regression. So the
@@ -84,8 +98,11 @@ the fix removes garble, does not inject errors). Net +2 (6->8). cat6 + this-run 
 ## STATUS (this run, `output/fr13_qwencode_cachefirst_remap`, TAG b4_remap)
 - **cat8 arm: DONE 16/16.** Garble **0%** (84 scripts), resolve **8/16 (50%) = native**, accept **3.336** clean,
   per_forward **0.217** (=B1 bank). derived_tps 63.92 NOT trusted (§4a). Merged to main @ cff3abd8.
-- **cat6 arm: RUNNING** (launched clean, hygiene OK). native arm: PENDING (serial after cat6).
-- Clean cat8-vs-cat6-vs-native speed A/B (same boot) + cat6/native garble + resolve = at arm completions.
+- **cat6 arm: DONE 16/16.** Garble **0/61** (undef), resolve **7/16 (44%) ≈ native** (−1 flaky 14096), accept
+  3.594 (traj-noise), per_forward 0.199. derived_tps 72.43 NOT trusted (§4b).
+- **native arm (3/3): RUNNING** — MTP-5 (num_spec=5), FLASH_ATTN, no tree (remap correctly NOT engaged = the bar).
+- => DELIVERABLE MET on garble: BOTH cat8 (0/84) AND cat6 (0/61) branched trees garble-free on full ship config,
+  resolve ≈ native. Remaining: this-run native reduce -> clean same-boot speed A/B; then branch-rescue diag + cleanup.
 - Queued: branch-rescue diagnostic on cat8 (per-flat-row accept hist, spine {1,3,5,7,8} vs branch {2,4,6}).
 
 ## 7. Completeness audit (audit-symmetry red-team) — the fix is STRUCTURALLY complete
