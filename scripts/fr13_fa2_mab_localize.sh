@@ -60,8 +60,18 @@ nz_layers = sum(1 for v in worst.values() if v > 0.0)
 recall_err = max((r.get("recall_m9_vs_served_deep_max_abs", 0.0) for r in recs), default=0.0)
 for r in recs[:10]:
     print(f'  {r["layer_name"]} m_full={r["m_full"]} spine={r["spine_rows"]} deep={r["deep_row"]} '
+          f'bias=[{r.get("bias_min",0):.1e},{r.get("bias_max",0):.1e}] '
           f'raw_max_abs={r.get("deep_spine_raw_max_abs",0.0):.3e} '
           f'recall_vs_served={r.get("recall_m9_vs_served_deep_max_abs",0.0):.3e}')
+# CONFOUND GUARD: cat8 spine MUST be [0,1,3,5,7,8] deep=8. If any event shows the
+# hardcoded cat9 fallback [0,1,2,4,6]/deep=6, the spine derivation silently failed
+# and the raw_max_abs is GARBAGE (wrong ancestor set) -- NOT a valid FA2 verdict.
+cat9_fallback = [r for r in recs if r["spine_rows"] == [0,1,2,4,6] or r["deep_row"] == 6]
+deeps = sorted({r["deep_row"] for r in recs}); spines = {tuple(r["spine_rows"]) for r in recs}
+print(f"distinct deep_row: {deeps} | distinct spine: {[list(s) for s in spines]}")
+if cat9_fallback:
+    print(f"!!! CONFOUND: {len(cat9_fallback)}/{len(recs)} events used the cat9 fallback "
+          f"[0,1,2,4,6]/deep6 -- spine derivation FAILED. raw_max_abs is INVALID. FIX before trusting.")
 print(f"GLOBAL worst deep-spine raw_max_abs = {gmax:.3e} | layers-with-nonzero = {nz_layers}/{len(worst)}")
 print(f"recall_vs_served self-check (should be ~0): {recall_err:.3e}")
 if gmax > 0.0:

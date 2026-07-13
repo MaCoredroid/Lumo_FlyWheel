@@ -15150,20 +15150,42 @@ def _fr13_fa2_mab_recall(
         m_full = int(query.shape[0])
         if m_full <= 0 or bias.shape[0] < m_full or bias.shape[1] < m_full:
             return
-        # Derive the spine from the LIVE tree (fr10_tree_path0_nodes) so the A/B
-        # is correct for ANY served tree (cat8 spine=[0,1,3,5,7,8] deep=8), NOT
-        # just the hardcoded cat9 caterpillar.  Fall back to the cat9 constants
-        # only when the live spine is unavailable (preserves 22-flip behavior).
+        # Derive the spine for the LIVE served tree (cat8 [0,1,3,5,7,8] deep=8,
+        # cat6, cat9), NOT the hardcoded cat9 caterpillar.  IMPORTANT: the FA2
+        # hook receives TreeAttentionMetadata, which carries tree_attn_bias but
+        # NOT fr10_tree_parent/path0 (those are on the SEPARATE GDN metadata) --
+        # so spine_nodes is reliably None here.  Derive the spine from the bias
+        # itself = the DEEPEST node's ancestor set (its visible keys); that is
+        # the longest root->leaf path = the all-zeros spine, and it is causally
+        # closed (every spine node's ancestors are in the spine).  Threshold-free
+        # visibility: finite & > -1e30 handles both -inf and finfo.min masks.
+        spine_rows = None
         if spine_nodes is not None:
             try:
-                spine_rows = [int(x) for x in spine_nodes.reshape(-1).tolist()]
+                sr = [int(x) for x in spine_nodes.reshape(-1).tolist()]
+                sr = sorted(r for r in sr if 0 <= r < m_full)
+                if len(sr) >= 2:
+                    spine_rows = sr
             except Exception:
-                spine_rows = [int(x) for x in spine_nodes]
-            spine_rows = [r for r in spine_rows if 0 <= r < m_full]
-            deep_row = spine_rows[-1] if spine_rows else -1
+                spine_rows = None
+        sub = bias[:m_full, :m_full]
+        bmin = float(sub.min().item())
+        bmax = float(sub.max().item())
+        if spine_rows is not None:
+            deep_row = spine_rows[-1]
         else:
-            spine_rows = [r for r in _FR13_MAB_SPINE_ROWS if r < m_full]
-            deep_row = _FR13_MAB_DEEP_ROW
+            # Data-driven visible/masked split robust to ANY mask convention
+            # (-inf, finfo.min, -1e9, -1e4): the mask is the global min (hugely
+            # negative); visible ancestor entries (~0) sit far above HALF the
+            # min, masked entries sit below it.  0.5*(-inf) = -inf handles the
+            # -inf case (bias > -inf keeps finite, drops -inf).
+            thresh = 0.5 * bmin if bmin < -1.0 else -1e30
+            vis = sub > thresh
+            counts = vis.sum(dim=1)
+            deep_row = int(counts.argmax().item())
+            spine_rows = sorted(
+                j for j in range(m_full) if bool(vis[deep_row, j].item())
+            )
         if deep_row not in spine_rows or len(spine_rows) < 2:
             return
 
@@ -15272,6 +15294,8 @@ def _fr13_fa2_mab_recall(
             "seq_len": int(seq_len),
             "spine_rows": list(spine_rows),
             "deep_row": int(deep_row),
+            "bias_min": bmin,
+            "bias_max": bmax,
             "scale": scale,
             "softcap": softcap,
             "deep_spine_raw_max_abs": raw_max_abs,
