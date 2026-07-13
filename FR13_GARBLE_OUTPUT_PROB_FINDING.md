@@ -889,3 +889,12 @@ REMAINING for SHIP (honest): (a) cache ON (APC) slot layout; (b) graph mode (cap
 live SWE-Verified WITH cache ON; (d) general spec-row->batch alignment (guard currently restricts to
 all-tree uniform-span batches); (e) confirm cat8/cat6 (same generic mechanism); (f) speed tax (small KV
 copy per step, no weight read).
+
+## Cache-ON gate: 0/15 CLEAN but 0% HITS (cache-COLD) — APC-hit path NOT yet validated (2026-07-13)
+FR13_ENABLE_APC=1 + remap, cat9 branched, temp-0.6, EAGER: matrix_build/token_ledger/wcs_slice all 0/15,
+syntax 0/45, ENGAGED foreign_first=10 spec_rows=4. BUT logs show "Prefix cache hit rate: 0.0%" every
+interval => the gate prompts (< block_size=1024) never cache, so this is cache-ENABLED-COLD (~= cache-off),
+NOT the APC-HIT path where the historical tree+cache garble carriers lived. ALSO still enforce_eager=True /
+cudagraph_mode=none (NOT graph). So validated so far: {cat9 branched, temp-0.6, eager, cache-cold} = 0/15.
+STILL UNVALIDATED: graph mode; APC HITS (need long-context / live SWE-Verified); general spec-row alignment;
+cat8/cat6; speed. Next: isolate graph (garble gate), then live SWE-Verified graph+cache (the real hit path).
