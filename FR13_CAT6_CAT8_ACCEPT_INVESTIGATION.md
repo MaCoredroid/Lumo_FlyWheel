@@ -134,3 +134,21 @@ keep-branches (cat6 keeps its (1,) branch). Likely cause: residual M-dependence 
 different GEMM path). => directive step 3: an M-invariance compute-only fix would restore cat8 accept >= cat6.
 Probe bug caught+fixed mid-run: decode_tps_wall counted SSE chunks not committed tokens; accept was always
 correct (/metrics delta); all tps re-derived committed/decode_wall.
+
+## LOCALIZATION (spine-mdep workflow wf_81953c42, 2026-07-13) — FA2 query-tile, fix=FR13_FA2_QPAD
+7-reader workflow over L0 sub-ops. Verdicts: in_proj_ba / conv1d / gdn_scan / gating / gemm_batchshape /
+out_proj = NOT M-dependent for cat6(M=6)-vs-cat8(M=8); tree_attention = PARTIAL (the carrier).
+- 5/7 provably BIT-IDENTICAL M=6-vs-8: padded_nodes=1<<(n-1).bit_length() => M=5,6,8 all N_PAD=8 (scan geom
+  identical); in_proj cuBLASLt switches at M>=9 (cat6/cat8 both <=8 => identical a/b). So the carrier is NOT
+  "1 of 7" — it's the ONE residual that changes M=6->8.
+- ROOT (HIGH): forked-FA2 tree-attn QUERY-TILE. max_seqlen_q=6 vs 8 drives kBlockM=64 partial-tile
+  predication (Is_even_MN) + tree-bias q/k offsets. Independent binding FR13_FA2_MAB replay M_DEPENDENT=True;
+  depth-ladder bit-exact depths 0-2, first-nonzero depth 3-4 = exactly the accept-truncation margin (accept
+  3.4-3.8); MONOTONE in M (native 3.813 -> cat6 3.664 -> cat8 3.368) — a codegen ULP flip would be non-monotone.
+- FIX: FR13_FA2_QPAD (pad query tile to fixed M => M-invariant predication; compute-only, no HBM tax). BUILT
+  at commit 030a1c22 but NOT in the live patcher (comment only @ fr10_phase4_patch_vllm_tree_gdn.py:14944) =>
+  must be RE-LANDED, not flag-flipped. gdn_scan N_ACTUAL codegen = LOW control (N_PAD=8 constant).
+- ssm_state reader errored (retry cap); covered by the N_PAD=8 argument (scan/state geometry M-invariant).
+PLAN: (1) clean experiment (running, remap ON) causally confirms cat8-spine < cat6-spine (greedy, non-garble);
+(2) re-land FR13_FA2_QPAD; (3) gate = greedy cat8-spine accept >= cat6 (M-invariant) AND garble stays 0/undef
+AND same-boot A/B. Directive step-3 = DONE localizing (FA2 query-tile, not the guessed conv/scan/state).
