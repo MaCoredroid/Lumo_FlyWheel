@@ -47,7 +47,11 @@ def online_softmax(q, blocks, scale):
 
 
 def main():
-    C, tree_n, D = 512, 9, 64          # context keys, cat8 served nodes, head dim
+    # C=500 NOT a multiple of kBlockN=128 (500=128*3+116) so the context-TAIL (116
+    # keys) shares the last partial block with the 9-key suffix (116+9=125 < 128) in
+    # the DEPLOYED path -- the ONLY regime where A1's separate-suffix-block differs.
+    # (C=512 aligned => deployed already isolates the suffix => A1==deployed, no split.)
+    C, tree_n, D = 500, 9, 64          # context keys, cat8 served nodes, head dim
     parent = [-1, 0, 0, 1, 1, 3, 3, 5, 7]   # cat8 served (root prepended)
 
     def anc(i):
