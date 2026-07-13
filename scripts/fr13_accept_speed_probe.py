@@ -66,6 +66,7 @@ def probe(mode, prompt, n_tokens, messages=None):
     t_first = t_last = None
     n_tok = 0
     usage = None
+    out_pieces = []   # accumulate generated text for the LOSSLESSNESS (token-for-token vs native) test
     t_send = time.monotonic()
     with urllib.request.urlopen(req, timeout=600) as resp:
         for raw in resp:
@@ -89,6 +90,7 @@ def probe(mode, prompt, n_tokens, messages=None):
                     t_first = now
                 t_last = now
                 n_tok += 1
+                out_pieces.append(piece)
     m1 = _get_metrics()
     apf, acc, drafts = _accept_per_forward(m0, m1)
     committed = usage.get("completion_tokens") if usage else n_tok
@@ -104,6 +106,7 @@ def probe(mode, prompt, n_tokens, messages=None):
         "accept_per_forward": apf, "accepted_delta": acc, "drafts_delta": drafts,
         "decode_wall_s": decode_wall, "ttft_s": ttft,
         "decode_tps_wall": decode_tps_wall,
+        "output_text": "".join(out_pieces),   # for the losslessness (vs native) comparison
     }
 
 
