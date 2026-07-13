@@ -426,7 +426,19 @@ def launch_attn_kv_linear_remap(
     path_cols = int(accepted_paths.shape[1])
     if path_cols <= 0:
         return 0
-    qsl = query_start_loc[:b].to(torch.long).view(-1, 1)                 # [b,1]
+    # SAFETY: this maps spec row i -> batch request i (qsl[:b]); that is valid
+    # ONLY when the first b batch requests are all full trees (each spanning
+    # path_cols verify tokens). A mixed prefill/decode batch would put a spec
+    # row at a higher batch position and qsl[:b] would index a foreign request
+    # -> wrong-slot copy. Guard: require the first b query spans to each equal
+    # path_cols; otherwise skip (safe no-op) rather than corrupt.
+    if int(query_start_loc.shape[0]) < b + 1:
+        return 0
+    qsl_full = query_start_loc[: b + 1].to(torch.long)
+    spans = qsl_full[1:] - qsl_full[:-1]                                # [b]
+    if not bool((spans == path_cols).all()):
+        return 0
+    qsl = qsl_full[:b].view(-1, 1)                                      # [b,1]
     acc = num_accepted_tokens[:b].to(torch.long).view(-1, 1)            # [b,1]
     # m = 0-based accepted position (depth-1). accepted_paths values are the
     # +1-shifted published node ids == FLAT VERIFY ROWS (H3: node i -> flat row

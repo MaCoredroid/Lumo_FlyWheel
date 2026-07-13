@@ -17810,6 +17810,130 @@ if _FR13PCT_ON:
     return True
 
 
+def _patch_gpu_model_runner_attn_kv_remap_capture() -> bool:
+    """FR13_ATTN_KV_REMAP capture: stash the FULL-ATTENTION kv-cache group's
+    per-step slot_mapping + layer names + query_start_loc during the forward's
+    attn-metadata build, so the post-commit re-linearize (apply patch, in
+    sample_tokens) can move each committed tree node's K/V from its flat verify
+    slot to the linear committed slot. Full-attn == a builder that is NOT a
+    Mamba2/GDN builder (GDN/mamba bind a tuple kv_cache; full-attn a bare
+    tensor). Capture is value-inert (writes only self attributes)."""
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_ATTN_KV_REMAP_CAPTURE"
+    if sentinel in text:
+        return False
+    anchor = (
+        "            for layer_name in attn_group.layer_names:\n"
+        "                attn_metadata_dict[layer_name] = attn_metadata_i\n"
+    )
+    if anchor not in text:
+        raise RuntimeError("FR13_ATTN_KV_REMAP_CAPTURE anchor not found")
+    inject = anchor + (
+        f"\n            {sentinel}: full-attn group slot_mapping/layers/qsl for the\n"
+        "            # post-commit KV re-linearize. Only under spec decode; only\n"
+        "            # non-mamba/GDN builders (= full-attention). Reset the group\n"
+        "            # dict on kv_cache_gid==0 so a step's capture never mixes with\n"
+        "            # a stale prior step.\n"
+        "            if not isinstance(\n"
+        "                builder, (Mamba2AttentionMetadataBuilder, GDNAttentionMetadataBuilder)\n"
+        "            ):\n"
+        "                _fr13_akrc = getattr(self, '_fr13_attn_remap_groups', None)\n"
+        "                if _fr13_akrc is None or int(kv_cache_gid) == 0:\n"
+        "                    _fr13_akrc = {}\n"
+        "                    self._fr13_attn_remap_groups = _fr13_akrc\n"
+        "                _fr13_akrc[int(kv_cache_gid)] = (\n"
+        "                    common_attn_metadata.slot_mapping,\n"
+        "                    list(attn_group.layer_names),\n"
+        "                    common_attn_metadata.query_start_loc,\n"
+        "                )\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
+    """FR13_ATTN_KV_REMAP apply: after the tree committer publishes the accepted
+    paths (inside _sample) and BEFORE the drafter / next verify forward, copy
+    each committed tree node's full-attn K/V from its flat verify slot to the
+    linear committed slot, so the next forward reads the committed-path KV
+    instead of a sibling near-neighbor's (the garble carrier). Default OFF
+    (FR13_ATTN_KV_REMAP=0): value-inert unless armed. Fail-loud when armed."""
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_ATTN_KV_REMAP_APPLY"
+    if sentinel in text:
+        return False
+    anchor = (
+        "        with record_function_or_nullcontext(\"gpu_model_runner: sample\"):\n"
+        "            sampler_output = self._sample(logits, spec_decode_metadata)\n"
+    )
+    if anchor not in text:
+        raise RuntimeError("FR13_ATTN_KV_REMAP_APPLY anchor not found")
+    inject = anchor + (
+        f"\n        {sentinel}: re-linearize committed-path full-attn KV.\n"
+        "        if __import__(\"os\").environ.get(\"FR13_ATTN_KV_REMAP\", \"0\") == \"1\":\n"
+        "            try:\n"
+        "                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_akr_gdn\n"
+        "                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+        "                    launch_attn_kv_linear_remap as _fr13_akr_fn,\n"
+        "                )\n"
+        "                _fr13_akr_paths = getattr(_fr13_akr_gdn, \"_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR\", None)\n"
+        "                _fr13_akr_lens = getattr(_fr13_akr_gdn, \"_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR\", None)\n"
+        "                _fr13_akr_groups = getattr(self, \"_fr13_attn_remap_groups\", None)\n"
+        "                _fr13_akr_spec_rids = getattr(_fr13_akr_gdn, \"_LUMO_FA_SPEC_ROW_REQ_IDS\", None)\n"
+        "                _fr13_akr_n = len(_fr13_akr_spec_rids) if _fr13_akr_spec_rids else 0\n"
+        "                if (\n"
+        "                    _fr13_akr_paths is not None\n"
+        "                    and _fr13_akr_lens is not None\n"
+        "                    and _fr13_akr_groups\n"
+        "                    and _fr13_akr_n > 0\n"
+        "                ):\n"
+        "                    _fr13_akr_fwd = (\n"
+        "                        self.vllm_config.compilation_config.static_forward_context\n"
+        "                    )\n"
+        "                    _fr13_akr_tot = 0\n"
+        "                    for _fr13_akr_sm, _fr13_akr_lyrs, _fr13_akr_qsl in _fr13_akr_groups.values():\n"
+        "                        _fr13_akr_kvs = []\n"
+        "                        for _fr13_akr_ln in _fr13_akr_lyrs:\n"
+        "                            _fr13_akr_mod = _fr13_akr_fwd.get(_fr13_akr_ln)\n"
+        "                            _fr13_akr_kv = (\n"
+        "                                getattr(_fr13_akr_mod, \"kv_cache\", None)\n"
+        "                                if _fr13_akr_mod is not None else None\n"
+        "                            )\n"
+        "                            if (\n"
+        "                                torch.is_tensor(_fr13_akr_kv)\n"
+        "                                and _fr13_akr_kv.numel() > 0\n"
+        "                                and int(_fr13_akr_kv.shape[0]) == 2\n"
+        "                            ):\n"
+        "                                _fr13_akr_kvs.append(_fr13_akr_kv)\n"
+        "                        if _fr13_akr_kvs:\n"
+        "                            _fr13_akr_tot += _fr13_akr_fn(\n"
+        "                                kv_caches=_fr13_akr_kvs,\n"
+        "                                slot_mapping=_fr13_akr_sm,\n"
+        "                                query_start_loc=_fr13_akr_qsl,\n"
+        "                                accepted_paths=_fr13_akr_paths,\n"
+        "                                num_accepted_tokens=_fr13_akr_lens,\n"
+        "                                num_spec_decodes=_fr13_akr_n,\n"
+        "                            )\n"
+        "                    _fr13_akr_seen = getattr(self, \"_fr13_akr_foreign_seen\", 0)\n"
+        "                    self._fr13_akr_foreign_seen = _fr13_akr_seen + _fr13_akr_tot\n"
+        "                    if not getattr(self, \"_fr13_akr_announced\", False):\n"
+        "                        self._fr13_akr_announced = True\n"
+        "                        logger.info(\n"
+        "                            \"FR13_ATTN_KV_REMAP ENGAGED: groups=%d spec_rows=%d foreign_first=%d\",\n"
+        "                            len(_fr13_akr_groups), _fr13_akr_n, _fr13_akr_tot,\n"
+        "                        )\n"
+        "            except Exception as _fr13_akr_exc:\n"
+        "                raise RuntimeError(\n"
+        "                    \"FR13_ATTN_KV_REMAP failed: \"\n"
+        "                    + type(_fr13_akr_exc).__name__ + \":\" + str(_fr13_akr_exc)\n"
+        "                ) from _fr13_akr_exc\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def main() -> int:
     _fr13_write_subop_mab_sidecar()
     _fr13_write_replay_durable_ab_sidecar()
@@ -17837,6 +17961,8 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_capture()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_apply()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_draft_reqkey()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_boundary_tap_d()),
