@@ -15430,6 +15430,42 @@ def _fr13_fa2_mab_recall(
                     ).abs().max().item()))
                 reorder_results["spine_all_vs_m6_max"] = _spine_all
                 reorder_results["pi"] = list(_pi)
+                # ---- BRANCH proper-fix check (user requirement: BOTH spine AND
+                # branch). A branch b's ancestors are a SUBSET of the spine, so
+                # non-ancestor spine nodes interleave b's columns even after the
+                # reorder -> the reorder does NOT auto-M-invariantize branches.
+                # The proper-fix gate for branches is TWO measurements:
+                #  (1) coresident_vs_solo: b in full reordered cat8 vs b in a
+                #      (spine + b ONLY) reordered tree. 0 => b is invariant to
+                #      co-resident branches (the deliverable-critical property:
+                #      branch rescues don't wobble with the branch set). ~1 ULP =>
+                #      b's OWN suffix column still shifts (within-floor; does NOT
+                #      touch the spine accept). Gross => branches NOT properly
+                #      fixed -> need fixed-slot branch layout too.
+                #  (2) ctx_preserved: b's output vs its context-only path (drop
+                #      the tree suffix entirely) is UNTOUCHED by the reorder =>
+                #      the fix never perturbs the branch context (the A1/hybrid
+                #      failure we just refuted on CPU).
+                _bc = []
+                for _b in _branch:
+                    _anc_b = sorted([_j for _j in range(m_full)
+                                     if float(bias_full[_b][_j].item()) == 0.0])
+                    _sb_pi = list(spine_rows) + [_b]  # spine-first, single branch
+                    _sbt = torch.tensor(_sb_pi, dtype=torch.long)
+                    _bias_sb = bias_full.index_select(0, _sbt).index_select(
+                        1, _sbt).contiguous()
+                    _out_sb = _call(_sb_pi, _sb_pi, _bias_sb)
+                    _b_solo = _out_sb[_sb_pi.index(_b)].reshape(-1)
+                    _b_full = _out_pi[_pi.index(_b)].reshape(-1)
+                    _bc.append({
+                        "branch": int(_b),
+                        "ancestors": _anc_b,
+                        "coresident_vs_solo_max": float(
+                            (_b_full - _b_solo).abs().max().item()),
+                    })
+                reorder_results["branch_check"] = _bc
+                reorder_results["branch_coresident_max"] = max(
+                    (c["coresident_vs_solo_max"] for c in _bc), default=0.0)
             except Exception as _rre:
                 reorder_results["err"] = repr(_rre)
         # Per-spine-depth RAW (M=9 spine rows vs M=5 spine rows) for context.
