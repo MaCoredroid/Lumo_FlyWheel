@@ -412,3 +412,23 @@ suffix KV, which for paged KV touches cache slots the COMMITTER + GDN read later
 GDN conv leaf-map, committer col-0); (2) call-site-local paged-KV suffix reorder (slot_mapping or dense-suffix
 hybrid). Next: gauge carrier-B surface + design live impl; gate greedy cat8-spine≥cat6-spine + lossless vs
 NON-SPEC + garble 0/undef temp06.
+
+## LIVE-IMPL DESIGN (wf_5370146c): DENSE-SUFFIX HYBRID, carrier-B-free (2026-07-13)
+Design workflow (verified vs source) DECISION: implement FIX A as a CALL-SITE-LOCAL dense-suffix hybrid,
+NOT a global reorder. Global spine-first is blocked by 3 vLLM-CORE positional hardcodes we don't own (eagle
+drafter depth counters; _get_depth_counts + _prepare_tree_attn_bias BFS builders that build the very bias we'd
+permute) + root@flat-0 invariant => largest surface, re-touches locked pipeline. slot_mapping permute = carrier-B
+garble. per-call block_table permute = infeasible (>=16-tok block granularity; 9 tree nodes in one block).
+DENSE-SUFFIX HYBRID (flag FR13_FA2_SPINE_REORDER default OFF, in fr13_patch_fa2_tree_bias.py :570 decode block):
+(1) CONTEXT call: paged, causal=False, tree_bias=None, seqused_k=seq_lens-tree_n (drop suffix), return_softmax_lse;
+(2) SUFFIX call: DENSE over key/value[:num_decode] (fresh current-step K/V in scope, no cache gather), permuted
+spine-first (q/k/v + both tree_bias axes), causal=True + tb_p, cu_seqlens_k=cu_tree, return_softmax_lse;
+(3) un-permute suffix out+LSE, merge_attn_states(output, ctx_out, ctx_lse, suf_out_u, suf_lse_u).
+Specialization of vLLM's shipped cascade/DCP split (flash_attn.py:854-915) + merge_attn_states (shipped Triton).
+CARRIER-B CONSUMERS TO TOUCH: NONE (permutation confined to local temporaries; cache/slot_mapping/committer/GDN
+read natural flat order; output un-permuted before return). BRANCH nodes: attend context(paged,unchanged) + spine
+ancestors(contiguous) + self => shift ~1 ULP (nondeep_relabel=0.125), NOT corrupted; MUST gate branch-rescue accept
++ branch commits (user red-team). UNCERTAINTIES to verify: (i) flash_attn_varlen_func returns LSE on the tree_bias
+branch when return_softmax_lse=True (fr13_patch_fa2_tree_bias.py:411-421); (ii) native reshape_and_cache write order
+(container-only). GATE: hybrid(no-permute)==current single call within-floor; hybrid(permute) cat8-spine==cat6-spine;
+lossless vs NON-SPEC; garble 0; accept>=cat6 INCL branch-rescue; speed (2 calls + merge overhead measured).
