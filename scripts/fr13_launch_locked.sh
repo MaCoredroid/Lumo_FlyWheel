@@ -28,6 +28,14 @@ export FR13_FA2_TREE_BIAS=1
 export FR13_FA2_PREFILL_NATIVE=1
 export FR13_TREE_ATTN_EXP2_SOFTMAX=1
 export FR13_CONV_COMMITTED_PATH=1
+# --- BAKED FIX (2026-07-13): attention-KV re-linearization = THE garble fix. GDN/conv
+# state gets re-linearized post-accept (launch_tree_state_linear_remap) but attn KV
+# never did => accepted non-contiguous BRANCH path read a sibling near-neighbor's foreign
+# KV => garble. Copies each committed node's K/V flat verify slot -> linear committed slot
+# per full-attn layer (launch_attn_kv_linear_remap, in sample_tokens = graph-safe).
+# GATE: temp-0.6 matrix_build 15/15 -> 0/15 (eager+graph+cache-cold), engaged foreign>0,
+# clean; live SWE astropy-12907 RESOLVED (cache hits 68-74%); speed tax -0.7% s/fwd (noise).
+export FR13_ATTN_KV_REMAP=1
 export BATCH_INVARIANT=0
 # --- BAKED FIX (2026-06-14): in_proj_ba pad-to-fixed-M batch-invariance (FR13_WIDTH_
 # CARRIER_INPROJ_BA_BIND.md, H1). Pads bf16 in_proj_ba (+ out_proj) to a tree_n-

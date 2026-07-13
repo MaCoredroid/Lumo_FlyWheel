@@ -920,3 +920,13 @@ n_pair_files=0, proxy_pair_dumps stale from Jul-4) => cannot do the served-strea
 is a PRE-EXISTING offload capture bug, independent of the remap. NEXT: fix offload pair-dump so the
 served-stream garble can be measured A/B vs native (the directive's final gate); token-level garble already
 0/15 + task resolved => expected clean.
+
+## Speed tax NEGLIGIBLE — no-HBM-tax CONFIRMED (2026-07-13)
+Paired tree_mtp probe (temp0.6 B=4, pinned swe4 prompts, matched shape), cache-OFF, graph.
+RED-TEAM: raw warm_decode_tps ON=14.36 vs OFF=13.65 (+5.17%) is CONFOUNDED by cross-boot accept mismatch
+(accept/fwd ON=3.202 vs OFF=2.977) -- TPS = accept/fwd / s_per_fwd, so do NOT read +5% as the remap.
+ACCEPT-INDEPENDENT per-forward basis (the speed-tax gate's rule): s_per_fwd = decode_seconds_sum/drafts =
+returned_tokens/(warm_tps*drafts): ON=1024/(14.36*248)=0.2876 s/fwd, OFF=1024/(13.65*259)=0.2897 s/fwd =>
+remap -0.7% per-forward (WITHIN ~1% cross-boot autotune noise) => NEGLIGIBLE, no measurable HBM tax.
+Consistent with analytical ~830KB copy/step vs 98.6ms weight-read floor. draft/fwd=9.0 both (basis valid).
+=> BAKE FR13_ATTN_KV_REMAP=1 into fr13_launch_locked (the ship config).
