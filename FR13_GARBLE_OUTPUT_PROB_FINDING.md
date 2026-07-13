@@ -822,3 +822,17 @@ accepted_tree_rows-correctness vs slot/position) RESISTS static analysis. DECISI
 reading: capture the KV cache rows at the committed positions after a BRANCH commit, tree-vs-native decode
 of the same committed tokens; the first divergent (position, layer) is the bug. Then build the targeted fix.
 Do NOT build a KV-remap on the unconfirmed hypothesis (lesson: conv-committer +1 built on a dead path).
+
+## DECISIVE (2026-07-13): kitchen-sink confirms garble is KV CONTENT/ROUTING, not compute/state
+Reliable temp-0.6 gate, ALL fixes co-armed + all needles FIRED (VERIFY_NATIVE + COMMITTER_NATIVE +
+BATCH_INVARIANT + BI_TREE_ATTN + device-multidraft): native GDN outputs + correct col-0 + batch-invariant
+GEMMs/reductions + batch-invariant attention COMPUTE. Result: matrix_build 15/15 = UNCHANGED. => the garble
+is EMPIRICALLY, decisively NOT compute, NOT GDN scan/state, NOT attention compute. By airtight elimination it
+is the ATTENTION KV CONTENT/ROUTING for branch nodes (which K/V is written/read/attended, at which slot, for
+num_accepted>1 branch commits) -- the ONLY thing none of these fixes covers. My cat9-accepted_tree_rows
+red-team (KV "might be handled") is REFUTED by this result: the KV is NOT correctly handled. KV values (RoPE
+position depth-correct, in_proj exonerated) appear static-correct, so the bug is the SLOT/BLOCK-TABLE routing
+or the attention MASK for the committed branch path, not the K/V values. NEXT (fully justified): capture the
+KV cache rows / block_table / attention mask at a BRANCH commit, tree-vs-native; the first divergence is the
+bug; then targeted fix. OR native-attention recompute for the committed path (attention analog of
+COMMITTER_NATIVE) as a constructive fix-test.
