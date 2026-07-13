@@ -88,8 +88,10 @@ def probe(mode, prompt, n_tokens):
     committed = usage.get("completion_tokens") if usage else n_tok
     decode_wall = (t_last - t_first) if (t_first and t_last and t_last > t_first) else None
     ttft = (t_first - t_send) if t_first else None
-    # decode_tps_wall excludes the first token's arrival (TTFT/prefill): (n-1)/(t_last-t_first)
-    decode_tps_wall = ((n_tok - 1) / decode_wall) if (decode_wall and n_tok > 1) else None
+    # decode_tps_wall = COMMITTED tokens / decode-wall (NOT SSE-chunk count: spec-decode packs ~accept+1
+    # committed tokens per chunk, so chunk-count massively undercounts). Window [t_first, t_last] excludes
+    # TTFT/prefill. Slight <1% overcount (first chunk's tokens land at t_first) — negligible at n=512.
+    decode_tps_wall = (committed / decode_wall) if (decode_wall and committed) else None
     return {
         "mode": mode, "temperature": temperature,
         "committed_tokens": committed, "streamed_tokens": n_tok,
@@ -105,11 +107,12 @@ def selftest():
     m1 = {"vllm:spec_decode_num_accepted_tokens_total": 100 + 331, "vllm:spec_decode_num_drafts_total": 40 + 100}
     apf, acc, dr = _accept_per_forward(m0, m1)
     assert abs(apf - 3.31) < 1e-9 and acc == 331 and dr == 100, (apf, acc, dr)
-    # decode_tps_wall = (n-1)/(t_last-t_first): 101 tokens over 5.0s (first->last) => 100/5 = 20.0
-    n, first, last = 101, 10.0, 15.0
-    tps = (n - 1) / (last - first)
+    # decode_tps_wall = committed / (t_last - t_first): 512 committed over 25.6s => 20.0 tok/s
+    # (committed, NOT SSE-chunk count — spec-decode packs ~accept+1 tokens per chunk)
+    committed, first, last = 512, 10.0, 35.6
+    tps = committed / (last - first)
     assert tps == 20.0, tps
-    print("selftest OK: accept/fwd=3.31; decode_tps_wall=(n-1)/(t_last-t_first)=20.0 tok/s")
+    print("selftest OK: accept/fwd=3.31; decode_tps_wall=committed/(t_last-t_first)=20.0 tok/s")
 
 
 def main():
