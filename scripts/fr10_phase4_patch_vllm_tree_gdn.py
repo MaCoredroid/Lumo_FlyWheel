@@ -2075,6 +2075,131 @@ def _fr13_gdn_subop_mab(
             "layer=" + str(getattr(self, "prefix", "")) + " exc=" + repr(exc),
             once=False,
         )
+
+
+# ============================================================================
+# FR13_CONV_SUBOP_MAB: fused-build conv-subop M-invariance A/B (default OFF).
+# Settles whether the SHIP fused causal-conv (fused_tree_conv_taps_acc + silu)
+# is the M-dependent carrier of the cat6-vs-cat8 SPINE accept-rate gap.  Unlike
+# the garble-era GDN_SUBOP_MAB (which re-ran the NATIVE causal_conv1d_update and
+# never engaged on the fused ship build), this re-runs the SAME imported FUSED op
+# on the SPINE-only sub-window and compares raw int-view (threshold 0.0).
+# OBSERVE-ONLY: fresh tensors only, never mutates conv_state/_fr10_tree_conv_out.
+# ============================================================================
+_FR13_CONV_SUBOP_MAB_FLAG = None
+_FR13_CONV_SUBOP_MAB_SEEN = {}
+
+
+def _fr13_conv_subop_mab_enabled():
+    """Resolve the FR13_CONV_SUBOP_MAB master switch (env-first, sidecar fallback).
+
+    Mirrors _fr13_gdn_subop_mab_enabled: the EngineCore worker inherits the full
+    os.environ (VERIFIED 2026-06-27; the earlier "curated env drops FR13_*" was a
+    /proc/PID/environ setproctitle artifact), so the env read is authoritative.
+    The pid-1 patch-time sidecar (/logs/fr13_conv_subop_mab.flag) is kept as
+    belt-and-suspenders for any hypothetical future curated path.  Default OFF
+    (no env, no sidecar) => byte-identical locked path.  Cached after first call.
+    """
+    global _FR13_CONV_SUBOP_MAB_FLAG
+    if _FR13_CONV_SUBOP_MAB_FLAG is not None:
+        return _FR13_CONV_SUBOP_MAB_FLAG
+    val = os.environ.get("FR13_CONV_SUBOP_MAB")
+    if val is not None and val != "":
+        _FR13_CONV_SUBOP_MAB_FLAG = val == "1"
+        return _FR13_CONV_SUBOP_MAB_FLAG
+    try:
+        flag_path = os.environ.get(
+            "FR13_CONV_SUBOP_MAB_FLAG_FILE", "/logs/fr13_conv_subop_mab.flag"
+        )
+        with open(flag_path, "r") as _fh:
+            _FR13_CONV_SUBOP_MAB_FLAG = _fh.read().strip() == "1"
+    except Exception:
+        _FR13_CONV_SUBOP_MAB_FLAG = False
+    return _FR13_CONV_SUBOP_MAB_FLAG
+
+
+def _fr13_conv_subop_mab(
+    *, acc, window, spine, conv_weights, bias, activation, dtype,
+    layer_prefix, tree_n,
+):
+    """OBSERVE-ONLY fused-conv M-invariance A/B (default-OFF; ship path untouched).
+
+    Re-runs the SAME imported fused op (fused_tree_conv_taps_acc + triton silu) on
+    the SPINE-only sub-window (M_reduced) and compares, raw int-view (threshold
+    0.0 -- NOT atol), vs the full-M spine rows.  `acc` is the PRE-splice full-M
+    taps output (fp32 [tree_n, dim]); silu is recomputed fresh here => NO native-
+    spine-splice confound (the :3356 index_copy_ overwrites _fr10_out, not _acc),
+    NO live mutation (fresh tensors only).
+    first_conv_subop (first nonzero wins): conv_taps -> conv_out_silu -> none(=>scan/FA2).
+    """
+    if not _fr13_conv_subop_mab_enabled():
+        return
+    try:
+        prefix = str(layer_prefix)
+        limit = int(os.environ.get("FR13_CONV_SUBOP_MAB_LIMIT", "16"))
+        seen = int(_FR13_CONV_SUBOP_MAB_SEEN.get(prefix, 0))
+        if seen >= limit:
+            return
+        if spine is None or int(spine.numel()) < 2:
+            return
+        sp = spine.to(torch.long)
+        # reduced arm: SAME imported fused taps on the spine-only sub-window
+        red_win = window.index_select(0, sp).contiguous()
+        red_acc = fused_tree_conv_taps_acc(
+            window=red_win, conv_weights=conv_weights, bias=bias
+        )
+        # full arm: live full-M taps (=acc); silu recomputed fresh (pre-splice)
+        if activation in (True, "silu", "swish"):
+            full_out_all = triton_ex2_silu_bf16(acc, out_dtype=dtype)
+            red_out = triton_ex2_silu_bf16(red_acc, out_dtype=dtype)
+        else:
+            full_out_all = acc.to(dtype=dtype)
+            red_out = red_acc.to(dtype=dtype)
+        full_acc = acc.index_select(0, sp).contiguous()
+        full_out = full_out_all.index_select(0, sp).contiguous()
+
+        def _iv(t):
+            return (
+                t.view(torch.int32)
+                if t.dtype == torch.float32
+                else t.view(torch.int16)
+            )
+
+        taps_mm = int((_iv(full_acc) != _iv(red_acc)).sum().item())
+        out_mm = int((_iv(full_out) != _iv(red_out)).sum().item())
+        deep_mm = int((_iv(full_out[-1:]) != _iv(red_out[-1:])).sum().item())
+        first = (
+            "conv_taps" if taps_mm > 0
+            else ("conv_out_silu" if out_mm > 0 else "none")
+        )
+        rec = {
+            "layer_prefix": prefix,
+            "tree_n": int(tree_n),
+            "m_reduced": int(sp.numel()),
+            "deep_row": int(sp[-1].item()),
+            "taps_mismatch": taps_mm,
+            "out_mismatch": out_mm,
+            "deep_row_mismatch": deep_mm,
+            "first_conv_subop": first,
+        }
+        dump = (
+            os.environ.get("FR13_CONV_SUBOP_MAB_DUMP", "")
+            or "/logs/fr13_conv_subop_mab.jsonl"
+        )
+        parent = os.path.dirname(dump)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(dump, "a", buffering=1) as _fh:
+            _fh.write(json.dumps(rec) + chr(10))
+        _FR13_CONV_SUBOP_MAB_SEEN[prefix] = seen + 1
+        logger.warning(
+            "FR13_CONV_SUBOP_MAB layer=%s tree_n=%s m_red=%s deep=%s | "
+            "taps_mm=%s out_mm=%s deep_mm=%s -> first=%s",
+            prefix, tree_n, int(sp.numel()), int(sp[-1].item()),
+            taps_mm, out_mm, deep_mm, first,
+        )
+    except Exception as _exc:  # pragma: no cover - diagnostic only
+        logger.warning("FR13_CONV_SUBOP_MAB failed: %s", repr(_exc))
 '''
         text = text.replace(
             "logger = init_logger(__name__)\n",
@@ -3360,6 +3485,21 @@ def _fr13_gdn_subop_mab(
                                 _fr12_native_spine_conv_out[_fr10_b],
                             )
                         _fr10_tree_conv_out[_fr10_start:_fr10_end] = _fr10_out
+                        if _fr10_b == 0 and _fr13_conv_subop_mab_enabled():
+                            # FR13_CONV_SUBOP_MAB (default OFF): observe-only
+                            # fused-conv M-invariance A/B on the spine request.
+                            # _fr10_acc is the PRE-splice full-M taps output.
+                            _fr13_conv_subop_mab(
+                                acc=_fr10_acc,
+                                window=_fr10_window,
+                                spine=_fr10_path0_node_tensor,
+                                conv_weights=conv_weights,
+                                bias=self.conv1d.bias,
+                                activation=self.activation,
+                                dtype=mixed_qkv_spec.dtype,
+                                layer_prefix=str(getattr(self, "prefix", "")),
+                                tree_n=_fr10_tree_n,
+                            )
                         if _FR13_TREE_CONV_FUSED:
                             # FR13_TREE_CONV_FUSED (FIX-3): the per-node
                             # state write-back loop (7 device nodes x tree_n
@@ -17247,6 +17387,39 @@ def _fr13_write_subop_mab_sidecar() -> None:
         print("FR13_GDN_SUBOP_MAB sidecar write failed: %s" % exc)
 
 
+def _fr13_write_conv_subop_mab_sidecar() -> None:
+    """Bake the FR13_CONV_SUBOP_MAB master switch into a sidecar flag file.
+
+    Belt-and-suspenders worker-env bridge (same rationale as the SUBOP_MAB
+    sidecar): the patcher runs in pid 1 where the env var is present; the fused
+    conv runs in the mp/spawn EngineCore worker.  The worker inherits the full
+    os.environ (VERIFIED 2026-06-27), so the env read normally wins; this sidecar
+    only matters on a hypothetical future curated-env path.  Default-safe: OFF/
+    absent DELETES any stale flag so a prior ON boot cannot leak (byte-identical
+    default).  Only writes a non-empty flag when the master == "1".
+    """
+    flag_path = os.environ.get(
+        "FR13_CONV_SUBOP_MAB_FLAG_FILE", "/logs/fr13_conv_subop_mab.flag"
+    )
+    on = os.environ.get("FR13_CONV_SUBOP_MAB", "0") == "1"
+    try:
+        if on:
+            os.makedirs(os.path.dirname(flag_path) or ".", exist_ok=True)
+            with open(flag_path, "w") as _fh:
+                _fh.write("1\n")
+            print(
+                "FR13_CONV_SUBOP_MAB sidecar written (worker-env bridge): "
+                + flag_path
+            )
+        else:
+            try:
+                os.remove(flag_path)
+            except FileNotFoundError:
+                pass
+    except Exception as exc:  # pragma: no cover - best-effort, fail-safe-OFF
+        print("FR13_CONV_SUBOP_MAB sidecar write failed: %s" % exc)
+
+
 def _fr13_write_replay_durable_ab_sidecar() -> None:
     """Bake the FR13_REPLAY_DURABLE_AB master switch into a sidecar flag file.
 
@@ -18003,6 +18176,7 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
 
 def main() -> int:
     _fr13_write_subop_mab_sidecar()
+    _fr13_write_conv_subop_mab_sidecar()
     _fr13_write_replay_durable_ab_sidecar()
     _fr13_write_apc_env_sidecar()
     patch_steps = [
