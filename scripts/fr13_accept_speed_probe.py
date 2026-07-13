@@ -47,7 +47,7 @@ def _accept_per_forward(m0, m1):
 
 def probe(mode, prompt, n_tokens):
     """Run ONE completion; return metrics dict. greedy=temp0 (bound test); temp06=temp0.6 seed0 (wall TPS)."""
-    temperature = 0.0 if mode == "greedy" else 0.6
+    temperature = {"greedy": 0.0, "temp06": 0.6, "temp10": 1.0}[mode]
     m0 = _get_metrics()
     body = {
         "model": "qwen3.6-27b", "prompt": prompt, "max_tokens": n_tokens,
@@ -118,7 +118,7 @@ def selftest():
 def main():
     global BASE
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", choices=["greedy", "temp06"])
+    ap.add_argument("--mode", choices=["greedy", "temp06", "temp10"])
     ap.add_argument("--prompt-file")
     ap.add_argument("--n", type=int, default=512)
     ap.add_argument("--out")

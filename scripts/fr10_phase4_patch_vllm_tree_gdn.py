@@ -17918,7 +17918,7 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                                _fr13_bkk = str(int(_fr13_bxx))\n"
         "                                _fr13_bah[\"rows\"][_fr13_bkk] = _fr13_bah[\"rows\"].get(_fr13_bkk, 0) + 1\n"
         "                        _fr13_bjp = __import__(\"os\").environ.get(\"FR13_BRANCH_ACCEPT_JSON\")\n"
-        "                        if _fr13_bjp and _fr13_bah[\"steps\"] % 200 == 0:\n"
+        "                        if _fr13_bjp and _fr13_bah[\"steps\"] % 20 == 0:\n"
         "                            import json as _fr13_bjm\n"
         "                            _fr13_btmp = _fr13_bjp + \".tmp\"\n"
         "                            with open(_fr13_btmp, \"w\") as _fr13_bfh:\n"

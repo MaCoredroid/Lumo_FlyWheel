@@ -451,14 +451,17 @@ fi
 # See FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md.
 if [[ "${ACCEPT_SPEED_PROBE:-0}" == "1" ]]; then
   PF=${PROBE_PROMPT_FILE:-scripts/fr13_probe_prompt.txt}
-  echo "[accept-speed] arm=$ARM kind=$KIND prompt=$PF n=${PROBE_N:-512}"
-  for _mode in greedy temp06; do
+  BRHIST="$ARMDIR/branch_hist.json"   # host side of FR13_BRANCH_ACCEPT_JSON=/workspace/$ARMDIR/branch_hist.json
+  echo "[accept-speed] arm=$ARM kind=$KIND prompt=$PF n=${PROBE_N:-512} modes=${PROBE_MODES:-greedy temp06 temp10}"
+  for _mode in ${PROBE_MODES:-greedy temp06 temp10}; do
     PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/python scripts/fr13_accept_speed_probe.py \
       --mode "$_mode" --prompt-file "$PF" --n "${PROBE_N:-512}" \
       --base-url "http://127.0.0.1:$PORT" \
       --out "$ARMDIR/accept_speed_${_mode}.json" >> "$ARMDIR/accept_speed.log" 2>&1 \
       && echo "[accept-speed] $_mode -> $(cat "$ARMDIR/accept_speed_${_mode}.json" | tr -d '\n')" \
       || { echo "[accept-speed] $_mode FAILED"; tail -20 "$ARMDIR/accept_speed.log"; }
+    # snapshot the cumulative branch-rescue hist AFTER this mode (per-mode = consecutive snapshot delta)
+    [[ -f "$BRHIST" ]] && cp "$BRHIST" "$ARMDIR/brhist_${_mode}.json" 2>/dev/null || true
   done
   exit 0
 fi
