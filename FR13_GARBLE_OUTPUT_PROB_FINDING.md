@@ -809,3 +809,16 @@ and explains why whole-GDN-native FAILS (GDN state IS remapped/correct; the KV i
 linear-remap mirroring launch_tree_state_linear_remap (copy accepted nodes' K,V from flat slots to linear
 committed slots; only num_accepted rows = no HBM tax). GATE: reliable temp-0.6 matrix_build -> ~0/15, +
 whole-config live SWE cache-ON. VERIFY layout order + that vLLM doesn't already remap before wiring.
+
+## CAVEAT (2026-07-13) on the KV-remap hypothesis: weakened for cat9; KV PATH still localized
+Red-team: accepted_tree_rows (written per-commit, "the next forward's input", patcher L8414/8455/8465) IS
+used by vLLM to reference the accepted path's KV. For cat9, EVERY accepted branch path = [spine
+intermediates] + [branch LEAF] (nodes 2,4,6,8 are leaves; 1,3,5,7 spine), so intermediates land on linear
+slots and the leaf is handled by accepted_tree_rows => the KV may be CORRECTLY handled, i.e. the "missing
+remap" may NOT fire for cat9. Also the garble step itself ([0,2] acc=0) commits only a single BONUS token
+(no branch KV kept) -- the corruptor is the PREVIOUS branch commit. So: the ELIMINATION to the KV path is
+sound (everything else exonerated on the reliable gate), but the exact KV mechanism (remap vs
+accepted_tree_rows-correctness vs slot/position) RESISTS static analysis. DECISIVE NEXT = DATA, not more
+reading: capture the KV cache rows at the committed positions after a BRANCH commit, tree-vs-native decode
+of the same committed tokens; the first divergent (position, layer) is the bug. Then build the targeted fix.
+Do NOT build a KV-remap on the unconfirmed hypothesis (lesson: conv-committer +1 built on a dead path).
