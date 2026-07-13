@@ -87,7 +87,28 @@ def _permute_bias(bias_2d: torch.Tensor, pi: torch.Tensor) -> torch.Tensor:
     return bias_2d.index_select(-2, pi).index_select(-1, pi).contiguous()
 
 
-def hybrid_reorder_decode(
+_IMPL_ERR_ONCE = [False]
+
+
+def hybrid_reorder_decode(**kwargs):
+    """Safe wrapper: any error (e.g. fp32 flash-out unsupported) -> return False so
+    the caller falls back to the byte-identical single paged call.  Logs once."""
+    try:
+        return _hybrid_reorder_impl(**kwargs)
+    except Exception as exc:
+        if not _IMPL_ERR_ONCE[0]:
+            _IMPL_ERR_ONCE[0] = True
+            try:
+                print(
+                    "FR13_FA2_SPINE_REORDER hybrid FELL BACK to single (error): %r"
+                    % exc, file=sys.stderr, flush=True,
+                )
+            except Exception:
+                pass
+        return False
+
+
+def _hybrid_reorder_impl(
     *,
     query,          # [num_decode, H, D]  (per-request tree query rows, flat order)
     key,            # [num_decode, Hkv, D] fresh current-step K (flat order)
@@ -131,8 +152,14 @@ def hybrid_reorder_decode(
     H = query.shape[1]
     out3 = output.view(B * tree_n, H, -1)  # ensure [N, H, D] view for merge
 
+    # FP32 intermediates: the single call accumulates fp32 and rounds to bf16
+    # ONCE; a bf16 ctx_out/suf_out would round each partial SEPARATELY, then the
+    # merge rounds again -> ~1 bf16 ULP double-rounding on the CONTEXT (compounds
+    # over the decode -> greedy drift).  Keep both partials + the merge in fp32
+    # and cast to bf16 exactly once at the end, matching the single call.
+    _f32 = torch.float32
     # (1) CONTEXT — paged, non-causal, NO tree bias, suffix excluded.
-    ctx_out = torch.empty_like(out3)
+    ctx_out = torch.empty(out3.shape, dtype=_f32, device=dev)
     ctx_out, ctx_lse = flash_fn(
         q=query, k=key_cache, v=value_cache, out=ctx_out,
         cu_seqlens_q=cu_seqlens_q, max_seqlen_q=tree_n,
@@ -153,7 +180,7 @@ def hybrid_reorder_decode(
     if tree_bias.dim() == 3:
         tb_p = tb_p.unsqueeze(0).expand(B, tree_n, tree_n).contiguous()
     cu_tree = torch.arange(0, (B + 1) * tree_n, tree_n, dtype=torch.int32, device=dev)
-    suf_out = torch.empty_like(qp)
+    suf_out = torch.empty(qp.shape, dtype=_f32, device=dev)
     suf_out, suf_lse = flash_fn(
         q=qp, k=kp, v=vp, out=suf_out,
         cu_seqlens_q=cu_tree, max_seqlen_q=tree_n,
@@ -176,8 +203,9 @@ def hybrid_reorder_decode(
         # BISECT: split -> temp; SINGLE reference (paged, full, causal, tree_bias)
         # -> out3 (the SAFE live output).  Log max_abs(split - single) + component
         # diagnostics ONCE so a broken split is localized without shipping it.
-        merged = torch.empty_like(out3)
-        merge_fn(merged, ctx_out, ctx_lse, suf_out_u, suf_lse_u)
+        merged32 = torch.empty(out3.shape, dtype=_f32, device=dev)
+        merge_fn(merged32, ctx_out, ctx_lse, suf_out_u, suf_lse_u)
+        merged = merged32.to(out3.dtype)  # cast to bf16 ONCE, like the single call
         flash_fn(
             q=query, k=key_cache, v=value_cache, out=out3,
             cu_seqlens_q=cu_seqlens_q, max_seqlen_q=tree_n,
@@ -203,5 +231,7 @@ def hybrid_reorder_decode(
                 print("SELFCHECK log failed: %r" % _e, file=sys.stderr, flush=True)
         return True
 
-    merge_fn(out3, ctx_out, ctx_lse, suf_out_u, suf_lse_u)
+    merged32 = torch.empty(out3.shape, dtype=_f32, device=dev)
+    merge_fn(merged32, ctx_out, ctx_lse, suf_out_u, suf_lse_u)
+    out3.copy_(merged32)  # single bf16 cast at the end (matches the single call)
     return True
