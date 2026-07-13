@@ -59,5 +59,20 @@ prompt, and records:
 2. **temp-0.6 seed-0 `decode_tps_wall`** (committed / decode-wall, from first gen token) — the REAL speed
    number, cat8 vs cat6 vs native, B=1 same boot-era. This replaces derived_tps as the headline.
 
-## RESULT
-(pending — runs after native arm completes; recorded here.)
+## Complete same-boot A/B (all 3 arms done, 2026-07-13) — cat8 is SLOWEST, non-monotonic
+| arm | resolve | accept | per_forward | derived_tps | committed/per_forward |
+|---|---|---|---|---|---|
+| native MTP-5 | 8/16 | 3.466 | 0.1995 | 70.94 | 22.4 |
+| **cat8 (8-node)** | 8/16 | **3.336** | **0.2173** | 63.92 | **19.9** |
+| cat6 (6-node) | 7/16 | 3.594 | 0.1988 | 72.43 | 23.1 |
+
+**BOTH bases agree: cat8 slowest, cat6 fastest, native middle.** cat8 has the LOWEST accept AND highest
+per_forward => slower than native's 5-chain. Accept is NON-MONOTONIC in nodes (cat6 6 > native 5 > cat8 8) —
+if branches just added accept, cat8 would be highest; it's lowest. Either (a) trajectory noise across 3
+different token streams, or (b) cat8's 2 extra branches cost more per-forward than they earn (M-dependence /
+drafter shift). This CHALLENGES "branches = speed" and demands the matched experiment below.
+NOTE: cat8-vs-native is NOT a clean superset test (different drafter/attn/committer: tree path vs native MTP).
+cat8-vs-cat6 IS (same forked tree path) — that's the sharp one.
+
+## RESULT (controlled experiment)
+(running now — GPU freed at campaign completion.)
