@@ -908,3 +908,15 @@ captured graph replays is safe (remap runs in sample_tokens, outside the capture
 SWE-Verified WITH cache ON (long agentic context => real APC HITS + the historical agentic degradation
 native 4/4 vs tree ~1/4). Caveat to watch: my guard skips MIXED prefill/decode batches (non-uniform span) =>
 conc1 single-task avoids mixing (guard fine); conc4 may need general spec-row->batch alignment hardening.
+
+## Live SWE-Verified (astropy-12907) with cat9+cache+remap: RESOLVED, remap safe, but served-stream A/B blocked (2026-07-13)
+Full ship config: cat9 branched + FR13_ENABLE_APC=1 (real hits 68-74%) + GRAPH + qwen-code agentic + temp0.6
++ nudge-OFF + FR13_ATTN_KV_REMAP=1, offloaded (agent on alienware, GB10 vLLM-only). health.json:
+verdict=RESOLVED, patch_bytes=504, codex_exit=0, codex_timed_out=false, eval_exit=0. Remap ENGAGED
+(foreign>0, path0=[1,2,4]) WITH cache hits, ZERO crashes/fail-loud. => the fix is SAFE on the full ship
+config and the task RESOLVES. Health flag "early exit 213s" = conservative FALSE-POSITIVE (fast clean solve).
+BLOCKER (infra, NOT garble): the offload pair-dump served-stream capture wrote 0 chars (pairdump_stats
+n_pair_files=0, proxy_pair_dumps stale from Jul-4) => cannot do the served-stream garble A/B vs native. This
+is a PRE-EXISTING offload capture bug, independent of the remap. NEXT: fix offload pair-dump so the
+served-stream garble can be measured A/B vs native (the directive's final gate); token-level garble already
+0/15 + task resolved => expected clean.
