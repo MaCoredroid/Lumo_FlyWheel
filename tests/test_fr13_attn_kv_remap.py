@@ -22,8 +22,10 @@ for off in range(10):
 for off in range(10):
     slot_mapping[off] = 20 + off
 query_start_loc = torch.tensor([0, 10], dtype=torch.long)
-# accepted_paths (flat rows) for full spine: [1,2,4,6,8, pad...] ; buffer width 10
-accepted_paths = torch.tensor([[1, 2, 4, 6, 8, 0, 0, 0, 0, 0]], dtype=torch.int32)
+# accepted_paths (flat rows) for full spine: [1,2,4,6,8]. REAL width = max path
+# length (5), NOT the 10-token verify span -- the guard must compare qsl spacing
+# (=10) to the offsets, NOT to path_cols(=5). Regression guard for that bug.
+accepted_paths = torch.tensor([[1, 2, 4, 6, 8]], dtype=torch.int32)
 num_accepted = torch.tensor([5], dtype=torch.int32)
 
 n_foreign = launch_attn_kv_linear_remap(

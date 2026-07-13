@@ -427,22 +427,18 @@ def launch_attn_kv_linear_remap(
     if path_cols <= 0:
         return 0
     # SAFETY: this maps spec row i -> batch request i (qsl[:b]); that is valid
-    # ONLY when the first b batch requests are all full trees (each spanning
-    # path_cols verify tokens). A mixed prefill/decode batch would put a spec
-    # row at a higher batch position and qsl[:b] would index a foreign request
-    # -> wrong-slot copy. Guard: require the first b query spans to each equal
-    # path_cols; otherwise skip (safe no-op) rather than corrupt.
+    # ONLY when the first b batch requests are all full trees with a UNIFORM
+    # verify span that exceeds every offset we index. A mixed prefill/decode
+    # batch would put a spec row at a higher batch position and qsl[:b] would
+    # index a foreign request -> wrong-slot copy: skip (safe no-op) instead.
     if int(query_start_loc.shape[0]) < b + 1:
         return 0
     qsl_full = query_start_loc[: b + 1].to(torch.long)
     spans = qsl_full[1:] - qsl_full[:-1]                                # [b]
-    if not bool((spans == path_cols).all()):
-        return 0
-    qsl = qsl_full[:b].view(-1, 1)                                      # [b,1]
-    acc = num_accepted_tokens[:b].to(torch.long).view(-1, 1)            # [b,1]
+    acc = num_accepted_tokens[:b].to(torch.long).view(-1, 1)           # [b,1]
     # m = 0-based accepted position (depth-1). accepted_paths values are the
     # +1-shifted published node ids == FLAT VERIFY ROWS (H3: node i -> flat row
-    # i+1; the 10-token verify batch is [anchor@offset0, choices@offsets1..9]).
+    # i+1; the verify batch is [anchor@offset0, choices@offsets 1..num_spec]).
     # The next forward reads the depth-(m+1) committed token at the flat-unique
     # slot of verify offset (m+1); the accepted node's true K/V lives at verify
     # offset accepted_paths[b,m]. So copy src=offset accepted_paths[b,m] ->
@@ -451,6 +447,14 @@ def launch_attn_kv_linear_remap(
     ap = accepted_paths[:b, :path_cols].to(torch.long)                  # [b,path] flat rows
     dst_off = m_idx + 1                                                 # [1,path]
     src_off = ap                                                        # [b,path]
+    # Guard: the span is the VERIFY TOKEN COUNT (num_spec+1), NOT path_cols
+    # (= max accepted path length). Require uniform spans AND span > the largest
+    # offset indexed (max flat verify row and the max linear dst depth acc), so
+    # qsl[i]+offset never crosses into request i+1.
+    _max_off = torch.maximum(ap.max(), acc.max())
+    if not (bool((spans == spans[0]).all()) and bool(spans[0] > _max_off)):
+        return 0
+    qsl = qsl_full[:b].view(-1, 1)                                     # [b,1]
     foreign = (m_idx < acc) & (ap != dst_off)                          # [b,path]
     if not bool(foreign.any()):
         return 0
