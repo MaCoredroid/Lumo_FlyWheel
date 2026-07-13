@@ -45,17 +45,22 @@ def _accept_per_forward(m0, m1):
     return (da / dd) if dd > 0 else None, da, dd
 
 
-def probe(mode, prompt, n_tokens):
-    """Run ONE completion; return metrics dict. greedy=temp0 (bound test); temp06=temp0.6 seed0 (wall TPS)."""
+def probe(mode, prompt, n_tokens, messages=None):
+    """Run ONE completion; return metrics dict. greedy=temp0 (bound test); temp06/temp10=seed0.
+    messages != None => real chat prompt via /v1/chat/completions (faithful ship-config content)."""
     temperature = {"greedy": 0.0, "temp06": 0.6, "temp10": 1.0}[mode]
     m0 = _get_metrics()
-    body = {
-        "model": "qwen3.6-27b", "prompt": prompt, "max_tokens": n_tokens,
-        "temperature": temperature, "seed": 0, "stream": True,
-        "ignore_eos": True,  # force exactly n_tokens => consistent token count across arms + no early stop
-        "stream_options": {"include_usage": True},
-    }
-    req = urllib.request.Request(BASE + "/v1/completions",
+    if messages is not None:
+        endpoint = "/v1/chat/completions"
+        body = {"model": "qwen3.6-27b", "messages": messages, "max_tokens": n_tokens,
+                "temperature": temperature, "seed": 0, "stream": True, "ignore_eos": True,
+                "stream_options": {"include_usage": True}}
+    else:
+        endpoint = "/v1/completions"
+        body = {"model": "qwen3.6-27b", "prompt": prompt, "max_tokens": n_tokens,
+                "temperature": temperature, "seed": 0, "stream": True, "ignore_eos": True,
+                "stream_options": {"include_usage": True}}
+    req = urllib.request.Request(BASE + endpoint,
                                  data=json.dumps(body).encode(),
                                  headers={"Content-Type": "application/json"})
     t_first = t_last = None
@@ -77,7 +82,8 @@ def probe(mode, prompt, n_tokens):
             if ev.get("usage"):
                 usage = ev["usage"]
             ch = (ev.get("choices") or [{}])[0]
-            if ch.get("text"):
+            piece = ch.get("text") or (ch.get("delta") or {}).get("content")  # completions | chat
+            if piece:
                 now = time.monotonic()
                 if t_first is None:
                     t_first = now
@@ -120,6 +126,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=["greedy", "temp06", "temp10"])
     ap.add_argument("--prompt-file")
+    ap.add_argument("--chat-messages", help="JSON file with {messages:[...]} => real chat prompt (ship-config)")
     ap.add_argument("--n", type=int, default=512)
     ap.add_argument("--out")
     ap.add_argument("--base-url", default=BASE)
@@ -128,8 +135,12 @@ def main():
     if a.selftest:
         selftest(); return
     BASE = a.base_url
+    messages = None
+    if a.chat_messages:
+        d = json.load(open(a.chat_messages))
+        messages = d.get("messages", d) if isinstance(d, dict) else d
     prompt = open(a.prompt_file).read() if a.prompt_file else "def fibonacci(n):\n    "
-    r = probe(a.mode, prompt, a.n)
+    r = probe(a.mode, prompt, a.n, messages=messages)
     print(json.dumps(r, indent=2))
     if a.out:
         json.dump(r, open(a.out, "w"), indent=2)

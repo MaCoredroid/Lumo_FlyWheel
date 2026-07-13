@@ -452,10 +452,12 @@ fi
 if [[ "${ACCEPT_SPEED_PROBE:-0}" == "1" ]]; then
   PF=${PROBE_PROMPT_FILE:-scripts/fr13_probe_prompt.txt}
   BRHIST="$ARMDIR/branch_hist.json"   # host side of FR13_BRANCH_ACCEPT_JSON=/workspace/$ARMDIR/branch_hist.json
-  echo "[accept-speed] arm=$ARM kind=$KIND prompt=$PF n=${PROBE_N:-512} modes=${PROBE_MODES:-greedy temp06 temp10}"
+  # PROBE_CHAT_MESSAGES=<json {messages:[...]}> => real SWE-Verified chat prompt (ship-config); else fixed prompt file
+  if [[ -n "${PROBE_CHAT_MESSAGES:-}" ]]; then PROMPTARG=(--chat-messages "$PROBE_CHAT_MESSAGES"); else PROMPTARG=(--prompt-file "$PF"); fi
+  echo "[accept-speed] arm=$ARM kind=$KIND prompt=${PROBE_CHAT_MESSAGES:-$PF} n=${PROBE_N:-512} modes=${PROBE_MODES:-greedy temp06 temp10}"
   for _mode in ${PROBE_MODES:-greedy temp06 temp10}; do
     PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/python scripts/fr13_accept_speed_probe.py \
-      --mode "$_mode" --prompt-file "$PF" --n "${PROBE_N:-512}" \
+      --mode "$_mode" "${PROMPTARG[@]}" --n "${PROBE_N:-512}" \
       --base-url "http://127.0.0.1:$PORT" \
       --out "$ARMDIR/accept_speed_${_mode}.json" >> "$ARMDIR/accept_speed.log" 2>&1 \
       && echo "[accept-speed] $_mode -> $(cat "$ARMDIR/accept_speed_${_mode}.json" | tr -d '\n')" \
