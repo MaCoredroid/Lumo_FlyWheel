@@ -746,3 +746,13 @@ suspect, now on solid footing. A fix must ZERO the drift (temp-0.6 ~0/15), not j
 UNIFY COROLLARY: routing greedy through the multidraft is lossless IFF p is forced one-hot (argmax delta);
 then multidraft accept_prob=1 for the argmax + residual->argmax == greedy argmax-accept (== LCP-max on
 distinct-draft trees like cat9). Tier2 = one-hot-p greedy branch, flag-gated, byte-identical accepted-set gate.
+
+## Garble is EARLY / near-single-step, not long-cumulative (2026-07-13)
+First-garble line across 32 garbled tree.jsonl samples: min=2, median=4, max=7 (of ~12-line functions).
+=> the garble hits the FIRST long-identifier reuse (line 2-4), NOT accumulating over a long generation.
+So the drift is a near-single-step effect: the first branch commit (num_accepted>1) corrupts col-0 and the
+NEXT verify drifts. Fix shape: no long-accumulation handling needed; target the single branch-commit ->
+col-0 -> next-verify path. DECISIVE next test unchanged: conv-col0-native recompute (does rebuilding the
+conv running window natively from the committed tokens at the branch commit zero the drift?). Static
+analysis of the conv col-0 committer/window/compute is EXHAUSTED (all static-correct, drift persists) =>
+must be DATA/constructive, not another code read.
