@@ -196,3 +196,25 @@ hypotheses.) => DO NOT re-land QPAD.
 small, ship-config-benign, and its named fix is refuted. Recommend NOT chasing QPAD; if pursuing tree speed,
 attack per-forward overhead. Directive step-3 "compute-only M-invariance fix": localized but the pre-built
 fix is a dead lever; a new fix isn't worth it for 0.087 greedy-only.
+
+## MATCHED PROOF on REAL SWE task (astropy-14598, B=1, 2026-07-13) — M effect on spine CONFIRMED (not batch)
+B=1 => batching physically eliminated. cat8(branch-diag)+native, real chat prompt, greedy/temp06/temp10.
+| temp | cat8 total | native | cat8-native | cat8 A_spine(~) | A_branch(rescue) |
+|---|---|---|---|---|---|
+| greedy | 3.589 | 3.526 | +0.06 | ~3.35 | 0.225 |
+| temp06 | 3.571 | 3.688 | -0.12 | ~3.34 | 0.225 |
+| temp10 | 2.916 | 3.905 | -0.99 | ~2.68 | 0.214 |
+FINDINGS:
+1. **M effect on spine CONFIRMED, and it is NOT batching** (B=1): cat8-spine (~3.35) < native (3.526) by
+   ~0.18 at greedy => intrinsic M-dependence (FA2 query-tile), not co-residency. User's "cat8-spine==native"
+   is REFUTED — the spine IS perturbed by M.
+2. Branch rescue REAL + stable: ~0.22/fwd (6.4-7.1%) at ALL temps incl temp1.0; all 3 branches fire; deeper
+   branch (0,0,1) dominates at temp06. The extra 2 branches (vs cat6) add 0.167/fwd.
+3. cat8 ~ native at greedy (rescue 0.22 ~compensates spine deficit 0.18); cat8 << native at temp10 (spine
+   deficit blows to ~1.2, rescue can't cover). Gap GROWS with temp.
+WHY cat8 NOT > cat6: cat8's +0.167 extra-branch gain ~cancels its extra spine M-perturbation (M=8 vs M=6).
+FIX: make the spine M-INVARIANT (FA2 query-tile pad, compute-only no-HBM-tax). Then cat8-spine==cat6-spine
+=> cat8 = spine + 3 branches > cat6 = spine + 1 branch (extra 0.167 becomes pure gain). cat6 running now to
+confirm cat6-spine > cat8-spine directly (the pure M comparison, B=1).
+CAVEATS: instrument undercounts total ~4% vs probe (spine abs ±0.19, used probe-total x instrument-ratio);
+native has a different drafter (not a perfect spine match) => cat6 is the clean same-path M comparison.
