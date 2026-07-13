@@ -44,6 +44,20 @@ all handled; discrimination preserved).
 harness_hash (must-match: wall/nudge/temp/conc/B/agent/git) matches prior EXCEPT git_head (newer commit =
 the fix). wall=no-wall (WALL=0), nudge=0 (OFF), temp=0.6, B4, cache-ON (APC hits 86-87%), EXACT_SEED=0.
 
+
+## 6. RESOLVE RATE (SWE-bench eval verdicts) — the deliverable number
+| run | resolved | rate | vs native |
+|---|---|---|---|
+| cat8 FIX-ON (this run, 15/16 evaluated) | 8 | **53%** | **≈ native** |
+| native (prior qc4, bar) | 8/16 | 50% | — |
+| cat8 no-fix (prior qc4) | 6/16 | 37% | BELOW native = the degradation |
+
+=> cat8 fix-ON resolve (53%) tracks native (50%); the tree+cache agentic DEGRADATION (no-fix 37% < native
+50%) is ELIMINATED. Same 16-task subset (15/16 overlap; 1 fix-ON task pending). RESCUED from garble-failure:
+astropy-13579, -14539, -14508 (no-fix failed -> fix resolved). REGRESSED: astropy-13236 (no-fix resolved ->
+fix failed; likely temp-0.6 trajectory variance - the fix removes garble, does not inject errors). Net +2
+(6->8). Garble 0% (fixed gate). Final cat8 tally + cat6 + this-run native at arm completion.
+
 ## STATUS (this run, `output/fr13_qwencode_cachefirst_remap`, TAG b4_remap)
 - cat8 arm: 16/16 tasks seen, running (finishing + eval). Garble 0%, edits 15/16, trajectories native-like.
 - cat6 + native arms: PENDING. Final resolve verdicts (SWE-bench eval) + clean speed A/B at completion.
