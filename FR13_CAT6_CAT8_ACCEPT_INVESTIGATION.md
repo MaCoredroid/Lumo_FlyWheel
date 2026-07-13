@@ -432,3 +432,17 @@ ancestors(contiguous) + self => shift ~1 ULP (nondeep_relabel=0.125), NOT corrup
 branch when return_softmax_lse=True (fr13_patch_fa2_tree_bias.py:411-421); (ii) native reshape_and_cache write order
 (container-only). GATE: hybrid(no-permute)==current single call within-floor; hybrid(permute) cat8-spine==cat6-spine;
 lossless vs NON-SPEC; garble 0; accept>=cat6 INCL branch-rescue; speed (2 calls + merge overhead measured).
+
+## GATE-1a FAIL: cascade split is BUGGY (2026-07-13)
+Wired FIX A' live (dense-suffix hybrid, FR13_FA2_SPINE_REORDER, module fr13_fa2_spine_reorder.py CPU-tested).
+Gate-1a (fr13_fa2_reorder_gate.sh, MODE=0 baseline vs MODE=2 split-only, ENFORCE_EAGER=1):
+- MODE=2 engagement marker=1 (hybrid ENGAGED, NOT a silent fallback — wiring/anchor OK).
+- BUT split-only is NOT lossless: baseline accept 3.063 -> split 3.625; MODE=2 output = DEGENERATE garbage
+  ('\nuser\n<think>\n\n</think>' looping). Inflated accept = garbage is trivially accepted. output_text
+  byte-compare was useless (SSE-truncation: m0 captured 2 chars, m2 52 chars) — accept+degeneracy is the signal.
+=> The cascade split (context paged causal=False no-bias suffix-excluded + suffix dense causal+bias + merge_attn_states)
+   is STRUCTURALLY BROKEN (not ~1ULP), likely the CONTEXT attention (degenerate = model lost context) or the
+   merge LSE. Structurally it matches the shipped cascade (flash_attn.py DCP path :900-980 + cascade_attention
+   :1127); bug is a subtle detail. NEXT: self-check mode FR13_FA2_SPINE_REORDER=3 (single ref to output + split
+   to temp + log max_abs + LSE/component norms) to bisect. Permute already MAB-proven; ONLY the live cascade split
+   is broken. Gate working as intended (caught before ship).
