@@ -767,3 +767,18 @@ draft MISSES the drifted argmax -- BOTH accept rules do this identically. So the
 accept rule; unifying the committer will NOT fix garble (confirms accept-exoneration independently). The 1.6%
 tie path-divergence feeds accepted_tree_rows -> GDN replay state route: harmless IFF the state advance is
 token-correct (state=f(tokens)); if state were f(node) it would matter -- a latent check for the state fix.
+
+## REDIRECT (2026-07-13): conv col-0 REFUTED; by elimination -> ATTENTION KV content
+Red-team of my own conv-col0 convergence: the conv committer copies col(leaf+1)->col-0, and col(leaf+1) IS
+the fused conv's leaf-node window = pure-torch (elementwise+gather, M-INVARIANT) + byte-exact to native
+causal_conv1d. So the conv col-0 is CORRECT. With COMMITTER_NATIVE making GDN col-0 correct, the WHOLE col-0
+state is correct => the ladder's rel_l2=0.6-0.9 "layer-0 divergence" is IMPOSSIBLE if state+compute are right
+=> the LADDER IS AN ARTIFACT (compared different logical positions: spec draft-node0 vs seq committed-col0).
+The conv-col0-native build is NOT warranted.
+ELIMINATION: whole-GDN-native (all GDN layer outputs native) + BATCH_INVARIANT (MLP/lm_head GEMMs + norm/mean
+reductions) + BI_TREE_ATTN (attention COMPUTE) ALL fail the reliable temp-0.6 gate. The ONLY thing none of
+these covers = the ATTENTION KV CONTENT/ROUTING (which node's/token's K,V is written to and read from the KV
+cache for branch nodes at num_accepted>1). BI_TREE_ATTN makes the attention COMPUTE batch-invariant but does
+NOT fix which KV is stored/read. NOTE: "KV-misplacement REFUTED (over-predicts)" was a specific row-swap
+hypothesis; a subtler branch-KV routing/content bug at num_accepted>1 is UNTESTED on the reliable gate.
+NEXT: localize the tree-attention KV write/read for the committed branch path (FA2 fork + KV cache indices).
