@@ -31,6 +31,7 @@ import sys
 import torch
 
 _ENGAGED_ONCE = [False]
+_SELFCHECK_ONCE = [False]
 
 
 def _mark_engaged(mode: str) -> None:
@@ -107,6 +108,7 @@ def hybrid_reorder_decode(
     fa_version=2,
     split_only=False,   # gate-1a: run the cascade split with pi=identity (NO reorder)
                         # to prove context+suffix+merge == the single paged call.
+    self_check=False,   # =3 debug: split->temp + single-ref->output; log the diff.
 ):
     """Dense-suffix hybrid decode with spine-first suffix reorder. Homogeneous trees
     (every request has the same tree_n == max_query_len). Returns True if the reorder
@@ -168,6 +170,39 @@ def hybrid_reorder_decode(
     slu = suf_lse_u.view(suf_lse.shape[0], B, tree_n)
     slv = suf_lse.view(suf_lse.shape[0], B, tree_n)
     slu.index_copy_(2, pi, slv)
+
+    if self_check:
+        # BISECT: split -> temp; SINGLE reference (paged, full, causal, tree_bias)
+        # -> out3 (the SAFE live output).  Log max_abs(split - single) + component
+        # diagnostics ONCE so a broken split is localized without shipping it.
+        merged = torch.empty_like(out3)
+        merge_fn(merged, ctx_out, ctx_lse, suf_out_u, suf_lse_u)
+        flash_fn(
+            q=query, k=key_cache, v=value_cache, out=out3,
+            cu_seqlens_q=cu_seqlens_q, max_seqlen_q=tree_n,
+            seqused_k=seq_lens, max_seqlen_k=max_seq_len,
+            softmax_scale=scale, causal=True, window_size=sliding_window_size,
+            block_table=block_table, softcap=softcap, fa_version=fa_version,
+            tree_bias=tree_bias,
+        )
+        if not _SELFCHECK_ONCE[0]:
+            _SELFCHECK_ONCE[0] = True
+            try:
+                d = float((merged - out3).abs().max().item())
+                dctx = float((ctx_out - out3).abs().max().item())
+                print(
+                    "FR13_FA2_SPINE_REORDER SELFCHECK max_abs(split-single)=%.4e "
+                    "ctx_only-vs-single=%.4e ctx_lse[%.2f,%.2f] suf_lse[%.2f,%.2f] "
+                    "ctx_absmax=%.3e suf_absmax=%.3e single_absmax=%.3e"
+                    % (d, dctx, ctx_lse.min().item(), ctx_lse.max().item(),
+                       suf_lse.min().item(), suf_lse.max().item(),
+                       ctx_out.abs().max().item(), suf_out.abs().max().item(),
+                       out3.abs().max().item()),
+                    file=sys.stderr, flush=True,
+                )
+            except Exception as _e:
+                print("SELFCHECK log failed: %r" % _e, file=sys.stderr, flush=True)
+        return True
 
     merge_fn(out3, ctx_out, ctx_lse, suf_out_u, suf_lse_u)
     return True
