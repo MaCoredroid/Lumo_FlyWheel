@@ -387,6 +387,83 @@ def launch_tree_state_linear_remap(
         )
 
 
+def launch_attn_kv_linear_remap(
+    *,
+    kv_caches,
+    slot_mapping: torch.Tensor,
+    query_start_loc: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    num_accepted_tokens: torch.Tensor,
+    num_spec_decodes: int,
+) -> int:
+    """Re-linearize the full-attention KV cache for the committed tree path.
+
+    FR13_ATTN_KV_REMAP. The attention analog of :func:`launch_tree_state_linear_remap`
+    (which re-linearizes GDN ssm/conv state). During tree verify, node ``k`` writes
+    its K/V to a flat/unique physical slot ``slot_mapping[qsl[b] + k]`` (node order).
+    After accept, vLLM advances ``seq_len`` and the NEXT forward reads the accepted
+    tokens at LINEAR positions ``[base .. base+acc-1]``. For a branching tree the
+    accepted path (e.g. spine nodes ``[0,1,3,5,7]``) sits at NON-CONTIGUOUS flat slots,
+    so linear position ``d`` would read node ``d``'s K/V (a sibling near-neighbor),
+    NOT the accepted node's. This copies each accepted node's K/V from its verify slot
+    -> the linear committed slot, per full-attn layer, so the next forward reads the
+    true committed-path KV.
+
+    Timing contract (caller MUST honour): call at STEP-N END, after the committer
+    publishes ``accepted_paths``/``num_accepted_tokens`` and while ``slot_mapping`` is
+    still THIS step's verify mapping, and BEFORE the drafter / step-(N+1) verify write
+    (which would overwrite the non-accepted tail slots that hold deep accepted nodes,
+    e.g. spine node 7 at flat slot base+7 with acc=5).
+
+    Returns the number of FOREIGN (non-contiguous) rows copied per layer -- the
+    engagement needle: 0 => the accepted paths were all contiguous (chain-class), so
+    the remap was a no-op (a branching tree with real accepts MUST be > 0).
+    """
+    b = int(num_spec_decodes)
+    if b <= 0 or not kv_caches:
+        return 0
+    device = slot_mapping.device
+    path_cols = int(accepted_paths.shape[1])
+    if path_cols <= 0:
+        return 0
+    qsl = query_start_loc[:b].to(torch.long).view(-1, 1)                 # [b,1]
+    acc = num_accepted_tokens[:b].to(torch.long).view(-1, 1)            # [b,1]
+    # m = 0-based accepted position (depth-1). accepted_paths values are the
+    # +1-shifted published node ids == FLAT VERIFY ROWS (H3: node i -> flat row
+    # i+1; the 10-token verify batch is [anchor@offset0, choices@offsets1..9]).
+    # The next forward reads the depth-(m+1) committed token at the flat-unique
+    # slot of verify offset (m+1); the accepted node's true K/V lives at verify
+    # offset accepted_paths[b,m]. So copy src=offset accepted_paths[b,m] ->
+    # dst=offset m+1. Contiguous (no-op) exactly when accepted_paths[b,m]==m+1.
+    m_idx = torch.arange(path_cols, device=device).view(1, -1)          # [1,path]
+    ap = accepted_paths[:b, :path_cols].to(torch.long)                  # [b,path] flat rows
+    dst_off = m_idx + 1                                                 # [1,path]
+    src_off = ap                                                        # [b,path]
+    foreign = (m_idx < acc) & (ap != dst_off)                          # [b,path]
+    if not bool(foreign.any()):
+        return 0
+    n_slots = int(slot_mapping.shape[0])
+    dst_flat = (qsl + dst_off).clamp_(0, n_slots - 1)                   # [b,path]
+    src_flat = (qsl + src_off).clamp_(0, n_slots - 1)                   # [b,path]
+    sel = foreign.reshape(-1)
+    dst_slot = slot_mapping.reshape(-1)[dst_flat.reshape(-1)][sel].to(torch.long)
+    src_slot = slot_mapping.reshape(-1)[src_flat.reshape(-1)][sel].to(torch.long)
+    n_foreign = int(dst_slot.numel())
+    if n_foreign == 0:
+        return 0
+    for kv in kv_caches:
+        if not torch.is_tensor(kv) or kv.dim() < 3 or int(kv.shape[0]) != 2:
+            continue
+        bs = int(kv.shape[2])
+        # Advanced-indexing on the (block, offset) slot dims is stride-safe (works
+        # for both NHD/HND cache layouts) and in-place. Gather ALL sources into a
+        # temp first so overlapping src/dst (spine paths chain src cols [1..L] ->
+        # dst cols [0..L-1]) permute exactly (mirrors the GDN gather-then-scatter).
+        gathered = kv[:, src_slot // bs, src_slot % bs].clone()
+        kv[:, dst_slot // bs, dst_slot % bs] = gathered
+    return n_foreign
+
+
 def gather_committed_path_conv_prior(
     *,
     conv_state: torch.Tensor,
