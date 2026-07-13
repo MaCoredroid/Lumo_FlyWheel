@@ -1,0 +1,40 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..08d06606f 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -871,7 +871,12 @@ class Card(_Verify):
+                 valuecomment = "".join(values)
+             else:
+                 # CONTINUE card
+-                valuecomment = f"'{''.join(values)}' / {' '.join(comments)}"
++                # Re-escape single quotes in the joined values before wrapping
++                # in quotes. Without this, values containing single quotes
++                # create ambiguous patterns like 'value''more' that the regex
++                # can't parse correctly.
++                joined = "".join(values).replace("'", "''")
++                valuecomment = f"'{joined}' / {' '.join(comments)}"
+             return keyword, valuecomment
+ 
+         if self.keyword in self._special_keywords:
+@@ -1059,6 +1064,21 @@ class Card(_Verify):
+         # do the value string
+         value = self._value.replace("'", "''")
+         words = _words_group(value, value_length)
++
++        # Adjust chunk boundaries so no chunk ends with an odd number of
++        # consecutive single quotes. If a chunk ends with an odd number of
++        # quotes, wrapping it in quotes creates an ambiguous pattern that
++        # the parser's regex can't handle (e.g., '''' could be two escaped
++        # quotes or one escaped quote + closing quote). Moving one quote
++        # to the next chunk ensures even counts.
++        for i in range(len(words) - 1):
++            # Count trailing quotes in current chunk
++            trailing = len(words[i]) - len(words[i].rstrip("'"))
++            if trailing % 2 == 1:
++                # Odd number of trailing quotes - move one to next chunk
++                words[i] = words[i][:-1]
++                words[i + 1] = "'" + words[i + 1]
++
+         for idx, word in enumerate(words):
+             if idx == 0:
+                 headstr = "{:{len}}= ".format(self.keyword, len=KEYWORD_LENGTH)
