@@ -477,3 +477,28 @@ context (natural) THEN dense spine-first suffix — single fp32 accumulator, one
 merge). Context bit-identical (columns unchanged); suffix canonical (spine-first) => spine M-invariant. Register-only,
 no-HBM-tax, no carrier-B. Cost: ONE FA2 rebuild. GO/NO-GO before recompile = CPU fp32 online-softmax model proving
 split-block context bit-identity + A1-spine==spine-only. NEXT: write that CPU model (no GPU, no recompile).
+
+## A1 REFUTED (CPU go/no-go) + delivery path clarified (2026-07-13)
+
+**A1 (two-K-source fused) REFUTED before any recompile.** `scripts/fr13_fa2_a1_cpu_model.py`
+split-block gate: reading the suffix as a SEPARATE dense block (A1's premise) perturbs the
+CONTEXT by ~1 bf16 ULP for EVERY row (spine AND branch) purely from online-softmax
+rescale timing — `[block-split ALONE, natural suffix] vs single_real = 9.766e-04`, the SAME
+magnitude/character as the hybrid double-round. This is a faithfully-modeled fp32 property
+(rescale timing, not the butterfly), so it is airtight. A1 does NOT give a proper fix; it
+relocates the ~1 ULP from the merge to the block boundary.
+
+**Delivery path = CACHE SLOT REORDER (no recompile, no block-split).** The live tree-verify
+reads the suffix KV PAGED (`block_table` + `slot_mapping` + `tree_attn_bias`, tree_attn.py
+build()). Permuting the tree-suffix `slot_mapping` spine-first writes the KV spine-first in
+the cache; the paged read then processes context-tail + spine-first-suffix in the NATURAL
+block structure (one rescale, suffix canonical) — exactly the MAB-proven clean reorder, with
+NONE of A1's block-split. Requires (1) permute tree-suffix slot_mapping spine-first, (2)
+permute tree_attn_bias columns to match, (3) permute committer/GDN read indices consistently
+(carrier-B audit). NO FA2 recompile.
+
+**GATE BEFORE delivery (user: "both spine AND branch proper fix"):** MAB `branch_check`
+(`branch_coresident_max`) — each branch's output in full cat8 vs (spine + that branch only).
+Spine M-invariance already MAB-proven (`spine_all_vs_m6_max==0`); the branch gate settles
+whether the reorder also M-invariantizes branches or only ~1 ULP within-floor. RUNNING:
+output/fr13_fa2_mab/branchfix_*. Parser: scripts/fr13_fa2_mab_branch_verdict.py.
