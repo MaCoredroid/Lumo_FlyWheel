@@ -15419,6 +15419,16 @@ def _fr13_fa2_mab_recall(
                         _out_pi[_inv[_r]].reshape(-1) - out_m9[_r].reshape(-1)
                     ).abs().max().item()))
                 reorder_results["nondeep_relabel_max"] = _ndmax
+                # WHOLE-SPINE check: EVERY reordered spine row (positions 0..S-1
+                # in pi, depth order) vs the M6 spine-only row at the same depth.
+                # All must be 0.0 for A' to M-invariantize the full spine (accept
+                # depends on every spine node, not just the deepest).
+                _spine_all = 0.0
+                for _d in range(len(spine_rows)):
+                    _spine_all = max(_spine_all, float((
+                        _out_pi[_d].reshape(-1) - out_m5[_d].reshape(-1)
+                    ).abs().max().item()))
+                reorder_results["spine_all_vs_m6_max"] = _spine_all
                 reorder_results["pi"] = list(_pi)
             except Exception as _rre:
                 reorder_results["err"] = repr(_rre)
