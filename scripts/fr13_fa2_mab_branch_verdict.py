@@ -34,6 +34,10 @@ deep_worst = collections.defaultdict(float)
 branch_worst = collections.defaultdict(float)
 relabel_worst = collections.defaultdict(float)
 per_branch = collections.defaultdict(lambda: collections.defaultdict(float))
+causal_off = collections.defaultdict(float)
+kperm_spine = collections.defaultdict(float)
+kperm_branch = collections.defaultdict(float)
+causal_events = 0
 errs = []
 
 for r in recs:
@@ -51,6 +55,14 @@ for r in recs:
         per_branch[c["branch"]]["max"] = max(
             per_branch[c["branch"]]["max"], c["coresident_vs_solo_max"])
         per_branch[c["branch"]]["anc"] = c.get("ancestors")
+    cr = r.get("slot_reorder_causal", {}) or {}
+    if cr and "err" not in cr:
+        causal_events += 1
+        causal_off[L] = max(causal_off[L], cr.get("causal_off_vs_m9_max", 0.0))
+        kperm_spine[L] = max(kperm_spine[L], cr.get("kperm_spine_all_vs_m6_max", 0.0))
+        kperm_branch[L] = max(kperm_branch[L], cr.get("kperm_branch_vs_m9_max", 0.0))
+    elif cr:
+        errs.append((L, "causal:" + str(cr["err"])))
 
 def g(d):
     return max(d.values()) if d else float("nan")
@@ -70,6 +82,17 @@ for b in sorted(per_branch):
     tag = "bit-exact" if v == 0.0 else (
         "within-floor(<=1 ULP)" if v <= ULP_BF16 else "GROSS>1ULP")
     print(f"    branch node {b} (anc={per_branch[b]['anc']}): {v:.3e}  {tag}")
+
+if causal_events:
+    c_g, kps_g, kpb_g = g(causal_off), g(kperm_spine), g(kperm_branch)
+    print("\n--- FR13_SLOT_REORDER in-process gates (S1, same-boot) ---")
+    print(f"  CAUSAL arm: causal=False vs causal=True M9   = {c_g:.3e}"
+          f"   {'PASS int-exact (causal redundant)' if c_g == 0.0 else 'FAIL — causal NOT redundant'}")
+    print(f"  KPERM arm (live-fix semantics: k-only perm + causal=False):")
+    print(f"    kperm_spine_all_vs_m6_max = {kps_g:.3e}"
+          f"   {'PASS bit-exact (fix works as DELIVERED)' if kps_g == 0.0 else 'FAIL'}")
+    print(f"    kperm_branch_vs_m9_max    = {kpb_g:.3e}"
+          f"   ({'within-floor lateral' if kpb_g <= ULP_BF16 else 'GROSS — wiring bug'})")
 
 print("\n--- non-corruption ---")
 print(f"  nondeep_relabel_max (global worst)              = {relabel_g:.3e}"

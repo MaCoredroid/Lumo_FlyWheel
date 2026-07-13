@@ -15210,7 +15210,7 @@ def _fr13_fa2_mab_recall(
         v_all = dense_value[0].to(dev).to(torch.bfloat16)
         bias_full = bias[:m_full, :m_full].contiguous()
 
-        def _call(q_rows, suffix_rows, bias_sub, pad_to=0, kv_pad_to=0):
+        def _call(q_rows, suffix_rows, bias_sub, pad_to=0, kv_pad_to=0, causal=True):
             m = len(q_rows)
             q = q_all.index_select(
                 0, torch.tensor(q_rows, dtype=torch.long, device=dev)
@@ -15277,7 +15277,7 @@ def _fr13_fa2_mab_recall(
                 max_seqlen_q=mq,
                 max_seqlen_k=int(k.shape[0]),
                 softmax_scale=scale,
-                causal=True,
+                causal=causal,
                 window_size=[-1, -1],
                 softcap=softcap,
                 fa_version=2,
@@ -15468,6 +15468,51 @@ def _fr13_fa2_mab_recall(
                     (c["coresident_vs_solo_max"] for c in _bc), default=0.0)
             except Exception as _rre:
                 reorder_results["err"] = repr(_rre)
+        # FR13_SLOT_REORDER in-process gates (FR13_FA2_MAB_CAUSAL=1). Cross-boot
+        # byte-identity is INVALID on GB10 (autotune floor) so both S1 claims are
+        # proven same-boot on the SAME captured operands:
+        #  CAUSAL arm (S1): causal=False vs the causal=True M9 baseline must be
+        #    int-exact 0.0 -- causal is redundant for the decode tree call (all
+        #    context cols precede all tree rows; BFS ancestry bias is already
+        #    -inf at every col causal would hit).
+        #  KPERM arm (live-fix semantics): BFS query rows + KEY-ONLY spine-first
+        #    permutation + bias[:, pi] + causal=False == the slot-reorder layout.
+        #    kperm_spine_all_vs_m6_max == 0.0 => the DELIVERED fix (not the q+k
+        #    relabel above) M-invariantizes the whole spine.
+        causal_results = {}
+        if os.environ.get("FR13_FA2_MAB_CAUSAL", "0") == "1":
+            try:
+                _out_nc = _call(full_rows, full_rows, bias_full, causal=False)
+                causal_results["causal_off_vs_m9_max"] = float(
+                    (_out_nc - out_m9).abs().max().item()
+                )
+                _branch_c = [r for r in range(m_full) if r not in spine_rows]
+                _pi_c = list(spine_rows) + _branch_c
+                _pit_c = torch.tensor(_pi_c, dtype=torch.long)
+                _bias_kp = bias_full.index_select(1, _pit_c).contiguous()
+                _out_kp = _call(full_rows, _pi_c, _bias_kp, causal=False)
+                # rows stay BFS: row j is node j in BOTH arms -> direct compares
+                _kp_spine_all = 0.0
+                for _d, _sr in enumerate(spine_rows):
+                    _kp_spine_all = max(_kp_spine_all, float((
+                        _out_kp[_sr].reshape(-1) - out_m5[_d].reshape(-1)
+                    ).abs().max().item()))
+                causal_results["kperm_spine_all_vs_m6_max"] = _kp_spine_all
+                causal_results["kperm_deep_vs_m6"] = float((
+                    _out_kp[deep_row].reshape(-1)
+                    - out_m5[spine_rows.index(deep_row)].reshape(-1)
+                ).abs().max().item())
+                # branch rows vs the BFS M9 baseline (column move only; expect
+                # ~1 ULP lateral, NOT gross; gross => causal/bias wiring bug)
+                _kp_branch_max = 0.0
+                for _b in _branch_c:
+                    _kp_branch_max = max(_kp_branch_max, float((
+                        _out_kp[_b].reshape(-1) - out_m9[_b].reshape(-1)
+                    ).abs().max().item()))
+                causal_results["kperm_branch_vs_m9_max"] = _kp_branch_max
+                causal_results["kperm_pi"] = list(_pi_c)
+            except Exception as _sce:
+                causal_results["err"] = repr(_sce)
         # Per-spine-depth RAW (M=9 spine rows vs M=5 spine rows) for context.
         by_depth = []
         for depth, sr in enumerate(spine_rows):
@@ -15504,6 +15549,7 @@ def _fr13_fa2_mab_recall(
             "kvpad_deep_raw_max_abs": kvpad_results,
             "kvpad_self_m9_vs_unpadded": kvpad_self,
             "reorder_a_prime": reorder_results,
+            "slot_reorder_causal": causal_results,
             "by_spine_depth": by_depth,
         }
         out_path = Path(dump)
