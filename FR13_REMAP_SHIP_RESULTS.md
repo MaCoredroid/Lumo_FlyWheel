@@ -34,9 +34,19 @@ all handled; discrimination preserved).
 - Edits: **15/16 cat8 tasks made real edits to the CORRECT source file** (separable.py, quantity.py, etc.).
 
 ## 4. Speed (accept-normalized; NOT raw TPS)
-- PRIOR NO-FIX cat8: accept/event **3.588**, s_per_fwd_gpu **0.131**, derived_tps_gpu **34.98** (prefill-independent).
-- cat8 FIX-ON interim (/metrics): accept/forward **3.41** (draft/fwd=8.0 basis valid). Clean s_per_fwd_gpu at completion.
-  Caveat: no-fix accept is garble-INFLATED (wrong-accepts); fix accept is clean → small dip expected.
+🛑 **The prior no-fix cat8/cat6 accept + derived_tps are GARBLE-CONFOUNDED — do NOT use them as the speed
+baseline.** No-fix accept counted garble wrong-accepts (drifted verify accepted near-neighbors it should have
+rejected), so accept/event **3.588** (cat8) / **3.850** (cat6) and derived_tps **34.98/40.12** are INFLATED.
+The clean tree-vs-native speed A/B must come from the **FIX-ON run** (this run). Marked as confound across
+`FR13_B4_CACHE_MATRIX_RESULTS.md` + memory ([[reference_deploy_speed_metric_definitions]],
+[[project_fr13_b4_cache_matrix]]).
+- **Valid bar = native 3.050** (no garble, ~1% floor) → derived_tps **31.74**. Native is NOT confounded.
+- **cat8 FIX-ON interim** (/metrics, cumulative): accept/forward **~3.3** (was 3.41 earlier, drifts down as
+  decode accumulates) — **below** the garble-inflated 3.588, empirically confirming the inflation. Clean
+  `s_per_fwd_gpu` / `derived_tps_gpu` at arm completion (reduce), + cat6-fix-ON + this-run native for the full
+  apples A/B.
+- Directionally the tree likely still out-accepts native (~3.3 > 3.05) but the **magnitude** (was claimed
+  +10%/+26%) is NOT established until the fix-ON reduce lands. No hand-rolled TPS.
 - Remap own tax (paired probe): **−0.7% s/fwd (within cross-boot noise)** = no-HBM-tax bar met.
 - B4 genuine: Running=4 dominant (~68% of intervals), effective batch ~3.7 (not serialized-to-1).
 

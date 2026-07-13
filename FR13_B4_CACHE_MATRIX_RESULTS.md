@@ -3,6 +3,17 @@
 **Status:** B=4 **3-arm matrix COMPLETE** — `native+cache`, `cat8+cache`, `cat6+cache` all DONE 16/16. Now running: **`native+nocache`** control (KIND flash_ns5_nocache, isolates the cache). B=1 CANCELLED. Serialization-fix shot (§7) queued after native+nocache.
 **Every number independently extracted from artifact files + adversarially verified** (workflow `wf_12862543-571`).
 
+> 🛑 **GARBLE CONFOUND — RETRACTION (2026-07-13).** Every cat8/cat6 **accept** count in this doc
+> (`3.588` / `3.850`) and every `derived_tps_gpu` derived from it (`34.98` / `40.12`) is **INFLATED by the
+> tree-attention-KV garble bug** (root cause found + fixed 2026-07 = `FR13_ATTN_KV_REMAP`). The drifted verify
+> (a sibling branch node's foreign K/V read at the committed slot) **accepted near-neighbor tokens it should
+> have rejected** — each wrong-accept counted as an accept → accept-per-forward too high → `derived_tps_gpu`
+> too high. **The "tree is +10.2% / +26% faster than native" verdict is OVERSTATED and RETRACTED.** Empirical
+> proof it was garble: the FIX-ON run's clean accept is **~3.3 < the no-fix 3.588** (the gap = the garble
+> inflation). **Native (3.050, ~1% garble floor) is NOT confounded** and remains a valid bar. Re-derive every
+> tree-vs-native speed number from the FIX-ON run `output/fr13_qwencode_cachefirst_remap` (see
+> `FR13_REMAP_SHIP_RESULTS.md §4/§6`). Treat the accept/speed tables below as **garble-era history only.**
+
 > ⚠️ **Matrix spans 3+ binaries.** cat8 = `8c27f454` (PRE leak-fix — the EXACT_SEED/HRS/refold deprecation `37bd90e2` is NOT in cat8's build; it avoided the es_ckpt OOM via explicit env `es=0`). native = `ecd7aedd` (POST fix). cat6 = `d8af472d`+.
 
 ---
@@ -13,8 +24,8 @@
 |---|---|---|---|---|---|---|
 | native+cache (MTP-5) | 3.050 | 0.1276 | 31.74 | 0.151 | **8/16 (50%)** | **1** |
 | **native+nocache** (control) | 3.336 | 0.073⚠️ | 59.13⚠️ | **0.419** | **9/16 (56%)** | **0** |
-| cat8+cache (8-node) | 3.588 | 0.1312 | 34.98 | 0.169 | 6/16 (38%) | 5 |
-| **cat6+cache (6-node)** | 3.850 | **0.1209** | **40.12** | 0.169 | 6/16 (38%) | 5 |
+| cat8+cache (8-node) | 3.588 🛑garble-inflated | 0.1312 | 34.98 🛑 | 0.169 | 6/16 (38%) | 5 |
+| **cat6+cache (6-node)** | 3.850 🛑garble-inflated | **0.1209** | **40.12** 🛑 | 0.169 | 6/16 (38%) | 5 |
 
 **⚠️ native+nocache's 59.13 derived_tps_gpu is a MEASUREMENT ARTIFACT, not a real 2× speedup.** Decode is *identical* to native+cache (same MTP-5/FLASH_ATTN kernel; the cache only touches prefill), so decode speed MUST be ~equal — and the **sfwd sidecar (cumulative per-step) confirms it: native+nocache 165.8 ms/step vs native+cache 148.8 ms/step** (~equal, if anything nocache slightly slower). The deploy-speed per-draft window-delta (0.073) is spurious — computed over a **high-prefill (0.419), low-decode-step (14720 vs 39298)** window. Use the sidecar per-step for decode; do NOT rank the arms on native+nocache's 59.13.
 
@@ -22,7 +33,7 @@
 - **Speed = TTFT/prefill, not decode.** The cache slashes **prefill_frac 0.419 → 0.151** (skips re-prefilling the shared agentic context — its real win), while **decode per-forward is unchanged** (~150-165 ms/step both). So the cache helps wall-clock via TTFT, invisible to the decode-only metric.
 - **Quality = slight cost.** Cache 8/16-resolved + 1 give-up (14096) vs nocache **9/16 + 0 give-ups** — the cache *introduced* native's only give-up (14096) and one fewer resolve. **n=1-2, and 14096's give-up was an 11-min quick-quit → plausibly stochastic**; don't overclaim a systematic cache quality regression, but the direction is "cache slightly hurt native." (Relevant to #12: 14096's give-up is cache-related, not tree/graph.)
 
-**Speed — PROVISIONAL. cat6-vs-cat8 is UNRESOLVED; cat6-vs-native is directionally real.** As measured the trees beat native (cat6 +26%, cat8 +10%). BUT:
+**Speed — 🛑 GARBLE-CONFOUNDED + PROVISIONAL. cat6-vs-cat8 UNRESOLVED; the cat6/cat8 accept is garble-inflated (see top banner) so the "+26%/+10% over native" magnitudes are OVERSTATED.** As measured the trees beat native (cat6 +26%, cat8 +10%) — but that "as measured" includes garble wrong-accepts. BUT:
 - **cat8 is a strict SUPERSET of cat6** (verified from code: `cat8 = cat6 ∪ {(0,1),(0,0,1)}`, same depth-5 spine + `(1,)` root sibling). A superset tree **must accept ≥ its subset on identical draft/target tokens** (cat6's best path is available to cat8, plus extras). So cat6's measured accept **3.850 > cat8's 3.588 is structurally impossible on matched inputs → pure trajectory noise** (temp 0.6, different tokens per arm).
 - Therefore **"cat6 faster than cat8" is NOT established** (I earlier over-claimed it). On matched trajectories cat8 accepts ≥ cat6; the real question is whether cat6's fewer-nodes **per-forward saving** (6 vs 8 positions) outweighs cat8's genuine (small, diminishing-returns) **extra accept** from the 2 added siblings. Net sign unknown → needs a **same-trajectory** measurement.
 - **concurrency-confounded** too — all arms ran at effective batch ~1.3 (§7 serialization bug), not true B=4.
@@ -82,7 +93,13 @@ Definitions: `s_per_fwd_gpu` is per-DRAFT (`_basis=/drafts`); `s_per_fwd_gpu_per
 | **native+cache** (es=0 FINAL) | 3.050 | 4.050 | **31.74** | 0.1276 | 0.151 | 16 tasks |
 | native+cache (es=1 8-task preview) | 3.465 | 4.465 | 37.67 | — | 0.276 | **SUPERSEDED** |
 
-**Speed verdict: cat8 (tree) is ~10.2% faster per committed token (34.98 vs 31.74).** Both es=0, both 16 tasks, prefill_frac close (0.169 vs 0.151), and `derived_tps_gpu` is prefill-independent by construction → apples. The tree's accept-per-forward (3.588) is **+17.6%** over native (3.050) because the 8-node branch tree gives more candidates to match; per-forward GPU cost is nearly equal (0.131 vs 0.128, +2.7%) since decode is HBM-bound (weight-read floor dominates, tree's extra compute nearly free). **Accept edge dominates → tree wins.**
+**🛑 RETRACTED (garble confound, 2026-07-13) — DO NOT CITE.** ~~Speed verdict: cat8 (tree) is ~10.2% faster
+per committed token (34.98 vs 31.74).~~ This verdict rests on cat8 accept **3.588**, which is **garble-inflated**
+(the tree-attn-KV bug's wrong-accepts, fixed by `FR13_ATTN_KV_REMAP`). The real clean cat8 accept is **~3.3**
+(FIX-ON run), so the true tree edge over native (3.050) is **smaller than the +17.6% accept / +10.2% tps
+claimed here** — magnitude TBD from the FIX-ON reduce. Native (3.050) is clean and stays the bar. The
+directional claim "tree out-accepts native" likely survives (3.3 > 3.05), but the **magnitude is not
+established**; re-derive from `output/fr13_qwencode_cachefirst_remap`.
 
 **Why the earlier "native faster" was wrong:** it used the es=1 8-task preview (37.67), whose 8 tasks happened to be higher-accept (3.465); on the full matched 16 (incl. hard low-accept tasks) native accept drops to 3.050 and the tree wins. Lesson: task-mix-dependent accept makes partial-subset speed numbers misleading — only the full matched subset is apples ([[reference_deploy_speed_metric_definitions]]).
 
