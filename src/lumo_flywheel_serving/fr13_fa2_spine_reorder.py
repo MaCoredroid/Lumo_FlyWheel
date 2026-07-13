@@ -26,7 +26,26 @@ wired into the live tree_attn patch.
 """
 from __future__ import annotations
 
+import sys
+
 import torch
+
+_ENGAGED_ONCE = [False]
+
+
+def _mark_engaged(mode: str) -> None:
+    """One-time loud stderr marker so the boot log PROVES the hybrid ran (guards
+    against the patch emitting the single-call fallback because the anchor didn't
+    match the container's tree_attn.py version -- a silent no-op)."""
+    if not _ENGAGED_ONCE[0]:
+        _ENGAGED_ONCE[0] = True
+        try:
+            print(
+                "FR13_FA2_SPINE_REORDER hybrid ENGAGED (mode=%s)" % mode,
+                file=sys.stderr, flush=True,
+            )
+        except Exception:
+            pass
 
 
 def spine_first_perm(bias_2d: torch.Tensor):
@@ -86,6 +105,8 @@ def hybrid_reorder_decode(
     flash_fn,       # flash_attn_varlen_func
     merge_fn,       # merge_attn_states
     fa_version=2,
+    split_only=False,   # gate-1a: run the cascade split with pi=identity (NO reorder)
+                        # to prove context+suffix+merge == the single paged call.
 ):
     """Dense-suffix hybrid decode with spine-first suffix reorder. Homogeneous trees
     (every request has the same tree_n == max_query_len). Returns True if the reorder
@@ -95,9 +116,14 @@ def hybrid_reorder_decode(
     if tree_n < 2 or B < 1 or query.shape[0] != B * tree_n:
         return False  # non-homogeneous / not the tree-decode shape -> caller falls back
     bias0 = tree_bias[0] if tree_bias.dim() == 3 else tree_bias
-    pi, inv = spine_first_perm(bias0)
-    if pi is None:
-        return False  # nothing to reorder (already contiguous / degenerate)
+    if split_only:
+        pi = torch.arange(tree_n, dtype=torch.long, device=query.device)
+        inv = pi
+    else:
+        pi, inv = spine_first_perm(bias0)
+        if pi is None:
+            return False  # nothing to reorder (already contiguous / degenerate)
+    _mark_engaged("split_only" if split_only else "reorder")
     dev = query.device
     H = query.shape[1]
     out3 = output.view(B * tree_n, H, -1)  # ensure [N, H, D] view for merge
