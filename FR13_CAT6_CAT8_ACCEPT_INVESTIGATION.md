@@ -252,3 +252,13 @@ STATE: mechanism confirmed (cat6-spine>cat8-spine ~0.3, B=1); carrier=FA2 (code)
 (big+uncertain). Effect SMALL (0.087 greedy, ~0.3 real). Garble deliverable MET (0/undef, resolve=native).
 NEXT OPTIONS: (A) re-port QPAD + A/B (big, uncertain); (B) build a fused-build FA2/GDN localizer; (C) accept
 the small M-dep as within-floor (deliverable met) and stop. Surfacing for a priority call given the ROI.
+
+## CORRECTION (2026-07-13): QPAD is NOT refuted for cat6-vs-cat8 (the refutation was CAT9)
+Red-team of the QPAD-accept-drop: "QPAD | 9-node | 24 flips | accept 2.643" = the test was on CAT9 (M=9),
+whose carrier is L0-GDN (N_PAD=16 vs 8, per NODE7-LADDER first-nonzero L0 linear_attention 2 ULP). QPAD drove
+the FA2 carrier L31 + 14/16 layers -> 0.0 but e2e flips STAYED 24 because the L0-GDN seed is UPSTREAM of FA2
+(L3) — an FA2 fix cannot remove an L0-born divergence AT M=9. => the refutation is REGIME-SPECIFIC to cat9.
+For cat6-vs-cat8 (M<=8, N_PAD=8), GDN is M-invariant (wf#1), so the carrier is FA2 (no L0-GDN seed) and QPAD
+is UNTESTED, PLAUSIBLY CORRECT. My earlier "QPAD refuted -> wall" CONFLATED cat9 with cat8. Corrected:
+the fix path is OPEN = re-port QPAD (archived 030a1c22 / origin/fr13-fa2-qpad) + A/B on cat8 (gate cat8-spine
+>=cat6 + garble0 + lossless-vs-nonspec). Lossless-by-construction (CPU 0.0) so it cannot reintroduce garble.
