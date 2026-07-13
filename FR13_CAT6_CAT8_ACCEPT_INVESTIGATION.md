@@ -81,7 +81,34 @@ cat8-vs-cat6 IS (same forked tree path) — that's the sharp one.
 | cat6 | greedy | **3.664** | 20.5 |
 | cat8 | temp06 | 3.031 | 16.9 |
 | cat6 | temp06 | 3.414 | 18.8 |
-| native | (booting) | | |
+| native | greedy | **3.813** | **22.21** |
+| native | temp06 | **3.691** | **21.45** |
+
+### FULL RESULT: native > cat6 > cat8 (accept AND wall-TPS, greedy + temp06) — challenges "branches=speed"
+On this controlled B=1 fixed-prompt benchmark, NATIVE (MTP-5, no branches) is the FASTEST — highest accept
+AND highest wall-TPS. Accept MONOTONICALLY DECREASES with node count: native(5) 3.813 > cat6(6) 3.664 >
+cat8(8) 3.368 (greedy). => adding tree nodes REDUCES accept here = strong M-dependence. The branched trees are
+NET SLOWER than native on this workload.
+TWO effects: (a) within the forked tree path, more nodes = less accept (cat8<cat6, pure M comparison);
+(b) even the smallest tree cat6 < native (forked-tree-path overhead / M-dep vs stock MTP).
+
+**HONEST CAVEATS (do not over-generalize from one prompt):**
+1. SINGLE PROMPT = predictable code (TTLCache). Predictable content => the SPINE draft usually hits => branches
+   (which pay off exactly when the spine is UNCERTAIN) are barely exercised => this prompt UNDERSTATES branch
+   value. A diverse/ambiguous-prompt benchmark is needed to fairly measure what branches buy.
+2. native is a DIFFERENT code path (stock MTP + FLASH_ATTN) vs forked tree path (TREE_ATTN + tree drafter);
+   native-vs-tree mixes path + M. cat8-vs-cat6 is the clean M comparison (and it's monotone worse).
+3. BATCH_INVARIANT=0 => M=5/6/8 take different GEMM-autotune paths => numerical M-dependence possible (an
+   artifact, fixable), not necessarily fundamental.
+4. B=1 (deployment is B4). B=1 is the clean HBM-bound condition where trees SHOULD win most — and they don't.
+
+**CONCLUSION + next lever:** the M-dependence (more nodes -> less accept) is the drag making branched trees
+slower than native. This is the directive's step-3 target: an M-INVARIANCE compute-only fix (localize which
+L0 sub-op is M-dependent: conv/scan/state/GEMM; the in_proj-pad LUMO_FB_PROJ_PAD covered some but not all)
+would restore trees' accept >= native + the branch bonus. WITHOUT it, branches are a net speed LOSS on
+predictable content. Garble remains fixed (0%, correctness intact); this is purely accept-rate/speed.
+Recommended next: (a) diverse-prompt benchmark to measure true branch value; (b) localize the M-dependent
+sub-op (greedy cat6-vs-cat8 accept as the gate) + compute-only fix.
 
 **cat6 > cat8 EVEN AT GREEDY (3.664 > 3.368).** Greedy = deterministic drafts + target, so cat8 ⊇ cat6 =>
 cat8 accept >= cat6 MUST hold if the spine is M-invariant. VIOLATED => **NOT trajectory noise** (my leading
