@@ -315,3 +315,25 @@ native-spine index_copy_ overwrites _fr10_out, not _acc), recomputes silu fresh.
 NEXT (ladder): FA2 query-tile MAB (generalize FR13_FA2_MAB cat9->live-tree, cat8 M=9-vs-M=6), then scan
 N_ACTUAL constexpr (6-vs-8 at fixed N_PAD=8). in_proj analytically excluded (cuBLASLt switch at M>=9; M=6,8
 share the GEMM path). commits: f03baa2a (localizer) + bbd0ea2f (capture-guard+eager).
+
+## FUSED-BUILD LOCALIZER — LADDER STEP 2: FA2 QUERY-TILE = THE CARRIER (2026-07-13)
+Generalized FR13_FA2_MAB (was hardcoded cat9) to cat8. FIRST run was CONFOUNDED (silent
+cat9 fallback: TreeAttentionMetadata carries tree_attn_bias but NOT fr10_tree_path0_nodes,
+so spine_nodes=None -> cat9 [0,1,2,4,6]/deep6 -> garbage raw_max_abs=2-8 from wrong ancestor
+set). Caught by the tell (real query-tile M-dep is ~1-ULP not 8.0) + spine!=live-tree. FIX:
+derive spine from tree_attn_bias itself = deepest-node ancestor set (data-driven mask split
+0.5*bias.min(), robust to -inf/finfo.min/-1e9, CPU-verified 5/5) + reader confound guard.
+- CLEAN RUN (run_eager2, rc=0): 256 events/16 full-attn layers. spine=[0,1,3,5,7,8] deep=8
+  (CORRECT, guard passed), bias=[-inf,0.0], recall_vs_served=0.0 (M=9 arm == live output,
+  self-check passes). deep-spine raw_max_abs: 16/16 layers NONZERO, worst 6.25e-2 (=1 bf16 ULP
+  @ mag~8), typical ~1e-3. NOT the confounded 2-8.
+=> VERDICT: forked FA2 query-tile IS M-DEPENDENT (~1-ULP kBlockM query-occupancy, q_offset=
+   max_seqlen_q-rows per FR13_FA2_MDEPENDENT_BIND) on cat8's deep spine, all 16 full-attn layers.
+   conv=0 + FA2=nonzero => FA2 is THE (likely dominant) accept-rate carrier. scan N_ACTUAL still
+   untested but a-priori M-invariant (N_PAD=8 both; only constexpr dead-code residual).
+NEXT: validate FR13_FA2_QPAD (pad query to fixed M so max_seqlen_q/kBlockM occupancy is
+M-invariant) IN the observe-only MAB (pad both arms -> raw_max_abs->0?) BEFORE touching the live
+ship FA2 path. Note FR13_FA2_QPAD is only a COMMENT today (:15097) — not implemented. QPAD was
+"refuted" only for the cat9 22-flip GARBLE (L0-GDN carrier), UNTESTED for this cat8 FA2 accept
+carrier. commits: cdef5bdc (confound fix). GATE for the eventual live fix: greedy cat8-spine ≥
+cat6-spine AND lossless vs NON-SPEC AND garble 0/undef temp06.
