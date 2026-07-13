@@ -171,3 +171,28 @@ AND same-boot A/B. Directive step-3 = DONE localizing (FA2 query-tile, not the g
 CONCLUSION: FA2_QPAD would restore the greedy superset (cat8>=cat6) but the benefit is small (0.087) and
 temp06 already has branches winning. The bigger lever for tree-vs-native wall-TPS is per-forward overhead.
 Re-landing FR13_FA2_QPAD = correct M-invariance (step-3) but low-impact; verify with a QPAD A/B before baking.
+
+## 🛑 QPAD LEVER REFUTED BY GIT HISTORY (2026-07-13) — do NOT re-land
+The spine-mdep workflow recommended re-landing FR13_FA2_QPAD (FA2 query-tile). GIT HISTORY OVERTURNS IT:
+- 030a1c22 (Jun14): QPAD built.
+- **8b7684dd: "FA2-tile-carrier OVERTURNED — QPAD fixed named carrier L31->0.0 but e2e flips STAYED 24 =>
+  FA2 query-tile NOT the carrier; first-nonzero is L0 GDN (conv1d prime suspect)."**
+- **033c6805: "REJECT A' workflow rec (build FR13_FA2_QPAD) — overturned/stale lever."**
+The workflow read the "built" comment but MISSED the two overturn commits => it rediscovered a refuted lever.
+QPAD makes the FA2 tile M-invariant but does NOT move e2e. (The overturn was garble-era (24 flips); garble
+was ultimately fixed by the attn-KV remap = data movement, so BOTH FA2 and L0-GDN were superseded compute
+hypotheses.) => DO NOT re-land QPAD.
+
+## FINAL CONCLUSION (M-dependence investigation)
+1. cat6>cat8 accept M-dependence is REAL but SMALL: **0.087 greedy** (confound had 3.4x-exaggerated it to 0.296).
+2. At the SHIP config (temp06) the branches WIN: cat8 3.673 ~ native 3.691 > cat6 3.522 => superset HOLDS,
+   "branches=accept" holds where it matters.
+3. The M-dep carrier is FA2-vs-L0-GDN AMBIGUOUS (workflow said FA2; git overturned FA2->L0-GDN for garble).
+   Settling it needs the matched single-forward capture (slice cat8->cat6, first-nonzero layer). LOW priority:
+   the effect is small + greedy-only + the fix lever (QPAD) is overturned.
+4. The REAL tree-vs-native gap is WALL-TPS ~10% = PER-FORWARD OVERHEAD (bigger verify), NOT the FA2/GDN M-dep.
+   That (per-forward cost) is the high-value lever if tree-vs-native speed is the goal.
+=> The garble ship-goal is MET (0/undef both trees, resolve~native). The accept-rate M-dep is understood,
+small, ship-config-benign, and its named fix is refuted. Recommend NOT chasing QPAD; if pursuing tree speed,
+attack per-forward overhead. Directive step-3 "compute-only M-invariance fix": localized but the pre-built
+fix is a dead lever; a new fix isn't worth it for 0.087 greedy-only.
