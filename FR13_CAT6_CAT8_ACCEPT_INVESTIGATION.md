@@ -534,3 +534,21 @@ slots). The carrier-B-free recompile options (A1/A3) all carry the block-split ~
 a substantial CUDA rebuild (A3 also needs explicit context_len — padding suffix width slides
 the `context_len = seqlen_k - seqlen_q` anchor, the KV-pad refutation). NEXT: read-only audit
 of carrier-B consumers to scope the cache slot reorder.
+
+## RED-TEAM REFRAME: branch 0.125 is a WITHIN-FLOOR lossless residual, not a production leak (2026-07-13)
+
+The branch gate's `branch_coresident_max=0.125` (node 6) compares full cat8 vs a (spine + node6
+only) tree. But PRODUCTION is ALWAYS cat8 (fixed parent array, tree_n=9) — the reduced "solo"
+config NEVER occurs. So node 6 is STABLE in production; 0.125 is its distance from a config that
+doesn't happen. Node 6 sits ~2 bf16 ULP off its canonical value because its ancestors {0,1,3}
+are gapped by masked spine nodes — a within-floor LOSSLESS residual, NOT a cross-tree speed leak.
+The systematic "cat8-spine accepts 0.3/fwd less than cat6" leak is SPINE-driven (the 6.25e-2 spine
+carrier); the reorder fixes THAT bit-exact. The reorder LATERALLY moves node 6 (~2 ULP, unbiased),
+doesn't degrade it.
+
+**Consequence:** branches likely need NO separate fixed-slot layout. The correct "both spine AND
+branch" gate = cat8-WITH-REORDER lossless vs NON-SPEC @ temp06 (validates spine fixed + branches
+not degraded, in one live gate). Separate branch fix only if that gate fails on branch tokens.
+This makes delivery MUCH more tractable: just deliver the SPINE reorder (cache-slot-reorder if the
+carrier-B audit says tractable, else A1 whose block-split ~1 ULP is now plausibly within-floor by
+the same argument) + losslessness gate. Pending: carrier-B consumer audit (agent, read-only).
