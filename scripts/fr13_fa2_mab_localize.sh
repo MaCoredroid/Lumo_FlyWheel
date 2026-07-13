@@ -78,25 +78,38 @@ print(f"recall_vs_served self-check (should be ~0): {recall_err:.3e}")
 # QPAD VALIDATION: per pad_to, worst deep-spine raw_max_abs across all events.
 # A pad_to that drives this to 0 = QPAD (pin max_seqlen_q) makes FA2 M-invariant.
 qpad_worst = collections.defaultdict(float)
+qpad_self_worst = collections.defaultdict(float)
 qpad_seen = False
 for r in recs:
     q = r.get("qpad_deep_raw_max_abs") or {}
+    s = r.get("qpad_self_m9_vs_unpadded") or {}
     for pt, val in q.items():
         qpad_seen = True
         if isinstance(val, (int, float)):
             qpad_worst[pt] = max(qpad_worst[pt], val)
+    for pt, val in s.items():
+        if isinstance(val, (int, float)):
+            qpad_self_worst[pt] = max(qpad_self_worst[pt], val)
 if qpad_seen:
-    print("=== QPAD VALIDATION (worst deep-spine raw_max_abs per pad_to; 0 => QPAD fixes it) ===")
+    print("=== QPAD VALIDATION (per pad_to: M9-vs-M6 deep raw_max_abs | SELF-CHECK padM9-vs-unpadM9) ===")
     for pt in sorted(qpad_worst, key=int):
-        tag = "  <-- M-INVARIANT (QPAD fix works)" if qpad_worst[pt] == 0.0 else ""
-        print(f"  pad_to={pt}: worst={qpad_worst[pt]:.3e}{tag}")
+        print(f"  pad_to={pt}: M9vM6={qpad_worst[pt]:.3e}  self(padM9-vs-unpadM9)={qpad_self_worst.get(pt,float('nan')):.3e}")
+    # SELF-CHECK FIRST: if padding corrupts the M9 real deep row (self >> unpadded
+    # ~1-ULP floor), the QPAD TEST is BROKEN (back-pad misaligns bias/causal),
+    # NOT a valid refutation. The unpadded M-dep floor is ~6e-2 (1 bf16 ULP).
+    self_bad = [pt for pt in qpad_self_worst if qpad_self_worst[pt] > 1e-1]
     winners = [pt for pt in qpad_worst if qpad_worst[pt] == 0.0]
-    if winners:
-        print(f">>> QPAD VALIDATED: pad max_seqlen_q to {min(winners, key=int)} => FA2 M-invariant. "
-              "Implement FR13_FA2_QPAD in the live forked-FA2 decode path, then gate.")
+    if self_bad and not winners:
+        print(f">>> QPAD TEST INVALID: padding CORRUPTS the M9 real deep row (self={max(qpad_self_worst.values()):.3e} "
+              f">> 1-ULP floor) at pad_to={self_bad} -- naive back-pad misaligns bias/causal. "
+              "The M9-vs-M6 numbers are ARTIFACTS, NOT a QPAD refutation. Fix the padding (front-pad / "
+              "bias-align) or test QPAD differently before concluding.")
+    elif winners:
+        print(f">>> QPAD VALIDATED: pad max_seqlen_q to {min(winners, key=int)} => FA2 M-invariant "
+              f"(self-check clean). Implement FR13_FA2_QPAD in the live path, then gate.")
     else:
-        print(">>> QPAD REFUTED for cat8: no pad_to reaches 0 (deep row sits at different tile "
-              "position in M=9 vs M=6). Need a different compute-only fix -- reassess.")
+        print(">>> QPAD REFUTED for cat8 (self-check CLEAN, padding preserves real rows, yet no "
+              "pad_to reaches 0): pinning max_seqlen_q does NOT align the deep row. Different fix needed.")
 elif gmax > 0.0:
     print(">>> CARRIER = forked FA2 query-tile (M-dependent). Next: validate FR13_FA2_QPAD (arm QPAD=1).")
 else:

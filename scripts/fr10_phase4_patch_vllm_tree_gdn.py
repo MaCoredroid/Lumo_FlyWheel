@@ -15297,6 +15297,11 @@ def _fr13_fa2_mab_recall(
         # route is needed.  16/32 keep one kBlockM tile; 64 = a full kBlockM
         # (Is_even_MN true).  Observe-only; NO live-path change.
         qpad_results = {}
+        qpad_self = {}  # SELF-CHECK: padded-M9 deep row vs UNPADDED-M9 deep row.
+        # If padding is CLEAN (attention rows independent), this is ~0 and the
+        # qpad_results M9-vs-M6 comparison is a valid QPAD verdict.  If it is
+        # LARGE, back-padding corrupts the real rows (bias/causal misalignment)
+        # => the QPAD test itself is broken, NOT a valid refutation.
         if os.environ.get("FR13_FA2_MAB_QPAD", "0") == "1":
             for _pt in (16, 32, 64):
                 if _pt < m_full:
@@ -15309,8 +15314,12 @@ def _fr13_fa2_mab_recall(
                     qpad_results[str(_pt)] = float(
                         (r9p - r5p).abs().max().item()
                     )
+                    qpad_self[str(_pt)] = float(
+                        (r9p - row_m9).abs().max().item()
+                    )
                 except Exception as _qe:
                     qpad_results[str(_pt)] = "err:" + repr(_qe)
+                    qpad_self[str(_pt)] = "err"
         # Per-spine-depth RAW (M=9 spine rows vs M=5 spine rows) for context.
         by_depth = []
         for depth, sr in enumerate(spine_rows):
@@ -15343,6 +15352,7 @@ def _fr13_fa2_mab_recall(
             "deep_spine_raw_mean_abs": raw_mean_abs,
             "recall_m9_vs_served_deep_max_abs": recall_vs_served,
             "qpad_deep_raw_max_abs": qpad_results,
+            "qpad_self_m9_vs_unpadded": qpad_self,
             "by_spine_depth": by_depth,
         }
         out_path = Path(dump)
