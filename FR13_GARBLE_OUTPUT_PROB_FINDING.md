@@ -861,3 +861,17 @@ committed slot, per full-attn layer. Small KV copy (acc rows x layers), NO weigh
 the existing GDN/conv remap (NOT a full re-forward). Engagement needle: count foreign copies (src_slot !=
 dst_slot) + assert byte-diff on foreign; vacuous(0 foreign) => mechanism refuted, pivot. Gate = reliable
 temp-0.6 matrix_build tree-vs-native.
+
+## FIX BUILT + UNDER TEST (2026-07-13): FR13_ATTN_KV_REMAP (default OFF)
+launch_attn_kv_linear_remap (fr10_gdn_tree_kernel.py) + 2 gated vLLM patches: (A) capture full-attn
+kv-cache group's per-step slot_mapping/layers/qsl during attn-metadata build (non-mamba/GDN builder);
+(B) sample_tokens after _sample (fresh KERNEL committer paths, NROWS>0 gate) copy each committed node's
+K/V flat verify slot -> linear committed slot per full-attn layer. Indexing (H3-derived, unit-tested
+n_foreign=3): src offset=accepted_paths[b,m] (flat verify row 1..9), dst offset=m+1; foreign=ap!=m+1.
+Guard: first N batch reqs all full trees (qsl spacing==tree size) else safe skip (no wrong-slot copy).
+RED-TEAM THE GATE RESULT ON:
+ (a) path0 log = flat rows starting at 1 (spine [1,2,4,6,8], foreign=3) NOT node-idx [0,1,3,5,7]
+     (foreign=4) -- the latter means +1 convention wrong (fix: shift).
+ (b) foreign>0 (engaged, not vacuous).
+ (c) matrix_build garbled ~0/15 (vs kitchen-sink 15/15, native 0/15) = FIXED.
+ (d) no fail-loud crash (capture populated, convention matched).
