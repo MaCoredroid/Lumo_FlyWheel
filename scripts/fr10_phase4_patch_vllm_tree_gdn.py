@@ -2134,6 +2134,19 @@ def _fr13_conv_subop_mab(
     """
     if not _fr13_conv_subop_mab_enabled():
         return
+    # EAGER-ONLY: this A/B .item()-syncs + launches kernels, which is illegal
+    # during CUDA graph capture (poisons the capture -> EngineCore init fails).
+    # Guard BEFORE any CUDA op (query is capture-safe) so the capture is never
+    # touched; warn once (never silently vacuous).  Boot the localizer with
+    # ENFORCE_EAGER=1 so the tree-verify forwards run eager and this fires.
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        if not _FR13_CONV_SUBOP_MAB_SEEN.get("__capture_warned__"):
+            _FR13_CONV_SUBOP_MAB_SEEN["__capture_warned__"] = 1
+            logger.warning(
+                "FR13_CONV_SUBOP_MAB is EAGER-ONLY (syncs) but hit a capturing "
+                "stream; boot with ENFORCE_EAGER=1. Skipping A/B under capture."
+            )
+        return
     try:
         prefix = str(layer_prefix)
         limit = int(os.environ.get("FR13_CONV_SUBOP_MAB_LIMIT", "16"))

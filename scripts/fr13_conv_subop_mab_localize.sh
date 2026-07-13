@@ -22,9 +22,15 @@ echo "=== FR13_CONV_SUBOP_MAB localizer | runroot=$RR ==="
 # cat8 boot mirrors the proven-bootable matched-proof config (garble-free ship
 # arm) + the localizer flags.  The conv A/B is independent of ATTN_KV_REMAP /
 # DEVICE_MULTIDRAFT (downstream), but we mirror the ship config for faithfulness.
+# ENFORCE_EAGER=1 is REQUIRED: the A/B .item()-syncs (EAGER-ONLY, like the GDN/
+# CHASE diagnostics) — illegal under CUDA graph capture (poisons EngineCore init).
+# Eager forwards run the fused conv loop in Python so the A/B fires with events.
+# The conv-taps M-invariance verdict is regime-independent (same triton/torch
+# kernel eager or captured), so eager is a faithful measurement.
 FR13_CONV_SUBOP_MAB=1 \
 FR13_CONV_SUBOP_MAB_LIMIT="${LIMIT:-16}" \
 FR13_CONV_SUBOP_MAB_DUMP=/logs/fr13_conv_subop_mab.jsonl \
+ENFORCE_EAGER=1 \
 FR13_ATTN_KV_REMAP=1 FR13_DEVICE_MULTIDRAFT=1 \
 FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
 ACCEPT_SPEED_PROBE=1 OFFLOAD_AGENT=0 PROBE_N="${PROBE_N:-256}" MAX_NUM_SEQS_OVR=1 \
