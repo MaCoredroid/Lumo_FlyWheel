@@ -502,3 +502,35 @@ permute tree_attn_bias columns to match, (3) permute committer/GDN read indices 
 Spine M-invariance already MAB-proven (`spine_all_vs_m6_max==0`); the branch gate settles
 whether the reorder also M-invariantizes branches or only ~1 ULP within-floor. RUNNING:
 output/fr13_fa2_mab/branchfix_*. Parser: scripts/fr13_fa2_mab_branch_verdict.py.
+
+## BRANCH GATE + research red-team (2026-07-13, loop)
+
+**BRANCH GATE (GPU, branchfix_20260713T211515Z, 96 events/16 layers):** the A' reorder fixes
+the SPINE bit-exact (`spine_all_vs_m6_max=0.0`) but does NOT fix BRANCHES:
+`branch_coresident_max=1.250e-01` — node 2 (depth1) 0.0 bit-exact; node 4 (depth2) 1.95e-3
+within-floor; node 6 (depth4, anc=[0,1,3,6]) **0.125 GROSS**. Mechanism: a branch's ancestors
+are a SUBSET of the spine, so non-ancestor spine nodes stay masked-between its columns AND its
+OWN self-column shifts with co-resident branches (col6 solo -> col8 with 2,4 present). Effect
+SCALES with branch depth. So the reorder just MOVES branches to different gapped columns.
+=> reorder alone under-fixes branches. The M-dep is CONCENTRATED in the deepest/rarest branch
+(shallow branches fine) => small net speed impact, but per user requirement branches need a
+FIXED-SLOT canonical layout, not just spine-first.
+
+**RESEARCH RED-TEAM (wf_39c0c4cc-3c3):** recommended Angle A1 (single-pass paged-context +
+dense spine-first suffix) as "context-bit-identical". REFUTED that precision: the CPU model
+with a REALISTIC block (C=500 unaligned, tail 116 + suffix 9 = 125 in one deployed block)
+shows A1's separate-suffix-block perturbs context by 9.77e-4 (~1 bf16 ULP, rescale timing).
+A1 is context-WITHIN-FLOOR-maybe, NOT bit-identical. Research correctly refuted: Angle C
+(split+merge, double-round+re-assoc), Angle D (num_splits=1, wrong carrier), bias-column edit
+(category error — bias adds to score, can't move columns), uniform column-compaction (P·V
+shared GEMM, per-row masks — impossible).
+
+**SYNTHESIS — the fix that handles BOTH spine AND branch, context-bit-identical:**
+Only the CACHE SLOT REORDER (write tree suffix to FIXED CANONICAL slots: spine-first cols
+0..S-1 + branches at FIXED cols by node id) is simultaneously (a) single fused call => context
+BIT-IDENTICAL (no block-split), (b) spine contiguous => bit-exact, (c) branches at fixed slots
+=> M-invariant, (d) NO recompile. Cost = carrier-B consumer audit (committer/GDN reads follow
+slots). The carrier-B-free recompile options (A1/A3) all carry the block-split ~1 ULP AND need
+a substantial CUDA rebuild (A3 also needs explicit context_len — padding suffix width slides
+the `context_len = seqlen_k - seqlen_q` anchor, the KV-pad refutation). NEXT: read-only audit
+of carrier-B consumers to scope the cache slot reorder.
