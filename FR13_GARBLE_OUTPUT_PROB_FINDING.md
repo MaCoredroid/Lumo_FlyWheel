@@ -898,3 +898,13 @@ NOT the APC-HIT path where the historical tree+cache garble carriers lived. ALSO
 cudagraph_mode=none (NOT graph). So validated so far: {cat9 branched, temp-0.6, eager, cache-cold} = 0/15.
 STILL UNVALIDATED: graph mode; APC HITS (need long-context / live SWE-Verified); general spec-row alignment;
 cat8/cat6; speed. Next: isolate graph (garble gate), then live SWE-Verified graph+cache (the real hit path).
+
+## Graph-mode gate: 0/15 CLEAN + graph-safe (2026-07-13)
+FR13_ATTN_KV_REMAP=1, cat9 branched, temp-0.6, GRAPH (enforce_eager=False, 2 cudagraph captures), cache-cold:
+matrix_build/token_ledger/wcs_slice all 0/15, syntax 0/45, ENGAGED foreign_first=9 spec_rows=4
+path0=[1,2,4,6,8]. NO CUDA error / illegal-memory => mutating the KV cache via eager index-ops BETWEEN
+captured graph replays is safe (remap runs in sample_tokens, outside the captured region). Validated matrix:
+{eager cache-off, eager cache-cold, GRAPH cache-cold} all 0/15 engaged. NEXT (directive's real gate): live
+SWE-Verified WITH cache ON (long agentic context => real APC HITS + the historical agentic degradation
+native 4/4 vs tree ~1/4). Caveat to watch: my guard skips MIXED prefill/decode batches (non-uniform span) =>
+conc1 single-task avoids mixing (guard fine); conc4 may need general spec-row->batch alignment hardening.
