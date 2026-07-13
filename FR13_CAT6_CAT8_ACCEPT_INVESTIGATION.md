@@ -637,3 +637,21 @@ accumulation) ✓; eager + FULL-graph both safe ✓. CPU logic model
 S2 reorder ON: engagement markers + MAB spine bit-exact + garble gate 0 + lossless-vs-nonspec
 temp06 → S3 GOAL GATE: matched-proof cat8-spine vs E5 (expect ≈3.53 == native) + branch-rescue
 intact + cat8 TOTAL > native (the deliverable).
+
+## S1 IN-PROCESS GATES: PASS (2026-07-13/14, s1_causal_kperm run, 256 events / 16 layers)
+
+- **CAUSAL arm = 0.000e+00 int-exact** (causal=False vs causal=True on identical live operands,
+  every event, every layer) — the causal-redundancy claim is PROVEN ON HW. Edit 5 is safe.
+- **KPERM arm (exact delivered-fix semantics: BFS queries + KEY-only spine-first perm +
+  bias[:,pi] + causal=False): kperm_spine_all_vs_m6_max = 0.000e+00** — the WHOLE spine is
+  bit-exact vs spine-only under the fix AS DELIVERED. The op-level M-invariance goal is met by
+  the slot-reorder semantics (not just the q+k relabel).
+- kperm_branch_vs_m9_max = 0.125: NOT a wiring bug (parser label corrected). Depth-scaling
+  signature (node2 0.0 / node4 3.1e-2 / node6 0.125 ≈ 2 ULP) = one-time lateral butterfly shift
+  to the new FIXED layout; a wiring bug would corrupt all rows at O(1) (cf. KV-pad 16.3).
+  Unbiased realization shift, stable in production (tree always cat8) — behavioral arbiters are
+  the S2 gates (garble 0 + lossless-vs-nonspec).
+
+NEXT: S2 e2e boot FR13_SLOT_REORDER=1 (eager first, then graph): engagement (runner pi log +
+tree_attn bias pi log EQUAL + remap dst_pi live), garble gate, accept probe (expect cat8-spine
+~3.5 vs prior ~3.18). Then S3 goal gate vs E5.

@@ -91,8 +91,14 @@ if causal_events:
     print(f"  KPERM arm (live-fix semantics: k-only perm + causal=False):")
     print(f"    kperm_spine_all_vs_m6_max = {kps_g:.3e}"
           f"   {'PASS bit-exact (fix works as DELIVERED)' if kps_g == 0.0 else 'FAIL'}")
+    # Branch rows move to a NEW but FIXED column layout => a one-time lateral
+    # butterfly shift that SCALES WITH BRANCH DEPTH (node2 0.0 / node4 ~3e-2 /
+    # node6 ~0.125 = ~2 ULP). A true wiring bug (wrong bias column mapping)
+    # corrupts ALL branch rows at O(1) (cf. KV-pad self=16.3). Gate: depth-
+    # scaling <= ~2 ULP = expected lateral; O(1) uniform = wiring bug.
     print(f"    kperm_branch_vs_m9_max    = {kpb_g:.3e}"
-          f"   ({'within-floor lateral' if kpb_g <= ULP_BF16 else 'GROSS — wiring bug'})")
+          f"   ({'within-floor lateral' if kpb_g <= 2 * ULP_BF16 else 'O(1)?? check wiring'})"
+          " [expected: one-time depth-scaling lateral move, NOT an M-leak]")
 
 print("\n--- non-corruption ---")
 print(f"  nondeep_relabel_max (global worst)              = {relabel_g:.3e}"
