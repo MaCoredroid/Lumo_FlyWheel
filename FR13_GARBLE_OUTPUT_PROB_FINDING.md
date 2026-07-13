@@ -782,3 +782,16 @@ cache for branch nodes at num_accepted>1). BI_TREE_ATTN makes the attention COMP
 NOT fix which KV is stored/read. NOTE: "KV-misplacement REFUTED (over-predicts)" was a specific row-swap
 hypothesis; a subtler branch-KV routing/content bug at num_accepted>1 is UNTESTED on the reliable gate.
 NEXT: localize the tree-attention KV write/read for the committed branch path (FA2 fork + KV cache indices).
+
+## PRECISE LOCALIZATION (2026-07-13, by elimination + M10-vs-M1 attention argument)
+At the garble step, node0 (root/running position) verify differs at M=10 (tree) vs M=1 (clean native). Given:
+embedding identical, col-0 state correct (conv=torch-M-invariant leaf window; GDN=COMMITTER_NATIVE), compute
+batch-invariant (BATCH_INVARIANT + BI_TREE_ATTN + whole-GDN-native) => the ONLY thing that can differ is the
+KV node0 ATTENDS TO. => the tree writes DIFFERENT KV for the committed branch path than native does (wrong
+position/RoPE, or wrong node's K/V, at the num_accepted>1 branch commit), OR node0's read slot_mapping/mask
+at M=10 pulls different KV than the M=1 clean read. This is the tree-attention KV CACHE path (write at branch
+commit / read at verify) -- uncovered by EVERY compute/state test run so far. Prime sub-suspects: (1) branch
+node POSITION IDs (depth) feeding RoPE -> stored K wrong; (2) which node's K/V is written to the committed
+running slot at a branch commit; (3) the verify attention MASK/slot_mapping at M=10. NEXT: capture/compare the
+committed-branch KV (or positions) tree-vs-native at a branch commit on the reliable gate; or a native-KV
+(recompute attention KV for the committed path) test = the attention analog of whole-GDN-native.
