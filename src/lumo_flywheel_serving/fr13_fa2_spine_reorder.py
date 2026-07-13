@@ -31,7 +31,8 @@ import sys
 import torch
 
 _ENGAGED_ONCE = [False]
-_SELFCHECK_ONCE = [False]
+_SELFCHECK_N = [0]        # count of self-check forwards logged
+_SELFCHECK_MAX = [0.0]    # running max over all self-check forwards
 
 
 def _mark_engaged(mode: str) -> None:
@@ -185,19 +186,17 @@ def hybrid_reorder_decode(
             block_table=block_table, softcap=softcap, fa_version=fa_version,
             tree_bias=tree_bias,
         )
-        if not _SELFCHECK_ONCE[0]:
-            _SELFCHECK_ONCE[0] = True
+        if _SELFCHECK_N[0] < 30:
             try:
                 d = float((merged - out3).abs().max().item())
-                dctx = float((ctx_out - out3).abs().max().item())
+                _SELFCHECK_MAX[0] = max(_SELFCHECK_MAX[0], d)
+                _SELFCHECK_N[0] += 1
                 print(
-                    "FR13_FA2_SPINE_REORDER SELFCHECK max_abs(split-single)=%.4e "
-                    "ctx_only-vs-single=%.4e ctx_lse[%.2f,%.2f] suf_lse[%.2f,%.2f] "
-                    "ctx_absmax=%.3e suf_absmax=%.3e single_absmax=%.3e"
-                    % (d, dctx, ctx_lse.min().item(), ctx_lse.max().item(),
-                       suf_lse.min().item(), suf_lse.max().item(),
-                       ctx_out.abs().max().item(), suf_out.abs().max().item(),
-                       out3.abs().max().item()),
+                    "FR13_FA2_SPINE_REORDER SELFCHECK[%d] max_abs(split-single)=%.4e "
+                    "RUNMAX=%.4e single_absmax=%.3e ctx_lse[%.2f,%.2f] suf_lse[%.2f,%.2f]"
+                    % (_SELFCHECK_N[0], d, _SELFCHECK_MAX[0], out3.abs().max().item(),
+                       ctx_lse.min().item(), ctx_lse.max().item(),
+                       suf_lse.min().item(), suf_lse.max().item()),
                     file=sys.stderr, flush=True,
                 )
             except Exception as _e:
