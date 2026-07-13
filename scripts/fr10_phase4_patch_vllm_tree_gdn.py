@@ -15377,6 +15377,51 @@ def _fr13_fa2_mab_recall(
                 except Exception as _ke:
                     kvpad_results[str(_kt)] = "err:" + repr(_ke)
                     kvpad_self[str(_kt)] = "err"
+        # FR13 FIX-A' VALIDATION (gated FR13_FA2_MAB_REORDER=1): CONTIGUOUS-SPINE
+        # REORDER.  Mechanism: the 6.25e-2 is 1 bf16 ULP from butterfly reduction
+        # REASSOCIATION -- interleaved branches place surviving spine keys in
+        # different score-tile columns.  Fix: permute the suffix q/K/V + BOTH
+        # tree_bias axes to pi = [spine (depth order), then branches (topological)]
+        # so the deep node's ancestors sit in cols 0..depth (contiguous) in cat8
+        # EXACTLY as in the spine-only arm -> identical lane partials -> bit-exact.
+        # This preserves actual_seqlen_k/q (no anchor slide) and is a pure exact
+        # relabeling (lossless).  reorder_deep_vs_m6 -> 0.0 => A' is the fix.
+        reorder_results = {}
+        if os.environ.get("FR13_FA2_MAB_REORDER", "0") == "1":
+            try:
+                _branch = [r for r in range(m_full) if r not in spine_rows]
+                _pi = list(spine_rows) + _branch  # topological (parents precede)
+                _pit = torch.tensor(_pi, dtype=torch.long)
+                _bias_pi = bias_full.index_select(0, _pit).index_select(
+                    1, _pit
+                ).contiguous()
+                _out_pi = _call(_pi, _pi, _bias_pi)  # [m_full] in permuted order
+                _deep_pi = _out_pi[_pi.index(deep_row)].reshape(-1)
+                # A' claim: reordered cat8 deep row == spine-only (M6) deep row
+                reorder_results["deep_vs_m6"] = float(
+                    (_deep_pi - row_m5).abs().max().item()
+                )
+                # the fix magnitude: reordered deep vs ORIGINAL cat8 deep (should
+                # be ~1 ULP = the correction, NOT gross corruption like kv-pad)
+                reorder_results["deep_vs_m9"] = float(
+                    (_deep_pi - row_m9).abs().max().item()
+                )
+                # relabel-neutrality self-check: un-permute the NON-deep rows and
+                # compare to unpadded M9 -- must be within floor (no corruption).
+                _inv = [0] * m_full
+                for _i, _p in enumerate(_pi):
+                    _inv[_p] = _i
+                _ndmax = 0.0
+                for _r in range(m_full):
+                    if _r == deep_row:
+                        continue
+                    _ndmax = max(_ndmax, float((
+                        _out_pi[_inv[_r]].reshape(-1) - out_m9[_r].reshape(-1)
+                    ).abs().max().item()))
+                reorder_results["nondeep_relabel_max"] = _ndmax
+                reorder_results["pi"] = list(_pi)
+            except Exception as _rre:
+                reorder_results["err"] = repr(_rre)
         # Per-spine-depth RAW (M=9 spine rows vs M=5 spine rows) for context.
         by_depth = []
         for depth, sr in enumerate(spine_rows):
@@ -15412,6 +15457,7 @@ def _fr13_fa2_mab_recall(
             "qpad_self_m9_vs_unpadded": qpad_self,
             "kvpad_deep_raw_max_abs": kvpad_results,
             "kvpad_self_m9_vs_unpadded": kvpad_self,
+            "reorder_a_prime": reorder_results,
             "by_spine_depth": by_depth,
         }
         out_path = Path(dump)

@@ -25,7 +25,8 @@ FR13_FA2_MAB_LAYER="*" \
 FR13_FA2_MAB_SKIP=0 \
 FR13_FA2_MAB_LIMIT="${LIMIT:-16}" \
 FR13_FA2_MAB_QPAD="${QPAD:-0}" \
-FR13_FA2_MAB_KVPAD="${KVPAD:-1}" \
+FR13_FA2_MAB_KVPAD="${KVPAD:-0}" \
+FR13_FA2_MAB_REORDER="${REORDER:-1}" \
 ENFORCE_EAGER=1 \
 FR13_ATTN_KV_REMAP=1 FR13_DEVICE_MULTIDRAFT=1 \
 FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
@@ -140,4 +141,27 @@ if kv_seen:
     else:
         print(">>> KV-PAD REFUTED (self clean, no kv_pad_to reaches 0): suffix-width pad does NOT align it. "
               "=> RESEARCH workflow for other compute-only fixes before cost-gate; test scan N_ACTUAL.")
+# FIX-A' VALIDATION: contiguous-spine reorder => deep row bit-exact vs spine-only?
+rr = [r.get("reorder_a_prime") for r in recs if r.get("reorder_a_prime")]
+if rr:
+    import statistics
+    def _wm(k):
+        vals=[x[k] for x in rr if isinstance(x.get(k),(int,float))]
+        return max(vals) if vals else float('nan')
+    d6=_wm("deep_vs_m6"); d9=_wm("deep_vs_m9"); nd=_wm("nondeep_relabel_max")
+    errs=[x.get("err") for x in rr if x.get("err")]
+    print("=== FIX-A' (contiguous-spine reorder) VALIDATION ===")
+    print(f"  events={len(rr)} | worst deep_vs_M6(spine-only)={d6:.3e}  deep_vs_M9(orig)={d9:.3e}  nondeep_relabel={nd:.3e}")
+    if rr and rr[0].get("pi"): print(f"  pi(example)={rr[0]['pi']}")
+    if errs: print(f"  !!! {len(errs)} errors, e.g. {errs[0]}")
+    # baseline (interleaved identity) = the raw deep-spine M9-vs-M6 = gmax (should stay 6.25e-2)
+    print(f"  negative control (interleaved identity M9-vs-M6) = {gmax:.3e} (should stay nonzero)")
+    if d6 == 0.0 and nd < 1e-1 and gmax > 0.0:
+        print(">>> FIX-A' VALIDATED: contiguous-spine reorder makes cat8 deep-spine BIT-EXACT vs spine-only "
+              "(deep_vs_M6=0, relabel clean, interleaved baseline still nonzero). Promote A' to a live "
+              "call-site-local reorder in fr13_patch_fa2_tree_bias.py tree-decode wiring (flag-gated) + gate.")
+    elif nd >= 1e-1:
+        print(">>> A' TEST SUSPECT: relabel-neutrality large => reorder corrupted non-deep rows. Check pi topology.")
+    else:
+        print(f">>> A' did NOT fully zero (deep_vs_M6={d6:.3e}). Reassess mechanism / try RANK-3 kernel fix.")
 PY
