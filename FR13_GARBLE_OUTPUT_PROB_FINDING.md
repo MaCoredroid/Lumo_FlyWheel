@@ -875,3 +875,17 @@ RED-TEAM THE GATE RESULT ON:
  (b) foreign>0 (engaged, not vacuous).
  (c) matrix_build garbled ~0/15 (vs kitchen-sink 15/15, native 0/15) = FIXED.
  (d) no fail-loud crash (capture populated, convention matched).
+
+## FIX WORKS — cat9 branched garble ELIMINATED (2026-07-13): 15/15 -> 0/15, engaged, clean
+FR13_ATTN_KV_REMAP=1, cat9 branched, temp-0.6, ENFORCE_EAGER=1, cache OFF. Reliable gate:
+  matrix_build 0/15 (was 15/15), token_ledger 0/15 (was 10-11/15), wcs_slice 0/15 (was 1-3/15).
+  undefined-name-rate 0.00%, samples-with-undef 0/45, syntax-errors 0/45 (CLEAN read, not degenerate).
+ENGAGED foreign_first>0 (DIAG n=4 cols=5 byreq=True path0=[1,2,4,6,8] spine + [1,2,4,6,9] BRANCH).
+=> the missing attention-KV re-linearization WAS the garble root cause (CONFIRMED by the fix). Branches
+KEPT (branch-path commits garble-free) = the deliverable, NOT chain5/reshape. Causal: the ONLY change vs
+the prior vacuous 15/15 runs is the remap actually copying foreign rows (guard-blocked=15/15 -> guard-fixed
+foreign>0 = 0/15); flag gates only the remap block.
+REMAINING for SHIP (honest): (a) cache ON (APC) slot layout; (b) graph mode (capture/apply timing); (c)
+live SWE-Verified WITH cache ON; (d) general spec-row->batch alignment (guard currently restricts to
+all-tree uniform-span batches); (e) confirm cat8/cat6 (same generic mechanism); (f) speed tax (small KV
+copy per step, no weight read).
