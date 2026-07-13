@@ -24,7 +24,33 @@ import json, os, sys, glob, ast, builtins, re, argparse, shlex
 BI = set(dir(builtins)) | {
     "self", "cls", "np", "torch", "os", "sys", "re", "math", "pd", "plt",
     "json", "time", "Path", "pytest", "__file__", "__name__", "true", "false", "null",
+    "kwargs", "args",  # near-universal idioms, never garble
 }
+
+
+def _bound_names(tr):
+    """All names BOUND by this AST (Store targets, imports, def/class, args, except-as)."""
+    S = set()
+    for node in ast.walk(tr):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            S.add(node.id)
+        elif isinstance(node, ast.alias):
+            S.add((node.asname or node.name).split(".")[0])
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            S.add(node.name)
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            S.update(node.names)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            S.add(node.name)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            aa = node.args
+            for a in aa.args + aa.posonlyargs + aa.kwonlyargs:
+                S.add(a.arg)
+            if aa.vararg:
+                S.add(aa.vararg.arg)
+            if aa.kwarg:
+                S.add(aa.kwarg.arg)
+    return S
 
 
 def _py_from_shell(cmd):
@@ -74,30 +100,18 @@ def extract(chatreq_path):
                     yield ("script", py)
 
 
-def undefined(code):
-    """None => syntax error; else set of undefined Load names (imports/args/builtins excluded)."""
+def undefined(code, gdefined=frozenset()):
+    """None => syntax error; else Load names not bound HERE, not builtins, and not bound
+    ANYWHERE in the arm (gdefined). A leftover = a name never defined in the whole session
+    = garble-suspect (a corrupted identifier). Real cross-fragment names (imported/assigned
+    in some other script) live in gdefined and drop out => native-floor noise (kwargs/AltAz)
+    is excluded, leaving only genuinely-never-defined corrupted identifiers."""
     try:
         tr = ast.parse(code)
     except Exception:
         return None
     L = {x.id for x in ast.walk(tr) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Load)}
-    S = {x.id for x in ast.walk(tr) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Store)}
-    A = set()
-    for fn in ast.walk(tr):
-        if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            for arg in fn.args.args + fn.args.posonlyargs + fn.args.kwonlyargs:
-                A.add(arg.arg)
-    for node in ast.walk(tr):
-        if isinstance(node, ast.alias):
-            S.add((node.asname or node.name).split(".")[0])
-        elif isinstance(node, ast.ExceptHandler) and node.name:
-            S.add(node.name)                      # `except X as e` binds e
-        elif isinstance(node, (ast.Global, ast.Nonlocal)):
-            S.update(node.names)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            S.add(node.name)                      # def/class names are bindings
-    # comprehension / with / for targets are already Store-ctx Names
-    return L - S - A - BI
+    return L - _bound_names(tr) - BI - gdefined
 
 
 def scan(d):
@@ -105,8 +119,9 @@ def scan(d):
     root = root if os.path.isdir(root) else d
     files = glob.glob(os.path.join(root, "**", "chatreq_*.json"), recursive=True)
     seen = set()
-    n_script = n_syntax_bad = n_undef = n_frag = n_malformed = 0
-    undef_ex = []
+    scripts = []
+    n_frag = n_malformed = 0
+    gdefined = set()               # pass 1: every name bound ANYWHERE in the arm's served code
     for f in files:
         for kind, code in extract(f):
             key = (kind, code)
@@ -115,17 +130,26 @@ def scan(d):
             seen.add(key)
             if kind == "malformed":
                 n_malformed += 1
-            elif kind == "fragment":
+                continue
+            if kind == "fragment":
                 n_frag += 1
-            elif kind == "script":
-                n_script += 1
-                u = undefined(code)
-                if u is None:
-                    n_syntax_bad += 1
-                elif u:
-                    n_undef += 1
-                    if len(undef_ex) < 12:
-                        undef_ex.append(sorted(u)[:6])
+            else:
+                scripts.append(code)
+            try:                    # fragments rarely parse; scripts usually do — best-effort
+                gdefined |= _bound_names(ast.parse(code))
+            except Exception:
+                pass
+    n_script = n_syntax_bad = n_undef = 0    # pass 2: score self-contained scripts
+    undef_ex = []
+    for code in scripts:
+        n_script += 1
+        u = undefined(code, gdefined)
+        if u is None:
+            n_syntax_bad += 1
+        elif u:
+            n_undef += 1
+            if len(undef_ex) < 12:
+                undef_ex.append(sorted(u)[:6])
     return dict(files=len(files), scripts=n_script, syntax_bad=n_syntax_bad, undef=n_undef,
                 fragments=n_frag, malformed=n_malformed, undef_ex=undef_ex)
 
