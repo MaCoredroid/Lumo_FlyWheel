@@ -50,6 +50,17 @@ The clean tree-vs-native speed A/B must come from the **FIX-ON run** (this run).
 - Remap own tax (paired probe): **−0.7% s/fwd (within cross-boot noise)** = no-HBM-tax bar met.
 - B4 genuine: Running=4 dominant (~68% of intervals), effective batch ~3.7 (not serialized-to-1).
 
+### 4a. cat8 FIX-ON FINAL reduce (16/16) — CLEAN accept, speed DEFERRED (red-team)
+- **accept_per_event 3.336** (clean) → confirms no-fix 3.588 was garble-inflated by ~0.25. TRUSTWORTHY.
+- **s_per_fwd_gpu_per_forward = 0.217s** = MATCHES the B=1 bank (0.218) → the trustworthy per-decode-step cost.
+- 🛑 **`derived_tps_gpu = 63.92` (s_per_fwd_gpu per-draft 0.0678) is NOT TRUSTED — do not cite as a speedup.**
+  The two GPU-time bases move OPPOSITE ways vs no-fix (per-draft −48% but per_forward +33%) — impossible for
+  the same kernel+tiny-copy. Same matched denominator both runs (checked), so it's not a denom change; the
+  **no-fix bases were themselves garble-composition-confounded** (garble skewed the draft/step mix). Fix-ON
+  per_forward matching B=1 (0.217) is the tell it's the correct one; no-fix 0.164 was anomalously low.
+- **The ONLY clean speed A/B = THIS-RUN cat8 vs THIS-RUN cat6 + native (same boot, same basis)** — running
+  now. No cross-run (fix-vs-prior) speed verdict. Quote speed only after this-run native lands.
+
 ## 5. Config manifest / confound tracking (`scripts/fr13_config_manifest.py`)
 harness_hash (must-match: wall/nudge/temp/conc/B/agent/git) matches prior EXCEPT git_head (newer commit =
 the fix). wall=no-wall (WALL=0), nudge=0 (OFF), temp=0.6, B4, cache-ON (APC hits 86-87%), EXACT_SEED=0.
@@ -58,9 +69,13 @@ the fix). wall=no-wall (WALL=0), nudge=0 (OFF), temp=0.6, B4, cache-ON (APC hits
 ## 6. RESOLVE RATE (SWE-bench eval verdicts) — the deliverable number
 | run | resolved | rate | vs native |
 |---|---|---|---|
-| cat8 FIX-ON (this run, 15/16 evaluated) | 8 | **53%** | **≈ native** |
+| **cat8 FIX-ON (this run, 16/16 FINAL)** | **8** | **50%** | **= native EXACTLY** |
 | native (prior qc4, bar) | 8/16 | 50% | — |
 | cat8 no-fix (prior qc4) | 6/16 | 37% | BELOW native = the degradation |
+
+**FINAL (16/16):** cat8 fix-ON resolve **8/16 (50%) = native 8/16 (50%) exactly.** The 16th task (14598)
+FAILED — a known-hard task (no-fix also wrong-patched it per matrix doc), NOT a fix regression. So the
+tree+cache agentic DEGRADATION (no-fix 37% < native 50%) is fully ELIMINATED. Garble 0% (84 scripts).
 
 => cat8 fix-ON resolve (53%) tracks native (50%); the tree+cache agentic DEGRADATION (no-fix 37% < native
 50%) is ELIMINATED. Same 16-task subset (15/16 overlap; 1 fix-ON task pending). RESCUED from garble-failure:
@@ -69,5 +84,8 @@ fix failed; likely temp-0.6 trajectory variance - the fix removes garble, does n
 (6->8). Garble 0% (fixed gate). Final cat8 tally + cat6 + this-run native at arm completion.
 
 ## STATUS (this run, `output/fr13_qwencode_cachefirst_remap`, TAG b4_remap)
-- cat8 arm: 16/16 tasks seen, running (finishing + eval). Garble 0%, edits 15/16, trajectories native-like.
-- cat6 + native arms: PENDING. Final resolve verdicts (SWE-bench eval) + clean speed A/B at completion.
+- **cat8 arm: DONE 16/16.** Garble **0%** (84 scripts), resolve **8/16 (50%) = native**, accept **3.336** clean,
+  per_forward **0.217** (=B1 bank). derived_tps 63.92 NOT trusted (§4a). Merged to main @ cff3abd8.
+- **cat6 arm: RUNNING** (launched clean, hygiene OK). native arm: PENDING (serial after cat6).
+- Clean cat8-vs-cat6-vs-native speed A/B (same boot) + cat6/native garble + resolve = at arm completions.
+- Queued: branch-rescue diagnostic on cat8 (per-flat-row accept hist, spine {1,3,5,7,8} vs branch {2,4,6}).
