@@ -655,3 +655,19 @@ intact + cat8 TOTAL > native (the deliverable).
 NEXT: S2 e2e boot FR13_SLOT_REORDER=1 (eager first, then graph): engagement (runner pi log +
 tree_attn bias pi log EQUAL + remap dst_pi live), garble gate, accept probe (expect cat8-spine
 ~3.5 vs prior ~3.18). Then S3 goal gate vs E5.
+
+## S2a e2e + CONTROL A/B (2026-07-13/14, same harness, eager, cat8 B=1, captured SWE prompt)
+
+ENGAGEMENT PASS: runner pi == tree_attn bias pi == [0,1,3,5,7,8,2,4,6]; "decode tree causal=False";
+remap ENGAGED with foreign_first=0 on spine accept path0=[1,3,5] (= the predicted ZERO-COPY:
+spine node depth d's permuted slot IS flat slot d). No crash, streams committed.
+
+A/B (fix-ON s2a_eager vs flag-OFF s2a_control_off, identical config):
+- Output class IDENTICAL (both emit turn-marker/near-empty text on this captured prompt —
+  the S2a "garble" alarm was a BASELINE ARTIFACT, control does it too).
+- brhist/event: spine 2.874 vs 2.784 (+0.090), branch 0.345 vs 0.338 (+0.006), total +0.096.
+- DEEP-SPINE rows (the fix target): row5 0.504 vs 0.446, row7 0.454 vs 0.396, row8 0.412 vs
+  0.360 — all +0.05-0.06 aligned = the deep-spine recovery signature.
+- probes: temp06 3.655 vs 3.283 (+0.37); greedy 3.283 vs 3.322 (-0.04, noise).
+CAVEAT (honest): n~130 events/arm, ONE prompt, cross-boot; per-row deltas ~1sigma each.
+Suggestive, NOT proof. Arbiters: S2b garble gate (matrix_build temp06) + S3 matched-proof vs E5.
