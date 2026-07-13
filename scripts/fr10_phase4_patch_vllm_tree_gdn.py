@@ -15233,11 +15233,17 @@ def _fr13_fa2_mab_recall(
             mq = m
             if pad_to and pad_to > m:
                 npad = pad_to - m
+                # FRONT-pad: dummy rows at the TOP, real rows at the BOTTOM.  The
+                # forked FA2 places query rows bottom-aligned (q_offset =
+                # max_seqlen_q - rows), so bottom-aligning the real rows PRESERVES
+                # their bias/causal alignment (self-check ~0), AND lands the
+                # deep-spine node (last real row) at position pad_to-1 in EVERY arm
+                # => same tile position => the actual QPAD M-invariance test.
                 q = torch.cat(
-                    [q, q[:1].expand(npad, *q.shape[1:]).contiguous()], dim=0
+                    [q[:1].expand(npad, *q.shape[1:]).contiguous(), q], dim=0
                 ).contiguous()
                 tb = torch.cat(
-                    [tb, tb[:1].expand(npad, tb.shape[1]).contiguous()], dim=0
+                    [tb[:1].expand(npad, tb.shape[1]).contiguous(), tb], dim=0
                 ).contiguous()
                 mq = pad_to
             cu_q = torch.tensor([0, q.shape[0]], dtype=torch.int32, device=dev)
@@ -15260,7 +15266,9 @@ def _fr13_fa2_mab_recall(
                 tree_bias=tb,
             )
             torch.cuda.synchronize()
-            return out.detach().to(torch.float32).cpu()[:m]
+            # Real rows are the BOTTOM m (front-padded); slice them off preserving
+            # the original q_rows order.  For pad_to==0 this is the whole output.
+            return out.detach().to(torch.float32).cpu()[-m:]
 
         # (a) M=9 full tree: all rows, suffix = all tree nodes, full bias.
         full_rows = list(range(m_full))
