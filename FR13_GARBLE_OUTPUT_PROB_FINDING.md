@@ -756,3 +756,14 @@ col-0 -> next-verify path. DECISIVE next test unchanged: conv-col0-native recomp
 conv running window natively from the committed tokens at the branch commit zero the drift?). Static
 analysis of the conv col-0 committer/window/compute is EXHAUSTED (all static-correct, drift persists) =>
 must be DATA/constructive, not another code read.
+
+## UNIFY proof + garble corollary (2026-07-13, offline scripts/fr13_lcp_vs_descent_equiv.py)
+200k random cat9 trees + random deterministic targets: LCP-max (greedy) vs deterministic-descent (one-hot-p
+multidraft) => committed TOKENS identical 100%; accepted PATH differs 1.6% = spine-vs-branch TIES (two nodes
+draft same token; LCP-max credits branch, descent credits spine; tokens identical). => Tier-2 unify is
+TOKEN-LOSSLESS (gate on committed tokens, NOT accepted_tree_rows which differ harmlessly on ties). GARBLE
+COROLLARY: the garble token is committed as the BONUS/RESIDUAL (= the drifted verify argmax) when the correct
+draft MISSES the drifted argmax -- BOTH accept rules do this identically. So the garble is the DRIFT, not the
+accept rule; unifying the committer will NOT fix garble (confirms accept-exoneration independently). The 1.6%
+tie path-divergence feeds accepted_tree_rows -> GDN replay state route: harmless IFF the state advance is
+token-correct (state=f(tokens)); if state were f(node) it would matter -- a latent check for the state fix.
