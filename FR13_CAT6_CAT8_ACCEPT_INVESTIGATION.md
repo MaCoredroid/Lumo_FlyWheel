@@ -218,3 +218,18 @@ FIX: make the spine M-INVARIANT (FA2 query-tile pad, compute-only no-HBM-tax). T
 confirm cat6-spine > cat8-spine directly (the pure M comparison, B=1).
 CAVEATS: instrument undercounts total ~4% vs probe (spine abs ±0.19, used probe-total x instrument-ratio);
 native has a different drafter (not a perfect spine match) => cat6 is the clean same-path M comparison.
+
+## PURE-M SPINE CONFIRMED (cat6 vs cat8, same path, B=1, real astropy-14598)
+| temp | cat6_spine | cat8_spine | Δ(cat6-cat8) |
+|---|---|---|---|
+| greedy | 3.560 | 3.175 | +0.385 (warmup-contaminated) |
+| temp06 | 3.608 | 3.317 | +0.291 (CLEAN delta) |
+=> cat6's M=6 spine accepts MORE than cat8's M=8 spine by ~0.3 (same forked path/drafter, B=1 => intrinsic
+M-dep, not batching). CONFIRMS: cat8's larger M perturbs the spine => cat8 not > cat6. cat6_spine (~3.56) ~=
+native (3.526); cat8_spine (~3.18) well below => the perturbation jumps steeply M=6->8 (FA2 query-tile 6->8).
+CAVEATS (owe a cleaner instrument): (1) branch-rescue instrument UNDERCOUNTS vs probe, variably (cat6 misses
+~0.42, cat8 ~0.19) => absolute spine numbers unreliable; the same-temp cat6-vs-cat8 DELTA is valid (same
+instrument). (2) greedy = warmup-contaminated (first-mode cumulative snapshot); temp06 delta is clean. (3)
+single sample/temp => totals noisy (cat6_tot greedy 4.039 vs temp06 3.470). FIX direction validated:
+M-invariant spine => cat8-spine==cat6-spine => cat8=spine+3br > cat6=spine+1br. Fix-front workflow w6gqaot0t
+localizing FA2-vs-L0-GDN + designing the capture + compute-only fix.
