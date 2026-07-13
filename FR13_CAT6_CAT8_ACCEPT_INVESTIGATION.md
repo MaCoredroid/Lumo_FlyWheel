@@ -446,3 +446,20 @@ Gate-1a (fr13_fa2_reorder_gate.sh, MODE=0 baseline vs MODE=2 split-only, ENFORCE
    :1127); bug is a subtle detail. NEXT: self-check mode FR13_FA2_SPINE_REORDER=3 (single ref to output + split
    to temp + log max_abs + LSE/component norms) to bisect. Permute already MAB-proven; ONLY the live cascade split
    is broken. Gate working as intended (caught before ship).
+
+## LIVE FIX COST-GATE: dense-suffix hybrid double-rounds; fp32-out unsupported (2026-07-13)
+Multi-forward self-check: cascade split is ~1 bf16 ULP RELATIVE on ALL 30 forwards (max_abs/single_absmax
+~4-6e-3) = DOUBLE-ROUNDING (single accumulates fp32->bf16 ONCE; split rounds ctx_out+suf_out to bf16
+SEPARATELY then merges again). fp32-intermediate fix REFUTED: flash_attn_varlen_func requires out.dtype==q.dtype
+(RuntimeError 'Output must have the same dtype as inputs') -> can't get fp32 partials -> double-rounding is
+FUNDAMENTAL to the two-pass merge. And the ~1 ULP is FATAL for spec-decode: MODE=2 (split driving) garbled/
+degenerate at GREEDY (which normally HIDES garble) = wrong-accept avalanche, not within-floor.
+LIVE-IMPL PATHS all blocked/expensive: (1) dense-suffix hybrid = double-rounding (this); (2) slot_mapping /
+global spine-first tree = BIT-EXACT but needs vLLM-CORE surgery (eagle drafter proposes BFS/depth-monotonic;
+spine-first is NOT depth-monotonic -> patch propose_tree + _get_depth_counts + _prepare_tree_attn_bias) +
+carrier-B audit -> high effort/risk for a SPEED-ONLY ~10% gain.
+=> EARNED COST-GATE (built the cheapest path, hit a fundamental wall): the 6.25e-2 spine M-dependence is a
+WITHIN-FLOOR SPEED RESIDUAL. Garble ship-goal already DELIVERED (FR13_ATTN_KV_REMAP). FIX A' is fully
+validated NUMERICALLY (MAB whole-spine bit-exact) + mechanism fully understood (butterfly reassociation) +
+live infra committed flag-gated FR13_FA2_SPINE_REORDER (default OFF, ship byte-identical) for future if the
+vLLM-core path is invested in or fp32 flash-out lands. NOT a premature no-go: research done, fix built+tested.
