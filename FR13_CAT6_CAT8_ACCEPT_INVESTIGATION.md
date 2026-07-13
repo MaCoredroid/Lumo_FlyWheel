@@ -337,3 +337,22 @@ ship FA2 path. Note FR13_FA2_QPAD is only a COMMENT today (:15097) — not imple
 "refuted" only for the cat9 22-flip GARBLE (L0-GDN carrier), UNTESTED for this cat8 FA2 accept
 carrier. commits: cdef5bdc (confound fix). GATE for the eventual live fix: greedy cat8-spine ≥
 cat6-spine AND lossless vs NON-SPEC AND garble 0/undef temp06.
+
+## FA2 QPAD (query-pad) REFUTED — carrier is KV/SUFFIX-WIDTH, not query tile (2026-07-13)
+Validated the FR13_FA2_QPAD (pad query to fixed max_seqlen_q) hypothesis IN the observe-only MAB before
+touching the live kernel. Two iterations of red-team:
+- back-pad (dummy rows at BOTTOM): M9-vs-M6 GREW to 1.46e1 -> looked like refutation, BUT self-check
+  qpad_self(padM9-vs-unpadM9)=65.0 => back-pad CORRUPTS real rows (forked FA2 is BOTTOM-aligned,
+  q_offset=max_seqlen_q-rows). The "refutation" was a BROKEN-TEST ARTIFACT, not real. Caught by self-check.
+- front-pad (dummy at TOP, real at BOTTOM, out[-m:]): qpad_self=0.000 at pad 16/32/64 (real rows PRESERVED,
+  valid test) AND deep node lands at pad_to-1 in BOTH arms (same tile pos). YET M9-vs-M6 = 6.25e-2 at
+  EVERY pad_to == the UNPADDED value. Query padding has ZERO effect.
+=> QPAD GENUINELY REFUTED for cat8 (valid test): pinning max_seqlen_q does NOT make FA2 M-invariant.
+   The carrier is NOT the query tile -- it is the KV/SUFFIX WIDTH (M9 has 9 suffix keys + 9-wide bias,
+   M6 has 6). Even though the deep spine node bias-masks the branch keys (-inf), their PRESENCE changes
+   the flash online-softmax block iteration => ~1-ULP (6.25e-2 = 1 bf16 ULP @ mag~8). Exact-same value at
+   all query-pads confirms query-independence.
+NEXT: test KV-SUFFIX-PAD in the MAB (pad suffix KV+bias to fixed width with -inf-masked dummy keys; both
+arms same width -> same block iteration -> M-invariant?). Near-no-HBM-tax (suffix << cached context). If
+validated -> live fix (metadata-level: pad tree_attn_bias + suffix KV, no compiled-kernel change). If
+refuted -> RESEARCH workflow for other compute-only fixes before any cost-gate. commits: 61e00a26 (front-pad).
