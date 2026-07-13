@@ -356,3 +356,18 @@ NEXT: test KV-SUFFIX-PAD in the MAB (pad suffix KV+bias to fixed width with -inf
 arms same width -> same block iteration -> M-invariant?). Near-no-HBM-tax (suffix << cached context). If
 validated -> live fix (metadata-level: pad tree_attn_bias + suffix KV, no compiled-kernel change). If
 refuted -> RESEARCH workflow for other compute-only fixes before any cost-gate. commits: 61e00a26 (front-pad).
+
+## KV-SUFFIX-PAD test BROKEN (self-check caught it) — need kernel-internal understanding (2026-07-13)
+Tested KV-suffix-pad (pad suffix KV+bias to fixed width 16/32 with -inf dummy keys). Self-check
+kvpad_self(kvpadM9-vs-unpadM9)=0.82 typical / 16.3 worst >> 1-ULP => the -inf dummy keys are NOT
+math-neutral in the forked kernel; they corrupt the real M9 row. So kvpad M9-vs-M6 (0.82/18.75) is an
+ARTIFACT, NOT a KV-pad refutation/validation. softcap=0.0 (ruled out the softcap-clamps-inf hypothesis).
+Likely mechanism: the forked FA2 aligns tree_bias to a WINDOW tied to max_seqlen_q (not the full suffix),
+so extending the KV past max_seqlen_q misaligns which keys are masked -> real keys wrongly attended.
+STATE of the FA2 carrier: conv CLEARED; FA2 query-tile CONFIRMED carrier (6.25e-2 = 1 bf16 ULP, 16/16
+layers); QPAD genuinely refuted (query dim irrelevant, valid front-pad self=0); carrier = SUFFIX-WIDTH
+(masked branch keys change flash block iteration); KV-pad test needs correct dummy construction which
+requires understanding the kernel's tree_bias/mask/causal alignment. Both re-call padding tests (query
+back-pad, KV -inf-pad) broke on kernel-internal conventions -> LAUNCH read-only research workflow to read
+the forked FA2 source (fr13_patch_fa2_tree_bias.py + varlen_fwd_tree_bias .cu) and adversarially verify
+compute-only no-HBM-tax fixes BEFORE any cost-gate. commits: 20ad27bd (kv-pad arm).
