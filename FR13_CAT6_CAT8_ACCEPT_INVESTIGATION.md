@@ -463,3 +463,17 @@ WITHIN-FLOOR SPEED RESIDUAL. Garble ship-goal already DELIVERED (FR13_ATTN_KV_RE
 validated NUMERICALLY (MAB whole-spine bit-exact) + mechanism fully understood (butterfly reassociation) +
 live infra committed flag-gated FR13_FA2_SPINE_REORDER (default OFF, ship byte-identical) for future if the
 vLLM-core path is invested in or fp32 flash-out lands. NOT a premature no-go: research done, fix built+tested.
+
+## NEW-ANGLES RESEARCH (wf_39c0c4cc, web+code): A1 two-K-source fused kernel (2026-07-13)
+User overturned the cost-gate; web+code research (Horace He/TML "Defeating Nondeterminism" 2025, SGLang/FlashInfer
+determinism, DASH ICLR26, + vendored FA2 source). MECHANISM confirmed exactly: reduction order is keyed by PHYSICAL
+COLUMN (lane (lane%4)*2 butterfly + MMA k-slice); masked branches = exact 0.0 + row_max branch-invariant => CONTEXT
+contribution ALREADY bit-identical; carrier = STRICTLY the 2 suffix reductions (row_sum butterfly + acc_o P·V).
+DEAD (searched+refuted): split+merge_attn_states (double-round + context re-assoc, fp32 doesn't rescue); bias-column
+edit (category error — bias adds to score, can't move columns); column-compaction (P·V shared GEMM, per-row masks);
+num_splits=1/BATCH_INVARIANT (wrong carrier = split-count not intra-tile column). NO no-recompile fix survives.
+RECOMMENDED = A1: modify the vendored FA2 fused kernel to read TWO K sources in ONE online-softmax pass — paged
+context (natural) THEN dense spine-first suffix — single fp32 accumulator, one bf16 round (NO double-round, NO
+merge). Context bit-identical (columns unchanged); suffix canonical (spine-first) => spine M-invariant. Register-only,
+no-HBM-tax, no carrier-B. Cost: ONE FA2 rebuild. GO/NO-GO before recompile = CPU fp32 online-softmax model proving
+split-block context bit-identity + A1-spine==spine-only. NEXT: write that CPU model (no GPU, no recompile).
