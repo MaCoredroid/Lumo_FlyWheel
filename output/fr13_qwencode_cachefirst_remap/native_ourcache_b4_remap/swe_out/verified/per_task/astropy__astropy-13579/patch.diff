@@ -1,0 +1,94 @@
+diff --git a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+index d7605b078..667b7e0bf 100644
+--- a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
++++ b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+@@ -244,23 +244,77 @@ class SlicedLowLevelWCS(BaseWCSWrapper):
+ 
+     def world_to_pixel_values(self, *world_arrays):
+         world_arrays = tuple(map(np.asanyarray, world_arrays))
+-        world_arrays_new = []
+-        iworld_curr = -1
+-        for iworld in range(self._wcs.world_n_dim):
+-            if iworld in self._world_keep:
+-                iworld_curr += 1
+-                world_arrays_new.append(world_arrays[iworld_curr])
+-            else:
+-                world_arrays_new.append(1.)
+ 
+-        world_arrays_new = np.broadcast_arrays(*world_arrays_new)
+-        pixel_arrays = list(self._wcs.world_to_pixel_values(*world_arrays_new))
++        # Identify which world dimensions are dropped (not in _world_keep).
++        dropped_world_indices = [
++            i for i in range(self._wcs.world_n_dim)
++            if i not in self._world_keep
++        ]
+ 
++        if not dropped_world_indices:
++            # No dropped world dimensions — delegate directly to underlying WCS.
++            world_arrays_new = np.broadcast_arrays(*world_arrays)
++            pixel_arrays = list(self._wcs.world_to_pixel_values(*world_arrays_new))
++        else:
++            # There are dropped world dimensions. We need to determine the correct
++            # world values for these dimensions. The dropped world values may depend
++            # on the kept pixel values (due to coupling in the PC matrix), so we use
++            # an iterative approach:
++            #   1. Start with dropped world values computed at p_k = 0.
++            #   2. Call world_to_pixel on the full WCS with kept + dropped world values.
++            #   3. Recompute dropped world values at the returned full pixel position.
++            #   4. Repeat until convergence.
++            # For linear WCS this converges in 1–2 iterations; for non-linear WCS
++            # a few more iterations may be needed.
++
++            # Initial dropped world values at p_k = 0.
++            world_at_zero = self._pixel_to_world_values_all(*[0] * len(self._pixel_keep))
++            if self._wcs.world_n_dim == 1:
++                world_at_zero = [world_at_zero]
++            dropped_world = {i: world_at_zero[i] for i in dropped_world_indices}
++
++            # Build full world array list from kept + dropped.
++            def build_full_world(kept_world, dropped):
++                full = []
++                iworld_curr = 0
++                for iworld in range(self._wcs.world_n_dim):
++                    if iworld in self._world_keep:
++                        full.append(kept_world[iworld_curr])
++                        iworld_curr += 1
++                    else:
++                        full.append(dropped[iworld])
++                return full
++
++            # Iterate to convergence (10 iterations is more than enough).
++            for _ in range(10):
++                full_world = build_full_world(world_arrays, dropped_world)
++                full_world = np.broadcast_arrays(*full_world)
++                pixel_arrays = list(self._wcs.world_to_pixel_values(*full_world))
++
++                # Recompute dropped world values at the new full pixel position.
++                pw_result = self._wcs.pixel_to_world_values(*pixel_arrays)
++                if self._wcs.world_n_dim == 1:
++                    pw_result = [pw_result]
++                new_dropped_world = {i: pw_result[i] for i in dropped_world_indices}
++
++                # Check convergence.
++                converged = True
++                for i in dropped_world_indices:
++                    if not np.allclose(dropped_world[i], new_dropped_world[i],
++                                       rtol=1e-10, atol=0):
++                        converged = False
++                        break
++                dropped_world = new_dropped_world
++                if converged:
++                    break
++
++        # Apply slice offsets to pixel values.
+         for ipixel in range(self._wcs.pixel_n_dim):
+-            if isinstance(self._slices_pixel[ipixel], slice) and self._slices_pixel[ipixel].start is not None:
++            if isinstance(self._slices_pixel[ipixel], slice) and \
++               self._slices_pixel[ipixel].start is not None:
+                 pixel_arrays[ipixel] -= self._slices_pixel[ipixel].start
+ 
+-        # Detect the case of a length 0 array
++        # Select kept pixel dimensions.
+         if isinstance(pixel_arrays, np.ndarray) and not pixel_arrays.shape:
+             return pixel_arrays
+         pixel = tuple(pixel_arrays[ip] for ip in self._pixel_keep)
