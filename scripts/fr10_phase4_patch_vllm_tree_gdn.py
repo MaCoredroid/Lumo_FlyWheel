@@ -15210,7 +15210,7 @@ def _fr13_fa2_mab_recall(
         v_all = dense_value[0].to(dev).to(torch.bfloat16)
         bias_full = bias[:m_full, :m_full].contiguous()
 
-        def _call(q_rows, suffix_rows, bias_sub):
+        def _call(q_rows, suffix_rows, bias_sub, pad_to=0):
             m = len(q_rows)
             q = q_all.index_select(
                 0, torch.tensor(q_rows, dtype=torch.long, device=dev)
@@ -15222,18 +15222,35 @@ def _fr13_fa2_mab_recall(
             kv_sel = torch.tensor(kv_idx, dtype=torch.long, device=dev)
             k = k_all.index_select(0, kv_sel).contiguous()
             v = v_all.index_select(0, kv_sel).contiguous()
-            cu_q = torch.tensor([0, m], dtype=torch.int32, device=dev)
+            tb = bias_sub.to(dev).contiguous()
+            # FR13_FA2_QPAD validation: pad the QUERY to a fixed pad_to so
+            # max_seqlen_q (and the kBlockM tile occupancy / q_offset) is
+            # M-invariant.  Dummy rows repeat row 0's q + bias (valid attn, no
+            # NaN); their outputs are discarded (we return only the real m rows).
+            # Attention rows are independent, so padding cannot corrupt real
+            # rows -- it ONLY changes max_seqlen_q, which is exactly the axis
+            # under test.
+            mq = m
+            if pad_to and pad_to > m:
+                npad = pad_to - m
+                q = torch.cat(
+                    [q, q[:1].expand(npad, *q.shape[1:]).contiguous()], dim=0
+                ).contiguous()
+                tb = torch.cat(
+                    [tb, tb[:1].expand(npad, tb.shape[1]).contiguous()], dim=0
+                ).contiguous()
+                mq = pad_to
+            cu_q = torch.tensor([0, q.shape[0]], dtype=torch.int32, device=dev)
             cu_k = torch.tensor(
                 [0, k.shape[0]], dtype=torch.int32, device=dev
             )
-            tb = bias_sub.to(dev).contiguous()
             out = flash_attn_varlen_func(
                 q=q,
                 k=k,
                 v=v,
                 cu_seqlens_q=cu_q,
                 cu_seqlens_k=cu_k,
-                max_seqlen_q=m,
+                max_seqlen_q=mq,
                 max_seqlen_k=int(k.shape[0]),
                 softmax_scale=scale,
                 causal=True,
@@ -15243,7 +15260,7 @@ def _fr13_fa2_mab_recall(
                 tree_bias=tb,
             )
             torch.cuda.synchronize()
-            return out.detach().to(torch.float32).cpu()
+            return out.detach().to(torch.float32).cpu()[:m]
 
         # (a) M=9 full tree: all rows, suffix = all tree nodes, full bias.
         full_rows = list(range(m_full))
@@ -15270,6 +15287,30 @@ def _fr13_fa2_mab_recall(
         # arm matches the live forked-FA2 output for the deep-spine row).
         served_row = output[deep_row].reshape(-1).to(torch.float32)
         recall_vs_served = float((row_m9 - served_row).abs().max().item())
+        # FR13_FA2_QPAD VALIDATION (gated FR13_FA2_MAB_QPAD=1): re-run BOTH arms
+        # with the query padded to each fixed pad_to, and compare the deep-spine
+        # row.  If any pad_to drives deep_spine_raw_max_abs -> 0, then pinning
+        # max_seqlen_q (the QPAD fix) makes the forked FA2 M-invariant on the
+        # spine => QPAD is the fix.  If NO pad_to reaches 0, QPAD is refuted for
+        # cat8 (the deep-spine row sits at a DIFFERENT tile position in the M=9
+        # vs M=6 arm, so a uniform pad cannot align it) and another compute-only
+        # route is needed.  16/32 keep one kBlockM tile; 64 = a full kBlockM
+        # (Is_even_MN true).  Observe-only; NO live-path change.
+        qpad_results = {}
+        if os.environ.get("FR13_FA2_MAB_QPAD", "0") == "1":
+            for _pt in (16, 32, 64):
+                if _pt < m_full:
+                    continue
+                try:
+                    o9p = _call(full_rows, full_rows, bias_full, pad_to=_pt)
+                    o5p = _call(spine_rows, spine_rows, bias_spine, pad_to=_pt)
+                    r9p = o9p[deep_row].reshape(-1)
+                    r5p = o5p[m5_deep].reshape(-1)
+                    qpad_results[str(_pt)] = float(
+                        (r9p - r5p).abs().max().item()
+                    )
+                except Exception as _qe:
+                    qpad_results[str(_pt)] = "err:" + repr(_qe)
         # Per-spine-depth RAW (M=9 spine rows vs M=5 spine rows) for context.
         by_depth = []
         for depth, sr in enumerate(spine_rows):
@@ -15301,6 +15342,7 @@ def _fr13_fa2_mab_recall(
             "deep_spine_raw_max_abs": raw_max_abs,
             "deep_spine_raw_mean_abs": raw_mean_abs,
             "recall_m9_vs_served_deep_max_abs": recall_vs_served,
+            "qpad_deep_raw_max_abs": qpad_results,
             "by_spine_depth": by_depth,
         }
         out_path = Path(dump)

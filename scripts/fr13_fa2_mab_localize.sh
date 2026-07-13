@@ -24,6 +24,7 @@ FR13_FA2_MAB_DUMP=/logs/fr13_fa2_mab.jsonl \
 FR13_FA2_MAB_LAYER="*" \
 FR13_FA2_MAB_SKIP=0 \
 FR13_FA2_MAB_LIMIT="${LIMIT:-16}" \
+FR13_FA2_MAB_QPAD="${QPAD:-1}" \
 ENFORCE_EAGER=1 \
 FR13_ATTN_KV_REMAP=1 FR13_DEVICE_MULTIDRAFT=1 \
 FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
@@ -74,10 +75,30 @@ if cat9_fallback:
           f"[0,1,2,4,6]/deep6 -- spine derivation FAILED. raw_max_abs is INVALID. FIX before trusting.")
 print(f"GLOBAL worst deep-spine raw_max_abs = {gmax:.3e} | layers-with-nonzero = {nz_layers}/{len(worst)}")
 print(f"recall_vs_served self-check (should be ~0): {recall_err:.3e}")
-if gmax > 0.0:
-    print(">>> CARRIER = forked FA2 query-tile (M-dependent). Fix candidate: FR13_FA2_QPAD "
-          "(pad query rows to fixed M so kBlockM occupancy is M-invariant).")
+# QPAD VALIDATION: per pad_to, worst deep-spine raw_max_abs across all events.
+# A pad_to that drives this to 0 = QPAD (pin max_seqlen_q) makes FA2 M-invariant.
+qpad_worst = collections.defaultdict(float)
+qpad_seen = False
+for r in recs:
+    q = r.get("qpad_deep_raw_max_abs") or {}
+    for pt, val in q.items():
+        qpad_seen = True
+        if isinstance(val, (int, float)):
+            qpad_worst[pt] = max(qpad_worst[pt], val)
+if qpad_seen:
+    print("=== QPAD VALIDATION (worst deep-spine raw_max_abs per pad_to; 0 => QPAD fixes it) ===")
+    for pt in sorted(qpad_worst, key=int):
+        tag = "  <-- M-INVARIANT (QPAD fix works)" if qpad_worst[pt] == 0.0 else ""
+        print(f"  pad_to={pt}: worst={qpad_worst[pt]:.3e}{tag}")
+    winners = [pt for pt in qpad_worst if qpad_worst[pt] == 0.0]
+    if winners:
+        print(f">>> QPAD VALIDATED: pad max_seqlen_q to {min(winners, key=int)} => FA2 M-invariant. "
+              "Implement FR13_FA2_QPAD in the live forked-FA2 decode path, then gate.")
+    else:
+        print(">>> QPAD REFUTED for cat8: no pad_to reaches 0 (deep row sits at different tile "
+              "position in M=9 vs M=6). Need a different compute-only fix -- reassess.")
+elif gmax > 0.0:
+    print(">>> CARRIER = forked FA2 query-tile (M-dependent). Next: validate FR13_FA2_QPAD (arm QPAD=1).")
 else:
-    print(">>> FA2 M-INVARIANT on all sampled layers => carrier is NOT FA2 "
-          "=> proceed to scan N_ACTUAL constexpr A/B (6-vs-8 at fixed N_PAD=8).")
+    print(">>> FA2 M-INVARIANT => carrier is NOT FA2 => proceed to scan N_ACTUAL A/B.")
 PY
