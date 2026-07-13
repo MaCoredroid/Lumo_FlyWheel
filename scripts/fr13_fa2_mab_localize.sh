@@ -24,7 +24,8 @@ FR13_FA2_MAB_DUMP=/logs/fr13_fa2_mab.jsonl \
 FR13_FA2_MAB_LAYER="*" \
 FR13_FA2_MAB_SKIP=0 \
 FR13_FA2_MAB_LIMIT="${LIMIT:-16}" \
-FR13_FA2_MAB_QPAD="${QPAD:-1}" \
+FR13_FA2_MAB_QPAD="${QPAD:-0}" \
+FR13_FA2_MAB_KVPAD="${KVPAD:-1}" \
 ENFORCE_EAGER=1 \
 FR13_ATTN_KV_REMAP=1 FR13_DEVICE_MULTIDRAFT=1 \
 FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
@@ -114,4 +115,29 @@ elif gmax > 0.0:
     print(">>> CARRIER = forked FA2 query-tile (M-dependent). Next: validate FR13_FA2_QPAD (arm QPAD=1).")
 else:
     print(">>> FA2 M-INVARIANT => carrier is NOT FA2 => proceed to scan N_ACTUAL A/B.")
+# KV-SUFFIX-PAD VALIDATION: pad suffix KV+bias to fixed width => M-invariant?
+kvw = collections.defaultdict(float); kvs = collections.defaultdict(float); kv_seen = False
+for r in recs:
+    q = r.get("kvpad_deep_raw_max_abs") or {}
+    s = r.get("kvpad_self_m9_vs_unpadded") or {}
+    for pt, val in q.items():
+        kv_seen = True
+        if isinstance(val, (int, float)): kvw[pt] = max(kvw[pt], val)
+    for pt, val in s.items():
+        if isinstance(val, (int, float)): kvs[pt] = max(kvs[pt], val)
+if kv_seen:
+    print("=== KV-SUFFIX-PAD VALIDATION (per kv_pad_to: M9-vs-M6 | SELF-CHECK kvpadM9-vs-unpadM9) ===")
+    for pt in sorted(kvw, key=int):
+        print(f"  kv_pad_to={pt}: M9vM6={kvw[pt]:.3e}  self(kvpadM9-vs-unpadM9)={kvs.get(pt,float('nan')):.3e}")
+    self_bad = [pt for pt in kvs if kvs[pt] > 1e-1]
+    winners = [pt for pt in kvw if kvw[pt] == 0.0]
+    if self_bad and not winners:
+        print(f">>> KV-PAD TEST INVALID: masked dummy keys CHANGED the M9 real row (self={max(kvs.values()):.3e}) "
+              "-- the -inf mask isn't math-neutral in this kernel. Fix the test before concluding.")
+    elif winners:
+        print(f">>> KV-PAD VALIDATED: pad suffix to {min(winners,key=int)} => FA2 M-invariant (self clean). "
+              "Implement live: pad tree_attn_bias + suffix KV to fixed width (metadata-level, near-no-HBM-tax), then gate.")
+    else:
+        print(">>> KV-PAD REFUTED (self clean, no kv_pad_to reaches 0): suffix-width pad does NOT align it. "
+              "=> RESEARCH workflow for other compute-only fixes before cost-gate; test scan N_ACTUAL.")
 PY

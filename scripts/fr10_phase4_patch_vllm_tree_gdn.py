@@ -15210,7 +15210,7 @@ def _fr13_fa2_mab_recall(
         v_all = dense_value[0].to(dev).to(torch.bfloat16)
         bias_full = bias[:m_full, :m_full].contiguous()
 
-        def _call(q_rows, suffix_rows, bias_sub, pad_to=0):
+        def _call(q_rows, suffix_rows, bias_sub, pad_to=0, kv_pad_to=0):
             m = len(q_rows)
             q = q_all.index_select(
                 0, torch.tensor(q_rows, dtype=torch.long, device=dev)
@@ -15219,10 +15219,28 @@ def _fr13_fa2_mab_recall(
             kv_idx = list(range(context_len)) + [
                 context_len + r for r in suffix_rows
             ]
+            tb = bias_sub.to(dev).contiguous()
+            # FR13 KV-SUFFIX-PAD validation (kv_pad_to): pad the tree-SUFFIX KV
+            # (and the tree_bias columns) to a fixed width with -inf-masked dummy
+            # keys, so the flash online-softmax block iteration over the suffix is
+            # M-invariant (M9 has 9 suffix keys, M6 has 6 -> both -> kv_pad_to).
+            # Dummy keys repeat suffix key 0 but are bias=-inf for ALL queries =>
+            # contribute 0 => math unchanged; only the iteration count changes,
+            # which is exactly the axis under test.  Near-no-HBM-tax (suffix <<
+            # cached context).
+            _S = len(suffix_rows)
+            if kv_pad_to and kv_pad_to > _S:
+                kv_idx = kv_idx + [context_len + suffix_rows[0]] * (
+                    kv_pad_to - _S
+                )
+                neg = torch.full(
+                    (tb.shape[0], kv_pad_to - _S), float("-inf"),
+                    dtype=tb.dtype, device=dev,
+                )
+                tb = torch.cat([tb, neg], dim=1).contiguous()
             kv_sel = torch.tensor(kv_idx, dtype=torch.long, device=dev)
             k = k_all.index_select(0, kv_sel).contiguous()
             v = v_all.index_select(0, kv_sel).contiguous()
-            tb = bias_sub.to(dev).contiguous()
             # FR13_FA2_QPAD validation: pad the QUERY to a fixed pad_to so
             # max_seqlen_q (and the kBlockM tile occupancy / q_offset) is
             # M-invariant.  Dummy rows repeat row 0's q + bias (valid attn, no
@@ -15328,6 +15346,37 @@ def _fr13_fa2_mab_recall(
                 except Exception as _qe:
                     qpad_results[str(_pt)] = "err:" + repr(_qe)
                     qpad_self[str(_pt)] = "err"
+        # FR13 KV-SUFFIX-PAD VALIDATION (gated FR13_FA2_MAB_KVPAD=1): QPAD refuted
+        # (query dim irrelevant) => the carrier is the tree-SUFFIX WIDTH.  Pad the
+        # suffix KV+bias of BOTH arms to a fixed width (masked dummy keys) so the
+        # flash block iteration over the suffix is identical, and compare the deep
+        # row.  kv_self = kvpad-M9 vs UNPADDED-M9: MUST be ~0 (masked dummies are
+        # math-neutral) for the test to be valid.  If kvpad M9-vs-M6 -> 0 with
+        # kv_self~0 => KV-suffix-pad is the fix (near-no-HBM-tax).
+        kvpad_results = {}
+        kvpad_self = {}
+        if os.environ.get("FR13_FA2_MAB_KVPAD", "0") == "1":
+            for _kt in (16, 32):
+                if _kt < m_full:
+                    continue
+                try:
+                    o9k = _call(
+                        full_rows, full_rows, bias_full, kv_pad_to=_kt
+                    )
+                    o5k = _call(
+                        spine_rows, spine_rows, bias_spine, kv_pad_to=_kt
+                    )
+                    r9k = o9k[deep_row].reshape(-1)
+                    r5k = o5k[m5_deep].reshape(-1)
+                    kvpad_results[str(_kt)] = float(
+                        (r9k - r5k).abs().max().item()
+                    )
+                    kvpad_self[str(_kt)] = float(
+                        (r9k - row_m9).abs().max().item()
+                    )
+                except Exception as _ke:
+                    kvpad_results[str(_kt)] = "err:" + repr(_ke)
+                    kvpad_self[str(_kt)] = "err"
         # Per-spine-depth RAW (M=9 spine rows vs M=5 spine rows) for context.
         by_depth = []
         for depth, sr in enumerate(spine_rows):
@@ -15361,6 +15410,8 @@ def _fr13_fa2_mab_recall(
             "recall_m9_vs_served_deep_max_abs": recall_vs_served,
             "qpad_deep_raw_max_abs": qpad_results,
             "qpad_self_m9_vs_unpadded": qpad_self,
+            "kvpad_deep_raw_max_abs": kvpad_results,
+            "kvpad_self_m9_vs_unpadded": kvpad_self,
             "by_spine_depth": by_depth,
         }
         out_path = Path(dump)
