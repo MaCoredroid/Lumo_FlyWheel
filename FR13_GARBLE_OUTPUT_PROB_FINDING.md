@@ -795,3 +795,17 @@ node POSITION IDs (depth) feeding RoPE -> stored K wrong; (2) which node's K/V i
 running slot at a branch commit; (3) the verify attention MASK/slot_mapping at M=10. NEXT: capture/compare the
 committed-branch KV (or positions) tree-vs-native at a branch commit on the reliable gate; or a native-KV
 (recompute attention KV for the committed path) test = the attention analog of whole-GDN-native.
+
+## LEADING HYPOTHESIS (2026-07-13): MISSING KV linear-remap for accepted BRANCH paths
+launch_tree_state_linear_remap (fr10_gdn_tree_kernel.py:354, called patcher L2689) re-linearizes the GDN+conv
+state after accept: "the committer publishes accepted_paths as tree NODE columns; vLLM's GDN/conv consumers
+read by LINEAR accepted-token position, so column k must contain accepted_paths[b,k]." The ATTENTION KV is
+the IDENTICAL situation (KV written per node-slot; next-step block_table reads linear) but has NO such remap
+(memory + grep confirm). Layout = caterpillar spine-first => SPINE accepts land on linear slots (clean, no
+remap needed) but BRANCH accepts land on NON-LINEAR slots => the next step reads the WRONG slot's KV for a
+committed branch node => node0 verify drifts. MATCHES EVERYTHING: branch-specific (spine linear=clean),
+num_accepted>1 (multi-token where branch diverges), KV (attention), drift, UNCOVERED by every compute test,
+and explains why whole-GDN-native FAILS (GDN state IS remapped/correct; the KV is NOT). FIX = add a KV
+linear-remap mirroring launch_tree_state_linear_remap (copy accepted nodes' K,V from flat slots to linear
+committed slots; only num_accepted rows = no HBM tax). GATE: reliable temp-0.6 matrix_build -> ~0/15, +
+whole-config live SWE cache-ON. VERIFY layout order + that vLLM doesn't already remap before wiring.
