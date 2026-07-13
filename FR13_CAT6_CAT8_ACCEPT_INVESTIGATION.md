@@ -233,3 +233,22 @@ instrument). (2) greedy = warmup-contaminated (first-mode cumulative snapshot); 
 single sample/temp => totals noisy (cat6_tot greedy 4.039 vs temp06 3.470). FIX direction validated:
 M-invariant spine => cat8-spine==cat6-spine => cat8=spine+3br > cat6=spine+1br. Fix-front workflow w6gqaot0t
 localizing FA2-vs-L0-GDN + designing the capture + compute-only fix.
+
+## FIX-FRONT WALL (2026-07-13): MAB localizer DEAD for fused-conv build; carrier=FA2 (code analysis)
+The empirical MAB co-residency localizer (fr13_mab_coresidency_localize.sh) ENGAGE-FAILED 3x (torch.compile
+autotune crash w/ device-multidraft; shallow warmup; deep warmup). ROOT CAUSE (code): the FR13_GDN_SUBOP_MAB
+hook stashes pre_conv/conv_state on the NON-FUSED conv path, but the ship bakes FR13_TREE_CONV_FUSED=1 (fused
+emulation) which BYPASSES those stash points => "conv_state snapshot missing (stash disengaged)" => never
+fires. It is a STALE tool for the current fused build (the garble-era conv1d_out 9.77e-4 verdict was a
+non-fused build + M10-vs-M5, NOT cat6-vs-cat8).
+BEST-AVAILABLE LOCALIZATION (wf#1 code analysis, HIGH): for cat6-vs-cat8 (M=6 vs 8, both N_PAD=8), conv / scan
+/ in_proj are M-INVARIANT (padded_nodes=1<<(n-1).bit_length()=8 for M<=8; in_proj cuBLASLt switch at M>=9). So
+the directive's "L0 conv/scan/state" premise is REFUTED for THIS regime. The only residual = FA2 query-tile
+(max_seqlen_q 6 vs 8), confirmed M_DEPENDENT=True by FR13_FA2_MAB.
+FIX = FA2 QPAD, but: (a) NOT in live patcher = 272-line re-port into scripts/fr10_phase4_patch_vllm_tree_gdn.py
+(inject into installed flash_attn_interface.py); (b) its ONE empirical test DROPPED accept to 2.643 (below
+native) = uncertain it helps the accept-rate. So the fix is a substantial+uncertain investment.
+STATE: mechanism confirmed (cat6-spine>cat8-spine ~0.3, B=1); carrier=FA2 (code); localizer dead; fix=QPAD
+(big+uncertain). Effect SMALL (0.087 greedy, ~0.3 real). Garble deliverable MET (0/undef, resolve=native).
+NEXT OPTIONS: (A) re-port QPAD + A/B (big, uncertain); (B) build a fused-build FA2/GDN localizer; (C) accept
+the small M-dep as within-floor (deliverable met) and stop. Surfacing for a priority call given the ROI.
