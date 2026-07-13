@@ -836,3 +836,28 @@ or the attention MASK for the committed branch path, not the K/V values. NEXT (f
 KV cache rows / block_table / attention mask at a BRANCH commit, tree-vs-native; the first divergence is the
 bug; then targeted fix. OR native-attention recompute for the committed path (attention analog of
 COMMITTER_NATIVE) as a constructive fix-test.
+
+## ROOT CAUSE LOCALIZED (2026-07-13): missing ATTENTION-KV linear remap (GDN/conv have one; attention doesn't)
+Convergent from FOUR independent lines:
+ 1. KITCHEN-SINK (today): all compute+state+attn-COMPUTE fixes co-armed, needles fired => garble in KV
+    content/ROUTING, not compute/state/attn-compute.
+ 2. CODE-GREP: `launch_tree_state_linear_remap` re-linearizes GDN ssm_state + conv_state (tree NODE columns ->
+    LINEAR accepted-token positions: "column k must contain accepted_paths[b,k]"). grep for any
+    attention-KV relinearize/compact/rewind/remap => ZERO. The attention KV cache has NO post-accept remap.
+ 3. BANKED H3 (FR13_CHASE_FIXA_BIND.md, topological): foreign_slot by depth d2..d5 = 167/130/84/76 foreign
+    vs 16/17/22/4 clean; d1 203/0 clean. Pattern: full-SPINE accepts read FOREIGN KV at every depth>=2
+    (same-depth tree rows collide; branch-leaf = last writer wins the slot); alt-leaf clean; chains never
+    foreign. Explains chain5-clean / cat9-garbled.
+ 4. FLOW: verify writes each tree node's K/V at its flat/verify slot; after accept vLLM advances seq_len and
+    the NEXT forward reads the accepted tokens at LINEAR positions [seq..seq+acc-1]. The accepted path (e.g.
+    spine [0,1,3,5,7] flat slots 0,1,3,5,7) is NON-CONTIGUOUS, so linear position seq+d reads node@flat-d's
+    K/V (a sibling / branch-leaf near-neighbor), NOT the accepted node's. FOREIGN.
+Reconciles the "gross wrong-accept" vs "8-11% flip": foreign KV = a SIBLING node (near-neighbor token, same
+drafter/depth) => SMALL per-position drift that COMPOUNDS over later attention (amplification physics ~492x)
+into a gross wrong-accept with near-neighbor character ('_row'->'_rows'); flips 8-11%.
+FIX (constructive, needle-gated): add the attention analog of launch_tree_state_linear_remap -- after accept,
+before the next forward's KV writes, COPY each accepted node's K,V from its flat verify slot -> the linear
+committed slot, per full-attn layer. Small KV copy (acc rows x layers), NO weight read => same cost-class as
+the existing GDN/conv remap (NOT a full re-forward). Engagement needle: count foreign copies (src_slot !=
+dst_slot) + assert byte-diff on foreign; vacuous(0 foreign) => mechanism refuted, pivot. Gate = reliable
+temp-0.6 matrix_build tree-vs-native.
