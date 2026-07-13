@@ -74,5 +74,26 @@ drafter shift). This CHALLENGES "branches = speed" and demands the matched exper
 NOTE: cat8-vs-native is NOT a clean superset test (different drafter/attn/committer: tree path vs native MTP).
 cat8-vs-cat6 IS (same forked tree path) — that's the sharp one.
 
-## RESULT (controlled experiment)
-(running now — GPU freed at campaign completion.)
+## RESULT (controlled experiment, B=1 fixed prompt) — NOISE REFUTED, M-dependence CONFIRMED
+| arm | mode | accept/fwd | tps_wall (committed/decode) |
+|---|---|---|---|
+| cat8 | greedy | **3.368** | 18.9 |
+| cat6 | greedy | **3.664** | 20.5 |
+| cat8 | temp06 | 3.031 | 16.9 |
+| cat6 | temp06 | 3.414 | 18.8 |
+| native | (booting) | | |
+
+**cat6 > cat8 EVEN AT GREEDY (3.664 > 3.368).** Greedy = deterministic drafts + target, so cat8 ⊇ cat6 =>
+cat8 accept >= cat6 MUST hold if the spine is M-invariant. VIOLATED => **NOT trajectory noise** (my leading
+hypothesis is REFUTED). It's a **real M-dependence**: cat8's 2 extra branch nodes (M=8) perturb its own spine
+(verify or draft) vs cat6 (M=6) => cat8 accepts FEWER correct tokens. Robust: cat6>cat8 across greedy + temp06
++ live run (3.594>3.336). No garble (tokens committed are correct) — this is a SPEED defect (accept rate), not
+a correctness one.
+
+**Consequence:** cat8's extra branches are a NET LOSS — M-dependence (lower accept) + bigger per-forward
+outweigh the 2 branches' extra acceptance. cat6 (branched 6-node) is the faster tree. Does NOT violate
+keep-branches (cat6 keeps its (1,) branch). Likely cause: residual M-dependence the garble in_proj-pad
+(LUMO_FB_PROJ_PAD_ROWS) didn't fully cover, and/or GEMM-autotune numerics (BATCH_INVARIANT=0 => M=8 vs M=6
+different GEMM path). => directive step 3: an M-invariance compute-only fix would restore cat8 accept >= cat6.
+Probe bug caught+fixed mid-run: decode_tps_wall counted SSE chunks not committed tokens; accept was always
+correct (/metrics delta); all tps re-derived committed/decode_wall.
