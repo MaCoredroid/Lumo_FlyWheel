@@ -152,3 +152,22 @@ out_proj = NOT M-dependent for cat6(M=6)-vs-cat8(M=8); tree_attention = PARTIAL 
 PLAN: (1) clean experiment (running, remap ON) causally confirms cat8-spine < cat6-spine (greedy, non-garble);
 (2) re-land FR13_FA2_QPAD; (3) gate = greedy cat8-spine accept >= cat6 (M-invariant) AND garble stays 0/undef
 AND same-boot A/B. Directive step-3 = DONE localizing (FA2 query-tile, not the guessed conv/scan/state).
+
+## CLEAN RESULT (remap ON, ENGAGED=1 verified, 2026-07-13) — M-dep REAL but SMALL; temp06 branches WIN
+| arm | greedy accept | temp06 accept | temp06 wall_tps |
+|---|---|---|---|
+| native (M=5) | 3.813 | 3.691 | 21.45 |
+| cat6 (M=6)   | 3.645 | 3.522 | 19.34 |
+| cat8 (M=8)   | 3.558 | 3.673 | 19.34 |
+
+- GREEDY (deterministic): native > cat6 > cat8; cat6−cat8 = **0.087** (confound had said 0.296 = **3.4x
+  exaggerated** by garble which DEFLATED cat8). So cat6>cat8 M-dep SURVIVES clean but is SMALL — matches the
+  workflow FA2-query-tile depth-3-4 localization. Superset VIOLATED at greedy by 0.087.
+- TEMP06 (ship config) FLIPS: cat8 3.673 ≈ native 3.691 > cat6 3.522. Branches ACTIVE at temp>0 => cat8's
+  extra branches recover it to native accept, OVERCOMING the small greedy M-dep => "branches=accept" HOLDS at
+  ship config. Superset HOLDS at temp06 (cat8>cat6). (1 sample — suggestive.)
+- WALL TPS (temp06, the REAL metric): native 21.45 > cat6 = cat8 19.34 (~10%). Even at accept parity the
+  tree's bigger per-forward eats it => the real tree-vs-native gap = PER-FORWARD OVERHEAD, not FA2 M-dep.
+CONCLUSION: FA2_QPAD would restore the greedy superset (cat8>=cat6) but the benefit is small (0.087) and
+temp06 already has branches winning. The bigger lever for tree-vs-native wall-TPS is per-forward overhead.
+Re-landing FR13_FA2_QPAD = correct M-invariance (step-3) but low-impact; verify with a QPAD A/B before baking.
