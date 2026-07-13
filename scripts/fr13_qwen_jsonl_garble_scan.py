@@ -1,27 +1,49 @@
 #!/usr/bin/env python3
 """Scan qwen-code proxy request-dump JSONLs (chatreq_*.json) for GARBLE in the
-served (model-generated) content.
+served (model-generated) content, with LOW false-positive noise.
 
-The offload pair-dump (served-stream capture) is /v1/responses-only and qwen-code
-hits /v1/chat/completions, so it captures 0. But the request dumps (chatreq_*.json,
-LUMO_PROXY_REQUEST_DUMP_DIR) accumulate the full conversation INCLUDING the model's
-prior assistant turns -> the served code lives in assistant tool_call arguments
-(edit new_string, run_shell_command python) + assistant content code blocks.
+The served code lives in assistant tool_call arguments. Garble (tree spec-decode
+commits a wrong/near-neighbor identifier) corrupts that code -> undefined names /
+syntax errors / malformed tool-call JSON.
 
-Garble (tree spec-decode commits a wrong/near-neighbor identifier) corrupts that
-generated code -> undefined names / syntax errors / malformed tool-call JSON. This
-is the temp-0.6 gate's undefined-name methodology applied to the agentic served
-code. The reliable signal is the tree(cat8/cat9)-vs-native RATE on the SAME tasks.
+NOISE CONTROL (v2): only SELF-CONTAINED code is syntax/undef-scored:
+  - run_shell_command `python -c <script>`  (extracted via shlex, not a fragile regex)
+  - assistant ```python fenced code blocks
+  - write_file / create_file full-file contents
+These SHOULD parse and (with their imports) have no undefined names, so a syntax
+error / undefined name here is a real anomaly. EDIT `new_string` is an inherently
+PARTIAL fragment (mid-function, references outside identifiers) -> it is COUNTED but
+NOT syntax/undef-scored (that was 35% of the old false positives). `malformed_toolargs`
+(a tool-call whose JSON args don't parse) is an absolute, unambiguous garble signal.
+
+The reliable verdict is the tree(cat8/cat6)-vs-native RATE on the SAME 16 tasks
+(native carries the identical self-contained-code baseline).
 """
-import json, os, sys, glob, ast, builtins, re, argparse
+import json, os, sys, glob, ast, builtins, re, argparse, shlex
 
 BI = set(dir(builtins)) | {
     "self", "cls", "np", "torch", "os", "sys", "re", "math", "pd", "plt",
-    "json", "time", "Path", "pytest", "__file__", "__name__",
+    "json", "time", "Path", "pytest", "__file__", "__name__", "true", "false", "null",
 }
 
 
-def extract_code_snippets(chatreq_path):
+def _py_from_shell(cmd):
+    """Extract the python -c SCRIPT from a shell command via shlex (quoting-safe)."""
+    try:
+        toks = shlex.split(cmd)
+    except Exception:
+        return None
+    for i, t in enumerate(toks):
+        if re.fullmatch(r"python[0-9.]*", os.path.basename(t)):
+            if "-c" in toks[i:]:
+                j = toks.index("-c", i)
+                if j + 1 < len(toks):
+                    return toks[j + 1]
+    return None
+
+
+def extract(chatreq_path):
+    """Yield (kind, code). kind in {script, fragment, malformed}. Only `script` is scored."""
     try:
         r = json.load(open(chatreq_path))
     except Exception:
@@ -30,89 +52,98 @@ def extract_code_snippets(chatreq_path):
         if m.get("role") != "assistant":
             continue
         c = m.get("content")
-        if isinstance(c, str) and "```" in c:
+        if isinstance(c, str):
             for blk in re.findall(r"```(?:python)?\n(.*?)```", c, re.S):
-                yield ("content_block", blk)
+                yield ("script", blk)
         for t in (m.get("tool_calls") or []):
             fn = t.get("function") or {}
             name = fn.get("name", "")
-            args = fn.get("arguments", "")
             try:
-                a = json.loads(args)
+                a = json.loads(fn.get("arguments", ""))
             except Exception:
-                yield ("malformed_toolargs", args)   # malformed JSON = a garble signal
+                yield ("malformed", fn.get("arguments", ""))
                 continue
-            if name == "edit" and isinstance(a.get("new_string"), str):
-                yield ("edit_new", a["new_string"])
-            if name == "run_shell_command" and isinstance(a.get("command"), str):
-                for pyc in re.findall(r'python[0-9.]* -c "(.*?)"', a["command"], re.S):
-                    yield ("shell_py", pyc.replace("\\n", "\n").replace('\\"', '"'))
+            if name in ("write_file", "create_file") and isinstance(a.get("content"), str):
+                if a.get("file_path", "").endswith(".py"):
+                    yield ("script", a["content"])
+            elif name == "edit" and isinstance(a.get("new_string"), str):
+                yield ("fragment", a["new_string"])          # count-only, NOT scored
+            elif name == "run_shell_command" and isinstance(a.get("command"), str):
+                py = _py_from_shell(a["command"])
+                if py:
+                    yield ("script", py)
 
 
-def undefined_names(code):
+def undefined(code):
+    """None => syntax error; else set of undefined Load names (imports/args/builtins excluded)."""
     try:
         tr = ast.parse(code)
     except Exception:
-        return None            # syntax error
+        return None
     L = {x.id for x in ast.walk(tr) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Load)}
     S = {x.id for x in ast.walk(tr) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Store)}
     A = set()
     for fn in ast.walk(tr):
         if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            for a in fn.args.args + fn.args.posonlyargs + fn.args.kwonlyargs:
-                A.add(a.arg)
-    # imported names count as defined
-    for imp in ast.walk(tr):
-        if isinstance(imp, ast.alias):
-            S.add((imp.asname or imp.name).split(".")[0])
+            for arg in fn.args.args + fn.args.posonlyargs + fn.args.kwonlyargs:
+                A.add(arg.arg)
+    for node in ast.walk(tr):
+        if isinstance(node, ast.alias):
+            S.add((node.asname or node.name).split(".")[0])
+        elif isinstance(node, ast.ExceptHandler) and node.name:
+            S.add(node.name)                      # `except X as e` binds e
+        elif isinstance(node, (ast.Global, ast.Nonlocal)):
+            S.update(node.names)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            S.add(node.name)                      # def/class names are bindings
+    # comprehension / with / for targets are already Store-ctx Names
     return L - S - A - BI
 
 
-def scan_dir(d):
-    rd = os.path.join(d, "proxy_request_dumps")
-    root = rd if os.path.isdir(rd) else d
+def scan(d):
+    root = os.path.join(d, "proxy_request_dumps")
+    root = root if os.path.isdir(root) else d
     files = glob.glob(os.path.join(root, "**", "chatreq_*.json"), recursive=True)
     seen = set()
-    n_snip = n_syntax_bad = n_with_undef = n_malformed = 0
-    undef_examples = []
+    n_script = n_syntax_bad = n_undef = n_frag = n_malformed = 0
+    undef_ex = []
     for f in files:
-        for kind, code in extract_code_snippets(f):
+        for kind, code in extract(f):
             key = (kind, code)
             if key in seen:
                 continue
             seen.add(key)
-            if kind == "malformed_toolargs":
+            if kind == "malformed":
                 n_malformed += 1
-                continue
-            n_snip += 1
-            undef = undefined_names(code)
-            if undef is None:
-                n_syntax_bad += 1
-            elif undef:
-                n_with_undef += 1
-                if len(undef_examples) < 12:
-                    undef_examples.append(sorted(undef)[:6])
-    return dict(files=len(files), snippets=n_snip, syntax_bad=n_syntax_bad,
-                with_undef=n_with_undef, malformed_toolargs=n_malformed,
-                undef_examples=undef_examples)
+            elif kind == "fragment":
+                n_frag += 1
+            elif kind == "script":
+                n_script += 1
+                u = undefined(code)
+                if u is None:
+                    n_syntax_bad += 1
+                elif u:
+                    n_undef += 1
+                    if len(undef_ex) < 12:
+                        undef_ex.append(sorted(u)[:6])
+    return dict(files=len(files), scripts=n_script, syntax_bad=n_syntax_bad, undef=n_undef,
+                fragments=n_frag, malformed=n_malformed, undef_ex=undef_ex)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("dirs", nargs="+", help="arm dirs (each holds proxy_request_dumps/)")
+    ap.add_argument("dirs", nargs="+")
     a = ap.parse_args()
     for d in a.dirs:
-        s = scan_dir(d)
-        print(f"{d}")
-        print(f"  chatreq_files={s['files']} unique_code_snippets={s['snippets']} "
-              f"syntax_bad={s['syntax_bad']} with_undef={s['with_undef']} "
-              f"malformed_toolargs={s['malformed_toolargs']}")
-        if s["snippets"]:
-            print(f"  undef_rate={s['with_undef']/s['snippets']*100:.1f}%  "
-                  f"syntax_bad_rate={s['syntax_bad']/s['snippets']*100:.1f}%  "
-                  f"(malformed_toolargs is an ABSOLUTE garble count)")
-        if s["undef_examples"]:
-            print(f"  undef_examples: {s['undef_examples'][:6]}")
+        s = scan(d)
+        print(d)
+        sc = s["scripts"] or 1
+        print(f"  chatreq={s['files']}  self_contained_scripts={s['scripts']}  "
+              f"syntax_bad={s['syntax_bad']} ({100*s['syntax_bad']/sc:.1f}%)  "
+              f"undef={s['undef']} ({100*s['undef']/sc:.1f}%)  "
+              f"malformed_toolargs={s['malformed']}  edit_fragments={s['fragments']}(unscored)")
+        if s["undef_ex"]:
+            print(f"  undef_examples: {s['undef_ex'][:6]}")
 
 
 if __name__ == "__main__":
