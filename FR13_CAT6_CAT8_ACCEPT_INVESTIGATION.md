@@ -552,3 +552,30 @@ not degraded, in one live gate). Separate branch fix only if that gate fails on 
 This makes delivery MUCH more tractable: just deliver the SPINE reorder (cache-slot-reorder if the
 carrier-B audit says tractable, else A1 whose block-split ~1 ULP is now plausibly within-floor by
 the same argument) + losslessness gate. Pending: carrier-B consumer audit (agent, read-only).
+
+## CARRIER-B AUDIT: slot-level reorder is TRACTABLE, N=3 edits (2026-07-13, VERIFIED)
+
+Read-only audit + my spot-check vs source CONFIRM: a slot-level canonical reorder (permute only
+the tree-suffix rows of the ATTENTION-group slot_mapping spine-first; keep the BFS tree DEFINITION)
+threads pi consistently and is NOT blocked by a BFS hardcode. Two disjoint address spaces:
+  - Attention KV addressed by slot_mapping.
+  - GDN conv/ssm state addressed by spec_state_indices = mamba_get_block_table_tensor (gdn_attn.py
+    :482,:567) — a SEPARATE bank; permuting attention slots never touches it. VERIFIED.
+The rejection-sampler/committer is node/token-indexed ("No float, no reduction, no reorder",
+patcher :17471-74), invariant to slot permutation. VERIFIED. Eagle drafter is INVISIBLE (slot-level
+keeps BFS node numbering — the crux vs the refuted global-tree-reorder that RENUMBERED nodes).
+
+**N=3 edit sites:** (1) derive+apply pi to tree-suffix rows of slot_mapping at construction
+(fr10_phase4_patch_vllm_tree_gdn.py ~:10733/:10747-10789, tree structure in hand); (2) column-
+permute tree_attn_bias by pi (key axis only; helper spine_first_perm exists fr13_fa2_spine_reorder
+.py:54,86); (3) THE ONE REAL EDIT — launch_attn_kv_linear_remap (fr10_gdn_tree_kernel.py:461-466):
+src_slot=slot_mapping[qsl+accepted] auto-threads on the permuted map, but dst_slot must use the
+UN-permuted/contiguous map so the next forward reads its committed prefix linearly. gather-then-
+clone at :478 already makes src/dst overlap safe. Honest caveat: site 3 is a real correctness
+dependency (not mechanical) — forget it and the committed prefix scatters to canonical slots.
+
+=> The over-conservative "carrier-B" claim in fr13_fa2_spine_reorder.py:10-21 (which drove the
+dense-suffix-split that double-rounds) is REFUTED. The cache-slot-reorder is the clean deliverable:
+context bit-identical (single fused call, no block-split), spine bit-exact, branches at fixed
+canonical slots, NO recompile. Next: implement N=3 behind a flag (default OFF), gate on LIVE SWE
+cat8-vs-E5 (spine argmax==E5 + bag-TV<=0.0593 + accept>=3.076 + branch-lossless) — the goal gate.
