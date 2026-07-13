@@ -262,3 +262,18 @@ For cat6-vs-cat8 (M<=8, N_PAD=8), GDN is M-invariant (wf#1), so the carrier is F
 is UNTESTED, PLAUSIBLY CORRECT. My earlier "QPAD refuted -> wall" CONFLATED cat9 with cat8. Corrected:
 the fix path is OPEN = re-port QPAD (archived 030a1c22 / origin/fr13-fa2-qpad) + A/B on cat8 (gate cat8-spine
 >=cat6 + garble0 + lossless-vs-nonspec). Lossless-by-construction (CPU 0.0) so it cannot reintroduce garble.
+
+## COST-GATE STOP (2026-07-13): carrier UNSETTLED, no confident cheap correct fix — M-dep = within-floor
+Git lineage shows the FA2-vs-L0-GDN carrier OSCILLATED: 06676346 (query-pad premise CONTRADICTED) -> 9ad6793f
+(FA2 IS carrier) -> 8b7684dd (FA2 NOT carrier, L0-GDN upstream); + wf#1 (FA2 for M<=8) vs wf#2 (L0-GDN). It is
+GENUINELY UNSETTLED. QPAD fixes only FA2, which 8b7684dd suggests is INSUFFICIENT (L0-GDN seed upstream). The
+empirical localizer (MAB) is DEAD for the fused build. => NO plausibly-cheap CONFIDENT correct fix.
+Per the cost-gate (speed=goal, STOP if no plausibly-cheap correct path): STOP the fix chase. The accept-rate
+M-dependence is SMALL (0.087 greedy, ~0.3 real) and SHIP-BENIGN (temp06 cat8 3.673~native 3.691>cat6; resolve
+cat8 8/16=native). GARBLE DELIVERABLE MET (0/undef both trees, resolve=native).
+OPEN ITEM (user-prioritizable, not cheap): to actually land a fix, first BUILD a fused-build FA2/GDN localizer
+(the MAB is non-fused-only) to definitively settle FA2-vs-L0-GDN, THEN fix the confirmed carrier + A/B. That is
+a multi-session effort for a small ship-benign gain — deferred pending explicit priority.
+SUMMARY of the whole cat6-vs-cat8 investigation: (1) cat8 not>cat6 = M-perturbation on spine (confirmed B=1,
+cat6-spine>cat8-spine ~0.3); (2) branches DO rescue (~0.22/fwd, 6-7%, all temps); (3) carrier unsettled
+FA2/L0-GDN; (4) small+ship-benign; (5) garble goal MET.
