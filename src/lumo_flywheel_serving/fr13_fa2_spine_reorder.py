@@ -26,6 +26,7 @@ wired into the live tree_attn patch.
 """
 from __future__ import annotations
 
+import os
 import sys
 
 import torch
@@ -157,9 +158,11 @@ def _hybrid_reorder_impl(
     # merge rounds again -> ~1 bf16 ULP double-rounding on the CONTEXT (compounds
     # over the decode -> greedy drift).  Keep both partials + the merge in fp32
     # and cast to bf16 exactly once at the end, matching the single call.
-    _f32 = torch.float32
+    _idt = (torch.float32
+            if os.environ.get("FR13_FA2_REORDER_FP32", "0") == "1"
+            else out3.dtype)  # default bf16 (real path); fp32 opt-in (unsupported by flash today)
     # (1) CONTEXT — paged, non-causal, NO tree bias, suffix excluded.
-    ctx_out = torch.empty(out3.shape, dtype=_f32, device=dev)
+    ctx_out = torch.empty(out3.shape, dtype=_idt, device=dev)
     ctx_out, ctx_lse = flash_fn(
         q=query, k=key_cache, v=value_cache, out=ctx_out,
         cu_seqlens_q=cu_seqlens_q, max_seqlen_q=tree_n,
@@ -180,7 +183,7 @@ def _hybrid_reorder_impl(
     if tree_bias.dim() == 3:
         tb_p = tb_p.unsqueeze(0).expand(B, tree_n, tree_n).contiguous()
     cu_tree = torch.arange(0, (B + 1) * tree_n, tree_n, dtype=torch.int32, device=dev)
-    suf_out = torch.empty(qp.shape, dtype=_f32, device=dev)
+    suf_out = torch.empty(qp.shape, dtype=_idt, device=dev)
     suf_out, suf_lse = flash_fn(
         q=qp, k=kp, v=vp, out=suf_out,
         cu_seqlens_q=cu_tree, max_seqlen_q=tree_n,
@@ -203,7 +206,7 @@ def _hybrid_reorder_impl(
         # BISECT: split -> temp; SINGLE reference (paged, full, causal, tree_bias)
         # -> out3 (the SAFE live output).  Log max_abs(split - single) + component
         # diagnostics ONCE so a broken split is localized without shipping it.
-        merged32 = torch.empty(out3.shape, dtype=_f32, device=dev)
+        merged32 = torch.empty(out3.shape, dtype=_idt, device=dev)
         merge_fn(merged32, ctx_out, ctx_lse, suf_out_u, suf_lse_u)
         merged = merged32.to(out3.dtype)  # cast to bf16 ONCE, like the single call
         flash_fn(
@@ -231,7 +234,7 @@ def _hybrid_reorder_impl(
                 print("SELFCHECK log failed: %r" % _e, file=sys.stderr, flush=True)
         return True
 
-    merged32 = torch.empty(out3.shape, dtype=_f32, device=dev)
+    merged32 = torch.empty(out3.shape, dtype=_idt, device=dev)
     merge_fn(merged32, ctx_out, ctx_lse, suf_out_u, suf_lse_u)
     out3.copy_(merged32)  # single bf16 cast at the end (matches the single call)
     return True
