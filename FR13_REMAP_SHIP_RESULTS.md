@@ -89,3 +89,14 @@ fix failed; likely temp-0.6 trajectory variance - the fix removes garble, does n
 - **cat6 arm: RUNNING** (launched clean, hygiene OK). native arm: PENDING (serial after cat6).
 - Clean cat8-vs-cat6-vs-native speed A/B (same boot) + cat6/native garble + resolve = at arm completions.
 - Queued: branch-rescue diagnostic on cat8 (per-flat-row accept hist, spine {1,3,5,7,8} vs branch {2,4,6}).
+
+## 7. Completeness audit (audit-symmetry red-team) — the fix is STRUCTURALLY complete
+Every per-layer state read positionally after a branched commit now has a re-linearizer:
+- full-attn `kv_cache` -> `launch_attn_kv_linear_remap` (THE FIX)
+- GDN `conv_state` -> `launch_tree_state_linear_remap` + `_fr13_conv_commit_to_col0`
+- GDN `ssm_state`  -> `launch_tree_state_linear_remap` + `launch_tree_gdn_replay`
+No third cached state exists (attn=KV; GDN=conv+ssm; RoPE is position-derived, not cached). The attn-KV
+capture is EXCLUSION-based (captures every group whose builder is NOT Mamba2/GDN) -> robust to any attention
+variant, not a narrow whitelist. => the missing twin (full-attn KV) was the LAST uncovered store; no residual
+carrier can hide under the 0% gate. Static coverage (this audit) + empirical correctness (0% garble gate) =
+complete + correct.
