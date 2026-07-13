@@ -100,6 +100,22 @@ def extract(chatreq_path):
                     yield ("script", py)
 
 
+_PY_MARKERS = re.compile(
+    r"(^|\n)\s*(import |from |def |class |return\b|if |elif |else:|for |while |"
+    r"with |try:|except|finally:|assert |raise |yield |print\s*\(|@\w|async |await )"
+    r"|[^=!<>+\-*/%&|^:]=[^=]"        # a plain assignment
+    r"|\blambda\b|\bself\.|\bprint\b"
+)
+
+
+def _looks_python(code):
+    """True if the content has real Python structure. Filters out NON-Python content the
+    agent sometimes quotes (PLY/BNF grammar rules, config/data, plain text) that fails
+    ast.parse but is NOT garble. Garbled Python still has import/def/=/return markers, so
+    this hides non-Python false positives WITHOUT hiding garble."""
+    return bool(_PY_MARKERS.search(code))
+
+
 def undefined(code, gdefined=frozenset()):
     """None => syntax error; else Load names not bound HERE, not builtins, and not bound
     ANYWHERE in the arm (gdefined). A leftover = a name never defined in the whole session
@@ -139,9 +155,12 @@ def scan(d):
                 gdefined |= _bound_names(ast.parse(code))
             except Exception:
                 pass
-    n_script = n_syntax_bad = n_undef = 0    # pass 2: score self-contained scripts
+    n_script = n_syntax_bad = n_undef = n_nonpy = 0    # pass 2: score self-contained scripts
     undef_ex = []
     for code in scripts:
+        if not _looks_python(code):
+            n_nonpy += 1                 # PLY grammar / config / text the agent quoted — not garble
+            continue
         n_script += 1
         u = undefined(code, gdefined)
         if u is None:
@@ -151,7 +170,7 @@ def scan(d):
             if len(undef_ex) < 12:
                 undef_ex.append(sorted(u)[:6])
     return dict(files=len(files), scripts=n_script, syntax_bad=n_syntax_bad, undef=n_undef,
-                fragments=n_frag, malformed=n_malformed, undef_ex=undef_ex)
+                fragments=n_frag, malformed=n_malformed, nonpython=n_nonpy, undef_ex=undef_ex)
 
 
 def main():
@@ -165,7 +184,7 @@ def main():
         print(f"  chatreq={s['files']}  self_contained_scripts={s['scripts']}  "
               f"syntax_bad={s['syntax_bad']} ({100*s['syntax_bad']/sc:.1f}%)  "
               f"undef={s['undef']} ({100*s['undef']/sc:.1f}%)  "
-              f"malformed_toolargs={s['malformed']}  edit_fragments={s['fragments']}(unscored)")
+              f"malformed_toolargs={s['malformed']}  edit_fragments={s['fragments']}(unscored)  nonpython={s.get('nonpython',0)}(skipped)")
         if s["undef_ex"]:
             print(f"  undef_examples: {s['undef_ex'][:6]}")
 
