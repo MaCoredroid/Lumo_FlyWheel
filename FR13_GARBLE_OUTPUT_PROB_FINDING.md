@@ -930,3 +930,15 @@ returned_tokens/(warm_tps*drafts): ON=1024/(14.36*248)=0.2876 s/fwd, OFF=1024/(1
 remap -0.7% per-forward (WITHIN ~1% cross-boot autotune noise) => NEGLIGIBLE, no measurable HBM tax.
 Consistent with analytical ~830KB copy/step vs 98.6ms weight-read floor. draft/fwd=9.0 both (basis valid).
 => BAKE FR13_ATTN_KV_REMAP=1 into fr13_launch_locked (the ship config).
+
+## Offload pair-dump vacuum ROOT-CAUSED (2026-07-13): endpoint mismatch, not stream-stall, not remap
+inference_proxy.py: _pair_dump_upstream (L46) captures ONLY /v1/responses (L35-37, built for Codex
+Responses-API). But qwen-code hits /v1/chat/completions (L175-177 "qwen-code ... hits
+/v1/chat/completions"). INFERENCE_PATHS={/v1/responses,/v1/chat/completions} (L106) but only the responses
+path is pair-dumped. So qwen-code's 64 requests -> 0 pair dumps (pairdump_stats n_pair_files=0). NOT a
+stream-stall (task RESOLVED, exit 0) and NOT the remap. This is the ONLY blocker for the served-stream
+garble A/B vs native. FIX (next cycle, non-trivial): add SSE-accumulating served-stream capture to the
+/v1/chat/completions streaming handler (accumulate delta.content across SSE chunks in
+_iter_upstream_with_heartbeat, write (request, accumulated_text) pair at stream end). Not attempted here
+(low context, proxy-break risk). NOTE: token-level garble already 0/15 (canonical gate = a tree-vs-native
+A/B) + SWE task resolved, so the served-stream A/B is a completeness confirmation, expected clean.
