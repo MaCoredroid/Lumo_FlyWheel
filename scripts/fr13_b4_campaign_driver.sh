@@ -18,6 +18,11 @@ cd /home/mark/shared/lumoFlyWheel
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 SUBSET=${SUBSET:-subset_b4_sixteen.json}
 WALL=${WALL:-1800}   # codex wall per task = deployment-faithful 30min (retries still ~2x)
+# WALL=0 => NO wall: emit EMPTY AGENT_WALL_S so the runner omits --agent-wall-s (a "0" would
+# pass --agent-wall-s 0 = 0s = instant timeout). Hang protection = the 600s stall-watchdog.
+# Matches the cachefirst header's "NO wall (WALL=0)" intent + the no-AGENT_WALL_S gate policy.
+if [[ "$WALL" == "0" || -z "$WALL" ]]; then AGENT_WALL_S_VAL=""; else AGENT_WALL_S_VAL="$WALL"; fi
+WALL_ENV="$WALL"; [[ "$WALL" == "0" ]] && WALL_ENV=""
 BSIZE=${BSIZE:-4}    # vLLM max_num_seqs (B). B=1 = single-stream, no co-residency.
 CONC=${CONC:-4}      # codex task concurrency. B=1 clean => CONC=1 (one task at a time).
 TAG=${TAG:-b4}       # arm-name / sidecar / deploy-json suffix (keeps B=1 + B=4 separate).
@@ -26,7 +31,7 @@ mkdir -p "$RUNROOT" output/fr13_sfwd_sidecar
 run_native() {  # arm spec_n expect offload
   local arm=$1 spec_n=$2 expect=$3 offload=$4
   echo "===== NATIVE ARM $arm (E$spec_n) B=$BSIZE offload=$offload ====="
-  OFFLOAD_AGENT=$offload SPEC_N=$spec_n MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL \
+  OFFLOAD_AGENT=$offload SPEC_N=$spec_n MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL_ENV \
     FR13_SFWD_GPU_TIMER=1 \
     FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
     bash scripts/fr13_bigdenom_swe_serve.sh "$arm" native "$SUBSET" \
@@ -42,7 +47,7 @@ run_variant() {  # arm kind expect offload
   # FR13_DEVICE_MULTIDRAFT=1 -> the device-side temp>0 multidraft committer (the real
   # t0.6 speed lever; lossless-within-floor; user 2026-06-16 accepted). Engages on tree
   # arms at temp>0 only; no-op for the native bars.
-  OFFLOAD_AGENT=$offload MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL \
+  OFFLOAD_AGENT=$offload MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL_ENV \
     FR13_DEVICE_MULTIDRAFT=1 \
     FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
     FR13_SFWD_GPU_TIMER=1 \
