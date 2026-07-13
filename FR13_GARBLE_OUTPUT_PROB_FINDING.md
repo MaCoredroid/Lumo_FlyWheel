@@ -942,3 +942,13 @@ garble A/B vs native. FIX (next cycle, non-trivial): add SSE-accumulating served
 _iter_upstream_with_heartbeat, write (request, accumulated_text) pair at stream end). Not attempted here
 (low context, proxy-break risk). NOTE: token-level garble already 0/15 (canonical gate = a tree-vs-native
 A/B) + SWE task resolved, so the served-stream A/B is a completeness confirmation, expected clean.
+
+## AGENTIC garble gate (fixed, low-noise) DISCRIMINATES + fix works (2026-07-13)
+fr13_qwen_jsonl_garble_scan v3 (self-contained scripts only, shlex python -c, except-as/def bindings):
+PRIOR NO-FIX (16-task qc4, garble observed): cat8 undef=45.4% syntax=16.2% (garbled ids: wcs_wcs_hdr,sll,
+result_full_low); cat6 undef=44.9% syntax=10.3% (lon_,topo_itrs_frame,nref_nommask); native undef=3.8%
+syntax=1.0% (kwargs,AltAz = real-name floor). => gate discriminates native~4% vs tree-no-fix~45% = the
+garble. FIX-ON (live, WALL=0 no-wall clean config, remap ENGAGED, APC 86%): cat8 undef=0% syntax=0%
+malformed=0 on 18 self-contained scripts => agentic garble 45%->0%, at/below native floor. Partial (18 vs
+130 scripts); firms up at arm completion + cat6 fix-ON pending. Old gate's 35%/17% were BUGS (fragment
+scoring, python -c regex truncation, missing except-as/def bindings), not garble.
