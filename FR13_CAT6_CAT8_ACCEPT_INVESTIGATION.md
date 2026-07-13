@@ -296,3 +296,22 @@ full-token-id compare (no-spec launcher exists) — DEFERRED (question already a
 - Accept-rate M-dep fix: cost-gate-STOPPED (carrier unsettled FA2/L0-GDN, localizer dead, no cheap confident fix).
 DEFERRED (user-prioritizable): (a) speed fix needs a new fused-build localizer (multi-session); (b) non-spec
 losslessness confirm; (c) dead-code cleanup #19.
+
+## FUSED-BUILD LOCALIZER — LADDER STEP 1: CONV CLEARED (2026-07-13)
+Reopened the cost-gated accept-rate M-dep fix (user greenlit). Built FR13_CONV_SUBOP_MAB (default-OFF,
+observe-only): re-runs the SAME imported FUSED op (fused_tree_conv_taps_acc + triton silu) on the SPINE-only
+sub-window (M_reduced) vs the full-M spine rows, raw int-view threshold 0.0. Corrects the garble-era
+GDN_SUBOP_MAB root cause: that MAB re-ran the NATIVE causal_conv1d_update (never populated on the fused ship
+build) -> engage-failed 3x. NOT "conv_state is None". Confound-dodged: passes PRE-splice _fr10_acc (the :3356
+native-spine index_copy_ overwrites _fr10_out, not _acc), recomputes silu fresh.
+- Engage-fail #1 (self-caught): the A/B .item()-syncs under CUDA-graph capture at EngineCore init -> poisoned
+  capture -> boot rc=2. FIX (per established eager-only-diagnostic pattern): capture-guard at helper top +
+  boot ENFORCE_EAGER=1. conv-taps M-invariance is regime-independent (same kernel eager/captured).
+- CLEAN RUN (run_eager, rc=0): 768 events / 48 distinct layers (16/layer), cat8 served tree_n=9, spine m_red=6,
+  deep=8. SUM taps_mismatch=0, SUM out_mismatch=0, ANY-mismatch events=0. Engaged (NOT vacuous), varied across
+  a real 256-tok temp06 decode (accept/fwd=3.06, 63 drafts).
+=> VERDICT: fused conv (taps + silu) is M-INVARIANT on GB10 -> DEFINITIVELY CLEARED as the accept-rate carrier.
+   Matches a-priori (elementwise mul + per-col fp32 add, no cross-row reduction) but now PROVEN on-device.
+NEXT (ladder): FA2 query-tile MAB (generalize FR13_FA2_MAB cat9->live-tree, cat8 M=9-vs-M=6), then scan
+N_ACTUAL constexpr (6-vs-8 at fixed N_PAD=8). in_proj analytically excluded (cuBLASLt switch at M>=9; M=6,8
+share the GEMM path). commits: f03baa2a (localizer) + bbd0ea2f (capture-guard+eager).
