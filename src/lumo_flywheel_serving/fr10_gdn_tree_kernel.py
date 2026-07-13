@@ -395,6 +395,7 @@ def launch_attn_kv_linear_remap(
     accepted_paths: torch.Tensor,
     num_accepted_tokens: torch.Tensor,
     num_spec_decodes: int,
+    dst_pi: torch.Tensor | None = None,
 ) -> int:
     """Re-linearize the full-attention KV cache for the committed tree path.
 
@@ -446,12 +447,21 @@ def launch_attn_kv_linear_remap(
     m_idx = torch.arange(path_cols, device=device).view(1, -1)          # [1,path]
     ap = accepted_paths[:b, :path_cols].to(torch.long)                  # [b,path] flat rows
     dst_off = m_idx + 1                                                 # [1,path]
+    # FR13_SLOT_REORDER (edit 3/5): under the spine-first slot permutation the
+    # verify slot_mapping row j holds the slot of canonical COLUMN pi_inv[j]
+    # (sm_perm[j] == sm_flat[pi_inv[j]], so sm_perm[pi[k]] == sm_flat[k]).
+    # SOURCE auto-threads: sm_perm[qsl + node] is still the accepted node's true
+    # slot. DESTINATION must stay the FLAT/linear committed slot: index the
+    # permuted map at pi[dst_off] to recover sm_flat[dst_off]. dst_pi=None (flag
+    # OFF) preserves the shipped behavior bit-for-bit.
+    if dst_pi is not None:
+        dst_off = dst_pi.to(device=device, dtype=torch.long)[dst_off]   # [1,path]
     src_off = ap                                                        # [b,path]
     # Guard: the span is the VERIFY TOKEN COUNT (num_spec+1), NOT path_cols
     # (= max accepted path length). Require uniform spans AND span > the largest
     # offset indexed (max flat verify row and the max linear dst depth acc), so
     # qsl[i]+offset never crosses into request i+1.
-    _max_off = torch.maximum(ap.max(), acc.max())
+    _max_off = torch.maximum(ap.max(), torch.maximum(acc.max(), dst_off.max()))
     if not (bool((spans == spans[0]).all()) and bool(spans[0] > _max_off)):
         return 0
     qsl = qsl_full[:b].view(-1, 1)                                     # [b,1]

@@ -18242,6 +18242,195 @@ if _FR13PCT_ON:
     return True
 
 
+def _patch_gpu_model_runner_slot_reorder() -> bool:
+    """FR13_SLOT_REORDER (edits 1+4 of 5): spine-first canonical KV slot layout.
+
+    Fixes the cat8 accept-rate M-dependence (deep-spine ~1 bf16 ULP from FA2
+    butterfly-reduction association keyed by physical score-tile column) by
+    permuting WHERE each tree node's K/V lands in the paged cache: physical
+    column k holds node pi[k] (pi = spine depth-order, then branches in BFS
+    order). The single fused FA2 call then sees the spine at contiguous columns
+    0..S-1 IDENTICALLY for cat6/cat8/spine-only => M-invariant by construction,
+    context bit-identical (no block-split, no merge, no recompile).
+
+    Three injections into gpu_model_runner.py, all gated on FR13_SLOT_REORDER=1
+    (default OFF => byte-identical ship):
+      CLEAR   - top of _build_attention_metadata: reset the span stash so a step
+                that never reaches propose cannot leak a stale restore.
+      PERMUTE - in _build_attn_group_metadata, BEFORE builder.build/update, for
+                FULL-ATTENTION builders only (mamba/GDN excluded; their state
+                bank is spec_state_indices, a different address space), attn_gid
+                ==0 only (metadata for extra attn groups shares the same cm ->
+                double-permute hazard), ubid None (no ubatching), skip cudagraph
+                capture. In-place on the persistent buffer (pointer-stable for
+                FULL cudagraphs). Spec rows identified EXACTLY: span == tree_n
+                AND num_decode_draft_tokens == tree_n-1.
+      RESTORE - top of propose_draft_token_ids: un-permute the spans BEFORE any
+                drafter read (eagle copies common_attn_metadata.slot_mapping
+                into its own buffer at eagle.py:469 for the DRAFT model's KV
+                writes -- it must see the flat layout). Sampling (and the
+                FR13_ATTN_KV_REMAP apply, whose dst-flat fix is edit 3 in
+                fr10_gdn_tree_kernel.launch_attn_kv_linear_remap) precedes
+                propose, so the permuted map is live exactly for: KV write,
+                FA2 verify read, and the remap copy. Stream-ordered.
+
+    Design + hazard log: FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md (v2). Edit 2
+    (bias column permute) + edit 5 (causal=False, provably redundant for the
+    decode tree call) live in fr13_patch_fa2_tree_bias.py.
+    """
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_SLOT_REORDER_PERMUTE"
+    if sentinel in text:
+        return False
+
+    clear_anchor = """        assert num_reqs_padded is not None and num_tokens_padded is not None
+
+        attn_metadata: PerLayerAttnMetadata = {}
+"""
+    clear_inject = """        assert num_reqs_padded is not None and num_tokens_padded is not None
+
+        # FR13_SLOT_REORDER_CLEAR: reset the permuted-span stash at every
+        # metadata build so a step that skips propose (exception / no spec)
+        # can never leak a stale restore onto freshly recomputed slot values.
+        self._fr13_sr_active = {}
+
+        attn_metadata: PerLayerAttnMetadata = {}
+"""
+    if clear_anchor not in text:
+        raise RuntimeError("FR13_SLOT_REORDER clear anchor not found")
+    text = text.replace(clear_anchor, clear_inject, 1)
+
+    permute_anchor = """            extra_attn_metadata_args = {}
+            if use_spec_decode and isinstance(
+"""
+    permute_inject = """            # FR13_SLOT_REORDER_PERMUTE: spine-first canonical KV slot layout
+            # for the tree-verify suffix (full-attention groups only). See the
+            # patch docstring + FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md.
+            if (
+                __import__("os").environ.get("FR13_SLOT_REORDER", "0") == "1"
+                and not for_cudagraph_capture
+                and use_spec_decode
+                and ubid is None
+                and attn_gid == 0
+                and not isinstance(
+                    builder,
+                    (Mamba2AttentionMetadataBuilder, GDNAttentionMetadataBuilder),
+                )
+            ):
+                if __import__("os").environ.get("FR13_ATTN_KV_REMAP", "0") != "1":
+                    raise RuntimeError(
+                        "FR13_SLOT_REORDER=1 requires FR13_ATTN_KV_REMAP=1 "
+                        "(the committer re-linearize owns the dst-flat fix)"
+                    )
+                _sr_pi = getattr(self, "_fr13_sr_pi_cpu", None)
+                if _sr_pi is None:
+                    _sr_cfg = __import__("os").environ.get("SPEC_CONFIG")
+                    _sr_tree = None
+                    if _sr_cfg:
+                        _sr_tree = __import__("json").loads(_sr_cfg).get(
+                            "speculative_token_tree"
+                        )
+                    if not _sr_tree:
+                        _sr_sc = getattr(self.vllm_config, "speculative_config", None)
+                        _sr_tree = getattr(_sr_sc, "speculative_token_tree", None)
+                    if not _sr_tree:
+                        raise RuntimeError(
+                            "FR13_SLOT_REORDER: no speculative_token_tree"
+                        )
+                    _sr_ch = sorted(
+                        __import__("ast").literal_eval(_sr_tree),
+                        key=lambda _p: (len(_p), _p),
+                    )
+                    _sr_pi = (
+                        [0]
+                        + [
+                            _i + 1
+                            for _i, _c in enumerate(_sr_ch)
+                            if all(int(_x) == 0 for _x in _c)
+                        ]
+                        + [
+                            _i + 1
+                            for _i, _c in enumerate(_sr_ch)
+                            if not all(int(_x) == 0 for _x in _c)
+                        ]
+                    )
+                    assert _sr_pi[0] == 0 and sorted(_sr_pi) == list(
+                        range(len(_sr_ch) + 1)
+                    ), _sr_pi
+                    _sr_inv = [0] * len(_sr_pi)
+                    for _sr_k, _sr_nd in enumerate(_sr_pi):
+                        _sr_inv[_sr_nd] = _sr_k
+                    self._fr13_sr_pi_cpu = _sr_pi
+                    self._fr13_sr_tree_n = len(_sr_pi)
+                    self._fr13_sr_pi_t = torch.tensor(
+                        _sr_pi, dtype=torch.long, device=self.device
+                    )
+                    self._fr13_sr_pi_inv_t = torch.tensor(
+                        _sr_inv, dtype=torch.long, device=self.device
+                    )
+                    logger.info(
+                        "FR13_SLOT_REORDER ENGAGED (runner): tree_n=%d pi=%s",
+                        self._fr13_sr_tree_n,
+                        _sr_pi,
+                    )
+                _sr_n = self._fr13_sr_tree_n
+                _sr_qslc = common_attn_metadata.query_start_loc_cpu
+                _sr_ndt = self.num_decode_draft_tokens.cpu
+                _sr_sm = common_attn_metadata.slot_mapping
+                _sr_spans = []
+                for _sr_r in range(int(_sr_qslc.shape[0]) - 1):
+                    _sr_q0 = int(_sr_qslc[_sr_r])
+                    if (
+                        int(_sr_qslc[_sr_r + 1]) - _sr_q0 == _sr_n
+                        and _sr_r < int(_sr_ndt.shape[0])
+                        and int(_sr_ndt[_sr_r]) == _sr_n - 1
+                    ):
+                        _sr_sm[_sr_q0 : _sr_q0 + _sr_n] = _sr_sm[
+                            _sr_q0 : _sr_q0 + _sr_n
+                        ][self._fr13_sr_pi_inv_t]
+                        _sr_spans.append(_sr_q0)
+                if _sr_spans:
+                    if getattr(self, "_fr13_sr_active", None) is None:
+                        self._fr13_sr_active = {}
+                    self._fr13_sr_active[int(kv_cache_gid)] = (_sr_sm, _sr_spans)
+                    self._fr13_sr_steps = getattr(self, "_fr13_sr_steps", 0) + 1
+
+            extra_attn_metadata_args = {}
+            if use_spec_decode and isinstance(
+"""
+    if permute_anchor not in text:
+        raise RuntimeError("FR13_SLOT_REORDER permute anchor not found")
+    text = text.replace(permute_anchor, permute_inject, 1)
+
+    restore_anchor = """        num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
+        spec_config = self.speculative_config
+        assert spec_config is not None
+"""
+    restore_inject = """        # FR13_SLOT_REORDER_RESTORE: un-permute the verify slot_mapping spans
+        # (inverse of FR13_SLOT_REORDER_PERMUTE; sm_perm[pi] == sm_flat) BEFORE
+        # any drafter read -- eagle copies common_attn_metadata.slot_mapping
+        # into its own buffer (eagle.py:469) for the DRAFT model's KV writes and
+        # must see the flat layout. Sampling + FR13_ATTN_KV_REMAP already ran.
+        _sr_act = getattr(self, "_fr13_sr_active", None)
+        if _sr_act:
+            for _sr_sm, _sr_spans in _sr_act.values():
+                for _sr_q0 in _sr_spans:
+                    _sr_sm[_sr_q0 : _sr_q0 + self._fr13_sr_tree_n] = _sr_sm[
+                        _sr_q0 : _sr_q0 + self._fr13_sr_tree_n
+                    ][self._fr13_sr_pi_t]
+            self._fr13_sr_active = {}
+        num_scheduled_tokens = scheduler_output.total_num_scheduled_tokens
+        spec_config = self.speculative_config
+        assert spec_config is not None
+"""
+    if restore_anchor not in text:
+        raise RuntimeError("FR13_SLOT_REORDER restore anchor not found")
+    text = text.replace(restore_anchor, restore_inject, 1)
+
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_attn_kv_remap_capture() -> bool:
     """FR13_ATTN_KV_REMAP capture: stash the FULL-ATTENTION kv-cache group's
     per-step slot_mapping + layer names + query_start_loc during the forward's
@@ -18310,6 +18499,17 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                    launch_attn_kv_linear_remap as _fr13_akr_fn,\n"
         "                )\n"
         "                _fr13_akr_groups = getattr(self, \"_fr13_attn_remap_groups\", None)\n"
+        "                # FR13_SLOT_REORDER (edit 3/5): under the spine-first slot\n"
+        "                # permutation the remap SOURCE auto-threads (reads the same\n"
+        "                # permuted slot_mapping) but the DESTINATION must stay the\n"
+        "                # FLAT committed slot: dst_pi recovers sm_flat[dst_off] via\n"
+        "                # sm_perm[pi[dst_off]]. None when the flag is OFF (shipped\n"
+        "                # behavior bit-identical).\n"
+        "                _fr13_akr_dstpi = (\n"
+        "                    getattr(self, \"_fr13_sr_pi_t\", None)\n"
+        "                    if __import__(\"os\").environ.get(\"FR13_SLOT_REORDER\", \"0\") == \"1\"\n"
+        "                    else None\n"
+        "                )\n"
         "                # FRESH per-step committer paths. The persistent PATHS_TENSOR is\n"
         "                # only refreshed at the NEXT step's pre-forward reqkey (stale\n"
         "                # here), and the *_KERNEL globals live in the committer's OWN\n"
@@ -18411,6 +18611,7 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                                accepted_paths=_fr13_akr_paths,\n"
         "                                num_accepted_tokens=_fr13_akr_lens,\n"
         "                                num_spec_decodes=_fr13_akr_n,\n"
+        "                                dst_pi=_fr13_akr_dstpi,\n"
         "                            )\n"
         "                    _fr13_akr_seen = getattr(self, \"_fr13_akr_foreign_seen\", 0)\n"
         "                    self._fr13_akr_foreign_seen = _fr13_akr_seen + _fr13_akr_tot\n"
@@ -18463,6 +18664,11 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_apply()),
+        # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
+        # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
+        # this patch's propose_draft_token_ids restore anchor in program order,
+        # but the two injections share no anchor text -- order-independent).
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_slot_reorder()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_draft_reqkey()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_boundary_tap_d()),

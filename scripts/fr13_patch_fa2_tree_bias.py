@@ -478,6 +478,95 @@ def _patch_tree_attn(path: Path) -> bool:
         "tree_attn spine-reorder helper import",
     )
     changed = changed or did
+    # FR13_SLOT_REORDER (edits 2+5/5): decode-call bias column permutation +
+    # causal-redundancy flag. Companions of the runner-side slot permutation
+    # (fr10_phase4_patch_vllm_tree_gdn.py _patch_gpu_model_runner_slot_reorder)
+    # and the committer dst-flat fix (fr10_gdn_tree_kernel.py dst_pi). Design +
+    # hazard log: FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md (v2).
+    sr_helpers = '''# FR13_SLOT_REORDER (edits 2+5/5): verify-bias column permutation + causal flag.
+_FR13_SR_PI = None
+_FR13_SR_BIAS_CACHE = {}
+_FR13_SR_CAUSAL = None
+
+
+def _fr13_sr_pi_list():
+    # pi = [spine depth-order, then branches BFS] over [root]+sorted(choices);
+    # SAME algorithm text as the runner-side permute (both parse SPEC_CONFIG and
+    # log pi at boot -- the gate script cross-asserts the two log lines).
+    global _FR13_SR_PI
+    if _FR13_SR_PI is None:
+        import ast as _ast
+        import json as _json
+        import os as _os
+        _cfg = _os.environ.get("SPEC_CONFIG")
+        _tree = _json.loads(_cfg).get("speculative_token_tree") if _cfg else None
+        if not _tree:
+            raise RuntimeError("FR13_SLOT_REORDER: no speculative_token_tree")
+        _ch = sorted(_ast.literal_eval(_tree), key=lambda _p: (len(_p), _p))
+        _pi = (
+            [0]
+            + [_i + 1 for _i, _c in enumerate(_ch) if all(int(_x) == 0 for _x in _c)]
+            + [_i + 1 for _i, _c in enumerate(_ch) if not all(int(_x) == 0 for _x in _c)]
+        )
+        assert _pi[0] == 0 and sorted(_pi) == list(range(len(_ch) + 1)), _pi
+        _FR13_SR_PI = _pi
+        logger.info(
+            "FR13_SLOT_REORDER ENGAGED (tree_attn bias): tree_n=%d pi=%s",
+            len(_pi), _pi,
+        )
+    return _FR13_SR_PI
+
+
+def _fr13_sr_bias_perm(bias):
+    # Column-permute the VERIFY tree bias (KEY axis only; query rows stay BFS)
+    # to match the spine-first slot layout: new col k <- node pi[k]. Cache keyed
+    # by (id, data_ptr) => one gather per boot, stable output tensor (safe under
+    # cudagraph capture). SHAPE GUARD: only the full [tree_n, tree_n] verify
+    # bias is permuted -- build_for_drafting slices (rows/cols < tree_n, draft
+    # path must stay BFS) pass through untouched.
+    _pi = _fr13_sr_pi_list()
+    _n = len(_pi)
+    if bias.shape[-1] != _n or bias.shape[-2] != _n:
+        return bias
+    _key = (id(bias), bias.data_ptr())
+    _hit = _FR13_SR_BIAS_CACHE.get(_key)
+    if _hit is None:
+        _pit = torch.tensor(_pi, dtype=torch.long, device=bias.device)
+        _hit = bias.index_select(-1, _pit).contiguous()
+        _FR13_SR_BIAS_CACHE[_key] = _hit
+    return _hit
+
+
+def _fr13_sr_causal_flag():
+    # causal for the decode tree-verify flash call. False when FR13_SLOT_REORDER
+    # =1 or FR13_TREE_CAUSAL_OFF=1 (stage gate). PROVABLY REDUNDANT here: all
+    # context cols precede all tree rows (causal never fires on context), and in
+    # the BFS suffix the ancestry bias is already -inf at every col the causal
+    # mask would hit (anc(m) is a subset of {0..m}) => False is byte-identical
+    # today, and it unlocks the permuted layout (branch self-cols sit beyond the
+    # old diagonal). Env read once (static per boot).
+    global _FR13_SR_CAUSAL
+    if _FR13_SR_CAUSAL is None:
+        import os as _os
+        _FR13_SR_CAUSAL = not (
+            _os.environ.get("FR13_SLOT_REORDER", "0") == "1"
+            or _os.environ.get("FR13_TREE_CAUSAL_OFF", "0") == "1"
+        )
+        if not _FR13_SR_CAUSAL:
+            logger.info(
+                "FR13_SLOT_REORDER/TREE_CAUSAL_OFF: decode tree causal=False"
+            )
+    return _FR13_SR_CAUSAL
+
+
+'''
+    text, did = _insert_once(
+        text,
+        "def _get_depth_counts(",
+        sr_helpers,
+        "tree_attn slot-reorder helpers",
+    )
+    changed = changed or did
     if "import vllm.envs as envs\n" not in text:
         text = text.replace(
             "from vllm.v1.attention.ops.triton_unified_attention import unified_attention\n",
@@ -584,7 +673,7 @@ def _patch_tree_attn(path: Path) -> bool:
             "(unified_attention prefill branch already mutated?)"
         )
     anchor = """        if decode_meta := attn_metadata.decode_metadata:\n            unified_attention(\n                q=query[:num_decode_tokens],\n                k=key_cache,\n                v=value_cache,\n                out=output[:num_decode_tokens],\n                cu_seqlens_q=decode_meta.query_start_loc,\n                max_seqlen_q=decode_meta.max_query_len,\n                seqused_k=decode_meta.seq_lens,\n                max_seqlen_k=decode_meta.max_seq_len,\n                softmax_scale=self.scale,\n                causal=True,\n                alibi_slopes=self.alibi_slopes,\n                qq_bias=decode_meta.tree_attn_bias,\n                window_size=self.sliding_window,\n                block_table=decode_meta.block_table,\n                softcap=self.logits_soft_cap,\n                q_descale=None,  # Not supported\n                k_descale=layer._k_scale.expand(descale_shape),\n                v_descale=layer._v_scale.expand(descale_shape),\n            )\n"""
-    replacement = """        if decode_meta := attn_metadata.decode_metadata:\n            tree_bias = decode_meta.tree_attn_bias\n            use_tree_bias = tree_bias is not None and tree_bias.numel() > 0\n            if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1" and use_tree_bias:\n                if self.alibi_slopes is not None:\n                    raise NotImplementedError("FR13_FA2_TREE_BIAS does not support ALiBi")\n                sliding_window_size = (\n                    list(self.sliding_window)\n                    if self.sliding_window is not None\n                    else None\n                )\n                _fr13_reordered = False\n                if os.environ.get("FR13_FA2_SPINE_REORDER", "0") in ("1", "2", "3"):\n                    _fr13_reordered = hybrid_reorder_decode(\n                        query=query[:num_decode_tokens],\n                        key=key[:num_decode_tokens],\n                        value=value[:num_decode_tokens],\n                        key_cache=key_cache,\n                        value_cache=value_cache,\n                        output=output[:num_decode_tokens],\n                        cu_seqlens_q=decode_meta.query_start_loc,\n                        seq_lens=decode_meta.seq_lens,\n                        max_query_len=decode_meta.max_query_len,\n                        max_seq_len=decode_meta.max_seq_len,\n                        block_table=decode_meta.block_table,\n                        tree_bias=tree_bias,\n                        scale=self.scale,\n                        softcap=self.logits_soft_cap,\n                        sliding_window_size=sliding_window_size,\n                        flash_fn=flash_attn_varlen_func,\n                        merge_fn=merge_attn_states,\n                        fa_version=2,\n                        split_only=(os.environ.get("FR13_FA2_SPINE_REORDER", "0") in ("2", "3")),\n                        self_check=(os.environ.get("FR13_FA2_SPINE_REORDER", "0") == "3"),\n                    )\n                if not _fr13_reordered:\n                    flash_attn_varlen_func(\n                        q=query[:num_decode_tokens],\n                        k=key_cache,\n                        v=value_cache,\n                        out=output[:num_decode_tokens],\n                        cu_seqlens_q=decode_meta.query_start_loc,\n                        max_seqlen_q=decode_meta.max_query_len,\n                        seqused_k=decode_meta.seq_lens,\n                        max_seqlen_k=decode_meta.max_seq_len,\n                        softmax_scale=self.scale,\n                        causal=True,\n                        alibi_slopes=None,\n                        window_size=sliding_window_size,\n                        block_table=decode_meta.block_table,\n                        softcap=self.logits_soft_cap,\n                        fa_version=2,\n                        tree_bias=tree_bias,\n                    )\n            else:\n                unified_attention(\n                    q=query[:num_decode_tokens],\n                    k=key_cache,\n                    v=value_cache,\n                    out=output[:num_decode_tokens],\n                    cu_seqlens_q=decode_meta.query_start_loc,\n                    max_seqlen_q=decode_meta.max_query_len,\n                    seqused_k=decode_meta.seq_lens,\n                    max_seqlen_k=decode_meta.max_seq_len,\n                    softmax_scale=self.scale,\n                    causal=True,\n                    alibi_slopes=self.alibi_slopes,\n                    qq_bias=decode_meta.tree_attn_bias,\n                    window_size=self.sliding_window,\n                    block_table=decode_meta.block_table,\n                    softcap=self.logits_soft_cap,\n                    q_descale=None,  # Not supported\n                    k_descale=layer._k_scale.expand(descale_shape),\n                    v_descale=layer._v_scale.expand(descale_shape),\n                )\n"""
+    replacement = """        if decode_meta := attn_metadata.decode_metadata:\n            tree_bias = decode_meta.tree_attn_bias\n            use_tree_bias = tree_bias is not None and tree_bias.numel() > 0\n            if use_tree_bias and os.environ.get("FR13_SLOT_REORDER", "0") == "1":\n                # FR13_SLOT_REORDER (edit 2/5): key-axis column permutation to\n                # match the spine-first slot layout (rows stay BFS). Cached\n                # gather; draft-slice shapes pass through untouched.\n                tree_bias = _fr13_sr_bias_perm(tree_bias)\n            if os.environ.get("FR13_FA2_TREE_BIAS", "0") == "1" and use_tree_bias:\n                if self.alibi_slopes is not None:\n                    raise NotImplementedError("FR13_FA2_TREE_BIAS does not support ALiBi")\n                sliding_window_size = (\n                    list(self.sliding_window)\n                    if self.sliding_window is not None\n                    else None\n                )\n                _fr13_reordered = False\n                if os.environ.get("FR13_FA2_SPINE_REORDER", "0") in ("1", "2", "3"):\n                    _fr13_reordered = hybrid_reorder_decode(\n                        query=query[:num_decode_tokens],\n                        key=key[:num_decode_tokens],\n                        value=value[:num_decode_tokens],\n                        key_cache=key_cache,\n                        value_cache=value_cache,\n                        output=output[:num_decode_tokens],\n                        cu_seqlens_q=decode_meta.query_start_loc,\n                        seq_lens=decode_meta.seq_lens,\n                        max_query_len=decode_meta.max_query_len,\n                        max_seq_len=decode_meta.max_seq_len,\n                        block_table=decode_meta.block_table,\n                        tree_bias=tree_bias,\n                        scale=self.scale,\n                        softcap=self.logits_soft_cap,\n                        sliding_window_size=sliding_window_size,\n                        flash_fn=flash_attn_varlen_func,\n                        merge_fn=merge_attn_states,\n                        fa_version=2,\n                        split_only=(os.environ.get("FR13_FA2_SPINE_REORDER", "0") in ("2", "3")),\n                        self_check=(os.environ.get("FR13_FA2_SPINE_REORDER", "0") == "3"),\n                    )\n                if not _fr13_reordered:\n                    flash_attn_varlen_func(\n                        q=query[:num_decode_tokens],\n                        k=key_cache,\n                        v=value_cache,\n                        out=output[:num_decode_tokens],\n                        cu_seqlens_q=decode_meta.query_start_loc,\n                        max_seqlen_q=decode_meta.max_query_len,\n                        seqused_k=decode_meta.seq_lens,\n                        max_seqlen_k=decode_meta.max_seq_len,\n                        softmax_scale=self.scale,\n                        causal=_fr13_sr_causal_flag(),\n                        alibi_slopes=None,\n                        window_size=sliding_window_size,\n                        block_table=decode_meta.block_table,\n                        softcap=self.logits_soft_cap,\n                        fa_version=2,\n                        tree_bias=tree_bias,\n                    )\n            else:\n                unified_attention(\n                    q=query[:num_decode_tokens],\n                    k=key_cache,\n                    v=value_cache,\n                    out=output[:num_decode_tokens],\n                    cu_seqlens_q=decode_meta.query_start_loc,\n                    max_seqlen_q=decode_meta.max_query_len,\n                    seqused_k=decode_meta.seq_lens,\n                    max_seqlen_k=decode_meta.max_seq_len,\n                    softmax_scale=self.scale,\n                    causal=True,\n                    alibi_slopes=self.alibi_slopes,\n                    qq_bias=decode_meta.tree_attn_bias,\n                    window_size=self.sliding_window,\n                    block_table=decode_meta.block_table,\n                    softcap=self.logits_soft_cap,\n                    q_descale=None,  # Not supported\n                    k_descale=layer._k_scale.expand(descale_shape),\n                    v_descale=layer._v_scale.expand(descale_shape),\n                )\n"""
     if anchor in text:
         text = text.replace(anchor, replacement, 1)
         did = True
