@@ -579,3 +579,61 @@ dense-suffix-split that double-rounds) is REFUTED. The cache-slot-reorder is the
 context bit-identical (single fused call, no block-split), spine bit-exact, branches at fixed
 canonical slots, NO recompile. Next: implement N=3 behind a flag (default OFF), gate on LIVE SWE
 cat8-vs-E5 (spine argmax==E5 + bag-TV<=0.0593 + accept>=3.076 + branch-lossless) — the goal gate.
+
+## SLOT-REORDER FINAL DESIGN v2 (2026-07-13) — N=5 sites, all Python, NO recompile
+
+Red-team of the audit's "N=3" against live source found TWO missed hazards; design v2 clears both:
+
+**HAZARD 1 — in-kernel causal mask (audit missed; would break BRANCHES):** served decode call is
+`causal=True` (fr13_patch_fa2_tree_bias.py:587) and the kernel applies mask AFTER apply_tree_bias
+(:139) → key cols permuted while query rows stay BFS ⇒ branch self-KV (e.g. node2→col6>row2)
+causally masked. RESOLUTION: causal is PROVABLY REDUNDANT in the decode tree call — (context cols:
+all precede all tree rows, never masked; suffix cols: BFS ancestry ⊆ {≤row}, bias already −INF
+beyond) ⇒ `causal=False` is byte-identical today AND unlocks any suffix layout. Non-causal template
+instantiation already compiled in the fork; apply_tree_bias inserted at source covers both. NO
+recompile. (Prefill calls :504/:541/:568 stay causal=True.)
+
+**HAZARD 2 — drafter slot_mapping leak (audit partially missed):** eagle.py:469-470 COPIES
+`common_attn_metadata.slot_mapping` into `self._slot_mapping_buffer` for the DRAFT model's KV
+writes (drafter gets `spec_decode_common_attn_metadata = cm`, gpu_model_runner:2296-2301) ⇒ naive
+in-place permute scrambles the draft cache. Also: fresh permuted CLONES break FULL-cudagraph
+pointer stability (graph captures the persistent buffer pointer; deploy=graph). RESOLUTION:
+**permute the persistent buffer IN PLACE (pointer-stable, graph reads contents at replay) +
+RESTORE after the last verify-side consumer and BEFORE drafter.propose**. Order per step:
+build-metadata (permute) → verify forward/graph-replay (reshape_and_cache + FA2 read use permuted)
+→ sample_tokens (ATTN_KV_REMAP src auto-threads on permuted; dst via pi) → RESTORE → propose
+(drafter sees flat). Restore is stream-ordered (torch op queues after remap kernel) ⇒ safe.
+
+**THE 5 EDIT SITES (flag FR13_SLOT_REORDER, default OFF):**
+1. PERMUTE — gpu_model_runner `_build_attention_metadata`, OUTER per-kv-group loop (once per kv
+   group per step; NOT inside `_build_attn_group_metadata` which runs per attn_gid → double-permute
+   hazard). Gate: full-attn spec type only (mamba/GDN untouched), `use_spec_decode`, per-req
+   `self.num_decode_draft_tokens.cpu[r]==tree_n-1` AND span==tree_n (exact spec signal, in scope),
+   skip `for_cudagraph_capture`. In-place: `sm[qsl_r:qsl_r+n] = sm[qsl_r:qsl_r+n][pi_inv]`
+   (sm_new[j]=orig[pi_inv[j]] ⇒ col k holds node pi[k]). Stash self._fr13_sr = (buffer, spans, pi).
+   Metadata-cache path safe: update_block_table passes the same permuted buffer.
+2. BIAS — TreeAttentionMetadataBuilder init: `self.tree_attn_bias = bias[:, pi]` ONCE (key axis;
+   rows stay BFS). NEVER per-step (metadata caching double-permutes). pi derived from the SAME
+   sorted-BFS algorithm text as the runner (both parse SPEC_CONFIG env; assert pi[0]==0; both log
+   pi at boot; gate script asserts equal — fail-loud vs divergence).
+3. COMMITTER DST — launch_attn_kv_linear_remap (fr10_gdn_tree_kernel.py:461-466): src auto-threads
+   (reads permuted map); dst must be FLAT: dst_slot = sm_permuted[qsl + pi[dst_off]] (identity
+   sm_new[pi[k]]==orig[k] ⇒ NO extra stash needed, just pi). Thread pi from self._fr13_sr.
+4. RESTORE — after ATTN_KV_REMAP apply in sample_tokens, before drafter.propose: un-permute the
+   stashed spans (sm[span] = sm[span][pi] — inverse of edit 1). Drafter + all later consumers see
+   flat. (eagle's copy_ at :469-470 happens at propose ⇒ sees restored ✓.)
+5. CAUSAL — fr13_patch_fa2_tree_bias.py:587 decode replacement: causal=(FR13_SLOT_REORDER!="1").
+   Stage-gate: FR13_TREE_CAUSAL_OFF=1 alone first — same-seed probe MUST be byte-identical to ship
+   (proves the redundancy claim on real HW before the reorder rides on it).
+
+**Cleared invariants:** RoPE positions row-attached (travel with K into permuted slot) ✓; rejection
+sampler node-indexed ✓; GDN spec_state_indices = separate mamba bank ✓; APC unaffected (committed
+prefix stays flat via edit 3) ✓; compute_slot_mapping fully rewrites spans each step (no cross-step
+accumulation) ✓; eager + FULL-graph both safe ✓. CPU logic model
+(scripts/fr13_slot_reorder_logic_model.py): GO — spine cols [0..d] contiguous IDENTICAL cat8/cat6
+⇒ M-invariant by construction; committer src-perm/dst-flat verified, scatter hazard demonstrated.
+
+**Staged validation:** S0 patcher self-test (pristine-copy diff) → S1 causal-off byte-identity →
+S2 reorder ON: engagement markers + MAB spine bit-exact + garble gate 0 + lossless-vs-nonspec
+temp06 → S3 GOAL GATE: matched-proof cat8-spine vs E5 (expect ≈3.53 == native) + branch-rescue
+intact + cat8 TOTAL > native (the deliverable).
