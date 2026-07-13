@@ -277,3 +277,22 @@ a multi-session effort for a small ship-benign gain — deferred pending explici
 SUMMARY of the whole cat6-vs-cat8 investigation: (1) cat8 not>cat6 = M-perturbation on spine (confirmed B=1,
 cat6-spine>cat8-spine ~0.3); (2) branches DO rescue (~0.22/fwd, 6-7%, all temps); (3) carrier unsettled
 FA2/L0-GDN; (4) small+ship-benign; (5) garble goal MET.
+
+## QUALITY QUESTION RESOLVED (2026-07-13): M-perturbation is SPEED-ONLY, not quality
+User reframe: "is it a quality issue if cat8 didn't accept the right token?" ANSWER: NO — cat8 commits the
+RIGHT tokens. EVIDENCE: the token-level garble gate matrix_build 15/15 -> 0/15 + token_ledger 0/15 = cat8
+fix-ON commits BYTE-IDENTICAL token sequences to native (a TOKEN-SEQUENCE compare, not just gross-garble).
+Native is a correct spec-decode (lossless vs true target by construction), so cat8==native => cat8 LOSSLESS.
+The earlier chat-prompt "divergence at char 10" was CONFOUNDED (237-char partial capture, post-turn junk,
+native-not-true-target) — flagged, NOT counter-evidence. => the accept-rate M-perturbation LOWERS accept
+(speed) but does NOT flip committed tokens (quality intact). Optional extra rigor: cat8 vs NON-SPEC true-target
+full-token-id compare (no-spec launcher exists) — DEFERRED (question already answered by token_ledger 0/15).
+
+## FR13 GARBLE SHIP-GOAL: COMPLETE (final state 2026-07-13)
+- Garble: 0/undef both branched trees (cat8 0/84, cat6 0/61) on full ship config (branched+cache+SWE-Verified).
+- Resolve: cat8 8/16 = native 8/16; cat6 7/16 (-1 flaky 14096). Degradation ELIMINATED.
+- Fix: FR13_ATTN_KV_REMAP (attn-KV re-linearization), baked. Structurally complete (all post-commit states remapped).
+- cat6-vs-cat8: cat8's larger M perturbs spine (~0.3, B=1); branches rescue ~0.22/fwd; SPEED-only, quality intact.
+- Accept-rate M-dep fix: cost-gate-STOPPED (carrier unsettled FA2/L0-GDN, localizer dead, no cheap confident fix).
+DEFERRED (user-prioritizable): (a) speed fix needs a new fused-build localizer (multi-session); (b) non-spec
+losslessness confirm; (c) dead-code cleanup #19.
