@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# FR13_FA2_MAB LOCALIZER (ladder step 2) — settle whether the forked FA2 query-tile
+# is the M-dependent carrier of the cat6-vs-cat8 SPINE accept-rate gap, now that
+# conv is CLEARED (768/768 M-invariant). Boots cat8 (served tree_n=9, spine=6,
+# deep=8), B=1, temp 0.6, ENFORCE_EAGER=1 (the FA2 MAB syncs -> eager-only). The
+# generalized FR13_FA2_MAB re-calls the SAME forked flash_attn_varlen_func on the
+# live tree TWICE: M_full=9 (all rows + 9x9 bias) vs M_spine=6 (spine rows
+# [0,1,3,5,7,8] + 6x6 sub-bias + spine-suffix KV), compares the deep-spine row
+# (row 8) output RAW max_abs. Spine derived from attn_metadata.fr10_tree_path0_nodes
+# (NOT the hardcoded cat9 constants).
+#   deep_spine_raw_max_abs > 0 (any full-attn layer) => FA2 query-tile IS the carrier
+#   == 0 on all layers                                => FA2 M-invariant => scan N_ACTUAL next
+set -uo pipefail
+cd /home/mark/shared/lumoFlyWheel
+
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+RR="${RUNROOT:-output/fr13_fa2_mab/run_$STAMP}"
+mkdir -p "$RR"
+echo "=== FR13_FA2_MAB localizer (cat8 M9-vs-M6) | runroot=$RR ==="
+[[ -z "$(docker ps -q)" ]] || { echo "FAIL: docker not empty before boot"; docker ps; exit 2; }
+
+FR13_FA2_MAB=1 \
+FR13_FA2_MAB_DUMP=/logs/fr13_fa2_mab.jsonl \
+FR13_FA2_MAB_LAYER="*" \
+FR13_FA2_MAB_SKIP=0 \
+FR13_FA2_MAB_LIMIT="${LIMIT:-16}" \
+ENFORCE_EAGER=1 \
+FR13_ATTN_KV_REMAP=1 FR13_DEVICE_MULTIDRAFT=1 \
+FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
+ACCEPT_SPEED_PROBE=1 OFFLOAD_AGENT=0 PROBE_N="${PROBE_N:-256}" MAX_NUM_SEQS_OVR=1 \
+PROBE_MODES="${PROBE_MODES:-temp06}" RUNROOT="$RR" \
+PROBE_CHAT_MESSAGES="${CHATMSG:-output/fr13_matched_proof_swe_prompt.json}" \
+  bash scripts/fr13_bigdenom_swe_serve_variant.sh mab cat8 subset_carrier_four.json \
+  > "$RR/run.log" 2>&1
+RC=$?
+echo "[boot+probe] rc=$RC  containers now: $(docker ps -q | wc -l)"
+
+DUMP="$RR/mab/logs/fr13_fa2_mab.jsonl"
+if [[ ! -s "$DUMP" ]]; then
+  echo "FAIL: FA2 MAB did NOT fire (dump empty/missing: $DUMP) — NOT a verdict."
+  echo "  --- last 40 lines run.log ---"; tail -40 "$RR/run.log"
+  echo "  --- worker log FR13_FA2_MAB lines ---"
+  grep -n "FR13_FA2_MAB" "$RR/mab/docker_full.log" 2>/dev/null | tail -20
+  exit 3
+fi
+
+echo "=== VERDICT (deep-spine RAW max_abs; int-view >0 => M-dependent) ==="
+.venv/bin/python - "$DUMP" <<'PY'
+import json, sys, collections
+recs = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+layers = sorted({r["layer_name"] for r in recs})
+print("events:", len(recs), "| distinct full-attn layers:", len(layers))
+# per-layer worst deep-spine raw max_abs
+worst = collections.defaultdict(float)
+for r in recs:
+    worst[r["layer_name"]] = max(worst[r["layer_name"]], r.get("deep_spine_raw_max_abs", 0.0))
+gmax = max(worst.values()) if worst else 0.0
+nz_layers = sum(1 for v in worst.values() if v > 0.0)
+# sanity: does the M_full arm reproduce the served deep-spine row? (recall self-check)
+recall_err = max((r.get("recall_m9_vs_served_deep_max_abs", 0.0) for r in recs), default=0.0)
+for r in recs[:10]:
+    print(f'  {r["layer_name"]} m_full={r["m_full"]} spine={r["spine_rows"]} deep={r["deep_row"]} '
+          f'raw_max_abs={r.get("deep_spine_raw_max_abs",0.0):.3e} '
+          f'recall_vs_served={r.get("recall_m9_vs_served_deep_max_abs",0.0):.3e}')
+print(f"GLOBAL worst deep-spine raw_max_abs = {gmax:.3e} | layers-with-nonzero = {nz_layers}/{len(worst)}")
+print(f"recall_vs_served self-check (should be ~0): {recall_err:.3e}")
+if gmax > 0.0:
+    print(">>> CARRIER = forked FA2 query-tile (M-dependent). Fix candidate: FR13_FA2_QPAD "
+          "(pad query rows to fixed M so kBlockM occupancy is M-invariant).")
+else:
+    print(">>> FA2 M-INVARIANT on all sampled layers => carrier is NOT FA2 "
+          "=> proceed to scan N_ACTUAL constexpr A/B (6-vs-8 at fixed N_PAD=8).")
+PY

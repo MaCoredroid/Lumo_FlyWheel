@@ -15120,8 +15120,14 @@ def _fr13_fa2_mab_recall(
     seq_lens,
     tree_attn_bias,
     output,
+    spine_nodes=None,
 ):
-    """In-process M=9-vs-M=5 spine-slice A/B on OUR forked-FA2 op."""
+    """In-process M_full-vs-M_spine spine-slice A/B on OUR forked-FA2 op.
+
+    spine_nodes (attn_metadata.fr10_tree_path0_nodes) generalizes the A/B to ANY
+    served tree (cat8 spine=[0,1,3,5,7,8] deep=8, cat6, cat9); falls back to the
+    hardcoded cat9 caterpillar constants only when it is None.
+    """
     if os.environ.get("FR13_FA2_MAB", "0") != "1":
         return
     dump = os.environ.get(
@@ -15144,11 +15150,20 @@ def _fr13_fa2_mab_recall(
         m_full = int(query.shape[0])
         if m_full <= 0 or bias.shape[0] < m_full or bias.shape[1] < m_full:
             return
-        # The deep-spine row and the spine slice are defined for the cat9
-        # caterpillar.  Skip silently if the live tree is a different shape
-        # (the A/B is only meaningful when the spine rows / deep row exist).
-        spine_rows = [r for r in _FR13_MAB_SPINE_ROWS if r < m_full]
-        deep_row = _FR13_MAB_DEEP_ROW
+        # Derive the spine from the LIVE tree (fr10_tree_path0_nodes) so the A/B
+        # is correct for ANY served tree (cat8 spine=[0,1,3,5,7,8] deep=8), NOT
+        # just the hardcoded cat9 caterpillar.  Fall back to the cat9 constants
+        # only when the live spine is unavailable (preserves 22-flip behavior).
+        if spine_nodes is not None:
+            try:
+                spine_rows = [int(x) for x in spine_nodes.reshape(-1).tolist()]
+            except Exception:
+                spine_rows = [int(x) for x in spine_nodes]
+            spine_rows = [r for r in spine_rows if 0 <= r < m_full]
+            deep_row = spine_rows[-1] if spine_rows else -1
+        else:
+            spine_rows = [r for r in _FR13_MAB_SPINE_ROWS if r < m_full]
+            deep_row = _FR13_MAB_DEEP_ROW
         if deep_row not in spine_rows or len(spine_rows) < 2:
             return
 
@@ -15269,10 +15284,13 @@ def _fr13_fa2_mab_recall(
         with out_path.open("a") as fh:
             fh.write(json.dumps(rec) + "\\n")
         logger.warning(
-            "FR13_FA2_MAB layer=%s call=%s M9-vs-M5 deep-spine(row6) "
-            "RAW max_abs=%.3e (recall_m9_vs_served=%.3e)",
+            "FR13_FA2_MAB layer=%s call=%s M%d-vs-M%d deep-spine(row%d) "
+            "RAW max_abs=%.3e (recall_full_vs_served=%.3e)",
             layer_name,
             capture_call_index,
+            m_full,
+            len(spine_rows),
+            deep_row,
             raw_max_abs,
             recall_vs_served,
         )
@@ -15427,6 +15445,7 @@ def _fr13_tree_attn_op_capture(
                 seq_lens,
                 payload["tree_attn_bias"],
                 output.detach().to(torch.float32).cpu(),
+                spine_nodes=getattr(attn_metadata, "fr10_tree_path0_nodes", None),
             )
     except Exception as exc:
         logger.warning("FR13 tree attention op capture failed: %s", exc)
