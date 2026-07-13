@@ -371,3 +371,28 @@ requires understanding the kernel's tree_bias/mask/causal alignment. Both re-cal
 back-pad, KV -inf-pad) broke on kernel-internal conventions -> LAUNCH read-only research workflow to read
 the forked FA2 source (fr13_patch_fa2_tree_bias.py + varlen_fwd_tree_bias .cu) and adversarially verify
 compute-only no-HBM-tax fixes BEFORE any cost-gate. commits: 20ad27bd (kv-pad arm).
+
+## RESEARCH (wf_6e41fd42): FA2 M-dep MECHANISM CLOSED + fix A' (contiguous-spine reorder) (2026-07-13)
+Read-only workflow read the forked FA2 source (scripts/fr13_patch_fa2_tree_bias.py + vendored FA2
+mask.h/block_info.h), VERIFIED against source (I spot-checked lines 42/57-58/200/213/29).
+ROOT CAUSE of both broken padding tests: the kernel anchors BOTH the tree_bias column window AND the
+causal diagonal to `context_len = actual_seqlen_k - actual_seqlen_q` (block_info-derived, NOT tree_bias.shape).
+KV-suffix-pad raises actual_seqlen_k without matching actual_seqlen_q => anchor slides => real keys lose their
+-inf mask (self=16.3). QPAD front-pad self=0 because k_offset (line 213) compensates when max_seqlen_q>cols.
+=> ALL re-call padding fixes exhausted (KV-pad desyncs anchor; to hold anchor you must pad query too = QPAD, refuted).
+MECHANISM of the 6.25e-2 (= exactly 1 bf16 ULP @ mag~8): FP REASSOCIATION of the online-softmax butterfly
+reduction. Interleaved branches place surviving spine keys in DIFFERENT score-tile columns (cat8 spine cols
+{0,1,2,4,6} vs spine-only {0,1,2,3,4}) => different lane partials (col=nj*8+(lane%4)*2+j) => different
+Allreduce<4> association tree => 1 ULP. NOT a masking bug (exp2(-inf)=0 exact; recall_vs_served=0).
+=> ONLY lever: make surviving spine keys occupy IDENTICAL columns regardless of branch count.
+FIX A' (RANK 1, mechanism-guaranteed, adversarial-verified): call-site-local CONTIGUOUS-SPINE REORDER.
+Permute suffix q/K/V + both tree_bias axes to pi=[spine-first (depth order), then branches (topological)],
+call the fork, UN-permute output. No .cu recompile (arg reorder of 6-16 suffix rows); no-HBM-tax (context
+untouched); lossless (exact relabeling; masked branch cols neutral); carrier-B-safe (local to FA2 call, GDN/
+committer see original order). VALIDATABLE in the MAB re-call harness BEFORE live: reorder arm -> deep_pi vs
+row_m5 == 0.000 (was 6.25e-2) + relabel-neutrality self-check (non-deep within floor) + identity(interleaved)
+baseline stays 6.25e-2 as negative control. Refuted/dead: KV-pad, bias-only reorder, separate spine call
+(HBM tax), precision-widening, QPAD, BV geom-match, chain5. Scan N_ACTUAL deferred (FA2 = only carrier).
+NEXT: implement FR13_FA2_MAB_REORDER arm; if deep_pi-row_m5==0 => promote A' to live call-site-local reorder
+in fr13_patch_fa2_tree_bias.py tree-decode wiring (flag-gated) + gate same-seed byte-identity + accept + lossless
++ garble 0. commits: (this doc) research finding.
