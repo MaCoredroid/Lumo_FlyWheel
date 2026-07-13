@@ -952,3 +952,11 @@ garble. FIX-ON (live, WALL=0 no-wall clean config, remap ENGAGED, APC 86%): cat8
 malformed=0 on 18 self-contained scripts => agentic garble 45%->0%, at/below native floor. Partial (18 vs
 130 scripts); firms up at arm completion + cat6 fix-ON pending. Old gate's 35%/17% were BUGS (fragment
 scoring, python -c regex truncation, missing except-as/def bindings), not garble.
+
+## Give-up/thrash ELIMINATED — cat8 fix-ON trajectory shape tracks native (2026-07-13)
+Assistant-turns per task (give-up=short 1-3, garble-thrash=long tail). NO-FIX cat8 (prior qc4): median=32,
+dist=[2,2,9,10,12,13,14,31,32,36,43,49,53,56,88,124] = BIMODAL DYSFUNCTION (2x 2-turn hard give-ups +
+88/124 garble-thrash loops). NATIVE: median=14 [5..56], healthy uniform. cat8 FIX-ON (live, 12 inst):
+median~15, min=8 (NO give-ups), max=35 (NO thrash) => tracks NATIVE, bimodal dysfunction GONE. => the fix
+eliminates BOTH failure modes (early give-up + garble-thrash); "faster per task" = healthier (not thrashing
+on garble), not giving up. Resolve rate = eval verdicts pending at arm completion. Garble 0% (52 scripts).
