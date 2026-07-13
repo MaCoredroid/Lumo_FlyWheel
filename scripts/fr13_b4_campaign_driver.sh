@@ -21,7 +21,6 @@ WALL=${WALL:-1800}   # codex wall per task = deployment-faithful 30min (retries 
 # WALL=0 => NO wall: emit EMPTY AGENT_WALL_S so the runner omits --agent-wall-s (a "0" would
 # pass --agent-wall-s 0 = 0s = instant timeout). Hang protection = the 600s stall-watchdog.
 # Matches the cachefirst header's "NO wall (WALL=0)" intent + the no-AGENT_WALL_S gate policy.
-if [[ "$WALL" == "0" || -z "$WALL" ]]; then AGENT_WALL_S_VAL=""; else AGENT_WALL_S_VAL="$WALL"; fi
 WALL_ENV="$WALL"; [[ "$WALL" == "0" ]] && WALL_ENV=""
 BSIZE=${BSIZE:-4}    # vLLM max_num_seqs (B). B=1 = single-stream, no co-residency.
 CONC=${CONC:-4}      # codex task concurrency. B=1 clean => CONC=1 (one task at a time).
