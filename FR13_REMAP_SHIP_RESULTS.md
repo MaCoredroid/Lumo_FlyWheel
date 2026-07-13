@@ -77,11 +77,9 @@ the fix). wall=no-wall (WALL=0), nudge=0 (OFF), temp=0.6, B4, cache-ON (APC hits
 FAILED — a known-hard task (no-fix also wrong-patched it per matrix doc), NOT a fix regression. So the
 tree+cache agentic DEGRADATION (no-fix 37% < native 50%) is fully ELIMINATED. Garble 0% (84 scripts).
 
-=> cat8 fix-ON resolve (53%) tracks native (50%); the tree+cache agentic DEGRADATION (no-fix 37% < native
-50%) is ELIMINATED. Same 16-task subset (15/16 overlap; 1 fix-ON task pending). RESCUED from garble-failure:
-astropy-13579, -14539, -14508 (no-fix failed -> fix resolved). REGRESSED: astropy-13236 (no-fix resolved ->
-fix failed; likely temp-0.6 trajectory variance - the fix removes garble, does not inject errors). Net +2
-(6->8). Garble 0% (fixed gate). Final cat8 tally + cat6 + this-run native at arm completion.
+Per-task vs no-fix: RESCUED from garble-failure: astropy-13579, -14539, -14508 (no-fix failed -> fix
+resolved). REGRESSED: astropy-13236 (no-fix resolved -> fix failed; likely temp-0.6 trajectory variance -
+the fix removes garble, does not inject errors). Net +2 (6->8). cat6 + this-run native resolve at completion.
 
 ## STATUS (this run, `output/fr13_qwencode_cachefirst_remap`, TAG b4_remap)
 - **cat8 arm: DONE 16/16.** Garble **0%** (84 scripts), resolve **8/16 (50%) = native**, accept **3.336** clean,
