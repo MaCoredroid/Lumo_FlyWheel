@@ -445,6 +445,24 @@ if [[ "${CAPTURE_ONLY:-0}" == "1" ]]; then
     echo "FAIL: no capture .pt produced (warmup tree-decode did not fire the layer-0 capture)"; exit 6; fi
 fi
 
+# ---- ACCEPT_SPEED_PROBE: superset-bound (greedy accept/fwd) + real wall-TPS (temp06), local vLLM ----
+# Reuses the proven boot above (server healthy + spec-engaged). Fixed prompt, B=1 single request => clean
+# decode_tps_wall (no co-residency, prefill excluded). Additive: default off => original SWE path unaffected.
+# See FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md.
+if [[ "${ACCEPT_SPEED_PROBE:-0}" == "1" ]]; then
+  PF=${PROBE_PROMPT_FILE:-scripts/fr13_probe_prompt.txt}
+  echo "[accept-speed] arm=$ARM kind=$KIND prompt=$PF n=${PROBE_N:-512}"
+  for _mode in greedy temp06; do
+    PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" .venv/bin/python scripts/fr13_accept_speed_probe.py \
+      --mode "$_mode" --prompt-file "$PF" --n "${PROBE_N:-512}" \
+      --base-url "http://127.0.0.1:$PORT" \
+      --out "$ARMDIR/accept_speed_${_mode}.json" >> "$ARMDIR/accept_speed.log" 2>&1 \
+      && echo "[accept-speed] $_mode -> $(cat "$ARMDIR/accept_speed_${_mode}.json" | tr -d '\n')" \
+      || { echo "[accept-speed] $_mode FAILED"; tail -20 "$ARMDIR/accept_speed.log"; }
+  done
+  exit 0
+fi
+
 # ---- PROBE_ONLY: generation-level carrier locator (skip offload proxy + SWE) ----
 # The server is booted, healthy, spec-engaged and APC-verified above. PROBE_ONLY replays banked
 # tool-call-boundary prompts N times DIRECTLY against local vLLM (temp 0.6 lives in the probe body)

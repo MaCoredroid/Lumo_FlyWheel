@@ -52,6 +52,7 @@ def probe(mode, prompt, n_tokens):
     body = {
         "model": "qwen3.6-27b", "prompt": prompt, "max_tokens": n_tokens,
         "temperature": temperature, "seed": 0, "stream": True,
+        "ignore_eos": True,  # force exactly n_tokens => consistent token count across arms + no early stop
         "stream_options": {"include_usage": True},
     }
     req = urllib.request.Request(BASE + "/v1/completions",

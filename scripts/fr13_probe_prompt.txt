@@ -1,0 +1,12 @@
+# A self-contained Python module implementing a small in-memory key-value store
+# with TTL expiry, LRU eviction, and thread-safety. Fully typed, with docstrings.
+import threading
+import time
+from collections import OrderedDict
+from typing import Any, Optional
+
+
+class TTLCache:
+    """A thread-safe in-memory cache with per-key TTL and LRU eviction."""
+
+    def __init__(self, max_size: int = 128, default_ttl: float = 60.0) -> None:
