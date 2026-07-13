@@ -74,7 +74,17 @@ drafter shift). This CHALLENGES "branches = speed" and demands the matched exper
 NOTE: cat8-vs-native is NOT a clean superset test (different drafter/attn/committer: tree path vs native MTP).
 cat8-vs-cat6 IS (same forked tree path) — that's the sharp one.
 
-## RESULT (controlled experiment, B=1 fixed prompt) — NOISE REFUTED, M-dependence CONFIRMED
+## 🛑 CONFOUND RETRACTION (2026-07-13): the controlled experiment below ran with FR13_ATTN_KV_REMAP OFF
+The accept-bound orchestrator omitted `FR13_ATTN_KV_REMAP=1` (0 ENGAGED in docker_full.log), so **cat8/cat6
+probes were GARBLING** => their accept is garble-CONFOUNDED (wrong-accepts). native has no tree => clean
+regardless. Impact: **the "cat6>cat8 at greedy => M-dependence not noise" conclusion is NOT cleanly
+established** (the greedy run was itself garbling). What SURVIVES: (a) native > trees holds/strengthens (trees
+garble-inflated, so clean trees even lower); (b) cat6>cat8 is corroborated by the CLEAN matrix (cat6 3.594 >
+cat8 3.336, remap-on 0/84 garble) — but the clean GREEDY M-dependence-vs-noise test is PENDING a re-run.
+Root cause fixed in scripts/fr13_cat6_cat8_accept_bound_exp.sh (now sets FR13_ATTN_KV_REMAP=1 +
+DEVICE_MULTIDRAFT=1). Re-running clean. TREAT THE NUMBERS BELOW AS GARBLE-CONFOUNDED (cat8/cat6 rows).
+
+## RESULT (controlled experiment, B=1 fixed prompt) — 🛑 GARBLE-CONFOUNDED (remap OFF), see retraction above
 | arm | mode | accept/fwd | tps_wall (committed/decode) |
 |---|---|---|---|
 | cat8 | greedy | **3.368** | 18.9 |

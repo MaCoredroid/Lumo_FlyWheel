@@ -9,7 +9,11 @@ N=${N:-512}
 run() {  # arm kind
   local arm=$1 kind=$2
   echo "===== ACCEPT/SPEED PROBE arm=$arm kind=$kind ====="
+  # FR13_ATTN_KV_REMAP=1 = the garble fix (MUST be on, else trees garble -> accept confounded; the omission
+  # confounded the first run 2026-07-13). FR13_DEVICE_MULTIDRAFT=1 = ship committer (temp>0). Match the matrix.
   ACCEPT_SPEED_PROBE=1 OFFLOAD_AGENT=0 PROBE_N=$N MAX_NUM_SEQS_OVR=${BSZ:-1} \
+    FR13_ATTN_KV_REMAP=1 \
+    FR13_DEVICE_MULTIDRAFT=1 FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh "$arm" "$kind" subset_b4_four.json \
     > "$RUNROOT/$arm.log" 2>&1
   echo "[$arm] rc=$? ; containers after: $(docker ps -q | wc -l)"
