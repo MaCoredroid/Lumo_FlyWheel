@@ -369,7 +369,7 @@ curl -fsS "http://127.0.0.1:$PORT/metrics" > "$ARMDIR/metrics_before_warmup.txt"
   --samples-per-prompt 1 --batch-size 1 --seed 1313 --top-p 1.0 \
   --wait-health 60 --request-timeout 900 --warmup-samples 0 \
   --modes "$PROBE_MODE" \
-  --prompt-limit 1 --max-tokens 16 --temperature 0.0 \
+  --prompt-limit "${WARMUP_PROMPT_LIMIT:-1}" --max-tokens "${WARMUP_MAX_TOKENS:-16}" --temperature 0.0 \
   --out "$ARMDIR/warmup_probe.json" \
   --request-metrics-out "$ARMDIR/warmup_request_metrics.jsonl" \
   > "$ARMDIR/warmup_probe_stdout.log" 2>&1
