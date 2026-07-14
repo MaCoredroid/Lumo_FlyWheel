@@ -422,6 +422,14 @@ if [[ "${FR13_DEVICE_MULTIDRAFT:-1}" == "0" ]]; then
 else
   rm -f "$LOG_DIR/fr13_device_multidraft_off.arm" 2>/dev/null || true
 fi
+# FR13_DRAFT_SOURCE=merged sidecar (same worker-env-drop workaround): the worker drops FR13_* env, so
+# the MTP-k+Arctic-suffix merged drafter seam (fr10_phase4_patch_vllm_tree_gdn.py) reads THIS sidecar
+# to enable merged mode. Default (absent/mtp) => byte-identical locked cat9 drafter, zero arctic.
+if [[ "${FR13_DRAFT_SOURCE:-mtp}" == "merged" ]]; then
+  : > "$LOG_DIR/fr13_draft_source_merged.arm"
+else
+  rm -f "$LOG_DIR/fr13_draft_source_merged.arm" 2>/dev/null || true
+fi
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
 set -a
