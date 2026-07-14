@@ -33,6 +33,10 @@ run_native() {  # arm spec_n expect offload
   OFFLOAD_AGENT=$offload SPEC_N=$spec_n MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL_ENV \
     FR13_SFWD_GPU_TIMER=1 \
     FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
+    FR13_DFWD_GPU_TIMER=1 \
+    FR13_DFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}_dfwd.json \
+    FR13_CFWD_GPU_TIMER=1 \
+    FR13_CFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}_cfwd.json \
     bash scripts/fr13_bigdenom_swe_serve.sh "$arm" native "$SUBSET" \
     > "$RUNROOT/$arm.runlog" 2>&1
   local rc=$?
@@ -51,6 +55,10 @@ run_variant() {  # arm kind expect offload
     FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
     FR13_SFWD_GPU_TIMER=1 \
     FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
+    FR13_DFWD_GPU_TIMER=1 \
+    FR13_DFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}_dfwd.json \
+    FR13_CFWD_GPU_TIMER=1 \
+    FR13_CFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}_cfwd.json \
     bash scripts/fr13_bigdenom_swe_serve_variant.sh "$arm" "$kind" "$SUBSET" \
     > "$RUNROOT/$arm.runlog" 2>&1
   local rc=$?

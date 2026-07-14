@@ -383,6 +383,28 @@ def fr13_device_multidraft_commit(
         raise RuntimeError(
             "FR13_DEVICE_MULTIDRAFT: missing target/self logits (disengaged)"
         )
+    # FR13_DM_DEPTHSYNC (S1/P1, default OFF => byte-identical ship): route to
+    # the depth-synchronous walk (~2 batched readbacks per LEVEL instead of
+    # 4-7 blocking .item() per NODE => ~100 syncs/step -> ~2x walk depth).
+    # SAME per-request tensor ops, draw order, draw sizes, and generators =>
+    # products BYTE-IDENTICAL at the same seeds (gated CPU-only by
+    # scripts/fr13_dm_depthsync_byte_gate.py).
+    if (
+        os.environ.get("FR13_DM_DEPTHSYNC", "0") == "1"
+        and _fr13_commit_trace_fh() is None
+    ):
+        # (commit-trace diagnostics need per-node host values => the legacy
+        # per-node path serves them; depthsync + trace never silently mix.)
+        return _fr13_commit_depthsync(
+            num_draft_tokens,
+            draft_token_ids,
+            tree_parent_indices,
+            target_logits,
+            tree_self_logits,
+            bonus_token_ids,
+            max_spec_len,
+            generators=generators,
+        )
 
     device = target_logits.device
     parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
@@ -485,4 +507,256 @@ def fr13_device_multidraft_commit(
         accepted_lens,
         accepted_node_paths,
         accepted_token_rows,
+    )
+
+
+def _fr13_commit_depthsync(
+    num_draft_tokens,
+    draft_token_ids,
+    tree_parent_indices,
+    target_logits,
+    tree_self_logits,
+    bonus_token_ids,
+    max_spec_len: int,
+    *,
+    generators=None,
+):
+    """Depth-SYNCHRONOUS multidraft walk (FR13_DM_DEPTHSYNC, S1/P1).
+
+    Semantically the SAME walk as ``fr13_device_multidraft_commit``'s legacy
+    per-node loop, restructured so host<->device round-trips are per LEVEL
+    (batched over the active requests), not per node:
+
+      legacy: 4-7 blocking ``.item()`` per node x ~10-15 nodes/step (~100 syncs)
+      here:   readback A (overlap masses) + readback B (source/accept/continue)
+              per level (+ readback C only on levels with rejects) + one seed
+              batch + one final packed row DtoH  =>  ~2 x walk-depth syncs.
+
+    BYTE-IDENTITY CONTRACT (gated by scripts/fr13_dm_depthsync_byte_gate.py):
+    per request, the tensor ops, their SIZES, their ORDER, and the generator
+    are exactly the legacy path's -- single-row softmax (never batched: a
+    stacked [A,V] softmax could shift p by 1 ULP), exact-k weights for the
+    source ``multinomial`` (replacement=False rng consumption depends on input
+    size, so padding is banned), residual draws launched only for rejected
+    requests as their LAST draw. Cross-request interleaving differs from the
+    legacy sequential order, but every request draws from its OWN generator,
+    so each request's stream is unchanged => identical products at same seeds.
+
+    Control comparisons replicate the legacy python-float semantics exactly:
+    ``u.item() < accept_prob.item()`` (f32 widened vs f64) becomes the device
+    compare ``u.to(f64) < accept_prob``; ``overlap_mass.item() <= 0.0`` and
+    ``mass.item() == 0.0`` are read back and compared as python floats.
+    """
+    device = target_logits.device
+    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+    drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
+    if hasattr(num_draft_tokens, "detach"):
+        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+    else:
+        counts = [int(x) for x in num_draft_tokens]
+    nreq = len(counts)
+    row_cap = int(max_spec_len) + 1
+
+    # --- per-request generators: same seed derivation as legacy, but the seed
+    # readbacks are batched into (at most) one sync per generator device.
+    gens: list = [None] * nreq
+    seed_pend: list = []  # (req_i, 0-dim seed tensor) needing readback
+    for req_i in range(nreq):
+        dev_gen = torch.Generator(device=device)
+        gens[req_i] = dev_gen
+        host_gen = generators.get(req_i) if generators else None
+        if host_gen is not None:
+            seed_t = torch.randint(
+                0, 2 ** 31 - 1, (1,), device=host_gen.device, generator=host_gen
+            )
+            if seed_t.device.type == "cpu":
+                dev_gen.manual_seed(int(seed_t.item()))  # cpu .item() = no sync
+            else:
+                seed_pend.append((req_i, seed_t.reshape(())))
+    if seed_pend:
+        vals = torch.stack([t for _, t in seed_pend]).cpu().tolist()
+        for (req_i, _), v in zip(seed_pend, vals):
+            gens[req_i].manual_seed(int(v))
+
+    # --- per-request walk state (host ints; the tree structure is host-known)
+    starts = []
+    s = 0
+    for c in counts:
+        starts.append(s)
+        s += int(c)
+    cur_parent = [-1] * nreq
+    accepted_row = [0] * nreq
+    accepted_path: list[list[int]] = [[] for _ in range(nreq)]
+    row_len = [0] * nreq
+    # device row buffer: tokens land here asynchronously; ONE final DtoH.
+    row_buf = torch.full((nreq, row_cap), -1, dtype=torch.long, device=device)
+    active = [i for i in range(nreq)]
+
+    def _children_of(req_i, parent):
+        st, n = starts[req_i], int(counts[req_i])
+        return [
+            node for node in range(n)
+            if int(parents_cpu[st + node]) == int(parent)
+        ]
+
+    def _emit_token(req_i, token_0dim):
+        # async device-side append into the packed row buffer
+        row_buf[req_i, row_len[req_i]] = token_0dim
+        row_len[req_i] += 1
+
+    def _bonus(req_i):
+        # walk end for req_i: leaf bonus (self-row sample) or root bonus id.
+        cp = cur_parent[req_i]
+        if cp >= 0:
+            self_row = _device_softmax_row(
+                tree_self_logits[starts[req_i] + cp]
+            )
+            tok = torch.multinomial(
+                self_row.to(torch.float32), 1, generator=gens[req_i]
+            ).reshape(())
+            _emit_token(req_i, tok)
+        elif req_i < int(bonus_token_ids.numel()):
+            _emit_token(req_i, bonus_token_ids.reshape(-1)[req_i])
+
+    for _level in range(row_cap):
+        if not active:
+            break
+        # ---- phase A (async device work; per-request ops identical to legacy)
+        stage = {}   # req_i -> dict of per-request tensors
+        ended = []
+        for req_i in list(active):
+            children = _children_of(req_i, cur_parent[req_i])
+            if not children:
+                _bonus(req_i)
+                ended.append(req_i)
+                continue
+            st = starts[req_i]
+            child_drafts = [int(drafts_cpu[st + c]) for c in children]
+            p_row = _device_softmax_row(target_logits[st + children[0]])
+            p = p_row
+            if p.dtype != torch.float32 and p.dtype != torch.float64:
+                p = p.to(torch.float32)
+            p = p / p.sum()
+            tokens_t = torch.tensor(
+                child_drafts, dtype=torch.long, device=device
+            )
+            overlaps = p[tokens_t].to(torch.float64)
+            overlap_mass = overlaps.sum()
+            stage[req_i] = {
+                "children": children,
+                "child_drafts": child_drafts,
+                "p": p,
+                "tokens": tokens_t,
+                "overlaps": overlaps,
+                "mass": overlap_mass,
+            }
+        for req_i in ended:
+            active.remove(req_i)
+        if not stage:
+            continue
+        # ---- readback A: overlap masses (one sync for all active requests)
+        a_reqs = sorted(stage.keys())
+        masses = torch.stack([stage[r]["mass"] for r in a_reqs]).cpu().tolist()
+        # ---- phase B: draws (async; exact-k sizes; per-request generators)
+        b_pend = {}
+        for r, m in zip(a_reqs, masses):
+            sg = stage[r]
+            if float(m) <= 0.0:
+                # zero-overlap reject: token ~ p (full vocab); LAST draw for r.
+                tok = torch.multinomial(
+                    sg["p"].to(torch.float32), 1, generator=gens[r]
+                ).reshape(())
+                _emit_token(r, tok)
+                active.remove(r)
+                continue
+            weights = sg["overlaps"] / sg["mass"]
+            source_t = torch.multinomial(
+                weights.to(torch.float32), 1, generator=gens[r]
+            ).reshape(())
+            token_t = sg["tokens"][source_t]
+            same = sg["tokens"] == token_t
+            q_mix = weights[same].sum()
+            accept_prob = torch.clamp(
+                sg["p"][token_t].to(torch.float64) / q_mix, max=1.0
+            )
+            u = torch.rand(
+                1, generator=gens[r], device=device, dtype=torch.float32
+            ).reshape(())
+            acc_t = u.to(torch.float64) < accept_prob
+            _emit_token(r, token_t)
+            b_pend[r] = {
+                "weights": weights,
+                "source": source_t,
+                "token": token_t,
+                "acc": acc_t,
+            }
+        if not b_pend:
+            continue
+        # ---- readback B: source index + accept flag (one sync)
+        b_reqs = sorted(b_pend.keys())
+        packed = torch.stack(
+            [
+                torch.stack(
+                    [
+                        b_pend[r]["source"].to(torch.int64),
+                        b_pend[r]["acc"].to(torch.int64),
+                    ]
+                )
+                for r in b_reqs
+            ]
+        ).cpu().tolist()
+        # ---- phase C: rejected -> residual pipeline (values stay on device;
+        # only the legacy `mass == 0` control float is read back, batched)
+        c_pend = []
+        for r, (src, acc) in zip(b_reqs, packed):
+            sg, bp = stage[r], b_pend[r]
+            if acc:
+                child = int(sg["children"][int(src)])
+                # legacy safety check `token != drafts[child]` is identically
+                # true here (token == tokens[source] == drafts[child]); the
+                # accepted path continues exactly as legacy.
+                cur_parent[r] = child
+                accepted_row[r] = child
+                accepted_path[r].append(child)
+                continue
+            q_mix_vocab = torch.zeros_like(sg["p"], dtype=torch.float64)
+            q_mix_vocab.scatter_add_(0, sg["tokens"], bp["weights"])
+            residual = torch.clamp(
+                sg["p"].to(torch.float64) - q_mix_vocab, min=0.0
+            )
+            rmass = residual.sum()
+            c_pend.append((r, residual, rmass))
+            active.remove(r)
+        if c_pend:
+            rmasses = torch.stack([m for _, _, m in c_pend]).cpu().tolist()
+            for (r, residual, rmass_t), m in zip(c_pend, rmasses):
+                if float(m) == 0.0:
+                    residual = stage[r]["p"].to(torch.float64)
+                else:
+                    # legacy divides by the DEVICE mass tensor -- keep that op
+                    residual = residual / rmass_t
+                tok = torch.multinomial(
+                    residual.to(torch.float32), 1, generator=gens[r]
+                ).reshape(())
+                # legacy appends the RESIDUAL token over the provisional
+                # rejected token (same row position: legacy appends once per
+                # node; the rejected node's row entry IS the residual token).
+                row_len[r] -= 1
+                _emit_token(r, tok)
+
+    # any request still active hit the level cap exactly like the legacy
+    # range(max_spec_len+1) loop; requests whose walk ended at a leaf got
+    # their bonus in _bonus(). Requests that ran out of levels take no bonus
+    # (legacy: loop exhausts without the children==[] branch firing).
+    rows_host = row_buf.cpu().tolist()
+    out_rows = [rows_host[i][: row_len[i]][:row_cap] for i in range(nreq)]
+    return (
+        out_rows,
+        [int(x) for x in accepted_row],
+        [int(len(p)) for p in accepted_path],
+        [[int(x) for x in p] for p in accepted_path],
+        [
+            [int(drafts_cpu[starts[i] + n]) for n in accepted_path[i]]
+            for i in range(nreq)
+        ],
     )

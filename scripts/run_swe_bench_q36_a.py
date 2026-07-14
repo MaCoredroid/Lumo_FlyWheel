@@ -447,6 +447,37 @@ def _sidecar_fwd_gpu_totals() -> dict | None:
     return {"seconds": secs, "steps": steps, "drafts": drafts} if found else None
 
 
+def _sidecar_span_totals(env_name: str) -> dict | None:
+    """FR13_DFWD/CFWD_GPU_TIMER: cumulative component GPU-span stats from a
+    _Fr13SpanTimer JSON sidecar (schema fr13.span_gpu_timer.v1): {seconds,
+    spans}. drafter = propose_draft_token_ids (all D spine forwards);
+    committer = the spec-decode rejection-sampler dispatch in _sample. Same
+    per-pid file layout + /workspace->host translation as the sfwd sidecar
+    (_sidecar_fwd_gpu_totals); sums across per-pid files. Returns None when
+    the timer is off / no sidecar."""
+    base = os.environ.get(env_name)
+    if not base:
+        return None
+    if base.startswith("/workspace/"):
+        base = str(REPO_ROOT / base[len("/workspace/"):])
+    import glob as _glob
+    pat = base.replace("{pid}", "*") if "{pid}" in base else base + ".*"
+    files = set(_glob.glob(pat))
+    if os.path.exists(base):
+        files.add(base)
+    secs = spans = 0.0
+    found = False
+    for f in files:
+        try:
+            d = json.loads(Path(f).read_text(encoding="utf-8"))
+            secs += float(d.get("gpu_seconds", 0.0))
+            spans += float(d.get("n_spans", 0.0))
+            found = True
+        except Exception:  # noqa: BLE001
+            continue
+    return {"seconds": secs, "spans": spans} if found else None
+
+
 def _metrics_snapshot(metrics_url: str) -> str:
     """/metrics text, plus (FR13_SFWD_GPU_TIMER) synthetic counter lines carrying the
     worker timer's cumulative pure-decode-forward GPU seconds AND its MATCHED
@@ -462,15 +493,34 @@ def _metrics_snapshot(metrics_url: str) -> str:
     aggregation active), use that and do NOT append. No-op / byte-identical when the
     timer is off / no sidecar."""
     text = _metrics_text(metrics_url)
-    if "fr13_decode_forward_gpu_seconds_total" in text:
-        return text
-    t = _sidecar_fwd_gpu_totals()
-    if t is not None:
+    if "fr13_decode_forward_gpu_seconds_total" not in text:
+        t = _sidecar_fwd_gpu_totals()
+        if t is not None:
+            if not text.endswith("\n"):
+                text += "\n"
+            text += f"vllm:fr13_decode_forward_gpu_seconds_total {t['seconds']:.9f}\n"
+            text += f"vllm:fr13_decode_forward_gpu_steps_total {t['steps']:.1f}\n"
+            text += f"vllm:fr13_decode_forward_gpu_drafts_total {t['drafts']:.1f}\n"
+    # FR13_DFWD/CFWD_GPU_TIMER: the SAME synthetic-line route for the drafter /
+    # committer span timers (their prometheus Counters are also worker-process-
+    # local in single-API-server mode; the sidecar is the robust channel). The
+    # spans counter exists ONLY as a synthetic line (the worker Counter carries
+    # seconds alone), so a multiprocess-aggregated /metrics run reports seconds
+    # without spans -> the reducer's ms-per-step is null there. No-op /
+    # byte-identical when a timer is off / no sidecar.
+    for _mbase, _env in (
+        ("fr13_drafter_gpu", "FR13_DFWD_GPU_TIMER_JSON"),
+        ("fr13_committer_gpu", "FR13_CFWD_GPU_TIMER_JSON"),
+    ):
+        if f"{_mbase}_seconds_total" in text:
+            continue  # multiprocess /metrics already exposes the counter
+        st = _sidecar_span_totals(_env)
+        if st is None:
+            continue
         if not text.endswith("\n"):
             text += "\n"
-        text += f"vllm:fr13_decode_forward_gpu_seconds_total {t['seconds']:.9f}\n"
-        text += f"vllm:fr13_decode_forward_gpu_steps_total {t['steps']:.1f}\n"
-        text += f"vllm:fr13_decode_forward_gpu_drafts_total {t['drafts']:.1f}\n"
+        text += f"vllm:{_mbase}_seconds_total {st['seconds']:.9f}\n"
+        text += f"vllm:{_mbase}_spans_total {st['spans']:.1f}\n"
     return text
 
 

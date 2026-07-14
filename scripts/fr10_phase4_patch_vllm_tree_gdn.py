@@ -17205,6 +17205,15 @@ class _Fr13SpanTimer:
         self._accum_s = 0.0
         self._n_spans = 0
         self._counter = None
+        # throttled sidecar dump (mirrors the sfwd timer's _maybe_dump_json):
+        # at most one rewrite per FR13_SPAN_GPU_TIMER_DUMP_S (default 1.0s),
+        # so an ARMED span timer never adds a per-step file write to the
+        # measurement it takes. Teardown dumps directly (final, unthrottled).
+        import time as _time
+        self._dump_period_s = float(
+            __import__("os").environ.get("FR13_SPAN_GPU_TIMER_DUMP_S", "1.0")
+        )
+        self._last_dump_t = _time.monotonic()
         if self._enabled:
             try:
                 from prometheus_client import Counter as _C
@@ -17256,6 +17265,14 @@ class _Fr13SpanTimer:
                     self._counter.inc(float(_ms) / 1000.0)
             except Exception:  # noqa: BLE001
                 continue
+        self._maybe_dump()
+
+    def _maybe_dump(self):
+        import time as _time
+        now = _time.monotonic()
+        if (now - self._last_dump_t) < self._dump_period_s:
+            return
+        self._last_dump_t = now
         self._dump()
 
     def _dump(self):
@@ -17403,6 +17420,76 @@ def _fr13_cfwd_end(start_ev):
         )
     text = text.replace(end_anchor, end_inject, 1)
 
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_cfwd_gpu_timer() -> bool:
+    """FR13_CFWD_GPU_TIMER (DEFAULT-OFF): wrap the spec-decode rejection-sampler
+    dispatch in gpu_model_runner._sample (the COMMITTER: accept / path-LCP /
+    bonus decision + commit; the host committer loop's packed DtoH+sync when
+    FR13_GPU_COMMITTER=0) with the _Fr13SpanTimer committer begin/end helpers
+    the sfwd module block installs (counter vllm:fr13_committer_gpu_seconds,
+    sidecar env FR13_CFWD_GPU_TIMER_JSON, schema fr13.span_gpu_timer.v1).
+
+    CALLER-LEVEL injection, NOT inside rejection_sampler.py: the sampler twin
+    regions are owned by another workstream, so the span brackets the dispatch
+    from the model-runner side. The wrapped call only runs when
+    spec_decode_metadata is not None, so prefill / plain-sampler steps are
+    never timed (the drafter twin _fr13_dfwd_* is injected around
+    propose_draft_token_ids by _patch_gpu_model_runner_replay_draft_reqkey).
+
+    FLAG-GATE: env FR13_CFWD_GPU_TIMER. DEFAULT OFF => _fr13_cfwd_begin returns
+    None and _fr13_cfwd_end no-ops => byte-identical to the unpatched dispatch.
+
+    ORDER: must run AFTER _patch_gpu_model_runner_sfwd_gpu_timer (whose module
+    block defines _fr13_cfwd_begin/_fr13_cfwd_end); fails loud if absent.
+    """
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    # Idempotency sentinel = the injected CALL itself. A bare "# FR13_CFWD_GPU_
+    # TIMER" comment sentinel could collide with the helper block the sfwd
+    # patch installs (the gpu_committer sentinel-collision lesson); the call
+    # string appears nowhere in the helper DEFINITIONS.
+    sentinel = "_fr13_cfwd_ev = _fr13_cfwd_begin()"
+    if sentinel in text:
+        return False
+    if "def _fr13_cfwd_begin" not in text:
+        raise RuntimeError(
+            "FR13_CFWD_GPU_TIMER: _fr13_cfwd_begin helper missing from "
+            "gpu_model_runner.py -- _patch_gpu_model_runner_sfwd_gpu_timer "
+            "(which installs the span-timer module block) must run BEFORE "
+            "this patch."
+        )
+    anchor = (
+        "        sampler_output = self.rejection_sampler(\n"
+        "            spec_decode_metadata,\n"
+        "            None,  # draft_probs\n"
+        "            logits,\n"
+        "            sampling_metadata,\n"
+        "        )\n"
+        "        return sampler_output\n"
+    )
+    if anchor not in text:
+        raise RuntimeError(
+            "FR13_CFWD_GPU_TIMER: rejection-sampler dispatch anchor not found "
+            "in gpu_model_runner._sample"
+        )
+    inject = (
+        "        # FR13_CFWD_GPU_TIMER: time the COMMITTER (rejection-sampler\n"
+        "        # dispatch = accept/LCP/bonus decision + commit) with async\n"
+        "        # cuda events; inert unless FR13_CFWD_GPU_TIMER=1 =>\n"
+        "        # byte-identical when off.\n"
+        "        _fr13_cfwd_ev = _fr13_cfwd_begin()\n"
+        "        sampler_output = self.rejection_sampler(\n"
+        "            spec_decode_metadata,\n"
+        "            None,  # draft_probs\n"
+        "            logits,\n"
+        "            sampling_metadata,\n"
+        "        )\n"
+        "        _fr13_cfwd_end(_fr13_cfwd_ev)\n"
+        "        return sampler_output\n"
+    )
+    text = text.replace(anchor, inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
 
@@ -18813,6 +18900,11 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_boundary_tap_d()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sfwd_gpu_timer()),
+        # FR13_CFWD_GPU_TIMER: committer span begin/end around the rejection-
+        # sampler dispatch in _sample (CALLER level; the sampler twin regions
+        # are owned by another workstream). Must run AFTER the sfwd timer
+        # patch, whose module block defines the _fr13_cfwd_* helpers.
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_cfwd_gpu_timer()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_tree_accept_bias()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_boundary_log()),
         (MAMBA_UTILS_PATH, _patch_mamba_utils_preprocess_context_flag()),

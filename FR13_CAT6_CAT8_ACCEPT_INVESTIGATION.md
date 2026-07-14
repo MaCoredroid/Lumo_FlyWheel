@@ -858,3 +858,18 @@ greedy block is the tested template (byte-A/B-gated at FIX-2).
 GATES per piece: offline distribution gate (P1) / byte-A/B (P2,P3) -> S0 patcher self-test ->
 boot engagement + same-seed probe -> live same-boot A/B wall/tok. Flag FR13_COMMITTER_PACK_SAMPLED
 default OFF until gated. Effort: P1 1-2d, P2 0.5d, P3 0.5d.
+
+## S1/P1 IMPLEMENTED + BYTE-GATED (2026-07-14): FR13_DM_DEPTHSYNC
+
+Depth-synchronous multidraft walk in fr13_device_multidraft_kernel.py (_fr13_commit_depthsync,
+env FR13_DM_DEPTHSYNC default OFF; legacy path serves commit-trace diagnostics). Per LEVEL:
+readback A (batched overlap masses) + readback B (source/accept) + readback C only on levels
+with rejects + one batched seed sync + one final packed row DtoH => ~2 x walk-depth syncs/step
+vs legacy 4-7 blocking .item() PER NODE (~100/step). Byte-identity engineering: single-row
+softmax preserved (no [A,V] batching — 1 ULP risk), exact-k multinomial (replacement=False rng
+consumption is size-dependent => padding banned), residual draws launched only for rejected
+requests as their LAST draw, control compares replicate python-float semantics (u f32->f64 vs
+accept_prob f64; mass floats via readback), residual divided by the DEVICE mass tensor.
+GATE: scripts/fr13_dm_depthsync_byte_gate.py — **96/96 cases BYTE-IDENTICAL** (cat8/cat6root/
+t33333 x B1/B4 x 4 seeds x random/dominant/adversarial/zero-overlap). NEXT: P2 (_ep_stacks
+all-layer replay transplant into the sampled twin), then boot gates + live same-boot A/B.
