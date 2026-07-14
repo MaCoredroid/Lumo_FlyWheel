@@ -1150,3 +1150,12 @@ PENDING: merged_base_t33333 (MTP-only, same 4 tasks) for the apples A/B -- resol
 drafter dfwd (no skip => expect higher; the drafter-speed delta is the deliverable). Gate1 => lossless
 regardless; 1/4 resolve is likely task-hardness (astropy 13033/13236/13453/13579) -- the A/B parity
 (merged resolve == baseline resolve on SAME tasks) is what proves correctness, not the absolute rate.
+
+## FRONT 2 SCOPE CORRECTION (user 2026-07-14): delivery gate = 16 tasks, ran 4 as first-look
+The 4-task A/B (subset_carrier_four) was a de-risk FIRST-LOOK, NOT the gate. It PROVED (merged arm):
+engages ~47% skip, garble-CLEAN, 0 give-ups (full 78-122-turn trajectories, coherent thinking/plan/
+explore), never-regress fallback, drafter ~34ms/step, no crashes. Config is apples-to-apples (same
+qwen-code 0.19.4, same ship-cache env, same t33333 tree, same B4/CONC4, no agent wall; ONLY diff =
+FR13_DRAFT_SOURCE=merged; arctic install is merged-gated + not imported by baseline). NEXT = the FULL
+16-task delivery A/B (subset_b4_sixteen.json) after the current 4-task baseline frees the GPU:
+run_variant merged vs MTP-only t33333 on 16 tasks -> resolve parity + give-ups + garble + dfwd delta.
