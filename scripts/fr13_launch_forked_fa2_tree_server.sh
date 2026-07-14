@@ -726,6 +726,36 @@ if os.environ.get('FR13_BI_TREE_ATTN', '0') == '1':
     if decode_needle not in text:
         raise SystemExit(f'FR13 BI decode num_splits expression missing in {path}')
 PY
+python3 - <<'PY'
+import importlib.util
+import os
+import subprocess
+import sys
+
+# FR13 merged drafter (MTP-k spine + Arctic suffix-decoding grow-to-cat33333):
+# install the REAL Snowflake suffix cache (arctic_inference.suffix_decoding.
+# SuffixDecodingCache, surfaced by vllm.v1.spec_decode.suffix_decoding) IN THE
+# CONTAINER. Arctic builds a C++ ext + pulls torch at build, so it must live in
+# the vLLM image -- the host CPU-venv build fails. Guarded TWO ways:
+#   (1) NO-OP unless FR13_DRAFT_SOURCE=merged  (default 'mtp' => byte-identical
+#       locked cat9 path, ZERO install, ZERO new deps);
+#   (2) NO-OP when arctic_inference is already present (idempotent reboots).
+# Pattern: git 29116417 run_track_b_loop.py:1165 (proven Round-2/Track-B install).
+if os.environ.get('FR13_DRAFT_SOURCE', 'mtp') != 'merged':
+    print('[FR13-PRELAUNCH] FR13_DRAFT_SOURCE!=merged -- skipping arctic-inference install')
+elif importlib.util.find_spec('arctic_inference') is None:
+    print('[FR13-PRELAUNCH] installing arctic-inference for suffix decoding (merged drafter)')
+    subprocess.check_call([
+        sys.executable,
+        '-m',
+        'pip',
+        'install',
+        '--disable-pip-version-check',
+        'arctic-inference==0.1.2',
+    ])
+else:
+    print('[FR13-PRELAUNCH] arctic-inference already available')
+PY
 NSYS_PREFIX=()
 case \"\${LUMO_NSYS_WRAP_VLLM,,}\" in
   1|true|yes|on)
