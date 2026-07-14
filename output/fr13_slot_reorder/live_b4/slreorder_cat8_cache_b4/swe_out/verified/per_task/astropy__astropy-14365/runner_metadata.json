@@ -1,14 +1,14 @@
 {
   "instance_id": "astropy__astropy-14365",
   "dataset_name": "princeton-nlp/SWE-bench_Verified",
-  "started_at": "2026-07-14T02:22:23Z",
+  "started_at": "2026-07-14T03:17:14Z",
   "repo": "astropy/astropy",
   "base_commit": "7269fa3e33e8d02485a647da91a5a2a60a06af61",
   "agent": {
-    "elapsed_s": 5.319,
+    "elapsed_s": 507.857,
     "exit_code": 0,
     "timed_out": false,
-    "container_name": "swe-qwen-astropy__astropy-14365-1783995743",
+    "container_name": "swe-qwen-astropy__astropy-14365-1783999034",
     "offloaded": true,
     "codex_host": "alienware",
     "network_drop": false,
@@ -18,10 +18,10 @@
     "image_arch": "x86_64"
   },
   "codex": {
-    "elapsed_s": 5.319,
+    "elapsed_s": 507.857,
     "exit_code": 0,
     "timed_out": false,
-    "container_name": "swe-qwen-astropy__astropy-14365-1783995743",
+    "container_name": "swe-qwen-astropy__astropy-14365-1783999034",
     "offloaded": true,
     "codex_host": "alienware",
     "network_drop": false,
@@ -30,30 +30,30 @@
     "host_arch": "x86_64",
     "image_arch": "x86_64"
   },
-  "empty_patch_retry": {
-    "cause": "agent_gave_up",
-    "attempted": true,
-    "max_retries": 0,
-    "recovered_patch_bytes": 0,
-    "attempts_used": 0
-  },
   "vllm_request_metrics_bytes": 0,
-  "patch_bytes": 0,
+  "patch_bytes": 493,
   "eval": {
     "exit_code": 1,
-    "elapsed_s": 1.693,
+    "elapsed_s": 45.082,
     "offloaded": true,
     "eval_host": "alienware"
   },
   "eval_report": {
+    "track": "swe_bench",
     "instance_id": "astropy__astropy-14365",
+    "model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
     "verdict": "failed",
     "passed": false,
-    "failure_mode": "patch_apply_failed",
-    "error": "empty_patch",
+    "failure_mode": "tests_failed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 42.507,
+    "error": null,
     "arch": "x86_64",
     "eval_host": "mark-Alienware-Aurora-ACT1250",
-    "eval_wall_clock_seconds": 0.0
+    "run_id": "x86eval-out-1783999543",
+    "namespace": "swebench",
+    "cache_level": "env"
   },
-  "ended_at": "2026-07-14T02:22:31Z"
+  "ended_at": "2026-07-14T03:26:28Z"
 }
