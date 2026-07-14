@@ -1108,3 +1108,20 @@ despite the drafter speedup. NET TPS = f(drafter -57ms, accept change) -- ONLY t
 settles it. (3) verify (sfwd 143) UNCHANGED (still 16-node tree) -- correct, mtp_k touches only the
 drafter. VERDICT: speed lever MEASURED + LARGE => building the MTP-k+Arctic-suffix integration is
 justified; the live A/B is the accept-hold gate.
+
+## FRONT 2 GATE (d) = PARTIAL (2026-07-14): wiring WORKS, but match_full=0 on single-prompt probe
+merged ENGAGED boot (t33333 + FR13_DRAFT_SOURCE=merged): arctic-inference 0.1.2 BUILT+installed in
+container OK; sidecar /logs/fr13_draft_source_merged.arm present; lifecycle ran (started=2 ingested=92
+retired=1); speculate_fired=100. => the full wiring (prelaunch install + sidecar gate + runner
+lifecycle + seam speculate) is LIVE and correct. NEVER-REGRESS confirmed: accept_per_forward=3.867
+(>= t33333 baseline ~3.6-3.9), dfwd=101 ms/step (~baseline) -- with match_full=0 it falls back to
+pure MTP (skip_fired=0), so ZERO correctness/speed regression.
+OPEN: match_full=0, match_partial=100 -- Arctic never returns a >=4-token (need=N_DEPTH-mtp_k=4)
+match on this SINGLE-PROMPT 512-token probe. HYPOTHESIS: WORKLOAD, not bug -- suffix decoding needs
+the pattern [committed_suffix ++ MTP-root] to have OCCURRED before with >=4 following tokens; fresh
+single-turn generation rarely repeats a >=4-token continuation, whereas AGENTIC multi-turn (file
+re-reads, repeated tool outputs/identifiers) does. Design A (pattern = committed ++ near) is on-path
+(Arctic continues FROM the MTP root) and correct; the match just requires repetition. NEXT: decisive
+check -- test decide_and_fill against REAL arctic with a repetitive stream (host --no-build-isolation
+install), then either a repetitive-probe boot or go straight to the live 16-task agentic gate (the
+real repetitive workload). If match_full stays 0 even on clearly-repetitive input => real bug.
