@@ -128,3 +128,26 @@ but it's a PURE-UPSIDE bet (cheap + can't regress + plausible). Cost-gate PASSES
 NEXT (mine, correctness-critical, next cycle): S-B buffer+staging, then S-C in-graph blend; gate
 each with the CPU committer contract (Gate 1 extended to the blend), garble gate, then live B=4 A/B
 vs cat8+SLOT_REORDER.
+
+## PIVOT (2026-07-14, user): use the REAL Snowflake code, not my hand-rolled k-gram
+The suffix source = **arctic_inference.suffix_decoding.SuffixDecodingCache** (pip arctic-inference
+==0.1.2), surfaced by vLLM's built-in `vllm.v1.spec_decode.suffix_decoding.SuffixDecodingProposer`.
+Prior git history integrated it (Round-2/Track-B: T1 `_SessionRoutedSuffixDecodingCache` router
++ prelaunch install hook + T3 schema-aware composite drafting; commits 29116417/8d4c4a0b/af3676fb).
+REAL API (from the vLLM proposer, authoritative):
+  cache = SuffixDecodingCache(max_tree_depth, max_cached_requests)
+  cache.start_request(req_id, prompt_token_ids)          # builds suffix tree for the prompt
+  cache.add_active_response(req_id, sampled_ids)          # ingest generated tokens
+  draft = cache.speculate(req_id, pattern, max_spec_tokens=, max_spec_factor=, min_token_prob=)
+  draft.token_ids                                          # dynamic-length speculation
+  cache.stop_request(req_id) / evict_cached_response(req_id); .active_requests / .cached_requests
+Config knobs (vLLM speculative_config): suffix_decoding_max_tree_depth (1-64), max_spec_factor
+(0-4), min_token_prob (0-1), max_cached_requests (0-10000), num_speculative_tokens.
+INSTALL: container prelaunch (arctic builds a C++ ext + pulls torch at build; host CPU-venv build
+fails -- goes in the vLLM image like all GPU/container deps).
+GATE 1 PRESERVED: it proved ANY candidate set fed to our committer is lossless + monotone-accept
+(source-agnostic) -- so it carries over unchanged; only the SOURCE swaps (arctic <- my k-gram).
+My scripts/fr13_suffix_source.py is SUPERSEDED (kept for now; committer-contract gate stays -- it's
+source-agnostic). OPEN FORK (user owns): (A) vLLM-native suffix proposer standalone = replaces our
+GDN tree + committer with vLLM's native path (Round-2 shape); (B) arctic as the SUFFIX BACKEND of
+our merged drafter, feeding OUR committer/tree (preserves the FR13 lossless deliverable). Awaiting call.
