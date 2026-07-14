@@ -18375,6 +18375,151 @@ if _FR13PCT_ON:
     return True
 
 
+def _patch_eagle_dfwd_split_timer() -> bool:
+    """FR13_DFWD_SPLIT (default OFF): 3-way GPU split of the tree-drafter cost.
+
+    The dfwd span timer measures the WHOLE propose (~88ms/step at B=4). This
+    splits propose_tree's per-level loop into:
+      model  -- the draft model forward (CUMULATIVE tokens: query_len grows
+                per level, cat8 re-processes 2,4,6,7,8 = 27 token-forwards)
+      head   -- compute_logits + topk (full-vocab lm_head weight read/level)
+      other  -- everything else (metadata rebuild, repeat/cat, slot math,
+                buffer copies, piecewise dispatch) = level_total - model - head
+    CUDA-event pairs, async; atexit sidecar (FR13_DFWD_SPLIT_JSON). Decides
+    FR-Spec-vocab vs level-fusion vs shape-depth as the drafter attack.
+    """
+    text = EAGLE_PATH.read_text()
+    sentinel = "# FR13_DFWD_SPLIT"
+    if sentinel in text:
+        return False
+    helper = '''
+
+# FR13_DFWD_SPLIT: per-level 3-way drafter timing (default OFF; env FR13_DFWD_SPLIT=1)
+class _Fr13DfwdSplit:
+    def __init__(self):
+        import os as _os
+        self.on = _os.environ.get("FR13_DFWD_SPLIT", "0") == "1"
+        self.pairs = {"level": [], "model": [], "head": []}
+        self.done = False
+        if self.on:
+            import atexit as _ax
+            _ax.register(self.dump)
+
+    def begin(self, k):
+        if not self.on:
+            return None
+        import torch as _t
+        ev = _t.cuda.Event(enable_timing=True)
+        ev.record()
+        return ev
+
+    def end(self, k, start_ev):
+        if start_ev is None:
+            return
+        import torch as _t
+        ev = _t.cuda.Event(enable_timing=True)
+        ev.record()
+        self.pairs[k].append((start_ev, ev))
+
+    def dump(self):
+        if self.done or not self.on:
+            return
+        self.done = True
+        import json as _j, os as _os, torch as _t
+        try:
+            _t.cuda.synchronize()
+            out = {"schema": "fr13.dfwd_split.v1"}
+            for k, ps in self.pairs.items():
+                tot = sum(a.elapsed_time(b) for a, b in ps) / 1000.0
+                out[k + "_seconds"] = tot
+                out["n_" + k] = len(ps)
+            out["other_seconds"] = max(
+                0.0, out.get("level_seconds", 0.0)
+                - out.get("model_seconds", 0.0) - out.get("head_seconds", 0.0)
+            )
+            p = _os.environ.get(
+                "FR13_DFWD_SPLIT_JSON", "/logs/fr13_dfwd_split.json"
+            ) + "." + str(_os.getpid())
+            with open(p, "w") as fh:
+                _j.dump(out, fh, indent=1)
+        except Exception:  # noqa: BLE001
+            pass
+
+
+_FR13_DFWD_SPLIT = _Fr13DfwdSplit()
+
+'''
+    anchor_cls = "class SpecDecodeBaseProposer:"
+    if anchor_cls in text:
+        text = text.replace(anchor_cls, helper.lstrip("\n") + "\n" + anchor_cls, 1)
+    else:
+        raise RuntimeError("FR13_DFWD_SPLIT helper anchor not found")
+
+    # level start/end around the loop body: anchor the loop head + tail
+    loop_head = "        for level in range(tree_depth - 1):\n"
+    if text.count(loop_head) != 1:
+        raise RuntimeError("FR13_DFWD_SPLIT loop anchor not unique")
+    text = text.replace(
+        loop_head,
+        loop_head + f"            {sentinel}: level span begin\n"
+        "            _fr13_ds_lv = _FR13_DFWD_SPLIT.begin('level')\n",
+        1,
+    )
+    tail = """            level_num_drafts = self.cu_drafts_per_level[level + 1] - total_num_drafts
+            total_num_drafts = self.cu_drafts_per_level[level + 1]
+        return draft_token_ids_list
+"""
+    if tail not in text:
+        raise RuntimeError("FR13_DFWD_SPLIT tail anchor not found")
+    text = text.replace(
+        tail,
+        """            level_num_drafts = self.cu_drafts_per_level[level + 1] - total_num_drafts
+            total_num_drafts = self.cu_drafts_per_level[level + 1]
+            _FR13_DFWD_SPLIT.end('level', _fr13_ds_lv)
+        return draft_token_ids_list
+""",
+        1,
+    )
+    # model span
+    model_call = """                last_hidden_states, hidden_states = self.model(
+                    input_ids=self.input_ids[:num_input_tokens],
+                    positions=self.positions[:num_input_tokens],
+                    hidden_states=self.hidden_states[:num_input_tokens],
+                    inputs_embeds=None,
+                )
+"""
+    if text.count(model_call) < 1:
+        raise RuntimeError("FR13_DFWD_SPLIT model anchor not found")
+    # propose_tree's occurrence is the one directly after the level-span begin;
+    # replace the FIRST occurrence AFTER the loop sentinel position.
+    pos = text.index(sentinel)
+    idx = text.index(model_call, pos)
+    text = (
+        text[:idx]
+        + "                _fr13_ds_md = _FR13_DFWD_SPLIT.begin('model')\n"
+        + model_call
+        + "                _FR13_DFWD_SPLIT.end('model', _fr13_ds_md)\n"
+        + text[idx + len(model_call):]
+    )
+    # head span (compute_logits + topk/argmax sampling)
+    head_start = """            logits = self.model.compute_logits(
+                draft_last_hidden_states.reshape(batch_size * level_num_drafts, -1)
+            )
+"""
+    idx = text.index(head_start, pos)
+    head_end_marker = "            draft_token_ids_list.append(draft_token_ids)\n"
+    idx2 = text.index(head_end_marker, idx)
+    text = (
+        text[:idx]
+        + "            _fr13_ds_hd = _FR13_DFWD_SPLIT.begin('head')\n"
+        + text[idx:idx2]
+        + "            _FR13_DFWD_SPLIT.end('head', _fr13_ds_hd)\n"
+        + text[idx2:]
+    )
+    EAGLE_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_uniform_dispatch_guard() -> bool:
     """FR13_UNIFORM_DISPATCH_GUARD: veto FULL-cudagraph uniform-decode dispatch on
     PSEUDO-uniform mixed steps (the 2026-07-07 + 2026-07-14 EngineDeadError class).
@@ -18874,6 +19019,7 @@ def main() -> int:
         (SCHEDULER_PATH, _patch_scheduler_mamba_block_align_45477()),
         (EAGLE_PATH, _patch_eagle_tree_consumption_verify()),
         (EAGLE_PATH, _patch_eagle_mtp_draft_trace()),
+        (EAGLE_PATH, _patch_eagle_dfwd_split_timer()),
         (TREE_ATTN_PATH, _patch_tree_attn_spec_config_override()),
         (TRITON_UNIFIED_ATTN_PATH, _patch_triton_unified_attention_fr13()),
         (TREE_ATTN_PATH, _patch_tree_attn_op_capture()),
