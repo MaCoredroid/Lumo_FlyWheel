@@ -1,0 +1,37 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced8..cf7038c28 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1,5 +1,6 @@
+ # Licensed under a 3-clause BSD style license - see PYFITS.rst
+ 
++import math
+ import re
+ import warnings
+ 
+@@ -1299,7 +1300,24 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
+-    value_str = f"{value:.16G}"
++    # Try str() first -- it often produces a shorter representation that
++    # still round-trips correctly (e.g., 0.009125 instead of 0.009124999999999999).
++    value_str = str(value)
++    try:
++        roundtrips = float(value_str) == value
++    except ValueError:
++        roundtrips = False
++    # NaN == NaN is always False; check with isnan instead.
++    if not roundtrips and math.isnan(value):
++        try:
++            roundtrips = math.isnan(float(value_str))
++        except ValueError:
++            pass
++    if not roundtrips:
++        value_str = f"{value:.16G}"
++    else:
++        # str() uses lowercase; normalize to uppercase for consistency.
++        value_str = value_str.upper()
+     if "." not in value_str and "E" not in value_str:
+         value_str += ".0"
+     elif "E" in value_str:
