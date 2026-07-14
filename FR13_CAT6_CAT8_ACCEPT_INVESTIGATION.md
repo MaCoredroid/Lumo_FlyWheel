@@ -671,3 +671,20 @@ A/B (fix-ON s2a_eager vs flag-OFF s2a_control_off, identical config):
 - probes: temp06 3.655 vs 3.283 (+0.37); greedy 3.283 vs 3.322 (-0.04, noise).
 CAVEAT (honest): n~130 events/arm, ONE prompt, cross-boot; per-row deltas ~1sigma each.
 Suggestive, NOT proof. Arbiters: S2b garble gate (matrix_build temp06) + S3 matched-proof vs E5.
+
+## COST + GENERALITY (2026-07-14, user questions)
+
+**HBM tax / s-per-fwd: NONE by design, confirmed at greedy.** Per-step added work = two 9-elem
+int64 gathers (permute+restore, metadata-side) + one [1,path] gather at commit; attention path
+identical (same pages/bytes/FLOPs); causal=False REMOVES mask work; remap copies FEWER rows
+(spine accepts zero-copy, foreign_first=0 observed live). Resident overhead ~1KB. EMPIRICAL
+(eager, content-matched greedy pair): fix 0.1137 vs control 0.1150 s/fwd (-1%, noise). temp06
+wall delta = trajectory-confounded (different outputs => host stream handling), not mechanical.
+Deploy-grade timing = S3 graph mode.
+
+**3-3-3 tree (challenge): GO, zero code changes.** pi is derived from SPEC_CONFIG at runtime —
+logic model extended with choices_to_tree() (exact shipped algorithm, cross-checked against
+served cat8): [3,3,3] => tree_n=10, spine [0,1,4,7] -> contiguous cols [0..3] == cat8's
+canonical spine form (same M-invariant layout), 6 branches at fixed gapped cols, committer OK
+at d1/d2/d3. Live 3-3-3 arm queued after S2b (SPEC_CONFIG + FR13_SLOT_REORDER=1, engagement
++ accept probe).

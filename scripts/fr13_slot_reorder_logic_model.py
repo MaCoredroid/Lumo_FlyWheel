@@ -110,10 +110,28 @@ def check_committer(parent, spine, branch, accept_depth, name):
           f"  (permuted-dst would{'' if scatter else ' NOT'} scatter => fix {'REQUIRED' if scatter else 'noop here'})")
 
 
+def choices_to_tree(choices):
+    """Derive (parent, spine, branch) from a speculative_token_tree choices list
+    using the EXACT shipped algorithm (sorted by (len, path); node id = 1+index;
+    parent = node of the path prefix; spine = root + all-zero paths)."""
+    ch = sorted(choices, key=lambda p: (len(p), p))
+    idx = {c: i + 1 for i, c in enumerate(ch)}
+    parent = [-1]
+    for c in ch:
+        parent.append(0 if len(c) == 1 else idx[c[:-1]])
+    spine = [0] + [i + 1 for i, c in enumerate(ch) if all(int(x) == 0 for x in c)]
+    branch = [i + 1 for i, c in enumerate(ch) if not all(int(x) == 0 for x in c)]
+    return parent, spine, branch
+
+
 def main():
     # cat8 served: tree_n=9, parent=[-1,0,0,1,1,3,3,5,7], spine=[0,1,3,5,7,8], branch=[2,4,6]
     cat8_parent = [-1, 0, 0, 1, 1, 3, 3, 5, 7]
     cat8_spine, cat8_branch = [0, 1, 3, 5, 7, 8], [2, 4, 6]
+    # cross-check the shipped derivation reproduces the served cat8
+    _p, _s, _b = choices_to_tree(
+        [(0,), (1,), (0, 0), (0, 1), (0, 0, 0), (0, 0, 1), (0, 0, 0, 0), (0, 0, 0, 0, 0)])
+    assert (_p, _s, _b) == (cat8_parent, cat8_spine, cat8_branch), (_p, _s, _b)
     # cat6 (spine + 1 branch off root): tree_n=7 — 0 root, 1 spine-d1, 2 branch,
     # 3..6 spine d2..d5. Key: the spine layout must match cat8's after reorder.
     cat6_parent = [-1, 0, 0, 1, 3, 4, 5]
@@ -130,11 +148,25 @@ def main():
     print(f"\n  CROSS-TREE: cat8-spine layout == cat6-spine layout for depths 0..{shared-1}  "
           f"=> M-INVARIANT by construction. OK")
 
-    # (4) committer correctness across accept depths, both trees
+    # 3-3-3 tree (user challenge): per-depth widths [3,3,3] -> 9 choices + root,
+    # spine (0,)/(0,0)/(0,0,0) + 2 branches fanning at EVERY depth (incl. deep).
+    t333 = [(0,), (1,), (2,),
+            (0, 0), (0, 1), (0, 2),
+            (0, 0, 0), (0, 0, 1), (0, 0, 2)]
+    p333, s333, b333 = choices_to_tree(t333)
+    l333 = check_tree(p333, s333, b333, "tree-3-3-3")
+    for d in range(min(len(l8), len(l333))):
+        assert l8[d] == l333[d], f"cat8 depth{d} {l8[d]} != 3-3-3 {l333[d]}"
+    print(f"  CROSS-TREE: 3-3-3 spine layout == cat8 spine layout for shared depths "
+          f"=> same M-invariant canonical form. OK")
+
+    # (4) committer correctness across accept depths, all trees
     print("\n=== COMMITTER simulation ===")
     for d in (1, 3, 5):
         check_committer(cat8_parent, cat8_spine, cat8_branch, d, "cat8")
     check_committer(cat6_parent, cat6_spine, cat6_branch, 3, "cat6")
+    for d in (1, 2, 3):
+        check_committer(p333, s333, b333, d, "tree-3-3-3")
 
     print("\n>>> GO — slot-reorder index logic is correct: spine contiguous+cross-tree-identical "
           "(M-invariant), branches fixed, committer prefix contiguous with src=permuted/dst=flat.")
