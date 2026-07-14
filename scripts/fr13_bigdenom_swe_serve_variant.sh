@@ -71,6 +71,8 @@ CAT555_TREE="[(0,),(1,),(2,),(3,),(4,),(0,0),(0,1),(0,2),(0,3),(0,4),(0,0,0),(0,
 # cat55222 [5,5,2,2,2]=16 nodes OVERFLOWS the GDN tree-verifier warm cap:
 # n_pad=next_pow2(nodes+1) must be <=16, but 16 nodes -> n17 -> pad32 -> raise.
 # Kept for reference only; it FAILS engine-init. Use cat55221 (15 nodes) instead.
+# 33333 = widths [3,3,3,3,3]: depth-5 spine (MTP-5-comparable) + 2 branches at EVERY depth (15 choices)
+T33333_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2)]"
 CAT55222_TREE="[(0,),(1,),(2,),(3,),(4,),(0,0),(0,1),(0,2),(0,3),(0,4),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,1),(0,0,0,0,0),(0,0,0,0,1)]"
 # cat55221 [5,5,2,2,1]=15 nodes, depth-5: the FITTING depth-5 wide arm (n16->pad16).
 # Wide front (5,5) intact; deepest spine node carries no leaf (width-1). vs E5.
@@ -142,6 +144,7 @@ case "$KIND" in
   cat8)      LAUNCHER=forked; TREEARG="$CAT8_TREE";     EXPECT_RATIO=8;  declare -a XFLAGS=() ;;
   333)       LAUNCHER=forked; TREEARG="$THREETHREE_TREE"; EXPECT_RATIO=9; declare -a XFLAGS=() ;;
   cat555)    LAUNCHER=forked; TREEARG="$CAT555_TREE";    EXPECT_RATIO=15; declare -a XFLAGS=() ;;
+  t33333)    LAUNCHER=forked; TREEARG="$T33333_TREE";   EXPECT_RATIO=15; declare -a XFLAGS=() ;;
   cat55222)  LAUNCHER=forked; TREEARG="$CAT55222_TREE";  EXPECT_RATIO=16; declare -a XFLAGS=() ;;
   cat55221)  LAUNCHER=forked; TREEARG="$CAT55221_TREE";  EXPECT_RATIO=15; declare -a XFLAGS=() ;;
   *) echo "FAIL: unknown KIND=$KIND"; exit 2 ;;
