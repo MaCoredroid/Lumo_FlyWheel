@@ -294,3 +294,38 @@ CRITICAL IMPL NOTE (prelaunch agent): the runtime seam MUST read FR13_DRAFT_SOUR
 FILE pattern (like FR13_COMMITTER_NATIVE/FR13_COMMIT_ARGMAX_GATE, launcher :402-424), NOT os.environ
 -- the EngineCore WORKER drops FR13_* env vars. Prelaunch install draft ready at
 fr13_launch_forked_fa2_tree_server.sh:728 (gated FR13_DRAFT_SOURCE=merged, byte-id when off).
+
+## BUILD PROGRESS (2026-07-14): all supporting pieces DONE; patcher seam = remaining unit
+DONE + committed (CPU-proven / gated):
+  - Gate 1 committer contract 32/32 (fr13_suffix_committer_contract_gate.py)
+  - assembly core 36/36 (fr13_mtp_suffix_assembly.py)
+  - arctic adapter 30/30 (fr13_arctic_suffix_adapter.py: .token_ids->suffix_rel)
+  - fill helper 35/35 (fr13_merged_fill.py: assembled nodes->spine_tokens/wide_topk, red-team discipline)
+  - prelaunch install (launcher :728, gated FR13_DRAFT_SOURCE=merged, byte-id off)
+  - FR13_DRAFT_SOURCE=merged SIDECAR (launcher, worker-env-drop-proof; worker reads
+    /logs/fr13_draft_source_merged.arm)
+REMAINING = the patcher seam edit (fr10_phase4_patch_vllm_tree_gdn.py, ALL gated on the sidecar,
+default mtp = byte-identical). Precise plan:
+  (S1) module-scope: `_fr13_merged_on()` reads /logs/fr13_draft_source_merged.arm (mirror
+       _fr13_committer_native_on); lazy `_fr13_suffix_cache` holder (import arctic in-worker,
+       SuffixDecodingCache(max_tree_depth, max_cached_requests)); import assemble_cat33333 +
+       arctic_draft_to_suffix_rel + build_cat33333_columns from /workspace/scripts.
+  (S2) RUNNER-level lifecycle: start_request(req_id, prompt_token_ids) for new reqs +
+       stop_request/evict_cached_response for gone reqs (batch req-set diff; port vllm
+       suffix_decoding.py:63-70,92-95). Find the runner frame where input_batch.req_ids +
+       token_ids_cpu live (near the drafter call site).
+  (S3) COMMIT-SITE hook (~:8730-8767): add_active_response(req_id, accepted_run) fed the FULL
+       accepted token rows (accepted_token_rows + per-row req-ids already there); maintain a rolling
+       per-req recent-committed buffer for the pattern.
+  (S4) SEAM (:13361 speculate + :13860 fill): per batch ROW b keyed by spec-row req-id ->
+       speculate(req_id, pattern=recent_suffix++mtp_near) -> arctic_draft_to_suffix_rel ->
+       assemble_cat33333 -> collect assembled_rows -> build_cat33333_columns -> overwrite deep
+       _fr10_spine_tokens[d]/_fr10_wide_topk[d]. ADAPTIVE gate: only shorten the spine loop
+       (range(mtp_k)) when ALL active rows have a full-depth (>=N_DEPTH-mtp_k) arctic match; else run
+       the full MTP loop (never-regress). Engagement counters (speculate_fired, assembler_engaged),
+       fail-loud if merged-on but never engaged.
+  (S5) patcher self-test fr13_merged_drafter_s0_test.py: apply to pristine copy -> compile -> assert
+       byte-identical when sidecar absent + markers present when the injected block exists.
+GATES after build: self-test (byte-id) -> detached boot merged (ENGAGED assert) -> garble temp06 ->
+live B=4 16-task A/B (correctness parity + dfwd speed same-or-better; accept-hold + D2H/H2D sync are
+the decisive measured gates).
