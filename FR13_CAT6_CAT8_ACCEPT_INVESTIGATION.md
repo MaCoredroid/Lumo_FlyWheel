@@ -1025,3 +1025,18 @@ ring/state buffers to 32). VERDICT: verify scales linearly (~2ms/row, weight-rea
 accept keeps rising with width; 16 is a soft cap, pad-32 trees are feasible at B<=1 (graph-captured
 <=48 tok) but B=4 past ~12 rows/req falls to eager unless cudagraph_capture_sizes widened. Whether
 to go past 16 = the width-economics (bigger accept vs ~2ms/row + drafter host + graph ceiling).
+
+### FRONT 1 addendum: does >16 nodes SPILL SRAM->HBM? NO (kernel-read, 2026-07-14)
+User hypothesis: trees >16 nodes spill SRAM to HBM (=> raising the cap is NOT cheap). CHECKED
+against the verify kernel /tmp/vllm_fla_fused_sigmoid_gating.py (fused_sigmoid_gating_delta_rule
+_update_kernel): the GDN tree verify is a SEQUENTIAL RANK-1 recurrence -- state tile
+`b_h = tl.zeros([BV, BK])` (line 106) sized by HEAD dims (BK=next_pow2(head_k), BV=min(next_pow2
+(head_v),32), line 223), and `for i_t in range(0,T)` (line 136) STREAMS the T=n_pad tree nodes one
+at a time. SRAM footprint is head-dim-sized, TREE-SIZE-INDEPENDENT; 16->32 nodes = 2x loop trips,
+same SRAM. No spill. (Kernel sig doesn't even take the [n_pad x n_pad] masks -- ancestry via
+per-node h0 initial-state indices.) The "16=spill" memory most likely conflates: (a) the CHUNKED/WY
+delta-rule (PREFILL only, chunk_gated_delta_rule :5834) which DOES hold an intra-chunk [BT x BT]
+SRAM matrix with BT a 16/32/64 tile; or (b) FA2 full-attn verify whose query tile = kNWarps*16 = 64
+rows (tree fits one SRAM tile until 64 nodes, not 16). VERDICT UNCHANGED and STRENGTHENED: 16 is the
+warmup-pad guard, not an SRAM wall; raising to 32 adds only the measured linear ~2ms/row (loop trips
++ FA2 query rows <=64), NO SRAM-spill HBM tax.
