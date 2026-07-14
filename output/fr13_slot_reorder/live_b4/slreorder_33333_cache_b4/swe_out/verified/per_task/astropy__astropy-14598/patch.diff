@@ -1,0 +1,24 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..ca1a8a370 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -859,7 +859,7 @@ class Card(_Verify):
+                     return kw, vc
+ 
+                 value = m.group("strg") or ""
+-                value = value.rstrip().replace("''", "'")
++                value = value.rstrip()
+                 if value and value[-1] == "&":
+                     value = value[:-1]
+                 values.append(value)
+@@ -871,7 +871,9 @@ class Card(_Verify):
+                 valuecomment = "".join(values)
+             else:
+                 # CONTINUE card
+-                valuecomment = f"'{''.join(values)}' / {' '.join(comments)}"
++                # Keep escaped quotes intact; _parse_value will unescape them
++                combined = "".join(values)
++                valuecomment = f"'{combined}' / {' '.join(comments)}"
+             return keyword, valuecomment
+ 
+         if self.keyword in self._special_keywords:
