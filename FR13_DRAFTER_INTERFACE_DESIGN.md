@@ -220,3 +220,25 @@ one forward." And "depth/shape lever dead" (#27 S2 DP) was about ACCEPT-vs-tree-
 -- a different question than "skip spine FORWARDS." So the spine-forward-count lever (mtp_k) is NEW,
 confirmed by code, and NOT contradicted by the earlier conclusions. Still UNMEASURED: the net host
 delta (saved spine-iteration orchestration - Arctic lookup); the live A/B + sfwd/dfwd timers decide.
+
+## SEAM FULLY SCOPED (2026-07-14): wide packer format -> exact injection
+The wide (t33333) packer (:13905) builds the tree from a (parent_pos, rank) plan:
+  for (pp, rk) in _fr10_wide_plan:
+    cols.append(_fr10_spine_tokens[pp] if rk==0 else _fr10_wide_topk[pp][:, rk])
+  _fr10_packed = torch.stack(cols, dim=1)
+So the injection (FR13_DRAFT_SOURCE=merged) is: fill _fr10_spine_tokens[d] (the spine, [batch] tensor)
+and _fr10_wide_topk[d][:, 1:3] (the 2 branches, [batch,>=3] tensor) for the DEEP positions d>=mtp_k
+with Arctic tokens; near positions d<mtp_k stay MTP. The assembly's 15-node output (CAT33333_ORDER =
+[spine_d, branch_a_d, branch_b_d] x5) maps directly: spine_tokens[d]=node[3d],
+wide_topk[d][:,1]=node[3d+1], [:,2]=node[3d+2]. SPEED path: run only mtp_k spine-loop iterations
+(range(min(_fr10_spine_steps, mtp_k))), skipping the deep MTP forwards (the -53% drafter win); the
+deep _fr10_spine_tokens/_fr10_wide_topk entries are then Arctic-filled before the packer. Existing
+t33333 packer + our committer/verify UNCHANGED (Gate 1 lossless).
+FULL SEAM SPEC (next cycle, mine): (a) container prelaunch pip install arctic-inference==0.1.2
+(Round-2 run_track_b_loop.py:1165); (b) instantiate SuffixDecodingCache on the drafter (lazy);
+(c) lifecycle: start_request(prompt) on new req, add_active_response(committed) each step,
+speculate(pattern=recent_suffix++MTP-near) at draft, stop_request on finish (vLLM SuffixDecoding
+Proposer pattern + Round-2 session router); (d) adapt .speculate().token_ids -> relative suffix_rel;
+(e) at :13860, gated merged: shorten spine loop to mtp_k + Arctic-fill deep spine/wide_topk via the
+assembly, dedup; (f) flag FR13_DRAFT_SOURCE=mtp(default,byte-id)|merged, FR13_MTP_SPINE_DEPTH=1|2.
+GATES: patcher self-test byte-id-off (CPU) -> garble temp06 -> live B4 A/B (accept-hold = decisive).
