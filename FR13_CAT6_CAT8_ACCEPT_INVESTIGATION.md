@@ -1125,3 +1125,15 @@ re-reads, repeated tool outputs/identifiers) does. Design A (pattern = committed
 check -- test decide_and_fill against REAL arctic with a repetitive stream (host --no-build-isolation
 install), then either a repetitive-probe boot or go straight to the live 16-task agentic gate (the
 real repetitive workload). If match_full stays 0 even on clearly-repetitive input => real bug.
+
+## FRONT 2 GATE (d) PASSED ON AGENTIC (2026-07-14): merged drafter ENGAGES + skip lever fires
+Live agentic A/B (merged_arctic_t33333, 4-task B=4, v1 flat), mid-run needle:
+  speculate_fired=4906  match_full=1093  match_partial=157  skip_fired=1093  assembler_engaged=1093
+  started=70  ingested=5565  retired=66
+=> on REAL agentic tasks Arctic finds >=4-tok suffix matches ~22% of steps (1093/4906); the ADAPTIVE
+gate FIRES (skip_fired=1093 -> skips the deep MTP forwards = the -53% drafter lever) on those steps
+and falls back to full MTP otherwise (never-regress). ingested=5565 = the non-gappy authoritative
+ingest works (no gappy trap). CONFIRMS: match_full=0 on the single-prompt probe was WORKLOAD; the
+design engages on agentic repetition. This is v1 (flat spine-only, branches=MTP); v2 (trie-walk,
+use_tree_spec, committed) adds branch-accept. DELIVERY (garble/resolve/dfwd vs baseline) pending arm
+completion + the MTP-only baseline arm.
