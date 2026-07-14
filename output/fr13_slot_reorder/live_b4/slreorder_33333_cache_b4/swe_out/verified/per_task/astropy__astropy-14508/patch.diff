@@ -1,0 +1,47 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 118bfced8..4a5207734 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1,5 +1,6 @@
+ # Licensed under a 3-clause BSD style license - see PYFITS.rst
+ 
++import math
+ import re
+ import warnings
+ 
+@@ -1299,13 +1300,29 @@ def _format_value(value):
+ 
+ def _format_float(value):
+     """Format a floating number to make sure it gets the decimal point."""
+-    value_str = f"{value:.16G}"
+-    if "." not in value_str and "E" not in value_str:
++    # Try using str(value) first, which produces the shortest representation
++    # that round-trips correctly for most values. This avoids unnecessarily
++    # long representations like "0.009124999999999999" for 0.009125.
++
++    value_str = str(value)
++    if "." not in value_str and "e" not in value_str:
+         value_str += ".0"
+-    elif "E" in value_str:
+-        # On some Windows builds of Python (and possibly other platforms?) the
+-        # exponent is zero-padded out to, it seems, three digits.  Normalize
+-        # the format to pad only to two digits.
++
++    # Check if the str() representation round-trips correctly
++    roundtrips = float(value_str) == value or (
++        math.isnan(value) and math.isnan(float(value_str))
++    )
++
++    if not roundtrips or len(value_str) > 20:
++        # Fall back to the more precise formatting
++        value_str = f"{value:.16G}"
++        if "." not in value_str and "E" not in value_str:
++            value_str += ".0"
++
++    # Normalize exponent format: ensure uppercase E with 2-digit exponent
++    if "e" in value_str:
++        value_str = value_str.replace("e", "E")
++    if "E" in value_str:
+         significand, exponent = value_str.split("E")
+         if exponent[0] in ("+", "-"):
+             sign = exponent[0]
