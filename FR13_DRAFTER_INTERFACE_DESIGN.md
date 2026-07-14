@@ -78,6 +78,11 @@ S-A. SuffixSource module (isolated new file): per-req rolling k-gram index + mat
 S-B. Wire the DraftSource seam at the propose() call (I own — drafter edit): flag
      FR13_DRAFT_SOURCE=mtp|suffix|merged, default mtp (byte-identical). MtpHeadSource = current.
 S-C. MergedSource compose (I own): suffix candidates -> extra tree children; committer-transparent.
-S-D. (optional) raise pad-16 cap to 32 for wide merged trees (gdn_attn.py:294 + buffer sizing).
+S-D. (optional, NOT cheap) widen past n_pad=16 for wide merged trees. NOTE: the 16 cap is a REAL
+     register wall, not buffer sizing — the FR10 tree kernel (fr10_gdn_tree_kernel.py:408)
+     holds h_cache=[N_PAD,BLOCK_V=16,DIM_K=128] fp32 register-resident (128 KB/CTA at 16 = half
+     the SM reg file; 32 spills to HBM). Widening REQUIRES re-tiling BLOCK_V 16->8 (+2x V-grid,
+     redundant q/k reloads) — a kernel rewrite. So prefer keeping merged trees <=16 nodes and
+     spending the free suffix candidates on BRANCH DENSITY within 16, not on going wider.
 Gates 1->4 per step. Suffix is losslessness-safe by the committer, so the risk is SPEED/ACCEPT
 (does it help), not CORRECTNESS (it can't garble).
