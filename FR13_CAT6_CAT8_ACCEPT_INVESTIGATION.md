@@ -828,3 +828,33 @@ pi=[0,1,3,4,5,6,2] non-vacuous). THE VERDICT MATH:
   (its own doc: structurally impossible); the MATCHED comparison is this one.
 t33333 arm running (16 rows/req; ms_step 258.5 as expected heavier — its accept must clear
 ~+25% over cat8's to pay for the wider verify; the arm measures exactly that).
+
+## S1 PORT DESIGN (2026-07-14, designed by direct source read — twins + kernel)
+
+STRUCTURE: dispatch :10374-10445 (all_greedy -> greedy twin :7699; temp>0 tree -> sampled twin
+:9259 via fr13_device_multidraft_commit). The sampled DECISION is already on-device (BAKED
+FR13_DEVICE_MULTIDRAFT); the cost is the WALK TRANSPORT: device_multidraft_step
+(fr13_device_multidraft_kernel.py:293-337) does 4-7 blocking .item()/NODE (overlap_mass :303,
+source draw :311, token :313, u+accept :319, mass :330, residual draw :335) x ~10-15 nodes/step
+x B=4 => the measured ~75-110 syncs/step (~6-10ms + pipeline bubbles).
+
+**P1 (core): depth-synchronous walk, 100+ syncs -> ~5/step, BYTE-identical.** Rewrite the walk
+so each DEPTH level runs all B requests' node-decisions as device ops WITHOUT .item()s (decision
+tensors stay on device; next-node selection via device gather), with ONE tiny [B] "continue"
+flag DtoH per depth (depth<=5 => <=5 syncs/step) + ONE packed products DtoH at the end.
+CRITICAL CONTRACT: preserve the EXACT per-request draw sequence — same conditional draws, same
+order, same per-request torch.Generator (loop over B for multinomial calls; B<=4, launches are
+async ~5-10us vs 50-100us blocking syncs) => products BYTE-IDENTICAL to today's device path
+(stronger than the distribution-lossless bar of fr13_device_multidraft_offline_gate.py, which
+remains the fallback gate). REJECTED design: fixed-depth masked unroll with zero per-depth syncs
+— it draws EXTRA (masked) rng samples, advancing per-request generators differently => trajectory
+divergence (distribution-OK but breaks same-seed byte gates); take the 5 syncs.
+**P2: transplant the _ep_stacks all-layer replay** (greedy :8990-9093 incl. flags consume) over
+the sampled legacy per-layer loop (:9798-9865; ~96 launches + flag .item()s). Stacks are
+module-level (_FR13_EAGER_PACK_STACKS on the gdn module, init-time) => directly usable; the
+greedy block is the tested template (byte-A/B-gated at FIX-2).
+**P3: G2.b-style packed writeback/publish twin** (greedy offset :8528+ vs sampled per-element
+:9564-9787). **P4 (defer): batched conv-commit kernel (~400 launches, new kernel work).**
+GATES per piece: offline distribution gate (P1) / byte-A/B (P2,P3) -> S0 patcher self-test ->
+boot engagement + same-seed probe -> live same-boot A/B wall/tok. Flag FR13_COMMITTER_PACK_SAMPLED
+default OFF until gated. Effort: P1 1-2d, P2 0.5d, P3 0.5d.
