@@ -1159,3 +1159,15 @@ qwen-code 0.19.4, same ship-cache env, same t33333 tree, same B4/CONC4, no agent
 FR13_DRAFT_SOURCE=merged; arctic install is merged-gated + not imported by baseline). NEXT = the FULL
 16-task delivery A/B (subset_b4_sixteen.json) after the current 4-task baseline frees the GPU:
 run_variant merged vs MTP-only t33333 on 16 tasks -> resolve parity + give-ups + garble + dfwd delta.
+
+## FRONT 2 v2 16-task run INVALIDATED -> 2 root causes found + FIXED (2026-07-14)
+v2 16-task merged arm: 15/16 EMPTY patches (resolve 1/16). RED-TEAM: NOT the drafter (v2 engaged
+0.7%, decode clean, 0 garble/give-up). Result records: agent analyzed the bug then "[API Error:
+terminated UND_ERR_SOCKET: other side closed]" RIGHT BEFORE editing => agent socket dropped.
+CAUSE 1 (my bug): ingest_from_sequence did seq=[int(t) for t in seq_list[:num_tokens]] = O(num_tokens)
+per DECODE STEP over a TENSOR (per-elem .item()) -> 100k+ ctx x B4 x hundreds steps = server stall ->
+agent HTTP timeout -> UND_ERR_SOCKET -> empty patch. FIX: O(delta+max_tree_depth) slices only.
+CAUSE 2 (v2 design): use_tree_spec=True spends budget on breadth -> SHALLOW tree -> rarely reaches
+depth need=4 -> 0.7% engage (v1 flat=47%). FIX: HYBRID arctic_flat_tree_to_suffix_rel = FLAT deep
+chain drives spine+depth (engagement) + TREE supplies branches. Both committed. RE-RUN = 16-task A/B
+fixed binary, merged first to validate real-patches + ~47% engage early.
