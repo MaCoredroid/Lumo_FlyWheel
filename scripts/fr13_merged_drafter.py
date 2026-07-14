@@ -107,10 +107,13 @@ def ingest_from_sequence(cache, req_id, seq_list, num_tokens, max_tree_depth=24)
     bonus token) -- NOT accepted-drafts-only (which would be gappy). Keeps _COMMITTED = the recent
     suffix for the seam's speculate pattern.
     seq_list: the full per-req token sequence (list/1-D); num_tokens: valid length."""
-    seq = [int(t) for t in seq_list[:num_tokens]]
+    # PERF-CRITICAL: convert ONLY the needed slices (delta + recent suffix), NEVER the whole
+    # sequence. A prior O(num_tokens)-per-step `seq=[int(t) for t in seq_list[:num_tokens]]` stalled
+    # the server on long agentic contexts (100k+ tok x B4 x hundreds of steps) -> dropped the agent
+    # socket (UND_ERR_SOCKET) -> empty patches. This is O(delta + max_tree_depth) per step.
     last = _INGESTED_LEN.get(req_id, 0)
     if num_tokens > last:
-        new = seq[last:num_tokens]
+        new = [int(x) for x in seq_list[last:num_tokens]]   # delta only
         if new and cache is not None:
             try:
                 cache.add_active_response(req_id, new)
@@ -119,7 +122,7 @@ def ingest_from_sequence(cache, req_id, seq_list, num_tokens, max_tree_depth=24)
                 pass
         _INGESTED_LEN[req_id] = num_tokens
     start = max(0, num_tokens - max_tree_depth)
-    _COMMITTED[req_id] = seq[start:num_tokens]
+    _COMMITTED[req_id] = [int(x) for x in seq_list[start:num_tokens]]   # recent suffix only
 
 
 def retire_requests(cache, gone_req_ids):
