@@ -966,3 +966,25 @@ correctness-critical work. Decision menu for the user:
   2. Commit to FR-Spec (A) — highest ceiling, hardest, garble-gated.
   3. Stop speed here — ship the correctness win; the tree is at accept+GPU parity, host-overhead
      slower, which for an HBM-bound agentic workload is a defensible ship.
+
+## DRAFTER DECOMPOSED (2026-07-14, split10 detached): HOST-BOUND, FR-Spec DEAD
+
+Precise GPU-event spans on the PATCHER's OWN drafter (not pristine — the fork rewrites propose via
+FR13_DRAFTER_SINGLE_LOGITS): model(draft fwd) 8.3ms + lmhead(compute_logits :13361) 15.1ms = 23ms
+GPU COMPUTE per step; dfwd TOTAL 140ms/step. => ~117ms (83%) is HOST orchestration + GPU-idle gaps
+(CUDA events count host-idle between records). The DRAFTER IS HOST-BOUND, not HBM/weight-read-bound.
+- FR-Spec (truncated draft vocab) REFUTED as a lever: lm_head is 15/140; halving saves ~2% total.
+  Do NOT pursue.
+- model forward (8.3ms) confirmed NOT the bottleneck (earlier split9 5.5ms consistent).
+- The 117ms host = prepare_inputs (draft input build from accepted path) + tree bookkeeping +
+  per-step host tensor ops + .item() syncs, in propose_draft_token_ids. This is the real drafter
+  lever: reduce host Python / syncs / graph-capture prepare_inputs. DIFFUSE + needs host profiling.
+
+INFRA WIN: fr13_detached_boot.sh (setsid session-detach) DEFEATS the phantom boot-killer — split9
++ split10 both completed (death.log clean, no signal) after split6/7/8 died at ~50s-3min. Root:
+serve script `trap teardown EXIT` binds container life to launcher; a SIGTERM to the (background)
+launcher tripped teardown -> docker rm -f. Detaching into a new session breaks the chain.
+
+ATTACK re-ranked (all cheap/compute levers now refuted — P1 walk, S2 shape, drafter model, FR-Spec):
+  (A') drafter HOST overhead (117ms) — biggest, but diffuse host Python; needs profiling.
+  (B) P2 committer replay transplant (bounded, template-proven) — share of 44-53ms cfwd unmeasured.
