@@ -209,3 +209,14 @@ packer consumes _fr10_spine_tokens list + _fr10_wide_topk dict; append/fill to d
 edit: the loop mutates seq_lens/slot_mapping/KV per step; stopping early is fine (skipped spine
 tokens are Arctic draft candidates the target verifies -- Gate 1 lossless -- never run through the
 draft model). Gate the speed claim with the sfwd/dfwd GPU timers + iteration-count log.
+
+### Reconciliation with prior "single parallel pass / depth lever dead" (#26/#27), honest
+Code is DEFINITIVE: the cat33333 spine loop runs range(_fr10_spine_steps)=range(4) with a
+self.model() forward per iter and NO parallel_drafting guard (that guard is in STOCK eagle, which
+the FR10 caterpillar patch REPLACES). So the SPINE is 4 sequential forwards. The prior "parallel
+drafting" was correct ONLY for the BRANCHES (each depth's runner-up branches are read via topk from
+that spine step's logits -- free, no per-branch forward); it was IMPRECISE as "the whole drafter is
+one forward." And "depth/shape lever dead" (#27 S2 DP) was about ACCEPT-vs-tree-SHAPE within depth-5
+-- a different question than "skip spine FORWARDS." So the spine-forward-count lever (mtp_k) is NEW,
+confirmed by code, and NOT contradicted by the earlier conclusions. Still UNMEASURED: the net host
+delta (saved spine-iteration orchestration - Arctic lookup); the live A/B + sfwd/dfwd timers decide.
