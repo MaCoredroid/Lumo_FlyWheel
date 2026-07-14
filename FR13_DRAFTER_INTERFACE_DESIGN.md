@@ -376,3 +376,23 @@ FINAL 3 PATCHER HOOKS (thin, all gated fr13_merged_drafter.merged_on()):
   S5 SELF-TEST fr13_merged_drafter_s0_test.py: apply patcher to pristine vLLM copies (/tmp/fr13inv or
      a fresh checkout) -> compile gdn_linear_attn + eagle -> assert markers present + (sidecar absent)
      the merged branches are dead. Host-runnable (no GPU).
+
+## v2 = TRIE-WALK (user 2026-07-14): use_tree_spec=True -> trie subtree fills cat33333 branches
+User's algorithm: MTP drafts 1-2 near tokens -> [committed++mtp-prefix] pattern WALKS DOWN the
+suffix trie -> the landed node's BRANCHING SUBTREE maps onto cat33333 (top-prob path=spine, sibling
+nodes=the 2 branches). CONFIRMED Arctic-native via speculate(..., use_tree_spec=True):
+SuffixDecodingDraft exposes token_ids + parents + probs + match_len + score. Live-verified in the
+container: pattern [1,2,3] (followed by BOTH [4,5,6] and [7,8,9] in history) ->
+token_ids=[4,7,5,8,6,9,1,2] parents=[-1,-1,0,1,2,3,5,6] => root children [4,7] = the branch set.
+IMPL (small, committed): arctic_tree_to_suffix_rel(draft) parses parents->depth, groups tokens by
+depth, ranks by prob -> per-depth ranked suffix_rel; assemble_cat33333 ALREADY consumes
+suffix_rel[d][1:] as the 2 branch candidates, so v2 = new adapter + use_tree_spec=True only. Gated
+FR13_MERGED_TREE_SPEC (default v2=1; =0 -> v1 flat spine-only). Tests: fr13_arctic_tree_adapter_test
+10/10 (real branching example -> cat33333 d1 branch = trie sibling 7, provenance suffix).
+DECISIVE BONUS FINDINGS (container inspection): (1) NO dtype bug -- python LISTS work (arctic accepts
+Sequence[int]; int32 only required for explicit ndarrays); my production passes lists => correct.
+(2) Arctic ENGAGES on repetition -- returned 6 continuation tokens (>=need=4) for a repetitive
+pattern => match_full=0 on the single-prompt probe was WORKLOAD (single-turn lacks >=4-tok
+repetition), NOT a bug. => the live AGENTIC A/B (file re-reads) is the right engagement test; v2 adds
+branch-accept on top. arctic API: speculate(req_id, context, max_spec_tokens, max_spec_factor=1.0,
+max_spec_offset=0.0, min_token_prob=0.1, use_tree_spec=False).
