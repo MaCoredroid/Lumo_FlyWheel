@@ -873,3 +873,26 @@ accept_prob f64; mass floats via readback), residual divided by the DEVICE mass 
 GATE: scripts/fr13_dm_depthsync_byte_gate.py — **96/96 cases BYTE-IDENTICAL** (cat8/cat6root/
 t33333 x B1/B4 x 4 seeds x random/dominant/adversarial/zero-overlap). NEXT: P2 (_ep_stacks
 all-layer replay transplant into the sampled twin), then boot gates + live same-boot A/B.
+
+## P1 B=4 A/B: walk-sync win NOT confirmed at ship batch; TIMERS REMAP THE OVERHEAD (2026-07-14)
+
+B=4 live 4-task arms (engagement audited: dson ENGAGED=1/legacy=0, env pins correct, crash 0):
+cfwd 44.1 vs 44.2 ms/span (NO delta); deploy committer_ms_per_step 53.3 vs 51.4 (-3.5%, but
+prefill_frac mismatch 0.344 vs 0.293 => not clean); accept 3.60 vs 3.48 (noise). The B=1 probe's
+-4.4ms/span is therefore INCONCLUSIVE (single boot pair; cfwd's dominant blocks — legacy replay
+loop, conv commits, remap — carry cross-boot variance of the same magnitude). HONEST: the walk
+.item()s were over-attributed by the census (est 3-8ms; real ≲2-4ms at agentic effective-batch
+~1.3, where legacy sync count barely scales). FR13_DM_DEPTHSYNC stays DEFAULT OFF (byte-safe,
+96/96-gated, value unproven — no bake).
+
+**THE NEW OVERHEAD MAP (first-ever direct timers, both arms agree):**
+  drafter (dfwd)   87.6-90.7 ms/step  <- THE ELEPHANT (~6.4 ms/tok at 13.6 tok/step; ~42% of a
+                                          207ms verify forward; 5 sequential level-calls)
+  committer (cfwd) 44.1-53.3 ms/step  <- replay legacy loop + conv commits + remap (P2/P3/P4
+                                          targets), walk syncs minor
+  verify forward   ~207 ms/step (sfwd)
+=> The +6.2 ms/tok tree-vs-native non-forward gap decomposes as mostly DRAFTER + committer
+blocks. RE-RANKED ATTACK: (A) drafter structure — is propose_tree graph-captured or 5 eager
+host-orchestrated level forwards? measure + graph/fuse; FR-Spec vocab cut if lm_head-bound;
+(B) P2 replay transplant (the 96-launch loop inside cfwd); (C) P3 writeback. Committer walk
+(P1) done+shelved (flag exists if later useful at true B>2 concurrency).
