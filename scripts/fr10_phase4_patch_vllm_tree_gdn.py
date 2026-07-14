@@ -18417,7 +18417,7 @@ class _Fr13DfwdSplit:
                 )
             except Exception:  # noqa: BLE001
                 pass
-        self.pairs = {"level": [], "model": [], "head": []}
+        self.pairs = {"model": [], "sample": []}
         self.pathmap = set()
         self.done = False
         if self.on:
@@ -18441,7 +18441,7 @@ class _Fr13DfwdSplit:
         self.pairs[k].append((start_ev, ev))
         # periodic dump: teardown is docker rm -f (SIGKILL, no atexit); mirror
         # the span-timer's survival pattern. Level-end only, every 25 levels.
-        if k == "level" and len(self.pairs["level"]) % 25 == 0:
+        if k == "model" and len(self.pairs["model"]) % 25 == 0:
             self.done = False
             self.dump()
             self.done = False
@@ -18510,72 +18510,38 @@ _FR13_DFWD_SPLIT = _Fr13DfwdSplit()
         "            draft_token_ids_list = self.propose_tree(",
         "propose() tree-branch",
     )
-    text = _pm_inject(
-        text,
-        "        draft_token_ids = self._greedy_sample(sample_hidden_states)\n\n        if self.allowed_attn_types is not None:",
-        "propose() CHAIN fallback",
+    # PARALLEL-DRAFT early exit (the live path per split5 pathmap elimination):
+    early = "        if self.num_speculative_tokens == 1 or self.parallel_drafting:\n"
+    ei = text.index(early)
+    greedy_line = "            draft_token_ids = self._greedy_sample(sample_hidden_states)\n"
+    gi = text.index(greedy_line, ei)
+    ret_line = text.index("\n", gi + len(greedy_line))
+    pm_early = (
+        "            if 'propose() PARALLEL early-exit' not in _FR13_DFWD_SPLIT.pathmap:\n"
+        "                _FR13_DFWD_SPLIT.pathmap.add('propose() PARALLEL early-exit')\n"
+        "                try:\n"
+        "                    from vllm.logger import init_logger as _il\n"
+        "                    _il('vllm.fr13_dfwd_split').info('FR13_PATHMAP: %s', 'propose() PARALLEL early-exit')\n"
+        "                except Exception:\n"
+        "                    pass\n"
     )
-
-    # level start/end around the loop body: anchor the loop head + tail
-    loop_head = "        for level in range(tree_depth - 1):\n"
-    if text.count(loop_head) != 1:
-        raise RuntimeError("FR13_DFWD_SPLIT loop anchor not unique")
-    text = text.replace(
-        loop_head,
-        loop_head + f"            {sentinel}: level span begin\n"
-        "            _fr13_ds_lv = _FR13_DFWD_SPLIT.begin('level')\n",
-        1,
-    )
-    tail = """            level_num_drafts = self.cu_drafts_per_level[level + 1] - total_num_drafts
-            total_num_drafts = self.cu_drafts_per_level[level + 1]
-        return draft_token_ids_list
-"""
-    if tail not in text:
-        raise RuntimeError("FR13_DFWD_SPLIT tail anchor not found")
-    text = text.replace(
-        tail,
-        """            level_num_drafts = self.cu_drafts_per_level[level + 1] - total_num_drafts
-            total_num_drafts = self.cu_drafts_per_level[level + 1]
-            _FR13_DFWD_SPLIT.end('level', _fr13_ds_lv)
-        return draft_token_ids_list
-""",
-        1,
-    )
-    # model span
-    model_call = """                last_hidden_states, hidden_states = self.model(
-                    input_ids=self.input_ids[:num_input_tokens],
-                    positions=self.positions[:num_input_tokens],
-                    hidden_states=self.hidden_states[:num_input_tokens],
-                    inputs_embeds=None,
-                )
-"""
-    if text.count(model_call) < 1:
-        raise RuntimeError("FR13_DFWD_SPLIT model anchor not found")
-    # propose_tree's occurrence is the one directly after the level-span begin;
-    # replace the FIRST occurrence AFTER the loop sentinel position.
-    pos = text.index(sentinel)
-    idx = text.index(model_call, pos)
     text = (
-        text[:idx]
-        + "                _fr13_ds_md = _FR13_DFWD_SPLIT.begin('model')\n"
-        + model_call
-        + "                _FR13_DFWD_SPLIT.end('model', _fr13_ds_md)\n"
-        + text[idx + len(model_call):]
+        text[:gi]
+        + pm_early
+        + "            _fr13_ds_sm = _FR13_DFWD_SPLIT.begin('sample')\n"
+        + greedy_line
+        + "            _FR13_DFWD_SPLIT.end('sample', _fr13_ds_sm)\n"
+        + text[gi + len(greedy_line):]
     )
-    # head span (compute_logits + topk/argmax sampling)
-    head_start = """            logits = self.model.compute_logits(
-                draft_last_hidden_states.reshape(batch_size * level_num_drafts, -1)
-            )
-"""
-    idx = text.index(head_start, pos)
-    head_end_marker = "            draft_token_ids_list.append(draft_token_ids)\n"
-    idx2 = text.index(head_end_marker, idx)
+    # model span: around the ONE draft forward in propose()
+    mline = "            ret_hidden_states = self.model(**model_kwargs)\n"
+    mi = text.index(mline)
     text = (
-        text[:idx]
-        + "            _fr13_ds_hd = _FR13_DFWD_SPLIT.begin('head')\n"
-        + text[idx:idx2]
-        + "            _FR13_DFWD_SPLIT.end('head', _fr13_ds_hd)\n"
-        + text[idx2:]
+        text[:mi]
+        + "            _fr13_ds_md = _FR13_DFWD_SPLIT.begin('model')\n"
+        + mline
+        + "            _FR13_DFWD_SPLIT.end('model', _fr13_ds_md)\n"
+        + text[mi + len(mline):]
     )
     EAGLE_PATH.write_text(text)
     return True
