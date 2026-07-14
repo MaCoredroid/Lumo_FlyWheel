@@ -137,7 +137,7 @@ def retire_requests(cache, gone_req_ids):
 
 # ---- the seam decision (:13361 speculate + :13860 fill) ---------------------
 def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_depth, mtp_k,
-                    device, pad_token, max_spec_tokens=8, max_spec_factor=1.0, min_token_prob=0.0):
+                    device, pad_token, max_spec_tokens=16, max_spec_factor=4.0, min_token_prob=0.0):
     """ADAPTIVE Mode B. Returns (spine_tokens, wide_topk, do_skip):
       * (spine_tokens, wide_topk, True)  when ALL active rows have a full-depth (>= N_DEPTH-mtp_k)
         Arctic match -> caller SKIPS the deep spine forwards and packs these columns.
