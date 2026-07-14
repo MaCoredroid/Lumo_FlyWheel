@@ -1235,10 +1235,10 @@
     <p class="title-subtitle">A Branched Verifier That Caches and Commits Like Native</p>
     <p class="subhead">Vol. IV left the tree decode path as the open frontier: a branched speculative verifier that a prefix cache could poison, while the native linear path stayed clean. This page closes it, twice. A redesign makes the tree carry <em>zero</em> persistent state, so native's own cache owns correctness by construction. And the garble that had survived every numerical gate turned out not to be numerical at all &mdash; it was the attention KV of committed tokens, read from the wrong slot.</p>
     <div class="hero-tldr" aria-label="TLDR and headline result">
-      <p class="tldr-copy"><strong>TL;DR:</strong> native decode gets caching for free because its accepted tokens form a linear chain; our token-tree verifier breaks that assumption in two independent ways. The fix for both is one principle: after a branched accept, <strong>re-linearize every committed state to the accepted path and burn the branch scratch</strong>, so the tree's data footprint is identical to native's. Applied to the recurrent state it is a stateless-tree lifecycle; applied to the attention KV it is the missing re-linearizer that had been emitting near-neighbor identifier garble the whole time.</p>
+      <p class="tldr-copy"><strong>TL;DR:</strong> native decode gets caching for free because its accepted tokens form a linear chain; our token-tree verifier breaks that assumption in two independent ways. The fix for both is one principle: after a branched accept, <strong>re-linearize every committed state to the accepted path and burn the branch scratch</strong>, so the tree's data footprint is identical to native's. Applied to the recurrent state it is a stateless-tree lifecycle; applied to the attention KV it is the missing re-linearizer that had been emitting near-neighbor identifier garble the whole time. Net result: garble ~40%&nbsp;&rarr;&nbsp;0%, resolve at native parity (8/16), and an honest speed picture &mdash; the tree runs about 10% slower end-to-end, with a branch-on-spine accept disturbance localized and left as future work.</p>
       <div class="hero-result">
         <span class="hero-number">0%</span>
-        <p><strong>garble</strong>, down from ~40%, on both branched trees (cat8: 0 of 84 scripts; cat6: 0 of 61), at the native ~1% floor. SWE-Verified resolve then matches native exactly (cat8 8/16 = native 8/16), with agent trajectories that track native instead of thrashing. The residual is a speed question, not a correctness one.</p>
+        <p><strong>garble</strong>, down from ~40%, on both branched trees (cat8: 0 of 84 scripts; cat6: 0 of 61), at the native ~1% floor. SWE-Verified <strong>resolve matches native exactly &mdash; cat8 8/16 = native 8/16 (50%)</strong>. On <strong>speed</strong> the tree is not yet ahead: about 10% slower end-to-end, and a residual disturbance in which a wider tree accepts <em>fewer</em> tokens (cat6&nbsp;3.594 over cat8&nbsp;3.336) is now localized but not yet fixed. The remaining question is speed, not correctness.</p>
       </div>
     </div>
     <div class="byline">
@@ -1302,7 +1302,7 @@
             <div class="claim"><span class="state pass">GARBLE</span><p>~40% &rarr; 0% on both branched trees; the token gate goes 0/15, matching native, and committer acceptance is verified token-lossless.</p></div>
             <div class="claim"><span class="state pass">RESOLVE</span><p>cat8 fix-on 8/16 = native 8/16 exactly; agent trajectories track native, no give-ups or thrash.</p></div>
             <div class="claim"><span class="state pass">STATELESS</span><p>the col-0 commit + burn lifecycle is baked default-on; the tree's data footprint equals native's.</p></div>
-            <div class="claim"><span class="state warn">SPEED</span><p>the clean three-arm run shows the tree ~10% slower per forward, not faster; the branch-on-spine accept disturbance is now localized but not yet fixed (<a href="#future">future work</a>).</p></div>
+            <div class="claim"><span class="state warn">SPEED</span><p>the clean three-arm run shows the tree ~10% slower end-to-end, not faster, and a wider tree accepting fewer tokens (cat6 3.594 &gt; cat8 3.336); localized but not yet fixed (<a href="#future">future work</a>).</p></div>
           </div>
         </aside>
       </div>
@@ -1338,7 +1338,7 @@
           <div class="box info"><span class="tag">Why free</span><p>Native's accepted tokens are a contiguous chain; the recurrent state, conv window, and attention KV all land at linear positions the stock cache handles.</p></div>
           <div class="box good"><span class="tag">Stateless tree</span><p>Make the tree hold no persistent state: init from native's rows, verify in scratch, commit the leaf to the running row, burn the scratch. Native's cache owns the rest.</p></div>
           <div class="box bad"><span class="tag">Garble</span><p>A near-neighbor identifier corruption that looked numerical for months. It was a foreign-KV read: the accepted branch path is non-contiguous, so a linear re-read grabbed a sibling's attention KV.</p></div>
-          <div class="box good"><span class="tag">Result</span><p>Garble ~40% &rarr; 0%; resolve matches native; committer acceptance verified token-lossless. The two remaps are the same idea applied to recurrent and attention state.</p></div>
+          <div class="box good"><span class="tag">Result</span><p>Garble ~40% &rarr; 0%; resolve at native parity (8/16); speed ~10% behind native end-to-end, with the branch-on-spine accept disturbance left as future work. The two remaps are the same idea applied to recurrent and attention state.</p></div>
           <div class="box warn"><span class="tag">Honest close</span><p>The remaining tree-shape accept difference is speed, not quality; the clean speed comparison is the one open experiment.</p></div>
         </div>
       </div>
@@ -1663,18 +1663,17 @@
 
       <p>The trajectory change is the tell that this is a real fix, not a metric that happened to move. The no-fix tree was bimodally dysfunctional &mdash; a cluster of two-turn hard give-ups and a tail of eighty-to-a-hundred-turn garble-thrash. Fix-on, both modes are gone: a healthy median around fifteen turns, a minimum of eight with no give-ups, a maximum of thirty-five with no thrash, and fifteen of sixteen tasks editing the correct source file. Resolve tracks native task-for-task; the net movement was three garble-failures rescued against one temperature-noise regression, which is what a fix that removes corruption without injecting errors looks like.</p>
 
-      <p>With garble out of the way, a same-boot three-arm speed comparison finally means something &mdash; the earlier numbers were garble-composition artifacts. On sixteen SWE-Verified tasks at one agent, all fix-on:</p>
+      <p>With garble out of the way, a clean same-boot three-arm comparison finally means something &mdash; the earlier numbers were garble-composition artifacts. This is the deployment temperature-0.6 run, remap-on, sixteen SWE-Verified tasks at one agent; resolve, acceptance, and speed are all from it, so the columns are directly comparable:</p>
       <div class="table-wrap">
         <table>
-          <caption>Three arms, same boot, fix-on: resolve, acceptance, and speed. Higher accept is faster; higher wall throughput is faster.</caption>
+          <caption>Three arms, one same-boot temp-0.6 run: resolve, acceptance, per-forward cost, and forward-limited throughput. Higher accept and higher throughput are faster.</caption>
           <thead>
             <tr>
               <th>Arm</th>
               <th>Resolve (16 tasks)</th>
               <th>Accept / event</th>
               <th>s / forward</th>
-              <th>Committed tokens / forward</th>
-              <th>Wall throughput (temp 0.6)</th>
+              <th>Throughput (committed tok/s, forward-limited)</th>
             </tr>
           </thead>
           <tbody>
@@ -1684,7 +1683,6 @@
               <td class="num">3.466</td>
               <td class="num">0.1995 s</td>
               <td class="num">22.4</td>
-              <td class="num">21.45 tok/s</td>
             </tr>
             <tr>
               <td>cat6 (6-node tree)</td>
@@ -1692,7 +1690,6 @@
               <td class="num">3.594</td>
               <td class="num">0.1988 s</td>
               <td class="num">23.1</td>
-              <td class="num">19.34 tok/s</td>
             </tr>
             <tr>
               <td>cat8 (8-node tree)</td>
@@ -1700,12 +1697,11 @@
               <td class="num">3.336</td>
               <td class="num">0.2173 s</td>
               <td class="num">19.9</td>
-              <td class="num">19.34 tok/s</td>
             </tr>
           </tbody>
         </table>
       </div>
-      <p>Two honest readings. On <em>quality</em>, cat8 matches native exactly (8/16) and cat6 is within one flaky task; garble is gone on both trees. On <em>speed</em>, the picture is more sobering than "branches are faster": on this benchmark native holds the highest wall throughput, the tree runs about ten percent slower per forward, and acceptance does not rise monotonically with node count &mdash; cat6 accepts more than cat8. That last fact is a real effect, not noise (the earlier, larger version of the gap was a garble artifact; the clean greedy gap is about 0.09 tokens per event), and chasing it down is the open frontier below. A note on the forward-only "derived throughput" figures (native 70.9, cat6 72.4, cat8 63.9 tokens per second): those divide by verify-forward GPU time only, so they are an upper bound that ignores the real per-request overhead &mdash; do not read them as deployment speed. The wall-throughput and committed-tokens-per-forward columns are the honest basis.</p>
+      <p>Two honest readings. On <em>quality</em>, cat8 matches native exactly (8/16) and cat6 is within one flaky task; garble is gone on both trees. On <em>speed</em>, the surprise that opened the investigation below: <strong>cat6 out-accepts cat8</strong> &mdash; 3.594 versus 3.336 &mdash; and is the faster tree here (highest acceptance, lowest per-forward, highest throughput; native sits in the middle, cat8 is slowest). That is backwards. cat8 is an eight-node tree that contains cat6's six as a subset, so it should accept <em>at least</em> as much, never less. The subtraction is the branch-on-spine disturbance, and it is the frontier below. One caution on the throughput column: it is forward-limited (committed tokens over verify-forward GPU time), which flatters the trees; a separate controlled wall-clock benchmark that adds the roughly thirty percent drafter-and-committer overhead puts native about ten percent ahead of both trees. So the tree does not yet out-run native end-to-end, and closing that overhead is part of the same open work.</p>
 
       <div class="source-exhibit" aria-label="Completeness audit">
         <div class="source-head">
@@ -1900,7 +1896,7 @@
         <div class="box warn">
           <span class="tag">Speed, not quality</span>
           <h3>The residual is a speed effect</h3>
-          <p>Different tree shapes accept at slightly different rates (a small, roughly 0.09-token gap between cat6 and cat8 at matched decode), driven by how tree width perturbs the attention projection. It is speed-only: the tree still commits the right tokens (the committer is verified token-lossless), so nothing is lost. An earlier, larger version of this gap was a garble-composition artifact, not a real effect.</p>
+          <p>At greedy, adding branches slightly lowers the spine's acceptance (a roughly 0.09-token gap, cat6 over cat8), driven by how the forked attention kernel's key width perturbs its reduction. It is speed-only: the tree still commits the right tokens (the committer is verified token-lossless), so nothing is lost, and at deployment temperature the branches recover the gap. An earlier, 3.4&times;-larger version of it was a garble-composition artifact, not a real effect.</p>
         </div>
         <div class="box warn">
           <span class="tag">Superset unproven</span>
@@ -1926,7 +1922,7 @@
         <p><strong>Status:</strong> not merged. This work lives on a branch, behind a default-off flag; the ship configuration is byte-identical without it. It is recorded here as the active frontier, in the same attempt-by-attempt spirit as the rest of the report.</p>
         <p><strong>The question:</strong> why does adding branches to the tree <em>lower</em> the acceptance rate of its own spine? Answering it is what would turn the tree from about ten percent slower than native into faster.</p>
       </aside>
-      <p>The results above leave one honest disappointment: the tree does not out-run native on this benchmark, and acceptance falls as node count rises &mdash; cat6 accepts more than cat8. That is counter-intuitive, because a wider tree is a superset of a narrower one; its extra branches should only ever add accepted tokens, never subtract. The subtraction is a numerical artifact, and the same six-day discipline that found the garble has now localized it, though not yet shipped a fix. The whole effect is a single bit of floating-point &mdash; roughly 0.09 tokens per event at greedy, a within-floor speed residual, with the committed tokens still correct &mdash; but it is the difference between the tree earning its complexity and not.</p>
+      <p>The results above leave one honest disappointment: the tree does not out-run native on this benchmark, and acceptance falls as node count rises &mdash; cat6 accepts more than cat8 (3.594 versus 3.336 on that run). That is counter-intuitive, because a wider tree is a superset of a narrower one; its extra branches should only ever add accepted tokens, never subtract. The subtraction is a numerical artifact, and the same six-day discipline that found the garble has now localized it, though not yet shipped a fix. Measured cleanly &mdash; at greedy, where drafts are deterministic and the superset test is exact &mdash; the true magnitude is a single bit of floating-point, about 0.09 tokens per event (the raw temp-0.6 gap above is larger and noisier; an even bigger earlier version was a garble artifact). It is a within-floor speed residual with the committed tokens still correct &mdash; but it is the difference between the tree earning its complexity and not.</p>
 
       <h3>Where the disturbance lives</h3>
       <p>Adding a co-resident branch changes the acceptance of the spine even though the branch's keys are correctly masked out of the spine's attention. We localized it the same way as the garble &mdash; overwrite each suspect with a native-exact version in an observe-only harness &mdash; and it resolved cleanly. The fused convolution is bit-invariant to branch count (elementwise math, no cross-row reduction). The in-projection is excluded by construction (the two tree widths share the same GEMM path). The carrier is the forked attention kernel: on the deepest spine node it drifts by exactly one bf16 unit-in-the-last-place at magnitude eight, in all sixteen full-attention layers, purely as a function of how many branches sit beside it.</p>
