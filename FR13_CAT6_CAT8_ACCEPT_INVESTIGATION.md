@@ -1061,3 +1061,14 @@ the kernel: e.g. BLOCK_V 16->8 (N_PAD=32 -> 32*8*128 = 128 KB, back under ceilin
 programs + redundant q/k reloads -- a kernel rewrite with real overhead, not a constant bump.
 IMPLICATION for the drafter interface: "free wide branches" is NOT free at the verify kernel past
 n_pad=16 -- the register wall gates tree width; wider merged trees need the BLOCK_V re-tile first.
+
+### FRONT 1 red-team CLOSED (2026-07-14): failure is at INIT, not a graph/tile confound
+t55555(26 rows) rc=2 with `NotImplementedError: FR10 GDN tree verifier only warms padded tree
+sizes <=16, got 26` logged at EngineCore START (07-14 18:15:54, core.py:1129) — i.e. at
+initialize_kv_cache/create_metadata_builders, BEFORE any decode step or cudagraph capture. This
+REFUTES the "it's really the 64-token FA2-tile/cudagraph boundary not tree_16" alternative: the
+hard cap bites at n_pad=32 at init, well below the kNWarps*16=64-row FA2 boundary. The 64-token
+boundary is a SEPARATE higher ceiling (would only matter at B=4 where tree_16 = 64 tokens — the
+batch×tree confound the B=1 sweep was built to isolate, and did). Sweep curve (n_pad=16 for BOTH):
+cat8(9)=131.3ms/3.691, t33333(16)=145.0ms/3.962, t55555(26)=BOOT-FAIL. FRONT 1 CONCLUDED: 16 is a
+real init-time register-wall cap; widening = BLOCK_V re-tile (kernel rewrite), tracked but not cheap.
