@@ -896,3 +896,26 @@ blocks. RE-RANKED ATTACK: (A) drafter structure — is propose_tree graph-captur
 host-orchestrated level forwards? measure + graph/fuse; FR-Spec vocab cut if lm_head-bound;
 (B) P2 replay transplant (the 96-launch loop inside cfwd); (C) P3 writeback. Committer walk
 (P1) done+shelved (flag exists if later useful at true B>2 concurrency).
+
+## DRAFTER DECOMPOSITION (2026-07-14, source read eagle.py propose_tree :1023-1142)
+
+Drafter = PIECEWISE-graphed (not launch overhead — 88ms is COMPUTE). The tree loop runs
+(tree_depth-1)=4 levels for cat8 depth-5; EACH level does two HBM-bound reads:
+  - self.model(...) draft-model forward (:1115) — reads the MTP/EAGLE draft weights (~1 layer)
+  - self.model.compute_logits(...) (:1131) — lm_head GEMM over FULL vocab (~152k), and the
+    lm_head is SHARED with the target (_maybe_share_lm_head :1354; boot log "Sharing target
+    model lm_head") => ~1.5GB weight read PER level-call.
+=> ~2.5GB/level x 4 = ~10GB HBM/step for drafting alone (GB10 ~250GB/s => ~40ms + attn/meta =>
+the measured 88ms). Attack A candidates:
+  A1 FR-SPEC truncated draft vocab (top lever): compute_logits only needs argmax/top-2, so use
+     lm_head[:, V'] over a high-frequency V' (e.g. 32k) => ~0.3GB vs 1.5GB, ~1.2GB/level saved
+     x4 = ~4.8GB => est ~19ms/step ~2ms/tok. LOSSLESS BY CONSTRUCTION (rejection sampler commits
+     target-correct tokens for whatever the draft proposed; MTP path draft_probs=None => accept
+     rule is SpecInfer-multidraft over proposed candidates, unchanged). ONLY accept-RATE at risk
+     (draft may miss a token outside V') => MEASURE accept delta; gate.
+  A2 draft-layer forward — harder (can't shrink the draft model losslessly); per-level metadata
+     rebuild (:1054-1092) is host + small device, minor.
+NEXT (loop-driven): (1) MEASURE the split — inject a default-OFF flag-gated timer around
+compute_logits vs self.model in the draft loop (patcher), confirm lm_head is the dominant share;
+(2) if yes, implement A1 FR-Spec behind FR13_DRAFT_VOCAB_TRUNC, dist/accept-gate + garble gate;
+(3) two-boot + B=4 same-harness A/B with dfwd + a new lm_head sub-timer. Measure or shelve.
