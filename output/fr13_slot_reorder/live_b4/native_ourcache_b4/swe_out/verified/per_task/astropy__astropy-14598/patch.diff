@@ -1,0 +1,24 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..e59dcfe4e 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -859,7 +859,7 @@ class Card(_Verify):
+                     return kw, vc
+ 
+                 value = m.group("strg") or ""
+-                value = value.rstrip().replace("''", "'")
++                value = value.rstrip()
+                 if value and value[-1] == "&":
+                     value = value[:-1]
+                 values.append(value)
+@@ -871,6 +871,10 @@ class Card(_Verify):
+                 valuecomment = "".join(values)
+             else:
+                 # CONTINUE card
++                # Do NOT replace '' -> ' here; that is done in _parse_value().
++                # Replacing per-chunk (as was done previously) caused incorrect
++                # unescaping when escaped quotes are split across CONTINUE
++                # boundaries.
+                 valuecomment = f"'{''.join(values)}' / {' '.join(comments)}"
+             return keyword, valuecomment
+ 
