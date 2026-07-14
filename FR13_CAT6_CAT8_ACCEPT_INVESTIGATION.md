@@ -914,3 +914,24 @@ shape DP must now include ~20ms/level drafter term + accept-ceiling-vs-depth tra
 NEXT CYCLE: sub-measure (a)-vs-(b) (one diagnostic boot: time lm_head vs rest inside a level,
 or infer from a vocab-truncation dry-run), then design the winner. S2 DP design (mine) now has
 its cost model: step_ms(rows) ~204+3.9/row(verify) + ~20ms x depth (drafter).
+
+## S2 SHAPE DP RESULT + PARALLEL-DRAFTING CORRECTION (2026-07-14, hands-on)
+
+**PARALLEL DRAFTING CONFIRMED by elimination** (split5/6 path-maps: propose_tree NEVER entered,
+propose() tree-branch NEVER taken, chain-fallback NEVER taken; only the :483 early exit
+`num_speculative_tokens==1 or parallel_drafting` remains) => the fork drafts ALL tree tokens in
+ONE parallel pass. CORRECTIONS: (a) the "5 sequential level-calls" model was WRONG for this
+config; (b) tree DEPTH does NOT buy drafter savings => that S2 lever is dead; (c) the 88-100
+ms/step dfwd is ONE draft pass + sample — its internal split (model fwd vs lm_head/sample)
+still needs the re-anchored split timer (split6/7 runs were externally stopped; measurement
+pending GPU resume).
+
+**S2 DP (scripts/fr13_tree_shape_dp.py, calibrated p_d/q_d from cat8 brhist; reproduces
+measured ordering, ±0.1 on magnitudes — overestimates t33333 by +0.16):**
+- Within TRUSTWORTHY space (depth <= 5): **cat8 [2,2,2,1,1] is near-optimal** — best variants
+  ([2,2,2,2,1]) gain <= +0.07 E[len] for +1 row = wash. No cheap S2 win; shape stays cat8.
+- Depth-6 shapes rank highest ONLY via unmeasured p6 extrapolation (0.915 from a small-n
+  long-tail) + assumes the MTP-5 drafter can draft a quality 6th level — PARKED unless the
+  drafter horizon is probed cheap.
+=> Speed path narrows to: (A) drafter single-pass internals (split measurement then FR-Spec
+lm_head cut or input-build fix), (B) P2 replay transplant (44-53ms committer span).
