@@ -18420,9 +18420,15 @@ class _Fr13DfwdSplit:
         ev = _t.cuda.Event(enable_timing=True)
         ev.record()
         self.pairs[k].append((start_ev, ev))
+        # periodic dump: teardown is docker rm -f (SIGKILL, no atexit); mirror
+        # the span-timer's survival pattern. Level-end only, every 25 levels.
+        if k == "level" and len(self.pairs["level"]) % 25 == 0:
+            self.done = False
+            self.dump()
+            self.done = False
 
     def dump(self):
-        if self.done or not self.on:
+        if not self.on:
             return
         self.done = True
         import json as _j, os as _os, torch as _t
