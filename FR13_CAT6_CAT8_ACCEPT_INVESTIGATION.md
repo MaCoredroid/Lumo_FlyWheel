@@ -919,3 +919,20 @@ NEXT (loop-driven): (1) MEASURE the split — inject a default-OFF flag-gated ti
 compute_logits vs self.model in the draft loop (patcher), confirm lm_head is the dominant share;
 (2) if yes, implement A1 FR-Spec behind FR13_DRAFT_VOCAB_TRUNC, dist/accept-gate + garble gate;
 (3) two-boot + B=4 same-harness A/B with dfwd + a new lm_head sub-timer. Measure or shelve.
+
+## FR-SPEC CEILING (theoretical HBM, model dims from config.json): ~+7% TPS, LOSSLESS
+
+Qwen3.6-27B: vocab=248,320, hidden=5120 => SHARED lm_head weight read = 2.54 GB / compute_logits
+call. Draft = 1 MTP layer (~0.53 GB dense MLP). lm_head = 83% of per-level draft weight read, and
+the TREE pays it 4x (one compute_logits per level, eagle.py:1131). FR-Spec V'=32k => lm_head 0.34
+GB, SAVE 2.21 GB/level x4 = 8.83 GB/step (~35 ms/step at ~250 GB/s) => drafter 88 -> ~53 ms/step
+=> ~2.6 ms/tok => ~+7% committed TPS. LOSSLESS (rejection sampler commits target-correct tokens
+regardless of draft proposal set; MTP draft_probs=None). RISK: accept-rate — draft argmax/top-2
+from truncated V' may miss CODE identifiers/rare tokens outside a high-freq set (adversarial for
+SWE) => MEASURE accept delta on live SWE. IMPL PLAN (loop-driven): (1) build high-freq V' from the
+existing SWE traces' committed tokens (offline, output/**/qwen_trace.jsonl or committed-token
+dumps) — code-aware freq, not generic corpus; (2) truncated draft lm_head = lm_head[:, V'] gather
++ argmax/topk over V' + map back to full ids, behind FR13_DRAFT_VOCAB_TRUNC default OFF (patcher
+propose_tree :14626 region + compute_logits :1131); (3) gates: dist-lossless (committed dist
+unchanged — verify uses FULL vocab), accept-rate delta measured, garble gate; (4) two-boot + B=4
+A/B with dfwd + lm_head sub-timer. Ceiling is the PRIZE; accept loss is the gate.
