@@ -18418,6 +18418,7 @@ class _Fr13DfwdSplit:
             except Exception:  # noqa: BLE001
                 pass
         self.pairs = {"level": [], "model": [], "head": []}
+        self.pathmap = set()
         self.done = False
         if self.on:
             import atexit as _ax
@@ -18483,6 +18484,37 @@ _FR13_DFWD_SPLIT = _Fr13DfwdSplit()
         text = text.replace(anchor_cls, helper.lstrip("\n") + "\n" + anchor_cls, 1)
     else:
         raise RuntimeError("FR13_DFWD_SPLIT helper anchor not found")
+
+    # PATH-MAP one-time logs: which drafting path actually runs live.
+    def _pm_inject(txt, body_anchor, label):
+        idx = txt.index(body_anchor)
+        indent = " " * (len(body_anchor) - len(body_anchor.lstrip()))
+        inj = (
+            indent + "if " + repr(label) + " not in _FR13_DFWD_SPLIT.pathmap:\n"
+            + indent + "    _FR13_DFWD_SPLIT.pathmap.add(" + repr(label) + ")\n"
+            + indent + "    try:\n"
+            + indent + "        from vllm.logger import init_logger as _il\n"
+            + indent + "        _il('vllm.fr13_dfwd_split').info('FR13_PATHMAP: %s', " + repr(label) + ")\n"
+            + indent + "    except Exception:\n"
+            + indent + "        pass\n"
+        )
+        return txt[:idx] + inj + txt[idx:]
+
+    text = _pm_inject(
+        text,
+        "        tree_attn_metadata_builder = self.draft_attn_groups[0].get_metadata_builder()",
+        "propose_tree ENTERED",
+    )
+    text = _pm_inject(
+        text,
+        "            draft_token_ids_list = self.propose_tree(",
+        "propose() tree-branch",
+    )
+    text = _pm_inject(
+        text,
+        "        draft_token_ids = self._greedy_sample(sample_hidden_states)\n\n        if self.allowed_attn_types is not None:",
+        "propose() CHAIN fallback",
+    )
 
     # level start/end around the loop body: anchor the loop head + tail
     loop_head = "        for level in range(tree_depth - 1):\n"
