@@ -151,3 +151,35 @@ My scripts/fr13_suffix_source.py is SUPERSEDED (kept for now; committer-contract
 source-agnostic). OPEN FORK (user owns): (A) vLLM-native suffix proposer standalone = replaces our
 GDN tree + committer with vLLM's native path (Round-2 shape); (B) arctic as the SUFFIX BACKEND of
 our merged drafter, feeding OUR committer/tree (preserves the FR13 lossless deliverable). Awaiting call.
+
+## CHOSEN ARCHITECTURE (user, 2026-07-14): MTP-k spine + Arctic-suffix GROW to cat33333
+"use native mtp1 or 2 then use suffix decoding to grow into a cat33333 tree." Path B (feeds OUR
+committer -> preserves the FR13 lossless deliverable). MOTIVATION: the FR13 drafter is PARALLEL
+(one forward), so its DEEP spine tokens (depth 2-4) are weak parallel-drafts; Arctic suffix decoding
+RETRIEVES the actual historical continuation (high accept on repetitive agentic context) and is FREE
+(no forward -- the host-bound-drafter insight). So swap MTP's weak deep-parallel-drafts for suffix's
+strong retrieved continuations.
+
+TARGET GEOMETRY = t33333 (16 nodes, n_pad=16, within the register wall):
+  spine: root -> (0,) -> (0,0) -> (0,0,0) -> (0,0,0,0) -> (0,0,0,0,0)   [depth-5 argmax chain]
+  branches: 2 per spine level -- (1,),(2,) at d1; (0,1),(0,2) at d2; ... (0,0,0,0,1/2) at d5.
+NODE MAPPING (mtp_k in {1,2}, flag FR13_MTP_SPINE_DEPTH):
+  - spine[0..k-1] = MTP head tokens (argmax; existing eagle forward). Confident near tokens.
+  - spine[k..4]   = Arctic suffix continuation tokens (the deep spine). FREE.
+  - branches @ every level = Arctic tree alternatives at that level (ranked by min_token_prob),
+    dedup vs the spine token; FALL BACK to MTP topk rank-2/3 when suffix has no alternative.
+DRIVE (per req, per step, at the :13361 eager seam):
+  1. MTP forward -> t0 [,t1].
+  2. pattern = recent committed suffix ++ [t0[,t1]]  (so suffix continues FROM the MTP prediction,
+     chaining MTP->suffix coherently).
+  3. draft = suffix_cache.speculate(req_id, pattern, max_spec_tokens>=5, max_spec_factor>0) -> tree.
+  4. assemble the 16 cat33333 node tokens from {MTP near, suffix deep+branches}; dedup per node.
+  5. OUR committer/tree verifies (lossless, Gate 1).
+LIFECYCLE (adapt vLLM SuffixDecodingProposer + Round-2 T1 router): start_request(prompt) on new req,
+add_active_response(committed ids) each step, stop_request on finish; per-session routing optional.
+INSTALL: container prelaunch `pip install arctic-inference==0.1.2` (Round-2 run_track_b_loop.py:1165).
+FALLBACK (never regress): suffix no-match / cold -> pure MTP cat33333 (current drafter) = baseline.
+GATES: (1) committer contract DONE (source-agnostic, 32/32). (2) ASSEMBLY unit test (CPU, mock
+arctic tree -> correct cat33333 node tokens, dedup, fallback) -- correctness-critical core, mine.
+(3) byte-identical when FR13_DRAFT_SOURCE=mtp (default). (4) garble temp-0.6. (5) live B=4 A/B:
+MTP+suffix cat33333 vs MTP-only t33333 baseline -- accept, resolve, garble, deploy-speed.
