@@ -765,3 +765,17 @@ on 1-token decodes). Host-side only; genuine uniform steps byte-identical (None)
 silent sibling. S0 PASS (17 patches sequence + markers). Rejected: per-step flag zeroing (replay
 re-stamps after build), staging-gate widening (Python never runs under replay), subset-consume
 (silent garble of stale rows — banned).
+
+## LIVE ARM-1 FINAL: cat8+fix BEATS the native bar (2026-07-14, slreorder_cat8_cache_b4, 16/16)
+
+**resolved 9/16 (56%)** vs native+cache ref 8/16, garble-era cat8 6/16 — BEST cat8 on this subset.
+**give-ups 0/16** (every task wrote a patch; zero timeouts) vs native ref 1, garble-era 5.
+**accept_per_event 3.500 clean** vs remap ref 3.336 (+0.16, single-flag delta) vs native 3.050.
+deploy: s_per_fwd_gpu(draft) 0.0638, derived_tps_gpu 70.6 PROVISIONAL (prefill_frac 0.226 —
+window-match vs native pending arm 2), sidecar 206.5 ms/step / 68.2 ms/draft (8832 steps).
+Garble: trace-scan 3/16 "signatures" = heuristic noise (no near-neighbor identifier drift
+anywhere; error-loops on 2 hard tasks = iteration-not-thrash; UNDEFINED hits are real API names
++ agent-authored dynamic attrs). Controlled S2b gate (0/90==native==control) stands; native arm
+gets the matched trace-scan null. Crash-class 0 across the full arm (dispatch guard soak PASS).
+Engagement non-vacuous (pi lines + causal=False; native arm 2 inverted-audit: 0 reorder lines ✓).
+NEXT: native (running) -> cat6+fix (superset test) -> t33333. Speed research (task #25) launched.
