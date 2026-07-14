@@ -935,3 +935,34 @@ measured ordering, ±0.1 on magnitudes — overestimates t33333 by +0.16):**
   drafter horizon is probed cheap.
 => Speed path narrows to: (A) drafter single-pass internals (split measurement then FR-Spec
 lm_head cut or input-build fix), (B) P2 replay transplant (44-53ms committer span).
+
+## SPEED CAMPAIGN — HONEST STRATEGIC STATE (2026-07-14)
+
+CHEAP LEVERS EXHAUSTED. Measured, not asserted:
+- P1 (committer walk depthsync): built, byte-gated 96/96, B=4 A/B NO win → shelved (flag OFF).
+- S2 (tree shape): DP calibrated → cat8 near-optimal within depth<=5; depth lever DEAD (parallel
+  drafting) → no shape win.
+- Drafter internal split (model vs lm_head): timer built (propose-anchored) but 6 measurement
+  boots inconclusive/interrupted (SIGKILL-vs-atexit, worker-env, external kills x2). UNMEASURED.
+- P2/P3 (committer replay/writeback transplants): replay-loop SHARE of the 44-53ms committer span
+  is UNMEASURED; transplant is correctness-critical + delicate. Not started (won't implement blind
+  — the P1 lesson).
+
+WHERE THE +12% wall/tok LIVES (measured): 100% non-forward = drafter single-pass (~88-100ms/step,
+the biggest slice, HBM-bound weight reads) + committer (~44-53ms). GPU verify is at native parity;
+cat8 accept 3.500 > native 3.442. So the tree is NOT compute-slower — the gap is host/HBM overhead.
+
+REMAINING LEVERS ARE ALL EXPENSIVE + CORRECTNESS-CRITICAL:
+  (A) FR-Spec truncated draft vocab — cut the ~1.2GB/pass lm_head read; multi-day; MANDATORY
+      garble gate (committer q must match truncated draft dist); the only real drafter lever.
+  (B) P2/P3 committer transplants — delicate; share unmeasured (needs 1 clean boot to justify).
+Both need GPU boots to measure+validate; the box is currently contested (2 external kills).
+
+RECOMMENDATION: this is an EARNED cost-gate. The garble+accept deliverable (SLOT_REORDER, superset
++0.166) is DONE and banked. Remaining speed is real (~6% end-state) but costs multi-day
+correctness-critical work. Decision menu for the user:
+  1. Measure-first: ONE clean boot with the drafter split timer (built) + a committer replay
+     sub-timer (to build) → decides A-vs-B before spending days. Cheapest next step.
+  2. Commit to FR-Spec (A) — highest ceiling, hardest, garble-gated.
+  3. Stop speed here — ship the correctness win; the tree is at accept+GPU parity, host-overhead
+     slower, which for an HBM-bound agentic workload is a defensible ship.
