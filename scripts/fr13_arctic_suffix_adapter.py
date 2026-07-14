@@ -115,6 +115,31 @@ def arctic_tree_to_suffix_rel(draft, max_rel: int | None = None) -> dict[int, li
     return out
 
 
+def arctic_flat_tree_to_suffix_rel(flat_draft, tree_draft, max_rel: int | None = None) -> dict[int, list[int]]:
+    """HYBRID (v2-correct): SPINE from the flat deep chain (use_tree_spec=False) + BRANCHES from the
+    trie subtree (use_tree_spec=True). Solves the depth-vs-breadth tension: use_tree_spec spends its
+    budget on breadth -> shallow tree -> rarely reaches the depth the skip gate needs (v2 engaged
+    ~0.7% live); the FLAT chain always goes deep (v1 engaged ~47%). So take the spine (and the depth
+    coverage that drives the skip gate) from FLAT, and add the trie's per-depth siblings as branches.
+
+    Returns {i: [flat_spine_i, trie_branch, ...]} for i over the flat chain's depth (capped max_rel).
+    assemble_cat33333 takes [0] as the deep spine and [1:] as the cat33333 branches -- so the SPINE
+    reaches full depth (high engagement) AND the branches come from the trie (your trie-walk).
+    """
+    flat = extract_draft_token_ids(flat_draft)
+    if not flat:
+        return {}
+    tree_rel = arctic_tree_to_suffix_rel(tree_draft, max_rel=max_rel)
+    out: dict = {}
+    for i, spine_tok in enumerate(flat):
+        if max_rel is not None and i >= max_rel:
+            break
+        spine_tok = int(spine_tok)
+        branches = [t for t in tree_rel.get(i, []) if t != spine_tok]   # trie siblings, dedup vs spine
+        out[i] = [spine_tok] + branches
+    return out
+
+
 def arctic_draft_to_suffix_rel(draft, max_rel: int | None = None) -> dict[int, list[int]]:
     """Convert an Arctic .speculate() draft into the RELATIVE suffix_rel dict.
 

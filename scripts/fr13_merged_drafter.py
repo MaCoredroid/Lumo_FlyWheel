@@ -149,7 +149,8 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
     mtp_near_per_depth[d]: an indexable of per-row MTP spine tokens for the mtp_k drafted depths
       (d in 0..mtp_k-1); mtp_topk_per_depth[d]: per-row [rank2,rank3] for the near depths.
     All ints; row order == spec_row_req_ids order (req_id-keyed by the caller)."""
-    from fr13_arctic_suffix_adapter import arctic_draft_to_suffix_rel, arctic_tree_to_suffix_rel
+    from fr13_arctic_suffix_adapter import (arctic_draft_to_suffix_rel, arctic_tree_to_suffix_rel,
+                                            arctic_flat_tree_to_suffix_rel)
     from fr13_mtp_suffix_assembly import assemble_cat33333
     from fr13_merged_fill import build_cat33333_columns
 
@@ -171,19 +172,30 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
         mtp_spine = near + [near[-1]] * (N_DEPTH - mtp_k)
         mtp_topk = {d: [int(x[b]) for x in mtp_topk_per_depth.get(d, [])] for d in range(N_DEPTH)}
         pattern = list(_COMMITTED.get(req_id, [])) + near
-        draft = None
+        suffix_rel = {}
         if cache is not None:
             try:
-                draft = cache.speculate(
-                    req_id, pattern, max_spec_tokens=max_spec_tokens,
-                    max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
-                    use_tree_spec=_use_tree,
-                )
+                if _use_tree:
+                    # HYBRID: FLAT (deep chain) drives the spine + depth-coverage (skip engagement),
+                    # TREE (use_tree_spec) supplies branch alternatives -> best of both.
+                    flat_d = cache.speculate(
+                        req_id, pattern, max_spec_tokens=max_spec_tokens,
+                        max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
+                        use_tree_spec=False)
+                    tree_d = cache.speculate(
+                        req_id, pattern, max_spec_tokens=max_spec_tokens,
+                        max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
+                        use_tree_spec=True)
+                    suffix_rel = arctic_flat_tree_to_suffix_rel(flat_d, tree_d, max_rel=need)
+                else:
+                    draft = cache.speculate(
+                        req_id, pattern, max_spec_tokens=max_spec_tokens,
+                        max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
+                        use_tree_spec=False)
+                    suffix_rel = arctic_draft_to_suffix_rel(draft, max_rel=need)
                 STATS["speculate_fired"] += 1
             except Exception:
-                draft = None
-        suffix_rel = (arctic_tree_to_suffix_rel(draft, max_rel=need) if _use_tree
-                      else arctic_draft_to_suffix_rel(draft, max_rel=need))
+                suffix_rel = {}
         if len(suffix_rel) < need:
             all_full = False
         nodes, _ = assemble_cat33333(mtp_spine, mtp_topk, suffix_rel, mtp_k)
