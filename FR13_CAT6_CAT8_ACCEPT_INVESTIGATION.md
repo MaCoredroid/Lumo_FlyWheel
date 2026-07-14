@@ -706,3 +706,20 @@ the logic-model prediction); causal=False; remap engaged. STRUCTURAL PROOF: acce
 [1,4,7] committed ZERO-COPY (foreign_first=0) — the permuted-slot identity (spine depth-d ==
 flat slot d) held on a never-seen tree. Probes clean: greedy 2.446, temp06 2.534 accept/fwd
 (structurally right for depth-3 spine; not comparable to cat8 depth-5). User challenge MET.
+
+## S3 PROBE VERDICT — graph-clean + no-tax ESTABLISHED; probe is NOT the goal gate (2026-07-14)
+
+S3 (s3_goalgate_20260714T003920Z, GRAPH mode, captured-prompt probe, 3 temps):
+  cat8+fix: greedy 3.607 / temp06 3.145 / temp10 3.561; s/fwd 0.131-0.139; brhist spine/event
+  3.106, branch/event 0.201. native E5: greedy 4.100 / temp06 3.727 / temp10 3.339; s/fwd 0.103-0.109.
+ESTABLISHED: (1) FIRST GRAPH BOOT WITH FIX = CLEAN (engagement 2 lines, no capture crash —
+pointer-stability design validated); (2) cat8's historical temp10 COLLAPSE (~2.92) is GONE (3.561);
+(3) s/fwd cat8fix==cat8control (fix has no tax; the 0.131-vs-0.107 gap vs native = the known tree
+overhead, NOT the fix).
+NOT ESTABLISHED — and the probe CANNOT establish it: native greedy 4.100 is +0.6 above EVERY
+historical E5 reading (3.34-3.53) because the captured prompt's content saturates the chain
+drafter (probe content != live agentic work; the probe generated coherent easy text at greedy).
+Per the binding-gate policy (live SWE-Verified agentic only; probes = diagnostic), the GOAL
+VERDICT moves to the live B=4 16-task run: LAUNCHED slreorder_cat8_cache_b4 (cachefirst ship env
++ FR13_SLOT_REORDER=1, WALL=0), vs clean refs native+cache 3.050 accept / 8/16 resolve / 1
+give-up + fix-on-remap cat8 ~3.3 accept (FR13_REMAP_SHIP_RESULTS.md).
