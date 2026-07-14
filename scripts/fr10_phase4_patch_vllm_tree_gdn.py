@@ -18399,6 +18399,24 @@ class _Fr13DfwdSplit:
     def __init__(self):
         import os as _os
         self.on = _os.environ.get("FR13_DFWD_SPLIT", "0") == "1"
+        if not self.on:
+            # env-first-then-flag-file: bare FR13_* env may not reach the
+            # EngineCore worker (the proven FR13_GDN_SUBOP_MAB pattern); the
+            # patcher main() writes the flag inside the container at boot.
+            try:
+                with open("/logs/fr13_dfwd_split.flag") as _fh:
+                    self.on = _fh.read().strip() == "1"
+            except Exception:  # noqa: BLE001
+                pass
+        if self.on:
+            try:
+                from vllm.logger import init_logger as _il
+                _il("vllm.fr13_dfwd_split").info(
+                    "FR13_DFWD_SPLIT ENGAGED (worker pid=%s)",
+                    __import__("os").getpid(),
+                )
+            except Exception:  # noqa: BLE001
+                pass
         self.pairs = {"level": [], "model": [], "head": []}
         self.done = False
         if self.on:
@@ -19011,6 +19029,11 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
 
 def main() -> int:
     _fr13_write_subop_mab_sidecar()
+    try:
+        with open('/logs/fr13_dfwd_split.flag', 'w') as _fh:
+            _fh.write(os.environ.get('FR13_DFWD_SPLIT', '0'))
+    except Exception:
+        pass
     _fr13_write_conv_subop_mab_sidecar()
     _fr13_write_replay_durable_ab_sidecar()
     _fr13_write_apc_env_sidecar()
