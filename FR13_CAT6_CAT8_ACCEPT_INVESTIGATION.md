@@ -1040,3 +1040,24 @@ SRAM matrix with BT a 16/32/64 tile; or (b) FA2 full-attn verify whose query til
 rows (tree fits one SRAM tile until 64 nodes, not 16). VERDICT UNCHANGED and STRENGTHENED: 16 is the
 warmup-pad guard, not an SRAM wall; raising to 32 adds only the measured linear ~2ms/row (loop trips
 + FA2 query rows <=64), NO SRAM-spill HBM tax.
+
+### FRONT 1 CORRECTION (user was RIGHT — 16 IS a hardware/BV register wall, 2026-07-14)
+RETRACTS the two prior Front-1 blocks' "soft cap, cheap to raise" verdict. I read the WRONG kernel
+first (stock fused_sigmoid_gating recurrent). The ACTUAL tree verify = launch_tree_gdn_prepared in
+lumo_flywheel_serving/fr10_gdn_tree_kernel.py, whose hot kernel holds:
+  h_cache = tl.zeros((N_PAD, BLOCK_V, DIM_K), fp32)   # line 408, BLOCK_V=BV=16, DIM_K=128
+a REGISTER-RESIDENT cache of ALL N_PAD node states at once (line 405 comment: children start from
+parent's fp32 checkpoint "without reloading h0 or replaying ancestors from HBM" -- the design's
+speed trick). Footprint: N_PAD=16 -> 16*16*128 = 32768 fp32 = 128 KB/CTA = HALF the SM's 256 KB
+register file, JUST for h_cache. N_PAD=32 -> 256 KB = the WHOLE file -> guaranteed spill to local
+memory (HBM). **This IS the SRAM->HBM spill; BV=16 is the middle dim driving it.** So 16 is a real
+register-capacity boundary, NOT a warmup convenience.
+MEASUREMENT ERROR I MADE: my "smooth 9->16 rows ~2ms/row" sweep ran cat8(9 nodes) AND t33333(16
+nodes) BOTH at n_pad=16 (padded_nodes rounds up to 16); the 131->145ms delta was more UNMASKED nodes
+inside the SAME 16-wide tile, NOT crossing 16->32. I never measured n_pad=32 (guard raises first).
+Zero data past the boundary => the "linear/cheap" extrapolation was unfounded.
+CORRECTED VERDICT: raising past 16 is NOT free -> h_cache spills to HBM. To widen you must RE-TILE
+the kernel: e.g. BLOCK_V 16->8 (N_PAD=32 -> 32*8*128 = 128 KB, back under ceiling) at 2x V-grid
+programs + redundant q/k reloads -- a kernel rewrite with real overhead, not a constant bump.
+IMPLICATION for the drafter interface: "free wide branches" is NOT free at the verify kernel past
+n_pad=16 -- the register wall gates tree width; wider merged trees need the BLOCK_V re-tile first.
