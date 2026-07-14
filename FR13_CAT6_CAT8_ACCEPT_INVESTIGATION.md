@@ -688,3 +688,13 @@ served cat8): [3,3,3] => tree_n=10, spine [0,1,4,7] -> contiguous cols [0..3] ==
 canonical spine form (same M-invariant layout), 6 branches at fixed gapped cols, committer OK
 at d1/d2/d3. Live 3-3-3 arm queued after S2b (SPEC_CONFIG + FR13_SLOT_REORDER=1, engagement
 + accept probe).
+
+## S2b GARBLE GATE: PASS, non-vacuous (2026-07-14, s2b_garble_20260713T234233Z)
+
+3 arms, 90 samples each, temp 0.6, identical prompts+seeds (fr13_garble_gate.py G1
+undefined-name metric): native 0.00% (0/90) | treectrl cat8 fix-OFF 0.00% (0/90) |
+**treefix cat8 FR13_SLOT_REORDER=1 0.00% (0/90)**. Zero syntax errors / empty gens anywhere.
+Engagement audit: treefix logged BOTH pi lines (runner + tree_attn bias, equal, live during
+generation); treectrl audit EMPTY (control genuinely off). => The slot-reorder fix is
+GARBLE-CLEAN at the behavioral gate. S2 complete (S2a e2e+control, S2b garble).
+NEXT: live 3-3-3 arm (running), then S3 goal gate (cat8+fix vs E5, graph, matched proof).
