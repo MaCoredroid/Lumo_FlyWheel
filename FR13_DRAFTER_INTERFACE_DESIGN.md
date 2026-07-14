@@ -8,10 +8,12 @@ measured reality of this session, not aspiration.
    8.3ms model fwd + 15.1ms lm_head — of a 140ms/step drafter; 117ms is host). => a new source
    MUST NOT add host Python overhead; and avoiding the draft *forward* (suffix) saves only the
    23ms GPU slice unless it also cuts host orchestration.
-2. **Verify scales ~linearly ~2ms/row (B=1), accept RISES with tree width** (Front 1:
-   cat8 9-row 131ms/3.69 -> t33333 16-row 145ms/3.96). The 16 cap is SOFT (gdn_attn.py:294
-   pad<=16 warmup). => the high-value use of a cheap draft source is **WIDENING the tree with
-   extra branch candidates** (free-in-GPU tokens that keep lifting accept).
+2. **Tree width is HARD-CAPPED at n_pad=16 by a register wall** (Front 1, CORRECTED): the FR10
+   tree kernel holds h_cache=[N_PAD,BV=16,DIM_K=128] fp32 register-resident (128 KB/CTA at 16,
+   spills HBM at 32; fr10_gdn_tree_kernel.py:408). Both cat8(9) and t33333(16) run at n_pad=16;
+   n_pad=32 fails to boot. => a cheap draft source CANNOT add nodes past 16 — its value is
+   **filling the fixed <=16 branch slots with BETTER tokens** (higher accept per slot), NOT
+   widening. Widening needs a BLOCK_V kernel re-tile (S-D, not cheap).
 3. **The committer already verifies arbitrary per-node candidates — PROVEN committer-transparent**
    (Gate 1: scripts/fr13_suffix_committer_contract_gate.py, 32/32 vs the REAL rule
    host_multidraft_accept_probs). The deployed multidraft rejection rule (draft_probs=None path)
@@ -60,10 +62,10 @@ Backends:
        MTP when suffix has no match (cold context). Deterministic, committer-verified either way.
 
 ## Correctness gates (mandatory, in order)
-1. **Committer contract proof (CPU)**: extend fr13_dm_depthsync_byte_gate / the multidraft offline
-   gate — feed suffix-sourced candidates as extra children; assert the accept DISTRIBUTION is
-   unchanged for MTP-only nodes and that suffix candidates are verified by the same rule (a
-   never-in-target suffix token must REJECT, never wrong-accept). This is the losslessness proof.
+1. **Committer contract proof (CPU) — DONE, PASSED 32/32** (scripts/fr13_suffix_committer_contract
+   _gate.py): proved vs the real rule that the OUTPUT distribution = p EXACTLY for any candidate set
+   (lossless, unconditional), ACCEPT = p(distinct S) monotone (the speed lever), and a garbage token
+   commits only at rate p[g]~0 (garble-safe via source-selection weight). See constraint #3.
 2. **Garble gate** (fr13_garble_gate.py, temp-0.6 matrix): suffix must not raise undefined-name
    rate above native — it structurally cannot (committer-verified), but PROVE it live.
 3. **Engagement / non-vacuous**: SuffixSource ENGAGED log + match-rate needle (how often suffix
@@ -74,12 +76,12 @@ Backends:
 ## Why this is the RIGHT next lever (given the campaign's cost-gate)
 The speed campaign concluded the tree's remaining gap is structural drafter host overhead.
 Suffix decoding attacks a DIFFERENT axis: it doesn't make the existing drafter faster — it adds
-ACCEPT (free wide branches + free spine-extension on repetitive context) which is the HBM-bound
-lever (accept-per-forward), the ONE thing that isn't dead. On agentic code editing (high repeat:
-re-reading files, repeated identifiers, boilerplate), suffix match rates are typically high ->
-free accepted tokens. And it composes with a wider tree (Front 1: raise the pad-16 cap) since the
-extra branch candidates come free from suffix. Net: a plausible accept win with ZERO garble risk
-(committer-gated) and ZERO GPU compute add — the profile the measurements point to.
+ACCEPT (better tokens in the fixed <=16 branch slots + spine-extension on repetitive context)
+which is the HBM-bound lever (accept-per-forward), the ONE thing that isn't dead. On agentic code
+editing (high repeat: re-reading files, repeated identifiers, boilerplate), suffix match rates are
+plausibly high -> free accepted tokens. Bounded by the n_pad=16 register wall (constraint #2), so
+the win is per-slot token QUALITY within 16, not wider trees. Net: a plausible accept win with
+ZERO garble risk (Gate 1 PROVEN) and ZERO GPU compute add — the profile the measurements point to.
 
 ## Impl order (each independently gated; delegate only mechanical/isolated pieces)
 S-A. SuffixSource module (isolated new file): per-req rolling k-gram index + match -> candidates.
