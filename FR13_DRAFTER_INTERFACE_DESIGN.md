@@ -354,3 +354,25 @@ commit-site; S4 seam (decide_and_fill after mtp_k MTP tokens -> if do_skip: appl
 wide_topk + shorten loop; else full MTP); S5 patcher self-test (byte-id off + markers on). Then boot
 ENGAGED-assert (require match_full>0 not just speculate_fired>0, to catch the gappy-history trap) ->
 garble -> live 16-task A/B.
+
+## SIMPLIFIED INJECTION MAP (2026-07-14): runner + seam (2 sites), no commit-site needed
+The runner frame (:11245, _LUMO_FA_SAMPLER_ROW_REQ_IDS set from input_batch.req_ids) has
+input_batch.token_ids_cpu = the AUTHORITATIVE full committed sequence per req (prompt + generated,
+incl bonus). => feed Arctic the non-gappy DELTA there (ingest_from_sequence), sidestepping the
+bonus-token archaeology. No commit-site (:8734) hook needed. All logic now DONE + tested (25/25).
+FINAL 3 PATCHER HOOKS (thin, all gated fr13_merged_drafter.merged_on()):
+  S1 IMPORT: add /workspace/scripts to sys.path + `import fr13_merged_drafter` (in the runner patch
+     _patch_gpu_model_runner_* near :11245 AND/OR gdn patch -- same process, cached module = shared
+     state). get_cache() lazily (arctic max_tree_depth from a baked const, default 24).
+  S2 RUNNER (~:11245, input_batch in scope): if merged_on(): cache=get_cache(); note_new_requests(
+     {req_id: token_ids_cpu[idx,:num_prompt] for new reqs}); for each row ingest_from_sequence(
+     cache, req_id, token_ids_cpu[i], num_tokens); retire_requests(active - batch). Row order ==
+     input_batch.req_ids[:num_reqs] (== the seam's spec-row order).
+  S4 SEAM (:13361 after root, :13610 loop, :13905 packer): if merged_on() and _fr10_is_wide (t33333):
+     gather mtp_near (root [+ mtp_k-1 loop tokens]) + mtp_topk per row; decide_and_fill(spec_row_req_ids,
+     near, topk, mtp_k, draft_token_ids.device, pad); if do_skip -> overwrite _fr10_spine_tokens[d] +
+     _fr10_wide_topk[d] for deep d + set _fr10_spine_steps so the remaining loop is skipped; else run
+     full MTP loop. pad = a benign in-vocab token (e.g. int(draft_token_ids[0])).
+  S5 SELF-TEST fr13_merged_drafter_s0_test.py: apply patcher to pristine vLLM copies (/tmp/fr13inv or
+     a fresh checkout) -> compile gdn_linear_attn + eagle -> assert markers present + (sidecar absent)
+     the merged branches are dead. Host-runnable (no GPU).
