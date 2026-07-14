@@ -53,19 +53,23 @@ class MockCache:
         self.cached_requests.discard(req_id); self.calls.append(("evict", req_id))
 
 
-print("[1] lifecycle: start (new+evict-cached), add_active_response, stop, rolling buffer")
+print("[1] lifecycle: start(+evict), NON-GAPPY delta ingest (prompt not re-fed), stop")
 md.reset_for_test()
 c = MockCache({})
 c.cached_requests.add("r_old")
-md.note_new_requests(c, {"r_old": [1, 2, 3], "r_new": [4, 5]})
+md.note_new_requests(c, {"r_old": [1, 2, 3], "r_new": [4, 5]})   # prompts len 3 and 2
 check(("evict", "r_old") in c.calls, "cached req evicted before start")
 check(c.active_requests == {"r_old", "r_new"}, "both reqs started (active)")
 check(md.STATS["started"] == 2, f"started counter == 2 (got {md.STATS['started']})")
-md.ingest_committed(c, "r_new", [10, 11], max_tree_depth=24)
-check(("add", "r_new", [10, 11]) in c.calls, "add_active_response fed the accepted run")
-check(md._COMMITTED["r_new"] == [10, 11], "rolling buffer holds committed tokens")
-md.ingest_committed(c, "r_new", [12], max_tree_depth=2)   # buffer [10,11,12] len3 > 2 -> keep last 2
-check(md._COMMITTED["r_new"] == [11, 12], f"buffer capped to max_tree_depth=2 (got {md._COMMITTED['r_new']})")
+check(md._INGESTED_LEN["r_new"] == 2, "ingested-len seeded to prompt length (prompt not re-fed)")
+# runner ingest: full sequence = prompt [4,5] + generated [10,11]; only the DELTA [10,11] fed to arctic
+md.ingest_from_sequence(c, "r_new", [4, 5, 10, 11], num_tokens=4, max_tree_depth=24)
+check(("add", "r_new", [10, 11]) in c.calls, "add_active_response fed ONLY the generated delta (non-gappy)")
+check(md._COMMITTED["r_new"] == [4, 5, 10, 11], "rolling suffix = recent full sequence (for pattern)")
+md.ingest_from_sequence(c, "r_new", [4, 5, 10, 11, 12], num_tokens=5, max_tree_depth=3)  # +1 token
+adds = [x for x in c.calls if x[0] == "add" and x[1] == "r_new"]
+check(adds[-1] == ("add", "r_new", [12]), f"next step feeds only the new token [12] (got {adds[-1]})")
+check(md._COMMITTED["r_new"] == [10, 11, 12], f"suffix capped to max_tree_depth=3 (got {md._COMMITTED['r_new']})")
 md.retire_requests(c, ["r_old"])
 check(("stop", "r_old") in c.calls and "r_old" not in md._COMMITTED, "retire -> stop + buffer dropped")
 
@@ -102,8 +106,8 @@ print("[4] cache=None (arctic unavailable) -> graceful no-op, never-regress")
 md.reset_for_test()
 spine, wide, skip = md.decide_and_fill(None, ["ra"], [[1000]], topk, mtp_k=1, device=DEV, pad_token=0)
 check(skip is False and spine is None, "no cache -> None (full MTP fallback)")
-md.note_new_requests(None, {"r": [1]}); md.ingest_committed(None, "r", [2]); md.retire_requests(None, ["r"])
-check(md._COMMITTED.get("r") is None, "lifecycle no-ops safely with cache=None (buffer still maintained/cleared)")
+md.note_new_requests(None, {"r": [1]}); md.ingest_from_sequence(None, "r", [1, 2], 2); md.retire_requests(None, ["r"])
+check(md._COMMITTED.get("r") is None, "lifecycle no-ops safely with cache=None (buffer maintained then cleared on retire)")
 
 print("[5] mtp_k=2: near covers d0,d1; arctic fills d2,d3,d4 (need=3)")
 md.reset_for_test()

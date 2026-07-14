@@ -33,9 +33,10 @@ N_DEPTH = 5
 _CACHE = None
 _CACHE_INIT_FAILED = False
 _COMMITTED: dict = {}     # req_id -> list[int] rolling recent-committed tokens (<= max_tree_depth)
+_INGESTED_LEN: dict = {}  # req_id -> #tokens already fed to Arctic add_active_response (non-gappy)
 STATS = {
     "speculate_fired": 0, "skip_fired": 0, "assembler_engaged": 0,
-    "match_full": 0, "match_partial_norun": 0, "started": 0, "retired": 0,
+    "match_full": 0, "match_partial_norun": 0, "started": 0, "retired": 0, "ingested": 0,
 }
 
 
@@ -72,10 +73,11 @@ def set_cache_for_test(mock):
 
 
 def reset_for_test():
-    global _CACHE, _CACHE_INIT_FAILED, _COMMITTED
+    global _CACHE, _CACHE_INIT_FAILED, _COMMITTED, _INGESTED_LEN
     _CACHE = None
     _CACHE_INIT_FAILED = False
     _COMMITTED = {}
+    _INGESTED_LEN = {}
     for k in STATS:
         STATS[k] = 0
 
@@ -83,7 +85,8 @@ def reset_for_test():
 # ---- lifecycle (RUNNER + COMMIT-SITE frames) --------------------------------
 def note_new_requests(cache, req_id_to_prompt):
     """start_request for reqs not yet active (evict a stale cached response first).
-    Port of vllm SuffixDecodingProposer :63-70."""
+    Port of vllm SuffixDecodingProposer :63-70. Sets _INGESTED_LEN to the prompt length so the
+    subsequent delta-ingest does NOT re-feed the prompt (Arctic start_request already ingests it)."""
     if cache is None:
         return
     for req_id, prompt in req_id_to_prompt.items():
@@ -92,25 +95,31 @@ def note_new_requests(cache, req_id_to_prompt):
                 if req_id in cache.cached_requests:
                     cache.evict_cached_response(req_id)
                 cache.start_request(req_id, prompt)
+                _INGESTED_LEN[req_id] = len(prompt)
                 STATS["started"] += 1
         except Exception:
             pass
 
 
-def ingest_committed(cache, req_id, accepted_ids, max_tree_depth=24):
-    """COMMIT-SITE hook: feed the FULL accepted run to Arctic + update the rolling suffix buffer."""
-    if not accepted_ids:
-        return
-    acc = [int(t) for t in accepted_ids]
-    if cache is not None:
-        try:
-            cache.add_active_response(req_id, acc)
-        except Exception:
-            pass
-    buf = _COMMITTED.setdefault(req_id, [])
-    buf.extend(acc)
-    if len(buf) > max_tree_depth:
-        del buf[:-max_tree_depth]
+def ingest_from_sequence(cache, req_id, seq_list, num_tokens, max_tree_depth=24):
+    """RUNNER hook (authoritative, NON-GAPPY): feed Arctic the NEW committed tokens since the last
+    ingest, sourced from input_batch.token_ids_cpu[i, :num_tokens] (the real full sequence, incl the
+    bonus token) -- NOT accepted-drafts-only (which would be gappy). Keeps _COMMITTED = the recent
+    suffix for the seam's speculate pattern.
+    seq_list: the full per-req token sequence (list/1-D); num_tokens: valid length."""
+    seq = [int(t) for t in seq_list[:num_tokens]]
+    last = _INGESTED_LEN.get(req_id, 0)
+    if num_tokens > last:
+        new = seq[last:num_tokens]
+        if new and cache is not None:
+            try:
+                cache.add_active_response(req_id, new)
+                STATS["ingested"] += 1
+            except Exception:
+                pass
+        _INGESTED_LEN[req_id] = num_tokens
+    start = max(0, num_tokens - max_tree_depth)
+    _COMMITTED[req_id] = seq[start:num_tokens]
 
 
 def retire_requests(cache, gone_req_ids):
@@ -122,6 +131,7 @@ def retire_requests(cache, gone_req_ids):
             except Exception:
                 pass
         _COMMITTED.pop(req_id, None)
+        _INGESTED_LEN.pop(req_id, None)
         STATS["retired"] += 1
 
 
