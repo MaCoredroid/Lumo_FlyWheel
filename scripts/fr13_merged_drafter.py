@@ -181,10 +181,36 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
 
     if not all_full:
         STATS["match_partial_norun"] += 1
+        _maybe_log_engagement()
         return None, None, False   # never-regress: caller runs full MTP, Arctic ignored
 
     STATS["match_full"] += 1
     STATS["assembler_engaged"] += 1
     spine_tokens, wide_topk = build_cat33333_columns(assembled, device, pad_token)
     STATS["skip_fired"] += 1
+    _maybe_log_engagement()
     return spine_tokens, wide_topk, True
+
+
+_LOG_EVERY = 50
+_LOG_N = 0
+
+
+def _maybe_log_engagement():
+    """Periodic engagement needle to the vLLM logger (-> docker log) for the ENGAGED gate.
+    match_full>0 (not just speculate_fired>0) is the non-gappy proof; skip_fired is the speed win."""
+    global _LOG_N
+    _LOG_N += 1
+    if _LOG_N % _LOG_EVERY != 0:
+        return
+    try:
+        import logging
+        logging.getLogger("vllm.fr13_merged_drafter").info(
+            "[FR13_MERGED ENGAGED] speculate_fired=%d match_full=%d match_partial=%d "
+            "skip_fired=%d assembler_engaged=%d started=%d ingested=%d retired=%d",
+            STATS["speculate_fired"], STATS["match_full"], STATS["match_partial_norun"],
+            STATS["skip_fired"], STATS["assembler_engaged"], STATS["started"],
+            STATS["ingested"], STATS["retired"],
+        )
+    except Exception:
+        pass
