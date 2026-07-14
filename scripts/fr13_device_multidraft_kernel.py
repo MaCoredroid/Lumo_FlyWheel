@@ -510,6 +510,9 @@ def fr13_device_multidraft_commit(
     )
 
 
+_FR13_DEPTHSYNC_ANNOUNCED = False
+
+
 def _fr13_commit_depthsync(
     num_draft_tokens,
     draft_token_ids,
@@ -548,6 +551,17 @@ def _fr13_commit_depthsync(
     ``mass.item() == 0.0`` are read back and compared as python floats.
     """
     device = target_logits.device
+    global _FR13_DEPTHSYNC_ANNOUNCED
+    if not _FR13_DEPTHSYNC_ANNOUNCED:
+        _FR13_DEPTHSYNC_ANNOUNCED = True
+        try:
+            from vllm.logger import init_logger as _il
+            _il("vllm.fr13_device_multidraft").info(
+                "FR13_DM_DEPTHSYNC ENGAGED: depth-synchronous multidraft walk "
+                "(batched per-level readbacks; byte gate 96/96)"
+            )
+        except Exception:  # noqa: BLE001
+            pass
     parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
     drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
     if hasattr(num_draft_tokens, "detach"):
