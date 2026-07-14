@@ -278,3 +278,19 @@ TWO SHIPPABLE MODES: (A) ACCEPT-ONLY (always full MTP loop + ADD Arctic branch c
 = genuinely never-regress, speed via accept only; (B) ADAPTIVE-SKIP (A + forward-skip when batch-wide
 match) = the speed lever, gated. Build A first (simpler, safe), then layer B behind a flag + the sync
 measurement. Both are Gate-1 lossless.
+
+## MODE DECISION (2026-07-14): build ADAPTIVE Mode B first (honors user arch + never-regress)
+The flat-chain adapter (arctic .token_ids -> deep SPINE) naturally supports Mode B (forward-skip),
+NOT Mode A (arctic->branches, which needs arctic's TREE not the flat chain). So build:
+**ADAPTIVE Mode B** = the user's mtp1/2 + suffix-grow, made safe: run mtp_k MTP forwards; predicate
+on arctic having a full-depth (>= N_DEPTH-mtp_k) match for ALL active reqs; if YES -> skip remaining
+spine forwards, arctic fills deep spine (the -53% drafter win); if NO -> run the FULL MTP loop
+(pure-MTP baseline, never-regress). Resolves the red-team "no fallback" blocker (adaptive gate = the
+fallback). Fits the flat-chain adapter. Gate-1 lossless either way. The D2H(t0)/H2D(pattern) per-step
+sync cost is the OPEN risk -> the live A/B's dfwd timer is the gate (could erase the skip win).
+Mode A (accept-only, no skip, arctic branches) DEFERRED -- needs the arctic suffix TREE + a branch-
+feeding assembly variant; layer it later if adaptive-B's sync cost erases the win.
+CRITICAL IMPL NOTE (prelaunch agent): the runtime seam MUST read FR13_DRAFT_SOURCE via the SIDECAR-
+FILE pattern (like FR13_COMMITTER_NATIVE/FR13_COMMIT_ARGMAX_GATE, launcher :402-424), NOT os.environ
+-- the EngineCore WORKER drops FR13_* env vars. Prelaunch install draft ready at
+fr13_launch_forked_fa2_tree_server.sh:728 (gated FR13_DRAFT_SOURCE=merged, byte-id when off).
