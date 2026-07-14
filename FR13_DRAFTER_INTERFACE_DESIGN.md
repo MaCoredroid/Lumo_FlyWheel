@@ -12,14 +12,23 @@ measured reality of this session, not aspiration.
    cat8 9-row 131ms/3.69 -> t33333 16-row 145ms/3.96). The 16 cap is SOFT (gdn_attn.py:294
    pad<=16 warmup). => the high-value use of a cheap draft source is **WIDENING the tree with
    extra branch candidates** (free-in-GPU tokens that keep lifting accept).
-3. **The committer already verifies arbitrary per-node candidates.** The deployed multidraft
-   rejection rule (fr13_device_multidraft_kernel.device_multidraft_node_step, draft_probs=None
-   path) takes `child_draft_tokens` at each node and computes source weights from the target's
-   overlap, accept ~ min(1, p_target/q_mix), residual fallback. It does NOT care WHERE a candidate
-   token came from. => **merging sources is committer-transparent** and, critically,
-   **LOSSLESS-BY-CONSTRUCTION**: any draft token (MTP or suffix or garbage) is *verified* against
-   the target before commit, so a bad suffix candidate can only be REJECTED, never wrong-accepted.
-   Suffix decoding carries ZERO garble risk (unlike a compute change) — the committer is the gate.
+3. **The committer already verifies arbitrary per-node candidates — PROVEN committer-transparent**
+   (Gate 1: scripts/fr13_suffix_committer_contract_gate.py, 32/32 vs the REAL rule
+   host_multidraft_accept_probs). The deployed multidraft rejection rule (draft_probs=None path)
+   computes overlaps=p[cands], weights=overlaps/overlap_mass, accept_prob(s)=min(1,p[t]/q_mix[t]),
+   residual=max(p-q_mix,0). The exact math (analytic + Monte-Carlo confirmed):
+   - **OUTPUT is EXACTLY p, for ANY candidate set** (P(out=t)=min(q_mix,p)+max(p-q_mix,0)=p[t]).
+     Adding suffix/garbage candidates NEVER changes the output distribution => LOSSLESS,
+     UNCONDITIONAL. (NB: the earlier draft's "accept *distribution* unchanged" was WRONG — the
+     per-source weights and accept RATE do change; what's invariant is the OUTPUT.)
+   - **ACCEPT RATE = p(S)** = target mass on the DISTINCT candidate set; adding a candidate with
+     p>0 RAISES it (monotone). This is the exact speed-win: suffix candidates are a pure monotone
+     accept lever. (Requires MergedSource to DEDUP candidates for the clean identity; lossless
+     holds even without dedup.)
+   - **ZERO garble**: a garbage token g (p[g]~0) is committed at rate EXACTLY p[g]~0 — the safety
+     is the SOURCE-SELECTION weight (=p[g]/overlap_mass ~0), NOT accept_prob (which = overlap_mass,
+     not small). So a bad suffix candidate is almost never even selected; if selected it still
+     commits only at rate p[g]. Suffix decoding carries ZERO garble risk BY THE COMMITTER MATH.
 
 ## The interface
 

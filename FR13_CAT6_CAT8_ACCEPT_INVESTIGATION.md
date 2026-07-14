@@ -1072,3 +1072,18 @@ boundary is a SEPARATE higher ceiling (would only matter at B=4 where tree_16 = 
 batch×tree confound the B=1 sweep was built to isolate, and did). Sweep curve (n_pad=16 for BOTH):
 cat8(9)=131.3ms/3.691, t33333(16)=145.0ms/3.962, t55555(26)=BOOT-FAIL. FRONT 1 CONCLUDED: 16 is a
 real init-time register-wall cap; widening = BLOCK_V re-tile (kernel rewrite), tracked but not cheap.
+
+## FRONT 2 GATE 1 PASSED: suffix candidates committer-transparent (CPU proof, 2026-07-14)
+scripts/fr13_suffix_committer_contract_gate.py — 32/32 vs the REAL deployment rule
+(host_multidraft_accept_probs = draft_probs=None MTP path). Proven analytically + Monte-Carlo:
+(P1) OUTPUT is EXACTLY the target p for ANY candidate set (P(out=t)=min(q_mix,p)+max(p-q_mix,0)=p);
+adding suffix/garbage NEVER changes the output => LOSSLESS, UNCONDITIONAL. (P2) ACCEPT RATE = p(S)
+= target mass on the DISTINCT candidate set; adding a p>0 candidate RAISES it (monotone; measured
+gains +0.03..+0.20 for a few high-p suffix tokens). => suffix = a PURE MONOTONE ACCEPT LEVER.
+(P3) garble-safety: a garbage token g (p~0) is committed at rate EXACTLY p[g]; the safety is the
+SOURCE-SELECTION weight (=p[g]/overlap_mass ~0), NOT accept_prob (which = overlap_mass, not small)
+-- a subtle point the gate CAUGHT (my first assertion "accept_prob~0" was WRONG). (P4) deterministic.
+RED-TEAM: 4 initial FAILs were MY incorrect assertions, not code -- fixing them to the correct math
+made the claim STRONGER (not "distribution unchanged" -- output invariant + accept monotone). This
+de-risks the live seam BEFORE writing it: the merge is provably lossless + a speed lever. MergedSource
+MUST dedup candidates for the clean accept=p(S) identity (lossless holds even without dedup).
