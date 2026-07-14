@@ -753,14 +753,17 @@ if os.environ.get('FR13_DRAFT_SOURCE', 'mtp') != 'merged':
     print('[FR13-PRELAUNCH] FR13_DRAFT_SOURCE!=merged -- skipping arctic-inference install')
 elif importlib.util.find_spec('arctic_inference') is None:
     print('[FR13-PRELAUNCH] installing arctic-inference for suffix decoding (merged drafter)')
-    subprocess.check_call([
-        sys.executable,
-        '-m',
-        'pip',
-        'install',
-        '--disable-pip-version-check',
-        'arctic-inference==0.1.2',
+    # NON-FATAL: a failed arctic build must NOT crash the boot -- the merged seam's get_cache()
+    # returns None on import failure => pure-MTP fallback (never-regress). The ENGAGED gate then
+    # reports VACUOUS and this log shows why.
+    _rc = subprocess.call([
+        sys.executable, '-m', 'pip', 'install',
+        '--disable-pip-version-check', 'arctic-inference==0.1.2',
     ])
+    if _rc == 0:
+        print('[FR13-PRELAUNCH] arctic-inference installed OK')
+    else:
+        print('[FR13-PRELAUNCH] WARNING arctic-inference install FAILED rc=%d -> merged will fall back to pure MTP' % _rc)
 else:
     print('[FR13-PRELAUNCH] arctic-inference already available')
 PY
