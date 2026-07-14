@@ -183,3 +183,29 @@ GATES: (1) committer contract DONE (source-agnostic, 32/32). (2) ASSEMBLY unit t
 arctic tree -> correct cat33333 node tokens, dedup, fallback) -- correctness-critical core, mine.
 (3) byte-identical when FR13_DRAFT_SOURCE=mtp (default). (4) garble temp-0.6. (5) live B=4 A/B:
 MTP+suffix cat33333 vs MTP-only t33333 baseline -- accept, resolve, garble, deploy-speed.
+
+## KEY FINDING (2026-07-14): MTP-k+suffix is ALSO a host-SPEED lever, not just accept
+Reading the drafter spine loop (patcher :13610 `for token_index in range(_fr10_spine_steps)`):
+the drafter runs ONE sequential `self.model(**model_kwargs)` forward PER spine depth (+ per-iter
+EAGER orchestration: eagle_step_update_slot_mapping_and_metadata, set_forward_context,
+compute_logits, argmax). `_fr10_spine_steps`=4 for the wide/cat33333 path (13191). So the depth-5
+spine costs ~4 sequential forwards + 4 host-orchestration iterations -- NOT pure-parallel (corrects
+my banked "single parallel pass" shorthand; that referenced eagle's num_spec==1 early-exit, not the
+caterpillar spine).
+=> MTP-k + suffix-grow SKIPS (spine_steps - mtp_k) spine iterations: with mtp_k=1 we run 1 forward
+instead of 4, and the deep spine (depths 2-4) + branches come from Arctic (host lookup). This
+attacks the DRAFTER HOST OVERHEAD -- the "structural/dead" gap the speed campaign closed -- via a
+DIFFERENT lever (reduce the NUMBER of iterations, not per-iteration overhead), so it is NOT a
+re-opened concluded lever. Potential DOUBLE win: fewer forwards+orchestration (SPEED) + better deep
+tokens on repetitive context (ACCEPT). Verify cost UNCHANGED (still 16-node tree).
+RED-TEAM (honest, UNMEASURED): (a) the per-iteration host savings is INFERRED from loop structure,
+not measured -- the forward is cudagraph-captured (cheap compute); the saving is the EAGER
+orchestration per iteration, magnitude unknown. MUST measure (sfwd/dfwd timers, iteration count).
+(b) accept: Arctic deep-spine must accept >= MTP deep-spine (repetitive: plausibly; else fallback).
+(c) net host = saved iterations - Arctic speculate() lookup; sign unknown until measured.
+IMPL IMPACT: not just a token-value substitution at :13361 -- also REDUCE _fr10_spine_steps to mtp_k
+and fill the skipped spine depths + their wide_topk branches with Arctic tokens before packing (the
+packer consumes _fr10_spine_tokens list + _fr10_wide_topk dict; append/fill to depth-5). Careful
+edit: the loop mutates seq_lens/slot_mapping/KV per step; stopping early is fine (skipped spine
+tokens are Arctic draft candidates the target verifies -- Gate 1 lossless -- never run through the
+draft model). Gate the speed claim with the sfwd/dfwd GPU timers + iteration-count log.
