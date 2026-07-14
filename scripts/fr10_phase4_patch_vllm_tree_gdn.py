@@ -18640,6 +18640,51 @@ def _patch_gpu_model_runner_uniform_dispatch_guard() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_merged_drafter() -> bool:
+    """FR13 merged drafter (MTP-k + Arctic-suffix -> cat33333): drive the Arctic SuffixDecodingCache
+    LIFECYCLE (start_request / ingest / retire) at the runner _prepare_inputs frame, where
+    self.input_batch (req_ids, token_ids_cpu, num_prompt_tokens, num_computed_tokens_cpu) is in
+    scope. Sidecar-gated (fr13_merged_drafter.merged_on() reads /logs/fr13_draft_source_merged.arm,
+    worker-env-drop-proof); speculate() + tree-fill happen at the drafter seam. Default (no sidecar)
+    = full no-op => byte-identical. Injected AFTER the reqkey block sets _fr13_rk_req_ids; wrapped in
+    its OWN try/except so a merged-path error can NEVER disable the (correctness-critical) reqkey
+    rewrite or the runner. Must register AFTER _patch_gpu_model_runner_tree_reqkey."""
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_MERGED_DRAFTER_LIFECYCLE"
+    if sentinel in text:
+        return False
+    anchor = "                    _fr13_rk_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = _fr13_rk_req_ids\n"
+    if anchor not in text:
+        raise RuntimeError("FR13 merged-drafter runner anchor (SAMPLER_ROW_REQ_IDS) not found")
+    inject = anchor + (
+        "                    " + sentinel + ": Arctic lifecycle, sidecar-gated, error-isolated.\n"
+        "                    try:\n"
+        "                        import sys as _fr13_md_sys\n"
+        "                        if \"/workspace/scripts\" not in _fr13_md_sys.path:\n"
+        "                            _fr13_md_sys.path.insert(0, \"/workspace/scripts\")\n"
+        "                        import fr13_merged_drafter as _fr13_md\n"
+        "                        if _fr13_md.merged_on():\n"
+        "                            _fr13_md_cache = _fr13_md.get_cache()\n"
+        "                            _fr13_md_new = {}\n"
+        "                            for _fr13_md_i, _fr13_md_rid in enumerate(_fr13_rk_req_ids):\n"
+        "                                if _fr13_md_cache is not None and _fr13_md_rid not in _fr13_md_cache.active_requests:\n"
+        "                                    _fr13_md_np = int(self.input_batch.num_prompt_tokens[_fr13_md_i])\n"
+        "                                    _fr13_md_new[_fr13_md_rid] = [int(_x) for _x in self.input_batch.token_ids_cpu[_fr13_md_i, :_fr13_md_np]]\n"
+        "                            _fr13_md.note_new_requests(_fr13_md_cache, _fr13_md_new)\n"
+        "                            for _fr13_md_i, _fr13_md_rid in enumerate(_fr13_rk_req_ids):\n"
+        "                                _fr13_md_nt = int(self.input_batch.num_computed_tokens_cpu[_fr13_md_i])\n"
+        "                                _fr13_md.ingest_from_sequence(_fr13_md_cache, _fr13_md_rid, self.input_batch.token_ids_cpu[_fr13_md_i], _fr13_md_nt)\n"
+        "                            if _fr13_md_cache is not None:\n"
+        "                                _fr13_md_live = set(_fr13_rk_req_ids)\n"
+        "                                _fr13_md.retire_requests(_fr13_md_cache, [_fr13_md_r for _fr13_md_r in list(_fr13_md_cache.active_requests) if _fr13_md_r not in _fr13_md_live])\n"
+        "                    except Exception:\n"
+        "                        pass\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_slot_reorder() -> bool:
     """FR13_SLOT_REORDER (edits 1+4 of 5): spine-first canonical KV slot layout.
 
@@ -19066,6 +19111,10 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
+        # FR13_MERGED_DRAFTER: Arctic SuffixDecodingCache lifecycle at the runner,
+        # sidecar-gated (no-op unless FR13_DRAFT_SOURCE=merged). MUST run AFTER
+        # tree_reqkey (anchors on its _fr13_rk_req_ids line).
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_merged_drafter()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_apply()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
