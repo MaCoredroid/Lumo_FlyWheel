@@ -814,3 +814,17 @@ from a win. The user goal axes: spine==native ACHIEVED (op-level bit-exact + liv
 "branches save correctly" SUPPORTED (resolve tie, 0 give-ups, garble clean). derived_tps NOT
 comparable across arms here (prefill_frac 0.226 vs 0.157 window mismatch — use the probe's matched
 decomposition instead). cat6+fix arm running (superset test); t33333 after.
+
+## SUPERSET CONFIRMED LIVE (2026-07-14, cat6+fix final): cat8 = cat6 + 0.166 (predicted +0.17)
+
+cat6+fix final: resolved 9/16, give-ups 0, accept_per_event 3.333 (engagement tree_n=7
+pi=[0,1,3,4,5,6,2] non-vacuous). THE VERDICT MATH:
+  cat8+fix 3.500 − cat6+fix 3.333 = **+0.166 vs predicted ~+0.17** — the mechanism
+  quantitatively confirmed: PRE-fix cat8 ≈ cat6 (spine M-dep −0.3 canceled the 2-extra-branch
+  gain +0.17); POST-fix the cancellation is gone and the branches are PURE GAIN, to within
+  0.004 of prediction. ALSO: cat6 3.333 < native 3.442 < cat8 3.500 — one branch does NOT beat
+  the chain drafter; THREE branches put the tree over the native accept. Quality parity
+  everywhere (9/16 + 0 give-ups on all three arms). Old cat6 "3.594" was trajectory noise
+  (its own doc: structurally impossible); the MATCHED comparison is this one.
+t33333 arm running (16 rows/req; ms_step 258.5 as expected heavier — its accept must clear
+~+25% over cat8's to pay for the wider verify; the arm measures exactly that).
