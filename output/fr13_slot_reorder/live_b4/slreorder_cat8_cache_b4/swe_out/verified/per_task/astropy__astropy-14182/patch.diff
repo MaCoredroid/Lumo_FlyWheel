@@ -1,0 +1,27 @@
+diff --git a/astropy/io/ascii/rst.py b/astropy/io/ascii/rst.py
+index abdeba8ef..632fca27d 100644
+--- a/astropy/io/ascii/rst.py
++++ b/astropy/io/ascii/rst.py
+@@ -57,10 +57,19 @@ class RST(FixedWidth):
+     data_class = SimpleRSTData
+     header_class = SimpleRSTHeader
+ 
+-    def __init__(self):
+-        super().__init__(delimiter_pad=None, bookend=False)
++    def __init__(self, header_rows=None):
++        if header_rows is None:
++            header_rows = ["name"]
++        super().__init__(delimiter_pad=None, bookend=False, header_rows=header_rows)
++        # Restore reading-specific attributes that FixedWidth.__init__ may have changed
++        self.header.position_line = 0
++        self.data.start_line = 3
+ 
+     def write(self, lines):
+         lines = super().write(lines)
+-        lines = [lines[1]] + lines + [lines[1]]
++        # FixedWidthData.write puts header rows first, then position line, then data.
++        # For RST format, we need to add a border line at the beginning and end.
++        n_header = len(self.header.header_rows)
++        pos_line = lines[n_header]  # position line is after header rows
++        lines = [pos_line] + lines + [pos_line]
+         return lines
