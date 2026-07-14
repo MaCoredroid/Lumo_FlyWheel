@@ -196,9 +196,22 @@ M_DECODE_FWD_GPU_S = "vllm:fr13_decode_forward_gpu_seconds_total"
 # 0.218 per-forward); M_DECODE_FWD_GPU_DRAFTS = drafts on those steps (per-spec-event).
 M_DECODE_FWD_GPU_STEPS = "vllm:fr13_decode_forward_gpu_steps_total"
 M_DECODE_FWD_GPU_DRAFTS = "vllm:fr13_decode_forward_gpu_drafts_total"
+# FR13_DFWD/CFWD_GPU_TIMER component span timers (_Fr13SpanTimer): drafter =
+# propose_draft_token_ids (all D spine forwards); committer = the spec-decode
+# rejection-sampler dispatch in gpu_model_runner._sample (accept/LCP/bonus +
+# commit). Sidecar-synthesized into the per-task brackets by
+# run_swe_bench_q36_a._metrics_snapshot (the same route as the sfwd counters).
+# DEFAULT-OFF timers; absent lines => 0.0 delta here => the deploy_speed
+# drafter_/committer_ fields are null (never a crash).
+M_DRAFTER_GPU_S = "vllm:fr13_drafter_gpu_seconds_total"
+M_DRAFTER_GPU_SPANS = "vllm:fr13_drafter_gpu_spans_total"
+M_COMMITTER_GPU_S = "vllm:fr13_committer_gpu_seconds_total"
+M_COMMITTER_GPU_SPANS = "vllm:fr13_committer_gpu_spans_total"
 COUNTERS = [M_DECODE_S, M_DRAFTS, M_ACCEPTED, M_DRAFT_TOK, M_GEN_TOK,
             M_TPOT_SUM, M_TPOT_COUNT, M_PREFILL_S, M_DECODE_FWD_GPU_S,
-            M_DECODE_FWD_GPU_STEPS, M_DECODE_FWD_GPU_DRAFTS]
+            M_DECODE_FWD_GPU_STEPS, M_DECODE_FWD_GPU_DRAFTS,
+            M_DRAFTER_GPU_S, M_DRAFTER_GPU_SPANS,
+            M_COMMITTER_GPU_S, M_COMMITTER_GPU_SPANS]
 
 # Forms that must NEVER be reported as s/fwd (blocked + asserted, class-12).
 BANNED_SPEED_BASES = {"tps", "accept", "wall", "wall_clock", "req_elapsed", "http_elapsed"}
@@ -1519,6 +1532,26 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # per-pure-decode-FORWARD GPU time (matches the metric name + the banked B=1 0.218
     # per-forward), reported alongside the per-spec-event s_fwd_gpu.
     s_fwd_gpu_per_forward = (agg_fwd_gpu / agg_fwd_gpu_steps) if (agg_fwd_gpu_steps > 0 and agg_fwd_gpu > 0) else None
+    # FR13_DFWD/CFWD_GPU_TIMER: per-arm component GPU totals (drafter propose /
+    # committer rejection-sampler dispatch) + per-step ms, from the synthetic
+    # bracket lines (sidecar-sourced). null when a timer was off / the brackets
+    # predate the wiring (no crash). Totals share the per-task-bracket overlap
+    # caveat of the other summed aggregates at B>1; ms-per-step is a ratio, so
+    # the overlap cancels.
+    agg_drafter_s = agg.get(M_DRAFTER_GPU_S, 0.0)
+    agg_drafter_spans = agg.get(M_DRAFTER_GPU_SPANS, 0.0)
+    agg_committer_s = agg.get(M_COMMITTER_GPU_S, 0.0)
+    agg_committer_spans = agg.get(M_COMMITTER_GPU_SPANS, 0.0)
+    drafter_gpu_seconds = agg_drafter_s if agg_drafter_s > 0 else None
+    drafter_gpu_ms_per_step = (
+        (agg_drafter_s / agg_drafter_spans) * 1000.0
+        if (agg_drafter_s > 0 and agg_drafter_spans > 0) else None
+    )
+    committer_gpu_seconds = agg_committer_s if agg_committer_s > 0 else None
+    committer_gpu_ms_per_step = (
+        (agg_committer_s / agg_committer_spans) * 1000.0
+        if (agg_committer_s > 0 and agg_committer_spans > 0) else None
+    )
     accept_per_event = agg[M_ACCEPTED] / drafts if drafts > 0 else None
     committed_per_event = (accept_per_event + 1.0) if accept_per_event is not None else None
     derived_tps = (committed_per_event / s_fwd) if (s_fwd and committed_per_event) else None
@@ -1637,6 +1670,25 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "derived_tps_gpu_note": (
             "DERIVED = committed_per_event / s_per_fwd_gpu = decode-kernel TPS "
             "(prefill-independent). None unless the timer was on."
+        ),
+        # FR13_DFWD/CFWD_GPU_TIMER component spans (where the tree overhead
+        # lives per reference_tree_tps_overhead_bound): per-arm totals +
+        # per-step ms. null => timer OFF (default; byte-identical) or the
+        # brackets lack the sidecar-synthesized lines.
+        "drafter_gpu_seconds": drafter_gpu_seconds,
+        "drafter_gpu_ms_per_step": drafter_gpu_ms_per_step,
+        "committer_gpu_seconds": committer_gpu_seconds,
+        "committer_gpu_ms_per_step": committer_gpu_ms_per_step,
+        "component_gpu_note": (
+            "FR13_DFWD/CFWD_GPU_TIMER spans: drafter = propose_draft_token_ids "
+            "(all D spine forwards); committer = the spec-decode rejection-"
+            "sampler dispatch in _sample (accept/LCP/bonus decision + commit; "
+            "includes the host committer loop's packed DtoH+sync when "
+            "FR13_GPU_COMMITTER=0). Async cuda-event spans summed over the "
+            "per-task brackets (d(vllm:fr13_drafter/committer_gpu_seconds_"
+            "total)); ms_per_step = seconds/spans*1000, one span per spec "
+            "decode step. Totals share the per-task-bracket overlap caveat at "
+            "B>1; the ms-per-step ratio does not."
         ),
         "accept_per_event": accept_per_event,
         "accept_per_event_note": (

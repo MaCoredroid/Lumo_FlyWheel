@@ -63,6 +63,9 @@ def main():
         ("runner_fr13_det_warn", big._patch_gpu_model_runner_fr13_det_warn),
         ("runner_replay_boundary_tap_d", big._patch_gpu_model_runner_replay_boundary_tap_d),
         ("runner_sfwd_gpu_timer", big._patch_gpu_model_runner_sfwd_gpu_timer),
+        # FR13_CFWD_GPU_TIMER: committer span around the rejection-sampler
+        # dispatch in _sample; must follow sfwd (helper module block).
+        ("runner_cfwd_gpu_timer", big._patch_gpu_model_runner_cfwd_gpu_timer),
     ]
     for name, fn in seq:
         try:
@@ -100,6 +103,10 @@ def main():
         (rt, "force_uniform_decode=_fr13_force_uniform,", "guard kwarg threading"),
         (rt, "dst_pi=_fr13_akr_dstpi", "runner remap dst_pi threading"),
         (rt, "_fr13_akr_dstpi = (", "runner dstpi definition"),
+        (rt, "_fr13_dfwd_ev = _fr13_dfwd_begin()", "runner dfwd begin"),
+        (rt, "_fr13_dfwd_end(_fr13_dfwd_ev)", "runner dfwd end"),
+        (rt, "_fr13_cfwd_ev = _fr13_cfwd_begin()", "runner cfwd begin"),
+        (rt, "_fr13_cfwd_end(_fr13_cfwd_ev)", "runner cfwd end"),
         (tt, "def _fr13_sr_bias_perm(", "tree_attn bias helper"),
         (tt, "def _fr13_sr_causal_flag(", "tree_attn causal helper"),
         (tt, "tree_bias = _fr13_sr_bias_perm(tree_bias)", "tree_attn bias wrap"),
