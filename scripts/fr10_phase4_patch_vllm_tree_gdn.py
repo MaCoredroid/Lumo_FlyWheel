@@ -13358,7 +13358,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # with 0). cat3w/cat6root/cat10 read the rank-2 token from the
                 # SAME root logits tensor (one topk, no extra lm-head read).
                 # 3-3-3 additionally reads rank-2 (index 2) from that topk.
+                _fr13_ds_lm = _FR13_DFWD_SPLIT.begin('lmhead')
                 _fr10_logits = self.model.compute_logits(sample_hidden_states)
+                _FR13_DFWD_SPLIT.end('lmhead', _fr13_ds_lm)
                 draft_token_ids = _fr10_logits.argmax(dim=-1)
                 if _fr10_consumes_root_leaf:
                     _fr10_root_topk = torch.topk(
@@ -18417,7 +18419,7 @@ class _Fr13DfwdSplit:
                 )
             except Exception:  # noqa: BLE001
                 pass
-        self.pairs = {"model": [], "sample": []}
+        self.pairs = {"model": [], "sample": [], "lmhead": []}
         self.pathmap = set()
         self.done = False
         if self.on:
