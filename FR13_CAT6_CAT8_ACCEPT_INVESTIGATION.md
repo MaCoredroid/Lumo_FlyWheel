@@ -801,3 +801,16 @@ branches) — certify [6,6,4,6]/cat8 or emit better static shape. S3 (hrs+2-4d):
 (wire DFWD timer into deploy report) then FR-Spec truncated draft vocab if lm_head read confirmed.
 S4: re-test async_scheduling x spec compose. No-gos: per-forward compute opts (HBM floor), branch
 removal (= deleting the accept lever).
+
+## NATIVE ARM FINAL + RETRACTION (2026-07-14, native_ourcache_b4, same binary)
+
+native: resolved 9/16, give-ups 0, accept_per_event 3.442, derived_tps 76.3 @ prefill_frac 0.157.
+**RETRACTION: the matrix native+cache row (3.050, 8/16, 1 give-up) is STALE/pessimistic** — my
+earlier "+0.45 accept over native" framing used it; the true SAME-BINARY delta is cat8+fix 3.500
+vs 3.442 = **+0.058 (within temp-0.6 trajectory noise ±0.25)**. HONEST verdict so far: cat8+fix at
+QUALITY PARITY with native (resolve 9/16 tie, 0 give-ups both, accept small-positive) + branch
+rescue intact; the +12% wall/tok overhead (100% non-forward, S1-fixable) is what separates parity
+from a win. The user goal axes: spine==native ACHIEVED (op-level bit-exact + live accept parity);
+"branches save correctly" SUPPORTED (resolve tie, 0 give-ups, garble clean). derived_tps NOT
+comparable across arms here (prefill_frac 0.226 vs 0.157 window mismatch — use the probe's matched
+decomposition instead). cat6+fix arm running (superset test); t33333 after.
