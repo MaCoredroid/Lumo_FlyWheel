@@ -1259,6 +1259,7 @@
       <a href="#museum">Failure museum</a>
       <a href="#reflection">Reflection</a>
       <a href="#limitations">Limits</a>
+      <a href="#future">Future work</a>
       <a href="#receipts">Source trail</a>
     </div>
   </header>
@@ -1301,7 +1302,7 @@
             <div class="claim"><span class="state pass">GARBLE</span><p>~40% &rarr; 0% on both branched trees; the token gate goes 0/15, matching native, and committer acceptance is verified token-lossless.</p></div>
             <div class="claim"><span class="state pass">RESOLVE</span><p>cat8 fix-on 8/16 = native 8/16 exactly; agent trajectories track native, no give-ups or thrash.</p></div>
             <div class="claim"><span class="state pass">STATELESS</span><p>the col-0 commit + burn lifecycle is baked default-on; the tree's data footprint equals native's.</p></div>
-            <div class="claim"><span class="state warn">SPEED</span><p>the residual tree-shape accept gap is speed-only; a clean tree-vs-native speed A/B is still pending.</p></div>
+            <div class="claim"><span class="state warn">SPEED</span><p>the clean three-arm run shows the tree ~10% slower per forward, not faster; the branch-on-spine accept disturbance is now localized but not yet fixed (<a href="#future">future work</a>).</p></div>
           </div>
         </aside>
       </div>
@@ -1662,6 +1663,50 @@
 
       <p>The trajectory change is the tell that this is a real fix, not a metric that happened to move. The no-fix tree was bimodally dysfunctional &mdash; a cluster of two-turn hard give-ups and a tail of eighty-to-a-hundred-turn garble-thrash. Fix-on, both modes are gone: a healthy median around fifteen turns, a minimum of eight with no give-ups, a maximum of thirty-five with no thrash, and fifteen of sixteen tasks editing the correct source file. Resolve tracks native task-for-task; the net movement was three garble-failures rescued against one temperature-noise regression, which is what a fix that removes corruption without injecting errors looks like.</p>
 
+      <p>With garble out of the way, a same-boot three-arm speed comparison finally means something &mdash; the earlier numbers were garble-composition artifacts. On sixteen SWE-Verified tasks at one agent, all fix-on:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>Three arms, same boot, fix-on: resolve, acceptance, and speed. Higher accept is faster; higher wall throughput is faster.</caption>
+          <thead>
+            <tr>
+              <th>Arm</th>
+              <th>Resolve (16 tasks)</th>
+              <th>Accept / event</th>
+              <th>s / forward</th>
+              <th>Committed tokens / forward</th>
+              <th>Wall throughput (temp 0.6)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>native (5-chain)</td>
+              <td class="num">8/16</td>
+              <td class="num">3.466</td>
+              <td class="num">0.1995 s</td>
+              <td class="num">22.4</td>
+              <td class="num">21.45 tok/s</td>
+            </tr>
+            <tr>
+              <td>cat6 (6-node tree)</td>
+              <td class="num">7/16</td>
+              <td class="num">3.594</td>
+              <td class="num">0.1988 s</td>
+              <td class="num">23.1</td>
+              <td class="num">19.34 tok/s</td>
+            </tr>
+            <tr>
+              <td>cat8 (8-node tree)</td>
+              <td class="num">8/16</td>
+              <td class="num">3.336</td>
+              <td class="num">0.2173 s</td>
+              <td class="num">19.9</td>
+              <td class="num">19.34 tok/s</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Two honest readings. On <em>quality</em>, cat8 matches native exactly (8/16) and cat6 is within one flaky task; garble is gone on both trees. On <em>speed</em>, the picture is more sobering than "branches are faster": on this benchmark native holds the highest wall throughput, the tree runs about ten percent slower per forward, and acceptance does not rise monotonically with node count &mdash; cat6 accepts more than cat8. That last fact is a real effect, not noise (the earlier, larger version of the gap was a garble artifact; the clean greedy gap is about 0.09 tokens per event), and chasing it down is the open frontier below. A note on the forward-only "derived throughput" figures (native 70.9, cat6 72.4, cat8 63.9 tokens per second): those divide by verify-forward GPU time only, so they are an upper bound that ignores the real per-request overhead &mdash; do not read them as deployment speed. The wall-throughput and committed-tokens-per-forward columns are the honest basis.</p>
+
       <div class="source-exhibit" aria-label="Completeness audit">
         <div class="source-head">
           <strong>Why this is complete, not just passing</strong>
@@ -1858,9 +1903,9 @@
           <p>Different tree shapes accept at slightly different rates (a small, roughly 0.09-token gap between cat6 and cat8 at matched decode), driven by how tree width perturbs the attention projection. It is speed-only: the tree still commits the right tokens (the committer is verified token-lossless), so nothing is lost. An earlier, larger version of this gap was a garble-composition artifact, not a real effect.</p>
         </div>
         <div class="box warn">
-          <span class="tag">Speed A/B pending</span>
-          <h3>The throughput headline is unproven</h3>
-          <p>The tree's whole justification is that its branches accept more tokens per forward than native's chain. That superset win is not yet cleanly measured &mdash; the trustworthy per-forward cost is in hand, but the confound-free tree-vs-native throughput A/B is blocked on a serving-capture plumbing mismatch, independent of this fix. Do not quote a derived tokens-per-second number; the two GPU-time bases disagree in a way that flags an artifact.</p>
+          <span class="tag">Superset unproven</span>
+          <h3>The speed story is not the hoped one</h3>
+          <p>The tree's justification is that its branches accept more tokens per forward than native's chain. The clean three-arm comparison above does not show that on this benchmark: native holds the highest wall throughput, the tree is about ten percent slower per forward, and acceptance is non-monotonic in node count. The residual &mdash; why cat8's extra branches <em>lower</em> its own spine acceptance &mdash; is now mechanistically localized but not yet fixed in production (see <a href="#future">Future work</a>).</p>
         </div>
         <div class="box warn">
           <span class="tag">Statistics</span>
@@ -1873,6 +1918,48 @@
           <p>The dead chunked-realization producer and its exact-seed / refold / HRS family (about 1,170 lines) have been deleted. The remaining Vol. IV redirect machinery &mdash; the leaf map and snapshot redirect &mdash; is now redundant under the stateless lifecycle and slated for removal; the access-equivalence proof gate is the queued follow-up, and until it lands the redirect path coexists as a default-on no-op.</p>
         </div>
       </div>
+    </section>
+
+    <section class="section" id="future">
+      <h2>Future Development: The Branch-on-Spine Disturbance</h2>
+      <aside class="sidenote">
+        <p><strong>Status:</strong> not merged. This work lives on a branch, behind a default-off flag; the ship configuration is byte-identical without it. It is recorded here as the active frontier, in the same attempt-by-attempt spirit as the rest of the report.</p>
+        <p><strong>The question:</strong> why does adding branches to the tree <em>lower</em> the acceptance rate of its own spine? Answering it is what would turn the tree from about ten percent slower than native into faster.</p>
+      </aside>
+      <p>The results above leave one honest disappointment: the tree does not out-run native on this benchmark, and acceptance falls as node count rises &mdash; cat6 accepts more than cat8. That is counter-intuitive, because a wider tree is a superset of a narrower one; its extra branches should only ever add accepted tokens, never subtract. The subtraction is a numerical artifact, and the same six-day discipline that found the garble has now localized it, though not yet shipped a fix. The whole effect is a single bit of floating-point &mdash; roughly 0.09 tokens per event at greedy, a within-floor speed residual, with the committed tokens still correct &mdash; but it is the difference between the tree earning its complexity and not.</p>
+
+      <h3>Where the disturbance lives</h3>
+      <p>Adding a co-resident branch changes the acceptance of the spine even though the branch's keys are correctly masked out of the spine's attention. We localized it the same way as the garble &mdash; overwrite each suspect with a native-exact version in an observe-only harness &mdash; and it resolved cleanly. The fused convolution is bit-invariant to branch count (elementwise math, no cross-row reduction). The in-projection is excluded by construction (the two tree widths share the same GEMM path). The carrier is the forked attention kernel: on the deepest spine node it drifts by exactly one bf16 unit-in-the-last-place at magnitude eight, in all sixteen full-attention layers, purely as a function of how many branches sit beside it.</p>
+      <p>The obvious fix &mdash; pad the query to a fixed width so the tile occupancy is branch-independent &mdash; was validated in the harness and genuinely refuted: query padding has zero effect. The carrier is not the query tile; it is the <em>key</em> width. cat8 presents nine suffix keys, cat6 six, and even though the extra branch keys are masked to negative infinity in the spine's score row, their <em>presence</em> changes the block iteration of the online-softmax reduction. A read of the vendored kernel source closed the mechanism: the reduction order is keyed by physical column. Interleaving branches places the surviving spine keys in different score-tile columns (spine-only occupies columns 0-4; the cat8 spine occupies 0, 1, 2, 4, 6), which produces a different lane-partial layout and therefore a different butterfly-reduction association tree &mdash; and floating-point addition is not associative, so the sum lands one unit-in-the-last-place away. It is not a masking bug: the masked keys contribute exactly zero. It is pure reassociation from column placement.</p>
+
+      <div class="source-exhibit" aria-label="The localization ladder">
+        <div class="source-head">
+          <strong>The localization, rung by rung</strong>
+          <span>Each suspect made native-exact in an observe-only harness; only one moved the needle</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Conv</span><p>Cleared &mdash; bit-invariant to branch count (elementwise, no cross-row reduction).</p></div>
+          <div class="box good"><span class="tag">In-projection</span><p>Excluded &mdash; both tree widths share the same GEMM path.</p></div>
+          <div class="box bad"><span class="tag">Attention</span><p>The carrier &mdash; one bf16 ULP on the deep spine, all 16 layers, scaling with branch count.</p></div>
+          <div class="box warn"><span class="tag">Not the query tile</span><p>Query padding refuted (zero effect); the carrier is the key/suffix width, via reduction reassociation.</p></div>
+        </div>
+      </div>
+
+      <h3>The fix, and why it is not yet in production</h3>
+      <p>The mechanism dictates the fix: make the surviving spine keys occupy identical columns regardless of branch count. A call-site-local <em>contiguous-spine reorder</em> &mdash; permute the suffix keys, values, and bias so the spine comes first in depth order and the branches follow &mdash; does exactly that, and in the observe-only harness it is provably correct: every spine depth becomes bit-identical to the spine-only computation (zero difference), while an interleaved-identity control stays at the one-ULP drift, confirming that contiguity itself is the property. The fix is lossless by construction (an exact relabeling; the masked branch columns stay neutral) and carries no memory-bandwidth tax.</p>
+      <p>Landing it in the live server is the open problem, and three routes have each hit a wall &mdash; every wall caught by a gate before it could ship:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>Three live-implementation routes for the reorder, and where each is blocked.</caption>
+          <thead><tr><th>Route</th><th>Idea</th><th>Wall</th></tr></thead>
+          <tbody>
+            <tr><td>Dense-suffix hybrid</td><td>Split the forward into a paged-context pass and a dense spine-first suffix pass, then merge</td><td>The two-pass merge rounds to bf16 twice, a one-ULP double-rounding that is fatal for speculative decode &mdash; it garbles even at greedy. fp32 partials are not available from the attention API.</td></tr>
+            <tr><td>Two-K-source fused kernel</td><td>Read paged context then dense spine-first suffix in one online-softmax pass, single accumulator</td><td>A CPU model refuted it before any recompile: reading the suffix as a separate block perturbs the context by the same one ULP from rescale timing. It relocates the error, it does not remove it.</td></tr>
+            <tr><td>Cache slot reorder</td><td>Permute the tree-suffix slot mapping so the KV is written spine-first; the paged read is then naturally canonical, no recompile</td><td>The surviving candidate. It writes to cache slots the committer and the recurrent path read later &mdash; the concurrency surface this whole page is about &mdash; so it needs a carrier-B audit before it can ship.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>There is also a subtlety worth flagging for whoever picks this up: the reorder fixes the <em>spine</em> bit-exactly but only partly fixes the <em>branches</em>. A branch's ancestors are a subset of the spine, so the deepest, rarest branch still shifts about one ULP as its own column moves with the co-resident branches beside it. The effect is concentrated in the deepest branch, so its net speed cost is small, but a fully canonical layout &mdash; fixed slots for branches as well as the spine &mdash; is what a complete fix would need. The numerical fix is proven and the mechanism understood; the live delivery, and the branch half of it, are the work that remains.</p>
     </section>
 
     <section class="section" id="config">
@@ -1944,7 +2031,7 @@
             <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_GARBLE_DRIFT_BINDING_PROVEN.md">Drift-to-misspell binding</a> - the measured join from verify drift to the committed near-neighbor.</li>
             <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_GARBLE_COMMITTER_CLEARED.md">Committer cleared</a> - the offline gate proving the committer is distribution-lossless, so the drift is upstream.</li>
             <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_NATIVE_BATCH_GARBLE_RESULT.md">Batching exonerated</a> - native clean at eight-way co-residency; the tree garbles at one agent per server.</li>
-            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md">The speed-only M-perturbation</a> - the residual accept gap, the untrusted derived-throughput numbers, and the pending clean A/B.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md">The branch-on-spine disturbance</a> - the three-arm accept/speed numbers, the untrusted derived-throughput figures, and the not-yet-merged localization of the attention suffix-width reassociation and the contiguous-spine reorder fix.</li>
             <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_launch_locked.sh">Locked launcher</a> - the baked ship config for every flag on this page.</li>
             <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">GDN tree kernel</a> - the replay/remap kernels and the col-0 commit.</li>
             <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr10_phase4_patch_vllm_tree_gdn.py">vLLM tree patch</a> - the attention-KV capture and remap wiring.</li>
