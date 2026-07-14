@@ -779,3 +779,25 @@ anywhere; error-loops on 2 hard tasks = iteration-not-thrash; UNDEFINED hits are
 gets the matched trace-scan null. Crash-class 0 across the full arm (dispatch guard soak PASS).
 Engagement non-vacuous (pi lines + causal=False; native arm 2 inverted-audit: 0 reorder lines ✓).
 NEXT: native (running) -> cat6+fix (superset test) -> t33333. Speed research (task #25) launched.
+
+## SPEED PROBE + SPEED-UP LIST (2026-07-14, wf_56f6537d; raw: FR13_TREE_SPEED_PROBE_AND_SPEEDUPS_RAW.txt)
+
+MEASURED (matched 16-task windows, graph, cache-ON): tree cat8+fix wall 39.05 ms/committed-token vs
+native 34.86 (+12%). Decomposition: verify-forward GPU/tok tree 13.36 < native 15.39 (tree CHEAPER —
+accept 3.500 + 3.03 drafts/step amortize the weight read); derived_tps_gpu PARITY (70.6 vs 70.9);
+THE ENTIRE deficit is NON-FORWARD: 25.69 vs 19.47 ms/tok (+6.2, +32%) = drafter/committer/gaps.
+Slot-reorder already bought ~2.5 ms/tok (41.58→39.05) via accept 3.34→3.50. END-STATE BOUND: match
+native's non-forward and tree WINS ~6% BEFORE accept gains. Sensitivity: −1 ms/tok = +2.6% TPS.
+
+**S1 (TOP, 2-4d, est +2.5-8% TPS): the ship path runs the UNOPTIMIZED committer.** All EAGER_PACK/
+OPT-1 collapses (DtoH 102→1, replay 96→2, packed writeback) are wired ONLY into the GREEDY twin
+(_lumo_tree_path_lcp_max_greedy_sample); temp-0.6 serving dispatches _lumo_tree_canonical_
+multidraft_sample which has NONE — ~75-110 blocking .item()/step + legacy 96-launch replay loop.
+CORROBORATED INDEPENDENTLY by today's crash stack: rejection_sampler.py:3758 in the SAMPLED twin hit
+the LEGACY per-layer flag check (:9815), not the _ep_stacks path (:9093). Port the collapses to the
+sampled twin (greedy twin = working template); byte-identity + garble + same-boot A/B gates.
+S2 (1-2d, +2-7%): Sequoia/OPT-Tree offline DP over the 9-row budget (reallocate, never remove
+branches) — certify [6,6,4,6]/cat8 or emit better static shape. S3 (hrs+2-4d): measure drafter GPU
+(wire DFWD timer into deploy report) then FR-Spec truncated draft vocab if lm_head read confirmed.
+S4: re-test async_scheduling x spec compose. No-gos: per-forward compute opts (HBM floor), branch
+removal (= deleting the accept lever).
