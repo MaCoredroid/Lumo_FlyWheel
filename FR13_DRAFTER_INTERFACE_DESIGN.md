@@ -95,3 +95,34 @@ S-D. (optional, NOT cheap) widen past n_pad=16 for wide merged trees. NOTE: the 
      spending the free suffix candidates on BRANCH DENSITY within 16, not on going wider.
 Gates 1->4 per step. Suffix is losslessness-safe by the committer, so the risk is SPEED/ACCEPT
 (does it help), not CORRECTNESS (it can't garble).
+
+## S-B/S-C SEAM LOCATED (2026-07-14) — small + localized, NOT a drafter rewrite
+The tree branch leaf tokens are built at patcher :13361 (FR13_DRAFTER_SINGLE_LOGITS):
+  _fr10_logits = self.model.compute_logits(sample_hidden_states)
+  draft_token_ids = _fr10_logits.argmax(-1)                    # spine token (per depth)
+  _fr10_root_topk = torch.topk(_fr10_logits, k, -1).indices
+  _fr10_root_leaf_token  = _fr10_root_topk[:, 1]               # branch rank-2  <-- SEAM
+  _fr10_root_leaf2_token = _fr10_root_topk[:, 2]               # branch rank-3  <-- SEAM
+The tree GEOMETRY is fixed (tree_choices, n_pad<=16 register wall); the branch LEAF TOKENS are the
+free variable. Suffix improves WHICH token fills each branch slot (Gate 1: replacing a low-p
+drafter rank-3 with a target-plausible suffix token raises p(S) -> accept, losslessly). NOT adding
+nodes (register wall forbids) -- filling fixed slots better ("branch density within 16").
+
+GRAPH CONSTRAINT (must respect): the drafter runs in a PIECEWISE cudagraph; the suffix dict lookup
+is a HOST op that CANNOT run in-graph. => S-B wires a PERSISTENT device buffer
+(suffix_branch_tokens + suffix_valid mask) at captured addresses + a per-step host->device copy
+(host: SuffixSource.propose fills the buffer, like slot_mapping staging). S-C does the in-graph
+blend: `_fr10_root_leaf_token = torch.where(suffix_valid, suffix_branch_tokens, drafter_topk_rank2)`
+(device torch.where, graph-safe). Flag FR13_DRAFT_SOURCE=mtp|merged, default mtp = byte-identical
+(don't touch the tokens); MUST dedup vs the spine argmax (Gate 1: duplicate adds nothing).
+
+COST-GATE (honest): (+) host cost negligible -- SuffixSource.propose ~7us (50k-tok test 0.35s) vs
+140ms/step host-bound drafter (<0.01%). (+) DOWNSIDE ZERO -- lossless (Gate 1), can't regress
+correctness; a bad suffix guess is just rejected. (?) UPSIDE is workload-dependent -- accept gain
+only materializes if suffix guesses carry real target-p on agentic code-editing (repetitive:
+re-read files, repeated identifiers). That's the LIVE B=4 A/B (Gate 4) -- unknowable until measured,
+but it's a PURE-UPSIDE bet (cheap + can't regress + plausible). Cost-gate PASSES.
+
+NEXT (mine, correctness-critical, next cycle): S-B buffer+staging, then S-C in-graph blend; gate
+each with the CPU committer contract (Gate 1 extended to the blend), garble gate, then live B=4 A/B
+vs cat8+SLOT_REORDER.
