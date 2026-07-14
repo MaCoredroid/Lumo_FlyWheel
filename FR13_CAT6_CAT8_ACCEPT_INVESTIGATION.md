@@ -1137,3 +1137,16 @@ ingest works (no gappy trap). CONFIRMS: match_full=0 on the single-prompt probe 
 design engages on agentic repetition. This is v1 (flat spine-only, branches=MTP); v2 (trie-walk,
 use_tree_spec, committed) adds branch-accept. DELIVERY (garble/resolve/dfwd vs baseline) pending arm
 completion + the MTP-only baseline arm.
+
+## FRONT 2 DELIVERY A/B (2026-07-14): MERGED arm done, baseline running
+merged_arctic_t33333 (v1 flat, 4 agentic tasks B=4): FINAL engagement match_full=4647/speculate=9895
+= **~47% steps skip** the deep MTP forwards (grew from ~22% mid-run as the trie learned). Speed:
+drafter_gpu_ms_per_step=33.8 (dfwd sidecar 28.8), committer 70.2, s_per_fwd_gpu 79.9ms (verify,
+HBM-bound), derived_tps_gpu 36.3, accept_per_event 1.90 / committed_per_event 2.90, engaged=True
+(tok_per_draft=15). CORRECTNESS: resolve 1/4 (verdict failed:3 resolved:1; failure modes tests_failed
+2 / tests_passed 1 / patch_apply_failed 1), **NO garble markers** (undefined-name/broken-token grep
+clean), NO engine crashes / committer-row errors on the engaged path (skip+arctic-fill runs clean).
+PENDING: merged_base_t33333 (MTP-only, same 4 tasks) for the apples A/B -- resolve parity + baseline
+drafter dfwd (no skip => expect higher; the drafter-speed delta is the deliverable). Gate1 => lossless
+regardless; 1/4 resolve is likely task-hardness (astropy 13033/13236/13453/13579) -- the A/B parity
+(merged resolve == baseline resolve on SAME tasks) is what proves correctness, not the absolute rate.
