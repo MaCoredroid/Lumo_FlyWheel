@@ -36,6 +36,10 @@ export FR13_CONV_COMMITTED_PATH=1
 # GATE: temp-0.6 matrix_build 15/15 -> 0/15 (eager+graph+cache-cold), engaged foreign>0,
 # clean; live SWE astropy-12907 RESOLVED (cache hits 68-74%); speed tax -0.7% s/fwd (noise).
 export FR13_ATTN_KV_REMAP=1
+# FR13_SLOT_REORDER: spine-first canonical KV slot layout (spine M-invariance fix).
+# Validated 2026-07-14: S0-S2c + live 4-arm B4 campaign (superset +0.166==predicted,
+# 9/16 resolve == native, 0 give-ups, garble clean, crash-class 0, no s/fwd tax).
+export FR13_SLOT_REORDER=1
 export BATCH_INVARIANT=0
 # --- BAKED FIX (2026-06-14): in_proj_ba pad-to-fixed-M batch-invariance (FR13_WIDTH_
 # CARRIER_INPROJ_BA_BIND.md, H1). Pads bf16 in_proj_ba (+ out_proj) to a tree_n-

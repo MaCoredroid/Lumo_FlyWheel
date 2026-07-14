@@ -199,3 +199,22 @@ Effect: 4 decodes (~28 tok) + one-to-three full 1024-token prefill blocks (disti
 - **Serialization-fix shot** after cat6 (§7).
 - B=1 pair **CANCELLED** (user 2026-07-08 — "B=4" is already ~B=1; fix the config instead).
 - Task #14 cleanup (delete dead deprecated code, rename `codex_trace.jsonl`→`qwen_trace.jsonl`).
+
+## SLOT-REORDER CAMPAIGN (2026-07-14, 4 arms, same binary 07becaf2+, all-cache-on ship env, WALL=0)
+
+| arm | resolved | give-ups | accept/event | derived_tps_gpu (pf) | ms/step | ms/draft | crash |
+|---|---|---|---|---|---|---|---|
+| **cat8 + SLOT_REORDER** | 9/16 | 0 | 3.500 | 70.6 (0.226) | 206.5 | 68.2 | 0 |
+| native MTP-5 (fresh bar) | 9/16 | 0 | 3.442 | 76.3 (0.157) | 210.3 | 59.3 | 0 |
+| cat6root + SLOT_REORDER | 9/16 | 0 | 3.333 | 72.7 (0.208) | 204.3 | 63.2 | 0 |
+| t33333 + SLOT_REORDER | **11/16** | 0 | **3.567** | 56.1 (0.191) | 233.9 | 93.1 | 0 |
+
+- SUPERSET CONFIRMED: cat8−cat6 = +0.166 (predicted +0.17). Ordering t33333>cat8>native>cat6.
+- The old native+cache row (3.050, 8/16, 1 give-up) is SUPERSEDED by the fresh same-binary bar.
+- t33333 11/16 = best resolve ever on this subset + highest accept, but WORST tps (16-row verify,
+  93.1 ms/draft). n=16 caveat: 11-vs-9 within variance; replicate before claiming. Feeds S2 DP.
+- derived_tps NOT rankable across arms here (prefill_frac mismatch); matched-window probe:
+  cat8 wall/tok +12% vs native, 100% non-forward (S1 committer port = the path to tree-wins).
+- Garble trace-scan noise floor: tree arms 3/2/1 signatures vs native 2. Crash-class 0 over ~9h
+  (FR13_UNIFORM_DISPATCH_GUARD soak PASS).
+- BAKED: FR13_SLOT_REORDER=1 in fr13_launch_locked.sh (this campaign = the validation).
