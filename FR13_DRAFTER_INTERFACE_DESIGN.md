@@ -242,3 +242,39 @@ Proposer pattern + Round-2 session router); (d) adapt .speculate().token_ids -> 
 (e) at :13860, gated merged: shorten spine loop to mtp_k + Arctic-fill deep spine/wide_topk via the
 assembly, dedup; (f) flag FR13_DRAFT_SOURCE=mtp(default,byte-id)|merged, FR13_MTP_SPINE_DEPTH=1|2.
 GATES: patcher self-test byte-id-off (CPU) -> garble temp06 -> live B4 A/B (accept-hold = decisive).
+
+## RED-TEAM VERDICT (2026-07-14, 3-lens workflow wf_5ab28060): plan_sound=False -> CORRECTED
+Adversarial review found the initial seam spec had BLOCKERS. Graph-safety = GO (seam IS eager,
+outside cudagraph; host Arctic call + spine-loop reduction are safe). Corrected plan:
+
+TENSOR DISCIPLINE (was 4 blockers): (1) build every Arctic column on draft_token_ids.device (int64),
+one H2D per depth -- NOT torch.tensor(list) (CPU) => stack crash. (2) fill ROW-MAJOR keyed by req_id
+via the SPEC-row req-id list aligned to drafter batch rows (same list committer uses :8744/:8796) --
+positional against Arctic's own order = wrong-row drafts = accept collapse (garble-free). Assert
+len==batch_size + per-row req-id equality (fail-loud). (3) _fr10_wide_topk[d] MUST be [batch,>=3]
+(packer fail-loud checks rk < shape[1] :13928); cols 1,2 = Arctic branches, col0 = placeholder
+(spine tok, free dedup). (4) densify ragged/empty Arctic output to a full [batch] column with a
+concrete PAD (Gate-1: p[g]~0 commits ~0). Append spine strictly depth-ordered; wide_topk keys must
+be exactly the filled depths; re-run the packer length assert (:13914).
+
+LIFECYCLE SPLIT BY FRAME (was 3 blockers -- the initial "all at :13361" was WRONG): drive
+start_request / stop_request / evict_cached_response at the MODEL-RUNNER level via the batch req-set
+diff (port vllm suffix_decoding.py:63-70,92-95 verbatim; prompt from input_batch.token_ids_cpu).
+Drive add_active_response at a NEW COMMIT-SITE hook (~:8730-8767) feeding the FULL accepted run (not
+the 1 bonus token), where accepted_token_rows + per-row req-ids + _LUMO_FA_TREE_ACCEPT_BY_REQ already
+coexist. Only speculate() runs at the :13361 seam. pattern = last max_tree_depth committed tokens per
+req (stash a rolling per-req buffer at the committer; :8734 already publishes last-accepted).
+
+SPEED LEVER = ADAPTIVE (reconciles user arch mtp1/2+grow with never-regress): the forward-skip is
+FRAGILE (no fallback if Arctic empty -> deep-node garbage -> accept collapse; spine_steps is a SCALAR
+so can't be per-req at B=4; per-step D2H t0 + H2D pattern syncs may ERASE the win). FIX: gate the
+spine_steps reduction on Arctic having a batch-wide confident deep match for ALL active reqs BEFORE
+the loop; else run the FULL MTP loop (never-regress). Fires often since agentic decode is effectively
+B~1 (Running==1 ~80%). DRAFT-KV HOLE = NON-ISSUE: if we skip ALL forwards after mtp_k, no downstream
+drafter forward needs the skipped KV, and verify uses the TARGET cache not draft-KV (VERIFY still to
+confirm eagle reseeds draft from target hidden each step). MUST MEASURE per-step D2H/H2D sync cost
+(sfwd/dfwd timers) -- the skip win can be partially/fully erased; that measurement is a gate.
+TWO SHIPPABLE MODES: (A) ACCEPT-ONLY (always full MTP loop + ADD Arctic branch candidates, no skip)
+= genuinely never-regress, speed via accept only; (B) ADAPTIVE-SKIP (A + forward-skip when batch-wide
+match) = the speed lever, gated. Build A first (simpler, safe), then layer B behind a flag + the sync
+measurement. Both are Gate-1 lossless.
