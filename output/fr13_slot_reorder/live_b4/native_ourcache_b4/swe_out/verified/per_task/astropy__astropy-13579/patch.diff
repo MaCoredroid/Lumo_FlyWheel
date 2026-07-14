@@ -1,0 +1,96 @@
+diff --git a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+index d7605b078..5aed6af13 100644
+--- a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
++++ b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+@@ -244,14 +244,84 @@ class SlicedLowLevelWCS(BaseWCSWrapper):
+ 
+     def world_to_pixel_values(self, *world_arrays):
+         world_arrays = tuple(map(np.asanyarray, world_arrays))
+-        world_arrays_new = []
+-        iworld_curr = -1
+-        for iworld in range(self._wcs.world_n_dim):
+-            if iworld in self._world_keep:
+-                iworld_curr += 1
+-                world_arrays_new.append(world_arrays[iworld_curr])
++
++        # Compute the world values for dropped dimensions at pixel origin.
++        # These are the world values corresponding to the sliced pixel positions.
++        world_at_origin = self._pixel_to_world_values_all(*[0]*len(self._pixel_keep))
++        if self._wcs.world_n_dim > 1:
++            world_at_origin = [world_at_origin[iw] for iw in range(self._wcs.world_n_dim)]
++        else:
++            world_at_origin = [world_at_origin]
++
++        # Identify dropped world dimensions
++        world_dropped = [iw for iw in range(self._wcs.world_n_dim)
++                         if iw not in self._world_keep]
++
++        # If there are dropped world dimensions and kept world dimensions,
++        # compute the Jacobian to adjust dropped world values based on coupling.
++        if world_dropped and len(self._world_keep) > 0:
++            # Compute Jacobian at pixel origin: how world changes with pixel
++            eps = 1e-6
++            world_origin = np.array(world_at_origin)
++            jac = np.zeros((self._wcs.world_n_dim, len(self._pixel_keep)))
++            for ipix in range(len(self._pixel_keep)):
++                pixel_plus = [0]*len(self._pixel_keep)
++                pixel_plus[ipix] = eps
++                world_plus = self._pixel_to_world_values_all(*pixel_plus)
++                if self._wcs.world_n_dim > 1:
++                    world_plus = [world_plus[iw] for iw in range(self._wcs.world_n_dim)]
++                else:
++                    world_plus = [world_plus]
++                jac[:, ipix] = (np.array(world_plus) - world_origin) / eps
++
++            # Invert the sub-Jacobian for kept world dimensions
++            jac_kk = jac[np.array(self._world_keep), :]
++            try:
++                jac_kk_inv = np.linalg.inv(jac_kk)
++            except np.linalg.LinAlgError:
++                jac_kk_inv = np.linalg.pinv(jac_kk)
++
++            # Compute adjustment matrix for dropped world dimensions
++            jac_dk = jac[np.array(world_dropped), :]
++            adjustment = jac_dk @ jac_kk_inv
++
++            # Build world array with adjusted dropped values
++            world_arrays_new = []
++            iworld_curr = -1
++            world_kept = np.array([world_arrays[i] for i in range(len(world_arrays))])
++            world_kept_origin = world_origin[np.array(self._world_keep)]
++
++            # Handle both scalar and array inputs
++            if world_kept.ndim == 1:
++                delta_wk = world_kept - world_kept_origin
++                delta_wd = adjustment @ delta_wk
+             else:
+-                world_arrays_new.append(1.)
++                # For array inputs, flatten, compute, then reshape
++                original_shape = world_kept.shape[1:]
++                n_elements = world_kept.size // world_kept.shape[0]
++                world_kept_flat = world_kept.reshape(world_kept.shape[0], -1)
++                world_kept_origin_flat = np.tile(world_kept_origin[:, np.newaxis], (1, n_elements))
++                delta_wk_flat = world_kept_flat - world_kept_origin_flat
++                delta_wd_flat = adjustment @ delta_wk_flat
++                delta_wd = delta_wd_flat.reshape(len(world_dropped), *original_shape)
++
++            for iworld in range(self._wcs.world_n_dim):
++                if iworld in self._world_keep:
++                    iworld_curr += 1
++                    world_arrays_new.append(world_arrays[iworld_curr])
++                else:
++                    drop_idx = world_dropped.index(iworld)
++                    world_arrays_new.append(world_at_origin[iworld] + delta_wd[drop_idx])
++        else:
++            # No coupling adjustment needed
++            world_arrays_new = []
++            iworld_curr = -1
++            for iworld in range(self._wcs.world_n_dim):
++                if iworld in self._world_keep:
++                    iworld_curr += 1
++                    world_arrays_new.append(world_arrays[iworld_curr])
++                else:
++                    world_arrays_new.append(world_at_origin[iworld])
+ 
+         world_arrays_new = np.broadcast_arrays(*world_arrays_new)
+         pixel_arrays = list(self._wcs.world_to_pixel_values(*world_arrays_new))
