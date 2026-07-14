@@ -18466,8 +18466,13 @@ class _Fr13DfwdSplit:
             ) + "." + str(_os.getpid())
             with open(p, "w") as fh:
                 _j.dump(out, fh, indent=1)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as _e:  # noqa: BLE001
+            try:
+                import traceback as _tb
+                with open("/logs/fr13_dfwd_split.err", "a") as fh:
+                    fh.write(repr(_e) + chr(10) + _tb.format_exc() + chr(10))
+            except Exception:
+                pass
 
 
 _FR13_DFWD_SPLIT = _Fr13DfwdSplit()
