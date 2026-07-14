@@ -1087,3 +1087,24 @@ RED-TEAM: 4 initial FAILs were MY incorrect assertions, not code -- fixing them 
 made the claim STRONGER (not "distribution unchanged" -- output invariant + accept monotone). This
 de-risks the live seam BEFORE writing it: the merge is provably lossless + a speed lever. MergedSource
 MUST dedup candidates for the clean accept=p(S) identity (lossless holds even without dedup).
+
+## FRONT 2 SPEED PREMISE VALIDATED (2026-07-14): drafter host gap IS per-spine-step (MEASURED)
+Probe scripts/fr13_spine_step_cost_probe.sh (B=1, same-width t333 vs t33333, dfwd brackets propose):
+  t333 (spine_steps=2):  dfwd 70.22 ms/step  sfwd 132.75  accept 2.696
+  t33333(spine_steps=4): dfwd 108.61 ms/step sfwd 143.39  accept 3.625
+=> per-spine-LEVEL drafter cost = (108.61-70.22)/2 = **19.2 ms/level** (spine forward + that level's
+branch-topk + packing). PROJECTED drafter with MTP-k: mtp_k=2 -> ~70 ms (==t333, sanity-checks);
+mtp_k=1 -> ~51 ms (-53% vs 108). Drops ~57 ms/decode-step out of a ~250-320 ms step (sfwd 143 +
+dfwd 108 + committer ~44 + gaps) => ~-18% decode wall => ~+22% TPS IF ACCEPT HOLDS.
+SIGNIFICANCE: REFUTES the speed-campaign "drafter host gap structural/dead" framing -- the 117 ms
+host is PER-SPINE-STEP orchestration (eagle_step_update_slot_mapping_and_metadata + set_forward_
+context per forward), NOT fixed setup, so REDUCING spine steps (mtp_k) reduces it proportionally.
+The mtp_k lever was NOT considered in the speed campaign (which held tree shape fixed).
+RED-TEAM CAVEATS (honest, un-resolved): (1) the 19.2 ms/level includes the extra level's branch-topk
++ packing, not PURELY the forward -- but that whole per-level cost IS what Arctic replaces, so it's
+the right unit. (2) THE decisive unknown = does accept HOLD when Arctic fills the deep spine? If
+Arctic deep tokens accept worse than MTP's, committed-tokens/sec net could be neutral/negative
+despite the drafter speedup. NET TPS = f(drafter -57ms, accept change) -- ONLY the live B=4 A/B
+settles it. (3) verify (sfwd 143) UNCHANGED (still 16-node tree) -- correct, mtp_k touches only the
+drafter. VERDICT: speed lever MEASURED + LARGE => building the MTP-k+Arctic-suffix integration is
+justified; the live A/B is the accept-hold gate.
