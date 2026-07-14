@@ -1253,9 +1253,10 @@
       <a href="#principle">Principle</a>
       <a href="#why-free">Why native is free</a>
       <a href="#stateless">Stateless tree</a>
-      <a href="#garble">Garble hunt</a>
+      <a href="#hunt">The hunt</a>
       <a href="#rootcause">Root cause</a>
       <a href="#results">Results</a>
+      <a href="#museum">Failure museum</a>
       <a href="#reflection">Reflection</a>
       <a href="#limitations">Limits</a>
       <a href="#receipts">Source trail</a>
@@ -1284,7 +1285,7 @@
         <div><dfn>flat verify slot</dfn><span>the sorted position each tree node writes its K/V to; a branched accepted path occupies a non-contiguous subset.</span></div>
         <div><dfn>ATTN_KV_REMAP</dfn><span>the garble fix: re-linearize committed-token attention KV, the twin of the recurrent remap.</span></div>
         <div><dfn>cat6 / cat8 / cat9</dfn><span>6-, 8-, 9-node token trees (a linear spine plus sibling branches).</span></div>
-        <div><dfn>M-perturbation</dfn><span>the residual accept-rate difference between tree shapes; a speed effect, with committed tokens byte-identical to native.</span></div>
+        <div><dfn>M-perturbation</dfn><span>the residual accept-rate difference between tree shapes; a speed effect &mdash; the tree still commits the right tokens (no garble), the committer being verified token-lossless.</span></div>
         <div><dfn>resolve</dfn><span>whether the agent's patch passes the SWE-Verified hidden tests.</span></div>
       </div>
 
@@ -1292,12 +1293,12 @@
         <div class="panel">
           <h2>Contribution</h2>
           <p>Two fixes and one idea. The idea is that a branched verifier can be made cache-correct not by patching the cache to understand branches, but by making the tree stop asking the cache to &mdash; it re-linearizes to the accepted path and holds no state, so the stock cache never sees a branch. The recurrent half is a stateless-tree lifecycle; the attention half is a KV re-linearizer that also happened to be the root cause of a months-long garble.</p>
-          <p>This page is the sequel to <a href="gdn-tree-scan.html">Vol.&nbsp;III</a> (the verifier) and <a href="gdn-prefix-cache.html">Vol.&nbsp;IV</a> (the cache), and is self-contained. It also records the debugging story honestly, because the reason the garble took so long to find is itself the most portable lesson here.</p>
+          <p>This page is the sequel to <a href="gdn-tree-scan.html">Vol.&nbsp;III</a> (the verifier) and <a href="gdn-prefix-cache.html">Vol.&nbsp;IV</a> (the cache), and is self-contained. It is also, deliberately, a research report rather than a results announcement: it records the week-long hunt attempt by attempt (<a href="#hunt">The Hunt</a>) and keeps a full <a href="#museum">failure museum</a> of the roughly two dozen refuted hypotheses, because the reason the garble took so long to find &mdash; and the reason the recurrent fix took a graveyard of seam-patches before a redesign &mdash; is the most portable content here. Two framings from the earlier volumes are corrected in passing: the deployment committer is distribution-preserving (not a theorem-less greedy rule), and the elaborate exact-seed cache machinery that Vol.&nbsp;IV described was found dead and deleted, not shipped.</p>
         </div>
         <aside class="panel">
           <h2>Status</h2>
           <div class="claim-list">
-            <div class="claim"><span class="state pass">GARBLE</span><p>~40% &rarr; 0% on both branched trees; committed tokens byte-identical to native (token-ledger 0/15).</p></div>
+            <div class="claim"><span class="state pass">GARBLE</span><p>~40% &rarr; 0% on both branched trees; the token gate goes 0/15, matching native, and committer acceptance is verified token-lossless.</p></div>
             <div class="claim"><span class="state pass">RESOLVE</span><p>cat8 fix-on 8/16 = native 8/16 exactly; agent trajectories track native, no give-ups or thrash.</p></div>
             <div class="claim"><span class="state pass">STATELESS</span><p>the col-0 commit + burn lifecycle is baked default-on; the tree's data footprint equals native's.</p></div>
             <div class="claim"><span class="state warn">SPEED</span><p>the residual tree-shape accept gap is speed-only; a clean tree-vs-native speed A/B is still pending.</p></div>
@@ -1336,7 +1337,7 @@
           <div class="box info"><span class="tag">Why free</span><p>Native's accepted tokens are a contiguous chain; the recurrent state, conv window, and attention KV all land at linear positions the stock cache handles.</p></div>
           <div class="box good"><span class="tag">Stateless tree</span><p>Make the tree hold no persistent state: init from native's rows, verify in scratch, commit the leaf to the running row, burn the scratch. Native's cache owns the rest.</p></div>
           <div class="box bad"><span class="tag">Garble</span><p>A near-neighbor identifier corruption that looked numerical for months. It was a foreign-KV read: the accepted branch path is non-contiguous, so a linear re-read grabbed a sibling's attention KV.</p></div>
-          <div class="box good"><span class="tag">Result</span><p>Garble ~40% &rarr; 0%; resolve matches native; committed tokens byte-identical. The two remaps are the same idea applied to recurrent and attention state.</p></div>
+          <div class="box good"><span class="tag">Result</span><p>Garble ~40% &rarr; 0%; resolve matches native; committer acceptance verified token-lossless. The two remaps are the same idea applied to recurrent and attention state.</p></div>
           <div class="box warn"><span class="tag">Honest close</span><p>The remaining tree-shape accept difference is speed, not quality; the clean speed comparison is the one open experiment.</p></div>
         </div>
       </div>
@@ -1390,7 +1391,7 @@
         <p><strong>Plainly:</strong> a chain has one path, so "the state after k accepted tokens" is always at slot k&minus;1. A tree has many paths, so the accepted one is scattered, and "slot k&minus;1" points at whichever branch happened to be sorted there.</p>
       </aside>
       <p>vLLM's stock mamba cache rests on a single structural assumption: after a speculative commit, the accepted tokens form a <em>linear chain</em>. Two things follow, and native satisfies both, so it needs no extra code. First, <strong>linear accept means the row is right</strong>: the native verify kernel writes token <em>t</em>'s running state into column <em>t</em>, so column-index equals chain-depth equals accept-order &mdash; an exact bijection. The committed state after <code>num_accepted</code> tokens is at the fixed row <code>num_accepted&minus;1</code>, and the stock snapshot reads exactly there. Second, <strong>the producer and consumer share a numeric basis</strong>: native's cached boundary seed is produced by the same kernel family the cache-hit restore folds from, so restoring and recomputing reproduces the sequence &mdash; empirically native's cache miss and cache hit are byte-identical.</p>
-      <p>The tree fork breaks both, independently. The GDN kernel writes each tree <em>node's</em> state into a node-bank row keyed by node, not by accept order; the accepted tokens are a root-to-leaf <em>path</em>, so the k-th accepted token is node <code>path[k]</code>, generally not <code>k&minus;1</code>. Stock's linear formula therefore snapshots a sibling, cousin, or never-written row &mdash; measured wrong on every branched-accept sample (48 of 48, with divergences up to 23 at layer 0). That is a row-addressing failure: the stock save/restore does not <em>apply</em> to a branched accept, it is not merely imprecise. Separately, even the correct leaf row carries a value produced by the tree's own decode kernel, a different numerical realization than the chunked restore fold; that cross-basis delta compounds across 48 recurrent layers, and because the tree committer accepts by greedy longest-prefix-match rather than exact rejection sampling, it inherits no losslessness theorem to absorb it.</p>
+      <p>The tree fork breaks both, independently. The GDN kernel writes each tree <em>node's</em> state into a node-bank row keyed by node, not by accept order; the accepted tokens are a root-to-leaf <em>path</em>, so the k-th accepted token is node <code>path[k]</code>, generally not <code>k&minus;1</code>. Stock's linear formula therefore snapshots a sibling, cousin, or never-written row &mdash; measured wrong on every branched-accept sample (48 of 48, with divergences up to 23 at layer 0). That is a row-addressing failure: the stock save/restore does not <em>apply</em> to a branched accept, it is not merely imprecise. Separately, even the correct leaf row carries a value produced by the tree's own decode kernel, a different numerical realization than the chunked restore fold; that cross-basis delta compounds across 48 recurrent layers as a small within-floor residual. (A framing correction from Vol.&nbsp;IV belongs here: we once attributed this fragility to the committer, calling it a theorem-less greedy longest-prefix-match. At the deployment temperature of 0.6 the committer is in fact the canonical multi-draft rejection sampler and is distribution-preserving &mdash; the greedy rule is the temperature-0 degenerate case only &mdash; so it does carry a losslessness theorem. The residual is a cache-numerics story, not a committer-distribution one.)</p>
 
       <div class="figure" aria-labelledby="fig1-title">
         <div class="figure-head"><strong id="fig1-title">Figure 1</strong><span>A chain's accepted state is contiguous; a tree's is scattered, so a linear read lands on a sibling</span></div>
@@ -1442,7 +1443,7 @@
         <p><strong>The reframe:</strong> stop teaching the cache about branches. Make the tree stop keeping state, so the cache only ever sees native's linear rows &mdash; which it already handles perfectly.</p>
         <p><strong>The economics:</strong> the per-step state is a few megabytes; an HBM-to-HBM copy is microseconds against a ~98 ms decode forward. Copying is free. Avoiding it was a false economy that cost correctness.</p>
       </aside>
-      <p>Vol. IV's answer to the row-addressing problem was a stack of machinery that taught the cache to follow branches: a leaf map recording which node-bank row the committer wrote, a snapshot redirect pointing the cache at that row, a bias translation walking the accepted path, a stale-global cleaner, plus a second family of fixes for the numeric-basis half. It worked, but it was fragile &mdash; one intended piece (a chunked-realization producer) never fired at all, so the deployed path fell back to a within-floor-but-not-bit-exact seed, fed to a committer with no losslessness theorem. Every piece existed only because the tree kept persistent state the cache then had to chase.</p>
+      <p>Vol. IV's answer to the row-addressing problem was a stack of machinery that taught the cache to follow branches: a leaf map recording which node-bank row the committer wrote, a snapshot redirect pointing the cache at that row, a bias translation walking the accepted path, a stale-global cleaner, plus a second family of fixes (exact-seed, block-refold, a recompute suffix) for the numeric-basis half. It did not survive scrutiny. Instrumentation showed the intended bit-exact producer never fired &mdash; its checkpoint was captured about one percent of the time and used at restore <em>zero</em> times (<code>redirect_used=0</code>), so the deployed path had been riding a within-floor recurrent-leaf fallback the whole time &mdash; and the block-hash-keyed checkpoint store leaked to an out-of-memory kill after a few hours because its eviction reaper never ran. That family (roughly 1,170 lines across exact-seed, refold, and HRS) was code-level deprecated and then deleted. Before the redesign, the recurrent give-ups under concurrency were chased directly for a day and a half through a graveyard of seam-patches &mdash; clear-the-stale-globals, re-key the positional reader, fix the zeroed-source restore &mdash; every one of which landed in a dead code path or dissolved under a regime confound (the <a href="#museum">failure museum</a> lists them). Every one of those patches existed only because the tree kept persistent state the cache then had to chase. The redesign deletes that premise instead.</p>
       <p>The redesign deletes the premise. The tree pipeline maintains <strong>zero</strong> persistent state; each step is a pure function. It initializes its scratch from native's running rows, drafts and verifies inside that scratch, copies the committed leaf back onto native's running row, and burns the branch scratch to zero. After that, native's stock, request-keyed cache owns snapshot, restore, and cross-request concurrency for both recurrent states &mdash; exactly as it does for native MTP, because at the data layer there is now nothing to distinguish them. The two cache carriers Vol. IV chased are gone by construction: there is no tree-owned state left to go stale, be reused dirty, or bleed between concurrent agents.</p>
 
       <div class="figure" aria-labelledby="fig2-title">
@@ -1489,31 +1490,71 @@
       <p><strong>The root the redesign closes.</strong> Column 0 of the state page <em>is</em> native's running row; columns 1 through <code>num_spec</code> are the tree's ephemeral drafts. But the tree deposited its committed leaf one column over and read it back positionally, so for two or more accepted tokens the running row was stale &mdash; it held the post-first-accept state while the true committed leaf sat in a branch column. That is exactly why tree-plus-no-cache had no give-ups (the leaf column survives within one continuous decode) yet the cache poisoned the tree under concurrency (the ephemeral column and the redirect are not request-owned across reallocation). Committing the leaf to column 0 and reading column 0 makes the running row the committed frontier again, for both the recurrent state and the conv window, in one write.</p>
       <p>Two kernel facts make the write free and safe: the register holding the committed leaf at loop exit is byte-identical to what already gets stored to the branch column, so storing it to column 0 as well changes no values; and the initialization tile is loaded into registers before any store, so reading column 0 and then overwriting it in the same launch is safe. The three flags &mdash; commit-to-running-row, read-from-running-row, burn-the-rest &mdash; form one lifecycle, gated off by default to a byte-identical path, with a fail-loud guard that refuses any partial enable. That guard is not ceremony: the conv and SSM states share one physical page as strided views, and native's restore rewrites the whole page, so re-routing one without the other corrupts the page on the next restore.</p>
     </section>
-    <section class="section" id="garble">
-      <h2>The Garble Hunt</h2>
+    <section class="section" id="hunt">
+      <h2>The Hunt</h2>
       <aside class="sidenote">
-        <p><strong>The symptom:</strong> the tree commits a plausible-but-wrong neighbor of the right identifier &mdash; <code>read_file</code>&nbsp;&rarr;&nbsp;<code>readFile</code>, <code>expected_row_count</code>&nbsp;&rarr;&nbsp;<code>expected_rowcount</code>, <code>astropy</code>&nbsp;&rarr;&nbsp;<code>astrop</code>. The code reads as correct; it just references a name that was never defined.</p>
+        <p><strong>Why this section exists:</strong> the two fixes are simple; finding them was not. This is the honest record &mdash; every attempt, the real signal it produced, and why it died &mdash; written for the next person debugging a branched verifier.</p>
+        <p><strong>The shape of it:</strong> a day and a half chasing recurrent give-ups through a graveyard of cache patches, then four days chasing a garble that looked numerical and was not. The right answer was even proposed and talked out of, once, before an experiment named it.</p>
       </aside>
-      <p>Running alongside the cache work was a stubborn quality bug. On code-heavy agentic tasks the branched tree systematically corrupted multi-word identifiers into near-neighbors: a dropped underscore, a truncation, an abbreviation, occasionally a wrong word. The model's comprehension was intact &mdash; it planned correctly and emitted the right structure &mdash; but <em>emission</em> degraded, and a single corrupted identifier raises a NameError, which sends the agent into a typo-fixing loop until it burns its budget and gives up with an empty patch. On a controlled identifier probe the native path corrupted nothing (0 of 45); the tree corrupted roughly one in ten. On real agentic tasks the gap was starker: a ~40% corrupted-identifier rate against native's ~1% floor.</p>
-      <p>The mechanism at the point of emission was clear and, it turned out, misleading. The tree's verify forward was numerically drifted: at a garbling position, the truly-correct next token &mdash; which a no-spec forward assigns near-certainty (probability around one in a million for the <em>wrong</em> neighbor) &mdash; had its margin compressed by roughly eleven nats until the near-neighbor sat inside the sampling nucleus at probability 0.08, and the committer accepted it. The committer itself was exonerated: an offline gate confirmed it accepts tokens at exactly the target distribution. So the corruption was upstream, in the verify logits &mdash; and drifted logits look, for all the world, like a numerical bug.</p>
+      <p>Two defects ran in parallel and shared machinery. The first was the give-up: under concurrent caching the tree bailed with empty patches. The second was the garble: the tree committed plausible-but-wrong near-neighbor identifiers (<code>read_file</code>&nbsp;&rarr;&nbsp;<code>readFile</code>, <code>expected_row_count</code>&nbsp;&rarr;&nbsp;<code>expected_rowcount</code>, <code>from_geodetic</code>&nbsp;&rarr;&nbsp;<code>from_geodentic</code>) that raise a NameError and send the agent into a typo-fixing loop. Both trace to the same root &mdash; committed state read from the wrong place after a branched accept &mdash; but we did not know that, and the two hunts looked nothing alike from the inside.</p>
 
-      <div class="grid" aria-label="The compute hunt and its dead ends">
-        <div class="box warn">
-          <span class="tag">Dead end</span>
-          <h3>The compute hunt</h3>
-          <p>For weeks the search was numerical: GEMM batch-invariance, a fixed-M projection pad, GDN-scan nativeness, attention-compute alignment. Each looked plausible because a small near-neighbor drift <em>is</em> what a numerical bug produces.</p>
+      <h3>Act I &mdash; the give-up, and a graveyard of cache patches</h3>
+      <p>The decisive experiment was cheap once someone asked the right question: is the give-up single-agent or concurrent? Holding the agent fixed and turning only concurrency, the linear spine plus cache resolved four of four tasks with a single agent and zero of four with four agents sharing the cache. That split the world in two &mdash; a concurrent restore bug, not a per-request one &mdash; and it retired a confound: several earlier "single-agent" runs had actually been four agents sharing one cache, because "batch of one" and "one concurrent stream" had been used interchangeably. Pinning that convention reconciled months of contradictory numbers.</p>
+      <p>Then came the graveyard. The give-up seam looked, from a code read, like a set of never-cleared batch-position globals the tree committer wrote and never reset. Five successive localizations each produced a real-looking signal and each fell:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>Act I: five recurrent-give-up localizations, each with its signal and its refutation.</caption>
+          <thead><tr><th>Attempt</th><th>The signal</th><th>What killed it</th></tr></thead>
+          <tbody>
+            <tr><td>Clear the stale globals on request free</td><td>Flag-on recovered the spine 0/4 &rarr; 2/4; give-ups 4 &rarr; 1</td><td>Red-team: the tree was mis-served that run, the flag had no engagement needle, and 2/4 was one noisy point &mdash; a rerun gave 0/4.</td></tr>
+            <tr><td>Re-key the positional reader by request</td><td>A clean code root: a spec-row reader indexed by full-batch position, a real cross-request mis-index</td><td>The mis-index counter read zero at runtime &mdash; the path was dead; the live carrier was elsewhere.</td></tr>
+            <tr><td>Zeroed-source restore under concurrency</td><td>68&times; more zeroed-source reads at four agents than one (476 vs 7)</td><td>Sample-size confound: matched at equal resolve, it was 616 vs 238 &mdash; the other direction. The spine resolves <em>despite</em> 616 zeroed reads.</td></tr>
+            <tr><td>(all of the above, via the boundary tap)</td><td>The tap localized stale reads in the live restore</td><td>The tap is eager-only, and eager itself degrades the spine &mdash; every tap run was in the wrong regime.</td></tr>
+            <tr><td>Copy the committed leaf into the block pool</td><td>A cleaner restore than the redirect</td><td>Proven byte-identical to the existing redirect &mdash; it reproduces the bug, cannot remove it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The graveyard ended in a more useful discovery than any of its patches: the bit-exact cache path everyone assumed was doing the work had never once executed. Its checkpoint was captured about one percent of the time and consumed at restore exactly zero times; the deployed cache had been riding a within-floor fallback all along, and its checkpoint store leaked to an out-of-memory kill after a few hours. That family of machinery was deleted, and the give-up was addressed not by a sixth patch but by the redesign above: make the tree hold no persistent state, and there is no stale global to chase. The recurrent give-up instrument went flat &mdash; sixteen of sixteen, cache-on byte-identical to cache-off &mdash; at a single agent. What remained was the garble.</p>
+
+      <h3>Act II, Phase 1 &mdash; name the symptom, build a gate that can see it</h3>
+      <p>The single most important call of the whole campaign was methodological: score <em>code correctness</em>, not per-token statistics. A within-floor token-distribution gate averages over the stream and is blind to one flipped identifier &mdash; but one flipped identifier is a NameError, and a NameError is the whole failure. The gate became an identifier-corruption rate over generated code. On it, native corrupted zero of forty-five samples; the tree corrupted at a 9.56% identifier rate, with thirty-two of forty-five samples flagged. A B=4 deployment matrix then set the honest stakes: the tree was a real decode speed win of about ten percent and a real quality loss &mdash; five give-ups to native's one on the same tasks, with native sometimes silently wrong-patching where the tree bailed. Worth fixing, not worth shipping as-is.</p>
+
+      <h3>Act II, Phase 2 &mdash; the numerical hunt, and the wall that broke it</h3>
+      <p>The near-neighbor symptom looked exactly like a numerical drift, so the search went numerical for days: batch-invariant GEMMs and reductions, a fixed-M projection pad, matching the tree's precision to native's, upcasting the conv state to fp32. A physics study even quantified the amplification &mdash; a systematic same-sign seed, re-injected coherently each layer, compounding layer over layer into a genuine ~492&times; error-vs-signal gain over the depth (honestly corrected down from a raw 14,800&times; ladder that double-counts the ordinary residual-stream growth native shares). Its one strategic conclusion held: the amplifier is the frozen trained network, identical for native and tree, so it cannot be lowered &mdash; native is clean only because native's <em>seed</em> is near zero, so attack the seed, not the amplifier.</p>
+      <p>Every seed lever failed, and one of them exposed the wall that had been quietly wrecking the measurements. A projection pad appeared to cut garble 68% (9.56% to 3.10%) &mdash; until the baseline was re-run on a fresh boot and came back at 2.96%. The tree's garble rate is set per boot by kernel autotuning, and swings between about three and ten percent for a fixed config; the pad's "fix" sat inside the baseline's own boot-to-boot swing. A cross-boot, single-lever A/B cannot distinguish a fix from luck. From that point the only trustworthy standard was elimination to zero, and one control did hold across the noise: native under real eight-way co-residency stayed at zero garble, and the tree garbled at one agent per server as much as at eight &mdash; so the defect lived in the tree path, not in batching.</p>
+
+      <div class="source-exhibit" aria-label="The abandoned prophecy">
+        <div class="source-head">
+          <strong>The abandoned prophecy</strong>
+          <span>The exact right hypothesis, raised and reasoned away &mdash; one day early</span>
         </div>
-        <div class="box bad"><span class="tag">The variance wall</span>
-          <h3>A fix you cannot measure</h3>
-          <p>The tree's garble rate is set per boot by autotune: the same config swung 2.96% to 9.56% across boots. A promising &minus;68% pad-block "fix" landed at 3.10% &mdash; inside the baseline's own boot-to-boot swing. Cross-boot, single-lever A/B could not tell a fix from luck.</p>
-        </div>
-        <div class="box info"><span class="tag">A control that held</span>
-          <h3>Batching was not it</h3>
-          <p>Native under real eight-way co-residency stayed at 0% garble; the tree garbled at one agent per server just as much as at eight. Whatever it was, it lived in the tree path itself, not in batching or concurrency.</p>
+        <div class="grid">
+          <div class="box info"><span class="tag">Raised</span><p>A KV audit found it directly: the GDN recurrent state <em>is</em> re-linearized to the accepted path after a branched accept; the attention KV is <em>not</em>. It reconciled everything &mdash; why mamba was clean, why chains were clean, why the corruption showed up a step late.</p></div>
+          <div class="box bad"><span class="tag">Dismissed</span><p>A red-team argued it over-predicts: no remap should misplace most committed positions and garble nearly every token, but garble was only 8&ndash;11%. Verdict: capture to settle, don't build. The hypothesis was shelved.</p></div>
+          <div class="box good"><span class="tag">The hidden flaw</span><p>The foreign K/V a node reads is a <em>sibling draft's</em> &mdash; a near-neighbor, not garbage &mdash; so it produces exactly a small, coherent, near-neighbor drift that the amplifier turns into an 8&ndash;11% flip. "Pervasive means garbage" was backwards; foreign-sibling KV <em>is</em> the near-neighbor symptom.</p></div>
         </div>
       </div>
 
-      <p>The turning point was to stop bisecting. Instead of testing one numerical fix at a time &mdash; which, when garble survived, only ever proved "not <em>this</em> op," never "not compute" &mdash; we ran the kitchen sink: every suspected compute and state fix armed simultaneously, needles confirming each fired. Garble was unchanged, 15 of 15. That single fifteen-minute experiment exonerated the entire compute class at once and forced the conclusion the isolation grind had been avoiding: if no combination of numerical fixes moves it, the bug is not numerical. It is what the forward <em>reads</em>.</p>
+      <h3>Act II, Phase 3 &mdash; eliminate every compute and state suspect</h3>
+      <p>With the numerical levers exhausted, the day turned to systematic elimination, anchored by a decisive control: teacher-forcing the exact same prefix in isolation produced the correct identifier at near-certainty, while the same position in-trajectory produced the near-neighbor at near-impossibility. The only thing that differed between the two forwards was the accumulated state they consumed &mdash; so the corruption was carried state, not the verify compute and not the model. One by one, each state suspect was overwritten with a native-exact version, each with a fired engagement needle: the GDN scan output, the recurrent-state write, the conv window, the attention mask. Each engaged; each left the garble intact. A per-layer state diff even pointed a reproducible finger at the first recurrent layer &mdash; a genuine signal that later proved a comparison artifact. By the end of the day every forward operation validated correct and the argmax was still grossly wrong: a paradox that could only mean the error was in what the forward <em>read</em>, not in any op. A second insight landed the same day and would make the next one decisive: the greedy and temperature-0.6 accept rules read the <em>same</em> drifted logits and only manifest them differently, so the fast deterministic gate is a lower-sensitivity detector of the same defect &mdash; and the reliable temperature-0.6 gate (fifteen of fifteen when present, zero when fixed) is the instrument that beats the boot-variance wall.</p>
+
+      <h3>Act II, Phase 4 &mdash; the kitchen sink, and the fix</h3>
+      <p>The turning point was to stop bisecting. Testing one numerical fix at a time only ever proves "not <em>this</em> op," never "not compute." So every suspected compute and state fix was armed at once, every needle confirming it fired, and the reliable gate was run: fifteen of fifteen, unchanged. That single fifteen-minute experiment falsified the entire compute-and-state class and left exactly one thing none of the armed fixes touched &mdash; the attention KV content the forward reads. It re-found, now by data instead of by argument, the hypothesis that had been shelved a day earlier. Four independent lines converged: the kitchen-sink verdict, a grep confirming the recurrent state has a re-linearizer and the attention KV has none, topological counts showing accepts read foreign KV at every depth past the first, and the slot arithmetic below. The fix mirrors the recurrent one and took an afternoon; most of that afternoon went to three plumbing bugs that each made the remap fire but copy nothing, each caught by red-teaming the engagement needle rather than trusting the flag. Then fifteen of fifteen became zero of fifteen, eager and graph and cache-cold alike, and the agentic rate fell from about forty percent to zero.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The hunt at a glance: 2026-07-06 to 07-13, the signal at each stage, and the verdict.</caption>
+          <thead><tr><th>When</th><th>Stage</th><th>Signal / result</th></tr></thead>
+          <tbody>
+            <tr><td>07-06</td><td>Concurrency split (give-up)</td><td>spine+cache 4/4 at one agent, 0/4 at four &mdash; a concurrent restore bug, not per-request</td></tr>
+            <tr><td>07-07</td><td>Cache-patch graveyard + pivot</td><td>five seam localizations refuted; the bit-exact path proven dead (<code>redirect_used=0</code>) and deprecated (deleted 07-11); stateless redesign, give-up instrument flat 16/16</td></tr>
+            <tr><td>07-08</td><td>Garble named + gated</td><td>score identifiers not statistics; tree 9.56% vs native 0%; B=4 matrix = +10% speed, &minus;quality</td></tr>
+            <tr><td>07-08&ndash;11</td><td>Numerical hunt + variance wall</td><td>every seed lever fails; the &minus;68% pad "fix" is inside the 2.96&ndash;9.56% boot swing; batching exonerated</td></tr>
+            <tr><td>07-12</td><td>Localization + abandoned prophecy</td><td>compute + state suspects each engage and miss; KV-not-re-linearized raised, then reasoned away as over-predicting</td></tr>
+            <tr><td>07-13</td><td>Kitchen sink &rarr; root cause &rarr; ship</td><td>all fixes armed = 15/15 unchanged &rarr; KV routing &rarr; remap &rarr; 0/15; baked, &minus;0.7% s/fwd</td></tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section class="section" id="rootcause">
@@ -1569,7 +1610,7 @@
       <h2>Results</h2>
       <aside class="sidenote">
         <p><strong>The bar:</strong> the tree should garble no more than native and resolve no worse. Both hold. The one number that is <em>not</em> a quality claim &mdash; the tree-shape accept difference &mdash; is called out as speed in the next section.</p>
-        <p><strong>Token-ledger:</strong> a byte-identical token-sequence compare against native, not just a gross-garble scan. cat8 fix-on scores 0/15 &mdash; the committed tokens <em>are</em> native's.</p>
+        <p><strong>Two senses of &ldquo;right tokens&rdquo;:</strong> the tree resolves the same tasks as native and garbles no more than native on the token gate (0/15). Separately, the committer is verified token-lossless &mdash; it accepts at the target distribution, checked over 200k trials &mdash; so its accepts are not what garble; the corruption was upstream, in the state the verify read.</p>
       </aside>
       <p>The remap and the stateless lifecycle ship together in the locked launcher. Measured across the token-level gate, the agentic gate, and the SWE-Verified eval, branched-tree garble is eliminated and resolve reaches native parity.</p>
 
@@ -1604,10 +1645,10 @@
               <td class="num">8/16 (50%)</td>
             </tr>
             <tr>
-              <td>Committed-token ledger vs native</td>
+              <td>Committer acceptance</td>
               <td class="num">&mdash;</td>
-              <td class="num">0/15 (byte-identical)</td>
-              <td><span class="pill info">reference</span></td>
+              <td class="num">token-lossless (200k trials)</td>
+              <td><span class="pill info">distribution-preserving</span></td>
             </tr>
             <tr>
               <td>Agent turns per task (median)</td>
@@ -1633,6 +1674,134 @@
           <div class="box info"><span class="tag">No fourth state</span><p>Attention is K/V; GDN is conv plus SSM; positions are derived, not cached. There is no other per-request state to mis-address, so a 0% gate cannot be hiding a residual carrier.</p></div>
         </div>
       </div>
+    </section>
+
+    <section class="section" id="museum">
+      <h2>Failure Museum</h2>
+      <aside class="sidenote">
+        <p><strong>Not a graveyard:</strong> every entry produced a real signal, and each refutation is why the final design and gate look the way they do. The through-line is that almost every dead end was a confound &mdash; of regime, of sample size, or of an overloaded label &mdash; not a wrong idea.</p>
+      </aside>
+      <p>Well over a dozen hypotheses were refuted across the campaign. They cluster into four families: attempts to patch the concurrent give-up at the cache seam; attempts to make the boundary numerics bit-exact; numerical levers against the garble; and framings from earlier volumes that this work corrects (including a suspected accept-logic bug). The ledger below collects the most instructive, with what made each look right and what killed it.</p>
+
+      <div class="grid" aria-label="Failure families">
+        <div class="box warn"><span class="tag">Give-up patches</span><h3>Seam fixes that never fired</h3><p>Five code-level localizations of the concurrent restore bug, each landing in a dead path or dissolving under a regime confound.</p></div>
+        <div class="box warn"><span class="tag">Boundary numerics</span><h3>A bit-exact cache that was not</h3><p>The exact-seed family looked like the fix and had never once executed; it leaked to OOM and was deleted.</p></div>
+        <div class="box warn"><span class="tag">Numerical levers</span><h3>The garble looked like drift</h3><p>Every seed and precision lever engaged and missed, because the bug was routing, not arithmetic.</p></div>
+        <div class="box warn"><span class="tag">Corrected framings</span><h3>Claims this work retracts</h3><p>A theorem-less greedy committer, an accept-logic bug, and the elaborate cache machinery &mdash; all overturned.</p></div>
+      </div>
+
+      <details class="fold">
+        <summary>
+          <span>Full failure ledger</span>
+          <small>Thirteen refuted attempts and corrected framings, grouped by family, with the signal and refutation for each.</small>
+        </summary>
+        <div class="fold-body">
+          <p class="failure-note"><strong>Status key:</strong> <span class="pill good">settled</span> a real dead end later evidence upheld; <span class="pill warn">superseded</span> the observation was real but the framing was replaced; <span class="pill bad">contaminated</span> the measurement could not support its conclusion; <span class="pill bad">corrected</span> a claim this work retracts.</p>
+
+          <div class="failure-ledger" aria-label="Detailed failure museum">
+            <p class="failure-note"><strong>Family A &mdash; concurrent give-up, patched at the cache seam.</strong></p>
+
+            <article class="failure-card contaminated">
+              <header><h3>Clear the stale globals on request-free</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> a code read localized the give-up to never-cleared batch-position committer globals; clearing them on request-free recovered the spine 0/4 &rarr; 2/4, give-ups 4 &rarr; 1.</p>
+              <ul>
+                <li><strong>What killed it:</strong> that run mis-served the tree (wrong tree size), the flag had no engagement needle, and the 2/4 was one noisy four-task point &mdash; a rerun gave 0/4. The claimed byte-identity was an easy-task diff, not a bug.</li>
+              </ul>
+              <p class="conclusion"><strong>Lesson:</strong> never claim a fix on four agentic tasks without an engagement instrument; a silent flag that cannot prove it fired is untestable.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Re-key the positional reader by request</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> a clean code root &mdash; a spec-row reader indexed by full-batch position, a genuine cross-request mis-index at concurrency &ge; 2.</p>
+              <ul><li><strong>What killed it:</strong> the mis-index counter read zero over a full concurrent run &mdash; the path was dead; the real carrier was in the replay route.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a clean code-read root cause still has to fire at runtime; instrument the counter before building the fix.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>Zeroed-source restore under concurrency</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the restore read a zeroed source block 68&times; more often at four agents than one (476 vs 7) &mdash; a clean concurrency-specific signal.</p>
+              <ul><li><strong>What killed it:</strong> a sample-size confound &mdash; the comparison mixed a partial one-agent run against a full four-agent run. Matched at equal resolve it was 616 vs 238, the other direction, and the spine resolves <em>despite</em> 616 zeroed reads. Worse, the tap that produced all of it is eager-only, and eager itself degrades the spine.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a large ratio is meaningless across arms of different completion rates; and an instrument that changes the system under test cannot localize the bug it perturbs.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Copy the committed leaf into the block pool</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> depositing the committed state directly into the pool seemed a cleaner restore than the snapshot redirect.</p>
+              <ul><li><strong>What killed it:</strong> proven byte-identical to the existing redirect &mdash; the same request-keyed value into the same request-keyed row. It reproduces the give-up, it cannot remove it.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> prove value-equivalence before building an alternative; two mechanisms that write the same bytes cannot differ in outcome. The tree already caches like native on restore &mdash; the give-up was not a restore-keying bug, which is why only the stateless redesign closed it.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family B &mdash; the boundary-numerics cache (exact-seed).</strong></p>
+
+            <article class="failure-card superseded">
+              <header><h3>The bit-exact exact-seed restore</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> keep the cache a pure chunked lineage so restore equals a cold prefill token-for-token, and a small block size would be lossless.</p>
+              <ul><li><strong>What killed it:</strong> instrumentation showed the checkpoint captured about one percent of the time and used at restore <em>zero</em> times (<code>redirect_used=0</code>) &mdash; the deployed path had ridden a within-floor recurrent-leaf fallback all along. Raising the block size to 8192 merely masked it, at a two-times speed cost and a single unconfirmed rescue.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a bit-exact path that never fires is worse than none &mdash; it hides the fallback. Instrument <code>used</code>, not just <code>engaged</code>.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>The whole exact-seed / refold / HRS family</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> it was the intended producer of a bit-exact cache; Vol. IV described it as the mechanism.</p>
+              <ul><li><strong>What killed it:</strong> beyond never firing, its block-hash-keyed checkpoint store leaked &mdash; the eviction reaper never ran &mdash; to an out-of-memory kill after a few hours that took down a resolve run. About 1,170 lines were deprecated and deleted.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> an unbounded keyed store needs an eviction path from day one; when a producer is proven non-functional, delete it rather than carry it.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family C &mdash; the garble looked numerical.</strong></p>
+
+            <article class="failure-card contaminated">
+              <header><h3>The &minus;68% projection-pad "fix"</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> a fixed-M pad on the verify projection cut garble 9.56% &rarr; 3.10%, a clean 68% reduction with acceptance intact.</p>
+              <ul><li><strong>What killed it:</strong> re-running the <em>baseline</em> on a fresh boot gave 2.96% &mdash; the "fix" sat inside the baseline's own boot-to-boot swing. Per-boot autotuning sets the garble rate between about three and ten percent for a fixed config.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> cross-boot A/B is worthless for a boot-variable rate. From here, eliminate-to-zero was the only trustworthy standard &mdash; and the variance itself was a lead toward kernel selection.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>The batch-invariant "breakthrough"</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the deterministic greedy garble vanished with full batch-invariance on, and a bisect said the carrier was a GEMM or reduction, not attention.</p>
+              <ul><li><strong>What killed it:</strong> the greedy gate has false negatives &mdash; the reliable temperature-0.6 gate showed 15/15 still garbled <em>with</em> batch-invariance on. A perturbation had nudged one greedy near-tie back to correct without touching the drift.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a deterministic repro that "clears" can be a gate false negative, not a fix; validate on the sampled gate that sees the whole drift.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>The 9e-4 amplification thesis (whole-GDN-native)</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> a roughly 9e-4 GDN-scan realization drift, amplified across the layers past the sampling margin, would explain a near-neighbor flip.</p>
+              <ul><li><strong>What killed it:</strong> making the entire GDN per-node path native-exact left the deterministic garble intact, and the output-probability probe measured the garbled token sitting 6.6 to 15.7 nats below the clean argmax &mdash; a gross structural error, where 9e-4 amplified ~492&times; is about 0.4 nats, fifteen to forty times too small to flip it.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> measure the effect size at the output in nats before chasing a ULP-scale seed; a fifteen-nat error cannot come from a sub-nat drift.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Precision-matching and fp32 seed fixes</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> matching native's bf16 round-trip on the replay path, or upcasting the conv state to fp32, would shrink a realization-bias seed.</p>
+              <ul><li><strong>What killed it:</strong> precision-matching made garble slightly <em>worse</em> (12.9% vs 9.6%) &mdash; by default the tree is more precise than native, not less &mdash; and a premise-check showed the garble is not first-layer-seed-dominated: fp32-conv buys about two times against the roughly six times needed, and the dominant amplifier is the full-attention stack, not the seed.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> premise-check the seed-dominance assumption against the amplification budget before building the fix; aligning to native's arithmetic is opt-in to <em>reproduce</em> native, not to beat it.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family D &mdash; framings this work corrects.</strong></p>
+
+            <article class="failure-card contaminated">
+              <header><h3>The theorem-less greedy committer</h3><span class="pill bad">corrected</span></header>
+              <p><strong>The claim (from Vol. IV):</strong> the tree commits by greedy longest-prefix-match rather than exact rejection sampling, so it carries no losslessness theorem, and that is what makes tree-plus-cache fragile.</p>
+              <ul><li><strong>The correction:</strong> greedy longest-prefix-match is the temperature-0 degenerate case only. At the deployment temperature of 0.6 the committer is the canonical multi-draft rejection sampler, distribution-preserving under the verified accept rule, and does carry the theorem (its token-losslessness was checked over 200k trials). The residual tree-plus-cache sensitivity is cache-numeric drift, not a committer-distribution break.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> name the deployment temperature when reasoning about a spec-decode committer; a temp-0 property is not a temp-0.6 one.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>The accept-logic over-commit</h3><span class="pill bad">corrected</span></header>
+              <p><strong>The claim:</strong> a "deciding result" &mdash; the verify scored the garble token at the true near-impossibility (1.99e-6) yet the multi-draft accept logic over-committed it, so the bug is the committer, and the drift chase is over.</p>
+              <ul><li><strong>What corrected it:</strong> an alignment artifact &mdash; the committer commits at exactly the post-constraint probability, and the near-neighbor had been top-p-masked to zero at the compared index. The garble is forward drift after all.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a gather-then-commit index misalignment can manufacture a fake accept-logic bug; verify the committer reads the post-constraint probability at the right index.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>KV-not-re-linearized (raised, then abandoned)</h3><span class="pill bad">corrected</span></header>
+              <p><strong>The right answer, one day early:</strong> a KV audit found the recurrent state re-linearized to the accepted path and the attention KV not, reconciling every observation.</p>
+              <ul><li><strong>Why it was dropped:</strong> an over-prediction argument &mdash; no remap should garble nearly every token, but garble was only 8&ndash;11%, so surely the framework re-points the slots. Verdict: capture to settle, don't build.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> the over-prediction had a hidden flaw &mdash; foreign KV from a sibling <em>draft</em> is a near-neighbor, so it produces the exact small, coherent drift observed, not garbage. The kitchen sink re-found it a day later. When an argument dismisses a hypothesis, check whether the symptom is actually consistent with it.</p>
+            </article>
+          </div>
+        </div>
+      </details>
     </section>
 
     <section class="section" id="reflection">
@@ -1686,7 +1855,7 @@
         <div class="box warn">
           <span class="tag">Speed, not quality</span>
           <h3>The residual is a speed effect</h3>
-          <p>Different tree shapes accept at slightly different rates (a small, roughly 0.09-token gap between cat6 and cat8 at matched decode), driven by how tree width perturbs the attention projection. It is speed-only: the committed tokens are byte-identical to native, so nothing is lost. An earlier, larger version of this gap was a garble-composition artifact, not a real effect.</p>
+          <p>Different tree shapes accept at slightly different rates (a small, roughly 0.09-token gap between cat6 and cat8 at matched decode), driven by how tree width perturbs the attention projection. It is speed-only: the tree still commits the right tokens (the committer is verified token-lossless), so nothing is lost. An earlier, larger version of this gap was a garble-composition artifact, not a real effect.</p>
         </div>
         <div class="box warn">
           <span class="tag">Speed A/B pending</span>
@@ -1701,7 +1870,7 @@
         <div class="box warn">
           <span class="tag">Simplification</span>
           <h3>The old machinery is now redundant</h3>
-          <p>Once the stateless lifecycle owns correctness, the Vol. IV carrier machinery (leaf map, snapshot redirect, the dead chunked-realization producer) is dead weight. The access-equivalence proof gate and the physical deletion pass are the queued follow-ups; until they land, both paths coexist.</p>
+          <p>The dead chunked-realization producer and its exact-seed / refold / HRS family (about 1,170 lines) have been deleted. The remaining Vol. IV redirect machinery &mdash; the leaf map and snapshot redirect &mdash; is now redundant under the stateless lifecycle and slated for removal; the access-equivalence proof gate is the queued follow-up, and until it lands the redirect path coexists as a default-on no-op.</p>
         </div>
       </div>
     </section>
