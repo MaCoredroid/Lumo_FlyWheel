@@ -1,0 +1,44 @@
+diff --git a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+index d7605b078..c2c4ee6ac 100644
+--- a/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
++++ b/astropy/wcs/wcsapi/wrappers/sliced_wcs.py
+@@ -256,6 +256,39 @@ class SlicedLowLevelWCS(BaseWCSWrapper):
+         world_arrays_new = np.broadcast_arrays(*world_arrays_new)
+         pixel_arrays = list(self._wcs.world_to_pixel_values(*world_arrays_new))
+ 
++        # If there are dropped world dimensions, we need to compute the correct
++        # world values for them using the pixel values obtained above, then call
++        # world_to_pixel_values again with the corrected world values that are consistent
++        # with the fixed pixel positions. This is necessary when dimensions are coupled
++        # (e.g., via a non-trivial PC matrix).
++        world_dropped = set(range(self._wcs.world_n_dim)) - set(self._world_keep)
++        if world_dropped:
++            # Build the full pixel array including fixed values for sliced dimensions
++            pixel_arrays_for_p2w = []
++            ipix_curr = 0
++            for ipix in range(self._wcs.pixel_n_dim):
++                if isinstance(self._slices_pixel[ipix], numbers.Integral):
++                    pixel_arrays_for_p2w.append(self._slices_pixel[ipix])
++                else:
++                    pixel_arrays_for_p2w.append(pixel_arrays[ipix])
++                    ipix_curr += 1
++
++            # Get the correct world values for all dimensions
++            world_all = self._pixel_to_world_values_all(*pixel_arrays_for_p2w)
++
++            # Rebuild world arrays with corrected values for dropped dimensions
++            world_arrays_corrected = []
++            for iworld in range(self._wcs.world_n_dim):
++                if iworld in world_dropped:
++                    world_arrays_corrected.append(world_all[iworld])
++                else:
++                    # Use the original input world value
++                    idx = list(self._world_keep).index(iworld)
++                    world_arrays_corrected.append(world_arrays[idx])
++
++            world_arrays_corrected = np.broadcast_arrays(*world_arrays_corrected)
++            pixel_arrays = list(self._wcs.world_to_pixel_values(*world_arrays_corrected))
++
+         for ipixel in range(self._wcs.pixel_n_dim):
+             if isinstance(self._slices_pixel[ipixel], slice) and self._slices_pixel[ipixel].start is not None:
+                 pixel_arrays[ipixel] -= self._slices_pixel[ipixel].start
