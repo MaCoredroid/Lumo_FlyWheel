@@ -988,3 +988,25 @@ launcher tripped teardown -> docker rm -f. Detaching into a new session breaks t
 ATTACK re-ranked (all cheap/compute levers now refuted — P1 walk, S2 shape, drafter model, FR-Spec):
   (A') drafter HOST overhead (117ms) — biggest, but diffuse host Python; needs profiling.
   (B) P2 committer replay transplant (bounded, template-proven) — share of 44-53ms cfwd unmeasured.
+
+## SPEED CAMPAIGN CONCLUSION — EARNED COST-GATE (2026-07-14, fully measured)
+
+Every CHEAP lever measured or measured-analogy refuted. The tree's +12% wall/tok is STRUCTURAL:
+| lever | verdict | basis |
+|---|---|---|
+| P1 committer walk (depthsync) | no B=4 win | DIRECT measure (byte-gated, A/B) |
+| S2 tree shape | cat8 near-optimal | hands-on DP on 4 measured arms |
+| drafter model forward 8.3ms | not bottleneck | split10 GPU span |
+| FR-Spec / lm_head 15ms | REFUTED (11% of drafter) | split10 GPU span |
+| drafter host 117ms/140 | THE elephant, STRUCTURAL | split10 (23ms GPU / 117ms host); eagle PIECEWISE-only (eagle.py:384) |
+| P2/P3 committer collapses | inferred-marginal (NOT direct) | same sync/launch-collapse class as P1 (no-win); committer 44ms is mostly real recurrent-replay COMPUTE, not launch overhead |
+
+REMAINING REAL LEVER = make the eagle drafter FULL-cudagraph-capturable (kill the 117ms host
+orchestration between piecewise pieces). This is a deep vLLM-upstream-limited change (weeks), for
+~6% on a tree already at GPU-parity + accept 3.500>native 3.442. NO plausibly-cheap correct path
+remains (per feedback_speed_is_the_goal_cost_gate) — MEASURED, not assumed.
+
+SHIPPED + BANKED: FR13_SLOT_REORDER (superset +0.166, garble-clean, accept>native). Infra: GPU span
+timers (sfwd/dfwd/cfwd + dfwd 3-way split), fr13_detached_boot.sh (defeats the trap-teardown killer),
+fr13_tree_shape_dp.py. HONEST caveat: P2/P3 are inferred not directly measured — if speed is refunded,
+measure the committer replay share first (delicate committer edit) before the structural drafter work.
