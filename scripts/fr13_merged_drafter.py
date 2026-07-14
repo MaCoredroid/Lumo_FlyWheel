@@ -146,9 +146,14 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
     mtp_near_per_depth[d]: an indexable of per-row MTP spine tokens for the mtp_k drafted depths
       (d in 0..mtp_k-1); mtp_topk_per_depth[d]: per-row [rank2,rank3] for the near depths.
     All ints; row order == spec_row_req_ids order (req_id-keyed by the caller)."""
-    from fr13_arctic_suffix_adapter import arctic_draft_to_suffix_rel
+    from fr13_arctic_suffix_adapter import arctic_draft_to_suffix_rel, arctic_tree_to_suffix_rel
     from fr13_mtp_suffix_assembly import assemble_cat33333
     from fr13_merged_fill import build_cat33333_columns
+
+    # v2 (default): use_tree_spec=True -> the trie SUBTREE (parents/probs) fills cat33333 SPINE +
+    # BRANCHES (the trie-branches->tree-branches mapping). v1 (FR13_MERGED_TREE_SPEC=0): flat chain,
+    # spine only, branches = MTP fallback. Both Gate-1 lossless + never-regress.
+    _use_tree = os.environ.get("FR13_MERGED_TREE_SPEC", "1") != "0"
 
     B = len(spec_row_req_ids)
     if B == 0:
@@ -169,11 +174,13 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
                 draft = cache.speculate(
                     req_id, pattern, max_spec_tokens=max_spec_tokens,
                     max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
+                    use_tree_spec=_use_tree,
                 )
                 STATS["speculate_fired"] += 1
             except Exception:
                 draft = None
-        suffix_rel = arctic_draft_to_suffix_rel(draft, max_rel=need)
+        suffix_rel = (arctic_tree_to_suffix_rel(draft, max_rel=need) if _use_tree
+                      else arctic_draft_to_suffix_rel(draft, max_rel=need))
         if len(suffix_rel) < need:
             all_full = False
         nodes, _ = assemble_cat33333(mtp_spine, mtp_topk, suffix_rel, mtp_k)

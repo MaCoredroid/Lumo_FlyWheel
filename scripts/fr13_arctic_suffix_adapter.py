@@ -62,6 +62,59 @@ def extract_draft_token_ids(draft) -> list[int]:
     return [int(t) for t in tok]
 
 
+def arctic_tree_to_suffix_rel(draft, max_rel: int | None = None) -> dict[int, list[int]]:
+    """v2: convert an Arctic use_tree_spec=True draft into PER-DEPTH RANKED suffix_rel.
+
+    The tree draft (from speculate(..., use_tree_spec=True)) exposes:
+      draft.token_ids : flat list, one token per tree node (topological order).
+      draft.parents   : parent index per node (-1 for the root's children = depth-0 continuation).
+      draft.probs     : per-node probability (for ranking siblings into spine vs branches).
+    Walking the MTP prefix down the suffix trie lands at the root; each node's depth = chain length
+    from a `-1` parent. suffix_rel[d] = the tokens at depth d, RANKED best-first by prob -- so
+    assemble_cat33333 takes suffix_rel[d][0] as the deep spine and suffix_rel[d][1:] as the 2
+    cat33333 branches (exactly your trie-branches -> tree-branches mapping). Empty/None -> {} (cold
+    fallback = pure MTP baseline).
+
+    max_rel caps the relative depth (N_DEPTH - mtp_k). Robust to a flat draft (parents absent ->
+    every node depth 0? no -- falls back to the flat spine adapter).
+    """
+    if draft is None:
+        return {}
+    token_ids = extract_draft_token_ids(draft)
+    if not token_ids:
+        return {}
+    parents = getattr(draft, "parents", None)
+    if parents is None or not hasattr(draft, "probs"):
+        # no tree structure -> flat spine-only (v1 behaviour)
+        return arctic_draft_to_suffix_rel(draft, max_rel=max_rel)
+    parents = list(parents)
+    probs = [float(p) for p in draft.probs]
+    n = min(len(token_ids), len(parents), len(probs))
+    # depth of each node = chain length from a -1 parent (root children are depth 0)
+    depth = [0] * n
+    for i in range(n):
+        p = int(parents[i])
+        depth[i] = 0 if p < 0 else depth[p] + 1
+    # group (token, prob) by depth
+    by_depth: dict = {}
+    for i in range(n):
+        by_depth.setdefault(depth[i], []).append((probs[i], int(token_ids[i])))
+    out: dict = {}
+    for d, items in by_depth.items():
+        if max_rel is not None and d >= max_rel:
+            continue
+        # rank best-first by prob; de-dup tokens keeping the highest-prob occurrence
+        seen = set()
+        ranked = []
+        for _pr, tok in sorted(items, key=lambda x: x[0], reverse=True):
+            if tok in seen:
+                continue
+            seen.add(tok)
+            ranked.append(tok)
+        out[d] = ranked
+    return out
+
+
 def arctic_draft_to_suffix_rel(draft, max_rel: int | None = None) -> dict[int, list[int]]:
     """Convert an Arctic .speculate() draft into the RELATIVE suffix_rel dict.
 
