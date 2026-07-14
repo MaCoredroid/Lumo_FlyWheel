@@ -897,42 +897,20 @@ host-orchestrated level forwards? measure + graph/fuse; FR-Spec vocab cut if lm_
 (B) P2 replay transplant (the 96-launch loop inside cfwd); (C) P3 writeback. Committer walk
 (P1) done+shelved (flag exists if later useful at true B>2 concurrency).
 
-## DRAFTER DECOMPOSITION (2026-07-14, source read eagle.py propose_tree :1023-1142)
+## DRAFTER ATTACK, CYCLE 1 (2026-07-14): structure confirmed, hypotheses ranked
 
-Drafter = PIECEWISE-graphed (not launch overhead — 88ms is COMPUTE). The tree loop runs
-(tree_depth-1)=4 levels for cat8 depth-5; EACH level does two HBM-bound reads:
-  - self.model(...) draft-model forward (:1115) — reads the MTP/EAGLE draft weights (~1 layer)
-  - self.model.compute_logits(...) (:1131) — lm_head GEMM over FULL vocab (~152k), and the
-    lm_head is SHARED with the target (_maybe_share_lm_head :1354; boot log "Sharing target
-    model lm_head") => ~1.5GB weight read PER level-call.
-=> ~2.5GB/level x 4 = ~10GB HBM/step for drafting alone (GB10 ~250GB/s => ~40ms + attn/meta =>
-the measured 88ms). Attack A candidates:
-  A1 FR-SPEC truncated draft vocab (top lever): compute_logits only needs argmax/top-2, so use
-     lm_head[:, V'] over a high-frequency V' (e.g. 32k) => ~0.3GB vs 1.5GB, ~1.2GB/level saved
-     x4 = ~4.8GB => est ~19ms/step ~2ms/tok. LOSSLESS BY CONSTRUCTION (rejection sampler commits
-     target-correct tokens for whatever the draft proposed; MTP path draft_probs=None => accept
-     rule is SpecInfer-multidraft over proposed candidates, unchanged). ONLY accept-RATE at risk
-     (draft may miss a token outside V') => MEASURE accept delta; gate.
-  A2 draft-layer forward — harder (can't shrink the draft model losslessly); per-level metadata
-     rebuild (:1054-1092) is host + small device, minor.
-NEXT (loop-driven): (1) MEASURE the split — inject a default-OFF flag-gated timer around
-compute_logits vs self.model in the draft loop (patcher), confirm lm_head is the dominant share;
-(2) if yes, implement A1 FR-Spec behind FR13_DRAFT_VOCAB_TRUNC, dist/accept-gate + garble gate;
-(3) two-boot + B=4 same-harness A/B with dfwd + a new lm_head sub-timer. Measure or shelve.
-
-## FR-SPEC CEILING (theoretical HBM, model dims from config.json): ~+7% TPS, LOSSLESS
-
-Qwen3.6-27B: vocab=248,320, hidden=5120 => SHARED lm_head weight read = 2.54 GB / compute_logits
-call. Draft = 1 MTP layer (~0.53 GB dense MLP). lm_head = 83% of per-level draft weight read, and
-the TREE pays it 4x (one compute_logits per level, eagle.py:1131). FR-Spec V'=32k => lm_head 0.34
-GB, SAVE 2.21 GB/level x4 = 8.83 GB/step (~35 ms/step at ~250 GB/s) => drafter 88 -> ~53 ms/step
-=> ~2.6 ms/tok => ~+7% committed TPS. LOSSLESS (rejection sampler commits target-correct tokens
-regardless of draft proposal set; MTP draft_probs=None). RISK: accept-rate — draft argmax/top-2
-from truncated V' may miss CODE identifiers/rare tokens outside a high-freq set (adversarial for
-SWE) => MEASURE accept delta on live SWE. IMPL PLAN (loop-driven): (1) build high-freq V' from the
-existing SWE traces' committed tokens (offline, output/**/qwen_trace.jsonl or committed-token
-dumps) — code-aware freq, not generic corpus; (2) truncated draft lm_head = lm_head[:, V'] gather
-+ argmax/topk over V' + map back to full ids, behind FR13_DRAFT_VOCAB_TRUNC default OFF (patcher
-propose_tree :14626 region + compute_logits :1131); (3) gates: dist-lossless (committed dist
-unchanged — verify uses FULL vocab), accept-rate delta measured, garble gate; (4) two-boot + B=4
-A/B with dfwd + lm_head sub-timer. Ceiling is the PRIZE; accept loss is the gate.
+CONFIRMED (eagle.py:381-396): the drafter NEVER runs FULL cudagraphs — "Eagle only supports
+PIECEWISE" — so each tree level is a host-orchestrated piecewise call (root topk + ~4 level
+forwards + eagle_step_update_slot_mapping_and_metadata between levels). 88ms/step over ~4-5
+calls = ~18-22ms/level for a TINY draft forward. HYPOTHESIS SPLIT (to sub-measure next):
+(a) draft lm_head weight-read: [hidden 4k x vocab ~150k] bf16 ~1.2GB PER LEVEL on the HBM-bound
+GB10 => ~6ms/level = ~30ms/step floor; (b) piecewise launch storm + per-level metadata/slot
+rebuild host work = the rest. ATTACK CANDIDATES: (i) FR-Spec truncated draft vocab (cuts (a)
+~5x; garble gate mandatory; committer q must match); (ii) level fusion / persistent draft graph
+(cuts (b)); (iii) **S2 SHAPE TIE-IN — drafter cost scales with DEPTH (levels), NOT width**:
+a shallower-wider tree cuts drafter cost linearly (~20ms/level) with zero kernel work — the
+shape DP must now include ~20ms/level drafter term + accept-ceiling-vs-depth tradeoff
+(t33333: depth-5, 11/16 resolve; a depth-3 wide shape would save ~40ms/step drafter).
+NEXT CYCLE: sub-measure (a)-vs-(b) (one diagnostic boot: time lm_head vs rest inside a level,
+or infer from a vocab-truncation dry-run), then design the winner. S2 DP design (mine) now has
+its cost model: step_ms(rows) ~204+3.9/row(verify) + ~20ms x depth (drafter).
