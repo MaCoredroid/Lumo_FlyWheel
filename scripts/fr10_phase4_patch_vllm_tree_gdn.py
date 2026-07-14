@@ -13405,6 +13405,43 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr10_logits, _fr10_w_root, dim=-1
                     ).indices
 
+            # FR13_MERGED_DRAFTER_SEAM: adaptive MTP-k(=1) + Arctic-suffix grow-to-cat33333.
+            # After the root is drafted, speculate per spec-row; on a BATCH-WIDE full-depth match,
+            # fill the deep spine/branches from Arctic and SKIP the deep MTP forwards
+            # (_fr10_spine_steps=0). Else leave the MTP path untouched (never-regress). Sidecar-gated,
+            # wide-tree only, own try/except so it can NEVER break the drafter. speculate() is the
+            # ONLY Arctic call here; lifecycle runs at the runner (_patch_gpu_model_runner_merged_drafter).
+            if _fr10_is_wide:
+                try:
+                    import sys as _fr13_ms_sys
+                    if "/workspace/scripts" not in _fr13_ms_sys.path:
+                        _fr13_ms_sys.path.insert(0, "/workspace/scripts")
+                    import fr13_merged_drafter as _fr13_ms
+                    if _fr13_ms.merged_on() and int(_fr10_spine_steps) >= 4:
+                        from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_ms_gdn
+                        _fr13_ms_ids = getattr(_fr13_ms_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
+                        _fr13_ms_cache = _fr13_ms.get_cache()
+                        _fr13_ms_B = int(draft_token_ids.shape[0])
+                        if (_fr13_ms_cache is not None and _fr13_ms_ids is not None
+                                and len(_fr13_ms_ids) == _fr13_ms_B):
+                            _fr13_ms_root = [int(_x) for _x in draft_token_ids.detach().reshape(-1).cpu().tolist()]
+                            _fr13_ms_wt0 = _fr10_wide_topk.get(0)
+                            if _fr13_ms_wt0 is not None and int(_fr13_ms_wt0.shape[1]) > 2:
+                                _fr13_ms_c1 = [int(_x) for _x in _fr13_ms_wt0[:, 1].detach().cpu().tolist()]
+                                _fr13_ms_c2 = [int(_x) for _x in _fr13_ms_wt0[:, 2].detach().cpu().tolist()]
+                                _fr13_ms_topk = {0: [_fr13_ms_c1, _fr13_ms_c2]}
+                            else:
+                                _fr13_ms_topk = {}
+                            _fr13_ms_spine, _fr13_ms_wide, _fr13_ms_skip = _fr13_ms.decide_and_fill(
+                                _fr13_ms_cache, [str(_r) for _r in _fr13_ms_ids], [_fr13_ms_root],
+                                _fr13_ms_topk, 1, draft_token_ids.device, _fr13_ms_root[0])
+                            if _fr13_ms_skip and _fr13_ms_spine is not None:
+                                _fr10_spine_tokens = list(_fr13_ms_spine)
+                                _fr10_wide_topk = _fr13_ms_wide
+                                _fr10_spine_steps = 0
+                except Exception:
+                    pass
+
             # FR13_CHASE_DIAG (superset-chase Step 1; ONE flag, default OFF,
             # inert): (i) per-event INTEGER record {token_indices_to_sample -
             # base, prev accepted_len, published leaf flat row from the
