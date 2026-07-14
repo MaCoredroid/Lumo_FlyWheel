@@ -1,0 +1,1795 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stateless Tree Speculative Decoding: A Branched Verifier That Caches and Commits Like Native - Lumo FlyWheel Vol. V</title>
+<meta name="description" content="Illustrated systems paper on making a branched token-tree speculative verifier behave like native linear decode: a stateless-tree redesign that re-linearizes every committed state to the accepted path, and the garble hunt that found the last missing re-linearizer in the attention KV of committed tokens.">
+<meta property="og:title" content="Stateless Tree Speculative Decoding: A Branched Verifier That Caches and Commits Like Native">
+<meta property="og:description" content="A stateless-tree redesign plus the committed-token attention-KV bug behind branched speculative decode garble, on a Gated-DeltaNet hybrid inside vLLM.">
+<meta name="author" content="Mark Ma">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Ccircle cx='16' cy='22' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='30' cy='16' r='4' fill='%23e7c76f'/%3E%3Ccircle cx='30' cy='30' r='4' fill='%238bd3dd'/%3E%3Cpath d='M16 22 L30 16 M16 22 L30 30' stroke='%233b3934' stroke-width='3'/%3E%3Cpath d='M38 41 h14' stroke='%23a7d98d' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='44' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='30' cy='44' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='44' cy='44' r='4' fill='%23a7d98d'/%3E%3Cpath d='M16 44 h28' stroke='%233b3934' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #111111;
+    --paper: #171717;
+    --paper-2: #202020;
+    --paper-3: #292929;
+    --ink: #f2efe7;
+    --text: #d8d3c8;
+    --muted: #a8a196;
+    --quiet: #7f776d;
+    --rule: #3b3934;
+    --rule-2: #565147;
+    --cyan: #8bd3dd;
+    --green: #a7d98d;
+    --amber: #e7c76f;
+    --rose: #d88989;
+    --cyan-soft: #193235;
+    --green-soft: #233320;
+    --amber-soft: #3b3018;
+    --rose-soft: #3a2323;
+    --grid-major: rgba(255, 255, 255, 0.025);
+    --grid-minor: rgba(255, 255, 255, 0.018);
+    --grid-opacity: 0.42;
+    --link-underline: rgba(139, 211, 221, 0.36);
+    --soft-panel: rgba(255, 255, 255, 0.018);
+    --soft-panel-2: rgba(255, 255, 255, 0.012);
+    --soft-panel-3: rgba(255, 255, 255, 0.026);
+    --flow-wash: rgba(139, 211, 221, 0.035);
+    --flow-bg: #0c0c0c;
+    --flow-card-bg: #101010;
+    --control-bg: #121212;
+    --green-wash: rgba(167, 217, 141, 0.045);
+    --bias-on-fill: rgba(231, 199, 111, 0.5);
+    --bias-off-fill: rgba(255, 255, 255, 0.03);
+    --bias-off-stroke: rgba(255, 255, 255, 0.08);
+    --callout-fill: rgba(255, 255, 255, 0.02);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f7;
+      --paper: #ffffff;
+      --paper-2: #eef1f0;
+      --paper-3: #dde3e1;
+      --ink: #151715;
+      --text: #303431;
+      --muted: #626a64;
+      --quiet: #7a827d;
+      --rule: #d8ddd9;
+      --rule-2: #b7c0bb;
+      --cyan: #1c7380;
+      --green: #3f7b3a;
+      --amber: #876812;
+      --rose: #a54444;
+      --cyan-soft: #e3f3f5;
+      --green-soft: #e4f2df;
+      --amber-soft: #f3ead2;
+      --rose-soft: #f5dfdf;
+      --grid-major: rgba(18, 24, 22, 0.055);
+      --grid-minor: rgba(18, 24, 22, 0.038);
+      --grid-opacity: 0.55;
+      --link-underline: rgba(28, 115, 128, 0.34);
+      --soft-panel: rgba(18, 24, 22, 0.028);
+      --soft-panel-2: rgba(18, 24, 22, 0.018);
+      --soft-panel-3: rgba(18, 24, 22, 0.038);
+      --flow-wash: rgba(28, 115, 128, 0.075);
+      --flow-bg: #fbfbfa;
+      --flow-card-bg: #ffffff;
+      --control-bg: #f8faf9;
+      --green-wash: rgba(63, 123, 58, 0.08);
+      --bias-on-fill: rgba(135, 104, 18, 0.22);
+      --bias-off-fill: rgba(18, 24, 22, 0.035);
+      --bias-off-stroke: rgba(18, 24, 22, 0.12);
+      --callout-fill: rgba(18, 24, 22, 0.025);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-minor) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: var(--grid-opacity);
+  }
+  ::selection { background: var(--cyan-soft); color: var(--ink); }
+  a {
+    color: var(--cyan);
+    text-decoration: none;
+    border-bottom: 1px solid var(--link-underline);
+  }
+  a:hover { border-bottom-color: currentColor; }
+  a:focus-visible {
+    outline: 3px solid var(--cyan);
+    outline-offset: 3px;
+  }
+  strong { color: var(--ink); font-weight: 720; }
+  code, .mono {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    color: var(--cyan);
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 28px 92px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .brandmark {
+    color: var(--ink);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .topbar nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px 16px;
+  }
+  .topbar a {
+    color: var(--muted);
+    border-bottom-color: transparent;
+  }
+  .topbar a:hover { color: var(--cyan); }
+
+  header.hero {
+    min-height: 88vh;
+    display: grid;
+    align-content: center;
+    padding: 52px 0 42px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .kicker {
+    margin: 0 0 18px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h1 {
+    max-width: 980px;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: clamp(42px, 7vw, 82px);
+    line-height: 1.02;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .title-subtitle {
+    max-width: 820px;
+    margin: 14px 0 0;
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+  .subhead {
+    max-width: 900px;
+    margin: 18px 0 0;
+    color: var(--text);
+    font-size: 21px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .hero-tldr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.46fr);
+    gap: 22px;
+    align-items: end;
+    max-width: 980px;
+    margin: 26px 0 0;
+    padding: 18px 0 20px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero-tldr p {
+    margin: 0;
+    color: var(--text);
+  }
+  .hero-tldr .tldr-copy {
+    max-width: 68ch;
+    font-size: 18px;
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+  .hero-result {
+    justify-self: end;
+    width: min(100%, 330px);
+  }
+  .hero-number {
+    display: block;
+    color: var(--green);
+    font-family: var(--serif);
+    font-size: clamp(40px, 4.3vw, 62px);
+    line-height: 0.96;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .hero-result p {
+    margin-top: 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: 28px 0 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .byline span:not(:first-child)::before {
+    content: "/";
+    color: var(--rule-2);
+    margin-right: 14px;
+  }
+  .paper-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 34px 0 0;
+  }
+  .paper-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .paper-nav a:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+
+  .section {
+    margin: 74px 0;
+  }
+  .section h2 {
+    max-width: 780px;
+    margin: 0 0 16px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1.12;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .section h3 {
+    margin: 0 0 8px;
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1.3;
+  }
+  .section > p,
+  .main-col > p {
+    max-width: 74ch;
+    margin: 0 0 18px;
+    text-wrap: pretty;
+  }
+  .main-col > p:last-child,
+  .section > p:last-child { margin-bottom: 0; }
+
+  .abstract-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    margin-top: 34px;
+  }
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 22px;
+  }
+  .panel h2,
+  .panel h3 {
+    margin: 0 0 12px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .panel p {
+    margin: 0 0 14px;
+  }
+  .panel p:last-child { margin-bottom: 0; }
+  .claim-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .claim {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .claim:last-child { border-bottom: 0; padding-bottom: 0; }
+  .claim .state {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    color: var(--muted);
+  }
+  .claim p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .state.pass { color: var(--green); }
+  .state.warn { color: var(--amber); }
+  .state.info { color: var(--cyan); }
+
+  .sidenote {
+    color: var(--muted);
+    border-left: 1px solid var(--rule-2);
+    padding-left: 13px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .sidenote::before {
+    content: "plain explanation";
+    display: block;
+    margin-bottom: 7px;
+    color: var(--amber);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .sidenote p {
+    margin: 0 0 10px;
+  }
+  .sidenote p:last-child { margin-bottom: 0; }
+
+  .figure {
+    margin: 28px 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px;
+    overflow: hidden;
+  }
+  .figure-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .figure-head strong { color: var(--cyan); }
+  .caption {
+    max-width: 78ch;
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .diagram text {
+    font-family: var(--mono);
+    fill: var(--text);
+    font-size: 13px;
+  }
+  .diagram .label {
+    fill: var(--ink);
+    font-weight: 800;
+  }
+  .diagram .tiny {
+    fill: var(--muted);
+    font-size: 11px;
+  }
+  .diagram .node {
+    fill: var(--paper-2);
+    stroke: var(--rule-2);
+    stroke-width: 1.2;
+  }
+  .diagram .node-cyan { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .diagram .node-green { fill: var(--green-soft); stroke: var(--green); }
+  .diagram .node-amber { fill: var(--amber-soft); stroke: var(--amber); }
+  .diagram .node-rose { fill: var(--rose-soft); stroke: var(--rose); }
+  .diagram .edge {
+    stroke: var(--rule-2);
+    stroke-width: 1.6;
+    fill: none;
+  }
+  .diagram .arrow {
+    stroke: var(--cyan);
+    stroke-width: 1.6;
+    fill: none;
+    marker-end: url(#arrow);
+  }
+  .diagram .dash {
+    stroke-dasharray: 6 5;
+  }
+
+  .flow-figure {
+    clear: both;
+    background:
+      linear-gradient(180deg, var(--flow-wash), transparent 36%),
+      var(--flow-bg);
+    overflow-x: auto;
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  .flow-figure.is-paused .flow-edge,
+  .flow-figure.is-paused .flow-node,
+  .flow-figure.is-paused .bias-on,
+  .flow-figure.is-paused .scan-window,
+  .flow-figure.is-paused .cache-cursor {
+    animation-play-state: paused;
+  }
+  .flow-control {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--control-bg);
+    color: var(--text);
+    font: 800 12px var(--mono);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1), color 160ms cubic-bezier(0.25, 1, 0.5, 1), background 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .flow-control:hover,
+  .flow-control:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-why {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 16px 0 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--rule);
+  }
+  .flow-why div {
+    background: var(--flow-card-bg);
+    padding: 13px 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .flow-why strong {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .code-grounding {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .code-grounding a {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 7px 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .code-grounding a:hover,
+  .code-grounding a:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-svg .lane {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-title {
+    fill: var(--ink);
+    font: 800 16px var(--mono);
+  }
+  .flow-svg .flow-sub {
+    fill: var(--muted);
+    font: 12px var(--mono);
+  }
+  .flow-svg .math {
+    fill: var(--text);
+    font: 13px var(--mono);
+  }
+  .flow-svg .native-fill { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .flow-svg .tree-fill { fill: var(--green-soft); stroke: var(--green); }
+  .flow-svg .fa-fill { fill: var(--amber-soft); stroke: var(--amber); }
+  .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .bad-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .meta-fill {
+    fill: var(--soft-panel-3);
+    stroke: var(--rule-2);
+  }
+  .flow-svg .kernel-card {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-node {
+    stroke-width: 1.4;
+    animation: nodePulse 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .flow-svg .flow-node.s2 { animation-delay: 0.35s; }
+  .flow-svg .flow-node.s3 { animation-delay: 0.7s; }
+  .flow-svg .flow-edge {
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 10 9;
+    animation: flowDash 2.4s linear infinite;
+  }
+  .flow-svg .native-edge { stroke: var(--cyan); }
+  .flow-svg .tree-edge { stroke: var(--green); animation-duration: 2.9s; }
+  .flow-svg .fa-edge { stroke: var(--amber); animation-duration: 2.1s; }
+  .flow-svg .warn-edge { stroke: var(--amber); animation-duration: 3s; }
+  .flow-svg .commit-edge { stroke: var(--rose); animation-duration: 3.2s; }
+  .flow-svg .bad-edge {
+    stroke: var(--rose);
+    stroke-dasharray: 7 8;
+    animation-duration: 3.8s;
+  }
+  .flow-svg .quiet-edge {
+    stroke: var(--rule-2);
+    stroke-dasharray: 2 8;
+    animation-duration: 4.4s;
+  }
+  .flow-svg .bias-on {
+    fill: var(--bias-on-fill);
+    animation: biasGlow 2.6s ease-in-out infinite;
+  }
+  .flow-svg .bias-off {
+    fill: var(--bias-off-fill);
+    stroke: var(--bias-off-stroke);
+  }
+  .flow-svg .code-label {
+    fill: var(--cyan);
+    font: 11px var(--mono);
+  }
+  .flow-svg .callout {
+    fill: var(--callout-fill);
+    stroke: var(--rule-2);
+    stroke-width: 1;
+  }
+  .flow-svg .scan-window {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    animation: scanWindow 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .flow-svg .cache-cursor {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+  }
+  .flow-svg .legend-dot { stroke: none; }
+  @keyframes flowDash {
+    to { stroke-dashoffset: -38; }
+  }
+  @keyframes nodePulse {
+    0%, 100% { opacity: 0.82; }
+    45%, 55% { opacity: 1; stroke-width: 2.7; }
+  }
+  @keyframes biasGlow {
+    0%, 100% { opacity: 0.48; }
+    50% { opacity: 1; }
+  }
+  @keyframes scanWindow {
+    0%, 100% { transform: translateX(0); opacity: 0.65; }
+    50% { transform: translateX(96px); opacity: 1; }
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.52fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .mini-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .mini-card p {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .mini-card p:last-child { margin-bottom: 0; }
+
+  .definition-box,
+  .glossary-strip {
+    margin: 22px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel);
+  }
+  .definition-box {
+    max-width: 900px;
+    padding: 16px 18px;
+  }
+  .definition-box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .glossary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+  }
+  .glossary-strip div {
+    padding: 14px 16px;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .glossary-strip div:nth-child(3n) { border-right: 0; }
+  .glossary-strip div:nth-last-child(-n + 3) { border-bottom: 0; }
+  .glossary-strip dfn {
+    display: block;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .glossary-strip span {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .confidence-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 14px;
+    align-items: start;
+    margin: 20px 0 24px;
+    padding: 15px 17px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--green-wash);
+  }
+  .confidence-row strong {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .confidence-row p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .fold {
+    margin: 26px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel-2);
+    overflow: hidden;
+  }
+  .fold > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    min-height: 58px;
+    padding: 15px 18px;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 850;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary::after {
+    content: "+";
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--cyan);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .fold[open] > summary {
+    border-bottom: 1px solid var(--rule);
+    background: var(--soft-panel);
+  }
+  .fold[open] > summary::after { content: "-"; }
+  .fold > summary small {
+    display: block;
+    grid-column: 1;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .fold-body {
+    padding: 18px;
+  }
+  .fold-body > :first-child { margin-top: 0; }
+  .fold-body > :last-child { margin-bottom: 0; }
+
+  .equation {
+    margin: 22px 0;
+    padding: 18px 20px;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .equation .muted { color: var(--muted); }
+  .equation .hl { color: var(--amber); }
+  .equation .ok { color: var(--green); }
+
+  .source-exhibit {
+    margin: 24px 0;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .source-exhibit .source-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .source-exhibit .source-head strong {
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .source-exhibit pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .source-exhibit code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .source-exhibit .source-note {
+    margin: 0;
+    padding: 0 16px 16px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .source-exhibit > .grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin: 16px;
+  }
+
+  .compare-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin: 24px 0;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--rule);
+  }
+  .compare-strip article {
+    min-height: 100%;
+    padding: 18px;
+    background: var(--paper);
+  }
+  .compare-strip h3 {
+    margin-bottom: 9px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .compare-strip p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .box {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .box .tag {
+    display: inline-flex;
+    margin-bottom: 10px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 760;
+  }
+  .box.good .tag { color: var(--green); background: var(--green-soft); }
+  .box.warn .tag { color: var(--amber); background: var(--amber-soft); }
+  .box.bad .tag { color: var(--rose); background: var(--rose-soft); }
+  .box.info .tag { color: var(--cyan); background: var(--cyan-soft); }
+  .box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--paper);
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  table {
+    border-collapse: collapse;
+    min-width: 760px;
+    width: 100%;
+    font-size: 14px;
+  }
+  caption {
+    caption-side: top;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+    text-align: left;
+  }
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--rule);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--paper-2);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num {
+    font-family: var(--mono);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .pill {
+    display: inline-flex;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .pill.good { color: var(--green); background: var(--green-soft); }
+  .pill.warn { color: var(--amber); background: var(--amber-soft); }
+  .pill.info { color: var(--cyan); background: var(--cyan-soft); }
+  .pill.bad { color: var(--rose); background: var(--rose-soft); }
+
+  .failure-note {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-ledger {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .failure-card {
+    min-width: 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .failure-card.contaminated { border-color: var(--rose); }
+  .failure-card.superseded { border-color: var(--amber); }
+  .failure-card.settled { border-color: var(--rule-2); }
+  .failure-card.open { border-color: var(--cyan); }
+  .failure-card header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .failure-card h3 {
+    margin: 0;
+    min-width: 0;
+    max-width: 58ch;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.25;
+  }
+  .failure-card p {
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-card p:last-child { margin-bottom: 0; }
+  .failure-card ul {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 12px;
+    padding-left: 18px;
+    color: var(--text);
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .failure-card .conclusion {
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    color: var(--text);
+  }
+  .failure-card code { overflow-wrap: anywhere; }
+
+  .shape-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .shape {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .shape h3 {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .shape h3 span {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .path-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .path-list li {
+    padding: 3px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .receipt-list {
+    columns: 2 330px;
+    column-gap: 34px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .receipt-list li {
+    break-inside: avoid;
+    margin: 0 0 12px;
+    font-size: 15px;
+  }
+
+  footer {
+    margin-top: 86px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  @media (min-width: 1040px) {
+    header.hero > .sidenote,
+    .section > .sidenote {
+      float: right;
+      clear: right;
+      width: 282px;
+      margin: 6px 0 20px 34px;
+    }
+  }
+  @media (max-width: 960px) {
+    .page { padding: 0 18px 72px; }
+    .topbar { flex-direction: column; align-items: flex-start; }
+    .topbar nav { justify-content: flex-start; }
+    header.hero { min-height: auto; padding: 26px 0 20px; }
+    h1 { font-size: 40px; }
+    .subhead {
+      margin-top: 18px;
+      font-size: 17px;
+      line-height: 1.48;
+    }
+    .title-subtitle {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .byline span:not(:first-child)::before { content: none; }
+    .abstract-grid, .two-col, .shape-grid, .hero-tldr, .confidence-row { grid-template-columns: 1fr; }
+    .glossary-strip { grid-template-columns: 1fr; }
+    .glossary-strip div,
+    .glossary-strip div:nth-child(3n),
+    .glossary-strip div:nth-last-child(-n + 3) {
+      border-right: 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .glossary-strip div:last-child { border-bottom: 0; }
+    .compare-strip { grid-template-columns: 1fr; }
+    .table-wrap::before,
+    .flow-figure::before {
+      display: inline-flex;
+      position: sticky;
+      left: 8px;
+      z-index: 1;
+      margin: 8px 8px 0;
+      padding: 4px 7px;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      background: var(--paper);
+      color: var(--muted);
+      font: 800 11px var(--mono);
+    }
+    .table-wrap::before { content: "wide table: scroll sideways"; }
+    .flow-figure::before { content: "wide figure: scroll sideways"; }
+    .section { margin: 56px 0; }
+    .section h2 { font-size: 30px; }
+    .hero-result {
+      justify-self: start;
+      width: 100%;
+    }
+    .hero-tldr {
+      gap: 14px;
+      margin-top: 16px;
+      padding: 12px 0 14px;
+    }
+    .hero-tldr .tldr-copy {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .hero-number { font-size: 36px; }
+    .byline { margin-top: 16px; }
+    .paper-nav {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin-top: 18px;
+      padding-bottom: 6px;
+      scrollbar-color: var(--rule-2) transparent;
+    }
+    .paper-nav a {
+      flex: 0 0 auto;
+    }
+    .sidenote {
+      display: block;
+      margin: 18px 0 22px;
+      padding: 13px 16px 13px 14px;
+      background: var(--paper-2);
+      border: 1px solid var(--rule);
+      border-left: 1px solid var(--rule-2);
+      border-radius: 7px;
+    }
+    .claim { grid-template-columns: 1fr; gap: 4px; }
+    .flow-figure .flow-svg {
+      width: 960px;
+      max-width: none;
+    }
+    .flow-why { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    .flow-svg .flow-edge,
+    .flow-svg .flow-node,
+    .flow-svg .bias-on,
+    .flow-svg .scan-window,
+    .flow-svg .cache-cursor {
+      animation: none !important;
+    }
+    .flow-svg .flow-edge { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brandmark">Lumo FlyWheel / Serving Lab</div>
+    <nav aria-label="Site navigation">
+      <a href="index.html">Vol. I</a>
+      <a href="round-f.html">Vol. II</a>
+      <a href="gdn-tree-scan.html">Vol. III</a>
+      <a href="gdn-prefix-cache.html">Vol. IV</a>
+      <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Repository</a>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <p class="kicker">Volume V / illustrated systems paper</p>
+    <h1>Stateless Tree Speculative Decoding</h1>
+    <p class="title-subtitle">A Branched Verifier That Caches and Commits Like Native</p>
+    <p class="subhead">Vol. IV left the tree decode path as the open frontier: a branched speculative verifier that a prefix cache could poison, while the native linear path stayed clean. This page closes it, twice. A redesign makes the tree carry <em>zero</em> persistent state, so native's own cache owns correctness by construction. And the garble that had survived every numerical gate turned out not to be numerical at all &mdash; it was the attention KV of committed tokens, read from the wrong slot.</p>
+    <div class="hero-tldr" aria-label="TLDR and headline result">
+      <p class="tldr-copy"><strong>TL;DR:</strong> native decode gets caching for free because its accepted tokens form a linear chain; our token-tree verifier breaks that assumption in two independent ways. The fix for both is one principle: after a branched accept, <strong>re-linearize every committed state to the accepted path and burn the branch scratch</strong>, so the tree's data footprint is identical to native's. Applied to the recurrent state it is a stateless-tree lifecycle; applied to the attention KV it is the missing re-linearizer that had been emitting near-neighbor identifier garble the whole time.</p>
+      <div class="hero-result">
+        <span class="hero-number">0%</span>
+        <p><strong>garble</strong>, down from ~40%, on both branched trees (cat8: 0 of 84 scripts; cat6: 0 of 61), at the native ~1% floor. SWE-Verified resolve then matches native exactly (cat8 8/16 = native 8/16), with agent trajectories that track native instead of thrashing. The residual is a speed question, not a correctness one.</p>
+      </div>
+    </div>
+    <div class="byline">
+      <span><strong>Mark Ma</strong></span>
+      <span>ML systems / inference</span>
+      <span>Qwen 3.6-27B FP8 / GB10</span>
+      <span>July 2026</span>
+    </div>
+    <div class="paper-nav">
+      <a href="#abstract">Abstract</a>
+      <a href="#reader-map">Reader map</a>
+      <a href="#principle">Principle</a>
+      <a href="#why-free">Why native is free</a>
+      <a href="#stateless">Stateless tree</a>
+      <a href="#garble">Garble hunt</a>
+      <a href="#rootcause">Root cause</a>
+      <a href="#results">Results</a>
+      <a href="#reflection">Reflection</a>
+      <a href="#limitations">Limits</a>
+      <a href="#receipts">Source trail</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="abstract">
+      <h2>Abstract</h2>
+      <p>Vol. III built a distribution-preserving token-tree verifier for Qwen 3.6-27B-FP8, a hybrid whose 64 layers include 48 Gated-DeltaNet recurrent layers. Vol. IV turned the prefix cache on and found it worked for the native decode path but not for the tree. This page resolves the tree path. The unifying observation is that native speculative decode is cheap to cache and commit for one structural reason: its accepted tokens form a <em>linear chain</em>, so every piece of committed state &mdash; the recurrent GDN state, the conv window, the attention KV &mdash; lands at a contiguous, linearly-addressed position that the framework already handles. A branched tree violates that assumption; its accepted path is a route through a per-node workspace, non-contiguous in the layout the next step reads.</p>
+      <p>We make the tree behave like native at the data layer along two axes. First, a <strong>stateless-tree redesign</strong>: the tree keeps no persistent state across steps. Each step initializes its scratch from native's running rows, drafts and verifies inside that scratch, copies the committed leaf back onto native's running rows, and burns the scratch to zero. Native's stock, request-keyed cache then owns snapshot, restore, and concurrency exactly as it does for native MTP &mdash; and the two cache carriers Vol. IV chased are eliminated by construction. Second, the <strong>garble hunt</strong>: a persistent near-neighbor identifier corruption (<code>read_file</code>&nbsp;&rarr;&nbsp;<code>readFile</code>, <code>expected_row_count</code>&nbsp;&rarr;&nbsp;<code>expected_rowcount</code>) that had defeated every numerical gate turned out to be a data-routing bug &mdash; the attention KV of committed tokens was being read from a sibling branch's slot. The fix re-linearizes it, mirroring the recurrent remap. Both are the same principle applied to different state, and together they take branched-tree garble from ~40% to 0% and SWE-Verified resolve to native parity.</p>
+
+      <div class="definition-box" aria-label="The governing principle">
+        <p><strong>The governing principle (the acceptance bar):</strong> the tree pipeline must be <em>behaviorally indistinguishable from native MTP at the data layer</em> &mdash; the same block-pool rows read and written, at the same times, holding no persistent state beyond what native holds. Only the speculative-decoding <em>math</em> may differ (the branched scan), and its workspace is burned every step. If the tree's persistent-data access pattern equals native's, a cache-behavior divergence is impossible, because native has none.</p>
+      </div>
+
+      <h3>Names in this paper</h3>
+      <div class="glossary-strip" aria-label="Names in this paper">
+        <div><dfn>native (naive_mtp)</dfn><span>stock vLLM linear multi-token-prediction decode on FLASH_ATTN; caches for free.</span></div>
+        <div><dfn>tree (tree_mtp)</dfn><span>the Lumo branched token-tree verifier of <a href="gdn-tree-scan.html">Vol.&nbsp;III</a> on TREE_ATTN: forked FA2, GDN tree kernel, committer.</span></div>
+        <div><dfn>node bank</dfn><span>the per-node workspace where the tree writes each candidate's state; columns 1..num_spec are ephemeral drafts, column 0 is native's running row.</span></div>
+        <div><dfn>running row</dfn><span>column 0 of the state page &mdash; the request-owned row native's cache snapshots and restores.</span></div>
+        <div><dfn>re-linearize</dfn><span>after a branched accept, copy each committed node's state from its scattered node-bank slot to the contiguous position native expects.</span></div>
+        <div><dfn>burn</dfn><span>zero the ephemeral branch scratch after committing, so nothing tree-owned survives the step.</span></div>
+        <div><dfn>garble</dfn><span>committing a plausible-but-wrong near-neighbor identifier inside otherwise-correct code, causing a NameError and an agentic give-up.</span></div>
+        <div><dfn>flat verify slot</dfn><span>the sorted position each tree node writes its K/V to; a branched accepted path occupies a non-contiguous subset.</span></div>
+        <div><dfn>ATTN_KV_REMAP</dfn><span>the garble fix: re-linearize committed-token attention KV, the twin of the recurrent remap.</span></div>
+        <div><dfn>cat6 / cat8 / cat9</dfn><span>6-, 8-, 9-node token trees (a linear spine plus sibling branches).</span></div>
+        <div><dfn>M-perturbation</dfn><span>the residual accept-rate difference between tree shapes; a speed effect, with committed tokens byte-identical to native.</span></div>
+        <div><dfn>resolve</dfn><span>whether the agent's patch passes the SWE-Verified hidden tests.</span></div>
+      </div>
+
+      <div class="abstract-grid">
+        <div class="panel">
+          <h2>Contribution</h2>
+          <p>Two fixes and one idea. The idea is that a branched verifier can be made cache-correct not by patching the cache to understand branches, but by making the tree stop asking the cache to &mdash; it re-linearizes to the accepted path and holds no state, so the stock cache never sees a branch. The recurrent half is a stateless-tree lifecycle; the attention half is a KV re-linearizer that also happened to be the root cause of a months-long garble.</p>
+          <p>This page is the sequel to <a href="gdn-tree-scan.html">Vol.&nbsp;III</a> (the verifier) and <a href="gdn-prefix-cache.html">Vol.&nbsp;IV</a> (the cache), and is self-contained. It also records the debugging story honestly, because the reason the garble took so long to find is itself the most portable lesson here.</p>
+        </div>
+        <aside class="panel">
+          <h2>Status</h2>
+          <div class="claim-list">
+            <div class="claim"><span class="state pass">GARBLE</span><p>~40% &rarr; 0% on both branched trees; committed tokens byte-identical to native (token-ledger 0/15).</p></div>
+            <div class="claim"><span class="state pass">RESOLVE</span><p>cat8 fix-on 8/16 = native 8/16 exactly; agent trajectories track native, no give-ups or thrash.</p></div>
+            <div class="claim"><span class="state pass">STATELESS</span><p>the col-0 commit + burn lifecycle is baked default-on; the tree's data footprint equals native's.</p></div>
+            <div class="claim"><span class="state warn">SPEED</span><p>the residual tree-shape accept gap is speed-only; a clean tree-vs-native speed A/B is still pending.</p></div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="source-exhibit" aria-label="Falsification checks">
+        <div class="source-head">
+          <strong>What would falsify this?</strong>
+          <span>Skeptic checks before trusting the headline</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Garble</span><p>A branched-tree run whose committed identifiers diverge from native's on matched tokens &mdash; the token-ledger showing any non-zero mismatch.</p></div>
+          <div class="box bad"><span class="tag">Statelessness</span><p>Any tree-owned tensor that survives a step, or a cache snapshot/restore reading a row native wouldn't read at that time.</p></div>
+          <div class="box bad"><span class="tag">Coverage</span><p>A per-request state read positionally after a branched commit that has no re-linearizer &mdash; a fourth cached state we missed.</p></div>
+          <div class="box bad"><span class="tag">Resolve</span><p>Tree fix-on resolve falling below native on a matched, powered task set rather than tracking it.</p></div>
+          <div class="box bad"><span class="tag">Speed</span><p>The tree's superset acceptance failing to beat native once the confound-free speed A/B finally runs.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="reader-map">
+      <h2>Five-Minute Reader Map</h2>
+      <aside class="sidenote">
+        <p><strong>Read path:</strong> the principle, then the two fixes (recurrent, then attention), then the results and the debugging retrospective. The rest is appendix.</p>
+      </aside>
+      <p>The shortest version: native speculative decode is a linear chain, so all its committed state is contiguous and the framework caches it for free. A branched tree is not a chain, so its committed state is scattered &mdash; and every place we read that state back at a linear position, we read a sibling branch's data instead. Re-linearize each committed state to the accepted path and hold nothing between steps, and the tree becomes native at the data layer. Doing this for the recurrent state is the stateless-tree redesign; the attention-KV twin was the garble bug.</p>
+
+      <div class="source-exhibit" aria-label="Five-minute reading path">
+        <div class="source-head">
+          <strong>Read in this order</strong>
+          <span>The blog path before the full paper path</span>
+        </div>
+        <div class="grid">
+          <div class="box info"><span class="tag">Why free</span><p>Native's accepted tokens are a contiguous chain; the recurrent state, conv window, and attention KV all land at linear positions the stock cache handles.</p></div>
+          <div class="box good"><span class="tag">Stateless tree</span><p>Make the tree hold no persistent state: init from native's rows, verify in scratch, commit the leaf to the running row, burn the scratch. Native's cache owns the rest.</p></div>
+          <div class="box bad"><span class="tag">Garble</span><p>A near-neighbor identifier corruption that looked numerical for months. It was a foreign-KV read: the accepted branch path is non-contiguous, so a linear re-read grabbed a sibling's attention KV.</p></div>
+          <div class="box good"><span class="tag">Result</span><p>Garble ~40% &rarr; 0%; resolve matches native; committed tokens byte-identical. The two remaps are the same idea applied to recurrent and attention state.</p></div>
+          <div class="box warn"><span class="tag">Honest close</span><p>The remaining tree-shape accept difference is speed, not quality; the clean speed comparison is the one open experiment.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="principle">
+      <h2>The Contract: Two States, One Discipline</h2>
+      <aside class="sidenote">
+        <p><strong>One idea, applied twice:</strong> the recurrent state and the attention KV are different tensors with the same problem &mdash; a branched accept scatters them, and a linear re-read grabs the wrong one. The discipline is identical for both.</p>
+      </aside>
+      <p>A speculative step produces state that the next step must read back: the recurrent GDN state, the conv1d window, and the attention KV of the accepted tokens. Native writes those at contiguous positions and reads them from the same, so the stock cache is correct with no special handling. The tree writes them into a branched workspace and must move the committed ones onto native's linear positions before the next step &mdash; otherwise a positional read lands on a sibling. Everything on this page is one discipline applied to each cached state.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The three cached states, what native gets for free, what the tree broke, and the re-linearizer that fixes it.</caption>
+          <thead>
+            <tr>
+              <th>Cached state</th>
+              <th>What native does (free)</th>
+              <th>What the tree broke</th>
+              <th>The re-linearizer</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GDN recurrent (SSM)</td>
+              <td>Accepted leaf lands at linear row <code>num_accepted&minus;1</code> in a chunk-consistent basis.</td>
+              <td>Committed leaf lives in a scattered node-bank column; running row (col 0) goes stale for &ge;2 accepts.</td>
+              <td>Commit the leaf to col 0 and burn the branch columns (the stateless lifecycle).</td>
+            </tr>
+            <tr>
+              <td>Conv1d window</td>
+              <td>Whole-row copy at the same linear offset.</td>
+              <td>Emulation gather reads the root window, not the committed-leaf window, for &ge;2 accepts.</td>
+              <td>The same col-0 commit fixes both the emulation read and the conv cache in one write.</td>
+            </tr>
+            <tr>
+              <td>Attention KV</td>
+              <td>Contiguous accepted path &rarr; linear slots &rarr; the paged cache is correct.</td>
+              <td>Branched accepted path is non-contiguous; a linear re-read grabs a sibling branch's K/V.</td>
+              <td><code>launch_attn_kv_linear_remap</code>: copy each committed node's K/V to its linear slot (the garble fix).</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The recurrent and conv remaps are the stateless-tree redesign; the attention-KV remap is the garble fix. They were built weeks apart and diagnosed very differently &mdash; one from first principles, one after a long hunt &mdash; but the completeness argument at the end is simply that these are the only three cached states, and each now has a re-linearizer.</p>
+    </section>
+
+    <section class="section" id="why-free">
+      <h2>Why Native Caches for Free</h2>
+      <aside class="sidenote">
+        <p><strong>Plainly:</strong> a chain has one path, so "the state after k accepted tokens" is always at slot k&minus;1. A tree has many paths, so the accepted one is scattered, and "slot k&minus;1" points at whichever branch happened to be sorted there.</p>
+      </aside>
+      <p>vLLM's stock mamba cache rests on a single structural assumption: after a speculative commit, the accepted tokens form a <em>linear chain</em>. Two things follow, and native satisfies both, so it needs no extra code. First, <strong>linear accept means the row is right</strong>: the native verify kernel writes token <em>t</em>'s running state into column <em>t</em>, so column-index equals chain-depth equals accept-order &mdash; an exact bijection. The committed state after <code>num_accepted</code> tokens is at the fixed row <code>num_accepted&minus;1</code>, and the stock snapshot reads exactly there. Second, <strong>the producer and consumer share a numeric basis</strong>: native's cached boundary seed is produced by the same kernel family the cache-hit restore folds from, so restoring and recomputing reproduces the sequence &mdash; empirically native's cache miss and cache hit are byte-identical.</p>
+      <p>The tree fork breaks both, independently. The GDN kernel writes each tree <em>node's</em> state into a node-bank row keyed by node, not by accept order; the accepted tokens are a root-to-leaf <em>path</em>, so the k-th accepted token is node <code>path[k]</code>, generally not <code>k&minus;1</code>. Stock's linear formula therefore snapshots a sibling, cousin, or never-written row &mdash; measured wrong on every branched-accept sample (48 of 48, with divergences up to 23 at layer 0). That is a row-addressing failure: the stock save/restore does not <em>apply</em> to a branched accept, it is not merely imprecise. Separately, even the correct leaf row carries a value produced by the tree's own decode kernel, a different numerical realization than the chunked restore fold; that cross-basis delta compounds across 48 recurrent layers, and because the tree committer accepts by greedy longest-prefix-match rather than exact rejection sampling, it inherits no losslessness theorem to absorb it.</p>
+
+      <div class="figure" aria-labelledby="fig1-title">
+        <div class="figure-head"><strong id="fig1-title">Figure 1</strong><span>A chain's accepted state is contiguous; a tree's is scattered, so a linear read lands on a sibling</span></div>
+        <svg class="diagram" viewBox="0 0 1120 400" role="img" aria-label="Native linear accept versus branched tree accept: the tree's committed state is non-contiguous in the layout the next step reads linearly">
+          <defs>
+            <marker id="f1-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+            <marker id="f1-arrow-r" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
+            </marker>
+          </defs>
+          <text x="24" y="34" class="label">A. Native: linear chain &mdash; accept-order == slot</text>
+          <circle cx="60" cy="86" r="16" class="node node-cyan"></circle>
+          <circle cx="140" cy="86" r="16" class="node node-cyan"></circle>
+          <circle cx="220" cy="86" r="16" class="node node-cyan"></circle>
+          <circle cx="300" cy="86" r="16" class="node node-cyan"></circle>
+          <path d="M76 86 H124" class="arrow" style="marker-end:url(#f1-arrow)"></path>
+          <path d="M156 86 H204" class="arrow" style="marker-end:url(#f1-arrow)"></path>
+          <path d="M236 86 H284" class="arrow" style="marker-end:url(#f1-arrow)"></path>
+          <text x="54" y="91" class="tiny">0</text><text x="134" y="91" class="tiny">1</text><text x="214" y="91" class="tiny">2</text><text x="294" y="91" class="tiny">3</text>
+          <text x="24" y="140" class="tiny">slots: [0][1][2][3] &mdash; accepted path = 0,1,2,3 = the slots. Read slot k, get token k. Cache is correct, no code.</text>
+
+          <text x="24" y="212" class="label">B. Tree: branched &mdash; accepted spine is non-contiguous in sorted slots</text>
+          <circle cx="60" cy="270" r="15" class="node node-cyan"></circle>
+          <circle cx="150" cy="270" r="15" class="node node-cyan"></circle>
+          <circle cx="240" cy="270" r="15" class="node node-cyan"></circle>
+          <circle cx="330" cy="270" r="15" class="node node-cyan"></circle>
+          <circle cx="150" cy="224" r="13" class="node node-amber"></circle>
+          <circle cx="240" cy="224" r="13" class="node node-amber"></circle>
+          <circle cx="330" cy="224" r="13" class="node node-amber"></circle>
+          <path d="M60 270 L150 270 L240 270 L330 270" class="edge"></path>
+          <path d="M60 270 L150 224" class="edge"></path>
+          <path d="M150 270 L240 224" class="edge"></path>
+          <path d="M240 270 L330 224" class="edge"></path>
+          <text x="420" y="228" class="tiny">cyan = accepted spine (flat slots 1, 2, 4, 6)</text>
+          <text x="420" y="250" class="tiny">amber = sibling branches (flat slots 3, 5, 7)</text>
+          <text x="420" y="278" class="tiny">next step reads committed tokens at LINEAR positions 1, 2, 3, 4 &mdash;</text>
+          <text x="420" y="300" class="tiny">but position 3 = flat-slot-3 = an AMBER sibling, not the spine.</text>
+          <path d="M470 314 L360 250" class="arrow" style="stroke: var(--rose); marker-end:url(#f1-arrow-r)"></path>
+          <text x="24" y="360" class="tiny">Color key: cyan = the accepted (committed) path, amber = rejected sibling branches, rose = the mis-addressed read. Native's read is a no-op; the tree's needs a re-linearizer.</text>
+        </svg>
+        <p class="caption">Figure 1 is the whole paper in one picture. Native's accepted path <em>is</em> the slot order, so reading slot k returns token k for free. The tree's accepted path is a non-contiguous subset of the sorted node slots, so reading position 3 linearly returns whatever branch node was sorted into flat-slot-3 &mdash; a sibling. Every fix here is: move the committed nodes onto the linear slots before that read.</p>
+      </div>
+    </section>
+    <section class="section" id="stateless">
+      <h2>The Stateless Tree</h2>
+      <aside class="sidenote">
+        <p><strong>The reframe:</strong> stop teaching the cache about branches. Make the tree stop keeping state, so the cache only ever sees native's linear rows &mdash; which it already handles perfectly.</p>
+        <p><strong>The economics:</strong> the per-step state is a few megabytes; an HBM-to-HBM copy is microseconds against a ~98 ms decode forward. Copying is free. Avoiding it was a false economy that cost correctness.</p>
+      </aside>
+      <p>Vol. IV's answer to the row-addressing problem was a stack of machinery that taught the cache to follow branches: a leaf map recording which node-bank row the committer wrote, a snapshot redirect pointing the cache at that row, a bias translation walking the accepted path, a stale-global cleaner, plus a second family of fixes for the numeric-basis half. It worked, but it was fragile &mdash; one intended piece (a chunked-realization producer) never fired at all, so the deployed path fell back to a within-floor-but-not-bit-exact seed, fed to a committer with no losslessness theorem. Every piece existed only because the tree kept persistent state the cache then had to chase.</p>
+      <p>The redesign deletes the premise. The tree pipeline maintains <strong>zero</strong> persistent state; each step is a pure function. It initializes its scratch from native's running rows, drafts and verifies inside that scratch, copies the committed leaf back onto native's running row, and burns the branch scratch to zero. After that, native's stock, request-keyed cache owns snapshot, restore, and cross-request concurrency for both recurrent states &mdash; exactly as it does for native MTP, because at the data layer there is now nothing to distinguish them. The two cache carriers Vol. IV chased are gone by construction: there is no tree-owned state left to go stale, be reused dirty, or bleed between concurrent agents.</p>
+
+      <div class="figure" aria-labelledby="fig2-title">
+        <div class="figure-head"><strong id="fig2-title">Figure 2</strong><span>Every step is a pure function: seed from native's row, verify in scratch, commit the leaf, burn the rest</span></div>
+        <svg class="diagram" viewBox="0 0 1120 360" role="img" aria-label="The stateless tree lifecycle: initialize scratch from native running rows, draft and verify in scratch, copy committed leaf to the running row, burn the branch scratch">
+          <defs>
+            <marker id="f2-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+            <marker id="f2-arrow-g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
+            </marker>
+          </defs>
+          <rect x="24" y="150" width="150" height="60" rx="8" class="node node-cyan"></rect>
+          <text x="38" y="176" class="tiny">native running row</text>
+          <text x="38" y="192" class="tiny">(col 0, req-owned)</text>
+          <path d="M176 180 H236" class="arrow" style="marker-end:url(#f2-arrow)"></path>
+          <text x="182" y="170" class="tiny">seed</text>
+          <rect x="244" y="132" width="180" height="96" rx="8" class="node node-amber"></rect>
+          <text x="258" y="158" class="tiny">tree scratch</text>
+          <text x="258" y="176" class="tiny">draft + branched verify</text>
+          <text x="258" y="194" class="tiny">cols 1..num_spec</text>
+          <text x="258" y="212" class="tiny">(ephemeral)</text>
+          <path d="M426 180 H486" class="arrow" style="marker-end:url(#f2-arrow-g)"></path>
+          <text x="430" y="170" class="tiny">commit leaf</text>
+          <rect x="494" y="150" width="170" height="60" rx="8" class="node node-green"></rect>
+          <text x="508" y="176" class="tiny">write committed leaf</text>
+          <text x="508" y="192" class="tiny">&rarr; col 0 (SSM + conv)</text>
+          <path d="M666 180 H726" class="arrow" style="marker-end:url(#f2-arrow-g)"></path>
+          <text x="672" y="170" class="tiny">burn</text>
+          <rect x="734" y="150" width="150" height="60" rx="8" class="node node-rose"></rect>
+          <text x="748" y="176" class="tiny">zero cols 1..num_spec</text>
+          <text x="748" y="192" class="tiny">(nothing survives)</text>
+          <path d="M809 148 C809 96, 99 96, 99 148" class="arrow" style="marker-end:url(#f2-arrow)"></path>
+          <text x="360" y="86" class="tiny">next step: col 0 holds the committed frontier &mdash; native's cache snapshots / restores it, unchanged</text>
+
+          <rect x="24" y="264" width="860" height="64" rx="8" class="node"></rect>
+          <text x="40" y="290" class="tiny">Three co-dependent flags, one lifecycle: COMMIT_TO_RUNNING_ROW (write leaf &rarr; col 0), TREE_RUNROW_INIT (read col 0), BURN_NODE_BANK (zero the rest).</text>
+          <text x="40" y="312" class="tiny">Default-off is byte-identical; a fail-loud guard forbids partial enable, because the mamba page holds conv and SSM together and native restore rewrites the whole page.</text>
+        </svg>
+        <p class="caption">Figure 2 is the recurrent half of the discipline. The only state that persists past a step is native's own running row (column 0); everything the tree added &mdash; the branch scratch &mdash; is zeroed. Native's cache then does snapshot, restore, and concurrency with no knowledge that a tree was ever involved, which is the entire point.</p>
+      </div>
+
+      <p><strong>The root the redesign closes.</strong> Column 0 of the state page <em>is</em> native's running row; columns 1 through <code>num_spec</code> are the tree's ephemeral drafts. But the tree deposited its committed leaf one column over and read it back positionally, so for two or more accepted tokens the running row was stale &mdash; it held the post-first-accept state while the true committed leaf sat in a branch column. That is exactly why tree-plus-no-cache had no give-ups (the leaf column survives within one continuous decode) yet the cache poisoned the tree under concurrency (the ephemeral column and the redirect are not request-owned across reallocation). Committing the leaf to column 0 and reading column 0 makes the running row the committed frontier again, for both the recurrent state and the conv window, in one write.</p>
+      <p>Two kernel facts make the write free and safe: the register holding the committed leaf at loop exit is byte-identical to what already gets stored to the branch column, so storing it to column 0 as well changes no values; and the initialization tile is loaded into registers before any store, so reading column 0 and then overwriting it in the same launch is safe. The three flags &mdash; commit-to-running-row, read-from-running-row, burn-the-rest &mdash; form one lifecycle, gated off by default to a byte-identical path, with a fail-loud guard that refuses any partial enable. That guard is not ceremony: the conv and SSM states share one physical page as strided views, and native's restore rewrites the whole page, so re-routing one without the other corrupts the page on the next restore.</p>
+    </section>
+    <section class="section" id="garble">
+      <h2>The Garble Hunt</h2>
+      <aside class="sidenote">
+        <p><strong>The symptom:</strong> the tree commits a plausible-but-wrong neighbor of the right identifier &mdash; <code>read_file</code>&nbsp;&rarr;&nbsp;<code>readFile</code>, <code>expected_row_count</code>&nbsp;&rarr;&nbsp;<code>expected_rowcount</code>, <code>astropy</code>&nbsp;&rarr;&nbsp;<code>astrop</code>. The code reads as correct; it just references a name that was never defined.</p>
+      </aside>
+      <p>Running alongside the cache work was a stubborn quality bug. On code-heavy agentic tasks the branched tree systematically corrupted multi-word identifiers into near-neighbors: a dropped underscore, a truncation, an abbreviation, occasionally a wrong word. The model's comprehension was intact &mdash; it planned correctly and emitted the right structure &mdash; but <em>emission</em> degraded, and a single corrupted identifier raises a NameError, which sends the agent into a typo-fixing loop until it burns its budget and gives up with an empty patch. On a controlled identifier probe the native path corrupted nothing (0 of 45); the tree corrupted roughly one in ten. On real agentic tasks the gap was starker: a ~40% corrupted-identifier rate against native's ~1% floor.</p>
+      <p>The mechanism at the point of emission was clear and, it turned out, misleading. The tree's verify forward was numerically drifted: at a garbling position, the truly-correct next token &mdash; which a no-spec forward assigns near-certainty (probability around one in a million for the <em>wrong</em> neighbor) &mdash; had its margin compressed by roughly eleven nats until the near-neighbor sat inside the sampling nucleus at probability 0.08, and the committer accepted it. The committer itself was exonerated: an offline gate confirmed it accepts tokens at exactly the target distribution. So the corruption was upstream, in the verify logits &mdash; and drifted logits look, for all the world, like a numerical bug.</p>
+
+      <div class="grid" aria-label="The compute hunt and its dead ends">
+        <div class="box warn">
+          <span class="tag">Dead end</span>
+          <h3>The compute hunt</h3>
+          <p>For weeks the search was numerical: GEMM batch-invariance, a fixed-M projection pad, GDN-scan nativeness, attention-compute alignment. Each looked plausible because a small near-neighbor drift <em>is</em> what a numerical bug produces.</p>
+        </div>
+        <div class="box bad"><span class="tag">The variance wall</span>
+          <h3>A fix you cannot measure</h3>
+          <p>The tree's garble rate is set per boot by autotune: the same config swung 2.96% to 9.56% across boots. A promising &minus;68% pad-block "fix" landed at 3.10% &mdash; inside the baseline's own boot-to-boot swing. Cross-boot, single-lever A/B could not tell a fix from luck.</p>
+        </div>
+        <div class="box info"><span class="tag">A control that held</span>
+          <h3>Batching was not it</h3>
+          <p>Native under real eight-way co-residency stayed at 0% garble; the tree garbled at one agent per server just as much as at eight. Whatever it was, it lived in the tree path itself, not in batching or concurrency.</p>
+        </div>
+      </div>
+
+      <p>The turning point was to stop bisecting. Instead of testing one numerical fix at a time &mdash; which, when garble survived, only ever proved "not <em>this</em> op," never "not compute" &mdash; we ran the kitchen sink: every suspected compute and state fix armed simultaneously, needles confirming each fired. Garble was unchanged, 15 of 15. That single fifteen-minute experiment exonerated the entire compute class at once and forced the conclusion the isolation grind had been avoiding: if no combination of numerical fixes moves it, the bug is not numerical. It is what the forward <em>reads</em>.</p>
+    </section>
+
+    <section class="section" id="rootcause">
+      <h2>The Root Cause: Committed-Token KV, Read From the Wrong Slot</h2>
+      <aside class="sidenote">
+        <p><strong>The tell we had all along:</strong> a foreign K/V read grabs a <em>sibling draft's</em> K/V &mdash; and a sibling draft is a near-neighbor. So the drift was always going to look small and near-neighbor. The symptom was never evidence against routing; it was the fingerprint of it.</p>
+      </aside>
+      <p>The recurrent state had a re-linearizer &mdash; the stateless-tree commit moves the accepted node's state onto the running row. The attention KV had none. Its cache is vLLM's sequential paged store, whose native slot mechanism is correct for chains, and nobody had revisited it for branches. Each tree node writes its K/V to a flat, sorted verify slot. For cat8 the accepted spine occupies flat slots 1, 2, 4, 6, 8, with the sibling branches interleaved at 3, 5, 7, 9. After the accept, the sequence length advances and the next forward reads the committed tokens at <em>linear</em> positions 1, 2, 3, 4, 5 &mdash; so position 3 reads flat-slot-3, which is a sibling branch node, not the accepted spine. The forward attends over a neighbor's key and value, its logits drift toward that neighbor, and it commits a near-neighbor identifier. Measured topologically, accepts read foreign KV at every depth past the first: depth 1 was clean, depths 2 through 5 read the sibling.</p>
+
+      <div class="figure" aria-labelledby="fig3-title">
+        <div class="figure-head"><strong id="fig3-title">Figure 3</strong><span>cat8: the accepted spine sits at flat slots 1,2,4,6,8; a linear re-read of position 3 grabs the branch at slot 3</span></div>
+        <svg class="diagram" viewBox="0 0 1120 420" role="img" aria-label="The foreign-KV read and its fix: committed spine nodes at non-contiguous flat slots, re-read at linear positions, grab sibling branch KV; the remap copies them to linear slots">
+          <defs>
+            <marker id="f3-arrow-r" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
+            </marker>
+            <marker id="f3-arrow-g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
+            </marker>
+          </defs>
+          <text x="24" y="32" class="label">Before: linear read of the committed path lands on a sibling</text>
+          <text x="24" y="60" class="tiny">flat verify slots (sorted): the accepted spine is cyan, sibling branches are amber</text>
+          <rect x="24" y="74" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="44" y="101" class="tiny">1</text>
+          <rect x="90" y="74" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="110" y="101" class="tiny">2</text>
+          <rect x="156" y="74" width="60" height="44" rx="6" class="node node-amber"></rect><text x="176" y="101" class="tiny">3</text>
+          <rect x="222" y="74" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="242" y="101" class="tiny">4</text>
+          <rect x="288" y="74" width="60" height="44" rx="6" class="node node-amber"></rect><text x="308" y="101" class="tiny">5</text>
+          <rect x="354" y="74" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="374" y="101" class="tiny">6</text>
+          <text x="24" y="164" class="tiny">next step reads committed tokens at LINEAR positions:</text>
+          <rect x="24" y="178" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="44" y="205" class="tiny">1</text>
+          <rect x="90" y="178" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="110" y="205" class="tiny">2</text>
+          <rect x="156" y="178" width="60" height="44" rx="6" class="node node-rose"></rect><text x="176" y="205" class="tiny">3</text>
+          <rect x="222" y="178" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="242" y="205" class="tiny">4</text>
+          <path d="M186 122 V174" class="arrow" style="stroke: var(--rose); marker-end:url(#f3-arrow-r)"></path>
+          <text x="300" y="205" class="tiny">position 3 reads flat-slot-3 = a sibling's K/V &rarr; near-neighbor drift &rarr; garble</text>
+
+          <text x="24" y="270" class="label">After: the remap copies each committed node's K/V to its linear slot</text>
+          <rect x="24" y="284" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="44" y="311" class="tiny">1</text>
+          <rect x="90" y="284" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="110" y="311" class="tiny">2</text>
+          <rect x="156" y="284" width="60" height="44" rx="6" class="node node-green"></rect><text x="176" y="311" class="tiny">3</text>
+          <rect x="222" y="284" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="242" y="311" class="tiny">4</text>
+          <path d="M384 96 C480 96, 200 284, 186 282" class="arrow" style="stroke: var(--green); marker-end:url(#f3-arrow-g)"></path>
+          <text x="300" y="303" class="tiny">flat-slot-6 (spine node 3) &rarr; linear slot 3: now the read is the accepted node</text>
+          <text x="300" y="325" class="tiny">launch_attn_kv_linear_remap, per full-attn layer, in sample_tokens (graph-safe)</text>
+          <text x="24" y="384" class="tiny">Color key: cyan = accepted spine, amber = sibling branch, rose = the wrong read, green = the corrected slot. The K/V was computed correctly all along; only its address was wrong.</text>
+        </svg>
+        <p class="caption">Figure 3 is the bug and its fix. The branch K/V was computed correctly; it was read from the wrong slot on the next step. The remap copies each committed node's K/V from its scattered flat slot to the linear slot the next forward will read &mdash; the exact twin of the recurrent commit in Figure 2. It runs in the sampler, outside the captured graph region, so it is graph-safe, and it moves under a megabyte per step against a ~99 ms forward, so its cost is noise.</p>
+      </div>
+
+      <p>The fix is <code>launch_attn_kv_linear_remap</code>: after a branched commit, copy each committed node's key and value from its flat verify slot to its linear committed slot, for every full-attention layer, inside the sampler. It is wiring and data movement, not a kernel change; it keeps all branches; and the capture that feeds it is exclusion-based &mdash; it grabs every attention group whose builder is not the recurrent kernel &mdash; so it is robust to any attention variant rather than a narrow whitelist. The measured cost is a 0.7% change in per-forward time, inside cross-boot noise.</p>
+    </section>
+    <section class="section" id="results">
+      <h2>Results</h2>
+      <aside class="sidenote">
+        <p><strong>The bar:</strong> the tree should garble no more than native and resolve no worse. Both hold. The one number that is <em>not</em> a quality claim &mdash; the tree-shape accept difference &mdash; is called out as speed in the next section.</p>
+        <p><strong>Token-ledger:</strong> a byte-identical token-sequence compare against native, not just a gross-garble scan. cat8 fix-on scores 0/15 &mdash; the committed tokens <em>are</em> native's.</p>
+      </aside>
+      <p>The remap and the stateless lifecycle ship together in the locked launcher. Measured across the token-level gate, the agentic gate, and the SWE-Verified eval, branched-tree garble is eliminated and resolve reaches native parity.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Garble and resolve, tree fix-on versus native and versus the prior no-fix tree.</caption>
+          <thead>
+            <tr>
+              <th>Measure</th>
+              <th>No-fix tree</th>
+              <th>Fix-on tree</th>
+              <th>Native</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Token-level garble gate</td>
+              <td class="num">15/15 garbled</td>
+              <td class="num">0/15</td>
+              <td class="num">clean</td>
+            </tr>
+            <tr>
+              <td>Agentic corrupted-identifier rate</td>
+              <td class="num">~40% (cat8), ~45% (cat6)</td>
+              <td class="num">0% (cat8 0/84, cat6 0/61)</td>
+              <td class="num">~1% floor</td>
+            </tr>
+            <tr>
+              <td>SWE-Verified resolve (16 tasks)</td>
+              <td class="num">6/16 (37%)</td>
+              <td class="num">cat8 8/16 (50%), cat6 7/16 (44%)</td>
+              <td class="num">8/16 (50%)</td>
+            </tr>
+            <tr>
+              <td>Committed-token ledger vs native</td>
+              <td class="num">&mdash;</td>
+              <td class="num">0/15 (byte-identical)</td>
+              <td><span class="pill info">reference</span></td>
+            </tr>
+            <tr>
+              <td>Agent turns per task (median)</td>
+              <td class="num">32, bimodal [2 &hellip; 124]</td>
+              <td class="num">~15 (min 8, max 35)</td>
+              <td class="num">14</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The trajectory change is the tell that this is a real fix, not a metric that happened to move. The no-fix tree was bimodally dysfunctional &mdash; a cluster of two-turn hard give-ups and a tail of eighty-to-a-hundred-turn garble-thrash. Fix-on, both modes are gone: a healthy median around fifteen turns, a minimum of eight with no give-ups, a maximum of thirty-five with no thrash, and fifteen of sixteen tasks editing the correct source file. Resolve tracks native task-for-task; the net movement was three garble-failures rescued against one temperature-noise regression, which is what a fix that removes corruption without injecting errors looks like.</p>
+
+      <div class="source-exhibit" aria-label="Completeness audit">
+        <div class="source-head">
+          <strong>Why this is complete, not just passing</strong>
+          <span>Every cached state read positionally after a branched commit now has a re-linearizer</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">GDN recurrent</span><p>Re-linearized by the stateless commit to the running row plus the replay kernel.</p></div>
+          <div class="box good"><span class="tag">Conv window</span><p>Fixed by the same col-0 commit &mdash; one write covers the emulation read and the conv cache.</p></div>
+          <div class="box good"><span class="tag">Attention KV</span><p>Re-linearized by the new remap &mdash; the twin that had been missing.</p></div>
+          <div class="box info"><span class="tag">No fourth state</span><p>Attention is K/V; GDN is conv plus SSM; positions are derived, not cached. There is no other per-request state to mis-address, so a 0% gate cannot be hiding a residual carrier.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="reflection">
+      <h2>Reflection: Why It Took So Long</h2>
+      <aside class="sidenote">
+        <p><strong>Worth stating plainly:</strong> once localized, the fix was obvious and cheap &mdash; mirror the recurrent remap, a small copy, no kernel work. Nearly all the cost was in localization, and localization was slow because the hunt fought the symptom's disguise instead of its structure.</p>
+      </aside>
+      <p>The bug was a data-routing gap masquerading as a numerical one, and three things kept the disguise on. The recurrent state already had a working remap, so state re-linearization <em>felt solved</em> &mdash; and the symmetric missing piece was invisible precisely because its analog was done. The linear chain was clean, so garble read as "branches are just harder" rather than the structural fact that chains are contiguous and branches are not. And the near-neighbor symptom pulled every instinct back toward compute, when a foreign-KV read &mdash; a read of a sibling <em>draft</em> &mdash; produces exactly a small, near-neighbor drift. The clue was there the whole time; we kept reading it as noise.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The portable lessons from the retrospective.</caption>
+          <thead>
+            <tr>
+              <th>Lesson</th>
+              <th>What it means here</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Elimination-by-combination beats bisection for a <em>class</em></td>
+              <td>Testing numerical fixes one at a time only ever proved "not this op." The kitchen sink &mdash; every suspect armed at once &mdash; ruled out the whole compute class in fifteen minutes. Bisection is for finding a member, not falsifying a category.</td>
+            </tr>
+            <tr>
+              <td>A working analog is a map to the missing twin</td>
+              <td>The recurrent remap should have prompted the question "what is the attention-KV analog, and does it exist?" Asymmetry between parallel subsystems is a high-yield place to look.</td>
+            </tr>
+            <tr>
+              <td>Framework assumptions break at the edge, silently</td>
+              <td>"The framework handles the KV" was true for chains and false for branches. Audit such assumptions at the edge case (non-contiguity), not the happy path.</td>
+            </tr>
+            <tr>
+              <td>Match the instrument to the failure mode</td>
+              <td>A scalar rate and a greedy near-tie gate had false negatives; the honest per-token gate at serving temperature was the instrument that held.</td>
+            </tr>
+            <tr>
+              <td>Distrust the symptom's surface</td>
+              <td>"Small near-neighbor drift" felt like compute, but it was the fingerprint of a foreign read. The symptom was never evidence against routing.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="limitations">
+      <h2>Threats to Validity</h2>
+      <aside class="sidenote">
+        <p><strong>Honest scope:</strong> the quality goal is met &mdash; committed tokens are native's, resolve matches native. The open item is speed, and the clean speed comparison has not yet run.</p>
+      </aside>
+      <div class="grid">
+        <div class="box warn">
+          <span class="tag">Speed, not quality</span>
+          <h3>The residual is a speed effect</h3>
+          <p>Different tree shapes accept at slightly different rates (a small, roughly 0.09-token gap between cat6 and cat8 at matched decode), driven by how tree width perturbs the attention projection. It is speed-only: the committed tokens are byte-identical to native, so nothing is lost. An earlier, larger version of this gap was a garble-composition artifact, not a real effect.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Speed A/B pending</span>
+          <h3>The throughput headline is unproven</h3>
+          <p>The tree's whole justification is that its branches accept more tokens per forward than native's chain. That superset win is not yet cleanly measured &mdash; the trustworthy per-forward cost is in hand, but the confound-free tree-vs-native throughput A/B is blocked on a serving-capture plumbing mismatch, independent of this fix. Do not quote a derived tokens-per-second number; the two GPU-time bases disagree in a way that flags an artifact.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Statistics</span>
+          <h3>Sixteen tasks, one run each</h3>
+          <p>Resolve parity is directional over sixteen SWE-Verified tasks at one run per cell. It tracks native task-for-task with an honest per-task rescue/regress ledger, but it is not a powered resolve-rate claim.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Simplification</span>
+          <h3>The old machinery is now redundant</h3>
+          <p>Once the stateless lifecycle owns correctness, the Vol. IV carrier machinery (leaf map, snapshot redirect, the dead chunked-realization producer) is dead weight. The access-equivalence proof gate and the physical deletion pass are the queued follow-ups; until they land, both paths coexist.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="config">
+      <h2>Canonical Config Appendix</h2>
+      <aside class="sidenote">
+        <p><strong>Why include config:</strong> the fixes are flags. The locked launcher pins every one so a run is not env-default-dependent; the native baseline is the stock launcher at spec-5 on FLASH_ATTN.</p>
+      </aside>
+      <details class="fold">
+        <summary>
+          <span>Config table: the baked ship flags</span>
+          <small>From the locked launcher; default-off for each flag is a byte-identical path.</small>
+        </summary>
+        <div class="fold-body">
+          <div class="table-wrap">
+            <table>
+              <caption>The baked stateless-tree and remap configuration.</caption>
+              <thead>
+                <tr><th>Surface</th><th>Baked choice</th><th>Why it matters</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Stateless recurrent lifecycle</td>
+                  <td><code>FR13_APC_COMMIT_TO_RUNNING_ROW=1</code>, <code>FR13_TREE_RUNROW_INIT=1</code>, <code>FR13_APC_BURN_NODE_BANK=1</code></td>
+                  <td>Write the committed leaf to col 0, read col 0, burn the branch columns. One lifecycle; a fail-loud guard forbids partial enable.</td>
+                </tr>
+                <tr>
+                  <td>Attention-KV remap</td>
+                  <td><code>FR13_ATTN_KV_REMAP=1</code></td>
+                  <td>The garble fix: re-linearize committed-token K/V per full-attn layer in the sampler (graph-safe). Gate 15/15 &rarr; 0/15; live SWE resolved at 68&ndash;74% cache hits; &minus;0.7% s/fwd.</td>
+                </tr>
+                <tr>
+                  <td>Projection batch-invariance</td>
+                  <td><code>LUMO_FB_KERNEL_ROWS=1</code>, <code>LUMO_FB_PROJ_PAD_ROWS=16</code></td>
+                  <td>Pads the in-projection to a tree-width-independent row count, removing ~8 of the leaf co-residency flips (lossless, same-boot off 26 vs on 18).</td>
+                </tr>
+                <tr>
+                  <td>Tree topology</td>
+                  <td><code>TREE=cat9</code> (5-spine + top-2 leaves at depths 1&ndash;4), <code>FR10_DECODE_MODE_DEFAULT=tree_mtp</code></td>
+                  <td>The locked branched tree; cat6 and cat8 are measured garble-free, and cat9 (shipped) is garble-free by the same construction.</td>
+                </tr>
+                <tr>
+                  <td>Native baseline</td>
+                  <td><code>fr10_launch_speed_server.sh</code>, num_spec=5, FLASH_ATTN</td>
+                  <td>The reference the tree is held byte- and behavior-equivalent to.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="section" id="receipts">
+      <h2>Source Trail</h2>
+      <p>The claims above are grounded in tracked evidence files, the ship launcher, and the reflection. This work runs on <code>main</code> through the 2026-07-13 ship commits; the two fixes are baked in the locked launcher.</p>
+      <details class="fold">
+        <summary>
+          <span>Full source trail</span>
+          <small>Repo docs, the ship config, and the prior volumes.</small>
+        </summary>
+        <div class="fold-body">
+          <ul class="receipt-list">
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_STATELESS_TREE_DESIGN.md">Stateless-tree design</a> - the zero-persistent-state principle, the Case-B root, the three-flag lifecycle, and the validation gates.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_CACHE_ARCHITECTURE.md">Tree-cache architecture</a> - why native caches for free and the tree does not; the two mismatches and the machinery each spawned.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_REMAP_REFLECTION.md">The 5-Whys reflection</a> - the technical root, the investigation retrospective, and the portable meta-lessons.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_REMAP_SHIP_RESULTS.md">Remap ship results</a> - the consolidated garble, resolve, trajectory, and completeness-audit numbers.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_GARBLE_GATE_AND_FIX.md">Garble gate and fix ladder</a> - the baseline, the reproduction gates, and the refuted pad-block lever / variance wall.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_GARBLE_OUTPUT_PROB_FINDING.md">Output-prob localization</a> - the probe-to-kitchen-sink-to-root-cause saga and the gated fix.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_GARBLE_DRIFT_BINDING_PROVEN.md">Drift-to-misspell binding</a> - the measured join from verify drift to the committed near-neighbor.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_GARBLE_COMMITTER_CLEARED.md">Committer cleared</a> - the offline gate proving the committer is distribution-lossless, so the drift is upstream.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_NATIVE_BATCH_GARBLE_RESULT.md">Batching exonerated</a> - native clean at eight-way co-residency; the tree garbles at one agent per server.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md">The speed-only M-perturbation</a> - the residual accept gap, the untrusted derived-throughput numbers, and the pending clean A/B.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_launch_locked.sh">Locked launcher</a> - the baked ship config for every flag on this page.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">GDN tree kernel</a> - the replay/remap kernels and the col-0 commit.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr10_phase4_patch_vllm_tree_gdn.py">vLLM tree patch</a> - the attention-KV capture and remap wiring.</li>
+            <li><a href="gdn-tree-scan.html">Vol. III</a> - the token-tree verifier this page makes stateless.</li>
+            <li><a href="gdn-prefix-cache.html">Vol. IV</a> - the prefix cache and the carriers this page eliminates by construction.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Volume V. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a>, <a href="round-f.html">Vol. II</a>, <a href="gdn-tree-scan.html">Vol. III</a>, and <a href="gdn-prefix-cache.html">Vol. IV</a>, but this page does not require them. Last updated 2026-07-13.</p>
+  </footer>
+</div>
+</body>
+</html>
