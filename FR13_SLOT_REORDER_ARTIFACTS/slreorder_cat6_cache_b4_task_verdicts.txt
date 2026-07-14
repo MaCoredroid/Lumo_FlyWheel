@@ -1,0 +1,79 @@
+      "instance_id": "astropy__astropy-12907",
+      "codex_elapsed_s": 1182.2,
+      "codex_timed_out": false,
+      "patch_bytes": 1867,
+--
+      "instance_id": "astropy__astropy-13033",
+      "codex_elapsed_s": 858.728,
+      "codex_timed_out": false,
+      "patch_bytes": 1055,
+--
+      "instance_id": "astropy__astropy-13236",
+      "codex_elapsed_s": 1291.216,
+      "codex_timed_out": false,
+      "patch_bytes": 819,
+--
+      "instance_id": "astropy__astropy-13398",
+      "codex_elapsed_s": 6532.447,
+      "codex_timed_out": false,
+      "patch_bytes": 580,
+--
+      "instance_id": "astropy__astropy-13453",
+      "codex_elapsed_s": 1178.785,
+      "codex_timed_out": false,
+      "patch_bytes": 551,
+--
+      "instance_id": "astropy__astropy-13579",
+      "codex_elapsed_s": 851.449,
+      "codex_timed_out": false,
+      "patch_bytes": 1584,
+--
+      "instance_id": "astropy__astropy-13977",
+      "codex_elapsed_s": 913.97,
+      "codex_timed_out": false,
+      "patch_bytes": 903,
+--
+      "instance_id": "astropy__astropy-14096",
+      "codex_elapsed_s": 1826.414,
+      "codex_timed_out": false,
+      "patch_bytes": 1015,
+--
+      "instance_id": "astropy__astropy-14182",
+      "codex_elapsed_s": 998.503,
+      "codex_timed_out": false,
+      "patch_bytes": 920,
+--
+      "instance_id": "astropy__astropy-14309",
+      "codex_elapsed_s": 143.535,
+      "codex_timed_out": false,
+      "patch_bytes": 574,
+--
+      "instance_id": "astropy__astropy-14365",
+      "codex_elapsed_s": 294.311,
+      "codex_timed_out": false,
+      "patch_bytes": 475,
+--
+      "instance_id": "astropy__astropy-14369",
+      "codex_elapsed_s": 3048.973,
+      "codex_timed_out": false,
+      "patch_bytes": 12150,
+--
+      "instance_id": "astropy__astropy-14508",
+      "codex_elapsed_s": 1092.255,
+      "codex_timed_out": false,
+      "patch_bytes": 1282,
+--
+      "instance_id": "astropy__astropy-14539",
+      "codex_elapsed_s": 469.931,
+      "codex_timed_out": false,
+      "patch_bytes": 530,
+--
+      "instance_id": "astropy__astropy-14598",
+      "codex_elapsed_s": 1745.218,
+      "codex_timed_out": false,
+      "patch_bytes": 507,
+--
+      "instance_id": "astropy__astropy-14995",
+      "codex_elapsed_s": 630.041,
+      "codex_timed_out": false,
+      "patch_bytes": 607,

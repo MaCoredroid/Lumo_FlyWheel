@@ -1,0 +1,10 @@
+{
+  "schema": "fr13.sfwd_gpu_timer.v1",
+  "pid": 175,
+  "final": false,
+  "decode_forward_gpu_seconds": 2270.608805877673,
+  "n_pure_decode_steps_timed": 11114,
+  "n_drafts_in_timed_steps": 35936,
+  "metric_name": "vllm:fr13_decode_forward_gpu_seconds_total",
+  "note": "pure-decode (uniform_decode) model-forward GPU seconds; prefill + mixed + idle EXCLUDED; async cuda events, single synchronize at teardown. Cumulative running total; the reducer takes a delta across a request window."
+}

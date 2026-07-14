@@ -1,0 +1,218 @@
+{
+  "schema": "fr13.measure.deploy_speed.v1",
+  "kind": "speed",
+  "instrument": "OFF",
+  "regime": "deployment",
+  "regime_note": "DEPLOYMENT trajectory: s/fwd + accept/event over the REAL codex agent loop on SWE-bench-Verified tasks (chat-templated /v1/responses, multi-turn, tool calls), from the per-task /metrics brackets. NO degenerate raw-prompt fork; accept is on the deployment trajectory.",
+  "label": "deploy_speed_slreorder_cat8_cache_b4_b4",
+  "arm": "slreorder_cat8_cache_b4",
+  "batch_size": 4,
+  "out_root": "output/fr13_slot_reorder/live_b4/slreorder_cat8_cache_b4/swe_out",
+  "n_tasks": 16,
+  "task_instance_ids": [
+    "astropy__astropy-12907",
+    "astropy__astropy-13033",
+    "astropy__astropy-13236",
+    "astropy__astropy-13398",
+    "astropy__astropy-13453",
+    "astropy__astropy-13579",
+    "astropy__astropy-13977",
+    "astropy__astropy-14096",
+    "astropy__astropy-14182",
+    "astropy__astropy-14309",
+    "astropy__astropy-14365",
+    "astropy__astropy-14369",
+    "astropy__astropy-14508",
+    "astropy__astropy-14539",
+    "astropy__astropy-14598",
+    "astropy__astropy-14995"
+  ],
+  "engagement": {
+    "tok_per_draft": 8.0,
+    "expected_tok_per_draft": 8.0,
+    "engaged": true
+  },
+  "speed_basis": "d(request_decode_time_seconds_sum)/d(spec_decode_num_drafts_total)",
+  "s_per_fwd": 0.4979456788687373,
+  "s_per_fwd_note": "WALL-SPAN basis (request_decode_time = last_token_ts - first_token_ts, vLLM v1/metrics/stats.py: 'preemptions during decode are included'). PREFILL-CONFOUNDED at B>1: the decode window absorbs co-resident chunked-prefill the scheduler interleaves into it (high prefill_frac) + idle. Use s_per_fwd_gpu for the prefill-independent decode-kernel time.",
+  "s_per_fwd_gpu": 0.06377047785355586,
+  "s_per_fwd_gpu_per_forward": 0.21572329741937718,
+  "s_per_fwd_gpu_basis": "d(fr13_decode_forward_gpu_seconds_total)/d(fr13_decode_forward_gpu_drafts_total) [MATCHED pure-decode drafts; NOT global spec_decode_num_drafts_total]",
+  "s_per_fwd_gpu_note": "PREFILL-INDEPENDENT: GPU-active time in the PURE-DECODE model-forward (tree TREE_ATTN / MTP verify forward) only, summed over uniform-decode steps via async cuda events (gpu_model_runner.execute_model). Divided by the MATCHED draft count (drafts on those same pure-decode steps), NOT the global spec_decode_num_drafts_total: the global counter adds drafts from mixed prefill+decode steps the timer excludes (~49% at B=4 deployment), a prefill-load-dependent, arm-dependent confound that would defeat prefill-independence. s_per_fwd_gpu_per_forward = per pure-decode FORWARD (matches the banked B=1 ~0.218). None => timer-OFF (default; byte-identical) OR a pre-fix run whose brackets lack the matched-denominator lines (re-derive from the sidecar fwd_gpu/n_drafts_in_timed_steps).",
+  "derived_tps_gpu": 70.55957355501499,
+  "derived_tps_gpu_note": "DERIVED = committed_per_event / s_per_fwd_gpu = decode-kernel TPS (prefill-independent). None unless the timer was on.",
+  "accept_per_event": 3.499617722746429,
+  "accept_per_event_note": "DEPLOYMENT-TRAJECTORY accept (real codex loop). B-DEPENDENT; valid for this batch_size on this workload. NOT the off-distribution raw-prompt accept (which forked degenerate).",
+  "committed_per_event": 4.499617722746429,
+  "derived_tps": 9.036362626881166,
+  "derived_tps_note": "DERIVED = committed_per_event / s_fwd = generation_tokens / request_decode_time_seconds_sum = the CONCURRENCY-SUMMED basis (decode-seconds summed over co-resident requests). FR10 flagged this as NOT directly E5-comparable at B>1. Use per_request_decode_tps (per-stream rate) or aggregate_decode_tps (GPU throughput) instead.",
+  "per_request_decode_tps": 9.4099842992227,
+  "per_request_decode_tps_note": "NON-deflated per-STREAM decode rate = count/sum of vLLM request_time_per_output_token (= 1/avg per-request mean-TPOT). Per-request normalized (NOT concurrency-summed); includes the real co-residency cost at B>1. The FR10-recommended per-request basis (cross-references the pre-kernel B=4 per-request ~28 synthetic / B=1 ~18 deployment).",
+  "aggregate_decode_tps": 25.60584802790967,
+  "aggregate_window_wall_s": 5331.243075847626,
+  "aggregate_decode_tps_note": "END-TO-END throughput = total generation_tokens / UNION wall (earliest-pre -> latest-post). The wall is IDLE- AND PREFILL-INCLUSIVE, so this is the SAME basis as the fr9 steptrace decode_tps=39.9 baseline (gen/wall) and is the ONLY field comparable to it - but ONLY at matched task-count + concurrency + prefill_frac (see effective_concurrency + prefill_frac). It is NOT decode capacity (a high-prefill / drained-batch run reads low here without being slower per forward). For per-forward/decode speed use s/fwd or per_request_decode_tps; aggregate = per_stream_decode_rate x effective_concurrency (exact identity).",
+  "per_stream_decode_rate": 9.26580715917697,
+  "effective_concurrency": 2.7634773299322677,
+  "prefill_frac": 0.22563963778108814,
+  "prefill_frac_note": "request_prefill_time_seconds_sum / request_decode_time_seconds_sum = the workload's prefill-vs-decode GPU-time ratio. HIGH (e.g. 0.39 for the 4 astropy tasks vs 0.108 for fr9's 16-task set) drags aggregate_decode_tps down WITHOUT a per-forward slowdown. The driver behind aggregate gaps; MATCH it before comparing aggregates across runs.",
+  "raw_counter_delta_aggregate": {
+    "vllm:request_decode_time_seconds_sum": 53405.66995002981,
+    "vllm:spec_decode_num_drafts_total": 107252.0,
+    "vllm:spec_decode_num_accepted_tokens_total": 375341.0,
+    "vllm:spec_decode_num_draft_tokens_total": 858016.0,
+    "vllm:generation_tokens_total": 481556.0,
+    "vllm:request_time_per_output_token_seconds_sum": 157.27975232883796,
+    "vllm:request_time_per_output_token_seconds_count": 1480.0,
+    "vllm:request_prefill_time_seconds_sum": 12050.43602298107,
+    "vllm:fr13_decode_forward_gpu_seconds_total": 5922.683130649,
+    "vllm:fr13_decode_forward_gpu_steps_total": 27455.0,
+    "vllm:fr13_decode_forward_gpu_drafts_total": 92875.0
+  },
+  "per_task": [
+    {
+      "instance_id": "astropy__astropy-12907",
+      "drafts": 2654.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.4753965380343313,
+      "s_per_fwd_gpu": 0.052185342379669854,
+      "accept_per_event": 3.694800301431801,
+      "per_request_decode_tps": 8.87183627061168
+    },
+    {
+      "instance_id": "astropy__astropy-13033",
+      "drafts": 4554.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.5079749354088109,
+      "s_per_fwd_gpu": 0.055611876709095724,
+      "accept_per_event": 3.678524374176548,
+      "per_request_decode_tps": 8.824581940612235
+    },
+    {
+      "instance_id": "astropy__astropy-13236",
+      "drafts": 5446.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.536687159596994,
+      "s_per_fwd_gpu": 0.05662106279792043,
+      "accept_per_event": 3.6970253396988615,
+      "per_request_decode_tps": 8.680213129234524
+    },
+    {
+      "instance_id": "astropy__astropy-13398",
+      "drafts": 17749.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.5002694881347326,
+      "s_per_fwd_gpu": 0.061640624009536335,
+      "accept_per_event": 3.567130542565778,
+      "per_request_decode_tps": 9.375073502350805
+    },
+    {
+      "instance_id": "astropy__astropy-13453",
+      "drafts": 6850.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.44974603685298864,
+      "s_per_fwd_gpu": 0.06101965147863841,
+      "accept_per_event": 3.4816058394160585,
+      "per_request_decode_tps": 9.29050125252645
+    },
+    {
+      "instance_id": "astropy__astropy-13579",
+      "drafts": 14808.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.520431880426967,
+      "s_per_fwd_gpu": 0.06404353107794751,
+      "accept_per_event": 3.5663155051323607,
+      "per_request_decode_tps": 9.44956369810678
+    },
+    {
+      "instance_id": "astropy__astropy-13977",
+      "drafts": 6569.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.5111268877734703,
+      "s_per_fwd_gpu": 0.062439412398819845,
+      "accept_per_event": 3.4155883696148575,
+      "per_request_decode_tps": 10.066485968819713
+    },
+    {
+      "instance_id": "astropy__astropy-14096",
+      "drafts": 3085.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.7539109350228909,
+      "s_per_fwd_gpu": 0.06627036355151042,
+      "accept_per_event": 3.687844408427877,
+      "per_request_decode_tps": 9.143546383748909
+    },
+    {
+      "instance_id": "astropy__astropy-14182",
+      "drafts": 8522.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.5373853018725493,
+      "s_per_fwd_gpu": 0.06341883590510246,
+      "accept_per_event": 3.608190565594931,
+      "per_request_decode_tps": 8.82433811995048
+    },
+    {
+      "instance_id": "astropy__astropy-14309",
+      "drafts": 1431.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.4643281998228644,
+      "s_per_fwd_gpu": 0.05887022803058628,
+      "accept_per_event": 3.6037735849056602,
+      "per_request_decode_tps": 8.91356410575511
+    },
+    {
+      "instance_id": "astropy__astropy-14365",
+      "drafts": 3428.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.5649846077205498,
+      "s_per_fwd_gpu": 0.06318074006523919,
+      "accept_per_event": 3.708868144690782,
+      "per_request_decode_tps": 10.094546761784503
+    },
+    {
+      "instance_id": "astropy__astropy-14369",
+      "drafts": 12252.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.4524381745276304,
+      "s_per_fwd_gpu": 0.07702891837034699,
+      "accept_per_event": 3.371612797910545,
+      "per_request_decode_tps": 10.441313839934471
+    },
+    {
+      "instance_id": "astropy__astropy-14508",
+      "drafts": 4216.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.5079892704162157,
+      "s_per_fwd_gpu": 0.05862027183504569,
+      "accept_per_event": 3.3799810246679316,
+      "per_request_decode_tps": 8.251440242144668
+    },
+    {
+      "instance_id": "astropy__astropy-14539",
+      "drafts": 2774.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.5250893717735103,
+      "s_per_fwd_gpu": 0.05761133454307439,
+      "accept_per_event": 3.548666186012978,
+      "per_request_decode_tps": 8.462206413824681
+    },
+    {
+      "instance_id": "astropy__astropy-14598",
+      "drafts": 7194.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.4077739145499047,
+      "s_per_fwd_gpu": 0.06592202514420299,
+      "accept_per_event": 3.1841812621629138,
+      "per_request_decode_tps": 10.76929712468166
+    },
+    {
+      "instance_id": "astropy__astropy-14995",
+      "drafts": 5720.0,
+      "tok_per_draft": 8.0,
+      "s_per_fwd": 0.40243840896885946,
+      "s_per_fwd_gpu": 0.0668664535553467,
+      "accept_per_event": 3.1351398601398603,
+      "per_request_decode_tps": 11.545698158032526
+    }
+  ],
+  "ts": 1784001813.785223
+}
