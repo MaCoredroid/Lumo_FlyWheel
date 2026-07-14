@@ -18288,6 +18288,97 @@ if _FR13PCT_ON:
     return True
 
 
+def _patch_gpu_model_runner_uniform_dispatch_guard() -> bool:
+    """FR13_UNIFORM_DISPATCH_GUARD: veto FULL-cudagraph uniform-decode dispatch on
+    PSEUDO-uniform mixed steps (the 2026-07-07 + 2026-07-14 EngineDeadError class).
+
+    Mechanism (workflow wf_c3937df5-d49, 4 mappers converged, verified vs source):
+    vLLM's `_is_uniform_decode` is SHAPE-ONLY (max_num_scheduled_tokens ==
+    uniform_decode_query_len and num_tokens == max*num_reqs). A chunked-prefill
+    TAIL of exactly uniform_decode_query_len (= 1+num_spec, 9 for cat8) tokens
+    co-scheduled with tree-spec decodes satisfies both clauses => the runner
+    replays the FULL bs=N uniform-SPEC graph: the captured staging fills re-stamp
+    flags=[1, N] with capture-time constants while the live step truly has N-1
+    spec + 1 prefill, AND the GDN builder's persistent-buffer refresh (gated
+    num_prefills==0) was skipped => the whole replayed forward consumes STALE
+    spec_state_indices => the committer's rows assert (:9815) fires (correctly).
+    SILENT SIBLING: a batch of pure prefill tails each exactly that length (zero
+    spec) also replays the spec graph with NO committer to catch it.
+
+    Fix: force_uniform_decode=False (existing kwarg, plumbed to _is_uniform_decode;
+    None = stock bit-for-bit) whenever spec decoding is configured AND the step is
+    not PURELY spec-decode by the committer's own source of truth
+    (scheduled_spec_decode_tokens covering every request, no ndt<0 row). Demoted
+    steps dispatch PIECEWISE: the mixed GDN metadata (spec+prefill) is actually
+    consumed, the tree staging Python runs live (flags=[1, true_count]), committer
+    rows match, and the prefill tail takes the prefill path. `num_spec_tokens > 0`
+    guard is LOAD-BEARING: without it, non-spec configs would demote genuine
+    1-token uniform decodes and lose FULL graphs. Host-side only, outside any
+    captured region; zero HBM/kernel change. NOT flag-gated: the crash class is
+    pre-existing (hit 2026-07-07 pre-slot-reorder) and the fix is a pure
+    correctness guard.
+    """
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_UNIFORM_DISPATCH_GUARD"
+    if sentinel in text:
+        return False
+    anchor = """            ) = self._determine_batch_execution_and_padding(
+                num_tokens=num_tokens_unpadded,
+                num_reqs=num_reqs,
+                num_scheduled_tokens_np=num_scheduled_tokens_np,
+                max_num_scheduled_tokens=max_num_scheduled_tokens,
+                use_cascade_attn=cascade_attn_prefix_lens is not None,
+                num_encoder_reqs=len(scheduler_output.scheduled_encoder_inputs),
+            )
+"""
+    if anchor not in text:
+        raise RuntimeError("FR13_UNIFORM_DISPATCH_GUARD anchor not found")
+    # The guard must precede the tuple-unpack STATEMENT the anchor closes, so it
+    # is injected inside the replacement ahead of a re-emitted assignment; the
+    # original assignment's tuple-open lines sit ABOVE the anchor and are left
+    # in place -- Python evaluates the RHS call after the guard ran because the
+    # guard lines are inserted before the tuple-open via a second anchor below.
+    tuple_open = """            (
+                cudagraph_mode,
+                batch_desc,
+                should_ubatch,
+                num_tokens_across_dp,
+                cudagraph_stats,
+            ) = self._determine_batch_execution_and_padding(
+"""
+    if tuple_open not in text:
+        raise RuntimeError("FR13_UNIFORM_DISPATCH_GUARD tuple-open anchor not found")
+    guard = """            # FR13_UNIFORM_DISPATCH_GUARD: veto FULL-graph uniform dispatch on
+            # pseudo-uniform mixed steps (prefill tail == uniform_decode_query_len
+            # co-scheduled with spec decodes => stale-staging graph replay). The
+            # purity test is the committer's own source of truth. None = stock.
+            _fr13_force_uniform = None
+            if self.num_spec_tokens > 0 and (
+                len(scheduler_output.scheduled_spec_decode_tokens) != num_reqs
+                or bool(
+                    (self.num_decode_draft_tokens.np[:num_reqs] < 0).any()
+                )
+            ):
+                _fr13_force_uniform = False
+            (
+                cudagraph_mode,
+                batch_desc,
+                should_ubatch,
+                num_tokens_across_dp,
+                cudagraph_stats,
+            ) = self._determine_batch_execution_and_padding(
+"""
+    text = text.replace(tuple_open, guard, 1)
+    new_call = anchor.replace(
+        "                num_encoder_reqs=len(scheduler_output.scheduled_encoder_inputs),\n",
+        "                num_encoder_reqs=len(scheduler_output.scheduled_encoder_inputs),\n"
+        "                force_uniform_decode=_fr13_force_uniform,\n",
+    )
+    text = text.replace(anchor, new_call, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_slot_reorder() -> bool:
     """FR13_SLOT_REORDER (edits 1+4 of 5): spine-first canonical KV slot layout.
 
@@ -18715,6 +18806,9 @@ def main() -> int:
         # this patch's propose_draft_token_ids restore anchor in program order,
         # but the two injections share no anchor text -- order-independent).
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_slot_reorder()),
+        # FR13_UNIFORM_DISPATCH_GUARD: pre-existing pseudo-uniform mixed-step
+        # graph-replay crash fix (NOT flag-gated; pure correctness guard).
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_uniform_dispatch_guard()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_draft_reqkey()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_fr13_det_warn()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_replay_boundary_tap_d()),

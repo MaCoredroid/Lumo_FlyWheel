@@ -741,3 +741,27 @@ co-scheduled with spec decodes at B>1) and fires flag-ON or flag-OFF. Prior 16/1
 this co-schedule. Fix design in flight: workflow wf_c3937df5-d49 (4 source-mappers + synthesizer)
 — exact gating branch + minimal fail-loud-preserving fix (per-step staleness invalidation +
 mixed-step staging or sound subset-replay; NO silent tolerance). Campaign relaunches after.
+
+## MIXED-STEP CRASH FIXED: FR13_UNIFORM_DISPATCH_GUARD (2026-07-14)
+
+Workflow wf_c3937df5-d49 (4 mappers + synthesizer) CORRECTED my mechanism twice: (1) flags[0] IS
+cleared after every commit consume (:9093/:9168/:9865 — my grep missed the alias), so plain
+staging-skip would fire the OTHER assert; (2) the crash class fired BEFORE (2026-07-07,
+sl_cat8_cache_qc4, "committer rows 2 != staged 3" — pre-slot-reorder, cast-iron pre-existing).
+TRUE MECHANISM: vLLM `_is_uniform_decode` is SHAPE-ONLY; a chunked-prefill tail of exactly
+uniform_decode_query_len (9) tokens co-scheduled with spec decodes passes it => FULL bs=N
+uniform-SPEC graph REPLAYS: captured staging fills re-stamp flags=[1,N] (capture-time constants)
+AND the GDN builder's persistent-buffer refresh (gated num_prefills==0, gdn_attn.py:672) was
+skipped => whole replayed forward consumed STALE spec_state_indices. Assert refused a genuinely
+corrupt step (working as designed). SILENT SIBLING: pure prefill-tail batches (zero spec) replay
+the spec graph with NO committer to catch it — plausible past B4 flake/garble carrier.
+FIX (patcher _patch_gpu_model_runner_uniform_dispatch_guard, NOT flag-gated — pure correctness):
+before _determine_batch_execution_and_padding, force_uniform_decode=False (existing stock kwarg;
+None=stock) when num_spec_tokens>0 AND the step is not PURELY spec by the committer's own truth
+(scheduled_spec_decode_tokens covering every req; no ndt<0). Demoted steps run PIECEWISE: mixed
+metadata consumed, staging Python live (flags=[1,true_count]), committer rows match, prefill tail
+takes the prefill path. num_spec_tokens>0 guard LOAD-BEARING (non-spec configs keep FULL graphs
+on 1-token decodes). Host-side only; genuine uniform steps byte-identical (None). Also closes the
+silent sibling. S0 PASS (17 patches sequence + markers). Rejected: per-step flag zeroing (replay
+re-stamps after build), staging-gate widening (Python never runs under replay), subset-consume
+(silent garble of stale rows — banned).
