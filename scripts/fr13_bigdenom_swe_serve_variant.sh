@@ -75,6 +75,9 @@ CAT555_TREE="[(0,),(1,),(2,),(3,),(4,),(0,0),(0,1),(0,2),(0,3),(0,4),(0,0,0),(0,
 # 55555 = widths [5,5,5,5,5]: depth-5 spine + 4 branches/depth (25 choices, 26 rows) — tree-scaling probe past 16
 T55555_TREE="[(0,),(1,),(2,),(3,),(4,),(0,0),(0,1),(0,2),(0,3),(0,4),(0,0,0),(0,0,1),(0,0,2),(0,0,3),(0,0,4),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,3),(0,0,0,4),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,3),(0,0,0,0,4)]"
 T33333_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2)]"
+# 333 = widths [3,3,3]: depth-3 spine (spine_steps=2) + 2 branches/depth (9 choices). SAME width
+# as t33333, differs ONLY in depth -> dfwd(t33333)-dfwd(t333) = 2 spine-steps' drafter cost.
+T333_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2)]"
 CAT55222_TREE="[(0,),(1,),(2,),(3,),(4,),(0,0),(0,1),(0,2),(0,3),(0,4),(0,0,0),(0,0,1),(0,0,0,0),(0,0,0,1),(0,0,0,0,0),(0,0,0,0,1)]"
 # cat55221 [5,5,2,2,1]=15 nodes, depth-5: the FITTING depth-5 wide arm (n16->pad16).
 # Wide front (5,5) intact; deepest spine node carries no leaf (width-1). vs E5.
@@ -146,6 +149,7 @@ case "$KIND" in
   cat8)      LAUNCHER=forked; TREEARG="$CAT8_TREE";     EXPECT_RATIO=8;  declare -a XFLAGS=() ;;
   333)       LAUNCHER=forked; TREEARG="$THREETHREE_TREE"; EXPECT_RATIO=9; declare -a XFLAGS=() ;;
   cat555)    LAUNCHER=forked; TREEARG="$CAT555_TREE";    EXPECT_RATIO=15; declare -a XFLAGS=() ;;
+  t333)      LAUNCHER=forked; TREEARG="$T333_TREE";     EXPECT_RATIO=9;  declare -a XFLAGS=() ;;
   t33333)    LAUNCHER=forked; TREEARG="$T33333_TREE";   EXPECT_RATIO=15; declare -a XFLAGS=() ;;
   t55555)    LAUNCHER=forked; TREEARG="$T55555_TREE";   EXPECT_RATIO=25; declare -a XFLAGS=() ;;
   cat55222)  LAUNCHER=forked; TREEARG="$CAT55222_TREE";  EXPECT_RATIO=16; declare -a XFLAGS=() ;;
