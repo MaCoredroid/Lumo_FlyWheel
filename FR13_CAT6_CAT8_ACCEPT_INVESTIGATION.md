@@ -723,3 +723,21 @@ Per the binding-gate policy (live SWE-Verified agentic only; probes = diagnostic
 VERDICT moves to the live B=4 16-task run: LAUNCHED slreorder_cat8_cache_b4 (cachefirst ship env
 + FR13_SLOT_REORDER=1, WALL=0), vs clean refs native+cache 3.050 accept / 8/16 resolve / 1
 give-up + fix-on-remap cat8 ~3.3 accept (FR13_REMAP_SHIP_RESULTS.md).
+
+## LIVE 3-ARM CAMPAIGN CRASH — PRE-EXISTING mixed-step staging bug, NOT the fix (2026-07-14 ~01:40)
+
+Arm 1 (cat8+fix) died ~40min in: EngineDeadError "FR13_REPLAY_ROUTE: committer rows 3 != staged
+spec decodes 4 for layer language_model.model.layers.0.linear_attn" (fail-loud assert, correct to
+fire). Scheduler dump: 4 reqs x 9 tokens; only 3 in scheduled_spec_decode_tokens; the 4th =
+CHUNKED-PREFILL TAIL of exactly 9 tokens (num_computed=28672, num_output=0) co-scheduled with the
+3 tree-spec decodes. Mechanism: runner marks the prefill req num_decode_draft_tokens=-1 (correct,
+3 spec); but the tree GDN STAGING block (patcher :5084-5125, flags[0].fill_(1) + flags[1].fill_(
+num_spec_decodes) at :5116-5119) did NOT run that step, and flags[0] is NEVER zeroed (one-way
+freshness, :5116 is the only [0] write) => the replay route consumed the PREVIOUS step's staging
+(4) with fresh==1 => assert. The assert PREVENTED real corruption (stale bank replay).
+NOT the slot-reorder: none of the 5 edits touch scheduling, GDN staging, num_spec_decodes, or
+committer row publication; the trigger is data-dependent (prefill tail <= tree_n tokens
+co-scheduled with spec decodes at B>1) and fires flag-ON or flag-OFF. Prior 16/16 runs never drew
+this co-schedule. Fix design in flight: workflow wf_c3937df5-d49 (4 source-mappers + synthesizer)
+— exact gating branch + minimal fail-loud-preserving fix (per-step staleness invalidation +
+mixed-step staging or sound subset-replay; NO silent tolerance). Campaign relaunches after.
