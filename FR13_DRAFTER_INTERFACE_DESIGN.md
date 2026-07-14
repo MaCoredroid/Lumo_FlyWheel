@@ -329,3 +329,28 @@ default mtp = byte-identical). Precise plan:
 GATES after build: self-test (byte-id) -> detached boot merged (ENGAGED assert) -> garble temp06 ->
 live B=4 16-task A/B (correctness parity + dfwd speed same-or-better; accept-hold + D2H/H2D sync are
 the decisive measured gates).
+
+## SEAM WIRING PROGRESS (2026-07-14): orchestration DONE; token-source gotcha found
+DONE + committed: orchestration module fr13_merged_drafter.py (23/23) -- lifecycle + rolling buffer
++ ADAPTIVE gate + engagement counters, mock-cache tested. Now 5 CPU components proven (Gate1/assembly
+/adapter/fill/orchestration) + flag plumbing (prelaunch + sidecar). Patcher hooks are THIN (call the
+module).
+INJECTION SITES LOCATED: commit-site ~:8734-8767 has accepted_token_rows + _fr13_row_req_ids
+(_LUMO_FA_SAMPLER_ROW_REQ_IDS) in scope; seam :13361 (root token :13364, spine loop :13610, packer
+:13905).
+CRITICAL GOTCHA (must fix before the live gate): the Arctic add_active_response stream MUST be the
+FULL committed tokens per step (accepted DRAFTS + BONUS token), NOT accepted_token_rows alone
+(=_LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS :8734, which OMITS the bonus). A gappy (bonus-less) history
+is NOT vacuous -- Arctic still matches the consistently-gappy stream, so the ENGAGEMENT gate would
+FALSELY PASS -- but its predicted drafts are wrong-by-one-per-step => LOW accept (only the live A/B
+catches it). Authoritative full stream = output_token_ids (accepted+bonus, :8546) or the runner
+output-append; bonus per-req = native_bonus_token / bonus_targets_cpu[req_i] (:8318). => feed
+ingest_committed the full committed row (accepted_token_rows[i] ++ [bonus_i]) so MY rolling buffer AND
+Arctic's history are the REAL sequence, and drafts predict reality.
+REMAINING THIN HOOKS: S1 module-scope (import fr13_merged_drafter, merged_on() sidecar, get_cache);
+S2 RUNNER frame (note_new_requests with prompts + retire_requests batch diff -- co-locate with the
+add_active_response ingestion so the stream is non-gappy); S3 ingest full committed row at the
+commit-site; S4 seam (decide_and_fill after mtp_k MTP tokens -> if do_skip: apply spine_tokens/
+wide_topk + shorten loop; else full MTP); S5 patcher self-test (byte-id off + markers on). Then boot
+ENGAGED-assert (require match_full>0 not just speculate_fired>0, to catch the gappy-history trap) ->
+garble -> live 16-task A/B.
