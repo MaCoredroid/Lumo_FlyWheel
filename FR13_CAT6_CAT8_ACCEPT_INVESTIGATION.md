@@ -1010,3 +1010,18 @@ SHIPPED + BANKED: FR13_SLOT_REORDER (superset +0.166, garble-clean, accept>nativ
 timers (sfwd/dfwd/cfwd + dfwd 3-way split), fr13_detached_boot.sh (defeats the trap-teardown killer),
 fr13_tree_shape_dp.py. HONEST caveat: P2/P3 are inferred not directly measured — if speed is refunded,
 measure the committer replay share first (delicate committer edit) before the structural drafter work.
+
+## FRONT 1: "IS 16 THE LIMIT?" — YES but SOFT/SELF-IMPOSED (2026-07-14, tree_scale sweep)
+
+B=1 sweep (num_tokens=tree_n, no batch-tile confound): cat8(9)=131.3ms, t33333(16)=145.0ms
+(SMOOTH ~2ms/row, NO cliff; accept RISES 3.691->3.962 with tree size). t55555(26)=BOOT FAIL.
+ROOT: `NotImplementedError: FR10 GDN tree verifier only warms padded tree sizes <=16, got 26`
+(gdn_attn.py:294 = patcher :236): n_pad=1<<(n-1).bit_length(); if n_pad>16 raise. So tree_n<=16
+=> pad16 OK; 17-32 => pad32 => raises. **The 16 ceiling is the GDN verifier warmup-buffer
+padding sized for pad-16 — NOT a kernel/tile/graph physics wall.** Corroborating: FA2 query
+tile=64 rows; cudagraph_capture_sizes=[1,2,4,8,16,24,32,40,48] max48 (16 not special). Raising to
+pad32 = bounded change (widen the >16 guard + the strict/visible [n_pad×n_pad] masks + replay
+ring/state buffers to 32). VERDICT: verify scales linearly (~2ms/row, weight-read-dominated),
+accept keeps rising with width; 16 is a soft cap, pad-32 trees are feasible at B<=1 (graph-captured
+<=48 tok) but B=4 past ~12 rows/req falls to eager unless cudagraph_capture_sizes widened. Whether
+to go past 16 = the width-economics (bigger accept vs ~2ms/row + drafter host + graph ceiling).
