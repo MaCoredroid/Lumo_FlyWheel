@@ -698,3 +698,11 @@ Engagement audit: treefix logged BOTH pi lines (runner + tree_attn bias, equal, 
 generation); treectrl audit EMPTY (control genuinely off). => The slot-reorder fix is
 GARBLE-CLEAN at the behavioral gate. S2 complete (S2a e2e+control, S2b garble).
 NEXT: live 3-3-3 arm (running), then S3 goal gate (cat8+fix vs E5, graph, matched proof).
+
+## S2c LIVE 3-3-3 ARM: PASS (2026-07-14, s2c_333_20260714T002751Z) — fix is tree-agnostic LIVE
+
+Zero code changes. Engagement: runner pi == bias pi == [0,1,4,7,2,3,5,6,8,9] tree_n=10 (EXACTLY
+the logic-model prediction); causal=False; remap engaged. STRUCTURAL PROOF: accepted spine path
+[1,4,7] committed ZERO-COPY (foreign_first=0) — the permuted-slot identity (spine depth-d ==
+flat slot d) held on a never-seen tree. Probes clean: greedy 2.446, temp06 2.534 accept/fwd
+(structurally right for depth-3 spine; not comparable to cat8 depth-5). User challenge MET.
