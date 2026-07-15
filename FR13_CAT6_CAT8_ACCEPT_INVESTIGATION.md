@@ -1247,3 +1247,40 @@ baked_needs_2nd_capture, eager chain step; #1 risk = depth-15 amplification->gar
 (arctic runner-ups, no skip): unlikely to win per the deep-accept finding. DELIVERABLE PROVEN: full
 merged pipeline runs lossless + crash-free live; the measured reason it doesn't win (arctic deep-accept
 << MTP) is the honest verdict.
+
+## CONFIDENCE-GATED SKIP (refined lever after merge16d) — measured: never-regress but BATCH-COUPLED
+After merge16d (blanket skip -17%: accept collapsed 3.61->1.97 because the skip fired on trie COVERAGE
+not confidence), built the confidence-gated skip: arctic_match_confidence (min per-node prob) +
+FR13_MERGED_SKIP_MIN_PROB (skip ONLY when the match's min-prob >= thresh, else full MTP = never-regress
+by design; default 0.0=blanket). Test 28/28. Live calibration (gated05/10/50):
+
+1. Arctic confidence DISTRIBUTION (needle histogram, threshold-independent, ~2200 matches): 14% <.05,
+   26% .05-.15, 19% .15-.30, 12% .30-.50, **29-34% >=.50**. So there IS a substantial high-confidence
+   tail (arctic confidence RISES as context/repetition accumulates mid-trajectory). NOTE: the FIRST
+   small-sample needle (168 matches) misleadingly showed only 7% >=.5 -> I twice concluded prematurely
+   ("marginal", killed gated05) and CORRECTED on the fuller histogram. Lesson: never calibrate off the
+   first needle.
+
+2. BATCH-COUPLING (the killer, MEASURED): the skip is BATCH-WIDE (_fr10_spine_steps=0 affects the whole
+   batch), so it fires only when ALL concurrent rows are full-depth AND confident. Measured Running-count
+   dist on this gate = ~29/36 Running:4 (effective batch ~3.8). With ~30% per-row confidence, all-4 ~=
+   0.3^4 ~= 1-4%. gated50@0.5 measured skip_fired ~1.6% over ~1440 steps (did NOT rise) => drafter skip
+   applies to <2% of steps => ~= BASELINE (never-regress, but rarely active). Wash, no speed win.
+
+FUNDAMENTAL TENSION: loose gate (blanket) fires 96% but collapses accept (-17%); tight gate (confidence)
+holds accept but the batch-AND rarely fires at B>1 (~= baseline). The ONLY way to get BOTH = PER-ROW skip
+(skip confident rows individually, run full MTP for the rest) = architectural (the batched spine forward
++ tree kernel process the whole batch uniformly; per-row variable-depth is not a cheap change).
+
+NUANCE (deployment-dependent): on SPARSE single-user agentic serving (Running=1, per
+[[reference_b4_effective_batch_agentic_sparsity]]) the batch-AND collapses to per-row -> confidence-gated
+skip would fire ~30% -> could win there. But the REQUIRED gate is the DENSE B=4 16-task, where it washes.
+
+## FRONT 2 SPEED GOAL — HONEST COST-GATE (2026-07-15)
+CORRECTNESS goal = MET (merge16d 8/16==8/16 resolve, identical 3 give-ups, lossless, crash-free live).
+SPEED goal = NO CHEAP WIN on the B=4 gate: blanket skip -17% (arctic deep-accept << MTP), confidence-gated
+skip ~= baseline (batch-coupled). Real win levers are architectural, NOT cheap: (A) PER-ROW skip; (B)
+adaptive geometry (deep chains on long confident matches; shape-probe: baked_needs_2nd_capture + depth-15
+amplification risk). DELIVERABLE PROVEN: the full MTP-k+Arctic-suffix -> committer pipeline runs lossless,
+crash-free, correctness-parity live; the measured reasons it doesn't win on speed (arctic deep-accept low +
+batch-coupling) are the honest verdict. Both real levers need explicit go given their cost.
