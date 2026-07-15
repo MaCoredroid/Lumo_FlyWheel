@@ -219,3 +219,32 @@ replay fuses 48 layers because it runs POST-HOC with all rings in HBM. Do NOT ch
 (b) committer CANNOT fuse into verify -- accepted path is unknown at verify time (verify logits ->
 rejection-sampler -> accepted path -> replay is a hard data dependency). So the committer lever is #5 (sync
 overlap), not fusion.
+
+## §11 — HW LIMIT ACROSS ALL 3 STAGES (user redirect 2026-07-15): the gap is drafter+committer HOST/SYNC, not verify
+
+MEASURED: FR13_PARENT_GATHER engaged (container FR13_PARENT_GATHER=1, BV=8) -> verify 171.3->168.4ms (-1.7%,
+n=319). The O(N^2)->O(N) gather is byte-identical (n_pad=32 selfcheck PASS) but a NON-lever for speed: the
+gather was ~3ms of the ~70ms verify overhead. HONEST: the ancestor gather is NOT the verify bottleneck.
+
+**The HW limit is a per-STEP budget across DRAFTER+VERIFY+COMMITTER. Per-stage floor vs measured (depth-5, /step):**
+
+| Stage | measured/step | HW floor | nature | reclaimable |
+|---|---|---|---|---|
+| DRAFTER  | ~100ms | ~22-30ms | 4 SEQUENTIAL M=1 MTP-head forwards (each re-reads ~1.5GB lm_head) + host trie walk | ~70ms (launch-latency + host, NOT bandwidth) |
+| VERIFY   | ~168ms (B=1) / ~259 (B=4) | 98.6ms (27GB weight read) | genuinely GPU-bandwidth-bound full-model tree forward | ~70ms (M=25 GEMM + GDN scan; gather only ~3ms) |
+| COMMITTER| ~74-113ms | ~sub-ms compute | replay sub-ms/12k-CTA; rest = DtoH-sync BUBBLE = GPU IDLE | ~80-110ms (pure host/sync) |
+
+**Punchline:** VERIFY is the ONLY genuinely GPU-bandwidth-bound stage and is already ~1.7x its floor. DRAFTER
++ COMMITTER are ~70-110ms EACH of host/launch/sync overhead over ~sub-ms/~25ms GPU floors => ~180ms of
+reclaimable NON-GPU overhead vs ~70ms in verify vs ~3ms in the gather. Serial-at-floor step ~130ms vs 435
+measured = ~3.3x gap, DOMINATED by drafter+committer, NOT verify. FR13_PARENT_GATHER (verify kernel micro-opt)
+aimed at the smallest slice -> keep default-OFF, do NOT bake.
+
+**Ranked HW-limit levers across the 3 stages (by headroom):**
+1. COMMITTER DtoH-sync bubble (~80-110ms GPU-idle): async / overlap the packed DtoH sync. Biggest reclaim.
+2. DRAFTER batching (~70ms): CUDA-graph the 4-forward MTP draft sequence to kill launch/host latency; probe
+   lm_head-read sharing (autoregressive dep limits full batch).
+3. VERIFY (~70ms): M=25 GEMM efficiency + GDN serial-scan occupancy stall (SRAM-occupancy-bound; hardest).
+Prior campaigns (#26/#28) called drafter/committer host overhead a cost-gate via CHEAP levers; the "optimize
+to HW limit, as much as we want" mandate authorizes the DEEPER rewrites (CUDA-graph draft, async committer sync)
+those cheap levers never attempted.
