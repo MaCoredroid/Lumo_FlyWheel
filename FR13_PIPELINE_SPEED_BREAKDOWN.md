@@ -128,3 +128,21 @@ committer even for the seeded variant). CAVEATS: parallelism gain is INFERRED fr
 not yet measured (needs union + stage timer); MTP-seed DOES buy tail accept (arctic continues MTP's confident
 prefix) so the independent union may draft a weaker deep spine -> accept-vs-speed tradeoff is the measurement.
 suffonly arm (running) = first data point on arctic-from-committed-alone quality.
+
+## 6. CORRECTION (2026-07-15, audit): per-step timers reverse the TPS verdict — tail6 is SLOWER
+The §0 table used the deploy_speed derived_tps_fullstep_gpu (18.81) which MIXES per-DRAFT verify (s_per_fwd_gpu
+85.8ms) with per-STEP drafter/committer (fr13_measure.py:1568) -- at B=4 there are ~4 draft-events/step, so
+verify is understated ~4x. The 3 timers DON'T overlap (SFWD=execute_model verify, DFWD=propose drafter, CFWD=
+committer replay). CONSISTENT per-STEP (raw sidecars):
+  baseline t33333: verify 258.8 + drafter 101.9 + committer 74.0 = 434.6ms/step, committed/step 18.36 -> aggregate GPU-TPS ~42.2 (per-req 10.56)
+  tail6 (depth-11): verify 339.7 + drafter 100.6 + committer 113.5 = 553.8ms/step, committed/step 21.12 -> aggregate GPU-TPS ~38.1 (per-req 9.53)
+=> tail6 is ~10% SLOWER (GPU compute) despite +19% accept. ROOT: the DEEP tail's VERIFY (+31%) + COMMITTER
+(+53%) scale with tree DEPTH and exceed the accept gain; the drafter is NOT the cost (100.6 vs 101.9). So:
+- **VERIFY is NOT HBM-flat for deep trees** (design §4 was wrong): 258ms at depth-5 >> 98.6ms weight floor ->
+  the GDN tree-scan is depth-dependent compute, not weight-read-bound. A deeper tail costs real verify.
+- **The tail as built (depth-11) is a COST-GATE, not a ship** (accept up +19%, GPU-TPS down -10%).
+- LEVERS for a NET speed win: (1) SHALLOWER tail (depth 6-8: less verify+committer, still >baseline accept) --
+  find the accept/depth-cost sweet spot; (2) cheaper committer (the +53% that scales with depth, S1 sampled);
+  (3) the union's arctic-parallelism helps the DRAFTER, which is NOT the deep-tail cost -> won't fix this.
+CAVEAT: baseline sidecar is mid-run (16-task batch-1, n=413 steps) but per-step GPU is workload-independent so
+robust. Depth is the speed axis to sweep next.
