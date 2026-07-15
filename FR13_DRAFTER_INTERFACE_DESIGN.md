@@ -433,3 +433,17 @@ lossless-by-committer (no new proof), verify-cost-invariant on GB10 (flat <=16 n
 DFlash/FailFast/EAGLE-2/OPT-Tree/DISCO/Nightjar. Cost-gate: probe kernel shape-switch cost + live
 match_len histogram BEFORE the full seam; DEEP only worth it if long-match fraction is materially >5%
 and the shape switch is cheap. Prereq = the merged A/B (its ENGAGED needle is the measurement instrument).
+
+## FRONT 2 FINAL VERDICT (2026-07-15): CORRECTNESS met, SPEED no-go (arctic loses to MTP). CLOSED.
+5-run live campaign settles it. CORRECTNESS = MET: merged pipeline lossless + crash-free + parity
+(merge16d 8/16==8/16, identical give-ups, ~19k skips, 0 device-asserts; crash-guard baked; mtp-inert
+byte-identical when FR13_DRAFT_SOURCE=mtp -- ALL merged code behind merged_on() sidecar gate, verified).
+SPEED = HONEST NO-GO: arctic is a WEAKER deep drafter than MTP on agentic code at ALL concurrency +
+confidence: B=4 blanket -17% (accept 3.61->1.97); B=4 conf-gated ~=baseline (batch-coupling); CONC=1
+conf-gated -10.4% vs CONC=1 baseline (accept 2.99 vs 3.79) EVEN where the skip fires freely. High-conf
+(>=.5) arctic STILL accepts 21% worse than MTP => arctic prob (suffix frequency) does NOT predict the
+model follows the deep chain. This ALSO closes the SMART-MATCHING adaptive-geometry §above as a SPEED
+lever: deep chains sourced from arctic would accept just as poorly (same weak-accept wall) -- the shape
+lever was contingent on arctic holding accept, which it does not. Detail: FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md.
+DELIVERABLE = the proven lossless correctness-parity MTP-k+Arctic->committer pipeline (default mtp untouched).
+Real speed levers remain in what WE own (committer/GDN-replay/tree-overhead), NOT the drafter source.
