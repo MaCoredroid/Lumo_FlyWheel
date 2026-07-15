@@ -47,7 +47,36 @@ def test_partial_then_pad():
     assert all(t == 7005 for t in nodes[21:]), "must pad-repeat last filled (7005)"
 
 
+def test_build_tail_columns():
+    import torch
+    from fr13_merged_fill import build_tail_columns
+    dev = torch.device("cpu")
+    cols = build_tail_columns([[9000, 9001, 9002, 9003], None], dev, pad_token=7, tail_len=4)
+    assert [c.tolist() for c in cols] == [[9000, 7], [9001, 7], [9002, 7], [9003, 7]]
+    # OOB (>=vocab) and None both -> pad
+    cols2 = build_tail_columns([[5, 999999, 6, None]], dev, pad_token=0, tail_len=4, vocab_size=1000)
+    assert [c.tolist()[0] for c in cols2] == [5, 0, 6, 0]
+
+
+def test_decide_tail():
+    import torch
+    import fr13_merged_drafter as md
+    dev = torch.device("cpu")
+
+    class MockCache:
+        def __init__(self, table): self.table = table
+        def speculate(self, req_id, pattern, **kw): return self.table.get(req_id, [])
+
+    md._COMMITTED["A"] = [1, 2, 3]; md._COMMITTED["B"] = [4, 5]
+    mtp_head = [[101, 201], [102, 202], [103, 203], [104, 204], [105, 205]]
+    tail = md.decide_tail(MockCache({"A": [8001, 8002, 8003]}), ["A", "B"], mtp_head,
+                          head_depth=5, tail_len=6, device=dev, pad_token=9, vocab_size=100000)
+    assert [t.tolist()[0] for t in tail] == [8001, 8002, 8003, 9, 9, 9]   # row0 arctic then pad
+    assert [t.tolist()[1] for t in tail] == [9, 9, 9, 9, 9, 9]            # row1 cold -> all pad
+
+
 if __name__ == "__main__":
-    for fn in (test_topology, test_never_regress_cold, test_warm_tail, test_partial_then_pad):
+    for fn in (test_topology, test_never_regress_cold, test_warm_tail, test_partial_then_pad,
+               test_build_tail_columns, test_decide_tail):
         fn(); print(f"OK {fn.__name__}")
-    print("ALL TAIL-TREE ASSEMBLY TESTS PASS")
+    print("ALL TAIL PIPELINE TESTS PASS")

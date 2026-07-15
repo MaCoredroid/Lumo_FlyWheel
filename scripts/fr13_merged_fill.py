@@ -91,3 +91,38 @@ def build_cat33333_columns(assembled_rows, device, pad_token, width=3, vocab_siz
         spine_tokens.append(torch.tensor(spine_col, dtype=torch.int64, device=device))
         wide_topk[d] = torch.tensor(wt_rows, dtype=torch.int64, device=device)
     return spine_tokens, wide_topk
+
+
+def build_tail_columns(tail_rows, device, pad_token, tail_len, vocab_size=None):
+    """Build the TAIL spine tensors (accept>5 mtp_k=5 mode): a PURE Arctic chain appended after the
+    MTP head. The tail tree's chain nodes are all rk==0, so the packer reads ONLY _fr10_spine_tokens[pp]
+    for them -- NO wide_topk. Returns a list of `tail_len` int64 [batch] tensors on `device` (spine token
+    per tail depth), to be APPENDED to the native MTP head's _fr10_spine_tokens (5 -> 5+tail_len).
+
+    tail_rows: list length batch; entry b = a list of `tail_len` Arctic chain tokens for row b, OR None
+               (cold/no-match -> PAD every tail depth: Gate-1 lossless, never matches past the head).
+    Same OOB bounds-guard as build_cat33333_columns (an OOB Arctic id = CUDA device-side assert).
+    """
+    B = len(tail_rows)
+    assert B > 0, "empty batch"
+    vs = int(vocab_size) if vocab_size is not None else None
+    pad = int(pad_token)
+    if vs is not None and not (0 <= pad < vs):
+        pad = 0
+
+    def tnode(row, j):
+        if row is None or j >= len(row) or row[j] is None:
+            return pad
+        v = int(row[j])
+        if vs is not None and not (0 <= v < vs):
+            global _OOB_DROPPED, _OOB_LAST
+            _OOB_DROPPED += 1
+            _OOB_LAST = ("tail", j, v)
+            return pad
+        return v
+
+    tail_tokens = []
+    for j in range(tail_len):
+        col = [tnode(tail_rows[b], j) for b in range(B)]
+        tail_tokens.append(torch.tensor(col, dtype=torch.int64, device=device))
+    return tail_tokens

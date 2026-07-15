@@ -321,6 +321,53 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
     return spine_tokens, wide_topk, True
 
 
+def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_len,
+                device, pad_token, max_spec_tokens=32, max_spec_factor=4.0, min_token_prob=0.0,
+                vocab_size=None):
+    """accept>5 TAIL (mtp_k=head_depth mode): the MTP head (depths 0..head_depth-1) is 100% native
+    (byte-identical baseline, filled by the drafter's own forwards); this ONLY produces the deep Arctic
+    CHAIN past the head (depths head_depth..head_depth+tail_len-1) to APPEND to _fr10_spine_tokens.
+    Pattern per row = _COMMITTED[req] + the native MTP head tokens (seeds the walk from MTP's confident
+    prefix). Returns a list of `tail_len` int64 [batch] tensors on `device`, or None (empty batch / no
+    cache). LOSSLESS + never-regress: the head is unchanged and the tail only ADDS candidates (cold ->
+    pad, never matches past the head). The committer (accept=p(S), source/depth-blind) does the rest.
+
+    mtp_head_per_depth: list length head_depth; entry d is a per-row-indexable of the native MTP spine
+                        token at depth d (e.g. _fr10_spine_tokens[d].cpu().tolist()), row order ==
+                        spec_row_req_ids order (req_id-keyed by the caller)."""
+    from fr13_arctic_suffix_adapter import arctic_draft_to_suffix_rel
+    from fr13_merged_fill import build_tail_columns
+
+    B = len(spec_row_req_ids)
+    if B == 0 or cache is None:
+        return None
+    tail_rows = []
+    any_hit = False
+    for b in range(B):
+        req_id = spec_row_req_ids[b]
+        head = [int(mtp_head_per_depth[d][b]) for d in range(head_depth)]
+        pattern = list(_COMMITTED.get(req_id, [])) + head
+        row = None
+        try:
+            draft = cache.speculate(
+                req_id, pattern, max_spec_tokens=max_spec_tokens,
+                max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
+                use_tree_spec=False)
+            STATS["tail_speculate_fired"] = STATS.get("tail_speculate_fired", 0) + 1
+            rel = arctic_draft_to_suffix_rel(draft, max_rel=tail_len)  # {0..: [tok,...]} = depths head+..
+            row = [(rel[j][0] if rel.get(j) else None) for j in range(tail_len)]
+            if any(t is not None for t in row):
+                any_hit = True
+                STATS["tail_hit"] = STATS.get("tail_hit", 0) + 1
+        except Exception:
+            row = None
+        tail_rows.append(row)
+    if not any_hit:
+        STATS["tail_all_cold"] = STATS.get("tail_all_cold", 0) + 1
+    _maybe_log_engagement()
+    return build_tail_columns(tail_rows, device, pad_token, tail_len, vocab_size=vocab_size)
+
+
 _LOG_EVERY = 50
 _LOG_N = 0
 
