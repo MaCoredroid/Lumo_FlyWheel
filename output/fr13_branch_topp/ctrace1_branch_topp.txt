@@ -1,0 +1,33 @@
+=== commit-trace analysis: 25080 node-records (output/fr13_committrace/base_ctrace_t33333_ctrace1/logs/commit_trace.jsonl.commit) ===
+
+MTP top-1 prob (argmax_prob) distribution  [the top-p / nucleus signal]:
+  argmax_prob >0.9    :    23805  94.9%
+  argmax_prob 0.7-0.9 :      598  2.4%
+  argmax_prob 0.5-0.7 :      427  1.7%
+  argmax_prob <0.5    :      250  1.0%
+  => top-1 dominant (>0.9) 94.9% of nodes: at those, rank-2/3 branches are WASTED -> reallocate to TAIL
+
+Where the model's argmax falls among the node's tree children  [do branches help?]:
+  spine  :    21196  84.5%
+  branch :     2557  10.2%
+  missed :     1327  5.3%
+  => BRANCH (rank>0) catches the argmax 10.2% of nodes = the branch's coverage value
+
+Branch value CONDITIONED on top-1 confidence  [top-p-adaptive width justification]:
+  argmax_prob >0.9     (n=  23805): spine 87.1%  branch 8.9%  missed 4.0%
+  argmax_prob 0.7-0.9  (n=    598): spine 40.6%  branch 31.8%  missed 27.6%
+  argmax_prob 0.5-0.7  (n=    427): spine 31.6%  branch 36.1%  missed 32.3%
+  argmax_prob <0.5     (n=    250): spine 36.8%  branch 34.4%  missed 28.8%
+  => branches earn their nodes ONLY in the low-argmax_prob rows; high-p rows should be width-1 (spine) + tail
+
+Per-depth (node->cat33333 map):
+  depth 1 (n=   6852): spine 87.3%  branch 9.3%  missed 3.4%
+  depth 2 (n=   5930): spine 82.6%  branch 11.4%  missed 6.0%
+  depth 3 (n=   4839): spine 84.0%  branch 9.8%  missed 6.2%
+  depth 4 (n=   4086): spine 83.0%  branch 10.6%  missed 6.4%
+  depth 5 (n=   3373): spine 84.8%  branch 10.1%  missed 5.2%
+
+overlap_mass (tree candidates' nucleus coverage):
+  overlap_mass >0.9   :    23445  93.5%
+  overlap_mass 0.5-0.9:      285  1.1%
+  overlap_mass <0.5   :     1350  5.4%
