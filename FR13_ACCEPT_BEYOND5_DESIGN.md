@@ -622,3 +622,24 @@ setsid-detached (output/fr13_tail6_prewarm, TAG=pw16), vs the established cold 4
 cost-gate on the windfall (the design's >5 path fails on real agentic temp-0.6 coding). If it jumps -> pursue +
 run the clean same-session cold A/B. Per "no early-needle conclusions / LIVE SWE-Verified only", NOT concluding
 until this 16-task tail result lands.
+
+## PRE-WARM STRONG POSITIVE (2026-07-15, tail6 16-task IN FLIGHT — potential no-go OVERTURN)
+
+**tail6 + PRE-WARM live 16-task run (engagement asserted: PREWARM seeded 132/132, TAIL fired 3661 hit 97%):**
+vLLM SpecDecoding running aggregate over 168 windows = **mean acceptance length 6.01 (median 5.56, min 2.86,
+max 11.14)**. mean-accept-length = committed_per_event => **accept_per_event ~5.0**, vs cold tail6 (g4c) 4.277
+(mean-accept-length ~5.28). Per-position rates show DEEP tail acceptance (positions 6-11 at 0.14-0.78; windfall
+windows hit 1.0 through position 8+). The high-acceptance windows (max 11.14) = the repetitive-span windfall the
+design predicted.
+
+**This OVERTURNS my earlier prewarm ~0 diagnosis** -- that was on the MERGED config (arctic fills mid-tree
+depth-3-4 slots, rejected). tail6 is different: MTP head drafts depths 1-5 (strong, accepted), the PREWARMED
+arctic TAIL extends depths 6-11 -- and it IS being accepted. The prewarm helps the TAIL specifically, exactly
+where it was designed to. (Lesson: the 4-task merged early-needle was the wrong config; the rules "no early-needle
+/ research before dead-end / every premature no-go overturned" were right to demand the 16-task tail test.)
+
+**NOT YET CONFIRMED (discipline):** (1) partial run 5/16 tasks -- await completion; (2) vLLM mean-accept-length
+is NOT the canonical deploy_speed accept_per_event -- await the reduce; (3) cold ref is cross-session (g4c) --
+need a SAME-SESSION tail6_cold A/B to isolate prewarm from run variance; (4) must stay lossless/garble-clean +
+TPS same-or-better. If the 16-task deploy_speed accept_per_event >5 AND the same-session cold A/B confirms the
+delta AND lossless/TPS hold -> GOAL MET. Next: complete prewarm run -> run same-session tail6_cold -> reduce both.
