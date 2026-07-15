@@ -13432,8 +13432,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             and not os.path.exists("/logs/fr13_tail_mode.arm")):
                         from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_ms_gdn
                         _fr13_ms_ids = getattr(_fr13_ms_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
-                        _fr13_ms_cache = _fr13_ms.get_cache()
                         _fr13_ms_B = int(draft_token_ids.shape[0])
+                        # B=4 mixed prefill/decode: SPEC_ROW_REQ_IDS is the spec-row SUBSET (len<B) -> the
+                        # merged seam otherwise skips ~half at B=4 (falls back to MTP). Fall back to the
+                        # SAMPLER row ids (unconditional full batch, patch:11250, row-aligned) so Arctic engages.
+                        if _fr13_ms_ids is None or len(_fr13_ms_ids) != _fr13_ms_B:
+                            _fr13_ms_ids = getattr(_fr13_ms_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None)
+                        _fr13_ms_cache = _fr13_ms.get_cache()
                         if (_fr13_ms_cache is not None and _fr13_ms_ids is not None
                                 and len(_fr13_ms_ids) == _fr13_ms_B):
                             _fr13_ms_root = [int(_x) for _x in draft_token_ids.detach().reshape(-1).cpu().tolist()]

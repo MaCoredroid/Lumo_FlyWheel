@@ -159,6 +159,11 @@ case "$KIND" in
   # FR13_TAIL_MODE=1 (caps native spine_steps=4 + appends Arctic tail) + FR13_DRAFT_SOURCE=merged (the
   # Arctic cache lifecycle) + BV=8 (n_pad=32 register budget). EXPECT_RATIO=21 = the tree node count.
   tail6)     LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8) ;;
+  # accept>5 control: cat33333 (15-node) filled PURELY from Arctic suffix decoding (FLAVOR=always -> run
+  # only the root forward, Arctic fills deep spine+branches, MTP deep forwards SKIPPED). == the closed
+  # Front-2 config (arctic-only deep drafter, prev -17% B=4) -- re-run on the FIXED pipeline as the control
+  # isolating "arctic alone" vs tail6 (MTP-head+arctic-tail) vs t33333 (MTP-only). NO tail mode.
+  suffonly)  LAUNCHER=forked; TREEARG="$T33333_TREE";   EXPECT_RATIO=15; declare -a XFLAGS=(FR13_DRAFT_SOURCE=merged FR13_MERGED_FLAVOR=always) ;;
   t55555)    LAUNCHER=forked; TREEARG="$T55555_TREE";   EXPECT_RATIO=25; declare -a XFLAGS=() ;;
   cat55222)  LAUNCHER=forked; TREEARG="$CAT55222_TREE";  EXPECT_RATIO=16; declare -a XFLAGS=() ;;
   cat55221)  LAUNCHER=forked; TREEARG="$CAT55221_TREE";  EXPECT_RATIO=15; declare -a XFLAGS=() ;;
