@@ -13838,6 +13838,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr13_t_ids = getattr(_fr13_t_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
                         _fr13_t_cache = _fr13_t.get_cache()
                         _fr13_t_B = int(_fr10_spine_tokens[0].shape[0])
+                        # B=4 mixed prefill/decode: SPEC_ROW_REQ_IDS is the spec-row SUBSET (len<B) ->
+                        # the tail padded 100% (measured tailg4b: ids2_ne_B4 x101). Fall back to the
+                        # SAMPLER row ids -- set UNCONDITIONALLY to the FULL batch (patch:11250), so
+                        # length==B and ROW-ALIGNED with the drafter's spine_tokens. decide_tail keys
+                        # _COMMITTED by req_id: spec rows hit Arctic; non-spec (cold) -> pad (lossless).
+                        if _fr13_t_ids is None or len(_fr13_t_ids) != _fr13_t_B:
+                            _fr13_t_ids = getattr(_fr13_t_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None)
                         if _fr13_t_cache is None:
                             _fr13_t_skip = "cache_none"
                         elif _fr13_t_ids is None:
