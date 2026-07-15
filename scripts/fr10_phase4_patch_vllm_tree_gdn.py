@@ -8020,21 +8020,22 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     accepted_lens = []
     path_log_rows = []
     winner_log_rows = []
-    # LEVER 1 (FR13 3-stage HW-limit reclaim): path_log_rows/winner_log_rows are
-    # consumed ONLY under FR10_METRICS / LUMO_TREE_PATH_LCP_LOG (guards at ~9204 /
-    # ~9235), both OFF in deploy. Building these ~25-field dicts (list-comprehensions
-    # over drafts / parent_targets / self_targets / path_scores) per NODE in the
-    # committer host critical path is pure dead work when metrics are off. Skip the
-    # build via `cond and append(...)` short-circuit => byte-identical committed
-    # tokens/lens (diagnostic-only sinks; no computed value depends on them).
-    _fr13_pathlog_build = (
-        __import__('os').environ.get("FR10_METRICS", "0") == "1"
-        or bool(__import__('os').environ.get("LUMO_TREE_PATH_LCP_LOG"))
-    )
     accepted_node_paths = []
     accepted_token_rows = []
     start = 0
     for req_i, node_count in enumerate(counts):
+        # LEVER 1 (FR13 3-stage HW-limit): skip building the metrics-only
+        # path_log_rows/winner_log_rows dicts (25-field, list-comprehensions over
+        # drafts/targets/path_scores) per request when metrics are OFF (deploy).
+        # Consumed ONLY under FR10_METRICS / LUMO_TREE_PATH_LCP_LOG (~9204/9235).
+        # Defined INSIDE the loop (not hoisted above out_rows) so the committer
+        # per-request anchor block (out_rows=[] .. for req_i..) stays contiguous
+        # for _patch_rejection_sampler_gpu_committer. Byte-identical: these are
+        # diagnostic-only sinks; no committed value depends on them.
+        _fr13_pathlog_build = (
+            __import__('os').environ.get("FR10_METRICS", "0") == "1"
+            or bool(__import__('os').environ.get("LUMO_TREE_PATH_LCP_LOG"))
+        )
         node_count = int(node_count)
         if parents_cpu is None:
             # OPT-1 G2 composition guard (fail-loud, class 9): the legacy
