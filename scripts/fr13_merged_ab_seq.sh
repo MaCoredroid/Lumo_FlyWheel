@@ -5,6 +5,11 @@
 # [FR13_MERGED ENGAGED] docker log (match_full/skip_fired on REAL agentic repetition) lands early
 # and decides whether the full A/B is worth completing. run_variant is in scope (driver-sourced).
 #
+# CANONICAL offload/proxy env (was DRIFTED-MISSING -> caused the empty-patch flake): the merged
+# drafter's arctic overhead trips the GB10 emit-wedge; heartbeat masks the mid-stream idle so
+# qwen-code's stream-idle abort doesn't cut the agent off mid-edit. FR10_METRICS=0 = speed regime.
+export LUMO_PROXY_SSE_HEARTBEAT_S=15
+export FR10_METRICS=0
 # Ship cache env (mirrors fr13_cat8_cat6_native_cachefirst_seq.sh + the SLOT_REORDER fix):
 export FR13_APC_COMMIT_TO_RUNNING_ROW=1 FR13_TREE_RUNROW_INIT=1 FR13_APC_BURN_NODE_BANK=1
 export FR13_APC_EXACT_SEED=0 MAMBA_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32
