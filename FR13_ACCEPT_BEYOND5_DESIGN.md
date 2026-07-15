@@ -503,3 +503,15 @@ added (queued after the t33333 baseline, GPU serialized):
    (monotone committer), fits n_pad=32 (21+6=27). NEEDS decide_tail top-2 + topology (not yet built). Ladder-
    step-1 (branches ~10% shallow / missed 5.3%) predicts marginal (+0.1-0.3), but user-requested + measurable.
 3-way order: t33333 (baseline, running) -> suffonly (arctic-only) -> wider-tail if data warrants.
+
+## MISSES ARE MTP HARD-MISSES, not rank-4+ (2026-07-15, ctrace1 n=1327 missed records) — user Q2
+For the 5.3% cat33333 "missed" (model argmax NOT in the MTP top-3): 71.7% at model argmax_prob>0.9, 94.6% at
+>0.5, and overlap_mass<0.5 for 99.1% -> the MTP head CONFIDENTLY drafted the WRONG tokens, missing the model's
+obvious high-prob answer. So the miss is a genuine DRAFTER divergence, NOT "answer at MTP rank 4 catchable by a
+wider top-k". CONSEQUENCE: wider MTP branches (top-4/5) are DEAD for the misses (same head, same miss). The
+right lever is a COMPLEMENTARY source = ARCTIC (historical retrieval catches the model's answer where MTP hard-
+misses) -> this is WHY the arctic tail adds accept, and says the head fix is an ARCTIC COMPLEMENT (arctic fills
+head branch slots), not wider MTP branches. suffonly (arctic-only) arm tests if arctic catches the head-misses.
+Q1 (branch correctness after slot-reorder): branches commit correctly (superset +0.166==predicted; monotone
+committer; tail6 deep tail commits) -- adding a spine-vs-branch delta check to the 3-way A/B for fresh confirm.
+Proxy caveat: argmax_prob/overlap_mass are proxies; exact MTP-rank of the answer needs a rank-probe (queued).
