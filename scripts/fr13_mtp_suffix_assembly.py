@@ -116,6 +116,99 @@ def assemble_cat33333(mtp_spine, mtp_topk_per_depth, suffix_rel, mtp_k):
     return nodes, meta
 
 
+## ---------------------------------------------------------------------------
+## TAIL TREE (accept>5): cat33333 head (depths 0-4) + a deep arctic-filled spine
+## chain (depths 6..5+TAIL_LEN). The chain is the ONLY path past accept=5 (MTP has
+## 5 heads; the tail spine comes from Arctic's historical continuation). Pure chain,
+## NO tail branches: ladder-step-1 (ctrace1 n=25080) showed the stream is 94.9%
+## argmax_prob>0.9 (peaked) and branches earn ~10% only at SHALLOW depths, so a deep
+## chain maximizes reach per node. mtp_k=5 => the head is BYTE-IDENTICAL to the
+## baseline cat33333 (pure MTP), and the tail only ADDS candidates => NEVER-REGRESS
+## by the monotone committer (accept=p(S), source/depth-blind). Cold Arctic -> tail
+## nodes pad-fill (repeat last spine tok) -> never match past the head -> accept==baseline.
+TAIL_HEAD_DEPTH = 5          # cat33333 head depths 0..4 (MTP-drafted, 3 nodes/depth)
+TAIL_LEN = 16                # Arctic chain nodes past the head (depths 6..21); 15+16=31 -> n_pad=32
+
+
+def tail_tree_order(head_depth: int = TAIL_HEAD_DEPTH, tail_len: int = TAIL_LEN,
+                    branches_per_depth: int = BRANCHES_PER_DEPTH):
+    """The node-path list (sorted head then chain) that drives the SPEC tree, the packer,
+    and the assembly -- ONE topology source. Head = spine+branches for depths 0..head_depth-1
+    (== CAT33333_ORDER when head_depth=5,branches=2); tail = pure spine chain (0,)*(head_depth+1+j).
+    """
+    order = []
+    for d in range(head_depth):
+        order.append((0,) * (d + 1))                       # spine at depth d
+        for r in range(1, branches_per_depth + 1):
+            order.append((0,) * d + (r,))                  # branch rank r at depth d
+    for j in range(tail_len):
+        order.append((0,) * (head_depth + 1 + j))          # chain node, absolute depth head_depth+1+j
+    return order
+
+
+def assemble_tail_tree(mtp_spine, mtp_topk_per_depth, suffix_rel, mtp_k,
+                       head_depth: int = TAIL_HEAD_DEPTH, tail_len: int = TAIL_LEN,
+                       branches_per_depth: int = BRANCHES_PER_DEPTH):
+    """Assemble the tail-tree node tokens (in tail_tree_order) from MTP head + Arctic chain.
+
+    HEAD (depths 0..head_depth-1): spine = MTP argmax when d<mtp_k else Arctic suffix_rel[d-mtp_k][0]
+      (never worse than MTP parallel-spine); 2 branches = suffix_rel[d-mtp_k][1:] deduped, MTP topk
+      backfill; root (d=0) branches are ALWAYS MTP topk. (mtp_k=head_depth => pure-MTP head = baseline.)
+    TAIL (chain node j, absolute depth head_depth+j): spine ONLY = Arctic suffix_rel[head_depth-mtp_k+j][0]
+      if present, else repeat the previous spine token (pad; never matches past the head => lossless).
+
+    Returns (nodes, meta). len(nodes) == head_depth*(1+branches_per_depth) + tail_len.
+    """
+    assert 1 <= mtp_k <= head_depth, "mtp_k in [1, head_depth]"
+    assert len(mtp_spine) >= mtp_k, "need >= mtp_k MTP spine tokens"
+    nodes, meta = [], {"spine_src": [], "branch_src": [], "tail_src": []}
+
+    # --- HEAD: depths 0..head_depth-1 (spine + branches) ---
+    last_spine = None
+    for d in range(head_depth):
+        used = set()
+        suf = ([int(x) for x in suffix_rel.get(d - mtp_k, []) if x is not None]
+               if d >= mtp_k else [])
+        if d < mtp_k:
+            spine_tok = int(mtp_spine[d]); src = "mtp"
+        elif suf:
+            spine_tok = suf[0]; src = "suffix"
+        else:
+            spine_tok = int(mtp_spine[d]) if d < len(mtp_spine) else last_spine; src = "mtp_fallback"
+        used.add(spine_tok); last_spine = spine_tok
+        meta["spine_src"].append(src)
+
+        if d == 0:
+            branch_pool = list(mtp_topk_per_depth.get(d, [])); bsrc = "mtp"
+        elif len(suf) > 1:
+            branch_pool = suf[1:] + list(mtp_topk_per_depth.get(d, [])); bsrc = "suffix"
+        else:
+            branch_pool = list(mtp_topk_per_depth.get(d, [])); bsrc = "mtp_fallback"
+        branches = _pick_distinct(branch_pool, used, branches_per_depth)
+        while len(branches) < branches_per_depth:
+            filler = _pick_distinct(mtp_spine, used, 1)
+            branches.append(filler[0] if filler else spine_tok)
+        meta["branch_src"].append(bsrc)
+        nodes.append(spine_tok)
+        nodes.extend(branches[:branches_per_depth])
+
+    # --- TAIL: pure Arctic spine chain, depths head_depth..head_depth+tail_len-1 ---
+    for j in range(tail_len):
+        rel = head_depth - mtp_k + j          # suffix_rel index for this chain depth
+        suf = [int(x) for x in suffix_rel.get(rel, []) if x is not None]
+        if suf:
+            tail_tok = suf[0]; tsrc = "suffix"
+        else:
+            tail_tok = last_spine; tsrc = "pad"   # cold -> repeat; never matches past head (lossless)
+        last_spine = tail_tok
+        meta["tail_src"].append(tsrc)
+        nodes.append(tail_tok)
+
+    expected = head_depth * (1 + branches_per_depth) + tail_len
+    assert len(nodes) == expected, f"tail tree must produce {expected} nodes, got {len(nodes)}"
+    return nodes, meta
+
+
 def assemble_pure_mtp(mtp_spine, mtp_topk_per_depth):
     """The BASELINE / cold-fallback: current drafter's cat33333 (spine=argmax, branches=MTP topk).
     Used when suffix is entirely absent -> byte-identical to the MTP-only t33333 drafter.
