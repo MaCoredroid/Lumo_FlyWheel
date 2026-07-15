@@ -1,0 +1,59 @@
+{
+  "instance_id": "astropy__astropy-13236",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "started_at": "2026-07-15T00:11:07Z",
+  "repo": "astropy/astropy",
+  "base_commit": "6ed769d58d89380ebaa1ef52b300691eefda8928",
+  "agent": {
+    "elapsed_s": 1921.073,
+    "exit_code": -1,
+    "timed_out": true,
+    "container_name": "swe-qwen-astropy__astropy-13236-1784074267",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
+    "agent_env": "instance_image",
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13236:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64"
+  },
+  "codex": {
+    "elapsed_s": 1921.073,
+    "exit_code": -1,
+    "timed_out": true,
+    "container_name": "swe-qwen-astropy__astropy-13236-1784074267",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
+    "agent_env": "instance_image",
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-13236:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64"
+  },
+  "empty_patch_retry": {
+    "cause": "agent_gave_up",
+    "attempted": true,
+    "max_retries": 0,
+    "recovered_patch_bytes": 0,
+    "attempts_used": 0
+  },
+  "vllm_request_metrics_bytes": 0,
+  "patch_bytes": 0,
+  "eval": {
+    "exit_code": 1,
+    "elapsed_s": 1.857,
+    "offloaded": true,
+    "eval_host": "alienware"
+  },
+  "eval_report": {
+    "instance_id": "astropy__astropy-13236",
+    "verdict": "failed",
+    "passed": false,
+    "failure_mode": "patch_apply_failed",
+    "error": "empty_patch",
+    "arch": "x86_64",
+    "eval_host": "mark-Alienware-Aurora-ACT1250",
+    "eval_wall_clock_seconds": 0.0
+  },
+  "ended_at": "2026-07-15T00:43:11Z"
+}
