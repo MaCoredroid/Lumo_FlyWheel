@@ -170,3 +170,14 @@ verify+committer ~81% irreducible (prior campaign task #30), the tail's -10% spe
 dominant stages are structurally fixed. FINAL: the accept>5-tail is a LOSSLESS +19%-accept drafter but an honest
 SPEED cost-gate (-10%, no cheap fix). accept>5-AVERAGE is workload-bound (windfall). Delivered = the lossless
 mechanism + the corrected honest measurement. Speed goal NOT met with no cheap path => report-and-hold.
+
+## 9. HARDWARE LIMIT + headroom (2026-07-15, workflow wbvlbn0x3): ~140-240ms/step is reclaimable
+GB10/DGX-Spark: 273 GB/s LPDDR5X unified (NOT HBM), ~214 TFLOPS FP8-dense (the "1 PFLOP" is FP4-sparse), ~48 SMs.
+Weight-read floor = 27GB fp8 / 273 GB/s = 98.6ms (confirmed). IDEAL tree-verify = 98.6 + 4-8ms (16-32 token
+compute at 214 TFLOPS) = ~100-107ms. MEASURED verify 258-339ms = 2.6-3.4x floor => ~140-240ms/step of
+NON-FUNDAMENTAL overhead in the tree machinery WE OWN (GDN tree-scan occupancy/serialization, committer replay,
+tree-attn/conv, per-layer x48). RECLAIM => verify -> ~100-120ms => 2-3x verify speedup => tail flips cost-gate
+to net WIN (accept +19% AND faster), t33333 also faster. This is the OPTIMIZE-TO-HW-LIMIT target (user 2026-07-15).
+IN FLIGHT: kernel-profile + committer + synthesis agents (WHERE the overhead is + ranked lossless fixes per tree
+flavor) + T55555 verify bench (n_pad vs depth axis). Next: implement the top-ROI kernel change (prior: GDN tree-
+scan is a serialized static_range(N_PAD) loop in few CTAs = poor occupancy; committer may be fusable into verify).
