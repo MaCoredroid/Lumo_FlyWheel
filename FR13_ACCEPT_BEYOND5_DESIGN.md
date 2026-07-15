@@ -597,3 +597,28 @@ FR13_PIPELINE_SPEED_BREAKDOWN.md §10.
 any bit-diff) = BYTE-IDENTICAL, no mismatch (pg_gate_t55555_np32). Losslessness proven at the tail's shape.
 Timing run (graph, PARENT_GATHER=1) in flight vs the 171.3ms baseline. Next: n_pad=16 gate (shipping shape)
 + live B=4 SWE deliverable gate, then bake ON if verify drops and never-regress holds.
+
+## PRE-WARM DIAGNOSIS + GATE 0.5-ON-DELIVERABLE (2026-07-15)
+
+**GOAL METRIC CLARIFIED:** "accept>5" = accept_per_event (design's "accept 3.56" = sum of per-depth survival
+[.972,.839,.695,.575,.479]). tail6 COLD baseline (g4c, 16-task): **accept_per_event 4.277**, committed_per_event
+**5.277** (=accept+1 bonus), derived_tps_gpu 61.85. So the goal needs accept_per_event 4.277 -> >5 = **+0.72**;
+committed/step is already >5 (but that includes the always-present bonus, not the goal metric).
+
+**PRIOR PRE-WARM ~0 DIAGNOSED (merged_cold vs merged_prewarm_t33333_pw1, 4-task):** pre-warm WAS loaded
+(132/132 seeded). match_full RATE ~FLAT (cold 43.9% vs prewarm 43.1% of speculate_fired) -> the boilerplate
+corpus did NOT raise arctic coverage. prewarm's confhist <.05 bucket ~DOUBLED (944->2164) => added candidates
+are LOW-confidence and REJECTED by verify (temp-0.6 generation doesn't reproduce cross-task boilerplate
+token-exact). => the windfall (long deep accept from a prewarmed span) needs EXACT reproduction, which temp 0.6
+breaks; within-task arctic already covers ~43% cold (the model quoting its own recent output).
+
+**CORPUS SUPPLY-LIMITED:** 6461/6495 request-dumps are astropy = the SAME repo as all 16 test tasks. A
+leakage-free corpus (--exclude-substr the 16 instance_ids) can only use non-test trajectories, which are scarce
+(all prior runs were the 16 astropy tasks). So a bigger leakage-free corpus is not buildable from what's on disk;
+the 132-seg corpus IS the fair leakage-free artifact.
+
+**RIGOROUS CONFIRMATION IN FLIGHT:** tail6 + pre-warm (132-seg corpus) on the full 16-task fr9-matched set,
+setsid-detached (output/fr13_tail6_prewarm, TAG=pw16), vs the established cold 4.277. If ~4.28 -> honest
+cost-gate on the windfall (the design's >5 path fails on real agentic temp-0.6 coding). If it jumps -> pursue +
+run the clean same-session cold A/B. Per "no early-needle conclusions / LIVE SWE-Verified only", NOT concluding
+until this 16-task tail result lands.
