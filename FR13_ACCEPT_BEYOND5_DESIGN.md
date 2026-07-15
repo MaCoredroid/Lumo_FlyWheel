@@ -269,3 +269,14 @@ assert + PAD-fill tail branch slots (committer unchanged) → wire the arctic ta
 `pattern=_COMMITTED[req]+near-MTP` (GATE 4) → live A/B (GATE 5). **Losslessness is free throughout** (committer
 Gate1, source-agnostic, depth-blind); the risks are entirely *shrink-BV bit-exactness* (GATE 1) and
 *magnitude* (GATE 4/5) — both measured before commit. No assuming a win.
+
+## §6b UPDATE (2026-07-15, GATE 0.5 MEASURED): pre-warm = NO measurable benefit (refuted as top lever)
+Clean same-config A/B (pw1, merged, 4 real SWE tasks, only diff = pre-warm sidecar; 132/132 seeded confirmed):
+PREWARM accept 1.902 / fullstep 15.65 / resolve 3/4 / match_full ~19.6% == COLD accept 1.896 / 15.66 / 3/4 /
+~20.0%. IDENTICAL. Coverage did NOT lift. ROOT: the PER-REQUEST arctic trie already self-warms from the
+task's OWN repetition (tool-calls/imports recur within the task), so a thin cross-task pre-warm is redundant;
+its only unique value is the early-task cold-start, a small fraction of aggregate decode. => §6b DOWNGRADED
+from "biggest EV lever" to "modest/negligible at this corpus". A richer corpus (long real generations) MIGHT
+help more but the flat COVERAGE says the addressable gap is small. The TAIL (§5, 32-node) is the real >5
+mechanism and does NOT depend on pre-warm. Pre-warm machinery kept (lossless, gated OFF) for a later richer-
+corpus retest; not on the critical path.
