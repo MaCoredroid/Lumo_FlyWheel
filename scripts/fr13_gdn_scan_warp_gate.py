@@ -92,6 +92,11 @@ native_update_serial_per_path = _validation.native_update_serial_per_path
 #       BV32/w1/s3 -- the DEPLOYABLE geometry fix (spill-free, no co-residency).
 ARMS = [
     {"name": "BV16_w8_DEPLOYED", "override": None, "scan_align": None},
+    # GATE 1 (accept>5 32-node infra, FR13_ACCEPT_BEYOND5_DESIGN.md §4): SHRINK BV 16->8 -- the UNTESTED
+    # direction. Widen (BV32) is bit-exact but SPILLS; shrink halves the h_cache footprint per node
+    # (32*8*128*4 == 16*16*128*4 = 128KiB) => room for N_PAD=32 spill-free. num_warps PINNED at 8.
+    # Reductions never occur over BV, so this MUST be int-view byte-exact to native/deployed = GATE 1.
+    {"name": "BV8_w8_SHRINK", "override": "BV=8", "scan_align": None},
     # (1) geometry pre-test, native packed-decode launch on the unchanged body.
     {
         "name": "BV32_w1_s3_native_geom",
