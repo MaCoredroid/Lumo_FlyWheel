@@ -10,6 +10,7 @@ It contains self-contained HTML mini-papers:
 - [`gdn-tree-scan.html`](gdn-tree-scan.html): Volume III preview for the lossless GDN tree-scan paper.
 - [`gdn-prefix-cache.html`](gdn-prefix-cache.html): Volume IV, bit-exact prefix caching (APC / EXACT_SEED) under speculative decoding.
 - [`stateless-tree.html`](stateless-tree.html): Volume V, stateless tree speculative decoding — a branched verifier that caches and commits like native, plus the committed-token attention-KV garble fix.
+- [`spine-reorder.html`](spine-reorder.html): Volume VI, one bit in the last place — why a wider speculative tree accepted fewer tokens (a superset violation), traced to online-softmax reduction reassociation (1 bf16 ULP) in the forked attention kernel, and the contiguous-spine reorder that restores the superset. Includes the MTP + Arctic suffix-decoding merge as future work.
 
 The full source, run drivers, graders, and formal report live on
 [`main`](https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main).

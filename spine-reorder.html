@@ -1,0 +1,2089 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>One Bit in the Last Place: Why a Wider Speculative Tree Accepted Fewer Tokens - Lumo FlyWheel Vol. VI</title>
+<meta name="description" content="Illustrated systems paper on the branch-on-spine disturbance: why a wider speculative token-tree (cat8) accepted fewer tokens than its own subset (cat6), a superset violation traced to a single bf16 unit-in-the-last-place from online-softmax reduction reassociation in the forked attention kernel, and the contiguous-spine reorder that restores the superset.">
+<meta property="og:title" content="One Bit in the Last Place: Why a Wider Speculative Tree Accepted Fewer Tokens">
+<meta property="og:description" content="A superset violation in branched speculative decoding, decomposed into garble inflation plus trajectory noise plus a genuine one-ULP reduction-reassociation bug, and the contiguous-spine fix that restores it, on a Gated-DeltaNet hybrid inside vLLM.">
+<meta name="author" content="Mark Ma">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Ccircle cx='16' cy='22' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='30' cy='16' r='4' fill='%23e7c76f'/%3E%3Ccircle cx='30' cy='30' r='4' fill='%238bd3dd'/%3E%3Cpath d='M16 22 L30 16 M16 22 L30 30' stroke='%233b3934' stroke-width='3'/%3E%3Cpath d='M38 41 h14' stroke='%23a7d98d' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='44' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='30' cy='44' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='44' cy='44' r='4' fill='%23a7d98d'/%3E%3Cpath d='M16 44 h28' stroke='%233b3934' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #111111;
+    --paper: #171717;
+    --paper-2: #202020;
+    --paper-3: #292929;
+    --ink: #f2efe7;
+    --text: #d8d3c8;
+    --muted: #a8a196;
+    --quiet: #7f776d;
+    --rule: #3b3934;
+    --rule-2: #565147;
+    --cyan: #8bd3dd;
+    --green: #a7d98d;
+    --amber: #e7c76f;
+    --rose: #d88989;
+    --cyan-soft: #193235;
+    --green-soft: #233320;
+    --amber-soft: #3b3018;
+    --rose-soft: #3a2323;
+    --grid-major: rgba(255, 255, 255, 0.025);
+    --grid-minor: rgba(255, 255, 255, 0.018);
+    --grid-opacity: 0.42;
+    --link-underline: rgba(139, 211, 221, 0.36);
+    --soft-panel: rgba(255, 255, 255, 0.018);
+    --soft-panel-2: rgba(255, 255, 255, 0.012);
+    --soft-panel-3: rgba(255, 255, 255, 0.026);
+    --flow-wash: rgba(139, 211, 221, 0.035);
+    --flow-bg: #0c0c0c;
+    --flow-card-bg: #101010;
+    --control-bg: #121212;
+    --green-wash: rgba(167, 217, 141, 0.045);
+    --bias-on-fill: rgba(231, 199, 111, 0.5);
+    --bias-off-fill: rgba(255, 255, 255, 0.03);
+    --bias-off-stroke: rgba(255, 255, 255, 0.08);
+    --callout-fill: rgba(255, 255, 255, 0.02);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f7;
+      --paper: #ffffff;
+      --paper-2: #eef1f0;
+      --paper-3: #dde3e1;
+      --ink: #151715;
+      --text: #303431;
+      --muted: #626a64;
+      --quiet: #7a827d;
+      --rule: #d8ddd9;
+      --rule-2: #b7c0bb;
+      --cyan: #1c7380;
+      --green: #3f7b3a;
+      --amber: #876812;
+      --rose: #a54444;
+      --cyan-soft: #e3f3f5;
+      --green-soft: #e4f2df;
+      --amber-soft: #f3ead2;
+      --rose-soft: #f5dfdf;
+      --grid-major: rgba(18, 24, 22, 0.055);
+      --grid-minor: rgba(18, 24, 22, 0.038);
+      --grid-opacity: 0.55;
+      --link-underline: rgba(28, 115, 128, 0.34);
+      --soft-panel: rgba(18, 24, 22, 0.028);
+      --soft-panel-2: rgba(18, 24, 22, 0.018);
+      --soft-panel-3: rgba(18, 24, 22, 0.038);
+      --flow-wash: rgba(28, 115, 128, 0.075);
+      --flow-bg: #fbfbfa;
+      --flow-card-bg: #ffffff;
+      --control-bg: #f8faf9;
+      --green-wash: rgba(63, 123, 58, 0.08);
+      --bias-on-fill: rgba(135, 104, 18, 0.22);
+      --bias-off-fill: rgba(18, 24, 22, 0.035);
+      --bias-off-stroke: rgba(18, 24, 22, 0.12);
+      --callout-fill: rgba(18, 24, 22, 0.025);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-minor) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: var(--grid-opacity);
+  }
+  ::selection { background: var(--cyan-soft); color: var(--ink); }
+  a {
+    color: var(--cyan);
+    text-decoration: none;
+    border-bottom: 1px solid var(--link-underline);
+  }
+  a:hover { border-bottom-color: currentColor; }
+  a:focus-visible {
+    outline: 3px solid var(--cyan);
+    outline-offset: 3px;
+  }
+  strong { color: var(--ink); font-weight: 720; }
+  code, .mono {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    color: var(--cyan);
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 28px 92px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .brandmark {
+    color: var(--ink);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .topbar nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px 16px;
+  }
+  .topbar a {
+    color: var(--muted);
+    border-bottom-color: transparent;
+  }
+  .topbar a:hover { color: var(--cyan); }
+
+  header.hero {
+    min-height: 88vh;
+    display: grid;
+    align-content: center;
+    padding: 52px 0 42px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .kicker {
+    margin: 0 0 18px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h1 {
+    max-width: 980px;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: clamp(42px, 7vw, 82px);
+    line-height: 1.02;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .title-subtitle {
+    max-width: 820px;
+    margin: 14px 0 0;
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+  .subhead {
+    max-width: 900px;
+    margin: 18px 0 0;
+    color: var(--text);
+    font-size: 21px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .hero-tldr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.46fr);
+    gap: 22px;
+    align-items: end;
+    max-width: 980px;
+    margin: 26px 0 0;
+    padding: 18px 0 20px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero-tldr p {
+    margin: 0;
+    color: var(--text);
+  }
+  .hero-tldr .tldr-copy {
+    max-width: 68ch;
+    font-size: 18px;
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+  .hero-result {
+    justify-self: end;
+    width: min(100%, 330px);
+  }
+  .hero-number {
+    display: block;
+    color: var(--green);
+    font-family: var(--serif);
+    font-size: clamp(40px, 4.3vw, 62px);
+    line-height: 0.96;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .hero-result p {
+    margin-top: 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: 28px 0 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .byline span:not(:first-child)::before {
+    content: "/";
+    color: var(--rule-2);
+    margin-right: 14px;
+  }
+  .paper-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 34px 0 0;
+  }
+  .paper-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .paper-nav a:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+
+  .section {
+    margin: 74px 0;
+  }
+  .section h2 {
+    max-width: 780px;
+    margin: 0 0 16px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1.12;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .section h3 {
+    margin: 0 0 8px;
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1.3;
+  }
+  .section > p,
+  .main-col > p {
+    max-width: 74ch;
+    margin: 0 0 18px;
+    text-wrap: pretty;
+  }
+  .main-col > p:last-child,
+  .section > p:last-child { margin-bottom: 0; }
+
+  .abstract-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    margin-top: 34px;
+  }
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 22px;
+  }
+  .panel h2,
+  .panel h3 {
+    margin: 0 0 12px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .panel p {
+    margin: 0 0 14px;
+  }
+  .panel p:last-child { margin-bottom: 0; }
+  .claim-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .claim {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .claim:last-child { border-bottom: 0; padding-bottom: 0; }
+  .claim .state {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    color: var(--muted);
+  }
+  .claim p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .state.pass { color: var(--green); }
+  .state.warn { color: var(--amber); }
+  .state.info { color: var(--cyan); }
+
+  .sidenote {
+    color: var(--muted);
+    border-left: 1px solid var(--rule-2);
+    padding-left: 13px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .sidenote::before {
+    content: "plain explanation";
+    display: block;
+    margin-bottom: 7px;
+    color: var(--amber);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .sidenote p {
+    margin: 0 0 10px;
+  }
+  .sidenote p:last-child { margin-bottom: 0; }
+
+  .figure {
+    margin: 28px 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px;
+    overflow: hidden;
+  }
+  .figure-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .figure-head strong { color: var(--cyan); }
+  .caption {
+    max-width: 78ch;
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .diagram text {
+    font-family: var(--mono);
+    fill: var(--text);
+    font-size: 13px;
+  }
+  .diagram .label {
+    fill: var(--ink);
+    font-weight: 800;
+  }
+  .diagram .tiny {
+    fill: var(--muted);
+    font-size: 11px;
+  }
+  .diagram .node {
+    fill: var(--paper-2);
+    stroke: var(--rule-2);
+    stroke-width: 1.2;
+  }
+  .diagram .node-cyan { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .diagram .node-green { fill: var(--green-soft); stroke: var(--green); }
+  .diagram .node-amber { fill: var(--amber-soft); stroke: var(--amber); }
+  .diagram .node-rose { fill: var(--rose-soft); stroke: var(--rose); }
+  .diagram .edge {
+    stroke: var(--rule-2);
+    stroke-width: 1.6;
+    fill: none;
+  }
+  .diagram .arrow {
+    stroke: var(--cyan);
+    stroke-width: 1.6;
+    fill: none;
+    marker-end: url(#arrow);
+  }
+  .diagram .dash {
+    stroke-dasharray: 6 5;
+  }
+
+  .flow-figure {
+    clear: both;
+    background:
+      linear-gradient(180deg, var(--flow-wash), transparent 36%),
+      var(--flow-bg);
+    overflow-x: auto;
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  .flow-figure.is-paused .flow-edge,
+  .flow-figure.is-paused .flow-node,
+  .flow-figure.is-paused .bias-on,
+  .flow-figure.is-paused .scan-window,
+  .flow-figure.is-paused .cache-cursor {
+    animation-play-state: paused;
+  }
+  .flow-control {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--control-bg);
+    color: var(--text);
+    font: 800 12px var(--mono);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1), color 160ms cubic-bezier(0.25, 1, 0.5, 1), background 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .flow-control:hover,
+  .flow-control:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-why {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 16px 0 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--rule);
+  }
+  .flow-why div {
+    background: var(--flow-card-bg);
+    padding: 13px 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .flow-why strong {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .code-grounding {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .code-grounding a {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 7px 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .code-grounding a:hover,
+  .code-grounding a:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-svg .lane {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-title {
+    fill: var(--ink);
+    font: 800 16px var(--mono);
+  }
+  .flow-svg .flow-sub {
+    fill: var(--muted);
+    font: 12px var(--mono);
+  }
+  .flow-svg .math {
+    fill: var(--text);
+    font: 13px var(--mono);
+  }
+  .flow-svg .native-fill { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .flow-svg .tree-fill { fill: var(--green-soft); stroke: var(--green); }
+  .flow-svg .fa-fill { fill: var(--amber-soft); stroke: var(--amber); }
+  .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .bad-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .meta-fill {
+    fill: var(--soft-panel-3);
+    stroke: var(--rule-2);
+  }
+  .flow-svg .kernel-card {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-node {
+    stroke-width: 1.4;
+    animation: nodePulse 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .flow-svg .flow-node.s2 { animation-delay: 0.35s; }
+  .flow-svg .flow-node.s3 { animation-delay: 0.7s; }
+  .flow-svg .flow-edge {
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 10 9;
+    animation: flowDash 2.4s linear infinite;
+  }
+  .flow-svg .native-edge { stroke: var(--cyan); }
+  .flow-svg .tree-edge { stroke: var(--green); animation-duration: 2.9s; }
+  .flow-svg .fa-edge { stroke: var(--amber); animation-duration: 2.1s; }
+  .flow-svg .warn-edge { stroke: var(--amber); animation-duration: 3s; }
+  .flow-svg .commit-edge { stroke: var(--rose); animation-duration: 3.2s; }
+  .flow-svg .bad-edge {
+    stroke: var(--rose);
+    stroke-dasharray: 7 8;
+    animation-duration: 3.8s;
+  }
+  .flow-svg .quiet-edge {
+    stroke: var(--rule-2);
+    stroke-dasharray: 2 8;
+    animation-duration: 4.4s;
+  }
+  .flow-svg .bias-on {
+    fill: var(--bias-on-fill);
+    animation: biasGlow 2.6s ease-in-out infinite;
+  }
+  .flow-svg .bias-off {
+    fill: var(--bias-off-fill);
+    stroke: var(--bias-off-stroke);
+  }
+  .flow-svg .code-label {
+    fill: var(--cyan);
+    font: 11px var(--mono);
+  }
+  .flow-svg .callout {
+    fill: var(--callout-fill);
+    stroke: var(--rule-2);
+    stroke-width: 1;
+  }
+  .flow-svg .scan-window {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    animation: scanWindow 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .flow-svg .cache-cursor {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+  }
+  .flow-svg .legend-dot { stroke: none; }
+  @keyframes flowDash {
+    to { stroke-dashoffset: -38; }
+  }
+  @keyframes nodePulse {
+    0%, 100% { opacity: 0.82; }
+    45%, 55% { opacity: 1; stroke-width: 2.7; }
+  }
+  @keyframes biasGlow {
+    0%, 100% { opacity: 0.48; }
+    50% { opacity: 1; }
+  }
+  @keyframes scanWindow {
+    0%, 100% { transform: translateX(0); opacity: 0.65; }
+    50% { transform: translateX(96px); opacity: 1; }
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.52fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .mini-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .mini-card p {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .mini-card p:last-child { margin-bottom: 0; }
+
+  .definition-box,
+  .glossary-strip {
+    margin: 22px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel);
+  }
+  .definition-box {
+    max-width: 900px;
+    padding: 16px 18px;
+  }
+  .definition-box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .glossary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+  }
+  .glossary-strip div {
+    padding: 14px 16px;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .glossary-strip div:nth-child(3n) { border-right: 0; }
+  .glossary-strip div:nth-last-child(-n + 3) { border-bottom: 0; }
+  .glossary-strip dfn {
+    display: block;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .glossary-strip span {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .confidence-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 14px;
+    align-items: start;
+    margin: 20px 0 24px;
+    padding: 15px 17px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--green-wash);
+  }
+  .confidence-row strong {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .confidence-row p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .fold {
+    margin: 26px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel-2);
+    overflow: hidden;
+  }
+  .fold > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    min-height: 58px;
+    padding: 15px 18px;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 850;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary::after {
+    content: "+";
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--cyan);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .fold[open] > summary {
+    border-bottom: 1px solid var(--rule);
+    background: var(--soft-panel);
+  }
+  .fold[open] > summary::after { content: "-"; }
+  .fold > summary small {
+    display: block;
+    grid-column: 1;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .fold-body {
+    padding: 18px;
+  }
+  .fold-body > :first-child { margin-top: 0; }
+  .fold-body > :last-child { margin-bottom: 0; }
+
+  .equation {
+    margin: 22px 0;
+    padding: 18px 20px;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .equation .muted { color: var(--muted); }
+  .equation .hl { color: var(--amber); }
+  .equation .ok { color: var(--green); }
+
+  .source-exhibit {
+    margin: 24px 0;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .source-exhibit .source-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .source-exhibit .source-head strong {
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .source-exhibit pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .source-exhibit code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .source-exhibit .source-note {
+    margin: 0;
+    padding: 0 16px 16px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .source-exhibit > .grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin: 16px;
+  }
+
+  .compare-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin: 24px 0;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--rule);
+  }
+  .compare-strip article {
+    min-height: 100%;
+    padding: 18px;
+    background: var(--paper);
+  }
+  .compare-strip h3 {
+    margin-bottom: 9px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .compare-strip p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .box {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .box .tag {
+    display: inline-flex;
+    margin-bottom: 10px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 760;
+  }
+  .box.good .tag { color: var(--green); background: var(--green-soft); }
+  .box.warn .tag { color: var(--amber); background: var(--amber-soft); }
+  .box.bad .tag { color: var(--rose); background: var(--rose-soft); }
+  .box.info .tag { color: var(--cyan); background: var(--cyan-soft); }
+  .box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--paper);
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  table {
+    border-collapse: collapse;
+    min-width: 760px;
+    width: 100%;
+    font-size: 14px;
+  }
+  caption {
+    caption-side: top;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+    text-align: left;
+  }
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--rule);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--paper-2);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num {
+    font-family: var(--mono);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .pill {
+    display: inline-flex;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .pill.good { color: var(--green); background: var(--green-soft); }
+  .pill.warn { color: var(--amber); background: var(--amber-soft); }
+  .pill.info { color: var(--cyan); background: var(--cyan-soft); }
+  .pill.bad { color: var(--rose); background: var(--rose-soft); }
+
+  .failure-note {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-ledger {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .failure-card {
+    min-width: 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .failure-card.contaminated { border-color: var(--rose); }
+  .failure-card.superseded { border-color: var(--amber); }
+  .failure-card.settled { border-color: var(--rule-2); }
+  .failure-card.open { border-color: var(--cyan); }
+  .failure-card header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .failure-card h3 {
+    margin: 0;
+    min-width: 0;
+    max-width: 58ch;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.25;
+  }
+  .failure-card p {
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-card p:last-child { margin-bottom: 0; }
+  .failure-card ul {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 12px;
+    padding-left: 18px;
+    color: var(--text);
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .failure-card .conclusion {
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    color: var(--text);
+  }
+  .failure-card code { overflow-wrap: anywhere; }
+
+  .shape-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .shape {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .shape h3 {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .shape h3 span {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .path-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .path-list li {
+    padding: 3px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .receipt-list {
+    columns: 2 330px;
+    column-gap: 34px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .receipt-list li {
+    break-inside: avoid;
+    margin: 0 0 12px;
+    font-size: 15px;
+  }
+
+  footer {
+    margin-top: 86px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  @media (min-width: 1040px) {
+    header.hero > .sidenote,
+    .section > .sidenote {
+      float: right;
+      clear: right;
+      width: 282px;
+      margin: 6px 0 20px 34px;
+    }
+  }
+  @media (max-width: 960px) {
+    .page { padding: 0 18px 72px; }
+    .topbar { flex-direction: column; align-items: flex-start; }
+    .topbar nav { justify-content: flex-start; }
+    header.hero { min-height: auto; padding: 26px 0 20px; }
+    h1 { font-size: 40px; }
+    .subhead {
+      margin-top: 18px;
+      font-size: 17px;
+      line-height: 1.48;
+    }
+    .title-subtitle {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .byline span:not(:first-child)::before { content: none; }
+    .abstract-grid, .two-col, .shape-grid, .hero-tldr, .confidence-row { grid-template-columns: 1fr; }
+    .glossary-strip { grid-template-columns: 1fr; }
+    .glossary-strip div,
+    .glossary-strip div:nth-child(3n),
+    .glossary-strip div:nth-last-child(-n + 3) {
+      border-right: 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .glossary-strip div:last-child { border-bottom: 0; }
+    .compare-strip { grid-template-columns: 1fr; }
+    .table-wrap::before,
+    .flow-figure::before {
+      display: inline-flex;
+      position: sticky;
+      left: 8px;
+      z-index: 1;
+      margin: 8px 8px 0;
+      padding: 4px 7px;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      background: var(--paper);
+      color: var(--muted);
+      font: 800 11px var(--mono);
+    }
+    .table-wrap::before { content: "wide table: scroll sideways"; }
+    .flow-figure::before { content: "wide figure: scroll sideways"; }
+    .section { margin: 56px 0; }
+    .section h2 { font-size: 30px; }
+    .hero-result {
+      justify-self: start;
+      width: 100%;
+    }
+    .hero-tldr {
+      gap: 14px;
+      margin-top: 16px;
+      padding: 12px 0 14px;
+    }
+    .hero-tldr .tldr-copy {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .hero-number { font-size: 36px; }
+    .byline { margin-top: 16px; }
+    .paper-nav {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin-top: 18px;
+      padding-bottom: 6px;
+      scrollbar-color: var(--rule-2) transparent;
+    }
+    .paper-nav a {
+      flex: 0 0 auto;
+    }
+    .sidenote {
+      display: block;
+      margin: 18px 0 22px;
+      padding: 13px 16px 13px 14px;
+      background: var(--paper-2);
+      border: 1px solid var(--rule);
+      border-left: 1px solid var(--rule-2);
+      border-radius: 7px;
+    }
+    .claim { grid-template-columns: 1fr; gap: 4px; }
+    .flow-figure .flow-svg {
+      width: 960px;
+      max-width: none;
+    }
+    .flow-why { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    .flow-svg .flow-edge,
+    .flow-svg .flow-node,
+    .flow-svg .bias-on,
+    .flow-svg .scan-window,
+    .flow-svg .cache-cursor {
+      animation: none !important;
+    }
+    .flow-svg .flow-edge { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brandmark">Lumo FlyWheel / Serving Lab</div>
+    <nav aria-label="Site navigation">
+      <a href="index.html">Vol. I</a>
+      <a href="round-f.html">Vol. II</a>
+      <a href="gdn-tree-scan.html">Vol. III</a>
+      <a href="gdn-prefix-cache.html">Vol. IV</a>
+      <a href="stateless-tree.html">Vol. V</a>
+      <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Repository</a>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <p class="kicker">Volume VI / illustrated systems paper</p>
+    <h1>One Bit in the Last Place</h1>
+    <p class="title-subtitle">Why a Wider Speculative Tree Accepted Fewer Tokens &mdash; and the Contiguous-Spine Fix That Restored the Superset</p>
+    <p class="subhead">Vol. V closed the correctness frontier and left one honest disappointment as future work: acceptance <em>fell</em> as the tree grew &mdash; a six-node tree (cat6) accepted more tokens per forward than the eight-node tree (cat8) that strictly contains it. That is impossible for a superset on matched inputs, so it had to be a bug. This page is the closed case. The disturbance decomposes into three parts &mdash; a garble artifact that inflated it 3.4&times;, ordinary temperature noise, and one genuine residual &mdash; and the residual is a single bf16 unit-in-the-last-place, from the forked attention kernel re-associating its online-softmax reduction when branch keys move the spine's columns. A call-site-local <em>contiguous-spine reorder</em> removes it. With the fix baked, the superset holds again: cat8 out-accepts cat6 by exactly the predicted margin.</p>
+    <div class="hero-tldr" aria-label="TLDR and headline result">
+      <p class="tldr-copy"><strong>TL;DR:</strong> the &ldquo;wider tree accepts fewer&rdquo; anomaly was never one effect. Peel off the garble bug of Vol. V (it had been deflating cat8's clean accept, exaggerating the gap 3.4&times;: raw 0.296&nbsp;&rarr;&nbsp;true 0.087) and peel off temperature-0.6 trajectory noise (a &plusmn;0.25 band across independently-sampled arms), and what remains is a deterministic, greedy-measurable <strong>0.087-token superset violation</strong>. Its mechanism is not arithmetic error and not a masking bug: floating-point addition is not associative, and interleaving branch keys places the surviving spine keys in different score-tile columns, changing the butterfly-reduction association tree by one ULP at magnitude eight, in all sixteen full-attention layers. The fix reorders the suffix so the spine keys are contiguous-first &mdash; a lossless relabeling, MAB-validated bit-exact vs the spine-only computation. Result on the baked B4 16-task run: the superset is restored, <strong>cat8 &minus; cat6 = +0.166 accept/event (predicted +0.17)</strong>, with a caterpillar 15-node tree (t33333) topping both accept (3.567) and resolve (11/16). The remaining tension is speed, not correctness: the wider trees now out-<em>accept</em> but not yet out-<em>run</em> native per token.</p>
+      <div class="hero-result">
+        <span class="hero-number">+0.166</span>
+        <p><strong>cat8 &minus; cat6 accept/event</strong>, on the baked B4 16-task run &mdash; the superset restored (predicted +0.17 from the two added branches; pre-fix this was <em>negative</em>). The genuine defect was <strong>one bf16 ULP</strong> (6.25e-2) of reduction reassociation, measured deterministically at greedy as a <strong>0.087</strong>-token violation &mdash; not the raw 0.296 gap, which was 3.4&times;-inflated by the Vol.&nbsp;V garble. Cross-arm accept gaps between <em>different</em> drafter paths (native vs either tree) sit inside the temp-0.6 <strong>&plusmn;0.25</strong> noise band and are not ranked. Correctness holds; the open question is end-to-end speed.</p>
+      </div>
+    </div>
+    <div class="byline">
+      <span><strong>Mark Ma</strong></span>
+      <span>ML systems / inference</span>
+      <span>Qwen 3.6-27B FP8 / GB10</span>
+      <span>July 2026</span>
+    </div>
+    <div class="paper-nav">
+      <a href="#abstract">Abstract</a>
+      <a href="#reader-map">Reader map</a>
+      <a href="#anomaly">The anomaly</a>
+      <a href="#decompose">Decomposition</a>
+      <a href="#mechanism">Mechanism</a>
+      <a href="#fix">The fix</a>
+      <a href="#results">Results</a>
+      <a href="#museum">Failure museum</a>
+      <a href="#reflection">Reflection</a>
+      <a href="#limitations">Limits</a>
+      <a href="#future">Future work</a>
+      <a href="#receipts">Source trail</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="abstract">
+      <h2>Abstract</h2>
+      <p>A branched token-tree speculative verifier should never accept fewer tokens than a tree it strictly contains: on identical drafts and target logits, the bigger tree offers every path the smaller one does, plus more, so its accepted length is greater than or equal at every forward. <a href="gdn-tree-scan.html">Vol.&nbsp;III</a> built such a verifier for Qwen 3.6-27B-FP8, a hybrid whose 64 layers include 48 Gated-DeltaNet recurrent layers; <a href="stateless-tree.html">Vol.&nbsp;V</a> made it cache-correct and garble-free, and reported a puzzle it deferred: the eight-node tree cat8 accepted <em>fewer</em> tokens per event than the six-node cat6 it contains. This page resolves that superset violation.</p>
+      <p>The apparent gap was a composite. Roughly 3.4&times; of it was an artifact of the very garble bug Vol.&nbsp;V fixed &mdash; the foreign-KV read had been over-accepting near-neighbors on cat8 and deflating its clean count, so removing garble shrank the raw 0.296-token gap to 0.087. Most of the rest is trajectory noise: at the deployment temperature of 0.6 each arm samples an independent token stream, and cross-arm accept differences under about a quarter-token are not signal. What survives &mdash; the only part measurable without noise, at greedy, where drafts and output are deterministic and the superset test is exact &mdash; is a real but small residual of 0.087 tokens per event. We localize it the same way Vol.&nbsp;V localized the garble: overwrite each suspect subsystem with a native-exact version in an observe-only harness. The convolution is bit-invariant to branch count; the input projection is shared; the carrier is the forked FlashAttention-2 tree-verify kernel, which drifts the deepest spine row by exactly one bf16 unit-in-the-last-place at magnitude eight, in all sixteen full-attention layers, as a pure function of how many branches sit beside it.</p>
+      <p>The mechanism is reduction reassociation, not error. The masked branch keys contribute exactly zero to the spine's score row, but their <em>presence</em> changes the physical column layout, and the kernel's online-softmax reduction is keyed by column; floating-point addition is not associative, so a different association tree sums one ULP away. The fix follows from the mechanism: a call-site-local <strong>contiguous-spine reorder</strong> permutes the suffix keys, values, and bias so the spine occupies identical columns regardless of branch count &mdash; a lossless relabeling, proven bit-exact against the spine-only computation in a multi-armed validation harness. Baked into the locked launcher and re-measured on the sixteen-task deployment run, the superset holds: cat8 out-accepts cat6 by +0.166 accept/event, matching the +0.17 predicted from its two extra branches. We close by reporting the honest remaining tension &mdash; the wider trees now accept more but do not yet run faster than native per token &mdash; and by scoping the next lever: merging the MTP spine with a real Snowflake&nbsp;Arctic suffix-decoding cache to fill the sixteen-slot register wall with higher-value branches.</p>
+
+      <div class="definition-box" aria-label="The governing principle">
+        <p><strong>The governing invariant (the acceptance bar):</strong> for two token trees where one is a subset of the other, the superset must accept &ge; the subset on identical drafts and target logits, at every forward &mdash; a structural property of the verify, independent of temperature. A measured violation is therefore a bug, not noise, <em>only when measured on matched inputs</em>: at greedy (deterministic) it is decisive; at temperature it is confounded by trajectory divergence and must be read against the noise band. This page respects that boundary throughout: the defect claim rests on the greedy number; the temperature numbers are confirmation, reported with their band.</p>
+      </div>
+
+      <h3>Names in this paper</h3>
+      <div class="glossary-strip" aria-label="Names in this paper">
+        <div><dfn>native (naive_mtp)</dfn><span>stock vLLM linear multi-token-prediction decode on FLASH_ATTN; a 5-token chain.</span></div>
+        <div><dfn>tree (tree_mtp)</dfn><span>the Lumo branched token-tree verifier of <a href="gdn-tree-scan.html">Vol.&nbsp;III</a> on TREE_ATTN: forked FA2, GDN tree kernel, rejection committer.</span></div>
+        <div><dfn>cat6 / cat8</dfn><span>6- and 8-node token trees: a depth-5 spine plus sibling branches. cat8 = cat6 &cup; {(0,1),(0,0,1)} &mdash; a strict superset.</span></div>
+        <div><dfn>t33333 (cat33333)</dfn><span>a 15-node caterpillar: depth-5 spine, three siblings at each depth. The widest arm on this page.</span></div>
+        <div><dfn>spine</dfn><span>the linear root-to-deepest-leaf path of a tree &mdash; the same chain native drafts; branches are the siblings hanging off it.</span></div>
+        <div><dfn>superset bound</dfn><span>a tree that contains another must accept &ge; it on matched inputs; violating it deterministically is a defect.</span></div>
+        <div><dfn>M / M-dependence</dfn><span>M = node count; the spine verify should be M-invariant. Residual M-dependence is the disturbance this page closes.</span></div>
+        <div><dfn>ULP</dfn><span>unit in the last place &mdash; the gap between adjacent floating-point values; here one bf16 ULP at magnitude 8 is 6.25e-2.</span></div>
+        <div><dfn>reassociation</dfn><span>summing the same numbers in a different order; because float addition is not associative, the result can shift by a ULP.</span></div>
+        <div><dfn>contiguous-spine reorder</dfn><span>the fix: permute the suffix so spine keys occupy fixed, branch-count-independent columns; lossless relabeling.</span></div>
+        <div><dfn>accept / event</dfn><span>mean tokens committed per speculative forward &mdash; the acceptance lever, higher is faster; a diagnostic, not the headline speed number.</span></div>
+        <div><dfn>greedy vs temp-0.6</dfn><span>greedy (temp&nbsp;0) is deterministic &mdash; the clean superset test; temp&nbsp;0.6 is the ship config, with a &plusmn;0.25 cross-arm accept noise band.</span></div>
+      </div>
+
+      <div class="abstract-grid">
+        <div class="panel">
+          <h2>Contribution</h2>
+          <p>One diagnosis and one fix, and a methodological point that outlives both. The diagnosis is that a superset-violating acceptance rate, in a system with a known garble bug and a stochastic committer, is three effects wearing one number &mdash; and only the greedy, deterministic slice is a real defect. The fix is that the defect is not arithmetic but associative: it is removed by making the reduction see the same column layout, which a contiguous-spine reorder does losslessly, with no kernel math change and no memory-bandwidth tax.</p>
+          <p>This page is the sequel to <a href="stateless-tree.html">Vol.&nbsp;V</a>, whose &ldquo;branch-on-spine disturbance&rdquo; future-work section this closes, and is self-contained. Like the prior volumes it is a research report, not an announcement: it records the decomposition, the localization ladder, and a full <a href="#museum">failure museum</a> of the levers that engaged and missed &mdash; a refuted query-pad fix, a fatal double-rounding hybrid, an overstated forward-only throughput, a dead depth lever &mdash; because the reason a one-ULP effect took a week to corner is the portable content. The new merge lever &mdash; MTP spine plus a real Arctic suffix cache &mdash; is scoped in <a href="#future">future work</a>, gated but not shipped.</p>
+        </div>
+        <aside class="panel">
+          <h2>Status</h2>
+          <div class="claim-list">
+            <div class="claim"><span class="state pass">SUPERSET</span><p>Restored: cat8 &minus; cat6 = +0.166 accept/event on the baked B4 16-task run, matching the +0.17 predicted from cat8's two extra branches. Pre-fix this delta was negative.</p></div>
+            <div class="claim"><span class="state pass">MECHANISM</span><p>Closed: one bf16 ULP (6.25e-2) from online-softmax reduction reassociation, carried by the forked FA2 kernel; convolution and in-projection cleared, query-pad refuted, key/suffix-width confirmed.</p></div>
+            <div class="claim"><span class="state pass">FIX</span><p>Contiguous-spine reorder, MAB-validated bit-exact against spine-only. Shipped at the cache-slot layer (<code>FR13_SLOT_REORDER</code>, baked, five edit sites, no recompile) after a carrier-B audit; two alternative landing routes were refuted by fundamental double-rounding.</p></div>
+            <div class="claim"><span class="state warn">SPEED</span><p>The wider trees out-<em>accept</em> but do not yet out-<em>run</em> native per token: on the forward-limited basis native leads (76.3 tok/s) the trees (56&ndash;73), a per-forward-overhead gap the accept gain has not yet paid for. End-to-end wall and the MTP+suffix merge are <a href="#future">future work</a>.</p></div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="source-exhibit" aria-label="Falsification checks">
+        <div class="source-head">
+          <strong>What would falsify this?</strong>
+          <span>Skeptic checks before trusting the headline</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Superset</span><p>A greedy, deterministic run in which the contiguous-spine reorder is on and cat8 still accepts fewer than cat6 &mdash; the bit-exact-vs-spine-only claim failing on any spine depth.</p></div>
+          <div class="box bad"><span class="tag">Mechanism</span><p>The one-ULP drift surviving after the spine keys are made column-identical, or reappearing with the masked branch keys proven to contribute non-zero &mdash; which would make it a masking bug, not reassociation.</p></div>
+          <div class="box bad"><span class="tag">Noise band</span><p>A native-vs-cat6 ranking presented as a finding &mdash; those arms run different drafter paths on independent trajectories, and their gap is inside &plusmn;0.25; only cat8-vs-cat6 is a clean structural comparison.</p></div>
+          <div class="box bad"><span class="tag">Lossless</span><p>Any committed token diverging from the no-reorder computation &mdash; the reorder is an exact relabeling; a single value change would mean it is not.</p></div>
+          <div class="box bad"><span class="tag">Speed honesty</span><p>The forward-limited throughput being quoted as an end-to-end win &mdash; it is a decode ceiling that omits per-step overhead, and this page does not claim the tree out-runs native.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="reader-map">
+      <h2>Five-Minute Reader Map</h2>
+      <aside class="sidenote">
+        <p><strong>Read path:</strong> the anomaly, then why it is three effects not one, then the mechanism and the fix, then the results. The museum and reflection are the debugging retrospective; the rest is appendix.</p>
+      </aside>
+      <p>The shortest version: a bigger speculative tree accepted fewer tokens than the smaller tree inside it, which cannot happen if the verify is a clean superset. It looked like a large effect (about a quarter-token). Most of that was the Vol.&nbsp;V garble deflating the bigger tree, plus temperature noise across independently-sampled arms. The real, deterministic residual is one bit of floating-point &mdash; the forked attention kernel sums its softmax reduction in a different order when branch keys shift the spine's columns. Make the spine columns fixed, and the bit comes back; baked in, the superset holds.</p>
+
+      <div class="source-exhibit" aria-label="Five-minute reading path">
+        <div class="source-head">
+          <strong>Read in this order</strong>
+          <span>The blog path before the full paper path</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">The anomaly</span><p>cat8 &sup; cat6, yet cat8 accepted fewer tokens per event (raw 3.336 vs 3.594). A superset must accept &ge; its subset on matched inputs, so this is a defect &mdash; if it survives at greedy.</p></div>
+          <div class="box info"><span class="tag">Three effects</span><p>Raw gap 0.296 = ~3.4&times; garble inflation (cat8 deflated by the fixed foreign-KV read) + temp-0.6 trajectory noise (&plusmn;0.25) + a true 0.087 greedy residual. Only the last is a bug.</p></div>
+          <div class="box bad"><span class="tag">Mechanism</span><p>One bf16 ULP from reduction reassociation: masked branch keys are numerically zero but move the surviving spine keys to different score-tile columns, and the online-softmax butterfly sums in a different order.</p></div>
+          <div class="box good"><span class="tag">The fix</span><p>Contiguous-spine reorder: permute the suffix so the spine is column-first, branch-count-independent. Lossless relabeling, bit-exact vs spine-only. Restores cat8 &minus; cat6 = +0.166 (predicted +0.17).</p></div>
+          <div class="box warn"><span class="tag">Honest close</span><p>Correctness is settled; the wider trees out-accept but not yet out-run native per token. Closing that is the MTP+suffix merge, scoped as future work.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="anomaly">
+      <h2>The Anomaly: A Superset That Accepted Less</h2>
+      <aside class="sidenote">
+        <p><strong>The invariant:</strong> if tree B contains tree A, then on the same drafts and the same target logits, B accepts at least as many tokens as A at every forward &mdash; B can always take A's best path, and might take a better one. So B's mean acceptance is &ge; A's <em>on matched inputs</em>. A measured reversal is either a real verify defect or an inputs mismatch.</p>
+      </aside>
+      <p>The two production trees are nested by construction. Written as the set of accepted-path prefixes each admits,</p>
+      <div class="table-wrap">
+        <table>
+          <caption>cat8 is a strict superset of cat6: the same depth-5 spine and root sibling, plus two extra branch nodes.</caption>
+          <thead><tr><th>Tree</th><th>Node set (path prefixes)</th><th>Relationship</th></tr></thead>
+          <tbody>
+            <tr><td>cat6 (6-node)</td><td class="mono">(0), (1), (0,0), (0,0,0), (0,0,0,0), (0,0,0,0,0)</td><td>subset</td></tr>
+            <tr><td>cat8 (8-node)</td><td class="mono">cat6 &cup; {(0,1), (0,0,1)}</td><td><strong>strict superset</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>cat8 is cat6 with two sibling branches added at depths 1 and 2. Every path cat6 can accept, cat8 can accept; cat8 additionally offers two more. So on identical drafts and target logits, <strong>cat8's accepted length &ge; cat6's at every forward</strong>, and its mean acceptance must be &ge; cat6's. That is not a heuristic; it is a property of the branched verify.</p>
+      <p>The live temperature-0.6 run reported the opposite. In the same-boot three-arm deployment measurement that <a href="stateless-tree.html">Vol.&nbsp;V</a> published, the wider tree accepted <em>fewer</em> tokens per event than the narrower one, and was the slowest arm:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>The opening anomaly (Vol.&nbsp;V's same-boot temp-0.6 run, remap-on): acceptance is non-monotonic in node count &mdash; cat6 &gt; native &gt; cat8.</caption>
+          <thead><tr><th>Arm</th><th>Nodes</th><th>Accept / event</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td>native (5-chain)</td><td class="num">5</td><td class="num">3.466</td><td>linear MTP, the middle</td></tr>
+            <tr><td>cat6 (6-node)</td><td class="num">6</td><td class="num">3.594</td><td>highest &mdash; the surprise</td></tr>
+            <tr><td>cat8 (8-node)</td><td class="num">8</td><td class="num">3.336</td><td><strong>lowest</strong> &mdash; the violation</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>cat6 &minus; cat8 = +0.258 in cat6's favor &mdash; backwards. If branches only ever add accepts, cat8 would be highest; it was lowest. Something in the wider tree was <em>lowering</em> the acceptance of the very spine it shares with cat6, and the question that opens this page is exactly Vol.&nbsp;V's deferred one: is that a real, structural verify defect, or an artifact of how the measurement was taken?</p>
+
+      <div class="figure" aria-labelledby="fig1-title">
+        <div class="figure-head"><strong id="fig1-title">Figure 1</strong><span>cat8 contains cat6 &mdash; so it must accept at least as much; the arrow points the wrong way</span></div>
+        <svg class="diagram" viewBox="0 0 1120 380" role="img" aria-label="cat8 is a superset of cat6, sharing the depth-5 spine plus two extra branches, yet its measured acceptance is lower — a superset violation">
+          <defs>
+            <marker id="f1-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+            <marker id="f1-arrow-r" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
+            </marker>
+          </defs>
+          <text x="24" y="34" class="label">A. cat6 &mdash; depth-5 spine + one root sibling (6 nodes)</text>
+          <circle cx="70" cy="92" r="15" class="node node-cyan"></circle>
+          <circle cx="170" cy="92" r="15" class="node node-cyan"></circle>
+          <circle cx="270" cy="92" r="15" class="node node-cyan"></circle>
+          <circle cx="370" cy="92" r="15" class="node node-cyan"></circle>
+          <circle cx="470" cy="92" r="15" class="node node-cyan"></circle>
+          <circle cx="170" cy="46" r="13" class="node node-amber"></circle>
+          <path d="M70 92 L170 92 L270 92 L370 92 L470 92" class="edge"></path>
+          <path d="M70 92 L170 46" class="edge"></path>
+          <text x="560" y="97" class="tiny">6 nodes: 5 spine (cyan) + 1 sibling (amber). Accept 3.594.</text>
+
+          <text x="24" y="188" class="label">B. cat8 &mdash; the same spine + the same sibling + two more (8 nodes) &sup; cat6</text>
+          <circle cx="70" cy="250" r="15" class="node node-cyan"></circle>
+          <circle cx="170" cy="250" r="15" class="node node-cyan"></circle>
+          <circle cx="270" cy="250" r="15" class="node node-cyan"></circle>
+          <circle cx="370" cy="250" r="15" class="node node-cyan"></circle>
+          <circle cx="470" cy="250" r="15" class="node node-cyan"></circle>
+          <circle cx="170" cy="204" r="13" class="node node-amber"></circle>
+          <circle cx="270" cy="204" r="13" class="node node-green"></circle>
+          <circle cx="370" cy="204" r="13" class="node node-green"></circle>
+          <path d="M70 250 L170 250 L270 250 L370 250 L470 250" class="edge"></path>
+          <path d="M70 250 L170 204" class="edge"></path>
+          <path d="M170 250 L270 204" class="edge"></path>
+          <path d="M270 250 L370 204" class="edge"></path>
+          <text x="560" y="243" class="tiny">8 nodes: cat6 (cyan+amber) + 2 extra branches (green).</text>
+          <text x="560" y="265" class="tiny">Must accept &ge; cat6 &mdash; yet measured 3.336 &lt; 3.594.</text>
+          <path d="M690 300 L540 268" class="arrow" style="stroke: var(--rose); marker-end:url(#f1-arrow-r)"></path>
+          <text x="24" y="340" class="tiny">Color key: cyan = shared spine, amber = shared root sibling, green = cat8's two extra branches, rose = the impossible direction (superset accepting less).</text>
+        </svg>
+        <p class="caption">Figure 1 states the paradox. cat8 is cat6 with two branches added (green); it can always replay cat6's accepted path, so it must accept at least as much. The measured reversal &mdash; the wider tree accepting fewer tokens &mdash; is the defect this page decomposes and closes. The catch is the phrase &ldquo;on matched inputs&rdquo;: at temperature the two arms never see the same tokens, so the reversal must be re-measured where inputs <em>are</em> matched before it can be called a bug.</p>
+      </div>
+    </section>
+
+    <section class="section" id="decompose">
+      <h2>Three Effects Wearing One Number</h2>
+      <aside class="sidenote">
+        <p><strong>The discipline:</strong> a superset violation is decisive only on matched inputs. The temperature run does not match inputs, so before believing any magnitude we split the raw gap into what the garble bug contributed, what trajectory noise contributed, and what survives at greedy &mdash; where inputs <em>are</em> matched.</p>
+      </aside>
+      <p>The raw anomaly is not one effect; it is three, and only one of them is a bug. Peeling them apart is the whole diagnostic move.</p>
+
+      <h3>Effect one: the garble bug had deflated cat8 (~3.4&times;)</h3>
+      <p>The very corruption <a href="stateless-tree.html">Vol.&nbsp;V</a> fixed &mdash; the foreign attention-KV read, in which a committed token's key/value came from a sibling branch's slot &mdash; did not merely garble identifiers. Because the foreign key was a near-neighbor draft, it also nudged the verify into <em>accepting</em> near-neighbor tokens it should have rejected, and that wrong-accept rate was higher on the busier cat8 layout. The result was a systematic deflation of cat8's clean acceptance. The garble-era measurement put cat6 &minus; cat8 at <strong>0.296</strong>; re-measured after the remap, the true greedy gap is <strong>0.087</strong>. The garble had exaggerated the disturbance by about <strong>3.4&times;</strong> &mdash; the single largest component of the apparent anomaly was an artifact of a bug in a different subsystem.</p>
+
+      <h3>Effect two: temperature-0.6 trajectory noise (&plusmn;0.25)</h3>
+      <p>At the deployment temperature of 0.6, every arm samples its own token stream. The moment two arms draw a different token &mdash; and the tree, drawing extra masked branch samples, advances its per-request generator differently from native on the very first step &mdash; they are on different trajectories, solving the sixteen agentic tasks along divergent paths. Cross-arm acceptance then differs for reasons that have nothing to do with the verify. The size of that noise is not small: the campaign's own working band is <strong>&plusmn;0.25 tokens</strong> per event. Two consequences follow, and both constrain how the results table may be read:</p>
+      <ul>
+        <li><strong>The per-task pattern is the tell.</strong> Across the sixteen tasks the mean of (cat8 &minus; cat6) was &minus;0.167 with cat8 ahead on only 6 of 16 &mdash; a ~2.1&sigma; lean to cat6. But the lean is <em>not</em> uniform: the biggest cat6-favoring gaps land on the failing, meandering tasks (one at &minus;0.83, one at &minus;0.68, one at &minus;0.52), while cleanly-resolved tasks sit near zero (+0.05, +0.07). A real verify defect would be task-independent; a gap that concentrates on divergent trajectories is trajectory divergence.</li>
+        <li><strong>Two of the three arms are not even a clean comparison.</strong> native runs the native-MTP drafter on FLASH_ATTN; the trees run the forked tree drafter on TREE_ATTN. There is no subset relationship between native and either tree &mdash; different drafter, different attention, different committer path &mdash; so native&nbsp;vs&nbsp;cat6 or native&nbsp;vs&nbsp;cat8 carries no superset bound at all. Their accept gaps (native &minus; cat6 = +0.109; cat8 &minus; native = +0.057 on the baked run) sit inside &plusmn;0.25 and are <em>not ranked</em> in this paper. The only clean structural comparison in the whole matrix is cat8&nbsp;vs&nbsp;cat6.</li>
+      </ul>
+
+      <h3>Effect three: the genuine residual (0.087, deterministic)</h3>
+      <p>Strip both confounds by measuring where they cannot exist. At greedy &mdash; temperature 0 &mdash; drafts are deterministic and the target is deterministic, so cat8 and cat6 produce the <em>same</em> output; the tree only changes how many tokens commit per forward. There is no trajectory noise, and there is no garble (the remap is on). On a fixed prompt, same boot era:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>The decisive test &mdash; greedy (temp 0), deterministic, remap-on. Superset VIOLATED by 0.087; the temp-0.6 row shows branches recovering the gap at the ship config.</caption>
+          <thead><tr><th>Arm</th><th>Greedy accept</th><th>Temp-0.6 accept</th><th>Reading</th></tr></thead>
+          <tbody>
+            <tr><td>native (M=5)</td><td class="num">3.813</td><td class="num">3.691</td><td>a different drafter &mdash; not a superset comparand</td></tr>
+            <tr><td>cat6 (M=6)</td><td class="num">3.645</td><td class="num">3.522</td><td>the clean subset</td></tr>
+            <tr><td>cat8 (M=8)</td><td class="num">3.558</td><td class="num">3.673</td><td><strong>greedy: below cat6 by 0.087</strong> &mdash; the real defect</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>At greedy the superset is violated cleanly and deterministically: cat8 (3.558) accepts <strong>0.087</strong> fewer than cat6 (3.645), on matched output, with no noise to hide behind. That is the whole bug &mdash; small, real, and structural. Two footnotes make it honest. First, at the ship temperature the branches <em>recover</em>: cat8 (3.673) climbs back to native (3.691) and above cat6 (3.522), so at deployment the superset direction is already restored by the active branches even before the fix &mdash; the greedy number is the residual the fix targets, not the deployment penalty. Second, this is one sample per cell; the greedy determinism is what makes even a single sample decisive.</p>
+
+      <div class="source-exhibit" aria-label="The decomposition">
+        <div class="source-head">
+          <strong>The raw 0.296, decomposed</strong>
+          <span>Only the deterministic residual is a defect</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Garble inflation</span><p>~3.4&times;. The foreign-KV read (Vol.&nbsp;V) over-accepted near-neighbors and deflated cat8; removing it shrinks the gap 0.296&nbsp;&rarr;&nbsp;0.087. An artifact of another subsystem.</p></div>
+          <div class="box warn"><span class="tag">Trajectory noise</span><p>&plusmn;0.25 band at temp 0.6. Concentrated on failing/meandering tasks (2.1&sigma; lean but non-uniform). Not a verify property; vanishes at greedy.</p></div>
+          <div class="box bad"><span class="tag">True residual</span><p>0.087 tokens/event, greedy, deterministic, matched output. The only part that is a bug &mdash; and the only part the fix must remove.</p></div>
+          <div class="box info"><span class="tag">Not comparable</span><p>native vs either tree: different drafter+attention+committer, no subset bound, gap inside &plusmn;0.25. Never ranked in this paper.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="mechanism">
+      <h2>The Mechanism: One ULP of Reassociation</h2>
+      <aside class="sidenote">
+        <p><strong>The claim in one line:</strong> the masked-out branch keys contribute exactly zero to the spine's attention, and still change its answer &mdash; because they change the <em>order</em> in which the kernel sums a non-associative reduction, not any value in it.</p>
+        <p><strong>The method:</strong> the same localization ladder Vol.&nbsp;V used for the garble &mdash; overwrite each candidate subsystem with a native-exact version in an observe-only harness, and watch which one moves the drift to zero.</p>
+      </aside>
+      <p>With the confounds gone, the residual is 0.087 tokens per event at greedy, and it is deterministic, so it has a single physical cause. We find it by the ladder. In an observe-only multi-armed harness that overwrites one subsystem at a time with a native-exact computation, each Gated-DeltaNet subsystem is cleared in turn, and one is not.</p>
+
+      <div class="source-exhibit" aria-label="The localization ladder">
+        <div class="source-head">
+          <strong>The localization, rung by rung</strong>
+          <span>Each subsystem made native-exact in an observe-only harness; only one carries the drift</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Fused conv</span><p>Cleared. 768 events across 48 layers, tap-mismatch and output-mismatch both sum to zero &mdash; the causal conv is elementwise, no cross-row reduction, bit-invariant to branch count.</p></div>
+          <div class="box good"><span class="tag">In-projection</span><p>Excluded by construction &mdash; both tree widths share the identical GEMM path; a shared matmul cannot depend on how many tree nodes follow it.</p></div>
+          <div class="box good"><span class="tag">Recurrent scan</span><p>M-invariant a priori &mdash; the padded node count is 8 for every tree with 8 or fewer nodes, so cat6 and cat8 run the same scan geometry.</p></div>
+          <div class="box bad"><span class="tag">Full attention (FA2)</span><p>The carrier. On the deepest spine row it drifts by exactly one bf16 ULP at magnitude eight (6.25e-2), in all sixteen full-attention layers, scaling with branch count. Typical layers ~1e-3; the worst is the deep spine.</p></div>
+        </div>
+      </div>
+
+      <p>The carrier is the forked FlashAttention-2 tree-verify kernel, and the drift is one bf16 unit-in-the-last-place &mdash; <strong>6.25e-2 at magnitude eight</strong> &mdash; on the deepest spine row, present in all sixteen full-attention layers and scaling with node count. That number is a fingerprint: a single ULP, not a growing error, and monotone in M &mdash; a codegen or precision fault would be non-monotone and larger. It says <em>reassociation</em>, and the source read confirms it exactly.</p>
+
+      <h3>Why the branch keys move the sum without being in it</h3>
+      <p>The obvious first suspect is masking &mdash; maybe the extra branch keys leak into the spine's score row. They do not: a masked key is exponentiated through <code>exp2(&minus;&infin;)&nbsp;=&nbsp;0</code>, an exact zero, and the served output on the widest arm matches the model bit-for-bit. The branch keys contribute exactly nothing to the value. What they change is <em>where the spine keys sit</em>. FlashAttention-2 computes its softmax as an online reduction whose association order is keyed by the <strong>physical score-tile column</strong> &mdash; a lane butterfly feeds a fixed four-way reduction tree, so which column a key lands in decides which partial sums it joins, and in what order. Interleaving branch nodes with spine nodes in the tree's breadth-first layout slides the surviving spine keys into different columns:</p>
+
+      <div class="figure" aria-labelledby="fig2-title">
+        <div class="figure-head"><strong id="fig2-title">Figure 2</strong><span>Same keys, same values, different columns &mdash; so the online-softmax butterfly sums them in a different order, one ULP apart</span></div>
+        <svg class="diagram" viewBox="0 0 1120 420" role="img" aria-label="Spine-only places surviving spine keys in contiguous score-tile columns 0-4; cat8 interleaves masked branch keys so the same spine keys land in gapped columns 0,1,2,4,6, changing the reduction association tree by one ULP">
+          <defs>
+            <marker id="f2-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+          </defs>
+          <text x="24" y="30" class="label">A. spine-only layout &mdash; surviving spine keys in contiguous columns {0,1,2,3,4}</text>
+          <g>
+            <rect x="40" y="48" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="60" y="75" class="tiny">s0</text>
+            <rect x="104" y="48" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="124" y="75" class="tiny">s1</text>
+            <rect x="168" y="48" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="188" y="75" class="tiny">s2</text>
+            <rect x="232" y="48" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="252" y="75" class="tiny">s3</text>
+            <rect x="296" y="48" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="316" y="75" class="tiny">s4</text>
+          </g>
+          <text x="40" y="112" class="tiny">columns:  0     1     2     3     4</text>
+          <text x="40" y="134" class="tiny">reduction tree: ((s0+s1)+(s2+s3))+s4 &mdash; one fixed association</text>
+
+          <text x="24" y="186" class="label">B. cat8 layout &mdash; masked branch keys interleaved; same spine keys now in {0,1,2,4,6}</text>
+          <g>
+            <rect x="40" y="204" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="60" y="231" class="tiny">s0</text>
+            <rect x="104" y="204" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="124" y="231" class="tiny">s1</text>
+            <rect x="168" y="204" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="188" y="231" class="tiny">s2</text>
+            <rect x="232" y="204" width="60" height="44" rx="6" class="node node-amber"></rect><text x="252" y="231" class="tiny">b</text>
+            <rect x="296" y="204" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="316" y="231" class="tiny">s3</text>
+            <rect x="360" y="204" width="60" height="44" rx="6" class="node node-amber"></rect><text x="380" y="231" class="tiny">b</text>
+            <rect x="424" y="204" width="60" height="44" rx="6" class="node node-cyan"></rect><text x="444" y="231" class="tiny">s4</text>
+          </g>
+          <text x="40" y="268" class="tiny">columns:  0     1     2    (3)    4    (5)    6      &mdash;  (3),(5) = masked branch keys = exact 0.0</text>
+          <text x="40" y="290" class="tiny">reduction tree: ((s0+s1)+(s2+0))+((s3+0)+s4) &mdash; a DIFFERENT association</text>
+          <path d="M470 226 H556" class="arrow" style="marker-end:url(#f2-arrow)"></path>
+          <text x="566" y="214" class="tiny">same numbers, summed in a different order &mdash;</text>
+          <text x="566" y="236" class="tiny">float addition is not associative, so the</text>
+          <text x="566" y="258" class="tiny">deep-spine result lands 1 bf16 ULP away</text>
+          <text x="566" y="280" class="tiny">(6.25e-2 @ mag 8), in all 16 full-attn layers.</text>
+
+          <rect x="40" y="330" width="1040" height="64" rx="8" class="node"></rect>
+          <text x="56" y="356" class="tiny">The masked branch columns (3),(5) hold exact zero, so no value leaks &mdash; the served output is bit-identical to the model. What changes is the reduction's</text>
+          <text x="56" y="378" class="tiny">association tree: the four-way lane butterfly is keyed by physical column, and the spine keys now occupy a gapped column set, so the same sum reassociates.</text>
+        </svg>
+        <p class="caption">Figure 2 is the whole defect. The spine keys and their values are identical between the two layouts; the masked branch keys contribute exact zero. The only difference is column placement &mdash; contiguous {0,1,2,3,4} versus gapped {0,1,2,4,6} &mdash; and because the online-softmax reduction associates by column, the deep-spine partial sums in a different order and lands one bf16 ULP away. At an acceptance near-tie, one ULP is enough to reject a token the narrower tree accepts, which is the 0.087 residual.</p>
+      </div>
+
+      <p>This also explains why every padding fix failed before the reorder (they are in the <a href="#museum">museum</a>). The kernel anchors both its bias-column window and its causal diagonal to a <em>derived</em> length &mdash; the key length minus the query length &mdash; so padding the query moves the tile but not the columns (query padding was measured to have exactly zero effect on the cross-M drift), and padding the key width slides the anchor and corrupts the real rows. The carrier is the key/suffix width, and the only compute-only lever that touches it without desyncing the anchor is to reorder the keys themselves.</p>
+    </section>
+
+    <section class="section" id="fix">
+      <h2>The Fix: Make the Spine Columns Fixed</h2>
+      <aside class="sidenote">
+        <p><strong>The remedy the mechanism dictates:</strong> if the drift comes from the spine keys landing in branch-count-dependent columns, put them in the same columns every time. Permute the suffix so the spine is contiguous-first and the branches follow &mdash; a relabeling, with no arithmetic changed.</p>
+      </aside>
+      <p>The mechanism names the fix. Make the surviving spine keys occupy identical columns regardless of how many branches sit beside them, and the reduction associates the same way for every tree, so the drift is gone by construction. Concretely, permute the tree suffix so the spine comes first in depth order and the branches follow: <code>&pi; = [spine depths] ++ [branches topological]</code>. It is a lossless relabeling &mdash; the masked branch columns stay neutral, no value changes &mdash; and it carries no memory-bandwidth tax. In the observe-only harness it is provably exact: under the reorder, <strong>every spine depth becomes bit-identical to the spine-only computation</strong> (whole-spine difference 0.000e+00), while an interleaved-identity control stays at the one-ULP drift &mdash; confirming that contiguity itself, not the permutation, is the property that matters.</p>
+
+      <div class="figure" aria-labelledby="fig3-title">
+        <div class="figure-head"><strong id="fig3-title">Figure 3</strong><span>Reorder the suffix spine-first, so the spine keys occupy the same columns for every tree width</span></div>
+        <svg class="diagram" viewBox="0 0 1120 320" role="img" aria-label="The contiguous-spine reorder permutes the tree suffix so the five spine nodes occupy columns 0-4 and the branch nodes follow, making the spine's reduction column layout independent of branch count">
+          <defs>
+            <marker id="f3-arrow-g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
+            </marker>
+          </defs>
+          <text x="24" y="30" class="label">Before &mdash; breadth-first tree order (spine and branches interleaved)</text>
+          <g>
+            <rect x="40" y="48" width="52" height="40" rx="6" class="node node-cyan"></rect><text x="56" y="73" class="tiny">s0</text>
+            <rect x="96" y="48" width="52" height="40" rx="6" class="node node-cyan"></rect><text x="112" y="73" class="tiny">s1</text>
+            <rect x="152" y="48" width="52" height="40" rx="6" class="node node-amber"></rect><text x="168" y="73" class="tiny">b1</text>
+            <rect x="208" y="48" width="52" height="40" rx="6" class="node node-cyan"></rect><text x="224" y="73" class="tiny">s2</text>
+            <rect x="264" y="48" width="52" height="40" rx="6" class="node node-amber"></rect><text x="280" y="73" class="tiny">b2</text>
+            <rect x="320" y="48" width="52" height="40" rx="6" class="node node-cyan"></rect><text x="336" y="73" class="tiny">s3</text>
+            <rect x="376" y="48" width="52" height="40" rx="6" class="node node-cyan"></rect><text x="392" y="73" class="tiny">s4</text>
+          </g>
+          <text x="40" y="108" class="tiny">flat nodes [0,1,3,5,7,8] = spine &rarr; score-tile columns {0,1,2,4,6} (gapped) &rarr; drift 6.25e-2</text>
+
+          <path d="M230 128 V168" class="arrow" style="marker-end:url(#f3-arrow-g)"></path>
+          <text x="250" y="152" class="tiny">&pi; = [spine depths] ++ [branches] &mdash; permute suffix keys, values, and both bias axes</text>
+
+          <text x="24" y="204" class="label">After &mdash; spine-first (branches follow); spine columns now {0,1,2,3,4} for every width</text>
+          <g>
+            <rect x="40" y="222" width="52" height="40" rx="6" class="node node-cyan"></rect><text x="56" y="247" class="tiny">s0</text>
+            <rect x="96" y="222" width="52" height="40" rx="6" class="node node-cyan"></rect><text x="112" y="247" class="tiny">s1</text>
+            <rect x="152" y="222" width="52" height="40" rx="6" class="node node-cyan"></rect><text x="168" y="247" class="tiny">s2</text>
+            <rect x="208" y="222" width="52" height="40" rx="6" class="node node-cyan"></rect><text x="224" y="247" class="tiny">s3</text>
+            <rect x="264" y="222" width="52" height="40" rx="6" class="node node-cyan"></rect><text x="280" y="247" class="tiny">s4</text>
+            <rect x="320" y="222" width="52" height="40" rx="6" class="node node-amber"></rect><text x="336" y="247" class="tiny">b1</text>
+            <rect x="376" y="222" width="52" height="40" rx="6" class="node node-amber"></rect><text x="392" y="247" class="tiny">b2</text>
+          </g>
+          <text x="40" y="282" class="tiny">spine &rarr; columns {0,1,2,3,4} (contiguous, branch-count-independent) &rarr; bit-exact vs spine-only (0.000e+00)</text>
+          <text x="560" y="240" class="tiny">Lossless: an exact relabeling. The</text>
+          <text x="560" y="262" class="tiny">masked branch columns stay neutral;</text>
+          <text x="560" y="284" class="tiny">no value changes, no bandwidth tax.</text>
+        </svg>
+        <p class="caption">Figure 3 is the fix. The permutation moves the five spine nodes to the front so they always occupy columns 0&ndash;4, whatever the branch count, and the branches follow. Because the reduction associates by column and the spine columns are now fixed, the deep-spine sum is bit-identical to the spine-only computation. It is a relabeling of where keys sit, not a change to what they are, so it is lossless by construction.</p>
+      </div>
+
+      <h3>Landing it: two layers, one survivor</h3>
+      <p>The reorder is abstract; where in the stack to apply it is the engineering problem, and the two obvious call-local routes both died on the same rock. Splitting the attention into a paged context pass plus a dense spine-first suffix pass and merging the two (<code>FR13_FA2_SPINE_REORDER</code>) re-quantizes each partial to bf16 separately and then again at the merge &mdash; a one-ULP double-rounding that the attention API cannot avoid, because it will not return fp32 partials, and that is fatal for speculative decode: it went degenerate at greedy, the very regime that is supposed to hide error. A two-K-source fused kernel that reads context then suffix in a single pass fares no better &mdash; a CPU model refuted it before any recompile, because introducing a second key block perturbs the context by the same one ULP from online-softmax rescale timing. Both are in the <a href="#museum">museum</a>; both merely relocate the bit.</p>
+      <p>The route that ships avoids a second pass entirely. Instead of splitting the kernel, permute the KV <strong>cache slot mapping</strong> so the tree suffix is written spine-first; then a single fused paged attention call reads the spine contiguously and naturally, the context stays bit-identical, and there is no merge to double-round and no recompile. That is <code>FR13_SLOT_REORDER</code>, baked into the locked launcher after a four-arm campaign. It is not a kernel-math change; it is data placement, and it interacts with exactly the concurrency surface this series has been about &mdash; the cache slots the committer and the recurrent path read later &mdash; so it shipped only after an audit proved that surface safe.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The same abstract fix at two layers: the cache-slot reorder ships; the FA2-call-local split does not.</caption>
+          <thead><tr><th></th><th><code>FR13_FA2_SPINE_REORDER</code> (call-local)</th><th><code>FR13_SLOT_REORDER</code> (cache-slot)</th></tr></thead>
+          <tbody>
+            <tr><td>Method</td><td>Split the FA2 call into paged context + dense permuted suffix, then <code>merge_attn_states</code></td><td>Permute the KV <code>slot_mapping</code> spine-first; one fused paged call reads spine-contiguous</td></tr>
+            <tr><td>Second pass?</td><td>Yes &rarr; context double-rounds ~1 ULP</td><td>No &rarr; context bit-identical</td></tr>
+            <tr><td>Recompile?</td><td>No</td><td>No</td></tr>
+            <tr><td>Carrier-B (cache) touch?</td><td>None (local temporaries)</td><td>Threads it &mdash; audited (see below)</td></tr>
+            <tr><td>Status</td><td><span class="pill bad">dead</span> double-rounding is fundamental; default-off probe</td><td><span class="pill good">shipped</span> baked =1</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The carrier-B audit and the five edits</h3>
+      <p>Permuting cache slots is only safe if nothing else reads those slots positionally in a way the permutation breaks. The audit found two disjoint address spaces and confirmed the permutation threads through both: the attention KV addressed by the slot map, and the Gated-DeltaNet conv/SSM state addressed by a <em>separate</em> mamba bank that the reorder never touches. The rejection committer is node- and token-indexed, invariant to a slot permutation; the drafter is invisible to it because the reorder keeps the breadth-first node numbering and only moves the physical slots &mdash; the crux that distinguishes it from an earlier global-tree reorder that renumbered nodes and broke the drafter. The audit sized the change at three edits; a red-team pass added two more for hazards it missed, giving five:</p>
+      <div class="table-wrap">
+        <table>
+          <caption>The five edit sites of <code>FR13_SLOT_REORDER</code> &mdash; all Python, no kernel recompile.</caption>
+          <thead><tr><th>#</th><th>Edit</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>Permute</td><td>In-place spine-first permutation of the persistent slot buffer (pointer-stable for the full cudagraph).</td></tr>
+            <tr><td>2</td><td>Bias</td><td>Permute the tree-attention bias on its key axis once, to match the reordered keys.</td></tr>
+            <tr><td>3</td><td>Committer destination</td><td>&ldquo;The one real edit&rdquo; &mdash; the committed leaf's destination slot must be the flat linear slot, not the permuted one, or the committed prefix scatters. A genuine correctness dependency.</td></tr>
+            <tr><td>4</td><td>Restore</td><td>Un-permute the stashed slot spans after the last verify-side consumer and before the drafter proposes, so the drafter sees canonical order.</td></tr>
+            <tr><td>5</td><td>Causal off</td><td>Set the decode tree call non-causal &mdash; provably redundant here (the tree bias already encodes causality), which is byte-identical and unlocks an arbitrary suffix layout.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>The reorder requires the attention-KV remap of Vol.&nbsp;V to be on &mdash; the launcher refuses to enable one without the other &mdash; because the committed-destination edit sits inside the same re-linearizer. Validated end to end, the delivered fix reproduces the harness result in-process: the whole reordered spine is bit-exact against the spine-only computation, and the fix magnitude on the deep node is exactly the one ULP it was built to remove.</p>
+
+      <div class="source-exhibit" aria-label="The branch half">
+        <div class="source-head">
+          <strong>An honest edge: the branches are only partly fixed</strong>
+          <span>The reorder is bit-exact for the spine; the deepest branch still shifts, harmlessly</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">Spine</span><p>Bit-exact. Every spine depth reads 0.000e+00 against spine-only, in the harness and in-process. This is the entire systematic accept leak, and it is gone.</p></div>
+          <div class="box good"><span class="tag">Shallow branches</span><p>Depth-1 branch bit-exact (0.0); depth-2 within floor (~2e-3). The reorder fixes them too.</p></div>
+          <div class="box warn"><span class="tag">Deepest branch</span><p>The rarest deep branch still shifts ~2 ULP (0.125 at magnitude 16), because its own column moves with its co-resident siblings. Concentrated where it is least sampled.</p></div>
+          <div class="box info"><span class="tag">Not a leak</span><p>That 0.125 is measured against a spine-plus-one-branch config that never occurs in production, where the tree is always the full cat8 with a fixed parent array. The behavioral gates &mdash; garble 0/90, lossless-vs-nonspec &mdash; settle it; branches need no separate fixed-slot layout.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="results">
+      <h2>Results: The Superset Restored</h2>
+      <aside class="sidenote">
+        <p><strong>The bar:</strong> with the reorder baked, the clean structural comparison &mdash; cat8 vs cat6 &mdash; should show the wider tree accepting <em>more</em>, by roughly the +0.17 its two extra branches predict. It does: +0.166. Everything else on this table is read against the &plusmn;0.25 noise band, not ranked.</p>
+        <p><strong>Two axes, kept separate:</strong> acceptance (did the fix restore the superset?) is settled; throughput (does the tree out-run native?) is not, and this section refuses to conflate them.</p>
+      </aside>
+      <p>The contiguous-spine reorder ships baked in the locked launcher. Re-running the four-arm campaign at the deployment configuration &mdash; batch-4, sixteen astropy SWE-Verified tasks, one agent, temperature 0.6, remap and reorder on &mdash; gives one same-boot table from which acceptance, resolve, and forward-cost are all directly comparable:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The baked B4 16-task four-arm run (fix on). Accept/event is the acceptance lever; derived TPS is the forward-limited GPU ceiling; ms/step and ms/draft are the per-step and drafter costs. Zero give-ups and zero crash lines on all four arms.</caption>
+          <thead>
+            <tr>
+              <th>Arm</th>
+              <th>Tree</th>
+              <th>Accept / event</th>
+              <th>Resolved</th>
+              <th>Derived TPS (fwd-limited)</th>
+              <th>ms / step</th>
+              <th>ms / draft</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>t33333 + fix</td>
+              <td>15-node, depth-5, 3-wide</td>
+              <td class="num"><strong>3.5667</strong></td>
+              <td class="num"><strong>11/16</strong></td>
+              <td class="num">56.12</td>
+              <td class="num">233.9</td>
+              <td class="num">93.1</td>
+            </tr>
+            <tr>
+              <td>cat8 + fix</td>
+              <td>8-node, depth-5</td>
+              <td class="num">3.4996</td>
+              <td class="num">9/16</td>
+              <td class="num">70.56</td>
+              <td class="num">206.5</td>
+              <td class="num">68.2</td>
+            </tr>
+            <tr>
+              <td>native</td>
+              <td>linear MTP-5</td>
+              <td class="num">3.4422</td>
+              <td class="num">9/16</td>
+              <td class="num"><strong>76.31</strong></td>
+              <td class="num">210.3</td>
+              <td class="num">59.3</td>
+            </tr>
+            <tr>
+              <td>cat6 + fix</td>
+              <td>6-node, depth-5</td>
+              <td class="num">3.3332</td>
+              <td class="num">9/16</td>
+              <td class="num">72.69</td>
+              <td class="num">204.3</td>
+              <td class="num">63.2</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Read it on the one axis that is a clean structural test first. <strong>cat8 &minus; cat6 = +0.166 accept/event</strong> &mdash; the wider tree now accepts more than the subset it contains, by essentially the <strong>+0.17</strong> predicted from its two extra branches. Pre-fix that delta was <em>negative</em> (the 0.087 greedy violation, larger and noisier at temperature); post-fix the two branches are pure gain and the cancellation is gone. The superset invariant that Figure&nbsp;1 said must hold, holds. That is the headline: the branch-on-spine disturbance is closed, and its closure is visible exactly where the theory says to look.</p>
+
+      <p>The other cross-arm gaps are inside the noise band and are reported, not ranked. native &minus; cat6 = +0.109 and cat8 &minus; native = +0.057 both sit within &plusmn;0.25, and neither is a subset comparison (native is a different drafter and attention path), so this paper draws no &ldquo;native beats cat6&rdquo; or &ldquo;cat8 beats native&rdquo; conclusion from them. The one genuinely striking cell is <strong>t33333</strong>: the fifteen-node caterpillar tops both acceptance (3.5667) and resolve (11 of 16, two above the other arms). That is a real and welcome surprise &mdash; more branch density lifting both accept and task success &mdash; but it is a single sample per cell, so it is flagged as a promising data point, not a settled ranking. Every arm resolved with zero give-ups and zero crash lines, which is the correctness floor Vol.&nbsp;V established holding across a fourth, wider tree.</p>
+
+      <div class="source-exhibit" aria-label="The superset math">
+        <div class="source-head">
+          <strong>The one clean comparison</strong>
+          <span>cat8 &sup; cat6, so this delta is a structural test &mdash; and it passes</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">cat8 &minus; cat6</span><p>+0.166 accept/event, predicted +0.17. The superset restored; the disturbance closed.</p></div>
+          <div class="box info"><span class="tag">Greedy pre-fix</span><p>&minus;0.087 (violation). The deterministic residual the fix removed; no trajectory noise in it.</p></div>
+          <div class="box warn"><span class="tag">native vs trees</span><p>+0.057 / +0.109, inside &plusmn;0.25, no subset bound. Reported, never ranked.</p></div>
+          <div class="box info"><span class="tag">t33333</span><p>3.5667 accept, 11/16 resolve &mdash; tops both. Single-sample standout, flagged not settled.</p></div>
+        </div>
+      </div>
+
+      <h3>The honest speed reading: out-accepts, does not yet out-run</h3>
+      <p>Restoring the superset fixed acceptance; it did not, on this hardware and workload, make the tree faster than native per token. On the forward-limited GPU ceiling &mdash; committed tokens over verify-forward GPU time, the most generous basis for the tree &mdash; native leads at 76.3 tok/s, with cat6 at 72.7, cat8 at 70.6, and t33333 at 56.1. Acceptance rises with tree width; forward cost rises faster. The drafter and verify of a fifteen-node tree cost more per step (ms/draft 93.1 versus native's 59.3) than its extra accepts pay back, so the widest tree, despite the highest acceptance, has the lowest throughput. This is the same shape Vol.&nbsp;V measured under a different lens and is stated the same way here: the tree's advantage is an acceptance advantage, and turning acceptance into wall-clock throughput is a per-forward-overhead problem the accept gain has not yet closed.</p>
+      <p>Two cautions on that throughput column, both inherited and both kept. First, <strong>derived TPS is a ceiling, not a wall clock</strong>: it charges only the GPU forward, omitting the drafter, the rejection committer, and the remap &mdash; the very per-step overhead that most separates the tree from native &mdash; so the true end-to-end gap is at least this wide, not narrower. Second, the honest comparand for &ldquo;is the tree worth it&rdquo; is a clean end-to-end wall-clock A/B at B=1, which is scoped but not the subject of this page; here the claim is only the one the greedy and the baked runs jointly support &mdash; the superset is restored and correctness holds, and the speed lever now moves to lifting acceptance <em>without</em> adding forward cost, which is the merge in <a href="#future">future work</a>.</p>
+    </section>
+    <section class="section" id="museum">
+      <h2>Failure Museum</h2>
+      <aside class="sidenote">
+        <p><strong>Not a graveyard:</strong> the eventual fix came from the <em>mechanism</em>, and the mechanism came from the failures. Every refuted lever narrowed the carrier or killed a landing route; the map is the dead ends.</p>
+        <p><strong>The through-line:</strong> almost every wrong turn was a one-sided confound or a broken test &mdash; garble deflating one arm, a padding convention corrupting the rows it measured, a forward-only metric reading a wall as a ceiling.</p>
+      </aside>
+      <p>Thirteen hypotheses and levers were refuted across the disturbance hunt and the drafter-speed campaign that framed it. They cluster into four families: attempts to <em>believe the anomaly's magnitude</em> before the confounds were stripped; attempts to <em>locate the carrier</em>; attempts to <em>land the reorder</em> in the live kernel; and the parallel <em>speed levers</em> that were measured-refuted around the accept fix. The ledger records what made each look right and what killed it.</p>
+
+      <div class="grid" aria-label="Failure families">
+        <div class="box warn"><span class="tag">The number</span><h3>One anomaly, three effects</h3><p>The raw superset gap was a garble artifact plus temperature noise plus a real bit; believing any of its early magnitudes was believing a confound.</p></div>
+        <div class="box warn"><span class="tag">The carrier</span><h3>Where the ULP is born</h3><p>The loud, on-device FA2 signal was downstream of an upstream seed once, and on the wrong axis another time; padding fixes died on anchor geometry.</p></div>
+        <div class="box warn"><span class="tag">The landing</span><h3>Two routes, one rock</h3><p>Both call-local ways to reorder the keys re-quantized a partial twice; one ULP of double-rounding is fatal for speculative decode.</p></div>
+        <div class="box warn"><span class="tag">The speed levers</span><h3>Ceilings that were not walls</h3><p>Forward-only throughput, a depth lever, a truncated draft vocab, and a &ldquo;soft&rdquo; node cap &mdash; each looked like free speed and each was refuted by a direct measurement.</p></div>
+      </div>
+
+      <details class="fold">
+        <summary>
+          <span>Full failure ledger</span>
+          <small>Thirteen refuted hypotheses and levers, grouped by family, with the signal and the refutation for each.</small>
+        </summary>
+        <div class="fold-body">
+          <p class="failure-note"><strong>Status key:</strong> <span class="pill good">settled</span> a real dead end later evidence upheld; <span class="pill warn">superseded</span> the observation was real but the framing was replaced; <span class="pill bad">contaminated</span> the measurement could not support its conclusion.</p>
+
+          <div class="failure-ledger" aria-label="Detailed failure museum">
+            <p class="failure-note"><strong>Family A &mdash; believing the anomaly before stripping the confounds.</strong></p>
+
+            <article class="failure-card contaminated">
+              <header><h3>&ldquo;cat6 is faster than cat8&rdquo; &mdash; the raw 0.296 gap</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the live aggregate had cat8 at 3.336 and cat6 at 3.594, and the first controlled greedy A/B seemed to confirm it hard &mdash; cat8 3.368 vs cat6 3.664, a 0.296 gap, and greedy is deterministic, so it reads as the clean superset test. A 0.296 violation of a set-theoretic bound looks like a large, real defect.</p>
+              <ul><li><strong>What killed it:</strong> that controlled run had the attention-KV remap <em>off</em> &mdash; both trees were garbling, and the wrong-accepts deflated cat8 specifically. Re-run clean (remap verified engaged), the greedy gap is 0.087; the confound had exaggerated the true effect by 3.4&times;. The live 3.594 was later shown to be structurally-impossible trajectory noise (the matched post-fix cat6 is 3.333).</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a dramatic deterministic number is worthless if a correctness flag silently flipped the arm under test; check the engagement log before trusting the delta, because a one-sided confound can manufacture a 3.4&times; exaggeration out of a real-but-small effect.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>The per-task cat6 lean (&minus;0.167 mean, 2.1&sigma;)</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> across the same sixteen tasks, the mean of (cat8 &minus; cat6) was &minus;0.167 and cat8 won on only 6 of 16 &mdash; a ~2.1&sigma; lean to cat6. A uniform verify defect would produce exactly this systematic pattern.</p>
+              <ul><li><strong>What killed it:</strong> per-task at temperature is not matched &mdash; the arms diverge within a task once any token differs. The tell is the distribution: the biggest cat6-favoring gaps land on the failing, meandering tasks (&minus;0.83, &minus;0.68, &minus;0.52) while cleanly-resolved tasks sit near zero (+0.05, +0.07). A real M-dependent defect is task-independent; concentration on diverging trajectories is noise.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> &ldquo;systematic across N tasks&rdquo; is not &ldquo;matched&rdquo;; when an effect concentrates on the runs that were already diverging, you are measuring trajectory spread, not the mechanism.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>&ldquo;The shared spine is M-invariant, so the bound must hold&rdquo;</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> pure set theory &mdash; cat8 offers every cat6 path plus two, so on identical inputs its accepted length is &ge; cat6's. The working premise was that the spine verify is M-invariant: cat8's spine equals cat6's equals native's.</p>
+              <ul><li><strong>What killed it:</strong> the greedy matched test violated the bound by 0.087, which is impossible if the spine were M-invariant. A direct pure-spine measurement at B=1 confirmed it: cat6's spine out-accepts cat8's by ~0.29 clean &mdash; the two extra branches earn +0.167 per forward, which almost exactly cancels cat8's larger-M spine perturbation. The premise &ldquo;spine == native&rdquo; is false; adding branches perturbs the shared spine's numerics.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a set-theoretic bound on <em>outputs</em> does not bound a <em>floating-point accept count</em> when enlarging the set perturbs the numerics of the nodes it shares &mdash; superset&nbsp;&rArr;&nbsp;&ge;&nbsp;accept holds in exact arithmetic and fails at the ULP.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family B &mdash; locating the carrier.</strong></p>
+
+            <article class="failure-card superseded">
+              <header><h3>&ldquo;The FA2 query-tile is the carrier&rdquo;</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> the forked FA2 decode keys its tile predication off the query length (6 vs 8), and the multi-armed replay returned M-dependent with a clean fingerprint &mdash; 6.25e-2, one bf16 ULP, in all sixteen full-attention layers, monotone in node count. Named, on-device, reproducible; it looked airtight.</p>
+              <ul><li><strong>What killed it (twice):</strong> in the garble era a first-nonzero ladder put the earliest divergence at a recurrent layer <em>upstream</em> of the first full-attention layer &mdash; a fix downstream cannot remove an error already born earlier. And in the accept era, granting FA2 is where the M-dependence <em>shows</em>, the fix-axis was still wrong: a front-pad test proved the carrier is the key/suffix width, not the query tile.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> &ldquo;layer L is M-dependent&rdquo; is not &ldquo;layer L is the carrier&rdquo; &mdash; trace divergence to its first-nonzero origin, because a real downstream ULP wiggle will happily masquerade as the root cause.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Re-landing the query-pad fix (QPAD)</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> query-padding to a fixed tile makes occupancy M-invariant and is lossless by construction (a CPU oracle read 0.0 across every M and precision). A spine-M-dependence localizer even recommended re-landing it after reading the &ldquo;built&rdquo; comment in the source &mdash; a pre-built, lossless, named fix for the confirmed carrier.</p>
+              <ul><li><strong>What killed it:</strong> the commits that <em>followed</em> its build already refuted it &mdash; QPAD zeroed the named carrier layer but left the end-to-end flip count unchanged and dropped accept below the native floor, and a later commit explicitly rejected re-landing it. The definitive cat8 refutation: a valid front-pad self-check showed the cross-M drift stays 6.25e-2 at every pad width, identical to unpadded. Query padding has zero effect.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> before re-landing a &ldquo;built but not merged&rdquo; fix, read the commits after its build &mdash; a source comment says it exists, not that it worked; and when a padding test refutes a lever, run the same-M self-check first, because the padding convention itself can corrupt the rows you measure.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Key-width padding (dummy &minus;&infin; suffix keys)</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> if the carrier is suffix width, pad every tree's suffix to a fixed width with negative-infinity dummy keys so both arms run the same block iteration &mdash; M-invariant, near-zero bandwidth tax. A clean mechanistic follow-on to the query-pad refutation.</p>
+              <ul><li><strong>What killed it:</strong> the same-M self-check was 0.82 typical and 16.3 worst &mdash; the dummy keys are not math-neutral in the forked kernel. The reason, from a source read: the kernel anchors both its bias-column window and its causal diagonal to a derived length (key length minus query length), so raising the key length without matching the query length slides the anchor and the real keys lose their mask. Holding the anchor means padding the query too &mdash; which is QPAD, already dead.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a &ldquo;just pad it wider&rdquo; fix assumes the padded region is inert; in a fused kernel the mask geometry is often anchored to a derived length, so padding one dimension silently desyncs the other. Prove your dummy elements are neutral with a same-M self-check first.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family C &mdash; landing the reorder in the live kernel.</strong></p>
+
+            <article class="failure-card settled">
+              <header><h3>Dense-suffix hybrid (split context + suffix, then merge)</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> to get the spine keys into contiguous columns without a recompile, split the attention into a paged context call and a dense spine-first suffix call and combine them with the shipped merge kernel &mdash; reusing tested cascade infrastructure, with the reorder itself already proven bit-exact.</p>
+              <ul><li><strong>What killed it:</strong> the split double-rounds. A single call accumulates in fp32 and rounds to bf16 once; the split rounds each partial separately and then again at the merge &mdash; ~1 ULP relative on every forward. The fp32-partial rescue is refused by the API (the attention op requires the output dtype to equal the query dtype), so double-rounding is fundamental to any two-pass merge. And one ULP is fatal for speculative decode: the split-driven path went degenerate at greedy, inflating accept on looping garbage &mdash; the regime that is supposed to hide error.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> splitting one fused reduction into two passes plus a merge re-quantizes each partial independently, and the merge cannot un-round what the halves already lost; in speculative decode a single ULP of wrong-accept compounds into degenerate output at greedy.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Two-K-source fused kernel (one pass, two key blocks)</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> after the split double-rounds, avoid the merge &mdash; modify the vendored kernel to read two key sources in one online-softmax pass (paged context, then dense spine-first suffix), single accumulator, one rounding, no merge. Backed by a research pass confirming the reduction is column-keyed, so context &ldquo;should&rdquo; be untouched.</p>
+              <ul><li><strong>What killed it:</strong> a CPU model with a realistic unaligned block showed that reading the suffix as a separate block perturbs the context by ~1 ULP for every row &mdash; the same magnitude as the double-round &mdash; purely from online-softmax rescale timing. It relocates the bit from the merge to the block boundary; it does not remove it. Refuted before spending a GPU recompile.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> &ldquo;single pass, one accumulator&rdquo; does not guarantee bit-identity when the pass has a block boundary &mdash; rescale timing depends on block structure, so any new block edge pays a rescale-timing ULP. Model the realistic, deployed block layout on CPU before committing a recompile.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family D &mdash; the drafter-speed levers, measured and refuted.</strong></p>
+
+            <article class="failure-card contaminated">
+              <header><h3>&ldquo;The tree is at throughput parity&rdquo; (forward-only ceiling)</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the forward-limited GPU throughput read the tree at parity with native, and the tree's verify-forward is actually <em>cheaper</em> per token (accept plus amortized drafts spread the weight read). By that metric the branches cost nothing.</p>
+              <ul><li><strong>What killed it:</strong> the metric charges only the verify forward &mdash; a ceiling, blind to drafter, committer, and scheduler gaps. Real wall clock is the opposite: the tree is ~12% slower per committed token, and 100% of the deficit is non-forward host overhead; the ceiling reads 64&ndash;72 where the real wall throughput is 15&ndash;17. A single-prompt probe even manufactured a phantom native win by saturating the chain drafter.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a forward-only throughput metric is a ceiling, not a speed &mdash; when the regression lives entirely in non-forward host overhead, the ceiling reads at parity while the wall is slower; speed verdicts belong on matched live runs.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>The depth lever (go deeper for free drafter savings)</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> if the drafter ran one sequential call per spine level, a shallower-wider tree would cut drafter cost roughly linearly with depth, and a calibrated shape model ranked a deeper spine highest on acceptance.</p>
+              <ul><li><strong>What killed it:</strong> path-map elimination showed the fork drafts the tree in one parallel pass, so depth buys no drafter savings; and the shape model found the shipped tree near-optimal within depth five, the best deeper variant a wash. The deeper-spine ranking lived entirely in an unmeasured tail-probability extrapolation.</li></ul>
+              <p class="conclusion"><strong>Lesson (with a twist):</strong> don't cost a lever against an assumed execution model &mdash; and note the &ldquo;parallel drafting&rdquo; premise that killed this lever was itself later corrected: the <em>spine</em> runs sequential forwards, &ldquo;parallel&rdquo; was only ever true of the branches. That correction is what reopened the speed frontier (Family&nbsp;D's last card).</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>FR-Spec: truncate the draft vocabulary</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> a dimensional decomposition made the shared output-projection read 83% of the per-level draft weight, paid four times; a truncated draft vocab would cut ~8.8 GB per step for a lossless ~+7% &mdash; the top-ranked drafter lever, since the rejection sampler commits target-correct tokens regardless of the draft set.</p>
+              <ul><li><strong>What killed it:</strong> direct GPU-event spans showed the drafter is host-bound, not bandwidth-bound &mdash; 23 ms of GPU compute inside a 140 ms step, the other 117 ms host orchestration. The output projection is 11% of the wall; halving it buys ~2%. The whole HBM ceiling assumed a weight read that isn't on the critical path.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> an HBM-bandwidth ceiling computed from weight dimensions is a fiction until you measure GPU-busy versus GPU-idle; if most of the step is host orchestration, the biggest weight read is still a small slice of the wall.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>&ldquo;The 16-node cap is a soft warmup guard&rdquo;</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> a B=1 sweep looked smooth and cliff-free &mdash; nine nodes 131 ms, sixteen nodes 145 ms, ~2 ms per row, accept rising with width &mdash; and the cap traced to a guard that reads like a warmup convenience. A prior pass even &ldquo;verified&rdquo; no SRAM spill by reading the stock recurrent kernel.</p>
+              <ul><li><strong>What killed it:</strong> the wrong kernel was read. The actual tree verifier holds a register-resident cache of all padded node states &mdash; 128&nbsp;KB per block at sixteen nodes, half the register file; thirty-two nodes is the whole file and spills to HBM. The &ldquo;smooth&rdquo; sweep never crossed the boundary: both arms round to a padded width of sixteen, so the delta was unmasked nodes inside the same tile. A twenty-six-node tree boot-fails at engine init, below the separate tile boundary the alternative blamed.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> &ldquo;no cliff in the sweep&rdquo; can mean the sweep never crossed the boundary &mdash; a padded quantity hides the real step; and verify which kernel actually runs before reasoning about its register footprint.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>&ldquo;The drafter host gap is structural &mdash; earned cost-gate&rdquo;</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> after the committer, shape, drafter-model, and vocab levers were all measured-refuted, the campaign honestly declared the remaining ~12% wall gap structural &mdash; the 117 ms host cost is the drafter's per-step orchestration, and closing it looked like a weeks-long framework change. It banked the accept fix and closed the ledger.</p>
+              <ul><li><strong>What killed it:</strong> a later probe measured that the host cost is ~19 ms <em>per spine level</em>, not a fixed setup &mdash; so shortening the spine loop shortens it proportionally. Drafting one level instead of four projects a &minus;53% drafter and ~&minus;18% decode, a lever the campaign never tried because it held tree shape fixed. The &ldquo;structural&rdquo; verdict closed the levers it had enumerated, not the one it hadn't thought to vary.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> &ldquo;structural&rdquo; is a claim about the lever space you searched &mdash; a host-orchestration cost is only structural if the orchestration is fixed; if it scales per step, a lever that changes the step count you held constant can still move it. That reopened lever is the merge in <a href="#future">future work</a>.</p>
+            </article>
+          </div>
+        </div>
+      </details>
+    </section>
+    <section class="section" id="reflection">
+      <h2>Reflection: Why One Bit Took a Week</h2>
+      <aside class="sidenote">
+        <p><strong>Worth stating plainly:</strong> the defect was 6.25e-2 &mdash; one bf16 ULP &mdash; and the fix, once localized, is a permutation with no math in it. Almost the entire cost was in <em>believing there was a bug at all</em>, then measuring it where it could not hide. Both steps fought the same enemy: a number that was really three numbers.</p>
+      </aside>
+      <p>The disturbance resisted for a structural reason, not a difficulty reason: the quantity everyone was staring at &mdash; a superset accepting less &mdash; was a sum of a garble artifact, a noise band, and a genuine bit, and any two of the three could flip its sign. Chase the raw temperature number and it is 0.258 one week and 0.19 the next; attribute that swing to the fix under test and you have manufactured a result. The move that broke it was refusing to measure at temperature at all until the confounds were gone: greedy makes drafts and output deterministic, which collapses the noise band to zero and exposes the one part that is a real, matched-input violation. Only then is 0.087 a fact rather than a mood.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The portable lessons from the disturbance retrospective.</caption>
+          <thead>
+            <tr>
+              <th>Lesson</th>
+              <th>What it means here</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>A structural invariant is a bug detector &mdash; but only on matched inputs</td>
+              <td>&ldquo;A superset must accept &ge; its subset&rdquo; is decisive at greedy, where inputs match, and inadmissible at temperature, where they do not. The same inequality is a proof in one regime and a rumor in the other; the regime is the whole argument.</td>
+            </tr>
+            <tr>
+              <td>Fixing one bug can shrink a metric that belonged to it all along</td>
+              <td>The garble in the attention KV had been quietly inflating the accept anomaly 3.4&times;. A disturbance measured before a neighboring subsystem is clean is a disturbance measured through that subsystem's bug.</td>
+            </tr>
+            <tr>
+              <td>Name the temperature, and the noise band, before ranking arms</td>
+              <td>A &plusmn;0.25 band at temp 0.6 makes every sub-quarter-token cross-arm gap unrankable, and different-drafter arms carry no structural bound at all. Half the &ldquo;orderings&rdquo; in the raw table were noise wearing a decimal point.</td>
+            </tr>
+            <tr>
+              <td>One ULP is not always negligible &mdash; measure it at the decision margin</td>
+              <td>A bf16 ULP is nothing in a residual stream and everything at an acceptance near-tie, where it decides whether a token commits. The effect size that matters is at the margin the bit feeds, not in the norm of the tensor.</td>
+            </tr>
+            <tr>
+              <td>Reassociation is not error; masked-zero still moves the sum</td>
+              <td>The branch keys contributed exactly zero and still changed the answer, because they changed the <em>order</em> of a non-associative reduction. &ldquo;It's masked out&rdquo; refutes a value contribution, never an ordering one.</td>
+            </tr>
+            <tr>
+              <td>Localize by native-exact overwrite, the same ladder that found the garble</td>
+              <td>Overwriting each suspect subsystem with a native-exact version in an observe-only harness cleared conv and in-projection and pinned attention in a day &mdash; the identical method Vol.&nbsp;V used, reused because it works: it falsifies a whole subsystem at once rather than bisecting inside it.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="limitations">
+      <h2>Threats to Validity</h2>
+      <aside class="sidenote">
+        <p><strong>Honest scope:</strong> the correctness claim is settled &mdash; the superset is restored, deterministically at greedy and on the baked run &mdash; and the committed tokens are unchanged (the reorder is a relabeling). The open items are all speed, and the widest-tree win is a single sample.</p>
+      </aside>
+      <div class="grid">
+        <div class="box warn">
+          <span class="tag">Accept, not wall-clock</span>
+          <h3>Restored acceptance is not yet restored throughput</h3>
+          <p>The fix makes the wider tree accept more, as a superset must; it does not make the tree out-run native per token. On the forward-limited ceiling native still leads, because the wider verify's per-forward cost outruns the accept gain. The clean end-to-end wall-clock A/B at B=1 is the comparison that would settle &ldquo;is the tree worth it,&rdquo; and it is not this page.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">One sample</span>
+          <h3>t33333's 11/16 is a standout, not a ranking</h3>
+          <p>The fifteen-node caterpillar tops both acceptance and resolve, two tasks above the others. It is one run per cell at temperature 0.6, inside the same noise band as everything else; it is reported as a promising lead for the merge below, not as an established &ldquo;wider is better&rdquo; ordering.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">The branch half</span>
+          <h3>The reorder fixes the spine exactly, the branches only partly</h3>
+          <p>Making the spine keys column-contiguous is bit-exact for the spine, but a branch's own column still moves with its co-resident siblings, so the deepest, rarest branch still shifts about one ULP. The effect is concentrated where it is least sampled, so its speed cost is small, but a fully canonical layout &mdash; fixed columns for branches as well &mdash; is what a complete fix would need.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Delivery route</span>
+          <h3>One route shipped; two others walled</h3>
+          <p>The mechanism admits more than one landing, and only one survived. The cache-slot reorder ships baked (<code>FR13_SLOT_REORDER</code>) after its carrier-B audit &mdash; a single fused paged call keeps the context bit-identical. The two call-local alternatives &mdash; a dense-suffix split-and-merge and a two-K-source fused kernel &mdash; each hit a fundamental one-ULP double-rounding wall (<a href="#museum">museum</a>) and are dead. The branch-complete variant is still open work.</p>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="future">
+      <h2>Future Work: Suffix Decoding Merged With MTP</h2>
+      <aside class="sidenote">
+        <p><strong>Status:</strong> designed, seam located, three correctness gates passed on CPU; <em>no serving code edited</em>. The one open gate is a live A/B, and the flags default to the current byte-identical behavior.</p>
+        <p><strong>The link to the results:</strong> the fifteen-node caterpillar that topped both accept and resolve above is exactly this design's target geometry &mdash; the merge is a bet that we can fill its branch slots with <em>better</em> tokens than the MTP head drafts today.</p>
+      </aside>
+      <p>Restoring the superset settled correctness and left the honest speed tension: the wider trees out-accept but do not out-run native per token, because acceptance rises with width and per-forward cost rises faster. The next lever attacks acceptance and drafter cost together, without widening the tree past the sixteen-node register wall. The idea is to keep the model's own confident <em>near</em> predictions from its multi-token-prediction head, but replace the weak <em>deep</em> draft tokens &mdash; the ones the MTP head is least sure of &mdash; with retrieved historical continuations from a real Snowflake Arctic suffix-decoding cache, and assemble both into the same fifteen-node caterpillar tree that feeds our proven-lossless committer.</p>
+
+      <div class="figure" aria-labelledby="fig4-title">
+        <div class="figure-head"><strong id="fig4-title">Figure 4</strong><span>MTP drafts the confident near tokens; Arctic retrieves the deep spine and branch alternatives; our committer verifies both</span></div>
+        <svg class="diagram" viewBox="0 0 1140 320" role="img" aria-label="The merged drafter: MTP head fills the shallow spine, an Arctic suffix cache fills the deep spine and branch candidates, both assemble into a cat33333 tree that feeds the rejection committer">
+          <defs>
+            <marker id="f4-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+            <marker id="f4-arrow-g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
+            </marker>
+          </defs>
+          <rect x="24" y="52" width="200" height="66" rx="8" class="node node-cyan"></rect>
+          <text x="40" y="80" class="tiny">MTP head (k forwards)</text>
+          <text x="40" y="98" class="tiny">confident near tokens</text>
+          <rect x="24" y="150" width="200" height="66" rx="8" class="node node-amber"></rect>
+          <text x="40" y="178" class="tiny">Arctic suffix cache</text>
+          <text x="40" y="196" class="tiny">retrieved deep + branches</text>
+          <path d="M226 85 H320" class="arrow" style="marker-end:url(#f4-arrow)"></path>
+          <path d="M226 183 C280 183, 280 120, 320 108" class="arrow" style="marker-end:url(#f4-arrow)"></path>
+          <text x="232" y="76" class="tiny">spine[0..k-1]</text>
+          <text x="232" y="150" class="tiny">spine[k..4] + branches</text>
+          <rect x="328" y="60" width="240" height="150" rx="8" class="node"></rect>
+          <text x="344" y="86" class="tiny">assemble cat33333 (16 nodes)</text>
+          <text x="344" y="110" class="tiny">depth-5 spine + 2 branches/level</text>
+          <text x="344" y="134" class="tiny">per-node dedup;</text>
+          <text x="344" y="158" class="tiny">cold context &rarr; pure-MTP</text>
+          <text x="344" y="182" class="tiny">(byte-identical fallback)</text>
+          <path d="M570 135 H664" class="arrow" style="marker-end:url(#f4-arrow-g)"></path>
+          <text x="576" y="126" class="tiny">candidates</text>
+          <rect x="672" y="72" width="230" height="126" rx="8" class="node node-green"></rect>
+          <text x="688" y="100" class="tiny">our rejection committer</text>
+          <text x="688" y="124" class="tiny">output = target p (lossless)</text>
+          <text x="688" y="148" class="tiny">accept = p(candidate set),</text>
+          <text x="688" y="172" class="tiny">monotone; zero garble</text>
+          <path d="M902 135 H986" class="arrow" style="marker-end:url(#f4-arrow-g)"></path>
+          <text x="924" y="126" class="tiny">committed</text>
+          <rect x="994" y="104" width="100" height="62" rx="8" class="node node-cyan"></rect>
+          <text x="1010" y="140" class="tiny">tokens</text>
+          <text x="24" y="252" class="tiny">Two levers at once: better deep tokens on repetitive context (ACCEPT), and fewer sequential MTP forwards when Arctic fills the deep spine (SPEED).</text>
+          <text x="24" y="274" class="tiny">The committer contract makes it lossless: a bad suffix guess is almost never selected, and if selected commits only at its true target probability &mdash; it cannot garble.</text>
+        </svg>
+        <p class="caption">Figure 4 is the merged drafter. The MTP head drafts the shallow, confident spine; Arctic retrieves the deep spine and the branch alternatives from the request's own history; both assemble into the sixteen-node caterpillar and feed our committer, which is verified to output exactly the target distribution regardless of what the sources propose. On cold context the assembly falls back to the pure-MTP tree byte-for-byte, so the merge can only ever add.</p>
+      </div>
+
+      <h3>Why it is the right lever</h3>
+      <p>Two things make this the axis to push rather than a wider tree. First, <strong>acceptance is the one lever the speed campaign did not exhaust</strong>. Every cheap drafter-cost lever was measured-refuted (the <a href="#museum">museum</a>), and widening the tree is blocked by the sixteen-node register wall &mdash; the verifier holds all padded node states in registers, so thirty-two nodes spills to HBM. So the win has to come from putting <em>better tokens in the sixteen slots we already have</em>, and a suffix cache does exactly that on agentic coding workloads, which are dense with repetition &mdash; re-read files, repeated identifiers, boilerplate paths &mdash; where a retrieved continuation is both high-acceptance and free of any forward. Second, <strong>the deep spine is where the MTP head is weakest and Arctic is strongest</strong>, so the swap is targeted: keep the near tokens the head is confident about, retrieve the far ones it is guessing at.</p>
+      <p>The speed half is a measured premise, not a hope. The drafter's spine is not one parallel pass &mdash; it runs one sequential model forward per spine level, at ~19&nbsp;ms of host-orchestrated cost each. Drafting only the first level with the MTP head and filling the deep spine from Arctic's host-side lookup skips the rest: a projected &minus;53% on the drafter and ~&minus;18% on the decode step, for a plausible ~+22% throughput &mdash; <em>if acceptance holds</em>. That conditional is the whole bet, and it is the open gate.</p>
+
+      <h3>Why it cannot regress: the committer contract</h3>
+      <p>The reason this is a pure-upside bet rather than a risk is the committer, and it was proven before any of it was built. Against the exact deployment rejection rule, four properties hold over analytic and Monte-Carlo checks: the <strong>output distribution is exactly the target</strong> for any candidate set &mdash; adding suffix candidates, or even garbage, never changes what commits; <strong>acceptance equals the target mass on the distinct candidate set and is monotone</strong> &mdash; a real candidate can only raise it, which is the speed-win mechanism; a garbage token commits at exactly its own near-zero target probability, so <strong>suffix decoding carries zero garble risk by the committer math</strong>; and the whole thing is deterministic. Because that contract is source-agnostic, it survived the pivot from a hand-rolled n-gram cache to the real Arctic cache unchanged &mdash; only the source swaps, never the guarantee.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The merge's correctness gates &mdash; three passed on CPU, one open on the live server.</caption>
+          <thead><tr><th>Gate</th><th>What it proves</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr><td>Committer contract</td><td>Output = target distribution; accept monotone; zero garble; deterministic &mdash; for any candidate set.</td><td><span class="pill good">32/32 CPU</span></td></tr>
+            <tr><td>Assembly core</td><td>Cold context assembles byte-identical to the pure-MTP tree; per-node dedup; MTP fallback when the suffix match runs short.</td><td><span class="pill good">36/36 CPU</span></td></tr>
+            <tr><td>Suffix source</td><td>The retrieval index is amortized O(1) per token, deterministic, and does not hallucinate on cold or random context.</td><td><span class="pill good">22/22 CPU</span></td></tr>
+            <tr><td>Live A/B (accept-hold)</td><td>Whether Arctic's retrieved deep tokens actually accept as well as the MTP head's on real agentic work &mdash; the one thing CPU gates cannot settle.</td><td><span class="pill warn">open</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The seam is fully scoped: the branch-leaf and spine tokens are read at a known drafter site, a persistent device buffer stages the host-side suffix lookup into the piecewise cudagraph, and an in-graph select blends the suffix candidate with the MTP runner-up. Two flags gate it &mdash; a draft-source selector and a spine-depth knob &mdash; both defaulting to the current byte-identical MTP path, and any suffix miss falls back to the pure-MTP tree. What remains is to wire that seam and run the A/B. Everything upstream of it &mdash; lossless, monotone-accept, byte-identical fallback, zero-garble, and the measured per-spine-level cost &mdash; is proven; whether retrieval accepts as well as the head on real code-editing traffic is the question the live run exists to answer.</p>
+    </section>
+
+    <section class="section" id="config">
+      <h2>Canonical Config Appendix</h2>
+      <aside class="sidenote">
+        <p><strong>Why include config:</strong> the fix is a flag. The locked launcher pins it so a run is not env-default-dependent; every flag is default-off to a byte-identical path, and the accept fix requires the garble fix to be on.</p>
+      </aside>
+      <details class="fold">
+        <summary>
+          <span>Config table: the baked ship flags</span>
+          <small>From the locked launcher; the two reorder/remap flags plus the probe flags that did not ship.</small>
+        </summary>
+        <div class="fold-body">
+          <div class="table-wrap">
+            <table>
+              <caption>The baked accept-and-garble configuration, and the refuted probes kept default-off.</caption>
+              <thead>
+                <tr><th>Surface</th><th>Setting</th><th>Why it matters</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Attention-KV remap (garble fix)</td>
+                  <td><code>FR13_ATTN_KV_REMAP=1</code></td>
+                  <td>Vol.&nbsp;V's re-linearizer for committed-token K/V; a hard prerequisite for the reorder, whose committed-destination edit lives inside it.</td>
+                </tr>
+                <tr>
+                  <td>Contiguous-spine reorder (accept fix)</td>
+                  <td><code>FR13_SLOT_REORDER=1</code></td>
+                  <td>Permutes the KV slot mapping spine-first so a single fused paged call reads the spine contiguously; five edit sites, no recompile. Baked after the four-arm B4 campaign; restores cat8 &minus; cat6 = +0.166.</td>
+                </tr>
+                <tr>
+                  <td>Decode tree causality</td>
+                  <td><code>causal=False</code> (edit 5 of the reorder)</td>
+                  <td>Provably redundant in the decode tree call (the tree bias already encodes causality), so it is byte-identical and unlocks an arbitrary suffix layout.</td>
+                </tr>
+                <tr>
+                  <td>Uniform-dispatch guard</td>
+                  <td><code>FR13_UNIFORM_DISPATCH_GUARD</code> (not flag-gated)</td>
+                  <td>A pure-correctness fix surfaced during the campaign: forbids replaying the spec graph on a mixed step whose token count coincidentally matches the uniform-decode length, which would use stale state indices.</td>
+                </tr>
+                <tr>
+                  <td>FA2-call-local reorder (probe)</td>
+                  <td><code>FR13_FA2_SPINE_REORDER</code> default off</td>
+                  <td>The dense-suffix hybrid; dead on fundamental double-rounding. Retained default-off as a self-check/probe; ships byte-identical.</td>
+                </tr>
+                <tr>
+                  <td>Merged drafter (future work)</td>
+                  <td><code>FR13_DRAFT_SOURCE=mtp</code>, <code>FR13_MTP_SPINE_DEPTH</code></td>
+                  <td>The MTP+Arctic merge flags, defaulting to the current byte-identical MTP path; not yet wired into serving.</td>
+                </tr>
+                <tr>
+                  <td>Hardware / model</td>
+                  <td>GB10 unified memory, Qwen 3.6-27B-FP8 (GDN hybrid), patched vLLM fork</td>
+                  <td>The 64-layer hybrid whose 48 Gated-DeltaNet layers and forked tree attention this series is about.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="section" id="receipts">
+      <h2>Source Trail</h2>
+      <p>The claims above are grounded in tracked evidence files, the ship launcher, and the campaign artifacts. This work runs on <code>main</code>; the reorder is baked in the locked launcher, and the merge lives in isolated design and gate files with no serving-code edits.</p>
+      <details class="fold">
+        <summary>
+          <span>Full source trail</span>
+          <small>The investigation doc, the campaign verdict, the merge design, the kernels, and the prior volumes.</small>
+        </summary>
+        <div class="fold-body">
+          <ul class="receipt-list">
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md">The cat6&gt;cat8 investigation</a> - the decomposition, the greedy superset test, the FA2 butterfly-reassociation mechanism, and every refuted route (query-pad, key-pad, dense-suffix, two-K-source).</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_SLOT_REORDER_ARTIFACTS/VERDICT_TABLE.md">The B4 four-arm verdict</a> - the sixteen-task baked run: accept, resolve, forward cost, engagement permutations, and the +0.166 superset math.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_DRAFTER_INTERFACE_DESIGN.md">The merged-drafter design</a> - the source-pluggable interface, the MTP-k + Arctic architecture, the committer-contract proof, and the register-wall constraint.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">GDN tree kernel</a> - the register-resident node-state cache (the sixteen-node wall) and the attention-KV re-linearizer whose destination edit the reorder threads.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_patch_fa2_tree_bias.py">Forked FA2 tree-bias patch</a> - the online-softmax reduction whose column-keyed association is the carrier, and the bias-permute and causal-off edits.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr10_phase4_patch_vllm_tree_gdn.py">vLLM tree patch</a> - the slot-mapping permute and restore edits of the reorder, and the drafter seam the merge targets.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr13_fa2_spine_reorder.py">FA2-call-local reorder probe</a> - the dead dense-suffix hybrid, kept default-off as a self-check, with the double-rounding wall documented in its header.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_fa2_a1_cpu_model.py">Two-K-source CPU model</a> - the refutation of the fused-kernel route before any recompile.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_suffix_committer_contract_gate.py">Committer-contract gate</a> - the lossless / monotone-accept / zero-garble proof that makes the merge a pure-upside bet.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_launch_locked.sh">Locked launcher</a> - the baked ship config: the remap and reorder flags on this page.</li>
+            <li><a href="stateless-tree.html">Vol. V</a> - the stateless-tree redesign and the attention-KV garble fix; its &ldquo;branch-on-spine disturbance&rdquo; future-work section is what this page closes.</li>
+            <li><a href="gdn-tree-scan.html">Vol. III</a> - the branched token-tree verifier whose spine acceptance this page makes M-invariant.</li>
+            <li><a href="gdn-prefix-cache.html">Vol. IV</a> - the prefix cache and the carriers the redesign eliminated.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Volume VI. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a>, <a href="round-f.html">Vol. II</a>, <a href="gdn-tree-scan.html">Vol. III</a>, <a href="gdn-prefix-cache.html">Vol. IV</a>, and <a href="stateless-tree.html">Vol. V</a>, but this page does not require them. Last updated 2026-07-15.</p>
+  </footer>
+</div>
+</body>
+</html>
