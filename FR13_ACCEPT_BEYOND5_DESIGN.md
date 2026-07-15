@@ -295,6 +295,22 @@ be from an n_pad-scaled index/accum array, NOT h_cache -> needs a different fix)
 (gpu_util tuning: lower 0.8->0.7 or fewer cudagraph sizes -> NOT a fundamental block). Verdict gates the whole
 horizon-expansion. If PASS -> build tail (below); if register-spill -> localize the n_pad-scaled consumer.
 
+### GATE 2 ATTEMPT 2 (2026-07-15, crash cause = SOFTWARE CAP, not a spill; committed fix)
+Captured engine log pinned the crash: `fr10_gdn_tree_kernel.py:1862 ValueError: n_pad must be a power of two
+<=16, got 32` in `launch_tree_gdn_prepared` -- a SECOND cap (the runtime kernel launcher), deeper than the
+patch:236 config-parse cap I'd already lifted. **The kernel never launched -> the register question was still
+unanswered.** Found FOUR identical `n_pad>16` guards: `padded_nodes:185`, `launch_tree_gdn_replay:1161`,
+`launch_tree_gdn_replay_all_layers:1630`, `launch_tree_gdn_prepared:1862`. Kernel-register audit: only the
+FORWARD `_tree_gdn_kernel` (via prepared) carries `h_cache=[N_PAD,BV,DIM_K]fp32` (the wall); BOTH replay
+kernels carry NO h_cache (one `[BLOCK_V,DIM_K]` tile), so they are n_pad-independent register-wise. FIX
+(committed): replay caps + padded_nodes lifted to <=32 unconditionally; the prepared cap lifted to <=32 GATED
+on effective BV<=8 (reads FR13_TREE_GDN_GEOM_OVERRIDE -> [32,8,128]==[16,16,128] byte-identical; BV=16 fails
+loud, no silent HBM spill). Also confirmed the patcher ring/descriptor alloc (patch:434-534) is already
+n_pad-parameterized (scales to 32 automatically) and `_FR13_N_FIXED=16` only bites under FR13_NPAD_INVARIANT
+(OFF here). Re-boot in flight (run_20260715T153701Z, monitor b1s1z6ygb) -> now the kernel ACTUALLY launches at
+n_pad=32/BV=8, so this run finally measures the register budget (the true GATE 2). Deployed cat9 path
+(n_pad=16, no override) is byte-identical -- every guard still allows <=16 exactly as before.
+
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
 up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
