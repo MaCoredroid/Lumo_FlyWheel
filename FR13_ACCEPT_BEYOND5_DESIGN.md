@@ -389,6 +389,25 @@ stall detector). If depth-11 boots -> depth/node-count was it -> shallow tail wo
 STILL stalls -> not depth magnitude -> isolate tail-mode-drafter (boot topology-only) or chain-capture (eager).
 This is a SPEED/capture cost, NOT a losslessness issue (never-regress holds regardless of tail depth).
 
+### GATE 4 ATTEMPT 2 (depth-11) = BOOTS + GRAPH-CAPTURES CLEAN; tail-append bug found (2026-07-15, run_20260715T164344Z)
+depth-11 tail (tail_len=6, 21 nodes, n_pad=32) profiled in 4.3min (vs depth-21's 12min -- cost scales steeply
+with tree size) and **graph-captured + became HEALTHY** -> the shallower tree operationally works (BV=8 + n_pad=32
++ deep chain + tail mode all boot). BUT the first LIVE completion raised `RuntimeError: FR13_RESHAPE_WIDE:
+collected 5 spine tokens, expected D=11` (packer tripwire): the tail-append block SILENTLY SKIPPED (its
+try/except:pass swallowed the reason), so _fr10_spine_tokens stayed 5 (head only) while the wide packer required
+wide_D=11. TWO flaws: (1) NO graceful fallback -- tail mode serves a wide_D tree so a skipped tail MUST crash
+(need pad-to-wide_D); (2) silent skip violates fail-loud. Likely cause: _LUMO_FA_SPEC_ROW_REQ_IDS stale/None
+AFTER the head loop's MTP forwards (the merged skip seam reads it BEFORE the loop). FIX (in flight, workflow
+w574b0v8i mapping req-id lifecycle + red-teaming): capture req_ids at the valid pre-loop point + pad-to-wide_D
+(lossless: repeated deep token ~never matches past head) + log the skip reason.
+
+### USER REDIRECT (2026-07-15): measure on REAL SWE-Verified tasks, NOT the synthetic repetitive probe.
+The fr13_gate_tail_boot.sh embedded config-dict probe is a PROXY; drop it. After the crash fix, run the tail
+tree on the REAL SWE-Verified gate (fr13_b4_campaign_driver.sh, B=4, temp 0.6) as a tail arm vs a baseline
+cat33333 arm -> GATE 4/5 = accept UP AND dfwd-TPS same-or-better AND lossless/garble-clean, on live agentic
+coding tasks (where the repetitive-span windfall actually lives). Workflow w574b0v8i is mapping the b4 driver's
+arm/env structure + which harness is the real SWE-Verified gate.
+
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
 up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
