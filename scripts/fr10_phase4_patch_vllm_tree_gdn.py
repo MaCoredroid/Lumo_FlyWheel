@@ -8020,6 +8020,17 @@ def _lumo_tree_path_lcp_max_greedy_sample(
     accepted_lens = []
     path_log_rows = []
     winner_log_rows = []
+    # LEVER 1 (FR13 3-stage HW-limit reclaim): path_log_rows/winner_log_rows are
+    # consumed ONLY under FR10_METRICS / LUMO_TREE_PATH_LCP_LOG (guards at ~9204 /
+    # ~9235), both OFF in deploy. Building these ~25-field dicts (list-comprehensions
+    # over drafts / parent_targets / self_targets / path_scores) per NODE in the
+    # committer host critical path is pure dead work when metrics are off. Skip the
+    # build via `cond and append(...)` short-circuit => byte-identical committed
+    # tokens/lens (diagnostic-only sinks; no computed value depends on them).
+    _fr13_pathlog_build = (
+        __import__('os').environ.get("FR10_METRICS", "0") == "1"
+        or bool(__import__('os').environ.get("LUMO_TREE_PATH_LCP_LOG"))
+    )
     accepted_node_paths = []
     accepted_token_rows = []
     start = 0
@@ -8300,7 +8311,7 @@ def _lumo_tree_path_lcp_max_greedy_sample(
         accepted_lens.append(int(best_lcp))
         accepted_node_paths.append([int(x) for x in best_path[:best_lcp]])
         accepted_token_rows.append([int(drafts[x]) for x in best_path[:best_lcp]])
-        path_log_rows.append({
+        _fr13_pathlog_build and path_log_rows.append({
             'req_index': int(req_i),
             'node_count': int(node_count),
             'accepted_len': int(best_lcp),
@@ -8328,11 +8339,11 @@ def _lumo_tree_path_lcp_max_greedy_sample(
             'parent_target_ids': [int(x) for x in parent_targets],
             'self_target_ids': [int(x) for x in self_targets],
         })
-        counts_by_path = {
+        counts_by_path = _fr13_pathlog_build and {
             str(i): int(score.get('lcp', 0))
             for i, score in enumerate(path_scores)
         }
-        winner_log_rows.append({
+        _fr13_pathlog_build and winner_log_rows.append({
             'primary': f'fr10_tree_req_{req_i}',
             'policy': (
                 'greedy_tree_lcp_max_FORCED_SPINE_DIAGNOSTIC'

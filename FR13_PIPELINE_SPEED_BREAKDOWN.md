@@ -248,3 +248,35 @@ aimed at the smallest slice -> keep default-OFF, do NOT bake.
 Prior campaigns (#26/#28) called drafter/committer host overhead a cost-gate via CHEAP levers; the "optimize
 to HW limit, as much as we want" mandate authorizes the DEEPER rewrites (CUDA-graph draft, async committer sync)
 those cheap levers never attempted.
+
+## §12 — 3-STAGE RECLAIM: workflow wwrrhmxgg ranked levers + honest ceiling (2026-07-15)
+
+Source-grounded (patcher live lines). HONEST corrections to my ~180ms optimism:
+- **Committer 74-113ms is a cudaEvent GPU-TIMELINE (idle-inclusive) span** (cfwd_begin AFTER logits exist :17615-22).
+  It CANNOT be split idle-vs-compute by the timer. Much is GENUINE B=1 serial latency: the committed token is
+  NEEDED before drafter(N+1)'s root forward launches. "committer double-counts verify" DEAD; "80ms is replay
+  compute" DEAD (replay accepted-path-scoped, sub-ms).
+- **B>1 pipelining DEAD** in the real workload (agentic effective batch ~1.3). Every lever pays at B=1.
+
+RANKED LEVERS (reclaim / risk): 
+1. **LEVER 1 dead metrics dicts (DONE, committed):** path_log_rows/winner_log_rows (:8303/:8335) built per-node
+   but consumed only under FR10_METRICS/LUMO_TREE_PATH_LCP_LOG (OFF deploy). Guarded via `cond and append(...)`
+   short-circuit. ~0.5-2ms, byte-identical (diagnostic-only sinks). Zero risk.
+2. **LEVER 2 batched replay (~5-10ms, LOW-MED, localized):** FR13_APC_SNAP_FIX=1 (baked) forces the per-layer
+   loop = 2 .item() DtoH/layer x48 = ~96 stream drains/step; the byte-identical all-layer _ep_launch_all (:9068)
+   does 0 per-layer syncs. The per-layer detour exists ONLY for _fr13_publish_apc_ssm_leaf, which is GUARDED-OUT
+   as dead under _fr13_runrow_commit (=True in deploy, FR13_APC_COMMIT_TO_RUNNING_ROW=1) -> batched is safe.
+   Gate: flag FR13_REPLAY_BATCHED_RUNROW (default OFF), same-boot byte A/B + assert batched-branch fired. DEFERRED.
+3. LEVER 3 async committer (~2.5-6ms INFERRED, MED-HIGH, prior EngineDeadError) - risky, small.
+4. LEVER 4 ATTN-KV remap device buffer (~0.5-2ms, LOW-MED) - drop HtoD round-trip.
+5. **LEVER 5 whole-spine drafter CUDA-graph (~40-60ms, HIGH, the ONLY large reclaim):** spine loop :13669-13820,
+   true GPU ~23ms vs ~100-140ms measured => ~80-117ms host orchestration + inter-launch idle. ENABLER: NO
+   .item()/.cpu()/synchronize in the mtp spine (grepped 13650-13830), static shapes -> capturable in principle.
+   5 hard invariants (N_PAD-inv, M-inv of in_proj_ba = the SLOT_REORDER problem, per-level bit-exact, no-sync-in-
+   capture, req-key routing survives). The goal-mover but HIGH risk/effort.
+
+**HONEST CEILING:** safe levers (1+2) = ~6-12ms (~1.5-3%); the goal (TPS same-or-better for the -10% deep tail,
+needs ~+43ms) reachable ONLY via LEVER 5 (HIGH risk) -- the rest of the drafter+committer overhead is FUNDAMENTAL
+B=1 serial latency (M=1 GEMM + weight reads + the draft->verify->commit dependency). Strategic implication: the
+SPEEDY path to accept>5 may be the SHALLOW pre-warm-windfall (deep chains only on repetitive-span hits, amortized
+by large accept) rather than the every-step deep tail -> next: GATE 0.5 pre-warm A/B measures accept AND TPS at once.
