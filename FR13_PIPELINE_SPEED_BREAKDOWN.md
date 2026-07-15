@@ -146,3 +146,18 @@ committer replay). CONSISTENT per-STEP (raw sidecars):
   (3) the union's arctic-parallelism helps the DRAFTER, which is NOT the deep-tail cost -> won't fix this.
 CAVEAT: baseline sidecar is mid-run (16-task batch-1, n=413 steps) but per-step GPU is workload-independent so
 robust. Depth is the speed axis to sweep next.
+
+## 7. native MTP-5 vs t33333 vs tail6 (user comparison 2026-07-15)
+SHAPE/SOURCE: native = 5-node depth-5 CHAIN, MTP only (5 heads), NO branches, NO FR13 tree committer (stock
+linear commit) -- the fr9 baseline (~40 TPS, accept ~3.4). t33333 = 15-node cat33333 (depth-5 spine + 2
+branches/depth), MTP only (spine=heads, branches=MTP topk), n_pad=16. tail6 = cat33333 head (15) + 6-node
+arctic CHAIN tail (depths 6-11) = 21 nodes, n_pad=32; head=MTP, tail=ARCTIC.
+STAGE (per-step GPU, ms): native (draft n/a, verify ~150-200, committer NATIVE-linear ~cheap) acc~3.4 ~40TPS;
+t33333 (draft 101.9 / verify 258.8 / commit 74.0 = 434.6) acc 3.59 ~42TPS; tail6 (draft 100.6 / verify 339.7 /
+commit 113.5 = 553.8) acc 4.28 ~38TPS. (native drafter/committer NOT FR13-timed = stock path.)
+STORY: monotone accept-for-speed trade. The FR13 TREE itself is the first tax: t33333 vs native adds ~+150ms/
+step (tree verify 258 vs ~180 + a NEW 74ms GDN tree committer native lacks) for only +0.2 accept (~wash on
+speed). tail6's arctic tail is the real accept jump (3.59->4.28) but n_pad=32 pushes verify 339 + committer 113
+=> -10% vs native. KEY: the COMMITTER is where tree/tail diverge from native (native=cheap linear; tree=74ms;
+tail=113ms GDN replay, depth-scaling) -> a sampled/faster tree committer is the unlock to keep the accept while
+closing the speed gap to native.
