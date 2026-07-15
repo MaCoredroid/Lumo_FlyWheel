@@ -1309,3 +1309,17 @@ across ~19k skips; crash-guard baked). SPEED goal = HONEST NO-GO (arctic weaker 
 measured airtight). Deliverable = the proven lossless correctness-parity MTP-k+Arctic->committer pipeline
 (FR13_DRAFT_SOURCE=merged; default mtp untouched). The arctic-drafter SPEED thesis is CLOSED. Real speed
 levers remain in what WE own (committer/GDN-replay/tree-overhead per prior speed campaign), NOT the drafter.
+
+## ACCEPT>5 DRIVE — GATE 0.5 (pre-warm) partial + ladder refinements (2026-07-15)
+GATE 0.5 pre-warm A/B (pw1) ran on the merged SKIP path. PREWARM arm: accept 1.902, resolve 3/4 -- i.e.
+= cold merged-skip (~1.97) => NO accept benefit. HONEST INSIGHT: this is expected+UNINFORMATIVE because
+the SKIP path collapses accept regardless (arctic replaces the spine). The pre-warm's value is COVERAGE
+(match_full), which only becomes ACCEPT on the COMPLEMENT/TAIL path (monotone committer, coverage->accept).
+=> the clean pre-warm-accept test must run on the complement/tail (post-32-node), NOT the skip path.
+Coverage comparison (prewarm vs cold match_full) pending the cold arm; corpus is thin (132 harness patterns).
+LADDER REFINEMENT: 16-node "complement" is a lossy SWAP (replace an MTP branch), not a monotone ADD -- the
+clean ADD needs 32 nodes. So GATE 1 (BV=8 bit-exact) is the right next step. GATE 1 assessment: HIGH-CONFIDENCE
+pass by prior evidence (BV16=BV32=0.0 int-view + reductions never occur over BV) -- shrink-BV should be
+bit-exact AND spill-free (opposite of the harmful widen). Will CONFIRM in the 32-node boot (same-boot no-spec
+B=1 byte compare + ptxas regs + verify-time = GATE 1+2+3 folded), not a separate payload-gate. Added
+BV8_w8_SHRINK arm to fr13_gdn_scan_warp_gate.py for the payload path if needed.
