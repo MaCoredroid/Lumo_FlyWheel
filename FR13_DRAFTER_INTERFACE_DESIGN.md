@@ -421,3 +421,15 @@ TWO FLAVORS (both lossless via committer):
     since drafter is only 18%, A (higher accept) likely beats B on net TPS unless hit-rate is very
     high. To be MEASURED: fr13_merged_flavorB_seq.sh (queued after merge16b) -> 3-way A/B/baseline via
     derived_tps_fullstep_gpu + resolve.
+
+## NEXT LEVER (design doc): Smart-Matching Drafter — adaptive geometry, load-aware
+The merged drafter above answers "does suffix break the DRAFTER-QUALITY ceiling inside cat33333?"
+(expected real-but-small, ~+0.1-0.3 accept). The bigger question — "can suffix break the GEOMETRY
+ceiling (depth-5 caps accept at ~5-6) by spending the fixed 16-node budget as DEPTH on long exact
+matches?" — is scoped in **FR13_SMART_MATCHING_DRAFTER_DESIGN.md**. Core: per-step pick geometry
+{DEEP chain (d<=15, fits the 16-node wall) | cat33333 (branches, default) | SHRINK/OFF (high load)}
+from the Arctic match_len/prob + scheduler Running count. Training-free, register-constrained,
+lossless-by-committer (no new proof), verify-cost-invariant on GB10 (flat <=16 nodes). Positioned vs
+DFlash/FailFast/EAGLE-2/OPT-Tree/DISCO/Nightjar. Cost-gate: probe kernel shape-switch cost + live
+match_len histogram BEFORE the full seam; DEEP only worth it if long-match fraction is materially >5%
+and the shape switch is cheap. Prereq = the merged A/B (its ENGAGED needle is the measurement instrument).
