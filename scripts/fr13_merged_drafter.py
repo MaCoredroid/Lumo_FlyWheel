@@ -32,12 +32,13 @@ N_DEPTH = 5
 
 _CACHE = None
 _CACHE_INIT_FAILED = False
+_PREWARMED = False        # design §6b: harness-aware trie pre-warm done once at boot
 _COMMITTED: dict = {}     # req_id -> list[int] rolling recent-committed tokens (<= max_tree_depth)
 _INGESTED_LEN: dict = {}  # req_id -> #tokens already fed to Arctic add_active_response (non-gappy)
 STATS = {
     "speculate_fired": 0, "skip_fired": 0, "assembler_engaged": 0,
     "match_full": 0, "match_partial_norun": 0, "always_fill_miss": 0,
-    "started": 0, "retired": 0, "ingested": 0,
+    "started": 0, "retired": 0, "ingested": 0, "prewarm_seeded": 0,
 }
 
 
@@ -74,13 +75,74 @@ def set_cache_for_test(mock):
 
 
 def reset_for_test():
-    global _CACHE, _CACHE_INIT_FAILED, _COMMITTED, _INGESTED_LEN
+    global _CACHE, _CACHE_INIT_FAILED, _COMMITTED, _INGESTED_LEN, _PREWARMED
     _CACHE = None
     _CACHE_INIT_FAILED = False
+    _PREWARMED = False
     _COMMITTED = {}
     _INGESTED_LEN = {}
     for k in STATS:
         STATS[k] = 0
+
+
+# ---- PRE-WARM (design §6b: harness-aware trie) ------------------------------
+def prewarm_trie(cache, corpus, prefix="prewarm"):
+    """Pre-warm the Arctic CROSS-REQUEST trie with a harness-aware corpus of prior-trajectory token
+    sequences so the per-request speculate() matches harness-structural spans (tool-call XML, system
+    prompt, imports, boilerplate) from token 1 -- fixing Front-2's cold/task-local weakness. Each
+    sequence is ingested as a completed cross-request pattern (start->add->stop => cached_requests).
+    NEVER-REGRESS: pre-warm only ADDS candidates through the monotone committer (a non-matching pattern
+    just doesn't accept). corpus = iterable of token-id lists. Returns #seeded. Never raises."""
+    if cache is None:
+        return 0
+    seeded = 0
+    for i, seq in enumerate(corpus):
+        try:
+            ids = [int(t) for t in seq]
+        except Exception:
+            continue
+        if len(ids) < 2:
+            continue
+        rid = f"{prefix}_{i}"
+        try:
+            cache.start_request(rid, ids[:1])        # first token = prompt
+            cache.add_active_response(rid, ids[1:])  # rest = the "response" ingested into the trie
+            cache.stop_request(rid)                  # -> cached (available cross-request)
+            seeded += 1
+        except Exception:
+            continue
+    STATS["prewarm_seeded"] = STATS.get("prewarm_seeded", 0) + seeded
+    return seeded
+
+
+def maybe_prewarm(cache):
+    """Boot-time hook: if FR13_PREWARM_TRIE=<path> is set, load the JSONL corpus (one token-id list per
+    line, or {"token_ids":[...]}) and prewarm the trie ONCE. Gated + non-fatal (missing file => no-op)."""
+    global _PREWARMED
+    if _PREWARMED or cache is None:
+        return
+    path = os.environ.get("FR13_PREWARM_TRIE")
+    if not path or not os.path.exists(path):
+        return
+    corpus = []
+    try:
+        import json as _json
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                obj = _json.loads(line)
+                seq = obj if isinstance(obj, list) else (obj.get("token_ids") or obj.get("ids") or [])
+                if seq:
+                    corpus.append(seq)
+        n = prewarm_trie(cache, corpus)
+        import logging
+        logging.getLogger("vllm.fr13_merged_drafter").info(
+            "[FR13_PREWARM] seeded %d/%d corpus sequences from %s", n, len(corpus), path)
+    except Exception:
+        pass
+    _PREWARMED = True
 
 
 # ---- lifecycle (RUNNER + COMMIT-SITE frames) --------------------------------

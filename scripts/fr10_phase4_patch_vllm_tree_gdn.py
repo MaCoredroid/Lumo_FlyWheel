@@ -18707,6 +18707,7 @@ def _patch_gpu_model_runner_merged_drafter() -> bool:
         "                        import fr13_merged_drafter as _fr13_md\n"
         "                        if _fr13_md.merged_on():\n"
         "                            _fr13_md_cache = _fr13_md.get_cache()\n"
+        "                            _fr13_md.maybe_prewarm(_fr13_md_cache)\n"
         "                            _fr13_md_new = {}\n"
         "                            for _fr13_md_i, _fr13_md_rid in enumerate(_fr13_rk_req_ids):\n"
         "                                if _fr13_md_cache is not None and _fr13_md_rid not in _fr13_md_cache.active_requests:\n"
