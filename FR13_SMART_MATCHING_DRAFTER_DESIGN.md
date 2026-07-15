@@ -137,12 +137,31 @@ the assembled-node output; geometry selection is a new step *between* speculate 
 - **(b) DEEP assembler path.** Extend `assemble_cat33333` → `assemble_shape(nodes, depth, widths)` so the
   same Arctic suffix_rel fills a depth-d chain (d>5) when G=DEEP. CPU test: depth-15 chain from a 15-long
   match == the 15 trie tokens; cold==pure-MTP byte-identical (unchanged invariant).
-- **(c) KERNEL SHAPE RISK — the one real unknown.** Does the GDN tree kernel + `_prepare_tree_attn_bias`
-  accept a **variable tree shape at runtime**, or is cat33333 baked into the compiled graph? Two outcomes:
-  - shape-parametric (tree passed as data / attn-bias) → DEEP is a data change, no recompile → cheap.
-  - shape-baked (graph captured for cat33333) → DEEP needs a **second captured graph** (2 shapes) or a
-    shape-generic kernel. **Probe this FIRST** (read the kernel + bias builder; a 1-node A/B of a d6 chain
-    vs cat33333 same-boot tells us if it recompiles). This gates the whole effort's cost.
+- **(c) KERNEL SHAPE — ANSWERED (shape-probe workflow wf_d9b98a5c, 2026-07-15, high confidence).**
+  Verdict: **`baked_needs_2nd_capture`** — NOT free-parametric, but NOT a kernel rewrite either. Five
+  cited facts: (1) **NO Triton recompile** — `_tree_gdn_kernel` (fr10_gdn_tree_kernel.py:659-733) keys
+  only on `N_ACTUAL/N_PAD/BLOCK_V` as `tl.constexpr`; topology enters purely as runtime `strict_mask`
+  data; both cat33333 and chain15 have 16 nodes → `n_pad=16` → **identical constexpr key, no recompile,
+  no autotune**. The scan is already topology-BLIND. (2) parent/strict/visible mask + conv-source
+  builders (patch:240-248) ARE topology-general — they'd build a correct chain if re-run — but are baked
+  once at `__init__` and copied by reference; nothing swaps them per step. (3) `_prepare_tree_attn_bias`
+  is called **0×/step** (tree_attn.py:255-291 runs once at init); `build()` re-emits the cached
+  `self.tree_attn_bias` — a stale cat33333 ancestry mask on a chain step is **WRONG** (chain node k
+  attends ancestors 1..k-1; cat33333 masks siblings). (4) **CUDA graph is topology-blind** —
+  `BatchDescriptor` (forward_context.py:30-59) has no depth/topology field; both 16-node shapes → same
+  `num_tokens` → same captured graph → vLLM won't auto-recapture; **replaying the cat33333 graph on a
+  chain step is a correctness hazard, not cheap reuse.** (5) the conv stage is a Python per-depth loop
+  (relaunch:4587-4607) — ~6 launches@d5 vs ~16@d15 — frozen inside the FULL captured graph, so a
+  depth-5 graph replayed on a chain step **silently skips conv levels 7-15**.
+- **(c-path) CHEAPEST REALIZATION (no kernel edit):** kernel untouched (already topology-blind) + at boot
+  build **both** descriptor sets (cat33333 AND chain15 masks/conv-idx/attn-bias/FA2-perm via the existing
+  topology-general builders) + run the **rare, suffix-triggered deep-chain step EAGER** (bypass the
+  captured graph — correctness-safe, no recapture; amortizes because chains fire only on long matches).
+  Steady-state-fastest alt = add a topology field to `BatchDescriptor`/the CG dispatch key so both shapes
+  get their own captured graph → runtime switch becomes an O(1) pointer swap. Either way the fill must be
+  extended to EMIT chain topology — today `build_cat33333_columns` hard-codes `N_DEPTH=5`
+  (fr13_merged_fill.py:26) and the seam only overrides token VALUES into the fixed layout (data assembly,
+  not kernel/graph surgery).
 - **(d) seam wire + patcher self-test.** Byte-identical when `FR13_SMART_GEOMETRY` off; DEEP marker fires
   when on. Reuse the merged self-test harness.
 - **(e) live A/B** (after the merged A/B): `smart` vs `merged-cat33333` vs `MTP-only`, B=4 16-task —
@@ -154,9 +173,21 @@ the assembled-node output; geometry selection is a new step *between* speculate 
 
 ## 5. Risks & the honest measurements that decide it
 
-1. **Kernel recompile on shape switch (§4c)** — the dominant cost risk. If cat33333 is graph-baked and DEEP
-   forces a second capture or eager fallback, the per-step overhead could erase the accept win. **Measure
-   before building the full path** (the dfwd timer is the gate, as with the merged skip).
+0. **[NEW — probe's #1 open risk] DEEP-chain losslessness is NOT free (amplification over the longer path).**
+   A depth-15 chain runs the GDN recurrence over **15 sequential steps vs 5** — 3× the path for the known
+   ~1.166×/layer diffuse amplification ([[reference_diffuse_gdn_accumulation_explained]]
+   [[project_fr13_amplification_levers_queued]]). The `tl.static_range` unroll is byte-identical (same
+   n_pad=16), but the *accumulated* drift over a 15-long chain can exceed the garble margin. So the accept
+   gain from deeper reach could be **eaten by garble** on the chain. MUST gate same-boot temp-0.6
+   tree-vs-native (fr13_garble_gate), **NOT assumed lossless** — this is now the primary correctness gate,
+   ahead of speed. (Ties the depth lever back to the amplification front: a deep chain is exactly the
+   "longer path" that amplification-reduction levers — fp32/rms-clamp/re-anchor — would need to hold.)
+1. **Shape-switch cost (§4c — ANSWERED: baked, not free).** The cheapest-correct path is EAGER execution of
+   the rare chain step (no recapture) — per-forward slower but only on suffix-matched steps, so it amortizes;
+   the dfwd timer still gates whether eager overhead erases the accept win. The two-captured-graph route
+   removes the eager tax but needs a `BatchDescriptor` dispatch-key edit + GPU_UTIL/HBM headroom for a 2nd
+   replay ring (patch:5071 guard). Confirm eager actually bypasses the captured graph (not trip the
+   `is_current_stream_capturing` guard, relaunch:~4492) via a live 1-node probe before the full build.
 2. **DEEP fires too rarely to matter** — the win is only on steps with a long *confident* exact match. The
    live **match_len histogram** (add a needle: bucket match_len 0/1–2/3–5/6–10/11+) sizes the addressable
    fraction. If long matches are <5% of steps, DEEP is not worth the shape-switch complexity → report and
