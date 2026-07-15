@@ -220,8 +220,13 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
                 suffix_rel = {}
         # Skip requires full depth AND (when gated) enough confidence -- a low-prob deep match is
         # exactly the over-confident-but-wrong case that collapsed accept, so fall back to full MTP.
-        if len(suffix_rel) >= need and _min_prob > 0.0 and _row_conf < _min_prob:
-            STATS["conf_gated"] = STATS.get("conf_gated", 0) + 1   # full-depth but blocked by low conf
+        if len(suffix_rel) >= need:
+            # confidence HISTOGRAM over full-depth matches (threshold calibration; independent of gating)
+            _b = ("conf_h0" if _row_conf < 0.05 else "conf_h1" if _row_conf < 0.15
+                  else "conf_h2" if _row_conf < 0.30 else "conf_h3" if _row_conf < 0.50 else "conf_h4")
+            STATS[_b] = STATS.get(_b, 0) + 1
+            if _min_prob > 0.0 and _row_conf < _min_prob:
+                STATS["conf_gated"] = STATS.get("conf_gated", 0) + 1   # full-depth but blocked by low conf
         if len(suffix_rel) < need or (_min_prob > 0.0 and _row_conf < _min_prob):
             all_full = False
         nodes, _ = assemble_cat33333(mtp_spine, mtp_topk, suffix_rel, mtp_k)
@@ -266,11 +271,14 @@ def _maybe_log_engagement():
         logging.getLogger("vllm.fr13_merged_drafter").info(
             "[FR13_MERGED ENGAGED] speculate_fired=%d match_full=%d match_partial=%d "
             "always_fill_miss=%d skip_fired=%d assembler_engaged=%d started=%d ingested=%d retired=%d "
-            "arctic_oob_dropped=%d last_oob=%s conf_gated=%d",
+            "arctic_oob_dropped=%d last_oob=%s conf_gated=%d "
+            "confhist[<.05|.05-.15|.15-.30|.30-.50|>=.50]=%d|%d|%d|%d|%d",
             STATS["speculate_fired"], STATS["match_full"], STATS["match_partial_norun"],
             STATS["always_fill_miss"], STATS["skip_fired"], STATS["assembler_engaged"],
             STATS["started"], STATS["ingested"], STATS["retired"], _oob_n, _oob_last,
             STATS.get("conf_gated", 0),
+            STATS.get("conf_h0", 0), STATS.get("conf_h1", 0), STATS.get("conf_h2", 0),
+            STATS.get("conf_h3", 0), STATS.get("conf_h4", 0),
         )
     except Exception:
         pass
