@@ -531,3 +531,20 @@ aggregate set, user 2026-06-16). Launched the full 3-way (t33333 baseline / tail
 16 tasks, B=4, GPU_UTIL=0.72 (fr13_tail_3way_seq.sh, TAG=g5, monitor bhwa6zfd4). The 4-task numbers (tail6
 accept 4.28, fullstep 18.81) PROVED the mechanism (engages+accepts+never-regress+TPS-neutral); the 16-task run
 gives the ROBUST deliverable accept/TPS + the arctic-complementarity answer (suffonly head accept vs MTP).
+
+## UNION of two trees (MTP cat33333 ∪ arctic) — user idea 2026-07-15, feasibility + plan
+Idea: verify MTP cat33333 AND an arctic tree together, committer picks best path across both. RIGHT structure
+for Q2 (MTP hard-misses at every depth caught by arctic's INDEPENDENT path). Never-regress (union ⊇ MTP).
+Two realizations, DIFFERENT build cost:
+- **Option 1 (COMPLEMENT branches):** arctic candidates as EXTRA siblings off the MTP spine (rk 3-4 in
+  wide_topk). BUILDABLE with the existing wide packer (just widen wide_topk width + fill rk3+ from arctic
+  tree-speculate). Catches MTP misses at depth d GIVEN correct prefix (0,)*d. Misses the ~2.8% depth-1
+  whole-path divergence.
+- **Option 2 (TRUE two-spines union):** arctic gets its OWN rk-0 spine chain from the root. **BREAKS the wide
+  packer**: _fr10_wide_plan maps (pp=depth, rk) which COLLIDES for two subtrees at the same depth+rank
+  ((0,0,3) MTP-branch vs (3,3,3) arctic-spine both = wide_topk[2][3]). Needs a per-NODE packer (bigger build).
+PLAN (measure-before-build): the 3-way (t33333 + suffonly) gives MTP-tree and arctic-tree per-token accepts;
+do the OFFLINE complementarity join -> P(arctic commits | MTP misses) at each depth -> estimate union accept.
+If the join shows strong complementarity, build Option 1 (cheap, wide packer) first; Option 2 only if the
+depth-1 whole-path divergence is a big chunk. EV stays complementarity-bound (+0.1-0.3), stacks with tail's
++0.72, does NOT reach >5 average alone (workload-bound) -- but it's the correct hard-miss lever.
