@@ -450,6 +450,20 @@ worst case = accept collapse not garble). Re-launched tailg4c (monitor b1wo1837z
 (engagement = fix works) then accept_per_event/derived_tps_gpu. NOTE: never-regress held even in the vacuous run
 (tail padded == baseline, no crash) -- the infra gauntlet has been ALL operational, zero losslessness failures.
 
+### ✅ GATE 4 SWE ATTEMPT 3 (tailg4c) = TAIL ENGAGES + ACCEPTS past depth-5 on LIVE B=4 (mechanism PROVEN)
+SAMPLER-row-id fix WORKED: TAIL[fired=650 hit=606] = ~93% arctic hit on live B=4 SWE decode (was 100% skip).
+DIRECTIONAL /metrics read mid-run (~315 forwards, spec_decode_num_accepted_tokens_per_pos):
+- HEAD pos 0-4 (depths 1-5): 306,254,204,176,143 = 1083 -> ~3.44 accept ~= baseline 3.56 => NEVER-REGRESS
+  CONFIRMED LIVE (within-floor, n_pad 16->32 drift).
+- **TAIL pos 5-10 (depths 6-11): 67,55,48,42,34,30 = 276 -> +0.88 accept/forward -- the tail GENUINELY
+  COMMITS past depth-5** (decays 67->30, real reach). pos 11-20 = 0 (correct, wide_D=11).
+- TOTAL accept ~4.3 (accepted 1369 / drafts 6720 basis). ABOVE baseline (+~0.9 from tail), BELOW 5 on this subset.
+**HONEST VERDICT (matches the up-front EV): the tail is REAL + additive + lossless, but the per-task AVERAGE
+(~4.3) is below 5 -- subset_b4_four has <27% repetitive spans, so no >5 average.** >5 is a repetitive-span
+WINDFALL, not a per-task average, on typical SWE. Awaiting full deploy_speed (proper accept_per_event +
+derived_tps_gpu) -- the TPS is the OTHER gate (does +0.9 accept beat the 21-node tree's extra verify?). Per-pos
+decay says a DEEPER tail gives diminishing returns (pos11~25,12~20...); the real >5 lever is workload repetition.
+
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
 up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
