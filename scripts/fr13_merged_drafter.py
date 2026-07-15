@@ -36,7 +36,8 @@ _COMMITTED: dict = {}     # req_id -> list[int] rolling recent-committed tokens 
 _INGESTED_LEN: dict = {}  # req_id -> #tokens already fed to Arctic add_active_response (non-gappy)
 STATS = {
     "speculate_fired": 0, "skip_fired": 0, "assembler_engaged": 0,
-    "match_full": 0, "match_partial_norun": 0, "started": 0, "retired": 0, "ingested": 0,
+    "match_full": 0, "match_partial_norun": 0, "always_fill_miss": 0,
+    "started": 0, "retired": 0, "ingested": 0,
 }
 
 
@@ -158,6 +159,11 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
     # BRANCHES (the trie-branches->tree-branches mapping). v1 (FR13_MERGED_TREE_SPEC=0): flat chain,
     # spine only, branches = MTP fallback. Both Gate-1 lossless + never-regress.
     _use_tree = os.environ.get("FR13_MERGED_TREE_SPEC", "1") != "0"
+    # FLAVOR: 'adaptive' (default, Flavor A) = skip deep MTP forwards ONLY on a batch-wide
+    # full-depth Arctic match, else full MTP (never-regress). 'always' (Flavor B) = ALWAYS run
+    # just mtp_k forwards + suffix-fill the whole deep tree unconditionally (max drafter speed;
+    # accept degrades toward root-only on a miss -- still lossless via the committer).
+    _flavor = os.environ.get("FR13_MERGED_FLAVOR", "adaptive")
 
     B = len(spec_row_req_ids)
     if B == 0:
@@ -201,12 +207,17 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
         nodes, _ = assemble_cat33333(mtp_spine, mtp_topk, suffix_rel, mtp_k)
         assembled.append(nodes)
 
-    if not all_full:
+    if not all_full and _flavor != "always":
         STATS["match_partial_norun"] += 1
         _maybe_log_engagement()
-        return None, None, False   # never-regress: caller runs full MTP, Arctic ignored
-
-    STATS["match_full"] += 1
+        return None, None, False   # Flavor A never-regress: caller runs full MTP, Arctic ignored
+    # Flavor B ('always'): fill + skip UNCONDITIONALLY -- even a partial/empty match packs (missing
+    # deep depths -> assemble MTP-placeholder + PAD branches; those nodes just don't accept). Max
+    # drafter speed, accept degrades to root-only on a miss. Lossless via the committer regardless.
+    if all_full:
+        STATS["match_full"] += 1
+    else:
+        STATS["always_fill_miss"] += 1   # Flavor B skipped a non-full match (accept degrades)
     STATS["assembler_engaged"] += 1
     spine_tokens, wide_topk = build_cat33333_columns(assembled, device, pad_token)
     STATS["skip_fired"] += 1
@@ -229,10 +240,10 @@ def _maybe_log_engagement():
         import logging
         logging.getLogger("vllm.fr13_merged_drafter").info(
             "[FR13_MERGED ENGAGED] speculate_fired=%d match_full=%d match_partial=%d "
-            "skip_fired=%d assembler_engaged=%d started=%d ingested=%d retired=%d",
+            "always_fill_miss=%d skip_fired=%d assembler_engaged=%d started=%d ingested=%d retired=%d",
             STATS["speculate_fired"], STATS["match_full"], STATS["match_partial_norun"],
-            STATS["skip_fired"], STATS["assembler_engaged"], STATS["started"],
-            STATS["ingested"], STATS["retired"],
+            STATS["always_fill_miss"], STATS["skip_fired"], STATS["assembler_engaged"],
+            STATS["started"], STATS["ingested"], STATS["retired"],
         )
     except Exception:
         pass
