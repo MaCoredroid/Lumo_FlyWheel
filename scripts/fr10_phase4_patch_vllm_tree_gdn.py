@@ -13821,6 +13821,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # spine tensors. Head unchanged + tail only ADDS => lossless never-regress (committer
             # accept=p(S), source/depth-blind). Own try/except: NEVER break the drafter.
             if _fr10_is_wide and os.path.exists("/logs/fr13_tail_mode.arm"):
+                _fr13_t_skip = ""
                 try:
                     import sys as _fr13_t_sys
                     if "/workspace/scripts" not in _fr13_t_sys.path:
@@ -13828,14 +13829,22 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     import fr13_merged_drafter as _fr13_t
                     _fr13_t_hd = int(getattr(_fr13_t, "TAIL_HEAD_DEPTH", 5))
                     _fr13_t_len = int(_fr10_wide_D) - _fr13_t_hd
-                    if (_fr13_t.merged_on() and _fr13_t_len > 0
-                            and len(_fr10_spine_tokens) == _fr13_t_hd):
+                    if not _fr13_t.merged_on():
+                        _fr13_t_skip = "merged_off"
+                    elif not (_fr13_t_len > 0 and len(_fr10_spine_tokens) == _fr13_t_hd):
+                        _fr13_t_skip = "geom_len%d_hd%d_tlen%d" % (len(_fr10_spine_tokens), _fr13_t_hd, _fr13_t_len)
+                    else:
                         from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_t_gdn
                         _fr13_t_ids = getattr(_fr13_t_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
                         _fr13_t_cache = _fr13_t.get_cache()
                         _fr13_t_B = int(_fr10_spine_tokens[0].shape[0])
-                        if (_fr13_t_cache is not None and _fr13_t_ids is not None
-                                and len(_fr13_t_ids) == _fr13_t_B):
+                        if _fr13_t_cache is None:
+                            _fr13_t_skip = "cache_none"
+                        elif _fr13_t_ids is None:
+                            _fr13_t_skip = "ids_none"
+                        elif len(_fr13_t_ids) != _fr13_t_B:
+                            _fr13_t_skip = "ids%d_ne_B%d" % (len(_fr13_t_ids), _fr13_t_B)
+                        else:
                             _fr13_t_head = [
                                 [int(_x) for _x in _fr10_spine_tokens[_d].detach().reshape(-1).cpu().tolist()]
                                 for _d in range(_fr13_t_hd)]
@@ -13847,8 +13856,28 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 _fr13_t_pad, vocab_size=_fr13_t_vocab)
                             if _fr13_t_cols is not None:
                                 _fr10_spine_tokens.extend(_fr13_t_cols)
-                except Exception:
-                    pass
+                            else:
+                                _fr13_t_skip = "decide_none"
+                except Exception as _fr13_t_exc:
+                    _fr13_t_skip = "exc:%r" % (_fr13_t_exc,)
+                # POST-TRY RECONCILIATION (OUTSIDE the try -- red-team FINDING 1, make-or-break): tail
+                # mode serves a wide_D-deep tree, so the wide packer REQUIRES wide_D spine tensors with
+                # NO fall-back-to-head. If the append produced fewer (skip/cold/exc), PAD to wide_D by
+                # repeating the last spine token -- a [batch] int64 tensor (torch.stack needs matching
+                # shape), NOT a scalar. Lossless: a repeated deep token ~never matches the model past the
+                # head, and the committer verifies each row against its OWN target -> never a wrong accept.
+                while len(_fr10_spine_tokens) < int(_fr10_wide_D):
+                    _fr10_spine_tokens.append(_fr10_spine_tokens[-1])
+                if _fr13_t_skip:   # fail-LOUD (throttled) so the real guard miss surfaces, not the packer error
+                    try:
+                        globals()["_fr13_tail_skip_n"] = globals().get("_fr13_tail_skip_n", 0) + 1
+                        if globals()["_fr13_tail_skip_n"] % 50 == 1:
+                            import logging as _fr13_t_log
+                            _fr13_t_log.getLogger("vllm.fr13_tail").warning(
+                                "[FR13_TAIL] append skipped x%d (padded to wide_D=%s): %s",
+                                globals()["_fr13_tail_skip_n"], _fr10_wide_D, _fr13_t_skip)
+                    except Exception:
+                        pass
 
             if _fr10_is_spine_only or _fr10_is_chain3:
                 # FR13_RESHAPE_DEPTH3 chain3 = pure depth-3 spine = the same
