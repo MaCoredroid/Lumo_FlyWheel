@@ -396,3 +396,28 @@ pattern => match_full=0 on the single-prompt probe was WORKLOAD (single-turn lac
 repetition), NOT a bug. => the live AGENTIC A/B (file re-reads) is the right engagement test; v2 adds
 branch-accept on top. arctic API: speculate(req_id, context, max_spec_tokens, max_spec_factor=1.0,
 max_spec_offset=0.0, min_token_prob=0.1, use_tree_spec=False).
+
+## SPEED ACCOUNTING + THE TWO FLAVORS (2026-07-15 discussion)
+STEP = drafter + verify + committer + gaps (SERIAL). v1 live: drafter 34ms + verify 80ms + committer
+70ms = ~184ms/step, committed_per_event 2.90.
+TRUE TPS = committed / (drafter+verify+committer) = 2.90/0.184 = 15.76 == measured aggregate 15.59.
+derived_tps_gpu (36.27) = committed / VERIFY-ONLY -> 2.3x OVERSTATED, BLIND to the drafter modes.
+=> added derived_tps_fullstep_gpu (drafter-inclusive) to fr13_measure.py -- the metric to compare
+drafter modes.
+REDUCIBILITY: verify 80ms = HBM weight-read floor (fixed per-step; only amortized by higher accept
+or smaller model/quant); committer 70ms = OUR replay compute (prior P1/P2/P3 levers ~no-win, scales
+w/ node count); drafter 34ms = reducible (skip lever / graph-capture); gaps = eager glue (hard).
+=> verify+committer = 150/184 (81%) ~IRREDUCIBLE per-step. DRAFTER is 18% -> the skip lever CEILING
+is ~18% TPS (measured -53% drafter -> ~-10% step -> ~+10% TPS if accept holds). ACCEPT scales the
+WHOLE step -> ACCEPT is the PRIMARY TPS lever (banked HBM-bound truth), drafter-skip is secondary.
+=> suffix BRANCHES (raise accept on hits) matter more than the skip; the fixed 15-node cat33333 tree
+verify is the amortization denominator.
+TWO FLAVORS (both lossless via committer):
+  A 'adaptive' (default): mtp_k fwds + skip deep ONLY on batch-wide full match, else full MTP.
+    NEVER-REGRESS accept (miss floor = full MTP tree ~1.9); speed win on the engaged fraction (~47%).
+  B 'always' (FR13_MERGED_FLAVOR=always): ALWAYS mtp_k fwds + suffix-fill whole tree unconditionally.
+    Max drafter speed always; accept DEGRADES to root-only (~1) on a miss. Wins ONLY if suffix
+    hit-rate is high enough that the always-1-forward savings beat the miss accept penalty -- and
+    since drafter is only 18%, A (higher accept) likely beats B on net TPS unless hit-rate is very
+    high. To be MEASURED: fr13_merged_flavorB_seq.sh (queued after merge16b) -> 3-way A/B/baseline via
+    derived_tps_fullstep_gpu + resolve.
