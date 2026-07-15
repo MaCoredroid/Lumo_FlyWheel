@@ -515,3 +515,11 @@ head branch slots), not wider MTP branches. suffonly (arctic-only) arm tests if 
 Q1 (branch correctness after slot-reorder): branches commit correctly (superset +0.166==predicted; monotone
 committer; tail6 deep tail commits) -- adding a spine-vs-branch delta check to the 3-way A/B for fresh confirm.
 Proxy caveat: argmax_prob/overlap_mass are proxies; exact MTP-rank of the answer needs a rank-probe (queued).
+
+## TPS verdict (directional, 2026-07-15): tail6 fullstep ~= baseline, NOT a Front-2 loss
+tail6 derived_tps_fullstep_gpu=18.81 (B=4, pf=0.40, accept 4.28) vs prior t33333 baseline bc1diag fullstep=16.58
+(B=1, pf=0.2, accept 3.79) -> COMPARABLE-to-slight-WIN, NOT the arctic-overhead loss feared. The +0.72 accept
+~compensates the arctic tail-drafter host overhead. tail6 verify-basis derived_tps_gpu=61.85 vs baseline-implied
+~53 (+15%). Clean same-config baseline (t33333base_basec, B=4 pf~0.40) pending (slow: agentic tasks 25-61 turns).
+NET so far: the tail is a LOSSLESS drafter, accept 3.56->4.28 (+20%), TPS-neutral-to-slight-positive. NOT the >5
+headline (windfall/workload-bound). Novel = first lossless GDN-tree suffix-decode TAIL past depth-5, live B=4.
