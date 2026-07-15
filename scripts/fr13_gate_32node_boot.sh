@@ -17,13 +17,13 @@ env CONTAINER=$C PORT=$PORT GPU_UTIL=0.8 MAX_NUM_SEQS=4 ATTENTION_BACKEND=TREE_A
   bash scripts/fr13_launch_forked_fa2_tree_server.sh > "$RUN/boot.log" 2>&1 &
 LPID=$!; T0=$SECONDS; OK=0
 # Capture the ENGINE log (docker logs) continuously so the crash cause survives container removal.
-( while [ $((SECONDS-T0)) -lt 900 ]; do
+( while [ $((SECONDS-T0)) -lt 1500 ]; do
     if docker ps -aq -f name=$C 2>/dev/null | grep -q .; then
       docker logs -f "$C" > "$RUN/engine.log" 2>&1; break
     fi; sleep 2
   done ) &
 CAPPID=$!
-while [ $((SECONDS-T0)) -lt 900 ]; do
+while [ $((SECONDS-T0)) -lt 1500 ]; do
   curl -fsS -m5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && { OK=1; break; }
   [[ -n "$(docker ps -aq -f name=$C -f status=exited)" ]] && { echo "BOOT EXITED early"; break; }
   sleep 10
