@@ -113,3 +113,18 @@ fullstep-TPS** vs the depth-5 baseline.
 
 **To measure the sub-breakdowns precisely** (currently [A]/[P]): add per-sub-stage timers — split DFWD into
 (MTP-forward vs arctic-host vs assembly-H2D), split CFWD into (path-pick vs GDN-replay). Queued; needs a GPU run.
+
+## 5. MTP↔arctic parallelism — the sequential trap and the union fix (user 2026-07-15)
+CURRENT TAIL = SEQUENTIAL: decide_tail seeds arctic with `pattern = _COMMITTED + MTP head tokens` (MTP-guided
+suffix). Arctic can't start until the MTP forwards finish, and the suffix match uses the RECENT tokens (incl.
+MTP) => FULL dependency, not partial. So the GPU IDLES during the ~100-140ms host arctic walk (head-loop GPU ->
+decide_tail host -> verify GPU) -- a big chunk of the ~40% wall gap (aggregate 10.9 vs fullstep_gpu 18.81).
+FIX = the UNION (independent arctic tree from _COMMITTED ONLY, not MTP-seeded): arctic host walk has NO dep on
+the MTP head -> runs IN PARALLEL with the MTP head forwards (GPU) -> the arctic host is HIDDEN behind MTP GPU.
+=> the union wins on BOTH axes: complementarity (accept) AND pipeline parallelism (speed). The MTP-guided tail
+traded parallelism for a confident seed. Two interleave levels: (1) within-step arctic-host || MTP-GPU (needs
+union); (2) across-step: prefetch step N+1 arctic while step N verify+committer GPU runs (hides arctic behind
+committer even for the seeded variant). CAVEATS: parallelism gain is INFERRED from the sequential structure,
+not yet measured (needs union + stage timer); MTP-seed DOES buy tail accept (arctic continues MTP's confident
+prefix) so the independent union may draft a weaker deep spine -> accept-vs-speed tradeoff is the measurement.
+suffonly arm (running) = first data point on arctic-from-committed-alone quality.
