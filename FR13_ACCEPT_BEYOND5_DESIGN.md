@@ -581,3 +581,19 @@ COST-GATE (-10% GPU-TPS), not a ship. PATH to a NET win (depth is the axis): swe
 accept/depth-cost sweet spot (shallower = less verify+committer, still >baseline accept) + cheaper committer (S1
 sampled, the +53% depth-scaler). The union's arctic-parallelism helps the DRAFTER (not the deep-tail cost) -> not
 the speed fix here. This is the honest measure-before-claiming correction (audit found the metric error).
+
+## VERIFY-COST OPTIMIZATION — FR13_PARENT_GATHER (2026-07-15, the OPTIMIZE-TO-HW-LIMIT lever)
+
+The as-built depth-11 tail is +19% accept but ~10% slower (verify 258->339ms >> the 98.6ms weight-read
+floor). Workflow wbvlbn0x3 found the verify headroom root cause: `_tree_gdn_kernel`'s inner ancestor loop
+does one full-tile fp32 reduction PER ancestor j<i, but `state_i=where(ancestor,h_j,state_i)` overwrites in
+increasing j -> only the largest-index ancestor (= the immediate parent, topological order) survives. So the
+O(N^2) loop computes `h_cache[parent]` -- one gather, not i. FR13_PARENT_GATHER (default OFF, byte-identical)
+finds that parent with a cheap integer mask-scan over the SAME strict_mask + ONE gather. Reductions/CTA:
+N(N-1)/2 -> N (7.5x fewer at n_pad=16, **15.5x at n_pad=32** => helps THIS tail most). See
+FR13_PIPELINE_SPEED_BREAKDOWN.md §10.
+
+**GATE (n_pad=32, BV=8) PASS:** in-process self-check (both scans on identical live-decode inputs, raise on
+any bit-diff) = BYTE-IDENTICAL, no mismatch (pg_gate_t55555_np32). Losslessness proven at the tail's shape.
+Timing run (graph, PARENT_GATHER=1) in flight vs the 171.3ms baseline. Next: n_pad=16 gate (shipping shape)
++ live B=4 SWE deliverable gate, then bake ON if verify drops and never-regress holds.
