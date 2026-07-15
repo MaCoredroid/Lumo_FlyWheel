@@ -182,8 +182,8 @@ def make_spine_tree(n: int) -> Tree:
 
 def padded_nodes(n: int) -> int:
     n_pad = 1 << (n - 1).bit_length()
-    if n_pad > 16:
-        raise ValueError(f"FR10 tree kernel only warms padded node blocks up to 16, got {n}")
+    if n_pad > 32:
+        raise ValueError(f"FR10 tree kernel only warms padded node blocks up to 32, got {n}")
     return n_pad
 
 
@@ -1157,8 +1157,11 @@ def launch_tree_gdn_replay(
             f"a={tuple(a_ring.shape)} b={tuple(b_ring.shape)}"
         )
     ring_bs, n_pad, num_kh, ring_dim_k = k_ring.shape
-    if n_pad > 16 or n_pad & (n_pad - 1):
-        raise ValueError(f"ring n_pad must be a power of two <=16, got {n_pad}")
+    # n_pad<=32: the replay kernels carry NO h_cache=[N_PAD,BV,DIM_K] tile (one
+    # [BLOCK_V,DIM_K] tile per program), so their register budget is n_pad-independent
+    # and safe at n_pad=32 even at the deployed BV=16 (accept>5 32-node horizon).
+    if n_pad > 32 or n_pad & (n_pad - 1):
+        raise ValueError(f"ring n_pad must be a power of two <=32, got {n_pad}")
     if ring_dim_k != dim_k:
         raise ValueError(f"ring k dim {ring_dim_k} != bank dim_k {dim_k}")
     if v_ring.shape != (ring_bs, n_pad, num_vh, dim_v):
@@ -1626,8 +1629,11 @@ def launch_tree_gdn_replay_all_layers(
     ring_layers, ring_bs, n_pad, num_kh, ring_dim_k = k_rings.shape
     if ring_layers < num_layers:
         raise ValueError(f"ring layers {ring_layers} < num_layers {num_layers}")
-    if n_pad > 16 or n_pad & (n_pad - 1):
-        raise ValueError(f"ring n_pad must be a power of two <=16, got {n_pad}")
+    # n_pad<=32: the replay kernels carry NO h_cache=[N_PAD,BV,DIM_K] tile (one
+    # [BLOCK_V,DIM_K] tile per program), so their register budget is n_pad-independent
+    # and safe at n_pad=32 even at the deployed BV=16 (accept>5 32-node horizon).
+    if n_pad > 32 or n_pad & (n_pad - 1):
+        raise ValueError(f"ring n_pad must be a power of two <=32, got {n_pad}")
     if ring_dim_k != dim_k:
         raise ValueError(f"ring k dim {ring_dim_k} != bank dim_k {dim_k}")
     if v_rings.shape != (ring_layers, ring_bs, n_pad, num_vh, dim_v):
@@ -1858,8 +1864,19 @@ def launch_tree_gdn_prepared(
     """
     if n_actual <= 0 or n_actual > n_pad:
         raise ValueError(f"invalid tree node counts n_actual={n_actual}, n_pad={n_pad}")
-    if n_pad > 16 or n_pad & (n_pad - 1):
-        raise ValueError(f"n_pad must be a power of two <=16, got {n_pad}")
+    # n_pad=32 (accept>5 32-node horizon) is register-safe ONLY with the shrink-BV
+    # geometry: the forward _tree_gdn_kernel carries h_cache=[N_PAD,BV,DIM_K]fp32, so
+    # [32,8,128] == [16,16,128] byte-for-byte (131072 B/CTA) at BV<=8, but [32,16,128]
+    # (256 KiB) spills at the deployed BV=16. Gate the lift on the effective BV (the
+    # FR13_TREE_GDN_GEOM_OVERRIDE this route applies below) so an accidental n_pad=32
+    # without BV<=8 fails loud instead of silently spilling to HBM.
+    _ov_cap = _read_tree_gdn_geom_override()
+    _bv_cap = int(_ov_cap.get("BV", BV)) if _ov_cap else BV
+    _npad_cap = 32 if _bv_cap <= 8 else 16
+    if n_pad > _npad_cap or n_pad & (n_pad - 1):
+        raise ValueError(
+            f"n_pad must be a power of two <={_npad_cap} (effective BV={_bv_cap}; "
+            f"n_pad>16 needs shrink-BV<=8), got {n_pad}")
     if q.shape[0] < n_actual:
         raise ValueError(f"q has {q.shape[0]} rows but n_actual={n_actual}")
     if k.shape[0] < n_actual:
