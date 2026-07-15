@@ -1,0 +1,23 @@
+diff --git a/astropy/coordinates/sky_coordinate.py b/astropy/coordinates/sky_coordinate.py
+index ab475f7d0..c9d0fc11c 100644
+--- a/astropy/coordinates/sky_coordinate.py
++++ b/astropy/coordinates/sky_coordinate.py
+@@ -894,6 +894,18 @@ class SkyCoord(ShapedLikeNDArray):
+             if frame_cls is not None and self.frame.is_transformable_to(frame_cls):
+                 return self.transform_to(attr)
+ 
++        # If attr is a property on the class (e.g., from a subclass), the
++        # property getter raised AttributeError. Re-invoke it so that the
++        # underlying error (about the actual missing attribute) surfaces
++        # instead of the misleading "no attribute 'prop'" message.
++        for cls in type(self).__mro__:
++            if cls is object:
++                break
++            if attr in cls.__dict__:
++                val = cls.__dict__[attr]
++                if isinstance(val, property) and val.fget is not None:
++                    return val.fget(self)
++
+         # Fail
+         raise AttributeError(
+             f"'{self.__class__.__name__}' object has no attribute '{attr}'"
