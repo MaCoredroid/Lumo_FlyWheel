@@ -488,3 +488,18 @@ up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
 3. `fr13_merged_drafter.py`: `N_DEPTH=5`, `need=N_DEPTH-mtp_k` -> generalize; extend CAT33333_ORDER node map to
    the wider/deeper 32-node topology; PAD-fill any unfilled tail slots (Gate-1 lossless).
 Losslessness stays free (committer is source/depth-blind); only magnitude (GATE 4/5) is open.
+
+## 3-WAY A/B + user-requested controls (2026-07-15)
+The tail is SPINE-ONLY (pure arctic chain, no tail branches); head keeps its 2 branches/depth. Two controls
+added (queued after the t33333 baseline, GPU serialized):
+1. **suffonly (arctic-only cat33333)** = t33333 + FR13_DRAFT_SOURCE=merged + FR13_MERGED_FLAVOR=always: root
+   from base model, Arctic fills deep spine+branches, MTP deep forwards SKIPPED = the closed Front-2 config
+   (prev -17% B=4). Re-run as the CONTROL isolating arctic-alone vs tail6 (MTP-head+arctic-tail, 4.28) vs
+   t33333 (MTP-only). Also applied the SAMPLER-row-id fallback to the MERGED seam (was skipping ~half at B=4
+   on ids_ne_B -> now arctic engages). KIND=suffonly (fr13_bigdenom_swe_serve_variant.sh), fr13_suffonly_seq.sh.
+2. **wider tail (tail branches)** = the measured tail-accept DECAY (pos 6-11 = 67,55,48,42,34,30) is the chain
+   dying when arctic top-1 is wrong; a tail BRANCH = arctic top-2 (use_tree_spec=True already provides ranked
+   siblings) rescues "top-1 wrong, top-2 right" -> slows decay -> more tail accept toward >5. Never-regress
+   (monotone committer), fits n_pad=32 (21+6=27). NEEDS decide_tail top-2 + topology (not yet built). Ladder-
+   step-1 (branches ~10% shallow / missed 5.3%) predicts marginal (+0.1-0.3), but user-requested + measurable.
+3-way order: t33333 (baseline, running) -> suffonly (arctic-only) -> wider-tail if data warrants.
