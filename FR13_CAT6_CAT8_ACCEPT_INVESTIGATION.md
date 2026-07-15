@@ -1198,3 +1198,22 @@ config drift per se (both heartbeat0) but the CANONICAL config (all probe seqs) 
 the merged latency needs it. FIX: LUMO_PROXY_SSE_HEARTBEAT_S=15 (masks emit-wedge) + FR10_METRICS=0
 baked into both merged seqs. FOLLOW-UP: reduce merged 2x speculate (halve arctic latency source).
 Re-run with heartbeat. Ingest fix (0 socket) + hybrid still hold.
+
+## MERGE16C CRASH (2026-07-15) + FIX: unguarded arctic token -> CUDA device-side assert
+merge16c (heartbeat+2x-speculate-reduce fixes applied) ran clean for ~30min (arctic engaged,
+match_full=356, always_fill_miss=0, ZERO socket drops -> the empty-patch flake WAS fixed) then
+**EngineCore died: CUDA device-side assert** (~skip #357; the "Exited (0)" is the API server's
+graceful shutdown AFTER the engine died; watchdog LINK-DEAD is downstream). Only 1 task finished
+(astropy-13236 verdict=failed@709s). ROOT-CAUSE: the merged path had NO token-id bounds validation --
+arctic .token_ids flow through int(row[i]) straight into the embedding gather; an OOB id = device-side
+assert that kills the engine. It fired on skip #357 (356 worked) => rare INPUT-DEPENDENT bad value,
+not structural. FIX (committed): build_cat33333_columns validates every candidate in [0,vocab) (vocab
+= _fr10_logits.shape[-1] at seam); OOB -> pad = lossless MTP-equiv fallback (Gate-1) + fail-loud
+arctic_oob_dropped counter in the ENGAGED needle. Test 42/42. RED-TEAM (honest, unproven): H1 arctic
+emits OOB (guard fixes) is weakened by "arctic ids subset of ingested-committed = valid vocab" -- so
+H2 is live: the skip sets _fr10_spine_steps=0 which OMITS the per-depth GPU slot-metadata the verify
+forward needs -> a stale/OOB slot index device-asserts (guard does NOT fix H2; also input-dependent).
+DISCRIMINATOR = re-run merge16d NORMALLY: clean+oob>0 => H1 confirmed + delivery numbers; crash again
+=> escalate CUDA_LAUNCH_BLOCKING=1 to name the kernel (embedding-gather=H1 / tree|gdn-attn=H2).
+LESSON: any external-source drafter candidate (arctic/suffix/lookup) MUST be vocab-bounds-guarded
+before the verify forward -- a spec drafter must never be able to crash the engine with a draft token.
