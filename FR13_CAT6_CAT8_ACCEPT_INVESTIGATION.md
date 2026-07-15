@@ -1217,3 +1217,33 @@ DISCRIMINATOR = re-run merge16d NORMALLY: clean+oob>0 => H1 confirmed + delivery
 => escalate CUDA_LAUNCH_BLOCKING=1 to name the kernel (embedding-gather=H1 / tree|gdn-attn=H2).
 LESSON: any external-source drafter candidate (arctic/suffix/lookup) MUST be vocab-bounds-guarded
 before the verify forward -- a spec drafter must never be able to crash the engine with a draft token.
+
+## MERGE16D FULL A/B VERDICT (2026-07-15): merged mtp_k=1 skip = correctness-parity, -17% SLOWER
+First complete live B=4 16-task A/B of the MTP-k(=1) + Arctic-suffix merged drafter (Flavor A, skip on
+batch-wide full-depth match) vs MTP-only cat33333 baseline. SAME config both arms (heartbeat=15, ship
+cache, SLOT_REORDER), only diff = FR13_DRAFT_SOURCE=merged. Crash-guard build (arctic token bounds).
+
+CORRECTNESS = PARITY PASS: resolve 8/16 == 8/16; give-ups 3 == 3 (IDENTICAL set 13398/14369/14598 =
+hard-for-both, ZERO give-up regression); 0 crashes, oob_dropped=0 (crash fix validated across 2 full
+agentic arms, ~19k skips). Lossless by Gate-1.
+
+SPEED = FAIL (-17%): merged fullstep_tps 15.58 vs baseline 18.82; agg_decode_tps 19.28 vs 23.81.
+MECHANISM (measured): drafter_ms 35.3 vs 87.6 (skip cut -52ms, WORKED) BUT accept_per_event 1.97 vs
+3.61 (-45%, -1.63 committed/step). committer/verify ~equal (81/74 vs 80/77). Per-step: merged 191ms
+commits 2.97, baseline 245ms commits 4.61 -> baseline commits 1.63 more tokens for 54ms more = more
+efficient. THE ACCEPT LOSS DOMINATES THE DRAFTER SAVINGS.
+
+ROOT CAUSE: on agentic code MTP is the better DEEP drafter; arctic's suffix trie has COVERAGE
+(match_full 96%) but the model DIVERGES from it after ~1 token -> arctic depths 1-4 accept ~1 vs MTP
+depths 1-4 ~2.6. Unconditional skip (fires 96%) uses arctic's weak deep drafts almost every step.
+
+COST-GATE: the blanket mtp_k=1 skip does NOT deliver (speed regression). Refined paths, all data-motivated
+but each a BUILD (no cheap path to a win): (A) mtp_k SWEEP (mtp_k=3: keep MTP's strong shallow depths 1-3
+= most of the 3.61 accept, arctic fills only deep tail 4-5 where MTP heads decay = little lost; drafter
+still saves ~2 forwards -> plausible NET WIN; requires structural seam move: run mtp_k fwds BEFORE the
+skip decision). (B) CONFIDENCE-GATED / adaptive-geometry: skip deep ONLY on a LONG + HIGH-PROB arctic
+match (fire arctic where it actually holds accept) = the Smart-Matching Drafter (shape-probe cost-gated:
+baked_needs_2nd_capture, eager chain step; #1 risk = depth-15 amplification->garble). (C) Mode-A branches
+(arctic runner-ups, no skip): unlikely to win per the deep-accept finding. DELIVERABLE PROVEN: full
+merged pipeline runs lossless + crash-free live; the measured reason it doesn't win (arctic deep-accept
+<< MTP) is the honest verdict.
