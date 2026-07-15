@@ -1558,6 +1558,17 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # derived GPU TPS uses the prefill-independent per-forward time (the kernel-
     # speed view; the wall-span derived_tps stays as the concurrency-summed basis).
     derived_tps_gpu = (committed_per_event / s_fwd_gpu) if (s_fwd_gpu and committed_per_event) else None
+    # TRUE full-step compute TPS: committed / (drafter + verify + committer) per decode step.
+    # derived_tps_gpu above is verify-ONLY (optimistic; blind to the drafter). For the merged
+    # skip/fill drafter MODES the drafter time is exactly what changes, so this drafter-INCLUSIVE
+    # basis is the right speed metric to compare arms. (Excludes host gaps -> still a compute-basis
+    # upper bound, but it captures the drafter delta the verify-only metric cannot.)
+    _drafter_s_step = (drafter_gpu_ms_per_step / 1000.0) if drafter_gpu_ms_per_step else 0.0
+    _committer_s_step = (committer_gpu_ms_per_step / 1000.0) if committer_gpu_ms_per_step else 0.0
+    _fullstep_s = (s_fwd_gpu or 0.0) + _drafter_s_step + _committer_s_step
+    derived_tps_fullstep_gpu = (
+        (committed_per_event / _fullstep_s) if (_fullstep_s > 0 and committed_per_event) else None
+    )
 
     # NON-deflated per-STREAM decode rate: count/sum of vLLM
     # request_time_per_output_token = 1/avg(per-request mean-TPOT). Per-request
@@ -1669,7 +1680,14 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "derived_tps_gpu": derived_tps_gpu,
         "derived_tps_gpu_note": (
             "DERIVED = committed_per_event / s_per_fwd_gpu = decode-kernel TPS "
-            "(prefill-independent). None unless the timer was on."
+            "(prefill-independent). None unless the timer was on. VERIFY-ONLY -- blind to the "
+            "drafter; use derived_tps_fullstep_gpu to compare drafter MODES."
+        ),
+        "derived_tps_fullstep_gpu": derived_tps_fullstep_gpu,
+        "derived_tps_fullstep_gpu_note": (
+            "committed_per_event / (drafter + verify + committer) per decode step -- the "
+            "drafter-INCLUSIVE compute TPS (captures the merged skip/fill drafter modes' effect, "
+            "which the verify-only derived_tps_gpu cannot). Excludes host gaps."
         ),
         # FR13_DFWD/CFWD_GPU_TIMER component spans (where the tree overhead
         # lives per reference_tree_tps_overhead_bound): per-arm totals +
