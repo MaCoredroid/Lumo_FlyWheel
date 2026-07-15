@@ -311,6 +311,18 @@ n_pad-parameterized (scales to 32 automatically) and `_FR13_N_FIXED=16` only bit
 n_pad=32/BV=8, so this run finally measures the register budget (the true GATE 2). Deployed cat9 path
 (n_pad=16, no override) is byte-identical -- every guard still allows <=16 exactly as before.
 
+### ✅ GATE 2 PASS (2026-07-15, run_20260715T153701Z) — 32-node horizon infra VIABLE
+The n_pad=32/BV=8 forward kernel launched **spill-free** through BOTH memory profiling (the exact step that
+crashed on the cap) AND cudagraph capture (PIECEWISE 8/8 + FULL-decode 4/4, "Graph capturing finished in 5
+secs, took 0.35 GiB"); server healthy; **zero spill/register signals** ("(none)"). Generation smoke on
+`def fibonacci(n):` returned COHERENT code (`if n==0: return 0 ... else: return fibonacci`) -> a mini
+end-to-end garble sanity on n_pad=32 tree decode also passed. **=> the shrink-BV thesis is confirmed live: the
+32-node register budget is byte-identical (BV=8) and the register wall is NOT a blocker.** GATE 1 (bit-exact
+BV8-vs-BV16) and GATE 3 (verify-cost flat) will be measured on the deliverable merged-tail server; the smoke's
+coherent output is a preliminary GATE-3 sanity (n_pad=32 verify decodes at normal speed, no catastrophic tax).
+Note: boot health window extended 900->1500s (n_pad=32 warmup ~13min, was right-censoring at 900s).
+**NEXT: build the depth-6+ arctic TAIL (the only path to >5) on the now-unblocked 32-node horizon.**
+
 ## LADDER STEP 1 MEASURED (2026-07-15, ctrace1 live SWE, n=25,080 node-records — NOT a probe)
 Ran `fr13_analyze_branch_topp.py` on the legacy-walk commit-trace (real SWE task, argmax_prob emitted):
 - **argmax_prob >0.9 at 94.9% of nodes** (0.7-0.9: 2.4%, 0.5-0.7: 1.7%, <0.5: 1.0%). The agentic-coding
