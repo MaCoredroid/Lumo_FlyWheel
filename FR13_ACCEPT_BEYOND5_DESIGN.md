@@ -311,6 +311,29 @@ n_pad-parameterized (scales to 32 automatically) and `_FR13_N_FIXED=16` only bit
 n_pad=32/BV=8, so this run finally measures the register budget (the true GATE 2). Deployed cat9 path
 (n_pad=16, no override) is byte-identical -- every guard still allows <=16 exactly as before.
 
+## LADDER STEP 1 MEASURED (2026-07-15, ctrace1 live SWE, n=25,080 node-records — NOT a probe)
+Ran `fr13_analyze_branch_topp.py` on the legacy-walk commit-trace (real SWE task, argmax_prob emitted):
+- **argmax_prob >0.9 at 94.9% of nodes** (0.7-0.9: 2.4%, 0.5-0.7: 1.7%, <0.5: 1.0%). The agentic-coding
+  token stream is EXTREMELY peaked/near-deterministic. => strongest signal FOR the TAIL: a near-deterministic
+  stream means the arctic suffix trie predicts depth-6/7/8+ tokens with high accuracy on repetitive spans ->
+  tail accepts -> the >5 windfall. (Magnitude still = GATE 4, not proven here.)
+- **Where the model's argmax falls among the 3 tree children: spine 84.5%, BRANCH 10.2%, missed 5.3%.**
+  Conditioned on confidence: at argmax_prob>0.9 branch STILL catches 8.9% (spine 87.1%, missed 4.0%); at
+  0.7-0.9 branch 31.8%; at 0.5-0.7 branch 36.1%. **This REFINES/partly-refutes the design's "high-p branches
+  are wasted -> reallocate to tail" claim**: argmax_prob is the MODEL's confidence, not the MTP DRAFTER's
+  accuracy -- the spine draft (rank0) is wrong ~9% even when the model is confident, and the branch rescues it.
+  Branches are NOT free to reallocate.
+- **overlap_mass>0.9 at 93.5%; missed only 5.3%** -- the 3 candidates already cover the nucleus; a WIDER tree
+  has limited upside (the 5.3% miss is usually a genuinely-novel token, not a rank-4/5 the model nearly took).
+- Per-depth 1..5: branch coverage FLAT 9.3/11.4/9.8/10.6/10.1%, missed 3.4->6.4% (rises slightly with depth)
+  -- consistent with the Q1 ~0.83 conditional hit.
+
+**DESIGN CONSEQUENCE (honest):** favor **pure ADDITION** for the 32-node horizon -- keep the 15-node depth-5
+tree (branches intact, they earn ~10%) and ADD ~17 tail nodes at depth 6+. The "top-p-adaptive shrink branches
+to fund the tail" reallocation is DOWNGRADED to a secondary optimization: only worth it if the 32-node budget
+is exhausted AND GATE 4 shows the displaced tail out-earns the ~9% high-p branch coverage it costs. Never-regress
+still holds (committer is source/depth-blind); this only reprioritizes WHICH nodes fill the extra budget.
+
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
 up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
