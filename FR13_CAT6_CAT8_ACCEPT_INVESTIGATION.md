@@ -1171,3 +1171,17 @@ CAUSE 2 (v2 design): use_tree_spec=True spends budget on breadth -> SHALLOW tree
 depth need=4 -> 0.7% engage (v1 flat=47%). FIX: HYBRID arctic_flat_tree_to_suffix_rel = FLAT deep
 chain drives spine+depth (engagement) + TREE supplies branches. Both committed. RE-RUN = 16-task A/B
 fixed binary, merged first to validate real-patches + ~47% engage early.
+
+## FRONT 2 merge16b (FIXED) — ingest cured, but residual empty-patch flake (2026-07-15, RED-TEAM)
+Fixed-binary 16-task A/B, merged (Flavor-A hybrid) arm mid-run: 0 UND_ERR_SOCKET (ingest O(delta) fix
+HOLDS), engagement ~21% (match_full 2178/spec 10397, growing), dfwd=49ms (hybrid 2x speculate +15ms
+vs v1 34 -- NOT a stall). BUT of 4 completed: 12907 RESOLVED (504B patch, clean result), 13033/13236
+made file EDITS ("file updated") but empty patch + NO result record (agent cut off MID-WORK), 13398
+93 turns 0 edits empty. => a residual empty-patch flake, NOT the drafter (decode clean, edits applied)
+and NOT the socket (0). Ruled out: server stall (dfwd 49ms fine), OOM (container 6GB, no dmesg OOM).
+Host at 11GB available (106/117 used = vLLM model unified-mem, SAME both arms) -> candidates =
+B=4 host-mem pressure on the 4 concurrent qwen-code AGENT procs, or the known offload/stream flake
+(#8) -- BOTH would hit the BASELINE equally. DECISIVE = the MTP-only baseline (same 16 tasks): if it
+also cuts off -> harness/host-B4 flake (A/B still comparable); if clean -> merged-caused, investigate.
+FOLLOW-UP (not the cause): reduce hybrid 2x speculate (dfwd 49->~34) -- derive spine from the tree's
+deepest path instead of a 2nd flat call.
