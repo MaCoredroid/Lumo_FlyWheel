@@ -436,6 +436,20 @@ still ~170k tokens, ample for B=4). Re-launched tailg4b (monitor b9twjhxtb). Kee
 offload/codex/monitor session). If the tail arm needs even more headroom, drop GPU_UTIL further or trim cudagraph
 sizes -- do NOT lower the guard floor.
 
+### GATE 4 SWE ATTEMPT 2 (tailg4b) = boot survived, tail VACUOUS on B=4 (red-team's predicted failure, MEASURED)
+GPU_UTIL=0.72 boot survived (HEALTHY after 592s). The fail-loud log EARNED ITS KEEP: warmup skipped x1 ids_none
+(expected: _prepare_inputs, the sole writer, doesn't run at warmup), then LIVE DECODE skipped x51->x101 with
+`ids2_ne_B4` = len(SPEC_ROW_REQ_IDS)=2 != drafter B=4. This is EXACTLY the red-team's flagged risk: at B=4 the
+batch is mixed prefill/decode, so _LUMO_FA_SPEC_ROW_REQ_IDS (the spec-row SUBSET) has fewer rows than the drafter
+batch -> the tail-append guard skips 100% -> tail PADS everywhere -> VACUOUS (accept=baseline, no >5). Agentic
+tasks are async so the batch stays mixed -> persistent. KILLED the run (concrete refutation; don't wait a
+known-vacuous 30min). FIX (committed): when SPEC_ROW_REQ_IDS len != B, fall back to _LUMO_FA_SAMPLER_ROW_REQ_IDS
+-- set UNCONDITIONALLY to the FULL batch (patch:11250), length==B, row-aligned with spine_tokens. decide_tail
+keys _COMMITTED by req_id: spec rows hit Arctic, non-spec (cold) -> pad. Lossless (per-row committer; misalignment
+worst case = accept collapse not garble). Re-launched tailg4c (monitor b1wo1837z) -> watching for TAIL[fired>0]
+(engagement = fix works) then accept_per_event/derived_tps_gpu. NOTE: never-regress held even in the vacuous run
+(tail padded == baseline, no crash) -- the infra gauntlet has been ALL operational, zero losslessness failures.
+
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
 up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
