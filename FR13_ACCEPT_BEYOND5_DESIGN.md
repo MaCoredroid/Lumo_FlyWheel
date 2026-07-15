@@ -464,6 +464,20 @@ WINDFALL, not a per-task average, on typical SWE. Awaiting full deploy_speed (pr
 derived_tps_gpu) -- the TPS is the OTHER gate (does +0.9 accept beat the 21-node tree's extra verify?). Per-pos
 decay says a DEEPER tail gives diminishing returns (pos11~25,12~20...); the real >5 lever is workload repetition.
 
+### ✅ GATE 4 FINAL (tailg4c deploy_speed, serve rc=0, n_tasks=4, prefill_frac=0.40): accept 4.28, committed 5.28
+accept_per_event=4.277, committed_per_event=5.277, s_per_fwd_gpu=85.3ms, derived_tps_gpu=61.85,
+derived_tps_fullstep_gpu=18.81. TAIL[fired=1029+ hit ~94%]. **The tail WORKS end-to-end on the LIVE B=4
+SWE-Verified gate: engages + accepts past depth-5 (+0.72 accept over baseline 3.56) + never-regress (head
+~3.54==baseline) + lossless (rc=0, committer per-row) -- ZERO correctness failures.**
+HONEST VERDICT on the >5 HEADLINE: **NOT met as a per-task average (4.28 on typical SWE); >5 is a
+repetitive-span WINDFALL exactly as the up-front EV stated** (need ~27% repetitive steps; subset_b4_four has
+less). Deeper tail = diminishing returns (per-pos decay). So >5-average is workload-repetition-bound, not a
+cheap code lever. WHAT IS DELIVERED: a lossless spec-decode tail that raises accept 3.56->4.28 (+20%) with
+never-regress by construction. SHIP-vs-cost-gate now hinges ENTIRELY on TPS: running the t33333 baseline A/B
+(basec, monitor bli5eu1zn) for derived_tps_gpu + derived_tps_fullstep_gpu at the SAME config. If tail
+fullstep-TPS >= baseline -> SHIP (faster + lossless, even at accept<5); if the arctic-tail drafter overhead
+eats the accept gain -> honest cost-gate (mechanism proven, no net speed).
+
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
 up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
