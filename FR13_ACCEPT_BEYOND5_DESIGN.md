@@ -408,6 +408,23 @@ cat33333 arm -> GATE 4/5 = accept UP AND dfwd-TPS same-or-better AND lossless/ga
 coding tasks (where the repetitive-span windfall actually lives). Workflow w574b0v8i is mapping the b4 driver's
 arm/env structure + which harness is the real SWE-Verified gate.
 
+### TAIL-APPEND FIX + REAL-SWE WIRING (2026-07-15, workflow w574b0v8i mapped + red-teamed)
+Root cause (req-id agent, DEFINITIVE): NOT stale req_ids -- _LUMO_FA_SPEC_ROW_REQ_IDS has ONE writer
+(_prepare_inputs, once/outer-forward) and is NEVER reset, so it's valid post-head-loop. The real bug is the
+MISSING FALLBACK: tail caps spine_steps=4 but serves wide_D, so ANY guard-skip/exc left _fr10_spine_tokens at
+5 -> packer crash (merged mode survives the identical miss by falling through to full MTP; tail cannot). Likely
+live skip = merged_off (needs BOTH sidecars) OR ids_ne_B (mixed prefill/decode batch: _LUMO_FA_SPEC_ROW_REQ_IDS
+is the spec-row SUBSET vs the drafter row count). FIX (red-team FINDING 1, make-or-break): pad _fr10_spine_tokens
+to wide_D by repeating the last [batch] spine tensor OUTSIDE the try + explicit skip reasons + throttled
+fail-loud log. Red-team: NONE of 5 concerns break losslessness (committer is a per-row target-verified backstop);
+scalar row-0 pad is lossless + magnitude-neutral (FINDING 3); head accept is WITHIN-FLOOR not exact vs the
+15-node baseline (n_pad 16->32 ~1-ULP drift, FINDING 2 -- don't gate on exact head-accept equality).
+Real-SWE wiring: added `tail6` arm to fr13_bigdenom_swe_serve_variant.sh (TAIL6_TREE 21 nodes, XFLAGS=
+FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8, EXPECT_RATIO=21) + fr13_tail_g4_seq.sh.
+GATE 4 LAUNCHED: real SWE-Verified B=4 via fr13_b4_campaign_driver.sh (SUBSET=subset_b4_four, monitor bin0rrcpj)
+-> reads TAIL[fired/hit] engagement + [FR13_TAIL] skip reasons + accept_per_event + derived_tps_gpu from
+deploy_speed_tailg4.json. If it engages + accept>5 + TPS ok -> GATE 5 full A/B (tail6 vs t33333 baseline).
+
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
 up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
