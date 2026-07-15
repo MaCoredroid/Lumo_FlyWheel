@@ -568,3 +568,16 @@ tail6 +19% accept -> +13% fullstep-TPS). SPEED LEVERS ranked: (1) bigger tree/ta
 fixed drafter+verify (accept-is-the-only-lever physics; committer replay is the eventual ceiling since it
 SCALES with accept). (2) sampled/faster committer (35%). (3) overlap arctic speculate with verify forward /
 fewer MTP head forwards (35%). The union + bigger tree both push accept => both faster until committer dominates.
+
+## ⚠️ TPS VERDICT CORRECTED (2026-07-15, metric audit): tail6 is ~10% SLOWER, not a win
+Prior "+13% fullstep-TPS win" was WRONG -- it used deploy_speed derived_tps_fullstep_gpu (18.81) which mixes
+per-DRAFT verify (85.8ms) with per-STEP drafter/committer (~4 draft-events/step at B=4 => verify understated 4x).
+CONSISTENT per-step (raw non-overlapping timers, FR13_PIPELINE_SPEED_BREAKDOWN.md §6): baseline 434.6ms/step ->
+GPU-TPS ~42.2; tail6 553.8ms/step -> ~38.1 => tail6 ~10% SLOWER despite +19% accept. ROOT: the DEEP tail's
+VERIFY (+31%, 258->340ms) + COMMITTER (+53%, 74->113ms) scale with DEPTH and exceed the accept gain; drafter is
+NOT the cost. => VERIFY is NOT HBM-flat for deep trees (design §4 wrong: 258ms@depth-5 >> 98.6ms floor = GDN
+tree-scan is depth-compute-bound). CORRECTED DELIVERABLE: lossless +19% accept, but as-built (depth-11) it's a
+COST-GATE (-10% GPU-TPS), not a ship. PATH to a NET win (depth is the axis): sweep tail_len {2,4,6,8} to find the
+accept/depth-cost sweet spot (shallower = less verify+committer, still >baseline accept) + cheaper committer (S1
+sampled, the +53% depth-scaler). The union's arctic-parallelism helps the DRAFTER (not the deep-tail cost) -> not
+the speed fix here. This is the honest measure-before-claiming correction (audit found the metric error).
