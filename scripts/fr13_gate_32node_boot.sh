@@ -16,6 +16,13 @@ env CONTAINER=$C PORT=$PORT GPU_UTIL=0.8 MAX_NUM_SEQS=4 ATTENTION_BACKEND=TREE_A
   GPU_GUARD_FLOOR_MIB=3000 \
   bash scripts/fr13_launch_forked_fa2_tree_server.sh > "$RUN/boot.log" 2>&1 &
 LPID=$!; T0=$SECONDS; OK=0
+# Capture the ENGINE log (docker logs) continuously so the crash cause survives container removal.
+( while [ $((SECONDS-T0)) -lt 900 ]; do
+    if docker ps -aq -f name=$C 2>/dev/null | grep -q .; then
+      docker logs -f "$C" > "$RUN/engine.log" 2>&1; break
+    fi; sleep 2
+  done ) &
+CAPPID=$!
 while [ $((SECONDS-T0)) -lt 900 ]; do
   curl -fsS -m5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && { OK=1; break; }
   [[ -n "$(docker ps -aq -f name=$C -f status=exited)" ]] && { echo "BOOT EXITED early"; break; }
@@ -32,7 +39,10 @@ if [ "$OK" = 1 ]; then
     | .venv/bin/python -c "import json,sys; d=json.load(sys.stdin); print('SMOKE OK ->', repr(d['choices'][0]['text'][:100]))" 2>&1 | tail -3
 else
   echo "GATE 2 FAIL: boot not healthy in 900s"
-  grep -iE "error|assert|Traceback|CUDA|spill|resource|register|OOM|NotImplemented|n_pad" "$RUN/boot.log" | tail -20
+  echo "--- crash cause from ENGINE log ($RUN/engine.log) ---"
+  grep -iE "error|assert|Traceback|CUDA|spill|out of resource|too many resources|register|OOM|OutOfMemory|NotImplemented|n_pad|Killed|exceed" "$RUN/engine.log" 2>/dev/null | tail -30
+  echo "--- last 8 engine lines ---"; tail -8 "$RUN/engine.log" 2>/dev/null
 fi
-docker rm -f "$C" >/dev/null 2>&1 || true; wait $LPID 2>/dev/null || true
+docker logs "$C" > "$RUN/engine_final.log" 2>&1 || true   # belt-and-suspenders before removal
+docker rm -f "$C" >/dev/null 2>&1 || true; kill $CAPPID 2>/dev/null || true; wait $LPID 2>/dev/null || true
 echo "=== GATE 32-node boot test DONE ($RUN) ==="
