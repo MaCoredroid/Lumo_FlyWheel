@@ -18,6 +18,9 @@ env CONTAINER=$C PORT=$PORT GPU_UTIL=0.8 MAX_NUM_SEQS=1 ATTENTION_BACKEND=TREE_A
   FR13_CFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${LABEL}_cfwd.json \
   SPEC_CONFIG='{"method":"qwen3_5_mtp","num_speculative_tokens":'"$NSPEC"',"speculative_token_tree":"'"$TREE"'"}' \
   GPU_GUARD_FLOOR_MIB=3000 \
+  ${FR13_PARENT_GATHER:+FR13_PARENT_GATHER=$FR13_PARENT_GATHER} \
+  ${FR13_PARENT_GATHER_SELFCHECK:+FR13_PARENT_GATHER_SELFCHECK=$FR13_PARENT_GATHER_SELFCHECK} \
+  ${ENFORCE_EAGER:+ENFORCE_EAGER=$ENFORCE_EAGER} \
   bash scripts/fr13_launch_forked_fa2_tree_server.sh > "$RUN/boot.log" 2>&1 &
 LPID=$!; T0=$SECONDS; OK=0
 while [ $((SECONDS-T0)) -lt 1500 ]; do
@@ -28,9 +31,10 @@ done
 if [ "$OK" = 1 ]; then
   MODEL=$(curl -fsS -m5 "http://127.0.0.1:$PORT/v1/models" | .venv/bin/python -c "import json,sys;print(json.load(sys.stdin)['data'][0]['id'])" 2>/dev/null)
   echo "[vbench] HEALTHY -> B=1 decode (3x400 tok) to accumulate pure-decode forwards" | tee -a "$RUN/bench.log"
+  MAXTOK="${MAXTOK:-400}"   # gate (selfcheck) can use a short gen; timing wants 400 for stats
   for i in 1 2 3; do
     curl -fsS -m120 "http://127.0.0.1:$PORT/v1/completions" -H 'Content-Type: application/json' \
-      -d "{\"model\":\"$MODEL\",\"prompt\":\"Write a long Python module with many functions:\\n\",\"max_tokens\":400,\"temperature\":0.6,\"seed\":$i}" >/dev/null 2>&1
+      -d "{\"model\":\"$MODEL\",\"prompt\":\"Write a long Python module with many functions:\\n\",\"max_tokens\":$MAXTOK,\"temperature\":0.6,\"seed\":$i}" >/dev/null 2>&1
   done
   sleep 3   # let the timer dump
   echo "--- SFWD verify sidecar ---" | tee -a "$RUN/bench.log"
@@ -47,6 +51,15 @@ except Exception: pass
 " 2>&1 | tee -a "$RUN/bench.log"
 else
   echo "[vbench] FAIL: not healthy in 1500s" | tee -a "$RUN/bench.log"
+fi
+# FR13_PARENT_GATHER byte-identity gate: a mismatch raises "SELFCHECK MISMATCH" in
+# the GDN forward (fails the request). Absence after real decode forwards = PASS.
+docker logs "$C" > "$RUN/docker.log" 2>&1 || true
+if grep -qi "SELFCHECK MISMATCH" "$RUN/boot.log" "$RUN/docker.log" 2>/dev/null; then
+  echo "[vbench] PARENT_GATHER SELFCHECK: *** MISMATCH *** (NOT byte-identical)" | tee -a "$RUN/bench.log"
+  grep -i "SELFCHECK MISMATCH" "$RUN/boot.log" "$RUN/docker.log" 2>/dev/null | tail -3 | tee -a "$RUN/bench.log"
+elif [ -n "${FR13_PARENT_GATHER_SELFCHECK:-}" ]; then
+  echo "[vbench] PARENT_GATHER SELFCHECK: PASS (byte-identical over live decode, no mismatch)" | tee -a "$RUN/bench.log"
 fi
 docker rm -f "$C" >/dev/null 2>&1 || true; wait $LPID 2>/dev/null || true
 echo "=== VBENCH DONE $LABEL ($RUN) ===" | tee -a "$RUN/bench.log"

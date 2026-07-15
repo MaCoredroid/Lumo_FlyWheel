@@ -89,6 +89,40 @@ def scan_align_on() -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def parent_gather_on() -> bool:
+    """Collapse the O(N^2) ancestor gather to a single per-node parent gather.
+
+    Default OFF => BYTE-IDENTICAL to the locked forward scan. The deployed inner
+    loop does one full-tile masked ``tl.sum`` reduction PER ancestor j<i, then
+    ``state_i = tl.where(ancestor, h_j, state_i)`` -- overwriting in increasing j,
+    so ONLY the largest-index ancestor survives. In the topological node order
+    (parent stored before child; the write at h_cache row i is read by children
+    i'>i) the largest-index ancestor IS the immediate parent. When this flag is
+    set the scan instead locates that same parent with a cheap INTEGER mask scan
+    (no full-tile reduction) and issues a SINGLE gather for its state -- the
+    identical one-hot masked ``tl.sum`` primitive selecting the identical row
+    (0.0 + x = x), so the bits are unchanged (bug-class #10 codegen-identity),
+    while the reduction count on the serial critical path drops N(N-1)/2 -> N
+    (7.5x fewer at N_PAD=16, 15.5x at N_PAD=32).
+    """
+    raw = os.environ.get("FR13_PARENT_GATHER", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def parent_gather_selfcheck_on() -> bool:
+    """In-process byte-identity gate for FR13_PARENT_GATHER.
+
+    When set, ``launch_tree_gdn_prepared`` runs the scan BOTH ways on the SAME
+    inputs in the SAME process (old ancestor loop -> out_ref, new parent gather
+    -> out) and raises on any ``out`` bit difference. Boot under enforce_eager:
+    the host-side compare forces a DtoH sync that would break CUDA-graph capture.
+    This is the same-boot codegen-identity gate (cross-boot byte gates fork on
+    GB10 autotune, so an in-process A/B is the only valid byte gate here).
+    """
+    raw = os.environ.get("FR13_PARENT_GATHER_SELFCHECK", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
 
 
 
@@ -674,6 +708,7 @@ def _tree_gdn_kernel(
     COUNT_INVOCATION: tl.constexpr,
     SCAN_ALIGN: tl.constexpr = False,
     N_LOOP: tl.constexpr = 0,
+    PARENT_GATHER: tl.constexpr = False,
 ):
     # N_LOOP is the span (loop bound, offs_n lane count, h_cache rows) of the
     # scan/reduction. Default (0) means "use N_PAD" -- the per-tree padded span
@@ -721,28 +756,56 @@ def _tree_gdn_kernel(
     h_cache = tl.zeros((N_SPAN, BLOCK_V, DIM_K), dtype=tl.float32)
     for i in tl.static_range(0, N_SPAN):
         state_i = b_h0
-        for j in tl.static_range(0, i):
-            # The strict_mask buffer is N_PAD x N_PAD. When the canonical-order
-            # span exceeds N_PAD (N_LOOP != 0), lanes i,j in [N_PAD, N_SPAN)
-            # must NOT read OOB: a guarded load returns 0 (no ancestry); those
-            # lanes are also >= N_ACTUAL so they contribute exactly 0.0. When
-            # N_LOOP == 0 (default served path) the span equals N_PAD, every
-            # i,j < N_PAD, and the load is the EXACT prior unguarded form --
-            # constexpr-dead guard => byte-identical codegen (bug-class #10).
-            if N_LOOP == 0:
-                anc_bit = tl.load(strict_mask + i * N_PAD + j)
-            else:
-                anc_bit = tl.load(
-                    strict_mask + i * N_PAD + j,
-                    mask=(i < N_PAD) & (j < N_PAD),
-                    other=0,
+        if PARENT_GATHER:
+            # FR13_PARENT_GATHER: the deployed else-branch below overwrites
+            # state_i in increasing j, so its result is exactly the state of the
+            # LARGEST-index ancestor = the immediate parent (topological order).
+            # Locate that parent with the SAME guarded strict_mask reads but only
+            # cheap INTEGER selects (no full-tile reduction), then do ONE gather.
+            # Byte-identical (same one-hot masked tl.sum, same row, 0.0+x=x);
+            # reductions/node drop from i to 1. i==0 (root) has no ancestor ->
+            # state_i stays b_h0, matching the empty else-loop.
+            if i > 0:
+                parent_i = -1
+                for j in tl.static_range(0, i):
+                    if N_LOOP == 0:
+                        anc_bit = tl.load(strict_mask + i * N_PAD + j)
+                    else:
+                        anc_bit = tl.load(
+                            strict_mask + i * N_PAD + j,
+                            mask=(i < N_PAD) & (j < N_PAD),
+                            other=0,
+                        )
+                    is_anc = (anc_bit != 0) & (j < N_ACTUAL)
+                    parent_i = tl.where(is_anc, j, parent_i)
+                h_par = tl.sum(
+                    tl.where((offs_n == parent_i)[:, None, None], h_cache, 0.0),
+                    axis=0,
                 )
-            ancestor = (anc_bit != 0) & (j < N_ACTUAL)
-            h_j = tl.sum(
-                tl.where((offs_n == j)[:, None, None], h_cache, 0.0),
-                axis=0,
-            )
-            state_i = tl.where(ancestor, h_j, state_i)
+                state_i = tl.where(parent_i >= 0, h_par, b_h0)
+        else:
+            for j in tl.static_range(0, i):
+                # The strict_mask buffer is N_PAD x N_PAD. When the canonical-order
+                # span exceeds N_PAD (N_LOOP != 0), lanes i,j in [N_PAD, N_SPAN)
+                # must NOT read OOB: a guarded load returns 0 (no ancestry); those
+                # lanes are also >= N_ACTUAL so they contribute exactly 0.0. When
+                # N_LOOP == 0 (default served path) the span equals N_PAD, every
+                # i,j < N_PAD, and the load is the EXACT prior unguarded form --
+                # constexpr-dead guard => byte-identical codegen (bug-class #10).
+                if N_LOOP == 0:
+                    anc_bit = tl.load(strict_mask + i * N_PAD + j)
+                else:
+                    anc_bit = tl.load(
+                        strict_mask + i * N_PAD + j,
+                        mask=(i < N_PAD) & (j < N_PAD),
+                        other=0,
+                    )
+                ancestor = (anc_bit != 0) & (j < N_ACTUAL)
+                h_j = tl.sum(
+                    tl.where((offs_n == j)[:, None, None], h_cache, 0.0),
+                    axis=0,
+                )
+                state_i = tl.where(ancestor, h_j, state_i)
 
         b_q = tl.load(
             q + (i * NUM_KH + pid_kh) * DIM_K + offs_k,
@@ -2019,44 +2082,67 @@ def launch_tree_gdn_prepared(
                 "the canonical span must cover the tree's padded node block"
             )
         _n_loop = _FR13_N_FIXED
+    # FR13_PARENT_GATHER: default OFF => the launch below is byte-identical to the
+    # locked path (PARENT_GATHER=False threads through as a dead constexpr branch).
+    _parent_gather = parent_gather_on()
     grid = (num_vh, triton.cdiv(dim_v, _bv))
-    _tree_gdn_kernel[grid](
-        q,
-        k,
-        v,
-        g,
-        beta,
-        raw_a,
-        raw_b,
-        A_log,
-        dt_bias,
-        h0,
-        h0_indices,
-        h0_num_accepted_tokens,
-        invocation_counter,
-        strict_mask,
-        visible_mask,
-        out,
-        state,
-        N_ACTUAL=n_actual,
-        N_PAD=n_pad,
-        NUM_KH=num_kh,
-        NUM_VH=num_vh,
-        DIM_K=dim_k,
-        DIM_V=dim_v,
-        BLOCK_V=_bv,
-        OUTPUT_SCALE=output_scale,
-        USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
-        H0_IS_BANK=h0_is_bank,
-        H0_INDEX_ROW=h0_index_row,
-        H0_BATCH_INDEX=h0_batch_index,
-        H0_BANK_STRIDE=h0_bank_stride,
-        H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
-        RAW_GATING=raw_gating,
-        COUNT_INVOCATION=count_invocation,
-        SCAN_ALIGN=_scan_align,
-        N_LOOP=_n_loop,
-        num_warps=_num_warps,
-        **_extra_launch_kwargs,
-    )
+
+    def _launch(_out, _pg_flag):
+        _tree_gdn_kernel[grid](
+            q,
+            k,
+            v,
+            g,
+            beta,
+            raw_a,
+            raw_b,
+            A_log,
+            dt_bias,
+            h0,
+            h0_indices,
+            h0_num_accepted_tokens,
+            invocation_counter,
+            strict_mask,
+            visible_mask,
+            _out,
+            state,
+            N_ACTUAL=n_actual,
+            N_PAD=n_pad,
+            NUM_KH=num_kh,
+            NUM_VH=num_vh,
+            DIM_K=dim_k,
+            DIM_V=dim_v,
+            BLOCK_V=_bv,
+            OUTPUT_SCALE=output_scale,
+            USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+            H0_IS_BANK=h0_is_bank,
+            H0_INDEX_ROW=h0_index_row,
+            H0_BATCH_INDEX=h0_batch_index,
+            H0_BANK_STRIDE=h0_bank_stride,
+            H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+            RAW_GATING=raw_gating,
+            COUNT_INVOCATION=count_invocation,
+            SCAN_ALIGN=_scan_align,
+            N_LOOP=_n_loop,
+            PARENT_GATHER=_pg_flag,
+            num_warps=_num_warps,
+            **_extra_launch_kwargs,
+        )
+
+    if parent_gather_selfcheck_on():
+        # In-process byte-identity gate: run BOTH scans on the SAME inputs and
+        # raise on any bit difference (boot enforce_eager; the host compare syncs).
+        out_ref = torch.empty_like(out)
+        _launch(out_ref, False)
+        _launch(out, True)
+        _n = int(n_actual)
+        if not torch.equal(out_ref[:_n], out[:_n]):
+            _diff = (out_ref[:_n].float() - out[:_n].float()).abs().max().item()
+            raise RuntimeError(
+                "FR13_PARENT_GATHER SELFCHECK MISMATCH: parent gather is NOT "
+                f"byte-identical to the ancestor loop (max_abs={_diff:.3e}, "
+                f"n_actual={_n}, n_pad={n_pad})"
+            )
+    else:
+        _launch(out, _parent_gather)
     return out, None
