@@ -425,6 +425,17 @@ GATE 4 LAUNCHED: real SWE-Verified B=4 via fr13_b4_campaign_driver.sh (SUBSET=su
 -> reads TAIL[fired/hit] engagement + [FR13_TAIL] skip reasons + accept_per_event + derived_tps_gpu from
 deploy_speed_tailg4.json. If it engages + accept>5 + TPS ok -> GATE 5 full A/B (tail6 vs t33333 baseline).
 
+### GATE 4 SWE ATTEMPT 1 = oom_guard kill (NOT a tail bug); GPU_UTIL fix (2026-07-15, tailg4)
+The tail6 SWE arm booted through model-load + conv-fusion (path_cols=22, no error) but the gpu_oom_guard KILLED
+it mid-graph-capture (PIECEWISE 4/8): GPU free dropped to 8612MiB < the SWE-serve's 9000MiB guard floor. My
+standalone depth-11 boot survived only because it used a 3000MiB floor. The n_pad=32 tail tree + FR13_DEVICE_
+MULTIDRAFT (device committer scratch) uses more GPU during capture than the cat9 (n_pad=16) the serve is tuned
+for. This is a MEMORY-HEADROOM issue, NOT a tail-code bug (the crash fix is fine; it never reached a request).
+FIX: GPU_UTIL 0.78->0.72 for the tail arm (frees ~7GB -> capture free ~15GB, above the 9000 floor; KV cache
+still ~170k tokens, ample for B=4). Re-launched tailg4b (monitor b9twjhxtb). Keep the 9000 floor (protects the
+offload/codex/monitor session). If the tail arm needs even more headroom, drop GPU_UTIL further or trim cudagraph
+sizes -- do NOT lower the guard floor.
+
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
 up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
