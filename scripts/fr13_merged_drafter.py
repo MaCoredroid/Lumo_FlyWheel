@@ -401,11 +401,13 @@ def _maybe_log_engagement():
             "[FR13_MERGED ENGAGED] speculate_fired=%d match_full=%d match_partial=%d "
             "always_fill_miss=%d skip_fired=%d assembler_engaged=%d started=%d ingested=%d retired=%d "
             "arctic_oob_dropped=%d last_oob=%s conf_gated=%d "
+            "TAIL[fired=%d hit=%d cold=%d] "
             "confhist[<.05|.05-.15|.15-.30|.30-.50|>=.50]=%d|%d|%d|%d|%d",
             STATS["speculate_fired"], STATS["match_full"], STATS["match_partial_norun"],
             STATS["always_fill_miss"], STATS["skip_fired"], STATS["assembler_engaged"],
             STATS["started"], STATS["ingested"], STATS["retired"], _oob_n, _oob_last,
             STATS.get("conf_gated", 0),
+            STATS.get("tail_speculate_fired", 0), STATS.get("tail_hit", 0), STATS.get("tail_all_cold", 0),
             STATS.get("conf_h0", 0), STATS.get("conf_h1", 0), STATS.get("conf_h2", 0),
             STATS.get("conf_h3", 0), STATS.get("conf_h4", 0),
         )
