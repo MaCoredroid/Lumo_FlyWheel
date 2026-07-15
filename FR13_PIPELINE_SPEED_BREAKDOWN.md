@@ -181,3 +181,41 @@ to net WIN (accept +19% AND faster), t33333 also faster. This is the OPTIMIZE-TO
 IN FLIGHT: kernel-profile + committer + synthesis agents (WHERE the overhead is + ranked lossless fixes per tree
 flavor) + T55555 verify bench (n_pad vs depth axis). Next: implement the top-ROI kernel change (prior: GDN tree-
 scan is a serialized static_range(N_PAD) loop in few CTAs = poor occupancy; committer may be fusable into verify).
+
+## §10 — VERIFY-COST ROOT CAUSE + RANKED LOSSLESS OPTIMIZATIONS (workflow wbvlbn0x3, 2026-07-15)
+
+**ROOT CAUSE of the 140-240ms verify headroom = a redundant O(N^2) ancestor gather.** In
+`_tree_gdn_kernel` (fr10_gdn_tree_kernel.py) the inner `for j in static_range(0,i)` does ONE full-tile
+masked fp32 reduction `tl.sum(tl.where(offs_n==j, h_cache, 0.0))` PER ancestor, but
+`state_i = tl.where(ancestor, h_j, state_i)` overwrites in increasing j -> only the LARGEST-index ancestor
+survives = the immediate parent (topological node order; the kernel already depends on parent-before-child
+at the h_cache row write). So the whole loop computes `h_cache[parent]`: 120 reductions at n_pad=16 (496 at
+n_pad=32) where 16 (resp. 32) would do -- ~25x (n16) to ~100x (n32) the real GDN node math. This redundant
+reduction runs on a SERIAL dependency chain at ~1 CTA/SM (h_cache=128KB/CTA -> register-pinned occupancy, no
+co-resident warp to hide latency), which is why "near-free attention" reads as 160-240ms wall.
+
+**T55555 bench (B=1, n_pad=32, depth-5, 25-node): verify 171.3ms, committer 84.5ms** -- the n_pad-scaling
+datapoint. Gather work grows ~4.1x n16->n32 but wall only ~1.3x => a FIXED component (48 un-fused per-layer
+launches + 7 .contiguous() copies/launch + attention/MoE) + an n_pad^2-scaling scan component.
+
+**Ranked lossless fixes (per synthesis, source-verified):**
+- **#1 FR13_PARENT_GATHER (IMPLEMENTED, gating):** replace the inner loop with a cheap integer mask-scan for
+  the parent + ONE gather. Byte-identical (same one-hot masked tl.sum, same row, 0.0+x=x). Reductions/CTA
+  N(N-1)/2 -> N: 7.5x fewer at n16, **15.5x at n32** (helps the accept>5 tail MOST). Shape-independent =>
+  same absolute win to every flavor. Default OFF; in-process selfcheck gate.
+- **#2 h_cache -> shared memory + O(1) addressed parent load** (superset of #1, MEDIUM-HIGH, after #1 proves
+  the parent-only contract): eliminates even the N remaining reductions AND frees 128 regs/thread (de-spill).
+  EXCLUDED (refuted): BV 16->8 re-tile to raise occupancy (reintroduces the spill num_warps=8 killed); bf16
+  h_cache carry (changes served tokens). Occupancy past ~1 CTA/SM is SRAM-size-bound, not buyable losslessly.
+- **#3 Kill the 7 per-launch .contiguous() copies** (patcher :5142-5148), LOW effort, 48x7=336 D2D copies/step.
+- **#4 Spec-decode axis in the verify grid** (B launches -> 1/layer): only helps B>1; marginal at agentic
+  effective-batch ~1.3. Deprioritized.
+- **#5 Overlap the committer's host DtoH-sync** (the 74-113ms committer = host-orchestration + packed
+  DtoH-sync-gated, NOT replay compute which is sub-ms/12k-CTA). MEDIUM.
+
+**Two CORRECTIONS to earlier hypotheses:** (a) verify CANNOT layer-fuse like the committer -- it is ONLINE
+(layer L's GDN inputs don't exist until layer L's attention/proj runs; residual-stream data dep), while
+replay fuses 48 layers because it runs POST-HOC with all rings in HBM. Do NOT chase 48->1 verify fusion.
+(b) committer CANNOT fuse into verify -- accepted path is unknown at verify time (verify logits ->
+rejection-sampler -> accepted path -> replay is a hard data dependency). So the committer lever is #5 (sync
+overlap), not fusion.
