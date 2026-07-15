@@ -523,3 +523,11 @@ tail6 derived_tps_fullstep_gpu=18.81 (B=4, pf=0.40, accept 4.28) vs prior t33333
 ~53 (+15%). Clean same-config baseline (t33333base_basec, B=4 pf~0.40) pending (slow: agentic tasks 25-61 turns).
 NET so far: the tail is a LOSSLESS drafter, accept 3.56->4.28 (+20%), TPS-neutral-to-slight-positive. NOT the >5
 headline (windfall/workload-bound). Novel = first lossless GDN-tree suffix-decode TAIL past depth-5, live B=4.
+
+## GATE 5 on the RIGHT denominator (2026-07-15, user flagged): 16-task fr9-matched B=4, 3-way
+The tail6/baseline A/B ran on subset_b4_four (4 tasks) -- SAME set BETWEEN arms (valid A/B) but a small sample.
+Switched to subset_b4_sixteen (16 tasks = the fr9-matched "native MTP-5 B=4 decode_tps=39.9" apples-to-apples
+aggregate set, user 2026-06-16). Launched the full 3-way (t33333 baseline / tail6 / suffonly arctic-only) on
+16 tasks, B=4, GPU_UTIL=0.72 (fr13_tail_3way_seq.sh, TAG=g5, monitor bhwa6zfd4). The 4-task numbers (tail6
+accept 4.28, fullstep 18.81) PROVED the mechanism (engages+accepts+never-regress+TPS-neutral); the 16-task run
+gives the ROBUST deliverable accept/TPS + the arctic-complementarity answer (suffonly head accept vs MTP).
