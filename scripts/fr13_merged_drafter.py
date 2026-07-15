@@ -183,16 +183,23 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
             try:
                 if _use_tree:
                     # HYBRID: FLAT (deep chain) drives the spine + depth-coverage (skip engagement),
-                    # TREE (use_tree_spec) supplies branch alternatives -> best of both.
+                    # TREE (use_tree_spec) supplies branch alternatives -> best of both. OVERHEAD:
+                    # only pay the 2nd (tree) speculate when the flat is a FULL-depth match -- on a
+                    # non-full row (won't skip on Flavor A) the branches are discarded anyway, so
+                    # skipping the tree call there ~halves the arctic latency that trips the emit-wedge.
                     flat_d = cache.speculate(
                         req_id, pattern, max_spec_tokens=max_spec_tokens,
                         max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
                         use_tree_spec=False)
-                    tree_d = cache.speculate(
-                        req_id, pattern, max_spec_tokens=max_spec_tokens,
-                        max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
-                        use_tree_spec=True)
-                    suffix_rel = arctic_flat_tree_to_suffix_rel(flat_d, tree_d, max_rel=need)
+                    _flat_rel = arctic_draft_to_suffix_rel(flat_d, max_rel=need)
+                    if len(_flat_rel) >= need:
+                        tree_d = cache.speculate(
+                            req_id, pattern, max_spec_tokens=max_spec_tokens,
+                            max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
+                            use_tree_spec=True)
+                        suffix_rel = arctic_flat_tree_to_suffix_rel(flat_d, tree_d, max_rel=need)
+                    else:
+                        suffix_rel = _flat_rel   # non-full -> flat-only (discarded on Flavor A miss)
                 else:
                     draft = cache.speculate(
                         req_id, pattern, max_spec_tokens=max_spec_tokens,
