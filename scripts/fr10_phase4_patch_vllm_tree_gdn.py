@@ -13432,9 +13432,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 _fr13_ms_topk = {0: [_fr13_ms_c1, _fr13_ms_c2]}
                             else:
                                 _fr13_ms_topk = {}
+                            # vocab_size from the root lm-head logits width -> bounds-guard arctic
+                            # candidate ids at the fill boundary (an OOB draft token = CUDA
+                            # device-side assert that kills EngineCore; observed merge16c 2026-07-15).
+                            _fr13_ms_vocab = int(_fr10_logits.shape[-1])
                             _fr13_ms_spine, _fr13_ms_wide, _fr13_ms_skip = _fr13_ms.decide_and_fill(
                                 _fr13_ms_cache, [str(_r) for _r in _fr13_ms_ids], [_fr13_ms_root],
-                                _fr13_ms_topk, 1, draft_token_ids.device, _fr13_ms_root[0])
+                                _fr13_ms_topk, 1, draft_token_ids.device, _fr13_ms_root[0],
+                                vocab_size=_fr13_ms_vocab)
                             if _fr13_ms_skip and _fr13_ms_spine is not None:
                                 _fr10_spine_tokens = list(_fr13_ms_spine)
                                 _fr10_wide_topk = _fr13_ms_wide

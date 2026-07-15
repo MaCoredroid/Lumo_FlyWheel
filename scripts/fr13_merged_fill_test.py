@@ -97,6 +97,25 @@ allok = all(len({spine3[d][b].item(), wide3[d][b, 1].item(), wide3[d][b, 2].item
             for d in range(N_DEPTH) for b in range(B))
 check(allok, "e2e all (spine,b1,b2) triples distinct per row/depth")
 
+# ---- BOUNDS GUARD: OOB arctic token -> pad (prevents the CUDA device-side assert; merge16c fix) ----
+from fr13_merged_fill import get_oob_stats  # noqa: E402
+VOCAB = 152064
+_n0, _ = get_oob_stats()
+# row 0 has an in-range deep spine; row 1 injects OOB values: >=vocab at (d1 spine) and negative at (d2 b1)
+good_row = [10, 11, 12, 20, 21, 22, 30, 31, 32, 40, 41, 42, 50, 51, 52]          # all valid
+oob_row = [10, 11, 12, VOCAB + 7, 21, 22, 30, -5, 32, 40, 41, 42, 50, 51, 52]    # idx3=OOB hi, idx7=OOB neg
+sp_g, wt_g = build_cat33333_columns([good_row, oob_row], DEV, pad_token=99, vocab_size=VOCAB)
+check(sp_g[0].tolist() == [10, 10], "guard: valid spine d0 passes through")
+check(sp_g[1].tolist() == [20, 99], "guard: OOB(>=vocab) spine d1 row1 -> pad(99)")   # idx3 was oob_row spine d1
+check(wt_g[2][:, 1].tolist() == [31, 99], "guard: OOB(negative) branch d2b1 row1 -> pad(99)")  # idx7
+check(wt_g[0][:, 1].tolist() == [11, 11], "guard: valid branch d0b1 both rows pass through")
+_n1, _last = get_oob_stats()
+check(_n1 - _n0 == 2, f"guard: exactly 2 OOB dropped (got {_n1 - _n0})")
+check(_last is not None, "guard: last-OOB recorded for the needle")
+# vocab_size=None (CPU tests / default) => NO bounds check, OOB passes through unchanged (back-compat)
+sp_n, _ = build_cat33333_columns([oob_row], DEV, pad_token=99, vocab_size=None)
+check(sp_n[1].tolist() == [VOCAB + 7], "guard: vocab_size=None disables check (back-compat)")
+
 print(f"\n{PASS}/{PASS+FAIL} checks PASS")
 if FAIL == 0:
     print(">>> PASS — merged fill: device/dtype/shape correct, row-major preserved, PAD-densified, "

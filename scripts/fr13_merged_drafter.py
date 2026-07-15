@@ -141,7 +141,8 @@ def retire_requests(cache, gone_req_ids):
 
 # ---- the seam decision (:13361 speculate + :13860 fill) ---------------------
 def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_depth, mtp_k,
-                    device, pad_token, max_spec_tokens=16, max_spec_factor=4.0, min_token_prob=0.0):
+                    device, pad_token, max_spec_tokens=16, max_spec_factor=4.0, min_token_prob=0.0,
+                    vocab_size=None):
     """ADAPTIVE Mode B. Returns (spine_tokens, wide_topk, do_skip):
       * (spine_tokens, wide_topk, True)  when ALL active rows have a full-depth (>= N_DEPTH-mtp_k)
         Arctic match -> caller SKIPS the deep spine forwards and packs these columns.
@@ -226,7 +227,7 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
     else:
         STATS["always_fill_miss"] += 1   # Flavor B skipped a non-full match (accept degrades)
     STATS["assembler_engaged"] += 1
-    spine_tokens, wide_topk = build_cat33333_columns(assembled, device, pad_token)
+    spine_tokens, wide_topk = build_cat33333_columns(assembled, device, pad_token, vocab_size=vocab_size)
     STATS["skip_fired"] += 1
     _maybe_log_engagement()
     return spine_tokens, wide_topk, True
@@ -245,12 +246,18 @@ def _maybe_log_engagement():
         return
     try:
         import logging
+        try:
+            from fr13_merged_fill import get_oob_stats
+            _oob_n, _oob_last = get_oob_stats()
+        except Exception:
+            _oob_n, _oob_last = 0, None
         logging.getLogger("vllm.fr13_merged_drafter").info(
             "[FR13_MERGED ENGAGED] speculate_fired=%d match_full=%d match_partial=%d "
-            "always_fill_miss=%d skip_fired=%d assembler_engaged=%d started=%d ingested=%d retired=%d",
+            "always_fill_miss=%d skip_fired=%d assembler_engaged=%d started=%d ingested=%d retired=%d "
+            "arctic_oob_dropped=%d last_oob=%s",
             STATS["speculate_fired"], STATS["match_full"], STATS["match_partial_norun"],
             STATS["always_fill_miss"], STATS["skip_fired"], STATS["assembler_engaged"],
-            STATS["started"], STATS["ingested"], STATS["retired"],
+            STATS["started"], STATS["ingested"], STATS["retired"], _oob_n, _oob_last,
         )
     except Exception:
         pass

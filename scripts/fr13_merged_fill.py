@@ -25,8 +25,21 @@ import torch
 
 N_DEPTH = 5
 
+# Module counter: arctic-sourced candidate ids that fell OUTSIDE [0, vocab_size) and were dropped to
+# pad. An OOB draft token indexes the embedding/gather out of range -> CUDA device-side assert that
+# kills EngineCore (observed merge16c 2026-07-15, ~skip #357). Arctic's suffix output is the ONLY
+# unguarded token source (draft_token_ids + torch.topk candidates are valid by construction). Dropping
+# OOB -> pad is lossless (Gate-1: p[pad]~0, MTP-equivalent fallback for that slot) AND fail-loud-visible.
+_OOB_DROPPED = 0
+_OOB_LAST = None  # (depth, slot, bad_value) of the most recent drop, for the needle/log
 
-def build_cat33333_columns(assembled_rows, device, pad_token, width=3):
+
+def get_oob_stats():
+    """Return (total_dropped, last_offending) so the drafter needle can surface OOB arctic ids."""
+    return _OOB_DROPPED, _OOB_LAST
+
+
+def build_cat33333_columns(assembled_rows, device, pad_token, width=3, vocab_size=None):
     """Build (spine_tokens, wide_topk) for the wide packer from row-ordered assembled nodes.
 
     assembled_rows: list of length batch. Each entry is either a 15-int list (CAT33333_ORDER from
@@ -43,24 +56,38 @@ def build_cat33333_columns(assembled_rows, device, pad_token, width=3):
     assert width >= 3, f"wide_topk width must be >= 3 (packer reads ranks 1,2), got {width}"
     B = len(assembled_rows)
     assert B > 0, "empty batch"
+    vs = int(vocab_size) if vocab_size is not None else None
     pad = int(pad_token)
+    if vs is not None and not (0 <= pad < vs):
+        pad = 0   # pad itself OOB (should never happen: pad=root MTP token) -> id 0 is always valid
 
     def node(row, i):
-        return pad if row is None else int(row[i])
+        if row is None:
+            return pad
+        v = int(row[i])
+        # BOUNDS GUARD: an OOB arctic candidate would index the embedding out of range ->
+        # CUDA device-side assert (kills EngineCore). Drop to pad (lossless MTP-equiv fallback).
+        if vs is not None and not (0 <= v < vs):
+            global _OOB_DROPPED, _OOB_LAST
+            _OOB_DROPPED += 1
+            _OOB_LAST = (i // 3, i % 3, v)
+            return pad
+        return v
 
     spine_tokens = []
     wide_topk = {}
     for d in range(N_DEPTH):
-        # one CPU-built row-ordered list per depth, then ONE H2D to `device`.
-        spine_col = [node(assembled_rows[b], 3 * d) for b in range(B)]
+        # one CPU-built row-ordered list per depth, then ONE H2D to `device`. Read each node ONCE
+        # (spine col derived from the triple's col0) so the OOB counter isn't double-counted.
+        spine_col = []
         wt_rows = []
         for b in range(B):
             row = assembled_rows[b]
             s = node(row, 3 * d)
             ba = node(row, 3 * d + 1)
             bb = node(row, 3 * d + 2)
-            r = [s, ba, bb] + [pad] * (width - 3)   # col0=spine, cols1,2=branches, pad any extra
-            wt_rows.append(r)
+            spine_col.append(s)
+            wt_rows.append([s, ba, bb] + [pad] * (width - 3))   # col0=spine, cols1,2=branches, pad extra
         spine_tokens.append(torch.tensor(spine_col, dtype=torch.int64, device=device))
         wide_topk[d] = torch.tensor(wt_rows, dtype=torch.int64, device=device)
     return spine_tokens, wide_topk
