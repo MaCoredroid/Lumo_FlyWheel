@@ -354,9 +354,25 @@ n_pad=32. PURE chain tail (no branches) per ladder-step-1 (94.9% peaked -> deep 
 (`fr13_tail_tree_test.py`): mtp_k=5 cold -> head==baseline cat33333, tail=pad(repeat) that never matches past
 the head -> accept==baseline; warm -> 16 arctic chain tokens; partial -> fills then pads. Arctic adapter
 already tail-ready (`max_rel` parameterized -> caller passes max_rel=head_depth-mtp_k+tail_len=16).
-REMAINING (gated on the packer->injection seam map, agent a4516b7c in flight): build_tail_tree_columns (fill),
-the 31-node packer/injection map + SPEC tree string, decide_and_fill tail call (max_rel=16, mtp_k=5, NO skip),
-one 32-node NODE_FAMILY/topology if the metadata builder needs it -> then live boot -> GATE 3/4/5.
+### ✅ FULL TAIL WIRING DONE (2026-07-15, seam map agent a4516b7c) — GATE 4 boot in flight
+Seam map finding: the packer/injection/attn-bias side is 100% topology-agnostic (auto-derives from
+SPEC_CONFIG tree_choices: parent[], masks, _fr10_wide_plan, n_pad); the ONLY hard tripwire is the wide
+packer's `len(_fr10_spine_tokens) == _fr10_wide_D` check (must return wide_D=21 spine tensors). Built:
+- `build_tail_columns` (fill.py): 16 pure-chain tail tensors (rk==0, no wide_topk), OOB bounds-guard.
+- `decide_tail` (drafter.py): head=100% native MTP (byte-identical); produces ONLY the Arctic chain
+  (pattern=_COMMITTED[req]+native head; max_spec_tokens=32). tail_on() sidecar + TAIL_HEAD_DEPTH=5.
+- Patcher (3 edits in the injected EAGLE-propose string, validated to compile): cap native spine_steps at
+  head_depth-1=4 (else ~20 slow autoregressive MTP forwards); DISABLE the incompatible mtp_k=1 skip seam
+  in tail mode; after the head loop, append decide_tail's 16 tensors (spine_tokens 5->21 == wide_D).
+- Launcher: /logs/fr13_tail_mode.arm on FR13_TAIL_MODE=1 (worker strips FR13_* env). Needle now logs
+  TAIL[fired hit cold] to ASSERT engagement before trusting any accept number.
+- SPEC: tail_tree_order() -> 31 nodes (n_pad=32, wide_D=21); num_speculative_tokens=31.
+NOTE: pad token = row-0 root (scalar, cross-row for cold rows) -> lossless (committer verifies; a wrong
+pad never commits). Refine to per-row pad only if it costs measurable accept.
+GATE 4 boot: scripts/fr13_gate_tail_boot.sh (run_20260715T161934Z, monitor bbm05q9rc) -- boots the tail
+tree in TAIL+merged mode, drives a repetitive workload (arctic self-warms), verifies TAIL[fired>0 hit>0],
+reads per-position accept (pos 6-20 non-zero => the tail accepts => >5 signal). Then the real GATE 4/5 =
+live B=4 SWE-Verified A/B (accept UP AND dfwd-TPS same-or-better AND lossless/garble-clean).
 
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
