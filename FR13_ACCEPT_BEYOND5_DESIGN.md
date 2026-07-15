@@ -76,13 +76,28 @@ which is nearly free since decode is HBM-bound.
 
 - **Direction matters:** the prior BV experiment *widened* BV 16→32 and spilled (harmful, refuted). *Shrinking*
   to buy nodes is the untested, opposite direction. [[reference_bv_geometry_refuted_and_harmful]] [[reference_fr13_tree_size_16_register_wall]]
-- **Cheap verify:** the verify is ONE forward; if its cost is weight-read-floor-bound (HBM), 32 nodes ≈ 16
-  nodes in wall-clock. *(Feasibility + scaling: workflow w9j8r0rbf — §4 to be finalized from its verdict:
-  shrink-BV bit-exactness, verify O(nodes) vs O(nodes²), conv per-depth loop count.)*
-- **Cost-gates (before build):** (a) BV-shrink **bit-exact** — the GDN scan under the re-tile must be
-  byte-identical (same reduction order); gate same-boot vs BV=16. (b) verify wall-clock 32 vs 16 nodes must
-  stay ~flat (dfwd timer). If either fails → fall back to a **2-graph pipelined verify** (deeper on a 2nd
-  forward only when the first fully accepts — amortized) or stay at 16 nodes with complement-only (§3).
+- **CONFIRMED feasible (workflow w9j8r0rbf, cited):** `h_cache=[N_SPAN, BLOCK_V, DIM_K]` fp32
+  (fr10_gdn_tree_kernel.py:721). N_PAD=16,BV=16 = 128 KiB; **N_PAD=32,BV=8 = 131072 B = byte-identical
+  footprint**; N_PAD=32,BV=16 = 256 KiB = the spill. BV is a pure DIM_V *tiling* constexpr tiled by the
+  launch grid `(num_vh, cdiv(dim_v, BV))` (:2005) — **no inner DIM_V loop**, so BV=8 just **doubles grid.y**
+  (cdiv(128,8)=16). And a knob is **already wired**: `FR13_TREE_GDN_GEOM_OVERRIDE="BV=8"` (:1972-2005),
+  value-neutral → GATE 1 is runnable **today** with zero deploy change.
+- **Bit-exact risk (adversarial):** every reduction is over DIM_K (axis=1, :616/:619) or N_SPAN (axis=0,
+  :741-744), **never over BV**, so the [16,128]→[8,128] tile-shape change leaves per-channel math untouched.
+  BUT the kernel itself flags (:577-581) that Triton reduction-tree codegen identity is *not* spec-guaranteed
+  under a shape change, and the prior D16=D32=0.0 A/B was a *widen*, not a *shrink*. → **GATE 1** below.
+  `num_warps` MUST stay pinned at 8 (w8→4 measured harmful = spill).
+- **Verify is ~FLAT, not 2×** (HBM weight-read-floor ~98.6 ms, weights load once regardless of 16 vs 32
+  tree tokens): GDN scan runs on a **node-independent grid**; extra nodes pile into the same CTAs as an
+  O(N) `static_range` loop (:722) with an O(N²) ancestor-gather (small base, ~8× ALU 16→32); tree-attn
+  intra-tree block is O(tree_n²) but tiny (256→1024); the fused conv is **one pass with zero extra
+  per-depth launches**. Net: node-dependent work is sub-few-percent of the weight floor → verify stays flat.
+  Confirm with GATE 3.
+- **Re-tile change (bounded, mechanical, cited):** set BV=8 (:33 or the override); lift the three hard
+  `n_pad>16` raises (:185, :1160, :1629) + patch:236; add ONE 32-node `NODE_FAMILY` entry (:26) + make_tree
+  topology + parent-tuple + Triton warmup (a 32-node tree does not exist yet — families cap at 14).
+- **Fallback if GATE 1/3 fail:** 2-graph pipelined verify (deeper on a 2nd forward only when the first fully
+  accepts — amortized), or stay at 16 nodes with complement-only (§3).
 
 ---
 
@@ -96,10 +111,18 @@ spans the suffix continuation has its **best** shot (predictable ⇒ repetitive 
 
 - **Accept > 5 comes from here and only here:** on a repetitive span, MTP carries depths 1-5 and the suffix
   tail carries 6, 7, 8… as long as the exact repeat continues. A 12-token verbatim repeat → accept ≈ 12.
-- **Lossless by construction:** the committer is source-agnostic; tail nodes are extra candidates on a
-  longer path. Cold/novel span → tail nodes don't accept → accept falls back to ≤5 (never-regress).
-- **Assembly change:** `fr13_mtp_suffix_assembly.py` hard-codes N_DEPTH=5; extend to N_DEPTH=D (needs the
-  32-node room from §4). *(Losslessness + exact change: workflow w9j8r0rbf tail lens.)*
+- **Lossless by construction — NO committer change (workflow w9j8r0rbf, cited):** the committer walks every
+  leaf's root→leaf path, scores LCP vs parent_targets, keeps the longest, appends the bonus, truncates to
+  `max_spec_len+1` (fr13_gpu_committer_kernel.py:124-159) — **nothing in the accept logic reads depth or
+  source**. A tail node past depth-5 is lossless the instant it's a verified node (its parent_targets come
+  from the same generic parent[]-built verify mask, patch:224-248), and `max_spec_len = num_speculative_tokens`
+  ≫ any single-path depth, so the cap doesn't bite. Cold/novel span → tail nodes don't accept → falls back
+  to ≤5 (never-regress).
+- **Code changes (all OUTSIDE accept logic):** generalize `N_DEPTH=5` in the 3 drafter modules
+  (merged_fill.py:26, merged_drafter.py:31, mtp_suffix_assembly.py:21); drop the 15-node
+  `assert len(nodes)==len(CAT33333_ORDER)` and PAD-fill the tail's empty branch slots (merged_fill.py:79-90,
+  PAD is Gate1-lossless p[pad]~0); break the n_pad>16 wall via §4's BV re-tile; widen `assert mtp_k in (1,2)`
+  (assembly:69) if seeding from more MTP heads.
 - **Honest EV:** the tail's expected contribution = P(reach d5) × E[suffix run length | predictable span].
   On SWE agentic code the repetitive fraction is modest, so typical gain is **+0.1..0.5**, with occasional
   large spikes (>5) on long verbatim repeats. The *average* may be modest; the *tail of the distribution*
@@ -153,23 +176,52 @@ not *direction*:
 - Suffix tail: +0.1-0.5 average, >5 spikes on repeats (gated on live tail-accept measurement).
 - 32-node infra: enables both at ~flat verify (gated on shrink-BV bit-exactness + verify-cost).
 
-Realistic combined: **3.56 → ~4.0-4.5 typical, >5 on the repetitive tail of the distribution.** Whether that
-beats the drafter/committer overhead of building a wider tree is the deliverable gate (dfwd-inclusive TPS).
+**Quantified honest EV (workflow w9j8r0rbf, adversarial):** on GENERIC decode, accept>5 is NOT reachable.
+With conditional 0.83 held forever the infinite-depth ceiling is only ~5.9 (and 0.83 *will* decay); with the
+tail sourced from arctic (deep-accept ~0.5) the geometric tail past d5 sums to 0.479·0.5/(1−0.5) ≈ **+0.48**
+→ a 32-node deep build lands at **accept ≈ 4.0 on generic prose** — short of 5. **>5 is a BIMODAL,
+workload-conditional windfall**: only on repetitive/boilerplate spans where the suffix trie has long *exact*
+matches (per-token accept ~0.95+), the depth-6..10 tail adds ~2.0 → that span's accept ≈ **7-9**. Blending:
+to *average* >5 you need ~27% of steps on repetitive spans (5 = 4.0·(1−f) + 7.6·f → f≈0.27). For agentic
+**code** (repeated identifiers, imports, boilerplate, edit-echoes) that fraction is plausible; for prose it
+is not.
+
+**So budget this build as: accept 3.56 → ~4.0 baseline everywhere (complement + short tails), with >5 as a
+repetitive-span windfall — NOT a flat average.** The go/no-go is GATE 4 measuring the *real* repetitive-span
+fraction of the target workload (that's where nearly all the gain past 3.56 lives), and whether the
+accept-per-verify lift beats the wider-tree drafter/committer overhead (dfwd-inclusive TPS).
 
 ---
 
-## 9. Cost-gate ladder (each before the next)
+## 9. Cost-gate ladder (workflow-refined, cheapest-first — commit nothing until each passes)
 
-1. **Q2 complementarity** (task #33, ~free): commit-trace offline join — suffix_covers_miss[d]/mtp_miss[d].
-   If ~0 at all depths → complement branches dead; if materially >0 at d≥1 → proceed.
-2. **Shrink-BV bit-exactness** (1 GPU boot): re-tile BV 16→8, N_PAD=32; assert GDN scan byte-identical vs
-   BV=16 same-boot. If not bit-exact → 2-graph pipelined verify fallback OR complement-only at 16 nodes.
-3. **32-node verify cost** (same boot): dfwd 32 vs 16 nodes must stay ~flat (HBM-bound). If ~2× → not cheap.
-4. **Tail accept** (1 GPU boot): live per-depth survival for depths 6+ (MTP-guided suffix tail) — does the
-   tail actually accept on repetitive spans?
-5. **Live B=4 A/B**: 32-node MTP+suffix-tail+complement vs cat33333 baseline — accept, dfwd-inclusive TPS,
-   resolve/give-ups/garble. DELIVERY = accept up AND TPS same-or-better AND lossless/garble-clean.
+**STEP 0 / GATE 1 — BV-shrink bit-exact (runnable TODAY, zero deploy risk).** Same-boot **BV=8 vs BV=16 byte
+A/B at n_pad=16** via `FR13_TREE_GDN_GEOM_OVERRIDE="BV=8"` (already wired, value-neutral) — require **0.0** +
+`ptxas -v`/nsight regs-per-thread confirming no spill. If nonzero → Triton reduction-tree identity broke
+under the shrink → **shrink-BV dead, 32-node path blocked** (fall back to §4 2-graph verify or complement-only).
+*This is the first thing to run and it needs no new topology.*
 
-**Losslessness is free throughout** (committer Gate1 + source-agnostic); the risk is entirely *magnitude*
-(does accept rise enough to beat the wider-tree overhead) and *shrink-BV bit-exactness*. All gated, all
-measured before commit — no repeat of assuming a win.
+**GATE 2 — register/occupancy at N_PAD=32.** Actual N_PAD=32,BV=8 launch + `ptxas -v`/nsight proves spill-free
+(h_cache 128 regs + the *larger unrolled scan's* other live registers < 255). The 128 KiB arithmetic alone
+does NOT guarantee this — the bigger `static_range` scan grows other live pressure.
+
+**GATE 3 — 32-node verify cost.** 32-node verify-forward A/B vs the ~98.6 ms weight floor confirms the scan
+(~8× ALU on a small base) + doubled-CTA increment stays **sub-few-percent (flat)**, not 2×.
+
+**GATE 4 — tail accept, live.** Per-depth survival for depths 6+ (MTP-guided suffix tail) on a REAL agentic
+**code** workload @ temp 0.6, depth-matched. This measures the repetitive-span fraction — where ~all the gain
+past 3.56 lives. Go/no-go: does accept actually rise enough to matter?
+
+**Q2 (task #33, parallel/free) — complement-branch complementarity:** commit-trace offline join
+suffix_covers_miss[d]/mtp_miss[d]. Gates §3 (branches) independently of the tail; run alongside GATE 1.
+
+**GATE 5 — live B=4 A/B (deliverable):** 32-node MTP-spine + MTP-guided suffix-tail + suffix-complement
+branches vs cat33333 baseline — accept, **dfwd-inclusive TPS**, resolve/give-ups/garble. DELIVERY = accept up
+AND TPS same-or-better AND lossless + garble-clean.
+
+**Build order (each behind its gate):** STEP 0 override A/B (GATE 1) → lift n_pad>16 + BV=8 + one 32-node
+`NODE_FAMILY`+topology+warmup (GATE 2/3) → generalize `N_DEPTH` in the 3 drafter modules + drop the 15-node
+assert + PAD-fill tail branch slots (committer unchanged) → wire the arctic tail seeded by the existing
+`pattern=_COMMITTED[req]+near-MTP` (GATE 4) → live A/B (GATE 5). **Losslessness is free throughout** (committer
+Gate1, source-agnostic, depth-blind); the risks are entirely *shrink-BV bit-exactness* (GATE 1) and
+*magnitude* (GATE 4/5) — both measured before commit. No assuming a win.
