@@ -5,5 +5,10 @@
 # candidates -> ~0. This is the rigorous 16-task tail confirmation. corpus = the leakage-free 132-seg
 # (--exclude-substr built; dumps are ~all astropy=the test repo so a bigger leakage-free corpus is supply-
 # limited). If ~4.28 -> honest cost-gate on the windfall; if it jumps -> run the clean cold A/B.
+# GPU_UTIL 0.72 (not the 0.78 default): n_pad=32 tail6 capture memory dips GPU-free below the
+# SWE-serve gpu_oom_guard floor (9000MiB) at 0.78 -> detached guard docker-kills the container right
+# after startup ("died before health"). 0.72 leaves headroom above the floor AND matches the tail6-cold
+# 4.277 baseline's config (clean A/B). (memory: tailg4 oom_guard kill -> GPU_UTIL 0.78->0.72.)
+export GPU_UTIL=0.72
 export FR13_PREWARM_TRIE=/home/mark/shared/lumoFlyWheel/output/fr13_prewarm/corpus_harness.jsonl
 run_variant tail6_prewarm_${TAG} tail6 21 1
