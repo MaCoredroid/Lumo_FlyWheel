@@ -121,8 +121,17 @@ def maybe_prewarm(cache):
     global _PREWARMED
     if _PREWARMED or cache is None:
         return
-    path = os.environ.get("FR13_PREWARM_TRIE")
-    if not path or not os.path.exists(path):
+    # worker STRIPS FR13_* env (like merged_on's sidecar) -> read a /logs sidecar first (launcher copies
+    # the corpus there when FR13_PREWARM_TRIE is set at host launch), then env, then a fixed repo path.
+    path = None
+    for cand in ("/logs/fr13_prewarm_corpus.jsonl",
+                 os.environ.get("FR13_PREWARM_TRIE") or "",
+                 "/workspace/output/fr13_prewarm/corpus_active.jsonl"):
+        if cand and os.path.exists(cand):
+            path = cand
+            break
+    if not path:
+        _PREWARMED = True   # nothing to load -> mark done so we don't re-stat every step
         return
     corpus = []
     try:

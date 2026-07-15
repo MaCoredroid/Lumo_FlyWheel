@@ -430,6 +430,13 @@ if [[ "${FR13_DRAFT_SOURCE:-mtp}" == "merged" ]]; then
 else
   rm -f "$LOG_DIR/fr13_draft_source_merged.arm" 2>/dev/null || true
 fi
+# PRE-WARM corpus sidecar (design §6b): worker drops FR13_* env, so copy the host corpus into /logs (mounted)
+# and maybe_prewarm() reads the fixed /logs/fr13_prewarm_corpus.jsonl. Absent => cold trie (never-regress).
+if [[ -n "${FR13_PREWARM_TRIE:-}" && -f "${FR13_PREWARM_TRIE}" ]]; then
+  cp "$FR13_PREWARM_TRIE" "$LOG_DIR/fr13_prewarm_corpus.jsonl" && echo "[launch] pre-warm corpus -> /logs ($(wc -l < "$FR13_PREWARM_TRIE") seqs)"
+else
+  rm -f "$LOG_DIR/fr13_prewarm_corpus.jsonl" 2>/dev/null || true
+fi
 docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
 
 set -a
