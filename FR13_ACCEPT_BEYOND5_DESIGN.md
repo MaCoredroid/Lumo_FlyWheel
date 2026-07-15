@@ -548,3 +548,12 @@ do the OFFLINE complementarity join -> P(arctic commits | MTP misses) at each de
 If the join shows strong complementarity, build Option 1 (cheap, wide packer) first; Option 2 only if the
 depth-1 whole-path divergence is a big chunk. EV stays complementarity-bound (+0.1-0.3), stacks with tail's
 +0.72, does NOT reach >5 average alone (workload-bound) -- but it's the correct hard-miss lever.
+
+## GATE 5 baseline accept (16-task set, mid-run robust, 2026-07-15): t33333 = 3.59
+Mid-run /metrics over 2563 forwards (draft_tokens 38445 / 15): accepted 9202 -> accept_per_forward = 3.59, all
+head (pos 0-4), tail=0 (correct, no tail). Matches Q1 baseline 3.56. => the ACCEPT A/B is settled on live B=4:
+baseline 3.59 -> tail6 4.28 = +0.69 (+19%), lossless, never-regress. Accept aggregates over forwards not tasks,
+so robust already; the 3-way run continues only for the clean same-config TPS + the suffonly complementarity.
+DELIVERABLE (established): a lossless GDN-tree suffix-decode TAIL, accept 3.59->4.28 (+19%) live B=4 SWE-Verified,
+TPS comparable-to-slight-win (tail6 fullstep 18.81 vs baseline ~16.58). >5-AVERAGE not met = repetitive-span
+windfall, workload-bound (no cheap code lever). Novel contribution = first lossless GDN-tree tail past depth-5.
