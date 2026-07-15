@@ -557,3 +557,14 @@ so robust already; the 3-way run continues only for the clean same-config TPS + 
 DELIVERABLE (established): a lossless GDN-tree suffix-decode TAIL, accept 3.59->4.28 (+19%) live B=4 SWE-Verified,
 TPS comparable-to-slight-win (tail6 fullstep 18.81 vs baseline ~16.58). >5-AVERAGE not met = repetitive-span
 windfall, workload-bound (no cheap code lever). Novel contribution = first lossless GDN-tree tail past depth-5.
+
+## SPEED breakdown (tail6, live B=4, measured 2026-07-15) — user speed question
+Per decode step GPU compute: DRAFTER 97.7ms (35%) + VERIFY 85.8ms (30%) + COMMITTER 97.5ms (35%) = 281ms ->
+committed 5.28 -> derived_tps_fullstep_gpu=18.81. verify-only=61.85. aggregate(prefill+idle)=10.9, per-req=4.8.
+KEY: (1) the COMMITTER is as expensive as the drafter (~35% each) -- surprising, a direct lever (S1 sampled-
+committer). (2) VERIFY is HBM-bound (~flat vs tree size) -> a bigger tree adds ~0 verify. (3) drafter+verify are
+FIXED per step -> higher accept amortizes them over more committed tokens => bigger tree = faster (CONFIRMED:
+tail6 +19% accept -> +13% fullstep-TPS). SPEED LEVERS ranked: (1) bigger tree/tail -> more accept -> amortize
+fixed drafter+verify (accept-is-the-only-lever physics; committer replay is the eventual ceiling since it
+SCALES with accept). (2) sampled/faster committer (35%). (3) overlap arctic speculate with verify forward /
+fewer MTP head forwards (35%). The union + bigger tree both push accept => both faster until committer dominates.
