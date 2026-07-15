@@ -13192,6 +13192,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # tree's all-zeros spine depth), so the step count always matches
             # the committed tree depth (no over-run mutating KV/seq_lens).
             _fr10_spine_steps = _fr10_wide_spine_steps
+            # accept>5 TAIL mode (sidecar /logs/fr13_tail_mode.arm; FR13_* env is stripped in the
+            # worker): cap native MTP forwards at the HEAD (head_depth-1 = 4). The deep chain
+            # (depths head_depth..wide_D-1) is Arctic-retrieved + appended after the loop, NOT
+            # MTP-drafted -- else the native path runs ~wide_D-1 (~20) slow autoregressive forwards.
+            if os.path.exists("/logs/fr13_tail_mode.arm"):
+                _fr13_tail_hd = 5   # == fr13_merged_drafter.TAIL_HEAD_DEPTH; mismatch fail-louds at packer
+                if _fr10_wide_spine_steps > (_fr13_tail_hd - 1):
+                    _fr10_spine_steps = _fr13_tail_hd - 1
         else:
             _fr10_spine_steps = 4
         # FR13_RESHAPE_333: 3-3-3 consumes a rank-1 leaf at BOTH interior
@@ -13420,7 +13428,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     if "/workspace/scripts" not in _fr13_ms_sys.path:
                         _fr13_ms_sys.path.insert(0, "/workspace/scripts")
                     import fr13_merged_drafter as _fr13_ms
-                    if _fr13_ms.merged_on() and int(_fr10_spine_steps) >= 4:
+                    if (_fr13_ms.merged_on() and int(_fr10_spine_steps) >= 4
+                            and not os.path.exists("/logs/fr13_tail_mode.arm")):
                         from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_ms_gdn
                         _fr13_ms_ids = getattr(_fr13_ms_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
                         _fr13_ms_cache = _fr13_ms.get_cache()
@@ -13804,6 +13813,42 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr10_wide_topk[token_index + 1] = torch.topk(
                             _fr10_step_logits, _fr10_w_p, dim=-1
                         ).indices
+
+            # accept>5 TAIL append (sidecar /logs/fr13_tail_mode.arm): the native MTP head loop
+            # above produced head_depth spine tokens (depths 0..head_depth-1) + head branches
+            # (byte-identical baseline). Retrieve the deep Arctic chain (depths head_depth..wide_D-1)
+            # and APPEND to _fr10_spine_tokens (head_depth -> wide_D) so the wide packer sees wide_D
+            # spine tensors. Head unchanged + tail only ADDS => lossless never-regress (committer
+            # accept=p(S), source/depth-blind). Own try/except: NEVER break the drafter.
+            if _fr10_is_wide and os.path.exists("/logs/fr13_tail_mode.arm"):
+                try:
+                    import sys as _fr13_t_sys
+                    if "/workspace/scripts" not in _fr13_t_sys.path:
+                        _fr13_t_sys.path.insert(0, "/workspace/scripts")
+                    import fr13_merged_drafter as _fr13_t
+                    _fr13_t_hd = int(getattr(_fr13_t, "TAIL_HEAD_DEPTH", 5))
+                    _fr13_t_len = int(_fr10_wide_D) - _fr13_t_hd
+                    if (_fr13_t.merged_on() and _fr13_t_len > 0
+                            and len(_fr10_spine_tokens) == _fr13_t_hd):
+                        from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_t_gdn
+                        _fr13_t_ids = getattr(_fr13_t_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
+                        _fr13_t_cache = _fr13_t.get_cache()
+                        _fr13_t_B = int(_fr10_spine_tokens[0].shape[0])
+                        if (_fr13_t_cache is not None and _fr13_t_ids is not None
+                                and len(_fr13_t_ids) == _fr13_t_B):
+                            _fr13_t_head = [
+                                [int(_x) for _x in _fr10_spine_tokens[_d].detach().reshape(-1).cpu().tolist()]
+                                for _d in range(_fr13_t_hd)]
+                            _fr13_t_vocab = int(_fr10_logits.shape[-1])
+                            _fr13_t_pad = int(_fr10_spine_tokens[0].detach().reshape(-1)[0].item())
+                            _fr13_t_cols = _fr13_t.decide_tail(
+                                _fr13_t_cache, [str(_r) for _r in _fr13_t_ids], _fr13_t_head,
+                                _fr13_t_hd, _fr13_t_len, _fr10_spine_tokens[0].device,
+                                _fr13_t_pad, vocab_size=_fr13_t_vocab)
+                            if _fr13_t_cols is not None:
+                                _fr10_spine_tokens.extend(_fr13_t_cols)
+                except Exception:
+                    pass
 
             if _fr10_is_spine_only or _fr10_is_chain3:
                 # FR13_RESHAPE_DEPTH3 chain3 = pure depth-3 spine = the same

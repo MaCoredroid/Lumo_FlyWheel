@@ -48,6 +48,17 @@ def merged_on() -> bool:
     return os.path.exists("/logs/fr13_draft_source_merged.arm")
 
 
+# accept>5 TAIL mode: head_depth (default 5) = MTP-drafted head; the deep chain past it is Arctic.
+TAIL_HEAD_DEPTH = 5
+
+
+def tail_on() -> bool:
+    """Sidecar-gated (worker drops FR13_* env): /logs/fr13_tail_mode.arm written by the launcher
+    when FR13_TAIL_MODE=1. Tail mode caps native MTP forwards at the head + appends the Arctic tail
+    chain. REQUIRES merged_on() too (the Arctic cache lifecycle rides on the merged runner hook)."""
+    return os.path.exists("/logs/fr13_tail_mode.arm")
+
+
 def get_cache(max_tree_depth: int = 24, max_cached_requests: int = 10000):
     """Lazily import Arctic + build the SuffixDecodingCache (container-only). Returns None (never
     raises) if arctic is unavailable -> caller falls back to pure MTP."""
