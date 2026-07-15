@@ -35,7 +35,37 @@ CONTRACT (must stay exact so assemble_cat33333 consumes it verbatim):
 """
 from __future__ import annotations
 
-__all__ = ["arctic_draft_to_suffix_rel", "extract_draft_token_ids"]
+__all__ = ["arctic_draft_to_suffix_rel", "extract_draft_token_ids", "arctic_match_confidence"]
+
+
+def arctic_match_confidence(draft) -> float:
+    """Confidence of an Arctic match for the CONFIDENCE-GATED skip (merge16d verdict: the blanket skip
+    fires on trie COVERAGE, not confidence -> skips over-confident-but-wrong deep matches -> accept
+    collapse 3.61->1.97). This returns the MIN per-node continuation probability along the drafted chain
+    -- the weakest link: if any deep node is low-prob, the suffix statistics do NOT strongly expect the
+    model to follow, so the caller should NOT skip (fall back to full MTP = never-regress). Falls back to
+    `.score`, then to 1.0 (no signal -> don't block = back-compat blanket behaviour). None -> 0.0.
+
+    Higher = the suffix stats more strongly expect the model to follow the whole chain, so the deep-forward
+    skip is more likely to hold accept. arctic prob = suffix FREQUENCY (context repetition), not the model
+    prob, but high-frequency continuations are exactly the ones the model tends to follow (the win case)."""
+    if draft is None:
+        return 0.0
+    probs = getattr(draft, "probs", None)
+    if probs is not None:
+        try:
+            vals = [float(p) for p in probs]
+            if vals:
+                return min(vals)
+        except Exception:
+            pass
+    score = getattr(draft, "score", None)
+    if score is not None:
+        try:
+            return float(score)
+        except Exception:
+            pass
+    return 1.0   # no confidence signal -> don't block (back-compat = blanket skip)
 
 
 def extract_draft_token_ids(draft) -> list[int]:

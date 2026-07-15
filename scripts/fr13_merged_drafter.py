@@ -152,7 +152,7 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
       (d in 0..mtp_k-1); mtp_topk_per_depth[d]: per-row [rank2,rank3] for the near depths.
     All ints; row order == spec_row_req_ids order (req_id-keyed by the caller)."""
     from fr13_arctic_suffix_adapter import (arctic_draft_to_suffix_rel, arctic_tree_to_suffix_rel,
-                                            arctic_flat_tree_to_suffix_rel)
+                                            arctic_flat_tree_to_suffix_rel, arctic_match_confidence)
     from fr13_mtp_suffix_assembly import assemble_cat33333
     from fr13_merged_fill import build_cat33333_columns
 
@@ -165,6 +165,11 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
     # just mtp_k forwards + suffix-fill the whole deep tree unconditionally (max drafter speed;
     # accept degrades toward root-only on a miss -- still lossless via the committer).
     _flavor = os.environ.get("FR13_MERGED_FLAVOR", "adaptive")
+    # CONFIDENCE-GATED skip (merge16d verdict): blanket skip fired on trie COVERAGE (match_full 96%) not
+    # confidence -> accept collapsed 3.61->1.97 -> -17% speed. Gate the skip on the arctic match's MIN
+    # per-node prob: skip ONLY when the suffix stats strongly expect the model to follow (>= threshold),
+    # else full MTP (never-regress = baseline accept). Default 0.0 = OFF (blanket, back-compat).
+    _min_prob = float(os.environ.get("FR13_MERGED_SKIP_MIN_PROB", "0.0"))
 
     B = len(spec_row_req_ids)
     if B == 0:
@@ -180,6 +185,7 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
         mtp_topk = {d: [int(x[b]) for x in mtp_topk_per_depth.get(d, [])] for d in range(N_DEPTH)}
         pattern = list(_COMMITTED.get(req_id, [])) + near
         suffix_rel = {}
+        _row_conf = 1.0   # match confidence for the gated skip (1.0 = no signal -> don't block)
         if cache is not None:
             try:
                 if _use_tree:
@@ -192,6 +198,7 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
                         req_id, pattern, max_spec_tokens=max_spec_tokens,
                         max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
                         use_tree_spec=False)
+                    _row_conf = arctic_match_confidence(flat_d)   # flat drives the spine -> its confidence
                     _flat_rel = arctic_draft_to_suffix_rel(flat_d, max_rel=need)
                     if len(_flat_rel) >= need:
                         tree_d = cache.speculate(
@@ -206,11 +213,16 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
                         req_id, pattern, max_spec_tokens=max_spec_tokens,
                         max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
                         use_tree_spec=False)
+                    _row_conf = arctic_match_confidence(draft)
                     suffix_rel = arctic_draft_to_suffix_rel(draft, max_rel=need)
                 STATS["speculate_fired"] += 1
             except Exception:
                 suffix_rel = {}
-        if len(suffix_rel) < need:
+        # Skip requires full depth AND (when gated) enough confidence -- a low-prob deep match is
+        # exactly the over-confident-but-wrong case that collapsed accept, so fall back to full MTP.
+        if len(suffix_rel) >= need and _min_prob > 0.0 and _row_conf < _min_prob:
+            STATS["conf_gated"] = STATS.get("conf_gated", 0) + 1   # full-depth but blocked by low conf
+        if len(suffix_rel) < need or (_min_prob > 0.0 and _row_conf < _min_prob):
             all_full = False
         nodes, _ = assemble_cat33333(mtp_spine, mtp_topk, suffix_rel, mtp_k)
         assembled.append(nodes)
@@ -254,10 +266,11 @@ def _maybe_log_engagement():
         logging.getLogger("vllm.fr13_merged_drafter").info(
             "[FR13_MERGED ENGAGED] speculate_fired=%d match_full=%d match_partial=%d "
             "always_fill_miss=%d skip_fired=%d assembler_engaged=%d started=%d ingested=%d retired=%d "
-            "arctic_oob_dropped=%d last_oob=%s",
+            "arctic_oob_dropped=%d last_oob=%s conf_gated=%d",
             STATS["speculate_fired"], STATS["match_full"], STATS["match_partial_norun"],
             STATS["always_fill_miss"], STATS["skip_fired"], STATS["assembler_engaged"],
             STATS["started"], STATS["ingested"], STATS["retired"], _oob_n, _oob_last,
+            STATS.get("conf_gated", 0),
         )
     except Exception:
         pass

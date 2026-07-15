@@ -119,9 +119,46 @@ check(skip is True, "mtp_k=2 all-full -> skip")
 check(spine[0].tolist() == [1000] and spine[1].tolist() == [1001], "d0,d1 = MTP near")
 check(spine[2].tolist() == [70] and spine[4].tolist() == [72], "d2..d4 = arctic (need=3)")
 
+print("[CONF] confidence-gated skip: FR13_MERGED_SKIP_MIN_PROB gates on arctic MIN-prob (merge16d fix)")
+import os as _os
+
+
+class MockDraftP:
+    def __init__(self, toks, probs): self.token_ids = toks; self.probs = probs
+
+
+class MockCacheP(MockCache):
+    def __init__(self, spec_map, prob_map): super().__init__(spec_map); self.prob_map = prob_map
+    def speculate(self, req_id, pattern, **kw):
+        self.calls.append(("spec", req_id, list(pattern)))
+        return MockDraftP(list(self.spec_map.get(req_id, [])), list(self.prob_map.get(req_id, [])))
+
+
+_near = [[1000]]
+_topk = {d: [[3000 + d, 3001 + d], [4000 + d, 4001 + d]] for d in range(5)}
+# LOW min-prob (0.3) full-depth match, threshold 0.5 -> must NOT skip (never-regress)
+md.reset_for_test(); _os.environ["FR13_MERGED_SKIP_MIN_PROB"] = "0.5"
+c = MockCacheP({"ra": [50, 51, 52, 53]}, {"ra": [0.9, 0.9, 0.3, 0.9]}); c.active_requests = {"ra"}
+md._COMMITTED["ra"] = [9, 8]
+_, _, skip_lo = md.decide_and_fill(c, ["ra"], _near, _topk, mtp_k=1, device=DEV, pad_token=0)
+check(skip_lo is False, "low-conf (min-prob 0.3 < 0.5) full match -> NO skip (never-regress)")
+# HIGH min-prob (0.8) -> skip
+md.reset_for_test()
+c2 = MockCacheP({"ra": [50, 51, 52, 53]}, {"ra": [0.9, 0.8, 0.85, 0.9]}); c2.active_requests = {"ra"}
+md._COMMITTED["ra"] = [9, 8]
+_, _, skip_hi = md.decide_and_fill(c2, ["ra"], _near, _topk, mtp_k=1, device=DEV, pad_token=0)
+check(skip_hi is True, "high-conf (min-prob 0.8 >= 0.5) full match -> skip")
+# threshold OFF (0.0, default) -> blanket skip even at low conf (back-compat)
+md.reset_for_test(); _os.environ["FR13_MERGED_SKIP_MIN_PROB"] = "0.0"
+c3 = MockCacheP({"ra": [50, 51, 52, 53]}, {"ra": [0.9, 0.9, 0.3, 0.9]}); c3.active_requests = {"ra"}
+md._COMMITTED["ra"] = [9, 8]
+_, _, skip_off = md.decide_and_fill(c3, ["ra"], _near, _topk, mtp_k=1, device=DEV, pad_token=0)
+check(skip_off is True, "threshold OFF (0.0) -> blanket skip at low conf (back-compat)")
+_os.environ.pop("FR13_MERGED_SKIP_MIN_PROB", None)
+
 print(f"\n{PASS}/{PASS+FAIL} checks PASS")
 if FAIL == 0:
     print(">>> PASS — merged-drafter orchestration: lifecycle + rolling buffer, adaptive gate "
-          "(all-match->skip, any-miss->never-regress), req-keyed pattern, engagement needle.")
+          "(all-match->skip, any-miss->never-regress), CONFIDENCE-gated skip, req-keyed pattern, needle.")
     sys.exit(0)
 sys.exit(1)
