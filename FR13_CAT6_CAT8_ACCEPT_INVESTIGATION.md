@@ -1284,3 +1284,28 @@ adaptive geometry (deep chains on long confident matches; shape-probe: baked_nee
 amplification risk). DELIVERABLE PROVEN: the full MTP-k+Arctic-suffix -> committer pipeline runs lossless,
 crash-free, correctness-parity live; the measured reasons it doesn't win on speed (arctic deep-accept low +
 batch-coupling) are the honest verdict. Both real levers need explicit go given their cost.
+
+## FRONT 2 SPEED — DEFINITIVE CLOSE (2026-07-15): arctic loses to MTP at ALL concurrency + confidence
+CONC=1 sparse A/B (same 4 resolved tasks, apples-to-apples, only diff = FR13_DRAFT_SOURCE) settles it:
+  BASELINE-C1 (pure MTP): accept 3.793, drafter 97.0ms, fullstep_tps 16.58
+  GATED-C1 (conf skip ~20%): accept 2.990, drafter 76.6ms, fullstep_tps 14.85
+  => DELTA accept -21%, fullstep -10.4%. The skip saved 21% drafter BUT accept collapsed 21% -> net LOSS.
+
+DEFINITIVE: even at CONC=1 where the confidence-gated skip fires FREELY (~20%, NO batch-coupling), it
+LOSES -10.4%. The HIGH-CONFIDENCE (>=.5) arctic matches STILL accept 21% worse than MTP -> arctic prob
+(suffix FREQUENCY) does NOT predict the model follows the deep chain. This kills BOTH remaining hopes:
+(1) PER-ROW skip NOT justified -- CONC=1 IS the per-row-behavior simulation (skip fires freely), and it
+loses, so the architectural build wouldn't help. (2) SPARSE serving doesn't win either -- batch-coupling
+was NOT the real blocker; arctic's weak deep-accept is.
+
+FULL CAMPAIGN (5 live runs): merge16d B=4 blanket -17% (accept 3.61->1.97); gated50 B=4 conf ~=baseline
+(batch-coupling skip 1.6%); gc1diag CONC=1 conf accept 2.99; bc1diag CONC=1 baseline accept 3.79 =>
+gated LOSES -10.4%. CONCLUSION: arctic suffix decoding does NOT beat MTP drafting on agentic code at ANY
+concurrency or confidence threshold -- the model diverges from the trie's deep continuations regardless of
+the trie's confidence. Adaptive geometry (deep chains from arctic) would hit the SAME weak-accept wall.
+
+FRONT 2 FINAL: CORRECTNESS goal MET (merge16d 8/16==8/16, identical give-ups, lossless, crash-free live
+across ~19k skips; crash-guard baked). SPEED goal = HONEST NO-GO (arctic weaker deep drafter than MTP,
+measured airtight). Deliverable = the proven lossless correctness-parity MTP-k+Arctic->committer pipeline
+(FR13_DRAFT_SOURCE=merged; default mtp untouched). The arctic-drafter SPEED thesis is CLOSED. Real speed
+levers remain in what WE own (committer/GDN-replay/tree-overhead per prior speed campaign), NOT the drafter.
