@@ -51,7 +51,7 @@ run_variant() {  # arm kind expect offload
   # t0.6 speed lever; lossless-within-floor; user 2026-06-16 accepted). Engages on tree
   # arms at temp>0 only; no-op for the native bars.
   OFFLOAD_AGENT=$offload MAX_NUM_SEQS_OVR=$BSIZE SWE_CONCURRENCY=$CONC AGENT_WALL_S=$WALL_ENV \
-    FR13_DEVICE_MULTIDRAFT=1 \
+    FR13_DEVICE_MULTIDRAFT=${FR13_DEVICE_MULTIDRAFT:-1} \
     FR13_DEVICE_MULTIDRAFT_KERNEL=/workspace/scripts/fr13_device_multidraft_kernel.py \
     FR13_SFWD_GPU_TIMER=1 \
     FR13_SFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/${arm}.json \
