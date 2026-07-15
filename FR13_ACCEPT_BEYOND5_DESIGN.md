@@ -280,3 +280,28 @@ from "biggest EV lever" to "modest/negligible at this corpus". A richer corpus (
 help more but the flat COVERAGE says the addressable gap is small. The TAIL (§5, 32-node) is the real >5
 mechanism and does NOT depend on pre-warm. Pre-warm machinery kept (lossless, gated OFF) for a later richer-
 corpus retest; not on the critical path.
+
+## GATE 2 UPDATE (2026-07-15, IN PROGRESS): n_pad=32 live-boot (BV=8, 25-node MTP-native tree)
+Boot test = `scripts/fr13_gate_32node_boot.sh` (25-node wide depth-5 tree `7-6-5-4-3` -> n=26 -> n_pad=32;
+`FR13_TREE_GDN_GEOM_OVERRIDE=BV=8`, plain qwen3_5_mtp spec so MTP-native tree fill isolates the KERNEL, not
+the merged drafter). **Config-parse cap lift VALIDATED LIVE**: `num_speculative_tokens=25` + 25-node tree spec
+parsed with NO `NotImplementedError` (patch:236 raised 16->32); model loaded 82%+ shards; SpeculativeConfig
+accepted. **Attempt 1 CRASHED at warmup/graph-capture (~6.5min, container exited on its own — NOT oom_guard,
+NOT the 900s cap)** but the engine log was discarded by the boot script's own container-rm before I read it.
+FIX (committed): boot script now streams `docker logs -f` to `$RUN/engine.log` so the crash cause survives
+removal. Re-run in flight (run_20260715T152303Z, monitor bggdut877). OPEN QUESTION the re-run answers:
+register spill (BV=8 h_cache=[32,8,128]fp32=131072B is byte-identical to [16,16,128]=131072B, so spill would
+be from an n_pad-scaled index/accum array, NOT h_cache -> needs a different fix) vs graph-capture OOM
+(gpu_util tuning: lower 0.8->0.7 or fewer cudagraph sizes -> NOT a fundamental block). Verdict gates the whole
+horizon-expansion. If PASS -> build tail (below); if register-spill -> localize the n_pad-scaled consumer.
+
+### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
+The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
+up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
+1. `fr13_merged_fill.py`: `N_DEPTH=5` + `for d in range(N_DEPTH)` device column-builder -> generalize to tree depth.
+2. `fr13_mtp_suffix_assembly.py`: `assert len(mtp_spine)>=N_DEPTH`; fills branch slots WITHIN depth-5 only
+   (complement) -> **no depth-6+ tail node machinery yet = the missing >5 piece**. Add tail nodes fed by arctic
+   (MTP has no head past depth-5; arctic walk `pattern=_COMMITTED[req]+near-MTP` produces depth-6+ spine).
+3. `fr13_merged_drafter.py`: `N_DEPTH=5`, `need=N_DEPTH-mtp_k` -> generalize; extend CAT33333_ORDER node map to
+   the wider/deeper 32-node topology; PAD-fill any unfilled tail slots (Gate-1 lossless).
+Losslessness stays free (committer is source/depth-blind); only magnitude (GATE 4/5) is open.
