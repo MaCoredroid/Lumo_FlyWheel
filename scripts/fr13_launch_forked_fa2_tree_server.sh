@@ -430,6 +430,15 @@ if [[ "${FR13_DRAFT_SOURCE:-mtp}" == "merged" ]]; then
 else
   rm -f "$LOG_DIR/fr13_draft_source_merged.arm" 2>/dev/null || true
 fi
+# accept>5 TAIL mode sidecar (same worker-env-drop workaround): caps native MTP forwards at the head
+# (head_depth-1) + appends the deep Arctic chain (depths head_depth..wide_D-1). REQUIRES the merged
+# sidecar too (the Arctic cache lifecycle rides on the merged runner hook). Absent => no tail.
+if [[ "${FR13_TAIL_MODE:-0}" == "1" ]]; then
+  : > "$LOG_DIR/fr13_tail_mode.arm"
+  echo "[launch] TAIL mode ON -> /logs/fr13_tail_mode.arm (head_depth=5 + arctic chain to wide_D)"
+else
+  rm -f "$LOG_DIR/fr13_tail_mode.arm" 2>/dev/null || true
+fi
 # PRE-WARM corpus sidecar (design §6b): worker drops FR13_* env, so copy the host corpus into /logs (mounted)
 # and maybe_prewarm() reads the fixed /logs/fr13_prewarm_corpus.jsonl. Absent => cold trie (never-regress).
 if [[ -n "${FR13_PREWARM_TRIE:-}" && -f "${FR13_PREWARM_TRIE}" ]]; then
