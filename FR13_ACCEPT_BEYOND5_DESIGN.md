@@ -146,6 +146,39 @@ strong 5 depths and suffix only **adds** beyond, never replaces.
 
 ---
 
+## 6b. PRE-WARMED harness-aware trie (fixes the Front-2 cold/task-local weakness — biggest EV lever)
+
+Front-2's suffix decoder was weak in large part because the arctic trie is **COLD at every task start** and
+only ever learns *this task's* repetition (task-local) — so early tokens have no coverage and cross-task
+structure is invisible. But the SWE agentic harness is **highly structured and repeats ACROSS tasks**:
+tool-call XML (`<tool_call>…</tool_call>`), the qwen-code system prompt + system reminders, JSON arg
+formats, diff/patch headers, file paths, ubiquitous imports (`import numpy`, `from astropy…`), edit-echoes,
+and boilerplate. **Pre-warm the trie with a hand-picked corpus of prior completed trajectories** — selected
+for high *cross-task structural* frequency — so the suffix decoder is strong on the harness-repetitive
+fraction **from token 1**.
+
+- **Mechanism (uses arctic's EXISTING cross-request cache):** arctic `SuffixDecodingCache` keeps a
+  cross-request corpus (`cached_requests`); pre-load it at boot via `add_active_response` over the selected
+  prior-trajectory token sequences. The per-request trie then **unions** the pre-warm (harness/cross-task
+  patterns) + the live request suffix (task-local repetition). No new arctic code — just a boot-time seed.
+- **Why it's the biggest EV lever:** the suffix TAIL (§5) fires on repetitive spans, and harness-structural
+  spans are a **large, predictable fraction** of agentic decode — a cold task-local trie misses them until
+  they recur *within* the task, but a pre-warmed trie covers them **deeply and immediately**. This turns
+  ">5 as a rare windfall" into ">5 as a **regularity on harness spans**," and also strengthens the §3
+  complement branches on those spans → lifts the whole EV (§8) toward a *higher average*, not just spikes.
+- **Corpus selection (harness-aware, bounded):** mine prior completed SWE trajectories already on disk
+  (proxy request-dumps `/tmp/lumo_proxy_request_dumps`, commit-traces, per-task outputs) → extract
+  high-frequency n-grams, dedupe, **weight toward cross-task structural tokens** (tool-call scaffolding,
+  system reminders, common imports/idioms) over task-specific content. Keep it under the trie's memory cap
+  (a few MB of the highest-frequency patterns; arctic evicts by policy).
+- **Never-regress preserved:** pre-warm only ADDS candidates through the monotone committer — a pre-warm
+  pattern that doesn't match the live model output simply doesn't accept. Lossless throughout.
+- **Measurement (new gate):** suffix-tail + complement accept **cold vs pre-warmed** on the same SWE tasks —
+  does the pre-warm raise the tail hit-rate / repetitive-coverage? This is the cheapest high-EV experiment
+  and can be run *independently* of the 32-node infra (pre-warm helps the 16-node complement too).
+
+---
+
 ## 7. The combined 32-node architecture
 
 ```
@@ -186,10 +219,14 @@ to *average* >5 you need ~27% of steps on repetitive spans (5 = 4.0·(1−f) + 7
 **code** (repeated identifiers, imports, boilerplate, edit-echoes) that fraction is plausible; for prose it
 is not.
 
-**So budget this build as: accept 3.56 → ~4.0 baseline everywhere (complement + short tails), with >5 as a
-repetitive-span windfall — NOT a flat average.** The go/no-go is GATE 4 measuring the *real* repetitive-span
-fraction of the target workload (that's where nearly all the gain past 3.56 lives), and whether the
-accept-per-verify lift beats the wider-tree drafter/committer overhead (dfwd-inclusive TPS).
+**So budget the *cold-trie* build as: accept 3.56 → ~4.0 baseline everywhere, with >5 as a repetitive-span
+windfall — NOT a flat average.** BUT the **pre-warmed harness-aware trie (§6b) is the lever that moves the
+average**: it makes the *harness-structural* fraction (tool calls, boilerplate, system reminders, common
+imports — a large slice of agentic decode) trie-covered *from token 1*, so those spans hit the >5 tail
+*regularly* rather than only after intra-task recurrence. That raises the effective repetitive fraction
+toward/past the ~27% needed to average >5. The go/no-go is GATE 4 (tail accept) measuring the real
+repetitive fraction **cold vs pre-warmed**, plus whether the accept-per-verify lift beats the wider-tree
+overhead (dfwd-inclusive TPS).
 
 ---
 
@@ -212,8 +249,15 @@ does NOT guarantee this — the bigger `static_range` scan grows other live pres
 **code** workload @ temp 0.6, depth-matched. This measures the repetitive-span fraction — where ~all the gain
 past 3.56 lives. Go/no-go: does accept actually rise enough to matter?
 
+**GATE 0.5 — PRE-WARM effect (§6b, pivotal, 16-node, NO BV work):** live A/B of suffix-complement (16-node
+cat33333 + one suffix branch slot) **cold trie vs harness-aware pre-warmed trie** on real SWE tasks —
+does the pre-warm raise the suffix accept/coverage on harness-structural spans? This is the **cheapest test
+of whether the suffix source is strong enough to justify the 32-node tail build at all** — if pre-warm
+doesn't lift it, the whole suffix direction stays weak (Front-2 territory) and we stop; if it does, the
+tail build is justified. Run early, independent of the BV work.
+
 **Q2 (task #33, parallel/free) — complement-branch complementarity:** commit-trace offline join
-suffix_covers_miss[d]/mtp_miss[d]. Gates §3 (branches) independently of the tail; run alongside GATE 1.
+suffix_covers_miss[d]/mtp_miss[d]. Gates §3 (branches) independently of the tail; run alongside GATE 0.5.
 
 **GATE 5 — live B=4 A/B (deliverable):** 32-node MTP-spine + MTP-guided suffix-tail + suffix-complement
 branches vs cat33333 baseline — accept, **dfwd-inclusive TPS**, resolve/give-ups/garble. DELIVERY = accept up
