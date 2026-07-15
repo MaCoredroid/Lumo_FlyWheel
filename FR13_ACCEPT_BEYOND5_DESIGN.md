@@ -643,3 +643,14 @@ is NOT the canonical deploy_speed accept_per_event -- await the reduce; (3) cold
 need a SAME-SESSION tail6_cold A/B to isolate prewarm from run variance; (4) must stay lossless/garble-clean +
 TPS same-or-better. If the 16-task deploy_speed accept_per_event >5 AND the same-session cold A/B confirms the
 delta AND lossless/TPS hold -> GOAL MET. Next: complete prewarm run -> run same-session tail6_cold -> reduce both.
+
+## PRE-WARM aggregate SOFTENED (2026-07-15, 281 windows, 9/16 tasks) — "no early-needle" paying off
+
+Running mean-accept-length: 168-win 6.01 -> **281-win 5.88 (median 5.56, max 11.14)** as more (non-windfall)
+windows accumulate => accept_per_event ~**4.88**, now JUST UNDER >5. Prewarm still clearly +0.6 over cold (5.28)
+= windfall REAL (no-go stays overturned), but the AVERAGE is landing BORDERLINE, not clearly >5. Correctness:
+no garble/crash; early patches mixed (1 non-trivial, 2 empty -- agentic resolve-rate TBD, tree-vs-native risk).
+Caveats compound: (a) still partial 9/16, (b) vLLM mean-accept-length != canonical deploy_speed accept_per_event
+(-1 conversion assumed, unverified), (c) cold is cross-session. VERDICT PENDING the 16-task deploy_speed reduce +
+same-session tail6_cold A/B. Honest read now: prewarm delivers a real +0.6 accept lift but ~5 is a coin-toss;
+whether it clears >5 depends on the final reduce and the windfall fraction over the full task mix.
