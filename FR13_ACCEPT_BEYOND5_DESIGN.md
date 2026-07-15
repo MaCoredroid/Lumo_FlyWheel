@@ -346,6 +346,18 @@ to fund the tail" reallocation is DOWNGRADED to a secondary optimization: only w
 is exhausted AND GATE 4 shows the displaced tail out-earns the ~9% high-p branch coverage it costs. Never-regress
 still holds (committer is source/depth-blind); this only reprioritizes WHICH nodes fill the extra budget.
 
+### ✅ TAIL ASSEMBLY CORE DONE (2026-07-15, CPU-validated, committed)
+`fr13_mtp_suffix_assembly.assemble_tail_tree` + `tail_tree_order` built: cat33333 head (depths 0-4, pure MTP
+at mtp_k=5 == baseline byte-identical) + deep Arctic-filled spine CHAIN (16 nodes, depths 6-21) = 31 nodes ->
+n_pad=32. PURE chain tail (no branches) per ladder-step-1 (94.9% peaked -> deep chain maximizes reach/node).
+`tail_tree_order` is ONE topology source (drives spec + packer + assembly). NEVER-REGRESS proven in CPU tests
+(`fr13_tail_tree_test.py`): mtp_k=5 cold -> head==baseline cat33333, tail=pad(repeat) that never matches past
+the head -> accept==baseline; warm -> 16 arctic chain tokens; partial -> fills then pads. Arctic adapter
+already tail-ready (`max_rel` parameterized -> caller passes max_rel=head_depth-mtp_k+tail_len=16).
+REMAINING (gated on the packer->injection seam map, agent a4516b7c in flight): build_tail_tree_columns (fill),
+the 31-node packer/injection map + SPEC tree string, decide_and_fill tail call (max_rel=16, mtp_k=5, NO skip),
+one 32-node NODE_FAMILY/topology if the metadata builder needs it -> then live boot -> GATE 3/4/5.
+
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
 up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
