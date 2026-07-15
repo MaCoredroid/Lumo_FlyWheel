@@ -161,3 +161,12 @@ speed). tail6's arctic tail is the real accept jump (3.59->4.28) but n_pad=32 pu
 => -10% vs native. KEY: the COMMITTER is where tree/tail diverge from native (native=cheap linear; tree=74ms;
 tail=113ms GDN replay, depth-scaling) -> a sampled/faster tree committer is the unlock to keep the accept while
 closing the speed gap to native.
+
+## 8. Committer already accepted-path-scoped -> tail speed cost-gate is a NO-CHEAP-PATH (2026-07-15)
+Checked the last unexamined lever: launch_tree_gdn_replay replays "root + accepted path" ONLY (not all n_pad
+nodes). So the committer is already accepted-path-scoped; cost = O(accepted-path length), intrinsic to deeper
+accept (tail6 replays ~5.3-token path vs baseline ~4.6 + small n_pad=32 ring overhead). No chain-tail win. With
+verify+committer ~81% irreducible (prior campaign task #30), the tail's -10% speed cost has NO cheap path -- both
+dominant stages are structurally fixed. FINAL: the accept>5-tail is a LOSSLESS +19%-accept drafter but an honest
+SPEED cost-gate (-10%, no cheap fix). accept>5-AVERAGE is workload-bound (windfall). Delivered = the lossless
+mechanism + the corrected honest measurement. Speed goal NOT met with no cheap path => report-and-hold.
