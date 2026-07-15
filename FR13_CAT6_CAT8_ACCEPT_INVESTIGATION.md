@@ -1185,3 +1185,16 @@ B=4 host-mem pressure on the 4 concurrent qwen-code AGENT procs, or the known of
 also cuts off -> harness/host-B4 flake (A/B still comparable); if clean -> merged-caused, investigate.
 FOLLOW-UP (not the cause): reduce hybrid 2x speculate (dfwd 49->~34) -- derive spine from the tree's
 deepest path instead of a 2nd flat call.
+
+## FRONT 2 EMPTY-PATCH FLAKE ROOT-CAUSED (user's config catch, 2026-07-15)
+User pushed: "same config as speed gate? config drift?" -> DECISIVE: SLOT_REORDER gate failure modes
+= ALL tests_failed/tests_passed, ZERO patch_apply_failed -- INCLUDING its own t33333 arm (resolved
+11/16), run with LUMO_PROXY_SSE_HEARTBEAT_S=0. So t33333+heartbeat0 = 0 empty patches. My merged
+t33333 (heartbeat0) = ~all empty. ONLY added var = FR13_DRAFT_SOURCE=merged. => CORRECTION (I was
+wrong to say "not merged"): the MERGED drafter's arctic overhead (2x speculate + ingest) trips the
+GB10 per-request EMIT-WEDGE (120s downstream idle) that plain t33333 tolerated; with no heartbeat,
+qwen-code's stream-idle abort cuts the agent mid-edit -> empty patch (no result record). NOT proxy
+config drift per se (both heartbeat0) but the CANONICAL config (all probe seqs) sets HEARTBEAT=15;
+the merged latency needs it. FIX: LUMO_PROXY_SSE_HEARTBEAT_S=15 (masks emit-wedge) + FR10_METRICS=0
+baked into both merged seqs. FOLLOW-UP: reduce merged 2x speculate (halve arctic latency source).
+Re-run with heartbeat. Ingest fix (0 socket) + hybrid still hold.
