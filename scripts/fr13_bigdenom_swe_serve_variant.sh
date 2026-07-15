@@ -75,6 +75,10 @@ CAT555_TREE="[(0,),(1,),(2,),(3,),(4,),(0,0),(0,1),(0,2),(0,3),(0,4),(0,0,0),(0,
 # 55555 = widths [5,5,5,5,5]: depth-5 spine + 4 branches/depth (25 choices, 26 rows) — tree-scaling probe past 16
 T55555_TREE="[(0,),(1,),(2,),(3,),(4,),(0,0),(0,1),(0,2),(0,3),(0,4),(0,0,0),(0,0,1),(0,0,2),(0,0,3),(0,0,4),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,3),(0,0,0,4),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,3),(0,0,0,0,4)]"
 T33333_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2)]"
+# accept>5 TAIL: cat33333 head (15 nodes, depths 0-4, MTP-drafted == t33333 baseline) + a 6-node deep
+# Arctic-filled spine CHAIN (depths 6-11) = 21 nodes -> n_pad=32, wide_D=11. Head byte-identical baseline;
+# the tail ADDS only (never-regress via the committer). == tail_tree_order(tail_len=6) from fr13_mtp_suffix_assembly.
+TAIL6_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0)]"
 # 333 = widths [3,3,3]: depth-3 spine (spine_steps=2) + 2 branches/depth (9 choices). SAME width
 # as t33333, differs ONLY in depth -> dfwd(t33333)-dfwd(t333) = 2 spine-steps' drafter cost.
 T333_TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2)]"
@@ -151,6 +155,10 @@ case "$KIND" in
   cat555)    LAUNCHER=forked; TREEARG="$CAT555_TREE";    EXPECT_RATIO=15; declare -a XFLAGS=() ;;
   t333)      LAUNCHER=forked; TREEARG="$T333_TREE";     EXPECT_RATIO=9;  declare -a XFLAGS=() ;;
   t33333)    LAUNCHER=forked; TREEARG="$T33333_TREE";   EXPECT_RATIO=15; declare -a XFLAGS=() ;;
+  # accept>5 TAIL arm: cat33333 head + 6-node Arctic chain (21 nodes, n_pad=32, wide_D=11). Needs
+  # FR13_TAIL_MODE=1 (caps native spine_steps=4 + appends Arctic tail) + FR13_DRAFT_SOURCE=merged (the
+  # Arctic cache lifecycle) + BV=8 (n_pad=32 register budget). EXPECT_RATIO=21 = the tree node count.
+  tail6)     LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8) ;;
   t55555)    LAUNCHER=forked; TREEARG="$T55555_TREE";   EXPECT_RATIO=25; declare -a XFLAGS=() ;;
   cat55222)  LAUNCHER=forked; TREEARG="$CAT55222_TREE";  EXPECT_RATIO=16; declare -a XFLAGS=() ;;
   cat55221)  LAUNCHER=forked; TREEARG="$CAT55221_TREE";  EXPECT_RATIO=15; declare -a XFLAGS=() ;;
