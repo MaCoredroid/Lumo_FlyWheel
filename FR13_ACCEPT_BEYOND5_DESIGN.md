@@ -374,6 +374,21 @@ tree in TAIL+merged mode, drives a repetitive workload (arctic self-warms), veri
 reads per-position accept (pos 6-20 non-zero => the tail accepts => >5 signal). Then the real GATE 4/5 =
 live B=4 SWE-Verified A/B (accept UP AND dfwd-TPS same-or-better AND lossless/garble-clean).
 
+### GATE 4 ATTEMPT 1 (depth-21) = graph-capture STALL, NOT a crash (2026-07-15, run_20260715T161934Z)
+The 31-node depth-21 tail tree booted CLEANLY through model-load + conv-fusion (path_cols=32, width=4,
+state_len=34, NO n_pad/packer/spill error) and reached KV-cache sizing (217,120 tokens) -- BUT profiling took
+12min (vs GATE-2's ~6min) and then it STALLED entering graph capture: last engine line 16:36:25, then ZERO
+"Capturing CUDA graph" lines for 8min -> killed at the 1800s window. No Traceback. So: correctness path fine,
+but the very deep chain is pathologically slow/hung at graph capture. HYPOTHESIS (under test): depth-driven
+(the tree spine is a depth-21 sequential dependency; even though the GDN kernel loops over n_pad=32 not depth,
+graph-capturing a depth-21 chain -- or the tail-mode drafter path during profiling -- blows up). CONFOUNDS
+still open: depth(21) vs node-count(31) vs tail-mode-drafter vs chain-vs-fan. **PIVOT (honest): the tail does
+NOT need depth-21 to clear 5 -- a depth-8..11 tail already exceeds 5 (accept up to 8-11 on repetitive spans).**
+Re-boot at tail_len=6 (depth-11 tree, 21 nodes, still n_pad=32; run_20260715T164344Z, monitor bu8qx0x9p w/
+stall detector). If depth-11 boots -> depth/node-count was it -> shallow tail works -> measure accept. If it
+STILL stalls -> not depth magnitude -> isolate tail-mode-drafter (boot topology-only) or chain-capture (eager).
+This is a SPEED/capture cost, NOT a losslessness issue (never-regress holds regardless of tail depth).
+
 ### Scoped tail-build (post-GATE-2, each edit committed behind the gate)
 The arctic substrate is ALREADY deep-capable: `fr13_merged_drafter.py:get_cache(max_tree_depth=24)` holds
 up-to-24-deep committed patterns. Missing pieces (all depth-5-locked today):
