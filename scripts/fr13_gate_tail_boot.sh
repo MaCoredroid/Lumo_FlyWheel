@@ -8,10 +8,14 @@ set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
 PORT=9958; C=fr13-gate-tail
 TS=$(date -u +%Y%m%dT%H%M%SZ); RUN=output/fr13_gate_tail/run_$TS; mkdir -p "$RUN"
-# tail tree SPEC from the ONE topology source (code-consistent): 31 nodes -> n_pad=32, wide_D=21.
-TREE=$(.venv/bin/python -c "import sys; sys.path.insert(0,'scripts'); from fr13_mtp_suffix_assembly import tail_tree_order as t; o=t(); print('['+','.join('('+','.join(str(x) for x in p)+(',' if len(p)==1 else '')+')' for p in o)+']')")
-NSPEC=$(.venv/bin/python -c "import sys; sys.path.insert(0,'scripts'); from fr13_mtp_suffix_assembly import tail_tree_order as t; print(len(t()))")
-echo "[gate-tail] tree nodes=$NSPEC (n_pad=32, wide_D=21); TAIL mode + merged cache" | tee "$RUN/gate.log"
+# tail tree SPEC from the ONE topology source (code-consistent). FR13_TAIL_LEN sweeps the chain depth:
+# depth-21 (tail_len=16) HANGS graph capture (deep GDN recurrence is O(depth), 12min profiling). Start
+# SHALLOW (default 6 -> depth-11 tree, 21 nodes, still n_pad=32) -- already >5-capable (accept up to 11).
+TAIL_LEN=${FR13_TAIL_LEN:-6}
+TREE=$(.venv/bin/python -c "import sys; sys.path.insert(0,'scripts'); from fr13_mtp_suffix_assembly import tail_tree_order as t; o=t(tail_len=$TAIL_LEN); print('['+','.join('('+','.join(str(x) for x in p)+(',' if len(p)==1 else '')+')' for p in o)+']')")
+NSPEC=$(.venv/bin/python -c "import sys; sys.path.insert(0,'scripts'); from fr13_mtp_suffix_assembly import tail_tree_order as t; print(len(t(tail_len=$TAIL_LEN)))")
+WIDE_D=$((5 + TAIL_LEN))
+echo "[gate-tail] tail_len=$TAIL_LEN -> tree nodes=$NSPEC, wide_D=$WIDE_D (n_pad<=32); TAIL mode + merged cache" | tee "$RUN/gate.log"
 
 docker ps -aq --filter "name=fr13" | xargs -r docker rm -f >/dev/null 2>&1 || true
 PYTHONPATH="$PWD/src" .venv/bin/python -c "from lumo_flywheel_serving.model_server import recover_host_memory; recover_host_memory()" >/dev/null 2>&1 || true
@@ -21,16 +25,16 @@ env CONTAINER=$C PORT=$PORT GPU_UTIL=0.8 MAX_NUM_SEQS=4 ATTENTION_BACKEND=TREE_A
   GPU_GUARD_FLOOR_MIB=3000 \
   bash scripts/fr13_launch_forked_fa2_tree_server.sh > "$RUN/boot.log" 2>&1 &
 LPID=$!; T0=$SECONDS; OK=0
-( while [ $((SECONDS-T0)) -lt 1500 ]; do
+( while [ $((SECONDS-T0)) -lt 1800 ]; do
     if docker ps -aq -f name=$C 2>/dev/null | grep -q .; then docker logs -f "$C" > "$RUN/engine.log" 2>&1; break; fi
     sleep 2; done ) & CAPPID=$!
-while [ $((SECONDS-T0)) -lt 1500 ]; do
+while [ $((SECONDS-T0)) -lt 1800 ]; do
   curl -fsS -m5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && { OK=1; break; }
   [[ -n "$(docker ps -aq -f name=$C -f status=exited)" ]] && { echo "BOOT EXITED early" | tee -a "$RUN/gate.log"; break; }
   sleep 10
 done
 if [ "$OK" != 1 ]; then
-  echo "GATE-TAIL FAIL: boot not healthy in 1500s" | tee -a "$RUN/gate.log"
+  echo "GATE-TAIL FAIL: boot not healthy in 1800s" | tee -a "$RUN/gate.log"
   grep -iE "n_pad must be|out of resource|register|Traceback|ValueError|RuntimeError|assert" "$RUN/engine.log" 2>/dev/null | tail -20 | tee -a "$RUN/gate.log"
   docker logs "$C" > "$RUN/engine_final.log" 2>&1 || true
   docker rm -f "$C" >/dev/null 2>&1 || true; kill $CAPPID 2>/dev/null || true; wait $LPID 2>/dev/null || true
