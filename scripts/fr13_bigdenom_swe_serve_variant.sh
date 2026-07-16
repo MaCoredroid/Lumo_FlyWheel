@@ -159,6 +159,13 @@ case "$KIND" in
   # FR13_TAIL_MODE=1 (caps native spine_steps=4 + appends Arctic tail) + FR13_DRAFT_SOURCE=merged (the
   # Arctic cache lifecycle) + BV=8 (n_pad=32 register budget). EXPECT_RATIO=21 = the tree node count.
   tail6)     LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8) ;;
+  # COMMITTER-PORT lever: identical to tail6 (NO drift) + FR13_GPU_COMMITTER=1 -> moves the tree path-LCP
+  # committer from the host Python loop (_lumo_tree_path_lcp_max_greedy_sample, measured 94ms/step vs
+  # native's 7ms) to the device LCP kernel (patcher:17749). Tests THE biggest reducible overhead (87ms of
+  # OUR code). Gate: does committer_gpu_ms drop 94->~10 AND accept_per_event + resolve/empty-patch stay ~=
+  # tail6 (lossless-equivalent, NOT byte-exact -- rejection-sampler convergence). NEVER live-run => monitor
+  # arm-1 boot for crash. gc = GPU_COMMITTER only (compute port); synckill (the sync defer) is separate/broken.
+  tail6_gc)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_GPU_COMMITTER=1) ;;
   # Direction-2 tail-DEPTH lever: identical config to tail6 (NO drift) but a deeper spine tail (25 nodes,
   # depth-15, tail_len=10 derived from wide_D). Tests whether the RISING deep-tail conditional (d7-11:
   # 0.848->0.950) keeps paying past d11. tail_len auto-derives from the tree; no code change.
