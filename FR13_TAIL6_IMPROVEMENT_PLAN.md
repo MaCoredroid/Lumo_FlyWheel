@@ -1,0 +1,94 @@
+# FR13 tail6 improvement plan — two compounding directions
+
+**Baseline (locked, same 16-task B=4 SWE-Verified, temp 0.6):**
+- Deliverable **tail6** (MTP spine d1–5 + 2 branches/depth + arctic tail d6–11, n_pad=32/BV=8): **accept ≈ 5.2**, derived_tps_gpu ≈ **70**, lossless never-regress.
+- Depth-5 baseline (t33333): accept 3.697, tps_gpu 67.06.
+- Pre-warm proven ≈0 same-session (dropped). The **arctic tail alone** carries +42% accept.
+
+Two independent levers, and they **multiply**: cheaper per-step (Dir-1) turns accept into more TPS; higher accept (Dir-2) amortizes the per-step cost. TPS ≈ committed_per_step / (draft+verify+commit ms).
+
+---
+
+## Grounded data
+
+### A. Per-depth acceptance profile (656-window aggregate, tail6)
+| depth | zone | survival P(reach d) | conditional P(hit d \| reached) |
+|---|---|---|---|
+| 1 | head/spine | 0.970 | 0.970 |
+| 2 | head | 0.838 | 0.864 |
+| 3 | head | 0.713 | 0.851 |
+| 4 | head | 0.605 | 0.849 |
+| 5 | head | 0.524 | 0.866 |
+| 6 | tail (MTP→arctic handoff) | 0.349 | **0.666** |
+| 7 | tail | 0.296 | 0.848 |
+| 8 | tail | 0.265 | 0.895 |
+| 9 | tail | 0.240 | 0.906 |
+| 10 | tail | 0.218 | 0.908 |
+| 11 | tail | 0.207 | 0.950 |
+
+Σ survival = **5.23 = accept**. Two structural facts:
+- **Head conditional is flat ~0.85** (d1–5); the ~15%/depth loss is MTP top-1 misses the 2 branches don't rescue. Branch-accept probe (`fr13_analyze_branch_topp.py`): argmax falls **spine 84.5% / branch 10.2% / hard-miss 5.3%**.
+- **The tail's weakest link is d6 = the MTP→arctic handoff (conditional 0.666)**; deep tail d7–11 actually *holds* at 0.85–0.95 (repetitive spans). So the tail loses most of its potential *at the first arctic token*, then coasts.
+
+**Loss decomposition** (vs a hypothetical all-accept = 11): accept 5.23; **head attrition ≈ 1.35**, **tail attrition ≈ 1.57** (of which ~0.43 is the single d6 handoff drop from 0.866→0.666).
+
+### B. Per-stage GPU cost (per decode STEP, B=4)
+| stage | ms/step | HW floor | nature | reclaimable |
+|---|---|---|---|---|
+| DRAFTER | ~100 | ~22–30 | 4 sequential M=1 MTP-head forwards (FIXED vs tree size) + host arctic trie walk + assembly/H2D | ~70 (launch-latency + host, NOT bandwidth) |
+| VERIFY | ~170 (B=1) / ~340 (B=4) | 98.6 (27 GB weight read) | the one full-model tree forward; the ONLY genuinely GPU-bandwidth-bound stage | ~70 (M=25 GEMM eff + GDN serial scan; the O(N²) gather is NOT it — parent-gather was −1.7%) |
+| COMMITTER | ~74–113 | ~sub-ms compute | GDN replay is sub-ms/12k-CTA; the rest is a DtoH-sync bubble + host orchestration (48-layer `.item()` storm) | ~80 (host/sync, but much is B=1 serial latency) |
+
+Key: **drafter GPU is FIXED in tree size** (MTP head always drafts 5 depths; branches are ~free `topk` reads; tail adds only HOST time). So growing the tree costs **verify + committer**, not drafter GPU — and higher accept amortizes all three.
+
+---
+
+## DIRECTION 1 — Make tail6 cheap (drafter + verify + committer)
+
+Goal: cut ms/step so accept 5.2 buys more TPS. Every lever must stay **byte-identical / never-regress** and be flag-gated with a same-boot A/B.
+
+Ranked by reclaim / risk (from workflow wbvlbn0x3, source-verified):
+
+1. **LEVER 1 — dead metrics-dict elim (DONE, committed).** ~1 ms, byte-identical.
+2. **LEVER 2 — route GDN replay to the batched `_ep_launch_all` (kill the 48-layer `.item()` storm).** ~5–10 ms, LOW-MED risk, **localized + designed** (behind `FR13_REPLAY_BATCHED_RUNROW`; under `_fr13_runrow_commit=True` the per-layer publish is already dead → batched path is byte-identical). *Next to ship.*
+3. **LEVER 3 — kill the 7 per-launch `.contiguous()` copies** (patcher :5142–5148, 48×7=336 D2D/step). LOW effort.
+4. **LEVER 4 — repoint the next-step ATTN-KV remap at the device buffer** (drop a HtoD round-trip). ~0.5–2 ms.
+5. **LEVER 5 — whole-spine drafter CUDA-graph capture. ~40–60 ms, the only LARGE reclaim, HIGH risk.** The MTP spine has **no `.item()`/sync** (grepped) and static shapes → capturable in principle; 4 sequential M=1 launches collapse to one replay. 5 hard invariants (N_PAD-inv, M-inv of `in_proj_ba` = the SLOT_REORDER problem, per-level bit-exactness, no-sync-in-capture, req-key routing survives).
+6. **VERIFY GDN-scan occupancy (open):** verify is 1.7× its 98.6 ms floor; the residual is M=25 GEMM efficiency + the GDN serial recurrence at ~1 CTA/SM (128 KB h_cache pins occupancy). SRAM-staging h_cache (LEVER-2 of the kernel study) frees registers/de-spills but does NOT raise occupancy past ~1 CTA/SM losslessly. Needs an ncu pass to size.
+
+**Plan (cheapest-first, each gated byte-identical then measured):** L2 → L3 → L4 (bank ~7–14 ms cheaply), then attempt L5 (the big one) behind its flag with the same-boot bit-exact self-check. Expected: ~15–70 ms/step off ~550 → meaningful TPS with zero accept change.
+
+**Honest caveat:** at agentic effective-batch ≈1.3, cross-request overlap is unavailable, so much of the committer's span is fundamental B=1 serial latency (committed token needed before the next drafter forward). L5 is the only lever that moves the needle a lot, and it's the riskiest.
+
+---
+
+## DIRECTION 2 — Save misses (raise accept)
+
+The committer is **monotone `accept=p(S)`** → *adding* candidates can only raise accept (never-regress, Gate1 32/32). So every miss-recovery lever is lossless by construction; only magnitude and cost are open. Ranked by expected accept / cost:
+
+1. **d6 handoff repair — the single biggest lever (conditional 0.666).** The MTP→arctic transition loses 33% at the first tail token, and every deeper survival is scaled by it (compounds). Levers:
+   - **Add branches at d6** (currently the tail is spine-only): give d6 the same 2–3 candidates the head gets (MTP-guided suffix ∪ arctic top-k). If d6 conditional 0.666→~0.85, tail sum ≈1.575→~2.0 → **+0.4 accept**. Cost: +2 nodes at n_pad, some verify.
+   - **Better d6 seed:** the arctic walk is seeded by `_COMMITTED`; seed it with the MTP-head's depth-5 token so the first tail token is MTP-anchored, not a cold arctic guess.
+2. **Suffix COMPLEMENT branches on the head (d1–5) — raise the flat 0.85 conditional.** Add an arctic/suffix candidate **alongside** MTP's top-3 at each head depth (fills part of the 5.3% hard-miss). Arithmetic: conditional 0.83 → 0.83 + 0.17·f, f = fraction of misses the suffix covers. Ladder-step-1 says head misses are only ~5.3% (wider tree = limited upside) → **+0.1–0.3 accept**, cheap (branches are ~free `topk` reads on the drafter; cost is verify n_pad).
+3. **Tail branches at d7–11 (secondary).** Deep tail already holds 0.85–0.95 conditional, so branches there catch little and cost n_pad — do only if the 32-node budget allows after (1).
+4. **Deeper tail (d12+) — windfall only.** Tail conditional rises with depth on repetitive spans, so extending past d11 pays off *only* on long exact repeats; costs verify depth + risks capture stalls (depth-21 hung). Gate on the repetitive fraction, don't extend blindly.
+
+**Node budget:** n_pad=32 with BV=8 (byte-identical register budget). Current tail6 uses 21 nodes → **11 free slots**. Spend them on d6 branches (biggest ROI) first, then head-complement.
+
+**Plan:** (a) d6 branches + MTP-anchored seed → target tail sum +0.4 (accept ~5.6); (b) head suffix-complement → +0.1–0.3; both within the 32-node horizon, both lossless. Gate: live B=4 A/B, accept UP, per-depth survival re-measured, garble-clean.
+
+---
+
+## Combined roadmap (both, compounding)
+
+| phase | direction | change | expected | risk |
+|---|---|---|---|---|
+| P1 | speed | LEVER 2 batched replay (ship behind flag) | −5–10 ms/step | LOW-MED |
+| P2 | accept | d6 branches + MTP-anchored seed | +0.4 accept | LOW (monotone) |
+| P3 | speed | LEVER 3+4 (contiguous copies, KV-remap device buf) | −5–10 ms | LOW |
+| P4 | accept | head suffix-complement branches | +0.1–0.3 accept | LOW (monotone) |
+| P5 | speed | LEVER 5 drafter CUDA-graph (the big one) | −40–60 ms | HIGH |
+
+Net target: **accept ~5.6–5.8 at meaningfully lower ms/step** → TPS well above baseline, still lossless. Every accept lever is never-regress by construction; every speed lever is byte-identical-gated. Measure each on the live B=4 gate before the next (design §9 discipline).
+
+**Why both:** TPS = committed / step-ms. Dir-2 raises the numerator (5.2→~5.7), Dir-1 cuts the denominator (~550→~480 ms). Multiplied, that's a ~30%+ TPS gain on top of a lossless accept improvement — the accept and speed wins reinforce rather than trade off.
