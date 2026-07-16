@@ -301,7 +301,7 @@ if _HAVE_TRITON:
         # --- bonus / correction token (one, only if best_path non-empty) ---
         # best_path non-empty <=> depth > 0 (best_leaf is a valid node).
         if depth > 0:
-            bonus_tok = 0
+            bonus_tok = nc * 0  # int64 0 (reassigned from int64 ptgt/stgt loads; Triton branch-type match)
             if best_lcp < depth:
                 # reject_parent_target: parent_targets[best_path[best_lcp]]
                 up = depth - 1 - best_lcp
@@ -337,7 +337,7 @@ if _HAVE_TRITON:
         tl.store(row_len_ptr + r, rlen)
         tl.store(best_lcp_ptr + r, best_lcp)
         # accepted_rows = best_path[best_lcp-1] if best_lcp>0 else 0
-        acc_row = 0
+        acc_row = nc * 0  # int64 0 (reassigned from int64 node2; Triton branch-type match)
         if best_lcp > 0:
             up = depth - 1 - (best_lcp - 1)
             node2 = best_leaf
@@ -504,7 +504,7 @@ if _HAVE_TRITON:
             p += 1
 
         if depth > 0:
-            bonus_tok = 0
+            bonus_tok = nc * 0  # int64 0 (reassigned from int64 ptgt/stgt loads; Triton branch-type match)
             if best_lcp < depth:
                 up = depth - 1 - best_lcp
                 node2 = best_leaf
@@ -536,7 +536,7 @@ if _HAVE_TRITON:
 
         tl.store(row_len_ptr + r, rlen)
         tl.store(best_lcp_ptr + r, best_lcp)
-        acc_row = 0
+        acc_row = nc * 0  # int64 0 (reassigned from int64 node2; Triton branch-type match)
         if best_lcp > 0:
             up = depth - 1 - (best_lcp - 1)
             node2 = best_leaf
