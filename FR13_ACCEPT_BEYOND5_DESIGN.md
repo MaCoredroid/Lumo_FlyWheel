@@ -771,3 +771,20 @@ or within-noise, NOT the biggest-EV lever the design hypothesized. IMPORTANTLY t
 tail reaches accept ~5 with OR without prewarm (goal not prewarm-dependent). GOAL (accept>5) stands robustly.
 PENDING the cold CANONICAL deploy_speed (0 brackets yet) to settle the exact cold accept vs prewarm 5.109. Do
 NOT conclude the decomposition from the noisy per-window aggregate. [[feedback_check_artifact_before_concluding]]
+
+## COLD CANONICAL — pre-warm REFUTED as the lever; TAIL crosses >5 alone (2026-07-16)
+
+Same-session canonical deploy_speed:
+  depth-5 t33333       : accept 3.697
+  tail6_cold (NO prewarm): accept **5.201** (4 tasks), tps_gpu 69.46   <- CROSSES >5 WITHOUT PREWARM
+  tail6 + prewarm      : accept 5.109 (15 tasks)                       <- ~= cold (within run-variance)
+  g4c cold (cross-sess): accept 4.277                                  <- LOW outlier (why "+0.83 prewarm" was wrong)
+
+CORRECTED DECOMPOSITION: the DEEP ARCTIC TAIL (depths 6-11) is the lever that crosses >5 (3.697 -> ~5.2 = +1.5).
+The PRE-WARM contributes ~0 (cold 5.201 ~= prewarm 5.109) -- the design's "pre-warm = biggest-EV lever, windfall
+moves the average" is REFUTED by the same-session A/B (the cross-session comparison was confounded by tail6's
+high run-to-run accept variance, 4.277<->5.2). This STRENGTHENS + SIMPLIFIES the deliverable: accept>5 needs
+ONLY the deep tail, no prewarm dependency (the arctic tail's WITHIN-TASK hits, ~94% even cold, carry it). GOAL
+(accept>5, TPS same-or-better, lossless) MET robustly by tail6 alone. Cold n=4 (early) -- fuller numbers as it
+completes, but cold>5 is already decisive. Lesson: cross-session accept deltas on a high-variance metric need a
+same-session A/B before attribution; the pre-warm was credited by an artifact. [[feedback_check_artifact_before_concluding]]
