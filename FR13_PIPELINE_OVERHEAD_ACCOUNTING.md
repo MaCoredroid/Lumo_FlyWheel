@@ -164,3 +164,38 @@ same align floor (confirmed: GDN hybrid => align forced), so nt1's committer/hos
   ALREADY BEATS native MTP-5 on BOTH axes. Branch-widening (tail6b) was the anti-speed misstep; tail6 stands.
 - Remaining speed frontier = align-escape (bounded device-side-check, deferred to nt1) OR HBM wall.
   Branch-widening for accept is CLOSED (anti-speed, b7-proven).
+
+---
+
+## NATIVE DECOMPOSITION (nt1) — the tree committer is the smoking gun, and native is FASTER
+
+Same-subset native MTP-5 (flash_ns5_nocache, timers ON) vs tail6 (b7):
+| stage/step | native MTP-5 | tail6 (tree) | delta |
+|-----------|-------------:|-------------:|-------|
+| accept_per_event | 3.415 | 4.317 | tree +0.9 (+27%) |
+| per_request_decode_tps | **5.490** | 4.889 | **native +12%** |
+| kernel derived_tps_gpu | **75.96** | 56.9 | native +33% |
+| verify s_per_fwd_gpu | 58ms | 93.5ms | tree +35ms (25-node attn) |
+| **committer_gpu_ms/step** | **7.2ms** | **94.0ms** | **tree +87ms (13x!)** |
+| drafter_gpu_ms/step | 93.1 | 99.2 | ~same |
+
+### Two overturned assumptions
+1. **Native MTP-5 is FASTER than the tree** (per-stream 5.49 vs 4.89; kernel 76 vs 57). Earlier "tail6 beats
+   native" came from a stale cross-run native (4.60); this fresh SAME-timer native is 5.49. The tree's +0.9
+   accept does NOT buy a speed win -- its verify+committer overhead exceeds the accept benefit.
+2. **The align-mode sync is NOT the committer bottleneck.** Native runs the SAME GDN hybrid (same
+   mamba_cache_mode=align, same per-step num_accepted.cpu()) yet its committer is 7.2ms. So the tree
+   committer's 94ms is FR13's OWN host path (tree path-LCP DtoH + Python per-row loop), not the align sync.
+
+### THE REAL LEVER: the FR13 tree committer (87ms of OUR overhead)
+The tree committer (94ms) vs native (7ms) = 87ms/step of FR13-authored host-side overhead (DtoH the tree
+output + host path-LCP over root-to-leaf paths + commit). This is the S1 "sampled-committer port" lever
+(prior task #25). If the tree committer drops to ~native's 7ms: tail6 per-step compute 286->199ms; wall
+1088->~1001ms; per_req 4.89->~5.3 -- closing most of the gap to native 5.49 WHILE keeping +0.9 accept.
+The verify (+35ms, 25-node tree-attn) is the remaining tree tax (trades accept via tree size).
+
+**Reframed plan:** the committer port (FR13 host-LCP -> device-resident, remove the 87ms host loop) is
+the biggest single reducible overhead AND it is entirely our code (low architectural risk vs the align-
+escape). FR13_GPU_COMMITTER=1 was meant to do this; redteam found its synckill path _materialise()s
+eagerly (keeps the sync) -- but the COMPUTE port (device LCP kernel, remove host loop) is the 87ms win,
+separable from the align sync. nt1 tail6 arm (running) confirms the 94ms committer SAME-SESSION vs native 7ms.
