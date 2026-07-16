@@ -203,7 +203,11 @@ if _HAVE_TRITON:
         out_base = r * (MAX_SPEC_LEN + 1)
 
         best_lcp = -1
-        best_leaf = -1  # node id of the winning leaf (path end)
+        # int64 -1: `leaf` is loaded from the int64 leaves tensor, so `best_leaf = leaf`
+        # reassigns to int64; a bare `-1` inits int32 and Triton rejects the branch-type
+        # change ("initial value ... int32[] ... then block redefines it as int64[]").
+        # Derive -1 from the int64 `nc` load (value-identical, no tl.full/tl.cast syntax risk).
+        best_leaf = nc * 0 - 1  # node id of the winning leaf (path end)
         # winning path is recomputed at emit time by re-walking best_leaf; this
         # keeps per-program state to scalars (no per-program arrays needed).
 
@@ -424,7 +428,7 @@ if _HAVE_TRITON:
         path_base = r * MAX_NODES
 
         best_lcp = -1
-        best_leaf = -1
+        best_leaf = nc * 0 - 1  # int64 -1 (match int64 leaf loads; see _fr13_committer_kernel)
 
         li = 0
         while li < nl:
