@@ -154,3 +154,33 @@ both arms ⇒ **no config drift**. WALL=1800, B=4, CONC=4 (== the deployment gat
 - If tail6b > tail6: the head-complement lever (arctic ∪ MTP branches at d1–5) is next.
 - If tail6b ≈ tail6 with br_real>0: branches engage but don't help (handoff isn't the accept leak) —
   re-target the lever.
+
+### b7 update: ENGAGEMENT GATE PASSES + diagnosis + next lever wired
+
+**Diagnosis (airtight, CPU-confirmed):** arctic's first tail token (d6) IS re-anchored to the
+committed MTP head — `decide_tail` builds `pattern = committed + head` (the d1-5 MTP spine) and feeds
+that to `cache.speculate` (fr13_merged_drafter.py:384). So the measured 0.666 handoff conditional is
+**inherent to arctic's first post-handoff prediction, NOT a re-anchoring bug.** The lever is therefore
+seam candidate *coverage*, exactly what tail6b tests. Arctic's runner-up branches come from its suffix
+**tree siblings** at depth d, ranked by prob (arctic_suffix_adapter:131-144) — same suffix-match context,
+so potentially correlated; `br_real` gates whether they exist at all.
+
+**LIVE engagement (b7, tail6b arm serving):** `TAIL[fired=509 hit=484 cold=0 br_real=466]`. br_real≈fired
+⇒ nearly every tail speculation yields REAL arctic runner-up branch tokens (not pad). The branched path
+is non-vacuous; arctic's tree HAS siblings at the seam. Engagement gate ✓. Open: does it raise accept
+(deploy_speed, on run completion).
+
+**Next lever wired + CPU-tested (ready, not yet run — b7 owns the GPU):**
+- `tail6c` KIND: seam-CONCENTRATE — all 4 branches at d6 ONLY (BRANCHES=4 DEPTHS=1), 25 nodes / n_pad=32
+  / tps == tail6b, vs tail6b's 2+2 spread across d6/d7. Tests concentrate-vs-spread at THE seam (d6 leak
+  0.334 >> d7 0.152). Needed `build_tail_branch_columns` width = max(3, tail_branches+1) (was hardcoded 3,
+  would drop ranks 3,4); no-op for BRANCHES<=2 ⇒ tail6b + running b7 byte-identical.
+- Decision tree keyed on b7's accept delta:
+  - tail6b > tail6 (br_real>0 ✓ already): arctic seam branches help ⇒ run tail6c (concentrate) vs tail6b.
+  - tail6b ≈ tail6 despite br_real>0: siblings are correlated (same-match) ⇒ escalate to a DECORRELATED
+    seam candidate = an MTP-extended d6 token (real model head vs suffix match) injected as a d6 branch.
+
+**Leverage math (why d6):** accept gain from raising cond_d by δ ≈ δ · survival_{d-1} · Σ(tail survivals
+from d). d6: survival_5=0.524, raising cond_6 0.666→0.766 (δ=0.10) scales survivals d6-11 (Σ=1.575) by
+1.150 ⇒ +0.236 accept. Biggest single-depth lever; head-complement at d2-5 gives ~+0.15 each but those
+conditionals (0.85-0.97) are already near-saturated (MTP branches present) ⇒ secondary.
