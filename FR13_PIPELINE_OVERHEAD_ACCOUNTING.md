@@ -274,3 +274,24 @@ kernel commits the SAME paths as the host committer => LOSSLESS-equivalent (the 
 if the accept/LCP/bonus decisions are identical). 0 crashes, 0 fallback, GPU committer engaged throughout.
 => The FR13_GPU_COMMITTER=1 device port is CORRECT. Remaining = pure SPEED (deploy_speed at arm end):
 committer_gpu_ms 94->~10? + per_req past native 5.49? If yes => BAKE (lossless + faster, our own code, no drift).
+
+## Committer-port = LOSSLESS but ~0 SPEED (misdiagnosed) — the 94ms is GDN replay, not the LCP
+
+Live cfwd/dfwd sidecars, tail6_gc (FR13_GPU_COMMITTER=1): drafter 100.2ms, committer **97.5ms** ==
+tail6's 99/94ms. The device LCP port did NOT reduce the committer. Needle: "FR13_EAGER_PACK committer path
+engaged: layers=48 replay_batched=1 boundary_legacy_loop=0" -- the host LCP loop was ALREADY skipped
+(EAGER_PACK, baked in BOTH arms); the 94ms committer is dominated by the **GDN state replay across 48
+layers** + packed DtoH, NOT the path-LCP. FR13_GPU_COMMITTER only moves the tiny LCP decision host->device.
+
+**MISDIAGNOSIS corrected:** I attributed the 94ms committer (vs native 7ms) to "the host path-LCP loop";
+it's actually the GDN recurrent-state replay for the committed path across 48 layers -- INHERENT to
+tree+GDN (native's mamba advances linearly by num_accepted, no per-committed-token tree replay). The
+committer port is LOSSLESS (accept 4.321==4.317, kernel debugged through 3 Triton dtype bugs) but delivers
+~0 speed because the LCP was never the bottleneck. The debugging fixed a real crash + proved the device
+LCP correct, but the lever doesn't move per_req.
+
+**Where this leaves it:** the tree's committer disadvantage vs native (94 vs 7ms) = the GDN replay, which
+is architecturally inherent. Reducing it = overlap the replay with the next drafter (workflow lever #5,
+~+2%) -- marginal. Native MTP-5 remains faster per-stream. The A/B tail6 arm (cp4 arm2) confirms tail6's
+committer is also ~94ms same-session (both EAGER_PACK). Do NOT bake FR13_GPU_COMMITTER (no speed win).
+Committer-as-LCP-lever CLOSED; GDN-replay is the real (inherent) committer cost.
