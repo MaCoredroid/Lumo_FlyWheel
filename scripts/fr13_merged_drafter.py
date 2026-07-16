@@ -332,6 +332,15 @@ def decide_and_fill(cache, spec_row_req_ids, mtp_near_per_depth, mtp_topk_per_de
     return spine_tokens, wide_topk, True
 
 
+_TAIL_WIDE_TOPK = {}
+
+
+def get_tail_wide_topk():
+    """Direction-2 d6-branch: the tail-branch wide_topk {parent_pos: [B, width]} from the LAST decide_tail
+    call ({} when the spine-only tail ran). The patcher tail-append merges this into _fr10_wide_topk."""
+    return _TAIL_WIDE_TOPK
+
+
 def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_len,
                 device, pad_token, max_spec_tokens=32, max_spec_factor=4.0, min_token_prob=0.0,
                 vocab_size=None):
@@ -346,13 +355,23 @@ def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_le
     mtp_head_per_depth: list length head_depth; entry d is a per-row-indexable of the native MTP spine
                         token at depth d (e.g. _fr10_spine_tokens[d].cpu().tolist()), row order ==
                         spec_row_req_ids order (req_id-keyed by the caller)."""
-    from fr13_arctic_suffix_adapter import arctic_draft_to_suffix_rel
-    from fr13_merged_fill import build_tail_columns
+    from fr13_arctic_suffix_adapter import arctic_draft_to_suffix_rel, arctic_tree_to_suffix_rel
+    from fr13_merged_fill import build_tail_columns, build_tail_branch_columns
+    import os as _os
+    # Direction-2 d6-handoff repair (env-gated; default 0 => spine-only == shipped tail6, byte-identical,
+    # NO drift). When on: use the arctic TREE adapter (ranked top-k per depth) and add tail_branches
+    # sibling candidates at the first tail_branch_depths tail depths from suffix_rel[j][1:] (the runner-ups
+    # we discard today). The branch wide_topk is stashed in _TAIL_WIDE_TOPK for the patcher tail-append.
+    _tb = int(_os.environ.get("FR13_TAIL_BRANCHES", "0") or "0")
+    _tbd = int(_os.environ.get("FR13_TAIL_BRANCH_DEPTHS", "0") or "0")
+    _branched = _tb > 0 and _tbd > 0
+    _to_rel = arctic_tree_to_suffix_rel if _branched else arctic_draft_to_suffix_rel
 
     B = len(spec_row_req_ids)
     if B == 0 or cache is None:
         return None
     tail_rows = []
+    branch_rows = [None] * B
     any_hit = False
     for b in range(B):
         req_id = spec_row_req_ids[b]
@@ -363,10 +382,14 @@ def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_le
             draft = cache.speculate(
                 req_id, pattern, max_spec_tokens=max_spec_tokens,
                 max_spec_factor=max_spec_factor, min_token_prob=min_token_prob,
-                use_tree_spec=False)
+                use_tree_spec=_branched)
             STATS["tail_speculate_fired"] = STATS.get("tail_speculate_fired", 0) + 1
-            rel = arctic_draft_to_suffix_rel(draft, max_rel=tail_len)  # {0..: [tok,...]} = depths head+..
+            rel = _to_rel(draft, max_rel=tail_len)  # {0..: [ranked tok,...]} = depths head+..
             row = [(rel[j][0] if rel.get(j) else None) for j in range(tail_len)]
+            if _branched:
+                branch_rows[b] = {j: [int(t) for t in rel[j][1:1 + _tb]]
+                                  for j in range(min(_tbd, tail_len))
+                                  if rel.get(j) and len(rel[j]) > 1}
             if any(t is not None for t in row):
                 any_hit = True
                 STATS["tail_hit"] = STATS.get("tail_hit", 0) + 1
@@ -376,7 +399,11 @@ def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_le
     if not any_hit:
         STATS["tail_all_cold"] = STATS.get("tail_all_cold", 0) + 1
     _maybe_log_engagement()
-    return build_tail_columns(tail_rows, device, pad_token, tail_len, vocab_size=vocab_size)
+    _spine = build_tail_columns(tail_rows, device, pad_token, tail_len, vocab_size=vocab_size)
+    global _TAIL_WIDE_TOPK
+    _TAIL_WIDE_TOPK = (build_tail_branch_columns(branch_rows, device, pad_token, head_depth, _tbd, _tb,
+                                                 vocab_size=vocab_size) if _branched else {})
+    return _spine
 
 
 _LOG_EVERY = 50
