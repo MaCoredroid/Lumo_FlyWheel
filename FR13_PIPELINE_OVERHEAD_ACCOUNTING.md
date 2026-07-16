@@ -96,3 +96,41 @@ data-serial per stream; the win = delete the 250ms host stall + compress the 315
 correctness-sensitive (the committer decides accepted tokens) and NEVER validated => build an IN-PROCESS
 OFF==ON byte-identical losslessness gate BEFORE the speed campaign. Meanwhile the free GPU runs the
 native+tail6 decomposition (native stage timings — the missing HW-limit input). Then #1 -> #2 -> #3.
+
+---
+
+## ADVERSARIAL VERIFY REFUTED the top levers — the HW-limit ceiling was over-optimistic
+
+The workflow's Design agent proposed 42 tps/9.5x; its own redteam (+ my code verification) DEMOLISHED it:
+
+- **Committer sync-kill: +9% → REFUTED (~+2%).** Two grounds, both verified in code: (1) the built synckill
+  path calls `_materialise()` EAGERLY (patcher:17888-91) which does `event.synchronize()` — it doesn't
+  actually defer. (2) **THE LINCHPIN (verified, gpu_model_runner.py:1430-1443):** for the GDN hybrid,
+  `mamba_cache_mode=="align"` runs `self.num_accepted_tokens.gpu[:num_reqs].cpu().numpy()` EVERY STEP —
+  a blocking host sync, upstream-flagged `# TODO: Remove .cpu() sync to enable fully async for hybrid model`.
+  align mode needs num_accepted on CPU to decide mamba-state block-copies at boundaries (preprocess_mamba,
+  :5033). The `else` (non-align) branch uses a non-blocking copy + event (NO sync). So the sync is FORCED by
+  the GDN cache architecture, not by our committer.
+- **Graphed drafter: +10% → REFUTED (~+3%).** The drafter's 101ms is REAL bf16 lm_head weight-read
+  (measured dfwd_split compute_logits=15.08ms/call x ~5 = ~75ms GPU-active), NOT a removable host bubble.
+- **APC: +25% → REFUTED (0% on per-stream).** `per_request_decode_tps` EXCLUDES prefill by construction
+  (fr13_measure.py:1606), so removing co-resident re-prefill doesn't move the per-stream metric. (APC is an
+  AGGREGATE/TTFT lever, not per-stream — and still blocked on agentic-losslessness.)
+
+### Honest per-step floor (adversarially verified)
+- verify 105ms = HBM weight-read floor (read 27B fp8 once = 98.6ms; within 6%). IRREDUCIBLE on GB10 273 GB/s.
+- drafter ~75ms of 101ms = draft lm_head weight-read. Also HBM-bound. Only ~+3% from graphing the launches.
+- committer host-sync = FORCED by mamba_cache_mode=align (upstream TODO). async scheduling (+20%) is
+  BLOCKED behind it.
+- => The decode IS HBM-bound (confirms the prior "weight-read floor, per-forward opts limited" finding).
+  The user's "push to HW limit" is right in principle, but verify+drafter are already AT the HBM floor.
+
+### The ONE real big lever: escape mamba_cache_mode="align"
+The only path to a large (+~20%) per-stream gain is switching the GDN hybrid OFF align mode onto the
+non-blocking event path (:1455), which unblocks async scheduling / batch-queue pipelining. This is HARD
+(align mode manages mamba-state block-copy at boundaries; GDN may need it for cache/APC correctness) and
+lossless-UNPROVEN. It is the real "kernel-maker" target: make the GDN state-advance read num_accepted
+DEVICE-resident so the host sync is unnecessary. Realistic ladder: ~+6% from small levers (graph drafter
++3%, overlap GDN replay +2%, reuse verify root-logits +1%) WITHOUT align-escape; ~+20-30% IF align-escape
+is made lossless. NOT 9.5x. native+tail6 decomp (nt1, running) confirms whether native shares the same
+align-mode floor (it uses the same GDN hybrid) -- if so, the floor is architectural, not tree-specific.
