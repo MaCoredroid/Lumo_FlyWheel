@@ -1328,6 +1328,48 @@ def launch_tree_gdn_replay(
     )
 
 
+# FR13_REPLAY_GPU_TIMER (diagnostic, default OFF => byte-identical): coarse GPU-time of the accepted-path
+# replay per committer step, to settle the 94ms-committer decomposition (replay vs sync-wait/DtoH). A
+# non-invasive wrapper -- the timed function body is UNCHANGED; only wall-events are recorded when the
+# flag is on. NOTE: uses a synchronize() so it inflates OTHER spans (diagnostic run only, never deploy).
+_FR13_REPLAY_GPU_SECONDS = 0.0
+_FR13_REPLAY_N = 0
+
+
+def _fr13_replay_gpu_timed(_orig):
+    import functools
+
+    @functools.wraps(_orig)
+    def _w(*a, **k):
+        import os
+        if os.environ.get("FR13_REPLAY_GPU_TIMER", "0") != "1":
+            return _orig(*a, **k)
+        import json
+        _s = torch.cuda.Event(enable_timing=True)
+        _e = torch.cuda.Event(enable_timing=True)
+        _s.record()
+        _r = _orig(*a, **k)
+        _e.record()
+        _e.synchronize()
+        global _FR13_REPLAY_GPU_SECONDS, _FR13_REPLAY_N
+        _FR13_REPLAY_GPU_SECONDS += _s.elapsed_time(_e) / 1000.0
+        _FR13_REPLAY_N += 1
+        if _FR13_REPLAY_N % 50 == 0:
+            try:
+                json.dump(
+                    {"gpu_seconds": _FR13_REPLAY_GPU_SECONDS, "n_spans": _FR13_REPLAY_N},
+                    open(os.environ.get("FR13_REPLAY_GPU_TIMER_JSON", "/logs/fr13_replay_gpu.json"), "w"),
+                )
+            except Exception:
+                pass
+        return _r
+
+    return _w
+
+
+launch_tree_gdn_replay = _fr13_replay_gpu_timed(launch_tree_gdn_replay)
+
+
 @triton.jit
 def _tree_gdn_replay_all_layers_kernel(
     k_rings,

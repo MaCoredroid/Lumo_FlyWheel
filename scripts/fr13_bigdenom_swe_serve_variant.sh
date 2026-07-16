@@ -166,6 +166,11 @@ case "$KIND" in
   # tail6 (lossless-equivalent, NOT byte-exact -- rejection-sampler convergence). NEVER live-run => monitor
   # arm-1 boot for crash. gc = GPU_COMMITTER only (compute port); synckill (the sync defer) is separate/broken.
   tail6_gc)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_GPU_COMMITTER=1) ;;
+  # REPLAY-TIMER probe: tail6 + FR13_REPLAY_GPU_TIMER=1 -> coarse GPU-time of the accepted-path GDN replay
+  # per step (sidecar). Settles the 94ms-committer split: replay ~=80ms => the replay is the bottleneck
+  # (re-compute, reducible via stateless-tree gather = real lever); replay ~=11ms => the cost is sync-wait/
+  # DtoH not the replay (native wins). Diagnostic (synchronize inflates other spans -- read REPLAY only).
+  tail6_rt)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_REPLAY_GPU_TIMER=1 FR13_REPLAY_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/tail6_rt_replay.json) ;;
   # COMMITTER-SPAN DECOMPOSITION probe: tail6_gc + FR13_COMMITTER_SYNCKILL=1 defers the committer's
   # DtoH+sync/materialise to a side stream (uses the _dev kernel, also int64-fixed). committer_gpu_ms
   # vs tail6_gc DECOMPOSES the 94ms span: drops => DtoH/sync is the reducible bottleneck (real lever);
