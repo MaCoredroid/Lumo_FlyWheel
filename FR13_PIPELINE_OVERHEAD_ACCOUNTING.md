@@ -295,3 +295,30 @@ is architecturally inherent. Reducing it = overlap the replay with the next draf
 ~+2%) -- marginal. Native MTP-5 remains faster per-stream. The A/B tail6 arm (cp4 arm2) confirms tail6's
 committer is also ~94ms same-session (both EAGER_PACK). Do NOT bake FR13_GPU_COMMITTER (no speed win).
 Committer-as-LCP-lever CLOSED; GDN-replay is the real (inherent) committer cost.
+
+## MEASURED COST-GATE: committer NOT reducible -> native MTP-5 is the throughput answer on GB10
+
+Committer decomposition complete (all variants, live-measured):
+| committer variant | committer_gpu_ms/step | verdict |
+|-------------------|----------------------:|---------|
+| tail6 host-LCP (baseline)   | 94.0  | -- |
+| tail6_gc device-LCP port    | 97.5  | no change (LCP already EAGER_PACK device-side) |
+| tail6_gc_sk synckill        | 129.3 | WORSE (_dev kernel acc_path extra work; defer doesn't help) |
+| native MTP-5                | 7.2   | -- |
+
+NONE of the committer variants reduce the 94ms => the tree committer's cost is INHERENT (GDN 48-layer
+state replay + unavoidable DtoH + sync-wait), NOT the path-LCP or the DtoH-deferral. Cleanly isolating
+sub-segments needs patcher sub-timers (declined -- rabbit hole; the answer is already directionally clear).
+
+### CONCLUSION (measured, not premature -- every lever tried on the live gate)
+On GB10 (HBM-bound, weight-read ~98.6ms), **native MTP-5 is faster than the tree spec-decode**: per-stream
+5.49 vs 4.89, aggregate 12.85 vs 9.67. The tree does ~122ms/step MORE work (verify +35ms 25-node tree-attn,
+committer +87ms GDN replay) for +0.9 accept (4.32 vs 3.42), but the cheap HBM-bound forward makes that
+overhead NOT worth it. Levers exhausted: branch-widening (anti-speed), committer-LCP-port (lossless, no
+speed), committer-synckill (worse), APC (0% per-stream), align-escape (risky + GDN forces the sync).
+**The tree's value on GB10 = ACCEPT / LOSSLESSNESS, not throughput.** Deploy answer: native MTP-5 for raw
+tps; the tree for its lossless high-accept spec-decode where accuracy/branch-losslessness is the goal.
+
+REAL deliverables from this investigation (kept): (1) the device committer kernel now COMPILES + is
+LOSSLESS (4 Triton int64 dtype fixes -- was never-live-run/broken); (2) full committer/drafter/verify
+decomposition documented; (3) the honest measured verdict. FR13_GPU_COMMITTER stays OFF (no speed win).
