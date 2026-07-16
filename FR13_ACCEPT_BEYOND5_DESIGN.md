@@ -759,3 +759,15 @@ Journey: accept>5! -> hollow(wrong) -> real -- three-flip rigorous red-team; the
 depth-5 t33333 baseline LOCKED at accept 3.697 (stable 3.685@8 -> 3.697@9 tasks), tps_gpu 67.06.
 deep tail6+prewarm: accept 5.109, tps_gpu 68.55. => +38% CROSSES >5, TPS same-or-better, lossless,
 empty/resolve equivalent (scaffold-limited both -> no tree regression). GATE 5 PASSES. GOAL MET, holding.
+
+## SAME-SESSION A/B — RED-FLAG on the prewarm decomposition (2026-07-16, tail6_cold IN FLIGHT)
+
+tail6_cold (deep tail, NO prewarm) live vLLM aggregate: 156 windows mean-accept-len **6.13** (median 5.97) --
+NOT lower than tail6+prewarm (~5.93), and rising with window count (5.38@36 -> 6.13@156, same volatility as
+prewarm 6.01->5.88->5.93). => the clean "prewarm +0.83" (5.109 vs cross-session g4c cold 4.277) is likely
+CONFOUNDED by RUN-TO-RUN VARIANCE (g4c may be a low cold outlier; tail6 accept varies 4.277<->~6 run-to-run).
+HONEST REVISION: the TAIL (depths 6-11) is the dominant lever; the pre-warm's specific contribution is SMALL
+or within-noise, NOT the biggest-EV lever the design hypothesized. IMPORTANTLY this STRENGTHENS accept>5: the
+tail reaches accept ~5 with OR without prewarm (goal not prewarm-dependent). GOAL (accept>5) stands robustly.
+PENDING the cold CANONICAL deploy_speed (0 brackets yet) to settle the exact cold accept vs prewarm 5.109. Do
+NOT conclude the decomposition from the noisy per-window aggregate. [[feedback_check_artifact_before_concluding]]
