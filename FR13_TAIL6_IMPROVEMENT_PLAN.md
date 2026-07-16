@@ -118,3 +118,11 @@ Calibrated at tail6 (n5,x6,no-branch → predicts 5.23 ≈ measured 5.2). **CAVE
 Then re-run the sweep with the 3 calibrated numbers → pick the accept-max config within budget → final live gate.
 
 **Endpoints as data points:** x=0 (pure MTP, accept 3.65) and n=0 (pure arctic) bound the space; both are cheap sanity A/Bs if the interpolation looks off.
+
+## Direction-2 EXPERIMENT RESULT: tail-DEPTH (x10) = NO (2026-07-16)
+tailx10 (25-node, depth-15 spine tail, SAME config as tail6) canonical (4 tasks): **accept 4.876, tps_gpu 55.0**
+vs tail6 ~5.1 / ~70. accept NOT up (arctic is cold past d11 -> deep tail = pad = never-regress floor) AND tps
+DROPS ~21% (deeper 25-node tree = more verify + GDN-scan). => extending the spine tail is NET-NEGATIVE; the
+sweep's 0.95 deep-tail plateau was an EXTRAPOLATION ARTIFACT (the measured d7-11 rise was the limited depth-11
+window). x-axis lever DEAD. Pivot fully to the d6-BRANCH lever: raise the handoff conditional (0.666) WITHOUT
+adding depth cost (branches are within the existing depth, +2 nodes at n_pad, ~free drafter topk).
