@@ -219,3 +219,7 @@ So: ENCOURAGING + consistent with branches helping, but NOT concluded. Await tai
 Next experiment prepped (fr13_tail6c_ab_seq.sh, ready when b7 frees the GPU IF tail6b > tail6):
 tail6c (concentrate 4@d6) vs tail6b (spread 2+2) same-session -- both 25 nodes/n_pad=32/same tps, only
 branch distribution differs (no drift). Isolates concentrate-vs-spread at the seam.
+
+**tail6c PRE-HARDENED (CPU end-to-end):** tail_tree_order(tb=4,tbd=1)=25 nodes; seam pp=5 needs width>4;
+both real fill (wide[5]=width 5) AND cold-forward pad-fallback (max(rk+1,3)=5) satisfy rk<width for all
+parent_pos. The width/rank-mismatch crash that hit tail6b 3x is pre-cleared => tail6c boots clean first try.
