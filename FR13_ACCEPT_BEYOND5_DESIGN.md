@@ -695,3 +695,29 @@ coding are in TENSION here. The REAL deliverable remains the DEPTH-5 pipeline (c
 tasks, lossless). This is an honest COST-GATE: you cannot get accept>5 without the deep tail, and the deep tail
 breaks the agent. CONFIRM: same-session tail6_cold (accept+empty-patch A/B) + depth-5/native resolve on the SAME
 16 tasks (isolate deep-tail degradation from scaffold/task-difficulty + temp-0.6 variance), then report-and-hold.
+
+## SAME-TASK CONFIRMATION + HONEST COST-GATE (2026-07-16)
+
+SAME 4 tasks, depth-5 (merged_cold) vs deep tail6+prewarm:
+  13579: depth5 RESOLVED -> tail6 FAILED (empty patch)   <- REGRESSION
+  13453: depth5 RESOLVED -> tail6 FAILED (empty patch)   <- REGRESSION
+  12907: depth5 RESOLVED -> tail6 RESOLVED (13 lines)
+  14096: depth5 FAILED   -> tail6 FAILED
+=> the DEEP TAIL regresses tasks depth-5 solves, from resolved to EMPTY-PATCH (agent stops editing). Same tasks,
+same scaffold, not wrong-edit (=variance) but non-convergence. CONFIRMS deep-tail agentic degradation.
+
+**FINAL HONEST VERDICT: accept>5 (5.109) is a CONFOUNDED / HOLLOW result -> honest COST-GATE.**
+- The ONLY geometric path to accept>5 is the deep tail (depths 6-11); the deep tail DEGRADES productive agentic
+  coding (regresses resolved->empty-patch; 13/15 empty vs depth-5 0/4; agent loops on todo_write x10 / 69-turn
+  explorations without editing); and the high accept is INFLATED by those non-productive repetitive loops (which
+  the arctic tail + prewarm accept well). So accept>5 is achieved BECAUSE the agent degrades, not despite it.
+- The REAL, WORKING deliverable = the DEPTH-5 pipeline (cat8/cat9, accept ~4.28 with tail-free / ~3.56 spine,
+  lossless never-regress, RESOLVES tasks). accept>5-on-a-working-gate is NOT achievable with the deep tail.
+- Pre-warm windfall is REAL (+0.55 accept, no-go overturned) but rides the degraded trajectories.
+
+**OPEN (next, before FINAL no-go -- per "research before dead-end"):** is the deep-tail degradation a FIXABLE
+correctness bug (n_pad=32/merged-tail GARBLE producing subtly-wrong tokens that confuse the agent) or FUNDAMENTAL
+(temp-0.6 trajectory divergence from deeper acceptance)? tail6 uses FR13_DRAFT_SOURCE=merged (NOT byte-identical
+to native). If a residual n_pad=32 garble (cf. the FR13_ATTN_KV_REMAP cat9 fix) -> FIXABLE -> accept>5 may be
+recoverable. If trajectory divergence -> fundamental cost-gate. This is the one investigation worth running before
+declaring the final no-go. GPU freed (hung prewarm container killed).
