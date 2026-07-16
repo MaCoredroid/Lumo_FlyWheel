@@ -788,3 +788,18 @@ ONLY the deep tail, no prewarm dependency (the arctic tail's WITHIN-TASK hits, ~
 (accept>5, TPS same-or-better, lossless) MET robustly by tail6 alone. Cold n=4 (early) -- fuller numbers as it
 completes, but cold>5 is already decisive. Lesson: cross-session accept deltas on a high-variance metric need a
 same-session A/B before attribution; the pre-warm was credited by an artifact. [[feedback_check_artifact_before_concluding]]
+
+## DEFINITIVE RESULT (2026-07-16) — tail-ONLY accept>5, prewarm dropped
+
+Same-session canonical (stable):
+  depth-5 t33333          : accept 3.697, tps_gpu 67.06
+  tail6_cold (NO prewarm) : accept **5.237** (5.201@4 -> 5.237@8, stable), tps_gpu **71.22**   <- BEST
+  tail6 + prewarm         : accept 5.109 (15 tasks), tps_gpu 68.55
+
+DELIVERABLE = tail6 WITHOUT prewarm: accept 3.697 -> **5.237 (+42%, >5)**, tps_gpu +6% (67.06->71.22), lossless
+never-regress, no correctness regression (empty/resolve == depth-5, scaffold-limited). The deep arctic tail
+(depths 6-11, ~94% within-task hit) does ALL the work. Pre-warm is UNNECESSARY (and marginally worse) => drop it;
+the default deploy (FR13_TAIL_MODE + FR13_DRAFT_SOURCE=merged, NO FR13_PREWARM_TRIE) IS the recommended config.
+GATE 5 PASSES cleanly. GOAL MET -- simplest + best form. Design's prewarm/complement/windfall machinery: BUILT +
+lossless but NOT needed for >5 (the tail suffices). Four honest corrections (win->hollow->real->tail-not-prewarm);
+core result held throughout, explanation converged to: THE DEEP ARCTIC TAIL crosses >5.
