@@ -13880,6 +13880,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 _fr13_t_pad, vocab_size=_fr13_t_vocab)
                             if _fr13_t_cols is not None:
                                 _fr10_spine_tokens.extend(_fr13_t_cols)
+                                # Direction-2 d6-branch: merge the tail-branch wide_topk (free packer keys
+                                # head_depth-1.. ; the head fills only 0..head_depth-2) so the wide packer
+                                # fills the d6/d7 tail branch nodes from the arctic runner-ups. Empty {}
+                                # when FR13_TAIL_BRANCHES is unset (spine-only == tail6, byte-identical, no
+                                # drift). Monotone-lossless: branches only ADD candidates (committer p(S)).
+                                _fr13_t_wtk = _fr13_t.get_tail_wide_topk()
+                                if _fr13_t_wtk:
+                                    _fr10_wide_topk.update(_fr13_t_wtk)
                             else:
                                 _fr13_t_skip = "decide_none"
                 except Exception as _fr13_t_exc:
