@@ -168,6 +168,13 @@ case "$KIND" in
   # depth-11 (SAME depth as tail6, +4 branch nodes). Targets the measured weakest link (handoff cond 0.666)
   # WITHOUT adding depth cost. Monotone-lossless (branches only ADD candidates). Compare accept to tail6 ~5.1.
   tail6b)    LAUNCHER=forked; TREEARG="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,1),(0,0,0,0,0,2),(0,0,0,0,0,0,0),(0,0,0,0,0,0,1),(0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0)]"; EXPECT_RATIO=25; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_TAIL_BRANCHES=2 FR13_TAIL_BRANCH_DEPTHS=2) ;;
+  # Direction-2 seam-CONCENTRATE lever: identical config to tail6b (NO drift, SAME 25 nodes / n_pad=32 /
+  # tps) but all 4 seam branches at d6 ONLY (FR13_TAIL_BRANCHES=4 FR13_TAIL_BRANCH_DEPTHS=1) instead of
+  # 2+2 across d6/d7. d6 is the biggest single leak (handoff cond 0.666 vs d7 0.848), so concentrating
+  # arctic width at THE seam tests concentrate-vs-spread. Needs the fr13_merged_fill width fix (width =
+  # max(3, tail_branches+1)) so ranks 3,4 aren't dropped. Monotone-lossless. Run AFTER tail6b confirms
+  # arctic seam branches help at all (else concentrate is moot). d6 = spine + 4 arctic runner-ups.
+  tail6c)    LAUNCHER=forked; TREEARG="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,1),(0,0,0,0,0,2),(0,0,0,0,0,3),(0,0,0,0,0,4)]"; EXPECT_RATIO=25; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_TAIL_BRANCHES=4 FR13_TAIL_BRANCH_DEPTHS=1) ;;
   # accept>5 control: cat33333 (15-node) filled PURELY from Arctic suffix decoding (FLAVOR=always -> run
   # only the root forward, Arctic fills deep spine+branches, MTP deep forwards SKIPPED). == the closed
   # Front-2 config (arctic-only deep drafter, prev -17% B=4) -- re-run on the FIXED pipeline as the control

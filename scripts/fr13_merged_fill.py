@@ -146,6 +146,11 @@ def build_tail_branch_columns(branch_rows, device, pad_token, head_depth, tail_b
         return {}
     B = len(branch_rows)
     assert B > 0, "empty batch"
+    # width MUST hold col-0 (spine placeholder) + one col per runner-up rank 1..tail_branches. The
+    # default 3 (== 2 runner-ups) SILENTLY DROPS ranks >2, so a seam-CONCENTRATE arm (tail_branches=4,
+    # e.g. tail6c BRANCHES=4 DEPTHS=1) would lose ranks 3,4 -> vacuous width. Grow width to fit; keep
+    # >=3 so the packer's rk<shape[1] fail-loud check + existing tail_branches<=2 arms are byte-identical.
+    width = max(int(width), int(tail_branches) + 1)
     vs = int(vocab_size) if vocab_size is not None else None
     pad = int(pad_token)
     if vs is not None and not (0 <= pad < vs):
