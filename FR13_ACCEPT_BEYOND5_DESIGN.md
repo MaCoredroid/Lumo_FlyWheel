@@ -674,3 +674,24 @@ tail alone 4.28; complement ~5.3% room caps at 5; corpus supply-limited to the t
 drafter exists -- MTP=5 heads, arctic weak off-repeats). => accept>5-AVERAGE = honest WORKLOAD-BOUND cost-gate;
 the DELIVERABLE = a lossless speedy tree pipeline at accept 4.83 (up from 4.28 cold / ~3.56 non-tail) WITH
 better TPS. Confirm with 16-task complete + cold A/B, then report-and-hold.
+
+## CRITICAL RED-TEAM — accept>5 is CONFOUNDED by deep-tail agentic degradation (2026-07-16)
+
+**tail6+prewarm 15-task CANONICAL accept_per_event = 5.109 (>5!) BUT the result is HOLLOW:**
+- **RESOLVE = 2/15** (astropy-12907, -14309 passed; 13/15 patch_apply_failed) and **13/15 patches are EMPTY**
+  (0 lines). The 2 non-empty patches BOTH resolved (2/2) -- when the agent edits, it's correct.
+- Empty-patch trajectory (13033, 69 turns) called **todo_write x10** + reads/greps/shell but **ZERO edit tools**:
+  the agent LOOPS on exploration/planning and never edits.
+- **Cold tail6 g4c = 4/4 EMPTY patches too** => the DEEP TAIL (n_pad=32, depths 6-11), NOT prewarm, causes the
+  non-convergence. Depth-5 merged_cold resolved 3/4 (converges to edits).
+- => the high accept is INFLATED by the repetitive non-productive loops (todo_write spam, 69-turn explorations)
+  that the arctic tail + prewarm accept well. accept>5 is achieved BECAUSE the agent degrades into repetitive
+  junk, not despite it. This is the memory's "TREE spec-decode degrades AGENTIC coding; token-lossless != agentic
+  parity" -- AMPLIFIED by tail depth.
+
+**HONEST VERDICT: accept>5 is NOT genuinely "proven on a working LIVE SWE-Verified gate."** The ONLY path to >5
+(the deep tail) degrades productive coding (2/15 vs depth-5's converge-to-edit). accept>5 and productive agentic
+coding are in TENSION here. The REAL deliverable remains the DEPTH-5 pipeline (cat8/cat9, accept ~4.28, resolves
+tasks, lossless). This is an honest COST-GATE: you cannot get accept>5 without the deep tail, and the deep tail
+breaks the agent. CONFIRM: same-session tail6_cold (accept+empty-patch A/B) + depth-5/native resolve on the SAME
+16 tasks (isolate deep-tail degradation from scaffold/task-difficulty + temp-0.6 variance), then report-and-hold.
