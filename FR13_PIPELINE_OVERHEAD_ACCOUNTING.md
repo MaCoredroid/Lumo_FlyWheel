@@ -134,3 +134,33 @@ DEVICE-resident so the host sync is unnecessary. Realistic ladder: ~+6% from sma
 +3%, overlap GDN replay +2%, reuse verify root-logits +1%) WITHOUT align-escape; ~+20-30% IF align-escape
 is made lossless. NOT 9.5x. native+tail6 decomp (nt1, running) confirms whether native shares the same
 align-mode floor (it uses the same GDN hybrid) -- if so, the floor is architectural, not tree-specific.
+
+---
+
+## Align-escape feasibility: the sync is a per-step CHECK for a RARE event (device-side detection = the lever)
+
+Read preprocess_mamba (mamba_utils.py): the align-mode block-copy moves GDN recurrent state between
+physical KV blocks ONLY when a request crosses a block boundary (mamba_utils:384 `if src==dest and
+accept_token_bias==0: return`). At FR13 mamba_block_size=8192, a boundary crossing is RARE (~1 per 8192
+decode tokens). But the `num_accepted.gpu.cpu().numpy()` sync (gpu_model_runner:1441) fires EVERY step
+to CHECK `accept_token_bias` (= did the accepted tokens cross a boundary). So the per-step host sync is a
+check for an almost-always-negative condition.
+
+**The real align-escape lever (device-side boundary detection):** compute `accept_token_bias` on GPU
+(num_accepted stays device-resident), branch device-side; only when a boundary IS crossed (rare) do the
+host sync + block-copy. Otherwise the non-blocking event path (:1455) already exists. This removes the
+per-step host stall (unblocks async scheduling +~20%) WITHOUT the full mamba-block-copy rewrite.
+
+**Cost/risk (honest):** the block-copy path is heavily FR13-instrumented (the entire APC/cache
+losslessness effort lives here: block-align, conv-snapshot, leaf-crosscheck) => extremely fragile,
+lossless-gating is expensive. But it is NOT a premature no-go: the device-side-check reframing makes it a
+BOUNDED change (touch the per-step check, not the rare copy). GO/NO-GO deferred to nt1's native stage
+decomposition (quantifies the exact host-stall $ that async-escape would reclaim) -- native shares the
+same align floor (confirmed: GDN hybrid => align forced), so nt1's committer/host numbers set the ceiling.
+
+## Where the deliverable actually stands (pending nt1 clean native comparison)
+- tail6 (21-node spine tail): accept 4.317, per_request_decode_tps 4.889 (b7). Cross-run vs native 4.60
+  => tail6 ~+6% per-stream tps AND higher accept. If nt1 confirms same-session, THE DELIVERABLE (tail6)
+  ALREADY BEATS native MTP-5 on BOTH axes. Branch-widening (tail6b) was the anti-speed misstep; tail6 stands.
+- Remaining speed frontier = align-escape (bounded device-side-check, deferred to nt1) OR HBM wall.
+  Branch-widening for accept is CLOSED (anti-speed, b7-proven).
