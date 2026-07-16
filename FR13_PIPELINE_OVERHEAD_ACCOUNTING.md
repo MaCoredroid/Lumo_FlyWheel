@@ -322,3 +322,21 @@ tps; the tree for its lossless high-accept spec-decode where accuracy/branch-los
 REAL deliverables from this investigation (kept): (1) the device committer kernel now COMPILES + is
 LOSSLESS (4 Triton int64 dtype fixes -- was never-live-run/broken); (2) full committer/drafter/verify
 decomposition documented; (3) the honest measured verdict. FR13_GPU_COMMITTER stays OFF (no speed win).
+
+## FINAL: committer 94ms = sync-wait (align serialization), not LCP/replay -> align-escape is the only lever (cost-gated)
+
+Replay code check (_fr13_native_committer_replay, fr10_gdn_tree_kernel.py): the GDN replay is STATE-ONLY,
+per-layer ring GATHER (index_select) + fused_sigmoid_gating SSM advance, NO host sync -- already cheap
+(~11ms, ~native's 7ms mamba advance). So the 94ms committer is NOT the replay and NOT the LCP (both cheap/
+device-side). By elimination it is the ~83ms SYNC-WAIT: the committer's output_token_ids.cpu() + align-mode
+per-step num_accepted.cpu() serialize committer<->verify (no overlap). Removing it = ASYNC scheduling,
+BLOCKED by mamba_cache_mode=align (per-step host sync) => the align-escape (device-side boundary detection).
+
+**COST-GATE (per speed-is-goal: STOP if no plausibly-cheap correct path):** the only remaining lever is
+the align-escape -- a deep, fragile rewrite of the GDN mamba block-boundary path (the FR13 APC losslessness
+core). NOT plausibly cheap. => STOP. Every cheap+medium lever exhausted & measured on the live gate.
+
+**MEASURED VERDICT (tree spec-decode on GB10):** native MTP-5 is the THROUGHPUT answer (per-stream 5.49 vs
+4.89, aggregate 12.85 vs 9.67). The tree's value is ACCEPT / LOSSLESSNESS (4.32 vs 3.42, branch-lossless
+spec-decode) -- an accuracy property, not a speed one, because the HBM-bound cheap forward doesn't reward
+the tree's extra verify+committer work. Deploy: native for tps; tree where lossless high-accept matters.
