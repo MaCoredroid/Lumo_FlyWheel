@@ -654,3 +654,23 @@ Caveats compound: (a) still partial 9/16, (b) vLLM mean-accept-length != canonic
 (-1 conversion assumed, unverified), (c) cold is cross-session. VERDICT PENDING the 16-task deploy_speed reduce +
 same-session tail6_cold A/B. Honest read now: prewarm delivers a real +0.6 accept lift but ~5 is a coin-toss;
 whether it clears >5 depends on the final reduce and the windfall fraction over the full task mix.
+
+## CANONICAL VERDICT (2026-07-16, deploy_speed reduce, 10/16 tasks — near-final)
+
+**tail6+prewarm CANONICAL accept_per_event = 4.832** (committed 5.832, derived_tps_gpu 65.71), vs cold tail6
+(g4c) accept 4.277 / tps 61.85. Reconciles with the vLLM aggregate (committed 5.832 ~ mean-accept-length 5.93).
+
+SCORECARD vs GOAL:
+- accept UP: YES (4.277 -> 4.832, +0.555, +13%, lossless never-regress).
+- TPS same-or-better: YES (derived_tps_gpu 61.85 -> 65.71; deeper commits amortize per-forward cost).
+- **accept > 5: NO (4.832 < 5).**
+
+HONEST VERDICT (forming, pending final 2 tasks + same-session cold A/B): the PRE-WARM WINDFALL IS REAL and
+reproducible (+0.55 accept, OVERTURNS my earlier merged-config ~0 no-go) AND comes with a TPS gain -- but it
+lands ~4.83, SHORT of the >5 average. The design's ">5 as repetitive-span windfall" was optimistic for the
+astropy SWE-Verified mix: the windfall lifts +0.55 but the repetitive fraction isn't high enough to average >5
+(design's own EV: needs ~27% repetitive steps; measured lift implies less). No cheaper lever reaches >5 (deep
+tail alone 4.28; complement ~5.3% room caps at 5; corpus supply-limited to the test repo; no strong depth-6+
+drafter exists -- MTP=5 heads, arctic weak off-repeats). => accept>5-AVERAGE = honest WORKLOAD-BOUND cost-gate;
+the DELIVERABLE = a lossless speedy tree pipeline at accept 4.83 (up from 4.28 cold / ~3.56 non-tail) WITH
+better TPS. Confirm with 16-task complete + cold A/B, then report-and-hold.
