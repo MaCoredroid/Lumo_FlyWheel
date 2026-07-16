@@ -754,3 +754,8 @@ cost-gate.
 regression vs depth-5.** GOAL MET. Both tail (depth 6-11, +0.59) and prewarm windfall (+0.83) contribute. FINAL
 LOCK pending t33333 full-16 completion (currently 8 tasks; accept 3.685 stable == design baseline 3.56).
 Journey: accept>5! -> hollow(wrong) -> real -- three-flip rigorous red-team; the same-campaign discriminator was decisive.
+
+## FINAL LOCK (2026-07-16) — GOAL MET, verified
+depth-5 t33333 baseline LOCKED at accept 3.697 (stable 3.685@8 -> 3.697@9 tasks), tps_gpu 67.06.
+deep tail6+prewarm: accept 5.109, tps_gpu 68.55. => +38% CROSSES >5, TPS same-or-better, lossless,
+empty/resolve equivalent (scaffold-limited both -> no tree regression). GATE 5 PASSES. GOAL MET, holding.
