@@ -277,3 +277,15 @@ lower -- the tail6-family artifacts span 4.28 (tailg4c) to 5.10 (prewarm). So th
 levels do NOT transfer across regimes; only the same-session DELTA (tail6b - tail6, monotone >= 0) is
 valid. tail6b=4.500 sits above tail6_tailg4c=4.277 (cross-run, weak evidence). CLEAN delta pending the
 same-session tail6 arm (arm2, now running ~2hr). tps gate: tail6b derived_tps 4.76 -- compare to tail6 arm.
+
+### b7 arm2 (tail6 baseline) early + DRIFT CHECK PASS
+
+- **DRIFT CHECK PASS:** tail6 arm br_real=**0** (vs tail6b 8170) -- the spine-only baseline emits ZERO
+  branch tokens, and no /logs/fr13_tail_branches.cfg sidecar. The two arms differ ONLY by the branch
+  flags. Clean A/B, no config drift.
+- **Early same-basis signal (raw-window, same tasks/session/method):** tail6 committed ~5.102
+  (accept ~4.10, 105 windows, FIRST WAVE only) vs tail6b committed ~5.49 (accept 4.500, FULL 16).
+  Direction POSITIVE: tail6 < tail6b, consistent with branches helping + monotone bound (tail6 <= 4.500).
+- CAVEAT: tail6 is PARTIAL (first wave) vs tail6b FULL -- the ~+0.4 magnitude is likely inflated by
+  partial-vs-full task mix. The CLEAN delta = bracketed deploy_speed accept_per_event when tail6
+  completes all 16 (~1.5hr). Do not quote +0.4 as the lift; only the sign is established so far.
