@@ -395,6 +395,10 @@ def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_le
                 branch_rows[b] = {j: [int(t) for t in rel[j][1:1 + _tb]]
                                   for j in range(min(_tbd, tail_len))
                                   if rel.get(j) and len(rel[j]) > 1}
+                # engagement proof: count REAL arctic runner-up branch tokens (vs pad). br_real>0 in the
+                # needle == the branched path ran + the tree adapter yielded runner-ups (NOT vacuous pad).
+                STATS["tail_branch_real"] = STATS.get("tail_branch_real", 0) + sum(
+                    len(v) for v in branch_rows[b].values())
             if any(t is not None for t in row):
                 any_hit = True
                 STATS["tail_hit"] = STATS.get("tail_hit", 0) + 1
@@ -433,13 +437,14 @@ def _maybe_log_engagement():
             "[FR13_MERGED ENGAGED] speculate_fired=%d match_full=%d match_partial=%d "
             "always_fill_miss=%d skip_fired=%d assembler_engaged=%d started=%d ingested=%d retired=%d "
             "arctic_oob_dropped=%d last_oob=%s conf_gated=%d "
-            "TAIL[fired=%d hit=%d cold=%d] "
+            "TAIL[fired=%d hit=%d cold=%d br_real=%d] "
             "confhist[<.05|.05-.15|.15-.30|.30-.50|>=.50]=%d|%d|%d|%d|%d",
             STATS["speculate_fired"], STATS["match_full"], STATS["match_partial_norun"],
             STATS["always_fill_miss"], STATS["skip_fired"], STATS["assembler_engaged"],
             STATS["started"], STATS["ingested"], STATS["retired"], _oob_n, _oob_last,
             STATS.get("conf_gated", 0),
             STATS.get("tail_speculate_fired", 0), STATS.get("tail_hit", 0), STATS.get("tail_all_cold", 0),
+            STATS.get("tail_branch_real", 0),
             STATS.get("conf_h0", 0), STATS.get("conf_h1", 0), STATS.get("conf_h2", 0),
             STATS.get("conf_h3", 0), STATS.get("conf_h4", 0),
         )
