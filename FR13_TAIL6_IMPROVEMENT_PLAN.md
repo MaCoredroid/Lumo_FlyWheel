@@ -184,3 +184,25 @@ is non-vacuous; arctic's tree HAS siblings at the seam. Engagement gate ✓. Ope
 from d). d6: survival_5=0.524, raising cond_6 0.666→0.766 (δ=0.10) scales survivals d6-11 (Σ=1.575) by
 1.150 ⇒ +0.236 accept. Biggest single-depth lever; head-complement at d2-5 gives ~+0.15 each but those
 conditionals (0.85-0.97) are already near-saturated (MTP branches present) ⇒ secondary.
+
+### Calibration bars for b7 (validate accept_per_event against these)
+
+Per-depth conditional-acceptance model (calibrated: tail6 baseline = 5.227, matches measured 5.1-5.24).
+Branch at depth d recovers fraction r of that depth's miss (1-cond_d); r encodes sibling decorrelation.
+
+| arm    | change                    | r=corr(.15) | r=decorr(.30/.45) |
+|--------|---------------------------|-------------|-------------------|
+| tail6  | spine tail (baseline)     | 5.227       | 5.227             |
+| tail6b | 2+2 branches @ d6,d7       | 5.381       | 5.540             |
+| tail6c | 4 branches @ d6 only       | 5.464       | 5.583             |
+
+**Gate read (b7 tail6b accept_per_event, depth-matched vs native MTP-5 E5, tps must stay ~= tail6):**
+- tail6b in [5.38, 5.54] => arctic seam branches help (decorrelation 15-30%) => run tail6c (concentrate) next.
+- tail6b < 5.35 => branches barely help despite br_real>0 (siblings correlated, same suffix-match) =>
+  escalate to a DECORRELATED seam candidate: an MTP-extended d6 token (+1 MTP forward, drafter:13211
+  cap 4->allow one extra head step) injected as a d6 branch. Real model head vs suffix match => decorrelated.
+- tail6b ~= 5.23 => no help => same escalation, higher priority.
+
+Note the MTP-d6-seam lever is NOT free (+1 MTP forward ~ +1/5 head drafter cost); it's a speed-vs-accept
+tradeoff, justified only if arctic width plateaus below the decorrelated bar. tail6c (free, same tps) is
+tried first. Live b7 engagement stable: TAIL[fired=2668 hit=2553 cold=0 br_real=2044], 0 crashes.
