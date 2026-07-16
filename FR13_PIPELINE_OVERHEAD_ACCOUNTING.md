@@ -226,3 +226,24 @@ FIXED, does NOT make the tree beat native per-stream. And native aggregate (12.8
   deliverable answer on GB10 is NATIVE MTP-5, not the tree -- the tree's accept edge doesn't buy speed here.
   This is the measured cost-gate, not a premature no-go (branch-widening + committer-port + align-escape
   all assessed).
+
+---
+
+## CORRECTION: "native wins" was PREMATURE — the committer port reclaims the host-loop STALL too
+
+Red-teamed the "native beats tree" conclusion. My ceiling math counted only the committer's 84ms COMPUTE,
+but the 94ms host LCP loop ALSO blocks the pipeline (GPU idle during the host DtoH+loop). Evidence: the
+tree's gap (802ms/step) is 156ms LARGER than native's (646ms) despite the SAME align sync + similar prefill
+-- much of that extra gap is the GPU idling during the host committer. A DEVICE committer removes BOTH the
+84ms compute AND the host-loop stall (~part of the 156ms). Corrected projection: tail6 wall 1088 -> ~900ms
+=> per_req 5.317/0.9 = **~5.9 -- BEATING native 5.49, WITH +0.9 accept.** So the committer port is a REAL
+win lever, not marginal. My earlier "native wins" under-counted it. (Every premature no-go here has been
+overturned; this one too.)
+
+## Committer-port crash: device kernel, needs the traceback
+tail6_gc crashed on warmup. The B=4 loop-skip/synckill drift (patcher:7714-7846) is ALREADY FIXED and my
+run had NO synckill (parents_cpu populated:7984), so the crash is in the DEVICE committer kernel
+(fr13_gpu_committer_kernel.py, _fr13_committer_kernel launched :653) on the warmup's dummy inputs -- a
+shape/counts assumption. Root-cause traceback was lost (container removed on arm-fail). NEXT: dedicated
+tail6_gc boot with docker-log capture (container persists) -> read the EngineCore traceback -> fix the
+kernel shape bug -> re-run. The corrected ROI (could beat native) justifies the debug effort.
