@@ -223,3 +223,22 @@ branch distribution differs (no drift). Isolates concentrate-vs-spread at the se
 **tail6c PRE-HARDENED (CPU end-to-end):** tail_tree_order(tb=4,tbd=1)=25 nodes; seam pp=5 needs width>4;
 both real fill (wide[5]=width 5) AND cold-forward pad-fallback (max(rk+1,3)=5) satisfy rk<width for all
 parent_pos. The width/rank-mismatch crash that hit tail6b 3x is pre-cleared => tail6c boots clean first try.
+
+### b7 interim rising (5.589 @ 454 windows) + seam-geometry sweep ready
+
+tail6b interim token-weighted accept = **5.589** (37784 tokens, 454 windows) -- risen from 5.418 @217w,
+now at/above the calibration decorrelated bar (5.54). Backing out the model: tail6b≈5.59 => arctic siblings
+recover ~35% of the d6/d7 miss (strong decorrelation, branches clearly help). SAME caveats (cross-session,
+window-approx) -- clean read = same-session tail6 arm. br_real=8170, 0 crashes.
+
+**Seam-geometry sweep (all n_pad=32 / same tps / boot-hardened CPU end-to-end, monotone-lossless, no drift):**
+| KIND   | branches           | nodes | fill width | status              |
+|--------|--------------------|-------|------------|---------------------|
+| tail6b | 2 @ d6,d7          | 25    | 3          | RUNNING (b7)        |
+| tail6c | 4 @ d6 (concentr.) | 25    | 5          | prepped+hardened    |
+| tail6e | 3 @ d6,d7 (wider)  | 27    | 4          | prepped+hardened    |
+
+**Sweep plan (one GPU job at a time, each same-session vs tail6b as reference):** after b7's clean
+tail6b>tail6 confirms branches help, run tail6e (scale-what-works, likely best given high recovery) and
+tail6c (concentrate) to find the best seam geometry. If any plateaus below a decorrelated ceiling =>
+the MTP-d6-seam lever (+1 forward) is the escalation. All three are free width plays first.

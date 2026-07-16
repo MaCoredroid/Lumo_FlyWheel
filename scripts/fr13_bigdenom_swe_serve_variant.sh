@@ -175,6 +175,11 @@ case "$KIND" in
   # max(3, tail_branches+1)) so ranks 3,4 aren't dropped. Monotone-lossless. Run AFTER tail6b confirms
   # arctic seam branches help at all (else concentrate is moot). d6 = spine + 4 arctic runner-ups.
   tail6c)    LAUNCHER=forked; TREEARG="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,1),(0,0,0,0,0,2),(0,0,0,0,0,3),(0,0,0,0,0,4)]"; EXPECT_RATIO=25; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_TAIL_BRANCHES=4 FR13_TAIL_BRANCH_DEPTHS=1) ;;
+  # Direction-2 seam-WIDEN lever: scale the PROVEN tail6b geometry -- 3 branches at d6 AND d7 (BRANCHES=3
+  # DEPTHS=2) = 27 nodes, still n_pad=32 / same tps. b7 interim implies HIGH recovery (~35% of the miss),
+  # so more seam width (not concentrate) is the natural "scale what works" lever: adds d6 rank-3 + d7 rank-3
+  # on top of tail6b's 2+2. Needs fill width=max(3,tail_branches+1)=4 at pp=5,6. Monotone-lossless / no drift.
+  tail6e)    LAUNCHER=forked; TREEARG="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,1),(0,0,0,0,0,2),(0,0,0,0,0,3),(0,0,0,0,0,0,1),(0,0,0,0,0,0,2),(0,0,0,0,0,0,3)]"; EXPECT_RATIO=27; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_TAIL_BRANCHES=3 FR13_TAIL_BRANCH_DEPTHS=2) ;;
   # accept>5 control: cat33333 (15-node) filled PURELY from Arctic suffix decoding (FLAVOR=always -> run
   # only the root forward, Arctic fills deep spine+branches, MTP deep forwards SKIPPED). == the closed
   # Front-2 config (arctic-only deep drafter, prev -17% B=4) -- re-run on the FIXED pipeline as the control
