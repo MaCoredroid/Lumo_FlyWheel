@@ -244,6 +244,12 @@ MAMBA_SSM_CACHE_DTYPE=${MAMBA_SSM_CACHE_DTYPE:-float32}
 # gated). Revert = set APC_MAX_NUM_BATCHED_TOKENS=$MAMBA_BLOCK_SIZE (the coupling assert below enforces
 # that raising it REQUIRES the threshold, so you can't half-revert into #45238).
 APC_MAX_NUM_BATCHED_TOKENS=${APC_MAX_NUM_BATCHED_TOKENS:-4096}
+# AGGREGATE-THROUGHPUT probe (APC-OFF deploy path): extra serve flags appended verbatim. Default EMPTY =>
+# byte-identical / no drift. Used to test whether the batch under-fill (effective_concurrency ~2.05 at B=4)
+# is BUDGET-STARVED (raising --max-num-batched-tokens lets more streams' prefill+decode co-reside => higher
+# aggregate tps) or AGENTIC-IDLE (streams paused between tool calls => no config fix). APC-off path sets no
+# chunked-prefill/batch flags today (vLLM defaults), so this is untested for the deploy config.
+FR13_SERVE_BATCH_FLAGS=${FR13_SERVE_BATCH_FLAGS:-}
 # BAKED 2026-07-08 (serialization fix): per-request prefill-chunk cap = mamba block (was unset/OFF).
 # Set here (before the coupling assert below) so the baked max_num_batched=4096 stays #45238-safe.
 LUMO_LONG_PREFILL_THRESHOLD=${LUMO_LONG_PREFILL_THRESHOLD:-$MAMBA_BLOCK_SIZE}
@@ -822,7 +828,7 @@ exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-na
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS $CG_FLAGS $KV_FP8_FLAGS \
+  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS $CG_FLAGS $KV_FP8_FLAGS $FR13_SERVE_BATCH_FLAGS \
   $(if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
 
 # DURABLE OOM BACKSTOP: spawn the detached GPU/unified-mem guard for THIS container.
