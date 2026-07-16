@@ -165,7 +165,10 @@ def build_tail_branch_columns(branch_rows, device, pad_token, head_depth, tail_b
 
     wide = {}
     for j in range(tail_branch_depths):
-        key = head_depth - 1 + j
+        # packer parent_pos is depth-indexed from root (pp=0 root, pp=d = the depth-d spine). A tail
+        # branch at tail-position j (absolute depth head_depth+1+j) has parent = the depth-(head_depth+j)
+        # spine => key = head_depth+j. (j=0/d6 -> key head_depth=5; the head fills only pp 0..head_depth-1.)
+        key = head_depth + j
         cols = []
         for c in range(width):
             if c == 0:

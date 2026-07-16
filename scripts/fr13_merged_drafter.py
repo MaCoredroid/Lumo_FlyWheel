@@ -357,13 +357,18 @@ def decide_tail(cache, spec_row_req_ids, mtp_head_per_depth, head_depth, tail_le
                         spec_row_req_ids order (req_id-keyed by the caller)."""
     from fr13_arctic_suffix_adapter import arctic_draft_to_suffix_rel, arctic_tree_to_suffix_rel
     from fr13_merged_fill import build_tail_columns, build_tail_branch_columns
-    import os as _os
-    # Direction-2 d6-handoff repair (env-gated; default 0 => spine-only == shipped tail6, byte-identical,
-    # NO drift). When on: use the arctic TREE adapter (ranked top-k per depth) and add tail_branches
-    # sibling candidates at the first tail_branch_depths tail depths from suffix_rel[j][1:] (the runner-ups
-    # we discard today). The branch wide_topk is stashed in _TAIL_WIDE_TOPK for the patcher tail-append.
-    _tb = int(_os.environ.get("FR13_TAIL_BRANCHES", "0") or "0")
-    _tbd = int(_os.environ.get("FR13_TAIL_BRANCH_DEPTHS", "0") or "0")
+    # Direction-2 d6-handoff repair (default 0 => spine-only == shipped tail6, byte-identical, NO drift).
+    # The WORKER DROPS FR13_* env, so read the launcher-written /logs sidecar (like tail_on/merged_on) for
+    # the branch value "<tail_branches> <tail_branch_depths>". When on: use the arctic TREE adapter (ranked
+    # top-k per depth) + add tail_branches sibling candidates at the first tail_branch_depths tail depths
+    # from suffix_rel[j][1:] (the runner-ups we discard today). Branch wide_topk stashed for the patcher.
+    _tb, _tbd = 0, 0
+    try:
+        with open("/logs/fr13_tail_branches.cfg") as _bcf:
+            _bp = _bcf.read().split()
+            _tb, _tbd = int(_bp[0]), (int(_bp[1]) if len(_bp) > 1 else 0)
+    except Exception:
+        _tb, _tbd = 0, 0
     _branched = _tb > 0 and _tbd > 0
     _to_rel = arctic_tree_to_suffix_rel if _branched else arctic_draft_to_suffix_rel
 

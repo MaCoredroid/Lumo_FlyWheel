@@ -439,6 +439,14 @@ if [[ "${FR13_TAIL_MODE:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_tail_mode.arm" 2>/dev/null || true
 fi
+# Direction-2 d6-branch: bridge FR13_TAIL_BRANCHES/DEPTHS past the worker env-strip via a /logs sidecar
+# (value-carrying, like the prewarm corpus). decide_tail reads "<branches> <depths>". Absent => spine-only.
+if [[ -n "${FR13_TAIL_BRANCHES:-}" && "${FR13_TAIL_BRANCHES:-0}" != "0" ]]; then
+  echo "${FR13_TAIL_BRANCHES} ${FR13_TAIL_BRANCH_DEPTHS:-0}" > "$LOG_DIR/fr13_tail_branches.cfg"
+  echo "[launch] TAIL branches ON -> /logs/fr13_tail_branches.cfg (${FR13_TAIL_BRANCHES} branches x ${FR13_TAIL_BRANCH_DEPTHS:-0} depths)"
+else
+  rm -f "$LOG_DIR/fr13_tail_branches.cfg" 2>/dev/null || true
+fi
 # PRE-WARM corpus sidecar (design §6b): worker drops FR13_* env, so copy the host corpus into /logs (mounted)
 # and maybe_prewarm() reads the fixed /logs/fr13_prewarm_corpus.jsonl. Absent => cold trie (never-regress).
 if [[ -n "${FR13_PREWARM_TRIE:-}" && -f "${FR13_PREWARM_TRIE}" ]]; then
