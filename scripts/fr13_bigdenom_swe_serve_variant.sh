@@ -166,6 +166,12 @@ case "$KIND" in
   # tail6 (lossless-equivalent, NOT byte-exact -- rejection-sampler convergence). NEVER live-run => monitor
   # arm-1 boot for crash. gc = GPU_COMMITTER only (compute port); synckill (the sync defer) is separate/broken.
   tail6_gc)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_GPU_COMMITTER=1) ;;
+  # COMMITTER-SPAN DECOMPOSITION probe: tail6_gc + FR13_COMMITTER_SYNCKILL=1 defers the committer's
+  # DtoH+sync/materialise to a side stream (uses the _dev kernel, also int64-fixed). committer_gpu_ms
+  # vs tail6_gc DECOMPOSES the 94ms span: drops => DtoH/sync is the reducible bottleneck (real lever);
+  # stays ~94ms => the on-GPU work (GDN replay + LCP kernel) is inherent => native genuinely wins.
+  # Settles the last uncertainty without a 3rd premature no-go. Lossless-gate as tail6_gc. NEVER-run => monitor boot.
+  tail6_gc_sk) LAUNCHER=forked; TREEARG="$TAIL6_TREE";  EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_GPU_COMMITTER=1 FR13_COMMITTER_SYNCKILL=1) ;;
   # Direction-2 tail-DEPTH lever: identical config to tail6 (NO drift) but a deeper spine tail (25 nodes,
   # depth-15, tail_len=10 derived from wide_D). Tests whether the RISING deep-tail conditional (d7-11:
   # 0.848->0.950) keeps paying past d11. tail_len auto-derives from the tree; no code change.
