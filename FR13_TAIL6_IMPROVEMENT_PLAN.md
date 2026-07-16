@@ -242,3 +242,22 @@ window-approx) -- clean read = same-session tail6 arm. br_real=8170, 0 crashes.
 tail6b>tail6 confirms branches help, run tail6e (scale-what-works, likely best given high recovery) and
 tail6c (concentrate) to find the best seam geometry. If any plateaus below a decorrelated ceiling =>
 the MTP-d6-seam lever (+1 forward) is the escalation. All three are free width plays first.
+
+### CORRECTION: my interim "accept ~5.4-5.5" was a DILUTED mean_accept_length, NOT accept_per_event
+
+Red-teamed my own interim numbers against real artifacts:
+- Canonical tail6 deploy_speed: accept_per_event = **5.099**, committed_per_event = 6.099
+  (output/fr13_tail6_prewarm/.../deploy_speed_pw16.json). accept_per_event = num_accepted/num_drafts
+  (decode-only /metrics BRACKETS, prefill excluded) -- fr13_measure.py:602.
+- vLLM's logged "Mean acceptance length" = **accept_per_event + 1** (verified: the 9.83 window had
+  106 accepted / 12 events = 8.83 accept, +1 bonus = 9.83). So it == committed_per_event.
+- My interim token-weighted "5.42/5.49/5.59" was raw-window mean_accept_length (== committed), AND it
+  averages over prefill/tool-gap windows (accept~0) that DILUTE it downward. => it is NOT comparable to
+  the accept_per_event calibration band [5.38, 5.54] (those are accept_per_event / Sigma-survival units).
+
+**What survives (valid):** (1) ENGAGEMENT proven -- br_real=8170, branches carry real arctic tokens.
+(2) MONOTONE-LOSSLESS guarantees tail6b >= tail6 by construction (the committer accepts a superset of
+candidates) -- the SIGN of the effect is guaranteed; only the MAGNITUDE needs the clean number.
+**What I must NOT do:** quote the raw-window average as "accept" (that is exactly the hand-rolled-speed
+pitfall). The ONLY accept read is the bracketed deploy_speed accept_per_event at arm completion:
+tail6b vs same-session tail6, both decode-only-bracketed, apples-to-apples. Await it; do not pre-conclude.
