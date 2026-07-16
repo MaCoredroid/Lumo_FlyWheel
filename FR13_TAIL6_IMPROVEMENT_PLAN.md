@@ -261,3 +261,19 @@ candidates) -- the SIGN of the effect is guaranteed; only the MAGNITUDE needs th
 **What I must NOT do:** quote the raw-window average as "accept" (that is exactly the hand-rolled-speed
 pitfall). The ONLY accept read is the bracketed deploy_speed accept_per_event at arm completion:
 tail6b vs same-session tail6, both decode-only-bracketed, apples-to-apples. Await it; do not pre-conclude.
+
+### b7 arm1 DONE: tail6b canonical accept_per_event = 4.500 (this regime)
+
+Bracketed deploy_speed (output/fr13_tail6b_ab/tail6b_b7/deploy_speed_b7.json):
+- **accept_per_event = 4.500**, committed_per_event = 5.500, derived_tps = 4.76, s_per_fwd_gpu = 0.105,
+  prefill_frac = 0.453. 16/16 tasks.
+
+RECONCILES with last fire's correction: raw-window committed ~5.49 minus 1 = 4.49 accept ≈ 4.500 canonical.
+So the raw-window mean_accept_length WAS committed_per_event; -1 recovers accept (the correction was right).
+
+REGIME NOTE: 4.500 is below the calibration band [5.38, 5.54] because that band was anchored to a stale
+tail6=5.23 from a DIFFERENT regime. This SWE-agentic regime (prefill_frac 0.45, this 16-task mix) runs
+lower -- the tail6-family artifacts span 4.28 (tailg4c) to 5.10 (prewarm). So the ABSOLUTE calibration
+levels do NOT transfer across regimes; only the same-session DELTA (tail6b - tail6, monotone >= 0) is
+valid. tail6b=4.500 sits above tail6_tailg4c=4.277 (cross-run, weak evidence). CLEAN delta pending the
+same-session tail6 arm (arm2, now running ~2hr). tps gate: tail6b derived_tps 4.76 -- compare to tail6 arm.
