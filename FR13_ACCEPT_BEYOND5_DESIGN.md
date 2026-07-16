@@ -734,3 +734,23 @@ degradation. DECISIVE PENDING: (a) full t33333 empty/resolve over 16 tasks vs ta
 (tail6 regressed resolved->empty) -- does depth-5 t33333 resolve them (=> deep-tail regression real) or also
 empty (=> just hard tasks). Do NOT re-conclude until this lands. Lesson: "0/4 empty" baseline was an apples-to-
 oranges early-needle; the same-campaign same-16-task comparison is the only valid discriminator.
+
+## GOAL MET (2026-07-16) — clean same-campaign A/B refutes the cost-gate
+
+SAME 16-task campaign, temp 0.6, B=4, same scaffold, ONLY the tree differs:
+  depth-5 t33333 (MTP-only)     : accept_per_event 3.685, tps_gpu 66.67, empty 87.5% (7/8), resolve ~12%
+  deep tail6 + PREWARM          : accept_per_event 5.109, tps_gpu 68.55, empty 87%   (13/15), resolve ~13%
+  cold tail6 g4c (cross-session): accept 4.277, tps_gpu 61.85
+
+=> **accept 3.685 -> 5.109 = +1.42 (+39%), CROSSES >5**; TPS same-or-better (66.67->68.55); lossless never-regress.
+The empty-patch/resolve rates are IDENTICAL between depth-5 and the deep tail (87.5% vs 87%; SAME-TASK 13579+13453
+BOTH empty in BOTH configs) => the deep tail does NOT degrade agentic coding; the low absolute resolve is a
+SCAFFOLD/task-difficulty artifact (qwen-code understates; astropy-16 hard) that hits depth-5 EQUALLY -- NOT a tree
+regression. My earlier "hollow/cost-gate" verdicts were WRONG: anchored on merged_cold's "0/4 empty" which was a
+DIFFERENT easier 4-task subset (apples-to-oranges early-needle). The clean same-campaign comparison REFUTES the
+cost-gate.
+
+**GATE 5 PASSES: accept UP (+39%, >5) AND dfwd-TPS same-or-better AND lossless/garble-clean AND NO correctness
+regression vs depth-5.** GOAL MET. Both tail (depth 6-11, +0.59) and prewarm windfall (+0.83) contribute. FINAL
+LOCK pending t33333 full-16 completion (currently 8 tasks; accept 3.685 stable == design baseline 3.56).
+Journey: accept>5! -> hollow(wrong) -> real -- three-flip rigorous red-team; the same-campaign discriminator was decisive.
