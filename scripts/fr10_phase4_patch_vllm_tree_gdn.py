@@ -13900,6 +13900,21 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # head, and the committer verifies each row against its OWN target -> never a wrong accept.
                 while len(_fr10_spine_tokens) < int(_fr10_wide_D):
                     _fr10_spine_tokens.append(_fr10_spine_tokens[-1])
+                # Direction-2 branch PAD-fallback (mirror the spine pad above): the branched tail tree has
+                # branch nodes (rk>0) whose _fr10_wide_topk keys are filled by decide_tail's merge ONLY when
+                # the tail path engaged; on a cold/dummy forward (decide_tail None/skip) those keys are absent
+                # and the packer fail-louds. Pad any missing branch key with the (pad-reconciled) spine token
+                # repeated -> LOSSLESS (a repeated token never matches a DISTINCT model token; committer p(S)).
+                # Head branches (pp<head_depth) are MTP-filled so present; this only backstops the tail. No-op
+                # for the spine-only tail (its plan has no rk>0 past the head) => byte-identical for tail6.
+                for _fr13_pp, _fr13_rk in _fr10_wide_plan:
+                    if _fr13_rk <= 0:
+                        continue
+                    _fr13_wt = _fr10_wide_topk.get(_fr13_pp)
+                    if _fr13_wt is None or _fr13_rk >= int(_fr13_wt.shape[1]):
+                        _fr13_w = max(int(_fr13_rk) + 1, 3)
+                        _fr10_wide_topk[_fr13_pp] = (
+                            _fr10_spine_tokens[_fr13_pp].unsqueeze(1).expand(-1, _fr13_w).contiguous())
                 if _fr13_t_skip:   # fail-LOUD (throttled) so the real guard miss surfaces, not the packer error
                     try:
                         globals()["_fr13_tail_skip_n"] = globals().get("_fr13_tail_skip_n", 0) + 1
