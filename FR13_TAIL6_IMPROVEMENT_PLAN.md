@@ -126,3 +126,31 @@ DROPS ~21% (deeper 25-node tree = more verify + GDN-scan). => extending the spin
 sweep's 0.95 deep-tail plateau was an EXTRAPOLATION ARTIFACT (the measured d7-11 rise was the limited depth-11
 window). x-axis lever DEAD. Pivot fully to the d6-BRANCH lever: raise the handoff conditional (0.666) WITHOUT
 adding depth cost (branches are within the existing depth, +2 nodes at n_pad, ~free drafter topk).
+
+---
+
+## Direction-2 d6-branch: clean same-session A/B LAUNCHED (b7)
+
+**What ran before:** a SOLO `tail6b` run (b6) decoded clean — `TAIL[fired=4619 hit=4501 cold=8]`,
+zero crashes — proving the branched wiring works live. But (a) its needle predates the `br_real`
+counter so branch-vs-pad engagement was unproven, and (b) its accept vs *cross-session* tail6 (~5.1)
+is confounded. Killed it.
+
+**The honest measurement (running now):** `scripts/fr13_tail6b_ab_seq.sh` via the b4 campaign driver
+on `subset_b4_sixteen`, `RUNROOT=output/fr13_tail6b_ab TAG=b7`, back-to-back arms in ONE driver run:
+1. `tail6b` (25-node, d6/d7 arctic-branched, depth-11) — the deliverable lift
+2. `tail6`  (21-node spine tail, depth-11) — the never-regress bar
+
+The **ONLY** difference is `FR13_TAIL_BRANCHES=2 / FR13_TAIL_BRANCH_DEPTHS=2` (+ the 4 branch nodes in
+the tree). GPU_UTIL=0.72 / geom BV=8 / tail-mode / draft-source=merged / no-prewarm are IDENTICAL on
+both arms ⇒ **no config drift**. WALL=1800, B=4, CONC=4 (== the deployment gate).
+
+**Reads to take (next fires):**
+- `br_real > 0` in the tail6b `[FR13_MERGED ENGAGED]` needle ⇒ branches carry REAL arctic runner-ups
+  (not pad-fallback). This is the engagement gate; if br_real==0 the branched path is vacuous.
+- `deploy_speed accept_per_event`: tail6b vs same-session tail6. Monotone-lossless ⇒ tail6b ≥ tail6 on
+  the same spans; the delta = the d6/d7 handoff lift (targets the measured weakest link, cond 0.666).
+  Target ~5.5 at unchanged tps (same depth-11 ⇒ tps ≈ tail6, unlike tailx10's depth-15 −21%).
+- If tail6b > tail6: the head-complement lever (arctic ∪ MTP branches at d1–5) is next.
+- If tail6b ≈ tail6 with br_real>0: branches engage but don't help (handoff isn't the accept leak) —
+  re-target the lever.
