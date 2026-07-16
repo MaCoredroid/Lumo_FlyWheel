@@ -199,3 +199,30 @@ the biggest single reducible overhead AND it is entirely our code (low architect
 escape). FR13_GPU_COMMITTER=1 was meant to do this; redteam found its synckill path _materialise()s
 eagerly (keeps the sync) -- but the COMPUTE port (device LCP kernel, remove host loop) is the 87ms win,
 separable from the align sync. nt1 tail6 arm (running) confirms the 94ms committer SAME-SESSION vs native 7ms.
+
+---
+
+## Committer-port CRASHED live + the sobering ceiling math
+
+**tail6_gc (FR13_GPU_COMMITTER=1) crashed on the WARMUP PROBE** (first decode, EngineDeadError rc=4,
+serve VACUOUS). The device LCP committer (scripts/fr13_gpu_committer_kernel.py, fr13_gpu_committer_device_full)
+is NOT functional on the live tree path -- a shape/init bug (warmup uses dummy inputs, so data-independent).
+The "never live-run" risk materialized. Root-cause traceback lost (container removed on arm transition);
+localizing needs a re-run with docker-log capture OR reading fr13_gpu_committer_kernel.py.
+
+**CEILING MATH (why the port doesn't rescue the tree):** committer 94->10ms saves 84ms/step. tail6 wall
+1088->1004ms => per_req 5.317/1.004 = **5.30 -- STILL below native's 5.49.** The committer port, even
+FIXED, does NOT make the tree beat native per-stream. And native aggregate (12.85) > tail6b (9.67).
+
+## HONEST EMERGING CONCLUSION: native MTP-5 is faster than the tree on GB10
+- Native MTP-5: accept 3.42, per_req 5.49, aggregate 12.85, committer 7ms, verify 58ms.
+- tail6 (tree):  accept 4.32, per_req 4.89, aggregate 9.67(b7), committer 94ms, verify 93ms.
+- The tree does MORE work per HBM-bound forward (draft tree + verify 25 nodes + commit tree) for +0.9
+  accept, but on GB10 the forward is cheap-ish (HBM 98.6ms) so the extra verify+committer overhead
+  (~127ms/step) EXCEEDS the accept benefit. Native wins per-stream AND aggregate.
+- The committer port (84ms) closes most of the committer gap but leaves the tree ~tied/slightly-behind
+  (5.30 vs 5.49) -- and it crashes, needing debug + losslessness gating. Poor ROI.
+- PENDING: the cp1 tail6 arm (running) confirms native-vs-tail6 SAME-ish-session. If it holds, the honest
+  deliverable answer on GB10 is NATIVE MTP-5, not the tree -- the tree's accept edge doesn't buy speed here.
+  This is the measured cost-gate, not a premature no-go (branch-widening + committer-port + align-escape
+  all assessed).
