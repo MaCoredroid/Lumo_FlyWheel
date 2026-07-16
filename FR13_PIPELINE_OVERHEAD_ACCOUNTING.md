@@ -247,3 +247,22 @@ run had NO synckill (parents_cpu populated:7984), so the crash is in the DEVICE 
 shape/counts assumption. Root-cause traceback was lost (container removed on arm-fail). NEXT: dedicated
 tail6_gc boot with docker-log capture (container persists) -> read the EngineCore traceback -> fix the
 kernel shape bug -> re-run. The corrected ROI (could beat native) justifies the debug effort.
+
+---
+
+## Committer-port kernel FIXED + running (cp4) — lossless is now the gate
+
+After 3 Triton int64 fixes (best_leaf/bonus_tok/acc_row, via log-capture boots), tail6_gc
+(FR13_GPU_COMMITTER=1) COMPILES + DECODES clean: 0 crashes, GPU committer engaged
+("FR13_EAGER_PACK committer path engaged: boundary_legacy_loop=0, packed_dtoh_elems=181" -- device LCP
+runs, host legacy loop skipped, tiny packed DtoH vs the full 94ms host loop).
+
+**OPEN GATE -- LOSSLESSNESS:** early raw accept ~3.807 (32 windows) vs tail6's 4.32. Could be early noise
+OR a device-LCP correctness bug (the Triton kernel commits a SHORTER/different path than the host
+committer => fewer accepted tokens => NOT lossless). The committer decides which tokens are accepted, so
+a lower accept = a real correctness difference, not just speed. The cp4 A/B (tail6_gc vs tail6) settles it:
+  - accept_per_event ~= tail6 4.32 => device LCP is lossless-equivalent (rejection-sampler convergence).
+  - accept << 4.32 => device LCP has a bug (wrong path-LCP / tie-break / bonus-token) -> localize vs the
+    host _lumo_tree_path_lcp_max_greedy_sample reference.
+  - committer_gpu_ms 94->~10 => the speed lever works (measured at arm end).
+DO NOT trust the speed win until accept matches -- a faster-but-wrong committer is a reward hack.
