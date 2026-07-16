@@ -289,3 +289,16 @@ same-session tail6 arm (arm2, now running ~2hr). tps gate: tail6b derived_tps 4.
 - CAVEAT: tail6 is PARTIAL (first wave) vs tail6b FULL -- the ~+0.4 magnitude is likely inflated by
   partial-vs-full task mix. The CLEAN delta = bracketed deploy_speed accept_per_event when tail6
   completes all 16 (~1.5hr). Do not quote +0.4 as the lift; only the sign is established so far.
+
+### b7 arm2 converging: raw delta shrinking to ~+0.10 (as predicted)
+
+tail6 raw-window accept rose 4.10 (105w) -> 4.402 (218w) as more tasks completed -- the partial-vs-full
+inflation is shrinking, confirming last fire's caveat. Same-basis raw delta now: tail6b 4.500 - tail6
+4.402 = **+0.10 accept** (modest, low end of calibration ~15% correlated siblings). Sign positive
+(branches help + monotone), magnitude STILL settling (tail6 partial, 4/16 patches). CLEAN bracketed
+delta at arm2 completion (~1.5hr). 0 crashes both arms.
+
+Strategic read (pending clean number): if the delta is modest (~+0.10-0.15), arctic siblings are hitting
+a CORRELATION ceiling (same suffix-match context) -> more arctic width (tail6c/tail6e) may plateau, and
+the DECORRELATED MTP-d6-seam (+1 forward) becomes the higher-value lever. Decide AFTER the clean delta +
+the tail6c/tail6e sweep -- do not pre-build the MTP-seam (risky patcher change) on a partial number.
