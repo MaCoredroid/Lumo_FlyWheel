@@ -52,3 +52,47 @@ native stage decomposition, same-session vs the tree arms. Only THEN can we say 
 
 GOAL (user): push the WHOLE pipeline to the hardware limit — we are kernel MAKERS, not reproducers.
 Huge TPS win, not another +0.05 accept.
+
+---
+
+## b7 CLEAN same-session result: d6-branch is an accept win but a SPEED LOSS
+
+| metric | tail6b (25-node branched) | tail6 (21-node spine) | delta |
+|--------|--------------------------:|----------------------:|-------|
+| accept_per_event | 4.500 | 4.317 | +0.18 (+4.2%) |
+| per_request_decode_tps | 4.452 | **4.889** | **-8.9%** |
+| kernel derived_tps_gpu | 52.4 | 56.9 | -7.9% |
+| committer_gpu_ms/step | 108.7 | 94.0 | +14.7 |
+| s_per_fwd_gpu | 0.105 | 0.0935 | +12% |
+
+The +0.18 accept does NOT pay for the +4 branch nodes' forward+committer cost => net **-8.9% per-stream tps**.
+Confirms: bloating the tree for accept is the WRONG speed lever. tail6 (spine-only) is the fastest tree.
+Geometry-widen arms (tail6c/tail6e) DEPRIORITIZED (more nodes = slower).
+
+## HW-LIMIT PLAN (workflow wf_fc8d5fe5-a49: 6 code-readers + design + adversarial verify)
+
+**Gap decomposition (the 920.7ms/step, was hand-waved as "fixed"):**
+- **~250ms (27%) = REDUCIBLE host stall we own** — sync engine loop + committer DtoH+full-stream
+  synchronize (patcher:7947-7948, 91.9% of committer window) + drafter eager launches. PER-STREAM killable.
+- ~305ms (33%) = genuine co-resident throughput (other streams' rows in the same weight-read). Not waste.
+- ~260ms (28%) = WASTED re-prefill (enable_prefix_caching=False, 107:1 prompt:gen). APC-recoverable (aggregate).
+- ~105ms (11%) = agentic idle (batch under-fill, eff_conc 2.05<4). Aggregate-only.
+
+**HW-limit ceiling: 130ms/step => ~42 tps/stream (~9.5x today's 4.45).** Floor = 1 weight-read (98.6ms
+verify, AT floor) + ~30ms graphed/fp8 drafter preamble + ~2ms overlapped committer. Spec-decode is
+data-serial per stream; the win = delete the 250ms host stall + compress the 315ms SERIAL chain.
+
+**Ranked levers:**
+| # | lever | effort | +tps | note |
+|---|-------|--------|------|------|
+| 1 | Committer sync-kill (FR13_GPU_COMMITTER=1 + FR13_COMMITTER_SYNCKILL=1) | low | +9% | **ROOT DOMINO** — flags EXIST; skips synchronize@7947-8; **NEVER live-gated (G5), needs IN-PROCESS OFF==ON byte-identical gate (no cross-boot byte gate on GB10)** |
+| 2 | Async scheduling / 2-deep batch_queue | med | +22% | depends on #1 |
+| 3 | CUDA-graph drafter spine + fp8 draft lm_head | high | +10% | patcher:13681 |
+| 4 | APC prefix-caching ON | high | +25% (agg) | **blocked on AGENTIC-losslessness (tree+cache degrades agentic)** |
+| 5 | Overlap GDN replay into next drafter | low | +2% | depends on #1 |
+| 6 | Reuse verify root logits for draft d0 | low | +1% | patcher:13385 |
+
+**Sequence:** #1 is the first domino (nothing pipelines until the main-thread synchronize is gone). It is
+correctness-sensitive (the committer decides accepted tokens) and NEVER validated => build an IN-PROCESS
+OFF==ON byte-identical losslessness gate BEFORE the speed campaign. Meanwhile the free GPU runs the
+native+tail6 decomposition (native stage timings — the missing HW-limit input). Then #1 -> #2 -> #3.
