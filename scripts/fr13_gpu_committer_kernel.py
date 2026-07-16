@@ -376,7 +376,7 @@ if _HAVE_TRITON:
         r = tl.program_id(0)
         nc = tl.load(node_count_ptr + r)
         base = r * MAX_NODES
-        n_leaf = 0
+        n_leaf = nc * 0  # int64 0 (reassigned = nc int64 at the fallback; Triton branch-type match)
         node = 0
         while node < nc:
             # node is a leaf iff no other node names it as parent.
