@@ -126,3 +126,51 @@ def build_tail_columns(tail_rows, device, pad_token, tail_len, vocab_size=None):
         col = [tnode(tail_rows[b], j) for b in range(B)]
         tail_tokens.append(torch.tensor(col, dtype=torch.int64, device=device))
     return tail_tokens
+
+
+def build_tail_branch_columns(branch_rows, device, pad_token, head_depth, tail_branch_depths,
+                              tail_branches, width=3, vocab_size=None):
+    """Direction-2 d6-handoff repair: build the tail-BRANCH wide_topk {parent_pos: [batch, width]}.
+
+    A tail branch at tail-position j (absolute depth head_depth+1+j) has parent = the spine at depth
+    head_depth+j, whose spine position pp = head_depth-1+j (j=0 -> the d5 spine, pp=head_depth-1). The
+    packer reads a rank-r leaf as wide_topk[parent_pos][:, r], so key = head_depth-1+j. The head only
+    fills keys 0..head_depth-2, so these keys are FREE. Cols: 0 = pad placeholder (packer reads ranks>=1),
+    1..tail_branches = the arctic runner-up branch tokens (suffix_rel[j][1:]). Missing/None/OOB -> pad
+    (a padded/repeated token can never match a DISTINCT model token => monotone-lossless / never-regress).
+
+    branch_rows: list length batch; entry b = {j: [tok_r1, tok_r2, ...]} for branched tail positions,
+                 OR None (cold -> all pad). Returns {} when no tail branches (== shipped tail6, no drift).
+    """
+    if tail_branches <= 0 or tail_branch_depths <= 0:
+        return {}
+    B = len(branch_rows)
+    assert B > 0, "empty batch"
+    vs = int(vocab_size) if vocab_size is not None else None
+    pad = int(pad_token)
+    if vs is not None and not (0 <= pad < vs):
+        pad = 0
+
+    def bnode(row, j, r):
+        toks = row.get(j) if isinstance(row, dict) else None
+        if not toks or r >= len(toks) or toks[r] is None:
+            return pad
+        v = int(toks[r])
+        if vs is not None and not (0 <= v < vs):
+            global _OOB_DROPPED, _OOB_LAST
+            _OOB_DROPPED += 1
+            _OOB_LAST = ("tail_br", j, v)
+            return pad
+        return v
+
+    wide = {}
+    for j in range(tail_branch_depths):
+        key = head_depth - 1 + j
+        cols = []
+        for c in range(width):
+            if c == 0:
+                cols.append([pad] * B)                                   # rank-0 spine placeholder
+            else:
+                cols.append([bnode(branch_rows[b], j, c - 1) for b in range(B)])  # rank c -> runner-up c-1
+        wide[key] = torch.tensor(cols, dtype=torch.int64, device=device).transpose(0, 1).contiguous()
+    return wide
