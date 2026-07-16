@@ -92,3 +92,29 @@ The committer is **monotone `accept=p(S)`** → *adding* candidates can only rai
 Net target: **accept ~5.6–5.8 at meaningfully lower ms/step** → TPS well above baseline, still lossless. Every accept lever is never-regress by construction; every speed lever is byte-identical-gated. Measure each on the live B=4 gate before the next (design §9 discipline).
 
 **Why both:** TPS = committed / step-ms. Dir-2 raises the numerator (5.2→~5.7), Dir-1 cuts the denominator (~550→~480 ms). Multiplied, that's a ~30%+ TPS gain on top of a lossless accept improvement — the accept and speed wins reinforce rather than trade off.
+
+---
+
+## Direction-2 IMPL + the two-proposer sweep (2026-07-16)
+
+**Framing (user):** the tree is a MERGE of TWO tree-proposers, each proposing top-k per depth —
+- **MTP** (strong, ≤5 heads) covers head depths 1..**n**; **x=0** ⇒ pure MTP (= cat33333).
+- **Suffix/Arctic** (weaker/token, unbounded depth, catches MTP misses) covers the **x** tail depths past the head, and *optionally* complements the head (overlap); **n=0** ⇒ pure arctic.
+Both propose **trees** — we currently throw the arctic tree away and use only its top-1 chain in the tail.
+
+**IMPL done (CPU-tested, no config drift):** `tail_tree_order` + `assemble_tail_tree` gained `tail_branches`/`tail_branch_depths` (default 0 ⇒ byte-identical shipped tail6). Branched tail fills the d6/d7 siblings from the **arctic tree runner-ups** `suffix_rel[j][1:]` (already computed by `arctic_tree_to_suffix_rel`, just discarded today). Pad-with-spine ⇒ monotone-lossless. TAIL6B tree string (25 nodes = 15 head + 6 tail spine + 4 d6/d7 branches) generated.
+
+**Measured per-depth conditionals (656-window tail6):** head d1–5 ≈ 0.85 flat; tail j0=**0.666 (the MTP→arctic handoff = weakest link)**, j1–5 = 0.848/0.895/0.906/0.908/0.950. The handoff is where the arctic is still ambiguous — exactly where runner-up branches help.
+
+**Sweep tool `fr13_tail_config_sweep.py`** models accept = Σ survival over (n, x, w_over=arctic-complement, w_tail/tail_bd=tail branches) within n_pad=32, with TWO unmeasured uplifts:
+- `tail_uplift` — how much an arctic branch raises a tail depth's conditional (d6-handoff rescue).
+- `comp_uplift` — how much an arctic complement raises an MTP depth's conditional (head-miss rescue).
+Calibrated at tail6 (n5,x6,no-branch → predicts 5.23 ≈ measured 5.2). **CAVEAT (honest):** the tail-conditional plateau (~0.95) is fit to tail6's MTP-anchored tail on THIS workload; the model's extreme optima (n=1,x=21) are **extrapolation artifacts** — Front-2 already showed arctic-heavy configs lose. Trust the model for interpolation near tail6, not for the extremes.
+
+**Calibration-first experiment ladder (each on the SAME subset_b4_sixteen, no config drift — only the tree/flag differs):**
+1. **A/B-1 (this iteration): tail6 (n5,x6, spine tail) vs TAIL6B (n5,x6, w_tail=2,tail_bd=2).** Same n,x — isolates `tail_uplift` (the d6/d7-branch effect). Expected +0.2–0.4 accept if the handoff rescue is real.
+2. **A/B-2: tail6 (x6) vs deeper tail (x10, spine).** Calibrates whether the tail conditional actually holds past d11 (does extending x pay, or decay?).
+3. **A/B-3: head-complement (w_over=1) vs tail6.** Calibrates `comp_uplift`.
+Then re-run the sweep with the 3 calibrated numbers → pick the accept-max config within budget → final live gate.
+
+**Endpoints as data points:** x=0 (pure MTP, accept 3.65) and n=0 (pure arctic) bound the space; both are cheap sanity A/Bs if the interpolation looks off.

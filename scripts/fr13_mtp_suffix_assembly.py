@@ -131,10 +131,15 @@ TAIL_LEN = 16                # Arctic chain nodes past the head (depths 6..21); 
 
 
 def tail_tree_order(head_depth: int = TAIL_HEAD_DEPTH, tail_len: int = TAIL_LEN,
-                    branches_per_depth: int = BRANCHES_PER_DEPTH):
+                    branches_per_depth: int = BRANCHES_PER_DEPTH,
+                    tail_branches: int = 0, tail_branch_depths: int = 0):
     """The node-path list (sorted head then chain) that drives the SPEC tree, the packer,
     and the assembly -- ONE topology source. Head = spine+branches for depths 0..head_depth-1
-    (== CAT33333_ORDER when head_depth=5,branches=2); tail = pure spine chain (0,)*(head_depth+1+j).
+    (== CAT33333_ORDER when head_depth=5,branches=2); tail = spine chain (0,)*(head_depth+1+j),
+    OPTIONALLY branched at its first `tail_branch_depths` depths (Direction-2 d6-handoff repair:
+    the tail's arctic top-1 conditional is weakest at the handoff j=0/d6, so give those depths
+    `tail_branches` arctic runner-up candidates -- monotone-lossless via the committer). Default
+    tail_branches=0 => pure spine chain == the shipped tail6 (no config drift).
     """
     order = []
     for d in range(head_depth):
@@ -143,12 +148,17 @@ def tail_tree_order(head_depth: int = TAIL_HEAD_DEPTH, tail_len: int = TAIL_LEN,
             order.append((0,) * d + (r,))                  # branch rank r at depth d
     for j in range(tail_len):
         order.append((0,) * (head_depth + 1 + j))          # chain node, absolute depth head_depth+1+j
+        if j < tail_branch_depths:
+            for r in range(1, tail_branches + 1):
+                # tail branch = sibling of spine node j (both children of (0,)*(head_depth+j))
+                order.append((0,) * (head_depth + j) + (r,))
     return order
 
 
 def assemble_tail_tree(mtp_spine, mtp_topk_per_depth, suffix_rel, mtp_k,
                        head_depth: int = TAIL_HEAD_DEPTH, tail_len: int = TAIL_LEN,
-                       branches_per_depth: int = BRANCHES_PER_DEPTH):
+                       branches_per_depth: int = BRANCHES_PER_DEPTH,
+                       tail_branches: int = 0, tail_branch_depths: int = 0):
     """Assemble the tail-tree node tokens (in tail_tree_order) from MTP head + Arctic chain.
 
     HEAD (depths 0..head_depth-1): spine = MTP argmax when d<mtp_k else Arctic suffix_rel[d-mtp_k][0]
@@ -192,7 +202,7 @@ def assemble_tail_tree(mtp_spine, mtp_topk_per_depth, suffix_rel, mtp_k,
         nodes.append(spine_tok)
         nodes.extend(branches[:branches_per_depth])
 
-    # --- TAIL: pure Arctic spine chain, depths head_depth..head_depth+tail_len-1 ---
+    # --- TAIL: Arctic spine chain, BRANCHED at its first tail_branch_depths depths (Direction-2) ---
     for j in range(tail_len):
         rel = head_depth - mtp_k + j          # suffix_rel index for this chain depth
         suf = [int(x) for x in suffix_rel.get(rel, []) if x is not None]
@@ -200,11 +210,24 @@ def assemble_tail_tree(mtp_spine, mtp_topk_per_depth, suffix_rel, mtp_k,
             tail_tok = suf[0]; tsrc = "suffix"
         else:
             tail_tok = last_spine; tsrc = "pad"   # cold -> repeat; never matches past head (lossless)
-        last_spine = tail_tok
         meta["tail_src"].append(tsrc)
         nodes.append(tail_tok)
+        if j < tail_branch_depths:
+            # d6-handoff repair: arctic runner-ups (suffix_rel[rel][1:]) as siblings of the tail spine
+            # node. Committer accept=p(S) picks whichever the model wants -> raises the weak handoff
+            # conditional. Pad w/ the spine token (a repeat can never match a DISTINCT model token =>
+            # still monotone-lossless / never-regress). Needs the TREE adapter (arctic_tree_to_suffix_rel)
+            # to populate suffix_rel[rel][1:]; the flat adapter yields only [0] -> branches pad -> no-op.
+            used = {tail_tok}
+            br = _pick_distinct(suf[1:], used, tail_branches)
+            while len(br) < tail_branches:
+                br.append(tail_tok)
+            meta.setdefault("tail_branch_src", []).append("suffix" if len(suf) > 1 else "pad")
+            nodes.extend(br[:tail_branches])
+        last_spine = tail_tok
 
-    expected = head_depth * (1 + branches_per_depth) + tail_len
+    expected = (head_depth * (1 + branches_per_depth) + tail_len
+                + min(tail_branch_depths, tail_len) * tail_branches)
     assert len(nodes) == expected, f"tail tree must produce {expected} nodes, got {len(nodes)}"
     return nodes, meta
 
