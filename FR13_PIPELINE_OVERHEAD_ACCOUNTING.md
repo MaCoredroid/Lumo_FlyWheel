@@ -340,3 +340,23 @@ core). NOT plausibly cheap. => STOP. Every cheap+medium lever exhausted & measur
 4.89, aggregate 12.85 vs 9.67). The tree's value is ACCEPT / LOSSLESSNESS (4.32 vs 3.42, branch-lossless
 spec-decode) -- an accuracy property, not a speed one, because the HBM-bound cheap forward doesn't reward
 the tree's extra verify+committer work. Deploy: native for tps; tree where lossless high-accept matters.
+
+## DEFINITIVE (measured, not guessed): GDN replay = 1.5ms -> stateless-tree lever DEAD, committer = verify-wait
+
+FR13_REPLAY_GPU_TIMER (10650 spans): **GDN accepted-path replay = 1.5 ms/step** -- negligible, cheaper
+than the ~11ms redteam estimate. => The replay is NOT the committer bottleneck. The stateless-tree
+committed-leaf-state GATHER lever (task #11: replace replay-recompute with a gather) is DEAD -- the replay
+is already 1.5ms, nothing to reclaim.
+
+**Clean committer decomposition (finally measured, not guessed):** committer span 94ms = ~1.5ms replay +
+small device-LCP + **~90ms WAIT-for-verify**. The CFWD cuda-event captures the committer blocking on the
+async verify forward (align-serialized pipeline: output.cpu() waits for the still-running verify). So the
+"94ms committer" is NOT 94ms of committer WORK -- it's mostly the verify-forward wait. The tree's REAL
+extra cost vs native = the bigger 25-node verify (93 vs 58ms tree-attn) + the non-overlapped pipeline.
+
+**FINAL VERDICT (fully measured on the live gate):** native MTP-5 is faster per-stream on GB10 (5.49 vs
+4.89). The tree's extra cost is the 25-node verify forward (tree-attn) + align-serialized non-overlap.
+Levers: shrink verify = smaller tree (refuted anti-accept); overlap = async/align-escape (cost-gated deep
+APC-core rewrite). Replay=1.5ms (stateless-tree lever dead). Committer-LCP-port lossless-but-no-speed.
+=> Tree's value on GB10 = ACCEPT/LOSSLESSNESS (4.32 vs 3.42), not throughput. Deploy: native for tps,
+tree for lossless high-accept. Speed investigation COMPLETE -- every lever measured, no premature no-go.
