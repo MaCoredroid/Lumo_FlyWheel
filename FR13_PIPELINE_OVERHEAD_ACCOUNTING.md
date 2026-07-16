@@ -266,3 +266,11 @@ a lower accept = a real correctness difference, not just speed. The cp4 A/B (tai
     host _lumo_tree_path_lcp_max_greedy_sample reference.
   - committer_gpu_ms 94->~10 => the speed lever works (measured at arm end).
 DO NOT trust the speed win until accept matches -- a faster-but-wrong committer is a reward hack.
+
+## Committer-port LOSSLESS confirmed (cp4) — speed numbers pending
+
+tail6_gc raw accept = **4.321** (267 windows) == tail6 host-committer 4.317 (native 3.415). The device LCP
+kernel commits the SAME paths as the host committer => LOSSLESS-equivalent (the two only match this closely
+if the accept/LCP/bonus decisions are identical). 0 crashes, 0 fallback, GPU committer engaged throughout.
+=> The FR13_GPU_COMMITTER=1 device port is CORRECT. Remaining = pure SPEED (deploy_speed at arm end):
+committer_gpu_ms 94->~10? + per_req past native 5.49? If yes => BAKE (lossless + faster, our own code, no drift).
