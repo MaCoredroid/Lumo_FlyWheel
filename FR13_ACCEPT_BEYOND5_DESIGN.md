@@ -803,3 +803,8 @@ the default deploy (FR13_TAIL_MODE + FR13_DRAFT_SOURCE=merged, NO FR13_PREWARM_T
 GATE 5 PASSES cleanly. GOAL MET -- simplest + best form. Design's prewarm/complement/windfall machinery: BUILT +
 lossless but NOT needed for >5 (the tail suffices). Four honest corrections (win->hollow->real->tail-not-prewarm);
 core result held throughout, explanation converged to: THE DEEP ARCTIC TAIL crosses >5.
+
+## FINAL CONFIRMATION (2026-07-16) — prewarm contributes exactly ~0; CLOSED
+tail6_cold (NO prewarm) canonical: 5.201@4 -> 5.237@8 -> 5.105@10 tasks (stable ~5.1-5.2, tps ~70).
+tail6+prewarm: 5.109@15. => cold 5.105 ~= prewarm 5.109 => PREWARM ~0 CONFIRMED. TAIL is the sole lever
+(depth-5 3.697 -> ~5.1, +1.4, >5). GOAL MET; deliverable = tail-only (no prewarm), simplest+best. CAMPAIGN CLOSED.
