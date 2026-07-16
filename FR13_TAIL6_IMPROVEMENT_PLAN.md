@@ -327,3 +327,17 @@ campaign). b7 was tree-vs-tree, so NO clean same-session tree-vs-native number e
 tail6b + tail6e + tail6c, native+tail6b FIRST (speed-gate pair). Definitively answers: does ANY tree
 geometry beat native MTP-5 on per-stream tps, or is the tree only an accept play? Launch when b7 frees GPU.
 (Supersedes fr13_tail6_sweep3_seq.sh, which lacked the native bar.)
+
+### b7 near-final: accept delta converged ~+0.18 (tail6b 4.500 vs tail6 ~4.32)
+
+tail6 arm 12/16 (final wave = same hard tasks tail6b ran), raw accept settled to ~4.324 (575 windows)
+after oscillating 4.10->4.40->4.32 with task mix. Same-basis delta: tail6b 4.500 - tail6 ~4.32 = **+0.18
+accept** (raw; clean bracketed number at 16/16). Modest, real, lossless -- calibration low end (~correlated
+arctic siblings). The tail6 deploy_speed (imminent) gives BOTH the clean accept delta AND the within-session
+SPEED delta: does the +0.18 accept beat tail6b's +4-node (25 vs 21) slower forward? = the branch net-win test.
+
+NEXT LAUNCH (when b7 done + GPU free + cleanup): the 4-arm speed sweep --
+  setsid bash -c 'RUNROOT=output/fr13_tail6_speedsweep TAG=sw1 SUBSET=subset_b4_sixteen.json \
+    SEQUENCE_FILE=scripts/fr13_tail6_speed_sweep_seq.sh bash scripts/fr13_b4_campaign_driver.sh \
+    > output/fr13_tail6_speedsweep/driver.sw1.log 2>&1' </dev/null >/dev/null 2>&1 &
+(nativemtp5+tail6b+tail6e+tail6c same-session => the definitive tree-vs-native speed verdict + geometry.)
