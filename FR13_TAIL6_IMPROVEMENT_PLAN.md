@@ -206,3 +206,16 @@ Branch at depth d recovers fraction r of that depth's miss (1-cond_d); r encodes
 Note the MTP-d6-seam lever is NOT free (+1 MTP forward ~ +1/5 head drafter cost); it's a speed-vs-accept
 tradeoff, justified only if arctic width plateaus below the decorrelated bar. tail6c (free, same tps) is
 tried first. Live b7 engagement stable: TAIL[fired=2668 hit=2553 cold=0 br_real=2044], 0 crashes.
+
+### b7 INTERIM (caveated, NOT a conclusion)
+
+tail6b arm 4/16 tasks: token-weighted mean accept over 217 windows / 17482 accepted tokens = **5.418**.
+Squarely in the calibration "branches help" band [5.38, 5.54] (recovers ~15-30% of the d6 miss). CAVEATS:
+(1) 4/16 tasks (interim); (2) window-mean token-weighting APPROXIMATES the true accept_per_event (the
+deploy_speed reducer does it rigorously from /metrics brackets at arm end); (3) vs CROSS-session tail6
+(~5.23) = the exact confound this A/B exists to remove -- the clean read is the same-session tail6 arm.
+So: ENCOURAGING + consistent with branches helping, but NOT concluded. Await tail6b + tail6 arm finals.
+
+Next experiment prepped (fr13_tail6c_ab_seq.sh, ready when b7 frees the GPU IF tail6b > tail6):
+tail6c (concentrate 4@d6) vs tail6b (spread 2+2) same-session -- both 25 nodes/n_pad=32/same tps, only
+branch distribution differs (no drift). Isolates concentrate-vs-spread at the seam.
