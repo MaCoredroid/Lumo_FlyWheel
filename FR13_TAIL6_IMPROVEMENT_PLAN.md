@@ -302,3 +302,28 @@ Strategic read (pending clean number): if the delta is modest (~+0.10-0.15), arc
 a CORRELATION ceiling (same suffix-match context) -> more arctic width (tail6c/tail6e) may plateau, and
 the DECORRELATED MTP-d6-seam (+1 forward) becomes the higher-value lever. Decide AFTER the clean delta +
 the tail6c/tail6e sweep -- do not pre-build the MTP-seam (risky patcher change) on a partial number.
+
+### SPEED GATE surfaced: tree ~TIES native MTP-5 (cross-run) -> add native arm to the sweep
+
+User asked how tail6b's tps compares to native MTP-5. Cross-run comparison (tail6b b7 vs native_nocache_qc4
+= flash_ns5_nocache, closest regime pf 0.42/ec 1.86):
+
+| metric (B=4)              | tail6b (TREE 25-node) | native MTP-5 | tree vs native |
+|---------------------------|-----------------------|--------------|----------------|
+| accept / forward          | 4.500                 | 3.336        | **+35%**       |
+| per-stream decode tps     | 4.45                  | 4.60         | -3% (~tie)     |
+| aggregate (throughput)tps | 9.67                  | 10.48        | -8%            |
+| decode-kernel tps_gpu     | 52.4                  | 59.1         | -11%           |
+| s / forward (GPU)         | 0.105s                | 0.073s       | **+43% slower**|
+
+KEY: the tree's +35% accept is CANCELLED by its +43%-slower 25-node forward => ~TIE (even slightly behind)
+on tps. At B=4 the extra tree-attention compute is real (nuances the "HBM-bound, accept is the only lever"
+read). "4.76 tps" (derived_tps) is the concurrency-summed basis the json flags NOT-E5-comparable; ignore it.
+
+CAVEAT: CROSS-RUN (different subset + b7 tree arms are cache-OFF matching native nocache, but different
+campaign). b7 was tree-vs-tree, so NO clean same-session tree-vs-native number exists yet.
+
+**Action:** fr13_tail6_speed_sweep_seq.sh -- 4-arm same-session campaign: nativemtp5(flash_ns5_nocache) +
+tail6b + tail6e + tail6c, native+tail6b FIRST (speed-gate pair). Definitively answers: does ANY tree
+geometry beat native MTP-5 on per-stream tps, or is the tree only an accept play? Launch when b7 frees GPU.
+(Supersedes fr13_tail6_sweep3_seq.sh, which lacked the native bar.)
