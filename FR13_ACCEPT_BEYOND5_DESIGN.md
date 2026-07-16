@@ -721,3 +721,16 @@ correctness bug (n_pad=32/merged-tail GARBLE producing subtly-wrong tokens that 
 to native). If a residual n_pad=32 garble (cf. the FR13_ATTN_KV_REMAP cat9 fix) -> FIXABLE -> accept>5 may be
 recoverable. If trajectory divergence -> fundamental cost-gate. This is the one investigation worth running before
 declaring the final no-go. GPU freed (hung prewarm container killed).
+
+## RED-TEAM OF THE RED-TEAM (2026-07-16) — depth-5 ALSO empties => cost-gate IN DOUBT
+
+Clean same-campaign depth-5 t33333 on the SAME 16-task set: **3/4 empty patches (75%)** so far, vs tail6(deep)
+13/15 (87%). NEARLY THE SAME. => the empty patches are NOT deep-tail-specific; they are a HARNESS/SCAFFOLD/
+TASK-SET artifact (qwen-code understates; astropy-16 has many hard tasks) affecting BOTH configs. The earlier
+"depth-5 merged_cold 0/4 empty" that anchored my "deep tail degrades" red-team was a DIFFERENT, likely easier
+4-task subset -- NOT a valid baseline. So my HOLLOW/cost-gate verdict is IN DOUBT: if depth-5 empties as much as
+the deep tail, the deep tail is NOT the degrader, and accept>5 (5.109) is NOT obviously inflated by tail-specific
+degradation. DECISIVE PENDING: (a) full t33333 empty/resolve over 16 tasks vs tail6; (b) SAME-TASK 13579+13453
+(tail6 regressed resolved->empty) -- does depth-5 t33333 resolve them (=> deep-tail regression real) or also
+empty (=> just hard tasks). Do NOT re-conclude until this lands. Lesson: "0/4 empty" baseline was an apples-to-
+oranges early-needle; the same-campaign same-16-task comparison is the only valid discriminator.
