@@ -171,6 +171,12 @@ case "$KIND" in
   # (re-compute, reducible via stateless-tree gather = real lever); replay ~=11ms => the cost is sync-wait/
   # DtoH not the replay (native wins). Diagnostic (synchronize inflates other spans -- read REPLAY only).
   tail6_rt)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_REPLAY_GPU_TIMER=1 FR13_REPLAY_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/tail6_rt_replay.json) ;;
+  # MULTIDRAFT-COMMITTER decomposition (the REAL temp-0.6 committer, per user's catch): tail6 +
+  # FR13_MULTIDRAFT_GPU_TIMER=1 -> per-step GPU-time of fr13_device_multidraft_commit (the deployed temp>0
+  # rejection committer). Settles what the 94ms committer_gpu span IS: multidraft_ms high => the rejection
+  # committer is the cost (optimize it); low => the 94ms is result-DtoH + verify-wait (pipeline). This is
+  # the committer I SHOULD have decomposed (FR13_GPU_COMMITTER was the greedy LCP, off the temp-0.6 path).
+  tail6_mt)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_MULTIDRAFT_GPU_TIMER=1 FR13_MULTIDRAFT_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/tail6_mt_md.json) ;;
   # COMMITTER-SPAN DECOMPOSITION probe: tail6_gc + FR13_COMMITTER_SYNCKILL=1 defers the committer's
   # DtoH+sync/materialise to a side stream (uses the _dev kernel, also int64-fixed). committer_gpu_ms
   # vs tail6_gc DECOMPOSES the 94ms span: drops => DtoH/sync is the reducible bottleneck (real lever);
