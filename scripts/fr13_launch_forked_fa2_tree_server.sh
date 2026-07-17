@@ -629,6 +629,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_GPU_COMMITTER_KERNEL="${FR13_GPU_COMMITTER_KERNEL:-/workspace/scripts/fr13_gpu_committer_kernel.py}" \
   -e FR13_DEVICE_MULTIDRAFT="${FR13_DEVICE_MULTIDRAFT:-1}" \
   -e FR13_DEVICE_MULTIDRAFT_KERNEL="${FR13_DEVICE_MULTIDRAFT_KERNEL:-/workspace/scripts/fr13_device_multidraft_kernel.py}" \
+  -e FR13_DEDUP_SIBLINGS="${FR13_DEDUP_SIBLINGS:-1}" \
   -e FR13_GREEDY_VIA_REJECTION="${FR13_GREEDY_VIA_REJECTION:-0}" \
   -e FR13_GREEDY_UNIFY_GATE="${FR13_GREEDY_UNIFY_GATE:-0}" \
   -e FR13_GREEDY_UNIFY_GATE_JSON="${FR13_GREEDY_UNIFY_GATE_JSON:-/logs/fr13_greedy_unify_gate.json}" \
