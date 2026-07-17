@@ -9283,8 +9283,21 @@ def _lumo_tree_canonical_multidraft_sample(
     bonus_token_ids: torch.Tensor,
     max_spec_len: int,
     generators=None,
+    all_greedy: bool = False,
 ) -> torch.Tensor:
-    """Reference sampled tree committer using the verified FR10 rule."""
+    """Reference sampled tree committer using the verified FR10 rule.
+
+    ``all_greedy`` (temp-0 committer unification): route temp-0/greedy commits
+    through THIS same multidraft committer with POINT-MASS target/self rows so
+    the accept rule reduces byte-for-byte and rng-free to the greedy longest-
+    prefix committer (byte-gate scripts/fr13_greedy_pointmass_byte_gate.py). This
+    lets the separate greedy path-LCP committer be deleted.
+    """
+    if all_greedy and draft_probs is not None:
+        raise RuntimeError(
+            'FR13 greedy-via-rejection: all_greedy with draft_probs!=None is '
+            'not a valid combination (greedy MTP always passes draft_probs=None)'
+        )
     if __import__('os').environ.get('FR13_FORCE_SPINE_COMMIT', '0') == '1':
         # FR13_FORCE_SPINE_COMMIT is a GREEDY-committer diagnostic. The
         # sampled committer's sequential child walk cannot force-commit the
@@ -9329,6 +9342,20 @@ def _lumo_tree_canonical_multidraft_sample(
         # skipped). The actual on-device commit runs at the loop anchor below.
         target_probs_cpu = None
         self_probs_cpu = None
+    elif all_greedy:
+        # host fallback, all_greedy: POINT-MASS rows (one-hot on argmax) so the
+        # host det-step reduces to greedy longest-prefix, matching the device
+        # all_greedy path. Only reached when FR13_DEVICE_MULTIDRAFT=0.
+        import numpy as _fr13_gu_np
+        _tgt_am = target_logits.argmax(dim=-1).detach().cpu().numpy()
+        _self_am = tree_self_logits.argmax(dim=-1).detach().cpu().numpy()
+        _vsz = int(target_logits.size(-1))
+        target_probs_cpu = _fr13_gu_np.zeros(
+            (int(target_logits.size(0)), _vsz), dtype=_fr13_gu_np.float32)
+        target_probs_cpu[_fr13_gu_np.arange(_tgt_am.shape[0]), _tgt_am] = 1.0
+        self_probs_cpu = _fr13_gu_np.zeros(
+            (int(tree_self_logits.size(0)), _vsz), dtype=_fr13_gu_np.float32)
+        self_probs_cpu[_fr13_gu_np.arange(_self_am.shape[0]), _self_am] = 1.0
     else:
         target_probs_cpu = target_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
         self_probs_cpu = tree_self_logits.softmax(dim=-1, dtype=torch.float32).detach().cpu().numpy()
@@ -9429,6 +9456,7 @@ def _lumo_tree_canonical_multidraft_sample(
                 bonus_token_ids,
                 max_spec_len,
                 generators=generators,
+                all_greedy=all_greedy,
             )
         except Exception as _fr13_dm_exc:
             raise RuntimeError(
@@ -10397,7 +10425,37 @@ def _lumo_tree_canonical_multidraft_sample(
         accepted_tree_rows = torch.empty(
             (batch_size,), dtype=torch.int32, device=device
         )
-        return _lumo_tree_path_lcp_max_greedy_sample(
+        # FR13 committer unification (temp-0): the greedy commit is the
+        # POINT-MASS (all_greedy) specialization of the SAME multidraft
+        # committer -- it reduces byte-for-byte and rng-free to greedy
+        # longest-prefix (scripts/fr13_greedy_pointmass_byte_gate.py 0/4000).
+        # FR13_GREEDY_VIA_REJECTION=1 serves the unified path so the separate
+        # greedy path-LCP committer becomes dead. FR13_GREEDY_UNIFY_GATE=1
+        # additionally dual-runs BOTH on the SAME real trees and records byte
+        # mismatches (settles the duplicate-sibling tie the offline gate defers)
+        # WITHOUT changing served output/state (old committer runs last + wins).
+        import os as _fr13_gu_os
+        _fr13_gu_via = _fr13_gu_os.environ.get("FR13_GREEDY_VIA_REJECTION", "0") == "1"
+        _fr13_gu_gate = _fr13_gu_os.environ.get("FR13_GREEDY_UNIFY_GATE", "0") == "1"
+        if (_fr13_gu_via or _fr13_gu_gate) and tree_self_logits is not None:
+            _fr13_gu_gen = getattr(sampling_metadata, "generators", None)
+            _fr13_gu_new = _lumo_tree_canonical_multidraft_sample(
+                (output_token_ids.clone() if _fr13_gu_gate else output_token_ids),
+                torch.empty((batch_size,), dtype=torch.int32, device=device),
+                num_draft_tokens,
+                draft_token_ids,
+                tree_parent_indices,
+                target_logits,
+                tree_self_logits,
+                None,
+                bonus_token_ids,
+                max_spec_len,
+                generators=(None if _fr13_gu_gate else _fr13_gu_gen),
+                all_greedy=True,
+            )
+            if not _fr13_gu_gate:
+                return _fr13_gu_new
+        _fr13_gu_old = _lumo_tree_path_lcp_max_greedy_sample(
             output_token_ids,
             accepted_tree_rows,
             num_draft_tokens,
@@ -10408,6 +10466,26 @@ def _lumo_tree_canonical_multidraft_sample(
             bonus_token_ids,
             max_spec_len,
         )
+        if _fr13_gu_gate:
+            try:
+                import json as _fr13_gu_j
+                _fr13_gu_mism = int((_fr13_gu_new != _fr13_gu_old).sum().item())
+                _fr13_gu_p = _fr13_gu_os.environ.get(
+                    "FR13_GREEDY_UNIFY_GATE_JSON",
+                    "/logs/fr13_greedy_unify_gate.json",
+                )
+                try:
+                    _fr13_gu_st = _fr13_gu_j.load(open(_fr13_gu_p))
+                except Exception:
+                    _fr13_gu_st = {"steps": 0, "mismatch_steps": 0, "mismatch_tokens": 0}
+                _fr13_gu_st["steps"] = int(_fr13_gu_st.get("steps", 0)) + 1
+                if _fr13_gu_mism > 0:
+                    _fr13_gu_st["mismatch_steps"] = int(_fr13_gu_st.get("mismatch_steps", 0)) + 1
+                    _fr13_gu_st["mismatch_tokens"] = int(_fr13_gu_st.get("mismatch_tokens", 0)) + _fr13_gu_mism
+                _fr13_gu_j.dump(_fr13_gu_st, open(_fr13_gu_p, "w"))
+            except Exception:
+                pass
+        return _fr13_gu_old
 
     if tree_parent_indices is not None and not sampling_metadata.all_greedy:
         try:
