@@ -9968,6 +9968,13 @@ def _lumo_tree_canonical_multidraft_sample(
                     __import__('os').environ.get('FR13_REPLAY_MULTISTREAM', '0') == '1'
                     and not _fr13_bnd_on and not _fr13_rdab_on and not _fr13_sbr_active
                     and int(_fr13_replay_rows) > 0
+                    # CUDA-graph capture cannot tolerate cross-stream events / stream-switch
+                    # (poisons the capture -> EngineCore init FAILS: observed ms_strm die at
+                    # 'Capturing CUDA graphs (decode, FULL)'). The accepted-path replay is
+                    # data-dependent => eager anyway, so fall back to the serial loop during
+                    # capture and overlap only on real (eager) decode steps.
+                    and not (torch.cuda.is_available()
+                             and torch.cuda.is_current_stream_capturing())
                 )
                 if _fr13_ms_on:
                     _fr13_ms_pool = getattr(
