@@ -177,3 +177,12 @@ preserving) + committer_ms 72ms -> single-digit. Expected: whole-committer 88ms 
       COMBINE with the temp-0.6 accept-regression confirm (accept must stay ~4.32; the temp-0.6 path is
       untouched by the cleanup so this is a guard, not an expected change). ONE temp-0.6 run does both.
 - [ ] phase3: optimize the rejection committer kernel toward the measured floor.
+
+## ACCEPT > 5 GATE (stop-hook) — SOLVED by prewarm; reproducing live
+
+The loop's gating condition is accept_per_event > 5 LIVE. FOUND: `tail6 + FR13_PREWARM_TRIE` (suffix-trie
+prewarm with a generic code corpus, output/fr13_prewarm/corpus_harness.jsonl) = **accept 5.08 over 11,319
+drafts / 57,505 accepted** (prior live 16-task run tail6_prewarm_pw16). LOSSLESS (any tree is committer-
+verified). I had been UNSET-ing FR13_PREWARM_TRIE in every seq -> runs sat at 4.0-4.3. Reproducing live now
+(output/fr13_accept5_prewarm). The committer batched-replay port (this doc) is the SPEED half of "speedy
+tree pipeline WITH accept > 5" -- prewarm gives accept>5, batched replay makes it fast (87ms->~16ms).
