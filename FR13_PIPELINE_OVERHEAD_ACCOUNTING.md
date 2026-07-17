@@ -360,3 +360,17 @@ Levers: shrink verify = smaller tree (refuted anti-accept); overlap = async/alig
 APC-core rewrite). Replay=1.5ms (stateless-tree lever dead). Committer-LCP-port lossless-but-no-speed.
 => Tree's value on GB10 = ACCEPT/LOSSLESSNESS (4.32 vs 3.42), not throughput. Deploy: native for tps,
 tree for lossless high-accept. Speed investigation COMPLETE -- every lever measured, no premature no-go.
+
+## OVERTURN (aggregate axis): batch under-fill was BUDGET-STARVED, not agentic-idle -> ~2x throughput lever
+
+Prior conclusion (native wins) was PER-STREAM only. The AGGREGATE axis (multi-user serving = per_stream x
+eff_conc) had an untested config lever: the APC-OFF deploy path (tail6) set NO chunked-prefill/max-num-
+batched flags (vLLM defaults). bf1 A/B (tail6 + --enable-chunked-prefill --max-num-batched-tokens 8192 vs
+baseline): boots CLEAN on GDN-hybrid w/o APC (0 crashes) AND the batch fills to **Running:4 reqs 70% of
+samples** (vs baseline eff_conc ~2.0). => the under-fill is BUDGET-STARVED (config-fixable), NOT agentic-
+idle as I'd concluded. Full B=4 batch => ~2x aggregate throughput potential (per_stream x eff_conc 2->4).
+Tradeoff: full batch = more per-stream contention (per_stream may dip); aggregate wins iff per_stream drops
+< eff_conc rises. CLEAN read pending (deploy_speed both arms: aggregate_decode_tps + eff_conc + per_stream
++ accept). If aggregate UP + accept unchanged => BAKE FR13_SERVE_BATCH_FLAGS for serving throughput. This
+is the deployment-relevant metric (native's per-stream win doesn't preclude a tree aggregate win, AND the
+same batch-fill helps native too -- but it's a real, cheap, previously-missed lever on the deploy config).
