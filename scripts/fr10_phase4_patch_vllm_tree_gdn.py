@@ -10521,7 +10521,19 @@ def _lumo_tree_canonical_multidraft_sample(
         accepted_tree_rows = torch.empty(
             (batch_size,), dtype=torch.int32, device=device
         )
-        return _lumo_tree_canonical_multidraft_sample(
+        # FR13_COMMIT_FULL_GPU_TIMER (diagnostic, default OFF => byte-identical):
+        # brackets the WHOLE committer (device multidraft walk + output-row
+        # assembly + GDN publish/replay) with cuda events. Compared against
+        # FR13_MULTIDRAFT_GPU_TIMER (inner walk only), the DELTA = the surrounding
+        # host assembly/publish -- the real decomposition of the committer span.
+        # Reliable (globals() accumulator + json every 50; the built-in CFWD timer
+        # counter is not firing). Uses synchronize() => diagnostic run only.
+        _fr13_cf2 = __import__('os').environ.get('FR13_COMMIT_FULL_GPU_TIMER', '0') == '1'
+        if _fr13_cf2:
+            _cf2_s = torch.cuda.Event(enable_timing=True)
+            _cf2_e = torch.cuda.Event(enable_timing=True)
+            _cf2_s.record()
+        _fr13_cf2_out = _lumo_tree_canonical_multidraft_sample(
             output_token_ids,
             accepted_tree_rows,
             num_draft_tokens,
@@ -10534,6 +10546,24 @@ def _lumo_tree_canonical_multidraft_sample(
             max_spec_len,
             generators=getattr(sampling_metadata, "generators", None),
         )
+        if _fr13_cf2:
+            _cf2_e.record()
+            _cf2_e.synchronize()
+            _cf2_g = globals()
+            _cf2_g['_FR13_CF2_S'] = _cf2_g.get('_FR13_CF2_S', 0.0) + _cf2_s.elapsed_time(_cf2_e) / 1000.0
+            _cf2_g['_FR13_CF2_N'] = _cf2_g.get('_FR13_CF2_N', 0) + 1
+            if _cf2_g['_FR13_CF2_N'] % 50 == 0:
+                try:
+                    import json as _cf2_json
+                    _cf2_json.dump(
+                        {"gpu_seconds": _cf2_g['_FR13_CF2_S'], "n_spans": _cf2_g['_FR13_CF2_N']},
+                        open(__import__('os').environ.get(
+                            'FR13_COMMIT_FULL_GPU_TIMER_JSON',
+                            '/logs/fr13_commit_full_gpu.json'), 'w'),
+                    )
+                except Exception:
+                    pass
+        return _fr13_cf2_out
 
     if sampling_metadata.all_greedy:
         is_greedy = None
