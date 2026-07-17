@@ -136,6 +136,20 @@ exists — if the committer uses the per-layer path and the all-layers batched k
 switching batches the 48 dispatches into 1 => big win. Gate: byte/accept-identical (state advance unchanged,
 only fused), committer_ms DOWN. VERIFY the all-layers kernel is genuinely batched (not a python loop) first.
 
+## PHASE-3 FIX IDENTIFIED — port batched all-layers replay to the sampled committer
+
+CONFIRMED: the deployed SAMPLED committer (`_lumo_tree_canonical_multidraft_sample`) replays the GDN state
+via an UNCONDITIONAL per-layer loop (patcher 9864-9921): ~48 `_fr13_replay_launch` (=launch_tree_gdn_replay)
+calls + 2 `.item()` syncs/layer (~96 syncs/step) = **~72ms/step**. The GREEDY committer already uses the
+BATCHED `launch_tree_gdn_replay_all_layers` (a TRUE single-launch "semantics-preserving sibling", EAGER_PACK
+path patcher ~9028-9160, `_ep_launch_all` @ 9080, boot needle `replay_batched=1`). Same greedy-optimized /
+sampled-not gap as the output write — but this is the 72ms cost.
+
+**FIX: port the greedy committer's EAGER_PACK batched all-layers replay (bank pointer table + stacked rings +
+one `_ep_launch_all`) to the sampled committer, replacing the 9864-9921 per-layer loop.** Flag-gated; the
+batched kernel is already validated (greedy path). Gate: byte/accept-identical (state advance is semantics-
+preserving) + committer_ms 72ms -> single-digit. Expected: whole-committer 88ms -> ~16ms => big per_req_tps lift.
+
 ## Status / plan
 
 - [x] phase1a: device committer point-mass specialization + offline byte-gate (0/4000).
