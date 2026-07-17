@@ -270,6 +270,29 @@ def _device_softmax_row(target_logits_row, *, fp32: bool = True):
     return torch.softmax(row, dim=-1)
 
 
+def _device_onehot_argmax_row(target_logits_row, *, fp32: bool = True):
+    """POINT-MASS prob row on the argmax logit (the temp->0 / greedy limit).
+
+    Returns a full-vocab prob row that is 1.0 at ``argmax(target_logits_row)``
+    and 0.0 elsewhere, ON DEVICE. Feeding this to ``device_multidraft_node_step``
+    makes the multidraft accept rule DETERMINISTIC and byte-identical to the
+    greedy longest-prefix committer: overlap mass is nonzero only for a child
+    whose draft == argmax, so that child is accepted with prob 1 (and any
+    residual/bonus multinomial over a point mass returns the argmax with no rng
+    consumption). This is the "use rejection sampling also at temp 0"
+    unification -- greedy is the one-hot specialization of the SAME rule, so the
+    separate greedy path-LCP committer is redundant. Proven node-equal to greedy
+    over 20k random trials and byte-equal at the tree level by
+    scripts/fr13_greedy_pointmass_byte_gate.py.
+    """
+    row = target_logits_row
+    if fp32:
+        row = row.to(torch.float32)
+    out = torch.zeros_like(row)
+    out[int(torch.argmax(row).item())] = 1.0
+    return out
+
+
 def device_multidraft_node_step(
     target_probs_row,
     child_draft_tokens,
@@ -354,8 +377,16 @@ def fr13_device_multidraft_commit(
     max_spec_len: int,
     *,
     generators=None,
+    all_greedy: bool = False,
 ):
     """Device-side temp>0 multidraft committer (FR13_DEVICE_MULTIDRAFT).
+
+    ``all_greedy`` (temp-0 unification): when True, every target/self prob row
+    is the POINT MASS on its argmax (``_device_onehot_argmax_row``) instead of
+    the softmax. The multidraft accept rule then reduces, byte-for-byte and with
+    ZERO rng consumption, to the greedy longest-prefix committer -- this is how
+    "use rejection sampling also at temp 0" stays lossless. The separate greedy
+    path-LCP committer is thereby redundant and deleted.
 
     Returns ``(out_rows, accepted_rows, accepted_lens, accepted_node_paths,
     accepted_token_rows)`` -- the SAME products
@@ -392,6 +423,7 @@ def fr13_device_multidraft_commit(
     if (
         os.environ.get("FR13_DM_DEPTHSYNC", "0") == "1"
         and _fr13_commit_trace_fh() is None
+        and not all_greedy
     ):
         # (commit-trace diagnostics need per-node host values => the legacy
         # per-node path serves them; depthsync + trace never silently mix.)
@@ -419,6 +451,10 @@ def fr13_device_multidraft_commit(
     accepted_lens: list[int] = []
     accepted_node_paths: list[list[int]] = []
     accepted_token_rows: list[list[int]] = []
+
+    # all_greedy => POINT-MASS rows (temp-0 unification, byte-identical to the
+    # greedy longest-prefix committer); else softmax rows (the temp>0 rule).
+    _row_fn = _device_onehot_argmax_row if all_greedy else _device_softmax_row
 
     start = 0
     for req_i, node_count in enumerate(counts):
@@ -454,7 +490,7 @@ def fr13_device_multidraft_commit(
                 if current_parent >= 0:
                     # self-target bonus: sample from the accepted node's self
                     # prob row, on-device (no [nodes x vocab] DtoH).
-                    self_row = _device_softmax_row(
+                    self_row = _row_fn(
                         tree_self_logits[start + current_parent]
                     )
                     tok = int(
@@ -469,8 +505,9 @@ def fr13_device_multidraft_commit(
 
             target_row = int(start + children[0])
             child_drafts = [int(drafts[child]) for child in children]
-            # On-device target prob row for this node (single row softmax).
-            p_row = _device_softmax_row(target_logits[target_row])
+            # On-device target prob row for this node (single row softmax, or a
+            # point mass on the argmax when all_greedy => byte-identical greedy).
+            p_row = _row_fn(target_logits[target_row])
             child_draft_tensor = torch.tensor(
                 child_drafts, dtype=torch.long, device=device
             )
