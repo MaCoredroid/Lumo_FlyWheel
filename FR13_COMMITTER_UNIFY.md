@@ -120,6 +120,22 @@ publish/replay block (patcher ~9620-9800+): heavy host Python (idx_by_req dict, 
 FR13_REPLAY_GPU_TIMER (wraps launch_tree_gdn_replay; passthrough now wired) alongside the whole + multidraft
 timers => whole(84) = walk(4) + replay(?) + publish-python(rest). The dominant sub-component is the target.
 
+## PHASE-3 RE-LOCALIZED — the ~72ms is the GDN REPLAY per-layer dispatch (2026-07-17)
+
+tail6_reloc, all 3 timers over the SAME decode period:
+- whole-committer = 17.69s/200 = **88.5ms/step**
+- inner walk = 0.77s/200 = **3.9ms/step**
+- **GDN replay (`launch_tree_gdn_replay`) = 14.42s / 200 steps = ~72ms/step** — logged **9750 spans over 200
+  steps = ~48 calls/step**, i.e. invoked PER-LAYER (~48 GDN layers) at 1.48ms each. = **81% of the committer**.
+- publish-python (idx dict + list-comps + DtoH + globals) = 88.5 - 3.9 - 72 = ~**12.6ms/step**.
+
+**TARGET: the GDN replay's per-layer dispatch (72ms/step).** Not the output write (refuted), not the walk
+(4ms, near-floor), not the publish-python (12ms). The 48× per-layer launch of `launch_tree_gdn_replay` with
+host coordination between is the cost. `launch_tree_gdn_replay_all_layers` (fr10_gdn_tree_kernel.py:1674)
+exists — if the committer uses the per-layer path and the all-layers batched kernel is a true single-launch,
+switching batches the 48 dispatches into 1 => big win. Gate: byte/accept-identical (state advance unchanged,
+only fused), committer_ms DOWN. VERIFY the all-layers kernel is genuinely batched (not a python loop) first.
+
 ## Status / plan
 
 - [x] phase1a: device committer point-mass specialization + offline byte-gate (0/4000).
