@@ -374,3 +374,20 @@ Tradeoff: full batch = more per-stream contention (per_stream may dip); aggregat
 + accept). If aggregate UP + accept unchanged => BAKE FR13_SERVE_BATCH_FLAGS for serving throughput. This
 is the deployment-relevant metric (native's per-stream win doesn't preclude a tree aggregate win, AND the
 same batch-fill helps native too -- but it's a real, cheap, previously-missed lever on the deploy config).
+
+## Batch-fill overturn FAILED (measured): aggregate -49% -- decode starved by big prefill batches
+
+bf1 A/B result: tail6 + --enable-chunked-prefill --max-num-batched-tokens 8192 => aggregate_decode_tps
+**4.917 vs baseline 9.67 (-49%)**, per_req 1.838 vs 4.89 (-62%), eff_conc 2.493 vs 2.09 (+19% only),
+accept 4.462 (holds). The big max-num-batched let the scheduler batch HUGE prefill chunks that STARVED
+decode -- per-stream cratered while eff_conc barely rose. The live "Running:4 reqs" was misleading: those
+were mostly PREFILLING, not decoding. => the batch-fill config is a NET LOSS; the vLLM DEFAULT config
+(baseline) is optimal. My aggregate overturn was WRONG (researched + run cleanly, honest measured negative).
+No drift risk: FR13_SERVE_BATCH_FLAGS is default-EMPTY (deploy config unaffected). DO NOT bake.
+
+### Speed direction FULLY closed (per-stream AND aggregate, all measured)
+- Per-stream: native MTP-5 faster (5.49 vs 4.89); tree overhead inherent (verify+committer), all levers
+  measured/refuted (replay 1.5ms, LCP-port, synckill, branch, APC, align-escape).
+- Aggregate: the default config is optimal; forcing bigger batches starves decode (-49%). eff_conc ~2 is
+  the agentic-workload natural concurrency (streams idle between tool calls), NOT budget-starved as hoped.
+- Tree value = accept/losslessness (4.32-4.46 vs native 3.42). Deploy: native for tps, tree for accuracy.
