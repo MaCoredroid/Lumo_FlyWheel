@@ -9980,6 +9980,14 @@ def _lumo_tree_canonical_multidraft_sample(
                                     'FR13_REPLAY_MULTISTREAM_N', '4')))
                         ]
                         _lumo_tree_commit_gdn._FR13_REPLAY_STREAMS = _fr13_ms_pool
+                    if not getattr(
+                        _lumo_tree_commit_gdn, '_FR13_MS_ANNOUNCED', False
+                    ):
+                        __import__('sys').stderr.write(
+                            '[FR13_REPLAY_MULTISTREAM] ENGAGED N='
+                            + str(len(_fr13_ms_pool)) + ' streams over '
+                            + str(len(_fr13_replay_layers)) + ' layers\n')
+                        _lumo_tree_commit_gdn._FR13_MS_ANNOUNCED = True
                     _fr13_ms_default = torch.cuda.current_stream()
                     # scan (default stream) wrote ssm_bank + rings; pool streams MUST wait on this
                     # event before reading them (else stale-state garble).
