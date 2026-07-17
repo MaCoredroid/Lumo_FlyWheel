@@ -106,6 +106,20 @@ Next: sub-decompose the 80ms (output-assembly vs GDN-publish vs dict) to localiz
 (batched H2D instead of per-element writes; minimize DtoH). Gate: accept-identical (any tree/assembly is
 lossless — committer verifies vs target), committer_ms DOWN.
 
+## PHASE-3 attempt 1 — REFUTED (batch-output is NOT the cost)
+
+FR13_COMMIT_BATCH_OUTPUT A/B (tail6_mt, subset_b4_four, whole-committer timer):
+- bo0 legacy per-element = **77.3ms** (500 spans)
+- bo1 batched H2D = **84.8ms** (200 spans) => saved **-7.5ms (-10%, i.e. NOT faster)**
+
+=> the per-element `output_token_ids[req_i,pos]=int(...)` write is NOT the ~80ms surrounding cost
+(effective batch ~1.3 => only ~6 writes/step; cheap). Hypothesis REFUTED by measurement. Keep the flag
+default-OFF (byte-identical, no harm, no win); do NOT bake. RE-LOCALIZE: the ~80ms surrounding is the GDN
+publish/replay block (patcher ~9620-9800+): heavy host Python (idx_by_req dict, accepted-path list comps,
+.cpu().tolist() DtoH, globals publish) + `launch_tree_gdn_replay` (GDN state advance). Next: enable
+FR13_REPLAY_GPU_TIMER (wraps launch_tree_gdn_replay; passthrough now wired) alongside the whole + multidraft
+timers => whole(84) = walk(4) + replay(?) + publish-python(rest). The dominant sub-component is the target.
+
 ## Status / plan
 
 - [x] phase1a: device committer point-mass specialization + offline byte-gate (0/4000).
