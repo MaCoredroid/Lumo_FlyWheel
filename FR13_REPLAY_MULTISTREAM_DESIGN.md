@@ -68,3 +68,15 @@ A vs B (independent writes => must match exactly; any drift = a concurrency bug,
 - If B < A but accept/bytes drift => concurrency correctness bug (missing sync / shared write missed) => STOP.
 
 ## Status: DESIGNED (this turn). Next: implement flag (default off, byte-identical gate) -> CF2 A/B -> live gate.
+
+## MEASUREMENT ATTEMPT 1 — BLOCKED by B=4 cold-boot GPU-OOM (NOT multistream) [2026-07-17]
+First A/B (ms_strm + ms_base, B=4) BOTH died "container died before health" with NO python traceback.
+dmesg (audit-infra-first) = the real cause: `NVRM GPU0 Out of memory [NV_ERR_NO_MEMORY] @ mem_desc.c:1393`
+at 21:17-21:20 (ms_strm capture) AND 21:32:42 (ms_base capture). The gpu_oom_guard (floor 9000MiB) then
+docker-kills the container => the no-traceback death. ROOT = B=4 cold-boot capture/autotune memory spike at
+GPU_UTIL~0.78 dips unified-avail below the guard floor. CORRECTS my premature "multistream poisons capture"
+read: ms_base has multistream OFF and OOM'd identically => OOM is the sole blocker so far. The capture-guard
+(6f55d2a19) stays (multistream IS capture-hostile in principle) but was not the bug.
+PLAN: get the multistream SPEED signal via a B=1 A/B (less KV => boots under the guard floor; B=1 is also a
+CLEANER per-step committer measure, no co-residency confound). Then fix the B=4 boot-OOM (lower GPU_UTIL /
+locked launcher) for the final no-drift + lossless gate at B=4.
