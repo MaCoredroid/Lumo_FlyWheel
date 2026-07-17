@@ -58,8 +58,25 @@ it only changes the temp-0/warmup path (proven byte-lossless by the gates above)
 - [x] phase1a: device committer point-mass specialization + offline byte-gate (0/4000).
 - [x] phase1b: wire routing behind FR13_GREEDY_VIA_REJECTION + dual-run FR13_GREEDY_UNIFY_GATE (default off; both off = byte-identical to prior).
 - [x] phase1c: container env passthrough + temp-0 gate seq; **temp-0 dual-run gate LAUNCHED**.
-- [ ] gate result: mismatch_steps == 0 → flip FR13_GREEDY_VIA_REJECTION default ON.
-- [ ] DELETE `_lumo_tree_path_lcp_max_greedy_sample`, `scripts/fr13_gpu_committer_kernel.py`,
-      dead flags FR13_GPU_COMMITTER / FR13_COMMITTER_SYNCKILL / dead `old`/`new` routing anchor.
+- [ ] gate result: mismatch_steps == 0 → flip FR13_GREEDY_VIA_REJECTION default ON (bake in launcher + routing).
+
+### phase1c DELETION scope (precise; execute ONLY after gate passes — the dual-run gate needs old committer alive)
+- **Greedy committer function** `_lumo_tree_path_lcp_max_greedy_sample` = patcher lines **7702–9273** (~1571 lines).
+  KEEP `_lumo_tree_canonical_multidraft_sample` (9274–10549, the rejection committer).
+- **Kernel file** `scripts/fr13_gpu_committer_kernel.py` (the FR13_GPU_COMMITTER greedy device kernel).
+- **Routing**: replace the dual-run gate block in `stock_branch_new` with an unconditional route of
+  `all_greedy` → `_lumo_tree_canonical_multidraft_sample(all_greedy=True)`; delete the old-greedy call.
+  Also delete the **dead `old`/`new` anchor** (lumo_tree_sample_kernel @ 9968 — never injected).
+- **Flags** (ref counts in patcher): FR13_GPU_COMMITTER (15), FR13_COMMITTER_SYNCKILL (16),
+  FR13_GPU_COMMITTER_KERNEL (1) — most refs live INSIDE 7702–9273 so they vanish with the function;
+  sweep the residue. Diagnostics that become fully dead once greedy is gone: FR13_COMMIT_ARGMAX_GATE (26),
+  FR13_FORK_MARGIN_DUMP (23) incl the routing publish @ ~10330; FR13_FORCE_SPINE_COMMIT (10) — the raise in
+  the rejection committer (9288) may stay as a cheap guard or go. Remove `-e` lines from the launcher.
+- **Dependent dead scripts** to retire: `fr13_gpu_committer_byte_ab_gate.py`, `fr13_synckill_sot_offline_gate.py`,
+  `fr13_dual_patch_loopskip_gate.py` (all gate the deleted greedy device kernel). Check the two workflow .js.
+- After each deletion step: `py_compile` patcher + extract-compile the injected strings; then ONE temp-0.6
+  confirming run (below) before trusting.
 - [ ] phase2: decompose the deployed multidraft committer's ~94ms span (FR13_MULTIDRAFT_GPU_TIMER / tail6_mt).
+      COMBINE with the temp-0.6 accept-regression confirm (accept must stay ~4.32; the temp-0.6 path is
+      untouched by the cleanup so this is a guard, not an expected change). ONE temp-0.6 run does both.
 - [ ] phase3: optimize the rejection committer kernel toward the measured floor.
