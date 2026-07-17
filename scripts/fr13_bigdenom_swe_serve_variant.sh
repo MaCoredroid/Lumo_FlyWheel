@@ -169,6 +169,10 @@ case "$KIND" in
   # tail6_ms = same + FR13_REPLAY_MULTISTREAM=1. Compare committer gpu_s; accept/output MUST be identical.
   tail6_cf2) LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_COMMIT_FULL_GPU_TIMER=1 FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/tail6_cf2_commit.json) ;;
   tail6_ms)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_REPLAY_MULTISTREAM=1 FR13_COMMIT_FULL_GPU_TIMER=1 FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/tail6_ms_commit.json) ;;
+  # NATIVE-KERNEL committer replay (the cheap attack): route the accepted-path GDN state advance through
+  # native fused_sigmoid_gating_delta_rule_update (0.15ms/layer) instead of the custom Triton replay
+  # (1.386ms/layer). Offline bit-exact to no-spec (1.19e-7). tail6_ncom vs tail6_cf2 (custom) = committer A/B.
+  tail6_ncom) LAUNCHER=forked; TREEARG="$TAIL6_TREE";   EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_COMMITTER_NATIVE=1 FR13_COMMIT_FULL_GPU_TIMER=1 FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/tail6_ncom_commit.json) ;;
   # MULTIDRAFT-COMMITTER decomposition (the REAL temp-0.6 committer, per user's catch): tail6 +
   # FR13_MULTIDRAFT_GPU_TIMER=1 -> per-step GPU-time of fr13_device_multidraft_commit (the deployed temp>0
   # rejection committer). Settles what the 94ms committer_gpu span IS: multidraft_ms high => the rejection
