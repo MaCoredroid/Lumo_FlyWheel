@@ -163,6 +163,12 @@ case "$KIND" in
   # (re-compute, reducible via stateless-tree gather = real lever); replay ~=11ms => the cost is sync-wait/
   # DtoH not the replay (native wins). Diagnostic (synchronize inflates other spans -- read REPLAY only).
   tail6_rt)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_REPLAY_GPU_TIMER=1 FR13_REPLAY_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/tail6_rt_replay.json) ;;
+  # MULTISTREAM A/B (FR13_REPLAY_MULTISTREAM_DESIGN.md): overlap the 48 write-independent per-layer replays
+  # across N streams. tail6_cf2 = baseline (multistream OFF) + whole-committer GPU timer (CF2, one sync/step
+  # => captures overlap, unlike per-launch REPLAY_GPU_TIMER whose per-launch synchronize serializes streams).
+  # tail6_ms = same + FR13_REPLAY_MULTISTREAM=1. Compare committer gpu_s; accept/output MUST be identical.
+  tail6_cf2) LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_COMMIT_FULL_GPU_TIMER=1 FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/tail6_cf2_commit.json) ;;
+  tail6_ms)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_REPLAY_MULTISTREAM=1 FR13_COMMIT_FULL_GPU_TIMER=1 FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/tail6_ms_commit.json) ;;
   # MULTIDRAFT-COMMITTER decomposition (the REAL temp-0.6 committer, per user's catch): tail6 +
   # FR13_MULTIDRAFT_GPU_TIMER=1 -> per-step GPU-time of fr13_device_multidraft_commit (the deployed temp>0
   # rejection committer). Settles what the 94ms committer_gpu span IS: multidraft_ms high => the rejection

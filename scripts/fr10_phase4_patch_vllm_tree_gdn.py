@@ -9958,8 +9958,95 @@ def _lumo_tree_canonical_multidraft_sample(
                         banks_list=_ep_banks,
                     )
                     _fr13_sbr_stacks['flags'][:, 0].fill_(0)
+                # FR13_REPLAY_MULTISTREAM (default OFF => serial loop below is byte-identical):
+                # overlap the WRITE-INDEPENDENT per-layer replays across N CUDA streams to hide the
+                # latency-bound per-layer kernel (measured 1.386ms/layer = 14x its ~0.1ms bandwidth
+                # floor). Each layer writes only its own ssm_bank => order-independent => byte-safe.
+                # Distinct from refuted batched-fused (strided cross-bank). See
+                # FR13_REPLAY_MULTISTREAM_DESIGN.md. Gate excludes bnd/rdab (serial order) + sbr.
+                _fr13_ms_on = (
+                    __import__('os').environ.get('FR13_REPLAY_MULTISTREAM', '0') == '1'
+                    and not _fr13_bnd_on and not _fr13_rdab_on and not _fr13_sbr_active
+                    and int(_fr13_replay_rows) > 0
+                )
+                if _fr13_ms_on:
+                    _fr13_ms_pool = getattr(
+                        _lumo_tree_commit_gdn, '_FR13_REPLAY_STREAMS', None
+                    )
+                    if _fr13_ms_pool is None:
+                        _fr13_ms_pool = [
+                            torch.cuda.Stream() for _ in range(int(
+                                __import__('os').environ.get(
+                                    'FR13_REPLAY_MULTISTREAM_N', '4')))
+                        ]
+                        _lumo_tree_commit_gdn._FR13_REPLAY_STREAMS = _fr13_ms_pool
+                    _fr13_ms_default = torch.cuda.current_stream()
+                    # scan (default stream) wrote ssm_bank + rings; pool streams MUST wait on this
+                    # event before reading them (else stale-state garble).
+                    _fr13_ms_ready = torch.cuda.Event()
+                    _fr13_ms_ready.record(_fr13_ms_default)
+                    _fr13_ms_used = []
+                    for _fr13_ms_i, _fr13_prefix in enumerate(
+                        sorted(_fr13_replay_layers)
+                    ):
+                        _fr13_layer = _fr13_replay_layers[_fr13_prefix]
+                        _fr13_flags = getattr(
+                            _fr13_layer, '_fr13_replay_flags', None)
+                        _fr13_ssm_bank = getattr(
+                            _fr13_layer, '_fr13_replay_ssm_state', None)
+                        if (_fr13_flags is None or _fr13_ssm_bank is None
+                                or int(_fr13_flags[0].item()) != 1):
+                            raise RuntimeError(
+                                'FR13_REPLAY_MULTISTREAM: stale or missing '
+                                'scan-time staging for layer '
+                                + str(_fr13_prefix))
+                        if int(_fr13_flags[1].item()) != _fr13_replay_rows:
+                            raise RuntimeError(
+                                'FR13_REPLAY_MULTISTREAM: committer rows '
+                                + str(_fr13_replay_rows) + ' != staged '
+                                + str(int(_fr13_flags[1].item()))
+                                + ' for layer ' + str(_fr13_prefix))
+                        _fr13_ms_s = _fr13_ms_pool[
+                            _fr13_ms_i % len(_fr13_ms_pool)]
+                        if _fr13_ms_s not in _fr13_ms_used:
+                            _fr13_ms_used.append(_fr13_ms_s)
+                        _fr13_ms_s.wait_event(_fr13_ms_ready)
+                        with torch.cuda.stream(_fr13_ms_s):
+                            _fr13_replay_launch(
+                                state_bank=_fr13_ssm_bank,
+                                spec_state_indices=(
+                                    _fr13_layer._fr13_replay_spec_idx),
+                                prev_lens=_fr13_layer._fr13_replay_prev_lens,
+                                accepted_paths=_accepted_path_buf,
+                                accepted_lens=_accepted_lens_buf,
+                                k_ring=_fr13_layer._fr13_replay_ring_k,
+                                v_ring=_fr13_layer._fr13_replay_ring_v,
+                                a_ring=_fr13_layer._fr13_replay_ring_a,
+                                b_ring=_fr13_layer._fr13_replay_ring_b,
+                                A_log=_fr13_layer.A_log,
+                                dt_bias=_fr13_layer.dt_bias,
+                                num_spec_decodes=_fr13_replay_rows,
+                                output_scale=float(
+                                    _fr13_layer._fr13_replay_output_scale),
+                                use_qk_l2norm_in_kernel=True,
+                                runrow_commit=_fr13_runrow_commit,
+                                runrow_init=_fr13_runrow_init,
+                                burn_node_bank=_fr13_burn_node_bank,
+                            )
+                            if not _fr13_runrow_commit:
+                                _fr13_publish_apc_ssm_leaf(
+                                    _lumo_tree_commit_gdn, _fr13_layer,
+                                    _fr13_spec_req_ids, _fr13_replay_lens,
+                                )
+                            _fr13_flags[0].fill_(0)
+                    # join: default stream waits for every used pool stream
+                    for _fr13_ms_s in _fr13_ms_used:
+                        _fr13_ms_je = torch.cuda.Event()
+                        _fr13_ms_je.record(_fr13_ms_s)
+                        _fr13_ms_default.wait_event(_fr13_ms_je)
                 for _fr13_prefix in (
-                    [] if _fr13_sbr_active else sorted(_fr13_replay_layers)
+                    [] if (_fr13_sbr_active or _fr13_ms_on)
+                    else sorted(_fr13_replay_layers)
                 ):
                     _fr13_layer = _fr13_replay_layers[_fr13_prefix]
                     _fr13_flags = getattr(
