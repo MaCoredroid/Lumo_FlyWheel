@@ -240,3 +240,23 @@ shared-row vs greedy per-node-row). Byte-exact unify needs the device committer 
 for siblings -- a real device change. Clean in-process same-boot gate (dual-run) is architecturally blocked
 (double GDN state-advance crash). NOTE(lever): this device shared-row behavior may cost a little DEPLOYED
 (temp-0.6) accept on tail6 split-row-sibling rows -- a possible small accept lever (per-node target row).
+
+## PHASE-3 — the 72ms replay is FUNDAMENTAL (stateless-tree copy-not-replay REFUTED by feasibility) [2026-07-17]
+The one remaining committer-speed lever was "copy the committed-leaf GDN state instead of recomputing
+(replaying) it." FEASIBILITY (fr10_gdn_tree_kernel.py, read): the tree verify scan DELIBERATELY does NOT
+export per-node states to HBM (:925 "does not export per-node states... re-executes the recurrence"; :2084-87
+"STATELESS-TREE (replay-only): no per-node state export"). It CAN'T cheaply: the accepted leaf is unknown
+until AFTER the committer decides, so a copy would require exporting ALL n_pad nodes' states = ~13.6MB/layer
+x 21 nodes x 48 layers ~= 13.7 GB HBM => infeasible. The design correctly keeps only the cheap activation
+rings and recomputes the accepted path. => the 72ms per-layer replay is the committer FLOOR, not a missed
+optimization. Batching it is slower (measured); copy-not-replay is infeasible (feasibility); async-overlap
+(task #37) was explored. NO cheap committer-speed lever remains -- this is a researched (not premature) close.
+
+## COMMITTER DIRECTIVE — FINAL (all measured/researched)
+- Phase 1: dead FR13_GPU_COMMITTER surface DELETED; greedy path-LCP committer KEPT (routing not byte-lossless
+  on tail6: device children[0]-row vs greedy per-node, 99.8% match, deploy-irrelevant). dedup done+validated.
+- Phase 2: committer = 4ms walk + 72ms GDN per-layer replay + 12ms publish (decomposed to floor).
+- Phase 3: batched-replay refuted (slower); copy-not-replay infeasible (13.7GB); replay is the true floor.
+- SEPARATE: accept > 5 delivered live (tail6+prewarm 5.15).
+Three hypotheses refuted by measurement (output-write, batched-replay, cross-boot phase-1) + one lever closed
+by feasibility (copy-not-replay). Committer is at its measured/researched floor; no cheap win exists.
