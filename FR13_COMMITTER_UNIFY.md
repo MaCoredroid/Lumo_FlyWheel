@@ -191,3 +191,22 @@ tree pipeline WITH accept > 5" -- prewarm gives accept>5, batched replay makes i
 tail6 + FR13_PREWARM_TRIE: **accept = 5.010 at 5,116 drafts** (climbing toward prior 5.08), live subset_b4_
 sixteen SWE-Verified. GATE MET. Lossless (committer verifies any tree). Speed half = committer batched
 all-layers replay port (72ms per-layer -> ~16ms), next.
+
+## PHASE-3 batched-replay — REFUTED (lossless but SLOWER on GB10) [2026-07-17]
+FR13_SAMPLED_REPLAY_BATCHED A/B (tail6_mt + prewarm, subset_b4_four):
+- sbr0 per-layer: committer=76.5ms (750sp), replay_spans=38200 (~51/step) => the baseline.
+- sbr1 batched:   committer=111.9ms (250sp), replay_spans=0 => per-layer BYPASSED, port ENGAGED.
+- accept sbr1=4.049 == sbr0=4.093 => LOSSLESS (the port is correct + byte/accept-safe).
+VERDICT: the batched single-launch launch_tree_gdn_replay_all_layers is ~SLOWER than 48 per-layer launches
+on GB10 (bank-pointer-table strided access on unified LPDDR5X; the 62ms replay is compute/memory-bound, NOT
+launch-overhead-bound, so fewer launches don't help). => KEEP FR13_SAMPLED_REPLAY_BATCHED default OFF (do
+NOT ship). The ~72ms per-layer GDN replay is the committer floor for the current kernel; batching does not
+reduce it. Deeper reduction needs async overlap (task #37, explored) or a re-tiled replay kernel (risky,
+pinned lineage) -- not a cheap win. Measure-before-claiming caught this before shipping a 45% slowdown.
+
+## DELIVERABLE STATUS — "speedy tree pipeline with accept > 5"
+- accept > 5: ACHIEVED + confirmed live in-session (tail6 + FR13_PREWARM_TRIE = 5.02->5.15, subset_b4_
+  sixteen SWE-Verified, lossless). This is the gate.
+- speedy: tail6+prewarm per_req_tps ~4.7 (higher accept 5.15 vs 4.3 => more committed tokens/forward).
+  The committer batched-replay SPEED lever is refuted (slower); the per-layer replay (~72ms) is the floor.
+- Phase-1 dedup: done+validated. Greedy-committer DELETION: still pending (deprioritized).
