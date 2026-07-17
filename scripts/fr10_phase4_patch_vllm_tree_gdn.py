@@ -13499,11 +13499,25 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # lm-head output (bound in BOTH the single-logits and legacy
             # branches above).
             _fr10_wide_topk = {}
+            # FR13_DEDUP_SIBLINGS: capture a few SPARE topk ranks beyond the
+            # per-position width so the sibling-dedup pass (before packing) has
+            # real distinct model candidates to swap a collided branch for. The
+            # packer only reads ranks 0..width-1, so the spare columns are inert
+            # unless the dedup consumes them. Default ON (correctness+budget; a
+            # duplicate sibling wastes a verify node AND creates a temp-0
+            # argmax-tie). off => byte-identical prior capture width.
+            _fr13_dedup_sib = (
+                __import__('os').environ.get('FR13_DEDUP_SIBLINGS', '1') == '1'
+            )
+            _fr13_dedup_slack = 3 if _fr13_dedup_sib else 0
             if _fr10_is_wide:
                 _fr10_w_root = _fr10_wide_width.get(0, 1)
                 if _fr10_w_root > 1:
                     _fr10_wide_topk[0] = torch.topk(
-                        _fr10_logits, _fr10_w_root, dim=-1
+                        _fr10_logits,
+                        min(_fr10_w_root + _fr13_dedup_slack,
+                            int(_fr10_logits.shape[-1])),
+                        dim=-1,
                     ).indices
 
             # FR13_MERGED_DRAFTER_SEAM: adaptive MTP-k(=1) + Arctic-suffix grow-to-cat33333.
@@ -13905,8 +13919,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 if _fr10_is_wide:
                     _fr10_w_p = _fr10_wide_width.get(token_index + 1, 1)
                     if _fr10_w_p > 1:
+                        # FR13_DEDUP_SIBLINGS: +slack spare ranks (see root capture)
                         _fr10_wide_topk[token_index + 1] = torch.topk(
-                            _fr10_step_logits, _fr10_w_p, dim=-1
+                            _fr10_step_logits,
+                            min(_fr10_w_p + _fr13_dedup_slack,
+                                int(_fr10_step_logits.shape[-1])),
+                            dim=-1,
                         ).indices
 
             # accept>5 TAIL append (sidecar /logs/fr13_tail_mode.arm): the native MTP head loop
@@ -14003,6 +14021,67 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 globals()["_fr13_tail_skip_n"], _fr10_wide_D, _fr13_t_skip)
                     except Exception:
                         pass
+
+            # FR13_DEDUP_SIBLINGS: enforce DISTINCT tokens within each sibling
+            # group (nodes sharing a parent_pos). Native topk branches are
+            # distinct by construction; the merged/arctic/pad fills can re-emit
+            # an already-used token -> a wasted verify node AND a temp-0 argmax
+            # TIE (where the greedy max-LCP committer and the per-node rejection
+            # committer legitimately differ). The target argmax is UNIQUE, so
+            # making siblings distinct guarantees at most one matches => no tie
+            # => point-mass rejection == greedy byte-for-byte. Correctness-safe:
+            # ANY tree is lossless (committer verifies each row vs its OWN
+            # target). ONE batched collision check (1 sync) => no-op fast path
+            # for distinct-by-construction configs (deployed tail6). Repairs a
+            # collided branch from the widened spare topk ranks; if none spare,
+            # a distinct dead-end token (a repeated token can never out-match a
+            # distinct model token so this only ever REMOVES a wasted node).
+            if _fr13_dedup_sib and _fr10_is_wide:
+                _fr13_dd_any = None
+                _fr13_dd_groups = []
+                for _fr13_gp in sorted({_pp for _pp, _rk in _fr10_wide_plan if _rk > 0}):
+                    _fr13_w = int(_fr10_wide_width.get(_fr13_gp, 1))
+                    _fr13_wt0 = _fr10_wide_topk.get(_fr13_gp)
+                    if _fr13_w <= 1 or _fr13_wt0 is None:
+                        continue
+                    _fr13_cols = int(_fr13_wt0.shape[1])
+                    _fr13_sp = _fr10_spine_tokens[_fr13_gp]
+                    _fr13_used = [_fr13_sp]
+                    _fr13_gc = torch.zeros_like(_fr13_sp, dtype=torch.bool)
+                    for _fr13_r in range(1, min(_fr13_w, _fr13_cols)):
+                        _fr13_c = _fr13_wt0[:, _fr13_r]
+                        for _fr13_u in _fr13_used:
+                            _fr13_gc = _fr13_gc | (_fr13_c == _fr13_u)
+                        _fr13_used.append(_fr13_c)
+                    _fr13_dd_any = _fr13_gc if _fr13_dd_any is None else (_fr13_dd_any | _fr13_gc)
+                    _fr13_dd_groups.append((_fr13_gp, _fr13_w, _fr13_cols))
+                if _fr13_dd_any is not None and bool(_fr13_dd_any.any().item()):
+                    _fr13_vsz = int(_fr10_logits.shape[-1])
+                    _fr13_nb = int(_fr10_spine_tokens[0].shape[0])
+                    for _fr13_gp, _fr13_w, _fr13_cols in _fr13_dd_groups:
+                        _fr13_wt = _fr10_wide_topk[_fr13_gp].clone()
+                        _fr13_sp = _fr10_spine_tokens[_fr13_gp]
+                        _fr13_seen = [[int(_fr13_sp[_b].item())] for _b in range(_fr13_nb)]
+                        for _fr13_r in range(1, min(_fr13_w, _fr13_cols)):
+                            for _fr13_b in range(_fr13_nb):
+                                _fr13_tk = int(_fr13_wt[_fr13_b, _fr13_r].item())
+                                if _fr13_tk not in _fr13_seen[_fr13_b]:
+                                    _fr13_seen[_fr13_b].append(_fr13_tk)
+                                    continue
+                                _fr13_nw = None
+                                for _fr13_sr in range(_fr13_w, _fr13_cols):
+                                    _fr13_cd = int(_fr13_wt[_fr13_b, _fr13_sr].item())
+                                    if _fr13_cd not in _fr13_seen[_fr13_b]:
+                                        _fr13_nw = _fr13_cd
+                                        break
+                                if _fr13_nw is None:
+                                    _fr13_cd = (_fr13_tk + 1) % _fr13_vsz
+                                    while _fr13_cd in _fr13_seen[_fr13_b]:
+                                        _fr13_cd = (_fr13_cd + 1) % _fr13_vsz
+                                    _fr13_nw = _fr13_cd
+                                _fr13_wt[_fr13_b, _fr13_r] = _fr13_nw
+                                _fr13_seen[_fr13_b].append(_fr13_nw)
+                        _fr10_wide_topk[_fr13_gp] = _fr13_wt
 
             if _fr10_is_spine_only or _fr10_is_chain3:
                 # FR13_RESHAPE_DEPTH3 chain3 = pure depth-3 spine = the same
