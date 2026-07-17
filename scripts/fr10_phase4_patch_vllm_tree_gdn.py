@@ -9964,6 +9964,21 @@ def _lumo_tree_canonical_multidraft_sample(
                 # floor). Each layer writes only its own ssm_bank => order-independent => byte-safe.
                 # Distinct from refuted batched-fused (strided cross-bank). See
                 # FR13_REPLAY_MULTISTREAM_DESIGN.md. Gate excludes bnd/rdab (serial order) + sbr.
+                # GATE-DIAG (why multistream vacuous at B=4?): log the term values for the first
+                # 30 committer-replay calls (captures boot-capture -> real-decode transition). Remove
+                # once resolved.
+                _fr13_ms_diag_n = int(getattr(
+                    _lumo_tree_commit_gdn, '_FR13_MS_DIAG_N', 0))
+                if (__import__('os').environ.get(
+                        'FR13_REPLAY_MULTISTREAM', '0') == '1'
+                        and _fr13_ms_diag_n < 30):
+                    _lumo_tree_commit_gdn._FR13_MS_DIAG_N = _fr13_ms_diag_n + 1
+                    __import__('sys').stderr.write(
+                        '[FR13_MS_GATEDIAG] n=%d bnd=%r rdab=%r sbr=%r rows=%d cap=%r\n'
+                        % (_fr13_ms_diag_n, _fr13_bnd_on, _fr13_rdab_on,
+                           _fr13_sbr_active, int(_fr13_replay_rows),
+                           bool(torch.cuda.is_available()
+                                and torch.cuda.is_current_stream_capturing())))
                 _fr13_ms_on = (
                     __import__('os').environ.get('FR13_REPLAY_MULTISTREAM', '0') == '1'
                     and not _fr13_bnd_on and not _fr13_rdab_on and not _fr13_sbr_active
