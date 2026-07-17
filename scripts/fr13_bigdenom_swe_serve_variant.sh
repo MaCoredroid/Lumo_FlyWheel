@@ -89,7 +89,6 @@ CAT55221_TREE="[(0,),(1,),(2,),(3,),(4,),(0,0),(0,1),(0,2),(0,3),(0,4),(0,0,0),(
 case "$KIND" in
   cat9)      LAUNCHER=locked; TREEARG="";             EXPECT_RATIO=9;  declare -a XFLAGS=() ;;
   cat9-opta) LAUNCHER=locked; TREEARG="";             EXPECT_RATIO=9;  declare -a XFLAGS=(FR13_GB10_FP8_GEMV_CFG=1) ;;
-  cat9-opt1) LAUNCHER=locked; TREEARG="";             EXPECT_RATIO=9;  declare -a XFLAGS=(FR13_GPU_COMMITTER=1 FR13_COMMITTER_SYNCKILL=1) ;;
   # nativemtp5 = the fr9 decode path: STOCK vLLM native MTP-5 (qwen3_5_mtp,
   # num_speculative_tokens=5, NO tree). The drafter emits 5 linear draft tokens
   # per step, so draft_tokens/drafts == 5 (EXPECT_RATIO=5). No forked-fa2, no
@@ -159,13 +158,6 @@ case "$KIND" in
   # FR13_TAIL_MODE=1 (caps native spine_steps=4 + appends Arctic tail) + FR13_DRAFT_SOURCE=merged (the
   # Arctic cache lifecycle) + BV=8 (n_pad=32 register budget). EXPECT_RATIO=21 = the tree node count.
   tail6)     LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8) ;;
-  # COMMITTER-PORT lever: identical to tail6 (NO drift) + FR13_GPU_COMMITTER=1 -> moves the tree path-LCP
-  # committer from the host Python loop (_lumo_tree_path_lcp_max_greedy_sample, measured 94ms/step vs
-  # native's 7ms) to the device LCP kernel (patcher:17749). Tests THE biggest reducible overhead (87ms of
-  # OUR code). Gate: does committer_gpu_ms drop 94->~10 AND accept_per_event + resolve/empty-patch stay ~=
-  # tail6 (lossless-equivalent, NOT byte-exact -- rejection-sampler convergence). NEVER live-run => monitor
-  # arm-1 boot for crash. gc = GPU_COMMITTER only (compute port); synckill (the sync defer) is separate/broken.
-  tail6_gc)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_GPU_COMMITTER=1) ;;
   # REPLAY-TIMER probe: tail6 + FR13_REPLAY_GPU_TIMER=1 -> coarse GPU-time of the accepted-path GDN replay
   # per step (sidecar). Settles the 94ms-committer split: replay ~=80ms => the replay is the bottleneck
   # (re-compute, reducible via stateless-tree gather = real lever); replay ~=11ms => the cost is sync-wait/
@@ -177,12 +169,6 @@ case "$KIND" in
   # committer is the cost (optimize it); low => the 94ms is result-DtoH + verify-wait (pipeline). This is
   # the committer I SHOULD have decomposed (FR13_GPU_COMMITTER was the greedy LCP, off the temp-0.6 path).
   tail6_mt)  LAUNCHER=forked; TREEARG="$TAIL6_TREE";    EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_MULTIDRAFT_GPU_TIMER=1 FR13_MULTIDRAFT_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/tail6_mt_md.json) ;;
-  # COMMITTER-SPAN DECOMPOSITION probe: tail6_gc + FR13_COMMITTER_SYNCKILL=1 defers the committer's
-  # DtoH+sync/materialise to a side stream (uses the _dev kernel, also int64-fixed). committer_gpu_ms
-  # vs tail6_gc DECOMPOSES the 94ms span: drops => DtoH/sync is the reducible bottleneck (real lever);
-  # stays ~94ms => the on-GPU work (GDN replay + LCP kernel) is inherent => native genuinely wins.
-  # Settles the last uncertainty without a 3rd premature no-go. Lossless-gate as tail6_gc. NEVER-run => monitor boot.
-  tail6_gc_sk) LAUNCHER=forked; TREEARG="$TAIL6_TREE";  EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_GPU_COMMITTER=1 FR13_COMMITTER_SYNCKILL=1) ;;
   # Direction-2 tail-DEPTH lever: identical config to tail6 (NO drift) but a deeper spine tail (25 nodes,
   # depth-15, tail_len=10 derived from wide_D). Tests whether the RISING deep-tail conditional (d7-11:
   # 0.848->0.950) keeps paying past d11. tail_len auto-derives from the tree; no code change.
