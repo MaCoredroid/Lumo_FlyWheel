@@ -80,3 +80,22 @@ read: ms_base has multistream OFF and OOM'd identically => OOM is the sole block
 PLAN: get the multistream SPEED signal via a B=1 A/B (less KV => boots under the guard floor; B=1 is also a
 CLEANER per-step committer measure, no co-residency confound). Then fix the B=4 boot-OOM (lower GPU_UTIL /
 locked launcher) for the final no-drift + lossless gate at B=4.
+
+## VERDICT [2026-07-17]: REFUTED at B=4 — multistream is SLOWER. Both cheap committer attacks dead.
+After fixing the worker-env-drop (sidecar), multistream ENGAGED at B=4 and measured (CF2, n=150):
+  multistream (N=4):  91.6 ms/step
+  serial (custom):    76.6 ms/step  (also native-kernel replay: 77.3 ms/step)
+=> multistream is ~15ms SLOWER. The SM-occupancy kill-criterion FIRED: one replay grid = ~1280 blocks
+already saturates GB10 SMs, so the 4 streams cannot run concurrently (no spare SMs) — they serialize on
+the shared unified-LPDDR5X bandwidth AND pay stream-creation + cross-stream-event overhead => net slower.
+Same physics as the refuted batched-fused replay: overlapping the per-layer GDN replays does NOT help on
+GB10 (memory-serialized, not latency-hideable-with-spare-bandwidth). Bake OFF (default; no sidecar).
+
+## COMMITTER-OVERHEAD ATTACKS — ALL CHEAP LEVERS EXHAUSTED (measured, B=4)
+- Native-kernel replay (FR13_COMMITTER_NATIVE): 77.3ms == custom 76.6ms. Kernel-agnostic (latency-bound).
+- Multistream overlap (FR13_REPLAY_MULTISTREAM): 91.6ms > 76.6ms. SLOWER (SM-saturated, can't overlap).
+- Batched-fused replay (FR13_SAMPLED_REPLAY_BATCHED): slower (strided). [earlier]
+- Copy-not-replay: infeasible (13.7GB per-node state export). [earlier]
+=> The ~77ms committer replay is the GB10 HARDWARE FLOOR for the per-layer recompute architecture. The
+only remaining lever is ARCHITECTURAL (fuse the accepted-path advance into the forward like native, or the
+stateless-tree rewrite) — NOT cheap. Multistream + native-replay + gate-diag code stay flag-gated OFF.
