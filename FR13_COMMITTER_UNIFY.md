@@ -88,6 +88,24 @@ it only changes the temp-0/warmup path (proven byte-lossless by the gates above)
 - NOTE: CFWD/DFWD/SFWD timer sidecars write at task-END (not continuous), so the full decomposition lands
   when the first slow agentic task completes. Watch `deploy_speed_dd.json committer_gpu_ms_per_step`.
 
+## PHASE-2 DECOMPOSITION — SETTLED (2026-07-17, live tail6_decomp)
+
+| span | ms/step | timer |
+|---|---|---|
+| whole committer (`_lumo_tree_canonical_multidraft_sample`) | **84.73** | FR13_COMMIT_FULL_GPU_TIMER (200 spans) |
+| inner multidraft walk (`fr13_device_multidraft_commit`) | **4.01** | FR13_MULTIDRAFT_GPU_TIMER (200 spans) |
+| **surrounding = assembly + GDN publish** | **80.72** | delta |
+
+**VERDICT: the ~94ms committer is NOT the rejection walk (4ms, near-floor) — it is the ~80ms SURROUNDING
+host assembly/publish.** The depthsync walk-lever (byte-gate 96/96) would save ≤4ms => RED HERRING; do not
+ship it as the speed fix. Phase-3 target = the ~80ms surrounding: output-row assembly + GDN accepted-path
+publish + req-keyed dict + globals + the result DtoH. The built-in FR13_CFWD_GPU_TIMER counter is dead, so
+this reliable FR13_COMMIT_FULL_GPU_TIMER is the canonical whole-committer measure now.
+
+Next: sub-decompose the 80ms (output-assembly vs GDN-publish vs dict) to localize, then optimize
+(batched H2D instead of per-element writes; minimize DtoH). Gate: accept-identical (any tree/assembly is
+lossless — committer verifies vs target), committer_ms DOWN.
+
 ## Status / plan
 
 - [x] phase1a: device committer point-mass specialization + offline byte-gate (0/4000).
