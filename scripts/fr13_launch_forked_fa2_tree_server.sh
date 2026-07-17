@@ -413,6 +413,14 @@ if [[ "${FR13_COMMITTER_NATIVE:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_committer_native.flag" 2>/dev/null || true
 fi
+# FR13_REPLAY_MULTISTREAM sidecar (worker-env-drop-proof): the worker curation drops FR13_* env, so the
+# patched committer reads THIS sidecar (content = N streams) to enable stream-overlapped per-layer replay.
+# Absent => serial per-layer loop (byte-identical). This is why the env-only gate went vacuous at B=4.
+if [[ "${FR13_REPLAY_MULTISTREAM:-0}" == "1" ]]; then
+  echo "${FR13_REPLAY_MULTISTREAM_N:-4}" > "$LOG_DIR/fr13_replay_multistream.arm"
+else
+  rm -f "$LOG_DIR/fr13_replay_multistream.arm" 2>/dev/null || true
+fi
 # FR13_COMMIT_ARGMAX_GATE sidecar (same worker-env-drop workaround): the worker curation drops the flag
 # (keeps only *_DUMP). The patched rejection_sampler reads this sidecar OR the (dropped) env.
 if [[ "${FR13_COMMIT_ARGMAX_GATE:-0}" == "1" ]]; then

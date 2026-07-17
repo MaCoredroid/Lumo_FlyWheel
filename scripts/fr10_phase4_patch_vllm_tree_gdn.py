@@ -9964,23 +9964,20 @@ def _lumo_tree_canonical_multidraft_sample(
                 # floor). Each layer writes only its own ssm_bank => order-independent => byte-safe.
                 # Distinct from refuted batched-fused (strided cross-bank). See
                 # FR13_REPLAY_MULTISTREAM_DESIGN.md. Gate excludes bnd/rdab (serial order) + sbr.
-                # GATE-DIAG (why multistream vacuous at B=4?): log the term values for the first
-                # 30 committer-replay calls (captures boot-capture -> real-decode transition). Remove
-                # once resolved.
-                _fr13_ms_diag_n = int(getattr(
-                    _lumo_tree_commit_gdn, '_FR13_MS_DIAG_N', 0))
-                if (__import__('os').environ.get(
+                # FR13_REPLAY_MULTISTREAM enable: env OR sidecar. The EngineCore worker curation DROPS
+                # FR13_* env (=> os.environ reads '0' at worker runtime), so read the /logs/*.arm sidecar
+                # the launcher wrote (worker-env-drop-proof, same pattern as _fr13_committer_native_on).
+                # This env-only read was the B=4 VACUOUS root cause.
+                _fr13_ms_enable = (
+                    __import__('os').environ.get(
                         'FR13_REPLAY_MULTISTREAM', '0') == '1'
-                        and _fr13_ms_diag_n < 30):
-                    _lumo_tree_commit_gdn._FR13_MS_DIAG_N = _fr13_ms_diag_n + 1
-                    __import__('sys').stderr.write(
-                        '[FR13_MS_GATEDIAG] n=%d bnd=%r rdab=%r sbr=%r rows=%d cap=%r\n'
-                        % (_fr13_ms_diag_n, _fr13_bnd_on, _fr13_rdab_on,
-                           _fr13_sbr_active, int(_fr13_replay_rows),
-                           bool(torch.cuda.is_available()
-                                and torch.cuda.is_current_stream_capturing())))
+                    or __import__('os').path.exists(
+                        '/logs/fr13_replay_multistream.arm')
+                    or __import__('os').path.exists(
+                        '/tmp/fr13_replay_multistream.arm')
+                )
                 _fr13_ms_on = (
-                    __import__('os').environ.get('FR13_REPLAY_MULTISTREAM', '0') == '1'
+                    _fr13_ms_enable
                     and not _fr13_bnd_on and not _fr13_rdab_on and not _fr13_sbr_active
                     and int(_fr13_replay_rows) > 0
                     # CUDA-graph capture cannot tolerate cross-stream events / stream-switch
@@ -9996,10 +9993,20 @@ def _lumo_tree_canonical_multidraft_sample(
                         _lumo_tree_commit_gdn, '_FR13_REPLAY_STREAMS', None
                     )
                     if _fr13_ms_pool is None:
+                        # N streams: env (dropped in worker) OR sidecar content OR default 4.
+                        _fr13_ms_n_s = __import__('os').environ.get(
+                            'FR13_REPLAY_MULTISTREAM_N', '')
+                        if not _fr13_ms_n_s:
+                            try:
+                                _fr13_ms_n_s = open(
+                                    '/logs/fr13_replay_multistream.arm'
+                                ).read().strip()
+                            except Exception:
+                                _fr13_ms_n_s = ''
+                        _fr13_ms_n = (
+                            int(_fr13_ms_n_s) if _fr13_ms_n_s.isdigit() else 4)
                         _fr13_ms_pool = [
-                            torch.cuda.Stream() for _ in range(int(
-                                __import__('os').environ.get(
-                                    'FR13_REPLAY_MULTISTREAM_N', '4')))
+                            torch.cuda.Stream() for _ in range(_fr13_ms_n)
                         ]
                         _lumo_tree_commit_gdn._FR13_REPLAY_STREAMS = _fr13_ms_pool
                     if not getattr(
