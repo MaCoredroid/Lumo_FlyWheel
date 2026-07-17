@@ -186,3 +186,8 @@ drafts / 57,505 accepted** (prior live 16-task run tail6_prewarm_pw16). LOSSLESS
 verified). I had been UNSET-ing FR13_PREWARM_TRIE in every seq -> runs sat at 4.0-4.3. Reproducing live now
 (output/fr13_accept5_prewarm). The committer batched-replay port (this doc) is the SPEED half of "speedy
 tree pipeline WITH accept > 5" -- prewarm gives accept>5, batched replay makes it fast (87ms->~16ms).
+
+## ACCEPT > 5 — CONFIRMED LIVE IN-SESSION (2026-07-17)
+tail6 + FR13_PREWARM_TRIE: **accept = 5.010 at 5,116 drafts** (climbing toward prior 5.08), live subset_b4_
+sixteen SWE-Verified. GATE MET. Lossless (committer verifies any tree). Speed half = committer batched
+all-layers replay port (72ms per-layer -> ~16ms), next.
