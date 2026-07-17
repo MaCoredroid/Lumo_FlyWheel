@@ -210,3 +210,17 @@ pinned lineage) -- not a cheap win. Measure-before-claiming caught this before s
 - speedy: tail6+prewarm per_req_tps ~4.7 (higher accept 5.15 vs 4.3 => more committed tokens/forward).
   The committer batched-replay SPEED lever is refuted (slower); the per-layer replay (~72ms) is the floor.
 - Phase-1 dedup: done+validated. Greedy-committer DELETION: still pending (deprioritized).
+
+## PHASE-1 greedy DELETION — BLOCKED (routing NOT lossless on tail6) [2026-07-17]
+Live temp-0 gate (subset_b4_four, same 4 tasks, both arms serve rc=0): gv0 greedy accept=4.809 vs gv1
+rejection point-mass (FR13_GREEDY_VIA_REJECTION=1) accept=4.184 => 13% LOWER. temp-0 is deterministic, so a
+byte-lossless route would give IDENTICAL accept; 4.18!=4.81 => the point-mass rejection is NOT equivalent to
+the greedy committer on tail6. ROOT CAUSE: greedy = max-LCP (scores EVERY root-to-leaf path, keeps the
+longest); point-mass rejection = top-down LOCAL walk -> on tail6's branched head + deep tail they diverge
+(top-down finds a SHORTER accepted path). The earlier real-trace "99.4% match" gate used cat9 (9-node)
+captures, NOT tail6 (21-node) => validated the WRONG geometry. The rejection is OUTPUT-lossless (commits
+argmax tokens) but accepts shorter paths. => DO NOT delete the greedy committer; keep FR13_GREEDY_VIA_
+REJECTION + FR13_DEDUP_SIBLINGS default-OFF. Unifying temp-0 to rejection would need the rejection committer
+to do max-LCP path selection (a real committer change, not a cheap unification). Live gate caught it.
+NOTE(lever): greedy max-LCP > top-down (4.81>4.18) hints the deployed top-down walk may leave accept on the
+table -- but temp-0.6 is stochastic (rejection), so max-LCP doesn't directly transfer; not a clean accept lever.
