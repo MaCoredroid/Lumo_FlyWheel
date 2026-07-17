@@ -9861,7 +9861,106 @@ def _lumo_tree_canonical_multidraft_sample(
                     _lumo_tree_commit_gdn._FR13_BOUNDARY_EVENT = int(getattr(
                         _lumo_tree_commit_gdn, '_FR13_BOUNDARY_EVENT', 0
                     )) + 1
-                for _fr13_prefix in sorted(_fr13_replay_layers):
+                # FR13_SAMPLED_REPLAY_BATCHED (default OFF => byte-identical per-layer loop):
+                # the sampled/deployed committer replays GDN state via ~48 per-layer
+                # launch_tree_gdn_replay calls (measured ~72ms/step, 81% of the committer).
+                # The GREEDY committer already batches this into ONE
+                # launch_tree_gdn_replay_all_layers over the GLOBAL _FR13_EAGER_PACK_STACKS
+                # (patcher ~8990-9108). Port that batched dispatch here (same gate: needs
+                # stacks + NOT boundary/durable/APC-publish, which require the per-layer
+                # publish). Semantics-preserving sibling kernel => byte-identical replay.
+                # When active, the per-layer loop below iterates EMPTY.
+                _fr13_sbr_stacks = getattr(
+                    _lumo_tree_commit_gdn, '_FR13_EAGER_PACK_STACKS', None
+                )
+                _fr13_sbr_active = (
+                    __import__('os').environ.get('FR13_SAMPLED_REPLAY_BATCHED', '0') == '1'
+                    and _fr13_sbr_stacks is not None
+                    and int(_fr13_sbr_stacks.get('num_layers', 0)) > 0
+                    and _fr13_replay_rows > 0
+                    and not _fr13_bnd_on
+                    and not _fr13_rdab_on
+                    and __import__('os').environ.get('FR13_APC_SNAP_FIX', '1') != '1'
+                )
+                if _fr13_sbr_active:
+                    _ep_order = list(_fr13_sbr_stacks['layer_order'])
+                    if _ep_order != sorted(_fr13_replay_layers):
+                        raise RuntimeError(
+                            'FR13_SAMPLED_REPLAY_BATCHED: stacked layer order != '
+                            'registered replay layers'
+                        )
+                    _ep_flag_rows = _fr13_sbr_stacks['flags'].detach().cpu().tolist()
+                    _ep_banks = []
+                    for _ep_i, _ep_prefix in enumerate(_ep_order):
+                        _ep_layer = _fr13_replay_layers[_ep_prefix]
+                        _ep_bank = getattr(_ep_layer, '_fr13_replay_ssm_state', None)
+                        if _ep_bank is None or int(_ep_flag_rows[_ep_i][0]) != 1:
+                            raise RuntimeError(
+                                'FR13_SAMPLED_REPLAY_BATCHED: stale/missing scan '
+                                'flags for layer ' + str(_ep_prefix)
+                            )
+                        if int(_ep_flag_rows[_ep_i][1]) != _fr13_replay_rows:
+                            raise RuntimeError(
+                                'FR13_SAMPLED_REPLAY_BATCHED: committer rows '
+                                + str(_fr13_replay_rows) + ' != staged '
+                                + str(int(_ep_flag_rows[_ep_i][1]))
+                                + ' for layer ' + str(_ep_prefix)
+                            )
+                        _ep_banks.append(_ep_bank)
+                    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                        build_replay_bank_pointer_table as _ep_build_tbl,
+                        launch_tree_gdn_replay_all_layers as _ep_launch_all,
+                    )
+                    _ep_tbl = getattr(
+                        _lumo_tree_commit_gdn, '_FR13_EAGER_PACK_BANK_TBL', None
+                    )
+                    _ep_ptrs_now = [int(_b.data_ptr()) for _b in _ep_banks]
+                    if _ep_tbl is None:
+                        _ep_ptr_list, _ep_bank_shape, _ep_bank_stride = (
+                            _ep_build_tbl(_ep_banks)
+                        )
+                        _ep_off16_dev = torch.tensor(
+                            [(_p - _ep_ptr_list[0]) // 16 for _p in _ep_ptr_list],
+                            dtype=torch.int64, device=_ep_banks[0].device,
+                        )
+                        _ep_tbl = (
+                            _ep_ptr_list, _ep_off16_dev, _ep_bank_shape,
+                            _ep_bank_stride, _ep_banks[0],
+                        )
+                        _lumo_tree_commit_gdn._FR13_EAGER_PACK_BANK_TBL = _ep_tbl
+                    elif _ep_tbl[0] != _ep_ptrs_now:
+                        raise RuntimeError(
+                            'FR13_SAMPLED_REPLAY_BATCHED: GDN bank data_ptr '
+                            'changed since pointer-table build'
+                        )
+                    _ep_launch_all(
+                        bank_anchor=_ep_tbl[4],
+                        bank_off16=_ep_tbl[1],
+                        bank_shape=_ep_tbl[2],
+                        bank_stride=_ep_tbl[3],
+                        spec_state_indices=_fr13_sbr_stacks['spec_idx'],
+                        prev_lens=_fr13_sbr_stacks['prev_lens'],
+                        accepted_paths=_accepted_path_buf,
+                        accepted_lens=_accepted_lens_buf,
+                        k_rings=_fr13_sbr_stacks['ring_k'],
+                        v_rings=_fr13_sbr_stacks['ring_v'],
+                        a_rings=_fr13_sbr_stacks['ring_a'],
+                        b_rings=_fr13_sbr_stacks['ring_b'],
+                        A_logs=_fr13_sbr_stacks['A_log'],
+                        dt_biases=_fr13_sbr_stacks['dt_bias'],
+                        num_layers=len(_ep_order),
+                        num_spec_decodes=_fr13_replay_rows,
+                        output_scale=float(_fr13_sbr_stacks['output_scale']),
+                        use_qk_l2norm_in_kernel=True,
+                        runrow_commit=_fr13_runrow_commit,
+                        runrow_init=_fr13_runrow_init,
+                        burn_node_bank=_fr13_burn_node_bank,
+                        banks_list=_ep_banks,
+                    )
+                    _fr13_sbr_stacks['flags'][:, 0].fill_(0)
+                for _fr13_prefix in (
+                    [] if _fr13_sbr_active else sorted(_fr13_replay_layers)
+                ):
                     _fr13_layer = _fr13_replay_layers[_fr13_prefix]
                     _fr13_flags = getattr(
                         _fr13_layer, '_fr13_replay_flags', None
