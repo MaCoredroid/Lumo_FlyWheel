@@ -224,3 +224,19 @@ REJECTION + FR13_DEDUP_SIBLINGS default-OFF. Unifying temp-0 to rejection would 
 to do max-LCP path selection (a real committer change, not a cheap unification). Live gate caught it.
 NOTE(lever): greedy max-LCP > top-down (4.81>4.18) hints the deployed top-down walk may leave accept on the
 table -- but temp-0.6 is stochastic (rejection), so max-LCP doesn't directly transfer; not a clean accept lever.
+
+## PHASE-1 — CORRECTED root cause (clean offline gate on tail6) [2026-07-17]
+RETRACTION: my earlier "top-down walk != max-LCP" root cause was WRONG, and the live gv0(4.18) vs gv1(4.81)
+gate was CROSS-BOOT-AUTOTUNE-CONFOUNDED (separate boots fork at tokens 11-71 on GB10; I broke my own
+no-cross-boot-byte-gate rule).
+CLEAN offline real-trace gate on the RIGHT geometry (tail6 21-node, 532 greedy rows): point-mass == greedy on
+531/532 = 99.8%, 1 mismatch, 0 dup-siblings. REAL root cause (from the 1 mismatch): greedy checks each node
+against its OWN target row (per-node parent_target_ids); the DEVICE point-mass committer uses children[0]'s
+target row for ALL siblings (fr13_device_multidraft_kernel.py:505 target_row=start+children[0]). On standard
+trees (cat9) siblings share the parent verify row => agree; on tail6 rare rows where siblings map to DIFFERENT
+verify rows (e.g. root kids pt=[25,13,25], both draft-match their OWN pt) => diverge ~0.2%/step.
+VERDICT unchanged (keep greedy, gates OFF) but for the CORRECT reason: ~99.8% but NOT byte-exact (device
+shared-row vs greedy per-node-row). Byte-exact unify needs the device committer to use per-node target rows
+for siblings -- a real device change. Clean in-process same-boot gate (dual-run) is architecturally blocked
+(double GDN state-advance crash). NOTE(lever): this device shared-row behavior may cost a little DEPLOYED
+(temp-0.6) accept on tail6 split-row-sibling rows -- a possible small accept lever (per-node target row).
