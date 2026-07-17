@@ -9604,10 +9604,33 @@ def _lumo_tree_canonical_multidraft_sample(
         })
         start += node_count
 
-    output_token_ids.fill_(-1)
-    for req_i, row in enumerate(out_rows):
-        for pos, token_id in enumerate(row):
-            output_token_ids[req_i, pos] = int(token_id)
+    # FR13_COMMIT_BATCH_OUTPUT (default OFF => legacy per-element writes; ON =>
+    # ONE host-build + ONE H2D copy). The legacy double loop does
+    # output_token_ids[req_i, pos] = int(token_id) per element -- each scalar->
+    # CUDA-tensor write is a kernel launch + implicit sync (~B*len syncs/step).
+    # The greedy committer was already batched (FR13_EAGER_PACK); the multidraft
+    # committer was NOT. Batched build is BYTE-IDENTICAL (same values, same -1
+    # padding). Phase-3 committer-decomposition target (surrounding ~80ms).
+    if __import__('os').environ.get('FR13_COMMIT_BATCH_OUTPUT', '0') == '1':
+        _ot_cols = int(output_token_ids.size(1))
+        _ot_host = [
+            [int(t) for t in row[:_ot_cols]]
+            + [-1] * (_ot_cols - len(row[:_ot_cols]))
+            for row in out_rows
+        ]
+        output_token_ids.fill_(-1)
+        if _ot_host:
+            output_token_ids[: len(_ot_host), :_ot_cols].copy_(
+                torch.tensor(
+                    _ot_host, dtype=output_token_ids.dtype,
+                    device=output_token_ids.device,
+                )
+            )
+    else:
+        output_token_ids.fill_(-1)
+        for req_i, row in enumerate(out_rows):
+            for pos, token_id in enumerate(row):
+                output_token_ids[req_i, pos] = int(token_id)
     accepted_tree_rows.copy_(
         torch.tensor(accepted_rows, dtype=accepted_tree_rows.dtype,
                      device=accepted_tree_rows.device)
