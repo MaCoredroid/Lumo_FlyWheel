@@ -53,6 +53,26 @@ Deploy is **temp-0.6** → the `not all_greedy` branch → the multidraft commit
 change does **not touch**. Deleting the greedy path is therefore zero-risk for deployment;
 it only changes the temp-0/warmup path (proven byte-lossless by the gates above).
 
+## LIVE GATE FINDINGS (2026-07-17)
+
+- **The live dual-run gate is architecturally impossible.** Both committers do the single-step
+  FR13_EAGER_PACK GDN state-advance, which consumes per-step staged scan flags exactly once; running
+  both in one step crashes the 2nd on "stale/missing staged scan flags". (The crash proved the NEW
+  point-mass path itself runs fine — only the 2nd committer dies.) Replaced by an offline real-trace gate.
+- **Rigorous real-trace gate** (`scripts/fr13_greedy_unify_real_trace_gate.py`): reconstruct the point-mass
+  greedy walk from real `tree_path_lcp_max.jsonl` per-node captures (draft/argmax + path_scores parents),
+  compare to the committer's OWN logged output. Current-format captures: **point-mass == actual old greedy
+  on 99.4% of steps; the ONLY divergence = ~0.6% duplicate-argmax-sibling ties** (drafter proposed the same
+  token for two siblings == argmax; old max-LCP picks the clean-leaf subtree, per-node rejection picks
+  per-node). Output-lossless always (correct argmax tokens); the ties were **cat9-only — ZERO in tail6**.
+- **Deployed tail6 is byte-exact by construction**: native-topk head branches (distinct) + spine-only tail
+  (no sibling groups) => no duplicate siblings => point-mass == greedy byte-for-byte. Unification unblocked
+  for deployment with NO drafter change needed.
+- **User chose: fix the drafter (FR13_DEDUP_SIBLINGS).** Since the target argmax is unique, making siblings
+  distinct guarantees at most one matches => no tie => byte-exact for ALL configs, AND recovers wasted tree
+  budget (a duplicate sibling verifies redundantly) => higher accept in branched/merged. Committed; no-op
+  for tail6 (collision-check False fast path). A/B (dd1 on / dd0 off) + committer decomposition run LAUNCHED.
+
 ## Status / plan
 
 - [x] phase1a: device committer point-mass specialization + offline byte-gate (0/4000).
