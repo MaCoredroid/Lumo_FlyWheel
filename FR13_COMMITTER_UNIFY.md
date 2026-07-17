@@ -73,6 +73,21 @@ it only changes the temp-0/warmup path (proven byte-lossless by the gates above)
   budget (a duplicate sibling verifies redundantly) => higher accept in branched/merged. Committed; no-op
   for tail6 (collision-check False fast path). A/B (dd1 on / dd0 off) + committer decomposition run LAUNCHED.
 
+## PHASE-2 DECOMPOSITION (partial, live from dd1 — 2026-07-17)
+
+- **Inner multidraft walk (`fr13_device_multidraft_commit`) = ~4.66 ms/call** (FR13_MULTIDRAFT_GPU_TIMER,
+  continuous, 950 spans, steady). GDN replay ≈ 1.5ms (prior FR13_REPLAY_GPU_TIMER).
+- **dedup no-drift (partial):** dd1 (dedup ON) accept_per_event = **4.385** (from live /metrics), vs ~4.32
+  baseline — NO regression (dedup is a no-op for tail6 as designed). dd0 (off) A/B pending for the clean tie.
+- **REFRAMED PHASE-3 HYPOTHESIS (unconfirmed — needs CFWD):** if the whole-committer span (CFWD,
+  `fr13_committer_gpu_seconds_total`, historically ~94ms) confirms, then multidraft(4.66) + replay(1.5) ≈ 6ms
+  of it is the actual rejection walk; the remaining **~88ms is the SURROUNDING committer forward** (target-
+  logits gather + apply_sampling_constraints + output-row assembly + req-keyed dict + globals publish), which
+  is largely HOST work. => the depthsync lever (per-level syncs in the walk) would save ≤4.66ms; the REAL
+  target is the surrounding host assembly. MUST confirm CFWD from deploy_speed before committing to this.
+- NOTE: CFWD/DFWD/SFWD timer sidecars write at task-END (not continuous), so the full decomposition lands
+  when the first slow agentic task completes. Watch `deploy_speed_dd.json committer_gpu_ms_per_step`.
+
 ## Status / plan
 
 - [x] phase1a: device committer point-mass specialization + offline byte-gate (0/4000).
