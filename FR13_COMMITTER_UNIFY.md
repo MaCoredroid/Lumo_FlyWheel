@@ -390,3 +390,21 @@ active old-call removed). The physical excision of the now-dead old committer + 
 is deferred to a dedicated careful refactor (overlaps task #10 "modularize the 20k patcher"): map the def's
 exact end, split the helper, py_compile + boot-test. NOT rushed at session-tail against the working new
 committer. Phase-2 done; Phase-3 (piggyback = the 94.7ms replay elimination) is the deployment prize.
+
+## PHASE-1 COMPLETE (2026-07-18): unify to rejection committer + delete greedy path + dead flags — VALIDATED
+All directive phase-1 items done + live-gated:
+- ROUTE all_greedy -> point-mass rejection committer (default via=1). Gate: temp-0.6 accept 4.363 (p1g1).
+- DELETE _lumo_tree_path_lcp_max_greedy_sample (1570-line def in shared helper). Gate: del1 boots clean,
+  0 fatal, serves temp-0.6. Boundary-asserted splice; new committer intact.
+- DELETE dead flags FR13_GPU_COMMITTER/FR13_COMMITTER_SYNCKILL + _patch_rejection_sampler_gpu_committer
+  patch + call-site (173 lines). Gate: del2 boots clean w/ def+flags BOTH deleted, 0 fatal, 4/4 tasks
+  temp-0.6. No code reads the flags now.
+- fr13_gpu_committer_kernel.py: already deleted (pre-session).
+- LOSSLESS: new==greedy offline 0/4000 + dup 0/2000; VIA-mode temp-0 clean; temp-0.6 accept 4.363≈4.32.
+COSMETIC TAIL (no-op, deferred): inactive fallback string (~8656, `old` anchor never matches this vLLM so
+never injected), orphaned comments (6871-6884, 16427), launcher -e FR13_GPU_COMMITTER in 2 shell files
+(passes an unread env). None affect behavior.
+GPU-run learnings this session: `&`+disown survives (run_in_background reaped); kill by PID not
+`pkill -f b4_campaign_driver` (self-kills shell); dcgm samplers linger + wedge unified mem after force-kill
+-> `model_server.recover_host_memory()` reclaims (96GB->5GB).
+=> NEXT: Phase-3 = piggyback (eliminate the measured 94.7ms committer replay). GPU clean (112GB free).
