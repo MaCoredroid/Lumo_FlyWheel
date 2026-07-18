@@ -736,6 +736,8 @@ def _tree_gdn_kernel(
     SCAN_ALIGN: tl.constexpr = False,
     N_LOOP: tl.constexpr = 0,
     PARENT_GATHER: tl.constexpr = False,
+    PIGGYBACK_EXPORT: tl.constexpr = False,
+    CHAIN_END_IDX: tl.constexpr = 0,
 ):
     # N_LOOP is the span (loop bound, offs_n lane count, h_cache rows) of the
     # scan/reduction. Default (0) means "use N_PAD" -- the per-tree padded span
@@ -898,6 +900,23 @@ def _tree_gdn_kernel(
             out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
             out_i,
             mask=(i < N_ACTUAL) & v_mask,
+        )
+    # FR13_PIGGYBACK: after the scan, export the FIXED chain-end node's committed state -> col 0 (the running
+    # row), so the NEXT step's h0=col0 carries the committed state WITHOUT the 48-kernel replay. CHAIN_END_IDX
+    # is a fixed known column (static mask). Constexpr-gated (default off => constexpr-dead => byte-identical
+    # codegen). Same one-hot h_cache reduction (:808-811/:831-834) + col-0 store form as the h0 seed (:764-778)
+    # and the replay RUNROW_COMMIT (:1058-72).
+    if PIGGYBACK_EXPORT:
+        _pb_state = tl.sum(
+            tl.where((offs_n == CHAIN_END_IDX)[:, None, None], h_cache, 0.0),
+            axis=0,
+        )
+        _pb_col0_index = tl.load(h0_indices + H0_INDEX_ROW + 0)
+        _pb_col0_base = h0 + _pb_col0_index * H0_BANK_STRIDE
+        tl.store(
+            _pb_col0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+            _pb_state,
+            mask=v_mask[:, None],
         )
 
 
@@ -1987,6 +2006,8 @@ def launch_tree_gdn_prepared(
     raw_b: torch.Tensor | None = None,
     A_log: torch.Tensor | None = None,
     dt_bias: torch.Tensor | None = None,
+    piggyback_export: bool = False,
+    chain_end_idx: int = 0,
 ) -> tuple[torch.Tensor, torch.Tensor | None]:
     """Launch with precomputed graph-safe tree descriptors.
 
@@ -2194,6 +2215,8 @@ def launch_tree_gdn_prepared(
             SCAN_ALIGN=_scan_align,
             N_LOOP=_n_loop,
             PARENT_GATHER=_pg_flag,
+            PIGGYBACK_EXPORT=piggyback_export,
+            CHAIN_END_IDX=chain_end_idx,
             num_warps=_num_warps,
             **_extra_launch_kwargs,
         )
