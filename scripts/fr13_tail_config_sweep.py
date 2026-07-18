@@ -18,8 +18,11 @@ Node budget (n_pad): sum over depths of (1 + branches_at_depth) <= NPAD (32). Br
 """
 import argparse
 
-HEAD = [0.970, 0.864, 0.851, 0.849, 0.866]           # MTP depth d1..5 (branched)
-TAIL = [0.666, 0.848, 0.895, 0.906, 0.908, 0.950]     # arctic tail position j=0.. (j0=handoff)
+# b7-REGIME conditionals (recalibrated 2026-07-18 from the b7 tail6 arm's 756
+# per-position windows, 15603 events, token-weighted; Sum-survival check 4.307
+# vs bracketed 4.317 = 0.2% agreement). Old-regime values in comments.
+HEAD = [0.967, 0.819, 0.795, 0.801, 0.815]           # MTP d1..5 (old: .970/.864/.851/.849/.866)
+TAIL = [0.593, 0.817, 0.860, 0.865, 0.851, 0.901]     # arctic j0..5; j0=handoff (old: .666 ...)
 TAIL_PLATEAU = 0.15  # tailx10 MEASURED refutation: deep tail is COLD (accept flat at x=10,
                      # tps -21%); 0.95 was the extrapolation artifact that ranked n1/x21 fantasies
 ARCTIC_PURE = 0.55                                    # n=0 pure-arctic flat conditional (design's ~0.5-0.6 deep)
