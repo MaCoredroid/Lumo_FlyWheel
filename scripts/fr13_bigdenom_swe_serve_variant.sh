@@ -229,7 +229,7 @@ case "$KIND" in
   # the same-session baseline for the V2 mechanical committer-CFWD comparison (the LOCKED-launcher
   # `cat9` kind bakes golden flags => not a valid A/B baseline for forked-launcher arms).
   cat9f)     LAUNCHER=forked; TREEARG="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,1),(0,0,1),(0,0,0,1),(0,0,0,0,1)]"; EXPECT_RATIO=9;  declare -a XFLAGS=() ;;
-  cat9_pb)   LAUNCHER=forked; TREEARG="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,0,1)]"; EXPECT_RATIO=17; declare -a XFLAGS=(FR13_PIGGYBACK=1 FR13_TREE_GDN_GEOM_OVERRIDE=BV=8) ;;
+  cat9_pb)   LAUNCHER=forked; TREEARG="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,0,1)]"; EXPECT_RATIO=17; declare -a XFLAGS=(FR13_PIGGYBACK=1 FR13_ATTN_KV_REMAP=1 FR13_TREE_GDN_GEOM_OVERRIDE=BV=8) ;;
   *) echo "FAIL: unknown KIND=$KIND"; exit 2 ;;
 esac
 # NATIVE_DECODE: arms whose DECODE is the native/linear MTP path (no tree), so the
