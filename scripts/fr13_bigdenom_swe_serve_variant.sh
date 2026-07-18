@@ -200,6 +200,15 @@ case "$KIND" in
   # so more seam width (not concentrate) is the natural "scale what works" lever: adds d6 rank-3 + d7 rank-3
   # on top of tail6b's 2+2. Needs fill width=max(3,tail_branches+1)=4 at pp=5,6. Monotone-lossless / no drift.
   tail6e)    LAUNCHER=forked; TREEARG="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,1),(0,0,0,0,0,2),(0,0,0,0,0,3),(0,0,0,0,0,0,1),(0,0,0,0,0,0,2),(0,0,0,0,0,0,3)]"; EXPECT_RATIO=27; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_TAIL_BRANCHES=3 FR13_TAIL_BRANCH_DEPTHS=2) ;;
+  # Direction-2 REALLOCATION lever (zero-node-cost): SAME 21 nodes as tail6 but the 2 deepest tail nodes
+  # (d10,d11 -- conditional already 0.90-0.95, low marginal value) REALLOCATED to 2 d6 branches (the 0.334
+  # handoff leak). tail_len auto-derives to 4 (wide_D=9 from the shallower tree, patcher:14220) => NO new
+  # plumbing/flag => no config drift; only the tree + FR13_TAIL_BRANCHES=2/DEPTHS=1 differ from tail6. SAME
+  # node count => SAME s_fwd => the accept delta IS the tps delta (the one possibly-tps-POSITIVE dir-2 lever;
+  # adding nodes is measured net-negative at 0.046 accept/node < 0.138 break-even). NON-MONOTONE (drops
+  # d10/d11 => can regress on long-repeat spans) => DIAGNOSTIC: does concentrating the fixed 21-node budget
+  # at the leak beat reaching deeper? fill width=max(3,2+1)=3, ranks 1,2<3 => boot-clean. Gate vs tail6.
+  tail6realloc) LAUNCHER=forked; TREEARG="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,1),(0,0,0,0,0,2),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0)]"; EXPECT_RATIO=21; declare -a XFLAGS=(FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_TAIL_BRANCHES=2 FR13_TAIL_BRANCH_DEPTHS=1) ;;
   # accept>5 control: cat33333 (15-node) filled PURELY from Arctic suffix decoding (FLAVOR=always -> run
   # only the root forward, Arctic fills deep spine+branches, MTP deep forwards SKIPPED). == the closed
   # Front-2 config (arctic-only deep drafter, prev -17% B=4) -- re-run on the FIXED pipeline as the control
