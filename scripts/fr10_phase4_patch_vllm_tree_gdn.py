@@ -12360,12 +12360,28 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     or _fr13_tsr_pb_os.path.exists("/tmp/fr13_piggyback.arm")
                     or _fr13_tsr_pb_os.environ.get("FR13_PIGGYBACK") == "1"
                 )
+                # pb row-8 is ONLY valid for rows serving the 18-stream tree
+                # THIS step: a prefill/nonspec row's span (< 18) cannot index
+                # row 8 (base+8 overruns the span -> gather OOB; pre-pb row 0
+                # was always in-bounds which masked this class). Guard by the
+                # row's actual query span.
+                _fr13_tsr_spans = (
+                    common_attn_metadata.query_start_loc[1:_fr13_tsr_n + 1]
+                    - common_attn_metadata.query_start_loc[:_fr13_tsr_n]
+                ).to(_fr13_tsr_leaf.dtype)
+                _fr13_tsr_zero_row = (
+                    torch.where(
+                        _fr13_tsr_spans == 18,
+                        torch.full_like(_fr13_tsr_leaf, 8),
+                        torch.zeros_like(_fr13_tsr_leaf),
+                    )
+                    if _fr13_tsr_pb
+                    else torch.zeros_like(_fr13_tsr_leaf)
+                )
                 _fr13_tsr_leaf = torch.where(
                     _fr13_tsr_len_n > 0,
                     _fr13_tsr_leaf,
-                    torch.full_like(_fr13_tsr_leaf, 8)
-                    if _fr13_tsr_pb
-                    else torch.zeros_like(_fr13_tsr_leaf),
+                    _fr13_tsr_zero_row,
                 )
                 _fr13_tsr_base = common_attn_metadata.query_start_loc[
                     :_fr13_tsr_n
