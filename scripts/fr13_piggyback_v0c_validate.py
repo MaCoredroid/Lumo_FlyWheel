@@ -337,9 +337,11 @@ def _replay_deposit(KM, case: dict, paths: torch.Tensor, acc_len: int) -> torch.
 def _committer_fixture(seed: int) -> dict:
     """Base 9-node cat9 fixture + its 17-node extension (shared subtree BYTES)."""
     rng = np.random.default_rng(seed)
-    # scale-3 logits => peaked softmax => real accept lengths at temp>0
-    tl_b = (rng.normal(size=(9, VOCAB)) * 3.0).astype(np.float32)
-    sl_b = (rng.normal(size=(9, VOCAB)) * 3.0).astype(np.float32)
+    # scale-8 logits => near-point-mass softmax => the drafted spine is accepted
+    # with high probability, giving len>=2 coverage (scale-3 + p=0.7 measured
+    # hist {0:25,1:7} => coverage check failed; equality held on all trials)
+    tl_b = (rng.normal(size=(9, VOCAB)) * 8.0).astype(np.float32)
+    sl_b = (rng.normal(size=(9, VOCAB)) * 8.0).astype(np.float32)
     drafts_b = [0] * 9
     by_parent: dict = {}
     for node, p in enumerate(BASE_PARENTS):
@@ -348,7 +350,7 @@ def _committer_fixture(seed: int) -> dict:
         used: set = set()
         greedy_tok = int(np.argmax(tl_b[kids[0]]))
         for i, node in enumerate(kids):
-            if i == 0 and rng.random() < 0.7:
+            if i == 0 and rng.random() < 0.95:
                 tok = greedy_tok
             else:
                 tok = int(rng.integers(0, VOCAB))
