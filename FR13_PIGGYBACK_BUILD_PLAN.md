@@ -153,3 +153,16 @@ CHAIN_END_IDX=K-1 (constexpr, kernel export DONE). Committer walk offsets to sta
 ## packer + accepted-len-plumbing + beta-identity sub-project needing its own byte-exact gate (1c), then the
 ## forward caller (2), committer offset (4), replay drop (5), then live cat9 GPU gates. This is a multi-session
 ## engineering build; the crux (kernel state-export) is landed. Recommend building 1a-1d as a focused unit.
+
+## SEAM 1c DE-RISKED (2026-07-18, red-team of _gdn_node_step:616) — identity padding is BYTE-EXACT, clean
+_gdn_node_step: a = exp(b_g), b_g = -exp(A_log)*softplus(b_raw_a + b_dt_bias); b_beta = sigmoid(b_raw_b).
+Set raw_a = raw_b = -1e9 at padding positions L..K-1:
+  softplus(-1e9) = log(1+exp(-1e9)) = log(1+0) = 0  (exp underflows to EXACTLY 0.0 in fp32)  => b_g = -exp(A_log)*0 = 0 => a = exp(0) = 1  (EXACT)
+  sigmoid(-1e9) = 1/(1+exp(1e9)) = 1/(1+inf) = 0  (EXACT)
+  => h_t = a*h_{t-1} + beta*(delta) = 1*h_{t-1} + 0 = h_{t-1}  = pure IDENTITY, BYTE-EXACT, independent of q/k/v.
+(SCAN_ALIGN sigmoid->bf16->fp32 of 0.0 is still 0.0.) So the "delicate half" (1c) is a CLEAN targeted override
+of raw_a/raw_b (=a[..],b[..] tensors at patcher:5147-48) at padding positions -- a scatter, not a kernel change,
+byte-exact-provable offline. This significantly DE-RISKS seam 1: the whole piggyback state-carry is byte-exact
+by construction (chain re-association = replay committed state at 1.19e-7; padding = exact identity).
+=> seam1 = clean coordinated build (config 1a + packer token-fill 1b + raw-override 1c + accepted_len plumb 1d),
+no delicate correctness gamble. Remaining risk is purely INTEGRATION (wiring 5 seams) + the live accept/tps gates.
