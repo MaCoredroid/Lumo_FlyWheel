@@ -382,3 +382,16 @@ running. Gated behind the strategic anchor: only worth building if the tree is e
 ### ACTION: run the STRATEGIC ANCHOR first (zero-build, zero-drift): native MTP-5 vs tail6 (best tree)
 same-session (fr13_native_vs_tail6_anchor_seq.sh). If native wins even vs the best tree, direction-2 is
 moot (node-adding can't leap past native). If tail6 competes, build+test the tail6realloc diagnostic.
+
+---
+
+## ACCEPT "5.x then vs 4.x now" — RESOLVED (2026-07-18, workflow-verified, see FR13_ACCEPT_PROVENANCE.md)
+Full artifact-cited provenance table + reconciliation in FR13_ACCEPT_PROVENANCE.md. Verdict:
+(1) BASIS: every b7-era "5.x" quote is committed_per_event or vLLM mean-acceptance-length (both = accept+1,
+fr13_measure.py:602-603); tail6's committed is STILL 5.3-5.5 today, accept 4.3-4.5. (2) REGIME: the genuine
+accept>=5 reads (cold 5.237 BEYOND5:796; pw16 artifact 5.099 prewarm-ON; as1 4.954 async-ON) are from the
+07-16 accept>5-campaign regime, ruled non-transferable by this plan's own REGIME NOTE (family span 4.28-5.10,
+">5 = repetitive-span windfall"; prewarm itself ~0: cold 5.105 ~= prewarm 5.109, and sbr0 prewarm-ON reads
+4.093). accept_per_event is B-dependent + trajectory-bound (fr13_measure.py:638-642) => only same-session
+deltas transfer. (3) NO REGRESSION: post-phase-1 reads 4.363/4.385/4.386 sit +0.05-0.07 ABOVE the pre-change
+b7 baseline 4.317 (within n=4 scatter +-0.4). CANONICAL current = 4.317 (b7, n=16 clean same-session).
