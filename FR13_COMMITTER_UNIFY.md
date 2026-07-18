@@ -427,3 +427,17 @@ The real committer cost = the REPLAY. Two levers:
   profile risky (state-carry ~1.19e-7, could amplify -> trajectory gate needed); verdict ROI ~parity (+10%
   with forward-trim). The ONLY lever that touches the 66-72ms compute floor.
 NEXT: A/B-gate LEVER 2 (bounded win, ready) and/or advance the PIGGYBACK (big win, major build).
+
+## PHASE-3 LEVER 2 (batched replay) = BROKEN (2026-07-18); committer floor is the replay COMPUTE
+A/B (l2): FR13_SAMPLED_REPLAY_BATCHED=1 FAILS ENGINE INIT ("EngineCore failed to start" at
+_initialize_kv_caches->determine_available_memory, during warmup -- batched-replay-specific; per-layer
+baseline boots fine). The designed bounded lever is NOT usable as-is (needs debugging), and even fixed its
+ceiling is ~5-10ms (48-launch host overhead) -- it does NOT touch the 66-72ms latency-bound replay COMPUTE.
+
+HONEST PHASE-3 CONCLUSION (measure-grounded): the temp-0.6 rejection committer cost is DOMINATED by the GDN
+replay's 66-72ms latency-bound per-layer compute. The rejection KERNEL (walk) is at its 4.25ms floor. NO
+cheap working lever exists: LEVER 2 broken + marginal; the only lever touching the compute floor is the
+PIGGYBACK (fold replay into next forward -> committer ~16ms) = MAJOR architectural build, risky lossless
+(~1.19e-7 state-carry), ~parity ROI. Per cost-gate: the piggyback is the sole remaining lever and is neither
+cheap nor low-risk -> warrants an explicit go/no-go, not a reflexive grind. Phases 1 (unify+delete,
+validated) + 2 (decompose) COMPLETE.
