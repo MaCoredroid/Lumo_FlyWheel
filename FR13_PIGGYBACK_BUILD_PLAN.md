@@ -22,10 +22,19 @@ h0 = pre-step running state (col-0 BEFORE this step); node input = accepted-path
 parent structure gets the prefix as a chain feeding the tree root.
 
 ## Build phases (each gated, commit per step)
-1. **Correctness contract (offline, NO GPU):** prove that scanning [accepted_path ++ tree] from h0=pre-step
-   yields byte-identical tree-node states vs today's [replay-to-committed-leaf then scan tree from h0=leaf].
-   The GDN recurrence is associative along a path, so this MUST hold; verify with a CPU/fp32 oracle
-   (fr13_native_committer_validate.py-style) before touching the live forward.
+1. **Correctness contract (offline, NO GPU):** scanning [accepted_path ++ tree] from h0=pre-step yields the
+   SAME-IN-ℝ tree-node states as today's [replay-to-committed-leaf then scan tree from h0=leaf] — the GDN
+   recurrence is associative along a path. **RIGOR CORRECTION (2026-07-18): this is MATH-correct, NOT
+   bit-exact.** The measured chain re-association reproduces the replay's committed state at **1.19e-7**
+   (fr13_native_committer_validate.py), not 0.0 — because the forward's fused high-occupancy scan and the
+   48-kernel replay accumulate in fp32 in DIFFERENT order/tiling (and the re-processed chain tokens' q/k/v
+   activations may differ vs their first pass). This is the SAME class as the ACCEPTED FA2 single-ULP floor
+   ([[project_fr13_fa2_fork_nocopy_floor]]) — but per [[feedback_math_correct_vs_bitexact]] the FR13 bar is
+   BIT-EXACT, so the 1.19e-7 is NOT free: it must be shown to stay WITHIN-FLOOR over a TRAJECTORY (not just
+   single-step), since diffuse-GDN accumulation can amplify (~1.166x/layer, [[reference_diffuse_gdn_accumulation_explained]];
+   ~492x worst-case [[FR13_AMPLIFICATION_PHYSICS]]). => the piggyback is a WITHIN-FLOOR optimization; its
+   viability GATE is trajectory parity, and the fallback is making the export bit-exact to the replay
+   (identical node-order + fp32 h_cache + same activations) BEFORE the deep build.
 2. **Forward input assembly:** prepend the accepted-path nodes (from the committer, prev step) to the tree
    node/parent tensors fed to launch_tree_gdn_prepared; h0 <- pre-step col-0; extend the parent map so the
    prefix chain feeds the tree root. Flag-gated (FR13_PIGGYBACK, default 0 => today's replay path, byte-id).
@@ -34,8 +43,10 @@ parent structure gets the prefix as a chain feeding the tree root.
    FR13_APC_COMMIT_TO_RUNNING_ROW, is the hook). Ensure the re-processed prefix does NOT double-write KV.
 4. **Drop the replay:** when FR13_PIGGYBACK on, the committer skips launch_tree_gdn_replay entirely (just
    records accepted nodes + pre-step h0 handle). Committer CFWD should drop 100->~16ms.
-5. **GATES (live B=4 subset_b4_sixteen):** (a) accept BYTE/accept-identical vs replay path (piggyback is a
-   pure re-association, MUST be lossless); (b) committer CFWD 100->~16ms (CF2 timer); (c) s_per_fwd_gpu:
+5. **GATES (live B=4 subset_b4_sixteen):** (a) TRAJECTORY within-floor vs replay path — NOT byte-exact
+   (the export is ~1.19e-7 off the replay, see phase-1 correction); the gate is same-seed argmax parity +
+   accept unchanged (~4.32) + no garble over the FULL trajectory (single-step 1.19e-7 must not amplify);
+   (b) committer CFWD 100->~16ms (CF2 timer); (c) s_per_fwd_gpu:
    forward +a few ms (the +k prefix nodes) but committer -84ms => net step down ~90ms; (d) derived_tps_gpu +
    fullstep vs native — does tree reach parity/win? (e) no garble, resolve unchanged.
 
