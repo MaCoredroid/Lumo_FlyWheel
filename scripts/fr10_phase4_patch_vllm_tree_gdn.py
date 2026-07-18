@@ -10680,58 +10680,30 @@ def _lumo_tree_canonical_multidraft_sample(
         # additionally dual-runs BOTH on the SAME real trees and records byte
         # mismatches (settles the duplicate-sibling tie the offline gate defers)
         # WITHOUT changing served output/state (old committer runs last + wins).
-        import os as _fr13_gu_os
-        _fr13_gu_via = _fr13_gu_os.environ.get("FR13_GREEDY_VIA_REJECTION", "1") == "1"
-        _fr13_gu_gate = _fr13_gu_os.environ.get("FR13_GREEDY_UNIFY_GATE", "0") == "1"
-        if (_fr13_gu_via or _fr13_gu_gate) and tree_self_logits is not None:
-            _fr13_gu_gen = getattr(sampling_metadata, "generators", None)
-            _fr13_gu_new = _lumo_tree_canonical_multidraft_sample(
-                (output_token_ids.clone() if _fr13_gu_gate else output_token_ids),
-                torch.empty((batch_size,), dtype=torch.int32, device=device),
-                num_draft_tokens,
-                draft_token_ids,
-                tree_parent_indices,
-                target_logits,
-                tree_self_logits,
-                None,
-                bonus_token_ids,
-                max_spec_len,
-                generators=(None if _fr13_gu_gate else _fr13_gu_gen),
-                all_greedy=True,
+        # FR13 committer UNIFICATION (temp-0/all_greedy): ALWAYS the point-mass
+        # rejection committer. Validated: offline 0/4000 + dup 0/2000 (new==greedy
+        # longest-prefix) + VIA-mode live (temp-0 clean, graph mode) + temp-0.6 gate
+        # (accept 4.363, 0 fatal). The old path-LCP greedy committer is removed -- it
+        # was an eager-only replay path, dual-run-incompatible in graph mode.
+        if tree_self_logits is None:
+            raise RuntimeError(
+                "FR13 greedy unification: all_greedy commit requires tree_self_logits"
             )
-            if not _fr13_gu_gate:
-                return _fr13_gu_new
-        _fr13_gu_old = _lumo_tree_path_lcp_max_greedy_sample(
+        _fr13_gu_gen = getattr(sampling_metadata, "generators", None)
+        return _lumo_tree_canonical_multidraft_sample(
             output_token_ids,
             accepted_tree_rows,
             num_draft_tokens,
             draft_token_ids,
             tree_parent_indices,
-            tree_token_ids[0],
-            tree_token_ids[1],
+            target_logits,
+            tree_self_logits,
+            None,
             bonus_token_ids,
             max_spec_len,
+            generators=_fr13_gu_gen,
+            all_greedy=True,
         )
-        if _fr13_gu_gate:
-            try:
-                import json as _fr13_gu_j
-                _fr13_gu_mism = int((_fr13_gu_new != _fr13_gu_old).sum().item())
-                _fr13_gu_p = _fr13_gu_os.environ.get(
-                    "FR13_GREEDY_UNIFY_GATE_JSON",
-                    "/logs/fr13_greedy_unify_gate.json",
-                )
-                try:
-                    _fr13_gu_st = _fr13_gu_j.load(open(_fr13_gu_p))
-                except Exception:
-                    _fr13_gu_st = {"steps": 0, "mismatch_steps": 0, "mismatch_tokens": 0}
-                _fr13_gu_st["steps"] = int(_fr13_gu_st.get("steps", 0)) + 1
-                if _fr13_gu_mism > 0:
-                    _fr13_gu_st["mismatch_steps"] = int(_fr13_gu_st.get("mismatch_steps", 0)) + 1
-                    _fr13_gu_st["mismatch_tokens"] = int(_fr13_gu_st.get("mismatch_tokens", 0)) + _fr13_gu_mism
-                _fr13_gu_j.dump(_fr13_gu_st, open(_fr13_gu_p, "w"))
-            except Exception:
-                pass
-        return _fr13_gu_old
 
     if tree_parent_indices is not None and not sampling_metadata.all_greedy:
         try:
