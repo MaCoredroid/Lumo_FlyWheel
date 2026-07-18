@@ -323,3 +323,30 @@ landed, byte-exact identity-pad de-risked, extended-tree defined). This decompos
 piggyback as the deployment-prize lever and closes Phase-2 with data. The rejection walk needs NO kernel
 optimization (already at floor). Phase-1 (temp-0 unify) remains the only cleanup, gated on the live
 FR13_GREEDY_UNIFY_GATE (low-pri hygiene).
+
+---
+
+## Phase-1 LIVE gate finding (2026-07-18): the dual-run gate is a BROKEN mechanism (not the committer)
+
+Ran FR13_GREEDY_UNIFY_GATE=1 DEPLOY_FORCE_TEMP=0.0 on tail6 (gu2). vLLM booted clean (~12min), then the
+FIRST temp-0 request crashed the EngineCore:
+  RuntimeError: FR13_EAGER_PACK replay: stale/missing staged scan flags for layer ...layers.0.linear_attn
+  (in _lumo_tree_path_lcp_max_greedy_sample, the OLD committer, at rejection_sampler.py:2961)
+
+ROOT CAUSE (corrected): NOT an inherent old-committer break. FR13_EAGER_PACK is baked ON; the eager-pack
+staged scan stacks (_FR13_EAGER_PACK_STACKS) are per-step state built in the forward and CONSUMED by the
+committer's GDN replay. In the DUAL-RUN, the NEW committer (_lumo_tree_canonical_multidraft_sample, runs
+FIRST at :10688) consumes the stacks via its replay; the OLD committer (:10704) then finds them stale =>
+crash. So the two committers' replays cannot both run on one step (shared consumable eager-pack state).
+=> the FR13_GREEDY_UNIFY_GATE dual-run design is unusable for a live byte compare.
+
+CONSEQUENCE for phase-1: the literal "rejection == old greedy, live dual-run" gate is IMPOSSIBLE as built.
+But the unification correctness is ALREADY established WITHOUT it:
+  - new committer == greedy-longest-prefix (the correct temp-0 semantics): offline 0/4000 (distinct sibs)
+    + dup gate 0/2000 (dup + LCP-tie). Greedy == argmax == deterministic, so "correct greedy" is unambiguous.
+  - the OLD committer also implements greedy-longest-prefix => transitively new == old (the dup-tie, the only
+    ambiguity, is device-settled 0/2000 + reasoned benign: dup sibs share parent+token+depth => equal state).
+  - both committers work STANDALONE (the crash is dual-run interference only).
+REMAINING LIVE CONFIRM (achievable): VIA mode (FR13_GREEDY_VIA_REJECTION=1, new committer serves temp-0, NO
+dual-run) runs clean => the point-mass path is live-viable at temp-0 in graph mode. Then delete the old
+committer + dead flags. temp-0.6 accept unchanged is trivial (new IS the temp-0.6 committer, untouched).
