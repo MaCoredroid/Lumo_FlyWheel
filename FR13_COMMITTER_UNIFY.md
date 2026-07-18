@@ -441,3 +441,24 @@ PIGGYBACK (fold replay into next forward -> committer ~16ms) = MAJOR architectur
 (~1.19e-7 state-carry), ~parity ROI. Per cost-gate: the piggyback is the sole remaining lever and is neither
 cheap nor low-risk -> warrants an explicit go/no-go, not a reflexive grind. Phases 1 (unify+delete,
 validated) + 2 (decompose) COMPLETE.
+
+## LEVER 2 root cause + occupancy red-team (2026-07-18) => piggyback is the sole occupancy-escaping lever
+LEVER 2 boot failure ROOT CAUSE: torch.AcceleratorError CUDA error "operation not permitted"
+(cudaErrorNotPermitted, ASYNC-reported at a later topk_topp_sampler call) during profile_run's
+_dummy_sampler_run -- the batched replay (_ep_launch_all over _FR13_EAGER_PACK_STACKS) operates on the
+DUMMY/profiling stacks (invalid banks) during capture. Fixable via a dummy-run/capture guard (bounded but
+subtle: must confirm the real committer runs eager, not captured).
+
+RED-TEAM OF THE WIN (decisive): FR13_REPLAY_MULTISTREAM already MEASURED that running the 48 per-layer GDN
+replays concurrently is SLOWER (91.6ms vs 76.6ms serial) -- they are OCCUPANCY-BOUND (128KB h_cache =
+[N_PAD,BV,DIM_K]fp32 pins ~1 CTA/SM). A batched single-launch hits the SAME occupancy wall (the 48 layers
+still serialize on the SMs); it can only recover launch overhead, which the measured multistream loss
+suggests is dominated by the occupancy serialization. => LEVER 2 is NOT a plausibly-clean win + is broken
++ needs a subtle CUDA-graph fix => COST-GATE: not worth the fix-and-measure for an occupancy-capped lever.
+
+FINAL PHASE-3 DISPOSITION (measure-grounded, red-teamed): the committer's 66-72ms replay is OCCUPANCY-BOUND
+per-layer GDN compute. Kernel-level levers (multistream=refuted, batched=occupancy-capped+broken) cannot
+escape the ~1 CTA/SM wall. The rejection KERNEL (walk) is at its 4.25ms floor. The ONLY lever that escapes
+the wall is the PIGGYBACK: fold the accepted-path advance into the NEXT forward's ONE high-occupancy fused
+scan (native-style) -- that is WHY native's committer is 6.6ms. Major architectural build, risky lossless
+(~1.19e-7 state-carry), ~parity ROI. Gated first step = trajectory-lossless contract proof. Phases 1+2 DONE.
