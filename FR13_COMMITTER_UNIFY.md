@@ -475,3 +475,17 @@ Tradeoff: occupancy-escape (faster fused kernel) vs host-gather overhead (per-re
 => MEASURING NOW (cn1, FR13_COMMITTER_NATIVE=1 + CF2 timer): committer CFWD (vs custom 98.9ms) + accept
 (lossless, bit-exact) + net tps. If net win + graph-forward + lossless => a DEPLOYABLE committer optimization
 far cheaper than the piggyback. This corrects the premature "piggyback sole lever" cost-gate.
+
+## native committer MEASURED (cn1, 2026-07-18): modest but REAL lossless deployable win (~8.8ms GPU)
+FR13_COMMITTER_NATIVE=1 tail6 (graph, deployed config): ENGAGED needle fired, 0 fatal, healthy after 826s
+(forward stays graph -- deployable), accept windows 4.62/4.07 bracket ~4.32 (LOSSLESS, bit-exact to no-spec).
+Committer CFWD = 90.06 ms/call (150 spans) vs custom tree-replay 98.9ms (phase-2) => ~8.8ms GPU saved (~9%
+of the committer). So the occupancy-escape is REAL but MODEST -- the linear-committed-path fused scan is
+faster than the tree-replay, but does NOT collapse the replay (the per-layer 48-call structure + host gather
+remain). It does NOT reach the ~16ms floor (that needs the piggyback forward-fold); it's a cheap incremental.
+CAVEATS: (1) CFWD is CROSS-RUN (cn1 native vs phase-2 custom, different boots) -> a same-boot A/B is needed
+for a clean delta before deploy. (2) CF2 is GPU-only; the eager per-request gather is HOST -> the NET
+(deploy_speed derived_tps/s_fwd) is the deployable verdict, PENDING at arm completion. (3) "no config drift":
+OFF=custom baseline (byte-identical), ON=native (bit-exact-to-no-spec, accept ~4.32) -> satisfies off-identical.
+NEXT: net deploy_speed (cn1) + a same-boot native-vs-custom A/B on subset_b4_sixteen -> if net win + clean
+delta -> bake FR13_COMMITTER_NATIVE. This is a modest-but-real phase-3 win, cheaper than the piggyback.
