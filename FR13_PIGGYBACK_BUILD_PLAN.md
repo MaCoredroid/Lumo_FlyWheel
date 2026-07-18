@@ -127,3 +127,29 @@ CONSTRAINT 2 (static masks -> FIXED K): masks/parent baked once from static SPEC
 ## BUILD ORDER (revised, cat9-first): seam0 read-helper[DONE] -> topology prepend+identity-pad (seam1, cat9) ->
 ## forward extended-tree + kernel chain-end export (seam2/3) -> committer offset (seam4) -> replay drop (seam5)
 ## -> GPU gate on cat9 (accept-identical, CFWD 77->16ms, tps>native) -> then subtree-shrunk tail for max accept.
+
+## SEAM 1 DESIGN RESOLVED (2026-07-18) — the variable-chain + identity-padding is the real crux
+The chain = the PREVIOUS step's accepted path (length L varies 1..~depth), NOT the last-K-committed. Worked
+through why: col-0 must lag exactly ONE STEP (col-0=S_{N-1}; chain=step N-1's accepts advances S_{N-1}->S_N;
+forward exports chain-end=S_N->col-0). Fixed-K-committed-chain is WRONG — its export creates a col-0 vs
+next-chain-start mismatch (double-processing). So the chain is variable-length.
+
+But the mask/topology is STATIC (baked into the captured graph) => the chain slot must be a FIXED K, and a
+short prev-accept (L<K) must PAD nodes L..K-1 so that:
+  (a) node K-1 (the static subtree-root) still holds S_N  -> padding must be GDN-IDENTITY (state-preserving),
+  (b) the export at fixed CHAIN_END_IDX=K-1 reads S_N.
+GDN identity = beta=0 (no delta-rule update) at the padding nodes. beta is model-computed (beta_tree, patcher
+:5146); forcing beta=0 at padding positions is a PACKER/forward override (zero beta_tree[L..K-1]) — this is
+the delicate, must-gate-byte-exact half.
+
+### Seam 1 is therefore a SUB-PROJECT, not a one-shot edit:
+1a. Static extended tree_choices: {(0,)^j : j=1..K} ∪ {(0,)^K + p : p in base} -> masks/parent/n_pad auto (patcher:224-254). [config]
+1b. Packer fills chain-node tokens = prev-accepted tokens (L real) + repeat-committed-leaf for L..K-1. [merged_fill]
+1c. Packer zeroes beta_tree at padding positions L..K-1 (GDN identity) — GATE byte-exact that a beta=0 node is a pure no-op. [delicate]
+1d. Plumb the prev-step accepted_len L (committer -> drafter); tokens are already in _COMMITTED, but L is not (agent Seam-6 gap).
+CHAIN_END_IDX=K-1 (constexpr, kernel export DONE). Committer walk offsets to start at K-1 (seam 4).
+
+## HONEST BUILD-SIZE UPDATE: seams 0+3 (read-helper + kernel export) DONE. Seam 1 is the bulk — a coordinated
+## packer + accepted-len-plumbing + beta-identity sub-project needing its own byte-exact gate (1c), then the
+## forward caller (2), committer offset (4), replay drop (5), then live cat9 GPU gates. This is a multi-session
+## engineering build; the crux (kernel state-export) is landed. Recommend building 1a-1d as a focused unit.
