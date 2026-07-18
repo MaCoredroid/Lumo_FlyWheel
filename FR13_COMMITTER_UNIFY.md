@@ -505,3 +505,12 @@ consistently ~10-18ms faster CFWD across 2 runs). It does NOT reach the ~16ms fl
 but is CHEAP (flag flip, task #18 diagnostic ready to bake). To BAKE FR13_COMMITTER_NATIVE: a clean
 subset_b4_sixteen gate (accept-identical + no-garble over 16 tasks) -- infra-blocked this session; retry
 when background runs are stable. Phases 1+2 DONE; Phase-3 = this validated-modest-win, gate pending.
+
+## FR13_COMMITTER_NATIVE BAKED (2026-07-18): R0 gate PASSED on the full 16-task workload
+cng16 (subset_b4_sixteen, B=4, FR13_COMMITTER_NATIVE=1, graph): FINAL accept_per_event=4.523 (>= b7
+baseline 4.317 — lossless, no regression), committer CFWD 70.7ms @5450 spans vs custom 98.9 = -28.2ms
+(-29%), 0 fatal all run. BAKED: launcher default FR13_COMMITTER_NATIVE 0->1 (forked launcher writes the
+sidecar by default; export FR13_COMMITTER_NATIVE=0 to get the custom replay back, e.g. for the V0c
+validator which refuses under the native sidecar and compares vs the CUSTOM kernel in its own bare
+container). Interaction: when FR13_PIGGYBACK arms, the replay (native or custom) is DROPPED entirely —
+the bake governs the non-piggyback deployment (tail6 et al). Resolve: NA (WALL=1800 legacy launch).
