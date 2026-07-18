@@ -58,3 +58,14 @@ policy; the driver's 1800 default is deployment-faithful but right-censors gate 
 - cng16 (in flight, WALL=1800): its accept/CFWD reads are wall-independent (decode-bracketed + per-call
   span timers) => still valid for the FR13_COMMITTER_NATIVE bake; its resolve = NA (wall-censored). The
   wall-free resolve read for the native committer rides the combined campaign (post-bake arms).
+
+## R5 REFRAMED (2026-07-18, from the cat9-vs-deliverable discussion): geometry re-optimization under pb costs
+cat9_pb = the MECHANISM-PROOF vehicle only (locked baseline; depth-5 accept fits the K=8 chain with 100%
+coverage; 18 streams fits the n_pad=32/BV=8 wall). The ~99ms replay being eliminated is geometry-INDEPENDENT
+(same 48-kernel machinery for every tree) => the CFWD collapse proven on cat9 transfers to the family.
+DELIVERABLE geometry = re-decided AFTER the mechanical+V2.5 gates, by re-running the geometry optimization
+UNDER THE PIGGYBACK COST MODEL — the old conclusions (cat8-near-optimal, tail6 break-even 0.138 accept/node,
+depth-lever-dead) were all derived at replay-era committer cost (~99ms); at ~16ms the calculus shifts
+(depth cheaper, branch break-even lower). Candidates: tail6-pb HYBRID (K=8 chain + fallback replay on
+accept>6 overflow, ~30% of steps => ~70% of the collapse, keeps accept 4.317) vs cat9-family widened under
+the new break-even vs a re-swept shape. This is a MEASUREMENT (same-session sweep), not an assumption.
