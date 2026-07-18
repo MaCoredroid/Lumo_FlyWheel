@@ -166,3 +166,25 @@ byte-exact-provable offline. This significantly DE-RISKS seam 1: the whole piggy
 by construction (chain re-association = replay committed state at 1.19e-7; padding = exact identity).
 => seam1 = clean coordinated build (config 1a + packer token-fill 1b + raw-override 1c + accepted_len plumb 1d),
 no delicate correctness gamble. Remaining risk is purely INTEGRATION (wiring 5 seams) + the live accept/tps gates.
+
+## SEAM 1a ARTIFACT DEFINED (2026-07-18) — extended cat9-piggyback tree (K=8), validated
+Base cat9 = [(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,1),(0,0,1),(0,0,0,1),(0,0,0,0,1)] (launcher:207).
+EXTENDED (K=8, CHAIN_END_IDX=7, 17 nodes -> n_pad=32, BV<=8):
+[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),
+ (0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0),
+ (0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,1),
+ (0,0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,0,1)]
+Validated: parent-closure holds (every path prefix present => patcher:224-254 regenerates parent/masks/n_pad
+automatically); nodes 0..7 = chain, node 7=(0,)^8=CHAIN_END_IDX; subtree (nodes 8..16) hangs off node 7.
+=> wire as a serve-variant kind cat9_pb (TREE=this, num_speculative_tokens=17, FR13_PIGGYBACK=1, BV=8) once
+the packer (1b/1c) + committer-offset (4) + replay-drop (5) land.
+
+## BUILD STATE (honest, 2026-07-18): DONE = read-helper(0), kernel export(3), design+byte-exact de-risk(1c),
+## extended-tree artifact(1a). REMAINING (coordinated, must build+GPU-validate TOGETHER):
+##   1b packer: fill chain nodes 0..L-1 = prev-accepted tokens, L..7 = repeat committed-leaf token.
+##   1c packer: scatter raw_a=raw_b=-1e9 at padding positions L..7 (byte-exact identity, proven).
+##   1d plumb: prev-step accepted_len L (committer -> drafter; tokens already in _COMMITTED).
+##   2  caller(patcher:5141): pass piggyback_export=_fr13_piggyback_on(), chain_end_idx=7.
+##   4  committer(fr13_device_multidraft_kernel.py:480): current_parent = 7 (not -1) when piggyback.
+##   5  replay drop: guard replay dispatch with `if not _fr13_piggyback_on()`.
+## Then: live cat9_pb GPU gates (accept-identical vs cat9-replay, CFWD 77->~16ms, tps>native, no garble).
