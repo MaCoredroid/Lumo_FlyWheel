@@ -421,6 +421,15 @@ if [[ "${FR13_REPLAY_MULTISTREAM:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_replay_multistream.arm" 2>/dev/null || true
 fi
+# FR13_PIGGYBACK sidecar (worker-env-drop-proof): eliminate the committer replay by building the verify tree
+# as [prev-accepted chain ++ new subtree] scanned from h0=pre-step, folding the accepted-path GDN advance into
+# the forward's fused scan (native-style). Absent => today's replay path (byte-identical). Build: task #46 /
+# FR13_PIGGYBACK_BUILD_PLAN.md. Content = prefix cap (max accepted-chain length to prepend).
+if [[ "${FR13_PIGGYBACK:-0}" == "1" ]]; then
+  echo "${FR13_PIGGYBACK_PREFIX_CAP:-8}" > "$LOG_DIR/fr13_piggyback.arm"
+else
+  rm -f "$LOG_DIR/fr13_piggyback.arm" 2>/dev/null || true
+fi
 # FR13_COMMIT_ARGMAX_GATE sidecar (same worker-env-drop workaround): the worker curation drops the flag
 # (keeps only *_DUMP). The patched rejection_sampler reads this sidecar OR the (dropped) env.
 if [[ "${FR13_COMMIT_ARGMAX_GATE:-0}" == "1" ]]; then

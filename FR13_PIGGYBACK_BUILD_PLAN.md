@@ -50,3 +50,29 @@ parent structure gets the prefix as a chain feeding the tree root.
   BEFORE trusting any speed number. LIVE GPU validation required (env was blocking; GPU now clean).
 
 ## Status: DESIGNED + seam-verified + feasibility-confirmed. Ready to build phase 1 (offline contract, no GPU).
+
+## REFINED APPROACH (2026-07-18): EXTENDED-TREE (cleanest — reuses existing tree machinery)
+Instead of a bespoke prefix mechanism, have the DRAFTER build the verify tree as:
+    tree = [ prev-accepted-path as a CHAIN ]  ++  [ new speculation subtree rooted at the committed leaf ]
+and scan it from h0 = PRE-STEP running state (the state BEFORE prev step's accepts), NOT the replayed leaf.
+- The chain prefix re-advances the GDN state through the accepted tokens INSIDE the forward's fused per-layer
+  scan (occupancy-free), landing the committed-leaf state at the chain's end = the speculation subtree root.
+- The committer walks ONLY the speculation subtree (offset past the prefix); the prefix nodes are committed
+  context (auto-consumed), never counted as new accepts.
+- REUSES: the tree scan (_tree_gdn_kernel), masks (strict/visible), n_pad (prefix 5 + base 16 = 21 -> 32,
+  already the tail size), and the committer walk (offset). NO replay call when FR13_PIGGYBACK on.
+- Correctness: PROVEN by composition — the chain-advance == fr13_native_committer_validate.py's committed
+  state (1.19e-7); the subtree scan from that state == today's forward. So byte-lossless-by-construction on
+  the state carry (kernel-consistent: same forward kernel does both, unlike replay's separate kernel).
+
+### Build order (extended-tree), each flag-gated (FR13_PIGGYBACK default 0 = today's replay path):
+1. FR13_PIGGYBACK sidecar (launcher, worker-env-drop-proof) + read helper.  [plumbing — SAFE]
+2. Drafter: when on, prepend the prev-accepted chain to the tree topology (parent map + tokens); grow
+   wide_D/n_pad by the prefix length. The committed leaf becomes the subtree root (already is).
+3. Forward: h0 <- pre-step col-0 (state before prev accepts); scan the extended tree (existing machinery).
+4. Committer: walk offset past the prefix (commit only the subtree); the prefix is context.
+5. Drop the replay when on (committer records prev-accepted for the next drafter step; no launch_tree_gdn_replay).
+6. GATES (live B=4 subset_b4_sixteen): accept-identical vs replay, CFWD 100->~16ms, s/fwd forward-delta
+   (the +k prefix nodes) << 72ms saved, tps vs native, no garble.
+This is a DRAFTER+FORWARD+COMMITTER change but each piece reuses existing tree machinery -> lower risk than a
+bespoke prefix kernel. Still correctness-critical + needs live GPU validation.
