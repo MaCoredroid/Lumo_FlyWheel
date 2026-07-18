@@ -15,7 +15,7 @@ name=${1:?usage: fr13_campaign_tmux.sh <session-name>}
 mkdir -p "$RUNROOT"
 envfile="$RUNROOT/campaign.$name.env"
 : > "$envfile"
-for v in RUNROOT TAG SUBSET WALL BSIZE CONC SEQUENCE_FILE GPU_UTIL DEPLOY_FORCE_TEMP; do
+for v in RUNROOT TAG SUBSET WALL BSIZE CONC SEQUENCE_FILE GPU_UTIL DEPLOY_FORCE_TEMP CUDA_LAUNCH_BLOCKING; do
   [[ -n "${!v:-}" ]] && printf '%s=%q\n' "$v" "${!v}" >> "$envfile"
 done
 for k in $(compgen -e | grep '^FR13_' || true); do
