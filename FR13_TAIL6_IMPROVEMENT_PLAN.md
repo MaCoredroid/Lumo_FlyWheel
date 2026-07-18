@@ -341,3 +341,44 @@ NEXT LAUNCH (when b7 done + GPU free + cleanup): the 4-arm speed sweep --
     SEQUENCE_FILE=scripts/fr13_tail6_speed_sweep_seq.sh bash scripts/fr13_b4_campaign_driver.sh \
     > output/fr13_tail6_speedsweep/driver.sw1.log 2>&1' </dev/null >/dev/null 2>&1 &
 (nativemtp5+tail6b+tail6e+tail6c same-session => the definitive tree-vs-native speed verdict + geometry.)
+
+---
+
+## Direction-2 BREAK-EVEN ANALYSIS + clean net-negative result (2026-07-18, loop-driven)
+
+### The clean same-session number (b7, bracketed deploy_speed, subset_b4_sixteen, cache-off):
+| arm            | nodes | accept_per_event | s_per_fwd_gpu | derived_tps |
+|----------------|-------|------------------|---------------|-------------|
+| tail6 (spine)  | 21    | 4.317            | 0.0935        | **5.06**    |
+| tail6b (d6/d7) | 25    | 4.500            | 0.1050        | **4.76**    |
+
+Arctic branches raise accept **+0.183** but are **NET-NEGATIVE on tps** (4.76 < 5.06). The +4 nodes cost
++12% verify; +0.18 accept doesn't pay for it. **This kills the "arctic width" lever definitively.**
+
+### Break-even (why): tps ∝ committed/s_fwd. Each tree node adds ~0.0029s to s_fwd (measured: +0.0115s/4
+nodes). d(tps)/d(node) > 0 requires **d(accept)/accept > d(s_fwd)/s_fwd**, i.e. accept must rise
+**> 0.138 per added node** (= 4.317 × 0.0029/0.0935). Arctic branches deliver **0.046/node** (correlated
+siblings, same suffix-match) → guaranteed loss. A 25-node arm needs accept **> 4.97** to beat 21-node
+tail6; arctic tops out ~4.5-4.65. NOTE: piggyback (Dir-1) does NOT help — shrinking the step makes the
+FIXED per-node verify cost a BIGGER fraction (0.0029/0.20 = 1.45%/node vs 0.0029/0.28 = 1.03%/node now),
+so Dir-1 and Dir-2 do NOT simply "multiply" (that claim in the roadmap is wrong for node-adding levers).
+
+### The only source that clears 0.138/node = a DECORRELATED d6 candidate (recovers the 0.334 handoff miss,
+~+0.4 accept for 1 node = 0.4/node >> 0.138). But MTP maxes at 5 heads (mtp_near[0..4], mtp_spine pads
+with near[-1]); a real d6 model prediction needs **+1 MTP forward** — verify-basis-FREE (drafter, not
+s_fwd) but **fullstep-COSTLY** (~+20ms drafter). Fullstep accounting: MTP-d6 ~18.6 tps vs tail6 ~18.75 =
+tps-NEUTRAL. No FREE decorrelated tail source exists (arctic is the only free tail proposer, self-correlated).
+=> COST-GATE: don't build the risky +1-forward MTP-d6 patcher change for a fullstep-neutral lever.
+
+### CREATIVE lever (the ONE untested tps-positive candidate) = REALLOCATION, not addition.
+Zero-node-cost: keep the fixed 21-node budget, move deep-tail nodes (d10,d11 — conditional already
+0.90-0.95, low marginal value) to d6 branches (the 0.334 leak). Same 21 nodes => same s_fwd => the accept
+delta IS the tps delta. tail6realloc = 15 head + tail spine d6-9 (4) + 2 d6 branches = 21 nodes (==tail6).
+NON-MONOTONE (drops d10/d11 => can regress on long-repeat spans) => DIAGNOSTIC, not lossless-shippable;
+tells us whether the leak is worth more than deep reach. tail_len is tree-derived (chain follows wide_D)
+so a shorter tree re-syncs the drafter WITHOUT a new flag — but must CPU-verify the drafter re-syncs before
+running. Gated behind the strategic anchor: only worth building if the tree is even competitive with native.
+
+### ACTION: run the STRATEGIC ANCHOR first (zero-build, zero-drift): native MTP-5 vs tail6 (best tree)
+same-session (fr13_native_vs_tail6_anchor_seq.sh). If native wins even vs the best tree, direction-2 is
+moot (node-adding can't leap past native). If tail6 competes, build+test the tail6realloc diagnostic.
