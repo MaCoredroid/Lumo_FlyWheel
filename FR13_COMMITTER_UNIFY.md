@@ -363,3 +363,12 @@ _lumo_tree_path_lcp_max_greedy_sample def + calls (:10228 fallback-string, :1070
 (:10663-10734 gate branch) + dead flags FR13_GPU_COMMITTER/FR13_COMMITTER_SYNCKILL. py_compile + boot-test
 (temp-0 clean + temp-0.6 accept ~4.32) each step. GPU-run note: pkill -f "b4_campaign_driver" self-kills my
 shell (my launch cmdline matches); kill via1 by PID or "serve_variant.sh tail6_gu1".
+
+## Phase-1 GATE PASSED (2026-07-18): temp-0.6 accept 4.363 ≈ 4.32, 0 fatal, routing regression-free
+Deployed tail6 @ temp-0.6 with the new committer routed by default (via=1): accept_per_event=4.363,
+committed=5.363, s_per_fwd_gpu=0.0864, n=4, 0 fatal errors over the whole run. 4.363 vs b7's 4.317 = within
+4-task subset variance (and temp-0.6 code is byte-identical: the edit touched only the all_greedy branch).
+=> PHASE-1 FUNCTIONAL UNIFICATION COMPLETE + FULLY GATED: (correctness offline 0/4000 + dup 0/2000) +
+(live temp-0 clean via VIA) + (temp-0.6 accept 4.363≈4.32 regression-free). Remaining = physical dead-code
+deletion (old committer def in 6857 helper + fallback :10213 + _patch_rejection_sampler_gpu_committer +
+flags), a bounded careful patcher refactor on now-UNREACHABLE code (py_compile + boot-test gated).
