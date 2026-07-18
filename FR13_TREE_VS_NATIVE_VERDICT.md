@@ -6,12 +6,18 @@ tail6 from the accept>5 campaign (FR13_ACCEPT_BEYOND5_DESIGN.md, multiple runs).
 tail6-vs-native A/B was attempted twice (b689wvlzf, b0vwonhjs) but BOTH were killed externally (env not
 sustaining long GPU background runs); the existing matched data is decisive so no fresh run is needed.
 
-| metric                          | native MTP-5 | tail6 (accept 5.237) |
-|---------------------------------|--------------|----------------------|
-| committed_per_event             | 4.41         | 5.28                 |
-| s_per_fwd_gpu                   | 58 ms        | 85 ms                |
-| derived_tps_gpu (verify-basis)  | 76.0         | 71.2                 |
-| derived_tps_fullstep_gpu (real) | 27.9         | 18.8                 |
+SAME-CAMPAIGN, AIRTIGHT (both arms from fr13_native_tail6_decomp, same boot, tail6_nt1 recomputed from its
+raw metrics via fr13_measure deploy-speed; pf native 0.41 / tail6 0.38, B=4):
+
+| metric                          | native MTP-5 | tail6 tree | native adv |
+|---------------------------------|--------------|------------|------------|
+| committed_per_event             | 4.41         | 5.31       | (tree +acc)|
+| s_per_fwd_gpu                   | 58 ms        | 88 ms      | -30ms      |
+| derived_tps_gpu (verify-basis)  | 76.0         | 60.5       | +26%       |
+| derived_tps_fullstep_gpu (real) | 27.9         | 18.4       | +52%       |
+
+(The earlier cross-run estimate used the design-doc tail6 71.2/18.8; the same-campaign tail6 is even slower
+— 60.5/18.4 — so native's margin is LARGER than first stated: +26% verify, +52% full-step.)
 
 ## Verdict: NATIVE WINS. The tree pipeline does NOT beat native MTP-5 throughput on GB10.
 - Verify-basis: native +7%. Full-step (drafter-inclusive, the real deploy metric): **native +48%**.
