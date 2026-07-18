@@ -68,3 +68,26 @@ tok/s) vs tail6 289ms (18.4), native +52%.
 It closes 78% of the gap and reaches parity; +forward-tax trim wins. The drafter is a RED HERRING (equal).
 All cheap committer-kernel attacks are refuted; only the architectural replay-elimination remains, and the
 math now PROVES it is worth it (parity->win, not marginal). GPU validation currently env-blocked (kills).
+
+## THE ATTACK, SCOPED (2026-07-18) — why native is cheap + what actually eliminates the tree's replay
+Native's committer is 6.6ms because the accepted-path SSM advance is DONE INSIDE THE VERIFY FORWARD's scan
+(one big high-occupancy kernel) — it keeps the ~5 linear per-position states and SELECTS h_k. The tree can't
+keep all 21 branching states (13.7GB), so it re-derives the leaf via the REPLAY = 48 small per-layer kernels,
+each latency-bound (1.386ms), = 66-72ms. The cost is OCCUPANCY: 48 tiny kernels vs one fused forward scan.
+
+CLARIFICATION: the stateless-tree (task #11, FR13_APC_COMMIT_TO_RUNNING_ROW etc., already baked) is a
+CORRECTNESS fix (redirects the replay's col-0 write to kill A'/B cache carriers). It STILL replays. It is
+NOT the speed lever.
+
+THE REAL SPEED LEVER = PIGGYBACK (defer the accepted-path advance to the next forward, native-style):
+  - Committer: walk + record the accepted tokens; DO NOT replay. (~walk 4 + publish 12 = ~16ms, ~native.)
+  - Next decode forward: input = [accepted_path_tokens] ++ [new draft tree]. The GDN scan advances the SSM
+    state through the accepted path AS PART OF the forward (fused, high-occupancy, ~free since HBM-bound),
+    then drafts/verifies the new tree. KV for the accepted tokens lands at the committed sequence positions.
+  => eliminates the 48-kernel 66-72ms replay; committer 100->~16ms. Attack math: tail6 -> ~parity, +forward
+     trim -> tree WINS +10%.
+  BUILD SCOPE (major, correctness-critical): forward input-assembly (variable-length accepted prefix + tree),
+  KV/conv position management for the re-processed prefix, running-state = pre-step (not post-accept), intra-
+  batch handling. Distinct from + larger than the baked stateless-tree. Needs LIVE GPU validation (byte-exact
+  state carry + accept unchanged + the actual s/fwd win) — currently env-blocked (2x external kills).
+SPINE-COMMIT is the tractable-but-marginal alternative (53% replay-skip, +export cost => still loses, measured).
