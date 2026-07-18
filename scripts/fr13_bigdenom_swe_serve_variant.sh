@@ -490,10 +490,22 @@ PY
 # the generic WIDE drafter would ALSO serve 17 cols (12 MTP spine forwards, chain slots = deep MTP
 # speculation) and pass the ratio assert vacuously. Require the dedicated branch's engage line.
 if [[ "$KIND" == "cat9_pb" ]]; then
-  docker logs "$CONTAINER" 2>&1 | grep -m1 "FR13_PIGGYBACK cat9_pb drafter engaged" \
-    || { echo "FAIL: cat9_pb piggyback drafter branch did NOT engage (wide-drafter fallback = chain slots are MTP junk)"; exit 4; }
-  docker logs "$CONTAINER" 2>&1 | grep -m1 -F "[FR13_PIGGYBACK] committer GDN replay DROPPED" \
-    || { echo "FAIL: cat9_pb committer GDN replay-drop needle absent (seam-5 drop did not engage)"; exit 4; }
+  # RETRY WINDOW (dbg3 lesson): the needles print during/after the probe's commit
+  # steps; docker-logs flushing + slow modes (CUDA_LAUNCH_BLOCKING=1) race an
+  # immediate grep. Poll up to 60s for each needle before declaring FAIL.
+  _fr13_pb_needle_wait() {  # $1 = fixed-string needle, $2 = fail message
+    for _try in $(seq 1 20); do
+      if docker logs "$CONTAINER" 2>&1 | grep -m1 -F -- "$1" >/dev/null 2>&1; then
+        return 0
+      fi
+      sleep 3
+    done
+    echo "$2"; return 1
+  }
+  _fr13_pb_needle_wait "FR13_PIGGYBACK cat9_pb drafter engaged" \
+    "FAIL: cat9_pb piggyback drafter branch did NOT engage (wide-drafter fallback = chain slots are MTP junk)" || exit 4
+  _fr13_pb_needle_wait "[FR13_PIGGYBACK] committer GDN replay DROPPED" \
+    "FAIL: cat9_pb committer GDN replay-drop needle absent (seam-5 drop did not engage)" || exit 4
 fi
 
 # ---- FR13 APC worker-env engagement assert (only for APC arms) ----
