@@ -13672,14 +13672,25 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_pb_ids = getattr(
                         _fr13_pb_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None
                     )
-                if _fr13_pb_ids is None or len(_fr13_pb_ids) != _fr13_pb_B:
-                    raise RuntimeError(
-                        "FR13_PIGGYBACK: no row-aligned request ids for the "
-                        "chain packer (B=" + str(_fr13_pb_B) + ")"
-                    )
                 _fr13_pb_by_req = getattr(
                     _fr13_pb_gdn, "_LUMO_FA_TREE_ACCEPT_BY_REQ", None
                 ) or {}
+                if _fr13_pb_ids is None or len(_fr13_pb_ids) != _fr13_pb_B:
+                    # COLD START (first propose after prefill: no tree commit
+                    # has ever published row ids). With no by_req entries every
+                    # row is by definition FRESH (chain len 0, all-identity;
+                    # chain token values are inert under phase-3: rows are
+                    # attention-ghosts and the GDN inputs are ring-overwritten)
+                    # => pack fresh rows instead of raising. A missing publish
+                    # WITH live by_req entries is a real desync => still raise.
+                    if _fr13_pb_by_req:
+                        raise RuntimeError(
+                            "FR13_PIGGYBACK: no row-aligned request ids for "
+                            "the chain packer (B=" + str(_fr13_pb_B)
+                            + ") but by_req has "
+                            + str(len(_fr13_pb_by_req)) + " live entries"
+                        )
+                    _fr13_pb_ids = [None] * _fr13_pb_B
                 _fr13_pb_tok_by_req = {
                     str(_r): _t
                     for _r, _t in zip(
@@ -13712,16 +13723,33 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 _fr13_pb_rows = []
                 _fr13_pb_live = set()
                 for _fr13_pb_b in range(_fr13_pb_B):
-                    _fr13_pb_rid = str(_fr13_pb_ids[_fr13_pb_b])
-                    _fr13_pb_live.add(_fr13_pb_rid)
-                    _fr13_pb_entry = _fr13_pb_by_req.get(_fr13_pb_rid)
-                    _fr13_pb_prev = _FR13_PB_PREV_BONUS.get(_fr13_pb_rid)
+                    _fr13_pb_rid = _fr13_pb_ids[_fr13_pb_b]
+                    if _fr13_pb_rid is not None:
+                        _fr13_pb_rid = str(_fr13_pb_rid)
+                        _fr13_pb_live.add(_fr13_pb_rid)
+                    _fr13_pb_entry = (
+                        None if _fr13_pb_rid is None
+                        else _fr13_pb_by_req.get(_fr13_pb_rid)
+                    )
+                    _fr13_pb_prev = (
+                        None if _fr13_pb_rid is None
+                        else _FR13_PB_PREV_BONUS.get(_fr13_pb_rid)
+                    )
                     _fr13_pb_bonus = int(_fr13_pb_bonus_t[_fr13_pb_b])
-                    if (_fr13_pb_entry is None) != (_fr13_pb_prev is None):
+                    if _fr13_pb_entry is None and _fr13_pb_prev is not None:
+                        # stale stash with no live accept entry = a REAL leak
                         raise RuntimeError(
-                            "FR13_PIGGYBACK: accept-publish/prev-bonus stash "
-                            "desync for req " + _fr13_pb_rid
+                            "FR13_PIGGYBACK: stale prev-bonus stash with no "
+                            "accept entry for req " + str(_fr13_pb_rid)
                         )
+                    if _fr13_pb_entry is not None and _fr13_pb_prev is None:
+                        # cold-start recovery (first commit before any stash,
+                        # e.g. the boot probe): the prev-root TOKEN is inert
+                        # under phase-3 (chain rows are attention-ghosts and
+                        # the GDN scan inputs are ring-overwritten; the STATE
+                        # comes from ring bytes + the lens buffer, guarded by
+                        # B3's desync raise). Placeholder = current bonus.
+                        _fr13_pb_prev = _fr13_pb_bonus
                     if _fr13_pb_entry is None:
                         _fr13_pb_toks = []
                     else:
@@ -13751,7 +13779,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         + [_fr13_pb_fill] * (7 - len(_fr13_pb_toks))
                         + [_fr13_pb_bonus]
                     )
-                    _FR13_PB_PREV_BONUS[_fr13_pb_rid] = _fr13_pb_bonus
+                    if _fr13_pb_rid is not None:
+                        _FR13_PB_PREV_BONUS[_fr13_pb_rid] = _fr13_pb_bonus
                 for _fr13_pb_dead in [
                     _k for _k in _FR13_PB_PREV_BONUS
                     if _k not in _fr13_pb_live
