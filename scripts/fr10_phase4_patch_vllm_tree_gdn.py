@@ -2667,6 +2667,22 @@ def _fr13_conv_subop_mab(
                                 # license, eager-only): recompute the LEGACY
                                 # committed-prior gather on the SAME inputs
                                 # and bitwise-compare. Boot-noise-immune.
+                                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                                    _fr13_piggyback_on as _fr13_tcf_pb_on,
+                                )
+                                if _fr13_tcf_pb_on():
+                                    # phase-3 unresolved 7 resolution: the
+                                    # selfcheck's legacy twin walks the BASE
+                                    # parent table; under cat9_pb the conv
+                                    # table is the node-8-rerooted variant
+                                    # (CONV-1a') => the twin would mismatch
+                                    # by design. Keep the diag OFF under pb.
+                                    raise RuntimeError(
+                                        "FR13_TCF_SELFCHECK=1 is unsupported "
+                                        "under FR13_PIGGYBACK (legacy twin "
+                                        "walks the un-rerooted conv table); "
+                                        "disarm one of them"
+                                    )
                                 if torch.cuda.is_current_stream_capturing():
                                     raise RuntimeError(
                                         "FR13_TCF_SELFCHECK=1 is eager-only"
@@ -12341,6 +12357,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 _fr13_tsr_pb_os = __import__("os")
                 _fr13_tsr_pb = (
                     _fr13_tsr_pb_os.path.exists("/logs/fr13_piggyback.arm")
+                    or _fr13_tsr_pb_os.path.exists("/tmp/fr13_piggyback.arm")
                     or _fr13_tsr_pb_os.environ.get("FR13_PIGGYBACK") == "1"
                 )
                 _fr13_tsr_leaf = torch.where(

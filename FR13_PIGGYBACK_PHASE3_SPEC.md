@@ -168,3 +168,16 @@ Rationale: on zero-accept, col-0's post-commit invariant is "window through comm
 8. **E12 arming-triple alignment** (/tmp missing) — follow-up edit not specced.
 9. **Committer-row vs spec-row order assert** (C risk 2) — specced as ride-along, no anchor; required before B>1 agentic gates.
 10. **Scout C's Q3 "multi-turn moot" verdict** is conditional on the INT-1 NODE-column leaf publish being fixture-proven (item 4 of §3 risks) — not yet proven.
+
+## Unresolved items 7/8/9 — CLOSED (2026-07-18, self-authored)
+- (7) TCF_SELFCHECK rider: DECIDED keep-off-under-pb + fail-loud landed at the arming site (the legacy twin
+  walks the un-rerooted conv table => designed mismatch under CONV-1a'). Raise: "FR13_TCF_SELFCHECK=1 is
+  unsupported under FR13_PIGGYBACK".
+- (8) E12 /tmp arming-triple: FIXED — the TSR zero-accept arming check now reads /logs OR /tmp OR env,
+  matching _fr13_piggyback_on()'s triple (was missing /tmp => offline-armed runs would sample the ghost row 0).
+- (9) committer-row/spec-row order assert: DISPOSITION = already satisfied by landed fail-louds, no new code:
+  E5's packer is rid-KEYED (order-free) and raises on any missing/len-mismatched tok row for L>0 (L==0 is
+  structurally benign — no accepted drafts to fetch); the device buffers are rewritten in spec order at the
+  REQKEY hook whose B3 desync raise covers cross-step scrambles. The narrow residual (same-length wrong-row
+  pairing WITHIN one committer publish) cannot occur: rid list + token rows are zipped from a single publish
+  site in one order. B>1 agentic gates are therefore NOT blocked on a new assert.
