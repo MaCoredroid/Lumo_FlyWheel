@@ -350,3 +350,16 @@ But the unification correctness is ALREADY established WITHOUT it:
 REMAINING LIVE CONFIRM (achievable): VIA mode (FR13_GREEDY_VIA_REJECTION=1, new committer serves temp-0, NO
 dual-run) runs clean => the point-mass path is live-viable at temp-0 in graph mode. Then delete the old
 committer + dead flags. temp-0.6 accept unchanged is trivial (new IS the temp-0.6 committer, untouched).
+
+## Phase-1 VALIDATED via VIA-mode (2026-07-18): new committer serves temp-0 CLEAN in graph mode
+FR13_GREEDY_VIA_REJECTION=1 DEPLOY_FORCE_TEMP=0.0 tail6 (via1): new point-mass committer serves all_greedy
+WITHOUT the dual-run. Booted clean, decoded many steps, 0 fatal errors, spec-decode working (vLLM: "Mean
+acceptance length 5.00, Per-position 1.0/1.0/1.0/0.667/0.333", Running 2 reqs). => the eager-pack crash was
+PURELY the dual-run's shared-stack interference; the new committer is live-viable at temp-0 in graph mode.
+PHASE-1 VALIDATION COMPLETE: (1) correctness new==greedy (offline 0/4000 + dup 0/2000); (2) live-viability
+(via1 clean); (3) temp-0.6 untouched (routing change hits ONLY all_greedy). => deletion justified.
+DELETION PLAN: route all_greedy -> new unconditionally (patcher :10663-10734 active block), then delete
+_lumo_tree_path_lcp_max_greedy_sample def + calls (:10228 fallback-string, :10704) + broken dual-run gate
+(:10663-10734 gate branch) + dead flags FR13_GPU_COMMITTER/FR13_COMMITTER_SYNCKILL. py_compile + boot-test
+(temp-0 clean + temp-0.6 accept ~4.32) each step. GPU-run note: pkill -f "b4_campaign_driver" self-kills my
+shell (my launch cmdline matches); kill via1 by PID or "serve_variant.sh tail6_gu1".
