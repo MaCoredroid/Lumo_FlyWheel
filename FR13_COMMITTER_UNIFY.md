@@ -296,3 +296,30 @@ SAME committed token AND the SAME state; the accepted_tree_row index (1 vs 2) se
 3. Re-gate: temp-0.6 accept ~4.32 UNCHANGED (trivial — temp-0.6 never touches the greedy path).
 Do NOT delete before the live gate confirms (per LIVE-only / never-proxy discipline). Phase-3 (piggyback,
 the actual committer OPTIMIZATION = the deployment prize) proceeds in parallel; it doesn't depend on this.
+
+---
+
+## Phase-2 DECOMPOSITION — DONE (measured, robust) + Phase-3 REDIRECT, 2026-07-18
+
+Measured GPU-timer decomposition of the committer's ~94ms span (tail6_mt_dd1, PID303, live tail6 SWE run;
+FR13_MULTIDRAFT_GPU_TIMER walk vs FR13_COMMIT_FULL_GPU_TIMER whole-committer; cross-checked on a 2nd run):
+
+| span                                              | ms/committer-call | share |
+|---------------------------------------------------|-------------------|-------|
+| whole committer (CFWD span_gpu_timer)             | 98.9 ms           | 100%  |
+| **rejection-sampler WALK** (MD; incl result-DtoH + verify-wait) | **4.25 ms** (identical both runs) | **4.3%** |
+| **surrounding = GDN REPLAY/publish + output assembly** | **94.7 ms**       | **95.7%** |
+| (context) drafter DFWD                            | 102.3 ms          |       |
+
+**DECISIVE + HONEST REDIRECT:** the directive's Phase-3 ("optimize the rejection committer KERNEL toward
+the measured floor") is MISDIRECTED by the data — the rejection walk is ALREADY ~4ms (at floor; and the MD
+sync-timer INFLATES it, so truly <4ms). The ~94ms is NOT the rejection kernel, nor its DtoH/verify-wait
+(all bundled inside the 4.25ms MD span) — it is the **GDN REPLAY** (48 per-layer kernels re-deriving the
+accepted leaf's state) + publish + assembly. Optimizing the rejection kernel would touch 4% of the span.
+
+=> **Phase-3's correct target = ELIMINATE the GDN replay = the PIGGYBACK** (fold the accepted-path GDN
+advance into the next forward's fused scan; task #46, in-flight: kernel chain-end export + read-helper
+landed, byte-exact identity-pad de-risked, extended-tree defined). This decomposition VINDICATES the
+piggyback as the deployment-prize lever and closes Phase-2 with data. The rejection walk needs NO kernel
+optimization (already at floor). Phase-1 (temp-0 unify) remains the only cleanup, gated on the live
+FR13_GREEDY_UNIFY_GATE (low-pri hygiene).
