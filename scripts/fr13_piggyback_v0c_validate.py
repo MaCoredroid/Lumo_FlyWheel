@@ -135,9 +135,16 @@ _BASE_CAT9_RAW = (
     (0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0),
     (0, 1), (0, 0, 1), (0, 0, 0, 1), (0, 0, 0, 0, 1),
 )  # the LOCKED cat9 (fr13_launch_locked.sh TREE)
-BASE_CHOICES = tuple(sorted(_BASE_CAT9_RAW))          # canonical sorted order
+# LIVE sort key: tree_attn sorts choices by (len, choice) -- length-first,
+# NOT plain lexicographic (they DIFFER here: lex puts (0,)^11 before
+# (0*9,1); length-first reverses that, and flips the base subtree order
+# too, e.g. (0,0,0,1) before (0,0,0,0,1)). Fixture stream numbering MUST
+# match the live layout (caught by fr13_piggyback_v0d_bias_conv check b).
+_LIVE_KEY = lambda _p: (len(_p), _p)  # noqa: E731 -- mirrors tree_attn/A1
+BASE_CHOICES = tuple(sorted(_BASE_CAT9_RAW, key=_LIVE_KEY))
 CHAIN_CHOICES = tuple((0,) * i for i in range(1, 9))  # (0,)^1 .. (0,)^8
-EXT_CHOICES = tuple(sorted(CHAIN_CHOICES + tuple((0,) * 8 + c for c in BASE_CHOICES)))
+EXT_CHOICES = tuple(sorted(CHAIN_CHOICES + tuple((0,) * 8 + c for c in BASE_CHOICES),
+                           key=_LIVE_KEY))
 
 
 def _choices_to_parents(choices):
