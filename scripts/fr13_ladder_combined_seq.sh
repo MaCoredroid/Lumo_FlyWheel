@@ -21,7 +21,12 @@ unset FR13_SERVE_BATCH_FLAGS
 export FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_ladder/tail6_cfwd.json
 run_variant tail6_base_${TAG}   tail6  21  1
 
+# R2 arms = V2 MECHANICAL GATES ONLY (bundle Risk 1: chain-token attention-KV double-write is UNRESOLVED
+# until the phase-3 KV/conv surgery => cat9_pb OUTPUT text/accept/resolve are NOT meaningful yet). Read:
+# engage needles (drafter engaged + "committer GDN replay DROPPED"), 0 fatal, drafts==17 ratio, and the
+# committer CFWD collapse (cat9pb ~16ms expected vs cat9f same-session baseline). cat9f = base cat9 on the
+# FORKED launcher (piggyback OFF) — the valid same-session baseline (LOCKED cat9 kind bakes golden flags).
 export FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_ladder/cat9pb_cfwd.json
 run_variant cat9pb_${TAG}       cat9_pb 17  1
-export FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_ladder/cat9_cfwd.json
-run_variant cat9base_${TAG}     cat9    9  1
+export FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_ladder/cat9f_cfwd.json
+run_variant cat9f_${TAG}        cat9f    9  1

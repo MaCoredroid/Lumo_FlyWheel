@@ -203,10 +203,23 @@ def _patch_gdn_attn() -> bool:
             "            dtype=torch.int32,\n"
             "            device=device,\n"
             "        )\n"
+            "        # FR13_PIGGYBACK seam 1d: per-row REAL chain length (0 =\n"
+            "        # fresh/fully-identity; else 1 + prev accepted len = the\n"
+            "        # replay-path token count). Allocated HERE (init-time,\n"
+            "        # capture-safe persistent buffer, same contract as the\n"
+            "        # accepted paths/lens above); written by the pre-forward\n"
+            "        # FR13_TREE_REQKEY rewrite; read by the tree-scan identity\n"
+            "        # mask. Value-inert while FR13_PIGGYBACK is off.\n"
+            "        self.fr13_pb_chain_lens = torch.zeros(\n"
+            "            (self.fr10_tree_accepted_path_bs,),\n"
+            "            dtype=torch.int32,\n"
+            "            device=device,\n"
+            "        )\n"
             "        try:\n"
             "            from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn_linear\n"
             "            _fr10_gdn_linear._LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR = self.fr10_tree_accepted_paths\n"
             "            _fr10_gdn_linear._LUMO_FA_ACCEPTED_TREE_LENS_TENSOR = self.fr10_tree_accepted_lens\n"
+            "            _fr10_gdn_linear._LUMO_FA_PB_CHAIN_LENS_TENSOR = self.fr13_pb_chain_lens\n"
             "        except Exception as _fr10_path_buf_exc:\n"
             "            if os.environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
             "                raise RuntimeError(\"FR10 tree accepted-path buffer export failed: \" + type(_fr10_path_buf_exc).__name__ + \":\" + str(_fr10_path_buf_exc)) from _fr10_path_buf_exc\n"
@@ -783,7 +796,7 @@ def _patch_gdn_linear() -> bool:
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
-            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
+            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import _fr13_piggyback_cap, _fr13_piggyback_on, gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
@@ -4433,6 +4446,37 @@ def _fr13_conv_subop_mab(
                 )
                 tree_n = int(attn_metadata.fr10_tree_parent.numel())
                 tree_n_pad = int(attn_metadata.fr10_tree_visible_mask.size(0))
+                # FR13_PIGGYBACK seam 1c hoist: flag + per-row REAL chain
+                # length buffer + node-position column, once per forward.
+                # The flag read is host python => baked at CUDA-graph capture
+                # (consistent with the constexpr PIGGYBACK_EXPORT). The mask
+                # below hard-codes the cat9_pb stream layout (tree_n=18:
+                # stream 0 = pos-0 root, streams 1..7 = chain slots, stream 8
+                # = subtree root (0,)^8, streams 9..17 = subtree), so any
+                # other tree while armed is a config error -> raise.
+                _fr13_pb_fwd = _fr13_piggyback_on()
+                _fr13_pb_chain_lens = None
+                _fr13_pb_pos = None
+                if _fr13_pb_fwd:
+                    if int(tree_n) != 18:
+                        raise RuntimeError(
+                            "FR13_PIGGYBACK armed but served tree_n="
+                            + str(int(tree_n)) + " != 18 (cat9_pb only)"
+                        )
+                    if int(_fr13_piggyback_cap()) != 8:
+                        raise RuntimeError("FR13_PIGGYBACK: prefix cap " + str(int(_fr13_piggyback_cap())) + " != 8; cat9_pb layout/mask/export hard-code K=8 (chain streams 1..7, export@7, subtree root stream 8)")
+                    _fr13_pb_chain_lens = globals().get(
+                        "_LUMO_FA_PB_CHAIN_LENS_TENSOR"
+                    )
+                    if _fr13_pb_chain_lens is None:
+                        raise RuntimeError(
+                            "FR13_PIGGYBACK: missing _LUMO_FA_PB_CHAIN_LENS"
+                            "_TENSOR (seam 1d buffer + REQKEY rewrite must "
+                            "land together)"
+                        )
+                    _fr13_pb_pos = torch.arange(
+                        tree_n, device=a.device
+                    ).view(-1, 1)
                 _fr12_native_spine_oracle_enabled = (
                     os.environ.get("FR12_NATIVE_SPINE_ORACLE", "0") == "1"
                 )
@@ -5138,14 +5182,57 @@ def _fr13_conv_subop_mab(
                         self._fr13_replay_ring_b[fr10_b, :tree_n].copy_(
                             b[start:end]
                         )
+                    if _fr13_pb_fwd:
+                        # FR13_PIGGYBACK seam 1c: GDN-identity override.
+                        # raw_a=raw_b=-1e9 => softplus->0, sigmoid->0 exactly
+                        # in fp32 => a=1, beta=0 => h_t = h_{t-1} byte-exact,
+                        # independent of q/k/v (plan de-risk, _gdn_node_step).
+                        # Identity set per request row: stream 0 (the pos-0
+                        # bonus copy: its state update is deferred to the
+                        # ACTIVE duplicate at stream 8 so token order matches
+                        # the committed sequence) plus chain streams beyond
+                        # the real replay-path length (1+prev_accepted_len,
+                        # or 0 for a fresh row). RAW_GATING makes g/beta
+                        # inputs dead, so only raw_a/raw_b need masking. Pure
+                        # device ops on a persistent buffer -> capture-safe;
+                        # NON-mutating (torch.where copies), so the replay
+                        # ring / diagnostics still see the model's raw a/b.
+                        _fr13_pb_ident = (
+                            (_fr13_pb_pos == 0)
+                            | (
+                                (_fr13_pb_pos <= 7)
+                                & (_fr13_pb_pos > _fr13_pb_chain_lens[fr10_b])
+                            )
+                        )
+                        _fr13_pb_a = torch.where(
+                            _fr13_pb_ident, a.new_full((), -1e9), a[start:end]
+                        ).contiguous()
+                        _fr13_pb_b = torch.where(
+                            _fr13_pb_ident, b.new_full((), -1e9), b[start:end]
+                        ).contiguous()
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
                         k=key_spec[0, start:end].contiguous(),
                         v=value_tree[start:end].contiguous(),
                         g=g_tree[start:end].contiguous(),
                         beta=beta_tree[start:end].contiguous(),
-                        raw_a=a[start:end].contiguous(),
-                        raw_b=b[start:end].contiguous(),
+                        raw_a=(
+                            _fr13_pb_a if _fr13_pb_fwd
+                            else a[start:end].contiguous()
+                        ),
+                        raw_b=(
+                            _fr13_pb_b if _fr13_pb_fwd
+                            else b[start:end].contiguous()
+                        ),
+                        # FR13_PIGGYBACK seam 2 rider: export the state at
+                        # STREAM index 7 = (0,)^7 = the last chain slot
+                        # (guaranteed identity-or-post-chain for L<=6) ->
+                        # col-0. NOT stream 8 ((0,)^8 = the ACTIVE bonus
+                        # node): exporting there would double-apply the bonus
+                        # next step. chain_end_idx is constexpr-dead when the
+                        # export flag is False (byte-identical codegen).
+                        piggyback_export=_fr13_pb_fwd,
+                        chain_end_idx=7,
                         A_log=self.A_log,
                         dt_bias=self.dt_bias,
                         h0=ssm_state,
@@ -7839,6 +7926,21 @@ def _lumo_tree_canonical_multidraft_sample(
     # unchanged. flag-on => the device committer fills the five product lists and
     # the legacy loop iterates EMPTY (the host walk never runs; the [nodes x
     # vocab] softmax DtoH above was already skipped).
+    # FR13_PIGGYBACK x host-reference A/B: the host per-node loop below has NO
+    # chain-offset port -- with the extended [chain ++ subtree] tree it would
+    # walk from the tree root and RE-COMMIT the prev step's chain tokens.
+    # Refuse loudly (bug-class 9) rather than silently double-committing.
+    if not _fr13_device_multidraft:
+        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+            _fr13_piggyback_on as _fr13_pb_on,
+        )
+        if _fr13_pb_on():
+            raise RuntimeError(
+                'FR13_PIGGYBACK requires the device multidraft committer '
+                '(FR13_DEVICE_MULTIDRAFT=1, no fr13_device_multidraft_off.arm, '
+                'draft_probs=None): the host-reference walk has no chain-root '
+                'offset port and would re-commit chain nodes'
+            )
     _fr13_dm_counts = counts
     if _fr13_device_multidraft:
         try:
@@ -8160,6 +8262,7 @@ def _lumo_tree_canonical_multidraft_sample(
             # publish site) -- sampled committer twin of the greedy block;
             # see the greedy committer for the full rationale.
             from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                _fr13_piggyback_on as _fr13_pb_on,
                 launch_tree_gdn_replay as _fr13_replay_launch,
             )
             _fr13_replay_layers = getattr(
@@ -8235,6 +8338,46 @@ def _lumo_tree_canonical_multidraft_sample(
                         _fr13_burn_node_bank,
                     )
                 )
+            # FR13_PIGGYBACK replay drop (seam 5; default OFF => byte-identical):
+            # when armed, the NEXT forward's extended-tree scan re-derives the
+            # committed GDN state ([prev-accepted chain ++ subtree] from
+            # h0=col-0) and PIGGYBACK_EXPORT deposits the chain-end state to
+            # col-0, so the per-layer launch_tree_gdn_replay dispatch below is
+            # skipped ENTIRELY (serial loop + SAMPLED_REPLAY_BATCHED +
+            # REPLAY_MULTISTREAM + the COMMITTER_NATIVE route inside them).
+            # Everything else stays LIVE: the conv col-0 commit + conv spec-col
+            # burn right below (conv is NOT re-derived by the chain), the
+            # spec-compacted accepted-path/lens device refill (the next
+            # forward's conv-prior gather reads _LUMO_FA_ACCEPTED_TREE_*), and
+            # the host accept publishes above (ROWS/LENS/NODE_PATHS/TOKEN_IDS/
+            # ACCEPT_BY_REQ feed the drafter _COMMITTED, the model-runner
+            # rewrite and the attn-KV remap). Piggyback REQUIRES the stateless
+            # runrow lifecycle (h0=col-0 seed + col-0 export target) and cannot
+            # host the replay-instrumenting diagnostics -- fail loud, never
+            # silently vacuous (bug-class 9).
+            _fr13_pb_drop_replay = _fr13_pb_on()
+            if _fr13_pb_drop_replay and not _fr13_runrow_commit:
+                raise RuntimeError(
+                    'FR13_PIGGYBACK requires the STATELESS-TREE runrow '
+                    'lifecycle (FR13_APC_COMMIT_TO_RUNNING_ROW/'
+                    'FR13_TREE_RUNROW_INIT/FR13_APC_BURN_NODE_BANK=1)'
+                )
+            if _fr13_pb_drop_replay and (
+                _fr13_bnd_on or _fr13_replay_durable_ab_enabled()
+            ):
+                raise RuntimeError(
+                    'FR13_PIGGYBACK drops the committer GDN replay; the '
+                    'boundary/durable-AB replay taps cannot observe it. '
+                    'Disarm the taps or FR13_PIGGYBACK.'
+                )
+            if _fr13_pb_drop_replay and not globals().get(
+                '_FR13_PB_DROP_ANNOUNCED'
+            ):
+                globals()['_FR13_PB_DROP_ANNOUNCED'] = True
+                __import__('sys').stderr.write(
+                    '[FR13_PIGGYBACK] committer GDN replay DROPPED; next '
+                    'forward chain re-derives col-0\n'
+                )
             # STATELESS-TREE conv committer (post-accept; gated -> no-op when OFF).
             _fr13_conv_commit_to_col0(
                 _fr13_replay_layers,
@@ -8301,6 +8444,7 @@ def _lumo_tree_canonical_multidraft_sample(
                     and _fr13_sbr_stacks is not None
                     and int(_fr13_sbr_stacks.get('num_layers', 0)) > 0
                     and _fr13_replay_rows > 0
+                    and not _fr13_pb_drop_replay
                     and not _fr13_bnd_on
                     and not _fr13_rdab_on
                     and __import__('os').environ.get('FR13_APC_SNAP_FIX', '1') != '1'
@@ -8402,6 +8546,7 @@ def _lumo_tree_canonical_multidraft_sample(
                 _fr13_ms_on = (
                     _fr13_ms_enable
                     and not _fr13_bnd_on and not _fr13_rdab_on and not _fr13_sbr_active
+                    and not _fr13_pb_drop_replay
                     and int(_fr13_replay_rows) > 0
                     # CUDA-graph capture cannot tolerate cross-stream events / stream-switch
                     # (poisons the capture -> EngineCore init FAILS: observed ms_strm die at
@@ -8505,7 +8650,9 @@ def _lumo_tree_canonical_multidraft_sample(
                         _fr13_ms_je.record(_fr13_ms_s)
                         _fr13_ms_default.wait_event(_fr13_ms_je)
                 for _fr13_prefix in (
-                    [] if (_fr13_sbr_active or _fr13_ms_on)
+                    [] if (
+                        _fr13_sbr_active or _fr13_ms_on or _fr13_pb_drop_replay
+                    )
                     else sorted(_fr13_replay_layers)
                 ):
                     _fr13_layer = _fr13_replay_layers[_fr13_prefix]
@@ -10175,6 +10322,48 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "                                        device=_fr13_rk_lens.device,\n"
         "                                    )\n"
         "                                )\n"
+        "                            # FR13_PIGGYBACK seam 1d: scatter the\n"
+        "                            # per-row REAL chain length for the NEXT\n"
+        "                            # tree forward, in the SAME spec-row order\n"
+        "                            # as the paths/lens rewrite above (this IS\n"
+        "                            # the row-id lifecycle fix reused). Rule\n"
+        "                            # MUST equal the drafter packer's token\n"
+        "                            # fill: no by_req entry -> 0 (fresh,\n"
+        "                            # fully-identity chain); else 1 + accepted\n"
+        "                            # len (the replay path [pos-0 root token]\n"
+        "                            # + accepted drafts). by_req is unchanged\n"
+        "                            # between propose() and this pre-forward\n"
+        "                            # hook (the committer publishes BEFORE\n"
+        "                            # propose), so packer and mask agree.\n"
+        "                            _fr13_rk_pb_lens = getattr(\n"
+        "                                _fr13_rk_gdn,\n"
+        "                                \"_LUMO_FA_PB_CHAIN_LENS_TENSOR\",\n"
+        "                                None,\n"
+        "                            )\n"
+        "                            if _fr13_rk_pb_lens is not None:\n"
+        "                                _fr13_rk_pb_vals = []\n"
+        "                                for _fr13_rk_rid2 in _fr13_rk_spec_rids:\n"
+        "                                    _fr13_rk_pb_e = _fr13_rk_by_req.get(\n"
+        "                                        _fr13_rk_rid2\n"
+        "                                    )\n"
+        "                                    _fr13_rk_pb_v = (\n"
+        "                                        0 if _fr13_rk_pb_e is None\n"
+        "                                        else int(_fr13_rk_pb_e[1]) + 1\n"
+        "                                    )\n"
+        "                                    if _fr13_rk_pb_v > 7:\n"
+        "                                        raise RuntimeError(\n"
+        "                                            \"FR13_PIGGYBACK chain len \"\n"
+        "                                            + str(_fr13_rk_pb_v)\n"
+        "                                            + \" > 7 slots\"\n"
+        "                                        )\n"
+        "                                    _fr13_rk_pb_vals.append(_fr13_rk_pb_v)\n"
+        "                                _fr13_rk_pb_lens[:_fr13_rk_n].copy_(\n"
+        "                                    torch.tensor(\n"
+        "                                        _fr13_rk_pb_vals,\n"
+        "                                        dtype=_fr13_rk_pb_lens.dtype,\n"
+        "                                        device=_fr13_rk_pb_lens.device,\n"
+        "                                    )\n"
+        "                                )\n"
         "                except Exception as _fr13_rk_exc:\n"
         "                    if __import__(\"os\").environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
         "                        raise RuntimeError(\n"
@@ -11703,10 +11892,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     1,
                     (_fr13_tsr_len_n - 1).clamp(min=0).unsqueeze(1),
                 ).squeeze(1)
+                _fr13_tsr_pb_os = __import__("os")
+                _fr13_tsr_pb = (
+                    _fr13_tsr_pb_os.path.exists("/logs/fr13_piggyback.arm")
+                    or _fr13_tsr_pb_os.environ.get("FR13_PIGGYBACK") == "1"
+                )
                 _fr13_tsr_leaf = torch.where(
                     _fr13_tsr_len_n > 0,
                     _fr13_tsr_leaf,
-                    torch.zeros_like(_fr13_tsr_leaf),
+                    torch.full_like(_fr13_tsr_leaf, 8)
+                    if _fr13_tsr_pb
+                    else torch.zeros_like(_fr13_tsr_leaf),
                 )
                 _fr13_tsr_base = common_attn_metadata.query_start_loc[
                     :_fr13_tsr_n
@@ -11851,6 +12047,37 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             and int(self.num_speculative_tokens) == 9
             and _fr10_tree_choices_current == _fr10_threethree_choices
         )
+        # FR13_PIGGYBACK cat9_pb: extended cat9 in SORTED (len,path) order — 8 chain
+        # rungs (0,)^1..(0,)^8 then the re-rooted cat9 (subtree spine/leaf INTERLEAVED
+        # by length: s0,s1,l0,s2,l1,s3,l2,s4,l3).
+        _fr13_pb_choices = [
+            (0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+        ]
+        _fr13_pb_armed = (
+            os.path.exists("/logs/fr13_piggyback.arm")
+            or os.environ.get("FR13_PIGGYBACK") == "1"
+        )
+        _fr10_is_cat9_pb = (
+            _fr10_active_decode_mode == "tree_mtp"
+            and int(self.num_speculative_tokens) == 17
+            and _fr10_tree_choices_current == _fr13_pb_choices
+        )
+        if _fr10_is_cat9_pb and not _fr13_pb_armed:
+            raise RuntimeError(
+                "FR13_PIGGYBACK: cat9_pb extended tree served without the piggyback "
+                "sidecar — chain slots would be MTP speculation and no export/replay "
+                "contract holds")
+        if (_fr13_pb_armed and _fr10_active_decode_mode == "tree_mtp"
+                and not _fr10_is_cat9_pb):
+            raise RuntimeError(
+                "FR13_PIGGYBACK armed but tree_choices is not the cat9_pb extended "
+                "tree: " + repr(_fr10_tree_choices_current))
         # FR13_RESHAPE_WIDE: GENERAL width-N caterpillar drafter. Engages for
         # ANY tree_choices that is a single all-zeros spine with arbitrary-width
         # leaf children hanging DIRECTLY off each spine node (incl root), and
@@ -11883,6 +12110,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr10_is_cat6root
                 or _fr10_is_cat10
                 or _fr10_is_333
+                or _fr10_is_cat9_pb
             )
         )
         # Build the wide plan from tree_choices: spine depth D (longest
@@ -11948,6 +12176,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         # steps (loop steps 0,1 == depths 2,3), same as chain3/cat3w.
         if _fr10_is_chain3 or _fr10_is_cat3w or _fr10_is_333:
             _fr10_spine_steps = 2
+        elif _fr10_is_cat9_pb:
+            # FR13_PIGGYBACK cat9_pb: MTP drafts ONLY the re-rooted cat9 subtree
+            # (depth-5 => 4 post-root spine forwards, exactly the cat9 loop). The
+            # 8 chain slots are committed-context fill, never MTP forwards.
+            _fr10_spine_steps = 4
         elif _fr10_is_wide:
             # FR13_RESHAPE_WIDE: D-1 post-root spine forwards (derived from the
             # tree's all-zeros spine depth), so the step count always matches
@@ -11999,6 +12232,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             or _fr10_is_cat10
             or _fr10_is_333
             or _fr10_is_wide
+            or _fr10_is_cat9_pb
         ):
             # FR10_CATERPILLAR_NATIVE_SPINE_TOP2: read-only drafter fix.
             # Run the native causal MTP spine unchanged for depth 5. At each
@@ -12946,6 +13180,129 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     ],
                     dim=1,
                 )
+            if _fr10_is_cat9_pb:
+                # FR13_PIGGYBACK seam 1b: prepend the 8 chain columns
+                # ((0,)^1..(0,)^8 = packed cols 0..7) ahead of the 9 base-cat9
+                # columns. ORDER-CRITICAL (fr13_native_committer_validate.py:
+                # replay path = [prev pos-0 root token] + prev accepted
+                # drafts): cols 0..L = [prev root] + THIS commit's accepted
+                # drafts; cols len..6 repeat-pad (GDN-identity via seam 1c,
+                # token value inert); col 7 = the CURRENT bonus (vLLM feeds
+                # the same token at stream 0 next step; that copy is
+                # identity-masked by seam 1c — the ACTIVE application is at
+                # stream 8 = the subtree root). Sources are all FRESH at
+                # propose-time; _COMMITTED is NOT used (runner lifecycle
+                # ingests at _prepare_inputs = one commit stale here).
+                from vllm.model_executor.layers.mamba import (
+                    gdn_linear_attn as _fr13_pb_gdn,
+                )
+                if int(_fr10_packed.shape[1]) != 9:
+                    raise RuntimeError(
+                        "FR13_PIGGYBACK: expected the base-cat9 9-col pack, "
+                        "got " + str(int(_fr10_packed.shape[1]))
+                    )
+                _fr13_pb_B = int(_fr10_packed.shape[0])
+                _fr13_pb_ids = getattr(
+                    _fr13_pb_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None
+                )
+                if _fr13_pb_ids is None or len(_fr13_pb_ids) != _fr13_pb_B:
+                    _fr13_pb_ids = getattr(
+                        _fr13_pb_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None
+                    )
+                if _fr13_pb_ids is None or len(_fr13_pb_ids) != _fr13_pb_B:
+                    raise RuntimeError(
+                        "FR13_PIGGYBACK: no row-aligned request ids for the "
+                        "chain packer (B=" + str(_fr13_pb_B) + ")"
+                    )
+                _fr13_pb_by_req = getattr(
+                    _fr13_pb_gdn, "_LUMO_FA_TREE_ACCEPT_BY_REQ", None
+                ) or {}
+                _fr13_pb_tok_by_req = {
+                    str(_r): _t
+                    for _r, _t in zip(
+                        getattr(
+                            _fr13_pb_gdn,
+                            "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None,
+                        ) or [],
+                        getattr(
+                            _fr13_pb_gdn,
+                            "_LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS", None,
+                        ) or [],
+                    )
+                }
+                global _FR13_PB_PREV_BONUS
+                try:
+                    _FR13_PB_PREV_BONUS
+                except NameError:
+                    _FR13_PB_PREV_BONUS = {}
+                # APPLY-TIME BIND: next_token_ids is the propose() input of
+                # sampled tokens, row-aligned with _fr10_packed. Verify the
+                # parameter name in the live-container eagle propose signature
+                # before landing (feedback_read_vllm_source_first).
+                _fr13_pb_bonus_t = next_token_ids[:_fr13_pb_B].tolist()
+                _fr13_pb_rows = []
+                _fr13_pb_live = set()
+                for _fr13_pb_b in range(_fr13_pb_B):
+                    _fr13_pb_rid = str(_fr13_pb_ids[_fr13_pb_b])
+                    _fr13_pb_live.add(_fr13_pb_rid)
+                    _fr13_pb_entry = _fr13_pb_by_req.get(_fr13_pb_rid)
+                    _fr13_pb_prev = _FR13_PB_PREV_BONUS.get(_fr13_pb_rid)
+                    _fr13_pb_bonus = int(_fr13_pb_bonus_t[_fr13_pb_b])
+                    if (_fr13_pb_entry is None) != (_fr13_pb_prev is None):
+                        raise RuntimeError(
+                            "FR13_PIGGYBACK: accept-publish/prev-bonus stash "
+                            "desync for req " + _fr13_pb_rid
+                        )
+                    if _fr13_pb_entry is None:
+                        _fr13_pb_toks = []
+                    else:
+                        _fr13_pb_L = int(_fr13_pb_entry[1])
+                        _fr13_pb_acc = [
+                            int(_x) for _x in
+                            _fr13_pb_tok_by_req.get(_fr13_pb_rid, [])
+                        ]
+                        if len(_fr13_pb_acc) != _fr13_pb_L:
+                            raise RuntimeError(
+                                "FR13_PIGGYBACK: accepted-token row len "
+                                + str(len(_fr13_pb_acc)) + " != by_req L "
+                                + str(_fr13_pb_L) + " for req "
+                                + _fr13_pb_rid
+                            )
+                        if _fr13_pb_L + 1 > 7:
+                            raise RuntimeError(
+                                "FR13_PIGGYBACK: chain does not fit (L="
+                                + str(_fr13_pb_L) + ")"
+                            )
+                        _fr13_pb_toks = [int(_fr13_pb_prev)] + _fr13_pb_acc
+                    _fr13_pb_fill = (
+                        _fr13_pb_toks[-1] if _fr13_pb_toks else _fr13_pb_bonus
+                    )
+                    _fr13_pb_rows.append(
+                        _fr13_pb_toks
+                        + [_fr13_pb_fill] * (7 - len(_fr13_pb_toks))
+                        + [_fr13_pb_bonus]
+                    )
+                    _FR13_PB_PREV_BONUS[_fr13_pb_rid] = _fr13_pb_bonus
+                for _fr13_pb_dead in [
+                    _k for _k in _FR13_PB_PREV_BONUS
+                    if _k not in _fr13_pb_live
+                ]:
+                    _FR13_PB_PREV_BONUS.pop(_fr13_pb_dead, None)
+                _fr10_packed = torch.cat(
+                    [
+                        torch.tensor(
+                            _fr13_pb_rows,
+                            dtype=_fr10_packed.dtype,
+                            device=_fr10_packed.device,
+                        ),
+                        _fr10_packed,
+                    ],
+                    dim=1,
+                )
+                logger.info_once(
+                    "FR13_PIGGYBACK cat9_pb drafter engaged: 17 cols "
+                    "(8 chain + 9 MTP)"
+                )
             try:
                 import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
                 if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
@@ -13413,6 +13770,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr10_is_cat10
                 or _fr10_is_333
                 or _fr10_is_wide
+                or _fr10_is_cat9_pb
             )
             and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
         ):
