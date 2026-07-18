@@ -181,3 +181,16 @@ Rationale: on zero-accept, col-0's post-commit invariant is "window through comm
   REQKEY hook whose B3 desync raise covers cross-step scrambles. The narrow residual (same-length wrong-row
   pairing WITHIN one committer publish) cannot occur: rid list + token rows are zipped from a single publish
   site in one order. B>1 agentic gates are therefore NOT blocked on a new assert.
+
+## LIVE DEBUG LOG (pbm1-3, 2026-07-18): three armed boots, three real bugs peeled via named guards
+- pbm1: S1-P2.a guard -> FR13_ATTN_KV_REMAP never wired into forked-launcher containers (no -e, no
+  sidecar; locked launcher exports it). FIXED: launcher passthrough + cat9_pb XFLAGS.
+- pbm2: E5 ids raise -> COLD START (first post-prefill propose precedes any committer publish). FIXED:
+  fresh-rows path (chain tokens inert), one-sided desync, None-rid stash hygiene.
+- pbm3: BOTH NEEDLES FIRED (drafter engaged 17 cols; replay DROPPED) + drafts/draft == 17.0 + greedy
+  probe PASSED incl. live cross-step chains. Then the FIRST SAMPLED request (long prefilled context)
+  hit a CUDA DEVICE-SIDE ASSERT in the tree causal-conv path (_forward_core:4236, "tree causal-conv
+  disengaged") ~30s after engagement -> engine graceful-exit via link watchdog. = bundle Risk 8 (conv
+  = the delicate half) at the KERNEL level, which the CPU conv-table gate cannot cover. The conv
+  reroot (conv_parent[8]=-1) or the S2 col-8 path under REAL prior windows (long context) is the
+  suspect seam. NEXT: solo cat9pb boot with CUDA_LAUNCH_BLOCKING=1 to capture the exact kernel assert.
