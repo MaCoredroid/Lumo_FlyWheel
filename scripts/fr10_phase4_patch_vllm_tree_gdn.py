@@ -10681,7 +10681,7 @@ def _lumo_tree_canonical_multidraft_sample(
         # mismatches (settles the duplicate-sibling tie the offline gate defers)
         # WITHOUT changing served output/state (old committer runs last + wins).
         import os as _fr13_gu_os
-        _fr13_gu_via = _fr13_gu_os.environ.get("FR13_GREEDY_VIA_REJECTION", "0") == "1"
+        _fr13_gu_via = _fr13_gu_os.environ.get("FR13_GREEDY_VIA_REJECTION", "1") == "1"
         _fr13_gu_gate = _fr13_gu_os.environ.get("FR13_GREEDY_UNIFY_GATE", "0") == "1"
         if (_fr13_gu_via or _fr13_gu_gate) and tree_self_logits is not None:
             _fr13_gu_gen = getattr(sampling_metadata, "generators", None)
