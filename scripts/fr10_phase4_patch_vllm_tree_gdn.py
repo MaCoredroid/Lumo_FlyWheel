@@ -215,11 +215,20 @@ def _patch_gdn_attn() -> bool:
             "            dtype=torch.int32,\n"
             "            device=device,\n"
             "        )\n"
+            "        # FR13_PIGGYBACK variant-B: per CURRENT-spec-row RING ROW of the\n"
+            "        # PREVIOUS tree forward (the activation ring batch dim is positional\n"
+            "        # in the prev forward's spec order). 0 when chain len is 0.\n"
+            "        self.fr13_pb_ring_rows = torch.zeros(\n"
+            "            (self.fr10_tree_accepted_path_bs,),\n"
+            "            dtype=torch.int32,\n"
+            "            device=device,\n"
+            "        )\n"
             "        try:\n"
             "            from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr10_gdn_linear\n"
             "            _fr10_gdn_linear._LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR = self.fr10_tree_accepted_paths\n"
             "            _fr10_gdn_linear._LUMO_FA_ACCEPTED_TREE_LENS_TENSOR = self.fr10_tree_accepted_lens\n"
             "            _fr10_gdn_linear._LUMO_FA_PB_CHAIN_LENS_TENSOR = self.fr13_pb_chain_lens\n"
+            "            _fr10_gdn_linear._LUMO_FA_PB_RING_ROW_TENSOR = self.fr13_pb_ring_rows\n"
             "        except Exception as _fr10_path_buf_exc:\n"
             "            if os.environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
             "                raise RuntimeError(\"FR10 tree accepted-path buffer export failed: \" + type(_fr10_path_buf_exc).__name__ + \":\" + str(_fr10_path_buf_exc)) from _fr10_path_buf_exc\n"
@@ -277,14 +286,32 @@ def _patch_gdn_attn() -> bool:
             "                    cur = parent[cur]\n"
             "                path.reverse()\n"
             "                path_node_tensors.append(torch.tensor(path, dtype=torch.long, device=device))\n"
+            "            conv_parent = list(parent)\n"
+            "            _fr13_pb_ext_tree = (\n"
+            "                n == 18\n"
+            "                and all(tree_choices[_pbk] == tuple([0] * (_pbk + 1)) for _pbk in range(8))\n"
+            "            )\n"
+            "            if _fr13_pb_ext_tree:\n"
+            "                # FR13_PIGGYBACK conv ancestry (LIVE-8): chain streams 1..7 are\n"
+            "                # conv-GHOSTS (windows dead: scan inputs ring-fed) and stream 8 is\n"
+            "                # the LIVE root twin. Conv col-0 is advanced AT COMMIT (post-chain),\n"
+            "                # so node 8 must NOT re-append the chain: make node 8 a conv-ROOT\n"
+            "                # (window = prior ++ x_8, the exact bonus window from the properly-\n"
+            "                # attending row 8). Subtree keeps parent 9->8, so subtree windows =\n"
+            "                # prior ++ x_8 ++ path == base cat9's windows byte-for-byte intent.\n"
+            "                # NOTE: NOT node 0 -- row 0 is GDN-identity-masked and its post-L0\n"
+            "                # x rows diverge from the true root (scout-B row-0 divergence).\n"
+            "                # SCAN parent/strict/visible masks + path_node_tensors keep FULL\n"
+            "                # extended ancestry (the GDN scan NEEDS the chain).\n"
+            "                conv_parent[8] = -1\n"
             "            for width in range(2, 7):\n"
             "                source_rows = []\n"
             "                for node in range(n):\n"
             "                    ancestry = []\n"
-            "                    cur = parent[node]\n"
+            "                    cur = conv_parent[node]\n"
             "                    while cur >= 0:\n"
             "                        ancestry.append(cur)\n"
-            "                        cur = parent[cur]\n"
+            "                        cur = conv_parent[cur]\n"
             "                    ancestry.reverse()\n"
             "                    path = ancestry + [node]\n"
             "                    source = list(range(width - 1)) + [\n"
@@ -2940,6 +2967,22 @@ def _fr13_conv_subop_mab(
                             if len(_fr10_choice) == 1
                             else _fr10_index[_fr10_choice[:-1]]
                         )
+                    _fr10_conv_parent = list(_fr10_parent)
+                    if (
+                        len(_fr10_parent) == 18
+                        and all(
+                            _fr10_choices[_pbk] == tuple([0] * (_pbk + 1))
+                            for _pbk in range(8)
+                        )
+                    ):
+                        # FR13_PIGGYBACK (LIVE-8): conv-GHOST chain -- make node 8
+                        # (the LIVE root twin) a conv-ROOT for the conv window/
+                        # state tables ONLY (window = prior ++ x_8; NOT node 0 --
+                        # row 0 is GDN-identity-masked and its post-L0 x rows
+                        # diverge from the true root). See the metadata-builder
+                        # twin; both twins MUST stay in lockstep or the forward's
+                        # window table and write-back state rows disagree.
+                        _fr10_conv_parent[8] = -1
                     _fr10_path0_node_tensor = getattr(
                         attn_metadata, "fr10_tree_path0_nodes", None
                     )
@@ -3032,7 +3075,7 @@ def _fr13_conv_subop_mab(
                         # tensors WITHOUT retaining them, so no capture-pool
                         # allocation outlives its graph.
                         _fr13_tcf_key = (
-                            tuple(_fr10_parent),
+                            tuple(_fr10_conv_parent),
                             int(_fr10_width),
                             int(conv_state.size(2)),
                             int(mixed_qkv_spec.size(1)),
@@ -3050,7 +3093,7 @@ def _fr13_conv_subop_mab(
                             _fr13_tcf_zero_row = _fr13_tcf_cached[2]
                         else:
                             _fr13_tcf_state_src = build_tree_conv_state_src_indices(
-                                parent=_fr10_parent,
+                                parent=_fr10_conv_parent,
                                 width=_fr10_width,
                                 state_len=int(conv_state.size(2)),
                                 device=mixed_qkv_spec.device,
@@ -3138,6 +3181,14 @@ def _fr13_conv_subop_mab(
                         and os.environ.get("FR12_TREE_CONV_NATIVE_SPINE", "0") == "1"
                     )
                     _fr12_native_spine_conv_out = None
+                    if _fr12_native_spine_conv_enabled and _fr13_piggyback_on():
+                        raise RuntimeError(
+                            "FR12_TREE_CONV_NATIVE_SPINE oracle assumes the "
+                            "base tree (path-0 spine incl. row 0 = live "
+                            "root); under FR13_PIGGYBACK row 0 is the "
+                            "identity-masked stale root -- disarm the oracle "
+                            "for cat9_pb"
+                        )
                     if _fr12_native_spine_conv_enabled:
                         _fr12_path0_len = int(_fr10_path0_node_tensor.numel())
                         _fr12_native_spine_x = (
@@ -4457,6 +4508,7 @@ def _fr13_conv_subop_mab(
                 _fr13_pb_fwd = _fr13_piggyback_on()
                 _fr13_pb_chain_lens = None
                 _fr13_pb_pos = None
+                _fr13_pb_chain_k = _fr13_pb_chain_v = _fr13_pb_chain_a = _fr13_pb_chain_b = None
                 if _fr13_pb_fwd:
                     if int(tree_n) != 18:
                         raise RuntimeError(
@@ -4473,6 +4525,24 @@ def _fr13_conv_subop_mab(
                             "FR13_PIGGYBACK: missing _LUMO_FA_PB_CHAIN_LENS"
                             "_TENSOR (seam 1d buffer + REQKEY rewrite must "
                             "land together)"
+                        )
+                    _fr13_pb_paths_t = globals().get(
+                        "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR"
+                    )
+                    _fr13_pb_ring_rows_t = globals().get(
+                        "_LUMO_FA_PB_RING_ROW_TENSOR"
+                    )
+                    if _fr13_pb_paths_t is None or _fr13_pb_ring_rows_t is None:
+                        raise RuntimeError(
+                            "FR13_PIGGYBACK variant-B: missing accepted-paths/"
+                            "ring-row device buffers (builder init + REQKEY "
+                            "rewrite must land together)"
+                        )
+                    if os.environ.get("FR13_REPLAY_ROUTE", "1") != "1":
+                        raise RuntimeError(
+                            "FR13_PIGGYBACK variant-B requires FR13_REPLAY_"
+                            "ROUTE=1: the chain scan inputs are fed from the "
+                            "activation ring staged by the forward"
                         )
                     _fr13_pb_pos = torch.arange(
                         tree_n, device=a.device
@@ -5170,6 +5240,70 @@ def _fr13_conv_subop_mab(
                             # conv committer can copy this-step's committed leaf
                             # window -> col 0 and burn the ephemeral cols.
                             self._fr13_replay_conv_state = conv_state
+                            if _fr13_pb_fwd:
+                                # FR13_PIGGYBACK variant-B: gather THIS layer's
+                                # PREV-forward ring rows for [prev root]+accepted
+                                # BEFORE the overwrite below (cross-step read;
+                                # replay gather convention _tree_gdn_replay_kernel
+                                # :1020-1036 with ROOT SOURCE = STREAM 8, the
+                                # ACTIVE Scheme-A bonus row -- ring row 0 is the
+                                # identity-masked pos-0 copy whose post-L0
+                                # projections diverge). Pure captured device ops;
+                                # indices come from persistent prepare-written
+                                # buffers (paths tensor rows already hold extended
+                                # stream ids 9..17).
+                                _fr13_pb_nsd = int(attn_metadata.num_spec_decodes)
+                                _fr13_pb_rows_prev = _fr13_pb_ring_rows_t[
+                                    :_fr13_pb_nsd
+                                ].to(torch.long).clamp_(
+                                    0, int(self._fr13_replay_ring_k.size(0)) - 1
+                                )
+                                _fr13_pb_src = torch.cat(
+                                    [
+                                        torch.full(
+                                            (_fr13_pb_nsd, 2), 8,
+                                            device=a.device, dtype=torch.long,
+                                        ),
+                                        _fr13_pb_paths_t[:_fr13_pb_nsd, :6].to(
+                                            torch.long
+                                        ),
+                                    ],
+                                    dim=1,
+                                ).clamp_(0, tree_n_pad - 1)
+                                _fr13_pb_flat = (
+                                    _fr13_pb_rows_prev.view(-1, 1) * tree_n_pad
+                                    + _fr13_pb_src
+                                ).view(-1)
+                                _fr13_pb_chain_k = self._fr13_replay_ring_k.reshape(
+                                    -1,
+                                    self._fr13_replay_ring_k.size(2),
+                                    self._fr13_replay_ring_k.size(3),
+                                ).index_select(0, _fr13_pb_flat).view(
+                                    _fr13_pb_nsd, 8,
+                                    self._fr13_replay_ring_k.size(2),
+                                    self._fr13_replay_ring_k.size(3),
+                                )
+                                _fr13_pb_chain_v = self._fr13_replay_ring_v.reshape(
+                                    -1,
+                                    self._fr13_replay_ring_v.size(2),
+                                    self._fr13_replay_ring_v.size(3),
+                                ).index_select(0, _fr13_pb_flat).view(
+                                    _fr13_pb_nsd, 8,
+                                    self._fr13_replay_ring_v.size(2),
+                                    self._fr13_replay_ring_v.size(3),
+                                )
+                                _fr13_pb_chain_a = self._fr13_replay_ring_a.reshape(
+                                    -1, self._fr13_replay_ring_a.size(2)
+                                ).index_select(0, _fr13_pb_flat).view(
+                                    _fr13_pb_nsd, 8,
+                                    self._fr13_replay_ring_a.size(2),
+                                )
+                                _fr13_pb_chain_b = self._fr13_replay_ring_b.reshape(
+                                    -1, self._fr13_replay_ring_b.size(2)
+                                ).index_select(0, _fr13_pb_flat).view(
+                                    _fr13_pb_nsd, 8,
+                                    self._fr13_replay_ring_b.size(2),
+                                )
                         self._fr13_replay_ring_k[fr10_b, :tree_n].copy_(
                             key_spec[0, start:end]
                         )
@@ -5204,16 +5338,46 @@ def _fr13_conv_subop_mab(
                                 & (_fr13_pb_pos > _fr13_pb_chain_lens[fr10_b])
                             )
                         )
+                        # variant-B: chain scan inputs (rows 0..7) = PREV-forward
+                        # ring bytes (gathered at fr10_b==0 above); subtree rows
+                        # 8..17 keep this forward's projections. Identity mask
+                        # (pos 0 + chain pad) applies ON TOP of the scattered
+                        # a/b -- pad rows stay exact no-ops, live chain rows get
+                        # the ORIGINAL committed raw gating.
+                        _fr13_pb_k = torch.cat(
+                            [_fr13_pb_chain_k[fr10_b], key_spec[0, start + 8:end]],
+                            dim=0,
+                        ).contiguous()
+                        _fr13_pb_v = torch.cat(
+                            [_fr13_pb_chain_v[fr10_b], value_tree[start + 8:end]],
+                            dim=0,
+                        ).contiguous()
                         _fr13_pb_a = torch.where(
-                            _fr13_pb_ident, a.new_full((), -1e9), a[start:end]
+                            _fr13_pb_ident,
+                            a.new_full((), -1e9),
+                            torch.cat(
+                                [_fr13_pb_chain_a[fr10_b], a[start + 8:end]],
+                                dim=0,
+                            ),
                         ).contiguous()
                         _fr13_pb_b = torch.where(
-                            _fr13_pb_ident, b.new_full((), -1e9), b[start:end]
+                            _fr13_pb_ident,
+                            b.new_full((), -1e9),
+                            torch.cat(
+                                [_fr13_pb_chain_b[fr10_b], b[start + 8:end]],
+                                dim=0,
+                            ),
                         ).contiguous()
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
-                        k=key_spec[0, start:end].contiguous(),
-                        v=value_tree[start:end].contiguous(),
+                        k=(
+                            _fr13_pb_k if _fr13_pb_fwd
+                            else key_spec[0, start:end].contiguous()
+                        ),
+                        v=(
+                            _fr13_pb_v if _fr13_pb_fwd
+                            else value_tree[start:end].contiguous()
+                        ),
                         g=g_tree[start:end].contiguous(),
                         beta=beta_tree[start:end].contiguous(),
                         raw_a=(
@@ -7385,9 +7549,18 @@ def _fr13_conv_commit_to_col0(
         _leaf_node = accepted_path_buf[:replay_rows].to(_dev).gather(
             1, _leaf_pos.view(-1, 1).to(torch.long)
         ).view(-1)
-        # zero-accept rows commit the ROOT (col 0) window (acc_len==0 -> col0).
+        # zero-accept rows commit the ROOT window. Base cat9: node col 0.
+        # FR13_PIGGYBACK (LIVE-8): node col 8 -- row 0 is GDN-identity-masked
+        # so its post-L0 conv x rows diverge; stream 8 is the ACTIVE bonus row
+        # whose retargeted window (prior ++ x_8, conv_parent[8] = -1) carries
+        # the SAME token with uncorrupted bytes. Matches the E12 row-8 SSM law.
+        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+            _fr13_piggyback_on as _fr13_cc_pb_on,
+        )
+        _fr13_cc_zero_col = 8 if _fr13_cc_pb_on() else 0
         _leaf_node = torch.where(
-            _alen > 0, _leaf_node, torch.zeros_like(_leaf_node)
+            _alen > 0, _leaf_node,
+            torch.full_like(_leaf_node, _fr13_cc_zero_col),
         ).clamp(0, _spec_cols - 1).to(torch.long)
         _dst = _ssi[:replay_rows, 0].to(torch.long)
         if do_commit:
@@ -8378,6 +8551,83 @@ def _lumo_tree_canonical_multidraft_sample(
                     '[FR13_PIGGYBACK] committer GDN replay DROPPED; next '
                     'forward chain re-derives col-0\n'
                 )
+            if _fr13_pb_drop_replay:
+                # FR13_PIGGYBACK C-INT-1 (Risk-4 data plane). (1) commit-time
+                # PENDING marker: this req's GDN col-0 now LAGS until the next
+                # tree forward's chain repairs it. Tagged with the staging seq
+                # of the forward that produced this commit's ring/spec_idx
+                # (the pre-forward REQKEY hook bumps _LUMO_FA_PB_FWD_SEQ
+                # BEFORE the forward, so the value read here IS this
+                # forward's staging seq; catch-up validity at the next
+                # pre-forward check = marker_seq == current seq; always
+                # marker_seq <= current_seq -- bug-class 12 discipline).
+                _fr13_pbm_pend = getattr(
+                    _lumo_tree_commit_gdn, '_LUMO_FA_PB_PENDING', None
+                )
+                if _fr13_pbm_pend is None:
+                    _fr13_pbm_pend = {}
+                    _lumo_tree_commit_gdn._LUMO_FA_PB_PENDING = _fr13_pbm_pend
+                _fr13_pbm_seq = int(getattr(
+                    _lumo_tree_commit_gdn, '_LUMO_FA_PB_FWD_SEQ', 0
+                ))
+                for _fr13_pbm_rid in _fr13_spec_req_ids:
+                    _fr13_pbm_pend[str(_fr13_pbm_rid)] = _fr13_pbm_seq
+                # (2) NODE-column APC leaf publish (piggyback twin of
+                # _fr13_publish_apc_ssm_leaf, which is SKIPPED under runrow):
+                # under piggyback+runrow, col-0 lags between commit N and
+                # forward N+1, so the postprocess get_temporal_copy_spec
+                # snapshot would persist the PRE-CHAIN state into the prefix
+                # cache. The committed post-chain SSM state DOES exist in the
+                # gap at the accepted-leaf NODE bank row (node banks are NOT
+                # burned when the replay is dropped -- burn lived inside
+                # launch_tree_gdn_replay): publish spec_idx[b, path[len-1]]
+                # for len>0 (extended stream ids 9..17 are direct columns)
+                # and spec_idx[b, 8] for len==0 (stream 8 = through-root
+                # state, the E12 row-8 law) so the default-ON
+                # FR13_APC_SNAP_FIX redirect sources the committed state.
+                # Entries are popped by the pre-forward catch-up/invalidate
+                # together with the marker. Conv needs NO redirect (conv
+                # col-0 is fresh at commit).
+                _fr13_pbm_layer = _fr13_replay_layers[
+                    sorted(_fr13_replay_layers)[0]
+                ]
+                _fr13_pbm_sidx = getattr(
+                    _fr13_pbm_layer, '_fr13_replay_spec_idx', None
+                )
+                if _fr13_pbm_sidx is None:
+                    raise RuntimeError(
+                        'FR13_PIGGYBACK C-INT-1: missing staged spec_idx '
+                        'for the APC leaf publish'
+                    )
+                _fr13_pbm_leaf_map = getattr(
+                    _lumo_tree_commit_gdn, '_FR13_APC_SSM_LEAF_BY_REQ', None
+                )
+                if _fr13_pbm_leaf_map is None:
+                    _fr13_pbm_leaf_map = {}
+                    _lumo_tree_commit_gdn._FR13_APC_SSM_LEAF_BY_REQ = (
+                        _fr13_pbm_leaf_map
+                    )
+                _fr13_pbm_spec_cpu = _fr13_pbm_sidx.detach().to('cpu').tolist()
+                for _fr13_pbm_b, _fr13_pbm_rid in enumerate(
+                    _fr13_spec_req_ids
+                ):
+                    if _fr13_pbm_b >= len(_fr13_replay_lens):
+                        raise RuntimeError(
+                            'FR13_PIGGYBACK C-INT-1: spec rows exceed '
+                            'committer replay lens'
+                        )
+                    _fr13_pbm_len = int(_fr13_replay_lens[_fr13_pbm_b])
+                    if _fr13_pbm_len > 0:
+                        _fr13_pbm_node = int(
+                            _fr13_replay_gdn_node_paths[_fr13_pbm_b][
+                                _fr13_pbm_len - 1
+                            ]
+                        )
+                    else:
+                        _fr13_pbm_node = 8
+                    _fr13_pbm_leaf_map[str(_fr13_pbm_rid)] = int(
+                        _fr13_pbm_spec_cpu[_fr13_pbm_b][_fr13_pbm_node]
+                    )
             # STATELESS-TREE conv committer (post-accept; gated -> no-op when OFF).
             _fr13_conv_commit_to_col0(
                 _fr13_replay_layers,
@@ -9692,6 +9942,35 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                     [0] + [len(_fr10_choice) for _fr10_choice in _fr10_choices],
                     dtype=np.int64,
                 )
+                # FR13_PIGGYBACK RoPE surgery: under the armed extended tree
+                # (cat9_pb) subtree streams carry BASE depth (extended depth
+                # minus the K=8 chain) so RoPE == base cat9 at the same
+                # committed state; stream 8 ((0,)^8 = the bonus) clamps to 0
+                # = base's node-0 offset; chain streams (len<=7) clamp to 0 =
+                # don't-care (their scratch K is never attended after the
+                # FR13_PIGGYBACK_ATTN_MASK ghosting, and their Q/logits are
+                # never consumed). Arming is boot-static (Risk 7): cached
+                # once per runner; same triple as _fr13_piggyback_on().
+                _fr10_pb_arm = getattr(self, "_fr13_pb_positions_arm", None)
+                if _fr10_pb_arm is None:
+                    _fr10_pb_os = __import__("os")
+                    _fr10_pb_arm = (
+                        _fr10_pb_os.path.exists("/logs/fr13_piggyback.arm")
+                        or _fr10_pb_os.path.exists("/tmp/fr13_piggyback.arm")
+                        or _fr10_pb_os.environ.get("FR13_PIGGYBACK") == "1"
+                    )
+                    self._fr13_pb_positions_arm = _fr10_pb_arm
+                if _fr10_pb_arm:
+                    if int(len(_fr10_depth_offsets)) != 18:
+                        raise RuntimeError(
+                            "FR13_PIGGYBACK armed but the position remap "
+                            "sees tree_n="
+                            + str(int(len(_fr10_depth_offsets)))
+                            + " != 18 (cat9_pb only)"
+                        )
+                    _fr10_depth_offsets = np.maximum(
+                        _fr10_depth_offsets - 8, 0
+                    )
                 _fr10_spine_choices = [
                     _fr10_choice
                     for _fr10_choice in _fr10_choices
@@ -10174,6 +10453,19 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "                    for _fr13_rk_key in list(_fr13_rk_by_req.keys()):\n"
         "                        if _fr13_rk_key not in _fr13_rk_live:\n"
         "                            del _fr13_rk_by_req[_fr13_rk_key]\n"
+        "                    # FR13_PIGGYBACK C-INT-2(6): evict the piggyback\n"
+        "                    # pending markers + prev-bonus stash for dead reqs\n"
+        "                    # too (same lifecycle as by_req above).\n"
+        "                    for _fr13_rk_pb_dn in (\n"
+        "                        \"_LUMO_FA_PB_PENDING\", \"_FR13_PB_PREV_BONUS\"\n"
+        "                    ):\n"
+        "                        _fr13_rk_pb_dm = getattr(\n"
+        "                            _fr13_rk_gdn, _fr13_rk_pb_dn, None\n"
+        "                        )\n"
+        "                        if _fr13_rk_pb_dm:\n"
+        "                            for _fr13_rk_key in list(_fr13_rk_pb_dm.keys()):\n"
+        "                                if _fr13_rk_key not in _fr13_rk_live:\n"
+        "                                    _fr13_rk_pb_dm.pop(_fr13_rk_key, None)\n"
         "                    # NON-SPEC/prefill row map (observe-only, value-inert).\n"
         "                    # The non-spec (prefill / chunked-prefill / first-decode)\n"
         "                    # row order produced by vLLM's\n"
@@ -10196,6 +10488,96 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "                    _fr13_rk_gdn._LUMO_FA_NONSPEC_ROW_REQ_IDS = (\n"
         "                        _fr13_rk_nonspec_rids\n"
         "                    )\n"
+        "                    # FR13_PIGGYBACK C-INT-2 (Risk-4 control plane):\n"
+        "                    # pre-forward PENDING-marker check. Runs EVERY step\n"
+        "                    # BEFORE the forward and BEFORE the spec-rid publish\n"
+        "                    # below overwrites forward-N's staging order. Arms:\n"
+        "                    # (a) rid spec this step -> the tree forward's chain\n"
+        "                    # repairs col-0 -> pop marker only; (b) rid nonspec\n"
+        "                    # decode + not resumed + seq fresh + rid staged ->\n"
+        "                    # one-shot CATCH-UP now (the nonspec decode is about\n"
+        "                    # to READ lagged col-0); (c) resumed or seq-stale ->\n"
+        "                    # invalidate-only (recompute prefill rebuilds col-0;\n"
+        "                    # staged rows may be reallocated). Pending is only\n"
+        "                    # ever populated by the pb-gated committer marker =>\n"
+        "                    # value-inert while FR13_PIGGYBACK is off.\n"
+        "                    _fr13_rk_pb_prev_spec2 = getattr(\n"
+        "                        _fr13_rk_gdn, \"_LUMO_FA_SPEC_ROW_REQ_IDS\", None\n"
+        "                    ) or []\n"
+        "                    _fr13_rk_pb_pend = getattr(\n"
+        "                        _fr13_rk_gdn, \"_LUMO_FA_PB_PENDING\", None\n"
+        "                    ) or {}\n"
+        "                    _fr13_rk_pb_seq = int(getattr(\n"
+        "                        _fr13_rk_gdn, \"_LUMO_FA_PB_FWD_SEQ\", 0\n"
+        "                    ))\n"
+        "                    if _fr13_rk_pb_pend:\n"
+        "                        _fr13_rk_pb_resumed = set(\n"
+        "                            str(_fr13_rk_r) for _fr13_rk_r in\n"
+        "                            scheduler_output.scheduled_cached_reqs.resumed_req_ids\n"
+        "                        )\n"
+        "                        _fr13_rk_pb_specset = set(\n"
+        "                            _fr13_rk_req_ids[_fr13_rk_i]\n"
+        "                            for _fr13_rk_i in range(num_reqs)\n"
+        "                            if int(num_decode_draft_tokens[_fr13_rk_i]) >= 0\n"
+        "                        )\n"
+        "                        _fr13_rk_pb_nonspecset = set(_fr13_rk_nonspec_rids)\n"
+        "                        _fr13_rk_pb_catchup = []\n"
+        "                        _fr13_rk_pb_clear = []\n"
+        "                        for _fr13_rk_pb_rid, _fr13_rk_pb_mseq in list(\n"
+        "                            _fr13_rk_pb_pend.items()\n"
+        "                        ):\n"
+        "                            if _fr13_rk_pb_rid not in _fr13_rk_live:\n"
+        "                                continue  # dead-req eviction handles it\n"
+        "                            if _fr13_rk_pb_mseq > _fr13_rk_pb_seq:\n"
+        "                                raise RuntimeError(\n"
+        "                                    \"FR13_PIGGYBACK: pending marker seq \"\n"
+        "                                    \"ahead of the forward seq \"\n"
+        "                                    \"(bug-class 12): \"\n"
+        "                                    + str(_fr13_rk_pb_mseq) + \" > \"\n"
+        "                                    + str(_fr13_rk_pb_seq)\n"
+        "                                )\n"
+        "                            if _fr13_rk_pb_rid in _fr13_rk_pb_specset:\n"
+        "                                _fr13_rk_pb_pend.pop(_fr13_rk_pb_rid, None)\n"
+        "                            elif (\n"
+        "                                _fr13_rk_pb_rid in _fr13_rk_pb_nonspecset\n"
+        "                                and _fr13_rk_pb_rid not in _fr13_rk_pb_resumed\n"
+        "                                and _fr13_rk_pb_mseq == _fr13_rk_pb_seq\n"
+        "                                and _fr13_rk_pb_rid in _fr13_rk_pb_prev_spec2\n"
+        "                            ):\n"
+        "                                _fr13_rk_pb_catchup.append(_fr13_rk_pb_rid)\n"
+        "                            elif (\n"
+        "                                _fr13_rk_pb_rid in _fr13_rk_pb_resumed\n"
+        "                                or _fr13_rk_pb_mseq != _fr13_rk_pb_seq\n"
+        "                            ):\n"
+        "                                _fr13_rk_pb_clear.append(_fr13_rk_pb_rid)\n"
+        "                            else:\n"
+        "                                raise RuntimeError(\n"
+        "                                    \"FR13_PIGGYBACK: unclassifiable \"\n"
+        "                                    \"pending req \" + str(_fr13_rk_pb_rid)\n"
+        "                                )\n"
+        "                        if _fr13_rk_pb_catchup:\n"
+        "                            from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+        "                                piggyback_catchup_replay as _fr13_rk_pb_cu,\n"
+        "                            )\n"
+        "                            _fr13_rk_pb_cu(_fr13_rk_gdn, _fr13_rk_pb_catchup)\n"
+        "                            _fr13_rk_pb_clear.extend(_fr13_rk_pb_catchup)\n"
+        "                        for _fr13_rk_pb_rid in _fr13_rk_pb_clear:\n"
+        "                            # invalidate TOGETHER: marker + by_req + leaf\n"
+        "                            # map + prev-bonus stash, so the next propose\n"
+        "                            # packs a fresh len-0 chain and E5's desync\n"
+        "                            # raise cannot fire.\n"
+        "                            _fr13_rk_pb_pend.pop(_fr13_rk_pb_rid, None)\n"
+        "                            _fr13_rk_by_req.pop(_fr13_rk_pb_rid, None)\n"
+        "                            _fr13_rk_pb_lm = getattr(\n"
+        "                                _fr13_rk_gdn, \"_FR13_APC_SSM_LEAF_BY_REQ\", None\n"
+        "                            )\n"
+        "                            if _fr13_rk_pb_lm is not None:\n"
+        "                                _fr13_rk_pb_lm.pop(_fr13_rk_pb_rid, None)\n"
+        "                            _fr13_rk_pb_pbs = getattr(\n"
+        "                                _fr13_rk_gdn, \"_FR13_PB_PREV_BONUS\", None\n"
+        "                            )\n"
+        "                            if _fr13_rk_pb_pbs is not None:\n"
+        "                                _fr13_rk_pb_pbs.pop(_fr13_rk_pb_rid, None)\n"
         "                    # Fail-loud partition assert: every i is classified\n"
         "                    # exactly once (predicate is >=0 xor <0), so spec+nonspec\n"
         "                    # must cover the whole real batch with no overlap. Guards\n"
@@ -10221,8 +10603,22 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "                            for _fr13_rk_i in range(num_reqs)\n"
         "                            if int(num_decode_draft_tokens[_fr13_rk_i]) >= 0\n"
         "                        ]\n"
+        "                        _fr13_rk_pb_prev_spec = getattr(\n"
+        "                            _fr13_rk_gdn, \"_LUMO_FA_SPEC_ROW_REQ_IDS\", None\n"
+        "                        )\n"
         "                        _fr13_rk_gdn._LUMO_FA_SPEC_ROW_REQ_IDS = _fr13_rk_spec_rids\n"
         "                        if _fr13_rk_spec_rids:\n"
+        "                            # FR13_PIGGYBACK C-INT-2(5): ONE seq bump per\n"
+        "                            # step that runs a tree forward, BEFORE the\n"
+        "                            # forward (and before this step's commit reads\n"
+        "                            # it), so markers written at this step's commit\n"
+        "                            # store the seq of the forward whose staging\n"
+        "                            # backs them; catch-up validity = marker_seq ==\n"
+        "                            # current seq. Pinned: marker_seq <=\n"
+        "                            # current_seq always (checked above).\n"
+        "                            _fr13_rk_gdn._LUMO_FA_PB_FWD_SEQ = (\n"
+        "                                _fr13_rk_pb_seq + 1\n"
+        "                            )\n"
         "                            if len(_fr13_rk_spec_rids) > int(_fr13_rk_paths.size(0)):\n"
         "                                raise RuntimeError(\n"
         "                                    \"FR13_TREE_REQKEY accepted-path buffer too small\"\n"
@@ -10372,6 +10768,48 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "                                        device=_fr13_rk_pb_lens.device,\n"
         "                                    )\n"
         "                                )\n"
+        "                                # FR13_PIGGYBACK variant-B (B3): map each\n"
+        "                                # CURRENT spec row -> its ring row in the\n"
+        "                                # PREVIOUS forward (the activation ring is\n"
+        "                                # positional in prev spec order). Fail-loud\n"
+        "                                # on desync ONLY when armed (unarmed the\n"
+        "                                # buffer is unread; the E11 chain-len clamp\n"
+        "                                # precedent above).\n"
+        "                                _fr13_rk_pb_rr = getattr(\n"
+        "                                    _fr13_rk_gdn,\n"
+        "                                    \"_LUMO_FA_PB_RING_ROW_TENSOR\",\n"
+        "                                    None,\n"
+        "                                )\n"
+        "                                if _fr13_rk_pb_rr is not None:\n"
+        "                                    _fr13_rk_pb_rr_vals = []\n"
+        "                                    for _fr13_rk_i2, _fr13_rk_rid3 in enumerate(_fr13_rk_spec_rids):\n"
+        "                                        if _fr13_rk_pb_vals[_fr13_rk_i2] == 0:\n"
+        "                                            _fr13_rk_pb_rr_vals.append(0)\n"
+        "                                            continue\n"
+        "                                        if (_fr13_rk_pb_prev_spec is None\n"
+        "                                                or _fr13_rk_rid3 not in _fr13_rk_pb_prev_spec):\n"
+        "                                            from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+        "                                                _fr13_piggyback_on as _fr13_rk_pb_on2,\n"
+        "                                            )\n"
+        "                                            if _fr13_rk_pb_on2():\n"
+        "                                                raise RuntimeError(\n"
+        "                                                    \"FR13_PIGGYBACK variant-B: chain>0 for req \"\n"
+        "                                                    + str(_fr13_rk_rid3) + \" but no prev-step ring row \"\n"
+        "                                                    \"(spec-row set/order changed since the last tree \"\n"
+        "                                                    \"forward; the activation ring is positional)\"\n"
+        "                                                )\n"
+        "                                            _fr13_rk_pb_rr_vals.append(0)\n"
+        "                                            continue\n"
+        "                                        _fr13_rk_pb_rr_vals.append(\n"
+        "                                            _fr13_rk_pb_prev_spec.index(_fr13_rk_rid3)\n"
+        "                                        )\n"
+        "                                    _fr13_rk_pb_rr[:_fr13_rk_n].copy_(\n"
+        "                                        torch.tensor(\n"
+        "                                            _fr13_rk_pb_rr_vals,\n"
+        "                                            dtype=_fr13_rk_pb_rr.dtype,\n"
+        "                                            device=_fr13_rk_pb_rr.device,\n"
+        "                                        )\n"
+        "                                    )\n"
         "                except Exception as _fr13_rk_exc:\n"
         "                    if __import__(\"os\").environ.get(\"FR10_ALLOW_LINEAR_FALLBACK\", \"0\") != \"1\":\n"
         "                        raise RuntimeError(\n"
@@ -13238,11 +13676,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         ) or [],
                     )
                 }
-                global _FR13_PB_PREV_BONUS
-                try:
-                    _FR13_PB_PREV_BONUS
-                except NameError:
+                # FR13_PIGGYBACK C-INT-3: host the prev-bonus stash on the gdn
+                # module (not this drafter module) so the runner-side interleave
+                # invalidation can clear it together with the by_req entry --
+                # else E5's accept-publish/prev-bonus desync raise fires on the
+                # first post-invalidation propose. Byte-identical otherwise.
+                _FR13_PB_PREV_BONUS = getattr(
+                    _fr13_pb_gdn, "_FR13_PB_PREV_BONUS", None
+                )
+                if _FR13_PB_PREV_BONUS is None:
                     _FR13_PB_PREV_BONUS = {}
+                    _fr13_pb_gdn._FR13_PB_PREV_BONUS = _FR13_PB_PREV_BONUS
                 # APPLY-TIME BIND: next_token_ids is the propose() input of
                 # sampled tokens, row-aligned with _fr10_packed. Verify the
                 # parameter name in the live-container eagle propose signature
@@ -14264,7 +14708,82 @@ def _patch_tree_attn_spec_config_override() -> bool:
     if mask_sentinel not in text:
         old_return = """    return tree_attn_mask
 """
-        new_return = f"""    {mask_sentinel}: dump the runtime root/bonus attention bias row.
+        new_return = f"""    # FR13_PIGGYBACK_ATTN_MASK: attention-ghost the chain streams of the
+    # extended cat9_pb tree. At forward time the chain tokens are ALREADY
+    # COMMITTED (vLLM's seq includes them; durable KV written at last commit
+    # by the stream-0 root write + FR13_ATTN_KV_REMAP), so the paged context
+    # already carries them at correct positions: tree-block visibility of
+    # chain cols is a double count, repeat-pad cols are garbage, and the
+    # bonus appears twice (col 0 = stream-0 copy, col 8 = (0,)^8). Surgery:
+    #   [1] no row attends chain cols 1..7;
+    #   [2] chain rows 1..7 attend no tree col (they still see the full
+    #       paged context -- the bias covers only the last-18 KV cols -- so
+    #       no row is ever fully masked / NaN-free);
+    #   [3] rows 8..17 drop col 0: the bonus is attended exactly once, at
+    #       col 8 (RoPE offset 0 via the FR10_TREE_DEPTH_POSITIONS clamp),
+    #       mirroring base cat9's node-0 col. Row 0 unchanged (self-only,
+    #       identical to base; its KV write to the canonical bonus slot
+    #       stays live).
+    # The GDN strict/visible masks are deliberately NOT touched: chain
+    # streams MUST keep contributing to the GDN scan (state carry).
+    _fr13_pb_on = False
+    try:
+        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+            _fr13_piggyback_on as _fr13_pb_probe,
+        )
+        _fr13_pb_on = bool(_fr13_pb_probe())
+    except ImportError:
+        _fr13_pb_on = (
+            os.path.exists("/logs/fr13_piggyback.arm")
+            or os.path.exists("/tmp/fr13_piggyback.arm")
+            or os.environ.get("FR13_PIGGYBACK") == "1"
+        )
+    if _fr13_pb_on:
+        if len(sorted_tree_choices) != 17 or int(tree_attn_mask.size(-1)) != 18:
+            raise RuntimeError(
+                "FR13_PIGGYBACK armed but the attention bias is not the "
+                "18-stream cat9_pb layout: choices=%d bias_shape=%s"
+                % (len(sorted_tree_choices), str(tuple(tree_attn_mask.shape)))
+            )
+        _fr13_pb_chain_cols = [
+            _i + 1
+            for _i, _c in enumerate(sorted_tree_choices)
+            if len(_c) <= 8
+        ]
+        if _fr13_pb_chain_cols != [1, 2, 3, 4, 5, 6, 7, 8]:
+            raise RuntimeError(
+                "FR13_PIGGYBACK: chain streams not at 1..8: %s"
+                % str(_fr13_pb_chain_cols)
+            )
+        _fr13_pb_ninf = float("-inf")
+        tree_attn_mask[..., :, 1:8] = _fr13_pb_ninf
+        tree_attn_mask[..., 1:8, :] = _fr13_pb_ninf
+        tree_attn_mask[..., 8:, 0] = _fr13_pb_ninf
+    _fr13_s1_pb = (len(sorted_tree_choices) + 1 == 18) and all(
+        tuple(sorted_tree_choices[_s1k]) == tuple([0] * (_s1k + 1))
+        for _s1k in range(8)
+    )
+    if _fr13_s1_pb:
+        # FR13_PIGGYBACK S1(b) (LIVE-8): stream 0 (the pos-0 bonus copy) is
+        # poisoned after the first GDN layer, so every full-attn layer's
+        # row-0 K/V is wrong bytes past L0. Full attention ghost: row 0
+        # attends the PAGED CONTEXT ONLY (finite -- the tree bias covers only
+        # the [18,18] suffix block and context_len >= 1 in tree decode), and
+        # NO row reads its K column (the ACTIVE root twin is stream 8; its
+        # durable KV lands in the canonical bonus slot via the S1(a)
+        # commit-time copy in launch_attn_kv_linear_remap). Convention must
+        # be hard -inf: the FA2 fork special-cases bias == -INFINITY as a
+        # hard mask; torch.finfo.min would take the += branch instead.
+        # Boot-static bias => applies to every step, drafting slices
+        # ([1:,1:]) exclude row/col 0, and the FR13_SLOT_REORDER column perm
+        # (pi[0] == 0) preserves both writes.
+        tree_attn_mask[0, :] = -torch.inf
+        tree_attn_mask[:, 0] = -torch.inf
+        logger.info(
+            "FR13_PIGGYBACK S1(b): row 0 attention-ghosted "
+            "(row+col 0 = -inf; live root twin = stream 8)"
+        )
+    {mask_sentinel}: dump the runtime root/bonus attention bias row.
     try:
         _fr10_mask_path = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE")
         if _fr10_mask_path and not os.path.exists(_fr10_mask_path + ".tree_attn_bias.pt"):
@@ -18129,6 +18648,14 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         raise RuntimeError("FR13_ATTN_KV_REMAP_APPLY anchor not found")
     inject = anchor + (
         f"\n        {sentinel}: re-linearize committed-path full-attn KV.\n"
+        "        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+        "            _fr13_piggyback_on as _fr13_akr_pb_probe,\n"
+        "        )\n"
+        "        if _fr13_akr_pb_probe() and __import__(\"os\").environ.get(\"FR13_ATTN_KV_REMAP\", \"0\") != \"1\":\n"
+        "            raise RuntimeError(\n"
+        "                \"FR13_PIGGYBACK requires FR13_ATTN_KV_REMAP=1 \"\n"
+        "                \"(S1 bonus slot-C copy rides the commit-time remap)\"\n"
+        "            )\n"
         "        if __import__(\"os\").environ.get(\"FR13_ATTN_KV_REMAP\", \"0\") == \"1\":\n"
         "            try:\n"
         "                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_akr_gdn\n"
@@ -18169,6 +18696,23 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                            ([int(_x) for _x in _fr13_akr_e[0]], int(_fr13_akr_e[1]))\n"
         "                            if _fr13_akr_e is not None else ([], 0)\n"
         "                        )\n"
+        "                # FR13_PIGGYBACK invariant guard: under the extended cat9_pb\n"
+        "                # tree the committer walks from rank 7 ((0,)^8) and publishes\n"
+        "                # +1-shifted SUBTREE flat rows only (>= 9). A chain row (1..8)\n"
+        "                # or root copy (0) here would remap garbage scratch KV onto a\n"
+        "                # committed slot. Fail loud (bug-class 9).\n"
+        "                if _fr13_akr_rows:\n"
+        "                    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+        "                        _fr13_piggyback_on as _fr13_akr_pb_on,\n"
+        "                    )\n"
+        "                    if _fr13_akr_pb_on():\n"
+        "                        for _fr13_akr_r in _fr13_akr_rows:\n"
+        "                            if any(int(_fr13_akr_x) < 9 for _fr13_akr_x in _fr13_akr_r[0][: _fr13_akr_r[1]]):\n"
+        "                                raise RuntimeError(\n"
+        "                                    \"FR13_PIGGYBACK: accepted path contains a \"\n"
+        "                                    \"chain/root flat row (<9): \"\n"
+        "                                    + str(_fr13_akr_r[0][: _fr13_akr_r[1]])\n"
+        "                                )\n"
         "                if __import__(\"os\").environ.get(\"FR13_BRANCH_ACCEPT_DIAG\", \"0\") == \"1\":\n"
         "                    # FR13_BRANCH_ACCEPT_DIAG (diagnostic, default OFF): per-flat-verify-row\n"
         "                    # accept histogram, accumulated ONCE per step here (single chokepoint).\n"
@@ -18195,7 +18739,13 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                            __import__(\"os\").replace(_fr13_btmp, _fr13_bjp)\n"
         "                    except Exception:\n"
         "                        pass\n"
+        "                _fr13_akr_pb = _fr13_akr_pb_probe()\n"
         "                _fr13_akr_cols = max((len(_r[0]) for _r in _fr13_akr_rows), default=0)\n"
+        "                if _fr13_akr_pb and _fr13_akr_n > 0 and _fr13_akr_nrows > 0:\n"
+        "                    # S1(a): the bonus copy must fire on ALL-zero-accept\n"
+        "                    # steps too; force the paths tensor to build (padded\n"
+        "                    # zeros, lens 0 -> no foreign copies, bonus pair only).\n"
+        "                    _fr13_akr_cols = max(_fr13_akr_cols, 1)\n"
         "                _fr13_akr_paths = None\n"
         "                _fr13_akr_lens = None\n"
         "                if (\n"
@@ -18249,6 +18799,7 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                                num_accepted_tokens=_fr13_akr_lens,\n"
         "                                num_spec_decodes=_fr13_akr_n,\n"
         "                                dst_pi=_fr13_akr_dstpi,\n"
+        "                                pb_bonus_src=(8 if _fr13_akr_pb else None),\n"
         "                            )\n"
         "                    _fr13_akr_seen = getattr(self, \"_fr13_akr_foreign_seen\", 0)\n"
         "                    self._fr13_akr_foreign_seen = _fr13_akr_seen + _fr13_akr_tot\n"

@@ -457,6 +457,7 @@ def launch_attn_kv_linear_remap(
     num_accepted_tokens: torch.Tensor,
     num_spec_decodes: int,
     dst_pi: torch.Tensor | None = None,
+    pb_bonus_src: int | None = None,
 ) -> int:
     """Re-linearize the full-attention KV cache for the committed tree path.
 
@@ -483,10 +484,20 @@ def launch_attn_kv_linear_remap(
     """
     b = int(num_spec_decodes)
     if b <= 0 or not kv_caches:
+        if pb_bonus_src is not None:
+            raise RuntimeError(
+                "FR13_PIGGYBACK S1(a): bonus-slot KV copy would be skipped "
+                "(empty-batch/kv) -- stale bonus KV is silent garble; refusing"
+            )
         return 0
     device = slot_mapping.device
     path_cols = int(accepted_paths.shape[1])
     if path_cols <= 0:
+        if pb_bonus_src is not None:
+            raise RuntimeError(
+                "FR13_PIGGYBACK S1(a): bonus-slot KV copy would be skipped "
+                "(no-path-cols) -- stale bonus KV is silent garble; refusing"
+            )
         return 0
     # SAFETY: this maps spec row i -> batch request i (qsl[:b]); that is valid
     # ONLY when the first b batch requests are all full trees with a UNIFORM
@@ -494,6 +505,11 @@ def launch_attn_kv_linear_remap(
     # batch would put a spec row at a higher batch position and qsl[:b] would
     # index a foreign request -> wrong-slot copy: skip (safe no-op) instead.
     if int(query_start_loc.shape[0]) < b + 1:
+        if pb_bonus_src is not None:
+            raise RuntimeError(
+                "FR13_PIGGYBACK S1(a): bonus-slot KV copy would be skipped "
+                "(qsl-too-short) -- stale bonus KV is silent garble; refusing"
+            )
         return 0
     qsl_full = query_start_loc[: b + 1].to(torch.long)
     spans = qsl_full[1:] - qsl_full[:-1]                                # [b]
@@ -523,9 +539,53 @@ def launch_attn_kv_linear_remap(
     # offset indexed (max flat verify row and the max linear dst depth acc), so
     # qsl[i]+offset never crosses into request i+1.
     _max_off = torch.maximum(ap.max(), torch.maximum(acc.max(), dst_off.max()))
+    if pb_bonus_src is not None:
+        _max_off = torch.maximum(
+            _max_off,
+            torch.tensor(int(pb_bonus_src), device=device, dtype=torch.long),
+        )
     if not (bool((spans == spans[0]).all()) and bool(spans[0] > _max_off)):
+        if pb_bonus_src is not None:
+            raise RuntimeError(
+                "FR13_PIGGYBACK S1(a): bonus-slot KV copy would be skipped "
+                "(nonuniform-spans-or-span<=max-off) -- stale bonus KV is "
+                "silent garble; refusing"
+            )
         return 0
     qsl = qsl_full[:b].view(-1, 1)                                     # [b,1]
+    if pb_bonus_src is not None:
+        # FR13_PIGGYBACK S1(a) (LIVE-8): stream 0's later-layer hiddens lack
+        # the GDN bonus update, so its full-attn K/V write at the canonical
+        # bonus slot (flat verify offset 0 = linear position base+0) is wrong
+        # bytes on EVERY full-attn layer (all sit past L0-GDN). Copy the
+        # ACTIVE root twin's per-layer scratch KV (verify offset
+        # pb_bonus_src == 8) -> the canonical bonus slot, every commit step
+        # INCLUDING zero-accept (this runs before the foreign.any() early
+        # return on purpose). Pure slot copy: stream 8's K is already RoPE'd
+        # at base+0 via the A1 offset clamp -- no re-rotation. SOURCE
+        # auto-threads under FR13_SLOT_REORDER (node k wrote via
+        # sm_perm[qsl+k]); DEST is the FLAT slot of offset 0 =
+        # sm_perm[pi[0]], and pi[0] == 0 by construction, so dst ==
+        # slot_mapping[qsl+0] with or without the perm.
+        pb_ns = int(slot_mapping.shape[0])
+        pb_src_off = torch.full(
+            (b, 1), int(pb_bonus_src), device=device, dtype=torch.long
+        )
+        pb_dst_off = torch.zeros((b, 1), device=device, dtype=torch.long)
+        if dst_pi is not None:
+            pb_dst_off = dst_pi.to(device=device, dtype=torch.long)[pb_dst_off]
+        pb_src_slot = slot_mapping.reshape(-1)[
+            (qsl + pb_src_off).clamp(0, pb_ns - 1).reshape(-1)
+        ].to(torch.long)
+        pb_dst_slot = slot_mapping.reshape(-1)[
+            (qsl + pb_dst_off).clamp(0, pb_ns - 1).reshape(-1)
+        ].to(torch.long)
+        for kv in kv_caches:
+            if not torch.is_tensor(kv) or kv.dim() < 3 or int(kv.shape[0]) != 2:
+                continue
+            bs = int(kv.shape[2])
+            pb_gathered = kv[:, pb_src_slot // bs, pb_src_slot % bs].clone()
+            kv[:, pb_dst_slot // bs, pb_dst_slot % bs] = pb_gathered
     foreign = (m_idx < acc) & (ap != dst_off)                          # [b,path]
     if not bool(foreign.any()):
         return 0
@@ -955,6 +1015,7 @@ def _tree_gdn_replay_kernel(
     RUNROW_COMMIT: tl.constexpr = False,
     RUNROW_INIT: tl.constexpr = False,
     BURN_NODE_BANK: tl.constexpr = False,
+    ROOT_NODE: tl.constexpr = 0,
 ):
     # FR13_REPLAY_ROUTE accepted-path chain replay (sibling of the scan).
     #
@@ -1019,12 +1080,14 @@ def _tree_gdn_replay_kernel(
     b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
     for t in tl.static_range(0, PATH_COLS + 1):
         if t == 0:
-            # Root (gdn node 0) replays unconditionally: row 0 must be
-            # refreshed even on a ZERO-ACCEPT event (the next h0 read clamps
-            # accepted_len-1 to column 0), and the scan applies NO handoff
-            # normalization to h0 before the root update.
+            # Root (gdn node ROOT_NODE; stock 0 -- FR13_PIGGYBACK catch-up
+            # passes 8 = the LIVE-8 bonus twin's ring row, since ring row 0
+            # is the diverged pos-0 copy) replays unconditionally: row 0 must
+            # be refreshed even on a ZERO-ACCEPT event (the next h0 read
+            # clamps accepted_len-1 to column 0), and the scan applies NO
+            # handoff normalization to h0 before the root update.
             active = acc_len >= 0
-            node = 0
+            node = ROOT_NODE
         else:
             active = (t - 1) < acc_len
             node = tl.load(
@@ -1134,7 +1197,7 @@ def _tree_gdn_replay_kernel(
             )
 
 
-def _fr13_prepare_committer_layout(*, accepted_paths, accepted_lens, spec_state_indices, num_spec_decodes):
+def _fr13_prepare_committer_layout(*, accepted_paths, accepted_lens, spec_state_indices, num_spec_decodes, root_node=0):
     """Compute the per-request committed-path node layout ONCE (it depends only on accepted_paths/
     accepted_lens/spec_state_indices, all SHARED across the ~48 GDN layers). This is the only host sync;
     hoisting it out of the per-layer loop eliminates B*47 syncs that made the eager committer crawl.
@@ -1146,7 +1209,7 @@ def _fr13_prepare_committer_layout(*, accepted_paths, accepted_lens, spec_state_
     for b in range(B):
         L = int(acc[b])
         nodes = torch.cat([
-            torch.zeros(1, dtype=torch.long, device=dev),
+            torch.full((1,), int(root_node), dtype=torch.long, device=dev),
             accepted_paths[b, :L].to(torch.long),
         ])
         nodes_list.append(nodes)
@@ -1168,7 +1231,7 @@ def _fr13_native_committer_replay(
     *, state_bank, spec_state_indices, accepted_paths, accepted_lens,
     k_ring, v_ring, a_ring, b_ring, A_log, dt_bias, num_spec_decodes,
     output_scale, use_qk_l2norm_in_kernel, burn_node_bank, spec_cols,
-    layout=None,
+    root_node=0, layout=None,
 ) -> None:
     """FR13_COMMITTER_NATIVE: rebuild col-0 (the running row) by running each request's committed path
     [node 0] ++ accepted_paths[:acc_len] through NATIVE fused_sigmoid_gating (bit-exact to no-spec), instead
@@ -1194,6 +1257,7 @@ def _fr13_native_committer_replay(
         layout = _fr13_prepare_committer_layout(
             accepted_paths=accepted_paths, accepted_lens=accepted_lens,
             spec_state_indices=spec_state_indices, num_spec_decodes=num_spec_decodes,
+            root_node=root_node,
         )
     nodes_list, cu, ssi, T, max_T = layout
     # Per-layer: ring GATHER only (device index_select on precomputed node tensors -> NO host sync).
@@ -1232,6 +1296,7 @@ def launch_tree_gdn_replay(
     runrow_commit: bool = False,
     runrow_init: bool = False,
     burn_node_bank: bool = False,
+    root_node: int = 0,
 ) -> None:
     """Launch the FR13 accepted-path replay (the durable-state publish).
 
@@ -1271,6 +1336,8 @@ def launch_tree_gdn_replay(
     # and safe at n_pad=32 even at the deployed BV=16 (accept>5 32-node horizon).
     if n_pad > 32 or n_pad & (n_pad - 1):
         raise ValueError(f"ring n_pad must be a power of two <=32, got {n_pad}")
+    if not (0 <= int(root_node) < n_pad):
+        raise ValueError(f"root_node {root_node} outside ring n_pad {n_pad}")
     if ring_dim_k != dim_k:
         raise ValueError(f"ring k dim {ring_dim_k} != bank dim_k {dim_k}")
     if v_ring.shape != (ring_bs, n_pad, num_vh, dim_v):
@@ -1333,6 +1400,7 @@ def launch_tree_gdn_replay(
             A_log=A_log, dt_bias=dt_bias, num_spec_decodes=num_spec_decodes,
             output_scale=output_scale, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
             burn_node_bank=burn_node_bank, spec_cols=spec_cols,
+            root_node=root_node,
         )
         return
     grid = (int(num_spec_decodes), num_vh, triton.cdiv(dim_v, BV))
@@ -1370,6 +1438,7 @@ def launch_tree_gdn_replay(
         RUNROW_COMMIT=runrow_commit,
         RUNROW_INIT=runrow_init,
         BURN_NODE_BANK=burn_node_bank,
+        ROOT_NODE=int(root_node),
         num_warps=8,
     )
 
@@ -1414,6 +1483,106 @@ def _fr13_replay_gpu_timed(_orig):
 
 
 launch_tree_gdn_replay = _fr13_replay_gpu_timed(launch_tree_gdn_replay)
+
+
+def piggyback_catchup_replay(gdn_mod, catchup_rids):
+    """FR13_PIGGYBACK C-INT-2' one-shot catch-up (pre-forward, host-eager).
+
+    Replays the DROPPED commit-N GDN committer replay for exactly
+    ``catchup_rids`` -- reqs about to run a NONSPEC decode while their col-0
+    still lags by the pending chain. Rows are the PREVIOUS tree forward's
+    spec order (``gdn_mod._LUMO_FA_SPEC_ROW_REQ_IDS`` at call time: the
+    REQKEY hook calls this BEFORE overwriting the publish). Every staged row
+    whose rid is NOT in ``catchup_rids`` has its spec_idx col 0 redirected to
+    its col 1 (stream-1 chain column = guaranteed-dead under cat9_pb: never
+    read by conv prior, scan h0, TSR, or the leaf publish) so its deposit
+    lands in dead space and pending-but-tree-bound rows are NOT
+    double-applied. ROOT ring row = 8 (LIVE-8: the ACTIVE bonus twin's ring
+    row; ring row 0 is the diverged pos-0 copy) via
+    ``launch_tree_gdn_replay(root_node=8)``. Eager launch between graph
+    replays (legal); fail-loud throughout (a silently skipped catch-up is
+    stale-col-0 garble).
+    """
+    layers = getattr(gdn_mod, "_FR13_REPLAY_LAYERS", None)
+    if not layers:
+        raise RuntimeError(
+            "FR13_PIGGYBACK catch-up: no registered GDN replay layers"
+        )
+    prev_spec = getattr(gdn_mod, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
+    if not prev_spec:
+        raise RuntimeError(
+            "FR13_PIGGYBACK catch-up: no previous spec-row req ids"
+        )
+    paths_buf = getattr(gdn_mod, "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR", None)
+    lens_buf = getattr(gdn_mod, "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR", None)
+    if paths_buf is None or lens_buf is None:
+        raise RuntimeError(
+            "FR13_PIGGYBACK catch-up: missing accepted path/lens device buffers"
+        )
+    want = set(str(_r) for _r in catchup_rids)
+    missing = want - set(str(_r) for _r in prev_spec)
+    if missing:
+        raise RuntimeError(
+            "FR13_PIGGYBACK catch-up: rids not in the previous spec order: "
+            + repr(sorted(missing)[:8])
+        )
+    runrow_commit = os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "1") == "1"
+    runrow_init = os.environ.get("FR13_TREE_RUNROW_INIT", "1") == "1"
+    burn_node_bank = os.environ.get("FR13_APC_BURN_NODE_BANK", "1") == "1"
+    if not (runrow_commit and runrow_init and burn_node_bank):
+        raise RuntimeError(
+            "FR13_PIGGYBACK catch-up requires the STATELESS-TREE runrow "
+            "lifecycle (COMMIT_TO_RUNNING_ROW/TREE_RUNROW_INIT/BURN_NODE_BANK=1)"
+        )
+    for _prefix in sorted(layers):
+        _layer = layers[_prefix]
+        _flags = getattr(_layer, "_fr13_replay_flags", None)
+        _bank = getattr(_layer, "_fr13_replay_ssm_state", None)
+        _sidx = getattr(_layer, "_fr13_replay_spec_idx", None)
+        if (
+            _flags is None
+            or _bank is None
+            or _sidx is None
+            or int(_flags[0].item()) != 1
+        ):
+            raise RuntimeError(
+                "FR13_PIGGYBACK catch-up: stale or missing scan-time staging "
+                "for layer " + str(_prefix)
+            )
+        _rows = int(_flags[1].item())
+        if _rows <= 0 or _rows > len(prev_spec):
+            raise RuntimeError(
+                "FR13_PIGGYBACK catch-up: staged rows " + str(_rows)
+                + " inconsistent with prev spec order len "
+                + str(len(prev_spec))
+            )
+        # Dead-col-1 doctoring on a CLONE (the staged buffer must survive
+        # for a same-step second consumer / diagnostics untouched).
+        _doctored = _sidx.clone()
+        for _b in range(_rows):
+            if str(prev_spec[_b]) not in want:
+                _doctored[_b, 0] = _doctored[_b, 1]
+        launch_tree_gdn_replay(
+            state_bank=_bank,
+            spec_state_indices=_doctored,
+            prev_lens=_layer._fr13_replay_prev_lens,
+            accepted_paths=paths_buf,
+            accepted_lens=lens_buf,
+            k_ring=_layer._fr13_replay_ring_k,
+            v_ring=_layer._fr13_replay_ring_v,
+            a_ring=_layer._fr13_replay_ring_a,
+            b_ring=_layer._fr13_replay_ring_b,
+            A_log=_layer.A_log,
+            dt_bias=_layer.dt_bias,
+            num_spec_decodes=_rows,
+            output_scale=float(_layer._fr13_replay_output_scale),
+            use_qk_l2norm_in_kernel=True,
+            runrow_commit=runrow_commit,
+            runrow_init=runrow_init,
+            burn_node_bank=burn_node_bank,
+            root_node=8,
+        )
+        _flags[0].fill_(0)
 
 
 @triton.jit
@@ -1858,6 +2027,12 @@ def launch_tree_gdn_replay_all_layers(
         raise ValueError("stacked A_logs/dt_biases must be contiguous")
     if not (spec_state_indices.is_contiguous() and prev_lens.is_contiguous()):
         raise ValueError("stacked spec_state_indices/prev_lens must be contiguous")
+    if _fr13_piggyback_on():
+        raise RuntimeError(
+            "FR13_PIGGYBACK: all-layers committer replay must be DROPPED "
+            "under piggyback (it replays ring node 0 = the diverged pos-0 "
+            "row); catch-up uses launch_tree_gdn_replay(root_node=8)"
+        )
     if _fr13_committer_native_on() and runrow_init and banks_list is not None:
         # SHIP path (EAGER_PACK on): route each layer's committed-path state rebuild through NATIVE
         # fused_sigmoid_gating (validated 1.19e-7) instead of the batched custom replay kernel, to test
