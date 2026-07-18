@@ -481,6 +481,7 @@ def fr13_device_multidraft_commit(
         accepted_row = 0
         accepted_path: list[int] = []
         row: list[int] = []
+        _fr13_sp_prefix = True  # spine-commit de-risk: were ALL accepted steps children[0]?
         for _step in range(int(max_spec_len) + 1):
             children = [
                 node for node, parent in enumerate(parents)
@@ -529,12 +530,31 @@ def fr13_device_multidraft_commit(
                 break
             current_parent = accepted_child
             accepted_row = int(current_parent)
+            if int(source_index) != 0:
+                _fr13_sp_prefix = False
             accepted_path.append(int(current_parent))
 
         out_rows.append(row[:int(max_spec_len) + 1])
         accepted_rows.append(int(accepted_row))
         accepted_lens.append(int(len(accepted_path)))
         accepted_node_paths.append([int(x) for x in accepted_path])
+        # SPINE-COMMIT DE-RISK (byte-neutral counter): how often is the accepted path a pure
+        # spine prefix (all children[0])? High => spine-commit skips the 72ms replay often.
+        _fr13_ss = globals().setdefault(
+            '_FR13_SPINE_STATS', {'spine': 0, 'branch': 0, 'empty': 0})
+        if len(accepted_path) == 0:
+            _fr13_ss['empty'] += 1
+        elif _fr13_sp_prefix:
+            _fr13_ss['spine'] += 1
+        else:
+            _fr13_ss['branch'] += 1
+        if (_fr13_ss['spine'] + _fr13_ss['branch']
+                + _fr13_ss['empty']) % 500 == 0:
+            try:
+                import json as _ssj
+                _ssj.dump(_fr13_ss, open('/logs/fr13_spine_stats.json', 'w'))
+            except Exception:
+                pass
         accepted_token_rows.append([int(drafts[x]) for x in accepted_path])
         start += node_count
 
