@@ -76,3 +76,33 @@ and scan it from h0 = PRE-STEP running state (the state BEFORE prev step's accep
    (the +k prefix nodes) << 72ms saved, tps vs native, no garble.
 This is a DRAFTER+FORWARD+COMMITTER change but each piece reuses existing tree machinery -> lower risk than a
 bespoke prefix kernel. Still correctness-critical + needs live GPU validation.
+
+## STATE-FLOW RESOLVED (2026-07-18) — how col-0 updates WITHOUT the replay (the crux)
+Key: the prev-accepted chain end is a FIXED, KNOWN position (last chain node) — unlike the spine-commit's
+unknown accepted-leaf. So the forward exports THAT one node's state to col-0 (one cheap write, reuses the
+FR13_APC_COMMIT_TO_RUNNING_ROW col-0 machinery), and col-0 carries with a one-step defer:
+
+  Define S_k = committed GDN state after step k's accepts.
+  Step N:  col-0 = S_{N-1}  (exported at end of step N-1).
+    tree = [ path_N chain (prev-accepted tokens) ]  ++  [ subtree_N (new spec from committed leaf) ].
+    forward scans from h0=col-0=S_{N-1}: chain re-applies path_N -> S_N at the chain-end node; subtree scans
+    from S_N. Forward EXPORTS the chain-end node state (S_N, fixed position) -> col-0.
+    committer walks subtree_N only (offset past the chain), commits path_{N+1}; NO replay.
+  => the chain does in the forward's fused scan what the 48-kernel replay did (occupancy-free); the export is
+     ONE state at a known column. col-0 lags one step and the chain re-derives -- self-consistent recursion.
+
+The prev-accepted chain TOKENS are ALREADY available to the drafter via `_COMMITTED[req]` (the merged drafter
+already builds pattern=_COMMITTED[req]+near-MTP) -> no new committer->drafter buffer needed.
+
+### Two variants for the chain's ACTIVATIONS (phase-2/3 implementation choice):
+- (A) RE-PROCESS: drafter puts the committed tokens as chain nodes; forward re-computes their activations +
+  scans. Standard forward over +k tokens (~free HBM-bound) BUT re-writes their KV (must not double-write /
+  land at committed positions). Simplest topology.
+- (B) REUSE-RINGS: forward GDN scan input = [prev-accepted RINGS (stored) ++ subtree activations]; chain rides
+  prev rings, NO re-processing, NO KV touch. More surgical; requires carrying prev rings + mixing into the scan.
+Pick (B) if KV re-write is problematic; (A) if ring-carry is. Both land the same chain-end S_N -> col-0.
+
+### Next implementation step: OBSERVE-ONLY validation (non-destructive, live).
+Before the coordinated drafter+forward+committer change, add FR13_PIGGYBACK_VALIDATE: during today's forward,
+ALSO scan [_COMMITTED-chain ++ tree] and assert the chain-end state == the replay's committed col-0 (byte or
+within bf16-store floor). Proves the mechanism live with ZERO deployed-path change. Then flip to destructive.
