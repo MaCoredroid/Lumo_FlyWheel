@@ -18,6 +18,33 @@ def _fr13_committer_native_on() -> bool:
             return True
     return False
 
+
+def _fr13_piggyback_on() -> bool:
+    """FR13_PIGGYBACK, worker-env-drop-proof (same pattern as _fr13_committer_native_on): eliminate the
+    committer replay by scanning [prev-accepted chain ++ subtree] in the forward from h0=col-0 and exporting
+    the fixed chain-end node state to col-0. Default off => today's replay path (byte-identical)."""
+    if os.environ.get("FR13_PIGGYBACK") == "1":
+        return True
+    for _p in ("/logs/fr13_piggyback.arm", "/tmp/fr13_piggyback.arm"):
+        if os.path.exists(_p):
+            return True
+    return False
+
+
+def _fr13_piggyback_cap(default: int = 8) -> int:
+    """Fixed chain-prefix length K (the mask is baked static, so K must be constant; short prev-accepts are
+    identity-padded). Reads the sidecar content (written by the launcher) OR the env."""
+    import os as _os
+    _v = _os.environ.get("FR13_PIGGYBACK_PREFIX_CAP", "")
+    if not _v:
+        for _p in ("/logs/fr13_piggyback.arm", "/tmp/fr13_piggyback.arm"):
+            try:
+                _v = open(_p).read().strip()
+                break
+            except Exception:
+                pass
+    return int(_v) if _v.isdigit() else default
+
 import torch
 import triton
 import triton.language as tl

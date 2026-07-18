@@ -106,3 +106,24 @@ Pick (B) if KV re-write is problematic; (A) if ring-carry is. Both land the same
 Before the coordinated drafter+forward+committer change, add FR13_PIGGYBACK_VALIDATE: during today's forward,
 ALSO scan [_COMMITTED-chain ++ tree] and assert the chain-end state == the replay's committed col-0 (byte or
 within bf16-store floor). Proves the mechanism live with ZERO deployed-path change. Then flip to destructive.
+
+## SEAM MAP DONE (2026-07-18, agent acab2867) — build is FEASIBLE with 2 constraints
+GREEN (clean reuse, no new machinery):
+- Forward ALREADY seeds h0 from col-0 (h0_use_accepted_column=False via RUNROW_INIT) -> "h0=pre-step" hook exists (patcher:5159-61).
+- col-0 export machinery EXISTS: RUNROW_COMMIT store (kernel:1058-72) + _fr13_conv_commit_to_col0 (patcher:7268-7326).
+  Reuse verbatim, source the FIXED chain-end index instead of the accepted leaf.
+- Replay is cleanly isolated -> ONE-condition drop (sampled patcher:9936/10052/10124; greedy:9080/9110; conv:9816/8879).
+- _COMMITTED[req] carries the chain TOKENS (drafter:208/384) -> no new committer->drafter token buffer.
+- Read helpers _fr13_piggyback_on/_cap ADDED (kernel:22+). [DONE]
+
+CONSTRAINT 1 (n_pad=32 hard cap, kernel:1970-84): tail6=31 nodes has NO room for a K-chain (31+K>32 -> n_pad=64 -> spill).
+  => BUILD ON cat9 FIRST (9 nodes; 9+K<=32 fits with BV<=8) to validate mechanism+win; the deep tail (accept 5.2)
+  needs a subtree shrunk to (32-K) nodes -> slightly lower accept, but the committer 100->16ms dominates (math: still wins).
+CONSTRAINT 2 (static masks -> FIXED K): masks/parent baked once from static SPEC_CONFIG (patcher:224-254) into the
+  captured graph, so chain length K must be CONSTANT (the sidecar prefix-cap). Short prev-accepts (L<K) pad the chain
+  to K with IDENTITY nodes (beta=0 => h_t=h_{t-1}); chain-end index K-1 then still holds the committed state S_N.
+  => identity-padding is the "delicate half" -> gate byte-exact (a beta=0 node must be a pure no-op in the GDN scan).
+
+## BUILD ORDER (revised, cat9-first): seam0 read-helper[DONE] -> topology prepend+identity-pad (seam1, cat9) ->
+## forward extended-tree + kernel chain-end export (seam2/3) -> committer offset (seam4) -> replay drop (seam5)
+## -> GPU gate on cat9 (accept-identical, CFWD 77->16ms, tps>native) -> then subtree-shrunk tail for max accept.
