@@ -69,3 +69,24 @@ depth-lever-dead) were all derived at replay-era committer cost (~99ms); at ~16m
 (depth cheaper, branch break-even lower). Candidates: tail6-pb HYBRID (K=8 chain + fallback replay on
 accept>6 overflow, ~30% of steps => ~70% of the collapse, keeps accept 4.317) vs cat9-family widened under
 the new break-even vs a re-swept shape. This is a MEASUREMENT (same-session sweep), not an assumption.
+
+## R5 SWEEP SPEC (user directive 2026-07-18): the (n, x, branching) two-proposer sweep under the pb cost model
+The deliverable-geometry decision = re-run the TWO-PROPOSER sweep (FR13_TAIL6_IMPROVEMENT_PLAN.md framing:
+MTP head depth n; arctic tail length x; branch width/placement w_over/w_tail/tail_bd) with the calibrated
+survival model (fr13_tail_config_sweep.py, calibrated at tail6; re-calibrate uplifts from the b7-era
+measured conditionals), but with the COST side replaced by the PIGGYBACK-ERA model:
+  tps(n,x,b) = committed(n,x,b) / step_ms(n,x,b)
+  step_ms    = drafter(n MTP forwards + arctic host) + verify(node_count, depth) + committer_pb
+NEW CONSTRAINTS the replay-era sweep did not have:
+  1. CHAIN BUDGET: piggyback consumes 8 of the 32 n_pad slots => tree budget 24 nodes (was 32) for
+     full-coverage chains; deeper trees (max committed > 6, i.e. n+x > 5) OVERFLOW the K=8 chain =>
+     committer_pb becomes the HYBRID BLEND: P(accept<=6)*~16ms + P(accept>6)*replay(~70ms w/ native
+     committer baked). The overflow probability comes from the measured per-depth survival profile.
+  2. committer_pb replaces the flat ~99ms; the branch break-even (accept/node) drops accordingly —
+     re-derive it from the measured cat9pb-vs-cat9f CFWD before sweeping.
+  3. Depth is cheaper (no replay-depth cost) but verify still scales with nodes; the K=8 slots also
+     pay verify cost (identity rows are cheap but not free) — measure the 18-stream vs 10-stream
+     s_per_fwd delta in the pbmech pair and feed it in.
+Sweep output = the deliverable (n, x, b) shape; then ONE same-session confirm campaign (winner vs tail6-pb
+hybrid vs native) on subset_b4_sixteen, WALL=0, wall-free resolve gate. Do not hand-pick a shape without
+the sweep (feedback: swap MTP-n / tail-x / branching with the cost model).
