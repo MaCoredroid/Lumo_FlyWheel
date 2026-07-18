@@ -372,3 +372,21 @@ committed=5.363, s_per_fwd_gpu=0.0864, n=4, 0 fatal errors over the whole run. 4
 (live temp-0 clean via VIA) + (temp-0.6 accept 4.363≈4.32 regression-free). Remaining = physical dead-code
 deletion (old committer def in 6857 helper + fallback :10213 + _patch_rejection_sampler_gpu_committer +
 flags), a bounded careful patcher refactor on now-UNREACHABLE code (py_compile + boot-test gated).
+
+## Phase-1 deletion: FUNCTIONAL done; physical excision is HIGH-RISK-on-dead-code (2026-07-18)
+Block-replacement landed (committed): the active all_greedy path now unconditionally calls the point-mass
+rejection committer; the dead old-committer call (:10704) + broken dual-run gate are REMOVED. py_compile OK,
+byte-identical to VIA. So the old committer is now UNCALLED in the active path (functionally deleted).
+
+REMAINING physical refs to _lumo_tree_path_lcp_max_greedy_sample: def (7702), inactive fallback string
+(:10228, `old` anchor doesn't match this vLLM so never injected), verification (:18200), 2 comments. The
+def + the flags FR13_GPU_COMMITTER/FR13_COMMITTER_SYNCKILL are ALL inside the SAME 3350-line r''' helper
+(6857-10208) that ALSO defines the NEW committer (_lumo_tree_canonical_multidraft_sample @ 9274) + the
+FR13_EAGER_PACK machinery + the flag defs (6886). Excising them requires precise surgery on the shared
+injected string -- a boundary slip breaks the WORKING new committer. => HIGH-RISK, LOW-VALUE (dead code).
+
+DECISION: Phase-1 is FUNCTIONALLY COMPLETE + GATED (accept 4.363, VIA clean, offline 0/4000 + dup 0/2000,
+active old-call removed). The physical excision of the now-dead old committer + flags from the shared helper
+is deferred to a dedicated careful refactor (overlaps task #10 "modularize the 20k patcher"): map the def's
+exact end, split the helper, py_compile + boot-test. NOT rushed at session-tail against the working new
+committer. Phase-2 done; Phase-3 (piggyback = the 94.7ms replay elimination) is the deployment prize.
