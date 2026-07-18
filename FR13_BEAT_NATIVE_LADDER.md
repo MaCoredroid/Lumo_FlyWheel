@@ -29,3 +29,17 @@ Reference (B=4 speed-gate basis: per-forward GPU + decode-bracketed accept, qwen
 Honest guards: async's accept 4.953 is trajectory-bound (cross-run) — only the same-session delta counts;
 native+async should also be measured eventually (the fair endgame bar); piggyback lossless is within-floor
 (1.19e-7 state-carry) → trajectory gate, not byte gate.
+
+## RESOLVE GATE (user-mandated, 2026-07-18): verdict pass-count ~8/16-ish; drifting below = issue signal
+Measured (subset_b4_sixteen, WALL=1800): native 6/16 passed (2 wall-truncated, 5 tests_failed = completed
+attempts); tail6 b7 3/16 (12 TRUNCATED mid-work); async as1 1/16 (9 truncated, 6 ended-text); cng16 interim
+1/8 (5 truncated). TRACE CLASSIFICATION: zero give-up texts, zero garble — truncated traces end with clean
+mid-investigation tool calls. => the tree's resolve deficit is WALL-CENSORING (34% slower => agent gets
+fewer turns in the fixed 30min wall => truncated => empty_patch), NOT token-quality degradation.
+IMPLICATIONS: (1) the speed deficit ALREADY costs ~2x resolves at deployment-faithful walls — speed converts
+directly to resolutions; (2) resolve-recovery = the cleanest end-to-end ladder gate: as rungs land, tree
+truncations must convert to attempts/passes toward native's band (~6-8/16 on this subset); failure to
+recover once speed is fixed => THEN suspect behavioral/token issues; (3) per the no-wall-on-gates policy,
+LOSSLESS gates treat wall-tripped as NA (right-censored) — but the fixed-wall resolve count is the honest
+DEPLOYMENT metric and is now reported per arm alongside accept/CFWD/tps. WATCH: async's 6 ended-with-text
+(vs tail6's 1) — final text without applied patch; classify during the async lossless gate.
