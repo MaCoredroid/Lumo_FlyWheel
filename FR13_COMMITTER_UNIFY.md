@@ -489,3 +489,19 @@ for a clean delta before deploy. (2) CF2 is GPU-only; the eager per-request gath
 OFF=custom baseline (byte-identical), ON=native (bit-exact-to-no-spec, accept ~4.32) -> satisfies off-identical.
 NEXT: net deploy_speed (cn1) + a same-boot native-vs-custom A/B on subset_b4_sixteen -> if net win + clean
 delta -> bake FR13_COMMITTER_NATIVE. This is a modest-but-real phase-3 win, cheaper than the piggyback.
+
+## native committer CONSOLIDATED (2 runs) + clean-gate blocked by infra (2026-07-18)
+Committer CFWD (FR13_COMMITTER_NATIVE=1, tail6, graph): cn1=90.06ms, cna1=80.38ms -- BOTH < custom
+tree-replay 98.9ms (phase-2). SIGN is robust (native consistently faster ~9-19ms); MAGNITUDE noisy
+(~10ms cross-boot). accept: cn1=4.386 (4 tasks) ~ 4.32 => LOSSLESS (bit-exact to no-spec, validated
+offline 1.19e-7). Deployable: graph-clean, 0 fatal, ENGAGED needle. "No config drift": OFF=custom baseline
+byte-identical => satisfies the off-identical requirement; ON=native (accept-preserving).
+CLEAN same-boot A/B (cna1) was BLOCKED: the background bash driver got reaped mid-arm-1, orphaning the vLLM
+container (held ~88GB -> wedge; cleared via docker rm + model_server.recover_host_memory). This infra
+flakiness (background driver reaped -> orphaned vLLM -> mem wedge) has recurred all session; cn1 survived,
+cna1 didn't (intermittent).
+DISPOSITION: native committer is a VALIDATED modest committer optimization (lossless + deployable +
+consistently ~10-18ms faster CFWD across 2 runs). It does NOT reach the ~16ms floor (piggyback territory)
+but is CHEAP (flag flip, task #18 diagnostic ready to bake). To BAKE FR13_COMMITTER_NATIVE: a clean
+subset_b4_sixteen gate (accept-identical + no-garble over 16 tasks) -- infra-blocked this session; retry
+when background runs are stable. Phases 1+2 DONE; Phase-3 = this validated-modest-win, gate pending.
