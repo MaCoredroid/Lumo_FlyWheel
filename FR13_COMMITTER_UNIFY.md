@@ -408,3 +408,22 @@ GPU-run learnings this session: `&`+disown survives (run_in_background reaped); 
 `pkill -f b4_campaign_driver` (self-kills shell); dcgm samplers linger + wedge unified mem after force-kill
 -> `model_server.recover_host_memory()` reclaims (96GB->5GB).
 => NEXT: Phase-3 = piggyback (eliminate the measured 94.7ms committer replay). GPU clean (112GB free).
+
+## PHASE-3 finding (measure-grounded): the rejection KERNEL is at floor; the 94.7ms is the REPLAY
+Phase-2 measured: the rejection committer WALK (fr13_device_multidraft_commit, wrapped by
+FR13_MULTIDRAFT_GPU_TIMER) = 4.25ms == its floor (a tiny accept-walk over ~21 nodes near launch-latency).
+This CORRECTS the directive's premise that the multidraft span is ~94ms -- it is 4ms. The ~94ms is the
+WHOLE committer (CFWD 98.9ms) dominated by the GDN REPLAY (48 latency-bound per-layer kernels re-deriving
+the accepted-leaf state = 66-72ms compute + ~25ms host orchestration/DtoH). So "optimize the rejection
+KERNEL toward the floor" has NO headroom -- the kernel is already at floor.
+
+The real committer cost = the REPLAY. Two levers:
+- LEVER 2 = FR13_SAMPLED_REPLAY_BATCHED (IMPLEMENTED, default-off byte-identical): batch the 48 per-layer
+  replay launches into ONE kernel (launch_tree_gdn_replay_all_layers). Trims the HOST launch-overhead
+  (~5-10ms of the ~25ms host), NOT the 66-72ms latency-bound compute. Bounded, low-risk, ready to A/B-gate
+  (accept-identical + CFWD reduction on subset_b4_sixteen).
+- PIGGYBACK (scaffolded, task #46): fold the accepted-path GDN advance into the NEXT forward's fused scan
+  => eliminate the whole 66-72ms replay compute; committer 94.7->~16ms. MAJOR architectural build; lossless
+  profile risky (state-carry ~1.19e-7, could amplify -> trajectory gate needed); verdict ROI ~parity (+10%
+  with forward-trim). The ONLY lever that touches the 66-72ms compute floor.
+NEXT: A/B-gate LEVER 2 (bounded win, ready) and/or advance the PIGGYBACK (big win, major build).
