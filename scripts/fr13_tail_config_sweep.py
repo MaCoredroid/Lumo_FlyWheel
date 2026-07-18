@@ -20,9 +20,11 @@ import argparse
 
 HEAD = [0.970, 0.864, 0.851, 0.849, 0.866]           # MTP depth d1..5 (branched)
 TAIL = [0.666, 0.848, 0.895, 0.906, 0.908, 0.950]     # arctic tail position j=0.. (j0=handoff)
-TAIL_PLATEAU = 0.95
+TAIL_PLATEAU = 0.15  # tailx10 MEASURED refutation: deep tail is COLD (accept flat at x=10,
+                     # tps -21%); 0.95 was the extrapolation artifact that ranked n1/x21 fantasies
 ARCTIC_PURE = 0.55                                    # n=0 pure-arctic flat conditional (design's ~0.5-0.6 deep)
 NPAD, CAP = 32, 0.97
+CHAIN_SLOTS = 8   # piggyback chain consumes 8 of NPAD (pb era only)
 
 def tailc(j): return TAIL[j] if j < len(TAIL) else TAIL_PLATEAU
 
@@ -41,12 +43,72 @@ def model(n, x, w_over, w_tail, tail_bd, comp_uplift, tail_uplift):
         surv *= c; acc += surv; nodes += 1 + (w_tail if branched else 0)
     return acc, nodes
 
+def survival_at(n, x, w_over, w_tail, tail_bd, comp_uplift, tail_uplift, depth):
+    """P(accept >= depth) under the same conditionals as model() (for overflow prob)."""
+    surv = 1.0
+    d_all = [("h", d) for d in range(1, n + 1)] + [("t", j) for j in range(x)]
+    for i, (kind, idx) in enumerate(d_all):
+        if i >= depth:
+            break
+        if kind == "h":
+            c = HEAD[idx - 1] + (comp_uplift if w_over else 0.0)
+        else:
+            c = ARCTIC_PURE if n == 0 else tailc(idx)
+            if idx < tail_bd and w_tail > 0:
+                c = min(CAP, c + tail_uplift)
+        surv *= min(CAP, c)
+    return surv
+
+
+def cost_model(a, n, x, w_over, w_tail, tail_bd, accept, nodes):
+    """PB-era (or replay-era) step cost in ms -> (tps, step_ms, committer_ms, coverage).
+
+    ALL inputs are provisional CLI params until measured (FR13_BEAT_NATIVE_LADDER R5):
+      c_pb        <- pbmech cat9pb CFWD (target ~16; UNMEASURED)
+      c_replay    <- cng16 measured 70.7 (native committer baked)
+      v_base/v_node <- refit from the pbmech 18-vs-10-stream delta + confirm campaign
+      d_head      <- ~20ms/MTP forward (drafter decomp); d_arctic host adder
+    PB constraints: chain consumes CHAIN_SLOTS of NPAD (tree budget 24); configs with
+    max committed depth n+x > 6 pay the HYBRID blend via P(accept > 6) = survival(7).
+    """
+    era_pb = a.era == "pb"
+    streams = 1 + nodes + (CHAIN_SLOTS if era_pb else 0)
+    verify = a.v_base + a.v_node * nodes + (a.v_chain * CHAIN_SLOTS if era_pb else 0.0)
+    drafter = a.d_head * n + (a.d_arctic if x > 0 else 0.0)
+    if era_pb:
+        if n + x <= 6:
+            committer, cov = a.c_pb, 1.0
+        else:
+            p_ov = survival_at(n, x, w_over, w_tail, tail_bd,
+                               a.comp_uplift, a.tail_uplift, 7)
+            committer = (1 - p_ov) * a.c_pb + p_ov * a.c_replay
+            cov = 1 - p_ov
+    else:
+        committer, cov = a.c_replay, 0.0
+    step = drafter + verify + committer + a.g_ms
+    tps = (accept + 1.0) / step * 1000.0
+    return tps, step, committer, cov
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--comp_uplift", type=float, default=0.06, help="arctic-complement uplift in overlap (calibrate: head-complement A/B)")
     ap.add_argument("--tail_uplift", type=float, default=0.12, help="arctic-branch uplift in tail (calibrate: tail6-vs-tail6b A/B)")
     ap.add_argument("--top", type=int, default=15)
+    # ---- cost model (R5): rank by tps under an era's committer cost ----------
+    ap.add_argument("--rank", choices=("accept", "tps"), default="accept")
+    ap.add_argument("--era", choices=("replay", "pb"), default="pb",
+                    help="replay = CALIBRATION mode (must reproduce measured tail6 ~18.5 fullstep before trusting pb rankings)")
+    ap.add_argument("--c_pb", type=float, default=16.0, help="UNMEASURED until pbmech cat9pb CFWD")
+    ap.add_argument("--c_replay", type=float, default=70.7, help="measured cng16 (native committer baked)")
+    ap.add_argument("--v_base", type=float, default=24.2, help="verify base ms (fit: tail6 88ms @ 21 nodes, v_node 2.9)")
+    ap.add_argument("--v_node", type=float, default=2.9, help="verify ms/node (b7 same-session tail6b-vs-tail6 delta)")
+    ap.add_argument("--v_chain", type=float, default=1.0, help="verify ms/chain-slot (identity rows; MEASURE via pbmech 18-vs-10 stream delta)")
+    ap.add_argument("--d_head", type=float, default=20.0, help="drafter ms per MTP head forward (drafter decomp ~100/5)")
+    ap.add_argument("--d_arctic", type=float, default=5.0, help="arctic host adder ms when x>0")
+    ap.add_argument("--g_ms", type=float, default=26.0, help="inter-phase gaps/host overhead ms (calibrated so replay-era tail6 == measured 18.5)")
     a = ap.parse_args()
+    budget = NPAD - (CHAIN_SLOTS if (a.rank == "tps" and a.era == "pb") else 0)
     rows = []
     for n in range(0, 6):                     # MTP HEAD depth (0=pure arctic .. 5)
         for x in range(0, 22):                # TAIL length (0=pure MTP)
@@ -56,15 +118,22 @@ def main():
                     for tail_bd in range(0, x + 1):
                         if w_tail == 0 and tail_bd > 0: continue
                         acc, nodes = model(n, x, w_over, w_tail, tail_bd, a.comp_uplift, a.tail_uplift)
-                        if nodes > NPAD or nodes == 0: continue
-                        rows.append((acc, nodes, n, x, w_over, w_tail, tail_bd))
+                        if nodes > budget or nodes == 0: continue
+                        tps, step, cmt, cov = cost_model(a, n, x, w_over, w_tail, tail_bd, acc, nodes)
+                        key = tps if a.rank == "tps" else acc
+                        rows.append((key, acc, tps, step, cmt, cov, nodes, n, x, w_over, w_tail, tail_bd))
     rows.sort(reverse=True)
-    print(f"# merged 2-proposer sweep  comp_uplift={a.comp_uplift} tail_uplift={a.tail_uplift}  nodes<={NPAD}")
-    print(f"  [ref] pure-MTP (n5,x0) accept={model(5,0,0,0,0,0,0)[0]:.3f}(nodes {model(5,0,0,0,0,0,0)[1]})  |  shipped tail6 (n5,x6,no branch) accept={model(5,6,0,0,0,0,0)[0]:.3f}(measured ~5.2)")
-    print(f"{'accept':>7} {'nodes':>5}  n=MTP  x=TAIL  w_over  w_tail  tail_bd")
-    for acc, nodes, n, x, w_over, w_tail, tail_bd in rows[:a.top]:
+    print(f"# merged 2-proposer sweep  rank={a.rank} era={a.era}  comp_uplift={a.comp_uplift} tail_uplift={a.tail_uplift}  nodes<={budget}")
+    print(f"  [ref] pure-MTP (n5,x0) accept={model(5,0,0,0,0,0,0)[0]:.3f}(nodes {model(5,0,0,0,0,0,0)[1]})  |  shipped tail6 (n5,x6,no branch) accept={model(5,6,0,0,0,0,0)[0]:.3f}(measured ~5.2 old-regime / 4.32 b7)")
+    if a.rank == "tps":
+        _t6 = model(5, 6, 0, 0, 0, a.comp_uplift, a.tail_uplift)
+        _t6c = cost_model(a, 5, 6, 0, 0, 0, *_t6)
+        print(f"  [calib] tail6 under era={a.era}: tps={_t6c[0]:.1f} step={_t6c[1]:.0f}ms committer={_t6c[2]:.0f}ms"
+              f"  (replay-era MUST land near the measured 18.5 fullstep; native bar = 27.9)")
+    print(f"{'tps':>6} {'accept':>7} {'step':>5} {'cmtms':>5} {'cov':>4} {'nodes':>5}  n=MTP  x=TAIL  w_over  w_tail  tail_bd")
+    for key, acc, tps, step, cmt, cov, nodes, n, x, w_over, w_tail, tail_bd in rows[:a.top]:
         tag = " <- shipped tail6" if (n,x,w_over,w_tail,tail_bd)==(5,6,0,0,0) else ""
-        print(f"{acc:7.3f} {nodes:5d}  {n:4d}  {x:5d}  {w_over:5d}  {w_tail:5d}  {tail_bd:6d}{tag}")
+        print(f"{tps:6.1f} {acc:7.3f} {step:5.0f} {cmt:5.0f} {cov:4.2f} {nodes:5d}  {n:4d}  {x:5d}  {w_over:5d}  {w_tail:5d}  {tail_bd:6d}{tag}")
 
 if __name__ == "__main__":
     main()
