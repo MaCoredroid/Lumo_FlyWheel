@@ -43,3 +43,18 @@ recover once speed is fixed => THEN suspect behavioral/token issues; (3) per the
 LOSSLESS gates treat wall-tripped as NA (right-censored) — but the fixed-wall resolve count is the honest
 DEPLOYMENT metric and is now reported per arm alongside accept/CFWD/tps. WATCH: async's 6 ended-with-text
 (vs tail6's 1) — final text without applied patch; classify during the async lossless gate.
+
+## RESOLVE GATE CORRECTION (user, 2026-07-18): resolve is measured WALL-FREE (WALL=0) — consistent with the
+## established speed-gate policy (no AGENT_WALL_S on gates; trace-inactivity watchdog = hang protection)
+My WALL=1800 launches today (cng16, p1g1, del1/2, via1) were a METHODOLOGY DRIFT from the no-wall gate
+policy; the driver's 1800 default is deployment-faithful but right-censors gate signal. Consequences:
+- ALL wall-censored resolve numbers above (native 6/16, tail6 3/16, async 1/16) are NA for the RESOLVE GATE
+  (they measure speed×wall, not quality). The user's ~8/16 band is the WALL-FREE basis.
+- Wall-free, resolve = pure behavioral/quality parity gate (agent runs to natural completion; retries ~2x);
+  speed shows up separately as wall-clock/task + the per-forward GPU metrics. Truncation-conversion applies
+  only to walled DEPLOYMENT reporting (kept as a secondary deployment-faithful view, clearly labeled).
+- FUTURE GATE CAMPAIGNS: WALL=0 (driver emits empty AGENT_WALL_S). The combined ladder campaign runs WALL=0;
+  its tail6_base arm gives the wall-free tree resolve baseline vs the ~8/16 band.
+- cng16 (in flight, WALL=1800): its accept/CFWD reads are wall-independent (decode-bracketed + per-call
+  span timers) => still valid for the FR13_COMMITTER_NATIVE bake; its resolve = NA (wall-censored). The
+  wall-free resolve read for the native committer rides the combined campaign (post-bake arms).
