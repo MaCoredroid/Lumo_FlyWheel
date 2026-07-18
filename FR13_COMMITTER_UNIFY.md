@@ -462,3 +462,16 @@ escape the ~1 CTA/SM wall. The rejection KERNEL (walk) is at its 4.25ms floor. T
 the wall is the PIGGYBACK: fold the accepted-path advance into the NEXT forward's ONE high-occupancy fused
 scan (native-style) -- that is WHY native's committer is 6.6ms. Major architectural build, risky lossless
 (~1.19e-7 state-carry), ~parity ROI. Gated first step = trajectory-lossless contract proof. Phases 1+2 DONE.
+
+## OVERTURN (2026-07-18): native committer is an OVERLOOKED, validated-lossless, occupancy-escaping lever
+Red-teaming the "piggyback is the sole lever" conclusion surfaced FR13_COMMITTER_NATIVE
+(_fr13_committer_native_on, launch_tree_gdn_replay:1325): it routes the committed-path GDN rebuild through
+NATIVE fused_sigmoid_gating (packed, cu_seqlens, "bit-exact to no-spec") instead of the custom
+_tree_gdn_replay_kernel. KEY: the committed path is LINEAR (no branching) => NO 128KB tree h_cache => it
+SIDESTEPS the ~1 CTA/SM occupancy wall that caps the tree-replay -- WITHOUT the full piggyback forward-fold.
+It was built as a GARBLE DIAGNOSTIC (task #18, garble fixed elsewhere via ATTN_KV_REMAP) so its SPEED was
+NEVER MEASURED. It does NOT force enforce_eager (forward stays graph; only the committer gathers eager).
+Tradeoff: occupancy-escape (faster fused kernel) vs host-gather overhead (per-request committed-path gather).
+=> MEASURING NOW (cn1, FR13_COMMITTER_NATIVE=1 + CF2 timer): committer CFWD (vs custom 98.9ms) + accept
+(lossless, bit-exact) + net tps. If net win + graph-forward + lossless => a DEPLOYABLE committer optimization
+far cheaper than the piggyback. This corrects the premature "piggyback sole lever" cost-gate.
