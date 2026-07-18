@@ -6883,11 +6883,6 @@ _FR13_EAGER_PACK_STAGE = {}
 # :6761 + first-draft-kernel/legacy path verbatim. NEVER bind into a config
 # without FR13_GPU_COMMITTER=1 (synckill is meaningless without the GPU
 # committer). Read once at import (flag plan).
-_FR13_COMMITTER_SYNCKILL = (
-    __import__('os').environ.get('FR13_GPU_COMMITTER', '0') == '1'
-    and __import__('os').environ.get('FR13_COMMITTER_SYNCKILL', '0') == '1'
-)
-_FR13_COMMITTER_SYNCKILL_NEEDLE_DONE = False
 
 # FR13_COMMIT_ARGMAX_GATE (ONE flag, default OFF, inert): per-served-token
 # in-process committer-row argmax gate. At each committed/served token the
@@ -16578,173 +16573,6 @@ def _patch_fp8_utils_gb10_gemv_cfg() -> bool:
     return True
 
 
-def _patch_rejection_sampler_gpu_committer() -> bool:
-    """OPT-1: flag-gated GPU-resident tree committer (FR13_GPU_COMMITTER).
-
-    Flag FR13_GPU_COMMITTER, DEFAULT-OFF. The greedy tree committer
-    ``_lumo_tree_path_lcp_max_greedy_sample`` (injected by
-    ``_patch_rejection_sampler_tree_lcp``) decides accept / path-LCP / bonus on
-    the HOST as a pure-Python loop over the synced committer inputs, gated by a
-    packed DtoH+sync that blocks the MAIN launching thread 91.9% of the verify
-    window (FR13_BEAT_NATIVE_SPEED_DESIGN_BIND.md). OPT-1 moves that PURE
-    INTEGER decision onto the GPU via the Triton committer kernel in
-    ``scripts/fr13_gpu_committer_kernel.py`` so the host never syncs the per-node
-    inputs to decide what to commit.
-
-    This patch edits the ALREADY-INJECTED committer (so it must run AFTER
-    ``_patch_rejection_sampler_tree_lcp`` in patch_steps). It:
-      1. reads the flag default-OFF just before the committer's per-request loop;
-      2. when ON, fills out_rows/accepted_rows/accepted_lens/accepted_node_paths/
-         accepted_token_rows from the GPU committer module, then makes the legacy
-         loop iterate an EMPTY list (so the legacy per-node Python body never
-         runs but stays byte-for-byte present);
-      3. when OFF, the loop iterates ``counts`` exactly as before -- the default
-         path is byte-identical (only the loop's iterable NAME changes, and that
-         name is bound to ``counts`` when the flag is off).
-
-    LOSSLESS BY CONSTRUCTION: the GPU committer is a location-only host->Triton
-    move of the SAME integer decision (token-id == compares, parent walks, LCP
-    scan, strict-> earliest-leaf tie-break, 3-way bonus select). No float, no
-    reduction, no reorder -> byte-identical out_rows/accepted_rows/accepted_lens
-    (proven CPU-only by scripts/fr13_gpu_committer_byte_ab_gate.py against a
-    verbatim copy of the committer serving logic). DEFAULT-OFF (FIX-1/2/3 gating
-    mirror).
-    """
-    text = REJECTION_SAMPLER_PATH.read_text()
-    # UNIQUE idempotency sentinel. It MUST be (a) injected by THIS patcher into
-    # the loop-skip region it adds AND (b) checked here, AND (c) NOT a substring
-    # of anything the tree_lcp helper injects. The old sentinel "# FR13_GPU_
-    # COMMITTER" COLLIDED with the tree_lcp doc comment "# FR13_GPU_COMMITTER)."
-    # (helper line ~6065): tree_lcp runs FIRST, so by the time this patcher read
-    # the file the bare "# FR13_GPU_COMMITTER" was already present -> this guard
-    # mis-fired "already patched" and BAILED, so the loop-skip
-    # `if _fr13_gpu_committer:` was never injected and the legacy loop ran on the
-    # synckill-nulled parents_cpu -> EngineDeadError. The new sentinel ends in a
-    # token ("_LOOPSKIP_SOT") that does NOT appear anywhere in the tree_lcp
-    # helper, so the guard now only matches a genuine prior gpu_committer apply.
-    sentinel = "# FR13_GPU_COMMITTER_LOOPSKIP_SOT"
-    if sentinel in text:
-        return False
-    if "def _lumo_tree_path_lcp_max_greedy_sample(" not in text:
-        # committer not injected yet (LCP patcher must run first) -- skip; the
-        # next run picks it up once the committer is present.
-        return False
-    anchor = (
-        "    out_rows = []\n"
-        "    accepted_rows = []\n"
-        "    accepted_lens = []\n"
-        "    path_log_rows = []\n"
-        "    winner_log_rows = []\n"
-        "    accepted_node_paths = []\n"
-        "    accepted_token_rows = []\n"
-        "    start = 0\n"
-        "    for req_i, node_count in enumerate(counts):\n"
-    )
-    if anchor not in text:
-        raise RuntimeError(
-            "FR13_GPU_COMMITTER: committer per-request loop anchor not found "
-            "(LCP committer drift) -- not patching."
-        )
-    replacement = (
-        "    out_rows = []\n"
-        "    accepted_rows = []\n"
-        "    accepted_lens = []\n"
-        "    path_log_rows = []\n"
-        "    winner_log_rows = []\n"
-        "    accepted_node_paths = []\n"
-        "    accepted_token_rows = []\n"
-        "    start = 0\n"
-        "    " + sentinel + " (OPT-1): flag-gated GPU-resident committer.\n"
-        "    # DEFAULT-OFF. flag-off => _fr13_gpu_commit_counts IS counts, so the\n"
-        "    # legacy per-node Python loop below runs byte-for-byte unchanged.\n"
-        "    _fr13_dev_out = None  # G2.b device->device writeback source (synckill)\n"
-        "    # SINGLE SOURCE OF TRUTH: _fr13_gpu_committer was computed ONCE at the\n"
-        "    # top of this function (OPT-1 G2). The synckill null guard references\n"
-        "    # the SAME variable, so the null can NEVER fire while this loop-skip\n"
-        "    # is False. Do NOT recompute it here (the prior duplicate diverged\n"
-        "    # from the runtime _fr13_bonus_self/_fr13_cag_active at B=4).\n"
-        "    if '_fr13_gpu_committer' not in dir():\n"
-        "        raise RuntimeError(\n"
-        "            'FR13_GPU_COMMITTER: single-source predicate _fr13_gpu_committer '\n"
-        "            'missing at the loop-skip (top-of-function computation lost) -- '\n"
-        "            'class 9 fail-loud, refusing to recompute a drifting duplicate.'\n"
-        "        )\n"
-        "    _fr13_gpu_commit_counts = counts\n"
-        "    if _fr13_gpu_committer:\n"
-        "        try:\n"
-        "            import importlib.util as _fr13_ilu, os as _fr13_gco\n"
-        "            _fr13_kpath = _fr13_gco.environ.get(\n"
-        "                'FR13_GPU_COMMITTER_KERNEL',\n"
-        "                '/home/mark/shared/lumoFlyWheel-speed/scripts/'\n"
-        "                'fr13_gpu_committer_kernel.py',\n"
-        "            )\n"
-        "            _fr13_km = __import__('sys').modules.get('_fr13_gpu_committer_kernel')\n"
-        "            if _fr13_km is None:\n"
-        "                _fr13_spec = _fr13_ilu.spec_from_file_location(\n"
-        "                    '_fr13_gpu_committer_kernel', _fr13_kpath)\n"
-        "                _fr13_km = _fr13_ilu.module_from_spec(_fr13_spec)\n"
-        "                _fr13_spec.loader.exec_module(_fr13_km)\n"
-        "                __import__('sys').modules['_fr13_gpu_committer_kernel'] = _fr13_km\n"
-        "            if _FR13_COMMITTER_SYNCKILL:\n"
-        "                " + sentinel + "_SYNCKILL (OPT-1 G2): device-resident\n"
-        "                # committer reading the DEVICE source tensors (NO host\n"
-        "                # committer-input list = the :6761 sync is killed) +\n"
-        "                # side-stream output readback (NO inline .cpu()). The\n"
-        "                # host lists are materialised LAZILY (event.synchronize\n"
-        "                # only on first access); the kernel device outputs are\n"
-        "                # the SAME-STEP serving writeback source. Byte-identical\n"
-        "                # to fr13_gpu_committer_full for every input (pure-int).\n"
-        "                _fr13_dev_out, _fr13_materialise = (\n"
-        "                    _fr13_km.fr13_gpu_committer_device_full(\n"
-        "                        tree_parent_indices, draft_token_ids,\n"
-        "                        parent_token_ids, self_token_ids,\n"
-        "                        bonus_token_ids, counts, max_spec_len,\n"
-        "                    )\n"
-        "                )\n"
-        "                if not _FR13_COMMITTER_SYNCKILL_NEEDLE_DONE:\n"
-        "                    globals()['_FR13_COMMITTER_SYNCKILL_NEEDLE_DONE'] = True\n"
-        "                    try:\n"
-        "                        from vllm.logger import init_logger as _fr13_sk_il\n"
-        "                        _fr13_sk_il('vllm.fr13_committer_synckill').info(\n"
-        "                            'FR13_COMMITTER_SYNCKILL engaged: device-arm '\n"
-        "                            'committer (no :6761 committer-input sync), '\n"
-        "                            'side-stream output readback, n_req=%d'\n"
-        "                            % len(counts)\n"
-        "                        )\n"
-        "                    except Exception:\n"
-        "                        print('FR13_COMMITTER_SYNCKILL engaged', flush=True)\n"
-        "                # Lazy host materialisation (the run-ahead window is\n"
-        "                # between device_full() above and this first access; on\n"
-        "                # the pure serving path the host lists feed the replay\n"
-        "                # req-key dict + diagnostics, NOT the same-step writeback\n"
-        "                # which reads _fr13_dev_out device->device).\n"
-        "                (\n"
-        "                    out_rows, accepted_rows, accepted_lens,\n"
-        "                    accepted_node_paths, accepted_token_rows,\n"
-        "                ) = _fr13_materialise()\n"
-        "            else:\n"
-        "                (\n"
-        "                    out_rows, accepted_rows, accepted_lens,\n"
-        "                    accepted_node_paths, accepted_token_rows,\n"
-        "                ) = _fr13_km.fr13_gpu_committer_full(\n"
-        "                    parents_cpu, drafts_cpu, parent_targets_cpu,\n"
-        "                    self_targets_cpu, bonus_targets_cpu, counts,\n"
-        "                    max_spec_len,\n"
-        "                )\n"
-        "        except Exception as _fr13_gco_exc:\n"
-        "            raise RuntimeError(\n"
-        "                'FR13_GPU_COMMITTER failed (no silent fallback, class 9): '\n"
-        "                + type(_fr13_gco_exc).__name__ + ':' + str(_fr13_gco_exc)\n"
-        "            ) from _fr13_gco_exc\n"
-        "        # legacy per-node loop iterates EMPTY (decision already made on GPU).\n"
-        "        _fr13_gpu_commit_counts = []\n"
-        "    for req_i, node_count in enumerate(_fr13_gpu_commit_counts):\n"
-    )
-    text = text.replace(anchor, replacement, 1)
-    REJECTION_SAMPLER_PATH.write_text(text)
-    return True
-
-
 def _fr13_write_subop_mab_sidecar() -> None:
     """Bake the FR13_GDN_SUBOP_MAB master switch into a sidecar flag file.
 
@@ -18147,7 +17975,6 @@ def main() -> int:
         (MAMBA_UTILS_PATH, _patch_worker_mamba_snap_fidelity()),
         (MAMBA_STATE_UTILS_PATH, _patch_mamba_state_utils_tree_conv_node_copy()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_tree_lcp()),
-        (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_gpu_committer()),
         (FP8_UTILS_PATH, _patch_fp8_utils_gb10_gemv_cfg()),
         # FR13_APC_ZERO_MAMBA_ON_ALLOC (default OFF / PATCH-TIME gated ->
         # byte-identical source when the env flag is not "1" at patch time).
