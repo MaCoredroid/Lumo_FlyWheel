@@ -219,10 +219,12 @@ def main() -> int:
     def h0_of(seed):
         g = torch.Generator(device=dev)
         g.manual_seed(seed)
-        h0 = torch.randn(NUM_VH, DIM, DIM, generator=g, device=dev,
-                         dtype=torch.float32) * 0.2
-        assert not bool((h0 == 0).any()), "h0 must contain no exact zeros (N3)"
-        return h0
+        for _try in range(16):  # resample on exact zeros (N3) instead of dying
+            h0 = torch.randn(NUM_VH, DIM, DIM, generator=g, device=dev,
+                             dtype=torch.float32) * 0.2
+            if not bool((h0 == 0).any()):
+                return h0
+        raise RuntimeError("h0 fixture: could not draw a zero-free tensor in 16 tries")
 
     # ---- (A) two-step induction + (B) threading identity, per L1 -------------
     print(f"[check A/B] two-step ring induction + root_node threading, L1 in {V0C.LS}",
