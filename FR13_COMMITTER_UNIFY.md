@@ -260,3 +260,39 @@ optimization. Batching it is slower (measured); copy-not-replay is infeasible (f
 - SEPARATE: accept > 5 delivered live (tail6+prewarm 5.15).
 Three hypotheses refuted by measurement (output-write, batched-replay, cross-boot phase-1) + one lever closed
 by feasibility (copy-not-replay). Committer is at its measured/researched floor; no cheap win exists.
+
+---
+
+## Phase-1 AUDIT + dup-sibling tie settled (device side), 2026-07-18 (committer directive, GPU-blocked)
+
+**State (rigorously audited, patcher fr10_phase4:10663-10734):** the temp-0 unification is ~80% DONE.
+- `_lumo_tree_canonical_multidraft_sample(..., all_greedy=True)` = the point-mass rejection committer path,
+  served when `FR13_GREEDY_VIA_REJECTION=1` (returns `_fr13_gu_new`, :10703). DEFAULT still runs the old
+  greedy `_lumo_tree_path_lcp_max_greedy_sample` (:10704, returns `_fr13_gu_old`).
+- `fr13_gpu_committer_kernel.py` ALREADY DELETED. `FR13_MULTIDRAFT_GPU_TIMER` (phase-2) ALREADY present.
+- Offline byte-gate `fr13_greedy_pointmass_byte_gate.py` PASSES 0/4000 (device point-mass == independent
+  top-down walk) on DISTINCT-sibling trees (re-verified this session).
+
+**The one deferred correctness question = the duplicate-sibling tie.** `_pick_distinct` dedupes siblings,
+but the last-resort pad (fr13_mtp_suffix_assembly.py:108 `branches.append(spine_tok)`) CAN repeat the spine
+token => two siblings carrying the same token; if it == greedy argmax, both match and the committer must
+pick one leaf. NEW gate `fr13_greedy_pointmass_dup_gate.py` (0/2000): the DEVICE point-mass committer picks
+the FIRST matching sibling (child-0 = spine) on BOTH sub-cases — (A) deep-match and (B) the LCP-TIE (spine's
+grandchild mismatches greedy => both paths accept-len 1). DEVICE SIDE SETTLED.
+
+**Why the tie is reasoned-BENIGN even if the old committer's tie-break differs:** dup siblings share the
+SAME parent + token + tree-depth => identical tree-attention ancestor set + identical RoPE(depth) => their
+GDN node states are computed byte-identically (h_node1 == h_node2). So committing either leaf yields the
+SAME committed token AND the SAME state; the accepted_tree_row index (1 vs 2) selects byte-equal state.
+
+**REMAINING (GPU-gated, LOW-priority hygiene — temp-0 is NEVER deployed, temp-0.6 already uses rejection):**
+1. LIVE `FR13_GREEDY_UNIFY_GATE=1` short temp-0 run on real trees => confirm old==new 0 byte mismatches
+   (settles the tie vs the ACTUAL old path-LCP-max committer, which is entangled w/ injected globals and
+   NOT CPU-extractable, so the live in-process dual-run is the airtight mechanism). Rides on a temp-0 SWE
+   run; a few tasks suffice to exercise dup cases. QUEUE after the anchor frees GPU.
+2. IF 0 mismatches: flip default (route all_greedy -> rejection unconditionally), DELETE
+   `_lumo_tree_path_lcp_max_greedy_sample` + its patch-strings + dead flags FR13_GPU_COMMITTER /
+   FR13_COMMITTER_SYNCKILL (all entangled w/ the old committer's diagnostic preamble :7713-7773).
+3. Re-gate: temp-0.6 accept ~4.32 UNCHANGED (trivial — temp-0.6 never touches the greedy path).
+Do NOT delete before the live gate confirms (per LIVE-only / never-proxy discipline). Phase-3 (piggyback,
+the actual committer OPTIMIZATION = the deployment prize) proceeds in parallel; it doesn't depend on this.
