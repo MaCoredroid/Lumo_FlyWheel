@@ -575,7 +575,12 @@ def fr13_device_multidraft_commit(
         # tree_self_logits/target_logits rows here, the +1 GDN bank rows
         # (paths tensor, conv col-0 commit), and the attn-KV remap all index
         # per-node arrays of THIS (extended) tree -- no id translation.
-        if _pb_root >= 0:
+        # dbg14: zero-node rows (bonus-only commits -- a request whose drafts
+        # were trimmed/dropped runs a native span-1 step and can still land in
+        # this dispatch with an empty tree) are LEGAL: the legacy walk commits
+        # 0 nodes naturally. Only validate the extended shape when a tree
+        # actually exists.
+        if _pb_root >= 0 and len(parents) > 0:
             _fr13_pb_validate_extended_tree(parents, _pb_root)
         current_parent = _pb_root
         accepted_row = 0
@@ -743,6 +748,11 @@ def _fr13_commit_depthsync(
     _pb_root = _fr13_pb_walk_root()
     if _pb_root >= 0:
         for _pb_r in range(nreq):
+            # dbg14: zero-count rows (bonus-only commits after a trimmed/
+            # dropped draft cycle) are legal -- the walk accepts nothing for
+            # them; only a NON-empty tree must have the extended shape.
+            if int(counts[_pb_r]) == 0:
+                continue
             _fr13_pb_validate_extended_tree(
                 parents_cpu[starts[_pb_r]:starts[_pb_r] + int(counts[_pb_r])],
                 _pb_root,
