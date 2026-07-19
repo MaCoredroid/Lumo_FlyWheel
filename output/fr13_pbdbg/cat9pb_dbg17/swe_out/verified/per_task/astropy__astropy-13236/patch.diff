@@ -1,0 +1,37 @@
+diff --git a/astropy/table/table.py b/astropy/table/table.py
+index 5afe2127a..dd8ff457d 100644
+--- a/astropy/table/table.py
++++ b/astropy/table/table.py
+@@ -1240,9 +1240,19 @@ class Table:
+                                 'did not return a valid mixin column')
+ 
+         # Structured ndarray gets viewed as a mixin unless already a valid
+-        # mixin class
++        # mixin class.  This behavior is deprecated; in the future structured
++        # arrays will be added as a Column.
+         if (not isinstance(data, Column) and not data_is_mixin
+                 and isinstance(data, np.ndarray) and len(data.dtype) > 1):
++            warnings.warn(
++                'Adding a structured array to a table as a column will change '
++                'in the future.  Currently it is converted to an NdarrayMixin '
++                'column.  In the future it will be added as a Column.  To '
++                'ensure that the structured array is added as a Column, wrap '
++                'it in a Column object, e.g., t[col_name] = Column(data).',
++                FutureWarning,
++                stacklevel=4,
++            )
+             data = data.view(NdarrayMixin)
+             data_is_mixin = True
+ 
+diff --git a/setup.cfg b/setup.cfg
+index 3503fd902..9b9abce72 100644
+--- a/setup.cfg
++++ b/setup.cfg
+@@ -129,6 +129,7 @@ xfail_strict = true
+ qt_no_exception_capture = 1
+ filterwarnings =
+     error
++    ignore:Adding a structured array to a table as a column will change:FutureWarning:astropy.table
+     ignore:unclosed <socket:ResourceWarning
+     ignore:unclosed <ssl.SSLSocket:ResourceWarning
+     ignore:numpy\.ufunc size changed:RuntimeWarning
