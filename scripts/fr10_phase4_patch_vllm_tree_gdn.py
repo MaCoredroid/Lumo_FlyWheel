@@ -8441,28 +8441,26 @@ def _lumo_tree_canonical_multidraft_sample(
             if _fr13_by_req is None:
                 _fr13_by_req = {}
                 _lumo_tree_commit_gdn._LUMO_FA_TREE_ACCEPT_BY_REQ = _fr13_by_req
-            # dbg12 fix (open item 9 landed here): committer rows are SPEC
-            # rows, not batch rows -- keying by the full-batch sampler list
-            # mis-keys by_req in mixed batches (a prefill row steals the tree
-            # row's path; the tree req then trips the stale-stash raise on its
-            # next propose, and the prefill req is silently poisoned). Key by
-            # the spec-row-ordered list, exact length, fail-loud.
-            _fr13_commit_key_ids = getattr(
-                _lumo_tree_commit_gdn, '_LUMO_FA_SPEC_ROW_REQ_IDS', None
-            )
-            if (
-                _fr13_commit_key_ids is None
-                or len(_fr13_commit_key_ids) != len(accepted_gdn_node_paths)
-            ):
+            # dbg16 CORRECTION (refutes the dbg13 spec-keying): committer rows
+            # cover ALL metadata rows (num_draft_tokens is built over num_reqs
+            # with zeros -- zero-count decode rows and mid-prefill rows both
+            # get rows), so the FULL-BATCH sampler list IS the right key
+            # space, exact length. The pb-specific hazard is different: a
+            # by_req entry for a row that never ran a TREE verify poisons the
+            # chain packer (variant-B ring lookups have no rows for it) -- so
+            # publish entries ONLY for rows with a real tree (count > 0).
+            _fr13_commit_key_ids = _fr13_row_req_ids
+            if len(_fr13_commit_key_ids) != len(accepted_gdn_node_paths):
                 raise RuntimeError(
-                    'FR13_TREE_REQKEY: spec-row id list does not match '
-                    'committer rows: spec_ids='
+                    'FR13_TREE_REQKEY: sampler-row id list does not match '
+                    'committer rows: sampler_ids='
                     + repr(_fr13_commit_key_ids)
                     + ' committer_rows='
                     + str(len(accepted_gdn_node_paths))
-                    + ' sampler_ids=' + repr(_fr13_row_req_ids)
                 )
             for _fr13_i in range(len(accepted_gdn_node_paths)):
+                if int(num_draft_tokens[_fr13_i]) <= 0:
+                    continue
                 _fr13_by_req[str(_fr13_commit_key_ids[_fr13_i])] = (
                     [int(_x) for _x in accepted_gdn_node_paths[_fr13_i]],
                     int(accepted_lens[_fr13_i]),
@@ -14139,17 +14137,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             + str(list(_fr10_packed.shape))
                         )
                     _fr13_pb_ids = [None] * _fr13_pb_B
-                # dbg12 fix: the accepted-token rows are COMMITTER (spec) rows
-                # -- zip them with the spec-row-ordered id list, not the
-                # full-batch sampler list (mixed batches mis-pair otherwise;
-                # the per-req len-vs-L raise below catches length skew, but
-                # same-length mis-pairs would pass silently).
+                # dbg16 correction: accepted-token rows cover ALL metadata
+                # rows (same space as the by_req publish) -- zip with the
+                # FULL-BATCH sampler list (fresh every step via
+                # FR13_PB_ROWIDS_FRESH). Rows without a real tree have no
+                # by_req entry, so their token rows are never consumed.
                 _fr13_pb_tok_by_req = {
                     str(_r): _t
                     for _r, _t in zip(
                         getattr(
                             _fr13_pb_gdn,
-                            "_LUMO_FA_SPEC_ROW_REQ_IDS", None,
+                            "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None,
                         ) or [],
                         getattr(
                             _fr13_pb_gdn,
