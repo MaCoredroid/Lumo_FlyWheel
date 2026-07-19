@@ -121,3 +121,14 @@ to POST-bake verification (explicit user override of the pre-bake ship rule).
   cng16 (3/16) ran WALL=1800 (env snapshot), right-censoring ~90-min tasks. rg1 (in flight,
   WALL=0) is the FIRST honest tail6 resolve read; the deliverable-shape decision (tail6 port vs
   sweep shapes vs cat9pb-as-is) waits on it + the rg2 async twin (R1).
+
+## SEQUENCING LOCK (user directive 2026-07-19): R1→R2→R3→R4 to COMPLETION before ANY sweep work.
+The (n,x,branching) sweep + geometry ports (tail6-x8, 30-node shapes, BV re-tile) ALL belong to R5
+and are PARKED until R1-R4 are done. The wall-free sweep recalibration (lad2 per-position) stands as
+R5 prep only — no sweep-driven campaigns before R4 closes.
+- R1: rg1 (tail6 wall-free, IN FLIGHT) -> rg2 (async twin) -> decision+bake; native wall-free pair
+  (fr13_native_nowall_seq.sh) re-anchors the bar in the same window.
+- R2: BAKED.
+- R3 verify tree-tax trim: DESIGN NOW (CPU, while the resolve matrix holds the GPU) -> flag-gated
+  impl -> same-session A/B after R1 arms finish.
+- R4 drafter CUDA-graph capture: after R3 (design de-risked by FR13_SLOT_REORDER).
