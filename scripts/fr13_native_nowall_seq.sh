@@ -5,12 +5,16 @@
 # wall-free ~5.47 lad2) also suppresses the native bar. Fair endgame bar =
 # native wall-free (+ async twin, the ladder's honest-guard endgame).
 # Runs AFTER the rg1/rg2 tail6 pair; same subset/code, back-to-back.
+# CACHE-ON (user directive 2026-07-19: from this pair onward all arms run APC
+# cache ON — (a) validate the stack under the ship config, (b) prefix reuse
+# makes campaigns faster). nativemtp5apc kind = NATIVE_ENABLE_APC=1 + block
+# flags. rg1/rg2 stay cache-OFF as their own matched pair.
 export GPU_UTIL=0.72
 unset FR13_PREWARM_TRIE
 export FR13_COMMIT_FULL_GPU_TIMER=1
 unset FR13_SERVE_BATCH_FLAGS
 export FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_resolve/native_cfwd.json
-run_variant native_${TAG}        nativemtp5  5  1
+run_variant native_${TAG}        nativemtp5apc  5  1
 export FR13_SERVE_BATCH_FLAGS="--async-scheduling"
 export FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_resolve/native_async_cfwd.json
-run_variant native_async_${TAG}  nativemtp5  5  1
+run_variant native_async_${TAG}  nativemtp5apc  5  1

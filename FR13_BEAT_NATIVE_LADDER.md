@@ -137,3 +137,12 @@ R5 prep only — no sweep-driven campaigns before R4 closes.
 ALL cross-arm comparisons and rung verdicts use `measured_tps_fullstep_wall` (FR13_STEP_WALL).
 `derived_tps_fullstep_gpu` is DIAGNOSTIC ONLY (component decomposition; known-invalid under async
 where component spans overlap — pbm1: derived 18.3 vs measured 27.8). Never rank arms on derived.
+
+## CACHE-ON FROM THE NATIVE PAIR ONWARD (user directive 2026-07-19)
+rg1/rg2 finish cache-OFF (their own matched pair). Every subsequent arm — the native wall-free
+bar pair (nativemtp5apc kind), R3/R4 A/Bs, R5 confirms — runs APC cache ON: (a) validates the
+spec stack under the ship config (GOAL = spec+cache lossless), (b) prefix reuse speeds campaigns.
+Tree cache-ON arms use the solved APC stack (HIT_RECURRENT_SUFFIX + overshoot fix +
+ZERO_MAMBA_ON_ALLOC/COPY_SRC_FIX baked); a tail6/cat9_pb cache kind gets wired when its first
+arm is scheduled. Cross-pair comparisons stay within-cache-config; the final bar compare =
+tree-cache-ON vs native-cache-ON.
