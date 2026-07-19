@@ -132,3 +132,8 @@ R5 prep only — no sweep-driven campaigns before R4 closes.
 - R3 verify tree-tax trim: DESIGN NOW (CPU, while the resolve matrix holds the GPU) -> flag-gated
   impl -> same-session A/B after R1 arms finish.
 - R4 drafter CUDA-graph capture: after R3 (design de-risked by FR13_SLOT_REORDER).
+
+## MEASURED-TPS IS THE COMPARISON BASIS (user directive 2026-07-19, strengthens the alignment gate):
+ALL cross-arm comparisons and rung verdicts use `measured_tps_fullstep_wall` (FR13_STEP_WALL).
+`derived_tps_fullstep_gpu` is DIAGNOSTIC ONLY (component decomposition; known-invalid under async
+where component spans overlap — pbm1: derived 18.3 vs measured 27.8). Never rank arms on derived.
