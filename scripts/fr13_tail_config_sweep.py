@@ -21,9 +21,21 @@ import argparse
 # b7-REGIME conditionals (recalibrated 2026-07-18 from the b7 tail6 arm's 756
 # per-position windows, 15603 events, token-weighted; Sum-survival check 4.307
 # vs bracketed 4.317 = 0.2% agreement). Old-regime values in comments.
-HEAD = [0.967, 0.819, 0.795, 0.801, 0.815]           # MTP d1..5 (old: .970/.864/.851/.849/.866)
-TAIL = [0.593, 0.817, 0.860, 0.865, 0.851, 0.901]     # arctic j0..5; j0=handoff (old: .666 ...)
-TAIL_PLATEAU = 0.15  # tailx10 MEASURED refutation: deep tail is COLD (accept flat at x=10,
+# WALL-FREE recalibration (2026-07-19, lad2 tail6+async, 70,670 drafts,
+# vllm per-position acceptance counters — the b7-era arrays below were
+# RIGHT-CENSORED by the 1800s wall, which cut exactly the deep-context
+# late-task decode where the tail runs hottest):
+#   b7 walled:   HEAD [0.967, 0.819, 0.795, 0.801, 0.815]
+#                TAIL [0.593, 0.817, 0.860, 0.865, 0.851, 0.901]  PLATEAU 0.15
+# Wall-free every depth improves; the tail conditional is STILL RISING at the
+# tree edge (d11 = 0.947) — extension nodes are the cheapest accept in the
+# design space. PLATEAU set conservatively to 0.07 miss (cap 0.93) for
+# unmeasured depths vs the measured rising trend. CAVEAT: lad2 is the ASYNC
+# arm; rg1 (no-async twin, in flight) re-confirms; theory says async is
+# accept-neutral.
+HEAD = [0.973, 0.871, 0.852, 0.859, 0.873]           # MTP d1..5 wall-free (lad2)
+TAIL = [0.696, 0.870, 0.902, 0.923, 0.931, 0.947]    # arctic j0..5 wall-free; j0=handoff
+TAIL_PLATEAU = 0.07  # WALLED-era "deep tail is COLD" REFUTED wall-free (was 0.15,
                      # tps -21%); 0.95 was the extrapolation artifact that ranked n1/x21 fantasies
 ARCTIC_PURE = 0.55                                    # n=0 pure-arctic flat conditional (design's ~0.5-0.6 deep)
 NPAD, CAP = 32, 0.97
