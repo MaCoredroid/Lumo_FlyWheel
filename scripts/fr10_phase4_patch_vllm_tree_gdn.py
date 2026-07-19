@@ -8441,8 +8441,29 @@ def _lumo_tree_canonical_multidraft_sample(
             if _fr13_by_req is None:
                 _fr13_by_req = {}
                 _lumo_tree_commit_gdn._LUMO_FA_TREE_ACCEPT_BY_REQ = _fr13_by_req
+            # dbg12 fix (open item 9 landed here): committer rows are SPEC
+            # rows, not batch rows -- keying by the full-batch sampler list
+            # mis-keys by_req in mixed batches (a prefill row steals the tree
+            # row's path; the tree req then trips the stale-stash raise on its
+            # next propose, and the prefill req is silently poisoned). Key by
+            # the spec-row-ordered list, exact length, fail-loud.
+            _fr13_commit_key_ids = getattr(
+                _lumo_tree_commit_gdn, '_LUMO_FA_SPEC_ROW_REQ_IDS', None
+            )
+            if (
+                _fr13_commit_key_ids is None
+                or len(_fr13_commit_key_ids) != len(accepted_gdn_node_paths)
+            ):
+                raise RuntimeError(
+                    'FR13_TREE_REQKEY: spec-row id list does not match '
+                    'committer rows: spec_ids='
+                    + repr(_fr13_commit_key_ids)
+                    + ' committer_rows='
+                    + str(len(accepted_gdn_node_paths))
+                    + ' sampler_ids=' + repr(_fr13_row_req_ids)
+                )
             for _fr13_i in range(len(accepted_gdn_node_paths)):
-                _fr13_by_req[str(_fr13_row_req_ids[_fr13_i])] = (
+                _fr13_by_req[str(_fr13_commit_key_ids[_fr13_i])] = (
                     [int(_x) for _x in accepted_gdn_node_paths[_fr13_i]],
                     int(accepted_lens[_fr13_i]),
                 )
@@ -8477,9 +8498,12 @@ def _lumo_tree_canonical_multidraft_sample(
                     'committer rows: '
                     f'{len(_fr13_row_req_ids)} < {len(accepted_gdn_node_paths)}'
                 )
+            # dbg12 fix: committer-row index by SPEC-row position (the same
+            # exact-length-checked list the by_req publish uses above), NOT
+            # the full-batch sampler position.
             _fr13_idx_by_req = {
                 str(_fr13_rid): int(_fr13_i)
-                for _fr13_i, _fr13_rid in enumerate(_fr13_row_req_ids)
+                for _fr13_i, _fr13_rid in enumerate(_fr13_commit_key_ids)
             }
             _fr13_replay_gdn_node_paths = []
             _fr13_replay_lens = []
@@ -14115,12 +14139,17 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             + str(list(_fr10_packed.shape))
                         )
                     _fr13_pb_ids = [None] * _fr13_pb_B
+                # dbg12 fix: the accepted-token rows are COMMITTER (spec) rows
+                # -- zip them with the spec-row-ordered id list, not the
+                # full-batch sampler list (mixed batches mis-pair otherwise;
+                # the per-req len-vs-L raise below catches length skew, but
+                # same-length mis-pairs would pass silently).
                 _fr13_pb_tok_by_req = {
                     str(_r): _t
                     for _r, _t in zip(
                         getattr(
                             _fr13_pb_gdn,
-                            "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None,
+                            "_LUMO_FA_SPEC_ROW_REQ_IDS", None,
                         ) or [],
                         getattr(
                             _fr13_pb_gdn,
