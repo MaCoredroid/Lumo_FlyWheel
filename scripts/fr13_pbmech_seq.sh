@@ -15,7 +15,10 @@ export FR13_COMMIT_FULL_GPU_TIMER=1
 # ALL-FLAGS-ON (user directive): pb + native-committer(baked default) + async on BOTH arms.
 # PEEL ORDER if cat9pb breaks: (1) drop async (unset FR13_SERVE_BATCH_FLAGS), (2) drop
 # native committer (FR13_COMMITTER_NATIVE=0), (3) pb itself (cat9f = the unarmed baseline).
-export FR13_SERVE_BATCH_FLAGS="--async-scheduling"
+# PEEL-1 override: FR13_PB_NO_ASYNC=1 drops async (dbg6: embedding OOB suspect =
+# next_token_ids -1 placeholders under async at propose time; sync probe passes,
+# agentic multi-request steps hit it)
+if [[ "${FR13_PB_NO_ASYNC:-0}" == "1" ]]; then unset FR13_SERVE_BATCH_FLAGS; else export FR13_SERVE_BATCH_FLAGS="--async-scheduling"; fi
 export FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_pbmech/cat9pb_cfwd.json
 run_variant cat9pb_${TAG}  cat9_pb 17  1
 export FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_pbmech/cat9f_cfwd.json
