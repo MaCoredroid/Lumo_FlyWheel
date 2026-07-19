@@ -430,6 +430,13 @@ if [[ "${FR13_PIGGYBACK:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_piggyback.arm" 2>/dev/null || true
 fi
+# FR13_PB_DEBUG_RANGE sidecar (debug boots only): host-side fail-loud range guard on the runner's
+# embedding input ids (dbg5/dbg6 device-OOB hunt). Syncs every step -- never arm on speed arms.
+if [[ "${FR13_PB_DEBUG_RANGE:-0}" == "1" ]]; then
+  : > "$LOG_DIR/fr13_pb_debug_range.arm"
+else
+  rm -f "$LOG_DIR/fr13_pb_debug_range.arm" 2>/dev/null || true
+fi
 # FR13_COMMIT_ARGMAX_GATE sidecar (same worker-env-drop workaround): the worker curation drops the flag
 # (keeps only *_DUMP). The patched rejection_sampler reads this sidecar OR the (dropped) env.
 if [[ "${FR13_COMMIT_ARGMAX_GATE:-0}" == "1" ]]; then

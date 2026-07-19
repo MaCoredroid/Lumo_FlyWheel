@@ -10338,6 +10338,87 @@ def _patch_gpu_model_runner_preprocess_input_capture() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_pb_input_range_guard() -> bool:
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_PB_DEBUG_RANGE"
+    if sentinel in text:
+        return False
+    anchor = """            inputs_embeds_scheduled = self.model.embed_input_ids(
+"""
+    guard = """            # FR13_PB_DEBUG_RANGE (diag, sidecar-armed): fail-loud host guard
+            # for out-of-range token ids reaching the vocab-embedding gather
+            # (dbg5/dbg6: device-side OOB under FR13_PIGGYBACK in the agentic
+            # phase). Names the faulting request + in-span column BEFORE the
+            # device assert smears attribution. Syncs the stream -- debug
+            # boots only, never armed on speed arms.
+            _fr13_rng_arm = getattr(self, "_fr13_pb_rng_arm", None)
+            if _fr13_rng_arm is None:
+                _fr13_rng_os = __import__("os")
+                _fr13_rng_arm = (
+                    _fr13_rng_os.path.exists("/logs/fr13_pb_debug_range.arm")
+                    or _fr13_rng_os.path.exists("/tmp/fr13_pb_debug_range.arm")
+                    or _fr13_rng_os.environ.get("FR13_PB_DEBUG_RANGE") == "1"
+                )
+                self._fr13_pb_rng_arm = _fr13_rng_arm
+            if _fr13_rng_arm and int(num_scheduled_tokens) > 0:
+                _fr13_rng_ids = self.input_ids.gpu[:num_scheduled_tokens]
+                try:
+                    _fr13_rng_vocab = int(self.model_config.get_vocab_size())
+                except Exception:
+                    _fr13_rng_vocab = 1000000
+                _fr13_rng_bad = torch.nonzero(
+                    (_fr13_rng_ids < 0) | (_fr13_rng_ids >= _fr13_rng_vocab)
+                ).flatten()
+                if int(_fr13_rng_bad.numel()) > 0:
+                    _fr13_rng_pos = _fr13_rng_bad[:32].cpu().tolist()
+                    _fr13_rng_val = (
+                        _fr13_rng_ids[_fr13_rng_bad[:32]].cpu().tolist()
+                    )
+                    _fr13_rng_spans = []
+                    _fr13_rng_off = 0
+                    for _fr13_rng_rid in self.input_batch.req_ids:
+                        _fr13_rng_n = int(
+                            scheduler_output.num_scheduled_tokens[
+                                _fr13_rng_rid
+                            ]
+                        )
+                        _fr13_rng_spans.append(
+                            (str(_fr13_rng_rid), _fr13_rng_off, _fr13_rng_n)
+                        )
+                        _fr13_rng_off += _fr13_rng_n
+                    _fr13_rng_map = []
+                    for _fr13_rng_p in _fr13_rng_pos:
+                        for _fr13_rng_s in _fr13_rng_spans:
+                            if (
+                                _fr13_rng_s[1]
+                                <= _fr13_rng_p
+                                < _fr13_rng_s[1] + _fr13_rng_s[2]
+                            ):
+                                _fr13_rng_map.append(
+                                    (
+                                        int(_fr13_rng_p),
+                                        _fr13_rng_s[0],
+                                        int(_fr13_rng_p - _fr13_rng_s[1]),
+                                        int(_fr13_rng_s[2]),
+                                    )
+                                )
+                                break
+                    raise RuntimeError(
+                        "FR13_PB_DEBUG_RANGE: out-of-range input ids at the "
+                        "embedding gather: vocab=" + str(_fr13_rng_vocab)
+                        + " vals=" + str(_fr13_rng_val)
+                        + " (pos, req, col_in_span, span)="
+                        + str(_fr13_rng_map)
+                        + " spans=" + str(_fr13_rng_spans)
+                    )
+"""
+    if anchor not in text:
+        raise RuntimeError("FR13 pb input range guard anchor not found")
+    text = text.replace(anchor, guard + anchor, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_tree_verify_input_ids() -> bool:
     """Rebuild target verify inputs from final scheduled token ids.
 
@@ -13790,11 +13871,28 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr13_pb_fill = (
                         _fr13_pb_toks[-1] if _fr13_pb_toks else _fr13_pb_bonus
                     )
-                    _fr13_pb_rows.append(
+                    _fr13_pb_rowv = (
                         _fr13_pb_toks
                         + [_fr13_pb_fill] * (7 - len(_fr13_pb_toks))
                         + [_fr13_pb_bonus]
                     )
+                    for _fr13_pb_ci, _fr13_pb_tv in enumerate(_fr13_pb_rowv):
+                        if _fr13_pb_tv < 0 or _fr13_pb_tv >= 1000000:
+                            # dbg7 fail-loud: a placeholder/garbage id packed
+                            # into the chain cols reaches the verify forward's
+                            # vocab-embedding gather as a device-side OOB
+                            # (dbg5/dbg6). Name the source with provenance.
+                            raise RuntimeError(
+                                "FR13_PIGGYBACK: packed chain token out of "
+                                "range: row=" + str(_fr13_pb_b)
+                                + " col=" + str(_fr13_pb_ci)
+                                + " val=" + str(_fr13_pb_tv)
+                                + " rid=" + str(_fr13_pb_rid)
+                                + " bonus=" + str(_fr13_pb_bonus)
+                                + " prev=" + str(_fr13_pb_prev)
+                                + " toks=" + str(_fr13_pb_toks)
+                            )
+                    _fr13_pb_rows.append(_fr13_pb_rowv)
                     if _fr13_pb_rid is not None:
                         _FR13_PB_PREV_BONUS[_fr13_pb_rid] = _fr13_pb_bonus
                 for _fr13_pb_dead in [
@@ -18916,6 +19014,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_depth_positions()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_preprocess_input_capture()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_pb_input_range_guard()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
         # FR13_MERGED_DRAFTER: Arctic SuffixDecodingCache lifecycle at the runner,
