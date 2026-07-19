@@ -592,7 +592,10 @@ def fr13_device_multidraft_commit(
                 if int(parent) == int(current_parent)
             ]
             if not children:
-                if current_parent >= 0:
+                # dbg15: bound by node_count -- under pb current_parent starts
+                # at the chain root (7); a zero-node row would index a foreign
+                # flat row (same class as the batch-walk _bonus fix).
+                if current_parent >= 0 and current_parent < int(node_count):
                     # self-target bonus: sample from the accepted node's self
                     # prob row, on-device (no [nodes x vocab] DtoH).
                     self_row = _row_fn(
@@ -779,8 +782,14 @@ def _fr13_commit_depthsync(
 
     def _bonus(req_i):
         # walk end for req_i: leaf bonus (self-row sample) or root bonus id.
+        # dbg15: bound cp by the request's node count -- under pb cur_parent
+        # STARTS at the chain root (7), so a zero-count row (bonus-only
+        # commit) would index tree_self_logits[starts+7] into another
+        # request's flat rows (the observed index-24-size-17 crash). A
+        # non-empty pb tree keeps the root self-row sample (live-root bonus
+        # application) unchanged: 7 < counts.
         cp = cur_parent[req_i]
-        if cp >= 0:
+        if cp >= 0 and cp < int(counts[req_i]):
             self_row = _device_softmax_row(
                 tree_self_logits[starts[req_i] + cp]
             )
