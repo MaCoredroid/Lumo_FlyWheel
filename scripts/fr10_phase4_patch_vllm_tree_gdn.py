@@ -14011,11 +14011,31 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # => pack fresh rows instead of raising. A missing publish
                     # WITH live by_req entries is a real desync => still raise.
                     if _fr13_pb_by_req:
+                        # dbg10 forensic raise: name the row spaces so the
+                        # mismatch mechanism is identified in one boot
+                        # (dbg9: B=2 vs by_req=1 on a mixed agentic step).
+                        _fr13_pb_spec_ids = getattr(
+                            _fr13_pb_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None
+                        )
+                        _fr13_pb_samp_ids = getattr(
+                            _fr13_pb_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS",
+                            None,
+                        )
                         raise RuntimeError(
                             "FR13_PIGGYBACK: no row-aligned request ids for "
                             "the chain packer (B=" + str(_fr13_pb_B)
                             + ") but by_req has "
                             + str(len(_fr13_pb_by_req)) + " live entries"
+                            + "; spec_row_ids="
+                            + repr(_fr13_pb_spec_ids)
+                            + " sampler_row_ids="
+                            + repr(_fr13_pb_samp_ids)
+                            + " by_req_keys="
+                            + repr(sorted(_fr13_pb_by_req.keys()))
+                            + " next_token_ids_rows="
+                            + str(int(next_token_ids.shape[0]))
+                            + " packed_shape="
+                            + str(list(_fr10_packed.shape))
                         )
                     _fr13_pb_ids = [None] * _fr13_pb_B
                 _fr13_pb_tok_by_req = {
