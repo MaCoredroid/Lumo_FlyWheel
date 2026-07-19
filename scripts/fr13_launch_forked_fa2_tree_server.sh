@@ -437,6 +437,13 @@ if [[ "${FR13_PB_DEBUG_RANGE:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_pb_debug_range.arm" 2>/dev/null || true
 fi
+# FR13_PB_BASE_COLS sidecar (tail6 port): the BASE tree's packed width under the pb chain
+# (cat9=9 default, tail6=21). Worker-env-drop-proof like the other pb sidecars.
+if [[ -n "${FR13_PB_BASE_COLS:-}" ]]; then
+  echo "${FR13_PB_BASE_COLS}" > "$LOG_DIR/fr13_pb_base_cols.arm"
+else
+  rm -f "$LOG_DIR/fr13_pb_base_cols.arm" 2>/dev/null || true
+fi
 # FR13_COMMIT_ARGMAX_GATE sidecar (same worker-env-drop workaround): the worker curation drops the flag
 # (keeps only *_DUMP). The patched rejection_sampler reads this sidecar OR the (dropped) env.
 if [[ "${FR13_COMMIT_ARGMAX_GATE:-0}" == "1" ]]; then

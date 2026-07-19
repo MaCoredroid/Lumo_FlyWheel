@@ -3,7 +3,7 @@
 # Split out of fr13_ladder_combined_seq.sh arms 3/4 so the async pair could run un-armed.
 #
 # GATES (MECHANICAL ONLY — S1 landed but slot-C V2.5 not yet green => NO accept/quality claims):
-#   - engage needles: 'FR13_PIGGYBACK cat9_pb drafter engaged' + '[FR13_PIGGYBACK] committer
+#   - engage needles: 'FR13_PIGGYBACK extended drafter engaged' + '[FR13_PIGGYBACK] committer
 #     GDN replay DROPPED' (both fail-loud absent), drafts/draft == 17, 0 fatal events.
 #   - CFWD collapse: cat9pb committer span vs cat9f same-session (~99 -> ~16ms target; the
 #     native-committer bake makes cat9f's replay ~70ms — the collapse is vs the DEPLOYED baseline).

@@ -236,6 +236,11 @@ case "$KIND" in
   # `cat9` kind bakes golden flags => not a valid A/B baseline for forked-launcher arms).
   cat9f)     LAUNCHER=forked; TREEARG="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,1),(0,0,1),(0,0,0,1),(0,0,0,0,1)]"; EXPECT_RATIO=9;  declare -a XFLAGS=() ;;
   cat9_pb)   LAUNCHER=forked; TREEARG="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,0,1)]"; EXPECT_RATIO=17; declare -a XFLAGS=(FR13_PIGGYBACK=1 FR13_ATTN_KV_REMAP=1 FR13_TREE_GDN_GEOM_OVERRIDE=BV=8) ;;
+  # tail6_pb = PIGGYBACK PORT to the deliverable shape (user 2026-07-19): extended tree =
+  # chain (0,)^1..(0,)^8 + tail6's 21 nodes re-rooted under (0,)^8 -> 29 packed cols
+  # (BV=8 h_cache @N_PAD->32 = 128KB/CTA = the proven cat9_pb budget). FR13_PB_BASE_COLS=21
+  # parameterizes every geometry guard (sidecar-published by the launcher).
+  tail6_pb)  LAUNCHER=forked; TREEARG="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)]"; EXPECT_RATIO=29; declare -a XFLAGS=(FR13_PIGGYBACK=1 FR13_ATTN_KV_REMAP=1 FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_PB_BASE_COLS=21) ;;
   *) echo "FAIL: unknown KIND=$KIND"; exit 2 ;;
 esac
 # NATIVE_DECODE: arms whose DECODE is the native/linear MTP path (no tree), so the
@@ -508,7 +513,7 @@ if [[ "$KIND" == "cat9_pb" ]]; then
     done
     echo "$2"; return 1
   }
-  _fr13_pb_needle_wait "FR13_PIGGYBACK cat9_pb drafter engaged" \
+  _fr13_pb_needle_wait "FR13_PIGGYBACK extended drafter engaged" \
     "FAIL: cat9_pb piggyback drafter branch did NOT engage (wide-drafter fallback = chain slots are MTP junk)" || exit 4
   _fr13_pb_needle_wait "[FR13_PIGGYBACK] committer GDN replay DROPPED" \
     "FAIL: cat9_pb committer GDN replay-drop needle absent (seam-5 drop did not engage)" || exit 4

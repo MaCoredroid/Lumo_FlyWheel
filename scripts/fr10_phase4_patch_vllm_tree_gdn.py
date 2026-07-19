@@ -288,7 +288,7 @@ def _patch_gdn_attn() -> bool:
             "                path_node_tensors.append(torch.tensor(path, dtype=torch.long, device=device))\n"
             "            conv_parent = list(parent)\n"
             "            _fr13_pb_ext_tree = (\n"
-            "                n == 18\n"
+            "                n > 8\n"
             "                and all(tree_choices[_pbk] == tuple([0] * (_pbk + 1)) for _pbk in range(8))\n"
             "            )\n"
             "            if _fr13_pb_ext_tree:\n"
@@ -2985,7 +2985,7 @@ def _fr13_conv_subop_mab(
                         )
                     _fr10_conv_parent = list(_fr10_parent)
                     if (
-                        len(_fr10_parent) == 18
+                        len(_fr10_parent) > 8
                         and all(
                             _fr10_choices[_pbk] == tuple([0] * (_pbk + 1))
                             for _pbk in range(8)
@@ -4526,10 +4526,15 @@ def _fr13_conv_subop_mab(
                 _fr13_pb_pos = None
                 _fr13_pb_chain_k = _fr13_pb_chain_v = _fr13_pb_chain_a = _fr13_pb_chain_b = None
                 if _fr13_pb_fwd:
-                    if int(tree_n) != 18:
+                    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                        _fr13_pb_tree_n as _fr13_pb_exp_tree_n,
+                    )
+                    if int(tree_n) != _fr13_pb_exp_tree_n():
                         raise RuntimeError(
                             "FR13_PIGGYBACK armed but served tree_n="
-                            + str(int(tree_n)) + " != 18 (cat9_pb only)"
+                            + str(int(tree_n)) + " != "
+                            + str(_fr13_pb_exp_tree_n())
+                            + " (chain+base+root)"
                         )
                     if int(_fr13_piggyback_cap()) != 8:
                         raise RuntimeError("FR13_PIGGYBACK: prefix cap " + str(int(_fr13_piggyback_cap())) + " != 8; cat9_pb layout/mask/export hard-code K=8 (chain streams 1..7, export@7, subtree root stream 8)")
@@ -9999,12 +10004,16 @@ def _patch_gpu_model_runner_tree_depth_positions() -> bool:
                     )
                     self._fr13_pb_positions_arm = _fr10_pb_arm
                 if _fr10_pb_arm:
-                    if int(len(_fr10_depth_offsets)) != 18:
+                    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                        _fr13_pb_tree_n as _fr10_pb_exp_n,
+                    )
+                    if int(len(_fr10_depth_offsets)) != _fr10_pb_exp_n():
                         raise RuntimeError(
                             "FR13_PIGGYBACK armed but the position remap "
                             "sees tree_n="
                             + str(int(len(_fr10_depth_offsets)))
-                            + " != 18 (cat9_pb only)"
+                            + " != " + str(_fr10_pb_exp_n())
+                            + " (chain+base+root)"
                         )
                     _fr10_depth_offsets = np.maximum(
                         _fr10_depth_offsets - 8, 0
@@ -12795,9 +12804,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     common_attn_metadata.query_start_loc[1:_fr13_tsr_n + 1]
                     - common_attn_metadata.query_start_loc[:_fr13_tsr_n]
                 ).to(_fr13_tsr_leaf.dtype)
+                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                    _fr13_pb_tree_n as _fr13_tsr_pb_span,
+                )
                 _fr13_tsr_zero_row = (
                     torch.where(
-                        _fr13_tsr_spans == 18,
+                        _fr13_tsr_spans == _fr13_tsr_pb_span(),
                         torch.full_like(_fr13_tsr_leaf, 8),
                         torch.zeros_like(_fr13_tsr_leaf),
                     )
@@ -12968,10 +12980,21 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             os.path.exists("/logs/fr13_piggyback.arm")
             or os.environ.get("FR13_PIGGYBACK") == "1"
         )
+        # tail6 port: STRUCTURAL detector (any extended chain+base tree, not
+        # just the literal cat9_pb choices) -- first 8 sorted choices are the
+        # strict chain. No served base tree has that prefix (branches break it).
+        _fr10_sorted_cur = (
+            sorted(_fr10_tree_choices_current, key=lambda c: (len(c), c))
+            if _fr10_tree_choices_current else []
+        )
         _fr10_is_cat9_pb = (
             _fr10_active_decode_mode == "tree_mtp"
-            and int(self.num_speculative_tokens) == 17
-            and _fr10_tree_choices_current == _fr13_pb_choices
+            and int(self.num_speculative_tokens) > 8
+            and len(_fr10_sorted_cur) > 8
+            and all(
+                _fr10_sorted_cur[_pbk] == tuple([0] * (_pbk + 1))
+                for _pbk in range(8)
+            )
         )
         if _fr10_is_cat9_pb and not _fr13_pb_armed:
             raise RuntimeError(
@@ -14101,10 +14124,15 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 from vllm.model_executor.layers.mamba import (
                     gdn_linear_attn as _fr13_pb_gdn,
                 )
-                if int(_fr10_packed.shape[1]) != 9:
+                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                    _fr13_pb_base_cols as _fr13_pb_bcols,
+                )
+                if int(_fr10_packed.shape[1]) != _fr13_pb_bcols():
                     raise RuntimeError(
-                        "FR13_PIGGYBACK: expected the base-cat9 9-col pack, "
-                        "got " + str(int(_fr10_packed.shape[1]))
+                        "FR13_PIGGYBACK: expected the "
+                        + str(_fr13_pb_bcols())
+                        + "-col base pack, got "
+                        + str(int(_fr10_packed.shape[1]))
                     )
                 _fr13_pb_B = int(_fr10_packed.shape[0])
                 # dbg11 preference flip: SAMPLER first -- FR13_PB_ROWIDS_FRESH
@@ -14294,8 +14322,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     dim=1,
                 )
                 logger.info_once(
-                    "FR13_PIGGYBACK cat9_pb drafter engaged: 17 cols "
-                    "(8 chain + 9 MTP)"
+                    "FR13_PIGGYBACK extended drafter engaged: "
+                    + str(8 + _fr13_pb_bcols())
+                    + " cols (8 chain + "
+                    + str(_fr13_pb_bcols()) + " base)"
                 )
             try:
                 import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
@@ -15281,11 +15311,20 @@ def _patch_tree_attn_spec_config_override() -> bool:
             or os.environ.get("FR13_PIGGYBACK") == "1"
         )
     if _fr13_pb_on:
-        if len(sorted_tree_choices) != 17 or int(tree_attn_mask.size(-1)) != 18:
+        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+            _fr13_pb_packed_cols as _fr13_pb_pcols,
+            _fr13_pb_tree_n as _fr13_pb_tn,
+        )
+        if (
+            len(sorted_tree_choices) != _fr13_pb_pcols()
+            or int(tree_attn_mask.size(-1)) != _fr13_pb_tn()
+        ):
             raise RuntimeError(
                 "FR13_PIGGYBACK armed but the attention bias is not the "
-                "18-stream cat9_pb layout: choices=%d bias_shape=%s"
-                % (len(sorted_tree_choices), str(tuple(tree_attn_mask.shape)))
+                "extended chain+base layout (want choices=%d bias=%d): "
+                "choices=%d bias_shape=%s"
+                % (_fr13_pb_pcols(), _fr13_pb_tn(),
+                   len(sorted_tree_choices), str(tuple(tree_attn_mask.shape)))
             )
         _fr13_pb_chain_cols = [
             _i + 1

@@ -45,6 +45,34 @@ def _fr13_piggyback_cap(default: int = 8) -> int:
                 pass
     return int(_v) if _v.isdigit() else default
 
+
+def _fr13_pb_base_cols(default: int = 9) -> int:
+    """TAIL6-PORT geometry (2026-07-19): the BASE tree's packed column count
+    under the pb chain (cat9=9, tail6=21). Extended packed = cap(8) + base;
+    extended tree_n (choices + root position) = packed + 1. Reads env
+    FR13_PB_BASE_COLS OR the launcher sidecar (worker-env-drop-proof), same
+    triple pattern as the arming reads. Default 9 = the proven cat9_pb."""
+    import os as _os
+    _v = _os.environ.get("FR13_PB_BASE_COLS", "")
+    if not _v:
+        for _p in ("/logs/fr13_pb_base_cols.arm", "/tmp/fr13_pb_base_cols.arm"):
+            try:
+                _v = open(_p).read().strip()
+                break
+            except Exception:
+                pass
+    return int(_v) if _v.isdigit() else default
+
+
+def _fr13_pb_packed_cols() -> int:
+    """Extended packed width = chain cap + base cols (17 for cat9_pb, 29 for tail6_pb)."""
+    return _fr13_piggyback_cap() + _fr13_pb_base_cols()
+
+
+def _fr13_pb_tree_n() -> int:
+    """Extended tree width incl. the root position (18 for cat9_pb, 30 for tail6_pb)."""
+    return _fr13_pb_packed_cols() + 1
+
 import torch
 import triton
 import triton.language as tl
