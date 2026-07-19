@@ -108,3 +108,16 @@ there's extra overhead outside three components."
 - GATE (applies to EVERY speed verdict from now on, incl. the pb CFWD-collapse verdict and all
   R-rung A/Bs): quote derived AND measured; if alignment ratio drifts far from ~1, the verdict
   MUST be made on the measured number and the residual bucket investigated per-arm.
+
+## R2 PIGGYBACK: BAKED (user decision 2026-07-19, golden-rule basis)
+pbm1 clean pair (WALL=0, async on, 16-task): cat9pb resolve **9/16** (band 8-9/16; the earlier
+0/16 read was a reader bug — eval_report.json verdict is the TOP-LEVEL "passed" field),
+accept 3.385 == cat9 baseline 3.397 (ACCEPT-NEUTRAL), committer 70.7 -> ~10-12 ms/span (5.7x),
+measured_tps_fullstep_wall 27.82 (vs bar 27.9) at the weakest-accept proof shape. ~6h live
+agentic decode, zero guard fires. User: bake on the golden rule; V2.5 restored-vs-oracle moves
+to POST-bake verification (explicit user override of the pre-bake ship rule).
+- cat9_pb is the reference arm for R3/R4 A/Bs from here.
+- TAIL6 CAVEAT (user-caught confound): ALL historical tail6 resolve numbers are WALL-suspect —
+  cng16 (3/16) ran WALL=1800 (env snapshot), right-censoring ~90-min tasks. rg1 (in flight,
+  WALL=0) is the FIRST honest tail6 resolve read; the deliverable-shape decision (tail6 port vs
+  sweep shapes vs cat9pb-as-is) waits on it + the rg2 async twin (R1).
