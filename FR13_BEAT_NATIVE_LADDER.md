@@ -146,3 +146,11 @@ Tree cache-ON arms use the solved APC stack (HIT_RECURRENT_SUFFIX + overshoot fi
 ZERO_MAMBA_ON_ALLOC/COPY_SRC_FIX baked); a tail6/cat9_pb cache kind gets wired when its first
 arm is scheduled. Cross-pair comparisons stay within-cache-config; the final bar compare =
 tree-cache-ON vs native-cache-ON.
+
+## rg1 VERDICT (2026-07-19, tail6 wall-free no-async cache-OFF, 16 tasks): tail6 REHABILITATED
+resolve 9/16 (band met; walled-era 3/16 = censoring artifact). accept bracketed 4.892 (+0.58 pure
+wall effect over walled 4.31). measured_tps_fullstep_wall 30.26 — ABOVE the old native bar 27.9
+with committer still at 85.5ms (pb un-ported) and no async. eff-conc 1.63, pf 0.50. Residual
+async-accept question: 4.892 vs lad2 5.469 — rg2 (async twin, SAME code) running, decides R1.
+pb-port-on-tail6 projection at rg1's own numbers: ~40 wall TPS pre-R3/R4. Reducer note:
+overhead_other_ms needs eff-conc normalization (true non-component overhead ~+4ms/event here).
