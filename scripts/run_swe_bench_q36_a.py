@@ -434,6 +434,7 @@ def _sidecar_fwd_gpu_totals() -> dict | None:
     if os.path.exists(base):
         files.add(base)
     secs = steps = drafts = 0.0
+    wall_s = wall_drafts = wall_steps = 0.0
     found = False
     for f in files:
         try:
@@ -441,10 +442,19 @@ def _sidecar_fwd_gpu_totals() -> dict | None:
             secs += float(d.get("decode_forward_gpu_seconds", 0.0))
             steps += float(d.get("n_pure_decode_steps_timed", 0.0))
             drafts += float(d.get("n_drafts_in_timed_steps", 0.0))
+            # FR13_STEP_WALL: measured full-step wall basis (absent on old
+            # sidecars -> 0.0 -> reducer emits null, never a crash).
+            wall_s += float(d.get("decode_step_wall_seconds", 0.0))
+            wall_drafts += float(d.get("n_drafts_in_wall_steps", 0.0))
+            wall_steps += float(d.get("n_wall_steps", 0.0))
             found = True
         except Exception:  # noqa: BLE001
             continue
-    return {"seconds": secs, "steps": steps, "drafts": drafts} if found else None
+    return {
+        "seconds": secs, "steps": steps, "drafts": drafts,
+        "wall_seconds": wall_s, "wall_drafts": wall_drafts,
+        "wall_steps": wall_steps,
+    } if found else None
 
 
 def _sidecar_span_totals(env_name: str) -> dict | None:
@@ -501,6 +511,12 @@ def _metrics_snapshot(metrics_url: str) -> str:
             text += f"vllm:fr13_decode_forward_gpu_seconds_total {t['seconds']:.9f}\n"
             text += f"vllm:fr13_decode_forward_gpu_steps_total {t['steps']:.1f}\n"
             text += f"vllm:fr13_decode_forward_gpu_drafts_total {t['drafts']:.1f}\n"
+            # FR13_STEP_WALL: measured full-step wall (start-to-start between
+            # consecutive pure-decode steps, idle-capped) -- the MEASURED twin
+            # the derived fullstep TPS must align with.
+            text += f"vllm:fr13_decode_step_wall_seconds_total {t['wall_seconds']:.9f}\n"
+            text += f"vllm:fr13_decode_step_wall_drafts_total {t['wall_drafts']:.1f}\n"
+            text += f"vllm:fr13_decode_step_wall_steps_total {t['wall_steps']:.1f}\n"
     # FR13_DFWD/CFWD_GPU_TIMER: the SAME synthetic-line route for the drafter /
     # committer span timers (their prometheus Counters are also worker-process-
     # local in single-API-server mode; the sidecar is the robust channel). The

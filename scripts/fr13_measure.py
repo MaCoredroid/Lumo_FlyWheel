@@ -207,11 +207,20 @@ M_DRAFTER_GPU_S = "vllm:fr13_drafter_gpu_seconds_total"
 M_DRAFTER_GPU_SPANS = "vllm:fr13_drafter_gpu_spans_total"
 M_COMMITTER_GPU_S = "vllm:fr13_committer_gpu_seconds_total"
 M_COMMITTER_GPU_SPANS = "vllm:fr13_committer_gpu_spans_total"
+# FR13_STEP_WALL: MEASURED full-step wall basis (start-to-start deltas between
+# consecutive pure-decode steps, idle-capped, chain broken on mixed/prefill).
+# Gate (user-mandated): every speed verdict must report the derived fullstep
+# TPS AGAINST this measured wall TPS; the residual (wall - fwd - drafter -
+# committer) is the "other overhead" bucket the derived basis cannot see.
+M_STEP_WALL_S = "vllm:fr13_decode_step_wall_seconds_total"
+M_STEP_WALL_DRAFTS = "vllm:fr13_decode_step_wall_drafts_total"
+M_STEP_WALL_STEPS = "vllm:fr13_decode_step_wall_steps_total"
 COUNTERS = [M_DECODE_S, M_DRAFTS, M_ACCEPTED, M_DRAFT_TOK, M_GEN_TOK,
             M_TPOT_SUM, M_TPOT_COUNT, M_PREFILL_S, M_DECODE_FWD_GPU_S,
             M_DECODE_FWD_GPU_STEPS, M_DECODE_FWD_GPU_DRAFTS,
             M_DRAFTER_GPU_S, M_DRAFTER_GPU_SPANS,
-            M_COMMITTER_GPU_S, M_COMMITTER_GPU_SPANS]
+            M_COMMITTER_GPU_S, M_COMMITTER_GPU_SPANS,
+            M_STEP_WALL_S, M_STEP_WALL_DRAFTS, M_STEP_WALL_STEPS]
 
 # Forms that must NEVER be reported as s/fwd (blocked + asserted, class-12).
 BANNED_SPEED_BASES = {"tps", "accept", "wall", "wall_clock", "req_elapsed", "http_elapsed"}
@@ -1569,6 +1578,30 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     derived_tps_fullstep_gpu = (
         (committed_per_event / _fullstep_s) if (_fullstep_s > 0 and committed_per_event) else None
     )
+    # FR13_STEP_WALL alignment (user gate): the derived fullstep TPS is a
+    # compute-basis upper bound blind to overhead OUTSIDE verify+drafter+
+    # committer. Report the MEASURED wall TPS on the same per-event basis and
+    # the residual bucket; a large residual or misalignment invalidates any
+    # cross-arm verdict made on the derived number alone.
+    agg_wall_s = agg.get(M_STEP_WALL_S, 0.0)
+    agg_wall_drafts = agg.get(M_STEP_WALL_DRAFTS, 0.0)
+    agg_wall_steps = agg.get(M_STEP_WALL_STEPS, 0.0)
+    wall_s_per_event = (
+        (agg_wall_s / agg_wall_drafts)
+        if (agg_wall_s > 0 and agg_wall_drafts > 0) else None
+    )
+    measured_tps_fullstep_wall = (
+        (committed_per_event / wall_s_per_event)
+        if (wall_s_per_event and committed_per_event) else None
+    )
+    overhead_other_ms_per_event = (
+        (wall_s_per_event - _fullstep_s) * 1000.0
+        if (wall_s_per_event is not None and _fullstep_s > 0) else None
+    )
+    fullstep_alignment_ratio = (
+        (derived_tps_fullstep_gpu / measured_tps_fullstep_wall)
+        if (derived_tps_fullstep_gpu and measured_tps_fullstep_wall) else None
+    )
 
     # NON-deflated per-STREAM decode rate: count/sum of vLLM
     # request_time_per_output_token = 1/avg(per-request mean-TPOT). Per-request
@@ -1689,6 +1722,25 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
             "drafter-INCLUSIVE compute TPS (captures the merged skip/fill drafter modes' effect, "
             "which the verify-only derived_tps_gpu cannot). Excludes host gaps."
         ),
+        # FR13_STEP_WALL (user gate): MEASURED wall twin + residual. A speed
+        # verdict quoting derived_tps_fullstep_gpu MUST also quote these; if
+        # fullstep_alignment_ratio drifts far from 1 the derived basis is
+        # missing real overhead and the verdict must use the measured number.
+        "measured_tps_fullstep_wall": measured_tps_fullstep_wall,
+        "measured_tps_fullstep_wall_note": (
+            "committed_per_event / MEASURED wall per event (start-to-start deltas "
+            "between consecutive pure-decode steps, idle-capped, chain broken on "
+            "mixed/prefill steps). Includes ALL step cost: host glue, sampler, "
+            "packer, scheduler gap."
+        ),
+        "wall_s_per_event": wall_s_per_event,
+        "wall_steps_measured": agg_wall_steps or None,
+        "overhead_other_ms_per_event": overhead_other_ms_per_event,
+        "overhead_other_note": (
+            "wall_per_event - (verify + drafter + committer) = step cost OUTSIDE "
+            "the three timed components."
+        ),
+        "fullstep_alignment_ratio": fullstep_alignment_ratio,
         # FR13_DFWD/CFWD_GPU_TIMER component spans (where the tree overhead
         # lives per reference_tree_tps_overhead_bound): per-arm totals +
         # per-step ms. null => timer OFF (default; byte-identical) or the

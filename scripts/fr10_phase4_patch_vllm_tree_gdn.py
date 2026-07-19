@@ -10338,6 +10338,52 @@ def _patch_gpu_model_runner_preprocess_input_capture() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_row_req_ids_fresh() -> bool:
+    """FR13_PB_ROWIDS_FRESH: refresh row-aligned request-id publishes EVERY step.
+
+    dbg10 forensic raise: the FR13_TREE_REQKEY capture of the sampler/spec
+    row-id lists only refreshes on steps that run the spec-decode section. A
+    propose after a non-spec step (e.g. an n>1 completions fork joining the
+    batch) read a STALE 1-row list against B=2 packed rows -> chain-packer
+    fail-loud. Worse, a stale list of the RIGHT length would bind silently
+    wrong. Publish the full-batch list unconditionally at _prepare_inputs and
+    INVALIDATE the spec-row list (the spec section re-publishes it when spec
+    rows exist this step).
+    """
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_PB_ROWIDS_FRESH"
+    if sentinel in text:
+        return False
+    anchor = (
+        "        use_spec_decode = "
+        "len(scheduler_output.scheduled_spec_decode_tokens) > 0\n"
+    )
+    inject = (
+        f"        {sentinel}: refresh row-id publishes every step; stale\n"
+        "        # lists mis-key the chain packer/committer (see patcher doc).\n"
+        "        try:\n"
+        "            from vllm.model_executor.layers.mamba import (\n"
+        "                gdn_linear_attn as _fr13_rf_gdn,\n"
+        "            )\n"
+        "            _fr13_rf_gdn._LUMO_FA_SAMPLER_ROW_REQ_IDS = [\n"
+        "                str(_fr13_rf_rid)\n"
+        "                for _fr13_rf_rid in self.input_batch.req_ids\n"
+        "            ]\n"
+        "            _fr13_rf_gdn._LUMO_FA_SPEC_ROW_REQ_IDS = None\n"
+        "        except Exception as _fr13_rf_exc:\n"
+        "            raise RuntimeError(\n"
+        "                \"FR13_PB_ROWIDS_FRESH publish failed: \"\n"
+        "                + repr(_fr13_rf_exc)\n"
+        "            ) from _fr13_rf_exc\n"
+        + anchor
+    )
+    if anchor not in text:
+        raise RuntimeError("FR13 row req ids fresh anchor not found")
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_draft_handoff_trim() -> bool:
     """FR13_DRAFT_HANDOFF_TRIM: never hand -1 draft ids to the scheduler.
 
@@ -17262,6 +17308,22 @@ class _Fr13SfwdGpuTimer:
         self._n_drafts = 0
         self._counter = None
         self._installed_atexit = False
+        # FR13_STEP_WALL: measured full-step WALL basis (user gate: derived
+        # fullstep TPS must align with a MEASURED wall TPS or the verdict is
+        # blind to overhead outside verify+drafter+committer). Start-to-start
+        # perf_counter deltas between CONSECUTIVE pure-decode steps capture
+        # the whole step (host glue + scheduler gap included); the chain
+        # breaks on mixed/prefill steps and deltas above the idle cap are
+        # rejected so agent think-time cannot pollute the basis.
+        self._wall_prev_t = None
+        self._wall_prev_n = 0
+        self._wall_accum_s = 0.0
+        self._wall_drafts = 0
+        self._wall_steps = 0
+        self._wall_rejected = 0
+        self._wall_cap_s = float(
+            __import__("os").environ.get("FR13_STEP_WALL_CAP_S", "1.5")
+        )
         # throttled incremental sidecar dump (prometheus-independent live channel)
         import time as _time
         self._dump_period_s = float(
@@ -17294,6 +17356,29 @@ class _Fr13SfwdGpuTimer:
         import atexit as _atexit
         _atexit.register(self._teardown)
         self._installed_atexit = True
+
+    def wall_mark(self, num_reqs=1):
+        """FR13_STEP_WALL: called at the FORWARD START of every pure-decode
+        step (flag-gated by the caller). Accumulates the start-to-start delta
+        from the previous pure-decode step, attributed to the PREVIOUS step's
+        drafts; rejects deltas above the idle cap."""
+        import time as _time
+        now = _time.perf_counter()
+        if self._wall_prev_t is not None:
+            d = now - self._wall_prev_t
+            if 0.0 < d < self._wall_cap_s:
+                self._wall_accum_s += d
+                self._wall_drafts += int(max(1, self._wall_prev_n))
+                self._wall_steps += 1
+            else:
+                self._wall_rejected += 1
+        self._wall_prev_t = now
+        self._wall_prev_n = int(max(1, num_reqs))
+
+    def wall_break(self):
+        """FR13_STEP_WALL: a mixed/prefill step breaks the pure-decode chain."""
+        self._wall_prev_t = None
+        self._wall_prev_n = 0
 
     def begin(self, num_reqs=1):
         """Return a fresh start cuda-event (recorded on the current stream), or
@@ -17388,6 +17473,13 @@ class _Fr13SfwdGpuTimer:
                 # == sum(num_reqs) so MIXED-step drafts are not counted against
                 # the pure-decode GPU numerator.
                 "n_drafts_in_timed_steps": self._n_drafts,
+                # FR13_STEP_WALL: measured full-step wall basis (start-to-start
+                # deltas between consecutive pure-decode steps; idle-capped).
+                "decode_step_wall_seconds": self._wall_accum_s,
+                "n_drafts_in_wall_steps": self._wall_drafts,
+                "n_wall_steps": self._wall_steps,
+                "n_wall_rejected": self._wall_rejected,
+                "wall_cap_s": self._wall_cap_s,
                 "metric_name": "vllm:fr13_decode_forward_gpu_seconds_total",
                 "note": (
                     "pure-decode (uniform_decode) model-forward GPU seconds; "
@@ -17460,9 +17552,20 @@ def _fr13_sfwd_begin(max_num_scheduled_tokens, num_tokens, num_reqs,
     step, else None (no event, no cost)."""
     if __import__("os").environ.get("FR13_SFWD_GPU_TIMER", "0") != "1":
         return None
-    if not _fr13_sfwd_is_pure_decode(
+    _fr13_sfwd_pure = _fr13_sfwd_is_pure_decode(
         max_num_scheduled_tokens, num_tokens, num_reqs, uniform_decode_query_len
-    ):
+    )
+    try:
+        # FR13_STEP_WALL: wall bookkeeping runs on EVERY step while the flag
+        # is on -- pure steps extend the start-to-start chain, mixed/prefill
+        # steps break it.
+        if _fr13_sfwd_pure:
+            _fr13_sfwd_timer().wall_mark(num_reqs=num_reqs)
+        else:
+            _fr13_sfwd_timer().wall_break()
+    except Exception:  # noqa: BLE001
+        pass
+    if not _fr13_sfwd_pure:
         return None
     try:
         return _fr13_sfwd_timer().begin(num_reqs=num_reqs)
@@ -19266,6 +19369,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_pb_input_range_guard()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_draft_handoff_trim()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_row_req_ids_fresh()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
         # FR13_MERGED_DRAFTER: Arctic SuffixDecodingCache lifecycle at the runner,

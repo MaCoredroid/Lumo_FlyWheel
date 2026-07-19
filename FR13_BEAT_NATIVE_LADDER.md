@@ -90,3 +90,21 @@ NEW CONSTRAINTS the replay-era sweep did not have:
 Sweep output = the deliverable (n, x, b) shape; then ONE same-session confirm campaign (winner vs tail6-pb
 hybrid vs native) on subset_b4_sixteen, WALL=0, wall-free resolve gate. Do not hand-pick a shape without
 the sweep (feedback: swap MTP-n / tail-x / branching with the cost model).
+
+## MEASURED-TPS ALIGNMENT GATE (user directive 2026-07-19): derived must align with measured
+User: "We must have a measured TPS to align with derived TPS, otherwise we would be wrong if
+there's extra overhead outside three components."
+- `derived_tps_fullstep_gpu` = committed/(verify+drafter+committer GPU) is a compute-basis
+  UPPER BOUND — blind to host glue (input prep, sampler, chain packer, bookkeeping, scheduler
+  gap). A cross-arm verdict on the derived number alone is invalid if the arms carry different
+  out-of-component overhead (piggyback moves work INTO exactly those buckets: packer, repair
+  scatters, interleave markers).
+- MEASURED twin (FR13_STEP_WALL, wired 2026-07-19 into the sfwd sidecar + snapshot synthesis +
+  reducer): start-to-start wall deltas between CONSECUTIVE pure-decode steps (chain broken on
+  mixed/prefill steps; deltas > FR13_STEP_WALL_CAP_S (default 1.5s) rejected so agent think-time
+  idle cannot pollute). Fields: `measured_tps_fullstep_wall`, `wall_s_per_event`,
+  `overhead_other_ms_per_event` (= wall − 3 components), `fullstep_alignment_ratio`
+  (= derived/measured).
+- GATE (applies to EVERY speed verdict from now on, incl. the pb CFWD-collapse verdict and all
+  R-rung A/Bs): quote derived AND measured; if alignment ratio drifts far from ~1, the verdict
+  MUST be made on the measured number and the residual bucket investigated per-arm.
