@@ -96,6 +96,12 @@ case "$KIND" in
   # chain5(forked)-vs-native-MTP A/B for the char-8 tool-call regression.
   nativemtp5) LAUNCHER=native; TREEARG="";            EXPECT_RATIO=5;  declare -a XFLAGS=() ;;
   nativemtp5apc) LAUNCHER=native; TREEARG="";         EXPECT_RATIO=5;  declare -a XFLAGS=(NATIVE_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32) ;;
+  # nativemtp11apc = DEPTH-MATCHED native baseline (user 2026-07-19): stock MTP
+  # recursion at tail6's depth 11 — decomposes the tree's accept edge into
+  # depth-budget vs branching vs mixed-drafter contributions. Expect the deep
+  # MTP conditionals to decay (self-fed embeddings) + 11 sequential drafter
+  # passes; native's own optimum stays MTP-5.
+  nativemtp11apc) LAUNCHER=native; TREEARG="";        EXPECT_RATIO=11; declare -a XFLAGS=(NUM_SPECULATIVE_TOKENS=11 NATIVE_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32) ;;
   # nativemtp5_exseed = NATIVE MTP-5 decode (clean native kernel: FLASH_ATTN, native
   # qwen3_5_mtp spec, NO speculative_token_tree, NO forked-fa2 tree-attn) + the
   # patcher's LOSSLESS deployment cache FR13_APC_EXACT_SEED=1. It uses LAUNCHER=forked

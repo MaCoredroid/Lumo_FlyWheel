@@ -18,3 +18,9 @@ run_variant native_${TAG}        nativemtp5apc  5  1
 export FR13_SERVE_BATCH_FLAGS="--async-scheduling"
 export FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_resolve/native_async_cfwd.json
 run_variant native_async_${TAG}  nativemtp5apc  5  1
+# DEPTH-MATCHED baseline (user): native MTP at tail6's depth 11 — decomposes
+# the tree accept edge (depth budget vs branching vs mixed drafter). Cache ON
+# like everything post-rg-pair.
+unset FR13_SERVE_BATCH_FLAGS
+export FR13_COMMIT_FULL_GPU_TIMER_JSON=/workspace/output/fr13_resolve/native11_cfwd.json
+run_variant native11_${TAG}      nativemtp11apc 11 1
