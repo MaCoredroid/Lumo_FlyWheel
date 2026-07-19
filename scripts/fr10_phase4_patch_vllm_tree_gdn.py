@@ -10369,7 +10369,13 @@ def _patch_gpu_model_runner_row_req_ids_fresh() -> bool:
         "                str(_fr13_rf_rid)\n"
         "                for _fr13_rf_rid in self.input_batch.req_ids\n"
         "            ]\n"
-        "            _fr13_rf_gdn._LUMO_FA_SPEC_ROW_REQ_IDS = None\n"
+        "            # NOTE (dbg11): do NOT invalidate _LUMO_FA_SPEC_ROW_REQ_IDS\n"
+        "            # here -- the variant-B ring mapper reads it as the\n"
+        "            # PREV-step spec-row order (the activation ring is\n"
+        "            # positional in prev spec order); nulling it broke the\n"
+        "            # ring lookup one step after every tree commit. Stale-list\n"
+        "            # mis-binding in the packer is instead prevented by the\n"
+        "            # packer preferring the always-fresh SAMPLER list.\n"
         "        except Exception as _fr13_rf_exc:\n"
         "            raise RuntimeError(\n"
         "                \"FR13_PB_ROWIDS_FRESH publish failed: \"\n"
@@ -10423,6 +10429,27 @@ def _patch_gpu_model_runner_draft_handoff_trim() -> bool:
     if anchor not in text:
         raise RuntimeError("FR13 draft handoff trim anchor not found")
     text = text.replace(anchor, replacement, 1)
+    # dbg11: the LIST branch (tree drafter returns per-row python lists, not a
+    # tensor) bypassed the trim above -- the [-1]*17 lists reached the
+    # scheduler through it. Trim that branch too.
+    list_anchor = """        if isinstance(self._draft_token_ids, list):
+            return self._draft_token_ids, self.input_batch.req_ids
+"""
+    list_replacement = """        if isinstance(self._draft_token_ids, list):
+            # FR13_DRAFT_HANDOFF_TRIM (list branch): same first-negative trim.
+            _fr13_ht_lout = []
+            for _fr13_ht_lrow in self._draft_token_ids:
+                _fr13_ht_lcut = len(_fr13_ht_lrow)
+                for _fr13_ht_lj, _fr13_ht_lv in enumerate(_fr13_ht_lrow):
+                    if int(_fr13_ht_lv) < 0:
+                        _fr13_ht_lcut = _fr13_ht_lj
+                        break
+                _fr13_ht_lout.append(list(_fr13_ht_lrow[:_fr13_ht_lcut]))
+            return _fr13_ht_lout, self.input_batch.req_ids
+"""
+    if list_anchor not in text:
+        raise RuntimeError("FR13 draft handoff trim LIST anchor not found")
+    text = text.replace(list_anchor, list_replacement, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
 
@@ -14038,12 +14065,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         "got " + str(int(_fr10_packed.shape[1]))
                     )
                 _fr13_pb_B = int(_fr10_packed.shape[0])
+                # dbg11 preference flip: SAMPLER first -- FR13_PB_ROWIDS_FRESH
+                # republishes it every step (never stale); SPEC_ROW may be one
+                # step old (it doubles as the variant-B ring mapper's
+                # PREV-step channel, so it must NOT be invalidated per step).
                 _fr13_pb_ids = getattr(
-                    _fr13_pb_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None
+                    _fr13_pb_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None
                 )
                 if _fr13_pb_ids is None or len(_fr13_pb_ids) != _fr13_pb_B:
                     _fr13_pb_ids = getattr(
-                        _fr13_pb_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None
+                        _fr13_pb_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None
                     )
                 _fr13_pb_by_req = getattr(
                     _fr13_pb_gdn, "_LUMO_FA_TREE_ACCEPT_BY_REQ", None
