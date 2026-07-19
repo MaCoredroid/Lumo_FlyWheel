@@ -10403,6 +10403,117 @@ def _patch_gpu_model_runner_pb_input_range_guard() -> bool:
                                     )
                                 )
                                 break
+                    # dbg8 forensic dump: complete ground truth at detection
+                    # (the raise below survives even if the save fails).
+                    _fr13_rng_dump = "/logs/fr13_pb_range_dump.pt"
+                    try:
+                        _fr13_rng_payload = {
+                            "schema": "fr13.pb_range_dump.v1",
+                            "vocab": int(_fr13_rng_vocab),
+                            "bad_pos": _fr13_rng_pos,
+                            "bad_vals": _fr13_rng_val,
+                            "spans_reconstructed": _fr13_rng_spans,
+                            "req_ids": [
+                                str(_x) for _x in self.input_batch.req_ids
+                            ],
+                            "input_ids_head": (
+                                _fr13_rng_ids[:64].cpu()
+                            ),
+                            "input_ids_around_bad": {
+                                int(_p): _fr13_rng_ids[
+                                    max(0, int(_p) - 2): int(_p) + 3
+                                ].cpu()
+                                for _p in _fr13_rng_pos[:8]
+                            },
+                            "scheduled_spec_decode_tokens": {
+                                str(_k): list(_v)
+                                for _k, _v in
+                                scheduler_output
+                                .scheduled_spec_decode_tokens.items()
+                            },
+                            "num_scheduled_tokens": {
+                                str(_k): int(_v)
+                                for _k, _v in
+                                scheduler_output.num_scheduled_tokens.items()
+                            },
+                            "prev_req_id_to_index": dict(
+                                getattr(
+                                    self.input_batch,
+                                    "prev_req_id_to_index", None
+                                ) or {}
+                            ),
+                            "prev_positions": (
+                                self.prev_positions.np[
+                                    : len(self.input_batch.req_ids)
+                                ].tolist()
+                                if hasattr(self, "prev_positions")
+                                else None
+                            ),
+                            "draft_token_ids_shape": (
+                                list(self._draft_token_ids.shape)
+                                if torch.is_tensor(self._draft_token_ids)
+                                else (
+                                    "list" if self._draft_token_ids
+                                    is not None else None
+                                )
+                            ),
+                            "draft_token_ids": (
+                                self._draft_token_ids.cpu()
+                                if torch.is_tensor(self._draft_token_ids)
+                                else self._draft_token_ids
+                            ),
+                            "replay_draft_req_ids": getattr(
+                                self, "_fr13_replay_draft_token_req_ids",
+                                None
+                            ),
+                            "replay_sampled_req_ids": getattr(
+                                self, "_fr13_replay_prev_sampled_req_ids",
+                                None
+                            ),
+                            "prev_sampled_token_ids": (
+                                self.input_batch.prev_sampled_token_ids.cpu()
+                                if torch.is_tensor(
+                                    self.input_batch.prev_sampled_token_ids
+                                ) else None
+                            ),
+                            "token_ids_cpu_windows": {},
+                            "num_spec_tokens": int(self.num_spec_tokens),
+                        }
+                        for (
+                            _fr13_rng_rid2,
+                            _fr13_rng_o2,
+                            _fr13_rng_n2,
+                        ) in _fr13_rng_spans:
+                            try:
+                                _fr13_rng_ri = (
+                                    self.input_batch.req_id_to_index[
+                                        _fr13_rng_rid2
+                                    ]
+                                )
+                                _fr13_rng_nc = int(
+                                    self.input_batch
+                                    .num_computed_tokens_cpu[_fr13_rng_ri]
+                                )
+                                _fr13_rng_payload[
+                                    "token_ids_cpu_windows"
+                                ][str(_fr13_rng_rid2)] = {
+                                    "num_computed": _fr13_rng_nc,
+                                    "window": torch.from_numpy(
+                                        self.input_batch.token_ids_cpu[
+                                            _fr13_rng_ri,
+                                            _fr13_rng_nc:
+                                            _fr13_rng_nc
+                                            + min(int(_fr13_rng_n2), 32),
+                                        ].copy()
+                                    ),
+                                }
+                            except Exception:
+                                pass
+                        torch.save(_fr13_rng_payload, _fr13_rng_dump)
+                    except Exception as _fr13_rng_exc:
+                        _fr13_rng_dump = (
+                            "SAVE_FAILED:" + repr(_fr13_rng_exc)
+                        )
                     raise RuntimeError(
                         "FR13_PB_DEBUG_RANGE: out-of-range input ids at the "
                         "embedding gather: vocab=" + str(_fr13_rng_vocab)
@@ -10410,6 +10521,7 @@ def _patch_gpu_model_runner_pb_input_range_guard() -> bool:
                         + " (pos, req, col_in_span, span)="
                         + str(_fr13_rng_map)
                         + " spans=" + str(_fr13_rng_spans)
+                        + " dump=" + str(_fr13_rng_dump)
                     )
 """
     if anchor not in text:
