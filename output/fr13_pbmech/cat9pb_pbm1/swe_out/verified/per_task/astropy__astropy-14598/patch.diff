@@ -1,0 +1,41 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..da6695b5e 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -854,12 +854,34 @@ class Card(_Verify):
+ 
+                 # Should match a string followed by a comment; if not it
+                 # might be an invalid Card, so we just take it verbatim
+-                m = self._strg_comment_RE.match(vc)
++                #
++                # For CONTINUE cards, the value may end with &' where & is
++                # the continuation marker. When the string contains escaped
++                # quotes (''), the regex can't distinguish between the escaped
++                # quotes and the closing quote. Preprocess to handle this:
++                # temporarily remove & before the closing quote so the regex
++                # can match correctly, then restore & after extraction.
++                continue_marker = False
++                match_vc = vc
++                if vc.endswith("&'"):
++                    match_vc = vc[:-2] + "'"
++                    continue_marker = True
++                elif " / " in vc:
++                    # Value with comment: find &' before the comment
++                    idx = vc.find(" / ")
++                    val_part = vc[:idx]
++                    if val_part.endswith("&'"):
++                        match_vc = val_part[:-2] + "'" + vc[idx:]
++                        continue_marker = True
++
++                m = self._strg_comment_RE.match(match_vc)
+                 if not m:
+                     return kw, vc
+ 
+                 value = m.group("strg") or ""
+-                value = value.rstrip().replace("''", "'")
++                value = value.rstrip()
++                if continue_marker:
++                    value = value + "&"
+                 if value and value[-1] == "&":
+                     value = value[:-1]
+                 values.append(value)
