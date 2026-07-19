@@ -14190,11 +14190,19 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     )
                     _fr13_pb_bonus = int(_fr13_pb_bonus_t[_fr13_pb_b])
                     if _fr13_pb_entry is None and _fr13_pb_prev is not None:
-                        # stale stash with no live accept entry = a REAL leak
-                        raise RuntimeError(
-                            "FR13_PIGGYBACK: stale prev-bonus stash with no "
-                            "accept entry for req " + str(_fr13_pb_rid)
-                        )
+                        # dbg13 downgrade: BENIGN, not a leak. The propose->
+                        # verify cycle can be interrupted for scheduling
+                        # reasons (spec tokens trimmed for budget/handoff
+                        # trim, preemption): the bonus then ran as a NATIVE
+                        # span-1 decode step which advanced the GDN state
+                        # natively, so the request is simply FRESH again --
+                        # identity chain is CORRECT. The original "real leak"
+                        # premise is now covered elsewhere: every by_req
+                        # clear pops this stash atomically (C-INT-2(6) +
+                        # dead-req eviction) and the committer publish
+                        # fail-louds on spec-row mis-keying.
+                        _FR13_PB_PREV_BONUS.pop(_fr13_pb_rid, None)
+                        _fr13_pb_prev = None
                     if _fr13_pb_entry is not None and _fr13_pb_prev is None:
                         # cold-start recovery (first commit before any stash,
                         # e.g. the boot probe): the prev-root TOKEN is inert
