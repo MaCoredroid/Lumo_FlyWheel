@@ -326,3 +326,15 @@ walk outputs as DEVICE tensors, materialize host copies on a side stream + CUDA 
 the GDN path/len publishes (needed pre-next-forward) stay device-keyed. Target: 53.7 -> ~24ms
 (commit_full), then chip the 19ms assembly. Author flag-gated + byte-identity gate + CFWD collapse.
 BLOCKED on GPU (acctrl running for the accept-collapse attribution -- the user's priority).
+
+## COLLAPSE = PIGGYBACK, NOT CACHE (collapse3 arm1, 2026-07-20) — REVERSES the "artifact" read
+Task 14539 under tail6_pb CACHE-OFF: accept **3.647** == allon5 cache-ON 3.6 (cache-independent),
+vs rg1 plain-tail6 4.9-5.7. Cumulative 3 collapse tasks cache-OFF = 3.48. Cache is NOT the carrier.
+=> The collapse is a real PIGGYBACK effect on rg1's HIGHEST-accept (deep-tail-heavy) tasks:
+   plain tail6 (committer replay every step) handles them at 5+; tail6_pb (chain re-derivation +
+   overflow catch-up) tanks them to 3.6. It is CACHE-INDEPENDENT and TASK-SELECTIVE (deep-accept).
+Workflow refuted GDN/conv col-0 divergence (single-step). So the mechanism is NOT col-0. NEW
+prime suspect = FR13_ATTN_KV_REMAP under deep/overflow accept (the attention-KV re-linearization,
+NOT scoped into the col-0 workflow). The user was right: fixable pb bug, not artifact/noise.
+NEXT: confirm 14598/14995 + arm2 cache-ON; then a per-step tail6_pb-vs-plain-tail6 divergence probe
+on ONE collapse task to localize (attention KV vs commit vs draft), then fix.
