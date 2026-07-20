@@ -19247,7 +19247,8 @@ def _patch_gpu_model_runner_slot_reorder() -> bool:
             # for the tree-verify suffix (full-attention groups only). See the
             # patch docstring + FR13_CAT6_CAT8_ACCEPT_INVESTIGATION.md.
             if (
-                __import__("os").environ.get("FR13_SLOT_REORDER", "0") == "1"
+                (__import__("os").environ.get("FR13_SLOT_REORDER", "0") == "1"
+                 or __import__("os").environ.get("FR13_PB_BASE_COL_INVARIANT", "0") == "1")
                 and not for_cudagraph_capture
                 and use_spec_decode
                 and ubid is None
@@ -19281,22 +19282,45 @@ def _patch_gpu_model_runner_slot_reorder() -> bool:
                         __import__("ast").literal_eval(_sr_tree),
                         key=lambda _p: (len(_p), _p),
                     )
-                    _sr_pi = (
-                        [0]
-                        + [
-                            _i + 1
-                            for _i, _c in enumerate(_sr_ch)
-                            if all(int(_x) == 0 for _x in _c)
-                        ]
-                        + [
-                            _i + 1
-                            for _i, _c in enumerate(_sr_ch)
-                            if not all(int(_x) == 0 for _x in _c)
-                        ]
+                    _sr_is_pb = (
+                        __import__("os").environ.get(
+                            "FR13_PB_BASE_COL_INVARIANT", "0"
+                        ) == "1"
+                        and len(_sr_ch) > 8
+                        and all(
+                            tuple(_sr_ch[_k]) == tuple([0] * (_k + 1))
+                            for _k in range(8)
+                        )
                     )
-                    assert _sr_pi[0] == 0 and sorted(_sr_pi) == list(
-                        range(len(_sr_ch) + 1)
-                    ), _sr_pi
+                    if _sr_is_pb:
+                        # FR13_PB_BASE_COL_INVARIANT: base-first pi (base subtree
+                        # nodes 8..tree_n-1 -> phys 0.., dead chain 1-7 + pos-0 ->
+                        # tail). MUST match the tree_attn bias _fr13_sr_pi_list
+                        # pb branch exactly (both permute the same physical cols).
+                        _sr_tn = len(_sr_ch) + 1
+                        _sr_pi = (
+                            list(range(8, _sr_tn))
+                            + list(range(1, 8))
+                            + [0]
+                        )
+                        assert sorted(_sr_pi) == list(range(_sr_tn)), _sr_pi
+                    else:
+                        _sr_pi = (
+                            [0]
+                            + [
+                                _i + 1
+                                for _i, _c in enumerate(_sr_ch)
+                                if all(int(_x) == 0 for _x in _c)
+                            ]
+                            + [
+                                _i + 1
+                                for _i, _c in enumerate(_sr_ch)
+                                if not all(int(_x) == 0 for _x in _c)
+                            ]
+                        )
+                        assert _sr_pi[0] == 0 and sorted(_sr_pi) == list(
+                            range(len(_sr_ch) + 1)
+                        ), _sr_pi
                     _sr_inv = [0] * len(_sr_pi)
                     for _sr_k, _sr_nd in enumerate(_sr_pi):
                         _sr_inv[_sr_nd] = _sr_k
@@ -19455,7 +19479,7 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                # behavior bit-identical).\n"
         "                _fr13_akr_dstpi = (\n"
         "                    getattr(self, \"_fr13_sr_pi_t\", None)\n"
-        "                    if __import__(\"os\").environ.get(\"FR13_SLOT_REORDER\", \"0\") == \"1\"\n"
+        "                    if getattr(self, \"_fr13_sr_pi_t\", None) is not None\n"
         "                    else None\n"
         "                )\n"
         "                # FRESH per-step committer paths. The persistent PATHS_TENSOR is\n"
