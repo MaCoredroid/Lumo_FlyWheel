@@ -458,3 +458,16 @@ runs REMAP=1. So the remap is the pb-specific KV path. Read all three pb state p
 => Residual -1.2 is a RUNTIME numerical effect (29-col fused forward vs 21-col, or interaction) NOT
 visible statically. DECISIVE = empirical teacher-forced first-divergence gate (pb vs non-pb, same
 tokens) -> pins conv-seed/ssm-seed/per-layer/final-logit. NOT a blind edit.
+
+## EXHAUSTIVE READ COMPLETE: ALL pb paths byte-correct; residual is runtime -> empirical gate is the ONLY decider
+Read every pb-specific path concretely: (1) GDN col-0 export==replay bit-identical; (2) conv common
+to both arms; (3) attn-KV remap dst=m+1 correct for deep accepts + fail-loud on mixed; (4) RoPE
+depth-positions (patcher:10018 offsets-8 clamp) correctly maps base-subtree to base depths 1-11,
+(0,)^8->0, chain->0; (5) attn mask generalized (S1(b) row-0 ghost, +0.29). ALL correct/fixed.
+=> residual -1.2 = RUNTIME numerical, NOT statically localizable. Two possibilities: (a) within-
+floor 29-vs-21-col ULP tipping temp-0.6 near-ties (inherent to bigger tree, hard w/o byte-identity);
+(b) subtle real leak invisible statically. DECIDER = teacher-forced gate (pb vs no-spec, same
+tokens, per-position argmax+top1/top2 margin via _tf_one). argmax-diff => real leak (fix it);
+margin-only => within-floor. Build gate (2 servers pb + native no-spec, deep prompt). GPU free.
+DELIVERED so far: pb carrier proven at cache-ON (5.0 vs 3.9); mask leak closed (+0.29); goal = byte-
+lossless (user); committer async-overlap fix still queued.
