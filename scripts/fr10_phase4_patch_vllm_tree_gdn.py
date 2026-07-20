@@ -10893,7 +10893,56 @@ def _patch_gpu_model_runner_tree_reqkey() -> bool:
         "                                    + str(_fr13_rk_pb_seq)\n"
         "                                )\n"
         "                            if _fr13_rk_pb_rid in _fr13_rk_pb_specset:\n"
-        "                                _fr13_rk_pb_pend.pop(_fr13_rk_pb_rid, None)\n"
+        "                                # tail6 port OVERFLOW FALLBACK: accepted\n"
+        "                                # len > 6 exceeds the 8-slot chain\n"
+        "                                # capacity ([prev root] + 6 drafts) --\n"
+        "                                # the tree forward's chain CANNOT repair\n"
+        "                                # col-0, so a spec-bound overflow row\n"
+        "                                # takes the one-shot catch-up\n"
+        "                                # (root_node=8) + atomic invalidate,\n"
+        "                                # like the nonspec branch. The propose\n"
+        "                                # that ALREADY ran packed a len-0\n"
+        "                                # identity chain via its own L>6\n"
+        "                                # branch, and seam 1d below reads\n"
+        "                                # by_req AFTER the invalidate => len 0.\n"
+        "                                # Packer/seam-1d agreement holds.\n"
+        "                                _fr13_rk_pb_ofe = _fr13_rk_by_req.get(\n"
+        "                                    _fr13_rk_pb_rid\n"
+        "                                )\n"
+        "                                _fr13_rk_pb_of = (\n"
+        "                                    _fr13_rk_pb_ofe is not None\n"
+        "                                    and int(_fr13_rk_pb_ofe[1]) + 1 > 7\n"
+        "                                )\n"
+        "                                if not _fr13_rk_pb_of:\n"
+        "                                    _fr13_rk_pb_pend.pop(_fr13_rk_pb_rid, None)\n"
+        "                                elif (\n"
+        "                                    _fr13_rk_pb_rid in _fr13_rk_pb_resumed\n"
+        "                                    or _fr13_rk_pb_mseq != _fr13_rk_pb_seq\n"
+        "                                ):\n"
+        "                                    # ring staging gone (resumed/seq-\n"
+        "                                    # stale): recompute prefill rebuilds\n"
+        "                                    # col-0 -> invalidate-only (branch\n"
+        "                                    # (c) semantics).\n"
+        "                                    _fr13_rk_pb_clear.append(_fr13_rk_pb_rid)\n"
+        "                                elif _fr13_rk_pb_rid in _fr13_rk_pb_prev_spec2:\n"
+        "                                    if not globals().get(\n"
+        "                                        \"_FR13_PB_OVERFLOW_ANNOUNCED\"\n"
+        "                                    ):\n"
+        "                                        globals()[\n"
+        "                                            \"_FR13_PB_OVERFLOW_ANNOUNCED\"\n"
+        "                                        ] = True\n"
+        "                                        __import__(\"sys\").stderr.write(\n"
+        "                                            \"[FR13_PIGGYBACK] chain overflow\"\n"
+        "                                            \" (L>6) -> pre-forward catch-up\"\n"
+        "                                            \" fallback engaged\" + chr(10)\n"
+        "                                        )\n"
+        "                                    _fr13_rk_pb_catchup.append(_fr13_rk_pb_rid)\n"
+        "                                else:\n"
+        "                                    raise RuntimeError(\n"
+        "                                        \"FR13_PIGGYBACK: overflow row\"\n"
+        "                                        \" absent from prev staging: \"\n"
+        "                                        + str(_fr13_rk_pb_rid)\n"
+        "                                    )\n"
         "                            elif (\n"
         "                                _fr13_rk_pb_rid in _fr13_rk_pb_nonspecset\n"
         "                                and _fr13_rk_pb_rid not in _fr13_rk_pb_resumed\n"
@@ -13018,6 +13067,36 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             raise RuntimeError(
                 "FR13_PIGGYBACK armed but tree_choices is not the cat9_pb extended "
                 "tree: " + repr(_fr10_tree_choices_current))
+        # tail6 port (allon3 root cause: "expected the 21-col base pack, got
+        # 9"): ALL base-shape detection/planning for an extended pb tree runs
+        # on the DE-ROOTED BASE SUBTREE (strip the strict 8-chain prefix from
+        # every node past the chain). cat9_pb's base == the hand-rolled
+        # default cat9 => keep the verified else-stack path (byte-identical
+        # to the R2 bake). Any OTHER base (tail6, ...) takes the general
+        # wide+tail path ON THE BASE SHAPE; the pb seam prepends the chain
+        # afterwards (sorted-extended order == chain ++ sorted-base order,
+        # since the (0,)*8 prefix is length- and lexicographically neutral).
+        _fr10_pb_base_choices = []
+        if _fr10_is_cat9_pb:
+            for _pbp in _fr10_sorted_cur[8:]:
+                if len(_pbp) <= 8 or tuple(_pbp[:8]) != tuple([0] * 8):
+                    raise RuntimeError(
+                        "FR13_PIGGYBACK: extended-tree base node without the "
+                        "8-chain prefix: " + repr(_pbp)
+                    )
+                _fr10_pb_base_choices.append(tuple(_pbp[8:]))
+        _fr10_pb_base_is_cat9 = _fr10_is_cat9_pb and (
+            sorted(_fr10_pb_base_choices, key=lambda c: (len(c), c))
+            == [
+                (0,), (0, 0), (0, 1), (0, 0, 0), (0, 0, 1),
+                (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 0, 0),
+                (0, 0, 0, 0, 1),
+            ]
+        )
+        _fr10_wide_src_choices = (
+            _fr10_pb_base_choices if _fr10_is_cat9_pb
+            else _fr10_tree_choices_current
+        )
         # FR13_RESHAPE_WIDE: GENERAL width-N caterpillar drafter. Engages for
         # ANY tree_choices that is a single all-zeros spine with arbitrary-width
         # leaf children hanging DIRECTLY off each spine node (incl root), and
@@ -13034,10 +13113,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         # from tree_choices (no per-shape hand-rolled stack).
         _fr10_wide_choices_ok = (
             _fr10_active_decode_mode == "tree_mtp"
-            and len(_fr10_tree_choices_current) > 0
+            and len(_fr10_wide_src_choices) > 0
             and all(
                 len(_p) >= 1 and all(_e == 0 for _e in _p[:-1])
-                for _p in _fr10_tree_choices_current
+                for _p in _fr10_wide_src_choices
             )
         )
         _fr10_is_wide = (
@@ -13050,7 +13129,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr10_is_cat6root
                 or _fr10_is_cat10
                 or _fr10_is_333
-                or _fr10_is_cat9_pb
+                # tail6 port: exclude wide ONLY when the pb base is the
+                # hand-rolled default cat9 (else-stack path); a tail6/other
+                # base MUST take the wide machinery on the base subtree.
+                or _fr10_pb_base_is_cat9
             )
         )
         # Build the wide plan from tree_choices: spine depth D (longest
@@ -13067,18 +13149,18 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         if _fr10_is_wide:
             _fr10_wide_D = max(
                 len(_p)
-                for _p in _fr10_tree_choices_current
+                for _p in _fr10_wide_src_choices
                 if all(_e == 0 for _e in _p)
             )
-            _fr10_wide_spine_set = set(_fr10_tree_choices_current)
+            _fr10_wide_spine_set = set(_fr10_wide_src_choices)
             for _fr10_wL in range(1, _fr10_wide_D + 1):
                 if tuple([0] * _fr10_wL) not in _fr10_wide_spine_set:
                     raise RuntimeError(
                         "FR13_RESHAPE_WIDE: spine gap, missing all-zeros path "
                         "of length " + str(_fr10_wL) + " in "
-                        + repr(_fr10_tree_choices_current)
+                        + repr(_fr10_wide_src_choices)
                     )
-            for _p in _fr10_tree_choices_current:
+            for _p in _fr10_wide_src_choices:
                 _fr10_wpp = len(_p) - 1
                 _fr10_wrk = _p[-1]
                 _fr10_wide_width[_fr10_wpp] = max(
@@ -13086,7 +13168,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 )
             _fr10_wide_spine_steps = _fr10_wide_D - 1
             _fr10_wide_plan = [
-                (len(_p) - 1, _p[-1]) for _p in _fr10_tree_choices_current
+                (len(_p) - 1, _p[-1]) for _p in _fr10_wide_src_choices
             ]
             # NOTE: logger.info_once hashes (msg, *args) to dedup, so EVERY arg
             # must be hashable -- pass the widths dict + tree as STRINGS, never
@@ -13101,8 +13183,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr10_wk: _fr10_wide_width[_fr10_wk]
                     for _fr10_wk in sorted(_fr10_wide_width)
                 }),
-                len(_fr10_tree_choices_current),
-                repr(_fr10_tree_choices_current),
+                len(_fr10_wide_src_choices),
+                repr(_fr10_wide_src_choices),
             )
         # FR13_RESHAPE_DEPTH3: number of post-root spine forward steps and the
         # depth steps (1-based) at which the runner-up leaf is consumed. cat9
@@ -13116,10 +13198,12 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         # steps (loop steps 0,1 == depths 2,3), same as chain3/cat3w.
         if _fr10_is_chain3 or _fr10_is_cat3w or _fr10_is_333:
             _fr10_spine_steps = 2
-        elif _fr10_is_cat9_pb:
+        elif _fr10_pb_base_is_cat9:
             # FR13_PIGGYBACK cat9_pb: MTP drafts ONLY the re-rooted cat9 subtree
             # (depth-5 => 4 post-root spine forwards, exactly the cat9 loop). The
             # 8 chain slots are committed-context fill, never MTP forwards.
+            # (tail6 port: a NON-cat9 base falls through to the wide branch,
+            # which derives steps from the BASE spine depth + tail-mode cap.)
             _fr10_spine_steps = 4
         elif _fr10_is_wide:
             # FR13_RESHAPE_WIDE: D-1 post-root spine forwards (derived from the
@@ -14285,11 +14369,24 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 + _fr13_pb_rid
                             )
                         if _fr13_pb_L + 1 > 7:
-                            raise RuntimeError(
-                                "FR13_PIGGYBACK: chain does not fit (L="
-                                + str(_fr13_pb_L) + ")"
+                            # tail6 port OVERFLOW FALLBACK: deep-tail accepts
+                            # (L up to 11) exceed the 8-slot chain, which can
+                            # replay at most [prev root] + 6 drafts -- the
+                            # chain CANNOT repair col-0. Pack a fresh identity
+                            # chain instead (token values are inert: ring
+                            # bytes + the seam-1d lens buffer carry the scan
+                            # semantics). The C-INT-2 pre-forward classifier
+                            # -- which runs AFTER this propose and BEFORE the
+                            # forward -- catch-up-replays the pending path
+                            # (root_node=8) and atomically invalidates
+                            # by_req/pending/leaf/stash for this rid, so seam
+                            # 1d also derives len 0. Packer/seam-1d agreement
+                            # holds at len-0 identity for this forward.
+                            _fr13_pb_toks = []
+                        else:
+                            _fr13_pb_toks = (
+                                [int(_fr13_pb_prev)] + _fr13_pb_acc
                             )
-                        _fr13_pb_toks = [int(_fr13_pb_prev)] + _fr13_pb_acc
                     _fr13_pb_fill = (
                         _fr13_pb_toks[-1] if _fr13_pb_toks else _fr13_pb_bonus
                     )
