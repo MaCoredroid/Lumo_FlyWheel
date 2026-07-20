@@ -376,3 +376,16 @@ identity + CFWD collapse + accept-neutral. Needs careful async-boundary trace (f
 ## CHAIN A/B RUNNING (cat9c3): cat9 (non-pb) on the 3 collapse tasks. vs cat9pb (2.9-3.25) on the
 ## SAME tasks isolates the CHAIN with zero confound (no overflow/arctic/tail). cat9~5 => chain
 ## carrier confirmed on cleanest shape; cat9~3 => cat9 shape itself weak on these tasks.
+
+## REFRAME (cat9c3 task 14539): chain is SMALL, DEEP-TAIL is the loss
+cat9 nonpb depth-5 = 3.352 (already low: misses the deep tail). cat9pb pb depth-5 = 3.046 =>
+CHAIN costs only -0.3 (not -2; my "cat9pb collapses harder" read was the DEPTH-5 limit, not the
+chain). tail6_pb depth-11 pb = 3.647 vs rg1 depth-11 nonpb = 5.12 => the REAL loss is -1.5 in the
+DEEP TAIL under piggyback. Carrier = deep-tail handling under pb (overflow catch-up degrading deep
+draft quality, OR the arctic suffix proposer's context under pb), NOT the chain per se.
+Implication: the generalized row-0-ghost mask fix addresses the small chain (-0.3); the big lever
+(-1.5) is the deep tail. Overflow/arctic-under-pb hypothesis partially RESURRECTED (the deep-accept
+workflow refuted per-step col-0 but not the deep-DRAFT-QUALITY effect).
+NEXT: (a) finish cat9c3 (confirm chain ~-0.3 on all 3); (b) tail6_pb w/ new mask on collapse tasks
+(does row-0 ghost move 3.6? expect small); (c) investigate deep-tail-under-pb (arctic suffix input
++ overflow catch-up deep-draft quality) -- the -1.5 lever.
