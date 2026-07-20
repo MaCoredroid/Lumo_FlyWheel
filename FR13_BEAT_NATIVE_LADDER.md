@@ -266,3 +266,20 @@ LEVERS:
 NOTE overflow catch-up replay (~19.5% steps x ~70ms per-layer replay) lands in overhead_other
 (~13.7ms/event), NOT the committer span -> fixing overflow ALSO cuts wall overhead, separate from
 the GPU-committer lever. Two distinct committer/overhead workstreams.
+
+## CORRECTIONS + STATE (2026-07-20)
+1. ACCEPT ATTRIBUTION CONFIRMED (arm1 killed early per user, decisive): tail6_pb cache-OFF
+   accept 4.364 @4261 drafts == allon5 cache-ON 4.417 (cache delta ~0.05, negligible), both
+   ~0.9 below rg2c plain-tail6 5.36. => PIGGYBACK is the accept carrier, NOT cache. Overflow
+   fallback = the specific suspect (col-0 workflow localizing). 2x2 answered; plain-tail6
+   cache-ON arm skipped (confirmatory only).
+2. COMMITTER LEVER CORRECTION (my earlier GPU_COMMITTER claim was WRONG): FR13_GPU_COMMITTER is
+   the GREEDY LCP committer, OFF the temp-0.6 path. The deployed temp-0.6 committer is
+   fr13_device_multidraft_commit (FR13_DEVICE_MULTIDRAFT, BAKED on-device). So the 53.7ms CFWD
+   is NOT a host compute loop GPU_COMMITTER would fix; it is multidraft-kernel + result-DtoH +
+   verify-wait. RIGHT lever = decompose via FR13_MULTIDRAFT_GPU_TIMER first (measure before
+   claiming). commdecomp arm (tail6_pb ship, cd1) running to split it.
+   Committer strategy TBD by cd1: kernel-heavy => optimize multidraft kernel; residual-heavy =>
+   async/overlap the result DtoH.
+3. Native component TARGETS stand: drafter 93.1 (tail6_pb 103, +10 = R4), committer 7.2
+   (tail6_pb 53.7 = THE gap, strategy pending cd1), verify near-native per-seq.
