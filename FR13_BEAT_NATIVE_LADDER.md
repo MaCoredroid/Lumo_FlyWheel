@@ -524,3 +524,26 @@ DELIVERED: pb carrier proven (cache-ON 5.0 vs 3.9; cache/async/co-sched ruled ou
 fail-loud guard fixed (+0.29/+0.37); accept residual = INHERENT extra-column cost (exhaustive read
 + BI dead-end). REMAINING (both substantial refactors): committer async-overlap (53.7->~24) +
 R4 drafter graph-capture (103->~50, bigger raw-speed lever). Neither is loop-tick work.
+
+## REVERSAL: pb accept residual is FIXABLE (FA2 base-column layout), NOT inherent (2026-07-20)
+My earlier "inherent 29-vs-21-col numerics -> net-neutral, no fix" was WRONG. User was right to push.
+MECHANISM (high-confidence, evidence-complete):
+- pb packs chain at attention cols 0-8 -> base subtree at cols 9-29; non-pb base at cols 0-20.
+- The single fused FA2 verify reduction over base rows sees a DIFFERENT physical column layout ->
+  tiny per-logit diffs (fp non-associativity of the butterfly reduction keyed by column) -> tips
+  temp-0.6 near-ties in the HEAD verify. Measured per-position: pb head pos-1 0.63-0.90 vs non-pb 1.0.
+- cat9pb (head only, no Arctic) = -0.23. Arctic decide_tail (patcher 13902) matches the shifted head
+  tokens (depths 0-4) against a DIFFERENT cached suffix -> AMPLIFIES -0.23 into -1.5 at depth-11
+  (tail6_pb 3.65 vs rg1 5.12). Deep tail lifts non-pb +1.82 (3.30->5.12) but pb only +0.58 -> pb
+  captures 1/3 of the deep-tail value. THIS is the -1.5 collapse, and it is depth/task-selective
+  because deep-tail-heavy tasks (14539/14598/14995) live entirely on the amplified path.
+- This is the SAME CLASS as FR13_SLOT_REORDER (which made the SPINE M-invariant by canonical columns,
+  +0.166 proven). SLOT_REORDER was DEFAULT-OFF in every collapsed run (never tested w/ pb).
+GDN is exonerated: parent-handoff sum(where(offs_n==parent,h_cache,0)) masks to the parent row
+EXACTLY; adding zeros for the extra chain/pad rows is fp-exact -> base GDN state N_PAD-invariant.
+Conv common. So the ONLY chain->base leak is the FA2 attention column layout.
+FIX = "SLOT_REORDER for pb": permute the base subtree onto attention cols 0-21 (col 8 root -> phys 0,
+base cols 9-29 -> phys 1-21), chain -> phys 22-29, with the pb ATTN mask + ATTN_KV_REMAP dst re-
+derived in permuted space; GDN keeps packed order (separate address space, untouched -- slot-reorder
+already excludes GDN). Flag-gated FR13_PB_BASE_COL_INVARIANT, byte-identity gate flag-OFF, deep-task
+accept test on 14539/14598/14995 (expect head pos-1 -> 1.0, deep tail -> ~5). Design doc next.
