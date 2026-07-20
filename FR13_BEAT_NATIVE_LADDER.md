@@ -357,3 +357,22 @@ DECISION POINT: (a) deliverable AVERAGE accept is ~neutral (pb net-neutral vs no
 the 3 collapses = perfect chain-ghosting (subtle; 2 read-only workflows could not localize it;
 needs a controlled same-input byte-diff probe of base-tree output WITH vs WITHOUT the chain).
 Committer fix (device-resident + side-stream, 53.7->~24ms) is INDEPENDENT and ready to implement.
+
+## COMMITTER FIX PLAN (seams localized; impl next, correctness-critical)
+_lumo_tree_canonical_multidraft_sample (patcher ~8018): DEVICE_MULTIDRAFT baked-on already SKIPS
+the [nodes x vocab] host softmax DtoH (8064-8067). Remaining committer cost splits:
+- ~30ms = result materialization OUTSIDE commit_full (CFWD - commit_full): the response-token /
+  logprobs processing. LIKELY DEFERRABLE -- route the tree committer's output through
+  AsyncGPUModelRunnerOutput (gpu_model_runner:6308) like native does (native's is async, tree's
+  is not). This is the big, safe win.
+- ~19ms = commit_full assembly + GDN publish (path/len/by_req): feeds the NEXT forward's reqkey
+  hook (patcher ~10776) -> ON the critical path, CANNOT be trivially deferred (native has no such
+  publish). Only reducible if the reqkey consumes device-keyed state instead of host lists.
+=> The async-overlap targets the ~30ms (deferrable) first: committer 53.7 -> ~24ms. The ~19ms GDN
+   publish is the tree's irreducible-ish tax vs native's 7.2 (native = linear, no per-node publish).
+Impl = author flag-gated (route tree spec output through AsyncGPUModelRunnerOutput); gate = byte
+identity + CFWD collapse + accept-neutral. Needs careful async-boundary trace (fresh focus).
+
+## CHAIN A/B RUNNING (cat9c3): cat9 (non-pb) on the 3 collapse tasks. vs cat9pb (2.9-3.25) on the
+## SAME tasks isolates the CHAIN with zero confound (no overflow/arctic/tail). cat9~5 => chain
+## carrier confirmed on cleanest shape; cat9~3 => cat9 shape itself weak on these tasks.
