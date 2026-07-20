@@ -7,6 +7,9 @@
 #   accept >> 4.9  -> composition/numerics carries; async's lift is mostly
 #                     mediated by shapes, and pure scheduling is itself a lever.
 # Cache-ON (post-rg-pair policy).
+# CACHE-OFF EXCEPTION (probe integrity): the APC stack REQUIRES chunked
+# prefill, which this probe deliberately disables; and the comparison target
+# (rg1) is cache-OFF. Mechanism experiments trump the cache-ON policy.
 export GPU_UTIL=0.72
 unset FR13_PREWARM_TRIE
 export FR13_COMMIT_FULL_GPU_TIMER=1

@@ -5,6 +5,11 @@
 # Launch: RUNROOT=output/fr13_resolve TAG=t6pb1 SUBSET=subset_b4_four.json
 #   WALL=0 BSIZE=4 CONC=4 SEQUENCE_FILE=scripts/fr13_tail6pb_mech_seq.sh
 #   bash scripts/fr13_campaign_tmux.sh t6pbmech
+# CACHE-ON (post-rg-pair policy): forked-launcher APC stack
+export FR13_ENABLE_APC=1
+export MAMBA_BLOCK_SIZE=1024
+export APC_BLOCK_SIZE=1024
+export MAMBA_SSM_CACHE_DTYPE=float32
 export GPU_UTIL=0.72
 unset FR13_PREWARM_TRIE
 export FR13_COMMIT_FULL_GPU_TIMER=1
