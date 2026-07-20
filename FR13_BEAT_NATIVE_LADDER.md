@@ -430,3 +430,16 @@ drift -> needs the EMPIRICAL teacher-forced logit gate (pb vs no-spec, first div
 more static reading. RUNNING pbab1 = tail6 nonpb vs tail6_pb, BOTH cache-ON (confirm pb carrier at
 ship regime). NEXT: adapt fr13_apc_teacher_forced_logit_gate.py for pb-vs-nospec on a deep task.
 mask fix confirmed +0.29/+0.37 (nm1).
+
+## CODE READ (concrete, not hand-wavy) + pbab1 runs: pb is ~1.3 carrier at cache-ON; col-0 RULED OUT
+RUNS: arm A tail6 NON-PB cache-ON = 5.027/5.306 (14539/14995) == rg1 cache-OFF => non-pb holds ~5
+regardless of cache; tail6_pb ~3.9 => PIGGYBACK costs ~1.3 at MATCHED cache-ON. Clean isolation.
+CODE (read both col-0 kernels): pb PIGGYBACK_EXPORT (_tree_gdn_kernel:997, tl.sum(where offs_n==
+CHAIN_END_IDX,h_cache)) vs non-pb RUNROW_COMMIT (_tree_gdn_replay_kernel:1195, store committed-leaf
+state). Same masked-reduction+store form, same _gdn_node_step, same committed tokens, identity-pad
+exact (exp(-0.0)=1, sigmoid(-1e9)=0). => GDN col-0 is BIT-IDENTICAL by construction (matches
+workflow refutation). NOT the -1.3 carrier.
+REMAINING (indistinguishable by reading, all look correct): conv col-0 (separate index_copy,
+patcher:7596), paged-attn KV (ATTN_KV_REMAP), or the 29-vs-21-col verify forward. DECISIVE =
+empirical fr13_apc_hit_first_divergence.py over conv-seed/ssm-seed/per-layer/final-logit. That is
+the next step, NOT more static reading.
