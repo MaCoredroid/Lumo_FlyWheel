@@ -302,3 +302,14 @@ REAL OPEN = the 3-task end-of-run collapse. Candidates (all NEW, not col-0):
   Attribution needs a cache-OFF FULL run (arm1 was killed at 3 tasks) or a per-task overflow-rate
   probe on 14539/14598/14995. DEFER behind the committer lever (cd1).
 COMMITTER remains the confirmed native-matching lever (53.7 vs 7.2); cd1 decomposing.
+
+## COMMITTER DECOMPOSITION (ac1 cache-OFF, 900 spans) — the strategy
+FR13_MULTIDRAFT (rejection kernel):  4.4 ms  -> near-native, NOT the cost.
+FR13_COMMIT_FULL (kernel+assembly+GDN publish): 23.6 ms -> assembly+publish ~19.2 ms.
+CFWD (full _sample dispatch, allon5): 53.7 ms -> DtoH+verify-wait ~30 ms (CFWD - commit_full).
+=> The 53.7ms committer is PIPELINE overhead (host assembly/publish ~19 + DtoH/wait ~30),
+   NOT compute (kernel 4.4). Matches why native committer = 7.2 (cheap linear commit, minimal
+   DtoH). FIX = async-overlap the assembly/publish + result-DtoH off the critical path (side-
+   stream materialization + CUDA event; the AsyncGPUModelRunnerOutput shape). Kernel opt is dead
+   (already 4.4ms). Impl = author the async committer materialization; validate byte-identity +
+   CFWD collapse. NOT FR13_GPU_COMMITTER (greedy, off temp-0.6).
