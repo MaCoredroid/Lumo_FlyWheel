@@ -389,3 +389,12 @@ workflow refuted per-step col-0 but not the deep-DRAFT-QUALITY effect).
 NEXT: (a) finish cat9c3 (confirm chain ~-0.3 on all 3); (b) tail6_pb w/ new mask on collapse tasks
 (does row-0 ghost move 3.6? expect small); (c) investigate deep-tail-under-pb (arctic suffix input
 + overflow catch-up deep-draft quality) -- the -1.5 lever.
+
+## cat9c3 COMPLETE: chain -0.23 confirmed; deep-tail -1.7 is the lever
+cat9 nonpb depth-5: 3.352/3.289/3.262 (~3.30). cat9pb pb depth-5: 3.05/2.92/3.25 (~3.07).
+=> CHAIN effect = -0.23 (small, all 3 tasks). Deep-tail: tail6_pb 3.5 vs rg1 5.2 (both depth-11)
+=> -1.7 is the DEEP TAIL under pb. Likely: the -0.23/step chain leak AMPLIFIES over these LONG
+deep tasks into -1.7 trajectory drift (short tasks: -0.23 nets neutral).
+RUNNING nm1 = tail6_pb + NEW generalized mask (row-0 ghost for all pb trees + fail-loud guard) on
+the 3 collapse tasks. Compare to old tail6_pb (3.65/3.35/3.51). Up => row-0 ghost was part of the
+leak; flat => the -1.7 is deep-draft-quality/overflow, not the tree-block ghost.
