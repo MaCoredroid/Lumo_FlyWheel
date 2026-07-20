@@ -313,3 +313,16 @@ CFWD (full _sample dispatch, allon5): 53.7 ms -> DtoH+verify-wait ~30 ms (CFWD -
    stream materialization + CUDA event; the AsyncGPUModelRunnerOutput shape). Kernel opt is dead
    (already 4.4ms). Impl = author the async committer materialization; validate byte-identity +
    CFWD collapse. NOT FR13_GPU_COMMITTER (greedy, off temp-0.6).
+
+## COMMITTER FIX DESIGN (localized, ready to implement when GPU frees)
+Root of the ~50ms: AsyncGPUModelRunnerOutput (gpu_model_runner.py:6308, used under
+--async-scheduling) defers ONLY the final sampled_token_ids. The TREE committer's own DtoH +
+output-row assembly (accepted_tree_rows, committed tokens, GDN path/len publishes) runs
+SYNCHRONOUSLY before that boundary, inside _lumo_tree_canonical_multidraft_sample (patcher
+:9618). Native's cheap output rides the async stream; the tree committer's does NOT.
+FIX = device-resident multidraft committer + side-stream materialization (the SYNCKILL concept
+applied to the TEMP-0.6 rejection committer, NOT the dead greedy FR13_GPU_COMMITTER): keep the
+walk outputs as DEVICE tensors, materialize host copies on a side stream + CUDA event, and let
+the GDN path/len publishes (needed pre-next-forward) stay device-keyed. Target: 53.7 -> ~24ms
+(commit_full), then chip the 19ms assembly. Author flag-gated + byte-identity gate + CFWD collapse.
+BLOCKED on GPU (acctrl running for the accept-collapse attribution -- the user's priority).
