@@ -1,0 +1,47 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..2d3c6ce77 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -63,8 +63,9 @@ class Card(_Verify):
+     _number_NFSC_RE = re.compile(rf"(?P<sign>[+-])? *0*?(?P<digt>{_digits_NFSC})")
+ 
+     # Used in cards using the CONTINUE convention which expect a string
+-    # followed by an optional comment
+-    _strg = r"\'(?P<strg>([ -~]+?|\'\'|) *?)\'(?=$|/| )"
++    # followed by an optional comment. The &? handles CONTINUE cards where
++    # the value ends with '&' before the closing quote.
++    _strg = r"\'(?P<strg>([ -~]+?|\'\'|) *?)&?\'(?=$|/| )"
+     _comm_field = r"(?P<comm_field>(?P<sepr>/ *)(?P<comm>(.|\n)*))"
+     _strg_comment_RE = re.compile(f"({_strg})? *{_comm_field}?")
+ 
+@@ -859,7 +860,7 @@ class Card(_Verify):
+                     return kw, vc
+ 
+                 value = m.group("strg") or ""
+-                value = value.rstrip().replace("''", "'")
++                value = value.rstrip()
+                 if value and value[-1] == "&":
+                     value = value[:-1]
+                 values.append(value)
+@@ -871,7 +872,20 @@ class Card(_Verify):
+                 valuecomment = "".join(values)
+             else:
+                 # CONTINUE card
+-                valuecomment = f"'{''.join(values)}' / {' '.join(comments)}"
++                # When joining chunks, we need to be careful about escaped quotes ('')
++                # that may be split across chunk boundaries. A quote at the end of one
++                # chunk and a quote at the start of the next should NOT be treated as
++                # an escape sequence. We use a placeholder to protect boundary quotes.
++                for i in range(len(values) - 1):
++                    if values[i] and values[i][-1] == "'":
++                        values[i] = values[i][:-1] + "\x00"
++                value_str = "".join(values)
++                # Unescape '' to ' but preserve boundary quotes (marked with \x00)
++                value_str = value_str.replace("''", "'")
++                value_str = value_str.replace("\x00", "'")
++                # Re-escape single quotes for the valuecomment format
++                value_str = value_str.replace("'", "''")
++                valuecomment = f"'{value_str}' / {' '.join(comments)}"
+             return keyword, valuecomment
+ 
+         if self.keyword in self._special_keywords:
