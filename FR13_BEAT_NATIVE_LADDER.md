@@ -208,3 +208,22 @@ pf/eff-conc only", a MATCHED cache-ON A/B is required before ranking tail6_pb vs
 NEXT (matched speed gate): one cache-ON async campaign, same 16 tasks, arms = cat9pb +
 tail6_pb + nativemtp11apc (depth-matched native). Isolates tree-shape from regime and
 answers both "beat our baked baseline?" and "beat native at matched depth?" in one matched run.
+
+## ACCEPT REGRESSION under piggyback+cache (allon5 4.417 vs rg2c 5.36) — ISOLATING
+User flagged: the accept>5 restoration (stale-root fix, FR13_REPLAY_ROUTE=1) — is it
+in the ship config? VERIFIED against container_env.txt:
+- rg2c = plain tail6, **pb OFF, cache OFF**, async, fix ON -> accept **5.36** (mid-run).
+- allon5 = tail6_pb, **pb ON, cache ON**, async, fix ON -> accept **4.417**.
+The fix is engaged in BOTH; 5.36 was NEVER demonstrated *with* piggyback. The -0.94 drop
+is the two vars rg2c lacked (pb + cache), NOT a missing fix.
+OPEN + sharp: is the stale-root fix EFFECTIVE under pb? It keys on `_fr13_all_neg`
+(scheduled spec list all-placeholder = async first-spec signature). Under pb the packer
+fills the 8 chain cols; if that defeats the all-neg signature, pb rows fall back to the
+buggy CPU-gate. Cannot prove statically (sched list vs packer tensor are different buffers).
+Per-pos (allon5 vs rg1): deep-tail conditional 0.81-0.91 vs 0.87-0.94 AND a sharper
+head->tail boundary drop (pos4->5 0.58 vs 0.68) -- consistent with a state-quality
+regression, not a missing suffix mechanism (the tail IS drafted+accepted).
+mab KILLED (both arms pb+cache = can't isolate). Running acciso 2x2 completion:
+  arm1 tail6_pb cache-OFF (bisect: vs rg2c=isolate pb, vs allon5=isolate cache)
+  arm2 plain tail6 cache-ON (isolate cache on pb-free shape)
+Decisive: arm1 ~5.3 => pb innocent, cache carries; arm1 ~4.4 => pb carries, fix neutered => localize+force root-repair on pb rows.
