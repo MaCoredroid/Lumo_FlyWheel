@@ -283,3 +283,22 @@ the GPU-committer lever. Two distinct committer/overhead workstreams.
    async/overlap the result DtoH.
 3. Native component TARGETS stand: drafter 93.1 (tail6_pb 103, +10 = R4), committer 7.2
    (tail6_pb 53.7 = THE gap, strategy pending cd1), verify near-native per-seq.
+
+## ACCEPT REGRESSION = LARGELY ARTIFACT (2026-07-20, task-matched + workflow-verified)
+Two independent results collapse the "piggyback ate 0.8 accept" narrative:
+1. Workflow wgrmh5q1l (read-only, adversarial): ALL 9 col-0 divergence candidates in the
+   overflow catch-up REFUTED. No single-step col-0 bug; the catch-up restores col-0 byte-correctly.
+2. Task-matched accept (allon5 PB vs rg1 no-PB, 16 tasks each): median delta **+0.008**
+   (NEUTRAL); 13/16 tasks allon5 ties-or-beats. The mean -0.274 is 3 tasks ONLY: 14539(-1.24),
+   14598(-1.36), 14995(-2.05) -- allon5 collapses to ~3.6-3.9 there, rg1 holds 4.9-5.7.
+=> The "5.4->4.4" gap was rg2c MID-run (10.9k drafts = early high-accept tasks) vs allon5 FULL
+   run (incl the 3 collapse tasks). NOT a uniform pb bug. Almost implemented a wrong col-0 fix;
+   the workflow + task-match caught it.
+REAL OPEN = the 3-task end-of-run collapse. Candidates (all NEW, not col-0):
+  (a) CACHE-ON late-run degrade (allon5 cache-ON, rg1 cache-OFF) -- ship-config risk.
+  (b) OVERFLOW ULP-ACCUMULATION over thousands of steps on deep tasks (workflow tested per-step
+      byte-neutrality, NOT accumulation; diffuse-GDN precedent).
+  (c) async trajectory divergence on those tasks.
+  Attribution needs a cache-OFF FULL run (arm1 was killed at 3 tasks) or a per-task overflow-rate
+  probe on 14539/14598/14995. DEFER behind the committer lever (cd1).
+COMMITTER remains the confirmed native-matching lever (53.7 vs 7.2); cd1 decomposing.
