@@ -172,3 +172,15 @@ GPU queue (fires in order as windows free; loop ticks execute):
 Reducer upgraded: overhead_other_ms_per_event_norm (eff-conc-normalized residual) in every
 deploy record. WHY-ledger so far: wall censoring (+0.58 sync), async assoc. lift (+0.64
 matched, d6-concentrated, 10/12 tasks), pure-shape story refuted, trajectory-feedback leading.
+
+## R1 CLOSED (2026-07-20, rg2c mid-run attribution): ASYNC BAKES
+The accept triangle resolved: lad2(old code,async)=5.469; rg1(gate-bug,sync)=4.892;
+rg2(gate-bug,async)~4.80; rg2c(gate-FIXED,async)=5.36@10.9k RESTORED. The "async accept lift"
+was my CPU-placeholder gate suppressing the two middle arms (stale-root conditioning); with the
+gate corrected, async ~= accept-neutral-or-better + overlap speed => --async-scheduling BAKES.
+rg2c closed mid-run (attribution complete); ALL-ON arm supersedes.
+
+## ALL-ON BASELINE ATTEMPT (user directive): tail6_pb + APC cache + async, 16 tasks
+fr13_allon_seq.sh. All-flags-forward playbook; boot needles fail fast; peel order
+async->cache->pb. On-band resolve => NEW BASELINE (ship config) and all follow-ups
+(R3 profile/impl, R4, native re-anchor, sweeps) run FROM this config.
