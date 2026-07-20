@@ -496,3 +496,16 @@ build with uncertain payoff (may be inherent/unfixable).
 STATE: mask leak fixed (+0.29/+0.37, delivered); pb carrier proven (5.0 vs 3.9). DECISION PENDING:
 invest in the careful byte-diff gate (definitive accept answer) OR bank the committer async-overlap
 win (53.7->~24, ready) + accept pb net-neutral.
+
+## ACCEPT CONCLUSION (2026-07-20): residual is INHERENT 29-vs-21-col, no cheap fix; committer is the win
+BI fix-attempt ABANDONED after fixing: (a) FR13_BI_TREE_ATTN allowlist MISSING from
+batch_invariant.py, (b) the num_splits I edited was in flash_attn.py not tree_attn.py, (c) GDN
+kernel not covered, and CRUCIALLY (d) batch-invariance determinizes each kernel but does NOT make
+the 29-col forward byte-identical to 21-col -> won't recover accept. Reverted clean.
+GATED RESULT (temp-0.6, REAL tasks, per user): tail6_pb consistently ~1.1 below non-pb (5.0) on the
+3 deep tasks (allon5/collapse3/nm1 all ~3.9); net-neutral over 16. All pb STATE paths byte-correct
+(exhaustive read); mask leak fixed (+0.29). => residual = INHERENT cost of the extra 8 columns
+(different tree -> different kernel -> deterministic numerical diff -> tips temp-0.6 ties on
+trajectory-sensitive tasks). No cheap fix remains.
+PIVOT: committer async-overlap (53.7->~24, toward native 7.2) = the ready concrete win, independent.
+Route the tree committer output through AsyncGPUModelRunnerOutput to defer the ~30ms result-DtoH.
