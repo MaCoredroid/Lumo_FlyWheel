@@ -94,7 +94,36 @@ is canonical). Two coordinated pieces:
       the mask/tile-walk ONLY (no KV move) — the key open question for the next session.
 Gate col-0 export==replay bit-identity FIRST on any FA2 change (piggyback must stay lossless).
 
+## COL-0 CRUX **RESOLVED SAFE** (2026-07-20) — the permute IS the fix, and it's clean
+The pb ATTN mask docstring (patcher 15392–15409) settles it:
+- `[1]` NO row attends chain cols 1..7 → the chain COLUMNS are dead (never attended by anyone).
+- `[2]` chain rows 1..7 attend NO tree col — ONLY the paged context. The committed chain tokens are
+  already durable in the paged KV (stream-0 root write + FR13_ATTN_KV_REMAP), so the chain rows read
+  them position-addressed, independent of their tree-block column.
+⇒ Moving the chain's physical columns changes NOTHING about the chain's attention → col-0 (exported
+from stream 7's GDN state, which is fed by the chain's PAGED attention) is PRESERVED. The earlier
+col-0 worry (permute perturbs col-0) is REFUTED. The GDN scan uses packed order (spec_state_indices,
+separate address space) — untouched by an attention-column permute.
+
+### THE FIX (concrete, col-0-safe, SLOT_REORDER class)
+Definitive pb layout (patcher 4521): col 0 = pos-0 root (fully ghosted, dead), cols 1–7 = chain
+(dead columns), col 8 = subtree root (0)^8, cols 9–29 = base subtree. Base = 22 nodes (root+21),
+shifted +8 vs non-pb (base at 0–21). The +8 shift misaligns the base's FA2 online-softmax tiles
+(context_len-variable, so no fixed padding aligns it) → the base verify perturbation.
+Permutation pi on the TREE-BLOCK attention columns ONLY:
+  base packed 8–29 → phys 0–21 (root→phys 0, base→phys 1–21) — EXACT non-pb columns
+  chain packed 1–7 → phys 22–28 ; pos-0 packed 0 → phys 29  (dead cols → trailing no-op tiles)
+Apply pi to: KV slot_mapping (attn), tree_bias BOTH axes, the pb ghost mask, ATTN_KV_REMAP dst.
+GDN spec_state_indices UNCHANGED. RESTORE at propose (un-permute before drafter reads slot_mapping)
+— the SLOT_REORDER seam already does slot_mapping-permute + bias-permute + restore; supply a
+pb-specific base-first pi and engage it for pb trees (span==tree_n && drafts==tree_n-1, tree_n=30).
+Base rows then reduce over {paged + base cols 0–21} == non-pb (chain cols 22–29 ghosted+future ⇒
+fully-masked trailing tiles ⇒ online-softmax no-ops) ⇒ base verify byte-canonical ⇒ head accepts
+like non-pb ⇒ the multiplicative deep-tail collapse lifts.
+
 ## Status
-Design + crux resolved. Implementation is deep-kernel. NEXT session FIRST action: prototype (B) —
-determine whether the FA2 tree-attn base-row reduction can be made chain-column-invariant via the
-mask/tile-walk alone (no KV move), preserving col-0. If yes → cheapest correct fix. Then (A) for GDN.
+Crux RESOLVED SAFE. Fix fully specified. Implementation = extend the SLOT_REORDER seam with a
+pb base-first pi (flag FR13_PB_BASE_COL_INVARIANT, default OFF byte-identical). NEXT: locate the
+SLOT_REORDER PERMUTE/RESTORE seam, add the pb pi branch, wire the mask/remap permute. Gates: col-0
+export==replay bit-identical (now expected to pass by construction), same-seed determinism,
+flag-OFF byte-identical, then deep-task accept 14539/14598/14995 LIVE.

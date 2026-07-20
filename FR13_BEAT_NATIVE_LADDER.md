@@ -547,3 +547,12 @@ base cols 9-29 -> phys 1-21), chain -> phys 22-29, with the pb ATTN mask + ATTN_
 derived in permuted space; GDN keeps packed order (separate address space, untouched -- slot-reorder
 already excludes GDN). Flag-gated FR13_PB_BASE_COL_INVARIANT, byte-identity gate flag-OFF, deep-task
 accept test on 14539/14598/14995 (expect head pos-1 -> 1.0, deep tail -> ~5). Design doc next.
+
+## COL-0 CRUX RESOLVED SAFE — pb base-col fix is clean (2026-07-20)
+pb ATTN mask (patcher 15399-15402): [1] no row attends chain cols 1-7 (chain COLUMNS dead), [2]
+chain ROWS attend ONLY paged context (committed tokens durable via stream-0 write + ATTN_KV_REMAP).
+⇒ moving the chain's attention columns changes NOTHING about its attention ⇒ col-0 (export@stream7,
+fed by chain PAGED attn) PRESERVED. The permute IS col-0-safe. Fix = permute tree-block attn cols so
+base subtree (packed 8-29) → phys 0-21 (== non-pb, canonical), dead chain/pos-0 → phys 22-29
+(trailing no-op tiles). SLOT_REORDER class + pb base-first pi. GDN untouched. Fully specified in
+FR13_PB_BASE_COL_INVARIANT_DESIGN.md. Implementing.
