@@ -556,3 +556,15 @@ fed by chain PAGED attn) PRESERVED. The permute IS col-0-safe. Fix = permute tre
 base subtree (packed 8-29) → phys 0-21 (== non-pb, canonical), dead chain/pos-0 → phys 22-29
 (trailing no-op tiles). SLOT_REORDER class + pb base-first pi. GDN untouched. Fully specified in
 FR13_PB_BASE_COL_INVARIANT_DESIGN.md. Implementing.
+
+## FR13_PB_BASE_COL_INVARIANT IMPLEMENTED + GATE LAUNCHED (2026-07-20)
+BUILT (6 edits, both files compile, committed ce416a0e0): pb base-first attn-col permute reusing the
+SLOT_REORDER machinery. base subtree (nodes 8..N-1) -> phys cols 0..N-9 (== non-pb canonical FA2
+columns), dead chain(1-7)+pos-0 -> tail. Col-0-safe (chain rows attend ONLY paged context per pb mask
+[2]). Flag FR13_PB_BASE_COL_INVARIANT default OFF byte-identical.
+Edits: bias-patch(fr13_patch_fa2_tree_bias.py) pi_list pb branch + causal-flag + call-site; runner
+permute-engage + pi + remap-dstpi(keyed on _fr13_sr_pi_t set); launcher -e forward. pi_pb=
+[8..N-1]+[1..7]+[0] identical both derivations. Patches re-apply at prelaunch (launcher 791-792).
+GATE RUNNING: tmux bcinv, driver 3194807, output/fr13_bcinv. tail6_pb + FR13_PB_BASE_COL_INVARIANT=1
+cache-OFF on 14539/14598/14995 vs collapse3 baseline 3.5. WATCH boot needle "ENGAGED ... pi=[8, 9,"
+(runner+bias), 0 fatal, no garble; accept ~5=WIN, ~3.6=reassess, crash=permute bug. Poll next ticks.
