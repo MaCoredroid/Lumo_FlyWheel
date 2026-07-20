@@ -251,3 +251,18 @@ identity chain + C-INT-2 catch-up replay root_node=8) -- BRAND-NEW code, FIRST e
   rg1 0.87-0.94). Consistent with the per-pos signature.
 ARM1 (tail6_pb cache-OFF) discriminates: ~5.3 => pb/overflow innocent, CACHE is the carrier;
 ~4.4 => pb OVERFLOW is the carrier => localize catch-up-vs-chain col-0 discrepancy (my code).
+
+## COMPONENT-COST TARGETS vs NATIVE (user directive 2026-07-20: match native best-effort on all 3)
+Native MTP-5 (nt1): drafter 93.1ms | committer 7.2ms | verify 0.181 s/fwd | accept 3.415.
+tail6_pb (allon5):  drafter 103.4  | committer 53.7   | verify 0.413 (conc 2.07; ~0.20/seq) | accept 4.417.
+GAPS: committer +46ms = THE gap (piggyback halved 99.4->53.7; rest = host DtoH loop ~36ms +
+GDN-commit 17.8 vs 7.2 ~11ms). drafter +10ms (R4). verify near-native per-seq.
+LEVERS:
+- committer host loop -> FR13_GPU_COMMITTER=1 + FR13_COMMITTER_SYNCKILL=1 (G2 device-resident +
+  side-stream, byte-identical by construction; built fr13_gpu_committer_kernel.py; DEFAULT-OFF,
+  NEVER live-validated). Gate = byte A/B (class-10) + s/fwd vs native. Drops ~36ms -> ~17.8ms.
+- drafter -> R4 CUDA-graph capture (~103 host-bound).
+- accept 4.4->5.4 -> overflow-fallback fix (col-0 workflow running).
+NOTE overflow catch-up replay (~19.5% steps x ~70ms per-layer replay) lands in overhead_other
+(~13.7ms/event), NOT the committer span -> fixing overflow ALSO cuts wall overhead, separate from
+the GPU-committer lever. Two distinct committer/overhead workstreams.
