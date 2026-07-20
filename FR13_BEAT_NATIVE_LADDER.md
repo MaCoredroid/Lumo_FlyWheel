@@ -227,3 +227,27 @@ mab KILLED (both arms pb+cache = can't isolate). Running acciso 2x2 completion:
   arm1 tail6_pb cache-OFF (bisect: vs rg2c=isolate pb, vs allon5=isolate cache)
   arm2 plain tail6 cache-ON (isolate cache on pb-free shape)
 Decisive: arm1 ~5.3 => pb innocent, cache carries; arm1 ~4.4 => pb carries, fix neutered => localize+force root-repair on pb rows.
+
+### STATIC TRACE (2026-07-20, arm1 booting): stale-root fix is NOT neutered by pb
+Traced the host spec_token_ids path in the live container source:
+- repair reads `scheduled_spec_tokens = scheduler_output.scheduled_spec_decode_tokens` (runner:1631).
+- scheduler:557 sets `scheduled_spec_decode_tokens[req]=request.spec_token_ids` (prev-step draft ids).
+- tree_mtp arms take the NATIVE async staging (scheduler:1750); `select_path0_spec_tokens` is
+  NAIVE_MTP-only, does NOT touch tail6/tail6_pb.
+- Under async the drafter output is the GPU `_draft_token_ids` tensor (runner:1699,1989) scattered
+  into input_ids at the NEXT forward (1976-1994); the HOST spec_token_ids stages `-1` placeholders
+  regardless of pb. The pb packer fills the GPU tensor, NOT the host list. No pb code writes host
+  spec_token_ids (grep: only NAIVE_MTP select_path0 + native assigns).
+=> `_fr13_all_neg` (all-placeholder) fires IDENTICALLY for tail6_pb (29 slots) and plain tail6 (21).
+   The stale-root TOKEN repair engages under pb. "Fix neutered by pb" hypothesis REFUTED by code.
+
+REFINED suspect (survives the trace): the tail6-SPECIFIC OVERFLOW FALLBACK (accept>6 -> len-0
+identity chain + C-INT-2 catch-up replay root_node=8) -- BRAND-NEW code, FIRST exercised in allon5.
+- Fires ~19.5% of events (allon5 pos6 accepts 5170/26483). cat9pb NEVER overflows (accept 3.4<<6),
+  which is why R2 measured pb ACCEPT-NEUTRAL (3.385==3.397) -- that test never covered this path.
+- Mechanism: on overflow the chain does NOT re-derive col-0; the catch-up replay must restore it.
+  If catch-up != chain re-derivation byte-wise, overflow rows get a degraded col-0 GDN state ->
+  lower NEXT-step deep draft quality -> the deep-tail conditional drop seen in allon5 (0.81-0.91 vs
+  rg1 0.87-0.94). Consistent with the per-pos signature.
+ARM1 (tail6_pb cache-OFF) discriminates: ~5.3 => pb/overflow innocent, CACHE is the carrier;
+~4.4 => pb OVERFLOW is the carrier => localize catch-up-vs-chain col-0 discrepancy (my code).
