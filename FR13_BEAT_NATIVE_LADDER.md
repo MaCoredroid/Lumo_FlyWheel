@@ -184,3 +184,27 @@ rg2c closed mid-run (attribution complete); ALL-ON arm supersedes.
 fr13_allon_seq.sh. All-flags-forward playbook; boot needles fail fast; peel order
 async->cache->pb. On-band resolve => NEW BASELINE (ship config) and all follow-ups
 (R3 profile/impl, R4, native re-anchor, sweeps) run FROM this config.
+
+## ALL-ON BASELINE = LIVE-VALIDATED (allon5, 2026-07-20)
+allon5 (tail6_pb + APC cache-ON + async, WALL=0, 16 tasks) COMPLETED CLEAN — the tail6_pb
+PORT is validated end-to-end on the deliverable shape:
+- **Resolve 9/16** (ON-BAND: == R2 cat9pb bake 9/16 == rg1 tail6 9/16). 7 failed.
+- **All 3 novel mechanisms engaged LIVE, 0 fatals / 0 raises**:
+  - `RESHAPE_WIDE engaged: depth=11 nodes=21` on the DE-ROOTED base subtree
+    `[(0,),(1,),(2,),(0,0),(0,1),(0,2),...]` — the wide-on-base fix (97a8b71d1) worked;
+    chain-prefix stripped exactly.
+  - `extended drafter engaged: 29 cols (8 chain + 21 base)` — packer fix worked.
+  - `committer GDN replay DROPPED` + overflow-fallback fired once (deep-tail accept>6
+    handled by the len-0-identity + C-INT-2 catch-up path; no crash).
+- accept_per_event **4.417** (committed 5.417), engaged 29/29 tok_per_draft.
+- measured_tps_fullstep_wall **23.67** @ prefill_frac **0.616** (HIGH), eff_conc 2.07.
+
+SPEED NOT YET A VERDICT (basis unmatched): the baked cat9pb 27.82 was measured CACHE-OFF
+async; allon5's 23.67 is CACHE-ON async at pf 0.616. The gap conflates (a) deeper-tree
+drafter+committer host cost (drafter 103 ms/step, committer 53.7 ms/step over 29 cols) with
+(b) the cache-ON chunked-prefill regime (high pf). Per BASIS rule "same-campaign matched
+pf/eff-conc only", a MATCHED cache-ON A/B is required before ranking tail6_pb vs cat9pb.
+
+NEXT (matched speed gate): one cache-ON async campaign, same 16 tasks, arms = cat9pb +
+tail6_pb + nativemtp11apc (depth-matched native). Isolates tree-shape from regime and
+answers both "beat our baked baseline?" and "beat native at matched depth?" in one matched run.
