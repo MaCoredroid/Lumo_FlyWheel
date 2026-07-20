@@ -338,3 +338,22 @@ prime suspect = FR13_ATTN_KV_REMAP under deep/overflow accept (the attention-KV 
 NOT scoped into the col-0 workflow). The user was right: fixable pb bug, not artifact/noise.
 NEXT: confirm 14598/14995 + arm2 cache-ON; then a per-step tail6_pb-vs-plain-tail6 divergence probe
 on ONE collapse task to localize (attention KV vs commit vs draft), then fix.
+
+## COLLAPSE MECHANISM = CHAIN NOT PERFECTLY GHOST (2026-07-20, decisive)
+Chain of evidence:
+- collapse3: tail6_pb cache-OFF 3.5 == allon5 cache-ON 3.6 => NOT cache.
+- rg1 log "Asynchronous scheduling is enabled" (async is DEFAULT) => rg1 is async too => NOT async.
+- cat9pb (chain, depth-5, NEVER overflows) collapses these SAME 3 tasks EVEN HARDER (2.9-3.25)
+  => NOT overflow; it is the CHAIN in general. Both pb shapes collapse the SAME tasks => systematic
+  to the chain, NOT RNG noise.
+- rg1 vs tail6_pb OUTPUTS DIFFER (patch bytes 539vs530, 988vs645, 0vs507) but RESOLVE VERDICTS
+  MATCH (both pass 14539/14995, both fail 14598). => pb takes a DIFFERENT token path (trajectory
+  divergence) that is lower-accept on these 3 trajectory-sensitive tasks; correctness preserved.
+CONCLUSION: the 8-chain is supposed to be an attention-GHOST but is NOT perfectly ghost -- it
+perturbs the base tree's tokens. Net ~neutral over 16 tasks (collapse on sensitive tasks balanced
+by gains elsewhere) -- which HID it in cat9pb's AND allon5's averages. NOT a per-step col-0 bug
+(2 workflows refuted). Leak = chain bleeding into the base-tree attention past FR13_ATTN_KV_REMAP.
+DECISION POINT: (a) deliverable AVERAGE accept is ~neutral (pb net-neutral vs non-pb); (b) fixing
+the 3 collapses = perfect chain-ghosting (subtle; 2 read-only workflows could not localize it;
+needs a controlled same-input byte-diff probe of base-tree output WITH vs WITHOUT the chain).
+Committer fix (device-resident + side-stream, 53.7->~24ms) is INDEPENDENT and ready to implement.
