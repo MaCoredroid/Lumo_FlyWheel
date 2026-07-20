@@ -509,3 +509,18 @@ GATED RESULT (temp-0.6, REAL tasks, per user): tail6_pb consistently ~1.1 below 
 trajectory-sensitive tasks). No cheap fix remains.
 PIVOT: committer async-overlap (53.7->~24, toward native 7.2) = the ready concrete win, independent.
 Route the tree committer output through AsyncGPUModelRunnerOutput to defer the ~30ms result-DtoH.
+
+## COMMITTER ASYNC-OVERLAP: entangled, needs a careful refactor (not a quick edit)
+CFWD wraps self.rejection_sampler(...); commit_full wraps the inner multidraft_sample. The ~30ms
+(CFWD-commit_full) is the rejection sampler's output ASSEMBLY around the committer -- and it is
+ENTANGLED: accepted_token_rows + per-req .cpu().item() (patcher 8199/8207/8233) feed BOTH the
+response sampled_token_ids (deferrable via AsyncGPUModelRunnerOutput) AND the next-step GDN
+publishes (path/len/by_req) which the NEXT forward's reqkey needs on-host pre-forward (NOT
+deferrable). So the fix = a careful refactor SEPARATING response-DtoH (defer) from state-publishes
+(keep), preserving losslessness. Substantial dedicated impl, flag-gated + byte-identity + CFWD gate.
+
+## SESSION STATE (pb accept front CONCLUDED)
+DELIVERED: pb carrier proven (cache-ON 5.0 vs 3.9; cache/async/co-sched ruled out); mask leak +
+fail-loud guard fixed (+0.29/+0.37); accept residual = INHERENT extra-column cost (exhaustive read
++ BI dead-end). REMAINING (both substantial refactors): committer async-overlap (53.7->~24) +
+R4 drafter graph-capture (103->~50, bigger raw-speed lever). Neither is loop-tick work.
