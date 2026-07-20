@@ -8,7 +8,13 @@ export FR13_ENABLE_APC=1
 export MAMBA_BLOCK_SIZE=1024
 export APC_BLOCK_SIZE=1024
 export MAMBA_SSM_CACHE_DTYPE=float32
-export GPU_UTIL=0.72
+# allon4 postmortem 2026-07-20: at 0.72 the engine-ready unified-mem margin
+# is INSIDE boot noise (avail dipped 8644MiB < the 9000MiB gpu_oom_guard
+# fence -> clean-boot kill at ready; allon3 same config measured ~9.1GB).
+# Fence-graze precedent (0.82->0.78): shrink the workload, never the fence.
+# NOTE config delta vs rg1/pureprobe comparators (0.72): KV/APC capacity
+# only, no per-token semantics; resolve band absorbs it.
+export GPU_UTIL=0.70
 unset FR13_PREWARM_TRIE
 export FR13_COMMIT_FULL_GPU_TIMER=1
 export FR13_SERVE_BATCH_FLAGS="--async-scheduling"
