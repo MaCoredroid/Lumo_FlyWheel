@@ -121,9 +121,43 @@ Base rows then reduce over {paged + base cols 0–21} == non-pb (chain cols 22�
 fully-masked trailing tiles ⇒ online-softmax no-ops) ⇒ base verify byte-canonical ⇒ head accepts
 like non-pb ⇒ the multiplicative deep-tail collapse lifts.
 
+## IMPLEMENTATION SEAM (located) — reuse SLOT_REORDER machinery with a pb base-first pi
+Seam: `_patch_gpu_model_runner_slot_reorder` (patcher ~19185). PERMUTE block 19246–19336 derives
+`_sr_pi` and permutes `common_attn_metadata.slot_mapping` per spec row (span==tree_n &&
+num_decode_draft_tokens==tree_n-1); RESTORE 19349–19361 un-permutes at propose; bias permute (edit 2)
++ remap dst (edit 3, ~19452) ride the same pi. So the ENTIRE machinery is pi-generic — only the pi
+DERIVATION must change for pb.
+
+**pb node indexing** (tree_n=30): node 0 = pos-0 root (ghosted/dead); nodes 1–7 = chain slots
+(dead columns); node 8 = subtree root (0)^8; nodes 9–29 = base subtree. (mask asserts chain cols
+[1..8] via len(choice)<=8; node 8 = [0]*8 = subtree root.)
+
+**pb base-first pi** (pi[k] = node at physical col k):
+    pi_pb = [8, 9, 10, ..., 29]  +  [1, 2, ..., 7]  +  [0]
+          = base subtree (packed order → phys 0–21, == non-pb node-for-node since same 22-node
+            subtree sorted by (len,tuple))  +  chain (→ phys 22–28)  +  pos-0 (→ phys 29)
+The base subtree at phys 0–21 in packed order matches non-pb's base at cols 0–21 ⇒ byte-canonical
+base reduction. Dead chain/pos-0 at phys 22–29 = ghosted trailing tiles = online-softmax no-ops.
+
+**Edits (flag FR13_PB_BASE_COL_INVARIANT, default OFF byte-identical):**
+1. PERMUTE block: engage on `FR13_SLOT_REORDER==1 OR (FR13_PB_BASE_COL_INVARIANT==1 AND pb-shaped
+   tree)`. When pb, set `_sr_pi = pi_pb` (skip the all-zeros/branch derivation).
+2. RELAX the assert `_sr_pi[0] == 0` (19297): pb pi has node 8 at phys 0, node 0 at phys 29. Keep
+   the permutation-validity check `sorted(_sr_pi) == range(len)`.
+3. Verify the bias permute (edit 2, fr13_patch_fa2_tree_bias.py) applies pi to the ALREADY-pb-masked
+   bias (pb mask built at patcher 15392 BEFORE slot-reorder) → ghost -inf entries move consistently.
+   ORDER CHECK REQUIRED: confirm pb-mask-then-permute (not permute-then-mask).
+4. Verify remap dst (edit 3, ~19452) is correct under pi_pb (committed KV → base linear slots).
+
+**Interaction risks to check before/at first boot:** (a) pb-mask vs bias-permute order; (b) the
+ATTN_KV_REMAP dst under pi_pb; (c) does the base-root (node 8→phys 0) attention still get the bonus
+exactly once (mask [3] dropped col 0 for rows 8–17; after permute those rows move — the mask must
+follow via the bias permute).
+
 ## Status
-Crux RESOLVED SAFE. Fix fully specified. Implementation = extend the SLOT_REORDER seam with a
-pb base-first pi (flag FR13_PB_BASE_COL_INVARIANT, default OFF byte-identical). NEXT: locate the
-SLOT_REORDER PERMUTE/RESTORE seam, add the pb pi branch, wire the mask/remap permute. Gates: col-0
-export==replay bit-identical (now expected to pass by construction), same-seed determinism,
-flag-OFF byte-identical, then deep-task accept 14539/14598/14995 LIVE.
+Crux RESOLVED SAFE. Fix + pi + seam + edits fully specified. Remaining = a focused, careful build
+(intricate multi-seam consistency + garble risk if wrong) + gates: (1) flag-OFF byte-identical,
+(2) same-seed determinism 4/4, (3) col-0 export==replay bit-identical (expected pass by construction),
+(4) deep-task accept 14539/14598/14995 LIVE qwen-code B=4 temp 0.6 (expect head pos-1→1.0, tail→~5).
+Do the build with fresh focus — NOT at the tail of an analysis pass (a wrong multi-seam edit garbles
++ wastes GPU boots). First boot after edits: gate (1)+(3) before any accept run.
