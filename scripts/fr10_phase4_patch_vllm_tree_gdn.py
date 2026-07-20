@@ -15419,6 +15419,29 @@ def _patch_tree_attn_spec_config_override() -> bool:
             or os.path.exists("/tmp/fr13_piggyback.arm")
             or os.environ.get("FR13_PIGGYBACK") == "1"
         )
+    # FAIL LOUD (user directive 2026-07-20): NO silent fallback to running
+    # piggyback WITHOUT the chain-ghost attn mask. The TREE SHAPE (strict
+    # 8-chain sorted prefix) is the AUTHORITATIVE pb signal -- a pb-shaped tree
+    # MUST get the mask on every tree we might ever serve. If the shape says pb
+    # but the _fr13_pb_on flag (import/arm-file/env detection) disagrees, the
+    # detection is broken and the mask would be silently skipped => chain leak.
+    # Refuse. (Non-pb trees: both False, agree, no mask -- correct.)
+    _fr13_tree_is_pb = (
+        len(sorted_tree_choices) > 8
+        and all(
+            tuple(sorted_tree_choices[_k]) == tuple([0] * (_k + 1))
+            for _k in range(8)
+        )
+    )
+    if bool(_fr13_tree_is_pb) != bool(_fr13_pb_on):
+        raise RuntimeError(
+            "FR13_PIGGYBACK attn mask shape-vs-flag disagreement "
+            "(tree_is_pb=%s pb_on=%s): refusing to run piggyback without the "
+            "chain-ghost mask (or apply the mask to a non-pb tree). "
+            "sorted_tree_choices[:9]=%s"
+            % (bool(_fr13_tree_is_pb), bool(_fr13_pb_on),
+               str(sorted_tree_choices[:9]))
+        )
     if _fr13_pb_on:
         from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
             _fr13_pb_packed_cols as _fr13_pb_pcols,
@@ -15449,16 +15472,30 @@ def _patch_tree_attn_spec_config_override() -> bool:
         tree_attn_mask[..., :, 1:8] = _fr13_pb_ninf
         tree_attn_mask[..., 1:8, :] = _fr13_pb_ninf
         tree_attn_mask[..., 8:, 0] = _fr13_pb_ninf
-    _fr13_s1_pb = (len(sorted_tree_choices) + 1 == 18) and all(
-        tuple(sorted_tree_choices[_s1k]) == tuple([0] * (_s1k + 1))
-        for _s1k in range(8)
+    # GENERALIZED (user directive 2026-07-20): S1(b) must apply to ANY 8-chain
+    # piggyback tree, not just cat9_pb (tree_n==18). The row-0 poisoning is a
+    # property of the 8-chain LIVE-8 layout (stream 0 = pos-0 bonus copy,
+    # poisoned past L0), independent of the BASE subtree -- so tail6_pb and any
+    # future extended tree need the identical row-0 ghost. Gate = piggyback
+    # armed + the strict 8-chain sorted prefix (the only structural requirement;
+    # base shape is irrelevant). The prior `== 18` cat9_pb constraint LEFT
+    # tail6_pb's row 0 self-attending its poisoned col-0 K -- a chain leak into
+    # the base draft. The masks below are index-0 (row/col 0), layout-invariant.
+    _fr13_s1_pb = (
+        _fr13_pb_on
+        and len(sorted_tree_choices) > 8
+        and all(
+            tuple(sorted_tree_choices[_s1k]) == tuple([0] * (_s1k + 1))
+            for _s1k in range(8)
+        )
     )
     if _fr13_s1_pb:
         # FR13_PIGGYBACK S1(b) (LIVE-8): stream 0 (the pos-0 bonus copy) is
         # poisoned after the first GDN layer, so every full-attn layer's
         # row-0 K/V is wrong bytes past L0. Full attention ghost: row 0
         # attends the PAGED CONTEXT ONLY (finite -- the tree bias covers only
-        # the [18,18] suffix block and context_len >= 1 in tree decode), and
+        # the [tree_n, tree_n] suffix block and context_len >= 1 in tree
+        # decode), and
         # NO row reads its K column (the ACTIVE root twin is stream 8; its
         # durable KV lands in the canonical bonus slot via the S1(a)
         # commit-time copy in launch_attn_kv_linear_remap). Convention must
