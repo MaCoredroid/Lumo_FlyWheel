@@ -419,3 +419,14 @@ tokens through tail6_pb vs no-spec oracle, compares per-position argmax+margin -
 logit pins the leak (fr13_apc_hit_first_divergence.py localizes across conv-seed/ssm-seed/per-layer/
 final-logit). Adapt it for pb-vs-nospec on a DEEP task; fix the localized leak; repeat until 0
 divergence => byte-lossless => accept matches non-pb everywhere.
+
+## CODE READ (while pbab1 runs): ATTN_KV_REMAP re-linearize is sound for pb deep accepts
+launch_attn_kv_linear_remap (kernel:479): copies committed node KV src=accepted_paths[b,m]
+(+1-shifted SUBTREE flat row, >=9 under pb per patcher:19483) -> dst=m+1 (linear committed slot).
+Reasoned: dst=m+1 is CORRECT for pb -- committed tokens occupy linear [base..base+L-1] regardless
+of tree shape; the committer's rank-7 walk publishes the correct subtree offsets for deep nodes.
+=> reading finds NO obvious deep-tail remap bug. The deep-tail -1.2 divergence is a runtime byte
+drift -> needs the EMPIRICAL teacher-forced logit gate (pb vs no-spec, first divergent logit), not
+more static reading. RUNNING pbab1 = tail6 nonpb vs tail6_pb, BOTH cache-ON (confirm pb carrier at
+ship regime). NEXT: adapt fr13_apc_teacher_forced_logit_gate.py for pb-vs-nospec on a deep task.
+mask fix confirmed +0.29/+0.37 (nm1).
