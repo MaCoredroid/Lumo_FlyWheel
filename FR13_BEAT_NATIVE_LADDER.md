@@ -568,3 +568,11 @@ permute-engage + pi + remap-dstpi(keyed on _fr13_sr_pi_t set); launcher -e forwa
 GATE RUNNING: tmux bcinv, driver 3194807, output/fr13_bcinv. tail6_pb + FR13_PB_BASE_COL_INVARIANT=1
 cache-OFF on 14539/14598/14995 vs collapse3 baseline 3.5. WATCH boot needle "ENGAGED ... pi=[8, 9,"
 (runner+bias), 0 fatal, no garble; accept ~5=WIN, ~3.6=reassess, crash=permute bug. Poll next ticks.
+
+## FR13_PB_BASE_COL_INVARIANT: ENGAGEMENT CONFIRMED (2026-07-20, bcinv boot)
+Boot healthy: model loaded, torch.compile from cache, NO patcher/SyntaxError/Traceback/fatal.
+Engagement needle fired IDENTICALLY on BOTH seams (runner gpu_model_runner:3405 + tree_attn bias
+:984): tree_n=30 pi=[8,9,...,29,1,2,3,4,5,6,7,0] == the designed base-first pi (base subtree nodes
+8-29 -> phys cols 0-21, dead chain 1-7 -> 22-28, pos-0 -> 29). Slot_mapping permute + bias permute
+CONSISTENT (same pi). No shape-vs-flag disagreement. Implementation structurally correct + engaging.
+REMAINING: accept on deep tasks (14539/14598/14995) accumulating; watch garble/col-0 + accept ~5=WIN.
