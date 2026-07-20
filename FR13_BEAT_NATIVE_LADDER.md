@@ -483,3 +483,16 @@ GATE BUILD must FIRE overflow: use a DEEP-accept prompt (long predictable code) 
 compare the overflow-step reconstructed state (col-0/conv/attn-KV) to the no-spec oracle. Bare pb
 server boot needs the full launcher sidecar+-e plumbing (piggyback.arm + FR13_* -e forwards);
 cleanest via a dedicated boot, not the SWE serve-variant. Committer async-overlap fix still ready.
+
+## FIX-ATTEMPT bi2 FAILED (broken patch) + cheap levers exhausted (2026-07-20)
+bi2 (BATCH_INVARIANT=1 + FR13_BI_TREE_ATTN=1) serve rc=2: "FR13 BI decode num_splits expression
+missing in tree_attn.py" -- the BI-tree-attn allowlist patch anchor is absent in this vLLM version
+=> autotune-determinism lever BLOCKED without patch surgery (and byte-identity 29-vs-21-col is
+unlikely even repaired). temp06_drift_estimate.py: the binding q-vs-p TV "q NOT banked" => no
+shortcut; needs a FRESH capture. All pb state paths byte-correct (exhaustive read). => residual
+~1.1 is very likely WITHIN-FLOOR (29-col forward numerics tipping temp-0.6 ties), but PROVING it
+needs the greedy byte-diff gate (bare pb + no-spec servers, deep/overflow prompt) -- a dedicated
+build with uncertain payoff (may be inherent/unfixable).
+STATE: mask leak fixed (+0.29/+0.37, delivered); pb carrier proven (5.0 vs 3.9). DECISION PENDING:
+invest in the careful byte-diff gate (definitive accept answer) OR bank the committer async-overlap
+win (53.7->~24, ready) + accept pb net-neutral.
