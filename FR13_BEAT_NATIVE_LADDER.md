@@ -576,3 +576,14 @@ Engagement needle fired IDENTICALLY on BOTH seams (runner gpu_model_runner:3405 
 8-29 -> phys cols 0-21, dead chain 1-7 -> 22-28, pos-0 -> 29). Slot_mapping permute + bias permute
 CONSISTENT (same pi). No shape-vs-flag disagreement. Implementation structurally correct + engaging.
 REMAINING: accept on deep tasks (14539/14598/14995) accumulating; watch garble/col-0 + accept ~5=WIN.
+
+## FR13_PB_BASE_COL_INVARIANT: BOOT HANG at capture-onset (2026-07-20, bcinv) — debugging
+Engagement CONFIRMED (exact pi both seams, causal=False, no fatal). But boot HANGS ~after the memory-
+profiling tree forward (last log conv-emul 23:30:37; GPU idle 0%/10W; main thread tid217 R/wchan=0
+userspace-spin; not capturing). NEW (my flag) -> pb+slot-reorder interaction.
+PRIME SUSPECT: the remap-dstpi path (edit 3/2d) is FIRST EVER exercised here -- SLOT_REORDER was
+validated on cat8 (REMAP=0), so slot-reorder + ATTN_KV_REMAP + the permuted layout never ran together.
+Other candidates: causal=False + pb tree_bias (larger tree_n=30 vs cat8), or a stream-order deadlock in
+the pb committer under the permute. No py-spy/gdb caps in the default container.
+NEXT: relaunch bcinv with PROFILE_PTRACE_CAP=1 (launcher 582 conditional --cap-add=SYS_PTRACE) -> py-spy
+dump on the hang -> exact spinning frame -> targeted fix. Flag stays default-OFF so nothing shipped.
