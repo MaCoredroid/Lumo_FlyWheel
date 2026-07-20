@@ -406,3 +406,16 @@ Same last B=4 batch [14508,14539,14598,14995] ran TOGETHER (co-scheduled) in all
 Plus collapse3 ran the 3 tasks FIRST (only tasks) and they still collapsed => NOT position/end-of-run.
 CONCLUSION: intrinsic to these 3 tasks' DEEP-TAIL-HEAVY content (rg1's highest accept, depths 6-11)
 that pb degrades. Residual to close: do the 3 interact with EACH OTHER? -> CONC=1 (each alone) after nm1.
+
+## GOAL RESET (user 2026-07-20): pb must be BYTE-LOSSLESS, not net-neutral. -0.46 is a real loss.
+Every per-task deviation vs non-pb = a pb non-losslessness (trajectory divergence). Target = match
+non-pb per-task (deep tasks -> 5+). Read-only workflows (col-0, deep-accept) found nothing because
+they check per-step MATH; the divergence is a subtle byte non-losslessness that DRIFTS the
+trajectory -> needs an EMPIRICAL byte-diff.
+PROGRESS: generalized row-0-ghost mask RECOVERED +0.29 (nm1 14539 3.647->3.937). The chain leak was
+real + fixable. Confirms the incremental leak-fix -> accept-recovery approach.
+NEXT (methodical localize-fix loop): fr13_apc_teacher_forced_logit_gate.py teacher-forces the SAME
+tokens through tail6_pb vs no-spec oracle, compares per-position argmax+margin -> FIRST divergent
+logit pins the leak (fr13_apc_hit_first_divergence.py localizes across conv-seed/ssm-seed/per-layer/
+final-logit). Adapt it for pb-vs-nospec on a DEEP task; fix the localized leak; repeat until 0
+divergence => byte-lossless => accept matches non-pb everywhere.
