@@ -398,3 +398,11 @@ deep tasks into -1.7 trajectory drift (short tasks: -0.23 nets neutral).
 RUNNING nm1 = tail6_pb + NEW generalized mask (row-0 ghost for all pb trees + fail-loud guard) on
 the 3 collapse tasks. Compare to old tail6_pb (3.65/3.35/3.51). Up => row-0 ghost was part of the
 leak; flat => the -1.7 is deep-draft-quality/overflow, not the tree-block ghost.
+
+## COLLAPSE IS TASK-SPECIFIC, NOT CO-SCHEDULING (user question 2026-07-20)
+Same last B=4 batch [14508,14539,14598,14995] ran TOGETHER (co-scheduled) in allon5:
+  14508 delta -0.46 (FINE) | 14539 -1.24 | 14598 -1.36 | 14995 -2.05 (3 COLLAPSE).
+=> a task sharing the EXACT concurrency did NOT collapse => NOT a co-scheduling/batch effect.
+Plus collapse3 ran the 3 tasks FIRST (only tasks) and they still collapsed => NOT position/end-of-run.
+CONCLUSION: intrinsic to these 3 tasks' DEEP-TAIL-HEAVY content (rg1's highest accept, depths 6-11)
+that pb degrades. Residual to close: do the 3 interact with EACH OTHER? -> CONC=1 (each alone) after nm1.
