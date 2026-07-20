@@ -471,3 +471,15 @@ tokens, per-position argmax+top1/top2 margin via _tf_one). argmax-diff => real l
 margin-only => within-floor. Build gate (2 servers pb + native no-spec, deep prompt). GPU free.
 DELIVERED so far: pb carrier proven at cache-ON (5.0 vs 3.9); mask leak closed (+0.29); goal = byte-
 lossless (user); committer async-overlap fix still queued.
+
+## SHARPENED SUSPECT: the OVERFLOW CATCH-UP (untested, tail6-specific, new code)
+KEY: the ship byte gates (V0/V1) ran on cat9_pb, which NEVER overflows (accept<=5). cat9_pb is
+byte-gated => byte-lossless => accept-NEUTRAL. The OVERFLOW catch-up (accept>6 -> len-0 chain +
+piggyback_catchup_replay, ~19.5% of tail6 steps) is NEW code this session, fires ONLY on tail6_pb
+deep accepts, and was NEVER byte-validated (cat9_pb can't exercise it). The col-0 workflow refuted
+the GDN divergence in it, but NOT its conv/attn-KV effects or the replay(catch-up)-vs-scan(non-
+overflow) numerics on overflow steps. => strongest tail6-specific untested carrier.
+GATE BUILD must FIRE overflow: use a DEEP-accept prompt (long predictable code) so accept>6 hits;
+compare the overflow-step reconstructed state (col-0/conv/attn-KV) to the no-spec oracle. Bare pb
+server boot needs the full launcher sidecar+-e plumbing (piggyback.arm + FR13_* -e forwards);
+cleanest via a dedicated boot, not the SWE serve-variant. Committer async-overlap fix still ready.
