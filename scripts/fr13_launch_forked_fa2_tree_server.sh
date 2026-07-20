@@ -583,6 +583,7 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 -p "$PORT:9950" \
   -v "$REPO:/workspace" -v /models:/models -v "$LOG_DIR:/logs" \
   -v "$FORKED_FA2_SO:/tmp/fr13_fork_fa2.so:ro" \
+  -v "${FR13_COMPILE_CACHE_DIR:-$HOME/.cache/fr13_vllm_container_cache}:/root/.cache" \
   "${NSYS_DOCKER_ARGS[@]}" \
   "${FR13_ENV_FORWARD_ARGS[@]}" \
   -e PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF" \
