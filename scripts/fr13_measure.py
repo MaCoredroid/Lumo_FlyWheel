@@ -1650,6 +1650,15 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         if (union_decode_s and aggregate_window_wall_s and aggregate_window_wall_s > 0)
         else None
     )
+    # FR13_STEP_WALL eff-conc normalization (rg1 finding 2026-07-19): the raw
+    # overhead_other subtracts per-STEP component ms from per-EVENT wall; at
+    # effective concurrency C a step serves ~C events, so the comparable
+    # component cost per event = fullstep_s / C. rg1: raw -114.8ms -> norm ~+4ms.
+    overhead_other_ms_per_event_norm = (
+        (wall_s_per_event - _fullstep_s / effective_concurrency) * 1000.0
+        if (wall_s_per_event is not None and _fullstep_s > 0
+            and effective_concurrency and effective_concurrency > 0) else None
+    )
     # per_stream_decode_rate = union gen / union decode-seconds = the EXACT
     # decomposition factor: aggregate_decode_tps == per_stream_decode_rate x
     # effective_concurrency (identity, both from the same union deltas). This is the
@@ -1737,8 +1746,13 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "wall_steps_measured": agg_wall_steps or None,
         "overhead_other_ms_per_event": overhead_other_ms_per_event,
         "overhead_other_note": (
-            "wall_per_event - (verify + drafter + committer) = step cost OUTSIDE "
-            "the three timed components."
+            "RAW basis-mismatched (per-step components vs per-event wall); "
+            "interpret via the _norm twin."
+        ),
+        "overhead_other_ms_per_event_norm": overhead_other_ms_per_event_norm,
+        "overhead_other_norm_note": (
+            "wall_per_event - components/effective_concurrency = true "
+            "non-component overhead per event."
         ),
         "fullstep_alignment_ratio": fullstep_alignment_ratio,
         # FR13_DFWD/CFWD_GPU_TIMER component spans (where the tree overhead

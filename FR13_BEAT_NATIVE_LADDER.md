@@ -154,3 +154,21 @@ with committer still at 85.5ms (pb un-ported) and no async. eff-conc 1.63, pf 0.
 async-accept question: 4.892 vs lad2 5.469 — rg2 (async twin, SAME code) running, decides R1.
 pb-port-on-tail6 projection at rg1's own numbers: ~40 wall TPS pre-R3/R4. Reducer note:
 overhead_other_ms needs eff-conc normalization (true non-component overhead ~+4ms/event here).
+
+## DRIVE PLAN (owned, 2026-07-20) — every GPU window pre-assigned
+GPU queue (fires in order as windows free; loop ticks execute):
+1. rg2 tail6+async (RUNNING) -> R1 verdict: accept attribution (vs rg1 4.892 same-code /
+   lad2 5.469 same-config), resolve band, measured-wall delta. Bake decision per standing rule.
+2. tail6_pb MECHANICAL (fr13_tail6pb_mech_seq.sh, 4-task): first boot of the ported pb on the
+   deliverable shape — needles(29), 0 fatal, CFWD collapse vs 85.5ms. PASS -> full-subset
+   tail6_pb resolve run becomes the R2-on-deliverable bake candidate (~40 TPS projection).
+3. native cache-ON pair + native11 depth-match (fr13_native_nowall_seq.sh, 16-task):
+   re-anchored fair bar + the depth/branch/mixed-drafter accept decomposition.
+4. COMPOSITION PROBE (fr13_tail6_pureprobe_seq.sh): tail6 sync + chunked-prefill OFF —
+   decides trajectory-feedback vs composition-numerics as the accept-why (pure-fraction data:
+   async 5.5% pure vs sync 12.7% REFUTED the pure-shape-consistency story).
+5. V2.5 restored-vs-oracle on the pb arm (post-bake formal check) + R3 profiler one-shot
+   (FR13_R3_VERIFY_TRIM_DESIGN.md step 1) in the same window; then R3 impl -> R4.
+Reducer upgraded: overhead_other_ms_per_event_norm (eff-conc-normalized residual) in every
+deploy record. WHY-ledger so far: wall censoring (+0.58 sync), async assoc. lift (+0.64
+matched, d6-concentrated, 10/12 tasks), pure-shape story refuted, trajectory-feedback leading.
