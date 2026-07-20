@@ -443,3 +443,18 @@ REMAINING (indistinguishable by reading, all look correct): conv col-0 (separate
 patcher:7596), paged-attn KV (ATTN_KV_REMAP), or the 29-vs-21-col verify forward. DECISIVE =
 empirical fr13_apc_hit_first_divergence.py over conv-seed/ssm-seed/per-layer/final-logit. That is
 the next step, NOT more static reading.
+
+## THOROUGH CODE READ (user: read+think hard): 3 pb state paths RULED OUT; residual = runtime
+Key discriminator: arm A (tail6 NON-PB, 5.0) ran FR13_ATTN_KV_REMAP=0 (NO remap); tail6_pb (3.9)
+runs REMAP=1. So the remap is the pb-specific KV path. Read all three pb state paths concretely:
+1. GDN col-0: PIGGYBACK_EXPORT (kernel:997) == replay RUNROW_COMMIT (kernel:1195) -- same
+   masked-reduction+store, same _gdn_node_step, same tokens, identity-pad exact => BIT-IDENTICAL.
+2. CONV: gather_committed_path_conv_prior reads col-0 under RUNROW_INIT=1, which is ON for BOTH
+   arms (common); conv committer common => NOT pb-specific.
+3. ATTN-KV REMAP (kernel:479-639): dst_off=m+1 correctly re-linearizes committed tokens to linear
+   positions (shape-agnostic); foreign mask copies every non-contiguous committed node; gather-
+   then-scatter handles overlap; FAIL-LOUD (raises) on mixed/nonuniform spans (allon5 0 fatals =>
+   never fired). => correct for deep accepts.
+=> Residual -1.2 is a RUNTIME numerical effect (29-col fused forward vs 21-col, or interaction) NOT
+visible statically. DECISIVE = empirical teacher-forced first-divergence gate (pb vs non-pb, same
+tokens) -> pins conv-seed/ssm-seed/per-layer/final-logit. NOT a blind edit.
