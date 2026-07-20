@@ -350,7 +350,9 @@ if (( RC != 0 )); then echo "FAIL: launcher rc=$RC"; tail -30 "$ARMDIR/launch.lo
 
 T0=$(date +%s)
 HEALTHY=0
-while (( $(date +%s) < T0 + 1200 )); do
+# HEALTH_TIMEOUT_S overridable: first boot of a NEW tree geometry pays a
+# one-time Triton compile (tail6_pb 29-col/N_PAD=32 blew the 1200s window).
+while (( $(date +%s) < T0 + ${HEALTH_TIMEOUT_S:-1200} )); do
   if curl -fsS -m 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then HEALTHY=1; break; fi
   if [[ "$(docker inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null)" != "running" ]]; then
     echo "FAIL: container died before health"; docker logs "$CONTAINER" 2>&1 | tail -40; exit 2
