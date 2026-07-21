@@ -1354,6 +1354,86 @@ def _fr13_native_committer_replay(
             state_bank[rows] = 0.0
 
 
+_FR13_COMMITTER_BATCHED_ANNOUNCED = False
+
+
+def _fr13_native_committer_all_layers_batched(
+    *, banks_list, spec_state_indices, accepted_paths, accepted_lens,
+    k_rings, v_rings, a_rings, b_rings, A_logs, dt_biases, num_layers,
+    num_spec_decodes, output_scale, use_qk_l2norm_in_kernel, burn_node_bank,
+    root_node=0,
+):
+    """FR13_COMMITTER_NATIVE_BATCHED (default OFF): native committer replay with the SHARED
+    accepted-path layout HOISTED (nodes_list/cu computed ONCE for all ~48 layers, not per-layer
+    -- the '_fr13_prepare_committer_layout' docstring names this as the B*47 syncs that made the
+    eager committer crawl) AND the 4 ring gathers BATCHED over the STACKED 5D rings
+    (k_rings[:, b, nodes] once, not 48x). The per-layer fused_sigmoid + per-layer ssi (running
+    row) + burn are the SAME ops in the SAME order => committed state BYTE-IDENTICAL to the
+    per-layer loop; only the host layout+gather overhead (~73ms) is removed. Keeps the 48
+    fused_sigmoid launches (graph-capture is the next lever). Shapes: k_rings[L,B,N,KH,DK],
+    v_rings[L,B,N,VH,DV], a_rings/b_rings[L,B,N,VH]; spec_state_indices STACKED [L,B,SPEC_COLS]."""
+    from vllm.model_executor.layers.fla.ops import (
+        fused_sigmoid_gating_delta_rule_update as _sg,
+    )
+    L = int(num_layers)
+    B = int(num_spec_decodes)
+    dev = k_rings.device
+    num_kh, dim_k = int(k_rings.shape[3]), int(k_rings.shape[4])
+    num_vh, dim_v = int(v_rings.shape[3]), int(v_rings.shape[4])
+    _spec_cols = int(spec_state_indices.shape[2])
+    # ---- SHARED layout computed ONCE (the single .tolist() host sync for all L layers) ----
+    acc = accepted_lens[:B].tolist()
+    nodes_list, seg = [], []
+    for b in range(B):
+        _nl = int(acc[b])
+        nodes = torch.cat([
+            torch.full((1,), int(root_node), dtype=torch.long, device=dev),
+            accepted_paths[b, :_nl].to(torch.long),
+        ])
+        nodes_list.append(nodes)
+        seg.append(int(nodes.numel()))
+    T = int(sum(seg))
+    max_T = int(max(seg))
+    cu = torch.tensor(
+        [0] + list(torch.tensor(seg).cumsum(0).tolist()),
+        device=dev, dtype=torch.int32,
+    )
+    # ---- BATCHED gather over the STACKED rings: one cat over B, ALL L layers ----
+    k_all = torch.cat([k_rings[:, b, nodes_list[b]] for b in range(B)], dim=1)
+    v_all = torch.cat([v_rings[:, b, nodes_list[b]] for b in range(B)], dim=1)
+    a_all = torch.cat([a_rings[:, b, nodes_list[b]] for b in range(B)], dim=1)
+    b_all = torch.cat([b_rings[:, b, nodes_list[b]] for b in range(B)], dim=1)
+    q = torch.zeros(1, T, num_kh, dim_k, device=dev, dtype=k_rings.dtype)
+    for _L in range(L):
+        # per-layer ssi: col 0 = THIS layer's running row (per-layer, not shared)
+        ssi = torch.zeros(B, max_T, device=dev, dtype=torch.int32)
+        col0 = spec_state_indices[_L][:B, 0].to(torch.int32)
+        for b in range(B):
+            ssi[b, :] = col0[b]
+        _sg(
+            A_log=A_logs[_L],
+            a=a_all[_L].reshape(1, T, num_vh).contiguous(),
+            b=b_all[_L].reshape(1, T, num_vh).contiguous(),
+            dt_bias=dt_biases[_L], q=q,
+            k=k_all[_L].reshape(1, T, num_kh, dim_k).contiguous(),
+            v=v_all[_L].reshape(1, T, num_vh, dim_v).contiguous(),
+            scale=output_scale, initial_state=banks_list[_L],
+            inplace_final_state=True, cu_seqlens=cu, ssm_state_indices=ssi,
+            use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+        )
+        if burn_node_bank:
+            for b in range(B):
+                rows = spec_state_indices[_L][b, 1:_spec_cols].to(torch.long)
+                banks_list[_L][rows] = 0.0
+    global _FR13_COMMITTER_BATCHED_ANNOUNCED
+    if not _FR13_COMMITTER_BATCHED_ANNOUNCED:
+        _FR13_COMMITTER_BATCHED_ANNOUNCED = True
+        print(
+            "[FR13_COMMITTER_NATIVE_BATCHED ENGAGED] hoisted layout (1 .tolist) + "
+            "batched gather (4 cat) over " + str(L) + " layers", flush=True,
+        )
+
+
 def launch_tree_gdn_replay(
     *,
     state_bank: torch.Tensor,
@@ -2121,6 +2201,17 @@ def launch_tree_gdn_replay_all_layers(
         # so the col-0 init read + node-bank burn address the correct per-layer rows. (was: 3D passed as
         # 2D -> col0[b] became a [SPEC_COLS] vector -> "expanded size 6 vs 10" crash.)
         _spec_cols = int(spec_state_indices.shape[2])
+        if os.environ.get("FR13_COMMITTER_NATIVE_BATCHED") == "1":
+            _fr13_native_committer_all_layers_batched(
+                banks_list=banks_list, spec_state_indices=spec_state_indices,
+                accepted_paths=accepted_paths, accepted_lens=accepted_lens,
+                k_rings=k_rings, v_rings=v_rings, a_rings=a_rings, b_rings=b_rings,
+                A_logs=A_logs, dt_biases=dt_biases, num_layers=num_layers,
+                num_spec_decodes=num_spec_decodes, output_scale=output_scale,
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+                burn_node_bank=burn_node_bank,
+            )
+            return
         for _L in range(int(num_layers)):
             _fr13_native_committer_replay(
                 state_bank=banks_list[_L], spec_state_indices=spec_state_indices[_L],
