@@ -25,6 +25,10 @@ unset FR13_PREWARM_TRIE
 export FR13_SERVE_BATCH_FLAGS="--async-scheduling"
 # THE FIX (default OFF; =1 engages the pb base-first attn-col permute):
 export FR13_PB_BASE_COL_INVARIANT=1
+# FR13_PARENT_GATHER=1: validated byte-identical O(N) GDN kernel (task #36). The O(N^2)
+# default compiles a huge Triton IR that spikes HOST RAM below the gpu_oom_guard 9GB floor
+# -> docker-kill (exit 137) during the ~10min compile. The O(N) IR compiles fast + light.
+export FR13_PARENT_GATHER=1
 # cache-OFF: match the collapse3 arm1 baseline (3.5) so the delta is the FIX alone.
 export FR13_ENABLE_APC=0
 export FR13_COMMIT_FULL_GPU_TIMER=1
