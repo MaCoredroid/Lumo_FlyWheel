@@ -756,3 +756,17 @@ form = COPY the spine-leaf state the verify already computes (STATELESS-TREE #11
 wall. So the ONE lever that matters = tree-kernel bit-exactness (unlocks copy-commit AND fixes accept).
 Layout-once (committer HOST syncs) = NULL: the committer cost is GPU replay (88ms), not host syncs;
 async-scheduling already hid the host part. Confirmed by historic non-pb tail6 in-band + the decomposition.
+
+## ATTACK SCOPING (2026-07-21, workflow wlqrjubyc) — dead-ends to avoid
+VERIFY trim (+36ms, 29%): the ancestor GATHER is REFUTED as a lever -- FR13_PARENT_GATHER already made it
+O(N) and measured only -1.7% (~3ms of ~70ms; FR13_PIPELINE_SPEED_BREAKDOWN.md:225). The +36ms is INHERENT
+tree-size compute (29 nodes vs native 5) -- not losslessly trimmable without shrinking the tree (=lower
+accept). => verify is the HARD 29%; committer is the tractable 65%.
+SCAN_ALIGN = DEAD END (aligns to WRONG twin): default _gdn_node_step ALREADY matches the true scoring
+oracle fused_sigmoid_gating_delta_rule_update (used for both no-spec decode + spec verify) on EVERY
+elementwise op (rsqrt l2norm, fp32 sigmoid beta, fp32 state carry). SCAN_ALIGN's 3 seams were copied from
+a DIFFERENT kernel fused_recurrent_gated_delta_rule_packed_decode -> enabling it makes bit-exactness WORSE.
+=> the accept/copy-commit bit-exactness carrier is REDUCTION-ORDER/structure, NOT elementwise arithmetic.
+COMMITTER (keep the replay, make it faster -- user): sg-split profile FR13_COMMITTER_SG_TIMER measures
+fused_sigmoid-GPU vs host gathers+dispatch; if host-bound => batch the 192/commit torch.cat gathers +
+graph-capture the 48-layer loop (lossless, kernel math untouched).
