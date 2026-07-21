@@ -663,3 +663,11 @@ concept, patcher 7143, currently only wired under the dead greedy FR13_GPU_COMMI
 outputs + side-stream host materialization (native AsyncGPUModelRunnerOutput shape) so the main thread
 launches the next forward without blocking on the DtoH. Target 53.7 -> ~16ms. Task #52.
 FR13_PB_BASE_COL_INVARIANT = small keeper (+0.08-0.36, head-canonical), NOT the win; deep-tail chase stopped.
+
+## bc5 FINAL 3-task (2026-07-21): base-col fix = +0.60 avg, pb+fix BEATS native
+accept/step (matched vllm_metrics pre/post delta): 14539 3.647->3.725 (+0.08); 14995 3.506->3.864
+(+0.36); 14598 3.348->4.712 (+1.36). avg collapse3 3.50 -> bc5(pb+fix) 4.10 (+0.60, temp-0.6 noise).
+pb+fix avg 4.10 BEATS native 3.415. => ACCEPT axis is FINE (beats native); keep FR13_PB_BASE_COL_INVARIANT
+as a flag-gated keeper. THE GAP IS THE COMMITTER (task #52): pb 53.7ms -> piggyback target ~16ms via
+async-overlap => TPS ~31 (+11% vs native). Cheap first lever FR13_COMMIT_BATCH_OUTPUT=1 (byte-identical,
+kills ~B*len syncs/step) is OFF in golden -> available.
