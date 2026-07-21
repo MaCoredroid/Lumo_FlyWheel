@@ -781,3 +781,12 @@ gathers/launches. FIX (LOSSLESS, math untouched): (1) batch the 192 gathers over
 48-layer loop -> one graph replay, kills dispatch; (3) reuse q=zeros. Target 88->~15-20ms.
 WIN MATH: tail6 5.953/(94+100+15=209ms)=28.5 > native 27.9 at TODAY's accept, replay INTACT. Drafter
 (100ms) also host-bound (#28) -> graph-capture (#50) adds margin. Committer host-overhead kill = the win.
+
+## COMMITTER BATCHED micro-bench (2026-07-21, CLEAN isolated) -- modest; dispatch is the real cost
+Fresh-container micro-bench (no agentic/async/metric confound): per-layer=56.3ms/commit, batched=47.6ms
+=> batched 1.18x, -8.7ms (the hoisted layout + batched gathers). MY "73ms host" ESTIMATE WAS WRONG -- the
+layout+gathers are only ~8.7ms. The committer's real bulk = the 48 fused_sigmoid LAUNCHES (~14.5ms GPU +
+~24ms launch dispatch) + ssi/burn ~9ms. => batched alone won't flip tail6 (282->~273ms -> 21.8 tok/s < 27.9).
+The REAL lever = CUDA-GRAPH CAPTURE of the 48-launch fused_sigmoid loop (~-24ms dispatch -> committer ~23ms).
+Batched kept as free lossless step. User chose: build the graph-capture. Enabler = FIXED shapes (pad path
+to max + num_accepted_tokens truncation, like native inline commit patcher:4380) so the loop is capturable.
