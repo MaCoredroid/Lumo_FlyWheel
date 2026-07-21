@@ -651,3 +651,15 @@ moments) do NOT. Use bracketed accept/step, never eyeball the window logs.
 NEXT: re-localize the DEEP-node verify perturbation under pb (why does the deep tail reject arctic
 drafts that non-pb accepts?). The base-col fix is a small keeper (+0.08-0.36, head-canonical) but
 the main lever is elsewhere. Do NOT bake/claim the fix as the win.
+
+## REFOCUS: committer overhead is the goal (user 2026-07-21); "7.2ms native" was MY ERROR
+CORRECTION: native committer CFWD = ~75ms (ladder row 0: FR13_COMMITTER_NATIVE linear-fused path;
+native_cfwd.json 74ms measured), NOT 7.2ms. pb committer CFWD=53.7ms ALREADY beats native (75).
+The pb accept 3.8 ALREADY beats native 3.415 -> accept was chasing the wrong bar (non-pb tree 5.3).
+THE WIN = the PIGGYBACK ~16ms committer target (ladder row 2) -> TPS ~31 (+11% vs native). Currently
+pb is 53.7ms because the ~30-42ms DtoH+verify-wait (CFWD - commit_full) is still SYNCHRONOUS.
+=> WORK = COMMITTER ASYNC-OVERLAP on the live temp-0.6 multidraft committer (FR13_COMMITTER_SYNCKILL
+concept, patcher 7143, currently only wired under the dead greedy FR13_GPU_COMMITTER): device-resident
+outputs + side-stream host materialization (native AsyncGPUModelRunnerOutput shape) so the main thread
+launches the next forward without blocking on the DtoH. Target 53.7 -> ~16ms. Task #52.
+FR13_PB_BASE_COL_INVARIANT = small keeper (+0.08-0.36, head-canonical), NOT the win; deep-tail chase stopped.
