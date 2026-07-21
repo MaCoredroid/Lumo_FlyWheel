@@ -609,3 +609,14 @@ seams) and is very likely FINE -- just needs patience through the compile. Re-bo
 PARENT_GATHER=0 to match collapse3 baseline) and WAIT the full ~12 min compile -> boot -> accept.
 (FR13_PARENT_GATHER=1 = validated byte-identical O(N) opt would make boots fast; keep for iteration
 if needed, but use =0 for the clean accept comparison first.)
+
+## FR13_PB_BASE_COL_INVARIANT: bc5 BOOTED + DECODING (2026-07-21) — validation underway
+Root of the 5-boot saga: the O(N^2) GDN compile (PARENT_GATHER=False default) spikes HOST RAM below
+the gpu_oom_guard 9GB floor (guard watches `free -m` avail, not GPU) -> docker-kill 137 during the
+~10min compile. FIX: FR13_PARENT_GATHER=1 (validated byte-identical O(N) kernel, task #36) -> light
+compile -> RAM steady 60GB through compile -> BOOTED. Fix ENGAGES (exact pi both seams), 0 fatal, no
+garble. First metrics window IDENTICAL to collapse3 baseline (mean 3.00, per-pos 0.800/0.800/0.400)
+=> fix not grossly perturbing (byte-canonical base as designed). DECODE-BRACKETED ACCEPT on deep
+tasks 14539/14598/14995 now accumulating (~3h) vs collapse3 baseline 3.5; expect ~5=WIN.
+WATCH: host RAM dropped to 15GB post-startup (offload=1 + B=4 KV); if it dips <9GB the guard kills ->
+may need GPU_GUARD_FLOOR_MIB lower or offload tuning. Poll accept + RAM next ticks.
