@@ -8752,8 +8752,7 @@ def _lumo_tree_canonical_multidraft_sample(
                     and not _fr13_pb_drop_replay
                     and not _fr13_bnd_on
                     and not _fr13_rdab_on
-                    and (__import__('os').environ.get('FR13_APC_SNAP_FIX', '1') != '1'
-                         or __import__('os').environ.get('FR13_COMMITTER_GRAPH', '0') == '1')
+                    and __import__('os').environ.get('FR13_APC_SNAP_FIX', '1') != '1'
                 )
                 if _fr13_sbr_active:
                     _ep_order = list(_fr13_sbr_stacks['layer_order'])
