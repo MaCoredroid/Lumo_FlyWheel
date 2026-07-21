@@ -1295,6 +1295,67 @@ def _fr13_sg_drain_dump():
             pass
 
 
+_FR13_REPLAY_ONLY_PENDING = []
+_FR13_REPLAY_ONLY_ACCUM = [0.0, 0]  # [gpu_seconds, n_calls]
+_FR13_REPLAY_ONLY_LAST_DUMP = [0.0]
+
+
+def _fr13_replay_only_teardown():
+    try:
+        _fr13_replay_only_drain(True)
+        _FR13_REPLAY_ONLY_LAST_DUMP[0] = 0.0  # force the final dump past the throttle
+        _fr13_replay_only_drain(True)
+    except Exception:
+        pass
+
+
+if os.environ.get("FR13_REPLAY_ONLY_GPU_TIMER") == "1":
+    import atexit as _fr13_ro_atexit
+    _fr13_ro_atexit.register(_fr13_replay_only_teardown)
+
+
+def _fr13_replay_only_drain(blocking):
+    """FR13_REPLAY_ONLY_GPU_TIMER (diagnostic, default OFF): times ONLY the deployed
+    per-layer committer-replay loop (the exact scope the isolated micro-bench measured),
+    via deferred cuda events -- separate from the patcher's FR13_CFWD_GPU_TIMER, which
+    wraps the whole self.rejection_sampler dispatch (accept/LCP/bonus decision INCLUDED,
+    a broader/different quantity). Answers: what does the pure state-commit replay cost,
+    live, apples-to-apples against the micro-bench's 14.97ms and native's 7ms floor."""
+    import os as _o, json as _j, time as _tm
+    _p = _FR13_REPLAY_ONLY_PENDING
+    while _p:
+        _a, _b = _p[0]
+        try:
+            done = _b.query()
+        except Exception:
+            _p.pop(0)
+            continue
+        if not done and not blocking:
+            break
+        _p.pop(0)
+        try:
+            if blocking and not done:
+                _b.synchronize()
+            _FR13_REPLAY_ONLY_ACCUM[0] += _a.elapsed_time(_b) / 1000.0
+            _FR13_REPLAY_ONLY_ACCUM[1] += 1
+        except Exception:
+            pass
+    _out = _o.environ.get("FR13_REPLAY_ONLY_GPU_TIMER_JSON")
+    if _out and (_tm.monotonic() - _FR13_REPLAY_ONLY_LAST_DUMP[0]) > 5.0:
+        _FR13_REPLAY_ONLY_LAST_DUMP[0] = _tm.monotonic()
+        try:
+            _tmp = _out + ".tmp"
+            with open(_tmp, "w") as _fh:
+                _fh.write(_j.dumps({
+                    "schema": "fr13.replay_only_gpu_timer.v1",
+                    "replay_only_gpu_seconds": _FR13_REPLAY_ONLY_ACCUM[0],
+                    "n_calls": _FR13_REPLAY_ONLY_ACCUM[1],
+                }))
+            _o.replace(_tmp, _out)
+        except Exception:
+            pass
+
+
 def _fr13_native_committer_replay(
     *, state_bank, spec_state_indices, accepted_paths, accepted_lens,
     k_ring, v_ring, a_ring, b_ring, A_log, dt_bias, num_spec_decodes,
@@ -2374,6 +2435,15 @@ def launch_tree_gdn_replay_all_layers(
                 burn_node_bank=burn_node_bank,
             )
             return
+        # DIRECTION-2 narrow measurement (default OFF): time ONLY this per-layer replay loop
+        # (the exact function the isolated micro-bench measured), separate from whatever
+        # broader span the patcher's FR13_CFWD_GPU_TIMER wraps (self.rejection_sampler, which
+        # also includes the accept/LCP/bonus sampling decision -- a different, larger quantity).
+        _rt_on = os.environ.get("FR13_REPLAY_ONLY_GPU_TIMER") == "1"
+        if _rt_on:
+            _rt_start = torch.cuda.Event(enable_timing=True)
+            _rt_stop = torch.cuda.Event(enable_timing=True)
+            _rt_start.record()
         for _L in range(int(num_layers)):
             _fr13_native_committer_replay(
                 state_bank=banks_list[_L], spec_state_indices=spec_state_indices[_L],
@@ -2383,6 +2453,11 @@ def launch_tree_gdn_replay_all_layers(
                 output_scale=output_scale, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
                 burn_node_bank=burn_node_bank, spec_cols=_spec_cols,
             )
+        if _rt_on:
+            _rt_stop.record()
+            global _FR13_REPLAY_ONLY_PENDING
+            _FR13_REPLAY_ONLY_PENDING.append((_rt_start, _rt_stop))
+            _fr13_replay_only_drain(False)
         return
     grid = (int(num_layers) * int(num_spec_decodes), num_vh, triton.cdiv(dim_v, BV))
     _tree_gdn_replay_all_layers_kernel[grid](
