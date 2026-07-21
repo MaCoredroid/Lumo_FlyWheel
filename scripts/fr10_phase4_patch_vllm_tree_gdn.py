@@ -8537,33 +8537,36 @@ def _lumo_tree_canonical_multidraft_sample(
             _fr13_runrow_init = (
                 os.environ.get("FR13_TREE_RUNROW_INIT", "1") == "1"
             )
+            # BAKED (2026-07-22): burn defaults OFF -- red-team (7-agent workflow,
+            # wf_16247424-fb2) + live SWE confirmed the burn is redundant for the
+            # served path (every served reader is col-0 under RUNROW_INIT=1). The
+            # tri-flag assert is relaxed to allow burn=0 ONLY when commit/init are
+            # BOTH still 1 (the red-team's hard requirement: redundancy holds
+            # exclusively because RUNROW_INIT=1 redirects h0 to col-0; the legacy
+            # RUNROW_INIT=0 path reads a col>=1 row and burn is load-bearing there,
+            # so burn=0 must never coexist with commit/init=0).
             _fr13_burn_node_bank = (
-                os.environ.get("FR13_APC_BURN_NODE_BANK", "1") == "1"
+                os.environ.get("FR13_APC_BURN_NODE_BANK", "0") == "1"
             )
-            if len({
-                _fr13_runrow_commit,
-                _fr13_runrow_init,
-                _fr13_burn_node_bank,
-            }) != 1:
+            if _fr13_runrow_commit != _fr13_runrow_init:
                 raise RuntimeError(
-                    "FR13 STATELESS-TREE: COMMIT_TO_RUNNING_ROW/TREE_RUNROW_INIT/"
-                    "BURN_NODE_BANK must all be set together (got commit=%r "
-                    "init=%r burn=%r)" % (
+                    "FR13 STATELESS-TREE: COMMIT_TO_RUNNING_ROW/TREE_RUNROW_INIT "
+                    "must be set together (got commit=%r init=%r)" % (
+                        _fr13_runrow_commit, _fr13_runrow_init,
+                    )
+                )
+            if (not _fr13_runrow_commit or not _fr13_runrow_init) and not _fr13_burn_node_bank:
+                raise RuntimeError(
+                    "FR13 STATELESS-TREE: burn cannot be OFF when "
+                    "COMMIT_TO_RUNNING_ROW/TREE_RUNROW_INIT=0 (the legacy non-"
+                    "stateless path reads a col>=1 row -- burn is load-bearing "
+                    "there per the red-team finding; got commit=%r init=%r "
+                    "burn=%r)" % (
                         _fr13_runrow_commit,
                         _fr13_runrow_init,
                         _fr13_burn_node_bank,
                     )
                 )
-            # FR13_BURN_REDUNDANCY_TEST (default OFF): the committer burn zeros the
-            # ephemeral tree spec rows (~8GB, ~43ms = 87% of the committer). Kernel
-            # comment asserts nothing downstream reads them (h0/snapshot read col 0;
-            # next scan writes nodes fresh) => burn should be REDUNDANT. This override
-            # turns burn OFF while keeping commit/init ON (bypasses the tri-flag assert)
-            # so the live lossless gate can PROVE redundancy before we drop the burn.
-            if os.environ.get("FR13_BURN_REDUNDANCY_TEST") == "1":
-                _fr13_burn_node_bank = False
-                print("[FR13_BURN_REDUNDANCY_TEST] burn OFF (commit/init ON) -- "
-                      "proving burn redundancy via lossless gate", flush=True)
             # FR13_PIGGYBACK replay drop (seam 5; default OFF => byte-identical):
             # when armed, the NEXT forward's extended-tree scan re-derives the
             # committed GDN state ([prev-accepted chain ++ subtree] from
