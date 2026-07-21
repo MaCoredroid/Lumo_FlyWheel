@@ -726,3 +726,15 @@ matches native committer -> seed matches non-pb -> deep verify recovers. TESTING
 (SCAN_ALIGN OFF: 3.725/3.864/4.712). Also: V0(d) chain-fold==replay gate NEVER RAN (ship rule violated
 in diagnostics). Note the flag reroutes launch_tree_gdn_replay(overflow) to native, but the CHAIN FOLD
 (<=6) is the tree kernel, unaligned = the carrier.
+
+## CONFIG-INDUCED ASYMMETRY (user "its a config drift?" 2026-07-21) — the real framing
+NO flag DRIFT between arms: bc5(pb) + pbab1/rg1(non-pb) BOTH FR13_COMMITTER_NATIVE=1 (launcher:411
+default, no variant override) + FR13_SCAN_ALIGN=0. BUT that config creates a CODE-PATH asymmetry:
+non-pb col-0 = launch_tree_gdn_replay -> REROUTED to NATIVE fused-sigmoid committer (bit-exact native);
+pb col-0/seed = CHAIN FOLD = custom tree kernel, NOT rerouted (piggyback skips the replay by design).
+=> same flag, non-pb runs NATIVE seed, pb runs CUSTOM-kernel seed. AND the piggyback was gated (V0(d))
+lossless vs the CUSTOM replay, but DEPLOYED with COMMITTER_NATIVE=1 (native) -> chain fold NEVER
+validated vs the native committer it's scored against. Config-vs-design gap = the deep-tail carrier.
+TWO TESTS: (1) SCAN_ALIGN=1 (running) = align pb chain fold TO native (deployment fix). (2) DEFINITIVE
+ISOLATION = pb vs non-pb BOTH COMMITTER_NATIVE=0 (custom everywhere) -> if pb==non-pb, the whole gap
+was the native-committer asymmetry + pb is lossless vs its design baseline.
