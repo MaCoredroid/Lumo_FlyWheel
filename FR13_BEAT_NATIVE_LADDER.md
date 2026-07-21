@@ -882,3 +882,13 @@ component breakdown exists; only wall-basis numbers. alignment_ratio~0.53 (deriv
 both tail6 tasks) flags a real denominator-unit mismatch in the canonical tool's fullstep formula
 (verify=per-request-event vs drafter/committer=per-physical-step) -- OPEN, not yet resolved. Full
 methodology + all wrong turns + corrections: FR13_DIR2_LIVE_SPEED_METHODOLOGY.md.
+
+## CORRECTION (2026-07-22, user caught it): the 4.317 comparison above was PB-CONFOUNDED
+4.317 = tail6-pb HYBRID accept (line 70), NOT clean non-pb tail6. Real clean cache-OFF reference
+(MEASURED DECOMPOSITION, eff_conc 2.04, matched -- see above): tail6 accept_per_event=4.953,
+native measured_tps_fullstep_wall=27.82 (~=derived 27.9, alignment_ratio~1.0, clean under cache-OFF).
+Corrected: burnoff_bo1's accept (4.726/4.863, cache-ON) vs 4.953 (cache-OFF) = roughly FLAT
+(-1.7% to -4.6%), not the wrongly-claimed +9.5-12.7%. Also: NO cache-ON native+GPU-timer capture
+exists anywhere in the archive (checked all candidates, all APC=0) -- the standing rule "final bar
+= tree-cache-ON vs native-cache-ON" (line 53-54) has NO matching pair yet. Needs a fresh native
+cache-ON+timers run (NOT a burn A/B) to close. Full correction: FR13_DIR2_LIVE_SPEED_METHODOLOGY.md.

@@ -112,15 +112,36 @@ differ run to run at temp 0.6) or a real regime difference between the two captu
 is understood/matched, even the wall-basis numbers (9.71 native vs 44.2-44.7 tail6— NOT
 comparable at face value, wildly different prefill mix) should not be read as a speed verdict.
 
-## Accept regression check: NOT a regression
+## Accept regression check: CORRECTED (2026-07-22, user caught the error)
 
-The ladder's historic BASIS line (same B=4 qwen-code nudge-free regime, non-pb): "tail6 today:
-... accept 4.317" (FR13_BEAT_NATIVE_LADDER.md:8). This run's bracketed accept (4.726, 4.863) is
-**+9.5% to +12.7% HIGHER** than that historic baseline — not a regression, an improvement (plain
-sampling variance across live agentic runs is the most likely explanation, not a real
-degradation). Native's accept in the same regime: 3.415 (historic) / 3.511 (freshly reduced from
-the reused nativemtp5apc_slb4 data) — internally consistent (~3% apart, both real). tail6
-burn-off's accept comfortably beats both native readings.
+**The "4.317" comparison above was WRONG — 4.317 is PB-CONFOUNDED, not clean tail6.** Ladder text
+confirms: "tail6-pb HYBRID (K=8 chain + fallback replay on accept>6 overflow... keeps accept
+4.317)" — that's the piggyback investigation number, not the plain non-pb baseline. Comparing
+burn-off (non-pb) against it was an apples-to-oranges error.
+
+**The real canonical reference** is the "MEASURED DECOMPOSITION (2026-07-21)" entry in the ladder:
+cache-OFF, `eff_conc=2.04` (nearly identical to this run's 2.03), matched denominators, same 16
+tasks: native accept_per_event=3.415 (step 158ms, derived_tps_fullstep_gpu=27.9,
+**measured_tps_fullstep_wall=27.82**, alignment_ratio≈1.0 — clean, unlike this run's 0.52); tail6
+accept_per_event=4.953 (step 282ms, committer=88ms burn-ON, derived_tps=21.1).
+
+Corrected comparison: this run's accept (4.726, 4.863; cache-ON, burn-OFF) vs that clean
+cache-OFF baseline (4.953) is **roughly flat, -1.7% to -4.6%** — not a clear improvement or
+regression. Other "clean" non-pb tail6 accept citations in the ladder span 4.9-5.7 (rg1: 4.9-5.7,
+rg2c: 5.36) — real run-to-run variance of ~15%+ even under matched config, live agentic temp-0.6.
+A single new run sitting a few percent below one historic point is not strong evidence either way
+without more samples.
+
+**Native's measured TPS (27.82) is real but cache-OFF.** Searched all existing native captures
+with GPU-timer instrumentation (fr13_native_vs_tail6, fr13_commnative_gate,
+fr13_native_tail6_decomp, fr13_commnative, fr13_commnative_ab) — every one has
+`FR13_ENABLE_APC=0`. **No cache-ON native + GPU-timer capture exists anywhere in the archive.**
+The project's own standing rule (ladder line 53-54): "Cross-pair comparisons stay
+within-cache-config; the final bar compare = tree-cache-ON vs native-cache-ON." That pairing does
+not exist yet — a genuine, confirmed gap, not an oversight. Closing it needs a fresh native run
+with `FR13_ENABLE_APC=1` + `FR13_SFWD/DFWD/CFWD_GPU_TIMER=1` on the same 16-task subset (NOT a
+burn-on/burn-off A/B — burn redundancy is separately settled; this is purely about getting
+native's own timed numbers under the cache-ON regime this project ships).
 
 ## Open items
 - alignment_ratio ~0.53 mismatch: unresolved, needs either fixing the fullstep formula's
