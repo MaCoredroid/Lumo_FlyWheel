@@ -871,3 +871,14 @@ coexists with init=0; (2) run proof with instruments OFF; (3) cross-req recycle 
 not the burn. Full verdict: output/fr13_burn_redteam_verdict.txt.
 LIVE GATE STATUS: cat9f burn-off partial healthy (3/5 resolve, accept 4.71, garble-free). tail6 relaunch HUNG
 at boot (metadata-builder init layer2 b_max=88, tail6-specific NOT burn-related) - retrying.
+
+## DIR-2 LIVE SPEED: first per-task numbers banked (2026-07-21/22, see FR13_DIR2_LIVE_SPEED_METHODOLOGY.md)
+tail6 burn-off cache-on B4 (burnoff6/burnoff_bo1, live): task12907 committer=56.80ms accept=4.726,
+task13033 committer=53.59ms accept=4.863 -- both beat historic tail6 BASIS accept 4.317 (+9.5-12.7%,
+NOT a regression). Native comparison REUSED existing data (no arm2 needed): nativemtp5apc_slb4 =
+exact same 16-task subset, cache-on, B4 -> accept_per_event=3.511 (matches historic 3.415, +-3%).
+GAP: that native capture has ZERO GPU-timer instrumentation (predates it) -> no native fullstep_gpu
+component breakdown exists; only wall-basis numbers. alignment_ratio~0.53 (derived vs measured-wall,
+both tail6 tasks) flags a real denominator-unit mismatch in the canonical tool's fullstep formula
+(verify=per-request-event vs drafter/committer=per-physical-step) -- OPEN, not yet resolved. Full
+methodology + all wrong turns + corrections: FR13_DIR2_LIVE_SPEED_METHODOLOGY.md.
