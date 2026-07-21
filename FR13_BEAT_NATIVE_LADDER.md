@@ -697,3 +697,17 @@ Enable K1 round-trip ON CHAIN STREAMS ONLY -> node-8 matches committer. Constexp
 FIX B (fallback): re-anchor deep-step subtree seed from piggyback_catchup_replay (trades committer
 savings on deep steps only, bit-exact). FIXABLE not inherent; cache-independent. Verify SCAN_ALIGN in
 code, then A/B (node-8-vs-committer + per-depth verify logits) -> apply Fix A -> deep accept -> ~5.
+
+## DEEP-TAIL = AMPLIFIED WITHIN-FLOOR DRIFT (2026-07-21, workflow + amplification physics converge)
+The deep-tail collapse is NOT a discrete carrier (all 5 refuted). It is the KNOWN ~1-ULP/node GDN
+co-residency/codegen drift (pb N_PAD=32 vs non-pb 24 = the SEED), amplified x492 over depth (systematic
+same-sign seed x exp propagator, FR13_AMPLIFICATION_PHYSICS), MARGIN-GATED onto the low-confidence
+arctic deep tail (flip only where amplified drift > small argmax margin). Head high-margin=absorbs
+(accept 1.0); arctic tail low-margin=flips (collapse). Base-col cut the ATTENTION seed (head +0.6);
+residual = the GDN co-residency seed. FIX BOUNDS: NPAD_INVARIANT no-op (pb already 32); SCAN_ALIGN
+wrong direction (bf16=more drift, chain-fold already fp32); real lever = amplification-reduction
+(fp32 deep full-attn hotspots + gate rms-clamp + residual re-anchor) BUT pinned note says it "lowers
+the SHARED floor, does NOT differentially close gaps" (amplifier shared bit-for-bit w/ native).
+=> pb accept 4.10 ALREADY BEATS native 3.415; the deep-tail gap is vs non-pb TREE (5.1), NOT the
+native bar. DECISION: bank base-col fix + pivot to committer (concrete +11% TPS win) OR pursue the
+substantial+uncertain amplification-reduction levers for the residual deep tail. Committer recommended.
