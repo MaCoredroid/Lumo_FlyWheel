@@ -671,3 +671,13 @@ pb+fix avg 4.10 BEATS native 3.415. => ACCEPT axis is FINE (beats native); keep 
 as a flag-gated keeper. THE GAP IS THE COMMITTER (task #52): pb 53.7ms -> piggyback target ~16ms via
 async-overlap => TPS ~31 (+11% vs native). Cheap first lever FR13_COMMIT_BATCH_OUTPUT=1 (byte-identical,
 kills ~B*len syncs/step) is OFF in golden -> available.
+
+## DEEP-TAIL CARRIER INVESTIGATION (user 2026-07-21: fix pb to ~5, cache-off AND cache-on)
+FIX numbers (bc5, cache-INDEPENDENT since APC restore is lossless): 14539 3.725, 14995 3.864, 14598
+4.712 (avg 4.10) vs non-pb cache-ON pbab1 5.027/5.306 -> base-col fix = +0.6, still ~1.0 SHORT of ~5.
+Head fixed (per-position pos0-4=1.0), ARCTIC DEEP TAIL still collapsed => the carrier is the DEEP-node
+VERIFY (target logits), NOT the drafts (drafter is pb-independent -- USER THEORY, confirming in code).
+5 candidate carriers under adversarial investigation (workflow wz25b202p): (1) OVERFLOW catch-up col-0
+(root_node=8 replay, deep-accept-SPECIFIC, never verified); (2) ATTN_KV_REMAP for deep accepts; (3) GDN
+scan N_PAD 32-vs-24 (0.0289 gap mechanism); (4) base-col exactness + masked-tile no-op for deep nodes;
+(5) REFUTE/confirm drafts-are-pb-independent. Synthesis -> ranked carrier + fix. NOT hand-waving GDN.
