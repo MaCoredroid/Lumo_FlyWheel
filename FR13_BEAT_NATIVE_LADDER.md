@@ -829,3 +829,16 @@ CLARIFICATION on the "10.8ms" (answering: why not ~10ms deployed / accept?): 10.
 portion in synthetic harness (incl naive python gather). Deployed committer = ring-gather(batched ~9ms) +
 graph-replay(~3-5ms GPU) + burn/ssi/host => honest ~15-30ms, MEASURED only after port. Accept is NOT measured
 yet (micro-bench = state byte-identity only); byte-identity GUARANTEES accept unchanged, live accept = gate (4).
+
+## DIR-2 PORT REVELATION: committer bottleneck is the BURN, not the fused_sigmoid dispatch (2026-07-21)
+Ported the graph committer (_fr13_native_committer_all_layers_graph, flag FR13_COMMITTER_GRAPH). Byte-identical
+to per-layer AND batched (max_diff=0.0, REAL committer fns, scripts/fr13_committer_graph_port_test.py). But
+NO end-to-end win: graph 49.8ms ~= batched 51.4ms. FR13_GRAPH_TIMER breakdown (per commit):
+  fill(gather+memset+ssi) = 0.47ms   replay(graph fused_sigmoid) = 5.75ms   burn(zero tree rows) = 43.47ms
+=> the BURN is 87% of the committer. burn = zero spec_state_indices[:B,1:spec_cols] rows in the fp32 state
+bank per layer = ~84 rows x 2MB x 48 layers ~= 8GB memory-bound zeroing (~43ms @ GB10 bandwidth). Native has
+NO burn (chain, not tree) -- this is the TREE-SPECIFIC tax. The graph-capture of fused_sigmoid is CORRECT +
+byte-identical + 5.75ms (down from ~40ms dispatch) but was aimed at the wrong cost. NEXT TARGET = the burn:
+(a) is it necessary (does the drafter overwrite tree rows before read, making it redundant)? (b) zero only
+WRITTEN rows not all spec_cols? (c) overlap with next forward? Graph committer stays as a validated building
+block (flag off) -- pairs with a burn fix to give committer ~10-15ms.

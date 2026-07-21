@@ -1434,6 +1434,155 @@ def _fr13_native_committer_all_layers_batched(
         )
 
 
+# ---- FR13_COMMITTER_GRAPH: CUDA-graph the 48-layer fused_sigmoid committer loop ----
+# Proven in scripts/fr13_committer_graph_microbench.py + fr13_committer_graph_varying.py:
+# capturing the loop at FIXED shapes (state-neutral padding a=-1e4=>decay1, k=v=b=0=>no write => state
+# EXACTLY unchanged) is BYTE-IDENTICAL to the varlen committer (max_diff=0.0) and 5.4x faster (kills the
+# ~24ms 48-launch dispatch). One graph (MAX_B x MAX_PATH) replays for every (B<=MAX_B, accept<=MAX_PATH).
+_FR13_GRAPH_COMMITTER = {}          # shape-sig -> dict(buffers..., graph)
+_FR13_GRAPH_COMMITTER_ANNOUNCED = False
+
+
+def _fr13_native_committer_all_layers_graph(
+    *, banks_list, spec_state_indices, accepted_paths, accepted_lens,
+    k_rings, v_rings, a_rings, b_rings, A_logs, dt_biases, num_layers,
+    num_spec_decodes, output_scale, use_qk_l2norm_in_kernel, burn_node_bank,
+    root_node=0, max_path=16, max_b=None,
+):
+    """FR13_COMMITTER_GRAPH (default OFF): same committed state as the batched/per-layer committer, but the
+    48 fused_sigmoid launches are captured into ONE cuda graph and replayed. Enabler = state-neutral padding
+    to FIXED (MAX_B x MAX_PATH) shapes. Burn stays eager (Stage 1). Falls back to the batched committer
+    (lossless) when accept+1 > MAX_PATH. Requires DISTINCT running rows per request (true in reality)."""
+    from vllm.model_executor.layers.fla.ops import (
+        fused_sigmoid_gating_delta_rule_update as _sg,
+    )
+    L = int(num_layers)
+    B = int(num_spec_decodes)
+    dev = k_rings.device
+    num_kh, dim_k = int(k_rings.shape[3]), int(k_rings.shape[4])
+    num_vh, dim_v = int(v_rings.shape[3]), int(v_rings.shape[4])
+    _spec_cols = int(spec_state_indices.shape[2])
+    MAX_B = int(max_b) if max_b else B
+    MAX_PATH = int(max_path)
+    MAXT = MAX_B * MAX_PATH
+    SCRATCH = int(banks_list[0].shape[0]) - 1     # reserved throwaway row for dummy segments
+
+    # ---- host layout (the single .tolist sync) ----
+    acc = accepted_lens[:B].tolist()
+    seg = [1 + int(acc[b]) for b in range(B)]
+    if max(seg) > MAX_PATH or B > MAX_B:
+        # overflow -> eager batched committer (lossless); never truncate the accepted path
+        return _fr13_native_committer_all_layers_batched(
+            banks_list=banks_list, spec_state_indices=spec_state_indices,
+            accepted_paths=accepted_paths, accepted_lens=accepted_lens,
+            k_rings=k_rings, v_rings=v_rings, a_rings=a_rings, b_rings=b_rings,
+            A_logs=A_logs, dt_biases=dt_biases, num_layers=L, num_spec_decodes=B,
+            output_scale=output_scale, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            burn_node_bank=burn_node_bank, root_node=root_node,
+        )
+
+    # ---- lazy-init persistent buffers (graph-stable addresses) ----
+    sig = (L, MAX_B, MAX_PATH, num_kh, dim_k, num_vh, dim_v, id(banks_list[0]))
+    st = _FR13_GRAPH_COMMITTER.get(sig)
+    if st is None:
+        _dt = k_rings.dtype
+        st = dict(
+            kbuf=torch.zeros(L, MAXT, num_kh, dim_k, device=dev, dtype=_dt),
+            vbuf=torch.zeros(L, MAXT, num_vh, dim_v, device=dev, dtype=_dt),
+            abuf=torch.full((L, MAXT, num_vh), -1e4, device=dev, dtype=_dt),
+            bbuf=torch.zeros(L, MAXT, num_vh, device=dev, dtype=_dt),
+            qbuf=torch.zeros(1, MAXT, num_kh, dim_k, device=dev, dtype=_dt),
+            cu=torch.tensor([i * MAX_PATH for i in range(MAX_B + 1)], device=dev, dtype=torch.int32),
+            ssi=torch.zeros(L, MAX_B, MAX_PATH, device=dev, dtype=torch.int32),
+            graph=None,
+        )
+        _FR13_GRAPH_COMMITTER[sig] = st
+    kbuf, vbuf, abuf, bbuf = st["kbuf"], st["vbuf"], st["abuf"], st["bbuf"]
+    qbuf, cu_fixed, ssi_buf = st["qbuf"], st["cu"], st["ssi"]
+
+    _tm = os.environ.get("FR13_GRAPH_TIMER") == "1"
+    if _tm:
+        _e0, _e1, _e2, _e3 = (torch.cuda.Event(enable_timing=True) for _ in range(4))
+        _e0.record()
+    # ---- fill fixed buffers: full re-neutralize (cheap memset) then overwrite real slots ----
+    abuf.fill_(-1e4); bbuf.zero_(); kbuf.zero_(); vbuf.zero_()
+    ssi_buf.fill_(SCRATCH)
+    for b in range(B):
+        _nl = seg[b]
+        nodes = torch.cat([
+            torch.full((1,), int(root_node), dtype=torch.long, device=dev),
+            accepted_paths[b, :int(acc[b])].to(torch.long),
+        ])
+        s0 = b * MAX_PATH
+        kbuf[:, s0:s0 + _nl] = k_rings[:, b, nodes]
+        vbuf[:, s0:s0 + _nl] = v_rings[:, b, nodes]
+        abuf[:, s0:s0 + _nl] = a_rings[:, b, nodes]
+        bbuf[:, s0:s0 + _nl] = b_rings[:, b, nodes]
+    # per-layer running row broadcast across all MAX_PATH cols, ALL layers at once (1 op, not L*B)
+    ssi_buf[:, :B, :] = spec_state_indices[:, :B, 0:1].to(torch.int32)
+    if _tm:
+        _e1.record()
+
+    def _loop():
+        for _L in range(L):
+            _sg(
+                A_log=A_logs[_L],
+                a=abuf[_L].reshape(1, MAXT, num_vh),
+                b=bbuf[_L].reshape(1, MAXT, num_vh),
+                dt_bias=dt_biases[_L], q=qbuf,
+                k=kbuf[_L].reshape(1, MAXT, num_kh, dim_k),
+                v=vbuf[_L].reshape(1, MAXT, num_vh, dim_v),
+                scale=output_scale, initial_state=banks_list[_L],
+                inplace_final_state=True, cu_seqlens=cu_fixed,
+                ssm_state_indices=ssi_buf[_L],
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            )
+
+    if st["graph"] is None:
+        # capture ONCE. Warmup(3x)+capture(1x) mutate the running rows 4x with THIS step's data, so save
+        # the running rows first, capture, RESTORE them, then replay once for the real (single) commit.
+        saved = []
+        for _L in range(L):
+            col0 = spec_state_indices[_L][:B, 0].to(torch.long)
+            saved.append((col0, banks_list[_L][col0].clone()))
+        _s = torch.cuda.Stream(); _s.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(_s):
+            for _ in range(3):
+                _loop()
+        torch.cuda.current_stream().wait_stream(_s)
+        gph = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(gph):
+            _loop()
+        for _L in range(L):
+            col0, val = saved[_L]
+            banks_list[_L][col0] = val
+        st["graph"] = gph
+        gph.replay()
+        global _FR13_GRAPH_COMMITTER_ANNOUNCED
+        if not _FR13_GRAPH_COMMITTER_ANNOUNCED:
+            _FR13_GRAPH_COMMITTER_ANNOUNCED = True
+            print(
+                "[FR13_COMMITTER_GRAPH ENGAGED] captured 48-layer fused_sigmoid loop "
+                "(MAX_B=" + str(MAX_B) + " MAX_PATH=" + str(MAX_PATH) + "); replaying per commit",
+                flush=True,
+            )
+    else:
+        st["graph"].replay()
+    if _tm:
+        _e2.record()
+
+    # ---- burn spec rows (eager, Stage 1). fused_sigmoid touched col0 only; burn touches cols 1: ----
+    # ALL B requests' spec rows for a layer zeroed in one scatter (48 ops, not L*B).
+    if burn_node_bank:
+        for _L in range(L):
+            rows = spec_state_indices[_L][:B, 1:_spec_cols].reshape(-1).to(torch.long)
+            banks_list[_L][rows] = 0.0
+    if _tm:
+        _e3.record(); torch.cuda.synchronize()
+        print("[FR13_GRAPH_TIMER] fill=%.2f replay=%.2f burn=%.2f ms" % (
+            _e0.elapsed_time(_e1), _e1.elapsed_time(_e2), _e2.elapsed_time(_e3)), flush=True)
+
+
 def launch_tree_gdn_replay(
     *,
     state_bank: torch.Tensor,
