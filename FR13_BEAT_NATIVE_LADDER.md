@@ -631,3 +631,23 @@ lifts decode-bracketed accept above 3.5 baseline, but not the ~5.4 full recovery
 stays low. DECIDER = decode-bracketed accept over full deep tasks (campaign closeout ~30min). bc5
 healthy (up 31min, RAM 14.5GB stable, 0 fatal, benign overflow-announce only). Do NOT claim until
 the closeout number lands + a matched flag-on/off A/B (both PARENT_GATHER=1).
+
+## FR13_PB_BASE_COL_INVARIANT MEASURED (2026-07-21) — small +, NOT a recovery. Mechanism magnitude WRONG.
+MATCHED bracketed accept (per-task vllm_metrics_pre/post delta, accept/step, IDENTICAL computation):
+  14539: collapse3(pb) 3.647 -> bc5(pb+FIX) 3.725  (+0.078)
+  14995: collapse3(pb) 3.506 -> bc5(pb+FIX) 3.864  (+0.358)
+  non-pb TARGET ~4.9-5.7. => FIX did NOT recover; closed only ~5-20% of the gap.
+Per-position confirms: bc5 head[0-4]=1.0 STABLE (the base-col fix worked AS DESIGNED on the head),
+but deep arctic tail[6-10]~0 STILL collapsed (non-pb holds ~0.6-0.8). The deep tail is where the
+accept lives, and the base-col-invariance did NOT fix it.
+=> MECHANISM CORRECTION: the -1.5 deep-tail collapse is NOT mostly "Arctic amplifies the head
+tie-tip" (fixing the head barely moved the total). It is a LARGELY SEPARATE/direct effect -- the
+DEEP-NODE verify rejecting arctic drafts under pb (drafter is pb-independent, so the deep DRAFTS are
+the same as non-pb; the deep VERIFY logits differ). Base-col-invariance canonicalizes the shallow
+head but NOT enough for the deep nodes (depth-compounded perturbation, OR a different deep carrier).
+ALSO: corrected an analysis error -- the CUMULATIVE/bracketed accept DOES distinguish collapse
+(collapse3=3.6); the noisy per-10s-window "Mean acceptance length" logs (which overweight high-accept
+moments) do NOT. Use bracketed accept/step, never eyeball the window logs.
+NEXT: re-localize the DEEP-node verify perturbation under pb (why does the deep tail reject arctic
+drafts that non-pb accepts?). The base-col fix is a small keeper (+0.08-0.36, head-canonical) but
+the main lever is elsewhere. Do NOT bake/claim the fix as the win.
