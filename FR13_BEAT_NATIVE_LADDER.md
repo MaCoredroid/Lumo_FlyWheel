@@ -681,3 +681,19 @@ VERIFY (target logits), NOT the drafts (drafter is pb-independent -- USER THEORY
 (root_node=8 replay, deep-accept-SPECIFIC, never verified); (2) ATTN_KV_REMAP for deep accepts; (3) GDN
 scan N_PAD 32-vs-24 (0.0289 gap mechanism); (4) base-col exactness + masked-tile no-op for deep nodes;
 (5) REFUTE/confirm drafts-are-pb-independent. Synthesis -> ranked carrier + fix. NOT hand-waving GDN.
+
+## DEEP-TAIL CARRIER FOUND (workflow wz25b202p, 2026-07-21): chain-fold SEED != committer col-0
+All 5 code carriers REFUTED (drafts pb-indep CONFIRMED=user theory; GDN parent-handoff one-hot exact;
+base-col bit-exact deep nodes; ATTN_KV_REMAP depth-uniform; overflow col-0 bit-correct). SURVIVOR by
+elimination: the pb chain-fold roots the CURRENT verify forward's subtree at NODE 8 (chain-fold twin,
+CHAIN_END_IDX=7, export kernel:997-1008), while non-pb roots it from _fr13_native_committer_replay
+col-0 (kernel:1258, 1.19e-7 vs fp32). Two DIFFERENT computations of the same post-accept state -> the
+subtree-root SEED differs pb-vs-nonpb -> per-node rank-1 update (_gdn_node_step:765-768) COMPOUNDS the
+seed error with DEPTH. Head (0-4) within arctic tie margin -> accept 1.0; deep (6-11) drifts past ->
+gross collapse-to-~0. Arctic decide_tail = AMPLIFIER not root. Explains head-fixed/tail-collapsed.
+FIX A (cheap): SCAN_ALIGN K1 bf16-carry round-trip (kernel:1013-1015) -- native/committer carries
+bf16-rounded state between tokens; if pb chain-fold runs fp32-carry it DISAGREES with the committer.
+Enable K1 round-trip ON CHAIN STREAMS ONLY -> node-8 matches committer. Constexpr, no deep recompile.
+FIX B (fallback): re-anchor deep-step subtree seed from piggyback_catchup_replay (trades committer
+savings on deep steps only, bit-exact). FIXABLE not inherent; cache-independent. Verify SCAN_ALIGN in
+code, then A/B (node-8-vs-committer + per-depth verify logits) -> apply Fix A -> deep accept -> ~5.
