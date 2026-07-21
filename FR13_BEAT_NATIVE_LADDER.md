@@ -800,3 +800,21 @@ k=0, v=0) leaves the GDN state EXACTLY unchanged => BYTE-IDENTICAL (max_diff=0.0
 FIXED shapes => CUDA-graph-capturable. num_accepted not needed. BUILD: (A) fixed-shape committer variant
 (state-neutral pad), (B) capture the 48-layer fused_sigmoid loop into a graph, replay per commit (kills the
 ~24ms 48-launch dispatch). Batched micro-bench floor: per-layer 56.3ms; target with graph ~<30ms.
+
+## DIRECTION-2 GRAPH-CAPTURE COMMITTER -- VALIDATED IN MICRO-BENCH (2026-07-21)
+scripts/fr13_committer_graph_microbench.py (isolated, fresh container, no server). Captures the 48-layer
+fused_sigmoid committer loop at FIXED shapes (state-neutral padding: a=-1e4=>decay1, k=v=b=0 => no write =>
+state EXACTLY unchanged) into ONE cuda graph, replays per commit.
+RESULT (distinct col0 = reality):
+  [1] varlen        vs fixed-eager  : max_diff=0.000  IDENTICAL   (padding neutral, all MAX_T in {8,12,16})
+  [2] fixed-eager   vs graph-replay : max_diff=0.000  IDENTICAL   (graph reproduces eager exactly)
+  [3] varlen        vs graph-replay : max_diff=0.000  IDENTICAL  <== the real lossless gate
+  SPEED: per-layer varlen 58.4ms -> graph replay 10.8ms  = 5.43x  (the ~24ms dispatch + per-launch overhead gone)
+HARNESS PITFALL (documented): random col0 collides => two segments write one bank row in a single
+fused_sigmoid call => CTA RACE => spurious divergence. Real state indices are DISTINCT per request; scripts
+now use torch.randperm. NOTE: 10.8ms includes fill_fixed (naive python gather); the DEPLOYED committer gather
+is the batched index_select -- real committer with graph ~= batched-gather + graph-replay.
+NEXT: port to the deployed committer (fill fixed buffers via batched gather, capture the per-layer loop,
+replay), IN-PROCESS byte-identity gate (restored state vs current committer), then the B=4 16-task SPEED gate.
+PROJECTION: committer 88ms -> ~30-40ms (gather + 10.8 graph) => tail6 21.1 -> ~26 TPS (approaching native 27.9);
+with gather also trimmed -> beats. Committer was 65% of the native gap.
