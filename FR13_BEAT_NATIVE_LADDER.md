@@ -738,3 +738,21 @@ validated vs the native committer it's scored against. Config-vs-design gap = th
 TWO TESTS: (1) SCAN_ALIGN=1 (running) = align pb chain fold TO native (deployment fix). (2) DEFINITIVE
 ISOLATION = pb vs non-pb BOTH COMMITTER_NATIVE=0 (custom everywhere) -> if pb==non-pb, the whole gap
 was the native-committer asymmetry + pb is lossless vs its design baseline.
+
+## MEASURED DECOMPOSITION (2026-07-21) — the committer fold is 65% of the gap, and it WINS
+Matched eff_conc 2.04, cache-OFF, same 16 tasks, per-span CUDA-event GPU timers.
+TPS = (accept+1) / (verify + drafter + committer)   [per stream; = derived_tps_fullstep_gpu ~= measured_wall]
+  native: 4.415 / (58 + 93 +  7)ms = 4.415/158ms = 27.9 tok/s  (== the bar; measured_wall 27.82)
+  tail6 : 5.953 / (94 +100 + 88)ms = 5.953/282ms = 21.1 tok/s
+=> native WINS 27.9 vs 21.1 (+32% full-step; the 20% verify-only figure HID the committer).
+GAP DECOMP (tail6 step +124ms vs native): committer +81ms (65%) | verify +36ms (29%) | drafter +7ms (6%).
+tail6 higher accept (5.95 vs 4.42 committed = +35% tokens) is REAL but spread over a +78% longer step => loses.
+THE LEVER (exact): fold committer 88->7ms (native inline): 5.953/(94+100+7=201ms) = 29.6 tok/s > 27.9 => WIN
+  at TODAY'S accept, no accept increase needed. Committer fold = decisively the biggest prize.
+Accept-alone is the WEAKER lever: at 282ms step, need accept ~8 to reach 27.9 (6.6 gives only 23.4).
+BLOCKER: the fold must be BIT-EXACT. pb-fold was lossy (custom kernel, deep-tail collapse). The lossless
+form = COPY the spine-leaf state the verify already computes (STATELESS-TREE #11) instead of re-replaying
+-- but that needs the tree kernel bit-exact enough to trust the leaf = the SAME amplification/bit-exactness
+wall. So the ONE lever that matters = tree-kernel bit-exactness (unlocks copy-commit AND fixes accept).
+Layout-once (committer HOST syncs) = NULL: the committer cost is GPU replay (88ms), not host syncs;
+async-scheduling already hid the host part. Confirmed by historic non-pb tail6 in-band + the decomposition.
