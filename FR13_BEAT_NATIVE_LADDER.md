@@ -790,3 +790,13 @@ layout+gathers are only ~8.7ms. The committer's real bulk = the 48 fused_sigmoid
 The REAL lever = CUDA-GRAPH CAPTURE of the 48-launch fused_sigmoid loop (~-24ms dispatch -> committer ~23ms).
 Batched kept as free lossless step. User chose: build the graph-capture. Enabler = FIXED shapes (pad path
 to max + num_accepted_tokens truncation, like native inline commit patcher:4380) so the loop is capturable.
+
+## GRAPH-CAPTURE ENABLER VALIDATED (2026-07-21) -- state-neutral padding = byte-identical
+The committer's variable T (accepted-path length) blocked CUDA-graph capture. TESTED padding schemes
+(scripts/fr13_committer_pad_schemes.py): zero-pad DIVERGES (folds into state); num_accepted_tokens does
+NOT truncate the committed state. BUT **state-neutral padding** (pad tokens: a=-1e4 => gate decay=1, b=0,
+k=0, v=0) leaves the GDN state EXACTLY unchanged => BYTE-IDENTICAL (max_diff=0.0) to the varlen committer.
+=> pad each request to fixed MAX_T (+ pad B to max_batch) with state-neutral tokens => committer runs at
+FIXED shapes => CUDA-graph-capturable. num_accepted not needed. BUILD: (A) fixed-shape committer variant
+(state-neutral pad), (B) capture the 48-layer fused_sigmoid loop into a graph, replay per commit (kills the
+~24ms 48-launch dispatch). Batched micro-bench floor: per-layer 56.3ms; target with graph ~<30ms.
