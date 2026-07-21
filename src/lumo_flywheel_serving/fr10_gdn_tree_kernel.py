@@ -1255,6 +1255,46 @@ def _fr13_prepare_committer_layout(*, accepted_paths, accepted_lens, spec_state_
     return nodes_list, cu, ssi, T, max_T
 
 
+_FR13_SG_PENDING = []
+_FR13_SG_ACCUM = [0.0, 0]  # [gpu_seconds, n_calls]
+_FR13_SG_LAST_DUMP = [0.0]
+
+
+def _fr13_sg_drain_dump():
+    """FR13_COMMITTER_SG_TIMER (diagnostic, default OFF): accumulate ONLY the
+    fused_sigmoid GPU time inside the native committer replay, via deferred cuda
+    events (no host sync). Subtract from the fr13_committer_gpu span (~88ms) to
+    split fused_sigmoid-GPU vs host gathers+dispatch-gaps -- settles whether the
+    replay is host-bound (batch/graph reducible) or fused_sigmoid-bound."""
+    import os as _o, json as _j, time as _tm
+    _p = _FR13_SG_PENDING
+    while _p:
+        _a, _b = _p[0]
+        try:
+            if not _b.query():
+                break
+        except Exception:
+            _p.pop(0)
+            continue
+        _p.pop(0)
+        try:
+            _FR13_SG_ACCUM[0] += _a.elapsed_time(_b) / 1000.0
+            _FR13_SG_ACCUM[1] += 1
+        except Exception:
+            pass
+    _out = _o.environ.get("FR13_COMMITTER_SG_TIMER_JSON")
+    if _out and (_tm.monotonic() - _FR13_SG_LAST_DUMP[0]) > 5.0:
+        _FR13_SG_LAST_DUMP[0] = _tm.monotonic()
+        try:
+            _tmp = _out + ".tmp"
+            with open(_tmp, "w") as _fh:
+                _fh.write(_j.dumps({"sg_gpu_seconds": _FR13_SG_ACCUM[0],
+                                    "n_sg": _FR13_SG_ACCUM[1]}))
+            _o.replace(_tmp, _out)
+        except Exception:
+            pass
+
+
 def _fr13_native_committer_replay(
     *, state_bank, spec_state_indices, accepted_paths, accepted_lens,
     k_ring, v_ring, a_ring, b_ring, A_log, dt_bias, num_spec_decodes,
@@ -1294,11 +1334,20 @@ def _fr13_native_committer_replay(
     v = torch.cat([v_ring[b, nodes_list[b]] for b in range(B)], 0).reshape(1, T, num_vh, dim_v).contiguous()
     aa = torch.cat([a_ring[b, nodes_list[b]] for b in range(B)], 0).reshape(1, T, num_vh).contiguous()
     bb = torch.cat([b_ring[b, nodes_list[b]] for b in range(B)], 0).reshape(1, T, num_vh).contiguous()
+    _fr13_sg_on = os.environ.get("FR13_COMMITTER_SG_TIMER") == "1"
+    if _fr13_sg_on:
+        _fr13_sg_s = torch.cuda.Event(enable_timing=True)
+        _fr13_sg_e = torch.cuda.Event(enable_timing=True)
+        _fr13_sg_s.record()
     _sg(
         A_log=A_log, a=aa, b=bb, dt_bias=dt_bias, q=q, k=k, v=v, scale=output_scale,
         initial_state=state_bank, inplace_final_state=True, cu_seqlens=cu,
         ssm_state_indices=ssi, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
     )
+    if _fr13_sg_on:
+        _fr13_sg_e.record()
+        _FR13_SG_PENDING.append((_fr13_sg_s, _fr13_sg_e))
+        _fr13_sg_drain_dump()
     if burn_node_bank:
         for b in range(B):
             rows = spec_state_indices[b, 1:spec_cols].to(torch.long)
