@@ -620,3 +620,14 @@ garble. First metrics window IDENTICAL to collapse3 baseline (mean 3.00, per-pos
 tasks 14539/14598/14995 now accumulating (~3h) vs collapse3 baseline 3.5; expect ~5=WIN.
 WATCH: host RAM dropped to 15GB post-startup (offload=1 + B=4 KV); if it dips <9GB the guard kills ->
 may need GPU_GUARD_FLOOR_MIB lower or offload tuning. Poll accept + RAM next ticks.
+
+## bc5 INTERIM per-position read (2026-07-21, UNMATCHED windows -- not conclusive)
+bc5 (FIX): head[0-4]=1.000 CONSISTENTLY (all windows) -- the head verify is stable/fully-accepted
+(mechanism as designed: base-col-invariance stops the head tie-tip). DEEP[5-10]~0.07-0.15 then 0.
+collapse3 (baseline): head VARIES, DEEP[5-10] swings 0.0<->0.75 by window.
+=> Fix STABILIZED the head to 1.0 (real, positive), but the arctic deep tail (pos 6+) is NOT
+obviously recovering. Windows are NOT time-matched -> suggestive only. Head=1.0 (~5 accepts) likely
+lifts decode-bracketed accept above 3.5 baseline, but not the ~5.4 full recovery IF the arctic tail
+stays low. DECIDER = decode-bracketed accept over full deep tasks (campaign closeout ~30min). bc5
+healthy (up 31min, RAM 14.5GB stable, 0 fatal, benign overflow-announce only). Do NOT claim until
+the closeout number lands + a matched flag-on/off A/B (both PARENT_GATHER=1).
