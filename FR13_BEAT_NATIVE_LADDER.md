@@ -854,3 +854,20 @@ tri-flag assert) -> run the LIVE lossless gate (tree burn-off vs no-spec ground 
 burn-off == no-spec => burn redundant => drop it (43ms). RISK: B>1 concurrency / APC-cache snapshot reading
 tree rows -- the gate must exercise those. This is the REAL committer lever; graph-capture is a validated
 building block that only pays off AFTER the burn is cut.
+
+## DIR-2 BURN REDUNDANCY: RED-TEAM STRUCTURAL VERDICT (2026-07-21, workflow wf_16247424-fb2, 7 agents/736k tok)
+VERDICT: burn is REDUNDANT for the DEPLOYED served path — safe to drop for the ~43ms committer win, but ONLY
+as a TRI-FLAG-GATED change, never a bare code deletion. Every served cross-step reader of the fp32 GDN bank is
+col-0: scan h0 (h0_use_accepted_column=(RUNROW_INIT!=1)=False, patch:5431-5433), committer replay h0/ssi=col0,
+APC snapshot get_temporal_copy_spec reads col0 with comment "accepted-leaf col is BURNED post-commit, must NOT
+be read" (patch:12369-12377), tree_state=None => scan writes no node cols, REPLAY_ROUTE skips linear remap.
+=> RESOLVES the "4.7 inflated?" worry: served drafts read col0 only, burn-off is byte-identical served output,
+accept UNCHANGED. The 2 "true" refuter flags were adversarial literalism: the ONLY col>=1 readers are (a)
+default-OFF diagnostics (FR13_REPLAY_BOUNDARY tap B, FR10 capture/handoff, FR12_SUBKERNEL_CAPTURE) that DO read
+stale rows if burn dropped (tree_state=None never rewrites node cols) => LIVE GATE MUST RUN WITH THOSE OFF (it
+does, confirmed absent in container), and (b) the RUNROW_INIT=0 legacy path (mutually exclusive with burn via
+tri-flag assert). RESIDUAL RISKS: (1) decoupling footgun - drop only tri-flag-gated so burn-absent never
+coexists with init=0; (2) run proof with instruments OFF; (3) cross-req recycle guarded by ZERO_MAMBA_ON_ALLOC
+not the burn. Full verdict: output/fr13_burn_redteam_verdict.txt.
+LIVE GATE STATUS: cat9f burn-off partial healthy (3/5 resolve, accept 4.71, garble-free). tail6 relaunch HUNG
+at boot (metadata-builder init layer2 b_max=88, tail6-specific NOT burn-related) - retrying.
