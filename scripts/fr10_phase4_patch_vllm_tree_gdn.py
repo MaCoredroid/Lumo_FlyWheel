@@ -8554,6 +8554,16 @@ def _lumo_tree_canonical_multidraft_sample(
                         _fr13_burn_node_bank,
                     )
                 )
+            # FR13_BURN_REDUNDANCY_TEST (default OFF): the committer burn zeros the
+            # ephemeral tree spec rows (~8GB, ~43ms = 87% of the committer). Kernel
+            # comment asserts nothing downstream reads them (h0/snapshot read col 0;
+            # next scan writes nodes fresh) => burn should be REDUNDANT. This override
+            # turns burn OFF while keeping commit/init ON (bypasses the tri-flag assert)
+            # so the live lossless gate can PROVE redundancy before we drop the burn.
+            if os.environ.get("FR13_BURN_REDUNDANCY_TEST") == "1":
+                _fr13_burn_node_bank = False
+                print("[FR13_BURN_REDUNDANCY_TEST] burn OFF (commit/init ON) -- "
+                      "proving burn redundancy via lossless gate", flush=True)
             # FR13_PIGGYBACK replay drop (seam 5; default OFF => byte-identical):
             # when armed, the NEXT forward's extended-tree scan re-derives the
             # committed GDN state ([prev-accepted chain ++ subtree] from

@@ -842,3 +842,15 @@ byte-identical + 5.75ms (down from ~40ms dispatch) but was aimed at the wrong co
 (a) is it necessary (does the drafter overwrite tree rows before read, making it redundant)? (b) zero only
 WRITTEN rows not all spec_cols? (c) overlap with next forward? Graph committer stays as a validated building
 block (flag off) -- pairs with a burn fix to give committer ~10-15ms.
+
+## DIR-2 REFRAME: the committer BURN (43ms=87%) is likely REDUNDANT (2026-07-21)
+Tree GDN kernel burn comment (fr10_gdn_tree_kernel.py:1210-1213): "Zero the ephemeral spec cols 1..num_spec
+(col 0 preserved). Nothing downstream reads them post-fix (h0 + snapshot both read col 0; the next step's
+scan writes its own nodes fresh) => tree keeps zero lifespan." => the burn is a DEFENSIVE cleanliness op, not
+load-bearing: h0/snapshot read col0, next scan overwrites node rows fresh. IF true, DROPPING the burn is a
+STANDALONE ~43ms committer win (no graph needed) + pairs with graph -> committer ~10-15ms. Must VERIFY (not
+trust the comment): added FR13_BURN_REDUNDANCY_TEST=1 (patcher, turns burn OFF, keeps commit/init ON, bypasses
+tri-flag assert) -> run the LIVE lossless gate (tree burn-off vs no-spec ground truth) same-boot; if tree
+burn-off == no-spec => burn redundant => drop it (43ms). RISK: B>1 concurrency / APC-cache snapshot reading
+tree rows -- the gate must exercise those. This is the REAL committer lever; graph-capture is a validated
+building block that only pays off AFTER the burn is cut.
