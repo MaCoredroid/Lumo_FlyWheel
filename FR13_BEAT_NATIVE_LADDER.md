@@ -711,3 +711,18 @@ the SHARED floor, does NOT differentially close gaps" (amplifier shared bit-for-
 => pb accept 4.10 ALREADY BEATS native 3.415; the deep-tail gap is vs non-pb TREE (5.1), NOT the
 native bar. DECISION: bank base-col fix + pivot to committer (concrete +11% TPS win) OR pursue the
 substantial+uncertain amplification-reduction levers for the residual deep tail. Committer recommended.
+
+## DEEP-TAIL CARRIER = chain-fold(custom kernel) vs native-committer SEED (2026-07-21, user redirect cracked it)
+User: "without pb we also have gdn scan" -> GDN scan is COMMON, not the differentiator. The pb-specific
+op is the CHAIN FOLD. FINDING: deployed FR13_COMMITTER_NATIVE=1 (launcher:411 default) => non-pb col-0
+= _fr13_native_committer_replay = NATIVE fused_sigmoid_gating (kernel:1258, "bit-exact to no-spec native"
+= TRUE state). But pb chain-fold seed (accept<=6) = the CUSTOM tree-GDN kernel (_gdn_node_step, PIGGYBACK
+_EXPORT), SCAN_ALIGN OFF = NOT native-aligned. => pb seed computed by a DIFFERENT kernel than non-pb's
+native committer -> the custom-kernel ~1-ULP/node drift-vs-native is the SEED, amplified into arctic
+collapse. EXONERATES my "both same SCAN_ALIGN" dismissal (non-pb committer = NATIVE kernel, inherently
+aligned; pb chain-fold = SCAN_ALIGN-OFF tree kernel). => SYNTHESIS Fix A was RIGHT. FIX = FR13_SCAN_ALIGN=1
+(align tree kernel chain-fold to native SASS: l2norm div-by-sqrt + beta bf16 round-trip) -> chain-fold
+matches native committer -> seed matches non-pb -> deep verify recovers. TESTING on deep tasks vs bc5
+(SCAN_ALIGN OFF: 3.725/3.864/4.712). Also: V0(d) chain-fold==replay gate NEVER RAN (ship rule violated
+in diagnostics). Note the flag reroutes launch_tree_gdn_replay(overflow) to native, but the CHAIN FOLD
+(<=6) is the tree kernel, unaligned = the carrier.
