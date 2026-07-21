@@ -599,3 +599,13 @@ constexpr silently changed by the permute/remap path (H0_USE_ACCEPTED_COLUMN / C
 num_warps), causing a Triton cache-miss + slow make_ttgir (nested static_range O(N_SPAN^2)=~500 unroll
 at N_PAD=32 -> huge IR). NEXT: find which GDN constexpr differs with the flag on vs off (compare the
 launch kwargs), decouple it. Flag default-OFF so nothing shipped. TEMP: launcher cap-add (revert).
+
+## CORRECTION: the "hang" was the INTRINSIC ~10-min GDN compile (2026-07-21) — flag likely FINE
+collapse3 (NO-FLAG tail6_pb) has a 9.5-MIN silent gap: conv-emul 15:56:47 -> next log 16:06:14
+(GDN O(N^2) make_ttgir compile at N_PAD=32, ~496-iter unroll, Triton cache ephemeral per-container).
+So the make_ttgir py-spy stack is NORMAL first-boot compilation, NOT a hang. I killed bc1/bc2/bc3
+prematurely (5-9 min in, just short of the ~10-min compile). My flag ENGAGES correctly (exact pi both
+seams) and is very likely FINE -- just needs patience through the compile. Re-boot bc4 clean (graph,
+PARENT_GATHER=0 to match collapse3 baseline) and WAIT the full ~12 min compile -> boot -> accept.
+(FR13_PARENT_GATHER=1 = validated byte-identical O(N) opt would make boots fast; keep for iteration
+if needed, but use =0 for the clean accept comparison first.)
