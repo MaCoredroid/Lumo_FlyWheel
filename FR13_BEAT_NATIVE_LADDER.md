@@ -818,3 +818,14 @@ NEXT: port to the deployed committer (fill fixed buffers via batched gather, cap
 replay), IN-PROCESS byte-identity gate (restored state vs current committer), then the B=4 16-task SPEED gate.
 PROJECTION: committer 88ms -> ~30-40ms (gather + 10.8 graph) => tail6 21.1 -> ~26 TPS (approaching native 27.9);
 with gather also trimmed -> beats. Committer was 65% of the native gap.
+
+## DIR-2 GATE (2) PASS: one graph, all (B,T) combos byte-identical (2026-07-21)
+scripts/fr13_committer_graph_varying.py: capture ONE graph (MAX_B=4 x MAX_PATH=12), replay across varying
+accept-lengths (1..12) and varying active-batch B (1/2/3/4, rest dummy-neutral -> SCRATCH row). ALL max_diff=0.0.
+=> R-B (stale pad on T-shrink) resolved by cheap full re-neutralize (fill/zero memset before overwriting real
+slots); R-C (batch pad to MAX_B with dummy-neutral segments) resolved. Graph is shape-invariant to (B,T) since
+it always processes MAX_B*MAX_PATH tokens. Port is correctness-safe.
+CLARIFICATION on the "10.8ms" (answering: why not ~10ms deployed / accept?): 10.8ms is the fused_sigmoid LOOP
+portion in synthetic harness (incl naive python gather). Deployed committer = ring-gather(batched ~9ms) +
+graph-replay(~3-5ms GPU) + burn/ssi/host => honest ~15-30ms, MEASURED only after port. Accept is NOT measured
+yet (micro-bench = state byte-identity only); byte-identity GUARANTEES accept unchanged, live accept = gate (4).
