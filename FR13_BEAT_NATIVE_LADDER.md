@@ -770,3 +770,14 @@ a DIFFERENT kernel fused_recurrent_gated_delta_rule_packed_decode -> enabling it
 COMMITTER (keep the replay, make it faster -- user): sg-split profile FR13_COMMITTER_SG_TIMER measures
 fused_sigmoid-GPU vs host gathers+dispatch; if host-bound => batch the 192/commit torch.cat gathers +
 graph-capture the 48-layer loop (lossless, kernel math untouched).
+
+## COMMITTER SG-SPLIT MEASURED (2026-07-21) -- HOST-BOUND, losslessly ~5x reducible => WINS
+FR13_COMMITTER_SG_TIMER on tail6 non-pb COMMITTER_NATIVE=1: fused_sigmoid = 0.303ms/layer x48 = 14.5ms/
+commit (n_sg=12816). committer span ~88ms. => only ~15ms is GPU compute; ~73ms is HOST (192 torch.cat
+gathers/commit + 48 eager fused_sigmoid launches + per-layer q=zeros alloc + burn). NOT occupancy (that
+was the CUSTOM tree replay), NOT fused_sigmoid. Layout-once was null b/c it hit the flag-syncs not the
+gathers/launches. FIX (LOSSLESS, math untouched): (1) batch the 192 gathers over the stacked rings
+(FR13_EAGER_PACK_STACKS) -> ~4/commit; (2) fixed-shape gather (index_select padded) + GRAPH-CAPTURE the
+48-layer loop -> one graph replay, kills dispatch; (3) reuse q=zeros. Target 88->~15-20ms.
+WIN MATH: tail6 5.953/(94+100+15=209ms)=28.5 > native 27.9 at TODAY's accept, replay INTACT. Drafter
+(100ms) also host-bound (#28) -> graph-capture (#50) adds margin. Committer host-overhead kill = the win.
