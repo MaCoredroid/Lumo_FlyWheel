@@ -587,3 +587,15 @@ Other candidates: causal=False + pb tree_bias (larger tree_n=30 vs cat8), or a s
 the pb committer under the permute. No py-spy/gdb caps in the default container.
 NEXT: relaunch bcinv with PROFILE_PTRACE_CAP=1 (launcher 582 conditional --cap-add=SYS_PTRACE) -> py-spy
 dump on the hang -> exact spinning frame -> targeted fix. Flag stays default-OFF so nothing shipped.
+
+## FR13_PB_BASE_COL_INVARIANT: HANG LOCALIZED = Triton make_ttgir on _tree_gdn_kernel (2026-07-21)
+py-spy (bc3, eager, --cap-add SYS_PTRACE): MainThread stuck in triton make_ttgir (compiler.py:316)
+<- _launch (fr10_gdn_tree_kernel:2384) <- launch_tree_gdn_prepared:2442 <- gdn_attention_core <-
+_dummy_run <- profile_cudagraph_memory. Stuck 5+ min, GPU idle, both graph(bc1/bc2) + eager(bc3) hang.
+DECISIVE: collapse3 (no-flag tail6_pb, SAME kernel) compiled it FAST -> cudagraph capture in ~sec
+(15:56:47). So MY FLAG triggers a pathological Triton (re)compile of the GDN kernel -- an UNINTENDED
+coupling (my edits are attention-only: slot-reorder/bias/causal/remap-dstpi). Suspect: a GDN launch
+constexpr silently changed by the permute/remap path (H0_USE_ACCEPTED_COLUMN / CHAIN_END_IDX / N_* /
+num_warps), causing a Triton cache-miss + slow make_ttgir (nested static_range O(N_SPAN^2)=~500 unroll
+at N_PAD=32 -> huge IR). NEXT: find which GDN constexpr differs with the flag on vs off (compare the
+launch kwargs), decouple it. Flag default-OFF so nothing shipped. TEMP: launcher cap-add (revert).
