@@ -8733,7 +8733,8 @@ def _lumo_tree_canonical_multidraft_sample(
                     _lumo_tree_commit_gdn, '_FR13_EAGER_PACK_STACKS', None
                 )
                 _fr13_sbr_active = (
-                    __import__('os').environ.get('FR13_SAMPLED_REPLAY_BATCHED', '0') == '1'
+                    (__import__('os').environ.get('FR13_SAMPLED_REPLAY_BATCHED', '0') == '1'
+                     or __import__('os').environ.get('FR13_COMMITTER_NATIVE_BATCHED', '0') == '1')
                     and _fr13_sbr_stacks is not None
                     and int(_fr13_sbr_stacks.get('num_layers', 0)) > 0
                     and _fr13_replay_rows > 0
