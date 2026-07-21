@@ -8942,12 +8942,49 @@ def _lumo_tree_canonical_multidraft_sample(
                         _fr13_ms_je = torch.cuda.Event()
                         _fr13_ms_je.record(_fr13_ms_s)
                         _fr13_ms_default.wait_event(_fr13_ms_je)
-                for _fr13_prefix in (
+                _fr13_lo_prefixes = (
                     [] if (
                         _fr13_sbr_active or _fr13_ms_on or _fr13_pb_drop_replay
                     )
                     else sorted(_fr13_replay_layers)
-                ):
+                )
+                # FR13_COMMITTER_LAYOUT_ONCE (default OFF): each loop iteration validates
+                # its layer's staging flags via .item() = 2 blocking D2H syncs/layer
+                # (~2*(L-1) redundant host stalls). When ON, batch-read ALL layers' flags
+                # in ONE .tolist() up front and validate from the host list -- identical
+                # values, identical raises, only the sync count changes. The per-layer
+                # replay below is untouched, so the committed GDN state is bit-identical.
+                _fr13_lo_on = __import__('os').environ.get(
+                    'FR13_COMMITTER_LAYOUT_ONCE', '0'
+                ) == '1'
+                _fr13_lo_flags_host = None
+                if _fr13_lo_on and _fr13_lo_prefixes:
+                    if any(
+                        getattr(_fr13_replay_layers[_p], '_fr13_replay_flags', None)
+                        is None
+                        or getattr(
+                            _fr13_replay_layers[_p], '_fr13_replay_ssm_state', None
+                        ) is None
+                        for _p in _fr13_lo_prefixes
+                    ):
+                        raise RuntimeError(
+                            'FR13_REPLAY_ROUTE: stale or missing scan-time staging '
+                            '(layout-once precheck)'
+                        )
+                    _fr13_lo_flags_host = torch.stack([
+                        _fr13_replay_layers[_p]._fr13_replay_flags[:2]
+                        for _p in _fr13_lo_prefixes
+                    ]).to('cpu').tolist()
+                    if not getattr(
+                        _lumo_tree_commit_gdn, '_FR13_LO_ANNOUNCED', False
+                    ):
+                        __import__('sys').stderr.write(
+                            '[FR13_COMMITTER_LAYOUT_ONCE ENGAGED] batched '
+                            + str(len(_fr13_lo_prefixes))
+                            + '-layer flag validation (1 D2H vs 2/layer)\n'
+                        )
+                        _lumo_tree_commit_gdn._FR13_LO_ANNOUNCED = True
+                for _fr13_i, _fr13_prefix in enumerate(_fr13_lo_prefixes):
                     _fr13_layer = _fr13_replay_layers[_fr13_prefix]
                     _fr13_flags = getattr(
                         _fr13_layer, '_fr13_replay_flags', None
@@ -8955,23 +8992,42 @@ def _lumo_tree_canonical_multidraft_sample(
                     _fr13_ssm_bank = getattr(
                         _fr13_layer, '_fr13_replay_ssm_state', None
                     )
-                    if (
-                        _fr13_flags is None
-                        or _fr13_ssm_bank is None
-                        or int(_fr13_flags[0].item()) != 1
-                    ):
-                        raise RuntimeError(
-                            'FR13_REPLAY_ROUTE: stale or missing scan-time '
-                            'staging for layer ' + str(_fr13_prefix)
-                        )
-                    if int(_fr13_flags[1].item()) != _fr13_replay_rows:
-                        raise RuntimeError(
-                            'FR13_REPLAY_ROUTE: committer rows '
-                            + str(_fr13_replay_rows)
-                            + ' != staged spec decodes '
-                            + str(int(_fr13_flags[1].item()))
-                            + ' for layer ' + str(_fr13_prefix)
-                        )
+                    if _fr13_lo_on:
+                        if (
+                            _fr13_flags is None
+                            or _fr13_ssm_bank is None
+                            or int(_fr13_lo_flags_host[_fr13_i][0]) != 1
+                        ):
+                            raise RuntimeError(
+                                'FR13_REPLAY_ROUTE: stale or missing scan-time '
+                                'staging for layer ' + str(_fr13_prefix)
+                            )
+                        if int(_fr13_lo_flags_host[_fr13_i][1]) != _fr13_replay_rows:
+                            raise RuntimeError(
+                                'FR13_REPLAY_ROUTE: committer rows '
+                                + str(_fr13_replay_rows)
+                                + ' != staged spec decodes '
+                                + str(int(_fr13_lo_flags_host[_fr13_i][1]))
+                                + ' for layer ' + str(_fr13_prefix)
+                            )
+                    else:
+                        if (
+                            _fr13_flags is None
+                            or _fr13_ssm_bank is None
+                            or int(_fr13_flags[0].item()) != 1
+                        ):
+                            raise RuntimeError(
+                                'FR13_REPLAY_ROUTE: stale or missing scan-time '
+                                'staging for layer ' + str(_fr13_prefix)
+                            )
+                        if int(_fr13_flags[1].item()) != _fr13_replay_rows:
+                            raise RuntimeError(
+                                'FR13_REPLAY_ROUTE: committer rows '
+                                + str(_fr13_replay_rows)
+                                + ' != staged spec decodes '
+                                + str(int(_fr13_flags[1].item()))
+                                + ' for layer ' + str(_fr13_prefix)
+                            )
                     _fr13_bnd_pre = None
                     _fr13_bnd_layer_on = (
                         _fr13_bnd_on
