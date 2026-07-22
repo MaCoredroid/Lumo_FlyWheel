@@ -223,24 +223,7 @@ case "$KIND" in
   t55555)    LAUNCHER=forked; TREEARG="$T55555_TREE";   EXPECT_RATIO=25; declare -a XFLAGS=() ;;
   cat55222)  LAUNCHER=forked; TREEARG="$CAT55222_TREE";  EXPECT_RATIO=16; declare -a XFLAGS=() ;;
   cat55221)  LAUNCHER=forked; TREEARG="$CAT55221_TREE";  EXPECT_RATIO=15; declare -a XFLAGS=() ;;
-  # FR13_PIGGYBACK cat9_pb: extended cat9 = 8-slot prev-accepted CHAIN ((0,)^1..(0,)^8; (0,)^8 =
-  # committed-leaf / re-rooted-subtree root = the state-export node) + re-rooted cat9 subtree
-  # ((0,)^8+p). 17 choices -> launcher auto-derives num_speculative_tokens=17 (launcher:207-214),
-  # 18 rows/step, n_pad=32 => REQUIRES BV=8 (register wall, launch_tree_gdn_prepared raises without
-  # it). EXPECT_RATIO=17 = the PACKED draft width (8 chain + 9 MTP-drafted), same node-count
-  # semantics as tail6's 21. Deliberately NO FR13_TAIL_MODE / FR13_DRAFT_SOURCE: the chain is
-  # filled by the dedicated cat9_pb drafter branch from the committer-published accept buffers,
-  # NOT the Arctic tail packer (tail would MTP/Arctic-fill the deep slots = wrong content).
-  # cat9f = base cat9 on the FORKED launcher (same launcher/flags as cat9_pb, piggyback OFF):
-  # the same-session baseline for the V2 mechanical committer-CFWD comparison (the LOCKED-launcher
-  # `cat9` kind bakes golden flags => not a valid A/B baseline for forked-launcher arms).
   cat9f)     LAUNCHER=forked; TREEARG="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,1),(0,0,1),(0,0,0,1),(0,0,0,0,1)]"; EXPECT_RATIO=9;  declare -a XFLAGS=() ;;
-  cat9_pb)   LAUNCHER=forked; TREEARG="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,0,1)]"; EXPECT_RATIO=17; declare -a XFLAGS=(FR13_PIGGYBACK=1 FR13_ATTN_KV_REMAP=1 FR13_TREE_GDN_GEOM_OVERRIDE=BV=8) ;;
-  # tail6_pb = PIGGYBACK PORT to the deliverable shape (user 2026-07-19): extended tree =
-  # chain (0,)^1..(0,)^8 + tail6's 21 nodes re-rooted under (0,)^8 -> 29 packed cols
-  # (BV=8 h_cache @N_PAD->32 = 128KB/CTA = the proven cat9_pb budget). FR13_PB_BASE_COLS=21
-  # parameterizes every geometry guard (sidecar-published by the launcher).
-  tail6_pb)  LAUNCHER=forked; TREEARG="[(0,),(0,0),(0,0,0),(0,0,0,0),(0,0,0,0,0),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,1),(0,0,0,0,0,0,0,0,0,0,0,0,2),(0,0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)]"; EXPECT_RATIO=29; declare -a XFLAGS=(FR13_PIGGYBACK=1 FR13_ATTN_KV_REMAP=1 FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_PB_BASE_COLS=21) ;;
   *) echo "FAIL: unknown KIND=$KIND"; exit 2 ;;
 esac
 # NATIVE_DECODE: arms whose DECODE is the native/linear MTP path (no tree), so the
@@ -498,28 +481,6 @@ assert abs(ratio - expect) < 1e-9, \
 print(f"spec engagement OK: drafts delta={d} draft_tokens/drafts={ratio}")
 PY
 (( $? == 0 )) || { echo "FAIL: spec engagement raw-counter assert"; exit 4; }
-
-# ---- cat9_pb piggyback engagement needle (class 9): ratio==17 is NECESSARY but NOT sufficient --
-# the generic WIDE drafter would ALSO serve 17 cols (12 MTP spine forwards, chain slots = deep MTP
-# speculation) and pass the ratio assert vacuously. Require the dedicated branch's engage line.
-if [[ "$KIND" == "cat9_pb" ]]; then
-  # RETRY WINDOW (dbg3 lesson): the needles print during/after the probe's commit
-  # steps; docker-logs flushing + slow modes (CUDA_LAUNCH_BLOCKING=1) race an
-  # immediate grep. Poll up to 60s for each needle before declaring FAIL.
-  _fr13_pb_needle_wait() {  # $1 = fixed-string needle, $2 = fail message
-    for _try in $(seq 1 20); do
-      if docker logs "$CONTAINER" 2>&1 | grep -m1 -F -- "$1" >/dev/null 2>&1; then
-        return 0
-      fi
-      sleep 3
-    done
-    echo "$2"; return 1
-  }
-  _fr13_pb_needle_wait "FR13_PIGGYBACK extended drafter engaged" \
-    "FAIL: cat9_pb piggyback drafter branch did NOT engage (wide-drafter fallback = chain slots are MTP junk)" || exit 4
-  _fr13_pb_needle_wait "[FR13_PIGGYBACK] committer GDN replay DROPPED" \
-    "FAIL: cat9_pb committer GDN replay-drop needle absent (seam-5 drop did not engage)" || exit 4
-fi
 
 # ---- FR13 APC worker-env engagement assert (only for APC arms) ----
 # The APC fixes read os.environ.get(FR13_APC_*) INSIDE the EngineCore worker (pid 176).
