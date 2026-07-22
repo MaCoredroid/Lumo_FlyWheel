@@ -9,7 +9,7 @@
 #          bit-exact -- SPEED-ONLY diagnostic, do NOT deploy). Measures the batched ceiling.
 # arm1 - arm2 TPS delta = the committer eager-dispatch tax. Big => inline-fold worth building. Also the
 # full committer CFWD decomposition (CFWD/COMMIT_FULL/MULTIDRAFT GPU timers) both arms -> the real magnitude.
-# BATCHED gates: needs FR13_APC_SNAP_FIX!=1 + no APC-publish (cache-OFF satisfies) + stacks present.
+# BATCHED gates: needs no APC-publish (cache-OFF satisfies) + stacks present.
 # Both non-pb tail6 (the deployed geometry), cache-OFF, PARENT_GATHER=1, --async-scheduling. Timers read
 # early (few k drafts) => small subset (subset_collapse3, 3 tasks) suffices. B4.
 # Launch (AFTER rr1 frees GPU): RUNROOT=output/fr13_commdiag TAG=cd1 SUBSET=subset_collapse3.json WALL=0
@@ -20,7 +20,6 @@ unset FR13_PREWARM_TRIE
 export FR13_SERVE_BATCH_FLAGS="--async-scheduling"
 export FR13_PARENT_GATHER=1
 export FR13_ENABLE_APC=0
-export FR13_APC_SNAP_FIX=0
 export FR13_CFWD_GPU_TIMER=1
 export FR13_COMMIT_FULL_GPU_TIMER=1
 export FR13_MULTIDRAFT_GPU_TIMER=1
