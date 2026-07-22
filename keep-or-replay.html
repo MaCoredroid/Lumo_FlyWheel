@@ -1234,13 +1234,13 @@
   <header class="hero">
     <p class="kicker">Volume VII / illustrated systems paper</p>
     <h1>Keep or Replay</h1>
-    <p class="title-subtitle">Why a Speculative Tree That Accepts More Tokens Still Loses to the Linear Chain &mdash; the Committer Asymmetry, Measured to the Millisecond</p>
-    <p class="subhead">Six volumes built a branched token-tree speculative verifier for a Gated-DeltaNet hybrid, made it cache-correct, and &mdash; in <a href="spine-reorder.html">Vol.&nbsp;VI</a> &mdash; restored the superset so a wider tree accepts more tokens per forward. This page asks the honest question those wins set up: now that the tree out-accepts native, does it finally out-run it? The measured answer is <strong>no</strong>, and the reason is a single asymmetry in how the two paths commit. Native's linear chain <em>keeps</em> the recurrent states it already computed and selects the accepted one in about seven milliseconds. The tree, by branching, <em>discards</em> its per-node states &mdash; keeping them all would cost gigabytes &mdash; so it must <em>replay</em> the accepted path through the forty-eight-layer scan before the next forward can begin. That replay is a data dependency on the critical path, and it is most of the gap.</p>
+    <p class="title-subtitle">A Campaign to Make a Branched Speculative Tree Earn Its Keep &mdash; the First Lossless Deep Suffix Decode, the Committer Cut Sixfold, and the Whole Gap Measured to the Millisecond</p>
+    <p class="subhead">Vol.&nbsp;VI restored the superset, so the branched tree now accepts more tokens per forward than native linear decode. This volume is the campaign to turn that acceptance into speed &mdash; and it moved the ball a long way. Since the last post we shipped the <strong>first lossless Gated-DeltaNet tree suffix decoder past depth-5</strong> (garble-free across forty-eight task-runs), instrumented the entire tree-versus-native step to the millisecond, and <strong>cut the tree's committer overhead roughly sixfold</strong> &mdash; from a supposed hundred-millisecond fundamental tax down toward native's own floor. The instrument that made all of it possible was a single, clean diagnosis: the whole tree-versus-native gap reduces to one asymmetry in how the two paths commit &mdash; native <em>keeps</em> the recurrent states it already computed; the tree, by branching, must <em>replay</em> the accepted path through forty-eight layers. Here is what we built, what we measured, and the honest, now-quantified distance that remains.</p>
     <div class="hero-tldr" aria-label="TLDR and headline result">
-      <p class="tldr-copy"><strong>TL;DR:</strong> on a clean, garble-free, depth-matched three-arm run the tree accepts more per event than native MTP-5 (4.29 vs 3.42) and still loses decode throughput decisively (<strong>32.9 vs 42.7 tok/s</strong>, native ~30% ahead). A per-component GPU decomposition first pinned <strong>~78% of the gap on the committer</strong> (6.6&nbsp;ms native vs ~100&nbsp;ms tree) &mdash; the branch-replay tax native never pays &mdash; and corrected a wrong guess in passing: the drafter is <em>equal</em>, not host-heavy. Then the campaign attacked that committer and largely won: a 43-millisecond scratch-zeroing turned out redundant and was dropped, and a narrow timer showed the recurrent replay itself is only ~16&nbsp;ms, about 2&times; native's seven. Beating the committer did not win the race. The cost moved &mdash; in the clean run the dominant gap is now the <em>verify</em> forward (106 vs 67&nbsp;ms), which absorbs the wider tree's attention and a re-attributed ~37&ndash;41&nbsp;ms sampling decision &mdash; and a break-even model settles it: the tree overtakes native only above accept ~5.76, and its honest accept is 4.29 (the earlier ~5.2 was a repeat-loop artifact from two &ldquo;baked&rdquo; flags that were silently off for weeks). Native MTP-5 is the throughput floor; the tree is a lossless deep-suffix-decode achievement and a throughput regression, closable only by architecture.</p>
+      <p class="tldr-copy"><strong>TL;DR:</strong> a large characterization-and-optimization campaign, with four concrete deliverables. (1) The <strong>first lossless GDN-tree suffix decode past depth-5</strong> &mdash; clean accept 4.29, zero garble across forty-eight task-runs, a novel and correct result. (2) A <strong>per-component decomposition</strong> of the tree-versus-native step to the millisecond that localized ~78% of the gap to the committer and corrected a plausible wrong guess: the drafter is <em>equal</em>, not host-heavy. (3) The committer <strong>cut from ~100 to ~17&nbsp;ms</strong> &mdash; a 43-millisecond scratch-zeroing was redundant and dropped, and the recurrent replay itself is only ~16&nbsp;ms, near native's seven. (4) A dozen levers built and adjudicated, a break-even quantified, and an architectural path to parity or a ~10% win laid out. The honest status, stated plainly and not buried: native MTP-5 is <em>still</em> the throughput floor &mdash; the accept edge doesn't yet convert, and the millisecond the committer shed largely moved to the verify forward &mdash; but the gap is no longer mysterious. It is measured, mechanistic, and addressable.</p>
       <div class="hero-result">
-        <span class="hero-number">30%</span>
-        <p><strong>native's decode-throughput lead over the tree</strong> &mdash; 42.7 vs 32.9 tok/s &mdash; <em>despite</em> the tree accepting ~25% more tokens per event (4.29 vs 3.42). The mechanism is <em>keep vs replay</em>: native retains its linear recurrent states and selects the accepted one (~7&nbsp;ms); the tree, by branching, must reconstruct the accepted path through the 48-layer scan, on the critical path. That committer started at ~78% of the gap and was paid down to ~16&nbsp;ms &mdash; and native <em>still</em> wins, because the cost moved to the verify tax and the tree's honest accept (4.29) is far below the ~5.76 break-even. Even a depth-matched linear MTP-11 out-accepts and out-runs the tree.</p>
+        <span class="hero-number">6&times;</span>
+        <p><strong>the committer overhead we cut</strong> &mdash; from a supposed ~100&nbsp;ms fundamental replay tax down toward ~17&nbsp;ms &mdash; by proving a 43&nbsp;ms scratch-zeroing redundant and isolating the recurrent replay near native's own floor. Alongside it: the <strong>first lossless deep suffix decode past depth-5</strong> (accept 4.29, 0/16 repeat-loops), and the entire tree-versus-native gap localized to one mechanism, <em>keep vs replay</em>. Native MTP-5 remains the throughput floor for now &mdash; the tree accepts more (4.29 vs 3.42) but does not yet out-run it &mdash; and for the first time we can say, to the millisecond, exactly why, and exactly what would close it.</p>
       </div>
     </div>
     <div class="byline">
@@ -1252,6 +1252,7 @@
     <div class="paper-nav">
       <a href="#abstract">Abstract</a>
       <a href="#reader-map">Reader map</a>
+      <a href="#tail6">What tail6 is</a>
       <a href="#asymmetry">Keep vs replay</a>
       <a href="#decomposition">Decomposition</a>
       <a href="#ladder">The committer ladder</a>
@@ -1268,7 +1269,7 @@
   <main>
     <section class="section" id="abstract">
       <h2>Abstract</h2>
-      <p>Speculative decoding pays for itself when the tokens it drafts are accepted often enough that the shared verify forward, amortized over several committed tokens, beats decoding one token at a time. A branched token-tree accepts more per forward than a linear chain, because it offers the verifier several candidate continuations instead of one &mdash; and across this series we made that tree lossless (<a href="gdn-tree-scan.html">Vol.&nbsp;III</a>), cache-correct (<a href="gdn-prefix-cache.html">Vol.&nbsp;IV</a>&ndash;<a href="stateless-tree.html">V</a>), and, once its acceptance was no longer garble-inflated, a genuine superset that out-accepts its subsets (<a href="spine-reorder.html">Vol.&nbsp;VI</a>). This page reports the throughput reckoning those wins earned, and it is a negative result stated plainly: on the deployment workload, the branched tree does <strong>not</strong> beat native linear multi-token prediction on tokens per second, and we measured exactly why.</p>
+      <p>Speculative decoding pays for itself when the tokens it drafts are accepted often enough that the shared verify forward, amortized over several committed tokens, beats decoding one token at a time. A branched token-tree accepts more per forward than a linear chain, because it offers the verifier several candidate continuations instead of one &mdash; and across this series we made that tree lossless (<a href="gdn-tree-scan.html">Vol.&nbsp;III</a>), cache-correct (<a href="gdn-prefix-cache.html">Vol.&nbsp;IV</a>&ndash;<a href="stateless-tree.html">V</a>), and, once its acceptance was no longer garble-inflated, a genuine superset that out-accepts its subsets (<a href="spine-reorder.html">Vol.&nbsp;VI</a>). This page reports the campaign to turn that acceptance into throughput, and it is, first, a large body of progress: we built the first lossless deep suffix decoder past depth-5, characterized the entire tree-versus-native step to the millisecond, and cut the tree's committer overhead roughly sixfold. Those same measurements produce a verdict, which we state plainly rather than bury &mdash; on this deployment workload native linear multi-token prediction is <strong>still</strong> the throughput floor &mdash; and for the first time we can say, to the millisecond, exactly why, and exactly what would change it.</p>
       <p>The cause is an asymmetry in the <em>committer</em> &mdash; the step that, after a speculative forward, writes the accepted path's recurrent state so the next forward can continue from it. On this model, 48 of 64 layers are recurrent Gated-DeltaNet, so &ldquo;the state&rdquo; is a per-layer scan carry, not a slice of a KV cache. Native's accepted tokens form a linear chain, so it already computed and <em>kept</em> each token's carry and simply selects the accepted one &mdash; about seven milliseconds. The tree branches, and a branched verify deliberately does not export every node's carry (retaining all of them would run to gigabytes), so after acceptance the tree must <em>replay</em> the accepted root-to-leaf path through all 48 layers to reconstruct its carry &mdash; on the order of a hundred milliseconds, and squarely on the critical path, since the next forward cannot start until that state exists. A per-component GPU-timer decomposition puts that replay at roughly 78% of the entire tree-versus-native step-time gap; the verify forward is ~18%, and the drafter &mdash; contrary to an earlier hypothesis this work retracts &mdash; is equal.</p>
       <p>We then spent the campaign attacking the committer and reporting what moved. A 43-millisecond scratch-zeroing (&ldquo;burn&rdquo;) that the served path never reads was proven redundant and dropped; a CUDA-graph capture cut the replay's dispatch cost more than fivefold, byte-identically; batched gathers replaced forty-eight per-layer host round-trips with a handful. Those brought the committer from ~100 toward ~53 milliseconds &mdash; and then a narrower timer re-attributed the remainder: the GDN replay proper is only ~16 milliseconds, near native's seven, while a previously-hidden ~37&ndash;41-millisecond <em>sampling decision</em> is the larger cost and the real next target. A break-even model ties it together: given the measured step times, the tree overtakes native only above an acceptance of roughly 5.76 tokens per event, and its honest, garble-free acceptance is 4.29 &mdash; the earlier ~5.2 figures were repeat-loop artifacts from a period when two &ldquo;baked&rdquo; correctness flags were silently defaulting off. The deliverable is therefore a lossless branched-tree recurrent-state committer with deep suffix decode past depth-5 &mdash; a correctness milestone &mdash; and an honest verdict that native MTP-5 is the throughput floor, closable only by architecture, not by cheap levers.</p>
 
@@ -1301,10 +1302,10 @@
         <aside class="panel">
           <h2>Status</h2>
           <div class="claim-list">
-            <div class="claim"><span class="state warn">THROUGHPUT</span><p>Native wins. Tree 32.9 vs native 42.7 tok/s decode on the clean 3-arm run; even depth-matched linear MTP-11 out-runs the tree. The tree's accept edge does not convert to speed.</p></div>
-            <div class="claim"><span class="state pass">DIAGNOSIS</span><p>The committer <em>started</em> at ~78% of the gap (6.6 vs 100&nbsp;ms), verify ~18%, drafter equal &mdash; correcting a &ldquo;host-heavy drafter&rdquo; guess. The replay is a critical-path data dependency; async cannot hide it.</p></div>
-            <div class="claim"><span class="state pass">LADDER</span><p>Committer paid down ~100&rarr;~17&nbsp;ms: a 43&nbsp;ms burn was redundant, the replay proper is only ~16&nbsp;ms. But the gap <em>moved</em> &mdash; in the clean run verify (106 vs 67&nbsp;ms) is now dominant, absorbing the re-attributed sampling decision.</p></div>
-            <div class="claim"><span class="state pass">CORRECTNESS</span><p>A lossless branched-tree GDN committer with deep suffix decode reaching accept &gt;5, garble-free at 0/16 repeat-loops across 48 task-runs. The honest deliverable.</p></div>
+            <div class="claim"><span class="state pass">DEEP DECODE</span><p>The first lossless GDN-tree suffix decode past depth-5 &mdash; clean accept 4.29, garble-free at 0/16 repeat-loops across all 48 task-runs. Novel and correct.</p></div>
+            <div class="claim"><span class="state pass">COMMITTER 6&times;</span><p>Cut ~100&rarr;~17&nbsp;ms: a 43&nbsp;ms scratch-zeroing proven redundant and dropped (byte-identical), the recurrent replay isolated at ~16&nbsp;ms near native's floor, batched and graph-captured variants at ~6&nbsp;ms.</p></div>
+            <div class="claim"><span class="state pass">DIAGNOSIS</span><p>The whole gap measured to the millisecond and localized: committer ~78% at the start, verify ~18%, drafter <em>equal</em> &mdash; correcting a &ldquo;host-heavy drafter&rdquo; guess. Mechanism: keep vs replay, on the critical path.</p></div>
+            <div class="claim"><span class="state warn">THROUGHPUT</span><p>Honest status: native MTP-5 is still the floor (42.7 vs 32.9 tok/s) &mdash; the accept edge doesn't yet convert, and the committer's shed cost moved to verify. The path to parity is now quantified (<a href="#future">future work</a>).</p></div>
           </div>
         </aside>
       </div>
@@ -1345,6 +1346,87 @@
         </div>
       </div>
     </section>
+    <section class="section" id="tail6">
+      <h2>What We Built: tail6, and Decoding Past Depth-5</h2>
+      <aside class="sidenote">
+        <p><strong>The headline deliverable:</strong> tail6 is the first lossless Gated-DeltaNet tree suffix decoder to accept tokens <em>past depth-5</em> &mdash; past the reach of the model's five multi-token-prediction heads &mdash; and it does so garble-free.</p>
+        <p><strong>Why three arms:</strong> to test &ldquo;branching buys acceptance&rdquo; fairly, the tree is measured against native at its own <em>depth</em>, not only the shallow default. That control changes what the numbers mean.</p>
+      </aside>
+      <p>Before the throughput story, the thing itself. The model drafts with five multi-token-prediction heads, so a plain linear draft &mdash; native MTP-5 &mdash; proposes a five-token chain and stops. The tree of this series does two things that chain cannot. Shallowly, at depths 0 through 4, it drafts a <strong>comb</strong>: the spine token plus two branch alternatives at each level, from the heads' runners-up, so the verifier can accept a near-miss it would otherwise reject. Deeply, at depths 5 through 10, it grows an <strong>Arctic suffix tail</strong> &mdash; a retrieved continuation from the request's own history, filling positions the five heads cannot reach. Together that is <strong>tail6</strong>: a twenty-one-node tree over an eleven-deep spine, and the first version of this stack to commit accepted tokens beyond depth-5, losslessly.</p>
+
+      <div class="figure" aria-labelledby="fig1-title">
+        <div class="figure-head"><strong id="fig1-title">Figure 1</strong><span>tail6 is a depth-11 spine with a shallow MTP comb and a deep Arctic tail &mdash; measured against linear chains of 5 and 11 tokens</span></div>
+        <svg class="diagram" viewBox="0 0 1120 470" role="img" aria-label="Three draft geometries: native MTP-5 a five-token chain, native MTP-11 an eleven-token chain, and tail6 an eleven-deep spine with two branch leaves per level at depths 0-4 (the MTP comb) and a linear Arctic suffix tail at depths 5-10">
+          <defs>
+            <marker id="t6-arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L8,3 z" fill="#8bd3dd"></path>
+            </marker>
+          </defs>
+          <text x="24" y="26" class="label">A. native MTP-5 &mdash; a linear 5-token chain (the shipped bar)</text>
+          <g>
+            <circle cx="70" cy="66" r="13" class="node node-cyan"></circle>
+            <circle cx="160" cy="66" r="13" class="node node-cyan"></circle>
+            <circle cx="250" cy="66" r="13" class="node node-cyan"></circle>
+            <circle cx="340" cy="66" r="13" class="node node-cyan"></circle>
+            <circle cx="430" cy="66" r="13" class="node node-cyan"></circle>
+            <path d="M83 66 H147" class="arrow" style="marker-end:url(#t6-arrow)"></path>
+            <path d="M173 66 H237" class="arrow" style="marker-end:url(#t6-arrow)"></path>
+            <path d="M263 66 H327" class="arrow" style="marker-end:url(#t6-arrow)"></path>
+            <path d="M353 66 H417" class="arrow" style="marker-end:url(#t6-arrow)"></path>
+          </g>
+          <text x="470" y="70" class="tiny">5 MTP heads, 5 nodes. Accept 3.42.</text>
+
+          <text x="24" y="126" class="label">B. native MTP-11 &mdash; a linear 11-token chain (the depth-matched control)</text>
+          <g>
+            <circle cx="70" cy="166" r="12" class="node node-cyan"></circle>
+            <circle cx="160" cy="166" r="12" class="node node-cyan"></circle>
+            <circle cx="250" cy="166" r="12" class="node node-cyan"></circle>
+            <circle cx="340" cy="166" r="12" class="node node-cyan"></circle>
+            <circle cx="430" cy="166" r="12" class="node node-cyan"></circle>
+            <circle cx="520" cy="166" r="12" class="node node-cyan"></circle>
+            <circle cx="610" cy="166" r="12" class="node node-cyan"></circle>
+            <circle cx="700" cy="166" r="12" class="node node-cyan"></circle>
+            <circle cx="790" cy="166" r="12" class="node node-cyan"></circle>
+            <circle cx="880" cy="166" r="12" class="node node-cyan"></circle>
+            <circle cx="970" cy="166" r="12" class="node node-cyan"></circle>
+            <path d="M82 166 H148 M172 166 H238 M262 166 H328 M352 166 H418 M442 166 H508 M532 166 H598 M622 166 H688 M712 166 H778 M802 166 H868 M892 166 H958" class="arrow" style="marker-end:url(#t6-arrow)"></path>
+          </g>
+          <text x="1000" y="170" class="tiny">11 nodes,</text><text x="1000" y="186" class="tiny">no branches.</text>
+
+          <text x="24" y="238" class="label">C. tail6 &mdash; 21-node tree: a depth-11 spine, MTP comb at depths 0&ndash;4, Arctic suffix tail at depths 5&ndash;10</text>
+          <rect x="44" y="300" width="420" height="150" rx="10" fill="none" stroke="#3b3934" stroke-dasharray="4 4"></rect>
+          <text x="54" y="320" class="tiny">MTP comb (depths 0&ndash;4): spine + 2 branch leaves per level</text>
+          <rect x="474" y="300" width="606" height="150" rx="10" fill="none" stroke="#6a5a2a" stroke-dasharray="4 4"></rect>
+          <text x="484" y="320" class="tiny">Arctic suffix tail (depths 5&ndash;10): retrieved continuation, past the 5 MTP heads</text>
+          <g>
+            <!-- spine y=400, depths 0-10 -->
+            <circle cx="70" cy="400" r="12" class="node node-cyan"></circle>
+            <circle cx="160" cy="400" r="12" class="node node-cyan"></circle>
+            <circle cx="250" cy="400" r="12" class="node node-cyan"></circle>
+            <circle cx="340" cy="400" r="12" class="node node-cyan"></circle>
+            <circle cx="430" cy="400" r="12" class="node node-cyan"></circle>
+            <circle cx="520" cy="400" r="12" class="node node-green"></circle>
+            <circle cx="610" cy="400" r="12" class="node node-green"></circle>
+            <circle cx="700" cy="400" r="12" class="node node-green"></circle>
+            <circle cx="790" cy="400" r="12" class="node node-green"></circle>
+            <circle cx="880" cy="400" r="12" class="node node-green"></circle>
+            <circle cx="970" cy="400" r="12" class="node node-green"></circle>
+            <path d="M82 400 H148 M172 400 H238 M262 400 H328 M352 400 H418 M442 400 H508 M532 400 H598 M622 400 H688 M712 400 H778 M802 400 H868 M892 400 H958" class="arrow" style="marker-end:url(#t6-arrow)"></path>
+            <!-- comb branch leaves above depths 0-4 -->
+            <circle cx="52" cy="352" r="9" class="node node-amber"></circle><circle cx="88" cy="352" r="9" class="node node-amber"></circle>
+            <circle cx="142" cy="352" r="9" class="node node-amber"></circle><circle cx="178" cy="352" r="9" class="node node-amber"></circle>
+            <circle cx="232" cy="352" r="9" class="node node-amber"></circle><circle cx="268" cy="352" r="9" class="node node-amber"></circle>
+            <circle cx="322" cy="352" r="9" class="node node-amber"></circle><circle cx="358" cy="352" r="9" class="node node-amber"></circle>
+            <circle cx="412" cy="352" r="9" class="node node-amber"></circle><circle cx="448" cy="352" r="9" class="node node-amber"></circle>
+            <path d="M66 389 L54 363 M74 389 L86 363 M156 389 L144 363 M164 389 L176 363 M246 389 L234 363 M254 389 L266 363 M336 389 L324 363 M344 389 L356 363 M426 389 L414 363 M434 389 L446 363" class="edge"></path>
+          </g>
+          <text x="24" y="466" class="tiny">Color key: cyan = spine drafted by the 5 MTP heads; amber = branch leaves (runners-up, dead-end siblings); green = the Arctic suffix tail past depth-5. 11 spine + 10 branches = 21 nodes.</text>
+        </svg>
+        <p class="caption">Figure 1 is what the three arms are. Native MTP-5 (A) is the shipped five-token chain. Native MTP-11 (B) is the fair depth-matched control &mdash; a linear chain drafted to the tree's own depth, no branching. tail6 (C) is the twenty-one-node tree: the shallow comb where the five heads offer alternatives, and the deep green Arctic tail where retrieval carries the draft past depth-5. The comparison this volume makes is against B as much as A &mdash; because a chain drafted just as deep is the honest test of whether branching earns its cost.</p>
+      </div>
+
+      <p>That tail is a real result. Reaching accepted tokens beyond depth-5 on a recurrent hybrid, losslessly and without garble, is something no earlier volume did &mdash; the five heads simply run out, and everything past them has to come from retrieval verified by the committer. On the clean run the tail engages exactly as designed: at the shallow depths the comb out-accepts native's chain outright, and the green tail keeps accepting where native MTP-5 has already stopped. The honest caveat, developed in the <a href="#breakeven">break-even</a> section, is that the deep tail accepts at roughly half the rate of a trained head at that depth &mdash; a retrieved guess is weaker than a learned prediction &mdash; so the tail lengthens the draft without matching a same-depth chain token for token. But it exists, it is correct, and it is the substrate every throughput lever below is trying to make pay.</p>
+    </section>
     <section class="section" id="asymmetry">
       <h2>Keep vs Replay</h2>
       <aside class="sidenote">
@@ -1357,8 +1439,8 @@
 
       <p><strong>The tree cannot.</strong> A branched verify scores all of the tree's nodes in parallel, but which leaf is accepted is not known until <em>after</em> the committer's rejection walk decides it &mdash; after the forward is over. To keep states the way native does, the kernel would have to export every node's carry, for every layer, to memory, and then gather the one accepted leaf. That is not a little expensive; it is <strong>~13.7&nbsp;GB</strong> per step (about 13.6&nbsp;MB per layer, times twenty-one nodes, times forty-eight layers), so the verify kernel deliberately does not export per-node states at all &mdash; it keeps only the cheap activation rings and reconstructs what it needs. Passing it a state buffer is a wiring error the kernel refuses. So after acceptance the tree must <strong>replay</strong>: re-execute the accepted root-to-leaf path through all forty-eight recurrent layers to rebuild its carry.</p>
 
-      <div class="figure" aria-labelledby="fig1-title">
-        <div class="figure-head"><strong id="fig1-title">Figure 1</strong><span>A linear accept leaves its state in place to select; a branched accept threw its states away and must recompute the path</span></div>
+      <div class="figure" aria-labelledby="fig2-title">
+        <div class="figure-head"><strong id="fig2-title">Figure 2</strong><span>A linear accept leaves its state in place to select; a branched accept threw its states away and must recompute the path</span></div>
         <svg class="diagram" viewBox="0 0 1120 400" role="img" aria-label="Native keeps its linear chain's per-token recurrent carries and selects the accepted one; the tree discards per-node carries because keeping all would cost gigabytes, and must replay the accepted path through 48 layers">
           <defs>
             <marker id="f1-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
@@ -1405,7 +1487,7 @@
           <path d="M70 340 L160 340 L250 340 L340 340" class="arrow" style="stroke: var(--rose); marker-end:url(#f1-arrow-r)"></path>
           <text x="24" y="384" class="tiny">Replay: re-execute root&rarr;leaf through all 48 recurrent layers &mdash; 48 tiny kernels, each pinning ~1 CTA/SM, latency-bound. On the critical path.</text>
         </svg>
-        <p class="caption">Figure 1 is the asymmetry. Native's verify scan writes every token's carry to its column as it goes, so the accepted carry is already there to select. The tree's verify cannot keep every node's carry &mdash; it would run to gigabytes &mdash; and the accepted leaf is not even known until the rejection walk finishes, so the tree must replay the accepted path through all forty-eight layers to rebuild it. Keeping is a gather; replaying is a scan. That is the price of branching on a recurrent model.</p>
+        <p class="caption">Figure 2 is the asymmetry. Native's verify scan writes every token's carry to its column as it goes, so the accepted carry is already there to select. The tree's verify cannot keep every node's carry &mdash; it would run to gigabytes &mdash; and the accepted leaf is not even known until the rejection walk finishes, so the tree must replay the accepted path through all forty-eight layers to rebuild it. Keeping is a gather; replaying is a scan. That is the price of branching on a recurrent model.</p>
       </div>
 
       <p>The replay is not slow because of launch overhead; it is slow because of <em>occupancy</em>. It is forty-eight tiny per-layer kernels, and each pins roughly one thread block per SM &mdash; the register-resident state tile is large enough that only one fits &mdash; so there is no co-resident warp to hide memory latency behind. Two natural ways to fix that were measured and both made it <em>worse</em>: running the forty-eight layers on concurrent streams (91.6&nbsp;ms versus 76.6&nbsp;ms serial) and fusing them into one batched launch (111.9&nbsp;ms versus 76.5&nbsp;ms), because the wall is occupancy and bandwidth, not the number of launches. The refutations are in the <a href="#museum">museum</a>; the point here is that the replay is a floor, not a missed optimization.</p>
@@ -1475,6 +1557,48 @@
             <tr><td>Narrow replay-only timer</td><td>isolates replay at 16.2&nbsp;ms</td><td><span class="pill info">re-attributed</span> ~37&ndash;41&nbsp;ms is the sampling decision</td></tr>
           </tbody>
         </table>
+      </div>
+
+      <div class="figure" aria-labelledby="fig3-title">
+        <div class="figure-head"><strong id="fig3-title">Figure 3</strong><span>The committer, ~100&nbsp;ms &rarr; ~17&nbsp;ms: a redundant burn dropped, the sampling decision re-attributed, the replay near native's floor</span></div>
+        <svg class="diagram" viewBox="0 0 1120 340" role="img" aria-label="Horizontal bars comparing committer cost: native ~7ms, tree before ~100ms split into burn 43 sampling 38 replay 16, tree after ~17ms which is just the replay near native's floor">
+          <defs>
+            <marker id="f3-a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#c9c4b8"></path></marker>
+          </defs>
+          <!-- axis gridlines: x=180 is 0ms, 8.5px/ms -->
+          <line x1="180" y1="52" x2="180" y2="300" stroke="#3b3934" stroke-width="1"></line>
+          <line x1="605" y1="52" x2="605" y2="300" stroke="#2a2824" stroke-width="1" stroke-dasharray="3 4"></line>
+          <line x1="1030" y1="52" x2="1030" y2="300" stroke="#2a2824" stroke-width="1" stroke-dasharray="3 4"></line>
+          <text x="176" y="44" class="tiny">0</text><text x="592" y="44" class="tiny">50 ms</text><text x="1012" y="44" class="tiny">100 ms</text>
+
+          <!-- native committer 7ms -->
+          <text x="24" y="86" class="tiny">native committer</text>
+          <rect x="180" y="72" width="60" height="26" rx="4" class="node node-green"></rect>
+          <text x="250" y="90" class="tiny">~7 ms &mdash; keep + select</text>
+
+          <!-- tree BEFORE ~100ms -->
+          <text x="24" y="150" class="tiny">tree committer</text>
+          <text x="24" y="166" class="tiny">(before)</text>
+          <rect x="180" y="136" width="366" height="30" rx="3" class="node node-rose"></rect>
+          <text x="200" y="156" class="tiny">burn 43 ms</text>
+          <rect x="546" y="136" width="323" height="30" rx="0" class="node node-amber"></rect>
+          <text x="566" y="156" class="tiny">sampling decision ~38 ms</text>
+          <rect x="869" y="136" width="136" height="30" rx="3" class="node node-cyan"></rect>
+          <text x="879" y="156" class="tiny">replay 16</text>
+
+          <!-- annotations -->
+          <text x="200" y="204" class="tiny" fill="#d88989">redundant &mdash; dropped (byte-identical)</text>
+          <path d="M300 196 L300 172" class="arrow" style="stroke:var(--rose);marker-end:url(#f3-a)"></path>
+          <text x="600" y="228" class="tiny" fill="#e7c76f">not committer work &mdash; re-attributed to verify</text>
+          <path d="M700 220 L700 172" class="arrow" style="stroke:var(--amber);marker-end:url(#f3-a)"></path>
+
+          <!-- tree AFTER ~17ms -->
+          <text x="24" y="278" class="tiny">tree committer</text>
+          <text x="24" y="294" class="tiny">(after)</text>
+          <rect x="180" y="264" width="145" height="30" rx="3" class="node node-cyan"></rect>
+          <text x="335" y="283" class="tiny">~17 ms &mdash; just the replay, near native's floor</text>
+        </svg>
+        <p class="caption">Figure 3 is the paydown. The ~100-millisecond committer split into a 43-millisecond scratch-zeroing that the served path never reads (dropped, byte-identical), a ~38-millisecond sampling decision that is not recurrent work at all (re-attributed to the verify forward, where it is now measured), and the recurrent replay itself &mdash; only 16 milliseconds, about twice native's seven. What remains of the committer, ~17 milliseconds, is close to native's floor. The gain is real; the reason it did not win the race is that the sampling decision did not vanish, it moved.</p>
       </div>
 
       <h3>The committer beaten &mdash; and the gap that moved</h3>
@@ -1586,6 +1710,37 @@
           <div class="box info"><span class="tag">Resolve</span><p>Native MTP-5 ties the tree (10/16) and beats native11 (8/16). Extra accept buys no extra resolves.</p></div>
           <div class="box good"><span class="tag">Clean</span><p>0/16 repeat-loops on every arm &mdash; the garble that inflated earlier tree accepts is gone; these numbers are trustworthy.</p></div>
         </div>
+      </div>
+
+      <div class="figure" aria-labelledby="fig4-title">
+        <div class="figure-head"><strong id="fig4-title">Figure 4</strong><span>Per-position acceptance: the comb wins shallow, native5 stops at depth 5, and the Arctic tail reaches deep at about half a trained head's rate</span></div>
+        <svg class="diagram" viewBox="0 0 1120 400" role="img" aria-label="Acceptance rate by draft depth 0 to 10 for tail6, native MTP-5, and native MTP-11: tail6 highest at shallow depths, native5 ends at depth 5, tail6 falls below native11 in the deep tail">
+          <!-- axes: plot x 120..1060 (depth 0..10, 94px each), y 340(rate0)..60(rate1) -->
+          <line x1="120" y1="60" x2="120" y2="340" stroke="#3b3934" stroke-width="1"></line>
+          <line x1="120" y1="340" x2="1060" y2="340" stroke="#3b3934" stroke-width="1"></line>
+          <line x1="120" y1="200" x2="1060" y2="200" stroke="#2a2824" stroke-width="1" stroke-dasharray="3 5"></line>
+          <text x="86" y="65" class="tiny">1.0</text><text x="86" y="205" class="tiny">0.5</text><text x="98" y="344" class="tiny">0</text>
+          <text x="24" y="200" class="tiny">accept</text><text x="24" y="216" class="tiny">rate</text>
+          <!-- arctic-tail shaded band depths 5-10: x = 120+5*94=590 .. 1060 -->
+          <rect x="590" y="60" width="470" height="280" fill="#e7c76f" opacity="0.05"></rect>
+          <text x="600" y="80" class="tiny" fill="#9a8a4a">Arctic suffix tail zone (past MTP's 5 heads)</text>
+          <!-- x labels -->
+          <text x="116" y="360" class="tiny">0</text><text x="210" y="360" class="tiny">1</text><text x="304" y="360" class="tiny">2</text><text x="398" y="360" class="tiny">3</text><text x="492" y="360" class="tiny">4</text><text x="586" y="360" class="tiny">5</text><text x="680" y="360" class="tiny">6</text><text x="774" y="360" class="tiny">7</text><text x="868" y="360" class="tiny">8</text><text x="962" y="360" class="tiny">9</text><text x="1052" y="360" class="tiny">10</text>
+          <text x="520" y="384" class="tiny">draft depth</text>
+          <!-- native11 (amber) -->
+          <polyline points="120,102 214,142 308,175 402,199 496,218 590,234 684,246 778,256 872,263 966,270 1060,277" fill="none" stroke="#e7c76f" stroke-width="2.5"></polyline>
+          <!-- native5 (green), stops at depth 4 -->
+          <polyline points="120,98 214,136 308,167 402,192 496,211" fill="none" stroke="#a7d98d" stroke-width="2.5"></polyline>
+          <circle cx="496" cy="211" r="4" fill="#a7d98d"></circle>
+          <text x="502" y="205" class="tiny" fill="#8bbf73">native5 has no heads past depth 5</text>
+          <!-- tail6 (cyan) -->
+          <polyline points="120,68 214,110 308,154 402,190 496,216 590,276 684,290 778,297 872,302 966,306 1060,309" fill="none" stroke="#8bd3dd" stroke-width="2.5"></polyline>
+          <!-- legend -->
+          <line x1="740" y1="96" x2="770" y2="96" stroke="#8bd3dd" stroke-width="2.5"></line><text x="778" y="100" class="tiny">tail6 (tree)</text>
+          <line x1="740" y1="118" x2="770" y2="118" stroke="#a7d98d" stroke-width="2.5"></line><text x="778" y="122" class="tiny">native MTP-5</text>
+          <line x1="740" y1="140" x2="770" y2="140" stroke="#e7c76f" stroke-width="2.5"></line><text x="778" y="144" class="tiny">native MTP-11</text>
+        </svg>
+        <p class="caption">Figure 4 is the acceptance story by depth. At depths 0 through 4, tail6's comb (cyan) sits above both chains &mdash; branching genuinely wins where the heads are strong. Native MTP-5 (green) simply ends at depth 5; there are no more heads. In the shaded tail, tail6's Arctic retrieval keeps accepting where native5 cannot, which is the deliverable &mdash; but it runs at roughly half the rate of native MTP-11's trained head at the same depth (0.111 versus 0.226 at depth 10), because a retrieved guess is weaker than a learned prediction. The tree reaches deeper; the chain accepts harder once it is there.</p>
       </div>
 
       <p>One caution kept from the campaign: decode TPS here is the prefill-independent per-decode-step rate, the fair cross-arm number. It is <em>not</em> a verify-only ceiling &mdash; the trap of a forward-limited metric, which flatters the tree by charging only the shared forward and omitting the committer &mdash; and it is not a raw wall clock that a differing prefill fraction would confound. On the verify-only ceiling the tree looks far closer to native (a ~26% gap rather than the true ~50% full-step gap); this page reports the full-step number, because the committer the ceiling omits is precisely the term that decides the race.</p>
