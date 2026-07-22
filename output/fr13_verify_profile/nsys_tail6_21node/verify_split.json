@@ -1,0 +1,43 @@
+{
+ "drafts_in_window": 186.0,
+ "probe_wall_s_total": 69.0,
+ "gpu_kernel_busy_ms": 65151.189552,
+ "launch_host_gap_ms": 3848.8104479999965,
+ "per_draft_ms_by_category": {
+  "gemm_mlp_proj": 201.9704,
+  "lm_head": 86.4067,
+  "norm_elementwise": 29.5972,
+  "gdn_tree_scan": 19.2793,
+  "other": 10.1423,
+  "attention": 1.647,
+  "tree_conv_aux": 0.7049,
+  "sampler_committer": 0.5273
+ },
+ "launch_count_per_draft_by_category": {
+  "gemm_mlp_proj": 374.33,
+  "lm_head": 5.73,
+  "norm_elementwise": 3043.26,
+  "gdn_tree_scan": 51.15,
+  "other": 1035.42,
+  "attention": 43.1,
+  "tree_conv_aux": 54.47,
+  "sampler_committer": 91.52
+ },
+ "memcpy": {
+  "kind1": {
+   "count": 31785,
+   "ms": 16.56,
+   "bytes": 41666458
+  },
+  "kind2": {
+   "count": 37442,
+   "ms": 28.495,
+   "bytes": 282497
+  },
+  "kind8": {
+   "count": 129391,
+   "ms": 314.043,
+   "bytes": 36633984208
+  }
+ }
+}
