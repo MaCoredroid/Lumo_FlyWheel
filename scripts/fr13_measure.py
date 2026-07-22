@@ -1541,6 +1541,28 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # per-pure-decode-FORWARD GPU time (matches the metric name + the banked B=1 0.218
     # per-forward), reported alongside the per-spec-event s_fwd_gpu.
     s_fwd_gpu_per_forward = (agg_fwd_gpu / agg_fwd_gpu_steps) if (agg_fwd_gpu_steps > 0 and agg_fwd_gpu > 0) else None
+    # events-per-step (FIX 2026-07-22, fullstep_alignment_ratio ~0.52-0.54 root
+    # cause): drafter_gpu_ms_per_step / committer_gpu_ms_per_step are genuinely
+    # PER PHYSICAL STEP (_Fr13SpanTimer.end() increments n_spans by 1 once per
+    # wrapped call -- one call per decode step, regardless of how many co-
+    # resident requests it served; see class docstring "no pure-decode gate,
+    # the wrapped op runs once per spec decode step"). s_fwd_gpu is genuinely
+    # PER REQUEST-EVENT (_Fr13SfwdGpuTimer increments n_drafts by n_reqs, the
+    # co-resident request count, each pure-decode step; verified at the
+    # `self._n_drafts += int(n_reqs)` call site). Summing a per-event term with
+    # two per-step terms without normalizing mixes scales whenever
+    # events_per_step > 1 (B>1 co-residency) -- this WAS the confirmed root
+    # cause of fullstep_alignment_ratio's persistent ~0.52-0.54 (derived
+    # understated because the per-step drafter+committer costs were counted at
+    # full step-cost per event instead of amortized across the events sharing
+    # that step). events_per_step is the EXACT measured ratio for the SAME
+    # pure-decode-step window s_fwd_gpu/s_fwd_gpu_per_forward are computed
+    # over (not the coarser wall-clock effective_concurrency estimate computed
+    # later from a different basis).
+    events_per_step = (
+        (agg_fwd_gpu_drafts / agg_fwd_gpu_steps)
+        if (agg_fwd_gpu_steps and agg_fwd_gpu_steps > 0) else None
+    )
     # FR13_DFWD/CFWD_GPU_TIMER: per-arm component GPU totals (drafter propose /
     # committer rejection-sampler dispatch) + per-step ms, from the synthetic
     # bracket lines (sidecar-sourced). null when a timer was off / the brackets
@@ -1572,11 +1594,20 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # skip/fill drafter MODES the drafter time is exactly what changes, so this drafter-INCLUSIVE
     # basis is the right speed metric to compare arms. (Excludes host gaps -> still a compute-basis
     # upper bound, but it captures the drafter delta the verify-only metric cannot.)
+    # UNIT FIX (see events_per_step above): drafter/committer per-step costs are amortized across
+    # events_per_step before adding to the already-per-event s_fwd_gpu, so every term here is on
+    # the SAME per-request-event basis (matching committed_per_event's own basis). None (not a
+    # silently-mixed-unit number) when events_per_step isn't available (timer off / no steps
+    # counted) -- a basis-mismatched number is worse than no number.
     _drafter_s_step = (drafter_gpu_ms_per_step / 1000.0) if drafter_gpu_ms_per_step else 0.0
     _committer_s_step = (committer_gpu_ms_per_step / 1000.0) if committer_gpu_ms_per_step else 0.0
-    _fullstep_s = (s_fwd_gpu or 0.0) + _drafter_s_step + _committer_s_step
+    if events_per_step and events_per_step > 0:
+        _fullstep_s = (s_fwd_gpu or 0.0) + (_drafter_s_step + _committer_s_step) / events_per_step
+    else:
+        _fullstep_s = None
     derived_tps_fullstep_gpu = (
-        (committed_per_event / _fullstep_s) if (_fullstep_s > 0 and committed_per_event) else None
+        (committed_per_event / _fullstep_s)
+        if (_fullstep_s and _fullstep_s > 0 and committed_per_event) else None
     )
     # FR13_STEP_WALL alignment (user gate): the derived fullstep TPS is a
     # compute-basis upper bound blind to overhead OUTSIDE verify+drafter+
@@ -1596,7 +1627,7 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     )
     overhead_other_ms_per_event = (
         (wall_s_per_event - _fullstep_s) * 1000.0
-        if (wall_s_per_event is not None and _fullstep_s > 0) else None
+        if (wall_s_per_event is not None and _fullstep_s) else None
     )
     fullstep_alignment_ratio = (
         (derived_tps_fullstep_gpu / measured_tps_fullstep_wall)
@@ -1650,14 +1681,20 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         if (union_decode_s and aggregate_window_wall_s and aggregate_window_wall_s > 0)
         else None
     )
-    # FR13_STEP_WALL eff-conc normalization (rg1 finding 2026-07-19): the raw
-    # overhead_other subtracts per-STEP component ms from per-EVENT wall; at
-    # effective concurrency C a step serves ~C events, so the comparable
-    # component cost per event = fullstep_s / C. rg1: raw -114.8ms -> norm ~+4ms.
-    overhead_other_ms_per_event_norm = (
-        (wall_s_per_event - _fullstep_s / effective_concurrency) * 1000.0
-        if (wall_s_per_event is not None and _fullstep_s > 0
-            and effective_concurrency and effective_concurrency > 0) else None
+    # CROSS-CHECK (superseded 2026-07-22 the old rg1 "_norm" double-correction --
+    # that field divided _fullstep_s by effective_concurrency AGAIN on top of the
+    # events_per_step normalization now baked into _fullstep_s itself, which would
+    # double-amortize the drafter/committer terms). events_per_step (GPU-timer-
+    # native, exact for the pure-decode-step window s_fwd_gpu/drafter/committer
+    # were measured over) and effective_concurrency (wall-clock, union decode-
+    # seconds / union wall, a DIFFERENT independent estimate of average co-
+    # residency) SHOULD roughly agree; a ratio far from 1 flags that one of the
+    # two concurrency estimates is off (e.g. a workload whose batch occupancy
+    # during pure-decode steps differs from its overall wall-clock occupancy).
+    events_per_step_vs_effective_concurrency_ratio = (
+        (events_per_step / effective_concurrency)
+        if (events_per_step and effective_concurrency and effective_concurrency > 0)
+        else None
     )
     # per_stream_decode_rate = union gen / union decode-seconds = the EXACT
     # decomposition factor: aggregate_decode_tps == per_stream_decode_rate x
@@ -1729,7 +1766,22 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "derived_tps_fullstep_gpu_note": (
             "committed_per_event / (drafter + verify + committer) per decode step -- the "
             "drafter-INCLUSIVE compute TPS (captures the merged skip/fill drafter modes' effect, "
-            "which the verify-only derived_tps_gpu cannot). Excludes host gaps."
+            "which the verify-only derived_tps_gpu cannot). Excludes host gaps. FIXED 2026-07-22: "
+            "drafter/committer GPU-ms are measured PER PHYSICAL STEP (_Fr13SpanTimer: one span per "
+            "wrapped call, regardless of co-resident request count) while s_fwd_gpu is measured PER "
+            "REQUEST-EVENT (_Fr13SfwdGpuTimer: n_drafts += co-resident request count); summing them "
+            "unnormalized mixed scales whenever events_per_step>1 and was the confirmed root cause "
+            "of fullstep_alignment_ratio sitting at ~0.52-0.54 regardless of arm. Now amortized by "
+            "the measured events_per_step (see that field) before summing -- all terms on the same "
+            "per-event basis. None (not a silently-mixed number) when events_per_step is unavailable."
+        ),
+        "events_per_step": events_per_step,
+        "events_per_step_note": (
+            "d(fr13_decode_forward_gpu_drafts_total)/d(fr13_decode_forward_gpu_steps_total) -- "
+            "average co-resident spec-decode requests per PHYSICAL pure-decode step, measured over "
+            "the EXACT same step window s_fwd_gpu/drafter/committer GPU timers cover (more precise "
+            "than the wall-clock effective_concurrency estimate below, which covers the whole task "
+            "window incl. prefill/idle). The normalizer that fixes derived_tps_fullstep_gpu."
         ),
         # FR13_STEP_WALL (user gate): MEASURED wall twin + residual. A speed
         # verdict quoting derived_tps_fullstep_gpu MUST also quote these; if
@@ -1746,15 +1798,29 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         "wall_steps_measured": agg_wall_steps or None,
         "overhead_other_ms_per_event": overhead_other_ms_per_event,
         "overhead_other_note": (
-            "RAW basis-mismatched (per-step components vs per-event wall); "
-            "interpret via the _norm twin."
+            "wall_s_per_event - _fullstep_s (now basis-matched, both per-event -- see "
+            "derived_tps_fullstep_gpu_note). The genuine non-component overhead per event: host "
+            "glue, sampler, packer, scheduler gap that the GPU-only components don't cover. Was "
+            "'RAW basis-mismatched' pre-fix; the old _norm twin was a compounding double-correction "
+            "(divided an already-mixed number by effective_concurrency again) and has been replaced "
+            "by events_per_step_vs_effective_concurrency_ratio, a genuine cross-check instead."
         ),
-        "overhead_other_ms_per_event_norm": overhead_other_ms_per_event_norm,
-        "overhead_other_norm_note": (
-            "wall_per_event - components/effective_concurrency = true "
-            "non-component overhead per event."
+        "events_per_step_vs_effective_concurrency_ratio": events_per_step_vs_effective_concurrency_ratio,
+        "events_per_step_vs_effective_concurrency_ratio_note": (
+            "events_per_step (GPU-timer-native, pure-decode-step window) / effective_concurrency "
+            "(wall-clock, whole-task window). Two independent estimates of average co-residency; "
+            "should be roughly 1. Far from 1 flags that pure-decode-step occupancy differs "
+            "meaningfully from the task's overall wall-clock occupancy (e.g. heavy prefill "
+            "interleaving) -- investigate before trusting either normalization."
         ),
         "fullstep_alignment_ratio": fullstep_alignment_ratio,
+        "fullstep_alignment_ratio_note": (
+            "derived_tps_fullstep_gpu / measured_tps_fullstep_wall. Post-fix (2026-07-22) this "
+            "should sit close to but somewhat below 1 -- the residual gap is REAL host overhead "
+            "(overhead_other_ms_per_event) that the GPU-only derived basis structurally excludes, "
+            "not a unit-mismatch artifact. A ratio still far below 1 (e.g. <0.8) after the fix "
+            "warrants investigating overhead_other_ms_per_event directly."
+        ),
         # FR13_DFWD/CFWD_GPU_TIMER component spans (where the tree overhead
         # lives per reference_tree_tps_overhead_bound): per-arm totals +
         # per-step ms. null => timer OFF (default; byte-identical) or the
