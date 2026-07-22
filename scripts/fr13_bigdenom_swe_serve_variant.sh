@@ -130,6 +130,21 @@ case "$KIND" in
         FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=0
         MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32
         ) ;;
+  # nativemtp11_exseed = DEPTH-MATCHED twin of nativemtp5_exseed (user 2026-07-22):
+  # identical forked-launcher/patcher pathway (so FR13_SFWD/DFWD/CFWD_GPU_TIMER
+  # instrumentation works, unlike nativemtp11apc which is LAUNCHER=native and never
+  # loads the patcher) but num_speculative_tokens=11 to match tail6's depth. Isolates
+  # draft DEPTH (5->11) on the clean native MTP kernel, matching the depth-matched
+  # comparison nativemtp11apc was built for but with GPU-timer visibility.
+  nativemtp11_exseed) LAUNCHER=forked; TREEARG=""; EXPECT_RATIO=11; declare -a XFLAGS=(
+        ATTENTION_BACKEND=FLASH_ATTN
+        'SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":11}'
+        FR10_DECODE_MODE_DEFAULT=naive_mtp
+        FR13_REPLAY_ROUTE=0 FR13_FA2_TREE_BIAS=0 FR13_FA2_PREFILL_NATIVE=0
+        FR13_TREE_SAMPLE_ROW=0 FR13_CONV_COMMITTED_PATH=0
+        FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=0
+        MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32
+        ) ;;
   # flash_ns5_nocache = CARRIER-LOCATOR cell A0: forked launcher (=> the forked FA2 .so IS mounted +
   # copied over stock at launch, L590) + clean FLASH_ATTN naive-MTP ns5, but CACHE OFF (no APC/EXACT_SEED).
   # vs stock-native N (LAUNCHER=native, stock .so) isolates the FORKED FA2 .so; vs tree D0 isolates the
@@ -234,7 +249,7 @@ esac
 # and FR10_DECODE_MODE_DEFAULT=naive_mtp). Both prove the drafter ran via the launcher-
 # agnostic draft_tokens/drafts==5 spec-ratio assert, NOT via TREE_ATTN/tree env.
 NATIVE_DECODE=0
-if [[ "$LAUNCHER" == "native" || "$KIND" == "nativemtp5_exseed" || "$KIND" == "flash_ns8_exseed" || "$KIND" == "flash_ns5_nocache" ]]; then NATIVE_DECODE=1; fi
+if [[ "$LAUNCHER" == "native" || "$KIND" == "nativemtp5_exseed" || "$KIND" == "nativemtp11_exseed" || "$KIND" == "flash_ns8_exseed" || "$KIND" == "flash_ns5_nocache" ]]; then NATIVE_DECODE=1; fi
 # Per-request decode-mode xarg for the warmup probe: naive_mtp for native-decode arms
 # (tree_mtp would ask the patched resolver for a tree that does not exist), tree_mtp
 # for the tree/reshape arms. The native launcher ignores the xarg (no patcher), but
@@ -368,9 +383,9 @@ if (( NATIVE_DECODE == 1 )); then
   # APC prefix-caching flags are LIVE in the container env (the whole point of the arm).
   # The forked launcher only emits APC_FLAGS when FR13_ENABLE_APC=1, and EXACT_SEED
   # requires SNAP_FIX=1 (baked ON when APC is on); verify both reached the container.
-  if [[ "$KIND" == "nativemtp5_exseed" ]]; then
+  if [[ "$KIND" == "nativemtp5_exseed" || "$KIND" == "nativemtp11_exseed" ]]; then
     grep -q "^ATTENTION_BACKEND=FLASH_ATTN$" "$ARMDIR/container_env.txt" \
-      || { echo "FAIL: nativemtp5_exseed ATTENTION_BACKEND != FLASH_ATTN (native kernel)"; exit 3; }
+      || { echo "FAIL: $KIND ATTENTION_BACKEND != FLASH_ATTN (native kernel)"; exit 3; }
     grep -q "^FR13_APC_EXACT_SEED=0$" "$ARMDIR/container_env.txt" \
       || { echo "FAIL: FR13_APC_EXACT_SEED must be DEPRECATED-OFF (=0) — leaking es_ckpt store"; exit 3; }
   fi
