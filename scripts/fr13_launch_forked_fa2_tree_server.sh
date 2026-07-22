@@ -421,29 +421,6 @@ if [[ "${FR13_REPLAY_MULTISTREAM:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_replay_multistream.arm" 2>/dev/null || true
 fi
-# FR13_PIGGYBACK sidecar (worker-env-drop-proof): eliminate the committer replay by building the verify tree
-# as [prev-accepted chain ++ new subtree] scanned from h0=pre-step, folding the accepted-path GDN advance into
-# the forward's fused scan (native-style). Absent => today's replay path (byte-identical). Build: task #46 /
-# FR13_PIGGYBACK_BUILD_PLAN.md. Content = prefix cap (max accepted-chain length to prepend).
-if [[ "${FR13_PIGGYBACK:-0}" == "1" ]]; then
-  echo "${FR13_PIGGYBACK_PREFIX_CAP:-8}" > "$LOG_DIR/fr13_piggyback.arm"
-else
-  rm -f "$LOG_DIR/fr13_piggyback.arm" 2>/dev/null || true
-fi
-# FR13_PB_DEBUG_RANGE sidecar (debug boots only): host-side fail-loud range guard on the runner's
-# embedding input ids (dbg5/dbg6 device-OOB hunt). Syncs every step -- never arm on speed arms.
-if [[ "${FR13_PB_DEBUG_RANGE:-0}" == "1" ]]; then
-  : > "$LOG_DIR/fr13_pb_debug_range.arm"
-else
-  rm -f "$LOG_DIR/fr13_pb_debug_range.arm" 2>/dev/null || true
-fi
-# FR13_PB_BASE_COLS sidecar (tail6 port): the BASE tree's packed width under the pb chain
-# (cat9=9 default, tail6=21). Worker-env-drop-proof like the other pb sidecars.
-if [[ -n "${FR13_PB_BASE_COLS:-}" ]]; then
-  echo "${FR13_PB_BASE_COLS}" > "$LOG_DIR/fr13_pb_base_cols.arm"
-else
-  rm -f "$LOG_DIR/fr13_pb_base_cols.arm" 2>/dev/null || true
-fi
 # FR13_COMMIT_ARGMAX_GATE sidecar (same worker-env-drop workaround): the worker curation drops the flag
 # (keeps only *_DUMP). The patched rejection_sampler reads this sidecar OR the (dropped) env.
 if [[ "${FR13_COMMIT_ARGMAX_GATE:-0}" == "1" ]]; then
