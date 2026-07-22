@@ -13115,78 +13115,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             and int(self.num_speculative_tokens) == 9
             and _fr10_tree_choices_current == _fr10_threethree_choices
         )
-        # FR13_PIGGYBACK cat9_pb: extended cat9 in SORTED (len,path) order — 8 chain
-        # rungs (0,)^1..(0,)^8 then the re-rooted cat9 (subtree spine/leaf INTERLEAVED
-        # by length: s0,s1,l0,s2,l1,s3,l2,s4,l3).
-        _fr13_pb_choices = [
-            (0,), (0, 0), (0, 0, 0), (0, 0, 0, 0), (0, 0, 0, 0, 0),
-            (0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0),
-            (0, 0, 0, 0, 0, 0, 0, 0, 0),
-            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
-            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
-            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
-            (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
-        ]
-        _fr13_pb_armed = (
-            os.path.exists("/logs/fr13_piggyback.arm")
-            or os.environ.get("FR13_PIGGYBACK") == "1"
-        )
-        # tail6 port: STRUCTURAL detector (any extended chain+base tree, not
-        # just the literal cat9_pb choices) -- first 8 sorted choices are the
-        # strict chain. No served base tree has that prefix (branches break it).
-        _fr10_sorted_cur = (
-            sorted(_fr10_tree_choices_current, key=lambda c: (len(c), c))
-            if _fr10_tree_choices_current else []
-        )
-        _fr10_is_cat9_pb = (
-            _fr10_active_decode_mode == "tree_mtp"
-            and int(self.num_speculative_tokens) > 8
-            and len(_fr10_sorted_cur) > 8
-            and all(
-                _fr10_sorted_cur[_pbk] == tuple([0] * (_pbk + 1))
-                for _pbk in range(8)
-            )
-        )
-        if _fr10_is_cat9_pb and not _fr13_pb_armed:
-            raise RuntimeError(
-                "FR13_PIGGYBACK: cat9_pb extended tree served without the piggyback "
-                "sidecar — chain slots would be MTP speculation and no export/replay "
-                "contract holds")
-        if (_fr13_pb_armed and _fr10_active_decode_mode == "tree_mtp"
-                and not _fr10_is_cat9_pb):
-            raise RuntimeError(
-                "FR13_PIGGYBACK armed but tree_choices is not the cat9_pb extended "
-                "tree: " + repr(_fr10_tree_choices_current))
-        # tail6 port (allon3 root cause: "expected the 21-col base pack, got
-        # 9"): ALL base-shape detection/planning for an extended pb tree runs
-        # on the DE-ROOTED BASE SUBTREE (strip the strict 8-chain prefix from
-        # every node past the chain). cat9_pb's base == the hand-rolled
-        # default cat9 => keep the verified else-stack path (byte-identical
-        # to the R2 bake). Any OTHER base (tail6, ...) takes the general
-        # wide+tail path ON THE BASE SHAPE; the pb seam prepends the chain
-        # afterwards (sorted-extended order == chain ++ sorted-base order,
-        # since the (0,)*8 prefix is length- and lexicographically neutral).
-        _fr10_pb_base_choices = []
-        if _fr10_is_cat9_pb:
-            for _pbp in _fr10_sorted_cur[8:]:
-                if len(_pbp) <= 8 or tuple(_pbp[:8]) != tuple([0] * 8):
-                    raise RuntimeError(
-                        "FR13_PIGGYBACK: extended-tree base node without the "
-                        "8-chain prefix: " + repr(_pbp)
-                    )
-                _fr10_pb_base_choices.append(tuple(_pbp[8:]))
-        _fr10_pb_base_is_cat9 = _fr10_is_cat9_pb and (
-            sorted(_fr10_pb_base_choices, key=lambda c: (len(c), c))
-            == [
-                (0,), (0, 0), (0, 1), (0, 0, 0), (0, 0, 1),
-                (0, 0, 0, 0), (0, 0, 0, 1), (0, 0, 0, 0, 0),
-                (0, 0, 0, 0, 1),
-            ]
-        )
-        _fr10_wide_src_choices = (
-            _fr10_pb_base_choices if _fr10_is_cat9_pb
-            else _fr10_tree_choices_current
-        )
+        _fr10_wide_src_choices = _fr10_tree_choices_current
         # FR13_RESHAPE_WIDE: GENERAL width-N caterpillar drafter. Engages for
         # ANY tree_choices that is a single all-zeros spine with arbitrary-width
         # leaf children hanging DIRECTLY off each spine node (incl root), and
@@ -13219,10 +13148,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr10_is_cat6root
                 or _fr10_is_cat10
                 or _fr10_is_333
-                # tail6 port: exclude wide ONLY when the pb base is the
-                # hand-rolled default cat9 (else-stack path); a tail6/other
-                # base MUST take the wide machinery on the base subtree.
-                or _fr10_pb_base_is_cat9
             )
         )
         # Build the wide plan from tree_choices: spine depth D (longest
@@ -13288,13 +13213,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
         # steps (loop steps 0,1 == depths 2,3), same as chain3/cat3w.
         if _fr10_is_chain3 or _fr10_is_cat3w or _fr10_is_333:
             _fr10_spine_steps = 2
-        elif _fr10_pb_base_is_cat9:
-            # FR13_PIGGYBACK cat9_pb: MTP drafts ONLY the re-rooted cat9 subtree
-            # (depth-5 => 4 post-root spine forwards, exactly the cat9 loop). The
-            # 8 chain slots are committed-context fill, never MTP forwards.
-            # (tail6 port: a NON-cat9 base falls through to the wide branch,
-            # which derives steps from the BASE spine depth + tail-mode cap.)
-            _fr10_spine_steps = 4
         elif _fr10_is_wide:
             # FR13_RESHAPE_WIDE: D-1 post-root spine forwards (derived from the
             # tree's all-zeros spine depth), so the step count always matches
@@ -13346,7 +13264,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             or _fr10_is_cat10
             or _fr10_is_333
             or _fr10_is_wide
-            or _fr10_is_cat9_pb
         ):
             # FR10_CATERPILLAR_NATIVE_SPINE_TOP2: read-only drafter fix.
             # Run the native causal MTP spine unchanged for depth 5. At each
@@ -14294,238 +14211,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     ],
                     dim=1,
                 )
-            if _fr10_is_cat9_pb:
-                # FR13_PIGGYBACK seam 1b: prepend the 8 chain columns
-                # ((0,)^1..(0,)^8 = packed cols 0..7) ahead of the 9 base-cat9
-                # columns. ORDER-CRITICAL (fr13_native_committer_validate.py:
-                # replay path = [prev pos-0 root token] + prev accepted
-                # drafts): cols 0..L = [prev root] + THIS commit's accepted
-                # drafts; cols len..6 repeat-pad (GDN-identity via seam 1c,
-                # token value inert); col 7 = the CURRENT bonus (vLLM feeds
-                # the same token at stream 0 next step; that copy is
-                # identity-masked by seam 1c — the ACTIVE application is at
-                # stream 8 = the subtree root). Sources are all FRESH at
-                # propose-time; _COMMITTED is NOT used (runner lifecycle
-                # ingests at _prepare_inputs = one commit stale here).
-                from vllm.model_executor.layers.mamba import (
-                    gdn_linear_attn as _fr13_pb_gdn,
-                )
-                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
-                    _fr13_pb_base_cols as _fr13_pb_bcols,
-                )
-                if int(_fr10_packed.shape[1]) != _fr13_pb_bcols():
-                    raise RuntimeError(
-                        "FR13_PIGGYBACK: expected the "
-                        + str(_fr13_pb_bcols())
-                        + "-col base pack, got "
-                        + str(int(_fr10_packed.shape[1]))
-                    )
-                _fr13_pb_B = int(_fr10_packed.shape[0])
-                # dbg11 preference flip: SAMPLER first -- FR13_PB_ROWIDS_FRESH
-                # republishes it every step (never stale); SPEC_ROW may be one
-                # step old (it doubles as the variant-B ring mapper's
-                # PREV-step channel, so it must NOT be invalidated per step).
-                _fr13_pb_ids = getattr(
-                    _fr13_pb_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None
-                )
-                if _fr13_pb_ids is None or len(_fr13_pb_ids) != _fr13_pb_B:
-                    _fr13_pb_ids = getattr(
-                        _fr13_pb_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None
-                    )
-                _fr13_pb_by_req = getattr(
-                    _fr13_pb_gdn, "_LUMO_FA_TREE_ACCEPT_BY_REQ", None
-                ) or {}
-                if _fr13_pb_ids is None or len(_fr13_pb_ids) != _fr13_pb_B:
-                    # COLD START (first propose after prefill: no tree commit
-                    # has ever published row ids). With no by_req entries every
-                    # row is by definition FRESH (chain len 0, all-identity;
-                    # chain token values are inert under phase-3: rows are
-                    # attention-ghosts and the GDN inputs are ring-overwritten)
-                    # => pack fresh rows instead of raising. A missing publish
-                    # WITH live by_req entries is a real desync => still raise.
-                    if _fr13_pb_by_req:
-                        # dbg10 forensic raise: name the row spaces so the
-                        # mismatch mechanism is identified in one boot
-                        # (dbg9: B=2 vs by_req=1 on a mixed agentic step).
-                        _fr13_pb_spec_ids = getattr(
-                            _fr13_pb_gdn, "_LUMO_FA_SPEC_ROW_REQ_IDS", None
-                        )
-                        _fr13_pb_samp_ids = getattr(
-                            _fr13_pb_gdn, "_LUMO_FA_SAMPLER_ROW_REQ_IDS",
-                            None,
-                        )
-                        raise RuntimeError(
-                            "FR13_PIGGYBACK: no row-aligned request ids for "
-                            "the chain packer (B=" + str(_fr13_pb_B)
-                            + ") but by_req has "
-                            + str(len(_fr13_pb_by_req)) + " live entries"
-                            + "; spec_row_ids="
-                            + repr(_fr13_pb_spec_ids)
-                            + " sampler_row_ids="
-                            + repr(_fr13_pb_samp_ids)
-                            + " by_req_keys="
-                            + repr(sorted(_fr13_pb_by_req.keys()))
-                            + " next_token_ids_rows="
-                            + str(int(next_token_ids.shape[0]))
-                            + " packed_shape="
-                            + str(list(_fr10_packed.shape))
-                        )
-                    _fr13_pb_ids = [None] * _fr13_pb_B
-                # dbg16 correction: accepted-token rows cover ALL metadata
-                # rows (same space as the by_req publish) -- zip with the
-                # FULL-BATCH sampler list (fresh every step via
-                # FR13_PB_ROWIDS_FRESH). Rows without a real tree have no
-                # by_req entry, so their token rows are never consumed.
-                _fr13_pb_tok_by_req = {
-                    str(_r): _t
-                    for _r, _t in zip(
-                        getattr(
-                            _fr13_pb_gdn,
-                            "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None,
-                        ) or [],
-                        getattr(
-                            _fr13_pb_gdn,
-                            "_LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS", None,
-                        ) or [],
-                    )
-                }
-                # FR13_PIGGYBACK C-INT-3: host the prev-bonus stash on the gdn
-                # module (not this drafter module) so the runner-side interleave
-                # invalidation can clear it together with the by_req entry --
-                # else E5's accept-publish/prev-bonus desync raise fires on the
-                # first post-invalidation propose. Byte-identical otherwise.
-                _FR13_PB_PREV_BONUS = getattr(
-                    _fr13_pb_gdn, "_FR13_PB_PREV_BONUS", None
-                )
-                if _FR13_PB_PREV_BONUS is None:
-                    _FR13_PB_PREV_BONUS = {}
-                    _fr13_pb_gdn._FR13_PB_PREV_BONUS = _FR13_PB_PREV_BONUS
-                # APPLY-TIME BIND: next_token_ids is the propose() input of
-                # sampled tokens, row-aligned with _fr10_packed. Verify the
-                # parameter name in the live-container eagle propose signature
-                # before landing (feedback_read_vllm_source_first).
-                _fr13_pb_bonus_t = next_token_ids[:_fr13_pb_B].tolist()
-                _fr13_pb_rows = []
-                _fr13_pb_live = set()
-                for _fr13_pb_b in range(_fr13_pb_B):
-                    _fr13_pb_rid = _fr13_pb_ids[_fr13_pb_b]
-                    if _fr13_pb_rid is not None:
-                        _fr13_pb_rid = str(_fr13_pb_rid)
-                        _fr13_pb_live.add(_fr13_pb_rid)
-                    _fr13_pb_entry = (
-                        None if _fr13_pb_rid is None
-                        else _fr13_pb_by_req.get(_fr13_pb_rid)
-                    )
-                    _fr13_pb_prev = (
-                        None if _fr13_pb_rid is None
-                        else _FR13_PB_PREV_BONUS.get(_fr13_pb_rid)
-                    )
-                    _fr13_pb_bonus = int(_fr13_pb_bonus_t[_fr13_pb_b])
-                    if _fr13_pb_entry is None and _fr13_pb_prev is not None:
-                        # dbg13 downgrade: BENIGN, not a leak. The propose->
-                        # verify cycle can be interrupted for scheduling
-                        # reasons (spec tokens trimmed for budget/handoff
-                        # trim, preemption): the bonus then ran as a NATIVE
-                        # span-1 decode step which advanced the GDN state
-                        # natively, so the request is simply FRESH again --
-                        # identity chain is CORRECT. The original "real leak"
-                        # premise is now covered elsewhere: every by_req
-                        # clear pops this stash atomically (C-INT-2(6) +
-                        # dead-req eviction) and the committer publish
-                        # fail-louds on spec-row mis-keying.
-                        _FR13_PB_PREV_BONUS.pop(_fr13_pb_rid, None)
-                        _fr13_pb_prev = None
-                    if _fr13_pb_entry is not None and _fr13_pb_prev is None:
-                        # cold-start recovery (first commit before any stash,
-                        # e.g. the boot probe): the prev-root TOKEN is inert
-                        # under phase-3 (chain rows are attention-ghosts and
-                        # the GDN scan inputs are ring-overwritten; the STATE
-                        # comes from ring bytes + the lens buffer, guarded by
-                        # B3's desync raise). Placeholder = current bonus.
-                        _fr13_pb_prev = _fr13_pb_bonus
-                    if _fr13_pb_entry is None:
-                        _fr13_pb_toks = []
-                    else:
-                        _fr13_pb_L = int(_fr13_pb_entry[1])
-                        _fr13_pb_acc = [
-                            int(_x) for _x in
-                            _fr13_pb_tok_by_req.get(_fr13_pb_rid, [])
-                        ]
-                        if len(_fr13_pb_acc) != _fr13_pb_L:
-                            raise RuntimeError(
-                                "FR13_PIGGYBACK: accepted-token row len "
-                                + str(len(_fr13_pb_acc)) + " != by_req L "
-                                + str(_fr13_pb_L) + " for req "
-                                + _fr13_pb_rid
-                            )
-                        if _fr13_pb_L + 1 > 7:
-                            # tail6 port OVERFLOW FALLBACK: deep-tail accepts
-                            # (L up to 11) exceed the 8-slot chain, which can
-                            # replay at most [prev root] + 6 drafts -- the
-                            # chain CANNOT repair col-0. Pack a fresh identity
-                            # chain instead (token values are inert: ring
-                            # bytes + the seam-1d lens buffer carry the scan
-                            # semantics). The C-INT-2 pre-forward classifier
-                            # -- which runs AFTER this propose and BEFORE the
-                            # forward -- catch-up-replays the pending path
-                            # (root_node=8) and atomically invalidates
-                            # by_req/pending/leaf/stash for this rid, so seam
-                            # 1d also derives len 0. Packer/seam-1d agreement
-                            # holds at len-0 identity for this forward.
-                            _fr13_pb_toks = []
-                        else:
-                            _fr13_pb_toks = (
-                                [int(_fr13_pb_prev)] + _fr13_pb_acc
-                            )
-                    _fr13_pb_fill = (
-                        _fr13_pb_toks[-1] if _fr13_pb_toks else _fr13_pb_bonus
-                    )
-                    _fr13_pb_rowv = (
-                        _fr13_pb_toks
-                        + [_fr13_pb_fill] * (7 - len(_fr13_pb_toks))
-                        + [_fr13_pb_bonus]
-                    )
-                    for _fr13_pb_ci, _fr13_pb_tv in enumerate(_fr13_pb_rowv):
-                        if _fr13_pb_tv < 0 or _fr13_pb_tv >= 1000000:
-                            # dbg7 fail-loud: a placeholder/garbage id packed
-                            # into the chain cols reaches the verify forward's
-                            # vocab-embedding gather as a device-side OOB
-                            # (dbg5/dbg6). Name the source with provenance.
-                            raise RuntimeError(
-                                "FR13_PIGGYBACK: packed chain token out of "
-                                "range: row=" + str(_fr13_pb_b)
-                                + " col=" + str(_fr13_pb_ci)
-                                + " val=" + str(_fr13_pb_tv)
-                                + " rid=" + str(_fr13_pb_rid)
-                                + " bonus=" + str(_fr13_pb_bonus)
-                                + " prev=" + str(_fr13_pb_prev)
-                                + " toks=" + str(_fr13_pb_toks)
-                            )
-                    _fr13_pb_rows.append(_fr13_pb_rowv)
-                    if _fr13_pb_rid is not None:
-                        _FR13_PB_PREV_BONUS[_fr13_pb_rid] = _fr13_pb_bonus
-                for _fr13_pb_dead in [
-                    _k for _k in _FR13_PB_PREV_BONUS
-                    if _k not in _fr13_pb_live
-                ]:
-                    _FR13_PB_PREV_BONUS.pop(_fr13_pb_dead, None)
-                _fr10_packed = torch.cat(
-                    [
-                        torch.tensor(
-                            _fr13_pb_rows,
-                            dtype=_fr10_packed.dtype,
-                            device=_fr10_packed.device,
-                        ),
-                        _fr10_packed,
-                    ],
-                    dim=1,
-                )
-                logger.info_once(
-                    "FR13_PIGGYBACK extended drafter engaged: "
-                    + str(8 + _fr13_pb_bcols())
-                    + " cols (8 chain + "
-                    + str(_fr13_pb_bcols()) + " base)"
-                )
             try:
                 import json as _fr10_lj, os as _fr10_lo, time as _fr10_lt
                 if _fr10_lo.environ.get("FR10_METRICS", "0") == "1":
@@ -14993,7 +14678,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 or _fr10_is_cat10
                 or _fr10_is_333
                 or _fr10_is_wide
-                or _fr10_is_cat9_pb
             )
             and os.environ.get("FR10_ALLOW_LINEAR_FALLBACK", "0") != "1"
         ):
