@@ -8120,21 +8120,6 @@ def _lumo_tree_canonical_multidraft_sample(
     # unchanged. flag-on => the device committer fills the five product lists and
     # the legacy loop iterates EMPTY (the host walk never runs; the [nodes x
     # vocab] softmax DtoH above was already skipped).
-    # FR13_PIGGYBACK x host-reference A/B: the host per-node loop below has NO
-    # chain-offset port -- with the extended [chain ++ subtree] tree it would
-    # walk from the tree root and RE-COMMIT the prev step's chain tokens.
-    # Refuse loudly (bug-class 9) rather than silently double-committing.
-    if not _fr13_device_multidraft:
-        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
-            _fr13_piggyback_on as _fr13_pb_on,
-        )
-        if _fr13_pb_on():
-            raise RuntimeError(
-                'FR13_PIGGYBACK requires the device multidraft committer '
-                '(FR13_DEVICE_MULTIDRAFT=1, no fr13_device_multidraft_off.arm, '
-                'draft_probs=None): the host-reference walk has no chain-root '
-                'offset port and would re-commit chain nodes'
-            )
     _fr13_dm_counts = counts
     if _fr13_device_multidraft:
         try:
@@ -8475,7 +8460,6 @@ def _lumo_tree_canonical_multidraft_sample(
             # publish site) -- sampled committer twin of the greedy block;
             # see the greedy committer for the full rationale.
             from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
-                _fr13_piggyback_on as _fr13_pb_on,
                 launch_tree_gdn_replay as _fr13_replay_launch,
             )
             _fr13_replay_layers = getattr(
@@ -8567,123 +8551,6 @@ def _lumo_tree_canonical_multidraft_sample(
                         _fr13_burn_node_bank,
                     )
                 )
-            # FR13_PIGGYBACK replay drop (seam 5; default OFF => byte-identical):
-            # when armed, the NEXT forward's extended-tree scan re-derives the
-            # committed GDN state ([prev-accepted chain ++ subtree] from
-            # h0=col-0) and PIGGYBACK_EXPORT deposits the chain-end state to
-            # col-0, so the per-layer launch_tree_gdn_replay dispatch below is
-            # skipped ENTIRELY (serial loop + SAMPLED_REPLAY_BATCHED +
-            # REPLAY_MULTISTREAM + the COMMITTER_NATIVE route inside them).
-            # Everything else stays LIVE: the conv col-0 commit + conv spec-col
-            # burn right below (conv is NOT re-derived by the chain), the
-            # spec-compacted accepted-path/lens device refill (the next
-            # forward's conv-prior gather reads _LUMO_FA_ACCEPTED_TREE_*), and
-            # the host accept publishes above (ROWS/LENS/NODE_PATHS/TOKEN_IDS/
-            # ACCEPT_BY_REQ feed the drafter _COMMITTED, the model-runner
-            # rewrite and the attn-KV remap). Piggyback REQUIRES the stateless
-            # runrow lifecycle (h0=col-0 seed + col-0 export target) and cannot
-            # host the replay-instrumenting diagnostics -- fail loud, never
-            # silently vacuous (bug-class 9).
-            _fr13_pb_drop_replay = _fr13_pb_on()
-            if _fr13_pb_drop_replay and not _fr13_runrow_commit:
-                raise RuntimeError(
-                    'FR13_PIGGYBACK requires the STATELESS-TREE runrow '
-                    'lifecycle (FR13_APC_COMMIT_TO_RUNNING_ROW/'
-                    'FR13_TREE_RUNROW_INIT/FR13_APC_BURN_NODE_BANK=1)'
-                )
-            if _fr13_pb_drop_replay and (
-                _fr13_bnd_on or _fr13_replay_durable_ab_enabled()
-            ):
-                raise RuntimeError(
-                    'FR13_PIGGYBACK drops the committer GDN replay; the '
-                    'boundary/durable-AB replay taps cannot observe it. '
-                    'Disarm the taps or FR13_PIGGYBACK.'
-                )
-            if _fr13_pb_drop_replay and not globals().get(
-                '_FR13_PB_DROP_ANNOUNCED'
-            ):
-                globals()['_FR13_PB_DROP_ANNOUNCED'] = True
-                __import__('sys').stderr.write(
-                    '[FR13_PIGGYBACK] committer GDN replay DROPPED; next '
-                    'forward chain re-derives col-0\n'
-                )
-            if _fr13_pb_drop_replay:
-                # FR13_PIGGYBACK C-INT-1 (Risk-4 data plane). (1) commit-time
-                # PENDING marker: this req's GDN col-0 now LAGS until the next
-                # tree forward's chain repairs it. Tagged with the staging seq
-                # of the forward that produced this commit's ring/spec_idx
-                # (the pre-forward REQKEY hook bumps _LUMO_FA_PB_FWD_SEQ
-                # BEFORE the forward, so the value read here IS this
-                # forward's staging seq; catch-up validity at the next
-                # pre-forward check = marker_seq == current seq; always
-                # marker_seq <= current_seq -- bug-class 12 discipline).
-                _fr13_pbm_pend = getattr(
-                    _lumo_tree_commit_gdn, '_LUMO_FA_PB_PENDING', None
-                )
-                if _fr13_pbm_pend is None:
-                    _fr13_pbm_pend = {}
-                    _lumo_tree_commit_gdn._LUMO_FA_PB_PENDING = _fr13_pbm_pend
-                _fr13_pbm_seq = int(getattr(
-                    _lumo_tree_commit_gdn, '_LUMO_FA_PB_FWD_SEQ', 0
-                ))
-                for _fr13_pbm_rid in _fr13_spec_req_ids:
-                    _fr13_pbm_pend[str(_fr13_pbm_rid)] = _fr13_pbm_seq
-                # (2) NODE-column APC leaf publish (piggyback twin of
-                # _fr13_publish_apc_ssm_leaf, which is SKIPPED under runrow):
-                # under piggyback+runrow, col-0 lags between commit N and
-                # forward N+1, so the postprocess get_temporal_copy_spec
-                # snapshot would persist the PRE-CHAIN state into the prefix
-                # cache. The committed post-chain SSM state DOES exist in the
-                # gap at the accepted-leaf NODE bank row (node banks are NOT
-                # burned when the replay is dropped -- burn lived inside
-                # launch_tree_gdn_replay): publish spec_idx[b, path[len-1]]
-                # for len>0 (extended stream ids 9..17 are direct columns)
-                # and spec_idx[b, 8] for len==0 (stream 8 = through-root
-                # state, the E12 row-8 law) so the default-ON
-                # FR13_APC_SNAP_FIX redirect sources the committed state.
-                # Entries are popped by the pre-forward catch-up/invalidate
-                # together with the marker. Conv needs NO redirect (conv
-                # col-0 is fresh at commit).
-                _fr13_pbm_layer = _fr13_replay_layers[
-                    sorted(_fr13_replay_layers)[0]
-                ]
-                _fr13_pbm_sidx = getattr(
-                    _fr13_pbm_layer, '_fr13_replay_spec_idx', None
-                )
-                if _fr13_pbm_sidx is None:
-                    raise RuntimeError(
-                        'FR13_PIGGYBACK C-INT-1: missing staged spec_idx '
-                        'for the APC leaf publish'
-                    )
-                _fr13_pbm_leaf_map = getattr(
-                    _lumo_tree_commit_gdn, '_FR13_APC_SSM_LEAF_BY_REQ', None
-                )
-                if _fr13_pbm_leaf_map is None:
-                    _fr13_pbm_leaf_map = {}
-                    _lumo_tree_commit_gdn._FR13_APC_SSM_LEAF_BY_REQ = (
-                        _fr13_pbm_leaf_map
-                    )
-                _fr13_pbm_spec_cpu = _fr13_pbm_sidx.detach().to('cpu').tolist()
-                for _fr13_pbm_b, _fr13_pbm_rid in enumerate(
-                    _fr13_spec_req_ids
-                ):
-                    if _fr13_pbm_b >= len(_fr13_replay_lens):
-                        raise RuntimeError(
-                            'FR13_PIGGYBACK C-INT-1: spec rows exceed '
-                            'committer replay lens'
-                        )
-                    _fr13_pbm_len = int(_fr13_replay_lens[_fr13_pbm_b])
-                    if _fr13_pbm_len > 0:
-                        _fr13_pbm_node = int(
-                            _fr13_replay_gdn_node_paths[_fr13_pbm_b][
-                                _fr13_pbm_len - 1
-                            ]
-                        )
-                    else:
-                        _fr13_pbm_node = 8
-                    _fr13_pbm_leaf_map[str(_fr13_pbm_rid)] = int(
-                        _fr13_pbm_spec_cpu[_fr13_pbm_b][_fr13_pbm_node]
-                    )
             # STATELESS-TREE conv committer (post-accept; gated -> no-op when OFF).
             _fr13_conv_commit_to_col0(
                 _fr13_replay_layers,
@@ -8752,7 +8619,6 @@ def _lumo_tree_canonical_multidraft_sample(
                     and _fr13_sbr_stacks is not None
                     and int(_fr13_sbr_stacks.get('num_layers', 0)) > 0
                     and _fr13_replay_rows > 0
-                    and not _fr13_pb_drop_replay
                     and not _fr13_bnd_on
                     and not _fr13_rdab_on
                     # SNAP_FIX exclusion relaxed under runrow_commit=1 (our baked
@@ -8873,7 +8739,6 @@ def _lumo_tree_canonical_multidraft_sample(
                 _fr13_ms_on = (
                     _fr13_ms_enable
                     and not _fr13_bnd_on and not _fr13_rdab_on and not _fr13_sbr_active
-                    and not _fr13_pb_drop_replay
                     and int(_fr13_replay_rows) > 0
                     # CUDA-graph capture cannot tolerate cross-stream events / stream-switch
                     # (poisons the capture -> EngineCore init FAILS: observed ms_strm die at
@@ -8978,7 +8843,7 @@ def _lumo_tree_canonical_multidraft_sample(
                         _fr13_ms_default.wait_event(_fr13_ms_je)
                 _fr13_lo_prefixes = (
                     [] if (
-                        _fr13_sbr_active or _fr13_ms_on or _fr13_pb_drop_replay
+                        _fr13_sbr_active or _fr13_ms_on
                     )
                     else sorted(_fr13_replay_layers)
                 )
