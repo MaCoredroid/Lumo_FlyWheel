@@ -19,60 +19,6 @@ def _fr13_committer_native_on() -> bool:
     return False
 
 
-def _fr13_piggyback_on() -> bool:
-    """FR13_PIGGYBACK, worker-env-drop-proof (same pattern as _fr13_committer_native_on): eliminate the
-    committer replay by scanning [prev-accepted chain ++ subtree] in the forward from h0=col-0 and exporting
-    the fixed chain-end node state to col-0. Default off => today's replay path (byte-identical)."""
-    if os.environ.get("FR13_PIGGYBACK") == "1":
-        return True
-    for _p in ("/logs/fr13_piggyback.arm", "/tmp/fr13_piggyback.arm"):
-        if os.path.exists(_p):
-            return True
-    return False
-
-
-def _fr13_piggyback_cap(default: int = 8) -> int:
-    """Fixed chain-prefix length K (the mask is baked static, so K must be constant; short prev-accepts are
-    identity-padded). Reads the sidecar content (written by the launcher) OR the env."""
-    import os as _os
-    _v = _os.environ.get("FR13_PIGGYBACK_PREFIX_CAP", "")
-    if not _v:
-        for _p in ("/logs/fr13_piggyback.arm", "/tmp/fr13_piggyback.arm"):
-            try:
-                _v = open(_p).read().strip()
-                break
-            except Exception:
-                pass
-    return int(_v) if _v.isdigit() else default
-
-
-def _fr13_pb_base_cols(default: int = 9) -> int:
-    """TAIL6-PORT geometry (2026-07-19): the BASE tree's packed column count
-    under the pb chain (cat9=9, tail6=21). Extended packed = cap(8) + base;
-    extended tree_n (choices + root position) = packed + 1. Reads env
-    FR13_PB_BASE_COLS OR the launcher sidecar (worker-env-drop-proof), same
-    triple pattern as the arming reads. Default 9 = the proven cat9_pb."""
-    import os as _os
-    _v = _os.environ.get("FR13_PB_BASE_COLS", "")
-    if not _v:
-        for _p in ("/logs/fr13_pb_base_cols.arm", "/tmp/fr13_pb_base_cols.arm"):
-            try:
-                _v = open(_p).read().strip()
-                break
-            except Exception:
-                pass
-    return int(_v) if _v.isdigit() else default
-
-
-def _fr13_pb_packed_cols() -> int:
-    """Extended packed width = chain cap + base cols (17 for cat9_pb, 29 for tail6_pb)."""
-    return _fr13_piggyback_cap() + _fr13_pb_base_cols()
-
-
-def _fr13_pb_tree_n() -> int:
-    """Extended tree width incl. the root position (18 for cat9_pb, 30 for tail6_pb)."""
-    return _fr13_pb_packed_cols() + 1
-
 import torch
 import triton
 import triton.language as tl
@@ -485,7 +431,6 @@ def launch_attn_kv_linear_remap(
     num_accepted_tokens: torch.Tensor,
     num_spec_decodes: int,
     dst_pi: torch.Tensor | None = None,
-    pb_bonus_src: int | None = None,
 ) -> int:
     """Re-linearize the full-attention KV cache for the committed tree path.
 
@@ -512,20 +457,10 @@ def launch_attn_kv_linear_remap(
     """
     b = int(num_spec_decodes)
     if b <= 0 or not kv_caches:
-        if pb_bonus_src is not None:
-            raise RuntimeError(
-                "FR13_PIGGYBACK S1(a): bonus-slot KV copy would be skipped "
-                "(empty-batch/kv) -- stale bonus KV is silent garble; refusing"
-            )
         return 0
     device = slot_mapping.device
     path_cols = int(accepted_paths.shape[1])
     if path_cols <= 0:
-        if pb_bonus_src is not None:
-            raise RuntimeError(
-                "FR13_PIGGYBACK S1(a): bonus-slot KV copy would be skipped "
-                "(no-path-cols) -- stale bonus KV is silent garble; refusing"
-            )
         return 0
     # SAFETY: this maps spec row i -> batch request i (qsl[:b]); that is valid
     # ONLY when the first b batch requests are all full trees with a UNIFORM
@@ -533,11 +468,6 @@ def launch_attn_kv_linear_remap(
     # batch would put a spec row at a higher batch position and qsl[:b] would
     # index a foreign request -> wrong-slot copy: skip (safe no-op) instead.
     if int(query_start_loc.shape[0]) < b + 1:
-        if pb_bonus_src is not None:
-            raise RuntimeError(
-                "FR13_PIGGYBACK S1(a): bonus-slot KV copy would be skipped "
-                "(qsl-too-short) -- stale bonus KV is silent garble; refusing"
-            )
         return 0
     qsl_full = query_start_loc[: b + 1].to(torch.long)
     spans = qsl_full[1:] - qsl_full[:-1]                                # [b]
@@ -567,53 +497,9 @@ def launch_attn_kv_linear_remap(
     # offset indexed (max flat verify row and the max linear dst depth acc), so
     # qsl[i]+offset never crosses into request i+1.
     _max_off = torch.maximum(ap.max(), torch.maximum(acc.max(), dst_off.max()))
-    if pb_bonus_src is not None:
-        _max_off = torch.maximum(
-            _max_off,
-            torch.tensor(int(pb_bonus_src), device=device, dtype=torch.long),
-        )
     if not (bool((spans == spans[0]).all()) and bool(spans[0] > _max_off)):
-        if pb_bonus_src is not None:
-            raise RuntimeError(
-                "FR13_PIGGYBACK S1(a): bonus-slot KV copy would be skipped "
-                "(nonuniform-spans-or-span<=max-off) -- stale bonus KV is "
-                "silent garble; refusing"
-            )
         return 0
     qsl = qsl_full[:b].view(-1, 1)                                     # [b,1]
-    if pb_bonus_src is not None:
-        # FR13_PIGGYBACK S1(a) (LIVE-8): stream 0's later-layer hiddens lack
-        # the GDN bonus update, so its full-attn K/V write at the canonical
-        # bonus slot (flat verify offset 0 = linear position base+0) is wrong
-        # bytes on EVERY full-attn layer (all sit past L0-GDN). Copy the
-        # ACTIVE root twin's per-layer scratch KV (verify offset
-        # pb_bonus_src == 8) -> the canonical bonus slot, every commit step
-        # INCLUDING zero-accept (this runs before the foreign.any() early
-        # return on purpose). Pure slot copy: stream 8's K is already RoPE'd
-        # at base+0 via the A1 offset clamp -- no re-rotation. SOURCE
-        # auto-threads under FR13_SLOT_REORDER (node k wrote via
-        # sm_perm[qsl+k]); DEST is the FLAT slot of offset 0 =
-        # sm_perm[pi[0]], and pi[0] == 0 by construction, so dst ==
-        # slot_mapping[qsl+0] with or without the perm.
-        pb_ns = int(slot_mapping.shape[0])
-        pb_src_off = torch.full(
-            (b, 1), int(pb_bonus_src), device=device, dtype=torch.long
-        )
-        pb_dst_off = torch.zeros((b, 1), device=device, dtype=torch.long)
-        if dst_pi is not None:
-            pb_dst_off = dst_pi.to(device=device, dtype=torch.long)[pb_dst_off]
-        pb_src_slot = slot_mapping.reshape(-1)[
-            (qsl + pb_src_off).clamp(0, pb_ns - 1).reshape(-1)
-        ].to(torch.long)
-        pb_dst_slot = slot_mapping.reshape(-1)[
-            (qsl + pb_dst_off).clamp(0, pb_ns - 1).reshape(-1)
-        ].to(torch.long)
-        for kv in kv_caches:
-            if not torch.is_tensor(kv) or kv.dim() < 3 or int(kv.shape[0]) != 2:
-                continue
-            bs = int(kv.shape[2])
-            pb_gathered = kv[:, pb_src_slot // bs, pb_src_slot % bs].clone()
-            kv[:, pb_dst_slot // bs, pb_dst_slot % bs] = pb_gathered
     foreign = (m_idx < acc) & (ap != dst_off)                          # [b,path]
     if not bool(foreign.any()):
         return 0
