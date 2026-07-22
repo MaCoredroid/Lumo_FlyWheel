@@ -1,0 +1,66 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..fcb0a208f 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -871,7 +871,11 @@ class Card(_Verify):
+                 valuecomment = "".join(values)
+             else:
+                 # CONTINUE card
+-                valuecomment = f"'{''.join(values)}' / {' '.join(comments)}"
++                # Escape single quotes in the joined value before wrapping
++                # in quotes, so that round-tripping through _parse_value
++                # preserves the original value correctly.
++                joined = "".join(values).replace("'", "''")
++                valuecomment = f"'{joined}' / {' '.join(comments)}"
+             return keyword, valuecomment
+ 
+         if self.keyword in self._special_keywords:
+@@ -1058,7 +1062,35 @@ class Card(_Verify):
+ 
+         # do the value string
+         value = self._value.replace("'", "''")
+-        words = _words_group(value, value_length)
++
++        # Use a placeholder to prevent _words_group from splitting '' pairs.
++        # After chunking, restore '' and fix any chunks that exceed the limit.
++        _ESC = "\x01"  # Placeholder for ''
++        value_esc = value.replace("''", _ESC)
++        words = _words_group(value_esc, value_length)
++        for i in range(len(words)):
++            words[i] = words[i].replace(_ESC, "''")
++
++        # Fix any chunks exceeding value_length after '' restoration.
++        # This happens when many '' pairs land in a single chunk.
++        fixed = []
++        for word in words:
++            while len(word) > value_length:
++                # Find split point that doesn't break '' pairs
++                split_at = value_length
++                while split_at > 0 and word[split_at - 1] == "'":
++                    split_at -= 1
++                if split_at <= 0:
++                    # All quotes up to value_length; use largest even split
++                    split_at = value_length if value_length % 2 == 0 else value_length - 1
++                    if split_at <= 0:
++                        split_at = 2  # Minimum even split
++                fixed.append(word[:split_at])
++                word = word[split_at:]
++            if word:
++                fixed.append(word)
++        words = fixed
++
+         for idx, word in enumerate(words):
+             if idx == 0:
+                 headstr = "{:{len}}= ".format(self.keyword, len=KEYWORD_LENGTH)
+@@ -1071,9 +1103,9 @@ class Card(_Verify):
+             else:
+                 value_format = "'{}&'"
+ 
+-            value = value_format.format(word)
++            value_str = value_format.format(word)
+ 
+-            output.append(f"{headstr + value:80}")
++            output.append(f"{headstr + value_str:80}")
+ 
+         # do the comment string
+         comment_format = "{}"
