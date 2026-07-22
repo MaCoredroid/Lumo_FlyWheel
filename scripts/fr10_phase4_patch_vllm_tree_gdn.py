@@ -15479,128 +15479,7 @@ def _patch_tree_attn_spec_config_override() -> bool:
     if mask_sentinel not in text:
         old_return = """    return tree_attn_mask
 """
-        new_return = f"""    # FR13_PIGGYBACK_ATTN_MASK: attention-ghost the chain streams of the
-    # extended cat9_pb tree. At forward time the chain tokens are ALREADY
-    # COMMITTED (vLLM's seq includes them; durable KV written at last commit
-    # by the stream-0 root write + FR13_ATTN_KV_REMAP), so the paged context
-    # already carries them at correct positions: tree-block visibility of
-    # chain cols is a double count, repeat-pad cols are garbage, and the
-    # bonus appears twice (col 0 = stream-0 copy, col 8 = (0,)^8). Surgery:
-    #   [1] no row attends chain cols 1..7;
-    #   [2] chain rows 1..7 attend no tree col (they still see the full
-    #       paged context -- the bias covers only the last-18 KV cols -- so
-    #       no row is ever fully masked / NaN-free);
-    #   [3] rows 8..17 drop col 0: the bonus is attended exactly once, at
-    #       col 8 (RoPE offset 0 via the FR10_TREE_DEPTH_POSITIONS clamp),
-    #       mirroring base cat9's node-0 col. Row 0 unchanged (self-only,
-    #       identical to base; its KV write to the canonical bonus slot
-    #       stays live).
-    # The GDN strict/visible masks are deliberately NOT touched: chain
-    # streams MUST keep contributing to the GDN scan (state carry).
-    _fr13_pb_on = False
-    try:
-        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
-            _fr13_piggyback_on as _fr13_pb_probe,
-        )
-        _fr13_pb_on = bool(_fr13_pb_probe())
-    except ImportError:
-        _fr13_pb_on = (
-            os.path.exists("/logs/fr13_piggyback.arm")
-            or os.path.exists("/tmp/fr13_piggyback.arm")
-            or os.environ.get("FR13_PIGGYBACK") == "1"
-        )
-    # FAIL LOUD (user directive 2026-07-20): NO silent fallback to running
-    # piggyback WITHOUT the chain-ghost attn mask. The TREE SHAPE (strict
-    # 8-chain sorted prefix) is the AUTHORITATIVE pb signal -- a pb-shaped tree
-    # MUST get the mask on every tree we might ever serve. If the shape says pb
-    # but the _fr13_pb_on flag (import/arm-file/env detection) disagrees, the
-    # detection is broken and the mask would be silently skipped => chain leak.
-    # Refuse. (Non-pb trees: both False, agree, no mask -- correct.)
-    _fr13_tree_is_pb = (
-        len(sorted_tree_choices) > 8
-        and all(
-            tuple(sorted_tree_choices[_k]) == tuple([0] * (_k + 1))
-            for _k in range(8)
-        )
-    )
-    if bool(_fr13_tree_is_pb) != bool(_fr13_pb_on):
-        raise RuntimeError(
-            "FR13_PIGGYBACK attn mask shape-vs-flag disagreement "
-            "(tree_is_pb=%s pb_on=%s): refusing to run piggyback without the "
-            "chain-ghost mask (or apply the mask to a non-pb tree). "
-            "sorted_tree_choices[:9]=%s"
-            % (bool(_fr13_tree_is_pb), bool(_fr13_pb_on),
-               str(sorted_tree_choices[:9]))
-        )
-    if _fr13_pb_on:
-        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
-            _fr13_pb_packed_cols as _fr13_pb_pcols,
-            _fr13_pb_tree_n as _fr13_pb_tn,
-        )
-        if (
-            len(sorted_tree_choices) != _fr13_pb_pcols()
-            or int(tree_attn_mask.size(-1)) != _fr13_pb_tn()
-        ):
-            raise RuntimeError(
-                "FR13_PIGGYBACK armed but the attention bias is not the "
-                "extended chain+base layout (want choices=%d bias=%d): "
-                "choices=%d bias_shape=%s"
-                % (_fr13_pb_pcols(), _fr13_pb_tn(),
-                   len(sorted_tree_choices), str(tuple(tree_attn_mask.shape)))
-            )
-        _fr13_pb_chain_cols = [
-            _i + 1
-            for _i, _c in enumerate(sorted_tree_choices)
-            if len(_c) <= 8
-        ]
-        if _fr13_pb_chain_cols != [1, 2, 3, 4, 5, 6, 7, 8]:
-            raise RuntimeError(
-                "FR13_PIGGYBACK: chain streams not at 1..8: %s"
-                % str(_fr13_pb_chain_cols)
-            )
-        _fr13_pb_ninf = float("-inf")
-        tree_attn_mask[..., :, 1:8] = _fr13_pb_ninf
-        tree_attn_mask[..., 1:8, :] = _fr13_pb_ninf
-        tree_attn_mask[..., 8:, 0] = _fr13_pb_ninf
-    # GENERALIZED (user directive 2026-07-20): S1(b) must apply to ANY 8-chain
-    # piggyback tree, not just cat9_pb (tree_n==18). The row-0 poisoning is a
-    # property of the 8-chain LIVE-8 layout (stream 0 = pos-0 bonus copy,
-    # poisoned past L0), independent of the BASE subtree -- so tail6_pb and any
-    # future extended tree need the identical row-0 ghost. Gate = piggyback
-    # armed + the strict 8-chain sorted prefix (the only structural requirement;
-    # base shape is irrelevant). The prior `== 18` cat9_pb constraint LEFT
-    # tail6_pb's row 0 self-attending its poisoned col-0 K -- a chain leak into
-    # the base draft. The masks below are index-0 (row/col 0), layout-invariant.
-    _fr13_s1_pb = (
-        _fr13_pb_on
-        and len(sorted_tree_choices) > 8
-        and all(
-            tuple(sorted_tree_choices[_s1k]) == tuple([0] * (_s1k + 1))
-            for _s1k in range(8)
-        )
-    )
-    if _fr13_s1_pb:
-        # FR13_PIGGYBACK S1(b) (LIVE-8): stream 0 (the pos-0 bonus copy) is
-        # poisoned after the first GDN layer, so every full-attn layer's
-        # row-0 K/V is wrong bytes past L0. Full attention ghost: row 0
-        # attends the PAGED CONTEXT ONLY (finite -- the tree bias covers only
-        # the [tree_n, tree_n] suffix block and context_len >= 1 in tree
-        # decode), and
-        # NO row reads its K column (the ACTIVE root twin is stream 8; its
-        # durable KV lands in the canonical bonus slot via the S1(a)
-        # commit-time copy in launch_attn_kv_linear_remap). Convention must
-        # be hard -inf: the FA2 fork special-cases bias == -INFINITY as a
-        # hard mask; torch.finfo.min would take the += branch instead.
-        # Boot-static bias => applies to every step, drafting slices
-        # ([1:,1:]) exclude row/col 0, and the FR13_SLOT_REORDER column perm
-        # (pi[0] == 0) preserves both writes.
-        tree_attn_mask[0, :] = -torch.inf
-        tree_attn_mask[:, 0] = -torch.inf
-        logger.info(
-            "FR13_PIGGYBACK S1(b): row 0 attention-ghosted "
-            "(row+col 0 = -inf; live root twin = stream 8)"
-        )
-    {mask_sentinel}: dump the runtime root/bonus attention bias row.
+        new_return = f"""    {mask_sentinel}: dump the runtime root/bonus attention bias row.
     try:
         _fr10_mask_path = os.environ.get("FR10_ROOT_HIDDEN_CAPTURE")
         if _fr10_mask_path and not os.path.exists(_fr10_mask_path + ".tree_attn_bias.pt"):
@@ -19546,14 +19425,6 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         raise RuntimeError("FR13_ATTN_KV_REMAP_APPLY anchor not found")
     inject = anchor + (
         f"\n        {sentinel}: re-linearize committed-path full-attn KV.\n"
-        "        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
-        "            _fr13_piggyback_on as _fr13_akr_pb_probe,\n"
-        "        )\n"
-        "        if _fr13_akr_pb_probe() and __import__(\"os\").environ.get(\"FR13_ATTN_KV_REMAP\", \"0\") != \"1\":\n"
-        "            raise RuntimeError(\n"
-        "                \"FR13_PIGGYBACK requires FR13_ATTN_KV_REMAP=1 \"\n"
-        "                \"(S1 bonus slot-C copy rides the commit-time remap)\"\n"
-        "            )\n"
         "        if __import__(\"os\").environ.get(\"FR13_ATTN_KV_REMAP\", \"0\") == \"1\":\n"
         "            try:\n"
         "                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_akr_gdn\n"
@@ -19594,23 +19465,6 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                            ([int(_x) for _x in _fr13_akr_e[0]], int(_fr13_akr_e[1]))\n"
         "                            if _fr13_akr_e is not None else ([], 0)\n"
         "                        )\n"
-        "                # FR13_PIGGYBACK invariant guard: under the extended cat9_pb\n"
-        "                # tree the committer walks from rank 7 ((0,)^8) and publishes\n"
-        "                # +1-shifted SUBTREE flat rows only (>= 9). A chain row (1..8)\n"
-        "                # or root copy (0) here would remap garbage scratch KV onto a\n"
-        "                # committed slot. Fail loud (bug-class 9).\n"
-        "                if _fr13_akr_rows:\n"
-        "                    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
-        "                        _fr13_piggyback_on as _fr13_akr_pb_on,\n"
-        "                    )\n"
-        "                    if _fr13_akr_pb_on():\n"
-        "                        for _fr13_akr_r in _fr13_akr_rows:\n"
-        "                            if any(int(_fr13_akr_x) < 9 for _fr13_akr_x in _fr13_akr_r[0][: _fr13_akr_r[1]]):\n"
-        "                                raise RuntimeError(\n"
-        "                                    \"FR13_PIGGYBACK: accepted path contains a \"\n"
-        "                                    \"chain/root flat row (<9): \"\n"
-        "                                    + str(_fr13_akr_r[0][: _fr13_akr_r[1]])\n"
-        "                                )\n"
         "                if __import__(\"os\").environ.get(\"FR13_BRANCH_ACCEPT_DIAG\", \"0\") == \"1\":\n"
         "                    # FR13_BRANCH_ACCEPT_DIAG (diagnostic, default OFF): per-flat-verify-row\n"
         "                    # accept histogram, accumulated ONCE per step here (single chokepoint).\n"
@@ -19637,13 +19491,7 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                            __import__(\"os\").replace(_fr13_btmp, _fr13_bjp)\n"
         "                    except Exception:\n"
         "                        pass\n"
-        "                _fr13_akr_pb = _fr13_akr_pb_probe()\n"
         "                _fr13_akr_cols = max((len(_r[0]) for _r in _fr13_akr_rows), default=0)\n"
-        "                if _fr13_akr_pb and _fr13_akr_n > 0 and _fr13_akr_nrows > 0:\n"
-        "                    # S1(a): the bonus copy must fire on ALL-zero-accept\n"
-        "                    # steps too; force the paths tensor to build (padded\n"
-        "                    # zeros, lens 0 -> no foreign copies, bonus pair only).\n"
-        "                    _fr13_akr_cols = max(_fr13_akr_cols, 1)\n"
         "                _fr13_akr_paths = None\n"
         "                _fr13_akr_lens = None\n"
         "                if (\n"
@@ -19697,7 +19545,6 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                                num_accepted_tokens=_fr13_akr_lens,\n"
         "                                num_spec_decodes=_fr13_akr_n,\n"
         "                                dst_pi=_fr13_akr_dstpi,\n"
-        "                                pb_bonus_src=(8 if _fr13_akr_pb else None),\n"
         "                            )\n"
         "                    _fr13_akr_seen = getattr(self, \"_fr13_akr_foreign_seen\", 0)\n"
         "                    self._fr13_akr_foreign_seen = _fr13_akr_seen + _fr13_akr_tot\n"
