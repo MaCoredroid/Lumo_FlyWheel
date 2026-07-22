@@ -8755,7 +8755,26 @@ def _lumo_tree_canonical_multidraft_sample(
                     and not _fr13_pb_drop_replay
                     and not _fr13_bnd_on
                     and not _fr13_rdab_on
-                    and __import__('os').environ.get('FR13_APC_SNAP_FIX', '1') != '1'
+                    # SNAP_FIX exclusion relaxed under runrow_commit=1 (our baked
+                    # STATELESS-TREE default): _fr13_publish_apc_ssm_leaf is gated
+                    # `if not _fr13_runrow_commit` (see the two per-layer call
+                    # sites) -- under runrow_commit=1 the leaf-map is NEVER
+                    # populated even in the per-layer path, so
+                    # get_temporal_copy_spec's redirect has no entry and falls
+                    # through to its col-0 default (get_temporal_copy_spec's own
+                    # docstring: "Native MTP never publishes the leaf map ->
+                    # auto-no-op (native-safe)" -- runrow_commit=1 puts the tree
+                    # committer in the identical no-publish state). col-0 is the
+                    # row batched/graph already write byte-identically (red-team
+                    # verdict, wf_16247424-fb2). So SNAP_FIX=1 is behaviorally
+                    # inert here regardless of committer path -- excluding sbr
+                    # only when runrow_commit=0 (the legacy path where the
+                    # leaf-map genuinely matters and per-layer-only publish is
+                    # required) preserves that path's safety unchanged.
+                    and (
+                        __import__('os').environ.get('FR13_APC_SNAP_FIX', '1') != '1'
+                        or _fr13_runrow_commit
+                    )
                 )
                 if _fr13_sbr_active:
                     _ep_order = list(_fr13_sbr_stacks['layer_order'])
