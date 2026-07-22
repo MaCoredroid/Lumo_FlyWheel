@@ -154,3 +154,21 @@ native's own timed numbers under the cache-ON regime this project ships).
   yet explained; blocks any face-value wall-basis TPS comparison between them.
 - Cache proxy-logging fix: queued, not built (would give real per-request cache visibility for
   future runs).
+
+## COMMITTER-REPLAY ISOLATED LIVE: ~16ms, near native's 7ms floor (2026-07-22)
+Root cause found for the "53-57ms committer, why not 7ms" mystery: the CFWD_GPU_TIMER wraps the
+WHOLE self.rejection_sampler(...) dispatch (patcher gpu_model_runner._sample anchor), NOT the
+committer replay alone. Built FR13_REPLAY_ONLY_GPU_TIMER, placed INSIDE _fr13_native_committer_replay
+itself (the shared function both launch_tree_gdn_replay/launch_tree_gdn_replay_all_layers call --
+first placement attempt was in the wrong wrapper, launch_tree_gdn_replay_all_layers, which is NOT
+the live path; deployed calls launch_tree_gdn_replay SINGULAR via the patcher's own per-layer loop).
+LIVE INCREMENTAL RATE (steady-state, warmup-excluded, smoke test bs3, tail6 burn-off cache-on):
+  16.21 ms/commit  -- matches the isolated micro-bench (14.97ms) almost exactly.
+=> the 53-57ms CFWD number decomposes as: ~16ms true committer replay + ~37-41ms sampling DECISION
+(accept/LCP/bonus dispatch, the rejection sampler evaluating the tree's candidate paths -- likely
+tied to branching factor, a genuinely separate and larger cost than the committer replay itself).
+REDIRECTS the "drive toward 7ms" target: committer replay is already close (16ms vs native's 7ms,
+~2.3x, and the batched/graph micro-bench variants (6.12/6.25ms) would close most of the remaining
+gap once their SNAP_FIX-gated wiring is fixed for live cache-on deployment). The sampling-DECISION
+cost (~37-41ms, newly isolated, not previously separately measured) is now the bigger unexplained
+piece and the next investigation target.
