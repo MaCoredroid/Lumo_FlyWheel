@@ -23,6 +23,8 @@
 #   AGENT_WALL_S (env): bound the codex wall for a DEV-iteration screen (e.g. 600).
 set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
+# shellcheck source=fr13_required_tree_flags.sh
+source scripts/fr13_required_tree_flags.sh
 
 ARM=${1:?usage: fr13_bigdenom_swe_serve_variant.sh <arm> <KIND> <subset.json>}
 KIND=${2:?cat9|cat9-opta|cat9-opt1|nativemtp5|nativemtp5apc|nativemtp5_exseed|cat6root|cat10}
@@ -335,8 +337,19 @@ else
   # Reshape arms boot the LOCKED cat9 pipeline flags (FIX-1/2/3/A, REPLAY_ROUTE,
   # FA2_TREE_BIAS, CONV_COMMITTED_PATH) + the BAKED in_proj_ba pad
   # (LUMO_FB_KERNEL_ROWS=1, LUMO_FB_PROJ_PAD_ROWS=16) so the only difference vs
-  # cat9 is the TREE shape. The forked launcher defaults these flags ON except
-  # the LUMO_FB pad, which we pin here for a like-for-like vs the deployed cat9.
+  # cat9 is the TREE shape. The forked launcher now source-defaults
+  # FR13_REQUIRED_TREE_FLAGS itself (fr13_required_tree_flags.sh); no need to
+  # pin them again here -- pinning was the pre-2026-07-22 workaround for the gap
+  # where those flags silently defaulted OFF. Exported (not spliced into the
+  # env-prefix chain below -- bash's prefix-assignment parsing needs LITERAL
+  # NAME=value words at parse time, so "${arr[@]}" there gets misparsed as the
+  # command itself; caught live 2026-07-22 when it broke both native control
+  # arms with "FR13_ATTN_KV_REMAP=1: command not found", rc=2, before boot).
+  for _fr13_req in "${FR13_REQUIRED_TREE_FLAGS[@]}"; do
+    _fr13_req_k="${_fr13_req%%=*}"; _fr13_req_v="${_fr13_req#*=}"
+    export "${_fr13_req_k}=${!_fr13_req_k:-$_fr13_req_v}"
+  done
+  unset _fr13_req _fr13_req_k _fr13_req_v
   CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL="${GPU_UTIL:-0.78}" MAX_NUM_SEQS="$MAX_NUM_SEQS_OVR" \
   TREE="$TREEARG" FR10_METRICS=0 BATCH_INVARIANT="${BATCH_INVARIANT:-0}" \
   LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 \
@@ -395,7 +408,15 @@ else
          "VLLM_BATCH_INVARIANT=0" "LUMO_BATCH_INVARIANT_VLLM=0" \
          "FR13_REPLAY_ROUTE=1" "FR13_FA2_TREE_BIAS=1" "FR13_CONV_COMMITTED_PATH=1" \
          "FR10_DECODE_MODE_DEFAULT=tree_mtp" \
-         "LUMO_FB_KERNEL_ROWS=1" "LUMO_FB_PROJ_PAD_ROWS=16")
+         "LUMO_FB_KERNEL_ROWS=1" "LUMO_FB_PROJ_PAD_ROWS=16" \
+         "${FR13_REQUIRED_TREE_FLAGS[@]}")
+  # ^ FR13_REQUIRED_TREE_FLAGS (fr13_required_tree_flags.sh): proven+"BAKED" fixes
+  # (garble + accept M-dependence) that silently sat OFF for every tree-kind
+  # campaign through this script until 2026-07-22 — now source-defaulted ON in the
+  # forked launcher AND asserted here from the SAME registry, so a future default
+  # regression (e.g. someone re-adding an explicit =0 override upstream, or a new
+  # required flag never getting added to the assertion) fails loud instead of
+  # silently degrading. Add new required flags to the registry file ONLY.
   if grep -q "^FR13_SCAN_ALIGN=1$" "$ARMDIR/container_env.txt" && [ "${FR13_ALLOW_SCAN_ALIGN:-0}" != "1" ]; then
     echo "FAIL: FR13_SCAN_ALIGN=1 present — K1 must NOT be baked (set FR13_ALLOW_SCAN_ALIGN=1 for the recompute diagnostic)"; exit 3
   fi

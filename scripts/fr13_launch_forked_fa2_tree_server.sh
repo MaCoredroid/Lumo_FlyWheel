@@ -2,6 +2,13 @@
 set -euo pipefail
 
 REPO=${REPO:-/home/mark/shared/lumoFlyWheel}
+# shellcheck source=fr13_required_tree_flags.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fr13_required_tree_flags.sh"
+for _fr13_req in "${FR13_REQUIRED_TREE_FLAGS[@]}"; do
+  _fr13_req_k="${_fr13_req%%=*}"; _fr13_req_v="${_fr13_req#*=}"
+  export "${_fr13_req_k}=${!_fr13_req_k:-$_fr13_req_v}"
+done
+unset _fr13_req _fr13_req_k _fr13_req_v
 IMAGE=${IMAGE:-"vllm/vllm-openai@sha256:3dbe092ec5b2cef63b6104d33fa75d6ce53a7870962529ada69f78bbbc38e776"}
 CONTAINER=${CONTAINER:-fr13-forked-fa2-tree}
 PORT=${PORT:-9950}
@@ -611,8 +618,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_GREEDY_VIA_REJECTION="${FR13_GREEDY_VIA_REJECTION:-0}" \
   -e FR13_GREEDY_UNIFY_GATE="${FR13_GREEDY_UNIFY_GATE:-0}" \
   -e FR13_GREEDY_UNIFY_GATE_JSON="${FR13_GREEDY_UNIFY_GATE_JSON:-/logs/fr13_greedy_unify_gate.json}" \
-  -e FR13_ATTN_KV_REMAP="${FR13_ATTN_KV_REMAP:-0}" \
-  -e FR13_SLOT_REORDER="${FR13_SLOT_REORDER:-0}" \
+  -e FR13_ATTN_KV_REMAP="${FR13_ATTN_KV_REMAP}" \
+  -e FR13_SLOT_REORDER="${FR13_SLOT_REORDER}" \
   -e FR13_PARENT_GATHER="${FR13_PARENT_GATHER:-0}" \
   -e VLLM_SERVER_DEV_MODE=1 \
   -e CUDA_LAUNCH_BLOCKING="${CUDA_LAUNCH_BLOCKING:-0}" \
