@@ -787,7 +787,7 @@ def _patch_gdn_linear() -> bool:
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
-            "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
+            "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
             "# FR13 DEPRECATION: FR13_APC_HIT_RECURRENT_SUFFIX is force-OFF at gdn\n"
@@ -3527,12 +3527,36 @@ def _fr13_conv_subop_mab(
                             # closed-form composition of the loop's index
                             # math, CPU-proven byte-identical per topology
                             # in tests/test_fr13_tree_conv_fused_byte_ab.py.
-                            _fr10_new_state = fused_tree_conv_state_rows(
-                                source_z=_fr10_source,
-                                state_src=_fr13_tcf_state_src,
-                                tree_n=_fr10_tree_n,
-                                state_len=int(conv_state.size(2)),
-                            ).to(dtype=conv_state.dtype)
+                            # FR13_CONV_WB_FUSED (B2a): when armed AND no
+                            # diagnostic consumer needs the materialized
+                            # rows, skip the gather+contiguous here and let
+                            # the single fused kernel at the scatter site do
+                            # gather->page-write in one launch (byte-copy
+                            # contract; nsys-measured ~8ms/draft pair).
+                            _fr13_conv_wb_fused_now = (
+                                os.environ.get("FR13_CONV_WB_FUSED", "0")
+                                == "1"
+                                and os.environ.get(
+                                    "FR13_TCF_SELFCHECK", "0"
+                                )
+                                != "1"
+                                and not os.environ.get(
+                                    "FR10_TREE_GDN_COMMIT_HANDOFF_LOG"
+                                )
+                                and not os.environ.get(
+                                    "FR10_TREE_GDN_SRC_NATIVE_PAYLOAD"
+                                )
+                                and not _fr10_log_conv_diag
+                            )
+                            if _fr13_conv_wb_fused_now:
+                                _fr10_new_state = None
+                            else:
+                                _fr10_new_state = fused_tree_conv_state_rows(
+                                    source_z=_fr10_source,
+                                    state_src=_fr13_tcf_state_src,
+                                    tree_n=_fr10_tree_n,
+                                    state_len=int(conv_state.size(2)),
+                                ).to(dtype=conv_state.dtype)
                             if os.environ.get("FR13_TCF_SELFCHECK", "0") == "1":
                                 # FIX-3 dual-path selfcheck: recompute the
                                 # ENTIRE legacy conv section on the same
@@ -3693,13 +3717,29 @@ def _fr13_conv_subop_mab(
                                 }
                             except Exception:
                                 pass
-                        conv_state.index_copy_(
-                            0,
-                            spec_state_indices_tensor[
-                                _fr10_b, :_fr10_tree_n
-                            ].to(torch.long),
-                            _fr10_new_state,
-                        )
+                        if _fr10_new_state is None:
+                            # FR13_CONV_WB_FUSED: one fused gather->page-write
+                            # launch replaces gather + transpose-contiguous +
+                            # index_copy_ (byte-copy contract; int32 dst rows
+                            # consumed directly, no .to(long) cast kernel).
+                            launch_conv_state_writeback(
+                                source_z=_fr10_source,
+                                state_src=_fr13_tcf_state_src,
+                                dst_rows=spec_state_indices_tensor[
+                                    _fr10_b, :_fr10_tree_n
+                                ],
+                                conv_state=conv_state,
+                                tree_n=_fr10_tree_n,
+                                state_len=int(conv_state.size(2)),
+                            )
+                        else:
+                            conv_state.index_copy_(
+                                0,
+                                spec_state_indices_tensor[
+                                    _fr10_b, :_fr10_tree_n
+                                ].to(torch.long),
+                                _fr10_new_state,
+                            )
                         if _fr10_log_conv_diag:
                             if _FR13_EAGER_PACK:
                                 # FR13_EAGER_PACK 2h gated-move: recompute from

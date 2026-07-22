@@ -642,3 +642,112 @@ def fused_tree_conv_layer(
             new_state,
         )
     return out, read_cols, bank_rows
+
+
+# ---------------------------------------------------------------------------
+# FR13_CONV_WB_FUSED (B2a, 2026-07-22): single-kernel conv-state write-back.
+#
+# The nsys real-task differential (FR13_VERIFY_PROFILE_FINDINGS.md) measured
+# the class-3 gather-then-scatter pair as the two biggest tree-only aten
+# kernels in the captured decode graph: the state-rows gather
+# (_scatter_gather_elementwise @73.2us) + transpose-.contiguous() copy
+# feeding conv_state.index_copy_ (index_elementwise @84.6us, 22 page-strided
+# rows ~17MB). This kernel fuses all three into ONE launch that reads the
+# shared (prior ++ x ++ zero_row) source and writes each node's state row
+# directly into the page-strided conv_state destination:
+#   conv_state[dst_rows[n], c, s] = source_z[state_src[n*L + s], c]
+# Pure data movement, zero arithmetic, no dtype change (host wrapper asserts
+# dtype equality) => byte-identical to the aten pair by construction; gated
+# offline in output/fr13_verify_profile/gate_conv_wb_fused_byte.py and
+# default OFF (FR13_CONV_WB_FUSED=0) in the patcher.
+# ---------------------------------------------------------------------------
+
+try:  # triton is only present in the serving container; import lazily-safe
+    import triton
+    import triton.language as tl
+
+    @triton.jit
+    def _fr13_conv_wb_fused_kernel(
+        source_z,      # [S, C] contiguous, same dtype as conv_state
+        state_src,     # [N*L] integer source-row table (static per topology)
+        dst_rows,      # [N] integer conv_state page rows
+        conv_state,    # strided base (as_strided page view)
+        stride_cs0,
+        stride_cs1,
+        stride_cs2,
+        C: tl.constexpr,
+        L: tl.constexpr,
+        BLOCK_C: tl.constexpr,
+    ):
+        pid_n = tl.program_id(0)
+        pid_c = tl.program_id(1)
+        offs_c = pid_c * BLOCK_C + tl.arange(0, BLOCK_C)
+        c_mask = offs_c < C
+        dst = tl.load(dst_rows + pid_n).to(tl.int64)
+        base = conv_state + dst * stride_cs0
+        for s in tl.static_range(0, L):
+            src = tl.load(state_src + pid_n * L + s).to(tl.int64)
+            vals = tl.load(source_z + src * C + offs_c, mask=c_mask, other=0)
+            tl.store(
+                base + offs_c * stride_cs1 + s * stride_cs2,
+                vals,
+                mask=c_mask,
+            )
+
+except Exception:  # pragma: no cover - CPU-only host env
+    triton = None
+    tl = None
+
+
+def launch_conv_state_writeback(
+    *,
+    source_z: torch.Tensor,
+    state_src: torch.Tensor,
+    dst_rows: torch.Tensor,
+    conv_state: torch.Tensor,
+    tree_n: int,
+    state_len: int,
+) -> None:
+    """One-launch fused replacement for
+    ``fused_tree_conv_state_rows(...).to(dtype) + conv_state.index_copy_``.
+
+    Byte-copy contract: identical source elements to identical destinations,
+    no cast (asserts dtype equality), page-stride-safe via explicit strides.
+    """
+    if triton is None:
+        raise RuntimeError("triton unavailable; FR13_CONV_WB_FUSED needs the serving container")
+    if source_z.dtype != conv_state.dtype:
+        raise ValueError(
+            f"FR13_CONV_WB_FUSED requires matching dtypes, got source "
+            f"{source_z.dtype} vs conv_state {conv_state.dtype}"
+        )
+    if not source_z.is_contiguous():
+        raise ValueError("source_z must be contiguous")
+    n = int(tree_n)
+    L = int(state_len)
+    C = int(source_z.size(1))
+    if int(state_src.numel()) < n * L:
+        raise ValueError(
+            f"state_src covers {int(state_src.numel())} < tree_n*state_len={n * L}"
+        )
+    if int(dst_rows.numel()) < n:
+        raise ValueError(f"dst_rows covers {int(dst_rows.numel())} < tree_n={n}")
+    if int(conv_state.size(1)) != C or int(conv_state.size(2)) != L:
+        raise ValueError(
+            f"conv_state dims {tuple(conv_state.shape[1:])} != (C={C}, L={L})"
+        )
+    BLOCK_C = 1024
+    grid = (n, triton.cdiv(C, BLOCK_C))
+    _fr13_conv_wb_fused_kernel[grid](
+        source_z,
+        state_src,
+        dst_rows,
+        conv_state,
+        conv_state.stride(0),
+        conv_state.stride(1),
+        conv_state.stride(2),
+        C=C,
+        L=L,
+        BLOCK_C=BLOCK_C,
+        num_warps=4,
+    )
