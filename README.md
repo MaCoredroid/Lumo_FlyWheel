@@ -11,6 +11,7 @@ It contains self-contained HTML mini-papers:
 - [`gdn-prefix-cache.html`](gdn-prefix-cache.html): Volume IV, bit-exact prefix caching (APC / EXACT_SEED) under speculative decoding.
 - [`stateless-tree.html`](stateless-tree.html): Volume V, stateless tree speculative decoding — a branched verifier that caches and commits like native, plus the committed-token attention-KV garble fix.
 - [`spine-reorder.html`](spine-reorder.html): Volume VI, one bit in the last place — why a wider speculative tree accepted fewer tokens (a superset violation), traced to online-softmax reduction reassociation (1 bf16 ULP) in the forked attention kernel, and the contiguous-spine reorder that restores the superset. Includes the MTP + Arctic suffix-decoding merge as future work.
+- [`keep-or-replay.html`](keep-or-replay.html): Volume VII, keep or replay — why the branched tree out-accepts native linear MTP and still loses on throughput. The committer asymmetry (native keeps its recurrent states; the tree replays the accepted path through the 48-layer GDN scan on the critical path), the per-component decomposition (committer ~78% of the gap, drafter equal), the committer optimization ladder (burn redundant, replay isolated to ~16ms), the break-even model, and the honest native-wins verdict on the depth-matched 3-arm run.
 
 The full source, run drivers, graders, and formal report live on
 [`main`](https://github.com/MaCoredroid/Lumo_FlyWheel/tree/main).

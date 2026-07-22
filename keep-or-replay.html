@@ -1,0 +1,1889 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Keep or Replay: Why a Speculative Tree That Accepts More Still Loses to the Linear Chain - Lumo FlyWheel Vol. VII</title>
+<meta name="description" content="Illustrated systems paper on the committer asymmetry: a branched speculative token-tree accepts more tokens per forward than native linear MTP and still loses on throughput, because native keeps its recurrent states while the tree must replay the accepted path through the Gated-DeltaNet scan on the critical path. The per-component decomposition, the committer optimization ladder, the break-even model, and the honest native-wins verdict.">
+<meta property="og:title" content="Keep or Replay: Why a Speculative Tree That Accepts More Still Loses to the Linear Chain">
+<meta property="og:description" content="The committer asymmetry behind a branched speculative-decoding tree that out-accepts native and still regresses on throughput — keep-vs-replay, measured to the millisecond, on a Gated-DeltaNet hybrid inside vLLM.">
+<meta name="author" content="Mark Ma">
+<meta name="theme-color" content="#111111" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f7f8f7" media="(prefers-color-scheme: light)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23111111'/%3E%3Ccircle cx='16' cy='22' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='30' cy='16' r='4' fill='%23e7c76f'/%3E%3Ccircle cx='30' cy='30' r='4' fill='%238bd3dd'/%3E%3Cpath d='M16 22 L30 16 M16 22 L30 30' stroke='%233b3934' stroke-width='3'/%3E%3Cpath d='M38 41 h14' stroke='%23a7d98d' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='44' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='30' cy='44' r='4' fill='%238bd3dd'/%3E%3Ccircle cx='44' cy='44' r='4' fill='%23a7d98d'/%3E%3Cpath d='M16 44 h28' stroke='%233b3934' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #111111;
+    --paper: #171717;
+    --paper-2: #202020;
+    --paper-3: #292929;
+    --ink: #f2efe7;
+    --text: #d8d3c8;
+    --muted: #a8a196;
+    --quiet: #7f776d;
+    --rule: #3b3934;
+    --rule-2: #565147;
+    --cyan: #8bd3dd;
+    --green: #a7d98d;
+    --amber: #e7c76f;
+    --rose: #d88989;
+    --cyan-soft: #193235;
+    --green-soft: #233320;
+    --amber-soft: #3b3018;
+    --rose-soft: #3a2323;
+    --grid-major: rgba(255, 255, 255, 0.025);
+    --grid-minor: rgba(255, 255, 255, 0.018);
+    --grid-opacity: 0.42;
+    --link-underline: rgba(139, 211, 221, 0.36);
+    --soft-panel: rgba(255, 255, 255, 0.018);
+    --soft-panel-2: rgba(255, 255, 255, 0.012);
+    --soft-panel-3: rgba(255, 255, 255, 0.026);
+    --flow-wash: rgba(139, 211, 221, 0.035);
+    --flow-bg: #0c0c0c;
+    --flow-card-bg: #101010;
+    --control-bg: #121212;
+    --green-wash: rgba(167, 217, 141, 0.045);
+    --bias-on-fill: rgba(231, 199, 111, 0.5);
+    --bias-off-fill: rgba(255, 255, 255, 0.03);
+    --bias-off-stroke: rgba(255, 255, 255, 0.08);
+    --callout-fill: rgba(255, 255, 255, 0.02);
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+    --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #f7f8f7;
+      --paper: #ffffff;
+      --paper-2: #eef1f0;
+      --paper-3: #dde3e1;
+      --ink: #151715;
+      --text: #303431;
+      --muted: #626a64;
+      --quiet: #7a827d;
+      --rule: #d8ddd9;
+      --rule-2: #b7c0bb;
+      --cyan: #1c7380;
+      --green: #3f7b3a;
+      --amber: #876812;
+      --rose: #a54444;
+      --cyan-soft: #e3f3f5;
+      --green-soft: #e4f2df;
+      --amber-soft: #f3ead2;
+      --rose-soft: #f5dfdf;
+      --grid-major: rgba(18, 24, 22, 0.055);
+      --grid-minor: rgba(18, 24, 22, 0.038);
+      --grid-opacity: 0.55;
+      --link-underline: rgba(28, 115, 128, 0.34);
+      --soft-panel: rgba(18, 24, 22, 0.028);
+      --soft-panel-2: rgba(18, 24, 22, 0.018);
+      --soft-panel-3: rgba(18, 24, 22, 0.038);
+      --flow-wash: rgba(28, 115, 128, 0.075);
+      --flow-bg: #fbfbfa;
+      --flow-card-bg: #ffffff;
+      --control-bg: #f8faf9;
+      --green-wash: rgba(63, 123, 58, 0.08);
+      --bias-on-fill: rgba(135, 104, 18, 0.22);
+      --bias-off-fill: rgba(18, 24, 22, 0.035);
+      --bias-off-stroke: rgba(18, 24, 22, 0.12);
+      --callout-fill: rgba(18, 24, 22, 0.025);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background:
+      linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+      linear-gradient(var(--grid-minor) 1px, transparent 1px);
+    background-size: 56px 56px;
+    opacity: var(--grid-opacity);
+  }
+  ::selection { background: var(--cyan-soft); color: var(--ink); }
+  a {
+    color: var(--cyan);
+    text-decoration: none;
+    border-bottom: 1px solid var(--link-underline);
+  }
+  a:hover { border-bottom-color: currentColor; }
+  a:focus-visible {
+    outline: 3px solid var(--cyan);
+    outline-offset: 3px;
+  }
+  strong { color: var(--ink); font-weight: 720; }
+  code, .mono {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    color: var(--cyan);
+    background: var(--paper-2);
+    border: 1px solid var(--rule);
+    border-radius: 5px;
+    padding: 1px 5px;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 28px 92px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 18px 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .brandmark {
+    color: var(--ink);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .topbar nav {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px 16px;
+  }
+  .topbar a {
+    color: var(--muted);
+    border-bottom-color: transparent;
+  }
+  .topbar a:hover { color: var(--cyan); }
+
+  header.hero {
+    min-height: 88vh;
+    display: grid;
+    align-content: center;
+    padding: 52px 0 42px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .kicker {
+    margin: 0 0 18px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  h1 {
+    max-width: 980px;
+    margin: 0;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: clamp(42px, 7vw, 82px);
+    line-height: 1.02;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .title-subtitle {
+    max-width: 820px;
+    margin: 14px 0 0;
+    color: var(--amber);
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1.45;
+    text-wrap: balance;
+  }
+  .subhead {
+    max-width: 900px;
+    margin: 18px 0 0;
+    color: var(--text);
+    font-size: 21px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .hero-tldr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(270px, 0.46fr);
+    gap: 22px;
+    align-items: end;
+    max-width: 980px;
+    margin: 26px 0 0;
+    padding: 18px 0 20px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .hero-tldr p {
+    margin: 0;
+    color: var(--text);
+  }
+  .hero-tldr .tldr-copy {
+    max-width: 68ch;
+    font-size: 18px;
+    line-height: 1.58;
+    text-wrap: pretty;
+  }
+  .hero-result {
+    justify-self: end;
+    width: min(100%, 330px);
+  }
+  .hero-number {
+    display: block;
+    color: var(--green);
+    font-family: var(--serif);
+    font-size: clamp(40px, 4.3vw, 62px);
+    line-height: 0.96;
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+  .hero-result p {
+    margin-top: 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin: 28px 0 0;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .byline span:not(:first-child)::before {
+    content: "/";
+    color: var(--rule-2);
+    margin-right: 14px;
+  }
+  .paper-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 34px 0 0;
+  }
+  .paper-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .paper-nav a:hover {
+    color: var(--cyan);
+    border-color: var(--cyan);
+  }
+
+  .section {
+    margin: 74px 0;
+  }
+  .section h2 {
+    max-width: 780px;
+    margin: 0 0 16px;
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1.12;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .section h3 {
+    margin: 0 0 8px;
+    color: var(--ink);
+    font-size: 18px;
+    line-height: 1.3;
+  }
+  .section > p,
+  .main-col > p {
+    max-width: 74ch;
+    margin: 0 0 18px;
+    text-wrap: pretty;
+  }
+  .main-col > p:last-child,
+  .section > p:last-child { margin-bottom: 0; }
+
+  .abstract-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+    gap: 18px;
+    margin-top: 34px;
+  }
+  .panel {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 22px;
+  }
+  .panel h2,
+  .panel h3 {
+    margin: 0 0 12px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .panel p {
+    margin: 0 0 14px;
+  }
+  .panel p:last-child { margin-bottom: 0; }
+  .claim-list {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+  }
+  .claim {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .claim:last-child { border-bottom: 0; padding-bottom: 0; }
+  .claim .state {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    color: var(--muted);
+  }
+  .claim p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  .state.pass { color: var(--green); }
+  .state.warn { color: var(--amber); }
+  .state.info { color: var(--cyan); }
+
+  .sidenote {
+    color: var(--muted);
+    border-left: 1px solid var(--rule-2);
+    padding-left: 13px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+  .sidenote::before {
+    content: "plain explanation";
+    display: block;
+    margin-bottom: 7px;
+    color: var(--amber);
+    font-size: 10px;
+    font-weight: 850;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .sidenote p {
+    margin: 0 0 10px;
+  }
+  .sidenote p:last-child { margin-bottom: 0; }
+
+  .figure {
+    margin: 28px 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 20px;
+    overflow: hidden;
+  }
+  .figure-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .figure-head strong { color: var(--cyan); }
+  .caption {
+    max-width: 78ch;
+    margin: 14px 0 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  svg {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+  .diagram text {
+    font-family: var(--mono);
+    fill: var(--text);
+    font-size: 13px;
+  }
+  .diagram .label {
+    fill: var(--ink);
+    font-weight: 800;
+  }
+  .diagram .tiny {
+    fill: var(--muted);
+    font-size: 11px;
+  }
+  .diagram .node {
+    fill: var(--paper-2);
+    stroke: var(--rule-2);
+    stroke-width: 1.2;
+  }
+  .diagram .node-cyan { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .diagram .node-green { fill: var(--green-soft); stroke: var(--green); }
+  .diagram .node-amber { fill: var(--amber-soft); stroke: var(--amber); }
+  .diagram .node-rose { fill: var(--rose-soft); stroke: var(--rose); }
+  .diagram .edge {
+    stroke: var(--rule-2);
+    stroke-width: 1.6;
+    fill: none;
+  }
+  .diagram .arrow {
+    stroke: var(--cyan);
+    stroke-width: 1.6;
+    fill: none;
+    marker-end: url(#arrow);
+  }
+  .diagram .dash {
+    stroke-dasharray: 6 5;
+  }
+
+  .flow-figure {
+    clear: both;
+    background:
+      linear-gradient(180deg, var(--flow-wash), transparent 36%),
+      var(--flow-bg);
+    overflow-x: auto;
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  .flow-figure.is-paused .flow-edge,
+  .flow-figure.is-paused .flow-node,
+  .flow-figure.is-paused .bias-on,
+  .flow-figure.is-paused .scan-window,
+  .flow-figure.is-paused .cache-cursor {
+    animation-play-state: paused;
+  }
+  .flow-control {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--control-bg);
+    color: var(--text);
+    font: 800 12px var(--mono);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: border-color 160ms cubic-bezier(0.25, 1, 0.5, 1), color 160ms cubic-bezier(0.25, 1, 0.5, 1), background 160ms cubic-bezier(0.25, 1, 0.5, 1);
+  }
+  .flow-control:hover,
+  .flow-control:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-why {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    margin: 16px 0 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--rule);
+  }
+  .flow-why div {
+    background: var(--flow-card-bg);
+    padding: 13px 14px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .flow-why strong {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .code-grounding {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .code-grounding a {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 7px 9px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .code-grounding a:hover,
+  .code-grounding a:focus-visible {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    outline: none;
+  }
+  .flow-svg .lane {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-title {
+    fill: var(--ink);
+    font: 800 16px var(--mono);
+  }
+  .flow-svg .flow-sub {
+    fill: var(--muted);
+    font: 12px var(--mono);
+  }
+  .flow-svg .math {
+    fill: var(--text);
+    font: 13px var(--mono);
+  }
+  .flow-svg .native-fill { fill: var(--cyan-soft); stroke: var(--cyan); }
+  .flow-svg .tree-fill { fill: var(--green-soft); stroke: var(--green); }
+  .flow-svg .fa-fill { fill: var(--amber-soft); stroke: var(--amber); }
+  .flow-svg .commit-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .bad-fill { fill: var(--rose-soft); stroke: var(--rose); }
+  .flow-svg .meta-fill {
+    fill: var(--soft-panel-3);
+    stroke: var(--rule-2);
+  }
+  .flow-svg .kernel-card {
+    fill: var(--soft-panel);
+    stroke: var(--rule);
+    stroke-width: 1;
+  }
+  .flow-svg .flow-node {
+    stroke-width: 1.4;
+    animation: nodePulse 3.2s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+  .flow-svg .flow-node.s2 { animation-delay: 0.35s; }
+  .flow-svg .flow-node.s3 { animation-delay: 0.7s; }
+  .flow-svg .flow-edge {
+    fill: none;
+    stroke-width: 2.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 10 9;
+    animation: flowDash 2.4s linear infinite;
+  }
+  .flow-svg .native-edge { stroke: var(--cyan); }
+  .flow-svg .tree-edge { stroke: var(--green); animation-duration: 2.9s; }
+  .flow-svg .fa-edge { stroke: var(--amber); animation-duration: 2.1s; }
+  .flow-svg .warn-edge { stroke: var(--amber); animation-duration: 3s; }
+  .flow-svg .commit-edge { stroke: var(--rose); animation-duration: 3.2s; }
+  .flow-svg .bad-edge {
+    stroke: var(--rose);
+    stroke-dasharray: 7 8;
+    animation-duration: 3.8s;
+  }
+  .flow-svg .quiet-edge {
+    stroke: var(--rule-2);
+    stroke-dasharray: 2 8;
+    animation-duration: 4.4s;
+  }
+  .flow-svg .bias-on {
+    fill: var(--bias-on-fill);
+    animation: biasGlow 2.6s ease-in-out infinite;
+  }
+  .flow-svg .bias-off {
+    fill: var(--bias-off-fill);
+    stroke: var(--bias-off-stroke);
+  }
+  .flow-svg .code-label {
+    fill: var(--cyan);
+    font: 11px var(--mono);
+  }
+  .flow-svg .callout {
+    fill: var(--callout-fill);
+    stroke: var(--rule-2);
+    stroke-width: 1;
+  }
+  .flow-svg .scan-window {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 5 5;
+    animation: scanWindow 3.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+  .flow-svg .cache-cursor {
+    fill: none;
+    stroke: var(--green);
+    stroke-width: 2;
+    stroke-dasharray: 4 4;
+  }
+  .flow-svg .legend-dot { stroke: none; }
+  @keyframes flowDash {
+    to { stroke-dashoffset: -38; }
+  }
+  @keyframes nodePulse {
+    0%, 100% { opacity: 0.82; }
+    45%, 55% { opacity: 1; stroke-width: 2.7; }
+  }
+  @keyframes biasGlow {
+    0%, 100% { opacity: 0.48; }
+    50% { opacity: 1; }
+  }
+  @keyframes scanWindow {
+    0%, 100% { transform: translateX(0); opacity: 0.65; }
+    50% { transform: translateX(96px); opacity: 1; }
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.52fr);
+    gap: 28px;
+    align-items: start;
+  }
+  .mini-card {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .mini-card p {
+    margin: 0 0 12px;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+  .mini-card p:last-child { margin-bottom: 0; }
+
+  .definition-box,
+  .glossary-strip {
+    margin: 22px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel);
+  }
+  .definition-box {
+    max-width: 900px;
+    padding: 16px 18px;
+  }
+  .definition-box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 16px;
+    line-height: 1.55;
+    text-wrap: pretty;
+  }
+  .glossary-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: hidden;
+  }
+  .glossary-strip div {
+    padding: 14px 16px;
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .glossary-strip div:nth-child(3n) { border-right: 0; }
+  .glossary-strip div:nth-last-child(-n + 3) { border-bottom: 0; }
+  .glossary-strip dfn {
+    display: block;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 850;
+  }
+  .glossary-strip span {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .confidence-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 14px;
+    align-items: start;
+    margin: 20px 0 24px;
+    padding: 15px 17px;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--green-wash);
+  }
+  .confidence-row strong {
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .confidence-row p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .fold {
+    margin: 26px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--soft-panel-2);
+    overflow: hidden;
+  }
+  .fold > summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    min-height: 58px;
+    padding: 15px 18px;
+    cursor: pointer;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 850;
+    list-style: none;
+  }
+  .fold > summary::-webkit-details-marker { display: none; }
+  .fold > summary::after {
+    content: "+";
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    color: var(--cyan);
+    font-size: 18px;
+    line-height: 1;
+  }
+  .fold[open] > summary {
+    border-bottom: 1px solid var(--rule);
+    background: var(--soft-panel);
+  }
+  .fold[open] > summary::after { content: "-"; }
+  .fold > summary small {
+    display: block;
+    grid-column: 1;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .fold-body {
+    padding: 18px;
+  }
+  .fold-body > :first-child { margin-top: 0; }
+  .fold-body > :last-child { margin-bottom: 0; }
+
+  .equation {
+    margin: 22px 0;
+    padding: 18px 20px;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 14px;
+    line-height: 1.85;
+  }
+  .equation .muted { color: var(--muted); }
+  .equation .hl { color: var(--amber); }
+  .equation .ok { color: var(--green); }
+
+  .source-exhibit {
+    margin: 24px 0;
+    background: var(--flow-bg);
+    border: 1px solid var(--rule-2);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .source-exhibit .source-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .source-exhibit .source-head strong {
+    color: var(--amber);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .source-exhibit pre {
+    margin: 0;
+    padding: 16px;
+    overflow-x: auto;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.65;
+  }
+  .source-exhibit code {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: inherit;
+  }
+  .source-exhibit .source-note {
+    margin: 0;
+    padding: 0 16px 16px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  .source-exhibit > .grid {
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin: 16px;
+  }
+
+  .compare-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin: 24px 0;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--rule);
+  }
+  .compare-strip article {
+    min-height: 100%;
+    padding: 18px;
+    background: var(--paper);
+  }
+  .compare-strip h3 {
+    margin-bottom: 9px;
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .compare-strip p {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 12px;
+    margin: 24px 0;
+  }
+  .box {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .box .tag {
+    display: inline-flex;
+    margin-bottom: 10px;
+    padding: 3px 7px;
+    border-radius: 5px;
+    background: var(--paper-2);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 760;
+  }
+  .box.good .tag { color: var(--green); background: var(--green-soft); }
+  .box.warn .tag { color: var(--amber); background: var(--amber-soft); }
+  .box.bad .tag { color: var(--rose); background: var(--rose-soft); }
+  .box.info .tag { color: var(--cyan); background: var(--cyan-soft); }
+  .box p {
+    margin: 0;
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .table-wrap {
+    overflow-x: auto;
+    margin: 24px 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: var(--paper);
+    scrollbar-color: var(--cyan) var(--paper-2);
+  }
+  table {
+    border-collapse: collapse;
+    min-width: 760px;
+    width: 100%;
+    font-size: 14px;
+  }
+  caption {
+    caption-side: top;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+    text-align: left;
+  }
+  th, td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--rule);
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--paper-2);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 850;
+  }
+  tr:last-child td { border-bottom: 0; }
+  td.num {
+    font-family: var(--mono);
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .pill {
+    display: inline-flex;
+    padding: 3px 7px;
+    border-radius: 5px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 850;
+    white-space: nowrap;
+  }
+  .pill.good { color: var(--green); background: var(--green-soft); }
+  .pill.warn { color: var(--amber); background: var(--amber-soft); }
+  .pill.info { color: var(--cyan); background: var(--cyan-soft); }
+  .pill.bad { color: var(--rose); background: var(--rose-soft); }
+
+  .failure-note {
+    margin: 0 0 14px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-ledger {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .failure-card {
+    min-width: 0;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 17px;
+  }
+  .failure-card.contaminated { border-color: var(--rose); }
+  .failure-card.superseded { border-color: var(--amber); }
+  .failure-card.settled { border-color: var(--rule-2); }
+  .failure-card.open { border-color: var(--cyan); }
+  .failure-card header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .failure-card h3 {
+    margin: 0;
+    min-width: 0;
+    max-width: 58ch;
+    color: var(--ink);
+    font-size: 17px;
+    line-height: 1.25;
+  }
+  .failure-card p {
+    margin: 0 0 10px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .failure-card p:last-child { margin-bottom: 0; }
+  .failure-card ul {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 12px;
+    padding-left: 18px;
+    color: var(--text);
+    font-size: 14.5px;
+    line-height: 1.5;
+  }
+  .failure-card .conclusion {
+    padding-top: 10px;
+    border-top: 1px solid var(--rule);
+    color: var(--text);
+  }
+  .failure-card code { overflow-wrap: anywhere; }
+
+  .shape-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .shape {
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  .shape h3 {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .shape h3 span {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .path-list {
+    margin: 12px 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.55;
+  }
+  .path-list li {
+    padding: 3px 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .receipt-list {
+    columns: 2 330px;
+    column-gap: 34px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .receipt-list li {
+    break-inside: avoid;
+    margin: 0 0 12px;
+    font-size: 15px;
+  }
+
+  footer {
+    margin-top: 86px;
+    padding-top: 24px;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  @media (min-width: 1040px) {
+    header.hero > .sidenote,
+    .section > .sidenote {
+      float: right;
+      clear: right;
+      width: 282px;
+      margin: 6px 0 20px 34px;
+    }
+  }
+  @media (max-width: 960px) {
+    .page { padding: 0 18px 72px; }
+    .topbar { flex-direction: column; align-items: flex-start; }
+    .topbar nav { justify-content: flex-start; }
+    header.hero { min-height: auto; padding: 26px 0 20px; }
+    h1 { font-size: 40px; }
+    .subhead {
+      margin-top: 18px;
+      font-size: 17px;
+      line-height: 1.48;
+    }
+    .title-subtitle {
+      margin-top: 10px;
+      font-size: 13px;
+    }
+    .byline span:not(:first-child)::before { content: none; }
+    .abstract-grid, .two-col, .shape-grid, .hero-tldr, .confidence-row { grid-template-columns: 1fr; }
+    .glossary-strip { grid-template-columns: 1fr; }
+    .glossary-strip div,
+    .glossary-strip div:nth-child(3n),
+    .glossary-strip div:nth-last-child(-n + 3) {
+      border-right: 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .glossary-strip div:last-child { border-bottom: 0; }
+    .compare-strip { grid-template-columns: 1fr; }
+    .table-wrap::before,
+    .flow-figure::before {
+      display: inline-flex;
+      position: sticky;
+      left: 8px;
+      z-index: 1;
+      margin: 8px 8px 0;
+      padding: 4px 7px;
+      border: 1px solid var(--rule);
+      border-radius: 5px;
+      background: var(--paper);
+      color: var(--muted);
+      font: 800 11px var(--mono);
+    }
+    .table-wrap::before { content: "wide table: scroll sideways"; }
+    .flow-figure::before { content: "wide figure: scroll sideways"; }
+    .section { margin: 56px 0; }
+    .section h2 { font-size: 30px; }
+    .hero-result {
+      justify-self: start;
+      width: 100%;
+    }
+    .hero-tldr {
+      gap: 14px;
+      margin-top: 16px;
+      padding: 12px 0 14px;
+    }
+    .hero-tldr .tldr-copy {
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .hero-number { font-size: 36px; }
+    .byline { margin-top: 16px; }
+    .paper-nav {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      margin-top: 18px;
+      padding-bottom: 6px;
+      scrollbar-color: var(--rule-2) transparent;
+    }
+    .paper-nav a {
+      flex: 0 0 auto;
+    }
+    .sidenote {
+      display: block;
+      margin: 18px 0 22px;
+      padding: 13px 16px 13px 14px;
+      background: var(--paper-2);
+      border: 1px solid var(--rule);
+      border-left: 1px solid var(--rule-2);
+      border-radius: 7px;
+    }
+    .claim { grid-template-columns: 1fr; gap: 4px; }
+    .flow-figure .flow-svg {
+      width: 960px;
+      max-width: none;
+    }
+    .flow-why { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+    .flow-svg .flow-edge,
+    .flow-svg .flow-node,
+    .flow-svg .bias-on,
+    .flow-svg .scan-window,
+    .flow-svg .cache-cursor {
+      animation: none !important;
+    }
+    .flow-svg .flow-edge { stroke-dashoffset: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brandmark">Lumo FlyWheel / Serving Lab</div>
+    <nav aria-label="Site navigation">
+      <a href="index.html">Vol. I</a>
+      <a href="round-f.html">Vol. II</a>
+      <a href="gdn-tree-scan.html">Vol. III</a>
+      <a href="gdn-prefix-cache.html">Vol. IV</a>
+      <a href="stateless-tree.html">Vol. V</a>
+      <a href="spine-reorder.html">Vol. VI</a>
+      <a href="https://github.com/MaCoredroid/Lumo_FlyWheel">Repository</a>
+    </nav>
+  </div>
+
+  <header class="hero">
+    <p class="kicker">Volume VII / illustrated systems paper</p>
+    <h1>Keep or Replay</h1>
+    <p class="title-subtitle">Why a Speculative Tree That Accepts More Tokens Still Loses to the Linear Chain &mdash; the Committer Asymmetry, Measured to the Millisecond</p>
+    <p class="subhead">Six volumes built a branched token-tree speculative verifier for a Gated-DeltaNet hybrid, made it cache-correct, and &mdash; in <a href="spine-reorder.html">Vol.&nbsp;VI</a> &mdash; restored the superset so a wider tree accepts more tokens per forward. This page asks the honest question those wins set up: now that the tree out-accepts native, does it finally out-run it? The measured answer is <strong>no</strong>, and the reason is a single asymmetry in how the two paths commit. Native's linear chain <em>keeps</em> the recurrent states it already computed and selects the accepted one in about seven milliseconds. The tree, by branching, <em>discards</em> its per-node states &mdash; keeping them all would cost gigabytes &mdash; so it must <em>replay</em> the accepted path through the forty-eight-layer scan before the next forward can begin. That replay is a data dependency on the critical path, and it is most of the gap.</p>
+    <div class="hero-tldr" aria-label="TLDR and headline result">
+      <p class="tldr-copy"><strong>TL;DR:</strong> on a clean, garble-free, depth-matched three-arm run the tree accepts more per event than native MTP-5 (4.29 vs 3.42) and still loses decode throughput decisively (<strong>32.9 vs 42.7 tok/s</strong>, native ~30% ahead). A per-component GPU decomposition first pinned <strong>~78% of the gap on the committer</strong> (6.6&nbsp;ms native vs ~100&nbsp;ms tree) &mdash; the branch-replay tax native never pays &mdash; and corrected a wrong guess in passing: the drafter is <em>equal</em>, not host-heavy. Then the campaign attacked that committer and largely won: a 43-millisecond scratch-zeroing turned out redundant and was dropped, and a narrow timer showed the recurrent replay itself is only ~16&nbsp;ms, about 2&times; native's seven. Beating the committer did not win the race. The cost moved &mdash; in the clean run the dominant gap is now the <em>verify</em> forward (106 vs 67&nbsp;ms), which absorbs the wider tree's attention and a re-attributed ~37&ndash;41&nbsp;ms sampling decision &mdash; and a break-even model settles it: the tree overtakes native only above accept ~5.76, and its honest accept is 4.29 (the earlier ~5.2 was a repeat-loop artifact from two &ldquo;baked&rdquo; flags that were silently off for weeks). Native MTP-5 is the throughput floor; the tree is a lossless deep-suffix-decode achievement and a throughput regression, closable only by architecture.</p>
+      <div class="hero-result">
+        <span class="hero-number">30%</span>
+        <p><strong>native's decode-throughput lead over the tree</strong> &mdash; 42.7 vs 32.9 tok/s &mdash; <em>despite</em> the tree accepting ~25% more tokens per event (4.29 vs 3.42). The mechanism is <em>keep vs replay</em>: native retains its linear recurrent states and selects the accepted one (~7&nbsp;ms); the tree, by branching, must reconstruct the accepted path through the 48-layer scan, on the critical path. That committer started at ~78% of the gap and was paid down to ~16&nbsp;ms &mdash; and native <em>still</em> wins, because the cost moved to the verify tax and the tree's honest accept (4.29) is far below the ~5.76 break-even. Even a depth-matched linear MTP-11 out-accepts and out-runs the tree.</p>
+      </div>
+    </div>
+    <div class="byline">
+      <span><strong>Mark Ma</strong></span>
+      <span>ML systems / inference</span>
+      <span>Qwen 3.6-27B FP8 / GB10</span>
+      <span>July 2026</span>
+    </div>
+    <div class="paper-nav">
+      <a href="#abstract">Abstract</a>
+      <a href="#reader-map">Reader map</a>
+      <a href="#asymmetry">Keep vs replay</a>
+      <a href="#decomposition">Decomposition</a>
+      <a href="#ladder">The committer ladder</a>
+      <a href="#breakeven">Break-even</a>
+      <a href="#results">Results</a>
+      <a href="#museum">Failure museum</a>
+      <a href="#reflection">Reflection</a>
+      <a href="#limitations">Limits</a>
+      <a href="#future">Future work</a>
+      <a href="#receipts">Source trail</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="section" id="abstract">
+      <h2>Abstract</h2>
+      <p>Speculative decoding pays for itself when the tokens it drafts are accepted often enough that the shared verify forward, amortized over several committed tokens, beats decoding one token at a time. A branched token-tree accepts more per forward than a linear chain, because it offers the verifier several candidate continuations instead of one &mdash; and across this series we made that tree lossless (<a href="gdn-tree-scan.html">Vol.&nbsp;III</a>), cache-correct (<a href="gdn-prefix-cache.html">Vol.&nbsp;IV</a>&ndash;<a href="stateless-tree.html">V</a>), and, once its acceptance was no longer garble-inflated, a genuine superset that out-accepts its subsets (<a href="spine-reorder.html">Vol.&nbsp;VI</a>). This page reports the throughput reckoning those wins earned, and it is a negative result stated plainly: on the deployment workload, the branched tree does <strong>not</strong> beat native linear multi-token prediction on tokens per second, and we measured exactly why.</p>
+      <p>The cause is an asymmetry in the <em>committer</em> &mdash; the step that, after a speculative forward, writes the accepted path's recurrent state so the next forward can continue from it. On this model, 48 of 64 layers are recurrent Gated-DeltaNet, so &ldquo;the state&rdquo; is a per-layer scan carry, not a slice of a KV cache. Native's accepted tokens form a linear chain, so it already computed and <em>kept</em> each token's carry and simply selects the accepted one &mdash; about seven milliseconds. The tree branches, and a branched verify deliberately does not export every node's carry (retaining all of them would run to gigabytes), so after acceptance the tree must <em>replay</em> the accepted root-to-leaf path through all 48 layers to reconstruct its carry &mdash; on the order of a hundred milliseconds, and squarely on the critical path, since the next forward cannot start until that state exists. A per-component GPU-timer decomposition puts that replay at roughly 78% of the entire tree-versus-native step-time gap; the verify forward is ~18%, and the drafter &mdash; contrary to an earlier hypothesis this work retracts &mdash; is equal.</p>
+      <p>We then spent the campaign attacking the committer and reporting what moved. A 43-millisecond scratch-zeroing (&ldquo;burn&rdquo;) that the served path never reads was proven redundant and dropped; a CUDA-graph capture cut the replay's dispatch cost more than fivefold, byte-identically; batched gathers replaced forty-eight per-layer host round-trips with a handful. Those brought the committer from ~100 toward ~53 milliseconds &mdash; and then a narrower timer re-attributed the remainder: the GDN replay proper is only ~16 milliseconds, near native's seven, while a previously-hidden ~37&ndash;41-millisecond <em>sampling decision</em> is the larger cost and the real next target. A break-even model ties it together: given the measured step times, the tree overtakes native only above an acceptance of roughly 5.76 tokens per event, and its honest, garble-free acceptance is 4.29 &mdash; the earlier ~5.2 figures were repeat-loop artifacts from a period when two &ldquo;baked&rdquo; correctness flags were silently defaulting off. The deliverable is therefore a lossless branched-tree recurrent-state committer with deep suffix decode past depth-5 &mdash; a correctness milestone &mdash; and an honest verdict that native MTP-5 is the throughput floor, closable only by architecture, not by cheap levers.</p>
+
+      <div class="definition-box" aria-label="The governing asymmetry">
+        <p><strong>The governing asymmetry (keep vs replay):</strong> after a speculative commit, the next forward needs the accepted path's recurrent carry. A <em>linear</em> accept lets you keep every candidate's carry and select the accepted one, because the candidates are the chain itself. A <em>branched</em> accept cannot &mdash; the tree computed many nodes' carries in a fused kernel that discards them rather than pay to export all of them &mdash; so it must recompute the accepted path. Keeping is O(1) selection; replaying is a 48-layer scan. That gap is not a bug and not a tuning knob; it is the price of branching on a recurrent model, and it is what this page measures, attacks, and bounds.</p>
+      </div>
+
+      <h3>Names in this paper</h3>
+      <div class="glossary-strip" aria-label="Names in this paper">
+        <div><dfn>native (MTP-5)</dfn><span>stock vLLM linear multi-token-prediction decode, a 5-token chain on FLASH_ATTN; the throughput bar.</span></div>
+        <div><dfn>tree (tail6)</dfn><span>the Lumo branched token-tree verifier of <a href="gdn-tree-scan.html">Vol.&nbsp;III</a> with a deep Arctic suffix tail past depth-5, on TREE_ATTN.</span></div>
+        <div><dfn>native11</dfn><span>a depth-matched linear MTP-11 control &mdash; an 11-token chain, the same draft depth as the tree, without branching.</span></div>
+        <div><dfn>committer</dfn><span>the post-forward step that writes the accepted path's recurrent state for the next forward to continue from.</span></div>
+        <div><dfn>keep</dfn><span>native's cheap path: the per-token carries were already computed on the chain, so selecting the accepted one is ~7&nbsp;ms.</span></div>
+        <div><dfn>replay</dfn><span>the tree's expensive path: recompute the accepted root-to-leaf path through all 48 recurrent layers to rebuild its carry.</span></div>
+        <div><dfn>GDN carry</dfn><span>the Gated-DeltaNet recurrent state (scan carry + conv window) each of the 48 recurrent layers threads forward; not a KV slice.</span></div>
+        <div><dfn>CFWD / SFWD / DFWD</dfn><span>the committer, verify-forward, and drafter GPU-timer spans &mdash; the three components the step decomposes into.</span></div>
+        <div><dfn>burn</dfn><span>zeroing the tree's node-bank scratch after a commit; measured redundant for the served path and dropped.</span></div>
+        <div><dfn>critical path</dfn><span>work the next forward must wait on. The replay is on it (a data dependency), so async scheduling cannot hide it.</span></div>
+        <div><dfn>accept / event, break-even</dfn><span>committed tokens per forward; the tree overtakes native only above accept ~5.76, and it sits at 4.29.</span></div>
+        <div><dfn>sampling decision</dfn><span>the accept / longest-prefix / bonus logic around the replay; newly isolated at ~37&ndash;41&nbsp;ms as the larger residual cost.</span></div>
+      </div>
+
+      <div class="abstract-grid">
+        <div class="panel">
+          <h2>Contribution</h2>
+          <p>One measurement and one mechanism, and the discipline to report a negative. The measurement is a per-component GPU decomposition of the tree-versus-native step that localizes ~78% of the gap to the committer and, crucially, corrects a plausible wrong story (the drafter is equal, not the culprit). The mechanism is <em>keep vs replay</em>: branching on a recurrent model forces a scan replay that a linear chain avoids by construction, on the critical path where nothing can hide it.</p>
+          <p>This page is the sequel to <a href="spine-reorder.html">Vol.&nbsp;VI</a>, whose restored superset made the throughput question finally meaningful, and is self-contained. Like the prior volumes it is a research report: it keeps the committer optimization ladder attempt by attempt, a full <a href="#museum">failure museum</a> &mdash; a whole overlap scheme built and deleted, four committer levers refuted or marginal, and a methodology bug in which two &ldquo;baked&rdquo; flags were off for weeks &mdash; and an honest break-even that says what acceptance the tree would need and does not have. The <a href="#future">future work</a> is the only thing that closes the gap, and it is architectural.</p>
+        </div>
+        <aside class="panel">
+          <h2>Status</h2>
+          <div class="claim-list">
+            <div class="claim"><span class="state warn">THROUGHPUT</span><p>Native wins. Tree 32.9 vs native 42.7 tok/s decode on the clean 3-arm run; even depth-matched linear MTP-11 out-runs the tree. The tree's accept edge does not convert to speed.</p></div>
+            <div class="claim"><span class="state pass">DIAGNOSIS</span><p>The committer <em>started</em> at ~78% of the gap (6.6 vs 100&nbsp;ms), verify ~18%, drafter equal &mdash; correcting a &ldquo;host-heavy drafter&rdquo; guess. The replay is a critical-path data dependency; async cannot hide it.</p></div>
+            <div class="claim"><span class="state pass">LADDER</span><p>Committer paid down ~100&rarr;~17&nbsp;ms: a 43&nbsp;ms burn was redundant, the replay proper is only ~16&nbsp;ms. But the gap <em>moved</em> &mdash; in the clean run verify (106 vs 67&nbsp;ms) is now dominant, absorbing the re-attributed sampling decision.</p></div>
+            <div class="claim"><span class="state pass">CORRECTNESS</span><p>A lossless branched-tree GDN committer with deep suffix decode reaching accept &gt;5, garble-free at 0/16 repeat-loops across 48 task-runs. The honest deliverable.</p></div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="source-exhibit" aria-label="Falsification checks">
+        <div class="source-head">
+          <strong>What would falsify this?</strong>
+          <span>Skeptic checks before trusting the headline</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Throughput</span><p>A clean, matched-prefill, garble-free run in which the tree's decode tokens-per-second meets or beats native MTP-5 &mdash; not a verify-only ceiling, the full-step wall.</p></div>
+          <div class="box bad"><span class="tag">Decomposition</span><p>The committer <em>not</em> being the dominant term &mdash; a per-call GPU timer showing the gap lives in the verify or drafter instead, which would move the whole diagnosis.</p></div>
+          <div class="box bad"><span class="tag">Critical path</span><p>Asynchronous scheduling hiding the replay &mdash; if the commit could overlap the next forward, it is not the data dependency this page claims.</p></div>
+          <div class="box bad"><span class="tag">Break-even</span><p>The tree beating native <em>below</em> accept ~5.76, or its honest accept clearing that bar &mdash; either would overturn the model or the retraction of the ~5.2 figures.</p></div>
+          <div class="box bad"><span class="tag">Losslessness</span><p>The committed tokens diverging from a linear recompute &mdash; the replay reconstructs state, so any token change would mean it is not faithful.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="reader-map">
+      <h2>Five-Minute Reader Map</h2>
+      <aside class="sidenote">
+        <p><strong>Read path:</strong> the asymmetry, then the decomposition that proves it dominates, then the ladder that attacks it and the break-even that bounds it, then the results. The museum and reflection are the retrospective; the rest is appendix.</p>
+      </aside>
+      <p>The shortest version: a branched tree accepts more tokens per forward than a linear chain, but on a recurrent model the branch has to be paid for at commit time. A linear accept keeps the states it already has; a branched accept threw them away and has to replay the accepted path through 48 layers to get them back &mdash; on the critical path, where nothing hides it. That replay is most of why the tree is slower, the accept advantage never catches up, and native linear decode stays the throughput floor.</p>
+
+      <div class="source-exhibit" aria-label="Five-minute reading path">
+        <div class="source-head">
+          <strong>Read in this order</strong>
+          <span>The blog path before the full paper path</span>
+        </div>
+        <div class="grid">
+          <div class="box info"><span class="tag">Keep vs replay</span><p>Native keeps its linear chain's recurrent carries and selects the accepted one (~7&nbsp;ms). The tree branches, discards per-node carries, and must replay the accepted path through 48 layers (~100&nbsp;ms).</p></div>
+          <div class="box bad"><span class="tag">Decomposition</span><p>Per-component GPU timers: committer ~78% of the gap, verify ~18%, drafter equal (~4%). The old &ldquo;host-heavy tree drafter&rdquo; story was wrong.</p></div>
+          <div class="box good"><span class="tag">The ladder</span><p>Attack the committer: burn is redundant (&minus;43&nbsp;ms), graph-capture cuts dispatch 5.4&times;, batched gathers replace 48 round-trips. ~100&rarr;~53&nbsp;ms &mdash; and the replay proper is only ~16.</p></div>
+          <div class="box warn"><span class="tag">Break-even</span><p>Tree beats native only above accept ~5.76; the honest accept is 4.29. Direct 3-arm run confirms: native wins decode TPS, even vs depth-matched linear MTP-11.</p></div>
+          <div class="box warn"><span class="tag">Honest close</span><p>The tree is a lossless deep-suffix-decode correctness win and a throughput regression. Closing the gap is architectural &mdash; fuse the replay into the forward, or push accept past break-even.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="asymmetry">
+      <h2>Keep vs Replay</h2>
+      <aside class="sidenote">
+        <p><strong>The committer's job:</strong> after a speculative forward, the accepted path's recurrent state has to exist before the next forward can start &mdash; the next scan reads it as its initial carry. How you produce it is the whole story.</p>
+        <p><strong>The machine:</strong> GB10 is a bandwidth-bound part &mdash; 273&nbsp;GB/s of unified LPDDR5X, a ~99&nbsp;ms weight-read floor per forward. On such a machine a small, occupancy-bound kernel that cannot fill the SMs is expensive out of all proportion to its FLOPs.</p>
+      </aside>
+      <p>On this model 48 of 64 layers are recurrent Gated-DeltaNet, so &ldquo;the state&rdquo; the next step needs is not a slice of a KV cache &mdash; it is a per-layer scan carry, threaded token by token. After a speculative step commits, the next forward must begin its scan from the accepted path's carry. Native and the tree produce that carry in fundamentally different ways, and the difference is the entire throughput story.</p>
+
+      <p><strong>Native keeps.</strong> Native MTP-5 drafts a linear chain of five tokens, and a chain advances the recurrent state contiguously: the accepted-path carry is computed <em>inside the verify forward's own fused scan</em>, which writes each token's final carry to its linear column. When acceptance lands at length <em>k</em>, the committed state is already sitting in column <em>k&minus;1</em>; committing is an index select, not a computation. The mamba block simply advances linearly by the number accepted, with no per-token replay. Measured, native's committer is about <strong>seven milliseconds</strong> &mdash; the cost of a gather.</p>
+
+      <p><strong>The tree cannot.</strong> A branched verify scores all of the tree's nodes in parallel, but which leaf is accepted is not known until <em>after</em> the committer's rejection walk decides it &mdash; after the forward is over. To keep states the way native does, the kernel would have to export every node's carry, for every layer, to memory, and then gather the one accepted leaf. That is not a little expensive; it is <strong>~13.7&nbsp;GB</strong> per step (about 13.6&nbsp;MB per layer, times twenty-one nodes, times forty-eight layers), so the verify kernel deliberately does not export per-node states at all &mdash; it keeps only the cheap activation rings and reconstructs what it needs. Passing it a state buffer is a wiring error the kernel refuses. So after acceptance the tree must <strong>replay</strong>: re-execute the accepted root-to-leaf path through all forty-eight recurrent layers to rebuild its carry.</p>
+
+      <div class="figure" aria-labelledby="fig1-title">
+        <div class="figure-head"><strong id="fig1-title">Figure 1</strong><span>A linear accept leaves its state in place to select; a branched accept threw its states away and must recompute the path</span></div>
+        <svg class="diagram" viewBox="0 0 1120 400" role="img" aria-label="Native keeps its linear chain's per-token recurrent carries and selects the accepted one; the tree discards per-node carries because keeping all would cost gigabytes, and must replay the accepted path through 48 layers">
+          <defs>
+            <marker id="f1-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#8bd3dd"></path>
+            </marker>
+            <marker id="f1-arrow-g" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#a7d98d"></path>
+            </marker>
+            <marker id="f1-arrow-r" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,6 L9,3 z" fill="#d88989"></path>
+            </marker>
+          </defs>
+          <text x="24" y="30" class="label">A. Native (linear): the carry is already in column k&minus;1 &mdash; select it (~7 ms)</text>
+          <circle cx="70" cy="92" r="16" class="node node-cyan"></circle>
+          <circle cx="160" cy="92" r="16" class="node node-cyan"></circle>
+          <circle cx="250" cy="92" r="16" class="node node-cyan"></circle>
+          <circle cx="340" cy="92" r="16" class="node node-green"></circle>
+          <circle cx="430" cy="92" r="16" class="node node-cyan" opacity="0.35"></circle>
+          <path d="M86 92 H144" class="arrow" style="marker-end:url(#f1-arrow)"></path>
+          <path d="M176 92 H234" class="arrow" style="marker-end:url(#f1-arrow)"></path>
+          <path d="M266 92 H324" class="arrow" style="marker-end:url(#f1-arrow)"></path>
+          <path d="M356 92 H414" class="arrow" style="marker-end:url(#f1-arrow)" opacity="0.4"></path>
+          <text x="64" y="97" class="tiny">0</text><text x="154" y="97" class="tiny">1</text><text x="244" y="97" class="tiny">2</text><text x="334" y="97" class="tiny">3</text><text x="424" y="97" class="tiny">4</text>
+          <path d="M340 118 V150" class="arrow" style="stroke: var(--green); marker-end:url(#f1-arrow-g)"></path>
+          <text x="360" y="140" class="tiny">accepted at k=4 &rarr; committed carry already sits in column 3. Select, done.</text>
+          <text x="24" y="176" class="tiny">Each token's carry was written to its column by the verify scan itself. Committing is a gather. No recompute.</text>
+
+          <text x="24" y="234" class="label">B. Tree (branched): the accepted leaf's carry was never kept &mdash; replay the path (~16&ndash;72 ms)</text>
+          <circle cx="70" cy="300" r="15" class="node node-cyan"></circle>
+          <circle cx="160" cy="300" r="15" class="node node-cyan"></circle>
+          <circle cx="250" cy="300" r="15" class="node node-cyan"></circle>
+          <circle cx="340" cy="300" r="15" class="node node-green"></circle>
+          <circle cx="160" cy="254" r="13" class="node node-rose"></circle>
+          <circle cx="250" cy="254" r="13" class="node node-rose"></circle>
+          <circle cx="340" cy="254" r="13" class="node node-rose"></circle>
+          <path d="M70 300 L160 300 L250 300 L340 300" class="edge"></path>
+          <path d="M70 300 L160 254" class="edge"></path>
+          <path d="M160 300 L250 254" class="edge"></path>
+          <path d="M250 300 L340 254" class="edge"></path>
+          <text x="410" y="252" class="tiny">rose = sibling nodes; their carries are discarded &mdash; keeping all</text>
+          <text x="410" y="274" class="tiny">21 nodes &times; 48 layers would be ~13.7 GB. So none are kept.</text>
+          <text x="410" y="300" class="tiny">green = accepted leaf, decided only AFTER the forward, by the</text>
+          <text x="410" y="322" class="tiny">rejection walk. Its carry must be rebuilt from scratch.</text>
+          <path d="M70 340 L160 340 L250 340 L340 340" class="arrow" style="stroke: var(--rose); marker-end:url(#f1-arrow-r)"></path>
+          <text x="24" y="384" class="tiny">Replay: re-execute root&rarr;leaf through all 48 recurrent layers &mdash; 48 tiny kernels, each pinning ~1 CTA/SM, latency-bound. On the critical path.</text>
+        </svg>
+        <p class="caption">Figure 1 is the asymmetry. Native's verify scan writes every token's carry to its column as it goes, so the accepted carry is already there to select. The tree's verify cannot keep every node's carry &mdash; it would run to gigabytes &mdash; and the accepted leaf is not even known until the rejection walk finishes, so the tree must replay the accepted path through all forty-eight layers to rebuild it. Keeping is a gather; replaying is a scan. That is the price of branching on a recurrent model.</p>
+      </div>
+
+      <p>The replay is not slow because of launch overhead; it is slow because of <em>occupancy</em>. It is forty-eight tiny per-layer kernels, and each pins roughly one thread block per SM &mdash; the register-resident state tile is large enough that only one fits &mdash; so there is no co-resident warp to hide memory latency behind. Two natural ways to fix that were measured and both made it <em>worse</em>: running the forty-eight layers on concurrent streams (91.6&nbsp;ms versus 76.6&nbsp;ms serial) and fusing them into one batched launch (111.9&nbsp;ms versus 76.5&nbsp;ms), because the wall is occupancy and bandwidth, not the number of launches. The refutations are in the <a href="#museum">museum</a>; the point here is that the replay is a floor, not a missed optimization.</p>
+
+      <p>And it is squarely on the critical path. The replay produces the exact state the next forward's scan reads as its initial carry, so the sequence <code>verify &rarr; commit (replay) &rarr; next forward</code> is a data dependency, not host slack. Asynchronous scheduling &mdash; which does help, overlapping the drafter's host work behind GPU time &mdash; cannot reorder the replay away, because nothing in the next forward can begin without its output. This is the deep reason native's committer is seven milliseconds and the tree's is not: native folds the accepted-path advance <em>into</em> the forward, for free on a bandwidth-bound machine, precisely because a linear accept lets it commit before the forward ends. The tree, by deferring &ldquo;which leaf&rdquo; past the forward, forfeits that fold. Everything the rest of this page does is either pay the replay down or try to earn it back in acceptance.</p>
+    </section>
+    <section class="section" id="decomposition">
+      <h2>Where the Step Time Goes</h2>
+      <aside class="sidenote">
+        <p><strong>The method:</strong> per-call GPU-timer spans around the three components of a speculative step &mdash; drafter, verify forward, committer &mdash; measured in the same run for both arms, so the comparison is same-boot and same-workload, not cross-run arithmetic.</p>
+        <p><strong>The correction:</strong> this decomposition overturned our own prior guess. We had blamed a &ldquo;host-heavy tree drafter.&rdquo; The timers say the drafter is equal; the committer is the story.</p>
+      </aside>
+      <p>A speculative decode step is three things: the <strong>drafter</strong> proposes candidate tokens, the <strong>verify forward</strong> scores them in one pass, and the <strong>committer</strong> writes the accepted path's state for the next step. Instrumenting each with its own GPU-timer span, in one same-boot run, decomposes the tree-versus-native step-time gap exactly. This is the <em>diagnostic</em> decomposition &mdash; taken before the committer was optimized, with the scratch-zeroing still on &mdash; and it is what aimed the campaign:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Per-component GPU timers, native MTP-5 versus the tree, same-boot diagnostic run (committer un-optimized). The committer is ~78% of the gap; the drafter is equal.</caption>
+          <thead>
+            <tr><th>Component</th><th>Native MTP-5</th><th>Tree</th><th>Delta</th><th>Share of gap</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Committer (CFWD)</td><td class="num">6.6 ms</td><td class="num">100.4 ms</td><td class="num"><strong>+93.8 ms</strong></td><td class="num"><strong>~78%</strong></td></tr>
+            <tr><td>Verify forward (SFWD)</td><td class="num">66 ms</td><td class="num">88 ms</td><td class="num">+22 ms</td><td class="num">~18%</td></tr>
+            <tr><td>Drafter (DFWD)</td><td class="num">97.1 ms</td><td class="num">102.4 ms</td><td class="num">+5.3 ms</td><td class="num">~4%</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The committer is the gap. At 6.6 milliseconds native barely notices it; at 100 milliseconds the tree pays it every step, and that single term is roughly 78% of the whole difference. The verify forward is a distant second at ~18% &mdash; the tree scores a wider candidate set, so its forward is a touch heavier &mdash; and the drafter, which we had assumed was the tree's host-bound weakness, is <em>equal</em>: native's five sequential MTP heads cost about what the tree's merged drafter does (97 versus 102 milliseconds). That retraction matters, because it points the entire optimization budget at one place. Whatever is to be done for the tree's throughput is a committer problem.</p>
+
+      <div class="source-exhibit" aria-label="The corrected picture">
+        <div class="source-head">
+          <strong>What the decomposition corrected</strong>
+          <span>A plausible wrong story, killed by a per-call timer</span>
+        </div>
+        <div class="grid">
+          <div class="box bad"><span class="tag">Old story</span><p>&ldquo;The tree's drafter is host-heavy&rdquo; &mdash; the Arctic tail plus tree assembly looked expensive on the host, so the drafter was the suspect.</p></div>
+          <div class="box good"><span class="tag">Measured</span><p>Drafter equal (97.1 vs 102.4&nbsp;ms). Native's five sequential MTP heads cost the same as the tree's merged drafter. Not the culprit.</p></div>
+          <div class="box bad"><span class="tag">The real term</span><p>Committer +93.8&nbsp;ms, ~78% of the gap. One term, on the critical path, native almost doesn't pay.</p></div>
+          <div class="box info"><span class="tag">Consequence</span><p>The optimization budget goes first to the committer. The next section pays it down &mdash; and finds the gap moves rather than closes.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="ladder">
+      <h2>The Committer Ladder</h2>
+      <aside class="sidenote">
+        <p><strong>The campaign:</strong> the diagnosis put ~78% of the gap on the committer, so we spent the campaign attacking it and reporting what moved &mdash; and, honestly, most of what looked like the tax turned out to be either redundant or misattributed.</p>
+        <p><strong>The punchline:</strong> the committer was largely paid down &mdash; from ~100 to ~17 milliseconds &mdash; and native still won, because the cost moved rather than vanished.</p>
+      </aside>
+      <p>The ~100-millisecond committer was not one thing. Decomposed, it was a large scratch-zeroing, the recurrent replay itself, forty-eight per-layer host dispatches, and the layout gathers that feed them. Attacking each in turn both cut the number and, more usefully, corrected what the number <em>was</em>.</p>
+
+      <h3>The 43 milliseconds that did nothing</h3>
+      <p>The single largest piece was not the replay. It was the <strong>burn</strong>: after each commit the tree zeroed its node-bank scratch &mdash; an eight-gigabyte fp32 region &mdash; a tree-specific tax native has no analog for, measured at <strong>43 milliseconds</strong>, about 87% of what remained once the replay loop was graph-reduced. And it was redundant. Every cross-step reader of the recurrent state bank targets column 0, the request's running row, under the locked stateless-tree lifecycle; the burned rows are columns 1 and up, the drafted tree nodes, which nothing reads on the next step. A red-team pass confirmed the served path is byte-identical with the burn off, and it was dropped &mdash; carefully, behind the lifecycle's tri-flag guard rather than a bare deletion, because the burn stays load-bearing on a legacy path and a handful of default-off diagnostics do read the stale rows. That one change took the committer from ~80&ndash;88 down to ~53&ndash;57 milliseconds, for free.</p>
+
+      <h3>The rest, batched and graph-captured &mdash; and a measurement that lied</h3>
+      <p>The remaining machinery was host-bound in the ordinary way: forty-eight per-layer dispatches, ninety-odd per-layer host syncs, gathers done once per layer. Batching them &mdash; one layout conversion and four batched gathers in place of forty-eight round-trips &mdash; is byte-identical and removes tens of milliseconds of host time; capturing the per-layer scan loop into a single CUDA graph is also byte-identical (enabled by a state-neutral padding that leaves the recurrent state exactly unchanged) and cuts its dispatch more than fivefold. In the micro-benchmark the batched and graph variants both land near six milliseconds &mdash; native's own floor &mdash; so the graph was not even needed over the simpler batched path.</p>
+      <p>Then the live number refused to match the micro-benchmark: burn off, the committer still read ~53&ndash;57 milliseconds live against ~15 in isolation. The timer was lying &mdash; it wrapped the entire rejection-sampler dispatch, not the replay. A narrow timer, placed inside the one shared replay function the deployed path actually calls, settled it: the recurrent replay proper is <strong>16.2 milliseconds</strong>, near native's seven. The other ~37&ndash;41 milliseconds is not replay at all &mdash; it is the <strong>sampling decision</strong>, the rejection walk that scores the tree's candidate paths and picks the accepted leaf, a cost that scales with branching and had been hiding inside the committer's timer the whole time. It is newly isolated, larger than the replay, and the real next target.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The committer ladder: what each lever did, and what it revealed. Every state-touching lever is byte-identical.</caption>
+          <thead><tr><th>Lever</th><th>Effect</th><th>Verdict</th></tr></thead>
+          <tbody>
+            <tr><td>Parallelize the replay (multistream / batched-single-launch)</td><td>91.6 / 111.9&nbsp;ms vs 76.6&nbsp;ms serial</td><td><span class="pill bad">slower</span> occupancy-bound, not launch-bound</td></tr>
+            <tr><td>Drop the burn (redundant scratch-zeroing)</td><td>committer ~85 &rarr; ~55&nbsp;ms (&minus;43&nbsp;ms)</td><td><span class="pill good">baked</span> served path byte-identical</td></tr>
+            <tr><td>Batched gathers / graph-capture the scan loop</td><td>micro-bench ~6&nbsp;ms, byte-identical</td><td><span class="pill good">at native floor</span> graph redundant vs batched</td></tr>
+            <tr><td>Narrow replay-only timer</td><td>isolates replay at 16.2&nbsp;ms</td><td><span class="pill info">re-attributed</span> ~37&ndash;41&nbsp;ms is the sampling decision</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The committer beaten &mdash; and the gap that moved</h3>
+      <p>So the committer campaign largely won: the tree's committer fell from ~100 to ~17 milliseconds, about twice native's rather than fifteen times it. And native still won the clean run. The reason is visible in the final per-event decomposition, where the committer is no longer the dominant term &mdash; the cost moved to the verify forward, which now carries both the wider tree's attention and the re-attributed sampling decision:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Per-event GPU time on the clean postsnapfix3 run (burn off). The committer is paid down; verify is now the dominant gap. Totals reproduce the decode throughput exactly.</caption>
+          <thead><tr><th>Component (ms/event)</th><th>tree (tail6)</th><th>native5</th><th>native11</th></tr></thead>
+          <tbody>
+            <tr><td>Verify</td><td class="num"><strong>106.28</strong></td><td class="num">66.68</td><td class="num">73.95</td></tr>
+            <tr><td>Drafter</td><td class="num">35.04</td><td class="num">31.72</td><td class="num">68.26</td></tr>
+            <tr><td>Committer</td><td class="num">16.89</td><td class="num">2.49</td><td class="num">3.84</td></tr>
+            <tr><td>Host-other</td><td class="num">2.67</td><td class="num">2.55</td><td class="num">2.24</td></tr>
+            <tr><td><strong>Total</strong></td><td class="num"><strong>160.88</strong></td><td class="num"><strong>103.45</strong></td><td class="num"><strong>148.28</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Read against the earlier money-table, this is the honest arc in one picture. (The two are different campaigns &mdash; the diagnostic run measured per-forward with the committer un-optimized; this one is per-event on a later boot with asynchronous scheduling on, which is why the absolute drafter cost differs &mdash; but the arm-to-arm structure is what the story turns on.) The committer that was ~78% of the gap is now ~14 of a ~57-millisecond gap; the verify forward is the new leader at nearly 40 milliseconds over native, part tree-attention width and part the sampling decision that used to hide in the committer. The tree's total per-event cost is 160.9 milliseconds against native's 103.5, and its 5.286 committed tokens over that time are exactly the 32.85 tokens per second the run measured &mdash; against native's 4.422 over 103.5 milliseconds, 42.74. Beating the committer was real and it was not enough: the tree pays a per-event tax that its extra acceptance, at the honest rate, does not cover.</p>
+    </section>
+    <section class="section" id="breakeven">
+      <h2>Break-Even, and the Accept That Wasn't There</h2>
+      <aside class="sidenote">
+        <p><strong>The point of a model:</strong> throughput is acceptance over step time. Once the per-event step time is measured, you can compute the exact acceptance the tree would need to overtake native &mdash; and check it against what the tree actually accepts.</p>
+        <p><strong>The twist:</strong> the acceptance the tree was thought to have (~5.2) turned out to be a garble artifact. The honest number is 4.29, and it moves the tree <em>further</em> from break-even, not closer.</p>
+      </aside>
+      <p>With the committer paid down and the components measured, the break-even is a division. The tree overtakes native when its accepted tokens per event, over its per-event step time, beat native's &mdash; that is, when <code>accept_tree / 160.9 &gt; 3.422 / 103.5</code>, so <code>accept_tree &gt; 3.422 &times; 160.9/103.5 &asymp; 5.3</code>. The tree accepts 4.29. It is a token below the bar, and the bar is set by a per-event cost the accept advantage has to pay back in full. (The earlier, rougher model &mdash; with the un-optimized committer inflating the tree step to ~177&nbsp;ms &mdash; put break-even near 5.76; the paid-down committer lowers it to ~5.3, and the tree still does not clear it.)</p>
+
+      <p>The acceptance number itself needed correcting, and the correction cuts against the tree. For weeks, this exact tree geometry was reported at accept ~5.2 &mdash; tantalizingly near break-even. Those figures were <strong>garble artifacts</strong>. Two &ldquo;baked&rdquo; correctness flags &mdash; the attention-KV remap and the contiguous-spine reorder of the last two volumes &mdash; were hardcoded on only in a narrow locked launcher and were silently defaulting <em>off</em> in the general campaign launcher, so the campaigns ran without them. The result was degenerate repeat-loops (one task emitted 126 consecutive identical tool calls), and a repeat-loop is trivially predictable, so it <em>inflates</em> acceptance &mdash; a garbled window measured 40&ndash;124% higher deep-tail acceptance than a healthy one. With the flags actually on, the clean run has zero repeat-loops across all forty-eight task-runs, and the honest acceptance for this tail geometry is <strong>4.286</strong>. The tree was never as close to break-even as it looked; the appearance of closeness was the same bug this series has been chasing since Vol.&nbsp;V.</p>
+
+      <div class="source-exhibit" aria-label="Break-even summary">
+        <div class="source-head">
+          <strong>The bar, and the honest number</strong>
+          <span>Two attacks, both under the line</span>
+        </div>
+        <div class="grid">
+          <div class="box warn"><span class="tag">Break-even</span><p>Tree needs accept &gt; ~5.3 (paid-down committer) to overtake native; ~5.76 on the earlier heavier model. Either way, a bar it does not clear.</p></div>
+          <div class="box bad"><span class="tag">Honest accept</span><p>4.286 &mdash; the first clean cache-on accept for this geometry. The ~5.2 figures were repeat-loop inflation from two flags that were off for weeks.</p></div>
+          <div class="box info"><span class="tag">The two ways under</span><p>Cheaper step (kill the tree's per-event tax) or higher accept (past break-even). The <a href="#future">future work</a> is exactly these two.</p></div>
+          <div class="box good"><span class="tag">What's solid</span><p>The verdict's sign. Native wins in the model and in direct measurement; the tree is a correctness win, not a throughput one.</p></div>
+        </div>
+      </div>
+    </section>
+    <section class="section" id="results">
+      <h2>Results: The Depth-Matched Three-Arm Run</h2>
+      <aside class="sidenote">
+        <p><strong>The bar:</strong> a clean, garble-free, cache-on run at deployment config, with a depth-matched linear control so &ldquo;the tree accepts more&rdquo; is tested against a chain of the <em>same</em> draft depth, not just the shallow default.</p>
+        <p><strong>Why depth-matched matters:</strong> the tree's justification is that branching buys acceptance. The fair control is not only native MTP-5 but an MTP-11 chain of the tree's own depth &mdash; and it changes the conclusion.</p>
+      </aside>
+      <p>The verdict rests on one clean run: three arms, all cache-on, batch-4, temperature 0.6, nudge-free, on the same sixteen SWE-Verified tasks, after the two correctness flags were fixed to actually be on (see the <a href="#museum">museum</a> for why that mattered). The arms are native MTP-5 (the shipped bar), the tree with its deep suffix tail, and a depth-matched native MTP-11 &mdash; a linear chain of the tree's own draft depth, so &ldquo;branching buys acceptance&rdquo; is tested against a chain that drafts just as deep.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Three arms, one clean cache-on B4 run over sixteen SWE-Verified tasks. Higher accept is a lever; higher decode TPS is the speed. Zero repeat-loops on all 48 task-runs.</caption>
+          <thead>
+            <tr>
+              <th>Arm</th>
+              <th>Draft</th>
+              <th>Accept / event</th>
+              <th>Committed / event</th>
+              <th>Resolved</th>
+              <th>Decode TPS (prefill-indep.)</th>
+              <th>Repeat-loop</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>native (MTP-5)</td>
+              <td>linear, 5-token</td>
+              <td class="num">3.422</td>
+              <td class="num">4.422</td>
+              <td class="num">10/16</td>
+              <td class="num"><strong>42.74</strong></td>
+              <td class="num">0/16</td>
+            </tr>
+            <tr>
+              <td>tree (tail6)</td>
+              <td>branched + deep suffix tail</td>
+              <td class="num">4.286</td>
+              <td class="num">5.286</td>
+              <td class="num">10/16</td>
+              <td class="num">32.85</td>
+              <td class="num">0/16</td>
+            </tr>
+            <tr>
+              <td>native11 (depth-matched)</td>
+              <td>linear, 11-token</td>
+              <td class="num"><strong>4.923</strong></td>
+              <td class="num">5.923</td>
+              <td class="num">8/16</td>
+              <td class="num">39.95</td>
+              <td class="num">0/16</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>Three readings, in order of how much they hurt the tree's case. First, the headline: the tree accepts more per event than native MTP-5 (4.286 vs 3.422) and is nonetheless <strong>~23% slower on decode throughput</strong> (32.85 vs 42.74 tok/s). The accept advantage is real and does not convert to speed &mdash; the committer eats it, as the decomposition below shows. Second, the depth-matched control removes even the accept bragging right: a plain linear MTP-11, drafting the same depth without any branching, <strong>out-accepts the tree</strong> (4.923 vs 4.286) and out-runs it (39.95 vs 32.85) &mdash; so at matched depth the branching does not even buy the acceptance it was supposed to, on this workload. Third, resolve: native MTP-5 ties the tree at 10 of 16 and native11 trails at 8 of 16, so the tree's extra acceptance buys no extra task success either. Native MTP-5 is simultaneously the fastest and (tied) the best-resolving arm.</p>
+
+      <div class="source-exhibit" aria-label="The three readings">
+        <div class="source-head">
+          <strong>What the clean run says</strong>
+          <span>The tree's accept edge converts to neither speed nor task success</span>
+        </div>
+        <div class="grid">
+          <div class="box warn"><span class="tag">Speed</span><p>Tree 32.85 vs native 42.74 tok/s &mdash; ~23% slower despite higher accept. The committer eats the advantage.</p></div>
+          <div class="box bad"><span class="tag">Depth-matched</span><p>Linear MTP-11 out-accepts the tree (4.923 vs 4.286) and out-runs it. At matched depth, branching buys no accept here.</p></div>
+          <div class="box info"><span class="tag">Resolve</span><p>Native MTP-5 ties the tree (10/16) and beats native11 (8/16). Extra accept buys no extra resolves.</p></div>
+          <div class="box good"><span class="tag">Clean</span><p>0/16 repeat-loops on every arm &mdash; the garble that inflated earlier tree accepts is gone; these numbers are trustworthy.</p></div>
+        </div>
+      </div>
+
+      <p>One caution kept from the campaign: decode TPS here is the prefill-independent per-decode-step rate, the fair cross-arm number. It is <em>not</em> a verify-only ceiling &mdash; the trap of a forward-limited metric, which flatters the tree by charging only the shared forward and omitting the committer &mdash; and it is not a raw wall clock that a differing prefill fraction would confound. On the verify-only ceiling the tree looks far closer to native (a ~26% gap rather than the true ~50% full-step gap); this page reports the full-step number, because the committer the ceiling omits is precisely the term that decides the race.</p>
+    </section>
+    <section class="section" id="museum">
+      <h2>Failure Museum</h2>
+      <aside class="sidenote">
+        <p><strong>The recurring adversary was the harness, not the hardware.</strong> Baked flags that were off, a metric inflated by garble, a timer on a function the deploy path never called, a compile mistaken for a hang, a confounded baseline &mdash; as much of the campaign went to trusting the measurement as to beating the machine.</p>
+      </aside>
+      <p>Eleven refuted levers and instructive failures, in three families: the <strong>measurement-hygiene</strong> failures that made numbers lie; the <strong>cheap committer levers</strong> that the replay's hardware floor refuted one by one; and the <strong>piggyback line</strong> &mdash; the architecturally-correct bet that was built, baked, and then deleted when its deep tail collapsed.</p>
+
+      <div class="grid" aria-label="Failure families">
+        <div class="box warn"><span class="tag">The harness lied</span><h3>Flags off, metrics inflated, timers misplaced</h3><p>Two &ldquo;baked&rdquo; fixes were off for weeks; the accept~5 headline was garble; the committer timer wrapped the wrong function.</p></div>
+        <div class="box warn"><span class="tag">The replay is a floor</span><h3>Cheap kernel levers, all refuted</h3><p>Copy-not-replay, multistream, batched-fuse, native-kernel swap &mdash; each measured slower or infeasible. Occupancy is the wall.</p></div>
+        <div class="box warn"><span class="tag">The big bet</span><h3>Piggyback: built, baked, deleted</h3><p>Folding the replay into the forward was provably state-exact and still collapsed the deep tail, because it seeded a different kernel.</p></div>
+      </div>
+
+      <details class="fold">
+        <summary>
+          <span>Full failure ledger</span>
+          <small>Eleven refuted levers, grouped by family, with the signal and the refutation for each.</small>
+        </summary>
+        <div class="fold-body">
+          <p class="failure-note"><strong>Status key:</strong> <span class="pill good">settled</span> a real dead end later evidence upheld; <span class="pill warn">superseded</span> the observation was real but the framing was replaced; <span class="pill bad">contaminated</span> the measurement could not support its conclusion.</p>
+
+          <div class="failure-ledger" aria-label="Detailed failure museum">
+            <p class="failure-note"><strong>Family A &mdash; the harness was the adversary.</strong></p>
+
+            <article class="failure-card contaminated">
+              <header><h3>Two &ldquo;baked&rdquo; fixes that were silently off for weeks</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the attention-KV remap and the contiguous-spine reorder of the last two volumes were both proven, and hardcoded on in the narrow locked launcher and a dozen diagnostics &mdash; so the docs said &ldquo;baked,&rdquo; and every campaign was assumed to inherit them.</p>
+              <ul><li><strong>What killed it:</strong> the general B4 campaign launcher &mdash; the one actually run &mdash; defaulted both flags <em>off</em>. Weeks of tree campaigns ran without the fixes; it surfaced only when two runs showed severe repeat-loops (one task at 126 consecutive identical tool calls). Fixed with a single source-of-truth flag file sourced by all three launchers plus a fail-loud boot assertion; the clean rerun then had 0 of 16 repeat-loops.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> &ldquo;baked into the locked script&rdquo; is not &ldquo;baked into the launcher you actually run&rdquo; &mdash; a flag proven on in one entry point is worthless if the production entry point defaults it off. One source of truth and a boot assertion, or it rots silently.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>The accept~5 headline was a garble artifact</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the tree's signature achievement was &ldquo;accept &gt; 5&rdquo; &mdash; the first lossless suffix decode past depth-5 &mdash; and run after run showed deep-tail acceptance near five, reading as a genuine model-quality win.</p>
+              <ul><li><strong>What killed it:</strong> once the flags-off bug surfaced, the near-5 numbers were re-examined. A window dominated by a garbled task showed deep-tail acceptance 40&ndash;124% higher than a healthy window in the <em>same</em> run &mdash; a repeat-loop is trivially self-predictable, so the drafter &ldquo;accepts&rdquo; its own corruption and inflates the metric. The first clean, garble-free accept for this geometry is 4.286, not ~5.3.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a degenerate or looping trajectory inflates acceptance, because repetition is trivially predictable. Never trust an accept number without first proving the run was garble-free.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>The committer timer wrapped a function the deploy path never calls</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why it looked right:</strong> the committer replay was timed around a real replay function; the numbers were plausible and fed the whole &ldquo;replay is 78% of the gap&rdquo; investigation.</p>
+              <ul><li><strong>What killed it:</strong> that function was the <em>batched</em> sibling; the deployed path calls the singular per-layer replay through the patcher's own loop. Moving the timer into the one shared function both wrappers call &mdash; and dividing by the forty-eight per-commit layer calls &mdash; isolated the true replay at 16&nbsp;ms and revealed the rest was the sampling decision.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> instrument the function the deploy path actually calls, not a same-named sibling; verify the call graph, and account for per-layer versus per-commit call counts.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>A ten-minute compile mistaken for a hang</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> one flag's boots sat unresponsive at capture-onset with no progress &mdash; the classic hung-flag signature &mdash; and the first-exercised permutation was the obvious suspect.</p>
+              <ul><li><strong>What killed it:</strong> a sampling profiler localized the &ldquo;hang&rdquo; to a Triton recompile of the GDN kernel &mdash; the intrinsic ~10-minute compile &mdash; and the no-flag control had the same ~9.5-minute gap. The flag was fine and was being killed prematurely.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> before declaring a hang, profile it and compare against the no-flag control's boot time. An O(N&sup2;) kernel recompile looks exactly like a deadlock.</p>
+            </article>
+
+            <article class="failure-card contaminated">
+              <header><h3>A trimmable verify-gather, and a confounded baseline</h3><span class="pill bad">contaminated</span></header>
+              <p><strong>Why they looked right:</strong> the verify forward's ancestor gather looked like a losslessly-trimmable ~29% slice; and a run appeared to show a +9.5&ndash;12.7% accept improvement over a 4.317 baseline.</p>
+              <ul><li><strong>What killed them:</strong> the gather had already been made linear and measured only &minus;1.7% &mdash; the +36&nbsp;ms verify cost is inherent tree-size compute, not opportunity. And the 4.317 baseline was itself piggyback-confounded; the real baseline is 4.953, against which the &ldquo;improvement&rdquo; is roughly flat.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a lever already optimized is inherent cost, not opportunity; and a delta over a confounded baseline is a mirage. Confirm the baseline is clean and a matched pair exists before claiming a win.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family B &mdash; the replay is a hardware floor.</strong></p>
+
+            <article class="failure-card settled">
+              <header><h3>Copy-not-replay, killed on a napkin (13.7&nbsp;GB)</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> if the replay is the cost, why replay? Native is cheap because it keeps its linear states and selects. So keep all the tree's per-node states and copy the accepted leaf directly &mdash; no recompute.</p>
+              <ul><li><strong>What killed it:</strong> exporting all twenty-one nodes' per-layer states is ~13.7&nbsp;GB per step &mdash; infeasible on unified memory. The branching topology is exactly why you <em>cannot</em> keep all states; that is why the replay exists. Refuted before any build.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> the cheapest refutation is arithmetic. Size the memory of &ldquo;just keep everything&rdquo; before designing the copy path; branching-factor times state-size is often an instant no.</p>
+            </article>
+
+            <article class="failure-card settled">
+              <header><h3>Overlap it, fuse it, swap the kernel &mdash; three refutations</h3><span class="pill good">settled</span></header>
+              <p><strong>Why it looked right:</strong> the replay is forty-eight tiny per-layer kernels running at ~14&times; their bandwidth floor &mdash; clearly latency-bound &mdash; so overlapping them on streams, fusing them into one launch, or swapping in native's kernel all looked like easy ~60&nbsp;ms wins.</p>
+              <ul><li><strong>What killed them, all measured:</strong> multistream was <em>slower</em> (91.6 vs 76.6&nbsp;ms) &mdash; one replay grid already saturates the SMs, so the streams serialize on shared bandwidth. Batched-fused was slower (111.9&nbsp;ms) on strided cross-bank indirection. Native-kernel replay was identical (77.3 &asymp; 76.6&nbsp;ms) &mdash; the cost is latency, not the kernel. And spine-commit, which skips the replay on a linear-prefix accept, only fires 53% of the time and pays a per-forward export, netting ~+15&nbsp;ms &mdash; marginal.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> for a latency- and bandwidth-bound kernel on unified memory, &ldquo;overlap / fuse / swap&rdquo; buys nothing &mdash; there are no spare SMs or bandwidth to hide behind. The floor is architectural; only eliminating the work can move it.</p>
+            </article>
+
+            <p class="failure-note"><strong>Family C &mdash; the piggyback line: the right idea, built and deleted.</strong></p>
+
+            <article class="failure-card superseded">
+              <header><h3>Piggyback: fold the replay into the forward</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> the one lever the attack math endorsed. Instead of replaying, have the committer just record the accepted tokens and let the next forward's fused scan advance the state through <code>[accepted path] ++ [new tree]</code> &mdash; native's own trick. The state carry was provably reproduced to 1.19e-7, the variable-length padding was byte-exact, a 24-edit bundle landed, and it was baked on an &ldquo;accept-neutral&rdquo; basis (resolve 9/16, committer collapsed, 27.8 wall TPS).</p>
+              <ul><li><strong>What killed it:</strong> the &ldquo;accept-neutral&rdquo; bake was confounded. On deep-tail-heavy tasks accept collapsed ~1.5 tokens (~3.65 vs ~5.12), reproducibly. The fold seeded the subtree from a <em>different</em> kernel than native's, and its sub-ULP-per-node drift amplified into the arctic tail. Every fix fell short, and the entire line was deleted per explicit directive &mdash; seventeen cleanup commits, ~4,077 deletions.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> a byte-exact <em>state</em> carry does not guarantee a byte-exact <em>output</em> &mdash; a provably-correct state seeded a different-kernel path whose drift amplified downstream. Don't bake on an accept-neutral gate that hasn't been stress-tested where accept actually lives: the deep tail.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>SCAN_ALIGN: match native's precision, backwards</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> the piggyback tail collapse was narrowed to a seed mismatch &mdash; the fold rooted the subtree with the custom tree kernel while the reference used native's. Aligning the tree kernel's arithmetic to native's was proposed as &ldquo;Fix A&rdquo; and briefly declared the crack.</p>
+              <ul><li><strong>What killed it:</strong> it aligned the wrong way. The fold already carried fp32; forcing native's bf16 round-trip <em>added</em> drift, not removed it &mdash; echoing an earlier finding where the same alignment made garble worse. The collapse was reclassified as amplified within-floor drift, not a fixable seed.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> &ldquo;match the other kernel's precision&rdquo; cuts both ways &mdash; aligning a higher-precision path <em>down</em> to a lower one adds error. Confirm which side is more precise before aligning.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>Base-column reorder: fixed the head, whiffed the tail</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> the piggyback chain pushed the base subtree into different score-tile columns &mdash; exactly the reduction-reassociation class Vol.&nbsp;VI's spine reorder fixed &mdash; so a base-first permute should restore the base logits and lift the whole collapse. The head evidence supported it.</p>
+              <ul><li><strong>What killed it:</strong> the head fix worked exactly as designed and closed only ~5&ndash;20% of the gap (+0.08 to +0.36 against a ~4.9&ndash;5.7 target). The deep tail still collapsed. The &minus;1.5 was not mostly a shallow tie amplified through the suffix; it was a largely separate deep-node verify effect.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> confirming a mechanism's <em>direction</em> is not confirming its <em>magnitude</em>. A plausible &ldquo;shallow tie wrecks the tail&rdquo; story predicted full recovery; the fix moved a fraction. Measure the total, don't infer it from the mechanism.</p>
+            </article>
+
+            <article class="failure-card superseded">
+              <header><h3>The &times;14,800 amplification chase</h3><span class="pill warn">superseded</span></header>
+              <p><strong>Why it looked right:</strong> a per-layer drift ladder grew ~14,800&times; over depth &mdash; a dramatic, smooth, log-linear instability fingerprint &mdash; seemingly explaining how a one-ULP seed flips a token, and motivating a whole class of amplification-reduction levers.</p>
+              <ul><li><strong>What killed it:</strong> two corrections under adversarial verification. The ~14,800&times; was inflated ~30&times; by ordinary residual-stream norm growth that native shares, leaving genuine error amplification at ~492&times;. And that amplifier is the frozen trained Jacobian &mdash; shared bit-for-bit with native, so reducing it lowers a floor both arms sit on, not the gap. The differentiator is the seed, and you cannot lower a frozen Jacobian.</li></ul>
+              <p class="conclusion"><strong>Lesson:</strong> before chasing an amplifier, subtract the part your baseline also has. A growth ladder inflated 30&times; and a Jacobian shared with the winning baseline mean the amplifier is a red herring &mdash; fix the seed.</p>
+            </article>
+          </div>
+        </div>
+      </details>
+    </section>
+    <section class="section" id="reflection">
+      <h2>Reflection: Measuring a Negative</h2>
+      <aside class="sidenote">
+        <p><strong>Worth stating plainly:</strong> the result is that native wins, and the value is in <em>why</em>. A clean decomposition that says &ldquo;the committer, because keep beats replay on a recurrent model&rdquo; is worth more than a hero number, because it tells the next person exactly which architecture could win and which levers are dead.</p>
+      </aside>
+      <p>Most of the campaign was not spent beating the hardware; it was spent learning to trust the measurement. Two flags proven on were off in the launcher that mattered; a signature accept number was inflated by the very garble those flags fixed; the committer's cost was timed on a function the deploy path never called; a baseline was confounded by an experimental arm; a compile looked like a hang. Each of these produced a confident, wrong number, and each was caught only by a control &mdash; a matched window, a no-flag boot, a call-graph check. The portable lesson of the whole volume is that on a mature, fast-moving system the harness is an adversary with the same standing as the GPU, and it earns the same adversarial verification.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The portable lessons from the throughput campaign.</caption>
+          <thead><tr><th>Lesson</th><th>What it means here</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Decompose before optimizing &mdash; and let the timer correct you</td>
+              <td>The obvious suspect was the tree's drafter; the per-call timer said the drafter is equal and the committer is 78% of the gap. Optimizing the wrong component would have been weeks wasted on a red herring.</td>
+            </tr>
+            <tr>
+              <td>Beating a component is not winning the race</td>
+              <td>The committer fell from ~100 to ~17&nbsp;ms and native still won, because the cost moved to the verify forward and the honest accept was below break-even. Re-measure the whole after every lever; a local win can be a global no-op.</td>
+            </tr>
+            <tr>
+              <td>A byte-exact state is not a byte-exact output</td>
+              <td>Piggyback reproduced the committed state to a part in ten million and still collapsed the deep tail, because it seeded a different kernel whose drift amplified. Validate the output distribution, not just the intermediate you copied.</td>
+            </tr>
+            <tr>
+              <td>Subtract what the baseline shares</td>
+              <td>A dramatic amplification ladder was mostly residual-stream growth native shares, and its amplifier was a frozen Jacobian identical in both arms. An &ldquo;instability&rdquo; the winner also has is not the differentiator.</td>
+            </tr>
+            <tr>
+              <td>A negative result with a mechanism is a deliverable</td>
+              <td>&ldquo;Native wins&rdquo; is a weak sentence; &ldquo;native wins because a linear accept keeps its recurrent state and a branched accept must replay it on the critical path&rdquo; tells you the tree can only win by folding the replay into the forward &mdash; which is exactly the future work.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="limitations">
+      <h2>Threats to Validity</h2>
+      <aside class="sidenote">
+        <p><strong>Honest scope:</strong> the verdict's <em>sign</em> is solid &mdash; native wins in both the model and direct measurement, and the mechanism is measured. The magnitudes carry the usual caveats of a single deployment run.</p>
+      </aside>
+      <div class="grid">
+        <div class="box warn">
+          <span class="tag">Statistics</span>
+          <h3>One clean run, sixteen tasks</h3>
+          <p>The headline is one cache-on B4 run, one arm per cell, sixteen SWE-Verified tasks. Resolve and throughput track cleanly and all arms clear the ~28% base rate, but this is a directional deployment measurement, not a powered benchmark.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Metric basis</span>
+          <h3>An open alignment flag at B&gt;1</h3>
+          <p>The live per-task speed reduction carries an alignment ratio near 0.53 between the GPU-derived and wall-clock throughput bases &mdash; a known artifact of mixing per-request and per-physical-step denominators at concurrency. Two candidate bases survive; the sign of the verdict holds under both, but the absolute tokens-per-second should be read as the compute basis it names.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Missing pair</span>
+          <h3>No cache-on native GPU-timer capture</h3>
+          <p>The cleanest native component breakdown is cache-off; a fully matched cache-on native-with-timers arm does not yet exist, so the native committer's ~2.5&nbsp;ms is cross-referenced, not co-measured with the tree in every configuration.</p>
+        </div>
+        <div class="box warn">
+          <span class="tag">Machine-specific</span>
+          <h3>The economics are GB10's</h3>
+          <p>The replay is expensive because GB10 is bandwidth-bound unified memory where an occupancy-starved kernel cannot be hidden. A machine with more SMs or HBM could change the replay's cost and, with it, the break-even &mdash; the verdict is for this hardware and workload.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="future">
+      <h2>Future Work: The Two Ways Under Break-Even</h2>
+      <aside class="sidenote">
+        <p><strong>The prize, quantified:</strong> the attack math says eliminating the replay reaches parity (loses ~2%), and eliminating it <em>plus</em> trimming the verify tax makes the tree win by ~10%. That is the whole target &mdash; not a blowout, but a real win, and only reachable architecturally.</p>
+      </aside>
+      <p>Throughput is acceptance over step time, so there are exactly two ways under the break-even line: make the step cheaper, or make the acceptance higher. The cheap committer-kernel levers are refuted (the <a href="#museum">museum</a>); what remains is architectural.</p>
+
+      <h3>The denominator: fold the replay into the forward</h3>
+      <p>The durable win is to make the tree pay native's committer cost by doing what native does &mdash; advance the accepted-path state <em>inside</em> the next forward's fused, high-occupancy scan rather than in forty-eight separate latency-bound kernels. The committer would only record the accepted tokens; the next forward would take <code>[accepted path] ++ [new tree]</code> as input and thread the state through as part of its own scan, roughly free on a bandwidth-bound machine. That is the piggyback direction, and it is the one the attack math endorses &mdash; committer ~100&nbsp;&rarr;&nbsp;~16&nbsp;ms, tree to parity, and to a ~10% win once the verify tax is trimmed. The specific implementation was built and deleted (its different-kernel seed collapsed the deep tail); the lesson it leaves is that the rebuild must seed the fold from the same kernel native uses, so the committed <em>output</em>, not merely the state, is faithful. It is the biggest rewrite on the board and the only path to a clear win.</p>
+
+      <h3>The residual: the sampling decision</h3>
+      <p>With the replay isolated at ~16&nbsp;ms, the larger committer piece is now the ~37&ndash;41-millisecond sampling decision &mdash; the rejection walk that scores the tree's candidate paths and picks the accepted leaf, a cost that scales with branching and had been hiding inside the committer's timer. It is newly separated, not yet attacked, and has no design yet; it is the next thing to profile.</p>
+
+      <h3>The verify tax, and the numerator</h3>
+      <p>Two further levers are scoped. A <strong>verify trim</strong> targets the tree-attention tax directly &mdash; skipping the ghost query rows the kernel masks but still computes, and per-shape tiling &mdash; profiled first, aiming the verify forward from ~106 toward ~70&nbsp;ms; together with a drafter graph-capture, the closeout projects the tree closing to native's throughput without touching acceptance. On the numerator side, <strong>accept-beyond-5</strong> &mdash; a deep suffix tail and complement branches at a 32-node horizon that fits the same register budget &mdash; is designed, built, and lossless, and is the only route to clearing break-even by acceptance. Honestly, it does not clear it in-regime: the &ldquo;accept &gt; 5&rdquo; readings were a repetitive-workload windfall, and the per-task average sits below the bar. A <strong>smart-matching drafter</strong> that reshapes the tree per step by the suffix-match signal &mdash; a deep chain when the match is long and confident, a wide comb otherwise &mdash; is designed and gated behind a kernel-shape probe. None of these is cheap, and the honest summary is that native MTP-5 is a strong floor: the tree's road back is a fused-replay rewrite, and even that aims for a win measured in single-digit-to-ten percent.</p>
+
+      <div class="source-exhibit" aria-label="The lever ladder">
+        <div class="source-head">
+          <strong>The levers, classified</strong>
+          <span>What is dead, what is scoped, and what could actually win</span>
+        </div>
+        <div class="grid">
+          <div class="box good"><span class="tag">The prize</span><p>Fuse replay into the forward (piggyback direction). Committer 100&rarr;16&nbsp;ms; parity alone, ~+10% with a verify trim. Biggest rewrite; must seed from native's kernel.</p></div>
+          <div class="box info"><span class="tag">Next target</span><p>The ~37&ndash;41&nbsp;ms sampling decision, newly isolated. Profile first; no design yet.</p></div>
+          <div class="box info"><span class="tag">Scoped</span><p>Verify trim (~106&rarr;70&nbsp;ms), drafter graph-capture, accept-beyond-5 (built, lossless, below break-even in-regime), smart-matching geometry.</p></div>
+          <div class="box bad"><span class="tag">Dead</span><p>Copy-not-replay, multistream, batched-fuse, native-kernel swap, spine-commit &mdash; refuted or marginal. The replay is a hardware floor.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="config">
+      <h2>Canonical Config Appendix</h2>
+      <aside class="sidenote">
+        <p><strong>Why include config:</strong> the campaign turned on both a methodology fix (the flags now have one source of truth and a boot assertion) and a genuine speed win (burn-off, baked). The rest is probes and refuted levers, default-off.</p>
+      </aside>
+      <details class="fold">
+        <summary>
+          <span>Config table: baked flags, probes, and what was deleted</span>
+          <small>From the tree launchers; every state-touching flag is default-off to a byte-identical path.</small>
+        </summary>
+        <div class="fold-body">
+          <div class="table-wrap">
+            <table>
+              <caption>The measured state of the FR13 committer/throughput campaign.</caption>
+              <thead><tr><th>Surface</th><th>Setting</th><th>Why it matters</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Required tree flags (methodology fix)</td>
+                  <td><code>FR13_ATTN_KV_REMAP=1</code>, <code>FR13_SLOT_REORDER=1</code> via <code>fr13_required_tree_flags.sh</code></td>
+                  <td>The Vol.&nbsp;V/VI correctness fixes, now sourced by all three launchers with a fail-loud boot assertion &mdash; after weeks of campaigns silently ran without them.</td>
+                </tr>
+                <tr>
+                  <td>Burn-off (speed win, baked)</td>
+                  <td><code>FR13_APC_BURN_NODE_BANK</code> default 1&rarr;0</td>
+                  <td>The 43&nbsp;ms scratch-zeroing is redundant for the served path (all cross-step readers target column 0); dropped tri-flag-gated. Committer ~85&rarr;~55&nbsp;ms, byte-identical.</td>
+                </tr>
+                <tr>
+                  <td>Stateless-tree lifecycle</td>
+                  <td><code>FR13_APC_COMMIT_TO_RUNNING_ROW</code>, <code>FR13_TREE_RUNROW_INIT</code>, <code>FR13_APC_BURN_NODE_BANK</code></td>
+                  <td>The correctness lifecycle of Vol.&nbsp;V; a lifecycle guard forbids partial enable. It still replays &mdash; it is not the speed lever.</td>
+                </tr>
+                <tr>
+                  <td>Committer probes (off)</td>
+                  <td><code>FR13_COMMITTER_GRAPH</code>, <code>FR13_COMMITTER_NATIVE_BATCHED</code>, <code>FR13_REPLAY_MULTISTREAM</code></td>
+                  <td>Graph-capture and batched are byte-identical and land near the native floor in micro-bench; multistream is refuted (slower). Kept default-off pending live cache-on wiring.</td>
+                </tr>
+                <tr>
+                  <td>Scoped, not built</td>
+                  <td><code>FR13_VERIFY_TRIM</code>, <code>FR13_SMART_GEOMETRY</code></td>
+                  <td>The verify-tax trim and per-step geometry levers; designed, flag-gated, profile-first.</td>
+                </tr>
+                <tr>
+                  <td>Deleted this campaign</td>
+                  <td>FR13_PIGGYBACK, PB_BASE_COL_INVARIANT, SNAP_FIX / leaf-map</td>
+                  <td>The piggyback line (~4,077 deletions) after its deep-tail collapse; the SNAP_FIX/leaf-map redirect, a no-op under the stateless-tree lifecycle.</td>
+                </tr>
+                <tr>
+                  <td>Hardware / model</td>
+                  <td>GB10 (DGX Spark), 273&nbsp;GB/s LPDDR5X unified memory; Qwen 3.6-27B-FP8 GDN hybrid; patched vLLM; B=4, temp 0.6</td>
+                  <td>The bandwidth-bound machine whose ~99&nbsp;ms weight-read floor and ~1-CTA/SM occupancy make the replay expensive.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section class="section" id="receipts">
+      <h2>Source Trail</h2>
+      <p>The claims above are grounded in tracked verdict and campaign docs, the kernel, and the launcher fixes. This work runs on <code>main</code>; the burn-off and required-flag fixes are baked, and the piggyback line is deleted.</p>
+      <details class="fold">
+        <summary>
+          <span>Full source trail</span>
+          <small>The verdict, the break-even, the closeout, the committer decomposition, and the prior volumes.</small>
+        </summary>
+        <div class="fold-body">
+          <ul class="receipt-list">
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_VS_NATIVE_VERDICT.md">The tree-vs-native verdict</a> - the per-component decomposition (committer 78% of the gap, drafter equal), the attack math, and the definitive &ldquo;native wins&rdquo; conclusion.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_TREE_THROUGHPUT_BREAKEVEN.md">The break-even model</a> - throughput as accept over step time, and the acceptance the tree would need (~5.3&ndash;5.76) and does not have.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_POSTSNAPFIX3_CLOSEOUT.md">The postsnapfix3 closeout</a> - the clean depth-matched three-arm run, the per-event breakdown, and the per-position acceptance curves.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_COMMITTER_UNIFY.md">The committer decomposition</a> - the replay's per-layer occupancy floor and the multistream / batched / native-kernel refutations.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_BURN_REDUNDANCY_VERDICT.md">The burn-redundancy verdict</a> - the red-team proof that the 43&nbsp;ms scratch-zeroing is redundant for the served path.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_DIR2_LIVE_SPEED_METHODOLOGY.md">Live speed methodology</a> - the narrow replay timer, the ~16&nbsp;ms replay vs ~37&ndash;41&nbsp;ms sampling-decision split, and the alignment-ratio flag.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_ACCEPT_BEYOND5_DESIGN.md">Accept-beyond-5 design</a> - the deep suffix tail and 32-node horizon, and the regime note that the &ldquo;&gt;5&rdquo; reading is a repetition windfall.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/FR13_BEAT_NATIVE_LADDER.md">The beat-native ladder</a> - the rung-by-rung lever ladder from burn-off through piggyback to the accept levers.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/src/lumo_flywheel_serving/fr10_gdn_tree_kernel.py">GDN tree kernel</a> - the replay that does not export per-node states (the 13.7&nbsp;GB it refuses), and the register-resident state tile.</li>
+            <li><a href="https://github.com/MaCoredroid/Lumo_FlyWheel/blob/main/scripts/fr13_required_tree_flags.sh">Required tree flags</a> - the single source of truth and boot assertion for the two correctness flags.</li>
+            <li><a href="spine-reorder.html">Vol. VI</a> - the contiguous-spine reorder whose absence, in the general launcher, was the garble inflating the earlier accept numbers.</li>
+            <li><a href="stateless-tree.html">Vol. V</a> - the stateless-tree lifecycle and the attention-KV remap; the committer this page decomposes.</li>
+            <li><a href="gdn-tree-scan.html">Vol. III</a> - the branched token-tree verifier whose committer is the subject here.</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+  </main>
+
+  <footer>
+    <p>Volume VII. Standalone GitHub Pages research paper. Prior context remains available in <a href="index.html">Vol. I</a>, <a href="round-f.html">Vol. II</a>, <a href="gdn-tree-scan.html">Vol. III</a>, <a href="gdn-prefix-cache.html">Vol. IV</a>, <a href="stateless-tree.html">Vol. V</a>, and <a href="spine-reorder.html">Vol. VI</a>, but this page does not require them. Last updated 2026-07-22.</p>
+  </footer>
+</div>
+</body>
+</html>
