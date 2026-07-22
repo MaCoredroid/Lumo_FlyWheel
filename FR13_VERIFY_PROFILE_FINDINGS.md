@@ -75,3 +75,36 @@ Per-committed-token GPU: tail6 61.7ms vs native5 58.5ms — only 5% apart; accep
 Levers NOT counted toward the beat (shared with native5): drafter gemvx efficiency,
 any KV-cache compression, drafter graph capture. Any of these applied ⇒ re-baseline
 native5 with the same change (honest-comparison rule).
+
+## Call-site map of the norm-soup (workflow wf_704284f5-9f9, 2026-07-22)
+
+Measured-fingerprint → call-site attribution (all in the captured decode graph):
+- **84.6µs `index_elementwise` pair** = (1) `conv_state.index_copy_` patch:3696 —
+  per-node conv-state write-back SCATTER, 22 page-strided bf16 rows ~17MB traffic
+  (page-strided dst = low effective BW); (2) same-kernel `index_copy_` in
+  `replay_conv_state_linear_remap_prepared` (fr13_tree_conv_fused.py:394 via
+  patch:2799), ~6 rows.
+- **Under-counted 2nd lever**: `_scatter_gather_elementwise` @73.2µs 1×/layer
+  (~3.5ms/draft) = `fused_tree_conv_state_rows` gather (528 rows → 8.6MB
+  materialization, fr13_tree_conv_fused.py:270) + transpose-`.contiguous()` copy
+  (:273) — feeds the 3696 scatter.
+- **`<128,4>` @19.7µs quartet** = ring k/v copies ×num_spec_decodes (B1 target ✓);
+  **`<128,2>` @4.5µs quartet** = conv tap fp32 accumulation (bias + 3 ordered adds,
+  fr13_tree_conv_fused.py:246-250), NOT ring a/b (those are 2 of the small copies).
+- 2× `vectorized_gather` = conv window gather (patch:3198) + state-rows gather.
+- All 7 `.contiguous()` on scan inputs = NO-OPS (verified provenance). The 5419
+  self-copy is DEAD under EAGER_PACK. Launch site itself adds zero aten kernels.
+
+## B-series build plan (revised by the map)
+
+- **B1 (DONE, gated)**: FR13_RING_EXPORT — in-kernel ring staging. Offline byte
+  gate PASS (tail6-21n-BV8 + cat9-9n-BV16; out + all 4 rings byte-identical).
+- **B2a (biggest, ~8.3ms/draft)**: fuse state-rows gather + transpose-contiguous +
+  conv_state.index_copy_ (3696) into ONE Triton kernel writing gathered source
+  rows directly to the page-strided conv_state destinations (skip the 8.6MB
+  round-trip and the aten scatter).
+- **B2b**: replay-remap index_copy (394) — fuse similarly or absorb into the
+  committer-overlap side stream.
+- **B2c (~1.5-2ms/draft)**: fold tap multiply + fp32 cast + 4 accumulation adds
+  into an extended fused_tree_conv_taps_acc.
+- Then: committer overlap-under-drafter; live same-seed gate; 16-task deploy gate.
