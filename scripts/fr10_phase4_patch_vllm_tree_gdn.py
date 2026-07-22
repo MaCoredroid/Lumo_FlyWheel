@@ -11429,11 +11429,12 @@ def _patch_mamba_utils_apc_align_tree_aware() -> bool:
 
     The commit-site write-through that this function used to emit (and the earlier
     wrong-row write it co-emitted) have both been REMOVED as confirmed-dead writers;
-    the committed accepted-leaf SSM snapshot is now handled SOURCE-side by the
-    FR13_APC_SNAP_FIX get_temporal_copy_spec override. This function now only injects
-    an inert comment carrying the ``# FR13_APC_ALIGN_TREE_AWARE`` sentinel so the
-    guard below prevents double-injection on a re-apply; the served copy path is
-    byte-identical to stock."""
+    the FR13_APC_SNAP_FIX get_temporal_copy_spec override that used to handle the
+    committed accepted-leaf SSM snapshot SOURCE-side has since been deleted too
+    (STATELESS-TREE's own get_temporal_copy_spec rewrite makes it unnecessary under
+    the deployed default). This function now only injects an inert comment carrying
+    the ``# FR13_APC_ALIGN_TREE_AWARE`` sentinel so the guard below prevents double-
+    injection on a re-apply; the served copy path is byte-identical to stock."""
     text = MAMBA_UTILS_PATH.read_text()
     sentinel = "# FR13_APC_ALIGN_TREE_AWARE"
     if sentinel in text:
