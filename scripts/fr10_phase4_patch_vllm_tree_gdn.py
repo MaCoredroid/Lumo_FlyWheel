@@ -4513,61 +4513,6 @@ def _fr13_conv_subop_mab(
                 )
                 tree_n = int(attn_metadata.fr10_tree_parent.numel())
                 tree_n_pad = int(attn_metadata.fr10_tree_visible_mask.size(0))
-                # FR13_PIGGYBACK seam 1c hoist: flag + per-row REAL chain
-                # length buffer + node-position column, once per forward.
-                # The flag read is host python => baked at CUDA-graph capture
-                # (consistent with the constexpr PIGGYBACK_EXPORT). The mask
-                # below hard-codes the cat9_pb stream layout (tree_n=18:
-                # stream 0 = pos-0 root, streams 1..7 = chain slots, stream 8
-                # = subtree root (0,)^8, streams 9..17 = subtree), so any
-                # other tree while armed is a config error -> raise.
-                _fr13_pb_fwd = _fr13_piggyback_on()
-                _fr13_pb_chain_lens = None
-                _fr13_pb_pos = None
-                _fr13_pb_chain_k = _fr13_pb_chain_v = _fr13_pb_chain_a = _fr13_pb_chain_b = None
-                if _fr13_pb_fwd:
-                    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
-                        _fr13_pb_tree_n as _fr13_pb_exp_tree_n,
-                    )
-                    if int(tree_n) != _fr13_pb_exp_tree_n():
-                        raise RuntimeError(
-                            "FR13_PIGGYBACK armed but served tree_n="
-                            + str(int(tree_n)) + " != "
-                            + str(_fr13_pb_exp_tree_n())
-                            + " (chain+base+root)"
-                        )
-                    if int(_fr13_piggyback_cap()) != 8:
-                        raise RuntimeError("FR13_PIGGYBACK: prefix cap " + str(int(_fr13_piggyback_cap())) + " != 8; cat9_pb layout/mask/export hard-code K=8 (chain streams 1..7, export@7, subtree root stream 8)")
-                    _fr13_pb_chain_lens = globals().get(
-                        "_LUMO_FA_PB_CHAIN_LENS_TENSOR"
-                    )
-                    if _fr13_pb_chain_lens is None:
-                        raise RuntimeError(
-                            "FR13_PIGGYBACK: missing _LUMO_FA_PB_CHAIN_LENS"
-                            "_TENSOR (seam 1d buffer + REQKEY rewrite must "
-                            "land together)"
-                        )
-                    _fr13_pb_paths_t = globals().get(
-                        "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR"
-                    )
-                    _fr13_pb_ring_rows_t = globals().get(
-                        "_LUMO_FA_PB_RING_ROW_TENSOR"
-                    )
-                    if _fr13_pb_paths_t is None or _fr13_pb_ring_rows_t is None:
-                        raise RuntimeError(
-                            "FR13_PIGGYBACK variant-B: missing accepted-paths/"
-                            "ring-row device buffers (builder init + REQKEY "
-                            "rewrite must land together)"
-                        )
-                    if os.environ.get("FR13_REPLAY_ROUTE", "1") != "1":
-                        raise RuntimeError(
-                            "FR13_PIGGYBACK variant-B requires FR13_REPLAY_"
-                            "ROUTE=1: the chain scan inputs are fed from the "
-                            "activation ring staged by the forward"
-                        )
-                    _fr13_pb_pos = torch.arange(
-                        tree_n, device=a.device
-                    ).view(-1, 1)
                 _fr12_native_spine_oracle_enabled = (
                     os.environ.get("FR12_NATIVE_SPINE_ORACLE", "0") == "1"
                 )
@@ -5261,70 +5206,6 @@ def _fr13_conv_subop_mab(
                             # conv committer can copy this-step's committed leaf
                             # window -> col 0 and burn the ephemeral cols.
                             self._fr13_replay_conv_state = conv_state
-                            if _fr13_pb_fwd:
-                                # FR13_PIGGYBACK variant-B: gather THIS layer's
-                                # PREV-forward ring rows for [prev root]+accepted
-                                # BEFORE the overwrite below (cross-step read;
-                                # replay gather convention _tree_gdn_replay_kernel
-                                # :1020-1036 with ROOT SOURCE = STREAM 8, the
-                                # ACTIVE Scheme-A bonus row -- ring row 0 is the
-                                # identity-masked pos-0 copy whose post-L0
-                                # projections diverge). Pure captured device ops;
-                                # indices come from persistent prepare-written
-                                # buffers (paths tensor rows already hold extended
-                                # stream ids 9..17).
-                                _fr13_pb_nsd = int(attn_metadata.num_spec_decodes)
-                                _fr13_pb_rows_prev = _fr13_pb_ring_rows_t[
-                                    :_fr13_pb_nsd
-                                ].to(torch.long).clamp_(
-                                    0, int(self._fr13_replay_ring_k.size(0)) - 1
-                                )
-                                _fr13_pb_src = torch.cat(
-                                    [
-                                        torch.full(
-                                            (_fr13_pb_nsd, 2), 8,
-                                            device=a.device, dtype=torch.long,
-                                        ),
-                                        _fr13_pb_paths_t[:_fr13_pb_nsd, :6].to(
-                                            torch.long
-                                        ),
-                                    ],
-                                    dim=1,
-                                ).clamp_(0, tree_n_pad - 1)
-                                _fr13_pb_flat = (
-                                    _fr13_pb_rows_prev.view(-1, 1) * tree_n_pad
-                                    + _fr13_pb_src
-                                ).view(-1)
-                                _fr13_pb_chain_k = self._fr13_replay_ring_k.reshape(
-                                    -1,
-                                    self._fr13_replay_ring_k.size(2),
-                                    self._fr13_replay_ring_k.size(3),
-                                ).index_select(0, _fr13_pb_flat).view(
-                                    _fr13_pb_nsd, 8,
-                                    self._fr13_replay_ring_k.size(2),
-                                    self._fr13_replay_ring_k.size(3),
-                                )
-                                _fr13_pb_chain_v = self._fr13_replay_ring_v.reshape(
-                                    -1,
-                                    self._fr13_replay_ring_v.size(2),
-                                    self._fr13_replay_ring_v.size(3),
-                                ).index_select(0, _fr13_pb_flat).view(
-                                    _fr13_pb_nsd, 8,
-                                    self._fr13_replay_ring_v.size(2),
-                                    self._fr13_replay_ring_v.size(3),
-                                )
-                                _fr13_pb_chain_a = self._fr13_replay_ring_a.reshape(
-                                    -1, self._fr13_replay_ring_a.size(2)
-                                ).index_select(0, _fr13_pb_flat).view(
-                                    _fr13_pb_nsd, 8,
-                                    self._fr13_replay_ring_a.size(2),
-                                )
-                                _fr13_pb_chain_b = self._fr13_replay_ring_b.reshape(
-                                    -1, self._fr13_replay_ring_b.size(2)
-                                ).index_select(0, _fr13_pb_flat).view(
-                                    _fr13_pb_nsd, 8,
-                                    self._fr13_replay_ring_b.size(2),
-                                )
                         self._fr13_replay_ring_k[fr10_b, :tree_n].copy_(
                             key_spec[0, start:end]
                         )
@@ -5337,87 +5218,14 @@ def _fr13_conv_subop_mab(
                         self._fr13_replay_ring_b[fr10_b, :tree_n].copy_(
                             b[start:end]
                         )
-                    if _fr13_pb_fwd:
-                        # FR13_PIGGYBACK seam 1c: GDN-identity override.
-                        # raw_a=raw_b=-1e9 => softplus->0, sigmoid->0 exactly
-                        # in fp32 => a=1, beta=0 => h_t = h_{t-1} byte-exact,
-                        # independent of q/k/v (plan de-risk, _gdn_node_step).
-                        # Identity set per request row: stream 0 (the pos-0
-                        # bonus copy: its state update is deferred to the
-                        # ACTIVE duplicate at stream 8 so token order matches
-                        # the committed sequence) plus chain streams beyond
-                        # the real replay-path length (1+prev_accepted_len,
-                        # or 0 for a fresh row). RAW_GATING makes g/beta
-                        # inputs dead, so only raw_a/raw_b need masking. Pure
-                        # device ops on a persistent buffer -> capture-safe;
-                        # NON-mutating (torch.where copies), so the replay
-                        # ring / diagnostics still see the model's raw a/b.
-                        _fr13_pb_ident = (
-                            (_fr13_pb_pos == 0)
-                            | (
-                                (_fr13_pb_pos <= 7)
-                                & (_fr13_pb_pos > _fr13_pb_chain_lens[fr10_b])
-                            )
-                        )
-                        # variant-B: chain scan inputs (rows 0..7) = PREV-forward
-                        # ring bytes (gathered at fr10_b==0 above); subtree rows
-                        # 8..17 keep this forward's projections. Identity mask
-                        # (pos 0 + chain pad) applies ON TOP of the scattered
-                        # a/b -- pad rows stay exact no-ops, live chain rows get
-                        # the ORIGINAL committed raw gating.
-                        _fr13_pb_k = torch.cat(
-                            [_fr13_pb_chain_k[fr10_b], key_spec[0, start + 8:end]],
-                            dim=0,
-                        ).contiguous()
-                        _fr13_pb_v = torch.cat(
-                            [_fr13_pb_chain_v[fr10_b], value_tree[start + 8:end]],
-                            dim=0,
-                        ).contiguous()
-                        _fr13_pb_a = torch.where(
-                            _fr13_pb_ident,
-                            a.new_full((), -1e9),
-                            torch.cat(
-                                [_fr13_pb_chain_a[fr10_b], a[start + 8:end]],
-                                dim=0,
-                            ),
-                        ).contiguous()
-                        _fr13_pb_b = torch.where(
-                            _fr13_pb_ident,
-                            b.new_full((), -1e9),
-                            torch.cat(
-                                [_fr13_pb_chain_b[fr10_b], b[start + 8:end]],
-                                dim=0,
-                            ),
-                        ).contiguous()
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
-                        k=(
-                            _fr13_pb_k if _fr13_pb_fwd
-                            else key_spec[0, start:end].contiguous()
-                        ),
-                        v=(
-                            _fr13_pb_v if _fr13_pb_fwd
-                            else value_tree[start:end].contiguous()
-                        ),
+                        k=key_spec[0, start:end].contiguous(),
+                        v=value_tree[start:end].contiguous(),
                         g=g_tree[start:end].contiguous(),
                         beta=beta_tree[start:end].contiguous(),
-                        raw_a=(
-                            _fr13_pb_a if _fr13_pb_fwd
-                            else a[start:end].contiguous()
-                        ),
-                        raw_b=(
-                            _fr13_pb_b if _fr13_pb_fwd
-                            else b[start:end].contiguous()
-                        ),
-                        # FR13_PIGGYBACK seam 2 rider: export the state at
-                        # STREAM index 7 = (0,)^7 = the last chain slot
-                        # (guaranteed identity-or-post-chain for L<=6) ->
-                        # col-0. NOT stream 8 ((0,)^8 = the ACTIVE bonus
-                        # node): exporting there would double-apply the bonus
-                        # next step. chain_end_idx is constexpr-dead when the
-                        # export flag is False (byte-identical codegen).
-                        piggyback_export=_fr13_pb_fwd,
-                        chain_end_idx=7,
+                        raw_a=a[start:end].contiguous(),
+                        raw_b=b[start:end].contiguous(),
                         A_log=self.A_log,
                         dt_bias=self.dt_bias,
                         h0=ssm_state,
