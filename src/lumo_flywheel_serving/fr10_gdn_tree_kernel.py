@@ -691,6 +691,10 @@ def _tree_gdn_kernel(
     visible_mask,
     out,
     state,
+    ring_k,
+    ring_v,
+    ring_a,
+    ring_b,
     N_ACTUAL: tl.constexpr,
     N_PAD: tl.constexpr,
     NUM_KH: tl.constexpr,
@@ -712,6 +716,7 @@ def _tree_gdn_kernel(
     PARENT_GATHER: tl.constexpr = False,
     PIGGYBACK_EXPORT: tl.constexpr = False,
     CHAIN_END_IDX: tl.constexpr = 0,
+    RING_EXPORT: tl.constexpr = False,
 ):
     # N_LOOP is the span (loop bound, offs_n lane count, h_cache rows) of the
     # scan/reduction. Default (0) means "use N_PAD" -- the per-tree padded span
@@ -815,16 +820,39 @@ def _tree_gdn_kernel(
             mask=i < N_ACTUAL,
             other=0.0,
         ).to(tl.float32)
-        b_k = tl.load(
+        b_k_raw = tl.load(
             k + (i * NUM_KH + pid_kh) * DIM_K + offs_k,
             mask=i < N_ACTUAL,
             other=0.0,
-        ).to(tl.float32)
-        b_v = tl.load(
+        )
+        b_k = b_k_raw.to(tl.float32)
+        b_v_raw = tl.load(
             v + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
             mask=(i < N_ACTUAL) & v_mask,
             other=0.0,
-        ).to(tl.float32)
+        )
+        b_v = b_v_raw.to(tl.float32)
+        # FR13_RING_EXPORT: stage the replay ring IN-KERNEL from the very values
+        # just loaded (byte-copy contract: k pre-l2norm, v, raw_a, raw_b at input
+        # precision), replacing the 4 per-layer aten .copy_() launches that the
+        # nsys differential measured as part of the +20ms/draft tree-only
+        # elementwise soup. Write-once partition: v is tiled exactly by the
+        # (pid_vh, pid_v) grid; k is per-KH so only the first program of each
+        # head group stores; a/b are per-VH scalars stored by the pid_v==0
+        # column. Default OFF => constexpr-dead => byte-identical codegen.
+        if RING_EXPORT:
+            tl.store(
+                ring_k + (i * NUM_KH + pid_kh) * DIM_K + offs_k,
+                b_k_raw,
+                mask=(i < N_ACTUAL)
+                & (pid_v == 0)
+                & (pid_vh % head_group == 0),
+            )
+            tl.store(
+                ring_v + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
+                b_v_raw,
+                mask=(i < N_ACTUAL) & v_mask,
+            )
         b_b = tl.load(
             beta + i * NUM_VH + pid_vh,
             mask=i < N_ACTUAL,
@@ -840,16 +868,32 @@ def _tree_gdn_kernel(
         b_a_log = b_g
         b_dt_bias = b_b
         if RAW_GATING:
-            b_raw_b = tl.load(
+            b_raw_b_in = tl.load(
                 raw_b + i * NUM_VH + pid_vh,
                 mask=i < N_ACTUAL,
                 other=0.0,
-            ).to(tl.float32)
-            b_raw_a = tl.load(
+            )
+            b_raw_b = b_raw_b_in.to(tl.float32)
+            b_raw_a_in = tl.load(
                 raw_a + i * NUM_VH + pid_vh,
                 mask=i < N_ACTUAL,
                 other=0.0,
-            ).to(tl.float32)
+            )
+            b_raw_a = b_raw_a_in.to(tl.float32)
+            # FR13_RING_EXPORT (a/b half): per-(node, value-head) scalars, one
+            # store column (pid_v==0). Requires RAW_GATING (the served path);
+            # the launcher asserts that pairing.
+            if RING_EXPORT:
+                tl.store(
+                    ring_a + i * NUM_VH + pid_vh,
+                    b_raw_a_in,
+                    mask=(i < N_ACTUAL) & (pid_v == 0),
+                )
+                tl.store(
+                    ring_b + i * NUM_VH + pid_vh,
+                    b_raw_b_in,
+                    mask=(i < N_ACTUAL) & (pid_v == 0),
+                )
             b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
             b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
 
@@ -2369,6 +2413,10 @@ def launch_tree_gdn_prepared(
     dt_bias: torch.Tensor | None = None,
     piggyback_export: bool = False,
     chain_end_idx: int = 0,
+    ring_k: torch.Tensor | None = None,
+    ring_v: torch.Tensor | None = None,
+    ring_a: torch.Tensor | None = None,
+    ring_b: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor | None]:
     """Launch with precomputed graph-safe tree descriptors.
 
@@ -2495,6 +2543,31 @@ def launch_tree_gdn_prepared(
     if state is not None:
         raise ValueError("state buffer must not be provided; the tree replay route does not stage per-node states")
     state = strict_mask  # dummy pointer; no store reaches it
+    # FR13_RING_EXPORT: in-kernel replay-ring staging (replaces the caller's 4
+    # per-layer aten .copy_() launches). All-or-nothing, and only defined for the
+    # RAW_GATING served path (the ring stages raw_a/raw_b, which the kernel only
+    # loads under RAW_GATING).
+    _ring_export = ring_k is not None
+    if _ring_export:
+        if ring_v is None or ring_a is None or ring_b is None:
+            raise ValueError("ring export requires all four ring tensors")
+        if raw_a is None or raw_b is None:
+            raise ValueError("ring export requires the RAW_GATING path (raw_a/raw_b)")
+        if ring_k.shape[0] < n_actual or ring_v.shape[0] < n_actual:
+            raise ValueError(
+                f"ring buffers must cover n_actual={n_actual} rows, got "
+                f"{ring_k.shape[0]}/{ring_v.shape[0]}"
+            )
+        if (
+            ring_k.dtype != k.dtype
+            or ring_v.dtype != v.dtype
+            or ring_a.dtype != raw_a.dtype
+            or ring_b.dtype != raw_b.dtype
+        ):
+            raise ValueError("ring dtype mismatch: the ring stages byte-copies of the scan inputs")
+    else:
+        # dummy pointers; RING_EXPORT=False makes every ring store dead code
+        ring_k = ring_v = ring_a = ring_b = strict_mask
     # Resolve launch geometry. The deployed/served path uses BLOCK_V=BV and
     # num_warps=8 with the Triton default num_stages (unset). The TEST-ONLY
     # override (FR13_TREE_GDN_GEOM_OVERRIDE) lets the BV/warps A/B arms run; it
@@ -2557,6 +2630,10 @@ def launch_tree_gdn_prepared(
             visible_mask,
             _out,
             state,
+            ring_k,
+            ring_v,
+            ring_a,
+            ring_b,
             N_ACTUAL=n_actual,
             N_PAD=n_pad,
             NUM_KH=num_kh,
@@ -2578,6 +2655,7 @@ def launch_tree_gdn_prepared(
             PARENT_GATHER=_pg_flag,
             PIGGYBACK_EXPORT=piggyback_export,
             CHAIN_END_IDX=chain_end_idx,
+            RING_EXPORT=_ring_export,
             num_warps=_num_warps,
             **_extra_launch_kwargs,
         )

@@ -5124,18 +5124,29 @@ def _fr13_conv_subop_mab(
                             # conv committer can copy this-step's committed leaf
                             # window -> col 0 and burn the ephemeral cols.
                             self._fr13_replay_conv_state = conv_state
-                        self._fr13_replay_ring_k[fr10_b, :tree_n].copy_(
-                            key_spec[0, start:end]
+                        # FR13_RING_EXPORT: when ON, the scan kernel stages the
+                        # ring in-kernel from its own inputs (byte-copy contract
+                        # preserved; see _tree_gdn_kernel RING_EXPORT), removing
+                        # these 4 per-layer aten copy launches -- measured as
+                        # part of the +20ms/draft tree-only elementwise soup in
+                        # the 2026-07-22 nsys differential. Default OFF =
+                        # byte-identical staged bytes via the original copies.
+                        _fr13_ring_export = (
+                            os.environ.get("FR13_RING_EXPORT", "0") == "1"
                         )
-                        self._fr13_replay_ring_v[fr10_b, :tree_n].copy_(
-                            value_tree[start:end]
-                        )
-                        self._fr13_replay_ring_a[fr10_b, :tree_n].copy_(
-                            a[start:end]
-                        )
-                        self._fr13_replay_ring_b[fr10_b, :tree_n].copy_(
-                            b[start:end]
-                        )
+                        if not _fr13_ring_export:
+                            self._fr13_replay_ring_k[fr10_b, :tree_n].copy_(
+                                key_spec[0, start:end]
+                            )
+                            self._fr13_replay_ring_v[fr10_b, :tree_n].copy_(
+                                value_tree[start:end]
+                            )
+                            self._fr13_replay_ring_a[fr10_b, :tree_n].copy_(
+                                a[start:end]
+                            )
+                            self._fr13_replay_ring_b[fr10_b, :tree_n].copy_(
+                                b[start:end]
+                            )
                     tree_out, _ = launch_tree_gdn_prepared(
                         q=query_spec[0, start:end].contiguous(),
                         k=key_spec[0, start:end].contiguous(),
@@ -5165,6 +5176,34 @@ def _fr13_conv_subop_mab(
                         state=tree_state,
                         output_scale=self.head_k_dim**-0.5,
                         use_qk_l2norm_in_kernel=True,
+                        # FR13_RING_EXPORT: in-kernel ring staging (see the
+                        # gated aten-copy block above). Self-contained gate:
+                        # replay route must be on (rings exist) AND the flag
+                        # armed; None => RING_EXPORT constexpr-dead in-kernel.
+                        ring_k=(
+                            self._fr13_replay_ring_k[fr10_b]
+                            if _fr13_replay_route_on
+                            and os.environ.get("FR13_RING_EXPORT", "0") == "1"
+                            else None
+                        ),
+                        ring_v=(
+                            self._fr13_replay_ring_v[fr10_b]
+                            if _fr13_replay_route_on
+                            and os.environ.get("FR13_RING_EXPORT", "0") == "1"
+                            else None
+                        ),
+                        ring_a=(
+                            self._fr13_replay_ring_a[fr10_b]
+                            if _fr13_replay_route_on
+                            and os.environ.get("FR13_RING_EXPORT", "0") == "1"
+                            else None
+                        ),
+                        ring_b=(
+                            self._fr13_replay_ring_b[fr10_b]
+                            if _fr13_replay_route_on
+                            and os.environ.get("FR13_RING_EXPORT", "0") == "1"
+                            else None
+                        ),
                         invocation_counter=(
                             attn_metadata.fr10_tree_invocation_counter
                             if os.environ.get("FR10_METRICS", "0") == "1"
