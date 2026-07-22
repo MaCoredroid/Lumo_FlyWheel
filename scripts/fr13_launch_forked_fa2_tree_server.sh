@@ -309,46 +309,15 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
       APC_FLAGS="$APC_FLAGS --long-prefill-token-threshold $LUMO_LONG_PREFILL_THRESHOLD"
     fi
   fi
-  # BAKE (2026-06-24, GPU-VERIFIED via verify3b output/fr13_apc_verify3b): the tree+APC
-  # node-bank staleness fix. The defect: the tree committer writes the accepted-leaf state
-  # to a DYNAMIC node-bank row (spec_state_indices[req, accepted_len-1]) != the static
-  # block-pool src row the stock align snapshot reads -> the postprocess SSM snapshot copies
-  # a STALE row (measured snap_src_row=74 vs committed leaf, |diff|~14-18, on the batch_memcpy
-  # SOURCE = what a cache-HIT restores). DETERMINISTIC 4-ARM VERIFY (src_ptrs = batch_memcpy
-  # source, eager, real 12907):
-  #   stock           UNFAITHFUL 208/240  (baseline staleness)
-  #                    overwritten by do_mamba_copy_block's batch_memcpy AFTER the loop. DEAD.
-  #                    override does NOT reach the memcpy source (still reads row 74). DEAD.
-  #   FR13_APC_SNAP_FIX FAITHFUL 240/240  (src=committed leaf) -- THE ONLY WORKING FIX.
-  # SNAP_FIX rewrites src_ptrs_np[offset-1]=state[leaf].data_ptr() in collect_mamba_copy_meta
-  # AFTER the stock record, so do_mamba_copy_block copies the committed-leaf state into the
-  # block-aligned restore row. Wrote_back==leaf_ptr verified; cuda-graph-safe (host-side
-  # collect rewrite, not in the captured graph); native-safe (no leaf published -> stock src).
-  # SCOPE: makes cache-ON lossless w.r.t. the committed-leaf SSM state (necessary for lossless
-  # APC). It is NOT a fix for the agentic tool-call "crash" (that is the cache-INDEPENDENT
-  # qwen free-form-runaway flake, audit output/.../wuez11596 -- fires even at 0% cache hit),
-  # and "src faithful" is necessary-not-sufficient for full losslessness (committed-leaf vs
-  # fresh-prefill is a separate cross-boot residual). VERBATIM (clobbered) + SSM_SNAPSHOT
-  # (mis-wired) RETIRED to 0. Conv path (CONV_FIX/CONV_SNAPSHOT) UNCHANGED (separate, not
-  # re-verified here -- a conv node-bank analogue may need the same SNAP_FIX-style redirect;
-  # follow-up). All APC flags only take effect with APC on, so the non-APC locked cat9 path
-  # stays byte-identical (align hooks not invoked without --enable-prefix-caching).
+  # SNAP_FIX/CONV_SNAP_FIX/PRE_SNAP_FIX/CONV_LEAF_COMPLETE (the tree+APC node-bank leaf-map
+  # redirect family) DELETED 2026-07-22: STATELESS-TREE's own get_temporal_copy_spec/
+  # get_conv_copy_spec stock rewrite (col-0 direct read under FR13_APC_COMMIT_TO_RUNNING_ROW=1)
+  # makes the redirect provably unreachable/unnecessary under the deployed default -- proven via
+  # direct code trace (SSM) + adversarial workflow (CONV, wf_207a3da7-ef0). See
+  # project_fr13_snapfix_pb_cleanup.md. CONV_FIX/CONV_SNAPSHOT (the separate, independently-
+  # baked mechanism that makes get_conv_copy_spec's stock branch correct) is UNCHANGED.
   : "${FR13_APC_CONV_FIX:=1}"
   : "${FR13_APC_CONV_SNAPSHOT:=1}"
-  : "${FR13_APC_SNAP_FIX:=1}"        # BAKED 2026-06-24: verify3b FAITHFUL 240/240 (the working SSM node-bank fix)
-  : "${FR13_APC_SNAP_FIX_ZEROACCEPT:=1}"  # BAKED 2026-06-27 (user call): publish committed-root row (_row[0]) for zero-accept (accepted_len==0) steps (shared spine+tree carrier). APC-only -> non-APC locked cat9 path byte-identical
-  : "${FR13_APC_CONV_SNAP_FIX:=1}"   # BAKED 2026-07-03: conv twin of the SSM SNAP_FIX. temp-0.6 TV gate proved cache-restore lossy (tv_mean~0.2, floor 0) = CONV window sourced from base block-pool row not committed accepted-leaf; EXACT_SEED re-seeds SSM only, never conv. Real-task 13453: give-up 2t -> 8t engage w/ this on (workflow wqz0zlae6, 3-agent convergent). PARTIAL (redirect still falls back on some rows -> residual source-rewrite pending). APC-only -> non-APC path byte-identical
-  : "${FR13_APC_PRE_SNAP_FIX:=0}"    # CLR: preprocess SSM redirect (default OFF -> byte-identical)
-  # (2026-07-08 cleanup #14: removed the DEAD HRS / EXACT_SEED / BLOCK_REFOLD / REFOLD_TO_SNAPSHOT
-  #  flag block + comments — force-off at gdn import + impl deleted from the patcher. git preserves.)
-  # BAKED 2026-07-04 (user): CONV_LEAF_COMPLETE default ON. The conv wrong-row write (snapshot
-  # falling back to base col-0 instead of the committed accepted-leaf among co-resident tree rows)
-  # was the PRIMARY carrier of the tree+cache agent give-up — dose-response proven on 13453:
-  # conv broken -> 2-6-turn drift give-up; CONV_SNAP_FIX partial -> 8 turns; complete -> 16
-  # coherent turns, drift GONE, conv_leafmap 25200 hits / 0 misses (fixv1 gate, campaign doc §17).
-  # Correctness-directional (only ever substitutes a COMMITTED row for a provably-wrong one);
-  # auto-no-op for native (leaf maps only published by the tree committer); cache-OFF byte-identical.
-  : "${FR13_APC_CONV_LEAF_COMPLETE:=1}"
   # BAKED 2026-07-06 (user): the two tree+cache give-up CARRIER FIXES default ON. Together they
   # fill the campaign's missing cell — tree+cache now resolves nudge-free like tree+no-cache
   # (give-up class extinct 0/9 live runs; rp5 probe 24/24 route parity; i6 RESOLVED through a 103s
@@ -366,7 +335,7 @@ if [[ "$FR13_ENABLE_APC" == "1" ]]; then
   #    batch-position 0 can't read the freed request's residue. Default 0 (byte-identical);
   #    flip to 1 only after the B=4 gate confirms 0/4 -> ~4/4.
   : "${FR13_FREE_TREE_POSGLOBALS:=0}"
-  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_SNAP_FIX FR13_APC_SNAP_FIX_ZEROACCEPT FR13_APC_CONV_SNAP_FIX FR13_APC_PRE_SNAP_FIX FR13_APC_CONV_LEAF_COMPLETE FR13_APC_ZERO_MAMBA_ON_ALLOC FR13_APC_COPY_SRC_FIX FR13_FREE_TREE_POSGLOBALS
+  export FR13_APC_CONV_FIX FR13_APC_CONV_SNAPSHOT FR13_APC_ZERO_MAMBA_ON_ALLOC FR13_APC_COPY_SRC_FIX FR13_FREE_TREE_POSGLOBALS
 else
   APC_FLAGS=""
 fi
@@ -586,16 +555,8 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_APC_CONV_FIX="${FR13_APC_CONV_FIX:-1}" \
   -e FR13_APC_CONV_SNAPSHOT="${FR13_APC_CONV_SNAPSHOT:-0}" \
   -e FR13_APC_BLOCK_ALIGN_45477="${FR13_APC_BLOCK_ALIGN_45477:-1}" \
-  -e FR13_APC_SNAP_FIX="${FR13_APC_SNAP_FIX:-0}" \
-  -e FR13_APC_SNAP_FIX_ZEROACCEPT="${FR13_APC_SNAP_FIX_ZEROACCEPT:-0}" \
-  -e FR13_APC_CONV_SNAP_FIX="${FR13_APC_CONV_SNAP_FIX:-0}" \
-  -e FR13_APC_PRE_SNAP_FIX="${FR13_APC_PRE_SNAP_FIX:-0}" \
-  -e FR13_APC_CONV_LEAF_COMPLETE="${FR13_APC_CONV_LEAF_COMPLETE:-0}" \
   -e FR13_SERVE_LOG="${FR13_SERVE_LOG:-0}" \
   -e FR13_LEAK_PROBE="${FR13_LEAK_PROBE:-0}" \
-  -e FR13_APC_LEAF_CROSSCHECK="${FR13_APC_LEAF_CROSSCHECK:-0}" \
-  -e FR13_APC_CACHEROW_DUMP="${FR13_APC_CACHEROW_DUMP:-}" \
-  -e FR13_APC_CACHEROW_DUMP_LIMIT="${FR13_APC_CACHEROW_DUMP_LIMIT:-80}" \
   -e FR13_FORCE_SPINE_COMMIT="$FR13_FORCE_SPINE_COMMIT" \
   -e FR13_DRAFTER_SINGLE_LOGITS="$FR13_DRAFTER_SINGLE_LOGITS" \
   -e FR13_EAGER_PACK="$FR13_EAGER_PACK" \
