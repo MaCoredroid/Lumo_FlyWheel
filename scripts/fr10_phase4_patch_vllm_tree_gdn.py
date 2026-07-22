@@ -265,23 +265,6 @@ def _patch_gdn_attn() -> bool:
             "                path.reverse()\n"
             "                path_node_tensors.append(torch.tensor(path, dtype=torch.long, device=device))\n"
             "            conv_parent = list(parent)\n"
-            "            _fr13_pb_ext_tree = (\n"
-            "                n > 8\n"
-            "                and all(tree_choices[_pbk] == tuple([0] * (_pbk + 1)) for _pbk in range(8))\n"
-            "            )\n"
-            "            if _fr13_pb_ext_tree:\n"
-            "                # FR13_PIGGYBACK conv ancestry (LIVE-8): chain streams 1..7 are\n"
-            "                # conv-GHOSTS (windows dead: scan inputs ring-fed) and stream 8 is\n"
-            "                # the LIVE root twin. Conv col-0 is advanced AT COMMIT (post-chain),\n"
-            "                # so node 8 must NOT re-append the chain: make node 8 a conv-ROOT\n"
-            "                # (window = prior ++ x_8, the exact bonus window from the properly-\n"
-            "                # attending row 8). Subtree keeps parent 9->8, so subtree windows =\n"
-            "                # prior ++ x_8 ++ path == base cat9's windows byte-for-byte intent.\n"
-            "                # NOTE: NOT node 0 -- row 0 is GDN-identity-masked and its post-L0\n"
-            "                # x rows diverge from the true root (scout-B row-0 divergence).\n"
-            "                # SCAN parent/strict/visible masks + path_node_tensors keep FULL\n"
-            "                # extended ancestry (the GDN scan NEEDS the chain).\n"
-            "                conv_parent[8] = -1\n"
             "            for width in range(2, 7):\n"
             "                source_rows = []\n"
             "                for node in range(n):\n"
@@ -801,7 +784,7 @@ def _patch_gdn_linear() -> bool:
         "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n",
         (
             "from vllm.v1.attention.backends.gdn_attn import GDNAttentionMetadata\n"
-            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import _fr13_piggyback_cap, _fr13_piggyback_on, gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
+            "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
             "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
@@ -2641,26 +2624,6 @@ def _fr13_conv_subop_mab(
                                 )
                             )
                             if os.environ.get("FR13_TCF_SELFCHECK", "0") == "1":
-                                # FIX-3 dual-path selfcheck (localization
-                                # license, eager-only): recompute the LEGACY
-                                # committed-prior gather on the SAME inputs
-                                # and bitwise-compare. Boot-noise-immune.
-                                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
-                                    _fr13_piggyback_on as _fr13_tcf_pb_on,
-                                )
-                                if _fr13_tcf_pb_on():
-                                    # phase-3 unresolved 7 resolution: the
-                                    # selfcheck's legacy twin walks the BASE
-                                    # parent table; under cat9_pb the conv
-                                    # table is the node-8-rerooted variant
-                                    # (CONV-1a') => the twin would mismatch
-                                    # by design. Keep the diag OFF under pb.
-                                    raise RuntimeError(
-                                        "FR13_TCF_SELFCHECK=1 is unsupported "
-                                        "under FR13_PIGGYBACK (legacy twin "
-                                        "walks the un-rerooted conv table); "
-                                        "disarm one of them"
-                                    )
                                 if torch.cuda.is_current_stream_capturing():
                                     raise RuntimeError(
                                         "FR13_TCF_SELFCHECK=1 is eager-only"
@@ -2962,21 +2925,6 @@ def _fr13_conv_subop_mab(
                             else _fr10_index[_fr10_choice[:-1]]
                         )
                     _fr10_conv_parent = list(_fr10_parent)
-                    if (
-                        len(_fr10_parent) > 8
-                        and all(
-                            _fr10_choices[_pbk] == tuple([0] * (_pbk + 1))
-                            for _pbk in range(8)
-                        )
-                    ):
-                        # FR13_PIGGYBACK (LIVE-8): conv-GHOST chain -- make node 8
-                        # (the LIVE root twin) a conv-ROOT for the conv window/
-                        # state tables ONLY (window = prior ++ x_8; NOT node 0 --
-                        # row 0 is GDN-identity-masked and its post-L0 x rows
-                        # diverge from the true root). See the metadata-builder
-                        # twin; both twins MUST stay in lockstep or the forward's
-                        # window table and write-back state rows disagree.
-                        _fr10_conv_parent[8] = -1
                     _fr10_path0_node_tensor = getattr(
                         attn_metadata, "fr10_tree_path0_nodes", None
                     )
@@ -3175,14 +3123,6 @@ def _fr13_conv_subop_mab(
                         and os.environ.get("FR12_TREE_CONV_NATIVE_SPINE", "0") == "1"
                     )
                     _fr12_native_spine_conv_out = None
-                    if _fr12_native_spine_conv_enabled and _fr13_piggyback_on():
-                        raise RuntimeError(
-                            "FR12_TREE_CONV_NATIVE_SPINE oracle assumes the "
-                            "base tree (path-0 spine incl. row 0 = live "
-                            "root); under FR13_PIGGYBACK row 0 is the "
-                            "identity-masked stale root -- disarm the oracle "
-                            "for cat9_pb"
-                        )
                     if _fr12_native_spine_conv_enabled:
                         _fr12_path0_len = int(_fr10_path0_node_tensor.numel())
                         _fr12_native_spine_x = (
