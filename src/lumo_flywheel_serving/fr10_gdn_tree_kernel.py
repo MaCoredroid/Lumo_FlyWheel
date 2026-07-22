@@ -1754,107 +1754,6 @@ def _fr13_replay_gpu_timed(_orig):
 launch_tree_gdn_replay = _fr13_replay_gpu_timed(launch_tree_gdn_replay)
 
 
-def piggyback_catchup_replay(gdn_mod, catchup_rids):
-    """FR13_PIGGYBACK C-INT-2' one-shot catch-up (pre-forward, host-eager).
-
-    Replays the DROPPED commit-N GDN committer replay for exactly
-    ``catchup_rids`` -- reqs about to run a NONSPEC decode while their col-0
-    still lags by the pending chain. Rows are the PREVIOUS tree forward's
-    spec order (``gdn_mod._LUMO_FA_SPEC_ROW_REQ_IDS`` at call time: the
-    REQKEY hook calls this BEFORE overwriting the publish). Every staged row
-    whose rid is NOT in ``catchup_rids`` has its spec_idx col 0 redirected to
-    its col 1 (stream-1 chain column = guaranteed-dead under cat9_pb: never
-    read by conv prior, scan h0, TSR, or the leaf publish) so its deposit
-    lands in dead space and pending-but-tree-bound rows are NOT
-    double-applied. ROOT ring row = 8 (LIVE-8: the ACTIVE bonus twin's ring
-    row; ring row 0 is the diverged pos-0 copy) via
-    ``launch_tree_gdn_replay(root_node=8)``. Eager launch between graph
-    replays (legal); fail-loud throughout (a silently skipped catch-up is
-    stale-col-0 garble).
-    """
-    layers = getattr(gdn_mod, "_FR13_REPLAY_LAYERS", None)
-    if not layers:
-        raise RuntimeError(
-            "FR13_PIGGYBACK catch-up: no registered GDN replay layers"
-        )
-    prev_spec = getattr(gdn_mod, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
-    if not prev_spec:
-        raise RuntimeError(
-            "FR13_PIGGYBACK catch-up: no previous spec-row req ids"
-        )
-    paths_buf = getattr(gdn_mod, "_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR", None)
-    lens_buf = getattr(gdn_mod, "_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR", None)
-    if paths_buf is None or lens_buf is None:
-        raise RuntimeError(
-            "FR13_PIGGYBACK catch-up: missing accepted path/lens device buffers"
-        )
-    want = set(str(_r) for _r in catchup_rids)
-    missing = want - set(str(_r) for _r in prev_spec)
-    if missing:
-        raise RuntimeError(
-            "FR13_PIGGYBACK catch-up: rids not in the previous spec order: "
-            + repr(sorted(missing)[:8])
-        )
-    runrow_commit = os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "1") == "1"
-    runrow_init = os.environ.get("FR13_TREE_RUNROW_INIT", "1") == "1"
-    burn_node_bank = os.environ.get("FR13_APC_BURN_NODE_BANK", "1") == "1"
-    if not (runrow_commit and runrow_init and burn_node_bank):
-        raise RuntimeError(
-            "FR13_PIGGYBACK catch-up requires the STATELESS-TREE runrow "
-            "lifecycle (COMMIT_TO_RUNNING_ROW/TREE_RUNROW_INIT/BURN_NODE_BANK=1)"
-        )
-    for _prefix in sorted(layers):
-        _layer = layers[_prefix]
-        _flags = getattr(_layer, "_fr13_replay_flags", None)
-        _bank = getattr(_layer, "_fr13_replay_ssm_state", None)
-        _sidx = getattr(_layer, "_fr13_replay_spec_idx", None)
-        if (
-            _flags is None
-            or _bank is None
-            or _sidx is None
-            or int(_flags[0].item()) != 1
-        ):
-            raise RuntimeError(
-                "FR13_PIGGYBACK catch-up: stale or missing scan-time staging "
-                "for layer " + str(_prefix)
-            )
-        _rows = int(_flags[1].item())
-        if _rows <= 0 or _rows > len(prev_spec):
-            raise RuntimeError(
-                "FR13_PIGGYBACK catch-up: staged rows " + str(_rows)
-                + " inconsistent with prev spec order len "
-                + str(len(prev_spec))
-            )
-        # Dead-col-1 doctoring on a CLONE (the staged buffer must survive
-        # for a same-step second consumer / diagnostics untouched).
-        _doctored = _sidx.clone()
-        for _b in range(_rows):
-            if str(prev_spec[_b]) not in want:
-                _doctored[_b, 0] = _doctored[_b, 1]
-        launch_tree_gdn_replay(
-            state_bank=_bank,
-            spec_state_indices=_doctored,
-            prev_lens=_layer._fr13_replay_prev_lens,
-            accepted_paths=paths_buf,
-            accepted_lens=lens_buf,
-            k_ring=_layer._fr13_replay_ring_k,
-            v_ring=_layer._fr13_replay_ring_v,
-            a_ring=_layer._fr13_replay_ring_a,
-            b_ring=_layer._fr13_replay_ring_b,
-            A_log=_layer.A_log,
-            dt_bias=_layer.dt_bias,
-            num_spec_decodes=_rows,
-            output_scale=float(_layer._fr13_replay_output_scale),
-            use_qk_l2norm_in_kernel=True,
-            runrow_commit=runrow_commit,
-            runrow_init=runrow_init,
-            burn_node_bank=burn_node_bank,
-            root_node=8,
-        )
-        _flags[0].fill_(0)
-
-
-@triton.jit
 def _tree_gdn_replay_all_layers_kernel(
     k_rings,
     v_rings,
@@ -2296,12 +2195,6 @@ def launch_tree_gdn_replay_all_layers(
         raise ValueError("stacked A_logs/dt_biases must be contiguous")
     if not (spec_state_indices.is_contiguous() and prev_lens.is_contiguous()):
         raise ValueError("stacked spec_state_indices/prev_lens must be contiguous")
-    if _fr13_piggyback_on():
-        raise RuntimeError(
-            "FR13_PIGGYBACK: all-layers committer replay must be DROPPED "
-            "under piggyback (it replays ring node 0 = the diverged pos-0 "
-            "row); catch-up uses launch_tree_gdn_replay(root_node=8)"
-        )
     if _fr13_committer_native_on() and runrow_init and banks_list is not None:
         # SHIP path (EAGER_PACK on): route each layer's committed-path state rebuild through NATIVE
         # fused_sigmoid_gating (validated 1.19e-7) instead of the batched custom replay kernel, to test
