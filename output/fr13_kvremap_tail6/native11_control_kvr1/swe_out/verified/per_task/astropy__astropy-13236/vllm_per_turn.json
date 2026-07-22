@@ -1,0 +1,12 @@
+{
+  "schema": "lumo.swe_bench_q36_a.vllm_per_turn.v1",
+  "instance_id": "astropy__astropy-13236",
+  "metrics_pre_bytes": 58406,
+  "metrics_post_bytes": 60084,
+  "proxy_request_rows": 0,
+  "model_id": "qwen3.6-27b",
+  "endpoint": "http://127.0.0.1:8022/v1",
+  "metrics_url": "http://127.0.0.1:9950/metrics",
+  "deferred_full_normalization": true,
+  "deferred_reason": "SWE-Bench campaign captures raw pre/post snapshots and the proxy capture slice; full per-request Prometheus normalization deferred to LLD-12 / closeout aggregation."
+}

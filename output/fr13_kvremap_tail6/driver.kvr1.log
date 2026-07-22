@@ -1,0 +1,20 @@
+===== CUSTOM SEQUENCE_FILE=/tmp/smoke_seq_kvremap_tail6.sh =====
+===== VARIANT ARM kvremap_tail6_kvr1 (kind=tail6) B=4 offload=1 =====
+[kvremap_tail6_kvr1] serve rc=0
+[kvremap_tail6_kvr1] post-brackets=16
+  "batch_size": 4,
+  "n_tasks": 16,
+  "s_per_fwd": 0.8059576572271241,
+  "s_per_fwd_gpu": 0.10628304871241763,
+  "accept_per_event": 4.2856093411691925,
+  "committed_per_event": 5.2856093411691925,
+  "derived_tps": 6.55817249674653,
+  "derived_tps_gpu": 49.731442644923355,
+  "per_request_decode_tps": 6.670527580585629,
+  "aggregate_decode_tps": 15.234519352924144,
+  "effective_concurrency": 2.1312641339191662,
+  "prefill_frac": 0.5465809445158667,
+  "instrument": "OFF"
+}
+[kvremap_tail6_kvr1] docker containers after: 0
+===== CAMPAIGN DRIVER DONE =====

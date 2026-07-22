@@ -1,0 +1,20 @@
+harness elapsed_s=40.859 exit_code=0 arch=x86_64
+-- stdout --
+Found 1 existing instance images. Will reuse them.
+Running 1 instances...
+All instances run.
+Cleaning cached images...
+Removed 0 images.
+Total instances: 1
+Instances submitted: 1
+Instances completed: 1
+Instances incomplete: 0
+Instances resolved: 1
+Instances unresolved: 0
+Instances with empty patches: 0
+Instances with errors: 0
+Unstopped containers: 0
+Unremoved images: 1
+Report written to qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a.x86eval-out-1784734629.json
+-- stderr --
+Evaluation:   0%|          | 0/1 [00:00<?, ?it/s, error=0, ✓=0, ✖=0]Evaluation:   0%|          | 0/1 [00:38<?, ?it/s, ✓=1, ✖=0, error=0]Evaluation: 100%|##########| 1/1 [00:38<00:00, 38.12s/it, ✓=1, ✖=0, error=0]Evaluation: 100%|##########| 1/1 [00:38<00:00, 38.12s/it, ✓=1, ✖=0, error=0]

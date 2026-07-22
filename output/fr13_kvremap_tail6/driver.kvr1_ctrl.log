@@ -1,0 +1,38 @@
+===== CUSTOM SEQUENCE_FILE=/tmp/smoke_seq_native_controls.sh =====
+===== VARIANT ARM native5_control_kvr1 (kind=nativemtp5_exseed) B=4 offload=1 =====
+[native5_control_kvr1] serve rc=0
+[native5_control_kvr1] post-brackets=16
+  "batch_size": 4,
+  "n_tasks": 16,
+  "s_per_fwd": 0.5014605296167979,
+  "s_per_fwd_gpu": 0.06668115431288331,
+  "accept_per_event": 3.421794350829565,
+  "committed_per_event": 4.421794350829565,
+  "derived_tps": 8.8178312941371,
+  "derived_tps_gpu": 66.31250458085186,
+  "per_request_decode_tps": 8.656992838408481,
+  "aggregate_decode_tps": 20.86522930601515,
+  "effective_concurrency": 2.1996880406825357,
+  "prefill_frac": 0.31932634337302657,
+  "instrument": "OFF"
+}
+[native5_control_kvr1] docker containers after: 0
+===== VARIANT ARM native11_control_kvr1 (kind=nativemtp11_exseed) B=4 offload=1 =====
+[native11_control_kvr1] serve rc=0
+[native11_control_kvr1] post-brackets=16
+  "batch_size": 4,
+  "n_tasks": 16,
+  "s_per_fwd": 0.6909537704251729,
+  "s_per_fwd_gpu": 0.07395210503976833,
+  "accept_per_event": 4.923428973772223,
+  "committed_per_event": 5.923428973772223,
+  "derived_tps": 8.572829655632805,
+  "derived_tps_gpu": 80.09817936334404,
+  "per_request_decode_tps": 9.005549027209256,
+  "aggregate_decode_tps": 18.61208801404316,
+  "effective_concurrency": 2.0613118339971432,
+  "prefill_frac": 0.4587593385055093,
+  "instrument": "OFF"
+}
+[native11_control_kvr1] docker containers after: 0
+===== CAMPAIGN DRIVER DONE =====

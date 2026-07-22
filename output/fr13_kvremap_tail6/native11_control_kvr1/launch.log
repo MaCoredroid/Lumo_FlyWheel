@@ -1,0 +1,5 @@
+               total        used        free      shared  buff/cache   available
+Mem:           117Gi       5.6Gi       112Gi        45Mi       354Mi       111Gi
+Swap:           15Gi          0B        15Gi
+f5b01bfd358b274798f37a82a2c0c607480872e10d9cc296c09065ae6fbbf5a7
+[launch] gpu_oom_guard armed for container=fr13-bigdenom-native11_control_kvr1 (floor=9000MiB)

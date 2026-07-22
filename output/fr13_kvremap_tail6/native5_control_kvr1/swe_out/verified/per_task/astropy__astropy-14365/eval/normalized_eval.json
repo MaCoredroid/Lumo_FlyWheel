@@ -1,0 +1,11 @@
+{
+  "track": "swe_bench",
+  "instance_id": "astropy__astropy-14365",
+  "outcome": "resolved",
+  "failure_mode": "tests_passed",
+  "dataset_name": "princeton-nlp/SWE-bench_Verified",
+  "model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+  "eval_wall_clock_seconds": 39.917,
+  "arch": "x86_64",
+  "eval_host": "mark-Alienware-Aurora-ACT1250"
+}

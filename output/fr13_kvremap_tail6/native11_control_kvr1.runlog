@@ -1,0 +1,151 @@
+=== BIGDENOM-VARIANT SWEServe ARM native11_control_kvr1 kind=nativemtp11_exseed launcher=forked expect=11 xflags=[ATTENTION_BACKEND=FLASH_ATTN SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":11} FR10_DECODE_MODE_DEFAULT=naive_mtp FR13_REPLAY_ROUTE=0 FR13_FA2_TREE_BIAS=0 FR13_FA2_PREFILL_NATIVE=0 FR13_TREE_SAMPLE_ROW=0 FR13_CONV_COMMITTED_PATH=0 FR13_ENABLE_APC=1 FR13_APC_EXACT_SEED=0 MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 MAMBA_SSM_CACHE_DTYPE=float32] subset=output/fr13_b1_gold_swe/subset_b4_sixteen.json ===
+2026-07-22T13:34:37Z
+2fc0faf624eb44dc1bfd43cf48e915c936b72804
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=112.0GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117           5         112           0           0         111
+Swap:             15           0          15
+healthy after 392s
+container env OK (native MTP: qwen3_5_mtp, no tree env; KIND=nativemtp11_exseed)
+worker environ needle SKIPPED (native-decode arm: no tree_mtp decode mode; spec-ratio assert covers drafter-ran)
+(EngineCore pid=91) INFO 07-22 13:41:02 [gpu_model_runner.py:7659] Graph capturing finished in 6 secs, took 0.03 GiB
+spec engagement OK: drafts delta=4.0 draft_tokens/drafts=11.0
+[offload] OFFLOAD_AGENT=1 — proxy+agent on alienware, GB10 stays vLLM-only
+[offload] alienware -> GB10 vLLM 100.103.10.122:9950/health OK
+OFFLOAD_PROXY_OK host=alienware upstream=http://100.103.10.122:9950 (forced temp 0.6, pair dumps on, NUDGE OFF)
+proxy OK (OFFLOADED to alienware:8023)
+eval offload: alienware reachable
+[offload] link watchdog pid=291231 (threshold 300s)
+swe orchestrator rc=0 wall=11284s
+[2026-07-22T15:38:10Z] <- astropy__astropy-14508 verdict=resolved elapsed_total=1786.8s
+[2026-07-22T15:49:48Z] <- astropy__astropy-14995 verdict=resolved elapsed_total=711.3s
+[2026-07-22T16:01:26Z] <- astropy__astropy-14369 verdict=failed elapsed_total=3358.3s
+[2026-07-22T16:49:58Z] <- astropy__astropy-14598 verdict=failed elapsed_total=4612.5s
+=== [2026-07-22T16:50:02Z] DONE n=16 resolved_rate=0.5 verdicts={'resolved': 8, 'failed': 8} ===
+OFFLOAD_FETCH_OK host=alienware pair_dumps_back=0
+{
+  "swe_orchestrator_rc": 0,
+  "swe_window_wall_s": 11284,
+  "tasks": [
+    {
+      "instance_id": "astropy__astropy-12907",
+      "codex_elapsed_s": 1587.869,
+      "codex_timed_out": false,
+      "patch_bytes": 504,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-13033",
+      "codex_elapsed_s": 1358.994,
+      "codex_timed_out": false,
+      "patch_bytes": 1394,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-13236",
+      "codex_elapsed_s": 474.153,
+      "codex_timed_out": false,
+      "patch_bytes": 927,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-13398",
+      "codex_elapsed_s": 6605.03,
+      "codex_timed_out": false,
+      "patch_bytes": 580,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-13453",
+      "codex_elapsed_s": 1397.647,
+      "codex_timed_out": false,
+      "patch_bytes": 408,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-13579",
+      "codex_elapsed_s": 4696.478,
+      "codex_timed_out": false,
+      "patch_bytes": 1019,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-13977",
+      "codex_elapsed_s": 654.529,
+      "codex_timed_out": false,
+      "patch_bytes": 727,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14096",
+      "codex_elapsed_s": 2109.349,
+      "codex_timed_out": false,
+      "patch_bytes": 1113,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14182",
+      "codex_elapsed_s": 2588.104,
+      "codex_timed_out": false,
+      "patch_bytes": 797,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14309",
+      "codex_elapsed_s": 301.95,
+      "codex_timed_out": false,
+      "patch_bytes": 574,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14365",
+      "codex_elapsed_s": 623.566,
+      "codex_timed_out": false,
+      "patch_bytes": 475,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14369",
+      "codex_elapsed_s": 3315.096,
+      "codex_timed_out": false,
+      "patch_bytes": 12167,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14508",
+      "codex_elapsed_s": 1744.003,
+      "codex_timed_out": false,
+      "patch_bytes": 2583,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14539",
+      "codex_elapsed_s": 735.546,
+      "codex_timed_out": false,
+      "patch_bytes": 530,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14598",
+      "codex_elapsed_s": 4567.863,
+      "codex_timed_out": false,
+      "patch_bytes": 2827,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14995",
+      "codex_elapsed_s": 667.196,
+      "codex_timed_out": false,
+      "patch_bytes": 992,
+      "verdict": "resolved"
+    }
+  ]
+}
+pair dumps captured: 0
+ARM_DONE native11_control_kvr1 kind=nativemtp11_exseed swerc=0
+[teardown] kill proxy + docker rm -f fr13-bigdenom-native11_control_kvr1 + recover_host_memory
+               total        used        free      shared  buff/cache   available
+Mem:             117           5         112           0           0         112
+Swap:             15           0          15
+2026-07-22T16:50:16Z

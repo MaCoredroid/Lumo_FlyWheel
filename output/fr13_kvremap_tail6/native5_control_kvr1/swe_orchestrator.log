@@ -1,0 +1,37 @@
+[eval-offload] eval step -> alienware (native x86_64)
+[codex-offload] codex docker -> alienware (x86); endpoint=http://127.0.0.1:8023/v1 (GB10 stays vLLM-only — uncontended deploy-speed)
+=== [2026-07-22T11:24:00Z] dataset=princeton-nlp/SWE-bench_Verified tag=verified n=16 concurrency=4 ===
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+[2026-07-22T11:24:04Z] -> astropy__astropy-12907
+[2026-07-22T11:24:04Z] -> astropy__astropy-13033
+[2026-07-22T11:24:04Z] -> astropy__astropy-13236
+[2026-07-22T11:24:04Z] -> astropy__astropy-13398
+[2026-07-22T11:33:55Z] <- astropy__astropy-12907 verdict=resolved elapsed_total=591.6s
+[2026-07-22T11:34:03Z] -> astropy__astropy-13453
+[2026-07-22T11:35:36Z] <- astropy__astropy-13033 verdict=failed elapsed_total=692.5s
+[2026-07-22T11:35:41Z] -> astropy__astropy-13579
+[2026-07-22T11:42:15Z] <- astropy__astropy-13236 verdict=resolved elapsed_total=1090.9s
+[2026-07-22T11:42:20Z] -> astropy__astropy-13977
+[2026-07-22T11:57:37Z] <- astropy__astropy-13453 verdict=resolved elapsed_total=1413.8s
+[2026-07-22T11:57:42Z] -> astropy__astropy-14096
+[2026-07-22T12:03:33Z] <- astropy__astropy-13977 verdict=failed elapsed_total=1272.8s
+[2026-07-22T12:03:37Z] -> astropy__astropy-14182
+[2026-07-22T12:08:49Z] <- astropy__astropy-14096 verdict=resolved elapsed_total=667.0s
+[2026-07-22T12:08:54Z] -> astropy__astropy-14309
+[2026-07-22T12:09:24Z] <- astropy__astropy-13579 verdict=resolved elapsed_total=2023.1s
+[2026-07-22T12:09:28Z] -> astropy__astropy-14365
+[2026-07-22T12:14:55Z] <- astropy__astropy-14309 verdict=resolved elapsed_total=360.8s
+[2026-07-22T12:14:59Z] -> astropy__astropy-14369
+[2026-07-22T12:19:50Z] <- astropy__astropy-14182 verdict=failed elapsed_total=972.5s
+[2026-07-22T12:19:54Z] -> astropy__astropy-14508
+[2026-07-22T12:24:09Z] <- astropy__astropy-14365 verdict=resolved elapsed_total=880.8s
+[2026-07-22T12:24:14Z] -> astropy__astropy-14539
+[2026-07-22T12:37:55Z] <- astropy__astropy-14508 verdict=resolved elapsed_total=1080.3s
+[2026-07-22T12:38:00Z] -> astropy__astropy-14598
+[2026-07-22T12:44:24Z] <- astropy__astropy-14539 verdict=resolved elapsed_total=1210.5s
+[2026-07-22T12:44:30Z] -> astropy__astropy-14995
+[2026-07-22T12:44:38Z] <- astropy__astropy-13398 verdict=failed elapsed_total=4834.1s
+[2026-07-22T12:49:51Z] <- astropy__astropy-14369 verdict=failed elapsed_total=2092.0s
+[2026-07-22T12:55:13Z] <- astropy__astropy-14995 verdict=resolved elapsed_total=643.3s
+[2026-07-22T13:34:25Z] <- astropy__astropy-14598 verdict=failed elapsed_total=3384.6s
+=== [2026-07-22T13:34:30Z] DONE n=16 resolved_rate=0.625 verdicts={'resolved': 10, 'failed': 6} ===

@@ -1,0 +1,6 @@
+[launch] TAIL mode ON -> /logs/fr13_tail_mode.arm (head_depth=5 + arctic chain to wide_D)
+               total        used        free      shared  buff/cache   available
+Mem:           117Gi       5.3Gi       112Gi        45Mi       380Mi       112Gi
+Swap:           15Gi          0B        15Gi
+1a32722ef47c15e9cbcf58061d2bbdebdf47e3635bdae33e1dcdb3b3e864578b
+[launch] gpu_oom_guard armed for container=fr13-bigdenom-kvremap_tail6_kvr1 (floor=9000MiB)

@@ -1,0 +1,189 @@
+=== BIGDENOM-VARIANT SWEServe ARM kvremap_tail6_kvr1 kind=tail6 launcher=forked expect=21 xflags=[FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8] subset=output/fr13_b1_gold_swe/subset_b4_sixteen.json ===
+2026-07-22T07:21:25Z
+224c5db735dae01bd5a6b4d1dd1599db31640175
+[hygiene] recover_host_memory + assert free
+[hygiene] MemAvailable=112.2GiB swap_used=0 OK
+               total        used        free      shared  buff/cache   available
+Mem:             117           5         112           0           0         112
+Swap:             15           0          15
+healthy after 539s
+container env OK (tail6)
+PID 1 cmd=[/usr/bin/python3 /usr/local/bin/vllm serve /models/qwen3.6-27b-fp8 --served-model-name qwen3.6-27b --host 0.0.0.0 --port 9950 --max-num-seqs 4 --gpu-memory-utilization 0.60 --max-model-len 131072 --seed 0 --attention-backend TREE_ATTN --gdn-prefill-backend triton --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 --speculative-config {"method":"qwen3_5_mtp","num_speculative_tokens":21,"speculative_token_tree":"[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0)]"} --enable-prefix-caching --enable-chunked-prefill --mamba-block-size 1024 --mamba-ssm-cache-dtype float32 --max-num-batched-tokens 4096 --block-size 1024 --long-prefill-token-threshold 1024 --compilation-config {"cudagraph_mode":"FULL_AND_PIECEWISE"} ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":21,"speculative_token_tree":"[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 222 cmd=[/usr/bin/python3 -c from multiprocessing.resource_tracker import main;main(51) ]
+   FR13_REPLAY_ROUTE=1
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":21,"speculative_token_tree":"[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 223 cmd=[VLLM::EngineCore                                                                                                                   ]
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+   FR13_GB10_FP8_GEMV_CFG=0
+PID 596 cmd=[bash -lc 
+hit=""; pids=""
+for p in $(ls /proc | grep -E "^[0-9]+$"); do
+  e="/proc/$p/environ"; [ -r "$e" ] || continue
+  cmd="$(tr "\0" " " < /proc/$p/cmdline 2>/dev/null || true)"
+  case "$cmd" in *vllm*|*VllmWorker*|*EngineCore*|*python*) ;; *) continue ;; esac
+  dm="$(tr "\0" "\n" < "$e" | grep -E "^FR10_DECODE_MODE_DEFAULT=" || true)"
+  if [ -n "$dm" ]; then
+    pids="$pids $p"
+    echo "PID $p cmd=[$cmd]"
+    tr "\0" "\n" < "$e" | grep -E "^(FR10_DECODE_MODE_DEFAULT|LUMO_FB_KERNEL_ROWS|FR13_GB10_FP8_GEMV_CFG|FR13_GPU_COMMITTER|FR13_COMMITTER_SYNCKILL|SPEC_CONFIG|FR13_REPLAY_ROUTE)=" | sed "s/^/   /"
+    hit="1"
+  fi
+done
+echo "SUMMARY worker_env_seen=[$hit] pids=[$pids]"
+ ]
+   FR13_REPLAY_ROUTE=1
+   FR13_GB10_FP8_GEMV_CFG=0
+   SPEC_CONFIG={"method":"qwen3_5_mtp","num_speculative_tokens":21,"speculative_token_tree":"[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0)]"}
+   LUMO_FB_KERNEL_ROWS=1
+   FR10_DECODE_MODE_DEFAULT=tree_mtp
+SUMMARY worker_env_seen=[1] pids=[ 1 222 223 596]
+worker environ needle OK (tail6)
+(EngineCore pid=223) INFO 07-22 07:30:20 [gpu_model_runner.py:7659] Graph capturing finished in 6 secs, took 0.02 GiB
+spec engagement OK: drafts delta=5.0 draft_tokens/drafts=21.0
+[offload] OFFLOAD_AGENT=1 — proxy+agent on alienware, GB10 stays vLLM-only
+[offload] alienware -> GB10 vLLM 100.103.10.122:9950/health OK
+OFFLOAD_PROXY_OK host=alienware upstream=http://100.103.10.122:9950 (forced temp 0.6, pair dumps on, NUDGE OFF)
+proxy OK (OFFLOADED to alienware:8023)
+eval offload: alienware reachable
+[offload] link watchdog pid=4173070 (threshold 300s)
+swe orchestrator rc=0 wall=11393s
+[2026-07-22T09:48:11Z] <- astropy__astropy-14995 verdict=resolved elapsed_total=1263.5s
+[2026-07-22T09:51:46Z] <- astropy__astropy-13579 verdict=resolved elapsed_total=7083.7s
+[2026-07-22T10:08:04Z] <- astropy__astropy-14598 verdict=failed elapsed_total=2679.7s
+[2026-07-22T10:40:45Z] <- astropy__astropy-14369 verdict=failed elapsed_total=6813.7s
+=== [2026-07-22T10:40:50Z] DONE n=16 resolved_rate=0.625 verdicts={'resolved': 10, 'failed': 6} ===
+OFFLOAD_FETCH_OK host=alienware pair_dumps_back=0
+{
+  "swe_orchestrator_rc": 0,
+  "swe_window_wall_s": 11393,
+  "tasks": [
+    {
+      "instance_id": "astropy__astropy-12907",
+      "codex_elapsed_s": 854.393,
+      "codex_timed_out": false,
+      "patch_bytes": 504,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-13033",
+      "codex_elapsed_s": 1303.322,
+      "codex_timed_out": false,
+      "patch_bytes": 1070,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-13236",
+      "codex_elapsed_s": 2292.305,
+      "codex_timed_out": false,
+      "patch_bytes": 819,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-13398",
+      "codex_elapsed_s": 4097.753,
+      "codex_timed_out": false,
+      "patch_bytes": 580,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-13453",
+      "codex_elapsed_s": 2205.808,
+      "codex_timed_out": false,
+      "patch_bytes": 575,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-13579",
+      "codex_elapsed_s": 7030.284,
+      "codex_timed_out": false,
+      "patch_bytes": 1565,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-13977",
+      "codex_elapsed_s": 1181.343,
+      "codex_timed_out": false,
+      "patch_bytes": 815,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14096",
+      "codex_elapsed_s": 2817.797,
+      "codex_timed_out": false,
+      "patch_bytes": 1020,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14182",
+      "codex_elapsed_s": 2155.874,
+      "codex_timed_out": false,
+      "patch_bytes": 969,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14309",
+      "codex_elapsed_s": 309.272,
+      "codex_timed_out": false,
+      "patch_bytes": 574,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14365",
+      "codex_elapsed_s": 49.957,
+      "codex_timed_out": false,
+      "patch_bytes": 0,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14369",
+      "codex_elapsed_s": 6769.755,
+      "codex_timed_out": false,
+      "patch_bytes": 12622,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14508",
+      "codex_elapsed_s": 1109.086,
+      "codex_timed_out": false,
+      "patch_bytes": 2411,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14539",
+      "codex_elapsed_s": 639.982,
+      "codex_timed_out": false,
+      "patch_bytes": 530,
+      "verdict": "resolved"
+    },
+    {
+      "instance_id": "astropy__astropy-14598",
+      "codex_elapsed_s": 2635.47,
+      "codex_timed_out": false,
+      "patch_bytes": 507,
+      "verdict": "failed"
+    },
+    {
+      "instance_id": "astropy__astropy-14995",
+      "codex_elapsed_s": 1219.856,
+      "codex_timed_out": false,
+      "patch_bytes": 607,
+      "verdict": "resolved"
+    }
+  ]
+}
+pair dumps captured: 0
+ARM_DONE kvremap_tail6_kvr1 kind=tail6 swerc=0
+[teardown] kill proxy + docker rm -f fr13-bigdenom-kvremap_tail6_kvr1 + recover_host_memory
+               total        used        free      shared  buff/cache   available
+Mem:             117           5         112           0           0         112
+Swap:             15           0          15
+2026-07-22T10:40:58Z
