@@ -1376,6 +1376,17 @@ def _fr13_native_committer_replay(
         _FR13_COMMITTER_NATIVE_ANNOUNCED = True
         print(f"[FR13_COMMITTER_NATIVE ENGAGED] native committed-path replay via fused_sigmoid_gating "
               f"(num_spec_decodes={int(num_spec_decodes)})", flush=True)
+    # DIRECTION-2 narrow measurement (default OFF): times THIS single per-layer call (gather +
+    # fused_sigmoid + burn) -- the exact scope the isolated micro-bench measured. Separate from
+    # the patcher's FR13_CFWD_GPU_TIMER (wraps the whole self.rejection_sampler dispatch,
+    # accept/LCP/bonus decision INCLUDED -- a broader, different quantity). This function is the
+    # SHARED committer body called both from launch_tree_gdn_replay (singular, the deployed
+    # per-layer dispatch loop in the patcher) and launch_tree_gdn_replay_all_layers -- placing the
+    # timer here (not in either wrapper) is correct regardless of which one is actually live.
+    _rt_on = os.environ.get("FR13_REPLAY_ONLY_GPU_TIMER") == "1"
+    if _rt_on:
+        _rt_start = torch.cuda.Event(enable_timing=True)
+        _rt_start.record()
     dev = state_bank.device
     B = int(num_spec_decodes)
     num_kh, dim_k = int(k_ring.shape[2]), int(k_ring.shape[3])
@@ -1413,6 +1424,11 @@ def _fr13_native_committer_replay(
         for b in range(B):
             rows = spec_state_indices[b, 1:spec_cols].to(torch.long)
             state_bank[rows] = 0.0
+    if _rt_on:
+        _rt_stop = torch.cuda.Event(enable_timing=True)
+        _rt_stop.record()
+        _FR13_REPLAY_ONLY_PENDING.append((_rt_start, _rt_stop))
+        _fr13_replay_only_drain(False)
 
 
 _FR13_COMMITTER_BATCHED_ANNOUNCED = False
@@ -2435,15 +2451,6 @@ def launch_tree_gdn_replay_all_layers(
                 burn_node_bank=burn_node_bank,
             )
             return
-        # DIRECTION-2 narrow measurement (default OFF): time ONLY this per-layer replay loop
-        # (the exact function the isolated micro-bench measured), separate from whatever
-        # broader span the patcher's FR13_CFWD_GPU_TIMER wraps (self.rejection_sampler, which
-        # also includes the accept/LCP/bonus sampling decision -- a different, larger quantity).
-        _rt_on = os.environ.get("FR13_REPLAY_ONLY_GPU_TIMER") == "1"
-        if _rt_on:
-            _rt_start = torch.cuda.Event(enable_timing=True)
-            _rt_stop = torch.cuda.Event(enable_timing=True)
-            _rt_start.record()
         for _L in range(int(num_layers)):
             _fr13_native_committer_replay(
                 state_bank=banks_list[_L], spec_state_indices=spec_state_indices[_L],
@@ -2453,11 +2460,6 @@ def launch_tree_gdn_replay_all_layers(
                 output_scale=output_scale, use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
                 burn_node_bank=burn_node_bank, spec_cols=_spec_cols,
             )
-        if _rt_on:
-            _rt_stop.record()
-            global _FR13_REPLAY_ONLY_PENDING
-            _FR13_REPLAY_ONLY_PENDING.append((_rt_start, _rt_stop))
-            _fr13_replay_only_drain(False)
         return
     grid = (int(num_layers) * int(num_spec_decodes), num_vh, triton.cdiv(dim_v, BV))
     _tree_gdn_replay_all_layers_kernel[grid](
