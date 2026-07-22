@@ -82,91 +82,6 @@ import numpy as np
 
 
 # ---------------------------------------------------------------------------
-# FR13_PIGGYBACK seam 4 (committer walk offset). With the extended tree
-# [prev-accepted CHAIN (K slots, identity-padded) ++ re-rooted subtree], the
-# commit walk must start at the CHAIN-END node (K-1) so it walks ONLY the real
-# speculation subtree: chain nodes are the PREV step's already-committed
-# tokens, present only to advance GDN state inside the verify forward --
-# accepting/committing/re-emitting one would double-commit history.
-# Flag + cap come from the SAME worker-env-drop-proof sources the kernel and
-# packer read (_fr13_piggyback_on/_cap in lumo_flywheel_serving.
-# fr10_gdn_tree_kernel: env FR13_PIGGYBACK / FR13_PIGGYBACK_PREFIX_CAP,
-# sidecar /logs|/tmp/fr13_piggyback.arm), so drafter/forward/committer cannot
-# disagree within a boot. Default OFF => -1 => today's walk, byte-identical.
-# ---------------------------------------------------------------------------
-def _fr13_pb_walk_root() -> int:
-    """Commit-walk start parent: -1 (tree root) when FR13_PIGGYBACK is off;
-    CHAIN_END_IDX = K-1 (K=_fr13_piggyback_cap(), 7 for the K=8 cat9_pb
-    artifact) when on. Read fresh each call (cheap stat)."""
-    try:
-        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
-            _fr13_piggyback_cap,
-            _fr13_piggyback_on,
-        )
-        if not _fr13_piggyback_on():
-            return -1
-        return int(_fr13_piggyback_cap()) - 1
-    except Exception:
-        # Offline/CPU-gate context only (package or triton unavailable):
-        # transcription of the SAME env+sidecar reads -- same decision from
-        # the same sources, NOT a semantic fallback (bug-class 9 safe). In
-        # the worker the import always succeeds: the patched gdn layer has
-        # fr10_gdn_tree_kernel warm in sys.modules before any commit runs.
-        on = os.environ.get("FR13_PIGGYBACK") == "1"
-        cap_raw = os.environ.get("FR13_PIGGYBACK_PREFIX_CAP", "")
-        for _p in ("/logs/fr13_piggyback.arm", "/tmp/fr13_piggyback.arm"):
-            if os.path.exists(_p):
-                on = True
-                if not cap_raw:
-                    try:
-                        cap_raw = open(_p).read().strip()
-                    except Exception:
-                        pass
-        if not on:
-            return -1
-        return (int(cap_raw) if cap_raw.isdigit() else 8) - 1
-
-
-def _fr13_pb_validate_extended_tree(parents, walk_root: int) -> None:
-    """Fail-loud shape gate: with FR13_PIGGYBACK on, the per-request tree MUST
-    be the extended [strict chain 0..walk_root ++ subtree] artifact. A base
-    tree walked from walk_root would silently commit wrong/no nodes; a broken
-    chain means drafter/packer and committer disagree. Host ints, ~17 items."""
-    n = len(parents)
-    if n <= walk_root + 1:
-        raise RuntimeError(
-            "FR13_PIGGYBACK: tree has %d nodes <= chain length %d -- no "
-            "speculation subtree (extended tree not engaged in the drafter?)"
-            % (n, walk_root + 1)
-        )
-    if int(parents[0]) != -1:
-        raise RuntimeError(
-            "FR13_PIGGYBACK: chain node 0 has parent %r != -1" % (parents[0],)
-        )
-    for j in range(1, walk_root + 1):
-        if int(parents[j]) != j - 1:
-            raise RuntimeError(
-                "FR13_PIGGYBACK: chain broken at node %d (parent %r != %d); "
-                "tree is not [chain ++ subtree]" % (j, parents[j], j - 1)
-            )
-    subtree_root_seen = False
-    for j in range(walk_root + 1, n):
-        p = int(parents[j])
-        if p == walk_root:
-            subtree_root_seen = True
-        elif p < walk_root:
-            raise RuntimeError(
-                "FR13_PIGGYBACK: subtree node %d parented into the chain "
-                "interior (parent %d < chain end %d)" % (j, p, walk_root)
-            )
-    if not subtree_root_seen:
-        raise RuntimeError(
-            "FR13_PIGGYBACK: no subtree node hangs off the chain end (node "
-            "%d) -- the walk would never commit anything" % walk_root
-        )
-
-
-# ---------------------------------------------------------------------------
 # MEASUREMENT-ONLY commit trace (FR13 garble mechanism binding, 2026-07-10).
 # Gated on LUMO_TREE_SAMPLER_DEBUG_LOG (the ONE diagnostic flag proven to reach
 # the forward EngineCore worker). When the flag is UNSET this is a no-op and the
@@ -541,10 +456,6 @@ def fr13_device_multidraft_commit(
     # greedy longest-prefix committer); else softmax rows (the temp>0 rule).
     _row_fn = _device_onehot_argmax_row if all_greedy else _device_softmax_row
 
-    # FR13_PIGGYBACK seam 4: resolve the walk root ONCE per commit call so
-    # every request in this step walks the same shape (the sidecar never
-    # flips mid-step). -1 = today's root walk (flag off, byte-identical).
-    _pb_root = _fr13_pb_walk_root()
     start = 0
     for req_i, node_count in enumerate(counts):
         node_count = int(node_count)
@@ -566,23 +477,7 @@ def fr13_device_multidraft_commit(
 
         parents = parents_cpu[start:start + node_count]
         drafts = drafts_cpu[start:start + node_count]
-        # FR13_PIGGYBACK seam 4: start the rejection walk at the CHAIN-END
-        # node (the re-rooted subtree's base) so chain nodes 0..K-1 -- the
-        # PREV step's committed tokens, replayed only to advance GDN state in
-        # the verify forward -- are never accepted, committed, or re-emitted.
-        # accepted_path/accepted_row then hold EXTENDED-tree node ids
-        # (subtree ids >= K), which is exactly what downstream indexes:
-        # tree_self_logits/target_logits rows here, the +1 GDN bank rows
-        # (paths tensor, conv col-0 commit), and the attn-KV remap all index
-        # per-node arrays of THIS (extended) tree -- no id translation.
-        # dbg14: zero-node rows (bonus-only commits -- a request whose drafts
-        # were trimmed/dropped runs a native span-1 step and can still land in
-        # this dispatch with an empty tree) are LEGAL: the legacy walk commits
-        # 0 nodes naturally. Only validate the extended shape when a tree
-        # actually exists.
-        if _pb_root >= 0 and len(parents) > 0:
-            _fr13_pb_validate_extended_tree(parents, _pb_root)
-        current_parent = _pb_root
+        current_parent = -1
         accepted_row = 0
         accepted_path: list[int] = []
         row: list[int] = []
@@ -743,24 +638,7 @@ def _fr13_commit_depthsync(
     for c in counts:
         starts.append(s)
         s += int(c)
-    # FR13_PIGGYBACK seam 4 (depthsync twin of the legacy-walk offset): start
-    # every request's walk at the chain-end node; chain nodes are never
-    # accepted/committed. The byte-identity contract with the legacy path is
-    # preserved: same per-request ops, draw order and sizes -- only the start
-    # parent moves, identically in both paths.
-    _pb_root = _fr13_pb_walk_root()
-    if _pb_root >= 0:
-        for _pb_r in range(nreq):
-            # dbg14: zero-count rows (bonus-only commits after a trimmed/
-            # dropped draft cycle) are legal -- the walk accepts nothing for
-            # them; only a NON-empty tree must have the extended shape.
-            if int(counts[_pb_r]) == 0:
-                continue
-            _fr13_pb_validate_extended_tree(
-                parents_cpu[starts[_pb_r]:starts[_pb_r] + int(counts[_pb_r])],
-                _pb_root,
-            )
-    cur_parent = [_pb_root] * nreq
+    cur_parent = [-1] * nreq
     accepted_row = [0] * nreq
     accepted_path: list[list[int]] = [[] for _ in range(nreq)]
     row_len = [0] * nreq
