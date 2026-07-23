@@ -407,6 +407,20 @@ if [[ "${FR13_COMMIT_OVERLAP:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_commit_overlap.arm" 2>/dev/null || true
 fi
+# FR13_COMMITTER_BATCHED / FR13_COMMITTER_GRAPH sidecars (same worker-env-drop
+# workaround): arm the sampled-path batched dispatch (sbr gate) + the kernel-lib
+# all-layers batched/graph branch. Absent => per-layer serial loop (byte-identical
+# shipped behavior). Graph implies the sbr gate too (patcher checks both files).
+if [[ "${FR13_COMMITTER_BATCHED:-0}" == "1" ]]; then
+  echo "1" > "$LOG_DIR/fr13_committer_batched.arm"
+else
+  rm -f "$LOG_DIR/fr13_committer_batched.arm" 2>/dev/null || true
+fi
+if [[ "${FR13_COMMITTER_GRAPH:-0}" == "1" ]]; then
+  echo "1" > "$LOG_DIR/fr13_committer_graph.arm"
+else
+  rm -f "$LOG_DIR/fr13_committer_graph.arm" 2>/dev/null || true
+fi
 # FR13_COMMIT_ARGMAX_GATE sidecar (same worker-env-drop workaround): the worker curation drops the flag
 # (keeps only *_DUMP). The patched rejection_sampler reads this sidecar OR the (dropped) env.
 if [[ "${FR13_COMMIT_ARGMAX_GATE:-0}" == "1" ]]; then

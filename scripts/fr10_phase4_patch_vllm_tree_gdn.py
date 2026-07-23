@@ -8284,10 +8284,17 @@ def _lumo_tree_canonical_multidraft_sample(
                 _fr13_sbr_stacks = getattr(
                     _lumo_tree_commit_gdn, '_FR13_EAGER_PACK_STACKS', None
                 )
+                # SIDECAR-armed like multistream: EngineCore curation DROPS FR13_* env
+                # (env-only read here was vacuous in deployment, same class as the
+                # multistream B=4 root cause). /logs/*.arm is worker-env-drop-proof.
                 _fr13_sbr_active = (
                     (__import__('os').environ.get('FR13_SAMPLED_REPLAY_BATCHED', '0') == '1'
                      or __import__('os').environ.get('FR13_COMMITTER_NATIVE_BATCHED', '0') == '1'
-                     or __import__('os').environ.get('FR13_COMMITTER_GRAPH', '0') == '1')
+                     or __import__('os').environ.get('FR13_COMMITTER_GRAPH', '0') == '1'
+                     or __import__('os').path.exists('/logs/fr13_committer_batched.arm')
+                     or __import__('os').path.exists('/tmp/fr13_committer_batched.arm')
+                     or __import__('os').path.exists('/logs/fr13_committer_graph.arm')
+                     or __import__('os').path.exists('/tmp/fr13_committer_graph.arm'))
                     and _fr13_sbr_stacks is not None
                     and int(_fr13_sbr_stacks.get('num_layers', 0)) > 0
                     and _fr13_replay_rows > 0

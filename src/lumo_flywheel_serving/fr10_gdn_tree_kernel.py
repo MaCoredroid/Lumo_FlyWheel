@@ -2387,7 +2387,11 @@ def launch_tree_gdn_replay_all_layers(
         # so the col-0 init read + node-bank burn address the correct per-layer rows. (was: 3D passed as
         # 2D -> col0[b] became a [SPEC_COLS] vector -> "expanded size 6 vs 10" crash.)
         _spec_cols = int(spec_state_indices.shape[2])
-        if os.environ.get("FR13_COMMITTER_GRAPH") == "1":
+        # env is dropped by EngineCore worker curation -> sidecar files are the
+        # deployment-armable path (same pattern as _fr13_committer_native_on).
+        if (os.environ.get("FR13_COMMITTER_GRAPH") == "1"
+                or os.path.exists("/logs/fr13_committer_graph.arm")
+                or os.path.exists("/tmp/fr13_committer_graph.arm")):
             # DIRECTION-2: CUDA-graph the 48-layer fused_sigmoid loop (byte-identical, gates 1+2 pass).
             # per-B graph (MAX_B=B, no dummy pad); overflow (accept+1 > max_path) falls back to batched.
             _fr13_native_committer_all_layers_graph(
@@ -2400,7 +2404,9 @@ def launch_tree_gdn_replay_all_layers(
                 burn_node_bank=burn_node_bank, max_path=16,
             )
             return
-        if os.environ.get("FR13_COMMITTER_NATIVE_BATCHED") == "1":
+        if (os.environ.get("FR13_COMMITTER_NATIVE_BATCHED") == "1"
+                or os.path.exists("/logs/fr13_committer_batched.arm")
+                or os.path.exists("/tmp/fr13_committer_batched.arm")):
             _fr13_native_committer_all_layers_batched(
                 banks_list=banks_list, spec_state_indices=spec_state_indices,
                 accepted_paths=accepted_paths, accepted_lens=accepted_lens,
