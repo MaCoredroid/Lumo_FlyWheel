@@ -525,6 +525,78 @@ def launch_attn_kv_linear_remap(
     return n_foreign
 
 
+def launch_attn_kv_linear_remap_syncfree(
+    *,
+    kv_caches,
+    slot_mapping: torch.Tensor,
+    query_start_loc: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    num_accepted_tokens: torch.Tensor,
+    num_spec_decodes: int,
+    dst_pi: torch.Tensor | None = None,
+) -> None:
+    """Zero-host-sync variant of :func:`launch_attn_kv_linear_remap`.
+
+    FR13_KV_REMAP_SYNCFREE (committer-overlap prerequisite, 2026-07-23). The
+    legacy fn stalls the stream 3-4x per step (two ``bool()`` span guards, a
+    ``bool(foreign.any())``, and a data-dependent boolean-mask compaction) --
+    fatal for enqueueing the remap on a side stream under the drafter. This
+    variant is enqueue-only with FIXED shapes:
+
+    - every (request, path-position) pair writes its DESTINATION slot exactly
+      once; the value is ``where(active, src_value, dst_prior_value)`` with
+      both gathered BEFORE any write. Inert pairs (non-foreign, m>=acc, or a
+      failed whole-call validity guard) become value-identical writes, so the
+      final cache bytes equal the legacy fn's for every case, including its
+      early-return cases. Destinations are distinct by construction (linear
+      committed offsets per request) => no write races, deterministic.
+    - the span-uniformity/overflow guard and the b+1 qsl-length guard fold
+      into a device-side ``valid`` scalar that deactivates ALL pairs.
+    - no engagement-needle return (the legacy fn stays the diagnostic arm).
+    """
+    b = int(num_spec_decodes)
+    if b <= 0 or not kv_caches:
+        return
+    if int(query_start_loc.shape[0]) < b + 1:
+        return
+    device = slot_mapping.device
+    path_cols = int(accepted_paths.shape[1])
+    if path_cols <= 0:
+        return
+    qsl_full = query_start_loc[: b + 1].to(torch.long)
+    spans = qsl_full[1:] - qsl_full[:-1]                                # [b]
+    acc = num_accepted_tokens[:b].to(torch.long).view(-1, 1)           # [b,1]
+    m_idx = torch.arange(path_cols, device=device).view(1, -1)          # [1,path]
+    ap = accepted_paths[:b, :path_cols].to(torch.long)                  # [b,path]
+    dst_off = m_idx + 1                                                 # [1,path]
+    if dst_pi is not None:
+        dst_off = dst_pi.to(device=device, dtype=torch.long)[dst_off]   # [1,path]
+    src_off = ap                                                        # [b,path]
+    # whole-call validity as a DEVICE scalar (no host bool()): uniform spans
+    # AND span > every indexed offset. Broadcast into the per-pair mask.
+    _max_off = torch.maximum(ap.max(), torch.maximum(acc.max(), dst_off.max()))
+    valid = (spans == spans[0]).all() & (spans[0] > _max_off)           # 0-dim bool
+    qsl = qsl_full[:b].view(-1, 1)                                     # [b,1]
+    active = valid & (m_idx < acc) & (ap != dst_off)                   # [b,path]
+    n_slots = int(slot_mapping.shape[0])
+    dst_flat = (qsl + dst_off).clamp_(0, n_slots - 1).reshape(-1)       # [b*path]
+    src_flat = (qsl + src_off).clamp_(0, n_slots - 1).reshape(-1)       # [b*path]
+    sm = slot_mapping.reshape(-1)
+    dst_slot = sm[dst_flat].to(torch.long)
+    src_slot = sm[src_flat].to(torch.long)
+    active_flat = active.reshape(-1)
+    for kv in kv_caches:
+        if not torch.is_tensor(kv) or kv.dim() < 3 or int(kv.shape[0]) != 2:
+            continue
+        bs = int(kv.shape[2])
+        src_vals = kv[:, src_slot // bs, src_slot % bs].clone()
+        dst_prior = kv[:, dst_slot // bs, dst_slot % bs].clone()
+        mask = active_flat.view(1, -1, *([1] * (src_vals.dim() - 2)))
+        kv[:, dst_slot // bs, dst_slot % bs] = torch.where(
+            mask, src_vals, dst_prior
+        )
+
+
 def gather_committed_path_conv_prior(
     *,
     conv_state: torch.Tensor,
