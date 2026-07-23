@@ -585,6 +585,71 @@ def launch_attn_kv_linear_remap_syncfree(
     dst_slot = sm[dst_flat].to(torch.long)
     src_slot = sm[src_flat].to(torch.long)
     active_flat = active.reshape(-1)
+    apply_kv_remap_slots(
+        kv_caches=kv_caches,
+        dst_slot=dst_slot,
+        src_slot=src_slot,
+        active_flat=active_flat,
+    )
+
+
+def prepare_kv_remap_slots(
+    *,
+    slot_mapping: torch.Tensor,
+    query_start_loc: torch.Tensor,
+    accepted_paths: torch.Tensor,
+    num_accepted_tokens: torch.Tensor,
+    num_spec_decodes: int,
+    dst_pi: torch.Tensor | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None:
+    """Slot/index math of the sync-free remap, MAIN-STREAM half.
+
+    FR13_COMMIT_OVERLAP split: this must be enqueued on the MAIN stream so its
+    slot_mapping gathers are stream-ordered BEFORE the SLOT_REORDER restore
+    mutates the mapping in-place at drafter start; the heavy per-layer cache
+    walk (:func:`apply_kv_remap_slots`) can then run on a side stream reading
+    only kv caches + these snapshot tensors. Zero host syncs. Returns None on
+    the host-shape guards (b/path/qsl) where the legacy fn early-returns.
+    """
+    b = int(num_spec_decodes)
+    if b <= 0:
+        return None
+    if int(query_start_loc.shape[0]) < b + 1:
+        return None
+    device = slot_mapping.device
+    path_cols = int(accepted_paths.shape[1])
+    if path_cols <= 0:
+        return None
+    qsl_full = query_start_loc[: b + 1].to(torch.long)
+    spans = qsl_full[1:] - qsl_full[:-1]
+    acc = num_accepted_tokens[:b].to(torch.long).view(-1, 1)
+    m_idx = torch.arange(path_cols, device=device).view(1, -1)
+    ap = accepted_paths[:b, :path_cols].to(torch.long)
+    dst_off = m_idx + 1
+    if dst_pi is not None:
+        dst_off = dst_pi.to(device=device, dtype=torch.long)[dst_off]
+    src_off = ap
+    _max_off = torch.maximum(ap.max(), torch.maximum(acc.max(), dst_off.max()))
+    valid = (spans == spans[0]).all() & (spans[0] > _max_off)
+    qsl = qsl_full[:b].view(-1, 1)
+    active = valid & (m_idx < acc) & (ap != dst_off)
+    n_slots = int(slot_mapping.shape[0])
+    dst_flat = (qsl + dst_off).clamp_(0, n_slots - 1).reshape(-1)
+    src_flat = (qsl + src_off).clamp_(0, n_slots - 1).reshape(-1)
+    sm = slot_mapping.reshape(-1)
+    return sm[dst_flat].to(torch.long), sm[src_flat].to(torch.long), active.reshape(-1)
+
+
+def apply_kv_remap_slots(
+    *,
+    kv_caches,
+    dst_slot: torch.Tensor,
+    src_slot: torch.Tensor,
+    active_flat: torch.Tensor,
+) -> None:
+    """Cache-walk half of the sync-free remap (side-stream-safe: reads only
+    kv caches + the prepared slot tensors; identity-safe distinct-destination
+    writes; zero host syncs)."""
     for kv in kv_caches:
         if not torch.is_tensor(kv) or kv.dim() < 3 or int(kv.shape[0]) != 2:
             continue
