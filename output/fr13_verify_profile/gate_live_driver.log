@@ -1,0 +1,12 @@
+=== ARM on (RING_EXPORT=1 CONV_WB_FUSED=1) 23:36:45Z ===
+healthy at +613s
+ENGAGEMENT OK tok/draft=21.00
+ARM on done
+=== ARM off (RING_EXPORT=0 CONV_WB_FUSED=0) 23:48:42Z ===
+healthy at +655s
+ENGAGEMENT OK tok/draft=21.00
+ARM off done
+[ON] s_per_fwd_gpu=Nonems/event  accept_per_event=6.254
+[OFF] s_per_fwd_gpu=Nonems/event  accept_per_event=6.286
+GATE SUMMARY COMPLETE
+LIVE_GATE_DONE 00:01:20Z
