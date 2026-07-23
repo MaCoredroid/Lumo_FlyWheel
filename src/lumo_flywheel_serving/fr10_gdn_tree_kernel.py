@@ -1526,6 +1526,15 @@ def _fr13_native_committer_all_layers_batched(
     num_vh, dim_v = int(v_rings.shape[3]), int(v_rings.shape[4])
     _spec_cols = int(spec_state_indices.shape[2])
     # ---- SHARED layout computed ONCE (the single .tolist() host sync for all L layers) ----
+    # narrow-timer hooks (same accumulators/drains as the per-layer body; the
+    # batched body previously had NONE -> arming the flags here was vacuous):
+    # REPLAY_ONLY = whole batched replay (gathers + 48x _sg); SG = the 48x _sg
+    # loop alone. Both deferred cuda events, no host sync, default OFF.
+    _rt_on = os.environ.get("FR13_REPLAY_ONLY_GPU_TIMER") == "1"
+    _sg_on = os.environ.get("FR13_COMMITTER_SG_TIMER") == "1"
+    if _rt_on:
+        _rt_start = torch.cuda.Event(enable_timing=True)
+        _rt_start.record()
     acc = accepted_lens[:B].tolist()
     nodes_list, seg = [], []
     for b in range(B):
@@ -1548,6 +1557,10 @@ def _fr13_native_committer_all_layers_batched(
     a_all = torch.cat([a_rings[:, b, nodes_list[b]] for b in range(B)], dim=1)
     b_all = torch.cat([b_rings[:, b, nodes_list[b]] for b in range(B)], dim=1)
     q = torch.zeros(1, T, num_kh, dim_k, device=dev, dtype=k_rings.dtype)
+    if _sg_on:
+        _sg_s = torch.cuda.Event(enable_timing=True)
+        _sg_e = torch.cuda.Event(enable_timing=True)
+        _sg_s.record()
     for _L in range(L):
         # per-layer ssi: col 0 = THIS layer's running row (per-layer, not shared)
         ssi = torch.zeros(B, max_T, device=dev, dtype=torch.int32)
@@ -1569,6 +1582,15 @@ def _fr13_native_committer_all_layers_batched(
             for b in range(B):
                 rows = spec_state_indices[_L][b, 1:_spec_cols].to(torch.long)
                 banks_list[_L][rows] = 0.0
+    if _sg_on:
+        _sg_e.record()
+        _FR13_SG_PENDING.append((_sg_s, _sg_e))
+        _fr13_sg_drain_dump()
+    if _rt_on:
+        _rt_stop = torch.cuda.Event(enable_timing=True)
+        _rt_stop.record()
+        _FR13_REPLAY_ONLY_PENDING.append((_rt_start, _rt_stop))
+        _fr13_replay_only_drain(False)
     global _FR13_COMMITTER_BATCHED_ANNOUNCED
     if not _FR13_COMMITTER_BATCHED_ANNOUNCED:
         _FR13_COMMITTER_BATCHED_ANNOUNCED = True
