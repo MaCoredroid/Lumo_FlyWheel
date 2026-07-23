@@ -27,4 +27,5 @@ FR13_REQUIRED_TREE_FLAGS=(
   "FR13_SLOT_REORDER=1"    # FA2 accept M-dependence fix (superset +0.166 live-confirmed)
   "FR13_RING_EXPORT=1"     # in-kernel replay-ring staging (B1; rwb1 16-task gate 2026-07-23: accept 4.520, TPS 38.01 vs 32.85, pass 8/16 in-band)
   "FR13_CONV_WB_FUSED=1"   # fused conv-state write-back (B2a; same gate; both offline byte-gated + live A/B'd)
+  "FR13_COMMITTER_BATCHED=1"  # B2b batched all-layers committer (tail6_batched_f70 16-task gate: span 47->36ms, verify FLAT, comb 3.592, 8P/8F; byte gate fr13_committer_graph_varying ALL-IDENTICAL)
 )

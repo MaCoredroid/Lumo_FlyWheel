@@ -411,7 +411,7 @@ fi
 # workaround): arm the sampled-path batched dispatch (sbr gate) + the kernel-lib
 # all-layers batched/graph branch. Absent => per-layer serial loop (byte-identical
 # shipped behavior). Graph implies the sbr gate too (patcher checks both files).
-if [[ "${FR13_COMMITTER_BATCHED:-0}" == "1" ]]; then
+if [[ "${FR13_COMMITTER_BATCHED:-1}" == "1" ]]; then  # BAKED default-ON 2026-07-23: tail6_batched_f70 16-task gate PASS (span 47->36ms, verify flat, comb 3.592, 8P/8F)
   echo "1" > "$LOG_DIR/fr13_committer_batched.arm"
 else
   rm -f "$LOG_DIR/fr13_committer_batched.arm" 2>/dev/null || true
