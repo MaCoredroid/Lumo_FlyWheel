@@ -1606,6 +1606,9 @@ def _fr13_native_committer_all_layers_batched(
 # EXACTLY unchanged) is BYTE-IDENTICAL to the varlen committer (max_diff=0.0) and 5.4x faster (kills the
 # ~24ms 48-launch dispatch). One graph (MAX_B x MAX_PATH) replays for every (B<=MAX_B, accept<=MAX_PATH).
 _FR13_GRAPH_COMMITTER = {}          # shape-sig -> dict(buffers..., graph)
+_FR13_GT_PENDING = []               # deferred (e0,e1,e2,e3) quads (FR13_GRAPH_TIMER)
+_FR13_GT_ACCUM = [0.0, 0.0, 0.0, 0]  # fill_s, replay_s, burn_s, n
+_FR13_GT_LAST_DUMP = [0.0]
 _FR13_GRAPH_COMMITTER_ANNOUNCED = False
 
 
@@ -1744,9 +1747,45 @@ def _fr13_native_committer_all_layers_graph(
             rows = spec_state_indices[_L][:B, 1:_spec_cols].reshape(-1).to(torch.long)
             banks_list[_L][rows] = 0.0
     if _tm:
-        _e3.record(); torch.cuda.synchronize()
-        print("[FR13_GRAPH_TIMER] fill=%.2f replay=%.2f burn=%.2f ms" % (
-            _e0.elapsed_time(_e1), _e1.elapsed_time(_e2), _e2.elapsed_time(_e3)), flush=True)
+        # DEFERRED drain (2026-07-23): the original per-event
+        # torch.cuda.synchronize() was a HOT-PATH SYNC that serialized the
+        # pipeline at every commit and contaminated the arm's cfwd/wall
+        # numbers. Same pattern as the SG timer: queue the event quad, read
+        # elapsed only for query()-complete quads, throttled JSON dump.
+        _e3.record()
+        _FR13_GT_PENDING.append((_e0, _e1, _e2, _e3))
+        while _FR13_GT_PENDING:
+            _q = _FR13_GT_PENDING[0]
+            try:
+                if not _q[3].query():
+                    break
+            except Exception:
+                _FR13_GT_PENDING.pop(0)
+                continue
+            _FR13_GT_PENDING.pop(0)
+            try:
+                _FR13_GT_ACCUM[0] += _q[0].elapsed_time(_q[1]) / 1000.0
+                _FR13_GT_ACCUM[1] += _q[1].elapsed_time(_q[2]) / 1000.0
+                _FR13_GT_ACCUM[2] += _q[2].elapsed_time(_q[3]) / 1000.0
+                _FR13_GT_ACCUM[3] += 1
+            except Exception:
+                pass
+        import json as _gt_j, time as _gt_tm
+        _gt_out = os.environ.get("FR13_GRAPH_TIMER_JSON")
+        if _gt_out and (_gt_tm.monotonic() - _FR13_GT_LAST_DUMP[0]) > 5.0:
+            _FR13_GT_LAST_DUMP[0] = _gt_tm.monotonic()
+            try:
+                _gt_tmp = _gt_out + ".tmp"
+                with open(_gt_tmp, "w") as _gt_fh:
+                    _gt_fh.write(_gt_j.dumps({
+                        "fill_s": _FR13_GT_ACCUM[0],
+                        "replay_s": _FR13_GT_ACCUM[1],
+                        "burn_s": _FR13_GT_ACCUM[2],
+                        "n": _FR13_GT_ACCUM[3],
+                    }))
+                os.replace(_gt_tmp, _gt_out)
+            except Exception:
+                pass
 
 
 def launch_tree_gdn_replay(
