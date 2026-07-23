@@ -1,0 +1,30 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..b6faf73fe 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -758,6 +758,25 @@ class Card(_Verify):
+         if self._check_if_rvkc(self._image):
+             return self._value
+ 
++        # For CONTINUE cards with string values, extract the raw escaped
++        # content from each subcard, join, and unescape once. This avoids
++        # the bug where '' escape sequences spanning card boundaries are
++        # incorrectly handled when unescaping per-card.
++        if len(self._image) > self.length:
++            raw_parts = []
++            for card in self._itersubcards():
++                kw, vc = card._split()
++                m = self._strg_comment_RE.match(vc)
++                if m:
++                    part = m.group("strg") or ""
++                    part = part.rstrip()
++                    if part and part[-1] == "&":
++                        part = part[:-1]
++                    raw_parts.append(part)
++            if raw_parts:
++                combined = "".join(raw_parts)
++                return re.sub("''", "'", combined)
++
+         m = self._value_NFSC_RE.match(self._split()[1])
+ 
+         if m is None:
