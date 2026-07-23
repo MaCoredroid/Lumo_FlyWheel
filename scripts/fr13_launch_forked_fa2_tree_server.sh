@@ -397,6 +397,16 @@ if [[ "${FR13_REPLAY_MULTISTREAM:-0}" == "1" ]]; then
 else
   rm -f "$LOG_DIR/fr13_replay_multistream.arm" 2>/dev/null || true
 fi
+# FR13_COMMIT_OVERLAP sidecar (same worker-env-drop workaround): the committer-
+# region overlap gate (side-stream replay+remap under the drafter) reads this
+# sidecar, NOT os.environ (the env-only read is exactly what made
+# FR13_REPLAY_MULTISTREAM vacuous at B=4). Absent => serial committer
+# (byte-identical shipped behavior).
+if [[ "${FR13_COMMIT_OVERLAP:-0}" == "1" ]]; then
+  echo "1" > "$LOG_DIR/fr13_commit_overlap.arm"
+else
+  rm -f "$LOG_DIR/fr13_commit_overlap.arm" 2>/dev/null || true
+fi
 # FR13_COMMIT_ARGMAX_GATE sidecar (same worker-env-drop workaround): the worker curation drops the flag
 # (keeps only *_DUMP). The patched rejection_sampler reads this sidecar OR the (dropped) env.
 if [[ "${FR13_COMMIT_ARGMAX_GATE:-0}" == "1" ]]; then
