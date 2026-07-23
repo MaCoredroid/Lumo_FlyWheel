@@ -10033,6 +10033,80 @@ def _patch_gpu_model_runner_row_req_ids_fresh() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_inputprep_guard() -> bool:
+    """FR13_INPUTPREP_GUARD: rescue invalid DRAFT-slot ids, fail-loud on SAMPLE slots.
+
+    native@0.70 crash class (3/3 repro, blocking-mode confirmed): async input
+    prep leaves a placeholder/stale id in an input_ids slot when the scheduler
+    and runner batch views desync (frequency scales with APC resume rate ->
+    surfaced at GPU_UTIL=0.70), and the embedding gather device-asserts.
+    Draft slots are PROPOSALS: an invalid id rescued to 0 is LOSSLESS (the
+    rejection sampler rejects it against the target distribution; worst case
+    is one lost speculation). Sample slots are COMMITTED tokens: any invalid
+    id there must fail loud (torch._assert_async, no host sync).
+    Baked at PATCH time from FR13_INPUTPREP_GUARD (worker env is dropped);
+    default ON. Needle: [FR13_INPUTPREP_GUARD] printed on call 1 and then
+    every 512 calls IF any draft id was rescued (one bounded .item()/512).
+    """
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_INPUTPREP_GUARD"
+    if sentinel in text:
+        return False
+    anchor = (
+        "        self.input_ids.gpu.scatter_(\n"
+        "            dim=0,\n"
+        "            index=draft_tokens_index_tensor,\n"
+        "            src=draft_token_ids.flatten()[prev_draft_token_indices_tensor],\n"
+        "        )\n"
+    )
+    if anchor not in text:
+        raise RuntimeError("FR13 inputprep guard anchor (draft scatter) not found")
+    on = "True" if os.environ.get("FR13_INPUTPREP_GUARD", "1") == "1" else "False"
+    inject = anchor + (
+        f"        {sentinel} (baked {on} at patch time; see patcher doc)\n"
+        f"        if {on}:\n"
+        "            _fr13_ipg_vocab = int(self.input_batch.vocab_size)\n"
+        "            _fr13_ipg_draft = self.input_ids.gpu.index_select(\n"
+        "                0, draft_tokens_index_tensor)\n"
+        "            _fr13_ipg_bad = (\n"
+        "                (_fr13_ipg_draft < 0)\n"
+        "                | (_fr13_ipg_draft >= _fr13_ipg_vocab))\n"
+        "            self.input_ids.gpu.index_copy_(\n"
+        "                0, draft_tokens_index_tensor,\n"
+        "                torch.where(\n"
+        "                    _fr13_ipg_bad,\n"
+        "                    torch.zeros_like(_fr13_ipg_draft),\n"
+        "                    _fr13_ipg_draft,\n"
+        "                ),\n"
+        "            )\n"
+        "            if getattr(self, '_fr13_ipg_rescued', None) is None:\n"
+        "                self._fr13_ipg_rescued = torch.zeros(\n"
+        "                    1, dtype=torch.int64,\n"
+        "                    device=self.input_ids.gpu.device)\n"
+        "                self._fr13_ipg_calls = 0\n"
+        "            self._fr13_ipg_rescued += _fr13_ipg_bad.sum()\n"
+        "            _fr13_ipg_samp = self.input_ids.gpu.index_select(\n"
+        "                0, sampled_tokens_index_tensor)\n"
+        "            torch._assert_async(\n"
+        "                ((_fr13_ipg_samp >= 0)\n"
+        "                 & (_fr13_ipg_samp < _fr13_ipg_vocab)).all(),\n"
+        "                'FR13_INPUTPREP_GUARD: COMMITTED-slot token id out of '\n"
+        "                'range (fail-loud; draft rescue does not cover sample '\n"
+        "                'slots)')\n"
+        "            self._fr13_ipg_calls += 1\n"
+        "            if self._fr13_ipg_calls % 512 == 1:\n"
+        "                _fr13_ipg_n = int(self._fr13_ipg_rescued.item())\n"
+        "                if _fr13_ipg_n > 0 or self._fr13_ipg_calls == 1:\n"
+        "                    print('[FR13_INPUTPREP_GUARD] calls='\n"
+        "                          + str(self._fr13_ipg_calls)\n"
+        "                          + ' rescued_draft_ids=' + str(_fr13_ipg_n),\n"
+        "                          flush=True)\n"
+    )
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_draft_handoff_trim() -> bool:
     """FR13_DRAFT_HANDOFF_TRIM: never hand -1 draft ids to the scheduler.
 
@@ -18110,6 +18184,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_verify_input_ids()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_draft_handoff_trim()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_row_req_ids_fresh()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_inputprep_guard()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_decode_mode_globals()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_tree_reqkey()),
         # FR13_MERGED_DRAFTER: Arctic SuffixDecodingCache lifecycle at the runner,
