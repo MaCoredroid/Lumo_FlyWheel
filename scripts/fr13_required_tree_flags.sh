@@ -25,4 +25,6 @@
 FR13_REQUIRED_TREE_FLAGS=(
   "FR13_ATTN_KV_REMAP=1"   # branching-tree foreign-KV garble fix (cat9 15/15->0/15)
   "FR13_SLOT_REORDER=1"    # FA2 accept M-dependence fix (superset +0.166 live-confirmed)
+  "FR13_RING_EXPORT=1"     # in-kernel replay-ring staging (B1; rwb1 16-task gate 2026-07-23: accept 4.520, TPS 38.01 vs 32.85, pass 8/16 in-band)
+  "FR13_CONV_WB_FUSED=1"   # fused conv-state write-back (B2a; same gate; both offline byte-gated + live A/B'd)
 )

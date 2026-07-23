@@ -3534,7 +3534,7 @@ def _fr13_conv_subop_mab(
                             # gather->page-write in one launch (byte-copy
                             # contract; nsys-measured ~8ms/draft pair).
                             _fr13_conv_wb_fused_now = (
-                                os.environ.get("FR13_CONV_WB_FUSED", "0")
+                                os.environ.get("FR13_CONV_WB_FUSED", "1")
                                 == "1"
                                 and os.environ.get(
                                     "FR13_TCF_SELFCHECK", "0"
@@ -5172,7 +5172,7 @@ def _fr13_conv_subop_mab(
                         # the 2026-07-22 nsys differential. Default OFF =
                         # byte-identical staged bytes via the original copies.
                         _fr13_ring_export = (
-                            os.environ.get("FR13_RING_EXPORT", "0") == "1"
+                            os.environ.get("FR13_RING_EXPORT", "1") == "1"
                         )
                         if not _fr13_ring_export:
                             self._fr13_replay_ring_k[fr10_b, :tree_n].copy_(
@@ -5223,25 +5223,25 @@ def _fr13_conv_subop_mab(
                         ring_k=(
                             self._fr13_replay_ring_k[fr10_b]
                             if _fr13_replay_route_on
-                            and os.environ.get("FR13_RING_EXPORT", "0") == "1"
+                            and os.environ.get("FR13_RING_EXPORT", "1") == "1"
                             else None
                         ),
                         ring_v=(
                             self._fr13_replay_ring_v[fr10_b]
                             if _fr13_replay_route_on
-                            and os.environ.get("FR13_RING_EXPORT", "0") == "1"
+                            and os.environ.get("FR13_RING_EXPORT", "1") == "1"
                             else None
                         ),
                         ring_a=(
                             self._fr13_replay_ring_a[fr10_b]
                             if _fr13_replay_route_on
-                            and os.environ.get("FR13_RING_EXPORT", "0") == "1"
+                            and os.environ.get("FR13_RING_EXPORT", "1") == "1"
                             else None
                         ),
                         ring_b=(
                             self._fr13_replay_ring_b[fr10_b]
                             if _fr13_replay_route_on
-                            and os.environ.get("FR13_RING_EXPORT", "0") == "1"
+                            and os.environ.get("FR13_RING_EXPORT", "1") == "1"
                             else None
                         ),
                         invocation_counter=(
