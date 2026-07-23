@@ -18197,7 +18197,12 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
         "                                        self._fr13_ov_e1.record(_fr13_ov_stream)\n"
         "                                    self._fr13_ov_evt = self._fr13_ov_e1\n"
         "                                _fr13_akr_tot = -2\n"
-        "                            elif __import__(\"os\").environ.get(\"FR13_KV_REMAP_SYNCFREE\", \"0\") == \"1\":\n"
+        # 2026-07-23: env-only read here was VACUOUS in deployment (worker env
+        # drop, same class as sbr/multistream). Bake at PATCH time; default ON
+        # (offline byte gate gate_kv_remap_syncfree_byte PASS; removes the
+        # legacy fn's 3-4 host syncs/step from the committer remainder).
+        # Joins the next BATCHED 16-task validation round.
+        "                            elif True:  # FR13_KV_REMAP_SYNCFREE baked at patch time\n"
         "                                _fr13_akr_fn_sf(\n"
         "                                    kv_caches=_fr13_akr_kvs,\n"
         "                                    slot_mapping=_fr13_akr_sm,\n"

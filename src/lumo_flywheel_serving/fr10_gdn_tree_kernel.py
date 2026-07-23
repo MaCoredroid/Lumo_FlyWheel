@@ -386,6 +386,54 @@ def _remap_state_rows(
     )
 
 
+# ---- generic deferred sub-span timer (observer-effect-safe: event pairs,
+# query()-guarded drain, throttled atomic JSON dump; NO hot-path syncs).
+# One registry entry per env prefix, e.g. FR13_KVREMAP_TIMER(_JSON). ----
+_FR13_SPAN_TIMERS: dict = {}
+
+
+def _fr13_span_begin(prefix: str):
+    if os.environ.get(prefix) != "1":
+        return None
+    ev = torch.cuda.Event(enable_timing=True)
+    ev.record()
+    return ev
+
+
+def _fr13_span_end(prefix: str, start_ev) -> None:
+    if start_ev is None:
+        return
+    st = _FR13_SPAN_TIMERS.setdefault(prefix, {"pend": [], "acc": [0.0, 0], "last": [0.0]})
+    end_ev = torch.cuda.Event(enable_timing=True)
+    end_ev.record()
+    st["pend"].append((start_ev, end_ev))
+    while st["pend"]:
+        a, b = st["pend"][0]
+        try:
+            if not b.query():
+                break
+        except Exception:
+            st["pend"].pop(0)
+            continue
+        st["pend"].pop(0)
+        try:
+            st["acc"][0] += a.elapsed_time(b) / 1000.0
+            st["acc"][1] += 1
+        except Exception:
+            pass
+    import json as _sj, time as _st
+    out = os.environ.get(prefix + "_JSON")
+    if out and (_st.monotonic() - st["last"][0]) > 5.0:
+        st["last"][0] = _st.monotonic()
+        try:
+            tmp = out + ".tmp"
+            with open(tmp, "w") as fh:
+                fh.write(_sj.dumps({"span_gpu_seconds": st["acc"][0], "n": st["acc"][1], "prefix": prefix}))
+            os.replace(tmp, out)
+        except Exception:
+            pass
+
+
 def launch_tree_state_linear_remap(
     *,
     ssm_state: torch.Tensor | None,
@@ -402,6 +450,7 @@ def launch_tree_state_linear_remap(
     causal-conv consumers read recurrent state by linear accepted-token position,
     so column k must contain the state for accepted_paths[b, k].
     """
+    _fr13_srt = _fr13_span_begin("FR13_STATEREMAP_TIMER")
     if ssm_state is not None:
         _remap_state_rows(
             ssm_state,
@@ -420,9 +469,19 @@ def launch_tree_state_linear_remap(
             num_spec_decodes=num_spec_decodes,
             max_path_len=max_path_len,
         )
+    _fr13_span_end("FR13_STATEREMAP_TIMER", _fr13_srt)
 
 
-def launch_attn_kv_linear_remap(
+def launch_attn_kv_linear_remap(**kwargs):
+    """Thin observer-effect-safe timing wrapper (FR13_KVREMAP_TIMER)."""
+    _t = _fr13_span_begin("FR13_KVREMAP_TIMER")
+    try:
+        return _launch_attn_kv_linear_remap_impl(**kwargs)
+    finally:
+        _fr13_span_end("FR13_KVREMAP_TIMER", _t)
+
+
+def _launch_attn_kv_linear_remap_impl(
     *,
     kv_caches,
     slot_mapping: torch.Tensor,
@@ -525,7 +584,16 @@ def launch_attn_kv_linear_remap(
     return n_foreign
 
 
-def launch_attn_kv_linear_remap_syncfree(
+def launch_attn_kv_linear_remap_syncfree(**kwargs):
+    """Thin observer-effect-safe timing wrapper (FR13_KVREMAP_TIMER)."""
+    _t = _fr13_span_begin("FR13_KVREMAP_TIMER")
+    try:
+        return _launch_attn_kv_linear_remap_syncfree_impl(**kwargs)
+    finally:
+        _fr13_span_end("FR13_KVREMAP_TIMER", _t)
+
+
+def _launch_attn_kv_linear_remap_syncfree_impl(
     *,
     kv_caches,
     slot_mapping: torch.Tensor,
