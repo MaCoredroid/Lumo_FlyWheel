@@ -1,14 +1,14 @@
 {
   "instance_id": "astropy__astropy-13236",
   "dataset_name": "princeton-nlp/SWE-bench_Verified",
-  "started_at": "2026-07-23T00:17:59Z",
+  "started_at": "2026-07-23T01:06:24Z",
   "repo": "astropy/astropy",
   "base_commit": "6ed769d58d89380ebaa1ef52b300691eefda8928",
   "agent": {
-    "elapsed_s": 1920.733,
-    "exit_code": -1,
-    "timed_out": true,
-    "container_name": "swe-qwen-astropy__astropy-13236-1784765879",
+    "elapsed_s": 7127.401,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-qwen-astropy__astropy-13236-1784768784",
     "offloaded": true,
     "codex_host": "alienware",
     "network_drop": false,
@@ -18,10 +18,10 @@
     "image_arch": "x86_64"
   },
   "codex": {
-    "elapsed_s": 1920.733,
-    "exit_code": -1,
-    "timed_out": true,
-    "container_name": "swe-qwen-astropy__astropy-13236-1784765879",
+    "elapsed_s": 7127.401,
+    "exit_code": 0,
+    "timed_out": false,
+    "container_name": "swe-qwen-astropy__astropy-13236-1784768784",
     "offloaded": true,
     "codex_host": "alienware",
     "network_drop": false,
@@ -30,30 +30,30 @@
     "host_arch": "x86_64",
     "image_arch": "x86_64"
   },
-  "empty_patch_retry": {
-    "cause": "agent_gave_up",
-    "attempted": true,
-    "max_retries": 0,
-    "recovered_patch_bytes": 0,
-    "attempts_used": 0
-  },
   "vllm_request_metrics_bytes": 0,
-  "patch_bytes": 0,
+  "patch_bytes": 826,
   "eval": {
     "exit_code": 1,
-    "elapsed_s": 1.764,
+    "elapsed_s": 56.041,
     "offloaded": true,
     "eval_host": "alienware"
   },
   "eval_report": {
+    "track": "swe_bench",
     "instance_id": "astropy__astropy-13236",
+    "model_id": "qwen3.6-27b-fp8::qwen-code-0.19.4::q36-a",
+    "dataset_name": "princeton-nlp/SWE-bench_Verified",
     "verdict": "failed",
     "passed": false,
-    "failure_mode": "patch_apply_failed",
-    "error": "empty_patch",
+    "failure_mode": "tests_failed",
+    "harness_exit_code": 0,
+    "eval_wall_clock_seconds": 54.012,
+    "error": null,
     "arch": "x86_64",
     "eval_host": "mark-Alienware-Aurora-ACT1250",
-    "eval_wall_clock_seconds": 0.0
+    "run_id": "x86eval-out-1784775912",
+    "namespace": "swebench",
+    "cache_level": "env"
   },
-  "ended_at": "2026-07-23T00:50:02Z"
+  "ended_at": "2026-07-23T03:06:08Z"
 }
