@@ -8388,6 +8388,17 @@ def _lumo_tree_canonical_multidraft_sample(
                     or __import__('os').path.exists(
                         '/tmp/fr13_replay_multistream.arm')
                 )
+                # FR13_COMMIT_OVERLAP v2 (replay half): reuse the multistream
+                # machinery but DEFER the default-stream join to the next
+                # forward's fence (gpu_model_runner begin-inject waits the
+                # stashed events), so the ~14ms replay overlaps the drafter
+                # instead of blocking it. SIDECAR-armed (worker env drop),
+                # capture-guarded via the shared _fr13_ms_on gate below.
+                _fr13_ov2_enable = (
+                    __import__('os').path.exists('/logs/fr13_commit_overlap.arm')
+                    or __import__('os').path.exists('/tmp/fr13_commit_overlap.arm')
+                )
+                _fr13_ms_enable = _fr13_ms_enable or _fr13_ov2_enable
                 _fr13_ms_on = (
                     _fr13_ms_enable
                     and not _fr13_bnd_on and not _fr13_rdab_on and not _fr13_sbr_active
@@ -8443,13 +8454,30 @@ def _lumo_tree_canonical_multidraft_sample(
                             _fr13_layer, '_fr13_replay_flags', None)
                         _fr13_ssm_bank = getattr(
                             _fr13_layer, '_fr13_replay_ssm_state', None)
-                        if (_fr13_flags is None or _fr13_ssm_bank is None
-                                or int(_fr13_flags[0].item()) != 1):
+                        if _fr13_flags is None or _fr13_ssm_bank is None:
+                            raise RuntimeError(
+                                'FR13_REPLAY_MULTISTREAM: missing scan-time '
+                                'staging for layer ' + str(_fr13_prefix))
+                        if _fr13_ov2_enable:
+                            # overlap mode: the 2 blocking .item() validations
+                            # per layer (~24ms/step host dispatch tax) become
+                            # ONE device-side async assert -- fail-loud is
+                            # preserved (CUDA assert kills the context), zero
+                            # host syncs, so the drafter starts immediately.
+                            torch._assert_async(
+                                (
+                                    (_fr13_flags[0] == 1)
+                                    & (_fr13_flags[1] == _fr13_replay_rows)
+                                ),
+                                'FR13_REPLAY_MULTISTREAM overlap: stale '
+                                'staging or row mismatch',
+                            )
+                        elif int(_fr13_flags[0].item()) != 1:
                             raise RuntimeError(
                                 'FR13_REPLAY_MULTISTREAM: stale or missing '
                                 'scan-time staging for layer '
                                 + str(_fr13_prefix))
-                        if int(_fr13_flags[1].item()) != _fr13_replay_rows:
+                        elif int(_fr13_flags[1].item()) != _fr13_replay_rows:
                             raise RuntimeError(
                                 'FR13_REPLAY_MULTISTREAM: committer rows '
                                 + str(_fr13_replay_rows) + ' != staged '
@@ -8483,11 +8511,25 @@ def _lumo_tree_canonical_multidraft_sample(
                                 burn_node_bank=_fr13_burn_node_bank,
                             )
                             _fr13_flags[0].fill_(0)
-                    # join: default stream waits for every used pool stream
-                    for _fr13_ms_s in _fr13_ms_used:
-                        _fr13_ms_je = torch.cuda.Event()
-                        _fr13_ms_je.record(_fr13_ms_s)
-                        _fr13_ms_default.wait_event(_fr13_ms_je)
+                    if _fr13_ov2_enable:
+                        # FR13_COMMIT_OVERLAP v2: DEFER the join -- stash one
+                        # completion event per used pool stream on the torch
+                        # module (cross-module reachable); the next forward's
+                        # fence (gpu_model_runner begin-inject) waits them
+                        # before the verify reads col0/rings. The drafter
+                        # proceeds immediately on the default stream.
+                        _fr13_ov2_evts = []
+                        for _fr13_ms_s in _fr13_ms_used:
+                            _fr13_ms_je = torch.cuda.Event()
+                            _fr13_ms_je.record(_fr13_ms_s)
+                            _fr13_ov2_evts.append(_fr13_ms_je)
+                        torch._fr13_ov2_evts = _fr13_ov2_evts
+                    else:
+                        # join: default stream waits for every used pool stream
+                        for _fr13_ms_s in _fr13_ms_used:
+                            _fr13_ms_je = torch.cuda.Event()
+                            _fr13_ms_je.record(_fr13_ms_s)
+                            _fr13_ms_default.wait_event(_fr13_ms_je)
                 _fr13_lo_prefixes = (
                     [] if (
                         _fr13_sbr_active or _fr13_ms_on
@@ -16429,6 +16471,14 @@ def _fr13_cfwd_end(start_ev):
         "        if _fr13_ov_evt is not None:\n"
         "            torch.cuda.current_stream().wait_event(_fr13_ov_evt)\n"
         "            self._fr13_ov_evt = None\n"
+        "        # Overlap v2 (replay half): wait the deferred multistream\n"
+        "        # join events stashed by the committer (torch-module attr,\n"
+        "        # cross-module). None/empty => no-op.\n"
+        "        _fr13_ov2_evts = getattr(torch, \"_fr13_ov2_evts\", None)\n"
+        "        if _fr13_ov2_evts:\n"
+        "            for _fr13_ov2_e in _fr13_ov2_evts:\n"
+        "                torch.cuda.current_stream().wait_event(_fr13_ov2_e)\n"
+        "            torch._fr13_ov2_evts = None\n"
         "        # FR13_SFWD_GPU_TIMER: time the PURE-DECODE verify forward only "
         "(async cuda events; no per-step sync; inert unless the flag is on).\n"
         "        _fr13_sfwd_ev = _fr13_sfwd_begin(\n"
