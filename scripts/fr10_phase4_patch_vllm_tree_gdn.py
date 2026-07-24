@@ -455,7 +455,7 @@ def _patch_gdn_attn() -> bool:
             "                    gdn_linear_attn as _fr13_gdn_mod,\n"
             "                )\n"
             "                _fr13_ring_bs = int(self.fr10_tree_accepted_path_bs)\n"
-            "                _fr13_spec_cols = int(self.num_spec) + 1\n"
+            "                _fr13_spec_cols = int(getattr(self, '_fr13_page_cols', int(self.num_spec) + 1))  # FR13_SPEC_BLOCKS_CAP-aware: the replay ssi stack must match the (possibly capped) ssi width or the per-step copy_ shape-mismatches\n"
             "                _fr13_fwd_ctx = (\n"
             "                    self.vllm_config.compilation_config.static_forward_context\n"
             "                )\n"
