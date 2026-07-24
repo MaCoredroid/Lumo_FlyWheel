@@ -202,35 +202,8 @@ def hc_internal_selfcheck_on() -> bool:
 _FR13_HC_DESC_CACHE: dict = {}
 
 
-def _hc_internal_desc(strict_mask: torch.Tensor, n_actual: int, n_pad: int):
-    """One-time host derivation of (HC_MASK, HC_ROWS, HC_SLOTS_LO, HC_SLOTS_HI).
-
-    internal set = { immediate parent of i : i in [1, n_actual) } -- and every
-    strict-ancestor of any node IS some node's immediate parent (the next node
-    down its path), so this set covers every row the one-hot reads can select.
-    Cached by (descriptor ptr, n_actual, n_pad): the served tree descriptors
-    are static buffers. The first call must happen OUTSIDE graph capture
-    (vLLM's eager warmup); fail loud otherwise -- never silently fall back.
-    """
-    key = (int(strict_mask.data_ptr()), int(n_actual), int(n_pad))
-    hit = _FR13_HC_DESC_CACHE.get(key)
-    if hit is not None:
-        return hit
-    if strict_mask.is_cuda and torch.cuda.is_current_stream_capturing():
-        raise RuntimeError(
-            "FR13_HC_INTERNAL: first-call descriptor derivation hit graph "
-            "capture; this tree shape must warm up eagerly first"
-        )
-    sm_host = strict_mask[:n_actual, :n_actual].detach().to("cpu")
-    parents: set[int] = set()
-    for i in range(1, n_actual):
-        row = sm_host[i]
-        p = -1
-        for j in range(0, i):
-            if int(row[j]) != 0:
-                p = j  # largest-index ancestor == immediate parent (topo order)
-        if p >= 0:
-            parents.add(p)
+def _hc_pack(parents: set, n_actual: int):
+    """Pack an internal-node set into (mask, rows, slots_lo, slots_hi)."""
     mask = 0
     slots_lo = 0
     slots_hi = 0
@@ -254,12 +227,65 @@ def _hc_internal_desc(strict_mask: torch.Tensor, n_actual: int, n_pad: int):
     while rows < slot:
         rows *= 2
     out = (mask, rows, slots_lo, slots_hi) if mask else (0, 0, 0, 0)
-    _FR13_HC_DESC_CACHE[key] = out
     print(
         f"[FR13_HC_INTERNAL] derived: n_actual={n_actual} internal={slot} "
         f"mask=0x{mask:x} rows={rows}",
         flush=True,
     )
+    return out
+
+
+def hc_internal_preseed(parent, n_actual: int, n_pad: int) -> None:
+    """Preseed the HC descriptor from the HOST parent list at builder init.
+
+    REQUIRED for graph boots: the tree-decode shape's FIRST scan invocation
+    happens INSIDE CUDA-graph capture (vLLM's eager warmup covers prefill
+    shapes only), so the strict_mask host read in ``_hc_internal_desc`` can
+    never run there. The parent list gives the internal set directly
+    (internal == appears as someone's immediate parent). Keyed by
+    (n_actual, n_pad) — the served tree shape is locked per boot.
+    """
+    parents = {int(p) for p in parent if int(p) >= 0}
+    _FR13_HC_DESC_CACHE[("shape", int(n_actual), int(n_pad))] = _hc_pack(
+        parents, int(n_actual)
+    )
+
+
+def _hc_internal_desc(strict_mask: torch.Tensor, n_actual: int, n_pad: int):
+    """One-time host derivation of (HC_MASK, HC_ROWS, HC_SLOTS_LO, HC_SLOTS_HI).
+
+    internal set = { immediate parent of i : i in [1, n_actual) } -- and every
+    strict-ancestor of any node IS some node's immediate parent (the next node
+    down its path), so this set covers every row the one-hot reads can select.
+    Cached by (descriptor ptr, n_actual, n_pad): the served tree descriptors
+    are static buffers. The first call must happen OUTSIDE graph capture
+    (vLLM's eager warmup); fail loud otherwise -- never silently fall back.
+    """
+    hit = _FR13_HC_DESC_CACHE.get(("shape", int(n_actual), int(n_pad)))
+    if hit is not None:
+        return hit
+    key = (int(strict_mask.data_ptr()), int(n_actual), int(n_pad))
+    hit = _FR13_HC_DESC_CACHE.get(key)
+    if hit is not None:
+        return hit
+    if strict_mask.is_cuda and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_HC_INTERNAL: first-call descriptor derivation hit graph "
+            "capture and no init-time preseed exists (hc_internal_preseed "
+            "was not called for this shape); the builder-init wiring is broken"
+        )
+    sm_host = strict_mask[:n_actual, :n_actual].detach().to("cpu")
+    parents: set = set()
+    for i in range(1, n_actual):
+        row = sm_host[i]
+        p = -1
+        for j in range(0, i):
+            if int(row[j]) != 0:
+                p = j  # largest-index ancestor == immediate parent (topo order)
+        if p >= 0:
+            parents.add(p)
+    out = _hc_pack(parents, n_actual)
+    _FR13_HC_DESC_CACHE[key] = out
     return out
 
 
