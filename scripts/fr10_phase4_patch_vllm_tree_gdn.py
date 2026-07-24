@@ -853,6 +853,43 @@ def _patch_gdn_attn() -> bool:
             "                        _fr13_tcf_group_key\n"
             "                    )\n"
             "                _fr13_tcf_mod._FR13_TCF_LAYER_GROUP = _fr13_tcf_layer_group\n"
+            "                if getattr(_fr13_tcf_mod, '_FR13_CONV_NODEBANK', False):\n"
+            "                    # FR13_CONV_NODEBANK preseed: banks must exist\n"
+            "                    # BEFORE capture (tree-decode first call is\n"
+            "                    # INSIDE capture — 2d class) and be sized by\n"
+            "                    # the REQUEST count (max_num_seqs), never the\n"
+            "                    # token-row cudagraph bs (88 => ~45GB bank).\n"
+            "                    try:\n"
+            "                        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
+            "                            conv_nodebank_preseed as _fr13_nb_ps,\n"
+            "                        )\n"
+            "                        _fr13_nb_shape = None\n"
+            "                        _fr13_nb_dt = None\n"
+            "                        for _fr13_nb_i, _fr13_nb_s in enumerate(\n"
+            "                            getattr(self.kv_cache_spec, 'shapes', ()) or ()\n"
+            "                        ):\n"
+            "                            if len(_fr13_nb_s) == 2:\n"
+            "                                _fr13_nb_shape = _fr13_nb_s\n"
+            "                                _fr13_nb_dt = self.kv_cache_spec.dtypes[_fr13_nb_i]\n"
+            "                                break\n"
+            "                        _fr13_nb_par = getattr(self, 'fr10_tree_parent', None)\n"
+            "                        if _fr13_nb_shape is not None and _fr13_nb_par is not None:\n"
+            "                            _fr13_nb_ps(\n"
+            "                                [str(_fr13_nb_n) for _fr13_nb_n in layer_names],\n"
+            "                                int(self.vllm_config.scheduler_config.max_num_seqs),\n"
+            "                                int(_fr13_nb_par.numel()),\n"
+            "                                int(_fr13_nb_shape[0]),\n"
+            "                                int(_fr13_nb_shape[1]),\n"
+            "                                _fr13_nb_dt,\n"
+            "                                device,\n"
+            "                            )\n"
+            "                        else:\n"
+            "                            print('[FR13_CONV_NODEBANK] preseed SKIPPED: '\n"
+            "                                  'conv shape or tree parent unavailable',\n"
+            "                                  flush=True)\n"
+            "                    except Exception as _fr13_nb_exc:\n"
+            "                        print('[FR13_CONV_NODEBANK] preseed failed: '\n"
+            "                              + repr(_fr13_nb_exc), flush=True)\n"
             "                try:\n"
             "                    from vllm.logger import init_logger as _fr13_tcf_il\n"
             "                    _fr13_tcf_il(\"vllm.fr13_tree_conv_fused\").info(\n"
@@ -3043,25 +3080,24 @@ def _fr13_conv_subop_mab(
                                     conv_nodebank_get as _fr13_nb_get,
                                     conv_nodebank_dst_rows as _fr13_nb_rows_get,
                                 )
-                                if _fr13_tcf_prep is None:
-                                    raise RuntimeError(
-                                        "FR13_CONV_NODEBANK requires the fused "
-                                        "tree-conv prep buffers (group prep missing)"
-                                    )
                                 _fr13_nb_ntree = int(
                                     attn_metadata.fr10_tree_parent.numel()
                                 )
-                                _fr13_nb_bmax = int(_fr13_tcf_prep["b_max"])
                                 _fr13_nb_c = int(conv_state.size(1))
                                 _fr13_nb_l = int(conv_state.size(2))
+                                # B = the step's REQUEST count: the bank was
+                                # preseeded at builder init with max_num_seqs
+                                # rows, so this never reallocs; a missing
+                                # preseed fail-louds via the capture guard.
                                 _fr13_nb_bank = _fr13_nb_get(
                                     str(self.prefix),
-                                    _fr13_nb_bmax,
+                                    int(attn_metadata.num_spec_decodes),
                                     _fr13_nb_ntree,
                                     _fr13_nb_c * _fr13_nb_l,
                                     conv_state.dtype,
                                     conv_state.device,
                                 )
+                                _fr13_nb_bmax = int(_fr13_nb_bank.shape[0])
                                 _fr13_nb_bank_flat = _fr13_nb_bank.view(
                                     -1, _fr13_nb_c, _fr13_nb_l
                                 )

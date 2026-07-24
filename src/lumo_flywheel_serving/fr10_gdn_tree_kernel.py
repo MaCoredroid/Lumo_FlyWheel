@@ -520,6 +520,30 @@ def conv_nodebank_get(layer_key, B: int, n_tree: int, row_elems: int,
     return st
 
 
+def conv_nodebank_preseed(layer_keys, b_max: int, n_tree: int,
+                          conv_c: int, conv_l: int, dtype, device) -> None:
+    """Preseed every layer's bank at BUILDER INIT (outside graph capture).
+
+    Same class as hc_internal_preseed: the tree-decode path's first call
+    happens INSIDE capture, so lazy first-call allocation is impossible on a
+    graph boot. b_max MUST be the REQUEST count (max_num_seqs), never the
+    token-row cudagraph bs (88 = 4 reqs x 22 rows would size a ~45GB bank).
+    """
+    if isinstance(dtype, str):
+        dtype = getattr(torch, dtype)
+    for k in layer_keys:
+        conv_nodebank_get(
+            str(k), int(b_max), int(n_tree),
+            int(conv_c) * int(conv_l), dtype, device,
+        )
+    conv_nodebank_dst_rows(int(b_max), int(n_tree), device)
+    print(
+        f"[FR13_CONV_NODEBANK] preseeded {len(layer_keys)} banks: "
+        f"bmax={b_max} n_tree={n_tree} c={conv_c} l={conv_l} dtype={dtype}",
+        flush=True,
+    )
+
+
 def conv_nodebank_dst_rows(b_max: int, n_tree: int, device) -> torch.Tensor:
     """Shared [b_max, N_TREE] int32 table: row b holds b*n_tree + arange.
 
