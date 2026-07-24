@@ -2518,24 +2518,23 @@ def _fr13_conv_subop_mab(
                         _fr13_cpg_idx = globals().get(
                             "_FR13_CPG_LAYER_IDX", {}).get(str(self.prefix))
                         # FR13_CPG_ROWID_TOKEN: rebuild the SAME composite
-                        # (req_ids, col0 page-ids, staged step-seq) token from
-                        # this step's publishes. Staged carries seq N-1; we
-                        # pass seq_now - 1, so equality also enforces "no
+                        # (spec-row (rid, col0) pairs, staged step-seq) token
+                        # from this step's publishes. Staged carries seq N-1;
+                        # we pass seq_now - 1, so equality also enforces "no
                         # intervening engine step" (an in-place col0 rewrite
-                        # is invisible to req-id + page-id equality alone).
-                        _fr13_cpg_col0 = globals().get(
-                            "_LUMO_FA_SAMPLER_ROW_CONV_COL0", None)
+                        # is invisible to page-id equality alone). Spec-scoped
+                        # pairs: full-batch col0 races on prefill rows.
+                        _fr13_cpg_pairs = globals().get(
+                            "_LUMO_FA_SPEC_ROW_CONV_COL0", None)
                         _fr13_cpg_seq = globals().get("_LUMO_FA_STEP_SEQ", None)
                         if (
                             _fr13_cpg_idx is not None
-                            and _fr13_cpg_col0 is not None
+                            and _fr13_cpg_pairs is not None
                             and _fr13_cpg_seq is not None
                         ):
                             _fr13_cpg_flat = _fr13_cpg_staged(
                                 (
-                                    tuple(globals().get(
-                                        "_LUMO_FA_SAMPLER_ROW_REQ_IDS", ()) or ()),
-                                    tuple(_fr13_cpg_col0),
+                                    _fr13_cpg_pairs,
                                     int(_fr13_cpg_seq) - 1,
                                 ),
                                 int(_fr13_cpg_idx),
@@ -2828,21 +2827,18 @@ def _fr13_conv_subop_mab(
                                 )
                                 _fr13_cpg_idx2 = globals().get(
                                     "_FR13_CPG_LAYER_IDX", {}).get(str(self.prefix))
-                                _fr13_cpg_col02 = globals().get(
-                                    "_LUMO_FA_SAMPLER_ROW_CONV_COL0", None)
+                                _fr13_cpg_pairs2 = globals().get(
+                                    "_LUMO_FA_SPEC_ROW_CONV_COL0", None)
                                 _fr13_cpg_seq2 = globals().get(
                                     "_LUMO_FA_STEP_SEQ", None)
                                 if (
                                     _fr13_cpg_idx2 is not None
-                                    and _fr13_cpg_col02 is not None
+                                    and _fr13_cpg_pairs2 is not None
                                     and _fr13_cpg_seq2 is not None
                                 ):
                                     _fr13_cpg_f2 = _fr13_cpg_staged2(
                                         (
-                                            tuple(globals().get(
-                                                "_LUMO_FA_SAMPLER_ROW_REQ_IDS",
-                                                ()) or ()),
-                                            tuple(_fr13_cpg_col02),
+                                            _fr13_cpg_pairs2,
                                             int(_fr13_cpg_seq2) - 1,
                                         ),
                                         int(_fr13_cpg_idx2),
@@ -8853,24 +8849,24 @@ def _lumo_tree_canonical_multidraft_sample(
                             # stage (consume then takes the legacy gather) --
                             # a req-id-only token cannot see a col0 page
                             # slide/realloc under stable batch composition.
-                            _fr13_cpg_col0 = getattr(
+                            # SPEC-ROW (rid, col0) pairs, NOT full-batch col0:
+                            # prefill rows' running blocks race every chunk
+                            # and would poison the all-or-nothing token.
+                            _fr13_cpg_pairs = getattr(
                                 _lumo_tree_commit_gdn,
-                                '_LUMO_FA_SAMPLER_ROW_CONV_COL0', None)
+                                '_LUMO_FA_SPEC_ROW_CONV_COL0', None)
                             _fr13_cpg_seq = getattr(
                                 _lumo_tree_commit_gdn,
                                 '_LUMO_FA_STEP_SEQ', None)
                             if (all(_b is not None for _b in _fr13_cpg_banks)
-                                    and _fr13_cpg_col0 is not None
+                                    and _fr13_cpg_pairs is not None
                                     and _fr13_cpg_seq is not None):
                                 _fr13_cpg(
                                     conv_banks=_fr13_cpg_banks,
                                     ssi_stack=_fr13_sbr_stacks['spec_idx'][:, :, 0].contiguous(),
                                     num_spec_decodes=_fr13_replay_rows,
                                     req_ids_token=(
-                                        tuple(getattr(
-                                            _lumo_tree_commit_gdn,
-                                            '_LUMO_FA_SAMPLER_ROW_REQ_IDS', ()) or ()),
-                                        tuple(_fr13_cpg_col0),
+                                        _fr13_cpg_pairs,
                                         int(_fr13_cpg_seq),
                                     ),
                                 )
@@ -10568,6 +10564,26 @@ def _patch_gpu_model_runner_row_req_ids_fresh() -> bool:
         "                        + str(_fr13_rf_nf), flush=True,\n"
         "                    )\n"
         "            _fr13_rf_gdn._LUMO_FA_SAMPLER_ROW_CONV_COL0 = _fr13_rf_col0\n"
+        "            # FR13_CPG spec-row (rid, col0) pairs: the pregather token\n"
+        "            # must be scoped to SPEC rows only -- full-batch col0\n"
+        "            # races on prefill rows (their running block advances by\n"
+        "            # whole chunks nearly every step), which poisons the\n"
+        "            # all-or-nothing token even though staging never touches\n"
+        "            # those rows. Pairs carry identity + order + page id.\n"
+        "            _fr13_rf_spec_pairs = None\n"
+        "            if _fr13_rf_col0 is not None:\n"
+        "                try:\n"
+        "                    _fr13_rf_spec_pairs = tuple(\n"
+        "                        (str(_fr13_rf_r3), _fr13_rf_col0[_fr13_rf_i3])\n"
+        "                        for _fr13_rf_i3, _fr13_rf_r3 in enumerate(\n"
+        "                            self.input_batch.req_ids\n"
+        "                        )\n"
+        "                        if str(_fr13_rf_r3) in\n"
+        "                        scheduler_output.scheduled_spec_decode_tokens\n"
+        "                    )\n"
+        "                except Exception:\n"
+        "                    _fr13_rf_spec_pairs = None\n"
+        "            _fr13_rf_gdn._LUMO_FA_SPEC_ROW_CONV_COL0 = _fr13_rf_spec_pairs\n"
         "            # FR13_CPG step-seq: monotone engine-step counter. The\n"
         "            # pregather token folds (staged_seq) and the consumer\n"
         "            # requires seq_now == staged_seq + 1 — an intervening\n"

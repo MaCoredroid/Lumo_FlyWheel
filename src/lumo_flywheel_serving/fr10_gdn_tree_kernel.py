@@ -768,7 +768,7 @@ def conv_col0_staged(req_ids_token, layer_idx: int):
             why = f"shape staged={type(staged).__name__} offered={type(req_ids_token).__name__}"
         else:
             parts = []
-            names = ("reqids", "col0", "seq")
+            names = ("pairs", "seq")
             for i, (a, b) in enumerate(zip(staged, req_ids_token)):
                 if a != b:
                     nm = names[i] if i < len(names) else str(i)
