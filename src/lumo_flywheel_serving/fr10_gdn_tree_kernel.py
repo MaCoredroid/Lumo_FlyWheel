@@ -255,6 +255,11 @@ def _hc_internal_desc(strict_mask: torch.Tensor, n_actual: int, n_pad: int):
         rows *= 2
     out = (mask, rows, slots_lo, slots_hi) if mask else (0, 0, 0, 0)
     _FR13_HC_DESC_CACHE[key] = out
+    print(
+        f"[FR13_HC_INTERNAL] derived: n_actual={n_actual} internal={slot} "
+        f"mask=0x{mask:x} rows={rows}",
+        flush=True,
+    )
     return out
 
 
