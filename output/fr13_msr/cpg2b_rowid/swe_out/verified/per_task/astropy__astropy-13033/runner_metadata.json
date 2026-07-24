@@ -1,14 +1,14 @@
 {
   "instance_id": "astropy__astropy-13033",
   "dataset_name": "princeton-nlp/SWE-bench_Verified",
-  "started_at": "2026-07-24T15:04:56Z",
+  "started_at": "2026-07-24T15:58:08Z",
   "repo": "astropy/astropy",
   "base_commit": "298ccb478e6bf092953bca67a3d29dc6c35f6752",
   "agent": {
-    "elapsed_s": 1841.319,
+    "elapsed_s": 1130.262,
     "exit_code": 0,
     "timed_out": false,
-    "container_name": "swe-qwen-astropy__astropy-13033-1784905496",
+    "container_name": "swe-qwen-astropy__astropy-13033-1784908688",
     "offloaded": true,
     "codex_host": "alienware",
     "network_drop": false,
@@ -18,10 +18,10 @@
     "image_arch": "x86_64"
   },
   "codex": {
-    "elapsed_s": 1841.319,
+    "elapsed_s": 1130.262,
     "exit_code": 0,
     "timed_out": false,
-    "container_name": "swe-qwen-astropy__astropy-13033-1784905496",
+    "container_name": "swe-qwen-astropy__astropy-13033-1784908688",
     "offloaded": true,
     "codex_host": "alienware",
     "network_drop": false,
@@ -32,10 +32,10 @@
   },
   "vllm_request_metrics_bytes": 0,
   "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
-  "patch_bytes": 1125,
+  "patch_bytes": 1009,
   "eval": {
     "exit_code": 1,
-    "elapsed_s": 53.373,
+    "elapsed_s": 54.024,
     "offloaded": true,
     "eval_host": "alienware"
   },
@@ -48,13 +48,13 @@
     "passed": false,
     "failure_mode": "tests_failed",
     "harness_exit_code": 0,
-    "eval_wall_clock_seconds": 51.845,
+    "eval_wall_clock_seconds": 52.164,
     "error": null,
     "arch": "x86_64",
     "eval_host": "mark-Alienware-Aurora-ACT1250",
-    "run_id": "x86eval-out-1784907338",
+    "run_id": "x86eval-out-1784909819",
     "namespace": "swebench",
     "cache_level": "env"
   },
-  "ended_at": "2026-07-24T15:36:31Z"
+  "ended_at": "2026-07-24T16:17:53Z"
 }
