@@ -29,9 +29,9 @@ run_variant if_base  tail6  21  1
 # time (edit before launch — placeholders reflect queue verdicts):
 export FR13_PARENT_GATHER=1
 export FR13_CONV_PREGATHER=1
-# export FR13_FLAGS_INKERNEL=1      # flip if 2c PASSes
-# export FR13_HC_INTERNAL=1         # flip if 2d PASSes
-# export FR13_CONV_WB_BATCHED=1     # flip if 2h PASSes
+export FR13_FLAGS_INKERNEL=1      # 2c PASS
+export FR13_HC_INTERNAL=1         # 2d PASS
+export FR13_CONV_WB_BATCHED=1     # 2h PASS
 export FR13_COMMITTER_SG_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/if_levers_sg.json
 export FR13_KVREMAP_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/if_levers_kvremap.json
 run_variant if_levers  tail6  21  1
