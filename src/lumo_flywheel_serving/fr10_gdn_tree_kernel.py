@@ -670,12 +670,17 @@ def _fr13_conv_col0_pregather_kernel(
     ssi_ptr,           # [L, B_STRIDE0/...] int32 stacked spec_state_indices
     ssi_stride_l, ssi_stride_b,
     out_ptr,           # [L, B, ROW_ELEMS] staging (same dtype as banks)
-    row_stride,        # conv bank row stride in ELEMENTS
-    ROW_ELEMS: tl.constexpr,
+    row_stride,        # conv bank ROW stride in elements (page stride)
+    s1, s2,            # conv bank C/L strides in elements
+    ROW_ELEMS: tl.constexpr,   # C * CONV_L (LOGICAL conv elements only)
+    CONV_L: tl.constexpr,
     ELEM_BYTES: tl.constexpr,
     B: tl.constexpr,
     BLOCK: tl.constexpr,
 ):
+    # Copies ONLY the conv-logical [C, L] block of each col0 row (page-safe:
+    # conv and ssm share the mamba page; a flat page copy both wastes ~8x
+    # staging and cannot be .view(C, L)'d by consumers — the r5 crash).
     pid_l = tl.program_id(0)
     pid_b = tl.program_id(1)
     pid_c = tl.program_id(2)
@@ -686,7 +691,12 @@ def _fr13_conv_col0_pregather_kernel(
     row = tl.load(ssi_ptr + pid_l * ssi_stride_l + pid_b * ssi_stride_b)
     offs = pid_c * BLOCK + tl.arange(0, BLOCK)
     mask = offs < ROW_ELEMS
-    vals = tl.load(base + row.to(tl.int64) * row_stride + offs, mask=mask)
+    c_idx = offs // CONV_L
+    l_idx = offs % CONV_L
+    vals = tl.load(
+        base + row.to(tl.int64) * row_stride + c_idx * s1 + l_idx * s2,
+        mask=mask,
+    )
     tl.store(out_ptr + (pid_l * B + pid_b) * ROW_ELEMS + offs, vals, mask=mask)
 
 
@@ -710,13 +720,22 @@ def launch_conv_col0_pregather(
     L = len(conv_banks)
     b0 = conv_banks[0]
     dev = b0.device
-    row_elems = int(b0.stride(0))
+    # LOGICAL conv elements only (C * L_conv), NOT stride(0): the conv view is
+    # as_strided over a shared mamba page (stride(0) = whole-page ~2M elems);
+    # consumers .view(B, C, L_conv) the staged rows.
+    conv_c = int(b0.size(1))
+    conv_l = int(b0.size(2))
+    row_elems = conv_c * conv_l
     st = _FR13_CONV_PREGATHER
     ptrs = [int(b.data_ptr()) for b in conv_banks]
     if st.get("ptrs") != ptrs:
         for b in conv_banks:
-            if b.dtype != b0.dtype or int(b.stride(0)) != row_elems:
-                raise RuntimeError("FR13_CONV_PREGATHER: bank dtype/stride mismatch")
+            if (
+                b.dtype != b0.dtype
+                or b.stride() != b0.stride()
+                or b.shape[1:] != b0.shape[1:]
+            ):
+                raise RuntimeError("FR13_CONV_PREGATHER: bank dtype/stride/shape mismatch")
             if (int(b.data_ptr()) - ptrs[0]) % 16 != 0:
                 raise RuntimeError("FR13_CONV_PREGATHER: bank ptr not 16B-aligned vs anchor")
         st["ptrs"] = ptrs
@@ -736,8 +755,9 @@ def launch_conv_col0_pregather(
     _fr13_conv_col0_pregather_kernel[grid](
         st["anchor"], st["off16"], ssi_stack,
         ssi_stack.stride(0), ssi_stack.stride(1),
-        st["staging"], row_elems,
-        ROW_ELEMS=row_elems, ELEM_BYTES=ebytes, B=B, BLOCK=BLOCK,
+        st["staging"], int(b0.stride(0)),
+        int(b0.stride(1)), int(b0.stride(2)),
+        ROW_ELEMS=row_elems, CONV_L=conv_l, ELEM_BYTES=ebytes, B=B, BLOCK=BLOCK,
     )
     st["token"] = req_ids_token
     st["n"] = B
