@@ -36,4 +36,5 @@ FR13_REQUIRED_TREE_FLAGS=(
   # FR13_HC_INTERNAL QUEUED (built 2026-07-24, default OFF): scan h_cache compacted to internal-node rows (leaves never re-read; attacks scan +18.2 via register/local footprint). Gate = selfcheck eager + capture leg (regate_queue.sh 2d). Incompatible with PARENT_GATHER/PIGGYBACK (launcher raises).
   # FR13_CONV_NODEBANK QUEUED (built 2026-07-24, default OFF): conv node deposits -> private per-layer bank; pool keeps col0 only (spec-page surgery 1+2). Offline route byte gate CPU PASS 36/36 incl. ordinal-perm composition cases. Gate = regate_queue.sh 2e. Patch-time incompat raises: TCF_SELFCHECK / RUNROW_INIT!=1 / FULL_CAPTURE.
   # FR13_SPEC_BLOCKS_CAP QUEUED (built 2026-07-24, default 0=OFF): MambaSpec num_speculative_blocks min-cap (21->12 => 13 pages/request, ~+9 pages reclaimed) + gdn_attn page-col width caps. REQUIRES FR13_CONV_NODEBANK=1 (patcher main raises otherwise). Gate = regate_queue.sh 2f.
+  # FR13_CONV_WB_BATCHED QUEUED (B2c, built 2026-07-24, default OFF): one batched conv writeback across requests (per-b launch loop -> 1-2 launches/layer; committer host-gap slice). Composes with NODEBANK. Gate = regate_queue.sh 2h.
 )

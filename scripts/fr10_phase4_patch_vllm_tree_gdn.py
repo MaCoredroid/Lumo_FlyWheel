@@ -898,7 +898,7 @@ def _patch_gdn_linear() -> bool:
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
-            "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, prepare_replay_conv_remap_rows_from_bank, replay_conv_state_linear_remap_from_bank, replay_conv_state_linear_remap_prepared\n"
+            "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, prepare_replay_conv_remap_rows_from_bank, replay_conv_state_linear_remap_from_bank, replay_conv_state_linear_remap_prepared\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
             "# FR13 DEPRECATION: FR13_APC_HIT_RECURRENT_SUFFIX is force-OFF at gdn\n"
@@ -915,6 +915,7 @@ def _patch_gdn_linear() -> bool:
             "_FR13_FLAGS_INKERNEL = False  # scan-kernel flag stores (patch-time baked)\n"
             "_FR13_CONV_NODEBANK = " + ("True" if os.environ.get("FR13_CONV_NODEBANK", "0") == "1" else "False") + "  # FR13_CONV_NODEBANK baked from PATCH-TIME env (worker drops FR13_*): conv NODE deposits -> private per-layer bank; pool keeps col0 only (spec-page reclaim piece 1+2)\n"
             "_FR13_NB_PERM_DEV = None  # persistent device int32 [max_bs]: prev-step spec ordinal per current spec row (host-refreshed each step in _prepare_inputs; closes the bank ordinal-keying hazard on composition change)\n"
+            "_FR13_CONV_WB_BATCHED = " + ("True" if os.environ.get("FR13_CONV_WB_BATCHED", "0") == "1" else "False") + "  # FR13_CONV_WB_BATCHED (B2c) baked from PATCH-TIME env: ONE batched conv writeback across requests replaces the per-b launch loop (committer host-gap slice)\n"
             "_FR13_VERIFY_NATIVE = " + ("True" if os.environ.get("FR13_VERIFY_NATIVE", "0") == "1" else "False") + "  # FR13_VERIFY_NATIVE baked from PATCH-TIME env (worker drops FR13_*); per-node native verify diagnostic\n"
             "_FR13_VERIFY_NATIVE_ANNOUNCED = False\n"
             "_FR12_NPR = " + ("True" if os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1" else "False") + "  # FR12_TREE_CONV_NATIVE_PRIOR_READ baked from PATCH-TIME env (worker drops FR12_*); conv-prior localization diagnostic\n"
@@ -3402,6 +3403,8 @@ def _fr13_conv_subop_mab(
                             _fr12_path0_len,
                             mixed_qkv_spec.size(1),
                         )
+                    _fr13_wbb_stage = None
+                    _fr13_wbb_srows = 0
                     for _fr10_b in range(attn_metadata.num_spec_decodes):
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
@@ -3432,6 +3435,33 @@ def _fr13_conv_subop_mab(
                                 (_fr10_prior_window.transpose(0, 1), _fr10_x),
                                 dim=0,
                             )
+                        if _FR13_CONV_WB_BATCHED:
+                            # B2c: stage this request's shared source for the
+                            # ONE batched writeback after the loop. copy_
+                            # preserves bytes; downstream window reads keep
+                            # using _fr10_source unchanged.
+                            if _fr13_wbb_stage is None:
+                                from lumo_flywheel_serving.fr13_tree_conv_fused import (
+                                    conv_wb_staging_get as _fr13_wbb_get,
+                                )
+                                if _fr13_tcf_prep is None:
+                                    raise RuntimeError(
+                                        "FR13_CONV_WB_BATCHED requires the "
+                                        "fused tree-conv prep (b_max source)"
+                                    )
+                                _fr13_wbb_srows = int(_fr10_source.size(0))
+                                _fr13_wbb_stage = _fr13_wbb_get(
+                                    str(self.prefix),
+                                    int(_fr13_tcf_prep["b_max"]),
+                                    _fr13_wbb_srows,
+                                    int(_fr10_source.size(1)),
+                                    _fr10_source.dtype,
+                                    _fr10_source.device,
+                                )
+                            _fr13_wbb_stage[
+                                _fr10_b * _fr13_wbb_srows:
+                                (_fr10_b + 1) * _fr13_wbb_srows
+                            ].copy_(_fr10_source)
                         _fr10_window = _fr10_source.index_select(
                             0, _fr10_source_flat
                         ).view(_fr10_tree_n, _fr10_width, _fr10_x.size(1))
@@ -3959,7 +3989,12 @@ def _fr13_conv_subop_mab(
                             # launch replaces gather + transpose-contiguous +
                             # index_copy_ (byte-copy contract; int32 dst rows
                             # consumed directly, no .to(long) cast kernel).
-                            if _FR13_CONV_NODEBANK:
+                            if _FR13_CONV_WB_BATCHED:
+                                # B2c: source staged above; ONE batched launch
+                                # fires after the loop (same bytes, disjoint
+                                # dsts; no same-step reader before it).
+                                pass
+                            elif _FR13_CONV_NODEBANK:
                                 # FR13_CONV_NODEBANK: full node mirror -> the
                                 # private bank; the pool keeps ONLY the col0
                                 # (anchor) deposit for NPR/pregather/stock
@@ -4284,6 +4319,59 @@ def _fr13_conv_subop_mab(
                             )
                             _fr10_conv_diag[11].add_(
                                 (_fr10_flat_sibling_path0_max != 0).to(dtype=torch.float32)
+                            )
+                    # FR13_CONV_WB_BATCHED (B2c): ONE batched writeback for all
+                    # requests (replaces B per-request launches; same bytes,
+                    # disjoint dsts). Fires only on the fused arm; nodebank
+                    # route adds the batched col0 pool write. No same-step
+                    # reader of these dsts runs before this point (taps/scan
+                    # read the staged source; committer + pregather run
+                    # post-forward; the linear remap consumed PREV-step
+                    # deposits at forward start).
+                    if (
+                        _FR13_CONV_WB_BATCHED
+                        and _fr13_wbb_stage is not None
+                        and _fr13_conv_wb_fused_now
+                        and int(attn_metadata.num_spec_decodes) > 0
+                    ):
+                        _fr13_wbb_b = int(attn_metadata.num_spec_decodes)
+                        if _FR13_CONV_NODEBANK:
+                            launch_conv_state_writeback_batched(
+                                source_z=_fr13_wbb_stage,
+                                state_src=_fr13_tcf_state_src,
+                                dst_rows=_fr13_nb_dst_rows[
+                                    :_fr13_wbb_b, :_fr10_tree_n
+                                ].reshape(-1),
+                                conv_state=_fr13_nb_bank_flat,
+                                tree_n=_fr10_tree_n,
+                                state_len=int(conv_state.size(2)),
+                                batch=_fr13_wbb_b,
+                                src_rows_per_b=_fr13_wbb_srows,
+                            )
+                            launch_conv_state_writeback_batched(
+                                source_z=_fr13_wbb_stage,
+                                state_src=_fr13_tcf_state_src,
+                                dst_rows=spec_state_indices_tensor[
+                                    :_fr13_wbb_b, :1
+                                ].reshape(-1),
+                                conv_state=conv_state,
+                                tree_n=1,
+                                state_len=int(conv_state.size(2)),
+                                batch=_fr13_wbb_b,
+                                src_rows_per_b=_fr13_wbb_srows,
+                            )
+                        else:
+                            launch_conv_state_writeback_batched(
+                                source_z=_fr13_wbb_stage,
+                                state_src=_fr13_tcf_state_src,
+                                dst_rows=spec_state_indices_tensor[
+                                    :_fr13_wbb_b, :_fr10_tree_n
+                                ].reshape(-1),
+                                conv_state=conv_state,
+                                tree_n=_fr10_tree_n,
+                                state_len=int(conv_state.size(2)),
+                                batch=_fr13_wbb_b,
+                                src_rows_per_b=_fr13_wbb_srows,
                             )
                     mixed_qkv_spec = _fr10_tree_conv_out
                 except Exception as _fr10_tree_conv_exc:
