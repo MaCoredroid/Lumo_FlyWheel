@@ -1,5 +1,27 @@
 # FR13 spec-page reservation surgery — design (2026-07-24)
 
+**STATUS (2026-07-24 post-reboot): BUILT, gates queued (regate_queue.sh 2e/2f).**
+- Piece 1+2 = FR13_CONV_NODEBANK (patch-time baked const): writeback -> bank
+  mirror + pool col0-only; remap src -> bank via
+  `replay_conv_state_linear_remap_from_bank` (invalid lanes substitute
+  current dst bytes — bank-space has no identity self-copy); stateless
+  committer leaf read -> bank (bank-width clamp, not spec_cols); committed-
+  path prior consumer is col0-only under RUNROW_INIT=1 => untouched
+  (RUNROW_INIT!=1 + nodebank = patch-time raise, ditto TCF_SELFCHECK and
+  FULL_CAPTURE). NEW HAZARD FOUND + CLOSED at design time: the bank is
+  ORDINAL-keyed while the remap consumes PREV-step deposits — composition
+  change re-points via `ordinal_perm`, a persistent device buffer host-
+  refreshed each step in _prepare_inputs (outside capture). Offline route
+  byte gate `output/fr13_msr/gate_conv_nodebank_byte.py`: CPU PASS 36/36
+  (dtypes x seeds x ordinal-perms, invalid lanes, nacc=0).
+- Piece 3 = FR13_SPEC_BLOCKS_CAP=12 (patch-time): abstract.py construction
+  min() + gdn_attn page-col width caps (_fr13_page_cols; token-count uses of
+  num_spec stay uncapped) + _fr13_tcf_cols follows. Requires nodebank
+  (patcher main raises). Write-never on vacated pool node cols is enforced
+  STRUCTURALLY by the cap (cols cease to exist); pre-cap the route byte gate
+  covers the contract, so no runtime write-guard instrument is added
+  (observer-effect discipline).
+
 Goal: cut tail6's per-request mamba spec-page reservation from 22 pages to
 ~13 (max accepted path 12 + col0), reclaiming ~9 pages/request of cached-
 history retention (measured root cause of the 71%-vs-85% hit gap and the

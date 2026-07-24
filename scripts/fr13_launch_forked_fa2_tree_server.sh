@@ -553,6 +553,17 @@ PY
 # absent in-container (the patcher reads flags at patch time inside the container).
 # Placed BEFORE the explicit -e list: docker takes the LAST occurrence of a name,
 # so the explicit entries below keep their ${VAR:-default} semantics unchanged.
+# FR13_TORCHPROF: arm vLLM's BUILT-IN torch profiler (with_stack defaults
+# TRUE in-engine) via serve CLI config — engine config, not env, so the
+# worker-env-drop class cannot touch it. Window control = POST /start_profile
+# + /stop_profile (routes attach only when this config is set). DIAGNOSTIC
+# ARM ONLY: in-window numbers carry capture overhead; label everything
+# derived from it diagnostic-only, never compare as clean speed.
+FR13_PROFILER_FLAGS=""
+if [[ "${FR13_TORCHPROF:-0}" == "1" ]]; then
+  FR13_PROFILER_FLAGS="--profiler-config.profiler=torch --profiler-config.torch_profiler_dir=/logs/torchprof"
+fi
+
 FR13_ENV_FORWARD_ARGS=()
 while IFS= read -r _v; do
   case "$(declare -p "$_v" 2>/dev/null)" in declare\ -a*|declare\ -A*) continue;; esac
@@ -671,6 +682,10 @@ docker run -d --name "$CONTAINER" --gpus all --ipc=host \
   -e FR13_GRAPH_TIMER_JSON="${FR13_GRAPH_TIMER_JSON:-}" \
   -e FR13_CONV_PREGATHER="${FR13_CONV_PREGATHER:-0}" \
   -e FR13_FLAGS_INKERNEL="${FR13_FLAGS_INKERNEL:-0}" \
+  -e FR13_CONV_NODEBANK="${FR13_CONV_NODEBANK:-0}" \
+  -e FR13_SPEC_BLOCKS_CAP="${FR13_SPEC_BLOCKS_CAP:-0}" \
+  -e FR13_HC_INTERNAL="${FR13_HC_INTERNAL:-0}" \
+  -e FR13_HC_INTERNAL_SELFCHECK="${FR13_HC_INTERNAL_SELFCHECK:-0}" \
   -e FR13_KVREMAP_TIMER="${FR13_KVREMAP_TIMER:-0}" \
   -e FR13_KVREMAP_TIMER_JSON="${FR13_KVREMAP_TIMER_JSON:-}" \
   -e FR13_STATEREMAP_TIMER="${FR13_STATEREMAP_TIMER:-0}" \
@@ -865,7 +880,7 @@ exec \"\${NSYS_PREFIX[@]}\" vllm serve /models/qwen3.6-27b-fp8 --served-model-na
   --attention-backend '$ATTENTION_BACKEND' --gdn-prefill-backend triton \
   --chat-template /workspace/docker/chat_templates/qwen3-openai-codex.jinja \
   --enable-auto-tool-choice --tool-call-parser qwen3_xml --reasoning-parser qwen3 \
-  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS $CG_FLAGS $KV_FP8_FLAGS $FR13_SERVE_BATCH_FLAGS \
+  --speculative-config \"\$SPEC_CONFIG\" $APC_FLAGS $CG_FLAGS $KV_FP8_FLAGS $FR13_SERVE_BATCH_FLAGS $FR13_PROFILER_FLAGS \
   $(if [[ "${ENFORCE_EAGER:-0}" == "1" ]]; then printf '%s' '--enforce-eager'; fi)"
 
 # DURABLE OOM BACKSTOP: spawn the detached GPU/unified-mem guard for THIS container.

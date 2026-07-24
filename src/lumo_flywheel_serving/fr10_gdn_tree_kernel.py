@@ -162,6 +162,102 @@ def npad_invariant_on() -> bool:
     return raw.strip().lower() in ("1", "true", "yes", "on")
 
 
+def hc_internal_on() -> bool:
+    """FR13_HC_INTERNAL: compact the scan's h_cache to INTERNAL-node rows only.
+
+    The one-hot ancestor reads (``tl.sum(tl.where(offs == j, h_cache, 0.0))``)
+    can only ever SELECT a row whose node appears in some strict_mask ancestry
+    row -- i.e. a node with children. Leaf rows are written at :1274 but never
+    re-read, so caching them is pure register/local-memory waste (the measured
+    BV wall: h_cache = [N_SPAN, BLOCK_V, DIM_K] fp32 tiles). When ON, the
+    launcher derives the internal-node set from the static tree descriptor
+    once (host-side, outside capture), packs a trace-time slot map, and the
+    kernel keeps HC_ROWS (= next-pow2 internal count) rows instead of N_SPAN.
+    Values are identical: internal reads select the identical state through
+    the identical one-hot primitive (0.0 + x = x), and a leaf j's skipped
+    iteration only removed a select whose runtime ``ancestor`` bit is always 0.
+    Default OFF => HC_MASK=0 => every compacted branch is trace-time dead and
+    the served launch is byte-identical to the locked path (bug-class #10).
+    Incompatible with FR13_PARENT_GATHER (runtime parent index cannot use the
+    trace-time slot map) and PIGGYBACK_EXPORT (chain end may be a leaf); the
+    launcher fails loud on either pairing.
+    """
+    raw = os.environ.get("FR13_HC_INTERNAL", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def hc_internal_selfcheck_on() -> bool:
+    """In-process byte-identity gate for FR13_HC_INTERNAL.
+
+    Same discipline as ``parent_gather_selfcheck_on``: run the scan BOTH ways
+    on the SAME inputs in the SAME process (full-span h_cache -> out_ref,
+    compacted -> out) and raise on any bit difference. Boot under
+    enforce_eager: the host compare forces a DtoH sync. The graph-capture leg
+    is gated separately (gate_live pattern) per the eager-vs-graph lesson.
+    """
+    raw = os.environ.get("FR13_HC_INTERNAL_SELFCHECK", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+_FR13_HC_DESC_CACHE: dict = {}
+
+
+def _hc_internal_desc(strict_mask: torch.Tensor, n_actual: int, n_pad: int):
+    """One-time host derivation of (HC_MASK, HC_ROWS, HC_SLOTS_LO, HC_SLOTS_HI).
+
+    internal set = { immediate parent of i : i in [1, n_actual) } -- and every
+    strict-ancestor of any node IS some node's immediate parent (the next node
+    down its path), so this set covers every row the one-hot reads can select.
+    Cached by (descriptor ptr, n_actual, n_pad): the served tree descriptors
+    are static buffers. The first call must happen OUTSIDE graph capture
+    (vLLM's eager warmup); fail loud otherwise -- never silently fall back.
+    """
+    key = (int(strict_mask.data_ptr()), int(n_actual), int(n_pad))
+    hit = _FR13_HC_DESC_CACHE.get(key)
+    if hit is not None:
+        return hit
+    if strict_mask.is_cuda and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_HC_INTERNAL: first-call descriptor derivation hit graph "
+            "capture; this tree shape must warm up eagerly first"
+        )
+    sm_host = strict_mask[:n_actual, :n_actual].detach().to("cpu")
+    parents: set[int] = set()
+    for i in range(1, n_actual):
+        row = sm_host[i]
+        p = -1
+        for j in range(0, i):
+            if int(row[j]) != 0:
+                p = j  # largest-index ancestor == immediate parent (topo order)
+        if p >= 0:
+            parents.add(p)
+    mask = 0
+    slots_lo = 0
+    slots_hi = 0
+    slot = 0
+    for node in sorted(parents):
+        if node >= 32:
+            raise RuntimeError(
+                f"FR13_HC_INTERNAL: internal node index {node} >= 32 unsupported"
+            )
+        mask |= 1 << node
+        if node < 16:
+            slots_lo |= slot << (4 * node)
+        else:
+            slots_hi |= slot << (4 * (node - 16))
+        slot += 1
+    if slot > 16:
+        raise RuntimeError(
+            f"FR13_HC_INTERNAL: {slot} internal nodes exceed the 4-bit slot map"
+        )
+    rows = 1
+    while rows < slot:
+        rows *= 2
+    out = (mask, rows, slots_lo, slots_hi) if mask else (0, 0, 0, 0)
+    _FR13_HC_DESC_CACHE[key] = out
+    return out
+
+
 @dataclass(frozen=True)
 class Tree:
     parent: tuple[int, ...]
@@ -370,14 +466,47 @@ _FR13_CONV_NODEBANK: dict = {}
 
 def conv_nodebank_get(layer_key, B: int, n_tree: int, row_elems: int,
                       dtype, device):
-    """Per-layer [B, N_TREE, ROW_ELEMS] conv node bank (allocated once)."""
+    """Per-layer [B, N_TREE, ROW_ELEMS] conv node bank (allocated once).
+
+    Callers MUST pass the MAX batch (ring_bs / prep b_max) every call, never
+    the step's live B: a mid-serving realloc would leave any captured CUDA
+    graph replaying against the OLD bank address (silent corruption). The
+    capture guard below makes a first-call-inside-capture fail loud.
+    """
     st = _FR13_CONV_NODEBANK.get(layer_key)
     if (
         st is None or st.shape[0] < B or st.shape[1] != n_tree
         or st.shape[2] != row_elems or st.dtype != dtype
     ):
+        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+            raise RuntimeError(
+                "FR13_CONV_NODEBANK: bank (re)allocation inside graph capture "
+                f"(layer={layer_key}, B={B}); allocate at eager warmup with the "
+                "MAX batch"
+            )
         st = torch.zeros(max(B, 4), n_tree, row_elems, dtype=dtype, device=device)
         _FR13_CONV_NODEBANK[layer_key] = st
+    return st
+
+
+def conv_nodebank_dst_rows(b_max: int, n_tree: int, device) -> torch.Tensor:
+    """Shared [b_max, N_TREE] int32 table: row b holds b*n_tree + arange.
+
+    The bank-writeback dst_rows for request ordinal b (bank viewed
+    [B*N_TREE, C, L]). Layer-independent; cached once.
+    """
+    key = ("__dst_rows__", int(b_max), int(n_tree), str(device))
+    st = _FR13_CONV_NODEBANK.get(key)
+    if st is None:
+        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+            raise RuntimeError(
+                "FR13_CONV_NODEBANK: dst-rows table allocation inside graph capture"
+            )
+        st = (
+            torch.arange(int(b_max), dtype=torch.int32).view(-1, 1) * int(n_tree)
+            + torch.arange(int(n_tree), dtype=torch.int32).view(1, -1)
+        ).to(device)
+        _FR13_CONV_NODEBANK[key] = st
     return st
 
 
@@ -1075,6 +1204,10 @@ def _tree_gdn_kernel(
     RING_EXPORT: tl.constexpr = False,
     FLAGS_EXPORT: tl.constexpr = False,
     FLAGS_ROWS: tl.constexpr = 0,
+    HC_MASK: tl.constexpr = 0,
+    HC_ROWS: tl.constexpr = 0,
+    HC_SLOTS_LO: tl.constexpr = 0,
+    HC_SLOTS_HI: tl.constexpr = 0,
 ):
     # N_LOOP is the span (loop bound, offs_n lane count, h_cache rows) of the
     # scan/reduction. Default (0) means "use N_PAD" -- the per-tree padded span
@@ -1119,7 +1252,17 @@ def _tree_gdn_kernel(
     # Sequential rank-1 tree scan. Each row caches the post-token state for one
     # tree node, so children start from their parent's fp32 checkpoint without
     # reloading h0 or replaying ancestors from HBM.
-    h_cache = tl.zeros((N_SPAN, BLOCK_V, DIM_K), dtype=tl.float32)
+    # FR13_HC_INTERNAL (HC_MASK != 0): keep rows ONLY for INTERNAL nodes -- an
+    # ancestor is by definition a node with children, so the one-hot selects
+    # below can never hit a leaf row. Slot map is trace-time (HC_SLOTS_LO/HI,
+    # 4 bits per node); the footprint drops N_SPAN -> HC_ROWS fp32 tiles.
+    # Default HC_MASK=0 => trace-time dead => the alloc is the exact locked
+    # form (bug-class #10 constexpr-dead).
+    if HC_MASK == 0:
+        h_cache = tl.zeros((N_SPAN, BLOCK_V, DIM_K), dtype=tl.float32)
+    else:
+        h_cache = tl.zeros((HC_ROWS, BLOCK_V, DIM_K), dtype=tl.float32)
+        offs_h = tl.arange(0, HC_ROWS)
     for i in tl.static_range(0, N_SPAN):
         state_i = b_h0
         if PARENT_GATHER:
@@ -1158,20 +1301,57 @@ def _tree_gdn_kernel(
                 # N_LOOP == 0 (default served path) the span equals N_PAD, every
                 # i,j < N_PAD, and the load is the EXACT prior unguarded form --
                 # constexpr-dead guard => byte-identical codegen (bug-class #10).
-                if N_LOOP == 0:
-                    anc_bit = tl.load(strict_mask + i * N_PAD + j)
-                else:
-                    anc_bit = tl.load(
-                        strict_mask + i * N_PAD + j,
-                        mask=(i < N_PAD) & (j < N_PAD),
-                        other=0,
+                if HC_MASK == 0:
+                    if N_LOOP == 0:
+                        anc_bit = tl.load(strict_mask + i * N_PAD + j)
+                    else:
+                        anc_bit = tl.load(
+                            strict_mask + i * N_PAD + j,
+                            mask=(i < N_PAD) & (j < N_PAD),
+                            other=0,
+                        )
+                    ancestor = (anc_bit != 0) & (j < N_ACTUAL)
+                    h_j = tl.sum(
+                        tl.where((offs_n == j)[:, None, None], h_cache, 0.0),
+                        axis=0,
                     )
-                ancestor = (anc_bit != 0) & (j < N_ACTUAL)
-                h_j = tl.sum(
-                    tl.where((offs_n == j)[:, None, None], h_cache, 0.0),
-                    axis=0,
-                )
-                state_i = tl.where(ancestor, h_j, state_i)
+                    state_i = tl.where(ancestor, h_j, state_i)
+                else:
+                    # FR13_HC_INTERNAL: a leaf j can never satisfy `ancestor`
+                    # (only nodes with children appear in strict ancestry), so
+                    # its iteration is skipped at trace time -- the select it
+                    # would compute is discarded at runtime in the locked form.
+                    # Internal j reads its COMPACTED row through the identical
+                    # one-hot primitive selecting the identical value.
+                    if ((HC_MASK >> j) & 1) == 1:
+                        if N_LOOP == 0:
+                            anc_bit = tl.load(strict_mask + i * N_PAD + j)
+                        else:
+                            anc_bit = tl.load(
+                                strict_mask + i * N_PAD + j,
+                                mask=(i < N_PAD) & (j < N_PAD),
+                                other=0,
+                            )
+                        ancestor = (anc_bit != 0) & (j < N_ACTUAL)
+                        if j < 16:
+                            h_j = tl.sum(
+                                tl.where(
+                                    (offs_h == ((HC_SLOTS_LO >> (4 * j)) & 15))[:, None, None],
+                                    h_cache,
+                                    0.0,
+                                ),
+                                axis=0,
+                            )
+                        else:
+                            h_j = tl.sum(
+                                tl.where(
+                                    (offs_h == ((HC_SLOTS_HI >> (4 * (j - 16))) & 15))[:, None, None],
+                                    h_cache,
+                                    0.0,
+                                ),
+                                axis=0,
+                            )
+                        state_i = tl.where(ancestor, h_j, state_i)
 
         b_q = tl.load(
             q + (i * NUM_KH + pid_kh) * DIM_K + offs_k,
@@ -1271,7 +1451,24 @@ def _tree_gdn_kernel(
             RAW_GATING=RAW_GATING,
             SCAN_ALIGN=SCAN_ALIGN,
         )
-        h_cache = tl.where((offs_n == i)[:, None, None], state_i[None, :, :], h_cache)
+        if HC_MASK == 0:
+            h_cache = tl.where((offs_n == i)[:, None, None], state_i[None, :, :], h_cache)
+        else:
+            # FR13_HC_INTERNAL: leaf states are never re-read -> only internal
+            # nodes keep a compacted row (identical one-hot store form).
+            if ((HC_MASK >> i) & 1) == 1:
+                if i < 16:
+                    h_cache = tl.where(
+                        (offs_h == ((HC_SLOTS_LO >> (4 * i)) & 15))[:, None, None],
+                        state_i[None, :, :],
+                        h_cache,
+                    )
+                else:
+                    h_cache = tl.where(
+                        (offs_h == ((HC_SLOTS_HI >> (4 * (i - 16))) & 15))[:, None, None],
+                        state_i[None, :, :],
+                        h_cache,
+                    )
         tl.store(
             out + (i * NUM_VH + pid_vh) * DIM_V + offs_v,
             out_i,
@@ -3052,13 +3249,37 @@ def launch_tree_gdn_prepared(
     # FR13_PARENT_GATHER: default OFF => the launch below is byte-identical to the
     # locked path (PARENT_GATHER=False threads through as a dead constexpr branch).
     _parent_gather = parent_gather_on()
+    # FR13_HC_INTERNAL: compact h_cache to internal-node rows (leaves are never
+    # re-read). One-time host derivation from the static tree descriptor,
+    # cached; the first call for a shape must be OUTSIDE graph capture (vLLM
+    # eager warmup) -- _hc_internal_desc fails loud otherwise. Default OFF =>
+    # HC_MASK=0 => trace-time dead => byte-identical locked launch.
+    _hc_mask = 0
+    _hc_rows = 0
+    _hc_slots_lo = 0
+    _hc_slots_hi = 0
+    if hc_internal_on():
+        if _parent_gather:
+            raise ValueError(
+                "FR13_HC_INTERNAL is incompatible with FR13_PARENT_GATHER "
+                "(runtime parent index cannot use the trace-time slot map); "
+                "gate one lever at a time"
+            )
+        if piggyback_export:
+            raise ValueError(
+                "FR13_HC_INTERNAL is incompatible with PIGGYBACK_EXPORT "
+                "(the chain-end node may be a leaf with no cached row)"
+            )
+        _hc_mask, _hc_rows, _hc_slots_lo, _hc_slots_hi = _hc_internal_desc(
+            strict_mask, n_actual, n_pad
+        )
     grid = (num_vh, triton.cdiv(dim_v, _bv))
 
     _flags_export = staging_flags is not None
     _flags_arg = staging_flags if _flags_export else strict_mask  # dummy ptr when off (dead code)
     _flags_rows = int(staging_rows) if _flags_export else 0
 
-    def _launch(_out, _pg_flag):
+    def _launch(_out, _pg_flag, _hc=(_hc_mask, _hc_rows, _hc_slots_lo, _hc_slots_hi)):
         _tree_gdn_kernel[grid](
             q,
             k,
@@ -3106,6 +3327,10 @@ def launch_tree_gdn_prepared(
             RING_EXPORT=_ring_export,
             FLAGS_EXPORT=_flags_export,
             FLAGS_ROWS=_flags_rows,
+            HC_MASK=_hc[0],
+            HC_ROWS=_hc[1],
+            HC_SLOTS_LO=_hc[2],
+            HC_SLOTS_HI=_hc[3],
             num_warps=_num_warps,
             **_extra_launch_kwargs,
         )
@@ -3123,6 +3348,20 @@ def launch_tree_gdn_prepared(
                 "FR13_PARENT_GATHER SELFCHECK MISMATCH: parent gather is NOT "
                 f"byte-identical to the ancestor loop (max_abs={_diff:.3e}, "
                 f"n_actual={_n}, n_pad={n_pad})"
+            )
+    elif hc_internal_selfcheck_on() and _hc_mask != 0:
+        # In-process byte-identity gate for FR13_HC_INTERNAL (same discipline:
+        # boot enforce_eager; the host compare syncs).
+        out_ref = torch.empty_like(out)
+        _launch(out_ref, _parent_gather, _hc=(0, 0, 0, 0))
+        _launch(out, _parent_gather)
+        _n = int(n_actual)
+        if not torch.equal(out_ref[:_n], out[:_n]):
+            _diff = (out_ref[:_n].float() - out[:_n].float()).abs().max().item()
+            raise RuntimeError(
+                "FR13_HC_INTERNAL SELFCHECK MISMATCH: compacted h_cache is NOT "
+                f"byte-identical to the full-span cache (max_abs={_diff:.3e}, "
+                f"n_actual={_n}, n_pad={n_pad}, hc_mask=0x{_hc_mask:x})"
             )
     else:
         _launch(out, _parent_gather)

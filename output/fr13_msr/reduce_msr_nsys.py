@@ -37,9 +37,18 @@ CATS = [
     ('committer_conv_wb', ('conv_wb_fused', 'fr13_conv_wb')),
     ('gdn_replay', ('_tree_gdn_replay', 'tree_gdn_replay')),
     ('gdn_tree_scan', ('_tree_gdn', 'tree_gdn')),
+    # gdn_native_scan: the NATIVE GDN verify/decode kernels (fused sigmoid
+    # gating is bucketed as committer above by first-match order; this
+    # catches the fla/chunked scan family so native-arm reductions split
+    # scan-vs-attention correctly instead of dumping fla into 'other').
+    ('gdn_native_scan', ('fla_', 'chunk_gated', 'gated_delta',
+                         'recurrent_gated', 'fused_recurrent')),
     ('tree_conv_aux', ('fused_tree_conv', 'ex2_silu', 'conv_taps',
                        'linear_remap', 'causal_conv')),
-    ('attention', ('flash', 'fmha', 'attn')),
+    # 'attention' (full word) catches kernel_unified_attention_2d/3d — the
+    # verified ~9.6ms/step misbucket ('attn' is not a substring of
+    # 'attention'): previously fell to 'other'.
+    ('attention', ('flash', 'fmha', 'attn', 'attention')),
     ('lm_head', ('gemvx',)),
     ('gemm_mlp_proj', ('cutlass', 'wmma', 'gemm', 'nvjet')),
     ('norm_elementwise', ('rmsnorm', 'layernorm', 'norm', 'elementwise',
