@@ -516,6 +516,12 @@ if _lumo_truthy "$LUMO_NSYS_WRAP_VLLM"; then
   done
 fi
 
+# stale dcgm-sampler sweep (2026-07-24): gate-era sample_dcgm_during_task
+# processes survive force-teardowns holding /dev/nvidia* and kill the NEXT
+# boot pre-health (reference_dcgm_samplers_block_mem_recovery; observed 24h
+# survivors). Sweep BEFORE memory recovery so the device is actually free.
+pkill -f "sample_dcgm_during_task.py" 2>/dev/null && sleep 2 || true
+
 PYTHONPATH="$REPO/src${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
 from lumo_flywheel_serving.model_server import recover_host_memory
 
