@@ -592,7 +592,7 @@ def _patch_gdn_attn() -> bool:
             "                        )\n"
             "                        _fr13_layer._fr13_replay_ssm_state = None\n"
             "                        _fr13_replay_layers[str(_fr13_name)] = _fr13_layer\n"
-            "                    _fr13_gdn_mod._FR13_CONV_PREGATHER_ON = False  # REVERTED 2026-07-24 (loop epidemic, later root-caused to host driver); col0-row token hole FIXED same day: composite (req_ids, col0 page-ids) token, stage refuses without col0 publish. OFF pending regate_queue.sh 2b\n"
+            "                    _fr13_gdn_mod._FR13_CONV_PREGATHER_ON = " + ("True" if os.environ.get("FR13_CONV_PREGATHER", "0") == "1" else "False") + "  # PATCH-TIME env (default OFF). REVERTED 2026-07-24 (loop epidemic, root-caused to host driver); col0-row token hole FIXED same day: composite (req_ids, col0 page-ids) token, stage refuses without col0 publish; regate = queue 2b\n"
             "                    _fr13_gdn_mod._FR13_CPG_LAYER_IDX = {\n"
             "                        str(_fr13_nm_): _fr13_i_\n"
             "                        for _fr13_i_, _fr13_nm_ in enumerate(_fr13_ep_names)\n"

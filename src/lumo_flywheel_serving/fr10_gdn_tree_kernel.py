@@ -744,9 +744,19 @@ def launch_conv_col0_pregather(
 
 
 def conv_col0_staged(req_ids_token, layer_idx: int):
-    """Return the staged [B, C, W]-flat view for layer_idx if fresh, else None."""
+    """Return the staged [B, C, W]-flat view for layer_idx if fresh, else None.
+
+    Engagement needle (observer-safe: host dict increment + 1-in-4096 print):
+    a pregather arm where `served` stays 0 is VACUOUS (always falling back to
+    the legacy gather) — its clean result proves nothing about the lever.
+    """
     st = _FR13_CONV_PREGATHER
-    if not st or st.get("token") != req_ids_token or st.get("token") is None:
+    ok = bool(st) and st.get("token") is not None and st.get("token") == req_ids_token
+    c = st.setdefault("_cnt", [0, 0])  # [served, fallback]
+    c[0 if ok else 1] += 1
+    if (c[0] + c[1]) % 4096 == 1:
+        print(f"[FR13_CPG_SERVE] served={c[0]} fallback={c[1]}", flush=True)
+    if not ok:
         return None
     return st["staging"][layer_idx, : st.get("n", 0)]
 
