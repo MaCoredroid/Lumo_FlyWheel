@@ -12278,6 +12278,21 @@ def get_conv_copy_spec(
             or _FR13_IN_PREPROCESS
         )
     ):
+        if os.environ.get("FR13_APC_COMMIT_TO_RUNNING_ROW", "1") == "1":
+            # STATELESS-committer redirect (2026-07-24): the RUNROW committer
+            # copied the accepted-leaf conv window into col0 (the running
+            # block) at the SAME step whose acceptance this copy processes,
+            # and these boundary copies are enqueued a full execute_model
+            # later on the same stream -> col0 already holds byte-identical
+            # content to the node row ("all served readers col0" redundancy).
+            # This removes the LAST pool node-row reader on the served path:
+            # required under FR13_CONV_NODEBANK / FR13_SPEC_BLOCKS_CAP (node
+            # rows are write-never/absent there) and a byte-identical
+            # simplification in pool mode.
+            src_state = state[block_ids[cur_block_idx]]
+            return MambaCopySpec(
+                start_addr=src_state.data_ptr(), num_elements=src_state.numel()
+            )
         src_block_pos = cur_block_idx + num_accepted_tokens - 1
         if src_block_pos < len(block_ids):
             src_state = state[block_ids[src_block_pos]]
