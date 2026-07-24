@@ -741,6 +741,9 @@ def launch_conv_col0_pregather(
     )
     st["token"] = req_ids_token
     st["n"] = B
+    st["_scnt"] = st.get("_scnt", 0) + 1
+    if st["_scnt"] % 512 == 1:
+        print(f"[FR13_CPG_STAGE] stages={st['_scnt']}", flush=True)
 
 
 def conv_col0_staged(req_ids_token, layer_idx: int):
@@ -751,11 +754,33 @@ def conv_col0_staged(req_ids_token, layer_idx: int):
     the legacy gather) — its clean result proves nothing about the lever.
     """
     st = _FR13_CONV_PREGATHER
-    ok = bool(st) and st.get("token") is not None and st.get("token") == req_ids_token
+    staged = st.get("token") if st else None
+    ok = staged is not None and staged == req_ids_token
     c = st.setdefault("_cnt", [0, 0])  # [served, fallback]
     c[0 if ok else 1] += 1
     if (c[0] + c[1]) % 4096 == 1:
-        print(f"[FR13_CPG_SERVE] served={c[0]} fallback={c[1]}", flush=True)
+        if ok:
+            why = "match"
+        elif staged is None:
+            why = "no-stage"
+        elif not isinstance(staged, tuple) or not isinstance(req_ids_token, tuple) \
+                or len(staged) != len(req_ids_token):
+            why = f"shape staged={type(staged).__name__} offered={type(req_ids_token).__name__}"
+        else:
+            parts = []
+            names = ("reqids", "col0", "seq")
+            for i, (a, b) in enumerate(zip(staged, req_ids_token)):
+                if a != b:
+                    nm = names[i] if i < len(names) else str(i)
+                    if nm == "seq":
+                        parts.append(f"seq staged={a} offered={b}")
+                    else:
+                        parts.append(nm)
+            why = "diff:" + ",".join(parts)
+        print(
+            f"[FR13_CPG_SERVE] served={c[0]} fallback={c[1]} last={why}",
+            flush=True,
+        )
     if not ok:
         return None
     return st["staging"][layer_idx, : st.get("n", 0)]
