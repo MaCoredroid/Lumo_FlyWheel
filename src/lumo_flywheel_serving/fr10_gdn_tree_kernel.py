@@ -319,6 +319,68 @@ def _linear_remap_rows_gather_kernel(
     )
 
 
+@triton.jit
+def _linear_remap_rows_gather_from_bank_kernel(
+    bank,               # [B, N_TREE, ROW_ELEMS] node-window bank (conv nodebank)
+    state,              # pool state (dst: linear cols via ssi)
+    spec_state_indices,
+    accepted_paths,
+    num_accepted_tokens,
+    B: tl.constexpr,
+    N_TREE: tl.constexpr,
+    PATH_COLS: tl.constexpr,
+    PATH_POW2: tl.constexpr,
+    SPEC_COLS: tl.constexpr,
+    ROW_ELEMS: tl.constexpr,
+    BLOCK: tl.constexpr,
+):
+    """FR13_CONV_NODEBANK remap: src = OUR bank rows (node deposits no longer
+    live in spec-slot pool pages), dst = pool linear cols via ssi — the stock
+    linear-reader contract is preserved bit-for-bit (same values, same dst
+    write order/masks as _linear_remap_rows_gather_kernel; only the src
+    ADDRESS space changes). Gather-before-scatter race-freedom inherited: one
+    program owns all path cols for a (batch, block) slice."""
+    pid_b = tl.program_id(0)
+    pid_blk = tl.program_id(1)
+    offs = pid_blk * BLOCK + tl.arange(0, BLOCK)
+    ks = tl.arange(0, PATH_POW2)
+    accepted_len = tl.load(num_accepted_tokens + pid_b)
+    valid_path = (
+        (pid_b < B) & (ks < PATH_COLS) & (ks < SPEC_COLS) & (ks < accepted_len)
+    )
+    src_col = tl.load(
+        accepted_paths + pid_b * PATH_COLS + ks, mask=valid_path, other=0
+    )
+    src_col = tl.maximum(0, tl.minimum(src_col, N_TREE - 1))
+    dst_bank = tl.load(
+        spec_state_indices + pid_b * SPEC_COLS + ks, mask=valid_path, other=0
+    ).to(tl.int64)
+    mask = valid_path[:, None] & (offs[None, :] < ROW_ELEMS)
+    vals = tl.load(
+        bank + (pid_b * N_TREE + src_col)[:, None] * ROW_ELEMS + offs[None, :],
+        mask=mask,
+    )
+    tl.store(
+        state + dst_bank[:, None] * ROW_ELEMS + offs[None, :], vals, mask=mask
+    )
+
+
+_FR13_CONV_NODEBANK: dict = {}
+
+
+def conv_nodebank_get(layer_key, B: int, n_tree: int, row_elems: int,
+                      dtype, device):
+    """Per-layer [B, N_TREE, ROW_ELEMS] conv node bank (allocated once)."""
+    st = _FR13_CONV_NODEBANK.get(layer_key)
+    if (
+        st is None or st.shape[0] < B or st.shape[1] != n_tree
+        or st.shape[2] != row_elems or st.dtype != dtype
+    ):
+        st = torch.zeros(max(B, 4), n_tree, row_elems, dtype=dtype, device=device)
+        _FR13_CONV_NODEBANK[layer_key] = st
+    return st
+
+
 def _remap_state_rows(
     state: torch.Tensor,
     spec_state_indices: torch.Tensor,
