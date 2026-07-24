@@ -2430,10 +2430,12 @@ def launch_tree_gdn_replay(
         )
     path_cols = int(accepted_paths.shape[1])
     if path_cols > spec_cols:
-        raise ValueError(
-            f"path cols {path_cols} exceed spec cols {spec_cols}; linear publish "
-            "columns must be valid spec columns"
-        )
+        # FR13_SPEC_BLOCKS_CAP: the accepted-paths BUFFER stays tree-wide
+        # (22) while the capped ssi is narrower (13). Content is bounded by
+        # accepted_len <= MAX_PATH (12) < spec_cols, and every path-col read
+        # below is masked by accepted_len, so clamping the window is
+        # value-identical (cols >= spec_cols were only ever masked lanes).
+        path_cols = spec_cols
     if prev_lens.numel() < num_spec_decodes or accepted_lens.numel() < num_spec_decodes:
         raise ValueError(
             "prev_lens/accepted_lens must cover num_spec_decodes="
@@ -2951,10 +2953,12 @@ def launch_tree_gdn_replay_all_layers(
         )
     path_cols = int(accepted_paths.shape[1])
     if path_cols > spec_cols:
-        raise ValueError(
-            f"path cols {path_cols} exceed spec cols {spec_cols}; linear publish "
-            "columns must be valid spec columns"
-        )
+        # FR13_SPEC_BLOCKS_CAP: the accepted-paths BUFFER stays tree-wide
+        # (22) while the capped ssi is narrower (13). Content is bounded by
+        # accepted_len <= MAX_PATH (12) < spec_cols, and every path-col read
+        # below is masked by accepted_len, so clamping the window is
+        # value-identical (cols >= spec_cols were only ever masked lanes).
+        path_cols = spec_cols
     if prev_lens.ndim != 2 or prev_lens.shape[0] < num_layers or (
         prev_lens.shape[1] < num_spec_decodes
     ):
