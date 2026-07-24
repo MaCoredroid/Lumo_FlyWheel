@@ -1625,16 +1625,23 @@ def _fr13_native_committer_all_layers_batched(
     a_all = torch.cat([a_rings[:, b, nodes_list[b]] for b in range(B)], dim=1)
     b_all = torch.cat([b_rings[:, b, nodes_list[b]] for b in range(B)], dim=1)
     q = torch.zeros(1, T, num_kh, dim_k, device=dev, dtype=k_rings.dtype)
+    # FR13_SSI_PREBUILD (2026-07-24, committer-gap kill): the old loop built
+    # ssi per layer on the HOST (48 x [zeros + index + B row-copies] aten
+    # dispatches = the measured ~78%-of-cfwd gap bucket). One broadcast over
+    # the stacked [L,B,spec_cols] tensor yields byte-identical ssi content
+    # (col0 broadcast across max_T) in 3 launches total.
+    ssi_all = (
+        spec_state_indices[:, :B, 0:1]
+        .to(torch.int32)
+        .expand(L, B, max_T)
+        .contiguous()
+    )
     if _sg_on:
         _sg_s = torch.cuda.Event(enable_timing=True)
         _sg_e = torch.cuda.Event(enable_timing=True)
         _sg_s.record()
     for _L in range(L):
-        # per-layer ssi: col 0 = THIS layer's running row (per-layer, not shared)
-        ssi = torch.zeros(B, max_T, device=dev, dtype=torch.int32)
-        col0 = spec_state_indices[_L][:B, 0].to(torch.int32)
-        for b in range(B):
-            ssi[b, :] = col0[b]
+        ssi = ssi_all[_L]
         _sg(
             A_log=A_logs[_L],
             a=a_all[_L].reshape(1, T, num_vh).contiguous(),
