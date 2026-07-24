@@ -16,6 +16,13 @@ export MAMBA_BLOCK_SIZE=1024
 export APC_BLOCK_SIZE=1024
 export MAMBA_SSM_CACHE_DTYPE=float32
 export FR13_COMMITTER_BATCHED=1
+# ARM A MUST BE LEVERS-OFF: explicit zeros guard against inherited env
+# (driver-level exports would otherwise contaminate the baseline arm).
+export FR13_PARENT_GATHER=0
+export FR13_CONV_PREGATHER=0
+export FR13_FLAGS_INKERNEL=0
+export FR13_HC_INTERNAL=0
+export FR13_CONV_WB_BATCHED=0
 export FR13_SFWD_GPU_TIMER=1
 export FR13_DFWD_GPU_TIMER=1
 export FR13_CFWD_GPU_TIMER=1
