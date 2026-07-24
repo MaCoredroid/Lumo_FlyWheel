@@ -1050,6 +1050,7 @@ def _tree_gdn_kernel(
     ring_v,
     ring_a,
     ring_b,
+    flags_ptr,
     N_ACTUAL: tl.constexpr,
     N_PAD: tl.constexpr,
     NUM_KH: tl.constexpr,
@@ -1072,6 +1073,8 @@ def _tree_gdn_kernel(
     PIGGYBACK_EXPORT: tl.constexpr = False,
     CHAIN_END_IDX: tl.constexpr = 0,
     RING_EXPORT: tl.constexpr = False,
+    FLAGS_EXPORT: tl.constexpr = False,
+    FLAGS_ROWS: tl.constexpr = 0,
 ):
     # N_LOOP is the span (loop bound, offs_n lane count, h_cache rows) of the
     # scan/reduction. Default (0) means "use N_PAD" -- the per-tree padded span
@@ -1279,6 +1282,15 @@ def _tree_gdn_kernel(
     # is a fixed known column (static mask). Constexpr-gated (default off => constexpr-dead => byte-identical
     # codegen). Same one-hot h_cache reduction (:808-811/:831-834) + col-0 store form as the h0 seed (:764-778)
     # and the replay RUNROW_COMMIT (:1058-72).
+    if FLAGS_EXPORT:
+        # FR13_FLAGS_INKERNEL: staging-freshness flags written by the scan
+        # itself (RING_EXPORT precedent) — replaces 2 aten fills per layer per
+        # step (96 launches/step). Values identical: flags[0]=1 staged,
+        # flags[1]=rows. One program stores (pid_vh==0, pid_v==0 guard).
+        tl.store(flags_ptr + 0, 1, mask=(pid_vh == 0) & (pid_v == 0))
+        tl.store(
+            flags_ptr + 1, FLAGS_ROWS, mask=(pid_vh == 0) & (pid_v == 0)
+        )
     if PIGGYBACK_EXPORT:
         _pb_state = tl.sum(
             tl.where((offs_n == CHAIN_END_IDX)[:, None, None], h_cache, 0.0),
@@ -2846,6 +2858,8 @@ def launch_tree_gdn_prepared(
     ring_v: torch.Tensor | None = None,
     ring_a: torch.Tensor | None = None,
     ring_b: torch.Tensor | None = None,
+    staging_flags: torch.Tensor | None = None,
+    staging_rows: int = 0,
 ) -> tuple[torch.Tensor, torch.Tensor | None]:
     """Launch with precomputed graph-safe tree descriptors.
 
@@ -3040,6 +3054,10 @@ def launch_tree_gdn_prepared(
     _parent_gather = parent_gather_on()
     grid = (num_vh, triton.cdiv(dim_v, _bv))
 
+    _flags_export = staging_flags is not None
+    _flags_arg = staging_flags if _flags_export else strict_mask  # dummy ptr when off (dead code)
+    _flags_rows = int(staging_rows) if _flags_export else 0
+
     def _launch(_out, _pg_flag):
         _tree_gdn_kernel[grid](
             q,
@@ -3063,6 +3081,7 @@ def launch_tree_gdn_prepared(
             ring_v,
             ring_a,
             ring_b,
+            _flags_arg,
             N_ACTUAL=n_actual,
             N_PAD=n_pad,
             NUM_KH=num_kh,
@@ -3085,6 +3104,8 @@ def launch_tree_gdn_prepared(
             PIGGYBACK_EXPORT=piggyback_export,
             CHAIN_END_IDX=chain_end_idx,
             RING_EXPORT=_ring_export,
+            FLAGS_EXPORT=_flags_export,
+            FLAGS_ROWS=_flags_rows,
             num_warps=_num_warps,
             **_extra_launch_kwargs,
         )
