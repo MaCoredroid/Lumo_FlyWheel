@@ -62,6 +62,13 @@ echo "   bash output/fr13_msr/run_torchprof_070.sh ->"
 echo "   reduce_torchprof_stacks.py names host-gap/index-soup/norms/sampler"
 echo "   python sites for the NEXT build round."
 
+echo "-- 2i INSTRUMENT-FULL attribution pair (two-kinds-of-runs discipline)"
+echo "   seq_if_pair.sh: if_base (levers OFF + full deferred timers) vs"
+echo "   if_levers (queue-passed levers ON + same timers), same subset, one"
+echo "   driver invocation. Yields the REAL per-bucket overhead deltas"
+echo "   (sfwd/cfwd/remap spans + wall-minus-GPU host-gap attribution)."
+echo "   ATTRIBUTION-ONLY numbers; clean arms remain the speed-of-record."
+
 echo "-- 3 clean-host bar confirm"
 echo "   16-task tail6 full stack (whatever re-baked above) vs bar 50.99;"
 echo "   bar16's 40.33 counts only after this repeat."
