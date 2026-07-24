@@ -1,23 +1,26 @@
 diff --git a/astropy/table/table.py b/astropy/table/table.py
-index 5afe2127a..99c3c882a 100644
+index 5afe2127a..46bf29e10 100644
 --- a/astropy/table/table.py
 +++ b/astropy/table/table.py
-@@ -1240,9 +1240,17 @@ class Table:
+@@ -1239,12 +1239,17 @@ class Table:
+                                 f'{fully_qualified_name} '
                                  'did not return a valid mixin column')
  
-         # Structured ndarray gets viewed as a mixin unless already a valid
+-        # Structured ndarray gets viewed as a mixin unless already a valid
 -        # mixin class
-+        # mixin class. This behavior is deprecated and will be removed in
-+        # a future version. Users should wrap structured arrays in Column.
++        # Structured ndarray used to get viewed as an NdarrayMixin; now it
++        # becomes a Column.  Emit a warning to tell users who rely on the old
++        # behavior to wrap the array in Column explicitly.
          if (not isinstance(data, Column) and not data_is_mixin
                  and isinstance(data, np.ndarray) and len(data.dtype) > 1):
+-            data = data.view(NdarrayMixin)
+-            data_is_mixin = True
 +            warnings.warn(
-+                "Starting in astropy 5.2, adding a structured array to a Table "
-+                "will create a Column instead of an NdarrayMixin. "
-+                "To silence this warning, explicitly wrap the array in Column.",
-+                FutureWarning,
-+                stacklevel=4
-+            )
-             data = data.view(NdarrayMixin)
-             data_is_mixin = True
++                'Adding a structured ndarray to a table is deprecated and will '
++                'change in a future release. Wrap the array in Column() to '
++                'add it as a column, or in NdarrayMixin() to preserve the '
++                'current behavior.',
++                FutureWarning)
  
+         # Get the final column name using precedence.  Some objects may not
+         # have an info attribute. Also avoid creating info as a side effect.
