@@ -1,0 +1,57 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..886ef6f0a 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -64,7 +64,7 @@ class Card(_Verify):
+ 
+     # Used in cards using the CONTINUE convention which expect a string
+     # followed by an optional comment
+-    _strg = r"\'(?P<strg>([ -~]+?|\'\'|) *?)\'(?=$|/| )"
++    _strg = r"\'(?P<strg>([ -~]+?|\'\'|) *?)\'(?!['])($|/| )"
+     _comm_field = r"(?P<comm_field>(?P<sepr>/ *)(?P<comm>(.|\n)*))"
+     _strg_comment_RE = re.compile(f"({_strg})? *{_comm_field}?")
+ 
+@@ -844,7 +844,14 @@ class Card(_Verify):
+             comments = []
+             keyword = None
+             for card in self._itersubcards():
+-                kw, vc = card._split()
++                # For CONTINUE cards, extract value directly from image to
++                # preserve trailing spaces needed by the regex to identify
++                # the closing quote correctly (see gh-14598).
++                if card._image.startswith("CONTINUE"):
++                    kw = "CONTINUE"
++                    vc = card._image[10:]
++                else:
++                    kw, vc = card._split()
+                 if keyword is None:
+                     keyword = kw
+ 
+@@ -1059,6 +1066,27 @@ class Card(_Verify):
+         # do the value string
+         value = self._value.replace("'", "''")
+         words = _words_group(value, value_length)
++
++        # Ensure escaped quote pairs ('') are not split across chunks.
++        # If a chunk ends with an odd number of quotes, it means an escaped
++        # pair was split, so we need to adjust the chunk boundary.
++        # (See gh-14598)
++        for i in range(len(words) - 1):
++            # Count trailing quotes in current chunk
++            quote_count = 0
++            for ch in reversed(words[i]):
++                if ch == "'":
++                    quote_count += 1
++                else:
++                    break
++            # Odd number of trailing quotes means an escaped pair was split
++            if quote_count % 2 == 1:
++                # Find the start of the trailing quote run
++                non_quote_end = len(words[i]) - quote_count
++                # Move all trailing quotes to the next chunk
++                trailing_quotes = words[i][non_quote_end:]
++                words[i] = words[i][:non_quote_end]
++                words[i + 1] = trailing_quotes + words[i + 1]
+         for idx, word in enumerate(words):
+             if idx == 0:
+                 headstr = "{:{len}}= ".format(self.keyword, len=KEYWORD_LENGTH)
