@@ -912,7 +912,7 @@ def _patch_gdn_linear() -> bool:
             "# read once per boot; init-time allocations are flag-conditional but\n"
             "# fixed for the life of the process).\n"
             "_FR13_EAGER_PACK = " + ("True" if os.environ.get("FR13_EAGER_PACK", "1") == "1" else "False") + "  # FR13_EAGER_PACK baked from PATCH-TIME env (worker-env drops it)\n"
-            "_FR13_FLAGS_INKERNEL = False  # scan-kernel flag stores (patch-time baked)\n"
+            "_FR13_FLAGS_INKERNEL = " + ("True" if os.environ.get("FR13_FLAGS_INKERNEL", "0") == "1" else "False") + "  # scan-kernel flag stores, PATCH-TIME env (default OFF); regate = queue 2c\n"
             "_FR13_CONV_NODEBANK = " + ("True" if os.environ.get("FR13_CONV_NODEBANK", "0") == "1" else "False") + "  # FR13_CONV_NODEBANK baked from PATCH-TIME env (worker drops FR13_*): conv NODE deposits -> private per-layer bank; pool keeps col0 only (spec-page reclaim piece 1+2)\n"
             "_FR13_NB_PERM_DEV = None  # persistent device int32 [max_bs]: prev-step spec ordinal per current spec row (host-refreshed each step in _prepare_inputs; closes the bank ordinal-keying hazard on composition change)\n"
             "_FR13_CONV_WB_BATCHED = " + ("True" if os.environ.get("FR13_CONV_WB_BATCHED", "0") == "1" else "False") + "  # FR13_CONV_WB_BATCHED (B2c) baked from PATCH-TIME env: ONE batched conv writeback across requests replaces the per-b launch loop (committer host-gap slice)\n"
