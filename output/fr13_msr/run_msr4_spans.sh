@@ -14,7 +14,7 @@
 set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
 RUNROOT=output/fr13_msr_nsys
-ARM=msr_tail6_nsysreal070
+ARM=msr4_syncfree_b4
 ARMDIR="$RUNROOT/$ARM"
 PORT=9950
 DELAY=1200   # boot(~10min nsys) + variant warmup/engagement + task prefill margin
@@ -46,11 +46,11 @@ export FR13_ENABLE_APC=1
 export MAMBA_BLOCK_SIZE=1024
 export APC_BLOCK_SIZE=1024
 export MAMBA_SSM_CACHE_DTYPE=float32
-run_variant msr_tail6_nsysreal070  tail6  21  1
+run_variant msr4_syncfree_b4  tail6  21  1
 EOF
 
 # campaign env + nsys env (LUMO_* auto-forwarded by the launcher's env scanner)
-export LUMO_NSYS_WRAP_VLLM=1
+export LUMO_NSYS_WRAP_VLLM=0
 export LUMO_NSYS_TRACE=cuda,cuda-sw,nvtx
 export LUMO_NSYS_DELAY_S=$DELAY
 export LUMO_NSYS_DURATION_S=$DUR
@@ -58,13 +58,13 @@ export LUMO_NSYS_OUTPUT=/logs/nsys_tail6_realtask
 T_LAUNCH=$(date +%s)
 
 export FR13_COMMITTER_SG_TIMER=1
-export FR13_COMMITTER_SG_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/oneshot_sg.json
+export FR13_COMMITTER_SG_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/msr4_sg.json
 export FR13_REPLAY_ONLY_GPU_TIMER=1
-export FR13_REPLAY_ONLY_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/oneshot_replayonly.json
+export FR13_REPLAY_ONLY_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/msr4_replayonly.json
 export FR13_KVREMAP_TIMER=1
-export FR13_KVREMAP_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/oneshot_kvremap.json
+export FR13_KVREMAP_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/msr4_kvremap.json
 export FR13_STATEREMAP_TIMER=1
-export FR13_STATEREMAP_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/oneshot_stateremap.json
+export FR13_STATEREMAP_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/msr4_stateremap.json
 RUNROOT="$RUNROOT" TAG=nsysreal SUBSET="$SUBSET" BSIZE=4 CONC=4 GPU_UTIL=0.70 \
   DEPLOY_FORCE_TEMP=0.6 SEQUENCE_FILE="$SEQ" \
   bash scripts/fr13_b4_campaign_driver.sh > "$RUNROOT/driver.nsysreal.log" 2>&1 &
@@ -74,7 +74,7 @@ echo "driver pid=$DRIVER_PID"
 # watch for the container + banner to compute t0
 T0=""
 for i in $(seq 1 200); do
-  BANNER_TS=$(docker logs -t fr13-bigdenom-msr_tail6_nsysreal070 2>/dev/null | grep -m1 "version 0.19" | awk '{print $1}')
+  BANNER_TS=$(docker logs -t fr13-bigdenom-msr4_syncfree_b4 2>/dev/null | grep -m1 "version 0.19" | awk '{print $1}')
   if [[ -n "${BANNER_TS:-}" ]]; then T0=$(( $(date -d "${BANNER_TS}" +%s) - 8 )); break; fi
   kill -0 $DRIVER_PID 2>/dev/null || { echo "FAIL: driver died pre-banner"; tail -20 "$RUNROOT/driver.nsysreal.log"; exit 2; }
   sleep 5
@@ -103,14 +103,14 @@ curl -fsS -m 5 "http://127.0.0.1:$PORT/metrics" > "$RUNROOT/metrics_window_close
 W1=$(date +%s)
 echo "window CLOSE bracket at t+$((W1-T0))s"
 
-ARMD="$RUNROOT/msr_tail6_nsysreal070"
+ARMD="$RUNROOT/msr4_syncfree_b4"
 mkdir -p "$ARMD"
 D0=$(awk '/^vllm:spec_decode_num_drafts_total/ {s+=$2} END {print s+0}' "$RUNROOT/metrics_window_open.txt" 2>/dev/null || echo 0)
 D1=$(awk '/^vllm:spec_decode_num_drafts_total/ {s+=$2} END {print s+0}' "$RUNROOT/metrics_window_close.txt" 2>/dev/null || echo 0)
 DRAFTS=$(python3 -c "print(max(float('$D1')-float('$D0'),0))")
 if python3 -c "exit(0 if float('$DRAFTS') <= 0 else 1)"; then
   echo "WARN: metrics-bracket drafts=0; falling back to docker-log Drafted-token deltas"
-  DRAFTS=$(docker logs fr13-bigdenom-msr_tail6_nsysreal070 2>&1 | python3 -c "
+  DRAFTS=$(docker logs fr13-bigdenom-msr4_syncfree_b4 2>&1 | python3 -c "
 import sys, re, calendar, time
 tot = 0.0
 for line in sys.stdin:
@@ -142,7 +142,7 @@ for i in $(seq 1 150); do
 done
 SZ=$(stat -c %s "$REP" 2>/dev/null || echo -1)
 (( SZ > 0 )) || { echo "FAIL: no nsys report at $REP"; ls -la "$ARMD/logs/" 2>/dev/null; exit 5; }
-docker logs fr13-bigdenom-msr_tail6_nsysreal070 > "$ARMD/docker_full.log" 2>&1 || true
+docker logs fr13-bigdenom-msr4_syncfree_b4 > "$ARMD/docker_full.log" 2>&1 || true
 # thaw the frozen variant/driver, then stop them for good
 pkill -CONT -f "fr13_bigdenom_swe_serve_variant" 2>/dev/null || true
 pkill -CONT -f "fr13_b4_campaign_driver" 2>/dev/null || true
