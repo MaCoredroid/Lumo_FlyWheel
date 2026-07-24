@@ -36,7 +36,7 @@ cleanup() {
 trap cleanup EXIT
 
 # 1-task subset (the marathon task) -- same dict shape as the source subset
-SUBSET="$RUNROOT/subset_14598.json"
+SUBSET="output/fr13_b1_gold_swe/subset_b4_four.json"  # ONE-SHOT: 4-task, deployment-regime batching
 python3 - "$SUBSET" <<'EOF'
 import json, sys
 src = json.load(open('output/fr13_b1_gold_swe/subset_b4_sixteen.json'))
@@ -67,7 +67,15 @@ export LUMO_NSYS_DURATION_S=$DUR
 export LUMO_NSYS_OUTPUT=/logs/nsys_tail6_realtask
 T_LAUNCH=$(date +%s)
 
-RUNROOT="$RUNROOT" TAG=nsysreal SUBSET="$SUBSET" BSIZE=4 CONC=1 GPU_UTIL=0.70 \
+export FR13_COMMITTER_SG_TIMER=1
+export FR13_COMMITTER_SG_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/oneshot_sg.json
+export FR13_REPLAY_ONLY_GPU_TIMER=1
+export FR13_REPLAY_ONLY_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/oneshot_replayonly.json
+export FR13_KVREMAP_TIMER=1
+export FR13_KVREMAP_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/oneshot_kvremap.json
+export FR13_STATEREMAP_TIMER=1
+export FR13_STATEREMAP_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/oneshot_stateremap.json
+RUNROOT="$RUNROOT" TAG=nsysreal SUBSET="$SUBSET" BSIZE=4 CONC=4 GPU_UTIL=0.70 \
   DEPLOY_FORCE_TEMP=0.6 SEQUENCE_FILE="$SEQ" \
   bash scripts/fr13_b4_campaign_driver.sh > "$RUNROOT/driver.nsysreal.log" 2>&1 &
 DRIVER_PID=$!
