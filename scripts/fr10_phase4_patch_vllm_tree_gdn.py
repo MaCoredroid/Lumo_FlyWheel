@@ -806,6 +806,7 @@ def _patch_gdn_linear() -> bool:
             "# read once per boot; init-time allocations are flag-conditional but\n"
             "# fixed for the life of the process).\n"
             "_FR13_EAGER_PACK = " + ("True" if os.environ.get("FR13_EAGER_PACK", "1") == "1" else "False") + "  # FR13_EAGER_PACK baked from PATCH-TIME env (worker-env drops it)\n"
+            "_FR13_FLAGS_INKERNEL = False  # scan-kernel flag stores (patch-time baked)\n"
             "_FR13_VERIFY_NATIVE = " + ("True" if os.environ.get("FR13_VERIFY_NATIVE", "0") == "1" else "False") + "  # FR13_VERIFY_NATIVE baked from PATCH-TIME env (worker drops FR13_*); per-node native verify diagnostic\n"
             "_FR13_VERIFY_NATIVE_ANNOUNCED = False\n"
             "_FR12_NPR = " + ("True" if os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1" else "False") + "  # FR12_TREE_CONV_NATIVE_PRIOR_READ baked from PATCH-TIME env (worker drops FR12_*); conv-prior localization diagnostic\n"
@@ -5187,10 +5188,11 @@ def _fr13_conv_subop_mab(
                             # (UNIFORM_BATCH capture). The bank ref is a fixed
                             # attribute write of an existing persistent
                             # tensor -- no per-step object creation.
-                            self._fr13_replay_flags[0].fill_(1)
-                            self._fr13_replay_flags[1].fill_(
-                                attn_metadata.num_spec_decodes
-                            )
+                            if not _FR13_FLAGS_INKERNEL:
+                                self._fr13_replay_flags[0].fill_(1)
+                                self._fr13_replay_flags[1].fill_(
+                                    attn_metadata.num_spec_decodes
+                                )
                             self._fr13_replay_ssm_state = ssm_state
                             # STATELESS-TREE: stage the LIVE conv cache view too
                             # (same fixed-attribute pattern), so the post-accept
@@ -5221,6 +5223,11 @@ def _fr13_conv_subop_mab(
                                 b[start:end]
                             )
                     tree_out, _ = launch_tree_gdn_prepared(
+                        staging_flags=(
+                            self._fr13_replay_flags
+                            if _FR13_FLAGS_INKERNEL else None
+                        ),
+                        staging_rows=int(attn_metadata.num_spec_decodes),
                         q=query_spec[0, start:end].contiguous(),
                         k=key_spec[0, start:end].contiguous(),
                         v=value_tree[start:end].contiguous(),
