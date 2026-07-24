@@ -2518,17 +2518,25 @@ def _fr13_conv_subop_mab(
                         _fr13_cpg_idx = globals().get(
                             "_FR13_CPG_LAYER_IDX", {}).get(str(self.prefix))
                         # FR13_CPG_ROWID_TOKEN: rebuild the SAME composite
-                        # (req_ids, col0 page-ids) token from this step's
-                        # publishes; any col0 page slide since stage-time
-                        # mismatches -> legacy gather (fail-safe).
+                        # (req_ids, col0 page-ids, staged step-seq) token from
+                        # this step's publishes. Staged carries seq N-1; we
+                        # pass seq_now - 1, so equality also enforces "no
+                        # intervening engine step" (an in-place col0 rewrite
+                        # is invisible to req-id + page-id equality alone).
                         _fr13_cpg_col0 = globals().get(
                             "_LUMO_FA_SAMPLER_ROW_CONV_COL0", None)
-                        if _fr13_cpg_idx is not None and _fr13_cpg_col0 is not None:
+                        _fr13_cpg_seq = globals().get("_LUMO_FA_STEP_SEQ", None)
+                        if (
+                            _fr13_cpg_idx is not None
+                            and _fr13_cpg_col0 is not None
+                            and _fr13_cpg_seq is not None
+                        ):
                             _fr13_cpg_flat = _fr13_cpg_staged(
                                 (
                                     tuple(globals().get(
                                         "_LUMO_FA_SAMPLER_ROW_REQ_IDS", ()) or ()),
                                     tuple(_fr13_cpg_col0),
+                                    int(_fr13_cpg_seq) - 1,
                                 ),
                                 int(_fr13_cpg_idx),
                             )
@@ -2795,12 +2803,68 @@ def _fr13_conv_subop_mab(
                             _fr13_committed_bank_rows = _fr13_tcf_prep[
                                 "bank_rows"
                             ][:_fr13_tcf_b]
-                            _fr13_committed_prior_bank = (
-                                gather_committed_path_conv_prior_prepared(
-                                    conv_state=conv_state,
-                                    bank_rows=_fr13_committed_bank_rows,
+                            # FR13_CONV_PREGATHER consume — SERVED-PATH site
+                            # (2026-07-24 rewire): the original consume sat in
+                            # the _FR12_NPR diagnostic branch (baked False) =
+                            # DEAD twin, so the lever was VACUOUS on the
+                            # deployed stack. Under RUNROW_INIT=1 this gather
+                            # reads col0 pre-remap == exactly what the commit-
+                            # time staging captured (post-commit truth of step
+                            # N-1); the (req_ids, col0 page-ids, seq-1) token
+                            # guards page slides AND intervening steps. Values
+                            # byte-identical (pure copy of the same rows);
+                            # fallback = the legacy per-layer gather below.
+                            _fr13_cpg_cbank = None
+                            if (
+                                globals().get("_FR13_CONV_PREGATHER_ON", False)
+                                and os.environ.get(
+                                    "FR13_TREE_RUNROW_INIT", "1") == "1"
+                            ):
+                                # staged windows are COL0; only the
+                                # RUNROW_INIT=1 route reads col0 here (the
+                                # same env the prepare fn reads per call).
+                                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                                    conv_col0_staged as _fr13_cpg_staged2,
                                 )
-                            )
+                                _fr13_cpg_idx2 = globals().get(
+                                    "_FR13_CPG_LAYER_IDX", {}).get(str(self.prefix))
+                                _fr13_cpg_col02 = globals().get(
+                                    "_LUMO_FA_SAMPLER_ROW_CONV_COL0", None)
+                                _fr13_cpg_seq2 = globals().get(
+                                    "_LUMO_FA_STEP_SEQ", None)
+                                if (
+                                    _fr13_cpg_idx2 is not None
+                                    and _fr13_cpg_col02 is not None
+                                    and _fr13_cpg_seq2 is not None
+                                ):
+                                    _fr13_cpg_f2 = _fr13_cpg_staged2(
+                                        (
+                                            tuple(globals().get(
+                                                "_LUMO_FA_SAMPLER_ROW_REQ_IDS",
+                                                ()) or ()),
+                                            tuple(_fr13_cpg_col02),
+                                            int(_fr13_cpg_seq2) - 1,
+                                        ),
+                                        int(_fr13_cpg_idx2),
+                                    )
+                                    if (
+                                        _fr13_cpg_f2 is not None
+                                        and int(_fr13_cpg_f2.shape[0])
+                                        == int(_fr13_tcf_b)
+                                    ):
+                                        _fr13_cpg_cbank = _fr13_cpg_f2.view(
+                                            int(_fr13_tcf_b),
+                                            *conv_state.shape[1:],
+                                        )
+                            if _fr13_cpg_cbank is not None:
+                                _fr13_committed_prior_bank = _fr13_cpg_cbank
+                            else:
+                                _fr13_committed_prior_bank = (
+                                    gather_committed_path_conv_prior_prepared(
+                                        conv_state=conv_state,
+                                        bank_rows=_fr13_committed_bank_rows,
+                                    )
+                                )
                             if os.environ.get("FR13_TCF_SELFCHECK", "0") == "1":
                                 if torch.cuda.is_current_stream_capturing():
                                     raise RuntimeError(
@@ -8792,8 +8856,12 @@ def _lumo_tree_canonical_multidraft_sample(
                             _fr13_cpg_col0 = getattr(
                                 _lumo_tree_commit_gdn,
                                 '_LUMO_FA_SAMPLER_ROW_CONV_COL0', None)
+                            _fr13_cpg_seq = getattr(
+                                _lumo_tree_commit_gdn,
+                                '_LUMO_FA_STEP_SEQ', None)
                             if (all(_b is not None for _b in _fr13_cpg_banks)
-                                    and _fr13_cpg_col0 is not None):
+                                    and _fr13_cpg_col0 is not None
+                                    and _fr13_cpg_seq is not None):
                                 _fr13_cpg(
                                     conv_banks=_fr13_cpg_banks,
                                     ssi_stack=_fr13_sbr_stacks['spec_idx'][:, :, 0].contiguous(),
@@ -8803,6 +8871,7 @@ def _lumo_tree_canonical_multidraft_sample(
                                             _lumo_tree_commit_gdn,
                                             '_LUMO_FA_SAMPLER_ROW_REQ_IDS', ()) or ()),
                                         tuple(_fr13_cpg_col0),
+                                        int(_fr13_cpg_seq),
                                     ),
                                 )
                         except Exception as _fr13_cpg_exc:
@@ -10499,6 +10568,14 @@ def _patch_gpu_model_runner_row_req_ids_fresh() -> bool:
         "                        + str(_fr13_rf_nf), flush=True,\n"
         "                    )\n"
         "            _fr13_rf_gdn._LUMO_FA_SAMPLER_ROW_CONV_COL0 = _fr13_rf_col0\n"
+        "            # FR13_CPG step-seq: monotone engine-step counter. The\n"
+        "            # pregather token folds (staged_seq) and the consumer\n"
+        "            # requires seq_now == staged_seq + 1 — an intervening\n"
+        "            # engine step (e.g. a native/prefill step that rewrites\n"
+        "            # col0 conv state IN PLACE, invisible to req-id and\n"
+        "            # page-id equality) forces the legacy gather.\n"
+        "            self._fr13_rf_seq = getattr(self, '_fr13_rf_seq', 0) + 1\n"
+        "            _fr13_rf_gdn._LUMO_FA_STEP_SEQ = self._fr13_rf_seq\n"
         "            # FR13_CONV_NODEBANK ordinal perm: prev-step spec ordinal\n"
         "            # per CURRENT spec row (bank rows are ordinal-keyed; the\n"
         "            # node->linear remap consumes PREV-step deposits, so a\n"
