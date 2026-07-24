@@ -829,26 +829,45 @@ except Exception:  # pragma: no cover - CPU-only host env
 _FR13_CONV_WB_STAGING: dict = {}
 
 
-def conv_wb_staging_get(layer_key, b_max: int, s_rows: int, c: int,
-                        dtype, device):
-    """Persistent [B_MAX*S, C] source staging for the batched writeback.
+def conv_wb_staging_get(layer_key, rows_needed: int, c: int, dtype, device):
+    """Persistent [ROWS_CAP, C] source staging for the batched writeback.
 
-    Callers MUST pass the MAX batch every call (graph-capture address
-    stability, same discipline as conv_nodebank_get); fail loud on a
-    first-call-inside-capture.
+    CAPACITY-keyed (layer, c, dtype): the actual per-request source rows S
+    are only known at forward time, so preseed allocates an upper bound
+    (max_num_seqs * (state_len + n_tree + 1) >= max_num_seqs * S) at builder
+    init — OUTSIDE capture (tree-decode first call is INSIDE capture, the 2d
+    class). A rows_needed beyond capacity fail-louds under capture rather
+    than reallocating a captured address.
     """
     import torch as _t
-    key = (layer_key, int(b_max), int(s_rows), int(c), str(dtype))
+    key = (layer_key, int(c), str(dtype))
     st = _FR13_CONV_WB_STAGING.get(key)
-    if st is None:
+    if st is None or st.shape[0] < int(rows_needed):
         if _t.cuda.is_available() and _t.cuda.is_current_stream_capturing():
             raise RuntimeError(
-                "FR13_CONV_WB_BATCHED: staging allocation inside graph capture "
-                f"(layer={layer_key}); allocate at eager warmup with MAX batch"
+                "FR13_CONV_WB_BATCHED: staging (re)allocation inside graph "
+                f"capture (layer={layer_key}, rows_needed={rows_needed}, "
+                f"have={0 if st is None else int(st.shape[0])}); preseed at "
+                "builder init with the capacity bound"
             )
-        st = _t.zeros(int(b_max) * int(s_rows), int(c), dtype=dtype, device=device)
+        st = _t.zeros(int(rows_needed), int(c), dtype=dtype, device=device)
         _FR13_CONV_WB_STAGING[key] = st
     return st
+
+
+def conv_wb_staging_preseed(layer_keys, rows_cap: int, c: int,
+                            dtype, device) -> None:
+    """Preseed batched-writeback staging at builder init (outside capture)."""
+    import torch as _t
+    if isinstance(dtype, str):
+        dtype = getattr(_t, dtype)
+    for k in layer_keys:
+        conv_wb_staging_get(str(k), int(rows_cap), int(c), dtype, device)
+    print(
+        f"[FR13_CONV_WB_BATCHED] preseeded {len(layer_keys)} stagings: "
+        f"rows_cap={rows_cap} c={c} dtype={dtype}",
+        flush=True,
+    )
 
 
 def launch_conv_state_writeback_batched(

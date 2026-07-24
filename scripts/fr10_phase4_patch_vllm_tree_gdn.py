@@ -890,6 +890,41 @@ def _patch_gdn_attn() -> bool:
             "                    except Exception as _fr13_nb_exc:\n"
             "                        print('[FR13_CONV_NODEBANK] preseed failed: '\n"
             "                              + repr(_fr13_nb_exc), flush=True)\n"
+            "                if getattr(_fr13_tcf_mod, '_FR13_CONV_WB_BATCHED', False):\n"
+            "                    # B2c staging preseed (same capture-first-call\n"
+            "                    # class): capacity bound = max_num_seqs *\n"
+            "                    # (state_len + n_tree + 1) >= B * S_actual.\n"
+            "                    try:\n"
+            "                        from lumo_flywheel_serving.fr13_tree_conv_fused import (\n"
+            "                            conv_wb_staging_preseed as _fr13_wbp,\n"
+            "                        )\n"
+            "                        _fr13_wbp_shape = None\n"
+            "                        _fr13_wbp_dt = None\n"
+            "                        for _fr13_wbp_i, _fr13_wbp_s in enumerate(\n"
+            "                            getattr(self.kv_cache_spec, 'shapes', ()) or ()\n"
+            "                        ):\n"
+            "                            if len(_fr13_wbp_s) == 2:\n"
+            "                                _fr13_wbp_shape = _fr13_wbp_s\n"
+            "                                _fr13_wbp_dt = self.kv_cache_spec.dtypes[_fr13_wbp_i]\n"
+            "                                break\n"
+            "                        _fr13_wbp_par = getattr(self, 'fr10_tree_parent', None)\n"
+            "                        if _fr13_wbp_shape is not None and _fr13_wbp_par is not None:\n"
+            "                            _fr13_wbp_c = int(max(_fr13_wbp_shape))\n"
+            "                            _fr13_wbp_l = int(min(_fr13_wbp_shape))\n"
+            "                            _fr13_wbp(\n"
+            "                                [str(_fr13_wbp_n) for _fr13_wbp_n in layer_names],\n"
+            "                                int(self.vllm_config.scheduler_config.max_num_seqs)\n"
+            "                                * (_fr13_wbp_l + int(_fr13_wbp_par.numel()) + 1),\n"
+            "                                _fr13_wbp_c,\n"
+            "                                _fr13_wbp_dt,\n"
+            "                                device,\n"
+            "                            )\n"
+            "                        else:\n"
+            "                            print('[FR13_CONV_WB_BATCHED] preseed SKIPPED',\n"
+            "                                  flush=True)\n"
+            "                    except Exception as _fr13_wbp_exc:\n"
+            "                        print('[FR13_CONV_WB_BATCHED] preseed failed: '\n"
+            "                              + repr(_fr13_wbp_exc), flush=True)\n"
             "                try:\n"
             "                    from vllm.logger import init_logger as _fr13_tcf_il\n"
             "                    _fr13_tcf_il(\"vllm.fr13_tree_conv_fused\").info(\n"
@@ -3557,16 +3592,15 @@ def _fr13_conv_subop_mab(
                                 from lumo_flywheel_serving.fr13_tree_conv_fused import (
                                     conv_wb_staging_get as _fr13_wbb_get,
                                 )
-                                if _fr13_tcf_prep is None:
-                                    raise RuntimeError(
-                                        "FR13_CONV_WB_BATCHED requires the "
-                                        "fused tree-conv prep (b_max source)"
-                                    )
                                 _fr13_wbb_srows = int(_fr10_source.size(0))
+                                # capacity-keyed get: preseeded at builder
+                                # init with the row-cap bound; this never
+                                # reallocs (fail-loud under capture if the
+                                # preseed is missing/undersized).
                                 _fr13_wbb_stage = _fr13_wbb_get(
                                     str(self.prefix),
-                                    int(_fr13_tcf_prep["b_max"]),
-                                    _fr13_wbb_srows,
+                                    int(attn_metadata.num_spec_decodes)
+                                    * _fr13_wbb_srows,
                                     int(_fr10_source.size(1)),
                                     _fr10_source.dtype,
                                     _fr10_source.device,
