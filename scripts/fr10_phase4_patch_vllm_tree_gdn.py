@@ -486,7 +486,7 @@ def _patch_gdn_attn() -> bool:
             "                        )\n"
             "                        _fr13_layer._fr13_replay_ssm_state = None\n"
             "                        _fr13_replay_layers[str(_fr13_name)] = _fr13_layer\n"
-            "                    _fr13_gdn_mod._FR13_CONV_PREGATHER_ON = False  # patch-time baked (worker env drop)\n"
+            "                    _fr13_gdn_mod._FR13_CONV_PREGATHER_ON = True  # BAKED ON 2026-07-24 (bv3 gate)\n"
             "                    _fr13_gdn_mod._FR13_CPG_LAYER_IDX = {\n"
             "                        str(_fr13_nm_): _fr13_i_\n"
             "                        for _fr13_i_, _fr13_nm_ in enumerate(_fr13_ep_names)\n"
