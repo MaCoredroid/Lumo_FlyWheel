@@ -442,6 +442,15 @@ def prepare_replay_conv_remap_rows_from_bank(
     dst_col = ks.view(1, -1).expand(b, path_cols)
     if ordinal_perm is not None:
         bank_ord = ordinal_perm.reshape(-1)[:b].to(torch.long).view(b, 1)
+        # STATELESS-TREE invariant, ENFORCED (async, no sync): an ordinal of
+        # -1 means "absent last step" — such a request cannot have accepted
+        # lanes (acceptance comes from last step's verify). If it ever does,
+        # the bank has no deposits for it and a silent clamp would serve
+        # another request's windows: fail loud instead.
+        torch._assert_async(
+            torch.logical_not((bank_ord < 0) & valid.any(dim=1, keepdim=True))
+            .all()
+        )
         bank_ord = torch.clamp(bank_ord, min=0)
         bank_base = bank_ord * int(n_tree)
     else:
