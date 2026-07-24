@@ -31,6 +31,6 @@ FR13_REQUIRED_TREE_FLAGS=(
   "FR13_KV_REMAP_SYNCFREE=1"  # zero-host-sync KV remap (patch-time baked; offline byte gate PASS; bv1 4-task gate 2026-07-24: accept 4.411, cfwd 12.33ms/event, 0 errors)
   "FR13_INPUTPREP_GUARD=1"    # draft-slot rescue + committed-slot async assert (crash-fix stack; r8 16-task survival + bv1 clean)
   "FR13_PARENT_GATHER=1"      # scan parent-gather (bv3 gate 2026-07-24: accept 4.734, fails coherent, sfwd no-regress; offline byte gate bit-identical tail6-21n-BV8)
-  "FR13_CONV_PREGATHER=1"     # all-layer conv col0 staging (bv3 same gate; offline byte gate 48/48 equal + stale-token fallback)
+  # FR13_CONV_PREGATHER REVERTED 2026-07-24: loop escalation (27->49->163/166 turns across runs); token hole = col0 row change under stable req-id. Fix = row-id-aware token before re-bake.
   # FR13_SSI_PREBUILD: unconditional kernel-lib code (no flag) — batched committer ssi broadcast; byte gate ALL-IDENTICAL + bv1 clean. Registry marker for drift awareness.
 )
