@@ -486,6 +486,11 @@ def _patch_gdn_attn() -> bool:
             "                        )\n"
             "                        _fr13_layer._fr13_replay_ssm_state = None\n"
             "                        _fr13_replay_layers[str(_fr13_name)] = _fr13_layer\n"
+            "                    _fr13_gdn_mod._FR13_CONV_PREGATHER_ON = False  # patch-time baked (worker env drop)\n"
+            "                    _fr13_gdn_mod._FR13_CPG_LAYER_IDX = {\n"
+            "                        str(_fr13_nm_): _fr13_i_\n"
+            "                        for _fr13_i_, _fr13_nm_ in enumerate(_fr13_ep_names)\n"
+            "                    }\n"
             "                    _fr13_gdn_mod._FR13_EAGER_PACK_STACKS = {\n"
             "                        \"layer_order\": tuple(_fr13_ep_names),\n"
             "                        \"flags\": _fr13_ep_flags,\n"
@@ -2392,11 +2397,39 @@ def _fr13_conv_subop_mab(
                     _fr12_native_prior_conv_bank_rows = spec_state_indices_tensor[
                         : attn_metadata.num_spec_decodes, 0
                     ].to(torch.long).view(-1, 1)
-                    _fr12_native_prior_conv_state_bank = torch.index_select(
-                        conv_state,
-                        0,
-                        _fr12_native_prior_conv_bank_rows.reshape(-1),
-                    )
+                    # FR13_CONV_PREGATHER consume (2026-07-24): staged at last
+                    # commit (one all-layer launch) when the host req-id token
+                    # matches this step's; else legacy per-layer gather.
+                    _fr13_cpg_bank = None
+                    if globals().get("_FR13_CONV_PREGATHER_ON", False):
+                        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                            conv_col0_staged as _fr13_cpg_staged,
+                        )
+                        _fr13_cpg_idx = globals().get(
+                            "_FR13_CPG_LAYER_IDX", {}).get(str(self.prefix))
+                        if _fr13_cpg_idx is not None:
+                            _fr13_cpg_flat = _fr13_cpg_staged(
+                                tuple(globals().get(
+                                    "_LUMO_FA_SAMPLER_ROW_REQ_IDS", ()) or ()),
+                                int(_fr13_cpg_idx),
+                            )
+                            if (
+                                _fr13_cpg_flat is not None
+                                and int(_fr13_cpg_flat.shape[0])
+                                == int(attn_metadata.num_spec_decodes)
+                            ):
+                                _fr13_cpg_bank = _fr13_cpg_flat.view(
+                                    int(attn_metadata.num_spec_decodes),
+                                    *conv_state.shape[1:],
+                                )
+                    if _fr13_cpg_bank is not None:
+                        _fr12_native_prior_conv_state_bank = _fr13_cpg_bank
+                    else:
+                        _fr12_native_prior_conv_state_bank = torch.index_select(
+                            conv_state,
+                            0,
+                            _fr12_native_prior_conv_bank_rows.reshape(-1),
+                        )
                 _fr12_tree_candidate_bank_rows = None
                 _fr12_tree_candidate_pre_remap = None
                 _fr12_tree_candidate_post_remap = None
@@ -8377,6 +8410,33 @@ def _lumo_tree_canonical_multidraft_sample(
                         banks_list=_ep_banks,
                     )
                     _fr13_sbr_stacks['flags'][:, 0].fill_(0)
+                    # FR13_CONV_PREGATHER trigger (2026-07-24): one launch
+                    # stages every layer's conv col0 (post-commit truth) for
+                    # next step's NPR read; host req-id token guards freshness
+                    # (composition-change steps fall back to legacy gather).
+                    if getattr(_lumo_tree_commit_gdn, '_FR13_CONV_PREGATHER_ON', False):
+                        try:
+                            from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                                launch_conv_col0_pregather as _fr13_cpg,
+                            )
+                            _fr13_cpg_banks = [
+                                _fr13_replay_layers[_n]._fr13_replay_conv_state
+                                for _n in _ep_order
+                            ]
+                            if all(_b is not None for _b in _fr13_cpg_banks):
+                                _fr13_cpg(
+                                    conv_banks=_fr13_cpg_banks,
+                                    ssi_stack=_fr13_sbr_stacks['spec_idx'][:, :, 0].contiguous(),
+                                    num_spec_decodes=_fr13_replay_rows,
+                                    req_ids_token=tuple(getattr(
+                                        _lumo_tree_commit_gdn,
+                                        '_LUMO_FA_SAMPLER_ROW_REQ_IDS', ()) or ()),
+                                )
+                        except Exception as _fr13_cpg_exc:
+                            raise RuntimeError(
+                                'FR13_CONV_PREGATHER trigger failed: '
+                                + repr(_fr13_cpg_exc)
+                            ) from _fr13_cpg_exc
                 # FR13_REPLAY_MULTISTREAM (default OFF => serial loop below is byte-identical):
                 # overlap the WRITE-INDEPENDENT per-layer replays across N CUDA streams to hide the
                 # latency-bound per-layer kernel (measured 1.386ms/layer = 14x its ~0.1ms bandwidth

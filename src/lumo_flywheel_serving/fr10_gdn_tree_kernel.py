@@ -472,6 +472,94 @@ def launch_tree_state_linear_remap(
     _fr13_span_end("FR13_STATEREMAP_TIMER", _fr13_srt)
 
 
+@triton.jit
+def _fr13_conv_col0_pregather_kernel(
+    anchor_ptr,        # layer-0 conv bank base (elements of DTYPE)
+    off16_ptr,         # [L] int64: (ptr_l - ptr_0) // 16
+    ssi_ptr,           # [L, B_STRIDE0/...] int32 stacked spec_state_indices
+    ssi_stride_l, ssi_stride_b,
+    out_ptr,           # [L, B, ROW_ELEMS] staging (same dtype as banks)
+    row_stride,        # conv bank row stride in ELEMENTS
+    ROW_ELEMS: tl.constexpr,
+    ELEM_BYTES: tl.constexpr,
+    B: tl.constexpr,
+    BLOCK: tl.constexpr,
+):
+    pid_l = tl.program_id(0)
+    pid_b = tl.program_id(1)
+    pid_c = tl.program_id(2)
+    if pid_b >= B:
+        return
+    off16 = tl.load(off16_ptr + pid_l)
+    base = anchor_ptr + off16 * (16 // ELEM_BYTES)
+    row = tl.load(ssi_ptr + pid_l * ssi_stride_l + pid_b * ssi_stride_b)
+    offs = pid_c * BLOCK + tl.arange(0, BLOCK)
+    mask = offs < ROW_ELEMS
+    vals = tl.load(base + row.to(tl.int64) * row_stride + offs, mask=mask)
+    tl.store(out_ptr + (pid_l * B + pid_b) * ROW_ELEMS + offs, vals, mask=mask)
+
+
+_FR13_CONV_PREGATHER: dict = {}
+
+
+def launch_conv_col0_pregather(
+    *, conv_banks: list, ssi_stack: torch.Tensor, num_spec_decodes: int,
+    req_ids_token,
+) -> None:
+    """FR13_CONV_PREGATHER: one launch stages EVERY layer's conv col0 row.
+
+    Replaces the per-layer NPR ``torch.index_select(conv_state, 0, col0)``
+    (48 launches + glue/gaps = part of the measured verify soup) with a single
+    pointer-table kernel run at COMMIT time (post conv-writeback => staging is
+    post-commit truth). Consumption is guarded HOST-SIDE by req_ids_token
+    equality (composition-change steps fall back to the legacy gather) -- no
+    device syncs, fail-safe by construction. Values byte-identical to the
+    per-layer gather (pure copy).
+    """
+    L = len(conv_banks)
+    b0 = conv_banks[0]
+    dev = b0.device
+    row_elems = int(b0.stride(0))
+    st = _FR13_CONV_PREGATHER
+    ptrs = [int(b.data_ptr()) for b in conv_banks]
+    if st.get("ptrs") != ptrs:
+        for b in conv_banks:
+            if b.dtype != b0.dtype or int(b.stride(0)) != row_elems:
+                raise RuntimeError("FR13_CONV_PREGATHER: bank dtype/stride mismatch")
+            if (int(b.data_ptr()) - ptrs[0]) % 16 != 0:
+                raise RuntimeError("FR13_CONV_PREGATHER: bank ptr not 16B-aligned vs anchor")
+        st["ptrs"] = ptrs
+        st["off16"] = torch.tensor(
+            [(p - ptrs[0]) // 16 for p in ptrs], dtype=torch.int64, device=dev
+        )
+        st["staging"] = torch.empty(
+            L, int(ssi_stack.shape[1]), row_elems, dtype=b0.dtype, device=dev
+        )
+        st["anchor"] = b0
+    ebytes = b0.element_size()
+    if (16 % ebytes) != 0:
+        raise RuntimeError("FR13_CONV_PREGATHER: element size must divide 16")
+    B = int(num_spec_decodes)
+    BLOCK = 1024
+    grid = (L, B, triton.cdiv(row_elems, BLOCK))
+    _fr13_conv_col0_pregather_kernel[grid](
+        st["anchor"], st["off16"], ssi_stack,
+        ssi_stack.stride(0), ssi_stack.stride(1),
+        st["staging"], row_elems,
+        ROW_ELEMS=row_elems, ELEM_BYTES=ebytes, B=B, BLOCK=BLOCK,
+    )
+    st["token"] = req_ids_token
+    st["n"] = B
+
+
+def conv_col0_staged(req_ids_token, layer_idx: int):
+    """Return the staged [B, C, W]-flat view for layer_idx if fresh, else None."""
+    st = _FR13_CONV_PREGATHER
+    if not st or st.get("token") != req_ids_token or st.get("token") is None:
+        return None
+    return st["staging"][layer_idx, : st.get("n", 0)]
+
+
 def launch_attn_kv_linear_remap(**kwargs):
     """Thin observer-effect-safe timing wrapper (FR13_KVREMAP_TIMER)."""
     _t = _fr13_span_begin("FR13_KVREMAP_TIMER")
