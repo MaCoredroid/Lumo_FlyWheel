@@ -13106,6 +13106,24 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             if _fr13_dg_all is None:
                 _fr13_dg_all = self._fr13_dg_graphs = {}
                 self._fr13_dg_calls = {}
+            if (
+                os.environ.get("FR13_DRAFTER_GRAPH", "0") == "1"
+                and not _fr13_dg_on
+                and not getattr(self, "_fr13_dg_elig_reported", False)
+            ):
+                self._fr13_dg_elig_reported = True
+                print(
+                    "[FR13_DRAFTER_GRAPH] INELIGIBLE first-call report: "
+                    f"spine_steps={_fr10_spine_steps} "
+                    f"single_logits={_fr13_single_logits} "
+                    f"mrope={self.uses_mrope} "
+                    f"xdrope={self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0} "
+                    f"mm={self.supports_mm_inputs} "
+                    f"capturing={torch.cuda.is_current_stream_capturing()} "
+                    f"nrt_none={num_rejected_tokens_gpu is None} "
+                    f"selfcheck={_fr13_selfcheck}",
+                    flush=True,
+                )
             _fr13_dg_cap = False
             _fr13_dg_g = None
             if _fr13_dg_on and _fr13_dg_key in _fr13_dg_all:
