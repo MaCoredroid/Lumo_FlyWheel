@@ -77,3 +77,25 @@ removed converts the accept edge into wall TPS.
 Bar confirm (current stack) runs FIRST — the honest checkpoint. Then
 R4 -> subtree-scan -> hc-compat -> 2g builds, each through the standard
 gate pipeline (offline byte gate -> capture-mode 4-task -> pair/bar).
+
+## BAR17-r2 result (2026-07-25) — the co-residency correction
+
+**Verdict: 8 pass, 8 fail, 16 finished** (golden band 8-9/16 met; 14369 fail
+kill-confounded). **Speed FAILED the bar: 27.30 vs native5 50.99** — and it is
+apples-to-apples: the native5_f70_r8 bar record was measured at
+events_per_step 3.75 vs bar17r2's 3.32. Engagement clean (serve 93.2%,
+all preseeds, 0 tracebacks). comb_ev 5.46 (arm band 5.40-6.07).
+
+**The B=1 frame above is incomplete.** Wall/event: native 83ms, tree 200ms.
+Per physical step at matched eps: native ~310ms vs tree 663ms
+(floor_ratio 6.72). Marginal cost per extra co-resident event: tree ~140ms
+vs native ~49ms — the ratio matches the row ratio (21 vs 6 rows/event).
+At deployment co-residency the ROW-SCALED work (scan, attn rows, norms,
+gather-soup, sampler) is the dominant tax, ~3x what the B=1 2i pair showed.
+4-task gates (eps 2.1-2.7) systematically over-predict the 16-task bar
+(eps 3.3-4.0): always read events_per_step next to tps.
+
+Ranked-headroom consequence: every per-row lever (#60 subtree-parallel scan,
+#62 norms/soup/sampler, HC) is worth ~3x its B=1 estimate at bar eps; full
+row-tax removal alone projects ~58 TPS (barely above bar) — the ~70 ceiling
+needs row tax ~0 AND the accept edge held.
