@@ -13501,6 +13501,15 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                     _fr13_g, "max_decode_seq_len", 0
                                 ):
                                     _fr13_g.max_decode_seq_len = _fr13_new_msl
+                            # Lazy cached views copy scalars at construction;
+                            # invalidate so the property rebuilds from the
+                            # bumped parent (cheap field-copy, no .item()).
+                            for _fr13_cv in (
+                                "_cached_decode_metadata",
+                                "_cached_prefill_metadata",
+                            ):
+                                if hasattr(_fr13_g, _fr13_cv):
+                                    setattr(_fr13_g, _fr13_cv, None)
                         per_layer_attn_metadata = _fr13_dmr_cache
                         if os.environ.get(
                             "FR13_DRAFTER_META_REUSE_SELFCHECK", "0"
