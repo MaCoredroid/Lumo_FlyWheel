@@ -10,8 +10,9 @@
 set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
 RUNROOT=output/fr13_verify_profile
-ARMDIR="$RUNROOT/hc_eager"
-CONTAINER=fr13-hc-eager
+ARMDIR="${ARMDIR:-$RUNROOT/hc_eager}"
+CONTAINER="${GATE_CONTAINER:-fr13-hc-eager}"
+NEEDLE_PAT="${NEEDLE_PAT:-FR13_HC_INTERNAL] derived}"
 PORT=9950
 mkdir -p "$ARMDIR/logs"
 
@@ -32,7 +33,7 @@ FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 \
 LUMO_FB_KERNEL_ROWS=1 LUMO_FB_PROJ_PAD_ROWS=16 \
 FR13_ENABLE_APC=1 MAMBA_BLOCK_SIZE=1024 APC_BLOCK_SIZE=1024 \
 MAMBA_SSM_CACHE_DTYPE=float32 \
-FR13_HC_INTERNAL=1 FR13_HC_INTERNAL_SELFCHECK=1 ENFORCE_EAGER=1 \
+FR13_HC_INTERNAL=${FR13_HC_INTERNAL:-1} FR13_HC_INTERNAL_SELFCHECK=${FR13_HC_INTERNAL_SELFCHECK:-1} ENFORCE_EAGER=1 \
 FR13_SFWD_GPU_TIMER=1 FR13_DFWD_GPU_TIMER=1 FR13_CFWD_GPU_TIMER=1 \
 FR13_CFWD_GPU_TIMER_JSON=/workspace/output/fr13_sfwd_sidecar/hc_eager_cfwd.json \
 FR13_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \
@@ -69,9 +70,9 @@ d,t,a=float('$D'),float('$T'),float('$A')
 assert d>0 and abs(t/d-21.0)<0.5, f'ENGAGEMENT FAIL tok/draft={t/d if d else 0:.2f}'
 print(f'TREE ENGAGEMENT OK tok/draft={t/d:.2f} accept={a/d:.3f}')"
 
-NEEDLE=$(docker logs "$CONTAINER" 2>&1 | grep -c "FR13_HC_INTERNAL] derived")
-echo "BATCHED ENGAGED needle count: $NEEDLE"
-(( NEEDLE >= 1 )) || { echo "GATE FAIL: HC derivation needle absent (vacuous arm)"; exit 5; }
+NEEDLE=$(docker logs "$CONTAINER" 2>&1 | grep -c "$NEEDLE_PAT")
+echo "ENGAGED needle count ($NEEDLE_PAT): $NEEDLE"
+(( NEEDLE >= 1 )) || { echo "GATE FAIL: engagement needle absent (vacuous arm)"; exit 5; }
 ERRS=$(docker logs "$CONTAINER" 2>&1 | grep -icE "traceback|assert.*fail" || true)
 echo "error-class lines: $ERRS"
 docker cp "$CONTAINER":/workspace/output/fr13_sfwd_sidecar/hc_eager_cfwd.json "$ARMDIR/" 2>/dev/null || true
