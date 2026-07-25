@@ -369,7 +369,7 @@ def _patch_gdn_attn() -> bool:
             "                _fr13_hc_npad = 1 if len(parent) <= 1 else (\n"
             "                    1 << (len(parent) - 1).bit_length()\n"
             "                )\n"
-            "                _fr13_hc_preseed(parent, len(parent), _fr13_hc_npad)\n"
+            "                _fr13_hc_preseed(parent, len(parent), _fr13_hc_npad, device)\n"
             "            except Exception as _fr13_hc_exc:\n"
             "                print('[FR13_HC_INTERNAL] preseed failed: '\n"
             "                      + repr(_fr13_hc_exc), flush=True)\n"

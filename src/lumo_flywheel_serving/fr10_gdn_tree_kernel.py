@@ -235,7 +235,48 @@ def _hc_pack(parents: set, n_actual: int):
     return out
 
 
-def hc_internal_preseed(parent, n_actual: int, n_pad: int) -> None:
+def hc_slot_map_get(n_actual: int, n_pad: int, device) -> torch.Tensor:
+    """Device int32[n_pad] node->compacted-slot map (leaves/pad -> 0).
+
+    Enables FR13_HC_INTERNAL + FR13_PARENT_GATHER together: the parent-gather
+    branch's parent index is RUNTIME, so its one-hot select needs a runtime
+    slot lookup instead of the trace-time constexpr map. A leaf can never be
+    a parent (internal by definition), so the 0 filler is unreachable on the
+    select path; parent_i < 0 (root) is handled by the existing where().
+    Built from the preseeded/derived mask; cached per (shape, device);
+    allocation is capture-guarded like every other preseed buffer.
+    """
+    key = ("slotmap", int(n_actual), int(n_pad), str(device))
+    hit = _FR13_HC_DESC_CACHE.get(key)
+    if hit is not None:
+        return hit
+    desc = _FR13_HC_DESC_CACHE.get(("shape", int(n_actual), int(n_pad)))
+    if desc is None:
+        raise RuntimeError(
+            "FR13_HC_INTERNAL slot map requested before preseed "
+            f"(n_actual={n_actual}, n_pad={n_pad})"
+        )
+    if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
+        raise RuntimeError(
+            "FR13_HC_INTERNAL: slot-map allocation inside graph capture; "
+            "preseed must run at builder init"
+        )
+    mask, _rows, slots_lo, slots_hi = desc
+    vals = []
+    for node in range(int(n_pad)):
+        if node < 32 and ((mask >> node) & 1):
+            if node < 16:
+                vals.append((slots_lo >> (4 * node)) & 15)
+            else:
+                vals.append((slots_hi >> (4 * (node - 16))) & 15)
+        else:
+            vals.append(0)
+    t = torch.tensor(vals, dtype=torch.int32).to(device)
+    _FR13_HC_DESC_CACHE[key] = t
+    return t
+
+
+def hc_internal_preseed(parent, n_actual: int, n_pad: int, device=None) -> None:
     """Preseed the HC descriptor from the HOST parent list at builder init.
 
     REQUIRED for graph boots: the tree-decode shape's FIRST scan invocation
@@ -249,6 +290,9 @@ def hc_internal_preseed(parent, n_actual: int, n_pad: int) -> None:
     _FR13_HC_DESC_CACHE[("shape", int(n_actual), int(n_pad))] = _hc_pack(
         parents, int(n_actual)
     )
+    if device is not None:
+        # PG-compat runtime slot map preseeded here too (outside capture).
+        hc_slot_map_get(int(n_actual), int(n_pad), device)
 
 
 def _hc_internal_desc(strict_mask: torch.Tensor, n_actual: int, n_pad: int):
@@ -1318,6 +1362,7 @@ def _tree_gdn_kernel(
     HC_ROWS: tl.constexpr = 0,
     HC_SLOTS_LO: tl.constexpr = 0,
     HC_SLOTS_HI: tl.constexpr = 0,
+    hc_slot_map=None,
 ):
     # N_LOOP is the span (loop bound, offs_n lane count, h_cache rows) of the
     # scan/reduction. Default (0) means "use N_PAD" -- the per-tree padded span
@@ -1397,10 +1442,23 @@ def _tree_gdn_kernel(
                         )
                     is_anc = (anc_bit != 0) & (j < N_ACTUAL)
                     parent_i = tl.where(is_anc, j, parent_i)
-                h_par = tl.sum(
-                    tl.where((offs_n == parent_i)[:, None, None], h_cache, 0.0),
-                    axis=0,
-                )
+                if HC_MASK == 0:
+                    h_par = tl.sum(
+                        tl.where((offs_n == parent_i)[:, None, None], h_cache, 0.0),
+                        axis=0,
+                    )
+                else:
+                    # FR13_HC_INTERNAL + PARENT_GATHER: runtime slot lookup
+                    # (a parent is internal by definition, so the map entry
+                    # is always a real slot; parent_i < 0 is masked to 0 and
+                    # the result discarded by the where() below).
+                    _par_slot = tl.load(
+                        hc_slot_map + tl.maximum(parent_i, 0)
+                    )
+                    h_par = tl.sum(
+                        tl.where((offs_h == _par_slot)[:, None, None], h_cache, 0.0),
+                        axis=0,
+                    )
                 state_i = tl.where(parent_i >= 0, h_par, b_h0)
         else:
             for j in tl.static_range(0, i):
@@ -3372,13 +3430,8 @@ def launch_tree_gdn_prepared(
     _hc_rows = 0
     _hc_slots_lo = 0
     _hc_slots_hi = 0
+    _hc_slot_map = strict_mask  # dummy pointer when off/PG-off (dead code)
     if hc_internal_on():
-        if _parent_gather:
-            raise ValueError(
-                "FR13_HC_INTERNAL is incompatible with FR13_PARENT_GATHER "
-                "(runtime parent index cannot use the trace-time slot map); "
-                "gate one lever at a time"
-            )
         if piggyback_export:
             raise ValueError(
                 "FR13_HC_INTERNAL is incompatible with PIGGYBACK_EXPORT "
@@ -3387,6 +3440,11 @@ def launch_tree_gdn_prepared(
         _hc_mask, _hc_rows, _hc_slots_lo, _hc_slots_hi = _hc_internal_desc(
             strict_mask, n_actual, n_pad
         )
+        if _parent_gather and _hc_mask != 0:
+            # HCxPG compat: the parent-gather branch's runtime parent index
+            # reads its compacted slot from a device map (preseeded at
+            # builder init; the getter fail-louds under capture).
+            _hc_slot_map = hc_slot_map_get(n_actual, n_pad, strict_mask.device)
     grid = (num_vh, triton.cdiv(dim_v, _bv))
 
     _flags_export = staging_flags is not None
@@ -3445,6 +3503,7 @@ def launch_tree_gdn_prepared(
             HC_ROWS=_hc[1],
             HC_SLOTS_LO=_hc[2],
             HC_SLOTS_HI=_hc[3],
+            hc_slot_map=_hc_slot_map,
             num_warps=_num_warps,
             **_extra_launch_kwargs,
         )

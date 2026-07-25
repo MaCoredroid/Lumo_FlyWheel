@@ -1625,6 +1625,16 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         (committed_per_event / wall_s_per_event)
         if (wall_s_per_event and committed_per_event) else None
     )
+    # FR13 hardware-floor accounting (task #63): distance to the GB10
+    # weight-read floor. One decode step >= one full weight read regardless
+    # of co-residency; everything above it is overhead or extra reads.
+    _floor_ms = float(os.environ.get("FR13_WEIGHT_FLOOR_MS", "98.6"))
+    _events_per_step_f = events_per_step if events_per_step else None
+    step_wall_ms = (
+        wall_s_per_event * 1000.0 * _events_per_step_f
+        if (wall_s_per_event and _events_per_step_f) else None
+    )
+    floor_ratio = (step_wall_ms / _floor_ms) if step_wall_ms else None
     overhead_other_ms_per_event = (
         (wall_s_per_event - _fullstep_s) * 1000.0
         if (wall_s_per_event is not None and _fullstep_s) else None
@@ -1788,6 +1798,16 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         # fullstep_alignment_ratio drifts far from 1 the derived basis is
         # missing real overhead and the verdict must use the measured number.
         "measured_tps_fullstep_wall": measured_tps_fullstep_wall,
+        "step_wall_ms": step_wall_ms,
+        "weight_floor_ms": _floor_ms,
+        "floor_ratio": floor_ratio,
+        "floor_ratio_note": (
+            "step_wall_ms / GB10 weight-read floor (27GB fp8 / ~273GB/s ~= "
+            "98.6ms; override FR13_WEIGHT_FLOOR_MS). 1.0 = hardware-perfect "
+            "step; the accept-advantage ceiling at floor is ~native_tps x "
+            "(tree_comb/native_comb). Distance-to-floor is the campaign's "
+            "utilization headroom in one number."
+        ),
         "measured_tps_fullstep_wall_note": (
             "committed_per_event / MEASURED wall per event (start-to-start deltas "
             "between consecutive pure-decode steps, idle-capped, chain broken on "
