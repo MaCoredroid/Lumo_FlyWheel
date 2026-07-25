@@ -704,7 +704,12 @@ def conv_nodebank_preseed(layer_keys, b_max: int, n_tree: int,
             str(k), int(b_max), int(n_tree),
             int(conv_c) * int(conv_l), dtype, device,
         )
-    conv_nodebank_dst_rows(int(b_max), int(n_tree), device)
+    # dst-rows tables are tiny (b x n_tree int32): preseed a RANGE of b —
+    # the engine's cudagraph memory profile synthesizes dummy spec batches
+    # with b > max_num_seqs (observed b=4 at max_num_seqs=1), and the bank
+    # fetch derives its dst-rows key from that bank's row count.
+    for _b in range(1, max(int(b_max), 8) + 1):
+        conv_nodebank_dst_rows(_b, int(n_tree), device)
     print(
         f"[FR13_CONV_NODEBANK] preseeded {len(layer_keys)} banks: "
         f"bmax={b_max} n_tree={n_tree} c={conv_c} l={conv_l} dtype={dtype}",
