@@ -13094,11 +13094,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 os.environ.get("FR13_DRAFTER_GRAPH", "0") == "1"
                 and int(_fr10_spine_steps) == 4
                 and _fr13_single_logits
-                and not self.uses_mrope
                 and not (self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0)
-                and not self.supports_mm_inputs
                 and not torch.cuda.is_current_stream_capturing()
-                and num_rejected_tokens_gpu is not None
                 and not _fr13_selfcheck
             )
             _fr13_dg_key = int(batch_size)
@@ -13130,6 +13127,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 _dg = _fr13_dg_all[_fr13_dg_key]
                 _dg["root"].copy_(_fr10_spine_tokens[-1])
                 _dg["hidden"].copy_(hidden_states[:batch_size])
+                # per-call device inputs -> static homes (addresses baked in
+                # the graph): positions + adjusted seq_lens.
+                _dg["pos"].copy_(positions)
+                _dg["slen"].copy_(common_attn_metadata.seq_lens)
                 _dg["graph"].replay()
                 for _dg_i in range(4):
                     _fr10_spine_tokens.append(_dg["spine"][_dg_i])
@@ -13191,6 +13192,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 }
                 _dg["root"].copy_(_fr10_spine_tokens[-1])
                 _dg["hidden"].copy_(hidden_states[:batch_size])
+                # static homes for per-call device inputs: the graph bakes
+                # THESE addresses; replay refreshes their contents.
+                _dg["pos"] = torch.zeros_like(positions)
+                _dg["pos"].copy_(positions)
+                positions = _dg["pos"]
+                _dg["slen"] = torch.zeros_like(common_attn_metadata.seq_lens)
+                _dg["slen"].copy_(common_attn_metadata.seq_lens)
+                common_attn_metadata.seq_lens = _dg["slen"]
                 _fr10_spine_tokens[-1] = _dg["root"]
                 hidden_states = _dg["hidden"]
                 common_attn_metadata.max_seq_len = self.max_model_len - 8
