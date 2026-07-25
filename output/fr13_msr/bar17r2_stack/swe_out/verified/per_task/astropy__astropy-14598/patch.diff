@@ -1,0 +1,27 @@
+diff --git a/astropy/io/fits/card.py b/astropy/io/fits/card.py
+index 1b3285ddc..79f72e49d 100644
+--- a/astropy/io/fits/card.py
++++ b/astropy/io/fits/card.py
+@@ -1059,6 +1059,22 @@ class Card(_Verify):
+         # do the value string
+         value = self._value.replace("'", "''")
+         words = _words_group(value, value_length)
++        
++        # Ensure no chunk ends with an odd number of consecutive quotes,
++        # which would split an escape sequence ('') across chunks.
++        # Adjust chunk boundaries if needed.
++        i = 0
++        while i < len(words) - 1:
++            word = words[i]
++            # Count trailing quotes
++            n_trailing_quotes = len(word) - len(word.rstrip("'"))
++            if n_trailing_quotes % 2 == 1:
++                # Odd number of trailing quotes means an escape sequence is split.
++                # Move one quote to the next chunk.
++                if i + 1 < len(words):
++                    words[i] = word[:-1]
++                    words[i + 1] = "'" + words[i + 1]
++            i += 1
+         for idx, word in enumerate(words):
+             if idx == 0:
+                 headstr = "{:{len}}= ".format(self.keyword, len=KEYWORD_LENGTH)
