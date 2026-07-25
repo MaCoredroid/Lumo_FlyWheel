@@ -235,6 +235,130 @@ def _hc_pack(parents: set, n_actual: int):
     return out
 
 
+def subtree_parallel_on() -> bool:
+    """FR13_SUBTREE_PARALLEL: path-decomposed tree scan (queue task #60).
+
+    The monolithic scan serializes ALL nodes inside every program. A tree
+    decomposes into vertex-disjoint PATHS (heavy-path style): level-0 = the
+    heavy path from the root; level-k paths hang off earlier levels. Paths
+    within a level have no data dependence -> they scan CONCURRENTLY on a
+    grid axis (one launch per level; tail6 = 2 launches, critical path
+    21 -> ~13 node-times). Each program is a pure chain, so the h_cache /
+    one-hot ancestor machinery VANISHES entirely; cross-path handoff is an
+    fp32 HBM export (bit-exact roundtrip). Per-node math = the same
+    _gdn_node_step -> values identical; codegen differs (bug-class #10) so
+    the in-process selfcheck + capture arm gate it. Supersedes PARENT_GATHER
+    and HC_INTERNAL when ON (there is no h_cache to optimize).
+    """
+    raw = os.environ.get("FR13_SUBTREE_PARALLEL", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+def subtree_parallel_selfcheck_on() -> bool:
+    """In-process byte gate: monolith -> out_ref vs path route -> out."""
+    raw = os.environ.get("FR13_SUBTREE_PARALLEL_SELFCHECK", "")
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+_FR13_SUBTREE_CACHE: dict = {}
+
+
+def _subtree_decompose(parent) -> list:
+    """Heavy-path decomposition -> list of LEVELS; each level is a list of
+    (path_nodes, parent_node) with parent_node = -1 for the root path.
+
+    Heavy child = the child whose subtree is DEEPEST (ties -> lowest id, a
+    deterministic choice). Every node belongs to exactly one path; a path's
+    root's parent node always lives in an EARLIER level -> one launch per
+    level with an fp32 state export between levels.
+    """
+    n = len(parent)
+    children: list = [[] for _ in range(n)]
+    for i in range(1, n):
+        children[int(parent[i])].append(i)
+    depth = [1] * n
+    for i in range(n - 1, -1, -1):
+        if children[i]:
+            depth[i] = 1 + max(depth[c] for c in children[i])
+    levels: list = []
+    # (path start node, parent node, level index)
+    stack = [(0, -1, 0)]
+    while stack:
+        start, par, lvl = stack.pop()
+        path = []
+        cur = start
+        while True:
+            path.append(cur)
+            ch = children[cur]
+            if not ch:
+                break
+            heavy = max(ch, key=lambda c: (depth[c], -c))
+            for c in ch:
+                if c != heavy:
+                    stack.append((c, cur, lvl + 1))
+            cur = heavy
+        while len(levels) <= lvl:
+            levels.append([])
+        levels[lvl].append((path, par))
+    return levels
+
+
+def subtree_preseed(parent, n_actual: int, vh: int, dv: int, dk: int,
+                    device) -> None:
+    """Preseed path tensors + the fp32 state-export buffer at builder init
+    (outside capture; the tree-decode-first-call-inside-capture class)."""
+    key = ("subtree", int(n_actual))
+    if key in _FR13_SUBTREE_CACHE:
+        return
+    levels = _subtree_decompose([int(p) for p in parent])
+    dev_levels = []
+    for lvl in levels:
+        max_len = max(len(p) for p, _ in lvl)
+        nodes = torch.full((len(lvl), max_len), -1, dtype=torch.int32)
+        pars = torch.empty(len(lvl), dtype=torch.int32)
+        for i, (p, par) in enumerate(lvl):
+            nodes[i, : len(p)] = torch.tensor(p, dtype=torch.int32)
+            pars[i] = par
+        dev_levels.append(
+            (nodes.to(device), pars.to(device), max_len, len(lvl))
+        )
+    # export mask: nodes that are some later-level path root's parent
+    need = set()
+    for lvl in levels[1:]:
+        for _p, par in lvl:
+            need.add(int(par))
+    emask = torch.zeros(int(n_actual), dtype=torch.int32)
+    for nd in need:
+        emask[nd] = 1
+    export = torch.zeros(
+        int(n_actual), int(vh), int(dv), int(dk),
+        dtype=torch.float32, device=device,
+    )
+    _FR13_SUBTREE_CACHE[key] = {
+        "levels": dev_levels,
+        "emask": emask.to(device),
+        "export": export,
+        "n_levels": len(levels),
+        "critical": sum(l[2] for l in dev_levels),
+    }
+    print(
+        f"[FR13_SUBTREE_PARALLEL] preseeded: n={n_actual} levels="
+        f"{[l[3] for l in dev_levels]} lens={[l[2] for l in dev_levels]} "
+        f"critical={sum(l[2] for l in dev_levels)} (monolith {n_actual})",
+        flush=True,
+    )
+
+
+def subtree_get(n_actual: int):
+    st = _FR13_SUBTREE_CACHE.get(("subtree", int(n_actual)))
+    if st is None:
+        raise RuntimeError(
+            f"FR13_SUBTREE_PARALLEL: no preseed for n_actual={n_actual} "
+            "(builder-init wiring missing; cannot derive inside capture)"
+        )
+    return st
+
+
 def hc_slot_map_get(n_actual: int, n_pad: int, device) -> torch.Tensor:
     """Device int32[n_pad] node->compacted-slot map (leaves/pad -> 0).
 
@@ -1667,6 +1791,189 @@ def _tree_gdn_kernel(
             _pb_col0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
             _pb_state,
             mask=v_mask[:, None],
+        )
+
+
+@triton.jit
+def _tree_gdn_path_kernel(
+    q,
+    k,
+    v,
+    g,
+    beta,
+    raw_a,
+    raw_b,
+    A_log,
+    dt_bias,
+    h0,
+    h0_indices,
+    h0_num_accepted_tokens,
+    path_nodes,     # [n_paths, MAX_PATH_LEN] int32 node ids, -1 padded
+    path_parent,    # [n_paths] int32 parent NODE id of the path root (-1 => h0)
+    state_export,   # [N_TOTAL, NUM_VH, DIM_V, DIM_K] fp32 handoff buffer
+    export_mask,    # [N_TOTAL] int32 1 => export this node's post-state
+    out,
+    ring_k,
+    ring_v,
+    ring_a,
+    ring_b,
+    N_ACTUAL: tl.constexpr,
+    NUM_KH: tl.constexpr,
+    NUM_VH: tl.constexpr,
+    DIM_K: tl.constexpr,
+    DIM_V: tl.constexpr,
+    BLOCK_V: tl.constexpr,
+    OUTPUT_SCALE: tl.constexpr,
+    USE_QK_L2NORM_IN_KERNEL: tl.constexpr,
+    H0_IS_BANK: tl.constexpr,
+    H0_INDEX_ROW: tl.constexpr,
+    H0_BATCH_INDEX: tl.constexpr,
+    H0_BANK_STRIDE: tl.constexpr,
+    H0_USE_ACCEPTED_COLUMN: tl.constexpr,
+    RAW_GATING: tl.constexpr,
+    SCAN_ALIGN: tl.constexpr,
+    MAX_PATH_LEN: tl.constexpr,
+    RING_EXPORT: tl.constexpr = False,
+):
+    # FR13_SUBTREE_PARALLEL path scan: one program = one PATH (pure chain).
+    # State is carried in registers node-to-node -- NO h_cache, NO one-hot
+    # ancestor machinery. The path root's state comes from h0 (par < 0) or
+    # the fp32 export of its parent node (written by an earlier level's
+    # launch; fp32 store->load is bit-exact). Per-node math is the identical
+    # _gdn_node_step; per-path node order equals the monolith's path order.
+    pid_vh = tl.program_id(0)
+    pid_v = tl.program_id(1)
+    pid_path = tl.program_id(2)
+    head_group = NUM_VH // NUM_KH
+    pid_kh = pid_vh // head_group
+    offs_k = tl.arange(0, DIM_K)
+    offs_v = pid_v * BLOCK_V + tl.arange(0, BLOCK_V)
+    v_mask = offs_v < DIM_V
+
+    par = tl.load(path_parent + pid_path)
+    # h0 source (identical addressing to the monolith)
+    h0_base = h0
+    if H0_IS_BANK:
+        h0_column = 0
+        if H0_USE_ACCEPTED_COLUMN:
+            h0_column = tl.maximum(
+                tl.load(h0_num_accepted_tokens + H0_BATCH_INDEX).to(tl.int64) - 1,
+                0,
+            )
+        h0_index = tl.load(h0_indices + H0_INDEX_ROW + h0_column)
+        h0_base = h0 + h0_index * H0_BANK_STRIDE
+    b_h0 = tl.load(
+        h0_base + (pid_vh * DIM_V + offs_v[:, None]) * DIM_K + offs_k[None, :],
+        mask=v_mask[:, None],
+        other=0.0,
+    ).to(tl.float32)
+    par_state = tl.load(
+        state_export
+        + ((tl.maximum(par, 0).to(tl.int64) * NUM_VH + pid_vh) * DIM_V
+           + offs_v[:, None]) * DIM_K
+        + offs_k[None, :],
+        mask=(par >= 0) & v_mask[:, None],
+        other=0.0,
+    )
+    state_i = tl.where(par >= 0, par_state, b_h0)
+
+    for i in tl.static_range(0, MAX_PATH_LEN):
+        node = tl.load(path_nodes + pid_path * MAX_PATH_LEN + i)
+        n_ok = (node >= 0) & (node < N_ACTUAL)
+        node_c = tl.maximum(node, 0)
+        b_q = tl.load(
+            q + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+            mask=n_ok,
+            other=0.0,
+        ).to(tl.float32)
+        b_k_raw = tl.load(
+            k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+            mask=n_ok,
+            other=0.0,
+        )
+        b_k = b_k_raw.to(tl.float32)
+        b_v_raw = tl.load(
+            v + (node_c * NUM_VH + pid_vh) * DIM_V + offs_v,
+            mask=n_ok & v_mask,
+            other=0.0,
+        )
+        b_v = b_v_raw.to(tl.float32)
+        if RING_EXPORT:
+            tl.store(
+                ring_k + (node_c * NUM_KH + pid_kh) * DIM_K + offs_k,
+                b_k_raw,
+                mask=n_ok
+                & (pid_v == 0)
+                & (pid_vh % head_group == 0),
+            )
+            tl.store(
+                ring_v + (node_c * NUM_VH + pid_vh) * DIM_V + offs_v,
+                b_v_raw,
+                mask=n_ok & v_mask,
+            )
+        b_b = tl.load(
+            beta + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+        ).to(tl.float32)
+        b_g = tl.load(
+            g + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+        ).to(tl.float32)
+        b_raw_a = b_g
+        b_raw_b = b_b
+        b_a_log = b_g
+        b_dt_bias = b_b
+        if RAW_GATING:
+            b_raw_b_in = tl.load(
+                raw_b + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            )
+            b_raw_b = b_raw_b_in.to(tl.float32)
+            b_raw_a_in = tl.load(
+                raw_a + node_c * NUM_VH + pid_vh, mask=n_ok, other=0.0
+            )
+            b_raw_a = b_raw_a_in.to(tl.float32)
+            if RING_EXPORT:
+                tl.store(
+                    ring_a + node_c * NUM_VH + pid_vh,
+                    b_raw_a_in,
+                    mask=n_ok & (pid_v == 0),
+                )
+                tl.store(
+                    ring_b + node_c * NUM_VH + pid_vh,
+                    b_raw_b_in,
+                    mask=n_ok & (pid_v == 0),
+                )
+            b_dt_bias = tl.load(dt_bias + pid_vh).to(tl.float32)
+            b_a_log = tl.load(A_log + pid_vh).to(tl.float32)
+        new_state, out_i = _gdn_node_step(
+            state_i,
+            b_q,
+            b_k,
+            b_v,
+            b_b,
+            b_g,
+            b_raw_a,
+            b_raw_b,
+            b_a_log,
+            b_dt_bias,
+            OUTPUT_SCALE=OUTPUT_SCALE,
+            USE_QK_L2NORM_IN_KERNEL=USE_QK_L2NORM_IN_KERNEL,
+            RAW_GATING=RAW_GATING,
+            SCAN_ALIGN=SCAN_ALIGN,
+        )
+        # padded lanes must NOT advance the carried state
+        state_i = tl.where(n_ok, new_state, state_i)
+        tl.store(
+            out + (node_c * NUM_VH + pid_vh) * DIM_V + offs_v,
+            out_i,
+            mask=n_ok & v_mask,
+        )
+        do_exp = tl.load(export_mask + node_c)
+        tl.store(
+            state_export
+            + ((node_c.to(tl.int64) * NUM_VH + pid_vh) * DIM_V
+               + offs_v[:, None]) * DIM_K
+            + offs_k[None, :],
+            state_i,
+            mask=n_ok & (do_exp != 0) & v_mask[:, None],
         )
 
 
@@ -3451,6 +3758,55 @@ def launch_tree_gdn_prepared(
     _flags_arg = staging_flags if _flags_export else strict_mask  # dummy ptr when off (dead code)
     _flags_rows = int(staging_rows) if _flags_export else 0
 
+    def _launch_paths(_out):
+        # FR13_SUBTREE_PARALLEL route: one launch per path level; paths in a
+        # level scan concurrently on grid axis 2. RING/RAW semantics match
+        # the monolith per node; PIGGYBACK unsupported (asserted below).
+        st = subtree_get(n_actual)
+        for _nodes, _pars, _mlen, _npaths in st["levels"]:
+            _tree_gdn_path_kernel[(num_vh, triton.cdiv(dim_v, _bv), _npaths)](
+                q,
+                k,
+                v,
+                g,
+                beta,
+                raw_a,
+                raw_b,
+                A_log,
+                dt_bias,
+                h0,
+                h0_indices,
+                h0_num_accepted_tokens,
+                _nodes,
+                _pars,
+                st["export"],
+                st["emask"],
+                _out,
+                ring_k,
+                ring_v,
+                ring_a,
+                ring_b,
+                N_ACTUAL=n_actual,
+                NUM_KH=num_kh,
+                NUM_VH=num_vh,
+                DIM_K=dim_k,
+                DIM_V=dim_v,
+                BLOCK_V=_bv,
+                OUTPUT_SCALE=output_scale,
+                USE_QK_L2NORM_IN_KERNEL=use_qk_l2norm_in_kernel,
+                H0_IS_BANK=h0_is_bank,
+                H0_INDEX_ROW=h0_index_row,
+                H0_BATCH_INDEX=h0_batch_index,
+                H0_BANK_STRIDE=h0_bank_stride,
+                H0_USE_ACCEPTED_COLUMN=h0_use_accepted_column,
+                RAW_GATING=raw_gating,
+                SCAN_ALIGN=_scan_align,
+                MAX_PATH_LEN=_mlen,
+                RING_EXPORT=_ring_export,
+                num_warps=_num_warps,
+                **_extra_launch_kwargs,
+            )
+
     def _launch(_out, _pg_flag, _hc=(_hc_mask, _hc_rows, _hc_slots_lo, _hc_slots_hi)):
         _tree_gdn_kernel[grid](
             q,
@@ -3522,6 +3878,26 @@ def launch_tree_gdn_prepared(
                 f"byte-identical to the ancestor loop (max_abs={_diff:.3e}, "
                 f"n_actual={_n}, n_pad={n_pad})"
             )
+    elif subtree_parallel_on():
+        if piggyback_export:
+            raise ValueError(
+                "FR13_SUBTREE_PARALLEL does not support PIGGYBACK_EXPORT"
+            )
+        if subtree_parallel_selfcheck_on():
+            # In-process byte gate: monolith -> out_ref, path route -> out.
+            out_ref = torch.empty_like(out)
+            _launch(out_ref, _parent_gather)
+            _launch_paths(out)
+            _n = int(n_actual)
+            if not torch.equal(out_ref[:_n], out[:_n]):
+                _diff = (out_ref[:_n].float() - out[:_n].float()).abs().max().item()
+                raise RuntimeError(
+                    "FR13_SUBTREE_PARALLEL SELFCHECK MISMATCH: path route is "
+                    f"NOT byte-identical to the monolith (max_abs={_diff:.3e}, "
+                    f"n_actual={_n})"
+                )
+        else:
+            _launch_paths(out)
     elif hc_internal_selfcheck_on() and _hc_mask != 0:
         # In-process byte-identity gate for FR13_HC_INTERNAL (same discipline:
         # boot enforce_eager; the host compare syncs).
