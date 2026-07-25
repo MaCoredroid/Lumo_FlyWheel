@@ -17,6 +17,7 @@ PORT=9950
 mkdir -p "$ARMDIR/logs"
 
 cleanup() {
+  [ -n "${LOGTAIL_PID:-}" ] && kill "$LOGTAIL_PID" >/dev/null 2>&1 || true
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
   sleep 3
   AVAIL=$(free -g | awk '/^Mem:/ {print $7}')
@@ -26,7 +27,7 @@ trap cleanup EXIT
 
 if docker ps --format '{{.Names}}' | grep -q fr13; then echo "REFUSING: fr13 container running"; exit 2; fi
 
-CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=0.70 MAX_NUM_SEQS=1 \
+CONTAINER="$CONTAINER" PORT=$PORT GPU_UTIL=0.70 MAX_NUM_SEQS="${GATE_MAX_SEQS:-1}" \
 BATCH_INVARIANT=0 FR13_BI_TREE_ATTN=0 FR10_METRICS=0 \
 TREE="[(0,),(1,),(2,),(0,0),(0,1),(0,2),(0,0,0),(0,0,1),(0,0,2),(0,0,0,0),(0,0,0,1),(0,0,0,2),(0,0,0,0,0),(0,0,0,0,1),(0,0,0,0,2),(0,0,0,0,0,0),(0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0),(0,0,0,0,0,0,0,0,0,0,0)]" \
 FR13_TAIL_MODE=1 FR13_DRAFT_SOURCE=merged FR13_TREE_GDN_GEOM_OVERRIDE=BV=8 \
@@ -40,6 +41,10 @@ FR13_RUN_DIR="$PWD/$ARMDIR" LOG_DIR="$PWD/$ARMDIR/logs" \
 scripts/fr13_launch_forked_fa2_tree_server.sh > "$ARMDIR/launch.log" 2>&1 || {
   echo "FAIL: launcher rc=$?"; tail -15 "$ARMDIR/launch.log"; exit 2; }
 
+
+# Loss-proof crash evidence: stream docker logs from boot (survives rm -f).
+( docker logs -f "$CONTAINER" > "$ARMDIR/engine_logtail.log" 2>&1 ) &
+LOGTAIL_PID=$!
 
 T0=$(date +%s); HEALTHY=0
 while (( $(date +%s) < T0 + 900 )); do
@@ -56,7 +61,7 @@ for R in 1 2 3; do
     --endpoint "http://127.0.0.1:$PORT" --model qwen3.6-27b \
     --prompts-file output/fr13_acceptance_ladder/prompts_swe4.json \
     --max-tokens 96 --temperature 0.6 --top-p 1.0 --seed 1313 \
-    --samples-per-prompt 1 --batch-size 1 --warmup-samples 0 --wait-health 60 \
+    --samples-per-prompt "${GATE_STREAMS:-1}" --batch-size "${GATE_STREAMS:-1}" --warmup-samples 0 --wait-health 60 \
     --modes tree_mtp --out "$ARMDIR/probe_r${R}.json" \
     > "$ARMDIR/probe_r${R}_stdout.log" 2>&1 || { echo "FAIL: probe r$R"; exit 4; }
 done
