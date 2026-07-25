@@ -1970,8 +1970,32 @@ def main(argv: list[str] | None = None) -> int:
             except Exception:
                 pass
         verdict = (res.get("eval_report") or {}).get("verdict", res.get("status", "?"))
-        print(f"[{_iso_now()}] <- {iid} verdict={verdict} elapsed_total={time.time()-t0:.1f}s",
+        elapsed = time.time() - t0
+        print(f"[{_iso_now()}] <- {iid} verdict={verdict} elapsed_total={elapsed:.1f}s",
               flush=True)
+        # FR13 ENDPOINT CIRCUIT BREAKER (2026-07-25, bar17 post-mortem): when
+        # the agent's model endpoint dies (offload proxy death), every task
+        # "completes" in seconds with an [API Error: fetch failed] single
+        # message and a failed verdict — bar17 burned 9 subset tasks in 80s
+        # this way. Three consecutive instant-fails => the endpoint is gone:
+        # ABORT the campaign loudly instead of torching the rest of the
+        # subset. Threshold 30s is far below any honest session (minutes).
+        global _FR13_CB_INSTANT_FAILS
+        try:
+            _FR13_CB_INSTANT_FAILS
+        except NameError:
+            _FR13_CB_INSTANT_FAILS = 0
+        if verdict != "resolved" and elapsed < 30.0:
+            _FR13_CB_INSTANT_FAILS += 1
+        else:
+            _FR13_CB_INSTANT_FAILS = 0
+        if _FR13_CB_INSTANT_FAILS >= 3:
+            raise SystemExit(
+                f"FR13 CIRCUIT BREAKER: {_FR13_CB_INSTANT_FAILS} consecutive "
+                f"instant-fail tasks (<30s, last={iid}) — the model endpoint "
+                "is dead (offload proxy?). Aborting the campaign; completed "
+                "task artifacts are preserved."
+            )
         _autocommit_task_artifacts(per_task_root / iid, iid)
         return res
 
