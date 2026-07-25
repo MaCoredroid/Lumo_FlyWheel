@@ -50,8 +50,8 @@ echo "[torchprof] health OK; warmup margin 600s"
 sleep 600
 date -Is > "$RUNROOT/${ARM}_window_open.ts"
 curl -s "http://127.0.0.1:${PORT}/metrics" > "$RUNROOT/${ARM}_metrics_open.txt"
-curl -sf -X POST "http://127.0.0.1:${PORT}/start_profile" && echo "[torchprof] window OPEN (B=4 deployment steps)"
-sleep 120
+curl -sf -X POST "http://127.0.0.1:${PORT}/start_profile" && echo "[torchprof] window OPEN (B=4, 45s — stop-crash mitigation)"
+sleep 45
 curl -sf -X POST "http://127.0.0.1:${PORT}/stop_profile" && echo "[torchprof] window CLOSE"
 curl -s "http://127.0.0.1:${PORT}/metrics" > "$RUNROOT/${ARM}_metrics_close.txt"
 date -Is > "$RUNROOT/${ARM}_window_close.ts"
