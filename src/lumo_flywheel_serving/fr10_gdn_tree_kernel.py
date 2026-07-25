@@ -723,7 +723,9 @@ def conv_nodebank_dst_rows(b_max: int, n_tree: int, device) -> torch.Tensor:
     if st is None:
         if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
             raise RuntimeError(
-                "FR13_CONV_NODEBANK: dst-rows table allocation inside graph capture"
+                "FR13_CONV_NODEBANK: dst-rows table allocation inside graph "
+                f"capture: requested key={key}; cached dst-rows keys="
+                f"{[k for k in _FR13_CONV_NODEBANK if k[0] == '__dst_rows__']}"
             )
         st = (
             torch.arange(int(b_max), dtype=torch.int32).view(-1, 1) * int(n_tree)
