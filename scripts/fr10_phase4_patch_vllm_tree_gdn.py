@@ -905,9 +905,6 @@ def _patch_gdn_linear() -> bool:
             "_FR13_EAGER_PACK = " + ("True" if os.environ.get("FR13_EAGER_PACK", "1") == "1" else "False") + "  # FR13_EAGER_PACK baked from PATCH-TIME env (worker-env drops it)\n"
             "_FR13_FLAGS_INKERNEL = " + ("True" if os.environ.get("FR13_FLAGS_INKERNEL", "0") == "1" else "False") + "  # scan-kernel flag stores, PATCH-TIME env (default OFF); regate = queue 2c\n"
             "_FR13_CONV_WB_BATCHED = " + ("True" if os.environ.get("FR13_CONV_WB_BATCHED", "0") == "1" else "False") + "  # FR13_CONV_WB_BATCHED (B2c) baked from PATCH-TIME env: ONE batched conv writeback across requests replaces the per-b launch loop (committer host-gap slice)\n"
-            "_FR13_VERIFY_NATIVE = " + ("True" if os.environ.get("FR13_VERIFY_NATIVE", "0") == "1" else "False") + "  # FR13_VERIFY_NATIVE baked from PATCH-TIME env (worker drops FR13_*); per-node native verify diagnostic\n"
-            "_FR13_VERIFY_NATIVE_ANNOUNCED = False\n"
-            "_FR12_NPR = " + ("True" if os.environ.get("FR12_TREE_CONV_NATIVE_PRIOR_READ", "0") == "1" else "False") + "  # FR12_TREE_CONV_NATIVE_PRIOR_READ baked from PATCH-TIME env (worker drops FR12_*); conv-prior localization diagnostic\n"
             "# FR13_TREE_CONV_FUSED (FIX-3): read ONCE at module scope; default OFF\n"
             "# until the byte A/B + live gate pass. ON fuses the tree causal-conv\n"
             "# emulation's per-node state write-back loop / per-col tap loop /\n"
@@ -2410,7 +2407,6 @@ def _fr13_conv_subop_mab(
             if (
                 _fr12_subkernel_capture_enabled
                 or _fr13_gdn_subop_mab_on
-                or bool(globals().get("_FR12_NPR", False))
             ):
                 _fr12_pre_conv_spec = mixed_qkv_spec.detach().clone()
             if _fr13_gdn_subop_mab_on:
@@ -2486,7 +2482,7 @@ def _fr13_conv_subop_mab(
                             + "/"
                             + str(conv_weights.dtype)
                         )
-                _fr12_native_prior_read = bool(globals().get("_FR12_NPR", False))
+                _fr12_native_prior_read = False  # FR12_NPR DELETED 2026-07-25 (dead-twin diagnostic; git preserves)
                 _fr12_full_state_capture = (
                     os.environ.get("FR12_TREE_CONV_STATE_FULL_CAPTURE", "0") == "1"
                 )
@@ -2767,7 +2763,7 @@ def _fr13_conv_subop_mab(
                             ][:_fr13_tcf_b]
                             # FR13_CONV_PREGATHER consume — SERVED-PATH site
                             # (2026-07-24 rewire): the original consume sat in
-                            # the _FR12_NPR diagnostic branch (baked False) =
+                            # the deleted NPR diagnostic branch (2026-07-25) =
                             # DEAD twin, so the lever was VACUOUS on the
                             # deployed stack. Under RUNROW_INIT=1 this gather
                             # reads col0 pre-remap == exactly what the commit-
@@ -3054,19 +3050,7 @@ def _fr13_conv_subop_mab(
                         0,
                         _fr12_tree_candidate_bank_rows,
                     ).detach().to(torch.float32).cpu().clone()
-                if _fr12_native_prior_read:
-                    _fr10_prior_read_mode = "native_tail_pre_remap"
-                    if not globals().get("_FR12_NPR_ENGAGED_ANNOUNCED"):
-                        globals()["_FR12_NPR_ENGAGED_ANNOUNCED"] = True
-                        print("[FR12_NATIVE_PRIOR_READ ENGAGED] conv prior <- col-0 native (skips committed-path leaf snapshot)", flush=True)
-                    _fr10_conv_read_cols = torch.zeros(
-                        (int(attn_metadata.num_spec_decodes), 1),
-                        dtype=torch.long,
-                        device=spec_state_indices_tensor.device,
-                    )
-                    _fr10_prior_conv_bank_rows = _fr12_native_prior_conv_bank_rows
-                    _fr10_prior_conv_state_bank = _fr12_native_prior_conv_state_bank
-                elif (
+                if (
                     _fr13_conv_committed_path
                     and _fr13_committed_prior_bank is not None
                 ):
@@ -5518,59 +5502,7 @@ def _fr13_conv_subop_mab(
                             else None
                         ),
                     )
-                    if _FR13_VERIFY_NATIVE and not (
-                        torch.cuda.is_available()
-                        and torch.cuda.is_current_stream_capturing()
-                    ):
-                        # FR13_VERIFY_NATIVE (diagnostic, EAGER-only): overwrite EVERY tree node's GDN verify
-                        # output with a native per-node ancestor-path recurrence (fused_sigmoid_gating over
-                        # root->node, take the last-token core_out), to test whether the gross verify-argmax
-                        # corruption is in the custom tree scan. Uses the NATIVE inputs (query_spec/key_spec/
-                        # value_spec, pre-l2norm) + col-0 h0 (RUNROW_INIT default); inplace_final_state=False so
-                        # the live ssm_state is NOT mutated (we consume core_out only). Generalizes the FR12
-                        # spine splice below to ALL nodes. Validated bit-identical to fp32 truth at the bf16
-                        # store floor (scripts/fr13_native_verify_validate.py).
-                        global _FR13_VERIFY_NATIVE_ANNOUNCED
-                        if not _FR13_VERIFY_NATIVE_ANNOUNCED:
-                            _FR13_VERIFY_NATIVE_ANNOUNCED = True
-                            print(
-                                "[FR13_VERIFY_NATIVE ENGAGED] per-node native verify tree_n=%d"
-                                % int(tree_n),
-                                flush=True,
-                            )
-                        _vn_col0 = spec_state_indices_tensor[fr10_b, 0].reshape(1, 1)
-                        _vn_hv = int(core_attn_out_spec.shape[-2])
-                        _vn_v = int(core_attn_out_spec.shape[-1])
-                        for _vn_i in range(int(tree_n)):
-                            _vn_path = attn_metadata.fr10_tree_path_node_tensors[_vn_i]
-                            _vn_T = int(_vn_path.numel())
-                            _vn_cu = (
-                                torch.arange(
-                                    2,
-                                    dtype=spec_query_start_loc.dtype,
-                                    device=spec_query_start_loc.device,
-                                )
-                                * _vn_T
-                            )
-                            _vn_out, _ = fused_sigmoid_gating_delta_rule_update(
-                                A_log=self.A_log,
-                                a=a[start:end].index_select(0, _vn_path).unsqueeze(0).contiguous(),
-                                b=b[start:end].index_select(0, _vn_path).unsqueeze(0).contiguous(),
-                                dt_bias=self.dt_bias,
-                                q=query_spec[0, start:end].index_select(0, _vn_path).unsqueeze(0).contiguous(),
-                                k=key_spec[0, start:end].index_select(0, _vn_path).unsqueeze(0).contiguous(),
-                                v=value_spec[0, start:end].index_select(0, _vn_path).unsqueeze(0).contiguous(),
-                                scale=self.head_k_dim ** -0.5,
-                                initial_state=ssm_state,
-                                inplace_final_state=False,
-                                cu_seqlens=_vn_cu,
-                                ssm_state_indices=_vn_col0.expand(1, _vn_T).contiguous(),
-                                use_qk_l2norm_in_kernel=True,
-                            )
-                            core_attn_out_spec[0, start + _vn_i] = (
-                                _vn_out.reshape(_vn_T, _vn_hv, _vn_v)[-1].to(core_attn_out_spec.dtype)
-                            )
-                    if _fr12_native_spine_scan_enabled and not _FR13_VERIFY_NATIVE:
+                    if _fr12_native_spine_scan_enabled:
                         assert _fr12_scan_path0_node_tensor is not None
                         _fr12_scan_path0_len = int(
                             _fr12_scan_path0_node_tensor.numel()
