@@ -1,0 +1,22 @@
+===== ARM A: subtree-graph =====
+healthy at +381s
+TREE ENGAGEMENT OK tok/draft=21.00 accept=3.264
+ENGAGED needle count (FR13_SUBTREE_PARALLEL] preseeded): 1
+error-class lines: 0
+(cfwd sidecar not present)
+LIVE_BATCHED_GATE_DONE 09:13:18Z
+HC_EAGER_BYTE_GATE PASS
+ARM A rc=0
+===== ARM B: monolith-graph =====
+healthy at +421s
+TREE ENGAGEMENT OK tok/draft=21.00 accept=3.264
+ENGAGED needle count (SpecDecoding metrics): 8
+error-class lines: 0
+(cfwd sidecar not present)
+LIVE_BATCHED_GATE_DONE 09:22:21Z
+HC_EAGER_BYTE_GATE PASS
+ARM B rc=0
+===== A/B warm_decode_tps =====
+subtree_graph rounds: [15.48, 16.89, 16.87] mean: 16.412
+mono_graph rounds: [14.82, 16.11, 16.1] mean: 15.679
+SUBTREE_SPEED_AB_DONE
