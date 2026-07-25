@@ -13073,6 +13073,115 @@ def _patch_eagle_tree_consumption_verify() -> bool:
 
             block_size = self.block_size
             assert block_size > 0, "block_size has not been initialized."
+            # FR13_DRAFTER_GRAPH (R4): capture the WHOLE 4-iteration spine
+            # loop as ONE CUDA graph per batch size — the ~93ms/step drafter
+            # cost is host python BETWEEN piecewise pieces (2g named:
+            # dispatch + set_forward_context + sampling glue x4; metadata
+            # builds measured ~0 by the meta-reuse dead-heat A/B).
+            # Mechanics: lazy capture_begin/capture_end around the EXISTING
+            # loop on the first eligible live call per B (capture records
+            # without executing; the immediate replay below produces this
+            # step's real outputs and KV/seq_lens mutations exactly once =
+            # eager-equivalent). During capture the inner model call is
+            # forced EAGER (replaying piecewise child graphs inside a parent
+            # capture is illegal; recording the pieces' kernels flat is the
+            # point) and max_seq_len is baked at max_model_len (upper-bound
+            # semantics; kernels bound by the live seq_lens device tensor).
+            # Replay path: copy root+hidden into static buffers, replay,
+            # append static output views (final torch.cat COPIES them out),
+            # then apply the loop's host post-conditions (+4 shadows).
+            _fr13_dg_on = (
+                os.environ.get("FR13_DRAFTER_GRAPH", "0") == "1"
+                and int(_fr10_spine_steps) == 4
+                and _fr13_single_logits
+                and not self.uses_mrope
+                and not (self.uses_xdrope_dim > 0 and self.draft_uses_xdrope_dim > 0)
+                and not self.supports_mm_inputs
+                and not torch.cuda.is_current_stream_capturing()
+                and num_rejected_tokens_gpu is not None
+                and not _fr13_selfcheck
+            )
+            _fr13_dg_key = int(batch_size)
+            _fr13_dg_all = getattr(self, "_fr13_dg_graphs", None)
+            if _fr13_dg_all is None:
+                _fr13_dg_all = self._fr13_dg_graphs = {}
+                self._fr13_dg_calls = {}
+            _fr13_dg_cap = False
+            _fr13_dg_g = None
+            if _fr13_dg_on and _fr13_dg_key in _fr13_dg_all:
+                _dg = _fr13_dg_all[_fr13_dg_key]
+                _dg["root"].copy_(_fr10_spine_tokens[-1])
+                _dg["hidden"].copy_(hidden_states[:batch_size])
+                _dg["graph"].replay()
+                for _dg_i in range(4):
+                    _fr10_spine_tokens.append(_dg["spine"][_dg_i])
+                    if (_dg_i + 1) in _fr10_leaf_steps:
+                        _fr10_leaf_tokens.append(_dg["leaf"][_dg_i])
+                        if (_dg_i + 1) in _fr10_leaf2_steps:
+                            _fr10_leaf2_tokens.append(_dg["leaf2"][_dg_i])
+                    if _fr10_is_wide:
+                        _dg_wp = _fr10_wide_width.get(_dg_i + 1, 1)
+                        if _dg_wp > 1:
+                            _fr10_wide_topk[_dg_i + 1] = _dg["wide"][
+                                _dg_i
+                            ][:, : min(
+                                _dg_wp + _fr13_dedup_slack,
+                                int(_dg["wide"].shape[2]),
+                            )]
+                common_attn_metadata.max_seq_len = min(
+                    common_attn_metadata.max_seq_len + 4, self.max_model_len
+                )
+                if common_attn_metadata._seq_lens_cpu is not None:
+                    common_attn_metadata._seq_lens_cpu += 4
+                if common_attn_metadata._num_computed_tokens_cpu is not None:
+                    common_attn_metadata._num_computed_tokens_cpu += 4
+                self._fr13_dg_calls[_fr13_dg_key] = (
+                    self._fr13_dg_calls.get(_fr13_dg_key, 0) + 1
+                )
+                if self._fr13_dg_calls[_fr13_dg_key] % 2048 == 1:
+                    print(
+                        f"[FR13_DRAFTER_GRAPH] replay bs={_fr13_dg_key} "
+                        f"calls={self._fr13_dg_calls[_fr13_dg_key]}",
+                        flush=True,
+                    )
+                _fr10_spine_steps = 0  # loop below no-ops; tail code proceeds
+            elif _fr13_dg_on:
+                # capture this call: static buffers + rebinds, then record.
+                _fr13_dg_cap = True
+                _dg_dev = hidden_states.device
+                _dg = {
+                    "root": torch.zeros(
+                        batch_size, dtype=_fr10_spine_tokens[-1].dtype,
+                        device=_dg_dev,
+                    ),
+                    "hidden": torch.zeros_like(hidden_states[:batch_size]),
+                    "spine": torch.zeros(
+                        4, batch_size, dtype=torch.int64, device=_dg_dev
+                    ),
+                    "leaf": torch.zeros(
+                        4, batch_size, dtype=torch.int64, device=_dg_dev
+                    ),
+                    "leaf2": torch.zeros(
+                        4, batch_size, dtype=torch.int64, device=_dg_dev
+                    ),
+                    "wide": torch.zeros(
+                        4, batch_size,
+                        (max(list(_fr10_wide_width.values()) or [1])
+                         + _fr13_dedup_slack) if _fr10_is_wide else 1,
+                        dtype=torch.int64, device=_dg_dev,
+                    ),
+                }
+                _dg["root"].copy_(_fr10_spine_tokens[-1])
+                _dg["hidden"].copy_(hidden_states[:batch_size])
+                _fr10_spine_tokens[-1] = _dg["root"]
+                hidden_states = _dg["hidden"]
+                common_attn_metadata.max_seq_len = self.max_model_len - 8
+                cudagraph_runtime_mode = type(cudagraph_runtime_mode).NONE
+                if getattr(self, "_fr13_dg_pool", None) is None:
+                    self._fr13_dg_pool = torch.cuda.graph_pool_handle()
+                _fr13_dg_g = torch.cuda.CUDAGraph()
+                torch.cuda.synchronize()
+                _fr13_dg_g.capture_begin(pool=self._fr13_dg_pool)
             # FR13_RESHAPE_DEPTH3: cat9/chain5 keep range(4) (depth-5 spine);
             # the depth-3 shapes (chain3/cat3w) run 2 post-root steps. Each
             # extra spine forward mutates seq_lens/slot_mapping/KV, so the step
@@ -13173,6 +13282,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             draft_token_ids,
                             self._greedy_sample(last_hidden_states[:batch_size]),
                         )
+                    if _fr13_dg_cap:
+                        # FR13_DRAFTER_GRAPH: route through the static out
+                        # buffer so replay reproduces the token chain.
+                        _dg["spine"][token_index].copy_(draft_token_ids)
+                        draft_token_ids = _dg["spine"][token_index]
                     _fr10_spine_tokens.append(draft_token_ids)
                     # FR13_RESHAPE_DEPTH3: collect the runner-up leaf only at
                     # the depths this shape consumes. cat9 = {1,2,3,4} (every
@@ -13191,9 +13305,20 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr10_step_top2 = torch.topk(
                             _fr10_step_logits, _fr10_step_topk_k, dim=-1
                         ).indices
-                        _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
-                        if (token_index + 1) in _fr10_leaf2_steps:
-                            _fr10_leaf2_tokens.append(_fr10_step_top2[:, 2])
+                        if _fr13_dg_cap:
+                            _dg["leaf"][token_index].copy_(_fr10_step_top2[:, 1])
+                            _fr10_leaf_tokens.append(_dg["leaf"][token_index])
+                            if (token_index + 1) in _fr10_leaf2_steps:
+                                _dg["leaf2"][token_index].copy_(
+                                    _fr10_step_top2[:, 2]
+                                )
+                                _fr10_leaf2_tokens.append(
+                                    _dg["leaf2"][token_index]
+                                )
+                        else:
+                            _fr10_leaf_tokens.append(_fr10_step_top2[:, 1])
+                            if (token_index + 1) in _fr10_leaf2_steps:
+                                _fr10_leaf2_tokens.append(_fr10_step_top2[:, 2])
                 else:
                     _fr10_step_logits = self.model.compute_logits(
                         last_hidden_states[:batch_size]
@@ -13227,12 +13352,34 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr10_w_p = _fr10_wide_width.get(token_index + 1, 1)
                     if _fr10_w_p > 1:
                         # FR13_DEDUP_SIBLINGS: +slack spare ranks (see root capture)
-                        _fr10_wide_topk[token_index + 1] = torch.topk(
+                        _fr13_dg_wt = torch.topk(
                             _fr10_step_logits,
                             min(_fr10_w_p + _fr13_dedup_slack,
                                 int(_fr10_step_logits.shape[-1])),
                             dim=-1,
                         ).indices
+                        if _fr13_dg_cap:
+                            _dg["wide"][
+                                token_index, :, : _fr13_dg_wt.shape[1]
+                            ].copy_(_fr13_dg_wt)
+                            _fr13_dg_wt = _dg["wide"][
+                                token_index, :, : _fr13_dg_wt.shape[1]
+                            ]
+                        _fr10_wide_topk[token_index + 1] = _fr13_dg_wt
+
+            if _fr13_dg_cap:
+                # end recording; the immediate replay executes the recorded
+                # kernels ONCE (capture itself executes nothing) => this
+                # call's outputs + KV/seq_lens mutations are eager-equivalent.
+                _fr13_dg_g.capture_end()
+                _fr13_dg_g.replay()
+                _dg["graph"] = _fr13_dg_g
+                _fr13_dg_all[_fr13_dg_key] = _dg
+                print(
+                    f"[FR13_DRAFTER_GRAPH] captured bs={_fr13_dg_key} "
+                    "(full 4-iter spine loop, inner model flat-recorded)",
+                    flush=True,
+                )
 
             # accept>5 TAIL append (sidecar /logs/fr13_tail_mode.arm): the native MTP head loop
             # above produced head_depth spine tokens (depths 0..head_depth-1) + head branches
