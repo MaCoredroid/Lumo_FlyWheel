@@ -13206,8 +13206,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 cudagraph_runtime_mode = type(cudagraph_runtime_mode).NONE
                 if getattr(self, "_fr13_dg_pool", None) is None:
                     self._fr13_dg_pool = torch.cuda.graph_pool_handle()
+                if getattr(self, "_fr13_dg_stream", None) is None:
+                    self._fr13_dg_stream = torch.cuda.Stream()
                 _fr13_dg_g = torch.cuda.CUDAGraph()
                 torch.cuda.synchronize()
+                # capture must run on a NON-default stream (raw begin/end
+                # form; the context-manager does this internally).
+                _fr13_dg_prev_stream = torch.cuda.current_stream()
+                torch.cuda.set_stream(self._fr13_dg_stream)
                 _fr13_dg_g.capture_begin(pool=self._fr13_dg_pool)
             # FR13_RESHAPE_DEPTH3: cat9/chain5 keep range(4) (depth-5 spine);
             # the depth-3 shapes (chain3/cat3w) run 2 post-root steps. Each
@@ -13399,6 +13405,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 # kernels ONCE (capture itself executes nothing) => this
                 # call's outputs + KV/seq_lens mutations are eager-equivalent.
                 _fr13_dg_g.capture_end()
+                torch.cuda.set_stream(_fr13_dg_prev_stream)
                 _fr13_dg_g.replay()
                 _dg["graph"] = _fr13_dg_g
                 _fr13_dg_all[_fr13_dg_key] = _dg
