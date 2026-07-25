@@ -68,60 +68,8 @@ FP8_UTILS_PATH = Path(
 )
 
 
-def _fr13_spec_blocks_cap() -> int:
-    """FR13_SPEC_BLOCKS_CAP patch-time value (0 = off).
-
-    Spec-page surgery piece 3: with FR13_CONV_NODEBANK holding every tree
-    node's conv window in a private bank, per-request mamba spec pages only
-    need the accepted-path LINEAR cols (deepest path + root = 12 on tail6),
-    not one page per tree node (22). Cap = num_speculative_blocks value, so
-    pages/request = 1 + cap. main() preflight enforces the NODEBANK pairing.
-    """
-    return int(os.environ.get("FR13_SPEC_BLOCKS_CAP", "0") or 0)
 
 
-def _patch_mamba_abstract_spec_blocks_cap() -> bool:
-    """Cap MambaSpec.num_speculative_blocks at CONSTRUCTION (abstract.py).
-
-    Every allocator/scheduler/width consumer reads the spec field, so the
-    construction-site min() flows coherently to page accounting
-    (kv_cache_interface), MambaManager reservation, the mamba block-table
-    width (gpu_model_runner), and the align gather (attention/backends/utils).
-    The two gdn_attn.py consumers that derive widths from num_spec instead
-    are capped in _patch_gdn_attn (same patch-time value)."""
-    cap = _fr13_spec_blocks_cap()
-    if cap <= 0:
-        return False
-    text = MAMBA_ABSTRACT_PATH.read_text()
-    if "FR13_SPEC_BLOCKS_CAP" in text:
-        return False
-    anchor = (
-        "            num_speculative_blocks=(\n"
-        "                vllm_config.speculative_config.num_speculative_tokens\n"
-        "                if vllm_config.speculative_config\n"
-        "                else 0\n"
-        "            ),\n"
-    )
-    if anchor not in text:
-        raise RuntimeError(
-            "FR13_SPEC_BLOCKS_CAP: abstract.py construction anchor not found"
-        )
-    inject = (
-        "            # FR13_SPEC_BLOCKS_CAP (patch-time baked): node conv\n"
-        "            # deposits live in the FR13_CONV_NODEBANK private bank,\n"
-        "            # so spec pages only cover accepted-path linear cols.\n"
-        "            num_speculative_blocks=(\n"
-        "                min(\n"
-        "                    vllm_config.speculative_config.num_speculative_tokens,\n"
-        f"                    {cap},\n"
-        "                )\n"
-        "                if vllm_config.speculative_config\n"
-        "                else 0\n"
-        "            ),\n"
-    )
-    text = text.replace(anchor, inject, 1)
-    MAMBA_ABSTRACT_PATH.write_text(text)
-    return True
 
 
 def _patch_gdn_attn() -> bool:
@@ -135,45 +83,6 @@ def _patch_gdn_attn() -> bool:
     # copy_ (13-col block table vs 22-col buffer). Page-column widths move
     # to self._fr13_page_cols; token-count uses of num_spec (cudagraph bs,
     # spec_token_indx) stay uncapped.
-    _cap = _fr13_spec_blocks_cap()
-    if _cap > 0:
-        _anchor_ns = (
-            "            self.num_spec: int = self.speculative_config.num_speculative_tokens\n"
-            "        else:\n"
-            "            self.num_spec = 0\n"
-        )
-        if _anchor_ns not in text:
-            raise RuntimeError(
-                "FR13_SPEC_BLOCKS_CAP: gdn_attn num_spec anchor not found"
-            )
-        text = text.replace(
-            _anchor_ns,
-            _anchor_ns.replace(
-                "            self.num_spec = 0\n",
-                "            self.num_spec = 0\n"
-                f"        self._fr13_page_cols: int = min(self.num_spec, {_cap}) + 1  # FR13_SPEC_BLOCKS_CAP\n",
-            ),
-            1,
-        )
-        _anchor_buf = "            (self.decode_cudagraph_max_bs, self.num_spec + 1),\n"
-        if text.count(_anchor_buf) != 1:
-            raise RuntimeError(
-                "FR13_SPEC_BLOCKS_CAP: gdn_attn ssi buffer anchor count != 1"
-            )
-        text = text.replace(
-            _anchor_buf,
-            "            (self.decode_cudagraph_max_bs, self._fr13_page_cols),\n",
-            1,
-        )
-        _anchor_slice = "                    spec_sequence_masks_cpu, : self.num_spec + 1\n"
-        if text.count(_anchor_slice) != 2:
-            raise RuntimeError(
-                "FR13_SPEC_BLOCKS_CAP: gdn_attn block-table slice anchor count != 2"
-            )
-        text = text.replace(
-            _anchor_slice,
-            "                    spec_sequence_masks_cpu, : self._fr13_page_cols\n",
-        )
 
     text = text.replace(
         "from dataclasses import dataclass\n",
@@ -1017,7 +926,7 @@ def _patch_gdn_linear() -> bool:
             "from lumo_flywheel_serving.fr10_gdn_tree_kernel import gather_committed_path_conv_prior, launch_tree_gdn_prepared, launch_tree_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_replay_conv_remap import replay_conv_state_linear_remap\n"
             "from lumo_flywheel_serving.fr13_ex2_silu import triton_ex2_silu_bf16\n"
-            "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, prepare_replay_conv_remap_rows_from_bank, replay_conv_state_linear_remap_from_bank, replay_conv_state_linear_remap_prepared\n"
+            "from lumo_flywheel_serving.fr13_tree_conv_fused import build_tree_conv_state_src_indices, conv_wb_staging_get, fused_tree_conv_source, fused_tree_conv_state_rows, fused_tree_conv_taps_acc, gather_committed_path_conv_prior_prepared, launch_conv_state_writeback, launch_conv_state_writeback_batched, prepare_committed_path_conv_rows, prepare_replay_conv_remap_rows, replay_conv_state_linear_remap_prepared\n"
             "\n"
             "_FR10_DECODE_MODE = os.environ.get(\"FR10_DECODE_MODE_DEFAULT\", \"tree_mtp\")\n"
             "# FR13 DEPRECATION: FR13_APC_HIT_RECURRENT_SUFFIX is force-OFF at gdn\n"
@@ -1032,8 +941,7 @@ def _patch_gdn_linear() -> bool:
             "# fixed for the life of the process).\n"
             "_FR13_EAGER_PACK = " + ("True" if os.environ.get("FR13_EAGER_PACK", "1") == "1" else "False") + "  # FR13_EAGER_PACK baked from PATCH-TIME env (worker-env drops it)\n"
             "_FR13_FLAGS_INKERNEL = " + ("True" if os.environ.get("FR13_FLAGS_INKERNEL", "0") == "1" else "False") + "  # scan-kernel flag stores, PATCH-TIME env (default OFF); regate = queue 2c\n"
-            "_FR13_CONV_NODEBANK = " + ("True" if os.environ.get("FR13_CONV_NODEBANK", "0") == "1" else "False") + "  # FR13_CONV_NODEBANK baked from PATCH-TIME env (worker drops FR13_*): conv NODE deposits -> private per-layer bank; pool keeps col0 only (spec-page reclaim piece 1+2)\n"
-            "_FR13_NB_PERM_DEV = None  # persistent device int32 [max_bs]: prev-step spec ordinal per current spec row (host-refreshed each step in _prepare_inputs; closes the bank ordinal-keying hazard on composition change)\n"
+            "_FR13_CONV_NODEBANK = False  # DELETED 2026-07-25 (eps-adjusted -7.3 vs baseline; git history preserves the bank family)\n"
             "_FR13_CONV_WB_BATCHED = " + ("True" if os.environ.get("FR13_CONV_WB_BATCHED", "0") == "1" else "False") + "  # FR13_CONV_WB_BATCHED (B2c) baked from PATCH-TIME env: ONE batched conv writeback across requests replaces the per-b launch loop (committer host-gap slice)\n"
             "_FR13_VERIFY_NATIVE = " + ("True" if os.environ.get("FR13_VERIFY_NATIVE", "0") == "1" else "False") + "  # FR13_VERIFY_NATIVE baked from PATCH-TIME env (worker drops FR13_*); per-node native verify diagnostic\n"
             "_FR13_VERIFY_NATIVE_ANNOUNCED = False\n"
@@ -13473,86 +13381,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 if common_attn_metadata._num_computed_tokens_cpu is not None:
                     common_attn_metadata._num_computed_tokens_cpu += 1
 
-                # FR13_DRAFTER_META_REUSE: iterations 1..N are construction-
-                # identical (build_for_drafting only branches on draft_index
-                # ==0 vs >=1; device tensors are shared refs mutated in place
-                # by the fused update kernel) -- build once at token_index 0,
-                # reuse after with only the scalar max_seq_len bump. Gate =
-                # byte-identical drafts vs REUSE=0 (same seed).
-                if os.environ.get("FR13_DRAFTER_META_REUSE", "0") == "1":
-                    if token_index == 0:
-                        _fr13_dmr_groups, per_layer_attn_metadata = (
-                            self.build_per_group_and_layer_attn_metadata(
-                                common_attn_metadata, draft_index=1
-                            )
-                        )
-                        _fr13_dmr_cache = per_layer_attn_metadata
-                    else:
-                        for _fr13_g in _fr13_dmr_groups:
-                            _fr13_msl = getattr(_fr13_g, "max_seq_len", None)
-                            if _fr13_msl is not None:
-                                _fr13_new_msl = min(
-                                    _fr13_msl + 1, self.max_model_len
-                                )
-                                _fr13_g.max_seq_len = _fr13_new_msl
-                                # Patcher-added scalar tracks max_seq_len in
-                                # the pure-decode (drafter) branch.
-                                if getattr(
-                                    _fr13_g, "max_decode_seq_len", 0
-                                ):
-                                    _fr13_g.max_decode_seq_len = _fr13_new_msl
-                            # Lazy cached views copy scalars at construction;
-                            # invalidate so the property rebuilds from the
-                            # bumped parent (cheap field-copy, no .item()).
-                            for _fr13_cv in (
-                                "_cached_decode_metadata",
-                                "_cached_prefill_metadata",
-                            ):
-                                if hasattr(_fr13_g, _fr13_cv):
-                                    setattr(_fr13_g, _fr13_cv, None)
-                        per_layer_attn_metadata = _fr13_dmr_cache
-                        if os.environ.get(
-                            "FR13_DRAFTER_META_REUSE_SELFCHECK", "0"
-                        ) == "1":
-                            # In-process equivalence gate (cross-boot byte
-                            # gates are invalid on GB10): fresh-build must
-                            # match the reused objects field-for-field.
-                            _fr13_fresh, _ = (
-                                self.build_per_group_and_layer_attn_metadata(
-                                    common_attn_metadata,
-                                    draft_index=token_index + 1,
-                                )
-                            )
-                            for _fr13_a, _fr13_b in zip(
-                                _fr13_dmr_groups, _fr13_fresh
-                            ):
-                                for _fr13_f in _fr13_a.__dataclass_fields__:
-                                    _va = getattr(_fr13_a, _fr13_f)
-                                    _vb = getattr(_fr13_b, _fr13_f)
-                                    if isinstance(_va, torch.Tensor):
-                                        _ok = (
-                                            _va.shape == _vb.shape
-                                            and _va.dtype == _vb.dtype
-                                            and bool(torch.equal(_va, _vb))
-                                        )
-                                    else:
-                                        _ok = _va == _vb
-                                    if not _ok:
-                                        raise RuntimeError(
-                                            "FR13_DRAFTER_META_REUSE SELFCHECK"
-                                            f" MISMATCH: {type(_fr13_a).__name__}"
-                                            f".{_fr13_f} reused != fresh at "
-                                            f"token_index={token_index}"
-                                        )
-                            print(
-                                "[FR13_DRAFTER_META_REUSE] selfcheck OK "
-                                f"token_index={token_index}",
-                                flush=True,
-                            ) if token_index == 1 else None
-                else:
-                    _, per_layer_attn_metadata = self.build_per_group_and_layer_attn_metadata(
-                        common_attn_metadata, draft_index=token_index + 1
-                    )
+                _, per_layer_attn_metadata = self.build_per_group_and_layer_attn_metadata(
+                    common_attn_metadata, draft_index=token_index + 1
+                )
 
                 self.input_ids[:batch_size] = input_ids
                 self.hidden_states[:batch_size] = hidden_states
@@ -19135,15 +18966,6 @@ def main() -> int:
                 "FR12_TREE_CONV_STATE_FULL_CAPTURE (pool node pages are stale "
                 "under the bank; the capture would silently record them)"
             )
-    if (
-        int(os.environ.get("FR13_SPEC_BLOCKS_CAP", "0") or 0) > 0
-        and os.environ.get("FR13_CONV_NODEBANK", "0") != "1"
-    ):
-        raise RuntimeError(
-            "FR13_SPEC_BLOCKS_CAP requires FR13_CONV_NODEBANK=1: without the "
-            "bank, node deposits address ssi cols >= the capped width "
-            "(silent OOB via the fused writeback)"
-        )
     _fr13_write_subop_mab_sidecar()
     try:
         with open('/logs/fr13_dfwd_split.flag', 'w') as _fh:
@@ -19154,7 +18976,6 @@ def main() -> int:
     _fr13_write_replay_durable_ab_sidecar()
     _fr13_write_apc_env_sidecar()
     patch_steps = [
-        (MAMBA_ABSTRACT_PATH, _patch_mamba_abstract_spec_blocks_cap()),
         (REQUEST_PATH, _patch_request_decode_mode()),
         (SCHED_OUTPUT_PATH, _patch_sched_output_decode_mode()),
         (SCHEDULER_PATH, _patch_scheduler_decode_modes()),

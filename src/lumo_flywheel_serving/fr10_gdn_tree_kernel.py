@@ -663,81 +663,10 @@ def _linear_remap_rows_gather_from_bank_kernel(
 _FR13_CONV_NODEBANK: dict = {}
 
 
-def conv_nodebank_get(layer_key, B: int, n_tree: int, row_elems: int,
-                      dtype, device):
-    """Per-layer [B, N_TREE, ROW_ELEMS] conv node bank (allocated once).
-
-    Callers MUST pass the MAX batch (ring_bs / prep b_max) every call, never
-    the step's live B: a mid-serving realloc would leave any captured CUDA
-    graph replaying against the OLD bank address (silent corruption). The
-    capture guard below makes a first-call-inside-capture fail loud.
-    """
-    st = _FR13_CONV_NODEBANK.get(layer_key)
-    if (
-        st is None or st.shape[0] < B or st.shape[1] != n_tree
-        or st.shape[2] != row_elems or st.dtype != dtype
-    ):
-        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
-            raise RuntimeError(
-                "FR13_CONV_NODEBANK: bank (re)allocation inside graph capture "
-                f"(layer={layer_key}, B={B}); allocate at eager warmup with the "
-                "MAX batch"
-            )
-        st = torch.zeros(max(B, 4), n_tree, row_elems, dtype=dtype, device=device)
-        _FR13_CONV_NODEBANK[layer_key] = st
-    return st
 
 
-def conv_nodebank_preseed(layer_keys, b_max: int, n_tree: int,
-                          conv_c: int, conv_l: int, dtype, device) -> None:
-    """Preseed every layer's bank at BUILDER INIT (outside graph capture).
-
-    Same class as hc_internal_preseed: the tree-decode path's first call
-    happens INSIDE capture, so lazy first-call allocation is impossible on a
-    graph boot. b_max MUST be the REQUEST count (max_num_seqs), never the
-    token-row cudagraph bs (88 = 4 reqs x 22 rows would size a ~45GB bank).
-    """
-    if isinstance(dtype, str):
-        dtype = getattr(torch, dtype)
-    for k in layer_keys:
-        conv_nodebank_get(
-            str(k), int(b_max), int(n_tree),
-            int(conv_c) * int(conv_l), dtype, device,
-        )
-    # dst-rows tables are tiny (b x n_tree int32): preseed a RANGE of b —
-    # the engine's cudagraph memory profile synthesizes dummy spec batches
-    # with b > max_num_seqs (observed b=4 at max_num_seqs=1), and the bank
-    # fetch derives its dst-rows key from that bank's row count.
-    for _b in range(1, max(int(b_max), 8) + 1):
-        conv_nodebank_dst_rows(_b, int(n_tree), device)
-    print(
-        f"[FR13_CONV_NODEBANK] preseeded {len(layer_keys)} banks: "
-        f"bmax={b_max} n_tree={n_tree} c={conv_c} l={conv_l} dtype={dtype}",
-        flush=True,
-    )
 
 
-def conv_nodebank_dst_rows(b_max: int, n_tree: int, device) -> torch.Tensor:
-    """Shared [b_max, N_TREE] int32 table: row b holds b*n_tree + arange.
-
-    The bank-writeback dst_rows for request ordinal b (bank viewed
-    [B*N_TREE, C, L]). Layer-independent; cached once.
-    """
-    key = ("__dst_rows__", int(b_max), int(n_tree), str(device))
-    st = _FR13_CONV_NODEBANK.get(key)
-    if st is None:
-        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():
-            raise RuntimeError(
-                "FR13_CONV_NODEBANK: dst-rows table allocation inside graph "
-                f"capture: requested key={key}; cached dst-rows keys="
-                f"{[k for k in _FR13_CONV_NODEBANK if k[0] == '__dst_rows__']}"
-            )
-        st = (
-            torch.arange(int(b_max), dtype=torch.int32).view(-1, 1) * int(n_tree)
-            + torch.arange(int(n_tree), dtype=torch.int32).view(1, -1)
-        ).to(device)
-        _FR13_CONV_NODEBANK[key] = st
-    return st
 
 
 def _remap_state_rows(
