@@ -35,7 +35,7 @@ EOF
 export FR13_TORCHPROF=1
 RUNROOT="$RUNROOT" TAG=msr WALL=0 HEALTH_TIMEOUT_S=3600 \
   SUBSET=output/fr13_b1_gold_swe/subset_b4_four.json \
-  BSIZE=4 CONC=4 GPU_UTIL=0.70 DEPLOY_FORCE_TEMP=0.6 \
+  BSIZE=1 CONC=1 GPU_UTIL=0.70 DEPLOY_FORCE_TEMP=0.6 \
   SEQUENCE_FILE="$PWD/$SEQF" \
   bash scripts/fr13_b4_campaign_driver.sh &
 DRIVER_PID=$!
@@ -50,8 +50,8 @@ echo "[torchprof] health OK; warmup margin 600s"
 sleep 600
 date -Is > "$RUNROOT/${ARM}_window_open.ts"
 curl -s "http://127.0.0.1:${PORT}/metrics" > "$RUNROOT/${ARM}_metrics_open.txt"
-curl -sf -X POST "http://127.0.0.1:${PORT}/start_profile" && echo "[torchprof] window OPEN (B=4, 45s — stop-crash mitigation)"
-sleep 45
+curl -sf -X POST "http://127.0.0.1:${PORT}/start_profile" && echo "[torchprof] window OPEN (B=1, 120s — proven 2g recipe; B=4 stop-crash structural)"
+sleep 120
 curl -sf -X POST "http://127.0.0.1:${PORT}/stop_profile" && echo "[torchprof] window CLOSE"
 curl -s "http://127.0.0.1:${PORT}/metrics" > "$RUNROOT/${ARM}_metrics_close.txt"
 date -Is > "$RUNROOT/${ARM}_window_close.ts"
