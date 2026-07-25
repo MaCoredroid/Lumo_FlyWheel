@@ -13453,11 +13453,20 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         elif len(_fr13_t_ids) != _fr13_t_B:
                             _fr13_t_skip = "ids%d_ne_B%d" % (len(_fr13_t_ids), _fr13_t_B)
                         else:
+                            # FR13_TAIL_HOSTCOPY_BATCHED (2026-07-25): ONE
+                            # stacked DtoH instead of hd separate .cpu()
+                            # syncs + one .item() — each was a full stream
+                            # sync waiting on the drafter forwards (and the
+                            # R4 replay). Values byte-identical.
+                            _fr13_t_stack = torch.stack([
+                                _fr10_spine_tokens[_d].detach().reshape(-1)
+                                for _d in range(_fr13_t_hd)
+                            ]).cpu()
                             _fr13_t_head = [
-                                [int(_x) for _x in _fr10_spine_tokens[_d].detach().reshape(-1).cpu().tolist()]
+                                [int(_x) for _x in _fr13_t_stack[_d].tolist()]
                                 for _d in range(_fr13_t_hd)]
                             _fr13_t_vocab = int(_fr10_logits.shape[-1])
-                            _fr13_t_pad = int(_fr10_spine_tokens[0].detach().reshape(-1)[0].item())
+                            _fr13_t_pad = int(_fr13_t_stack[0, 0])
                             _fr13_t_cols = _fr13_t.decide_tail(
                                 _fr13_t_cache, [str(_r) for _r in _fr13_t_ids], _fr13_t_head,
                                 _fr13_t_hd, _fr13_t_len, _fr10_spine_tokens[0].device,
