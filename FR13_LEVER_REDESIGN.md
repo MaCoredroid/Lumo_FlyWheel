@@ -76,3 +76,12 @@ Offloaded real-SWE arms only (agent never local), cache-ON, decode-only
 metric + B-aware floor; 4-task at B=4 for iteration, B-sweep table
 (tree/native x B1/B4/B8) as the frame; every record read eps-matched;
 byte/equivalence selfcheck gate BEFORE any speed read (dmr pattern).
+
+## GOAL REFRAME (user, 2026-07-25 evening)
+
+Target = HARDWARE FLOOR (floor_ratio -> 1.0), not native. Native = reference
+only. Every lever gates on delta step_wall_ms toward floor(B) at matched eps
++ behavior band. Floor budget at B=4 (lean, 355ms today): drafter -75 (R4),
+verify-forward trio -85 (soup > scan/BV > norms), committer -21, glue -10
+=> ~160ms/step ~ floor_ratio 1.5, where tps = comb x eps / floor and accept
+is the remaining lever (comb 5.78 already banked).
