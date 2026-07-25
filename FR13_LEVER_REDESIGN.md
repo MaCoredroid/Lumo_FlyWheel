@@ -37,7 +37,13 @@ delete-dead-flags discipline; git preserves):
   ~200 lines. (The single-arm-writeback redesign is MOOT if nodebank goes.)
 
 Keep baked: sync-kill, SLOT_REORDER, ATTN_KV_REMAP (correctness), stateless
-core, PG, CPG, FLAGS_INKERNEL, SUBTREE_PARALLEL.
+core, SUBTREE_PARALLEL. RED-TEAM CORRECTION (2026-07-25 workflow): the raw
+PG/HC "wins" were PHANTOM eps-amortization (adjusted -1.66/-0.06); CPG/flags
+within-noise; subtree SUPERSEDES PG and HC on the tree launch. WB_BATCHED
+moved OFF the delete list — only genuine per-step reducer (F=324ms best,
+adjusted +2.30) — pending a matched-eps re-run. Deletion must follow the
+blast-radius checklist (patcher:1020 module-scope import + :1035-37 globals
+are unconditional).
 
 ## Redesign queue (ranked by hardware-measured size at deployment eps)
 
