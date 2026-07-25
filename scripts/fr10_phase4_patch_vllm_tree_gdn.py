@@ -13491,9 +13491,16 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         for _fr13_g in _fr13_dmr_groups:
                             _fr13_msl = getattr(_fr13_g, "max_seq_len", None)
                             if _fr13_msl is not None:
-                                _fr13_g.max_seq_len = min(
+                                _fr13_new_msl = min(
                                     _fr13_msl + 1, self.max_model_len
                                 )
+                                _fr13_g.max_seq_len = _fr13_new_msl
+                                # Patcher-added scalar tracks max_seq_len in
+                                # the pure-decode (drafter) branch.
+                                if getattr(
+                                    _fr13_g, "max_decode_seq_len", 0
+                                ):
+                                    _fr13_g.max_decode_seq_len = _fr13_new_msl
                         per_layer_attn_metadata = _fr13_dmr_cache
                         if os.environ.get(
                             "FR13_DRAFTER_META_REUSE_SELFCHECK", "0"
