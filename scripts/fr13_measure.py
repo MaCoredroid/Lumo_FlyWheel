@@ -1628,12 +1628,33 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
     # FR13 hardware-floor accounting (task #63): distance to the GB10
     # weight-read floor. One decode step >= one full weight read regardless
     # of co-residency; everything above it is overhead or extra reads.
-    _floor_ms = float(os.environ.get("FR13_WEIGHT_FLOOR_MS", "98.6"))
+    _weight_floor_ms = float(os.environ.get("FR13_WEIGHT_FLOOR_MS", "98.6"))
     _events_per_step_f = events_per_step if events_per_step else None
     step_wall_ms = (
         wall_s_per_event * 1000.0 * _events_per_step_f
         if (wall_s_per_event and _events_per_step_f) else None
     )
+    # B-aware DECODE-ONLY floor (B-sweep, 2026-07-25): floor(B) =
+    # max(weight-read, GEMM-compute x token-rows). Weight read is B-invariant
+    # (shared); compute = 2*params*rows / peak ~ 0.54 ms/row on GB10 (override
+    # FR13_COMPUTE_MS_PER_ROW). rows/step = events_per_step x (tok_per_draft
+    # + 1 committed/bonus row). The tree (22 rows/event) crosses into
+    # compute-bound near B_eff~8; native (6 rows/event) stays weight-bound.
+    # KV/state reads (context-dependent, cache-ON keeps contexts long) are
+    # NOT modeled — they live in the measured step wall.
+    _compute_ms_row = float(os.environ.get("FR13_COMPUTE_MS_PER_ROW", "0.54"))
+    _tok_per_draft = (
+        (agg[M_DRAFT_TOK] / agg[M_DRAFTS])
+        if agg.get(M_DRAFTS, 0.0) > 0 else None
+    )
+    _rows_per_step = (
+        _events_per_step_f * (_tok_per_draft + 1.0)
+        if (_events_per_step_f and _tok_per_draft) else None
+    )
+    _compute_floor_ms = (
+        _compute_ms_row * _rows_per_step if _rows_per_step else None
+    )
+    _floor_ms = max(_weight_floor_ms, _compute_floor_ms or 0.0)
     floor_ratio = (step_wall_ms / _floor_ms) if step_wall_ms else None
     overhead_other_ms_per_event = (
         (wall_s_per_event - _fullstep_s) * 1000.0
@@ -1799,14 +1820,23 @@ def cmd_deploy_speed(args: argparse.Namespace) -> int:
         # missing real overhead and the verdict must use the measured number.
         "measured_tps_fullstep_wall": measured_tps_fullstep_wall,
         "step_wall_ms": step_wall_ms,
-        "weight_floor_ms": _floor_ms,
+        "weight_floor_ms": _weight_floor_ms,
+        "compute_floor_ms": _compute_floor_ms,
+        "rows_per_step": _rows_per_step,
+        "floor_ms": _floor_ms,
         "floor_ratio": floor_ratio,
         "floor_ratio_note": (
-            "step_wall_ms / GB10 weight-read floor (27GB fp8 / ~273GB/s ~= "
-            "98.6ms; override FR13_WEIGHT_FLOOR_MS). 1.0 = hardware-perfect "
-            "step; the accept-advantage ceiling at floor is ~native_tps x "
-            "(tree_comb/native_comb). Distance-to-floor is the campaign's "
-            "utilization headroom in one number."
+            "step_wall_ms / floor(B), where floor(B) = max(weight-read "
+            "98.6ms [FR13_WEIGHT_FLOOR_MS], compute 0.54ms/row x rows_per_step "
+            "[FR13_COMPUTE_MS_PER_ROW]) — DECODE-ONLY, B-aware (B-sweep "
+            "2026-07-25). rows_per_step = events_per_step x (tok_per_draft+1). "
+            "Weight read is co-residency-INVARIANT (shared); the tree "
+            "(22 rows/event) crosses to compute-bound near B_eff~8, native "
+            "(6 rows/event) stays weight-bound. KV/state reads are unmodeled "
+            "(context-dependent; cache-ON keeps contexts long) — they live in "
+            "the measured wall. 1.0 = hardware-perfect step; marginal HW cost "
+            "per extra event ~= 0.54 x rows_per_event ms (~12 tree, ~3 native) "
+            "vs measured marginal ~140ms tree — THAT slope is the target."
         ),
         "measured_tps_fullstep_wall_note": (
             "committed_per_event / MEASURED wall per event (start-to-start deltas "
