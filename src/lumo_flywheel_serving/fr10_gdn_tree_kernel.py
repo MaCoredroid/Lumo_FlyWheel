@@ -1824,6 +1824,7 @@ def _tree_gdn_path_kernel(
     ring_v,
     ring_a,
     ring_b,
+    flags_ptr,
     N_ACTUAL: tl.constexpr,
     NUM_KH: tl.constexpr,
     NUM_VH: tl.constexpr,
@@ -1841,6 +1842,8 @@ def _tree_gdn_path_kernel(
     SCAN_ALIGN: tl.constexpr,
     MAX_PATH_LEN: tl.constexpr,
     RING_EXPORT: tl.constexpr = False,
+    FLAGS_EXPORT: tl.constexpr = False,
+    FLAGS_ROWS: tl.constexpr = 0,
 ):
     # FR13_SUBTREE_PARALLEL path scan: one program = one PATH (pure chain).
     # State is carried in registers node-to-node -- NO h_cache, NO one-hot
@@ -1982,6 +1985,15 @@ def _tree_gdn_path_kernel(
             state_i,
             mask=n_ok & (do_exp != 0) & v_mask[:, None],
         )
+    if FLAGS_EXPORT:
+        # FR13_FLAGS_INKERNEL under the subtree route: same staging-freshness
+        # store as the monolith tail (values identical: flags[0]=1 staged,
+        # flags[1]=rows). Exactly ONE program stores — the launcher passes
+        # FLAGS_EXPORT=True only on the level-0 launch; pid_path==0 guards
+        # within it. Stream-ordered before any later consumer.
+        _fl_mask = (pid_vh == 0) & (pid_v == 0) & (pid_path == 0)
+        tl.store(flags_ptr + 0, 1, mask=_fl_mask)
+        tl.store(flags_ptr + 1, FLAGS_ROWS, mask=_fl_mask)
 
 
 @triton.jit
@@ -3770,7 +3782,7 @@ def launch_tree_gdn_prepared(
         # level scan concurrently on grid axis 2. RING/RAW semantics match
         # the monolith per node; PIGGYBACK unsupported (asserted below).
         st = subtree_get(n_actual)
-        for _nodes, _pars, _mlen, _npaths in st["levels"]:
+        for _li, (_nodes, _pars, _mlen, _npaths) in enumerate(st["levels"]):
             _tree_gdn_path_kernel[(num_vh, triton.cdiv(dim_v, _bv), _npaths)](
                 q,
                 k,
@@ -3793,6 +3805,7 @@ def launch_tree_gdn_prepared(
                 ring_v,
                 ring_a,
                 ring_b,
+                _flags_arg,
                 N_ACTUAL=n_actual,
                 NUM_KH=num_kh,
                 NUM_VH=num_vh,
@@ -3810,6 +3823,8 @@ def launch_tree_gdn_prepared(
                 SCAN_ALIGN=_scan_align,
                 MAX_PATH_LEN=_mlen,
                 RING_EXPORT=_ring_export,
+                FLAGS_EXPORT=_flags_export and (_li == 0),
+                FLAGS_ROWS=_flags_rows,
                 num_warps=_num_warps,
                 **_extra_launch_kwargs,
             )
