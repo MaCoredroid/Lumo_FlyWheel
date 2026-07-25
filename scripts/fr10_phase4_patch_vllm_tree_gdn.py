@@ -8229,12 +8229,40 @@ def _lumo_tree_canonical_multidraft_sample(
         sample_multidraft_rejection_step as _fr10_sample_step,
     )
 
-    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
-    drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
-    if hasattr(num_draft_tokens, 'detach'):
-        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+    # FR13_SAMPLER_SYNC_KILL (2026-07-25, torchprof-named #1 site): the three
+    # DtoH .cpu() syncs below ran EVERY step even on the deployed device
+    # committer path, whose per-request host loop is SKIPPED (their only
+    # consumer). Each sync drains the async pipeline -> the measured 37%%-of-
+    # window host stall. Under device mode: parents_cpu comes from a static
+    # per-topology cache (the tree never changes intra-boot) and drafts/
+    # counts DtoH are eliminated (needle uses tensor numel). Host-reference
+    # mode (FR13_DEVICE_MULTIDRAFT=0) keeps the original conversions
+    # byte-for-byte.
+    _fr13_dm_pre = (
+        __import__('os').environ.get('FR13_DEVICE_MULTIDRAFT', '1') == '1'
+        and not __import__('os').path.exists('/logs/fr13_device_multidraft_off.arm')
+        and draft_probs is None
+    )
+    if _fr13_dm_pre:
+        _fr13_pc_key = (
+            int(tree_parent_indices.data_ptr()), int(tree_parent_indices.numel())
+        )
+        _fr13_pc_cache = globals().setdefault('_FR13_PARENTS_CPU_CACHE', {})
+        parents_cpu = _fr13_pc_cache.get(_fr13_pc_key)
+        if parents_cpu is None:
+            parents_cpu = [
+                int(x) for x in tree_parent_indices.detach().cpu().tolist()
+            ]
+            _fr13_pc_cache[_fr13_pc_key] = parents_cpu
+        drafts_cpu = None
+        counts = None
     else:
-        counts = [int(x) for x in num_draft_tokens]
+        parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+        drafts_cpu = [int(x) for x in draft_token_ids.detach().cpu().tolist()]
+        if hasattr(num_draft_tokens, 'detach'):
+            counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+        else:
+            counts = [int(x) for x in num_draft_tokens]
     # FR13_DEVICE_MULTIDRAFT (BAKED default ON = the deployed cat6/cat9 committer): the temp>0 multidraft
     # per-node decision runs ON-DEVICE (scripts/fr13_device_multidraft_kernel.py)
     # so the [nodes x vocab] host softmax DtoH below + the Python per-node
@@ -8332,7 +8360,7 @@ def _lumo_tree_canonical_multidraft_sample(
     # unchanged. flag-on => the device committer fills the five product lists and
     # the legacy loop iterates EMPTY (the host walk never runs; the [nodes x
     # vocab] softmax DtoH above was already skipped).
-    _fr13_dm_counts = counts
+    _fr13_dm_counts = counts if counts is not None else []
     if _fr13_device_multidraft:
         try:
             import importlib.util as _fr13_dm_ilu, os as _fr13_dm_os
@@ -8355,7 +8383,7 @@ def _lumo_tree_canonical_multidraft_sample(
                     _fr13_dm_il('vllm.fr13_device_multidraft').info(
                         'FR13_DEVICE_MULTIDRAFT engaged: device-side temp>0 '
                         'multidraft committer (no [nodes x vocab] softmax DtoH, '
-                        'no per-node Python loop), n_req=%d' % len(counts)
+                        'no per-node Python loop), n_req=%d' % int(num_draft_tokens.numel() if hasattr(num_draft_tokens, 'numel') else len(num_draft_tokens))
                     )
                 except Exception:
                     print('FR13_DEVICE_MULTIDRAFT engaged', flush=True)
