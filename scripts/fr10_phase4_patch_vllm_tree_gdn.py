@@ -792,43 +792,6 @@ def _patch_gdn_attn() -> bool:
             "                        _fr13_tcf_group_key\n"
             "                    )\n"
             "                _fr13_tcf_mod._FR13_TCF_LAYER_GROUP = _fr13_tcf_layer_group\n"
-            "                if getattr(_fr13_tcf_mod, '_FR13_CONV_NODEBANK', False):\n"
-            "                    # FR13_CONV_NODEBANK preseed: banks must exist\n"
-            "                    # BEFORE capture (tree-decode first call is\n"
-            "                    # INSIDE capture — 2d class) and be sized by\n"
-            "                    # the REQUEST count (max_num_seqs), never the\n"
-            "                    # token-row cudagraph bs (88 => ~45GB bank).\n"
-            "                    try:\n"
-            "                        from lumo_flywheel_serving.fr10_gdn_tree_kernel import (\n"
-            "                            conv_nodebank_preseed as _fr13_nb_ps,\n"
-            "                        )\n"
-            "                        _fr13_nb_shape = None\n"
-            "                        _fr13_nb_dt = None\n"
-            "                        for _fr13_nb_i, _fr13_nb_s in enumerate(\n"
-            "                            getattr(self.kv_cache_spec, 'shapes', ()) or ()\n"
-            "                        ):\n"
-            "                            if len(_fr13_nb_s) == 2:\n"
-            "                                _fr13_nb_shape = _fr13_nb_s\n"
-            "                                _fr13_nb_dt = self.kv_cache_spec.dtypes[_fr13_nb_i]\n"
-            "                                break\n"
-            "                        _fr13_nb_par = getattr(self, 'fr10_tree_parent', None)\n"
-            "                        if _fr13_nb_shape is not None and _fr13_nb_par is not None:\n"
-            "                            _fr13_nb_ps(\n"
-            "                                [str(_fr13_nb_n) for _fr13_nb_n in layer_names],\n"
-            "                                int(self.vllm_config.scheduler_config.max_num_seqs),\n"
-            "                                int(_fr13_nb_par.numel()),\n"
-            "                                int(_fr13_nb_shape[0]),\n"
-            "                                int(_fr13_nb_shape[1]),\n"
-            "                                _fr13_nb_dt,\n"
-            "                                device,\n"
-            "                            )\n"
-            "                        else:\n"
-            "                            print('[FR13_CONV_NODEBANK] preseed SKIPPED: '\n"
-            "                                  'conv shape or tree parent unavailable',\n"
-            "                                  flush=True)\n"
-            "                    except Exception as _fr13_nb_exc:\n"
-            "                        print('[FR13_CONV_NODEBANK] preseed failed: '\n"
-            "                              + repr(_fr13_nb_exc), flush=True)\n"
             "                if getattr(_fr13_tcf_mod, '_FR13_CONV_WB_BATCHED', False):\n"
             "                    # B2c staging preseed (same capture-first-call\n"
             "                    # class): capacity bound = max_num_seqs *\n"
@@ -941,7 +904,6 @@ def _patch_gdn_linear() -> bool:
             "# fixed for the life of the process).\n"
             "_FR13_EAGER_PACK = " + ("True" if os.environ.get("FR13_EAGER_PACK", "1") == "1" else "False") + "  # FR13_EAGER_PACK baked from PATCH-TIME env (worker-env drops it)\n"
             "_FR13_FLAGS_INKERNEL = " + ("True" if os.environ.get("FR13_FLAGS_INKERNEL", "0") == "1" else "False") + "  # scan-kernel flag stores, PATCH-TIME env (default OFF); regate = queue 2c\n"
-            "_FR13_CONV_NODEBANK = False  # DELETED 2026-07-25 (eps-adjusted -7.3 vs baseline; git history preserves the bank family)\n"
             "_FR13_CONV_WB_BATCHED = " + ("True" if os.environ.get("FR13_CONV_WB_BATCHED", "0") == "1" else "False") + "  # FR13_CONV_WB_BATCHED (B2c) baked from PATCH-TIME env: ONE batched conv writeback across requests replaces the per-b launch loop (committer host-gap slice)\n"
             "_FR13_VERIFY_NATIVE = " + ("True" if os.environ.get("FR13_VERIFY_NATIVE", "0") == "1" else "False") + "  # FR13_VERIFY_NATIVE baked from PATCH-TIME env (worker drops FR13_*); per-node native verify diagnostic\n"
             "_FR13_VERIFY_NATIVE_ANNOUNCED = False\n"
@@ -2797,32 +2759,6 @@ def _fr13_conv_subop_mab(
                                 _fr13_tcf_prep["dst_rows"][
                                     :_fr13_tcf_rows_n
                                 ].copy_(_fr13_tcf_new_dst)
-                                if _FR13_CONV_NODEBANK:
-                                    # FR13_CONV_NODEBANK owner prep: bank-space
-                                    # src rows (perm-corrected ordinals), pool
-                                    # dst rows, valid mask. Rebound per step;
-                                    # prep + consume live inside the same
-                                    # captured graph, so capture-pool tensors
-                                    # stay consistent on replay.
-                                    (
-                                        _fr13_tcf_prep["nb_src_rows"],
-                                        _fr13_tcf_prep["nb_dst_rows"],
-                                        _fr13_tcf_prep["nb_valid"],
-                                    ) = prepare_replay_conv_remap_rows_from_bank(
-                                        spec_state_indices=spec_state_indices_tensor,
-                                        accepted_paths=_fr10_accepted_paths_tensor,
-                                        num_accepted_tokens=_fr10_accepted_lens_tensor,
-                                        num_spec_decodes=_fr13_tcf_b,
-                                        max_path_len=int(
-                                            spec_state_indices_tensor.size(-1)
-                                        ),
-                                        n_tree=int(
-                                            attn_metadata.fr10_tree_parent.numel()
-                                        ),
-                                        ordinal_perm=globals().get(
-                                            "_FR13_NB_PERM_DEV"
-                                        ),
-                                    )
                             _fr13_committed_read_cols = _fr13_tcf_prep[
                                 "read_cols"
                             ][:_fr13_tcf_b]
@@ -3042,52 +2978,6 @@ def _fr13_conv_subop_mab(
                             # shared row math was computed once per kv-cache
                             # group above. The frozen library fn is the
                             # byte-verbatim OFF arm.
-                            if _FR13_CONV_NODEBANK:
-                                # FR13_CONV_NODEBANK: fetch (or first-call
-                                # allocate, eager warmup only) this layer's
-                                # private node bank BEFORE the remap -- the
-                                # remap consumes the PREVIOUS step's deposits
-                                # from it. Sized by prep b_max (stable address
-                                # across captured replays) x n_tree.
-                                from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
-                                    conv_nodebank_get as _fr13_nb_get,
-                                    conv_nodebank_dst_rows as _fr13_nb_rows_get,
-                                )
-                                _fr13_nb_ntree = int(
-                                    attn_metadata.fr10_tree_parent.numel()
-                                )
-                                _fr13_nb_c = int(conv_state.size(1))
-                                _fr13_nb_l = int(conv_state.size(2))
-                                # B = the step's REQUEST count: the bank was
-                                # preseeded at builder init with max_num_seqs
-                                # rows, so this never reallocs; a missing
-                                # preseed fail-louds via the capture guard.
-                                _fr13_nb_bank = _fr13_nb_get(
-                                    str(self.prefix),
-                                    int(attn_metadata.num_spec_decodes),
-                                    _fr13_nb_ntree,
-                                    _fr13_nb_c * _fr13_nb_l,
-                                    conv_state.dtype,
-                                    conv_state.device,
-                                )
-                                _fr13_nb_bmax = int(_fr13_nb_bank.shape[0])
-                                _fr13_nb_bank_flat = _fr13_nb_bank.view(
-                                    -1, _fr13_nb_c, _fr13_nb_l
-                                )
-                                _fr13_nb_dst_rows = _fr13_nb_rows_get(
-                                    _fr13_nb_bmax, _fr13_nb_ntree,
-                                    conv_state.device,
-                                )
-                                # stage the [B, N_TREE, C, L] view for the
-                                # post-accept committer's leaf read (same
-                                # fixed-attribute pattern as replay_conv_state)
-                                self._fr13_replay_conv_nodebank = _fr13_nb_bank.view(
-                                    _fr13_nb_bmax, _fr13_nb_ntree,
-                                    _fr13_nb_c, _fr13_nb_l,
-                                )
-                            else:
-                                _fr13_nb_bank_flat = None
-                                _fr13_nb_dst_rows = None
                             _fr13_sc_remap_on = (
                                 os.environ.get("FR13_TCF_SELFCHECK", "0")
                                 == "1"
@@ -3107,28 +2997,15 @@ def _fr13_conv_subop_mab(
                                 _fr13_sc_pre_rows = conv_state.index_select(
                                     0, _fr13_sc_srcr
                                 ).clone()
-                            if _FR13_CONV_NODEBANK:
-                                # FR13_CONV_NODEBANK: prev-step node deposits
-                                # come from the private bank (perm-corrected
-                                # ordinals); dst/invalid-lane semantics match
-                                # the pool path byte-for-byte.
-                                replay_conv_state_linear_remap_from_bank(
-                                    conv_state=conv_state,
-                                    bank_view=_fr13_nb_bank_flat,
-                                    bank_src_rows=_fr13_tcf_prep["nb_src_rows"],
-                                    dst_rows=_fr13_tcf_prep["nb_dst_rows"],
-                                    valid=_fr13_tcf_prep["nb_valid"],
-                                )
-                            else:
-                                replay_conv_state_linear_remap_prepared(
-                                    conv_state=conv_state,
-                                    src_rows=_fr13_tcf_prep["src_rows"][
-                                        :_fr13_tcf_rows_n
-                                    ],
-                                    dst_rows=_fr13_tcf_prep["dst_rows"][
-                                        :_fr13_tcf_rows_n
-                                    ],
-                                )
+                            replay_conv_state_linear_remap_prepared(
+                                conv_state=conv_state,
+                                src_rows=_fr13_tcf_prep["src_rows"][
+                                    :_fr13_tcf_rows_n
+                                ],
+                                dst_rows=_fr13_tcf_prep["dst_rows"][
+                                    :_fr13_tcf_rows_n
+                                ],
+                            )
                             if _fr13_sc_remap_on:
                                 _fr13_tcf_sc_compare(
                                     "remap_dst_permutation",
@@ -4079,32 +3956,6 @@ def _fr13_conv_subop_mab(
                                 # fires after the loop (same bytes, disjoint
                                 # dsts; no same-step reader before it).
                                 pass
-                            elif _FR13_CONV_NODEBANK:
-                                # FR13_CONV_NODEBANK: full node mirror -> the
-                                # private bank; the pool keeps ONLY the col0
-                                # (anchor) deposit for NPR/pregather/stock
-                                # readers. Pool node cols become write-never
-                                # (the spec-page reclaim target).
-                                launch_conv_state_writeback(
-                                    source_z=_fr10_source,
-                                    state_src=_fr13_tcf_state_src,
-                                    dst_rows=_fr13_nb_dst_rows[
-                                        _fr10_b, :_fr10_tree_n
-                                    ],
-                                    conv_state=_fr13_nb_bank_flat,
-                                    tree_n=_fr10_tree_n,
-                                    state_len=int(conv_state.size(2)),
-                                )
-                                launch_conv_state_writeback(
-                                    source_z=_fr10_source,
-                                    state_src=_fr13_tcf_state_src,
-                                    dst_rows=spec_state_indices_tensor[
-                                        _fr10_b, :1
-                                    ],
-                                    conv_state=conv_state,
-                                    tree_n=1,
-                                    state_len=int(conv_state.size(2)),
-                                )
                             else:
                                 launch_conv_state_writeback(
                                     source_z=_fr10_source,
@@ -4117,29 +3968,13 @@ def _fr13_conv_subop_mab(
                                     state_len=int(conv_state.size(2)),
                                 )
                         else:
-                            if _FR13_CONV_NODEBANK:
-                                _fr13_nb_bank_flat.index_copy_(
-                                    0,
-                                    _fr13_nb_dst_rows[
-                                        _fr10_b, :_fr10_tree_n
-                                    ].to(torch.long),
-                                    _fr10_new_state,
-                                )
-                                conv_state.index_copy_(
-                                    0,
-                                    spec_state_indices_tensor[
-                                        _fr10_b, :1
-                                    ].to(torch.long),
-                                    _fr10_new_state[:1],
-                                )
-                            else:
-                                conv_state.index_copy_(
-                                    0,
-                                    spec_state_indices_tensor[
-                                        _fr10_b, :_fr10_tree_n
-                                    ].to(torch.long),
-                                    _fr10_new_state,
-                                )
+                            conv_state.index_copy_(
+                                0,
+                                spec_state_indices_tensor[
+                                    _fr10_b, :_fr10_tree_n
+                                ].to(torch.long),
+                                _fr10_new_state,
+                            )
                         if _fr10_log_conv_diag:
                             if _FR13_EAGER_PACK:
                                 # FR13_EAGER_PACK 2h gated-move: recompute from
@@ -4420,44 +4255,18 @@ def _fr13_conv_subop_mab(
                         and int(attn_metadata.num_spec_decodes) > 0
                     ):
                         _fr13_wbb_b = int(attn_metadata.num_spec_decodes)
-                        if _FR13_CONV_NODEBANK:
-                            launch_conv_state_writeback_batched(
-                                source_z=_fr13_wbb_stage,
-                                state_src=_fr13_tcf_state_src,
-                                dst_rows=_fr13_nb_dst_rows[
-                                    :_fr13_wbb_b, :_fr10_tree_n
-                                ].reshape(-1),
-                                conv_state=_fr13_nb_bank_flat,
-                                tree_n=_fr10_tree_n,
-                                state_len=int(conv_state.size(2)),
-                                batch=_fr13_wbb_b,
-                                src_rows_per_b=_fr13_wbb_srows,
-                            )
-                            launch_conv_state_writeback_batched(
-                                source_z=_fr13_wbb_stage,
-                                state_src=_fr13_tcf_state_src,
-                                dst_rows=spec_state_indices_tensor[
-                                    :_fr13_wbb_b, :1
-                                ].reshape(-1),
-                                conv_state=conv_state,
-                                tree_n=1,
-                                state_len=int(conv_state.size(2)),
-                                batch=_fr13_wbb_b,
-                                src_rows_per_b=_fr13_wbb_srows,
-                            )
-                        else:
-                            launch_conv_state_writeback_batched(
-                                source_z=_fr13_wbb_stage,
-                                state_src=_fr13_tcf_state_src,
-                                dst_rows=spec_state_indices_tensor[
-                                    :_fr13_wbb_b, :_fr10_tree_n
-                                ].reshape(-1),
-                                conv_state=conv_state,
-                                tree_n=_fr10_tree_n,
-                                state_len=int(conv_state.size(2)),
-                                batch=_fr13_wbb_b,
-                                src_rows_per_b=_fr13_wbb_srows,
-                            )
+                        launch_conv_state_writeback_batched(
+                            source_z=_fr13_wbb_stage,
+                            state_src=_fr13_tcf_state_src,
+                            dst_rows=spec_state_indices_tensor[
+                                :_fr13_wbb_b, :_fr10_tree_n
+                            ].reshape(-1),
+                            conv_state=conv_state,
+                            tree_n=_fr10_tree_n,
+                            state_len=int(conv_state.size(2)),
+                            batch=_fr13_wbb_b,
+                            src_rows_per_b=_fr13_wbb_srows,
+                        )
                     mixed_qkv_spec = _fr10_tree_conv_out
                 except Exception as _fr10_tree_conv_exc:
                     if (
@@ -7849,29 +7658,10 @@ def _fr13_conv_commit_to_col0(
             # +1 => clean coherent code (with the _rows identifier garble),
             # -1 => 95% syntax-broken degeneracy. Keep +1. The _rows garble root
             # is NOT this committer column; re-hunt on the fused conv path.
-            _nb = getattr(_layer, "_fr13_replay_conv_nodebank", None)
-            if _nb is not None:
-                # FR13_CONV_NODEBANK: THIS-step leaf windows live in the
-                # private bank (same-step ordinals -- no perm needed here;
-                # same +1-anchored node cols). Pool node cols are write-never
-                # under the flag, and the bank clamp uses the BANK width
-                # (n_tree), not spec_cols -- under the spec-page cap the ssi
-                # is narrower than the tree.
-                _leaf_nb = accepted_path_buf[:replay_rows].to(_dev).gather(
-                    1, _leaf_pos.view(-1, 1).to(torch.long)
-                ).view(-1)
-                _leaf_nb = torch.where(
-                    _alen > 0, _leaf_nb,
-                    torch.zeros_like(_leaf_nb),
-                ).clamp(0, int(_nb.shape[1]) - 1).to(torch.long)
-                _conv.index_copy_(
-                    0, _dst, _nb[_rows.to(torch.long), _leaf_nb]
-                )
-            else:
-                _src = _ssi[_rows, _leaf_node].to(torch.long)
-                # index_select snapshots the source rows before the write -> no alias
-                # hazard even when a leaf row coincides with col 0.
-                _conv.index_copy_(0, _dst, _conv.index_select(0, _src))
+            _src = _ssi[_rows, _leaf_node].to(torch.long)
+            # index_select snapshots the source rows before the write -> no alias
+            # hazard even when a leaf row coincides with col 0.
+            _conv.index_copy_(0, _dst, _conv.index_select(0, _src))
         if do_burn and _spec_cols > 1:
             _burn = _ssi[:replay_rows, 1:_spec_cols].reshape(-1).to(torch.long)
             _conv.index_fill_(0, _burn, 0.0)
@@ -10645,59 +10435,6 @@ def _patch_gpu_model_runner_row_req_ids_fresh() -> bool:
         "            # page-id equality) forces the legacy gather.\n"
         "            self._fr13_rf_seq = getattr(self, '_fr13_rf_seq', 0) + 1\n"
         "            _fr13_rf_gdn._LUMO_FA_STEP_SEQ = self._fr13_rf_seq\n"
-        "            # FR13_CONV_NODEBANK ordinal perm: prev-step spec ordinal\n"
-        "            # per CURRENT spec row (bank rows are ordinal-keyed; the\n"
-        "            # node->linear remap consumes PREV-step deposits, so a\n"
-        "            # composition change must re-point each row at its old\n"
-        "            # ordinal). Host-built every step OUTSIDE graph capture;\n"
-        "            # the forward reads the persistent device buffer\n"
-        "            # unconditionally. Absent-last-step rows map to self\n"
-        "            # (safe: acceptance implies presence last step).\n"
-        "            if getattr(_fr13_rf_gdn, '_FR13_CONV_NODEBANK', False):\n"
-        "                _fr13_nb_cur = [\n"
-        "                    str(_fr13_nb_rid)\n"
-        "                    for _fr13_nb_rid in self.input_batch.req_ids\n"
-        "                    if str(_fr13_nb_rid) in\n"
-        "                    scheduler_output.scheduled_spec_decode_tokens\n"
-        "                ]\n"
-        "                _fr13_nb_prev = getattr(\n"
-        "                    self, '_fr13_nb_prev_spec_reqs', None)\n"
-        "                _fr13_nb_dev = getattr(\n"
-        "                    _fr13_rf_gdn, '_FR13_NB_PERM_DEV', None)\n"
-        "                if _fr13_nb_dev is None:\n"
-        "                    import torch as _fr13_nb_torch\n"
-        "                    _fr13_nb_dev = _fr13_nb_torch.arange(\n"
-        "                        int(self.input_batch.max_num_reqs),\n"
-        "                        dtype=_fr13_nb_torch.int32,\n"
-        "                        device=self.device,\n"
-        "                    )\n"
-        "                    _fr13_rf_gdn._FR13_NB_PERM_DEV = _fr13_nb_dev\n"
-        "                    self._fr13_nb_perm_host = _fr13_nb_torch.arange(\n"
-        "                        int(self.input_batch.max_num_reqs),\n"
-        "                        dtype=_fr13_nb_torch.int32,\n"
-        "                    ).pin_memory()\n"
-        "                _fr13_nb_hp = self._fr13_nb_perm_host\n"
-        "                if _fr13_nb_prev is None:\n"
-        "                    _fr13_nb_prev_map = {}\n"
-        "                else:\n"
-        "                    _fr13_nb_prev_map = {\n"
-        "                        _fr13_nb_r: _fr13_nb_i\n"
-        "                        for _fr13_nb_i, _fr13_nb_r\n"
-        "                        in enumerate(_fr13_nb_prev)\n"
-        "                    }\n"
-        "                for _fr13_nb_i, _fr13_nb_r in enumerate(_fr13_nb_cur):\n"
-        "                    # -1 sentinel for absent-last-step: the remap prep\n"
-        "                    # ASSERTS such rows have zero accepted lanes\n"
-        "                    # (stateless-tree invariant made enforced, not\n"
-        "                    # assumed) before clamping to a safe row.\n"
-        "                    _fr13_nb_hp[_fr13_nb_i] = _fr13_nb_prev_map.get(\n"
-        "                        _fr13_nb_r, -1)\n"
-        "                if _fr13_nb_cur:\n"
-        "                    _fr13_nb_dev[: len(_fr13_nb_cur)].copy_(\n"
-        "                        _fr13_nb_hp[: len(_fr13_nb_cur)],\n"
-        "                        non_blocking=True,\n"
-        "                    )\n"
-        "                self._fr13_nb_prev_spec_reqs = _fr13_nb_cur\n"
         "            # NOTE (dbg11): do NOT invalidate _LUMO_FA_SPEC_ROW_REQ_IDS\n"
         "            # here -- the variant-B ring mapper reads it as the\n"
         "            # PREV-step spec-row order (the activation ring is\n"
