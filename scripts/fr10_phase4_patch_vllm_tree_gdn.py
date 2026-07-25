@@ -13473,9 +13473,70 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 if common_attn_metadata._num_computed_tokens_cpu is not None:
                     common_attn_metadata._num_computed_tokens_cpu += 1
 
-                _, per_layer_attn_metadata = self.build_per_group_and_layer_attn_metadata(
-                    common_attn_metadata, draft_index=token_index + 1
-                )
+                # FR13_DRAFTER_META_REUSE: iterations 1..N are construction-
+                # identical (build_for_drafting only branches on draft_index
+                # ==0 vs >=1; device tensors are shared refs mutated in place
+                # by the fused update kernel) -- build once at token_index 0,
+                # reuse after with only the scalar max_seq_len bump. Gate =
+                # byte-identical drafts vs REUSE=0 (same seed).
+                if os.environ.get("FR13_DRAFTER_META_REUSE", "0") == "1":
+                    if token_index == 0:
+                        _fr13_dmr_groups, per_layer_attn_metadata = (
+                            self.build_per_group_and_layer_attn_metadata(
+                                common_attn_metadata, draft_index=1
+                            )
+                        )
+                        _fr13_dmr_cache = per_layer_attn_metadata
+                    else:
+                        for _fr13_g in _fr13_dmr_groups:
+                            _fr13_msl = getattr(_fr13_g, "max_seq_len", None)
+                            if _fr13_msl is not None:
+                                _fr13_g.max_seq_len = min(
+                                    _fr13_msl + 1, self.max_model_len
+                                )
+                        per_layer_attn_metadata = _fr13_dmr_cache
+                        if os.environ.get(
+                            "FR13_DRAFTER_META_REUSE_SELFCHECK", "0"
+                        ) == "1":
+                            # In-process equivalence gate (cross-boot byte
+                            # gates are invalid on GB10): fresh-build must
+                            # match the reused objects field-for-field.
+                            _fr13_fresh, _ = (
+                                self.build_per_group_and_layer_attn_metadata(
+                                    common_attn_metadata,
+                                    draft_index=token_index + 1,
+                                )
+                            )
+                            for _fr13_a, _fr13_b in zip(
+                                _fr13_dmr_groups, _fr13_fresh
+                            ):
+                                for _fr13_f in _fr13_a.__dataclass_fields__:
+                                    _va = getattr(_fr13_a, _fr13_f)
+                                    _vb = getattr(_fr13_b, _fr13_f)
+                                    if isinstance(_va, torch.Tensor):
+                                        _ok = (
+                                            _va.shape == _vb.shape
+                                            and _va.dtype == _vb.dtype
+                                            and bool(torch.equal(_va, _vb))
+                                        )
+                                    else:
+                                        _ok = _va == _vb
+                                    if not _ok:
+                                        raise RuntimeError(
+                                            "FR13_DRAFTER_META_REUSE SELFCHECK"
+                                            f" MISMATCH: {type(_fr13_a).__name__}"
+                                            f".{_fr13_f} reused != fresh at "
+                                            f"token_index={token_index}"
+                                        )
+                            print(
+                                "[FR13_DRAFTER_META_REUSE] selfcheck OK "
+                                f"token_index={token_index}",
+                                flush=True,
+                            ) if token_index == 1 else None
+                else:
+                    _, per_layer_attn_metadata = self.build_per_group_and_layer_attn_metadata(
+                        common_attn_metadata, draft_index=token_index + 1
+                    )
 
                 self.input_ids[:batch_size] = input_ids
                 self.hidden_states[:batch_size] = hidden_states
