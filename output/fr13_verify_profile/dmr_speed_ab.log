@@ -1,0 +1,22 @@
+===== ARM A: dmr-graph (REUSE=1) =====
+healthy at +431s
+TREE ENGAGEMENT OK tok/draft=21.00 accept=3.264
+ENGAGED needle count (SpecDecoding metrics): 9
+error-class lines: 0
+(cfwd sidecar not present)
+LIVE_BATCHED_GATE_DONE 10:43:23Z
+HC_EAGER_BYTE_GATE PASS
+ARM A rc=0
+===== ARM B: nodmr-graph (REUSE=0) =====
+healthy at +421s
+TREE ENGAGEMENT OK tok/draft=21.00 accept=3.264
+ENGAGED needle count (SpecDecoding metrics): 8
+error-class lines: 0
+(cfwd sidecar not present)
+LIVE_BATCHED_GATE_DONE 10:52:25Z
+HC_EAGER_BYTE_GATE PASS
+ARM B rc=0
+===== A/B warm_decode_tps =====
+dmr_graph rounds: [14.84, 16.12, 16.14] mean: 15.7
+nodmr_graph rounds: [14.85, 16.13, 16.14] mean: 15.705
+DMR_SPEED_AB_DONE
