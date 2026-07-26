@@ -985,17 +985,30 @@ def fr13_taw_commit(
     V = int(target_logits.shape[-1])
 
     # pre-drawn uniforms [B, row_cap, 3]: (u_source, u_accept, u_residual).
+    # Per-request determinism: seed a DEVICE generator from each host
+    # generator (depthsync's proven pattern) — never silently fall to the
+    # global stream on device mismatch (the tawcg live-FAIL root cause
+    # candidate: cuda device + cpu gens dropped per-req seeding entirely).
     if uniforms is None:
         uniforms = torch.empty(nreq, row_cap, 3, device=device)
         if generators:
             for req_i in range(nreq):
                 g = generators.get(req_i)
-                if g is not None and g.device.type == device.type:
+                if g is None:
+                    uniforms[req_i] = torch.rand(row_cap, 3, device=device)
+                elif g.device.type == device.type:
                     uniforms[req_i] = torch.rand(
                         row_cap, 3, device=device, generator=g
                     )
                 else:
-                    uniforms[req_i] = torch.rand(row_cap, 3, device=device)
+                    dev_gen = torch.Generator(device=device)
+                    seed_t = torch.randint(
+                        0, 2 ** 31 - 1, (1,), device=g.device, generator=g
+                    )
+                    dev_gen.manual_seed(int(seed_t.item()))
+                    uniforms[req_i] = torch.rand(
+                        row_cap, 3, device=device, generator=dev_gen
+                    )
         else:
             uniforms.uniform_()
 
