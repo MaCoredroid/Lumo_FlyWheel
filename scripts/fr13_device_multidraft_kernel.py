@@ -975,11 +975,21 @@ def fr13_taw_commit(
         print("[FR13_TAW] ENGAGED: tensorized tree-accept walk "
               "(zero per-node readbacks; distribution-equal gate)", flush=True)
     device = target_logits.device
-    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
-    if hasattr(num_draft_tokens, "detach"):
-        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+    global _FR13_SG_TOPOLOGY
+    if not defer_materialize:
+        defer_materialize = bool(torch.cuda.is_current_stream_capturing())
+    if defer_materialize and _FR13_SG_TOPOLOGY is not None:
+        # S1 capture mode: topology pre-read OUTSIDE the capture (step-constant)
+        parents_cpu, counts = _FR13_SG_TOPOLOGY
+    elif defer_materialize:
+        raise RuntimeError("FR13_TAW capture without cached topology (warmup step missing)")
     else:
-        counts = [int(x) for x in num_draft_tokens]
+        parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+        if hasattr(num_draft_tokens, "detach"):
+            counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+        else:
+            counts = [int(x) for x in num_draft_tokens]
+        _FR13_SG_TOPOLOGY = (parents_cpu, counts)  # eager call caches for capture
     nreq = len(counts)
     row_cap = int(max_spec_len) + 1
     ctab, ccnt, starts_t, wmax = _fr13_taw_topology(
@@ -1161,3 +1171,18 @@ def fr13_sg_fill_uniforms(nreq, row_cap, device, generators=None):
     else:
         u.uniform_()
     return u
+
+
+# S1 topology handoff (step-constant; wrapper pre-reads OUTSIDE the capture)
+_FR13_SG_TOPOLOGY = None
+
+
+def fr13_sg_set_topology(tree_parent_indices, num_draft_tokens):
+    global _FR13_SG_TOPOLOGY
+    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+    if hasattr(num_draft_tokens, "detach"):
+        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+    else:
+        counts = [int(x) for x in num_draft_tokens]
+    _FR13_SG_TOPOLOGY = (parents_cpu, counts)
+    return _FR13_SG_TOPOLOGY
