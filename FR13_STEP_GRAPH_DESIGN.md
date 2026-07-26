@@ -109,6 +109,15 @@ their own graphs), and the S1 graph becomes the only replay. CG/R4 remain
 the staged path (STEP_GRAPH=0). Eligibility mirrors R4's (uniform all-spec
 decode, B-keyed) + sampler RNG-as-input.
 
+## S1 capture-legality audit of the sampler (2026-07-26, live source)
+FR13_DEVICE_MULTIDRAFT is BAKED default ON: the deployed accept walk runs in
+fr13_device_multidraft_commit ON DEVICE (class-9 fail-loud, no silent
+fallback); the numpy host walk is legacy-mode (=0) only. => the deployed S1
+span is GPU-clean end to end: device multidraft commit + CG committer body +
+R4 drafter body. Remaining RNG question: how fr13_device_multidraft_commit
+consumes per-req generators (torch philox = graph-safe replay; byte gate
+needs a pinned-uniforms mode either way) — next read.
+
 ## First build steps (S1)
 1. Map every host touchpoint between sampler entry and drafter end in the
    live-container source (read-first discipline): .tolist()/.item()/host
