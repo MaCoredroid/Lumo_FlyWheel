@@ -1247,6 +1247,19 @@ def fr13_taw_commit_captured(
             }
             g = torch.cuda.CUDAGraph()
             torch.cuda.synchronize()
+            # documented pre-capture warmup ON A SIDE STREAM (classic
+            # StreamCaptureInvalidated fix: allocator blocks get stream-
+            # assigned before capture)
+            if _FR13_SG_STREAM is None:
+                _FR13_SG_STREAM = torch.cuda.Stream()
+            _FR13_SG_STREAM.wait_stream(torch.cuda.current_stream())
+            with torch.cuda.stream(_FR13_SG_STREAM):
+                _ = fr13_taw_commit(
+                    statics["ndt"], statics["dti"], statics["tpi"],
+                    statics["tl"], statics["sl"], statics["bti"],
+                    max_spec_len, generators=None, defer_materialize=True)
+            torch.cuda.current_stream().wait_stream(_FR13_SG_STREAM)
+            torch.cuda.synchronize()
             # torch.cuda.graph ctx manager: proper RNG registration/cleanup
             # even on exceptions (bare begin/end left philox registered =>
             # every later eager rand crashed: boots 2-3's engine deaths)
@@ -1270,6 +1283,21 @@ def fr13_taw_commit_captured(
         return fr13_taw_materialize(*ent["out"])
     except Exception as e:
         _FR13_SG_CAP_DEAD = True
+        # philox repair: destroy the failed graph object so its destructor
+        # unregisters the generators (else every later eager rand crashes
+        # with "Offset increment outside graph capture")
+        try:
+            import gc as _gc
+            for _v in ("g",):
+                if _v in dir():
+                    pass
+            locals_g = locals().get("g")
+            if locals_g is not None:
+                del locals_g
+            _gc.collect()
+            torch.cuda.synchronize()
+        except Exception:
+            pass
         print("[FR13_STEP_GRAPH] TAW-capture DISABLED (eager fallback): "
               + type(e).__name__ + ": " + str(e)[:160], flush=True)
         return fr13_taw_commit(
