@@ -902,6 +902,22 @@ fr13_device_multidraft_commit = _fr13_md_gpu_timed(fr13_device_multidraft_commit
 # ---------------------------------------------------------------------------
 _FR13_TAW_TOPO_CACHE: dict = {}
 _FR13_TAW_ANNOUNCED = False
+_FR13_BULK_GEN = None
+
+
+def _fr13_bulk_gen(device):
+    """POISON-IMMUNE bulk RNG (twin of the topk_topp port): a silently-
+    aborted capture leaves the DEFAULT philox generator graph-registered and
+    every default-gen draw dies ('Offset increment outside graph capture' —
+    the boot-14 post-DISABLE death was THIS module's uniform fallback).
+    Explicit generators survive; the unseeded bulk draw was never
+    reproducible, so this is distribution-equal."""
+    global _FR13_BULK_GEN
+    if _FR13_BULK_GEN is None:
+        g = torch.Generator(device=device)
+        g.manual_seed(torch.initial_seed() & 0x7FFFFFFF)
+        _FR13_BULK_GEN = g
+    return _FR13_BULK_GEN
 
 
 def _fr13_taw_topology(parents_key, parents_cpu, counts, max_spec_len, device):
@@ -1022,7 +1038,9 @@ def fr13_taw_commit(
             for req_i in range(nreq):
                 g = generators.get(req_i)
                 if g is None:
-                    uniforms[req_i] = torch.rand(row_cap, 3, device=device)
+                    uniforms[req_i] = torch.rand(
+                        row_cap, 3, device=device,
+                        generator=_fr13_bulk_gen(device))
                 elif g.device.type == device.type:
                     uniforms[req_i] = torch.rand(
                         row_cap, 3, device=device, generator=g
@@ -1037,7 +1055,7 @@ def fr13_taw_commit(
                         row_cap, 3, device=device, generator=dev_gen
                     )
         else:
-            uniforms.uniform_()
+            uniforms.uniform_(generator=_fr13_bulk_gen(device))
 
     cur = torch.full((nreq,), -1, dtype=torch.long, device=device)  # parent node
     alive = torch.ones(nreq, dtype=torch.bool, device=device)

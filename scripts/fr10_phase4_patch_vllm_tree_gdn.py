@@ -7170,6 +7170,19 @@ def _fr13_replay_durable_ab(
 # correct deterministic tree accept rule. The same rows are diagnostics only for
 # sampled Gate C; sampled production must use the distribution-preserving tree
 # rejection sampler, not this max selector.
+def _fr13_sg_capchk(tag):
+    """FR13_CAPDBG phase probe: a silently-invalidated capture flips
+    is_current_stream_capturing() False — the first probe that fires names
+    the guilty phase. Inert unless FR13_CAPDBG=1 AND a capture was active."""
+    import os
+    if os.environ.get("FR13_CAPDBG") != "1":
+        return
+    if globals().get("_FR13_SG_CAPCHK_ARMED") and not torch.cuda.is_current_stream_capturing():
+        if not globals().get("_FR13_SG_CAPCHK_FIRED"):
+            globals()["_FR13_SG_CAPCHK_FIRED"] = True
+            print(f"[FR13_CAPDBG] INVALIDATED at phase: {tag}", flush=True)
+
+
 def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows, dm):
     """S1-full (FR13_STEP_GRAPH=2) in-capture committer: consume TAW defer
     products entirely on-device — product fill + GDN buffer fills + conv col0
@@ -7179,6 +7192,7 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
     only on STAGED steps of the same boot (warmup guarantees >=1). Every
     missing-state case RAISES => capture aborts => S1 DISABLED staged fallback."""
     from vllm.model_executor.layers.mamba import gdn_linear_attn as _g
+    _fr13_sg_capchk("route-entry (sampler+walk done)")
     row_buf, row_len, path_buf, path_len = products
     nreq = int(row_buf.shape[0])
     gdn_paths, _gdn_rows = dm.fr13_taw_products_device(
@@ -7217,7 +7231,9 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
     lbuf[:nreq].zero_()
     pbuf[:nreq, :k].copy_(gdn_paths[:, :k].to(pbuf.dtype))
     lbuf[:nreq].copy_(path_len.to(lbuf.dtype))
+    _fr13_sg_capchk("post-fill1")
     _fr13_conv_commit_to_col0(layers, pbuf, lbuf, nreq, _runrow_commit, _burn)
+    _fr13_sg_capchk("post-conv-commit")
     # fill 2: replay (spec-row) order via the wrapper-refilled perm static —
     # the staged tail's host-list reorder, expressed as index_select
     pbuf[:nreq, :k].copy_(gdn_paths.index_select(0, perm)[:, :k].to(pbuf.dtype))
@@ -7242,6 +7258,7 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
         burn_node_bank=_burn,
         banks_list=_banks,
     )
+    _fr13_sg_capchk("post-committer-launch")
     stacks['flags'][:, 0].fill_(0)
     globals()['_FR13_SG_DEFER_STASH'] = (row_buf, row_len, path_buf, path_len)
     return output_token_ids
@@ -7345,6 +7362,7 @@ def _lumo_tree_canonical_multidraft_sample(
             'FR13 greedy-via-rejection: all_greedy with draft_probs!=None is '
             'not a valid combination (greedy MTP always passes draft_probs=None)'
         )
+    _fr13_sg_capchk("committer-fn-entry")
     if __import__('os').environ.get('FR13_FORCE_SPINE_COMMIT', '0') == '1':
         # FR13_FORCE_SPINE_COMMIT is a GREEDY-committer diagnostic. The
         # sampled committer's sequential child walk cannot force-commit the
@@ -17927,15 +17945,19 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    _fr13_sg_prev = torch.cuda.current_stream()\n"
         "                    torch.cuda.set_stream(self._fr13_sg_stream)\n"
         "                    try:\n"
+        "                        _fr13_sg_rs.__dict__[\"_FR13_SG_CAPCHK_ARMED\"] = True\n"
+        "                        _fr13_sg_rs.__dict__[\"_FR13_SG_CAPCHK_FIRED\"] = False\n"
         "                        _fr13_sg_g.capture_begin()\n"
         "                        sampler_output = self._sample(logits, _fr13_sg_md)\n"
         "                        _fr13_sg_g.capture_end()\n"
+        "                        _fr13_sg_rs.__dict__[\"_FR13_SG_CAPCHK_ARMED\"] = False\n"
         "                    except Exception:\n"
         "                        # SAFE ABORT: end the open capture, then RESET —\n"
         "                        # reset() unregisters the philox generators the\n"
         "                        # capture registered. Without it every later\n"
         "                        # eager rand dies with 'Offset increment outside\n"
         "                        # graph capture' => EngineDead (boot-2/3 death).\n"
+        "                        _fr13_sg_rs.__dict__[\"_FR13_SG_CAPCHK_ARMED\"] = False\n"
         "                        try:\n"
         "                            _fr13_sg_g.capture_end()\n"
         "                        except Exception:\n"

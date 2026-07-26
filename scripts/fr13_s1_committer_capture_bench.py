@@ -15,10 +15,10 @@ dev = torch.device("cuda")
 g = torch.Generator().manual_seed(7)
 
 # qwen3.6-27b GDN geometry (from the live boot): fp32 banks
-L, RING = 4, 24            # 4 layers is enough to exercise the loop
-num_kh, dim_k, num_vh, dim_v = 4, 128, 8, 128
+L, RING = 48, 24           # REAL scale: 48 GDN layers, live head geometry
+num_kh, dim_k, num_vh, dim_v = 16, 128, 32, 128
 B, MAX_PATH = 4, 16
-ROWS = 64
+ROWS = 128
 
 def mk_inputs(seed):
     gg = torch.Generator().manual_seed(seed)
