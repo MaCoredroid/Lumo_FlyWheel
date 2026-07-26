@@ -12262,6 +12262,32 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     try:
                         import types as _fr13_dvk_types
                         _fr13_dvk_lm = self.model.lm_head
+                        # GATHER mode (FR13_DRAFT_VOCAB_BLOCKS=<json>): the
+                        # subset is measured top-(K/128) 128-id blocks from
+                        # our own trace corpus, not the contiguous id prefix.
+                        # 128-block granularity keeps fp8 block-scale rows
+                        # aligned; sliced argmax rows then need mapping back
+                        # to real vocab ids via _fr13_dvk_map_t.
+                        _fr13_dvk_bl = os.environ.get(
+                            "FR13_DRAFT_VOCAB_BLOCKS", ""
+                        )
+                        _fr13_dvk_idx = None
+                        _fr13_dvk_blk = None
+                        if _fr13_dvk_bl:
+                            import json as _fr13_dvk_json
+                            with open(_fr13_dvk_bl) as _fr13_dvk_f:
+                                _fr13_dvk_js = _fr13_dvk_json.load(_fr13_dvk_f)
+                            _fr13_dvk_blk = torch.tensor(
+                                _fr13_dvk_js["subsets"][str(_fr13_dvk)],
+                                dtype=torch.long,
+                                device=_fr13_dvk_lm.weight.device,
+                            )
+                            _fr13_dvk_idx = (
+                                _fr13_dvk_blk[:, None] * 128
+                                + torch.arange(
+                                    128, device=_fr13_dvk_blk.device
+                                )[None, :]
+                            ).reshape(-1)
                         _fr13_dvk_sh = _fr13_dvk_types.SimpleNamespace()
                         for _fr13_dvk_a in dir(_fr13_dvk_lm):
                             if _fr13_dvk_a.startswith("__"):
@@ -12274,20 +12300,32 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                     >= _fr13_dvk // 128
                                     and _fr13_dvk_v.shape[0] > 1
                                 ):
-                                    _fr13_dvk_n = (
-                                        _fr13_dvk
-                                        if _fr13_dvk_v.shape[0] > _fr13_dvk // 2
-                                        else _fr13_dvk // 128
-                                    )
-                                    _fr13_dvk_v = _fr13_dvk_v[:_fr13_dvk_n]
+                                    if _fr13_dvk_idx is not None:
+                                        _fr13_dvk_v = _fr13_dvk_v.index_select(
+                                            0,
+                                            _fr13_dvk_idx
+                                            if _fr13_dvk_v.shape[0]
+                                            > _fr13_dvk // 2
+                                            else _fr13_dvk_blk,
+                                        ).contiguous()
+                                    else:
+                                        _fr13_dvk_n = (
+                                            _fr13_dvk
+                                            if _fr13_dvk_v.shape[0]
+                                            > _fr13_dvk // 2
+                                            else _fr13_dvk // 128
+                                        )
+                                        _fr13_dvk_v = _fr13_dvk_v[:_fr13_dvk_n]
                                 setattr(_fr13_dvk_sh, _fr13_dvk_a, _fr13_dvk_v)
                             elif not callable(_fr13_dvk_v):
                                 setattr(_fr13_dvk_sh, _fr13_dvk_a, _fr13_dvk_v)
                         _fr13_dvk_sh.quant_method = _fr13_dvk_lm.quant_method
                         self._fr13_dvk_shim = _fr13_dvk_sh
+                        self._fr13_dvk_map_t = _fr13_dvk_idx
                         print(
                             f"[FR13_DRAFT_VOCAB] shim built K={_fr13_dvk} "
-                            f"(head rows {_fr13_dvk_lm.weight.shape[0]}->{_fr13_dvk})",
+                            f"(head rows {_fr13_dvk_lm.weight.shape[0]}->{_fr13_dvk}) "
+                            f"mode={'gather' if _fr13_dvk_idx is not None else 'contig'}",
                             flush=True,
                         )
                     except Exception as _fr13_dvk_e:
@@ -12310,6 +12348,11 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         return self.model.compute_logits(_h)
             else:
                 _fr13_dvk = 0
+            _fr13_dvk_map = (
+                getattr(self, "_fr13_dvk_map_t", None)
+                if _fr13_dvk > 0 and not getattr(self, "_fr13_dvk_dead", False)
+                else None
+            )
             _fr13_ds_on = (
                 os.environ.get("FR13_DFWD_SPLIT_NEEDLE", "0") == "1"
                 and not torch.cuda.is_current_stream_capturing()
@@ -12534,6 +12577,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             last_hidden_states[:batch_size]
                         )
                     draft_token_ids = _fr10_step_logits.argmax(dim=-1)
+                    if _fr13_dvk_map is not None:
+                        draft_token_ids = _fr13_dvk_map[draft_token_ids]
                     if _fr13_selfcheck:
                         _fr13_sc_check(
                             "loop",
@@ -12563,6 +12608,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                         _fr10_step_top2 = torch.topk(
                             _fr10_step_logits, _fr10_step_topk_k, dim=-1
                         ).indices
+                        if _fr13_dvk_map is not None:
+                            _fr10_step_top2 = _fr13_dvk_map[_fr10_step_top2]
                         if _fr13_dg_cap:
                             _dg["leaf"][token_index].copy_(_fr10_step_top2[:, 1])
                             _fr10_leaf_tokens.append(_dg["leaf"][token_index])
@@ -12595,6 +12642,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     _fr10_step_top2 = torch.topk(
                         _fr10_step_logits, _fr10_step_topk_k, dim=-1
                     ).indices
+                    if _fr13_dvk_map is not None:
+                        _fr10_step_top2 = _fr13_dvk_map[_fr10_step_top2]
                     draft_token_ids = self._greedy_sample(last_hidden_states[:batch_size])
                     _fr10_spine_tokens.append(draft_token_ids)
                     # FR13_RESHAPE_DEPTH3: only the leaf append is depth-gated.
@@ -12621,6 +12670,8 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 int(_fr10_step_logits.shape[-1])),
                             dim=-1,
                         ).indices
+                        if _fr13_dvk_map is not None:
+                            _fr13_dg_wt = _fr13_dvk_map[_fr13_dg_wt]
                         if _fr13_dg_cap:
                             _dg["wide"][
                                 token_index, :, : _fr13_dg_wt.shape[1]
