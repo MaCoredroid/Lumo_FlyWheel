@@ -3155,6 +3155,96 @@ def build_replay_bank_pointer_table(
     return ptrs, (int(shape0[0]), int(shape0[1]), int(shape0[2]), int(shape0[3])), int(stride0)
 
 
+def _fr13_native_committer_all_layers_device(
+    banks_list, spec_state_indices, accepted_paths, accepted_lens,
+    k_rings, v_rings, a_rings, b_rings, A_logs, dt_biases,
+    num_layers, num_spec_decodes, output_scale, use_qk_l2norm_in_kernel,
+    burn_node_bank, root_node=0, max_path=16,
+):
+    """S1 (=2) IN-CAPTURE committer: the CG body's fixed-shape neutral-padded
+    fused_sigmoid sequence with the segment layout built ON DEVICE — no host
+    .tolist()/torch.tensor(list) (every other committer flavor is host-layout
+    and capture-illegal). Neutral padding semantics (a=-1e4 => decay 1,
+    k=v=b=0 => no write) byte-proven by the CG gates. Persistent per-(sig)
+    buffers => graph-stable addresses; every fill op is a device op recorded
+    into the outer S1 graph, so replays recompute the layout from the live
+    accepted_paths/lens device tensors. burn must be OFF (stateless-tree
+    default; the S1 route asserts it) — fused_sigmoid touches col0 only."""
+    from vllm.model_executor.layers.fla.ops import (
+        fused_sigmoid_gating_delta_rule_update as _sg,
+    )
+    if burn_node_bank:
+        raise RuntimeError("S1 device committer requires burn OFF")
+    L = int(num_layers)
+    B = int(num_spec_decodes)
+    dev = k_rings.device
+    num_kh, dim_k = int(k_rings.shape[-2]), int(k_rings.shape[-1])
+    num_vh, dim_v = int(v_rings.shape[-2]), int(v_rings.shape[-1])
+    MAX_PATH = int(max_path)
+    MAXT = B * MAX_PATH
+    SCRATCH = int(banks_list[0].shape[0]) - 1
+    RING = int(k_rings.shape[2])
+    sig = ("s1dev", L, B, MAX_PATH, num_kh, dim_k, num_vh, dim_v, id(banks_list[0]))
+    st = _FR13_GRAPH_COMMITTER.get(sig)
+    if st is None:
+        # device-op-only init (capture-legal on first use): no tensor-from-list
+        _dt = k_rings.dtype
+        st = dict(
+            kbuf=torch.zeros(L, MAXT, num_kh, dim_k, device=dev, dtype=_dt),
+            vbuf=torch.zeros(L, MAXT, num_vh, dim_v, device=dev, dtype=_dt),
+            abuf=torch.full((L, MAXT, num_vh), -1e4, device=dev, dtype=_dt),
+            bbuf=torch.zeros(L, MAXT, num_vh, device=dev, dtype=_dt),
+            qbuf=torch.zeros(1, MAXT, num_kh, dim_k, device=dev, dtype=_dt),
+            cu=(torch.arange(B + 1, device=dev, dtype=torch.int64) * MAX_PATH).to(torch.int32),
+            ssi=torch.zeros(L, B, MAX_PATH, device=dev, dtype=torch.int32),
+            ar=torch.arange(MAX_PATH, device=dev),
+            arb=torch.arange(B, device=dev),
+        )
+        _FR13_GRAPH_COMMITTER[sig] = st
+    # ---- neutralize, then masked-overwrite real slots (all device ops) ----
+    st["abuf"].fill_(-1e4)
+    st["bbuf"].zero_()
+    st["kbuf"].zero_()
+    st["vbuf"].zero_()
+    st["ssi"].fill_(SCRATCH)
+    acc = accepted_lens[:B].to(torch.long)
+    node_mat = torch.empty(B, MAX_PATH, dtype=torch.long, device=dev)
+    node_mat[:, 0] = int(root_node)
+    node_mat[:, 1:] = accepted_paths[:B, : MAX_PATH - 1].to(torch.long).clamp(min=0)
+    valid = st["ar"].unsqueeze(0) <= acc.unsqueeze(1)          # [B, MAX_PATH]
+    safe_nodes = torch.where(
+        valid, node_mat, torch.zeros_like(node_mat)).clamp(0, RING - 1)
+    bidx = st["arb"].view(B, 1)
+    k_sel = k_rings[:, bidx, safe_nodes]                        # [L,B,MP,kh,dk]
+    v_sel = v_rings[:, bidx, safe_nodes]
+    a_sel = a_rings[:, bidx, safe_nodes]                        # [L,B,MP,vh]
+    b_sel = b_rings[:, bidx, safe_nodes]
+    m4 = valid.view(1, B, MAX_PATH, 1, 1)
+    m3 = valid.view(1, B, MAX_PATH, 1)
+    st["kbuf"].view(L, B, MAX_PATH, num_kh, dim_k)[:] = torch.where(
+        m4, k_sel, torch.zeros_like(k_sel))
+    st["vbuf"].view(L, B, MAX_PATH, num_vh, dim_v)[:] = torch.where(
+        m4, v_sel, torch.zeros_like(v_sel))
+    st["abuf"].view(L, B, MAX_PATH, num_vh)[:] = torch.where(
+        m3, a_sel, torch.full_like(a_sel, -1e4))
+    st["bbuf"].view(L, B, MAX_PATH, num_vh)[:] = torch.where(
+        m3, b_sel, torch.zeros_like(b_sel))
+    st["ssi"][:, :, :] = spec_state_indices[:, :B, 0:1].to(torch.int32)
+    for _L in range(L):
+        _sg(
+            A_log=A_logs[_L],
+            a=st["abuf"][_L].reshape(1, MAXT, num_vh),
+            b=st["bbuf"][_L].reshape(1, MAXT, num_vh),
+            dt_bias=dt_biases[_L], q=st["qbuf"],
+            k=st["kbuf"][_L].reshape(1, MAXT, num_kh, dim_k),
+            v=st["vbuf"][_L].reshape(1, MAXT, num_vh, dim_v),
+            scale=output_scale, initial_state=banks_list[_L],
+            inplace_final_state=True, cu_seqlens=st["cu"],
+            ssm_state_indices=st["ssi"][_L],
+            use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+        )
+
+
 def launch_tree_gdn_replay_all_layers(
     *,
     bank_anchor: torch.Tensor,
@@ -3311,6 +3401,22 @@ def launch_tree_gdn_replay_all_layers(
         _spec_cols = int(spec_state_indices.shape[2])
         # env is dropped by EngineCore worker curation -> sidecar files are the
         # deployment-armable path (same pattern as _fr13_committer_native_on).
+        if torch.cuda.is_current_stream_capturing():
+            # S1 (=2) outer capture: EVERY other committer flavor is host-
+            # layout (.tolist/tensor-from-list) or a nested graph replay —
+            # both capture-illegal. The device-layout variant computes the
+            # same fixed-shape neutral-padded layout with device ops.
+            _fr13_native_committer_all_layers_device(
+                banks_list=banks_list, spec_state_indices=spec_state_indices,
+                accepted_paths=accepted_paths, accepted_lens=accepted_lens,
+                k_rings=k_rings, v_rings=v_rings, a_rings=a_rings,
+                b_rings=b_rings, A_logs=A_logs, dt_biases=dt_biases,
+                num_layers=num_layers, num_spec_decodes=num_spec_decodes,
+                output_scale=output_scale,
+                use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+                burn_node_bank=burn_node_bank,
+            )
+            return
         if (os.environ.get("FR13_COMMITTER_GRAPH") == "1"
                 or os.path.exists("/logs/fr13_committer_graph.arm")
                 or os.path.exists("/tmp/fr13_committer_graph.arm")):
