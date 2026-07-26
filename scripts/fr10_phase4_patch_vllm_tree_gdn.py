@@ -17532,28 +17532,85 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
     if anchor not in text:
         raise RuntimeError("FR13_STEP_GRAPH_SCAFFOLD anchor not found")
     inject = (
-        f"        {sentinel}: S1 eligibility probe (inert unless armed).\n"
+        f"        {sentinel}: S1-lite — capture _sample (TAW walk + committer\n"
+        "        # body) as ONE B-keyed CUDA graph. Fail-loud fallback: ANY\n"
+        "        # capture/replay exception permanently reverts to the staged\n"
+        "        # path with a one-shot needle (arm stays valid DEPTHSYNC-class).\n"
         "        _fr13_sg_on = getattr(self, \"_fr13_sg_on\", None)\n"
         "        if _fr13_sg_on is None:\n"
         "            _fr13_sg_on = (\n"
         "                __import__(\"os\").environ.get(\"FR13_STEP_GRAPH\", \"0\") == \"1\"\n"
         "            )\n"
         "            self._fr13_sg_on = _fr13_sg_on\n"
-        "        if _fr13_sg_on and not getattr(self, \"_fr13_sg_reported\", False):\n"
-        "            _fr13_sg_nr = int(self.input_batch.num_reqs)\n"
-        "            _fr13_sg_spec = spec_decode_metadata is not None\n"
-        "            _fr13_sg_elig = bool(\n"
-        "                _fr13_sg_spec\n"
-        "                and not torch.cuda.is_current_stream_capturing()\n"
-        "            )\n"
-        "            self._fr13_sg_reported = True\n"
-        "            print(\n"
-        "                \"[FR13_STEP_GRAPH] S1 scaffold armed: first-step class \"\n"
-        "                f\"B={_fr13_sg_nr} spec={_fr13_sg_spec} eligible={_fr13_sg_elig} \"\n"
-        "                \"(capture body NOT YET WIRED -- staged path in use)\",\n"
-        "                flush=True,\n"
-        "            )\n"
-    ) + anchor
+        "            self._fr13_sg_graphs = {}\n"
+        "            self._fr13_sg_dead = False\n"
+        "        _fr13_sg_used = False\n"
+        "        if (\n"
+        "            _fr13_sg_on\n"
+        "            and not self._fr13_sg_dead\n"
+        "            and spec_decode_metadata is not None\n"
+        "            and not torch.cuda.is_current_stream_capturing()\n"
+        "        ):\n"
+        "            try:\n"
+        "                _fr13_sg_B = int(spec_decode_metadata.num_draft_tokens.shape[0]) if hasattr(spec_decode_metadata.num_draft_tokens, \"shape\") else len(spec_decode_metadata.num_draft_tokens)\n"
+        "                _fr13_sg_key = (_fr13_sg_B, tuple(logits.shape))\n"
+        "                _fr13_sg_ent = self._fr13_sg_graphs.get(_fr13_sg_key)\n"
+        "                if _fr13_sg_ent is not None and _fr13_sg_ent[\"logits_ptr\"] != logits.data_ptr():\n"
+        "                    raise RuntimeError(\"S1 logits buffer address moved (verify graph not address-stable)\")\n"
+        "                import fr13_device_multidraft_kernel as _fr13_sg_dm\n"
+        "                if _fr13_sg_ent is None:\n"
+        "                    # ---- CAPTURE (once per (B, logits-shape)) ----\n"
+        "                    _fr13_sg_md = spec_decode_metadata\n"
+        "                    _fr13_sg_statics = {}\n"
+        "                    for _fr13_sg_f in (\"draft_token_ids\", \"num_draft_tokens\", \"cu_num_draft_tokens\", \"target_logits_indices\", \"bonus_logits_indices\", \"logits_indices\"):\n"
+        "                        _fr13_sg_v = getattr(_fr13_sg_md, _fr13_sg_f, None)\n"
+        "                        if torch.is_tensor(_fr13_sg_v):\n"
+        "                            _fr13_sg_s = _fr13_sg_v.clone()\n"
+        "                            _fr13_sg_statics[_fr13_sg_f] = _fr13_sg_s\n"
+        "                            setattr(_fr13_sg_md, _fr13_sg_f, _fr13_sg_s)\n"
+        "                    _fr13_sg_g = torch.cuda.CUDAGraph()\n"
+        "                    if getattr(self, \"_fr13_sg_stream\", None) is None:\n"
+        "                        self._fr13_sg_stream = torch.cuda.Stream()\n"
+        "                    torch.cuda.synchronize()\n"
+        "                    _fr13_sg_prev = torch.cuda.current_stream()\n"
+        "                    torch.cuda.set_stream(self._fr13_sg_stream)\n"
+        "                    _fr13_sg_g.capture_begin()\n"
+        "                    sampler_output = self._sample(logits, _fr13_sg_md)\n"
+        "                    _fr13_sg_g.capture_end()\n"
+        "                    torch.cuda.set_stream(_fr13_sg_prev)\n"
+        "                    _fr13_sg_g.replay()\n"
+        "                    self._fr13_sg_graphs[_fr13_sg_key] = {\n"
+        "                        \"graph\": _fr13_sg_g,\n"
+        "                        \"statics\": _fr13_sg_statics,\n"
+        "                        \"md\": _fr13_sg_md,\n"
+        "                        \"out\": sampler_output,\n"
+        "                        \"logits_ptr\": logits.data_ptr(),\n"
+        "                    }\n"
+        "                    print(\n"
+        "                        f\"[FR13_STEP_GRAPH] S1-lite captured B={_fr13_sg_B} \"\n"
+        "                        f\"(sampler+committer one graph; statics={len(_fr13_sg_statics)})\",\n"
+        "                        flush=True,\n"
+        "                    )\n"
+        "                else:\n"
+        "                    # ---- REPLAY ----\n"
+        "                    for _fr13_sg_f, _fr13_sg_s in _fr13_sg_ent[\"statics\"].items():\n"
+        "                        _fr13_sg_v = getattr(spec_decode_metadata, _fr13_sg_f)\n"
+        "                        _fr13_sg_s.copy_(_fr13_sg_v, non_blocking=True)\n"
+        "                    _fr13_sg_ent[\"graph\"].replay()\n"
+        "                    sampler_output = _fr13_sg_ent[\"out\"]\n"
+        "                _fr13_sg_used = True\n"
+        "            except Exception as _fr13_sg_e:\n"
+        "                self._fr13_sg_dead = True\n"
+        "                print(\n"
+        "                    \"[FR13_STEP_GRAPH] S1 DISABLED (staged fallback): \"\n"
+        "                    + type(_fr13_sg_e).__name__ + \": \" + str(_fr13_sg_e)[:200],\n"
+        "                    flush=True,\n"
+        "                )\n"
+        "                _fr13_sg_used = False\n"
+        "        if not _fr13_sg_used:\n"
+    ) + anchor.replace("        with record", "            with record").replace(
+        "            sampler_output", "                sampler_output"
+    )
     text = text.replace(anchor, inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
@@ -17830,8 +17887,11 @@ def main() -> int:
         # tree_reqkey (anchors on its _fr13_rk_req_ids line).
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_merged_drafter()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_capture()),
-        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_step_graph_scaffold()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_apply()),
+        # STEP_GRAPH scaffold MUST run AFTER remap_apply: both anchor on the
+        # pristine _sample block; remap appends after it, the scaffold
+        # re-indents it (remap's anchor would no longer exist afterward).
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_step_graph_scaffold()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
         # this patch's propose_draft_token_ids restore anchor in program order,
