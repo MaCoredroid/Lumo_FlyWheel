@@ -35,3 +35,20 @@ CAPDBG capture-lifecycle needle, skip-reason needles, capture-status phase
 probes (NOTE: is_current_stream_capturing stays True on Invalidated — blind),
 composed/committer/sampler-half capture benches, MEMFRAC allocator probe.
 Hazard log: PRESSURE ballast on unified memory = host OOM (retired 22:54).
+
+## Bisect conclusion (boot-19, 2026-07-26 23:42) + pivot
+SCOPE=half (sampler+walk+products; committer OUT) invalidates with the
+IDENTICAL signature => the invalidator is in the SAMPLER STRIP's live context
+(_sample entry -> walk: vLLM Sampler bonus path / slices / constraints).
+Walk-only (=1) captures are proven live; products+device-committer proven
+offline byte-identical at scale. Shared-pool refuted (boot-18 attempt-1,
+pre-link-drop). Boot-18's 0/4 itself = transient GB10<->alienware link drop
+(watchdog-classified network-drop; link recovered), NOT code. Cache-regression
+smell CLEARED: hit-rate ramps overlap (s1go 0->21->41->65->82% vs boot-18
+44->55% at same-elapsed); boot-16 prefill_frac 0.63 = task-path composition.
+
+PIVOT (=3): grow the LIVE-PROVEN =1 in-dispatcher capture region to
+walk -> products_device -> device committer (zero vLLM sampler code in-region);
+committer tail gets a state-committed marker (skip conv/launch, keep
+publishes). Sampler strip (~3-5ms launches) stays eager — acceptable loss;
+the committer launch storm (dominant glue) is captured. =2 runner wrapper parked.
