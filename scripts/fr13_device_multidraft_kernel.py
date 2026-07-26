@@ -1056,7 +1056,7 @@ def fr13_taw_commit(
         has_kids = (nk > 0) & alive
         # ---- leaf/bonus rows (alive, no children): self-row sample or bonus id
         leaf = alive & ~ (nk > 0)
-        if bool(leaf.any()):
+        if True:  # capture-legal: leaf block runs unconditionally (mask-internal)
             # careful host-free: compute for ALL rows, apply masked
             cp_ok = (cur >= 0) & (cur < counts_t)
             self_rows = torch.softmax(
@@ -1071,8 +1071,7 @@ def fr13_taw_commit(
                              tok_leaf.unsqueeze(1))
             row_len = row_len + emit.long()
             alive = alive & ~leaf
-        if not bool(has_kids.any()):
-            break
+        # capture-legal: fixed-depth loop, no data-dependent break
         # ---- parent target row: legacy uses target_logits[start+children[0]]
         first_child = kids[:, 0].clamp(min=0)
         p = torch.softmax(
@@ -1097,7 +1096,7 @@ def fr13_taw_commit(
         accepted = has_kids & ~zero_mass & (uniforms[:, level, 1] < acc_p)
         # rejected rows: residual sample over full vocab (or plain p on zero mass)
         rejected = has_kids & ~accepted
-        if bool(rejected.any()):
+        if True:  # capture-legal: rejected block runs unconditionally (mask-internal)
             weights = overlaps / mass.clamp(min=1e-30).unsqueeze(-1)
             q_mix_v = torch.zeros_like(p)
             q_mix_v.scatter_add_(1, kid_tokens.clamp(min=0), weights * kid_mask)
@@ -1304,6 +1303,8 @@ def fr13_taw_commit_captured(
         return fr13_taw_materialize(*ent["out"])
     except Exception as e:
         _FR13_SG_CAP_DEAD = True
+        import traceback as _tb
+        _tb.print_exc()
         # philox repair: destroy the failed graph object so its destructor
         # unregisters the generators (else every later eager rand crashes
         # with "Offset increment outside graph capture")

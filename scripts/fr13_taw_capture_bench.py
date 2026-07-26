@@ -32,11 +32,14 @@ NC = len(parents)
 os.environ["FR13_TAW"] = "1"
 os.environ["FR13_STEP_GRAPH"] = "1"
 
+_IG = torch.Generator(device=dev); _IG.manual_seed(123)
 def make_inputs():
-    drafts = torch.randint(0, V, (NC * B,), device=dev)
-    tl = torch.randn(NC * B, V, device=dev)
-    sl = torch.randn(NC * B, V, device=dev)
-    bonus = torch.randint(0, V, (B, 1), device=dev)
+    # explicit generator: doubles as the prod-survivability probe (vLLM uses
+    # explicit gens; if these survive a failed capture, prod survives too)
+    drafts = torch.randint(0, V, (NC * B,), device=dev, generator=_IG)
+    tl = torch.randn(NC * B, V, device=dev, generator=_IG)
+    sl = torch.randn(NC * B, V, device=dev, generator=_IG)
+    bonus = torch.randint(0, V, (B, 1), device=dev, generator=_IG)
     ndt = torch.full((B,), NC, dtype=torch.long, device=dev)
     tpi = torch.tensor(parents * B, device=dev)
     return ndt, drafts, tpi, tl, sl, bonus
@@ -50,6 +53,23 @@ for step in range(4):
         generators=None)
     outs.append([r[:3] for r in out[0]])
     print(f"step {step}: rows head = {[r[:2] for r in out[0]]}")
+if dm._FR13_SG_CAP_DEAD:
+    # PROD-SURVIVABILITY PROBE: vLLM samplers use EXPLICIT generators, not the
+    # default one the poison binds to. If explicit draws survive, a failed
+    # capture in prod is non-fatal (dead-flag insurance suffices).
+    try:
+        eg = torch.Generator(device=dev); eg.manual_seed(7)
+        _ = torch.rand(8, device=dev, generator=eg)
+        torch.cuda.synchronize()
+        print("post-abort EXPLICIT-generator draw: OK (prod likely survivable)")
+    except Exception as e:
+        print(f"post-abort EXPLICIT-generator draw FAILED: {type(e).__name__}")
+    try:
+        _ = torch.randn(8, device=dev)
+        torch.cuda.synchronize()
+        print("post-abort DEFAULT-generator randn: OK")
+    except Exception as e:
+        print(f"post-abort DEFAULT randn FAILED: {type(e).__name__}")
 assert not dm._FR13_SG_CAP_DEAD, "capture went DEAD — read the DISABLED needle above"
 assert any(outs[2][i] != outs[3][i] for i in range(B)) or True
 n_keys = len([v for v in dm._FR13_SG_CAP.values() if isinstance(v, dict)])
