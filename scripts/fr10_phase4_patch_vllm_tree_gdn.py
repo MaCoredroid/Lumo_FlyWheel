@@ -7167,6 +7167,154 @@ def _fr13_replay_durable_ab(
 # correct deterministic tree accept rule. The same rows are diagnostics only for
 # sampled Gate C; sampled production must use the distribution-preserving tree
 # rejection sampler, not this max selector.
+def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows, dm):
+    """S1-full (FR13_STEP_GRAPH=2) in-capture committer: consume TAW defer
+    products entirely on-device — product fill + GDN buffer fills + conv col0
+    commit + ONE batched replay launch. ALL host publishes are deferred to
+    fr13_sg_post_replay_publish (wrapper calls it after capture/replay). Host
+    validation reads (flags tolist, ptr compares) are capture-illegal and run
+    only on STAGED steps of the same boot (warmup guarantees >=1). Every
+    missing-state case RAISES => capture aborts => S1 DISABLED staged fallback."""
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _g
+    row_buf, row_len, path_buf, path_len = products
+    nreq = int(row_buf.shape[0])
+    gdn_paths, _gdn_rows = dm.fr13_taw_products_device(
+        row_buf, row_len, path_buf, path_len, output_token_ids,
+        accepted_tree_rows)
+    pbuf = getattr(_g, '_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR', None)
+    lbuf = getattr(_g, '_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR', None)
+    perm = getattr(dm, '_FR13_SG_PERM', None)
+    stacks = getattr(_g, '_FR13_EAGER_PACK_STACKS', None)
+    layers = getattr(_g, '_FR13_REPLAY_LAYERS', None)
+    tbl = getattr(_g, '_FR13_EAGER_PACK_BANK_TBL', None)
+    if (pbuf is None or lbuf is None or perm is None or stacks is None
+            or not layers or tbl is None):
+        raise RuntimeError(
+            'S1 device route: missing device state '
+            f'(pbuf={pbuf is not None} lbuf={lbuf is not None} '
+            f'perm={perm is not None} stacks={stacks is not None} '
+            f'layers={bool(layers)} tbl={tbl is not None})')
+    if int(perm.numel()) != nreq or int(pbuf.size(0)) < nreq:
+        raise RuntimeError(
+            f'S1 device route rows mismatch: perm={int(perm.numel())} '
+            f'nreq={nreq} pbuf_rows={int(pbuf.size(0))}')
+    import os as _os
+    _runrow_commit = _os.environ.get('FR13_APC_COMMIT_TO_RUNNING_ROW', '1') == '1'
+    _runrow_init = _os.environ.get('FR13_TREE_RUNROW_INIT', '1') == '1'
+    _burn = _os.environ.get('FR13_APC_BURN_NODE_BANK', '0') == '1'
+    if not (_runrow_commit and _runrow_init and not _burn):
+        raise RuntimeError(
+            'S1 device route requires stateless-tree defaults '
+            '(commit=init=1 burn=0)')
+    cols = int(pbuf.size(1))
+    k = min(cols, int(gdn_paths.shape[1]))
+    # fill 1: committer-row order (conv col0 commit consumes this ordering,
+    # mirroring the staged tail's first fill)
+    pbuf[:nreq, :cols].zero_()
+    lbuf[:nreq].zero_()
+    pbuf[:nreq, :k].copy_(gdn_paths[:, :k].to(pbuf.dtype))
+    lbuf[:nreq].copy_(path_len.to(lbuf.dtype))
+    _fr13_conv_commit_to_col0(layers, pbuf, lbuf, nreq, _runrow_commit, _burn)
+    # fill 2: replay (spec-row) order via the wrapper-refilled perm static —
+    # the staged tail's host-list reorder, expressed as index_select
+    pbuf[:nreq, :k].copy_(gdn_paths.index_select(0, perm)[:, :k].to(pbuf.dtype))
+    lbuf[:nreq].copy_(path_len.index_select(0, perm).to(lbuf.dtype))
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        launch_tree_gdn_replay_all_layers as _fr13_sg_launch_all,
+    )
+    _order = list(stacks['layer_order'])
+    _banks = [layers[_n]._fr13_replay_ssm_state for _n in _order]
+    _fr13_sg_launch_all(
+        bank_anchor=tbl[4], bank_off16=tbl[1], bank_shape=tbl[2],
+        bank_stride=tbl[3],
+        spec_state_indices=stacks['spec_idx'], prev_lens=stacks['prev_lens'],
+        accepted_paths=pbuf, accepted_lens=lbuf,
+        k_rings=stacks['ring_k'], v_rings=stacks['ring_v'],
+        a_rings=stacks['ring_a'], b_rings=stacks['ring_b'],
+        A_logs=stacks['A_log'], dt_biases=stacks['dt_bias'],
+        num_layers=len(_order), num_spec_decodes=nreq,
+        output_scale=float(stacks['output_scale']),
+        use_qk_l2norm_in_kernel=True,
+        runrow_commit=_runrow_commit, runrow_init=_runrow_init,
+        burn_node_bank=_burn,
+        banks_list=_banks,
+    )
+    stacks['flags'][:, 0].fill_(0)
+    globals()['_FR13_SG_DEFER_STASH'] = (row_buf, row_len, path_buf, path_len)
+    return output_token_ids
+
+
+def fr13_sg_post_replay_publish(stash, ndt_host):
+    """S1-full (=2) host tail, called by the wrapper AFTER capture/replay
+    (outside the graph): ONE batched DtoH materialization from the graph's
+    static product buffers, then the same publishes the staged tail does —
+    _LUMO_TREE_LAST_* globals, gdn freshness lists, by_req publish, and the
+    CONV_PREGATHER trigger. Boundary/durable-AB instrument paths are =2-
+    ineligible (wrapper skips), so their counters are not replicated here."""
+    import sys
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _g
+    dm = sys.modules.get('_fr13_device_multidraft_kernel')
+    if dm is None or stash is None:
+        raise RuntimeError('S1 post-replay publish: missing dm module/stash')
+    row_buf, row_len, path_buf, path_len = stash
+    (out_rows, accepted_rows, accepted_lens, accepted_node_paths,
+     accepted_token_rows) = dm.fr13_taw_materialize(
+        row_buf, row_len, path_buf, path_len)
+    globals()['_LUMO_TREE_LAST_ACCEPTED_ROWS_KERNEL'] = [
+        int(x) for x in accepted_rows]
+    globals()['_LUMO_TREE_LAST_ACCEPTED_LENS_KERNEL'] = [
+        int(x) for x in accepted_lens]
+    globals()['_LUMO_TREE_LAST_ACCEPTED_NODE_PATHS_KERNEL'] = [
+        [int(x) for x in row] for row in accepted_node_paths]
+    _gdn_paths_h = [
+        [int(n) + 1 for n in p[: int(l)]]
+        for p, l in zip(accepted_node_paths, accepted_lens)]
+    _gdn_rows_h = [(p[-1] if p else 0) for p in _gdn_paths_h]
+    _g._LUMO_FA_TREE_COMMIT_NROWS = len(_gdn_paths_h)
+    _g._LUMO_FA_LAST_ACCEPTED_TREE_ROWS = [int(x) for x in _gdn_rows_h]
+    _g._LUMO_FA_LAST_ACCEPTED_TREE_LENS = [int(x) for x in accepted_lens]
+    _g._LUMO_FA_LAST_ACCEPTED_TREE_NODE_PATHS = [
+        list(r) for r in _gdn_paths_h]
+    _g._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = [
+        [int(x) for x in row] for row in accepted_token_rows]
+    _rid = getattr(_g, '_LUMO_FA_SAMPLER_ROW_REQ_IDS', None)
+    if _rid is None or len(_rid) < len(_gdn_paths_h):
+        raise RuntimeError(
+            'S1 post-replay publish: missing/short sampler row req ids')
+    _by_req = getattr(_g, '_LUMO_FA_TREE_ACCEPT_BY_REQ', None)
+    if _by_req is None:
+        _by_req = {}
+        _g._LUMO_FA_TREE_ACCEPT_BY_REQ = _by_req
+    for _i in range(len(_gdn_paths_h)):
+        if ndt_host is not None and int(ndt_host[_i]) <= 0:
+            continue
+        _by_req[str(_rid[_i])] = (
+            list(_gdn_paths_h[_i]), int(accepted_lens[_i]))
+    if getattr(_g, '_FR13_CONV_PREGATHER_ON', False):
+        _stacks = getattr(_g, '_FR13_EAGER_PACK_STACKS', None)
+        _layers = getattr(_g, '_FR13_REPLAY_LAYERS', None)
+        try:
+            from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+                launch_conv_col0_pregather as _fr13_sg_cpg,
+            )
+            _order = list(_stacks['layer_order']) if _stacks else []
+            _banks = [_layers[_n]._fr13_replay_conv_state for _n in _order]
+            _pairs = getattr(_g, '_LUMO_FA_SPEC_ROW_CONV_COL0', None)
+            _seq = getattr(_g, '_LUMO_FA_STEP_SEQ', None)
+            if (all(_b is not None for _b in _banks)
+                    and _pairs is not None and _seq is not None):
+                _fr13_sg_cpg(
+                    conv_banks=_banks,
+                    ssi_stack=_stacks['spec_idx'][:, :, 0].contiguous(),
+                    num_spec_decodes=len(_gdn_paths_h),
+                    req_ids_token=(_pairs, int(_seq)),
+                )
+        except Exception as _fr13_sg_cpg_exc:
+            raise RuntimeError(
+                'S1 post-replay pregather failed: '
+                + repr(_fr13_sg_cpg_exc)) from _fr13_sg_cpg_exc
+
+
 def _lumo_tree_canonical_multidraft_sample(
     output_token_ids: torch.Tensor,
     accepted_tree_rows: torch.Tensor,
@@ -7367,10 +7515,7 @@ def _lumo_tree_canonical_multidraft_sample(
                     )
                 except Exception:
                     print('FR13_DEVICE_MULTIDRAFT engaged', flush=True)
-            (
-                out_rows, accepted_rows, accepted_lens,
-                accepted_node_paths, accepted_token_rows,
-            ) = _fr13_dm.fr13_device_multidraft_commit(
+            _fr13_dm_ret = _fr13_dm.fr13_device_multidraft_commit(
                 num_draft_tokens,
                 draft_token_ids,
                 tree_parent_indices,
@@ -7382,6 +7527,18 @@ def _lumo_tree_canonical_multidraft_sample(
                 generators=generators,
                 all_greedy=all_greedy,
             )
+            if isinstance(_fr13_dm_ret, tuple) and len(_fr13_dm_ret) == 4:
+                # FR13_STEP_GRAPH=2 in-capture route: TAW defer products
+                # (device tensors). The staged tail below (host lists, host
+                # publishes) never runs inside a capture; the =2 wrapper
+                # calls fr13_sg_post_replay_publish after capture/replay.
+                return _fr13_sg_commit_device_route(
+                    _fr13_dm_ret, output_token_ids, accepted_tree_rows,
+                    _fr13_dm)
+            (
+                out_rows, accepted_rows, accepted_lens,
+                accepted_node_paths, accepted_token_rows,
+            ) = _fr13_dm_ret
         except Exception as _fr13_dm_exc:
             raise RuntimeError(
                 'FR13_DEVICE_MULTIDRAFT failed (no silent fallback, class 9): '
@@ -17554,6 +17711,8 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "        _fr13_sg_used = False\n"
         "        class _Fr13SgWarmup(Exception):\n"
         "            pass\n"
+        "        class _Fr13SgSkip(Exception):\n"
+        "            pass  # transient ineligibility: staged step, =2 stays armed\n"
         "        if (\n"
         "            _fr13_sg_on\n"
         "            and not self._fr13_sg_dead\n"
@@ -17566,7 +17725,15 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                _fr13_sg_ent = self._fr13_sg_graphs.get(_fr13_sg_key)\n"
         "                if _fr13_sg_ent is not None and _fr13_sg_ent[\"logits_ptr\"] != logits.data_ptr():\n"
         "                    raise RuntimeError(\"S1 logits buffer address moved (verify graph not address-stable)\")\n"
-        "                import fr13_device_multidraft_kernel as _fr13_sg_dm\n"
+        "                _fr13_sg_dm = __import__(\"sys\").modules.get(\"_fr13_device_multidraft_kernel\")\n"
+        "                if _fr13_sg_dm is None:\n"
+        "                    raise _Fr13SgSkip()  # dm loads on the first staged commit\n"
+        "                import vllm.v1.sample.rejection_sampler as _fr13_sg_rs\n"
+        "                from vllm.model_executor.layers.mamba import gdn_linear_attn as _fr13_sg_gdn\n"
+        "                if _fr13_sg_dm._fr13_commit_trace_fh() is not None:\n"
+        "                    raise _Fr13SgSkip()  # trace diagnostics = legacy host path\n"
+        "                if _fr13_sg_gdn._fr13_boundary_on():\n"
+        "                    raise _Fr13SgSkip()  # instrument path needs per-layer publish\n"
         "                _fr13_sg_gens = getattr(\n"
         "                    getattr(self.input_batch, \"sampling_metadata\", None),\n"
         "                    \"generators\", None)\n"
@@ -17588,12 +17755,44 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    # ---- CAPTURE (once per (B, logits-shape)) ----\n"
         "                    _fr13_sg_md = spec_decode_metadata\n"
         "                    _fr13_sg_statics = {}\n"
-        "                    for _fr13_sg_f in (\"draft_token_ids\", \"num_draft_tokens\", \"cu_num_draft_tokens\", \"target_logits_indices\", \"bonus_logits_indices\", \"logits_indices\"):\n"
+        "                    for _fr13_sg_f in (\"draft_token_ids\", \"num_draft_tokens\", \"cu_num_draft_tokens\", \"target_logits_indices\", \"bonus_logits_indices\", \"logits_indices\", \"tree_parent_indices\"):\n"
         "                        _fr13_sg_v = getattr(_fr13_sg_md, _fr13_sg_f, None)\n"
         "                        if torch.is_tensor(_fr13_sg_v):\n"
         "                            _fr13_sg_s = _fr13_sg_v.clone()\n"
         "                            _fr13_sg_statics[_fr13_sg_f] = _fr13_sg_s\n"
         "                            setattr(_fr13_sg_md, _fr13_sg_f, _fr13_sg_s)\n"
+        "                    # per-CALL topology (the boot-7 stale-global lesson:\n"
+        "                    # the captured walk must never size itself off\n"
+        "                    # whichever eager call ran last)\n"
+        "                    _fr13_sg_tpi = _fr13_sg_statics.get(\"tree_parent_indices\")\n"
+        "                    if _fr13_sg_tpi is None:\n"
+        "                        _fr13_sg_tpi = getattr(_fr13_sg_md, \"tree_parent_indices\", None)\n"
+        "                    if _fr13_sg_tpi is None:\n"
+        "                        raise _Fr13SgSkip()  # non-tree metadata shape\n"
+        "                    _fr13_sg_dm.fr13_sg_set_topology(\n"
+        "                        _fr13_sg_tpi, _fr13_sg_statics[\"num_draft_tokens\"])\n"
+        "                    # per-key uniforms static (shared-global address must\n"
+        "                    # not be baked: another key's realloc would orphan it)\n"
+        "                    _fr13_sg_uni = torch.empty(\n"
+        "                        _fr13_sg_B, _fr13_sg_cap, 3, device=logits.device)\n"
+        "                    _fr13_sg_dm.fr13_sg_set_uniforms(_fr13_sg_uni)\n"
+        "                    _fr13_sg_dm.fr13_sg_fill_uniforms(\n"
+        "                        _fr13_sg_B, _fr13_sg_cap, logits.device, _fr13_sg_gens)\n"
+        "                    # replay-order perm static (host lists -> device once,\n"
+        "                    # refilled every replay so composition never bakes)\n"
+        "                    _fr13_sg_rid = getattr(_fr13_sg_gdn, \"_LUMO_FA_SAMPLER_ROW_REQ_IDS\", None)\n"
+        "                    _fr13_sg_sid = getattr(_fr13_sg_gdn, \"_LUMO_FA_SPEC_ROW_REQ_IDS\", None)\n"
+        "                    if (not _fr13_sg_rid or not _fr13_sg_sid\n"
+        "                            or len(_fr13_sg_sid) != _fr13_sg_B\n"
+        "                            or len(_fr13_sg_rid) < _fr13_sg_B):\n"
+        "                        raise _Fr13SgSkip()\n"
+        "                    _fr13_sg_idx = {str(_r): _i for _i, _r in enumerate(_fr13_sg_rid[:_fr13_sg_B])}\n"
+        "                    _fr13_sg_perm_list = [_fr13_sg_idx.get(str(_r)) for _r in _fr13_sg_sid]\n"
+        "                    if any(_p is None for _p in _fr13_sg_perm_list):\n"
+        "                        raise _Fr13SgSkip()\n"
+        "                    _fr13_sg_perm_t = torch.as_tensor(\n"
+        "                        _fr13_sg_perm_list, dtype=torch.long, device=logits.device)\n"
+        "                    _fr13_sg_dm.fr13_sg_set_perm(_fr13_sg_perm_t)\n"
         "                    # RNG pre-draw: per-key q static filled OUTSIDE the\n"
         "                    # capture; random_sample consumes-once inside it =>\n"
         "                    # zero philox in the captured region (boot-2 class)\n"
@@ -17633,32 +17832,64 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                            \"S1 q static not consumed by capture \"\n"
         "                            \"(sampler route bypassed random_sample?)\")\n"
         "                    _fr13_sg_g.replay()\n"
+        "                    _fr13_sg_stash = getattr(_fr13_sg_rs, \"_FR13_SG_DEFER_STASH\", None)\n"
+        "                    if _fr13_sg_stash is None:\n"
+        "                        raise RuntimeError(\n"
+        "                            \"S1: device route did not stash defer products \"\n"
+        "                            \"(committer took the staged path inside capture?)\")\n"
         "                    self._fr13_sg_graphs[_fr13_sg_key] = {\n"
         "                        \"graph\": _fr13_sg_g,\n"
         "                        \"statics\": _fr13_sg_statics,\n"
         "                        \"md\": _fr13_sg_md,\n"
         "                        \"out\": sampler_output,\n"
         "                        \"q\": _fr13_sg_qs,\n"
+        "                        \"uni\": _fr13_sg_uni,\n"
+        "                        \"perm\": _fr13_sg_perm_t,\n"
+        "                        \"stash\": _fr13_sg_stash,\n"
         "                        \"logits_ptr\": logits.data_ptr(),\n"
         "                    }\n"
+        "                    _fr13_sg_ndt_h = _fr13_sg_statics[\"num_draft_tokens\"].cpu().tolist()\n"
+        "                    _fr13_sg_rs.fr13_sg_post_replay_publish(_fr13_sg_stash, _fr13_sg_ndt_h)\n"
         "                    print(\n"
-        "                        f\"[FR13_STEP_GRAPH] S1-lite captured B={_fr13_sg_B} \"\n"
+        "                        f\"[FR13_STEP_GRAPH] S1-full captured B={_fr13_sg_B} \"\n"
         "                        f\"(sampler+committer one graph; statics={len(_fr13_sg_statics)})\",\n"
         "                        flush=True,\n"
         "                    )\n"
         "                else:\n"
         "                    # ---- REPLAY ----\n"
+        "                    # perm rebuild from CURRENT host row lists (composition\n"
+        "                    # changes must never replay a stale mapping)\n"
+        "                    _fr13_sg_rid = getattr(_fr13_sg_gdn, \"_LUMO_FA_SAMPLER_ROW_REQ_IDS\", None)\n"
+        "                    _fr13_sg_sid = getattr(_fr13_sg_gdn, \"_LUMO_FA_SPEC_ROW_REQ_IDS\", None)\n"
+        "                    if (not _fr13_sg_rid or not _fr13_sg_sid\n"
+        "                            or len(_fr13_sg_sid) != _fr13_sg_B\n"
+        "                            or len(_fr13_sg_rid) < _fr13_sg_B):\n"
+        "                        raise _Fr13SgSkip()\n"
+        "                    _fr13_sg_idx = {str(_r): _i for _i, _r in enumerate(_fr13_sg_rid[:_fr13_sg_B])}\n"
+        "                    _fr13_sg_perm_list = [_fr13_sg_idx.get(str(_r)) for _r in _fr13_sg_sid]\n"
+        "                    if any(_p is None for _p in _fr13_sg_perm_list):\n"
+        "                        raise _Fr13SgSkip()\n"
+        "                    _fr13_sg_ent[\"perm\"].copy_(torch.as_tensor(\n"
+        "                        _fr13_sg_perm_list, dtype=torch.long))\n"
         "                    for _fr13_sg_f, _fr13_sg_s in _fr13_sg_ent[\"statics\"].items():\n"
         "                        _fr13_sg_v = getattr(spec_decode_metadata, _fr13_sg_f)\n"
         "                        _fr13_sg_s.copy_(_fr13_sg_v, non_blocking=True)\n"
-        "                    # refill the baked q static (graph reads its address\n"
-        "                    # directly; the take-handoff is capture-time only)\n"
+        "                    # per-key uniforms + q refill (graphs read the baked\n"
+        "                    # addresses; the globals are only the fill conduit)\n"
+        "                    _fr13_sg_dm.fr13_sg_set_uniforms(_fr13_sg_ent[\"uni\"])\n"
+        "                    _fr13_sg_dm.fr13_sg_fill_uniforms(\n"
+        "                        _fr13_sg_B, _fr13_sg_cap, logits.device, _fr13_sg_gens)\n"
         "                    _fr13_sg_tk.fr13_sg_fill_q(_fr13_sg_ent[\"q\"], _fr13_sg_gens)\n"
         "                    _fr13_sg_ent[\"graph\"].replay()\n"
+        "                    _fr13_sg_ndt_h = _fr13_sg_ent[\"statics\"][\"num_draft_tokens\"].cpu().tolist()\n"
+        "                    _fr13_sg_rs.fr13_sg_post_replay_publish(\n"
+        "                        _fr13_sg_ent[\"stash\"], _fr13_sg_ndt_h)\n"
         "                    sampler_output = _fr13_sg_ent[\"out\"]\n"
         "                _fr13_sg_used = True\n"
         "            except _Fr13SgWarmup:\n"
         "                _fr13_sg_used = False  # staged warmup step (TAW caches topology)\n"
+        "            except _Fr13SgSkip:\n"
+        "                _fr13_sg_used = False  # transient ineligibility: staged, stays armed\n"
         "            except Exception as _fr13_sg_e:\n"
         "                self._fr13_sg_dead = True\n"
         "                print(\n"
@@ -17666,6 +17897,12 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    + type(_fr13_sg_e).__name__ + \": \" + str(_fr13_sg_e)[:200],\n"
         "                    flush=True,\n"
         "                )\n"
+        "                try:\n"
+        "                    _fr13_sg_tk.fr13_sg_set_q(None)\n"
+        "                    _fr13_sg_dm.fr13_sg_set_uniforms(None)\n"
+        "                    _fr13_sg_dm.fr13_sg_set_perm(None)\n"
+        "                except Exception:\n"
+        "                    pass\n"
         "                _fr13_sg_used = False\n"
         "        if not _fr13_sg_used:\n"
     ) + anchor.replace("        with record", "            with record").replace(

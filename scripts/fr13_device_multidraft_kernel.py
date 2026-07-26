@@ -1219,6 +1219,14 @@ def fr13_sg_fill_uniforms(nreq, row_cap, device, generators=None):
 
 # S1 topology handoff (step-constant; wrapper pre-reads OUTSIDE the capture)
 _FR13_SG_TOPOLOGY = None
+# S1-full (=2): replay-order permutation static (sampler-row -> spec-row
+# order), wrapper-owned per key, refilled pre-replay (never baked stale)
+_FR13_SG_PERM = None
+
+
+def fr13_sg_set_perm(t):
+    global _FR13_SG_PERM
+    _FR13_SG_PERM = t
 
 
 def fr13_sg_set_topology(tree_parent_indices, num_draft_tokens):
