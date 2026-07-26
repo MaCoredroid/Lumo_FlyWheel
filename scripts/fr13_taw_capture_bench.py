@@ -33,28 +33,42 @@ os.environ["FR13_TAW"] = "1"
 os.environ["FR13_STEP_GRAPH"] = "1"
 
 _IG = torch.Generator(device=dev); _IG.manual_seed(123)
-def make_inputs(B=B):
+def make_inputs(spec):
     # explicit generator: doubles as the prod-survivability probe (vLLM uses
     # explicit gens; if these survive a failed capture, prod survives too)
-    drafts = torch.randint(0, V, (NC * B,), device=dev, generator=_IG)
-    tl = torch.randn(NC * B, V, device=dev, generator=_IG)
-    sl = torch.randn(NC * B, V, device=dev, generator=_IG)
+    # spec: int B => all requests full (NC nodes); "4z" => counts
+    # [NC,NC,NC,0] — the boot-7 live geometry: one running request with ZERO
+    # draft tokens, whose flattened 63-node tpi is byte-identical to B=3.
+    counts = [NC, NC, NC, 0] if spec == "4z" else [NC] * spec
+    B, total = len(counts), sum(counts)
+    drafts = torch.randint(0, V, (total,), device=dev, generator=_IG)
+    tl = torch.randn(total, V, device=dev, generator=_IG)
+    sl = torch.randn(total, V, device=dev, generator=_IG)
     bonus = torch.randint(0, V, (B, 1), device=dev, generator=_IG)
-    ndt = torch.full((B,), NC, dtype=torch.long, device=dev)
-    tpi = torch.tensor(parents * B, device=dev)
+    ndt = torch.tensor(counts, dtype=torch.long, device=dev)
+    tpi = torch.tensor([p for c in counts for p in parents[:c]], device=dev)
     return ndt, drafts, tpi, tl, sl, bonus
 
 MAXSPEC = 20
 outs = []
-Bs = [4, 4, 3, 4, 3, 4]
-for step in range(6):
-    B = Bs[step]
-    ndt, drafts, tpi, tl, sl, bonus = make_inputs(B)
+# warmup all three keys FIRST, then capture each: every capture happens with
+# a DIFFERENT key's topology in the shared global (the boot-7 stale-topology
+# exposure — step "4z" capture sees B=3's topology, the exact live fatal).
+seq = [4, 3, "4z", 4, 3, "4z", 4, 3, "4z"]
+for step, spec in enumerate(seq):
+    ndt, drafts, tpi, tl, sl, bonus = make_inputs(spec)
+    nreq_want = 4 if spec == "4z" else spec
     out = dm.fr13_taw_commit_captured(
         ndt, drafts, tpi, tl, sl, bonus, MAXSPEC,
         generators=None)
     outs.append([r[:3] for r in out[0]])
-    print(f"step {step}: rows head = {[r[:2] for r in out[0]]}")
+    print(f"step {step} spec={spec}: products={len(out[0])} rows head = {[r[:2] for r in out[0]]}")
+    assert len(out[0]) == nreq_want, (
+        f"step {step} spec={spec}: products={len(out[0])} != nreq {nreq_want} "
+        "(stale-topology class)")
+    if spec == "4z":
+        # zero-count request must still get its bonus-token row
+        assert len(out[0][3]) == 1, f"zero-count row wrong: {out[0][3]}"
 if dm._FR13_SG_CAP_DEAD:
     # PROD-SURVIVABILITY PROBE: vLLM samplers use EXPLICIT generators, not the
     # default one the poison binds to. If explicit draws survive, a failed
@@ -75,8 +89,8 @@ if dm._FR13_SG_CAP_DEAD:
 assert not dm._FR13_SG_CAP_DEAD, "capture went DEAD — read the DISABLED needle above"
 assert True  # multi-B: outs shapes vary
 n_keys = len([v for v in dm._FR13_SG_CAP.values() if isinstance(v, dict)])
-print(f"captured graphs: {n_keys} (want >=1)")
-assert n_keys >= 1, "no graph captured (only warmup ran?)"
+print(f"captured graphs: {n_keys} (want 3: B4-full, B3, B4-zerocount)")
+assert n_keys == 3, f"expected 3 captured graphs, got {n_keys}"
 
 # post-abort context health: force an illegal capture and verify eager works
 g = torch.cuda.CUDAGraph()

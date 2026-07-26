@@ -1218,7 +1218,7 @@ def fr13_taw_commit_captured(
     target_logits, tree_self_logits, bonus_token_ids, max_spec_len,
     *, generators=None,
 ):
-    global _FR13_SG_CAP_DEAD, _FR13_SG_STREAM
+    global _FR13_SG_CAP_DEAD, _FR13_SG_STREAM, _FR13_SG_TOPOLOGY
     device = target_logits.device
     nreq = int(num_draft_tokens.numel() if hasattr(num_draft_tokens, "numel") else len(num_draft_tokens))
     # nreq MUST be in the key: total-node counts collide across B (B=4 with a
@@ -1229,7 +1229,10 @@ def fr13_taw_commit_captured(
     row_cap = int(max_spec_len) + 1
     try:
         if ent is None and key not in _FR13_SG_CAP:
-            # warmup: eager TAW (caches topology in _FR13_SG_TOPOLOGY)
+            # warmup: eager TAW. Clear the shared uniforms handoff first — a
+            # same-shape ent["uni"] left set by another key's replay would be
+            # consumed here as ALREADY-USED draws (cross-step RNG reuse).
+            fr13_sg_set_uniforms(None)
             _FR13_SG_CAP[key] = False  # warmup done marker
             return fr13_taw_commit(
                 num_draft_tokens, draft_token_ids, tree_parent_indices,
@@ -1241,9 +1244,24 @@ def fr13_taw_commit_captured(
             fr13_sg_set_uniforms(ent["uni"])
         fr13_sg_fill_uniforms(nreq, row_cap, device, generators)
         if ent is False:
-            # capture on 2nd call: per-key uniforms static FIRST (so the
-            # graph bakes this key's tensor address, immune to other keys'
-            # reallocation of the shared global)
+            # capture on 2nd call. TOPOLOGY MUST COME FROM THIS CALL'S ARGS:
+            # _FR13_SG_TOPOLOGY holds whichever EAGER call ran last, and any
+            # other batch shape can run between this key's warmup and now.
+            # Boot-7 fatal: a 4-req key captured a 3-req walk off the stale
+            # global (counts [21,21,21,0] vs [21,21,21] — same 63-node tpi),
+            # and the capture-step return fed 3 products into a 4-request
+            # committer. Host reads are legal here (pre-capture).
+            _parents_cap = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+            if hasattr(num_draft_tokens, "detach"):
+                _counts_cap = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+            else:
+                _counts_cap = [int(x) for x in num_draft_tokens]
+            if len(_counts_cap) != nreq:
+                raise RuntimeError(
+                    f"TAW-capture topology nreq skew: counts={len(_counts_cap)} nreq={nreq} key={key}")
+            _FR13_SG_TOPOLOGY = (_parents_cap, _counts_cap)
+            # per-key uniforms static (so the graph bakes this key's tensor
+            # address, immune to other keys' reallocation of the shared global)
             uni = torch.empty(nreq, row_cap, 3, device=device)
             fr13_sg_set_uniforms(uni)
             fr13_sg_fill_uniforms(nreq, row_cap, device, generators)
@@ -1264,12 +1282,16 @@ def fr13_taw_commit_captured(
                 _FR13_SG_STREAM = torch.cuda.Stream()
             _FR13_SG_STREAM.wait_stream(torch.cuda.current_stream())
             with torch.cuda.stream(_FR13_SG_STREAM):
-                _ = fr13_taw_commit(
+                _warm = fr13_taw_commit(
                     statics["ndt"], statics["dti"], statics["tpi"],
                     statics["tl"], statics["sl"], statics["bti"],
                     max_spec_len, generators=None, defer_materialize=True)
             torch.cuda.current_stream().wait_stream(_FR13_SG_STREAM)
             torch.cuda.synchronize()
+            if int(_warm[0].shape[0]) != nreq:
+                raise RuntimeError(
+                    f"TAW-capture pre-capture row skew: warm_rows={int(_warm[0].shape[0])} "
+                    f"nreq={nreq} key={key}")
             # manual begin/end with g.reset() repair on failure: reset()
             # destroys the underlying graph AND unregisters the philox
             # generators (the ctx manager's __exit__ skips that cleanup when
@@ -1299,10 +1321,25 @@ def fr13_taw_commit_captured(
                 torch.cuda.synchronize()
                 raise
             torch.cuda.set_stream(prev2)
+            if int(out[0].shape[0]) != nreq:
+                # never store or return from a wrong-row graph (the boot-7
+                # fatal path was THIS return, unguarded)
+                try:
+                    g.reset()
+                except Exception:
+                    pass
+                raise RuntimeError(
+                    f"TAW-capture captured row skew: rows={int(out[0].shape[0])} "
+                    f"nreq={nreq} key={key}")
             g.replay()
             _FR13_SG_CAP[key] = {"g": g, "statics": statics, "out": out, "uni": uni}
-            print(f"[FR13_STEP_GRAPH] TAW-walk captured key={key[1]}", flush=True)
-            return fr13_taw_materialize(*out)
+            print(f"[FR13_STEP_GRAPH] TAW-walk captured key={key}", flush=True)
+            _mat = fr13_taw_materialize(*out)
+            if len(_mat[0]) != nreq:
+                raise RuntimeError(
+                    f"TAW-capture capture-step product mismatch: products={len(_mat[0])} "
+                    f"nreq={nreq} key={key}")
+            return _mat
         # replay path
         for name, src in (("ndt", num_draft_tokens), ("dti", draft_token_ids),
                           ("tpi", tree_parent_indices), ("tl", target_logits),
@@ -1339,6 +1376,10 @@ def fr13_taw_commit_captured(
             pass
         print("[FR13_STEP_GRAPH] TAW-capture DISABLED (eager fallback): "
               + type(e).__name__ + ": " + str(e)[:160], flush=True)
+        # clear the shared uniforms handoff: post-DEAD eager steps must draw
+        # fresh per-call (a lingering same-shape ent["uni"] would be re-
+        # consumed every step => cross-step RNG reuse)
+        fr13_sg_set_uniforms(None)
         return fr13_taw_commit(
             num_draft_tokens, draft_token_ids, tree_parent_indices,
             target_logits, tree_self_logits, bonus_token_ids,
