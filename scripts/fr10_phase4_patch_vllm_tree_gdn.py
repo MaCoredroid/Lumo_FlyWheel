@@ -12678,6 +12678,25 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             _fr13_t_head = [
                                 [int(_x) for _x in _fr13_t_stack[_d].tolist()]
                                 for _d in range(_fr13_t_hd)]
+                            # FR13_DVK_DRAFTID_DUMP (instrumented runs only):
+                            # spine draft ids are ALREADY on host here — one
+                            # json line per drafter call, zero extra syncs.
+                            # Run with DVK off => full-head argmax ids => the
+                            # whole K/subset accept-curve computes offline.
+                            _fr13_dvkd = os.environ.get(
+                                "FR13_DVK_DRAFTID_DUMP", "")
+                            if _fr13_dvkd:
+                                try:
+                                    _fr13_dvkd_fh = getattr(
+                                        self, "_fr13_dvkd_fh", None)
+                                    if _fr13_dvkd_fh is None:
+                                        _fr13_dvkd_fh = self._fr13_dvkd_fh = (
+                                            open(_fr13_dvkd, "a", buffering=1))
+                                    _fr13_dvkd_fh.write(
+                                        __import__("json").dumps(
+                                            _fr13_t_head) + chr(10))
+                                except Exception:
+                                    self._fr13_dvkd_fh = None
                             _fr13_t_vocab = int(_fr10_logits.shape[-1])
                             _fr13_t_pad = int(_fr13_t_stack[0, 0])
                             _fr13_t_cols = _fr13_t.decide_tail(
