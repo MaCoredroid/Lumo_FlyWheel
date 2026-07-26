@@ -2458,7 +2458,6 @@ def _fr13_conv_subop_mab(
                             + "/"
                             + str(conv_weights.dtype)
                         )
-                _fr12_native_prior_read = False  # FR12_NPR DELETED 2026-07-25 (dead-twin diagnostic; git preserves)
                 _fr13_conv_committed_path = (
                     True  # FR13_CONV_COMMITTED_PATH baked ON
                 )
@@ -2551,7 +2550,7 @@ def _fr13_conv_subop_mab(
                                     + ":"
                                     + str(_fr10_len_exc)
                                 ) from _fr10_len_exc
-                    if _fr13_conv_committed_path and not _fr12_native_prior_read:
+                    if _fr13_conv_committed_path:
                         # FR13_CONV_COMMITTED_PATH (default ON): snapshot the
                         # committed-path prior conv window BEFORE the in-place
                         # remap below mutates the bank. The window is read
@@ -2983,16 +2982,9 @@ def _fr13_conv_subop_mab(
                         )
                         if _fr13_ep_ar is not None and _fr13_ep_ar[0] == _fr13_ep_ar_key:
                             _fr10_prior_col_base = _fr13_ep_ar[1]
-                            _fr12_native_prior_col_base = _fr13_ep_ar[2]
                         else:
                             _fr10_prior_col_base = torch.arange(
                                 _fr10_width - 1,
-                                dtype=torch.long,
-                                device=mixed_qkv_spec.device,
-                            )
-                            _fr12_native_prior_col_base = torch.arange(
-                                max(0, int(conv_state.size(2)) - (_fr10_width - 1)),
-                                int(conv_state.size(2)),
                                 dtype=torch.long,
                                 device=mixed_qkv_spec.device,
                             )
@@ -3000,17 +2992,10 @@ def _fr13_conv_subop_mab(
                                 self._fr13_eager_pack_conv_arange = (
                                     _fr13_ep_ar_key,
                                     _fr10_prior_col_base,
-                                    _fr12_native_prior_col_base,
                                 )
                     else:
                         _fr10_prior_col_base = torch.arange(
                             _fr10_width - 1,
-                            dtype=torch.long,
-                            device=mixed_qkv_spec.device,
-                        )
-                        _fr12_native_prior_col_base = torch.arange(
-                            max(0, int(conv_state.size(2)) - (_fr10_width - 1)),
-                            int(conv_state.size(2)),
                             dtype=torch.long,
                             device=mixed_qkv_spec.device,
                         )
@@ -3178,10 +3163,7 @@ def _fr13_conv_subop_mab(
                         _fr10_start = _fr10_b * _fr10_tree_n
                         _fr10_end = _fr10_start + _fr10_tree_n
                         _fr10_x = mixed_qkv_spec[_fr10_start:_fr10_end]
-                        if _fr12_native_prior_read:
-                            _fr10_prior_cols = _fr12_native_prior_col_base
-                        else:
-                            _fr10_prior_cols = _fr10_prior_col_base
+                        _fr10_prior_cols = _fr10_prior_col_base
                         _fr10_prior_window = _fr10_prior_conv_state_bank[
                             _fr10_b
                         ].index_select(1, _fr10_prior_cols)
