@@ -1233,9 +1233,18 @@ def fr13_taw_commit_captured(
                 num_draft_tokens, draft_token_ids, tree_parent_indices,
                 target_logits, tree_self_logits, bonus_token_ids,
                 max_spec_len, generators=generators)
+        if ent is False or ent is None:
+            pass  # uniforms handled per-branch below
+        else:
+            fr13_sg_set_uniforms(ent["uni"])
         fr13_sg_fill_uniforms(nreq, row_cap, device, generators)
         if ent is False:
-            # capture on 2nd call: statics for the per-step inputs
+            # capture on 2nd call: per-key uniforms static FIRST (so the
+            # graph bakes this key's tensor address, immune to other keys'
+            # reallocation of the shared global)
+            uni = torch.empty(nreq, row_cap, 3, device=device)
+            fr13_sg_set_uniforms(uni)
+            fr13_sg_fill_uniforms(nreq, row_cap, device, generators)
             statics = {
                 "ndt": num_draft_tokens.clone() if hasattr(num_draft_tokens, "clone") else num_draft_tokens,
                 "dti": draft_token_ids.clone(),
@@ -1289,7 +1298,7 @@ def fr13_taw_commit_captured(
                 raise
             torch.cuda.set_stream(prev2)
             g.replay()
-            _FR13_SG_CAP[key] = {"g": g, "statics": statics, "out": out}
+            _FR13_SG_CAP[key] = {"g": g, "statics": statics, "out": out, "uni": uni}
             print(f"[FR13_STEP_GRAPH] TAW-walk captured key={key[1]}", flush=True)
             return fr13_taw_materialize(*out)
         # replay path

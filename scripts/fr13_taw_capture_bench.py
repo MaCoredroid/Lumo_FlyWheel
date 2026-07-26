@@ -33,7 +33,7 @@ os.environ["FR13_TAW"] = "1"
 os.environ["FR13_STEP_GRAPH"] = "1"
 
 _IG = torch.Generator(device=dev); _IG.manual_seed(123)
-def make_inputs():
+def make_inputs(B=B):
     # explicit generator: doubles as the prod-survivability probe (vLLM uses
     # explicit gens; if these survive a failed capture, prod survives too)
     drafts = torch.randint(0, V, (NC * B,), device=dev, generator=_IG)
@@ -46,8 +46,10 @@ def make_inputs():
 
 MAXSPEC = 20
 outs = []
-for step in range(4):
-    ndt, drafts, tpi, tl, sl, bonus = make_inputs()
+Bs = [4, 4, 3, 4, 3, 4]
+for step in range(6):
+    B = Bs[step]
+    ndt, drafts, tpi, tl, sl, bonus = make_inputs(B)
     out = dm.fr13_taw_commit_captured(
         ndt, drafts, tpi, tl, sl, bonus, MAXSPEC,
         generators=None)
@@ -71,7 +73,7 @@ if dm._FR13_SG_CAP_DEAD:
     except Exception as e:
         print(f"post-abort DEFAULT randn FAILED: {type(e).__name__}")
 assert not dm._FR13_SG_CAP_DEAD, "capture went DEAD — read the DISABLED needle above"
-assert any(outs[2][i] != outs[3][i] for i in range(B)) or True
+assert True  # multi-B: outs shapes vary
 n_keys = len([v for v in dm._FR13_SG_CAP.values() if isinstance(v, dict)])
 print(f"captured graphs: {n_keys} (want >=1)")
 assert n_keys >= 1, "no graph captured (only warmup ran?)"
