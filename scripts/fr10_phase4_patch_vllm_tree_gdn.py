@@ -12248,6 +12248,68 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 and not torch.cuda.is_current_stream_capturing()
                 and not _fr13_selfcheck
             )
+            # FR13_DRAFT_VOCAB_K (FR-Spec revival, 2026-07-26): draft argmax/topk
+            # over the CONTIGUOUS lm_head slice [:K] (BPE ids ~frequency-ordered;
+            # sliced logits ids are REAL vocab ids; tokens >= K simply never
+            # draft — verifier emits them via bonus, lossless by construction).
+            # Shim clones lm_head tensor attrs with dim-0 slices (fp8 block
+            # scales sliced at K/128). NEVER-REGRESS: any error -> one-shot
+            # needle + permanent fallback to full compute_logits.
+            _fr13_dvk = int(os.environ.get("FR13_DRAFT_VOCAB_K", "0") or 0)
+            if _fr13_dvk > 0 and not getattr(self, "_fr13_dvk_dead", False):
+                _fr13_dvk -= _fr13_dvk % 128
+                if getattr(self, "_fr13_dvk_shim", None) is None:
+                    try:
+                        import types as _fr13_dvk_types
+                        _fr13_dvk_lm = self.model.lm_head
+                        _fr13_dvk_sh = _fr13_dvk_types.SimpleNamespace()
+                        for _fr13_dvk_a in dir(_fr13_dvk_lm):
+                            if _fr13_dvk_a.startswith("__"):
+                                continue
+                            _fr13_dvk_v = getattr(_fr13_dvk_lm, _fr13_dvk_a)
+                            if isinstance(_fr13_dvk_v, torch.Tensor):
+                                if (
+                                    _fr13_dvk_v.dim() >= 1
+                                    and _fr13_dvk_v.shape[0]
+                                    >= _fr13_dvk // 128
+                                    and _fr13_dvk_v.shape[0] > 1
+                                ):
+                                    _fr13_dvk_n = (
+                                        _fr13_dvk
+                                        if _fr13_dvk_v.shape[0] > _fr13_dvk // 2
+                                        else _fr13_dvk // 128
+                                    )
+                                    _fr13_dvk_v = _fr13_dvk_v[:_fr13_dvk_n]
+                                setattr(_fr13_dvk_sh, _fr13_dvk_a, _fr13_dvk_v)
+                            elif not callable(_fr13_dvk_v):
+                                setattr(_fr13_dvk_sh, _fr13_dvk_a, _fr13_dvk_v)
+                        _fr13_dvk_sh.quant_method = _fr13_dvk_lm.quant_method
+                        self._fr13_dvk_shim = _fr13_dvk_sh
+                        print(
+                            f"[FR13_DRAFT_VOCAB] shim built K={_fr13_dvk} "
+                            f"(head rows {_fr13_dvk_lm.weight.shape[0]}->{_fr13_dvk})",
+                            flush=True,
+                        )
+                    except Exception as _fr13_dvk_e:
+                        self._fr13_dvk_dead = True
+                        print(
+                            f"[FR13_DRAFT_VOCAB] DISABLED (shim build failed): {_fr13_dvk_e!r}",
+                            flush=True,
+                        )
+
+                def _fr13_dvk_logits(_h):
+                    try:
+                        _sh = self._fr13_dvk_shim
+                        return _sh.quant_method.apply(_sh, _h, bias=None)
+                    except Exception as _e:
+                        self._fr13_dvk_dead = True
+                        print(
+                            f"[FR13_DRAFT_VOCAB] DISABLED (apply failed): {_e!r}",
+                            flush=True,
+                        )
+                        return self.model.compute_logits(_h)
+            else:
+                _fr13_dvk = 0
             _fr13_ds_on = (
                 os.environ.get("FR13_DFWD_SPLIT_NEEDLE", "0") == "1"
                 and not torch.cuda.is_current_stream_capturing()
@@ -12463,9 +12525,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     # slots; spine-only (chain5) never consumes the
                     # runner-up (packing and the FR10_METRICS log both emit
                     # no leaves in spine-only mode), so its topk is skipped.
-                    _fr10_step_logits = self.model.compute_logits(
-                        last_hidden_states[:batch_size]
-                    )
+                    if _fr13_dvk > 0 and not getattr(self, "_fr13_dvk_dead", False):
+                        _fr10_step_logits = _fr13_dvk_logits(
+                            last_hidden_states[:batch_size]
+                        )
+                    else:
+                        _fr10_step_logits = self.model.compute_logits(
+                            last_hidden_states[:batch_size]
+                        )
                     draft_token_ids = _fr10_step_logits.argmax(dim=-1)
                     if _fr13_selfcheck:
                         _fr13_sc_check(
@@ -12511,9 +12578,14 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                             if (token_index + 1) in _fr10_leaf2_steps:
                                 _fr10_leaf2_tokens.append(_fr10_step_top2[:, 2])
                 else:
-                    _fr10_step_logits = self.model.compute_logits(
-                        last_hidden_states[:batch_size]
-                    )
+                    if _fr13_dvk > 0 and not getattr(self, "_fr13_dvk_dead", False):
+                        _fr10_step_logits = _fr13_dvk_logits(
+                            last_hidden_states[:batch_size]
+                        )
+                    else:
+                        _fr10_step_logits = self.model.compute_logits(
+                            last_hidden_states[:batch_size]
+                        )
                     # FR13_RESHAPE_333: widen the legacy topk to k=3 only when
                     # this step packs a rank-2 leaf; otherwise keep k=2 (op
                     # order unchanged vs legacy cat9: topk before greedy_sample).
