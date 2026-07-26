@@ -1258,10 +1258,16 @@ def fr13_taw_commit_captured(
 ):
     global _FR13_SG_CAP_DEAD, _FR13_SG_STREAM, _FR13_SG_TOPOLOGY
     device = target_logits.device
-    nreq = int(num_draft_tokens.numel() if hasattr(num_draft_tokens, "numel") else len(num_draft_tokens))
-    # nreq MUST be in the key: total-node counts collide across B (B=4 with a
-    # truncated tree == B=3 full => wrong-graph replay, the boot-5 4-vs-3 crash)
-    key = (nreq, tuple(target_logits.shape), tuple(draft_token_ids.reshape(-1).shape),
+    # counts TUPLE in the key (not just nreq): [21,21,21,0] and [21,0,21,21]
+    # share every shape (boot-5 lesson generalized) but the captured walk
+    # bakes per-request tables — a permuted-zero replay would silently commit
+    # the wrong requests' tokens. One small DtoH per call buys soundness.
+    if hasattr(num_draft_tokens, "detach"):
+        counts_h = tuple(int(x) for x in num_draft_tokens.detach().cpu().tolist())
+    else:
+        counts_h = tuple(int(x) for x in num_draft_tokens)
+    nreq = len(counts_h)
+    key = (counts_h, tuple(target_logits.shape), tuple(draft_token_ids.reshape(-1).shape),
            int(bonus_token_ids.numel()))
     ent = _FR13_SG_CAP.get(key)
     row_cap = int(max_spec_len) + 1
@@ -1290,14 +1296,7 @@ def fr13_taw_commit_captured(
             # and the capture-step return fed 3 products into a 4-request
             # committer. Host reads are legal here (pre-capture).
             _parents_cap = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
-            if hasattr(num_draft_tokens, "detach"):
-                _counts_cap = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
-            else:
-                _counts_cap = [int(x) for x in num_draft_tokens]
-            if len(_counts_cap) != nreq:
-                raise RuntimeError(
-                    f"TAW-capture topology nreq skew: counts={len(_counts_cap)} nreq={nreq} key={key}")
-            _FR13_SG_TOPOLOGY = (_parents_cap, _counts_cap)
+            _FR13_SG_TOPOLOGY = (_parents_cap, list(counts_h))
             # per-key uniforms static (so the graph bakes this key's tensor
             # address, immune to other keys' reallocation of the shared global)
             uni = torch.empty(nreq, row_cap, 3, device=device)
