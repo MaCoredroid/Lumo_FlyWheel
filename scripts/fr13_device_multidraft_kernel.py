@@ -976,7 +976,7 @@ def fr13_taw_commit(
               "(zero per-node readbacks; distribution-equal gate)", flush=True)
     device = target_logits.device
     global _FR13_SG_TOPOLOGY
-    if not defer_materialize:
+    if not defer_materialize and torch.cuda.is_available():
         defer_materialize = bool(torch.cuda.is_current_stream_capturing())
     if defer_materialize and _FR13_SG_TOPOLOGY is not None:
         # S1 capture mode: topology pre-read OUTSIDE the capture (step-constant)
