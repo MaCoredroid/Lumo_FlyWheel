@@ -977,6 +977,7 @@ def _patch_gdn_linear() -> bool:
             "        \"FR12_TREE_CONV_STATE_FULL_CAPTURE\",\n"
             "        \"FR13_CONV_REPLAY_NODES\",\n"
             "        \"FR12_SUBKERNEL_CAPTURE\",\n"
+            "        \"FR13_CONV_NODEBANK\",\n"
             "    ):\n"
             "        if os.environ.get(_fr13_tcf_env, \"\").strip() not in (\"\", \"0\"):\n"
             "            raise RuntimeError(\n"
@@ -2429,10 +2430,6 @@ def _fr13_conv_subop_mab(
                     )
                 except Exception as _fr12_pre_cap_exc:
                     logger.warning("FR12 pre-conv capture failed: %s", _fr12_pre_cap_exc)
-            _fr12_native_candidate_bank_rows_pre_update = None
-            _fr12_native_candidate_conv_state_pre_update = None
-            _fr12_native_prior_full_row_pre_update = None
-            _fr12_native_prior_full_row_pre_update_device = None
             if use_fr10_tree_conv:
                 if _FR13_TREE_CONV_FUSED:
                     # FR13_TREE_CONV_FUSED (FIX-3) engagement preconditions
@@ -2462,25 +2459,6 @@ def _fr13_conv_subop_mab(
                             + str(conv_weights.dtype)
                         )
                 _fr12_native_prior_read = False  # FR12_NPR DELETED 2026-07-25 (dead-twin diagnostic; git preserves)
-                _fr12_full_state_capture = (
-                    os.environ.get("FR12_TREE_CONV_STATE_FULL_CAPTURE", "0") == "1"
-                )
-                _fr12_native_prior_conv_bank_rows = None
-                _fr12_native_prior_conv_state_bank = None
-                _fr12_tree_candidate_bank_rows = None
-                _fr12_tree_candidate_pre_remap = None
-                _fr12_tree_candidate_post_remap = None
-                if _fr12_full_state_capture:
-                    _fr12_tree_candidate_bank_rows = torch.unique(
-                        spec_state_indices_tensor[
-                            : attn_metadata.num_spec_decodes
-                        ].reshape(-1).to(torch.long)
-                    )
-                    _fr12_tree_candidate_pre_remap = torch.index_select(
-                        conv_state,
-                        0,
-                        _fr12_tree_candidate_bank_rows,
-                    ).detach().to(torch.float32).cpu().clone()
                 _fr13_conv_committed_path = (
                     True  # FR13_CONV_COMMITTED_PATH baked ON
                 )
@@ -2894,15 +2872,6 @@ def _fr13_conv_subop_mab(
                             + ":"
                             + str(_fr10_seed_conv_exc)
                         ) from _fr10_seed_conv_exc
-                if (
-                    _fr12_full_state_capture
-                    and _fr12_tree_candidate_bank_rows is not None
-                ):
-                    _fr12_tree_candidate_post_remap = torch.index_select(
-                        conv_state,
-                        0,
-                        _fr12_tree_candidate_bank_rows,
-                    ).detach().to(torch.float32).cpu().clone()
                 if (
                     _fr13_conv_committed_path
                     and _fr13_committed_prior_bank is not None
@@ -3899,28 +3868,6 @@ def _fr13_conv_subop_mab(
                 ):
                     raise RuntimeError(
                         "FR10 tree causal-conv disengaged: eligible_tree_spec_row_flat_fallback"
-                    )
-                if os.environ.get("FR12_TREE_CONV_STATE_FULL_CAPTURE", "0") == "1":
-                    _fr12_native_candidate_bank_rows_pre_update = torch.unique(
-                        spec_state_indices_tensor[
-                            : attn_metadata.num_spec_decodes
-                        ].reshape(-1).to(torch.long)
-                    )
-                    _fr12_native_candidate_conv_state_pre_update = torch.index_select(
-                        conv_state,
-                        0,
-                        _fr12_native_candidate_bank_rows_pre_update,
-                    ).detach().to(torch.float32).cpu().clone()
-                    _fr12_native_prior_full_row_pre_update_device = torch.index_select(
-                        conv_state,
-                        0,
-                        spec_state_indices_tensor[0, 0].to(torch.long).view(1),
-                    )[0]
-                    _fr12_native_prior_full_row_pre_update = (
-                        _fr12_native_prior_full_row_pre_update_device.detach()
-                        .to(torch.float32)
-                        .cpu()
-                        .clone()
                     )
                 mixed_qkv_spec = causal_conv1d_update(
                     mixed_qkv_spec,
@@ -17796,26 +17743,6 @@ def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
 
 
 def main() -> int:
-    # FR13_CONV_NODEBANK / FR13_SPEC_BLOCKS_CAP patch-time incompatibility
-    # preflight (fail loud at boot, never at step time):
-    if os.environ.get("FR13_CONV_NODEBANK", "0") == "1":
-        if os.environ.get("FR13_TCF_SELFCHECK", "0") == "1":
-            raise RuntimeError(
-                "FR13_CONV_NODEBANK is incompatible with FR13_TCF_SELFCHECK "
-                "(the selfcheck's legacy reference reads pool node cols, which "
-                "are write-never under the bank)"
-            )
-        if os.environ.get("FR13_TREE_RUNROW_INIT", "1") != "1":
-            raise RuntimeError(
-                "FR13_CONV_NODEBANK requires FR13_TREE_RUNROW_INIT=1 (the "
-                "RUNROW_INIT=0 committed-path arm reads pool NODE cols)"
-            )
-        if os.environ.get("FR12_TREE_CONV_STATE_FULL_CAPTURE", "0") == "1":
-            raise RuntimeError(
-                "FR13_CONV_NODEBANK is incompatible with "
-                "FR12_TREE_CONV_STATE_FULL_CAPTURE (pool node pages are stale "
-                "under the bank; the capture would silently record them)"
-            )
     _fr13_write_subop_mab_sidecar()
     try:
         with open('/logs/fr13_dfwd_split.flag', 'w') as _fh:
