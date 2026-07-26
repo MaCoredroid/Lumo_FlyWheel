@@ -59,20 +59,22 @@ def main():
         row = {"B": B, "M": M, "KV": KV}
         try:
             row["t_default_ms"] = bench(lambda: flash_attn_varlen_func(**base_kwargs))
-        except TypeError as e:
+        except (TypeError, NotImplementedError) as e:
             # signature drift: record and bail loudly rather than fake numbers
             print("SIGNATURE_MISMATCH:", e)
             print("available:", flash_attn_varlen_func.__doc__)
             return
-        for ns in (0, 1, 2, 4, 8, 16):
-            try:
-                row[f"t_ns{ns}_ms"] = bench(
-                    lambda: flash_attn_varlen_func(**base_kwargs, num_splits=ns)
-                )
-            except TypeError:
-                break
         results.append(row)
         print(json.dumps(row), flush=True)
+        # num_splits sweep: FA2's varlen API raises NotImplementedError for
+        # num_splits>1 (splitkv is auto-selected inside dispatch) — probe once,
+        # record the outcome, never let it kill the geometry rows.
+        if B == 1 and M == 6 and KV == 2048:
+            try:
+                bench(lambda: flash_attn_varlen_func(**base_kwargs, num_splits=2), iters=3, warmup=1)
+                row["num_splits_supported"] = True
+            except Exception as e:
+                print(f"num_splits lever: DEAD ({type(e).__name__})", flush=True)
     # tax ratios
     print("\n=== tax ratios (t22/t6, same B,KV; row-linear fair = 3.67) ===")
     for B in (1, 4):
