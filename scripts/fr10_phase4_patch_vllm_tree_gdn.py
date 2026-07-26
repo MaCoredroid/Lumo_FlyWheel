@@ -18079,6 +18079,64 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_capdbg() -> bool:
+    """FR13_CAPDBG (env-gated forensics): every CUDAGraph capture_begin/
+    capture_end/reset prints id + caller; a failed capture_end prints LOUDLY.
+    Hunts the silent capture abort that leaves the default philox generator
+    graph-registered (boots 12-13 latent-poison death at the first temp
+    sampler draw). Inert unless FR13_CAPDBG=1."""
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    if "FR13_CAPDBG" in text:
+        return False
+    inject = '''
+
+# FR13_CAPDBG: capture lifecycle forensics (latent philox-poison hunt)
+def _fr13_capdbg_install():
+    import os as _os
+    if _os.environ.get("FR13_CAPDBG") != "1":
+        return
+    import torch as _t, traceback as _tb
+    if getattr(_t.cuda.CUDAGraph, "_fr13_capdbg", False):
+        return
+    _t.cuda.CUDAGraph._fr13_capdbg = True
+    _ob = _t.cuda.CUDAGraph.capture_begin
+    _oe = _t.cuda.CUDAGraph.capture_end
+    _orst = _t.cuda.CUDAGraph.reset
+    def _caller():
+        for fr in reversed(_tb.extract_stack()[:-2]):
+            if "torch/" not in fr.filename:
+                return fr.filename.split("/")[-1] + ":" + str(fr.lineno)
+        return "?"
+    def _b(self, *a, **k):
+        print("[FR13_CAPDBG] begin id=%x at %s" % (id(self), _caller()), flush=True)
+        return _ob(self, *a, **k)
+    def _e(self, *a, **k):
+        try:
+            r = _oe(self, *a, **k)
+            print("[FR13_CAPDBG] end-ok id=%x" % id(self), flush=True)
+            return r
+        except Exception as ex:
+            print("[FR13_CAPDBG] END-FAIL id=%x %s: %s at %s" % (
+                id(self), type(ex).__name__, str(ex)[:80], _caller()), flush=True)
+            raise
+    def _r(self, *a, **k):
+        try:
+            r = _orst(self, *a, **k)
+            print("[FR13_CAPDBG] reset-ok id=%x" % id(self), flush=True)
+            return r
+        except Exception as ex:
+            print("[FR13_CAPDBG] RESET-FAIL id=%x %s" % (id(self), type(ex).__name__), flush=True)
+            raise
+    _t.cuda.CUDAGraph.capture_begin = _b
+    _t.cuda.CUDAGraph.capture_end = _e
+    _t.cuda.CUDAGraph.reset = _r
+_fr13_capdbg_install()
+'''
+    text += inject
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_input_batch_capture_guard() -> bool:
     """FR13 S1 (=2): update_async_output_token_ids opens _sample with an
     async_copy_ready_event.synchronize() — capture-illegal, and the SOLE
@@ -18213,10 +18271,28 @@ def _patch_topk_topp_rng_predraw() -> bool:
         "    _FR13_SG_Q = q\n"
         "\n"
         "\n"
+        "_FR13_SG_BULK_GEN = None\n"
+        "\n"
+        "\n"
+        "def _fr13_sg_bulk_gen(device):\n"
+        "    # POISON-IMMUNE bulk RNG: a silently-aborted capture anywhere in\n"
+        "    # the process leaves the DEFAULT philox generator graph-registered\n"
+        "    # and every default-gen draw dies with 'Offset increment outside\n"
+        "    # graph capture' (boots 12-13 death). Explicit generators survive\n"
+        "    # (bench-proven). The bulk draw was never seed-reproducible (global\n"
+        "    # stream) => switching it to an explicit gen is distribution-equal.\n"
+        "    global _FR13_SG_BULK_GEN\n"
+        "    if _FR13_SG_BULK_GEN is None:\n"
+        "        g = torch.Generator(device=device)\n"
+        "        g.manual_seed(torch.initial_seed() & 0x7FFFFFFF)\n"
+        "        _FR13_SG_BULK_GEN = g\n"
+        "    return _FR13_SG_BULK_GEN\n"
+        "\n"
+        "\n"
         "def fr13_sg_fill_q(q, generators):\n"
         "    # EXACT draw parity with random_sample's in-line sequence\n"
         "    if not generators or len(generators) != q.shape[0]:\n"
-        "        q.exponential_()\n"
+        "        q.exponential_(generator=_fr13_sg_bulk_gen(q.device))\n"
         "    if generators:\n"
         "        for i, generator in generators.items():\n"
         "            q[i].exponential_(generator=generator)\n"
@@ -18251,6 +18327,20 @@ def _patch_topk_topp_rng_predraw() -> bool:
         "    if q is not None:\n"
         "        return probs.div_(q).argmax(dim=-1).view(-1)\n"
         + draw_anchor,
+        1,
+    )
+    bulk_anchor = (
+        "    if len(generators) != probs.shape[0]:\n"
+        "        q.exponential_()\n"
+    )
+    if text.count(bulk_anchor) != 1:
+        raise RuntimeError(
+            f"FR13_SG_RNG_PREDRAW bulk anchor count={text.count(bulk_anchor)}")
+    text = text.replace(
+        bulk_anchor,
+        "    if len(generators) != probs.shape[0]:\n"
+        "        # poison-immune bulk draw (see _fr13_sg_bulk_gen)\n"
+        "        q.exponential_(generator=_fr13_sg_bulk_gen(q.device))\n",
         1,
     )
     TOPK_TOPP_SAMPLER_PATH.write_text(text)
@@ -18537,6 +18627,7 @@ def main() -> int:
         # behavior-inert unless the =2 wrapper sets the q handoff.
         (TOPK_TOPP_SAMPLER_PATH, _patch_topk_topp_rng_predraw()),
         (GPU_INPUT_BATCH_PATH, _patch_gpu_input_batch_capture_guard()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_capdbg()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sample_async_spec_capture_guard()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_target_logits_handoff()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
