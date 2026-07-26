@@ -118,6 +118,22 @@ R4 drafter body. Remaining RNG question: how fr13_device_multidraft_commit
 consumes per-req generators (torch philox = graph-safe replay; byte gate
 needs a pinned-uniforms mode either way) — next read.
 
+## S1 sub-build: tensorized tree-accept walk (FR13_TAW) — REQUIRED first
+CORRECTION to the audit: fr13_device_multidraft_commit is device-RNG but
+HOST-STEPPED — the accept walk loops on host with torch.multinomial(...)
+.item() per node (per-draw DtoH syncs + host branching). Not capture-legal
+as-is. S1 therefore starts with FR13_TAW: re-express the walk as ~6 fixed
+depth iterations of batched tensor ops over the CONSTANT topology
+(precomputed children tables), pre-drawn uniforms/categoricals [B, depth+1]
+as explicit inputs, zero .item(). Equivalence gate: distribution-level vs the
+existing walk (the 20k-trial harness pattern device-multidraft itself used)
++ same-seed trace equality with pinned draws. TAW is also the pinned-uniforms
+mechanism the S1 byte gate needs — one build serves both.
+ALSO measured 2026-07-26: CG at B=4 is NEUTRAL (MAX_B=1 per-commit replay
+x4 ~= batched 24ms; dvkcg step-wall flat at 353.7). The committer win
+(~23ms) is still on the table and lands via S1's batched in-graph committer
+body — do not chase a separate CG MAX_B=4 fix.
+
 ## First build steps (S1)
 1. Map every host touchpoint between sampler entry and drafter end in the
    live-container source (read-first discipline): .tolist()/.item()/host
