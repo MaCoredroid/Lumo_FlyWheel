@@ -144,3 +144,21 @@ body — do not chase a separate CG MAX_B=4 fix.
 3. Single capture wrapping the three existing bodies; statics inventory
    extends R4's dict.
 4. Byte gate harness: same-boot staged-vs-graph, 512-step probe, temp 0.6.
+
+## ONE-GO GATE (USER CALL 2026-07-26: "verify the whole s1 attempt in one go in 4 task gate")
+Supersedes incremental staging. Build EVERYTHING, gate as ONE 4-task live arm:
+- Stack: canonical env + FR13_TAW=1 (seeding-fixed) + FR13_STEP_GRAPH=1
+  (capture wrapper: TAW sampler body + committer body + R4 drafter body, one
+  graph, side-stream committer) vs the dscg record (335.6ms @ eps 2.32).
+- The arm IS the verification: engagement needles (TAW ENGAGED +
+  STEP_GRAPH captured + shim + CG-bypass note), accept band 5.5±, per-position
+  profile, empty-file_path discriminator vs 0.8% floor, garble eyeball,
+  4-task verdicts, step_wall @ eps target ~280ms (ratio ~2.9).
+- Wrapper build notes (pinned): capture region = _sample entry (device
+  multidraft w/ TAW pre-drawn uniforms as static input) through
+  ATTN_KV_REMAP apply through propose's R4 loop end (spine/wide statics);
+  discard-indices numpy hoisted pre-replay; async prev_sampled bookkeeping +
+  decide_tail (0.3ms) + dedup + pack stay post-replay; verify-logits/hidden
+  read from the FULL-graph's stable output buffers (assert data_ptr stability
+  at capture); eligibility = uniform all-spec decode step, B-keyed graphs,
+  fail-loud staged-path fallback with one-shot needle.
