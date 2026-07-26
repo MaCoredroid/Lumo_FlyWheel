@@ -63,6 +63,17 @@ One graph per step. Additional requirements:
 - Scheduler stays out of the graph: steady-state decode steps only; any
   prefill/mixed step uses the staged path (UNIFORM_DISPATCH_GUARD pattern).
 
+### S1 side-stream committer (overlap, captured concurrency)
+CUDA graphs preserve the stream concurrency recorded at capture. Dependency
+audit: the drafter consumes the sampler's accepted path + verify-written KV,
+NOT the committer's state writes => capture the CG committer body on a SIDE
+stream (event-fenced: sampler-out -> {committer side, drafter main};
+step-end joins both). Post-CG the committer is compute/launch-shaped, so it
+overlaps the drafter's byte-bound first iteration on the shared-bandwidth box
+(byte-under-byte would not). Expected −5..8ms, free inside the same capture;
+the S1 byte gate covers it (wrong deps = loud byte mismatch, not silence).
+Prior art: FR13_REPLAY_MULTISTREAM machinery (#43).
+
 ## Cost-gate arithmetic
 S1 eliminates the sampler->committer->drafter host glue (~30-50ms measured
 class); S2 the remaining scheduler/prepare hop (~20-40ms). Both are
