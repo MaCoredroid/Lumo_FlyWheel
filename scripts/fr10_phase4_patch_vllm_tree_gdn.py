@@ -16,6 +16,9 @@ GDN_LINEAR_PATH = Path(
 SCHEDULER_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py"
 )
+GPU_INPUT_BATCH_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_input_batch.py"
+)
 TOPK_TOPP_SAMPLER_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/ops/topk_topp_sampler.py"
 )
@@ -17768,6 +17771,9 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    raise _Fr13SgWarmup()\n"
         "                if _fr13_sg_ent is None:\n"
         "                    # ---- CAPTURE (once per (B, logits-shape)) ----\n"
+        "                    # HOIST: async-output event sync (capture-illegal;\n"
+        "                    # the in-capture call no-ops via FR13_SG_ASYNC_HOIST)\n"
+        "                    self.input_batch.update_async_output_token_ids()\n"
         "                    _fr13_sg_md = spec_decode_metadata\n"
         "                    _fr13_sg_statics = {}\n"
         "                    for _fr13_sg_f in (\"draft_token_ids\", \"num_draft_tokens\", \"cu_num_draft_tokens\", \"target_logits_indices\", \"bonus_logits_indices\", \"logits_indices\", \"tree_parent_indices\"):\n"
@@ -17887,6 +17893,9 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    )\n"
         "                else:\n"
         "                    # ---- REPLAY ----\n"
+        "                    # HOIST: async-output event sync (graph contains the\n"
+        "                    # no-op'd call; the real work runs here, outside)\n"
+        "                    self.input_batch.update_async_output_token_ids()\n"
         "                    # perm rebuild from CURRENT host row lists (composition\n"
         "                    # changes must never replay a stale mapping)\n"
         "                    _fr13_sg_rid = getattr(_fr13_sg_gdn, \"_LUMO_FA_SAMPLER_ROW_REQ_IDS\", None)\n"
@@ -17947,6 +17956,38 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
     )
     text = text.replace(anchor, inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_input_batch_capture_guard() -> bool:
+    """FR13 S1 (=2): update_async_output_token_ids opens _sample with an
+    async_copy_ready_event.synchronize() — capture-illegal, and the SOLE
+    capture-killer boots 2-5 (AcceleratorError: operation not permitted when
+    stream is capturing; engine then died of philox poison from the failed
+    capture). The =2 wrapper HOISTS the call pre-capture/pre-replay; the
+    in-capture invocation must no-op. Behavior-inert outside capture."""
+    text = GPU_INPUT_BATCH_PATH.read_text()
+    if "FR13_SG_ASYNC_HOIST" in text:
+        return False
+    anchor = (
+        "        This is called right before they are needed by the logits processors.\n"
+        "        \"\"\"\n"
+        "        output_token_ids = self.sampling_metadata.output_token_ids\n"
+    )
+    if anchor not in text:
+        raise RuntimeError("FR13_SG_ASYNC_HOIST anchor not found")
+    text = text.replace(
+        anchor,
+        "        This is called right before they are needed by the logits processors.\n"
+        "        \"\"\"\n"
+        "        # FR13_SG_ASYNC_HOIST: capture-illegal event sync — hoisted\n"
+        "        # pre-capture/pre-replay by the FR13_STEP_GRAPH=2 wrapper.\n"
+        "        if torch.cuda.is_available() and torch.cuda.is_current_stream_capturing():\n"
+        "            return\n"
+        "        output_token_ids = self.sampling_metadata.output_token_ids\n",
+        1,
+    )
+    GPU_INPUT_BATCH_PATH.write_text(text)
     return True
 
 
@@ -18304,6 +18345,7 @@ def main() -> int:
         # FR13_SG_RNG_PREDRAW: S1-full (=2) philox port in topk_topp_sampler —
         # behavior-inert unless the =2 wrapper sets the q handoff.
         (TOPK_TOPP_SAMPLER_PATH, _patch_topk_topp_rng_predraw()),
+        (GPU_INPUT_BATCH_PATH, _patch_gpu_input_batch_capture_guard()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
         # this patch's propose_draft_token_ids restore anchor in program order,
