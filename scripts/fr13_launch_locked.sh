@@ -34,6 +34,7 @@ export FR13_CONV_COMMITTED_PATH=1
 # file's header). Do not re-hardcode `export FR13_ATTN_KV_REMAP=1` etc. here --
 # that duplication is exactly what let these fixes drift out of the general
 # campaign launcher for weeks (found+fixed 2026-07-22).
+source "$HERE/fr13_canonical_env.sh"
 source "$HERE/fr13_required_tree_flags.sh"
 for _fr13_req in "${FR13_REQUIRED_TREE_FLAGS[@]}"; do
   export "${_fr13_req%%=*}=${_fr13_req#*=}"

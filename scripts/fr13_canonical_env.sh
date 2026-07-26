@@ -53,6 +53,9 @@ export LUMO_PROXY_QWEN_SAMPLING="${LUMO_PROXY_QWEN_SAMPLING:-1}"       # qwen sa
 # DEPLOY_FORCE_TEMP -> LUMO_PROXY_FORCE_TEMPERATURE is set by the serve
 # scripts from the driver's DEPLOY_FORCE_TEMP (canonical 0.6; never greedy).
 
+# ---- runner (GB10 host process) ----
+export LUMO_SWE_STALL_KILL_S="${LUMO_SWE_STALL_KILL_S:-900}"  # trace-growth stall watchdog (AUDIT #2: env was read by run_swe_bench_q36_a.py but SET NOWHERE => watchdog silently OFF; the session wedges would have been auto-killed by it. 900s > the 600s agent stream-idle window so it never races a healthy long turn)
+
 # ---- agent (qwen-code in per-instance image) ----
 # Set in run_swe_bench_q36_a.py docker-run assembly; listed here as the record:
 #   QWEN_STREAM_IDLE_TIMEOUT_MS=600000   (stream-idle abort window)
