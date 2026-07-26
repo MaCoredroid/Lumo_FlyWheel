@@ -429,6 +429,12 @@ def fr13_device_multidraft_commit(
         and _fr13_commit_trace_fh() is None
         and not all_greedy
     ):
+        if (os.environ.get("FR13_STEP_GRAPH", "0") == "1"
+                and not _FR13_SG_CAP_DEAD):
+            return fr13_taw_commit_captured(
+                num_draft_tokens, draft_token_ids, tree_parent_indices,
+                target_logits, tree_self_logits, bonus_token_ids,
+                max_spec_len, generators=generators)
         return fr13_taw_commit(
             num_draft_tokens,
             draft_token_ids,
@@ -1186,3 +1192,90 @@ def fr13_sg_set_topology(tree_parent_indices, num_draft_tokens):
         counts = [int(x) for x in num_draft_tokens]
     _FR13_SG_TOPOLOGY = (parents_cpu, counts)
     return _FR13_SG_TOPOLOGY
+
+
+# ---------------------------------------------------------------------------
+# S1 v2: capture the TAW walk region ONLY (all our code, RNG-free inside —
+# uniforms pre-drawn, no philox) => an aborted capture cannot poison vLLM's
+# graph-safe sampler generators (the boot-2 EngineDead). Managed entirely in
+# this module; the dispatcher routes here when FR13_STEP_GRAPH=1.
+# ---------------------------------------------------------------------------
+_FR13_SG_CAP = {}
+_FR13_SG_CAP_DEAD = False
+_FR13_SG_STREAM = None
+
+
+def fr13_taw_commit_captured(
+    num_draft_tokens, draft_token_ids, tree_parent_indices,
+    target_logits, tree_self_logits, bonus_token_ids, max_spec_len,
+    *, generators=None,
+):
+    global _FR13_SG_CAP_DEAD, _FR13_SG_STREAM
+    device = target_logits.device
+    key = (tuple(target_logits.shape), tuple(draft_token_ids.reshape(-1).shape),
+           int(bonus_token_ids.numel()))
+    ent = _FR13_SG_CAP.get(key)
+    nreq = int(num_draft_tokens.numel() if hasattr(num_draft_tokens, "numel") else len(num_draft_tokens))
+    row_cap = int(max_spec_len) + 1
+    try:
+        if ent is None and key not in _FR13_SG_CAP:
+            # warmup: eager TAW (caches topology in _FR13_SG_TOPOLOGY)
+            _FR13_SG_CAP[key] = False  # warmup done marker
+            return fr13_taw_commit(
+                num_draft_tokens, draft_token_ids, tree_parent_indices,
+                target_logits, tree_self_logits, bonus_token_ids,
+                max_spec_len, generators=generators)
+        fr13_sg_fill_uniforms(nreq, row_cap, device, generators)
+        if ent is False:
+            # capture on 2nd call: statics for the per-step inputs
+            statics = {
+                "ndt": num_draft_tokens.clone() if hasattr(num_draft_tokens, "clone") else num_draft_tokens,
+                "dti": draft_token_ids.clone(),
+                "tpi": tree_parent_indices.clone(),
+                "tl": target_logits.clone(),
+                "sl": tree_self_logits.clone(),
+                "bti": bonus_token_ids.clone(),
+            }
+            if _FR13_SG_STREAM is None:
+                _FR13_SG_STREAM = torch.cuda.Stream()
+            g = torch.cuda.CUDAGraph()
+            torch.cuda.synchronize()
+            prev = torch.cuda.current_stream()
+            torch.cuda.set_stream(_FR13_SG_STREAM)
+            try:
+                g.capture_begin()
+                out = fr13_taw_commit(
+                    statics["ndt"], statics["dti"], statics["tpi"],
+                    statics["tl"], statics["sl"], statics["bti"],
+                    max_spec_len, generators=None, defer_materialize=True)
+                g.capture_end()
+            except Exception:
+                try:
+                    g.capture_end()
+                except Exception:
+                    pass
+                torch.cuda.set_stream(prev)
+                torch.cuda.synchronize()
+                raise
+            torch.cuda.set_stream(prev)
+            g.replay()
+            _FR13_SG_CAP[key] = {"g": g, "statics": statics, "out": out}
+            print(f"[FR13_STEP_GRAPH] TAW-walk captured key={key[1]}", flush=True)
+            return fr13_taw_materialize(*out)
+        # replay path
+        for name, src in (("ndt", num_draft_tokens), ("dti", draft_token_ids),
+                          ("tpi", tree_parent_indices), ("tl", target_logits),
+                          ("sl", tree_self_logits), ("bti", bonus_token_ids)):
+            dst = ent["statics"][name]
+            if hasattr(dst, "copy_"):
+                dst.copy_(src, non_blocking=True)
+        ent["g"].replay()
+        return fr13_taw_materialize(*ent["out"])
+    except Exception as e:
+        _FR13_SG_CAP_DEAD = True
+        print("[FR13_STEP_GRAPH] TAW-capture DISABLED (eager fallback): "
+              + type(e).__name__ + ": " + str(e)[:160], flush=True)
+        return fr13_taw_commit(
+            num_draft_tokens, draft_token_ids, tree_parent_indices,
+            target_logits, tree_self_logits, bonus_token_ids,
+            max_spec_len, generators=generators)
