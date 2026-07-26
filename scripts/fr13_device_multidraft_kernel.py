@@ -1311,7 +1311,13 @@ def fr13_taw_commit_captured(
             if hasattr(dst, "copy_"):
                 dst.copy_(src, non_blocking=True)
         ent["g"].replay()
-        return fr13_taw_materialize(*ent["out"])
+        _mat = fr13_taw_materialize(*ent["out"])
+        if len(_mat[0]) != nreq:
+            raise RuntimeError(
+                f"TAW-capture product-shape mismatch: products={len(_mat[0])} "
+                f"nreq={nreq} key={key} ent_rows={ent['out'][0].shape} "
+                f"counts_head={num_draft_tokens.reshape(-1)[:4].tolist() if hasattr(num_draft_tokens, 'reshape') else num_draft_tokens}")
+        return _mat
     except Exception as e:
         _FR13_SG_CAP_DEAD = True
         import traceback as _tb
