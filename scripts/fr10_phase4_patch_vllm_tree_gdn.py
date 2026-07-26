@@ -12766,6 +12766,13 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                 and not torch.cuda.is_current_stream_capturing()
                 and not _fr13_selfcheck
             )
+            _fr13_ds_on = (
+                os.environ.get("FR13_DFWD_SPLIT_NEEDLE", "0") == "1"
+                and not torch.cuda.is_current_stream_capturing()
+            )
+            if _fr13_ds_on:
+                torch.cuda.synchronize()
+                _fr13_ds_t0 = __import__("time").monotonic()
             _fr13_dg_key = int(batch_size)
             _fr13_dg_all = getattr(self, "_fr13_dg_graphs", None)
             if _fr13_dg_all is None:
@@ -12835,6 +12842,7 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             elif _fr13_dg_on:
                 # capture this call: static buffers + rebinds, then record.
                 _fr13_dg_cap = True
+                _fr13_ds_on = False
                 _dg_dev = hidden_states.device
                 _dg = {
                     "root": torch.zeros(
@@ -12887,14 +12895,6 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # the depth-3 shapes (chain3/cat3w) run 2 post-root steps. Each
             # extra spine forward mutates seq_lens/slot_mapping/KV, so the step
             # count MUST match the committed tree depth -- do not over-run.
-            _fr13_ds_on = (
-                os.environ.get("FR13_DFWD_SPLIT_NEEDLE", "0") == "1"
-                and not _fr13_dg_cap
-                and not torch.cuda.is_current_stream_capturing()
-            )
-            if _fr13_ds_on:
-                torch.cuda.synchronize()
-                _fr13_ds_t0 = __import__("time").monotonic()
             for token_index in range(_fr10_spine_steps):
                 input_ids = _fr10_spine_tokens[-1].int()
                 positions_1d = positions[0] if self.uses_mrope else positions
