@@ -988,6 +988,11 @@ def fr13_taw_commit(
     drafts_t = draft_token_ids.detach().to(device=device, dtype=torch.long).reshape(-1)
     V = int(target_logits.shape[-1])
 
+    # S1 handoff: the STEP_GRAPH wrapper pre-fills _FR13_SG_UNIFORMS outside
+    # the capture; consume it here so the captured region has zero seeding
+    # syncs. (Shape must match; wrapper owns refill per replay.)
+    if uniforms is None and _FR13_SG_UNIFORMS is not None and _FR13_SG_UNIFORMS.shape == (nreq, row_cap, 3):
+        uniforms = _FR13_SG_UNIFORMS
     # pre-drawn uniforms [B, row_cap, 3]: (u_source, u_accept, u_residual).
     # Per-request determinism: seed a DEVICE generator from each host
     # generator (depthsync's proven pattern) — never silently fall to the
@@ -1120,3 +1125,39 @@ def fr13_taw_materialize(row_buf, row_len, path_buf, path_len):
     accepted_rows = accepted_lens
     accepted_token_rows = [r[: int(l)] for r, l in zip(rb, pl)]
     return out_rows, accepted_rows, accepted_lens, accepted_node_paths, accepted_token_rows
+
+
+# ---- S1 wrapper handoff: pre-drawn uniforms static (set by the STEP_GRAPH
+# wrapper OUTSIDE the capture; TAW consumes it INSIDE, keeping the captured
+# region free of generator seeding .item() syncs). None => TAW draws its own.
+_FR13_SG_UNIFORMS = None
+
+
+def fr13_sg_set_uniforms(u):
+    global _FR13_SG_UNIFORMS
+    _FR13_SG_UNIFORMS = u
+
+
+def fr13_sg_fill_uniforms(nreq, row_cap, device, generators=None):
+    """Draw the per-step uniforms OUTSIDE the graph into (or as) the static.
+    Returns the tensor (callers keep it static and refill per replay)."""
+    global _FR13_SG_UNIFORMS
+    if (_FR13_SG_UNIFORMS is None
+            or _FR13_SG_UNIFORMS.shape != (nreq, row_cap, 3)):
+        _FR13_SG_UNIFORMS = torch.empty(nreq, row_cap, 3, device=device)
+    u = _FR13_SG_UNIFORMS
+    if generators:
+        for req_i in range(nreq):
+            g = generators.get(req_i)
+            if g is None:
+                u[req_i] = torch.rand(row_cap, 3, device=device)
+            elif g.device.type == device.type if hasattr(device, "type") else str(g.device) == str(device):
+                u[req_i] = torch.rand(row_cap, 3, device=device, generator=g)
+            else:
+                dev_gen = torch.Generator(device=device)
+                seed_t = torch.randint(0, 2 ** 31 - 1, (1,), device=g.device, generator=g)
+                dev_gen.manual_seed(int(seed_t.item()))
+                u[req_i] = torch.rand(row_cap, 3, device=device, generator=dev_gen)
+    else:
+        u.uniform_()
+    return u
