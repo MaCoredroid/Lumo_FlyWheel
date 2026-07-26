@@ -17800,6 +17800,19 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    _fr13_sg_rs.__dict__.setdefault(\"_FR13_PARENTS_CPU_CACHE\", {})[\n"
         "                        (int(_fr13_sg_tpi.data_ptr()), int(_fr13_sg_tpi.numel()))\n"
         "                    ] = [int(_x) for _x in _fr13_sg_tpi.detach().cpu().tolist()]\n"
+        "                    # target-logits pre-processing OUTSIDE the capture\n"
+        "                    # (penalties build per-step host tensors; boot-8\n"
+        "                    # killer) — forward consumes via pop-once handoff\n"
+        "                    _fr13_sg_tli = getattr(spec_decode_metadata, \"target_logits_indices\", None)\n"
+        "                    if _fr13_sg_tli is None:\n"
+        "                        raise _Fr13SgSkip(\"no target_logits_indices\")\n"
+        "                    _fr13_sg_raw = logits[_fr13_sg_tli].to(torch.float32)\n"
+        "                    if not self.rejection_sampler.is_processed_logprobs_mode:\n"
+        "                        _fr13_sg_raw = _fr13_sg_raw.clone()\n"
+        "                    _fr13_sg_tls = self.rejection_sampler.apply_logits_processors(\n"
+        "                        _fr13_sg_raw, self.input_batch.sampling_metadata,\n"
+        "                        spec_decode_metadata)\n"
+        "                    _fr13_sg_rs.__dict__[\"_FR13_SG_TARGET_LOGITS\"] = _fr13_sg_tls\n"
         "                    # per-key uniforms static (shared-global address must\n"
         "                    # not be baked: another key's realloc would orphan it)\n"
         "                    _fr13_sg_uni = torch.empty(\n"
@@ -17868,6 +17881,7 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        torch.cuda.set_stream(_fr13_sg_prev)\n"
         "                        torch.cuda.synchronize()\n"
         "                        _fr13_sg_tk.fr13_sg_set_q(None)\n"
+        "                        _fr13_sg_rs.__dict__.pop(\"_FR13_SG_TARGET_LOGITS\", None)\n"
         "                        raise\n"
         "                    torch.cuda.set_stream(_fr13_sg_prev)\n"
         "                    if _fr13_sg_tk._FR13_SG_Q is not None:\n"
@@ -17892,6 +17906,7 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        \"uni\": _fr13_sg_uni,\n"
         "                        \"perm\": _fr13_sg_perm_t,\n"
         "                        \"stash\": _fr13_sg_stash,\n"
+        "                        \"tls\": _fr13_sg_tls,\n"
         "                        \"logits_ptr\": logits.data_ptr(),\n"
         "                    }\n"
         "                    _fr13_sg_rs.fr13_sg_post_replay_publish(_fr13_sg_stash, _fr13_sg_ndt_h)\n"
@@ -17931,6 +17946,14 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    _fr13_sg_dm.fr13_sg_fill_uniforms(\n"
         "                        _fr13_sg_B, _fr13_sg_cap, logits.device, _fr13_sg_gens)\n"
         "                    _fr13_sg_tk.fr13_sg_fill_q(_fr13_sg_ent[\"q\"], _fr13_sg_gens)\n"
+        "                    # eager processor pass -> refill the baked tls static\n"
+        "                    _fr13_sg_raw = logits[spec_decode_metadata.target_logits_indices].to(torch.float32)\n"
+        "                    if not self.rejection_sampler.is_processed_logprobs_mode:\n"
+        "                        _fr13_sg_raw = _fr13_sg_raw.clone()\n"
+        "                    _fr13_sg_ent[\"tls\"].copy_(\n"
+        "                        self.rejection_sampler.apply_logits_processors(\n"
+        "                            _fr13_sg_raw, self.input_batch.sampling_metadata,\n"
+        "                            spec_decode_metadata))\n"
         "                    _fr13_sg_ent[\"graph\"].replay()\n"
         "                    _fr13_sg_rs.fr13_sg_post_replay_publish(\n"
         "                        _fr13_sg_ent[\"stash\"], _fr13_sg_ndt_h)\n"
@@ -17959,6 +17982,7 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    _fr13_sg_tk.fr13_sg_set_q(None)\n"
         "                    _fr13_sg_dm.fr13_sg_set_uniforms(None)\n"
         "                    _fr13_sg_dm.fr13_sg_set_perm(None)\n"
+        "                    _fr13_sg_rs.__dict__.pop(\"_FR13_SG_TARGET_LOGITS\", None)\n"
         "                except Exception:\n"
         "                    pass\n"
         "                _fr13_sg_used = False\n"
@@ -18033,6 +18057,63 @@ def _patch_gpu_model_runner_sample_async_spec_capture_guard() -> bool:
         1,
     )
     GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_rejection_sampler_target_logits_handoff() -> bool:
+    """FR13 S1 (=2), boot-8 killer: apply_logits_processors (penalties active
+    in live serving) builds per-step host-content tensors (repeat_indices
+    pageable H2D at minimum) — not capturable as statics. Seam fix: the =2
+    wrapper computes the PROCESSED target_logits eagerly pre-capture/pre-
+    replay (replicating the slice->fp32->clone->processors sequence) into a
+    per-key static; forward consumes it via a pop-once handoff and skips the
+    whole block. Replays only refill the static (graph baked its address).
+    Behavior-inert when the handoff is unset (staged path unchanged)."""
+    text = REJECTION_SAMPLER_PATH.read_text()
+    if "_FR13_SG_TARGET_LOGITS" in text:
+        return False
+    anchor = (
+        "        raw_target_logits = logits[target_logits_indices]\n"
+        "        # Use float32 for the target_logits.\n"
+        "        raw_target_logits = raw_target_logits.to(torch.float32)\n"
+        "        target_logits = raw_target_logits\n"
+        "        if not self.is_processed_logprobs_mode:\n"
+        "            # Clone raw_target_logits before applying processors to preserve\n"
+        "            # the original raw logits for logprobs computation, since\n"
+        "            # apply_logits_processors modifies the tensor in-place.\n"
+        "            target_logits = target_logits.clone()\n"
+        "        target_logits = self.apply_logits_processors(\n"
+        "            target_logits, sampling_metadata, metadata\n"
+        "        )\n"
+    )
+    if anchor not in text:
+        raise RuntimeError("FR13_SG_TARGET_LOGITS handoff anchor not found")
+    text = text.replace(
+        anchor,
+        "        # FR13_SG_TARGET_LOGITS (S1 =2): consume-once handoff of the\n"
+        "        # pre-processed target logits (wrapper applied processors\n"
+        "        # OUTSIDE the capture; penalties build per-step host tensors\n"
+        "        # that cannot run inside a graph). Unset => stock path.\n"
+        "        _fr13_sg_tl = globals().pop('_FR13_SG_TARGET_LOGITS', None)\n"
+        "        if _fr13_sg_tl is not None:\n"
+        "            raw_target_logits = _fr13_sg_tl\n"
+        "            target_logits = _fr13_sg_tl\n"
+        "        else:\n"
+        "            raw_target_logits = logits[target_logits_indices]\n"
+        "            # Use float32 for the target_logits.\n"
+        "            raw_target_logits = raw_target_logits.to(torch.float32)\n"
+        "            target_logits = raw_target_logits\n"
+        "            if not self.is_processed_logprobs_mode:\n"
+        "                # Clone raw_target_logits before applying processors to\n"
+        "                # preserve the original raw logits for logprobs\n"
+        "                # computation (processors modify in-place).\n"
+        "                target_logits = target_logits.clone()\n"
+        "            target_logits = self.apply_logits_processors(\n"
+        "                target_logits, sampling_metadata, metadata\n"
+        "            )\n",
+        1,
+    )
+    REJECTION_SAMPLER_PATH.write_text(text)
     return True
 
 
@@ -18392,6 +18473,7 @@ def main() -> int:
         (TOPK_TOPP_SAMPLER_PATH, _patch_topk_topp_rng_predraw()),
         (GPU_INPUT_BATCH_PATH, _patch_gpu_input_batch_capture_guard()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sample_async_spec_capture_guard()),
+        (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_target_logits_handoff()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
         # this patch's propose_draft_token_ids restore anchor in program order,
