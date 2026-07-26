@@ -863,3 +863,205 @@ def _fr13_md_gpu_timed(_orig):
 
 
 fr13_device_multidraft_commit = _fr13_md_gpu_timed(fr13_device_multidraft_commit)
+
+
+# ---------------------------------------------------------------------------
+# FR13_TAW (S1): fully-tensorized tree-accept walk — zero per-node readbacks.
+# Distribution-equal to the legacy/depthsync walk (NOT byte-equal: draws are
+# pre-drawn uniforms consumed by inverse-CDF, so the rng stream differs), the
+# same standard used when device-multidraft replaced the numpy host walk.
+# Capture-legal core: after topology prep, the walk is ~(max_spec_len+1)
+# fixed iterations of batched tensor ops with NO .item()/.tolist(). The
+# product materialization shim at the end does ONE batched DtoH — the S1
+# wrapper phase moves consumers to the tensor products and drops the shim.
+# ---------------------------------------------------------------------------
+_FR13_TAW_TOPO_CACHE: dict = {}
+_FR13_TAW_ANNOUNCED = False
+
+
+def _fr13_taw_topology(parents_key, parents_cpu, counts, max_spec_len, device):
+    """Per-shape topology tables (STEP-CONSTANT for the fixed tree): for each
+    request-local parent node id (-1=root), the padded child-node table and
+    counts. Cached by (parents tuple, counts tuple)."""
+    key = (parents_key, tuple(counts), int(max_spec_len))
+    hit = _FR13_TAW_TOPO_CACHE.get(key)
+    if hit is not None:
+        return hit
+    nreq = len(counts)
+    nmax = max(int(c) for c in counts) if counts else 0
+    wmax = 1
+    child_lists: list = []
+    starts = []
+    s = 0
+    for c in counts:
+        starts.append(s)
+        s += int(c)
+    for req_i in range(nreq):
+        st, n = starts[req_i], int(counts[req_i])
+        per_parent = {}
+        for node in range(n):
+            par = int(parents_cpu[st + node])
+            per_parent.setdefault(par, []).append(node)
+        child_lists.append(per_parent)
+        for v in per_parent.values():
+            wmax = max(wmax, len(v))
+    # tables indexed [req, parent+1] -> padded child node ids / count
+    # (parent -1 = root maps to slot 0)
+    ctab = torch.full((nreq, nmax + 1, wmax), -1, dtype=torch.long)
+    ccnt = torch.zeros((nreq, nmax + 1), dtype=torch.long)
+    for req_i in range(nreq):
+        for par, kids in child_lists[req_i].items():
+            ctab[req_i, par + 1, : len(kids)] = torch.tensor(kids)
+            ccnt[req_i, par + 1] = len(kids)
+    out = (
+        ctab.to(device),
+        ccnt.to(device),
+        torch.tensor(starts, dtype=torch.long, device=device),
+        wmax,
+    )
+    _FR13_TAW_TOPO_CACHE[key] = out
+    return out
+
+
+def _fr13_taw_inv_cdf(weights, u):
+    """source = inverse-CDF draw: first index where cumsum(weights) > u*mass.
+    weights [B, W] (>=0, rows may be all-zero), u [B] in [0,1)."""
+    cs = torch.cumsum(weights, dim=-1)
+    total = cs[:, -1:]
+    thresh = u.unsqueeze(-1).to(weights.dtype) * total
+    return (cs <= thresh).sum(dim=-1).clamp(max=weights.shape[-1] - 1)
+
+
+def fr13_taw_commit(
+    num_draft_tokens,
+    draft_token_ids,
+    tree_parent_indices,
+    target_logits,
+    tree_self_logits,
+    bonus_token_ids,
+    max_spec_len: int,
+    *,
+    generators=None,
+    uniforms=None,
+):
+    """FR13_TAW: batched zero-readback walk. Returns the SAME products as
+    fr13_device_multidraft_commit via a single materialization DtoH."""
+    global _FR13_TAW_ANNOUNCED
+    if not _FR13_TAW_ANNOUNCED:
+        _FR13_TAW_ANNOUNCED = True
+        print("[FR13_TAW] ENGAGED: tensorized tree-accept walk "
+              "(zero per-node readbacks; distribution-equal gate)", flush=True)
+    device = target_logits.device
+    parents_cpu = [int(x) for x in tree_parent_indices.detach().cpu().tolist()]
+    if hasattr(num_draft_tokens, "detach"):
+        counts = [int(x) for x in num_draft_tokens.detach().cpu().tolist()]
+    else:
+        counts = [int(x) for x in num_draft_tokens]
+    nreq = len(counts)
+    row_cap = int(max_spec_len) + 1
+    ctab, ccnt, starts_t, wmax = _fr13_taw_topology(
+        tuple(parents_cpu), parents_cpu, counts, max_spec_len, device
+    )
+    drafts_t = draft_token_ids.detach().to(device=device, dtype=torch.long).reshape(-1)
+    V = int(target_logits.shape[-1])
+
+    # pre-drawn uniforms [B, row_cap, 3]: (u_source, u_accept, u_residual).
+    if uniforms is None:
+        uniforms = torch.empty(nreq, row_cap, 3, device=device)
+        if generators:
+            for req_i in range(nreq):
+                g = generators.get(req_i)
+                if g is not None and g.device.type == device.type:
+                    uniforms[req_i] = torch.rand(
+                        row_cap, 3, device=device, generator=g
+                    )
+                else:
+                    uniforms[req_i] = torch.rand(row_cap, 3, device=device)
+        else:
+            uniforms.uniform_()
+
+    cur = torch.full((nreq,), -1, dtype=torch.long, device=device)  # parent node
+    alive = torch.ones(nreq, dtype=torch.bool, device=device)
+    row_buf = torch.full((nreq, row_cap), -1, dtype=torch.long, device=device)
+    row_len = torch.zeros(nreq, dtype=torch.long, device=device)
+    path_buf = torch.full((nreq, row_cap), -1, dtype=torch.long, device=device)
+    path_len = torch.zeros(nreq, dtype=torch.long, device=device)
+    bonus_flat = bonus_token_ids.reshape(-1).to(device=device, dtype=torch.long)
+    ar = torch.arange(nreq, device=device)
+
+    for level in range(row_cap):
+        kids = ctab[ar, cur + 1]              # [B, W]
+        nk = ccnt[ar, cur + 1]                # [B]
+        has_kids = (nk > 0) & alive
+        # ---- leaf/bonus rows (alive, no children): self-row sample or bonus id
+        leaf = alive & ~ (nk > 0)
+        if bool(leaf.any()):
+            # careful host-free: compute for ALL rows, apply masked
+            cp_ok = (cur >= 0) & (cur < torch.tensor(counts, device=device))
+            self_rows = torch.softmax(
+                tree_self_logits[(starts_t + cur.clamp(min=0)).clamp(max=tree_self_logits.shape[0] - 1)].to(torch.float32),
+                dim=-1,
+            )
+            tok_self = _fr13_taw_inv_cdf(self_rows, uniforms[:, level, 2])
+            tok_bonus = bonus_flat[ar.clamp(max=bonus_flat.numel() - 1)]
+            tok_leaf = torch.where(cp_ok, tok_self, tok_bonus)
+            emit = leaf
+            row_buf[emit, row_len[emit]] = tok_leaf[emit]
+            row_len = row_len + emit.long()
+            alive = alive & ~leaf
+        if not bool(has_kids.any()):
+            break
+        # ---- parent target row: legacy uses target_logits[start+children[0]]
+        first_child = kids[:, 0].clamp(min=0)
+        p = torch.softmax(
+            target_logits[(starts_t + first_child).clamp(max=target_logits.shape[0] - 1)].to(torch.float32),
+            dim=-1,
+        )                                      # [B, V]
+        p = p / p.sum(dim=-1, keepdim=True)
+        kid_tokens = drafts_t[(starts_t.unsqueeze(1) + kids.clamp(min=0)).clamp(max=drafts_t.numel() - 1)]  # [B, W]
+        kid_mask = kids >= 0
+        overlaps = torch.gather(p, 1, kid_tokens.clamp(min=0)) * kid_mask
+        mass = overlaps.sum(dim=-1)            # [B]
+        zero_mass = has_kids & (mass <= 0)
+        # source draw (inverse-CDF over overlaps)
+        src = _fr13_taw_inv_cdf(overlaps, uniforms[:, level, 0])  # [B]
+        tok = kid_tokens[ar, src]              # [B]
+        # accept prob = min(1, p[tok] / q_mix_tok); q_mix = weight mass of
+        # children sharing tok (weights = overlaps / mass)
+        same = (kid_tokens == tok.unsqueeze(1)) & kid_mask
+        q_mix_tok = (overlaps * same).sum(dim=-1) / mass.clamp(min=1e-30)
+        p_tok = torch.gather(p, 1, tok.unsqueeze(1)).squeeze(1)
+        acc_p = (p_tok / q_mix_tok.clamp(min=1e-30)).clamp(max=1.0)
+        accepted = has_kids & ~zero_mass & (uniforms[:, level, 1] < acc_p)
+        # rejected rows: residual sample over full vocab (or plain p on zero mass)
+        rejected = has_kids & ~accepted
+        if bool(rejected.any()):
+            weights = overlaps / mass.clamp(min=1e-30).unsqueeze(-1)
+            q_mix_v = torch.zeros_like(p)
+            q_mix_v.scatter_add_(1, kid_tokens.clamp(min=0), weights * kid_mask)
+            residual = (p - q_mix_v).clamp(min=0)
+            rmass = residual.sum(dim=-1, keepdim=True)
+            residual = torch.where(rmass > 0, residual / rmass.clamp(min=1e-30), p)
+            residual = torch.where(zero_mass.unsqueeze(1), p, residual)
+            tok_rej = _fr13_taw_inv_cdf(residual, uniforms[:, level, 2])
+            tok = torch.where(rejected, tok_rej, tok)
+        # emit token for every has_kids row; record path node for accepted
+        row_buf[has_kids, row_len[has_kids]] = tok[has_kids]
+        row_len = row_len + has_kids.long()
+        acc_node = kids[ar, src]
+        path_buf[accepted, path_len[accepted]] = acc_node[accepted]
+        path_len = path_len + accepted.long()
+        cur = torch.where(accepted, acc_node, cur)
+        alive = alive & accepted
+
+    # ---- materialization shim (ONE batched DtoH; wrapper phase removes this)
+    rb = row_buf.cpu().tolist()
+    rl = row_len.cpu().tolist()
+    pb = path_buf.cpu().tolist()
+    pl = path_len.cpu().tolist()
+    out_rows = [r[: int(l)] for r, l in zip(rb, rl)]
+    accepted_node_paths = [pth[: int(l)] for pth, l in zip(pb, pl)]
+    accepted_lens = [int(l) for l in pl]
+    accepted_rows = accepted_lens  # legacy alias shape (per-req accepted count)
+    accepted_token_rows = [r[: int(l)] for r, l in zip(rb, pl)]
+    return out_rows, accepted_rows, accepted_lens, accepted_node_paths, accepted_token_rows
