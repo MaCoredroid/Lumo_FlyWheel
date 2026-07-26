@@ -12887,6 +12887,10 @@ def _patch_eagle_tree_consumption_verify() -> bool:
             # the depth-3 shapes (chain3/cat3w) run 2 post-root steps. Each
             # extra spine forward mutates seq_lens/slot_mapping/KV, so the step
             # count MUST match the committed tree depth -- do not over-run.
+            _fr13_ds_on = os.environ.get("FR13_DFWD_SPLIT_NEEDLE", "0") == "1"
+            if _fr13_ds_on:
+                torch.cuda.synchronize()
+                _fr13_ds_t0 = __import__("time").monotonic()
             for token_index in range(_fr10_spine_steps):
                 input_ids = _fr10_spine_tokens[-1].int()
                 positions_1d = positions[0] if self.uses_mrope else positions
@@ -13083,6 +13087,9 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                     flush=True,
                 )
 
+            if _fr13_ds_on:
+                torch.cuda.synchronize()
+                _fr13_ds_t1 = __import__("time").monotonic()
             # accept>5 TAIL append (sidecar /logs/fr13_tail_mode.arm): the native MTP head loop
             # above produced head_depth spine tokens (depths 0..head_depth-1) + head branches
             # (byte-identical baseline). Retrieve the deep Arctic chain (depths head_depth..wide_D-1)
@@ -13424,7 +13431,31 @@ def _patch_eagle_tree_consumption_verify() -> bool:
                                 + ")"
                             )
                         _fr10_wide_cols.append(_fr10_wt[:, _fr10_rk])
+                if _fr13_ds_on:
+                    torch.cuda.synchronize()
+                    _fr13_ds_t2 = __import__("time").monotonic()
                 _fr10_packed = torch.stack(_fr10_wide_cols, dim=1)
+                if _fr13_ds_on:
+                    torch.cuda.synchronize()
+                    _fr13_ds_t3 = __import__("time").monotonic()
+                    _fr13_ds_c = globals().get("_FR13_DS_CNT", 0) + 1
+                    globals()["_FR13_DS_CNT"] = _fr13_ds_c
+                    _fr13_ds_acc = globals().get("_FR13_DS_ACC", [0.0, 0.0, 0.0])
+                    _fr13_ds_acc[0] += _fr13_ds_t1 - _fr13_ds_t0
+                    _fr13_ds_acc[1] += _fr13_ds_t2 - _fr13_ds_t1
+                    _fr13_ds_acc[2] += _fr13_ds_t3 - _fr13_ds_t2
+                    globals()["_FR13_DS_ACC"] = _fr13_ds_acc
+                    if _fr13_ds_c % 256 == 1:
+                        print(
+                            "[FR13_DFWD_SPLIT] n=%d loop=%.1fms tail+mid=%.1fms pack=%.1fms"
+                            % (
+                                _fr13_ds_c,
+                                1e3 * _fr13_ds_acc[0] / _fr13_ds_c,
+                                1e3 * _fr13_ds_acc[1] / _fr13_ds_c,
+                                1e3 * _fr13_ds_acc[2] / _fr13_ds_c,
+                            ),
+                            flush=True,
+                        )
             else:
                 _fr10_packed = torch.stack(
                     [
