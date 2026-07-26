@@ -962,9 +962,13 @@ def fr13_taw_commit(
     *,
     generators=None,
     uniforms=None,
+    defer_materialize=False,
 ):
     """FR13_TAW: batched zero-readback walk. Returns the SAME products as
-    fr13_device_multidraft_commit via a single materialization DtoH."""
+    fr13_device_multidraft_commit via a single materialization DtoH.
+    defer_materialize=True (S1 capture mode): returns the DEVICE tensors
+    (row_buf, row_len, path_buf, path_len) with NO DtoH — the S1 wrapper
+    materializes post-replay. Zero syncs inside => capture-legal."""
     global _FR13_TAW_ANNOUNCED
     if not _FR13_TAW_ANNOUNCED:
         _FR13_TAW_ANNOUNCED = True
@@ -1086,6 +1090,10 @@ def fr13_taw_commit(
         cur = torch.where(accepted, acc_node, cur)
         alive = alive & accepted
 
+    if defer_materialize:
+        # S1 capture mode: everything above is pure tensor ops (zero syncs).
+        return row_buf, row_len, path_buf, path_len
+
     # ---- materialization shim (ONE batched DtoH; wrapper phase removes this)
     rb = row_buf.cpu().tolist()
     rl = row_len.cpu().tolist()
@@ -1095,5 +1103,20 @@ def fr13_taw_commit(
     accepted_node_paths = [pth[: int(l)] for pth, l in zip(pb, pl)]
     accepted_lens = [int(l) for l in pl]
     accepted_rows = accepted_lens  # legacy alias shape (per-req accepted count)
+    accepted_token_rows = [r[: int(l)] for r, l in zip(rb, pl)]
+    return out_rows, accepted_rows, accepted_lens, accepted_node_paths, accepted_token_rows
+
+
+def fr13_taw_materialize(row_buf, row_len, path_buf, path_len):
+    """Post-replay materialization of TAW device products into the legacy
+    host-list contract (ONE batched DtoH). Used by the S1 wrapper."""
+    rb = row_buf.cpu().tolist()
+    rl = row_len.cpu().tolist()
+    pb = path_buf.cpu().tolist()
+    pl = path_len.cpu().tolist()
+    out_rows = [r[: int(l)] for r, l in zip(rb, rl)]
+    accepted_node_paths = [pth[: int(l)] for pth, l in zip(pb, pl)]
+    accepted_lens = [int(l) for l in pl]
+    accepted_rows = accepted_lens
     accepted_token_rows = [r[: int(l)] for r, l in zip(rb, pl)]
     return out_rows, accepted_rows, accepted_lens, accepted_node_paths, accepted_token_rows
