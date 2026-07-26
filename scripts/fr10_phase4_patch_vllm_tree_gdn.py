@@ -16,6 +16,9 @@ GDN_LINEAR_PATH = Path(
 SCHEDULER_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/scheduler.py"
 )
+TOPK_TOPP_SAMPLER_PATH = Path(
+    "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/ops/topk_topp_sampler.py"
+)
 REJECTION_SAMPLER_PATH = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/v1/sample/rejection_sampler.py"
 )
@@ -17570,6 +17573,7 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                _fr13_sg_cap = int(getattr(self, \"num_spec_tokens\", 21)) + 1\n"
         "                _fr13_sg_dm.fr13_sg_fill_uniforms(\n"
         "                    _fr13_sg_B, _fr13_sg_cap, logits.device, _fr13_sg_gens)\n"
+        "                from vllm.v1.sample.ops import topk_topp_sampler as _fr13_sg_tk\n"
         "                # first eligible step per key runs STAGED (TAW eager\n"
         "                # call caches its host topology); capture on the 2nd —\n"
         "                # the in-capture topology DtoH was boot-1's\n"
@@ -17590,6 +17594,14 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                            _fr13_sg_s = _fr13_sg_v.clone()\n"
         "                            _fr13_sg_statics[_fr13_sg_f] = _fr13_sg_s\n"
         "                            setattr(_fr13_sg_md, _fr13_sg_f, _fr13_sg_s)\n"
+        "                    # RNG pre-draw: per-key q static filled OUTSIDE the\n"
+        "                    # capture; random_sample consumes-once inside it =>\n"
+        "                    # zero philox in the captured region (boot-2 class)\n"
+        "                    _fr13_sg_qs = torch.empty(\n"
+        "                        _fr13_sg_B, int(logits.shape[-1]),\n"
+        "                        dtype=torch.float32, device=logits.device)\n"
+        "                    _fr13_sg_tk.fr13_sg_fill_q(_fr13_sg_qs, _fr13_sg_gens)\n"
+        "                    _fr13_sg_tk.fr13_sg_set_q(_fr13_sg_qs)\n"
         "                    _fr13_sg_g = torch.cuda.CUDAGraph()\n"
         "                    if getattr(self, \"_fr13_sg_stream\", None) is None:\n"
         "                        self._fr13_sg_stream = torch.cuda.Stream()\n"
@@ -17610,14 +17622,23 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                            pass\n"
         "                        torch.cuda.set_stream(_fr13_sg_prev)\n"
         "                        torch.cuda.synchronize()\n"
+        "                        _fr13_sg_tk.fr13_sg_set_q(None)\n"
         "                        raise\n"
         "                    torch.cuda.set_stream(_fr13_sg_prev)\n"
+        "                    if _fr13_sg_tk._FR13_SG_Q is not None:\n"
+        "                        # fail loud: an unconsumed static means the\n"
+        "                        # capture drew its own philox (poison class)\n"
+        "                        _fr13_sg_tk.fr13_sg_set_q(None)\n"
+        "                        raise RuntimeError(\n"
+        "                            \"S1 q static not consumed by capture \"\n"
+        "                            \"(sampler route bypassed random_sample?)\")\n"
         "                    _fr13_sg_g.replay()\n"
         "                    self._fr13_sg_graphs[_fr13_sg_key] = {\n"
         "                        \"graph\": _fr13_sg_g,\n"
         "                        \"statics\": _fr13_sg_statics,\n"
         "                        \"md\": _fr13_sg_md,\n"
         "                        \"out\": sampler_output,\n"
+        "                        \"q\": _fr13_sg_qs,\n"
         "                        \"logits_ptr\": logits.data_ptr(),\n"
         "                    }\n"
         "                    print(\n"
@@ -17630,6 +17651,9 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    for _fr13_sg_f, _fr13_sg_s in _fr13_sg_ent[\"statics\"].items():\n"
         "                        _fr13_sg_v = getattr(spec_decode_metadata, _fr13_sg_f)\n"
         "                        _fr13_sg_s.copy_(_fr13_sg_v, non_blocking=True)\n"
+        "                    # refill the baked q static (graph reads its address\n"
+        "                    # directly; the take-handoff is capture-time only)\n"
+        "                    _fr13_sg_tk.fr13_sg_fill_q(_fr13_sg_ent[\"q\"], _fr13_sg_gens)\n"
         "                    _fr13_sg_ent[\"graph\"].replay()\n"
         "                    sampler_output = _fr13_sg_ent[\"out\"]\n"
         "                _fr13_sg_used = True\n"
@@ -17649,6 +17673,81 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
     )
     text = text.replace(anchor, inject, 1)
     GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_topk_topp_rng_predraw() -> bool:
+    """FR13_SG_RNG_PREDRAW (S1-full STEP_GRAPH=2 dependency; behavior-inert
+    otherwise): pre-drawn exponential-noise handoff for the gumbel-trick draw
+    in random_sample. The full-_sample capture swallowed these philox draws
+    (boot-2 poison); the =2 wrapper fills a per-key static OUTSIDE the graph
+    with the SAME draw sequence (bulk exponential_ iff len(generators)!=rows,
+    then per-request generator overwrite => byte-identical q), sets it via
+    fr13_sg_set_q, and random_sample CONSUMES-ONCE (take clears the handoff so
+    a stale static can never leak into an unrelated sampler call; graph REPLAY
+    reads the baked static address and never consults the global). Geometry
+    mismatch RAISES (fail-loud => S1 DISABLED staged fallback) — silently
+    drawing philox inside the capture is the poison-class. Live route
+    confirmed 2026-07-26: no flashinfer sampler picked on GB10 =>
+    forward_native => random_sample is the single GPU chokepoint
+    (compiled_random_sample is forward_cpu-only)."""
+    text = TOPK_TOPP_SAMPLER_PATH.read_text()
+    if "_FR13_SG_Q" in text:
+        return False
+    helper_anchor = "class TopKTopPSampler(nn.Module):"
+    if helper_anchor not in text:
+        raise RuntimeError("FR13_SG_RNG_PREDRAW helper anchor not found")
+    helpers = (
+        "# FR13_SG_RNG_PREDRAW: S1-full capture handoff (see patcher docstring)\n"
+        "_FR13_SG_Q = None\n"
+        "\n"
+        "\n"
+        "def fr13_sg_set_q(q):\n"
+        "    global _FR13_SG_Q\n"
+        "    _FR13_SG_Q = q\n"
+        "\n"
+        "\n"
+        "def fr13_sg_fill_q(q, generators):\n"
+        "    # EXACT draw parity with random_sample's in-line sequence\n"
+        "    if not generators or len(generators) != q.shape[0]:\n"
+        "        q.exponential_()\n"
+        "    if generators:\n"
+        "        for i, generator in generators.items():\n"
+        "            q[i].exponential_(generator=generator)\n"
+        "    return q\n"
+        "\n"
+        "\n"
+        "def _fr13_sg_q_take(probs):\n"
+        "    # consume-once: never let a stale static leak into another call\n"
+        "    global _FR13_SG_Q\n"
+        "    q = _FR13_SG_Q\n"
+        "    if q is None:\n"
+        "        return None\n"
+        "    _FR13_SG_Q = None\n"
+        "    if q.shape == probs.shape and q.device == probs.device and q.dtype == probs.dtype:\n"
+        "        return q\n"
+        "    raise RuntimeError(\n"
+        "        f\"FR13_SG_RNG_PREDRAW geometry mismatch: q={tuple(q.shape)} \"\n"
+        "        f\"probs={tuple(probs.shape)} (wrapper filled the wrong rows)\")\n"
+        "\n"
+        "\n"
+    )
+    text = text.replace(helper_anchor, helpers + helper_anchor, 1)
+    draw_anchor = (
+        "    q = torch.empty_like(probs)\n"
+        "    # NOTE(woosuk): To batch-process the requests without their own seeds,\n"
+    )
+    if draw_anchor not in text:
+        raise RuntimeError("FR13_SG_RNG_PREDRAW draw anchor not found")
+    text = text.replace(
+        draw_anchor,
+        "    q = _fr13_sg_q_take(probs)\n"
+        "    if q is not None:\n"
+        "        return probs.div_(q).argmax(dim=-1).view(-1)\n"
+        + draw_anchor,
+        1,
+    )
+    TOPK_TOPP_SAMPLER_PATH.write_text(text)
     return True
 
 
@@ -17928,6 +18027,9 @@ def main() -> int:
         # pristine _sample block; remap appends after it, the scaffold
         # re-indents it (remap's anchor would no longer exist afterward).
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_step_graph_scaffold()),
+        # FR13_SG_RNG_PREDRAW: S1-full (=2) philox port in topk_topp_sampler —
+        # behavior-inert unless the =2 wrapper sets the q handoff.
+        (TOPK_TOPP_SAMPLER_PATH, _patch_topk_topp_rng_predraw()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
         # this patch's propose_draft_token_ids restore anchor in program order,
