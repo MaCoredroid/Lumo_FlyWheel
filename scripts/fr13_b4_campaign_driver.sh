@@ -17,21 +17,10 @@ set -uo pipefail
 cd /home/mark/shared/lumoFlyWheel
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}
 SUBSET=${SUBSET:-subset_b4_sixteen.json}
-# Wedge forensics (2026-07-26, default ON): capture every streamed chat
-# response chunk at the offload proxy. The wedge class (session silent after
-# tool_result, ~1.3/16 sessions) has NEVER been observed at the response
-# level (pair dumps cover only /v1/responses; qwen_stdout empty) — so
-# garble-vs-infra is UNSETTLED. SSE capture is the discriminator; no retry
-# without reading the wedged response first.
-export LUMO_PROXY_SSE_LOG="${LUMO_PROXY_SSE_LOG:-1}"
-export LUMO_PROXY_SSE_CAPTURE_DIR="${LUMO_PROXY_SSE_CAPTURE_DIR:-/home/mark/lumo_proxy_offload/sse_capture}"
-# REGRESSION FIX (2026-07-26, user-caught via git history): the canonical
-# emit-wedge protection LUMO_PROXY_SSE_HEARTBEAT_S=15 (commit 3a86c8a85:
-# "masks emit-wedge -> qwen-code no stream-idle abort") lived only in that
-# era's seq files; the offload helper defaulted 0 => every driver arm ran
-# UNPROTECTED and the session wedges (~1.3/16) are that class returned.
-# With this set there should be ZERO wedges/retries.
-export LUMO_PROXY_SSE_HEARTBEAT_S="${LUMO_PROXY_SSE_HEARTBEAT_S:-15}"
+# ALL baked flags + era-fix protections live in the canonical registry —
+# never here, never in seq files (two lost-protection regressions taught
+# this: ATTN_KV_REMAP near-loss, SSE_HEARTBEAT emit-wedge return).
+source "$(dirname "${BASH_SOURCE[0]}")/fr13_canonical_env.sh"
 WALL=${WALL:-1800}   # codex wall per task = deployment-faithful 30min (retries still ~2x)
 # WALL=0 => NO wall: emit EMPTY AGENT_WALL_S so the runner omits --agent-wall-s (a "0" would
 # pass --agent-wall-s 0 = 0s = instant timeout). Hang protection = the 600s stall-watchdog.
