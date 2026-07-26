@@ -116,3 +116,28 @@ construction. Env FR13_DRAFT_VOCAB_K (0=off); gate = accept delta on live
 tasks (code workloads have rare-identifier mass — measure, don't assume).
 Remaining ~10ms/iter unexplained above head+lm_head estimates: one
 in-replay kernel attribution read before further drafter work.
+
+## Verifier attack (V-ladder, designed 2026-07-26)
+
+Measured basis: verify differential vs native at eps~1.8-2.3 = per-event
+norms/gather-soup +20 > scan +15 > attn-rows +14 (GEMM/lm_head ZERO delta —
+M-tile dead). Committer handled separately (CG re-gate queued). Python glue
+around verify is ALREADY conquered (FR13_EAGER_PACK cache baked ON, PG/CPG/
+FLAGS_INKERNEL/subtree shipped) — remaining mass is inside-forward row-scaled
+kernels.
+
+- V2 attn-rows (+14/event): flash splitkv at M=22 vs native M=6. Microbench
+  scripts/fr13_attn_mgeom_bench.py (queued inside cg_combo container) decides:
+  tax_ratio ~=3.67 => row-linear, CLOSED (accept is the only lever);
+  >>3.67 => tile/occupancy headroom; if num_splits moves t22 => cheapest fix is
+  a launch-param env (FR13_ATTN_NUM_SPLITS), else fork kernel M-tile work.
+  Gate ladder: microbench -> flag-gated variant -> same-boot byte gate (FA2
+  fork floor: 0.0 with known single-ULP MMA exceptions) -> probe -> live arm.
+- V3 scan (+15/event): subtree-parallel shipped (+4.7% B=1, deployment link
+  pending); BV re-tile conditional stays parked behind the register-wall
+  finding (re-tile = HBM tax, do-not-re-run without new design).
+- Sampler 4.2 + residual soup: post-CG profiler pass re-ranks; no build until
+  attn/scan verdicts land.
+
+Sequencing (GPU serialized): dvkg64L live arm -> cg_combo (committer graph
+re-gate + attn microbench in-container) -> V2 verdict -> composed live arm.
