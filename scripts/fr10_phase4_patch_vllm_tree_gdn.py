@@ -18072,45 +18072,24 @@ def _patch_rejection_sampler_target_logits_handoff() -> bool:
     text = REJECTION_SAMPLER_PATH.read_text()
     if "_FR13_SG_TARGET_LOGITS" in text:
         return False
-    anchor = (
-        "        raw_target_logits = logits[target_logits_indices]\n"
-        "        # Use float32 for the target_logits.\n"
-        "        raw_target_logits = raw_target_logits.to(torch.float32)\n"
-        "        target_logits = raw_target_logits\n"
-        "        if not self.is_processed_logprobs_mode:\n"
-        "            # Clone raw_target_logits before applying processors to preserve\n"
-        "            # the original raw logits for logprobs computation, since\n"
-        "            # apply_logits_processors modifies the tensor in-place.\n"
-        "            target_logits = target_logits.clone()\n"
-        "        target_logits = self.apply_logits_processors(\n"
-        "            target_logits, sampling_metadata, metadata\n"
-        "        )\n"
-    )
-    if anchor not in text:
-        raise RuntimeError("FR13_SG_TARGET_LOGITS handoff anchor not found")
+    # METHOD-ENTRY seam (not the call site): forward's call block is the
+    # anchor for the fr10 sampling-constraints patch and must stay verbatim.
+    # The in-graph slice/fp32/clone are capture-legal device ops; only the
+    # processors body is illegal, so the method returns the handoff when set.
+    anchor = "        has_penalties = not sampling_metadata.no_penalties\n"
+    if text.count(anchor) != 1:
+        raise RuntimeError(
+            f"FR13_SG_TARGET_LOGITS handoff anchor count={text.count(anchor)}")
     text = text.replace(
         anchor,
-        "        # FR13_SG_TARGET_LOGITS (S1 =2): consume-once handoff of the\n"
-        "        # pre-processed target logits (wrapper applied processors\n"
-        "        # OUTSIDE the capture; penalties build per-step host tensors\n"
-        "        # that cannot run inside a graph). Unset => stock path.\n"
+        "        # FR13_SG_TARGET_LOGITS (S1 =2): consume-once handoff — the =2\n"
+        "        # wrapper ran this method eagerly OUTSIDE the capture into a\n"
+        "        # per-key static (penalties build per-step host tensors that\n"
+        "        # cannot run inside a graph). Unset => stock path.\n"
         "        _fr13_sg_tl = globals().pop('_FR13_SG_TARGET_LOGITS', None)\n"
         "        if _fr13_sg_tl is not None:\n"
-        "            raw_target_logits = _fr13_sg_tl\n"
-        "            target_logits = _fr13_sg_tl\n"
-        "        else:\n"
-        "            raw_target_logits = logits[target_logits_indices]\n"
-        "            # Use float32 for the target_logits.\n"
-        "            raw_target_logits = raw_target_logits.to(torch.float32)\n"
-        "            target_logits = raw_target_logits\n"
-        "            if not self.is_processed_logprobs_mode:\n"
-        "                # Clone raw_target_logits before applying processors to\n"
-        "                # preserve the original raw logits for logprobs\n"
-        "                # computation (processors modify in-place).\n"
-        "                target_logits = target_logits.clone()\n"
-        "            target_logits = self.apply_logits_processors(\n"
-        "                target_logits, sampling_metadata, metadata\n"
-        "            )\n",
+        "            return _fr13_sg_tl\n"
+        + anchor,
         1,
     )
     REJECTION_SAMPLER_PATH.write_text(text)
