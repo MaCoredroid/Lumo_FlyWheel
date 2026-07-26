@@ -1260,14 +1260,35 @@ def fr13_taw_commit_captured(
                     max_spec_len, generators=None, defer_materialize=True)
             torch.cuda.current_stream().wait_stream(_FR13_SG_STREAM)
             torch.cuda.synchronize()
-            # torch.cuda.graph ctx manager: proper RNG registration/cleanup
-            # even on exceptions (bare begin/end left philox registered =>
-            # every later eager rand crashed: boots 2-3's engine deaths)
-            with torch.cuda.graph(g):
+            # manual begin/end with g.reset() repair on failure: reset()
+            # destroys the underlying graph AND unregisters the philox
+            # generators (the ctx manager's __exit__ skips that cleanup when
+            # capture_end itself throws => the persistent post-abort poison)
+            prev2 = torch.cuda.current_stream()
+            torch.cuda.set_stream(_FR13_SG_STREAM)
+            try:
+                g.capture_begin()
                 out = fr13_taw_commit(
                     statics["ndt"], statics["dti"], statics["tpi"],
                     statics["tl"], statics["sl"], statics["bti"],
                     max_spec_len, generators=None, defer_materialize=True)
+                g.capture_end()
+            except Exception:
+                # abort order matters: END the open capture first (else the
+                # eager fallback itself runs "while capturing"), THEN reset
+                # to unregister philox, THEN restore the stream.
+                try:
+                    g.capture_end()
+                except Exception:
+                    pass
+                try:
+                    g.reset()
+                except Exception:
+                    pass
+                torch.cuda.set_stream(prev2)
+                torch.cuda.synchronize()
+                raise
+            torch.cuda.set_stream(prev2)
             g.replay()
             _FR13_SG_CAP[key] = {"g": g, "statics": statics, "out": out}
             print(f"[FR13_STEP_GRAPH] TAW-walk captured key={key[1]}", flush=True)
