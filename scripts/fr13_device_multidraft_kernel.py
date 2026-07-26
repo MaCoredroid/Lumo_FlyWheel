@@ -1040,9 +1040,12 @@ def fr13_taw_commit(
 
     cur = torch.full((nreq,), -1, dtype=torch.long, device=device)  # parent node
     alive = torch.ones(nreq, dtype=torch.bool, device=device)
-    row_buf = torch.full((nreq, row_cap), -1, dtype=torch.long, device=device)
+    # +1 trash column: capture-legal masked writes via scatter_ (no
+    # boolean-mask indexing => no nonzero host sync inside the capture)
+    row_buf = torch.full((nreq, row_cap + 1), -1, dtype=torch.long, device=device)
     row_len = torch.zeros(nreq, dtype=torch.long, device=device)
-    path_buf = torch.full((nreq, row_cap), -1, dtype=torch.long, device=device)
+    _trash = torch.full((nreq,), row_cap, dtype=torch.long, device=device)
+    path_buf = torch.full((nreq, row_cap + 1), -1, dtype=torch.long, device=device)
     path_len = torch.zeros(nreq, dtype=torch.long, device=device)
     bonus_flat = bonus_token_ids.reshape(-1).to(device=device, dtype=torch.long)
     ar = torch.arange(nreq, device=device)
@@ -1064,7 +1067,8 @@ def fr13_taw_commit(
             tok_bonus = bonus_flat[ar.clamp(max=bonus_flat.numel() - 1)]
             tok_leaf = torch.where(cp_ok, tok_self, tok_bonus)
             emit = leaf
-            row_buf[emit, row_len[emit]] = tok_leaf[emit]
+            row_buf.scatter_(1, torch.where(emit, row_len, _trash).unsqueeze(1),
+                             tok_leaf.unsqueeze(1))
             row_len = row_len + emit.long()
             alive = alive & ~leaf
         if not bool(has_kids.any()):
@@ -1104,19 +1108,23 @@ def fr13_taw_commit(
             tok_rej = _fr13_taw_inv_cdf(residual, uniforms[:, level, 2])
             tok = torch.where(rejected, tok_rej, tok)
         # emit token for every has_kids row; record path node for accepted
-        row_buf[has_kids, row_len[has_kids]] = tok[has_kids]
+        row_buf.scatter_(1, torch.where(has_kids, row_len, _trash).unsqueeze(1),
+                         tok.unsqueeze(1))
         row_len = row_len + has_kids.long()
         acc_node = kids[ar, src]
-        path_buf[accepted, path_len[accepted]] = acc_node[accepted]
+        path_buf.scatter_(1, torch.where(accepted, path_len, _trash).unsqueeze(1),
+                          acc_node.unsqueeze(1))
         path_len = path_len + accepted.long()
         cur = torch.where(accepted, acc_node, cur)
         alive = alive & accepted
 
     if defer_materialize:
         # S1 capture mode: everything above is pure tensor ops (zero syncs).
-        return row_buf, row_len, path_buf, path_len
+        return row_buf[:, :row_cap], row_len, path_buf[:, :row_cap], path_len
 
     # ---- materialization shim (ONE batched DtoH; wrapper phase removes this)
+    row_buf = row_buf[:, :row_cap]
+    path_buf = path_buf[:, :row_cap]
     rb = row_buf.cpu().tolist()
     rl = row_len.cpu().tolist()
     pb = path_buf.cpu().tolist()
@@ -1237,28 +1245,16 @@ def fr13_taw_commit_captured(
                 "sl": tree_self_logits.clone(),
                 "bti": bonus_token_ids.clone(),
             }
-            if _FR13_SG_STREAM is None:
-                _FR13_SG_STREAM = torch.cuda.Stream()
             g = torch.cuda.CUDAGraph()
             torch.cuda.synchronize()
-            prev = torch.cuda.current_stream()
-            torch.cuda.set_stream(_FR13_SG_STREAM)
-            try:
-                g.capture_begin()
+            # torch.cuda.graph ctx manager: proper RNG registration/cleanup
+            # even on exceptions (bare begin/end left philox registered =>
+            # every later eager rand crashed: boots 2-3's engine deaths)
+            with torch.cuda.graph(g):
                 out = fr13_taw_commit(
                     statics["ndt"], statics["dti"], statics["tpi"],
                     statics["tl"], statics["sl"], statics["bti"],
                     max_spec_len, generators=None, defer_materialize=True)
-                g.capture_end()
-            except Exception:
-                try:
-                    g.capture_end()
-                except Exception:
-                    pass
-                torch.cuda.set_stream(prev)
-                torch.cuda.synchronize()
-                raise
-            torch.cuda.set_stream(prev)
             g.replay()
             _FR13_SG_CAP[key] = {"g": g, "statics": statics, "out": out}
             print(f"[FR13_STEP_GRAPH] TAW-walk captured key={key[1]}", flush=True)
