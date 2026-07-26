@@ -85,3 +85,17 @@ only. Every lever gates on delta step_wall_ms toward floor(B) at matched eps
 verify-forward trio -85 (soup > scan/BV > norms), committer -21, glue -10
 => ~160ms/step ~ floor_ratio 1.5, where tps = comb x eps / floor and accept
 is the remaining lever (comb 5.78 already banked).
+
+## Verify-forward kernel budget (B=1 ledger, 2026-07-26)
+
+GPU kernel time split (120s window): GEMM/weights ~44.4s (irreducible) vs
+non-GEMM ~15s (25% at 22 rows; scales to ~46% at 50 rows == the -120..150
+verify gap). Ranked row-scaled targets inside verify:
+1. **attn rows**: flash_fwd_splitkv 6.5s + unified_attention 1.2s — the
+   FA2 fork's tree attention at M=22 queries; splitkv geometry is built for
+   long-KV/few-query — M-row efficiency is the biggest non-GEMM item.
+2. **small-kernel chains** (~4s): per_block_quant, silu_and_mul, index/
+   scatter/elementwise, topk — fusion pass (compile region or hand-fused).
+3. **scan** 1.5s: subtree shipped; BV re-tile only if (1)+(2) leave it top.
+Drafter CLOSED (dsplit: post-loop 0.3ms; span was drain artifact). Ladder:
+verify(1,2) -> committer fuse (-23) -> glue overlap (-10) -> floor ~1.2.
