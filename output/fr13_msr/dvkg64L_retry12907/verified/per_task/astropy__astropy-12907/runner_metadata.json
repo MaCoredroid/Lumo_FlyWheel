@@ -1,42 +1,41 @@
 {
   "instance_id": "astropy__astropy-12907",
   "dataset_name": "princeton-nlp/SWE-bench_Verified",
-  "started_at": "2026-07-26T04:11:30Z",
+  "started_at": "2026-07-26T04:13:48Z",
   "repo": "astropy/astropy",
   "base_commit": "d16bfe05a744909de4b27f5875fe0d4ed41ce607",
   "agent": {
-    "elapsed_s": 0.607,
-    "exit_code": 127,
+    "elapsed_s": 260.229,
+    "exit_code": 0,
     "timed_out": false,
-    "container_name": "swe-qwen-astropy__astropy-12907-1785039090",
+    "container_name": "swe-qwen-astropy__astropy-12907-1785039228",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
     "agent_env": "instance_image",
-    "instance_image": "swebench/sweb.eval.arm64.astropy_1776_astropy-12907:latest",
-    "host_arch": "aarch64",
-    "image_arch": "arm64"
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64"
   },
   "codex": {
-    "elapsed_s": 0.607,
-    "exit_code": 127,
+    "elapsed_s": 260.229,
+    "exit_code": 0,
     "timed_out": false,
-    "container_name": "swe-qwen-astropy__astropy-12907-1785039090",
+    "container_name": "swe-qwen-astropy__astropy-12907-1785039228",
+    "offloaded": true,
+    "codex_host": "alienware",
+    "network_drop": false,
     "agent_env": "instance_image",
-    "instance_image": "swebench/sweb.eval.arm64.astropy_1776_astropy-12907:latest",
-    "host_arch": "aarch64",
-    "image_arch": "arm64"
-  },
-  "empty_patch_retry": {
-    "cause": "agent_gave_up",
-    "attempted": true,
-    "max_retries": 0,
-    "recovered_patch_bytes": 0,
-    "attempts_used": 0
+    "instance_image": "swebench/sweb.eval.x86_64.astropy_1776_astropy-12907:latest",
+    "host_arch": "x86_64",
+    "image_arch": "x86_64"
   },
   "vllm_request_metrics_bytes": 0,
   "vllm_request_metrics_warning": "proxy capture file not present; verbose request metrics unavailable",
-  "patch_bytes": 0,
+  "patch_bytes": 504,
   "eval": {
-    "exit_code": 1,
-    "elapsed_s": 0.138
+    "exit_code": 0,
+    "elapsed_s": 62.246
   },
   "eval_report": {
     "track": "swe_bench",
@@ -45,12 +44,18 @@
     "dataset_name": "princeton-nlp/SWE-bench_Verified",
     "patch_path": "/home/mark/shared/lumoFlyWheel/output/fr13_msr/dvkg64L_retry12907/verified/per_task/astropy__astropy-12907/patch.diff",
     "prediction_path": "/home/mark/shared/lumoFlyWheel/output/fr13_msr/dvkg64L_retry12907/verified/per_task/astropy__astropy-12907/eval/predictions.jsonl",
-    "verdict": "failed",
-    "passed": false,
-    "failure_mode": "patch_apply_failed",
+    "verdict": "resolved",
+    "passed": true,
+    "failure_mode": "tests_passed",
     "harness_exit_code": 0,
-    "eval_wall_clock_seconds": 0.0,
-    "error": "empty_patch"
+    "eval_wall_clock_seconds": 59.883,
+    "error": null,
+    "arch": "arm64",
+    "run_id": "cbe-eval-1785039489",
+    "namespace": "swebench",
+    "requested_namespace": "auto",
+    "cache_level": "env",
+    "x86_emulation_fallback": false
   },
-  "ended_at": "2026-07-26T04:11:31Z"
+  "ended_at": "2026-07-26T04:19:11Z"
 }
