@@ -1136,6 +1136,36 @@ def fr13_taw_commit(
     return out_rows, accepted_rows, accepted_lens, accepted_node_paths, accepted_token_rows
 
 
+def fr13_taw_products_device(row_buf, row_len, path_buf, path_len,
+                             output_token_ids, accepted_tree_rows):
+    """S1-full (=2) in-capture product consumption: fill the sampler output
+    tensors ON DEVICE from the TAW defer products, replacing the host-list
+    committer glue (out_rows python loops / .tolist()) that cannot run inside
+    a capture. Byte contract vs the host route is gated CPU-side
+    (scripts/fr13_taw_products_device_byte_gate.py).
+
+    Returns (gdn_paths, gdn_rows): the +1-shifted 0-padded accepted node paths
+    [nreq, k] and per-request last-path-node rows [nreq] the CG committer body
+    consumes (host route: _gdn_path = [node+1 ...], row = last or 0)."""
+    nreq, cols = output_token_ids.shape
+    k = min(cols, row_buf.shape[1])
+    ar = torch.arange(k, device=row_buf.device)
+    mask = ar.unsqueeze(0) < row_len.unsqueeze(1)
+    output_token_ids.fill_(-1)
+    output_token_ids[:, :k] = torch.where(
+        mask, row_buf[:, :k], torch.full_like(row_buf[:, :k], -1))
+    accepted_tree_rows.copy_(path_len)
+    pmask = ar.unsqueeze(0) < path_len.unsqueeze(1)
+    gdn_paths = torch.where(
+        pmask, path_buf[:, :k] + 1, torch.zeros_like(path_buf[:, :k]))
+    last_idx = (path_len - 1).clamp(min=0)
+    gdn_rows = torch.where(
+        path_len > 0,
+        gdn_paths.gather(1, last_idx.unsqueeze(1)).squeeze(1),
+        torch.zeros_like(path_len))
+    return gdn_paths, gdn_rows
+
+
 def fr13_taw_materialize(row_buf, row_len, path_buf, path_len):
     """Post-replay materialization of TAW device products into the legacy
     host-list contract (ONE batched DtoH). Used by the S1 wrapper."""
