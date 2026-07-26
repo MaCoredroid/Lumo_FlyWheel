@@ -943,6 +943,7 @@ def _fr13_taw_topology(parents_key, parents_cpu, counts, max_spec_len, device):
         ccnt.to(device),
         torch.tensor(starts, dtype=torch.long, device=device),
         wmax,
+        torch.tensor(counts, dtype=torch.long, device=device),
     )
     _FR13_TAW_TOPO_CACHE[key] = out
     return out
@@ -998,7 +999,7 @@ def fr13_taw_commit(
         _FR13_SG_TOPOLOGY = (parents_cpu, counts)  # eager call caches for capture
     nreq = len(counts)
     row_cap = int(max_spec_len) + 1
-    ctab, ccnt, starts_t, wmax = _fr13_taw_topology(
+    ctab, ccnt, starts_t, wmax, counts_t = _fr13_taw_topology(
         tuple(parents_cpu), parents_cpu, counts, max_spec_len, device
     )
     drafts_t = draft_token_ids.detach().to(device=device, dtype=torch.long).reshape(-1)
@@ -1054,7 +1055,7 @@ def fr13_taw_commit(
         leaf = alive & ~ (nk > 0)
         if bool(leaf.any()):
             # careful host-free: compute for ALL rows, apply masked
-            cp_ok = (cur >= 0) & (cur < torch.tensor(counts, device=device))
+            cp_ok = (cur >= 0) & (cur < counts_t)
             self_rows = torch.softmax(
                 tree_self_logits[(starts_t + cur.clamp(min=0)).clamp(max=tree_self_logits.shape[0] - 1)].to(torch.float32),
                 dim=-1,
