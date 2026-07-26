@@ -80,6 +80,23 @@ class); S2 the remaining scheduler/prepare hop (~20-40ms). Both are
 glue-elimination, not byte reduction — orthogonal to accept and to the parked
 byte levers, composable with everything shipped.
 
+## S1 touchpoint map (MEASURED from live-container source, 2026-07-26)
+Sampler span (runner 4792-4945): 2 host syncs, both partial-prefill discard
+bookkeeping (np.nonzero + .tolist) — empty on steady decode, hoistable
+pre-replay. Eagle propose span: 44 raw sites, classified:
+- REAL per-step: (1) ONE stacked tail DtoH + decide_tail host python —
+  measured 0.3ms (dsplit tail+mid), stays POST-replay (suffix cache is
+  host-resident; not a blocker at 0.3ms); (2) FR13_DEDUP_SIBLINGS
+  .any().item() + rare .item() loops — tensorizable; (3) prepare-input
+  numpy/tolist cluster (seq_lens/query_start_loc) — S2 territory
+  (scheduler-owned metadata), untouched by S1.
+- Instrument-gated (OFF clean): dsplit syncs x4, metrics payload dumps,
+  selfcheck compares. Boot-time only: embed/lm_head weight compares.
+- ZERO unconditional per-step synchronizes in the span.
+=> S1 capture boundary: rejection-sampler entry -> CG committer (side
+stream) -> R4 spine loop end. Post-replay host: one DtoH + 0.3ms tail +
+pack (0.0ms measured). Surface is CLEANER than R4's was at build start.
+
 ## First build steps (S1)
 1. Map every host touchpoint between sampler entry and drafter end in the
    live-container source (read-first discipline): .tolist()/.item()/host
