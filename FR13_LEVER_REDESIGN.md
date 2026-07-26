@@ -99,3 +99,20 @@ verify gap). Ranked row-scaled targets inside verify:
 3. **scan** 1.5s: subtree shipped; BV re-tile only if (1)+(2) leave it top.
 Drafter CLOSED (dsplit: post-loop 0.3ms; span was drain artifact). Ladder:
 verify(1,2) -> committer fuse (-23) -> glue overlap (-10) -> floor ~1.2.
+
+## Drafter final accounting + FR-Spec revival design (2026-07-26)
+
+dsplit3 (needle v2, replay covered): loop = 70.0ms STEADY at B=1; tail+pack
+0.3ms. The drain-artifact theory was wrong — the span was honest. 70ms =
+4 sequential drafter iterations' traffic incl. 4-5 full lm_head reads/step
+(0.77GB fp8 each ~2.8ms) for GUESS tokens. Lever: **reduced-vocab draft
+head** — S3-era FR-Spec refutation is STALE (assumed host-bound drafter).
+Key implementation insight: BPE ids are ~frequency-ordered, so subset =
+ids [0, K): the head slice lm_head.weight[:K] is CONTIGUOUS (zero-copy
+view incl. per-block fp8 scales), logits[:, :K] argmax yields REAL vocab
+ids directly (no mapping); tokens >= K (rare merges, specials incl. EOS)
+simply never draft — verifier emits them via bonus, lossless by
+construction. Env FR13_DRAFT_VOCAB_K (0=off); gate = accept delta on live
+tasks (code workloads have rare-identifier mass — measure, don't assume).
+Remaining ~10ms/iter unexplained above head+lm_head estimates: one
+in-replay kernel attribution read before further drafter work.
