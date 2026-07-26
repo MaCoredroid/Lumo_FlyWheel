@@ -28,6 +28,16 @@ from vllm.v1.sample.ops.topk_topp_sampler import (
 assert torch.cuda.is_available()
 dev = torch.device("cuda")
 PHASES = os.environ.get("PHASES", "all")
+# PRESSURE=GB: pre-fill GPU memory to reproduce live allocator pressure
+# (emergency cudaFree during in-capture allocation = silent invalidator
+# hypothesis; live GPU runs ~95% committed, benches ran empty)
+# PRESSURE ballast RETIRED: on GB10 unified memory it IS host RAM => host
+# OOM-killer (2026-07-26 22:54). Safe equivalent: MEMFRAC_MB caps the torch
+# allocator just above the warm working set, so the capture's private-pool
+# growth trips the allocator's OOM-retry path (release_cached_blocks +
+# event sync/query = the suspected silent invalidator) with ZERO real
+# memory pressure. Applied after warmup, before capture.
+_MEMFRAC_MB = float(os.environ.get("MEMFRAC_MB", "0"))
 def on(p): return PHASES == "all" or p in PHASES.split(",")
 
 V, B = 248320, 4
@@ -107,6 +117,13 @@ prefill()
 with torch.cuda.stream(s):
     _ = region()
 torch.cuda.current_stream().wait_stream(s); torch.cuda.synchronize()
+if _MEMFRAC_MB > 0:
+    _resv = torch.cuda.memory_reserved()
+    _free_b, _tot_b = torch.cuda.mem_get_info()
+    _frac = min((_resv + _MEMFRAC_MB * (1 << 20)) / _tot_b, 1.0)
+    torch.cuda.set_per_process_memory_fraction(_frac)
+    print(f"memcap: reserved={_resv/(1<<30):.2f}GB +{_MEMFRAC_MB:.0f}MB "
+          f"frac={_frac:.4f}", flush=True)
 # capture
 gph = torch.cuda.CUDAGraph()
 prev = torch.cuda.current_stream()
