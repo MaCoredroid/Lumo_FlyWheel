@@ -1220,10 +1220,12 @@ def fr13_taw_commit_captured(
 ):
     global _FR13_SG_CAP_DEAD, _FR13_SG_STREAM
     device = target_logits.device
-    key = (tuple(target_logits.shape), tuple(draft_token_ids.reshape(-1).shape),
+    nreq = int(num_draft_tokens.numel() if hasattr(num_draft_tokens, "numel") else len(num_draft_tokens))
+    # nreq MUST be in the key: total-node counts collide across B (B=4 with a
+    # truncated tree == B=3 full => wrong-graph replay, the boot-5 4-vs-3 crash)
+    key = (nreq, tuple(target_logits.shape), tuple(draft_token_ids.reshape(-1).shape),
            int(bonus_token_ids.numel()))
     ent = _FR13_SG_CAP.get(key)
-    nreq = int(num_draft_tokens.numel() if hasattr(num_draft_tokens, "numel") else len(num_draft_tokens))
     row_cap = int(max_spec_len) + 1
     try:
         if ent is None and key not in _FR13_SG_CAP:
