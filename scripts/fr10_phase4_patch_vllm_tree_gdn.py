@@ -7223,6 +7223,13 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
         raise RuntimeError(
             'S1 device route requires stateless-tree defaults '
             '(commit=init=1 burn=0)')
+    globals()['_FR13_SG_DEFER_STASH'] = (row_buf, row_len, path_buf, path_len)
+    import os as _os2
+    if _os2.environ.get("FR13_STEP_GRAPH_SCOPE", "full") == "half":
+        # SCOPE=half (bisect + S1-mid shape): capture = sampler+walk+products;
+        # the state-commit half (fills+conv+launch) runs EAGERLY post-replay
+        # via _fr13_sg_commit_state_part.
+        return output_token_ids
     cols = int(pbuf.size(1))
     k = min(cols, int(gdn_paths.shape[1]))
     # fill 1: committer-row order (conv col0 commit consumes this ordering,
@@ -7260,8 +7267,54 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
     )
     _fr13_sg_capchk("post-committer-launch")
     stacks['flags'][:, 0].fill_(0)
-    globals()['_FR13_SG_DEFER_STASH'] = (row_buf, row_len, path_buf, path_len)
     return output_token_ids
+
+
+def _fr13_sg_commit_state_part(dm, stash):
+    """SCOPE=half eager state-commit: fills+conv+ONE batched launch from the
+    graph's stashed device products — identical ops to the in-graph commit
+    half, just outside the capture. Uses the same perm static."""
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as _g
+    row_buf, row_len, path_buf, path_len = stash
+    nreq = int(row_buf.shape[0])
+    otid = torch.empty(nreq, row_buf.shape[1], dtype=torch.long, device=row_buf.device)
+    atr = torch.empty(nreq, dtype=torch.long, device=row_buf.device)
+    gdn_paths, _r = dm.fr13_taw_products_device(
+        row_buf, row_len, path_buf, path_len, otid, atr)
+    pbuf = getattr(_g, '_LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR')
+    lbuf = getattr(_g, '_LUMO_FA_ACCEPTED_TREE_LENS_TENSOR')
+    perm = getattr(dm, '_FR13_SG_PERM')
+    stacks = getattr(_g, '_FR13_EAGER_PACK_STACKS')
+    layers = getattr(_g, '_FR13_REPLAY_LAYERS')
+    tbl = getattr(_g, '_FR13_EAGER_PACK_BANK_TBL')
+    import os as _os3
+    _rc = _os3.environ.get('FR13_APC_COMMIT_TO_RUNNING_ROW', '1') == '1'
+    _ri = _os3.environ.get('FR13_TREE_RUNROW_INIT', '1') == '1'
+    _bn = _os3.environ.get('FR13_APC_BURN_NODE_BANK', '0') == '1'
+    cols = int(pbuf.size(1))
+    k = min(cols, int(gdn_paths.shape[1]))
+    pbuf[:nreq, :cols].zero_()
+    lbuf[:nreq].zero_()
+    pbuf[:nreq, :k].copy_(gdn_paths[:, :k].to(pbuf.dtype))
+    lbuf[:nreq].copy_(path_len.to(lbuf.dtype))
+    _fr13_conv_commit_to_col0(layers, pbuf, lbuf, nreq, _rc, _bn)
+    pbuf[:nreq, :k].copy_(gdn_paths.index_select(0, perm)[:, :k].to(pbuf.dtype))
+    lbuf[:nreq].copy_(path_len.index_select(0, perm).to(lbuf.dtype))
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        launch_tree_gdn_replay_all_layers as _la)
+    _order = list(stacks['layer_order'])
+    _banks = [layers[_n]._fr13_replay_ssm_state for _n in _order]
+    from lumo_flywheel_serving.fr10_gdn_tree_kernel import (
+        _fr13_native_committer_all_layers_device as _dc)
+    _dc(banks_list=_banks, spec_state_indices=stacks['spec_idx'],
+        accepted_paths=pbuf, accepted_lens=lbuf,
+        k_rings=stacks['ring_k'], v_rings=stacks['ring_v'],
+        a_rings=stacks['ring_a'], b_rings=stacks['ring_b'],
+        A_logs=stacks['A_log'], dt_biases=stacks['dt_bias'],
+        num_layers=len(_order), num_spec_decodes=nreq,
+        output_scale=float(stacks['output_scale']),
+        use_qk_l2norm_in_kernel=True, burn_node_bank=_bn)
+    stacks['flags'][:, 0].fill_(0)
 
 
 def fr13_sg_post_replay_publish(stash, ndt_host):
@@ -18020,6 +18073,8 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        \"stls\": _fr13_sg_stls,\n"
         "                        \"logits_ptr\": logits.data_ptr(),\n"
         "                    }\n"
+        "                    if __import__(\"os\").environ.get(\"FR13_STEP_GRAPH_SCOPE\", \"full\") == \"half\":\n"
+        "                        _fr13_sg_rs._fr13_sg_commit_state_part(_fr13_sg_dm, _fr13_sg_stash)\n"
         "                    _fr13_sg_rs.fr13_sg_post_replay_publish(_fr13_sg_stash, _fr13_sg_ndt_h)\n"
         "                    print(\n"
         "                        f\"[FR13_STEP_GRAPH] S1-full captured B={_fr13_sg_B} \"\n"
@@ -18074,6 +18129,8 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                            _fr13_sg_sraw, self.input_batch.sampling_metadata,\n"
         "                            spec_decode_metadata))\n"
         "                    _fr13_sg_ent[\"graph\"].replay()\n"
+        "                    if __import__(\"os\").environ.get(\"FR13_STEP_GRAPH_SCOPE\", \"full\") == \"half\":\n"
+        "                        _fr13_sg_rs._fr13_sg_commit_state_part(_fr13_sg_dm, _fr13_sg_ent[\"stash\"])\n"
         "                    _fr13_sg_rs.fr13_sg_post_replay_publish(\n"
         "                        _fr13_sg_ent[\"stash\"], _fr13_sg_ndt_h)\n"
         "                    sampler_output = _fr13_sg_ent[\"out\"]\n"
