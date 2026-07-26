@@ -97,6 +97,18 @@ pre-replay. Eagle propose span: 44 raw sites, classified:
 stream) -> R4 spine loop end. Post-replay host: one DtoH + 0.3ms tail +
 pack (0.0ms measured). Surface is CLEANER than R4's was at build start.
 
+## S1 architecture decision (2026-07-26, from live-source read)
+The committer replay is invoked INSIDE the rejection sampler (the S1-era
+sampled-committer port — launch_tree_gdn_replay_all_layers lives in
+rejection_sampler.py). So the S1 span is: _sample (sampler kernels + CG
+committer) -> runner glue -> propose (R4 loop). A CUDA graph CANNOT capture
+another graph's replay => S1 re-captures the BODIES eagerly under ONE
+capture: when FR13_STEP_GRAPH=1, the CG and R4 replay branches are FORCED to
+their eager bodies during S1 capture (both bodies proven capture-legal by
+their own graphs), and the S1 graph becomes the only replay. CG/R4 remain
+the staged path (STEP_GRAPH=0). Eligibility mirrors R4's (uniform all-spec
+decode, B-keyed) + sampler RNG-as-input.
+
 ## First build steps (S1)
 1. Map every host touchpoint between sampler entry and drafter end in the
    live-container source (read-first discipline): .tolist()/.item()/host

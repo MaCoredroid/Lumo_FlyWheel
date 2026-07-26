@@ -17514,6 +17514,51 @@ def _patch_gpu_model_runner_attn_kv_remap_capture() -> bool:
     return True
 
 
+def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
+    """FR13_STEP_GRAPH S1 scaffold (default OFF, behavior-inert): eligibility
+    probe + one-shot needle for the single-capture step graph (sampler + CG
+    committer body + R4 drafter body under ONE capture; the CG/R4 REPLAYS are
+    bypassed when armed — a graph cannot capture another graph's replay).
+    This scaffold only classifies+reports steps; the capture body lands next.
+    Anchored BEFORE the _sample call so the future capture wraps it."""
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    sentinel = "# FR13_STEP_GRAPH_SCAFFOLD"
+    if sentinel in text:
+        return False
+    anchor = (
+        "        with record_function_or_nullcontext(\"gpu_model_runner: sample\"):\n"
+        "            sampler_output = self._sample(logits, spec_decode_metadata)\n"
+    )
+    if anchor not in text:
+        raise RuntimeError("FR13_STEP_GRAPH_SCAFFOLD anchor not found")
+    inject = (
+        f"        {sentinel}: S1 eligibility probe (inert unless armed).\n"
+        "        _fr13_sg_on = getattr(self, \"_fr13_sg_on\", None)\n"
+        "        if _fr13_sg_on is None:\n"
+        "            _fr13_sg_on = (\n"
+        "                __import__(\"os\").environ.get(\"FR13_STEP_GRAPH\", \"0\") == \"1\"\n"
+        "            )\n"
+        "            self._fr13_sg_on = _fr13_sg_on\n"
+        "        if _fr13_sg_on and not getattr(self, \"_fr13_sg_reported\", False):\n"
+        "            _fr13_sg_nr = int(self.input_batch.num_reqs)\n"
+        "            _fr13_sg_spec = spec_decode_metadata is not None\n"
+        "            _fr13_sg_elig = bool(\n"
+        "                _fr13_sg_spec\n"
+        "                and not torch.cuda.is_current_stream_capturing()\n"
+        "            )\n"
+        "            self._fr13_sg_reported = True\n"
+        "            print(\n"
+        "                \"[FR13_STEP_GRAPH] S1 scaffold armed: first-step class \"\n"
+        "                f\"B={_fr13_sg_nr} spec={_fr13_sg_spec} eligible={_fr13_sg_elig} \"\n"
+        "                \"(capture body NOT YET WIRED -- staged path in use)\",\n"
+        "                flush=True,\n"
+        "            )\n"
+    ) + anchor
+    text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_attn_kv_remap_apply() -> bool:
     """FR13_ATTN_KV_REMAP apply: after the tree committer publishes the accepted
     paths (inside _sample) and BEFORE the drafter / next verify forward, copy
@@ -17785,6 +17830,7 @@ def main() -> int:
         # tree_reqkey (anchors on its _fr13_rk_req_ids line).
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_merged_drafter()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_capture()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_step_graph_scaffold()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_attn_kv_remap_apply()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
