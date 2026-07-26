@@ -420,6 +420,25 @@ def fr13_device_multidraft_commit(
     # SAME per-request tensor ops, draw order, draw sizes, and generators =>
     # products BYTE-IDENTICAL at the same seeds (gated CPU-only by
     # scripts/fr13_dm_depthsync_byte_gate.py).
+    # FR13_TAW (S1, default OFF): fully-tensorized zero-readback walk.
+    # Distribution-equal (fr13_taw_equiv_gate.py PASS), NOT byte-equal to the
+    # legacy rng stream; gates as its own live arm. Trace diagnostics and
+    # all_greedy stay on the legacy path (same exclusions as depthsync).
+    if (
+        os.environ.get("FR13_TAW", "0") == "1"
+        and _fr13_commit_trace_fh() is None
+        and not all_greedy
+    ):
+        return fr13_taw_commit(
+            num_draft_tokens,
+            draft_token_ids,
+            tree_parent_indices,
+            target_logits,
+            tree_self_logits,
+            bonus_token_ids,
+            max_spec_len,
+            generators=generators,
+        )
     if (
         os.environ.get("FR13_DM_DEPTHSYNC", "0") == "1"
         and _fr13_commit_trace_fh() is None
