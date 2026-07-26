@@ -1,14 +1,14 @@
 {
   "instance_id": "astropy__astropy-13236",
   "dataset_name": "princeton-nlp/SWE-bench_Verified",
-  "started_at": "2026-07-26T16:21:00Z",
+  "started_at": "2026-07-26T16:33:58Z",
   "repo": "astropy/astropy",
   "base_commit": "6ed769d58d89380ebaa1ef52b300691eefda8928",
   "agent": {
-    "elapsed_s": 112.387,
+    "elapsed_s": 103.187,
     "exit_code": 0,
     "timed_out": false,
-    "container_name": "swe-qwen-astropy__astropy-13236-1785082860",
+    "container_name": "swe-qwen-astropy__astropy-13236-1785083638",
     "offloaded": true,
     "codex_host": "alienware",
     "network_drop": false,
@@ -18,10 +18,10 @@
     "image_arch": "x86_64"
   },
   "codex": {
-    "elapsed_s": 112.387,
+    "elapsed_s": 103.187,
     "exit_code": 0,
     "timed_out": false,
-    "container_name": "swe-qwen-astropy__astropy-13236-1785082860",
+    "container_name": "swe-qwen-astropy__astropy-13236-1785083638",
     "offloaded": true,
     "codex_host": "alienware",
     "network_drop": false,
@@ -42,7 +42,7 @@
   "patch_bytes": 0,
   "eval": {
     "exit_code": 1,
-    "elapsed_s": 0.873,
+    "elapsed_s": 1.326,
     "offloaded": true,
     "eval_host": "alienware"
   },
@@ -56,5 +56,5 @@
     "eval_host": "mark-Alienware-Aurora-ACT1250",
     "eval_wall_clock_seconds": 0.0
   },
-  "ended_at": "2026-07-26T16:22:53Z"
+  "ended_at": "2026-07-26T16:35:43Z"
 }
