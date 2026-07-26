@@ -3283,6 +3283,11 @@ def launch_tree_gdn_replay_all_layers(
     build_replay_bank_pointer_table's pointer list (the caller re-asserts
     the live banks' data_ptr() each commit, which also pins the anchor).
     """
+    if globals().pop("_FR13_S1_STATE_DONE", False):
+        # =3: scan state already committed inside the S1 graph this step —
+        # the staged tail must not double-commit (fused update is not
+        # idempotent). Consume-once, set by the dm wrapper post-replay.
+        return
     if num_spec_decodes <= 0:
         return
     if num_layers <= 0:

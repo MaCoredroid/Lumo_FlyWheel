@@ -1276,6 +1276,66 @@ def fr13_sg_set_topology(tree_parent_indices, num_draft_tokens):
 # ---------------------------------------------------------------------------
 _FR13_SG_CAP = {}
 _FR13_SG_CAP_DEAD = False
+
+
+def _fr13_s3_setup(nreq, device):
+    """=3 capture-prep (walk+products+committer in the LIVE-PROVEN =1 in-
+    dispatcher region — zero vLLM sampler code in-graph): replay-order perm
+    static + state save (col0 SSM/conv rows + scan flags — the side-stream
+    warmup executes a real commit) + module handles. Raises on missing state
+    (=> DISABLED => staged, survivable)."""
+    import importlib
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as g
+    import vllm.v1.sample.rejection_sampler as rs
+    tk = importlib.import_module("lumo_flywheel_serving.fr10_gdn_tree_kernel")
+    rid = getattr(g, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None)
+    sid = getattr(g, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
+    stk = getattr(g, "_FR13_EAGER_PACK_STACKS", None)
+    lay = getattr(g, "_FR13_REPLAY_LAYERS", None)
+    if (not rid or not sid or len(sid) != nreq or len(rid) < nreq
+            or stk is None or not lay):
+        raise RuntimeError(
+            f"S3 setup: rows/stacks missing rid={rid and len(rid)} "
+            f"sid={sid and len(sid)} nreq={nreq} stk={stk is not None}")
+    idx = {str(r): i for i, r in enumerate(rid[:nreq])}
+    perm_list = [idx.get(str(r)) for r in sid]
+    if any(p is None for p in perm_list):
+        raise RuntimeError("S3 setup: spec req id missing from sampler rows")
+    perm = torch.as_tensor(perm_list, dtype=torch.long, device=device)
+    fr13_sg_set_perm(perm)
+    saved = []
+    for li, pref in enumerate(list(stk["layer_order"])):
+        ly = lay[pref]
+        c0 = stk["spec_idx"][li, :nreq, 0].to(torch.long)
+        cvs = getattr(ly, "_fr13_replay_conv_state", None)
+        saved.append((ly, c0, ly._fr13_replay_ssm_state[c0].clone(),
+                      cvs[c0].clone() if cvs is not None else None))
+    return {"g": g, "rs": rs, "tk": tk, "perm": perm, "saved": saved,
+            "flags_sv": stk["flags"][:, 0].clone(), "stk": stk}
+
+
+def _fr13_s3_restore(s3):
+    for ly, c0, sv, cv in s3["saved"]:
+        ly._fr13_replay_ssm_state[c0] = sv
+        if cv is not None:
+            ly._fr13_replay_conv_state[c0] = cv
+    s3["stk"]["flags"][:, 0].copy_(s3["flags_sv"])
+
+
+def _fr13_s3_perm_refill(ent, nreq):
+    """Replay-time perm rebuild from CURRENT host row lists. False on any
+    composition mismatch => caller falls back to eager for THIS call only."""
+    from vllm.model_executor.layers.mamba import gdn_linear_attn as g
+    rid = getattr(g, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None)
+    sid = getattr(g, "_LUMO_FA_SPEC_ROW_REQ_IDS", None)
+    if not rid or not sid or len(sid) != nreq or len(rid) < nreq:
+        return False
+    idx = {str(r): i for i, r in enumerate(rid[:nreq])}
+    pl = [idx.get(str(r)) for r in sid]
+    if any(p is None for p in pl):
+        return False
+    ent["perm"].copy_(torch.as_tensor(pl, dtype=torch.long))
+    return True
 _FR13_SG_STREAM = None
 
 
@@ -1338,6 +1398,22 @@ def fr13_taw_commit_captured(
                 "sl": tree_self_logits.clone(),
                 "bti": bonus_token_ids.clone(),
             }
+            _mode3 = os.environ.get("FR13_STEP_GRAPH", "0") == "3"
+            _s3 = _fr13_s3_setup(nreq, device) if _mode3 else None
+
+            def _region():
+                _o = fr13_taw_commit(
+                    statics["ndt"], statics["dti"], statics["tpi"],
+                    statics["tl"], statics["sl"], statics["bti"],
+                    max_spec_len, generators=None, defer_materialize=True)
+                if _mode3:
+                    # products + conv col0 + device committer, all device ops
+                    # (the =2-era state part, reused verbatim in-region)
+                    _s3["rs"]._fr13_sg_commit_state_part(
+                        __import__("sys").modules["_fr13_device_multidraft_kernel"],
+                        _o)
+                return _o
+
             g = torch.cuda.CUDAGraph()
             torch.cuda.synchronize()
             # documented pre-capture warmup ON A SIDE STREAM (classic
@@ -1347,12 +1423,14 @@ def fr13_taw_commit_captured(
                 _FR13_SG_STREAM = torch.cuda.Stream()
             _FR13_SG_STREAM.wait_stream(torch.cuda.current_stream())
             with torch.cuda.stream(_FR13_SG_STREAM):
-                _warm = fr13_taw_commit(
-                    statics["ndt"], statics["dti"], statics["tpi"],
-                    statics["tl"], statics["sl"], statics["bti"],
-                    max_spec_len, generators=None, defer_materialize=True)
+                _warm = _region()
             torch.cuda.current_stream().wait_stream(_FR13_SG_STREAM)
             torch.cuda.synchronize()
+            if _mode3:
+                # the warmup executed a REAL commit — restore col0 SSM/conv
+                # rows + scan flags before the capture replays the same step
+                _fr13_s3_restore(_s3)
+                torch.cuda.synchronize()
             if int(_warm[0].shape[0]) != nreq:
                 raise RuntimeError(
                     f"TAW-capture pre-capture row skew: warm_rows={int(_warm[0].shape[0])} "
@@ -1365,10 +1443,7 @@ def fr13_taw_commit_captured(
             torch.cuda.set_stream(_FR13_SG_STREAM)
             try:
                 g.capture_begin()
-                out = fr13_taw_commit(
-                    statics["ndt"], statics["dti"], statics["tpi"],
-                    statics["tl"], statics["sl"], statics["bti"],
-                    max_spec_len, generators=None, defer_materialize=True)
+                out = _region()
                 g.capture_end()
             except Exception:
                 # abort order matters: END the open capture first (else the
@@ -1397,8 +1472,17 @@ def fr13_taw_commit_captured(
                     f"TAW-capture captured row skew: rows={int(out[0].shape[0])} "
                     f"nreq={nreq} key={key}")
             g.replay()
-            _FR13_SG_CAP[key] = {"g": g, "statics": statics, "out": out, "uni": uni}
-            print(f"[FR13_STEP_GRAPH] TAW-walk captured key={key}", flush=True)
+            _FR13_SG_CAP[key] = {"g": g, "statics": statics, "out": out,
+                                 "uni": uni, "mode3": _mode3,
+                                 "perm": (_s3["perm"] if _mode3 else None),
+                                 "tk": (_s3["tk"] if _mode3 else None)}
+            print(f"[FR13_STEP_GRAPH] TAW-walk captured key={key} "
+                  f"mode3={_mode3}", flush=True)
+            if _mode3:
+                # the graph committed state this step: the staged tail must
+                # skip its own scan launch (consume-once flag in the kernel
+                # lib entry). Conv col0 copy is idempotent — left alone.
+                _s3["tk"]._FR13_S1_STATE_DONE = True
             _mat = fr13_taw_materialize(*out)
             if len(_mat[0]) != nreq:
                 raise RuntimeError(
@@ -1406,6 +1490,12 @@ def fr13_taw_commit_captured(
                     f"nreq={nreq} key={key}")
             return _mat
         # replay path
+        if ent.get("mode3") and not _fr13_s3_perm_refill(ent, nreq):
+            # transient composition mismatch: eager THIS call, stay armed
+            return fr13_taw_commit(
+                num_draft_tokens, draft_token_ids, tree_parent_indices,
+                target_logits, tree_self_logits, bonus_token_ids,
+                max_spec_len, generators=generators)
         for name, src in (("ndt", num_draft_tokens), ("dti", draft_token_ids),
                           ("tpi", tree_parent_indices), ("tl", target_logits),
                           ("sl", tree_self_logits), ("bti", bonus_token_ids)):
@@ -1413,6 +1503,8 @@ def fr13_taw_commit_captured(
             if hasattr(dst, "copy_"):
                 dst.copy_(src, non_blocking=True)
         ent["g"].replay()
+        if ent.get("mode3"):
+            ent["tk"]._FR13_S1_STATE_DONE = True
         _mat = fr13_taw_materialize(*ent["out"])
         if len(_mat[0]) != nreq:
             raise RuntimeError(
