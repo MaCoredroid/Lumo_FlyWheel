@@ -3401,10 +3401,12 @@ def launch_tree_gdn_replay_all_layers(
         _spec_cols = int(spec_state_indices.shape[2])
         # env is dropped by EngineCore worker curation -> sidecar files are the
         # deployment-armable path (same pattern as _fr13_committer_native_on).
-        if torch.cuda.is_current_stream_capturing():
-            # S1 (=2) outer capture: EVERY other committer flavor is host-
-            # layout (.tolist/tensor-from-list) or a nested graph replay —
-            # both capture-illegal. The device-layout variant computes the
+        if (torch.cuda.is_current_stream_capturing()
+                or globals().get("_FR13_S1_FORCE_DEVICE", False)):
+            # S1 (=2) outer capture (or its eager side-stream warmup, forced
+            # via _FR13_S1_FORCE_DEVICE): EVERY other committer flavor is
+            # host-layout (.tolist/tensor-from-list) or a nested graph replay
+            # — both capture-illegal. The device-layout variant computes the
             # same fixed-shape neutral-padded layout with device ops.
             _fr13_native_committer_all_layers_device(
                 banks_list=banks_list, spec_state_indices=spec_state_indices,

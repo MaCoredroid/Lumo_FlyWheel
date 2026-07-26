@@ -984,7 +984,8 @@ def fr13_taw_commit(
     device = target_logits.device
     global _FR13_SG_TOPOLOGY
     if not defer_materialize and torch.cuda.is_available():
-        defer_materialize = bool(torch.cuda.is_current_stream_capturing())
+        defer_materialize = bool(
+            torch.cuda.is_current_stream_capturing() or _FR13_SG_FORCE_DEFER)
     if defer_materialize and _FR13_SG_TOPOLOGY is not None:
         # S1 capture mode: topology pre-read OUTSIDE the capture (step-constant)
         parents_cpu, counts = _FR13_SG_TOPOLOGY
@@ -1222,11 +1223,20 @@ _FR13_SG_TOPOLOGY = None
 # S1-full (=2): replay-order permutation static (sampler-row -> spec-row
 # order), wrapper-owned per key, refilled pre-replay (never baked stale)
 _FR13_SG_PERM = None
+# S1-full (=2) pre-capture warmup: forces the defer/device route on an EAGER
+# side-stream run (warms Triton configs + allocates every persistent buffer
+# OUTSIDE the capture — first-run cudaMalloc inside capture invalidates it)
+_FR13_SG_FORCE_DEFER = False
 
 
 def fr13_sg_set_perm(t):
     global _FR13_SG_PERM
     _FR13_SG_PERM = t
+
+
+def fr13_sg_set_force_defer(v):
+    global _FR13_SG_FORCE_DEFER
+    _FR13_SG_FORCE_DEFER = bool(v)
 
 
 def fr13_sg_set_topology(tree_parent_indices, num_draft_tokens):
