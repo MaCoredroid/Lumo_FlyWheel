@@ -18357,6 +18357,32 @@ GPUModelRunner.execute_model = _fr13_sg_execute_model_locked
     return True
 
 
+def _patch_gpu_model_runner_sample_return_probe() -> bool:
+    """FR13 sliver triple-split: probe at _sample's return (between forward's
+    post-so-build probe and the wrapper's pre-capture-end)."""
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    if "sample-return" in text:
+        return False
+    anchor = (
+        "            sampling_metadata,\n"
+        "        )\n"
+        "        return sampler_output\n"
+    )
+    if anchor not in text:
+        raise RuntimeError("FR13_SG sample-return probe anchor not found")
+    text = text.replace(
+        anchor,
+        "            sampling_metadata,\n"
+        "        )\n"
+        "        __import__(\"vllm.v1.sample.rejection_sampler\", "
+        "fromlist=[\"_x\"])._fr13_sg_capchk(\"sample-return\")\n"
+        "        return sampler_output\n",
+        1,
+    )
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_warmup_capture() -> bool:
     """FR13 boot-29: WARMUP CAPTURE — capture the =2 graph in the boot's
     quiet window (where vLLM's ~180 FULL graphs capture successfully)
@@ -18555,12 +18581,20 @@ def _patch_rejection_sampler_bonus_handoff() -> bool:
     fwd_tail_anchor = (
         "        return SamplerOutput(\n"
         "            sampled_token_ids=output_token_ids,\n"
+        "            logprobs_tensors=logprobs_tensors,\n"
+        "        )\n"
     )
     if fwd_tail_anchor not in text:
         raise RuntimeError("FR13_SG fwd-tail probe anchor not found")
     text = text.replace(
         fwd_tail_anchor,
-        "        _fr13_sg_capchk(\"fwd-tail\")\n" + fwd_tail_anchor,
+        "        _fr13_sg_capchk(\"fwd-tail\")\n"
+        "        _fr13_sg_so = SamplerOutput(\n"
+        "            sampled_token_ids=output_token_ids,\n"
+        "            logprobs_tensors=logprobs_tensors,\n"
+        "        )\n"
+        "        _fr13_sg_capchk(\"post-so-build\")\n"
+        "        return _fr13_sg_so\n",
         1,
     )
     REJECTION_SAMPLER_PATH.write_text(text)
@@ -18998,6 +19032,7 @@ def main() -> int:
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_bonus_handoff()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_exec_lock()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_warmup_capture()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sample_return_probe()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
         # this patch's propose_draft_token_ids restore anchor in program order,

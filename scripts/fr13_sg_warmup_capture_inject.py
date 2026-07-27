@@ -102,6 +102,7 @@ def _fr13_sg_warmup_capture(self):
             self.num_decode_draft_tokens.copy_to_gpu()
             logits = None
             for _phase in ("warm", "capture"):
+                self._fr13_sg_skip_seen = False  # print EVERY skip reason
                 _fr13_wids = ["fr13-warmup-%d" % _r for _r in range(B)]
                 _tk._LUMO_FA_SAMPLER_ROW_REQ_IDS = _fr13_wids
                 _tk._LUMO_FA_SPEC_ROW_REQ_IDS = list(_fr13_wids)
@@ -170,6 +171,36 @@ def _fr13_sg_warmup_capture(self):
             for _k in [k for k in _by_req if str(k).startswith(
                     "fr13-warmup-")]:
                 _by_req.pop(_k, None)
+    def _poisoned():
+        try:
+            torch.rand(2, device=device)
+            return False
+        except RuntimeError as _pe:
+            return "Offset increment" in str(_pe)
+    if _poisoned():
+        import gc as _gc
+        _gen = torch.cuda.default_generators[
+            device.index if device.index is not None else 0]
+        for _cn, _cf in (
+            ("gc", lambda: _gc.collect()),
+            ("manual_seed", lambda: torch.cuda.manual_seed(0)),
+            ("set_state", lambda: _gen.set_state(_gen.get_state())),
+            ("graphsafe", lambda: _gen.graphsafe_set_state(
+                _gen.clone_state())),
+        ):
+            try:
+                _cf()
+                _st = "ran"
+            except Exception as _ce:
+                _st = "threw:" + str(_ce)[:60]
+            _pp = _poisoned()
+            print("[FR13_STEP_GRAPH] philox cure %s: %s -> poisoned=%s"
+                  % (_cn, _st, _pp), flush=True)
+            if not _pp:
+                break
+        if _poisoned():
+            print("[FR13_STEP_GRAPH] philox POISON UNCURED — boot will "
+                  "likely die at next default-gen draw", flush=True)
     print(
         "[FR13_STEP_GRAPH] warmup-capture done: %d/%d keys" % (captured, maxB),
         flush=True,
