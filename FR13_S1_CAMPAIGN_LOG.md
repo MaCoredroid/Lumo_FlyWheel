@@ -132,3 +132,21 @@ Boot-25 package (this commit):
 Expected boot-25 outcomes: either (a) capture succeeds on attempt 2 now
 that retries are real (attempt-1-poison was self-inflicted), or (b) probes
 name the guilty phase precisely. Both advance the line.
+
+## Boot-24 FINAL (completed 04:48Z) — staged-fallback reference arm
+Verdicts: 2 pass, 2 fail, 4 finished (12907+13236 pass; 13033+13398 fail)
+= boot-16/boot-23 2P/2F band. 13398 marathon again (2737s, ~417 records,
+coherent IERS/mjd_utc debugging to the end — no garble).
+Speed (STAGED fallback, =2 capture disabled at step 1):
+measured_tps_fullstep_wall 32.276 | step_wall 331.457ms @ eps 1.899 |
+accept 4.635 | prefill_frac 0.480 | s_per_fwd_gpu 0.113 | death 0.
+Slope (accept+1)/step = 17.00 tps/eps == boot-16 staged 16.97 =>
+staged-vs-staged cross-boot reproducibility CONFIRMED; the staged
+reference is REPAIRED with full component records preserved this time:
+output/fr13_msr/boot24_records/ (deploy json + verdicts + pid-231
+sidecars: committer 236.25s/6108 spans=38.7ms, drafter 356.36s/6482=55.0ms,
+sfwd 1094.08s). Stream log rotated to s1fullgo_stream.boot24.log.
+Scoreboard (slope basis): =3 graph 18.7 > staged 17.0 (x2 boots) > =1 14.7.
+Boot-25 LAUNCHING: same =2 lever + tri-state probes + real retries
+(a25162f50). Expected: capture on the real attempt 2, or the first
+probe with status!=1 names the poison phase.
