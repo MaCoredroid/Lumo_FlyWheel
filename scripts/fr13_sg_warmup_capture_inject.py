@@ -351,7 +351,8 @@ def _fr13_sg_capture_model_wrapped(self, *a, **k):
     import os as _os
     if _os.environ.get("FR13_STEP_GRAPH", "0") == "2":
         try:
-            _fr13_sg_warmup_capture(self)
+            with torch.inference_mode():
+                _fr13_sg_warmup_capture(self)
         except Exception as _e:
             import traceback as _tb
             _tb.print_exc()
