@@ -8673,7 +8673,7 @@ def _lumo_tree_canonical_multidraft_sample(
             sampling_metadata,
         )
 """
-        target_constraint = """        _fr10_target_logits_pre_sampling_constraints = None
+        target_precap = """        _fr10_target_logits_pre_sampling_constraints = None
         try:
             import os as _fr10_constraint_os
             if (
@@ -8685,12 +8685,14 @@ def _lumo_tree_canonical_multidraft_sample(
                 )
         except Exception:
             _fr10_target_logits_pre_sampling_constraints = None
-        target_logits = apply_sampling_constraints(
+"""
+        target_apply = """        target_logits = apply_sampling_constraints(
             target_logits,
             metadata.cu_num_draft_tokens,
             sampling_metadata,
         )
 """
+        target_constraint = target_precap + target_apply
         target_processor_anchor = """        target_logits = self.apply_logits_processors(
             target_logits, sampling_metadata, metadata
         )
@@ -9057,13 +9059,41 @@ def _lumo_tree_canonical_multidraft_sample(
         stock_call_pos = text.find(stock_call)
         if stock_call_pos < 0:
             raise RuntimeError("stock rejection_sample call anchor not found")
-        if target_constraint not in text[:stock_call_pos]:
+        # FR13 DOUBLE-TEMP FIX (2026-07-27, finding 6e86d6a29): current images'
+        # STOCK rejection_sampler already applies sampling constraints right
+        # after the processor anchor; the old unconditional injection added a
+        # SECOND apply => temperature divided twice (T^2: effective 0.36 at a
+        # requested 0.6) for every spec arm since 2026-06-05 (e87808ee5). Now:
+        # insert the debug pre-capture ALWAYS (it must sit before the stock
+        # apply to capture pre-constraint logits), and inject OUR apply ONLY
+        # when the stock apply is absent (older images — the injection's
+        # original purpose) or FR13_TEMP_LEGACY_DOUBLE=1 (patch-time escape
+        # hatch so the re-base A/B can boot a legacy control arm).
+        _fr13_legacy_double = (
+            os.environ.get("FR13_TEMP_LEGACY_DOUBLE", "0") == "1"
+        )
+        _fr13_stock_applies = target_apply in text[:stock_call_pos]
+        if ("_fr10_target_logits_pre_sampling_constraints = None"
+                not in text[:stock_call_pos]):
             if target_processor_anchor not in text[:stock_call_pos]:
                 raise RuntimeError("target logits sampling-constraints anchor not found")
+            _fr13_temp_ins = target_precap
+            if (not _fr13_stock_applies) or _fr13_legacy_double:
+                _fr13_temp_ins = _fr13_temp_ins + target_apply
             text = text.replace(
                 target_processor_anchor,
-                target_processor_anchor + target_constraint + "\n",
+                target_processor_anchor + _fr13_temp_ins + "\n",
                 1,
+            )
+            print(
+                "[FR13_TEMP_FIX] rejection_sampler constraints: stock_apply=%s "
+                "legacy_double=%s -> injected_extra_apply=%s"
+                % (
+                    _fr13_stock_applies,
+                    _fr13_legacy_double,
+                    (not _fr13_stock_applies) or _fr13_legacy_double,
+                ),
+                flush=True,
             )
         text = text.replace(stock_call, stock_call_new, 1)
 
