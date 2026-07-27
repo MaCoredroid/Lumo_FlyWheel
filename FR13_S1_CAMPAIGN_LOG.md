@@ -928,6 +928,24 @@ and docker rm -f (SIGKILL) never runs atexit — tempfix1's samples LOST
 (sidecar final=False). Samples now ride a 30s slow throttle; next
 instrumented arm delivers the F/m regression.
 
+## REGRESS1 COMPLETE (2026-07-27 21:00Z): per-step F/m DELIVERED + 2P/2F at 0.6
+Verdicts: 2 pass, 2 fail, 4 finished (12907 + 13236 pass — 13236's coin flip
+landed pass; the 2P band reappears at TRUE 0.6). Tuple: accept 4.561 | eps
+2.173 | tps 34.984 | step 345.4ms | pf .316 | drafter 56.1 | committer 52.4.
+TRUE-0.6 accept band now 4.33-4.56 across two arms.
+PER-STEP REGRESSION, FINAL (harvested samples, p98-trimmed, n=5617/5769):
+  step_wall = 217.1(±0.7) + 58.99(±0.39)·drafts   R²=0.941
+  sfwd      = 139.4(±0.6) + 40.05(±0.31)·drafts   R²=0.915
+  (tuple cross-check: model predicts 344-347 at eps 2.173 vs measured 345.4)
+=> the arm-level pooled fit (235.5+49.2) is RETIRED: fixed ~217, marginal
+~59/event. Non-verify remainder = ~78 fixed + ~19/event (drafter+committer+
+host). IN-SPAN IDLE stands as the campaign: verify marginal ~40/event vs
+~11-12/event measured kernels => ~28ms/event non-kernel inside the forward
+span; between-span remainder adds ~78+19·eps. Samples instrument (v2
+.samples sidecar + harvest) = the standing per-arm deliverable.
+Task #7 (honest hole) CLOSED: host/gaps fully attributed at three levels —
+between-span ~11ms/step, in-span idle named + sized, F/m resolved with CIs.
+
 ## CLEANBAKE1 GATE: PASS (2026-07-27 18:52Z) — cleaned+baked build behaviorally
 ## neutral, tuple ON the pooled line
 Verdicts: 1 pass, 3 fail, 4 finished (12907 pass; 13236 patch_apply_failed —
