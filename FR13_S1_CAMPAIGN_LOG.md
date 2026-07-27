@@ -461,3 +461,23 @@ Implementation (boot-42):
    change; kernel-order between the two launches enforces the dependency
    (same stream, still fully in-graph).
 Gate before live: selfcheck STATE EQUAL x4 + ids BYTE-EQUAL x4.
+
+## Boot-43 STATEVAL: state "divergence" is BENIGN ULP DUST — check CLEAN
+STATEVAL 12.linear_attn: ssm sums IDENTICAL e==r==b (~1e-10, denormal
+dust); conv e=0.006293 r=0.006302 b=0.006324 (~0.5% on near-zero totals)
+=> batched-vs-sequential accumulation-order ULP class (the ACCEPTED
+within-floor category), NOT corruption. Ordering fix (two-phase) can stay
+or be reverted — it was never the issue.
+NET: the =2 replay is CLEAN in the check context (ids BYTE-EQUAL x4,
+states ULP-equal). The LIVE accept-1.0 + garble is live-only.
+PRIME SUSPECT: LIVE TOPOLOGY VARIATION — tail6's merged drafter emits
+per-step suffix-chain topologies; the fabricated capture baked the static
+config tree; the graph key ((21,)*B, logits.shape) does NOT key topology
+=> wrong tree structure at replay => reject-all. (=1 lived because its
+walk-only graph consumed topology via per-step refilled statics.)
+DECIDER IN FLIGHT: boot-43's live phase prints MD-DIFF (live vs baked
+tree_parent_indices) at first replay — letting the arm run to live.
+Fix candidates: topology in the graph key (per-topology captures — may
+explode key count) OR make the walk's topology tables per-step refilled
+data (the =1 pattern) OR composition-guard: skip replay when live
+topology != baked (staged fallback for non-matching steps).
