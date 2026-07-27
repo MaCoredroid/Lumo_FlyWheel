@@ -712,3 +712,34 @@ NEXT INSTRUMENT (to resolve below ±15ms): per-STEP regression from the
 sfwd sidecar (thousands of steps/arm, each with known draft count) instead
 of arm-level aggregates; gives F and m per mode with real confidence
 intervals.
+
+## STRATEGIC RE-BASE: the tree deficit is a FIXED +75ms/step, not per-event
+Fits (step_wall vs eps):
+  NATIVE (e5, B=4 & B=8):   step = 160.4 + 44.6 * eps
+  TREE   (7 arms, all modes): step = 235.5 + 49.2 * eps
+  => MARGINAL essentially at PARITY (+4.6 ms/event) — the historic row-tax
+     (bar17-r2: tree ~140 vs native ~49 ms/event) is GONE, killed by the
+     kernel work (PARENT_GATHER, SLOT_REORDER, subtree-parallel, HC/PG).
+  => The entire remaining deficit is the FIXED term: +75.1 ms/step.
+Net effect at matched eps (tree accept 4.5 vs native 3.55):
+  eps 2.0: native 36.47 tps | tree 32.94 | tree 0.90x
+  eps 2.6: native 42.82 tps | tree 39.35 | tree 0.92x
+The +27% accept advantage is MORE THAN EATEN by the +75ms fixed tax.
+WHAT THE FIXED TERM IS MADE OF (measured, per step):
+  drafter  ~54 ms GPU  (21-node tree draft vs native's 5-token chain)
+  committer ~39 ms     (staged span; in-graph under =2/=3)
+  + host gaps/publishes
+S1 VERDICT IN THIS FRAME: =2/=3 graph fusion targeted part of this fixed
+term and moved it by < detection floor (~15ms) — because the host cost had
+already been hoisted out to make capture legal; only launch gaps remained.
+TWO WAYS TO WIN (both quantified):
+ (a) CUT FIXED: -75 ms/step reaches native parity at equal accept. The
+     drafter (54ms) is the single largest owned component.
+ (b) RAISE ACCEPT: at the CURRENT fixed cost, accept >= 5.0 beats native
+     at eps 2.6 (need (a+1) > 5.985). We sit at 4.5-4.7 => the accept>5
+     work (tasks #33/#45) is now a DIRECT win condition, not a nice-to-have.
+S2 AS ORIGINALLY FRAMED (fold verify forward into our graph) is NOT
+obviously the lever: the verify forward is already inside vLLM's own CUDA
+graphs and its ~200ms is GPU work (98.6ms weight-read floor + tree rows),
+not launch overhead. Verify that claim (full-graph vs piecewise for the
+tree decode shape) BEFORE investing in S2.
