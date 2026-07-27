@@ -142,3 +142,9 @@ ctrace corpus flowing (mis-pathed to /vllm-workspace/1 — snapshotted;
 schema RICHER than .commit: per-node draft_token_id/parent/target_argmax/
 target_prob_draft => the branch-tail join can condition on exact rescue
 events with accept probabilities).
+CONFOUND RECORDED (do NOT quote b2c1 speed): cfwd 106.3 ms/span vs regress1
+42.1 — the ctrace debug rider does per-row .cpu() pulls inside the committer
+path = a large injected observer effect (the very per-event-sync pathology
+under investigation; sfwd samples unaffected — debug lives in the sampler
+region). b2c1 deliverables = band + dispatch tags (FULL at n=2727) + corpus.
+B2c's REAL speed gate = a clean arm without the debug rider.
