@@ -18344,6 +18344,21 @@ GPUModelRunner.execute_model = _fr13_sg_execute_model_locked
     return True
 
 
+def _patch_gpu_model_runner_warmup_capture() -> bool:
+    """FR13 boot-29: WARMUP CAPTURE — capture the =2 graph in the boot's
+    quiet window (where vLLM's ~180 FULL graphs capture successfully)
+    instead of under live traffic (boots 24-28: every live-capture lever
+    refuted; ~80-thread process is structurally hostile). Injected code
+    lives in fr13_sg_warmup_capture_inject.py next to this patcher."""
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    if "_fr13_sg_warmup_capture" in text:
+        return False
+    inj = Path(__file__).resolve().parent / "fr13_sg_warmup_capture_inject.py"
+    text += "\n\n" + inj.read_text()
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
 def _patch_gpu_model_runner_capdbg() -> bool:
     """FR13_CAPDBG (env-gated forensics): every CUDAGraph capture_begin/
     capture_end/reset prints id + caller; a failed capture_end prints LOUDLY.
@@ -18969,6 +18984,7 @@ def main() -> int:
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_target_logits_handoff()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_bonus_handoff()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_exec_lock()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_warmup_capture()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
         # this patch's propose_draft_token_ids restore anchor in program order,
