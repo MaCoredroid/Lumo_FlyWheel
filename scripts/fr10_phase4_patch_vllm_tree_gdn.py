@@ -16265,9 +16265,20 @@ class _Fr13SfwdGpuTimer:
         if (now - self._last_dump_t) < period:
             return
         self._last_dump_t = now
-        self._dump_json(final=False)
+        # FIX 2026-07-27: the harness tears down with docker rm -f (SIGKILL),
+        # so atexit/teardown NEVER runs and a teardown-only samples dump loses
+        # everything (observed: tempfix1 sidecar final=False, no per_step).
+        # Include the samples in a slower second throttle instead: every
+        # FR13_SFWD_SAMPLES_DUMP_S (default 30s) the regular dump carries the
+        # full per-step arrays — a few MB write every 30s, off the step path.
+        _sp = float(__import__("os").environ.get(
+            "FR13_SFWD_SAMPLES_DUMP_S", "30"))
+        _with = (now - getattr(self, "_last_samples_dump_t", 0.0)) >= _sp
+        if _with:
+            self._last_samples_dump_t = now
+        self._dump_json(final=False, with_samples=_with)
 
-    def _dump_json(self, final):
+    def _dump_json(self, final, with_samples=False):
         out = __import__("os").environ.get("FR13_SFWD_GPU_TIMER_JSON")
         if not out:
             return
@@ -16299,10 +16310,11 @@ class _Fr13SfwdGpuTimer:
                     "reducer takes a delta across a request window."
                 ),
             }
-            if final:
-                # per-step samples (teardown-only; parallel arrays): the
-                # per-STEP regression instrument — step_wall/sfwd vs drafts
-                # with real n, resolving F/m below the arm-level noise floor.
+            if final or with_samples:
+                # per-step samples (parallel arrays): the per-STEP regression
+                # instrument — step_wall/sfwd vs drafts with real n, resolving
+                # F/m below the arm-level noise floor. Carried on the slow
+                # (30s) throttle + final so SIGKILL teardown cannot lose them.
                 payload["per_step"] = {
                     "fwd_drafts": self._fwd_samples_d,
                     "fwd_ms": self._fwd_samples_ms,
