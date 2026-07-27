@@ -16188,6 +16188,8 @@ def _fr13_sfwd_begin(max_num_scheduled_tokens, num_tokens, num_reqs,
     step, else None (no event, no cost)."""
     if __import__("os").environ.get("FR13_SFWD_GPU_TIMER", "0") != "1":
         return None
+    if torch.cuda.is_current_stream_capturing():
+        return None  # boot-29i: event ops inside a capture invalidate it
     _fr13_sfwd_pure = _fr13_sfwd_is_pure_decode(
         max_num_scheduled_tokens, num_tokens, num_reqs, uniform_decode_query_len
     )
@@ -16368,6 +16370,8 @@ def _fr13_cfwd_timer():
 
 
 def _fr13_dfwd_begin():
+    if torch.cuda.is_current_stream_capturing():
+        return None  # boot-29i: event ops inside a capture invalidate it
     if __import__("os").environ.get("FR13_DFWD_GPU_TIMER", "0") != "1":
         return None
     try:
@@ -16386,6 +16390,8 @@ def _fr13_dfwd_end(start_ev):
 
 
 def _fr13_cfwd_begin():
+    if torch.cuda.is_current_stream_capturing():
+        return None  # boot-29i: event ops inside a capture invalidate it
     if __import__("os").environ.get("FR13_CFWD_GPU_TIMER", "0") != "1":
         return None
     try:
@@ -18153,6 +18159,16 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        try:\n"
         "                            del _fr13_sg_g\n"
         "                            __import__(\"gc\").collect()\n"
+        "                        except Exception:\n"
+        "                            pass\n"
+        "                        try:\n"
+        "                            # boot-29i cure bench: graphsafe_set_state\n"
+        "                            # is the ONLY cure for the abort philox\n"
+        "                            # poison (gc/manual_seed/set_state all fail)\n"
+        "                            _fr13_sg_dg = torch.cuda.default_generators[\n"
+        "                                torch.cuda.current_device()]\n"
+        "                            _fr13_sg_dg.graphsafe_set_state(\n"
+        "                                _fr13_sg_dg.clone_state())\n"
         "                        except Exception:\n"
         "                            pass\n"
         "                        torch.cuda.set_stream(_fr13_sg_prev)\n"
