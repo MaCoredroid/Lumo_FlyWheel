@@ -8190,7 +8190,10 @@ def _lumo_tree_canonical_multidraft_sample(
                 )
                 if _fr13_sbr_active:
                     _ep_order = list(_fr13_sbr_stacks['layer_order'])
-                    if _ep_order != sorted(_fr13_replay_layers):
+                    # boot-42: layer_order is now PARTITIONED (independent
+                    # first, post-full-attn adjacent last) — validate as a
+                    # SET; row alignment is carried by the stacks themselves.
+                    if sorted(_ep_order) != sorted(_fr13_replay_layers):
                         raise RuntimeError(
                             'FR13_SAMPLED_REPLAY_BATCHED: stacked layer order != '
                             'registered replay layers'
