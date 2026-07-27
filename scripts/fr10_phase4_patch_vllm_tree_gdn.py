@@ -17904,6 +17904,19 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        spec_decode_metadata)\n"
         "                    _fr13_sg_rs.__dict__[\"_FR13_SG_TL_QUEUE\"] = [\n"
         "                        _fr13_sg_tls, _fr13_sg_stls]\n"
+        "                    # bonus sampler precompute (last strip hoist): the\n"
+        "                    # in-forward call pops this SamplerOutput once\n"
+        "                    from dataclasses import replace as _fr13_sg_dcrep\n"
+        "                    _fr13_sg_bso = self.rejection_sampler.sampler(\n"
+        "                        logits=logits[spec_decode_metadata.bonus_logits_indices],\n"
+        "                        sampling_metadata=_fr13_sg_dcrep(\n"
+        "                            self.input_batch.sampling_metadata, max_num_logprobs=-1),\n"
+        "                        predict_bonus_token=True,\n"
+        '                        logprobs_mode_override="processed_logits"\n'
+        "                        if self.rejection_sampler.is_processed_logprobs_mode\n"
+        '                        else "raw_logits",\n'
+        "                    )\n"
+        "                    _fr13_sg_rs.__dict__[\"_FR13_SG_BONUS_OUT\"] = _fr13_sg_bso\n"
         "                    # per-key uniforms static (shared-global address must\n"
         "                    # not be baked: another key's realloc would orphan it)\n"
         "                    _fr13_sg_uni = torch.empty(\n"
@@ -18003,6 +18016,19 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        spec_decode_metadata))\n"
         "                    _fr13_sg_rs.__dict__[\"_FR13_SG_TL_QUEUE\"] = [\n"
         "                        _fr13_sg_tls, _fr13_sg_stls]\n"
+        "                    # bonus sampler precompute (last strip hoist): the\n"
+        "                    # in-forward call pops this SamplerOutput once\n"
+        "                    from dataclasses import replace as _fr13_sg_dcrep\n"
+        "                    _fr13_sg_bso = self.rejection_sampler.sampler(\n"
+        "                        logits=logits[spec_decode_metadata.bonus_logits_indices],\n"
+        "                        sampling_metadata=_fr13_sg_dcrep(\n"
+        "                            self.input_batch.sampling_metadata, max_num_logprobs=-1),\n"
+        "                        predict_bonus_token=True,\n"
+        '                        logprobs_mode_override="processed_logits"\n'
+        "                        if self.rejection_sampler.is_processed_logprobs_mode\n"
+        '                        else "raw_logits",\n'
+        "                    )\n"
+        "                    _fr13_sg_rs.__dict__[\"_FR13_SG_BONUS_OUT\"] = _fr13_sg_bso\n"
         "                    torch.cuda.empty_cache()\n"
         "                    _fr13_sg_g = torch.cuda.CUDAGraph()\n"
         "                    # capture into vLLM's SHARED graph pool: its block\n"
@@ -18066,6 +18092,7 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        torch.cuda.synchronize()\n"
         "                        _fr13_sg_tk.fr13_sg_set_q(None)\n"
         "                        _fr13_sg_rs.__dict__.pop(\"_FR13_SG_TL_QUEUE\", None)\n"
+        "                        _fr13_sg_rs.__dict__.pop(\"_FR13_SG_BONUS_OUT\", None)\n"
         "                        raise\n"
         "                    torch.cuda.set_stream(_fr13_sg_prev)\n"
         "                    if _fr13_sg_tk._FR13_SG_Q is not None:\n"
@@ -18092,6 +18119,7 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        \"stash\": _fr13_sg_stash,\n"
         "                        \"tls\": _fr13_sg_tls,\n"
         "                        \"stls\": _fr13_sg_stls,\n"
+        "                        \"bso\": _fr13_sg_bso,\n"
         "                        \"logits_ptr\": logits.data_ptr(),\n"
         "                    }\n"
         "                    if __import__(\"os\").environ.get(\"FR13_STEP_GRAPH_SCOPE\", \"full\") == \"half\":\n"
@@ -18149,6 +18177,18 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        self.rejection_sampler.apply_logits_processors(\n"
         "                            _fr13_sg_sraw, self.input_batch.sampling_metadata,\n"
         "                            spec_decode_metadata))\n"
+        "                    from dataclasses import replace as _fr13_sg_dcrep\n"
+        "                    _fr13_sg_bnew = self.rejection_sampler.sampler(\n"
+        "                        logits=logits[spec_decode_metadata.bonus_logits_indices],\n"
+        "                        sampling_metadata=_fr13_sg_dcrep(\n"
+        "                            self.input_batch.sampling_metadata, max_num_logprobs=-1),\n"
+        "                        predict_bonus_token=True,\n"
+        '                        logprobs_mode_override="processed_logits"\n'
+        "                        if self.rejection_sampler.is_processed_logprobs_mode\n"
+        '                        else "raw_logits",\n'
+        "                    )\n"
+        "                    _fr13_sg_ent[\"bso\"].sampled_token_ids.copy_(\n"
+        "                        _fr13_sg_bnew.sampled_token_ids)\n"
         "                    _fr13_sg_ent[\"graph\"].replay()\n"
         "                    if __import__(\"os\").environ.get(\"FR13_STEP_GRAPH_SCOPE\", \"full\") == \"half\":\n"
         "                        _fr13_sg_rs._fr13_sg_commit_state_part(_fr13_sg_dm, _fr13_sg_ent[\"stash\"])\n"
@@ -18187,6 +18227,7 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    _fr13_sg_dm.fr13_sg_set_uniforms(None)\n"
         "                    _fr13_sg_dm.fr13_sg_set_perm(None)\n"
         "                    _fr13_sg_rs.__dict__.pop(\"_FR13_SG_TL_QUEUE\", None)\n"
+        "                    _fr13_sg_rs.__dict__.pop(\"_FR13_SG_BONUS_OUT\", None)\n"
         "                except Exception:\n"
         "                    pass\n"
         "                _fr13_sg_used = False\n"
@@ -18319,6 +18360,67 @@ def _patch_gpu_model_runner_sample_async_spec_capture_guard() -> bool:
         1,
     )
     GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_rejection_sampler_bonus_handoff() -> bool:
+    """FR13 S1 (=2): the bonus sampler call is the LAST un-hoisted op of the
+    sampler strip (the bisect-convicted live invalidator region). The =2
+    wrapper precomputes bonus sampling eagerly pre-capture/pre-replay; the
+    in-forward call pops the precomputed SamplerOutput once. Unset => stock."""
+    text = REJECTION_SAMPLER_PATH.read_text()
+    if "_FR13_SG_BONUS_OUT" in text:
+        return False
+    anchor = (
+        "        bonus_sampler_output = self.sampler(\n"
+        "            logits=bonus_logits,\n"
+    )
+    if anchor not in text:
+        raise RuntimeError("FR13_SG_BONUS handoff anchor not found")
+    text = text.replace(
+        anchor,
+        "        _fr13_sg_bso = globals().pop('_FR13_SG_BONUS_OUT', None)\n"
+        "        if _fr13_sg_bso is not None:\n"
+        "            bonus_sampler_output = _fr13_sg_bso\n"
+        "        else:\n"
+        "            bonus_sampler_output = self.sampler(\n"
+        "                logits=bonus_logits,\n",
+        1,
+    )
+    # re-indent the remainder of the original call (until its closing paren)
+    tail_anchor = (
+        "            predict_bonus_token=True,\n"
+    )
+    # indent the original arg lines that followed our replaced two
+    text = text.replace(
+        "            sampling_metadata=replace(\n"
+        "                sampling_metadata,\n"
+        "                max_num_logprobs=-1,\n"
+        "            ),\n"
+        "            predict_bonus_token=True,\n",
+        "                sampling_metadata=replace(\n"
+        "                    sampling_metadata,\n"
+        "                    max_num_logprobs=-1,\n"
+        "                ),\n"
+        "                predict_bonus_token=True,\n",
+        1,
+    )
+    text = text.replace(
+        "            # Override the logprobs mode to return logits because they are\n"
+        "            # needed later to compute the accepted token logprobs.\n"
+        '            logprobs_mode_override="processed_logits"\n' 
+        "            if self.is_processed_logprobs_mode\n"
+        '            else "raw_logits",\n' 
+        "        )\n",
+        "                # Override the logprobs mode to return logits (needed\n"
+        "                # later for accepted token logprobs).\n"
+        '                logprobs_mode_override="processed_logits"\n' 
+        "                if self.is_processed_logprobs_mode\n"
+        '                else "raw_logits",\n' 
+        "            )\n",
+        1,
+    )
+    REJECTION_SAMPLER_PATH.write_text(text)
     return True
 
 
@@ -18750,6 +18852,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_capdbg()),
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sample_async_spec_capture_guard()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_target_logits_handoff()),
+        (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_bonus_handoff()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
         # this patch's propose_draft_token_ids restore anchor in program order,

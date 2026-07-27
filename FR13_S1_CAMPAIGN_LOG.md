@@ -77,3 +77,29 @@ dominating the average) => speed verdict = staged-parity-class, committer
 attribution INCOMPLETE (staged component pairs were lost with boots 16/19
 records). Next-arm protocol: preserve FULL component records + overlap-phase
 window pairs; 13398 style watch-item (terse/marathon trajectory) stands.
+
+## Boot-24 — ALL-AT-ONCE =2 (S1-full one-graph, full strip hoisted) [LAUNCH 2026-07-27]
+Strategy call (user): attack =2 in one shot, then S2. Basis: the SCOPE=half
+bisect convicted the sampler strip; every strip op is now hoisted —
+processors via _FR13_SG_TL_QUEUE (two-entry FIFO), async/spec syncs via
+FR13_SG_ASYNC_HOIST/FR13_SG_SPEC_HOIST, and NEW this boot the bonus sampler
+via _FR13_SG_BONUS_OUT pop-once handoff (the last un-hoisted strip op,
+rejection_sampler.py forward call).
+Mechanism: wrapper precomputes bonus SamplerOutput eagerly; forward pops it
+(module-global, same namespace pattern as TL_QUEUE). Capture flow: obj-1
+consumed by side-stream warmup -> post-warmup refill sets obj-2 -> real
+capture bakes obj-2 tensors; ent["bso"]=obj-2. Replay: eager bonus recompute
+-> copy_ into baked ent["bso"].sampled_token_ids before graph.replay().
+Abort paths clear the handoff (philox-poison protocol unchanged).
+Dry-gate PASS: full patcher applied on pristine pinned image
+(vllm/vllm-openai@sha256:3dbe092...), rejection_sampler + gpu_model_runner
+py_compile clean, call-site re-indent verified by eye.
+Arm: run_s1fullgo.sh seq FR13_STEP_GRAPH=2 (+CAPDBG), B=4 CONC=4 offloaded
+4-task subset, temp 0.6, WALL=0 (standing no-AGENT_WALL_S gate policy —
+eps comparability handled measurement-side via eps-matched overlap windows,
+NOT by capping agents). Survivability: skip-and-stay-armed => degrades to
+valid TAW-eager arm on capture failure.
+Success needle: "S1-full captured B=4 (sampler+committer one graph...)".
+If =2 STILL invalidates with the full strip hoisted: the poison op is
+OUTSIDE the named strip remainder => next move is the inverted climb
+(un-hoist one piece per boot from this scaffold to name it).
