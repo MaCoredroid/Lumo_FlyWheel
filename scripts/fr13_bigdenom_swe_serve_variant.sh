@@ -26,8 +26,10 @@ cd /home/mark/shared/lumoFlyWheel
 # shellcheck source=fr13_required_tree_flags.sh
 source scripts/fr13_required_tree_flags.sh
 
-ARM=${1:?usage: fr13_bigdenom_swe_serve_variant.sh <arm> <KIND> <subset.json>}
-KIND=${2:?cat9|cat9-opta|cat9-opt1|nativemtp5|nativemtp5apc|nativemtp5_exseed|cat6root|cat10}
+ARM=${1:?usage: fr13_bigdenom_swe_serve_variant.sh <arm> [KIND=tail6] [subset.json]}
+# KIND defaults to tail6 = the CANONICAL deployed config (cleanup+bake 2026-07-27,
+# FR13_CLEANUP_BAKE_PLAN.md): cat33333 head + 6-node Arctic tail, 21 nodes, BV=8.
+KIND=${2:-tail6}
 SUBSET=${3:?subset json}
 
 RUNROOT=${RUNROOT:-output/fr13_bigdenom_swe}

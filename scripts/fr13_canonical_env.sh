@@ -37,13 +37,15 @@ export FR13_CONV_PREGATHER="${FR13_CONV_PREGATHER:-1}"
 export FR13_FLAGS_INKERNEL="${FR13_FLAGS_INKERNEL:-1}"
 export FR13_SUBTREE_PARALLEL="${FR13_SUBTREE_PARALLEL:-1}"    # +4.7% B=1, byte-exact
 export FR13_SUBTREE_PARALLEL_SELFCHECK="${FR13_SUBTREE_PARALLEL_SELFCHECK:-0}"
-export FR13_HC_INTERNAL="${FR13_HC_INTERNAL:-0}"              # lean verdict: off
 export FR13_ENABLE_APC="${FR13_ENABLE_APC:-1}"                # cache ON (goal = spec+cache)
 export MAMBA_BLOCK_SIZE="${MAMBA_BLOCK_SIZE:-1024}"
 export APC_BLOCK_SIZE="${APC_BLOCK_SIZE:-1024}"
 export MAMBA_SSM_CACHE_DTYPE="${MAMBA_SSM_CACHE_DTYPE:-float32}"  # LOSSLESSNESS choice; change = behavior gate (PARKED)
-# EXPERIMENT-ONLY (default off; own live gates): FR13_COMMITTER_GRAPH,
-# FR13_TAW (benched: live FAIL, deployment-shape re-gate pending), FR13_STEP_GRAPH
+# BAKED 2026-07-27 (cleanup+bake, launcher defaults now 1): FR13_COMMITTER_GRAPH,
+# FR13_TAW, FR13_DRAFTER_GRAPH, FR13_PARENT_GATHER (all ran clean in every S1/A-B arm).
+# EXPERIMENT-ONLY (default off): FR13_STEP_GRAPH (=1/=2/=3 capture modes; A/B verdict:
+# no speed effect vs staged — see FR13_CLEANUP_BAKE_PLAN.md #72 closure).
+# DELETED 2026-07-27: FR13_HC_INTERNAL (retired mechanism), FR13_APC_BURN_NODE_BANK.
 
 # ---- proxy (offload, alienware) ----
 export LUMO_PROXY_SSE_HEARTBEAT_S="${LUMO_PROXY_SSE_HEARTBEAT_S:-15}"  # EMIT-WEDGE protection (3a86c8a85; regressed to 0 until 4df608b75)
