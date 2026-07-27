@@ -80,6 +80,12 @@ def _fr13_sg_warmup_capture(self):
 
     _orig_make_dummy = _mdmod.SpecDecodeMetadata.make_dummy
     _orig_sm = getattr(self.input_batch, "sampling_metadata", None)
+    # committer-publish host structures: live steps set these in the
+    # pre-forward; warmup must fabricate them (REQKEY fail-loud otherwise)
+    import vllm.v1.sample.rejection_sampler as _rsmod
+    _tk = getattr(_rsmod, "_lumo_tree_commit_gdn", None)
+    _orig_rowids = getattr(_tk, "_LUMO_FA_SAMPLER_ROW_REQ_IDS", None)
+    _orig_last = getattr(_tk, "_LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS", None)
     captured = 0
     try:
         for B in range(1, maxB + 1):
@@ -89,6 +95,9 @@ def _fr13_sg_warmup_capture(self):
             self.input_batch.sampling_metadata = _make_sm(B)
             logits = None
             for _phase in ("warm", "capture"):
+                if _tk is not None:
+                    _tk._LUMO_FA_SAMPLER_ROW_REQ_IDS = [
+                        "fr13-warmup-%d" % _r for _r in range(B)]
                 hs = self._dummy_run(
                     (n + 1) * B,
                     cudagraph_runtime_mode=CUDAGraphMode.NONE,
@@ -119,6 +128,14 @@ def _fr13_sg_warmup_capture(self):
         _mdmod.SpecDecodeMetadata.make_dummy = _orig_make_dummy
         if _orig_sm is not None:
             self.input_batch.sampling_metadata = _orig_sm
+        if _tk is not None:
+            _tk._LUMO_FA_SAMPLER_ROW_REQ_IDS = _orig_rowids
+            _tk._LUMO_FA_LAST_ACCEPTED_TREE_TOKEN_IDS = _orig_last
+            _by_req = getattr(_tk, "_LUMO_FA_TREE_ACCEPT_BY_REQ", None)
+            if isinstance(_by_req, dict):
+                for _k in [k for k in _by_req if str(k).startswith(
+                        "fr13-warmup-")]:
+                    _by_req.pop(_k, None)
     print(
         "[FR13_STEP_GRAPH] warmup-capture done: %d/%d keys" % (captured, maxB),
         flush=True,
