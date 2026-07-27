@@ -906,6 +906,28 @@ INSTRUMENT ADDED for the residual F/m question: per-step (drafts, ms) samples
 in the sfwd timer final JSON (teardown-only dump) — tempfix1 carries it =>
 per-STEP regression with real CIs replaces arm-level n=7 fits.
 
+## TEMPFIX1 RE-BASE COMPLETE (2026-07-27 19:53Z): TRUE temp 0.6, accept holds
+Verdicts: 1 pass, 3 fail, 4 finished (12907 pass; 13033 tests_failed; 13398
+context-marathon fail; 13236 whitespace-marathon fail 3095s — its known
+signature at BOTH temps, self-limited as predicted). Garble eyeball 4/4 clean.
+Engagement PROVEN: [FR13_TEMP_FIX] stock_apply=True legacy_double=False,
+live rejection_sampler = exactly 1 apply; TAIL 98% hit.
+RE-BASE TUPLE (vs cleanbake1 = the legacy-0.36 control, same subset,
+back-to-back boots):
+  cleanbake1 (0.36): accept 4.434 | eps 1.579 | tps 27.548 | step 311.5 | pf .578
+  tempfix1   (0.60): accept 4.331 | eps 2.571 | tps 35.644 | step 384.5 | pf .414
+=> ACCEPT AT TRUE 0.6 = 4.331 — only −0.10 vs the 0.36 control. The feared
+0.36-inflation of the accept band was SMALL: the honest band is ~4.3-4.4.
+Tail share holds (~18-22% live windows). NEW REFERENCE BAND: accept ~4.33,
+band 1P-2P on subset_b4_four, temp regime = TRUE 0.6 from here on.
+Step-line note: 384.5 measured vs 362.0 predicted at eps 2.571 (+22.5) —
+same above-line drift as boot-54 (+13.9 at eps 2.55); high-eps arms suggest
+the pooled m is underfit (its CI was ±19.5). The per-step regression decides.
+INSTRUMENT BUG found+fixed (3f7143acc): per-step samples were teardown-only
+and docker rm -f (SIGKILL) never runs atexit — tempfix1's samples LOST
+(sidecar final=False). Samples now ride a 30s slow throttle; next
+instrumented arm delivers the F/m regression.
+
 ## CLEANBAKE1 GATE: PASS (2026-07-27 18:52Z) — cleaned+baked build behaviorally
 ## neutral, tuple ON the pooled line
 Verdicts: 1 pass, 3 fail, 4 finished (12907 pass; 13236 patch_apply_failed —
