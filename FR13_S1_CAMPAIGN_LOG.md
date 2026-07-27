@@ -391,3 +391,20 @@ Boot-38 statics-split readout decides: ent_tls0 fresh but output frozen
 => freeze between tls and output (walk consumes a baked clone — suspect:
 apply_sampling_constraints intermediate); ent_tls0 stale => the tls
 refill itself doesn't reach the graph's tensor.
+
+### Boot-38 split-probe readout (B=1)
+in0=0 ent_tls0=0 BOTH arms; eager0=4080 replay0=38352 (both boot-constant).
+1. POSITIVE: the tls refill PROVABLY reaches the graph's baked tensor
+   (ent_tls0 fresh) — the frozen-refill theory is DEAD.
+2. CONFOUND NAMED: check-context logits are DEGENERATE (argmax 0 =>
+   near-constant rows from the zero-input dummy hidden), and the two arms
+   draw from the same-seeded generators in DIFFERENT SEQUENCES (staged
+   fill order vs wrapper refill order) => recovery tokens legitimately
+   differ per arm while being boot-constant. The MISMATCH as currently
+   measured does NOT convict the graph.
+NEXT (boot-39): RNG-PROOF self-check — pin uniforms/q CONTENT via
+FR13_SG_PIN_UNIFORMS=1 (fill returns constant 0.5) applied in BOTH arms
+=> accept/recovery deterministic in logits alone => byte-comparable.
+ALSO revisit: the LIVE accept-1.0 may trace to the conv-commit host-eager
+sub-step (accepted-lens host reads baked at capture) — audit whether
+_fr13_conv_commit_to_col0 consumes host-read lens inside the capture.
