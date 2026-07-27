@@ -315,3 +315,19 @@ PHILOX CURE FOUND (in-boot cascade vs the REAL poison):
 graphsafe_set_state(clone_state()) cures; gc/manual_seed/set_state all
 fail. Baked into the abort path — aborts are no longer boot-lethal.
 Boot-30 = warmup capture with the fix. Expected: WARMUP-CAPTURED x4.
+
+## BOOT-30: =2 CAPTURED — S1-full one-graph MILESTONE (2026-07-27 ~07:58Z)
+[FR13_STEP_GRAPH] S1-full captured B=2 (sampler+committer one graph; statics=6)
+  WARMUP-CAPTURED B=2 key=((21,21),(44,248320))
+  WARMUP-CAPTURED B=3 key=((21,21,21),(66,248320))
+  WARMUP-CAPTURED B=4 key=((21,21,21,21),(88,248320))
+warmup-capture done: 3/4 keys. B=1 missed on a bring-up off-by-one only
+(phase-1 died on dm-not-loaded BEFORE the warm-set add, so phase-2 was
+consumed by the warm-set skip; B=1 needs 3 calls — fix queued; live-ladder
+B=1 capture also still armed with timers now guarded).
+THE FIX THAT DID IT: capture-guards on our own CFWD/DFWD/SFWD span timers
+(42157968e) — the invalidator all along.
+Arm continues to the live 4-task gate with B=2/3/4 replaying from step 1.
+Gates now: behavioral band (2P/2F), garble eyeball, replay engagement,
+captured-=2 speed vs staged 331.5ms @ eps 1.9 (slope basis: staged 17.0,
+=3 18.7).
