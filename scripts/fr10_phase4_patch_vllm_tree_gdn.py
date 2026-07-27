@@ -7222,6 +7222,31 @@ def _fr13_sg_capchk(tag):
         )
 
 
+def _fr13_sg_consumed_ptrs(stacks, tbl, pbuf, lbuf, banks, perm):
+    """boot-32 ptr audit: addresses of every tensor the batched committer
+    launch consumes. Baked at capture; compared at replay — a mismatch names
+    the stale-consumption hole behind the boot-31 garble."""
+    d = {}
+    for k in ('spec_idx', 'prev_lens', 'ring_k', 'ring_v', 'ring_a',
+              'ring_b', 'A_log', 'dt_bias'):
+        try:
+            d['stacks.' + k] = int(stacks[k].data_ptr())
+        except Exception:
+            d['stacks.' + k] = -1
+    try:
+        d['tbl.anchor'] = int(tbl[4].data_ptr())
+        d['tbl.off16'] = int(tbl[1].data_ptr())
+    except Exception:
+        pass
+    d['pbuf'] = int(pbuf.data_ptr())
+    d['lbuf'] = int(lbuf.data_ptr())
+    d['perm'] = int(perm.data_ptr())
+    for i, b in enumerate(banks):
+        if i in (0, len(banks) - 1):
+            d['bank.%d' % i] = int(b.data_ptr())
+    return d
+
+
 def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows, dm):
     """S1-full (FR13_STEP_GRAPH=2) in-capture committer: consume TAW defer
     products entirely on-device — product fill + GDN buffer fills + conv col0
@@ -7289,6 +7314,9 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
     )
     _order = list(stacks['layer_order'])
     _banks = [layers[_n]._fr13_replay_ssm_state for _n in _order]
+    if torch.cuda.is_current_stream_capturing():
+        _g._FR13_SG_CONSUMED_PTRS = _fr13_sg_consumed_ptrs(
+            stacks, tbl, pbuf, lbuf, _banks, perm)
     _fr13_sg_launch_all(
         bank_anchor=tbl[4], bank_off16=tbl[1], bank_shape=tbl[2],
         bank_stride=tbl[3],
@@ -18206,6 +18234,8 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        \"bso\": _fr13_sg_bso,\n"
         "                        \"logits_static\": logits,\n"
         "                        \"logits_ptr\": logits.data_ptr(),\n"
+        "                        \"consumed_ptrs\": _fr13_sg_gdn.__dict__.pop(\n"
+        "                            \"_FR13_SG_CONSUMED_PTRS\", None),\n"
         "                    }\n"
         "                    if __import__(\"os\").environ.get(\"FR13_STEP_GRAPH_SCOPE\", \"full\") == \"half\":\n"
         "                        _fr13_sg_rs._fr13_sg_commit_state_part(_fr13_sg_dm, _fr13_sg_stash)\n"
@@ -18220,6 +18250,31 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    if _fr13_sg_ent[\"logits_ptr\"] != logits.data_ptr():\n"
         "                        _fr13_sg_ent[\"logits_static\"].copy_(logits)\n"
         "                        logits = _fr13_sg_ent[\"logits_static\"]\n"
+        "                    if not _fr13_sg_ent.get(\"ptr_audited\"):\n"
+        "                        _fr13_sg_ent[\"ptr_audited\"] = True\n"
+        "                        try:\n"
+        "                            _fr13_sg_bp = _fr13_sg_ent.get(\"consumed_ptrs\")\n"
+        "                            _fr13_sg_st = _fr13_sg_gdn._FR13_EAGER_PACK_STACKS\n"
+        "                            _fr13_sg_tb = _fr13_sg_gdn._FR13_EAGER_PACK_BANK_TBL\n"
+        "                            _fr13_sg_ly = _fr13_sg_gdn._FR13_REPLAY_LAYERS\n"
+        "                            _fr13_sg_bk = [_fr13_sg_ly[_n]._fr13_replay_ssm_state\n"
+        "                                           for _n in _fr13_sg_st[\"layer_order\"]]\n"
+        "                            _fr13_sg_lp = _fr13_sg_rs._fr13_sg_consumed_ptrs(\n"
+        "                                _fr13_sg_st, _fr13_sg_tb,\n"
+        "                                _fr13_sg_gdn._LUMO_FA_ACCEPTED_TREE_PATHS_TENSOR,\n"
+        "                                _fr13_sg_gdn._LUMO_FA_ACCEPTED_TREE_LENS_TENSOR,\n"
+        "                                _fr13_sg_bk, _fr13_sg_dm._FR13_SG_PERM)\n"
+        "                            if _fr13_sg_bp:\n"
+        "                                for _fr13_sg_kk, _fr13_sg_vv in _fr13_sg_lp.items():\n"
+        "                                    if _fr13_sg_bp.get(_fr13_sg_kk) != _fr13_sg_vv:\n"
+        "                                        print(\"[FR13_STEP_GRAPH] REPLAY-STALE \"\n"
+        "                                              + _fr13_sg_kk + \" baked=\"\n"
+        "                                              + hex(_fr13_sg_bp.get(_fr13_sg_kk, -1))\n"
+        "                                              + \" live=\" + hex(_fr13_sg_vv),\n"
+        "                                              flush=True)\n"
+        "                        except Exception as _fr13_sg_pae:\n"
+        "                            print(\"[FR13_STEP_GRAPH] ptr-audit err: \"\n"
+        "                                  + str(_fr13_sg_pae)[:120], flush=True)\n"
         "                    # HOIST: async-output event sync (graph contains the\n"
         "                    # no-op'd call; the real work runs here, outside)\n"
         "                    self.input_batch.update_async_output_token_ids()\n"
