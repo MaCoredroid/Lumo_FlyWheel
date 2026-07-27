@@ -18097,6 +18097,10 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        print(\"[FR13_STEP_GRAPH] attempt 3: RELAXED capture mode\", flush=True)\n"
         "                    if getattr(self, \"_fr13_sg_stream\", None) is None:\n"
         "                        self._fr13_sg_stream = torch.cuda.Stream()\n"
+        "                    print(\"[FR13_STEP_GRAPH] capture: acquiring exec lock (drain)\", flush=True)\n"
+        "                    globals()[\"_FR13_SG_EXEC_LOCK\"].acquire()\n"
+        "                    self._fr13_sg_elock_held = True\n"
+        "                    print(\"[FR13_STEP_GRAPH] capture: exec lock HELD (pipeline solo)\", flush=True)\n"
         "                    torch.cuda.synchronize()\n"
         "                    _fr13_sg_prev = torch.cuda.current_stream()\n"
         "                    torch.cuda.set_stream(self._fr13_sg_stream)\n"
@@ -18118,6 +18122,9 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                        sampler_output = self._sample(logits, _fr13_sg_md)\n"
         "                        _fr13_sg_rs._fr13_sg_capchk(\"pre-capture-end\")\n"
         "                        _fr13_sg_g.capture_end()\n"
+        "                        if getattr(self, \"_fr13_sg_elock_held\", False):\n"
+        "                            self._fr13_sg_elock_held = False\n"
+        "                            globals()[\"_FR13_SG_EXEC_LOCK\"].release()\n"
         "                        _fr13_sg_rs.__dict__[\"_FR13_SG_CAPCHK_ARMED\"] = False\n"
         "                    except Exception:\n"
         "                        # SAFE ABORT: end the open capture, then RESET —\n"
@@ -18278,6 +18285,12 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                    flush=True,\n"
         "                )\n"
         "                try:\n"
+        "                    if getattr(self, \"_fr13_sg_elock_held\", False):\n"
+        "                        self._fr13_sg_elock_held = False\n"
+        "                        globals()[\"_FR13_SG_EXEC_LOCK\"].release()\n"
+        "                except Exception:\n"
+        "                    pass\n"
+        "                try:\n"
         "                    if _fr13_sg_pool is not None:\n"
         "                        torch._C._cuda_endAllocateToPool(\n"
         "                            torch.cuda.current_device(), _fr13_sg_pool)\n"
@@ -18298,6 +18311,35 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "            sampler_output", "                sampler_output"
     )
     text = text.replace(anchor, inject, 1)
+    GPU_MODEL_RUNNER_PATH.write_text(text)
+    return True
+
+
+def _patch_gpu_model_runner_exec_lock() -> bool:
+    """FR13 S1 (=2) capture-step serialization: boots 25-27 proved the
+    capture invalidation is a STRUCTURAL stream/event violation (all three
+    capture modes fail identically; sliver has zero CUDA ops; pool refuted;
+    no hooks) => the cause is the batch-queue pipelining thread interacting
+    with the capture window. Fix: execute_model holds a module lock for its
+    whole body; the =2 capture section holds the same lock exclusively.
+    Normal steps: sample_tokens does NOT take the lock, so the designed
+    execute(N+1)/sample(N) overlap is untouched. Capture steps: we wait for
+    the in-flight forward, capture solo, release — a one-step stall, once
+    per key."""
+    text = GPU_MODEL_RUNNER_PATH.read_text()
+    if "_fr13_sg_orig_execute_model" in text:
+        return False
+    text += """
+
+# FR13 S1 capture-step serialization (see fr10_phase4 patcher)
+import threading as _fr13_sg_threading
+_FR13_SG_EXEC_LOCK = _fr13_sg_threading.RLock()
+_fr13_sg_orig_execute_model = GPUModelRunner.execute_model
+def _fr13_sg_execute_model_locked(self, *a, **k):
+    with _FR13_SG_EXEC_LOCK:
+        return _fr13_sg_orig_execute_model(self, *a, **k)
+GPUModelRunner.execute_model = _fr13_sg_execute_model_locked
+"""
     GPU_MODEL_RUNNER_PATH.write_text(text)
     return True
 
@@ -18926,6 +18968,7 @@ def main() -> int:
         (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_sample_async_spec_capture_guard()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_target_logits_handoff()),
         (REJECTION_SAMPLER_PATH, _patch_rejection_sampler_bonus_handoff()),
+        (GPU_MODEL_RUNNER_PATH, _patch_gpu_model_runner_exec_lock()),
         # FR13_SLOT_REORDER (edits 1+4/5): spine-first canonical KV slot layout,
         # default OFF. Must run AFTER remap_apply (whose _sample anchor precedes
         # this patch's propose_draft_token_ids restore anchor in program order,

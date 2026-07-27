@@ -197,3 +197,30 @@ relaxed-fail => (ii) confirmed => build capture-step serialization
 (pause batch-queue pipelining for the single capture step).
 Stream log preserved: s1fullgo_stream.boot26.log. Staged reference
 unchanged (banked x2).
+
+## Boot-27 verdict + boot-28 launch: capture-step serialization
+Boot-27: RELAXED mode failed with the IDENTICAL signature (status 2 at
+pre-capture-end, last Active fwd-tail) => hypothesis (i) mode-gated
+own-thread action REFUTED. STRUCTURAL stream/event violation CONFIRMED:
+the batch-queue pipelining thread (execute_model futures run concurrently
+with sample_tokens on separate executor threads; AsyncGPUModelRunnerOutput
+does per-step cross-stream wait_stream event wiring) interacts with the
+capture window. The stable fwd-tail bracket is a GIL-scheduling artifact:
+the blocked thread lands its pending CUDA call at our first yield near
+region end — cause != location, which is why 19 boots of in-region
+op-hunting never converged.
+Boot-28 package (this commit): CAPTURE-STEP SERIALIZATION.
+- Module RLock in gpu_model_runner; execute_model holds it for its whole
+  body (normal execute(N+1)/sample(N) overlap untouched — sample_tokens
+  does not take the lock => zero steady-state cost).
+- The =2 capture section acquires it exclusively: waits for the in-flight
+  forward to drain, captures solo, releases right after capture_end
+  (aborts release in the handler). One-step stall, once per key.
+- Dry-gate caught a real ordering bug (tail-append guard sentinel
+  collided with the wrapper's own string => lock never defined); fixed
+  (guard on _fr13_sg_orig_execute_model), re-gated PASS.
+Ladder stays 3-attempt (shared/tl -> private/tl -> private/relaxed) — all
+three now run under serialization; ANY success is decisive.
+If boot-28 still invalidates solo: the violator is NOT the pipelining
+thread => next suspects are the async-output copy machinery (its
+wait_stream/event wiring) and in-region record_stream allocator traffic.
