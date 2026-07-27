@@ -233,7 +233,13 @@ def _fr13_sg_warmup_capture(self):
                               self._fr13_sg_dead = _dead2
                               if _saved2 is not None:
                                   self._fr13_sg_graphs[_key2] = _saved2
-                          _pair[_mode] = _so2.sampled_token_ids.detach().clone()
+                          _ids2 = _so2.sampled_token_ids.detach().clone()
+                          _pair[_mode] = _ids2
+                          print("[FR13_STEP_GRAPH] SELFCHECK %s B=%d "
+                                "accept_lens=%s" % (
+                                    _mode, B,
+                                    (_ids2 >= 0).sum(dim=-1).tolist()),
+                                flush=True)
                       _restore(_s0)
                       if bool(torch.equal(_pair["eager"], _pair["replay"])):
                           print("[FR13_STEP_GRAPH] SELFCHECK B=%d BYTE-EQUAL"
