@@ -153,6 +153,101 @@ def _fr13_sg_warmup_capture(self):
                     % (B, str((tuple([n] * B), tuple(logits.shape)))),
                     flush=True,
                 )
+                # ---- BYTE SELF-CHECK: paired identical-input eager-vs-replay
+                try:
+                    import types as _t2
+                    import sys as _sys2
+                    _dm2 = _sys2.modules.get("_fr13_device_multidraft_kernel")
+                    _layers2 = _tk._FR13_REPLAY_LAYERS
+
+                    def _snap():
+                        _s = []
+                        for _nm, _ly in _layers2.items():
+                            _c = getattr(_ly, "_fr13_replay_conv_state", None)
+                            _m = getattr(_ly, "_fr13_replay_ssm_state", None)
+                            _si = getattr(_ly, "_fr13_replay_spec_idx", None)
+                            if _c is None or _m is None or _si is None:
+                                _s.append((_nm, None))
+                                continue
+                            _rows = _si[:B, 0].to(torch.long)
+                            _s.append((_nm, (_rows,
+                                             _m.index_select(0, _rows).clone(),
+                                             _c.index_select(0, _rows).clone())))
+                        return _s
+
+                    def _restore(_s):
+                        for _nm, _e in _s:
+                            if _e is None:
+                                continue
+                            _rows, _mv, _cv = _e
+                            _ly = _layers2[_nm]
+                            _ly._fr13_replay_ssm_state.index_copy_(0, _rows, _mv)
+                            _ly._fr13_replay_conv_state.index_copy_(0, _rows, _cv)
+
+                    _s0 = _snap()
+                    _pair = {}
+                    _key2 = (tuple([n] * B), tuple(logits.shape))
+                    for _mode in ("eager", "replay"):
+                        _restore(_s0)
+                        _dm2._fr13_bulk_gen(device).manual_seed(777)
+                        globals()["_FR13_SG_WU_GEN"].manual_seed(888)
+                        _tk._LUMO_FA_SAMPLER_ROW_REQ_IDS = list(_fr13_wids)
+                        _tk._LUMO_FA_SPEC_ROW_REQ_IDS = list(_fr13_wids)
+                        self.num_decode_draft_tokens.np[:B] = n
+                        self.num_decode_draft_tokens.np[B:] = -1
+                        self.num_decode_draft_tokens.copy_to_gpu()
+                        hs2 = self._dummy_run(
+                            (n + 1) * B,
+                            cudagraph_runtime_mode=CUDAGraphMode.NONE,
+                            force_attention=True,
+                            uniform_decode=True,
+                        )
+                        _h2 = (hs2[0] if isinstance(hs2, tuple)
+                               else hs2)[: (n + 1) * B]
+                        _lg2 = self.model.compute_logits(torch.rand(
+                            _h2.shape, dtype=_h2.dtype, device=_h2.device,
+                            generator=globals()["_FR13_SG_WU_GEN"]))
+                        md.draft_token_ids.copy_(
+                            _lg2[md.target_logits_indices.long()]
+                            .argmax(dim=-1).to(torch.int32))
+                        _saved2 = None
+                        if _mode == "eager":
+                            _saved2 = self._fr13_sg_graphs.pop(_key2, None)
+                        self._fr13_sg_warmup_mode = True
+                        try:
+                            self.execute_model_state = (
+                                _t2.SimpleNamespace(
+                                    scheduled_spec_decode_tokens={
+                                        _w: [0] * n for _w in _fr13_wids}),
+                                _lg2, md, None, _h2, _h2,
+                                None, None, None, None)
+                            _so2 = self.sample_tokens(None)
+                        finally:
+                            self._fr13_sg_warmup_mode = False
+                            self.execute_model_state = None
+                            if _saved2 is not None:
+                                self._fr13_sg_graphs[_key2] = _saved2
+                        _pair[_mode] = _so2.sampled_token_ids.detach().clone()
+                    _restore(_s0)
+                    if bool(torch.equal(_pair["eager"], _pair["replay"])):
+                        print("[FR13_STEP_GRAPH] SELFCHECK B=%d BYTE-EQUAL"
+                              % B, flush=True)
+                    else:
+                        _dm3 = (_pair["eager"] != _pair["replay"])
+                        print(
+                            "[FR13_STEP_GRAPH] SELFCHECK B=%d MISMATCH "
+                            "rows=%s eager0=%s replay0=%s" % (
+                                B,
+                                _dm3.any(dim=-1).nonzero().flatten()
+                                .tolist()[:8],
+                                _pair["eager"][0, :8].tolist(),
+                                _pair["replay"][0, :8].tolist()),
+                            flush=True)
+                except Exception as _sce:
+                    import traceback as _stb2
+                    _stb2.print_exc()
+                    print("[FR13_STEP_GRAPH] SELFCHECK ERR B=%d: %s"
+                          % (B, str(_sce)[:150]), flush=True)
             else:
                 print(
                     "[FR13_STEP_GRAPH] warmup capture MISSING for B=%d "
