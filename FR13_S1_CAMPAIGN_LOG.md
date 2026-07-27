@@ -267,3 +267,32 @@ per B in 1..max_num_seqs:
 6. Restore patched seams; skip live publishes (nothing to publish);
    dummy-slot GDN state safe (zero-on-alloc baked).
 Live steps then REPLAY-only; composition checks already guard mismatch.
+
+## Boot-29 sub-series ledger (a-h): warmup-capture bring-up
+Launch infra: three harness-tracked driver launches died at +2-4min
+("stopped" externally); detached setsid launches survive => all boots now
+launch detached (workaround, cause in the task harness unknown).
+Fabrication seam ladder (each found fail-loud, ~12min/cycle):
+  29a REQKEY sampler-row req ids -> fabricate B dummies
+  29d REPLAY_ROUTE spec-row req ids -> same list
+  29e layer-0 stale scan flags -> ROOT: num_decode_draft_tokens buffer
+      all -1 at warmup => gdn builder num_spec_decodes=0 => no layer
+      staging; buffer fill fixes BOTH the builder gate and the =2
+      wrapper's own uniform-step gate
+  29f 0/4 keys, all-eager: the =2 harness wraps sample_tokens' CALL to
+      _sample; direct _sample bypassed it => fabricator now routes
+      through sample_tokens with fabricated execute_model_state +
+      warmup-mode early-return after the wrapper block
+  29g THE BIG DATUM: warmup capture RAN in the quiet window and
+      invalidated with the IDENTICAL signature (status 2 at
+      pre-capture-end, last Active fwd-tail). QUIET-WINDOW HYPOTHESIS
+      REFUTED — the poison is in our region's own execution. Also:
+      abort philox poison is BOOT-LETHAL at warmup (vLLM's own init
+      rand_like crashed the engine).
+Working theory (fits ALL data incl. warmup-solo + mode-independence +
+the empty sliver): python GC firing in the fwd-tail->capture_end window
+frees side-stream-warmup intermediates DURING capture; allocator
+event-insertion on cross-stream frees = structural invalidation.
+Boot-29h: gc.collect+cuda.synchronize before capture_begin + gc.disable
+across the capture (+re-enable on success/abort); fabricator logits via
+poison-immune generator; per-B cuda rng-state restore.
