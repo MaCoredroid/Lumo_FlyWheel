@@ -15992,6 +15992,20 @@ class _Fr13SfwdGpuTimer:
         self._wall_cap_s = float(
             __import__("os").environ.get("FR13_STEP_WALL_CAP_S", "1.5")
         )
+        # FR13 PER-STEP SAMPLES (2026-07-27, host-gap bound + per-STEP F/m
+        # regression instrument): keep (n_drafts, ms) per drained forward span
+        # and per accepted wall delta, MEMORY-ONLY, written once into the FINAL
+        # (teardown) JSON — the throttled live dumps are unchanged, so this adds
+        # zero per-step I/O and only an O(1) list append per step. Capped.
+        self._samples_max = int(
+            __import__("os").environ.get(
+                "FR13_SFWD_GPU_TIMER_SAMPLES_MAX", "200000"
+            )
+        )
+        self._fwd_samples_d = []
+        self._fwd_samples_ms = []
+        self._wall_samples_d = []
+        self._wall_samples_ms = []
         # throttled incremental sidecar dump (prometheus-independent live channel)
         import time as _time
         self._dump_period_s = float(
@@ -16038,6 +16052,9 @@ class _Fr13SfwdGpuTimer:
                 self._wall_accum_s += d
                 self._wall_drafts += int(max(1, self._wall_prev_n))
                 self._wall_steps += 1
+                if len(self._wall_samples_ms) < self._samples_max:
+                    self._wall_samples_d.append(int(max(1, self._wall_prev_n)))
+                    self._wall_samples_ms.append(round(d * 1000.0, 4))
             else:
                 self._wall_rejected += 1
         self._wall_prev_t = now
@@ -16101,6 +16118,9 @@ class _Fr13SfwdGpuTimer:
                 self._accum_s += secs
                 self._n_steps += 1
                 self._n_drafts += int(n_reqs)
+                if len(self._fwd_samples_ms) < self._samples_max:
+                    self._fwd_samples_d.append(int(n_reqs))
+                    self._fwd_samples_ms.append(round(float(ms), 4))
                 if self._counter is not None:
                     self._counter.inc(secs)
             except Exception:  # noqa: BLE001
@@ -16156,6 +16176,20 @@ class _Fr13SfwdGpuTimer:
                     "reducer takes a delta across a request window."
                 ),
             }
+            if final:
+                # per-step samples (teardown-only; parallel arrays): the
+                # per-STEP regression instrument — step_wall/sfwd vs drafts
+                # with real n, resolving F/m below the arm-level noise floor.
+                payload["per_step"] = {
+                    "fwd_drafts": self._fwd_samples_d,
+                    "fwd_ms": self._fwd_samples_ms,
+                    "wall_drafts": self._wall_samples_d,
+                    "wall_ms": self._wall_samples_ms,
+                    "samples_capped": (
+                        len(self._fwd_samples_ms) >= self._samples_max
+                        or len(self._wall_samples_ms) >= self._samples_max
+                    ),
+                }
             # per-pid suffix so multiple workers do not clobber one file.
             _p = out
             if "{pid}" in out:
