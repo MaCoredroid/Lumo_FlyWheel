@@ -52,3 +52,11 @@ walk -> products_device -> device committer (zero vLLM sampler code in-region);
 committer tail gets a state-committed marker (skip conv/launch, keep
 publishes). Sampler strip (~3-5ms launches) stays eager — acceptable loss;
 the committer launch storm (dominant glue) is captured. =2 runner wrapper parked.
+
+## boot-19 record (staged; =3 built but boot ran pre-=3 seq at STEP_GRAPH=2-era... verify: seq had =2+SCOPE=half)
+boot-19 (SCOPE=half bisect arm, staged after DISABLED): 2P/2F
+(12907+13236 pass; 13033+13398 fail) — SAME set as boot-16; second
+consecutive band-positive vs 1P/3F references (16-task confirm queued).
+Speed: 31.343 tps wall | step 325.023ms @ eps 1.847 | accept 4.515 |
+prefill_frac 0.454. Staged line consistent w/ boot-16 (331.8 @ 1.94 pf .63);
+lower pf confirms boot-16's prefill was path variance.
