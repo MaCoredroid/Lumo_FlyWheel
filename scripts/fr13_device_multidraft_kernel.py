@@ -905,6 +905,14 @@ _FR13_TAW_ANNOUNCED = False
 _FR13_BULK_GEN = None
 
 
+def _fr13_pin_uniforms():
+    """FR13_SG_PIN_UNIFORMS=1 (selfcheck-only): pin uniform draws to 0.5 so
+    accept/recovery are deterministic functions of logits alone — makes the
+    eager-vs-replay pair byte-comparable (RNG sequencing differs by design)."""
+    import os
+    return os.environ.get("FR13_SG_PIN_UNIFORMS", "0") == "1"
+
+
 def _fr13_bulk_gen(device):
     """POISON-IMMUNE bulk RNG (twin of the topk_topp port): a silently-
     aborted capture leaves the DEFAULT philox generator graph-registered and
@@ -1056,6 +1064,8 @@ def fr13_taw_commit(
                     )
         else:
             uniforms.uniform_(generator=_fr13_bulk_gen(device))
+    if _fr13_pin_uniforms():
+        uniforms.fill_(0.5)
 
     cur = torch.full((nreq,), -1, dtype=torch.long, device=device)  # parent node
     alive = torch.ones(nreq, dtype=torch.bool, device=device)
@@ -1238,6 +1248,8 @@ def fr13_sg_fill_uniforms(nreq, row_cap, device, generators=None):
                 u[req_i] = torch.rand(row_cap, 3, device=device, generator=dev_gen)
     else:
         u.uniform_(generator=_fr13_bulk_gen(u.device))
+    if _fr13_pin_uniforms():
+        u.fill_(0.5)
     return u
 
 
