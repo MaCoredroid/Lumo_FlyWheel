@@ -865,3 +865,22 @@ band. VERDICT: no mode buys speed or behavior; FR13_STEP_GRAPH stays 0.
   exports — baked defaults under test) launched; gates = engagement needles +
   garble-free traces + 2P/2F band + tuple on the pooled line. Next after PASS:
   double-temp fix as its own milestone + same-subset A/B re-base.
+- Boot needles verified live: FULL decode graphs 4/4 largest=88 (tree shape),
+  new TAIL-led ENGAGED needle firing (TAIL[fired=84 hit=77]), CPG first-line
+  signature byte-identical to reference boots, APC_ZERO_MAMBA engaged, 0 errors.
+
+## DOUBLE-TEMP FIX LANDED (2026-07-27, commit 58b51f762 — user go-ahead)
+Root cause of the double apply: the injection predates images whose STOCK
+rejection_sampler applies constraints itself; the guard only checked for the
+patcher's own copy => second apply => T^2 (effective 0.36 at requested 0.6)
+for every spec arm since 2026-06-05. FIX: debug pre-capture inserted always;
+the extra apply ONLY when stock lacks it OR FR13_TEMP_LEGACY_DOUBLE=1
+(patch-time control-arm hatch). Container-validated: default => 1 apply
+(true 0.6); legacy => 2 applies (byte-reproduces 0.36). Boot needle
+[FR13_TEMP_FIX] prints stock/legacy/injected at patch time.
+RE-BASE A/B queued: cleanbake1 (legacy 0.36 — its boot predates the fix) vs
+tempfix1 (fixed 0.6), back-to-back boots, same subset_b4_four, no exports.
+ALL pre-fix absolute accept/behavior numbers now carry the 0.36 caveat;
+tempfix1 sets the new reference band. Side effect resolved: the parent-row
+(0.36) vs tree-self (0.6) asymmetry inside the tree arm collapses to a
+uniform 0.6.
