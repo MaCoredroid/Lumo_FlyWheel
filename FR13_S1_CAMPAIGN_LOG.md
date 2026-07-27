@@ -928,6 +928,24 @@ and docker rm -f (SIGKILL) never runs atexit — tempfix1's samples LOST
 (sidecar final=False). Samples now ride a 30s slow throttle; next
 instrumented arm delivers the F/m regression.
 
+## SUBSPAN1 COMPLETE (2026-07-27 23:06Z): B2c speed POSITIVE + best board tps
+Verdicts: 1 pass, 3 fail, 4 finished (12907; 13236 flipped back — coin-flip
+class; band 1P-2P holds). Garble 4/4 clean.
+Tuple: accept **4.749** (best true-0.6 yet; band now 4.33-4.75) | eps 2.701 |
+**tps 43.570 — best measured_tps_fullstep_wall on the board** | step 356.4ms
+| pf .504 | drafter 54.6 | committer 60.6.
+B2C SPEED VERDICT (two independent signals, cross-boot caveat):
+  - sfwd per-step fit: 132.7 + 37.65·drafts vs regress1's 139.4 + 40.05
+    (−6.7 fixed, −2.4/event)
+  - step 356.4 vs the regress1-based model's 376.5 at eps 2.701 (−20ms)
+  => FR13_CONV_WB_BATCHED ≈ −10-20ms/step at operating eps. BAKE per the
+  bake-on-golden rule (offline byte gate 07-24 + b2c1 band PASS + this).
+NOTE (headline with caveats): at eps 2.7 the native fit predicts ~43.7 tps —
+this arm sits AT native-parity throughput for the first time (single arm,
+pf .504, workload-phase caveats; the accept 4.75 × eps 2.7 combination did
+it). SUBSPAN: final n=1751 samples, HOST≈35µs confirmed; mark #2 (CPU tail)
+arm subspan2 queued (marker bug fixed — sed'd runner echoed B2C2_DONE).
+
 ## B2C1 COMPLETE (2026-07-27 22:05Z): B2c band-gate PASS + dispatch verdict
 Verdicts: 2 pass, 2 fail, 4 finished (12907+13236 pass) — band holds with
 FR13_CONV_WB_BATCHED engaged (preseeded needles fired). Garble eyeball 4/4
