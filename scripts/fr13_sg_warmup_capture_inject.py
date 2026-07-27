@@ -93,6 +93,12 @@ def _fr13_sg_warmup_capture(self):
             _mdmod.SpecDecodeMetadata.make_dummy = classmethod(
                 lambda cls, draft_token_ids, device, _md=md: _md)
             self.input_batch.sampling_metadata = _make_sm(B)
+            # spec-mode gate: the gdn builder AND the =2 wrapper both key on
+            # this persistent buffer (all -1 at warmup => no tree route, no
+            # layer staging => stale-flags raise)
+            self.num_decode_draft_tokens.np[:B] = n
+            self.num_decode_draft_tokens.np[B:] = -1
+            self.num_decode_draft_tokens.copy_to_gpu()
             logits = None
             for _phase in ("warm", "capture"):
                 _fr13_wids = ["fr13-warmup-%d" % _r for _r in range(B)]
