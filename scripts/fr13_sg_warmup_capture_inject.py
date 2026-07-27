@@ -119,9 +119,16 @@ def _fr13_sg_warmup_capture(self):
                     _gen.manual_seed(torch.initial_seed() & 0x7FFFFFFF)
                     globals()["_FR13_SG_WU_GEN"] = _gen
                 _h = hidden[: (n + 1) * B]
-                logits = self.model.compute_logits(
-                    torch.rand(_h.shape, dtype=_h.dtype, device=_h.device,
-                               generator=_gen))
+                # boot-37: capture in a DEEP-ACCEPT context (real logits +
+                # argmax drafts). Boot-36 selfcheck: random-logits capture
+                # rejects all drafts and the baked region freezes the
+                # degenerate accept-0 output (replay0=38352 constant across
+                # keys AND boots = capture-time token re-emitted forever —
+                # the live accept-1.0 + garble signature).
+                logits = self.model.compute_logits(_h)
+                md.draft_token_ids.copy_(
+                    logits[md.target_logits_indices.long()]
+                    .argmax(dim=-1).to(torch.int32))
                 # route through sample_tokens: the =2 capture harness wraps
                 # ITS call to _sample (calling self._sample directly bypasses
                 # the wrapper entirely — boot-29f: done 0/4, all-eager)
