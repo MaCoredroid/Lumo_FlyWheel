@@ -1399,7 +1399,22 @@ def fr13_taw_commit_captured(
                 "bti": bonus_token_ids.clone(),
             }
             _mode3 = os.environ.get("FR13_STEP_GRAPH", "0") == "3"
-            _s3 = _fr13_s3_setup(nreq, device) if _mode3 else None
+            _s3 = None
+            if _mode3:
+                try:
+                    _s3 = _fr13_s3_setup(nreq, device)
+                except RuntimeError as _s3e:
+                    # transient (mixed/transitional step, e.g. sid=1 nreq=3 at
+                    # a task boundary — boot-21): eager THIS call, stay armed;
+                    # the next same-key step retries the capture.
+                    if not globals().get("_FR13_S3_SKIP_SEEN"):
+                        globals()["_FR13_S3_SKIP_SEEN"] = True
+                        print(f"[FR13_STEP_GRAPH] S3 setup skip (first): {_s3e}",
+                              flush=True)
+                    return fr13_taw_commit(
+                        num_draft_tokens, draft_token_ids, tree_parent_indices,
+                        target_logits, tree_self_logits, bonus_token_ids,
+                        max_spec_len, generators=generators)
 
             def _region():
                 _o = fr13_taw_commit(
