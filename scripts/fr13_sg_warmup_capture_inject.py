@@ -194,6 +194,8 @@ def _fr13_sg_warmup_capture(self):
 
                       _s0 = _snap()
                       _pair = {}
+                      import os as _os5
+                      _os5.environ["FR13_SG_PIN_UNIFORMS"] = "1"
                       _key2 = (tuple([n] * B), tuple(logits.shape))
                       for _mode in ("eager", "replay"):
                           _restore(_s0)
@@ -254,6 +256,7 @@ def _fr13_sg_warmup_capture(self):
                                     int(_lg2[0].argmax().item()), _tls0),
                                 flush=True)
                       _restore(_s0)
+                      _os5.environ.pop("FR13_SG_PIN_UNIFORMS", None)
                       if bool(torch.equal(_pair["eager"], _pair["replay"])):
                           print("[FR13_STEP_GRAPH] SELFCHECK B=%d BYTE-EQUAL"
                                 % B, flush=True)
