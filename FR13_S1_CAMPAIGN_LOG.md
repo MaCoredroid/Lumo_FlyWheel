@@ -369,3 +369,25 @@ Pointer auditing exhausted; NEXT = the byte self-check (task #71): at
 warmup, per key, paired identical-input steps eager-vs-replay, byte-compare
 sampled ids + accepted counts + committed state rows — directly names the
 diverging output. No live arm until 4/4 byte-clean.
+
+## Boots 34-38: self-check convergence (ongoing)
+Harness now: inference-mode wrap (34), paired default-gen seeds + true-eager
+via dead-flag (36; warm-set was silently RE-CAPTURING the "eager" arm),
+deep-accept capture attempt (37), statics-split probe in0/ent_tls0 (38).
+FINDINGS SO FAR:
+1. FROZEN REPLAY OUTPUT — the primary defect: replay0 = 38352 CONSTANT
+   across keys B=1..4, across boots, while check logits vary => the
+   replayed region re-emits the capture-time recovery token; some link
+   between the refilled statics (logits_static -> tls/stls -> walk ->
+   output) does not recompute at replay. This mechanism exactly produces
+   the live signature (accept pinned 1.00 + 1 wrong token/step + garble).
+2. EAGER accepts 0 in the fabricated context even with argmax drafts:
+   the walk verifies the FORWARD's staged products (which encode the
+   dummy forward's ZERO input tokens), not md.draft_token_ids post-hoc =>
+   a coherent deep-accept warmup context needs drafts == the tokens the
+   dummy forward actually consumed (drafter-coherent fabrication) — or
+   run the self-check on the FIRST LIVE steps instead.
+Boot-38 statics-split readout decides: ent_tls0 fresh but output frozen
+=> freeze between tls and output (walk consumes a baked clone — suspect:
+apply_sampling_constraints intermediate); ent_tls0 stale => the tls
+refill itself doesn't reach the graph's tensor.
