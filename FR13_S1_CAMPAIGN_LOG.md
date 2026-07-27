@@ -150,3 +150,28 @@ Scoreboard (slope basis): =3 graph 18.7 > staged 17.0 (x2 boots) > =1 14.7.
 Boot-25 LAUNCHING: same =2 lever + tri-state probes + real retries
 (a25162f50). Expected: capture on the real attempt 2, or the first
 probe with status!=1 names the poison phase.
+
+## Boot-25 (killed early by design) + boot-26 launch
+Boot-25 delivered its diagnostic payload in the first 10 minutes:
+1. TRI-STATE PROBES WORKED: "capture status 2 at phase: pre-capture-end
+   (last Active: fwd-tail)". The bracketed sliver (SamplerOutput build +
+   module-call exit + _sample return) contains ZERO CUDA ops => the poison
+   CAUSE is concurrent (batch-queue pipelining thread / allocator-pool
+   entanglement) landing late in the region window; cause != location.
+2. Philox fix CONFIRMED: attempt 2 reached capture_begin (no Offset-
+   increment burn) and exposed the NEXT abort-hygiene leak:
+   "beginAllocateToPool: already recording to mempool_id" — C++
+   capture_end throws at cudaStreamEndCapture BEFORE endAllocateToPool,
+   and reset() does not end pool recording either.
+Arm killed after S1 DISABLED (lever burned at step 1; staged reference
+already banked twice — boot-16 slope 16.97, boot-24 17.00). Stream log
+preserved: s1fullgo_stream.boot25.log.
+Boot-26 package (this commit):
+- Abort path now calls torch._C._cuda_endAllocateToPool(dev, pool)
+  (releasePool deliberately skipped: leaked refcount on the process-
+  lifetime global pool is harmless; double-release is not).
+- HETEROGENEOUS RETRY: attempt 1 = shared global pool, attempt 2 =
+  PRIVATE pool. One boot discriminates: attempt-2 success => shared-pool
+  entanglement was the poison (adopt private); identical attempt-2
+  failure => concurrent-thread landing => next lever = capture-step
+  serialization (pause batch-queue pipelining for the one capture step).
