@@ -1,0 +1,31 @@
+diff --git a/astropy/coordinates/builtin_frames/__init__.py b/astropy/coordinates/builtin_frames/__init__.py
+index 6fd688c28..131509874 100644
+--- a/astropy/coordinates/builtin_frames/__init__.py
++++ b/astropy/coordinates/builtin_frames/__init__.py
+@@ -50,6 +50,7 @@ from . import cirs_observed_transforms
+ from . import icrs_observed_transforms
+ from . import intermediate_rotation_transforms
+ from . import ecliptic_transforms
++from . import itrs_observed_transforms
+ 
+ # Import this after importing other frames, since this requires various
+ # transformtions to set up the LSR frames
+diff --git a/astropy/utils/iers/iers.py b/astropy/utils/iers/iers.py
+index dae42fba8..e5a0840a7 100644
+--- a/astropy/utils/iers/iers.py
++++ b/astropy/utils/iers/iers.py
+@@ -266,7 +266,13 @@ class IERS(QTable):
+         try:  # see if this is a Time object
+             jd1, jd2 = jd1.utc.jd1, jd1.utc.jd2
+         except Exception:
+-            pass
++            # If UTC conversion fails (e.g., due to IERS range issues),
++            # fall back to using the Time object's jd1/jd2 directly.
++            try:
++                jd1, jd2 = jd1.jd1, jd1.jd2
++            except AttributeError:
++                # jd1 is not a Time object, leave it as is
++                pass
+ 
+         mjd = np.floor(jd1 - MJD_ZERO + jd2)
+         utc = jd1 - (MJD_ZERO+mjd) + jd2
