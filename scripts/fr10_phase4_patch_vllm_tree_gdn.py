@@ -7171,16 +7171,55 @@ def _fr13_replay_durable_ab(
 # sampled Gate C; sampled production must use the distribution-preserving tree
 # rejection sampler, not this max selector.
 def _fr13_sg_capchk(tag):
-    """FR13_CAPDBG phase probe: a silently-invalidated capture flips
-    is_current_stream_capturing() False — the first probe that fires names
-    the guilty phase. Inert unless FR13_CAPDBG=1 AND a capture was active."""
+    """FR13_CAPDBG phase probe, TRI-STATE (boot-24 fix): torch's
+    is_current_stream_capturing() is `status != None`, which stays True for
+    an INVALIDATED capture (the allocator needs it that way) — the old probe
+    was structurally blind to the exact event we hunt. Read the raw
+    cudaStreamIsCapturing status via ctypes instead: 0=None 1=Active
+    2=Invalidated. Fires once at the FIRST probe seeing status != 1, and
+    tracks the last Active tag so the failure is bracketed. Inert unless
+    FR13_CAPDBG=1 AND a capture is armed; a status query, never a sync."""
     import os
     if os.environ.get("FR13_CAPDBG") != "1":
         return
-    if globals().get("_FR13_SG_CAPCHK_ARMED") and not torch.cuda.is_current_stream_capturing():
-        if not globals().get("_FR13_SG_CAPCHK_FIRED"):
-            globals()["_FR13_SG_CAPCHK_FIRED"] = True
-            print(f"[FR13_CAPDBG] INVALIDATED at phase: {tag}", flush=True)
+    if not globals().get("_FR13_SG_CAPCHK_ARMED"):
+        return
+    st = -1
+    try:
+        import ctypes
+        lib = globals().get("_FR13_SG_CUDART")
+        if lib is None:
+            for _cand in (None, "libcudart.so.13", "libcudart.so.12",
+                          "libcudart.so"):
+                try:
+                    _lib = ctypes.CDLL(_cand)
+                    _lib.cudaStreamIsCapturing  # symbol probe
+                    lib = _lib
+                    break
+                except (OSError, AttributeError):
+                    continue
+            globals()["_FR13_SG_CUDART"] = lib
+        if lib is None:
+            st = -3
+        else:
+            _st = ctypes.c_int(-1)
+            _rc = lib.cudaStreamIsCapturing(
+                ctypes.c_void_p(torch.cuda.current_stream().cuda_stream),
+                ctypes.byref(_st))
+            st = int(_st.value) if _rc == 0 else -(100 + int(_rc))
+    except Exception:
+        st = -2
+    if st == 1:
+        globals()["_FR13_SG_CAPCHK_LAST_ACTIVE"] = tag
+        return
+    if not globals().get("_FR13_SG_CAPCHK_FIRED"):
+        globals()["_FR13_SG_CAPCHK_FIRED"] = True
+        print(
+            "[FR13_CAPDBG] capture status " + str(st) + " at phase: "
+            + str(tag) + " (last Active: "
+            + str(globals().get("_FR13_SG_CAPCHK_LAST_ACTIVE")) + ")",
+            flush=True,
+        )
 
 
 def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows, dm):
@@ -7270,6 +7309,7 @@ def _fr13_sg_commit_device_route(products, output_token_ids, accepted_tree_rows,
     # staged tail validates flags==1 BEFORE its launch call; the lib-entry
     # consume-once guard then absorbs the launch => no double-commit, and
     # the next forward re-stages flags fresh)
+    _fr13_sg_capchk("route-return")
     return output_token_ids
 
 
@@ -18061,7 +18101,9 @@ def _patch_gpu_model_runner_step_graph_scaffold() -> bool:
         "                            _fr13_sg_g.capture_begin(pool=_fr13_sg_pool, capture_error_mode=\"thread_local\")\n"
         "                        else:\n"
         "                            _fr13_sg_g.capture_begin(capture_error_mode=\"thread_local\")\n"
+        "                        _fr13_sg_rs._fr13_sg_capchk(\"post-begin\")\n"
         "                        sampler_output = self._sample(logits, _fr13_sg_md)\n"
+        "                        _fr13_sg_rs._fr13_sg_capchk(\"pre-capture-end\")\n"
         "                        _fr13_sg_g.capture_end()\n"
         "                        _fr13_sg_rs.__dict__[\"_FR13_SG_CAPCHK_ARMED\"] = False\n"
         "                    except Exception:\n"
@@ -18418,6 +18460,17 @@ def _patch_rejection_sampler_bonus_handoff() -> bool:
         "                if self.is_processed_logprobs_mode\n"
         '                else "raw_logits",\n' 
         "            )\n",
+        1,
+    )
+    fwd_tail_anchor = (
+        "        return SamplerOutput(\n"
+        "            sampled_token_ids=output_token_ids,\n"
+    )
+    if fwd_tail_anchor not in text:
+        raise RuntimeError("FR13_SG fwd-tail probe anchor not found")
+    text = text.replace(
+        fwd_tail_anchor,
+        "        _fr13_sg_capchk(\"fwd-tail\")\n" + fwd_tail_anchor,
         1,
     )
     REJECTION_SAMPLER_PATH.write_text(text)

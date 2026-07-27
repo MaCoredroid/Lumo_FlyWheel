@@ -103,3 +103,32 @@ Success needle: "S1-full captured B=4 (sampler+committer one graph...)".
 If =2 STILL invalidates with the full strip hoisted: the poison op is
 OUTSIDE the named strip remainder => next move is the inverted climb
 (un-hoist one piece per boot from this scaffold to name it).
+
+### Boot-24 mid-run finding + boot-25 package (committed same day)
+Boot-24 =2 capture FAILED both attempts; arm degraded to staged fallback
+(by design, still running as the staged component-pair reference repair).
+Forensics:
+- Attempt 1: silent invalidation surfaced at capture_end (same signature).
+  ZERO phase probes fired — and the probe is STRUCTURALLY BLIND:
+  torch.cuda.is_current_stream_capturing() == (status != None), which stays
+  True for an INVALIDATED capture. All prior "no probe fired" evidence is
+  void; the poison op is NOT bracketed by existing probes.
+- Attempt 2 never really ran: pre-capture fr13_sg_fill_uniforms
+  u.uniform_() (default-gen draw missed by the bulk-gen conversion) hit the
+  philox captured-offset poison left by attempt 1 => "Offset increment
+  outside graph capture" => attempt burned for free.
+- Audit while reading source: served tree path does NOT execute the
+  per-request-generator draw sites (early device-route return); glue is
+  sync-free under device multidraft (probs staging None, parents from
+  step-constant cache). Shared-pool capture + thread_local already in.
+Boot-25 package (this commit):
+1. capchk upgraded to TRI-STATE via ctypes cudaStreamIsCapturing
+   (0=None 1=Active 2=Invalidated; tracks last-Active tag) — un-blinds
+   every probe.
+2. New probes: post-begin, route-return, fwd-tail, pre-capture-end
+   (brackets the whole region; first status!=1 names the phase).
+3. fill_uniforms poison immunity (bulk-gen for both default-gen draws)
+   => retry attempt 2 becomes a REAL second capture attempt.
+Expected boot-25 outcomes: either (a) capture succeeds on attempt 2 now
+that retries are real (attempt-1-poison was self-inflicted), or (b) probes
+name the guilty phase precisely. Both advance the line.

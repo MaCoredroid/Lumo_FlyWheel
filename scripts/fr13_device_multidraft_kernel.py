@@ -1223,7 +1223,12 @@ def fr13_sg_fill_uniforms(nreq, row_cap, device, generators=None):
         for req_i in range(nreq):
             g = generators.get(req_i)
             if g is None:
-                u[req_i] = torch.rand(row_cap, 3, device=device)
+                # poison-immune (boot-24: an aborted capture leaves the
+                # DEFAULT philox in captured-offset state; the retry's
+                # pre-capture draw here then raised "Offset increment
+                # outside graph capture" and burned attempt 2 for free)
+                u[req_i] = torch.rand(row_cap, 3, device=device,
+                                      generator=_fr13_bulk_gen(device))
             elif g.device.type == device.type if hasattr(device, "type") else str(g.device) == str(device):
                 u[req_i] = torch.rand(row_cap, 3, device=device, generator=g)
             else:
@@ -1232,7 +1237,7 @@ def fr13_sg_fill_uniforms(nreq, row_cap, device, generators=None):
                 dev_gen.manual_seed(int(seed_t.item()))
                 u[req_i] = torch.rand(row_cap, 3, device=device, generator=dev_gen)
     else:
-        u.uniform_()
+        u.uniform_(generator=_fr13_bulk_gen(u.device))
     return u
 
 
