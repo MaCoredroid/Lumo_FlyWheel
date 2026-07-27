@@ -224,3 +224,24 @@ three now run under serialization; ANY success is decisive.
 If boot-28 still invalidates solo: the violator is NOT the pipelining
 thread => next suspects are the async-output copy machinery (its
 wait_stream/event wiring) and in-region record_stream allocator traffic.
+
+## Boot-28 verdict: serialization REFUTED => pivot to WARMUP CAPTURE
+Attempts 2/3 captured with the pipeline provably solo ("exec lock HELD")
+and invalidated with the identical signature. Combined refutation set is
+now: strip ops (all hoisted), pool (shared+private), capture mode
+(global-class thread_local + relaxed), execute_model concurrency
+(exec-lock), module hooks, philox/pool abort hygiene. Thread census of
+EngineCore: 54 VLLM::EngineCor + 7 pt_nccl_watchdg + 7 pt_nccl_heartbt +
+12 pt_gloo_runloop + cuda-EvtHandlr — the live capture window is
+structurally hostile (many threads, unlockable one-by-one).
+PIVOT (evidence-backed): vLLM's ~180 FULL forward graphs capture
+SUCCESSFULLY in this same process/thread census — at WARMUP, in the quiet
+window. Our =2 capture is the only one attempted under live traffic.
+The refill machinery built over boots 20-28 (uniforms/perm/tls/stls/
+bonus/topology handoffs, composition checks) makes capture-time
+irrelevant: replays refill everything. Tree topology is a serve-config
+CONSTANT (21-node speculative_token_tree) => synthetic warmup metadata
+reproduces live shapes exactly (B in 1..4 x fixed 21-tok drafts).
+Boot-29 = WARMUP CAPTURE: pre-capture the =2 graph per B-key during the
+boot's quiet capture phase; live steps replay-only. Boot-28 arm continues
+as staged band point while the build proceeds.
