@@ -354,3 +354,18 @@ and skipped it in the capture excitement.
 NEXT: in-boot replay-vs-eager BYTE SELF-CHECK in the fabricator (capture
 -> paired fresh-input step replay-vs-eager -> compare sampled ids +
 committed GDN/conv states, per key) — no live arm until 4/4 byte-clean.
+
+## Boots 32-33: engagement corruption localization (ongoing)
+Boot-32 (ptr-audit): committer-consumed addresses CLEAN except a benign
+perm module-static hit (graph reads ent["perm"], refilled by copy_; the
+audit compared the eager-path module static that later warmup keys
+legitimately re-point). Accept collapsed to 1.00 (0 drafts accepted @
+176/s drafted) => walk rejects everything.
+Boot-33 (draft-ids refill: live draft_token_ids copied into the baked
+md_static pre-replay): accept STILL 1.00 @ 92/s drafted + same garble
+("!!!" spam / "agh" stubs). The draft-ids hole was real but not the only
+one — the walk's accept criterion is catastrophically false at replay.
+Pointer auditing exhausted; NEXT = the byte self-check (task #71): at
+warmup, per key, paired identical-input steps eager-vs-replay, byte-compare
+sampled ids + accepted counts + committed state rows — directly names the
+diverging output. No live arm until 4/4 byte-clean.
