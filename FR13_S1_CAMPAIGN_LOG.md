@@ -657,3 +657,25 @@ the graph (top-k/top-p now execute per replay in-region), (2) the per-step
 temperature/top_p/top_k refills added alongside, (3) the double
 apply_sampling_constraints (temp²) — cheap to test by comparing CFWD/SFWD
 sidecar spans boot-54 (=2) vs boot-23 (=3) at matched eps.
+
+### Boot-54 sidecar decomposition — INCONCLUSIVE, and it undercuts the
+### "=2 region costs more" reading
+boot-54 (=2, pid217) vs =3-era (pid231), per-step GPU spans:
+  sfwd (VERIFY FORWARD): 217.81 vs 194.23 ms/step  (+23.6)
+  dfwd (drafter):         54.07 vs  54.98 ms/span  (parity)
+  cfwd (committer):       71.34 x571 vs 38.68 x6108 spans
+  wall:                  340.9  vs 299.3  ms/step  (+41.6)
+TWO PROBLEMS with attributing the slope gap to the =2 region:
+1. cfwd is NOT comparable: under =2 the committer runs INSIDE the graph, and
+   the span timers are capture-guarded (boot-30 fix), so only the 571 STAGED
+   steps are timed — the 71.34ms/span is mixed-step cost, not replay cost.
+2. The biggest comparable delta is sfwd (+23.6ms/step) — the verify forward,
+   which =2 does NOT touch. That points at workload/co-residency PHASE, not
+   at the captured region.
+=> The 2-arm slope gap (14.8 vs 18.7) is real as measured but NOT yet
+attributed; cross-boot phase is a live confound (exactly the eps-matched
+lesson from bar17-r2).
+NEXT (correct instrument): SAME-SESSION A/B — one boot running the =3 arm
+and the =2 arm back-to-back on the same subset, so phase/co-residency and
+host state are shared; compare slopes within that boot. Only then decide
+whether =2 costs per-event, and only then attribute.
