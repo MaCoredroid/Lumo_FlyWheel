@@ -481,3 +481,20 @@ Fix candidates: topology in the graph key (per-topology captures — may
 explode key count) OR make the walk's topology tables per-step refilled
 data (the =1 pattern) OR composition-guard: skip replay when live
 topology != baked (staged fallback for non-matching steps).
+
+## Boot-44: TOPOLOGY REFUTED (live MD-DIFF identical) — deep-accept gap named
+Live replays (B=2/3/4 keys, multiple steps): live_tgt/self/par/bonus ALL
+== baked — the live tree topology IS the config constant (suffix
+machinery maps into the same fixed padded 21-node layout).
+REFUTED PILE (complete): strip ops, pools, capture modes, exec-lock,
+hooks, GC, quiet-window, commit ordering, state corruption (ULP dust),
+metadata indices, draft ids, logits address, topology.
+THE GAP: the selfcheck only exercises ACCEPT-0 contexts (zero-context
+products; even eager accepts 0). Live eager accepts 4.7; live replay
+accepts 0 — the divergence lives in code only executed at accept>0
+(walk path-selection -> committer row consumption).
+NEXT BUILD (boot-45): DRAFTER-COHERENT deep-accept selfcheck — feed the
+draft tokens as the dummy forward's input ids at tree positions (dummy
+input_ids seam), so products cohere with drafts and the check reaches
+deep accepts; replay-vs-eager at accept~5 then reproduces the live bug
+in-warmup (12min/boot iteration) or fully exonerates the graph.
