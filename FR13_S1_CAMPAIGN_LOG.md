@@ -296,3 +296,22 @@ event-insertion on cross-stream frees = structural invalidation.
 Boot-29h: gc.collect+cuda.synchronize before capture_begin + gc.disable
 across the capture (+re-enable on success/abort); fabricator logits via
 poison-immune generator; per-B cuda rng-state restore.
+
+## Boot-29i VERDICT: INVALIDATOR NAMED — our own CFWD span timer
+Triple-split probes bracketed the flip to: last Active post-so-build,
+invalid at sample-return — the gap contains exactly ONE call:
+_fr13_cfwd_end(_fr13_cfwd_ev), the CFWD GPU committer timer (the driver
+sets FR13_CFWD_GPU_TIMER=1 on EVERY arm). The begin/end pair brackets the
+rejection_sampler call inside _sample:
+- =1/=3 regions are NESTED INSIDE that bracket => timer ops outside the
+  capture => 4 clean graphs, 2h15m soaks.
+- =2's region CONTAINS the pair => its cuda-event ops inside the capture
+  are a STRUCTURAL violation => silent invalidation, every boot, every
+  mode/pool/thread/window. 19+ boots of external suspects; the standing
+  instrumentation-observer-effect rule vindicated in the strongest form.
+Fix (42157968e): capture-guards on all three span timers (cfwd/dfwd/sfwd
+begin returns None when is_current_stream_capturing()).
+PHILOX CURE FOUND (in-boot cascade vs the REAL poison):
+graphsafe_set_state(clone_state()) cures; gc/manual_seed/set_state all
+fail. Baked into the abort path — aborts are no longer boot-lethal.
+Boot-30 = warmup capture with the fix. Expected: WARMUP-CAPTURED x4.
